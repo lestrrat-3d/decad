@@ -273,9 +273,8 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 		source, err := os.ReadFile(path)
 		require.NoError(t, err)
 		for _, name := range []string{
-			"TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap",
-			"TestChordedBoundaryVolumeAllowWallLegDeletionSearch",
-			"TestChordedBoundaryVolumeAllowSeamLegDeletionSearch",
+			"TestChordedWallAndTwistLegsEncloseTheMeasuredGap",
+			"TestChordedWallLegIsLoadBearing",
 		} {
 			require.Containsf(t, string(source), "func "+name+"(", "%s must stay in %s", name, path)
 		}

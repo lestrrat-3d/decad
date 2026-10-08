@@ -36,13 +36,12 @@ type MassAccumulator struct {
 	// from the recorded curve it chords, AS A SET (a10-plan.md Part 3 PR 6) —
 	// zero for a LineSeg-only pairing. It is delta's independent twin
 	// (loftPayload's own doc comment), never composed as if it were delta.
-	// It is ALSO never internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper (or
-	// proofbound.ChordedBoundaryVolumeResidualAllow/proofbound.ChordedBoundarySeamAllow's)
-	// own matchedDeltaUpper obligation, nor CentroidRadius's reach — a
-	// STRONGER, PARAMETER-MATCHED quantity sectionMatchedDelta below carries
-	// instead — and that includes the cap-area tube
-	// (proofbound.SectionDisplacementArea), whose own §5.2 row names the matched term
-	// because a held cap polygon's vertices are displaced as well as chorded.
+	// It is ALSO never internal/proofbound/bounds.go's
+	// proofbound.CellChordCurveAreaUpper own matchedDeltaUpper obligation, nor
+	// CentroidRadius's reach — a STRONGER, PARAMETER-MATCHED quantity
+	// sectionMatchedDelta below carries instead — and that includes the cap-area tube, whose own
+	// §5.2 row names the matched term because a held cap polygon's vertices
+	// are displaced as well as chorded.
 	// sectionDelta's OWN remaining spend is Bounds.Bound, a SET-distance
 	// reading, and the terms below that read it are gated on sectionDelta > 0
 	// exactly as the delta-driven terms are gated on delta > 0.
@@ -57,11 +56,9 @@ type MassAccumulator struct {
 	// it, and it is not the sagitta with a new name either — the delta leg is
 	// what charges the computed station's own displacement, which the sagitta
 	// leaves out (§5.2's matchedDelta paragraph). Every composed reading that
-	// needs "the SAME parameter-matched displacement leg (a)'s own
-	// obligation" — internal/proofbound/bounds.go's own phrase, repeated verbatim on
-	// proofbound.ChordedBoundaryVolumeResidualAllow and
-	// proofbound.ChordedBoundarySeamAllow's own doc comments — reads this field, never
-	// sectionDelta, and so does CentroidRadius. It stays exactly 0 on a build with no chorded cell at all
+	// needs the parameter-matched displacement — the skirt leg and
+	// CentroidRadius — reads this field, never
+	// sectionDelta. It stays exactly 0 on a build with no chorded cell at all
 	// (a LineSeg-only pairing), whose held triangle pair IS the boundary §5
 	// gives it and whose vertex displacement the delta-keyed legs above
 	// already charge.
@@ -85,11 +82,6 @@ type MassAccumulator struct {
 
 	haveBounds bool
 	lo, hi     r3.Vec // componentwise extremes over every held vertex
-
-	// DistUpper is the max |v-anchor| (3D distance) over every held vertex
-	// (a10-plan.md Part 3 PR 6), computeLoftChordedAllow's own posUpper
-	// reading.
-	DistUpper float64
 
 	// perturbAreaSum is Σ proofbound.PerturbedTriangleAreaAllow(...) over EVERY triangle
 	// of T — walls and caps alike — the extra area the payload's own delta
@@ -116,6 +108,10 @@ type MassAccumulator struct {
 	WallAreaAbs   float64
 	WallAreaSlack float64
 	WallTerms     int // term count proofbound.SumSlop needs to bound that sum
+
+	// areaUpper caches PerturbedAreaUpper over the folded mesh.
+	areaUpper     float64
+	haveAreaUpper bool
 }
 
 // NewMassAccumulator opens a fresh accumulator anchored at the loft's
@@ -146,13 +142,6 @@ func NewMassAccumulator(anchor r3.Vec, delta, sectionDelta, sectionMatchedDelta 
 // nothing until publication, and the area sum's own terms are the endpoints
 // of a proven per-triangle enclosure rather than a float evaluation.
 func (m *MassAccumulator) Add(a, b, c r3.Vec, wall bool) {
-	m.AddTriangle(a, b, c, wall, [3]int{}, nil)
-}
-
-// AddTriangle keeps Add's triangle fold unchanged. Only evalLoft supplies
-// indices and a cache, so repeated references to one assembled vertex reuse
-// its exact Euclidean upper distance.
-func (m *MassAccumulator) AddTriangle(a, b, c r3.Vec, wall bool, indices [3]int, distances []LoftVertexDistance) {
 	sa := proofarith.Xsub(proofarith.XptOf(a), m.anchor)
 	sb := proofarith.Xsub(proofarith.XptOf(b), m.anchor)
 	sc := proofarith.Xsub(proofarith.XptOf(c), m.anchor)
@@ -173,15 +162,6 @@ func (m *MassAccumulator) AddTriangle(a, b, c r3.Vec, wall bool, indices [3]int,
 	m.foldBounds(a)
 	m.foldBounds(b)
 	m.foldBounds(c)
-	if distances == nil {
-		m.FoldCoordUpper(a)
-		m.FoldCoordUpper(b)
-		m.FoldCoordUpper(c)
-	} else {
-		m.FoldCoordUpperCached(a, &distances[indices[0]])
-		m.FoldCoordUpperCached(b, &distances[indices[1]])
-		m.FoldCoordUpperCached(c, &distances[indices[2]])
-	}
 
 	if m.delta > 0 {
 		m.PerturbAreaSum = proofbound.UpRound(m.PerturbAreaSum + proofbound.PerturbedTriangleAreaAllow(a, b, c, m.delta))
@@ -214,46 +194,25 @@ func (m *MassAccumulator) foldBounds(p r3.Vec) {
 	m.hi = r3.Vec{X: math.Max(m.hi.X, p.X), Y: math.Max(m.hi.Y, p.Y), Z: math.Max(m.hi.Z, p.Z)}
 }
 
-// FoldCoordUpper extends DistUpper (a10-plan.md Part 3 PR 6) over one held
-// vertex's own EUCLIDEAN distance from anchor. computeLoftChordedAllow reads
-// DistUpper for proofbound.ChordedBoundarySeamAllow's own posUpper obligation.
-//
-// distUpper is PROVEN by exact rational arithmetic, the SAME mechanism
-// computeLoftChordedAllow's own h1Upper reading already uses
-// (ratSquaredDistance3/proofbound.RatSqrtUp): p and anchorF are both float64, hence
-// both exact rationals, so ratSquaredDistance3 is the true squared distance
-// with no rounding of its own, and proofbound.RatSqrtUp brackets its root by exact
-// comparison, proven whatever the platform's own sqrt does. An earlier
-// version of this function instead nudged r3.Vec.Len()'s own float64
-// result outward by a single proofbound.UpRound — one ulp — which does not cover
-// Len()'s own composed rounding (Sub, two nested Hypot calls each with
-// their own error) and so was not actually proven to enclose the true
-// distance; the exact-rational route replaces that single-ulp guess with a
-// derivation this function's own callers can trust the same way h1Upper's
-// already is. A vertex or anchor coordinate ratSquaredDistance3 cannot read
-// as an exact rational (non-finite) answers +Inf here rather than silently
-// dropping the widening — the same "absent bound must never read as small"
-// rule this file's other terms already follow.
-func (m *MassAccumulator) FoldCoordUpper(p r3.Vec) {
-	dist := math.Inf(1)
-	if d2 := proofarith.RatSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
-		dist = proofbound.RatSqrtUp(d2)
+// PerturbedAreaUpper is proofbound.PerturbedAreaUpper over the held mesh at
+// the accumulator's own delta, computed once and reused by Volume, Centroid
+// and the tessellation proof, which all read it over the one mesh evalLoft
+// folded into this accumulator. verts and tris must be that mesh.
+func (m *MassAccumulator) PerturbedAreaUpper(verts []r3.Vec, tris [][3]int) float64 {
+	if !m.haveAreaUpper {
+		m.areaUpper = proofbound.PerturbedAreaUpper(verts, tris, m.delta)
+		m.haveAreaUpper = true
 	}
-	m.DistUpper = max(m.DistUpper, dist)
+	return m.areaUpper
 }
 
-// FoldCoordUpperCached performs the same per-reference maxima as
-// FoldCoordUpper. The distance is computed when this assembled vertex index
-// is first referenced, so unused vertices never affect the measurements.
-func (m *MassAccumulator) FoldCoordUpperCached(p r3.Vec, entry *LoftVertexDistance) {
-	if !entry.Ready {
-		entry.Upper = math.Inf(1)
-		if d2 := proofarith.RatSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
-			entry.Upper = proofbound.RatSqrtUp(d2)
-		}
-		entry.Ready = true
+// SweptVolumeAllow is proofbound.SweptVolumeAllow(delta, PerturbedAreaUpper),
+// docs/loft-gear-bounds-design.md §2's sweptLeg: exactly 0 at delta == 0.
+func (m *MassAccumulator) SweptVolumeAllow(verts []r3.Vec, tris [][3]int) float64 {
+	if m.delta <= 0 {
+		return 0
 	}
-	m.DistUpper = max(m.DistUpper, entry.Upper)
+	return proofbound.SweptVolumeAllow(m.delta, m.PerturbedAreaUpper(verts, tris))
 }
 
 // Volume returns Σvol6/6 plus the exact bilinear-patch correction, rounded
@@ -262,13 +221,19 @@ func (m *MassAccumulator) FoldCoordUpperCached(p r3.Vec, entry *LoftVertexDistan
 // in cubic millimetres, never unconditionally (docs/loft-design.md §8,
 // spline design §3's Tier A rule).
 //
-// A placement (delta > 0, §12 PR 2a) widens that bound by
-// internal/proofbound/bounds.go's proofbound.SweptVolumeAllow(delta, areaUpper), areaUpper the SAME
-// whole-mesh proofbound.PerturbedAreaUpper the identity fast path never reaches — this
-// is the term that closes the measured 1.82e-12 gap a naive re-lift-and-round
-// implementation misses: every held vertex is exact ONLY under the identity
-// transform, and a general rigid motion rounds inside its own products and
-// sums.
+// The bound adds docs/loft-gear-bounds-design.md §2's residual to that
+// rounding:
+//
+//	sweptLeg + wallLeg + skirtLeg
+//
+// sweptLeg (SweptVolumeAllow) pays for projecting the held caps onto their
+// exact planes and for every faceted cell's motion to the corners it
+// denotes; it is the term that closes the measured 1.82e-12 gap a naive
+// re-lift-and-round implementation misses, since a general rigid motion
+// rounds inside its own products and sums. It is REQUIRED whenever delta > 0,
+// chorded or not: neither chorded leg reaches those two steps. wallLeg and
+// skirtLeg (LoftChordedAllow) pay for the charged cells' chord-to-curve
+// motion and the seam's skirt, and are zero on a build with no chorded cell.
 func (m *MassAccumulator) Volume(verts []r3.Vec, tris [][3]int) (float64, float64) {
 	vol := m.correctedVolume()
 	value, _ := vol.Float64()
@@ -289,14 +254,10 @@ func (m *MassAccumulator) Volume(verts []r3.Vec, tris [][3]int) (float64, float6
 func (m *MassAccumulator) VolumeAllow(verts []r3.Vec, tris [][3]int) float64 {
 	allow := 0.0
 	if m.delta > 0 {
-		areaUpper := proofbound.PerturbedAreaUpper(verts, tris, m.delta)
-		allow = proofbound.SweptVolumeAllow(m.delta, areaUpper)
+		allow = m.SweptVolumeAllow(verts, tris)
 	}
 	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
-		allow = proofbound.AbsSumUpper(allow, proofbound.ChordedBoundaryVolumeResidualAllow(
-			m.sectionMatchedDelta, m.Chorded.WallAreaUpper,
-			m.Chorded.CapVolumeUpper, m.Chorded.SeamAllow,
-		))
+		allow = proofbound.AbsSumUpper(allow, m.Chorded.WallLeg, m.Chorded.SkirtLeg)
 	}
 	return allow
 }
@@ -441,7 +402,7 @@ func (m *MassAccumulator) Centroid(verts []r3.Vec, tris [][3]int) (r3.Vec, float
 func (m *MassAccumulator) CentroidMeasureAllow(verts []r3.Vec, tris [][3]int) float64 {
 	epsV := 0.0
 	if m.delta > 0 {
-		epsV = proofbound.SweptVolumeAllow(m.delta, proofbound.PerturbedAreaUpper(verts, tris, m.delta))
+		epsV = m.SweptVolumeAllow(verts, tris)
 	}
 	return proofbound.AbsSumUpper(epsV, m.Chorded.WallLeg, m.Chorded.SkirtLeg)
 }
@@ -528,9 +489,8 @@ func (m *MassAccumulator) Bounds() (r3.Vec, r3.Vec, float64, bool) {
 // since neither is a proven scale any more. A chorded build (a computed
 // correction, or a positive section term) adds the bilinear integration
 // enclosure, and a positive section term adds computeLoftChordedAllow's own
-// two-leg wall residual and capAreaExcess (the SAME cap
-// chord-versus-curve gap capVolumeUpper folds into Volume, spent here as an
-// area rather than a volume) — both documented at the composition below. A
+// two-leg wall residual and capAreaExcess (the per-cell cap tube) — both
+// documented at the composition below. A
 // displaced build (delta > 0) adds perturbAreaSum, the held triangles' and the
 // caps' own per-triangle placement allowance; the wall's own held-to-denoted
 // SURFACE step is a leg of areaExcess, not of that sum, and the composition
@@ -580,10 +540,8 @@ func (m *MassAccumulator) Area(capAreas ...*big.Rat) (float64, float64) {
 	// differs by at most areaExcess; capFloat
 	// above is capPolygonAreaRat, the built polygon's own exact rational, and
 	// the region the loft's construction actually denotes is the CURVED
-	// region proofbound.SectionDisplacementArea bounds the gap to on EITHER cap
-	// (capAreaExcess) — the identical gap capVolumeUpper folds into the
-	// Volume leg via a plane-offset division that Area, having no such
-	// offset, spends unfolded. Both are gated on sectionDelta > 0 OR
+	// region the per-cell cap tube bounds the gap to on EITHER cap
+	// (capAreaExcess, docs/loft-gear-bounds-design.md §4). Both are gated on sectionDelta > 0 OR
 	// sectionMatchedDelta > 0 — never sectionDelta alone — so a free-form
 	// cell whose matchedDelta is positive at an exactly-zero sagitta
 	// (internal/freeform/spline_sagitta.go's own counterexample) still has its wall and cap

@@ -143,12 +143,12 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 	margin := toleranceRel / ratio
 	t.Logf("A10b wedge Verify margin: binding=%s ratio=%.6g margin=%.3gx", reading, ratio, margin)
 	require.Greater(t, margin, 1.0)
-	// Volume binds at a measured ~4.3x once Area no longer does and
+	// Volume binds at a measured ~14.3x once Area no longer does,
 	// Centroid's bound is the shift form (docs/loft-gear-bounds-design.md
-	// §3). Pinned with generous slack, the arc wedge's own rule, so host
-	// rounding never flips it.
+	// §3) and Volume's is the per-cell chain (§2). Pinned with generous
+	// slack, the arc wedge's own rule, so host rounding never flips it.
 	require.Equal(t, "Volume", reading)
-	require.InEpsilon(t, 4.3, margin, 0.25)
+	require.InEpsilon(t, 14.3, margin, 0.25)
 
 	area, err := body.Area()
 	require.NoError(t, err)
@@ -234,16 +234,7 @@ func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measur
 	}
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
-	anchor := pl.xform.Apply(pl.plane0.Origin)
-	matchedDelta := chordCellDeltaUpper(sectionMatchedDelta, a.delta)
-	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
-	distances := make([]loftmesh.LoftVertexDistance, len(a.verts))
-	for k, tri := range a.tris {
-		mass.addTriangle(a.verts[tri[0]], a.verts[tri[1]], a.verts[tri[2]], k < a.walls, tri, distances)
-	}
-	chorded, err := computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.DistUpper, a.reversed)
-	require.NoError(t, err)
-	mass.Chorded = chorded
+	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
 	return mass.area(capPolygonAreaRat(a.pts0, a.loopIdx0), capPolygonAreaRat(a.pts1, a.loopIdx1)), pairs, a
 }
 

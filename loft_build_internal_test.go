@@ -1704,10 +1704,8 @@ func TestComputeLoftChordedAllowReversesSignedCorrections(t *testing.T) {
 	vIdx, wIdx := [][]int{{0, 1}}, [][]int{{2, 3}}
 	anchor := r3.NewVec(-2, 1.25, -3)
 
-	forward, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.01, 0, 12, false)
-	require.NoError(t, err)
-	reversed, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.01, 0, 12, true)
-	require.NoError(t, err)
+	forward := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.01, 0, false)
+	reversed := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.01, 0, true)
 
 	require.Zero(t, new(big.Rat).Add(forward.TwistVolumeCorrection, reversed.TwistVolumeCorrection).Sign())
 	require.Equal(t, forward.TwistVolumeUpper, reversed.TwistVolumeUpper,

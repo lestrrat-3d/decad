@@ -61,56 +61,104 @@ are dominated by cap-vs-wall and cap-vs-cap pairs whose exact classification is
 never informative: at z40, 2.15 M of the 30.7 M pairs overlap in boxes, and 2.05 M of
 those involve a cap triangle.
 
-## 2. The volume residual: a per-cell wall leg and a skirt leg
+## 2. The volume residual: a per-cell wall leg, a skirt leg and the vertex sweep
 
-**`Volume`'s chorded residual is `wallLeg + skirtLeg`.** `Volume.Value` already
-holds the ruled body (loft §8.1: held triangles plus the exact twist correction),
-so the residual bounds `|V_true − V_ruled|`.
+**`Volume`'s chorded residual is `sweptLeg + wallLeg + skirtLeg`.** `Volume.Value`
+already holds the ruled body (loft §8.1: held triangles plus the exact twist
+correction), so the residual bounds `|V_true − V_ruled|`.
 
 ```text
-wallLeg  = Σ_cells productUpper(cellMatched_k, cellWallUpper_k)
+sweptLeg = sweptVolumeAllow(delta, perturbedAreaUpper(verts, tris, delta))      // exactly 0 at delta == 0
+wallLeg  = Σ_charged cells productUpper(cellMatched_k, cellWallUpper_k)
 skirtLeg = productUpper(productUpper(matchedDelta, delta), seamPerimeterUpper)   // exactly 0 at delta == 0
 ```
 
-`cellMatched_k` is loft §5.2's `matchedDelta` row read at cell `k`
+A CHARGED cell is every cell except a FACETED one, a `LineSeg` pair's cell whose
+chord-to-curve departure is zero (`p.Faceted[j] && p.MatchedDelta[j] <= 0`): the
+cells `ComputeLoftChordedAllow` walks for its other chorded terms. A circular or
+free-form cell is charged even at zero departure, since it stands for the
+bilinear patch the twist correction moves `Volume` onto. `cellMatched_k` is loft §5.2's `matchedDelta` row read at cell `k`
 (`chordCellDeltaUpper(cell's chord-to-curve half, delta)`), and `cellWallUpper_k`
 is `cellChordCurveAreaUpper` at that cell — the same two numbers
 `computeLoftChordedAllow` already forms per cell and today sums into
-`wallAreaUpper` before multiplying by the build-wide maximum. `seamPerimeterUpper`
-is the existing sum of both loops' `arcLenUpper_k`.
+`wallAreaUpper` before multiplying by the build-wide maximum.
+`seamPerimeterUpper` sums, over EVERY wall cell, charged or not, and both of its
+sides, the larger of that side's `arcLenUpper_k` and its held chord's exact
+length (`CellSpanUpper`). `perturbedAreaUpper` is `proofbound.PerturbedAreaUpper` over
+every held triangle, walls and caps alike; it reads each triangle's area as
+`RatSqrtUp` of the exact rational `|u × v|²/4` and its edge lengths through
+`RatSqrtUp` of their exact squared lengths, so no float cross product enters it.
 
-**Derivation.** Write `Φ(t, s, r) = (1 − t)·ruled_k(s, r) + t·true_k(s, r)` for the
-chord-to-curve homotopy of wall cell `k` (loft §8.1's wall leg) and close the
-moving wall into a closed surface `S_t` at each end with a filling of its seam
-curve: the planar region of the cap plane `Π` bounded by the seam's orthogonal
-projection onto `Π`, plus the skirt ruled between the seam and that projection.
-For a point `p` not on any `S_t`, the winding number of `S_t` about `p` is constant
-in `t`, and it changes by at most one each time some `S_t` passes through `p`.
-`V_ruled` and `V_true` are the winding-number integrals of `S_0` and `S_1` (that is
-what the signed tetrahedron sum computes), so `|V_true − V_ruled| ≤ ∫ N(p) dp` where
-`N(p)` counts the `(t, s, r)` with `Φ = p`. The area formula gives
-`∫ N = ∫ |det DΦ| ≤ ∫∫∫ |∂Φ/∂t| · |Φ_s × Φ_r| ≤ Σ_k cellMatched_k · sup_t Area_k(t)`,
-and `cellChordCurveAreaUpper` bounds `Area_k(t)` for every `t`
-(`internal/proofbound/bounds.go`, its `eA·eB` argument). The planar part of each cap
-filling stays inside `Π` for every `t`, so its map has rank two and contributes
-nothing to `∫ |det|`. The skirt is the one new term: every held seam point lies
-within `delta` of `Π` (loft §5.2's `delta` row, read at the two held stations the
-chord joins), the true seam lies in `Π`, so the skirt's width is at most `delta`,
-its length at most `seamPerimeterUpper`, and every point of it moves at most
-`matchedDelta` as `t` runs — the orthogonal projection onto a plane is
-1-Lipschitz — which is `skirtLeg`. No step assumes the held cap polygon is planar,
-the ruled wall embedded, or the seam simple at an intermediate `t`.
+**Derivation.** Write `w_S` for the winding function of a closed oriented surface
+`S`; the signed tetrahedron sum of a closed triangulated surface is `∫ w_S`. If a
+family of closed surfaces is the image of a map `H(t, x)` whose moving part is a
+patch `M`, the winding number about a point `p` changes only when the moving part
+passes through `p`, so `|∫ w_end − ∫ w_start| ≤ ∫ N(p) dp`, where `N(p)` counts the
+`(t, x)` with `H(t, x) = p`, and the area formula gives
+`∫ N = ∫ |det DH| ≤ ∫∫ |∂H/∂t| · |area element|`. Call `Π` a cap's exact placed
+plane. Three steps, in this order, carry `S_0` — bilinear patches through the
+held corners on charged cells, held triangle pairs on every other cell, held cap
+triangles — to the true body:
+
+1. **Project each held cap onto `Π`.** `H(λ, x) = x − λ·((x − o)·n)·n` on every held
+   cap triangle, and the strip between the held seam and its projection (the
+   SKIRT) is the trace of the cap's boundary, so the surface stays closed. Every
+   held vertex lies within `delta` of its denoted station, which lies on `Π`, so
+   every cap point lies within `delta` of `Π` and moves at speed at most `delta`;
+   the map `I − λ·n·nᵀ` does not increase area. The step costs at most
+   `delta · Σ_cap triangles held area`.
+2. **Move every wall cell to the true wall at once**, `Φ_k(t, s, r) = (1 −
+   t)·held_k(s, r) + t·true_k(s, r)`, carrying the skirt and the cap filling with
+   it. Every cell runs over the same `t` and moves its corners by the same
+   vertex interpolation, so cells that share a rung stay joined along it;
+   moving one family of cells first would tear the surface there. The filling is
+   the planar region of `Π` bounded by the projection of the moving seam; after
+   step 1 the projected held triangles are that region (two 2-chains in a plane
+   with the same boundary agree almost everywhere), and it stays inside `Π`, so
+   its map has rank two and contributes nothing to `∫ |det|`.
+   - A charged cell moves at speed at most `cellMatched_k` over a surface of area
+     at most `cellChordCurveAreaUpper` at every `t` (`internal/proofbound/bounds.go`,
+     its `eA·eB` argument): `wallLeg`.
+   - A FACETED cell is a cell whose held triangle pair IS the boundary loft §5
+     gives it, so `true_k` is the triangle pair through the
+     denoted corners. Its points move by convex combinations of corner
+     displacements, at most `delta`, and each triangle's area stays below its held
+     area plus `perturbedTriangleAreaAllow`: at most `delta · Σ (held area +
+     allowance)` over those triangles.
+   - The skirt: the held seam lies within `delta` of `Π` and the true seam lies in
+     `Π`, and signed distance to a plane is affine, so the moving seam lies within
+     `(1 − t)·delta ≤ delta` of `Π` and the skirt's width is at most `delta`. Its
+     length is at most the moving seam's speed summed over EVERY seam cell,
+     charged or not. That speed is a convex combination of the held chord's
+     and the true curve's, so it is at most the larger of the held chord's exact
+     length and `arcLenUpper_k`; a held chord joining two displaced stations
+     can be up to `2·delta` longer than the true segment. The sum is
+     `seamPerimeterUpper`. Every skirt point is a convex
+     combination of a seam point and its orthogonal projection, which is
+     1-Lipschitz, so it moves at most `matchedDelta`: `skirtLeg`.
+3. At `t = 1` the walls are the true walls, the seam is the true seam in `Π`, the
+   skirt has zero width and the filling is the true cap region: the true body.
+
+**Steps 1 and the faceted cells of step 2 are what `sweptLeg` pays for.** Their
+two costs together are at most `delta · Σ (held area + perturbedTriangleAreaAllow)`
+over disjoint triangle sets, and `perturbedAreaUpper` sums exactly that over every
+held triangle, so `sweptVolumeAllow(delta, perturbedAreaUpper)` dominates both.
+Neither the wall leg nor the skirt leg reaches them: the wall leg reads only
+charged cells, and the skirt leg bounds the strip's motion, not the cap's. So
+`sweptLeg` is REQUIRED whenever `delta > 0`, chorded or not. At `delta == 0` every
+held vertex is its denoted station (loft §5.2's `delta` row), the held caps lie in
+`Π`, the faceted cells never move, and all three of `sweptLeg`, step 1 and the
+skirt are exactly zero. No step assumes the held cap polygon is planar, the ruled
+wall embedded, or the seam simple at an intermediate `t`.
 
 **The cap leg and the seam leg are not spent.** Loft §8.1 states them as the two
 residues of a by-parts split of the wall's flux integral over an OPEN patch; the
-winding argument above integrates over a CLOSED surface and so has no such residue.
-The two legs cancel exactly in the signed difference they were bounding —
-`internal/proofbound/bounds.go`'s own `ChordedBoundaryVolumeAllow` comment already
-records that the wall and twist legs alone dominate the swept measure — and
-`|V_true − V_ruled|` is at most that measure. `ChordedBoundarySeamAllow`,
-`CapAreaVolumeAllow`'s loft call, the cap `planeOffsetUpper` row and the `posUpper`
-row leave the loft path with this increment; `CapAreaVolumeAllow` itself stays for
-the prism path that owns it.
+chain above moves a CLOSED surface at every step and so has no such residue. The
+cap's in-plane change is the filling's rank-two map, and the seam's departure from
+the cap plane is the skirt. `ChordedBoundaryVolumeAllow`,
+`ChordedBoundaryVolumeResidualAllow`, `ChordedBoundarySeamAllow`,
+`CapAreaVolumeAllow`, the cap `planeOffsetUpper` row and the `posUpper` row leave
+with this increment; the loft was their only production caller.
 
 **Per cell, never the maximum.** The build-wide `matchedDelta × wallAreaUpper`
 charges every cell at the worst cell's departure. On the gear a LineSeg cell's
@@ -125,6 +173,10 @@ Measured on the probe (shipped target, ceilings lifted):
 | z8 | 1.15 / 0.83 / 1.01 | 0.69 | 1.0e-15 | 3.0 → 0.69 |
 | z20 | 7.5 / 9.6 / 11.3 | 4.3 | 2.3e-14 | 28.4 → 4.3 |
 | z40 | 36.4 / 90.5 / 98.4 | 16.9 | 1.7e-13 | 225 → 16.9 |
+
+The skirt column is the prototype's, which summed only charged cells' sides;
+summing every seam cell adds the root `LineSeg`s and leaves the leg at the
+coordinates' rounding scale, since `delta` is.
 
 The tessellation's `volSymDiff` (`docs/tessellation-design.md` §2's `loftPayload`
 row) composes `sweptVolumeAllow + wallLeg + twistVolumeUpper + skirtLeg`: the mesh
@@ -156,33 +208,13 @@ allowance without that rounding; the difference rounds down once. Subtracting
 from the rounded `V_value` instead carries `V_value`'s half-ulp into the
 result, and where `epsV` is most of `V` that half-ulp is many ulps of the
 small difference, so no single outward step covers it. `volumeAllow` is
-whatever residual `Volume` composes (§2's `wallLeg + skirtLeg` beside the
-vertex sweep, or loft §8.1's residual where that is still the shipped form):
-the clearance reads `Volume`'s proven enclosure of `V'`, so S12 stays exactly
+the residual `Volume` composes, §2's `wallLeg + skirtLeg` beside the vertex
+sweep: the clearance reads `Volume`'s proven enclosure of `V'`, so S12 stays exactly
 the test `Volume` states.
 
-**The measure `epsV` covers one closed-surface sweep, each part charged.**
-The winding argument needs `∫ |w_1 − w_0| ≤ epsV` for a homotopy that keeps
-the surface closed, and with `delta > 0` the held caps are not in their
-planes. Every part moves at once, over the same `t`, so cells that share a
-rung stay joined along it; moving one family of cells first would tear the
-surface at those rungs.
-
-- each held cap projects onto its plane `Π`, and every cell whose chord
-  departure is zero (`p.MatchedDelta[j] <= 0`, which no chorded leg charges)
-  moves by vertex interpolation to its exact place; both move held
-  triangles at speed at most `delta`, so
-  `sweptVolumeAllow(delta, perturbedAreaUpper)` charges them;
-- every chorded cell moves by `Φ`, charged per cell by `wallLeg`; its corners
-  are the same held vertices the faceted cells interpolate;
-- the skirt between every held seam cell, zero-departure cells included, and
-  its projection onto `Π` has width at most `delta` and moves at speed at
-  most `matchedDelta`, so `skirtLeg = productUpper(productUpper(matchedDelta,
-  delta), Σ_all cells (seamV_k + seamW_k))`. Each `seam_k` is the larger of
-  the cell's `arcLenUpper_k`, which bounds the TRUE segment, and the held
-  chord's exact length `cellSpanUpper`, which can exceed it by `2·delta`.
-
-The vertex sweep is therefore REQUIRED in `epsV` whenever `delta > 0`.
+**The measure `epsV` is §2's chain.** `epsV` bounds `∫ |w_1 − w_0|` over the
+three steps §2 writes down, each with its charge, so the vertex sweep is
+REQUIRED in `epsV` whenever `delta > 0`, as it is in `Volume`.
 
 **Derivation.** Let `w_0`, `w_1` be the winding functions of §2's `S_0` and `S_1`,
 `V' = ∫ w_1` the true volume and `c` the exact centroid of the ruled body, so that
@@ -439,12 +471,13 @@ asserted as ratios against the tolerance.
 
 | Test | Asserts | Shown to fail by |
 |---|---|---|
-| `TestLoftVolumeResidualIsPerCellWallLegPlusSkirt` | on a twisted arc ring, `Volume.Bound` equals the per-cell sum plus skirt composed with the rounding; the skirt is exactly 0 at `delta == 0` and positive on the placed copy | dropping the skirt on the placed copy; charging the build-wide maximum instead of the per-cell sum (bound rises) |
-| `TestLoftVolumeBoundEnclosesRefinedRing` | the exact ring volume lies inside `[Value − Bound, Value + Bound]` at every station count `m` in 3..64, twisted and untwisted | deleting the wall leg |
+| `TestLoftVolumeResidualIsPerCellWallLegPlusSkirt` | on an oval whose two arcs have radii 3 and 5, `Volume.Bound` equals the rounding, the vertex sweep, the per-cell sum and the skirt composed in order; the skirt is exactly 0 at `delta == 0` (one chord per arc) and positive on the placed copy | dropping the skirt on the placed copy; charging the build-wide maximum instead of the per-cell sum (bound rises) |
+| `TestLoftVolumeBoundEnclosesRefinedRing` | the exact ring volume lies inside `[Value − Bound, Value + Bound]` at station counts from 4 to 64 per quarter arc, twisted and untwisted | deleting the wall leg |
+| `TestLoftPlacedVolumeNeedsTheVertexSweep` | a placed thin slab with one tiny chorded arc: the exact volume lies inside `Volume`'s bound and outside the bound without `sweptLeg` | deleting `sweptVolumeAllow` from the chorded `Volume` composition |
 | `TestLoftCentroidShiftFormEnclosesTwoArcLobe` | on a section of two circular arcs (no `LineSeg`, so every wall is ruled; a ring cannot show the shift red, its chorded centroid equals the true one by symmetry), untwisted, twisted and placed at three bulge offsets: the exact centroid lies inside `Bound` of the published one; `R_c` reaches every densely sampled true boundary point; the bound is below the old form's on every row | deleting `R_c`'s `max(matchedDelta, delta)` term (6 of 7 rows); deleting the shift (every row) |
-| `TestLoftCentroidToothBoundReadsToothSize` | one tooth at z = 8, 20, 40: `R_c` within the tooth's own diameter; the Centroid ratio below the old form's and below `2.5e-4 · 4` on every row (5.0e-5, 5.0e-5, 6.1e-5 measured) | the anchor-based form exceeds `2.5e-4 · 4` at z20 and z40 (2.0e-3, 7.2e-3) |
+| `TestLoftCentroidToothBoundReadsToothSize` | one tooth at z = 8, 20, 40: `R_c` within the tooth's own diameter; the Centroid ratio below the old form's and below `2.5e-4 · 4` on every row (5.0e-5, 5.0e-5, 6.1e-5 measured) | the anchor-based form, read over §2's volume legs, exceeds `2.5e-4 · 4` at z40 (1.7e-3; 3.1e-4 and 7.3e-4 at z8 and z20) |
 | `TestCentroidClearanceIsExact` | `CentroidClearance` is the largest float at or below the exact `|vol| − volumeAllow` where that allowance sits inside `V_value`'s half-ulp | the rounded-volume form overstates it 1.7x |
-| `TestLoftAreaCapTubeIsPerCell` | `Area.Bound` composes the per-cell tube; it equals the maximum form when every cell's departure is equal (a uniform full circle) and is below it on the gear | charging the maximum form |
+| `TestLoftAreaCapTubeIsPerCell` | `CapAreaExcess` is the per-cell tube; it matches the maximum form to rounding when every cell's departure is equal (a uniform full circle) and is below it on the two-radius oval | charging the maximum form |
 | `TestLoftChordTargetReadsFeatureSize` | the target of a tooth, a gear and a copy of each translated 10 outer radii: `fraction · A/P` to one ulp, translation-invariant; an exact `LineSeg`/`NURBSSeg` record's target bits pinned, read on amd64 and arm64 by CI | reading the envelope rule |
 | `TestLoftFreeformWalkBisectsOnMatched` | on the zigzag span of `TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses` paired with itself, every accepted cell's matched value is at or below the target | bisecting on the sagitta alone |
 | `TestLoftArcWedgeVerifiesSound` (re-pinned) | the §14 wedge's Volume and Centroid margins under the new constant, as ratios | — |
@@ -465,7 +498,7 @@ the loft sections §12 lists for it.
 
 | PR | Files and functions | Proves itself by |
 |---|---|---|
-| **1 — volume residual and area tube** | `internal/loftmesh/loft_chord_allow.go`: `ComputeLoftChordedAllow` accumulates `WallLeg`, `SkirtLeg`, `CapAreaExcess` per cell and drops `CapVolumeUpper`, `SeamAllow`, `h1Upper`, `posUpper`; `loft_moments.go` (`computeLoftChordedAllow` loses the cap-offset scan); `internal/loftmesh/mass_accumulator.go` `Volume`/`Area`; `loft_build.go` `loftMeshProofOf` (`volSymDiff`); `internal/proofbound/bounds.go` deletes `ChordedBoundarySeamAllow`, `ChordedBoundaryVolumeAllow`, `ChordedBoundaryVolumeResidualAllow` and their tests | the first five tests of §8 that name Volume or Area |
+| **1 — volume residual and area tube** | `internal/loftmesh/loft_chord_allow.go`: `ComputeLoftChordedAllow` accumulates `WallLeg`, `CapAreaExcess` per cell and `SkirtLeg` over every seam cell, and drops `CapVolumeUpper`, `SeamAllow`, `h1Upper`, `posUpper`; `loft_moments.go` (`computeLoftChordedAllow` loses the cap-offset scan); `internal/loftmesh/mass_accumulator.go` `Volume`/`Area`, and `Centroid`'s `epsV` reads the same chain; `loft_build.go` `loftMeshProofOf` (`volSymDiff`); `internal/proofbound/bounds.go` makes `PerturbedAreaUpper` exact and deletes `ChordedBoundarySeamAllow`, `ChordedBoundaryVolumeAllow`, `ChordedBoundaryVolumeResidualAllow`, `CapAreaVolumeAllow` and their tests | the tests of §8 that name Volume or Area, and `TestLoftPlacedVolumeNeedsTheVertexSweep` |
 | **2 — centroid shift form** | `internal/loftmesh/mass_accumulator.go` `Centroid`, `CentroidMeasureAllow`, `CentroidRadius`, `CentroidClearance`, `VolumeAllow`; `loft_chord_allow.go` accumulates `WallLeg` and `SkirtLeg` (fields only; `Volume` keeps reading the shipped residual until PR 1); delete `PlacedCentroidAllow` and the loft's `ChordedBoundaryMomentResidualAllow` call (the `internal/proofbound` helpers stay) | the three centroid tests |
 | **3 — audit** | `internal/loftmesh/loft_audit.go`: `sweepCandidates`, `LoftCrossingAuditStructured`, `capFamilyProof`, `LoftAuditShortcuts.Sweep`/`.CapProof`; `loft_build.go` calls the structured entry with `a.walls`, `a.capStartCount`, `a.vIdx`, `a.wIdx`; `sweep_mitre_build.go` unchanged; `internal/proofbound/budget.go` comment on what S8 counts | the four audit tests |
 | **4 — chord target and matched bisection** | `loft_stations.go`: `loftChordTarget(area0, perim0, area1, perim1)`, `loftFeatureSize`, `loftChordFraction = 2.5e-4`; `loft.go` passes `falsifyRecordedArea`'s integrals on `loftPayload.recordArea`; `loftStationCapGate` computes the target from them and `loft_build.go` chords at it; `internal/freeform/spline_stations.go` `WalkCell` measures and forwards the matched value, `StationCellReader.AcceptCell` takes it; `loft_chord_calibration_internal_test.go` re-pinned | the target, walk and wedge tests |
@@ -478,6 +511,15 @@ and `testing.Short`) and records the ratios it reached in its description.
 
 - Do not keep the cap or seam leg "for safety" in `Volume`: §2's argument is written
   down, and a redundant leg is what made the gear `Suspect`.
+- Do not drop `sweptVolumeAllow(delta, perturbedAreaUpper)` from `Volume`,
+  `Centroid`'s `epsV` or `volSymDiff` whenever `delta > 0`, chorded or not: it is the
+  only charge for §2's step 1 (projecting the held caps onto their planes) and for
+  the faceted cells' motion in step 2. It is required, not kept for safety.
+- Do not compute `perturbedAreaUpper` from a float cross product or a float edge
+  length: §2 depends on it, so each triangle's area and edge lengths go through the
+  exact rational cross product and `RatSqrtUp`.
+- Do not sum `seamPerimeterUpper` over charged cells alone: the skirt runs along
+  every seam cell, and a faceted cell's seam moves by `delta` too.
 - Do not read `sectionDelta` where `cellMatched_k` is owed, and do not substitute the
   build-wide `matchedDelta` for the per-cell value in `wallLeg` or the cap tube.
 - Do not bisect on the sagitta alone and rely on the measured 1.5× ratio; the ratio

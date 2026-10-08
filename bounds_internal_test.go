@@ -644,7 +644,7 @@ func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
 // rounding to +0 PROVES the exact result sits at or below half the smallest
 // subnormal, so the smallest subnormal encloses it — and stays FINITE, which a
 // +Inf refusal would not, and which the consumers that gate on a positive
-// bound (proofbound.ChordedBoundaryVolumeAllow's own wallAreaUpper > 0 branch) need.
+// bound (proofbound.ChordedBoundaryMomentAllow's own matchedDelta > 0 branch) need.
 //
 // No leg below pins a float literal a platform's own FMA contraction could
 // move: each asserts the SIGN of the published bound and the exactness class
@@ -839,55 +839,6 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		require.Equal(t, Approximate, exactnessOf(got))
 	})
 
-	t.Run("cap area volume", func(t *testing.T) {
-		// Both operands pass the helper's own positivity gate, so |h|·|ΔArea|/3
-		// is positive and a zero would republish a moved cap as an unmoved one.
-		got := proofbound.CapAreaVolumeAllow(s, s)
-		require.Greater(t, got, 0.0,
-			`a positive plane offset over a positive area gap bounds a positive volume`)
-		require.Equal(t, Approximate, exactnessOf(got))
-	})
-
-	t.Run("cap area volume whose product survives but whose third flushes", func(t *testing.T) {
-		// The product itself is representable; only the division by 3
-		// underflows, so this leg falsifies the DIVIDE independently of the
-		// multiply the leg above covers.
-		require.Greater(t, proofbound.ProductUpper(s, 0.1), 0.0,
-			`the fixture must carry a positive numerator into the divide`)
-		require.Equal(t, 0.0, proofbound.ProductUpper(s, 0.1)/3,
-			`the fixture must actually exercise a flush at the divide`)
-		got := proofbound.CapAreaVolumeAllow(s, 0.1)
-		require.Greater(t, got, 0.0, `the third of a positive volume is positive`)
-		require.Equal(t, Approximate, exactnessOf(got))
-	})
-
-	t.Run("wall chord-to-curve leg", func(t *testing.T) {
-		// matchedDelta and wallAreaUpper both pass the helper's own > 0
-		// branch gate, so the wall leg matchedDelta·wallAreaUpper is positive
-		// and the composed total cannot be zero.
-		got := proofbound.ChordedBoundaryVolumeAllow(s, s, 0, 0, 0)
-		require.Greater(t, got, 0.0,
-			`a positive displacement over a positive wall area bounds a positive volume`)
-		require.Equal(t, Approximate, exactnessOf(got))
-	})
-
-	t.Run("seam correction", func(t *testing.T) {
-		got := proofbound.ChordedBoundarySeamAllow(s, s, s)
-		require.Greater(t, got, 0.0,
-			`three positive operands bound a positive line-integral residue`)
-		require.Equal(t, Approximate, exactnessOf(got))
-	})
-
-	t.Run("seam correction whose product survives but whose third flushes", func(t *testing.T) {
-		// As with the cap: the numerator is representable and only the
-		// division by 3 underflows.
-		require.Equal(t, 0.0, proofbound.ProductUpper(s, proofbound.ProductUpper(0.1, 1))/3,
-			`the fixture must actually exercise a flush at the divide`)
-		got := proofbound.ChordedBoundarySeamAllow(s, 0.1, 1)
-		require.Greater(t, got, 0.0, `the third of a positive residue is positive`)
-		require.Equal(t, Approximate, exactnessOf(got))
-	})
-
 	t.Run("moment", func(t *testing.T) {
 		// The volume leg is positive, and the widened radius is positive
 		// through matchedDelta alone, so the first moment this bounds is
@@ -904,11 +855,6 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		// family exactnessOf may keep calling Exact.
 		require.Equal(t, 0.0, proofbound.CellChordCurveAreaUpper(vLo, vLo, vLo, vLo, 0, 0, 0))
 		require.Equal(t, 0.0, proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi))
-		require.Equal(t, 0.0, proofbound.CapAreaVolumeAllow(0, 1))
-		require.Equal(t, 0.0, proofbound.CapAreaVolumeAllow(1, 0))
-		require.Equal(t, 0.0, proofbound.ChordedBoundaryVolumeAllow(0, 1, 0, 0, 0))
-		require.Equal(t, 0.0, proofbound.ChordedBoundarySeamAllow(0, 1, 1))
-		require.Equal(t, 0.0, proofbound.ChordedBoundarySeamAllow(1, 0, 1))
 		require.Equal(t, 0.0, proofbound.ChordedBoundaryMomentAllow(0, 1, 0, 0, 0, 0, 0))
 	})
 }

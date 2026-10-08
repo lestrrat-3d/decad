@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -172,23 +171,18 @@ func loftCentroidRebuild(t *testing.T, pl loftPayload) (*loftMassAccumulator, lo
 	require.True(t, sectionDelta > 0 || sectionMatchedDelta > 0, "the fixture must be chorded")
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
-	anchor := pl.xform.Apply(pl.plane0.Origin)
+	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
 	matchedDelta := chordCellDeltaUpper(sectionMatchedDelta, a.delta)
-	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
-	distances := make([]loftmesh.LoftVertexDistance, len(a.verts))
-	for k, tri := range a.tris {
-		mass.addTriangle(a.verts[tri[0]], a.verts[tri[1]], a.verts[tri[2]], k < a.walls, tri, distances)
-	}
-	chorded, err := computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.DistUpper, a.reversed)
-	require.NoError(t, err)
-	mass.Chorded = chorded
 	return mass, a, matchedDelta
 }
 
 // retiredAnchorCentroidBound is the anchor-based centroid bound the shift
 // form replaced, rebuilt from the proofbound helpers it composed: per
 // coordinate (epsM + |c_i − anchor_i|·epsV)/clearance, with epsM read at the
-// body's inf-norm extent from the mass anchor. It omits the coordinate
+// body's inf-norm extent from the mass anchor. Its epsV is the volume legs
+// Volume spends today (docs/loft-gear-bounds-design.md §2), not the cap and
+// seam legs it once read, so the comparison isolates the anchor-versus-shift
+// form. It omits the coordinate
 // rounding, so it is a LOWER bound on what that form published, which makes
 // "the shift form is smaller" the stronger claim.
 func retiredAnchorCentroidBound(t *testing.T, mass *loftMassAccumulator, a loftAssembly, anchor r3.Vec, matchedDelta float64, centroid r3.Vec) float64 {
@@ -207,10 +201,9 @@ func retiredAnchorCentroidBound(t *testing.T, mass *loftMassAccumulator, a loftA
 		epsM = proofbound.SweptMomentAllow(a.delta, areaUpper, coordUpper+a.delta)
 	}
 	c := mass.Chorded
-	epsV = proofbound.AbsSumUpper(epsV, proofbound.ChordedBoundaryVolumeResidualAllow(
-		matchedDelta, c.WallAreaUpper, c.CapVolumeUpper, c.SeamAllow))
+	epsV = proofbound.AbsSumUpper(epsV, c.WallLeg, c.SkirtLeg)
 	epsM = proofbound.AbsSumUpper(epsM, proofbound.ChordedBoundaryMomentResidualAllow(
-		matchedDelta, c.WallAreaUpper, c.CapVolumeUpper, c.SeamAllow, c.MaxTwistOffsetUpper, coordUpper))
+		matchedDelta, c.WallAreaUpper, 0, 0, c.MaxTwistOffsetUpper, coordUpper))
 	vol := mass.volume(a.verts, a.tris)
 	clearance := math.Nextafter(math.Abs(vol.Value.Base())-epsV, math.Inf(-1))
 	require.Positive(t, clearance, "the retired form must have had a clearance to compare against")
@@ -414,16 +407,16 @@ func loftCentroidRatio(t *testing.T, body *Body, bound float64) (float64, float6
 // Verify's verdict is not asserted: Volume's binding residual is §2's
 // increment, not this one.
 //
-// Shown to fail: the retired anchor-based form, rebuilt beside it, exceeds
-// 2.5e-4·4 on the z20 and z40 rows, where the anchor is farthest from the
-// tooth, as the assertion on it records.
+// Shown to fail: the retired anchor-based form, rebuilt beside it over the
+// volume legs Volume spends today, exceeds 2.5e-4·4 on the z40 row, where the
+// anchor is farthest from the tooth, as the assertion on it records.
 func TestLoftCentroidToothBoundReadsToothSize(t *testing.T) {
 	t.Parallel()
 	const threshold = 2.5e-4 * 4
 	for _, row := range []struct {
 		teeth        float64
 		retiredFails bool
-	}{{8, false}, {20, true}, {40, true}} {
+	}{{8, false}, {20, false}, {40, true}} {
 		t.Run(fmt.Sprintf("z%g", row.teeth), func(t *testing.T) {
 			t.Parallel()
 			body := helicalToothLoft(t, involuteGear{module: 2, teeth: row.teeth, pressure: 20 * math.Pi / 180, fitPoints: 5})
@@ -436,8 +429,12 @@ func TestLoftCentroidToothBoundReadsToothSize(t *testing.T) {
 			radius := mass.CentroidRadius(a.verts, a.tris, cen.Value, 0)
 			retired := retiredAnchorCentroidBound(t, mass, a, lp.xform.Apply(lp.plane0.Origin), matchedDelta, cen.Value)
 			retiredRatio, _ := loftCentroidRatio(t, body, retired)
+			anchorReach := 0.0
+			for _, v := range a.verts {
+				anchorReach = math.Max(anchorReach, v.Sub(lp.xform.Apply(lp.plane0.Origin)).Len())
+			}
 			t.Logf("R_c %.4g, tooth diameter %.4g, anchor reach %.4g; ratio %.4g, retired anchor form ratio %.4g",
-				radius, diameter, mass.DistUpper, ratio, retiredRatio)
+				radius, diameter, anchorReach, ratio, retiredRatio)
 			require.LessOrEqual(t, radius, diameter, "R_c must read the tooth's own size")
 			require.Less(t, ratio, retiredRatio, "the shift form must be below the retired anchor form")
 			require.Less(t, ratio, threshold, "the shift form must leave Centroid within the threshold")

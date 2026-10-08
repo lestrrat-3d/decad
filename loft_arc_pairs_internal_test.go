@@ -294,13 +294,11 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	}}
 
 	anchor := r3.NewVec(0, 0, 0)
-	distUpper := math.Hypot(r0, h) + 1 // generously above the true max distance
 
 	// delta is 0: this hand-built station chain stands for an unplaced build
 	// whose stations are the exact points, so the composed matchedDelta
 	// (docs/loft-design.md §5.2) is the chord-to-curve half alone.
-	chorded, err := computeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, 0, distUpper, false)
-	require.NoError(t, err, "this fixture's cap plane offset is derivable")
+	chorded := computeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, 0, false)
 
 	// The independent reference: the quarter lateral frustum's own closed
 	// form, and the SAME two-triangle split assembleLoft's own Table B uses,
@@ -388,15 +386,16 @@ func TestLoftArcWedgeVerifiesSound(t *testing.T) {
 	margin := toleranceRel / ratio
 	t.Logf("A10a wedge Verify margin: binding=%s ratio=%.6g margin=%.3gx", reading, ratio, margin)
 	require.Greater(t, margin, 1.0, "the achieved margin must exceed 1x for a Sound verdict")
-	// Volume is the binding reading at a measured ~3.78x at the 75 stations
+	// Volume is the binding reading at a measured ~9.12x at the 75 stations
 	// the feature-size chord target settles this wedge on
 	// (loftChordFractionPinM), once Centroid's bound is the shift form
-	// (docs/loft-gear-bounds-design.md §3). Pinned with generous slack
+	// (docs/loft-gear-bounds-design.md §3) and Volume's is the per-cell chain
+	// (§2). Pinned with generous slack
 	// since a fraction-of-a-ulp difference in composed bound arithmetic
 	// between hosts must never flip this assertion (never a wall-clock or
 	// exact-bit pin — CLAUDE.md's own host-portability rule).
 	require.Equal(t, "Volume", reading)
-	require.InEpsilon(t, 3.78, margin, 0.25,
+	require.InEpsilon(t, 9.12, margin, 0.25,
 		"the achieved margin at the shipped constant, pinned so a future change to the bound formulas is caught")
 }
 

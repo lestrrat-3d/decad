@@ -5,8 +5,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -35,77 +33,6 @@ func addBoxFaces(m *loftMassAccumulator, a, b, c float64) {
 	for _, tri := range tris {
 		m.add(tri[0], tri[1], tri[2], true)
 	}
-}
-
-func TestLoftVertexDistanceCacheMatchesUncachedAccumulator(t *testing.T) {
-	t.Parallel()
-	verts := []r3.Vec{
-		r3.NewVec(0, 0, 0), r3.NewVec(2, 0, 0),
-		r3.NewVec(0, 3, 0), r3.NewVec(0, 0, 5),
-		r3.NewVec(math.NaN(), 0, 0), // No triangle admits this vertex.
-	}
-	tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
-	anchor := r3.NewVec(0.125, -0.375, 0.625)
-	for _, delta := range []float64{0, 1e-8} {
-		uncached := newLoftMassAccumulator(anchor, delta, 0, 0)
-		cached := newLoftMassAccumulator(anchor, delta, 0, 0)
-		cache := make([]loftmesh.LoftVertexDistance, len(verts))
-		for _, tri := range tris {
-			uncached.add(verts[tri[0]], verts[tri[1]], verts[tri[2]], true)
-			cached.addTriangle(verts[tri[0]], verts[tri[1]], verts[tri[2]], true, tri, cache)
-		}
-		for _, pair := range [][2]*big.Rat{
-			{uncached.Vol6, cached.Vol6}, {uncached.MomX, cached.MomX},
-			{uncached.MomY, cached.MomY}, {uncached.MomZ, cached.MomZ},
-		} {
-			require.Zero(t, pair[0].Cmp(pair[1]))
-		}
-		require.Equal(t, math.Float64bits(uncached.DistUpper), math.Float64bits(cached.DistUpper))
-		require.Equal(t, math.Float64bits(uncached.PerturbAreaSum), math.Float64bits(cached.PerturbAreaSum))
-		for i, entry := range cache {
-			require.Equal(t, i < 4, entry.Ready, "only referenced vertices receive a distance")
-		}
-
-		for _, pair := range [][2]Measurement{
-			{uncached.volume(verts, tris), cached.volume(verts, tris)},
-			{uncached.area(), cached.area()},
-		} {
-			require.Equal(t, math.Float64bits(pair[0].Value.Base()), math.Float64bits(pair[1].Value.Base()))
-			require.Equal(t, math.Float64bits(pair[0].Bound.Base()), math.Float64bits(pair[1].Bound.Base()))
-			require.Equal(t, pair[0].Exactness, pair[1].Exactness)
-		}
-		oldCentroid, oldErr := uncached.centroid(verts, tris)
-		newCentroid, newErr := cached.centroid(verts, tris)
-		require.Equal(t, oldErr, newErr)
-		if oldErr == nil {
-			for _, pair := range [][2]float64{
-				{oldCentroid.Value.X, newCentroid.Value.X},
-				{oldCentroid.Value.Y, newCentroid.Value.Y},
-				{oldCentroid.Value.Z, newCentroid.Value.Z},
-				{oldCentroid.Bound.Base(), newCentroid.Bound.Base()},
-			} {
-				require.Equal(t, math.Float64bits(pair[0]), math.Float64bits(pair[1]))
-			}
-			require.Equal(t, oldCentroid.Exactness, newCentroid.Exactness)
-		}
-		oldBox, oldOK := uncached.bounds()
-		newBox, newOK := cached.bounds()
-		require.Equal(t, oldOK, newOK)
-		require.Equal(t, oldBox, newBox)
-	}
-
-	// A finite coordinate can still have no finite float64 upper distance.
-	uncached := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
-	cached := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
-	far := r3.NewVec(math.MaxFloat64, 1, 0)
-	entry := new(loftmesh.LoftVertexDistance)
-	for range 2 {
-		uncached.FoldCoordUpper(far)
-		cached.FoldCoordUpperCached(far, entry)
-	}
-	require.True(t, entry.Ready)
-	require.True(t, math.IsInf(entry.Upper, 1))
-	require.Equal(t, math.Float64bits(uncached.DistUpper), math.Float64bits(cached.DistUpper))
 }
 
 // TestLoftMassAccumulatorBoxIsExact reproduces a closed box's closed-form
@@ -597,9 +524,8 @@ func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
 
 // TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta pins
 // a10-plan.md Part 3 PR 9 Task 1's own soundness fix: internal/proofbound/bounds.go's
-// proofbound.ChordedBoundaryVolumeAllow (and proofbound.ChordedBoundarySeamAllow
-// inside computeLoftChordedAllow) must be composed
-// with the build's own PARAMETER-MATCHED sectionMatchedDelta — NEVER
+// chorded volume legs (the per-cell wall leg and the skirt) must be composed
+// with the build's own PARAMETER-MATCHED matched departure — NEVER
 // sectionDelta, the build's own MAX SAGITTA (a SET-distance). The
 // chord-to-curve half of that matched term coincides with the sagitta on a
 // circular-only build (loftCircularCellStations' own doc comment: a circular
@@ -664,8 +590,7 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	// delta is 0: the accumulator below carries no placement displacement
 	// either, so the composed matchedDelta (docs/loft-design.md §5.2) is the
 	// chord-to-curve half alone and the two sites agree.
-	chorded, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, sectionMatchedDelta, 0, 2.0, false)
-	require.NoError(t, err, "this fixture's cap plane offset is derivable")
+	chorded := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, sectionMatchedDelta, 0, false)
 
 	m := newLoftMassAccumulator(anchor, 0, sectionDelta, sectionMatchedDelta)
 	m.Chorded = chorded
@@ -675,20 +600,16 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	tris := [][3]int{{0, 1, 3}, {0, 3, 2}}
 	vol := m.volume(verts, tris)
 
-	// The reference this fixture must FALSIFY: proofbound.ChordedBoundaryVolumeAllow
-	// composed with sectionDelta (the sagitta) rather than
-	// sectionMatchedDelta — what a buggy caller reading the wrong field
-	// would publish.
-	wrongTerm := proofbound.ChordedBoundaryVolumeResidualAllow(
-		sectionDelta, chorded.WallAreaUpper, chorded.CapVolumeUpper, chorded.SeamAllow,
-	)
-	rightTerm := proofbound.ChordedBoundaryVolumeResidualAllow(
-		sectionMatchedDelta, chorded.WallAreaUpper, chorded.CapVolumeUpper, chorded.SeamAllow,
-	)
+	// The reference this fixture must FALSIFY: the wall leg composed with
+	// sectionDelta (the sagitta) rather than the cell's matched departure —
+	// what a buggy caller reading the wrong field would publish.
+	wrongTerm := proofbound.ProductUpper(sectionDelta, chorded.WallAreaUpper)
+	rightTerm := proofbound.ProductUpper(sectionMatchedDelta, chorded.WallAreaUpper)
 	require.Greater(t, rightTerm, wrongTerm, "the fixture must actually distinguish the two candidate bounds")
+	require.Greater(t, chorded.WallLeg, wrongTerm, "the wall leg reads the cell's matched departure, not the sagitta")
 
 	require.GreaterOrEqual(t, vol.Bound.Base(), rightTerm,
-		"Volume's own Bound must compose the matchedDelta-keyed chordedBoundaryVolumeAllow term")
+		"Volume's own Bound must compose the matchedDelta-keyed wall leg")
 	require.Greater(t, vol.Bound.Base(), wrongTerm,
 		"Volume's own Bound must exceed what composing the sagitta-keyed term alone would publish")
 }
@@ -703,15 +624,15 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 // The sagitta bounds the IDEAL chord between the two points the record denotes.
 // The chord the build DRAWS joins two HELD stations, each displaced by delta
 // from those points, so every leg keyed on the matched term — the wall upper,
-// the ruled area leg, the cap-area tube, and the seam allowance with the
-// posUpper it widens — must charge the SUM. Reachability needs neither an
+// the wall leg, the ruled area leg, the cap-area tube and the skirt — must
+// charge the SUM. Reachability needs neither an
 // interior station nor a placement: delta > 0 is enough, and an unplaced loft
 // over two same-kind ArcSeg profiles reaches it as soon as the settled chord
 // count produces a computed station.
 //
 // FALSIFICATION: replace computeLoftChordedAllow's own per-cell
 // chordCellDeltaUpper(p.matchedDelta[j], delta) with p.matchedDelta[j], or its
-// cap-area/seam matchedDelta argument with the chord-to-curve half alone, and
+// skirt's matchedDelta argument with the chord-to-curve half alone, and
 // the matching leg below turns red — verified by hand (apply the shim, rerun,
 // confirm failure, restore). The fixture is potent BECAUSE delta is the same
 // order as the chord-to-curve half rather than the ulp-scale term a real build
@@ -746,13 +667,11 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 	matched := chordCellDeltaUpper(chordToCurve, delta)
 	require.Greater(t, matched, chordToCurve, "the composition must actually widen the term it replaces")
 
-	got, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matched, delta, 2.0, false)
-	require.NoError(t, err, "this fixture's cap plane offset is derivable")
+	got := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matched, delta, false)
 	// What the sagitta-alone reading publishes: the identical call with the
 	// station displacement dropped from both the per-cell and the build-wide
 	// argument.
-	sagittaOnly, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, chordToCurve, 0, 2.0, false)
-	require.NoError(t, err, "the sagitta-alone reference reads the same derivable assembly")
+	sagittaOnly := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, chordToCurve, 0, false)
 
 	require.Greater(t, got.WallAreaUpper, sagittaOnly.WallAreaUpper,
 		"the wall upper must charge the held station displacement")
@@ -760,14 +679,10 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 		"the ruled area leg must charge the held station displacement")
 	require.Greater(t, got.CapAreaExcess, sagittaOnly.CapAreaExcess,
 		"the cap-area tube must charge the matched term, never the sagitta alone")
-	require.Greater(t, got.SeamAllow, sagittaOnly.SeamAllow,
-		"the seam allowance must charge the held station displacement")
-	require.Greater(t, got.CapVolumeUpper, sagittaOnly.CapVolumeUpper,
-		"the cap volume leg inherits the widened cap-area term")
 	require.Greater(t, got.WallLeg, sagittaOnly.WallLeg,
-		"the per-cell wall measure leg must charge the held station displacement")
-	require.Zero(t, sagittaOnly.SkirtLeg, "the skirt is exactly 0 at delta == 0")
-	require.Positive(t, got.SkirtLeg, "the skirt must charge a held seam displaced off its cap plane")
+		"the wall leg must charge the held station displacement")
+	require.Positive(t, got.SkirtLeg, "a positive delta gives the seam a skirt")
+	require.Zero(t, sagittaOnly.SkirtLeg, "the skirt is exactly zero at delta == 0")
 	// The exact corrections and the offset leg read no displacement at all,
 	// so the widening above is the matched term's and not blanket inflation.
 	require.Zero(t, got.TwistVolumeCorrection.Cmp(sagittaOnly.TwistVolumeCorrection),
@@ -790,106 +705,13 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 	tris := [][3]int{{0, 1, 3}, {0, 3, 2}}
 	vol := m.volume(verts, tris)
 
-	wrongTerm := proofbound.ChordedBoundaryVolumeResidualAllow(
-		chordToCurve, sagittaOnly.WallAreaUpper, sagittaOnly.CapVolumeUpper, sagittaOnly.SeamAllow,
-	)
-	rightTerm := proofbound.ChordedBoundaryVolumeResidualAllow(
-		matched, got.WallAreaUpper, got.CapVolumeUpper, got.SeamAllow,
-	)
+	wrongTerm := proofbound.AbsSumUpper(sagittaOnly.WallLeg, sagittaOnly.SkirtLeg)
+	rightTerm := proofbound.AbsSumUpper(got.WallLeg, got.SkirtLeg)
 	require.Greater(t, rightTerm, wrongTerm, "the fixture must actually distinguish the two candidate bounds")
 	require.GreaterOrEqual(t, vol.Bound.Base(), rightTerm,
 		"Volume's own Bound must compose the matched-term chorded allowance")
 	require.Greater(t, vol.Bound.Base(), wrongTerm,
 		"Volume's own Bound must exceed what the sagitta-alone reading would publish")
-}
-
-// underivableCapOffsetPairs is the one-cell chorded pairing the two subtests
-// below share: a single positive-matchedDelta cell on each side, so the wall
-// loop runs and both caps carry a strictly positive proofbound.SectionDisplacementArea,
-// leaving the cap plane offset as the only term under test. The two tangent
-// energies are +Inf, which costs proofbound.CellChordCurveAreaAllow its sharp arm and
-// nothing else (loft_build.go's perCellTangentEnergy).
-func underivableCapOffsetPairs(matched float64) []loftLoopPair {
-	return []loftLoopPair{{
-		v: make([]Point2, 2), w: make([]Point2, 2),
-		arcUpperV:      []float64{1.01, 0},
-		arcUpperW:      []float64{1.1, 0},
-		matchedDelta:   []float64{matched, 0},
-		faceted:        []bool{false, true},
-		tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
-		tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
-	}}
-}
-
-// TestLoftCapOffsetUnderivableRefuses is docs/loft-design.md Table S row S14
-// for §5.2's cap planeOffsetUpper term, decided in the CONSTRUCTION arm §4's
-// gate-order paragraph assigns it: an assembly stating no proven distance from
-// the mass anchor to a held cap1 vertex must REFUSE, never publish a finite
-// substitute and never a zero (§5.2's own closing rule).
-//
-// Both subtests assert on the sentinel and on the WHOLE return being the zero
-// value, so no leg reaches a consumer at all. Neither weakens any numeric
-// bound: the fixture is built for this row and shares no assertion with the
-// calibrated wedges.
-func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
-	t.Parallel()
-	const matched = 0.5
-	anchor := r3.NewVec(0, 0, 0)
-	vIdx, wIdx := [][]int{{0, 1}}, [][]int{{2, 3}}
-
-	t.Run("a cap1 distance past the float64 range refuses instead of publishing zero", func(t *testing.T) {
-		// Both cap1 vertices sit a hair beyond MaxFloat64 from the anchor, so
-		// proofbound.RatSqrtUp's outward step off MaxFloat64 lands on +Inf for each and
-		// the minimum over the cap never leaves +Inf.
-		for _, v := range []r3.Vec{r3.NewVec(math.MaxFloat64, 0, 1), r3.NewVec(math.MaxFloat64, -1, 1)} {
-			d2 := ratSquaredDistance3(anchor.X, anchor.Y, anchor.Z, v.X, v.Y, v.Z)
-			require.NotNil(t, d2, "the coordinates are finite, so the squared distance is an exact rational")
-			require.True(t, math.IsInf(proofbound.RatSqrtUp(d2), 1), "no float64 upper bound on this distance exists")
-		}
-
-		// What a substituted zero would publish in its place, at this
-		// fixture's own cap-area allowance: proofbound.CapAreaVolumeAllow takes its
-		// planeOffsetUpper <= 0 arm and answers exactly 0 for a strictly
-		// positive area gap, the SMALLEST possible number standing in for a
-		// quantity no derivation states. The proven-underivable reading
-		// answers +Inf for the same area gap, which is what a refusal must
-		// stand on.
-		capAreaAllow := proofbound.SectionDisplacementArea(matched, 1, 1.1)
-		require.Positive(t, capAreaAllow, "the fixture's cap carries a real area gap to fold into a volume")
-		require.Zero(t, proofbound.CapAreaVolumeAllow(0, capAreaAllow), "a zero plane offset publishes a zero cap volume gap")
-		require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(math.Inf(1), capAreaAllow), 1),
-			"the underivable plane offset's own answer is +Inf, never that zero")
-
-		verts := []r3.Vec{
-			r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0),
-			r3.NewVec(math.MaxFloat64, 0, 1), r3.NewVec(math.MaxFloat64, -1, 1),
-		}
-		got, err := computeLoftChordedAllow(underivableCapOffsetPairs(matched), vIdx, wIdx, verts, anchor, matched, 0, 2.0, false)
-		require.ErrorIs(t, err, loftmesh.ErrLoftCapOffsetUnderivable, "S14 refuses the underivable cap plane offset")
-		require.ErrorIs(t, err, ErrUnsupported, "the row's sentinel is ErrUnsupported, a derivation gap and not a shape rule")
-		require.Equal(t, loftmesh.LoftChordedAllow{}, got, "a refused build publishes no leg at all")
-	})
-
-	t.Run("a NaN cap1 vertex refuses instead of panicking", func(t *testing.T) {
-		// A NaN coordinate has no exact rational, so ratSquaredDistance3
-		// answers nil — which proofbound.RatSqrtUp dereferences. The same refusal arm
-		// covers it, so the reading never reaches that dereference.
-		verts := []r3.Vec{
-			r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0),
-			r3.NewVec(math.NaN(), 0, 1), r3.NewVec(1, 1, 1.3),
-		}
-		require.Nil(t, ratSquaredDistance3(anchor.X, anchor.Y, anchor.Z, verts[2].X, verts[2].Y, verts[2].Z),
-			"a NaN coordinate states no squared distance")
-
-		var got loftmesh.LoftChordedAllow
-		var err error
-		require.NotPanics(t, func() {
-			got, err = computeLoftChordedAllow(underivableCapOffsetPairs(matched), vIdx, wIdx, verts, anchor, matched, 0, 2.0, false)
-		}, "an unreadable cap1 coordinate is a refusal, never a nil dereference")
-		require.ErrorIs(t, err, loftmesh.ErrLoftCapOffsetUnderivable, "S14 refuses the unreadable cap plane offset")
-		require.ErrorIs(t, err, ErrUnsupported, "the row's sentinel is ErrUnsupported")
-		require.Equal(t, loftmesh.LoftChordedAllow{}, got, "a refused build publishes no leg at all")
-	})
 }
 
 // TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell pins
@@ -941,8 +763,7 @@ func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 	}
 
 	t.Run("sums both charged cells", func(t *testing.T) {
-		chorded, err := computeLoftChordedAllow(pairsWith([]float64{0.5, 0.5}, false), vIdx, wIdx, verts, anchor, 0.5, 0, 2.0, false)
-		require.NoError(t, err)
+		chorded := computeLoftChordedAllow(pairsWith([]float64{0.5, 0.5}, false), vIdx, wIdx, verts, anchor, 0.5, 0, false)
 
 		// The loop walks cell 0 as (v0, v1, w0, w1) and cell 1 as the wrap
 		// back, (v1, v0, w1, w0) — the same quad with its two ends swapped.
@@ -957,8 +778,7 @@ func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 	})
 
 	t.Run("charges nothing where every cell is faceted", func(t *testing.T) {
-		chorded, err := computeLoftChordedAllow(pairsWith([]float64{0, 0}, true), vIdx, wIdx, verts, anchor, 0, 0, 2.0, false)
-		require.NoError(t, err)
+		chorded := computeLoftChordedAllow(pairsWith([]float64{0, 0}, true), vIdx, wIdx, verts, anchor, 0, 0, false)
 		require.Zero(t, chorded.TwistAreaAllow,
 			"a LineSeg-only build's held triangle pair IS its own boundary, so it charges no held-to-bilinear gap")
 	})
@@ -968,8 +788,7 @@ func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 	// fail first: under the departure-only gate this subtest read a nil
 	// correction and zero legs.
 	t.Run("charges a zero-departure cell that is not faceted", func(t *testing.T) {
-		chorded, err := computeLoftChordedAllow(pairsWith([]float64{0, 0}, false), vIdx, wIdx, verts, anchor, 0, 0, 2.0, false)
-		require.NoError(t, err)
+		chorded := computeLoftChordedAllow(pairsWith([]float64{0, 0}, false), vIdx, wIdx, verts, anchor, 0, 0, false)
 		want := new(big.Rat).Add(proofbound.CellTwistVolume(vLo, vHi, wLo, wHi), proofbound.CellTwistVolume(vHi, vLo, wHi, wLo))
 		require.NotNil(t, chorded.TwistVolumeCorrection)
 		require.Zero(t, want.Cmp(chorded.TwistVolumeCorrection), "both cells' exact twist corrections are applied")
