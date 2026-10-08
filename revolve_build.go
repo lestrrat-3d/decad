@@ -240,86 +240,6 @@ func (rp revolvePayload) sweptVertex(b revolvemesh.RevolveBasis, z, rho float64,
 	return &Vertex{position: held, bound: units.Millimeters(gap), denot: denot}
 }
 
-// revolveCentroidGeometryBound bounds the centroid independently of the
-// Pappus quotient. Every material point starts in the recorded profile plane,
-// rotates about the resolved axis, then passes through a rigid placement. The
-// L1 envelopes use three times an input L1 norm for any orthogonal map.
-func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec, work *freeform.FreeformWork) (float64, error) {
-	coordUpper, err := profileCoordinateUpper(rp.profile, work, nil)
-	if err != nil {
-		return 0, err
-	}
-	// The denoted section's points sit within sectionDelta of the recorded
-	// boundary, so the envelope that bounds the material is widened over it
-	// (docs/surface-intersection-design.md §7.2).
-	coordUpper = revolveaxis.SectionCoordUpper(coordUpper, rp.sectionDelta)
-	originUpper := vecL1(rp.frame.Origin())
-	profileUpper := proofbound.AbsSumUpper(
-		originUpper,
-		proofbound.ProductUpper(vecL1(rp.frame.U()), coordUpper),
-		proofbound.ProductUpper(vecL1(rp.frame.V()), coordUpper),
-	)
-	aUUpper := proofbound.AbsSumUpper(rp.ax.aU, rp.ax.aUBound)
-	aVUpper := proofbound.AbsSumUpper(rp.ax.aV, rp.ax.aVBound)
-	axisUpper := proofbound.AbsSumUpper(
-		originUpper,
-		proofbound.ProductUpper(vecL1(rp.frame.U()), aUUpper),
-		proofbound.ProductUpper(vecL1(rp.frame.V()), aVUpper),
-	)
-	rotatedUpper := proofbound.AbsSumUpper(proofbound.ProductUpper(3, profileUpper), proofbound.ProductUpper(4, axisUpper))
-	placedUpper := proofbound.AbsSumUpper(proofbound.ProductUpper(3, rotatedUpper), vecL1(rp.xform.Translation()))
-	return proofbound.AbsSumUpper(vecL1(held), placedUpper), nil
-}
-
-// revolveCentroidLift carries the magnitudes the centroid's own lift
-// A3 + W·axial + (E0·rx + E1·ry)·scale multiplies the axis basis by: the
-// axial coordinate's, and for a partial sweep the in-plane term's three
-// factors, each its value plus its own proven bound. A full turn leaves the
-// partial-sweep three at zero.
-type revolveCentroidLift struct {
-	axialUpper, rxUpper, ryUpper, scaleUpper float64
-}
-
-// charge is what that lift owes the axis basis itself, beside the float
-// rounding AnalyticRoundBound charges at the centroid's own magnitude.
-//
-// The anchor A3 is the frame lift O + U·aU + V·aV, whose products and sums
-// round at the frame origin's and the anchor's magnitudes rather than at
-// A3's: a far sketch plane whose anchor lifts back near the world origin
-// rounds at ulp(10⁶) while A3 itself is small. Its exact rounding is
-// RevolveLift.ExactPointRound's, read at z = ρ = 0 under the identity.
-//
-// The axis's own proven displacement (axisInPlane's aUBound, aVBound,
-// dUBound, dVBound) moves the basis the TRUE centroid is lifted through, and
-// axisMoments charges it only into the axial coordinate. Read as L1 norms of
-// the basis's own change: A3 moves by |U|·aUBound + |V|·aVBound, W = U·dU +
-// V·dV by dW = |U|·dUBound + |V|·dVBound, E0 = −U·dV + V·dU by dE0 =
-// |U|·dVBound + |V|·dUBound, and E1 = W × E0 by at most dW·|E0*| + |W|·dE0,
-// since W×E0 − W*×E0* = (W − W*)×E0* + W×(E0 − E0*) and an L1 cross product
-// is at most the product of its operands' L1 norms. Each moves the centroid
-// by its own factor's magnitude. Every term is zero for a frame whose anchor
-// lifts exactly and an axis whose anchor and direction carry no bound.
-func (l revolveCentroidLift) charge(rp revolvePayload, b revolvemesh.RevolveBasis) float64 {
-	a3Round := rp.lift().ExactPointRound(r3.Identity(), 0, 0, 1, 0, b.A3)
-	ax := rp.ax
-	lu, lv := vecL1(rp.frame.U()), vecL1(rp.frame.V())
-	anchor := proofbound.AbsSumUpper(proofbound.ProductUpper(lu, ax.aUBound), proofbound.ProductUpper(lv, ax.aVBound))
-	dW := proofbound.AbsSumUpper(proofbound.ProductUpper(lu, ax.dUBound), proofbound.ProductUpper(lv, ax.dVBound))
-	terms := []float64{a3Round, anchor, proofbound.ProductUpper(l.axialUpper, dW)}
-	if l.scaleUpper > 0 {
-		dE0 := proofbound.AbsSumUpper(proofbound.ProductUpper(lu, ax.dVBound), proofbound.ProductUpper(lv, ax.dUBound))
-		wHeld := proofbound.AbsSumUpper(proofbound.ProductUpper(lu, math.Abs(ax.dU)), proofbound.ProductUpper(lv, math.Abs(ax.dV)))
-		e0True := proofbound.AbsSumUpper(
-			proofbound.ProductUpper(lu, proofbound.AbsSumUpper(ax.dV, ax.dVBound)),
-			proofbound.ProductUpper(lv, proofbound.AbsSumUpper(ax.dU, ax.dUBound)),
-		)
-		dE1 := proofbound.AbsSumUpper(proofbound.ProductUpper(dW, e0True), proofbound.ProductUpper(wHeld, dE0))
-		radial := proofbound.AbsSumUpper(proofbound.ProductUpper(l.rxUpper, dE0), proofbound.ProductUpper(l.ryUpper, dE1))
-		terms = append(terms, proofbound.ProductUpper(l.scaleUpper, radial))
-	}
-	return proofbound.AbsSumUpper(terms...)
-}
-
 // frameCharge is massmoment.MapCharge over the map the record denotes
 // through: the plane-coordinate solid of revolution carried through
 // L = B·[U V U×V] (massmoment.PlaneMap), the leaves sweptGap reads. Its third
@@ -613,56 +533,17 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		Bound:     units.SquareMillimeters(area.Bound),
 	}
 
-	axial := proofbound.BoundedDiv(mzr, q)
-	cen := b.A3.Add(b.W.Scale(axial.Value))
-	centroidScale := proofbound.AbsSumUpper(proofbound.VecMaxAbs(b.A3), axial.Value)
-	centroidBound := proofbound.AbsSumUpper(axial.Bound, proofbound.Radius3D(proofbound.AnalyticRoundBound(centroidScale)))
-	lift := revolveCentroidLift{axialUpper: proofbound.AbsSumUpper(axial.Value, axial.Bound)}
-	if !rp.full {
-		// The in-plane term is the swept radial direction integrated over
-		// the interval — closed form in the sweep angle; a full turn's is
-		// identically zero, which is what puts its centroid on the axis.
-		sin1, cos1 := revolveangle.EndSinCos(rp.den.Phi1, rp.phi1)
-		sin0, cos0 := revolveangle.EndSinCos(rp.den.Phi0, rp.phi0)
-		rx := proofbound.BoundedSub(sin1, sin0)
-		ry := proofbound.BoundedSub(cos0, cos1)
-		radial := b.E0.Scale(rx.Value).Add(b.E1.Scale(ry.Value))
-		radialBound := proofbound.Radius2D(rx.Bound, ry.Bound)
-		radialScale := proofbound.BoundedDiv(mrr, proofbound.BoundedMul(sweep, q))
-		cen = cen.Add(radial.Scale(radialScale.Value))
-		radialUpper := vecL1(radial)
-		centroidBound = proofbound.AbsSumUpper(
-			centroidBound,
-			proofbound.ProductUpper(radialScale.Value, radialBound),
-			proofbound.ProductUpper(radialUpper, radialScale.Bound),
-			proofbound.Radius3D(proofbound.AnalyticRoundBound(proofbound.ProductUpper(radialScale.Value, radialUpper))),
-		)
-		lift.rxUpper = proofbound.AbsSumUpper(rx.Value, rx.Bound)
-		lift.ryUpper = proofbound.AbsSumUpper(ry.Value, ry.Bound)
-		lift.scaleUpper = proofbound.AbsSumUpper(radialScale.Value, radialScale.Bound)
-	}
-	// An absent axis-lift charge folds nothing: proofbound.AbsSumUpper up-rounds
-	// every term it folds, zero included, and an exact axis must read as it
-	// did before the charge existed.
-	if axisLift := lift.charge(rp, b); axisLift > 0 {
-		centroidBound = proofbound.AbsSumUpper(centroidBound, axisLift)
-	}
-	centroidBound = proofbound.AbsSumUpper(
-		centroidBound,
-		proofbound.RigidRoundAllow(proofbound.VecMaxAbs(cen), proofbound.VecMaxAbs(rp.xform.Translation())),
-	)
-	centroidValue := rp.xform.Apply(cen)
-	geometryBound, err := revolveCentroidGeometryBound(rp, centroidValue, work)
+	coordUpper, err := profileCoordinateUpper(rp.profile, work, nil)
 	if err != nil {
 		return nil, err
 	}
-	centroidBound = math.Min(centroidBound, geometryBound)
-	// The axis gate's own admitted-band charge is added AFTER the geometry
-	// bound's independent min: revolveCentroidGeometryBound knows nothing of
-	// resolveAxisSide's own uncertainty, so folding this charge in before the
-	// min would let a smaller geometry bound silently discard it.
-	centroidBound = proofbound.AbsSumUpper(centroidBound,
-		revolvemass.AdmitBandCharge(rp.ax.radialAdmitAllow, rp.ax.axialExtentUpper))
+	centroidValue, centroidBound := revolvemass.Centroid(revolvemass.CentroidInput{
+		Basis: b, Frame: rp.frame, Placement: rp.xform, Axis: rp.ax.numeric(),
+		Full: rp.full, Phi0: rp.phi0, Phi1: rp.phi1, DenPhi0: rp.den.Phi0, DenPhi1: rp.den.Phi1,
+		Q: q, MZR: mzr, MRR: mrr, Sweep: sweep,
+		CoordUpper: coordUpper, SectionDelta: rp.sectionDelta,
+		RadialAdmit: rp.ax.radialAdmitAllow, AxialExtentUpper: rp.ax.axialExtentUpper,
+	})
 	body.centroid = VecMeasurement{
 		Value:     centroidValue,
 		Exactness: exactnessOf(centroidBound),
