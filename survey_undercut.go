@@ -21,7 +21,7 @@ import (
 // the same standard, over the rationals rather than a float allowance,
 // because both carve-outs are exactly decidable from held numbers alone: a
 // straight wall's plane-local tangent, a circular wall's swept angle, and the
-// placed frame's own exact directions (newPlacedFrameMap,
+// placed frame's own exact directions (survey2d.NewPlacedFrameMap,
 // capblend_normal.go).
 //
 // The caller's ORIGINAL pull is used throughout, never its normalized form:

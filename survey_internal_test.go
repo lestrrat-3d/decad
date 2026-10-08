@@ -1423,7 +1423,7 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 		}
 		pp, ok := b.payload.(prismPayload)
 		require.True(t, ok)
-		m, ok := newPlacedFrameMap(pp)
+		m, ok := survey2d.NewPlacedFrameMap(pp.frame, pp.xform)
 		require.True(t, ok)
 		loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(pp.profile))
 		require.NoError(t, err)

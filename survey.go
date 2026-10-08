@@ -245,7 +245,7 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 	if _, ok := pull.Normalize(); !ok {
 		return undercutOutcome{}
 	}
-	m, okM := newPlacedFrameMap(pp)
+	m, okM := survey2d.NewPlacedFrameMap(pp.frame, pp.xform)
 	if !okM {
 		return undercutOutcome{}
 	}
@@ -435,7 +435,7 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 		return undercutOutcome{}
 	}
 	base := cp.basePrism()
-	m, okM := newPlacedFrameMap(base)
+	m, okM := survey2d.NewPlacedFrameMap(base.frame, base.xform)
 	if !okM {
 		return undercutOutcome{}
 	}
