@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -394,7 +395,7 @@ func validatePairPath(path PairPath) (affinePairPath, error) {
 	switch p := path.(type) {
 	case PoseSegment:
 		out.from, out.to = p.From, p.To
-		if err := (Between{From: p.From, To: p.To}).validate(); err != nil {
+		if err := motionbound.ValidateBetween(Between{From: p.From, To: p.To}); err != nil {
 			return out, err
 		}
 		out.duration, _ = exactBaseValue(p.Duration)

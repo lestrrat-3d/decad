@@ -100,7 +100,7 @@ func resolveMotion(m Motion) (motionSpec, error) {
 	var spec motionSpec
 	switch mv := m.(type) {
 	case Revolute:
-		if err := mv.validate(); err != nil {
+		if err := motionbound.ValidateRevolute(mv); err != nil {
 			return motionSpec{}, err
 		}
 		spec = motionSpec{kind: motionbound.MotionRevolute, center: mv.Center, axis: mv.Axis,
@@ -111,7 +111,7 @@ func resolveMotion(m Motion) (motionSpec, error) {
 		}
 		return resolveMotionAs(m, *mv)
 	case Prismatic:
-		if err := mv.validate(); err != nil {
+		if err := motionbound.ValidatePrismatic(mv); err != nil {
 			return motionSpec{}, err
 		}
 		spec = motionSpec{kind: motionbound.MotionPrismatic, dir: mv.Dir,
@@ -122,7 +122,7 @@ func resolveMotion(m Motion) (motionSpec, error) {
 		}
 		return resolveMotionAs(m, *mv)
 	case Between:
-		sc, err := mv.resolve()
+		sc, err := resolveBetween(mv)
 		if err != nil {
 			return motionSpec{}, err
 		}
@@ -192,14 +192,14 @@ func (s motionDomain) label(f *big.Rat) units.Value {
 // off the relative motion, which must be representable and must not be the
 // zero screw — a relative motion with neither angle nor slide names no path,
 // since PoseAt is then From at every s.
-func (m Between) resolve() (r3.Screw, error) {
-	if err := m.validate(); err != nil {
+func resolveBetween(m Between) (r3.Screw, error) {
+	if err := motionbound.ValidateBetween(m); err != nil {
 		return r3.Screw{}, err
 	}
 	if m.From == m.To {
 		return r3.Screw{}, fmt.Errorf(`%w: a between whose From equals its To names no path`, ErrDegenerate)
 	}
-	sc, err := m.screw()
+	sc, err := motionbound.ScrewBetween(m)
 	if err != nil {
 		return r3.Screw{}, err
 	}
