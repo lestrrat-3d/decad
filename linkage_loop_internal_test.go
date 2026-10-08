@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -113,9 +114,9 @@ func TestDependentSpan(t *testing.T) {
 	iv := func(lo, hi int64) proofbound.RatInterval {
 		return proofbound.IntervalOwned(big.NewRat(lo, 100), big.NewRat(hi, 100))
 	}
-	monotone := dependentSpan(loopSpan{a: iv(10, 11), b: iv(50, 51), h: iv(10, 51)})
+	monotone := linkagebound.SpanUpper(loopSpan{Start: iv(10, 11), End: iv(50, 51), Hull: iv(10, 51)})
 	require.Zero(t, monotone.Cmp(big.NewRat(42, 100)), `a_hi + b_hi − 2·h_lo = 0.11 + 0.51 − 0.20`)
-	back := dependentSpan(loopSpan{a: iv(0, 1), b: iv(0, 1), h: iv(-30, 1)})
+	back := linkagebound.SpanUpper(loopSpan{Start: iv(0, 1), End: iv(0, 1), Hull: iv(-30, 1)})
 	require.Zero(t, back.Cmp(big.NewRat(62, 100)), `the dip to −0.30 and back`)
 }
 
@@ -450,8 +451,8 @@ func TestLoopIntervalGate(t *testing.T) {
 	half, end := big.NewRat(1, 2), big.NewRat(3, 4)
 	dr := &linkageDriver{run: &motionRun{ctx: t.Context()}, spec: spec}
 	require.Empty(t, dr.intervalGate(&motionPose{f: half}, &motionPose{f: end}), `a certified cell passes`)
-	require.Len(t, ld.spans[loopSpanKey(half, end)], 1, `one piece`)
-	require.Len(t, ld.spans[loopSpanKey(half, end)][0], 2, `two dependents`)
+	require.Len(t, ld.spans[linkagebound.IntervalKey(half, end)], 1, `one piece`)
+	require.Len(t, ld.spans[linkagebound.IntervalKey(half, end)][0], 2, `two dependents`)
 	ld.asks["0:c0,1/2"] = &loopAsk{err: fmt.Errorf(`%w: injected`, sketch.ErrNotCertified)}
 	require.Contains(t, dr.intervalGate(&motionPose{f: new(big.Rat)}, &motionPose{f: half}), `injected`)
 }
@@ -500,11 +501,11 @@ func TestLoopMixedCrossing(t *testing.T) {
 		at, err := ld.pointValues(t.Context(), cut)
 		require.NoError(t, err)
 		for j := range ld.deps {
-			inside := valueInterval(values[j][0], values[j][1])
-			end := valueInterval(at[j][0], at[j][1])
+			inside := linkagebound.ValueInterval(values[j][0], values[j][1])
+			end := linkagebound.ValueInterval(at[j][0], at[j][1])
 			require.LessOrEqual(t, inside.Lo.Cmp(end.Lo), 0)
 			require.GreaterOrEqual(t, inside.Hi.Cmp(end.Hi), 0)
-			m, _ := magnitude(inside).Float64()
+			m, _ := linkagebound.Magnitude(inside).Float64()
 			require.Less(t, m, 1e-12)
 		}
 	}

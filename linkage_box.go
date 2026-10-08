@@ -411,7 +411,7 @@ type boxCell struct {
 	delta map[int]*big.Rat
 	// depReach is, per dependent joint, its centre and half-span for the
 	// projection bound's expansion over the cell (dependentReach).
-	depReach map[int]depReach
+	depReach map[int]linkagebound.CellReach
 	gate     string
 	gateLoop *loopDrive
 	// projShares holds, for each evaluated pair whose bound over the cell is
@@ -556,33 +556,7 @@ func (b *boxRun) nextReadingSplit() (int, int) {
 // link, −1 when none qualifies.
 func (b *boxRun) readingAxis(c *boxCell, wide func(*boxCell, int) bool) int {
 	share, projected := b.boundShares(c, c.low[0], c.low[1])
-	return b.rankAxes(c, share, projected, wide)
-}
-
-// rankAxes is the varying joint, among those wide reports wider than its
-// floor, with the largest share; ties go to the earliest link, −1 when none
-// qualifies. Under a projection bound a joint with no share is one the bound
-// does not depend on, and splitting it lowers nothing, so it never qualifies
-// (docs/linkage-check-design.md §5.8, the split axis).
-func (b *boxRun) rankAxes(c *boxCell, share map[int]*big.Rat, projected bool, wide func(*boxCell, int) bool) int {
-	axis := -1
-	var top *big.Rat
-	for _, k := range b.axes {
-		if !wide(c, k) {
-			continue
-		}
-		v := share[k]
-		if v == nil {
-			v = new(big.Rat)
-		}
-		if projected && v.Sign() == 0 {
-			continue
-		}
-		if axis < 0 || v.Cmp(top) > 0 {
-			axis, top = k, v
-		}
-	}
-	return axis
+	return linkagebound.RankAxes(b.axes, share, projected, func(k int) bool { return wide(c, k) })
 }
 
 // boundShares is each axis's share of the defect of pair k of mover i's
@@ -592,7 +566,7 @@ func (b *boxRun) boundShares(c *boxCell, i, k int) (map[int]*big.Rat, bool) {
 	if shares, ok := c.projShares[[2]int{i, k}]; ok {
 		return shares, true
 	}
-	return b.pairShares(c, i, k), false
+	return linkagebound.SumTerms(b.pairTerms(c, i, k)), false
 }
 
 // upperPoses is the evaluated centre holding the smallest proven upper end
@@ -737,7 +711,7 @@ func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
 		return loopPose{}, err
 	}
 	c.delta = make(map[int]*big.Rat)
-	c.depReach = make(map[int]depReach)
+	c.depReach = make(map[int]linkagebound.CellReach)
 	for _, ld := range spec.loops {
 		var hulls []proofbound.RatInterval
 		if !ld.held {
@@ -756,53 +730,18 @@ func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
 			}
 		}
 		for j, d := range ld.deps {
-			m := valueInterval(lp.lo[d], lp.hi[d])
+			m := linkagebound.ValueInterval(lp.lo[d], lp.hi[d])
 			h, delta := m, new(big.Rat)
 			if hulls != nil {
-				h, delta = hulls[j], dependentDelta(m, hulls[j])
+				h, delta = hulls[j], linkagebound.DependentCellDelta(m, hulls[j])
 			}
 			c.delta[d] = delta
-			c.depReach[d] = dependentReach(m, h)
+			c.depReach[d] = linkagebound.DependentCellReach(m, h)
 			unit := lp.values[d].Unit()
 			c.cell.Min[d], c.cell.Max[d] = units.New(proofbound.RatFloatDown(h.Lo), unit), units.New(proofbound.RatFloatUp(h.Hi), unit)
 		}
 	}
 	return lp, nil
-}
-
-// depReach is a loop dependent's centre and half-span over a cell for the
-// projection bound's expansion (docs/linkage-check-design.md §5.8, §16.3).
-type depReach struct {
-	centre, h *big.Rat
-}
-
-// dependentReach is a dependent's expansion over a cell: its centre the exact
-// midpoint of m, the enclosure at the cell's centre, and h the larger
-// distance from that centre to an end of the hull of the cell's hull h and
-// m, which holds every value the dependent takes over the cell. A held
-// loop's dependent stands still across the cell, its hull m itself.
-func dependentReach(m, hull proofbound.RatInterval) depReach {
-	all := proofbound.IntervalOwned(minRat(hull.Lo, m.Lo), maxRat(hull.Hi, m.Hi))
-	centre := intervalMidpoint(m)
-	h := new(big.Rat).Sub(all.Hi, centre)
-	if low := new(big.Rat).Sub(centre, all.Lo); low.Cmp(h) > 0 {
-		h = low
-	}
-	return depReach{centre: centre, h: h}
-}
-
-// dependentDelta is δ_j of docs/linkage-check-design.md §16.3: with the
-// dependent's exact value at the centre inside m and its exact value anywhere
-// in the cell inside the hull h, the farthest the two can lie apart,
-// max(h_hi − m_lo, m_hi − h_lo). It is the hull's whole width where the
-// centre sits at an end of it, as over a monotone stretch, and never half the
-// width, which the centre need not split.
-func dependentDelta(m, h proofbound.RatInterval) *big.Rat {
-	delta := new(big.Rat).Sub(h.Hi, m.Lo)
-	if other := new(big.Rat).Sub(m.Hi, h.Lo); other.Cmp(delta) > 0 {
-		delta = other
-	}
-	return delta
 }
 
 // classify sets a cell's outcome from its evaluated centre. A gated cell
@@ -918,7 +857,7 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 				if !ok {
 					return projectionSide{}, false
 				}
-				span = new(big.Rat).Set(reach.h)
+				span = new(big.Rat).Set(reach.Half)
 			}
 			half := proofarith.FloatRat(proofbound.RatFloatUp(span))
 			if half == nil {
@@ -938,7 +877,7 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 				if dr.spec.joints[j].dep != nil {
 					// A dependent is read at its centre, the midpoint of its
 					// enclosure at the cell's centre (§5.8).
-					params[j] = motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).Set(c.depReach[j].centre)}
+					params[j] = motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).Set(c.depReach[j].Centre)}
 					continue
 				}
 				params[j] = jointParam(dr.spec.joints[j], c.centre(j))
@@ -974,9 +913,9 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 	bound := linkagebound.Lower(a, p)
 	shares := make(map[int]*big.Rat)
 	axis, sense := linkagebound.AttainedDirection(a, p, bound)
-	linkagebound.AddAxisShares(shares, a, mine.Rho[below:], projectionAxes(mine, below, axisOf), axis, sense)
+	linkagebound.AddAxisShares(shares, a, mine.Rho[below:], linkagebound.ProjectionAxes(mine.Path, below, axisOf), axis, sense)
 	if other >= 0 {
-		linkagebound.AddAxisShares(shares, p, theirs.Rho[below:], projectionAxes(theirs, below, axisOf), axis, -sense)
+		linkagebound.AddAxisShares(shares, p, theirs.Rho[below:], linkagebound.ProjectionAxes(theirs.Path, below, axisOf), axis, -sense)
 	}
 	// The hull bound (§5.8): the same expansion over each body's hull points
 	// along every candidate direction, the larger of the two serving.
@@ -991,10 +930,10 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 		return bound, shares
 	}
 	shares = make(map[int]*big.Rat)
-	linkagebound.AddHullShares(shares, ah, mine.Rho[below:], projectionAxes(mine, below, axisOf),
+	linkagebound.AddHullShares(shares, ah, mine.Rho[below:], linkagebound.ProjectionAxes(mine.Path, below, axisOf),
 		witness.Axis, witness.Norm, witness.Sense)
 	if other >= 0 {
-		linkagebound.AddHullShares(shares, ph, theirs.Rho[below:], projectionAxes(theirs, below, axisOf),
+		linkagebound.AddHullShares(shares, ph, theirs.Rho[below:], linkagebound.ProjectionAxes(theirs.Path, below, axisOf),
 			witness.Axis, witness.Norm, -witness.Sense)
 	}
 	return hull, shares
@@ -1031,48 +970,15 @@ func (b *boxRun) staticReading(k int, hull bool) (cornerBounds, bool) {
 	return reading, true
 }
 
-// projectionAxes maps the relative path's joints to the split axes used by
-// the projection share calculation.
-func projectionAxes(b linkBound, below int, axisOf func(int) int) []int {
-	axes := make([]int, len(b.Path)-below)
-	for n, joint := range b.Path[below:] {
-		axes[n] = axisOf(joint)
-	}
-	return axes
-}
-
-// jointTerm is one joint's share w_i·span_i(C) of a pair's travel over a
-// cell (docs/linkage-check-design.md §14.3), charged to the axis whose
-// halving shrinks it: the joint itself, or a loop dependent's driver.
-type jointTerm struct {
-	joint int
-	value *big.Rat
-}
-
 // pairTerms is every joint's share of pair k of mover i's travel across cell
 // c: against a static body, every joint on the mover's path; against a body
 // of another link, the joints strictly below the two links' lowest common
 // ancestor on each branch, each with its own body's ρ. A joint's span is
 // motionbound.MotionParam.SpanUpper of its exact values at the cell's two
 // ends; a joint that does not vary spans 0.
-func (b *boxRun) pairTerms(c *boxCell, i, k int) []jointTerm {
+func (b *boxRun) pairTerms(c *boxCell, i, k int) []linkagebound.JointTerm {
 	mine, theirs := b.branchTerms(c, i, k)
 	return append(mine, theirs...)
-}
-
-// pairShares sums pair k of mover i's terms per axis: each axis's share of
-// the pair's travel across cell c. A tree's pair names each joint once; a
-// loop's driver also carries the terms of its dependents on the pair's path.
-func (b *boxRun) pairShares(c *boxCell, i, k int) map[int]*big.Rat {
-	out := make(map[int]*big.Rat)
-	for _, t := range b.pairTerms(c, i, k) {
-		if cur, ok := out[t.joint]; ok {
-			cur.Add(cur, t.value)
-			continue
-		}
-		out[t.joint] = new(big.Rat).Set(t.value)
-	}
-	return out
 }
 
 // branchTerms is pairTerms split by body: the terms that move mover i's own
@@ -1086,7 +992,7 @@ func (b *boxRun) pairShares(c *boxCell, i, k int) map[int]*big.Rat {
 // 2·w_j·δ_j — twice its part of τ_half, as a stated joint's w_i·span_i is —
 // charged to its loop's driver, whose halving shrinks the hull. Only a cell
 // with every δ_j read reaches here: a gated cell has no pair travel.
-func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []jointTerm) {
+func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []linkagebound.JointTerm) {
 	r, dr := b.run, b.dr
 	if r.pairs[i][k].once != nil {
 		// A constant pair (docs/linkage-check-design.md §5.9) moves nothing
@@ -1100,31 +1006,13 @@ func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []jointTerm) {
 		}
 		return joint, jointParam(jt, c.lo[joint]).SpanUpper(jointParam(jt, c.hi[joint]))
 	}
-	terms := func(bound linkBound, below int, out []jointTerm) []jointTerm {
-		for n := below; n < len(bound.Path); n++ {
-			axis, term := span(bound.Path[n])
-			if bound.Rho[n] != nil {
-				term.Mul(term, bound.Rho[n])
-			}
-			out = append(out, jointTerm{joint: axis, value: term})
-		}
-		return out
-	}
 	other := r.pairs[i][k].other
 	below := dr.pairDepth(i, other)
 	if other < 0 {
-		return terms(dr.pathOf(i, below), below, nil), nil
+		return linkagebound.TermsOnPath(dr.pathOf(i, below), below, span), nil
 	}
-	return terms(dr.pathOf(i, below), below, nil), terms(dr.pathOf(other, below), below, nil)
-}
-
-// halfSum is half the sum of a body's joint terms: its τ_half.
-func halfSum(terms []jointTerm) *big.Rat {
-	sum := new(big.Rat)
-	for _, t := range terms {
-		sum.Add(sum, t.value)
-	}
-	return sum.Quo(sum, big.NewRat(2, 1))
+	return linkagebound.TermsOnPath(dr.pathOf(i, below), below, span),
+		linkagebound.TermsOnPath(dr.pathOf(other, below), below, span)
 }
 
 // halfTravel is τ_half(C) of docs/linkage-check-design.md §14.3 for pair k of
@@ -1132,7 +1020,7 @@ func halfSum(terms []jointTerm) *big.Rat {
 // the pair's distance changes from the cell's centre to any configuration of
 // the cell, since no joint lies farther than half its span from the centre.
 func (b *boxRun) halfTravel(c *boxCell, i, k int) *big.Rat {
-	return halfSum(b.pairTerms(c, i, k))
+	return linkagebound.HalfSum(b.pairTerms(c, i, k))
 }
 
 // blocks reports whether pair k of mover i, which collides at cell c's centre
@@ -1154,9 +1042,9 @@ func (b *boxRun) blocks(c *boxCell, i, k int, volume Measurement) bool {
 	}
 	lower := proofbound.RatFloatDown(new(big.Rat).Sub(value, bound))
 	mine, theirs := b.branchTerms(c, i, k)
-	allow := proofbound.SweptVolumeAllow(proofbound.RatFloatUp(halfSum(mine)), r.movers[i].area)
+	allow := proofbound.SweptVolumeAllow(proofbound.RatFloatUp(linkagebound.HalfSum(mine)), r.movers[i].area)
 	if other := r.pairs[i][k].other; other >= 0 {
-		allow = proofbound.AbsSumUpper(allow, proofbound.SweptVolumeAllow(proofbound.RatFloatUp(halfSum(theirs)), r.movers[other].area))
+		allow = proofbound.AbsSumUpper(allow, proofbound.SweptVolumeAllow(proofbound.RatFloatUp(linkagebound.HalfSum(theirs)), r.movers[other].area))
 	}
 	if proofbound.IsNonFinite(allow) || proofbound.IsNonFinite(lower) {
 		return false
@@ -1202,7 +1090,7 @@ func (b *boxRun) splitAxis(c *boxCell) int {
 			}
 		}
 	}
-	return b.rankAxes(c, best, projected, b.wide)
+	return linkagebound.RankAxes(b.axes, best, projected, func(k int) bool { return b.wide(c, k) })
 }
 
 // wide reports whether cell c's span along joint k, as a fraction of the

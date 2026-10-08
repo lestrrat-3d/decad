@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -88,11 +89,11 @@ func TestJointBoxHalfTravel(t *testing.T) {
 	quarter := &boxCell{lo: []*big.Rat{new(big.Rat), new(big.Rat)}, hi: []*big.Rat{big.NewRat(1, 4), big.NewRat(1, 4)}}
 	terms := b.pairTerms(quarter, 1, 0)
 	require.Len(t, terms, 2)
-	require.Equal(t, 0, terms[0].joint)
-	require.Equal(t, 1, terms[1].joint)
+	require.Equal(t, 0, terms[0].Axis)
+	require.Equal(t, 1, terms[1].Axis)
 	twenty, _ := motionbound.ExactMotionParam(units.Degrees(20))
-	require.Zero(t, new(big.Rat).Mul(rho, zero.SpanUpper(twenty)).Cmp(terms[0].value))
-	require.Zero(t, big.NewRat(15, 2).Cmp(terms[1].value))
+	require.Zero(t, new(big.Rat).Mul(rho, zero.SpanUpper(twenty)).Cmp(terms[0].Value))
+	require.Zero(t, big.NewRat(15, 2).Cmp(terms[1].Value))
 }
 
 // TestJointBoxSplitAxis: scene 6's root is held back by (boom, wall) alone,
@@ -278,7 +279,7 @@ func TestJointBoxDependentDelta(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := dependentDelta(tc.m, h)
+			got := linkagebound.DependentCellDelta(tc.m, h)
 			require.Zero(t, tc.want.Cmp(got), `δ is %s, want %s`, got.FloatString(12), tc.want.FloatString(12))
 		})
 	}
@@ -360,7 +361,7 @@ func TestJointBoxLoopSplitAxis(t *testing.T) {
 
 	rho := b.dr.bounds[2].Rho[0]
 	require.InDelta(t, math.Sqrt(30*30+4*4), linkRatFloat(t, rho), 1e-9)
-	shares := b.pairShares(root, 2, 0)
+	shares := linkagebound.SumTerms(b.pairTerms(root, 2, 0))
 	require.Contains(t, shares, 0, `the crank carries the follower's term`)
 	want := new(big.Rat).Mul(delta, big.NewRat(2, 1))
 	want.Mul(want, rho)

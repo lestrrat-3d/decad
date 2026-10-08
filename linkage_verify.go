@@ -501,7 +501,7 @@ func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat
 				return nil, false
 			}
 			hull = proofbound.IntervalOwned(minRat(hull.Lo, at.Lo), maxRat(hull.Hi, at.Hi))
-			centre := intervalMidpoint(at)
+			centre := linkagebound.Midpoint(at)
 			span = new(big.Rat).Sub(hull.Hi, centre)
 			if low := new(big.Rat).Sub(centre, hull.Lo); low.Cmp(span) > 0 {
 				span = low
@@ -514,12 +514,6 @@ func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat
 		h = append(h, rounded)
 	}
 	return h, true
-}
-
-// intervalMidpoint is an interval's exact midpoint.
-func intervalMidpoint(iv proofbound.RatInterval) *big.Rat {
-	mid := new(big.Rat).Add(iv.Lo, iv.Hi)
-	return mid.Quo(mid, big.NewRat(2, 1))
 }
 
 // projectionSteps is each joint's segment step Δq_i over [sa, sb] on b's path
@@ -580,7 +574,7 @@ func (dr *linkageDriver) cornersAt(pose *motionPose, m int, b linkBound, below i
 		if !ok {
 			return cornerBounds{}, false
 		}
-		params[i] = motionbound.MotionParam{Turn: new(big.Rat), Base: intervalMidpoint(at)}
+		params[i] = motionbound.MotionParam{Turn: new(big.Rat), Base: linkagebound.Midpoint(at)}
 	}
 	reading, ok := linkagebound.RoundCorners(readPoints(dr.spec, dr.frames, params, b, below, points))
 	if !ok {
