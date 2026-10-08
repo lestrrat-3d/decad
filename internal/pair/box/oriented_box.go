@@ -92,21 +92,27 @@ func OrientedBoxGap(a, b OrientedBox, gap, normSquared proofarith.Dyadic) (pair.
 			upperSquared = candidate
 		}
 	}
+	facesA, validA := prepareOrientedFaceProjectors(a)
+	facesB, validB := prepareOrientedFaceProjectors(b)
 	for _, va := range a.Corner {
 		for _, vb := range b.Corner {
 			delta := proofarith.DvSub(va, vb)
 			consider(proofarith.DvDot(delta, delta).Rat())
 		}
-		for axis := range 3 {
-			for side := range 2 {
-				consider(OrientedVertexFaceDistanceSquared(va, b, axis, side))
+		for index := range facesB {
+			if validB[index] {
+				if foot, ok := facesB[index].project(va); ok {
+					consider(foot.distanceSquared())
+				}
 			}
 		}
 	}
 	for _, vb := range b.Corner {
-		for axis := range 3 {
-			for side := range 2 {
-				consider(OrientedVertexFaceDistanceSquared(vb, a, axis, side))
+		for index := range facesA {
+			if validA[index] {
+				if foot, ok := facesA[index].project(vb); ok {
+					consider(foot.distanceSquared())
+				}
 			}
 		}
 	}
@@ -185,6 +191,31 @@ func (f orientedFaceProjection) distanceSquared() *big.Rat {
 // a polynomial in held coordinates, so it is Dyadic, and the face test
 // 0 ≤ u, v ≤ 1 compares U and V against 0 and N·det exactly.
 func orientedVertexFaceProjection(vertex proofarith.DyV3, box OrientedBox, axis, side int) (orientedFaceProjection, bool) {
+	projector, ok := prepareOrientedFaceProjector(box, axis, side)
+	if !ok {
+		return orientedFaceProjection{}, false
+	}
+	return projector.project(vertex)
+}
+
+type orientedFaceProjector struct {
+	face, a, b, normal  proofarith.DyV3
+	normSquared, aa, bb proofarith.Dyadic
+	ab, whole           proofarith.Dyadic
+}
+
+func prepareOrientedFaceProjectors(box OrientedBox) ([6]orientedFaceProjector, [6]bool) {
+	var projectors [6]orientedFaceProjector
+	var usable [6]bool
+	for axis := range 3 {
+		for side := range 2 {
+			projectors[axis*2+side], usable[axis*2+side] = prepareOrientedFaceProjector(box, axis, side)
+		}
+	}
+	return projectors, usable
+}
+
+func prepareOrientedFaceProjector(box OrientedBox, axis, side int) (orientedFaceProjector, bool) {
 	i, j := (axis+1)%3, (axis+2)%3
 	face := box.Corner[0]
 	if side == 1 {
@@ -194,45 +225,54 @@ func orientedVertexFaceProjection(vertex proofarith.DyV3, box OrientedBox, axis,
 	normal := proofarith.DvCross(a, b)
 	normSquared := proofarith.DvDot(normal, normal)
 	if normSquared.Sign() == 0 {
-		return orientedFaceProjection{}, false
-	}
-	w := proofarith.DvSub(vertex, face)
-	distance := proofarith.DvDot(w, normal)
-	var point proofarith.DyV3
-	for k := range 3 {
-		point[k] = proofarith.DySubScalar(proofarith.DyMul(w[k], normSquared), proofarith.DyMul(normal[k], distance))
+		return orientedFaceProjector{}, false
 	}
 	aa, bb, ab := proofarith.DvDot(a, a), proofarith.DvDot(b, b), proofarith.DvDot(a, b)
 	det := proofarith.DySubScalar(proofarith.DyMul(aa, bb), proofarith.DyMul(ab, ab))
 	if det.Sign() <= 0 {
-		return orientedFaceProjection{}, false
+		return orientedFaceProjector{}, false
 	}
-	pa, pb := proofarith.DvDot(point, a), proofarith.DvDot(point, b)
-	u := proofarith.DySubScalar(proofarith.DyMul(pa, bb), proofarith.DyMul(pb, ab))
-	v := proofarith.DySubScalar(proofarith.DyMul(pb, aa), proofarith.DyMul(pa, ab))
-	whole := proofarith.DyMul(normSquared, det)
-	if u.Sign() < 0 || v.Sign() < 0 || proofarith.DyCmp(u, whole) > 0 || proofarith.DyCmp(v, whole) > 0 {
+	return orientedFaceProjector{face: face, a: a, b: b, normal: normal, normSquared: normSquared,
+		aa: aa, bb: bb, ab: ab, whole: proofarith.DyMul(normSquared, det)}, true
+}
+
+func (p *orientedFaceProjector) project(vertex proofarith.DyV3) (orientedFaceProjection, bool) {
+	w := proofarith.DvSub(vertex, p.face)
+	distance := proofarith.DvDot(w, p.normal)
+	var point proofarith.DyV3
+	for k := range 3 {
+		point[k] = proofarith.DySubScalar(proofarith.DyMul(w[k], p.normSquared),
+			proofarith.DyMul(p.normal[k], distance))
+	}
+	pa, pb := proofarith.DvDot(point, p.a), proofarith.DvDot(point, p.b)
+	u := proofarith.DySubScalar(proofarith.DyMul(pa, p.bb), proofarith.DyMul(pb, p.ab))
+	v := proofarith.DySubScalar(proofarith.DyMul(pb, p.aa), proofarith.DyMul(pa, p.ab))
+	if u.Sign() < 0 || v.Sign() < 0 || proofarith.DyCmp(u, p.whole) > 0 || proofarith.DyCmp(v, p.whole) > 0 {
 		return orientedFaceProjection{}, false
 	}
 	var foot proofarith.DyV3
 	for k := range 3 {
-		foot[k] = proofarith.DyAdd(proofarith.DyMul(face[k], normSquared), point[k])
+		foot[k] = proofarith.DyAdd(proofarith.DyMul(p.face[k], p.normSquared), point[k])
 	}
-	return orientedFaceProjection{scaled: foot, distance: distance, normSquared: normSquared}, true
+	return orientedFaceProjection{scaled: foot, distance: distance, normSquared: p.normSquared}, true
 }
 
 // An actual point strictly inside both η-eroded read boxes is also inside
 // both ideal boxes: every support plane moves by at most its body's η.
 func OrientedInteriorWitness(a, b OrientedBox, etaA, etaB *big.Rat) bool {
+	insideA, okA := prepareOrientedInside(a, etaA)
+	insideB, okB := prepareOrientedInside(b, etaB)
+	if !okA || !okB {
+		return false
+	}
 	try := func(point [3]*big.Rat) bool {
-		return orientedPointInside(a, point, etaA) && orientedPointInside(b, point, etaB)
+		return insideA.contains(point) && insideB.contains(point)
 	}
 	center := func(box OrientedBox) [3]*big.Rat {
 		var result [3]*big.Rat
 		for k := range 3 {
-			result[k] = new(big.Rat).Add(box.Corner[0][k].Rat(),
-				new(big.Rat).Quo(new(big.Rat).Add(box.Edge[0][k].Rat(),
-					new(big.Rat).Add(box.Edge[1][k].Rat(), box.Edge[2][k].Rat())), big.NewRat(2, 1)))
+			edges := proofarith.DyAdd(box.Edge[0][k], proofarith.DyAdd(box.Edge[1][k], box.Edge[2][k]))
+			result[k] = proofarith.DyAdd(box.Corner[0][k], proofarith.DyShift(edges, -1)).Rat()
 		}
 		return result
 	}
@@ -241,21 +281,24 @@ func OrientedInteriorWitness(a, b OrientedBox, etaA, etaB *big.Rat) bool {
 		return true
 	}
 	for _, pair := range [][2]OrientedBox{{a, b}, {b, a}} {
+		projectors, usable := prepareOrientedFaceProjectors(pair[1])
 		for _, vertex := range OrientedWitnessSamples(pair[0]) {
-			for axis := range 3 {
-				for side := range 2 {
-					foot, distance := OrientedVertexFaceFoot(vertex, pair[1], axis, side)
-					if distance == nil {
-						continue
-					}
-					var candidate [3]*big.Rat
-					for k := range 3 {
-						candidate[k] = new(big.Rat).Quo(new(big.Rat).Add(vertex[k].Rat(), foot[k]),
-							big.NewRat(2, 1))
-					}
-					if try(candidate) {
-						return true
-					}
+			for index := range projectors {
+				if !usable[index] {
+					continue
+				}
+				projection, ok := projectors[index].project(vertex)
+				if !ok {
+					continue
+				}
+				var candidate [3]*big.Rat
+				normSquared := projection.normSquared.Rat()
+				for k := range 3 {
+					foot := new(big.Rat).Quo(projection.scaled[k].Rat(), normSquared)
+					candidate[k] = new(big.Rat).Quo(new(big.Rat).Add(vertex[k].Rat(), foot), big.NewRat(2, 1))
+				}
+				if try(candidate) {
+					return true
 				}
 			}
 		}
@@ -266,21 +309,21 @@ func OrientedInteriorWitness(a, b OrientedBox, etaA, etaB *big.Rat) bool {
 func OrientedWitnessSamples(box OrientedBox) []proofarith.DyV3 {
 	samples := make([]proofarith.DyV3, 0, 26)
 	samples = append(samples, box.Corner[:]...)
-	average := func(indices ...int) proofarith.DyV3 {
+	average := func(shift int, indices ...int) proofarith.DyV3 {
 		var point proofarith.DyV3
 		for axis := range 3 {
 			sum := proofarith.DyZero()
 			for _, index := range indices {
 				sum = proofarith.DyAdd(sum, box.Corner[index][axis])
 			}
-			point[axis], _ = proofarith.DyOfRat(new(big.Rat).Quo(sum.Rat(), big.NewRat(int64(len(indices)), 1)))
+			point[axis] = proofarith.DyShift(sum, shift)
 		}
 		return point
 	}
 	for axis := range 3 {
 		for index := range 8 {
 			if index&(1<<axis) == 0 {
-				samples = append(samples, average(index, index|(1<<axis)))
+				samples = append(samples, average(-1, index, index|(1<<axis)))
 			}
 		}
 		for side := range 2 {
@@ -290,13 +333,23 @@ func OrientedWitnessSamples(box OrientedBox) []proofarith.DyV3 {
 					indices = append(indices, index)
 				}
 			}
-			samples = append(samples, average(indices...))
+			samples = append(samples, average(-2, indices...))
 		}
 	}
 	return samples
 }
 
-func orientedPointInside(box OrientedBox, point [3]*big.Rat, eta *big.Rat) bool {
+type orientedInsidePlane struct {
+	normal [3]*big.Rat
+	limit  *big.Rat
+}
+
+type orientedInsidePlanes [6]orientedInsidePlane
+
+// prepareOrientedInside fixes each eroded face plane once for all witness
+// candidates of the same box.
+func prepareOrientedInside(box OrientedBox, eta *big.Rat) (orientedInsidePlanes, bool) {
+	var planes orientedInsidePlanes
 	for axis := range 3 {
 		i, j := (axis+1)%3, (axis+2)%3
 		normal := proofarith.DvCross(box.Edge[i], box.Edge[j])
@@ -307,7 +360,7 @@ func orientedPointInside(box OrientedBox, point [3]*big.Rat, eta *big.Rat) bool 
 		}
 		normUp := proofbound.RatSqrtUp(proofarith.DvDot(normal, normal).Rat())
 		if !finite(normUp) || normUp <= 0 {
-			return false
+			return orientedInsidePlanes{}, false
 		}
 		margin := new(big.Rat).Mul(eta, proofarith.FloatRat(normUp))
 		for side := range 2 {
@@ -320,14 +373,25 @@ func orientedPointInside(box OrientedBox, point [3]*big.Rat, eta *big.Rat) bool 
 					signed[k] = proofarith.DyNeg(signed[k])
 				}
 			}
-			bound := proofarith.DvDot(signed, face).Rat()
-			projected := new(big.Rat)
+			plane := &planes[axis*2+side]
 			for k := range 3 {
-				projected.Add(projected, new(big.Rat).Mul(signed[k].Rat(), point[k]))
+				plane.normal[k] = signed[k].Rat()
 			}
-			if new(big.Rat).Sub(bound, projected).Cmp(margin) <= 0 {
-				return false
-			}
+			plane.limit = new(big.Rat).Sub(proofarith.DvDot(signed, face).Rat(), margin)
+		}
+	}
+	return planes, true
+}
+
+func (planes *orientedInsidePlanes) contains(point [3]*big.Rat) bool {
+	for i := range planes {
+		plane := &planes[i]
+		projected := new(big.Rat)
+		for k := range 3 {
+			projected.Add(projected, new(big.Rat).Mul(plane.normal[k], point[k]))
+		}
+		if projected.Cmp(plane.limit) >= 0 {
+			return false
 		}
 	}
 	return true
