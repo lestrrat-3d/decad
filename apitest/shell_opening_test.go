@@ -2,10 +2,12 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -99,6 +101,21 @@ func requireBrepRoles(t *testing.T, b *decad.Body) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
+// requireHole asserts the x = 0 plane, facing −x, is one face with one hole
+// spanning lo to hi.
+func requireHole(t *testing.T, b *decad.Body, lo, hi r3.Vec) {
+	t.Helper()
+	opened := planeFaces(t, b, r3.NewVec(-1, 0, 0), 0)
+	require.Len(t, opened, 1, "the x = 0 plane is one face")
+	loops := opened[0].Loops()
+	require.Len(t, loops, 2, "an outer loop and the opening")
+	require.True(t, loops[0].IsOuter())
+	require.False(t, loops[1].IsOuter())
+	gotLo, gotHi := loopBox(loops[1])
+	require.Equal(t, lo, gotLo)
+	require.Equal(t, hi, gotHi)
+}
+
 // uChannelBox is the U-channel fixture's 40×20 section.
 var uChannelBox = [][2]float64{{0, 0}, {40, 0}, {40, 20}, {0, 20}}
 
@@ -115,20 +132,6 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 	opening := func(t *testing.T, box *decad.Body) *decad.FaceQuery {
 		t.Helper()
 		return sideFaceAt(t, box, minusX, 0)
-	}
-	// requireHole asserts the x = 0 plane is one face with one hole spanning
-	// lo to hi.
-	requireHole := func(t *testing.T, b *decad.Body, lo, hi r3.Vec) {
-		t.Helper()
-		opened := planeFaces(t, b, minusX, 0)
-		require.Len(t, opened, 1, "the x = 0 plane is one face")
-		loops := opened[0].Loops()
-		require.Len(t, loops, 2, "an outer loop and the opening")
-		require.True(t, loops[0].IsOuter())
-		require.False(t, loops[1].IsOuter())
-		gotLo, gotHi := loopBox(loops[1])
-		require.Equal(t, lo, gotLo)
-		require.Equal(t, hi, gotHi)
 	}
 
 	t.Run("inward, both caps kept", func(t *testing.T) {
@@ -223,17 +226,42 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 		require.Equal(t, decad.Sound, report.Status)
 	})
 
-	t.Run("outward, both caps kept, an arc join is staged (SO5)", func(t *testing.T) {
+	t.Run("outward, both caps kept, the arc joins meet their lines tangentially", func(t *testing.T) {
 		t.Parallel()
-		// The two convex corners of K offset outward to arcs tangent to
-		// their neighbours, and the stacked record build keys no tangent
-		// junction of a line with a circle: an engine miss, SO5.
+		// The two convex corners of K offset outward to arcs of radius 2
+		// tangent to their neighbours (§4.3's tangent line–circle junction).
+		// The wall slab holds W, area 208 − 2(4 − π), over [0, 10]; each cap
+		// slab holds O = [0,42]×[−2,22] with the two corners rounded, area
+		// 1008 − 2(4 − π), over 2: 6000 + 28π in all. Shown to fail with
+		// stackedbrep's tangentFoot deleted (the junction missed, SO5).
 		doc, box := polygonPrism(t, uChannelBox)
-		before := snapshotDocument(t, doc)
-		_, err := box.Shell(t.Context(), opening(t, box), units.Millimeters(2), decad.WithShellSense(decad.Outward))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "SO5")
-		require.Equal(t, before.bodies, doc.Bodies())
+		body, err := box.Shell(t.Context(), opening(t, box), units.Millimeters(2), decad.WithShellSense(decad.Outward))
+		require.NoError(t, err)
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		requirePiLinearEnclosed(t, vol, 6000, 28)
+		// Two caps, the cavity's floor and ceiling, the outer walls y = −2,
+		// x = 42 and y = 22 with the two corner cylinders, the box's three
+		// kept walls, and the x = 0 plane's one face, whose hole is the
+		// removed face itself.
+		require.Len(t, body.Faces(), 13)
+		requireHole(t, body, r3.NewVec(0, 0, 0), r3.NewVec(0, 20, 10))
+		cylinders := 0
+		for _, f := range body.Faces() {
+			if c, ok := f.Surface().(decad.Cylinder); ok {
+				cylinders++
+				require.Equal(t, 2.0, c.Radius.Base())
+			}
+		}
+		require.Equal(t, 2, cylinders)
+		requireBrepRoles(t, body)
+		report, err := doc.Verify(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, decad.Sound, report.Status)
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		requireWatertight(t, mesh)
+		require.True(t, mesh.VolumeVerified())
 	})
 
 	t.Run("outward, both caps kept, one kept wall", func(t *testing.T) {
@@ -297,19 +325,6 @@ func TestShellSideOpeningRefusals(t *testing.T) {
 			require.NoError(t, err, "the receiver stays live")
 		})
 	}
-
-	t.Run("a circular walk is staged (SO5)", func(t *testing.T) {
-		t.Parallel()
-		s, p := semicircleSketch(t)
-		doc := decad.New()
-		half, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-		require.NoError(t, err)
-		before := snapshotDocument(t, doc)
-		_, err = half.Shell(t.Context(), sideFaceAt(t, half, r3.NewVec(0, -1, 0), 0), units.Millimeters(1))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "circular walk")
-		require.Equal(t, before.bodies, doc.Bodies())
-	})
 }
 
 // TestShellSideOpeningObliqueRefusals covers Table SO's gates where a removed
@@ -610,5 +625,251 @@ func TestShellSideOpeningOblique(t *testing.T) {
 			require.Len(t, faces, 1)
 		}
 		requireSoundAndMeshed(t, doc, body, 300)
+	})
+}
+
+// arcPrism extrudes a section of lines and arcs on XY by 10 along +z: build
+// draws its entities on s, and the section is the one profile they bound.
+func arcPrism(t *testing.T, build func(s *sketch.Sketch)) (*decad.Document, *decad.Body) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	build(s)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	return doc, body
+}
+
+// dSection is §9's D section: the semicircle of radius 5 about the origin
+// from (0,−5) through (5,0) to (0,5), closed by the chord x = 0.
+func dSection(s *sketch.Sketch) {
+	o := s.CreatePoint(0, 0)
+	s.Fix(o)
+	a := s.CreatePoint(0, -5)
+	b := s.CreatePoint(0, 5)
+	s.CreateArc(o, a, b)
+	s.CreateLine(b, a)
+}
+
+// cylinderFaces lists a body's cylindrical faces of radius r whose axis
+// passes through (u, v) on XY.
+func cylinderFaces(b *decad.Body, u, v, r float64) []*decad.Face {
+	var out []*decad.Face
+	for _, f := range b.Faces() {
+		c, ok := f.Surface().(decad.Cylinder)
+		if ok && c.Radius.Base() == r && c.Origin.X == u && c.Origin.Y == v {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// requireRatEnclosed asserts the measurement's interval value ± bound holds
+// the whole closed-form bracket [lo, hi], compared over big.Rat.
+func requireRatEnclosed(t *testing.T, got decad.Measurement, lo, hi *big.Rat) {
+	t.Helper()
+	value := new(big.Rat).SetFloat64(got.Value.Base())
+	bound := new(big.Rat).SetFloat64(got.Bound.Base())
+	require.LessOrEqual(t, new(big.Rat).Sub(value, bound).Cmp(lo), 0, "the interval reaches down to the closed form")
+	require.GreaterOrEqual(t, new(big.Rat).Add(value, bound).Cmp(hi), 0, "the interval reaches up to the closed form")
+}
+
+// dClosedForm brackets the D section fixtures' closed forms base + p·π +
+// a·A + r·√21, where A is acos(3/5) when r is zero and acos(2/5) otherwise,
+// each constant bracketed to 50 digits: the low end when high is false and
+// the high end when it is true.
+func dClosedForm(base, p, a, r int64, high bool) *big.Rat {
+	bracket := func(lo, hi string, coeff int64) *big.Rat {
+		pick := lo
+		if (coeff > 0) == high {
+			pick = hi
+		}
+		v, _ := new(big.Rat).SetString(pick)
+		return v.Mul(v, big.NewRat(coeff, 1))
+	}
+	acosLo, acosHi := "0.92729521800161223242851246292242880405707410857224", "0.92729521800161223242851246292242880405707410857225"
+	if r != 0 {
+		acosLo, acosHi = "1.15927948072740859984658379402241583724288356456052", "1.15927948072740859984658379402241583724288356456053"
+	}
+	v := big.NewRat(base, 1)
+	v.Add(v, bracket("3.14159265358979323846264338327950288419716939937510", "3.14159265358979323846264338327950288419716939937511", p))
+	v.Add(v, bracket(acosLo, acosHi, a))
+	return v.Add(v, bracket("4.58257569495584000658804719372800848898445657676797", "4.58257569495584000658804719372800848898445657676798", r))
+}
+
+// TestShellSideOpeningArcs is docs/shell-opening-design.md §9's D section, 10
+// tall, both caps kept, inward. Removing the chord at t = 1 keeps the arc: its
+// offset is the radius-4 arc, the cuts the exact feet (0, ±4), and the cavity
+// the half-disc of radius 4 over [1, 9]: 125π − 8π·8 = 61π. Removing the arc
+// at t = 3 keeps the chord: its offset x = 3 meets the arc's own circle at
+// (3, ±4), the rims are arcs about the origin, and the cavity is the circular
+// segment beyond x = 3, area 25·acos(3/5) − 12, over [3, 7]. Shown to fail:
+// the arc removed inward and outward with the removed arc stated whole in P
+// and R' (splitAtCuts false for an arc: the area identity failed, SO5); the
+// arc removed outward's tessellation with every wall column holding both
+// side lines' splits (the mesh did not close); the
+// float cut under a kept cap with requireRemovedArcKey deleted (the engine
+// missed instead, without naming the cut).
+func TestShellSideOpeningArcs(t *testing.T) {
+	t.Parallel()
+	t.Run("chord removed", func(t *testing.T) {
+		t.Parallel()
+		doc, d := arcPrism(t, dSection)
+		body, err := d.Shell(t.Context(), sideFaceAt(t, d, r3.NewVec(-1, 0, 0), 0), units.Millimeters(1))
+		require.NoError(t, err)
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		requirePiLinearEnclosed(t, vol, 0, 61)
+		requireHole(t, body, r3.NewVec(0, -4, 1), r3.NewVec(0, 4, 9))
+		// Two caps, the cavity's floor and ceiling, the outer cylinder over
+		// [0, 10], the cavity's radius-4 cylinder and the x = 0 plane.
+		require.Len(t, body.Faces(), 7)
+		require.Len(t, cylinderFaces(body, 0, 0, 5), 1)
+		require.Len(t, cylinderFaces(body, 0, 0, 4), 1)
+		requireBrepRoles(t, body)
+		report, err := doc.Verify(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, decad.Sound, report.Status)
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		requireWatertight(t, mesh)
+		require.True(t, mesh.VolumeVerified())
+	})
+	t.Run("arc removed", func(t *testing.T) {
+		t.Parallel()
+		doc, d := arcPrism(t, dSection)
+		removed := cylinderFaces(d, 0, 0, 5)
+		require.Len(t, removed, 1)
+		sel := decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0]))
+		body, err := d.Shell(t.Context(), sel, units.Millimeters(3))
+		require.NoError(t, err)
+		// 125π − 4·(25·acos(3/5) − 12) = 48 + 125π − 100·acos(3/5).
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		requireRatEnclosed(t, vol, dClosedForm(48, 125, -100, 0, false), dClosedForm(48, 125, -100, 0, true))
+		// The arc's circle holds the two rim columns, each one face over
+		// [0, 10] with its side line split at the cavity's levels z = 3 and
+		// z = 7, and the floor and ceiling strips between (3, −4) and (3, 4).
+		onArc := cylinderFaces(body, 0, 0, 5)
+		require.Len(t, onArc, 4)
+		columns := 0
+		for _, f := range onArc {
+			lo, hi := loopBox(f.Loops()[0])
+			if lo.Z == 0 && hi.Z == 10 {
+				columns++
+				// Eight corners: the column's four, and both side lines
+				// split at z = 3 and z = 7 — the cut's where the cavity
+				// begins, the corner's where it is marked (§4.3).
+				require.Len(t, f.Loops()[0].CoEdges(), 8)
+				continue
+			}
+			require.Equal(t, 3.0, hi.Z-lo.Z, "a strip spans one cap slab")
+			require.Equal(t, r3.NewVec(3, -4, lo.Z), r3.NewVec(lo.X, lo.Y, lo.Z))
+			require.Equal(t, 4.0, hi.Y)
+		}
+		require.Equal(t, 2, columns)
+		// Two caps, the cavity's floor and ceiling, the chord plane x = 0, its
+		// offset x = 3 and the four pieces on the arc's circle.
+		require.Len(t, body.Faces(), 10)
+		require.Len(t, planeFaces(t, body, r3.NewVec(1, 0, 0), 3), 1)
+		requireBrepRoles(t, body)
+		report, err := doc.Verify(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, decad.Sound, report.Status)
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		requireWatertight(t, mesh)
+		require.True(t, mesh.VolumeVerified())
+	})
+	t.Run("arc removed, outward", func(t *testing.T) {
+		t.Parallel()
+		// The chord's offset x = −3 meets the arc's circle at (−3, ±4),
+		// walking it backward from each corner, so each rim runs along the
+		// circle beyond the corner and O is the disc less the segment left of
+		// x = −3: 25π − (25·acos(3/5) − 12). The wall W = O − D over [0, 10]
+		// and O over the two cap slabs of 3: 192 + 275π − 400·acos(3/5).
+		doc, d := arcPrism(t, dSection)
+		removed := cylinderFaces(d, 0, 0, 5)
+		require.Len(t, removed, 1)
+		sel := decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0]))
+		body, err := d.Shell(t.Context(), sel, units.Millimeters(3), decad.WithShellSense(decad.Outward))
+		require.NoError(t, err)
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		requireRatEnclosed(t, vol, dClosedForm(192, 275, -400, 0, false), dClosedForm(192, 275, -400, 0, true))
+		// Two caps, the cavity's floor and ceiling, the chord plane x = 0 and
+		// its offset x = −3, the two rim columns over [−3, 13] and the cap
+		// slabs' two strips between the corners (0, ±5).
+		require.Len(t, body.Faces(), 10)
+		require.Len(t, cylinderFaces(body, 0, 0, 5), 4)
+		requireBrepRoles(t, body)
+		report, err := doc.Verify(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, decad.Sound, report.Status)
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		requireWatertight(t, mesh)
+		require.True(t, mesh.VolumeVerified())
+	})
+	t.Run("arc removed at a float cut", func(t *testing.T) {
+		t.Parallel()
+		// At t = 2 the offset chord x = 2 meets the arc's circle at
+		// (2, ±√21), a float solve. With both caps removed the wall is a
+		// prism over 125π/10 − (25·acos(2/5) − 2√21), volume 125π −
+		// 250·acos(2/5) + 20√21 within its bound (the cut's own charge is
+		// TestSideOpeningRegionsDSection's). With a cap kept the rims read
+		// their radius from the cut and cannot key the arc's own circle
+		// (SO5).
+		arcFace := func(t *testing.T, d *decad.Body) *decad.FaceQuery {
+			t.Helper()
+			removed := cylinderFaces(d, 0, 0, 5)
+			require.Len(t, removed, 1)
+			return decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0]))
+		}
+		_, d := arcPrism(t, dSection)
+		body, err := d.Shell(t.Context(), arcFace(t, d).Or(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(2))
+		require.NoError(t, err)
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		requireRatEnclosed(t, vol, dClosedForm(0, 125, -250, 20, false), dClosedForm(0, 125, -250, 20, true))
+
+		doc, d := arcPrism(t, dSection)
+		before := snapshotDocument(t, doc)
+		_, err = d.Shell(t.Context(), arcFace(t, d), units.Millimeters(2))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "not an exact point of the arc's circle")
+		require.ErrorContains(t, err, "SO5")
+		require.Equal(t, before.bodies, doc.Bodies())
+	})
+	t.Run("two arcs at an end corner (SO5)", func(t *testing.T) {
+		t.Parallel()
+		// The quarter arc about the origin from (0,−5) to (5,0) meets, at a
+		// right corner, the concave arc about (5,5) running to (0,5); the
+		// chord x = 0 closes the section. Removing the concave arc leaves
+		// the kept quarter arc meeting it at (5,0): two circles, SO5.
+		doc, d := arcPrism(t, func(s *sketch.Sketch) {
+			o := s.CreatePoint(0, 0)
+			s.Fix(o)
+			c := s.CreatePoint(5, 5)
+			s.Fix(c)
+			a := s.CreatePoint(0, -5)
+			b := s.CreatePoint(5, 0)
+			e := s.CreatePoint(0, 5)
+			s.CreateArc(o, a, b)
+			s.CreateArc(c, e, b)
+			s.CreateLine(e, a)
+		})
+		removed := cylinderFaces(d, 5, 5, 5)
+		require.Len(t, removed, 1)
+		before := snapshotDocument(t, doc)
+		_, err := d.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0])), units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "SO5")
+		require.Equal(t, before.bodies, doc.Bodies())
 	})
 }

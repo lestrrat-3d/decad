@@ -275,10 +275,20 @@ slabs disagree:
 | circular arc | the same pieces on one cylinder | the end columns are each one swept face over `[z0, z1]`, joined across the three slabs, with side-line splits at `q`'s two levels; the floor and ceiling strips are swept faces over the cap slabs alone |
 | oblique line | the same pieces on one plane the record cannot hold as a planar face | four swept faces (two columns, two strips), coplanar, each edge paired by identity |
 
-The circular case needs nothing beyond the engine's rules: `W`'s rim is an
-`ArcSeg` about `r`'s centre, so it shares `r`'s carrier key, `circlePoints`
-splits the cap slabs' `r` unit at `qA` and `qB`, and `stackedBrepSweptFaces` joins the
-column pieces. The oblique case needs every region walking `carrier(r)` to
+The circular case is stated in the same pieces as the oblique one below
+(`P`'s arc split at each forward cut, `R'` at `v` where its cut runs
+backward), arcs about `r`'s centre: the engine merges consecutive pieces of
+one circle walked one way into one unit, `circlePoints` splits the cap
+slabs' unit at `qA` and `qB`, and `stackedBrepSweptFaces` joins the column
+pieces; the pieces serve the area identity (§4.7), and each end vertex on a
+circular `r` is marked as an oblique one is. The engine keys a circle by the
+radius an `ArcSeg` reads from its `Start`, so every piece must read `r`'s
+radius bit for bit. A cut that is an exact point of `r`'s circle does; a
+piece that starts counter-clockwise at a float cut — the D section's
+`(2, ±√21)` — reads a radius off `r`'s by its rounding, lands on a second
+carrier and never pairs its edges. Under a kept cap that is SO5, refused
+before the engine runs (`requireRemovedArcKey`); with both caps removed
+BO1's prism takes the cut, its displacement charged (§4.4). The oblique case needs every region walking `carrier(r)` to
 state it in the same pieces, since an oblique line carrier is keyed by its
 recorded endpoints and the engine refuses a vertex strictly inside one: `P`'s
 record of `r` is pre-split at every forward cut (`vB → qB`, `qB → qA`,
@@ -298,17 +308,14 @@ segment has no such common statement and is SO5.
 |---|---|---|
 | planar wall with holes | `brepgeom.StackedWallRegions(embed, loops)`, read over every loop of one wall key | the chained loops of one `(axis, level, side)` key are grouped: all counter-clockwise → one face each; exactly one counter-clockwise and the rest clockwise → one face `{Outer, Holes}`; anything else is a miss. The §5 audit's S9 then proves each hole nested in its outer, and refuses; it admits nothing |
 | vertex events | `Engine.Event(p Point2, level int)` exported | the shell marks each end vertex `v` whose cut runs backward along `carrier(r)` (a reflex end inward, a convex end outward), and each end vertex on an oblique `r`, at both cavity levels, so `C`'s walk along `carrier(r)` is split at `v` where the rim face and the floor strip meet, and the kept wall's edge through `v` splits where an oblique rim column's does (`CutsOnLine` reads events; a vertex whose junction pair does not change between slabs gets none on its own) |
+| tangent line–circle junction | `Engine.junction`, `tangentFoot` | an axis-aligned line whose level lies exactly the circle's radius from the centre's coordinate across it, read in exact rational arithmetic over the held floats, touches the circle at one point: the centre's coordinate along the line at the line's level, an exact point. Where the side test cannot decide a line–circle crossing (the walked end within its allowance band of the centre's coordinate), that point is the junction, keyed with no side and charged the walked end's allowance plus its distance from the point. Every arc join of `K'` (modify §7's arc of radius `t` about an outward convex or inward reflex interior corner) between axis-aligned walks meets its offset lines so, since the join's feet are the offset lines' own feet. An oblique line is never decided tangent and still misses |
 | circle–circle junction (PR 5) | `Engine.junction` | two circles meeting where both walked ends are one recorded point take that point with the larger allowance; two circles whose walked ends differ still miss |
 
 A miss anywhere in the engine (`brepgeom.ErrStackedWallMiss`) is SO5, never a
-silent fallback: a shell has no mesh path to fall to. One miss every
-rectilinear section can reach: an arc join of `K'` (modify §7's arc of radius
-`t` about an outward convex or inward reflex interior corner of `K`) meets its
-neighbouring offset lines tangentially, and `Engine.junction` decides a
-line–circle crossing's side by its distance from the centre's coordinate,
-which a tangency makes zero. A kept cap slab or an interface over such a join
-is therefore SO5. With both caps removed the wall is BO1's prism, which takes
-the arc.
+silent fallback: a shell has no mesh path to fall to. An arc join of `K'`
+between oblique walks meets its offset lines at a float tangency the
+engine does not decide, so a kept cap slab or an interface over it is SO5;
+with both caps removed the wall is BO1's prism, which takes the arc.
 
 ### 4.4 Displacements
 
@@ -357,11 +364,15 @@ In order, each refusing and none admitting:
    another: rims and `K'` against `K` in `W`, `K'` and the re-cut `R'`
    against each other in `C`; the pairs of `K` with `R` are the receiver's
    own.
-3. Area identity, exact rational over the recorded floats:
+3. Area identity, exact rational over the walked floats:
    `area(P) = area(W) + area(C)` inward, `area(O) = area(W) + area(P)`
-   outward; a sum that differs is SO5. An arc enters as its chord: every arc
-   is a join of `K'`, which `W` and the offset region both walk, so its bulge
-   stands on both sides of the identity and cancels.
+   outward, `P` read as recorded (§4.2); a sum that differs is SO5. An arc
+   enters as its chord. Every arc stands on both sides piece by piece — a
+   kept arc in `P` and `W`, an arc of `K'` in `W` and the offset region, a
+   rim in `W` and in `P` or `R'`, every other piece of a removed arc in `P`
+   and `R'` — so its bulge cancels. The identity pairs the pieces; whether a
+   cut lies on `carrier(r)` is the enclosure's question (§2.4), not this
+   one's.
 4. The engine's own misses (SO5), modify §5's audit on every planar face the
    engine writes (as `stacked_union_brep.go` runs it), `falsifyBrepPayload`,
    `brepTopologyContext`'s closure count, and `evalBrepContext`'s positive
@@ -378,7 +389,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | **SO2** | a forward cut beyond the far end of `r` (`|r| ≤ t/sin θ` for lines; the sweep to `q` reaching `r`'s own) | yes; the inner body's boundary there runs on `r`'s neighbour's carrier, a trimmed-offset construction this evaluator does not build | `ErrUnsupported` |
 | **SO3** | `C` encloses no area (S8 on `C`), or inward `h − k·t ≤ 0` for `k` kept caps (reach SX11) | no cavity | `ErrDegenerate` |
 | **SO4** | a cut, a join or a level whose displacement the enclosure cannot bound (`offset2d.ErrUnbounded`) | yes; its readings would carry no bound | `ErrUnsupported` |
-| **SO5** | the engine misses the record (`ErrStackedWallMiss`: two circles meeting at distinct walked ends, a crossing too near a circle's centre to key — an offset arc join's tangent junction among them (§4.3) — a wall plane whose loops are neither all outers nor one outer with holes), an oblique end walk of `R` recorded as several collinear segments (§4.2), the area identity fails, or the closure count fails | yes; the record cannot be stated | `ErrUnsupported` |
+| **SO5** | the engine misses the record (`ErrStackedWallMiss`: two circles meeting at distinct walked ends, a crossing too near a circle's centre to key that is not an exact tangency (§4.3), a wall plane whose loops are neither all outers nor one outer with holes), an oblique end walk of `R` recorded as several collinear segments (§4.2), a kept cap over a rim cut that is not an exact point of a removed arc's circle (§4.2), the area identity fails, or the closure count fails | yes; the record cannot be stated | `ErrUnsupported` |
 | **SO6** | a side opening on a holed section; a run that is not one proper connected run of whole walks of the outer loop (a face of a hole loop, a run covering part of a coalesced walk, every side face) | yes | `ErrUnsupported` (reach SX8's text) |
 | **SO7** | a side opening on a brep or stacked receiver through route P | yes; route P maps removed faces to the recognised prism's caps only | brep-modify SB3, unchanged |
 
@@ -483,9 +494,12 @@ exported API live in `apitest/shell_opening_test.go` and
 - both caps removed: a `prismPayload` over `W`, volume `192·10 = 1920`,
   `capStart`/`capEnd` present;
 - outward, both caps kept: `K'` rounds the two convex corners beyond
-  `x = 40` to arcs of radius 2 tangent to their neighbours, SO5 (§4.3); with
-  both caps removed the same wall is BO1's prism, volume
-  `(208 − 2(4 − π))·10`;
+  `x = 40` to arcs of radius 2 tangent to their neighbours (§4.3's tangent
+  junction): `W` of area `208 − 2(4 − π)` over `[0, 10]` and `O` of area
+  `1008 − 2(4 − π)` over the two cap slabs, volume `6000 + 28π` within its
+  bound against π's bracket, 13 faces (two corner cylinders, the `x = 0`
+  plane one face whose hole is the removed face); with both caps removed the
+  same wall is BO1's prism, volume `(208 − 2(4 − π))·10`;
 - outward, both caps kept, the `x = 0`, `y = 20` and `x = 40` faces removed:
   the one kept wall `y = 0` cuts backward at `(0, −2)` and `(40, −2)`,
   `O = [0,40]×[−2,20]`, volume `880·14 − 8000 = 4320`, 10 faces, `Exact`;
@@ -553,6 +567,13 @@ through `(5,0)` from `(0,−5)` to `(0,5)`, then the chord `x = 0` — height
   side-line splits at `z = 3` and `z = 7`; `C` the circular segment beyond
   `x = 3`, area `25·acos(3/5) − 12`; volume `125π − 4·(25·acos(3/5) − 12)`
   within its bound;
+- arc removed outward, `t = 3`: the offset `x = −3` meets the circle at
+  `(−3, ±4)` walking it backward from each corner, `O` is the disc less the
+  segment left of `x = −3`, volume `192 + 275π − 400·acos(3/5)`, 10 faces;
+- arc removed, `t = 2`: the cuts `(2, ±√21)` are float solves; the section
+  displacement is nonzero and encloses `√21`; with both caps removed the
+  prism's volume `125π − 250·acos(2/5) + 20√21` lies within its bound; with
+  a cap kept SO5 (§4.2);
 - two consecutive arcs at an end corner → SO5 until PR 5, then builds.
 
 **Revolve slanted rim** (PR 1). Meridian `(ρ,z) = (0,0),(8,0),(8,2),(5,6),
@@ -647,7 +668,7 @@ every new root file. This document ships with PR 1.
 |---|---|---|---|---|
 | **1** (landed) | `offset2d.OpeningJoin` (§2.4) with its exact pairs and root choice; `offsetOpenChain` moved to `shell_chain.go` with an end-kind parameter; the revolve slanted rim (§8): `revolveShellSideWall` writes the rim from `OpeningJoin`, `requireOpeningRim` deleted; `offset2d.OpeningReach` charging each rim cut through `ChainReach` into the wall's `sectionDelta` | `internal/offset2d/opening.go`, `internal/offset2d/reach.go`, `shell_chain.go`, `shell_revolve.go`, `apitest/revolve_shell_side_test.go`, `internal/offset2d/opening_test.go`, `shell_chain_internal_test.go` | the revolve fixtures of §9; `OpeningJoin`'s corner rows; right-angle bodies bit for bit; float cuts charged, exact ones not | — |
 | **2** (landed) | the prism side opening, rectilinear: `classifyRemovedFaces` (caps by role, sides by `side(0,j)`, SO6), the three regions and the §4.7 audit (`shell_opening.go`), the stack through the engine into a `brepPayload` and the both-caps prism (`shell_opening_brep.go`), the `delta` composition over `offset2d.ChainReach`, `brepgeom.StackedWallRegions` with holes, `Engine.Event`; every non-axis-aligned walk in `K` or `R` refused with SO5's sentinel until PRs 3–4 | `shell_opening.go`, `shell_opening_brep.go`, `shell.go` (S2 replaced by the dispatch), `internal/offset2d/reach.go`, `internal/brepgeom/stacked_wall.go`, `internal/stackedbrep/record.go`, `apitest/shell_opening_test.go`, `shell_opening_internal_test.go` | the U-channel and L fixtures of §9, every sense and cap variant, DO11's route E on the result | 1 |
-| **3** | circular walks in `K` and `R`: line–arc and arc–line cuts through `ChainReach`'s circle enclosures; the refusal of PR 2 narrowed to oblique lines and arc–arc end corners | `shell_opening.go`, `internal/offset2d/opening.go`, `internal/offset2d/reach.go`, tests | the D fixtures of §9 | 2 |
+| **3** (landed) | circular walks in `K` and `R`: line–arc and arc–line cuts through `ChainReach`'s circle enclosures; `R` and `R'` stated in pieces on a removed arc's circle (§4.2); the refusal narrowed to arc–arc end corners; the engine's tangent line–circle junction (§4.3), so an offset arc join between axis-aligned walks builds under a kept cap | `shell_opening.go`, `internal/offset2d/opening.go`, `internal/stackedbrep/record.go`, `tessellate_brep.go` (a side line's column holds its own splits alone), tests | the D fixtures of §9; the outward U-channel with both caps kept | 2 |
 | **4** (landed) | oblique straight walks in `K` and `R`: the pre-split record of `r` at forward cuts and of `R'` at backward ones, with the oblique end vertices marked (§4.2), the axis hold of a float cut on an axis-aligned `r` (§2.4), the acute, obtuse and slanted-reflex corners; the refusal of PR 2 narrowed to circular walks, which PR 3 lifts | `shell_opening.go`, `internal/offset2d/opening.go`, tests | the triangle and trapezoid fixtures of §9 | 2 |
 | **5** | the engine's circle–circle junction at one recorded point (§4.3); arc–arc interior corners of `K` and arc–arc end corners | `internal/stackedbrep/record.go`, `shell_opening.go`, tests | two consecutive arcs at an end corner build; distinct walked ends still miss | 3 |
 
@@ -662,6 +683,6 @@ Increment table — what still refuses after each PR:
 |---|---|
 | 1 | every prism side opening (base S2) |
 | 2 | a prism side opening with any circular or oblique walk (SO5's sentinel); an offset arc join under a kept cap (SO5, §4.3); the revolve rows of reach SX8 |
-| 3 | oblique walks; arc–arc end corners; an offset arc join under a kept cap |
-| 4 | arc–arc end corners and an offset arc join under a kept cap (SO5) |
+| 3 | oblique walks; arc–arc end corners; a rim cut off a removed arc's exact circle under a kept cap (SO5, §4.2) |
+| 4 | arc–arc end corners; a rim cut off a removed arc's exact circle under a kept cap; an offset arc join between oblique walks under a kept cap (SO5) |
 | 5 | Table SO alone |

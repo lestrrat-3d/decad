@@ -18,9 +18,14 @@ import (
 // mesh vertex indices in walk order (closed for a whole circle), its largest
 // sagitta, and the chord-versus-arc charges tessellation §5 reads.
 type brepWallMesh struct {
-	// rows holds one sample row per level from z0 through every side split
-	// to z1; bottom and top are its first and last.
-	rows        [][]int
+	// cols holds one vertex column per rim sample, ascending from z0 to z1,
+	// and levels each column's heights: a side line's column stops at its
+	// own splits alone, so the neighbouring face across it meets exactly the
+	// side pieces' vertices, and every interior column at every split of
+	// either side. bottom and top are the rims, each column's first and last
+	// vertex.
+	cols        [][]int
+	levels      [][]float64
 	bottom, top []int
 	sag         float64
 	wallSlack   float64
@@ -119,12 +124,10 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 				edgePoly[topo.edgeOf[ui]] = []int{addVertex(u.DirFrom, proofbound.WalkEndBound{}), addVertex(u.DirTo, proofbound.WalkEndBound{})}
 			}
 		}
-		for r := 0; r+1 < len(wm.rows); r++ {
-			lower, upper := wm.rows[r], wm.rows[r+1]
-			for j := 0; j+1 < len(lower); j++ {
-				mesh.addTriangle([3]int{lower[j], lower[j+1], upper[j+1]}, face)
-				mesh.addTriangle([3]int{lower[j], upper[j+1], upper[j]}, face)
-			}
+		for j := 0; j+1 < len(wm.cols); j++ {
+			brepZipColumns(wm.cols[j], wm.cols[j+1], wm.levels[j], wm.levels[j+1], func(tri [3]int) {
+				mesh.addTriangle(tri, face)
+			})
 		}
 		faceTrim[face] = wm.sag
 		faceAxial[face] = proofbound.AbsSumUpper(math.Max(f.z0Delta, f.z1Delta), f.delta)
@@ -290,30 +293,65 @@ func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e br
 	}
 	wm := brepWallMesh{sag: sampled.MaxSag, wallSlack: sampled.WallSlack, capSlack: sampled.CapSlack,
 		segmentArea: sampled.SegmentArea}
-	// A row at every level either side line is split at, so each side
-	// piece's vertices are the wall's own and the quads between rows close
-	// against the neighbouring faces' edges.
-	levels := []float64{f.z0}
-	for _, splits := range [][]brepSplit{f.side0, f.side1} {
-		for _, sp := range splits {
-			levels = append(levels, sp.Z)
+	// Each side line's column holds a vertex at its own splits alone, so the
+	// side pieces' vertices are the wall's own and the face across the side
+	// line meets no vertex it does not hold; the interior columns hold every
+	// split of either side, and brepZipColumns closes the strips between.
+	levelsOf := func(splits ...[]brepSplit) []float64 {
+		out := []float64{f.z0}
+		for _, side := range splits {
+			for _, sp := range side {
+				out = append(out, sp.Z)
+			}
 		}
+		out = append(out, f.z1)
+		slices.Sort(out)
+		return slices.Compact(out)
 	}
-	levels = append(levels, f.z1)
-	slices.Sort(levels)
-	levels = slices.Compact(levels)
-	for _, z := range levels {
-		var row []int
-		for j, p := range samples {
-			row = append(row, addVertex(e.Canon(p.U, p.V, z), bounds[j]))
+	every := levelsOf(f.side0, f.side1)
+	for j, p := range samples {
+		levels := every
+		switch {
+		case w.Closed:
+		case j == 0:
+			levels = levelsOf(f.side0)
+		case j == len(samples)-1:
+			levels = levelsOf(f.side1)
 		}
-		if w.Closed {
-			row = append(row, row[0])
+		col := make([]int, 0, len(levels))
+		for _, z := range levels {
+			col = append(col, addVertex(e.Canon(p.U, p.V, z), bounds[j]))
 		}
-		wm.rows = append(wm.rows, row)
+		wm.cols = append(wm.cols, col)
+		wm.levels = append(wm.levels, levels)
+		wm.bottom = append(wm.bottom, col[0])
+		wm.top = append(wm.top, col[len(col)-1])
 	}
-	wm.bottom, wm.top = wm.rows[0], wm.rows[len(wm.rows)-1]
+	if w.Closed {
+		wm.cols = append(wm.cols, wm.cols[0])
+		wm.levels = append(wm.levels, wm.levels[0])
+		wm.bottom = append(wm.bottom, wm.bottom[0])
+		wm.top = append(wm.top, wm.top[0])
+	}
 	return wm, nil
+}
+
+// brepZipColumns triangulates the strip between two adjacent vertex columns
+// of one wall, a and b ascending at heights za and zb from one common bottom
+// to one common top: it climbs whichever column's next vertex is lower, b
+// first at a shared height, so two columns holding the same heights close
+// in quads split as (a, b, b↑) and (a, b↑, a↑).
+func brepZipColumns(a, b []int, za, zb []float64, emit func([3]int)) {
+	i, k := 0, 0
+	for i < len(a)-1 || k < len(b)-1 {
+		if i == len(a)-1 || (k < len(b)-1 && zb[k+1] <= za[i+1]) {
+			emit([3]int{a[i], b[k], b[k+1]})
+			k++
+			continue
+		}
+		emit([3]int{a[i], b[k], a[i+1]})
+		i++
+	}
 }
 
 // brepWallClearance refuses a mesh whose chorded walls could cross where the
