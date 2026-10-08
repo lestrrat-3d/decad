@@ -480,6 +480,9 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// held triangles, refused below the payload's own delta.
 		return tessellateMitredSweep(ctx, b, mp, chord)
 	}
+	if _, ok := b.payload.(coilPayload); ok {
+		return nil, fmt.Errorf(`%w: tessellation of a coil is staged (docs/helix-design.md Table CD row CD2)`, ErrUnsupported)
+	}
 	if sp, ok := b.payload.(sweepPayload); ok {
 		// docs/sweep-design.md Table D row D2's one exception: a one-span
 		// straight solid sweep builds through the identical evalPrismContext

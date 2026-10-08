@@ -1167,6 +1167,12 @@ audit close. Tessellation, free-form profiles, twist, clearance, and surveys
 remain staged exactly as its Table D states. An unlanded Sweep build returns
 `ErrUnsupported`; an unlanded verification question reads `Suspect`.
 
+Coil follows `docs/helix-design.md` §11's count-free four-PR plan: PR 1 builds
+`Document.Coil` over whole-line profiles with its four readings, structural
+and tolerance `Verify`, and placement; tessellation and boolean operands, arc
+profiles and clearance land with PRs 2 to 4. An unlanded Coil build returns
+`ErrUnsupported`; an unlanded verification question reads `Suspect`.
+
 Sheet bodies and the surface operations follow `docs/surface-design.md` §14's
 count-free three-increment plan: the body kind with `WithSurfaceResult()` on
 Extrude and Revolve and `Document.Patch`; then `Stitch`/`Unstitch` over exact

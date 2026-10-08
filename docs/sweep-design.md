@@ -69,7 +69,10 @@ The following remain outside this design:
 - a corner mode other than §16's join plane: a rounded corner, or a corner
   on an arc span;
 - closed paths and their frame holonomy;
-- a sweep that lets the section leave the path-normal plane.
+- a sweep that lets the section leave the path-normal plane;
+- a helical path: `docs/helix-design.md` builds it as `Document.Coil`, a
+  screw motion whose section stays in the axis plane, and its §12 states
+  why it is not a `Path` segment.
 
 `Loft` remains the operation for two different sections. `Revolve` remains the
 direct operation for one angular span. `Sweep` does not infer either operation
