@@ -3,12 +3,12 @@ package decad
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
+	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -295,37 +295,9 @@ func planarSnapshotOf(ctx context.Context, budget *proofbound.WorkBudget, b *Bod
 // orthonormal to rounding, so the bound sits a hair above one; it is charged
 // all the same, since the held mesh and its displacement move through the
 // exact float map, not through a rotation.
-func planarPoseScale(t r3.Transform) proofarith.Dyadic {
-	basis := t.Basis()
-	columns := [3]proofarith.DyV3{proofarith.DyVec(basis.EX), proofarith.DyVec(basis.EY), proofarith.DyVec(basis.EZ)}
-	one := proofarith.DyInt(1)
-	g := one
-	for i := range 3 {
-		row := proofarith.DyZero()
-		for j := range 3 {
-			row = proofarith.DyAdd(row, proofarith.DyAbs(proofarith.DvDot(columns[i], columns[j])))
-		}
-		if proofarith.DyCmp(row, g) > 0 {
-			g = row
-		}
-	}
-	return proofarith.DyShift(proofarith.DyAdd(one, g), -1)
-}
+func planarPoseScale(t r3.Transform) proofarith.Dyadic { return planarsnapshot.PoseScale(t) }
 
-// positiveAffine admits a finite transform whose exact basis determinant is
-// positive. Such a map preserves every orientation sign, so a snapshot's
-// outward winding and convexity survive it.
-func positiveAffine(t r3.Transform) bool {
-	if !t.IsValid() || !proofbound.FiniteVec(t.Translation()) {
-		return false
-	}
-	basis := t.Basis()
-	if !proofbound.FiniteVec(basis.EX) || !proofbound.FiniteVec(basis.EY) || !proofbound.FiniteVec(basis.EZ) {
-		return false
-	}
-	ex, ey, ez := proofarith.DyVec(basis.EX), proofarith.DyVec(basis.EY), proofarith.DyVec(basis.EZ)
-	return proofarith.DvDot(ex, proofarith.DvCross(ey, ez)).Sign() > 0
-}
+func positiveAffine(t r3.Transform) bool { return planarsnapshot.PositiveAffine(t) }
 
 // prismFaceIndex maps a prism face's provenance role to its index in the
 // body's Faces order, the roles evalPrism gives its caps and side walls.
@@ -348,140 +320,12 @@ func prismFaceIndex(b *Body) map[string]int {
 // side(loop, segment) for a wall; a missing role leaves Faces unset.
 func planarPrismSolid(ctx context.Context, budget *proofbound.WorkBudget,
 	pp prismPayload, faceIndex map[string]int) (planar.PlanarSolid, bool, error) {
-	if pp.surfaceResult || pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		!finiteMeasurementValues(pp.z0, pp.z1) || pp.z0 >= pp.z1 || !positiveAffine(pp.xform) ||
-		!proofbound.FiniteVec(pp.frame.Origin()) || !proofbound.FiniteVec(pp.frame.U()) ||
-		!proofbound.FiniteVec(pp.frame.V()) || !proofbound.FiniteVec(pp.frame.N()) {
-		return planar.PlanarSolid{}, false, nil
-	}
-	fu, fv, fn := proofarith.DyVec(pp.frame.U()), proofarith.DyVec(pp.frame.V()), proofarith.DyVec(pp.frame.N())
-	if proofarith.DvDot(fu, proofarith.DvCross(fv, fn)).Sign() <= 0 {
-		return planar.PlanarSolid{}, false, nil
-	}
-	var pts []Point2
-	loops := make([][]int, 0, 1+len(pp.profile.Holes))
-	for role, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
-		indices, ok := planarLoopPoints(loop, &pts)
-		if !ok {
-			return planar.PlanarSolid{}, false, nil
-		}
-		area := planarLoopArea(pts, indices)
-		if (role == 0 && area.Sign() <= 0) || (role > 0 && area.Sign() >= 0) {
-			return planar.PlanarSolid{}, false, nil
-		}
-		loops = append(loops, indices)
-	}
-	caps, err := triangulate2DContext(ctx, pts, loops)
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return planar.PlanarSolid{}, false, ctxErr
-		}
-		return planar.PlanarSolid{}, false, nil
-	}
-	n := len(pts)
-	solid := planar.PlanarSolid{Verts: make([]proofarith.DyV3, 2*n)}
-	origin := proofarith.DyVec(pp.frame.Origin())
-	z := [2]proofarith.Dyadic{proofarith.MustDyOf(pp.z0), proofarith.MustDyOf(pp.z1)}
-	for i, p := range pts {
-		if err := budget.Step(); err != nil {
-			return planar.PlanarSolid{}, false, err
-		}
-		local := proofarith.DvAdd(origin, proofarith.DvAdd(dyScaleVec(fu, proofarith.MustDyOf(p.U)),
-			dyScaleVec(fv, proofarith.MustDyOf(p.V))))
-		for level := range z {
-			solid.Verts[level*n+i] = exactContactTransform(pp.xform,
-				proofarith.DvAdd(local, dyScaleVec(fn, z[level])))
-		}
-	}
-	for _, tri := range caps {
-		if err := budget.Step(); err != nil {
-			return planar.PlanarSolid{}, false, err
-		}
-		if planarCross2(pts[tri[0]], pts[tri[1]], pts[tri[2]]).Sign() <= 0 {
-			return planar.PlanarSolid{}, false, nil
-		}
-		solid.Tris = append(solid.Tris, [3]int{tri[0], tri[2], tri[1]},
-			[3]int{n + tri[0], n + tri[1], n + tri[2]})
-	}
-	start, okStart := faceIndex[roleCapStart]
-	end, okEnd := faceIndex[roleCapEnd]
-	mapped := okStart && okEnd
-	for range caps {
-		solid.Faces = append(solid.Faces, start, end)
-	}
-	for li, loop := range loops {
-		for i, from := range loop {
-			to := loop[(i+1)%len(loop)]
-			solid.Tris = append(solid.Tris, [3]int{from, to, n + to}, [3]int{from, n + to, n + from})
-			side, ok := faceIndex[fmt.Sprintf("side(%d,%d)", li, i)]
-			mapped = mapped && ok
-			solid.Faces = append(solid.Faces, side, side)
-		}
-	}
-	if !mapped {
-		solid.Faces = nil
-	}
-	return solid, true, nil
-}
-
-// planarLoopPoints appends one loop's walk-start points to pts and returns
-// their indices. It admits only whole LineSeg edges that chain exactly.
-func planarLoopPoints(loop LoopRecord, pts *[]Point2) ([]int, bool) {
-	if len(loop.Segments) < 3 {
-		return nil, false
-	}
-	indices := make([]int, 0, len(loop.Segments))
-	var first, last Point2
-	for i, segment := range loop.Segments {
-		line, ok := segment.(LineSeg)
-		if !ok {
-			return nil, false
-		}
-		start, end := line.Start, line.End
-		switch {
-		case line.TStart == 0 && line.TEnd == 1:
-		case line.TStart == 1 && line.TEnd == 0:
-			start, end = end, start
-		default:
-			return nil, false
-		}
-		if !finiteMeasurementValues(start.U, start.V, end.U, end.V) || start == end ||
-			(i > 0 && start != last) {
-			return nil, false
-		}
-		if i == 0 {
-			first = start
-		}
-		last = end
-		indices = append(indices, len(*pts))
-		*pts = append(*pts, start)
-	}
-	if last != first {
-		return nil, false
-	}
-	return indices, true
-}
-
-// planarLoopArea is twice the exact signed area of a loop.
-func planarLoopArea(pts []Point2, loop []int) proofarith.Dyadic {
-	area := proofarith.DyZero()
-	for i, from := range loop {
-		a, b := pts[from], pts[loop[(i+1)%len(loop)]]
-		area = proofarith.DyAdd(area, proofarith.DySubScalar(
-			proofarith.DyMul(proofarith.MustDyOf(a.U), proofarith.MustDyOf(b.V)),
-			proofarith.DyMul(proofarith.MustDyOf(b.U), proofarith.MustDyOf(a.V))))
-	}
-	return area
-}
-
-// planarCross2 is the exact (b−a)×(c−a) of three section points.
-func planarCross2(a, b, c Point2) proofarith.Dyadic {
-	au, av := proofarith.MustDyOf(a.U), proofarith.MustDyOf(a.V)
-	bu := proofarith.DySubScalar(proofarith.MustDyOf(b.U), au)
-	bv := proofarith.DySubScalar(proofarith.MustDyOf(b.V), av)
-	cu := proofarith.DySubScalar(proofarith.MustDyOf(c.U), au)
-	cv := proofarith.DySubScalar(proofarith.MustDyOf(c.V), av)
-	return proofarith.DySubScalar(proofarith.DyMul(bu, cv), proofarith.DyMul(bv, cu))
+	return planarsnapshot.PrismSolid(ctx, budget, planarsnapshot.PrismInput{
+		Outer: pp.profile.Outer, Holes: pp.profile.Holes,
+		Frame: pp.frame, Transform: pp.xform, Z0: pp.z0, Z1: pp.z1,
+		SectionDelta: pp.sectionDelta, Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
+		SurfaceResult: pp.surfaceResult, CapStartRole: roleCapStart, CapEndRole: roleCapEnd,
+	}, faceIndex, triangulate2DContext)
 }
 
 // planarFacetedSolid reads a Boolean's held mesh. A zero-bound mesh is its
@@ -491,80 +335,17 @@ func planarCross2(a, b, c Point2) proofarith.Dyadic {
 // positive-bound mesh is read as held, with its mesh bound returned as the
 // displacement δ of §10.4.
 func planarFacetedSolid(budget *proofbound.WorkBudget, pp facetedPayload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
-	none := proofarith.DyZero()
-	if len(pp.verts) == 0 || len(pp.tris) == 0 {
-		return planar.PlanarSolid{}, none, false, nil
-	}
-	if pp.meshBound != 0 || pp.volSymDiff != 0 {
-		if !finiteMeasurementValues(pp.meshBound) || pp.meshBound < 0 {
-			return planar.PlanarSolid{}, none, false, nil
-		}
-		solid, ok, err := planarFacetedSourceSolid(budget, pp)
-		if err != nil || ok {
-			return solid, none, ok, err
-		}
-		if pp.meshBound == 0 {
-			return planar.PlanarSolid{}, none, false, nil
-		}
-	}
-	solid, ok, err := planarHeldSolid(budget, pp.verts, pp.tris, pp.faceOf)
-	if err != nil || !ok {
-		return planar.PlanarSolid{}, none, false, err
-	}
-	return solid, proofarith.MustDyOf(pp.meshBound), true, nil
-}
-
-// planarFacetedSourceSolid is the saved exact source mesh of a zero-bound
-// Boolean moved by a translation-only placement.
-func planarFacetedSourceSolid(budget *proofbound.WorkBudget, pp facetedPayload) (planar.PlanarSolid, bool, error) {
-	if !facetedTranslationOnly(pp.xform) || len(pp.exactSourceVerts) != len(pp.verts) ||
-		len(pp.exactSourceTris) != len(pp.tris) {
-		return planar.PlanarSolid{}, false, nil
-	}
-	for i, tri := range pp.tris {
-		if tri != pp.exactSourceTris[i] {
-			return planar.PlanarSolid{}, false, nil
-		}
-	}
-	solid, ok, err := planarHeldSolid(budget, pp.exactSourceVerts, pp.tris, pp.faceOf)
-	if err != nil || !ok {
-		return planar.PlanarSolid{}, false, err
-	}
-	bound := proofarith.MustDyOf(pp.meshBound)
-	for i := range solid.Verts {
-		if err := budget.Step(); err != nil {
-			return planar.PlanarSolid{}, false, err
-		}
-		if !proofbound.FiniteVec(pp.verts[i]) {
-			return planar.PlanarSolid{}, false, nil
-		}
-		solid.Verts[i] = exactContactTransform(pp.xform, solid.Verts[i])
-		difference := proofarith.DvSub(solid.Verts[i], proofarith.DyVec(pp.verts[i]))
-		if proofarith.DyCmp(proofarith.DvDot(difference, difference), proofarith.DyMul(bound, bound)) > 0 {
-			return planar.PlanarSolid{}, false, nil
-		}
-	}
-	return solid, true, nil
+	return planarsnapshot.FacetedSolid(budget, planarsnapshot.FacetedInput{
+		Verts: pp.verts, Tris: pp.tris, FaceOf: pp.faceOf,
+		ExactSourceVerts: pp.exactSourceVerts, ExactSourceTris: pp.exactSourceTris,
+		MeshBound: pp.meshBound, VolSymDiff: pp.volSymDiff, Transform: pp.xform,
+	})
 }
 
 // planarHeldSolid lifts a held triangle mesh to an exact snapshot. faceOf
 // names each triangle's face; a length mismatch leaves Faces unset.
 func planarHeldSolid(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int, faceOf []int) (planar.PlanarSolid, bool, error) {
-	solid := planar.PlanarSolid{Verts: make([]proofarith.DyV3, len(verts)),
-		Tris: append([][3]int(nil), tris...)}
-	if len(faceOf) == len(tris) {
-		solid.Faces = append([]int(nil), faceOf...)
-	}
-	for i, v := range verts {
-		if err := budget.Step(); err != nil {
-			return planar.PlanarSolid{}, false, err
-		}
-		if !proofbound.FiniteVec(v) {
-			return planar.PlanarSolid{}, false, nil
-		}
-		solid.Verts[i] = proofarith.DyVec(v)
-	}
-	return solid, true, nil
+	return planarsnapshot.HeldSolid(budget, verts, tris, faceOf)
 }
 
 // planarStitchSolid reads a closed all-planar stitched solid off its own
