@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -143,7 +144,7 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 		require.Positive(t, gap, `the premise: R − dc is not a float64`)
 		capTh0, capTh1, wraps := capWallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
 		sweep := capTh1 - capTh0
-		withoutRadial := capWallArcBound(w.CU, w.CV, start, end, capRadius, capRadius*sweep, wraps, delta, 0)
+		withoutRadial := capcontour.CapWallArcBound(w.CU, w.CV, start, end, capRadius, capRadius*sweep, wraps, delta, 0)
 
 		var arc *Edge
 		for _, e := range chamfered.Edges() {
@@ -218,7 +219,7 @@ func TestCapMiterLocusUpperReadsTheStatedAxialRise(t *testing.T) {
 			total, ok, err := capMiterLocusUpper(budget, prev, cur, j.vU, j.vV, axial, dc, 0)
 			require.NoError(t, err)
 			require.True(t, ok)
-			chordSq := ratSquaredDistance3(j.m.U, j.m.V, axial, j.vU, j.vV, 0)
+			chordSq := proofarith.RatSquaredDistance3(j.m.U, j.m.V, axial, j.vU, j.vV, 0)
 			rt := proofarith.FloatRat(total)
 			require.GreaterOrEqual(t, new(big.Rat).Mul(rt, rt).Cmp(chordSq), 0,
 				`corner %d, axial rise %v: the locus bound %v is below its own chord`, i, axial, total)

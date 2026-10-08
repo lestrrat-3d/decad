@@ -149,12 +149,12 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	}
 	// The closure slivers between the patch integrals and the disks
 	// (capBandClosure) carry moment too, charged once per band like delta's.
-	if !closure.zero() {
+	if !closure.Zero() {
 		pointUpper, cerr := capBandPointUpper(loop, capBoundary, delta, closure, sideZB, capZB, work)
 		if cerr != nil {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, cerr
 		}
-		inPlane, axial := closure.momentAllow(pointUpper,
+		inPlane, axial := closure.MomentAllow(pointUpper,
 			proofbound.AbsSumUpper(sideZB.Value, sideZB.Bound), proofbound.AbsSumUpper(capZB.Value, capZB.Bound))
 		muTotal.Bound = proofbound.AbsSumUpper(muTotal.Bound, inPlane)
 		mvTotal.Bound = proofbound.AbsSumUpper(mvTotal.Bound, inPlane)

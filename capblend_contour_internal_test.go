@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -94,9 +95,9 @@ func TestStraightEdgeBoundDyadicMatchesRational(t *testing.T) {
 		}
 
 		want := ratSquaredDistance3Oracle(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
-		squared, ok := dySquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
+		squared, ok := proofarith.DySquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
 		require.Equal(t, want != nil, ok, "whether %v and %v state a squared distance", a, b)
-		gotRat := ratSquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
+		gotRat := proofarith.RatSquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
 		if want == nil {
 			require.Nil(t, gotRat, "%v and %v", a, b)
 		} else {
@@ -112,9 +113,9 @@ func TestStraightEdgeBoundDyadicMatchesRational(t *testing.T) {
 		// from 1 its gap from the bracket needs more than 53 bits, which is
 		// what reaches the inexact rounding path.
 		for _, h := range []float64{held, math.Nextafter(held, math.Inf(1)), 1} {
-			requireSameFloatBits(t, ratStraightEdgeBound(h, want), straightEdgeBound(h, squared, ok),
+			requireSameFloatBits(t, ratStraightEdgeBound(h, want), capcontour.StraightEdgeBound(h, squared, ok),
 				"bound of %v to %v at %v", a, b, h)
-			requireSameFloatBits(t, ratStraightEdgeBound(h, want, delta, delta), straightEdgeBound(h, squared, ok, delta, delta),
+			requireSameFloatBits(t, ratStraightEdgeBound(h, want, delta, delta), capcontour.StraightEdgeBound(h, squared, ok, delta, delta),
 				"displaced bound of %v to %v at %v", a, b, h)
 		}
 
@@ -122,7 +123,7 @@ func TestStraightEdgeBoundDyadicMatchesRational(t *testing.T) {
 		planeHeld := math.Hypot(end.U-start.U, end.V-start.V)
 		requireSameFloatBits(t,
 			ratStraightEdgeBound(planeHeld, ratSquaredDistance3Oracle(end.U, end.V, 0, start.U, start.V, 0), delta, delta),
-			capEdgeLengthBound(planeHeld, end, start, delta),
+			capcontour.CapEdgeLengthBound(planeHeld, end, start, delta),
 			"plane bound of %v to %v", end, start)
 	}
 }
@@ -148,8 +149,8 @@ func TestStraightEdgeBoundExactSquareSkipsTheBracket(t *testing.T) {
 	check := func(t *testing.T, a, b r3.Vec, held, delta float64) {
 		t.Helper()
 		want := ratSquaredDistance3Oracle(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
-		squared, ok := dySquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
-		got := straightEdgeBound(held, squared, ok, delta, delta)
+		squared, ok := proofarith.DySquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
+		got := capcontour.StraightEdgeBound(held, squared, ok, delta, delta)
 		old := ratStraightEdgeBound(held, want, delta, delta)
 		if want != nil && held >= 0 && new(big.Rat).Mul(proofarith.FloatRat(held), proofarith.FloatRat(held)).Cmp(want) == 0 {
 			requireSameFloatBits(t, proofbound.AbsSumUpper(0, delta, delta), got,
@@ -179,7 +180,7 @@ func TestStraightEdgeBoundExactSquareSkipsTheBracket(t *testing.T) {
 		// -5 squares to 25 exactly, and the true length is 5, ten away.
 		pyth := r3.Vec{X: 3, Y: 4}
 		check(t, pyth, r3.Vec{}, -5, 0)
-		require.GreaterOrEqual(t, straightEdgeBound(-5, proofarith.DyInt(25), true), 10.0,
+		require.GreaterOrEqual(t, capcontour.StraightEdgeBound(-5, proofarith.DyInt(25), true), 10.0,
 			"a negated length is off by twice its magnitude")
 		check(t, pyth, r3.Vec{}, 5, 1e-9)
 	})

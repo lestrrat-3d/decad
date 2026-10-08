@@ -494,12 +494,12 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// The patch integrals and the two disks meet one another only to within
 	// the band's own closure slivers (capBandClosure), whose flux is charged
 	// here, before the division, beside the terms it sits with.
-	if !closure.zero() {
+	if !closure.Zero() {
 		pointUpper, err := capBandPointUpper(loop, capBoundary, delta, closure, sideZB, capZB, work)
 		if err != nil {
 			return proofbound.BoundedScalar{}, err
 		}
-		fluxTotal.Bound = proofbound.AbsSumUpper(fluxTotal.Bound, closure.fluxAllow(pointUpper,
+		fluxTotal.Bound = proofbound.AbsSumUpper(fluxTotal.Bound, closure.FluxAllow(pointUpper,
 			proofbound.AbsSumUpper(sideZB.Value, sideZB.Bound), proofbound.AbsSumUpper(capZB.Value, capZB.Bound)))
 	}
 	result := proofbound.BoundedQuotient(fluxTotal.Value, fluxTotal.Bound, 3, 0)
@@ -569,5 +569,5 @@ func capBandPointUpper(loop, capBoundary LoopRecord, delta float64, closure capB
 	}
 	planeUpper := math.Max(coordUpper, proofbound.AbsSumUpper(capCoordUpper, delta))
 	zUpper := math.Max(proofbound.AbsSumUpper(sideZB.Value, sideZB.Bound), proofbound.AbsSumUpper(capZB.Value, capZB.Bound))
-	return proofbound.AbsSumUpper(planeUpper, zUpper, closure.reach), nil
+	return proofbound.AbsSumUpper(planeUpper, zUpper, closure.Reach), nil
 }

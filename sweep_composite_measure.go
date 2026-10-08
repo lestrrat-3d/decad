@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -193,11 +194,11 @@ func compositeLineSweepSpan(
 	if math.IsInf(height, 0) || math.IsNaN(height) {
 		return sweepSpanPayload{}, fmt.Errorf(`%w: the sweep line's length is outside the representable range`, ErrUnsupported)
 	}
-	heightSquared, heightSquaredOK := dySquaredDistance3(
+	heightSquared, heightSquaredOK := proofarith.DySquaredDistance3(
 		record.start.X, record.start.Y, record.start.Z,
 		record.end.X, record.end.Y, record.end.Z,
 	)
-	heightBound := straightEdgeBound(height, heightSquared, heightSquaredOK)
+	heightBound := capcontour.StraightEdgeBound(height, heightSquared, heightSquaredOK)
 	heldSweep := frame.N().Scale(height)
 	heightBound = proofbound.AbsSumUpper(
 		heightBound,

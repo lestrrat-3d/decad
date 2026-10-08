@@ -533,7 +533,7 @@ func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, w
 	if !ok || proofbound.IsNonFinite(locus) {
 		return 0, fmt.Errorf(`%w: a cap-loop chamfer's miter ruling states no enclosure of the locus it stands for, so this mesh can publish no displacement bound for the patches that share it`, ErrUnsupported)
 	}
-	chordSq := ratSquaredDistance3(j.m.U, j.m.V, setback.ds, j.vU, j.vV, 0)
+	chordSq := proofarith.RatSquaredDistance3(j.m.U, j.m.V, setback.ds, j.vU, j.vV, 0)
 	chordSqDown, exact := chordSq.Float64()
 	if !exact {
 		chordSqDown = math.Nextafter(chordSqDown, math.Inf(-1))

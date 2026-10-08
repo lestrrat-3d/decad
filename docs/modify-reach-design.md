@@ -849,7 +849,7 @@ patches meet along a corner ruling only to within a gap: the held ends two
 walks meet at need not be one float, a walk end names its denoted point only
 to within its end bound, an `ArcSeg`'s `End` need not lie at its `Start`'s
 radius, and a cap arc is recorded through one foot while the other sits at its
-own distance. `capBandClosure` (`capblend_contour.go`) sums those gaps per
+own distance. `capBandClosure` (`internal/capband/closure.go`) sums those gaps per
 corner. Two rulings at most `gap` apart and at most `slant` long bound a
 sliver of area at most `(slant + gap)·gap`, whose flux is at most that area
 times `|P|` over the band and whose first moment is at most that area times
@@ -1687,13 +1687,15 @@ No implementation PR changes SX9. Brep and stacked receivers are
 The cap-loop chamfer's cap contour displacement (§8.4) and
 `docs/prism-boolean-design.md` §7's `sectionDelta` are the same idea applied to
 two different constructions, and they are independent terms with separate
-owners: `capblend_contour.go` derives the cap contour's own displacement, and
+owners: `internal/capcontour/` derives the cap contour's own displacement;
+`capblend_contour.go` maps it to the cap-band construction and refusal, and
 the cap-blend build/measurement code (`capblend_geom.go`, `capblend.go`,
 `capblend_moments.go`) carries it into every reading that needs it. No
 cap-blend reading composes `sectionDelta`, and no `sectionDelta` consumer reads
 the cap contour's displacement. `capBlendPayload` separately preserves its
 receiver's per-end axial displacement and the selected-end setback rounding.
 `capblend_contour.go` also states each circular patch's held allowances
-(`capWallHeldAllow`, `capApexHeldAllow`) and each band's closure slivers
-(`capBandClosure`), which `capblend_moments.go` and `capblend_centroid.go`
-charge beside the patch integrals (§8.4's held numbers paragraph).
+(`capWallHeldAllow`, `capApexHeldAllow`). `internal/capband/closure.go` bounds
+each band's closure slivers (`capBandClosure`), which `capblend_moments.go`
+and `capblend_centroid.go` charge beside the patch integrals (§8.4's held
+numbers paragraph).
