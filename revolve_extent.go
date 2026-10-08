@@ -23,7 +23,7 @@ import (
 //
 // A revolve's extreme along a direction is a sweep extreme, not a boundary
 // vertex: the meridian's own extremes are swept through the angular interval,
-// and sweepExtremeBounds brackets where that sweep turns. Every answer is a
+// and revolveangle.ExtremeBounds brackets where that sweep turns. Every answer is a
 // bounded interval charging the frame's rounding, the angular interval's own
 // bound, and the meridian bound the walk carries. See
 // docs/evaluator-design.md §6.
@@ -137,7 +137,7 @@ func (rp revolvePayload) extentBoundedAlongProfile(
 	wg := rp.xform.ApplyDir(b.W).Dot(g)
 	c0 := rp.xform.ApplyDir(b.E0).Dot(g)
 	c1 := rp.xform.ApplyDir(b.E1).Dot(g)
-	mlo, mhi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
+	mlo, mhi := revolveangle.Extremes(c0, c1, rp.phi0, rp.phi1, rp.full)
 	hi, hiBound, err := axisExtremeContext(ctx, rp, wg, mhi, true, work, profile)
 	if err != nil {
 		return 0, 0, 0, err
@@ -193,7 +193,7 @@ func (rp revolvePayload) sweepBoundAlong(
 		}
 	}
 	return revolveaxis.SweepBoundAlong(rp.ax.numeric(), rp.sectionDelta, c0, c1,
-		rp.phi0, rp.phi1, rp.den.toSweep(), mlo, mhi, rp.full, coordUpper)
+		rp.phi0, rp.phi1, rp.den, mlo, mhi, rp.full, coordUpper)
 }
 
 // revolveBoundsContext computes the axis-aligned bounds of the placed
@@ -312,20 +312,6 @@ func resolveAnalyticRevolveExtentProfile(
 		return nil, err
 	}
 	return &revolveExtentProfile{walks: walks, coordUpper: coordUpper}, nil
-}
-
-// sweepExtremes returns the range of m(φ) = c0·cos φ + c1·sin φ over the
-// sweep interval: endpoints plus the interior critical angles, or the full
-// ±amplitude for a whole turn. The held values it returns are what
-// extentBoundedAlong evaluates its interval from, and so what the box and the
-// through-all stop both publish; sweepExtremeBounds proves how far each can sit
-// from the truth without touching either.
-func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
-	return revolveangle.Extremes(c0, c1, phi0, phi1, full)
-}
-
-func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo, heldHi float64, full bool) (float64, float64) {
-	return revolveangle.ExtremeBounds(c0, c1, phi0, phi1, den.toSweep(), heldLo, heldHi, full)
 }
 
 // axisExtremeContext keeps the profile scan and its work budget at the root.

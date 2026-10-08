@@ -470,7 +470,7 @@ caller's own record states, whether or not that coincides with the held
 no better claim than itself, since the record names a target face rather
 than an angle, so its displacement is unbounded and every reading it feeds
 keeps the magnitude envelope it always has. The pair is spelled
-`revolvePayload.phi0`/`phi1` beside `den`, their `angleDenotation` twin
+`revolvePayload.phi0`/`phi1` beside `den`, their `revolveangle.Angle` twin
 (`internal/revolveangle/denotation.go`), and the per-end displacement is
 `phi0Delta`/`phi1Delta` (`angularDelta` for whichever a reading cannot
 attribute to one end). Every reading that folds a held sweep angle into a
@@ -491,7 +491,7 @@ bound that reaches both neighbouring walks' denoted ends there (§3's rim
 vertex rule; a free end's own walk-end bound), re-expresses
 it about the axis anchor and direction widened by `axisInPlane`'s four
 bounds, rotates it by that end's certified sine and cosine
-(`angleDenotation.sinCosFor`), and lifts it through the frame and the
+(`revolveangle.Angle.SinCosFor`), and lifts it through the frame and the
 placement, all over rational intervals with the frame and the placement as
 exact leaves. The held point's distance from that enclosure therefore covers
 the re-expression's rounding, a snapped radius, the axis's own anchor and

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
@@ -70,7 +71,7 @@ type revolvePayload struct {
 	ax            axisFrame
 	phi0, phi1    float64
 	full          bool
-	den           sweepDenotation
+	den           revolveangle.Sweep
 	xform         r3.Transform
 	surfaceResult bool
 	// sectionDelta is prismPayload's own §7 term over the MERIDIAN: the proven
@@ -190,15 +191,15 @@ func (rw revolveWalks) junctionStart(prev, next survey2d.SideWalk) sweptPoint {
 }
 
 // sweptEnd is one end of the sweep a vertex sits at: the held angle and the
-// angle the record denotes there (rp.phi0 with rp.den.phi0, or rp.phi1 with
-// rp.den.phi1).
+// angle the record denotes there (rp.phi0 with rp.den.Phi0, or rp.phi1 with
+// rp.den.Phi1).
 type sweptEnd struct {
 	phi float64
-	den angleDenotation
+	den revolveangle.Angle
 }
 
-func (rp revolvePayload) end0() sweptEnd { return sweptEnd{phi: rp.phi0, den: rp.den.phi0} }
-func (rp revolvePayload) end1() sweptEnd { return sweptEnd{phi: rp.phi1, den: rp.den.phi1} }
+func (rp revolvePayload) end0() sweptEnd { return sweptEnd{phi: rp.phi0, den: rp.den.Phi0} }
+func (rp revolvePayload) end1() sweptEnd { return sweptEnd{phi: rp.phi1, den: rp.den.Phi1} }
 
 // sweptGap proves how far held sits from the point at denotes, swept to the
 // angle end's record states (revolvemesh.RevolveLift.SweptPointGap;
@@ -207,10 +208,10 @@ func (rp revolvePayload) end1() sweptEnd { return sweptEnd{phi: rp.phi1, den: rp
 // angle to rotate to, so the gap is unbounded there, which is the +Inf the
 // end's own displacement (phi0Delta/phi1Delta) answers for every reading.
 func (rp revolvePayload) sweptGap(held r3.Vec, at sweptPoint, end sweptEnd) float64 {
-	if !end.den.valid() {
+	if !end.den.Valid() {
 		return math.Inf(1)
 	}
-	sin, cos, ok := end.den.sinCosFor(end.phi)
+	sin, cos, ok := end.den.SinCosFor(end.phi)
 	if !ok {
 		return math.Inf(1)
 	}
@@ -592,8 +593,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// The in-plane term is the swept radial direction integrated over
 		// the interval — closed form in the sweep angle; a full turn's is
 		// identically zero, which is what puts its centroid on the axis.
-		sin1, cos1 := endSinCos(rp.den.phi1, rp.phi1)
-		sin0, cos0 := endSinCos(rp.den.phi0, rp.phi0)
+		sin1, cos1 := revolveangle.EndSinCos(rp.den.Phi1, rp.phi1)
+		sin0, cos0 := revolveangle.EndSinCos(rp.den.Phi0, rp.phi0)
 		rx := proofbound.BoundedSub(sin1, sin0)
 		ry := proofbound.BoundedSub(cos0, cos1)
 		radial := b.E0.Scale(rx.Value).Add(b.E1.Scale(ry.Value))
@@ -873,7 +874,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
 					arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(w.AxisRadiusUpper, dphiUpper))
 					if rhoEnc, ok := junctionRadiusInterval(j.rho, w.StartVBound); ok {
-						if widthEnc, ok := rp.den.widthInterval(); ok {
+						if widthEnc, ok := rp.den.WidthInterval(); ok {
 							enc := proofbound.IntervalMul(rhoEnc, widthEnc)
 							arcBound = math.Min(arcBound, proofbound.IntervalFloatError(enc, arcLength))
 						}
@@ -1278,10 +1279,10 @@ func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plan
 // angle, so it returns nil and the cap keeps its tag's proof composed with
 // its normalBound, which is +Inf there.
 func (rp revolvePayload) capDenotation(end sweptEnd, start bool) *surfacenormal.Revolved {
-	if !end.den.valid() {
+	if !end.den.Valid() {
 		return nil
 	}
-	sin, cos, ok := end.den.sinCosFor(end.phi)
+	sin, cos, ok := end.den.SinCosFor(end.phi)
 	if !ok {
 		return nil
 	}
@@ -1528,7 +1529,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
 				arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(axisRadiusUpper, dphiUpper))
 				if rhoEnc, ok := junctionRadiusInterval(j.rho, rhoBound); ok {
-					if widthEnc, ok := rp.den.widthInterval(); ok {
+					if widthEnc, ok := rp.den.WidthInterval(); ok {
 						enc := proofbound.IntervalMul(rhoEnc, widthEnc)
 						arcBound = math.Min(arcBound, proofbound.IntervalFloatError(enc, arcLength))
 					}

@@ -26,7 +26,7 @@ import (
 // minimum (cos(pi/2) = 0) once it is grown by its own proven bound, and that
 // bound must be nonzero — the charge is not free. A wide (120deg/180deg)
 // sweep's box stays tight through the interior-critical-angle arm this PR
-// also adds to sweepExtremeBounds. A partial-sweep cap vertex carries the
+// also adds to revolveangle.ExtremeBounds. A partial-sweep cap vertex carries the
 // same charge and nothing else, so it is exactly zero for a radian-stated
 // sweep and nonzero for a degree-stated one; its cap face's own normal
 // carries the charge on top of the frame's own baseline rounding, so it
@@ -642,9 +642,9 @@ func TestRevolveTiltedAxisBoundsTighten(t *testing.T) {
 	})
 }
 
-// The tests below prove the reflex-sweep box bound: sweepExtremeBounds'
-// default arm (revolve_extent.go) certifies both extremes are the amplitude
-// once den.halfTurnExcessFor proves the sweep is at least a half turn wide,
+// The tests below prove the reflex-sweep box bound: revolveangle.ExtremeBounds'
+// default arm certifies both extremes are the amplitude once
+// Sweep.HalfTurnExcessFor proves the sweep is at least a half turn wide,
 // replacing the old widen-to-amplitude-on-both-ends fallback that published
 // up to 50 mm of slack on annularSketch (rho_upper 15 mm). Every assertion is
 // a RELATION, never a bound literal.

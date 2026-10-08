@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -36,7 +37,7 @@ func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
 		"direction bound":      func(rp *revolvePayload) { rp.ax.dVBound = 1e-16 },
 		"admitted band":        func(rp *revolvePayload) { rp.ax.radialAdmitAllow = 1e-12 },
 		"axis snap":            func(rp *revolvePayload) { rp.ax.snap.second = 1e-12 },
-		"undenoted sweep end":  func(rp *revolvePayload) { rp.den.phi1 = angleDenotation{} },
+		"undenoted sweep end":  func(rp *revolvePayload) { rp.den.Phi1 = revolveangle.Angle{} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			rp := base

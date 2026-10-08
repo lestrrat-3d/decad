@@ -132,7 +132,7 @@ the rules leave to the byte budget.
 | `revolve_build.go` | Builds a revolve's solid or sheet body and its measurements. See evaluator §6. |
 | `revolve_section.go` | Revolve section-displacement charges. See surface-intersection §7.2. |
 | `revolve_extent.go` | Revolve extents over `internal/revolveaxis/` and `revolveangle/`. See evaluator §6. |
-| `revolve_denotation.go` | Payload adapters for `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |
+| `revolve_denotation.go` | Payload sweep bounds over `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |
 | `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
 | `loft.go` | Loft entry points, chain ribbon assembly, and option parsing. See loft §2/§4/§10/§16. |
 | `loft_build.go` | Loft payload, evaluation, placement and tessellation adapter. See loft §5, §8, §12. |

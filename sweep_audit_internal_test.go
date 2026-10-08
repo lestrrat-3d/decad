@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -81,14 +82,14 @@ func TestSweepAuditBoxesRequireStrictBoundedSeparation(t *testing.T) {
 }
 
 func TestSweepAuditEndpointSupportStopsAtHalfTurn(t *testing.T) {
-	body := &Body{payload: revolvePayload{den: sweepDenotation{
-		phi0: angleDenotation{rad: new(big.Rat), turn: new(big.Rat)},
-		phi1: angleDenotation{rad: new(big.Rat), turn: big.NewRat(1, 2)},
+	body := &Body{payload: revolvePayload{den: revolveangle.Sweep{
+		Phi0: revolveangle.Angle{Rad: new(big.Rat), Turn: new(big.Rat)},
+		Phi1: revolveangle.Angle{Rad: new(big.Rat), Turn: big.NewRat(1, 2)},
 	}}}
 	require.True(t, sweepAuditEndpointSupports(body))
 
 	payload := body.payload.(revolvePayload)
-	payload.den.phi1.turn = big.NewRat(3, 4)
+	payload.den.Phi1.Turn = big.NewRat(3, 4)
 	body.payload = payload
 	require.False(t, sweepAuditEndpointSupports(body))
 }

@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -209,7 +210,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 		// about the flipped one, so the interval flips with it — and so does
 		// what it denotes, exactly: negate and swap both ends.
 		phi0, phi1 = -phi1, -phi0
-		den.phi0, den.phi1 = den.phi1.neg(), den.phi0.neg()
+		den.Phi0, den.Phi1 = den.Phi1.Neg(), den.Phi0.Neg()
 	}
 
 	ref := d.nextProducerID()
@@ -312,62 +313,62 @@ const angFullEps = 1e-12
 // displacement between the two is what every consumer charges, never a
 // reinterpretation of the record. Magnitudes are validated per core §8.1/§12;
 // a zero-angle sweep is ErrDegenerate, as is one past a full turn.
-func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float64, float64, bool, sweepDenotation, []producerID, error) { //nolint:unparam // the stop refs have no consumer yet in either caller (Revolve, RevolveChain), matching resolveLinearExtent's own untracked linearSweep.inputs field — dependency tracking for a ToFaceAngular stop is not wired to the document.
+func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float64, float64, bool, revolveangle.Sweep, []producerID, error) { //nolint:unparam // the stop refs have no consumer yet in either caller (Revolve, RevolveChain), matching resolveLinearExtent's own untracked linearSweep.inputs field — dependency tracking for a ToFaceAngular stop is not wired to the document.
 	var phi0, phi1 float64
-	var den sweepDenotation
+	var den revolveangle.Sweep
 	var refs []producerID
 	full := false
 	switch a := a.(type) {
 	case AngleExtent:
 		m, err := sectionrecord.MagnitudeIn(a.A, units.Angle, units.Radian, "the extent angle")
 		if err != nil {
-			return 0, 0, false, sweepDenotation{}, nil, err
+			return 0, 0, false, revolveangle.Sweep{}, nil, err
 		}
 		if m == 0 {
-			return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, false, revolveangle.Sweep{}, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
 		}
-		stated := angleDenotationFromValue(a.A)
+		stated := revolveangle.FromValue(a.A)
 		// An unknown Direction is malformed input, never silently Along.
 		switch a.Dir {
 		case Along:
 			phi0, phi1 = 0, m
-			den = sweepDenotation{phi0: zeroAngleDenotation(), phi1: stated}
+			den = revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: stated}
 		case Against:
 			phi0, phi1 = -m, 0
-			den = sweepDenotation{phi0: stated.neg(), phi1: zeroAngleDenotation()}
+			den = revolveangle.Sweep{Phi0: stated.Neg(), Phi1: revolveangle.Zero()}
 		default:
-			return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(a.Dir))
+			return 0, 0, false, revolveangle.Sweep{}, nil, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(a.Dir))
 		}
 	case FullRevolution:
-		fullDen := sweepDenotation{phi0: zeroAngleDenotation(), phi1: angleDenotation{rad: new(big.Rat), turn: big.NewRat(1, 1)}}
+		fullDen := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: revolveangle.Angle{Rad: new(big.Rat), Turn: big.NewRat(1, 1)}}
 		return 0, 2 * math.Pi, true, fullDen, nil, nil
 	case SymmetricAngle:
 		m, err := sectionrecord.MagnitudeIn(a.A, units.Angle, units.Radian, "the symmetric angle")
 		if err != nil {
-			return 0, 0, false, sweepDenotation{}, nil, err
+			return 0, 0, false, revolveangle.Sweep{}, nil, err
 		}
 		if m == 0 {
-			return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, false, revolveangle.Sweep{}, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
 		}
 		half := m
-		stated := angleDenotationFromValue(a.A)
+		stated := revolveangle.FromValue(a.A)
 		if a.FullLength {
 			half = m / 2
-			stated = stated.scale(big.NewRat(1, 2))
+			stated = stated.Scale(big.NewRat(1, 2))
 		}
 		phi0, phi1 = -half, half
-		den = sweepDenotation{phi0: stated.neg(), phi1: stated}
+		den = revolveangle.Sweep{Phi0: stated.Neg(), Phi1: stated}
 	case TwoSidedAngle:
 		along, alongDen, oneRefs, err := d.resolveAngleSide(a.One, st, 1, "the along side")
 		if err != nil {
-			return 0, 0, false, sweepDenotation{}, nil, err
+			return 0, 0, false, revolveangle.Sweep{}, nil, err
 		}
 		against, againstDen, twoRefs, err := d.resolveAngleSide(a.Two, st, -1, "the against side")
 		if err != nil {
-			return 0, 0, false, sweepDenotation{}, nil, err
+			return 0, 0, false, revolveangle.Sweep{}, nil, err
 		}
 		if along == 0 && against == 0 {
-			return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, false, revolveangle.Sweep{}, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
 		}
 		phi0, phi1 = against, along
 		// Each side denotes its own end independently; a side this evaluator
@@ -375,14 +376,14 @@ func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float
 		// sweep's denotation nil, never half of it — a nil end mixed with a
 		// stated one would let one end's zero charge stand for a sweep whose
 		// other end the resolver cannot prove at all.
-		if againstDen.valid() && alongDen.valid() {
-			den = sweepDenotation{phi0: againstDen, phi1: alongDen}
+		if againstDen.Valid() && alongDen.Valid() {
+			den = revolveangle.Sweep{Phi0: againstDen, Phi1: alongDen}
 		}
 		refs = append(oneRefs, twoRefs...)
 	case ToFaceAngular:
 		stop, ref, err := st.resolveToFaceAngular(a, 0, "a to-face extent")
 		if err != nil {
-			return 0, 0, false, sweepDenotation{}, nil, err
+			return 0, 0, false, revolveangle.Sweep{}, nil, err
 		}
 		refs = []producerID{ref}
 		if stop > 0 {
@@ -391,13 +392,13 @@ func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float
 			phi0, phi1 = stop, 0
 		}
 	case nil:
-		return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
+		return 0, 0, false, revolveangle.Sweep{}, nil, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
 	default:
-		return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: angular extent %T is not supported by this evaluator`, ErrUnsupported, a)
+		return 0, 0, false, revolveangle.Sweep{}, nil, fmt.Errorf(`%w: angular extent %T is not supported by this evaluator`, ErrUnsupported, a)
 	}
 	total := phi1 - phi0
 	if total > 2*math.Pi+angFullEps {
-		return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: a sweep past a full turn overlaps itself`, ErrDegenerate)
+		return 0, 0, false, revolveangle.Sweep{}, nil, fmt.Errorf(`%w: a sweep past a full turn overlaps itself`, ErrDegenerate)
 	}
 	if total >= 2*math.Pi-angFullEps {
 		full = true
@@ -410,32 +411,32 @@ func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float
 // boundary angle and the exact angle it denotes (§6); travel is +1 for the
 // along side, −1 for the against side, and the denotation is scaled by the
 // same sign — exact, since travel is always ±1.
-func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float64, what string) (float64, angleDenotation, []producerID, error) {
+func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float64, what string) (float64, revolveangle.Angle, []producerID, error) {
 	s, err := normalizeSideAngular(s)
 	if err != nil {
-		return 0, angleDenotation{}, nil, err
+		return 0, revolveangle.Angle{}, nil, err
 	}
 	switch s := s.(type) {
 	case AngleSide:
 		m, err := sectionrecord.MagnitudeIn(s.A, units.Angle, units.Radian, what)
 		if err != nil {
-			return 0, angleDenotation{}, nil, err
+			return 0, revolveangle.Angle{}, nil, err
 		}
 		travelR := big.NewRat(1, 1)
 		if travel < 0 {
 			travelR = big.NewRat(-1, 1)
 		}
-		return travel * m, angleDenotationFromValue(s.A).scale(travelR), nil, nil
+		return travel * m, revolveangle.FromValue(s.A).Scale(travelR), nil, nil
 	case ToFaceAngular:
 		stop, ref, err := st.resolveToFaceAngular(s, travel, what)
 		if err != nil {
-			return 0, angleDenotation{}, nil, err
+			return 0, revolveangle.Angle{}, nil, err
 		}
-		return stop, angleDenotation{}, []producerID{ref}, nil
+		return stop, revolveangle.Angle{}, []producerID{ref}, nil
 	case nil:
-		return 0, angleDenotation{}, nil, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
+		return 0, revolveangle.Angle{}, nil, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
 	default:
-		return 0, angleDenotation{}, nil, fmt.Errorf(`%w: side angular %T is not supported by this evaluator`, ErrUnsupported, s)
+		return 0, revolveangle.Angle{}, nil, fmt.Errorf(`%w: side angular %T is not supported by this evaluator`, ErrUnsupported, s)
 	}
 }
 
@@ -471,7 +472,7 @@ type chainRevolvePayload struct {
 	ax         axisFrame
 	phi0, phi1 float64
 	full       bool
-	den        sweepDenotation
+	den        revolveangle.Sweep
 	xform      r3.Transform
 	// sectionDelta is prismPayload's own §7 term (docs/prism-boolean-design.md),
 	// carried here on the identical terms: the proven upper bound on how far
@@ -609,7 +610,7 @@ func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a
 	}
 	if side < 0 {
 		phi0, phi1 = -phi1, -phi0
-		den.phi0, den.phi1 = den.phi1.neg(), den.phi0.neg()
+		den.Phi0, den.Phi1 = den.Phi1.Neg(), den.Phi0.Neg()
 	}
 
 	ref := d.nextProducerID()

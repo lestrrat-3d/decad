@@ -77,7 +77,7 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 	if status != surfacenormal.Proven {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span has no certified axis direction`, ErrUnsupported)
 	}
-	sin, cos, ok := record.arcAngle.sinCosFor(record.arcPhi)
+	sin, cos, ok := record.arcAngle.SinCosFor(record.arcPhi)
 	if !ok {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span has no certified sine and cosine`, ErrUnsupported)
 	}

@@ -35,7 +35,7 @@ import (
 // either way.
 //
 // revolveUndercuts is NOT converted: it carries the same defect through
-// sweepExtremes, a genuinely different reader, and fixing it is fu188's
+// revolveangle.Extremes, a genuinely different reader, and fixing it is fu188's
 // scope, not this one's.
 
 // listVerdict folds one face's verdict into the running faces list and

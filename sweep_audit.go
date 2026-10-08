@@ -129,12 +129,12 @@ func sweepAuditEndpointSupports(body *Body) bool {
 		if payload.full {
 			return false
 		}
-		from, to := payload.den.phi0, payload.den.phi1
-		if !from.valid() || !to.valid() || from.span != nil || to.span != nil ||
-			from.rad.Sign() != 0 || to.rad.Sign() != 0 {
+		from, to := payload.den.Phi0, payload.den.Phi1
+		if !from.Valid() || !to.Valid() || from.Span != nil || to.Span != nil ||
+			from.Rad.Sign() != 0 || to.Rad.Sign() != 0 {
 			return false
 		}
-		width := new(big.Rat).Sub(to.turn, from.turn)
+		width := new(big.Rat).Sub(to.Turn, from.Turn)
 		return width.Sign() > 0 && width.Cmp(big.NewRat(1, 2)) <= 0
 	default:
 		return false

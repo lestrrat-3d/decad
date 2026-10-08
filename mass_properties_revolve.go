@@ -73,7 +73,7 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (massmoment.Mo
 	if ax.radialAdmitAllow != 0 || ax.snap != (regionSnapAllow{}) {
 		return massmoment.Moments{}, fmt.Errorf("%w: revolve axis snap is not charged by the mass path", ErrUnsupported)
 	}
-	if !rp.den.phi0.valid() || !rp.den.phi1.valid() {
+	if !rp.den.Phi0.Valid() || !rp.den.Phi1.Valid() {
 		return massmoment.Moments{}, fmt.Errorf("%w: revolve sweep has no exact denotation", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
@@ -188,12 +188,12 @@ func revolveSectionMoments(ig regionIntegrals) ([4][4]proofbound.RatInterval, er
 
 // revolveAngularFactors reads the sweep's certified width and endpoint values.
 func revolveAngularFactors(rp revolvePayload) (massmoment.RevolveAngular, bool) {
-	width, ok := rp.den.widthInterval()
+	width, ok := rp.den.WidthInterval()
 	if !ok {
 		return massmoment.RevolveAngular{}, false
 	}
-	s0, c0, ok0 := rp.den.phi0.sinCosFor(rp.phi0)
-	s1, c1, ok1 := rp.den.phi1.sinCosFor(rp.phi1)
+	s0, c0, ok0 := rp.den.Phi0.SinCosFor(rp.phi0)
+	s1, c1, ok1 := rp.den.Phi1.SinCosFor(rp.phi1)
 	if !ok0 || !ok1 {
 		return massmoment.RevolveAngular{}, false
 	}
