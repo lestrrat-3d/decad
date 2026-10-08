@@ -207,12 +207,10 @@ func TestDocumentRemoveConcurrentWithVerify(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		close(ready)
+		// done is checked at the END of each iteration so every reader
+		// publishes at least one snapshot, even when the removals finish
+		// before the scheduler first runs it.
 		for {
-			select {
-			case <-done:
-				return
-			default:
-			}
 			r, err := doc.Verify(t.Context())
 			if err != nil {
 				readerErrs <- err
@@ -226,18 +224,24 @@ func TestDocumentRemoveConcurrentWithVerify(t *testing.T) {
 			case reports <- s:
 			default:
 			}
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		for {
 			select {
 			case <-done:
 				return
 			default:
 			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		// Same do-while shape as the Verify reader: done is checked last.
+		for {
 			select {
 			case reports <- snapshot{passed: true, bodies: doc.Bodies()}:
+			default:
+			}
+			select {
+			case <-done:
+				return
 			default:
 			}
 		}
