@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -156,44 +157,6 @@ func stackedBoundsContext(ctx context.Context, sp stackedPrismPayload, outerDelt
 	return out, nil
 }
 
-// stackedExclusiveHoles derives the holes present on only one side of an
-// interface. Admission proves their nesting; this function compares records.
-func stackedExclusiveHoles(lower, upper ProfileRecord) (lowerOnly, upperOnly []LoopRecord, err error) {
-	for _, hole := range lower.Holes {
-		found := false
-		for _, other := range upper.Holes {
-			equal, e := loopRecordsEqual(nil, hole, other)
-			if e != nil {
-				return nil, nil, e
-			}
-			if equal {
-				found = true
-				break
-			}
-		}
-		if !found {
-			lowerOnly = append(lowerOnly, hole)
-		}
-	}
-	for _, hole := range upper.Holes {
-		found := false
-		for _, other := range lower.Holes {
-			equal, e := loopRecordsEqual(nil, hole, other)
-			if e != nil {
-				return nil, nil, e
-			}
-			if equal {
-				found = true
-				break
-			}
-		}
-		if !found {
-			upperOnly = append(upperOnly, hole)
-		}
-	}
-	return lowerOnly, upperOnly, nil
-}
-
 func stackedExposed(ctx context.Context, holes []LoopRecord) ([]ProfileRecord, error) {
 	out := make([]ProfileRecord, 0, len(holes))
 	for _, hole := range holes {
@@ -259,10 +222,7 @@ func stackedInterfaces(ctx context.Context, slabs []prismSlab, prior []prismSlab
 			out[i] = prismSlabInterface{upperExposed: upper}
 			continue
 		}
-		lowerOnly, upperOnly, err := stackedExclusiveHoles(lowerRegion, upperRegion)
-		if err != nil {
-			return nil, err
-		}
+		lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(lowerRegion, upperRegion)
 		lower, err := stackedExposed(ctx, upperOnly)
 		if err != nil {
 			return nil, err
@@ -352,10 +312,7 @@ func falsifyStackedPayload(ctx context.Context, sp stackedPrismPayload) error {
 			}
 			continue
 		}
-		lowerOnly, upperOnly, err := stackedExclusiveHoles(prev.regions[0], slab.regions[0])
-		if err != nil {
-			return err
-		}
+		lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(prev.regions[0], slab.regions[0])
 		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
 			return fmt.Errorf(`%w: both sides of interface %d have exclusive holes`, ErrUnsupported, i-1)
 		}
@@ -603,10 +560,7 @@ func stackedInterfacePatches(sp stackedPrismPayload, columns []stackedColumn, by
 		}
 		return patches, nil
 	}
-	lowerOnly, upperOnly, err := stackedExclusiveHoles(lower, upper)
-	if err != nil {
-		return nil, err
-	}
+	lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(lower, upper)
 	for e, hole := range upperOnly {
 		ci, err := stackedHoleColumn(columns, stackedHoleColumns(bySlab[k+1]), hole, k+1, true)
 		if err != nil {
