@@ -280,7 +280,7 @@ the rules leave to the byte budget.
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
-| `internal/classbgeom/` | Class-B boxes, record gates, through reach, and crossing scene geometry. See general-boolean §3 B, §5. |
+| `internal/classbgeom/` | Class-B boxes, gates, through reach, crossing scenes and edge splitting. See general-boolean §3 B, §5. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep joins, frames, restatement and stacked records. See general-boolean §4. |
 | `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap charges and extent bounds. See evaluator §6. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |

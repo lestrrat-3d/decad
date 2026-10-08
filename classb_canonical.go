@@ -24,6 +24,8 @@ type cbVertex struct {
 	delta    float64
 }
 
+func (v *cbVertex) Carriers() []cbCarrier { return v.carriers }
+
 // cbKey2 keys a cylinder's crossing with a plane parallel to its axis: the
 // cylinder, the plane, and the side of the cylinder's centre the crossing
 // lies on along the remaining axis.
@@ -292,139 +294,8 @@ func (b *cbBuild) splitSegment(f *cbFace, seg CurveSegment, c cbCarrier) ([]Curv
 		return nil, err
 	}
 	g := b.geom(c)
-	type cut struct {
-		at  [3]float64
-		key float64
-	}
-	var cuts []cut
-	if w.IsLine() {
-		start := f.frame.toX([3]float64{w.StartU, w.StartV, f.level})
-		end := f.frame.toX([3]float64{w.EndU, w.EndV, f.level})
-		free := -1
-		for k := range 3 {
-			if start[k] != end[k] {
-				free = k
-			}
-		}
-		if free < 0 {
-			return nil, errCBMiss
-		}
-		lo, hi := math.Min(start[free], end[free]), math.Max(start[free], end[free])
-		for p, v := range b.verts {
-			if !slices.Contains(v.carriers, f.carrier) || !slices.Contains(v.carriers, c) {
-				continue
-			}
-			if p[free] > lo && p[free] < hi {
-				cuts = append(cuts, cut{at: p, key: math.Abs(p[free] - start[free])})
-			}
-		}
-		slices.SortFunc(cuts, func(a, b cut) int { return cmpFloat(a.key, b.key) })
-		points := [][3]float64{start}
-		for _, k := range cuts {
-			points = append(points, k.at)
-		}
-		points = append(points, end)
-		var out []CurveSegment
-		for i := 0; i+1 < len(points); i++ {
-			if points[i] == points[i+1] {
-				return nil, errCBMiss
-			}
-			pf, pt := f.frame.toLocal(points[i]), f.frame.toLocal(points[i+1])
-			out = append(out, LineSeg{Start: Point2{U: pf[0], V: pf[1]}, End: Point2{U: pt[0], V: pt[1]}, TStart: 0, TEnd: 1})
-		}
-		return out, nil
-	}
-	if !g.cyl || f.frame.axis[2] != g.axis {
-		return []CurveSegment{seg}, nil
-	}
-	// An arc on a cylinder, in a face across the cylinder's axis: cut at the
-	// angle of every vertex on the cylinder.
-	ccw := w.Th1 > w.Th0
-	angle := func(p [3]float64) float64 {
-		l := f.frame.toLocal(p)
-		return math.Atan2(l[1]-w.CV, l[0]-w.CU)
-	}
-	sweep := func(from, to float64) float64 {
-		d := to - from
-		if !ccw {
-			d = -d
-		}
-		for d < 0 {
-			d += 2 * math.Pi
-		}
-		for d >= 2*math.Pi {
-			d -= 2 * math.Pi
-		}
-		return d
-	}
-	startPt := f.frame.toX([3]float64{w.StartU, w.StartV, f.level})
-	endPt := f.frame.toX([3]float64{w.EndU, w.EndV, f.level})
-	a0 := angle(startPt)
-	total := sweep(a0, angle(endPt))
-	if w.Closed {
-		total = 2 * math.Pi
-	}
-	// Two vertices this close in angle are not ordered by their held
-	// points, so the pair misses rather than guess their order.
-	const tol = 1e-9
-	for p, v := range b.verts {
-		if !slices.Contains(v.carriers, c) {
-			continue
-		}
-		q := p
-		q[g.axis] = f.frame.toX([3]float64{0, 0, f.level})[g.axis]
-		if q == startPt || q == endPt {
-			continue
-		}
-		s := sweep(a0, angle(q))
-		if !w.Closed {
-			if s >= total+tol {
-				continue // outside the arc's span
-			}
-			if s <= tol || s >= total-tol {
-				return nil, errCBMiss // too close to an end to order
-			}
-		}
-		cuts = append(cuts, cut{at: q, key: s})
-	}
-	slices.SortFunc(cuts, func(a, b cut) int { return cmpFloat(a.key, b.key) })
-	// Vertices at other levels project to one point: keep it once.
-	cuts = slices.CompactFunc(cuts, func(a, b cut) bool { return a.at == b.at })
-	for i := 1; i < len(cuts); i++ {
-		if cuts[i].key-cuts[i-1].key <= tol {
-			return nil, errCBMiss
-		}
-	}
-	if len(cuts) == 0 {
-		return []CurveSegment{seg}, nil
-	}
-	points := [][3]float64{startPt}
-	for _, k := range cuts {
-		points = append(points, k.at)
-	}
-	if w.Closed {
-		// A whole circle cut at its vertices starts and ends at the first.
-		points = points[1:]
-		points = append(points, points[0])
-	} else {
-		points = append(points, endPt)
-	}
-	var out []CurveSegment
-	for i := 0; i+1 < len(points); i++ {
-		pf, pt := f.frame.toLocal(points[i]), f.frame.toLocal(points[i+1])
-		out = append(out, arcSegment(Point2{U: w.CU, V: w.CV}, Point2{U: pf[0], V: pf[1]}, Point2{U: pt[0], V: pt[1]}, ccw))
-	}
-	return out, nil
-}
-
-func cmpFloat(a, b float64) int {
-	switch {
-	case a < b:
-		return -1
-	case a > b:
-		return 1
-	}
-	return 0
+	return classbgeom.SplitSegment(w, seg, f.frame.axis, f.frame.sign, f.level,
+		f.carrier, c, g.cyl, g.axis, b.verts, errCBMiss)
 }
 
 // cylinderPieces reads every cylinder's surviving pieces off the planar
