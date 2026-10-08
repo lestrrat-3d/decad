@@ -68,9 +68,9 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `doc.go` | Package doc: scope, the evaluator support-and-refusal map, and the layering contract (`decad -> sketch -> r3 -> units`). |
+| `doc.go` | Package scope, support map and layering. |
 | `errors.go` | The core §12 sentinel errors (values from `internal/decaderr/`) and the typed `BooleanError` with its `Code`. See api §12, §8. |
-| `measurement.go` | Bounded reading types. See `docs/api-design.md` §5.3, §6. |
+| `measurement.go` | Public reading aliases and analytic result gate. |
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
 | `record.go` | `ProfileRecord` and public record aliases. See `docs/sketch-seam-design.md` §2. |
 | `seam.go` | `RecordProfile`/`RecordChain` adapters. See sketch-seam §1–§2. |
@@ -269,6 +269,7 @@ the rules leave to the byte budget.
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit: comparison helpers over bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
+| `internal/measurement/` | Bounded reading types. See API §5.3, §6. |
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact box paths, contact, oriented and sphere-box proofs, patches, clips and witnesses. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
