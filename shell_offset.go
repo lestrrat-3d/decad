@@ -31,7 +31,8 @@ import (
 // offsetProfile computes the topology-preserving offset of a section: P ⊖ t
 // (inward, s = +1) or P ⊕ t (outward, s = −1), each loop offset in its own
 // sense (docs/modify-design.md §7). A dropped feature is S11a (offset2d.ErrDrop);
-// a non-closing miter is S11 (offset2d.ErrTopology). Both are ErrUnsupported.
+// a non-closing miter is S11 (offset2d.ErrTopology), naming the loop and the
+// corner (offset2d.CornerTopologyError). Both are ErrUnsupported.
 func offsetProfile(budget *proofbound.WorkBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return ProfileRecord{}, err
@@ -47,7 +48,7 @@ func offsetProfile(budget *proofbound.WorkBudget, profile ProfileRecord, s, t fl
 		}
 		segs, err := offset2d.BuildLoop(budget, loop.walks, s, t, shellTol)
 		if err != nil {
-			return ProfileRecord{}, err
+			return ProfileRecord{}, offset2d.InLoop(err, i)
 		}
 		out[i] = LoopRecord{Segments: segs}
 	}

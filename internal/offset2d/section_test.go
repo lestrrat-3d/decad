@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -157,4 +158,30 @@ func TestOpenWalkConsumed(t *testing.T) {
 	require.Equal(t, offset2d.WalkConsumed(line, offset2d.Point{U: 2}, back, tol),
 		offset2d.OpenWalkConsumed(line, offset2d.Point{U: 2}, back, true, true, tol))
 	require.True(t, offset2d.OpenWalkConsumed(line, offset2d.Point{U: 2}, back, true, true, tol))
+}
+
+// TestSectionJoinsNameTheCornerThatDoesNotMeet pins that a corner whose
+// offset carriers do not meet refuses as ErrTopology naming that corner. The
+// loop runs (0, 0) → (10, 0) and back, so both corners are cusps whose offset
+// lines run parallel and never meet; the first corner resolved is the one at
+// the first walk's start, (0, 0). InLoop adds the loop index and keeps the
+// sentinel, and leaves any other error unchanged.
+//
+// Shown to fail: with SectionJoinsBudget returning the bare ErrTopology
+// again, the message names no corner.
+func TestSectionJoinsNameTheCornerThatDoesNotMeet(t *testing.T) {
+	t.Parallel()
+	walls := []survey2d.SideWalk{
+		{SegmentWalk: survey2d.SegmentWalk{StartU: 0, StartV: 0, EndU: 10, TanInU: 1, TanOutU: 1}},
+		{SegmentWalk: survey2d.SegmentWalk{StartU: 10, StartV: 0, TanInU: -1, TanOutU: -1}},
+	}
+	_, err := offset2d.SectionJoinsBudget(proofbound.NewWorkBudget(t.Context()), walls, 1, 0.5, 1e-9)
+	require.ErrorIs(t, err, offset2d.ErrTopology)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.ErrorContains(t, err, `the offsets of the two walls meeting at (0, 0) do not intersect`)
+
+	named := offset2d.InLoop(err, 2)
+	require.ErrorIs(t, named, offset2d.ErrTopology)
+	require.ErrorContains(t, named, `meeting at (0, 0) on loop 2 do not intersect`)
+	require.Equal(t, offset2d.ErrDrop, offset2d.InLoop(offset2d.ErrDrop, 2))
 }

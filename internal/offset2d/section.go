@@ -29,7 +29,9 @@ type Join struct {
 // places both offset feet. An arc connects a corner of sign −s. A G1 join
 // uses the leaving foot because intersecting tangent carriers would solve a
 // double root whose held discriminant can stray from zero. A cusp stays on
-// the miter row, where missing intersections refuse it.
+// the miter row, where missing intersections refuse it. A CornerJoin refusal
+// keeps its own message and records the corner it sits at, which
+// SectionJoinsBudget names.
 func JoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t, tol float64) ([]Join, error) {
 	n := len(walks)
 	joins := make([]Join, n)
@@ -39,12 +41,22 @@ func JoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t,
 		}
 		j, err := CornerJoin(walks[(i+n-1)%n], walks[i], s, t, tol)
 		if err != nil {
-			return nil, err
+			return nil, &cornerError{u: walks[i].StartU, v: walks[i].StartV, err: err}
 		}
 		joins[i] = j
 	}
 	return joins, nil
 }
+
+// cornerError is a CornerJoin refusal at the corner (u, v), the start of the
+// walk that leaves it. It reads as err for errors.Is and prints as err.
+type cornerError struct {
+	u, v float64
+	err  error
+}
+
+func (e *cornerError) Error() string { return e.err.Error() }
+func (e *cornerError) Unwrap() error { return e.err }
 
 // CornerJoin resolves the one corner where prev arrives at cur's start, by
 // the rule JoinsBudget applies to every corner of a loop. A caller offsetting

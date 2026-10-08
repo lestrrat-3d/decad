@@ -795,7 +795,7 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (Pro
 		}
 		segs, err := offset2d.BuildLoop(budget, loops[li].walks, 1, cbp.loopOffset(li), shellTol)
 		if err != nil {
-			return ProfileRecord{}, err
+			return ProfileRecord{}, offset2d.InLoop(err, li)
 		}
 		out[li] = LoopRecord{Segments: segs}
 	}
