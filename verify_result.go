@@ -3,227 +3,57 @@ package decad
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// tokenNotEvaluated and tokenUndecided are the two stable lower-snake tokens
-// every outcome enum below shares at its own zero-value or undecided branch;
-// naming each once keeps every enum's String() spelling it identically.
 const (
 	tokenNotEvaluated = "not_evaluated"
 	tokenUndecided    = "undecided"
 )
 
-// This file holds the result vocabulary Verify's report is written in: the
-// outcome enums, the effective-request records, the bounded reading
-// wrappers, the per-survey result records, and Report/BodyReport themselves
-// (docs/verification-design.md §1-§9). It holds TYPES and the two pure
-// predicates over them (Passed, ForBody) alone; verify_publish.go builds a
-// Report and its BodyReport entries from real survey outcomes and certified
-// readings, and verify.go and survey.go feed it.
+// ScalarOutcome is a whole-body scalar survey's result.
+type ScalarOutcome = reportvocab.ScalarOutcome
 
-// ScalarOutcome is a whole-body scalar survey's primary outcome (Wall or
-// ConcaveRadius): whether the question was asked, and if so, whether the
-// solid prerequisite or payload allows it, the survey could decide it, no
-// feature exists, or a minimum was proven. Every successful Verify call
-// fills this nonzero on every returned BodyReport's Wall and ConcaveRadius
-// results — ScalarNotRequested for a survey the call did not ask.
-type ScalarOutcome int
+// Coverage is an undercut survey's face-membership result.
+type Coverage = reportvocab.Coverage
 
-const (
-	// ScalarNotEvaluated is the reserved zero value: only a zero or
-	// caller-created record carries it, never a value Verify returns.
-	ScalarNotEvaluated ScalarOutcome = iota
-	// ScalarNotRequested — this call did not ask this question.
-	ScalarNotRequested
-	// ScalarUnavailable — the solid prerequisite failed, or this payload has
-	// no implemented survey.
-	ScalarUnavailable
-	// ScalarUndecided — the survey could not certify the whole minimum or
-	// its absence.
-	ScalarUndecided
-	// ScalarAbsent — no feature in the survey's defined class exists.
-	ScalarAbsent
-	// ScalarMeasured — the reading encloses the actual whole-body minimum.
-	ScalarMeasured
-)
+// Assessment is a verdict against a stated survey requirement.
+type Assessment = reportvocab.Assessment
 
-// String renders the pinned lower-snake token. An out-of-range value renders
-// "scalar_outcome(<n>)", never a panic.
-func (o ScalarOutcome) String() string {
-	switch o {
-	case ScalarNotEvaluated:
-		return tokenNotEvaluated
-	case ScalarNotRequested:
-		return "not_requested"
-	case ScalarUnavailable:
-		return "unavailable"
-	case ScalarUndecided:
-		return tokenUndecided
-	case ScalarAbsent:
-		return "absent"
-	case ScalarMeasured:
-		return "measured"
-	default:
-		return fmt.Sprintf("scalar_outcome(%d)", int(o))
-	}
-}
+// ToleranceState is a reading's verdict against the relative tolerance gate.
+type ToleranceState = reportvocab.ToleranceState
 
-// Coverage is the undercut survey's primary outcome: how completely the
-// producer decided face membership against the requested pull direction.
-// Every successful Verify call fills this nonzero on every returned
-// BodyReport's Undercut result — CoverageNotRequested for a call that did
-// not ask.
-type Coverage int
+// ValidityOutcome is a body's held-boundary validity verdict.
+type ValidityOutcome = reportvocab.ValidityOutcome
 
 const (
-	// CoverageNotEvaluated is the reserved zero value: only a zero or
-	// caller-created record carries it, never a value Verify returns.
-	CoverageNotEvaluated Coverage = iota
-	// CoverageNotRequested — the pull direction was not requested.
-	CoverageNotRequested
-	// CoverageUnavailable — a prerequisite or payload capability prevents
-	// the survey.
-	CoverageUnavailable
-	// CoverageUndecided — the producer certifies neither a complete list
-	// nor any opposing face.
-	CoverageUndecided
-	// CoveragePartial — confirmed opposing faces exist and other
-	// membership remains undecided.
-	CoveragePartial
-	// CoverageComplete — every face was decided; Faces lists every
-	// opposing face, empty when none opposes.
-	CoverageComplete
+	ScalarNotEvaluated     = reportvocab.ScalarNotEvaluated
+	ScalarNotRequested     = reportvocab.ScalarNotRequested
+	ScalarUnavailable      = reportvocab.ScalarUnavailable
+	ScalarUndecided        = reportvocab.ScalarUndecided
+	ScalarAbsent           = reportvocab.ScalarAbsent
+	ScalarMeasured         = reportvocab.ScalarMeasured
+	CoverageNotEvaluated   = reportvocab.CoverageNotEvaluated
+	CoverageNotRequested   = reportvocab.CoverageNotRequested
+	CoverageUnavailable    = reportvocab.CoverageUnavailable
+	CoverageUndecided      = reportvocab.CoverageUndecided
+	CoveragePartial        = reportvocab.CoveragePartial
+	CoverageComplete       = reportvocab.CoverageComplete
+	AssessmentNotEvaluated = reportvocab.AssessmentNotEvaluated
+	AssessmentMet          = reportvocab.AssessmentMet
+	AssessmentViolated     = reportvocab.AssessmentViolated
+	AssessmentUndecided    = reportvocab.AssessmentUndecided
+	ToleranceNotEvaluated  = reportvocab.ToleranceNotEvaluated
+	ToleranceSatisfied     = reportvocab.ToleranceSatisfied
+	ToleranceExceeded      = reportvocab.ToleranceExceeded
+	ToleranceUndecided     = reportvocab.ToleranceUndecided
+	ValidityNotEvaluated   = reportvocab.ValidityNotEvaluated
+	ValidityValid          = reportvocab.ValidityValid
+	ValidityInvalid        = reportvocab.ValidityInvalid
+	ValidityUndecided      = reportvocab.ValidityUndecided
 )
-
-// String renders the pinned lower-snake token. An out-of-range value renders
-// "coverage(<n>)", never a panic.
-func (c Coverage) String() string {
-	switch c {
-	case CoverageNotEvaluated:
-		return tokenNotEvaluated
-	case CoverageNotRequested:
-		return "not_requested"
-	case CoverageUnavailable:
-		return "unavailable"
-	case CoverageUndecided:
-		return tokenUndecided
-	case CoveragePartial:
-		return "partial"
-	case CoverageComplete:
-		return "complete"
-	default:
-		return fmt.Sprintf("coverage(%d)", int(c))
-	}
-}
-
-// Assessment is a stated spec's verdict against a ScalarOutcome or Coverage
-// result: met, violated, undecided, or not evaluated because nothing was
-// asked.
-type Assessment int
-
-const (
-	// AssessmentNotEvaluated — no requirement was assessed: the survey was
-	// not requested, or it carries no assessment (ConcaveRadius).
-	AssessmentNotEvaluated Assessment = iota
-	// AssessmentMet — the requirement holds.
-	AssessmentMet
-	// AssessmentViolated — the requirement is proven to fail.
-	AssessmentViolated
-	// AssessmentUndecided — no comparison can be proved.
-	AssessmentUndecided
-)
-
-// String renders the pinned lower-snake token. An out-of-range value renders
-// "assessment(<n>)", never a panic.
-func (a Assessment) String() string {
-	switch a {
-	case AssessmentNotEvaluated:
-		return tokenNotEvaluated
-	case AssessmentMet:
-		return "met"
-	case AssessmentViolated:
-		return "violated"
-	case AssessmentUndecided:
-		return tokenUndecided
-	default:
-		return fmt.Sprintf("assessment(%d)", int(a))
-	}
-}
-
-// ToleranceState is one reading's verdict against the caller's relative
-// tolerance gate (verification §2).
-type ToleranceState int
-
-const (
-	// ToleranceNotEvaluated — no precision decision was made. Two cases
-	// share this state: the reading does not exist at all, and the reading
-	// exists but its precision was deliberately not judged, as for an
-	// invalid body's area and bounds, which are published as boundary data
-	// with the tolerance check skipped.
-	ToleranceNotEvaluated ToleranceState = iota
-	// ToleranceSatisfied — the gate accepted the bound.
-	ToleranceSatisfied
-	// ToleranceExceeded — the gate compared against a usable reference and
-	// rejected the bound.
-	ToleranceExceeded
-	// ToleranceUndecided — a nonzero bound had no usable reference.
-	ToleranceUndecided
-)
-
-// String renders the pinned lower-snake token. An out-of-range value renders
-// "tolerance_state(<n>)", never a panic.
-func (t ToleranceState) String() string {
-	switch t {
-	case ToleranceNotEvaluated:
-		return tokenNotEvaluated
-	case ToleranceSatisfied:
-		return "satisfied"
-	case ToleranceExceeded:
-		return "exceeded"
-	case ToleranceUndecided:
-		return tokenUndecided
-	default:
-		return fmt.Sprintf("tolerance_state(%d)", int(t))
-	}
-}
-
-// ValidityOutcome is one body's held-boundary validity verdict (proposal §9).
-// ValidityValid entails the watertightness, manifoldness, and lack of
-// self-intersection the proof gives for that solid; ValidityInvalid and
-// ValidityUndecided establish no independent per-property verdict.
-type ValidityOutcome int
-
-const (
-	// ValidityNotEvaluated is the reserved zero value: only a zero or
-	// caller-created record carries it, never a value Verify returns.
-	ValidityNotEvaluated ValidityOutcome = iota
-	// ValidityValid — the evaluator's construction and the boundary audit
-	// prove the body a valid solid.
-	ValidityValid
-	// ValidityInvalid — a concrete invalid-solid proof exists.
-	ValidityInvalid
-	// ValidityUndecided — the current evidence cannot decide validity.
-	ValidityUndecided
-)
-
-// String renders the pinned lower-snake token. An out-of-range value renders
-// "validity_outcome(<n>)", never a panic.
-func (v ValidityOutcome) String() string {
-	switch v {
-	case ValidityNotEvaluated:
-		return tokenNotEvaluated
-	case ValidityValid:
-		return "valid"
-	case ValidityInvalid:
-		return "invalid"
-	case ValidityUndecided:
-		return tokenUndecided
-	default:
-		return fmt.Sprintf("validity_outcome(%d)", int(v))
-	}
-}
 
 // WallRequest is the effective WithMinWallThickness spec (proposal §5):
 // canonicalized to millimetres and radians.
