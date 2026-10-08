@@ -193,11 +193,11 @@ the rules leave to the byte budget.
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
 | `contact_oriented_patch.go` | Publishes oblique box patches from `internal/pair/box/` geometry. See contact geometry §4. |
 | `contact_clipped_patch.go` | Publishes horizontal box patches from exact polygon clips. See contact geometry §4. |
-| `contact_sphere.go` / `contact_sphere_sweep.go` | Axis sphere-box path, including centered rotating sphere drift. See the contact designs. |
-| `contact_cylinder.go` / `contact_cylinder_sweep.go` | Source-cylinder axial and circular-sidewall contact and sweeps. See the contact designs. |
+| `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box contact and sweep. See contact-sweep §4–§5. |
+| `contact_cylinder.go` / `contact_cylinder_sweep.go` | Cylinder contact and sweep. See contact-sweep §4–§5. |
 | `contact_analytic_manifold.go` | Ruling contact adapters. See contact-geometry §4.5. |
 | `contact_sphere_oriented.go` / `contact_sphere_oriented_sweep.go` | Rotated sphere-box path. See the contact designs. |
-| `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
+| `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See contact-sweep §4–§5. |
 | `contact_sweep_replay.go` | Affine and rotating replay adapters. See contact-sweep §6. |
 | `clearance_cells.go` | Pruned cell walk and face-pair adapter. See clearance §3–§5. |
 | `clearance_tiers.go` | Tier adapters and vertex budget. See clearance §3/§6. |
@@ -316,6 +316,7 @@ the rules leave to the byte budget.
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, curvature and depth bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
 | `internal/sweepmemo/` | Sweep memo tables. See contact-sweep §6–§7. |
+| `internal/spherepath/` | Sphere path gaps and brackets. See contact-sweep §4–§5. |
 | `internal/linkagebound/` | Link reach, layers, spans, projections and loops. See linkage §5, §15. |
 | `internal/linkagebound/loopchain/` | Sketch enclosure chains and zero-pose checks. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
