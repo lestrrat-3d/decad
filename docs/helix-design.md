@@ -501,7 +501,7 @@ rationals against `math.Log`/`math.Asinh` (enclosure contains, width below
 |---|---|---|
 | **CD1** | structural `Verify` + tolerance gate | lands with PR 1. Validity is proven by construction: CP5 over CS5/CS6 proves the true solid simple, and the held audit proves the shell embedded, so `payloadProvesSimple` answers true for a `coilPayload`. All four readings are judged. The gate diameter is §7's |
 | **CD2** | `Tessellate` / STL / OBJ / 3MF / faceted STEP | landed (`tessellate_coil.go`) as an exact restatement of the held triangles at any tolerance at or above `δ` (below it `ErrUnsupported`, `docs/tessellation-design.md` §7's rule): each vertex's `β` as its `vertexBound`, `sourceBound(face)` the largest corner `β` over that face's triangles, `Bound` `δ`, `areaSlack` §8.1's term, `volSymDiff` §8.2's with `symDiffOK == true`, and the boundary proof the build's own audit. `docs/tessellation-design.md` §2's table carries the `coilPayload` row |
-| **CD3** | mesh booleans | landed: an operand on `docs/tessellation-design.md` §11's terms, through CD2's proof. The boolean asks a coil for its mesh at the pair tolerance raised to `δ` (`heldFloorOf`), which the restatement always meets, and the chain-depth gate of `docs/faceted-vertex-bounds-design.md` §5 then refuses the pair wherever a coil facet it touches holds `β` above the pair tolerance `2e-5 ×` the pair diameter. A pair admits only when that diameter is at least about `δ / 2e-5`, near 50 mm for §13's spring; §9 states what this means for threads |
+| **CD3** | mesh booleans | landed: an operand on `docs/tessellation-design.md` §11's terms, through CD2's proof. A coil raises the pair's chord tolerance to its `δ` (`heldPrimitiveFloorOf`, `docs/faceted-vertex-bounds-design.md` §5), so every facet it touches the partner with holds `β ≤ δ ≤ tol` and the chain-depth gate admits it; the partner is meshed at that tolerance, more coarsely than the pair's size alone would ask, with its own bounds proven. §9 is the use case |
 | **CD4** | interference | landed through `Verify`'s read-only mesh intersection (`docs/interference-design.md` §5) for every partner the mesh boolean admits; a partner the chain-depth gate refuses reads the pair as unsupported staging |
 | **CD5** | clearance | box separation at once; `WithClearances` reads the exact planar arm (`clearance_planar.go`) once PR 4 adds `coilPayload` to `planarPairAdmits`, against a prism or a stitched solid, the held gap widened by `δ`; `Suspect` against every other payload |
 | **CD6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with the unsupported-survey diagnostic |
@@ -580,18 +580,6 @@ proof reads near `0.14 mm³` against a volume of `10π mm³`.
 
 ## 9. The thread use case
 
-**Today both threads refuse.** §13's external fixture's 8-turn tool builds:
-its crossing audit enumerates candidates through the grid
-(`docs/loft-design.md` §6), about `2.2 × 10⁶` units of work for about
-`1.8 × 10⁵` candidates, where the sweep alone would scan `1.1 × 10⁷` box
-pairs, past the `8 × 10⁶` ceiling. `Cut` of that tool from the `R = 5`,
-`L = 20` cylinder then refuses at the chain-depth gate (CD3): the groove's
-facets hold `β ≈ 9.2e-4 mm` where the pair tolerance is `2e-5 ×` the pair
-diameter, about `5.0e-4 mm`.
-
-The rest of this section states the use case the coil is built for, and
-what each reading would hold once that refusal lifts.
-
 Both threads are a `Cut` whose tool is a coil. The cylinder stays what it
 was built as; the coil is the mesh-path operand CD3 admits; the result is a
 `facetedPayload` (`docs/evaluator-design.md` §9).
@@ -636,7 +624,18 @@ the test computes independently.
 | `Volume` | `Approximate`: the mesh boolean composes the cylinder operand's own chord `volSymDiff` at the pair tolerance, the coil's §8.2 term, and the rim terms of `docs/faceted-vertex-bounds-design.md` §3. The published interval encloses the closed form above; that enclosure is §13's assertion |
 | `Area`, `Centroid`, `Bounds` | `Approximate`, composed the same way |
 | faces | `Faceted` throughout: a boolean result loses analytic identity (`docs/api-design.md` §6.1) |
-| `Verify` | validity by the faceted verdict (`docs/payload-verification-design.md` §6.4): the held audit is clean and the feature scale — the crest-to-crest gap, a fraction of the pitch — clears `2·δ`, so validity is proven; `Status` is then the tolerance gate's answer over the composed bounds, `Sound` at the default tolerance for the §13 fixtures. It is never `Suspect` for a reason the thread itself introduces |
+| `Verify` | validity by the faceted verdict (`docs/payload-verification-design.md` §6.4): the held audit is clean and the feature scale — the crest-to-crest gap, a fraction of the pitch — clears `2·δ`, so validity is proven; `Status` is then the tolerance gate's answer over the composed bounds. On the §13 fixtures `Volume` sits inside the default tolerance and `Area` does not, nor, on the external thread, does `Centroid`, so both read `Suspect`: the rims run some 250 mm per helical edge and each carries its facet pair's trim amplification `(δ_coil + δ_cylinder)/sin θ ≈ 2e-3 mm`, and a face's area bound charges that times its own perimeter |
+
+The §13 fixtures read (`examples/decad_thread_external_example_test.go`,
+`examples/decad_thread_internal_example_test.go`):
+
+| Fixture | Closed form | `Volume` | `Area` bound | `Verify` |
+|---|---|---|---|---|
+| external, `R = 5`, `L = 20` cylinder, groove root `4.1`, mouth `5.3` | `π·(500 − 16·Q(Ω ∩ {ρ ≤ 5}))` ≈ `1460.31 mm³` | `1460.0 ± 1.5 mm³` | `≈ 4.0 mm²` of `≈ 1000.8 mm²` | valid, `Suspect` on `Area` and `Centroid` |
+| internal, annulus `5 ≤ ρ ≤ 10`, 20 mm, groove root `5.9`, mouth `4.7` | `π·(1500 − 16·Q(Ω ∩ {ρ ≥ 5}))` ≈ `4587.80 mm³` | `4587.3 ± 2.2 mm³` | `≈ 4.7 mm²` of `≈ 2665.7 mm²` | valid, `Suspect` on `Area` |
+
+Each cut takes about 6 s, most of it the mesh boolean's exact contact
+classification and stitch.
 
 A coil built directly (no boolean) reads Table CM: `Volume` within
 `1e-16` relative, `Area` and `Centroid` tight, `Bounds` within `δ`, and
@@ -671,7 +670,7 @@ touches it.
 | PR | Model | Lands | Still staged |
 |---|---|---|---|
 | **1** | Opus (proof spec) | `Document.Coil`, `CoilOption`, `WithLeftHand`; Table CS; §5's construction over a `LineSeg`-only profile; Table CB; Table CM with `proofbound.LnInterval`/`AsinhInterval`; CD1 and CD7; the design doc, its layout row, `doc.go`'s support map, `docs/missing-features.md`; the executable example `examples/decad_coil_example_test.go` (a square-wire spring: `Volume`, `Centroid`, face count, `Verify` status). **This row is landed.** | CD2–CD5, CD9, arcs, threads |
-| **2** | Opus (proof spec) | `tessellate_coil.go`: CD2 with §5.4's `β`, §8.1, §8.2; CD3, CD4, CD9 follow; the `coilPayload` row in `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md` §1. **Landed, except** the thread examples `examples/decad_thread_external_example_test.go` and `..._internal_...`, which wait on §9's chain-depth refusal | the thread examples, arcs, CD5 |
+| **2** | Opus (proof spec) | `tessellate_coil.go`: CD2 with §5.4's `β`, §8.1, §8.2; CD3, CD4, CD9 follow; the `coilPayload` row in `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md` §1. The thread examples `examples/decad_thread_external_example_test.go` and `..._internal_...`. **This row is landed.** | arcs, CD5 |
 | **3** | Opus (proof spec) | `ArcSeg`/`CircleSeg` profile segments: the profile station chain for an arc ruling (loft §5.1's chord chain, so a cell is chorded in both directions), `sag` folding the profile chord's own sagitta, the arc wall area by the Taylor-model bracket of §11.1, `Arc3` rim edges; the round-wire spring example | CD5 |
 | **4** | Sonnet (file-by-file) | CD5: `coilPayload` in `planarPairAdmits` and `planarPairVerdict`; the `Verify` clearance fixture against a prism | `CoilChain`, `WithSurfaceResult()`, modify |
 
@@ -802,16 +801,19 @@ PR 2:
   shown to fail: §8.2's wall homotopy.
 - `Verify` measures the overlap of the spring with a 60 mm coaxial core of
   radius `2.5` as `4.5π`, and their `Union` encloses `380.5π`.
-- §9's refusal: the 8-turn tool builds, and `Cut` of it refuses at the
-  chain-depth gate. The bullets below land once that refusal lifts.
 - The external thread of §9 on a `Revolve` cylinder (`R = 5`, `L = 20`,
   a `60°` V of depth `0.9` at pitch `1.5`, `8` turns inside the height):
   the result is one lump of one shell, `Volume` encloses
-  `π R² L − Θ·Q(clipped)` with `Q(clipped)` the exact polygon moment;
-  `Verify` validity proven and `Status` `Sound`; the faceted mesh is
-  watertight.
+  `π R² L − Θ·Q(clipped)` with `Q(clipped)` the exact polygon moment, the
+  box holds the true extremes within its bound; `Verify` proves validity and
+  reads `Suspect` on `Area` and `Centroid` alone; the faceted mesh is
+  watertight. Leg shown to fail: without the coil's arm in the pair
+  tolerance, `Cut` refuses at the chain-depth gate.
 - The internal thread on an annular `Extrude`: the same enclosure with
-  `Ω ∩ {ρ ≥ R}`.
+  `Ω ∩ {ρ ≥ R}`, `Suspect` on `Area` alone.
+- The cylinder meshed at the raised pair tolerance is coarser than at the
+  diameter-derived one, and its mesh volume and area still lie within its
+  own `volSymDiff` and `areaSlack` of `500π` and `250π`.
 - A coil cap in the cylinder's end plane refuses with the boolean's
   contact code; starting it `pitch/4` outside builds.
 - The union of a coil with a coaxial cylinder through its core (a

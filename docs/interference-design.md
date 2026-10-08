@@ -462,7 +462,8 @@ stitched result passes §5 and its volume clears §6.
 A public boolean meshes both operands at the pair's own chord tolerance:
 `boolChordFactor` times the diameter of the union of the two operands'
 bounds-inflated boxes, raised past each operand's own reserved floor (its
-section displacement, a revolve's coordinate stages). `Verify` does not. Each
+section displacement, a revolve's coordinate stages, a coil's or a mitred
+sweep's held `delta`). `Verify` does not. Each
 body is meshed **once per `Verify` call**, at one chord, and that one mesh — its
 facet-contact audit included — serves every pair of the body that reaches the
 mesh path. Meshing per pair would mesh and audit a body in a 20-body star 19

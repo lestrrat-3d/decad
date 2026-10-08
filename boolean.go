@@ -1024,11 +1024,31 @@ func chordOperandOf(ctx context.Context, b *Body) (chordOperand, error) {
 	return chordOperand{
 		lo: box.Min.Sub(pad),
 		hi: box.Max.Add(pad),
-		floor: math.Max(
+		floor: max(
 			proofbound.ProductUpper(2, sectionDisplacementOf(b)),
 			proofbound.ProductUpper(2, coordDisplacementOf(ctx, b)),
+			heldPrimitiveFloorOf(b),
 		),
 	}, nil
+}
+
+// heldPrimitiveFloorOf is the proven held bound of an operand built as a
+// fixed held mesh in one construction — a coil's or a mitred sweep's delta
+// (docs/faceted-vertex-bounds-design.md §5). Its restatement cannot be
+// meshed closer than that, and every facet it touches the partner with holds
+// at most that bound, so raising the pair tolerance to it is what lets the
+// chain-depth gate admit the pair. A boolean result's meshBound is not one:
+// it grows with the chain, which is what the gate exists to refuse. Every
+// other payload answers zero.
+func heldPrimitiveFloorOf(b *Body) float64 {
+	switch p := b.payload.(type) {
+	case coilPayload:
+		return p.delta
+	case mitredSweepPayload:
+		return p.delta
+	default:
+		return 0
+	}
 }
 
 // pairChordFrom combines two operands' shares into the pair's chord tolerance

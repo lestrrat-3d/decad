@@ -294,14 +294,30 @@ chain (core §8), and is never the reason for a refusal.
 (`facetedPayload`) or `delta` (`mitredSweepPayload`, `coilPayload`), read by a
 `heldFloorOf(body)` reader beside `sectionDisplacementOf`; a restatement
 returns the same vertices at any tolerance at or above its floor, so the mesh
-is the one the boolean needs and the request never refuses. The request for a
-chorded analytic operand stays `tol`, unchanged, so raising one operand's
-request never coarsens the other. After the contact classification has run
+is the one the boolean needs and the request never refuses.
+
+**A held primitive raises the pair's tolerance.** An operand built as one
+fixed held mesh — a coil or a mitred sweep, whose `delta` is a proven bound
+of that one construction rather than a figure a chain grows — raises the
+pair's chord tolerance itself to that bound, as a displaced prism section
+already raises it past twice its displacement (`pairChordFrom`, through
+`heldPrimitiveFloorOf` beside `sectionDisplacementOf`). Every facet such an
+operand touches the partner with then holds `δ(t) ≤ delta ≤ tol`, so the gate
+below admits it. A boolean result's `meshBound` does not raise the pair
+tolerance: it is the figure a chain grows, and the gate exists to refuse it.
+The partner pays for the raise: a chorded analytic partner is meshed at the
+raised `tol`, so its mesh may be coarser than the pair's size alone would
+ask, and the result's rims and area and volume bounds compose from that
+coarser mesh. Its published bounds still hold, since every tessellation
+proves its `sourceBound`, `areaSlack` and `volSymDiff` for the tolerance it
+was asked at. Otherwise the request for a chorded analytic operand stays
+`tol`. After the contact classification has run
 and before any facet is cut, the gate walks every operand facet the
 classification reports as meeting the other operand (`ContactPoint`,
 `ContactSegment`, or within the pre-pass slack) and refuses with
 `ErrUnsupported`, through `meshbool.BooleanExpectedStaging`, when any such
-facet of a RESTATING operand has `δ(t) > tol` (`meshbool.RefuseCoarseHeldContact`,
+facet of a RESTATING operand has `δ(t) > tol` — which a held primitive's
+facets never do (`meshbool.RefuseCoarseHeldContact`,
 called from `MeshBoolean` on the classified contacts and from the root's
 hidden-tangency pre-pass on the facets within its slack;
 `booleanOperandStaging` restates it in the boolean's own terms). The message names the operand (`Cut`'s
