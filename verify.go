@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/verifyoption"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -166,7 +168,11 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if err != nil {
 		return nil, err
 	}
-	outcomes, err := runVerifyPairs(ctx, jobs, verifyWorkers(ctx), func(ctx context.Context, job verifyPairJob) (verifyPairOutcome, error) {
+	// A parallel pair already occupies one worker, so its contact batches use
+	// that worker. The single-worker path keeps the caller's contact setting.
+	parallelCtx := meshbool.WithContactWorkers(ctx, 1)
+	workers := orderedwork.Workers(ctx, meshbool.DefaultContactWorkers())
+	outcomes, err := orderedwork.Run(ctx, parallelCtx, jobs, workers, func(ctx context.Context, job verifyPairJob) (verifyPairOutcome, error) {
 		return proveVerifyPair(ctx, job, cfg, geomCache, meshes)
 	})
 	if err != nil {

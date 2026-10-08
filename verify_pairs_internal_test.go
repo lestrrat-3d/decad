@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
@@ -40,7 +41,8 @@ func TestRunVerifyPairsKeepsJobOrder(t *testing.T) {
 		return verifyPairOutcome{diagnostics: []Diagnostic{{Message: strconv.Itoa(i)}}, undecided: i%2 == 0}, nil
 	}
 	for _, workers := range []int{1, 2, 8, 64} {
-		out, err := runVerifyPairs(t.Context(), jobs, workers, prove)
+		ctx := t.Context()
+		out, err := orderedwork.Run(ctx, meshbool.WithContactWorkers(ctx, 1), jobs, workers, prove)
 		require.NoError(t, err, `%d workers`, workers)
 		require.Len(t, out, n)
 		for i, o := range out {
@@ -73,7 +75,8 @@ func TestRunVerifyPairsReturnsLowestFailingError(t *testing.T) {
 			}
 			return verifyPairOutcome{}, nil
 		}
-		out, err := runVerifyPairs(t.Context(), jobs, workers, prove)
+		ctx := t.Context()
+		out, err := orderedwork.Run(ctx, meshbool.WithContactWorkers(ctx, 1), jobs, workers, prove)
 		require.ErrorIs(t, err, errEarly, `%d workers`, workers)
 		require.Nil(t, out)
 		for i := range 5 {
@@ -84,7 +87,7 @@ func TestRunVerifyPairsReturnsLowestFailingError(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	jobs, _ := pairJobsByIndex(n)
-	_, err := runVerifyPairs(ctx, jobs, 4, func(context.Context, verifyPairJob) (verifyPairOutcome, error) {
+	_, err := orderedwork.Run(ctx, meshbool.WithContactWorkers(ctx, 1), jobs, 4, func(context.Context, verifyPairJob) (verifyPairOutcome, error) {
 		return verifyPairOutcome{}, nil
 	})
 	require.ErrorIs(t, err, context.Canceled)
@@ -106,7 +109,8 @@ func TestRunVerifyPairsRunsContactBatchesOnTheirWorker(t *testing.T) {
 			seen[index[job.a]] = meshbool.ContactWorkers(ctx)
 			return verifyPairOutcome{}, nil
 		}
-		_, err := runVerifyPairs(meshbool.WithContactWorkers(t.Context(), caller), jobs, tc.workers, prove)
+		ctx := meshbool.WithContactWorkers(t.Context(), caller)
+		_, err := orderedwork.Run(ctx, meshbool.WithContactWorkers(ctx, 1), jobs, tc.workers, prove)
 		require.NoError(t, err)
 		for i, got := range seen {
 			require.Equal(t, tc.want, got, `%d pool workers, job %d`, tc.workers, i)
@@ -167,9 +171,9 @@ func TestVerifyPairWorkersMatchOneWorker(t *testing.T) {
 	internalSheetBody(t, doc, 13, 1, 15, 3, 5)
 	internalSheetBody(t, doc, 14, 2, 18, 5, 1)
 	for _, opts := range [][]VerifyOption{nil, {WithClearances()}} {
-		one, err := doc.Verify(withVerifyWorkers(t.Context(), 1), opts...)
+		one, err := doc.Verify(orderedwork.WithWorkers(t.Context(), 1), opts...)
 		require.NoError(t, err)
-		many, err := doc.Verify(withVerifyWorkers(t.Context(), 6), opts...)
+		many, err := doc.Verify(orderedwork.WithWorkers(t.Context(), 6), opts...)
 		require.NoError(t, err)
 		require.NotEmpty(t, one.Interferences)
 		require.Equal(t, one, many)
@@ -260,7 +264,7 @@ func TestVerifyMeshesEachBodyOnce(t *testing.T) {
 	require.Positive(t, finer, `the fixture must give some body a chord finer than one of its pairs' own`)
 
 	count := &tessellationCount{}
-	report, err := doc.Verify(withTessellationCount(withVerifyWorkers(t.Context(), 3), count))
+	report, err := doc.Verify(withTessellationCount(orderedwork.WithWorkers(t.Context(), 3), count))
 	require.NoError(t, err)
 	require.Len(t, report.Interferences, 3)
 	for i, b := range bodies {

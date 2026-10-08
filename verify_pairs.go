@@ -5,41 +5,16 @@ import (
 	"fmt"
 	"math"
 	"sync"
-	"sync/atomic"
 
-	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Verify's pair partition (docs/interference-design.md §2): the
-// per-pair proof walk, and the ordered executor that runs the pairs needing
-// kernel work on a bounded worker pool. Every pair's proof reads only its two
-// operands and caches each body fills the same way whoever asks first, so a
-// pair's outcome does not depend on which other pairs ran before it or
-// beside it. The executor stores each outcome in its own slot and Verify
-// folds the slots in pair order, so rows, diagnostics and the returned error
-// are the ones a walk of the pairs one at a time produces.
-
-type verifyWorkerContextKey struct{}
-
-// withVerifyWorkers is an internal test hook. It sets how many pairs one
-// Verify call proves at once, without touching package state.
-func withVerifyWorkers(ctx context.Context, workers int) context.Context {
-	if workers < 1 {
-		workers = 1
-	}
-	return context.WithValue(ctx, verifyWorkerContextKey{}, workers)
-}
-
-// verifyWorkers is the pair pool size: the test hook's value, or the same
-// GOMAXPROCS-derived cap the boolean's contact batches use.
-func verifyWorkers(ctx context.Context) int {
-	if workers, ok := ctx.Value(verifyWorkerContextKey{}).(int); ok && workers > 0 {
-		return workers
-	}
-	return meshbool.DefaultContactWorkers()
-}
-
+// This file is Verify's pair partition (docs/interference-design.md §2):
+// the per-pair proof walk. Every pair's proof reads only its two operands
+// and caches each body fills the same way whoever asks first, so a pair's
+// outcome does not depend on which other pairs ran before it or beside it.
+// Verify runs the jobs through internal/orderedwork and folds outcomes in
+// pair order.
 // verifyPairJob is one unordered pair, in Document.Bodies() order, that box
 // separation alone does not finish.
 type verifyPairJob struct {
@@ -80,83 +55,6 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 		}
 	}
 	return jobs, nil
-}
-
-// runVerifyPairs proves every job and returns the outcomes in job order. With
-// one worker it walks the jobs in order on the calling goroutine and stops at
-// the first error. With more, workers take jobs in order and each writes only
-// its own slot; once a job fails, no job after it starts, and every job
-// before it still runs, so the error returned is the one at the lowest
-// failing index — the error the one-at-a-time walk would have stopped on.
-// Each parallel worker proves its pairs with one contact worker
-// (meshbool.WithContactWorkers); the one-worker walk leaves the context's
-// contact workers as they are. The context is polled before each job.
-func runVerifyPairs(ctx context.Context, jobs []verifyPairJob, workers int, prove func(context.Context, verifyPairJob) (verifyPairOutcome, error)) ([]verifyPairOutcome, error) {
-	out := make([]verifyPairOutcome, len(jobs))
-	if workers > len(jobs) {
-		workers = len(jobs)
-	}
-	if workers <= 1 {
-		for i, job := range jobs {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			res, err := prove(ctx, job)
-			if err != nil {
-				return nil, err
-			}
-			out[i] = res
-		}
-		return out, nil
-	}
-
-	// The pool already keeps the cores busy one pair per worker, so the
-	// contact batches inside each pair run on their worker alone instead of
-	// starting their own goroutines beside it (docs/interference-design.md
-	// §2). The worker count never changes a contact batch's result.
-	ctx = meshbool.WithContactWorkers(ctx, 1)
-
-	errs := make([]error, len(jobs))
-	var next atomic.Int64
-	var firstErr atomic.Int64
-	firstErr.Store(int64(len(jobs)))
-	fail := func(i int, err error) {
-		errs[i] = err
-		for {
-			cur := firstErr.Load()
-			if int64(i) >= cur || firstErr.CompareAndSwap(cur, int64(i)) {
-				return
-			}
-		}
-	}
-	var wg sync.WaitGroup
-	wg.Add(workers)
-	for range workers {
-		go func() {
-			defer wg.Done()
-			for {
-				i := int(next.Add(1) - 1)
-				if i >= len(jobs) || int64(i) > firstErr.Load() {
-					return
-				}
-				if err := ctx.Err(); err != nil {
-					fail(i, err)
-					return
-				}
-				res, err := prove(ctx, jobs[i])
-				if err != nil {
-					fail(i, err)
-					continue
-				}
-				out[i] = res
-			}
-		}()
-	}
-	wg.Wait()
-	if i := firstErr.Load(); i < int64(len(jobs)) {
-		return nil, errs[i]
-	}
-	return out, nil
 }
 
 // proveVerifyPair runs docs/interference-design.md §2's walk over one pair:
