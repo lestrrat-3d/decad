@@ -509,8 +509,6 @@ type loopDrive struct {
 	certified [][2]*big.Rat
 }
 
-type loopSub = linkagebound.DriverSubsegment
-
 // loopScene is the private sketch scene of one loop under one drive, on one
 // side of the plane (docs/linkage-check-design.md §15.2).
 type loopScene struct {
