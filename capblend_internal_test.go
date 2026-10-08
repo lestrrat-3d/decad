@@ -928,12 +928,12 @@ func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ext, ok := harmonicWindowRange(tc.a, tc.b, tc.c, tc.width, tc.wholeTurn)
+			ext, ok := capband.HarmonicWindowRange(tc.a, tc.b, tc.c, tc.width, tc.wholeTurn)
 			require.True(t, ok)
-			require.LessOrEqual(t, ext.minLo.Cmp(ext.minHi), 0)
-			require.LessOrEqual(t, ext.maxLo.Cmp(ext.maxHi), 0)
-			require.Less(t, proofbound.RatFloatUp(new(big.Rat).Sub(ext.minHi, ext.minLo)), tc.tightBelow)
-			require.Less(t, proofbound.RatFloatUp(new(big.Rat).Sub(ext.maxHi, ext.maxLo)), tc.tightBelow)
+			require.LessOrEqual(t, ext.MinLo.Cmp(ext.MinHi), 0)
+			require.LessOrEqual(t, ext.MaxLo.Cmp(ext.MaxHi), 0)
+			require.Less(t, proofbound.RatFloatUp(new(big.Rat).Sub(ext.MinHi, ext.MinLo)), tc.tightBelow)
+			require.Less(t, proofbound.RatFloatUp(new(big.Rat).Sub(ext.MaxHi, ext.MaxLo)), tc.tightBelow)
 
 			amp, okAmp := proofbound.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(tc.a, tc.a), proofbound.RatMul(tc.b, tc.b))))
 			require.True(t, okAmp)
@@ -942,10 +942,10 @@ func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
 				// form's own amplitude about c and the enclosure must bracket them.
 				trough := proofbound.IntervalSub(proofbound.PointInterval(tc.c), amp)
 				peak := proofbound.IntervalAdd(proofbound.PointInterval(tc.c), amp)
-				require.LessOrEqual(t, ext.minLo.Cmp(trough.Hi), 0)
-				require.GreaterOrEqual(t, ext.minHi.Cmp(trough.Lo), 0)
-				require.GreaterOrEqual(t, ext.maxHi.Cmp(peak.Lo), 0)
-				require.LessOrEqual(t, ext.maxLo.Cmp(peak.Hi), 0)
+				require.LessOrEqual(t, ext.MinLo.Cmp(trough.Hi), 0)
+				require.GreaterOrEqual(t, ext.MinHi.Cmp(trough.Lo), 0)
+				require.GreaterOrEqual(t, ext.MaxHi.Cmp(peak.Lo), 0)
+				require.LessOrEqual(t, ext.MaxLo.Cmp(peak.Hi), 0)
 			}
 
 			// No azimuth of the window may take a value the reported enclosure
@@ -966,8 +966,8 @@ func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
 					sin, cos, okT := proofbound.RadSinCosInterval(at)
 					require.True(t, okT)
 					v := proofbound.IntervalAdd(proofbound.IntervalAdd(proofbound.IntervalScale(cos, tc.a), proofbound.IntervalScale(sin, tc.b)), proofbound.PointInterval(tc.c))
-					require.LessOrEqual(t, ext.minLo.Cmp(v.Hi), 0, "a reachable value sits below the reported minimum")
-					require.GreaterOrEqual(t, ext.maxHi.Cmp(v.Lo), 0, "a reachable value sits above the reported maximum")
+					require.LessOrEqual(t, ext.MinLo.Cmp(v.Hi), 0, "a reachable value sits below the reported minimum")
+					require.GreaterOrEqual(t, ext.MaxHi.Cmp(v.Lo), 0, "a reachable value sits above the reported maximum")
 				}
 			}
 		})
