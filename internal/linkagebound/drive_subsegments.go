@@ -22,6 +22,69 @@ type DriverSubsegment struct {
 	Straddle bool
 }
 
+// DriverSegments is the ordered partition of a loop driver's schedule.
+type DriverSegments []DriverSubsegment
+
+// DriverPiece is one positive-width part of an interval within a subsegment.
+type DriverPiece struct {
+	Sub    DriverSubsegment
+	Lo, Hi *big.Rat
+}
+
+// Increasing reports that the subsegment's chain runs toward larger fractions.
+func (sub DriverSubsegment) Increasing() bool { return sub.Near.Cmp(sub.Lo) == 0 }
+
+// Holds reports whether the subsegment includes s.
+func (sub DriverSubsegment) Holds(s *big.Rat) bool { return sub.Lo.Cmp(s) <= 0 && s.Cmp(sub.Hi) <= 0 }
+
+// At selects the subsegment whose near end is s, or the first one containing s.
+// The caller checks that s lies within the schedule before calling At.
+func (subs DriverSegments) At(s *big.Rat) DriverSubsegment {
+	first := -1
+	for n, sub := range subs {
+		if !sub.Holds(s) {
+			continue
+		}
+		if sub.Near.Cmp(s) == 0 {
+			return sub
+		}
+		if first < 0 {
+			first = n
+		}
+	}
+	if first < 0 {
+		return subs[0]
+	}
+	return subs[first]
+}
+
+// Pieces cuts [a, b] at each subsegment boundary strictly inside it.
+func (subs DriverSegments) Pieces(a, b *big.Rat) []DriverPiece {
+	var out []DriverPiece
+	for _, sub := range subs {
+		lo, hi := a, b
+		if sub.Lo.Cmp(lo) > 0 {
+			lo = sub.Lo
+		}
+		if sub.Hi.Cmp(hi) < 0 {
+			hi = sub.Hi
+		}
+		if lo.Cmp(hi) < 0 {
+			out = append(out, DriverPiece{Sub: sub, Lo: lo, Hi: hi})
+		}
+	}
+	return out
+}
+
+// Sides reports which of the two scene sides the subsegments read.
+func (subs DriverSegments) Sides() [2]bool {
+	var out [2]bool
+	for _, sub := range subs {
+		out[sub.Side] = true
+	}
+	return out
+}
+
 // DriverSubsegments cuts a loop driver's schedule into sub-segments
 // (docs/linkage-check-design.md §15.8): each segment once, or twice at the
 // fraction where its driver value crosses 0. That fraction is exact when both

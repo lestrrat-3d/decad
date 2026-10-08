@@ -489,7 +489,7 @@ type loopDrive struct {
 	// axisSense is a revolute driver's axis sense against the closure axis;
 	// it picks each side's mirror. A slide driver's is unused.
 	axisSense int
-	subs      []loopSub
+	subs      linkagebound.DriverSegments
 	// held reports that every sub-segment holds the driver: the loop's links
 	// then stand at one placement for the whole drive.
 	held bool
@@ -512,23 +512,7 @@ type loopDrive struct {
 	spans map[string][][]loopSpan
 }
 
-// loopSub is one sub-segment of a driven loop's drive
-// (docs/linkage-check-design.md §15.8): the stretch [lo, hi] of the fraction
-// on which the driver's value has one sign, its near end — where |q| is
-// least, and the chain starts — and the side of the plane it is read on.
-type loopSub struct {
-	idx      int
-	lo, hi   *big.Rat
-	near     *big.Rat
-	nearZero bool // the driver is exactly 0 at the near end
-	held     bool // the driver holds one value over the sub-segment
-	side     int  // 0 when q ≥ 0 over it, 1 when q ≤ 0
-	// straddle marks the stretch between two rational cuts that holds an
-	// irrational zero crossing. It has no chain: its two neighbours, the
-	// sub-segments just before and after it, end at those cuts, and its
-	// values are their branches' from the zero pose to each cut.
-	straddle bool
-}
+type loopSub = linkagebound.DriverSubsegment
 
 // loopScene is the private sketch scene of one loop under one drive, on one
 // side of the plane (docs/linkage-check-design.md §15.2).
@@ -642,11 +626,11 @@ func (l *Linkage) resolveLoops(spec *linkageSpec, noun string) error {
 		if jt.revolute {
 			ld.axisSense = ratDot(ratVecExact(jt.axis), lp.normal).Sign()
 		}
-		subs, err := driverSubs(jt)
+		subs, err := linkagebound.DriverSubsegments(jt.points, jt.values, jt.link.index)
 		if err != nil {
 			return err
 		}
-		ld.subs = subs
+		ld.subs = linkagebound.DriverSegments(subs)
 		ld.held = !jt.moves()
 		for _, link := range lp.links {
 			if link.index != k {
@@ -659,88 +643,6 @@ func (l *Linkage) resolveLoops(spec *linkageSpec, noun string) error {
 		spec.loops = append(spec.loops, ld)
 	}
 	return nil
-}
-
-// driverSubs adapts the exact schedule cuts to the root loop scene.
-func driverSubs(jt linkJoint) ([]loopSub, error) {
-	subs, err := linkagebound.DriverSubsegments(jt.points, jt.values, jt.link.index)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]loopSub, len(subs))
-	for i, sub := range subs {
-		out[i] = loopSub{
-			idx: sub.Idx, lo: sub.Lo, hi: sub.Hi, near: sub.Near,
-			nearZero: sub.NearZero, held: sub.Held, side: sub.Side,
-			straddle: sub.Straddle,
-		}
-	}
-	return out, nil
-}
-
-// increasing reports that a sub-segment's chain runs toward larger fractions.
-func (sub loopSub) increasing() bool { return sub.near.Cmp(sub.lo) == 0 }
-
-// holds reports whether the sub-segment holds the exact fraction s.
-func (sub loopSub) holds(s *big.Rat) bool { return sub.lo.Cmp(s) <= 0 && s.Cmp(sub.hi) <= 0 }
-
-// subAt is the sub-segment a pose at s is read on: the one whose near end s is,
-// when there is one, and otherwise the first that holds s. Every sub-segment
-// holding a parameter reads one exact configuration there: on one side of 0
-// the solution is one continuous function of the driver's value, certified
-// from the zero pose, and at 0 it is the zero pose itself.
-func (ld *loopDrive) subAt(s *big.Rat) loopSub {
-	first := -1
-	for n, sub := range ld.subs {
-		if !sub.holds(s) {
-			continue
-		}
-		if sub.near.Cmp(s) == 0 {
-			return sub
-		}
-		if first < 0 {
-			first = n
-		}
-	}
-	if first < 0 {
-		// s outside [0, 1]; the callers refuse it before asking.
-		return ld.subs[0]
-	}
-	return ld.subs[first]
-}
-
-// pieces cuts [a, b] at every sub-segment boundary strictly inside it: each
-// piece with the sub-segment it lies in, in order.
-func (ld *loopDrive) pieces(a, b *big.Rat) []loopPiece {
-	var out []loopPiece
-	for _, sub := range ld.subs {
-		lo, hi := a, b
-		if sub.lo.Cmp(lo) > 0 {
-			lo = sub.lo
-		}
-		if sub.hi.Cmp(hi) < 0 {
-			hi = sub.hi
-		}
-		if lo.Cmp(hi) < 0 {
-			out = append(out, loopPiece{sub: sub, lo: lo, hi: hi})
-		}
-	}
-	return out
-}
-
-// loopPiece is a stretch of a verification interval inside one sub-segment.
-type loopPiece struct {
-	sub    loopSub
-	lo, hi *big.Rat
-}
-
-// sides reports which scene sides the drive's sub-segments read.
-func (ld *loopDrive) sides() [2]bool {
-	var out [2]bool
-	for _, sub := range ld.subs {
-		out[sub.side] = true
-	}
-	return out
 }
 
 // sceneSide is the frame flip side reads on: for a revolute driver the side
@@ -1151,7 +1053,7 @@ func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, flip s
 // enclosure and the loop is refused; a pin inside it admits nothing.
 func (s *linkageSpec) prepare(ctx context.Context) error {
 	for _, ld := range s.loops {
-		for side, used := range ld.sides() {
+		for side, used := range ld.subs.Sides() {
 			if !used || ld.scenes[side] != nil {
 				continue
 			}
@@ -1248,30 +1150,30 @@ func decimalUp(x *big.Rat) string   { return linkagebound.DecimalUp(x) }
 
 // chainStart finds the canonical cell ending at s without passing the sub-segment's near end.
 func chainStart(sub loopSub, s *big.Rat) *big.Rat {
-	return linkagebound.ChainStart(sub.lo, sub.near, s, linkageReadingFloor)
+	return linkagebound.ChainStart(sub.Lo, sub.Near, s, linkageReadingFloor)
 }
 
 // askKey names an ask of sub's chain.
 func askKey(sub loopSub, kind string, ends ...*big.Rat) string {
-	return linkagebound.AskKey(sub.idx, kind, ends...)
+	return linkagebound.AskKey(sub.Idx, kind, ends...)
 }
 
 // point is the point ask at the exact fraction s in sub's chain, continued
 // from its canonical predecessor. A sub-segment that holds its driver has one
 // point, at its near end. Callers hold mu.
 func (ld *loopDrive) point(ctx context.Context, sub loopSub, s *big.Rat) (*loopAsk, error) {
-	if sub.held {
-		s = sub.near
+	if sub.Held {
+		s = sub.Near
 	}
-	if s.Cmp(sub.near) == 0 {
-		if sub.nearZero {
-			return ld.scenes[sub.side].e0, nil
+	if s.Cmp(sub.Near) == 0 {
+		if sub.NearZero {
+			return ld.scenes[sub.Side].e0, nil
 		}
 		approach, err := ld.approach(ctx, sub)
 		if err != nil {
 			return nil, err
 		}
-		lo, hi := ld.sceneValue(sub.side, s)
+		lo, hi := ld.sceneValue(sub.Side, s)
 		return ld.enclose(ctx, askKey(sub, "p", s), lo, hi, approach)
 	}
 	key := askKey(sub, "p", s)
@@ -1282,7 +1184,7 @@ func (ld *loopDrive) point(ctx context.Context, sub loopSub, s *big.Rat) (*loopA
 	if err != nil {
 		return nil, err
 	}
-	lo, hi := ld.sceneValue(sub.side, s)
+	lo, hi := ld.sceneValue(sub.Side, s)
 	return ld.enclose(ctx, key, lo, hi, cell)
 }
 
@@ -1294,12 +1196,12 @@ func (ld *loopDrive) point(ctx context.Context, sub loopSub, s *big.Rat) (*loopA
 // Callers hold mu.
 func (ld *loopDrive) straddleAsks(ctx context.Context, sub loopSub) ([]*loopAsk, error) {
 	var out []*loopAsk
-	for _, nb := range []loopSub{ld.subs[sub.idx-1], ld.subs[sub.idx+1]} {
+	for _, nb := range []loopSub{ld.subs[sub.Idx-1], ld.subs[sub.Idx+1]} {
 		approach, err := ld.approach(ctx, nb)
 		if err != nil {
 			return nil, err
 		}
-		at, err := ld.point(ctx, nb, nb.near)
+		at, err := ld.point(ctx, nb, nb.Near)
 		if err != nil {
 			return nil, err
 		}
@@ -1319,17 +1221,17 @@ func (ld *loopDrive) askHull(asks []*loopAsk, j int) proofbound.RatInterval {
 
 // approach is the enclosure from the zero pose to sub's near-end driver value.
 func (ld *loopDrive) approach(ctx context.Context, sub loopSub) (*loopAsk, error) {
-	lo, _ := ld.sceneValue(sub.side, sub.near)
-	_, zero := ld.scenes[sub.side].zero()
-	return ld.enclose(ctx, askKey(sub, "a"), zero, lo, ld.scenes[sub.side].e0)
+	lo, _ := ld.sceneValue(sub.Side, sub.Near)
+	_, zero := ld.scenes[sub.Side].zero()
+	return ld.enclose(ctx, askKey(sub, "a"), zero, lo, ld.scenes[sub.Side].e0)
 }
 
 // cell is the cell ask from start to end in sub's chain order, continued from
 // the point at start; a sub-segment that holds its driver answers its one
 // point. Callers hold mu.
 func (ld *loopDrive) cell(ctx context.Context, sub loopSub, start, end *big.Rat) (*loopAsk, error) {
-	if sub.held {
-		return ld.point(ctx, sub, sub.near)
+	if sub.Held {
+		return ld.point(ctx, sub, sub.Near)
 	}
 	key := askKey(sub, "c", start, end)
 	if ask, ok := ld.asks[key]; ok {
@@ -1339,15 +1241,15 @@ func (ld *loopDrive) cell(ctx context.Context, sub loopSub, start, end *big.Rat)
 	if err != nil {
 		return nil, err
 	}
-	_, lo := ld.sceneValue(sub.side, start)
-	hi, _ := ld.sceneValue(sub.side, end)
+	_, lo := ld.sceneValue(sub.Side, start)
+	hi, _ := ld.sceneValue(sub.Side, end)
 	return ld.enclose(ctx, key, lo, hi, from)
 }
 
 // chainCell is the cell over the piece [a, b], a < b, in its sub-segment's
 // chain order.
 func (ld *loopDrive) chainCell(ctx context.Context, sub loopSub, a, b *big.Rat) (*loopAsk, error) {
-	if sub.increasing() {
+	if sub.Increasing() {
 		return ld.cell(ctx, sub, a, b)
 	}
 	return ld.cell(ctx, sub, b, a)
@@ -1416,11 +1318,11 @@ func (ld *loopDrive) decompose(ctx context.Context, spec *linkageSpec, floor *bi
 		}
 	}
 	for _, sub := range ld.subs {
-		if sub.straddle {
+		if sub.Straddle {
 			// Its neighbours' near ends are its values' sources.
 			continue
 		}
-		near, err := ld.point(ctx, sub, sub.near)
+		near, err := ld.point(ctx, sub, sub.Near)
 		if err != nil {
 			return err
 		}
@@ -1430,9 +1332,9 @@ func (ld *loopDrive) decompose(ctx context.Context, spec *linkageSpec, floor *bi
 	walk = func(a, b *big.Rat) error {
 		var asks []*loopAsk
 		refused := false
-		for _, pc := range ld.pieces(a, b) {
-			if pc.sub.straddle {
-				st, err := ld.straddleAsks(ctx, pc.sub)
+		for _, pc := range ld.subs.Pieces(a, b) {
+			if pc.Sub.Straddle {
+				st, err := ld.straddleAsks(ctx, pc.Sub)
 				if err != nil {
 					return err
 				}
@@ -1442,14 +1344,14 @@ func (ld *loopDrive) decompose(ctx context.Context, spec *linkageSpec, floor *bi
 				asks = append(asks, st...)
 				continue
 			}
-			c, err := ld.chainCell(ctx, pc.sub, pc.lo, pc.hi)
+			c, err := ld.chainCell(ctx, pc.Sub, pc.Lo, pc.Hi)
 			if err != nil {
 				return err
 			}
 			refused = refused || c.err != nil
 			asks = append(asks, c)
-			for _, end := range []*big.Rat{pc.lo, pc.hi} {
-				p, err := ld.point(ctx, pc.sub, end)
+			for _, end := range []*big.Rat{pc.Lo, pc.Hi} {
+				p, err := ld.point(ctx, pc.Sub, end)
 				if err != nil {
 					return err
 				}
@@ -1534,8 +1436,8 @@ func (ld *loopDrive) withinReach(j int, iv proofbound.RatInterval) bool {
 func (ld *loopDrive) pointValues(ctx context.Context, s *big.Rat) ([][2]motionbound.MotionParam, error) {
 	ld.mu.Lock()
 	defer ld.mu.Unlock()
-	sub := ld.subAt(s)
-	if sub.straddle {
+	sub := ld.subs.At(s)
+	if sub.Straddle {
 		return ld.straddleValues(ctx, sub)
 	}
 	ask, err := ld.point(ctx, sub, s)
@@ -1599,24 +1501,24 @@ func (ld *loopDrive) intervalSpans(ctx context.Context, a, b *big.Rat) ([][]loop
 	ld.mu.Lock()
 	defer ld.mu.Unlock()
 	var out [][]loopSpan
-	for _, pc := range ld.pieces(a, b) {
-		if pc.sub.straddle {
-			piece, err := ld.straddleSpans(ctx, pc.sub)
+	for _, pc := range ld.subs.Pieces(a, b) {
+		if pc.Sub.Straddle {
+			piece, err := ld.straddleSpans(ctx, pc.Sub)
 			if err != nil {
 				return nil, err
 			}
 			out = append(out, piece)
 			continue
 		}
-		pa, err := ld.point(ctx, pc.sub, pc.lo)
+		pa, err := ld.point(ctx, pc.Sub, pc.Lo)
 		if err != nil {
 			return nil, err
 		}
-		pb, err := ld.point(ctx, pc.sub, pc.hi)
+		pb, err := ld.point(ctx, pc.Sub, pc.Hi)
 		if err != nil {
 			return nil, err
 		}
-		c, err := ld.chainCell(ctx, pc.sub, pc.lo, pc.hi)
+		c, err := ld.chainCell(ctx, pc.Sub, pc.Lo, pc.Hi)
 		if err != nil {
 			return nil, err
 		}
