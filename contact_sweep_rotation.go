@@ -1125,7 +1125,7 @@ func (r *rotationalPairSweep) narrowBracket(ctx context.Context, left, right *Sw
 
 // bracketRightReplays reports whether replay accepts the bracket's right
 // edge: (hi − lo)·T − g plus the rounded poses' deviation there fits
-// PointResolution (sweepReplayProof.bracketDepthWithin), with g the left
+// PointResolution (sweepmemo.BracketDepthWithin), with g the left
 // sample's proven lower gap and T both travel bounds per unit fraction. The
 // deviation is the one replay charges, read at the same rounded poses. A left
 // sample without a positive gap, or a right edge whose deviation has no finite
@@ -1150,9 +1150,8 @@ func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool
 		charge.Add(charge, deviation)
 		charge.Add(charge, displacement)
 	}
-	bracket := sweepReplayProof{bracketLo: lo, bracketHi: hi, bracketGap: gap,
-		bracketTravel: new(big.Rat).Add(r.a.fullTravel, r.b.fullTravel)}
-	return bracket.bracketDepthWithin(hi, charge, resolution)
+	return sweepmemo.BracketDepthWithin(hi, charge, resolution, lo, hi, gap,
+		new(big.Rat).Add(r.a.fullTravel, r.b.fullTravel))
 }
 
 func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *big.Rat) bool {

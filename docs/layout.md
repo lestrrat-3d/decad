@@ -201,7 +201,7 @@ the rules leave to the byte budget.
 | `contact_analytic_manifold.go` | Ruling contact adapters. See contact-geometry §4.5. |
 | `contact_sphere_oriented.go` / `contact_sphere_oriented_sweep.go` | Rotated sphere-box path. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See contact-sweep §4–§5. |
-| `contact_sweep_replay.go` | Affine and rotating replay adapters. See contact-sweep §6. |
+| `contact_sweep_replay.go` | Replay adapters. See contact-sweep §6. |
 | `clearance_cells.go` | Pruned cell walk and face-pair adapter. See clearance §3–§5. |
 | `clearance_tiers.go` | Tier adapters and vertex budget. See clearance §3/§6. |
 | `clearance_geom.go` | `bodyGeom`: each body's clearance faces, edges and nesting test over `internal/clearance/`'s carriers. See `docs/clearance-design.md` §2–§3. |
@@ -277,7 +277,7 @@ the rules leave to the byte budget.
 | `internal/facetproof/` | Faceted shell audits, placement, restatement and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/surfacegeom/` | Sealed face and edge geometry variants. See `docs/api-design.md` §6.1. |
-| `internal/reportvocab/` | Verify, Motion, Linkage, and JointBox report types and outcome enums. |
+| `internal/reportvocab/` | Contact, sweep, Verify, Motion, Linkage, and JointBox outcome enums and reports. |
 | `internal/extent/` | Sealed linear and angular extent variants. See API §8.1. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation and segment record. See surface §5.2. |
 | `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |
@@ -322,7 +322,7 @@ the rules leave to the byte budget.
 | `internal/motionoption/` | Motion options. See motion-check §3. |
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, depth and rolling bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
-| `internal/sweepmemo/` | Sweep memo tables. See contact-sweep §6–§7. |
+| `internal/sweepmemo/` | Sweep replay coverage and memo tables. See contact-sweep §6–§7. |
 | `internal/spherepath/` | Sphere path gaps and brackets. See contact-sweep §4–§5. |
 | `internal/linkagebound/` | Link reach, layers, spans, projections and loops. See linkage §5, §15. |
 | `internal/linkagebound/loopchain/` | Sketch enclosure chains and zero-pose checks. See linkage §15. |
