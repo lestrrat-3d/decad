@@ -1377,6 +1377,66 @@ func CellTwistAreaLinearFromSpans(spans CellSpans, twistQuarterUpper float64) fl
 	return ProductUpper(ProductUpper(4, twistQuarterUpper), AbsSumUpper(eA, eB))
 }
 
+// CellTwistAreaProjectedAllow is CellTwistAreaQuadraticAllow's arm with the
+// remainder read off the part of V normal to U alone. Writing p = Û·V and
+// V⊥ = V − p·Û,
+//
+//	|U+V| = sqrt((|U| + p)² + |V⊥|²),  0 ≤ |U+V| − |U| − p ≤ |V⊥|²/(2(|U| + p)),
+//
+// the second inequality holding wherever |U| + p > 0. Both averages share
+// the linear term, so |Area_ruled − Q| is at most the largest remainder over
+// the unit square, which holds both rules' nodes. With W = 2U, over that
+// square |p| ≤ (|W·A| + |W·B|)/(2|W|) and |V⊥|² ≤ (|A⊥|² + |B⊥|²)/2, where
+// |A⊥|² = |A|² − (W·A)²/|W|². So, with c = |W|² − |W·A| − |W·B| > 0,
+//
+//	|Area_ruled − Q| ≤ (|A⊥|² + |B⊥|²)·|W| / (2c).
+//
+// Where A and B lie close to U, as they do on a cell whose twist runs along
+// its own surface, this is second order in the twist where the quadratic
+// arm's |A|² + |B|² is first. A c at or below zero withdraws the arm with
+// +Inf. Every vector and product is exact; |W| is rounded up and the
+// quotient rounded up.
+func CellTwistAreaProjectedAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	if !FiniteVec(vLo) || !FiniteVec(vHi) || !FiniteVec(wLo) || !FiniteVec(wHi) {
+		return math.Inf(1)
+	}
+	da := HeldDelta(vHi, vLo)
+	g := HeldDelta(wLo, vLo)
+	twist := proofarith.DvSub(HeldDelta(vLo, vHi), HeldDelta(wLo, wHi))
+	a := proofarith.DvCross(da, twist)
+	b := proofarith.DvCross(twist, g)
+	n0 := proofarith.DvCross(da, g)
+	var w proofarith.DyV3
+	for i := range w {
+		w[i] = proofarith.DyAdd(proofarith.DyAdd(proofarith.DyShift(n0[i], 1), a[i]), b[i])
+	}
+	ww := proofarith.DvDot(w, w).Rat()
+	if ww.Sign() <= 0 {
+		return math.Inf(1)
+	}
+	wa := proofarith.DvDot(w, a).Rat()
+	wb := proofarith.DvDot(w, b).Rat()
+	perp := func(v proofarith.DyV3, wv *big.Rat) *big.Rat {
+		out := proofarith.DvDot(v, v).Rat()
+		return out.Sub(out, new(big.Rat).Quo(new(big.Rat).Mul(wv, wv), ww))
+	}
+	num := new(big.Rat).Add(perp(a, wa), perp(b, wb))
+	if num.Sign() <= 0 {
+		return 0
+	}
+	c := new(big.Rat).Sub(ww, new(big.Rat).Abs(wa))
+	c.Sub(c, new(big.Rat).Abs(wb))
+	if c.Sign() <= 0 {
+		return math.Inf(1)
+	}
+	wLen, ok := RatOf(RatSqrtUp(ww))
+	if !ok {
+		return math.Inf(1)
+	}
+	num.Mul(num, wLen)
+	return RatFloatUp(num.Quo(num, c.Mul(c, big.NewRat(2, 1))))
+}
+
 // CellTwistAreaQuadraticAllow is the cancellation-preserving arm. Write the
 // bilinear patch's area-element vector as
 //

@@ -406,14 +406,35 @@ type CellProof struct {
 	// surface of that homotopy has.
 	Swept float64
 	// Density bounds ∫|J_S − J_B|, the area-density gap between the true cell
-	// and the bilinear patch through its true corners at matched parameters:
-	// 2·sag·Helix + Ruling·2ρ_max·h·(h + h²/6).
+	// and the bilinear patch through its true corners at matched parameters,
+	// from both densities' closed forms (CellProofUpper's own comment). It is
+	// third order in h per cell where the segment is a band or an annulus,
+	// and second order otherwise.
 	Density float64
 }
 
 // CellProofUpper evaluates CellProof for one cell of segment v → w over a
 // station step of dt turns. ok is false when a radius is not proven
 // positive or the segment has no proven length.
+//
+// Density reads both densities in closed form. In the frame at the cell's
+// mid angle the bilinear patch on the true corners is B = (ρ(λ)·c(s),
+// ζ(λ) + k·θ(s)) with c(s) = (cos h, (2s − 1)·sin h) the unit circle's chord,
+// and the true cell S = (ρ(λ)·e(θ(s)), ζ(λ) + k·θ(s)), so
+//
+//	J_S² = 4h²·(Δζ²ρ² + k²Δρ² + Δρ²ρ²)
+//	J_B² = 4sin²h·(Δρ(2s − 1)hk − Δζρ)² + 4h²k²Δρ²cos²h + 4ρ²Δρ²sin²h·cos²h
+//
+// at ρ = ρ(λ). Their difference is 4h²k²Δρ²sin²h + 4ρ²Δρ²(h² − sin²h·cos²h)
+// + 4Δζ²ρ²(h² − sin²h) + 4sin²h·(2ΔζρX − X²) with X = Δρ(2s − 1)hk, and
+// with sin h ≤ h, h² − sin²h ≤ h⁴/3, 0 ≤ h² − sin²h·cos²h ≤ 4h⁴/3 and the
+// s-averages of |2s − 1| and (2s − 1)², 1/2 and 1/3, its integral over the
+// cell is at most
+//
+//	(16/3)·h⁴k²Δρ² + (16/3)·ρ_max²Δρ²h⁴ + (4/3)·Δζ²ρ_max²h⁴ + 4h³k·|ΔζΔρ|·ρ_max.
+//
+// |J_S − J_B| = |J_S² − J_B²|/(J_S + J_B), and J_S ≥ 2h·L·ρ_min, so Density
+// is that integral over 2h·L·ρ_min, with h read at its lower end there.
 //
 // Swept's two derivative bounds come from H = S(λ, θ(s) + ε) with
 // ε = c·m·2Δρ·sin h/ρ(λ) and q = c·|Δρ|/ρ_min ≤ 1: |∂_s ε| ≤ 2h·q, so
@@ -465,21 +486,42 @@ func CellProofUpper(rhoV, zetaV, rhoW, zetaW Iv, pitch, dt *big.Rat) (CellProof,
 	swept := new(big.Rat).Mul(dep, alongL)
 	swept.Mul(swept, alongS)
 
-	// 2·sag·Helix + L·2ρ_max·h·(h + h²/6)
-	density := new(big.Rat).Mul(big.NewRat(2, 1), SagUpper(rhoMax, dt))
-	density.Mul(density, helix)
-	tangent := new(big.Rat).Add(h, new(big.Rat).Quo(new(big.Rat).Mul(h, h), big.NewRat(6, 1)))
-	tangent.Mul(tangent, h)
-	tangent.Mul(tangent, rhoMax)
-	tangent.Mul(tangent, big.NewRat(2, 1))
-	tangent.Mul(tangent, l.Hi)
-	density.Add(density, tangent)
+	if l.Lo.Sign() <= 0 {
+		return CellProof{}, false
+	}
+	density := densityGapUpper(h, new(big.Rat).Mul(proofbound.PiLower, dt), k, rhoMin, rhoMax, drAbs,
+		proofbound.IntervalAbsUpper(dz), l.Lo)
 	return CellProof{
 		Ruling:  proofbound.RatFloatUp(l.Hi),
 		Helix:   proofbound.RatFloatUp(helix),
 		Swept:   proofbound.RatFloatUp(swept),
 		Density: proofbound.RatFloatUp(density),
 	}, true
+}
+
+// densityGapUpper is CellProofUpper's Density integral over 2h·L·ρ_min:
+// hUp and hLo bound h above and below, dr and dz bound |Δρ| and |Δζ|, and
+// lLo bounds L below.
+func densityGapUpper(hUp, hLo, k, rhoMin, rhoMax, dr, dz, lLo *big.Rat) *big.Rat {
+	h2 := new(big.Rat).Mul(hUp, hUp)
+	h3 := new(big.Rat).Mul(h2, hUp)
+	h4 := new(big.Rat).Mul(h2, h2)
+	sq := func(x *big.Rat) *big.Rat { return new(big.Rat).Mul(x, x) }
+	third := func(n int64, terms ...*big.Rat) *big.Rat {
+		out := big.NewRat(n, 3)
+		for _, t := range terms {
+			out.Mul(out, t)
+		}
+		return out
+	}
+	num := third(16, h4, sq(k), sq(dr))
+	num.Add(num, third(16, sq(rhoMax), sq(dr), h4))
+	num.Add(num, third(4, sq(dz), sq(rhoMax), h4))
+	num.Add(num, third(12, h3, k, dz, dr, rhoMax))
+	den := new(big.Rat).Mul(big.NewRat(2, 1), hLo)
+	den.Mul(den, lLo)
+	den.Mul(den, rhoMin)
+	return num.Quo(num, den)
 }
 
 // Held is the float nearest an interval's midpoint, carried with the

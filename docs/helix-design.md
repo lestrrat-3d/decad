@@ -506,33 +506,40 @@ rationals against `math.Log`/`math.Asinh` (enclosure contains, width below
 
 ### 8.1 `areaSlack`
 
-The cut-stable area allowance integrates, over every wall cell and at one
-shared parameter `(λ, s)`, the absolute area-density gap along a chain of
-three surfaces, then adds the caps:
+The area allowance follows every wall cell along a chain of three surfaces,
+then adds the caps:
 
-1. held triangles → bilinear patch on the held corners:
-   `proofbound.CellTwistAreaAllow` over the four held corners;
+1. held triangles → bilinear patch on the held corners: the gap between the
+   patch's area and the triangle pair's, per cell, the loft's own
+   cancellation-preserving treatment (`docs/loft-design.md` §5.2). It reads
+   `proofbound.CellTwistAreaProjectedAllow`, which charges only the part of
+   the area element's variation normal to its mean: on a coil cell the twist
+   runs along the surface, so that part is second order in the station step
+   and the cell's gap is third order. Where the arm states no bound it falls
+   back to `proofbound.CellTwistAreaAllow`;
 2. that patch → bilinear patch on the TRUE corners: each corner moves at
    most `r`, the largest station rounding, so each derivative moves at most
    `2r` and the density at most `2r·|∂sB| + (|∂λB| + 2r)·2r`, with
    `|∂λB|` at most the world ruling and `|∂sB|` the world chord, each bounded
    by its plane-coordinate value times `1 + e` (§5.3);
-3. that patch → the true cell, matched: the density gap is at most
-   `|∂λ(S − B)|·|∂sS| + |∂λB|·|∂s(S − B)|`, with `|∂λ(S − B)| ≤ 2·sag`
-   (the difference of the two edge departures), `|∂sS| ≤ helix`, the arc
-   length `2h·sqrt(ρ_max² + k²)` of one station step, `|∂λB| ≤ L` and
-   `|∂s(S − B)| ≤ 2ρ_max·h·(h + h²/6)` (the helix tangent against its
-   chord, transverse part only: the slide is linear and cancels), so
-   `2·sag·helix + L·2ρ_max·h·(h + h²/6)` per cell
-   (`coil.CellProof.Density`). It is derived in plane coordinates; `L`
-   carries a density by a factor in `[1 − e, 1 + e]` that differs between
-   the two surfaces' tangent planes, so the world gap adds `2e` times the
-   patch's own area, at most `L·helix`, to `(1 + e)` times the plane gap.
+3. that patch → the true cell at matched parameters, pointwise. Both
+   densities have closed forms: in the frame at the cell's mid angle
+   `B = (ρ(λ)·c(s), ζ(λ) + k·θ(s))` with `c(s)` the unit circle's chord, so
+   `J_S² = 4h²(Δζ²ρ² + k²Δρ² + Δρ²ρ²)` and
+   `J_B² = 4sin²h(Δρ(2s − 1)hk − Δζρ)² + 4h²k²Δρ²cos²h + 4ρ²Δρ²sin²h·cos²h`.
+   `|J_S − J_B| = |J_S² − J_B²|/(J_S + J_B)` with `J_S ≥ 2h·L·ρ_min`, and
+   the difference integrates over the cell to at most
+   `(16/3)h⁴k²Δρ² + (16/3)ρ_max²Δρ²h⁴ + (4/3)Δζ²ρ_max²h⁴ + 4h³k|ΔζΔρ|ρ_max`
+   (`coil.CellProof.Density`; its doc comment derives each term). It is
+   derived in plane coordinates; `L` carries a density by a factor in
+   `[1 − e, 1 + e]` that differs between the two surfaces' tangent planes,
+   so the world gap adds `2e` times the patch's own area, at most
+   `L·helix`, to `(1 + e)` times the plane gap.
 
 Both caps add `proofbound.PerturbedTriangleAreaAllow` at `δ` per triangle:
 the true cap is the planar section on the true corners. Every term through
-`absSumUpper`. Leg 3's tangential term is first order in `h` per cell, so on
-§13's spring the allowance is near `3.4 mm²` of an area near `128 mm²`.
+`absSumUpper`. On §13's spring the allowance is near `0.064 mm²` of an area
+near `128 mm²`, and the spring's union with a 60 mm core verifies `Sound`.
 
 ### 8.2 `volSymDiff`
 

@@ -144,7 +144,10 @@ func TestCoilMassPropertiesSettleAtTheFirstStep(t *testing.T) {
 // pair's chord tolerance 2e-5·diameter sits above the coil's δ and the
 // boolean's chain-depth gate admits the coil's facets. Verify measures the
 // overlap Θ·Q(Ω ∩ {ρ ≤ 2.5}) = 4π·(2.5² − 2²)/2 = 4.5π, and the union reads
-// V_cylinder + Θ·Q(Ω ∩ {ρ ≥ 2.5}) = 375π + 5.5π.
+// V_cylinder + Θ·Q(Ω ∩ {ρ ≥ 2.5}) = 375π + 5.5π and verifies Sound. With the
+// coil's twist-area leg read through proofbound.CellTwistAreaAllow instead
+// of the projected arm, the union's area bound rose to 2.6 mm² and Verify
+// read Suspect.
 func TestCoilInterferenceAndUnionWithACore(t *testing.T) {
 	doc := New()
 	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, -28}, {2.5, -28}, {2.5, 32}, {0, 32}})
@@ -168,6 +171,12 @@ func TestCoilInterferenceAndUnionWithACore(t *testing.T) {
 	vol, err := u.Volume()
 	require.NoError(t, err)
 	requireEnclosesBig(t, vol.Value.Base(), vol.Bound.Base(), new(big.Float).SetPrec(512).Mul(bigPi(), big.NewFloat(380.5)), "union volume")
+
+	// Every reading of the union, its area included, sits inside the default
+	// tolerance.
+	rep, err = doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, Sound, rep.Status)
 }
 
 // TestCoilThreadRefusals pins the two refusals docs/helix-design.md §9's
