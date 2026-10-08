@@ -459,8 +459,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// this walk, computed by the caller.
 		bottomEdge := &Edge{curve: curve0, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		topEdge := &Edge{curve: curve1, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
-		bottomEdge.curveBound, bottomEdge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z0, pp.z0Delta, w.Radius, w.RadiusBound, center0, edgeAxis)
-		topEdge.curveBound, topEdge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z1, pp.z1Delta, w.Radius, w.RadiusBound, center1, edgeAxis)
+		bottomEdge.curveBound, bottomEdge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z0, pp.z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
+		topEdge.curveBound, topEdge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z1, pp.z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
 		surf := Cylinder{Origin: center0, Axis: axis, Radius: radius}
 		// A clockwise-walked wall has its material OUTSIDE the cylinder,
 		// so its outward normal is the radial direction negated.

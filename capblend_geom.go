@@ -403,6 +403,14 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				capcontour.ApexJoin{VU: j.vU, VV: j.vV, PA: j.pA, PB: j.pB},
 				dc, dcDelta, arcLength, wraps, delta),
 		}
+		// The connector denotes the arc of every setback in dc's span about
+		// the recorded corner, which both neighbouring walks' held ends
+		// enclose within their own bounds.
+		if span, ok := capcontour.OffsetSpan(dc, dcDelta); ok {
+			center, axis, _, _ := circleOf(arcByCorner[i].curve)
+			cornerDelta := math.Min(capCornerGap(j.vU, j.vV, prev.EndU, prev.EndV, prev.EndBound), capCornerGap(j.vU, j.vV, cur.StartU, cur.StartV, cur.StartBound))
+			arcByCorner[i].curveBound, arcByCorner[i].curveBounded = pl.circleCurveBound(j.vU, j.vV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
+		}
 	}
 
 	var patches []*Face
@@ -578,6 +586,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			held := math.Abs(capRadius * sweepSigned)
 			capEdge = arcEdge(pl, w.CU, w.CV, capRadius, capZ, capA, capB, capTh0, capTh1, held,
 				capcontour.CapWallArcBound(w.CU, w.CV, start, end, capRadius, capRadius*sweepSigned, wraps, delta, radialShift))
+			// The trimmed arc lies on the offset circle about the wall's
+			// recorded centre, every radius of which sits within radialShift
+			// of the held capRadius.
+			center, axis, _, _ := circleOf(capEdge.curve)
+			capEdge.curveBound, capEdge.curveBounded = pl.circleCurveBound(w.CU, w.CV, capZ, capDelta, 0, capRadius, radialShift, center, axis)
 		}
 
 		var surf Surface
@@ -930,7 +943,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 			proofbound.RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(exactRadius.Hi, heldRat))))
 		radiusBound = proofbound.AbsSumUpper(gap, delta)
 	}
-	e.curveBound, e.curveBounded = pl.circleCurveBound(cu, cv, z, pl.axialDelta(), r, radiusBound, center, axis)
+	e.curveBound, e.curveBounded = pl.circleCurveBound(cu, cv, z, pl.axialDelta(), 0, r, radiusBound, center, axis)
 	return e
 }
 
@@ -1101,4 +1114,20 @@ func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, ref
 func capBandLevelDelta(capZ, matSign float64, setback capSetback) float64 {
 	sideZ := capZ + matSign*setback.ds
 	return proofbound.AbsSumUpper(setback.dsDelta, proofarith.AddRoundError(capZ, matSign*setback.ds, sideZ))
+}
+
+// capCornerGap bounds how far the held corner (vU, vV) sits from the corner a
+// walk end at (u, v), within its own bound, denotes: that bound plus the exact
+// distance between the two held points.
+func capCornerGap(vU, vV, u, v float64, bound proofbound.WalkEndBound) float64 {
+	a, okA := proofarith.DyOf(vU)
+	b, okB := proofarith.DyOf(vV)
+	c, okC := proofarith.DyOf(u)
+	d, okD := proofarith.DyOf(v)
+	if !okA || !okB || !okC || !okD {
+		return math.Inf(1)
+	}
+	x, y := proofarith.DySubScalar(a, c), proofarith.DySubScalar(b, d)
+	gap := proofarith.DySqrtUp(proofarith.DyAdd(proofarith.DyMul(x, x), proofarith.DyMul(y, y)))
+	return proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(bound), gap)
 }

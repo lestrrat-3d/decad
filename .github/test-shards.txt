@@ -372,6 +372,7 @@
 3	0.00	TestCupPayloadForTracksEachSourceEndDisplacement
 3	0.00	TestCupWallCancellationDuringProfileIntegrals
 3	0.00	TestCupWallRequiresExactMorphology
+3	0.40	TestCurveBoundsCoverMappedReference
 3	0.00	TestCurveTokenComposeDeclinesTheZeroToken
 3	0.00	TestDecidePullMatchesOpposesPullAtZeroAllowance
 3	0.00	TestDegCertifiedContainment

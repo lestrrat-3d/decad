@@ -857,6 +857,11 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					}
 				}
 			}
+			for _, je := range []*Edge{j.lat, j.arc} {
+				if je != nil {
+					je.curveBound, je.curveBounded = rp.latitudeCurveBound(at, center, jAxis, jRadius.Base())
+				}
+			}
 			js[i] = j
 		}
 	}
@@ -903,8 +908,9 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// segment's own start; every other walk's cap edge takes the
 			// junction vertices above.
 			seam := rp.denotedPoint(walkStart(resolved.Segs[w.Segs[0]], resolved.Plane[w.Segs[0]]))
-			cap0[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs0, ve0, seam, rp.end0(), holeLoop, frame)
-			cap1[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs1, ve1, seam, rp.end1(), holeLoop, frame)
+			plane := segPlaneWalks(resolved, w.Segs)
+			cap0[i] = rp.capEdge(b, w.SegmentWalk, plane, singleClosed, vs0, ve0, seam, rp.end0(), holeLoop, frame)
+			cap1[i] = rp.capEdge(b, w.SegmentWalk, plane, singleClosed, vs1, ve1, seam, rp.end1(), holeLoop, frame)
 		}
 	}
 
@@ -1091,7 +1097,7 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // own seam vertex denotes; that vertex is bounded the same way every other cap
 // vertex is (sweptVertex; docs/evaluator-design.md §6). An open walk reads
 // neither.
-func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, closed bool, vs, ve *Vertex, seam sweptPoint, end sweptEnd, holeLoop bool, frame massmoment.MapCharge) *Edge {
+func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, plane []survey2d.SegmentWalk, closed bool, vs, ve *Vertex, seam sweptPoint, end sweptEnd, holeLoop bool, frame massmoment.MapCharge) *Edge {
 	convex := !holeLoop
 	if w.IsCircular() {
 		convex = w.Th0 < w.Th1
@@ -1118,6 +1124,7 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	axis := rp.xform.ApplyDir(normal).Scale(sign)
 	center := rp.point(b, w.CU, w.CV, end.phi)
 	radius := units.Millimeters(w.Radius)
+	e.curveBound, e.curveBounded = rp.capArcCurveBound(plane, end, center, axis, w.Radius)
 	if closed {
 		v := rp.sweptVertex(b, w.StartU, w.StartV, seam, curveToken{}, end)
 		e.curve = Circle3{Center: center, Axis: axis, Radius: radius}
@@ -1127,6 +1134,50 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	e.curve = Arc3{Center: center, Axis: axis, Radius: radius}
 	e.start, e.end = vs, ve
 	return e
+}
+
+// capArcCurveBound is an Edge's curveBound for a partial sweep's cap copy of
+// a recorded circular walk: plane holds the plane-local walks of the
+// recorded segments the copy covers, every one on one circle, whose centre
+// is recorded and whose radius sits within its walk's RadiusBound; a
+// whole-section displacement widens both (revolvemesh.RevolveLift.CapArcGap).
+// An end with no denotation, a walk set that is not one circle, or a bound
+// not below half the held radius answers false.
+func (rp revolvePayload) capArcCurveBound(plane []survey2d.SegmentWalk, end sweptEnd, center, axis r3.Vec, radius float64) (float64, bool) {
+	if len(plane) == 0 || !end.den.Valid() {
+		return 0, false
+	}
+	sin, cos, ok := end.den.SinCosFor(end.phi)
+	if !ok {
+		return 0, false
+	}
+	first := plane[0]
+	radiusBound := 0.0
+	for _, pw := range plane {
+		if !pw.IsCircular() || pw.CU != first.CU || pw.CV != first.CV || pw.Radius != first.Radius {
+			return 0, false
+		}
+		radiusBound = math.Max(radiusBound, pw.RadiusBound)
+	}
+	charge := revolveaxis.SectionWholeCharges(rp.sectionWhole, rp.sectionDelta)
+	if charge.U != 0 {
+		radiusBound = proofbound.AbsSumUpper(radiusBound, rp.sectionDelta)
+	}
+	gap := rp.lift().CapArcGap(rp.axisBound(), rp.xform, first.CU, first.CV, charge, first.Radius, radiusBound, sin, cos, center, axis, radius)
+	if proofbound.IsNonFinite(gap) || !(proofbound.ProductUpper(2, gap) < radius) {
+		return 0, false
+	}
+	return gap, true
+}
+
+// latitudeCurveBound is an Edge's curveBound for the latitude circle or the
+// junction arc the recorded point at sweeps (revolvemesh.RevolveLift.LatitudeGap).
+func (rp revolvePayload) latitudeCurveBound(at sweptPoint, center, axis r3.Vec, radius float64) (float64, bool) {
+	gap := rp.lift().LatitudeGap(rp.axisBound(), rp.xform, at.u, at.v, at.bound, center, axis, radius)
+	if proofbound.IsNonFinite(gap) || !(proofbound.ProductUpper(2, gap) < radius) {
+		return 0, false
+	}
+	return gap, true
 }
 
 // wallSurface is the placed surface of revolution one off-axis walk sweeps,
@@ -1434,6 +1485,11 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				}
 			}
 		}
+		for _, je := range []*Edge{j.lat, j.arc} {
+			if je != nil {
+				je.curveBound, je.curveBounded = rp.latitudeCurveBound(at, center, wDir.Scale(sweepSign), j.rho)
+			}
+		}
 		js[i] = j
 	}
 
@@ -1478,8 +1534,9 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			// holeLoop is always false: a chain has no hole, and its whole
 			// walk takes the loop-0 (outer) convention
 			// (docs/surface-design.md §13.4).
-			cap0 := rp.capEdge(b, w.SegmentWalk, false, js[i].v0, js[i+1].v0, sweptPoint{}, rp.end0(), false, frame)
-			cap1 := rp.capEdge(b, w.SegmentWalk, false, js[i].v1, js[i+1].v1, sweptPoint{}, rp.end1(), false, frame)
+			plane := segPlaneWalks(resolved, w.Segs)
+			cap0 := rp.capEdge(b, w.SegmentWalk, plane, false, js[i].v0, js[i+1].v0, sweptPoint{}, rp.end0(), false, frame)
+			cap1 := rp.capEdge(b, w.SegmentWalk, plane, false, js[i].v1, js[i+1].v1, sweptPoint{}, rp.end1(), false, frame)
 			co := []coedge{{edge: cap0, forward: true}}
 			if a := js[i+1].arc; a != nil {
 				co = append(co, coedge{edge: a, forward: true})
@@ -1497,4 +1554,14 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		total = proofbound.BoundedAdd(total, faceArea)
 	}
 	return faces, total, nil
+}
+
+// segPlaneWalks reads the plane-local walks of the recorded segments segs
+// indexes.
+func segPlaneWalks(resolved revolveWalks, segs []int) []survey2d.SegmentWalk {
+	out := make([]survey2d.SegmentWalk, len(segs))
+	for i, si := range segs {
+		out[i] = resolved.Plane[si]
+	}
+	return out
 }

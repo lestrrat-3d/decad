@@ -355,7 +355,7 @@
 2	0.00	TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet
 2	0.00	TestBodyPatchContextCancellationLeavesDocumentUnchanged
 2	0.00	TestBodyPatchDoublesAFlatSheetWithANegatedNormal
-2	0.00	TestBodyPatchRefusesAnUnboundedCurvedRim
+2	0.00	TestBodyPatchFillsARevolvedDiskRim
 2	0.00	TestBodyPatchReproducesThroughPlacement
 2	0.00	TestBodyPatchTableR
 2	3.12	TestBooleanBoundSoundnessAxisAligned

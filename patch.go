@@ -353,9 +353,9 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 		edge := &Edge{curve: curve, start: start, end: end, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		switch c := curve.(type) {
 		case Circle3:
-			edge.curveBound, edge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z0, pp.z0Delta, w.Radius, w.RadiusBound, c.Center, c.Axis)
+			edge.curveBound, edge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z0, pp.z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
 		case Arc3:
-			edge.curveBound, edge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z0, pp.z0Delta, w.Radius, w.RadiusBound, c.Center, c.Axis)
+			edge.curveBound, edge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z0, pp.z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
 		}
 		coedges = append(coedges, coedge{edge: edge, forward: true})
 	}

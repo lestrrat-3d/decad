@@ -141,13 +141,14 @@ func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64
 // centre at center, its axis along axis, and the walk's radius, which sits within
 // radiusBound of the radius the record denotes. The denoted curve is the
 // recorded circle carried through L = B·[U V N] (massmoment.PrismRotation),
-// displaced by the level's own zDelta along L·N and by the section's own
-// sectionDelta in the plane. Its distance from the held circle is at most
+// displaced by the level's own zDelta along L·N, by the section's own
+// sectionDelta in the plane, and by centerDelta, how far the denoted centre
+// sits from (cu, cv) in the plane. Its distance from the held circle is at most
 // the centre's exact lift rounding, massmoment.CircleImageGap's in-plane and
 // tilt terms, and those two displacements stretched by L. It answers +Inf,
 // and ok false, when that bound is not below half the radius, where radial
 // projection onto the held circle stops being continuous.
-func (pp prismPayload) circleCurveBound(cu, cv, z, zDelta, radius, radiusBound float64, center, axis r3.Vec) (float64, bool) {
+func (pp prismPayload) circleCurveBound(cu, cv, z, zDelta, centerDelta, radius, radiusBound float64, center, axis r3.Vec) (float64, bool) {
 	l, err := massmoment.PrismRotation(pp.frame, pp.xform)
 	if err != nil {
 		return math.Inf(1), false
@@ -156,7 +157,7 @@ func (pp prismPayload) circleCurveBound(cu, cv, z, zDelta, radius, radiusBound f
 	if err != nil {
 		return math.Inf(1), false
 	}
-	displaced := proofbound.AbsSumUpper(zDelta, proofbound.ProductUpper(2, pp.sectionDelta))
+	displaced := proofbound.AbsSumUpper(zDelta, proofbound.ProductUpper(2, pp.sectionDelta), centerDelta)
 	bound := proofbound.AbsSumUpper(
 		exactPrismPointRound(pp, cu, cv, z, center),
 		massmoment.CircleImageGap(l, charge.Stretch, axis, radius, radiusBound),
