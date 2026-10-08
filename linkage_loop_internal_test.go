@@ -74,7 +74,7 @@ func internalTilt(t *testing.T) r3.Transform {
 // rotation falls outside it.
 func TestMotionFrameAtRange(t *testing.T) {
 	t.Parallel()
-	frame, ok := newMotionFrame(motionSpec{kind: motionbound.MotionRevolute, center: r3.NewVec(3, -2, 0), axis: r3.NewVec(0, 0, 1)})
+	frame, ok := motionbound.NewMotionFrame(motionbound.Spec{Kind: motionbound.MotionRevolute, Center: r3.NewVec(3, -2, 0), Axis: r3.NewVec(0, 0, 1)})
 	require.True(t, ok)
 	theta, w := big.NewRat(7, 10), big.NewRat(1, 1000)
 	lo := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).Sub(theta, w)}
@@ -95,7 +95,7 @@ func TestMotionFrameAtRange(t *testing.T) {
 	require.GreaterOrEqual(t, sinWidth, 2*1e-3*math.Cos(0.7)-pointWidth)
 	require.Equal(t, frame.At(lo), frame.AtRange(lo, lo), `AtRange(p, p) is At(p)`)
 
-	slide, ok := newMotionFrame(motionSpec{kind: motionbound.MotionPrismatic, dir: r3.NewVec(0, 2, 0)})
+	slide, ok := motionbound.NewMotionFrame(motionbound.Spec{Kind: motionbound.MotionPrismatic, Dir: r3.NewVec(0, 2, 0)})
 	require.True(t, ok)
 	shift := slide.AtRange(lo, hi).Shift[1]
 	require.Zero(t, shift.Lo.Cmp(lo.Base))

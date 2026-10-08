@@ -188,7 +188,7 @@ the floor's sample budget between segments. A caller who wants one stretch of th
 splits it with more waypoints on the same line.
 
 The parameter every report record carries is `units.Scalar(s)`, a dyadic fraction, exact in float. Each
-joint's value is a label, computed as `motionSpec.label` computes a `Between` pose's parameter on the segment
+joint's value is a label, computed as `motionbound.Domain.Label` computes a `Between` pose's parameter on the segment
 from `w_j` to `w_{j+1}` at `t`, and carried in `w_j`'s unit. Every bound reads the exact rational `w_j + t·(w_{j+1} −
 w_j)` through `motionbound.MotionParam.Lerp`. A waypoint fraction `j/n` is in general not dyadic (`n = 3`
 puts the waypoints at `1/3` and `2/3`), so §6's grid need not land on one, and §5.2 does not need it to.
@@ -1642,7 +1642,7 @@ pairs are settled before any cell, and `settlePairs` runs unchanged.
 **What is exact, what is bounded.** §5.3's table holds. `span_i` for an angle carries `π` at its upper
 enclosure; every product and sum in `τ_half` and the allowance is `big.Rat` arithmetic; a cell's ends and
 centre are dyadic fractions of each range, exact in float, and each joint's value at the centre is the
-label `motionDomain.label` gives a pose at that fraction, while every bound reads the exact
+label `motionbound.Domain.Label` gives a pose at that fraction, while every bound reads the exact
 `Min_i + f·(Max_i − Min_i)`.
 
 ### 14.4 The procedure

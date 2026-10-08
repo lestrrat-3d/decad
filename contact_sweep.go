@@ -437,7 +437,7 @@ func validatePairPath(path PairPath) (affinePairPath, error) {
 			return out, err
 		}
 		for _, v := range []units.Value{p.LinearVelocity.X, p.LinearVelocity.Y, p.LinearVelocity.Z} {
-			if err := motionValueValid(v, units.Velocity, "drift linear velocity"); err != nil {
+			if err := motionbound.MotionValueValid(v, units.Velocity, "drift linear velocity"); err != nil {
 				return out, err
 			}
 		}
@@ -483,7 +483,7 @@ func validatePairPath(path PairPath) (affinePairPath, error) {
 }
 
 func sweepDuration(v units.Value, base *big.Rat) error {
-	if err := motionValueValid(v, units.Time, "sweep duration"); err != nil {
+	if err := motionbound.MotionValueValid(v, units.Time, "sweep duration"); err != nil {
 		return err
 	}
 	if base == nil || base.Sign() <= 0 {

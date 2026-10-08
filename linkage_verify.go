@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -75,7 +76,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 	if !ok {
 		return nil, linkageBoundsError()
 	}
-	cfg, err := resolveMotionOptions(opts, motionSpec{motionDomain: fractionDomain()})
+	cfg, err := motionoption.Resolve(opts, motionbound.FractionDomain())
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +128,7 @@ func readingResolution(cfg motionConfig) units.Value {
 // moving group per link, in Linkage.Links() order, every other live body
 // static, and each link body's swept box for the exclusion against them.
 func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames []motionbound.MotionFrame, bounds []linkBound, cfg motionConfig) *motionRun {
-	run := &motionRun{ctx: ctx, d: d, dom: fractionDomain(), cfg: cfg, cache: &bodyGeomCache{}}
+	run := &motionRun{ctx: ctx, d: d, dom: motionbound.FractionDomain(), cfg: cfg, cache: &bodyGeomCache{}}
 	dr := &linkageDriver{run: run, spec: spec, frames: frames, bounds: bounds, standing: linkStandings(spec, bounds)}
 	run.drive = dr
 	run.declared = make(map[[2]*Body]struct{}, 2*len(spec.linkage.contacts))

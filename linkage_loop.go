@@ -1844,7 +1844,7 @@ func (s *Schedule) PoseAt(ctx context.Context, at units.Value) (LinkagePose, err
 	if ctx == nil {
 		return LinkagePose{}, fmt.Errorf(`%w: a nil context cannot control a pose`, ErrDegenerate)
 	}
-	if err := motionValueValid(at, units.Dimensionless, "the pose fraction"); err != nil {
+	if err := motionbound.MotionValueValid(at, units.Dimensionless, "the pose fraction"); err != nil {
 		return LinkagePose{}, err
 	}
 	p, ok := motionbound.ExactMotionParam(at)

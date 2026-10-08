@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -23,7 +24,7 @@ import (
 // (docs/linkage-check-design.md §6): validation, the swept-box exclusion, the
 // per-pose pair proof over transient placements, the two-sided interval
 // certificate, and the report assembly. motion.go owns the vocabulary and
-// motion_bound.go the bounds; linkage_verify.go drives the same engine over a
+// internal/motionbound the bounds; linkage_verify.go drives the same engine over a
 // chain of joints.
 //
 // The engine moves one or more GROUPS of bodies, each group rigid under one
@@ -50,156 +51,6 @@ import (
 // placement is built under. It never enters the document: a transient body is
 // never committed, never published, and its provenance is never read back.
 const transientProducer producerID = -1
-
-// motionDomain is the parameter a check bisects: its Kind, its two endpoints
-// as stated, and their exact denotations. A Motion's domain is its own From
-// and To; a linkage drive's is the Dimensionless fraction [0, 1], exactly a
-// Between's (fractionDomain).
-type motionDomain struct {
-	quantity   units.Kind
-	from, to   units.Value
-	fromP, toP motionbound.MotionParam
-}
-
-// fractionDomain is the Dimensionless fraction s ∈ [0, 1] a Between and a
-// linkage drive both run over.
-func fractionDomain() motionDomain {
-	return motionDomain{
-		quantity: units.Dimensionless,
-		from:     units.Scalar(0),
-		to:       units.Scalar(1),
-		fromP:    motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)},
-		toP:      motionbound.MotionParam{Turn: new(big.Rat), Base: big.NewRat(1, 1)},
-	}
-}
-
-// motionSpec is a validated Motion read into the fields every pose and bound
-// is built from. A Between's parameter runs over the dimensionless fraction
-// [0, 1], so its from and to are units.Scalar(0) and units.Scalar(1), and
-// between and screw carry its poses and the screw r3 reads off them.
-type motionSpec struct {
-	motionDomain
-	motion  Motion
-	kind    motionbound.MotionKind
-	center  r3.Vec
-	axis    r3.Vec
-	dir     r3.Vec
-	between Between
-	screw   r3.Screw
-	frame   motionbound.MotionFrame
-}
-
-// resolveMotion validates m (docs/motion-check-design.md §2, §8): the
-// variant's own field refusals, From == To, and both endpoint poses building
-// under r3. A nil motion is ErrDegenerate.
-func resolveMotion(m Motion) (motionSpec, error) {
-	var spec motionSpec
-	switch mv := m.(type) {
-	case Revolute:
-		if err := motionbound.ValidateRevolute(mv); err != nil {
-			return motionSpec{}, err
-		}
-		spec = motionSpec{kind: motionbound.MotionRevolute, center: mv.Center, axis: mv.Axis,
-			motionDomain: motionDomain{quantity: units.Angle, from: mv.From, to: mv.To}}
-	case *Revolute:
-		if mv == nil {
-			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
-		}
-		return resolveMotionAs(m, *mv)
-	case Prismatic:
-		if err := motionbound.ValidatePrismatic(mv); err != nil {
-			return motionSpec{}, err
-		}
-		spec = motionSpec{kind: motionbound.MotionPrismatic, dir: mv.Dir,
-			motionDomain: motionDomain{quantity: units.Length, from: mv.From, to: mv.To}}
-	case *Prismatic:
-		if mv == nil {
-			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
-		}
-		return resolveMotionAs(m, *mv)
-	case Between:
-		sc, err := resolveBetween(mv)
-		if err != nil {
-			return motionSpec{}, err
-		}
-		spec = motionSpec{kind: motionbound.MotionBetween, between: mv, screw: sc,
-			motionDomain: motionDomain{quantity: units.Dimensionless, from: units.Scalar(0), to: units.Scalar(1)}}
-	case *Between:
-		if mv == nil {
-			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
-		}
-		return resolveMotionAs(m, *mv)
-	case nil:
-		return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
-	default:
-		return motionSpec{}, fmt.Errorf(`%w: a motion of type %T is not one this evaluator checks`, ErrUnsupported, m)
-	}
-	spec.motion = m
-	var okF, okT bool
-	spec.fromP, okF = motionbound.ExactMotionParam(spec.from)
-	spec.toP, okT = motionbound.ExactMotionParam(spec.to)
-	if !okF || !okT {
-		return motionSpec{}, fmt.Errorf(`%w: a motion endpoint is not representable`, ErrNotFinite)
-	}
-	if sameMotionValue(spec.from, spec.to) {
-		return motionSpec{}, fmt.Errorf(`%w: From and To are both %s, which names no path`, ErrDegenerate, spec.from)
-	}
-	for _, end := range []units.Value{spec.from, spec.to} {
-		if _, err := m.PoseAt(end); err != nil {
-			return motionSpec{}, err
-		}
-	}
-	frame, ok := newMotionFrame(spec)
-	if !ok {
-		return motionSpec{}, fmt.Errorf(`%w: the motion's axis is not representable`, ErrNotFinite)
-	}
-	spec.frame = frame
-	return spec, nil
-}
-
-// label is the published parameter of the pose at fraction f of the path:
-// From and To exactly at the ends, and otherwise the float nearest the exact
-// interpolation carried in From's unit — exact itself whenever From and To
-// share a unit and the dyadic step is representable. It is a label: every
-// bound is built from the exact parameter fromP.lerp(toP, f), and
-// motionbound.PoseDeviation charges whatever separates the pose PoseAt builds from this
-// label and the ideal pose at f.
-func (s motionDomain) label(f *big.Rat) units.Value {
-	return motionbound.DomainLabel(s.from, s.to, f)
-}
-
-// resolve validates a Between for VerifyMotion (docs/motion-check-design.md
-// §2, §8): its own field refusals, then From == To, then the screw r3 reads
-// off the relative motion, which must be representable and must not be the
-// zero screw — a relative motion with neither angle nor slide names no path,
-// since PoseAt is then From at every s.
-func resolveBetween(m Between) (r3.Screw, error) {
-	if err := motionbound.ValidateBetween(m); err != nil {
-		return r3.Screw{}, err
-	}
-	if m.From == m.To {
-		return r3.Screw{}, fmt.Errorf(`%w: a between whose From equals its To names no path`, ErrDegenerate)
-	}
-	sc, err := motionbound.ScrewBetween(m)
-	if err != nil {
-		return r3.Screw{}, err
-	}
-	if sc.Angle.Mag() == 0 && sc.Slide == 0 {
-		return r3.Screw{}, fmt.Errorf(`%w: a between whose relative motion is the zero screw names no path`, ErrDegenerate)
-	}
-	return sc, nil
-}
-
-// resolveMotionAs resolves a dereferenced pointer motion while keeping the
-// caller's own value as the stated motion the report echoes.
-func resolveMotionAs(stated Motion, value Motion) (motionSpec, error) {
-	spec, err := resolveMotion(value)
-	if err != nil {
-		return motionSpec{}, err
-	}
-	spec.motion = stated
-	return spec, nil
-}
 
 // resolveMovers validates the moving set (docs/motion-check-design.md §3, §8).
 func (d *Document) resolveMovers(moving []*Body) error {
@@ -251,11 +102,11 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	if err := d.resolveMovers(moving); err != nil {
 		return nil, err
 	}
-	spec, err := resolveMotion(m)
+	spec, err := motionbound.ResolveMotion(m)
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := resolveMotionOptions(opts, spec)
+	cfg, err := motionoption.Resolve(opts, spec.Domain)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +128,7 @@ type motionRun struct {
 	ctx       context.Context //nolint:containedctx // motionRun is per-call state and never outlives its call.
 	d         *Document
 	transient *Document // per-call identity counters for uncommitted pose bodies
-	dom       motionDomain
+	dom       motionbound.Domain
 	cfg       motionConfig
 	cache     *bodyGeomCache
 	drive     motionDriver
@@ -298,7 +149,7 @@ type motionRun struct {
 	// pose before the end and for the end itself: exactly 1 for a Revolute
 	// and a Prismatic; motionbound.BasisSigmaUpper of From, and at s = 1 the
 	// larger of From's and To's, for a Between.
-	spec                motionSpec
+	spec                motionbound.Spec
 	stretch, stretchEnd float64
 }
 
@@ -482,20 +333,20 @@ type motionPlaced struct {
 // between, the stretch bases, and the swept box each mover's exclusion
 // compares the static bodies against.
 func (r *motionRun) setup(moving []*Body) {
-	r.dom = r.spec.motionDomain
+	r.dom = r.spec.Domain
 	r.drive = &singleMotion{r: r}
 	r.readBodies([][]*Body{moving})
 	r.stretch, r.stretchEnd = 1, 1
-	if r.spec.kind == motionbound.MotionBetween {
-		r.stretch = motionbound.BasisSigmaUpper(r.spec.between.From)
-		r.stretchEnd = math.Max(r.stretch, motionbound.BasisSigmaUpper(r.spec.between.To))
+	if r.spec.Kind == motionbound.MotionBetween {
+		r.stretch = motionbound.BasisSigmaUpper(r.spec.Between.From)
+		r.stretchEnd = math.Max(r.stretch, motionbound.BasisSigmaUpper(r.spec.Between.To))
 	}
 	zero := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)}
 	swept := make([]motionSweptBox, len(r.movers))
 	for i := range r.movers {
 		mv := &r.movers[i]
-		if r.spec.kind != motionbound.MotionPrismatic {
-			mv.rho = motionbound.MoverAxisRadius(mv.body.bounds, r.spec.frame)
+		if r.spec.Kind != motionbound.MotionPrismatic {
+			mv.rho = motionbound.MoverAxisRadius(mv.body.bounds, r.spec.Frame)
 		}
 		// The swept box covers every pose from where the path's box was read:
 		// for a Revolute or a Prismatic that is the mover at rest — the
@@ -503,10 +354,10 @@ func (r *motionRun) setup(moving []*Body) {
 		// never merely across [From, To]; for a Between it is the From-placed
 		// box at s = 0, From itself, so the travel is the whole path's.
 		travel := maxRat(
-			motionbound.MoverTravel(r.spec.frame, mv.rho, zero, r.spec.fromP),
-			motionbound.MoverTravel(r.spec.frame, mv.rho, zero, r.spec.toP),
+			motionbound.MoverTravel(r.spec.Frame, mv.rho, zero, r.spec.FromP),
+			motionbound.MoverTravel(r.spec.Frame, mv.rho, zero, r.spec.ToP),
 		)
-		lo, hi, ok := motionbound.MoverSweptBox(mv.body.bounds, r.spec.frame, travel)
+		lo, hi, ok := motionbound.MoverSweptBox(mv.body.bounds, r.spec.Frame, travel)
 		swept[i] = motionSweptBox{lo: lo, hi: hi, ok: ok}
 	}
 	r.formPairs(swept)
@@ -628,17 +479,17 @@ type motionPointsKey struct {
 
 func (m *singleMotion) posesAt(f *big.Rat, at units.Value, param motionbound.MotionParam) ([]motionGroupPose, error) {
 	r := m.r
-	pose, err := r.spec.motion.PoseAt(at)
+	pose, err := r.spec.Motion.PoseAt(at)
 	if err != nil {
 		return nil, err
 	}
-	ideals := []motionbound.IdealPose{r.spec.frame.At(param)}
+	ideals := []motionbound.IdealPose{r.spec.Frame.At(param)}
 	stretch := r.stretch
-	if r.spec.kind == motionbound.MotionBetween && f.Cmp(big.NewRat(1, 1)) == 0 {
+	if r.spec.Kind == motionbound.MotionBetween && f.Cmp(big.NewRat(1, 1)) == 0 {
 		// PoseAt(1) returns the stated To, which the exact screw of the read
 		// parameters rebuilds only to rounding: the pose is charged against
 		// both the ideal end and To itself (§5.1, η_1 = max(η_ideal, η_To)).
-		ideals = append(ideals, r.spec.frame.StatedEnd())
+		ideals = append(ideals, r.spec.Frame.StatedEnd())
 		stretch = r.stretchEnd
 	}
 	return []motionGroupPose{{pose: pose, ideals: ideals, stretch: stretch}}, nil
@@ -647,7 +498,7 @@ func (m *singleMotion) posesAt(f *big.Rat, at units.Value, param motionbound.Mot
 // travel is τ of docs/motion-check-design.md §5.2 for mover i: every pair of
 // one group's mover has a static partner, which does not move.
 func (m *singleMotion) travel(i, _ int, a, b motionbound.MotionParam) *big.Rat {
-	return motionbound.MoverTravel(m.r.spec.frame, m.r.movers[i].rho, a, b)
+	return motionbound.MoverTravel(m.r.spec.Frame, m.r.movers[i].rho, a, b)
 }
 
 // projection is the projection bound of docs/linkage-check-design.md §5.8
@@ -683,7 +534,7 @@ func (m *singleMotion) projection(i, k int, a, b *motionPose) *big.Rat {
 				continue
 			}
 			rem := m.remainder(i, span)
-			if rem == nil && r.spec.frame.Kind != motionbound.MotionPrismatic {
+			if rem == nil && r.spec.Frame.Kind != motionbound.MotionPrismatic {
 				continue
 			}
 			side := projectionSide{corners: mine, h: []*big.Rat{span}, seg: stepsFrom([]proofbound.RatInterval{step}, n == 1), rem: rem}
@@ -717,7 +568,7 @@ func motionStep(a, b motionbound.MotionParam) (proofbound.RatInterval, bool) {
 // Between, and nothing for a Prismatic, which moves every point along a
 // straight line. nil when ρ_max is not finite, or for a Prismatic.
 func (m *singleMotion) remainder(i int, h *big.Rat) *big.Rat {
-	f := m.r.spec.frame
+	f := m.r.spec.Frame
 	if f.Kind == motionbound.MotionPrismatic {
 		return nil
 	}
@@ -748,7 +599,7 @@ func (m *singleMotion) moverPoints(pose *motionPose, i int, hull bool) (cornerBo
 	if !ok {
 		return cornerBounds{}, false
 	}
-	f := m.r.spec.frame
+	f := m.r.spec.Frame
 	ideal := f.At(pose.param)
 	var unit motionbound.IvVec
 	for d := range 3 {
@@ -832,7 +683,7 @@ func (r *motionRun) refine() ([]*motionPose, []motionSpan, error) {
 	for _, end := range []struct {
 		f  *big.Rat
 		at units.Value
-	}{{new(big.Rat), r.dom.from}, {big.NewRat(1, 1), r.dom.to}} {
+	}{{new(big.Rat), r.dom.From}, {big.NewRat(1, 1), r.dom.To}} {
 		pose, err := r.evaluatePose(end.f, end.at)
 		if err != nil {
 			return nil, nil, err
@@ -847,7 +698,7 @@ func (r *motionRun) refine() ([]*motionPose, []motionSpan, error) {
 		}
 		f := new(big.Rat).Add(poses[k].f, poses[k+1].f)
 		f.Quo(f, big.NewRat(2, 1))
-		mid, err := r.evaluatePose(f, r.dom.label(f))
+		mid, err := r.evaluatePose(f, r.dom.Label(f))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -947,7 +798,7 @@ func (r *motionRun) evaluatePose(f *big.Rat, at units.Value) (*motionPose, error
 	if err := r.ctx.Err(); err != nil {
 		return nil, err
 	}
-	param := r.dom.fromP.Lerp(r.dom.toP, f)
+	param := r.dom.FromP.Lerp(r.dom.ToP, f)
 	groups, err := r.drive.posesAt(f, at, param)
 	if err != nil {
 		var ub errPoseUnbuildable
@@ -1604,7 +1455,7 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 	c := r.conclude(poses, spans)
 	report := &MotionReport{
 		Request:     c.Request,
-		Motion:      r.spec.motion,
+		Motion:      r.spec.Motion,
 		Against:     c.Against,
 		Intervals:   c.Intervals,
 		Collisions:  []Collision{},

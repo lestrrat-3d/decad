@@ -80,7 +80,7 @@ func (l *Linkage) Configuration(values []units.Value) (JointConfiguration, error
 	spec := l.restSpec()
 	for k, v := range values {
 		jt := spec.joints[k]
-		if err := motionValueValid(v, jt.kind, "a joint value"); err != nil {
+		if err := motionbound.MotionValueValid(v, jt.kind, "a joint value"); err != nil {
 			return JointConfiguration{}, err
 		}
 		if _, ok := motionbound.ExactMotionParam(v); !ok {
@@ -273,7 +273,7 @@ func (l *Linkage) resolveBox(box JointBox) (*linkageSpec, []int, error) {
 				return nil, nil, fmt.Errorf(`%w: a joint range's ends must be a %s, got %s`, ErrUnitKind, jt.kind, v.Kind())
 			}
 		}
-		if err := motionFinite(rg.Min, rg.Max); err != nil {
+		if err := motionbound.MotionFinite(rg.Min, rg.Max); err != nil {
 			return nil, nil, err
 		}
 		pMin, okMin := motionbound.ExactMotionParam(rg.Min)
@@ -343,7 +343,7 @@ func resolveJointBoxOptions(opts []JointBoxOption) (motionConfig, int, error) {
 		}
 		motion = append(motion, mo)
 	}
-	cfg, err := resolveMotionOptions(motion, motionSpec{motionDomain: fractionDomain()})
+	cfg, err := motionoption.Resolve(motion, motionbound.FractionDomain())
 	if err != nil {
 		return motionConfig{}, 0, err
 	}
