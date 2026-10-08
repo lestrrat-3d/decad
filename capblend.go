@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 
@@ -595,7 +596,69 @@ func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismP
 	if err := requireCapBlendLevelsSeparate(cbp); err != nil {
 		return nil, err
 	}
+	if err := requireCapBlendCornerLoci(budget, cbp); err != nil {
+		return nil, err
+	}
 	return evalCapBlendContext(ctx, doc, ref, cbp)
+}
+
+// requireCapBlendCornerLoci is SX14's corner-locus half
+// (docs/modify-reach-design.md §4 stage 6). At a miter corner where a circular
+// wall meets its neighbour, the cap-level foot rides a conic locus as the
+// offset grows, and the band's slant ruling and its circular patch's
+// chord-locus term both read a proven bound on that locus
+// (capband.MiterLocusUpper, capband.MiterLocusSliverFlux). Two corners leave
+// those bounds unbuildable, because the offset carriers' discriminant there is
+// zero or its enclosure reaches zero:
+//
+//   - a tangent cusp, where a line touches the circle but the walls run in
+//     opposite directions, so the corner rule does not read it as G1. The
+//     carriers meet in a double root at the corner itself and the foot leaves
+//     it at unbounded speed (capcontour.LineCircleLocusSpeedUpper's momentary
+//     fold);
+//   - a corner that turns past the G1 dead zone, yet so slightly that the
+//     carriers meet in a near-double root. The arc's own radius is enclosed
+//     only to its RadiusBound, and that width exceeds the discriminant, so
+//     whether the denoted carriers meet at all is decided below the record's
+//     own precision.
+//
+// The check runs before the body is assembled, so the refusal names the
+// corner rather than surfacing as an unbounded measurement. A G1 join and a
+// reflex corner's connector arc read no locus and are not checked.
+func requireCapBlendCornerLoci(budget *proofbound.WorkBudget, cbp capBlendPayload) error {
+	for li, loop := range cbp.loops() {
+		if !cbp.startLoops[li] && !cbp.endLoops[li] {
+			continue
+		}
+		setback := cbp.loopSetback(li)
+		if setback.dc <= 0 {
+			continue
+		}
+		cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
+		if err != nil {
+			return err
+		}
+		joins, err := capOffsetJoins(budget, cl, setback.dc)
+		if err != nil {
+			return err
+		}
+		walks := cl.walks
+		n := len(walks)
+		for i, j := range joins {
+			prev, cur := walks[(i+n-1)%n], walks[i]
+			if j.arc || j.g1 || (!prev.IsCircular() && !cur.IsCircular()) {
+				continue
+			}
+			_, ok, err := capband.MiterLocusUpper(budget, prev, cur, j.vU, j.vV, setback.axialUpper(), setback.dc, setback.dcDelta)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf(`%w: loop %d of this cap-loop chamfer has a corner at (%v, %v) where a circular wall meets its neighbour tangentially or nearly so without running on as one smooth wall, and this evaluator cannot bound the path the corner's offset foot takes there, so no cap-level ruling at that corner can be built with a proven bound`, ErrUnsupported, li, j.vU, j.vV)
+			}
+		}
+	}
+	return nil
 }
 
 // requireCapBlendLevelsSeparate is SX13's AXIAL half (Table SX,

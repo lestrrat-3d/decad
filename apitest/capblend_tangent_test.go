@@ -145,3 +145,100 @@ func TestTangentJoinedRotatedSlotChamfer(t *testing.T) {
 		})
 	}
 }
+
+// TestCapLoopChamferRefusesNearTangentCorner pins SX14's corner-locus refusal
+// (docs/modify-reach-design.md Table SX). Each profile has one corner where a
+// circular wall meets a line tangentially or nearly so without the two
+// running on as one smooth wall, and a cap-loop chamfer there refuses with
+// ErrUnsupported naming that corner before any measurement is taken.
+//
+// The kinked profile is a counterclockwise arc about the origin from
+// (10·cos 3π/4, 10·sin 3π/4) to (0, −10), then a line to (30, −10 + 30·kink),
+// up to (30, 10·sin 3π/4) and back. At kink 2e−9 the corner at (0, −10) turns
+// past the G1 tolerance by too little to enclose where the offset walls meet.
+// At kink 1e−7 the same corner turns enough and the chamfer builds; its volume
+// lies below the prism's and its bound is finite.
+//
+// The cusp profile is the region between the circle of radius 10 about
+// (0, 10), its tangent line y = 0 and the line x = 10. The arc and the line
+// meet tangentially at (0, 0) but run in opposite directions there, so the
+// corner foot leaves the corner at unbounded speed.
+//
+// Shown to fail: without requireCapBlendCornerLoci, both refusing chamfers
+// answer ErrNotFinite ("the analytic body's volume measurement is not
+// finite"), from capPatchCornerFlux's +Inf corner flux.
+func TestCapLoopChamferRefusesNearTangentCorner(t *testing.T) {
+	t.Parallel()
+	const height = 8.0
+	extrude := func(t *testing.T, s *sketch.Sketch) *decad.Body {
+		t.Helper()
+		_, err := s.Solve(t.Context())
+		require.NoError(t, err)
+		require.Len(t, s.Profiles(), 1)
+		body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		require.NoError(t, err)
+		return body
+	}
+	newSketch := func(t *testing.T) (*sketch.Sketch, func(u, v float64) *sketch.Point) {
+		t.Helper()
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		return s, func(u, v float64) *sketch.Point {
+			p := s.CreatePoint(u, v)
+			s.Fix(p)
+			return p
+		}
+	}
+	kinked := func(t *testing.T, kink float64) *decad.Body {
+		t.Helper()
+		const r, l, th = 10.0, 30.0, 3 * math.Pi / 4
+		s, fix := newSketch(t)
+		start, corner := fix(r*math.Cos(th), r*math.Sin(th)), fix(0, -r)
+		far, top := fix(l, -r+l*kink), fix(l, r*math.Sin(th))
+		s.CreateArc(fix(0, 0), start, corner)
+		s.CreateLine(corner, far)
+		s.CreateLine(far, top)
+		s.CreateLine(top, start)
+		return extrude(t, s)
+	}
+	requireRefusal := func(t *testing.T, body *decad.Body, corner string) {
+		t.Helper()
+		_, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(0.5))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.NotErrorIs(t, err, decad.ErrNotFinite)
+		require.ErrorContains(t, err, `corner at `+corner)
+	}
+
+	t.Run("kink 2e-9", func(t *testing.T) {
+		t.Parallel()
+		requireRefusal(t, kinked(t, 2e-9), `(0, -10)`)
+	})
+	t.Run("kink 1e-7 builds", func(t *testing.T) {
+		t.Parallel()
+		body := kinked(t, 1e-7)
+		before, err := body.Volume()
+		require.NoError(t, err)
+		chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(0.5))
+		require.NoError(t, err)
+		requireManifold(t, chamfered)
+		after, err := chamfered.Volume()
+		require.NoError(t, err)
+		require.Less(t, after.Value.Mag(), before.Value.Mag())
+		require.False(t, math.IsInf(after.Bound.Base(), 0))
+	})
+	t.Run("tangent cusp", func(t *testing.T) {
+		t.Parallel()
+		const r = 10.0
+		s, fix := newSketch(t)
+		origin, foot, top := fix(0, 0), fix(r, 0), fix(r, r)
+		s.CreateLine(origin, foot)
+		s.CreateLine(foot, top)
+		s.CreateArc(fix(0, r), origin, top)
+		body := extrude(t, s)
+		volume, err := body.Volume()
+		require.NoError(t, err)
+		require.InDelta(t, (r*r-math.Pi*r*r/4)*height, volume.Value.Mag(), 1e-9, `the horn between the circle, its tangent and x = r`)
+		requireRefusal(t, body, `(0, 0)`)
+	})
+}

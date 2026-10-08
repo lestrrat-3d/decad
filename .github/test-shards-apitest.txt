@@ -393,6 +393,7 @@
 2	0.03	TestCapBlendReflexApexUndercutSurvey
 2	0.04	TestCapBlendUndercutStillDecidedOnOrdinaryBand
 2	0.01	TestCapBlendUndercutSurvey
+2	0.08	TestCapLoopChamferRefusesNearTangentCorner
 2	0.00	TestChainFedRefusalsStillRunTheSeamGates
 2	0.00	TestChainGateDiameterFullRevolveVerify
 2	0.00	TestChainGateDiameterLoftHasToleranceReference
