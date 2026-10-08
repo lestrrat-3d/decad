@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -47,7 +49,7 @@ func TestPrismGroupRegionsDisjointProof(t *testing.T) {
 func TestPrismGroupPayloadAudit(t *testing.T) {
 	doc := New()
 	_, base := internalBoxGroup(t, doc)
-	require.NoError(t, falsifyStackedPayload(t.Context(), base))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(base)))
 	cases := []struct {
 		name   string
 		change func(*stackedPrismPayload)
@@ -63,7 +65,7 @@ func TestPrismGroupPayloadAudit(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sp := cloneStackedForAudit(base)
 			tc.change(&sp)
-			require.ErrorIs(t, falsifyStackedPayload(t.Context(), sp), tc.want)
+			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)), tc.want)
 		})
 	}
 }

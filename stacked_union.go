@@ -6,10 +6,10 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -270,7 +270,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 		sp.interfaces = append(sp.interfaces, boundary)
 	}
 	sp.sectionDelta = st.sectionDelta()
-	if err := falsifyStackedPayload(ctx, sp); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedRecordOf(sp)); err != nil {
 		return nil, false, err
 	}
 	return sp, true, nil
@@ -487,7 +487,7 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper Profi
 	if same {
 		// Hole-free regions with one outer: nothing is exposed, recorded as
 		// I7's own empty derivation.
-		none, err := stackedExposed(ctx, nil)
+		none, err := stackedrecord.Exposed(ctx, nil)
 		if err != nil {
 			return prismSlabInterface{}, false, err
 		}
@@ -500,13 +500,13 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper Profi
 	st.walkInterface = max(st.walkInterface, m.sceneDelta.a, m.sceneDelta.b)
 	switch m.nest {
 	case stackedNestBInA:
-		exposed, err := stackedUnionExposed(ctx, lower, upper)
+		exposed, err := stackedrecord.UnionExposed(ctx, lower, upper)
 		if err != nil {
 			return prismSlabInterface{}, false, err
 		}
 		return prismSlabInterface{lowerExposed: exposed}, true, nil
 	case stackedNestAInB:
-		exposed, err := stackedUnionExposed(ctx, upper, lower)
+		exposed, err := stackedrecord.UnionExposed(ctx, upper, lower)
 		if err != nil {
 			return prismSlabInterface{}, false, err
 		}
@@ -515,16 +515,6 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper Profi
 	// A crossing (m.split) or any other unmatched pair: prism-boolean §4.4's
 	// unresolved topology, a silent fallback.
 	return prismSlabInterface{}, false, nil
-}
-
-// stackedUnionExposed is the union reading of stacked §2.2's I7: the wider
-// region with the narrower region's outer, reversed, as its one hole.
-func stackedUnionExposed(ctx context.Context, wider, narrower ProfileRecord) ([]ProfileRecord, error) {
-	hole, err := offset2d.ReverseLoopRecordContext(ctx, narrower.Outer)
-	if err != nil {
-		return nil, err
-	}
-	return []ProfileRecord{{Outer: wider.Outer, Holes: []LoopRecord{hole}}}, nil
 }
 
 // stackedUnionInterfaceMatch arranges two adjacent result regions, both

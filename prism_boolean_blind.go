@@ -136,11 +136,11 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 			z0: innerHeld, z1: target.z1, z0Delta: innerDelta, z1Delta: target.z1Delta}
 	}
 	lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(sp.slabs[0].regions[0], sp.slabs[1].regions[0])
-	lowerExposed, err := stackedExposed(ctx, upperOnly)
+	lowerExposed, err := stackedrecord.Exposed(ctx, upperOnly)
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
-	upperExposed, err := stackedExposed(ctx, lowerOnly)
+	upperExposed, err := stackedrecord.Exposed(ctx, lowerOnly)
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
@@ -231,17 +231,17 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 			return stackedPrismPayload{}, false, fmt.Errorf(
 				`%w: slab interface %d has exclusive holes on both sides`, ErrUnsupported, k)
 		}
-		lowerExposed, err := stackedExposed(ctx, upperOnly)
+		lowerExposed, err := stackedrecord.Exposed(ctx, upperOnly)
 		if err != nil {
 			return stackedPrismPayload{}, false, err
 		}
-		upperExposed, err := stackedExposed(ctx, lowerOnly)
+		upperExposed, err := stackedrecord.Exposed(ctx, lowerOnly)
 		if err != nil {
 			return stackedPrismPayload{}, false, err
 		}
 		result.interfaces[k] = prismSlabInterface{lowerExposed: lowerExposed, upperExposed: upperExposed}
 	}
-	if err := falsifyStackedPayload(ctx, result); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedRecordOf(result)); err != nil {
 		return stackedPrismPayload{}, false, err
 	}
 	return result, true, nil

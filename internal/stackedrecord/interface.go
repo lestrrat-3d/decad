@@ -1,11 +1,35 @@
 package stackedrecord
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
+
+// Exposed reverses each exclusive hole into one exposed patch.
+func Exposed(ctx context.Context, holes []sectionrecord.LoopRecord) ([]momentinput.Profile, error) {
+	out := make([]momentinput.Profile, 0, len(holes))
+	for _, hole := range holes {
+		reversed, err := offset2d.ReverseLoopRecordContext(ctx, hole)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, momentinput.Profile{Outer: reversed})
+	}
+	return out, nil
+}
+
+// UnionExposed records a wider region with the narrower outer as a reversed hole.
+func UnionExposed(ctx context.Context, wider, narrower momentinput.Profile) ([]momentinput.Profile, error) {
+	hole, err := offset2d.ReverseLoopRecordContext(ctx, narrower.Outer)
+	if err != nil {
+		return nil, err
+	}
+	return []momentinput.Profile{{Outer: wider.Outer, Holes: []sectionrecord.LoopRecord{hole}}}, nil
+}
 
 // ExclusiveHoles returns the recorded holes present on only one side of a
 // slab interface. Admission has already proved their nesting.

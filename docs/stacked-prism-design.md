@@ -81,7 +81,7 @@ the audit below would have to re-check without any consumer reading it.
 
 ### 2.2 Invariants
 
-`falsifyStackedPayload` checks every one of these before a body is built and
+`stackedrecord.Falsify` checks every one of these before a body is built and
 before a mesh is chorded. A record that fails one is refused — `ErrDegenerate`
 for a record no stacked body matches, `ErrUnsupported` for a shape this
 evaluator does not build — never repaired.
@@ -195,7 +195,7 @@ by column (§4).
 ## 3. Topology and roles
 
 `evalStackedContext` builds the body under the boolean's own private producer
-identity, after `falsifyStackedPayload`. It builds through the payload's own
+identity, after `stackedrecord.Falsify`. It builds through the payload's own
 naming plan; a cup builds the same record through its own plan
 (`stackedPlan`), which mints the cup's roles (modify Table B) and states each
 column's displacement:

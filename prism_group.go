@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
@@ -332,7 +334,7 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, tag
 		frame: oa.proxy.frame, xform: oa.proxy.xform,
 		sectionDelta: proofbound.AbsSumUpper(max(inputDelta, disjointWalk), cutDelta),
 	}
-	if err := falsifyStackedPayload(ctx, sp); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedRecordOf(sp)); err != nil {
 		return nil, false, err
 	}
 	return sp, true, nil

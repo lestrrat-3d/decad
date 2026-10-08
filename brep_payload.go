@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -193,7 +195,7 @@ func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, er
 	if sp.isGroup() {
 		return brepPayload{}, fmt.Errorf(`%w: a prism group of %d disjoint regions has no face view`, ErrUnsupported, len(sp.slabs[0].regions))
 	}
-	if err := falsifyStackedPayload(ctx, sp); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedRecordOf(sp)); err != nil {
 		return brepPayload{}, err
 	}
 	cavity, err := stackedEnclosesCavity(sp)

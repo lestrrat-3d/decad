@@ -6,6 +6,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
@@ -28,7 +30,7 @@ type stackedRing struct {
 }
 
 func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, chord float64, verify Verification) (*Mesh, error) {
-	if err := falsifyStackedPayload(ctx, sp); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedRecordOf(sp)); err != nil {
 		return nil, err
 	}
 	columns, bySlab, err := stackedColumns(sp)
@@ -278,20 +280,6 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		return nil, err
 	}
 	return &mesh, nil
-}
-
-func stackedHoleColumn(columns []stackedColumn, candidates []int, hole LoopRecord, slab int, starts bool) (int, error) {
-	for _, ci := range candidates {
-		col := columns[ci]
-		equal, err := loopRecordsEqual(nil, col.loop, hole)
-		if err != nil {
-			return 0, err
-		}
-		if equal && ((starts && col.start == slab) || (!starts && col.end == slab)) {
-			return ci, nil
-		}
-	}
-	return 0, fmt.Errorf(`%w: an exposed patch has no wall column`, ErrDegenerate)
 }
 
 // stackedCapFace is the cap face with the given role over one region. A
