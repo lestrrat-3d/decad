@@ -8,7 +8,6 @@ import (
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
@@ -40,7 +39,7 @@ import (
 // (p−O)·n is identically σ·Radius at every point of a cylinder wall, so the
 // K_F term reuses the face's own already-proven area/areaBound rather than
 // integrating anything fresh. Radius itself is never read bare off
-// Cylinder.Radius/Circle3.Radius — boundedCircleRadius derives it, and its
+// Cylinder.Radius/Circle3.Radius — stitchflux.CircleRadius derives it, and its
 // own doc comment states why: neither type carries a bound field, and this
 // evaluator's own revolve build can hand back a Radius that is a rounded,
 // axis-dependent re-expression of a recorded point, not always the exact
@@ -145,7 +144,7 @@ import (
 // stitched solid.
 //
 // The radius itself carries a second, independent source of bound
-// (boundedCircleRadius's own doc comment): a revolve about an axis that is
+// (stitchflux.CircleRadius's own doc comment): a revolve about an axis that is
 // not coordinate-aligned through the origin hands back a Radius that is
 // itself a rounded re-expression of a recorded point, and every use of it
 // here goes through proofbound.BoundedMul against that proven bound rather than
@@ -162,9 +161,9 @@ import (
 // ever deleted.
 //
 // The Sphere arm's own radius carries a DIFFERENT source of bound, because
-// it has no rim edge to read boundedCircleRadius's own circumference from
+// it has no rim edge to read stitchflux.CircleRadius's own circumference from
 // at all (this arm's own scope restriction admits only a zero-loop face):
-// boundedSphereRadius inverts the face's own already-proven area/areaBound
+// stitchflux.SphereRadius inverts the face's own already-proven area/areaBound
 // instead (its own doc comment). The public T50 fixture's own area bound is
 // the same tiny, ulp-scale magnitude every other term here carries, so
 // TestStitchSphereFluxReusesAreaBound (stitch_internal_test.go) pins the
@@ -338,10 +337,6 @@ func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
 	return nil
 }
 
-func boundedCircleRadius(e *Edge) (proofbound.BoundedScalar, error) {
-	return stitchflux.CircleRadius(e.length, e.lengthBound, e.lengthUnbounded)
-}
-
 // stitchFaceFluxAndMoment dispatches on the face's own tagged surface,
 // returning its flux_F (this face's own contribution to 3·Volume, before
 // the sum is divided by three) and its three first-moment contributions
@@ -364,15 +359,16 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz proofboun
 	}
 	switch s := f.surface.(type) {
 	case Plane:
-		return planeFaceFluxAndMoment(f, s, anchor, sign)
+		return stitchflux.PlaneFaceFluxAndMoment(stitchFluxFaceInput(f), s.Frame, anchor, sign)
 	case Cylinder:
-		return cylinderFaceFluxAndMoment(f, s, anchor, sign)
+		return stitchflux.CylinderFaceFluxAndMoment(stitchFluxFaceInput(f), s.Origin, s.Axis, anchor, sign)
 	case Cone:
 		return coneFaceFluxAndMoment(f, s, anchor, sign)
 	case Sphere:
-		return sphereFaceFluxAndMoment(f, s, anchor, sign)
+		return stitchflux.SphereFaceFluxAndMoment(stitchFluxFaceInput(f), s.Center, anchor, sign)
 	case Torus:
-		return torusFaceFluxAndMoment(f, s, anchor, sign)
+		input := stitchflux.TorusInput{Center: s.Center, Axis: s.Axis, Major: s.Major, Minor: s.Minor}
+		return stitchflux.TorusFaceFluxAndMoment(stitchFluxFaceInput(f), input, anchor, sign)
 	default:
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch closes a boundary holding a %T face this evaluator has no closed-form flux integral for (docs/surface-design.md Table R row R8)`,
@@ -413,14 +409,6 @@ func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
 	}, true, ""
 }
 
-func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
-	return stitchflux.PlaneFaceFluxAndMoment(stitchFluxFaceInput(f), pl.Frame, anchor, sign)
-}
-
-func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
-	return stitchflux.CylinderFaceFluxAndMoment(stitchFluxFaceInput(f), cyl.Origin, cyl.Axis, anchor, sign)
-}
-
 func coneApex(c Cone) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
 	return stitchflux.ConeApex(c.HalfAngle, c.Radius, c.Origin)
 }
@@ -459,7 +447,7 @@ func coneApexDeparture(f *Face, cone Cone) (float64, bool) {
 	var end [2][2]*big.Rat
 	for i := range end {
 		for k := range end[i] {
-			x, ok := ratPoint(r.Ends[0][i][k])
+			x, ok := stitchflux.RatPoint(r.Ends[0][i][k])
 			if !ok {
 				return 0, false
 			}
@@ -474,27 +462,14 @@ func coneApexDeparture(f *Face, cone Cone) (float64, bool) {
 	za := new(big.Rat).Sub(end[0][0], new(big.Rat).Quo(new(big.Rat).Mul(end[0][1], dz), drho))
 	worst := 0.0
 	for k, held := range [...]float64{cone.Origin.X, cone.Origin.Y, cone.Origin.Z} {
-		o, okO := ratPoint(r.Origin[k])
-		w, okW := ratPoint(r.Basis[2][k])
+		o, okO := stitchflux.RatPoint(r.Origin[k])
+		w, okW := stitchflux.RatPoint(r.Basis[2][k])
 		if !okO || !okW {
 			return 0, false
 		}
 		worst = math.Max(worst, proofarith.RationalFloatError(new(big.Rat).Add(o, new(big.Rat).Mul(w, za)), held))
 	}
 	return worst, !proofbound.IsNonFinite(worst)
-}
-
-func boundedSphereRadius(f *Face) (proofbound.BoundedScalar, error) {
-	return stitchflux.SphereRadius(f.area, f.areaBound)
-}
-
-func sphereFaceFluxAndMoment(f *Face, sph Sphere, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
-	return stitchflux.SphereFaceFluxAndMoment(stitchFluxFaceInput(f), sph.Center, anchor, sign)
-}
-
-func torusFaceFluxAndMoment(f *Face, t Torus, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
-	input := stitchflux.TorusInput{Center: t.Center, Axis: t.Axis, Major: t.Major, Minor: t.Minor}
-	return stitchflux.TorusFaceFluxAndMoment(stitchFluxFaceInput(f), input, anchor, sign)
 }
 
 // stitchCurvedMass sums every face's own flux and first moment
@@ -523,8 +498,6 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 		}
 	}
 
-	vol := proofbound.BoundedQuotient(fluxSum.Value, fluxSum.Bound, 3, 0)
-
 	areaUpper := 0.0
 	coordUpper := 0.0
 	for _, f := range faces {
@@ -539,14 +512,15 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 			if len(f.loops) > 0 && len(f.loops[0].coedges) > 0 {
 				// A rim vertex's own distance from anchor is what the loop
 				// above already folds in; this adds the cylinder's own
-				// radius — its PROVEN value plus bound, boundedCircleRadius's
+				// radius — its PROVEN value plus bound, stitchflux.CircleRadius's
 				// own doc comment, never Cylinder.Radius.Base() read bare —
 				// as a blanket safety margin so coordUpper never understates
 				// a wall point that sits farther from anchor than either rim
 				// vertex does, however far the tagged Radius itself sits
 				// from the true one. Both rims share one radius, so reading
 				// either suffices.
-				if rB, err := boundedCircleRadius(f.loops[0].coedges[0].edge); err == nil {
+				edge := f.loops[0].coedges[0].edge
+				if rB, err := stitchflux.CircleRadius(edge.length, edge.lengthBound, edge.lengthUnbounded); err == nil {
 					coordUpper = proofbound.AbsSumUpper(coordUpper, rB.Value, rB.Bound)
 				}
 			}
@@ -561,7 +535,8 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 				if len(l.coedges) == 0 {
 					continue
 				}
-				if rB, err := boundedCircleRadius(l.coedges[0].edge); err == nil {
+				edge := l.coedges[0].edge
+				if rB, err := stitchflux.CircleRadius(edge.length, edge.lengthBound, edge.lengthUnbounded); err == nil {
 					coordUpper = proofbound.AbsSumUpper(coordUpper, rB.Value, rB.Bound)
 				}
 			}
@@ -575,10 +550,10 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 			// rather than a zero coordinate. Every point of the sphere sits
 			// within Center's own distance from anchor plus Radius, so that
 			// sum is the margin, with Radius read through
-			// boundedSphereRadius — never Sphere.Radius bare — exactly as
+			// stitchflux.SphereRadius — never Sphere.Radius bare — exactly as
 			// the Cylinder/Cone margins above read theirs through
-			// boundedCircleRadius.
-			if rB, err := boundedSphereRadius(f); err == nil {
+			// stitchflux.CircleRadius.
+			if rB, err := stitchflux.SphereRadius(f.area, f.areaBound); err == nil {
 				coordUpper = proofbound.AbsSumUpper(coordUpper, surf.Center.Sub(anchor).Len(), rB.Value, rB.Bound)
 			}
 		case Torus:
@@ -601,41 +576,22 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 		}
 	}
 
-	if delta > 0 {
-		// The placement allowance is charged once here, on momX/momY/momZ and
-		// vol directly, and every downstream reading (the proofbound.BoundedQuotient
-		// calls below) composes it through the ordinary quotient-bound
-		// formula rather than through a second, separately-derived term —
-		// charging it twice would only widen an already-sound bound, but it
-		// would also hide a real regression: a shown-to-fail test that
-		// deletes this leg must see the SAME published bound go slack, not a
-		// smaller one still covered by a leftover duplicate charge.
-		epsV := proofbound.SweptVolumeAllow(delta, areaUpper)
-		epsM := proofbound.SweptMomentAllow(delta, areaUpper, coordUpper+delta)
-		vol.Bound = proofbound.AbsSumUpper(vol.Bound, epsV)
-		momX.Bound = proofbound.AbsSumUpper(momX.Bound, epsM)
-		momY.Bound = proofbound.AbsSumUpper(momY.Bound, epsM)
-		momZ.Bound = proofbound.AbsSumUpper(momZ.Bound, epsM)
+	vol, centre, state := stitchflux.MassFromFlux(fluxSum,
+		[3]proofbound.BoundedScalar{momX, momY, momZ}, areaUpper, coordUpper, delta)
+	if state == stitchflux.MassZeroVolume {
+		return Measurement{}, VecMeasurement{}, fmt.Errorf(`%w: a stitched curved solid with zero net volume has no centroid`, ErrDegenerate)
 	}
-
+	if state == stitchflux.MassUnboundedCentroid {
+		return Measurement{}, VecMeasurement{}, fmt.Errorf(`%w: the placement's proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, ErrUnsupported)
+	}
 	volMeasurement := Measurement{
 		Value:     units.CubicMillimeters(vol.Value),
 		Exactness: exactnessOf(vol.Bound),
 		Bound:     units.CubicMillimeters(vol.Bound),
 	}
-	if vol.Value == 0 {
-		return Measurement{}, VecMeasurement{}, fmt.Errorf(`%w: a stitched curved solid with zero net volume has no centroid`, ErrDegenerate)
-	}
+	fx, fy, fz := anchor.X+centre[0].Value, anchor.Y+centre[1].Value, anchor.Z+centre[2].Value
 
-	cx := proofbound.BoundedQuotient(momX.Value, momX.Bound, vol.Value, vol.Bound)
-	cy := proofbound.BoundedQuotient(momY.Value, momY.Bound, vol.Value, vol.Bound)
-	cz := proofbound.BoundedQuotient(momZ.Value, momZ.Bound, vol.Value, vol.Bound)
-	if proofbound.IsNonFinite(cx.Bound) || proofbound.IsNonFinite(cy.Bound) || proofbound.IsNonFinite(cz.Bound) {
-		return Measurement{}, VecMeasurement{}, fmt.Errorf(`%w: the placement's proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, ErrUnsupported)
-	}
-	fx, fy, fz := anchor.X+cx.Value, anchor.Y+cy.Value, anchor.Z+cz.Value
-
-	bound := proofbound.Radius3D(math.Max(cx.Bound, math.Max(cy.Bound, cz.Bound)))
+	bound := proofbound.Radius3D(math.Max(centre[0].Bound, math.Max(centre[1].Bound, centre[2].Bound)))
 	centroidMeasurement := VecMeasurement{
 		Value:     r3.NewVec(fx, fy, fz),
 		Exactness: exactnessOf(bound),
@@ -684,18 +640,6 @@ func stitchFluxTagsDenoted(faces []*Face) bool {
 	return true
 }
 
-// exactRevolve is a surfacenormal.Revolved whose every leaf is a point, read
-// as exact rationals: the axis origin o, the basis (e0, e1, w), each straight
-// segment's two meridian ends (z, ρ), and a circular wall's centre (z, ρ)
-// and, where the walk states it exactly, its radius (nil otherwise).
-type exactRevolve struct {
-	o, e0, e1, w [3]*big.Rat
-	ends         [][2][2]*big.Rat
-	circular     bool
-	centre       [2]*big.Rat
-	radius       *big.Rat
-}
-
 // revolveTagIsDenoted decides exactly whether f's tag is the surface f's
 // record denotes, in the terms the flux arm for that tag reads. It requires
 // every leaf of the denotation the arm reads to be a point and its basis
@@ -722,50 +666,50 @@ func revolveTagIsDenoted(f *Face) bool {
 	if !r.Valid || r.Cap {
 		return false
 	}
-	ex, ok := exactRevolveOf(*r)
+	ex, ok := stitchflux.ExactRevolveOf(*r)
 	if !ok {
 		return false
 	}
 	switch s := f.surface.(type) {
 	case Cylinder:
-		radius, ok := ratMillimetres(s.Radius)
-		if !ok || ex.circular || len(ex.ends) == 0 {
+		radius, ok := stitchflux.RatMillimetres(s.Radius)
+		if !ok || ex.Circular || len(ex.Ends) == 0 {
 			return false
 		}
-		for _, seg := range ex.ends {
+		for _, seg := range ex.Ends {
 			for _, end := range seg {
 				if end[1].Cmp(radius) != 0 {
 					return false
 				}
 			}
 		}
-		return ex.onAxis(s.Origin) && ex.alongAxis(s.Axis) && ex.rimsAtEnds(f)
+		return ex.OnAxis(s.Origin) && ex.AlongAxis(s.Axis) && revolveRimsAtEnds(ex, f)
 	case Plane:
-		if ex.circular || len(ex.ends) == 0 {
+		if ex.Circular || len(ex.Ends) == 0 {
 			return false
 		}
-		z := ex.ends[0][0][0]
-		for _, seg := range ex.ends {
+		z := ex.Ends[0][0][0]
+		for _, seg := range ex.Ends {
 			for _, end := range seg {
 				if end[0].Cmp(z) != 0 {
 					return false
 				}
 			}
 		}
-		u, okU := ratVecOf(s.Frame.U())
-		v, okV := ratVecOf(s.Frame.V())
-		origin, okO := ratVecOf(s.Frame.Origin())
-		if !okU || !okV || !okO || ratDot(u, ex.w).Sign() != 0 || ratDot(v, ex.w).Sign() != 0 {
+		u, okU := stitchflux.RatVecOf(s.Frame.U())
+		v, okV := stitchflux.RatVecOf(s.Frame.V())
+		origin, okO := stitchflux.RatVecOf(s.Frame.Origin())
+		if !okU || !okV || !okO || ratDot(u, ex.W).Sign() != 0 || ratDot(v, ex.W).Sign() != 0 {
 			return false
 		}
-		return ratDot(ratSub3(origin, ex.o), ex.w).Cmp(z) == 0 && ex.rimsAtEnds(f)
+		return ratDot(ratSub3(origin, ex.O), ex.W).Cmp(z) == 0 && revolveRimsAtEnds(ex, f)
 	case Cone:
-		radius, ok := ratMillimetres(s.Radius)
-		if !ok || radius.Sign() != 0 || ex.circular || len(ex.ends) == 0 {
+		radius, ok := stitchflux.RatMillimetres(s.Radius)
+		if !ok || radius.Sign() != 0 || ex.Circular || len(ex.Ends) == 0 {
 			return false
 		}
 		var apex *big.Rat
-		for _, seg := range ex.ends {
+		for _, seg := range ex.Ends {
 			z0, rho0, z1, rho1 := seg[0][0], seg[0][1], seg[1][0], seg[1][1]
 			drho := new(big.Rat).Sub(rho1, rho0)
 			if drho.Sign() == 0 {
@@ -780,164 +724,30 @@ func revolveTagIsDenoted(f *Face) bool {
 		}
 		// Origin is the float apex of the walk; coneApexDeparture charges how
 		// far it sits from this one.
-		return ex.alongAxis(s.Axis) && ex.rimsAtEnds(f)
+		return ex.AlongAxis(s.Axis) && revolveRimsAtEnds(ex, f)
 	case Sphere:
-		return ex.circular && ex.centre[1].Sign() == 0 && ex.atAxis(s.Center, ex.centre[0])
+		return ex.Circular && ex.Centre[1].Sign() == 0 && ex.AtAxis(s.Center, ex.Centre[0])
 	case Torus:
-		major, okMajor := ratMillimetres(s.Major)
-		minor, okMinor := ratMillimetres(s.Minor)
-		return okMajor && okMinor && ex.circular && ex.radius != nil &&
-			ex.centre[1].Cmp(major) == 0 && ex.radius.Cmp(minor) == 0 &&
-			ex.atAxis(s.Center, ex.centre[0]) && ex.alongAxis(s.Axis)
+		major, okMajor := stitchflux.RatMillimetres(s.Major)
+		minor, okMinor := stitchflux.RatMillimetres(s.Minor)
+		return okMajor && okMinor && ex.Circular && ex.Radius != nil &&
+			ex.Centre[1].Cmp(major) == 0 && ex.Radius.Cmp(minor) == 0 &&
+			ex.AtAxis(s.Center, ex.Centre[0]) && ex.AlongAxis(s.Axis)
 	default:
 		return false
 	}
 }
 
-// exactRevolveOf reads r's leaves as exact rationals, or reports false where
-// any of them is not a point or the basis is not exactly orthonormal.
-func exactRevolveOf(r surfacenormal.Revolved) (exactRevolve, bool) {
-	var ex exactRevolve
-	vecs := [...]*[3]*big.Rat{&ex.o, &ex.e0, &ex.e1, &ex.w}
-	for i, iv := range [...]proofbound.IvVec3{r.Origin, r.Basis[0], r.Basis[1], r.Basis[2]} {
-		for k := range 3 {
-			x, ok := ratPoint(iv[k])
-			if !ok {
-				return exactRevolve{}, false
-			}
-			vecs[i][k] = x
-		}
-	}
-	basis := [3][3]*big.Rat{ex.e0, ex.e1, ex.w}
-	for i := range basis {
-		for j := range basis {
-			want := int64(0)
-			if i == j {
-				want = 1
-			}
-			if ratDot(basis[i], basis[j]).Cmp(big.NewRat(want, 1)) != 0 {
-				return exactRevolve{}, false
-			}
-		}
-	}
-	ex.circular = r.Circular
-	if r.Circular {
-		zc, okZ := ratPoint(r.Centre[0])
-		rc, okR := ratPoint(r.Centre[1])
-		if !okZ || !okR {
-			return exactRevolve{}, false
-		}
-		ex.centre = [2]*big.Rat{zc, rc}
-		// Only the Torus arm reads the radius; a Sphere's comes from its
-		// area, so a radius the walk holds to a bracket leaves it nil.
-		if radius, ok := ratPoint(r.Radius); ok {
-			ex.radius = radius
-		}
-		return ex, true
-	}
-	for _, seg := range r.Ends {
-		var out [2][2]*big.Rat
-		for i := range seg {
-			for k := range 2 {
-				x, ok := ratPoint(seg[i][k])
-				if !ok {
-					return exactRevolve{}, false
-				}
-				out[i][k] = x
-			}
-		}
-		ex.ends = append(ex.ends, out)
-	}
-	return ex, true
-}
-
-// axisPoint is o + w·z.
-func (ex exactRevolve) axisPoint(z *big.Rat) [3]*big.Rat {
-	var out [3]*big.Rat
-	for k := range 3 {
-		out[k] = new(big.Rat).Add(ex.o[k], new(big.Rat).Mul(ex.w[k], z))
-	}
-	return out
-}
-
-// atAxis reports whether p is exactly the axis point at z.
-func (ex exactRevolve) atAxis(p r3.Vec, z *big.Rat) bool {
-	q, ok := ratVecOf(p)
-	return ok && ratVecEqual(q, ex.axisPoint(z))
-}
-
-// onAxis reports whether p lies exactly on the axis line: (p − o) × w is
-// zero.
-func (ex exactRevolve) onAxis(p r3.Vec) bool {
-	q, ok := ratVecOf(p)
-	if !ok {
-		return false
-	}
-	return ratZero(ratCross3(ratSub3(q, ex.o), ex.w))
-}
-
-// alongAxis reports whether a is exactly w or −w.
-func (ex exactRevolve) alongAxis(a r3.Vec) bool {
-	q, ok := ratVecOf(a)
-	if !ok {
-		return false
-	}
-	neg := [3]*big.Rat{new(big.Rat).Neg(ex.w[0]), new(big.Rat).Neg(ex.w[1]), new(big.Rat).Neg(ex.w[2])}
-	return ratVecEqual(q, ex.w) || ratVecEqual(q, neg)
-}
-
-// rimsAtEnds reports whether every Circle3 edge of f sits exactly at one of
-// its recorded ends: centre o + w·z, radius ρ. Those rims are what the
-// Plane, Cylinder and Cone arms read their centres and lengths from.
-func (ex exactRevolve) rimsAtEnds(f *Face) bool {
+// revolveRimsAtEnds checks every circular edge against its recorded meridian
+// end. The Face adapter supplies the rim radius and centre to the exact proof.
+func revolveRimsAtEnds(ex stitchflux.ExactRevolve, f *Face) bool {
 	for _, l := range f.loops {
 		for _, ce := range l.coedges {
 			c, ok := ce.edge.curve.(Circle3)
-			if !ok {
-				continue
-			}
-			radius, okR := ratMillimetres(c.Radius)
-			centre, okC := ratVecOf(c.Center)
-			if !okR || !okC {
-				return false
-			}
-			found := false
-			for _, seg := range ex.ends {
-				for _, end := range seg {
-					if end[1].Cmp(radius) == 0 && ratVecEqual(centre, ex.axisPoint(end[0])) {
-						found = true
-					}
-				}
-			}
-			if !found {
+			if ok && !ex.RimAtEnd(c.Radius, c.Center) {
 				return false
 			}
 		}
 	}
 	return true
-}
-
-func ratPoint(iv proofbound.RatInterval) (*big.Rat, bool) {
-	if iv.Lo == nil || iv.Hi == nil || iv.Lo.Cmp(iv.Hi) != 0 {
-		return nil, false
-	}
-	return iv.Lo, true
-}
-
-func ratMillimetres(v units.Value) (*big.Rat, bool) {
-	mm, err := v.In(units.Millimeter)
-	if err != nil {
-		return nil, false
-	}
-	r := proofarith.FloatRat(mm)
-	return r, r != nil
-}
-
-func ratVecOf(v r3.Vec) ([3]*big.Rat, bool) {
-	out := [3]*big.Rat{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
-	return out, out[0] != nil && out[1] != nil && out[2] != nil
-}
-
-func ratVecEqual(a, b [3]*big.Rat) bool {
-	return a[0].Cmp(b[0]) == 0 && a[1].Cmp(b[1]) == 0 && a[2].Cmp(b[2]) == 0
 }

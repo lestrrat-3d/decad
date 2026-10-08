@@ -113,7 +113,7 @@ the rules leave to the byte budget.
 | `denotation.go` | Mints document tokens. |
 | `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |
 | `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |
-| `stitch_flux.go` | Stitch curved-face mass adapter. See surface §6.4. |
+| `stitch_flux.go` | Stitch face flux, mass and tag adapters. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split and placement. See surface §6.5. |
 | `extrude.go` | `Document.Extrude`, `WithTaper`, and linear-extent resolution into a `linearSweep`. See evaluator §5. |
 | `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, and span payloads. See `docs/sweep-design.md` and `docs/surface-design.md` §4. |
@@ -338,7 +338,7 @@ the rules leave to the byte budget.
 | `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
 | `internal/clearance/spine/` | Point, line and circle spine cell pairs. See clearance §4. |
-| `internal/stitchflux/` | Stitch bounded scalars and flux. See surface §6.4. |
+| `internal/stitchflux/` | Stitch exact revolve, face flux and mass proofs. See surface §6.4. |
 | `internal/stitchweld/` | Stitch welds, topology and bounds. See surface §6.2–6.4. |
 | `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
