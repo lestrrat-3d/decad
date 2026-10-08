@@ -1628,23 +1628,18 @@ func dHoleBody(t *testing.T, cx, cy, r, phi0Deg, phi1Deg float64, minor bool) *d
 	return body
 }
 
-// TestCapBlendDHoleLoopBoundStaysTight is the fix's own hole-loop floor:
-// TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight above pins the
-// tight-bound property for an outer-loop tangent fillet and a whole-turn
-// circle, but neither is a HOLE loop and neither has a genuinely
-// non-tangential miter corner, so neither could have caught PR-122's own
-// defect (a D-hole whose wall is the MAJOR arc: capband.WallSweep's raw Atan2
-// puts the offset foot's angle a full 2*pi from the wall's own recorded
-// th0, so chordLocusResidualAllow's windowSkewMax read close to 2*pi
-// instead of the corner's own small miter skew, and the published bound
-// inflated by orders of magnitude on a patch whose true residual is
-// negligible). The major-arc case below is that exact repro, audited at a
-// pre-fix bound of 22972.28860508683 mm^3 (windowSkewMax == 2*pi, up to
-// float rounding) against a post-fix bound of 7157.192745203181 mm^3; the
-// minor-arc case is the same hole family with the wall on the SHORT arc
-// instead, which never crosses branches and never needed the fix, given a
-// floor of its own so a future change to either patch cannot silently
-// regress it unnoticed.
+// TestCapBlendDHoleLoopBoundStaysTight pins the volume bound of a chamfered
+// D-hole, a HOLE loop whose straight wall meets its circular wall at a
+// non-tangential miter, which neither case of
+// TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight has. In the
+// major-arc case capband.WallSweep reads the offset foot's angle from a raw
+// Atan2, a full 2*pi from the wall's own recorded th0, so the cap window sits
+// on another branch than the side window until capband.WindowOnBranch moves
+// it back before the chord-versus-locus term reads it. A reading that took
+// that 2*pi as the corner's skew was audited at 22972.28860508683 mm^3, and
+// the ceiling of 10000 mm^3 sits below it. The minor-arc case is the same
+// hole family with the wall on the short arc, which never crosses branches,
+// and keeps a ceiling of its own.
 func TestCapBlendDHoleLoopBoundStaysTight(t *testing.T) {
 	t.Parallel()
 	t.Run(`major-arc hole (branch-crossing repro)`, func(t *testing.T) {
@@ -1654,7 +1649,7 @@ func TestCapBlendDHoleLoopBoundStaysTight(t *testing.T) {
 		vol, err := chamfered.Volume()
 		require.NoError(t, err)
 		require.Less(t, vol.Bound.Mag(), 10000.0,
-			`the major-arc D-hole bound (%v mm^3) must stay close to the post-fix reading (7157.192745203181 mm^3), not the pre-fix branch-mismatch regression (22972.28860508683 mm^3)`,
+			`the major-arc D-hole bound (%v mm^3) must stay under the ceiling, below the 2*pi-skew reading (22972.28860508683 mm^3)`,
 			vol.Bound.Mag())
 	})
 
@@ -1665,7 +1660,7 @@ func TestCapBlendDHoleLoopBoundStaysTight(t *testing.T) {
 		vol, err := chamfered.Volume()
 		require.NoError(t, err)
 		require.Less(t, vol.Bound.Mag(), 5000.0,
-			`the minor-arc D-hole bound (%v mm^3) must stay close to the audited reading (2733.0793750625394 mm^3)`,
+			`the minor-arc D-hole bound (%v mm^3) must stay under its ceiling`,
 			vol.Bound.Mag())
 	})
 }

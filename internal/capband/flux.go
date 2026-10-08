@@ -285,7 +285,8 @@ func chordLocusResidualAllow(g Patch) float64 {
 // proofbound.ChordLocusRegionAllow: the wide and narrow fluxes
 // chordLocusFluxes encloses, a swept-volume term at the larger proven corner
 // skew over an area bound for every surface on the homotopy from the wide
-// sector to the built patch, and the corner slivers' flux.
+// sector to the built patch, the shell over the two corner wedges that holds
+// the rest of the region, and the corner slivers' flux.
 //
 // Every input carries its held allowance (Patch.Held): each radius is read at
 // its held magnitude plus its allowance, each window width at its held
@@ -295,12 +296,13 @@ func chordLocusResidualAllow(g Patch) float64 {
 func chordLocusRegionAllow(g Patch) float64 {
 	skew := math.Max(g.SkewStart, g.SkewEnd)
 	if skew <= 0 {
-		return proofbound.ChordLocusRegionAllow(0, 0, 0, 0, 0, 0, 0, g.CornerFlux)
+		return proofbound.ChordLocusRegionAllow(0, 0, 0, 0, 0, 0, 0, 0, g.CornerFlux)
 	}
 	wide, narrow, _ := chordLocusFluxes(g)
 	radius, area := chordLocusHomotopyArea(g, skew)
+	shell := proofbound.ChordLocusCornerShellUpper(radius, g.SkewStart, g.SkewEnd, absDiffUpper(g.CapZ, g.SideZ))
 	return proofbound.ChordLocusRegionAllow(wide.Value, wide.Bound, narrow.Value, narrow.Bound,
-		radius, skew, area, g.CornerFlux)
+		radius, skew, area, shell, g.CornerFlux)
 }
 
 // chordLocusHomotopyArea returns chordLocusRegionAllow's radius bound and its
@@ -657,6 +659,15 @@ func ChordLocusFluxAllow(g Patch) float64 { return chordLocusResidualAllow(g) }
 func ChordLocusHomotopyArea(g Patch) float64 {
 	_, area := chordLocusHomotopyArea(g, math.Max(g.SkewStart, g.SkewEnd))
 	return area
+}
+
+// ChordLocusCornerDeficit returns how far inside the cone radius a Cone
+// patch's region term lets a crossing of its built surface or corner sliver
+// sit at a corner azimuth.
+func ChordLocusCornerDeficit(g Patch) float64 {
+	skew := math.Max(g.SkewStart, g.SkewEnd)
+	radius, _ := chordLocusHomotopyArea(g, skew)
+	return proofbound.ChordLocusCornerDeficitUpper(radius, skew)
 }
 
 // AxisAnchoredLevels translates a band's two levels so the side level sits

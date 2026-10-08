@@ -74,14 +74,35 @@ func LineCircleLocusSliverMoment(line, circle survey2d.SideWalk, lo, hi float64)
 	return moment, true
 }
 
-// LocusVelocityHull is the smallest axis-aligned box holding every velocity
-// box it has been given. The zero value holds nothing.
+// LocusVelocityHull holds, for each offset sub-range [t0, t1] of a
+// corner-foot locus in the order the sub-ranges tile [0, span], the
+// enclosures of the locus position at t0 and at t1 and the box holding every
+// velocity the locus has on the sub-range, together with the smallest
+// axis-aligned box holding every velocity box. The zero value holds nothing.
 type LocusVelocityHull struct {
+	ranges             []locusVelocityRange
 	loU, hiU, loV, hiV *big.Rat
 }
 
-// Add grows the hull to hold box.
-func (h *LocusVelocityHull) Add(box Point) {
+// locusVelocityRange is one offset sub-range [t0, t1], the locus position
+// enclosures at its two ends, and its velocity box.
+type locusVelocityRange struct {
+	t0, t1     *big.Rat
+	start, end Point
+	box        Point
+}
+
+// Add records one sub-range: start and end enclose the locus position at
+// offsets t0 and t1, and box holds every velocity the locus has between them.
+// It grows the hull to hold box. Each enclosure is first widened outward to
+// float64 ends, which keeps the exact sums SliverEnclosure forms from growing
+// their denominators range by range. A bound that does not lift is recorded
+// as a gap, which SliverEnclosure refuses.
+func (h *LocusVelocityHull) Add(t0, t1 float64, start, end, box Point) {
+	start, end, box = floatOutward(start), floatOutward(end), floatOutward(box)
+	h.ranges = append(h.ranges, locusVelocityRange{
+		t0: proofarith.FloatRat(t0), t1: proofarith.FloatRat(t1), start: start, end: end, box: box,
+	})
 	if h.loU == nil {
 		h.loU, h.hiU = new(big.Rat).Set(box.U.Lo), new(big.Rat).Set(box.U.Hi)
 		h.loV, h.hiV = new(big.Rat).Set(box.V.Lo), new(big.Rat).Set(box.V.Hi)
@@ -128,4 +149,125 @@ func (h LocusVelocityHull) SliverUpper(span float64) (float64, bool) {
 		return 0, false
 	}
 	return upper, true
+}
+
+// SliverEnclosure encloses each component of W(dc) = ∫₀^dc (P(t) − Q(t)) dt
+// for every dc in [lo, hi], from the per-range positions and velocity boxes
+// rather than their hull. The recorded sub-ranges must tile [0, hi] in order,
+// with no gap and no overlap.
+//
+// As SliverUpper derives, W(dc) = ∫₀^dc (dc/2 − τ)·P'(τ) dτ. A sub-range
+// [t0, t1] that ends at or before lo lies inside [0, dc] for every dc. With
+// mid its midpoint, its share splits as
+//
+//	(dc/2 − mid)·(P(t1) − P(t0)) + ∫ (mid − τ)·(P'(τ) − m) dτ,
+//
+// the second integral taken over the sub-range, where m is the centre of its
+// velocity box: mid − τ integrates to zero there, so subtracting m changes
+// nothing. The first term reads the two position enclosures, with the weight
+// dc/2 − mid boxed over [lo, hi]. In the second, each component of P' − m is
+// at most the box's half-width h, and |mid − τ| integrates to (t1 − t0)²/4,
+// so each component is at most (t1 − t0)²·h/4. That error is cubic in the
+// sub-range's width once the box's own width shrinks with it, so it falls
+// as the square of the number of sub-ranges.
+//
+// The sub-ranges past lo tile [L, hi], with L the end of the last one that
+// ended at or before lo, and dc may stop anywhere in them. On [L, dc],
+// dc/2 − τ = −L/2 + ((L + dc)/2 − τ), so the remainder is
+// −(L/2)·(P(dc) − P(L)) plus ∫ ((L + dc)/2 − τ)·(P'(τ) − m') dτ, with m' the
+// centre of the hull of those sub-ranges' velocity boxes. P(dc) − P(L) is
+// (dc − L) times an average velocity, which lies in that hull, and dc − L
+// lies in [0, hi − L]; the integral is at most (hi − L)²/4 times the hull's
+// half-width per component. With lo = hi no sub-range is past lo and the
+// remainder is empty.
+//
+// Everything is exact rational interval arithmetic. ok is false for an empty
+// hull, a bound that does not lift, sub-ranges that do not tile [0, hi], or
+// 0 < lo <= hi failing.
+func (h LocusVelocityHull) SliverEnclosure(lo, hi float64) (Point, bool) {
+	rlo, rhi := proofarith.FloatRat(lo), proofarith.FloatRat(hi)
+	if len(h.ranges) == 0 || rlo == nil || rhi == nil || rlo.Sign() <= 0 || rlo.Cmp(rhi) > 0 {
+		return Point{}, false
+	}
+	at := new(big.Rat)
+	for _, r := range h.ranges {
+		if r.t0 == nil || r.t1 == nil || r.t0.Cmp(at) != 0 || r.t1.Cmp(r.t0) < 0 {
+			return Point{}, false
+		}
+		at = r.t1
+	}
+	if at.Cmp(rhi) != 0 {
+		return Point{}, false
+	}
+	half, quarter := big.NewRat(1, 2), big.NewRat(1, 4)
+	cLo, cHi := new(big.Rat).Mul(rlo, half), new(big.Rat).Mul(rhi, half)
+	zero := proofbound.PointInterval(new(big.Rat))
+	sumU, sumV := zero, zero
+	radU, radV := new(big.Rat), new(big.Rat)
+	split := new(big.Rat)
+	var past []Point
+	for _, r := range h.ranges {
+		if r.t1.Cmp(rlo) > 0 {
+			past = append(past, r.box)
+			continue
+		}
+		split = r.t1
+		mid := new(big.Rat).Mul(new(big.Rat).Add(r.t0, r.t1), half)
+		weight := proofbound.Interval(new(big.Rat).Sub(cLo, mid), new(big.Rat).Sub(cHi, mid))
+		sumU = proofbound.IntervalAdd(sumU, proofbound.IntervalMul(weight, proofbound.IntervalSub(r.end.U, r.start.U)))
+		sumV = proofbound.IntervalAdd(sumV, proofbound.IntervalMul(weight, proofbound.IntervalSub(r.end.V, r.start.V)))
+		length := new(big.Rat).Sub(r.t1, r.t0)
+		spread := new(big.Rat).Mul(new(big.Rat).Mul(length, length), quarter)
+		radU.Add(radU, new(big.Rat).Mul(spread, intervalHalfWidth(r.box.U)))
+		radV.Add(radV, new(big.Rat).Mul(spread, intervalHalfWidth(r.box.V)))
+	}
+	if len(past) > 0 {
+		hullU, hullV := past[0].U, past[0].V
+		for _, b := range past[1:] {
+			hullU, hullV = IntervalHull(hullU, b.U), IntervalHull(hullV, b.V)
+		}
+		reach := new(big.Rat).Sub(rhi, split)
+		run := proofbound.Interval(new(big.Rat), reach)
+		lead := new(big.Rat).Neg(new(big.Rat).Mul(split, half))
+		sumU = proofbound.IntervalAdd(sumU, proofbound.IntervalScale(proofbound.IntervalMul(run, hullU), lead))
+		sumV = proofbound.IntervalAdd(sumV, proofbound.IntervalScale(proofbound.IntervalMul(run, hullV), lead))
+		spread := new(big.Rat).Mul(new(big.Rat).Mul(reach, reach), quarter)
+		radU.Add(radU, new(big.Rat).Mul(spread, intervalHalfWidth(hullU)))
+		radV.Add(radV, new(big.Rat).Mul(spread, intervalHalfWidth(hullV)))
+	}
+	return Point{U: proofbound.IntervalWiden(sumU, radU), V: proofbound.IntervalWiden(sumV, radV)}, true
+}
+
+// CircleCircleLocusFoot encloses the corner foot where two circular walls'
+// offset carriers meet at the single offset amount t: the root nearest the
+// corner (vU, vV), the same root CircleCircleLocusVelocity encloses over a
+// range. ok is false where a carrier does not lift or no root is decided.
+func CircleCircleLocusFoot(prev, cur survey2d.SideWalk, t, vU, vV float64) (Point, bool) {
+	ca, okA := carrierOverRange(prev, t, t)
+	cb, okB := carrierOverRange(cur, t, t)
+	if !okA || !okB {
+		return Point{}, false
+	}
+	cands, ok := Intersect(ca, cb)
+	if !ok {
+		return Point{}, false
+	}
+	return Nearest(cands, vU, vV)
+}
+
+func intervalHalfWidth(a proofbound.RatInterval) *big.Rat {
+	return new(big.Rat).Mul(new(big.Rat).Sub(a.Hi, a.Lo), big.NewRat(1, 2))
+}
+
+// floatOutward widens each component of p to the nearest float64 ends at or
+// beyond it. A component past the float64 range is kept exact.
+func floatOutward(p Point) Point {
+	out := func(a proofbound.RatInterval) proofbound.RatInterval {
+		lo, hi := proofbound.RatFloatDown(a.Lo), proofbound.RatFloatUp(a.Hi)
+		if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) {
+			return a
+		}
+		return proofbound.Interval(new(big.Rat).SetFloat64(lo), new(big.Rat).SetFloat64(hi))
+	}
+	return Point{U: out(p.U), V: out(p.V)}
 }

@@ -554,30 +554,46 @@ across the ruling carries with the opposite sign. Split at the corner vertex
 share is zero, because the sliver lies in its plane. Where a line meets a
 circle the locus is a parabola and `|W| = dc³·Δ1²/(6·(y0 + y1)³)` in closed
 form, with the line's distance from the centre as the moment arm. Between two
-circles, `|W|` is at most `dc²/8` times the diagonal of the hull of the locus
-velocity enclosures over the 32 offset sub-ranges: `W` is the integral of
-`(dc/2 − t)` times the velocity's distance from the hull's centre. The share is zero at a
-reflex foot, a G1 join and a whole turn, whose loci are straight, and a corner
-whose share cannot be bounded makes the volume bound unbounded. The built
-volume's own error holds none of this flux: it cancels between the two
-patches a ruling joins. It is owed because each `Cone` patch's bound is taken
-about its own axis. `ChordLocusVolumeAllow` composes the three terms into one
-proven volume bound.
+circles, `W = ∫₀^dc (dc/2 − t)·P'(t) dt` is enclosed over 128 offset
+sub-ranges: each contributes `(dc/2 − mid)` times the difference of the
+enclosed feet at its two ends, plus at most `width²/4` times its velocity
+box's half-width, and the moment crosses that enclosure with the exact arm
+`v − c`. The error falls as the square of the sub-range count, and the
+lens-shaped test corners are charged within 2% of their exact share. The
+share is zero at a reflex foot, a G1 join and a whole turn, whose loci are
+straight, and a corner whose share cannot be bounded makes the volume bound
+unbounded. The built volume's own error holds none of this flux: it cancels
+between the two patches a ruling joins. It is owed because each `Cone`
+patch's bound is taken about its own axis. `ChordLocusVolumeAllow` composes
+the three terms into one proven volume bound.
 
 That bound covers the signed volume gap, which can be smaller than the
 volume of the region between the two solids when the built patch lies
 outside the denoted surface in one place and inside it in another. The first
 moment (§8.4) needs the region's volume, so it reads `ChordLocusRegionAllow`
-instead: the same `|W − N|` and corner terms, plus the volume the straight
-homotopy from the wide sector to the built patch passes through. The cones
-from the axis point over the denoted surface lie between those over the two
-reference sectors, so the region lies in the shell between those two cones or
-on a surface of that homotopy. The homotopy moves each point by at most
-`R1·Φ`, `Φ` the larger corner skew, and its swept volume is at most that
-times an area bound for EVERY surface on it, `ChordLocusHomotopyAreaUpper`:
+instead. Its proof works along horizontal rays out from the arc's axis and
+reads no point on the axis, so the half-ulp anchoring of the reference
+fluxes' levels does not enter it. Each patch's difference of the two solids
+is closed by joining the corner-foot locus to the built ruling with a
+straight segment at each height, and on each ray the winding number of that
+closed surface is nonzero only between its nearest and farthest crossing.
+Between the two corner wedges only the cone, at `r(z)`, and the built patch
+cross the ray, and every radius between them lies on some surface of the
+straight homotopy from the wide sector to the built patch: each homotopy
+surface's level curve sweeps the azimuth monotonically and covers that range,
+so its crossing radius moves continuously from `r(z)` to the built patch's.
+The homotopy moves each point by at most `R1·Φ`, `Φ` the larger corner skew,
+and its swept volume is at most that times an area bound for EVERY surface
+on it, `ChordLocusHomotopyAreaUpper`:
 `max(R0, R1)·max(dS, dC)·(|R1 − R0| + R1·Φ + |H|)`, from the two partial
 derivatives' lengths. The built patch's own area does not bound it, since the
-wide sector at the homotopy's start spans the side window. The skew the
+wide sector at the homotopy's start spans the side window. Inside a corner
+wedge every crossing, of the cone, the built patch or the joining segments,
+lies within `(3/8)·max(R0, R1)·Φ²` inside `r(z)`
+(`ChordLocusCornerDeficitUpper`), so the region there lies in a thin shell
+over the two wedges, `ChordLocusCornerShellUpper`. The region term charges
+the swept and shell volumes, and also carries the `|W − N|` and corner
+terms, which this argument does not read. The skew the
 region term reads is the larger of the patch's two proven corner
 skews (§8.4's `CornerSkewUpper`), the exact angle between each corner's held
 side end and held cap end; the volume term reads it only to test for zero. The difference of the two held windows is not used:

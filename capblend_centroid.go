@@ -97,7 +97,6 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)
 	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
-	sideZ := sideZB.Value
 
 	signedArea, err := loopSignedAreaBudget(proofbound.NewWorkBudget(ctx), loop)
 	if err != nil {
@@ -145,17 +144,10 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 
 	if delta > 0 || locusVolume > 0 {
 		areaUpper := proofbound.AbsSumUpper(patchAreaTotal.Value, patchAreaTotal.Bound, capArea.Value, capArea.Bound)
-		coordUpper, cerr := loopCoordinateUpper(loop, work)
+		coordUpper, cerr := capBandCoordUpper(loop, capBoundary, delta, sideZB, capZB, work)
 		if cerr != nil {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, cerr
 		}
-		capCoordUpper, cerr := loopCoordinateUpper(capBoundary, work)
-		if cerr != nil {
-			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, cerr
-		}
-		coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(capCoordUpper, delta))
-		coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(sideZ), sideZB.Bound))
-		coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(capZ), capZB.Bound))
 		allow := proofbound.SweptMomentAllow(delta, areaUpper, coordUpper)
 		// Each Cone patch's chord-versus-locus volume moves the moment by at
 		// most that volume times coordUpper widened by the patch's radial gap
@@ -226,4 +218,24 @@ func capBlendCentroidGeometryBound(estimate r3.Vec, bounds Box) float64 {
 		}
 	}
 	return proofbound.AbsSumUpper(reach, bounds.Bound.Mag())
+}
+
+// capBandCoordUpper bounds every coordinate magnitude of a band's region:
+// the larger of the original loop's and the cap contour's in-plane
+// coordinates (the cap contour widened by its displacement delta) and of the
+// two levels, each widened by its own bound. Every section offset by t in
+// [0, dc] lies between the original loop and the cap contour, so a corner
+// foot's locus, a point of such a section, is covered as well.
+func capBandCoordUpper(loop, capBoundary LoopRecord, delta float64, sideZB, capZB proofbound.BoundedScalar, work *freeform.FreeformWork) (float64, error) {
+	coordUpper, err := loopCoordinateUpper(loop, work)
+	if err != nil {
+		return 0, err
+	}
+	capCoordUpper, err := loopCoordinateUpper(capBoundary, work)
+	if err != nil {
+		return 0, err
+	}
+	coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(capCoordUpper, delta))
+	coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(sideZB.Value), sideZB.Bound))
+	return math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(capZB.Value), capZB.Bound)), nil
 }
