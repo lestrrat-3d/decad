@@ -194,7 +194,7 @@ the rules leave to the byte budget.
 | `contact_clipped_patch.go` | Publishes horizontal box patches from exact polygon clips. See contact geometry §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Axis sphere-box path, including centered rotating sphere drift. See the contact designs. |
 | `contact_cylinder.go` / `contact_cylinder_sweep.go` | Source-cylinder axial and circular-sidewall contact and sweeps. See the contact designs. |
-| `contact_analytic_manifold.go` | Ruling contacts: clearance certificates and placed poses. See `docs/contact-geometry-design.md` §4.5. |
+| `contact_analytic_manifold.go` | Ruling contact adapters. See contact-geometry §4.5. |
 | `contact_sphere_oriented.go` / `contact_sphere_oriented_sweep.go` | Rotated sphere-box path. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
 | `contact_sweep_replay.go` | Affine and rotating replay adapters. See contact-sweep §6. |
@@ -268,6 +268,7 @@ the rules leave to the byte budget.
 | `internal/pair/box/` | Exact axis, oriented box and sphere-box proofs, patches, clips and bounded witnesses. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/planarsnapshot/` | Exact prism and held-mesh snapshots for planar contact. See multibody §9.1. |
+| `internal/placedruling/` | Placed cylinder support proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/surfacegeom/` | Sealed face and edge geometry variants. See `docs/api-design.md` §6.1. |

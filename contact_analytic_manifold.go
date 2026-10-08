@@ -5,7 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
-	"github.com/lestrrat-3d/decad/internal/pair/planar"
+	"github.com/lestrrat-3d/decad/internal/placedruling"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -275,6 +275,11 @@ type placedCylinder struct {
 	wall    *Face
 }
 
+func (c *placedCylinder) geometry() placedruling.Cylinder {
+	return placedruling.Cylinder{Axis: c.axis, Radius: c.radius, Gram: c.gram,
+		BoxLo: c.box.lo, BoxHi: c.box.hi, Centers: c.centers, Columns: c.columns}
+}
+
 // placedCylinderAt reads a full source cylinder at its identity pose and
 // stages it through any pose with a positive determinant.
 func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
@@ -315,51 +320,19 @@ func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
 	return c, true
 }
 
-// sectionDrift is r·gram + r·α², the bound on how far the staged section's
-// least height along a unit normal n̂ departs from its center's height less
-// r, with α = n̂·Bâ the normal component of the staged axis column: that least
-// height is r·|P·Bᵀn̂| below the center, P removing the identity axis, and
-// |P·Bᵀn̂|² = |Bᵀn̂|² − α² lies in [1 − gram − α², 1 + gram], so
-// |r − r·|P·Bᵀn̂|| <= r·(gram + α²).
+// sectionDrift delegates to the placed-ruling proof.
 func (c *placedCylinder) sectionDrift(alpha proofarith.Dyadic) proofarith.Dyadic {
-	return proofarith.DyMul(c.radius, proofarith.DyAdd(c.gram, proofarith.DyMul(alpha, alpha)))
+	return c.geometry().SectionDrift(alpha)
 }
 
-// rimDrift is r·(3·gram + (3/2)·|α|): how far the true lowest point of a
-// staged end disk lies from its center less r·n̂, while gram <= 1/16 and
-// |α| <= 1/4. With A the staged basis, y = P·Aᵀn̂ and AAᵀ = I + E, ‖E‖ <= gram,
-// the lowest point is c − r·Ay/|y| and Ay = n̂ + E·n̂ − α·Aâ, so
-// |Ay − |y|·n̂| <= (gram + α²) + gram + |α|·√(1 + gram), and dividing by
-// |y| >= √(1 − gram − α²) >= √(7/8) leaves at most 3·gram + (3/2)·|α|.
+// rimDrift delegates to the placed-ruling proof.
 func (c *placedCylinder) rimDrift(alpha *big.Rat) *big.Rat {
-	return proofbound.RatMul(c.radius.Rat(), proofbound.RatAdd(proofbound.RatMul(big.NewRat(3, 1), c.gram.Rat()),
-		proofbound.RatMul(big.NewRat(3, 2), new(big.Rat).Abs(alpha))))
+	return c.geometry().RimDrift(alpha)
 }
 
-// stagedCorners are the eight corners of the cylinder's identity
-// disk-by-interval box under the pose, whose hull holds the staged cylinder.
-// The box's center maps to the midpoint of the staged end centers and each
-// half extent along a basis column, so every corner is exact.
+// stagedCorners delegates to the placed-ruling proof.
 func (c *placedCylinder) stagedCorners() [8]proofarith.DyV3 {
-	var mid proofarith.DyV3
-	var extent [3]proofarith.Dyadic
-	for k := range 3 {
-		mid[k] = proofarith.DyShift(proofarith.DyAdd(c.centers[0][k], c.centers[1][k]), -1)
-		extent[k] = proofarith.DyShift(proofarith.DySubScalar(c.box.hi[k], c.box.lo[k]), -1)
-	}
-	var out [8]proofarith.DyV3
-	for i := range out {
-		corner := mid
-		for k := range 3 {
-			step := extent[k]
-			if i&(1<<k) == 0 {
-				step = proofarith.DyNeg(step)
-			}
-			corner = proofarith.DvAdd(corner, dyScaleVec(c.columns[k], step))
-		}
-		out[i] = corner
-	}
-	return out
+	return c.geometry().StagedCorners()
 }
 
 // rulingPlane is the face plane of an exact planar body S that a placed
@@ -380,98 +353,19 @@ type rulingPlane struct {
 	clearance *big.Rat
 }
 
-// rulingPlaneLimits are the gates every placed ruling reads: gram at most
-// 1/16 and |α| at most 1/4, under which rimDrift holds.
-var (
-	rulingGramLimit  = proofarith.MustDyOf(1.0 / 16)
-	rulingAlphaLimit = proofarith.MustDyOf(1.0 / 4)
-)
+// The placed-ruling proof requires gram at most 1/16; its support selection
+// checks |α| at most 1/4, under which RimDrift holds.
+var rulingGramLimit = proofarith.MustDyOf(1.0 / 16)
 
-// rulingSupport picks the plane a placed cylinder rests on: among S's face
-// planes whose outward normal is a signed axis, with |α| <= 1/4 and S's
-// triangles on it belonging to one face, the one whose larger |H±| is least,
-// the first in S's triangle order on a tie. A plane with an S vertex strictly
-// in front of it is face-local (§10.6): it is admitted only when the column
-// test holds at f = 0 over the coordinate box of the staged corners, and it
-// records that box's lateral clearance. S is a path whose startPoints are its
-// staged vertices.
+// rulingSupport adapts a sweep path to the placed-ruling support proof.
 func rulingSupport(c *placedCylinder, S *rotationalSweepPath, poll func() error) (rulingPlane, bool, error) {
-	var best rulingPlane
-	var bestScore proofarith.Dyadic
-	found := false
-	var tried []planarSupport
-	for _, tri := range S.solid.Tris {
-		if err := poll(); err != nil {
-			return rulingPlane{}, false, err
-		}
-		origin := S.startPoints[tri[0]]
-		n := proofarith.DvCross(proofarith.DvSub(S.startPoints[tri[1]], origin),
-			proofarith.DvSub(S.startPoints[tri[2]], origin))
-		axis, unit, ok := dyUnitAxis(n)
-		if !ok || planarPlaneTried(tried, unit, origin) {
-			continue
-		}
-		tried = append(tried, planarSupport{normal: unit, origin: origin})
-		alpha := proofarith.DvDot(unit, c.columns[c.axis])
-		if proofarith.DyCmp(proofarith.DyAbs(alpha), rulingAlphaLimit) > 0 {
-			continue
-		}
-		plane := rulingPlane{normal: unit, axis: axis, origin: tri[0], offset: origin[axis], alpha: alpha}
-		score := proofarith.DyZero()
-		for i, center := range c.centers {
-			plane.heights[i] = proofarith.DySubScalar(proofarith.DvDot(unit, proofarith.DvSub(center, origin)), c.radius)
-			score = dyMax(score, proofarith.DyAbs(plane.heights[i]))
-		}
-		if found && proofarith.DyCmp(score, bestScore) >= 0 {
-			continue
-		}
-		face, ok := planarSupportFace(&planarSupport{normal: unit, origin: origin, pathS: S})
-		if !ok {
-			continue
-		}
-		plane.face = face
-		for _, v := range S.startPoints {
-			if proofarith.DvDot(unit, proofarith.DvSub(v, origin)).Sign() > 0 {
-				plane.local = true
-				break
-			}
-		}
-		if plane.local {
-			clearance, apart, err := rulingColumn(c, S, unit, origin, poll)
-			if err != nil {
-				return rulingPlane{}, false, err
-			}
-			if !apart {
-				continue
-			}
-			plane.clearance = clearance
-		}
-		best, bestScore, found = plane, score, true
+	p, ok, err := placedruling.Support(c.geometry(), S.solid, S.startPoints, poll)
+	if err != nil || !ok {
+		return rulingPlane{}, ok, err
 	}
-	return best, found, nil
-}
-
-// rulingColumn is §10.6's column test at f = 0 for a placed cylinder: every
-// S triangle with a vertex strictly in front of the plane through origin
-// must project apart from the coordinate box of the staged corners, whose
-// hull holds the cylinder. clearance is that box's lateral clearance, nil for
-// an unbounded one (planar.PlanarColumnClear).
-func rulingColumn(c *placedCylinder, S *rotationalSweepPath, unit, origin proofarith.DyV3,
-	poll func() error) (*big.Rat, bool, error) {
-	var lo, hi [3]*big.Rat
-	for i, corner := range c.stagedCorners() {
-		for k := range 3 {
-			v := corner[k].Rat()
-			if i == 0 || v.Cmp(lo[k]) < 0 {
-				lo[k] = v
-			}
-			if i == 0 || v.Cmp(hi[k]) > 0 {
-				hi[k] = v
-			}
-		}
-	}
-	solid := planar.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
-	return planar.PlanarColumnClear(&solid, unit, origin, lo, hi, poll)
+	return rulingPlane{normal: p.Normal, axis: p.Axis, origin: p.Origin,
+		offset: p.Offset, face: planarFace{p.Face}, alpha: p.Alpha,
+		heights: p.Heights, local: p.Local, clearance: p.Clearance}, true, nil
 }
 
 // clearsBand reports whether a touch or band of half-width w on the plane is
