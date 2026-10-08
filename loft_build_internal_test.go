@@ -1120,9 +1120,7 @@ func TestLoftFrameLiftRoundingChargedInDelta(t *testing.T) {
 func exactLoftVertexLifts(t *testing.T, pl loftPayload) [][3]*big.Rat {
 	t.Helper()
 	require.Equal(t, r3.Identity(), pl.xform)
-	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, freeform.NewFreeformWork(), freeform.NewFreeformWork())
-	require.NoError(t, err)
-	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
+	offsets, walks0, walks1, target, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	pairs, _, _, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
