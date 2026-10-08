@@ -653,6 +653,26 @@ assembly `Stitch`'s own orientation derivation refuses as non-orientable
 before it is ever assembled (R7), and so a shape no builder in this package
 can hand `Body.Patch` — that disagreement is `ErrDegenerate` (R18).
 
+**The new face's area is bounded against the rim it denotes.** The moments
+engine integrates the chain re-expressed into the fitted frame by float
+`ToLocal`, so its own bound covers that recorded loop and nothing about how
+far the loop sits from the rim. A rim of lines bounds its area directly
+against the polygon its own vertices denote (`patchPolygonAreaBound`). A rim
+with a circular edge is bounded edge by edge (`patchCurvedAreaCharge`): both
+it and the lifted recorded loop are closed planar curves, so with a
+continuous correspondence keeping them within κ of each other their areas
+differ by at most Σ κ·(1.5·len_lifted + 0.5·len_denoted). A line's κ is its
+larger end gap (the held vertex's bound plus its exact distance from the
+lifted record point). A circular edge's κ runs through its held circle: the
+edge's own curve bound (`Edge.curveBound`), the lifted record circle's
+centre gap and `massmoment.CircleImageGap`, and twice the larger end gap. A
+prism-family build stamps that curve bound on its cap rims
+(`prismPayload.circleCurveBound`), and every copier carries it through its
+placement (`placedCurveBound`). A rim edge with no curve bound — a revolve's
+latitude circle or cap arc, a cap blend's trimmed or apex arc — leaves the
+face with no proven area, and `Body.Patch` refuses with `ErrUnsupported`
+(R46).
+
 **Filling a HOLE loop is one of this operation's own cases, and it keeps the
 holed face's normal rather than negating it.** A hole loop is walked
 clockwise (moments.go's own "outer counter-clockwise, holes clockwise"
@@ -1524,6 +1544,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R43 | `Thicken` on a revolve sheet or a chain revolve shell whose axis is not stated exactly along a recorded plane axis, whose swept offset has no proven strictly positive radius from that axis over the whole interval, or whose assembled section leaves the axis side undecided (§16.5, §16.7) | `ErrUnsupported` |
 | R44 | `Thicken` on a chain-fed sheet holding more than one recorded walk, carrying a nonzero section displacement, or holding a walk outside §16.6's axis-parallel right-angle class | `ErrUnsupported` |
 | R45 | `ExtrudeChain` or `SweepChain`'s tessellation or export over a chain holding a curved (`CircleSeg`/`ArcSeg` fragment) or free-form wall, before the increment that chords that wall too | `ErrUnsupported` |
+| R46 | `Body.Patch` chain holding a circular edge no build stamped a curve bound on (a revolve's latitude circle or cap arc, a cap blend's trimmed or apex arc), so the new face has no proven area (§5.2) | `ErrUnsupported` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
 `docs/api-design.md` §8's own distinction: the input names real geometry and

@@ -445,8 +445,12 @@ permutations of its first, so the first face's map stands for all. A face copy
 placement alone and takes the placement's own charge; a `Body.Patch` face
 fitted to a rim takes its fitted frame's, and one fitted to a straight-edged
 rim instead bounds its area directly against the polygon its own vertices
-denote (`patchPolygonAreaBound`), which also charges the rim's float
-re-expression into the fitted frame. `MassProperties` reads the exact image
+denote (`patchPolygonAreaBound`), and one with a circular edge edge by edge
+through that edge's curve bound (`docs/surface-design.md` §5.2), which also
+charges the rim's float re-expression into the fitted frame. A prism-family
+cap rim's circle or arc carries that curve bound (`circleCurveBound`): its
+centre's exact lift rounding, `massmoment.CircleImageGap`'s tilt and stretch
+terms, and the level and section displacements carried through L. `MassProperties` reads the exact image
 under the same map (`docs/multibody-dynamics-design.md` §8.1). The centroid takes no charge: an
 affine map carries a body's centroid to its image's centroid. The box takes
 none either: each reading is the extreme of the linear functional g·L over

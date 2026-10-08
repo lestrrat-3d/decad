@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
@@ -914,12 +915,23 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 		axis = axis.Scale(-1)
 	}
 	held := 2 * math.Pi * r
-	return &Edge{
-		curve: Circle3{Center: pl.point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
+	center := pl.point(cu, cv, z)
+	e := &Edge{
+		curve: Circle3{Center: center, Axis: axis, Radius: units.Millimeters(r)},
 		start: seam, end: seam,
 		convex: ccw,
 		length: held, lengthBound: capcontour.CapCircleLengthBound(exactRadius, held),
 	}
+	// The held radius sits within its own gap from exactRadius's ends of
+	// every radius the offset denotes, and the contour within delta of it.
+	radiusBound := math.Inf(1)
+	if heldRat, ok := proofbound.RatOf(r); ok {
+		gap := max(proofbound.RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(heldRat, exactRadius.Lo))),
+			proofbound.RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(exactRadius.Hi, heldRat))))
+		radiusBound = proofbound.AbsSumUpper(gap, delta)
+	}
+	e.curveBound, e.curveBounded = pl.circleCurveBound(cu, cv, z, pl.axialDelta(), r, radiusBound, center, axis)
+	return e
 }
 
 // arcEdge builds an Arc3 Edge in the cap plane at z between the given

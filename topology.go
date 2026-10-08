@@ -244,6 +244,19 @@ type Edge struct {
 	// adjacent to a circular wall whose corner-foot locus this evaluator
 	// cannot enclose (docs/modify-reach-design.md §8.3).
 	lengthUnbounded bool
+	// curveBound, valid only where curveBounded is set, bounds how far the
+	// curve a Circle3 or Arc3 edge denotes lies from its held circle — the
+	// circle of the held Radius about the held Center, normal to the held
+	// Axis: every denoted point is within curveBound of that circle, and
+	// curveBound is below half the held radius, so projecting radially about
+	// the held centre carries the denoted curve continuously onto the held
+	// circle. It says nothing about where along the circle the curve ends;
+	// the end vertices' own bounds say that. A builder that proves it sets
+	// both (prismPayload.circleCurveBound); every copier carries it through
+	// its placement (placedCurveBound). An edge no builder bounds leaves
+	// curveBounded false, and a reading that needs the bound refuses.
+	curveBound   float64
+	curveBounded bool
 	// level is the LEVEL half of the shared-denotation certificate
 	// (denotation.go): non-zero only for a rim edge a builder stamped at one
 	// denoted sweep level, and zero ("no certificate") for every edge no

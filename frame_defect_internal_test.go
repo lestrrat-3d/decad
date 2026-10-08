@@ -45,6 +45,13 @@ import (
 //     patch went red;
 //   - patchPolygonAreaBound in buildPatchFace: the thin body patch's fitted
 //     face missed in every variant, by up to 870× its bound;
+//   - patchCurvedAreaCharge in buildPatchFace: the thin slot body patch's
+//     fitted face missed by 74× its bound on the tilted plane, and its
+//     straight-edge leg alone by 12×. Its circular legs (the curve bound,
+//     the lifted circle's gap, the end matching) were each deleted without
+//     any fixture here going red: a circle's area does not move with its
+//     centre, and the π enclosure's own width already covers what its radius
+//     terms charge on these rims;
 //   - the endpoint-support arm of auditAdjacentSweepSpans: the rotated
 //     composite sweep refused as "not certified on opposite sides".
 //
@@ -253,6 +260,33 @@ func fdRecordedFrame(t *testing.T, f r3.Frame) r3.Frame {
 	return held
 }
 
+// fdSlotSheet extrudes, as a sheet, the slot whose caps of radius r sit at
+// (0, 0) and (length, 0), every point fixed at an exact dyadic coordinate.
+func fdSlotSheet(t *testing.T, f r3.Frame, length, r float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	pl, err := w.CreatePlaneFromFrame(f)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(pl)
+	require.NoError(t, err)
+	pt := func(x, y float64) *sketch.Point {
+		p := s.CreatePoint(x, y)
+		s.Fix(p)
+		return p
+	}
+	c1, c2 := pt(0, 0), pt(length, 0)
+	p1l, p1r, p2l, p2r := pt(0, r), pt(0, -r), pt(length, r), pt(length, -r)
+	s.CreateArc(c1, p1l, p1r)
+	s.CreateArc(c2, p2r, p2l)
+	s.CreateLine(p1r, p2r)
+	s.CreateLine(p2l, p1l)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	b, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}, WithSurfaceResult())
+	require.NoError(t, err)
+	return b
+}
+
 // fdCompositeSweep sweeps a unit square on XY along an arc and a line:
 // docs/sweep-design.md's composite path.
 func fdCompositeSweep(t *testing.T) (*Body, error) {
@@ -361,6 +395,12 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 		{name: "thin body patch", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			thin := [][2]float64{{0, 0}, {100, 0}, {100, 1.0 / 128}, {0, 1.0 / 128}}
 			return fdExtrudeLoop(t, f, thin, WithSurfaceResult()).Patch(t.Context(), Edges(Free()))
+		}},
+		// A long thin slot: its rim mixes straight flanks with semicircular
+		// caps, so its fitted face's area is bounded edge by edge against
+		// the curves its rim denotes.
+		{name: "thin slot body patch", build: func(t *testing.T, f r3.Frame) (*Body, error) {
+			return fdSlotSheet(t, f, 100, 1.0/128).Patch(t.Context(), Edges(Free()))
 		}},
 		{name: "class B drill", xyOnly: true, build: func(t *testing.T, _ r3.Frame) (*Body, error) {
 			w := sketch.NewWorld()
