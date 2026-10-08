@@ -129,7 +129,7 @@ func (r Revolved) Allow(p, held r3.Vec, reversed bool) (float64, Status) {
 		return proofbound.IvVec3Mul(w, sig)
 	}
 	if r.Circular {
-		return r.circularAllow(k, det, radial, world, held, reversed)
+		return r.circularAllow(k, det, sig, radial, world, held, reversed)
 	}
 	if len(r.Runs) == 0 {
 		return 0, Unproven
@@ -164,20 +164,21 @@ func (r Revolved) Allow(p, held r3.Vec, reversed bool) (float64, Status) {
 }
 
 // circularAllow is Allow's circular-wall arm: the normal runs from the
-// rotated circle's centre at p's azimuth, (ρc·r̂, zc), to p, which sits at
-// k/det in the axis frame. A centre exactly on the axis needs no azimuth at
+// rotated circle's centre at p's azimuth, (ρc·r̂, zc), to p. Scaling that
+// direction by the positive |det| gives σ·k − |det|·centre and avoids three
+// interval divisions. A centre exactly on the axis needs no azimuth at
 // all. Off it, a p whose own azimuth the enclosure cannot fix — one on or
 // near the axis — still has a centre within ρc of the axis point zc, and
 // the reading takes that whole box rather than refuse.
-func (r Revolved) circularAllow(k proofbound.IvVec3, det proofbound.RatInterval, radial proofbound.IvVec3, world func(proofbound.IvVec3) proofbound.IvVec3, held r3.Vec, reversed bool) (float64, Status) {
-	var q proofbound.IvVec3
-	for i, c := range k {
-		v, ok := proofbound.IntervalQuo(c, det)
-		if !ok {
-			return 0, Unproven
-		}
-		q[i] = v
+func (r Revolved) circularAllow(
+	k proofbound.IvVec3, det, sig proofbound.RatInterval, radial proofbound.IvVec3,
+	world func(proofbound.IvVec3) proofbound.IvVec3, held r3.Vec, reversed bool,
+) (float64, Status) {
+	absDet := det
+	if det.Hi.Sign() < 0 {
+		absDet = proofbound.IntervalNeg(det)
 	}
+	scaled := proofbound.IvVec3{radial[0], radial[1], proofbound.IntervalMul(k[2], sig)}
 	zc, rc := r.Centre[0], r.Centre[1]
 	zero := proofbound.PointInterval(new(big.Rat))
 	centre := proofbound.IvVec3{zero, zero, zc}
@@ -190,7 +191,7 @@ func (r Revolved) circularAllow(k proofbound.IvVec3, det proofbound.RatInterval,
 			centre = proofbound.IvVec3{box, box, zc}
 		}
 	}
-	n := proofbound.IvVec3Sub(q, centre)
+	n := proofbound.IvVec3Sub(scaled, proofbound.IvVec3Mul(centre, absDet))
 	if reversed {
 		n = proofbound.IvVec3Mul(n, proofbound.PointInterval(big.NewRat(-1, 1)))
 	}
