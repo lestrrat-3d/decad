@@ -34,13 +34,14 @@ import (
 // denotes (docs/clearance-design.md §2's payload-adapter displacement,
 // docs/payload-verification-design.md §2.3's delta(X)). addPrismFaces and
 // addRevolveFaces fold in the payload's own frame/placement point-rounding
-// (internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow, the identical charge
-// topology.go's Vertex.Position already takes), the payload's own proven
-// axial or angular displacement, and the per-face tilt a rounded carrier
-// normal commits across that face's own extent (clearance.BodyFaceTiltDelta, below).
-// addStitchFaces folds in the body's own largest proven vertex bound instead.
-// It is exactly zero for an axis-aligned, unplaced, feature-built body, which
-// is what keeps every such body's Clearance rows Exact as before.
+// (the largest clearance.CFace.LiftRound its carriers recorded, each measured
+// exactly per lifted point, the same charge topology.go's Vertex.Position
+// takes), the payload's own proven axial or angular displacement, and the
+// per-face tilt a rounded carrier normal commits across that face's own extent
+// (clearance.BodyFaceTiltDelta, below). addStitchFaces folds in the body's own
+// largest proven vertex bound instead. It is exactly zero for an unplaced,
+// axis-aligned, feature-built body whose lifts are exact for its own
+// coordinates, which is what keeps every such body's Clearance rows Exact.
 type bodyGeom struct {
 	body     *Body
 	faces    []*clearance.CFace
@@ -291,16 +292,27 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 	// g.delta charges the three terms clearance_geom.go's package doc comment
 	// and bodyGeom's own doc comment name: the payload's own frame/placement
 	// point rounding (every anchor, axis point and witness came from the
-	// frame's point lift), its proven axial displacement (pp.axialDelta — the
-	// section's own sectionDelta is already refused above), and the worst
-	// per-face tilt a rounded carrier normal commits (every u, v and n came
-	// from the frame's direction lift). It is exactly zero for an axis-aligned,
-	// unplaced, feature-built prism, which keeps its Clearance rows Exact.
-	pointTerm := proofbound.FrameAndPlacementRoundAllow(pp.frame, pp.xform,
-		math.Max(built.CoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
+	// frame's point lift, each carrier recording the largest exact rounding
+	// its own lifts committed in CFace.LiftRound), its proven axial
+	// displacement (pp.axialDelta — the section's own sectionDelta is already
+	// refused above), and the worst per-face tilt a rounded carrier normal
+	// commits (every u, v and n came from the frame's direction lift). It is
+	// exactly zero for an unplaced, feature-built prism whose lifts are exact
+	// for its own coordinates, which keeps its Clearance rows Exact.
+	pointTerm := carrierLiftRound(built.Faces)
 	g.delta = proofbound.AbsSumUpper(pointTerm, pp.axialDelta(), clearance.BodyFaceTiltDelta(g.faces, pp.frame, pp.xform))
 	g.carrierDelta = g.delta
 	return true, nil
+}
+
+// carrierLiftRound is the largest frame/placement lift rounding any of faces
+// recorded (clearance.CFace.LiftRound): the point term of bodyGeom.delta.
+func carrierLiftRound(faces []*clearance.CFace) float64 {
+	round := 0.0
+	for _, f := range faces {
+		round = math.Max(round, f.LiftRound)
+	}
+	return round
 }
 
 func prismCarrierFrame(pp prismPayload) clearance.PrismCarrierFrame {
@@ -317,11 +329,10 @@ func prismCarrierFrame(pp prismPayload) clearance.PrismCarrierFrame {
 // A record carrying any section displacement has no model, as addPrismFaces
 // refuses a displaced prism: the certificates are exact statements about the
 // carriers read. g.delta charges, per face, the same three terms a prism's
-// model does — the frame and placement point rounding at that face's own
-// coordinate envelope, the record's largest level displacement, and the tilt
-// a rounded carrier normal commits across that face's extent — and keeps the
-// largest. Every face frame is a signed permutation of the reference frame
-// (brepEmbeds), so no face's rounding can exceed what its own frame states.
+// model does — the exact frame and placement rounding of that face's own
+// lifted points (CFace.LiftRound), the record's largest level displacement,
+// and the tilt a rounded carrier normal commits across that face's extent —
+// and keeps the largest.
 func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (bool, error) {
 	if bp.sectionDelta() != 0 {
 		return false, nil
@@ -332,7 +343,6 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 			return false, err
 		}
 		pp := f.view(bp.xform)
-		coordUpper := math.Max(math.Abs(f.z0), math.Abs(f.z1))
 		var face *clearance.CFace
 		if f.planar() {
 			loops, err := recordLoops(budget, *f.region)
@@ -350,7 +360,6 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 						return false, nil
 					}
 					elems = append(elems, el)
-					coordUpper = math.Max(coordUpper, w.CoordUpper)
 				}
 			}
 			sign := -1.0
@@ -363,13 +372,12 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 			if !ok {
 				return false, nil
 			}
-			coordUpper = math.Max(coordUpper, w.CoordUpper)
 			if face, ok = clearance.PrismWallCarrier(prismCarrierFrame(pp), w); !ok {
 				return false, nil
 			}
 		}
 		g.faces = append(g.faces, face)
-		pointTerm = math.Max(pointTerm, proofbound.FrameAndPlacementRoundAllow(f.frame, bp.xform, coordUpper))
+		pointTerm = math.Max(pointTerm, face.LiftRound)
 		tiltTerm = math.Max(tiltTerm, clearance.BodyFaceTiltDelta([]*clearance.CFace{face}, f.frame, bp.xform))
 	}
 	g.delta = proofbound.AbsSumUpper(pointTerm, bp.axialDelta(), tiltTerm)
@@ -420,22 +428,23 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 		}
 	}
 	built := clearance.BuildRevolveCarriers(clearance.RevolveCarrierInput{
-		Basis: rp.basis(), Transform: rp.xform, Full: rp.full,
+		Lift: rp.lift(), Transform: rp.xform, Full: rp.full,
 		Phi0: rp.phi0, Phi1: rp.phi1, Walls: walls,
 	})
 	g.faces = append(g.faces, built.Faces...)
 	g.verts = append(g.verts, built.Vertices...)
 
 	// g.delta mirrors addPrismFaces' own three terms, over this payload's own
-	// axis-symmetric construction: the frame/placement point rounding every
-	// anchor, axis point and witness took through the placed basis, the angular
+	// axis-symmetric construction: the exact frame/placement point rounding
+	// every anchor, axis point and witness took through the placed basis
+	// (CFace.LiftRound), the angular
 	// displacement scaled by the radial envelope every such point can carry it
 	// at (the same reading verify_gate.go's own bodyGateDiameter arm takes for
 	// the identical displacement), and the worst per-face tilt a rounded
 	// wallPlane/cap carrier normal commits. It is exactly zero for an
-	// axis-aligned, unplaced, full-turn revolve, which keeps an ordinary
-	// revolve's Clearance rows Exact.
-	pointTerm := revolveVertexFrameLiftAllow(rp, built.AxisRadiusUpper)
+	// axis-aligned, unplaced, full-turn revolve whose lifts are exact for its
+	// own coordinates, which keeps an ordinary revolve's Clearance rows Exact.
+	pointTerm := carrierLiftRound(built.Faces)
 	angularTerm := proofbound.ProductUpper(built.AxisRadiusUpper, rp.angularDelta())
 	tiltTerm := clearance.BodyFaceTiltDelta(g.faces, rp.frame, rp.xform)
 	g.delta = proofbound.AbsSumUpper(pointTerm, angularTerm, tiltTerm)

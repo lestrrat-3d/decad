@@ -649,19 +649,15 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	n := len(walks)
 
 	height := proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar())
-	maxCoordUpper := 0.0
-	for _, w := range walks {
-		maxCoordUpper = math.Max(maxCoordUpper, w.CoordUpper)
+	// rimVertex places one rim post at (u, v) on level z, whose own axial
+	// displacement is zDelta, beside the post's own exact frame lift and
+	// placement rounding (prismPayload.liftedVertex) — zero wherever that lift
+	// is exact, which is what keeps a plain ExtrudeChain's rim vertices Exact,
+	// mirroring buildLoopSidesAs's own rimVertex.
+	rimVertex := func(u, v, z, zDelta, extra float64) *Vertex {
+		held, lift := prismView.liftedVertex(u, v, z)
+		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(zDelta, lift), extra))}
 	}
-	// frameLiftAllow is the one proven bound this ribbon's rim vertices share
-	// for the payload's own frame lift and accumulated placement
-	// (internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow) — exactly zero for an
-	// axis-aligned, unplaced payload, which is what keeps a plain
-	// ExtrudeChain's rim vertices Exact, mirroring buildLoopSidesAs's own
-	// frameLiftAllow.
-	frameLiftAllow := proofbound.FrameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
-	bottomBoundBase := proofbound.AbsSumUpper(pp.z0Delta, frameLiftAllow)
-	topBoundBase := proofbound.AbsSumUpper(pp.z1Delta, frameLiftAllow)
 
 	// Rim posts 0..n, no wraparound: post i sits at walk i's start for
 	// i < n, and at the LAST walk's own end for i == n — the chain's two free
@@ -685,8 +681,8 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		if i > 0 && i < n {
 			extra = math.Max(extra, freeformVertexAllow(walks[i-1].SegmentWalk, walks[i-1].EndBound))
 		}
-		bottomV[i] = &Vertex{position: prismView.point(u, v, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(bottomBoundBase, extra))}
-		topV[i] = &Vertex{position: prismView.point(u, v, pp.z1), bound: units.Millimeters(proofbound.AbsSumUpper(topBoundBase, extra))}
+		bottomV[i] = rimVertex(u, v, pp.z0, pp.z0Delta, extra)
+		topV[i] = rimVertex(u, v, pp.z1, pp.z1Delta, extra)
 	}
 
 	// Sweep edges at every post, free-end and interior alike. Convexity from

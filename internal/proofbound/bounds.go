@@ -162,6 +162,14 @@ import (
 //     rounding for the input at hand (an identity placement, an axis-aligned
 //     frame direction), never a worst-case ulp estimate where an exact
 //     rational comparison is available instead.
+//   - a HELD WORLD POINT an analytic builder lifts from a plane-local
+//     (u, v, z) through its own frame and accumulated placement — a prism's,
+//     cap-loop chamfer's, brep's or patch's vertex, a clearance carrier's
+//     anchor — measured against the EXACT image of the same chain →
+//     ExactFrameLiftRound, with ExactRigidRound its placement half. It reads
+//     the frame origin as a leaf of the chain, so an axis-aligned plane far
+//     from the world origin is charged the rounding its own origin + u sum
+//     commits.
 //   - a HELD PLANE-LOCAL COORDINATE a world point projects to under a frame —
 //     a revolve axis's own anchor (revolve.go's axisInPlane) — measured against
 //     the EXACT rational image of the same (p − origin)·axis chain the
@@ -414,33 +422,73 @@ func RigidRoundAllow(maxInputAbs, maxTransAbs float64) float64 {
 	return Radius3D(16 * ulp)
 }
 
-// FrameAndPlacementRoundAllow is RigidRoundAllow's own "second call site"
-// (above), read for a builder that lifts a plane-local coordinate through ITS
-// OWN frame and then its accumulated placement, together: prismPayload's,
-// revolvePayload's and capBlendPayload's shared `point`-style construction,
-// none of which the loft chord-station reading covers. maxInputAbs is the
-// PLANE-LOCAL coordinate's own magnitude — never the lifted world point's —
-// exactly as RigidRoundAllow's own doc comment states for that second site.
+// ExactFrameLiftRound proves, exactly, how far one held world point sits from
+// the point a plane-local (u, v, z) denotes under frame and then xform: the
+// construction prismPayload.point evaluates in float64 (frame.ToWorldUV(u, v)
+// plus frame.N()·z, then xform.Apply). The denoted point is the same chain
+// over dyadic rationals, with the frame's origin, U, V and N, the placement's
+// basis and translation, and u, v, z all read as exact leaves, and the answer
+// is the 3D distance bound (Radius3D) of the per-coordinate gap between that
+// value and held, rounded upward.
 //
-// It is exactly zero only where BOTH the frame is AXIS-ALIGNED (U and V the
-// first two standard basis vectors — N is then the third by Frame's own U×V
-// invariant, and the origin may be anywhere: ToWorldUV's own products by 0
-// or 1 round nothing, whatever the origin, exactly the axis-aligned exemption
-// docs/evaluator-design.md §8 itself states) AND the placement is Identity:
-// an exact comparison, never a tolerance, matching every other analytic
-// builder's own zero-bound fast path (stitch.go, unstitch.go, patch_body.go,
-// loft_topology.go: `xform != r3.Identity()`). Charging it only when the
-// PLACEMENT is non-identity is not enough here: a tilted, non-axis-aligned
-// sketch plane rounds a plane-local coordinate lifting through ToWorldUV
-// under the identity placement too, which is what every OTHER analytic
-// builder never has to consider — their own frame lift already happened in
-// whichever build produced the vertices they re-place.
-func FrameAndPlacementRoundAllow(frame r3.Frame, xform r3.Transform, maxInputAbs float64) float64 {
-	trivialFrame := frame.U() == r3.NewVec(1, 0, 0) && frame.V() == r3.NewVec(0, 1, 0)
-	if trivialFrame && xform == r3.Identity() {
-		return 0
+// held must be the SAME float point the caller's own arithmetic produced, so
+// the comparison measures the rounding that arithmetic committed. Every term of
+// the chain counts: ToWorldUV's own origin + u·U + v·V sum rounds at the
+// origin's magnitude even for an axis-aligned frame (a sketch plane at
+// x = 10⁶ + 0.1 rounds every vertex by up to half an ulp at 10⁶), and a
+// placement adds its own rounding on top. A body built far away and placed back
+// is charged for the far lift, because the far lift is where it rounded.
+//
+// The answer is zero exactly where the whole chain is exact for the input at
+// hand: an axis-aligned frame with an integer origin and integer coordinates
+// under the identity placement, for example. A non-finite leaf answers +Inf,
+// never 0: an absent bound must never read as a small one.
+//
+// This is the per-vertex bound every analytic builder's own frame lift takes
+// (prismPayload's rim and side vertices, capBlendPayload's cap-level vertices,
+// brepPayload's vertices, patchPayload's rim vertices, the clearance kernel's
+// prism carriers). Tessellation reads the same helper for its own cap and wall
+// vertices, through prism_payload.go's exactPrismPointRound.
+func ExactFrameLiftRound(frame r3.Frame, xform r3.Transform, u, v, z float64, held r3.Vec) float64 {
+	basis := xform.Basis()
+	origin, fu, fv, fn := frame.Origin(), frame.U(), frame.V(), frame.N()
+	tr := xform.Translation()
+	for _, w := range [...]r3.Vec{origin, fu, fv, fn, basis.EX, basis.EY, basis.EZ, tr} {
+		if !FiniteVec(w) {
+			return math.Inf(1)
+		}
 	}
-	return RigidRoundAllow(maxInputAbs, VecMaxAbs(xform.Apply(frame.Origin())))
+	if IsNonFinite(u) || IsNonFinite(v) || IsNonFinite(z) {
+		return math.Inf(1)
+	}
+	o, du, dv, dn := proofarith.DyVec(origin), proofarith.DyVec(fu), proofarith.DyVec(fv), proofarith.DyVec(fn)
+	ru, rv, rz := proofarith.MustDyOf(u), proofarith.MustDyOf(v), proofarith.MustDyOf(z)
+	var local proofarith.DyV3
+	for i := range local {
+		local[i] = proofarith.DyAdd(
+			proofarith.DyAdd(o[i], proofarith.DyMul(du[i], ru)),
+			proofarith.DyAdd(proofarith.DyMul(dv[i], rv), proofarith.DyMul(dn[i], rz)),
+		)
+	}
+	return ExactRigidRound(basis, tr, local, held)
+}
+
+// ExactRigidRound is ExactFrameLiftRound's second half: the Radius3D bound of
+// the per-coordinate gap between held and the exact rigid image
+// basis·local + translation of an exact pre-placement point. Every caller has
+// already proven basis, translation and local finite.
+func ExactRigidRound(basis r3.Basis, translation r3.Vec, local proofarith.DyV3, held r3.Vec) float64 {
+	ex, ey, ez, t := proofarith.DyVec(basis.EX), proofarith.DyVec(basis.EY), proofarith.DyVec(basis.EZ), proofarith.DyVec(translation)
+	h := [3]float64{held.X, held.Y, held.Z}
+	perCoord := 0.0
+	for i := range h {
+		exact := proofarith.DyAdd(
+			proofarith.DyAdd(proofarith.DyMul(ex[i], local[0]), proofarith.DyMul(ey[i], local[1])),
+			proofarith.DyAdd(proofarith.DyMul(ez[i], local[2]), t[i]),
+		)
+		perCoord = max(perCoord, proofarith.DyRoundedFloatError(exact, h[i]))
+	}
+	return Radius3D(perCoord)
 }
 
 // DirRoundAllow bounds the rounding a builder's own `dir`-style construction
@@ -448,13 +496,13 @@ func FrameAndPlacementRoundAllow(frame r3.Frame, xform r3.Transform, maxInputAbs
 // maxInputAbs, combined from the payload's own frame vectors and then carried
 // through the accumulated placement's rotation (`prismPayload.dir`,
 // `revolvePayload`'s equivalent radial/velocity directions) — the same
-// two-step map `FrameAndPlacementRoundAllow` reads for a POINT, with the
-// translation term dropped: a direction carries no origin to translate, so
-// `ApplyDir` commits no translation rounding for `RigidRoundAllow`'s own
-// maxTransAbs term to cover.
+// two-step map `ExactFrameLiftRound` measures for a POINT, with the origin and
+// the translation dropped: a direction carries neither, so neither the frame
+// origin's magnitude nor the translation's enters the rounding, and
+// `RigidRoundAllow`'s own maxTransAbs term is zero.
 //
-// It shares `FrameAndPlacementRoundAllow`'s own zero fast path, for the
-// identical reason: an axis-aligned frame's U/V/N combine only 0, 1 and -1
+// It is zero exactly where both the frame is axis-aligned and the placement
+// is Identity: an axis-aligned frame's U/V/N combine only 0, 1 and -1
 // coefficients, each exact in float64, and `ApplyDir` under Identity changes
 // nothing — so under that exemption every direction `dir` builds is bit-exact,
 // and the CROSS product of two such directions (a plane's own outward normal,

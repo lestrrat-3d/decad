@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -11,7 +10,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -128,50 +126,23 @@ func prismPointBound(pp prismPayload, u, v, z proofbound.BoundedScalar) float64 
 	return proofbound.AbsSumUpper(proofbound.ProductUpper(4, source), round)
 }
 
+// exactPrismPointRound is proofbound.ExactFrameLiftRound read through pp's own
+// frame and accumulated placement: the exact rounding pp.point committed
+// lifting (u, v, z) to held.
 func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64 {
-	triple := func(x, y, z *big.Rat) [3]*big.Rat { return [3]*big.Rat{x, y, z} }
-	ratOfVec := func(value r3.Vec) [3]*big.Rat {
-		return triple(proofarith.FloatRat(value.X), proofarith.FloatRat(value.Y), proofarith.FloatRat(value.Z))
-	}
-	origin := ratOfVec(pp.frame.Origin())
-	fu, fv, fn := ratOfVec(pp.frame.U()), ratOfVec(pp.frame.V()), ratOfVec(pp.frame.N())
-	ru, rv, rz := proofarith.FloatRat(u), proofarith.FloatRat(v), proofarith.FloatRat(z)
-	if ru == nil || rv == nil || rz == nil {
-		return math.Inf(1)
-	}
-	local := [3]*big.Rat{}
-	for i := range local {
-		if origin[i] == nil || fu[i] == nil || fv[i] == nil || fn[i] == nil {
-			return math.Inf(1)
-		}
-		local[i] = proofbound.RatAdd(
-			origin[i],
-			proofbound.RatMul(fu[i], ru),
-			proofbound.RatMul(fv[i], rv),
-			proofbound.RatMul(fn[i], rz),
-		)
-	}
-	basis := pp.xform.Basis()
-	ex, ey, ez := ratOfVec(basis.EX), ratOfVec(basis.EY), ratOfVec(basis.EZ)
-	translation := ratOfVec(pp.xform.Translation())
-	exact := [3]*big.Rat{}
-	for i := range exact {
-		if ex[i] == nil || ey[i] == nil || ez[i] == nil || translation[i] == nil {
-			return math.Inf(1)
-		}
-		exact[i] = proofbound.RatAdd(
-			proofbound.RatMul(ex[i], local[0]),
-			proofbound.RatMul(ey[i], local[1]),
-			proofbound.RatMul(ez[i], local[2]),
-			translation[i],
-		)
-	}
-	perCoord := max(
-		proofarith.RationalFloatError(exact[0], held.X),
-		proofarith.RationalFloatError(exact[1], held.Y),
-		proofarith.RationalFloatError(exact[2], held.Z),
-	)
-	return proofbound.Radius3D(perCoord)
+	return proofbound.ExactFrameLiftRound(pp.frame, pp.xform, u, v, z, held)
+}
+
+// liftedVertex lifts a plane-local (u, v) at height z through pp.point and
+// returns the held point beside the exact rounding that lift committed
+// (exactPrismPointRound). Every analytic vertex a prism-shaped build places
+// takes its frame and placement charge from here, one vertex at a time, so
+// a lift that is exact for the coordinates at hand charges nothing and a lift
+// that rounds — a far sketch-plane origin, a tilted frame, a placement —
+// charges exactly what it rounded (docs/evaluator-design.md §8).
+func (pp prismPayload) liftedVertex(u, v, z float64) (r3.Vec, float64) {
+	held := pp.point(u, v, z)
+	return held, exactPrismPointRound(pp, u, v, z, held)
 }
 
 func vecL1(v r3.Vec) float64 {

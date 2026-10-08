@@ -227,6 +227,7 @@
 3	0.00	TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload
 3	0.00	TestBodyGateDiameterFreeformArmSkipsAnalyticPrism
 3	0.00	TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism
+3	0.01	TestBodyGeomLiftDeltaReadsTheFrameOrigin
 3	0.00	TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain
 3	0.00	TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver
 3	0.00	TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch

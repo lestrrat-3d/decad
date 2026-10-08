@@ -180,9 +180,11 @@ func Assemble(ctx context.Context, pairs []LoopPair, f0, f1 r3.Frame, plane0 sec
 // U and V the first two standard basis vectors AND the origin's X and Y both
 // zero. Then x = 0 + u·1 + v·0 is u, y is v, and z = origin.Z + u·0 + v·0 is
 // origin.Z, whatever the station. An axis-aligned frame alone does not earn
-// the zero: x = origin.X + u rounds whenever that sum is not representable,
-// which is why this is not proofbound.FrameAndPlacementRoundAllow, whose
-// fast path exempts any axis-aligned frame.
+// the zero: x = origin.X + u rounds whenever that sum is not representable.
+// It charges the same rounding the analytic builders measure exactly per
+// vertex (proofbound.ExactFrameLiftRound), as one envelope over every station
+// of the build; the placement's own rounding is the separate placeAllow term,
+// so the two never cover the same arithmetic twice.
 func FrameLiftRoundAllow(frame r3.Frame, maxLocalAbs float64) float64 {
 	o := frame.Origin()
 	if frame.U() == r3.NewVec(1, 0, 0) && frame.V() == r3.NewVec(0, 1, 0) && o.X == 0 && o.Y == 0 {

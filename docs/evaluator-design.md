@@ -231,13 +231,26 @@ rounding: `xform.Apply`/`xform.ApplyDir` are isometries only in EXACT
 arithmetic, so a frame that is not axis-aligned or a placement that is not the
 identity rounds, and `Bounds` (a `capBlendPayload` result's included) charges
 that rounding rather than reading the placed extreme as an exact leaf. Every
-rim and side vertex `buildLoopSidesAs` places charges the identical frame/
-placement rounding, computed once per loop as `frameLiftAllow`
-(`internal/proofbound/bounds.go`'s `frameAndPlacementRoundAllow`) and folded into the vertex's own
-section/axial displacement rather than into `Bounds` alone — a cap-loop
-chamfer's own cap-level vertices take the same charge in `capblend_geom.go`'s
-`buildCapBand`, beside their own contour displacement, never inside the
-value an edge's own length bound still reads unwidened. Beside
+rim and side vertex `buildLoopSidesAs` places charges its OWN frame/placement
+lift rounding, measured exactly for that vertex (`prismPayload.liftedVertex`,
+`internal/proofbound/bounds.go`'s `ExactFrameLiftRound`: the held point
+against the same origin + u·U + v·V + z·N chain and placement over dyadic
+rationals) and folded into the vertex's own section/axial displacement rather
+than into `Bounds` alone. The frame ORIGIN is a leaf of that chain, so an
+axis-aligned sketch plane whose origin the plane-local coordinate does not add
+to exactly (origin x = 10⁶ + 0.1, or 0.1) charges the rounding of that sum,
+and a body built far away and placed back keeps the far lift's rounding. A
+lift exact for the coordinates at hand — an integer origin and integer
+coordinates under the identity placement, for one — charges zero. A cap-loop
+chamfer's own cap-level vertices take the same per-vertex charge in
+`capblend_geom.go`'s `buildCapBand` (`capVertexAt`), beside their own contour
+displacement, never inside the value an edge's own length bound still reads
+unwidened; `ExtrudeChain`'s rim posts, a brep record's vertices and a patch's
+rim vertices take it too. The cost is one exact dyadic evaluation per vertex,
+about 0.3 µs, under 1% of a 1000-gon extrude's build.
+`apitest/vertex_frame_origin_test.go` checks every payload kind at a
+non-dyadic and a far origin against the exact rational lift, and
+`clearance_lift_internal_test.go` the clearance carriers. Beside
 it, the same reading charges the rounding its own FINAL SUMMATION of those
 terms into one published coordinate commits. That is a separate mechanism, not
 a consequence of the first: a placement can leave every coefficient exactly
@@ -351,12 +364,14 @@ sampling, the wall survey's cap wedge, and the tolerance gate's reference
 diameter. Clearance and interference stay on the prism's own precedent:
 neither reads the axial displacement there, and neither reads the angular
 one here. Beside the angular displacement, every junction, seam and cap
-vertex `buildRevolveLoop` places charges the SAME frame/placement rounding
-`Bounds` charges below — `revolveVertexFrameLiftAllow`, `internal/proofbound/bounds.go`'s
-`frameAndPlacementRoundAllow` read at the junction's own axis-radius envelope
-— since a swept vertex's plane-local coordinate is lifted through the
-payload's frame and placement exactly as a box extreme is, and a tilted
-sketch plane rounds it under the identity placement too.
+vertex `buildRevolveLoop` places charges its own frame/placement lift
+rounding, measured exactly for that vertex (`revolvePayload.sweptVertex`,
+`revolvemesh.RevolveLift.ExactPointRound`): the held point against the
+basis construction — the axis anchor's own frame lift, the axis and radial
+directions and the axial and radial terms — and the placement over dyadic
+rationals, with the held sine and cosine as leaves, so the frame origin, a
+tilted sketch plane and a placement each charge exactly what they rounded,
+and the trigonometric evaluation stays the angular term's own.
 
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid
@@ -465,8 +480,9 @@ source certificate.
 `Body.Placed` transforms analytic geometry exactly in EXACT arithmetic — every
 v1 surface variant maps to itself under an isometry (plane→plane,
 cylinder→cylinder, …), with `IsReflection` flipping face orientation handling
-— but the isometry's FLOAT evaluation rounds wherever the frame is not
-axis-aligned or the placement is not the identity. Every reading built from
+— but the FLOAT evaluation of the frame lift and the isometry rounds wherever
+the frame is not axis-aligned, the placement is not the identity, or the
+frame origin and a coordinate do not add exactly. Every reading built from
 `xform.Apply`/`xform.ApplyDir` therefore carries that rounding as its own
 proven displacement rather than reading the placed coordinate as an exact
 leaf: `prismPayload`/`capBlendPayload`'s `Bounds` (§5) and
@@ -476,14 +492,19 @@ rounding of its OWN recombination of the placed terms into a published
 coordinate, which a pure translation commits even where the isometry's float
 evaluation rounded nothing. `Vertex.Position` takes the identical charge for
 every rim, junction and cap-level vertex `prismPayload`, `revolvePayload` and
-`capBlendPayload` place (`internal/proofbound/bounds.go`'s `frameAndPlacementRoundAllow`, one
-cheap call per vertex group rather than a per-vertex exact-rational bound): a
-vertex sits at a plane-local
+`capBlendPayload` place, measured exactly per vertex (`ExactFrameLiftRound`,
+`RevolveLift.ExactPointRound`; §5, §6): a vertex sits at a plane-local
 coordinate lifted through the payload's own frame and then its placement, the
-same two-step map `Bounds` reads, so a tilted frame rounds it under the
-identity placement exactly as it rounds a box extreme — the one difference
-from `Bounds` being that a vertex takes no separate final-summation charge, since
-it is not a recombination of several extremes into one endpoint.
+same two-step map `Bounds` reads, so a tilted frame or an origin the
+coordinate does not add to exactly rounds it under the identity placement
+exactly as it rounds a box extreme — the one difference from `Bounds` being
+that a vertex takes no separate final-summation charge, since its exact
+measurement already includes the placement's own sums. The clearance kernel's
+carriers take the same per-point measurement for every recorded anchor they
+lift (`clearance.CFace.LiftRound`, folded into `bodyGeom.delta`).
+A DIRECTION carries no origin and no translation, so the directions every
+`dir`-style construction builds keep `proofbound.DirRoundAllow`'s magnitude
+charge, zero exactly for an axis-aligned frame under the identity placement.
 
 A placement changes the MOTION and nothing else, so a prism's re-evaluation
 reuses the plane-local walk resolution the original build published rather than

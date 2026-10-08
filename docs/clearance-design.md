@@ -587,13 +587,20 @@ trimmed inner face alone and asks the oracle nothing:
   silent pass.
 - **Held bounds subtract before anything is proven.** A body whose held
   boundary carries a nonzero proven bound — a `Faceted` body (increment 4,
-  not yet landed), or a feature-built body placed, swept off an
-  axis-aligned sketch plane, or stitched from a bounded topology
+  not yet landed), or a feature-built body placed, swept off a
+  non-axis-aligned sketch plane, drawn on a plane whose origin the carrier
+  lift adds to inexactly, or stitched from a bounded topology
   (`bodyGeom.delta`, §2) — clears only what exceeds the summed bounds
   (evaluator §10): the pair's proven `lo` is the held-boundary `lo` minus
-  both bodies' bounds, and the row's `Bound` folds them in. An unplaced,
-  axis-aligned, feature-built body keeps `bodyGeom.delta` at exactly zero,
-  so the subtraction is exact nothing for it.
+  both bodies' bounds, and the row's `Bound` folds them in. The point term
+  of `bodyGeom.delta` is the largest rounding any carrier anchor's own lift
+  through the payload's frame and placement committed, measured exactly per
+  point (`clearance.CFace.LiftRound`), so an unplaced, axis-aligned,
+  feature-built body whose lifts are exact for its own coordinates (an
+  integer origin and integer coordinates, for one) keeps `bodyGeom.delta` at
+  exactly zero, and the subtraction is exact nothing for it. Witness points
+  are float samples the kernel never reads as recorded boundary points, so
+  their lift charges nothing.
 
 ## 6. Touching pairs
 
@@ -630,9 +637,9 @@ the near-zero gate on its own terms (§1).
 Every one of these certificates is an EXACT material-side claim about where
 the two boundaries lie, so it runs only when BOTH bodies' `bodyGeom.delta`
 (§2) are exactly zero, or for a ruling certificate their carrier part
-(below). A body whose carriers are displaced — placed,
-swept off a non-axis-aligned sketch plane, or stitched from a bounded
-topology — cannot honestly certify that its carrier plane IS the boundary it
+(below). A body whose carriers are displaced — placed, swept off a
+non-axis-aligned sketch plane, lifted inexactly through its plane's origin,
+or stitched from a bounded topology — cannot honestly certify that its carrier plane IS the boundary it
 would be certifying against, and a displaced certificate has nothing to widen:
 the blessed answer here is an `Exact` zero, and there is no such thing as an
 approximate one (§1). Such a pair therefore reads undecided — `Suspect`, no

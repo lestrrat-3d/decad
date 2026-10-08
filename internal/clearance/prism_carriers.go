@@ -15,10 +15,22 @@ type PrismCarrierFrame struct {
 	Z0, Z1    float64
 }
 
-func (p PrismCarrierFrame) point(u, v, z float64) r3.Vec {
+// sample lifts plane-local (u, v) at level z into placed world space.
+func (p PrismCarrierFrame) sample(u, v, z float64) r3.Vec {
 	local := p.Frame.ToWorldUV(u, v)
 	n := p.Frame.N()
 	return p.Transform.Apply(local.Add(n.Scale(z)))
+}
+
+// point lifts a recorded plane-local (u, v) at level z — a carrier's anchor,
+// origin or axis end, a point the record states — and widens f.LiftRound by
+// the exact rounding that lift committed. A witness is a float sample the
+// kernel reads as an approximate surface point, never as a recorded one, so
+// it lifts through sample and records nothing.
+func (p PrismCarrierFrame) point(f *CFace, u, v, z float64) r3.Vec {
+	held := p.sample(u, v, z)
+	f.LiftRound = math.Max(f.LiftRound, proofbound.ExactFrameLiftRound(p.Frame, p.Transform, u, v, z, held))
+	return held
 }
 
 func (p PrismCarrierFrame) dir(du, dv, dz float64) r3.Vec {
@@ -26,10 +38,9 @@ func (p PrismCarrierFrame) dir(du, dv, dz float64) r3.Vec {
 	return p.Transform.ApplyDir(world)
 }
 
-// PrismCarrierResult holds ordered faces and the largest recorded coordinate.
+// PrismCarrierResult holds the ordered carrier faces.
 type PrismCarrierResult struct {
-	Faces      []*CFace
-	CoordUpper float64
+	Faces []*CFace
 }
 
 // BuildPrismCarriers builds wall and, for a solid, cap carriers from validated walks.
@@ -49,7 +60,6 @@ func BuildPrismCarriers(budget *proofbound.WorkBudget, p PrismCarrierFrame,
 			if !ok {
 				return PrismCarrierResult{}, false, nil
 			}
-			out.CoordUpper = math.Max(out.CoordUpper, w.CoordUpper)
 			if !surfaceResult {
 				capElems = append(capElems, el)
 			}
@@ -82,7 +92,6 @@ func PrismWallCarrier(p PrismCarrierFrame, w survey2d.SegmentWalk) (*CFace, bool
 	if w.IsCircular() {
 		f := &CFace{
 			Kind:   CkCylinder,
-			Anchor: p.point(w.CU, w.CV, p.Z0),
 			Axis:   nDir,
 			RefU:   p.dir(1, 0, 0),
 			RefV:   p.dir(0, 1, 0),
@@ -90,15 +99,16 @@ func PrismWallCarrier(p PrismCarrierFrame, w survey2d.SegmentWalk) (*CFace, bool
 			ZWin:   NewLinWindow(0, h),
 			Sweep:  AngWindow{Full: w.Closed},
 		}
+		f.Anchor = p.point(f, w.CU, w.CV, p.Z0)
 		if !w.Closed {
 			f.Sweep = NewAngWindow(w.Th0, w.Th1)
 		}
-		top := p.point(w.CU, w.CV, p.Z1)
+		top := p.point(f, w.CU, w.CV, p.Z1)
 		f.Box = BoxUnion(CircleBox(f.Anchor, nDir, w.Radius), CircleBox(top, nDir, w.Radius))
 		midTh := (w.Th0 + w.Th1) / 2
 		f.Wit = append(f.Wit,
-			p.point(w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), (p.Z0+p.Z1)/2),
-			p.point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), p.Z0))
+			p.sample(w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), (p.Z0+p.Z1)/2),
+			p.sample(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), p.Z0))
 		return f, true
 	}
 
@@ -120,11 +130,11 @@ func PrismWallCarrier(p PrismCarrierFrame, w survey2d.SegmentWalk) (*CFace, bool
 	}
 	f := &CFace{
 		Kind: CkPlane,
-		O:    p.point(w.StartU, w.StartV, p.Z0),
 		U:    e1,
 		V:    nDir,
 		N:    nOut,
 	}
+	f.O = p.point(f, w.StartU, w.StartV, p.Z0)
 	le0, _ := survey2d.LineElem(0, 0, l, 0)
 	le1, _ := survey2d.LineElem(l, 0, l, h)
 	le2, _ := survey2d.LineElem(l, h, 0, h)
@@ -139,12 +149,12 @@ func PrismWallCarrier(p PrismCarrierFrame, w survey2d.SegmentWalk) (*CFace, bool
 func PrismPlaneCarrier(p PrismCarrierFrame, z, sign float64, region Region2) *CFace {
 	f := &CFace{
 		Kind:   CkPlane,
-		O:      p.point(0, 0, z),
 		U:      p.dir(1, 0, 0),
 		V:      p.dir(0, 1, 0),
 		N:      p.dir(0, 0, 1).Scale(sign),
 		Region: region,
 	}
+	f.O = p.point(f, 0, 0, z)
 	f.Box = CapBox(f)
 	f.Wit = CapWitnesses(f)
 	return f

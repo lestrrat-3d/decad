@@ -387,6 +387,7 @@
 2	0.00	TestClearanceConeCoarseRow
 2	0.00	TestClearanceCubesDiagonalOffset
 2	0.00	TestClearanceFarOriginTiltedPlanePairContainsTruth
+2	0.01	TestClearanceFrameOriginGapEnclosesExactGap
 2	0.00	TestClearanceInchExtrudeAxialGapContainsTruth
 2	0.00	TestClearanceNearParallelPlateReadsTheCorner
 2	1.07	TestClearanceOracleOverlapNeverSound
@@ -939,6 +940,9 @@
 2	0.00	TestVerifyTouchingBoxesAreDisjoint
 2	0.01	TestVerifyUnsupportedPairEmitsOneCause
 2	0.00	TestVerifyZeroAllowanceIsLegal
+2	0.01	TestVertexFarBuiltPlacedBackBoundEnclosesLift
+2	0.01	TestVertexFrameOriginBoundEnclosesLift
+2	0.01	TestVertexIntegerOriginBoundStaysZero
 2	0.00	TestVertexPlacedPrismBoundEnclosesDisplacement
 2	0.00	TestVertexTiltedPlaneUnplacedBoundEnclosesDisplacement
 2	0.01	TestWallConeNoWall
