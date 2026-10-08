@@ -23,6 +23,11 @@ type SideResult struct {
 	RadialProof      bool
 	AxialExtentUpper float64
 	Side             float64
+	// Near is the chosen side's near-axis radial extreme with its proven
+	// bound, measured from the oriented axis: ResolveSide admits it when it is
+	// not proven negative, and a caller that needs the region strictly off
+	// the axis decides its own sign from it.
+	Near proofbound.BoundedScalar
 }
 
 // ResolveSide orients the axis so the recorded region lies on its
@@ -174,5 +179,6 @@ func ResolveSide(line Line2, readings SideExtremes) (SideResult, error) {
 		RadialProof:      radialProof,
 		AxialExtentUpper: axialExtentUpper,
 		Side:             side,
+		Near:             near,
 	}, nil
 }

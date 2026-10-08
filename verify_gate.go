@@ -156,6 +156,17 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = lowerDiameterForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
+	if payload, ok := body.payload.(coilPayload); ok {
+		// A coil's held shell is a polyhedron over its vertex table, each
+		// vertex within delta of a true point, so the mitred arm's reading
+		// and shrink apply unchanged (docs/helix-design.md §7).
+		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
+		if err != nil || !ok {
+			return d, ok, err
+		}
+		d, ok = lowerDiameterForDisplacement(d, payload.delta)
+		return d, ok, nil
+	}
 	if payload, ok := body.payload.(stitchPayload); ok {
 		// Modelled on the loft arm immediately above: a stitched body's
 		// boundary is a polyhedron over its own shared vertex table exactly

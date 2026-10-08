@@ -781,6 +781,13 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 		return pp.surfaceResult && pp.sectionDelta == 0 && !pp.chorded
 	case chainLoftPayload:
 		return true
+	case coilPayload:
+		// CP5 proves the true coil simple from CS5 and CS6, and the build's
+		// crossing audit proves its held shell embedded (docs/helix-design.md
+		// Table CD row CD1). A coil is always a solid, so the sheet audit
+		// never reaches this arm; it states the answer for any caller that
+		// asks.
+		return true
 	case stitchPayload:
 		return pp.auditClean
 	case bodyPatchPayload:
