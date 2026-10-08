@@ -279,6 +279,7 @@
 3	0.03	TestCapBlendCornerChordReachesArcNaturalEnd
 3	0.04	TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus
 3	0.04	TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine
+3	0.02	TestCapBlendGateDiameterReadsCapContours
 3	0.02	TestCapBlendGateDiameterReadsSideLevels
 3	0.02	TestCapBlendMeshCapMotionCarriesSetbackRounding
 3	0.03	TestCapBlendSideRingReachesArcNaturalEnd
@@ -451,6 +452,7 @@
 3	0.00	TestFreeformWalkWithoutCounterRefuses
 3	0.00	TestFreeformWorkLimitRefuses
 3	0.00	TestFullRevolveShellsContextPollsEachLoop
+3	0.10	TestGateDiameterReadsArcWallStations
 3	0.00	TestHeldGateReadsFacetsWithinThePrePassSlack
 3	0.00	TestHodographBoundsAreExactlyZeroOnCollapsedAndStraightUniformSpans
 3	0.00	TestHoleOrderingCancellationIsBounded
@@ -573,6 +575,7 @@
 3	0.00	TestP8SpineFixturesAreCircles
 3	0.00	TestPairGapMeasurementChargeReachesToleranceGate
 3	0.00	TestPairGapMeasurementEnclosesProvenInterval
+3	0.10	TestPairGateDiameterReadsStations
 3	0.00	TestPairReportKeyIsBitExact
 3	0.00	TestPairReportMemoEvictsOldest
 3	4.24	TestPairStationsAcceptsTheStatedChordCap
@@ -703,6 +706,7 @@
 3	0.00	TestRevolveCoordMaxCoversEveryIdealCoordinate
 3	0.00	TestRevolveFacetAreaRefusesAFacetThinnerThanItsOwnDisplacement
 3	0.00	TestRevolveFanAreaSlackIsHalfTheDensityGap
+3	0.03	TestRevolveGateDiameterReadsSheetsAndDisplacedSections
 3	0.00	TestRevolveIdealPointMeasuresTheConstructionRounding
 3	0.01	TestRevolveJunctionReachesArcNaturalEnd
 3	0.00	TestRevolveLoopsCancellationIsBounded

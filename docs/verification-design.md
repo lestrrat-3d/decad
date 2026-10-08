@@ -570,8 +570,8 @@ that allowance, and every point of a wall of radius `R` lies within
 `2R·sin(3.75°)` of a station, so a farthest pair between two walls is missed
 by at most that much at each end.
 
-**A `revolvePayload` reads its meridian stations swept to two or three
-angles.** Two points on circles of radii `r1` and `r2` about the axis, `dz`
+**Every `revolvePayload` reads its meridian stations swept to two or three
+angles**, solid or sheet, with or without a section displacement. Two points on circles of radii `r1` and `r2` about the axis, `dz`
 apart along it, sit `√(dz² + r1² + r2² − 2·r1·r2·cos Δφ)` apart, which grows
 with the angle `Δφ` between them up to half a turn. The farthest pair
 therefore sits at the widest angle apart the sweep allows, up to half a turn.
@@ -583,7 +583,9 @@ own held angle. `revolvemesh.RevolveLift.SweptPointGap` compares each held
 point exactly against the point it denotes: the recorded station, widened by
 its own gap and `sectionDelta`, rotated about the recorded axis to the
 denoted angle and lifted through the frame and placement. The maximum is
-shrunk by the widest gap. An end that states no angle (a `ToFaceAngular`
+shrunk by the widest gap. A sheet's stations lie on its walls, and a line
+wall's two ends are the only stations it gives, so a meridian line on the
+axis adds only its ends. An end that states no angle (a `ToFaceAngular`
 stop) withholds the diameter.
 
 **A draft body reads both caps' stations.** `draftGateDiameter` reads the
@@ -592,6 +594,28 @@ recorded far section at the far level; both are the boundaries of the body's
 caps. A far station also carries `farDelta`, the far contour's displacement
 from the one the sweep and taper denote. A 3° taper on a disc of radius 5
 swept 8 mm reads its antipodal rims, where its vertices alone read the seam.
+
+**An `ExtrudeChain` sheet and a `brepPayload` read wall stations too.** A
+chain sheet's vertices sit only at its segments' ends, so an open 240° arc
+would read its chord, `√3·R`, against its own diameter `2R`.
+`chainGatePoints` adds the stations along the chains at both levels, read
+off the payload's prism view; a chain the stations cannot read (a free-form
+segment) keeps its vertices alone. `brepGatePoints` reads every vertex with
+its published bound and the stations on every face's prism view: a swept
+face is its wall over the whole of its two levels, its side splits adding
+vertices and removing nothing, and a planar face's view holds its region at
+its one level. A face whose stations cannot be read adds none.
+
+**The pair's `D` reads both bodies' points together.** `pairGateDiameter`
+(`verify_gate_points.go`) joins the point sets each body proves lie on it
+(`bodyGatePoints`: the points its own gate arm reads, or its vertices with
+their published bounds) and reads the largest distance among them, pairs
+across the two bodies included, shrunk by twice the larger gap. The
+clearance kernel's pair reading (`pairKernel.pairDiameter`) and
+`interferencePairDiameter` both read it; neither reads the carriers'
+witnesses. Two unit cylinders 1 mm tall, their axes 10 mm apart along
+`(0.6, 0.8)`, are `√145` across between wall points no carrier witness
+samples; the stations reach within 7.5° of each.
 
 **Every arm publishes through one witness-maximum reader, and that reader
 rounds toward zero.** `pointSetDiameterWithBudget` (`verify_gate.go`, backed by
@@ -732,10 +756,13 @@ around its end cap is `√264` across, while the receiver's corners at the cap
 read `√300`. A loop chamfered on a cap is read from that cap's side level, the
 float sum the build places the band's side level at, and an unchamfered loop
 over the whole interval. `capBlendPayload.axialDelta` bounds how far each of
-those levels sits from the one it denotes. The cap contour is not read, so a
-chamfered body whose farthest pair ends on its cap contour reads below its
-diameter: a disc of radius 5 extruded 20 mm and chamfered 2 mm reads `√424`
-against `√464`.
+those levels sits from the one it denotes. `capBlendGatePoints` joins those
+stations with the stations on every whole cap circle (the cap contour a
+cornerless closed circle offsets into, held at its centre and offset radius
+within the band's contour displacement) and with the body's vertices, which
+hold every cap contour corner. A disc of radius 5 extruded 20 mm and
+chamfered 2 mm around both caps is `√436` across, between its two cap
+circles. A cap contour arc a corner trims is read at its ends alone.
 
 What `fallbackGateDiameter` reports is `stationGateDiameter`'s reading over
 those witness prisms. A station is a point of the body only when the witness

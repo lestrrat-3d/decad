@@ -479,14 +479,8 @@ func TestSurfaceRevolveSheetVerifiesUndecided(t *testing.T) {
 // by construction — payloadProvesSimple's revolvePayload arm holds because
 // the sweep is exactly one full turn and annularSketch's radial minimum
 // (5 mm) is proven clear of the axis. This is the widening PR 0 makes: the
-// same fixture read ValidityUndecided before this arm existed. The body's
-// overall Status still reads Suspect here, on a DiagToleranceReferenceUnavailable
-// unrelated to validity: a revolve sheet has no gate-diameter arm
-// (newBodyGeomBudget's revolvePayload case refuses every surfaceResult
-// revolve outright, verify_gate.go), a pre-existing gap this leg does not
-// touch, so the Approximate area this curved fixture publishes has no
-// reference to gate against. The assertion below is deliberately scoped to
-// what this leg changes: Validity alone.
+// same fixture read ValidityUndecided before this arm existed. The assertion
+// below is deliberately scoped to what this leg changes: Validity alone.
 func TestSurfaceRevolveFullTurnSheetVerifiesValid(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
