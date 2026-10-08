@@ -1,6 +1,7 @@
 package offset2d_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -142,6 +143,45 @@ func TestOpeningJoinKeepsTheFoot(t *testing.T) {
 	j, err := offset2d.OpeningJoin(d, line([2]float64{d.EndU, d.EndV}, [2]float64{0.3, 0.1 - 1.1}), true, 1, 0.3, openingTol)
 	require.NoError(t, err)
 	require.Equal(t, offset2d.Point{U: 0.3, V: 0.1 + (1.1 - 0.3)}, j.M)
+}
+
+// TestOpeningJoinHoldsAnAxisLevel reads §2.4's float-solve row on a removed
+// walk along a section axis: the cut lies on r's carrier, so it holds v's
+// coordinate across that axis bit for bit, while the coordinate along r is
+// the solve's. The trapezoid (0,0) (14,0) (11,4) (3,4) without its y = 4
+// side and the triangle (0,0) (12,0) (0,9) without its x = 0 leg, over a
+// range of t, each cut also near its closed form.
+//
+// Shown to fail: deleting the hold leaves the trapezoid's cut at (9.75, 4)
+// for t = 1 a unit in the last place off y = 4.
+func TestOpeningJoinHoldsAnAxisLevel(t *testing.T) {
+	top := line([2]float64{11, 4}, [2]float64{3, 4})
+	leg := line([2]float64{0, 9}, [2]float64{0, 0})
+	for _, tt := range []float64{0.3, 0.7, 1, 1.3, 2.9} {
+		for _, tc := range []struct {
+			name   string
+			k, r   survey2d.SideWalk
+			atEnd  bool
+			alongU bool
+			want   [2]float64
+		}{
+			{"trapezoid at the end", line([2]float64{14, 0}, [2]float64{11, 4}), top, true, true, [2]float64{(44 - 5*tt) / 4, 4}},
+			{"trapezoid at the start", line([2]float64{3, 4}, [2]float64{0, 0}), top, false, true, [2]float64{(12 + 5*tt) / 4, 4}},
+			{"triangle at the end", line([2]float64{12, 0}, [2]float64{0, 9}), leg, true, false, [2]float64{0, (36 - 5*tt) / 4}},
+		} {
+			t.Run(fmt.Sprintf("%s, t = %g", tc.name, tt), func(t *testing.T) {
+				j, err := offset2d.OpeningJoin(tc.k, tc.r, tc.atEnd, 1, tt, openingTol)
+				require.NoError(t, err)
+				if tc.alongU {
+					require.Equal(t, math.Float64bits(j.VertV), math.Float64bits(j.M.V))
+				} else {
+					require.Equal(t, math.Float64bits(j.VertU), math.Float64bits(j.M.U))
+				}
+				require.InDelta(t, tc.want[0], j.M.U, 1e-12)
+				require.InDelta(t, tc.want[1], j.M.V, 1e-12)
+			})
+		}
+	}
 }
 
 func TestOpeningJoinRefusals(t *testing.T) {

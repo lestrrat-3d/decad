@@ -209,7 +209,21 @@ func solveOpeningCut(k, r survey2d.SideWalk, o opening, s, t, tol float64) (Poin
 			return Point{}, ErrOpeningCorner
 		}
 	}
-	return Point{U: bestAt[0], V: bestAt[1]}, nil
+	q := Point{U: bestAt[0], V: bestAt[1]}
+	// The cut lies on r's carrier. A straight r along a section axis holds
+	// one coordinate exactly, v's, so the cut takes that coordinate rather
+	// than the solve's rounding of it: the record then states the cut on r's
+	// own plane, as the right-angle foot does. OpeningReach charges whatever
+	// the other coordinate's rounding leaves.
+	if !r.IsCircular() {
+		switch {
+		case o.fU == 0:
+			q.U = o.vU
+		case o.fV == 0:
+			q.V = o.vV
+		}
+	}
+	return q, nil
 }
 
 // openingAdvance is how far along r's carrier, in the entering direction from

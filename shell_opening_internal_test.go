@@ -173,3 +173,137 @@ func TestRequireAreaIdentityRefuses(t *testing.T) {
 	require.True(t, errors.Is(err, ErrUnsupported))
 	require.ErrorContains(t, err, "SO5")
 }
+
+// internalSideSegmentsOn names the outer-loop segments of pp whose recorded
+// line runs from a to b.
+func internalSideSegmentsOn(t *testing.T, pp prismPayload, a, b Point2) map[int]struct{} {
+	t.Helper()
+	out := map[int]struct{}{}
+	for i, seg := range pp.profile.Outer.Segments {
+		l, ok := seg.(LineSeg)
+		require.True(t, ok)
+		if l.Start == a && l.End == b {
+			out[i] = struct{}{}
+		}
+	}
+	require.Len(t, out, 1)
+	return out
+}
+
+// internalNear asserts the held point p lies within bound of the exact point
+// (u, v), compared exactly.
+func internalNear(t *testing.T, p Point2, u, v *big.Rat, bound float64) {
+	t.Helper()
+	du := new(big.Rat).Sub(proofarith.FloatRat(p.U), u)
+	dv := new(big.Rat).Sub(proofarith.FloatRat(p.V), v)
+	d2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
+	b := proofarith.FloatRat(bound)
+	require.LessOrEqual(t, d2.Cmp(new(big.Rat).Mul(b, b)), 0, "held %v lies off (%s, %s) by more than %g", p, u.FloatString(20), v.FloatString(20), bound)
+}
+
+// TestSideOpeningRegionsOblique pins docs/shell-opening-design.md §3's regions
+// where the removed face is oblique (§4.2). The triangle (0,0) (12,0) (0,9)
+// without its hypotenuse at t = 3 cuts forward at both ends, so the cap
+// region states the hypotenuse as three collinear pieces (12,0) → qB → qA →
+// (0,9) with qB near (8, 3) and qA near (3, 6.75), and both end vertices are
+// marked. The slanted reflex section (0,0) (30,0) (30,10) (14,10) (10,30)
+// (0,30) without (14,10)→(10,30) at t = 2 cuts backward at (14.4, 8), so R'
+// runs from that cut through the corner (14,10) as two pieces, and forward at
+// (10.4, 28), which splits the cap region's walk there.
+func TestSideOpeningRegionsOblique(t *testing.T) {
+	t.Parallel()
+	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
+	rat := func(n, d int64) *big.Rat { return big.NewRat(n, d) }
+	t.Run("oblique removed face", func(t *testing.T) {
+		t.Parallel()
+		tri := internalPolyPrismBodyAtZ(t, New(), [][2]float64{{0, 0}, {12, 0}, {0, 9}}, 0, 10)
+		pp := tri.payload.(prismPayload)
+		budget := proofbound.NewWorkBudget(t.Context())
+		sec, err := sideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, pt(12, 0), pt(0, 9)), 2, 1, units.Millimeters(3), 3, 0)
+		require.NoError(t, err)
+		caps := internalLoopPoints(t, sec.caps.Outer)
+		require.Len(t, caps, 5)
+		require.Equal(t, []Point2{pt(0, 9), pt(0, 0), pt(12, 0)}, caps[:3])
+		internalNear(t, caps[3], rat(8, 1), rat(3, 1), sec.delta)
+		internalNear(t, caps[4], rat(3, 1), rat(27, 4), sec.delta)
+		cavity := internalLoopPoints(t, sec.cavity.Outer)
+		require.Equal(t, []Point2{caps[4], pt(3, 3), caps[3]}, cavity)
+		require.ElementsMatch(t, []Point2{pt(12, 0), pt(0, 9)}, sec.corners)
+	})
+	t.Run("slanted reflex end", func(t *testing.T) {
+		t.Parallel()
+		l := internalPolyPrismBodyAtZ(t, New(), [][2]float64{{0, 0}, {30, 0}, {30, 10}, {14, 10}, {10, 30}, {0, 30}}, 0, 10)
+		pp := l.payload.(prismPayload)
+		budget := proofbound.NewWorkBudget(t.Context())
+		sec, err := sideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, pt(14, 10), pt(10, 30)), 2, 1, units.Millimeters(2), 2, 0)
+		require.NoError(t, err)
+		cavity := internalLoopPoints(t, sec.cavity.Outer)
+		require.Len(t, cavity, 7)
+		internalNear(t, cavity[0], rat(52, 5), rat(28, 1), sec.delta)
+		require.Equal(t, []Point2{pt(2, 28), pt(2, 2), pt(28, 2), pt(28, 8)}, cavity[1:5])
+		internalNear(t, cavity[5], rat(72, 5), rat(8, 1), sec.delta)
+		require.Equal(t, pt(14, 10), cavity[6], "R' turns at the corner it runs back through")
+		caps := internalLoopPoints(t, sec.caps.Outer)
+		require.Equal(t, []Point2{pt(10, 30), pt(0, 30), pt(0, 0), pt(30, 0), pt(30, 10), pt(14, 10), cavity[0]}, caps)
+		require.ElementsMatch(t, []Point2{pt(14, 10), pt(10, 30)}, sec.corners)
+	})
+}
+
+// TestSideOpeningCutReachCoversExactCut is docs/shell-opening-design.md §9's
+// record fixture: for the triangle and trapezoid families over a range of t,
+// every vertex of the cavity C — the two rim cuts and K's miters — lies within
+// the published section displacement of its exact rational closed form, and
+// some cut is inexact, so the displacement is charged. Shown to fail with
+// chainEndReach's opening ends returning zero (OpeningReach skipped): the
+// triangle's cut at (31/3, 0) for t = 1 then lay off by more than a delta of
+// zero.
+func TestSideOpeningCutReachCoversExactCut(t *testing.T) {
+	t.Parallel()
+	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
+	type family struct {
+		name   string
+		pts    [][2]float64
+		a, b   Point2
+		cavity func(t *big.Rat) [][2]*big.Rat
+	}
+	// lin is a + b·t over the rationals.
+	lin := func(a, b, d int64, t *big.Rat) *big.Rat {
+		out := new(big.Rat).Mul(big.NewRat(b, d), t)
+		return out.Add(out, big.NewRat(a, d))
+	}
+	families := []family{
+		// The y = 0 leg removed: qA on 3x + 4y = 36 − 5t, the miter (t, 9 − 2t), qB (t, 0).
+		{"triangle without its leg", [][2]float64{{0, 0}, {12, 0}, {0, 9}}, pt(0, 0), pt(12, 0), func(t *big.Rat) [][2]*big.Rat {
+			return [][2]*big.Rat{{lin(36, -5, 3, t), new(big.Rat)}, {t, lin(9, -2, 1, t)}, {t, new(big.Rat)}}
+		}},
+		// The hypotenuse removed: qA (t, (36 − 3t)/4), the miter (t, t), qB ((36 − 4t)/3, t).
+		{"triangle without its hypotenuse", [][2]float64{{0, 0}, {12, 0}, {0, 9}}, pt(12, 0), pt(0, 9), func(t *big.Rat) [][2]*big.Rat {
+			return [][2]*big.Rat{{t, lin(36, -3, 4, t)}, {t, t}, {lin(36, -4, 3, t), t}}
+		}},
+		// The y = 4 side removed: qA ((12 + 5t)/4, 4), miters (2t, t) and (14 − 2t, t), qB ((44 − 5t)/4, 4).
+		{"trapezoid without its top", [][2]float64{{0, 0}, {14, 0}, {11, 4}, {3, 4}}, pt(11, 4), pt(3, 4), func(t *big.Rat) [][2]*big.Rat {
+			four := big.NewRat(4, 1)
+			return [][2]*big.Rat{{lin(12, 5, 4, t), four}, {lin(0, 2, 1, t), t}, {lin(14, -2, 1, t), t}, {lin(44, -5, 4, t), four}}
+		}},
+	}
+	charged := 0
+	for _, f := range families {
+		for _, tmm := range []float64{0.5, 1, 1.25, 1.5, 2, 2.5, 3} {
+			body := internalPolyPrismBodyAtZ(t, New(), f.pts, 0, 10)
+			pp := body.payload.(prismPayload)
+			budget := proofbound.NewWorkBudget(t.Context())
+			sec, err := sideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, f.a, f.b), 2, 1, units.Millimeters(tmm), tmm, 0)
+			require.NoError(t, err, "%s at t = %g", f.name, tmm)
+			want := f.cavity(proofarith.FloatRat(tmm))
+			held := internalLoopPoints(t, sec.cavity.Outer)
+			require.Len(t, held, len(want), "%s at t = %g", f.name, tmm)
+			for i, w := range want {
+				internalNear(t, held[i], w[0], w[1], sec.delta)
+			}
+			if sec.delta > 0 {
+				charged++
+			}
+		}
+	}
+	require.Positive(t, charged, "some cut is a float solve whose displacement is charged")
+}

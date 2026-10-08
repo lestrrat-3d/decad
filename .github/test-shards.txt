@@ -724,7 +724,9 @@
 3	0.00	TestSharesFacePlane
 3	0.00	TestShellRectCircleWitnessKeepsToleranceAndFallsBack
 3	0.01	TestSideOpeningBrepChargesInexactThickness
+3	0.01	TestSideOpeningCutReachCoversExactCut
 3	0.01	TestSideOpeningRegionsLPrism
+3	0.01	TestSideOpeningRegionsOblique
 3	0.01	TestSideOpeningRegionsUChannel
 3	0.00	TestSideOriginsContextPollsEachSegment
 3	0.00	TestSingleSignPolygonTurnsProveNoCurvatureSign
