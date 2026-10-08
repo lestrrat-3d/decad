@@ -1178,3 +1178,4 @@
 5	0.01	TestSegmentCoordinateUpperCoversTheArc
 5	0.04	TestChordLocusSliverCubeCoversTheSlivers
 5	0.07	TestChordLocusRegionVolumeCoversTheDip
+5	0.01	TestPrismLiftFactorBoundsTheHeldMap

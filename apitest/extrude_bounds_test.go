@@ -174,7 +174,9 @@ func TestExtrudeArcSegPrismBoundsTighten(t *testing.T) {
 // scenario on the pre-port commit (exact-rational atanSmallInterval) via
 // fmt.Sprintf("%b", ...) — the exact binary float64 representation, not a
 // rounded decimal — so a mismatch here means the carrier swap moved a
-// published value or bound, not merely that a tolerance loosened.
+// published value or bound, not merely that a tolerance loosened. The
+// centroid bound's golden carries prismPointBound's lift factor, exactly 1 for
+// this unplaced axis-aligned prism.
 func TestExtrudeArcSegPrismReadingsBitIdenticalAcrossAtanCarrier(t *testing.T) {
 	t.Parallel()
 	const r = 20.0
@@ -211,7 +213,7 @@ func TestExtrudeArcSegPrismReadingsBitIdenticalAcrossAtanCarrier(t *testing.T) {
 	require.Equal(t, "4778467616018883p-49", fmt.Sprintf("%b", c.Value.X))
 	require.Equal(t, "4778467616018881p-49", fmt.Sprintf("%b", c.Value.Y))
 	require.Equal(t, "5629499534213120p-51", fmt.Sprintf("%b", c.Value.Z))
-	require.Equal(t, "4698155632678034p-98", fmt.Sprintf("%b", c.Bound.Base()))
+	require.Equal(t, "4698155632678034p-100", fmt.Sprintf("%b", c.Bound.Base()))
 
 	var arcEdge *decad.Edge
 	for _, e := range body.Edges() {

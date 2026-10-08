@@ -456,8 +456,9 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // this arm's structural (0, false, nil) answer, which states only that the
 // recorded section gives this arm nothing to read.
 func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64, bool, error) {
+	factor := prismLiftFactor(pp)
 	lift := func(u, v, z float64, bound proofbound.WalkEndBound) (r3.Vec, float64) {
-		gap := prismPointBound(pp, proofbound.MeasuredScalar(u, bound.U), proofbound.MeasuredScalar(v, bound.V),
+		gap := prismPointBoundWith(pp, factor, proofbound.MeasuredScalar(u, bound.U), proofbound.MeasuredScalar(v, bound.V),
 			proofbound.MeasuredScalar(z, 0))
 		return pp.point(u, v, z), gap
 	}
