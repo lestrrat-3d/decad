@@ -645,6 +645,22 @@ corners and a pierced L prism's reflex corner read concave. Any other line
 reads the owner planar face's loop role: outer convex, hole concave. That
 covers a cap meeting a wall, and two planar faces of different sweeps.
 
+Vertices are shared by exact reference coordinates. Each rim and loop-segment
+use places a vertex at both ends of its walk, and the vertex publishes the
+largest bound any use placing it states. A use states its face's `delta`,
+its level's displacement, the vertex's own frame and placement lift rounding,
+and the distance from its held walk end to the point its recorded segment
+denotes there (`brepgeom.Use`'s `StartBound` and `EndBound`, evaluator §3).
+That distance is the walk's own end bound, plus the arc's radial residual at
+an arc's natural `t = 1` end, where the record holds `End` verbatim while
+the arc denotes Start's radius at End's angle (evaluator §4). Every use
+meeting at a vertex holds the same coordinates, so the largest bound reaches
+every neighbour's denoted end. A vertex at a whole arc's `End` off Start's
+radius therefore carries a bound in every result that keeps the arc: an A1
+union, a class-B cut, a route-E rewrite, a shell side opening. A vertex where
+natural line ends and an arc's `t = 0` Start meet at one recorded coordinate
+stays `Exact`.
+
 `Lumps` and `Shells` are derived from face adjacency (`sheetLumps`). Roles are fresh under the boolean's producer identity:
 `face(k)` for planar faces, `wall(k)` for swept, both indexed by the result
 record, and `capStart`/`capEnd` are not minted (core §9: the helper returns a

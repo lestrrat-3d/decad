@@ -357,6 +357,7 @@
 2	0.03	TestBooleanRejections
 2	0.72	TestBooleanVerifyUsesProvenToleranceBound
 2	0.00	TestBox
+2	0.05	TestBrepVertexReachesArcNaturalEnd
 2	0.00	TestBrokenNURBSKnotVectorRefuses
 2	0.05	TestCapBlendAsymmetricBox
 2	0.05	TestCapBlendAsymmetricCapsPickApart

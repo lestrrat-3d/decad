@@ -147,6 +147,13 @@ Rules:
   natural line ends meet at one recorded coordinate, or the seam of a circle
   whose centre plus radius is representable, is `Exact`. A cut junction, a
   trimmed line end, and a seam whose sum rounds carry a bound.
+  A brep body's vertex (`docs/general-boolean-design.md` §4.2) takes the
+  largest bound over every face use meeting it. Each use charges the bound
+  from its held walk end to the point its recorded segment denotes there
+  (`brepgeom.Use`'s `StartBound` and `EndBound`, which call
+  `boundarywalk.DenotedStartBound` and `DenotedEndBound`). Every such use
+  holds the same reference coordinates, so the largest of them reaches both
+  neighbours' denoted ends, an arc's natural `t = 1` end included.
   `Body.Patch` admits a rim with such a vertex only through its level-token
   arm, which a straight prism build stamps (`docs/surface-design.md` §5.2,
   Table R row R6).

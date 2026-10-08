@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
@@ -149,7 +152,8 @@ const NoSweep = -1
 // piece's SideDelta holds the level displacements at its two ends, lower
 // first. Sweep is the reference axis the use's face sweeps along as a wall —
 // a swept face's own, a planar face's recorded one, NoSweep for a cap — and
-// Outward is a planar face's outward flag.
+// Outward is a planar face's outward flag. Record is the recorded segment a
+// rim or loop-segment use walks, nil on a side line.
 type Use struct {
 	Face            int
 	Loop            int
@@ -160,11 +164,26 @@ type Use struct {
 	DirFrom, DirTo  [3]float64
 	Sense, DirSense bool
 	Walk            survey2d.SegmentWalk
+	Record          sectionrecord.CurveSegment
 	Level           float64
 	LevelDelta      float64
 	SideDelta       [2]float64
 	Sweep           int
 	Outward         bool
+}
+
+// StartBound is the per-component bound on the distance from DirFrom, the
+// held start of a rim's or loop segment's walk, to the point its Record
+// denotes there (boundarywalk.DenotedStartBound). It is the walk's own start
+// bound except at an arc's natural t = 1 end, which adds the arc's radial
+// residual.
+func (u Use) StartBound() proofbound.WalkEndBound {
+	return boundarywalk.DenotedStartBound(u.Record, u.Walk)
+}
+
+// EndBound is StartBound for DirTo, the walk's held end.
+func (u Use) EndBound() proofbound.WalkEndBound {
+	return boundarywalk.DenotedEndBound(u.Record, u.Walk)
 }
 
 // Split is one level strictly inside a swept face's interval at which a side
@@ -178,10 +197,14 @@ type Split struct {
 // states its outward flag and, when it restates a straight wall as a plane,
 // the reference axis that wall sweeps along (NoSweep for a cap); a swept
 // face's axis is its own frame normal's, and Build reads it from Embed.
+// PlanarSegs and WallSeg are the recorded segments Planar and Wall walk, in
+// the same order; Build copies each onto its uses' Record.
 type FaceWalks struct {
 	Embed            Embed
 	Planar           [][]survey2d.SegmentWalk
+	PlanarSegs       [][]sectionrecord.CurveSegment
 	Wall             survey2d.SegmentWalk
+	WallSeg          sectionrecord.CurveSegment
 	IsPlanar         bool
 	Outward          bool
 	Sweep            int
@@ -252,7 +275,7 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 		t0, t1 := e.Canon(w.EndU, w.EndV, f.Z0), e.Canon(w.EndU, w.EndV, f.Z1)
 		_ = t0
 		rim := func(part Part, z, zDelta float64, from, to, dirFrom, dirTo [3]float64, reversed bool) Use {
-			u := Use{Face: fi, Loop: -1, Seg: -1, Part: part, Walk: w, Level: z, LevelDelta: zDelta,
+			u := Use{Face: fi, Loop: -1, Seg: -1, Part: part, Walk: w, Record: f.WallSeg, Level: z, LevelDelta: zDelta,
 				From: from, To: to, DirFrom: dirFrom, DirTo: dirTo, Sweep: e.Axis[2]}
 			u.Key, u.Sense = CurveKey(e, w, z)
 			u.DirSense = u.Sense
