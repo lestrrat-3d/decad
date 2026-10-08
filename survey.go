@@ -1,13 +1,13 @@
 package decad
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
@@ -533,174 +533,21 @@ func cupWalksBudget(budget *proofbound.WorkBudget, loop LoopRecord) ([]survey2d.
 	return loops[0], nil
 }
 
-// cupWall returns the shell-wall theorem of
-// docs/payload-verification-design.md §4: an accepted cup reads its shell
-// thickness unless one of its material junctions is within the caller's draft
-// allowance, in which case the closure-under-limits rule makes the reading
-// exactly zero. The thickness reading carries the payload's own
-// millimetre-conversion displacement as its bound and is Exact only when that
-// displacement is zero; the pinch reading is always Exact zero. The theorem
-// consumes the payload's morphology, not caller input: it rebuilds and
-// audits the offset relation before trusting it.
-func cupWall(budget *proofbound.WorkBudget, cp cupView, alpha float64) (wallOutcome, error) {
-	finite := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
-	isCancellation := func(err error) bool {
-		return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
-	}
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return wallOutcome{}, err
-	}
-	t := cp.thickness
-	if !finite(t) || t <= 0 || (cp.sense != Inward && cp.sense != Outward) {
-		return wallOutcome{}, nil
-	}
-	dOuter := cp.zOpen - cp.zOuter
-	dCavity := cp.zOpen - cp.zCav
-	if !finite(dOuter) || !finite(dCavity) || dOuter == 0 || dCavity == 0 ||
-		math.Signbit(dOuter) != math.Signbit(dCavity) || math.Abs(dCavity) >= math.Abs(dOuter) {
-		return wallOutcome{}, nil
-	}
-	openDir := 1.0
-	if dOuter < 0 {
-		openDir = -1
-	}
-	if cp.sense == Inward && cp.zCav != cp.zOuter+openDir*t {
-		return wallOutcome{}, nil
-	}
-	if cp.sense == Outward && cp.zOuter != cp.zCav-openDir*t {
-		return wallOutcome{}, nil
-	}
+var cupWallOperations = cupwall.Operations{
+	Offset:  offsetProfile,
+	Equal:   profileRecordsEqual,
+	Audit:   auditOffsetSectionBudget,
+	Walks:   recordLoopsBudget,
+	Reverse: reverseLoopRecordBudget,
+}
 
-	oLoops := append([]LoopRecord{cp.outer.Outer}, cp.outer.Holes...)
-	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
-	if len(oLoops) != len(cLoops) {
-		return wallOutcome{}, nil
+func cupWallInput(cp cupView) cupwall.Input {
+	return cupwall.Input{
+		Outer: cp.outer, Cavity: cp.cavity,
+		ZOpen: cp.zOpen, ZOuter: cp.zOuter, ZCav: cp.zCav,
+		Thickness: cp.thickness, ThicknessDelta: cp.thicknessDelta,
+		Inward: cp.sense == Inward, Outward: cp.sense == Outward,
 	}
-	if oi, err := cp.outer.IntegralsBudget(budget); err != nil {
-		if isCancellation(err) {
-			return wallOutcome{}, err
-		}
-		return wallOutcome{}, nil
-	} else if oi.Area <= 0 || !finite(oi.Area) {
-		return wallOutcome{}, nil
-	}
-	if ci, err := cp.cavity.IntegralsBudget(budget); err != nil {
-		if isCancellation(err) {
-			return wallOutcome{}, err
-		}
-		return wallOutcome{}, nil
-	} else if ci.Area <= 0 || !finite(ci.Area) {
-		return wallOutcome{}, nil
-	}
-
-	// Inward cups store C = O ⊖ t. Outward cups store O = C ⊕ t. Structural
-	// equality is the exact claim: a residual or tolerance match could only
-	// guess that the regions correspond.
-	offsetMatches := func(orig, want ProfileRecord, sense float64) (bool, error) {
-		got, err := offsetProfile(budget, orig, sense, t)
-		if err != nil {
-			if isCancellation(err) {
-				return false, err
-			}
-			return false, nil
-		}
-		same, err := profileRecordsEqual(budget, got, want)
-		if err != nil {
-			if isCancellation(err) {
-				return false, err
-			}
-			return false, nil
-		}
-		if !same {
-			return false, nil
-		}
-		if err := auditOffsetSectionBudget(budget, orig, got); err != nil {
-			if isCancellation(err) {
-				return false, err
-			}
-			return false, nil
-		}
-		return true, nil
-	}
-	matches, err := offsetMatches(cp.outer, cp.cavity, 1)
-	if err != nil {
-		return wallOutcome{}, err
-	}
-	if cp.sense == Outward {
-		matches, err = offsetMatches(cp.cavity, cp.outer, -1)
-		if err != nil {
-			return wallOutcome{}, err
-		}
-	}
-	if !matches {
-		return wallOutcome{}, nil
-	}
-
-	hasPinch := func(loops [][]survey2d.SideWalk) (bool, bool, error) {
-		for _, loop := range loops {
-			if err := survey2d.WallBudgetStep(budget); err != nil {
-				return false, false, err
-			}
-			if len(loop) == 0 {
-				return false, false, nil
-			}
-			if len(loop) == 1 && loop[0].Closed {
-				continue
-			}
-			for i, w := range loop {
-				if err := survey2d.WallBudgetStep(budget); err != nil {
-					return false, false, err
-				}
-				prev := loop[(i+len(loop)-1)%len(loop)]
-				if survey2d.JunctionPinch(prev.TanOutU, prev.TanOutV, w.TanInU, w.TanInV, alpha) {
-					return true, true, nil
-				}
-			}
-		}
-		return false, true, nil
-	}
-
-	outerWalks, err := recordLoopsBudget(budget, cp.outer)
-	if err != nil {
-		return wallOutcome{}, err
-	}
-	pinch, ok, err := hasPinch(outerWalks)
-	if err != nil {
-		return wallOutcome{}, err
-	}
-	if !ok {
-		return wallOutcome{}, nil
-	} else if pinch {
-		zero := 0.0
-		return wallOutcome{reading: &zero, ok: true}, nil
-	}
-
-	// The cavity boundary is a void skin, so reverse every recorded loop to
-	// restore the same material-left walk convention junctionPinch expects.
-	var cavityWalks [][]survey2d.SideWalk
-	for _, loop := range cLoops {
-		reversed, err := reverseLoopRecordBudget(budget, loop)
-		if err != nil {
-			return wallOutcome{}, err
-		}
-		walks, err := cupWalksBudget(budget, reversed)
-		if err != nil {
-			return wallOutcome{}, err
-		}
-		cavityWalks = append(cavityWalks, walks)
-	}
-	pinch, ok, err = hasPinch(cavityWalks)
-	if err != nil {
-		return wallOutcome{}, err
-	}
-	if !ok {
-		return wallOutcome{}, nil
-	} else if pinch {
-		zero := 0.0
-		return wallOutcome{reading: &zero, ok: true}, nil
-	}
-
-	return wallOutcome{reading: &t, bound: cp.thicknessDelta, ok: true}, nil
 }
 
 // cupUndercuts surveys a cup's faces against the pull (docs/modify-design.md
@@ -889,7 +736,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		case revolvePayload:
 			out, err = revolveWall(budget, pl, cfg.AllowRad)
 		case cupPayload:
-			out, err = cupWall(budget, pl.view(), cfg.AllowRad)
+			wall, wallErr := cupwall.Evaluate(budget, cupWallInput(pl.view()), cfg.AllowRad, cupWallOperations)
+			out, err = wallOutcome{reading: wall.Reading, bound: wall.Bound, ok: wall.OK}, wallErr
 		case capBlendPayload:
 			// DX9 (docs/modify-reach-design.md Table DX): a cap blend is not
 			// one constant section at one height, so the existing 2D

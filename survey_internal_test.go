@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -22,6 +23,11 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func cupWall(budget *proofbound.WorkBudget, cp cupView, alpha float64) (wallOutcome, error) {
+	wall, err := cupwall.Evaluate(budget, cupWallInput(cp), alpha, cupWallOperations)
+	return wallOutcome{reading: wall.Reading, bound: wall.Bound, ok: wall.OK}, err
+}
 
 // This file is a deliberate internal-test exception (like
 // selector_internal_test.go): the kernel's sub-resolution web semantic is
