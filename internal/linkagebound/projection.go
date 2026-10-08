@@ -40,7 +40,8 @@ func sqrtUpRat(q *big.Rat) *big.Rat {
 	return proofarith.FloatRat(proofbound.RatSqrtUp(q))
 }
 
-func ratZero(v motionbound.RatVec) bool {
+// ZeroVec reports whether every exact component is zero.
+func ZeroVec(v motionbound.RatVec) bool {
 	return v[0].Sign() == 0 && v[1].Sign() == 0 && v[2].Sign() == 0
 }
 
@@ -153,7 +154,7 @@ func FaceNormals(c Bounds) []motionbound.RatVec {
 	}
 	var out []motionbound.RatVec
 	for _, v := range vecs {
-		if r, ok := motionbound.RatVecOf(v); ok && !ratZero(r) {
+		if r, ok := motionbound.RatVecOf(v); ok && !ZeroVec(r) {
 			out = append(out, r)
 		}
 	}

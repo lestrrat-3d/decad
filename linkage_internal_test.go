@@ -764,11 +764,20 @@ func TestLinkageProjectionSegmentTerm(t *testing.T) {
 //
 // Legs seen to fail when deleted: the pad (the displaced level reads zero),
 // and the pads in the bound (the padded pair reads 10).
+func prismHullPointsForTest(b *Body) ([]motionbound.RatVec, *big.Rat, int, bool) {
+	pp := b.payload.(prismPayload)
+	return linkagebound.PrismHullPoints(linkagebound.PrismHull{
+		Outer: pp.profile.Outer, Frame: pp.frame, Transform: pp.xform,
+		Z0: pp.z0, Z1: pp.z1, SectionDelta: pp.sectionDelta,
+		Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
+	})
+}
+
 func TestLinkageHullPoints(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	block := internalBoxBody(t, doc, 0, 0, 10, 4, 3)
-	points, pad, k, ok := bodyHullPoints(block)
+	points, pad, k, ok := prismHullPointsForTest(block)
 	require.True(t, ok)
 	require.Equal(t, 4, k)
 	require.Len(t, points, 8)
@@ -782,7 +791,7 @@ func TestLinkageHullPoints(t *testing.T) {
 
 	pp := block.payload.(prismPayload)
 	pp.z1Delta = 0.25
-	_, pad, _, ok = bodyHullPoints(&Body{payload: pp})
+	_, pad, _, ok = prismHullPointsForTest(&Body{payload: pp})
 	require.True(t, ok)
 	require.InDelta(t, 4*math.Sqrt(3)*0.25, linkRatFloat(t, pad), 1e-12)
 	require.GreaterOrEqual(t, linkRatFloat(t, pad), 4*math.Sqrt(3)*0.25)
@@ -852,7 +861,7 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 		"a box": block, "a box turned about Z and lifted": turned, "a box turned about (1, 1, 1)": tilted,
 		"a displaced union": {payload: union, bounds: unionBox},
 	} {
-		points, pad, _, ok := bodyHullPoints(body)
+		points, pad, _, ok := prismHullPointsForTest(body)
 		require.True(t, ok, name)
 		lo, hi, ok := motionbound.BoxCornersExact(body.bounds, new(big.Rat))
 		require.True(t, ok, name)

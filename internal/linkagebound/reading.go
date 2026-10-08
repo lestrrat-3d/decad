@@ -26,6 +26,12 @@ func StaticPoints(points []motionbound.RatVec) Reading {
 	return out
 }
 
+// StaticBox reads the eight corners of a stationary box with no velocity.
+func StaticBox(lo, hi motionbound.RatVec) Reading {
+	corners := BoxCorners(lo, hi)
+	return StaticPoints(corners[:])
+}
+
 // ApplyIdeal maps an enclosed point through an ideal pose,
 // x ↦ rot·(x − pivot) + pivot + shift.
 func ApplyIdeal(p motionbound.IdealPose, x motionbound.IvVec) motionbound.IvVec {

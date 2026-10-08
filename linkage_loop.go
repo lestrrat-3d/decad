@@ -160,11 +160,11 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 	for _, k := range lp.links {
 		switch j := k.joint.(type) {
 		case RevoluteJoint:
-			if c := ratCross(ratVecExact(j.Axis), lp.normal); !ratZero(c) {
+			if c := linkagebound.Cross(ratVecExact(j.Axis), lp.normal); !linkagebound.ZeroVec(c) {
 				return nil, fmt.Errorf(`%w: link %d's revolute axis %v is not exactly parallel to the closure axis %v`, ErrUnsupported, k.index, j.Axis, axis)
 			}
 		case PrismaticJoint:
-			if ratDot(ratVecExact(j.Dir), lp.normal).Sign() != 0 {
+			if linkagebound.Dot(ratVecExact(j.Dir), lp.normal).Sign() != 0 {
 				return nil, fmt.Errorf(`%w: link %d's prismatic direction %v is not exactly perpendicular to the closure axis %v`, ErrUnsupported, k.index, j.Dir, axis)
 			}
 		}
@@ -176,7 +176,8 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 		if k.parent == lp.common && lp.slide == nil {
 			lp.slide = k
 		}
-		if k.parent != lp.common && isSlide(k.parent) && ratZero(ratCross(slideDir(k), slideDir(k.parent))) {
+		if k.parent != lp.common && isSlide(k.parent) &&
+			linkagebound.ZeroVec(linkagebound.Cross(slideDir(k), slideDir(k.parent))) {
 			return nil, fmt.Errorf(`%w: links %d and %d slide in a row along parallel directions, which slides the loop with no driver`, ErrDegenerate, k.parent.index, k.index)
 		}
 	}
@@ -272,10 +273,10 @@ func (lp *LinkageLoop) planeSqRat(pd, qd motionbound.RatVec) *big.Rat {
 	for i := range 3 {
 		d[i] = new(big.Rat).Sub(pd[i], qd[i])
 	}
-	along := ratDot(d, lp.normal)
+	along := linkagebound.Dot(d, lp.normal)
 	along.Mul(along, along)
-	along.Quo(along, ratDot(lp.normal, lp.normal))
-	return along.Sub(ratDot(d, d), along)
+	along.Quo(along, linkagebound.Dot(lp.normal, lp.normal))
+	return along.Sub(linkagebound.Dot(d, d), along)
 }
 
 // linkNext is loop link k's next pin along its side of the loop.
@@ -389,7 +390,7 @@ func (lp *LinkageLoop) readKappa() {
 // scaleFor is the least power of two λ with λ·|dir| at least the loop's
 // reach.
 func (lp *LinkageLoop) scaleFor(dir motionbound.RatVec) *big.Rat {
-	_, exp := math.Frexp(lp.reach / proofbound.RatSqrtDown(ratDot(dir, dir)))
+	_, exp := math.Frexp(lp.reach / proofbound.RatSqrtDown(linkagebound.Dot(dir, dir)))
 	return new(big.Rat).SetFloat64(math.Ldexp(1, exp))
 }
 
@@ -619,7 +620,7 @@ func (l *Linkage) resolveLoops(spec *linkageSpec, noun string) error {
 		}
 		ld := &loopDrive{loop: lp, driver: k, driverJt: jt, asks: make(map[string]*loopAsk), spans: make(map[string][][]loopSpan)}
 		if jt.revolute {
-			ld.axisSense = ratDot(ratVecExact(jt.axis), lp.normal).Sign()
+			ld.axisSense = linkagebound.Dot(ratVecExact(jt.axis), lp.normal).Sign()
 		}
 		subs, err := linkagebound.DriverSubsegments(jt.points, jt.values, jt.link.index)
 		if err != nil {
@@ -952,7 +953,7 @@ func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, flip s
 			// on the rider's other side, are each held to both, by
 			// triangles that stay well shaped wherever O lies.
 			o, oAt := point(par.pin()), ratVecExact(par.pin())
-			perp := ratCross(lp.normal, slideDir(k))
+			perp := linkagebound.Cross(lp.normal, slideDir(k))
 			cAt := ratStep(oAt, perp, lp.scaleFor(perp))
 			var bAt motionbound.RatVec
 			for i := range 3 {
@@ -983,12 +984,12 @@ func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, flip s
 	}
 	senseOf := func(k int) int {
 		if spec.joints[k].revolute {
-			return ratDot(ratVecExact(spec.joints[k].axis), n).Sign()
+			return linkagebound.Dot(ratVecExact(spec.joints[k].axis), n).Sign()
 		}
 		if lp.anchored(spec.joints[k].link) {
 			return 1
 		}
-		return ratDot(ratVecExact(spec.joints[k].axis), plane.u).Sign()
+		return linkagebound.Dot(ratVecExact(spec.joints[k].axis), plane.u).Sign()
 	}
 	mid, _ := linkagebound.Midpoint(offset).Float64()
 	switch {

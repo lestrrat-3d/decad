@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -90,30 +91,6 @@ func jointSpan(jt linkJoint, sa, sb *big.Rat) *big.Rat {
 	})
 }
 
-// linkRestBox is the per-axis union of a link's bodies' Bounds boxes, each
-// inflated outward by its own Bound, as exact rational extremes.
-func linkRestBox(link *Link) (lo, hi motionbound.RatVec, ok bool) {
-	for n, b := range link.bodies {
-		bLo, bHi, okB := motionbound.BoxCornersExact(b.bounds, new(big.Rat))
-		if !okB {
-			return motionbound.RatVec{}, motionbound.RatVec{}, false
-		}
-		if n == 0 {
-			lo, hi = bLo, bHi
-			continue
-		}
-		for i := range 3 {
-			if bLo[i].Cmp(lo[i]) < 0 {
-				lo[i] = bLo[i]
-			}
-			if bHi[i].Cmp(hi[i]) > 0 {
-				hi[i] = bHi[i]
-			}
-		}
-	}
-	return lo, hi, true
-}
-
 // reachSource adapts the root linkage's bodies and joints to the exact
 // ball and cylinder calculation in internal/linkagebound.
 type reachSource struct {
@@ -126,7 +103,12 @@ func (s reachSource) Parent(i int) int                    { return s.spec.joints
 func (s reachSource) Revolute(i int) bool                 { return s.spec.joints[i].revolute }
 func (s reachSource) Frame(i int) motionbound.MotionFrame { return s.frames[i] }
 func (s reachSource) RestBox(i int) (motionbound.RatVec, motionbound.RatVec, bool) {
-	return linkRestBox(s.spec.joints[i].link)
+	bodies := s.spec.joints[i].link.bodies
+	boxes := make([]measurement.Box, len(bodies))
+	for n, body := range bodies {
+		boxes[n] = body.bounds
+	}
+	return linkagebound.RestBox(boxes)
 }
 func (s reachSource) Reach(i int) *big.Rat { return jointReach(s.spec.joints[i]) }
 
@@ -238,14 +220,6 @@ func linkStandings(spec *linkageSpec, bounds []linkBound) []linkStanding {
 	return out
 }
 
-func ratDot(a, b motionbound.RatVec) *big.Rat { return linkagebound.Dot(a, b) }
-
-func ratCross(a, b motionbound.RatVec) motionbound.RatVec { return linkagebound.Cross(a, b) }
-
-func ratZero(v motionbound.RatVec) bool {
-	return v[0].Sign() == 0 && v[1].Sign() == 0 && v[2].Sign() == 0
-}
-
 // layerExtent reads a body's inflated rest box and delegates its exact a-extents.
 func layerExtent(b *Body, a motionbound.RatVec) (lo, hi *big.Rat, ok bool) {
 	boxLo, boxHi, ok := motionbound.BoxCornersExact(b.bounds, new(big.Rat))
@@ -270,13 +244,6 @@ func layerLower(spec *linkageSpec, frames []motionbound.MotionFrame, path []int,
 		yLo, yHi, okY := layerExtent(y, a)
 		return xLo, xHi, yLo, yHi, okX && okY
 	})
-}
-
-// staticCorners is the corner reading of a box no joint moves: its eight
-// corners as points, with no velocity.
-func staticCorners(lo, hi motionbound.RatVec) cornerReading {
-	corners := linkagebound.BoxCorners(lo, hi)
-	return linkagebound.StaticPoints(corners[:])
 }
 
 // readCorners is docs/linkage-check-design.md §5.8's reading of one body of
@@ -365,81 +332,12 @@ func symmetricAboutJoint(b *Body, jt linkJoint, f motionbound.MotionFrame) bool 
 		return false
 	}
 	point, dir, ok := bodySymmetryAxis(b)
-	if !ok || !ratZero(ratCross(dir, f.Axis)) {
+	if !ok || !linkagebound.ZeroVec(linkagebound.Cross(dir, f.Axis)) {
 		return false
 	}
 	var offset motionbound.RatVec
 	for i := range 3 {
 		offset[i] = new(big.Rat).Sub(f.Center[i], point[i])
 	}
-	return ratZero(ratCross(offset, dir))
-}
-
-// withoutOwnJoint is b's reading with its own joint, the last on its path,
-// dropped: the reading of a body that joint does not move. ρ_{ik} of every
-// joint above stays an upper bound, read over the link's whole rest box.
-func withoutOwnJoint(b linkBound) linkBound {
-	n := len(b.Path) - 1
-	return linkBound{Path: b.Path[:n], Rho: b.Rho[:n], Reach: b.Reach}
-}
-
-// bodyHullPoints is docs/linkage-check-design.md §5.8's hull point reading of
-// a body: points whose convex hull, padded by a ball of radius pad, holds the
-// body the payload denotes. A straight prism whose outer loop is all line
-// segments answers its outer vertices at its two levels, k bottom then k top,
-// each the exact rational image of its recorded floats through the frame and
-// the placement read exactly, and pad = 4·√3 times the largest of its section
-// and level displacements, rounded up — the charge prismPointBound makes
-// through the two near-orthonormal maps. ok is false for any other payload.
-func bodyHullPoints(b *Body) (points []motionbound.RatVec, pad *big.Rat, k int, ok bool) {
-	pp, isPrism := b.payload.(prismPayload)
-	if !isPrism || len(pp.profile.Outer.Segments) < 3 {
-		return nil, nil, 0, false
-	}
-	ratOf := func(v r3.Vec) (motionbound.RatVec, bool) { return motionbound.RatVecOf(v) }
-	origin, okO := ratOf(pp.frame.Origin())
-	fu, okU := ratOf(pp.frame.U())
-	fv, okV := ratOf(pp.frame.V())
-	fn, okN := ratOf(pp.frame.N())
-	basis := pp.xform.Basis()
-	ex, okX := ratOf(basis.EX)
-	ey, okY := ratOf(basis.EY)
-	ez, okZ := ratOf(basis.EZ)
-	shift, okT := ratOf(pp.xform.Translation())
-	if !okO || !okU || !okV || !okN || !okX || !okY || !okZ || !okT {
-		return nil, nil, 0, false
-	}
-	lift := func(u, v, z *big.Rat) motionbound.RatVec {
-		var local, out motionbound.RatVec
-		for i := range 3 {
-			local[i] = proofbound.RatAdd(origin[i], proofbound.RatMul(fu[i], u), proofbound.RatMul(fv[i], v), proofbound.RatMul(fn[i], z))
-		}
-		for i := range 3 {
-			out[i] = proofbound.RatAdd(proofbound.RatMul(ex[i], local[0]), proofbound.RatMul(ey[i], local[1]),
-				proofbound.RatMul(ez[i], local[2]), shift[i])
-		}
-		return out
-	}
-	z0, z1 := proofarith.FloatRat(pp.z0), proofarith.FloatRat(pp.z1)
-	if z0 == nil || z1 == nil {
-		return nil, nil, 0, false
-	}
-	k = len(pp.profile.Outer.Segments)
-	points = make([]motionbound.RatVec, 2*k)
-	for n, seg := range pp.profile.Outer.Segments {
-		line, isLine := seg.(LineSeg)
-		if !isLine {
-			return nil, nil, 0, false
-		}
-		u, v := proofarith.FloatRat(line.Start.U), proofarith.FloatRat(line.Start.V)
-		if u == nil || v == nil {
-			return nil, nil, 0, false
-		}
-		points[n], points[k+n] = lift(u, v, z0), lift(u, v, z1)
-	}
-	padF := proofbound.ProductUpper(4, proofbound.Radius3D(max(pp.sectionDelta, pp.z0Delta, pp.z1Delta)))
-	if pad = proofarith.FloatRat(padF); pad == nil {
-		return nil, nil, 0, false
-	}
-	return points, pad, k, true
+	return linkagebound.ZeroVec(linkagebound.Cross(offset, dir))
 }

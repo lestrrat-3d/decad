@@ -383,22 +383,22 @@ func TestLoopSceneFrameTilted(t *testing.T) {
 					lp := &LinkageLoop{normal: ratVecExact(axis), coord: -1, slide: slide}
 					plane, err := lp.sceneFrame(mirror, halfTurn)
 					require.NoError(t, err)
-					require.Zero(t, ratDot(plane.u, plane.v).Sign(), `u ⟂ v`)
+					require.Zero(t, linkagebound.Dot(plane.u, plane.v).Sign(), `u ⟂ v`)
 					n := lp.normal
 					if mirror {
 						n = ratNeg(n)
 					}
-					uv := ratCross(plane.u, plane.v)
-					require.True(t, ratZero(ratCross(uv, n)), `u × v ∥ n`)
-					require.Positive(t, ratDot(uv, n).Sign(), `u × v along the side's normal`)
+					uv := linkagebound.Cross(plane.u, plane.v)
+					require.True(t, linkagebound.ZeroVec(linkagebound.Cross(uv, n)), `u × v ∥ n`)
+					require.Positive(t, linkagebound.Dot(uv, n).Sign(), `u × v along the side's normal`)
 					if slide != nil {
 						j, _ := slide.joint.(PrismaticJoint)
 						want := 1
 						if halfTurn {
 							want = -1
 						}
-						require.True(t, ratZero(ratCross(plane.u, ratVecExact(j.Dir))))
-						require.Equal(t, want, ratDot(plane.u, ratVecExact(j.Dir)).Sign())
+						require.True(t, linkagebound.ZeroVec(linkagebound.Cross(plane.u, ratVecExact(j.Dir))))
+						require.Equal(t, want, linkagebound.Dot(plane.u, ratVecExact(j.Dir)).Sign())
 					}
 					x, y := plane.coords(pin)
 					sq := func(iv proofbound.RatInterval) (*big.Rat, *big.Rat) {

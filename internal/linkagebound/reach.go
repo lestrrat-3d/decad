@@ -132,7 +132,7 @@ func ReadReachBounds(src ReachSource) ([]ReachBound, bool) {
 			f := src.Frame(i)
 			if !src.Revolute(i) {
 				ball = reachBall{c: ball.c, r: new(big.Rat).Add(ball.r, src.Reach(i))}
-				if cyl != nil && !ratZero(reachCross(cyl.dir, f.Axis)) {
+				if cyl != nil && !ZeroVec(reachCross(cyl.dir, f.Axis)) {
 					cyl = &reachCylinder{point: cyl.point, dir: cyl.dir, r: new(big.Rat).Add(cyl.r, src.Reach(i))}
 				}
 				continue
@@ -148,7 +148,7 @@ func ReadReachBounds(src ReachSource) ([]ReachBound, bool) {
 			switch {
 			case cyl == nil:
 				cyl = &reachCylinder{point: f.Center, dir: f.Axis, r: rho[n]}
-			case ratZero(reachCross(cyl.dir, f.Axis)):
+			case ZeroVec(reachCross(cyl.dir, f.Axis)):
 				between := sqrtUpRat(lineDistanceSq(cyl.point, f.Center, f.Axis, axisSq(f.Axis)))
 				if between == nil {
 					return nil, false

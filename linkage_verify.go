@@ -380,7 +380,8 @@ func (dr *linkageDriver) pairDepth(i, other int) int {
 func (dr *linkageDriver) pathOf(m, below int) linkBound {
 	b := dr.bounds[dr.run.movers[m].group]
 	if dr.symmetric[m] && below < len(b.Path) {
-		return withoutOwnJoint(b)
+		n := len(b.Path) - 1
+		return linkBound{Path: b.Path[:n], Rho: b.Rho[:n], Reach: b.Reach}
 	}
 	return b
 }
@@ -441,7 +442,7 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 			if !ok {
 				return nil
 			}
-			corners, ok := linkagebound.RoundCorners(staticCorners(lo, hi))
+			corners, ok := linkagebound.RoundCorners(linkagebound.StaticBox(lo, hi))
 			if !ok {
 				return nil
 			}
@@ -607,22 +608,29 @@ func (dr *linkageDriver) staticHull(k int) (cornerBounds, bool) {
 	return reading, true
 }
 
-// bodyPoints is a body's static point reading: its hull points when hull is
-// set and the body has them (bodyHullPoints), and otherwise the eight corners
+// bodyPoints is a body's static point reading: its prism hull points when hull
+// is set and the body has them, and otherwise the eight corners
 // of its Bounds box inflated by its own Bound.
 func bodyPoints(b *Body, hull bool) (cornerReading, bool) {
 	if hull {
-		if points, pad, k, ok := bodyHullPoints(b); ok {
-			reading := linkagebound.StaticPoints(points)
-			reading.Pad, reading.PrismK = pad, k
-			return reading, true
+		if pp, isPrism := b.payload.(prismPayload); isPrism {
+			points, pad, k, ok := linkagebound.PrismHullPoints(linkagebound.PrismHull{
+				Outer: pp.profile.Outer, Frame: pp.frame, Transform: pp.xform,
+				Z0: pp.z0, Z1: pp.z1, SectionDelta: pp.sectionDelta,
+				Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
+			})
+			if ok {
+				reading := linkagebound.StaticPoints(points)
+				reading.Pad, reading.PrismK = pad, k
+				return reading, true
+			}
 		}
 	}
 	lo, hi, ok := motionbound.BoxCornersExact(b.bounds, new(big.Rat))
 	if !ok {
 		return cornerReading{}, false
 	}
-	return staticCorners(lo, hi), true
+	return linkagebound.StaticBox(lo, hi), true
 }
 
 // publishLinkage assembles VerifyLinkage's report
