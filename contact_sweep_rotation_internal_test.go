@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -26,12 +28,12 @@ import (
 // operation at a time.
 func cornerSpanRational(p rotationalSweepPath, from, to *big.Rat) []motionbound.IvVec {
 	output := make([]motionbound.IvVec, len(p.startPoints))
-	if p.path.drift == nil {
+	if p.path.Drift == nil {
 		for index, corner := range p.startPoints {
 			for axis := range 3 {
 				start := corner[axis].Rat()
-				lo := new(big.Rat).Mul(p.path.delta[axis].Rat(), from)
-				hi := new(big.Rat).Mul(p.path.delta[axis].Rat(), to)
+				lo := new(big.Rat).Mul(p.path.Delta[axis].Rat(), from)
+				hi := new(big.Rat).Mul(p.path.Delta[axis].Rat(), to)
 				if lo.Cmp(hi) > 0 {
 					lo, hi = hi, lo
 				}
@@ -40,8 +42,8 @@ func cornerSpanRational(p rotationalSweepPath, from, to *big.Rat) []motionbound.
 		}
 		return output
 	}
-	lowTime := new(big.Rat).Mul(p.path.duration, from)
-	highTime := new(big.Rat).Mul(p.path.duration, to)
+	lowTime := new(big.Rat).Mul(p.path.Duration, from)
+	highTime := new(big.Rat).Mul(p.path.Duration, to)
 	lowAngle := new(big.Rat).Mul(p.omegaLow, lowTime)
 	highAngle := new(big.Rat).Mul(p.omegaHigh, highTime)
 	sin, cos := rotationalSinCosSpan(lowAngle, highAngle)
@@ -81,15 +83,15 @@ func cornerSpanRational(p rotationalSweepPath, from, to *big.Rat) []motionbound.
 // a time.
 func idealAtRational(p rotationalSweepPath, f *big.Rat) motionbound.IdealPose {
 	zero := proofbound.PointInterval(new(big.Rat))
-	if p.path.drift == nil {
+	if p.path.Drift == nil {
 		shift := motionbound.PointVec(p.fromT)
 		for axis := range 3 {
 			shift[axis] = proofbound.IntervalAdd(shift[axis],
-				proofbound.PointInterval(new(big.Rat).Mul(p.path.delta[axis].Rat(), f)))
+				proofbound.PointInterval(new(big.Rat).Mul(p.path.Delta[axis].Rat(), f)))
 		}
 		return motionbound.IdealPose{Rot: p.fromRot, Pivot: motionbound.IvVec{zero, zero, zero}, Shift: shift}
 	}
-	elapsed := new(big.Rat).Mul(p.path.duration, f)
+	elapsed := new(big.Rat).Mul(p.path.Duration, f)
 	angleLow := new(big.Rat).Mul(p.omegaLow, elapsed)
 	angleHigh := new(big.Rat).Mul(p.omegaHigh, elapsed)
 	sin, cos := motionbound.RadianSinCos(angleLow)
@@ -196,7 +198,7 @@ func rotationFormPaths(t *testing.T) map[string]rotationalSweepPath {
 
 	paths := map[string]rotationalSweepPath{}
 	sourceBox := func(name string, body *Body, segment PairPath) {
-		path, err := validatePairPath(segment)
+		path, err := sweeppath.Validate(segment)
 		require.NoError(t, err, name)
 		prepared, ok := prepareRotationalSweepPath(body, path)
 		require.True(t, ok, name)
@@ -208,9 +210,9 @@ func rotationFormPaths(t *testing.T) map[string]rotationalSweepPath {
 	sourceBox("box screw", box, PoseSegment{From: shift, To: screwTo, Duration: units.Seconds(1.0 / 256)})
 	planar := bandRun(t, doc, block, box, drift, drift)
 	paths["planar drift"] = planar.a
-	require.NotNil(t, paths["box screw"].path.screw, "premise: the Z turn reads as a screw")
-	require.NotNil(t, paths["box drift"].path.drift)
-	require.Nil(t, paths["box translation"].path.drift)
+	require.NotNil(t, paths["box screw"].path.Screw, "premise: the Z turn reads as a screw")
+	require.NotNil(t, paths["box drift"].path.Drift)
+	require.Nil(t, paths["box translation"].path.Drift)
 	return paths
 }
 
@@ -264,7 +266,7 @@ func TestPointDeviationMatchesRationalForm(t *testing.T) {
 			require.NoError(t, err, name)
 			// The pose read at f, and the start pose read at f, which deviates
 			// from the ideal path by the whole step's motion.
-			for _, at := range []r3.Transform{pose, path.path.from} {
+			for _, at := range []r3.Transform{pose, path.path.From} {
 				points, bound, ok, err := path.pointDeviation(at, f, noSweepPoll)
 				require.NoError(t, err, name)
 				require.True(t, ok, name)
@@ -419,7 +421,7 @@ func TestPointDeviationMatchesCommonDenomForm(t *testing.T) {
 			require.NoError(t, err, name)
 			ideal, ok := path.idealAt(f)
 			require.True(t, ok, name)
-			poses := []r3.Transform{pose, path.path.from, halfShift}
+			poses := []r3.Transform{pose, path.path.From, halfShift}
 			for range 6 {
 				moved, err := pose.Then(randomContactPose(t, rng))
 				require.NoError(t, err, name)

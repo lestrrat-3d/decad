@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -41,7 +43,7 @@ func (d *Document) SweptBox(ctx context.Context, b *Body, path PairPath) (SweptB
 	if err := d.requireLive(b); err != nil {
 		return SweptBox{}, err
 	}
-	p, err := validatePairPath(path)
+	p, err := sweeppath.Validate(path)
 	if err != nil {
 		return SweptBox{}, err
 	}
@@ -98,7 +100,7 @@ func sweptBoxOf(b *Body, p affinePairPath) (SweptBox, bool) {
 	}
 	out := SweptBox{body: b}
 	for i, corner := range corners {
-		mapped := exactContactTransform(p.from, corner)
+		mapped := exactContactTransform(p.From, corner)
 		for axis := range 3 {
 			if i == 0 || proofarith.DyCmp(mapped[axis], out.lo[axis]) < 0 {
 				out.lo[axis] = mapped[axis]
@@ -110,14 +112,14 @@ func sweptBoxOf(b *Body, p affinePairPath) (SweptBox, bool) {
 	}
 	var travel *big.Rat
 	switch {
-	case p.drift != nil:
+	case p.Drift != nil:
 		travel, ok = driftTravel(b, p)
-	case p.read != nil:
+	case p.Read != nil:
 		travel, ok = screwTravel(b, p)
 	default:
 		for axis := range 3 {
-			out.lo[axis] = dyMin(out.lo[axis], proofarith.DyAdd(out.lo[axis], p.delta[axis]))
-			out.hi[axis] = dyMax(out.hi[axis], proofarith.DyAdd(out.hi[axis], p.delta[axis]))
+			out.lo[axis] = dyMin(out.lo[axis], proofarith.DyAdd(out.lo[axis], p.Delta[axis]))
+			out.hi[axis] = dyMax(out.hi[axis], proofarith.DyAdd(out.hi[axis], p.Delta[axis]))
 		}
 		return out, true
 	}
@@ -140,14 +142,14 @@ func sweptBoxOf(b *Body, p affinePairPath) (SweptBox, bool) {
 // (V + ρΩ)·Duration, with ρ the largest distance of the From-mapped bounds
 // corners from the rotation line through Center.
 func driftTravel(b *Body, p affinePairPath) (*big.Rat, bool) {
-	drift := p.drift
+	drift := p.Drift
 	linear := [3]units.Value{drift.LinearVelocity.X, drift.LinearVelocity.Y, drift.LinearVelocity.Z}
 	angular := [3]units.Value{drift.AngularVelocity.X, drift.AngularVelocity.Y, drift.AngularVelocity.Z}
 	var omega motionbound.RatVec
 	vSquared, omegaSquared := new(big.Rat), new(big.Rat)
 	for axis := range 3 {
-		v, okV := exactBaseValue(linear[axis])
-		w, okW := exactBaseValue(angular[axis])
+		v, okV := sweeppath.ExactBaseValue(linear[axis])
+		w, okW := sweeppath.ExactBaseValue(angular[axis])
 		if !okV || !okW {
 			return nil, false
 		}
@@ -159,20 +161,20 @@ func driftTravel(b *Body, p affinePairPath) (*big.Rat, bool) {
 	if !finiteMeasurementValues(speed, spin) {
 		return nil, false
 	}
-	radius, ok := rotationalSweepRadius(b, p.from, drift.Center, omega)
+	radius, ok := rotationalSweepRadius(b, p.From, drift.Center, omega)
 	if !ok {
 		return nil, false
 	}
 	rate := new(big.Rat).Add(proofarith.FloatRat(speed), new(big.Rat).Mul(radius, proofarith.FloatRat(spin)))
-	return rate.Mul(rate, p.duration), true
+	return rate.Mul(rate, p.Duration), true
 }
 
 // screwTravel is contact-sweep §4.1's τ_screw over the whole path: ρ|θ| + |d|,
 // with ρ the largest distance of the From-mapped bounds corners from the
 // read screw's axis line.
 func screwTravel(b *Body, p affinePairPath) (*big.Rat, bool) {
-	screw := p.read
-	angle, okAngle := exactBaseValue(screw.Angle)
+	screw := p.Read
+	angle, okAngle := sweeppath.ExactBaseValue(screw.Angle)
 	slide := proofarith.FloatRat(screw.Slide)
 	if !okAngle || slide == nil {
 		return nil, false
@@ -185,7 +187,7 @@ func screwTravel(b *Body, p affinePairPath) (*big.Rat, bool) {
 	if !ok {
 		return nil, false
 	}
-	radius, ok := rotationalSweepRadius(b, p.from, screw.Point, axis)
+	radius, ok := rotationalSweepRadius(b, p.From, screw.Point, axis)
 	if !ok {
 		return nil, false
 	}

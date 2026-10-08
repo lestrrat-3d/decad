@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 
@@ -104,14 +106,14 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
 	m, bodyM, bodyS, pathM, pathS := 0, a, b, pa, pb
-	start, ok := placedCylinderAt(a, pa.from)
+	start, ok := placedCylinderAt(a, pa.From)
 	if !ok {
 		m, bodyM, bodyS, pathM, pathS = 1, b, a, pb, pa
-		if start, ok = placedCylinderAt(b, pb.from); !ok {
+		if start, ok = placedCylinderAt(b, pb.From); !ok {
 			return nil, false, nil
 		}
 	}
-	if pathM.drift == nil || pathM.screw != nil || pathS.drift != nil || pathS.screw != nil {
+	if pathM.Drift == nil || pathM.Screw != nil || pathS.Drift != nil || pathS.Screw != nil {
 		return nil, false, nil
 	}
 	solid, delta, ok, err := planarSolidAtPose(ctx, proofbound.NewWorkBudget(ctx), bodyS, r3.Identity(), heldChordOf(req.ContactRequest))
@@ -125,8 +127,8 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 	preparedS, okS := preparePlanarSweepPath(bodyS, pathS, &solid, delta)
 	if !okM || !okS {
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
+		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
+			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 		return report, true, nil
 	}
 	attachSweepMemos(&preparedM, &preparedS)
@@ -244,7 +246,7 @@ func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(zero, r.paths[0].path.duration)
+	at := sweepInstant(zero, r.paths[0].path.Duration)
 	event := SweepEvent{At: at, Relation: ContactUndecided, Reason: contact.Reason}
 	if exact {
 		event.Relation, event.Gap, event.Overlap = contact.Relation, contact.Gap, contact.Overlap
@@ -258,7 +260,7 @@ func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
 }
 
 func (r *rollingPairSweep) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
-	duration := r.paths[0].path.duration
+	duration := r.paths[0].path.Duration
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
 	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, duration), To: sweepInstant(to, duration)}
 	return r.report
@@ -314,7 +316,7 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 	if !ok {
 		return nil, false, nil
 	}
-	duration := r.paths[r.m].path.duration
+	duration := r.paths[r.m].path.Duration
 	box, ok := r.columnBox()
 	if !ok {
 		return nil, false, nil
@@ -374,7 +376,7 @@ func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *
 	path.startPoints = box.Corners
 	corners := path.cornerSpan(zero, f)
 	S := &r.paths[r.s]
-	lo, hi := planarsweep.RollingColumnBounds(centers, corners, box.Reach, S.path.delta, f)
+	lo, hi := planarsweep.RollingColumnBounds(centers, corners, box.Reach, S.path.Delta, f)
 	solid := planar.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
 	return planar.PlanarColumnApart(&solid, support.normal, S.startPoints[support.origin], lo, hi, poll)
 }
@@ -382,7 +384,7 @@ func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *
 func (r *rollingPairSweep) footInside(support rulingPlane, f, growth *big.Rat) bool {
 	S := &r.paths[r.s]
 	spans := r.paths[r.m].cornerSpan(new(big.Rat), f)
-	lo, hi := planarsweep.RollingFootBounds(spans, S.path.delta, support.axis, f, growth)
+	lo, hi := planarsweep.RollingFootBounds(spans, S.path.Delta, support.axis, f, growth)
 	return support.face.HoldsBox(lo, hi)
 }
 
@@ -431,12 +433,12 @@ func (r *rollingPairSweep) track(first *SweepSample, support rulingPlane,
 		return nil, false, nil
 	}
 	if depth.Sign() > 0 || end.Cmp(big.NewRat(1, 1)) < 0 {
-		value := ratFloatNearest(depth)
+		value := sweeppath.RatFloatNearest(depth)
 		bound := proofarith.RationalFloatError(depth, value)
 		proof.band = &Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
 			Exactness: exactnessFromBound(bound)}
 	}
-	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(end), duration: M.path.duration,
+	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(end), duration: M.path.Duration,
 		request: r.req.ContactRequest, normal: normal, rolling: proof, pointCount: len(ends)}
 	track.features[r.m], track.features[r.s] = featureM, featureS
 	// A track whose start manifold is refused is not published; the refusal
@@ -450,7 +452,7 @@ func (r *rollingPairSweep) track(first *SweepSample, support rulingPlane,
 // depthThrough is the band depth over [0, f]: every coefficient's term is
 // nondecreasing in time, so their value at f bounds every earlier instant.
 func (p *rollingTrackProof) depthThrough(f *big.Rat) *big.Rat {
-	depth, _ := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].path.duration))
+	depth, _ := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].path.Duration))
 	return depth
 }
 
@@ -466,7 +468,7 @@ func (p *rollingTrackProof) rounded(f *big.Rat) ([2]r3.Transform, [2]*big.Rat, [
 		if err != nil {
 			return poses, eta, nil, false
 		}
-		if i == p.s && pose.Basis() != p.paths[i].path.from.Basis() {
+		if i == p.s && pose.Basis() != p.paths[i].path.From.Basis() {
 			return poses, eta, nil, false
 		}
 		points, bound, ok, _ := p.paths[i].pointDeviation(pose, f, noSweepPoll)
@@ -491,13 +493,13 @@ func (p *rollingTrackProof) manifoldAt(f *big.Rat, req ContactRequest) (*Contact
 	if !ok {
 		return nil, fmt.Errorf("%w: rolling contact track pose has no finite bound", ErrUnsupported)
 	}
-	resolution, okResolution := exactBaseValue(req.PointResolution)
+	resolution, okResolution := sweeppath.ExactBaseValue(req.PointResolution)
 	if !okResolution {
 		return nil, fmt.Errorf("%w: rolling contact track resolution is invalid", ErrUnsupported)
 	}
 	n := ratOfDyV3(p.normal)
 	q := ratOfDyV3(vertsS[p.origin])
-	_, lateral := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].path.duration))
+	_, lateral := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].path.Duration))
 	separation := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(p.depthUp),
 		Exactness: exactnessFromBound(p.depthUp)}
 	points := make([]ContactPoint, 0, len(p.ends))
@@ -543,7 +545,7 @@ func (r *SweepReport) certifiedRollingPosesAtFraction(f *big.Rat) (r3.Transform,
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rolling replay pose has no finite error bound", ErrUnsupported)
 	}
 	deviation := new(big.Rat).Add(eta[0], eta[1])
-	resolution, ok := exactBaseValue(r.replay.request.PointResolution)
+	resolution, ok := sweeppath.ExactBaseValue(r.replay.request.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rolling replay pose exceeds point resolution", ErrUnsupported)
 	}

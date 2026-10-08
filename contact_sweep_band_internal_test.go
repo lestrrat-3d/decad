@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
@@ -123,7 +125,7 @@ func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSup
 	}
 	rest := new(big.Rat)
 	if r.req.RestSpeed != (units.Value{}) {
-		speed, ok := exactBaseValue(r.req.RestSpeed)
+		speed, ok := sweeppath.ExactBaseValue(r.req.RestSpeed)
 		if !ok {
 			return nil, nil
 		}
@@ -156,7 +158,7 @@ func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSup
 			support.m, support.s, support.tri = m, s, t
 			support.motionM, support.motionS = motions[m], motions[s]
 			support.pathM, support.pathS = M, S
-			support.duration = r.a.path.duration
+			support.duration = r.a.path.Duration
 			support.rates = make([]*big.Rat, len(M.startPoints))
 			relative := ratSub3(support.motionM.Velocity, support.motionS.Velocity)
 			normal := ratOfDyV3(n)
@@ -235,7 +237,7 @@ func supportFixture(rng *rand.Rand, shared []proofarith.DyV3, scale proofarith.D
 		solid.Tris = append(solid.Tris, [3]int{i, pool[rng.IntN(len(pool))], pool[rng.IntN(len(pool))]})
 	}
 	return rotationalSweepPath{startPoints: points, solid: solid,
-		path: affinePairPath{duration: big.NewRat(1, 1)}}
+		path: affinePairPath{Duration: big.NewRat(1, 1)}}
 }
 
 // TestPlanarSupportsMatchScan holds planarSupports to planarSupportsScan, the
