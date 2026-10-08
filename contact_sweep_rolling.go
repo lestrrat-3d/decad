@@ -270,27 +270,6 @@ func (r *rollingPairSweep) support(poll func() error) (rulingPlane, bool, error)
 	return rulingSupport(&r.cylinder, &r.paths[r.s], poll)
 }
 
-// dyUnitAxis reads an exact vector with exactly one nonzero component as its
-// axis and the matching signed unit vector.
-func dyUnitAxis(n proofarith.DyV3) (int, proofarith.DyV3, bool) {
-	axis := -1
-	for k := range 3 {
-		if n[k].Sign() == 0 {
-			continue
-		}
-		if axis >= 0 {
-			return 0, proofarith.DyV3{}, false
-		}
-		axis = k
-	}
-	if axis < 0 {
-		return 0, proofarith.DyV3{}, false
-	}
-	var unit proofarith.DyV3
-	unit[axis] = proofarith.DyInt(int64(n[axis].Sign()))
-	return axis, unit, true
-}
-
 // rollingCoefficients are the depth bound's terms, constant + rate·t +
 // quadratic·t², and the rim drift's, lateralBase + lateral·t. With ã the
 // staged axis column, α = n̂·ã, β = |ω×ã| and both ends' H±:
