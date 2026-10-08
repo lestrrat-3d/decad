@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -115,18 +116,18 @@ func TestChordLoopSampleReachesArcNaturalEnd(t *testing.T) {
 	require.True(t, ok, `got %T`, pie.payload)
 	arc := onlyArc(t, pp.profile.Outer.Segments)
 	face := &Face{}
-	cl, err := chordLoop(t.Context(), pp.profile.Outer, 0.2, 10, freeform.NewFreeformWork(), nil, 0,
-		func(survey2d.SideWalk) (*Face, error) { return face, nil })
+	cl, err := tessellation.ChordLoop(t.Context(), pp.profile.Outer, 0.2, 10, freeform.NewFreeformWork(), nil, 0,
+		func(survey2d.SideWalk) (*Face, error) { return face, nil }, chordStationBound)
 	require.NoError(t, err)
 	found := false
-	for j, p := range cl.samples {
+	for j, p := range cl.Samples {
 		switch p {
 		case arc.End:
 			found = true
-			gap := requireReachesArcEnd(t, arc, p.U, p.V, cl.boundOf[j])
+			gap := requireReachesArcEnd(t, arc, p.U, p.V, cl.BoundOf[j])
 			require.Greater(t, gap, 1e-12, `End sits well off the denoted point`)
 		case arc.Start, Point2{}:
-			require.Equalf(t, proofbound.WalkEndBound{}, cl.boundOf[j], `the recorded corner %v stays exact`, p)
+			require.Equalf(t, proofbound.WalkEndBound{}, cl.BoundOf[j], `the recorded corner %v stays exact`, p)
 		}
 	}
 	require.True(t, found, `one sample sits at End`)

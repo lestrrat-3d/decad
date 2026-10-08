@@ -77,29 +77,29 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			return nil, err
 		}
 		first, last := sp.slabs[col.start], sp.slabs[col.end]
-		cl, err := chordLoop(ctx, col.loop, budget, last.z1-first.z0, work, nil, col.loopIndex,
+		cl, err := tessellation.ChordLoop(ctx, col.loop, budget, last.z1-first.z0, work, nil, col.loopIndex,
 			func(w survey2d.SideWalk) (*Face, error) {
 				return faceOfRole(fmt.Sprintf("slab(%d).region(%d).side(%d,%d)",
 					col.start, col.region, col.loopIndex, w.Segs[0]))
-			})
+			}, chordStationBound)
 		if err != nil {
 			return nil, err
 		}
 		r := &rings[ci]
-		r.samples, r.faces, r.sag = cl.samples, cl.faceOf, cl.maxSag
-		r.segmentArea, r.walks, r.perimeterUpper = cl.segmentArea, cl.walks, cl.perimeterUpper
-		r.bottom = make([]int, len(cl.samples))
-		r.top = make([]int, len(cl.samples))
-		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
-		for j, p := range cl.samples {
-			r.bottom[j] = addVertex(p, first.z0, cl.boundOf[j])
-			r.top[j] = addVertex(p, last.z1, cl.boundOf[j])
+		r.samples, r.faces, r.sag = cl.Samples, cl.FaceOf, cl.MaxSag
+		r.segmentArea, r.walks, r.perimeterUpper = cl.SegmentArea, cl.Walks, cl.PerimeterUpper
+		r.bottom = make([]int, len(cl.Samples))
+		r.top = make([]int, len(cl.Samples))
+		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.WallSlack, cl.CapSlack, cl.CapSlack)
+		for j, p := range cl.Samples {
+			r.bottom[j] = addVertex(p, first.z0, cl.BoundOf[j])
+			r.top[j] = addVertex(p, last.z1, cl.BoundOf[j])
 		}
-		for j, face := range cl.faceOf {
-			next := (j + 1) % len(cl.samples)
+		for j, face := range cl.FaceOf {
+			next := (j + 1) % len(cl.Samples)
 			mesh.addTriangle([3]int{r.bottom[j], r.bottom[next], r.top[next]}, face)
 			mesh.addTriangle([3]int{r.bottom[j], r.top[next], r.top[j]}, face)
-			faceTrim[face] = math.Max(faceTrim[face], cl.sagOf[j])
+			faceTrim[face] = math.Max(faceTrim[face], cl.SagOf[j])
 			faceAxial[face] = math.Max(first.z0Delta, last.z1Delta)
 		}
 	}

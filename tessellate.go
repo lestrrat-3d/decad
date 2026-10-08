@@ -12,14 +12,12 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -613,16 +611,16 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		cl, err := chordLoop(ctx, loop, budget, pp.z1-pp.z0, work, pw, li, func(w survey2d.SideWalk) (*Face, error) {
+		cl, err := tessellation.ChordLoop(ctx, loop, budget, pp.z1-pp.z0, work, pw, li, func(w survey2d.SideWalk) (*Face, error) {
 			return faceOfRole(wallRole(li, w.Segs[0]))
-		})
+		}, chordStationBound)
 		if err != nil {
 			return nil, err
 		}
-		chorded = append(chorded, tessellation.PrismLoop[*Face]{Samples: cl.samples, FaceOf: cl.faceOf,
-			SagOf: cl.sagOf, BoundOf: cl.boundOf, MaxSag: cl.maxSag,
-			WallSlack: cl.wallSlack, CapSlack: cl.capSlack, SegmentArea: cl.segmentArea,
-			Walks: cl.walks, PerimeterUpper: cl.perimeterUpper})
+		chorded = append(chorded, tessellation.PrismLoop[*Face]{Samples: cl.Samples, FaceOf: cl.FaceOf,
+			SagOf: cl.SagOf, BoundOf: cl.BoundOf, MaxSag: cl.MaxSag,
+			WallSlack: cl.WallSlack, CapSlack: cl.CapSlack, SegmentArea: cl.SegmentArea,
+			Walks: cl.Walks, PerimeterUpper: cl.PerimeterUpper})
 	}
 	topology := tessellation.PrismWalls(chorded, sheet, pp.axialDelta())
 	mesh.areaSlack = topology.AreaSlack
@@ -874,129 +872,6 @@ func publishSymDiff(m *Mesh, terms []float64) error {
 	return nil
 }
 
-// chordedLoop is one boundary loop's chording, as chordLoop returns it: the 2D
-// samples, the wall face of the chord LEAVING each sample, the largest sagitta
-// the chording took, the chord-versus-arc area slack over the sweep height —
-// split into its wall and per-cap halves so a sheet, which carries no cap, can
-// decline the cap half (docs/surface-design.md §10) — and the loop's own
-// coalesced walk count with a proven upper bound on its analytic length — the
-// two figures a section displacement's area charge reads
-// (docs/tessellation-design.md §5). Beside those it carries the three readings
-// the proof record composes per FACE rather than per mesh: each sample's own
-// outgoing sagitta and enclosure gap, and the loop's summed circular-segment
-// area (docs/tessellation-reach-design.md §3).
-type chordedLoop struct {
-	samples []Point2
-	faceOf  []*Face
-	// sagOf is, parallel to samples, the chord sagitta bound of the walk the
-	// sample's OUTGOING chord belongs to — the trim displacement its wall face
-	// carries, and zero for a straight walk, which chords nothing.
-	sagOf []float64
-	// boundOf is, parallel to samples, the sample's own proven plane-local
-	// enclosure gap: what the recorded curve's certified enclosure at the
-	// parameter this sample denotes says about the held (u, v) pair. A walk
-	// junction reads the walk's own recorded endpoint bound; an interior
-	// circular station reads chordStationBound. A component the record cannot
-	// enclose reads +Inf, and the tessellation refuses on it.
-	boundOf []proofbound.WalkEndBound
-	maxSag  float64
-	// wallSlack is the WALL half of the chord-versus-arc area slack this
-	// loop's curved walks contribute over the sweep height: the deficit
-	// between arc length and chord length, times height, summed across every
-	// curved walk. It binds a sheet mesh exactly as it does a solid's — a
-	// sheet keeps every wall.
-	wallSlack float64
-	// capSlack is ONE CAP's own share of the same loop's chord-versus-arc
-	// area slack: the circular or free-form segment area between one curved
-	// walk's chord and its arc, summed across every curved walk of the loop.
-	// A solid charges it TWICE — once per cap it triangulates — and a sheet,
-	// which triangulates no cap, charges it zero times; the caller composes
-	// the two into the mesh's published areaSlack rather than this type ever
-	// doubling it itself.
-	capSlack       float64
-	segmentArea    float64
-	walks          int
-	perimeterUpper float64
-}
-
-// chordLoop chords one boundary loop into 2D samples: sample j is walk j's own
-// start (the junction shared with the previous walk) plus, for a circular walk,
-// its interior chord samples. The wall face of each sample's outgoing chord is
-// resolved by wallFace over the coalesced walk it belongs to. The same chording
-// feeds every face that meets the loop — walls and caps alike — so the mesh is
-// watertight by construction.
-// work is the free-form counter of the RECORD being chorded, opened once by the
-// caller and shared by every loop of it: chording holds no preflight counter, so
-// the ceiling starts at the tessellation entry rather than at each loop.
-//
-// resolved is a *momentinput.ProfileWalks whose loop index roleLoop holds this loop's
-// pre-resolved walks, or nil to resolve each segment through walkOf as before —
-// buildLoopSidesAs' own parameter of the same name, read the same way. The
-// caller charges work what that resolution cost BEFORE the first read (the
-// tessellation entry does), so the counter binds a replaying chording exactly as
-// it binds a resolving one. A non-nil resolved whose loop at roleLoop was not
-// resolved from exactly this loop's recorded segments is a plumbing bug and
-// refuses rather than silently resolving anyway.
-func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, roleLoop int, wallFace func(w survey2d.SideWalk) (*Face, error)) (chordedLoop, error) {
-	if len(loop.Segments) == 0 {
-		return chordedLoop{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
-	}
-	// One counter spans the segment walk, the walk loop and the sample emission
-	// nested under it: a single walk emits many samples, and it is the SAMPLES
-	// that are the candidate operations §7.2 counts.
-	budget := proofbound.NewWorkBudget(ctx)
-	var loopWalks []survey2d.SegmentWalk
-	if resolved != nil {
-		if !resolved.LoopMatches(roleLoop, loop) {
-			return chordedLoop{}, momentinput.ErrResolvedWalksMismatch
-		}
-		loopWalks = resolved.LoopWalks(roleLoop)
-	}
-	raw := make([]survey2d.SideWalk, len(loop.Segments))
-	// The loop's analytic length, upper bound included: buildLoopSidesAs sums the
-	// same RAW walk lengths for the body's own perimeter, so both readings of one
-	// section speak for the same curve.
-	perimeterUpper := 0.0
-	for i, seg := range loop.Segments {
-		if err := budget.Step(); err != nil {
-			return chordedLoop{}, err
-		}
-		// A resolved walk was already through walkOf once
-		// (momentinput.ResolveProfileWalks), so it carries the same refusal that
-		// resolution would surface here, and it holds nothing
-		// placement-dependent to restate (docs/evaluator-design.md §8).
-		var w survey2d.SegmentWalk
-		if loopWalks != nil {
-			w = loopWalks[i]
-		} else {
-			var err error
-			w, err = boundarywalk.WalkOf(seg, work)
-			if err != nil {
-				return chordedLoop{}, err
-			}
-		}
-		perimeterUpper = proofbound.AbsSumUpper(perimeterUpper, w.Length, w.LengthBound)
-		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
-	}
-	walks, err := boundarywalk.CoalesceWalksContext(ctx, raw)
-	if err != nil {
-		return chordedLoop{}, err
-	}
-
-	sampled, err := tessellation.SampleLoop[*Face](walks, loop.Segments, chord, height, work, budget,
-		wallFace, chordStationBound)
-	if err != nil {
-		return chordedLoop{}, err
-	}
-	return chordedLoop{
-		samples: sampled.Samples, faceOf: sampled.FaceOf,
-		sagOf: sampled.SagOf, boundOf: sampled.BoundOf,
-		maxSag: sampled.MaxSag, wallSlack: sampled.WallSlack,
-		capSlack: sampled.CapSlack, segmentArea: sampled.SegmentArea,
-		walks: sampled.Walks, perimeterUpper: perimeterUpper,
-	}, nil
-}
-
 // tessellateCup meshes a cup (docs/modify-design.md §9, D4): the outer region O
 // and the cavity region C, each with k ≥ 0 holes, sharing one rim per region
 // loop at the open end. Every region loop is chorded ONCE — the same chording
@@ -1082,33 +957,33 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		// A cup chords the DERIVED region loops — an offset cavity, an outer
 		// contour — which no payload holds a resolution of, so each segment
 		// resolves through walkOf here as it always has.
-		cl, err := chordLoop(ctx, loop, chord, h, work, nil, 0, func(w survey2d.SideWalk) (*Face, error) {
+		cl, err := tessellation.ChordLoop(ctx, loop, chord, h, work, nil, 0, func(w survey2d.SideWalk) (*Face, error) {
 			return faceOfRole(fmt.Sprintf(role, w.Segs[0]))
-		})
+		}, chordStationBound)
 		if err != nil {
 			return ring{}, err
 		}
-		samples := cl.samples
+		samples := cl.Samples
 		// A cup always triangulates two planar patches off this ring (its
 		// kept cap or pocket floor, plus a rim band), so it keeps both cap
-		// halves of the loop's slack, the same total chordedLoop's own
+		// halves of the loop's slack, the same total chording's own
 		// combined areaSlack used to carry before it split.
-		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
-		*area = proofbound.AbsSumUpper(*area, cl.segmentArea)
-		r := ring{samples: samples, faces: cl.faceOf, sag: cl.maxSag, walks: cl.walks, perim: cl.perimeterUpper}
+		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.WallSlack, cl.CapSlack, cl.CapSlack)
+		*area = proofbound.AbsSumUpper(*area, cl.SegmentArea)
+		r := ring{samples: samples, faces: cl.FaceOf, sag: cl.MaxSag, walks: cl.Walks, perim: cl.PerimeterUpper}
 		r.loV = make([]int, len(samples))
 		r.hiV = make([]int, len(samples))
 		// A wall spans both of its region's levels, so it cannot attribute its
 		// axial displacement to one of them and takes the larger.
 		wallAxial := math.Max(loDelta, hiDelta)
 		for i, p := range samples {
-			plane := proofbound.WalkEndBoundAllow(cl.boundOf[i])
+			plane := proofbound.WalkEndBoundAllow(cl.BoundOf[i])
 			loV := base.point(p.U, p.V, lo)
 			hiV := base.point(p.U, p.V, hi)
 			r.loV[i] = add(loV, proofbound.AbsSumUpper(plane, exactPrismPointRound(base, p.U, p.V, lo, loV)))
 			r.hiV[i] = add(hiV, proofbound.AbsSumUpper(plane, exactPrismPointRound(base, p.U, p.V, hi, hiV)))
-			f := cl.faceOf[i]
-			faceTrim[f] = math.Max(faceTrim[f], cl.sagOf[i])
+			f := cl.FaceOf[i]
+			faceTrim[f] = math.Max(faceTrim[f], cl.SagOf[i])
 			faceAxial[f] = wallAxial
 		}
 		return r, nil
