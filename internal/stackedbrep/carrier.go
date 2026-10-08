@@ -43,10 +43,29 @@ type Carrier struct {
 
 // ubEnd is one walked end of a segment and how far it can sit from the point
 // it denotes: the walk's own rounding, plus the cut displacement when the
-// parameter there is one the arrangement computed.
+// parameter there is one the arrangement computed. seg is the segment it
+// ends, whose carrier a junction's crossing offset reads (crossingOffset),
+// and cut marks a parameter the arrangement computed.
 type ubEnd struct {
 	p     Point2
 	allow float64
+	seg   CurveSegment
+	cut   bool
+}
+
+// crossingOffset is the proven distance from a junction's canonical point p
+// to the exact crossing of the carriers of the two segments meeting there
+// (brepgeom.CrossingOffsetUpper), where either side is a cut: the arrangement
+// placed p through a cut parameter that, far from the plane origin, is off
+// the crossing by the coordinates' own rounding rather than within the cut
+// allowance. A recorded corner, both sides at their natural ends, is the
+// record's own point and is charged nothing. +Inf where the carriers state no
+// crossing.
+func crossingOffset(ei, sj ubEnd, p Point2) float64 {
+	if !ei.cut && !sj.cut {
+		return 0
+	}
+	return brepgeom.CrossingOffsetUpper(ei.seg, sj.seg, p)
 }
 
 // Unit is one maximal run of a loop's consecutive segments on one carrier,
@@ -160,13 +179,15 @@ func ubEnds(seg CurveSegment, w survey2d.SegmentWalk) (ubEnd, ubEnd, error) {
 		}
 		cut = proofbound.CutDisplacementAllow(speed)
 	}
-	start := ubEnd{p: Point2{U: w.StartU + 0, V: w.StartV + 0}, allow: proofbound.WalkEndBoundAllow(w.StartBound)}
-	end := ubEnd{p: Point2{U: w.EndU + 0, V: w.EndV + 0}, allow: proofbound.WalkEndBoundAllow(w.EndBound)}
+	start := ubEnd{p: Point2{U: w.StartU + 0, V: w.StartV + 0}, allow: proofbound.WalkEndBoundAllow(w.StartBound), seg: seg}
+	end := ubEnd{p: Point2{U: w.EndU + 0, V: w.EndV + 0}, allow: proofbound.WalkEndBoundAllow(w.EndBound), seg: seg}
 	if t0 != 0 && t0 != 1 {
 		start.allow = proofbound.AbsSumUpper(start.allow, cut)
+		start.cut = true
 	}
 	if t1 != 0 && t1 != 1 {
 		end.allow = proofbound.AbsSumUpper(end.allow, cut)
+		end.cut = true
 	}
 	return start, end, nil
 }
