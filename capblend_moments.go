@@ -453,12 +453,13 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	capZB := cbp.capBandLevel(capZ, matSign)
 	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
 	sideZ := sideZB.Value
-	// sideZ multiplies a whole disk area below, so its own rounding is a term
-	// of the band and is charged here — an error the size of an ulp of the
-	// sweep height, amplified by the section's area, which is of the order of
-	// the band itself once the disks cancel. sideZB also preserves the cap
-	// level's inherited axial displacement: the side level is derived from
-	// that computed cap, not from an exact coordinate.
+	// sideZ is the held side level every patch flux reads too, so the disks
+	// and patches close one band exactly at the held levels. The side level's
+	// own move from the denoted one, its setback conversion and float-sum
+	// rounding, is the band's, not the disk's alone: capBandLevelVolume
+	// charges it once below, over the larger section area. The side disk
+	// keeps only the cap level's inherited axial displacement, which the side
+	// level carries because it is derived from that computed cap.
 	// The two closing disks are loopEnclosedAreaContext's ABSOLUTE areas, so
 	// the sub-solid they close off is the region the loop encloses read as
 	// POSITIVELY oriented — counter-clockwise — whichever way the loop was
@@ -490,13 +491,11 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// from the band's own material. A flat disk's raw flux (P.N over the
 	// disk) is its constant Z coordinate times its signed normal times its
 	// area — no triangulation needed.
-	// The two sign factors are +1 or -1, so applying them is exact and each
-	// level keeps whatever bound it arrived with: capZ can inherit a body-
-	// relative stop's axial displacement, and sideZ adds its own rounding to
-	// that same displacement.
+	// The two sign factors are +1 or -1, so applying them is exact, and both
+	// disks carry the cap level's inherited axial displacement.
 	fluxTotal := proofbound.BoundedAdd(
 		proofbound.BoundedMul(proofbound.MeasuredScalar(capZB.Value*(-matSign), capZB.Bound), capArea),
-		proofbound.BoundedMul(proofbound.MeasuredScalar(sideZ*matSign, sideZB.Bound), sideArea),
+		proofbound.BoundedMul(proofbound.MeasuredScalar(sideZ*matSign, capZB.Bound), sideArea),
 	)
 	// patchRawFlux's own v0..v3 (or triangle-fan) vertex order is FIXED —
 	// side-level vertices first, cap-level second — regardless of which cap

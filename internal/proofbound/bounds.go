@@ -94,9 +94,8 @@ import (
 //     reach past that interval (ChordLocusBuiltExcursion), plus each
 //     mitered corner's sliver flux (ChordLocusCornerFlux); the MEASURE of the
 //     region between the two solids, which the first moment reads, is
-//     ChordLocusRegionAllow, a swept-volume term over a homotopy from the
-//     wide sector to the built patch (ChordLocusHomotopyAreaUpper) plus a thin
-//     shell over the corner wedges (ChordLocusCornerShellUpper);
+//     ChordLocusRegionAllow, a thin shell under the cone that holds every
+//     point where the two solids differ (ChordLocusShellUpper);
 //   - the FIRST MOMENT a cap-loop chamfer's contour displacement can move →
 //     SweptMomentAllow, SweptVolumeAllow's own one-dimension-higher sibling;
 //   - the FIRST MOMENT a loft's chorded boundary can move under the same
@@ -2385,12 +2384,8 @@ func ChordLocusBuiltExcursion(fluxWide, wideBound, fluxNarrow, narrowBound, flux
 // locus's azimuth is monotone in the offset amount (ChordLocusVolumeAllow's
 // first bullet), so the caller must answer +Inf for a patch whose corner
 // could not be bounded, where the carriers may touch and the azimuth turn
-// back. Here W is the sector over the side window alone. Ride W and B on one
-// parametrisation (u, v) over the unit square: at height v·H,
-// W(u, v) has plane-local position ((1−v)·R0 + v·R1)·e^{iθS(u)} and B(u, v)
-// has (1−v)·R0·e^{iθS(u)} + v·R1·e^{iθC(u)}, θS and θC linear in u across the
-// side and cap windows. H_λ = (1−λ)·W + λ·B is the straight homotopy between
-// them.
+// back. B, at height v·H, is the curve u ↦ (1−v)·R0·e^{iθS(u)} + v·R1·e^{iθC(u)},
+// θS and θC linear in u across the side and cap windows.
 //
 // Across a corner ruling the band's neighbour ends on the locus for T and on
 // the ruling for B. Close each patch's difference with the surface σ joining
@@ -2406,72 +2401,72 @@ func ChordLocusBuiltExcursion(fluxWide, wideBound, fluxNarrow, narrowBound, flux
 // between the nearest and the farthest crossing of T, B or σ.
 //
 // Three facts about the level curves at height z bound those crossings.
-// First, H_λ's level curve u ↦ (1−v)·R0·e^{iθS(u)} + v·R1·((1−λ)·e^{iθS(u)} + λ·e^{iθC(u)})
-// has azimuth strictly increasing in u, because its cross product with its
-// own u-derivative is A²·dS + C²·dC + A·C·(dS + dC)·cos(θC(u) − θS(u)) > 0,
-// with A, C ≥ 0 the two coefficients, dS, dC > 0 the window widths and the
-// skew below a quarter turn; its ends sit at azimuths between θS0 and θC0 and
-// between θC1 and θS1, since a non-negative combination of two unit vectors
-// less than a half turn apart points between them. So every H_λ, W at λ = 0
-// and B at λ = 1, crosses each ray at an azimuth θ in the middle window
-// between those two corner wedges (between max(θS0, θC0) and
-// min(θS1, θC1)) exactly once, at a radius f_λ(θ, z)
-// continuous in λ. Second, B's radius is at least r(z) − dB, with
-// r² − |B|² = 4·v·(1−v)·R0·R1·sin²((θC − θS)/2) ≤ R0·R1·sin²(Φ/2), so
-// dB = max(R0, R1)·Φ²/4 for the larger corner skew Φ. Third, σ at height z is
-// the segment from P(z), at radius r(z) on T's edge, to Q(z), at radius at
-// least r(z) − dB on B's ruling, both inside one corner wedge, whose width is
-// at most Φ: every point of the segment has a component of at least
-// (r(z) − dB)·cos(Φ/2) along the wedge's bisector, so σ's radius is at least
-// r(z) − dσ with dσ = dB + r(z)·2·sin²(Φ/4) ≤ (3/8)·max(R0, R1)·Φ²
+// First, B's level curve has azimuth strictly increasing in u, because its
+// cross product with its own u-derivative is
+// A²·dS + C²·dC + A·C·(dS + dC)·cos(θC(u) − θS(u)) > 0, with A = (1−v)·R0 and
+// C = v·R1, dS, dC > 0 the window widths and the skew below a quarter turn;
+// its ends sit at azimuths between θS0 and θC0 and between θC1 and θS1,
+// since a non-negative combination of two unit vectors less than a half turn
+// apart points between them. So B crosses each ray at an azimuth in the
+// middle window, between max(θS0, θC0) and min(θS1, θC1), exactly once.
+// Second, B's radius is at least r(z) − dB, with
+// r² − |B|² = 4·v·(1−v)·R0·R1·sin²((θC − θS)/2) ≤ R0·R1·sin²(Φ/2) and
+// r ≥ min(R0, R1), so dB = max(R0, R1)·Φ²/4 for the larger corner skew Φ
+// (ChordLocusBuiltDeficitUpper). Third, σ at height z is the segment from
+// P(z), at radius r(z) on T's edge, to Q(z), at radius at least r(z) − dB on
+// B's ruling, both inside one corner wedge, whose width is at most Φ: every
+// point of the segment has a component of at least (r(z) − dB)·cos(Φ/2) along
+// the wedge's bisector, so σ's radius is at least r(z) − dσ with
+// dσ = dB + r(z)·2·sin²(Φ/4) ≤ (3/8)·max(R0, R1)·Φ²
 // (ChordLocusCornerDeficitUpper). Every crossing's radius is at most r(z): T
 // lies on the cone, B and σ inside it by the triangle inequality.
 //
-// At a middle azimuth only T, at r(z), and B, at f_1(θ, z), cross the ray, so
-// the winding number is nonzero only between them. Every radius in that
-// stretch is f_λ(θ, z) for some λ in [0, 1] by the intermediate value
-// theorem, so the point lies on H_λ. The set the homotopy passes through has
-// volume at most ∫∫∫ |∂λH|·|∂uH × ∂vH|, with ∂λH = B − W =
-// v·R1·(e^{iθC(u)} − e^{iθS(u)}) of length at most R1·Φ, so at most
-// R1·Φ·sup_λ Area(H_λ): SweptVolumeAllow of that displacement against an area
-// bound for EVERY H_λ, λ in [0, 1]. homotopyAreaUpper must be such a bound
-// (ChordLocusHomotopyAreaUpper forms one); the area of B alone does not
-// qualify, since W, at λ = 0, spans the wider side window. At an azimuth in a
-// corner wedge every crossing lies in [r(z) − dσ, r(z)], so the region there
-// lies in a shell of that thickness over the two corner wedges, whose volume
-// cornerShellUpper must bound (ChordLocusCornerShellUpper forms one).
-//
-// The region therefore has volume at most the swept volume plus the shell's,
-// and the bound is exactly that. The corner slivers are part of the shell,
-// so no corner flux is charged beside it. A zero skew puts every corner's
-// side and cap ends on one ray, so each corner's locus, whose azimuth runs
-// between those two ends, is the straight ruling itself, and the built patch
-// is the cone sector: the region is empty.
+// At a middle azimuth only T, at r(z), and B cross the ray, so the region
+// there lies in the shell of thickness dB under the cone. In a corner wedge
+// every crossing lies in [r(z) − dσ, r(z)], so the region there lies in the
+// shell of thickness dσ. Per unit angle the shell's cross-section at height z
+// is (r² − (r − d)²)/2 ≤ r·d, so the region's volume is at most
+// H·max(R0, R1)·(w·dB + (s0 + s1)·dσ), with w the middle window's width and
+// s0, s1 the two corner wedges' widths, which the corner skews bound
+// (ChordLocusShellUpper). That is second order in the skew; the region holds
+// no point the shell does not, the corner slivers included, so no corner
+// flux is charged beside it. A zero skew puts every corner's side and cap
+// ends on one ray, so each corner's locus, whose azimuth runs between those
+// two ends, is the straight ruling itself, and the built patch is the cone
+// sector: the region is empty.
 //
 // T and B here both run between the same two held levels, H apart. The held
 // side level's own displacement from the denoted one moves the whole body,
 // slab and band together, and the decad package charges it once per band
 // (capblend_moments.go's capBandLevelVolume), so no term here reads it.
 //
-// radiusUpper must bound both radii, so R1·Φ ≤ radiusUpper·windowSkewMax, and
-// windowSkewMax must be a PROVEN upper bound on the larger corner skew, below
-// a quarter turn (capband.CornerSkewUpper). The result is three times the
-// volume, the flux units capband.ChordLocusVolume divides by 3 once. A skew,
-// radius, area or shell that is negative or not finite answers +Inf.
-func ChordLocusRegionAllow(radiusUpper, windowSkewMax, homotopyAreaUpper, cornerShellUpper float64) float64 {
-	if !(windowSkewMax >= 0) || IsNonFinite(windowSkewMax) {
-		return math.Inf(1)
-	}
-	if windowSkewMax == 0 {
-		return 0
-	}
-	for _, in := range []float64{radiusUpper, homotopyAreaUpper, cornerShellUpper} {
+// radiusUpper must bound both radii, windowUpper the middle window's width,
+// heightUpper |H|, and skewStart, skewEnd the two corner skews, each PROVEN,
+// with the larger below a quarter turn (capband.CornerSkewUpper). The result
+// is three times the volume, the flux units capband.ChordLocusVolume divides
+// by 3 once. An input that is negative or not finite answers +Inf.
+func ChordLocusRegionAllow(radiusUpper, windowUpper, skewStart, skewEnd, heightUpper float64) float64 {
+	for _, in := range []float64{radiusUpper, windowUpper, skewStart, skewEnd, heightUpper} {
 		if !(in >= 0) || IsNonFinite(in) {
 			return math.Inf(1)
 		}
 	}
-	swept := SweptVolumeAllow(ProductUpper(radiusUpper, windowSkewMax), homotopyAreaUpper)
-	return ProductUpper(3, AbsSumUpper(swept, cornerShellUpper))
+	if skewStart == 0 && skewEnd == 0 {
+		return 0
+	}
+	return ProductUpper(3, ChordLocusShellUpper(radiusUpper, windowUpper, skewStart, skewEnd, heightUpper))
+}
+
+// ChordLocusBuiltDeficitUpper bounds how far inside the cone radius r(z) a
+// Cone patch's built surface can cross a ray at any azimuth
+// (ChordLocusRegionAllow's dB): radiusUpper·Φ²/4, rounded up, for
+// radiusUpper a bound on both radii and windowSkewMax the larger corner skew
+// Φ. A negative or non-finite input answers +Inf.
+func ChordLocusBuiltDeficitUpper(radiusUpper, windowSkewMax float64) float64 {
+	if !(radiusUpper >= 0) || !(windowSkewMax >= 0) || IsNonFinite(radiusUpper) || IsNonFinite(windowSkewMax) {
+		return math.Inf(1)
+	}
+	return ProductUpper(ProductUpper(radiusUpper, 0.25), ProductUpper(windowSkewMax, windowSkewMax))
 }
 
 // ChordLocusCornerDeficitUpper bounds how far inside the cone radius r(z) any
@@ -2486,48 +2481,20 @@ func ChordLocusCornerDeficitUpper(radiusUpper, windowSkewMax float64) float64 {
 	return ProductUpper(ProductUpper(radiusUpper, 0.375), ProductUpper(windowSkewMax, windowSkewMax))
 }
 
-// ChordLocusCornerShellUpper bounds the volume of ChordLocusRegionAllow's
-// corner shell: the points at an azimuth inside either corner wedge, at a
-// height in [0, H], whose radius lies within the deficit dσ below r(z). The
-// two wedges are at most skewStart + skewEnd wide, and at each height the
-// shell's cross-section per unit angle is (r² − (r − dσ)²)/2 ≤ r·dσ, so its
-// volume is at most (skewStart + skewEnd)·heightUpper·radiusUpper·dσ, with
-// dσ = ChordLocusCornerDeficitUpper(radiusUpper, max(skewStart, skewEnd)).
-// Every operation rounds up. A negative or non-finite input answers +Inf.
-func ChordLocusCornerShellUpper(radiusUpper, skewStart, skewEnd, heightUpper float64) float64 {
-	for _, in := range []float64{radiusUpper, skewStart, skewEnd, heightUpper} {
+// ChordLocusShellUpper bounds the volume of ChordLocusRegionAllow's shell:
+// heightUpper·radiusUpper·(windowUpper·dB + (skewStart + skewEnd)·dσ), with
+// dB and dσ the built and corner deficits at the larger skew. Every operation
+// rounds up. A negative or non-finite input answers +Inf.
+func ChordLocusShellUpper(radiusUpper, windowUpper, skewStart, skewEnd, heightUpper float64) float64 {
+	for _, in := range []float64{radiusUpper, windowUpper, skewStart, skewEnd, heightUpper} {
 		if !(in >= 0) || IsNonFinite(in) {
 			return math.Inf(1)
 		}
 	}
-	deficit := ChordLocusCornerDeficitUpper(radiusUpper, math.Max(skewStart, skewEnd))
-	wedges := AbsSumUpper(skewStart, skewEnd)
-	return ProductUpper(ProductUpper(wedges, heightUpper), ProductUpper(radiusUpper, deficit))
-}
-
-// ChordLocusHomotopyAreaUpper bounds the area of every surface
-// H_λ = (1−λ)·W + λ·B, λ in [0, 1], between a Cone patch's wide reference
-// sector W and its built ruled patch B (ChordLocusRegionAllow states the
-// parametrisation). With dS and dC the side and cap window widths,
-//
-//	∂uH = i·((1−v)·R0·dS·e^{iθS} + v·R1·((1−λ)·dS·e^{iθS} + λ·dC·e^{iθC})),
-//
-// so |∂uH| ≤ max(R0, R1)·max(dS, dC), and ∂vH has in-plane part
-// (R1 − R0)·e^{iθS} + λ·R1·(e^{iθC} − e^{iθS}) and axial part H, so
-// |∂vH| ≤ |R1 − R0| + R1·Φ + |H|. The area is at most the integral of
-// |∂uH|·|∂vH| over the unit square, which is at most the product of the two
-// bounds. radiusUpper must bound both radii, windowUpper both window widths,
-// radialGapUpper |R1 − R0|, heightUpper |H| and windowSkewMax the larger
-// corner skew Φ, each proven. Every operation rounds up. A negative or
-// non-finite input answers +Inf.
-func ChordLocusHomotopyAreaUpper(radiusUpper, windowUpper, radialGapUpper, heightUpper, windowSkewMax float64) float64 {
-	for _, in := range []float64{radiusUpper, windowUpper, radialGapUpper, heightUpper, windowSkewMax} {
-		if !(in >= 0) || IsNonFinite(in) {
-			return math.Inf(1)
-		}
-	}
-	slant := AbsSumUpper(radialGapUpper, ProductUpper(radiusUpper, windowSkewMax), heightUpper)
-	return ProductUpper(ProductUpper(radiusUpper, windowUpper), slant)
+	skew := math.Max(skewStart, skewEnd)
+	middle := ProductUpper(windowUpper, ChordLocusBuiltDeficitUpper(radiusUpper, skew))
+	corners := ProductUpper(AbsSumUpper(skewStart, skewEnd), ChordLocusCornerDeficitUpper(radiusUpper, skew))
+	return ProductUpper(ProductUpper(heightUpper, radiusUpper), AbsSumUpper(middle, corners))
 }
 
 // chordLocusEnvelopeSlack is |fluxWide − fluxNarrow| + wideBound + narrowBound

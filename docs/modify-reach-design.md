@@ -590,22 +590,18 @@ is closed by joining the corner-foot locus to the built ruling with a
 straight segment at each height, and on each ray the winding number of that
 closed surface is nonzero only between its nearest and farthest crossing.
 Between the two corner wedges only the cone, at `r(z)`, and the built patch
-cross the ray, and every radius between them lies on some surface of the
-straight homotopy from the wide sector to the built patch: each homotopy
-surface's level curve sweeps the azimuth monotonically and covers that range,
-so its crossing radius moves continuously from `r(z)` to the built patch's.
-The homotopy moves each point by at most `R1·Φ`, `Φ` the larger corner skew,
-and its swept volume is at most that times an area bound for EVERY surface
-on it, `ChordLocusHomotopyAreaUpper`:
-`max(R0, R1)·max(dS, dC)·(|R1 − R0| + R1·Φ + |H|)`, from the two partial
-derivatives' lengths. The built patch's own area does not bound it, since the
-wide sector at the homotopy's start spans the side window. Inside a corner
+cross the ray. The built patch's level curve sweeps the azimuth
+monotonically and covers that range, and its radius sits at most
+`max(R0, R1)·Φ²/4` inside `r(z)` (`ChordLocusBuiltDeficitUpper`), `Φ` the
+larger corner skew, since `r² − |B|² ≤ R0·R1·sin²(Φ/2)`. Inside a corner
 wedge every crossing, of the cone, the built patch or the joining segments,
 lies within `(3/8)·max(R0, R1)·Φ²` inside `r(z)`
-(`ChordLocusCornerDeficitUpper`), so the region there lies in a thin shell
-over the two wedges, `ChordLocusCornerShellUpper`. The region term charges
-the swept and shell volumes and nothing else: the corner slivers lie in
-the shell. A patch whose corner sliver could not be bounded answers an
+(`ChordLocusCornerDeficitUpper`). So the whole region lies in a shell under
+the cone, of the built deficit's thickness over the middle window and the
+corner deficit's over the two wedges, whose volume is at most
+`H·max(R0, R1)·(w·dB + (s0 + s1)·dσ)` (`ChordLocusShellUpper`): second order
+in the skew. The region term charges that shell and nothing else: the
+corner slivers lie in the shell. A patch whose corner sliver could not be bounded answers an
 unbounded region, since its locus may fold back. The proof reads the
 corner-foot locus as the carrier root nearest the corner: the two roots
 mirror each other across the line through the two centres, or across the
@@ -618,7 +614,8 @@ slab and the band meet at the held level, so the body changes only where a
 vertical line leaves the band toward the cap, by at most the larger of the
 side loop's and the cap contour's areas times the move
 (`capBandLevelVolume`), which the band's volume and first-moment bounds
-charge. The skew the
+charge. The band volume charges it there alone: its side disk carries only
+the cap level's inherited displacement. The skew the
 region term reads is the larger of the patch's two proven corner
 skews (§8.4's `CornerSkewUpper`), the exact angle between each corner's held
 side end and held cap end; the volume term reads it only to test for zero.
