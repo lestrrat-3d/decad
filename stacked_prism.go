@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"reflect"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -158,354 +156,48 @@ func stackedBoundsContext(ctx context.Context, sp stackedPrismPayload, outerDelt
 	return out, nil
 }
 
-func stackedExposed(ctx context.Context, holes []LoopRecord) ([]ProfileRecord, error) {
-	out := make([]ProfileRecord, 0, len(holes))
-	for _, hole := range holes {
-		reversed, err := offset2d.ReverseLoopRecordContext(ctx, hole)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, ProfileRecord{Outer: reversed})
-	}
-	return out, nil
-}
-
-// stackedInterfaces derives every interface's exposed records from the slabs
-// alone, so a rewrite that moves or rebuilds the slab regions (the mirror
-// join, a pattern instance) re-derives its interfaces here rather than moving
-// the old ones, and falsifyStackedPayload's I7 holds by construction and is
-// still checked. Where the two outers match, each exclusive hole of one side,
-// reversed, is the material the other side exposes. Where they differ (§2.2's
-// union reading), the one patch is the wider region with the narrower outer
-// reversed as its hole, on the side prior records: which side is wider is a
-// fact of the stack's construction, and a rigid motion of both regions keeps
-// it.
-func stackedInterfaces(ctx context.Context, slabs []prismSlab, prior []prismSlabInterface) ([]prismSlabInterface, error) {
-	out := make([]prismSlabInterface, len(slabs)-1)
-	for i := range out {
-		if wideLower, lining := stackedLiningSides(slabs[i], slabs[i+1]); lining {
-			narrow := slabs[i].regions
-			if wideLower {
-				narrow = slabs[i+1].regions
-			}
-			exposed, err := stackedLiningExposed(ctx, narrow)
-			if err != nil {
-				return nil, err
-			}
-			if wideLower {
-				out[i] = prismSlabInterface{lowerExposed: exposed}
-			} else {
-				out[i] = prismSlabInterface{upperExposed: exposed}
-			}
-			continue
-		}
-		lowerRegion, upperRegion := slabs[i].regions[0], slabs[i+1].regions[0]
-		same, err := loopRecordsEqual(nil, lowerRegion.Outer, upperRegion.Outer)
-		if err != nil {
-			return nil, err
-		}
-		if !same {
-			if i >= len(prior) {
-				return nil, fmt.Errorf(`%w: interface %d changes the outer loop and has no prior record of its exposed side`, ErrDegenerate, i)
-			}
-			if len(prior[i].lowerExposed) == 1 && len(prior[i].upperExposed) == 0 {
-				lower, err := stackedUnionExposed(ctx, lowerRegion, upperRegion)
-				if err != nil {
-					return nil, err
-				}
-				out[i] = prismSlabInterface{lowerExposed: lower}
-				continue
-			}
-			upper, err := stackedUnionExposed(ctx, upperRegion, lowerRegion)
-			if err != nil {
-				return nil, err
-			}
-			out[i] = prismSlabInterface{upperExposed: upper}
-			continue
-		}
-		lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(lowerRegion, upperRegion)
-		lower, err := stackedExposed(ctx, upperOnly)
-		if err != nil {
-			return nil, err
-		}
-		upper, err := stackedExposed(ctx, lowerOnly)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = prismSlabInterface{lowerExposed: lower, upperExposed: upper}
-	}
-	return out, nil
-}
-
-// falsifyStackedPayload refuses any record whose interfaces cannot be built
-// from whole, shared loop columns. It is run before topology and chording.
 // isGroup reports whether the payload is a prism group
 // (docs/mirror-pattern-design.md §6.3): one slab holding two or more regions.
 func (sp stackedPrismPayload) isGroup() bool {
 	return len(sp.slabs) == 1 && len(sp.slabs[0].regions) >= 2
 }
 
-// falsifyPrismGroup is §2.2's I1/I2 reading for a prism group: one slab with
-// two or more non-empty regions over a finite interval, and no interface.
-// That the regions are pairwise disjoint is proven when the group is built,
-// by sketch's arrangement of every region's outer (provePrismRegionsDisjoint);
-// this audit compares records and proves no geometry.
-func falsifyPrismGroup(ctx context.Context, sp stackedPrismPayload) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if len(sp.interfaces) != 0 {
-		return fmt.Errorf(`%w: a prism group has one slab and no interface`, ErrUnsupported)
-	}
-	slab := sp.slabs[0]
-	if math.IsNaN(slab.z0) || math.IsNaN(slab.z1) ||
-		math.IsInf(slab.z0, 0) || math.IsInf(slab.z1, 0) || slab.z0 >= slab.z1 {
-		return fmt.Errorf(`%w: slab 0 has an empty interval`, ErrDegenerate)
-	}
-	for r, region := range slab.regions {
-		if len(region.Outer.Segments) == 0 {
-			return fmt.Errorf(`%w: region %d of the prism group has no outer loop`, ErrDegenerate, r)
-		}
-	}
-	return nil
-}
-
-func falsifyStackedPayload(ctx context.Context, sp stackedPrismPayload) error {
-	if sp.isGroup() {
-		return falsifyPrismGroup(ctx, sp)
-	}
-	if len(sp.slabs) < 2 || len(sp.interfaces) != len(sp.slabs)-1 {
-		return fmt.Errorf(`%w: a stacked prism needs two slabs and one interface between each pair`, ErrUnsupported)
+// stackedRecordOf adapts the root payload's slab fields for the record audit.
+func stackedRecordOf(sp stackedPrismPayload) stackedrecord.Record {
+	out := stackedrecord.Record{
+		Slabs:      make([]stackedrecord.Slab, len(sp.slabs)),
+		Interfaces: make([]stackedrecord.Interface, len(sp.interfaces)),
 	}
 	for i, slab := range sp.slabs {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if len(slab.regions) == 0 {
-			return fmt.Errorf(`%w: slab %d has no region`, ErrUnsupported, i)
-		}
-		if math.IsNaN(slab.z0) || math.IsNaN(slab.z1) ||
-			math.IsInf(slab.z0, 0) || math.IsInf(slab.z1, 0) || slab.z0 >= slab.z1 {
-			return fmt.Errorf(`%w: slab %d has an empty interval`, ErrDegenerate, i)
-		}
-		if i == 0 {
-			continue
-		}
-		prev := sp.slabs[i-1]
-		if prev.z1 != slab.z0 || prev.z1Delta != slab.z0Delta {
-			return fmt.Errorf(`%w: slabs %d and %d do not share one level`, ErrDegenerate, i-1, i)
-		}
-		if len(prev.regions) != 1 || len(slab.regions) != 1 {
-			// I2: a slab holds several regions only as the narrow side of a
-			// lining interface (§2.2's lining reading).
-			if err := falsifyStackedLiningInterface(ctx, prev, slab, sp.interfaces[i-1], i-1); err != nil {
-				return err
-			}
-			continue
-		}
-		equal, err := loopRecordsEqual(nil, prev.regions[0].Outer, slab.regions[0].Outer)
-		if err != nil {
-			return err
-		}
-		if !equal {
-			if err := falsifyStackedUnionInterface(ctx, prev.regions[0], slab.regions[0], sp.interfaces[i-1], i-1); err != nil {
-				return err
-			}
-			continue
-		}
-		lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(prev.regions[0], slab.regions[0])
-		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
-			return fmt.Errorf(`%w: both sides of interface %d have exclusive holes`, ErrUnsupported, i-1)
-		}
-		got := sp.interfaces[i-1]
-		lowerOK, err := stackedExposedMatches(ctx, got.lowerExposed, upperOnly)
-		if err != nil {
-			return err
-		}
-		upperOK, err := stackedExposedMatches(ctx, got.upperExposed, lowerOnly)
-		if err != nil {
-			return err
-		}
-		if !lowerOK || !upperOK {
-			return fmt.Errorf(`%w: interface %d does not record its exposed material`, ErrDegenerate, i-1)
+		out.Slabs[i] = stackedSlabRecord(slab)
+	}
+	for i, face := range sp.interfaces {
+		out.Interfaces[i] = stackedrecord.Interface{
+			LowerExposed: face.lowerExposed, UpperExposed: face.upperExposed,
 		}
 	}
-	return nil
+	return out
 }
 
-// stackedExposedMatches is I7 for a monotone interface: got holds exactly one
-// hole-free record per exclusive hole, in order, each one's outer the hole's
-// interior. A record states that interior either as reverse(hole) — the
-// spelling stackedExposed derives — or as the loop whose reverse is the hole,
-// which is how a shell records the offset loop it built the hole from
-// (loopReversesRecord).
-func stackedExposedMatches(ctx context.Context, got []ProfileRecord, holes []LoopRecord) (bool, error) {
-	if len(got) != len(holes) {
-		return false, nil
-	}
-	for e, hole := range holes {
-		if len(got[e].Holes) != 0 {
-			return false, nil
-		}
-		ok, err := loopReversesRecord(ctx, got[e].Outer, hole)
-		if err != nil || !ok {
-			return false, err
-		}
-	}
-	return true, nil
-}
-
-// loopReversesRecord reports whether loop a is loop b walked the other way,
-// as records: a equals reverse(b), or reverse(a) equals b. Reversal rebuilds
-// each segment from its walk, so the two spellings need not agree bit for bit,
-// and either one names the same loop.
-func loopReversesRecord(ctx context.Context, a, b LoopRecord) (bool, error) {
-	rb, err := offset2d.ReverseLoopRecordContext(ctx, b)
-	if err != nil {
-		return false, err
-	}
-	if same, err := loopRecordsEqual(nil, a, rb); err != nil || same {
-		return same, err
-	}
-	ra, err := offset2d.ReverseLoopRecordContext(ctx, a)
-	if err != nil {
-		return false, err
-	}
-	return loopRecordsEqual(nil, ra, b)
-}
-
-// stackedLiningSides reports whether the interface between lower and upper
-// takes §2.2's lining reading — one side holds several regions — and, if so,
-// whether the lower side is the wide one (the side holding one region).
-func stackedLiningSides(lower, upper prismSlab) (bool, bool) {
-	switch {
-	case len(lower.regions) == 1 && len(upper.regions) > 1:
-		return true, true
-	case len(upper.regions) == 1 && len(lower.regions) > 1:
-		return false, true
-	default:
-		return false, false
+func stackedSlabRecord(slab prismSlab) stackedrecord.Slab {
+	return stackedrecord.Slab{
+		Regions: slab.regions, Z0: slab.z0, Z1: slab.z1,
+		Z0Delta: slab.z0Delta, Z1Delta: slab.z1Delta,
 	}
 }
 
-// stackedLiningExposed derives the one exposed record of a lining interface
-// from its narrow regions: the wide region's material they do not cover. Its outer is
-// the reverse of the first narrow region's one hole, and its holes are the
-// reverses of every other narrow region's outer, in order.
-func stackedLiningExposed(ctx context.Context, narrow []ProfileRecord) ([]ProfileRecord, error) {
-	if len(narrow) == 0 || len(narrow[0].Holes) != 1 {
-		return nil, fmt.Errorf(`%w: a lining interface's first narrow region has no single hole`, ErrUnsupported)
-	}
-	outer, err := offset2d.ReverseLoopRecordContext(ctx, narrow[0].Holes[0])
+// stackedInterfaces derives interface records and adapts them for the payload.
+func stackedInterfaces(ctx context.Context, slabs []prismSlab, prior []prismSlabInterface) ([]prismSlabInterface, error) {
+	record := stackedRecordOf(stackedPrismPayload{slabs: slabs, interfaces: prior})
+	derived, err := stackedrecord.Derive(ctx, record.Slabs, record.Interfaces)
 	if err != nil {
 		return nil, err
 	}
-	record := ProfileRecord{Outer: outer}
-	for _, region := range narrow[1:] {
-		hole, err := offset2d.ReverseLoopRecordContext(ctx, region.Outer)
-		if err != nil {
-			return nil, err
-		}
-		record.Holes = append(record.Holes, hole)
+	out := make([]prismSlabInterface, len(derived))
+	for i, face := range derived {
+		out[i] = prismSlabInterface{lowerExposed: face.LowerExposed, upperExposed: face.UpperExposed}
 	}
-	return []ProfileRecord{record}, nil
-}
-
-// falsifyStackedLiningInterface is §2.2's lining reading of I5-I7, for an
-// interface where one side holds several regions. The wide side holds one
-// region W with k holes; the narrow side holds 1 + k regions: the first
-// shares W's outer and has one hole of its own, and region m >= 1 has W's
-// hole m-1 as its one hole and an outer of its own. Only the wide side
-// records exposed material, one record: the first narrow region's hole
-// reversed as its outer and every other narrow region's outer reversed as
-// its holes (loopReversesRecord's either spelling). That each narrow region
-// lies in W, and that the narrow regions are pairwise disjoint, is proven
-// when the shell builds them, by the offset section's §5 audit; this audit
-// compares records and proves no geometry.
-func falsifyStackedLiningInterface(ctx context.Context, lower, upper prismSlab, boundary prismSlabInterface, index int) error {
-	wideLower, lining := stackedLiningSides(lower, upper)
-	if !lining {
-		return fmt.Errorf(`%w: both sides of interface %d hold several regions`, ErrUnsupported, index)
-	}
-	wide, narrow := upper.regions[0], lower.regions
-	got, other := boundary.upperExposed, boundary.lowerExposed
-	if wideLower {
-		wide, narrow = lower.regions[0], upper.regions
-		got, other = boundary.lowerExposed, boundary.upperExposed
-	}
-	if len(narrow) != 1+len(wide.Holes) || len(narrow[0].Holes) != 1 {
-		return fmt.Errorf(`%w: interface %d does not line each loop of its wide region`, ErrUnsupported, index)
-	}
-	same, err := loopRecordsEqual(nil, narrow[0].Outer, wide.Outer)
-	if err != nil {
-		return err
-	}
-	if !same {
-		return fmt.Errorf(`%w: interface %d's first narrow region does not share the wide outer`, ErrUnsupported, index)
-	}
-	for m, region := range narrow[1:] {
-		if len(region.Holes) != 1 {
-			return fmt.Errorf(`%w: interface %d's narrow region %d has no single hole`, ErrUnsupported, index, m+1)
-		}
-		same, err := loopRecordsEqual(nil, region.Holes[0], wide.Holes[m])
-		if err != nil {
-			return err
-		}
-		if !same {
-			return fmt.Errorf(`%w: interface %d's narrow region %d does not line wide hole %d`, ErrUnsupported, index, m+1, m)
-		}
-	}
-	if len(other) != 0 || len(got) != 1 || len(got[0].Holes) != len(narrow)-1 {
-		return fmt.Errorf(`%w: interface %d does not record its exposed material`, ErrDegenerate, index)
-	}
-	ok, err := loopReversesRecord(ctx, got[0].Outer, narrow[0].Holes[0])
-	if err != nil {
-		return err
-	}
-	for m := 1; ok && m < len(narrow); m++ {
-		ok, err = loopReversesRecord(ctx, got[0].Holes[m-1], narrow[m].Outer)
-		if err != nil {
-			return err
-		}
-	}
-	if !ok {
-		return fmt.Errorf(`%w: interface %d does not record its exposed material`, ErrDegenerate, index)
-	}
-	return nil
-}
-
-// falsifyStackedUnionInterface is §2.2's union reading of I5-I7 for an
-// interface whose two outer loops differ. Both regions must be hole-free, and
-// exactly one side records exactly one exposed patch: the wider region with
-// the narrower outer reversed as its hole (stackedUnionExposed). The audit
-// re-derives that record from the two regions and the recorded side and
-// compares it record for record. That the narrower outer lies inside the
-// wider one is proven at construction by the clean-nesting match, as I6's
-// monotone holes are; this audit compares records and proves no geometry.
-func falsifyStackedUnionInterface(ctx context.Context, lower, upper ProfileRecord, boundary prismSlabInterface, index int) error {
-	if len(lower.Holes) != 0 || len(upper.Holes) != 0 {
-		return fmt.Errorf(`%w: interface %d changes the outer loop between holed regions`, ErrUnsupported, index)
-	}
-	var got []ProfileRecord
-	var want []ProfileRecord
-	var err error
-	switch {
-	case len(boundary.lowerExposed) == 1 && len(boundary.upperExposed) == 0:
-		got = boundary.lowerExposed
-		want, err = stackedUnionExposed(ctx, lower, upper)
-	case len(boundary.upperExposed) == 1 && len(boundary.lowerExposed) == 0:
-		got = boundary.upperExposed
-		want, err = stackedUnionExposed(ctx, upper, lower)
-	default:
-		return fmt.Errorf(`%w: interface %d changes the outer loop without exactly one exposed patch`, ErrDegenerate, index)
-	}
-	if err != nil {
-		return err
-	}
-	if !reflect.DeepEqual(got, want) {
-		return fmt.Errorf(`%w: interface %d does not record its exposed material`, ErrDegenerate, index)
-	}
-	return nil
+	return out, nil
 }
 
 // stackedPatchLoop is one loop of a planar patch: the column whose ring it
@@ -526,108 +218,37 @@ type stackedPatch struct {
 	loops  []stackedPatchLoop
 }
 
-// stackedInterfacePatches lists interface k's exposed patches with the column
-// rings that bound them. Where the two outers match (§2.2's I5), each patch is
-// one exclusive hole's column. Where they differ (the union reading), the one
-// patch is bounded by the wider side's outer column and, as its hole, the
-// narrower side's outer column. A lining interface's one patch is bounded by
-// the first narrow region's hole column, as its outer, and by every other
-// narrow region's outer column, as its holes. The body build and the
-// tessellator both read this list, so both name the same face by the same
-// role and the same rings.
+// stackedInterfacePatches adapts the record plan's patch rings to the body build.
 func stackedInterfacePatches(sp stackedPrismPayload, columns []stackedColumn, bySlab [][]stackedSlabLoop, k int) ([]stackedPatch, error) {
-	boundary := sp.interfaces[k]
-	if wideLower, lining := stackedLiningSides(sp.slabs[k], sp.slabs[k+1]); lining {
-		return stackedLiningPatches(sp, columns, bySlab, k, wideLower)
+	plannedColumns := make([]stackedrecord.Column, len(columns))
+	for i, col := range columns {
+		plannedColumns[i] = stackedrecord.Column{
+			Loop: col.loop, Start: col.start, End: col.end,
+			Region: col.region, LoopIndex: col.loopIndex,
+		}
 	}
-	lower, upper := sp.slabs[k].regions[0], sp.slabs[k+1].regions[0]
-	same, err := loopRecordsEqual(nil, lower.Outer, upper.Outer)
+	plannedLoops := make([][]stackedrecord.SlabLoop, len(bySlab))
+	for slab, entries := range bySlab {
+		plannedLoops[slab] = make([]stackedrecord.SlabLoop, len(entries))
+		for i, entry := range entries {
+			plannedLoops[slab][i] = stackedrecord.SlabLoop{
+				Column: entry.column, Region: entry.region, Loop: entry.loop,
+			}
+		}
+	}
+	planned, err := stackedrecord.InterfacePatches(stackedRecordOf(sp), plannedColumns, plannedLoops, k)
 	if err != nil {
 		return nil, err
 	}
-	var patches []stackedPatch
-	if !same {
-		lowerOuter, upperOuter := stackedSlabColumn(bySlab[k], 0, 0), stackedSlabColumn(bySlab[k+1], 0, 0)
-		if lowerOuter < 0 || upperOuter < 0 || columns[lowerOuter].end != k || columns[upperOuter].start != k+1 {
-			return nil, fmt.Errorf(`%w: interface %d changes the outer loop but a wall column crosses it`, ErrDegenerate, k)
+	patches := make([]stackedPatch, len(planned))
+	for i, patch := range planned {
+		loops := make([]stackedPatchLoop, len(patch.Loops))
+		for j, loop := range patch.Loops {
+			loops[j] = stackedPatchLoop{column: loop.Column, top: loop.Top, outer: loop.Outer}
 		}
-		for e, exposed := range boundary.lowerExposed {
-			patches = append(patches, stackedPatch{role: fmt.Sprintf("floor(%d,%d)", k, e), floor: true, record: exposed,
-				loops: []stackedPatchLoop{{column: lowerOuter, top: true, outer: true}, {column: upperOuter}}})
-		}
-		for e, exposed := range boundary.upperExposed {
-			patches = append(patches, stackedPatch{role: fmt.Sprintf("ceiling(%d,%d)", k, e), record: exposed,
-				loops: []stackedPatchLoop{{column: upperOuter, outer: true}, {column: lowerOuter, top: true}}})
-		}
-		return patches, nil
-	}
-	lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(lower, upper)
-	for e, hole := range upperOnly {
-		ci, err := stackedHoleColumn(columns, stackedHoleColumns(bySlab[k+1]), hole, k+1, true)
-		if err != nil {
-			return nil, err
-		}
-		patches = append(patches, stackedPatch{role: fmt.Sprintf("floor(%d,%d)", k, e), floor: true,
-			record: boundary.lowerExposed[e], loops: []stackedPatchLoop{{column: ci, outer: true}}})
-	}
-	for e, hole := range lowerOnly {
-		ci, err := stackedHoleColumn(columns, stackedHoleColumns(bySlab[k]), hole, k, false)
-		if err != nil {
-			return nil, err
-		}
-		patches = append(patches, stackedPatch{role: fmt.Sprintf("ceiling(%d,%d)", k, e),
-			record: boundary.upperExposed[e], loops: []stackedPatchLoop{{column: ci, top: true, outer: true}}})
+		patches[i] = stackedPatch{role: patch.Role, floor: patch.Floor, record: patch.Record, loops: loops}
 	}
 	return patches, nil
-}
-
-// stackedHoleColumns lists the columns carrying the first region's holes in
-// one slab's entries.
-func stackedHoleColumns(entries []stackedSlabLoop) []int {
-	var out []int
-	for _, e := range entries {
-		if e.region == 0 && e.loop != 0 {
-			out = append(out, e.column)
-		}
-	}
-	return out
-}
-
-// stackedLiningPatches is stackedInterfacePatches for a lining interface. The
-// narrow side's own loops — the first region's hole and every other region's
-// outer — have no equal loop on the wide side, so each one's column starts
-// (narrow side above) or ends (narrow side below) at this interface, and the
-// patch reads that end's ring.
-func stackedLiningPatches(sp stackedPrismPayload, columns []stackedColumn, bySlab [][]stackedSlabLoop, k int, wideLower bool) ([]stackedPatch, error) {
-	narrowSlab, top := k, true
-	exposed, role := sp.interfaces[k].upperExposed, fmt.Sprintf("ceiling(%d,0)", k)
-	if wideLower {
-		narrowSlab, top = k+1, false
-		exposed, role = sp.interfaces[k].lowerExposed, fmt.Sprintf("floor(%d,0)", k)
-	}
-	if len(exposed) != 1 {
-		return nil, fmt.Errorf(`%w: lining interface %d records no single exposed patch`, ErrDegenerate, k)
-	}
-	ring := func(region, loop int, outer bool) (stackedPatchLoop, error) {
-		ci := stackedSlabColumn(bySlab[narrowSlab], region, loop)
-		if ci < 0 || (top && columns[ci].end != k) || (!top && columns[ci].start != k+1) {
-			return stackedPatchLoop{}, fmt.Errorf(`%w: lining interface %d has no wall column ending at it`, ErrDegenerate, k)
-		}
-		return stackedPatchLoop{column: ci, top: top, outer: outer}, nil
-	}
-	outer, err := ring(0, 1, true)
-	if err != nil {
-		return nil, err
-	}
-	patch := stackedPatch{role: role, floor: wideLower, record: exposed[0], loops: []stackedPatchLoop{outer}}
-	for m := 1; m < len(sp.slabs[narrowSlab].regions); m++ {
-		hole, err := ring(m, 0, false)
-		if err != nil {
-			return nil, err
-		}
-		patch.loops = append(patch.loops, hole)
-	}
-	return []stackedPatch{patch}, nil
 }
 
 // stackedPatchArea is a patch record's area: its outer loop's enclosed area
@@ -672,10 +293,6 @@ type stackedColumn struct {
 	perimeter  proofbound.BoundedScalar
 }
 
-func stackedLoops(region ProfileRecord) []LoopRecord {
-	return append([]LoopRecord{region.Outer}, region.Holes...)
-}
-
 // stackedSlabLoop is one loop of one slab's region: the column that carries
 // it, the region it belongs to in that slab, and its index in that region
 // (0 the outer, i >= 1 hole i-1).
@@ -683,51 +300,25 @@ type stackedSlabLoop struct {
 	column, region, loop int
 }
 
-// stackedSlabColumn is the column carrying one region's loop, by region and
-// loop index, in one slab's entries, or -1.
-func stackedSlabColumn(entries []stackedSlabLoop, region, loop int) int {
-	for _, e := range entries {
-		if e.region == region && e.loop == loop {
-			return e.column
+// stackedColumns adapts recorded wall columns for the topology build.
+func stackedColumns(sp stackedPrismPayload) ([]stackedColumn, [][]stackedSlabLoop, error) {
+	planned, loops, err := stackedrecord.Columns(stackedRecordOf(sp))
+	if err != nil {
+		return nil, nil, err
+	}
+	columns := make([]stackedColumn, len(planned))
+	for i, col := range planned {
+		columns[i] = stackedColumn{
+			loop: col.Loop, start: col.Start, end: col.End,
+			region: col.Region, loopIndex: col.LoopIndex,
 		}
 	}
-	return -1
-}
-
-// stackedColumns names each uninterrupted wall once. bySlab lists every
-// region loop of each slab, region by region, with the column carrying it,
-// including shared through holes. A loop continues the column of an equal
-// loop record in the slab below, whichever region of either slab holds it.
-func stackedColumns(sp stackedPrismPayload) ([]stackedColumn, [][]stackedSlabLoop, error) {
-	var columns []stackedColumn
-	bySlab := make([][]stackedSlabLoop, len(sp.slabs))
-	for k, slab := range sp.slabs {
-		for r, region := range slab.regions {
-			for i, loop := range stackedLoops(region) {
-				found := -1
-				// A prism group has one slab, so no column continues.
-				if k != 0 {
-					for _, prev := range bySlab[k-1] {
-						equal, err := loopRecordsEqual(nil, loop, columns[prev.column].loop)
-						if err != nil {
-							return nil, nil, err
-						}
-						if equal {
-							found = prev.column
-							break
-						}
-					}
-				}
-				switch {
-				case found < 0:
-					found = len(columns)
-					columns = append(columns, stackedColumn{loop: loop, start: k, end: k, region: r, loopIndex: i})
-				case columns[found].end == k:
-					return nil, nil, fmt.Errorf(`%w: slab %d carries one loop record twice`, ErrDegenerate, k)
-				default:
-					columns[found].end = k
-				}
-				bySlab[k] = append(bySlab[k], stackedSlabLoop{column: found, region: r, loop: i})
+	bySlab := make([][]stackedSlabLoop, len(loops))
+	for k, entries := range loops {
+		bySlab[k] = make([]stackedSlabLoop, len(entries))
+		for i, entry := range entries {
+			bySlab[k][i] = stackedSlabLoop{
+				column: entry.Column, region: entry.Region, loop: entry.Loop,
 			}
 		}
 	}
@@ -909,7 +500,7 @@ func stackedRegionPart(ctx context.Context, sp stackedPrismPayload, base prismPa
 // evalStackedPlanContext builds a stacked body under plan's naming and column
 // displacements (§3, §4).
 func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp stackedPrismPayload, plan stackedPlan) (*Body, error) {
-	if err := falsifyStackedPayload(ctx, sp); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedRecordOf(sp)); err != nil {
 		return nil, err
 	}
 	columns, bySlab, err := stackedColumns(sp)

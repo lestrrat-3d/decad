@@ -298,7 +298,7 @@ the rules leave to the byte budget.
 | `internal/revolvemesh/` | Revolve rings, construction and proofs. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
-| `internal/stackedrecord/` | Compares slab interface hole records. See stacked-prism §2.2. |
+| `internal/stackedrecord/` | Derives and audits slab interfaces, wall columns, and exposed patch rings. See stacked-prism §2.2–§3. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons and body reference formulas. See verification §2-§3. |

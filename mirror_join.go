@@ -258,7 +258,7 @@ func joinPrismPayload(budget *proofbound.WorkBudget, pp prismPayload, walls []jo
 // receiver, rewrites each region by the same splice, and re-derives every
 // interface's exposed records from the rewritten regions. Equal loops rewrite
 // to equal loops, so the outer wall stays one column and each interface stays
-// monotone; evalStackedContext's falsifyStackedPayload re-checks both.
+// monotone; evalStackedContext's stackedrecord.Falsify call re-checks both.
 func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp stackedPrismPayload, walls []joinWall) (stackedPrismPayload, error) {
 	// J1: the join re-derives each interface from exclusive holes, which a
 	// union-built stack's changing outer loop does not record.

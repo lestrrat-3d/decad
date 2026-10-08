@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -180,7 +182,7 @@ func TestStackedUnionLevelChargesExactOffsetSum(t *testing.T) {
 		require.Equal(t, charge, sp.slabs[k+1].z0Delta)
 	}
 	require.True(t, found, "the boss's top level splits the plate")
-	require.NoError(t, falsifyStackedPayload(t.Context(), sp))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)))
 }
 
 // A boss moved in its plane re-expresses into the plate's frame, so the
@@ -207,7 +209,7 @@ func TestStackedUnionPlacedBossChargesSectionDisplacement(t *testing.T) {
 func TestStackedUnionPayloadAuditRejectsBrokenInterfaces(t *testing.T) {
 	plate, boss := internalBossOnPlate(t, 0, 10, 15)
 	base := internalStackedUnion(t, plate, boss)
-	require.NoError(t, falsifyStackedPayload(t.Context(), base))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(base)))
 	bossOuter := boss.payload.(prismPayload).profile.Outer
 	cases := []struct {
 		name   string
@@ -234,7 +236,7 @@ func TestStackedUnionPayloadAuditRejectsBrokenInterfaces(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sp := cloneStackedForAudit(base)
 			tc.change(&sp)
-			require.ErrorIs(t, falsifyStackedPayload(t.Context(), sp), tc.want)
+			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)), tc.want)
 		})
 	}
 }

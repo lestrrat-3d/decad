@@ -297,7 +297,7 @@ every slab whose region holds an equal loop (its face spans that column),
 J5–J6 run over every slab's region (an exposed record is a hole's own loop
 reversed, so it is covered), and the rewrite runs per region. The interfaces'
 exposed records are re-derived from the rewritten regions, and the stacked
-audit (`falsifyStackedPayload`, stacked §2.2) re-checks them.
+audit (`stackedrecord.Falsify`, stacked §2.2) re-checks them.
 
 ### 5.3 Audit and exactness
 

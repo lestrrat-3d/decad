@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -50,7 +52,7 @@ func cloneStackedForAudit(sp stackedPrismPayload) stackedPrismPayload {
 func TestStackedPayloadAuditRejectsBrokenRecords(t *testing.T) {
 	doc, pocket := internalPocket(t)
 	base := pocket.payload.(stackedPrismPayload)
-	require.NoError(t, falsifyStackedPayload(t.Context(), base))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(base)))
 	other := internalBoxBody(t, doc, 1, 1, 2, 2, 10)
 	otherHole, err := offset2d.ReverseLoopRecordContext(t.Context(), other.payload.(prismPayload).profile.Outer)
 	require.NoError(t, err)
@@ -79,7 +81,7 @@ func TestStackedPayloadAuditRejectsBrokenRecords(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sp := cloneStackedForAudit(base)
 			tc.change(&sp)
-			require.ErrorIs(t, falsifyStackedPayload(t.Context(), sp), tc.want)
+			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)), tc.want)
 		})
 	}
 }
@@ -132,7 +134,7 @@ func TestBlindStackedPlacedToolChargesSectionDisplacement(t *testing.T) {
 	volume, err := pocket.Volume()
 	require.NoError(t, err)
 	require.Equal(t, Approximate, volume.Exactness)
-	require.NoError(t, falsifyStackedPayload(t.Context(), sp))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)))
 }
 
 func TestBlindStackedAdmissionLeavesOtherCutsToMesh(t *testing.T) {
@@ -194,12 +196,12 @@ func TestCupStackedRecord(t *testing.T) {
 	require.Len(t, cp.stack.slabs, 2)
 	require.Len(t, cp.stack.slabs[0].regions, 1)
 	require.Len(t, cp.stack.slabs[1].regions, 2, `1 + k wall bands`)
-	require.NoError(t, falsifyStackedPayload(t.Context(), cp.stack))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(cp.stack)))
 	derived, err := stackedInterfaces(t.Context(), cp.stack.slabs, cp.stack.interfaces)
 	require.NoError(t, err)
 	rederived := cp.stack
 	rederived.interfaces = derived
-	require.NoError(t, falsifyStackedPayload(t.Context(), rederived), `the derived spelling passes the same audit`)
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(rederived)), `the derived spelling passes the same audit`)
 
 	d := New()
 	body, err := evalCupContext(t.Context(), d, d.nextProducerID(), cp)
@@ -258,7 +260,7 @@ func TestStackedLiningAuditRejectsBrokenRecords(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sp := cloneStackedForAudit(base)
 			tc.change(&sp)
-			require.ErrorIs(t, falsifyStackedPayload(t.Context(), sp), tc.want)
+			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)), tc.want)
 		})
 	}
 }
