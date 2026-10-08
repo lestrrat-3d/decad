@@ -428,7 +428,7 @@ func TestSheetWallAndConcaveRadiusKeepTheSurveyPrerequisiteRefusal(t *testing.T)
 	require.NoError(t, err)
 
 	// The tool (50 mm) exceeds the plate's own 10 mm spanning wall on
-	// purpose: publishWallResult's kind gate must refuse before that
+	// purpose: reportvocab.PublishWall's kind gate must refuse before that
 	// reading is ever consulted, so an unguarded wall survey run on the
 	// sheet would otherwise surface a DiagWallTooThin the published result
 	// must never carry.

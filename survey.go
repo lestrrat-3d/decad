@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -16,7 +17,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // This file is the analytic survey layer of
@@ -50,12 +50,12 @@ import (
 // concave-radius type switch does not name at all (today, a loft) — before
 // runSurveys maps either into DiagUnsupportedSurveyPayload rather than a
 // generic undecided result (proposal §16).
-type surveyReason int
+type surveyReason = reportvocab.SurveyReason
 
 const (
-	surveyUndecided surveyReason = iota
-	surveyFacetedUnsupported
-	surveyPayloadStaged
+	surveyUndecided          = reportvocab.SurveyUndecided
+	surveyFacetedUnsupported = reportvocab.SurveyFacetedUnsupported
+	surveyPayloadStaged      = reportvocab.SurveyPayloadStaged
 )
 
 // wallOutcome is one body's wall reading: ok=false is an undecided survey;
@@ -859,7 +859,7 @@ type surveyResults struct {
 // sheet (docs/surface-design.md §2.3, §9.1): the wall and concave-radius
 // blocks below run only on a BodySolid, so a sheet leaves WallAsked and
 // RadiusAsked false and their own prerequisite refusal to
-// publishWallResult/publishConcaveRadiusResult. It returns the raw private
+// reportvocab.PublishWall/PublishRadius. It returns the raw private
 // outcome for each survey and one diagnostic per
 // non-Sound outcome: DiagWallTooThin / DiagUndercut (Violating) when a stated
 // spec is proven to fail, and the per-survey DiagUndecided* (Suspect) when an
@@ -1106,7 +1106,7 @@ func payloadClassName(payload any) string {
 // computed: Exact only where that arm's own arithmetic proved bound zero,
 // Approximate otherwise — never asserted (docs/verification-design.md §6).
 func lengthMeasurement(mm, bound float64) Measurement {
-	return Measurement{Value: units.Millimeters(mm), Exactness: exactnessOf(bound), Bound: units.Millimeters(bound)}
+	return reportvocab.LengthMeasurement(mm, bound)
 }
 
 // intervalVerdict decides a stated spec on the proven interval
@@ -1114,11 +1114,5 @@ func lengthMeasurement(mm, bound float64) Measurement {
 // proven thin (every admissible thickness under the tool), +1 is met
 // (exactly tool-thick is not thinner), 0 is a straddle — undecided.
 func intervalVerdict(value, bound, tool float64) int {
-	if value+bound < tool {
-		return -1
-	}
-	if value-bound >= tool {
-		return 1
-	}
-	return 0
+	return reportvocab.IntervalVerdict(value, bound, tool)
 }

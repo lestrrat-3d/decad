@@ -448,7 +448,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 			}
 		}
 		// The wall and concave-radius prerequisite refusals are emitted by
-		// publishWallResult/publishConcaveRadiusResult, not by runSurveys, so
+		// reportvocab.PublishWall/PublishRadius, not by runSurveys, so
 		// they never appear in surveyDiags above; a sheet that asked either
 		// one still owes this body a Suspect for it.
 		if b.Kind() == BodySheet && (cfg.Wall != nil || cfg.ConcaveRadius) {
@@ -458,8 +458,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		// surveysRunnable is false here only because the body is a proven
 		// sheet that asked no pull — a wall and/or concave-radius question
 		// with no material to be about (docs/surface-design.md §9.1).
-		// runSurveys never runs; publishWallResult and
-		// publishConcaveRadiusResult each publish Unavailable plus their own
+		// runSurveys never runs; reportvocab.PublishWall and
+		// PublishRadius each publish Unavailable plus their own
 		// DiagSurveyPrerequisite from validity and kind alone, so this
 		// body's Status must already carry that Suspect verdict.
 		suspect = true
