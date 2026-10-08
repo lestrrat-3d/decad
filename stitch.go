@@ -783,97 +783,25 @@ func stitchHasFreeEdge(faces []*Face) bool {
 	return false
 }
 
-// stitchLumpBox is one component's own axis-aligned bounding box, built
-// entirely from held vertex coordinates and their own proven bounds
-// (stitchLumpsProvenSeparate's doc comment) — never a tolerance, never a
-// clearance-kernel reading.
-type stitchLumpBox struct {
-	lo, hi r3.Vec
-	have   bool
-}
-
-// include widens box to also cover p, inflated on both sides by bound — the
-// vertex's own proven class bound, charged exactly once per side rather
-// than once total, so the box the caller compares is never tighter than
-// what this evaluator actually proved.
-func (box *stitchLumpBox) include(p r3.Vec, bound float64) {
-	lo := r3.Vec{X: p.X - bound, Y: p.Y - bound, Z: p.Z - bound}
-	hi := r3.Vec{X: p.X + bound, Y: p.Y + bound, Z: p.Z + bound}
-	if !box.have {
-		box.lo, box.hi, box.have = lo, hi, true
-		return
-	}
-	box.lo = r3.Vec{X: math.Min(box.lo.X, lo.X), Y: math.Min(box.lo.Y, lo.Y), Z: math.Min(box.lo.Z, lo.Z)}
-	box.hi = r3.Vec{X: math.Max(box.hi.X, hi.X), Y: math.Max(box.hi.Y, hi.Y), Z: math.Max(box.hi.Z, hi.Z)}
-}
-
-// stitchLumpBoxFromFaces builds one component's own box from its faces'
-// held vertices, deduplicated by pointer identity: every distinct vertex
-// contributes its own position/bound pair exactly once, regardless of how
-// many edges or faces of this component reach it.
-func stitchLumpBoxFromFaces(faces []*Face) stitchLumpBox {
-	var box stitchLumpBox
-	seen := map[*Vertex]struct{}{}
-	visit := func(v *Vertex) {
-		if v == nil {
-			return
-		}
-		if _, ok := seen[v]; ok {
-			return
-		}
-		seen[v] = struct{}{}
-		box.include(v.position, v.bound.Base())
-	}
-	for _, f := range faces {
-		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				visit(ce.edge.start)
-				visit(ce.edge.end)
-			}
-		}
-	}
-	return box
-}
-
-// stitchLumpBoxesSeparated reports whether a and b are strictly separated in
-// at least one axis — the exact, tolerance-free comparison
-// stitchLumpsProvenSeparate's doc comment describes. Two boxes that merely
-// touch (equal on one bound) are NOT separated: strict inequality only,
-// matching sweepAuditBoxesStrictlySeparated's identical convention.
-func stitchLumpBoxesSeparated(a, b stitchLumpBox) bool {
-	if !a.have || !b.have {
-		return false
-	}
-	return a.hi.X < b.lo.X || b.hi.X < a.lo.X ||
-		a.hi.Y < b.lo.Y || b.hi.Y < a.lo.Y ||
-		a.hi.Z < b.lo.Z || b.hi.Z < a.lo.Z
-}
-
-// stitchLumpsProvenSeparate reports whether every pair of the given
-// connected-face components (splitConnectedFaces, evalStitchContext's own
-// call, or a Stitch'd body's own Lumps read back by tessellate_stitch.go)
-// carries a strict axis-aligned bounding-box separation in at least one
-// axis: a nested or overlapping pair proves nothing separated, so a caller
-// with more than one component and any non-separated pair must refuse
-// rather than sum an additive mass/flux term across them (evalStitchContext,
-// docs/surface-design.md Table C/R20). Fewer than two components trivially
-// holds, since there is no pair to separate.
+// stitchLumpsProvenSeparate compares connected-face components using each
+// distinct vertex's held position and proven bound. A touching or nested pair
+// cannot prove separation (docs/surface-design.md Table C/R20).
 func stitchLumpsProvenSeparate(components [][]*Face) bool {
-	if len(components) < 2 {
-		return true
-	}
-	boxes := make([]stitchLumpBox, len(components))
-	for i, c := range components {
-		boxes[i] = stitchLumpBoxFromFaces(c)
-	}
-	for i := range boxes {
-		for j := i + 1; j < len(boxes); j++ {
-			if !stitchLumpBoxesSeparated(boxes[i], boxes[j]) {
-				return false
+	return stitchweld.LumpsProvenSeparate(components,
+		func(f *Face, visit func(*Vertex)) {
+			for _, l := range f.loops {
+				for _, ce := range l.coedges {
+					visit(ce.edge.start)
+					visit(ce.edge.end)
+				}
 			}
-		}
-	}
-	return true
+		},
+		func(v *Vertex) (r3.Vec, float64, bool) {
+			if v == nil {
+				return r3.Vec{}, 0, false
+			}
+			return v.position, v.bound.Base(), true
+		})
 }
 
 // stitchZeroVertexBound reports whether every one of b's own vertices
@@ -1089,7 +1017,7 @@ func stitchBounds(srcFaces []*Face, xform r3.Transform, delta float64) (Box, err
 	for _, b := range bodies {
 		box := b.bounds
 		inflate := box.Bound.Base()
-		for _, c := range stitchBoxCorners(box.Min, box.Max, inflate) {
+		for _, c := range stitchweld.BoxCorners(box.Min, box.Max, inflate) {
 			p := xform.Apply(c)
 			if !proofbound.FiniteVec(p) {
 				return Box{}, fmt.Errorf(`%w: a placed stitch bound is not representable`, ErrUnsupported)
@@ -1104,15 +1032,4 @@ func stitchBounds(srcFaces []*Face, xform r3.Transform, delta float64) (Box, err
 		}
 	}
 	return Box{Min: lo, Max: hi, Exactness: exactnessOf(delta), Bound: units.Millimeters(delta)}, nil
-}
-
-func stitchBoxCorners(boxMin, boxMax r3.Vec, inflate float64) [8]r3.Vec {
-	lo := r3.Vec{X: boxMin.X - inflate, Y: boxMin.Y - inflate, Z: boxMin.Z - inflate}
-	hi := r3.Vec{X: boxMax.X + inflate, Y: boxMax.Y + inflate, Z: boxMax.Z + inflate}
-	return [8]r3.Vec{
-		{X: lo.X, Y: lo.Y, Z: lo.Z}, {X: hi.X, Y: lo.Y, Z: lo.Z},
-		{X: lo.X, Y: hi.Y, Z: lo.Z}, {X: lo.X, Y: lo.Y, Z: hi.Z},
-		{X: hi.X, Y: hi.Y, Z: lo.Z}, {X: hi.X, Y: lo.Y, Z: hi.Z},
-		{X: lo.X, Y: hi.Y, Z: hi.Z}, {X: hi.X, Y: hi.Y, Z: hi.Z},
-	}
 }

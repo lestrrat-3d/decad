@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stitchweld"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -409,7 +410,7 @@ func facePolygonBounds(nf *Face) (Box, error) {
 
 // unstitchBounds publishes one unstitched face's box as the retiring
 // receiver's own already-proven Bounds, inflated by its own Bound and then
-// carried through xform by its 8 corners (stitch.go's stitchBoxCorners) —
+// carried through xform by its 8 corners (stitchweld.BoxCorners) —
 // the same reasoning stitchBounds already states for a curved Stitch
 // operand, applied here to a single face of the body being split rather
 // than to a whole operand body. The published Bound is exactly delta, on
@@ -421,7 +422,7 @@ func unstitchBounds(srcBounds Box, xform r3.Transform, delta float64) (Box, erro
 	inflate := srcBounds.Bound.Base()
 	have := false
 	var lo, hi r3.Vec
-	for _, c := range stitchBoxCorners(srcBounds.Min, srcBounds.Max, inflate) {
+	for _, c := range stitchweld.BoxCorners(srcBounds.Min, srcBounds.Max, inflate) {
 		p := xform.Apply(c)
 		if !proofbound.FiniteVec(p) {
 			return Box{}, fmt.Errorf(`%w: a placed unstitch bound is not representable`, ErrUnsupported)
