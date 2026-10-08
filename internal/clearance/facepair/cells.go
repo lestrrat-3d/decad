@@ -538,11 +538,12 @@ func (k *Kernel) planeCrossesRevolved(f, g *clearance.CFace, sink *clearance.Cel
 // ruling, |n·axis| = sin α, at the apex's own plane distance) is NOT emitted,
 // and the cell loses nothing by it. Two reasons, and both must hold:
 //
-//   - It cannot be certified. |n·axis| is exact arithmetic on the payload's
-//     floats, but sin α is a transcendental of the stored half-angle: no exact
-//     test on those floats decides the identity, so the plateau could only ever
-//     be minted off a tolerance — an Exact reading a tilt undercuts by up to
-//     clearance.ClrAngTol × the slant length, exactly the lie this kernel does not tell.
+//   - It is not certified. sin α is Rise/√(Rise² + Run²), so the identity
+//     holds only where |n·axis|² equals Rise²/(Rise² + Run²) exactly over the
+//     payload's floats. The cell runs no such exact test, and a plateau minted
+//     off a tolerance instead would be an Exact reading a tilt undercuts by up
+//     to clearance.ClrAngTol × the slant length, exactly the lie this kernel
+//     does not tell.
 //   - It is redundant. The plane distance is AFFINE along every ruling, so its
 //     minimum over the trimmed face always migrates to a trim boundary in the
 //     axial direction: the latitude edges (Circle3 × Plane, closed form) and
@@ -561,7 +562,7 @@ func (k *Kernel) planeCone(f, g *clearance.CFace, sink *clearance.CellSink) {
 		lo, hi = g.Sweep.Lo, g.Sweep.Hi
 	}
 	mn, mx := clearance.TrigRange(nu, nv, lo, hi)
-	tanA := math.Tan(g.Half)
+	tanA := g.ConeTan()
 	rangeLo, rangeHi := math.Inf(1), math.Inf(-1)
 	for _, z := range []float64{g.ZWin.Lo, g.ZWin.Hi} {
 		for _, m := range []float64{mn, mx} {
@@ -678,7 +679,10 @@ func (k *Kernel) coneSphere(f, g *clearance.CFace, sink *clearance.CellSink) {
 	z := rel.Dot(cone.Axis)
 	perp := rel.Sub(cone.Axis.Scale(z))
 	rho := perp.Len()
-	sinA, cosA := math.Sincos(cone.Half)
+	// The meridian reading comes off the cone's slope, so it adds nothing
+	// beyond its own few float operations (clearance.CFace.ConeMeridian).
+	dCarrier, t := cone.ConeMeridian(z, rho)
+	sinA, cosA := cone.ConeSinCos()
 	var radial r3.Vec
 	switch k.oracle().OnAxis(sph.Anchor, cone.Anchor, cone.Axis) {
 	case clearance.DegYes:
@@ -697,10 +701,9 @@ func (k *Kernel) coneSphere(f, g *clearance.CFace, sink *clearance.CellSink) {
 		// is not: an offset in the undecided band normalizes to a garbage
 		// direction. The carrier distance still bounds the trimmed pair from
 		// below, so it stands as the honest lower bound it is.
-		sink.LoOnly(math.Abs(rho*cosA-z*sinA) - sph.Radius)
+		sink.LoOnly(dCarrier - sph.Radius)
 		return
 	}
-	t := z*cosA + rho*sinA // slant projection onto the ruling
 	if t <= k.tol {
 		// The nearest carrier point is the apex — a singular point owned by
 		// the synthesized vertex tier; the interior cell has no critical.
@@ -709,7 +712,6 @@ func (k *Kernel) coneSphere(f, g *clearance.CFace, sink *clearance.CellSink) {
 		}
 		return
 	}
-	dCarrier := math.Abs(rho*cosA - z*sinA)
 	v := dCarrier - sph.Radius
 	pf := cone.Anchor.Add(cone.Axis.Scale(t * cosA)).Add(radial.Scale(t * sinA))
 	sep := pf.Sub(sph.Anchor)

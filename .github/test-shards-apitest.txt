@@ -411,6 +411,7 @@
 2	0.01	TestClearanceRevolveAxisSnapContainsTruth
 2	0.01	TestClearanceRevolveCapVertexContainsTruth
 2	0.01	TestClearanceRevolveConeApexContainsTruth
+2	0.01	TestClearanceRevolveSteepConeContainsTruth
 2	0.00	TestClearanceStackedCubes
 2	0.00	TestClearanceStopBuiltStackTouching
 2	0.00	TestClearanceTiltedPlanePairIntervalContainsTruth

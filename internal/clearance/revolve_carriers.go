@@ -146,7 +146,8 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 				Kind: CkCone,
 				Axis: wp.Scale(growth),
 				RefU: e0p, RefV: e1p,
-				Half:  math.Atan2(math.Abs(dr), math.Abs(dz)),
+				Rise:  math.Abs(dr),
+				Run:   math.Abs(dz),
 				ZWin:  NewLinWindow(math.Abs(w.StartU-apexZ), math.Abs(w.EndU-apexZ)),
 				Sweep: sweep,
 			}

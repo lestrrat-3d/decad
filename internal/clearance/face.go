@@ -36,11 +36,15 @@ type CFace struct {
 	RefU, RefV r3.Vec
 	Radius     float64 // cylinder/sphere radius, torus minor
 	Major      float64 // torus major
-	Half       float64 // cone half-angle
-	Sweep      AngWindow
-	ZWin       LinWindow // cylinder: axial range; cone: axial range from apex
-	Merid      AngWindow // sphere/torus meridian window
-	Spindle    bool      // torus minor >= major: off the polynomial path (§4)
+	// Rise and Run are a cone's slope: its radius grows by Rise for every Run
+	// along Axis from the apex, so its half angle is exactly atan(Rise/Run).
+	// The cells read the slope itself (ConeSinCos, ConeMeridian), never a
+	// float angle, so the carrier is the cone of exactly this slope.
+	Rise, Run float64
+	Sweep     AngWindow
+	ZWin      LinWindow // cylinder: axial range; cone: axial range from apex
+	Merid     AngWindow // sphere/torus meridian window
+	Spindle   bool      // torus minor >= major: off the polynomial path (§4)
 
 	Box [2]r3.Vec
 	Wit []r3.Vec
@@ -88,6 +92,30 @@ func (f *CFace) AxisCoords(p r3.Vec) (float64, float64, float64) {
 	rad := rel.Sub(f.Axis.Scale(z))
 	rho := rad.Len()
 	return z, rho, math.Atan2(rad.Dot(f.RefV), rad.Dot(f.RefU))
+}
+
+// ConeSinCos returns the sine and cosine of a cone's half angle, Rise/L and
+// Run/L with L = √(Rise² + Run²): two divisions and a square root of the
+// slope, no transcendental of an angle.
+func (f *CFace) ConeSinCos() (float64, float64) {
+	l := math.Sqrt(f.Rise*f.Rise + f.Run*f.Run)
+	return f.Rise / l, f.Run / l
+}
+
+// ConeTan returns the tangent of a cone's half angle, Rise/Run.
+func (f *CFace) ConeTan() float64 { return f.Rise / f.Run }
+
+// ConeMeridian returns, for a point at axial offset z from a cone's apex and
+// radius rho from its axis, its distance from the generating ray,
+// |rho·Run − z·Rise|/L, and its slant projection onto that ray,
+// (z·Run + rho·Rise)/L, with L = √(Rise² + Run²). Each numerator is formed
+// before the one division, so it carries no rounding of its own wherever the
+// four products and their sum are exact, as for integer coordinates and
+// slope, and a slope whose L is exact (a Pythagorean one) then reads the
+// correctly rounded distance.
+func (f *CFace) ConeMeridian(z, rho float64) (float64, float64) {
+	l := math.Sqrt(f.Rise*f.Rise + f.Run*f.Run)
+	return math.Abs(rho*f.Run-z*f.Rise) / l, (z*f.Run + rho*f.Rise) / l
 }
 
 // admitPoint classifies a world point claimed to lie on the face's carrier

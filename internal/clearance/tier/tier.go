@@ -55,7 +55,10 @@ func (k *Kernel) VertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *clearanc
 		z := rel.Dot(f.Axis)
 		perp := rel.Sub(f.Axis.Scale(z))
 		rho := perp.Len()
-		sinA, cosA := math.Sincos(f.Half)
+		// The meridian reading comes off the cone's slope, so it adds nothing
+		// beyond its own few float operations (clearance.CFace.ConeMeridian).
+		d, t := f.ConeMeridian(z, rho)
+		sinA, cosA := f.ConeSinCos()
 		var radial r3.Vec
 		switch k.oracle().OnAxis(v, f.Anchor, f.Axis) {
 		case clearance.DegYes:
@@ -71,15 +74,13 @@ func (k *Kernel) VertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *clearanc
 		default:
 			// The distance is azimuth-free, the admission foot is not. The
 			// carrier distance is a proven lower bound; it stands as one.
-			sink.LoOnly(math.Abs(rho*cosA - z*sinA))
+			sink.LoOnly(d)
 			return nil
 		}
-		t := z*cosA + rho*sinA
 		if t <= k.tol {
 			return nil // the apex holds the nearest point; the vertex tiers pair with it
 		}
 		pf := f.Anchor.Add(f.Axis.Scale(t * cosA)).Add(radial.Scale(t * sinA))
-		d := math.Abs(rho*cosA - z*sinA)
 		sink.Candidate(k.tol, f.AdmitPoint(pf, k.tol), d, d, true, pf, v)
 	default:
 		d, foot := clearance.SpineDistOf(f, v)

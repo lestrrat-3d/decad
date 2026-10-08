@@ -105,6 +105,39 @@ func TestClearanceRevolveConeApexContainsTruth(t *testing.T) {
 	requireGapEnclosesRoot(t, clearanceRow(t, doc), big.NewRat(10, 16), big.NewRat(1, 4))
 }
 
+// TestClearanceRevolveSteepConeContainsTruth revolves the triangle
+// (2²⁰, 0), (2²⁰ + a·K, b·K), (2²⁰ + a·K, 0) a full turn about the u axis,
+// K = 2¹⁶, so its slanted wall is a cone whose apex sits on the axis 2²⁰ from
+// the origin and whose half angle atan(b/a), with a² + b² = c², is no
+// rational multiple of π. Every coordinate is an integer, so the carriers
+// match the record exactly. A ball of radius 1/4 is centred c along the
+// wall's outward normal (−b, a)/c from the wall point at slant c·K/2 from the
+// apex, so the true gap is c − 1/4 and the row must hold it.
+//
+// No failure reproduced through this public path. With the cone × sphere
+// cell reading math.Sincos of the carrier's float half angle, the kernel's
+// held interval was the single point 4.7500000000145519 (a = 3, b = 4) and
+// 12.750000000029104 (a = 5, b = 12), marked exact and about 1.5e-11 off the
+// truth, but both bodies' full-turn angular term widened the row to a bound
+// of about 2e-9, which held the truth. TestConeCellsReadTheSlope
+// (internal/clearance) pins the held interval itself and was seen red.
+func TestClearanceRevolveSteepConeContainsTruth(t *testing.T) {
+	t.Parallel()
+	const z0, k = 1048576.0, 65536.0
+	for _, tc := range []struct{ a, b, c float64 }{{3, 4, 5}, {5, 12, 13}} {
+		t.Run(fmt.Sprintf("slope=%v/%v", tc.b, tc.a), func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			s := fixedPolygonSketch(t, [][2]float64{{z0, 0}, {z0 + tc.a*k, tc.b * k}, {z0 + tc.a*k, 0}})
+			_, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+			require.NoError(t, err)
+			const m = k / 2
+			ballAtCentre(t, doc, z0+tc.a*m-tc.b, tc.b*m+tc.a, 0, 0.25)
+			requireGapEncloses(t, clearanceRow(t, doc), new(big.Rat).Sub(ratOf(tc.c), big.NewRat(1, 4)))
+		})
+	}
+}
+
 // bigSinCos returns sin x and cos x to 300 bits by their Taylor series, whose
 // terms at |x| ≤ 1 fall below 2⁻³⁰⁰ long before the 80th.
 func bigSinCos(x float64) (*big.Float, *big.Float) {
