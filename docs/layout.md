@@ -76,7 +76,7 @@ the rules leave to the byte budget.
 | `seam.go` | `RecordProfile`/`RecordChain` adapters. See sketch-seam §1–§2. |
 | `path.go` | The immutable spatial `Path` and its sealed `LineTo` / `ArcThrough` segment vocabulary. See `docs/sweep-design.md` §2–§3. |
 | `extent.go` | Public extent aliases and normalization. See API §8.1. |
-| `selector.go` | Selectors: `EdgeQuery`/`FaceQuery`, predicates and cardinality; a failure is a `SelectionError`. See `docs/api-design.md` §9. |
+| `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |
 | `selection_error.go` | `SelectionError` and the shared `*Query.String()` rendering. See `docs/api-design.md` §9. |
 
 ### Mass properties and free-form curves
