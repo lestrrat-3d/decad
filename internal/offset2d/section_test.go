@@ -88,4 +88,18 @@ func TestMirrorCornerJoin(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, g1.G1)
 	require.Equal(t, offset2d.Point{U: 20 - tt, V: 0}, g1.M)
+
+	// A sphere meridian's arc about (5, 0) arrives at the axis at (0, 0), its
+	// tangent read through the angle π: cos π is exact, sin π is not, so the
+	// foot stepped along the float normal lands at v = −1.2e-16, below the
+	// axis. The join takes the axis point itself. Shown to fail with the foot
+	// in place of the axis point.
+	pole := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		StartU: 10, EndU: 0, CU: 5, Radius: 5, Kind: survey2d.WalkCircular, Th0: 0, Th1: math.Pi,
+		TanInV: 1, TanOutU: -math.Sin(math.Pi), TanOutV: math.Cos(math.Pi),
+	}}
+	g1, err = offset2d.MirrorCornerJoin(pole, true, axis, 1, tt, 1e-9)
+	require.NoError(t, err)
+	require.True(t, g1.G1)
+	require.Equal(t, offset2d.Point{U: tt, V: 0}, g1.M)
 }

@@ -199,17 +199,16 @@ func TestShellNoOpenings(t *testing.T) {
 	})
 	t.Run("Revolve", func(t *testing.T) {
 		// A partial turn's closed shell keeps both angular caps (SX8); a full
-		// turn's waits on §14 row D.
+		// turn's builds (revolve_shell_test.go).
 		doc := decad.New()
 		partial := revolveMeridian(t, doc, shaftMeridian, halfTurn)
 		_, err := partial.Shell(t.Context(), nil, units.Millimeters(1), decad.WithNoOpenings())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SX8")
 		full := revolveMeridian(t, doc, shaftMeridian, decad.FullRevolution{})
-		_, err = full.Shell(t.Context(), nil, units.Millimeters(1), decad.WithNoOpenings())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "row D")
-		require.Equal(t, []*decad.Body{partial, full}, doc.Bodies())
+		closed, err := full.Shell(t.Context(), nil, units.Millimeters(1), decad.WithNoOpenings())
+		require.NoError(t, err)
+		require.Equal(t, []*decad.Body{partial, closed}, doc.Bodies())
 	})
 	t.Run("HoledSection", func(t *testing.T) {
 		w := sketch.NewWorld()

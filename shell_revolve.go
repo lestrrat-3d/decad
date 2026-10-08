@@ -13,7 +13,7 @@ import (
 )
 
 // This file is the revolve shell of docs/modify-reach-design.md §9.3 (Table RX
-// row RX2, Table BX row BX7): Body.Shell on a revolvePayload receiver. A
+// row RX2, Table BX rows BX6 and BX7): Body.Shell on a revolvePayload receiver. A
 // surface of revolution's normal lies in its meridian plane, so a wall of
 // thickness t behind every kept face is the meridian's own offset swept over
 // the receiver's unchanged angular interval. The offset is the same exact
@@ -23,15 +23,20 @@ import (
 // cut back to the non-negative radial half-plane, so a walk on the axis grows
 // no wall.
 //
-// What builds is a partial turn with both angular caps removed and no side
-// face removed. Every other selection refuses before a face is made: a side
-// opening is S2 until the open-chain wall section of reach §9.2 lands, a kept
-// angular cap and a holed meridian are SX8, and so is an effective meridian
-// whose mirror union would hold a hole or whose offset reaches across the axis.
+// Two calls build. A partial turn with both angular caps removed and no side
+// face removed sweeps the wall region over the receiver's own interval. A full
+// turn under WithNoOpenings sweeps it a whole turn into a closed hollow body:
+// the cavity wall is the offset's own swept surface, a void shell beside the
+// outer one (revolve_build.go's fullRevolveShellsContext). Every other
+// selection refuses before a face is made: a side opening is S2 until the
+// open-chain wall section of reach §9.2 lands, a kept angular cap and a holed
+// meridian are SX8, and so is an effective meridian whose mirror union would
+// hold a hole or whose offset reaches across the axis.
 
 // shellRevolve is Body.Shell's revolve receiver, from reach §4's stage 4 on.
 // Stage 1 — the live receiver, the options, the magnitude and the selector —
-// has already run in Shell. s is +1 inward, −1 outward.
+// has already run in Shell. removed is nil for a WithNoOpenings full turn. s
+// is +1 inward, −1 outward.
 func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*Face, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
 	d := b.doc
 	// RS13's guard, read as a modify refusal: the offset is of the recorded
@@ -91,8 +96,9 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	}
 
 	// Stage 5 (reach §4; modify §8): S18, then S10's section limit, inward
-	// only, on the effective meridian. A partial turn with both caps open keeps
-	// no angular floor, so the section limit is the only one.
+	// only, on the effective meridian. A partial turn with both caps open and
+	// a full turn both keep no angular floor, so the section limit is the
+	// only one.
 	if s > 0 {
 		inradius, enough, err := revolveShellInradius(budget, rp, axisAt >= 0, tmm, tDelta)
 		if err != nil {

@@ -318,6 +318,16 @@ neither endpoint reaches the axis). The free-form segment kinds emit
 `NURBSSurface` faces; `docs/spline-design.md` §7 owns the variant and its
 exactness, Table C the revolve reach, Table R the refusals, and §10 the revolve
 increment.
+Shells: a partial sweep's two caps join every wall into one shell. A full turn
+has no caps, and an on-axis junction sweeps a point, never an edge, so each
+RUN of a loop — its walks between two consecutive on-axis walks, or the whole
+loop when it meets the axis along fewer than two — sweeps its own closed
+surface and gets its own shell. A hole loop's run bounds a toroidal void. A
+loop meeting the axis along k ≥ 2 walks gives k shells: the run whose two axis
+ends bracket every other on-axis junction of the loop is the outer one, and
+the others are voids (a hollow cylinder's meridian sweeps its skin and its
+cavity wall). A surface result marks no shell void (`docs/surface-design.md`
+§2.2).
 Each END of the sweep interval carries its own proven **angular
 displacement** — how far the angle held there sits from the angle the
 recorded `AngularExtent` denotes — the angular twin of the axial displacement

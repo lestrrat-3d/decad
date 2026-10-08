@@ -128,10 +128,11 @@
 //	Shell         straight prism (tube or cup)                builds
 //	  both caps removed from a holed section                  ErrUnsupported
 //	Shell         partial revolve, both angular caps removed  builds
-//	  full turn, a side face removed, or a kept angular cap   ErrUnsupported
+//	Shell         full revolve, WithNoOpenings (closed)       builds
+//	  a side face removed, or a kept angular cap              ErrUnsupported
 //	  holed meridian, or one meeting the axis twice           ErrUnsupported
 //	  offset reaching across the axis                         ErrUnsupported
-//	  WithNoOpenings (a closed shell), any receiver           ErrUnsupported
+//	  WithNoOpenings on any other receiver                    ErrUnsupported
 //	Fillet/Chamfer/Shell  brep or stacked boolean result that
 //	                      reads as a prism along an axis      builds
 //	  Shell of a brep that reads as no prism                  ErrUnsupported
@@ -163,7 +164,7 @@
 // a signature change). WithTangentChain expands a Fillet's or Chamfer's edges
 // across proven tangent continuations, WithAsymmetricChamfer gives a Chamfer
 // two setbacks, WithShellSense picks a shell's wall sense, WithNoOpenings asks
-// for a closed shell (refused with [ErrUnsupported] on every receiver today),
+// for a closed shell (built for a full revolve, [ErrUnsupported] elsewhere),
 // and WithTaper names an extrude taper — but a nonzero taper is
 // [ErrUnsupported], returned before the document changes. WithSweepTwist names
 // a sweep's distributed twist, with nonzero twist staged as [ErrUnsupported].
