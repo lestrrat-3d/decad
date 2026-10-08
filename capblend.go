@@ -77,7 +77,7 @@ type capBlendPayload struct {
 	// it puts patch 10 ahead of patch 2.
 	patches []capPatch
 	// bandDelta is each built band's own cap-contour displacement
-	// (capBandResult.delta, capblend_contour.go's capContourDelta), keyed by the
+	// (capBandResult.delta, capband.ContourDisplacement), keyed by the
 	// (loop, cap) that band sits on. buildCapBand already computes it once for
 	// every cap-level vertex, edge and area reading of that band; storing it here
 	// lets a later reader — the tessellator, docs/tessellation-reach-design.md
@@ -92,7 +92,7 @@ type capBlendPayload struct {
 // and ds down the side wall — the axial distance from the cap level to the
 // side level — each beside the rounding its own unit conversion committed.
 // dsDelta is charged by every level built from ds. dcDelta is charged by the
-// cap contour's displacement (capContourDelta), which encloses the contour
+// cap contour's displacement (capband.ContourDisplacement), which encloses the contour
 // over every offset amount within dcDelta of dc, and by every cap-level
 // length that reads dc as a radius. An equal chamfer holds dc == ds == d.
 type capSetback struct {

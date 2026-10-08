@@ -690,7 +690,7 @@ func ratWithin(value float64, want *big.Rat, bound float64) bool {
 // against the same denoted offset.
 //
 // Shown to fail: with the conversion left out of the cap contour's
-// displacement (capContourDelta reading the point d rather than its span), the
+// displacement (capband.ContourDisplacement reading the point d rather than its span), the
 // corners (97.46, 57.46) and (2.54, 57.46) published a bound of 6.280e-15 mm
 // and sat 6.312e-15 mm from the denoted corner, in both rows.
 func TestCapBlendCapContourCarriesInPlaneDistanceRounding(t *testing.T) {
@@ -775,7 +775,7 @@ func TestCapBlendCapContourCarriesInPlaneDistanceRounding(t *testing.T) {
 // to nothing, so the offset solve's own displacement is zero and the cap
 // circle's seam vertex sits off the denoted one by the conversion alone.
 //
-// Shown to fail: with the conversion left out (capWholeCircleDelta reading
+// Shown to fail: with the conversion left out (capband.WholeCircleDisplacement reading
 // the point d), the seam vertex published an Exact position 3.7e-17 mm off the
 // denoted seam.
 func TestCapBlendCapCircleCarriesInPlaneDistanceRounding(t *testing.T) {

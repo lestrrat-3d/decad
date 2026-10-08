@@ -92,7 +92,7 @@ func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop LoopRecord, work *fre
 // new patch faces, the cap-level coedges bounding the loop's rewritten cap
 // boundary (in walk order), the exact-rational patch geometry the moments
 // pass integrates, and the band's own contour displacement (delta,
-// capblend_contour.go's capContourDelta/capWholeCircleDelta) — computed once
+// capband.ContourDisplacement/WholeCircleDisplacement) — computed once
 // here, since buildCapBand already needs it for every cap-level vertex and
 // edge bound, and returned so the cap face area and band volume readings
 // (capblend_moments.go) charge the SAME value rather than each re-deriving it
@@ -173,13 +173,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if err != nil {
 			return capBandResult{}, err
 		}
-		delta, err := capWholeCircleDelta(w, dc, dcDelta)
+		delta, err := capband.WholeCircleDisplacement(w, dc, dcDelta, shellTol)
 		if err != nil {
 			return capBandResult{}, err
 		}
-		exactRadius, ok := capOffsetRadiusSpan(w, dc, dcDelta)
+		exactRadius, ok := capband.OffsetRadiusSpan(w, dc, dcDelta)
 		if !ok {
-			return capBandResult{}, errCapContourUnbounded
+			return capBandResult{}, capband.ErrContourUnbounded
 		}
 		seam0 := sideCo[0].edge // the side wall's own whole-circle bottom/top edge
 		capLevelDelta := proofbound.AbsSumUpper(delta, capDelta)
@@ -253,7 +253,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// are told a different story about it — and neither the zero bound a
 	// recorded coordinate earns nor an infinite one that bounds nothing is
 	// published for a coordinate this solve computed.
-	delta, err := capContourDelta(walks, joins, dc, dcDelta)
+	delta, err := capband.ContourDisplacement(walks, capContourJoins(joins), dc, dcDelta, shellTol)
 	if err != nil {
 		return capBandResult{}, err
 	}
@@ -442,7 +442,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			LevelDelta:   levelDelta,
 			CapThAllow:   capThAllow,
 		}
-		held, err := capApexHeldAllow(j, dc, foot0, foot1, gth0, gth1)
+		held, err := capband.ApexHeldAllow(j.vU, j.vV, dc, foot0, foot1, gth0, gth1)
 		if err != nil {
 			return capBandResult{}, err
 		}
@@ -483,9 +483,9 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			if err != nil {
 				return capBandResult{}, err
 			}
-			radius, ok := capOffsetRadiusSpan(w, dc, dcDelta)
+			radius, ok := capband.OffsetRadiusSpan(w, dc, dcDelta)
 			if !ok {
-				return capBandResult{}, errCapContourUnbounded
+				return capBandResult{}, capband.ErrContourUnbounded
 			}
 			capRadius = r
 			// radialShift is how far every radius the cap arc denotes sits
@@ -599,7 +599,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			g.CapThAllow = capThAllow
 			side0, side1 := Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV}
 			cap0, cap1 := start, end
-			held, err := capWallHeldAllow(w, capRadius, start, end, capTh0, capTh1)
+			held, err := capband.WallHeldAllow(w, capRadius, start, end, capTh0, capTh1)
 			if err != nil {
 				return capBandResult{}, err
 			}

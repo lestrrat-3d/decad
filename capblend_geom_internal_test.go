@@ -126,7 +126,7 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 	require.NoError(t, err)
 	joins, err := capOffsetJoins(budget, cl, dc)
 	require.NoError(t, err)
-	delta, err := capContourDelta(cl.walks, joins, dc, 0)
+	delta, err := capband.ContourDisplacement(cl.walks, capContourJoins(joins), dc, 0, shellTol)
 	require.NoError(t, err)
 
 	n := len(cl.walks)
@@ -138,7 +138,7 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 		start, end := capWallFoot(joins, i, n)
 		capRadius, err := capband.BandRadius(w, dc, shellTol)
 		require.NoError(t, err)
-		radius, ok := capOffsetRadiusSpan(w, dc, 0)
+		radius, ok := capband.OffsetRadiusSpan(w, dc, 0)
 		require.True(t, ok)
 		gap := proofbound.IntervalFloatError(radius, capRadius)
 		require.Positive(t, gap, `the premise: R − dc is not a float64`)

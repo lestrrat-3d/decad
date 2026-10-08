@@ -16,7 +16,7 @@ import (
 // circular walk the circle about its recorded centre whose radius its walk
 // brackets, each endpoint widened by the bound its walk states, and the
 // corner rule (miter, arc, G1) is the construction's own (SectionJoinsBudget).
-// The proof is an enclosure, the method capContourDelta
+// The proof is an enclosure, the method capband.ContourDisplacement
 // (capblend_contour.go) states: the same closed forms are re-evaluated over
 // rational intervals with outward-rounded square roots, over the whole
 // thickness interval at once, and each recorded join point is charged its

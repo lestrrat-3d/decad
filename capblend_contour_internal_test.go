@@ -358,7 +358,7 @@ func capHeldSlot(cU, cV, a, b, k float64) func(*sketch.Sketch) {
 // corner skews are zero, so the chord-versus-locus term adds nothing to its
 // bound.
 //
-// Shown to fail: with capWallHeldAllow's four angle allowances zeroed, the
+// Shown to fail: with capband.WallHeldAllow's four angle allowances zeroed, the
 // slot up the v axis reads a v moment 3200 mm⁴ off against a 0.52 mm⁴ bound;
 // with its two radius allowances zeroed, the turned slot reads a flux
 // 0.021 mm³ off against a 0.013 mm³ bound.
