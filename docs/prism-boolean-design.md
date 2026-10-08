@@ -257,7 +257,7 @@ silent fallback stops being available:
    Such a pair never refuses: a crossing whose proven sine is not above
    verification §4's dimensionless noise floor has no charge, and that, or
    any later merge, audit or recording failure, sends it to the mesh path
-   with no error (`prismAmplifiedFallback`), exactly as an unresolved
+   with no error (`prismcells.AmplifiedFallback`), exactly as an unresolved
    topology does. `Body.Placed` is the ordinary way a pair reaches the
    re-expression cause, and it reaches it through the ACCUMULATED placement
    rather than through the motion any one call received:
@@ -771,7 +771,7 @@ the §4.1 refusal means no boolean reaches that arm; it stands so a charge,
 never a silent zero, is what any future widening of that refusal would meet.
 Each operand owes the largest such allowance over its OWN
 consumed segments — `δ_walkA` and `δ_walkB`, the `a` and `b` fields of
-`prismSceneDelta`, each holding that operand's walk charge ALONE — and the
+`prismcells.SceneDelta`, each holding that operand's walk charge ALONE — and the
 charge stands even when both operands carry zero displacement and the
 re-expression is the identity — the same
 independence `δ_cut` already has, one construction earlier: `δ_cut` charges

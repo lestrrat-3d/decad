@@ -62,7 +62,7 @@ func TestPrismSharedWallMirroredL(t *testing.T) {
 }
 
 // TestPrismSharedWallDisplacedInteriorSpanFallsBack pins
-// prismSceneDelta.sharedSpansBounded: a box beside its own mirror image
+// prismSceneDelta.SharedSpansBounded: a box beside its own mirror image
 // across x = 10 shares the wall x = 10, and the image brings a
 // displacement. Union keeps that wall inside the result, where the two true
 // walls can sit apart and leave a sliver no recorded edge bounds, so it

@@ -69,8 +69,8 @@ func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *proofbound.Wor
 	}
 
 	// Point of no return (§3.4): every further problem is a genuine refusal,
-	// unless the cuts carry an amplified displacement (prismAmplifiedFallback).
-	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, auditPrismMergeSection(budget, target, merged)); fallBack || err != nil {
+	// unless the cuts carry an amplified displacement (prismcells.AmplifiedFallback).
+	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, auditPrismMergeSection(budget, target, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
 
@@ -88,7 +88,7 @@ func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *proofbound.Wor
 		// §7's formula with A6's crossing term, Union's own: this path
 		// assembles a merged loop exactly like Union's, so it carries the
 		// same displacement terms, cutDelta and the crossing charge included.
-		sectionDelta: sceneDelta.merged(target, tool, reexpress, cutDelta),
+		sectionDelta: sceneDelta.Merged(target.sectionDelta, tool.sectionDelta, reexpress.Delta, cutDelta),
 	}
 	return result, true, nil
 }
@@ -111,7 +111,7 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbou
 		return prismPayload{}, false, nil
 	}
 
-	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, auditPrismMergeSection(budget, pa, merged)); fallBack || err != nil {
+	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, auditPrismMergeSection(budget, pa, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
 
@@ -131,7 +131,7 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbou
 		z1:           z1,
 		z0Delta:      z0Delta,
 		z1Delta:      z1Delta,
-		sectionDelta: sceneDelta.merged(pa, pb, reexpress, cutDelta),
+		sectionDelta: sceneDelta.Merged(pa.sectionDelta, pb.sectionDelta, reexpress.Delta, cutDelta),
 	}
 	return result, true, nil
 }
@@ -153,7 +153,7 @@ func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa
 	}
 
 	merged, cutDelta, mergedResolved, err := mergePrismCells(budget, selected, opName)
-	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, err); fallBack || err != nil {
+	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if !mergedResolved {
@@ -166,7 +166,7 @@ func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa
 // first half of resolvePrismCrossing's own shape: build the private scene,
 // classify every cell (prismcells.Classify), select the op's own subset
 // (keep), and charge every crossing the operands' incoming displacement can
-// move (A6, prismSceneDelta.chargeCrossings) — stopping short of mergePrismCells's
+// move (A6, prismSceneDelta.ChargeCrossings) — stopping short of mergePrismCells's
 // assembly tail, which requires the selected cells to chain into one closed
 // loop and so cannot answer a multi-region selection at all
 // (docs/prism-boolean-design.md §4.4). resolvePrismCrossing above is this
@@ -209,10 +209,10 @@ func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudge
 	// docs/general-boolean-design.md §3 A6, Union's own charge: every cut the
 	// operands' incoming displacement can move is charged, and a crossing too
 	// close to tangent for that charge sends the pair to the mesh path.
-	if ok, err := sceneDelta.chargeCrossings(budget, tags, profiles, pa, pb, reexpress); err != nil || !ok {
+	if ok, err := sceneDelta.ChargeCrossings(budget, tags, profiles, pa.sectionDelta, pb.sectionDelta, reexpress.Delta); err != nil || !ok {
 		return nil, prismSceneDelta{}, false, err
 	}
-	if ok, err := sceneDelta.sharedSpansBounded(budget, selected); err != nil || !ok {
+	if ok, err := sceneDelta.SharedSpansBounded(budget, selected); err != nil || !ok {
 		return nil, prismSceneDelta{}, false, err
 	}
 	return selected, sceneDelta, true, nil

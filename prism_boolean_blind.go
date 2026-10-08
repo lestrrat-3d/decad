@@ -122,8 +122,8 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 		innerDelta = proofbound.AbsSumUpper(innerDelta, shiftRound)
 	}
 	sp := stackedPrismPayload{frame: target.frame, xform: target.xform, slabs: make([]prismSlab, 2),
-		sectionDelta: max(proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
-			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.Delta))}
+		sectionDelta: max(proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.A),
+			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.B, reexpress.Delta))}
 	if openAtTop {
 		sp.slabs[0] = prismSlab{regions: []ProfileRecord{target.profile},
 			z0: target.z0, z1: innerHeld, z0Delta: target.z0Delta, z1Delta: innerDelta}
@@ -221,8 +221,8 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 		}
 		result.slabs[k].regions = []ProfileRecord{profile}
 		result.sectionDelta = max(result.sectionDelta,
-			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
-			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.Delta))
+			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.A),
+			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.B, reexpress.Delta))
 	}
 	for k := range result.interfaces {
 		lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(

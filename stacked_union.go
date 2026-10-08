@@ -350,14 +350,14 @@ func (st *stackedUnionState) scene(ctx context.Context, x, y stackedUnionRegionR
 		return nil, err
 	}
 	if x.isB {
-		st.walkB = max(st.walkB, m.sceneDelta.a)
+		st.walkB = max(st.walkB, m.sceneDelta.A)
 	} else {
-		st.walkA = max(st.walkA, m.sceneDelta.a)
+		st.walkA = max(st.walkA, m.sceneDelta.A)
 	}
 	if y.isB {
-		st.walkB = max(st.walkB, m.sceneDelta.b)
+		st.walkB = max(st.walkB, m.sceneDelta.B)
 	} else {
-		st.walkA = max(st.walkA, m.sceneDelta.b)
+		st.walkA = max(st.walkA, m.sceneDelta.B)
 	}
 	st.scenes[key] = &m
 	return &m, nil
@@ -411,18 +411,18 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 	if err != nil || !voidFree {
 		return ProfileRecord{}, false, err
 	}
-	if ok, err := m.sceneDelta.sharedSpansBounded(st.budget, m.profiles); err != nil || !ok {
+	if ok, err := m.sceneDelta.SharedSpansBounded(st.budget, m.profiles); err != nil || !ok {
 		return ProfileRecord{}, false, err
 	}
 	merged, cutDelta, resolved, err := mergePrismCells(st.budget, m.profiles, "union")
-	if fallBack, err := prismAmplifiedFallback(m.sceneDelta.amplified, err); fallBack || err != nil || !resolved {
+	if fallBack, err := prismcells.AmplifiedFallback(m.sceneDelta.Amplified, err); fallBack || err != nil || !resolved {
 		return ProfileRecord{}, false, err
 	}
-	if fallBack, err := prismAmplifiedFallback(m.sceneDelta.amplified, auditPrismMergeSection(st.budget, pa, merged)); fallBack || err != nil {
+	if fallBack, err := prismcells.AmplifiedFallback(m.sceneDelta.Amplified, auditPrismMergeSection(st.budget, pa, merged)); fallBack || err != nil {
 		return ProfileRecord{}, false, err
 	}
 	st.cutDelta = max(st.cutDelta, cutDelta)
-	st.crossing = max(st.crossing, m.sceneDelta.crossing)
+	st.crossing = max(st.crossing, m.sceneDelta.Crossing)
 	return merged, true, nil
 }
 
@@ -449,7 +449,7 @@ func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (ProfileRecord
 	if err != nil {
 		return ProfileRecord{}, false, err
 	}
-	st.walkB = max(st.walkB, sceneDelta.b)
+	st.walkB = max(st.walkB, sceneDelta.B)
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
 		return ProfileRecord{}, false, err
@@ -497,7 +497,7 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper Profi
 	if err != nil {
 		return prismSlabInterface{}, false, err
 	}
-	st.walkInterface = max(st.walkInterface, m.sceneDelta.a, m.sceneDelta.b)
+	st.walkInterface = max(st.walkInterface, m.sceneDelta.A, m.sceneDelta.B)
 	switch m.nest {
 	case stackedNestBInA:
 		exposed, err := stackedrecord.UnionExposed(ctx, lower, upper)
@@ -574,7 +574,7 @@ func (m *stackedNesting) charge(budget *proofbound.WorkBudget, pa, pb prismPaylo
 	if m.charged {
 		return m.chargeOK, nil
 	}
-	ok, err := m.sceneDelta.chargeCrossings(budget, m.tags, m.profiles, pa, pb, reexpress)
+	ok, err := m.sceneDelta.ChargeCrossings(budget, m.tags, m.profiles, pa.sectionDelta, pb.sectionDelta, reexpress.Delta)
 	if err != nil {
 		return false, err
 	}

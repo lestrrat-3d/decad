@@ -145,7 +145,7 @@ func TestPrismGroupMirrorJoinRefuses(t *testing.T) {
 // Shown to fail with tryPrismGroupCut's and tryPrismGroupUnion's former
 // split-boundary reroute restored (neither built), with either path's
 // chargeCrossings call skipped (the displacement fell short of δ_B/0.01),
-// and with prismAmplifiedFallback returning every error (the quadrilateral
+// and with prismcells.AmplifiedFallback returning every error (the quadrilateral
 // returned RB9).
 func TestPrismGroupDisplacedToolChargesTheCrossing(t *testing.T) {
 	t.Parallel()

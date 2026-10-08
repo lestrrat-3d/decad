@@ -102,16 +102,16 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 		// count, drop or chain, since a cell is already one loop in
 		// sketch's own order. RB8/RB9 propagate here, exactly as they do on
 		// the body path, unless the cuts carry an amplified displacement
-		// (prismAmplifiedFallback), which sends the pair to the mesh path.
+		// (prismcells.AmplifiedFallback), which sends the pair to the mesh path.
 		cellProfile, cutDelta, err := recordPrismOverlapCell(budget, p.Outer)
-		if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, err); fallBack || err != nil {
+		if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil {
 			return Measurement{}, false, err
 		}
 
 		// §7's formula with A6's crossing term, byte-identical to
 		// resolveAndBuildPrismIntersectCrossing's, taken over THIS cell's
 		// own cutDelta.
-		sectionDelta := sceneDelta.merged(pa, pb, reexpress, cutDelta)
+		sectionDelta := sceneDelta.Merged(pa.sectionDelta, pb.sectionDelta, reexpress.Delta, cutDelta)
 		pp := prismPayload{
 			profile:      cellProfile,
 			frame:        pa.frame,
