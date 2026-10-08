@@ -896,6 +896,7 @@
 2	0.01	TestTangentChainOvalArcArc
 2	0.01	TestTangentChainSlotCapLoop
 2	0.01	TestTangentChainUndecidedRefused
+2	0.10	TestTangentJoinedRotatedSlotChamfer
 2	0.13	TestTangentJoinedSlotChamferAtOffsetOrigin
 2	0.00	TestTessellateBoundIncludesComputedLevelDisplacement
 2	0.05	TestTessellateCapBlendAsymmetric

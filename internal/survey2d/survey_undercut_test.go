@@ -146,3 +146,47 @@ func TestWallNormalDecisionReadsDenotedArcWindow(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, survey2d.PullUndecided, verdict)
 }
+
+// TestWallNormalDecisionUndecidedOnUnbracketedWindow pins that a circular
+// wall whose window cannot be cut into arcs shorter than a half turn answers
+// PullUndecided for itself, so the body's survey keeps every other wall's
+// verdict. The walk is about the origin with radius 1 and holds the window
+// [0, π]. Its start (1, 0) and its end (cos 2.94, sin 2.94) each carry an
+// end bound that reaches 0.95 from the point, so each end's angle enclosure
+// spreads about ±1.49 and the two enclosures overlap across a window whose
+// held sweep is a half turn.
+//
+// Shown to fail: with circularWindowOf refusing that window again, the
+// decision answers ok false, which drops the whole undercut survey.
+func TestWallNormalDecisionUndecidedOnUnbracketedWindow(t *testing.T) {
+	t.Parallel()
+	const reach, endAngle = 0.95, 2.94
+	perAxis := reach / math.Sqrt(3)
+	bound := proofbound.WalkEndBound{U: perAxis, V: perAxis}
+	allow := proofbound.WalkEndBoundAllow(bound)
+	require.Less(t, allow, 1.0, `each end's box must stay off the centre`)
+	require.Greater(t, allow, 0.9, `each end's angle enclosure must spread past a quarter turn`)
+	w := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		Kind:       survey2d.WalkCircular,
+		Radius:     1,
+		Th0:        0,
+		Th1:        math.Pi,
+		StartU:     1,
+		EndU:       math.Cos(endAngle),
+		EndV:       math.Sin(endAngle),
+		StartBound: bound,
+		EndBound:   bound,
+	}, Segs: []int{0}}
+
+	low, ok := survey2d.EndAngleEnclosure(0, 0, w.StartU, w.StartV, allow, w.Th0)
+	require.True(t, ok)
+	high, ok := survey2d.EndAngleEnclosure(0, 0, w.EndU, w.EndV, allow, w.Th1)
+	require.True(t, ok)
+	require.LessOrEqual(t, high.Lo.Cmp(low.Hi), 0, `the fixture needs the two ends' angle enclosures to overlap`)
+
+	for _, pull := range []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, -1, 0)} {
+		verdict, ok := survey2d.WallNormalDecision(w, identityFrameMap(t), pull)
+		require.True(t, ok, `pull %v: the wall answers for itself`, pull)
+		require.Equal(t, survey2d.PullUndecided, verdict, `pull %v`, pull)
+	}
+}

@@ -1512,7 +1512,9 @@ answers this way:
   ends, each end widened by its own end bound, never the held angles `Th0`
   and `Th1`, which are a float multiple of 2π or a `math.Atan2`. An end whose
   widened direction straddles a sign change of the component leaves the wall
-  undecided. A tagged analytic variant that is a bounded
+  undecided, as does a window of a half turn or more whose two ends' angle
+  enclosures overlap. Every other wall keeps its own verdict. A tagged
+  analytic variant that is a bounded
   stand-in carries its own normal departure (`docs/modify-reach-design.md`
   §8.3) on top of that. A faceted survey proves the same all-clear only when
   every true patch's source-normal range clears. A missing or straddling

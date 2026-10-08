@@ -20,13 +20,10 @@ import (
 // join's PERSISTENT Δ ≡ 0, which returns a finite answer instead
 // (TestLineCircleLocusSpeedUpperExactAtPersistentTangency below).
 //
-// The public Chamfer path never reaches this: every tangent join this
-// evaluator itself builds (a Fillet corner, fillet.go) lands on the
-// persistent branch, bit for bit, and a corner recorded through sketch's own
-// solver is never quite so exactly tangent that it can hit this one narrow
-// non-persistent case — the same reason capblend_normal_internal_test.go
-// covers its own certified enclosures directly rather than hunting for a
-// public fixture that reaches them.
+// No public Chamfer fixture reaches this one narrow non-persistent case, the
+// same reason capblend_normal_internal_test.go covers its own certified
+// enclosures directly rather than hunting for a public fixture that reaches
+// them.
 //
 // The construction: a straight wall along the U axis (material-side normal
 // (0, 1)) meets a circular wall centred at (0, -R), radius R, so the corner
@@ -57,9 +54,10 @@ func TestLineCircleLocusSpeedUpperRefusesMomentaryFold(t *testing.T) {
 
 // TestLineCircleLocusSpeedUpperExactAtPersistentTangency pins the closed
 // form's other branch: a line permanently tangent to a circle under a
-// consistent offset (every Fillet-built corner in this codebase) publishes
-// the EXACT unit speed 1, not a refusal and not capcontour.CircleCircleLocusSpeedUpper's
-// own looser bound.
+// consistent offset publishes the EXACT unit speed 1, not a refusal and not
+// capcontour.CircleCircleLocusSpeedUpper's own looser bound. A build
+// classifies such a corner as a G1 join and never asks for its speed
+// (TestTangentJoinedRotatedSlotChamfer), so only a direct call reaches it.
 //
 // The construction mirrors the refusal case above but offsets the circle the
 // OTHER way (th1 < th0, growing radius R + t): a line moving away from the
