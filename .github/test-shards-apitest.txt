@@ -328,7 +328,7 @@
 2	0.01	TestAnalyticChordsAreCharged
 2	0.38	TestAnalyticPlateWithCircularHolesArea
 2	0.00	TestBetweenPoseAt
-2	0.01	TestBlindPocketFilletIsStaged
+2	0.01	TestBlindPocketFilletsItsOuterEdges
 2	0.00	TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne
 2	0.00	TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall
 2	0.00	TestBodyPatchCapsBothBoundedRimsOnARotatedSketchPlane

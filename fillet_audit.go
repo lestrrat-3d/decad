@@ -180,6 +180,22 @@ func loopOverrunBudget(budget *proofbound.WorkBudget, cl cornerLoop, blends map[
 	return 0, false, nil
 }
 
+// auditTrimmedWall is S6 for a swept brep face route E trims
+// (docs/brep-modify-design.md §5.3 step 6): the claims a blend makes on the
+// wall's start and end, each the cutback its end face's corner took on the
+// same carrier, must sum strictly below the wall's walk length, by
+// loopOverrunBudget's test. A wall they reach or pass is consumed by its own
+// blends, ErrUnsupported as errCutbackOverrun is.
+func auditTrimmedWall(w survey2d.SegmentWalk, claimStart, claimEnd float64) error {
+	if claimStart+claimEnd < w.Length-1e-9*math.Max(1, w.Length) {
+		return nil
+	}
+	legacy := fmt.Errorf(`%w: a corner's setback reaches the far end of an adjacent wall; merging the rewrites there is not supported`, ErrUnsupported)
+	detailed := fmt.Sprintf(`%v: the swept wall from (u, v) = (%s, %s) to (%s, %s) is consumed by its blends' setbacks; merging the rewrites there is not supported`,
+		ErrUnsupported, renderCoord(w.StartU), renderCoord(w.StartV), renderCoord(w.EndU), renderCoord(w.EndV))
+	return auditError(legacy, detailed)
+}
+
 // errCutbackOverrun is S6's op-neutral refusal (§6, Table S): a corner's setback
 // reaches or passes the far end of an adjacent wall, so the rewrite's pieces
 // must be resolved against each other before they bound anything — a body a

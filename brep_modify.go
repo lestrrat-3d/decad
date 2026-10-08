@@ -8,29 +8,38 @@ import (
 // This file is the receiver dispatch of docs/brep-modify-design.md
 // ("brep-modify §N" below): which record Fillet, Chamfer and Shell hand to the
 // brep route (§2, Table RB), the gates every brep or stacked receiver passes
-// before any route runs (Table SB's SB1 and SB2), and the refusals that
-// follow when route P (brep_modify_prism.go) takes no axis.
+// before any route runs (Table SB's SB1 and SB2), and the order of the two
+// routes: route P (brep_modify_prism.go), then route E for a Fillet or
+// Chamfer (brep_modify_edge.go).
 
 // brepModifyRequest is what one modify op hands the brep route
 // (brep-modify §2): the verb its refusals name ("fillets", "chamfers" or
 // "shells"), whether the op is Shell, and admits, the op's own prism
 // classification of its selection (§4.2). admits returns nil when the
 // selection classifies against the prism pp with caps as its two cap faces,
-// and the op's own refusal otherwise.
+// and the op's own refusal otherwise. sel, edges and blend are a Fillet's or
+// Chamfer's selector, its resolved edges and its per-corner construction
+// (computeFillet or computeChamfer, bound to the op's magnitude), which route
+// E (§5) reads; a Shell leaves them nil.
 type brepModifyRequest struct {
 	op     string
 	shell  bool
 	admits func(pp prismPayload, caps prismCaps) error
+	sel    EdgeSelector
+	edges  []*Edge
+	blend  *revolveBlendOp
 }
 
 // brepRoute is what the brep route hands back to the op. It is empty for a
 // receiver the brep route does not take, and the op continues on its own
 // path. Route P sets prism, the recognised prism (never stored; the op's
 // receiver for the rest of the call), and caps, its two cap faces on the
-// receiver body: the op continues on its prism path with them.
+// receiver body: the op continues on its prism path with them. Route E sets
+// body, the result it built, which the op commits (commitModifyResult).
 type brepRoute struct {
 	prism *prismPayload
 	caps  prismCaps
+	body  *Body
 }
 
 // modifyBrepReceiver is the brep route for one modify op (brep-modify §2).
@@ -40,8 +49,8 @@ type brepRoute struct {
 // rule (SB1) — and then route P (§4): the first reference axis along which
 // the record reads as a prism the op's classification admits. When none
 // admits, a Shell refuses with SB3 (some axis reads as a prism; the prism
-// path's own S2) or SB10 (none does), and a Fillet or Chamfer refuses with
-// modify-reach SX16's ErrUnsupported, because route E (§5) is not built.
+// path's own S2) or SB10 (none does), and a Fillet or Chamfer takes route E
+// (§5), which builds the result or refuses with a Table SB row.
 func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (brepRoute, error) {
 	bp, ok, err := brepModifyRecord(ctx, b.payload, req.op)
 	if err != nil || !ok {
@@ -60,9 +69,29 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 		return brepRoute{}, fmt.Errorf(`%w; this body reads as a prism along a reference axis, and no such prism takes the removed faces as its caps (brep-modify SB3)`, refusal)
 	case req.shell:
 		return brepRoute{}, fmt.Errorf(`%w: this evaluator shells a brep or stacked receiver only where it reads as a prism along a reference axis, and this one reads as none; the three-dimensional offset it needs puts a cylinder along every reflex straight edge, which this record does not hold (brep-modify SB10)`, ErrUnsupported)
+	case req.blend == nil:
+		return brepRoute{}, fmt.Errorf(`%w: this evaluator %s a brep or stacked receiver through route P or route E only (modify-reach SX16)`, ErrUnsupported, req.op)
 	default:
-		return brepRoute{}, fmt.Errorf(`%w: this evaluator does not yet blend a brep body's edges outside the prism it reads as (brep-modify route E), so it %s no such selection on a brep or stacked receiver (modify-reach SX16)`, ErrUnsupported, req.op)
+		body, err := brepBlendEdges(ctx, b.doc, bp, req)
+		if err != nil {
+			return brepRoute{}, err
+		}
+		return brepRoute{body: body}, nil
 	}
+}
+
+// commitModifyResult commits a modify op's result in place of its receiver,
+// after the receiver's liveness and the context are read once more at the
+// commit edge (modify §13's atomic commit).
+func commitModifyResult(ctx context.Context, b, body *Body) (*Body, error) {
+	if err := b.doc.requireLive(b); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	b.doc.commit(body, b)
+	return body, nil
 }
 
 // brepModifyRecord is brep-modify §2's dispatch table: a brepPayload is

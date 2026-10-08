@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -82,15 +83,29 @@ func TestBlindPocketPlacedAndVerified(t *testing.T) {
 	requireBodyWatertight(t, placed)
 }
 
-func TestBlindPocketFilletIsStaged(t *testing.T) {
+// TestBlindPocketFilletsItsOuterEdges rounds a blind pocket's four convex
+// vertical edges, r = 1, through docs/brep-modify-design.md's route E: each
+// corner loses (1 − π/4)·10, so the volume 936 becomes 896 + 10π, and the
+// result is watertight. π lies in [3.14159265358979, 3.14159265358980], and
+// the reading covers both ends.
+func TestBlindPocketFilletsItsOuterEdges(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 10, 10, 10)
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
 	pocket, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	_, err = pocket.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	filleted, err := pocket.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
+	require.NoError(t, err)
+	volume, err := filleted.Volume()
+	require.NoError(t, err)
+	for _, pi := range []string{"3.14159265358979", "3.14159265358980"} {
+		exact, ok := new(big.Rat).SetString(pi)
+		require.True(t, ok)
+		exact.Mul(exact, big.NewRat(10, 1)).Add(exact, big.NewRat(896, 1))
+		requireReadingCovers(t, volume, exact)
+	}
+	requireBodyWatertight(t, filleted)
 }
 
 func TestBlindRoundBoreTessellates(t *testing.T) {

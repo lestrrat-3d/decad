@@ -37,7 +37,9 @@ import (
 // convex and concave — with B1's roles and atomic commit (modify §13). A
 // cap-edge selector is S1 (ErrUnsupported, the vertex blend §6). A revolve
 // receiver takes the same corner rewrite on its meridian (revolve_blend.go,
-// docs/modify-reach-design.md §7); any other receiver is S3 (ErrUnsupported).
+// docs/modify-reach-design.md §7), and a brep or stacked boolean result takes
+// routes P and E of docs/brep-modify-design.md (brep_modify.go); any other
+// receiver is S3 (ErrUnsupported).
 
 // FilletOption configures Fillet. No options are currently supported; the
 // option group exists so a variable-radius or setback option can be added
@@ -76,9 +78,16 @@ const filletTol = sectionaudit.Tolerance
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is filleted as that prism
 // (docs/brep-modify-design.md route P): its lateral edges are the prism's, and
-// the result is a prism. Any other selection on such a body is ErrUnsupported
-// (modify-reach SX16), as is a body whose faces carry a section displacement
-// (SB1). Any other receiver that is neither a prism nor a revolve is S3
+// the result is a prism. Any other selection of straight edges along one axis
+// of such a body's face record takes route E (§5): both end faces of each
+// edge take the tangent arc at their corner, the two faces beside it are
+// trimmed to the arc's feet, and one cylindrical wall carrying a fillet(k)
+// role is added; the result is a brep body whose record pairs every edge
+// again before it is built. A curved edge, two selected edges sharing a
+// vertex, an edge whose end face or side face is a swept straight wall, a
+// curved face or an earlier blend, end faces whose arcs disagree, and a body
+// whose faces carry a section displacement (SB1) are ErrUnsupported (Table
+// SB). Any other receiver that is neither a prism nor a revolve is S3
 // (ErrUnsupported).
 func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if ctx == nil {
@@ -132,23 +141,30 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	if err := requireNotCapBlendReceiver(b.payload, "fillets"); err != nil {
 		return nil, err
 	}
+	blend := revolveBlendOp{
+		kind: "fillet",
+		corner: func(loop cornerLoop, ci int) (*cornerBlend, error) {
+			return computeFillet(loop, ci, rmm)
+		},
+	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
-	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{op: "fillets",
-		admits: func(pp prismPayload, _ prismCaps) error { return requireLateralEdges(ctx, pp, edges) }})
+	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{
+		op:     "fillets",
+		admits: func(pp prismPayload, _ prismCaps) error { return requireLateralEdges(ctx, pp, edges) },
+		sel:    sel, edges: edges, blend: &blend,
+	})
 	if err != nil {
 		return nil, err
+	}
+	if route.body != nil {
+		return commitModifyResult(ctx, b, route.body)
 	}
 
 	// Reach RX2 (docs/modify-reach-design.md §7): a revolve receiver rounds its
 	// swept meridian junctions through the same corner rewrite.
 	if rp, ok := b.payload.(revolvePayload); ok {
-		return b.blendRevolveJunctions(ctx, sel, edges, rp, revolveBlendOp{
-			kind: "fillet",
-			corner: func(loop cornerLoop, ci int) (*cornerBlend, error) {
-				return computeFillet(loop, ci, rmm)
-			},
-		})
+		return b.blendRevolveJunctions(ctx, sel, edges, rp, blend)
 	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
@@ -698,7 +714,10 @@ func rewriteLoop(budget *proofbound.WorkBudget, loop cornerLoop, blends map[int]
 			endU, endV = cb.fA.U, cb.fA.V
 		}
 		segs = append(segs, walkSegment(w, startU, startV, endU, endV))
-		if cb := blends[(i+1)%n]; cb != nil {
+		// A blend without a connector only moves this walk's end: the brep
+		// route's trim of a face that holds a blended edge as a segment
+		// (docs/brep-modify-design.md §5.3 step 4).
+		if cb := blends[(i+1)%n]; cb != nil && cb.connector != nil {
 			segs = append(segs, cb.connector)
 			connectors[len(segs)-1] = struct{}{}
 		}

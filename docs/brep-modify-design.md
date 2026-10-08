@@ -187,13 +187,19 @@ edge `e` must satisfy EB1–EB6 and the set must satisfy EB7.
 | **EB3** | At each vertex the third face `G` (the face using both other edges at `V`, not adjacent to `e`) is, after §5.2's restatement, a planar face with `Embed.Axis[2] == a`. `G0` is the end face at `e`'s lower `a`-coordinate, `G1` at its upper. | SB7 |
 | **EB4** | Each face adjacent to `e`, after restatement, is one of: **(sw)** a swept face with `Axis[2] == a` whose side line is `e`; **(pl)** a planar face with `Axis[2] != a` that holds `e` as one loop segment whose two neighbouring segments are `LineSeg`s at constant `a`-coordinate. | SB8 |
 | **EB5** | Every segment of `G0`, `G1` and the adjacent faces is over its natural range (`LineSeg` 0→1 or 1→0, `ArcSeg` likewise, `CircleSeg` whole), and no loop of those faces holds two consecutive segments on one carrier (collinear lines; co-circular arcs of one centre, radius and sense). | SB8 |
-| **EB6** | `G0`'s two loop segments at `V0` are the traces of the two adjacent faces — each pairs, in the receiver's topology, with that face's side line (sw) or neighbouring segment (pl) — and they make a corner there (modify S4 otherwise). `G1` likewise at `V1`. | SB8 / S4 |
+| **EB6** | `G0`'s two loop segments at `V0` are the traces of the two adjacent faces — each pairs, in the receiver's topology, with that face's rim (sw) or with its segment next to `e` (pl) — and they make a corner there (modify S4 otherwise). `G1` likewise at `V1`. | SB8 / S4 |
 | **EB7** | No two edges of `E` share a vertex. | SB5 |
 
 EB5's second half exists because the corner rewrite re-emits a coalesced walk as
 one segment (`rewriteLoop`), and a vertex another face placed inside that walk
 would vanish from the record; the result would then fail to pair and refuse
 honestly, but late and with the wrong reason.
+
+EB1 reads a selected edge in the record by lifting each recorded line edge's
+two ends through the reference frame and the placement and matching them to
+the selected edge's vertices within `1e-6`, as `matchCornerBudget` does for a
+prism. The match identifies the edge and admits no geometry; a selected edge
+that matches no recorded edge, or several, is SB6.
 
 ### 5.2 Restatement of a straight wall as a planar face
 
@@ -261,17 +267,21 @@ faces `G0`, `G1`:
    connector in that frame, `z0`/`z1` the two end levels in that frame's
    coordinates (`G0`'s own level and `G1`'s reference level through `G0`'s
    embed, ascending), `z0Delta`/`z1Delta` those levels' displacements,
-   `delta` zero, `blend` `"fillet"` or `"chamfer"`. Its walk sense is decided
-   by the solid edge's convexity (`e.IsConvex()`, general-boolean §4.2's
-   walked-boundary reading): with `V` the corner mapped into that frame and
-   the connector walked from `p` to `q`, `V` lies on the right
-   (`(q − p) × (V − p) < 0`) for a convex edge and on the left for a concave
-   one. A convex edge's blend is material toward the centre and away from the
-   corner it removes; a concave edge's fills the corner. The same two feet and
-   the same circle serve both end faces whatever their own corner's convexity
-   — a boss top's convex corner and a floor's reflex corner at one boss edge
-   compute one centre, since modify §6's rule offsets into the material at a
-   convex corner and away from it at a reflex one.
+   `delta` zero, `blend` `"fillet"` or `"chamfer"`. Its wall walks with the
+   solid's material on its left. `G0`'s connector already walks with `G0`'s
+   region on its left, and near `V0` the solid between the two end faces is
+   bounded by `F1` and `F2` alone, so its section there is `G0`'s region
+   when `G1` lies on `G0`'s inner side (against `G0`'s outward normal) and
+   the rest of the plane when `G1` lies on `G0`'s outer side. The wall is
+   `G0`'s connector in the first case and the connector reversed in the
+   second. The same two feet and the same circle serve both end faces
+   whatever their own corner's convexity — a boss top's convex corner and a
+   floor's reflex corner at one boss edge compute one centre, since modify
+   §6's rule offsets into the material at a convex corner and away from it at
+   a reflex one. `e.IsConvex()` cannot decide the walk sense: an edge between
+   two planar faces reads its convexity from a loop's role (general-boolean
+   §4.2), and the inner edge of an L-shaped boss flush on a plate reads
+   convex while it is concave.
 6. **Audit.** Every rewritten planar face runs modify §5's audit on its final
    record: S8 (orientation), S6 (every walk's claims from both ends sum
    strictly below its length — a corner's cutback and a (pl) neighbour's
@@ -300,9 +310,10 @@ between two faces with normals on one axis is the composition restricted to
 the two other axes; it reflects when its permutation sign times its two signs
 is `−1`. `brepgeom.MapSegment(map, seg)` applies it to a record: a `LineSeg`
 maps its endpoints; an `ArcSeg` maps centre and endpoints and, under a
-reflecting map, swaps `Start`/`End` and swaps `TStart`/`TEnd`; a `CircleSeg`
-maps its centre and flips `CCW` under a reflecting map. These are general-
-boolean A4's re-winding rules applied to one segment.
+reflecting map, swaps `Start`/`End` and reads its range as `1 − t`; a
+`CircleSeg` maps its centre and, under a reflecting map, flips `CCW` and reads
+its range as `1 − t`. On a natural range `1 − t` swaps `TStart`/`TEnd`, which
+is general-boolean A4's re-winding rule applied to one segment.
 
 Route E asks `sketch` for nothing. The rounded corner, the chord and the
 trimmed wall exist in no sketch; they are decad's own geometry synthesised from
@@ -439,6 +450,14 @@ Route E:
 - Boss, chamfer the boss's inner vertical edge at `(10, −10)`, `d = 2`:
   `Exact` `17470`, 10 faces; the floor's reflex corner and the boss top's
   convex corner carry the one chord between `(10, −12)` and `(12, −10)`.
+  Its front vertical edge at `(10, −20)` → SB9: the plate top's convex
+  corner there faces away from the boss, and its feet `(8, −20)`,
+  `(10, −18)` disagree with the boss top's.
+- An L-shaped boss flush on the plate's corner (`(10, −20)`, `(20, −20)`,
+  `(20, −10)`, `(15, −10)`, `(15, −15)`, `(10, −15)`, `z∈[10,25]`), fillet
+  the inner vertical edge at `(15, −15)`, `r = 1`: concave between two planar
+  faces whose `Edge.IsConvex()` reads convex; volume within its bound of
+  `17140 − 15π/4`.
 - S1, chamfer the edge along `x` at `(y, z) = (0, 0)`, `d = 2`: the `x = 0`
   and `x = 40` walls are restated, volume within its bound of
   `16000 − 180π − 80`.
@@ -448,14 +467,16 @@ Route E:
 - Consumers on the S1 fillet result: `Verify` `Sound` at the default
   tolerance, the mesh's occupied-volume proof covering `15920 − 160π`, STEP's
   analytic arm (the fillet wall two arcs and two lines), the undercut survey
-  listing the fillet wall under a pull along `(−1, −1, 0)` and nothing along
-  `z`, and `Placed` by a translation reproducing volume and area.
+  listing the fillet wall under a pull along `(1, 1, 0)` and not along `z`,
+  and `Placed` by a translation reproducing volume and area.
 
 Refusals:
 
 - general-boolean §9's crossing round boss and the B2 keyway → SB1 naming the
-  displacement; a prism-group stacked receiver → SB2; Pocket plus a Ø4 through
-  hole, its rim selected → SB4; Pocket shell → SB10.
+  displacement; a prism-group stacked receiver → SB2; S1's hole rims
+  selected → SB4 (Pocket cut by a Ø4 through hole takes the mesh path, and
+  its result is reach SX9's); Pocket shell → SB10; S1 chamfered at `d = 25`
+  along its `z` edge at the origin → S6 in the end face.
 - Every refusal leaves the receiver live and the document unchanged.
 - `TestBrepModifyOpsAreStaged` is replaced by these; `.github/test-shards.txt`
   carries every new name, and `go test . ./apitest/ -run '^TestCI'` passes.
@@ -474,8 +495,9 @@ Refusals:
   stop pairing.
 - **Read a face region's corner convexity as the solid edge's.** A floor's
   reflex corner and a boss top's convex corner belong to one convex edge; the
-  blend face's walk sense reads `Edge.IsConvex()` and the corner rewrite reads
-  each face's own loop.
+  blend face's walk sense reads `G0`'s outward side against `G1`'s (§5.3 step
+  5) and the corner rewrite reads each face's own loop. `Edge.IsConvex()` is
+  not the solid's convexity for an edge between two planar faces.
 - **Patch a vertex where two blends meet.** The spherical or conical corner
   patch is the vertex blend modify §6 excludes; SB5 and SB7 refuse it.
 - **Build a hole-rim chamfer on a brep face as a planar region.** A cone band
@@ -524,5 +546,5 @@ Increment table — what still refuses after each PR:
 |---|---|
 | 0 (landed) | every brep and stacked modify op except SB1/SB2 (reach SX16's text) |
 | 1 (landed) | every non-prism brep; every route E edge |
-| 2a | edges whose end or rim-adjacent face is a swept straight wall (SB7/SB8 until 2b) |
+| 2a (landed) | edges whose end or rim-adjacent face is a swept straight wall (SB7/SB8 until 2b) |
 | 2b | Table SB alone |

@@ -154,6 +154,7 @@ the rules leave to the byte budget.
 | `shell_offset.go` | Shell section record, audit and displacement proof. See modify §7–§9. |
 | `shell_cup.go` | `cupPayload` and `evalCup`: the two-prism body a one-cap `Shell` builds, with its mass properties and roles. See `docs/modify-design.md` §9, §12 D6. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See `docs/brep-modify-design.md`. |
+| `brep_modify_edge.go` | Route E: Table EB, the end-face blends, trims, blend faces and closure. See brep-modify §5. |
 
 ### Cap-loop chamfer
 
@@ -162,8 +163,8 @@ the rules leave to the byte budget.
 | `capblend.go` | Complete-cap-loop chamfer: `capBlendPayload`, selection classification, build gates. See modify-reach §8.3/§4. |
 | `capblend_geom.go` | `buildCapBand`: trimmed side walls, cap faces, Plane/Cone band patches. See modify-reach §8.3. |
 | `capblend_contour.go` | Bounds cap contour displacement and length through `internal/capcontour/`. See modify-reach §8.3-§8.4. |
-| `capblend_centroid.go` | Assembles cap-blend first moments and bounds from slab, disk and `internal/capband/` patch terms. See `docs/modify-reach-design.md` §8.4. |
-| `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and assembles bounded area/volume readings over `internal/capband/`. See `docs/modify-reach-design.md` §8.4. |
+| `capblend_centroid.go` | Cap-blend first moments and bounds. See modify-reach §8.4. |
+| `capblend_moments.go` | `evalCapBlendContext`: the cap-blend body and its area/volume. See modify-reach §8.4. |
 | `capblend_survey.go` | Cap-blend undercut and minimum-radius surveys. See modify-reach Table DX (DX7/DX8). |
 | `capblend_normal.go` | Reads band-patch tags and placed frames for DX7's normal model. |
 | `capblend_departure.go` | Reads band-patch tags and built edges for departure bounds. |
