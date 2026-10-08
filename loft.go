@@ -180,12 +180,17 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	// counter per profile, threaded through to evalLoft so a single loft
 	// operation opens exactly two R7 ceilings — one per record — rather than
 	// four (docs/spline-design.md §5.2).
+	// The two integrals the falsifier computes are also the records' own
+	// areas the chord target reads (docs/loft-gear-bounds-design.md §5), so
+	// they ride on the payload rather than being integrated again in evalLoft.
 	work0 := freeform.NewFreeformWork()
 	work1 := freeform.NewFreeformWork()
-	if err := falsifyRecordedArea(profile0, area0, work0); err != nil {
+	recordArea0, err := falsifyRecordedArea(profile0, area0, work0)
+	if err != nil {
 		return nil, err
 	}
-	if err := falsifyRecordedArea(profile1, area1, work1); err != nil {
+	recordArea1, err := falsifyRecordedArea(profile1, area1, work1)
+	if err != nil {
 		return nil, err
 	}
 
@@ -207,6 +212,7 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 		alignment:     alignment,
 		xform:         r3.Identity(),
 		surfaceResult: surfaceResult,
+		recordArea:    [2]float64{recordArea0, recordArea1},
 	}, proofbound.NewWorkBudget(ctx), work0, work1)
 	if err != nil {
 		return nil, err

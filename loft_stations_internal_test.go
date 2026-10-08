@@ -15,6 +15,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -335,14 +336,13 @@ func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
 // chordCount's own algorithm against an independent transcription of it, not
 // merely echoing chordCount's return value back at itself.
 //
-// wedgeArcEnvelope and wedgeRadius/wedgeSweep are
-// loft_chord_calibration_internal_test.go's own PR 1 fixtures (same package,
-// same reference wedge): a 90-degree radius-5 quarter arc, envelope read
-// through the real profileCoordinateUpper.
+// wedgeArcFeatureSize and wedgeRadius/wedgeSweep are
+// loft_chord_calibration_internal_test.go's own fixtures (same package, same
+// reference wedge): a 90-degree radius-5 quarter arc, its feature size read
+// through the record's own area integral and perimeter bound.
 func TestLoftCircularCellStationsHandDerivedStationCount(t *testing.T) {
 	t.Parallel()
-	envelope := wedgeArcEnvelope(t)
-	target := loftChordFraction * envelope
+	target := loftChordFraction * wedgeArcFeatureSize(t)
 
 	handN := 1
 	for {
@@ -359,28 +359,17 @@ func TestLoftCircularCellStationsHandDerivedStationCount(t *testing.T) {
 	require.LessOrEqual(t, achieved, target)
 	require.Equal(t, handN, m, "chordCount's own walk-up must match this test's own independent transcription of the same conservative bound")
 
-	// The seed for this reference wedge is 65 stations, and the joint walk-up
-	// only increments, so 65 is also the count
+	// The seed for this reference wedge is 75 stations, and the joint walk-up
+	// only increments, so 75 is also the count
 	// loft_chord_calibration_internal_test.go's loftChordFractionPinM pins and
-	// measures every calibration margin at. It sits one station above the sweep
-	// grid row the shipped constant was read off because the two prove the
-	// sagitta differently: the sweep measures the EXACT 2r*sin^2(dtheta/4),
-	// while chordCount proves its own bound through chordSagitta's
-	// outward-rounded, provably conservative r*sweep^2/(8n^2) (chordSagitta's
-	// own doc comment states the (x/sin x)^2 gap this opens). At m=64 on this
-	// exact wedge the two straddle the target: chordSagitta(5, pi/2, 64) =
-	// 3.7649553e-4 against a target of 3.7649100e-4, over by about 4.53e-9, so
-	// the seed walk-up commits one further station. The straddle is
-	// host-independent — it holds computing target from an exact envelope of
-	// 10.0 as well as from the live profileCoordinateUpper reading — and
-	// wedgePinStations asserts both sides of it directly.
+	// measures every calibration margin at.
 	//
 	// The literal below is deliberate here, where every other site names
 	// loftChordFractionPinM instead: this test exists to check chordCount
 	// against an independent transcription, so naming the pin the generator
 	// itself settles would make the two ends of the cross-check the same
 	// value.
-	require.Equal(t, 65, m)
+	require.Equal(t, 75, m)
 }
 
 // handChordSagittaConservative is TestLoftCircularCellStationsHandDerivedStationCount's
@@ -394,23 +383,20 @@ func handChordSagittaConservative(radius, sweep float64, n int) float64 {
 }
 
 // TestLoftShippedFractionOnReferenceWedge is this PR's own additional
-// acceptance line: drive the REAL generator at the SHIPPED loftChordFraction
-// constant, envelope read through the real profileCoordinateUpper, on the
-// plan's own reference wedge — proving the production station rule, not a hand
-// re-derivation of it. See TestLoftCircularCellStationsHandDerivedStationCount's
-// own comment for the seed straddle at m=64 that puts this count at 65, and
-// loft_chord_calibration_internal_test.go's loftChordFractionPinM for the
-// margins measured at it.
+// acceptance line: drive the REAL generator at the SHIPPED chord target, read
+// through the wedge record's own feature size, on the plan's own reference
+// wedge — proving the production station rule, not a hand re-derivation of it.
+// See loft_chord_calibration_internal_test.go's loftChordFractionPinM for why
+// the count is 75 and for the margins measured at it.
 func TestLoftShippedFractionOnReferenceWedge(t *testing.T) {
 	t.Parallel()
-	envelope := wedgeArcEnvelope(t)
-	target := loftChordFraction * envelope
+	target := loftChordFraction * wedgeArcFeatureSize(t)
 	seg, w := wedgeArcRecord(t)
 	stations, _, sagitta, _, _, err := loftCircularCellStations(w, w, seg, seg, target) //nolint:dogsled // only the stations and the sagitta matter here.
 	require.NoError(t, err)
 	require.LessOrEqual(t, sagitta, target)
 	t.Logf("the generator at the shipped loftChordFraction on the reference wedge: m=%d (target=%.10g, certified=%.10g)", len(stations), target, sagitta)
-	require.Equal(t, loftChordFractionPinM, len(stations), "the calibration pin must name the count the production generator produces at the shipped constant; see this test's sibling for the derivation of the seed straddle at m=64")
+	require.Equal(t, loftChordFractionPinM, len(stations), "the calibration pin must name the count the production generator produces at the shipped constant")
 }
 
 // --- loftCircularCellStations: the joint walk-up ---
@@ -745,10 +731,12 @@ func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 
 // quarterArcRingProfile is the S15 fixture: n radius-5 quarter arcs recorded in
 // one loop, each a same-kind circular pair with itself. Every pair settles at
-// the SAME station count against the shared chord target (the whole profile's
-// own coordinate envelope decides that target, §5.1, so it does not move with
-// n), which is what lets a fixture drive P and C alone and read the per-segment
-// share loftStationShare allocates from them.
+// the SAME station count against the shared chord target. The loop winds n/4
+// times round one circle, so its area integral and its perimeter bound both
+// grow in proportion to n and the target, which reads their quotient
+// (docs/loft-gear-bounds-design.md §5), does not move with n. That is what lets
+// a fixture drive P and C alone and read the per-segment share
+// loftStationShare allocates from them.
 func quarterArcRingProfile(t *testing.T, n int) (ProfileRecord, [][]survey2d.SegmentWalk) {
 	t.Helper()
 	segs := make([]CurveSegment, n)
@@ -779,7 +767,7 @@ func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
 	assembledTriangles := func(t *testing.T, p ProfileRecord) int {
 		t.Helper()
 		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-		offsets, walks0, walks1, err := validateLoftRecords(p, p, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+		offsets, walks0, walks1, _, err := validateLoftRecords(p, p, pl0, pl1, nil, loftRecordAreas(t, p, p), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 		require.NoError(t, err)
 		pairs, _, _, stationRound, err := loftPairings(p, p, offsets, walks0, walks1, 0, nil, nil)
 		require.NoError(t, err)
@@ -834,11 +822,10 @@ func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
 // option") — nor did any single curve here ask for 16384 of anything.
 func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 	t.Parallel()
-	const n = 16
+	const n = 24
 	p, walks := quarterArcRingProfile(t, n)
 
-	target, err := loftChordTarget(p, p, walks, walks)
-	require.NoError(t, err)
+	target := loftTestChordTarget(t, p, p, walks, walks)
 	m, _, _, err := loftSettleStationCount(walks[0][0], walks[0][0], p.Outer.Segments[0], p.Outer.Segments[0], target)
 	require.NoError(t, err)
 
@@ -854,7 +841,7 @@ func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 	require.Greater(t, wouldBePairs, uint64(proofbound.MaxFacetPairTestsPerCall),
 		"the fixture must be one that would otherwise reach S8's audit ceiling")
 
-	err = loftStationCapGate(p, p, make([]int, 1), walks, walks)
+	_, err = loftStationCapGate(p, p, loftRecordAreas(t, p, p), make([]int, 1), walks, walks)
 	require.ErrorIs(t, err, freeform.ErrTooManyChords, "S15 carries chordCount's own sentinel (spline design Table R row R8)")
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "loop 0 segment 0", "the refusal must name the segment whose share it exceeded")
@@ -873,13 +860,14 @@ func TestLoftStationCapAdmitsAPairInsideItsShare(t *testing.T) {
 	const n = 4
 	p, walks := quarterArcRingProfile(t, n)
 
-	target, err := loftChordTarget(p, p, walks, walks)
-	require.NoError(t, err)
+	target := loftTestChordTarget(t, p, p, walks, walks)
 	m, _, _, err := loftSettleStationCount(walks[0][0], walks[0][0], p.Outer.Segments[0], p.Outer.Segments[0], target)
 	require.NoError(t, err)
 	require.LessOrEqual(t, m, loftStationShare(n, n), "the fixture must settle inside its own share")
 
-	require.NoError(t, loftStationCapGate(p, p, make([]int, 1), walks, walks))
+	gateTarget, err := loftStationCapGate(p, p, loftRecordAreas(t, p, p), make([]int, 1), walks, walks)
+	require.NoError(t, err)
+	require.Equal(t, target, gateTarget, "the gate returns the target it decided S15 against")
 }
 
 // TestLoftStationShareAllocatesTheCap pins docs/loft-design.md §5.1's own
@@ -935,7 +923,9 @@ func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 	t.Parallel()
 	p := unitSquareProfile()
 	walks := resolveLoftLoopWalks(t, p)
-	require.NoError(t, loftStationCapGate(p, p, make([]int, 1), walks, walks))
+	target, err := loftStationCapGate(p, p, loftRecordAreas(t, p, p), make([]int, 1), walks, walks)
+	require.NoError(t, err)
+	require.Zero(t, target, "a build with no chorded pair never reads the chord target")
 
 	fit := FitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
 	free := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{fit, fit, fit}}}
@@ -943,8 +933,11 @@ func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 	_, c, ok := loftPairCounts([]LoopRecord{free.Outer}, make([]int, 1), freeWalks, freeWalks)
 	require.True(t, ok)
 	require.Equal(t, uint64(3), c, "a same-kind free-form pair is a chorded pair (§5.1)")
-	require.NoError(t, loftStationCapGate(free, free, make([]int, 1), freeWalks, freeWalks),
-		"the gate settles circular counts only, so a free-form build passes it")
+	// The three-fit loop is a pairing fixture, not a closed region, so it has
+	// no area of its own; a unit area stands in, since only the chord
+	// target's existence matters to this row.
+	_, err = loftStationCapGate(free, free, [2]float64{1, 1}, make([]int, 1), freeWalks, freeWalks)
+	require.NoError(t, err, "the gate settles circular counts only, so a free-form build passes it")
 }
 
 // --- S16: the one-sided collapsed cell (defensive) ---
@@ -1282,33 +1275,206 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 
 // --- loftChordTarget ---
 
-// TestLoftChordTargetUsesTheAnalyticEnvelope pins §5.1's chord-target reader:
-// loftChordTarget reads profileCoordinateEnvelope, which states a free-form
-// walk's control-point extent, so a FitSplineSeg profile gets a target of
-// loftChordFraction times that extent rather than the refusal
-// profileCoordinateUpper's placed-cap-frame requirement would give.
-func TestLoftChordTargetUsesTheAnalyticEnvelope(t *testing.T) {
-	t.Parallel()
-	fit := FitSplineSeg{
-		Fit:    []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)},
-		TStart: 0, TEnd: 1,
+// featureSizeGear is a spur-gear section for the chord-target tests: involute
+// flanks as fit splines through fitPoints points each, a tip arc per tooth, and
+// root arcs between teeth (a closing root line for a single tooth). shift moves
+// every point, the gear centre included, by (shift, shift) in the sketch plane.
+type featureSizeGear struct {
+	module, teeth, pressure float64
+	fitPoints               int
+}
+
+func (g featureSizeGear) radii() (float64, float64, float64) {
+	r := g.module * g.teeth / 2
+	return r * math.Cos(g.pressure), r - 1.25*g.module, r + g.module
+}
+
+func (g featureSizeGear) sketchOn(t *testing.T, w *sketch.World, plane *sketch.Plane, count int, shift float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	rb, rf, ra := g.radii()
+	thetaB := math.Pi/(2*g.teeth) + (math.Tan(g.pressure) - g.pressure)
+	tmax := math.Sqrt((ra/rb)*(ra/rb) - 1)
+	polar := func(r, ang float64) *sketch.Point {
+		p := s.CreatePoint(shift+r*math.Cos(ang), shift+r*math.Sin(ang))
+		s.Fix(p)
+		return p
 	}
-	loop := LoopRecord{Segments: []CurveSegment{fit, fit, fit}}
-	p := ProfileRecord{Outer: loop}
-	work := freeform.NewFreeformWork()
-	walks := make([]survey2d.SegmentWalk, 3)
-	var err error
-	for i := range walks {
-		walks[i], err = walkOf(fit, work)
+	origin := polar(0, 0)
+	pitch := 2 * math.Pi / g.teeth
+	var firstRoot, prevRoot *sketch.Point
+	for k := range count {
+		rot := float64(k) * pitch
+		rootR := polar(rf, rot-thetaB)
+		right := make([]*sketch.Point, g.fitPoints)
+		left := make([]*sketch.Point, g.fitPoints)
+		for i := range g.fitPoints {
+			tt := tmax * float64(i) / float64(g.fitPoints-1)
+			r := rb * math.Sqrt(1+tt*tt)
+			ang := thetaB - (tt - math.Atan(tt))
+			right[i] = polar(r, rot-ang)
+			left[g.fitPoints-1-i] = polar(r, rot+ang)
+		}
+		rootL := polar(rf, rot+thetaB)
+		s.CreateLine(rootR, right[0])
+		_, err = s.CreateFitSpline(right...)
+		require.NoError(t, err)
+		s.CreateArc(origin, right[len(right)-1], left[0])
+		_, err = s.CreateFitSpline(left...)
+		require.NoError(t, err)
+		s.CreateLine(left[len(left)-1], rootL)
+		if prevRoot != nil {
+			s.CreateArc(origin, prevRoot, rootR)
+		} else {
+			firstRoot = rootR
+		}
+		prevRoot = rootL
+	}
+	if count == 1 {
+		s.CreateLine(prevRoot, firstRoot)
+	} else {
+		s.CreateArc(origin, prevRoot, firstRoot)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	return s, profiles[0]
+}
+
+// loftTargetReading is what the production readers give for one record
+// lofted against itself: the chord target, the record's own area integral as
+// falsifyRecordedArea returns it, its perimeter bound, the sum of its walks'
+// held lengths, and the coordinate envelope the previous chord-target rule
+// read.
+type loftTargetReading struct {
+	target, area, perimeter, heldLength, envelope float64
+}
+
+// readLoftTarget reads the target through loftChordTarget rather than the
+// station cap gate, and resolves each walk on a counter of its own: the
+// eight-tooth gear passes the shipped station cap and free-form work ceiling
+// only once docs/loft-gear-bounds-design.md §7 raises them, and the target
+// depends on neither.
+func readLoftTarget(t *testing.T, s *sketch.Sketch, p *sketch.Profile) loftTargetReading {
+	t.Helper()
+	rec, _, sketchArea, err := recordProfile(s, p)
+	require.NoError(t, err)
+	area, err := falsifyRecordedArea(rec, sketchArea, freeform.NewFreeformWork())
+	require.NoError(t, err)
+	walks := [][]survey2d.SegmentWalk{make([]survey2d.SegmentWalk, len(rec.Outer.Segments))}
+	require.Empty(t, rec.Holes)
+	for j, seg := range rec.Outer.Segments {
+		walks[0][j], err = walkOf(seg, freeform.NewFreeformWork())
 		require.NoError(t, err)
 	}
-	walks0 := [][]survey2d.SegmentWalk{walks}
-	pw := &profileWalks{profile: p, outer: walks0[0]}
-	envelope, err := profileCoordinateEnvelope(p, nil, pw)
+	perimeter := loftPerimeterUpper(rec, walks)
+	target, err := loftChordTarget(area, perimeter, area, perimeter)
 	require.NoError(t, err)
-	require.Positive(t, envelope, "a free-form walk must supply its control-point coordinate envelope")
+	held := 0.0
+	for _, loop := range walks {
+		for _, w := range loop {
+			held += w.Length
+		}
+	}
+	pw := &profileWalks{profile: rec, outer: walks[0], holes: walks[1:]}
+	envelope, err := profileCoordinateEnvelope(rec, nil, pw)
+	require.NoError(t, err)
+	return loftTargetReading{target: target, area: area, perimeter: perimeter, heldLength: held, envelope: envelope}
+}
 
-	target, err := loftChordTarget(p, p, walks0, walks0)
-	require.NoError(t, err)
-	require.Equal(t, loftChordFraction*envelope, target)
+// TestLoftChordTargetReadsFeatureSize pins docs/loft-gear-bounds-design.md §5's
+// chord target on one gear tooth and on a whole eight-tooth gear, each also
+// built 10 outer radii away from the sketch origin. The target is
+// loftChordFraction times the record's own |area| over its perimeter bound, to
+// one ulp; that perimeter bound encloses the walks' held lengths; and the
+// target does not move when the section moves, while the coordinate envelope
+// the previous rule read grows more than fivefold.
+//
+// Shown to fail: with the target read as loftChordFraction times
+// profileCoordinateEnvelope, the rule this one replaced, both gear rows fail
+// (the tooth reads 5.3e-3 against fraction * |A| / P = 2.1e-4).
+//
+// The exact-record row pins the target's bits for a record whose every input
+// is exact: a LineSeg and a quadratic NURBSSeg, whose area integral and
+// perimeter bracket are exact-rational computations with one outward rounding
+// each. The CI suite runs this test on amd64 (Linux, Windows) and arm64
+// (macOS), so the one literal is the cross-architecture check. A circular or
+// fit-spline record is not such a record: the circular area contribution is a
+// float trig expression (internal/momentregion's AddCircular) and a fit
+// spline's spans come from sketch's float interpolation solve.
+func TestLoftChordTargetReadsFeatureSize(t *testing.T) {
+	t.Parallel()
+	gear := featureSizeGear{module: 2, teeth: 8, pressure: 20 * math.Pi / 180, fitPoints: 5}
+	_, _, ra := gear.radii()
+	for _, row := range []struct {
+		name  string
+		count int
+	}{{"tooth", 1}, {"gear", 8}} {
+		t.Run(row.name, func(t *testing.T) {
+			t.Parallel()
+			read := func(shift float64) loftTargetReading {
+				w := sketch.NewWorld()
+				s, p := gear.sketchOn(t, w, w.XY(), row.count, shift)
+				return readLoftTarget(t, s, p)
+			}
+			here, far := read(0), read(10*ra)
+
+			want := loftChordFraction * (math.Abs(here.area) / here.perimeter)
+			require.InDelta(t, want, here.target, ulpOf(want), "the target is fraction * |A| / P to one ulp")
+			require.GreaterOrEqual(t, here.perimeter, here.heldLength, "the perimeter bound encloses the held boundary length")
+			require.Less(t, here.perimeter, 1.5*here.heldLength, "the perimeter bound stays near the boundary length")
+
+			require.InEpsilon(t, here.target, far.target, 1e-9, "moving the section leaves its feature size alone")
+			require.Greater(t, far.envelope/here.envelope, 5.0, "the coordinate envelope grows with the distance from the sketch origin")
+			t.Logf("%s: target=%.6g area=%.6g perimeter=%.6g (held %.6g); envelope %.4g -> %.4g", row.name, here.target, here.area, here.perimeter, here.heldLength, here.envelope, far.envelope)
+		})
+	}
+
+	t.Run("exact record", func(t *testing.T) {
+		t.Parallel()
+		// The region under the parabola B(s) = (4(1-s), 8s(1-s)) closed by
+		// the chord from (0,0) to (4,0): its area is two thirds of the
+		// control triangle's, 16/3.
+		p := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+			LineSeg{Start: pt(0, 0), End: pt(4, 0), TStart: 0, TEnd: 1},
+			NURBSSeg{
+				Degree:  2,
+				Control: []Point2{pt(4, 0), pt(2, 4), pt(0, 0)},
+				Knots:   []float64{0, 0, 0, 1, 1, 1},
+				Weights: []float64{1, 1, 1},
+				TStart:  0, TEnd: 1,
+			},
+		}}}
+		areas := loftRecordAreas(t, p, p)
+		require.InEpsilon(t, 16.0/3, areas[0], 1e-15, "the record's own area integral is the closed form")
+		walks := resolveLoftLoopWalks(t, p)
+		curve := 0.0
+		const n = 200_000
+		for k := range n {
+			s0, s1 := float64(k)/n, float64(k+1)/n
+			curve += math.Hypot(4*(s1-s0), 8*(s1*(1-s1)-s0*(1-s0)))
+		}
+		perimeter := loftPerimeterUpper(p, walks)
+		require.GreaterOrEqual(t, perimeter, 4+curve, "the perimeter bound encloses the true boundary length")
+		require.InEpsilon(t, 4+curve, perimeter, 1e-3)
+
+		target, err := loftStationCapGate(p, p, areas, make([]int, 1), walks, walks)
+		require.NoError(t, err)
+		require.InDelta(t, loftChordFraction*(16.0/3)/perimeter, target, 2*ulpOf(target))
+		t.Logf("exact record: target=%v bits=%#x", target, math.Float64bits(target))
+		require.Equal(t, exactRecordTargetBits, math.Float64bits(target),
+			"the same exact record must give the same target bits on every architecture")
+	})
+}
+
+// exactRecordTargetBits is TestLoftChordTargetReadsFeatureSize's exact-record
+// target, recorded once. It is a vertex-set input rather than a bound, so it is
+// pinned to the bit.
+const exactRecordTargetBits uint64 = 0x3f219fed328a3919
+
+// ulpOf is the spacing of float64 values at x.
+func ulpOf(x float64) float64 {
+	return math.Nextafter(math.Abs(x), math.Inf(1)) - math.Abs(x)
 }

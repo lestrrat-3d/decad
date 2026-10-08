@@ -42,10 +42,15 @@ func loftStationShare(p, c uint64) int { return loftmesh.StationShare(p, c) }
 // makes that possible: m and mMax are each a function of the two records, so
 // the construction phase settles the identical m this gate reads.
 //
+// It is the build's one reader of the chord target: it computes it from
+// recordArea and the resolved walks (loftChordTarget) and returns it, so the
+// station generators chord at exactly the target S15 was decided against.
+//
 // A build with no chorded pair (C == 0) never consults the cap and never even
 // reads the chord target: its Σstations is Σn_i exactly, the count the record
-// itself states, and S8 is its only resource refusal. That early return is why
-// an all-LineSeg build pays nothing for this gate.
+// itself states, and S8 is its only resource refusal. It returns a target of
+// 0 there, which no LineSeg cell reads. That early return is why an
+// all-LineSeg build pays nothing for this gate.
 //
 // Only a circular pair settles its count here. A same-kind free-form pair's
 // count is what its dyadic walk settles, so that walk carries the same share as
@@ -58,21 +63,21 @@ func loftStationShare(p, c uint64) int { return loftmesh.StationShare(p, c) }
 // DERIVATION arm, which §5.1 places beside this row precisely because the
 // walk-up that settles m is what asks for that term, and freeform.ErrTooManyChords bare
 // is chordCount's own per-walk ceiling.
-func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk) error {
+func loftStationCapGate(p0, p1 ProfileRecord, recordArea [2]float64, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk) (float64, error) {
 	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
 	loops1 := append([]LoopRecord{p1.Outer}, p1.Holes...)
 
 	p, c, ok := loftPairCounts(loops0, offsets, walks0, walks1)
 	if !ok {
-		return fmt.Errorf(`%w: this loft's paired-segment count overflows the station-cap arithmetic`, ErrUnsupported)
+		return 0, fmt.Errorf(`%w: this loft's paired-segment count overflows the station-cap arithmetic`, ErrUnsupported)
 	}
 	if c == 0 {
-		return nil
+		return 0, nil
 	}
 
-	target, err := loftChordTarget(p0, p1, walks0, walks1)
+	target, err := loftChordTarget(recordArea[0], loftPerimeterUpper(p0, walks0), recordArea[1], loftPerimeterUpper(p1, walks1))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	mMax := loftStationShare(p, c)
 
@@ -87,81 +92,79 @@ func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]
 			}
 			m, _, _, err := loftSettleStationCount(w0, w1, loops0[i].Segments[j], loops1[i].Segments[k], target)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			if m > mMax {
-				return &loftStationCapError{Loop: i, Seg: j, M: m, MMax: mMax}
+				return 0, &loftStationCapError{Loop: i, Seg: j, M: m, MMax: mMax}
 			}
 		}
 	}
-	return nil
+	return target, nil
 }
 
-// loftChordFraction is the coefficient a10-plan.md Part 2 Q2's chord-target
-// rule applies to a whole section's own coordinate envelope:
+// loftChordFraction is the coefficient docs/loft-gear-bounds-design.md §5's
+// chord-target rule applies to the sections' own feature size:
 //
-//	chordTarget = loftChordFraction * max(profileCoordinateEnvelope(p0), profileCoordinateEnvelope(p1))
+//	chordTarget = loftChordFraction * min(|area(p0)| / perimeterUpper(p0), |area(p1)| / perimeterUpper(p1))
 //
-// It is calibrated by measurement, never assumed (merged PR #188,
-// loft_chord_calibration_internal_test.go): against two hand-chorded
-// reference wedges — a 90-degree radius-5 quarter-arc and a 5-point
-// fit-spline approximation of the same arc, both lofted between z=0 and
-// z=10 — it is the coarsest value at which both fixtures still read Sound at
-// the default 1e-3 relative tolerance inside the per-fixture wall-clock budget
-// (a10-plan.md Q3), which docs/loft-design.md §13's build cost model paragraph
-// owns and this comment states no cost of its own for.
+// The target therefore scales with the section's own area over its own
+// perimeter, and does not grow with the section's distance from the sketch
+// origin or with the radius of the gear one tooth belongs to. That design's §5
+// states why the volume residual tracks this size.
 //
-// Driven through the SHIPPED generator — loftCircularCellStations below, whose
-// joint walk-up settles the count against the CERTIFIED per-cell sagitta — this
-// constant settles the arc wedge at m=65 stations, whose assembled face count
-// is the F §7 owns, with Volume the binding reading at a measured 2.47x margin
-// (gate ratio 4.04928e-4), and the fit-spline wedge chorded at that same count
-// at 1.95x (5.1326e-4). Both builds land inside the budget §13 owns. The
-// calibration pins those two margins at that production count and re-derives
-// the count from the generator at every run (loftChordFractionPinM), so no
-// published margin here belongs to a chording this evaluator does not produce.
-//
-// A finer grid point (m=128) clears the plan's separate 4x-margin target but
-// falls outside that budget, so the plan's
-// own named fallback governs (a10-plan.md Q2's "Fallback if calibration does
-// not close"): ship the coarser, in-budget value and accept that an extreme
-// aspect ratio can read Suspect at a tight tolerance — a correct non-silent
-// outcome, not a wrong answer.
+// 2.5e-4 is the finest value whose full z = 40 gear build that design measured
+// keeps its audit near 5 s; the coarser 5e-4 still reads Sound on every gear
+// case the design measured but leaves Area a 1.5x margin at z = 8. The
+// reference arc wedge settles at the count wedgePinStations pins
+// (loft_chord_calibration_internal_test.go), which re-derives it from the
+// generator at every run.
 //
 // It is NOT a caller option: a loft's chording is topology, and nothing is
-// added to the public API for it (a10-plan.md Q2).
-const loftChordFraction = 3.76491e-05
+// added to the public API for it (docs/loft-design.md §5.1).
+const loftChordFraction = 2.5e-4
 
-// loftChordTarget is one loft build's own chord target (docs/loft-design.md
-// §5.1): the coordinate envelope is a WHOLE-PROFILE quantity, so it is read
-// once here, never re-derived per paired segment.
-//
-// It reads profileCoordinateEnvelope, the non-refusing reader §5.1 names: an
-// analytic walk states the same coordUpper profileCoordinateUpper would
-// return, and a free-form walk states its control-point extent, which a
-// free-form pair needs and which profileCoordinateUpper's placed-cap-frame
-// requirement would refuse.
-//
-// walks0/walks1 are validateLoftRecords' own already-resolved walks
-// (outer at index 0, each hole at index i+1): wrapping them in a
-// *profileWalks view here, rather than passing nil and resolving again, keeps
-// this reading inside the resolve-once rule. The two views are deliberately
-// UNMETERED — validateLoftRecords charged this work against its own counters,
-// and a view that restated the charge as its own would let a later replay levy
-// it twice. Neither leaves this function, so neither can reach a payload that
-// replays it.
-func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]survey2d.SegmentWalk) (float64, error) {
-	pw0 := &profileWalks{profile: p0, outer: walks0[0], holes: walks0[1:]}
-	pw1 := &profileWalks{profile: p1, outer: walks1[0], holes: walks1[1:]}
-	u0, err := profileCoordinateEnvelope(p0, nil, pw0)
-	if err != nil {
-		return 0, err
+// loftFeatureSize is one section's own feature size: the magnitude of its
+// exact region area over a proven upper bound on its perimeter. Both inputs
+// come from the record alone, so the same record gives the same size on every
+// platform.
+func loftFeatureSize(area, perimeterUpper float64) float64 {
+	return math.Abs(area) / perimeterUpper
+}
+
+// loftPerimeterUpper is a proven upper bound on a section's whole boundary
+// length, every loop included: the sum over the record's segments of
+// perCellArcUpper at one cell, which is the exact circularLengthInterval
+// bracket for a circular segment and the walk's own LengthUpper otherwise.
+// walks is validateLoftRecords' own per-loop list (outer at index 0, each hole
+// at index i+1), in the record's own segment order.
+func loftPerimeterUpper(p ProfileRecord, walks [][]survey2d.SegmentWalk) float64 {
+	loops := append([]LoopRecord{p.Outer}, p.Holes...)
+	perimeter := 0.0
+	for i, loop := range loops {
+		for j, seg := range loop.Segments {
+			perimeter = proofbound.AbsSumUpper(perimeter, perCellArcUpper(seg, walks[i][j], 1))
+		}
 	}
-	u1, err := profileCoordinateEnvelope(p1, nil, pw1)
-	if err != nil {
-		return 0, err
+	return perimeter
+}
+
+// loftChordTarget is one loft build's own chord target
+// (docs/loft-gear-bounds-design.md §5): loftChordFraction times the smaller of
+// the two sections' feature sizes. area0/area1 are the records' own exact
+// region integrals falsifyRecordedArea computed in Loft, never sketch's claimed
+// areas, and perim0/perim1 are loftPerimeterUpper's bounds.
+//
+// A target that is not a positive finite number — a perimeter bound that
+// overflowed, or an area that is zero — has no chord depth that meets it, so
+// it refuses ErrUnsupported (Table S row S14's derivation arm) instead of
+// sending the station walk to its ceiling.
+func loftChordTarget(area0, perim0, area1, perim1 float64) (float64, error) {
+	target := loftChordFraction * math.Min(loftFeatureSize(area0, perim0), loftFeatureSize(area1, perim1))
+	if !(target > 0) || math.IsInf(target, 0) {
+		return 0, fmt.Errorf(`%w: this loft's chord target is %v: a section's area (%v, %v) over its perimeter bound (%v, %v) gives no positive finite feature size`,
+			ErrUnsupported, target, area0, area1, perim0, perim1)
 	}
-	return loftChordFraction * math.Max(u0, u1), nil
+	return target, nil
 }
 
 func loftLineCellStations(w0, w1 survey2d.SegmentWalk) ([]Point2, []Point2, float64, []float64, float64, error) {

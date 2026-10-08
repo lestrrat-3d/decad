@@ -90,7 +90,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	// (docs/spline-design.md §5.2). A counter per phase would give the same
 	// record a fresh full ceiling in each.
 	work := freeform.NewFreeformWork()
-	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
+	if _, err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
 
@@ -164,17 +164,22 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 // disagree, which is a bug somewhere. A small residual proves nothing and
 // admits nothing; the check can only reject, the same one-sided shape as the
 // seam's range falsifier.
-func falsifyRecordedArea(profile ProfileRecord, sketchArea float64, work *freeform.FreeformWork) error {
+//
+// It returns the record's own area integral it compared, never sketch's
+// answer, so a caller that needs the record's area (Loft's chord target,
+// docs/loft-gear-bounds-design.md §5) reads it here instead of integrating
+// the record a second time.
+func falsifyRecordedArea(profile ProfileRecord, sketchArea float64, work *freeform.FreeformWork) (float64, error) {
 	ig, err := profile.evaluatorIntegrals(freeform.MomentAreaOrder, work)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	scale := math.Max(1, math.Abs(sketchArea))
 	if math.Abs(ig.area-sketchArea) > 1e-9*scale {
-		return fmt.Errorf(`%w: the recorded boundary's area %v does not reproduce sketch's %v; report upstream as a bug`,
+		return 0, fmt.Errorf(`%w: the recorded boundary's area %v does not reproduce sketch's %v; report upstream as a bug`,
 			ErrUnrecordableProfile, ig.area, sketchArea)
 	}
-	return nil
+	return ig.area, nil
 }
 
 // linearSweep is a resolved linear extent: the signed sweep interval [z0, z1]
