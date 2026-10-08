@@ -4,6 +4,10 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,4 +43,41 @@ func TestLineWallFrameEnclosesDenotedWall(t *testing.T) {
 	}
 	requireEncloses(t, frame.anchor.U, lerp(24, -1e-15), `anchor u`)
 	requireEncloses(t, frame.anchor.V, lerp(32, 0), `anchor v`)
+}
+
+// TestLineCircleCornerEnclosesDenotedRadius pins that the line-circle locus
+// discriminant reads every radius the circle's record denotes. The ArcSeg runs
+// about the origin from (1, 1) to (−1, −1), so its record denotes the radius √2
+// while the walk holds √2 rounded to float64. The line y = −2 runs along +u, so
+// its normal is (0, 1) and α = −2 exactly. The denoted Δ0 = R² − α² is then
+// the rational 2 − 4 = −2, and Δ1 = −2(α + R) is −2(√2 − 2), solved at 400
+// bits.
+//
+// Shown to fail: with lineCircleCornerOf reading the held radius as exact
+// again, Δ0 and Δ1 are single points at the held radius, which miss both.
+func TestLineCircleCornerEnclosesDenotedRadius(t *testing.T) {
+	t.Parallel()
+	line, err := boundarywalk.WalkOf(sectionrecord.LineSeg{
+		Start: sectionrecord.Point2{U: 0, V: -2},
+		End:   sectionrecord.Point2{U: 1, V: -2},
+		TEnd:  1,
+	}, freeform.NewFreeformWork())
+	require.NoError(t, err)
+	circle, err := boundarywalk.WalkOf(sectionrecord.ArcSeg{
+		Start: sectionrecord.Point2{U: 1, V: 1},
+		End:   sectionrecord.Point2{U: -1, V: -1},
+		TEnd:  1,
+	}, freeform.NewFreeformWork())
+	require.NoError(t, err)
+	require.NotEqual(t, 0, big.NewFloat(circle.Radius).Cmp(new(big.Float).SetPrec(400).Sqrt(big.NewFloat(2))),
+		`the fixture needs a held radius off the denoted one`)
+
+	k, ok := lineCircleCornerOf(survey2d.SideWalk{SegmentWalk: line}, survey2d.SideWalk{SegmentWalk: circle})
+	require.True(t, ok)
+	requireEnclosesRat(t, k.alpha, big.NewRat(-2, 1), `alpha`)
+	requireEnclosesRat(t, k.delta0, big.NewRat(-2, 1), `delta0`)
+	root2 := new(big.Float).SetPrec(400).Sqrt(big.NewFloat(2))
+	want := new(big.Float).SetPrec(400).Sub(root2, big.NewFloat(2))
+	want.Mul(want, big.NewFloat(-2))
+	requireEncloses(t, k.delta1, want, `delta1`)
 }
