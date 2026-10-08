@@ -922,3 +922,151 @@ func TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift(t *testing.T) {
 	require.False(t, revolvePayloadProvesSimple(t.Context(), rp),
 		"the true radial minimum here is negative (-8e-8); the offset shift's own rounding must not admit it")
 }
+
+// internalArcChordPrism extrudes a unit-radius arc about the origin, swept
+// counter-clockwise through sweepDeg degrees symmetrically about +u and closed
+// by its chord, h mm along +z.
+func internalArcChordPrism(t *testing.T, doc *Document, sweepDeg, h float64) *Body {
+	t.Helper()
+	half := sweepDeg / 2 * math.Pi / 180
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	a := s.CreatePoint(math.Cos(-half), math.Sin(-half))
+	b := s.CreatePoint(math.Cos(half), math.Sin(half))
+	s.Fix(c)
+	s.Fix(a)
+	s.Fix(b)
+	s.CreateArc(c, a, b)
+	s.CreateLine(b, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// arcChordDiameterSquare is the exact square of an upper bound on the
+// diameter of pp's arc-plus-chord prism, from its own record: every section
+// point lies within the largest recorded endpoint or arc radius of the arc's
+// center (the arc takes its radius from Start, the chord is the hull of its
+// two ends), so the section's diameter is at most twice that radius and the
+// prism's at most sqrt((2R)^2 + (z1 - z0)^2).
+func arcChordDiameterSquare(t *testing.T, pp prismPayload) *big.Rat {
+	t.Helper()
+	var center *Point2
+	for _, seg := range pp.profile.Outer.Segments {
+		if arc, ok := seg.(ArcSeg); ok {
+			center = &arc.Center
+		}
+	}
+	require.NotNil(t, center, `the fixture's section holds one arc`)
+	sq := func(x float64) *big.Rat {
+		r := new(big.Rat).SetFloat64(x)
+		return r.Mul(r, r)
+	}
+	radiusSquare := new(big.Rat)
+	for _, seg := range pp.profile.Outer.Segments {
+		var ends []Point2
+		switch seg := seg.(type) {
+		case ArcSeg:
+			ends = []Point2{seg.Start, seg.End}
+		case LineSeg:
+			ends = []Point2{seg.Start, seg.End}
+		default:
+			t.Fatalf("unexpected segment %T", seg)
+		}
+		for _, p := range ends {
+			r := new(big.Rat).Add(sq(p.U-center.U), sq(p.V-center.V))
+			if r.Cmp(radiusSquare) > 0 {
+				radiusSquare = r
+			}
+		}
+	}
+	upper := new(big.Rat).Mul(radiusSquare, big.NewRat(4, 1))
+	return upper.Add(upper, sq(pp.z1-pp.z0))
+}
+
+// requireStationDiameter asserts that d sits at or below the exact upper
+// bound and at or above sqrt((2*cos(7.5 degrees))^2 + h^2), the floor that
+// stations every 15 degrees at both levels guarantee on a unit-radius wall of
+// height h that sweeps past 180 degrees.
+func requireStationDiameter(t *testing.T, d, h float64, upperSquare *big.Rat) {
+	t.Helper()
+	square := new(big.Rat).SetFloat64(d)
+	square.Mul(square, square)
+	require.LessOrEqual(t, square.Cmp(upperSquare), 0,
+		`the gate diameter must stay at or below the body's own diameter`)
+	require.GreaterOrEqual(t, d, math.Hypot(2*math.Cos(gateStationStep/2), h),
+		`the stations must reach a near-antipodal pair across the two levels`)
+}
+
+// A circular wall that sweeps past 180 degrees holds antipodal points the
+// carrier witnesses never reach: at 240 degrees they sample th0, the
+// mid-angle and th1 only, which read 2*sin(120 degrees) = sqrt(3) against the
+// unit wall's true 2. The stations prismStationWitnesses adds lift the
+// exact-carrier reading to the true diameter while it stays at or below it.
+//
+// Shown to fail first: with stationGateDiameter returning its input reading
+// unchanged, the 240 degree h=0.001 case reads 1.7320511 against a floor of
+// 1.9828900, and the 270 degree h=1 case 2.1010030 against 2.2207773. With
+// the stations kept but their allowance dropped from the shrink, the 240
+// degree case reads above its exact upper bound on amd64: the rounding in
+// the held stations carries their maximum past the body's own diameter.
+func TestBodyGateDiameterReadsCurvedWallStations(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		sweepDeg float64
+		h        float64
+	}{
+		{"240 degrees h 0.001", 240, 0.001},
+		{"270 degrees h 1", 270, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := internalArcChordPrism(t, New(), tc.sweepDeg, tc.h)
+			pp, isPrism := body.payload.(prismPayload)
+			require.True(t, isPrism)
+			_, modelled := newBodyGeom(body)
+			require.True(t, modelled, `the exact carrier model reads this prism`)
+
+			d, ok, err := bodyGateDiameter(t.Context(), body)
+			require.NoError(t, err)
+			require.True(t, ok)
+			requireStationDiameter(t, d, tc.h, arcChordDiameterSquare(t, pp))
+			t.Logf("gate diameter %.17g", d)
+		})
+	}
+}
+
+// fallbackGateDiameter reads the same stations off a witness prism. A copy
+// of the 240 degree prism carrying a section displacement misses the exact
+// carrier model and reaches the fallback's displaced-prism arm, which
+// shrinks the reading by twice the displacement plus the stations' own
+// allowance.
+//
+// Shown to fail first: with stationGateDiameter returning its input reading
+// unchanged, this reads 1.7320511 against a floor of 1.9828900.
+func TestFallbackGateDiameterReadsCurvedWallStations(t *testing.T) {
+	t.Parallel()
+	body := internalArcChordPrism(t, New(), 240, 0.001)
+	exact, ok, err := bodyGateDiameter(t.Context(), body)
+	require.NoError(t, err)
+	require.True(t, ok)
+	pp, isPrism := body.payload.(prismPayload)
+	require.True(t, isPrism)
+	pp.sectionDelta = math.Ldexp(1, -40)
+
+	d, ok, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), &Body{payload: pp})
+	require.NoError(t, err)
+	require.True(t, ok)
+	requireStationDiameter(t, d, 0.001, arcChordDiameterSquare(t, pp))
+	require.Less(t, d, exact, `the displacement charge pulls the reading below the undisplaced body's reading`)
+
+	routed, ok, err := bodyGateDiameter(t.Context(), &Body{payload: pp})
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, d, routed, `bodyGateDiameter routes a displaced prism through fallbackGateDiameter`)
+}
