@@ -157,6 +157,9 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	if err := requireNotCapBlendReceiver(b.payload, "fillets"); err != nil {
 		return nil, err
 	}
+	if err := requireNotDraftReceiver(b.payload, "fillets"); err != nil {
+		return nil, err
+	}
 	blend := revolveBlendOp{
 		kind: "fillet",
 		corner: func(loop cornerLoop, _, ci int, _ *Edge) (*cornerBlend, error) {

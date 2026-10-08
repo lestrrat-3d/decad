@@ -190,6 +190,15 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		}
 		return chainVertexGateDiameter(ctx, body, proofbound.AbsSumUpper(payload.sectionDelta, endpointAllow))
 	}
+	if _, ok := body.payload.(draftPayload); ok {
+		// A draft body (docs/draft-design.md Table DD row DD6) has no exact
+		// carrier model here and no witness prism: its far section is not the
+		// receiver's section. Every vertex it holds, on both caps, publishes
+		// its own displacement from the point it denotes, so the held vertex
+		// set's diameter, shrunk by the widest of those, is a lower bound on
+		// the body's.
+		return chainVertexGateDiameter(ctx, body, 0)
+	}
 	if _, ok := body.payload.(chainLoftPayload); ok {
 		return chainVertexGateDiameter(ctx, body, 0)
 	}

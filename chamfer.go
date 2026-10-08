@@ -188,6 +188,9 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if err := requireNotCapBlendReceiver(b.payload, "chamfers"); err != nil {
 		return nil, err
 	}
+	if err := requireNotDraftReceiver(b.payload, "chamfers"); err != nil {
+		return nil, err
+	}
 	// SX16: docs/brep-modify-design.md states no asymmetric setback for either
 	// brep route, so the option is refused on every brep or stacked receiver.
 	if asym != nil {

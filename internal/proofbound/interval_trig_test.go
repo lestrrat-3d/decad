@@ -91,3 +91,74 @@ func TestRadSinCosIntervalMemoMatchesUncached(t *testing.T) {
 		require.Zero(t, cos.Hi.Cmp(big.NewRat(1, 1)))
 	})
 }
+
+// seriesTan is tan(x) to about 75 significant digits: the Taylor series of
+// sin and cos at 256 bits, summed until a term falls below 2⁻³⁰⁰. It is the
+// reference RadTanSpan's enclosure is checked against, and shares no code with
+// it.
+func seriesTan(x *big.Rat) *big.Rat {
+	const prec = 256
+	fx := new(big.Float).SetPrec(prec).SetRat(x)
+	x2 := new(big.Float).SetPrec(prec).Mul(fx, fx)
+	sum := func(term *big.Float, first int64) *big.Float {
+		total := new(big.Float).SetPrec(prec).Set(term)
+		eps := new(big.Float).SetPrec(prec).SetMantExp(big.NewFloat(1), -300)
+		for k := first; ; k += 2 {
+			term = new(big.Float).SetPrec(prec).Mul(term, x2)
+			term.Quo(term, new(big.Float).SetPrec(prec).SetInt64(-k*(k+1)))
+			total.Add(total, term)
+			if new(big.Float).Abs(term).Cmp(eps) < 0 {
+				return total
+			}
+		}
+	}
+	sin := sum(fx, 2)
+	cos := sum(new(big.Float).SetPrec(prec).SetInt64(1), 1)
+	tan, _ := new(big.Float).SetPrec(prec).Quo(sin, cos).Rat(nil)
+	return tan
+}
+
+// TestRadTanSpanEnclosesSeriesReference pins the draft's certified tangent
+// (docs/draft-design.md §8.1): over every span, the enclosure holds the series
+// reference at both ends of the span, and over a one-point span it is a box
+// far narrower than one float ulp of the tangent wherever the angle is a degree
+// or more; the turn grid's fixed absolute width dominates a tinier angle's
+// tangent. Shown to fail first: with
+// RadTanSpan's body replaced by the point interval at math.Tan of the span's
+// float, the reference fell outside the box at every angle.
+func TestRadTanSpanEnclosesSeriesReference(t *testing.T) {
+	deg := func(d float64) *big.Rat { return proofarith.FloatRat(d * math.Pi / 180) }
+	for _, x := range []*big.Rat{deg(3), deg(5), deg(-5), deg(10), deg(45), deg(89), big.NewRat(1, 1<<50)} {
+		t.Run(x.FloatString(20), func(t *testing.T) {
+			width := new(big.Rat).SetFrac64(1, 1<<40)
+			for _, span := range []proofbound.RatInterval{
+				proofbound.PointInterval(x),
+				proofbound.Interval(x, new(big.Rat).Add(x, width)),
+			} {
+				tan, ok := proofbound.RadTanSpan(span)
+				require.True(t, ok)
+				for _, end := range []*big.Rat{span.Lo, span.Hi} {
+					ref := seriesTan(end)
+					require.LessOrEqual(t, tan.Lo.Cmp(ref), 0, "the enclosure's low end passes tan at %s", end.FloatString(20))
+					require.GreaterOrEqual(t, tan.Hi.Cmp(ref), 0, "the enclosure's high end falls short of tan at %s", end.FloatString(20))
+				}
+			}
+			if new(big.Rat).Abs(x).Cmp(deg(1)) < 0 {
+				return
+			}
+			tan, ok := proofbound.RadTanSpan(proofbound.PointInterval(x))
+			require.True(t, ok)
+			ref, _ := seriesTan(x).Float64()
+			gap, _ := new(big.Rat).Sub(tan.Hi, tan.Lo).Float64()
+			require.Less(t, gap, 1e-6*ulpOf(ref), "a one-point span encloses its tangent well inside one float ulp")
+		})
+	}
+	// A cosine enclosure reaching zero has no quotient to box.
+	_, ok := proofbound.RadTanSpan(proofbound.Interval(deg(89), deg(91)))
+	require.False(t, ok)
+}
+
+func ulpOf(v float64) float64 {
+	v = math.Abs(v)
+	return math.Nextafter(v, math.Inf(1)) - v
+}

@@ -42,12 +42,12 @@ Question router (navigation, not authority):
 ## 1. Problem
 
 A molded part needs every wall that runs along the pull direction to lean
-away from the mold by a few degrees. decad today builds straight prisms only:
-`WithTaper` with a nonzero angle returns `ErrUnsupported` before commit
-(`extrude.go`), and no operation drafts the faces of a body that already
-exists (`docs/missing-features.md`, "Feature operations"). A caller proving a
-molded part therefore cannot model it, and `Verify`'s pull-direction survey
-has nothing to read.
+away from the mold by a few degrees. A straight prism's walls run parallel to
+the sweep, so a caller proving a molded part needs a tapered extrude and a
+draft of the faces of a body that already exists, and `Verify`'s
+pull-direction survey needs drafted walls to read. §14 states which of these
+build today and `docs/missing-features.md` ("Feature operations") lists the
+rest.
 
 The evaluator already builds exactly one drafted surface family: the cap-loop
 chamfer band of modify-reach §8.3, which joins a cap loop at one level to its
@@ -162,13 +162,13 @@ any evaluator?) and the sentinel that follows from it.
 
 | SD | The call asked for | Exists? | Sentinel |
 |---|---|---|---|
-| **SD1** | a taper that is not an angle, or not representable in radians | — | `ErrUnitKind` / `ErrNotFinite` (unchanged from today) |
+| **SD1** | a taper that is not an angle, or not representable in radians | — | `ErrUnitKind` / `ErrNotFinite`, as for a straight prism |
 | **SD2** | `|α| ≥ 90°`, or an angle whose certified cosine enclosure (`RadSinCosInterval`) reaches zero | no — a wall at a right angle to the axis sweeps nothing | `ErrDegenerate` |
 | **SD3** | a free-form walk in the section | yes | `ErrUnsupported` — the offset of a Bézier span is not a recorded kind; §12 names the chorded alternative and rejects it |
 | **SD4** | a corner where a circular walk meets its neighbour that the held-tangent rule classifies as a miter (not G1) | yes | `ErrUnsupported` — the junction is a conic; the ruled stand-in of modify-reach §8.3 is not scheduled here (§14) |
 | **SD5** | a circular walk whose far radius collapses: `offset2d.OffsetRadius` reports `ok == false` (`R ≤ d` for a round with the material inside under a positive taper; a hole wall under a negative one) | yes — the cone's apex lies inside the sweep and the body past it has another topology | `ErrUnsupported` (modify S11a) |
-| **SD6** | a far outer loop whose signed area has changed sign (modify S8) | no — the taper consumed the region | `ErrDegenerate` |
-| **SD7** | a far walk `offset2d.WalkConsumed` reports consumed — a line whose two miters have crossed | yes | `ErrUnsupported` (modify S11a) |
+| **SD6** | a far outer loop whose signed area has changed sign (modify S8), whose every walk the offset consumes (`offset2d.ErrLoopConsumed`) under a positive taper, or a far hole the audit decides lies outside the far outer loop (modify S9's decided row) | no — the taper consumed the region | `ErrDegenerate` |
+| **SD7** | a far walk `offset2d.WalkConsumed` reports consumed — a line whose two miters have crossed — where some walk of its loop survives, or a hole every walk of which is consumed | yes | `ErrUnsupported` (modify S11a) |
 | **SD8** | far loops that cross or make boundary contact at modify §5's scale-anchored floor (S7/S11b) — two walls closing on each other, a widened hole reaching the outer loop | yes | `ErrUnsupported` |
 | **SD9** | far loops whose nesting the containment classifier cannot decide (modify S9) | undecidable here | `ErrUnsupported` |
 | **SD10** | a far section that passes every audit at the held `d` and fails at the top of `d`'s span (§8.1; modify-reach §8.3.1's second audit) | undecidable here | `ErrUnsupported` |
@@ -176,7 +176,7 @@ any evaluator?) and the sentinel that follows from it.
 | **SD12** | a nonzero taper with `WithSurfaceResult` | yes | `ErrUnsupported` (staged, §14) |
 | **SD13** | a `d` that rounds to zero, a far vertex bit-identical to its near vertex, or a far radius bit-identical to its near radius (`capband.BandRadius`) | yes — float64 cannot name the far section at this scale | `ErrUnsupported` (modify-reach SX13) |
 | **SD14** | a far corner whose displacement enclosure cannot be built (`offset2d.ErrUnbounded`) | yes | `ErrUnsupported` (SX14) |
-| **SD15** | a corner whose two moved carriers have no intersection — a cusp (`|cross| ≤ tol`, `dot ≤ 0`) | yes | `ErrUnsupported` (`offset2d.ErrTopology`, modify S11's row) |
+| **SD15** | a corner whose two moved carriers have no intersection — a cusp (`|cross| ≤ tol`, `dot ≤ 0`) between two lines | yes | `ErrUnsupported` (`offset2d.ErrTopology`, modify S11's row) |
 | **SD16** | a wall patch whose outward orientation `fixPatchOrientation` cannot certify | yes | `ErrUnsupported` (SX15) |
 | **SD17** | `Draft` of a retired receiver, or of a sheet | — | `ErrRetiredBody`; a sheet as `Fillet`'s `refuseSheetOperand` refuses it |
 | **SD18** | `Draft` with a zero angle | it exists and is the receiver (modify S13) | `ErrDegenerate` |
@@ -186,15 +186,24 @@ any evaluator?) and the sentinel that follows from it.
 | **SD22** | a selected face parallel to the neutral plane — the other cap — or the neutral face itself | no — a face with no trace on the neutral plane has no line to tilt about | `ErrDegenerate` |
 | **SD23** | `Draft` of a receiver that is not a `prismPayload`, or whose section carries a displacement (`requireExactSection`), or that is itself a draft body | yes | `ErrUnsupported` (modify S3; a second draft is SX10's composition rule) |
 
+The sharp offset of a convex section past its collapse is the section
+point-reflected through a centre, which keeps its walk sense, so S8 never sees
+a square tapered past its apex; stage 4 reads that outer loop, every walk
+consumed, as SD6. Two concentric far circles never cross: past the closure of
+F7's ring the far hole lies outside the far outer loop, which is SD6 through
+the audit's decided nesting row, not SD8. No recorded profile holds a cusp
+between two lines, and a cusp at a circular walk is SD4 first, so Extrude never
+reaches SD15; `internal/offset2d/sharp_test.go` pins it.
+
 **Gate order.** Each stage needs the one before it, and where two gates read
 one constructed section the existence question is asked first (modify §4).
 
 | Stage | Gates, in order |
 |---|---|
-| 1 — the pre-gates | SD1, SD2; for `Draft`: SD17, SD18, SD19's cardinality |
-| 2 — the receiver and its inputs | `Draft`: SD23, SD20, SD19's kind rules, SD22, SD21. `Extrude`: the seam gates of core §7 (unchanged), SD11, SD12 |
+| 1 — the pre-gates | `Extrude`: the seam gates of core §7, then SD1, SD2 (the seam gates run first, as they do for SD1 on a straight prism). `Draft`: SD1, SD2, SD17, SD18, SD19's cardinality |
+| 2 — the receiver and its inputs | `Draft`: SD23, SD20, SD19's kind rules, SD22, SD21. `Extrude`: the extent's own validation (unchanged), SD11, SD12 |
 | 3 — the section's kinds | SD3; then per corner SD4 and SD15 |
-| 4 — the far section is built | the span of `d` (§8.1); SD5, SD7, SD13 as the walks are offset |
+| 4 — the far section is built | the span of `d` (§8.1); SD5, SD7 and SD6's consumed outer loop as the walks are offset, then SD13 |
 | 5 — the audit | SD6, then SD8, then SD9, over the far section at `d` |
 | 6 — the span re-audit | SD10 |
 | 7 — the patches | SD14, SD16 |
@@ -227,16 +236,23 @@ reads the record and not the surface.
    A corner at a circular walk that is not G1 is SD4.
 4. **Offset every loop sharply.** `offset2d.BuildSharpLoop(budget, walks, s,
    d, tol)` is `BuildLoop` with one change: a corner the rule would send to
-   the reflex-arc row takes the miter row instead. Its corner table is §2's.
-   A missing miter root is SD15; a collapsed radius is SD5; a consumed walk is
-   SD7. The result is `Q` as `[]CurveSegment` per loop, assembled into a
-   `ProfileRecord` with the same loop order as `P`.
+   the reflex-arc row takes the miter row instead. Its corner table is §2's,
+   and it returns the joins beside the record for SD13's corner test. A
+   missing miter root is SD15; a collapsed radius is SD5; a consumed walk is
+   SD7, and a loop whose every walk is consumed is `offset2d.ErrLoopConsumed`
+   (SD6 for the outer loop under a positive taper). The result is `Q` as
+   `[]CurveSegment` per loop, assembled into a `ProfileRecord` with the same
+   loop order as `P`.
 5. **Audit `Q`** with `auditOffsetSectionBudget` (modify §5): SD6, SD8, SD9.
    Re-run steps 4–5 at the top of `d`'s span (`auditCapBlendSetbackSpan`'s
    rule): SD10.
-6. **Enclose the far corners.** `offset2d.SectionDeltaFromWalks` over the
-   span gives `farDelta`, the far section's proven displacement; a corner it
-   cannot enclose is SD14.
+6. **Enclose the far corners.** `capband.ContourDisplacement`
+   (`capcontour.Displacement` over the sharp joins, across the span of `d`)
+   gives each loop's far
+   contour displacement, and the payload's `farDelta` is the largest; a
+   corner it cannot enclose is SD14. `offset2d.SectionDeltaFromWalks` is not
+   used: it re-derives the joins by the shell's rule, which closes a reflex
+   corner with an arc the sharp offset never builds.
 7. **Build the caps** with the prism's cap builder over `P` at its level and
    over `Q` at the far level. The far cap's vertices carry `farDelta` beside
    their frame-lift rounding (evaluator §5's `liftedVertex`), as the cap-blend
@@ -254,6 +270,16 @@ reads the record and not the surface.
 9. **Stamp roles and convexity**: `side(i, j)` per walk, `capStart`/`capEnd`,
    lateral edges convex by the walk's turn.
 10. **Measure** (§8), then commit.
+
+Steps 7–9 run through the cap-loop band itself. `draftPayload.band()` is a
+`capBlendPayload` view with every loop chamfered on the far cap, `dc = d`
+across the cap and `ds = h` down the sweep, so the band's side level is the
+sketch plane and no straight slab remains. Its `draft` flag makes
+`buildCapBand` (`capblend_geom.go`) take the sharp joins
+(`offset2d.SharpJoinsBudget`), stamp `side(i, j)` roles, give rulings and far
+rims the prism's convexity, and flip the axial half of the orientation
+reference for a negative taper. The near rim is `draftNearRim`'s: the bottom
+rim `buildLoopSidesAs` builds for a prism's wall, at the sketch plane.
 
 `Body.Draft` reaches step 1 with the receiver's record and placement after its
 own gates (§10), and builds the identical body `Extrude` would build from the
@@ -291,6 +317,15 @@ are not provably one point, exactly as the band does. The chord-versus-locus
 term (`ChordLocusVolumeAllow`) is read and is zero, because both windows of
 every Cone patch coincide; an implementer keeps the call and asserts the zero
 rather than omitting the term.
+
+**The wall normal.** `Face.NormalAt` on a draft wall adds one term a chamfer
+band's patch does not carry: the turn between the built wall and the wall the
+taper denotes, since the far rim sits within the contour displacement of the
+denoted one. A Plane wall's tag passes through its exact near edge and one far
+corner, and moving that corner by `e` turns the normal by at most `2|e|/h`; a
+Cone wall's half angle moves by at most `(e_r + |Δr|·e_z/h)/h`.
+`draftDenotedNormalAllow` charges `2·(δ + δ_z·max(1, |Δr|/h))/h` with `h` at
+the bottom of its span.
 
 **Exactness.** A draft measurement is `Exact` only where every term of it is
 exactly representable. The tangent of the taper is a certified enclosure of
@@ -450,16 +485,21 @@ the red run's failing assertion in the test's comment, and restores the leg.
 | F5 flare | F1 with `α = −5°` | `Volume = h(a² + 2ad + 4d²/3)`; far vertices at `±(a/2 + d)` |
 | F6 against | F1 with `Against` | the far cap at `z = −h` and `capStart`; volume as F1 |
 | F7 ring | annulus `R = 10`, `r = 4`, `h = 10`, `α = 5°` | `Volume = πh[R² − r² − d(R + r)]`: the hole widens; the hole wall is a `Cone` opening toward the far end, its rims concave |
-| F8 far origin | F1 and F3 on a sketch plane whose origin is `(10⁶ + 0.1, 0.1, 0)` and under a rotation placement | every vertex's published bound covers the exact rational lift (the `apitest/vertex_frame_origin_test.go` pattern); F3's volume bound covers its closed form |
+| F8 far origin | F1 and F3 on a sketch plane whose origin is `(10⁶ + 0.1, 0.1, 0)` and under a rotation placement; F3 drawn at `v = 10⁶` in the plane | every vertex's published bound covers the exact rational lift (the `apitest/vertex_frame_origin_test.go` pattern); F1's volume and area and F3's volume bounds cover their closed forms; the slot at `v = 10⁶` covers its volume, its centroid and each straight wall's denoted normal |
 | F9 placed equivalence | F1 built, then `Placed` under a translation and a rotation | volume, area and centroid equal the unplaced readings within bounds; `Bounds` covers the placed box |
+| F10 tangent span | F1 with `a = 2` | each far corner `a/2 − d`, a Sterbenz subtraction exact for the held `d`, lies within its bound of the exact corner the stated taper denotes |
 
 **Refusal fixtures**, one per SD row that `Extrude` can reach, each asserting
 `errors.Is` on the sentinel and that `Document.Bodies()` is unchanged: SD2
 (`90°`), SD3 (a spline wall), SD4 (a semicircular bite meeting its lines at
-right angles), SD5 (F2 with `α` such that `d ≥ R`), SD6 (F1 with `d ≥ a/2`),
-SD7 (a thin rectangle whose short walls' miters cross), SD8 (F7 with `d`
-closing the ring), SD11 (`Symmetric`, `ToFace`, `ThroughAll`), SD12, SD13 (an
-angle of `1e-14°` on a 1 mm sweep), SD15 (a cusp).
+right angles), SD5 (F2 with `α` such that `d ≥ R`), SD6 (F1 with `d ≥ a/2`,
+and F7 with `d` closing the ring), SD7 (a thin rectangle whose short walls'
+miters cross), SD8 (a plate whose off-centre hole widens across the outer
+wall), SD11 (`Symmetric`, `ToFace`, `ThroughAll`), SD12, SD13 (an angle of
+`1e-14°` on a 1 mm sweep). SD15 is pinned in `internal/offset2d/sharp_test.go`
+(§5). Beside them, the draft body's downstream refusals: `Fillet`, `Chamfer`
+and `Shell` refuse it by name (DD14), `Tessellate` through its default (DD1),
+and `MirroredCopy` builds it (DD12).
 
 **`Draft` fixtures** (`apitest/draft_test.go`, `draft_internal_test.go`):
 
@@ -486,11 +526,12 @@ undecided; F7's hole wall clear along `+e`.
 
 | Leg | Deleted | Goes red on |
 |---|---|---|
-| `farDelta` in the volume (`SweptVolumeAllow`) | the composition after the flux sum | F8's F3 at `v = 10⁶` |
-| `dDelta` in the corner enclosures | `OffsetAmount`'s span, replaced by the point `d` | F8's F1 under a degree angle at the far origin |
-| the tangent enclosure | `RadSinCosInterval` replaced by `math.Tan` | the `internal/proofbound` unit test against a 60-digit `big.Float` series reference |
-| the closure sliver | `ClosureOf` omitted | F8's F3 (the held G1 feet) |
-| the far cap's `sectionDisplacementArea` | omitted | F8's F1 area |
+| `farDelta` in the volume (`SweptVolumeAllow`) | the composition after the flux sum | F1, F6 and F8's placed F1 volumes |
+| `dDelta` in the corner enclosures | the band's `dcDelta`, so the span is the point `d` | F10: every far corner reads `Exact` with a zero bound about `1.1e-16` from its exact point |
+| the tangent enclosure | `RadTanSpan` replaced by the point `math.Tan` | `TestRadTanSpanEnclosesSeriesReference` against a 75-digit `big.Float` series reference |
+| the closure sliver | `ClosureOf`'s result omitted | no fixture: F3's axis-aligned slot holds no sliver, and a slanted slot's slivers sit four orders below the far contour's volume term |
+| the far cap's `sectionDisplacementArea` | omitted | F6's far cap area |
+| the wall normal's denoted term (`draftDenotedNormalAllow`) | omitted | F8's slot at `v = 10⁶`: a straight wall publishes a `2.2e-16` bound `3.3e-12` from its denoted normal |
 | DD6's diameter arm | omitted | every F fixture under `Verify` (`DiagToleranceReferenceUnavailable`) |
 
 ## 12. Do not do this
@@ -567,7 +608,7 @@ every new root file. This document ships with PR 1.
 
 | PR | Lands | Files and functions | Proves | After |
 |---|---|---|---|---|
-| **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `transform`/`placed`; `draft_build.go` (§7); `draft_moments.go` (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class; `Tessellate` refuses the class through its default | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `draft_payload.go`, `draft_build.go`, `draft_moments.go`, `extrude.go`, `verify_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `draft_build_internal_test.go`, `internal/offset2d/sharp_test.go`, `examples/decad_extrude_taper_example_test.go` | F1–F9 and the SD refusals of §11; the fail-first legs | — |
+| **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `transform`/`placed`; `draft_build.go` (§7); `draft_moments.go` (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class; `Tessellate` refuses the class through its default | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `draft_payload.go`, `draft_build.go`, `draft_moments.go`, `extrude.go`, `capblend*.go` (the band's `draft` view), `verify_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `draft_build_internal_test.go`, `internal/offset2d/sharp_test.go`, `examples/decad_extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
 | **2** | tessellation and the mesh volume proof (DD1), which opens DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `tessellate_draft.go`, `tessellate.go` (dispatch), `mass_properties.go` (the mesh path needs no arm), `motion_bound.go`, `apitest/draft_mesh_test.go`, `tessellate_draft_internal_test.go` | the PR 2 fixtures | 1 |
 | **3** | `Body.Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `docs/api-design.md` §8/§12, `apitest/draft_test.go`, `draft_internal_test.go`, `examples/decad_draft_example_test.go` | D1–D5 | 1 |
 | **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
@@ -580,13 +621,13 @@ tier; PRs 3 and 5 are file-by-file plans over PR 1's builder.
 
 Increment table — what still refuses after each PR:
 
-| After | Still refused |
-|---|---|
-| 1 | every draft body's tessellation, boolean, export, mass and interference reading (DD1's dependants); `Body.Draft` (no entry point); surveys `Suspect`; SD3, SD4, SD11, SD12 |
-| 2 | `Body.Draft`; surveys `Suspect`; SD3, SD4, SD11, SD12 |
-| 3 | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21 |
-| 4 | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20, SD21 |
-| 5 | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
+| After | State | Still refused |
+|---|---|---|
+| 1 | landed | every draft body's tessellation, boolean, export, mass and interference reading (DD1's dependants); `Body.Draft` (no entry point); surveys `Suspect`; SD3, SD4, SD11, SD12 |
+| 2 | planned | `Body.Draft`; surveys `Suspect`; SD3, SD4, SD11, SD12 |
+| 3 | planned | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21 |
+| 4 | planned | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20, SD21 |
+| 5 | planned | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
 
 The unscheduled reach, in the order a later design should take it: the
 drafted shell (DD14, the molded cup), the two-sided extents and the interior

@@ -100,7 +100,7 @@ the rules leave to the byte budget.
 |---|---|
 | `topology.go` | Topology types from `Body` to `Vertex`; aliases for `internal/surfacegeom/`. See evaluator §3. |
 | `document.go` | `Document`: live body set, commit, `Remove`, liveness gates, placement and duplication. See evaluator §8. |
-| `mirror.go` | The sealed `MirrorPlane` vocabulary and `Mirrored`/`MirroredCopy` over `Placed`/`PlacedCopy`. See `docs/mirror-pattern-design.md` §4. |
+| `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
 | `mirror_join.go` | `WithJoin` adapters and section audit. See mirror-pattern §5. |
 | `pattern.go` | Pattern entry points and payload adapters. See mirror-pattern §6. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, shared shell/lump helpers, free-edge chain counts. See surface §2-§4, §7, §11. |
@@ -115,10 +115,13 @@ the rules leave to the byte budget.
 | `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |
 | `stitch_flux.go` | Stitch face flux, mass and tag adapters. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split and placement. See surface §6.5. |
-| `extrude.go` | `Document.Extrude`, `WithTaper`, and linear-extent resolution into a `linearSweep`. See evaluator §5. |
-| `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, and span payloads. See `docs/sweep-design.md` and `docs/surface-design.md` §4. |
+| `extrude.go` | `Document.Extrude`, `WithTaper`, linear-extent resolution. See evaluator §5. |
+| `draft_payload.go` | `draftPayload`, its band view and offset span. See draft §6, §8.1. |
+| `draft_build.go` | Tapered extrude gates and assembly. See draft §5, §7. |
+| `draft_moments.go` | Draft body measurements. See draft §8. |
+| `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, span payloads. See sweep design. |
 | `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
-| `sweep_composite.go` | Composite Sweep join topology, boundary audit and cap omission. See sweep PR 4 and surface §4. |
+| `sweep_composite.go` | Composite Sweep join topology, boundary audit, surface-result caps. See sweep PR 4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and combined body measurements. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Composite Sweep adjacent-span and remote-span separation proofs. See `docs/sweep-design.md` §7. |
 | `sweep_mitre.go` | Mitred options, entry adapters, payload, placement and restatement. See sweep §16. |
@@ -128,9 +131,9 @@ the rules leave to the byte budget.
 | `coil_build.go` | The coil's held shell: stations, β, triangles, orientation, audit. See helix §5. |
 | `coil_body.go` | The coil's Table CB topology and Table CM readings. See helix §6–§7. |
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
-| `prism_payload.go` | `prismPayload`, its coordinate readings and envelopes. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
-| `prism_build.go` | `evalPrismContext`, caps, and side faces with displacement bounds. See `docs/evaluator-design.md` §5. |
-| `prism_extent.go` | Prism extent readings, directional reach and box, each a bounded interval. See `docs/evaluator-design.md` §5. |
+| `prism_payload.go` | `prismPayload`, coordinate readings, envelopes. See evaluator §5. |
+| `prism_build.go` | `evalPrismContext`, caps, and side faces. See evaluator §5. |
+| `prism_extent.go` | Prism extent readings, reach and box. See evaluator §5. |
 | `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
@@ -167,7 +170,7 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `capblend.go` | Complete-cap-loop chamfer: `capBlendPayload`, selection classification, build gates. See modify-reach §8.3/§4. |
-| `capblend_geom.go` | `buildCapBand`: trimmed side walls, cap faces, Plane/Cone band patches. See modify-reach §8.3. |
+| `capblend_geom.go` | `buildCapBand`: band patches and cap edges, also a draft's walls. See modify-reach §8.3. |
 | `capblend_contour.go` | Adapts built corner and edge records to `internal/capband/` contour and closure proofs. |
 | `capblend_centroid.go` | Cap-blend first moments and bounds. See modify-reach §8.4. |
 | `capblend_moments.go` | `evalCapBlendContext`: the cap-blend body and its area/volume. See modify-reach §8.4. |
@@ -255,7 +258,7 @@ the rules leave to the byte budget.
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
-| `tessellate_capblend.go` | `tessellateCapBlend`, the cap-loop chamfer mesh over `internal/tessellation/` rings. See tessellation reach §7. |
+| `tessellate_capblend.go` | The cap-loop chamfer mesh. See tessellation reach §7. |
 | `export/` | STL, OBJ, 3MF and AP214 writers. See `docs/step-export-design.md`, `docs/3mf-export-design.md`. |
 
 ### Repository
@@ -317,7 +320,7 @@ the rules leave to the byte budget.
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
-| `internal/offset2d/` | Offset carriers, joins and displacement proofs. See modify §6–§9, shell-opening §3–§5. |
+| `internal/offset2d/` | Offset carriers, joins, sharp loops and displacement proofs. See modify §6–§9, shell-opening §3–§5, draft §2. |
 | `internal/capband/` | Cap-band contour, held patch, radius, window, miter locus and mass proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |

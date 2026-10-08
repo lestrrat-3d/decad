@@ -110,7 +110,7 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	if err != nil {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
-	capBoundary, err := capLoopBoundary(ctx, loop, setback.dc)
+	capBoundary, err := cbp.contourOf(ctx, loop, setback.dc)
 	if err != nil {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
