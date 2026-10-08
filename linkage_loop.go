@@ -544,11 +544,6 @@ type loopScene struct {
 	slideDriver bool
 }
 
-// zero is the driver range E0 asks: the floats outward from offset's ends.
-func (sc *loopScene) zero() (float64, float64) {
-	return loopchain.ZeroRange(sc.offset)
-}
-
 // scenePin is one loop pin's sketch point, its world position, and the
 // enclosure of its exact plane position in the document: one exact value per
 // coordinate on a coordinate-axis loop.
