@@ -13,7 +13,7 @@ import (
 //
 // A switch on WalkKind MUST be total. A consumer that cannot yet handle
 // WalkFreeform refuses before building an analytic face: where it needs a walk
-// it uses requireAnalyticWalk, and where no resolution can contribute it gates
+// it uses boundarywalk.RequireAnalyticWalk, and where no resolution can contribute it gates
 // the recorded free-form kind before walkOf.
 type WalkKind uint8
 
@@ -114,13 +114,13 @@ type SegmentWalk struct {
 	// are zero for every other kind.
 	//
 	// The chain is SHARED and MUST NOT be mutated in place. A SegmentWalk
-	// copies only the slice header, so every reader of one profileWalks set
+	// copies only the slice header, so every reader of one ProfileWalks set
 	// holds the same ratPoints: the build (buildLoopSidesAs), the tessellation
 	// (chordLoop), the extent readings, and a rigid re-evaluation that reads
 	// the published set back. Writing through any of them writes through all
 	// of them.
 	//
-	// The guard cannot catch such a write. profileWalks.reusable decides on
+	// The guard cannot catch such a write. ProfileWalks.Reusable decides on
 	// matches, which compares the RECORD by float bits and never inspects the
 	// walks, so a mutated set still reads back as the resolution of its own
 	// record. The corruption would also be quiet rather than loud: a

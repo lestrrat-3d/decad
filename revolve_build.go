@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
@@ -802,7 +803,7 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 		if err != nil {
 			return revolveWalks{}, err
 		}
-		if err := requireAnalyticWalk(w, what); err != nil {
+		if err := boundarywalk.RequireAnalyticWalk(w, what); err != nil {
 			return revolveWalks{}, err
 		}
 		plane[i] = w
@@ -1498,7 +1499,7 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 		if err != nil {
 			return revolveWalks{}, err
 		}
-		if err := requireAnalyticWalk(w, "the revolve wall build"); err != nil {
+		if err := boundarywalk.RequireAnalyticWalk(w, "the revolve wall build"); err != nil {
 			return revolveWalks{}, err
 		}
 		plane[i] = w

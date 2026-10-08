@@ -126,7 +126,6 @@ the rules leave to the byte budget.
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
 | `prism_payload.go` | `prismPayload`, its coordinate readings and envelopes. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces with displacement bounds. See `docs/evaluator-design.md` §5. |
-| `segment_walk.go` | Caches profile walks for extrude, revolve and loft. |
 | `segment_walk_adapters.go` | Adapts root walk callers to `internal/boundarywalk/`. |
 | `prism_extent.go` | Prism extent readings, directional reach and box, each a bounded interval. See `docs/evaluator-design.md` §5. |
 | `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
@@ -290,7 +289,7 @@ the rules leave to the byte budget.
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
 | `internal/sweepmitre/` | Mitred profile gates, exact sections and measurements. See sweep §16. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
-| `internal/momentinput/` | Owns profile records, validation and measurements. See evaluator §4 and spline §5.2. |
+| `internal/momentinput/` | Owns profile records, validation, measurements and the profile walk cache. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Chords, prism/cup topology, mesh bounds, cap-blend rings, audits and chording refusal errors. |

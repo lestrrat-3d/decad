@@ -856,7 +856,7 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 // not merely un-disproven.
 //
 // NO FREE-FORM REFUSAL IS NEEDED HERE. rejectInteriorContact
-// (revolve_axis.go) calls requireAnalyticWalk on every segment before its own
+// (revolve_axis.go) calls boundarywalk.RequireAnalyticWalk on every segment before its own
 // circularity check, and resolveAxisSide runs on every revolve build
 // (revolve.go). So a revolvePayload that built at all already has an
 // all-analytic profile and can never carry a free-form face — adding a

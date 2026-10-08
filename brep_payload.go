@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -396,7 +397,7 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 		if err != nil {
 			return survey2d.SegmentWalk{}, err
 		}
-		if err := requireAnalyticWalk(w, "a brep face"); err != nil {
+		if err := boundarywalk.RequireAnalyticWalk(w, "a brep face"); err != nil {
 			return survey2d.SegmentWalk{}, err
 		}
 		return w, nil

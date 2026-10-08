@@ -5,7 +5,9 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -37,13 +39,13 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 		captures := make([]chainWalkCapture, len(payload.chains))
 		for ci, chain := range payload.chains {
 			for _, segment := range chain.Segments {
-				before, beforeRecon := workSpent(work)
+				before, beforeRecon := boundarywalk.WorkSpent(work)
 				walk, err := walkOf(segment, work)
 				require.NoError(t, err)
-				after, afterRecon := workSpent(work)
+				after, afterRecon := boundarywalk.WorkSpent(work)
 				captures[ci].walks = append(captures[ci].walks, walk)
 				captures[ci].charges = append(captures[ci].charges,
-					walkReadCharge{after - before, afterRecon - beforeRecon})
+					momentinput.WalkReadCharge{Spent: after - before, ReconstructionSpent: afterRecon - beforeRecon})
 			}
 		}
 		cachedWork, freshWork := *work, *work
@@ -77,10 +79,10 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 		for ci, chain := range payload.chains {
 			for si, segment := range chain.Segments {
 				charge := captures[ci].charges[si]
-				if charge.spent <= 1 {
+				if charge.Spent <= 1 {
 					continue
 				}
-				near := freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - charge.spent + 1}
+				near := freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - charge.Spent + 1}
 				cachedNear, freshNear := near, near
 				_, cachedErr := resolveOrRead(segment, &cachedNear, cachedWalks, ci, si)
 				_, freshErr := walkOf(segment, &freshNear)

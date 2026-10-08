@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -369,16 +370,16 @@ func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
 // own reuse: handed the resolution the build published, chordLoop returns the
 // chording it produces from a fresh resolution, field for field, and it does
 // NOT spend the resolution's charge a second time. The two counters differ by
-// exactly resolveProfileWalks' own figure for this record, which proves the
+// exactly momentinput.ResolveProfileWalks' own figure for this record, which proves the
 // arc-length bracketing was skipped rather than merely repeated more cheaply —
 // everything else the chording charges (freeform.ChainStations over the same Bézier
 // chain) is spent by both runs alike.
 func TestChordLoopReadsResolvedWalks(t *testing.T) {
 	t.Parallel()
 	profile := involuteFitProfile()
-	pw, err := resolveProfileWalks(profile, freeform.NewFreeformWork())
+	pw, err := momentinput.ResolveProfileWalks(profile, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	require.Greater(t, pw.spent, uint64(0), "premise: resolving this record costs free-form work")
+	require.Greater(t, pw.Spent, uint64(0), "premise: resolving this record costs free-form work")
 
 	// One face for every wall, so the two chordings' faceOf slices compare as
 	// the same pointers and the comparison below is about the geometry.
@@ -395,7 +396,7 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, want, got, "reading the published walks must give the resolve-every-segment chording")
-	require.Equal(t, direct.Spent-pw.spent, replay.Spent,
+	require.Equal(t, direct.Spent-pw.Spent, replay.Spent,
 		"the chording that read the walks back must spend everything EXCEPT the resolution's own charge")
 	require.Equal(t, direct.ReconstructionSpent, replay.ReconstructionSpent,
 		"a walk resolution charges no reconstruction work, so both runs spend the same")
@@ -407,7 +408,7 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 // own refusal, on the same exact-comparison terms.
 func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 	t.Parallel()
-	pw, err := resolveProfileWalks(involuteFitProfile(), freeform.NewFreeformWork())
+	pw, err := momentinput.ResolveProfileWalks(involuteFitProfile(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	other := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
@@ -418,7 +419,7 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 	face := &Face{}
 	_, err = chordLoop(t.Context(), other.Outer, 0.2, 5, freeform.NewFreeformWork(), pw, 0,
 		func(survey2d.SideWalk) (*Face, error) { return face, nil })
-	require.ErrorIs(t, err, errResolvedWalksMismatch)
+	require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -434,7 +435,7 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 	body, err := evalPrism(New(), 0, involuteFitPrismPayload(t), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	published := prismPayloadOf(t, body)
-	require.True(t, published.walks.reusable(published.profile),
+	require.True(t, published.walks.Reusable(published.profile),
 		"premise: the build published a resolution of this very record")
 
 	tol := units.Millimeters(0.2)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 
@@ -230,7 +231,7 @@ func (ax axisFrame) auditAxisContact(profile ProfileRecord, work *freeform.Freef
 		if err != nil {
 			return survey2d.SegmentWalk{}, err
 		}
-		if err := requireAnalyticWalk(w, "the revolve axis-contact audit"); err != nil {
+		if err := boundarywalk.RequireAnalyticWalk(w, "the revolve axis-contact audit"); err != nil {
 			return survey2d.SegmentWalk{}, err
 		}
 		return w, nil

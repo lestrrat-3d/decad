@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -619,22 +621,22 @@ func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (proofbound.Walk
 // gates it on pp.sectionDelta != 0, which no construction but this design's
 // Trim ever sets, so an ordinary ribbon keeps resolving through walkOf with
 // no augmentation.
-func trimBoundsWalks(profile ProfileRecord, work *freeform.FreeformWork) (*profileWalks, error) {
-	before, beforeRecon := workSpent(work)
+func trimBoundsWalks(profile ProfileRecord, work *freeform.FreeformWork) (*momentinput.ProfileWalks, error) {
+	before, beforeRecon := boundarywalk.WorkSpent(work)
 	outer, holes, err := prismcells.TrimBoundsWalks(profile.Outer, profile.Holes, func(seg CurveSegment) (survey2d.SegmentWalk, error) {
 		return walkOf(seg, work)
 	})
 	if err != nil {
 		return nil, err
 	}
-	after, afterRecon := workSpent(work)
-	return &profileWalks{
-		profile:             profile,
-		outer:               outer,
-		holes:               holes,
-		spent:               after - before,
-		reconstructionSpent: afterRecon - beforeRecon,
-		metered:             true,
+	after, afterRecon := boundarywalk.WorkSpent(work)
+	return &momentinput.ProfileWalks{
+		Profile:             profile,
+		Outer:               outer,
+		Holes:               holes,
+		Spent:               after - before,
+		ReconstructionSpent: afterRecon - beforeRecon,
+		Metered:             true,
 	}, nil
 }
 

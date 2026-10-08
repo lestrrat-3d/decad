@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -165,7 +166,7 @@ func sectionMomentInputs(ig regionIntegrals) massmoment.SectionInputs {
 // within their own displacement of h/2 from zm.
 func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbound.RatInterval, h *big.Rat) (*big.Rat, *big.Rat, error) {
 	work := freeform.NewFreeformWork()
-	walks, err := resolveProfileWalks(pp.profile, work)
+	walks, err := momentinput.ResolveProfileWalks(pp.profile, work)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -174,7 +175,7 @@ func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbo
 	}
 	count := 0
 	perimeter := 0.0
-	for _, loop := range append([][]survey2d.SegmentWalk{walks.outer}, walks.holes...) {
+	for _, loop := range append([][]survey2d.SegmentWalk{walks.Outer}, walks.Holes...) {
 		for _, w := range loop {
 			count++
 			perimeter = proofbound.AbsSumUpper(perimeter, w.Length, w.LengthBound)

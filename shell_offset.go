@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 
@@ -174,7 +175,7 @@ func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, err
 		if err != nil {
 			return LoopRecord{}, err
 		}
-		if err := requireAnalyticWalk(w, "the shell section offset"); err != nil {
+		if err := boundarywalk.RequireAnalyticWalk(w, "the shell section offset"); err != nil {
 			return LoopRecord{}, err
 		}
 		walks[i] = w

@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -36,7 +37,7 @@ type patchPayload struct {
 	profile ProfileRecord
 	frame   r3.Frame
 	xform   r3.Transform
-	walks   *profileWalks
+	walks   *momentinput.ProfileWalks
 }
 
 // transform is the accumulated rigid placement.
@@ -136,16 +137,16 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 	prismView := pp.prism()
 
 	// pw resolves every boundary segment's walk exactly once for this whole
-	// build (segment_walk.go's profileWalks doc comment), read back by every
+	// build (internal/momentinput/profile_walks.go), read back by every
 	// buildPatchLoop call below instead of each one resolving afresh — the
 	// same reuse evalPrismContext runs for its own loops.
 	pw := pp.walks
-	if pw.reusable(pp.profile) {
-		if err := pw.charge(work); err != nil {
+	if pw.Reusable(pp.profile) {
+		if err := pw.Charge(work); err != nil {
 			return nil, err
 		}
 	} else {
-		resolved, err := resolveProfileWalks(pp.profile, work)
+		resolved, err := momentinput.ResolveProfileWalks(pp.profile, work)
 		if err != nil {
 			return nil, err
 		}
@@ -230,8 +231,8 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 // pp is patchPayload.prism()'s zero-height view. holeLoop is li != 0, the
 // same convention buildLoopSides derives it by. resolved is pp.profile's
 // pre-resolved segment walks, or nil to resolve each segment through walkOf
-// as before (segment_walk.go's profileWalks doc comment).
-func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecord, work *freeform.FreeformWork, resolved *profileWalks) ([]coedge, error) {
+// as before (internal/momentinput/profile_walks.go).
+func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks) ([]coedge, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -242,10 +243,10 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 
 	var loopWalks []survey2d.SegmentWalk
 	if resolved != nil {
-		if !resolved.loopMatches(li, loop) {
-			return nil, errResolvedWalksMismatch
+		if !resolved.LoopMatches(li, loop) {
+			return nil, momentinput.ErrResolvedWalksMismatch
 		}
-		loopWalks = resolved.loopWalks(li)
+		loopWalks = resolved.LoopWalks(li)
 	}
 
 	raw := make([]survey2d.SideWalk, len(loop.Segments))

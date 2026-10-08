@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -121,7 +122,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		walks += len(loop.Segments)
 	}
 	// pw resolves every boundary segment's walk exactly ONCE for this whole
-	// build (segment_walk.go's profileWalks doc comment): buildLoopSides below,
+	// build (internal/momentinput/profile_walks.go): buildLoopSides below,
 	// prismCentroidGeometryBound and prismBoundsContext's three per-axis
 	// extentBoundedAlong calls all read it back instead of each calling
 	// walkOf itself, which is what let one free-form segment's §5.2 charge be
@@ -134,12 +135,12 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// decides, and it accepts only a set resolved from a bit-identical record
 	// that measured its own charge; anything else resolves here as before.
 	pw := pp.walks
-	if pw.reusable(pp.profile) {
-		if err := pw.charge(work); err != nil {
+	if pw.Reusable(pp.profile) {
+		if err := pw.Charge(work); err != nil {
 			return nil, err
 		}
 	} else {
-		resolved, err := resolveProfileWalks(pp.profile, work)
+		resolved, err := momentinput.ResolveProfileWalks(pp.profile, work)
 		if err != nil {
 			return nil, err
 		}
@@ -503,10 +504,10 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 // every other a hole (material outside).
 //
 // resolved is pp.profile's pre-resolved segment walks, or nil to resolve each
-// segment through walkOf as before (this file's profileWalks doc comment).
+// segment through walkOf as before (internal/momentinput/profile_walks.go).
 // buildLoopSides's own li IS resolved's loop index here — li walks the same
 // append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) order a
-// *profileWalks was resolved from — so it is passed straight through as
+// *momentinput.ProfileWalks was resolved from — so it is passed straight through as
 // buildLoopSidesAs's roleLoop, which resolved is read against.
 //
 // mintCurveTokens is the CURVE half of the shared-denotation certificate's
@@ -515,7 +516,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 // straight-prism build, false from every other caller (shell_cup.go,
 // capblend_moments.go), which mint no curve identity for their own rim and
 // so keep every certificate check refusing by default.
-func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeform.FreeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
+func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
 	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens)
 }
 
@@ -527,14 +528,14 @@ func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPay
 // (holeLoop false) — a pairing the natural li != 0 rule cannot express
 // (docs/modify-design.md §9).
 //
-// resolved is a *profileWalks whose loop index roleLoop holds this loop's
+// resolved is a *momentinput.ProfileWalks whose loop index roleLoop holds this loop's
 // pre-resolved walks, or nil to resolve each segment through walkOf as
 // before. A non-nil resolved whose loop at roleLoop was not resolved from
-// exactly this loop's recorded segments (loopMatches — the segments
+// exactly this loop's recorded segments (LoopMatches — the segments
 // themselves, not their count) is a plumbing bug and refuses rather than
 // silently resolving anyway — the only caller that ever passes non-nil is
 // buildLoopSides from evalPrismContext, where roleLoop already IS the loop
-// index the *profileWalks was resolved at.
+// index the *momentinput.ProfileWalks was resolved at.
 //
 // levelZ0 and levelZ1 are the LEVEL half of the shared-denotation certificate
 // (denotation.go), minted once per build by the caller's own evalPrismContext
@@ -551,7 +552,7 @@ func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPay
 // what keeps two separate builds from ever sharing one (denotation.go).
 // False for every OTHER caller of this function, which mints no curve
 // identity for their own rim.
-func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeform.FreeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
+func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
 	mintCurve := func() curveToken {
 		if !mintCurveTokens {
 			return curveToken{}
@@ -566,10 +567,10 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	}
 	var loopWalks []survey2d.SegmentWalk
 	if resolved != nil {
-		if !resolved.loopMatches(roleLoop, loop) {
-			return nil, nil, nil, proofbound.BoundedScalar{}, errResolvedWalksMismatch
+		if !resolved.LoopMatches(roleLoop, loop) {
+			return nil, nil, nil, proofbound.BoundedScalar{}, momentinput.ErrResolvedWalksMismatch
 		}
-		loopWalks = resolved.loopWalks(roleLoop)
+		loopWalks = resolved.LoopWalks(roleLoop)
 	}
 	// Every coordinate this loop's walks read sits within the payload's own
 	// section displacement of the section it denotes, so each walk's length, each
@@ -592,7 +593,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		// unequal-weight NURBS, or an elliptical arc) refuses inside walkOf
 		// itself (freeformBezierSpans, Table R R2/R10) — this build stages no
 		// gate of its own ahead of it any more (§10 P4b retires R6). A
-		// resolved walk was already through walkOf once (resolveProfileWalks),
+		// resolved walk was already through walkOf once (momentinput.ResolveProfileWalks),
 		// so it carries the same refusal already surfaced there.
 		var w survey2d.SegmentWalk
 		if loopWalks != nil {

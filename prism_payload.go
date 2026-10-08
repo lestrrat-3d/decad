@@ -4,7 +4,9 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -74,7 +76,7 @@ import (
 // published by the evaluation that built the body and carried through every
 // rigid re-evaluation of it (placed). It is a pure cache: it holds nothing the
 // record does not already determine, nothing placement-dependent, and every
-// read of it is guarded by profileWalks.reusable, so a payload whose profile
+// read of it is guarded by momentinput.ProfileWalks.reusable, so a payload whose profile
 // differs by one float bit resolves afresh. A payload a caller draws directly —
 // a plain extrude, a modify rewrite, a boolean result — leaves it nil and
 // resolves as before. See docs/evaluator-design.md §8.
@@ -88,7 +90,7 @@ type prismPayload struct {
 	blendSegs     []map[int]struct{}
 	blendKind     string
 	sectionDelta  float64
-	walks         *profileWalks
+	walks         *momentinput.ProfileWalks
 	surfaceResult bool
 }
 
@@ -150,13 +152,13 @@ func vecL1(v r3.Vec) float64 {
 }
 
 // walks is the profile's pre-resolved segment walks (docs/spline-design.md
-// §5.2, this file's profileWalks doc comment), or nil to resolve each segment
+// §5.2, this file's momentinput.ProfileWalks doc comment), or nil to resolve each segment
 // through walkOf as before. A non-nil walks that was not resolved from THIS
 // profile — the recorded segments compared, not their count — is a plumbing
 // bug and refuses rather than silently resolving anyway.
-func profileCoordinateUpper(profile ProfileRecord, work *freeform.FreeformWork, walks *profileWalks) (float64, error) {
-	if walks != nil && !walks.matches(profile) {
-		return 0, errResolvedWalksMismatch
+func profileCoordinateUpper(profile ProfileRecord, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, error) {
+	if walks != nil && !walks.Matches(profile) {
+		return 0, momentinput.ErrResolvedWalksMismatch
 	}
 	upper := 0.0
 	for li, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
@@ -165,7 +167,7 @@ func profileCoordinateUpper(profile ProfileRecord, work *freeform.FreeformWork, 
 			if err != nil {
 				return 0, err
 			}
-			if err := requireAnalyticWalk(w, "a placed cap frame"); err != nil {
+			if err := boundarywalk.RequireAnalyticWalk(w, "a placed cap frame"); err != nil {
 				return 0, err
 			}
 			upper = math.Max(upper, w.CoordUpper)
@@ -186,9 +188,9 @@ func profileCoordinateUpper(profile ProfileRecord, work *freeform.FreeformWork, 
 //
 // walks is profileCoordinateUpper's own optional pre-resolved set, same
 // contract: nil resolves as before, a non-matching non-nil set refuses.
-func profileCoordinateEnvelope(profile ProfileRecord, work *freeform.FreeformWork, walks *profileWalks) (float64, error) {
-	if walks != nil && !walks.matches(profile) {
-		return 0, errResolvedWalksMismatch
+func profileCoordinateEnvelope(profile ProfileRecord, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, error) {
+	if walks != nil && !walks.Matches(profile) {
+		return 0, momentinput.ErrResolvedWalksMismatch
 	}
 	upper := 0.0
 	for li, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
@@ -204,22 +206,22 @@ func profileCoordinateEnvelope(profile ProfileRecord, work *freeform.FreeformWor
 }
 
 // resolveOrRead is the shared "read the pre-resolved walk, or resolve one"
-// step every profileWalks-aware consumer in this file uses: walks non-nil
+// step every momentinput.ProfileWalks-aware consumer in this file uses: walks non-nil
 // (and already checked against the profile by the caller) reads
-// walks.at(loopIndex, segIndex); walks nil calls walkOf, exactly as every
-// consumer did before profileWalks existed.
-func resolveOrRead(seg CurveSegment, work *freeform.FreeformWork, walks *profileWalks, loopIndex, segIndex int) (survey2d.SegmentWalk, error) {
+// walks.At(loopIndex, segIndex); walks nil calls walkOf, exactly as every
+// consumer did before momentinput.ProfileWalks existed.
+func resolveOrRead(seg CurveSegment, work *freeform.FreeformWork, walks *momentinput.ProfileWalks, loopIndex, segIndex int) (survey2d.SegmentWalk, error) {
 	if walks != nil {
-		if walks.readCharges != nil {
-			charge := walks.readCharges[loopIndex][segIndex]
-			if err := work.Step(charge.spent); err != nil {
+		if walks.ReadCharges != nil {
+			charge := walks.ReadCharges[loopIndex][segIndex]
+			if err := work.Step(charge.Spent); err != nil {
 				return survey2d.SegmentWalk{}, err
 			}
-			if err := work.ReconstructionStep(charge.reconstructionSpent); err != nil {
+			if err := work.ReconstructionStep(charge.ReconstructionSpent); err != nil {
 				return survey2d.SegmentWalk{}, err
 			}
 		}
-		return walks.at(loopIndex, segIndex), nil
+		return walks.At(loopIndex, segIndex), nil
 	}
 	return walkOf(seg, work)
 }
@@ -239,7 +241,7 @@ func resolveOrRead(seg CurveSegment, work *freeform.FreeformWork, walks *profile
 //
 // walks is the profile's pre-resolved segment walks, or nil; same contract as
 // profileCoordinateEnvelope's own.
-func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec, work *freeform.FreeformWork, walks *profileWalks) (float64, error) {
+func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, error) {
 	coordUpper, err := profileCoordinateEnvelope(profile, work, walks)
 	if err != nil {
 		return 0, err
