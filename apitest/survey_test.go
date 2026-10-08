@@ -542,6 +542,20 @@ func TestUndercutsSphereListed(t *testing.T) {
 	require.Equal(t, decad.Violating, br.Status)
 }
 
+func TestRevolvePartialUndercutCaps(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 1, 1)))
+	require.NoError(t, err)
+	faces := report.Bodies[0].Undercut.Faces
+	require.Contains(t, faces, faceByRole(t, body, "capStart"))
+	require.Contains(t, faces, faceByRole(t, body, "capEnd"))
+}
+
 func TestUndercutsVerticalHoleClear(t *testing.T) {
 	t.Parallel()
 	// A vertical hole wall under a +z pull carries only horizontal normals:

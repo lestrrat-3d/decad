@@ -319,7 +319,7 @@ the rules leave to the byte budget.
 | `internal/shellsurvey/` | Shell inradius, work budget and contained-disk witness. See modify §8. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
-| `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
+| `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Motion variants, specification validation, exact parameters, poses, box bounds and sweeps. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, depth and rolling bounds. |

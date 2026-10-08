@@ -3,16 +3,13 @@ package decad
 import (
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
-	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
-	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -227,34 +224,6 @@ func facesByRole(b *Body) map[string]*Face {
 	return m
 }
 
-// opposesPull decides the pointwise membership rule of verification §6 over
-// a face's normal-component range [m, M] against the unit pull, read as a
-// bare float with no allowance: a point opposes when its normal has a
-// component against the pull — exactly perpendicular is not opposed — and a
-// face whose normals are EXACTLY antiparallel everywhere separates under the
-// pull rather than hooking it (the flat base a straight prism pulls off of).
-// The carve-out is exact, never a tolerance band: a pull tilted by any real
-// angle hooks under the base, however slightly, and §6 lists it. The clamp
-// below absorbs only float overshoot past −1 in a unit dot; it never widens
-// the exception.
-//
-// revolveUndercuts is this function's only remaining caller: prismUndercuts,
-// cupUndercuts and capBlendUndercuts's receiver-wall loop instead read
-// through survey2d.DecidePull's exact-rational sibling (survey_undercut.go), which
-// this function's own zero-allowance behaviour matches exactly
-// (TestDecidePullMatchesOpposesPullAtZeroAllowance).
-func opposesPull(m, M float64) bool {
-	if M < -1 {
-		M = -1
-	}
-	return m < 0 && M > -1
-}
-
-// trigRange is the exact range of a·cosθ + b·sinθ over [lo, hi].
-func trigRange(a, b, lo, hi float64) (float64, float64) {
-	return clearance.TrigRange(a, b, lo, hi)
-}
-
 // prismUndercuts surveys a prism's faces against the pull, through the exact
 // three-valued reader survey_undercut.go shares with cupUndercuts and
 // capBlendUndercuts's receiver-wall loop: planar sides and caps carry one
@@ -342,70 +311,21 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	pw := rp.xform.ApplyDir(bas.W).Dot(p)
 	c0 := rp.xform.ApplyDir(bas.E0).Dot(p)
 	c1 := rp.xform.ApplyDir(bas.E1).Dot(p)
-	glo, ghi := revolveangle.Extremes(c0, c1, rp.phi0, rp.phi1, rp.full)
 	roles := facesByRole(b)
 	loops, err := revolveLoops(nil, rp)
 	if err != nil {
 		return undercutOutcome{}
 	}
 	faces := []*Face{}
-	for li, loop := range loops {
-		for _, w := range loop {
-			if rp.ax.classify(w.SegmentWalk) == wallAxis {
-				continue
-			}
-			f := roles[fmt.Sprintf("side(%d,%d)", li, w.Segs[0])]
-			if f == nil {
-				return undercutOutcome{}
-			}
-			mn, mx := math.Inf(1), math.Inf(-1)
-			if w.IsCircular() {
-				sigma := 1.0
-				if w.Th1 < w.Th0 {
-					sigma = -1
-				}
-				lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
-				for _, g := range []float64{glo, ghi} {
-					// n·p = σ(cosθ·pw + sinθ·g) over the meridian range.
-					a, bb := trigRange(pw, g, lo, hi)
-					mn = math.Min(mn, math.Min(sigma*a, sigma*bb))
-					mx = math.Max(mx, math.Max(sigma*a, sigma*bb))
-				}
-			} else {
-				l := math.Hypot(w.TanInU, w.TanInV)
-				nz := w.TanInV / l
-				nr := -w.TanInU / l
-				for _, g := range []float64{glo, ghi} {
-					v := nz*pw + nr*g
-					mn = math.Min(mn, v)
-					mx = math.Max(mx, v)
-				}
-			}
-			if opposesPull(mn, mx) {
-				faces = append(faces, f)
-			}
+	for _, decision := range revolvesurvey.UndercutRoles(
+		loops, rp.ax, pw, c0, c1, rp.phi0, rp.phi1, rp.full, [2]string{roleCapStart, roleCapEnd},
+	) {
+		f := roles[decision.Role]
+		if f == nil {
+			return undercutOutcome{}
 		}
-	}
-	if !rp.full {
-		sin0, cos0 := math.Sincos(rp.phi0)
-		sin1, cos1 := math.Sincos(rp.phi1)
-		for _, cap := range []struct {
-			role string
-			v    float64
-		}{
-			// A cap's outward normal is the sweep-velocity direction at its
-			// own angle — against the sweep on the start cap, along it on
-			// the end cap.
-			{role: roleCapStart, v: -(c1*cos0 - c0*sin0)},
-			{role: roleCapEnd, v: c1*cos1 - c0*sin1},
-		} {
-			f := roles[cap.role]
-			if f == nil {
-				return undercutOutcome{}
-			}
-			if opposesPull(cap.v, cap.v) {
-				faces = append(faces, f)
-			}
+		if decision.Opposes {
+			faces = append(faces, f)
 		}
 	}
 	return undercutOutcome{faces: faces, ok: true}

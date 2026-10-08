@@ -24,6 +24,16 @@ const (
 	PullOpposes
 )
 
+// OpposesPull applies the zero-allowance normal-component rule to [mn, mx].
+// Exact perpendicular is clear, and an exactly antiparallel face separates
+// under the pull. The clamp absorbs float overshoot below -1 only.
+func OpposesPull(mn, mx float64) bool {
+	if mx < -1 {
+		mx = -1
+	}
+	return mn < 0 && mx > -1
+}
+
 // DecidePull answers the §6 membership rule for a normal-component range
 // [mn, mx] read to within allow: PullClear when the whole range is proven at
 // or above zero (mn-allow >= 0) or proven at or below -1 (mx+allow <= -1);

@@ -1312,14 +1312,14 @@ func TestPrismWallAnalyticSectionRegression(t *testing.T) {
 }
 
 // This file is survey_undercut.go's own internal coverage: survey2d.DecidePull's
-// equivalence with opposesPull at zero allowance, and survey2d.WallNormalDecision's
+// equivalence with survey2d.OpposesPull at zero allowance, and survey2d.WallNormalDecision's
 // soundness against an exact-rational ground truth computed independently
 // from the walk's own held tangent and the placed frame's own held
 // directions.
 
 // TestDecidePullMatchesOpposesPullAtZeroAllowance proves survey2d.DecidePull(mn, mx, 0)
-// reduces to exactly opposesPull(mn, mx)'s own answer — survey2d.PullOpposes where
-// opposesPull is true, survey2d.PullClear everywhere else, never survey2d.PullUndecided — over
+// reduces to exactly survey2d.OpposesPull(mn, mx)'s own answer — survey2d.PullOpposes where
+// it is true, survey2d.PullClear everywhere else, never survey2d.PullUndecided — over
 // a table that includes both exact carve-outs (0 and -1) and the float
 // readings fu155's own repro produced.
 func TestDecidePullMatchesOpposesPullAtZeroAllowance(t *testing.T) {
@@ -1360,7 +1360,7 @@ func TestDecidePullMatchesOpposesPullAtZeroAllowance(t *testing.T) {
 	for _, p := range pairs {
 		mn, mx := p[0], p[1]
 		want := survey2d.PullClear
-		if opposesPull(mn, mx) {
+		if survey2d.OpposesPull(mn, mx) {
 			want = survey2d.PullOpposes
 		}
 		got := survey2d.DecidePull(mn, mx, 0)

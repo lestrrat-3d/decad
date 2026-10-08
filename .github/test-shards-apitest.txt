@@ -248,6 +248,7 @@
 1	0.02	TestRevolveMinRadiusArcRadiusBound
 1	0.94	TestRevolveMinRadiusSweepEnclosesConeBoreTruths
 1	0.01	TestRevolvePartialSweepWithHole
+1	0.01	TestRevolvePartialUndercutCaps
 1	0.01	TestRevolveSemicircleFullTurnCentroidBoundTightens
 1	0.06	TestRevolveShellSideOpening
 1	0.06	TestRevolveShellSideOpeningRefusals
