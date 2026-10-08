@@ -136,12 +136,14 @@ func (b *Engine) LoopOf(region brepgeom.Profile, budget *proofbound.WorkBudget) 
 // their exact levels. A line crossing a circle takes the keyed table's one
 // float for that crossing — the first scene to reach the key records the
 // line's walked point, whose fixed coordinate is exact, with its allowance —
-// keyed by the side of the circle's centre the crossing lies on. A crossing
-// too close to the centre's coordinate to decide its side is a tangency when
-// an axis-aligned line lies exactly the radius from the centre (tangentFoot),
-// and takes the exact tangent point, keyed with no side: a tangent line meets
-// its circle once (docs/shell-opening-design.md §4.3). Any other crossing
-// that close misses. Two circles crossing have no exact record and miss.
+// keyed by the side of the circle's centre the crossing lies on, read along
+// the line. A crossing too close to the centre's foot to decide its side is a
+// tangency when an axis-aligned line lies exactly the radius from the centre
+// (tangentFoot), and takes the exact tangent point, keyed with no side: a
+// tangent line meets its circle once (docs/shell-opening-design.md §4.3).
+// Any other crossing that close, an oblique line's included, stands only at
+// one recorded point (recordedJunction), and so do two circles; where the two
+// walked ends differ, the junction misses.
 func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, float64, error) {
 	if ci == cj {
 		return Point2{}, 0, brepgeom.ErrStackedWallMiss
@@ -156,7 +158,10 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 		return Point2{U: cj.Level, V: ci.Level}, 0, nil
 	}
 	if ci.Kind == ubCircle && cj.Kind == ubCircle {
-		return Point2{}, 0, brepgeom.ErrStackedWallMiss
+		if ei.p != sj.p {
+			return Point2{}, 0, brepgeom.ErrStackedWallMiss
+		}
+		return b.recordedJunction(ci, cj, ei, sj, circleSide(ci, cj, ei.p))
 	}
 	// Prefer the straight carrier's own walked point: an axis-aligned
 	// line's fixed coordinate is exact.
@@ -184,8 +189,10 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 			}
 			scale = 1
 		default:
+			// The crossing's position along the line from the centre's
+			// foot, as the axis-aligned case reads it.
 			du, dv := line.B.U-line.A.U, line.B.V-line.A.V
-			diff = du*(p.V-curve.A.V) - dv*(p.U-curve.A.U)
+			diff = du*(p.U-curve.A.U) + dv*(p.V-curve.A.V)
 			scale = math.Abs(du) + math.Abs(dv)
 		}
 		switch {
@@ -197,7 +204,12 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 		default:
 			foot, ok := tangentFoot(line, curve)
 			if !ok {
-				return Point2{}, 0, brepgeom.ErrStackedWallMiss
+				// No exact tangency to read: the junction stands only where
+				// both segments end at one recorded point.
+				if ei.p != sj.p {
+					return Point2{}, 0, brepgeom.ErrStackedWallMiss
+				}
+				return b.recordedJunction(ci, cj, ei, sj, 0)
 			}
 			// The line touches the circle at one point, the centre's foot on
 			// it; the walked end lies within the side test's band of it, so
@@ -239,6 +251,48 @@ func tangentFoot(line, circle Carrier) (Point2, bool) {
 		return Point2{U: line.Level, V: circle.A.V}, true
 	}
 	return Point2{U: circle.A.U, V: line.Level}, true
+}
+
+// recordedJunction is the junction of two carriers at the one recorded point
+// both walked ends hold, a known join of the record: two circles meeting
+// there (docs/shell-opening-design.md §4.3), or a line and a circle whose
+// crossing the side test cannot place and that are not exactly tangent, such
+// as an offset arc join meeting an oblique offset line at its foot. The point
+// is taken as recorded, with the larger walked allowance, so no float sign
+// decides it. It is keyed by side, and a later loop must reach the key at the
+// same point: a different point under one key misses, so two crossings are
+// never merged into one vertex.
+func (b *Engine) recordedJunction(ci, cj Carrier, ei, sj ubEnd, side int) (Point2, float64, error) {
+	pair := ubPair(ci, cj)
+	key := ubKey{c1: pair[0], c2: pair[1], side: side}
+	delta := math.Max(ei.allow, sj.allow)
+	entry, ok := b.table[key]
+	switch {
+	case !ok:
+		entry = ubEntry{p: ei.p, delta: delta}
+	case entry.p != ei.p:
+		return Point2{}, 0, brepgeom.ErrStackedWallMiss
+	default:
+		entry.delta = math.Max(entry.delta, delta)
+	}
+	b.table[key] = entry
+	b.allow = math.Max(b.allow, entry.delta)
+	return entry.p, entry.delta, nil
+}
+
+// circleSide is the side of the line through two circles' centres that p
+// lies on, read in exact rational arithmetic over the held floats with the
+// pair in its table order: the two crossings of two circles lie on opposite
+// sides, and a point on the line reads zero.
+func circleSide(ci, cj Carrier, p Point2) int {
+	pair := ubPair(ci, cj)
+	rat := func(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
+	ax, ay := rat(pair[0].A.U), rat(pair[0].A.V)
+	dx := new(big.Rat).Sub(rat(pair[1].A.U), ax)
+	dy := new(big.Rat).Sub(rat(pair[1].A.V), ay)
+	px := new(big.Rat).Sub(rat(p.U), ax)
+	py := new(big.Rat).Sub(rat(p.V), ay)
+	return new(big.Rat).Sub(new(big.Rat).Mul(dx, py), new(big.Rat).Mul(dy, px)).Sign()
 }
 
 // record registers a canonical vertex with the carriers it was found on.

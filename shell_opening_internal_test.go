@@ -475,3 +475,69 @@ func TestSideOpeningRegionsDSection(t *testing.T) {
 		}
 	})
 }
+
+// TestSideOpeningRegionsArcArcCut pins an arc–arc end corner's float cut. The
+// section is the concave arc of radius 13 about the origin from (0,13) to
+// (13,0), the arc of radius 17 about (−2,8) from (13,0) to (13,16), then
+// x = 13, y = 20 and x = 0 back to (0,13); every walk but the concave arc is
+// removed. At t = 2 the kept arc's offset, radius 15, meets the removed arc's
+// circle where x = 4y − 1 and 17y² − 8y − 224 = 0, at y = 4(1 + √239)/17: a
+// float solve, so with both caps removed the section displacement is nonzero
+// and covers the held cut's distance from it. At t = 4 the cut (15,8) is
+// exact and both caps may stay. Shown to fail
+// with chainEndReach's opening ends returning zero (the t = 2 displacement
+// then 0).
+func TestSideOpeningRegionsArcArcCut(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	pts := map[string]*sketch.Point{}
+	for name, p := range map[string][2]float64{"o": {0, 0}, "c": {-2, 8}, "a": {0, 13}, "b": {13, 0}, "e": {13, 16}, "f": {13, 20}, "g": {0, 20}} {
+		pts[name] = s.CreatePoint(p[0], p[1])
+		s.Fix(pts[name])
+	}
+	s.CreateArc(pts["o"], pts["b"], pts["a"])
+	s.CreateArc(pts["c"], pts["b"], pts["e"])
+	s.CreateLine(pts["e"], pts["f"])
+	s.CreateLine(pts["f"], pts["g"])
+	s.CreateLine(pts["g"], pts["a"])
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	require.NoError(t, err)
+	pp := body.payload.(prismPayload)
+	removed := map[int]struct{}{}
+	for i, seg := range pp.profile.Outer.Segments {
+		if a, ok := seg.(ArcSeg); ok && a.Center == (Point2{}) {
+			continue
+		}
+		removed[i] = struct{}{}
+	}
+	require.Len(t, removed, 4)
+	regions := func(t *testing.T, keptCaps int, tmm float64) sideOpeningSection {
+		t.Helper()
+		sec, err := sideOpeningRegions(proofbound.NewWorkBudget(t.Context()), pp, removed, keptCaps, 1, units.Millimeters(tmm), tmm, 0)
+		require.NoError(t, err)
+		return sec
+	}
+
+	exact := regions(t, 2, 4)
+	require.Equal(t, []Point2{{U: 0, V: 17}, {U: 15, V: 8}, {U: 13, V: 16}, {U: 13, V: 20}, {U: 0, V: 20}},
+		internalWalkedPoints(t, exact.cavity.Outer))
+
+	sec := regions(t, 0, 2)
+	q := internalWalkedPoints(t, sec.cavity.Outer)[1]
+	require.Positive(t, sec.delta)
+	// 17y/4 − 1 = √239 at the exact cut.
+	root := func(y *big.Rat) *big.Rat {
+		v := new(big.Rat).Mul(y, big.NewRat(17, 4))
+		v.Sub(v, big.NewRat(1, 1))
+		return v.Mul(v, v)
+	}
+	lo := new(big.Rat).Sub(proofarith.FloatRat(q.V), proofarith.FloatRat(sec.delta))
+	hi := new(big.Rat).Add(proofarith.FloatRat(q.V), proofarith.FloatRat(sec.delta))
+	require.Positive(t, new(big.Rat).Sub(new(big.Rat).Mul(lo, big.NewRat(17, 4)), big.NewRat(1, 1)).Sign())
+	require.LessOrEqual(t, root(lo).Cmp(big.NewRat(239, 1)), 0, "the displacement reaches down to the cut")
+	require.GreaterOrEqual(t, root(hi).Cmp(big.NewRat(239, 1)), 0, "the displacement reaches up to the cut")
+}

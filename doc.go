@@ -134,9 +134,11 @@
 //	              both angular caps), any line or arc corner  builds
 //	Shell         hole-free prism, one run of side faces
 //	              removed, every walk a line or an arc        builds
-//	  a prism side opening with two arcs at an end corner,
-//	    an oblique removed end face of several segments, or
-//	    a rim cut no range of a removed arc's record names    ErrUnsupported
+//	  a prism side opening with an oblique removed end face
+//	    of several segments, a rim cut no range of a removed
+//	    arc's record names, a float arc–arc end cut under a
+//	    kept cap, or a kept arc whose offset runs past its
+//	    own end                                               ErrUnsupported
 //	  a kept angular cap                                      ErrUnsupported
 //	  revolve side run in pieces, a smooth end corner, or a
 //	    rim past the removed walk's far end                   ErrUnsupported
