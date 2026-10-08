@@ -83,6 +83,14 @@ func loopCoordinateUpper(loop LoopRecord, work *freeform.FreeformWork) (float64,
 // OUTWARD — capArea's own boundary is exactly that displaced coordinate set,
 // and proofbound.SweptMomentAllow's own contract (internal/proofbound/bounds.go) requires coordUpper to
 // bound every point the difference volume can hold.
+//
+// Each Cone patch's moment flux bounds only the straight-ruled patch the
+// build holds, so the gap between it and the denoted miter locus is charged
+// here too, once per band beside delta's term: the summed chord-versus-locus
+// volume (capband.ChordLocusVolume, the volume term capBandVolume's patch
+// fluxes carry) times the same coordUpper widened by the largest patch radial
+// gap (docs/modify-reach-design.md §8.4). coordUpper is formed whenever
+// either term charges, not only when delta is positive.
 func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure, work *freeform.FreeformWork) (mu, mv, mz proofbound.BoundedScalar, err error) {
 	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)
@@ -119,6 +127,7 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	mzTotal := proofbound.BoundedAdd(capZTerm, sideZTerm)
 
 	patchAreaTotal := proofbound.BoundedScalar{}
+	locusVolume, locusRadialGap := 0.0, 0.0
 	for _, g := range geom {
 		pmu, pmv, pmz := capband.FirstMomentFlux(g)
 		sign := -matSign * orient
@@ -127,9 +136,12 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 		mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*pmz.Value, pmz.Bound))
 		pa, pb := capband.AreaOf(g)
 		patchAreaTotal = proofbound.BoundedAdd(patchAreaTotal, proofbound.MeasuredScalar(pa, pb))
+		vol, gap := capband.ChordLocusVolume(g)
+		locusVolume = proofbound.AbsSumUpper(locusVolume, vol)
+		locusRadialGap = math.Max(locusRadialGap, gap)
 	}
 
-	if delta > 0 {
+	if delta > 0 || locusVolume > 0 {
 		areaUpper := proofbound.AbsSumUpper(patchAreaTotal.Value, patchAreaTotal.Bound, capArea.Value, capArea.Bound)
 		coordUpper, cerr := loopCoordinateUpper(loop, work)
 		if cerr != nil {
@@ -143,6 +155,14 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 		coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(sideZ), sideZB.Bound))
 		coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(capZ), capZB.Bound))
 		allow := proofbound.SweptMomentAllow(delta, areaUpper, coordUpper)
+		// Each Cone patch's chord-versus-locus volume moves the moment by at
+		// most that volume times coordUpper widened by the patch's radial gap
+		// (capband.ChordLocusVolume). The largest gap covers every patch, so
+		// the summed volume times it bounds the sum of the per-patch terms.
+		if locusVolume > 0 {
+			locusReach := proofbound.AbsSumUpper(coordUpper, locusRadialGap)
+			allow = proofbound.AbsSumUpper(allow, proofbound.ProductUpper(locusVolume, locusReach))
+		}
 		muTotal.Bound = proofbound.AbsSumUpper(muTotal.Bound, allow)
 		mvTotal.Bound = proofbound.AbsSumUpper(mvTotal.Bound, allow)
 		mzTotal.Bound = proofbound.AbsSumUpper(mzTotal.Bound, allow)

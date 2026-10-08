@@ -982,20 +982,20 @@ func TestCapBlendCapLevelArcLengthMatchesGeometry(t *testing.T) {
 	require.Equal(t, 1, checked, `one cap-level arc: the chamfered quarter-circle wall`)
 }
 
-// simpson1D is a fixed-resolution composite Simpson's rule integrator, test
-// code only: every reference below judges a residual of several mm^3 against
-// a numerical integral, so float64 quadrature at this resolution (relative
-// error many orders of magnitude below what it is judging) is more than
-// enough — this is an independent REFERENCE, not a proof obligation the
-// production code carries.
-func simpson1D(f func(float64) float64, a, b float64, n int) float64 {
+// simpson1D is a fixed-resolution composite Simpson's rule integrator over
+// [0, b], test code only: every reference below integrates a smooth
+// erosion-family integrand over the eroded depth, so float64 quadrature at
+// this resolution (relative error many orders of magnitude below the
+// residuals judged) is more than enough — this is an independent REFERENCE,
+// not a proof obligation the production code carries.
+func simpson1D(f func(float64) float64, b float64, n int) float64 {
 	if n%2 != 0 {
 		n++
 	}
-	h := (b - a) / float64(n)
-	sum := f(a) + f(b)
+	h := b / float64(n)
+	sum := f(0) + f(b)
 	for i := 1; i < n; i++ {
-		x := a + float64(i)*h
+		x := float64(i) * h
 		if i%2 == 0 {
 			sum += 2 * f(x)
 		} else {
@@ -1005,25 +1005,44 @@ func simpson1D(f func(float64) float64, a, b float64, n int) float64 {
 	return sum * h / 3
 }
 
-// sectorArea is a symmetric circular sector's (radius R, full angle phi)
+// sectorArea is a symmetric circular sector's (radius R, full angle phi < pi)
 // own area once its boundary — the arc AND the two straight radii through
-// the centre — is eroded inward by t: the closed form the task's own design
-// note states, A(t) = 2*integral[asin(t/(R-t)), phi/2] of
-// ((R-t)^2 - (t/sin(theta))^2)/2 dtheta.
+// the centre — is eroded inward by t. In polar coordinates about the apex,
+// with a = phi/2 and lo = asin(t/(R-t)), the eroded half-sector is
+// lo <= theta <= a, t/sin(theta) <= r <= R-t, so
+// A(t) = (R-t)^2*(a-lo) - t^2*(cot(lo) - cot(a)). The term t^2*cot(lo)
+// equals t*sqrt((R-t)^2 - t^2), which has no cancellation at a small t.
 func sectorArea(R, phi, t float64) float64 {
+	a := phi / 2
 	if t <= 0 {
-		return R * R * phi / 2
+		return R * R * a
 	}
-	lo := math.Asin(t / (R - t))
-	hi := phi / 2
-	if lo >= hi {
+	r := R - t
+	lo := math.Asin(t / r)
+	if lo >= a {
 		return 0
 	}
-	f := func(th float64) float64 {
-		s := t / math.Sin(th)
-		return ((R-t)*(R-t) - s*s) / 2
+	return r*r*(a-lo) - t*math.Sqrt(r*r-t*t) + t*t/math.Tan(a)
+}
+
+// sectorMomentAlongBisector is the same eroded sector's first moment along
+// its own bisector, about the apex: twice the integral over the half-sector
+// of r*cos(a-theta), whose closed form is
+// (2/3)*[(R-t)^3*sin(a-lo) - t^3*(cos(a)*(1/sin(lo)^2 - 1/sin(a)^2)/2
+// + sin(a)*(cot(lo) - cot(a)))], with sin(lo) = t/(R-t) substituted.
+func sectorMomentAlongBisector(R, phi, t float64) float64 {
+	a := phi / 2
+	sa, ca := math.Sincos(a)
+	if t <= 0 {
+		return 2 * R * R * R * sa / 3
 	}
-	return 2 * simpson1D(f, lo, hi, 4000)
+	r := R - t
+	lo := math.Asin(t / r)
+	if lo >= a {
+		return 0
+	}
+	return 2.0 / 3 * (r*r*r*math.Sin(a-lo) - ca*t*r*r/2 + ca*t*t*t/(2*sa*sa) -
+		sa*t*t*math.Sqrt(r*r-t*t) + ca*t*t*t)
 }
 
 // sectorErosionVolume is the erosion-family reference volume for a straight
@@ -1033,7 +1052,7 @@ func sectorArea(R, phi, t float64) float64 {
 // [0, d], of the sector's own area at that erosion.
 func sectorErosionVolume(R, phi, h, d float64) float64 {
 	slab := sectorArea(R, phi, 0) * (h - d)
-	band := simpson1D(func(t float64) float64 { return sectorArea(R, phi, t) }, 0, d, 4000)
+	band := simpson1D(func(t float64) float64 { return sectorArea(R, phi, t) }, d, 4000)
 	return slab + band
 }
 
@@ -1055,7 +1074,7 @@ func segmentArea(R, chordV, t float64) float64 {
 // h and chamfered by setback d on one cap.
 func segmentErosionVolume(R, chordV, h, d float64) float64 {
 	slab := segmentArea(R, chordV, 0) * (h - d)
-	band := simpson1D(func(t float64) float64 { return segmentArea(R, chordV, t) }, 0, d, 4000)
+	band := simpson1D(func(t float64) float64 { return segmentArea(R, chordV, t) }, d, 4000)
 	return slab + band
 }
 
@@ -1091,13 +1110,20 @@ func circularSegmentBody(t *testing.T, r, chordV, h float64) *decad.Body {
 // quarterDiskBody to any full angle phi.
 func circularSectorBody(t *testing.T, r, phi, h float64) *decad.Body {
 	t.Helper()
+	return circularSectorBodyAt(t, 0, 0, r, phi, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+}
+
+// circularSectorBodyAt is circularSectorBody with its apex at (cx, cy) and
+// the extent ext.
+func circularSectorBodyAt(t *testing.T, cx, cy, r, phi float64, ext decad.Extent) *decad.Body {
+	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
-	o := s.CreatePoint(0, 0)
+	o := s.CreatePoint(cx, cy)
 	s.Fix(o)
-	px := s.CreatePoint(r, 0)
-	py := s.CreatePoint(r*math.Cos(phi), r*math.Sin(phi))
+	px := s.CreatePoint(cx+r, cy)
+	py := s.CreatePoint(cx+r*math.Cos(phi), cy+r*math.Sin(phi))
 	s.CreateLine(o, px)
 	s.CreateLine(py, o)
 	s.CreateArc(o, px, py)
@@ -1106,7 +1132,7 @@ func circularSectorBody(t *testing.T, r, phi, h float64) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := doc.Extrude(s, s.Profiles()[0], ext)
 	require.NoError(t, err)
 	return body
 }
@@ -1211,6 +1237,57 @@ func TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux(t *testing.T) {
 	require.LessOrEqual(t, residual, vol.Bound.Mag(),
 		`the published bound (%v mm^3) must still enclose the erosion-family residual (%v mm^3)`,
 		vol.Bound.Mag(), residual)
+}
+
+// TestCapBlendSectorCentroidBoundEnclosesChordLocus judges the published
+// centroid of a chamfered circular sector against the erosion-family
+// reference (docs/modify-reach-design.md §8.4's first-moment paragraph). The
+// sector (R=10, full angle 3.0) is extruded 200 mm symmetrically about the
+// sketch plane, with its apex placed so the chamfered body's centroid sits
+// near the origin in plane, and its end cap is chamfered by 1% of the
+// section's inradius. The built Cone patch chords the denoted miter locus, so
+// the published first moment misses the denoted one by that gap's volume
+// times its height above the mid-plane, about 100 mm.
+//
+// The reference reads the closed-form eroded-sector area and bisector moment
+// (sectorArea, sectorMomentAlongBisector) and integrates them over the band
+// with Simpson's rule. The integrands are smooth on [0, d], so the quadrature
+// and float error sit many orders of magnitude below the residual judged.
+//
+// Shown to fail on 2026-10-09: without capBandMoment's chord-locus moment
+// term the published bound was about half the residual (z residual 3.5e-8 mm
+// against a 1.6e-8 mm bound).
+func TestCapBlendSectorCentroidBoundEnclosesChordLocus(t *testing.T) {
+	t.Parallel()
+	const R, phi, h = 10.0, 3.0, 200.0
+	const n = 20000
+	a := phi / 2
+	sa, ca := math.Sincos(a)
+	d := 0.01 * R * sa / (1 + sa)
+
+	area := func(x float64) float64 { return sectorArea(R, phi, x) }
+	vol := sectorArea(R, phi, 0)*(h-d) + simpson1D(area, d, n)
+	momBisector := sectorMomentAlongBisector(R, phi, 0)*(h-d) +
+		simpson1D(func(x float64) float64 { return sectorMomentAlongBisector(R, phi, x) }, d, n)
+	// The body spans z in [-h/2, h/2]: the straight slab [-h/2, h/2-d] has
+	// its centroid at -d/2, and the band's eroded section at depth x sits at
+	// z = h/2-d+x.
+	momZ := -sectorArea(R, phi, 0)*(h-d)*d/2 +
+		simpson1D(func(x float64) float64 { return (h/2 - d + x) * area(x) }, d, n)
+	cb := momBisector / vol
+	cx, cy := -cb*ca, -cb*sa
+	want := r3.NewVec(cx+cb*ca, cy+cb*sa, momZ/vol)
+
+	body := circularSectorBodyAt(t, cx, cy, R, phi, decad.Symmetric{D: units.Millimeters(h), FullLength: true})
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+	centroid, err := chamfered.Centroid()
+	require.NoError(t, err)
+
+	residual := centroid.Value.Sub(want).Len()
+	require.LessOrEqual(t, residual, centroid.Bound.Mag(),
+		`the published centroid bound (%v mm) must enclose the residual (%v mm) against the erosion-family reference (held %v, reference %v)`,
+		centroid.Bound.Mag(), residual, centroid.Value, want)
 }
 
 // roundedRectBody extrudes an l x w rectangle by h and fillets its four
