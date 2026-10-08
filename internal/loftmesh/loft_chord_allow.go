@@ -135,6 +135,11 @@ type LoftChordPair struct {
 //
 // This is the wall term; capAreaExcess above is Area's own cap term, and the
 // two together are what area() charges beside the mixed wall reading.
+//
+// wallLeg sums each charged cell's own cellMatched times its cellWallUpper,
+// and skirtLeg charges the skirt along every seam cell, a zero-departure one
+// included (docs/loft-gear-bounds-design.md §3);
+// LoftChordedAllow's field comment states what the two bound.
 func ComputeLoftChordedAllow(
 	pairs []LoftChordPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec,
 	h1Upper, matchedDelta, delta, distUpper float64, reversed bool,
@@ -142,6 +147,7 @@ func ComputeLoftChordedAllow(
 	var wallAreaUpper, twistVolumeUpper, maxTwistOffsetUpper, seamPerimeterUpper float64
 	var perimeterUpperV, perimeterUpperW, areaExcess, bilinearAreaBound, twistAreaAllow float64
 	var walksV, walksW int
+	var wallLeg, skirtPerimeterUpper float64
 	twistVolumeCorrection := new(big.Rat)
 	var twistMomentCorrection proofbound.RatV3
 	for axis := range twistMomentCorrection {
@@ -155,6 +161,15 @@ func ComputeLoftChordedAllow(
 			jn := (j + 1) % n
 			vLo, vHi := verts[vIdx[i][j]], verts[vIdx[i][jn]]
 			wLo, wHi := verts[wIdx[i][j]], verts[wIdx[i][jn]]
+			// The skirt runs along every HELD seam cell, a zero-departure one
+			// included: its held seam is as far off the cap plane as any.
+			// ArcUpper bounds the true segment, and a held chord joining two
+			// displaced stations can be up to 2·delta longer, so each side
+			// takes the larger of that and the held chord's own exact length.
+			skirtPerimeterUpper = proofbound.AbsSumUpper(skirtPerimeterUpper,
+				math.Max(p.ArcUpperV[j], proofbound.CellSpanUpper(vLo, vHi)),
+				math.Max(p.ArcUpperW[j], proofbound.CellSpanUpper(wLo, wHi)),
+			)
 			if p.Faceted[j] && p.MatchedDelta[j] <= 0 {
 				// A faceted cell's held triangle pair IS the boundary it
 				// denotes, so its true departure is exactly zero: excluding
@@ -183,6 +198,7 @@ func ComputeLoftChordedAllow(
 
 			cellWallUpper := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, p.ArcUpperV[j], p.ArcUpperW[j], cellMatched)
 			wallAreaUpper = proofbound.AbsSumUpper(wallAreaUpper, cellWallUpper)
+			wallLeg = proofbound.AbsSumUpper(wallLeg, proofbound.ProductUpper(cellMatched, cellWallUpper))
 			twistVolumeUpper = proofbound.AbsSumUpper(twistVolumeUpper, proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi))
 			cellTwist := proofbound.CellTwistVolume(vLo, vHi, wLo, wHi)
 			cellMoment := proofbound.CellTwistMomentFromVolume(vLo, vHi, wLo, wHi, anchor, cellTwist)
@@ -240,6 +256,13 @@ func ComputeLoftChordedAllow(
 	posUpper := proofbound.AbsSumUpper(distUpper, matchedDelta)
 	seamAllow := proofbound.ChordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)
 	areaCorrectionValue, _ := areaCorrection.Float64()
+	// The skirt joins each held seam, within delta of its cap plane, to that
+	// seam's projection onto the plane; every point of it moves at most
+	// matchedDelta (at least delta, so it covers a zero-departure cell's own
+	// motion too), so its swept measure is at most this
+	// (docs/loft-gear-bounds-design.md §3). ProductUpper answers an honest 0
+	// at delta == 0, where the held seam already lies in the plane.
+	skirtLeg := proofbound.ProductUpper(proofbound.ProductUpper(matchedDelta, delta), skirtPerimeterUpper)
 
 	return LoftChordedAllow{
 		WallAreaUpper:         wallAreaUpper,
@@ -255,5 +278,7 @@ func ComputeLoftChordedAllow(
 		AreaExcess:            areaExcess,
 		TwistAreaAllow:        twistAreaAllow,
 		CapAreaExcess:         proofbound.AbsSumUpper(capAreaAllow0, capAreaAllow1),
+		WallLeg:               wallLeg,
+		SkirtLeg:              skirtLeg,
 	}
 }

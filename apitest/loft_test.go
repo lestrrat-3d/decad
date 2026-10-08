@@ -810,3 +810,31 @@ func TestLoftHelicalToothClearsDefaultTolerance(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, report.Passed(), "the m1 z17 tooth loft must be trustworthy: %v", report.Diagnostics)
 }
+
+// TestLoftHugeCircleRefusesNonFiniteVolume lofts a radius-1e103 circle over
+// a height of 1e103. Its volume overflows float64, so the build must refuse
+// with ErrNotFinite. The centroid's clearance is computed first, from an
+// exact rational gap past float64's range; it must answer a finite lower
+// bound there rather than panic before the volume refusal runs.
+//
+// Shown to fail: without the clamp in loftmesh.CentroidClearance, Loft
+// panics on a nil *big.Rat inside Centroid.
+func TestLoftHugeCircleRefusesNonFiniteVolume(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	base, err := w.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	top, err := w.CreateOffsetPlane(base, 1e103)
+	require.NoError(t, err)
+	s0, p0 := loftCircleProfile(t, w, base, 1e103)
+	s1, p1 := loftCircleProfile(t, w, top, 1e103)
+	doc := decad.New()
+	require.NotPanics(t, func() {
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrNotFinite)
+	})
+	require.Empty(t, doc.Bodies(), "a refused loft leaves the document untouched")
+}

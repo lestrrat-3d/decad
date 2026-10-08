@@ -60,7 +60,6 @@ func TestLoftVertexDistanceCacheMatchesUncachedAccumulator(t *testing.T) {
 		} {
 			require.Zero(t, pair[0].Cmp(pair[1]))
 		}
-		require.Equal(t, math.Float64bits(uncached.CoordUpper), math.Float64bits(cached.CoordUpper))
 		require.Equal(t, math.Float64bits(uncached.DistUpper), math.Float64bits(cached.DistUpper))
 		require.Equal(t, math.Float64bits(uncached.PerturbAreaSum), math.Float64bits(cached.PerturbAreaSum))
 		for i, entry := range cache {
@@ -598,8 +597,8 @@ func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
 
 // TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta pins
 // a10-plan.md Part 3 PR 9 Task 1's own soundness fix: internal/proofbound/bounds.go's
-// proofbound.ChordedBoundaryVolumeAllow (and proofbound.ChordedBoundaryMomentAllow /
-// proofbound.ChordedBoundarySeamAllow inside computeLoftChordedAllow) must be composed
+// proofbound.ChordedBoundaryVolumeAllow (and proofbound.ChordedBoundarySeamAllow
+// inside computeLoftChordedAllow) must be composed
 // with the build's own PARAMETER-MATCHED sectionMatchedDelta — NEVER
 // sectionDelta, the build's own MAX SAGITTA (a SET-distance). The
 // chord-to-curve half of that matched term coincides with the sagitta on a
@@ -612,7 +611,7 @@ func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
 // would silently understate a genuine chord-to-curve volume displacement —
 // unsound in exactly the direction CLAUDE.md forbids.
 //
-// FALSIFICATION: reverting loft_moments.go's volume()/centroid() and
+// FALSIFICATION: reverting loft_moments.go's volume() and
 // computeLoftChordedAllow to read m.sectionDelta wherever they now read
 // m.sectionMatchedDelta turns this test red — verified by hand during
 // review (git stash the fix, rerun, confirm failure; restore). The fixture
@@ -692,23 +691,6 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 		"Volume's own Bound must compose the matchedDelta-keyed chordedBoundaryVolumeAllow term")
 	require.Greater(t, vol.Bound.Base(), wrongTerm,
 		"Volume's own Bound must exceed what composing the sagitta-keyed term alone would publish")
-
-	// The moment leg's identical composition, checked at the scalar level
-	// (proofbound.ChordedBoundaryMomentAllow itself, the SAME helper centroid() calls
-	// with m.sectionMatchedDelta): this fixture's own volume/allowance ratio
-	// is too extreme for m.centroid() to publish a positive S12 clearance
-	// (an expected, unrelated refusal on a synthetic 2-triangle patch this
-	// small), so the moment leg is checked directly rather than through the
-	// full accumulator call.
-	wrongMoment := proofbound.ChordedBoundaryMomentResidualAllow(
-		sectionDelta, chorded.WallAreaUpper, chorded.CapVolumeUpper,
-		chorded.SeamAllow, chorded.MaxTwistOffsetUpper, m.CoordUpper,
-	)
-	rightMoment := proofbound.ChordedBoundaryMomentResidualAllow(
-		sectionMatchedDelta, chorded.WallAreaUpper, chorded.CapVolumeUpper,
-		chorded.SeamAllow, chorded.MaxTwistOffsetUpper, m.CoordUpper,
-	)
-	require.Greater(t, rightMoment, wrongMoment, "the fixture must actually distinguish the two candidate moment terms")
 }
 
 // TestComputeLoftChordedAllowChargesTheHeldStationDisplacement pins
@@ -782,6 +764,10 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 		"the seam allowance must charge the held station displacement")
 	require.Greater(t, got.CapVolumeUpper, sagittaOnly.CapVolumeUpper,
 		"the cap volume leg inherits the widened cap-area term")
+	require.Greater(t, got.WallLeg, sagittaOnly.WallLeg,
+		"the per-cell wall measure leg must charge the held station displacement")
+	require.Zero(t, sagittaOnly.SkirtLeg, "the skirt is exactly 0 at delta == 0")
+	require.Positive(t, got.SkirtLeg, "the skirt must charge a held seam displaced off its cap plane")
 	// The exact corrections and the offset leg read no displacement at all,
 	// so the widening above is the matched term's and not blanket inflation.
 	require.Zero(t, got.TwistVolumeCorrection.Cmp(sagittaOnly.TwistVolumeCorrection),

@@ -40,20 +40,6 @@ func WallTriangleArea(u, v proof.Xpt) (float64, float64) {
 	return proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)
 }
 
-// PlacedCentroidAllow bounds how far one already-computed centroid
-// coordinate can move under a placement's proven volume and first-moment
-// allowances, mirroring moments.go's proofbound.BoundedQuotient formula (§12 PR 2a):
-// coordRel is the coordinate's own value relative to the accumulator's
-// anchor, epsM the proven first-moment allowance (proofbound.SweptMomentAllow), epsV
-// the proven volume allowance (proofbound.SweptVolumeAllow), and clearance the
-// caller's own proven positive gap between the held volume and epsV (S12's
-// own test, checked once by the caller since it does not depend on
-// coordRel).
-func PlacedCentroidAllow(coordRel, epsM, epsV, clearance float64) float64 {
-	numerator := proofbound.AbsSumUpper(epsM, proofbound.ProductUpper(math.Abs(coordRel), epsV))
-	return proofbound.UpRound(numerator / clearance)
-}
-
 // LoftChordedAllow bundles the exact volume and first-moment corrections,
 // the unsigned twist measure retained for tessellation's occupied-volume
 // proof, the three residual volume terms, and the wall's two-leg area residual
@@ -101,6 +87,19 @@ type LoftChordedAllow struct {
 	// published area IS the built polygon's area and the true denoted area
 	// differs from it by exactly this much (docs/loft-design.md §5/§8).
 	CapAreaExcess float64
+	// WallLeg is docs/loft-gear-bounds-design.md §2's per-cell wall leg:
+	// Σ proofbound.ProductUpper(cellMatched_k, cellWallUpper_k) over the same
+	// chorded cells WallAreaUpper sums, each cell charged at its own matched
+	// departure rather than the build-wide maximum. SkirtLeg is that section's
+	// skirt between each held seam and its projection onto the cap plane,
+	// productUpper(productUpper(matchedDelta, delta), perimeter), the
+	// perimeter summed over EVERY held seam cell, each side the larger of
+	// its arc-length upper bound and its held chord's exact length, and
+	// exactly 0 at delta == 0. Together with the vertex sweep they bound the
+	// MEASURE of the region the chord-to-curve homotopy sweeps, which is what
+	// MassAccumulator.Centroid's shift form spends.
+	WallLeg  float64
+	SkirtLeg float64
 }
 
 // ErrLoftCapOffsetUnderivable is the sentinel docs/loft-design.md Table S row

@@ -388,15 +388,16 @@ func TestLoftArcWedgeVerifiesSound(t *testing.T) {
 	margin := toleranceRel / ratio
 	t.Logf("A10a wedge Verify margin: binding=%s ratio=%.6g margin=%.3gx", reading, ratio, margin)
 	require.Greater(t, margin, 1.0, "the achieved margin must exceed 1x for a Sound verdict")
-	// Centroid is the binding reading at a measured ~2.92x at the 75 stations
+	// Volume is the binding reading at a measured ~3.78x at the 75 stations
 	// the feature-size chord target settles this wedge on
-	// (loftChordFractionPinM). Pinned with generous slack
+	// (loftChordFractionPinM), once Centroid's bound is the shift form
+	// (docs/loft-gear-bounds-design.md §3). Pinned with generous slack
 	// since a fraction-of-a-ulp difference in composed bound arithmetic
 	// between hosts must never flip this assertion (never a wall-clock or
 	// exact-bit pin — CLAUDE.md's own host-portability rule).
-	require.Equal(t, "Centroid", reading)
-	require.InEpsilon(t, 2.92, margin, 0.25,
-		"the achieved margin at the shipped constant, pinned so a future change to the moment formula is caught")
+	require.Equal(t, "Volume", reading)
+	require.InEpsilon(t, 3.78, margin, 0.25,
+		"the achieved margin at the shipped constant, pinned so a future change to the bound formulas is caught")
 }
 
 // TestLoftArcWedgeReadingsApproximateWithPositiveBounds is the ask's own

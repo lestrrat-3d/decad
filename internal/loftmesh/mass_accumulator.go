@@ -37,8 +37,8 @@ type MassAccumulator struct {
 	// zero for a LineSeg-only pairing. It is delta's independent twin
 	// (loftPayload's own doc comment), never composed as if it were delta.
 	// It is ALSO never internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper (or
-	// proofbound.ChordedBoundaryVolumeResidualAllow/proofbound.ChordedBoundaryMomentResidualAllow/
-	// proofbound.ChordedBoundarySeamAllow's) own matchedDeltaUpper obligation — a
+	// proofbound.ChordedBoundaryVolumeResidualAllow/proofbound.ChordedBoundarySeamAllow's)
+	// own matchedDeltaUpper obligation, nor CentroidRadius's reach — a
 	// STRONGER, PARAMETER-MATCHED quantity sectionMatchedDelta below carries
 	// instead — and that includes the cap-area tube
 	// (proofbound.SectionDisplacementArea), whose own §5.2 row names the matched term
@@ -59,9 +59,9 @@ type MassAccumulator struct {
 	// leaves out (§5.2's matchedDelta paragraph). Every composed reading that
 	// needs "the SAME parameter-matched displacement leg (a)'s own
 	// obligation" — internal/proofbound/bounds.go's own phrase, repeated verbatim on
-	// proofbound.ChordedBoundaryVolumeResidualAllow, proofbound.ChordedBoundaryMomentResidualAllow and
+	// proofbound.ChordedBoundaryVolumeResidualAllow and
 	// proofbound.ChordedBoundarySeamAllow's own doc comments — reads this field, never
-	// sectionDelta. It stays exactly 0 on a build with no chorded cell at all
+	// sectionDelta, and so does CentroidRadius. It stays exactly 0 on a build with no chorded cell at all
 	// (a LineSeg-only pairing), whose held triangle pair IS the boundary §5
 	// gives it and whose vertex displacement the delta-keyed legs above
 	// already charge.
@@ -86,16 +86,9 @@ type MassAccumulator struct {
 	haveBounds bool
 	lo, hi     r3.Vec // componentwise extremes over every held vertex
 
-	// coordUpper is a proven upper bound on |u|, |v| and |z| over the body's
-	// own material relative to anchor: the max |v-anchor|_inf over every held
-	// vertex (internal/proofbound/bounds.go's proofbound.SweptMomentAllow reads it widened by delta at the
-	// point of use, since the true vertex may sit up to delta further out).
-	CoordUpper float64
-	// distUpper is coordUpper's Euclidean twin (a10-plan.md Part 3 PR 6): the
-	// max |v-anchor| (3D distance, not inf-norm) over every held vertex —
-	// computeLoftChordedAllow's own posUpper reading, tighter than
-	// proofbound.Radius3D(coordUpper) since it never assumes the three per-axis
-	// extremes land on one vertex at once.
+	// DistUpper is the max |v-anchor| (3D distance) over every held vertex
+	// (a10-plan.md Part 3 PR 6), computeLoftChordedAllow's own posUpper
+	// reading.
 	DistUpper float64
 
 	// perturbAreaSum is Σ proofbound.PerturbedTriangleAreaAllow(...) over EVERY triangle
@@ -221,13 +214,9 @@ func (m *MassAccumulator) foldBounds(p r3.Vec) {
 	m.hi = r3.Vec{X: math.Max(m.hi.X, p.X), Y: math.Max(m.hi.Y, p.Y), Z: math.Max(m.hi.Z, p.Z)}
 }
 
-// FoldCoordUpper extends CoordUpper over one held vertex's own inf-norm
-// distance from anchor, and distUpper (a10-plan.md Part 3 PR 6) over its
-// own EUCLIDEAN distance from anchor — a tighter reading than
-// proofbound.Radius3D(coordUpper) by up to sqrt(3), since the inf-norm bound assumes
-// the per-axis extremes are simultaneously achieved at one vertex, which a
-// real point set rarely does. computeLoftChordedAllow reads distUpper for
-// proofbound.ChordedBoundarySeamAllow's own posUpper obligation.
+// FoldCoordUpper extends DistUpper (a10-plan.md Part 3 PR 6) over one held
+// vertex's own EUCLIDEAN distance from anchor. computeLoftChordedAllow reads
+// DistUpper for proofbound.ChordedBoundarySeamAllow's own posUpper obligation.
 //
 // distUpper is PROVEN by exact rational arithmetic, the SAME mechanism
 // computeLoftChordedAllow's own h1Upper reading already uses
@@ -246,8 +235,6 @@ func (m *MassAccumulator) foldBounds(p r3.Vec) {
 // dropping the widening — the same "absent bound must never read as small"
 // rule this file's other terms already follow.
 func (m *MassAccumulator) FoldCoordUpper(p r3.Vec) {
-	d := p.Sub(m.anchorF)
-	m.CoordUpper = max(m.CoordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
 	dist := math.Inf(1)
 	if d2 := proofarith.RatSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
 		dist = proofbound.RatSqrtUp(d2)
@@ -259,8 +246,6 @@ func (m *MassAccumulator) FoldCoordUpper(p r3.Vec) {
 // FoldCoordUpper. The distance is computed when this assembled vertex index
 // is first referenced, so unused vertices never affect the measurements.
 func (m *MassAccumulator) FoldCoordUpperCached(p r3.Vec, entry *LoftVertexDistance) {
-	d := p.Sub(m.anchorF)
-	m.CoordUpper = max(m.CoordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
 	if !entry.Ready {
 		entry.Upper = math.Inf(1)
 		if d2 := proofarith.RatSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
@@ -285,23 +270,73 @@ func (m *MassAccumulator) FoldCoordUpperCached(p r3.Vec, entry *LoftVertexDistan
 // transform, and a general rigid motion rounds inside its own products and
 // sums.
 func (m *MassAccumulator) Volume(verts []r3.Vec, tris [][3]int) (float64, float64) {
-	vol := new(big.Rat).Quo(m.Vol6, big.NewRat(6, 1))
-	if m.Chorded.TwistVolumeCorrection != nil {
-		vol.Add(vol, m.Chorded.TwistVolumeCorrection)
-	}
+	vol := m.correctedVolume()
 	value, _ := vol.Float64()
 	bound := proofarith.RationalFloatError(vol, value)
+	// An unplaced LineSeg-only body has no allowance, and its bound stays the
+	// single rounding exactly; a NaN allowance still reaches the sum.
+	if allow := m.VolumeAllow(verts, tris); allow != 0 {
+		bound = proofbound.AbsSumUpper(bound, allow)
+	}
+	return value, bound
+}
+
+// VolumeAllow is Volume's proven allowance for the gap between the exact
+// corrected volume and the true one, without the value's own rounding: the
+// placement's swept term at delta > 0 and the chorded residual at a positive
+// sectionDelta or sectionMatchedDelta. Centroid's clearance subtracts it from
+// the exact rational volume.
+func (m *MassAccumulator) VolumeAllow(verts []r3.Vec, tris [][3]int) float64 {
+	allow := 0.0
 	if m.delta > 0 {
 		areaUpper := proofbound.PerturbedAreaUpper(verts, tris, m.delta)
-		bound = proofbound.AbsSumUpper(bound, proofbound.SweptVolumeAllow(m.delta, areaUpper))
+		allow = proofbound.SweptVolumeAllow(m.delta, areaUpper)
 	}
 	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
-		bound = proofbound.AbsSumUpper(bound, proofbound.ChordedBoundaryVolumeResidualAllow(
+		allow = proofbound.AbsSumUpper(allow, proofbound.ChordedBoundaryVolumeResidualAllow(
 			m.sectionMatchedDelta, m.Chorded.WallAreaUpper,
 			m.Chorded.CapVolumeUpper, m.Chorded.SeamAllow,
 		))
 	}
-	return value, bound
+	return allow
+}
+
+// correctedVolume is the exact rational volume Volume rounds: the held
+// tetrahedron sum plus the exact twist correction.
+func (m *MassAccumulator) correctedVolume() *big.Rat {
+	vol := new(big.Rat).Quo(m.Vol6, big.NewRat(6, 1))
+	if m.Chorded.TwistVolumeCorrection != nil {
+		vol.Add(vol, m.Chorded.TwistVolumeCorrection)
+	}
+	return vol
+}
+
+// CentroidClearance is a proven lower bound on the true volume's magnitude:
+// |vol| − allow evaluated over exact rationals and rounded DOWN once. A
+// float subtraction from the rounded volume would carry that rounding into
+// the result, and where allow is most of |vol| the volume's half-ulp is many
+// ulps of the small difference, so no single outward step covers it. A
+// non-finite allow states no bound and answers 0, which Centroid refuses.
+func CentroidClearance(vol *big.Rat, allow float64) float64 {
+	if proofbound.IsNonFinite(allow) || allow < 0 {
+		return 0
+	}
+	gap := new(big.Rat).Abs(vol)
+	gap.Sub(gap, new(big.Rat).SetFloat64(allow))
+	if gap.Sign() <= 0 {
+		return 0
+	}
+	f, _ := gap.Float64()
+	if math.IsInf(f, 1) {
+		// The gap is past float64's range, so the largest finite float is
+		// still at or below it; the volume itself is refused downstream as
+		// non-finite.
+		return math.MaxFloat64
+	}
+	if new(big.Rat).SetFloat64(f).Cmp(gap) > 0 {
+		f = math.Nextafter(f, math.Inf(-1))
+	}
+	return f
 }
 
 // Centroid returns anchor + Σmoment/(4·Σvol6) after
@@ -310,29 +345,32 @@ func (m *MassAccumulator) Volume(verts []r3.Vec, tris [][3]int) (float64, float6
 // per-coordinate rounding error, and a loft with zero corrected volume has no
 // centroid.
 //
-// A placement (delta > 0) and a curved pairing (sectionDelta > 0 or
-// sectionMatchedDelta > 0) each widen one COMBINED volume allowance epsV and
-// one COMBINED first-moment allowance epsM before either is spent: delta's
-// own leg is proofbound.SweptVolumeAllow/proofbound.SweptMomentAllow, and the curved pairing's leg
-// is proofbound.ChordedBoundaryVolumeResidualAllow/proofbound.ChordedBoundaryMomentResidualAllow,
-// both composed
-// from sectionMatchedDelta — the PARAMETER-MATCHED quantity those two
-// helpers' own doc comments oblige, never sectionDelta, whose SET-distance
-// sagitta is spent on Bounds instead. The two legs are mechanically distinct (a vertex displaced versus
-// a boundary replaced by a nearby non-mesh surface, docs/loft-design.md §5),
-// but each publishes a volume and a first-moment allowance over the SAME
-// anchored accumulator, so ONE clearance test and ONE PlacedCentroidAllow
-// quotient composition — moments.go's proofbound.BoundedQuotient formula, specialized to
-// whichever allowances are active — cover both. A non-positive clearance (the
-// combined volume allowance is not smaller than the held volume) leaves the
-// quotient's denominator with nothing left to divide by, so the centroid is
-// unstateable — refused decaderr.ErrUnsupported (Table S, S12) rather than published
-// with a bound nobody could use. This gate is reachable on an UNPLACED body
-// under a curved pairing alone (a10-plan.md Part 3 PR 6): delta's own fast
-// path (delta == 0) does not imply epsV == 0, and EITHER section quantity on
-// its own reaches it, since a free-form cell can carry a positive
-// matchedDelta at an exactly-zero sagitta (internal/freeform/spline_sagitta.go's own
-// counterexample).
+// A placement (delta > 0) or a curved pairing (sectionDelta > 0 or
+// sectionMatchedDelta > 0) widens that bound by one SHIFT of the held
+// centroid, docs/loft-gear-bounds-design.md §3's
+//
+//	shift = epsV · R_c / clearance
+//
+// epsV (CentroidMeasureAllow) bounds the measure of the region where the
+// true solid and the corrected held body differ, and R_c (CentroidRadius)
+// bounds how far any point of that region lies from the published centroid.
+// The true centroid is the held one plus the first moment of that difference
+// about it divided by the true volume, so it moves at most epsV · R_c over a
+// proven lower bound on that volume. clearance is that lower bound
+// (CentroidClearance): the exact corrected volume minus VolumeAllow, the
+// allowance Volume already proves for the true volume, rounded down once.
+// R_c is measured from the published centroid, so
+// the shift scales with the body's own size and never with its distance from
+// the mass anchor.
+//
+// A non-positive clearance (Volume's allowance is not smaller than the held
+// volume) leaves the shift nothing to divide by, so the centroid is
+// unstateable — refused decaderr.ErrUnsupported (Table S, S12) rather than
+// published with a bound nobody could use. This gate is reachable on an
+// UNPLACED body under a curved pairing alone (a10-plan.md Part 3 PR 6): either
+// section quantity on its own reaches it, since a free-form cell can carry a
+// positive matchedDelta at an exactly-zero sagitta
+// (internal/freeform/spline_sagitta.go's own counterexample).
 func (m *MassAccumulator) Centroid(verts []r3.Vec, tris [][3]int) (r3.Vec, float64, error) {
 	vol6 := new(big.Rat).Set(m.Vol6)
 	momX := new(big.Rat).Set(m.MomX)
@@ -359,40 +397,89 @@ func (m *MassAccumulator) Centroid(verts []r3.Vec, tris [][3]int) (r3.Vec, float
 	bx := proofarith.RationalFloatError(cx, fx)
 	by := proofarith.RationalFloatError(cy, fy)
 	bz := proofarith.RationalFloatError(cz, fz)
+	published := r3.NewVec(fx, fy, fz)
+	rounding := proofbound.Radius3D(math.Max(bx, math.Max(by, bz)))
 
-	if m.delta > 0 || m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
-		vol := new(big.Rat).Quo(vol6, big.NewRat(6, 1))
-		volValue, _ := vol.Float64()
-
-		epsV, epsM := 0.0, 0.0
-		if m.delta > 0 {
-			areaUpper := proofbound.PerturbedAreaUpper(verts, tris, m.delta)
-			epsV = proofbound.AbsSumUpper(epsV, proofbound.SweptVolumeAllow(m.delta, areaUpper))
-			epsM = proofbound.AbsSumUpper(epsM, proofbound.SweptMomentAllow(m.delta, areaUpper, m.CoordUpper+m.delta))
-		}
-		if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
-			epsV = proofbound.AbsSumUpper(epsV, proofbound.ChordedBoundaryVolumeResidualAllow(
-				m.sectionMatchedDelta, m.Chorded.WallAreaUpper,
-				m.Chorded.CapVolumeUpper, m.Chorded.SeamAllow,
-			))
-			epsM = proofbound.AbsSumUpper(epsM, proofbound.ChordedBoundaryMomentResidualAllow(
-				m.sectionMatchedDelta, m.Chorded.WallAreaUpper,
-				m.Chorded.CapVolumeUpper, m.Chorded.SeamAllow, m.Chorded.MaxTwistOffsetUpper, m.CoordUpper,
-			))
-		}
-
-		clearance := math.Nextafter(math.Abs(volValue)-epsV, math.Inf(-1))
-		if clearance <= 0 {
-			return r3.Vec{}, 0, fmt.Errorf(`%w: the placement and section proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, decaderr.ErrUnsupported)
-		}
-		bx = proofbound.AbsSumUpper(bx, PlacedCentroidAllow(fx-m.anchorF.X, epsM, epsV, clearance))
-		by = proofbound.AbsSumUpper(by, PlacedCentroidAllow(fy-m.anchorF.Y, epsM, epsV, clearance))
-		bz = proofbound.AbsSumUpper(bz, PlacedCentroidAllow(fz-m.anchorF.Z, epsM, epsV, clearance))
+	if m.delta <= 0 && m.sectionDelta <= 0 && m.sectionMatchedDelta <= 0 {
+		return published, rounding, nil
 	}
 
-	bound := proofbound.Radius3D(math.Max(bx, math.Max(by, bz)))
+	// The clearance test (S12) runs before any shift term is read, so a body
+	// whose volume enclosure reaches zero refuses whatever its other terms are.
+	clearance := CentroidClearance(m.correctedVolume(), m.VolumeAllow(verts, tris))
+	if !(clearance > 0) {
+		return r3.Vec{}, 0, fmt.Errorf(`%w: the placement and section proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, decaderr.ErrUnsupported)
+	}
+	epsV := m.CentroidMeasureAllow(verts, tris)
+	if epsV == 0 {
+		return published, rounding, nil
+	}
+	radius := m.CentroidRadius(verts, tris, published, rounding)
+	shift := proofbound.DivUpper(proofbound.ProductUpper(epsV, radius), clearance)
+	return published, proofbound.AbsSumUpper(rounding, shift), nil
+}
 
-	return r3.NewVec(fx, fy, fz), bound, nil
+// CentroidMeasureAllow is Centroid's epsV (docs/loft-gear-bounds-design.md
+// §3): a proven upper bound on the measure of the region where the true solid
+// and the corrected held body differ. One homotopy sweeps it, every cell
+// moving at once so the surface stays closed at the rungs cells share, and
+// each part of the motion has its charge:
+//
+//   - the held caps, each within delta of its cap plane, project onto the
+//     plane, and every cell whose chord departure is zero moves by vertex
+//     interpolation to its exact place, both at speed at most delta over held
+//     triangles: proofbound.SweptVolumeAllow over the perturbed area, zero at
+//     delta == 0;
+//   - every chorded cell moves from its ruled patch to the true surface under
+//     the chord-to-curve homotopy: LoftChordedAllow.WallLeg, each cell at its
+//     own matched departure;
+//   - the skirt joining every held seam cell to the cap plane moves with it:
+//     LoftChordedAllow.SkirtLeg, zero at delta == 0.
+//
+// The cap and seam volume legs are signed identities that sweep no material,
+// so neither enters it.
+func (m *MassAccumulator) CentroidMeasureAllow(verts []r3.Vec, tris [][3]int) float64 {
+	epsV := 0.0
+	if m.delta > 0 {
+		epsV = proofbound.SweptVolumeAllow(m.delta, proofbound.PerturbedAreaUpper(verts, tris, m.delta))
+	}
+	return proofbound.AbsSumUpper(epsV, m.Chorded.WallLeg, m.Chorded.SkirtLeg)
+}
+
+// CentroidRadius is Centroid's R_c (docs/loft-gear-bounds-design.md §3): a
+// proven upper bound on the distance from the published centroid to any point
+// of the region CentroidMeasureAllow measures. A wall-sweep point lies within
+// its cell's matched departure of a bilinear patch, which lies in the convex
+// hull of its four held corners; a vertex-sweep or skirt point lies within
+// delta of a held triangle or seam. So every such point lies within
+// max(sectionMatchedDelta, delta) of the held vertex hull, and the farthest
+// vertex tris references, measured from the published centroid, bounds that
+// hull's reach; a vertex no triangle references is no part of the body.
+// rounding is the published centroid's own distance bound from the exact one,
+// which the derivation measures from.
+//
+// Each vertex distance is exact: both points are float64, so the squared
+// distance is an exact dyadic and proofarith.DySqrtUp brackets its root by
+// exact comparison. A coordinate the dyadic lift cannot read (non-finite)
+// answers +Inf rather than dropping the vertex.
+func (m *MassAccumulator) CentroidRadius(verts []r3.Vec, tris [][3]int, centroid r3.Vec, rounding float64) float64 {
+	farthest := 0.0
+	seen := make([]bool, len(verts))
+	for _, tri := range tris {
+		for _, idx := range tri {
+			if seen[idx] {
+				continue
+			}
+			seen[idx] = true
+			v := verts[idx]
+			d2, ok := proofarith.DySquaredDistance3(centroid.X, centroid.Y, centroid.Z, v.X, v.Y, v.Z)
+			if !ok {
+				return math.Inf(1)
+			}
+			farthest = math.Max(farthest, proofarith.DySqrtUp(d2))
+		}
+	}
+	return proofbound.AbsSumUpper(farthest, rounding, math.Max(m.sectionMatchedDelta, m.delta))
 }
 
 // Bounds returns the componentwise min/max over every held vertex. Bound
