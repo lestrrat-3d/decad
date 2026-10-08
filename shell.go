@@ -88,12 +88,16 @@ func WithShellSense(s ShellSense) ShellOption {
 // with k holes returns 1 + k lumps: the band inside the outer loop, then one
 // band lining each hole (docs/modify-reach-design.md BX8).
 //
-// A partial revolve is shelled when sel removes both of its angular caps and
-// nothing else: the wall is its meridian's offset swept over the same angle,
-// and a meridian walk on the axis grows no wall
-// (docs/modify-reach-design.md §9.3). A removed side face, a kept angular
-// cap, a holed meridian, a meridian meeting the axis along more than one walk
-// and an offset reaching the axis are ErrUnsupported.
+// A partial revolve is shelled when sel removes both of its angular caps: the
+// wall is its meridian's offset swept over the same angle, and a meridian walk
+// on the axis grows no wall (docs/modify-reach-design.md §9.3). A revolve
+// also takes a side opening — one connected run of its generated side faces,
+// on a full turn or beside both removed angular caps — where each opening end
+// meets a straight removed walk at a right angle and the kept chain is one
+// piece; the rim there is the removed face's own cut through the wall. Any
+// other side selection, a kept angular cap, a holed meridian, a meridian
+// meeting the axis along more than one walk and an offset reaching the axis
+// are ErrUnsupported.
 //
 // WithNoOpenings asks for a closed hollow body that keeps every face; it is
 // the one call form that takes a nil sel, and a non-nil sel beside it is

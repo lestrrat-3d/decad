@@ -249,6 +249,8 @@
 1	0.94	TestRevolveMinRadiusSweepEnclosesConeBoreTruths
 1	0.01	TestRevolvePartialSweepWithHole
 1	0.01	TestRevolveSemicircleFullTurnCentroidBoundTightens
+1	0.06	TestRevolveShellSideOpening
+1	0.06	TestRevolveShellSideOpeningRefusals
 1	1.04	TestRevolveTessellateConcaveTorusWall
 1	0.03	TestRevolveTessellateConeApexIsOneInternedVertex
 1	0.01	TestRevolveTessellateExportIsByteIdentical

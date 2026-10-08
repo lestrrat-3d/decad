@@ -1043,7 +1043,13 @@ them as one face; and at a right-angle end the cap slabs' walls along `R` and
 the middle slab's normal-segment walls are coplanar, so canonical topology
 needs one planar face spanning all three slabs with the opening as its hole.
 Both need per-segment wall columns that merge coplanar pieces across slabs,
-which the stacked build does not have.
+which the stacked build does not have. Third, the normal segment follows the
+removed face only at a right angle against a straight removed walk: there it
+lies on that walk's own line, which is where the removed face cuts the wall.
+At an acute corner an inward normal segment reaches past the removed face,
+outside the receiver, and at an obtuse one it falls short of it, so the rim
+must be the removed face's own cut, which this section does not construct.
+A revolve side opening (§9.3.2) builds only the right-angle case.
 
 For cap-only removal from a holed section, build the wall as one slab with
 `1 + k` regions: the band between the paired outer loops first, followed by one
@@ -1158,9 +1164,39 @@ and the void shell outward. Only S10's section limit bounds the thickness, as
 for a partial turn, since a full turn keeps no angular floor.
 
 Stage 4's revolve gates run in this order: RS13's section-displacement guard,
-a holed meridian (SX8), a kept angular cap (SX8), a removed side face (S2, until
-§9.2 lands), then more than one on-axis walk (SX8). `WithNoOpenings` on a
+a holed meridian (SX8), a kept angular cap (SX8), more than one on-axis walk
+(SX8), then a removed side run that is not one proper connected run of whole
+walks or that leaves two kept chains (SX8, §9.3.2). `WithNoOpenings` on a
 partial turn or on a holed meridian is SX8 before the shell is routed here.
+
+#### 9.3.2 Side opening
+
+`revolveShellSideWall` (`shell_revolve.go`) builds the side opening of a full
+turn, and of a partial turn beside both removed angular caps. The removed
+faces name the recorded segments they sweep through their `side(0,j)` roles,
+and they must cover whole plane-local walks. The removed walks form one
+proper connected run. On a meridian with an on-axis walk the run must touch
+the axis walk at one end of the chain the axis walk leaves: a run between two
+kept walks would leave two wall regions, which one revolve record does not
+hold.
+
+The kept chain `K` runs from the walk after the run to the walk before it,
+skipping the axis walk. Each end of `K` is an axis end or an opening end. An
+axis end takes §9.3.1's mirror join, so the offset ends on the axis, and its
+axis point must land on the axis walk on the material side (S11b). An opening
+end takes the walk's own offset foot, so §9.2's exact normal segment of length
+`t` joins `K` to its offset `K'`. The wall walks `K`, the joining segment at
+`K`'s end, `K'` backward and the joining segment at `K`'s start, inward; and
+`K'`, the segment back to `K`'s end, `K` backward and the segment out from
+`K`'s start, outward. The wall faces the §5 audit (S8, S11b, S9) and the axis
+gates before it is swept, and the result's roles are its own `side(i,j)`.
+
+Each opening end is admitted only where the removed neighbour walk is a line
+whose float dot product with the kept walk's end tangent is exactly zero, and,
+where the normal segment runs into that walk's span, the walk is longer than
+`t` (§9.2's third open point). Anything else is `ErrUnsupported`. A side
+opening runs no section limit: its cavity opens through the removed faces, so
+the open chain's own S11a drop gate and the wall's §5 audit decide it.
 
 ## 10. Table BX — results + roles
 
@@ -1465,8 +1501,8 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **B** (landed) | revolve junction rewrite + roles + surveys | cap loops; shell reach |
 | **C1** (landed) | multi-region `stackedPrismPayload` (the lining reading); cups recorded on it; base S12 lifted through BX8 | closed + side-opening prism shell; revolve side opening; cap loops |
 | **C2** (landed) | closed prism shell (BX5): the void-shell stack, its tessellation | side-opening prism shell (BX4, §9.2's open question); revolve side opening; cap loops |
-| **C3** | revolve shell side opening, full and partial turn (§9.3) | cap loops |
-| **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | a side opening, full or partial turn, is S2 until C's §9.2 wall section lands; cap loops |
+| **C3** (landed) | revolve shell side opening, full and partial turn, right-angle rims (§9.3.2) | a slanted rim; cap loops |
+| **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | a side opening, full or partial turn (C3 lands it); cap loops |
 | **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, and

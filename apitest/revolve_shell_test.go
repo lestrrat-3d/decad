@@ -269,12 +269,13 @@ func TestRevolveShellPlaced(t *testing.T) {
 
 func TestRevolveShellRefusals(t *testing.T) {
 	t.Parallel()
-	t.Run("full turn opens a side face", func(t *testing.T) {
+	t.Run("full turn opens two separate side faces", func(t *testing.T) {
 		t.Parallel()
+		// The ring's two end annuli are not one connected run of side faces.
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, decad.FullRevolution{})
 		_, err := ring.Shell(t.Context(), decad.Faces(decad.Planar()), units.Millimeters(1))
-		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `§9.2`)
+		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `SX8`)
 	})
 	t.Run("kept angular cap", func(t *testing.T) {
 		t.Parallel()
@@ -287,8 +288,9 @@ func TestRevolveShellRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, halfTurn)
+		// Both angular caps, and the two end annuli: two separate runs.
 		_, err := ring.Shell(t.Context(), decad.Faces(decad.Planar()).Exactly(4), units.Millimeters(1))
-		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `§9.2`)
+		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `one connected run`)
 	})
 	t.Run("holed meridian", func(t *testing.T) {
 		t.Parallel()
