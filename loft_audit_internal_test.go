@@ -705,7 +705,7 @@ func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 // chordedWedgeTriangles assembles the F~230 hand-chorded spline wedge's own
 // wall-and-cap triangle set — the very verts/tris loftmesh.LoftCrossingAudit is handed
 // inside a Document.Loft of that shape — by running the same pipeline evalLoft
-// runs ahead of the audit (recordProfile, validateLoftRecords, loftPairings,
+// runs ahead of the audit (recordProfile, loftmesh.ValidateLoftRecords, loftmesh.PairRecords,
 // assembleLoft) and stopping at its output. It reuses
 // loft_chord_calibration_internal_test.go's wedgePlanes/chordedWedgeProfile
 // harness, so the geometry is that file's own m=112-station wedge.
@@ -733,9 +733,9 @@ func chordedWedgeAssembly(t testing.TB, pts [][2]float64) loftAssembly {
 	require.NoError(t, err)
 
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	offsets, walks0, walks1, target, err := validateLoftRecords(profile0, profile1, plane0, plane1, nil, loftRecordAreas(t, profile0, profile1), work0, work1)
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(profile0, profile1, plane0, plane1, nil, loftRecordAreas(t, profile0, profile1), work0, work1)
 	require.NoError(t, err)
-	pairs, _, _, stationRound, err := loftPairings(profile0, profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, _, _, stationRound, err := loftmesh.PairRecords(profile0, profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
 
 	frame0, err := r3.NewFrame(plane0.Origin, plane0.U, plane0.V)
@@ -881,10 +881,10 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 // `bound = proofbound.AbsSumUpper(bound, m.chorded.areaExcess, m.chorded.capAreaExcess)`)
 // — the leg zeroing left the ENTIRE repository suite green before this file
 // existed. TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap
-// (loft_arc_pairs_internal_test.go) already proves computeLoftChordedAllow's
+// (loft_arc_pairs_internal_test.go) already proves loftmesh.ComputeLoftChordedAllow's
 // own RETURNED areaExcess value is sound; it does NOT prove area() actually
 // SPENDS it — a regression deleting that composition term, or swapping which
-// field it reads, is invisible to a test that calls computeLoftChordedAllow
+// field it reads, is invisible to a test that calls loftmesh.ComputeLoftChordedAllow
 // directly and never goes through the real Body.Area(). Every test below
 // goes through Document.Loft and Body.Area(), the real published path, for
 // the BODY UNDER TEST. The dense REFERENCE each test converges against is
@@ -1063,7 +1063,7 @@ func convergedDenseArea(t *testing.T, botPtsAt, topPtsAt func(m int) [][2]float6
 // A10a-shaped baseline: the real arc-paired loft's own Area must enclose
 // the densely-converged reference — not merely the closed-form
 // quarter-cylinder value TestLoftArcWedgeBuildsAndMatchesClosedForm already
-// checks for Volume, and not merely computeLoftChordedAllow's own RETURNED
+// checks for Volume, and not merely loftmesh.ComputeLoftChordedAllow's own RETURNED
 // value (TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap) — this
 // goes through the real Document.Loft and Body.Area() end to end. Per this
 // file's own ledger, this shape's own cap term masks a zeroed wall leg; it

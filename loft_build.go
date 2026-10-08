@@ -121,11 +121,11 @@ type loftPayload struct {
 	// terms the row names, never this field on its own.
 	//
 	// Every matched-delta obligation is discharged by a SEPARATE quantity,
-	// the matchedDelta evalLoft composes: loftPairings accumulates each
+	// the matchedDelta evalLoft composes: loftmesh.PairRecords accumulates each
 	// cell's own chord-to-curve departure into a MAX beside sectionDelta,
 	// and buildLoftMass sums that MAX with the delta above through
 	// loftmesh.ChordCellDeltaUpper before passing it — never this field — to
-	// newLoftMassAccumulator and computeLoftChordedAllow (loft_moments.go),
+	// newLoftMassAccumulator and loftmesh.ComputeLoftChordedAllow (loft_moments.go),
 	// which is where the skirt leg's, the centroid radius' and every other
 	// build-wide matched argument comes from;
 	// proofbound.CellChordCurveAreaUpper, the wall leg and the cap tube read the
@@ -151,7 +151,7 @@ type loftPayload struct {
 
 	// chorded reports that the build holds a cell whose held triangle pair is
 	// NOT the boundary it denotes: a circular or free-form cell, which stands
-	// for a ruled patch (loftLoopPair.faceted). It is true on a degree-1
+	// for a ruled patch (loftmesh.LoopPair.Faceted). It is true on a degree-1
 	// free-form build whose sectionDelta is zero, so a consumer asking whether
 	// the held mesh IS the surface reads this field beside sectionDelta.
 	chorded bool
@@ -288,12 +288,12 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 
-	offsets, walks0, walks1, target, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
 	if err != nil {
 		return nil, err
 	}
 
-	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +409,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	pl.capStartCount, pl.cell, pl.side = a.capStartCount, a.cell, a.side
 	pl.proof = loftMeshProofOf(a, mass, sectionMatchedDelta)
 	pl.delta = a.delta
-	// sectionDelta is loftPairings' own accumulated MAX over cells
+	// sectionDelta is loftmesh.PairRecords' own accumulated MAX over cells
 	// (loftPayload's own doc comment): zero for a LineSeg-only pairing,
 	// positive for a same-kind circular one, to the sagitta its station
 	// chording commits.
@@ -421,10 +421,10 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 
 // loftIsChorded reports whether a build holds a cell whose held triangle pair
 // is not the boundary it denotes: a positive section term, or any cell that is
-// not faceted (loftLoopPair.faceted). A degree-1 free-form pair has a zero
+// not faceted (loftmesh.LoopPair.Faceted). A degree-1 free-form pair has a zero
 // departure on every cell and still stands for twisted bilinear patches.
-func loftIsChorded(pairs []loftLoopPair, sectionDelta, sectionMatchedDelta float64) bool {
-	return sectionDelta > 0 || sectionMatchedDelta > 0 || loftHasUnfacetedCell(pairs)
+func loftIsChorded(pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64) bool {
+	return sectionDelta > 0 || sectionMatchedDelta > 0 || loftmesh.HasUnfacetedCell(pairs)
 }
 
 // buildLoftMass folds the assembled triangle set into the mass accumulator
@@ -434,7 +434,7 @@ func loftIsChorded(pairs []loftLoopPair, sectionDelta, sectionMatchedDelta float
 //
 // docs/loft-design.md §5.2's matchedDelta row is composed here and nowhere
 // else: proofbound.AbsSumUpper of the build's own MAX-over-cells chord-to-curve
-// departure (loftPairings' sectionMatchedDelta) and the held vertex
+// departure (loftmesh.PairRecords' sectionMatchedDelta) and the held vertex
 // displacement a.delta. The two halves are accumulated apart — a chord's
 // departure from the curve it chords, and a station's departure from the
 // point the record and the motion denote for it — and every chorded leg
@@ -450,7 +450,7 @@ func loftIsChorded(pairs []loftLoopPair, sectionDelta, sectionMatchedDelta float
 // free-form cell with zero departure. Its bilinear patch still needs the
 // exact correction and twist legs. The chorded terms remain zero for a
 // LineSeg-only build, whose cells are all faceted.
-func buildLoftMass(pl loftPayload, a loftAssembly, pairs []loftLoopPair, sectionDelta, sectionMatchedDelta float64) *loftMassAccumulator {
+func buildLoftMass(pl loftPayload, a loftAssembly, pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64) *loftMassAccumulator {
 	anchor := pl.xform.Apply(pl.plane0.Origin)
 	chorded := loftIsChorded(pairs, sectionDelta, sectionMatchedDelta)
 	matchedDelta := 0.0
@@ -462,7 +462,7 @@ func buildLoftMass(pl loftPayload, a loftAssembly, pairs []loftLoopPair, section
 		mass.add(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls)
 	}
 	if chorded {
-		mass.Chorded = computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, a.reversed)
+		mass.Chorded = loftmesh.ComputeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, a.reversed)
 	}
 	return mass
 }
@@ -473,7 +473,7 @@ func buildLoftMass(pl loftPayload, a loftAssembly, pairs []loftLoopPair, section
 // the SAME triangle set the payload keeps, so the mesh restating that set
 // publishes the payload's own proofs and states nothing new of its own.
 //
-// sectionMatchedDelta is loftPairings' own MAX-over-cells chord-to-curve
+// sectionMatchedDelta is loftmesh.PairRecords' own MAX-over-cells chord-to-curve
 // departure.
 //
 // The three terms and why each reads what it does:

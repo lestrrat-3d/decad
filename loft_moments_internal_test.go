@@ -539,7 +539,7 @@ func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
 // unsound in exactly the direction CLAUDE.md forbids.
 //
 // FALSIFICATION: reverting loft_moments.go's volume() and
-// computeLoftChordedAllow to read m.sectionDelta wherever they now read
+// loftmesh.ComputeLoftChordedAllow to read m.sectionDelta wherever they now read
 // m.sectionMatchedDelta turns this test red — verified by hand during
 // review (git stash the fix, rerun, confirm failure; restore). The fixture
 // is potent BECAUSE sectionDelta and sectionMatchedDelta are given
@@ -570,17 +570,17 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 
 	const sectionDelta = 0.001      // stands in for the build's own max sagitta
 	const sectionMatchedDelta = 0.5 // stands in for its own max matchedDelta, deliberately far larger
-	pairs := []loftLoopPair{{
-		v: make([]Point2, 2), w: make([]Point2, 2),
-		arcUpperV: arcUpperV, arcUpperW: arcUpperW,
-		matchedDelta: []float64{sectionMatchedDelta, 0},
-		faceted:      []bool{false, true},
+	pairs := []loftmesh.LoopPair{{
+		V: make([]Point2, 2), W: make([]Point2, 2),
+		ArcUpperV: arcUpperV, ArcUpperW: arcUpperW,
+		MatchedDelta: []float64{sectionMatchedDelta, 0},
+		Faceted:      []bool{false, true},
 		// No arm placed these stations, so neither side carries a
 		// constant-speed claim: +Inf is the absence of a tangent-deviation
 		// energy proof, which proofbound.CellChordCurveAreaAllow spends as its
 		// premise-free arm (this fixture asserts on the VOLUME leg anyway).
-		tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
-		tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
+		TangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
+		TangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
 	}}
 	// anchor sits off every held vertex so neither triangle's own first
 	// vertex cancels the tetrahedron term trivially (a vLo-anchored sum
@@ -591,7 +591,7 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	// delta is 0: the accumulator below carries no placement displacement
 	// either, so the composed matchedDelta (docs/loft-design.md §5.2) is the
 	// chord-to-curve half alone and the two sites agree.
-	chorded := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, sectionMatchedDelta, 0, false)
+	chorded := loftmesh.ComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, sectionMatchedDelta, 0, false)
 
 	m := newLoftMassAccumulator(anchor, 0, sectionDelta, sectionMatchedDelta)
 	m.Chorded = chorded
@@ -631,8 +631,8 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 // over two same-kind ArcSeg profiles reaches it as soon as the settled chord
 // count produces a computed station.
 //
-// FALSIFICATION: replace computeLoftChordedAllow's own per-cell
-// loftmesh.ChordCellDeltaUpper(p.matchedDelta[j], delta) with p.matchedDelta[j], or its
+// FALSIFICATION: replace loftmesh.ComputeLoftChordedAllow's own per-cell
+// loftmesh.ChordCellDeltaUpper(p.MatchedDelta[j], delta) with p.MatchedDelta[j], or its
 // skirt's matchedDelta argument with the chord-to-curve half alone, and
 // the matching leg below turns red — verified by hand (apply the shim, rerun,
 // confirm failure, restore). The fixture is potent BECAUSE delta is the same
@@ -654,25 +654,25 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 
 	const chordToCurve = 0.5 // the cell's own sagitta half of the matched row
 	const delta = 0.25       // the held stations' own displacement
-	pairs := []loftLoopPair{{
-		v: make([]Point2, 2), w: make([]Point2, 2),
-		arcUpperV:      []float64{1.01, 0},
-		arcUpperW:      []float64{1.1, 0},
-		matchedDelta:   []float64{chordToCurve, 0},
-		faceted:        []bool{false, true},
-		tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
-		tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
+	pairs := []loftmesh.LoopPair{{
+		V: make([]Point2, 2), W: make([]Point2, 2),
+		ArcUpperV:      []float64{1.01, 0},
+		ArcUpperW:      []float64{1.1, 0},
+		MatchedDelta:   []float64{chordToCurve, 0},
+		Faceted:        []bool{false, true},
+		TangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
+		TangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
 	}}
 	anchor := r3.NewVec(-1, -1, -1)
 
 	matched := loftmesh.ChordCellDeltaUpper(chordToCurve, delta)
 	require.Greater(t, matched, chordToCurve, "the composition must actually widen the term it replaces")
 
-	got := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matched, delta, false)
+	got := loftmesh.ComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matched, delta, false)
 	// What the sagitta-alone reading publishes: the identical call with the
 	// station displacement dropped from both the per-cell and the build-wide
 	// argument.
-	sagittaOnly := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, chordToCurve, 0, false)
+	sagittaOnly := loftmesh.ComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, chordToCurve, 0, false)
 
 	require.Greater(t, got.WallAreaUpper, sagittaOnly.WallAreaUpper,
 		"the wall upper must charge the held station displacement")
@@ -752,19 +752,19 @@ func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 	// subtends: |vHi-vLo| = 1 and |wHi-wLo| = sqrt(1.09) ~= 1.044.
 	arcUpperV := []float64{1.01, 1.01}
 	arcUpperW := []float64{1.1, 1.1}
-	pairsWith := func(matched []float64, faceted bool) []loftLoopPair {
-		return []loftLoopPair{{
-			v: make([]Point2, 2), w: make([]Point2, 2),
-			arcUpperV: arcUpperV, arcUpperW: arcUpperW,
-			matchedDelta:   matched,
-			faceted:        []bool{faceted, faceted},
-			tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
-			tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
+	pairsWith := func(matched []float64, faceted bool) []loftmesh.LoopPair {
+		return []loftmesh.LoopPair{{
+			V: make([]Point2, 2), W: make([]Point2, 2),
+			ArcUpperV: arcUpperV, ArcUpperW: arcUpperW,
+			MatchedDelta:   matched,
+			Faceted:        []bool{faceted, faceted},
+			TangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
+			TangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
 		}}
 	}
 
 	t.Run("sums both charged cells", func(t *testing.T) {
-		chorded := computeLoftChordedAllow(pairsWith([]float64{0.5, 0.5}, false), vIdx, wIdx, verts, anchor, 0.5, 0, false)
+		chorded := loftmesh.ComputeLoftChordedAllow(pairsWith([]float64{0.5, 0.5}, false), vIdx, wIdx, verts, anchor, 0.5, 0, false)
 
 		// The loop walks cell 0 as (v0, v1, w0, w1) and cell 1 as the wrap
 		// back, (v1, v0, w1, w0) — the same quad with its two ends swapped.
@@ -779,7 +779,7 @@ func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 	})
 
 	t.Run("charges nothing where every cell is faceted", func(t *testing.T) {
-		chorded := computeLoftChordedAllow(pairsWith([]float64{0, 0}, true), vIdx, wIdx, verts, anchor, 0, 0, false)
+		chorded := loftmesh.ComputeLoftChordedAllow(pairsWith([]float64{0, 0}, true), vIdx, wIdx, verts, anchor, 0, 0, false)
 		require.Zero(t, chorded.TwistAreaAllow,
 			"a LineSeg-only build's held triangle pair IS its own boundary, so it charges no held-to-bilinear gap")
 	})
@@ -789,7 +789,7 @@ func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 	// fail first: under the departure-only gate this subtest read a nil
 	// correction and zero legs.
 	t.Run("charges a zero-departure cell that is not faceted", func(t *testing.T) {
-		chorded := computeLoftChordedAllow(pairsWith([]float64{0, 0}, false), vIdx, wIdx, verts, anchor, 0, 0, false)
+		chorded := loftmesh.ComputeLoftChordedAllow(pairsWith([]float64{0, 0}, false), vIdx, wIdx, verts, anchor, 0, 0, false)
 		want := new(big.Rat).Add(proofbound.CellTwistVolume(vLo, vHi, wLo, wHi), proofbound.CellTwistVolume(vHi, vLo, wHi, wLo))
 		require.NotNil(t, chorded.TwistVolumeCorrection)
 		require.Zero(t, want.Cmp(chorded.TwistVolumeCorrection), "both cells' exact twist corrections are applied")

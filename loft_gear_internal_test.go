@@ -136,9 +136,9 @@ func loftGearAssembly(t *testing.T, g loftGear, count int) loftAssembly {
 	profile1, plane1, _, err := recordProfile(s1, p1)
 	require.NoError(t, err)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	offsets, walks0, walks1, target, err := validateLoftRecords(profile0, profile1, plane0, plane1, nil, loftRecordAreas(t, profile0, profile1), work0, work1)
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(profile0, profile1, plane0, plane1, nil, loftRecordAreas(t, profile0, profile1), work0, work1)
 	require.NoError(t, err)
-	pairs, _, _, stationRound, err := loftPairings(profile0, profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, _, _, stationRound, err := loftmesh.PairRecords(profile0, profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
 	frame0, err := r3.NewFrame(plane0.Origin, plane0.U, plane0.V)
 	require.NoError(t, err)
@@ -382,7 +382,7 @@ func TestLoftGearOutlineVerifiesSound(t *testing.T) {
 
 // TestLoftStationWalkWorkPerStation runs Loft's own prefix on each gear
 // fixture with the two records' counters in hand. It asserts the raise
-// validateLoftRecords applies before it resolves a walk,
+// loftmesh.ValidateLoftRecords applies before it resolves a walk,
 // loftmesh.StationWorkLimit over the counter's spend after the area
 // falsifier, and that the walk resolution and the station walk together stay
 // below loftmesh.StationWorkUnits per station on every case, which is what
@@ -406,20 +406,20 @@ func TestLoftStationWalkWorkPerStation(t *testing.T) {
 			works := []*freeform.FreeformWork{work0, work1}
 			before := []uint64{work0.Spent, work1.Spent}
 
-			offsets, walks0, walks1, target, err := validateLoftRecords(profile0, profile1, plane0, plane1, nil, [2]float64{a0, a1}, work0, work1)
+			offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(profile0, profile1, plane0, plane1, nil, [2]float64{a0, a1}, work0, work1)
 			require.NoError(t, err)
 			p := uint64(len(profile0.Outer.Segments))
 			for i, w := range works {
 				require.Equal(t, loftmesh.StationWorkLimit(before[i], p), w.WorkLimit(),
-					"validateLoftRecords raises record %d's ceiling to StationWorkLimit over its spend", i)
+					"loftmesh.ValidateLoftRecords raises record %d's ceiling to StationWorkLimit over its spend", i)
 				require.Greater(t, w.WorkLimit(), freeform.FreeformWorkLimit)
 			}
 
-			pairs, _, _, _, err := loftPairings(profile0, profile1, offsets, walks0, walks1, target, work0, work1)
+			pairs, _, _, _, err := loftmesh.PairRecords(profile0, profile1, offsets, walks0, walks1, target, work0, work1)
 			require.NoError(t, err)
 			stations := 0
 			for _, pair := range pairs {
-				stations += len(pair.v)
+				stations += len(pair.V)
 			}
 			for i, w := range works {
 				perStation := (w.Spent - before[i]) / uint64(stations) //nolint:gosec // stations is a positive count.
@@ -433,12 +433,12 @@ func TestLoftStationWalkWorkPerStation(t *testing.T) {
 }
 
 // TestLoftStationWalkRefusesAtTheRaisedWorkLimit is R7 at the raised
-// ceiling. Each gear tooth record's counter is raised by validateLoftRecords,
+// ceiling. Each gear tooth record's counter is raised by loftmesh.ValidateLoftRecords,
 // then left with half the station walk's measured cost: the walk runs past
 // the default 1 << 20 (the counters already hold more than that) and refuses
 // with ErrUnsupported exactly at the raised limit.
 //
-// Shown to fail first: with RaiseLimit removed from validateLoftRecords, the
+// Shown to fail first: with RaiseLimit removed from loftmesh.ValidateLoftRecords, the
 // first assertion fails, and the walk refuses on its first charge rather than
 // at the raised limit.
 func TestLoftStationWalkRefusesAtTheRaisedWorkLimit(t *testing.T) {
@@ -452,10 +452,10 @@ func TestLoftStationWalkRefusesAtTheRaisedWorkLimit(t *testing.T) {
 
 	measure := func() (uint64, uint64) {
 		work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-		offsets, walks0, walks1, target, err := validateLoftRecords(profile0, profile1, plane0, plane1, nil, areas, work0, work1)
+		offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(profile0, profile1, plane0, plane1, nil, areas, work0, work1)
 		require.NoError(t, err)
 		before0, before1 := work0.Spent, work1.Spent
-		_, _, _, _, err = loftPairings(profile0, profile1, offsets, walks0, walks1, target, work0, work1)
+		_, _, _, _, err = loftmesh.PairRecords(profile0, profile1, offsets, walks0, walks1, target, work0, work1)
 		require.NoError(t, err)
 		return work0.Spent - before0, work1.Spent - before1
 	}
@@ -464,7 +464,7 @@ func TestLoftStationWalkRefusesAtTheRaisedWorkLimit(t *testing.T) {
 	require.Positive(t, cost1)
 
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	offsets, walks0, walks1, target, err := validateLoftRecords(profile0, profile1, plane0, plane1, nil, areas, work0, work1)
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(profile0, profile1, plane0, plane1, nil, areas, work0, work1)
 	require.NoError(t, err)
 	require.Greater(t, work0.WorkLimit(), freeform.FreeformWorkLimit+cost0, "the raise must leave room past the default ceiling")
 	require.Greater(t, work1.WorkLimit(), freeform.FreeformWorkLimit+cost1, "the raise must leave room past the default ceiling")
@@ -472,7 +472,7 @@ func TestLoftStationWalkRefusesAtTheRaisedWorkLimit(t *testing.T) {
 	work1.Spent = work1.WorkLimit() - cost1/2
 
 	start := time.Now()
-	_, _, _, _, err = loftPairings(profile0, profile1, offsets, walks0, walks1, target, work0, work1) //nolint:dogsled // only the refusal matters here.
+	_, _, _, _, err = loftmesh.PairRecords(profile0, profile1, offsets, walks0, walks1, target, work0, work1) //nolint:dogsled // only the refusal matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 	refused := work0
 	if work1.Spent == work1.WorkLimit() {

@@ -378,7 +378,7 @@ func TestEvalLoftHoleRimIsConcave(t *testing.T) {
 // (k+offset) mod n — asserted on the built correspondence's own coordinates.
 // resolveLoftLoopWalks resolves every loop of p (Outer, then Holes in order)
 // into its own per-segment walk slice, on a fresh freeform.FreeformWork per loop — the
-// shape validateLoftRecords returns and loftPairings consumes.
+// shape loftmesh.ValidateLoftRecords returns and loftmesh.PairRecords consumes.
 func resolveLoftLoopWalks(t *testing.T, p ProfileRecord) [][]survey2d.SegmentWalk {
 	t.Helper()
 	loops := append([]LoopRecord{p.Outer}, p.Holes...)
@@ -401,9 +401,9 @@ func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{0}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftPairings(p, p, offsets, walks, walks, 0, nil, nil)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(p, p, offsets, walks, walks, 0, nil, nil)
 	require.NoError(t, err)
-	require.Equal(t, pt(0, 0), pairs[0].w[0])
+	require.Equal(t, pt(0, 0), pairs[0].W[0])
 	require.Zero(t, sectionDelta, "a LineSeg-only pairing carries no curve to depart from")
 	require.Zero(t, sectionMatchedDelta, "a LineSeg-only pairing carries no curve to depart from")
 	require.Zero(t, stationRound, "every segment of this square is UNTRIMMED, so every station is PINNED (docs/loft-design.md §5.2)")
@@ -414,13 +414,13 @@ func TestLoftPairingsAlignmentRotatesCorrespondence(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{1}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs, _, _, _, err := loftPairings(p, p, offsets, walks, walks, 0, nil, nil) //nolint:dogsled // sectionDelta/sectionMatchedDelta/stationRound discarded; only the correspondence is under test.
+	pairs, _, _, _, err := loftmesh.PairRecords(p, p, offsets, walks, walks, 0, nil, nil) //nolint:dogsled // sectionDelta/sectionMatchedDelta/stationRound discarded; only the correspondence is under test.
 	require.NoError(t, err)
 	// loop0 segment 0 (V_0, at local (0,0)) now pairs with loop1 segment 1,
 	// whose own recorded start is local (1,0) — the far endpoint of rung R_0
 	// moves from W[0]=(0,0) to W[1]=(1,0).
-	require.Equal(t, pt(1, 0), pairs[0].w[0])
-	require.Equal(t, pt(0, 0), pairs[0].v[0])
+	require.Equal(t, pt(1, 0), pairs[0].W[0])
+	require.Equal(t, pt(0, 0), pairs[0].V[0])
 }
 
 // TestLoftPairingsTwoHolesPairByPosition proves P1: two holes recorded in
@@ -438,14 +438,14 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 	p1 := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{largeHole, smallHole}}
 
 	offsets := []int{0, 0, 0}
-	pairs, _, _, _, err := loftPairings(p0, p1, offsets, resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), 0, nil, nil) //nolint:dogsled // sectionDelta/sectionMatchedDelta/stationRound discarded; only the correspondence is under test.
+	pairs, _, _, _, err := loftmesh.PairRecords(p0, p1, offsets, resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), 0, nil, nil) //nolint:dogsled // sectionDelta/sectionMatchedDelta/stationRound discarded; only the correspondence is under test.
 	require.NoError(t, err)
 
 	require.Len(t, pairs, 3) // outer + 2 holes
 	// Hole loop 1 (index 1+0): p0's own small hole (v) pairs with p1's
 	// Holes[0], the LARGE hole (w) — pure positional pairing.
-	require.Equal(t, smallHole.Segments[0].(LineSeg).Start.U, pairs[1].v[0].U)
-	require.InDelta(t, 0.65, pairs[1].w[0].U, 1e-9, "p1's Holes[0] is the large hole, centered at 0.8 with half-width 0.15")
+	require.Equal(t, smallHole.Segments[0].(LineSeg).Start.U, pairs[1].V[0].U)
+	require.InDelta(t, 0.65, pairs[1].W[0].U, 1e-9, "p1's Holes[0] is the large hole, centered at 0.8 with half-width 0.15")
 }
 
 // TestLoftWalkResolutionChargesOncePerSegment pins the A10 plan's Task 1: a
@@ -496,7 +496,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 		"the gate walks that segment ONCE: its counter reads a single reference charge, not two")
 	require.Zero(t, work1.Spent, "S3 refuses on p0's segment 0 before p1's own segment is walked")
 
-	// loftPairings, handed those already-resolved walks, resolves no walk
+	// loftmesh.PairRecords, handed those already-resolved walks, resolves no walk
 	// again: everything it spends is the free-form station generator's own
 	// work, which the same generator run on a fresh counter reproduces.
 	loop := LoopRecord{Segments: make([]CurveSegment, k)}
@@ -509,7 +509,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	// counter's R7 ceiling; the charge comparison does not depend on it.
 	const target = 1e-1
 	before := loopWork.Spent
-	_, _, _, _, err = loftPairings(profile, profile, []int{0}, walks0, walks0, target, loopWork, loopWork) //nolint:dogsled // only the charge matters here.
+	_, _, _, _, err = loftmesh.PairRecords(profile, profile, []int{0}, walks0, walks0, target, loopWork, loopWork) //nolint:dogsled // only the charge matters here.
 	require.NoError(t, err)
 
 	stationWork := &freeform.FreeformWork{}
@@ -520,13 +520,13 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	}
 	require.Positive(t, stationWork.Spent, "chording a free-form pair charges the records' counters")
 	require.Equal(t, stationWork.Spent, loopWork.Spent-before,
-		"loftPairings spends the station generator's work and resolves no walk a second time")
+		"loftmesh.PairRecords spends the station generator's work and resolves no walk a second time")
 }
 
 // TestLoftPairingsConsumesTheGateResolvedWalks pins Task 1's other half on
-// the ADMITTED path: loftPairings publishes the coordinates of the walks
-// validateLoftRecords already resolved, rather than resolving the segments
-// again. loftPairings is handed p0's record and both walk sets, and never
+// the ADMITTED path: loftmesh.PairRecords publishes the coordinates of the walks
+// loftmesh.ValidateLoftRecords already resolved, rather than resolving the segments
+// again. loftmesh.PairRecords is handed p0's record and both walk sets, and never
 // sees p1's record at all, so every w coordinate it publishes can only come
 // from the walks1 slice the gate returned — the two profiles are deliberately
 // disjoint squares, so a pairing that re-resolved from the one record it does
@@ -537,35 +537,35 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 	p1 := ProfileRecord{Outer: squareLoop(10, 20, 2, true)} // corners (8,18), (12,18), (12,22), (8,22)
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 
-	offsets, walks0, walks1, _, err := validateLoftRecords(p0, p1, pl0, pl1, []int{1}, loftRecordAreas(t, p0, p1), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	offsets, walks0, walks1, _, err := loftmesh.ValidateLoftRecords(p0, p1, pl0, pl1, []int{1}, loftRecordAreas(t, p0, p1), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, []int{1}, offsets)
 	require.Len(t, walks0, 1)
 	require.Len(t, walks1, 1)
 
-	pairs, _, _, _, err := loftPairings(p0, p1, offsets, walks0, walks1, 0, nil, nil) //nolint:dogsled // only the pairs and the error matter here.
+	pairs, _, _, _, err := loftmesh.PairRecords(p0, p1, offsets, walks0, walks1, 0, nil, nil) //nolint:dogsled // only the pairs and the error matter here.
 	require.NoError(t, err)
 	require.Len(t, pairs, 1)
 
 	n := len(p0.Outer.Segments)
-	require.Len(t, pairs[0].v, n)
-	require.Len(t, pairs[0].w, n)
+	require.Len(t, pairs[0].V, n)
+	require.Len(t, pairs[0].W, n)
 	for j := range n {
 		k := (j + offsets[0]) % n
-		require.Equal(t, pt(walks0[0][j].StartU, walks0[0][j].StartV), pairs[0].v[j],
+		require.Equal(t, pt(walks0[0][j].StartU, walks0[0][j].StartV), pairs[0].V[j],
 			"v[%d] is walks0[0][%d]'s own start point", j, j)
-		require.Equal(t, pt(walks1[0][k].StartU, walks1[0][k].StartV), pairs[0].w[j],
+		require.Equal(t, pt(walks1[0][k].StartU, walks1[0][k].StartV), pairs[0].W[j],
 			"w[%d] is walks1[0][%d]'s own start point", j, k)
 	}
 	// The same claim as literal coordinates: v runs p0's own corners from
 	// (0,0), and w runs p1's corners rotated by the offset, so w[0] is p1's
 	// SECOND corner (12,18) — a coordinate p0's record does not contain.
-	require.Equal(t, pt(0, 0), pairs[0].v[0])
-	require.Equal(t, pt(12, 18), pairs[0].w[0])
+	require.Equal(t, pt(0, 0), pairs[0].V[0])
+	require.Equal(t, pt(12, 18), pairs[0].W[0])
 }
 
 // TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile pins
-// the walk-resolution seam's own precedence: validateLoftRecords' per-segment
+// the walk-resolution seam's own precedence: loftmesh.ValidateLoftRecords' per-segment
 // loop walks p0's segment j, tests S3, THEN walks p1's segment k — the
 // ORIGINAL interleaved order, unchanged by threading the resolved walks
 // through (Task 1). A record whose FIRST profile fails S3 at its very first
@@ -830,7 +830,7 @@ func TestEvalLoftCancellation(t *testing.T) {
 
 // --- Table S gate tests ---
 
-// validateLoftRecordsErr is validateLoftRecords with only the error kept, for
+// validateLoftRecordsErr is loftmesh.ValidateLoftRecords with only the error kept, for
 // the gate tests below that assert a refusal and don't need the resolved
 // offsets or walks.
 //
@@ -838,13 +838,13 @@ func TestEvalLoftCancellation(t *testing.T) {
 // (loftRecordAreasOrZero), so a gate that reads the chord target reads the
 // same one a real build would.
 func validateLoftRecordsErr(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeform.FreeformWork) error {
-	_, _, _, _, err := validateLoftRecords(p0, p1, pl0, pl1, alignment, loftRecordAreasOrZero(p0, p1), work0, work1) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err := loftmesh.ValidateLoftRecords(p0, p1, pl0, pl1, alignment, loftRecordAreasOrZero(p0, p1), work0, work1) //nolint:dogsled // only the error matters here.
 	return err
 }
 
 // loftRecordAreas is the pair of exact region integrals Loft reads off
 // falsifyRecordedArea and stores on the payload (loftPayload.recordArea), for
-// a test that builds a payload or calls validateLoftRecords directly.
+// a test that builds a payload or calls loftmesh.ValidateLoftRecords directly.
 func loftRecordAreas(t testing.TB, p0, p1 ProfileRecord) [2]float64 {
 	t.Helper()
 	ig0, err := p0.EvaluatorIntegrals(freeform.MomentAreaOrder, nil)
@@ -961,7 +961,7 @@ func TestValidateLoftRecordsDistinctPlanesPass(t *testing.T) {
 	t.Parallel()
 	p := unitSquareProfile()
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	offsets, walks0, walks1, _, err := validateLoftRecords(p, p, pl0, pl1, nil, loftRecordAreas(t, p, p), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	offsets, walks0, walks1, _, err := loftmesh.ValidateLoftRecords(p, p, pl0, pl1, nil, loftRecordAreas(t, p, p), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, []int{0}, offsets)
 	require.Len(t, walks0, 1)
@@ -1139,9 +1139,9 @@ func TestLoftFrameLiftRoundingChargedInDelta(t *testing.T) {
 func exactLoftVertexLifts(t *testing.T, pl loftPayload) [][3]*big.Rat {
 	t.Helper()
 	require.Equal(t, r3.Identity(), pl.xform)
-	offsets, walks0, walks1, target, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
-	pairs, _, _, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	pairs, _, _, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
@@ -1158,10 +1158,10 @@ func exactLoftVertexLifts(t *testing.T, pl loftPayload) [][3]*big.Rat {
 	}
 	out := make([][3]*big.Rat, len(a.verts))
 	for i, p := range pairs {
-		for j, q := range p.v {
+		for j, q := range p.V {
 			out[a.vIdx[i][j]] = lift(pl.frame0, q)
 		}
-		for j, q := range p.w {
+		for j, q := range p.W {
 			out[a.wIdx[i][j]] = lift(pl.frame1, q)
 		}
 	}
@@ -1186,14 +1186,14 @@ func exactRatMeshVolume(verts [][3]*big.Rat, tris [][3]int) *big.Rat {
 // --- capPolygonAreaRat: docs/loft-design.md §8's cap-polygon shoelace ---
 
 // assembleLoftFixture runs evalLoft's own pairing/assembly prefix
-// (validateLoftRecords, loftPairings, assembleLoft) and stops there, so a
+// (loftmesh.ValidateLoftRecords, loftmesh.PairRecords, assembleLoft) and stops there, so a
 // test can inspect the assembled cap polygon (pts0/loopIdx0, pts1/loopIdx1)
 // directly rather than only the published body.
 func assembleLoftFixture(t *testing.T, pl loftPayload) loftAssembly {
 	t.Helper()
-	offsets, walks0, walks1, target, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, loftRecordAreas(t, pl.profile0, pl.profile1), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, loftRecordAreas(t, pl.profile0, pl.profile1), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
-	pairs, _, _, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	pairs, _, _, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
@@ -1693,21 +1693,21 @@ func TestComputeLoftChordedAllowReversesSignedCorrections(t *testing.T) {
 		r3.NewVec(1, -2, 0.5), r3.NewVec(4, 0, 1),
 		r3.NewVec(-0.5, 2, 6), r3.NewVec(3, 4, 7.5),
 	}
-	pairs := []loftLoopPair{{
-		v:              make([]Point2, 2),
-		w:              make([]Point2, 2),
-		arcUpperV:      []float64{4, 0},
-		arcUpperW:      []float64{4, 0},
-		matchedDelta:   []float64{0.01, 0},
-		faceted:        []bool{false, true},
-		tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
-		tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
+	pairs := []loftmesh.LoopPair{{
+		V:              make([]Point2, 2),
+		W:              make([]Point2, 2),
+		ArcUpperV:      []float64{4, 0},
+		ArcUpperW:      []float64{4, 0},
+		MatchedDelta:   []float64{0.01, 0},
+		Faceted:        []bool{false, true},
+		TangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
+		TangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
 	}}
 	vIdx, wIdx := [][]int{{0, 1}}, [][]int{{2, 3}}
 	anchor := r3.NewVec(-2, 1.25, -3)
 
-	forward := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.01, 0, false)
-	reversed := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.01, 0, true)
+	forward := loftmesh.ComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.01, 0, false)
+	reversed := loftmesh.ComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.01, 0, true)
 
 	require.Zero(t, new(big.Rat).Add(forward.TwistVolumeCorrection, reversed.TwistVolumeCorrection).Sign())
 	require.Equal(t, forward.TwistVolumeUpper, reversed.TwistVolumeUpper,

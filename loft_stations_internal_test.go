@@ -24,9 +24,9 @@ import (
 
 // This file is a10-plan.md Part 3 PR 5's own test file: loftmesh.RecordCellStations (the
 // station generator), loftmesh.CircularCellPoints (the ARC arm), the S15 station
-// cap and S16 one-sided collapsed-cell refusal, and loftPairings' own
+// cap and S16 one-sided collapsed-cell refusal, and loftmesh.PairRecords' own
 // station-chain and sectionDelta expansion. Every circular-arm test below
-// calls the generator or loftPairings DIRECTLY rather than through
+// calls the generator or loftmesh.PairRecords DIRECTLY rather than through
 // Document.Loft, so each one pins the arm's own published readings; the
 // end-to-end arc build is pinned in loft_arc_pairs_internal_test.go.
 
@@ -652,7 +652,7 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 // smaller reading. That per-cell value is the CHORD-TO-CURVE HALF of
 // docs/loft-design.md §5.2's matchedDelta row, which every consumer
 // (internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper through loft_moments.go's
-// computeLoftChordedAllow) reads straight off this arm before composing it
+// loftmesh.ComputeLoftChordedAllow) reads straight off this arm before composing it
 // with the build's own delta, and loftPayload's own doc comment states the
 // equality as fact — so it is asserted here rather than left to the
 // assignment that implements it.
@@ -714,7 +714,7 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 //
 // This necessarily precedes S8's own audit-budget ceiling, each row decided at
 // the phase docs/loft-design.md §4's gate-order paragraph assigns it: evalLoft
-// calls loftPairings (which reaches this refusal through loftCellStations)
+// calls loftmesh.PairRecords (which reaches this refusal through loftCellStations)
 // before assembleLoft ever builds a triangle and before
 // loftmesh.LoftCrossingAudit ever runs (loft_build.go's own evalLoft body). Had the
 // cap not fired, the station count alone — already past 2^14 per side — would
@@ -770,9 +770,9 @@ func TestLoftStationCapFitsTheAuditTriangleCeiling(t *testing.T) {
 	assembledTriangles := func(t *testing.T, p ProfileRecord) int {
 		t.Helper()
 		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-		offsets, walks0, walks1, _, err := validateLoftRecords(p, p, pl0, pl1, nil, loftRecordAreas(t, p, p), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+		offsets, walks0, walks1, _, err := loftmesh.ValidateLoftRecords(p, p, pl0, pl1, nil, loftRecordAreas(t, p, p), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 		require.NoError(t, err)
-		pairs, _, _, stationRound, err := loftPairings(p, p, offsets, walks0, walks1, 0, nil, nil)
+		pairs, _, _, stationRound, err := loftmesh.PairRecords(p, p, offsets, walks0, walks1, 0, nil, nil)
 		require.NoError(t, err)
 		a, err := assembleLoft(t.Context(), pairs, mustFrame(t, pl0), mustFrame(t, pl1), pl0, r3.Identity(), stationRound)
 		require.NoError(t, err)
@@ -1008,7 +1008,7 @@ func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 // exactly the points given, chained End-to-Start around the loop. The LineSeg
 // arm publishes one station a side at its own recorded start
 // (loftmesh.LineCellPoints), so the points given ARE the station chain
-// loftPairings assembles for that side — which is what lets an S16 fixture
+// loftmesh.PairRecords assembles for that side — which is what lets an S16 fixture
 // state a cell's collapse directly instead of hunting for a curve that
 // produces one. A repeated point makes a zero-length LineSeg, which
 // docs/loft-design.md §4 names as a recordable input rather than a
@@ -1051,7 +1051,7 @@ func TestLoftPairingsRefusesAOneSidedTerminalCell(t *testing.T) {
 	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
 	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(2, 0), pt(1, 3)})
 
-	_, _, _, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err := loftmesh.PairRecords(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the error matters here.
 	requireOneSidedCellRefusal(t, err, 0)
 }
 
@@ -1065,7 +1065,7 @@ func TestLoftPairingsRefusesAOneSidedWrapCell(t *testing.T) {
 	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(1, 1), pt(0, 0)})
 	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(2, 0), pt(3, 3)})
 
-	_, _, _, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err := loftmesh.PairRecords(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the error matters here.
 	requireOneSidedCellRefusal(t, err, 2)
 }
 
@@ -1093,13 +1093,13 @@ func TestLoftPairingsRefusesAOneSidedCellAtOneChordCell(t *testing.T) {
 	p0 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{arc0, line0}}}
 	p1 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{arc1, line1}}}
 
-	_, _, _, _, err = loftPairings(p0, p1, make([]int, 1), resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), target, nil, nil) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err = loftmesh.PairRecords(p0, p1, make([]int, 1), resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), target, nil, nil) //nolint:dogsled // only the error matters here.
 	requireOneSidedCellRefusal(t, err, 0)
 }
 
 // TestLoftPairingsAdmitsABothSidedCollapsedCell is S16's own boundary, and the
 // reason the gate compares the two sides rather than refusing on either: a
-// cell collapsing on BOTH sections is S6's row, so loftPairings must let it
+// cell collapsing on BOTH sections is S6's row, so loftmesh.PairRecords must let it
 // through for the audit to answer it. Without this the three refusals above
 // would prove only that the gate refuses every collapse.
 func TestLoftPairingsAdmitsABothSidedCollapsedCell(t *testing.T) {
@@ -1107,11 +1107,11 @@ func TestLoftPairingsAdmitsABothSidedCollapsedCell(t *testing.T) {
 	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
 	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(5, 5), pt(5, 5), pt(9, 9)})
 
-	pairs, _, _, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the pairs matter here.
+	pairs, _, _, _, err := loftmesh.PairRecords(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the pairs matter here.
 	require.NoError(t, err)
 	require.Len(t, pairs, 1)
-	require.Equal(t, pairs[0].v[0], pairs[0].v[1], "the fixture's cell 0 must collapse on side 0")
-	require.Equal(t, pairs[0].w[0], pairs[0].w[1], "and on side 1 too, or it is not this boundary")
+	require.Equal(t, pairs[0].V[0], pairs[0].V[1], "the fixture's cell 0 must collapse on side 0")
+	require.Equal(t, pairs[0].W[0], pairs[0].W[1], "and on side 1 too, or it is not this boundary")
 }
 
 // --- the chain's own pinned endpoint ---
@@ -1233,7 +1233,7 @@ func TestCircularStationChainRefusesAnUnenclosableRecord(t *testing.T) {
 	require.True(t, math.IsInf(loftmesh.ChordCellDeltaUpper(1e-3, delta), 1), "an underivable half makes the whole chord bound underivable")
 }
 
-// --- loftPairings: station-chain expansion and sectionDelta ---
+// --- loftmesh.PairRecords: station-chain expansion and sectionDelta ---
 
 // TestLoftPairingsSectionDeltaIsMaxNotSum is the plan's own acceptance line:
 // a loop with two curved pairs of different curvature publishes sectionDelta
@@ -1260,7 +1260,7 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 	walks0 := [][]survey2d.SegmentWalk{{wA, wB}}
 	walks1 := [][]survey2d.SegmentWalk{{wA, wB}}
 
-	pairs, sectionDelta, _, _, err := loftPairings(p, p, []int{0}, walks0, walks1, target, nil, nil)
+	pairs, sectionDelta, _, _, err := loftmesh.PairRecords(p, p, []int{0}, walks0, walks1, target, nil, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, pairs)
 
@@ -1286,14 +1286,14 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{0}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs, sectionDelta, _, stationRound, err := loftPairings(p, p, offsets, walks, walks, 999.0, nil, nil)
+	pairs, sectionDelta, _, stationRound, err := loftmesh.PairRecords(p, p, offsets, walks, walks, 999.0, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, pairs, 1)
-	require.Len(t, pairs[0].v, 4)
-	require.Len(t, pairs[0].w, 4)
+	require.Len(t, pairs[0].V, 4)
+	require.Len(t, pairs[0].W, 4)
 	for j := range 4 {
-		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, pairs[0].v[j])
-		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, pairs[0].w[j])
+		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, pairs[0].V[j])
+		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, pairs[0].W[j])
 	}
 	require.Zero(t, sectionDelta)
 	require.Zero(t, stationRound, "every station of this UNTRIMMED square is PINNED (docs/loft-design.md §5.2)")

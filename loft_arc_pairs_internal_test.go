@@ -26,7 +26,7 @@ import (
 // This file is a10-plan.md Part 3 PR 6's own acceptance tests: the
 // same-kind circular pairing S3's arc form now admits, S14's station-
 // rounding gate, the CCW structural gate, and sectionDelta's composition
-// into all four measurements (loft_moments.go's computeLoftChordedAllow).
+// into all four measurements (loft_moments.go's loftmesh.ComputeLoftChordedAllow).
 // wedgePlanes/wedgeArcSketch/wedgeRadius/wedgeSweep/wedgeHeight/toleranceRel
 // are loft_chord_calibration_internal_test.go's own PR 1 fixtures (same
 // package, same reference wedge).
@@ -98,7 +98,7 @@ func TestLoftArcWedgeMatchesExtrudeOracle(t *testing.T) {
 	// under-widens the wall's own transverse extent when the two sections
 	// differ (VIOLATION 2) — on the SHIPPED A10a wedge this exact oracle
 	// checks, the true gap (5.7333e-03) exceeded the published Area.Bound
-	// (3.8222e-03) by 1.50x, a false-Sound reading. computeLoftChordedAllow's
+	// (3.8222e-03) by 1.50x, a false-Sound reading. loftmesh.ComputeLoftChordedAllow's
 	// own capAreaExcess and widened areaExcess close it; see
 	// TestLoftArcWedgeAreaOracleAtGrowingRadius for the 4.5x/10.5x cases the
 	// audit reported at r=20 and r=50.
@@ -142,7 +142,7 @@ func wedgeArcSketchR(t *testing.T, w *sketch.World, plane *sketch.Plane, radius 
 // the shipped r=5 wedge, replayed at r=20 and r=50 — the radii the audit
 // reported VIOLATION 1's shortfall growing to 4.50x and 10.50x at (the omitted
 // cap term scales as 4r/h, so a bound that only covers r=5 by chance would
-// still fail here). All three must overlap under computeLoftChordedAllow's
+// still fail here). All three must overlap under loftmesh.ComputeLoftChordedAllow's
 // own capAreaExcess and widened areaExcess terms.
 func TestLoftArcWedgeAreaOracleAtGrowingRadius(t *testing.T) {
 	t.Parallel()
@@ -228,7 +228,7 @@ func triAreaFloat(a, b, c r3.Vec) float64 {
 
 // TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap isolates
 // VIOLATION 2's own claim from VIOLATION 1's cap term entirely: it calls
-// computeLoftChordedAllow DIRECTLY on a hand-built quarter-cone-frustum
+// loftmesh.ComputeLoftChordedAllow DIRECTLY on a hand-built quarter-cone-frustum
 // station chain (r0=20 -> r1=2, h=10, m=65 — the audit's own fixture), with
 // no cap contribution in the picture at all, and checks that its OWN
 // areaExcess return value alone encloses the wall's own true chord-to-curve
@@ -247,7 +247,7 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	const m = 65
 	n := m + 1 // m circular cells, plus one closing (non-circular) station
 	// standing in for the next segment's own first station
-	// (loftLoopPair's own doc comment) — without it, (j+1)%n would wrap
+	// (loftmesh.LoopPair's own doc comment) — without it, (j+1)%n would wrap
 	// cell m-1 straight back to station 0 and fabricate a bogus closing
 	// cell spanning nearly the whole sweep.
 
@@ -289,10 +289,10 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 			energyW[k] = proofbound.UniformSpeedTangentEnergyUpper(arcUpperW[k], freeform.DownRound(freeform.DownRound(2*r1*math.Sin(dth/2))))
 		}
 	}
-	pairs := []loftLoopPair{{
-		v: make([]Point2, n), w: make([]Point2, n),
-		arcUpperV: arcUpperV, arcUpperW: arcUpperW, matchedDelta: matchedDelta,
-		tangentEnergyV: energyV, tangentEnergyW: energyW, faceted: make([]bool, n),
+	pairs := []loftmesh.LoopPair{{
+		V: make([]Point2, n), W: make([]Point2, n),
+		ArcUpperV: arcUpperV, ArcUpperW: arcUpperW, MatchedDelta: matchedDelta,
+		TangentEnergyV: energyV, TangentEnergyW: energyW, Faceted: make([]bool, n),
 	}}
 
 	anchor := r3.NewVec(0, 0, 0)
@@ -300,7 +300,7 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	// delta is 0: this hand-built station chain stands for an unplaced build
 	// whose stations are the exact points, so the composed matchedDelta
 	// (docs/loft-design.md §5.2) is the chord-to-curve half alone.
-	chorded := computeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, 0, false)
+	chorded := loftmesh.ComputeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, 0, false)
 
 	// The independent reference: the quarter lateral frustum's own closed
 	// form, and the SAME two-triangle split assembleLoft's own Table B uses,

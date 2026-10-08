@@ -112,7 +112,7 @@ func StationWorkLimit(spent, p uint64) uint64 {
 //
 // A pair is chorded when BOTH sides' walks are circular or BOTH are free-form;
 // a mixed-kind pair is
-// S3's refusal (validateLoftRecords) and is counted in P like any other, since
+// S3's refusal (ValidateLoftRecords) and is counted in P like any other, since
 // P's own entitlement is one station per paired segment whatever its kind. Only
 // loop0's segment counts are read: S2 has already proved loop1 carries the same
 // count, which is what makes one loop's shape the pair count for both.
@@ -186,7 +186,7 @@ func StationShare(p, c uint64) int {
 //
 // stations0/stations1 each carry ONLY this segment's own interior stations,
 // never its shared end point — the next segment's own first station (or the
-// loop's wrap) supplies it, the convention loftLoopPair's own doc comment
+// loop's wrap) supplies it, the convention LoopPair's own doc comment
 // states, and what makes a loop's own chain total the count
 // docs/loft-design.md §7 states for it rather than one stated here.
 //
@@ -242,8 +242,8 @@ func RecordCellStations(w0, w1 survey2d.SegmentWalk, seg0, seg1 sectionrecord.Cu
 	case w0.Kind == survey2d.WalkCircular && w1.Kind == survey2d.WalkCircular:
 		return CircularCellPoints(w0, w1, seg0, seg1, target)
 	default:
-		// Unreached from any real build: validateLoftRecords' own S3 gate
-		// refuses every mixed-kind pair before loftPairings ever calls this
+		// Unreached from any real build: ValidateLoftRecords' own S3 gate
+		// refuses every mixed-kind pair before PairRecords ever calls this
 		// function (SameKindGate), and PairRecords sends a free-form pair to
 		// FreeformCellPoints. A defensive refusal, so a kind this switch has
 		// no case for fails loud rather than falling into either analytic
@@ -279,7 +279,7 @@ func CircularCellPoints(w0, w1 survey2d.SegmentWalk, seg0, seg1 sectionrecord.Cu
 
 // PerCellArcUpper is one paired segment's own per-cell arc-length upper
 // bound, shared by every one of its m uniformly-stepped cells
-// (computeLoftChordedAllow, loft_moments.go). Uniform angular stepping means
+// (ComputeLoftChordedAllow, loft_chord_allow.go). Uniform angular stepping means
 // each of the m cells carries the SAME true share of the whole sweep, so
 // dividing a proven upper bound on the WHOLE segment's length by m stays an
 // upper bound on each share.

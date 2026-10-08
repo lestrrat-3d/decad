@@ -64,9 +64,9 @@ type MassAccumulator struct {
 	// already charge.
 	sectionMatchedDelta float64
 
-	// chorded holds the corrections and residuals computeLoftChordedAllow derives from the
+	// chorded holds the corrections and residuals ComputeLoftChordedAllow derives from the
 	// composed sectionMatchedDelta and the delta above (loft_build.go): every
-	// field stays its zero value unless evalLoft calls computeLoftChordedAllow,
+	// field stays its zero value unless evalLoft calls ComputeLoftChordedAllow,
 	// which it does exactly when the build holds a cell that is not faceted
 	// (a circular or free-form cell) or a positive section term. A degree-1
 	// free-form build reaches it with both section terms zero, so the readings
@@ -488,7 +488,7 @@ func (m *MassAccumulator) Bounds() (r3.Vec, r3.Vec, float64, bool) {
 // wallBound owns the first two and answers +Inf where either has saturated,
 // since neither is a proven scale any more. A chorded build (a computed
 // correction, or a positive section term) adds the bilinear integration
-// enclosure, and a positive section term adds computeLoftChordedAllow's own
+// enclosure, and a positive section term adds ComputeLoftChordedAllow's own
 // two-leg wall residual and capAreaExcess (the per-cell cap tube) — both
 // documented at the composition below. A
 // displaced build (delta > 0) adds perturbAreaSum, the held triangles' and the
@@ -535,7 +535,7 @@ func (m *MassAccumulator) Area(capAreas ...*big.Rat) (float64, float64) {
 	}
 	// A curved pairing's own two-leg wall residual PLUS its own cap
 	// chord-versus-curve excess (a10-plan.md Part 3 PR 6,
-	// computeLoftChordedAllow's own doc comment): the corrected wall value above
+	// ComputeLoftChordedAllow's own doc comment): the corrected wall value above
 	// uses bilinear patches, and the true wall surface a circular cell denotes
 	// differs by at most areaExcess; capFloat
 	// above is capPolygonAreaRat, the built polygon's own exact rational, and

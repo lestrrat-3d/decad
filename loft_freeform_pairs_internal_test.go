@@ -163,9 +163,9 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 	predicted, freeTotal, sharpTotal := 0.0, 0.0, 0.0
 	cells := 0
 	for i, p := range pairs {
-		n := len(p.v)
+		n := len(p.V)
 		for j := range n {
-			if p.matchedDelta[j] <= 0 {
+			if p.MatchedDelta[j] <= 0 {
 				continue
 			}
 			jn := (j + 1) % n
@@ -173,13 +173,13 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 			wLo, wHi := a.verts[a.wIdx[i][j]], a.verts[a.wIdx[i][jn]]
 			require.Equal(t, vHi.Sub(vLo), wHi.Sub(wLo), "cell %d/%d must be untwisted for the closed form", i, j)
 			require.Equal(t, r3.NewVec(0, 0, wedgeHeight), wLo.Sub(vLo))
-			measured := sampledTangentEnergy(t, samples, p.v[j], p.v[jn])
-			require.InEpsilon(t, measured, p.tangentEnergyV[j], 1e-3, "cell %d: side 0's energy", j)
-			require.InEpsilon(t, measured, p.tangentEnergyW[j], 1e-3, "cell %d: side 1's energy", j)
-			md := loftmesh.ChordCellDeltaUpper(p.matchedDelta[j], a.delta)
+			measured := sampledTangentEnergy(t, samples, p.V[j], p.V[jn])
+			require.InEpsilon(t, measured, p.TangentEnergyV[j], 1e-3, "cell %d: side 0's energy", j)
+			require.InEpsilon(t, measured, p.TangentEnergyW[j], 1e-3, "cell %d: side 1's energy", j)
+			md := loftmesh.ChordCellDeltaUpper(p.MatchedDelta[j], a.delta)
 			c := vHi.Sub(vLo).Len()
-			energyRuled := untwistedRuledLeg(c, wedgeHeight, md, p.arcUpperV[j], p.arcUpperW[j], measured, measured)
-			infRuled := untwistedRuledLeg(c, wedgeHeight, md, p.arcUpperV[j], p.arcUpperW[j], math.Inf(1), math.Inf(1))
+			energyRuled := untwistedRuledLeg(c, wedgeHeight, md, p.ArcUpperV[j], p.ArcUpperW[j], measured, measured)
+			infRuled := untwistedRuledLeg(c, wedgeHeight, md, p.ArcUpperV[j], p.ArcUpperW[j], math.Inf(1), math.Inf(1))
 			predicted += infRuled - energyRuled
 			freeTotal += infRuled
 			sharpTotal += energyRuled
@@ -218,18 +218,18 @@ func untwistedRuledLeg(c, h, md, arcA, arcB, energyA, energyB float64) float64 {
 // loftWedgeAreaRebuild replays evalLoft's own steps from the records to the
 // Area reading. With dropEnergy set, every cell's tangent energy is +Inf, the
 // reading a build with no energy proof publishes.
-func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measurement, []loftLoopPair, loftAssembly) {
+func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measurement, []loftmesh.LoopPair, loftAssembly) {
 	t.Helper()
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	offsets, walks0, walks1, target, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, loftRecordAreas(t, pl.profile0, pl.profile1), work0, work1)
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, loftRecordAreas(t, pl.profile0, pl.profile1), work0, work1)
 	require.NoError(t, err)
-	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
 	if dropEnergy {
 		for i := range pairs {
-			for j := range pairs[i].tangentEnergyV {
-				pairs[i].tangentEnergyV[j] = math.Inf(1)
-				pairs[i].tangentEnergyW[j] = math.Inf(1)
+			for j := range pairs[i].TangentEnergyV {
+				pairs[i].TangentEnergyV[j] = math.Inf(1)
+				pairs[i].TangentEnergyW[j] = math.Inf(1)
 			}
 		}
 	}
@@ -549,7 +549,7 @@ func TestLoftFreeformPairPastItsShareRefusesS15(t *testing.T) {
 	}
 	p := ProfileRecord{Outer: LoopRecord{Segments: segs}}
 	walks := resolveLoftLoopWalks(t, p)
-	_, _, _, _, err := loftPairings(p, p, []int{0}, walks, walks, 1, freeform.NewFreeformWork(), freeform.NewFreeformWork()) //nolint:dogsled // only the refusal is under test.
+	_, _, _, _, err := loftmesh.PairRecords(p, p, []int{0}, walks, walks, 1, freeform.NewFreeformWork(), freeform.NewFreeformWork()) //nolint:dogsled // only the refusal is under test.
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorIs(t, err, freeform.ErrTooManyChords)
 	var capErr *loftmesh.StationCapError
