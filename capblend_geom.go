@@ -287,10 +287,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// A cornerless band has no corner to pair its two directrices at, so
 		// the one ruling its azimuth spread is measured on is the pair of SEAM
 		// vertices — the one place either circle names a parameter origin.
-		setPatchReadings(patch, geom, capBuiltPatch(seam0, capEdge, []*Vertex{seam0.Start()}, []*Vertex{capEdge.Start()}))
-		if cbp.draft {
-			patch.normalBound = proofbound.AbsSumUpper(patch.normalBound, draftDenotedNormalAllow(delta, capDelta, levelDelta, capZ-sideZ, capRadius-w.Radius))
-		}
+		setPatchReadings(patch, geom, capBuiltPatch(seam0, capEdge, []*Vertex{seam0.Start()}, []*Vertex{capEdge.Start()}), delta, capDelta)
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}, delta: delta}, nil
 	}
@@ -509,7 +506,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		g.Held = held
 		// The apex patch's rulings all leave the ORIGINAL corner vertex, which
 		// is the cone tag's own apex: a point side directrix.
-		setPatchReadings(face, g, capBuiltApexPatch(sideVertexAt(i), arc, []*Vertex{arc.Start(), arc.End()}))
+		setPatchReadings(face, g, capBuiltApexPatch(sideVertexAt(i), arc, []*Vertex{arc.Start(), arc.End()}), delta, capDelta)
 		geoms = append(geoms, g)
 	}
 
@@ -709,10 +706,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// fourth's own departure from it is what capPatchNormalAllow measures
 		// there.
 		setPatchReadings(face, g, capBuiltPatch(side, capEdge,
-			[]*Vertex{side.Start(), side.End()}, []*Vertex{capA, capB}))
-		if cbp.draft {
-			face.normalBound = proofbound.AbsSumUpper(face.normalBound, draftDenotedNormalAllow(delta, capDelta, levelDelta, capZ-sideZ, capRadius-w.Radius))
-		}
+			[]*Vertex{side.Start(), side.End()}, []*Vertex{capA, capB}), delta, capDelta)
 		geoms = append(geoms, g)
 		capCo = append(capCo, coedge{edge: capEdge, forward: true})
 		if arc := arcByCorner[nextI]; arc != nil {
@@ -788,7 +782,15 @@ var errCapPatchSkewUnbounded = fmt.Errorf(`%w: a cap-loop chamfer's circular ban
 // so a caller reading `Face.Area()` and a caller reading `Body.Area()` are told
 // the same thing about the same surface — and the bound its `Face.NormalAt`
 // owes, which is how far the RULED surface the build assembles can depart from
-// the surface this file tags it with (capblend_departure.go).
+// the surface this file tags it with (capblend_departure.go), plus how far
+// that built surface turns from the one the records denote
+// (capband.DenotedNormalAllow). The second term exists because the cap-level
+// directrix is the offset the build solved, held only within delta of the
+// denoted contour and within capDelta of the denoted cap level: a 0.1 mm
+// chamfer on a square drawn 10⁶ mm out holds its tilted walls about 1e-10
+// from the exact 45° normal, while the departure alone states about 2e-16.
+// A circular patch's held radii widen delta by their own allowances, since
+// they move its half angle the same way.
 //
 // built names that ruled surface through the numbers the body PUBLISHES for it:
 // the two directrices' own circles and the rulings' own endpoints. It is passed
@@ -807,9 +809,15 @@ var errCapPatchSkewUnbounded = fmt.Errorf(`%w: a cap-loop chamfer's circular ban
 // Every patch this file builds passes through here, and each does so with the
 // geometry the moments pass then integrates, so those two can never disagree
 // either.
-func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
+func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt, delta, capDelta float64) {
 	f.area, f.areaBound = capband.AreaOf(g)
-	f.normalBound = capPatchNormalAllow(f, g, built)
+	dr := 0.0
+	if g.Circular {
+		delta = proofbound.AbsSumUpper(delta, g.Held.SideRadius, g.Held.CapRadius)
+		dr = g.CapRadius - g.SideRadius
+	}
+	denoted := capband.DenotedNormalAllow(delta, capDelta, g.LevelDelta, g.CapZ-g.SideZ, dr)
+	f.normalBound = math.Min(ruledNormalAllowUnbounded, proofbound.AbsSumUpper(capPatchNormalAllow(f, g, built), denoted))
 }
 
 // capSlantEdge is one cap-level contour point's slant edge down to the

@@ -391,16 +391,20 @@ func TestCapBlendFlatPatchUndercutRespectsNormalBound(t *testing.T) {
 // requireRoundingScaleFlatBound checks a flat band patch's computed normal,
 // which carries Face.NormalAt's own arithmetic proof composed with the
 // rounding-scale departure the patch's four independently rounded corners
-// leave (capblend_departure.go). Both terms are rounding-scale on the unplaced
-// builds this file reads; capblend_departure_test.go reads the same patch
-// placed, where the second is orders larger.
+// leave (capblend_departure.go) and the turn from the denoted wall that the
+// cap contour's own rounding allows (capband.DenotedNormalAllow). All three
+// are rounding-scale on the unplaced builds this file reads, though the last
+// divides a contour rounding by the setback: the 100 mm quarter disk's 0.5 mm
+// setback reads about 6e-14, so the ceiling is 1e-12 rather than an ulp of
+// one. capblend_departure_test.go reads the same patch placed, where the
+// departure is orders larger.
 func requireRoundingScaleFlatBound(t *testing.T, n decad.VecMeasurement) {
 	t.Helper()
 	require.Equal(t, decad.Approximate, n.Exactness)
 	bound, err := n.Bound.In(units.One)
 	require.NoError(t, err)
 	require.Positive(t, bound)
-	require.Less(t, bound, 1e-14)
+	require.Less(t, bound, 1e-12)
 }
 
 // requireRoundingScaleNormalBound keeps a band with no window skew distinct

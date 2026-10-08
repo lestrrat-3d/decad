@@ -318,14 +318,16 @@ term (`ChordLocusVolumeAllow`) is read and is zero, because both windows of
 every Cone patch coincide; an implementer keeps the call and asserts the zero
 rather than omitting the term.
 
-**The wall normal.** `Face.NormalAt` on a draft wall adds one term a chamfer
-band's patch does not carry: the turn between the built wall and the wall the
-taper denotes, since the far rim sits within the contour displacement of the
-denoted one. A Plane wall's tag passes through its exact near edge and one far
-corner, and moving that corner by `e` turns the normal by at most `2|e|/h`; a
-Cone wall's half angle moves by at most `(e_r + |Δr|·e_z/h)/h`.
-`draftDenotedNormalAllow` charges `2·(δ + δ_z·max(1, |Δr|/h))/h` with `h` at
-the bottom of its span.
+**The wall normal.** `Face.NormalAt` on a draft wall carries the same
+denoted-wall term a chamfer band's patch does (modify-reach §8.3): the turn
+between the built wall and the wall the taper denotes, since the far rim sits
+within the contour displacement of the denoted one. A Plane wall's tag passes
+through its exact near edge and one far corner, and moving that corner by `e`
+turns the normal by at most `2|e|/h`; a Cone wall's half angle moves by at most
+`(e_r + |Δr|·e_z/h)/h`. `capband.DenotedNormalAllow` charges
+`2·(δ + δ_z·max(1, |Δr|/h))/h` with `h` at the bottom of its span, and
+`setPatchReadings` (`capblend_geom.go`) adds it to every draft wall and chamfer
+patch alike.
 
 **Exactness.** A draft measurement is `Exact` only where every term of it is
 exactly representable. The tangent of the taper is a certified enclosure of
@@ -531,7 +533,7 @@ undecided; F7's hole wall clear along `+e`.
 | the tangent enclosure | `RadTanSpan` replaced by the point `math.Tan` | `TestRadTanSpanEnclosesSeriesReference` against a 75-digit `big.Float` series reference |
 | the closure sliver | `ClosureOf`'s result omitted | no fixture: F3's axis-aligned slot holds no sliver, and a slanted slot's slivers sit four orders below the far contour's volume term |
 | the far cap's `sectionDisplacementArea` | omitted | F6's far cap area |
-| the wall normal's denoted term (`draftDenotedNormalAllow`) | omitted | F8's slot at `v = 10⁶`: a straight wall publishes a `2.2e-16` bound `3.3e-12` from its denoted normal |
+| the wall normal's denoted term (`capband.DenotedNormalAllow`) | omitted | F8's slot at `v = 10⁶`: a straight wall publishes a `2.2e-16` bound `3.3e-12` from its denoted normal |
 | DD6's diameter arm | omitted | every F fixture under `Verify` (`DiagToleranceReferenceUnavailable`) |
 
 ## 12. Do not do this

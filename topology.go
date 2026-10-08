@@ -404,8 +404,11 @@ type Face struct {
 	// the placement's independent rounding of every coordinate the build emits —
 	// which leaves the tag even on a flat patch, and on a circular one whose two
 	// windows coincide exactly. A zero term there would omit a direction
-	// difference the built surface has. NormalAt separately composes its
-	// arithmetic proof (normal_bound.go).
+	// difference the built surface has. A band patch's bound also carries the
+	// turn between that ruled surface and the wall its records denote, since
+	// the cap contour it rules to is a solved offset held within a proven
+	// displacement (capband.DenotedNormalAllow). NormalAt separately composes
+	// its arithmetic proof (normal_bound.go).
 	normalBound float64
 	// denoted is the surface a revolve wall or cap DENOTES — a wall's
 	// recorded meridian segment swept about its recorded axis, or a cap's

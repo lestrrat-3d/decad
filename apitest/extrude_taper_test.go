@@ -540,7 +540,7 @@ func farFrame(t *testing.T) r3.Frame {
 // drawn at v = 10⁶ in the plane itself, holds its far section at coordinates
 // whose own rounding is that large, which the far contour's displacement must
 // carry into the volume. Shown to fail first: without SweptVolumeAllow the
-// placed box's volume failed; without draftDenotedNormalAllow the slot's
+// placed box's volume failed; without capband.DenotedNormalAllow the slot's
 // walls failed (below). Omitting the closure slivers (capband.ClosureOf's
 // charge) turned no fixture here red: the axis-aligned slot holds no sliver,
 // and a slanted one's slivers sit four orders below the far contour's term.
@@ -622,7 +622,7 @@ func TestTaperFarOrigin(t *testing.T) {
 		// The far rim's corners hold coordinates near 10⁶, rounded by about
 		// 1e-10, so each straight wall's tag turns from the wall the taper
 		// denotes by far more than its own arithmetic. Shown to fail first:
-		// without draftDenotedNormalAllow each wall published a 2.2e-16
+		// without capband.DenotedNormalAllow each wall published a 2.2e-16
 		// bound while sitting 3.3e-12 from its denoted normal.
 		cos, sin := cosSinOf(taperTan(3))
 		planes, _ := facesByKind(b)

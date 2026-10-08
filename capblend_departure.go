@@ -31,11 +31,13 @@ type capPatchBuilt = capband.PatchBuilt
 // from the surface the patch publishes.
 //
 // Both patch kinds answer from their own held corners, and neither is exempt.
-// A straight wall's offset family is affine in the offset amount, so the exact
-// surface a flat patch denotes IS its tag's plane — but the corners the build
-// emits are each rounded once more, and the tag is fixed through three of the
-// four, so the built quad still leaves the plane by an amount only a world-space
-// reading of those four corners states.
+// A straight wall's offset family is affine in the offset amount, so the
+// surface a flat patch denotes is a plane — but the corners the build emits are
+// each rounded once more, and the tag is fixed through three of the four, so
+// the built quad still leaves the plane by an amount only a world-space reading
+// of those four corners states. How far the built patch turns from the denoted
+// one is a separate term (capband.DenotedNormalAllow), which setPatchReadings
+// adds.
 func capPatchNormalAllow(f *Face, g capPatchGeom, b capPatchBuilt) float64 {
 	departure := capPlaneDeparture
 	if g.Circular {

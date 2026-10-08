@@ -427,30 +427,3 @@ func draftNearRim(ctx context.Context, pl prismPayload, li int, loop LoopRecord,
 	}
 	return co, nil
 }
-
-// draftDenotedNormalAllow bounds how far a draft wall's built surface turns
-// from the wall the taper denotes, a term a chamfer band's patch reading does
-// not carry because its own cap contour is the construction's: here the far
-// rim is held within delta in the plane and within the far level's axial
-// displacement (capDelta, beside the near level's levelDelta) of the denoted
-// one, while the near rim is the recorded section.
-//
-// A Plane wall's tag passes through its near edge A→B and one far corner D;
-// moving D by e turns the normal of (B − A)×(D − A) by at most 2|e| over D's
-// distance from the line AB, and that distance is at least the axial height
-// h, since the line lies in the near level. A Cone wall's normal at a given
-// azimuth is fixed by its half angle atan(|Δr|/h), which moves by at most the
-// change of that ratio: (|e_r| + |Δr|·|e_z|/h)/h. One formula covers both:
-// 2·(delta + axial·max(1, |Δr|/h))/h, with h read at the bottom of its span.
-// A height that span cannot keep positive bounds nothing, and the reading
-// is +Inf rather than a number that would understate it.
-func draftDenotedNormalAllow(delta, capDelta, levelDelta, dz, dr float64) float64 {
-	axial := proofbound.AbsSumUpper(capDelta, levelDelta)
-	hLow := freeform.DownRound(math.Abs(dz) - axial)
-	if !(hLow > 0) {
-		return math.Inf(1)
-	}
-	lever := math.Max(1, proofbound.UpRound(math.Abs(dr)/hLow))
-	shift := proofbound.AbsSumUpper(delta, proofbound.ProductUpper(axial, lever))
-	return proofbound.UpRound(proofbound.ProductUpper(2, shift) / hLow)
-}
