@@ -404,6 +404,37 @@ carriers (`clearance.RevolveCarrierResult`'s `AxisGap`,
 `docs/clearance-design.md` §2) is the one those edges share; they add only
 the float evaluation of the centre. STEP export, `stops.go`'s boundary
 probes and `stitch_flux.go`'s circle rims read the held curves as they stand.
+A wall's `Face.NormalAt` bound is proven against the surface its record
+DENOTES, never against its `Surface` tag. The tag is a float re-expression:
+its origin and centre are placed from the walk's (z, ρ), a centre within the
+contact tolerance is snapped onto the axis (a `Sphere`), a segment within the
+classifier's 1e-9 slope of parallel or perpendicular is tagged a `Cylinder` or
+a `Plane`, and a `Cone`'s half angle is a float `atan2` of rounded runs. The
+build stores the denoted surface beside the tag (`Face.denoted`,
+`surfacenormal.Revolved`, built by `revolvePayload.wallDenotation` through
+`revolvemesh.RevolveLift.StraightWallNormal`/`CircularWallNormal`): a
+straight wall's recorded segments, each as its exact run (dz, dρ), and a
+circular wall's recorded centre, re-expressed about the axis anchor and
+direction widened by `axisInPlane`'s four bounds, with the axis frame lifted
+through the frame and the placement as exact leaves — the swept-vertex
+comparison's leaves. `NormalAt` keeps the arm's float direction and bounds its
+distance from the enclosed outward unit normal of that surface at p. A
+straight wall's normal is dρ·ẑ − dz·r̂ in the axis frame, the worst over the
+recorded segments a coalesced wall covers. A circular wall's normal runs from
+the rotated circle's centre at p's azimuth to p. Either is carried to the
+world through the cofactor matrix of the placed basis, since that basis is not
+exactly orthonormal. The bound therefore covers the re-expression, the snap,
+the classification, the angle and every placement rounding at once, and the
+tag's own arithmetic proof is not run. It is zero where every leaf is exact and
+the unit normal is a coordinate axis, so an integer profile about a coordinate
+axis keeps those wall normals `Exact`. A plain float `atan2` was not seen to
+break the tag's own bound on its own; the snapped centre, a near-parallel or
+near-perpendicular segment, and a far or tilted axis do
+(`apitest/revolve_normal_bound_test.go`). The cap faces keep the tag arm and
+their `normalBound` (the angular displacement above). The departure is NOT a
+`normalBound`: no one dimensionless figure states it for every p, and
+`Stitch`'s flux arms gate on `normalBound` and integrate the tag
+(`docs/surface-design.md` §6.4).
 
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid

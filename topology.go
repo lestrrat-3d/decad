@@ -387,10 +387,12 @@ type Face struct {
 	// normalBound is the proven DIMENSIONLESS bound on NormalAt's own answer:
 	// how far the surface this face really carries can tilt away from the
 	// tagged variant the normal is computed from. It is zero for every face
-	// whose own geometry IS its tag, which is every analytic face but a
-	// cap-loop chamfer's band patch: the patch is RULED between two built
-	// directrices, and the `Cone` or `Plane` it publishes is that ruled surface
-	// only to within a bound measured from the numbers the body publishes for it
+	// whose own geometry IS its tag, and for a revolve wall, whose departure
+	// rides in denoted instead. It is nonzero for a revolve's cap (its
+	// angular displacement) and for a cap-loop chamfer's band patch: the
+	// patch is RULED between two built directrices, and the `Cone` or `Plane`
+	// it publishes is that ruled surface only to within a bound measured from
+	// the numbers the body publishes for it
 	// (capblend_departure.go, docs/modify-reach-design.md §8.3). The bound is a
 	// world-space one, so it covers both a mitered corner's own angular skew and
 	// the placement's independent rounding of every coordinate the build emits —
@@ -399,14 +401,37 @@ type Face struct {
 	// difference the built surface has. NormalAt separately composes its
 	// arithmetic proof (normal_bound.go).
 	normalBound float64
+	// denoted is the surface a revolve wall DENOTES — its recorded meridian
+	// segment swept about its recorded axis, enclosed exactly
+	// (surfacenormal.Revolved) — where the tag is only a float re-expression
+	// of it. NormalAt judges such a face's normal against it rather than
+	// against the tag, so the bound covers the tag's whole departure; nil
+	// for every face whose tag is its own denotation. It is not
+	// normalBound: no dimensionless term states the departure for every p,
+	// and Stitch's flux arms, which read normalBound, integrate the tag.
+	denoted *surfacenormal.Revolved
+}
+
+// denotedUnder carries a face's denoted surface onto a copy placed by xform:
+// the exact image of the source face's own, never a re-reading of the copy's
+// rounded tag.
+func (f *Face) denotedUnder(xform r3.Transform) *surfacenormal.Revolved {
+	if f.denoted == nil || xform == r3.Identity() {
+		return f.denoted
+	}
+	out := f.denoted.Transformed(xform)
+	return &out
 }
 
 // NormalAt returns the face's outward normal at p. Its bound combines the
 // arithmetic proof for the normal of the face's tagged surface
 // (normal_bound.go) and any proven departure of the surface actually carried
-// from that tag (normalBound). It is Exact only when both are zero. A point
-// that gives the surface no direction is ErrDegenerate. A reading whose own
-// enclosure cannot separate the direction from zero is ErrUnsupported.
+// from that tag (normalBound). A revolve wall's bound is instead proven
+// against the surface its record denotes (Face.denoted), which covers its
+// tag's departure and the arm's arithmetic at once. It is Exact only when the
+// whole bound is zero. A point that gives the surface no direction is
+// ErrDegenerate. A reading whose own enclosure cannot separate the direction
+// from zero is ErrUnsupported.
 //
 // The five analytic variants — Plane, Cylinder, Cone, Sphere and Torus — are
 // the whole set this answers for. Any other tagged surface is ErrUnsupported:
@@ -415,15 +440,12 @@ type Face struct {
 // waits on the faceted certificate stage
 // (docs/payload-verification-design.md §5.4, §13).
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
-	sign := 1.0
-	if f.reversed {
-		sign = -1
-	}
 	switch s := f.surface.(type) {
 	case Plane:
 		n := s.Frame.N()
-		allow, st := surfacenormal.PlaneAllow(s.Frame, n)
-		return f.normalMeasurement(n, sign, allow, st, "the frame of this plane names no direction")
+		return f.normalMeasurement(p, n, func() (float64, surfacenormal.Status) {
+			return surfacenormal.PlaneAllow(s.Frame, n)
+		}, "the frame of this plane names no direction")
 	case Cylinder:
 		rel := p.Sub(s.Origin)
 		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
@@ -431,8 +453,9 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		if !ok {
 			return VecMeasurement{}, fmt.Errorf(`%w: a point on the cylinder axis has no normal`, ErrDegenerate)
 		}
-		allow, st := surfacenormal.AxialAllow(p, s.Origin, s.Axis, dir)
-		return f.normalMeasurement(dir, sign, allow, st, "a point on the cylinder axis has no normal")
+		return f.normalMeasurement(p, dir, func() (float64, surfacenormal.Status) {
+			return surfacenormal.AxialAllow(p, s.Origin, s.Axis, dir)
+		}, "a point on the cylinder axis has no normal")
 	case Cone:
 		rel := p.Sub(s.Origin)
 		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
@@ -447,15 +470,17 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		// The wall leans outward by the half angle along the growth axis, so
 		// the geometric normal tilts against it by the same angle.
 		n := dir.Scale(math.Cos(half)).Sub(s.Axis.Scale(math.Sin(half)))
-		allow, st := surfacenormal.ConeAllow(p, s.Origin, s.Axis, half, n)
-		return f.normalMeasurement(n, sign, allow, st, "the cone apex has no normal")
+		return f.normalMeasurement(p, n, func() (float64, surfacenormal.Status) {
+			return surfacenormal.ConeAllow(p, s.Origin, s.Axis, half, n)
+		}, "the cone apex has no normal")
 	case Sphere:
 		dir, ok := p.Sub(s.Center).Normalize()
 		if !ok {
 			return VecMeasurement{}, fmt.Errorf(`%w: the sphere center has no normal`, ErrDegenerate)
 		}
-		allow, st := surfacenormal.RadialAllow(p, s.Center, dir)
-		return f.normalMeasurement(dir, sign, allow, st, "the sphere center has no normal")
+		return f.normalMeasurement(p, dir, func() (float64, surfacenormal.Status) {
+			return surfacenormal.RadialAllow(p, s.Center, dir)
+		}, "the sphere center has no normal")
 	case Torus:
 		major, err := s.Major.In(units.Millimeter)
 		if err != nil {
@@ -472,18 +497,31 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		if !ok {
 			return VecMeasurement{}, fmt.Errorf(`%w: the tube center has no normal`, ErrDegenerate)
 		}
-		allow, st := surfacenormal.TorusAllow(p, s.Center, s.Axis, major, dir)
-		return f.normalMeasurement(dir, sign, allow, st, "the tube center has no normal")
+		return f.normalMeasurement(p, dir, func() (float64, surfacenormal.Status) {
+			return surfacenormal.TorusAllow(p, s.Center, s.Axis, major, dir)
+		}, "the tube center has no normal")
 	default:
 		return VecMeasurement{}, fmt.Errorf(`%w: this evaluator computes normals for its own analytic faces only`, ErrUnsupported)
 	}
 }
 
-// normalMeasurement publishes one arm's computed direction under the face's
-// own outward sign. It combines the arm's proof against its tagged surface and
-// the face's own departure from that tag by triangle inequality. The sign is
-// exact, so it never changes the bound.
-func (f *Face) normalMeasurement(dir r3.Vec, sign, allow float64, st surfacenormal.Status, degenerate string) (VecMeasurement, error) {
+// normalMeasurement publishes one arm's computed geometric direction under
+// the face's own outward sign. tagAllow is the arm's proof against its tagged
+// surface; a face carrying its denoted surface is proven against that
+// instead, and tagAllow never runs. The face's own departure from its tag
+// (normalBound) composes by triangle inequality. The sign is exact, so it
+// never changes the bound.
+func (f *Face) normalMeasurement(p, dir r3.Vec, tagAllow func() (float64, surfacenormal.Status), degenerate string) (VecMeasurement, error) {
+	if f.reversed {
+		dir = dir.Scale(-1)
+	}
+	var allow float64
+	var st surfacenormal.Status
+	if f.denoted != nil {
+		allow, st = f.denoted.Allow(p, dir, f.reversed)
+	} else {
+		allow, st = tagAllow()
+	}
 	switch st {
 	case surfacenormal.Zero:
 		return VecMeasurement{}, fmt.Errorf(`%w: %s`, ErrDegenerate, degenerate)
@@ -494,7 +532,7 @@ func (f *Face) normalMeasurement(dir r3.Vec, sign, allow float64, st surfacenorm
 		allow = math.Nextafter(allow+f.normalBound, math.Inf(1))
 	}
 	return VecMeasurement{
-		Value:     dir.Scale(sign),
+		Value:     dir,
 		Exactness: exactnessOf(allow),
 		Bound:     units.Scalar(allow),
 	}, nil

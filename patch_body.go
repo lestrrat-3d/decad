@@ -570,7 +570,8 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 // patch never merges two DIFFERENT edges into one, it only gives an
 // already-free edge a second face once buildPatchFace's own coedge is
 // attached, so the plain per-pointer cache is the whole of what sharing
-// needs here.
+// needs here. A revolve wall's denoted surface (Face.denoted) carries over as
+// its exact image under xform.
 func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transform, delta float64) ([]*Face, map[*Edge]*Edge, error) {
 	newVertByOld := map[*Vertex]*Vertex{}
 	vertexFor := func(old *Vertex) (*Vertex, error) {
@@ -644,6 +645,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			areaBound:  f.areaBound,
 			reversed:   f.reversed,
 			heldPlanar: f.heldPlanar,
+			denoted:    f.denotedUnder(xform),
 		}
 		for _, l := range f.loops {
 			coedges := make([]coedge, len(l.coedges))

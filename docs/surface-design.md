@@ -1120,7 +1120,11 @@ anchor.
 Integrating a closed form over the tag would be unsound for such a face, so
 every admitting arm — the tetrahedron path included, not only the new flux
 arms — requires a zero `normalBound`. An `Unstitch`ed fillet or chamfer face
-re-stitched into a closed set refuses on this gate alone (§15's T38).
+re-stitched into a closed set refuses on this gate alone (§15's T38). A
+revolve wall's own departure from its tag is not a `normalBound`: `NormalAt`
+proves that wall's normal against the denoted surface it carries beside the
+tag (`docs/evaluator-design.md` §6), so this gate admits the revolve sheets it
+admits (T46, T50, T53) and their flux arms integrate the tag.
 
 **The split is "`Plane` bounded entirely by `Line3`" versus everything
 else, never "planar versus curved".** The old wording ("all faces planar")
@@ -1385,6 +1389,14 @@ whose `normalBound` is nonzero is `ErrUnsupported` rather than an invented
 bound. `stitch.go`'s `rebuildStitchTopology` carries the same three fields
 the same way, so a stitched body's own later placement never reopens this
 gap.
+
+**A revolve wall's copy also carries the surface its record denotes**
+(`Face.denoted`, `docs/evaluator-design.md` §6), which `NormalAt` proves the
+wall's normal against in place of its tag. Unlike `normalBound`, it composes
+with any placement: it is an exact enclosure, so a placed copy holds its exact
+image under the placement's held basis and translation (`Face.denotedUnder`),
+never a re-reading of the copy's rounded tag. `copyFaceUnderContext`,
+`rebuildStitchTopology` and `Body.Patch`'s `copyPatchFacesUnder` all carry it.
 
 **Each result's own `Bounds` is a tight box exactly when its face is bounded
 entirely by straight (`Line3`) edges on a `Plane` surface, and the sound
