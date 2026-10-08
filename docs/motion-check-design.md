@@ -321,7 +321,8 @@ of interference §3 over every (placed mover, static) pair. Three rules make it 
   transient body's provenance values are never published; `PoseResult` carries the `Pose` transform, not the
   transient body.
 - **A placed pose carries its placement rounding as `bodyGeom.delta` already.** Evaluator §8 charges
-  `frameAndPlacementRoundAllow` into every placed coordinate, and clearance §5 subtracts both bodies' deltas
+  every placed carrier point its own exact frame-and-placement lift rounding, and every placed direction
+  `DirRoundAllow`'s rounding through the tilt term, and clearance §5 subtracts both bodies' deltas
   from the kernel's `lo` before anything is proven. The transient body is a placed body like any other, so
   the pose's gap interval `[lo_k, hi_k]` already covers the float evaluation of the composed transform.
 - **The float pose is not the ideal pose, and the difference is charged.** `Motion.PoseAt(s_k)` returns a

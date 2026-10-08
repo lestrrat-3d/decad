@@ -137,32 +137,36 @@ func (rp revolvePayload) placed(ctx context.Context, d *Document, ref producerID
 	return evalRevolveContext(ctx, d, ref, rp)
 }
 
-// basis derives the sweep basis from the plane frame and the axis frame.
-func (rp revolvePayload) basis() revolvemesh.RevolveBasis {
-	a3 := rp.frame.ToWorldUV(rp.ax.aU, rp.ax.aV)
-	w := rp.frame.U().Scale(rp.ax.dU).Add(rp.frame.V().Scale(rp.ax.dV))
-	e0 := rp.frame.U().Scale(-rp.ax.dV).Add(rp.frame.V().Scale(rp.ax.dU))
-	return revolvemesh.RevolveBasis{A3: a3, W: w, E0: e0, E1: w.Cross(e0)}
+// lift is the record rp's sweep basis is built from: the plane frame and the
+// resolved axis in it.
+func (rp revolvePayload) lift() revolvemesh.RevolveLift {
+	return revolvemesh.RevolveLift{Frame: rp.frame, AU: rp.ax.aU, AV: rp.ax.aV, DU: rp.ax.dU, DV: rp.ax.dV}
 }
 
-// revolveVertexFrameLiftAllow bounds one junction's own share of the
-// payload's frame lift and accumulated placement rounding
-// (internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow; topology.go's Vertex.Position
-// contract) — the revolve's own reading of proofbound.RigidRoundAllow's "plane-local
-// coordinate" input. A swept vertex's plane-local (z, ρ) sits within
-// axisRadiusUpper of the axis anchor (axisFrame.walk's own
-// axisRadiusUpper field, ax.radialUpper(coordUpper) — the SAME enclosure
-// that bounds |z| and ρ alike, revolve_extent.go's own frameRoundAllow
-// states why), and the anchor itself sits within aUpper of the frame
-// origin, so |z| and ρ are each within aUpper+axisRadiusUpper of the frame
-// origin's own plane-local coordinate — folded in twice, once per axis,
-// since z and ρ are independent coordinates rather than one bounding the
-// other. It is exactly zero for an axis-aligned, unplaced revolve, which is
-// what keeps its junction and seam vertices Exact as before.
-func revolveVertexFrameLiftAllow(rp revolvePayload, axisRadiusUpper float64) float64 {
-	aUpper := math.Max(math.Abs(rp.ax.aU), math.Abs(rp.ax.aV))
-	maxInputAbs := proofbound.AbsSumUpper(aUpper, axisRadiusUpper, axisRadiusUpper)
-	return proofbound.FrameAndPlacementRoundAllow(rp.frame, rp.xform, maxInputAbs)
+// basis derives the sweep basis from the plane frame and the axis frame.
+func (rp revolvePayload) basis() revolvemesh.RevolveBasis { return rp.lift().Basis() }
+
+// liftedVertex places one swept vertex at axial z, radius rho and angle phi
+// over b (rp.basis()) and returns the held point beside the exact rounding
+// the frame lift and accumulated placement committed on it
+// (revolvemesh.RevolveLift.ExactPointRound; topology.go's Vertex.Position
+// contract). It is zero wherever that evaluation is exact for the
+// coordinates at hand, which is what keeps an ordinary revolve's junction and
+// seam vertices Exact; a far sketch-plane origin, a tilted frame or a
+// placement charges exactly what it rounded.
+func (rp revolvePayload) liftedVertex(b revolvemesh.RevolveBasis, z, rho, phi float64) (r3.Vec, float64) {
+	held := rp.point(b, z, rho, phi)
+	sin, cos := math.Sincos(phi)
+	return held, rp.lift().ExactPointRound(rp.xform, z, rho, cos, sin, held)
+}
+
+// sweptVertex places one swept vertex at axial z, radius rho and angle phi
+// (liftedVertex), bounded by angularAllow — the radius times the held angle's
+// own displacement — beside the vertex's own exact lift rounding, and stamps
+// it with denot, the zero token where the vertex mints no curve certificate.
+func (rp revolvePayload) sweptVertex(b revolvemesh.RevolveBasis, z, rho, phi, angularAllow float64, denot curveToken) *Vertex {
+	held, lift := rp.liftedVertex(b, z, rho, phi)
+	return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(angularAllow, lift)), denot: denot}
 }
 
 // revolveCentroidGeometryBound bounds the centroid independently of the
@@ -195,9 +199,7 @@ func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec, work *freeform
 // point places the axis-frame point (z, ρ) at sweep angle φ into placed
 // world space.
 func (rp revolvePayload) point(b revolvemesh.RevolveBasis, z, rho, phi float64) r3.Vec {
-	sin, cos := math.Sincos(phi)
-	radial := b.E0.Scale(cos).Add(b.E1.Scale(sin))
-	return rp.xform.Apply(b.A3.Add(b.W.Scale(z)).Add(radial.Scale(rho)))
+	return rp.lift().Point(b, rp.xform, z, rho, phi)
 }
 
 // reflected reports whether the accumulated placement flips handedness — a
@@ -748,7 +750,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			center, jAxis, jRadius := rp.junctionCircle(b, j.z, j.rho)
 			switch {
 			case rp.full && !j.onAxis:
-				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.AxisRadiusUpper))), denot: body.doc.mintCurve()}
+				seam := rp.sweptVertex(b, j.z, j.rho, rp.phi0, proofbound.ProductUpper(j.rho, rp.phi0Delta()), body.doc.mintCurve())
 				latitudeLength := 2 * math.Pi * j.rho
 				latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(w.AxisRadiusUpper, proofbound.TwoPiUpper()))
 				if rhoEnc, ok := junctionRadiusInterval(j.rho, w.StartVBound); ok {
@@ -770,10 +772,10 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					denot: body.doc.mintCurve(),
 				}
 			case !rp.full:
-				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.AxisRadiusUpper))), denot: body.doc.mintCurve()}
+				j.v0 = rp.sweptVertex(b, j.z, j.rho, rp.phi0, proofbound.ProductUpper(j.rho, rp.phi0Delta()), body.doc.mintCurve())
 				j.v1 = j.v0
 				if !j.onAxis {
-					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi1Delta()), revolveVertexFrameLiftAllow(rp, w.AxisRadiusUpper))), denot: body.doc.mintCurve()}
+					j.v1 = rp.sweptVertex(b, j.z, j.rho, rp.phi1, proofbound.ProductUpper(j.rho, rp.phi1Delta()), body.doc.mintCurve())
 					arcLength := j.rho * dphi
 					dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
 					arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(w.AxisRadiusUpper, dphiUpper))
@@ -1054,7 +1056,7 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	center := rp.point(b, w.CU, w.CV, phi)
 	radius := units.Millimeters(w.Radius)
 	if closed {
-		seam := &Vertex{position: rp.point(b, w.StartU, w.StartV, phi), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(w.StartV, delta), revolveVertexFrameLiftAllow(rp, w.AxisRadiusUpper)))}
+		seam := rp.sweptVertex(b, w.StartU, w.StartV, phi, proofbound.ProductUpper(w.StartV, delta), curveToken{})
 		e.curve = Circle3{Center: center, Axis: axis, Radius: radius}
 		e.start, e.end = seam, seam
 		return e
@@ -1417,11 +1419,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		center := rp.point(b, j.z, 0, 0)
 		switch {
 		case rp.full && !j.onAxis:
-			seam := &Vertex{
-				position: rp.point(b, j.z, j.rho, rp.phi0),
-				bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
-				denot:    body.doc.mintCurve(),
-			}
+			seam := rp.sweptVertex(b, j.z, j.rho, rp.phi0, proofbound.ProductUpper(j.rho, rp.phi0Delta()), body.doc.mintCurve())
 			latitudeLength := 2 * math.Pi * j.rho
 			latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(axisRadiusUpper, proofbound.TwoPiUpper()))
 			if rhoEnc, ok := junctionRadiusInterval(j.rho, rhoBound); ok {
@@ -1438,18 +1436,10 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				denot:       body.doc.mintCurve(),
 			}
 		case !rp.full:
-			j.v0 = &Vertex{
-				position: rp.point(b, j.z, j.rho, rp.phi0),
-				bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
-				denot:    body.doc.mintCurve(),
-			}
+			j.v0 = rp.sweptVertex(b, j.z, j.rho, rp.phi0, proofbound.ProductUpper(j.rho, rp.phi0Delta()), body.doc.mintCurve())
 			j.v1 = j.v0
 			if !j.onAxis {
-				j.v1 = &Vertex{
-					position: rp.point(b, j.z, j.rho, rp.phi1),
-					bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi1Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
-					denot:    body.doc.mintCurve(),
-				}
+				j.v1 = rp.sweptVertex(b, j.z, j.rho, rp.phi1, proofbound.ProductUpper(j.rho, rp.phi1Delta()), body.doc.mintCurve())
 				arcLength := j.rho * dphi
 				dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
 				arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(axisRadiusUpper, dphiUpper))

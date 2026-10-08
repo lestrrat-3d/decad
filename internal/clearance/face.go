@@ -44,6 +44,17 @@ type CFace struct {
 
 	Box [2]r3.Vec
 	Wit []r3.Vec
+
+	// LiftRound is the largest exact rounding the payload's own frame lift and
+	// accumulated placement committed on any recorded point this carrier was
+	// built from (its anchor or origin, the other end of its axis and, for a
+	// revolve, any singular axis point it synthesized) — measured per point
+	// over exact rationals (proofbound.ExactFrameLiftRound,
+	// revolvemesh.RevolveLift.ExactPointRound), so a lift that is exact for the
+	// coordinates at hand contributes zero. Witnesses are float samples and
+	// record nothing. The caller folds it into the body's own displacement
+	// (decad's bodyGeom.delta); the kernel itself never reads it.
+	LiftRound float64
 }
 
 // AdmitState folds two per-side admission classifications: any −1 rejects,

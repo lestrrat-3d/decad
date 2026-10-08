@@ -146,14 +146,17 @@ type Vertex struct {
 // a PLACED loft's vertex, re-lifted from the record under a rigid motion,
 // carries that motion's own rounding (docs/loft-design.md §5) — a recorded
 // coordinate the identity transform leaves alone is the zero-bound case of
-// that same rule, not an exception to it. An analytic prism's, revolve's or
-// cap-loop chamfer's own rim/junction/cap vertex carries the SAME rounding —
-// internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow, one cheap call per vertex group
-// rather than a per-vertex exact-rational bound — whenever its payload's own
-// frame is not axis-aligned or its accumulated placement is not the identity
-// (docs/evaluator-design.md §8): lifting a plane-local coordinate through a
-// tilted sketch plane rounds under the identity placement too, which is what
-// makes the frame half of that test independent of the placement half.
+// that same rule, not an exception to it. An analytic prism's, revolve's,
+// cap-loop chamfer's, brep's or patch's own rim/junction/cap vertex carries
+// the rounding its own lift through the payload's frame and accumulated
+// placement committed, measured exactly for that vertex
+// (proofbound.ExactFrameLiftRound, revolvemesh.RevolveLift.ExactPointRound;
+// docs/evaluator-design.md §8). The frame origin is part of that lift: a
+// sketch plane whose axes are the world's own still rounds origin.X + u
+// whenever the sum is not representable, and a body built far away and placed
+// back keeps the far lift's rounding. A lift that is exact for the coordinates
+// at hand — an integer origin and integer coordinates under the identity
+// placement, for one — charges nothing.
 // A swept vertex is read from two independent coordinates and carries what each
 // was read from: its plane-local pair from the section, and its sweep level from
 // the extent. A level a ToFace or ThroughAll stop resolved in float, a magnitude

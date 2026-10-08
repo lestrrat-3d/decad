@@ -298,22 +298,19 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	liftCap := func(p Point2) r3.Vec { return pl.point(p.U, p.V, capZ) }
 	liftSide := func(p Point2) r3.Vec { return pl.point(p.U, p.V, sideZ) }
 
-	// frameLiftAllow is the ONE proven bound this whole band's own cap-level
-	// vertices share for the payload's own frame lift and accumulated
-	// placement rounding (internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow;
-	// topology.go's Vertex.Position contract) — computed once here, over
-	// every plane-local coordinate this band's own corner walks and the two
-	// axial levels can put into pl.point, rather than per vertex. It is
-	// exactly zero for an axis-aligned, unplaced payload, which is what
-	// keeps an ordinary chamfer's cap-level vertices Exact as before. It
-	// widens only the VERTEX bounds below (vertexCapLevelDelta), never
-	// capLevelDelta itself, which the band's slant and cap edges still read
-	// unwidened for their own, separate bound.
-	maxCoordUpper := 0.0
-	for _, w := range walks {
-		maxCoordUpper = math.Max(maxCoordUpper, w.CoordUpper)
+	// capVertexAt places one cap-level vertex at p, bounded by base beside the
+	// vertex's own exact frame lift and placement rounding
+	// (prismPayload.liftedVertex; topology.go's Vertex.Position contract) —
+	// zero wherever that lift is exact, which is what keeps an ordinary
+	// chamfer's cap-level vertices Exact. The lift term widens only the VERTEX
+	// bound, never capLevelDelta itself, which the band's slant and cap edges
+	// still read unwidened for their own, separate bound: the frame lift is a
+	// per-coordinate rounding, not a chord or locus term, so it has no business
+	// in an edge's length bound.
+	capVertexAt := func(p Point2, base float64) *Vertex {
+		held, lift := pl.liftedVertex(p.U, p.V, capZ)
+		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, lift))}
 	}
-	frameLiftAllow := proofbound.FrameAndPlacementRoundAllow(pl.frame, pl.xform, math.Max(maxCoordUpper, math.Max(math.Abs(capZ), math.Abs(sideZ))))
 
 	// levelDelta is the side level's conversion and float-sum rounding: sideZ
 	// is a float sum, so the band's side directrix sits that far from the level
@@ -347,9 +344,9 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		capLevelDelta := proofbound.AbsSumUpper(delta, capDelta)
 		// wholeCircleEdge's own delta parameter feeds ONLY its seam vertex's
 		// bound — its returned Edge's own lengthBound comes from
-		// capCircleLengthBound instead — so widening it here by
-		// frameLiftAllow charges the vertex alone.
-		capEdge := wholeCircleEdge(pl, w.CU, w.CV, capRadius, capZ, w.Th1 > w.Th0, proofbound.AbsSumUpper(capLevelDelta, frameLiftAllow), exactRadius)
+		// capCircleLengthBound instead — and the seam vertex adds its own
+		// exact lift rounding there.
+		capEdge := wholeCircleEdge(pl, w.CU, w.CV, capRadius, capZ, w.Th1 > w.Th0, capLevelDelta, exactRadius)
 		patch := buildConePatch(pl, body, ref, li, 0, w.CU, w.CV, w.Radius, capRadius, sideZ, capZ, matSign, false, seam0, capEdge)
 		sign := 1.0
 		if w.Th1 < w.Th0 {
@@ -408,12 +405,6 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		return capBandResult{}, err
 	}
 	capLevelDelta := proofbound.AbsSumUpper(delta, capDelta)
-	// vertexCapLevelDelta is capLevelDelta plus the band's own frameLiftAllow
-	// (above): every cap-level VERTEX this band places below charges it, but
-	// capLevelDelta itself stays unwidened wherever it feeds an EDGE's own
-	// bound (capSlantEdge) — the frame lift is a per-coordinate rounding, not
-	// a chord or locus term, so it has no business in an edge's length bound.
-	vertexCapLevelDelta := proofbound.AbsSumUpper(capLevelDelta, frameLiftAllow)
 
 	// sideVertexAt(i) is the ORIGINAL corner point before wall i, at sideZ —
 	// buildLoopSidesAs's own shared vertex (sideCo[i].edge.Start() ==
@@ -454,7 +445,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		apex := sideVertexAt(i)
 		prev, cur := walks[(i+n-1)%n], walks[i]
 		if !j.arc {
-			capV := &Vertex{position: liftCap(j.m), bound: units.Millimeters(vertexCapLevelDelta)}
+			capV := capVertexAt(j.m, capLevelDelta)
 			e, held, err := capSlantEdge(budget, j.m, capV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, d, j.g1)
 			if err != nil {
 				return capBandResult{}, err
@@ -463,8 +454,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			slantInHeld[i], slantOutHeld[i] = held, held
 			continue
 		}
-		pAV := &Vertex{position: liftCap(j.pA), bound: units.Millimeters(vertexCapLevelDelta)}
-		pBV := &Vertex{position: liftCap(j.pB), bound: units.Millimeters(vertexCapLevelDelta)}
+		pAV := capVertexAt(j.pA, capLevelDelta)
+		pBV := capVertexAt(j.pB, capLevelDelta)
 		var errA, errB error
 		slantIn[i], slantInHeld[i], errA = capSlantEdge(budget, j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, 0, true)
 		if errA != nil {
@@ -928,13 +919,15 @@ const capMiterLocusSubdivisions = 32
 // is the contour displacement of the concentric offset circle and exactRadius
 // the radius it denotes, so the seam vertex publishes the displacement it
 // actually has (its own coordinate is a float SUM of the centre and that
-// radius, which rounds once more) and the circumference is bounded against π's
-// own rational bracket.
+// radius, which rounds once more, and its own lift through pl's frame and
+// placement rounds by what prismPayload.liftedVertex measures) and the
+// circumference is bounded against π's own rational bracket.
 func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta float64, exactRadius *big.Rat) *Edge {
 	seamU := cu + r
+	seamPos, lift := pl.liftedVertex(seamU, cv, z)
 	seam := &Vertex{
-		position: pl.point(seamU, cv, z),
-		bound:    units.Millimeters(proofbound.AbsSumUpper(delta, proofarith.AddRoundError(cu, r, seamU))),
+		position: seamPos,
+		bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(delta, lift), proofarith.AddRoundError(cu, r, seamU))),
 	}
 	axis := pl.dir(0, 0, 1)
 	if !ccw {

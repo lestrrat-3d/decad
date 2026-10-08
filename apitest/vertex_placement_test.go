@@ -147,15 +147,17 @@ func generalMotion(t *testing.T, degrees, shift float64) r3.Transform {
 	return motion
 }
 
-// requireEnclosedVertex is T96/T97/T98/T99's shared assertion: the vertex
-// nearest truth is Approximate, its bound is strictly positive, and the
-// exact-rational residual against truth sits inside that bound.
+// requireEnclosedVertex is T96/T97/T98/T99's shared assertion: the
+// exact-rational residual of the vertex nearest truth sits inside that
+// vertex's own published bound. A vertex whose lift happens to be exact for
+// its own coordinates may read Exact with a zero bound — its residual is then
+// zero too — so each caller separately requires the largest residual to be
+// positive, which proves at least one vertex is Approximate with a positive
+// bound that covers it.
 func requireEnclosedVertex(t *testing.T, vs []*decad.Vertex, truth [3]*big.Rat) float64 {
 	t.Helper()
 	v := closestVertex(t, vs, truth)
 	pos := v.Position()
-	require.Equal(t, decad.Approximate, pos.Exactness)
-	require.Positive(t, pos.Bound.Base())
 	res := vertexResidual(pos.Value, truth)
 	require.LessOrEqualf(t, res, pos.Bound.Base(),
 		"residual %g must sit inside the published bound %g", res, pos.Bound.Base())
@@ -166,10 +168,10 @@ func requireEnclosedVertex(t *testing.T, vs []*decad.Vertex, truth [3]*big.Rat) 
 // rim vertices report Approximate with a positive bound, and that bound
 // encloses the true displacement between the held (float) vertex and the
 // exact-rational point the record, frame and placement denote (computed over
-// math/big.Rat, never a second float answer). Shown-to-fail: deleting
-// prism_build.go's frameLiftAllow term (buildLoopSidesAs) turns every vertex
-// back to Exact with a zero bound, and the Approximate/Positive assertions
-// below go red.
+// math/big.Rat, never a second float answer). Shown-to-fail: deleting the
+// lift term prism_build.go's rimVertex charges (buildLoopSidesAs) turns every
+// vertex back to Exact with a zero bound, and the enclosure assertions below
+// go red.
 func TestVertexPlacedPrismBoundEnclosesDisplacement(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -194,11 +196,11 @@ func TestVertexPlacedPrismBoundEnclosesDisplacement(t *testing.T) {
 // tilted, non-axis-aligned sketch plane with NO placement at all. Lifting a
 // plane-local coordinate through a non-axis-aligned frame rounds under the
 // identity transform too, so this body's rim vertices must ALSO report
-// Approximate with a positive, enclosing bound. Shown-to-fail: reverting
-// internal/proofbound/bounds.go's frameAndPlacementRoundAllow to gate on `xform != r3.Identity()`
-// alone (the loft/stitch/patch/unstitch pattern, which never has to consider
-// its OWN frame lift) turns this case's Approximate/Positive assertions red
-// while T100 stays green — this is the row that catches it.
+// Approximate with a positive, enclosing bound. Shown-to-fail: charging the
+// lift only when `xform != r3.Identity()` (the loft/stitch/patch/unstitch
+// pattern, which never has to consider its OWN frame lift) turns this case's
+// enclosure assertions red while T100 stays green — this is the row that
+// catches it.
 func TestVertexTiltedPlaneUnplacedBoundEnclosesDisplacement(t *testing.T) {
 	t.Parallel()
 	s, p, frame := tiltedPlaneSketch(t)
@@ -223,8 +225,8 @@ func TestVertexTiltedPlaneUnplacedBoundEnclosesDisplacement(t *testing.T) {
 // sin/cos evaluate exactly (1, 0) with no libm rounding of their own, which
 // isolates the frame-lift/placement charge this row tests from the
 // angular-denotation charge revolve_bounds_test.go already covers.
-// Shown-to-fail: deleting revolve_build.go's revolveVertexFrameLiftAllow
-// term turns the Approximate/Positive assertions red.
+// Shown-to-fail: deleting the lift term revolve_build.go's sweptVertex
+// charges turns the enclosure assertions red.
 func TestVertexPlacedRevolveBoundEnclosesDisplacement(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
@@ -251,9 +253,9 @@ func TestVertexPlacedRevolveBoundEnclosesDisplacement(t *testing.T) {
 // positive, enclosing bound. A 5 mm chamfer on a rectangular cap loop offsets
 // each corner inward by exactly 5 mm along both adjacent edges, so the
 // cap-level corner at plane-local (5, 5) is exact by construction, and the
-// truth needs no offset-solve reproduction. Shown-to-fail: deleting
-// capblend_geom.go's frameLiftAllow term (buildCapBand) turns the
-// Approximate/Positive assertions red.
+// truth needs no offset-solve reproduction. Shown-to-fail: deleting the lift
+// term capblend_geom.go's capVertexAt charges (buildCapBand) turns the
+// enclosure assertions red.
 func TestVertexPlacedCapBlendBoundEnclosesDisplacement(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -277,10 +279,11 @@ func TestVertexPlacedCapBlendBoundEnclosesDisplacement(t *testing.T) {
 // TestVertexAxisAlignedUnplacedBoundStaysZero is T100: the charge the four
 // rows above pin must not silently widen the common, exact-arithmetic case.
 // An axis-aligned, unplaced prism, revolve and cap-blend body must each keep
-// every vertex Exact with a zero bound, exactly as before this repair.
-// Shown-to-fail: dropping frameAndPlacementRoundAllow's own trivial-frame
-// gate (charging unconditionally whenever maxInputAbs is nonzero) turns
-// every one of these assertions red.
+// every vertex Exact with a zero bound. Shown-to-fail: replacing the exact
+// lift measurement with a magnitude charge (proofbound.RigidRoundAllow at the
+// coordinate envelope, nonzero whenever a coordinate is) in
+// prismPayload.liftedVertex turns the prism and capBlend subtests red, and in
+// revolvePayload.liftedVertex the revolve subtest.
 func TestVertexAxisAlignedUnplacedBoundStaysZero(t *testing.T) {
 	t.Parallel()
 

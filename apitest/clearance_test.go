@@ -214,8 +214,10 @@ func TestClearancePrunedRodsContainTruth(t *testing.T) {
 // were lifted through `prismPayload.point`/`dir` in raw float64 and the
 // rounding that lift commits was charged nowhere. The axis-aligned control
 // below returns exactly 300 as Exact through the same code, which is why a
-// single axis-aligned fixture never caught this: the frame's own zero fast
-// path (internal/proofbound/bounds.go's frameAndPlacementRoundAllow) makes every term vanish.
+// single axis-aligned fixture never caught this: an unplaced axis-aligned
+// frame at the world origin lifts its integer coordinates exactly, so the
+// carriers' measured lift rounding (clearance.CFace.LiftRound) and the tilt
+// term (proofbound.DirRoundAllow's axis-aligned zero) both vanish.
 //
 // The assertion is enclosure, never a pinned Bound literal — the charge is
 // ulp-scale and rounds differently on amd64 and arm64.
@@ -268,8 +270,8 @@ func TestClearanceFarOriginTiltedPlanePairContainsTruth(t *testing.T) {
 	// bodyGeom.delta's POINT term load-bearing on its own. At an origin of
 	// (1e6, 2e6, 3e6) the frame lift rounds at the scale of ulp(3e6), so the
 	// held gap misses the truth by ~1.7e-10 mm — two orders of magnitude more
-	// than the per-face tilt term alone charges (~3.2e-11 mm). Dropping
-	// frameAndPlacementRoundAllow from addPrismFaces' own g.delta therefore
+	// than the per-face tilt term alone charges (~3.2e-11 mm). Dropping the
+	// carriers' point term (CFace.LiftRound) from addPrismFaces' own g.delta therefore
 	// turns THIS pair red while leaving the flagship above green, which is
 	// why both fixtures exist: at a near origin the tilt term covers for the
 	// point term, and one combined leg would prove neither.
@@ -425,11 +427,12 @@ func TestClearancePlacedStopBuiltStackTouchingIsUndecided(t *testing.T) {
 	t.Parallel()
 	// The identical stop-built stack, with the smaller box arriving through
 	// Placed (a pure translation) instead of a direct offset-plane
-	// construction: the placement's own frame/placement rounding
-	// (internal/proofbound/bounds.go's frameAndPlacementRoundAllow) makes the placed box's
-	// bodyGeom.delta nonzero, so the §6 coplanar contact certificate — an
-	// exact material-side claim — refuses to fire (clearancePair's own doc
-	// comment). The partition is still proven disjoint through the
+	// construction: the translation lifts every carrier point exactly, but
+	// the tilt term charges the placement's direction rounding
+	// (proofbound.DirRoundAllow, nonzero under any non-identity placement),
+	// which makes the placed box's bodyGeom.delta nonzero, so the §6 coplanar
+	// contact certificate — an exact material-side claim — refuses to fire
+	// (clearancePair's own doc comment). The partition is still proven disjoint through the
 	// mesh-boolean fallback (verification §1's own "no fabricated rows"
 	// alternative route), but the requested gap stays unmeasured: Suspect,
 	// DiagUndecidedClearance, no Clearance row. This is the honest cost of
@@ -519,9 +522,9 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 	// and 5 have spine distance 0 and a genuine 5 mm gap — the peg-in-hole
 	// clearance a subtraction-only rule would misread as "carriers meet".
 	// The tube is a revolve and the peg a prism sketched on the YZ plane, so
-	// the pair also covers the mixed-payload path — a plane the frame's own
-	// zero fast path does not cover (internal/proofbound/bounds.go's frameAndPlacementRoundAllow
-	// only exempts EXACTLY U=(1,0,0), V=(0,1,0)), and a full turn's own
+	// the pair also covers the mixed-payload path — a plane the tilt term's
+	// zero fast path does not cover (proofbound.DirRoundAllow only exempts
+	// EXACTLY U=(1,0,0), V=(0,1,0)), and a full turn's own
 	// angular displacement never collapses to exactly zero (2π has no exact
 	// rational value), so both bodyGeom.delta are nonzero and the row reads
 	// honest-Approximate rather than the Exact this pair published before

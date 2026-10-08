@@ -276,17 +276,23 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 	singleClosed := n == 1 && walks[0].Closed
 
 	// A patch's own record is its own denotation (patchPayload carries no
-	// section displacement), so the boundBase term below is always zero;
-	// it is composed anyway, exactly as buildLoopSidesAs composes
-	// bottomBoundBase, so a later field this payload gains is charged the
-	// same way rather than silently skipped.
-	boundBase := proofbound.AbsSumUpper(pp.sectionDelta, pp.z0Delta)
+	// section displacement), so the section and level terms below are always
+	// zero; they are composed anyway, exactly as buildLoopSidesAs composes its
+	// rim vertices, so a later field this payload gains is charged the same way
+	// rather than silently skipped. Beside them every rim vertex carries its
+	// own exact frame lift and placement rounding (prismPayload.liftedVertex),
+	// zero wherever that lift is exact for the coordinates at hand.
+	rimVertex := func(u, v, extra float64) *Vertex {
+		held, lift := pp.liftedVertex(u, v, pp.z0)
+		base := proofbound.AbsSumUpper(pp.sectionDelta, pp.z0Delta, lift)
+		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, extra))}
+	}
 	var seam *Vertex
 	var verts []*Vertex
 	if singleClosed {
 		w := walks[0]
 		extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(w.SegmentWalk, w.EndBound))
-		seam = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(boundBase, extra))}
+		seam = rimVertex(w.StartU, w.StartV, extra)
 	} else {
 		verts = make([]*Vertex, n)
 		for i, w := range walks {
@@ -295,7 +301,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 			}
 			prev := walks[(i+n-1)%n]
 			extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(prev.SegmentWalk, prev.EndBound))
-			verts[i] = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(boundBase, extra))}
+			verts[i] = rimVertex(w.StartU, w.StartV, extra)
 		}
 	}
 

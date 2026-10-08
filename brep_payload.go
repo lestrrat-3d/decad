@@ -458,22 +458,31 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	}
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true, kind: BodySolid}
 	refView := bp.refView()
-	frameLift := proofbound.FrameAndPlacementRoundAllow(refView.frame, refView.xform, topo.coordUpper)
 
 	// Vertices are shared by reference coordinates. Each carries the largest
-	// displacement any use placing it states: its face's section displacement,
-	// its level's, the frame and placement lift, and its walk end's own bound.
-	vertices := map[[3]float64]*Vertex{}
-	vertexAt := func(c [3]float64, bound float64) *Vertex {
-		v, ok := vertices[c]
+	// displacement any use placing it states — its face's section displacement,
+	// its level's and its walk end's own bound — beside the vertex's own exact
+	// frame and placement lift rounding (prismPayload.liftedVertex), measured
+	// once per vertex when it is first placed.
+	type placedVertex struct {
+		v    *Vertex
+		lift float64
+	}
+	vertices := map[[3]float64]placedVertex{}
+	// placeVertex returns the vertex at reference coordinates c, widening its
+	// bound to cover one more use: faceDelta and levelDelta are that use's
+	// section and level displacements and endAllow its walk end's own bound.
+	placeVertex := func(c [3]float64, faceDelta, levelDelta, endAllow float64) *Vertex {
+		pv, ok := vertices[c]
 		if !ok {
-			v = &Vertex{position: refView.point(c[0], c[1], c[2])}
-			vertices[c] = v
+			held, lift := refView.liftedVertex(c[0], c[1], c[2])
+			pv = placedVertex{v: &Vertex{position: held}, lift: lift}
+			vertices[c] = pv
 		}
-		if bound > v.bound.Base() {
-			v.bound = units.Millimeters(bound)
+		if b := proofbound.AbsSumUpper(proofbound.AbsSumUpper(faceDelta, levelDelta, pv.lift), endAllow); b > pv.v.bound.Base() {
+			pv.v.bound = units.Millimeters(b)
 		}
-		return v
+		return pv.v
 	}
 	for _, u := range topo.uses {
 		// A whole circle's seam is its rim's: a loop that walks the same
@@ -482,10 +491,12 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 			continue
 		}
 		f := bp.faces[u.Face]
-		base := proofbound.AbsSumUpper(f.delta, u.LevelDelta, frameLift)
-		vertexAt(u.DirFrom, proofbound.AbsSumUpper(base, proofbound.WalkEndBoundAllow(u.Walk.StartBound)))
-		vertexAt(u.DirTo, proofbound.AbsSumUpper(base, proofbound.WalkEndBoundAllow(u.Walk.EndBound)))
+		placeVertex(u.DirFrom, f.delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.Walk.StartBound))
+		placeVertex(u.DirTo, f.delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.Walk.EndBound))
 	}
+	// vertexAt is the lookup brepEdge reads: every vertex it names was already
+	// placed by a use above, so it adds no displacement of its own.
+	vertexAt := func(c [3]float64) *Vertex { return placeVertex(c, 0, 0, 0) }
 
 	edges := make([]*Edge, len(topo.edges))
 	for ei, pair := range topo.edges {
@@ -556,11 +567,11 @@ func (bp brepPayload) refView() prismPayload {
 // walk length, a side line runs bottom to top over the wall's bounded height,
 // and a loop segment shared by two planar faces is a line of its walk's
 // length. Convexity reads evaluator §3's walked boundary (brepEdgeConvex).
-func brepEdge(ctx context.Context, bp brepPayload, topo *brepTopology, pair [2]int, vertexAt func([3]float64, float64) *Vertex) (*Edge, error) {
+func brepEdge(ctx context.Context, bp brepPayload, topo *brepTopology, pair [2]int, vertexAt func([3]float64) *Vertex) (*Edge, error) {
 	owner := topo.uses[pair[0]]
 	f := bp.faces[owner.Face]
-	start := vertexAt(owner.DirFrom, 0)
-	end := vertexAt(owner.DirTo, 0)
+	start := vertexAt(owner.DirFrom)
+	end := vertexAt(owner.DirTo)
 	convex, err := brepEdgeConvex(ctx, topo, pair)
 	if err != nil {
 		return nil, err

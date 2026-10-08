@@ -580,7 +580,6 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	walkLenAllow := proofbound.SectionDisplacementLength(delta, 1)
 	raw := make([]survey2d.SideWalk, len(loop.Segments))
 	total := proofbound.BoundedScalar{}
-	maxCoordUpper := 0.0
 	for i, seg := range loop.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
@@ -607,17 +606,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		w.LengthBound = proofbound.AbsSumUpper(w.LengthBound, walkLenAllow)
 		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(w.Length, w.LengthBound))
-		maxCoordUpper = math.Max(maxCoordUpper, w.CoordUpper)
 	}
-	// frameLiftAllow is the ONE proven bound this whole loop's rim vertices
-	// share for the payload's own frame lift and accumulated placement
-	// (internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow) — computed once here rather
-	// than per vertex, over every plane-local coordinate this loop's own
-	// walks and sweep levels can put into pp.point (topology.go's
-	// Vertex.Position contract; docs/evaluator-design.md §8). It is exactly
-	// zero for an axis-aligned, unplaced payload, which is what keeps an
-	// ordinary extrude's rim vertices Exact as before.
-	frameLiftAllow := proofbound.FrameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
 	walks, err := coalesceWalksContext(ctx, raw)
 	if err != nil {
 		return nil, nil, nil, proofbound.BoundedScalar{}, err
@@ -636,23 +625,21 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// A side vertex sits at one recorded boundary coordinate and one sweep level,
 	// so it carries both displacements: the section's, which moves it in the
 	// plane, and its own end's, which moves it along the normal. Each is zero for
-	// a coordinate the payload recorded from what the caller stated, and beside
-	// them every rim vertex carries frameLiftAllow, the payload's own frame lift
-	// and accumulated placement rounding (internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow;
-	// topology.go's Vertex.Position contract) — zero for an axis-aligned, unplaced
-	// payload, which is what keeps an ordinary extrude's vertices Exact; neither
-	// is a claim about the other's axis, so they compose rather than one
-	// standing in for the other.
-	// A junction touching a FREE-FORM walk's own end also folds in that walk's
-	// own endpoint bound (freeformVertexAllow, internal/proofbound/bounds.go's proofbound.WalkEndBoundAllow) —
-	// the one rounding §5.1's exact-rational Bézier conversion committed taking
-	// the endpoint into float64 (topology.go's Vertex.Position contract: a
-	// COMPUTED coordinate carries its own computation's proven displacement).
-	// An analytic walk contributes nothing here: widening a trimmed circular
-	// walk's vertex is a separate question this build does not answer by
-	// accident.
-	bottomBoundBase := proofbound.AbsSumUpper(delta, pp.z0Delta, frameLiftAllow)
-	topBoundBase := proofbound.AbsSumUpper(delta, pp.z1Delta, frameLiftAllow)
+	// a coordinate the payload recorded from what the caller stated. Beside them
+	// every rim vertex carries its OWN frame lift and accumulated placement
+	// rounding, measured exactly for that vertex (prismPayload.liftedVertex;
+	// topology.go's Vertex.Position contract) — zero wherever the lift is exact
+	// for the coordinates at hand, which is what keeps an ordinary extrude's
+	// vertices Exact. None of the three is a claim about another's axis, so
+	// they compose rather than one standing in for another.
+	// rimVertex places one rim vertex at (u, v) on level z, whose own axial
+	// displacement is zDelta, charging the section's displacement, that level's,
+	// the vertex's own exact lift rounding and the walk-end term extra.
+	rimVertex := func(u, v, z, zDelta, extra float64, level levelToken) *Vertex {
+		held, lift := pp.liftedVertex(u, v, z)
+		base := proofbound.AbsSumUpper(delta, zDelta, lift)
+		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, extra)), level: level, denot: mintCurve()}
+	}
 	var bottomV, topV []*Vertex
 	// seamBottom/seamTop are the SINGLE seam vertex a lone closed walk's rim
 	// edges share at each cap — one per cap, no junction vertex at all — the
@@ -664,8 +651,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	if singleClosed {
 		w := walks[0]
 		extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(w.SegmentWalk, w.EndBound))
-		seamBottom = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(bottomBoundBase, extra)), level: levelZ0, denot: mintCurve()}
-		seamTop = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z1), bound: units.Millimeters(proofbound.AbsSumUpper(topBoundBase, extra)), level: levelZ1, denot: mintCurve()}
+		seamBottom = rimVertex(w.StartU, w.StartV, pp.z0, pp.z0Delta, extra, levelZ0)
+		seamTop = rimVertex(w.StartU, w.StartV, pp.z1, pp.z1Delta, extra, levelZ1)
 	} else {
 		bottomV = make([]*Vertex, n)
 		topV = make([]*Vertex, n)
@@ -675,8 +662,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			}
 			prev := walks[(i+n-1)%n]
 			extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(prev.SegmentWalk, prev.EndBound))
-			bottomV[i] = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(bottomBoundBase, extra)), level: levelZ0, denot: mintCurve()}
-			topV[i] = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z1), bound: units.Millimeters(proofbound.AbsSumUpper(topBoundBase, extra)), level: levelZ1, denot: mintCurve()}
+			bottomV[i] = rimVertex(w.StartU, w.StartV, pp.z0, pp.z0Delta, extra, levelZ0)
+			topV[i] = rimVertex(w.StartU, w.StartV, pp.z1, pp.z1Delta, extra, levelZ1)
 		}
 	}
 
