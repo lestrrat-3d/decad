@@ -259,12 +259,14 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 }
 
 // chordLocusResidualAllow is this ONE patch's chord-versus-locus flux term,
-// internal/proofbound/bounds.go's proofbound.ChordLocusVolumeAllow over the
-// three fluxes chordLocusFluxes encloses about the arc's axis and the
-// patch's corner slivers' flux (Patch.CornerFlux). Only that last term
-// remains wherever both proven corner skews are zero (an apex patch, and a
-// join whose two directrix ends lie on one ray from the centre): the two
-// windows then coincide and the three fluxes are one.
+// internal/proofbound/bounds.go's proofbound.ChordLocusVolumeAllow over an
+// enclosure of the denoted surface's flux about the arc's axis
+// (chordLocusDenotedFlux), the built patch's flux enclosed the same way
+// (chordLocusFluxes), and the patch's corner slivers' flux
+// (Patch.CornerFlux). Only that last term remains wherever both proven corner
+// skews are zero (an apex patch, and a join whose two directrix ends lie on
+// one ray from the centre): the two windows then coincide and the denoted and
+// built surfaces are one.
 //
 // The skew is the larger of the two PROVEN corner skews (CornerSkewUpper):
 // the exact angle about the centre between each corner's side directrix end
@@ -272,11 +274,124 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 // difference of two float Atan2 readings, which can understate it.
 func chordLocusResidualAllow(g Patch) float64 {
 	if math.Max(g.SkewStart, g.SkewEnd) <= 0 {
-		return proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, 0, 0, g.CornerFlux)
+		return proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, g.CornerFlux)
 	}
+	lo, hi, built, ok := chordLocusDenotedFlux(g)
+	if !ok {
+		return math.Inf(1)
+	}
+	return proofbound.ChordLocusVolumeAllow(lo, hi, built.Value, built.Bound, g.CornerFlux)
+}
+
+// chordLocusDenotedFlux encloses the denoted surface's flux about the arc's
+// axis, [lo, hi] rounded outward, beside the built patch's enclosed flux.
+// The enclosure is the sandwich between the wide and narrow sectors
+// (chordLocusFluxes) and, where the patch carries both corners' locus spans
+// (Patch.Locus0, Patch.Locus1), the tighter enclosure chordLocusSpanFlux
+// reads from them; the two are intersected, since the flux lies in both. ok
+// is false where an enclosure does not lift or the two do not meet.
+func chordLocusDenotedFlux(g Patch) (float64, float64, proofbound.BoundedScalar, bool) {
 	wide, narrow, built := chordLocusFluxes(g)
-	return proofbound.ChordLocusVolumeAllow(wide.Value, wide.Bound, narrow.Value, narrow.Bound,
-		built.Value, built.Bound, g.CornerFlux)
+	w, wb, n, nb := proofarith.FloatRat(wide.Value), proofarith.FloatRat(wide.Bound), proofarith.FloatRat(narrow.Value), proofarith.FloatRat(narrow.Bound)
+	if w == nil || wb == nil || n == nil || nb == nil {
+		return 0, 0, built, false
+	}
+	lo := ratMin(new(big.Rat).Sub(w, wb), new(big.Rat).Sub(n, nb))
+	hi := ratMax(new(big.Rat).Add(w, wb), new(big.Rat).Add(n, nb))
+	if span, ok := chordLocusSpanFlux(g); ok {
+		lo, hi = ratMax(lo, span.Lo), ratMin(hi, span.Hi)
+	}
+	if lo.Cmp(hi) > 0 {
+		return 0, 0, built, false
+	}
+	return proofbound.RatFloatDown(lo), proofbound.RatFloatUp(hi), built, true
+}
+
+// chordLocusSpanFlux encloses the denoted surface's flux about the arc's axis
+// from the two corners' locus spans. At height fraction v the denoted surface
+// is the cone over [θS0 + φ0(v), θS1 + φ1(v)], φ0 and φ1 the two loci's
+// angles from their corners' rays at offset v·dc, and about the axis point at
+// the side level its flux density per dθ·dv is r(v)·(R0·h − z0·(R1 − R0)),
+// with r(v) = R0 + (R1 − R0)·v and (z0, h) the anchored side level and height
+// the three fluxes of chordLocusFluxes read. The flux is therefore
+//
+//	(R0·h − z0·(R1 − R0))·∫₀¹ r(v)·(dS + φ1(v) − φ0(v)) dv,
+//
+// and over each span φ lies in that span's [Lo, Hi], so each corner's share
+// is the sum over its spans of ∫ r dv times that interval, with
+// ∫ r dv = (v1 − v0)·(R0 + (R1 − R0)·(v0 + v1)/2). Every radius and window
+// end is boxed by its held allowance (Patch.Held). A clockwise-walked patch
+// negates the flux, as patchRawFlux does. ok is false where a span list is
+// empty or does not tile [0, LocusSetback] in order, or a number does not
+// lift.
+func chordLocusSpanFlux(g Patch) (proofbound.RatInterval, bool) {
+	dc := proofarith.FloatRat(g.LocusSetback)
+	if len(g.Locus0) == 0 || len(g.Locus1) == 0 || dc == nil || dc.Sign() <= 0 {
+		return proofbound.RatInterval{}, false
+	}
+	R0, ok0 := heldBox(g.SideRadius, g.Held.SideRadius)
+	R1, ok1 := heldBox(g.CapRadius, g.Held.CapRadius)
+	th0, okT0 := heldBox(g.Th0, g.Held.Th0)
+	th1, okT1 := heldBox(g.Th1, g.Held.Th1)
+	if !ok0 || !ok1 || !okT0 || !okT1 {
+		return proofbound.RatInterval{}, false
+	}
+	sideZ, capZ := axisAnchoredLevels(g.SideZ, g.CapZ)
+	z0, z1 := proofarith.FloatRat(sideZ), proofarith.FloatRat(capZ)
+	if z0 == nil || z1 == nil {
+		return proofbound.RatInterval{}, false
+	}
+	h := new(big.Rat).Sub(z1, z0)
+	slope := proofbound.IntervalSub(R1, R0)
+	density := proofbound.IntervalSub(proofbound.IntervalScale(R0, h), proofbound.IntervalScale(slope, z0))
+	half := big.NewRat(1, 2)
+	rIntegral := func(v0, v1 *big.Rat) proofbound.RatInterval {
+		mid := new(big.Rat).Mul(new(big.Rat).Add(v0, v1), half)
+		return proofbound.IntervalScale(proofbound.IntervalAdd(R0, proofbound.IntervalScale(slope, mid)), new(big.Rat).Sub(v1, v0))
+	}
+	cornerShare := func(spans []LocusSpan) (proofbound.RatInterval, bool) {
+		sum := proofbound.PointInterval(new(big.Rat))
+		at := new(big.Rat)
+		for _, sp := range spans {
+			t0, t1 := proofarith.FloatRat(sp.T0), proofarith.FloatRat(sp.T1)
+			lo, hi := proofarith.FloatRat(sp.Lo), proofarith.FloatRat(sp.Hi)
+			if t0 == nil || t1 == nil || lo == nil || hi == nil || t0.Cmp(at) != 0 || t1.Cmp(t0) < 0 || lo.Cmp(hi) > 0 {
+				return proofbound.RatInterval{}, false
+			}
+			at = t1
+			v0, v1 := new(big.Rat).Quo(t0, dc), new(big.Rat).Quo(t1, dc)
+			sum = proofbound.IntervalAdd(sum, proofbound.IntervalMul(rIntegral(v0, v1), proofbound.Interval(lo, hi)))
+		}
+		if at.Cmp(dc) != 0 {
+			return proofbound.RatInterval{}, false
+		}
+		return sum, true
+	}
+	share0, okS0 := cornerShare(g.Locus0)
+	share1, okS1 := cornerShare(g.Locus1)
+	if !okS0 || !okS1 {
+		return proofbound.RatInterval{}, false
+	}
+	full := proofbound.IntervalMul(rIntegral(new(big.Rat), big.NewRat(1, 1)), proofbound.IntervalSub(th1, th0))
+	flux := proofbound.IntervalMul(density, proofbound.IntervalSub(proofbound.IntervalAdd(full, share1), share0))
+	if !g.SweepCCW {
+		flux = proofbound.IntervalNeg(flux)
+	}
+	return flux, true
+}
+
+func ratMin(a, b *big.Rat) *big.Rat {
+	if a.Cmp(b) <= 0 {
+		return a
+	}
+	return b
+}
+
+func ratMax(a, b *big.Rat) *big.Rat {
+	if a.Cmp(b) >= 0 {
+		return a
+	}
+	return b
 }
 
 // chordLocusRegionAllow is three times this ONE patch's bound on the volume
@@ -653,6 +768,10 @@ func tripleProductUpper(a, b, c r3.Vec) float64 {
 
 // RawFlux returns one cap band's patch flux and its proven bound.
 func RawFlux(g Patch) proofbound.BoundedScalar { return patchRawFlux(g) }
+
+// ChordLocusSpanFlux encloses a Cone patch's denoted surface's flux about the
+// arc's axis from its corner locus spans.
+func ChordLocusSpanFlux(g Patch) (proofbound.RatInterval, bool) { return chordLocusSpanFlux(g) }
 
 // ChordLocusFluxes returns the wide, narrow and built fluxes a Cone patch's
 // chord-versus-locus term reads, about the arc's axis, with their bounds.

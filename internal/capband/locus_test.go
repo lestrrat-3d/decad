@@ -215,7 +215,7 @@ func TestMiterLocusSliverFluxZeroOnAStraightLocus(t *testing.T) {
 }
 
 // TestCircleCircleFootIsTheLocusRoot checks the corner-foot enclosure a
-// circle-circle corner reads at each offset (capcontour.CircleCircleLocusFoot,
+// circle-circle corner reads at each offset (capcontour.LocusFoot,
 // the carrier-intersection root nearest the corner) holds the locus itself,
 // which a reference follows from the corner by Newton's method, on the
 // asymmetric lens of TestMiterLocusSliverFluxCoversTheExactCornerShare. The
@@ -225,7 +225,7 @@ func TestMiterLocusSliverFluxZeroOnAStraightLocus(t *testing.T) {
 // tangency. A setback that reaches the tangency, where the two offset circles
 // part near t ≈ 5.97, must charge no finite sliver.
 //
-// Shown to fail on 2026-10-09: with CircleCircleLocusFoot answering the
+// Shown to fail on 2026-10-09: with LocusFoot answering the
 // farther root, the enclosures miss the followed locus from offset 0 on.
 func TestCircleCircleFootIsTheLocusRoot(t *testing.T) {
 	t.Parallel()
@@ -246,7 +246,7 @@ func TestCircleCircleFootIsTheLocusRoot(t *testing.T) {
 			det := a1*b2 - a2*b1
 			u, v = u-(f1*b2-f2*b1)/det, v-(a1*f2-a2*f1)/det
 		}
-		box, ok := capcontour.CircleCircleLocusFoot(lensA, lensB, off, lensU, lensV)
+		box, ok := capcontour.LocusFoot(lensA, lensB, off, lensU, lensV)
 		require.True(t, ok, `offset %v: the foot must be enclosed`, off)
 		lo, _ := box.U.Lo.Float64()
 		hi, _ := box.U.Hi.Float64()
@@ -260,4 +260,85 @@ func TestCircleCircleFootIsTheLocusRoot(t *testing.T) {
 	_, ok, err := capband.MiterLocusSliverFlux(nil, lensA, lensB, 0, -4, lensU, lensV, 6.5, 6.5, 0)
 	require.NoError(t, err)
 	require.False(t, ok, `a setback past the carriers' tangency charges no finite sliver`)
+}
+
+// followLocus returns the corner-foot locus at each offset in offs, followed
+// from the corner (vU, vV) by Newton's method on the two carriers' own
+// equations, the offsets taken in increasing order.
+func followLocus(prev, cur survey2d.SideWalk, vU, vV float64, offs []float64) [][2]float64 {
+	fa, fb := sliverCarrierOf(prev), sliverCarrierOf(cur)
+	u, v := vU, vV
+	out := make([][2]float64, len(offs))
+	for i, off := range offs {
+		for range 50 {
+			f1, a1, b1 := fa(u, v, off)
+			f2, a2, b2 := fb(u, v, off)
+			det := a1*b2 - a2*b1
+			u, v = u-(f1*b2-f2*b1)/det, v-(a1*f2-a2*f1)/det
+		}
+		out[i] = [2]float64{u, v}
+	}
+	return out
+}
+
+// TestCornerLocusSpansHoldTheLocus checks each span CornerLocusSpans reports
+// holds the angle, about the circular wall's centre and from the ray through
+// its side end, of the locus a reference follows by Newton's method, sampled
+// eight times per span, on a convex line-circle corner and on the lens
+// corner read from both of its arcs. Each span must also stay within an
+// eighth of the locus's whole turn, which is what makes the spans tighter
+// than the sandwich between the side and cap windows.
+//
+// Shown to fail on 2026-10-09: with each span reading only its end foot's
+// angle, the samples inside the span fall outside it.
+func TestCornerLocusSpansHoldTheLocus(t *testing.T) {
+	t.Parallel()
+	const alpha, gamma = 1.0, 0.5
+	vU, vV := 10*math.Cos(alpha), 10*math.Sin(alpha)
+	du, dv := -math.Sin(alpha+gamma), math.Cos(alpha+gamma)
+	arc := arcWalk(0, 0, 10, -alpha, alpha)
+	line := lineWalk(vU, vV, vU+20*du, vV+20*dv)
+	lensU, lensV := lensCorner(0, -4, 10, 1, 6, 12)
+	thA := math.Atan2(lensV+4, lensU)
+	thB := math.Atan2(lensV-6, lensU-1)
+	lensA := arcWalk(0, -4, 10, thA-1, thA)
+	lensB := arcWalk(1, 6, 12, thB, thB+0.5)
+	for _, tc := range []struct {
+		name       string
+		prev, cur  survey2d.SideWalk
+		cU, cV     float64
+		vU, vV, dc float64
+	}{
+		{name: `convex line-circle`, prev: arc, cur: line, vU: vU, vV: vV, dc: 1},
+		{name: `lens about arc A`, prev: lensA, cur: lensB, cU: 0, cV: -4, vU: lensU, vV: lensV, dc: 1},
+		{name: `lens about arc B`, prev: lensA, cur: lensB, cU: 1, cV: 6, vU: lensU, vV: lensV, dc: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			spans, ok, err := capband.CornerLocusSpans(nil, tc.prev, tc.cur, tc.cU, tc.cV, tc.vU, tc.vV, tc.vU, tc.vV, tc.dc)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Len(t, spans, capband.MiterLocusSubdivisions)
+			au, av := tc.vU-tc.cU, tc.vV-tc.cV
+			angleOf := func(p [2]float64) float64 {
+				du, dv := p[0]-tc.cU, p[1]-tc.cV
+				return math.Atan2(au*dv-av*du, au*du+av*dv)
+			}
+			total := math.Abs(angleOf(followLocus(tc.prev, tc.cur, tc.vU, tc.vV, []float64{tc.dc})[0]))
+			require.Positive(t, total)
+			const tol = 1e-12
+			for _, sp := range spans {
+				require.LessOrEqual(t, sp.Hi-sp.Lo, total/8, `a span must stay within an eighth of the locus's turn`)
+				offs := make([]float64, 9)
+				for k := range offs {
+					offs[k] = sp.T0 + (sp.T1-sp.T0)*float64(k)/8
+				}
+				for k, p := range followLocus(tc.prev, tc.cur, tc.vU, tc.vV, offs) {
+					a := angleOf(p)
+					require.True(t, sp.Lo-tol <= a && a <= sp.Hi+tol,
+						`offset %v: the locus angle %v must lie in the span [%v, %v]`, offs[k], a, sp.Lo, sp.Hi)
+				}
+			}
+		})
+	}
 }

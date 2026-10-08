@@ -12,103 +12,63 @@ import (
 
 func ratOf(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
 
-// chordLocusExcursionExact is ChordLocusBuiltExcursion's expression over
-// rationals: how far the built enclosure reaches past the interval the wide
-// and narrow enclosures span.
-func chordLocusExcursionExact(wide, wideBound, narrow, narrowBound, built, builtBound float64) *big.Rat {
-	w, wb, n, nb, b, bb := ratOf(wide), ratOf(wideBound), ratOf(narrow), ratOf(narrowBound), ratOf(built), ratOf(builtBound)
-	top := new(big.Rat).Sub(w, wb)
-	if alt := new(big.Rat).Sub(n, nb); alt.Cmp(top) > 0 {
-		top = alt
-	}
-	bottom := new(big.Rat).Add(w, wb)
-	if alt := new(big.Rat).Add(n, nb); alt.Cmp(bottom) < 0 {
-		bottom = alt
-	}
-	above := new(big.Rat).Sub(new(big.Rat).Add(b, bb), top)
-	below := new(big.Rat).Sub(bottom, new(big.Rat).Sub(b, bb))
-	out := new(big.Rat)
-	if above.Cmp(out) > 0 {
-		out = above
-	}
-	if below.Cmp(out) > 0 {
-		out = below
-	}
-	return out
-}
-
-// envelopeSlackExact is |wide − narrow| + wideBound + narrowBound over
-// rationals.
-func envelopeSlackExact(wide, wideBound, narrow, narrowBound float64) *big.Rat {
-	sum := new(big.Rat).Abs(new(big.Rat).Sub(ratOf(wide), ratOf(narrow)))
-	return sum.Add(sum, ratOf(wideBound)).Add(sum, ratOf(narrowBound))
-}
-
 // TestChordLocusVolumeAllowRoundsOutward checks the chord-versus-locus flux
-// term is never below its own expression evaluated exactly, |W − N| plus both
-// reference bounds plus the built excursion ε plus the corner flux, over a
-// randomized sweep that draws the built flux inside the reference interval,
-// past either end of it, and with the two references in either order (a
-// clockwise-walked patch negates all three). Rows with the built flux past
-// an end must charge that excursion on top of the envelope, and an input it
-// cannot read must refuse rather than read zero.
+// term is the farther end of the denoted enclosure from the built enclosure
+// plus the corner flux: never below max(0, hi − (b − bb), (b + bb) − lo) +
+// corner evaluated exactly and within a few ulps above it, over a randomized
+// sweep that draws the built flux inside the enclosure and past either end.
+// Rows with the built flux on one side of the enclosure must charge the
+// far end, and an input it cannot read, or an empty enclosure, must refuse.
 //
-// Shown to fail on 2026-10-09: with ε left out of the sum, the excursion rows
-// and the sweep's outside draws fall below the exact expression; with the
-// excursion taken against [N, W] in that order only, the negated inside row
-// charges an excursion of 2 it does not have.
+// Shown to fail on 2026-10-09: with the term reading only how far the built
+// flux sits above the enclosure's bottom, the sweep's draws above the middle
+// and the row below the enclosure fall below the exact expression; with the
+// corner flux left out, every draw does.
 func TestChordLocusVolumeAllowRoundsOutward(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(7, 11))
 	for range 2000 {
-		wide := (rng.Float64() - 0.5) * 1e6
-		narrow := wide * (1 - rng.Float64()*1e-3)
-		// built ranges from well below the interval to well above it.
-		built := narrow + (wide-narrow)*(rng.Float64()*3-1)
-		if rng.IntN(2) == 0 {
-			wide, narrow, built = -wide, -narrow, -built
-		}
-		wideBound, narrowBound, builtBound := rng.Float64()*1e-6, rng.Float64()*1e-6, rng.Float64()*1e-6
+		lo := (rng.Float64() - 0.5) * 1e6
+		hi := lo + rng.Float64()*1e3
+		built := lo + (hi-lo)*(rng.Float64()*3-1)
+		builtBound := rng.Float64() * 1e-6
 		corner := rng.Float64() * 1e3
-		got := proofbound.ChordLocusVolumeAllow(wide, wideBound, narrow, narrowBound, built, builtBound, corner)
-		lower := envelopeSlackExact(wide, wideBound, narrow, narrowBound)
-		lower.Add(lower, chordLocusExcursionExact(wide, wideBound, narrow, narrowBound, built, builtBound))
-		lower.Add(lower, ratOf(corner))
-		require.GreaterOrEqual(t, ratOf(got).Cmp(lower), 0,
-			`wide=%v narrow=%v built=%v: %v is below the exact expression`, wide, narrow, built, got)
+		got := proofbound.ChordLocusVolumeAllow(lo, hi, built, builtBound, corner)
+		above := new(big.Rat).Sub(ratOf(hi), new(big.Rat).Sub(ratOf(built), ratOf(builtBound)))
+		below := new(big.Rat).Sub(new(big.Rat).Add(ratOf(built), ratOf(builtBound)), ratOf(lo))
+		exact := new(big.Rat)
+		if above.Cmp(exact) > 0 {
+			exact = above
+		}
+		if below.Cmp(exact) > 0 {
+			exact = below
+		}
+		exact.Add(exact, ratOf(corner))
+		require.GreaterOrEqual(t, ratOf(got).Cmp(exact), 0,
+			`lo=%v hi=%v built=%v: %v is below the exact expression`, lo, hi, built, got)
+		ceiling, _ := new(big.Rat).Mul(exact, big.NewRat(1000000000001, 1000000000000)).Float64()
+		require.LessOrEqual(t, got, ceiling, `lo=%v hi=%v built=%v: %v is past the exact expression`, lo, hi, built, got)
 	}
-
 	for _, tc := range []struct {
-		name                string
-		wide, narrow, built float64
-		excursion           float64
+		name          string
+		lo, hi, built float64
+		want          float64
 	}{
-		{name: `inside`, wide: 10, narrow: 6, built: 8},
-		{name: `above the wide flux`, wide: 10, narrow: 6, built: 11, excursion: 1},
-		{name: `below the narrow flux`, wide: 10, narrow: 6, built: 4, excursion: 2},
-		{name: `negated, inside`, wide: -10, narrow: -6, built: -8},
-		{name: `negated, below`, wide: -10, narrow: -6, built: -11, excursion: 1},
+		{name: `inside, nearer the top`, lo: 6, hi: 10, built: 9, want: 3},
+		{name: `inside, nearer the bottom`, lo: 6, hi: 10, built: 7, want: 3},
+		{name: `above`, lo: 6, hi: 10, built: 11, want: 5},
+		{name: `below`, lo: 6, hi: 10, built: 4, want: 6},
 	} {
-		eps := proofbound.ChordLocusBuiltExcursion(tc.wide, 0, tc.narrow, 0, tc.built, 0)
-		require.Equal(t, tc.excursion, eps, `%s: the excursion`, tc.name)
-		require.Equal(t, math.Abs(tc.wide-tc.narrow)+tc.excursion,
-			proofbound.ChordLocusVolumeAllow(tc.wide, 0, tc.narrow, 0, tc.built, 0, 0), `%s: the term`, tc.name)
+		require.Equal(t, tc.want, proofbound.ChordLocusVolumeAllow(tc.lo, tc.hi, tc.built, 0, 0), tc.name)
 	}
-
-	require.Zero(t, proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, 0, 0, 0), `three equal fluxes charge nothing`)
-	require.Equal(t, 0.5, proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, 0, 0, 0.5), `the corner flux is charged alone`)
-	for _, corner := range []float64{math.Inf(1), math.NaN(), -1} {
-		require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(1, 0, 1, 0, 1, 0, corner), 1),
-			`a corner flux of %v states no bound`, corner)
-	}
+	require.Zero(t, proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, 0), `a point enclosure at the built flux charges nothing`)
+	require.Equal(t, 0.5, proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, 0.5), `the corner flux is charged alone`)
 	for _, bad := range []float64{math.Inf(1), math.NaN(), -1} {
-		require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(1, 0, 1, 0, 1, bad, 0), 1),
-			`a built bound of %v states no bound`, bad)
-		require.True(t, math.IsInf(proofbound.ChordLocusBuiltExcursion(1, bad, 1, 0, 1, 0), 1),
-			`a wide bound of %v states no excursion`, bad)
+		require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(1, 2, 1.5, 0, bad), 1), `a corner flux of %v states no bound`, bad)
+		require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(1, 2, 1.5, bad, 0), 1), `a built bound of %v states no bound`, bad)
 	}
-	require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(math.NaN(), 0, 1, 0, 1, 0, 0), 1),
-		`a flux that does not lift states no bound`)
+	require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(2, 1, 1.5, 0, 0), 1), `an empty enclosure states no bound`)
+	require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(math.NaN(), 1, 1, 0, 0), 1), `an enclosure that does not lift states no bound`)
 }
 
 // shellExact is ChordLocusShellUpper's expression over rationals:
