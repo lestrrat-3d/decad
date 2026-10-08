@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -310,7 +311,7 @@ func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, er
 	}
 	// The squared length is the recorded tangent's own exact dot product; both
 	// endpoints are finite (dyVec's precondition), so it always states one.
-	lengthBound := straightEdgeBound(height, proofarith.DvDot(tangent, tangent), true)
+	lengthBound := capcontour.StraightEdgeBound(height, proofarith.DvDot(tangent, tangent), true)
 	heldSweep := frame.N().Scale(height)
 	bound := proofbound.AbsSumUpper(
 		lengthBound,

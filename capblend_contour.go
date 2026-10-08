@@ -3,20 +3,16 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// This file owns the CAP CONTOUR's displacement — the one term every cap-level
-// reading of a cap-loop chamfer is bounded through (docs/modify-reach-design.md
-// §8.3/§8.4).
+// This file connects the CAP CONTOUR's displacement proof in internal/capcontour
+// to the cap-band construction and its refusal classes (modify-reach §8.3/§8.4).
 //
 // The band has two directrices and they are not the same kind of number. The
 // SIDE contour is the receiver's own recorded loop, held at its own (u, v) and
@@ -57,20 +53,10 @@ import (
 // intersectOffsets rejects a determinant at or below filletTol (1e-9), while
 // the interval widths here are the relative rounding of unit directions, so the
 // determinant interval cannot straddle zero once the float one cleared that
-// floor, and a G1 join (modify §7) never reaches ivIntersect at all. It stands
+// floor, and a G1 join (modify §7) never reaches the carrier intersection. It stands
 // as the honest answer for a configuration that does reach it rather than as a
 // case the tests can exhibit.
 var errCapContourUnbounded = fmt.Errorf(`%w: this evaluator cannot prove a bound on the cap-loop chamfer's own offset contour at a corner, so no cap-level coordinate it emits there can be published with a proven displacement`, ErrUnsupported)
-
-type ivPoint = capcontour.Point
-type ivCarrier = capcontour.Carrier
-
-func ivUnion(a, b ivPoint) ivPoint                            { return capcontour.Union(a, b) }
-func ivIntersect(a, b ivCarrier) ([]ivPoint, bool)            { return capcontour.Intersect(a, b) }
-func ivNearest(cands []ivPoint, u, v float64) (ivPoint, bool) { return capcontour.Nearest(cands, u, v) }
-func miterLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (float64, bool) {
-	return capcontour.MiterLocusSpeedUpper(prev, cur, t0, t1, vU, vV)
-}
 
 // capContourDelta is ONE chamfer band's contour displacement: a proven upper
 // bound on how far any cap-level point the band emits sits from the point the
@@ -101,76 +87,32 @@ func miterLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (
 // to signal uncertainty would silently match every LongerThan query instead.
 // Uncertainty belongs in lengthBound alone.
 func capContourDelta(walks []survey2d.SideWalk, joins []cornerJoin, d, dDelta float64) (float64, error) {
-	span, ok := capcontour.OffsetSpan(d, dDelta)
+	if _, ok := capcontour.OffsetSpan(d, dDelta); !ok {
+		return 0, errCapContourUnbounded
+	}
+	for _, w := range walks {
+		if w.IsCircular() {
+			if _, err := capBandRadius(w, d); err != nil {
+				return 0, err
+			}
+		}
+	}
+	delta, ok := capcontour.Displacement(walks, capContourJoins(joins), d, dDelta)
 	if !ok {
 		return 0, errCapContourUnbounded
 	}
-	delta := 0.0
-	for _, w := range walks {
-		if !w.IsCircular() {
-			continue
-		}
-		held, err := capBandRadius(w, d)
-		if err != nil {
-			return 0, err
-		}
-		exact, ok := capcontour.ExactOffsetRadiusOver(w, span)
-		if !ok {
-			return 0, errCapContourUnbounded
-		}
-		// The emitted arc sits at the float radius about the exact centre while
-		// the denoted one sits at a radius the span encloses about it, so the
-		// radial gap between them IS the displacement of every point of that arc.
-		delta = math.Max(delta, proofbound.IntervalFloatError(exact, held))
-	}
-	n := len(walks)
-	for i, j := range joins {
-		if n == 0 {
-			break
-		}
-		prev, cur := walks[(i+n-1)%n], walks[i]
-		if j.arc {
-			a, okA := capcontour.OffsetFootOver(j.vU, j.vV, prev.TanOutU, prev.TanOutV, span)
-			b, okB := capcontour.OffsetFootOver(j.vU, j.vV, cur.TanInU, cur.TanInV, span)
-			if !okA || !okB {
-				return 0, errCapContourUnbounded
-			}
-			delta = math.Max(delta, math.Max(a.Reach(j.pA.U, j.pA.V), b.Reach(j.pB.U, j.pB.V)))
-			continue
-		}
-		if j.g1 {
-			// A G1 join intersects no carriers (modify §7; modify-reach §8.4): its
-			// denoted corner is v + d·n̂ for the leaving wall's exact unit normal, and
-			// the enclosure is the HULL of the two shared-normal feet, so a join the
-			// dead zone classified G1 with a residual turn is charged the spread
-			// between the two normals it could have taken.
-			a, okA := capcontour.OffsetFootOver(j.vU, j.vV, prev.TanOutU, prev.TanOutV, span)
-			b, okB := capcontour.OffsetFootOver(j.vU, j.vV, cur.TanInU, cur.TanInV, span)
-			if !okA || !okB {
-				return 0, errCapContourUnbounded
-			}
-			delta = math.Max(delta, ivUnion(a, b).Reach(j.m.U, j.m.V))
-			continue
-		}
-		ca, okA := capcontour.CarrierOver(prev, span)
-		cb, okB := capcontour.CarrierOver(cur, span)
-		if !okA || !okB {
-			return 0, errCapContourUnbounded
-		}
-		cands, okI := ivIntersect(ca, cb)
-		if !okI {
-			return 0, errCapContourUnbounded
-		}
-		enc, okN := ivNearest(cands, j.vU, j.vV)
-		if !okN {
-			return 0, errCapContourUnbounded
-		}
-		delta = math.Max(delta, enc.Reach(j.m.U, j.m.V))
-	}
-	if proofbound.IsNonFinite(delta) {
-		return 0, errCapContourUnbounded
-	}
 	return delta, nil
+}
+
+func capContourJoins(joins []cornerJoin) []capcontour.Join {
+	readings := make([]capcontour.Join, len(joins))
+	for i, j := range joins {
+		readings[i] = capcontour.Join{
+			Arc: j.arc, G1: j.g1, VU: j.vU, VV: j.vV,
+			M: j.m, PA: j.pA, PB: j.pB,
+		}
+	}
+	return readings
 }
 
 // capWholeCircleDelta is the cornerless closed circle's own contour
@@ -219,41 +161,6 @@ func loopContourDelta(ctx context.Context, loop LoopRecord, d, dDelta float64) (
 		return 0, err
 	}
 	return capContourDelta(cl.walks, joins, d, dDelta)
-}
-
-// The root proof and geometry callers keep their existing private names.
-func dySquaredDistance3(a0, a1, a2, b0, b1, b2 float64) (proofarith.Dyadic, bool) {
-	return proofarith.DySquaredDistance3(a0, a1, a2, b0, b1, b2)
-}
-
-func ratSquaredDistance3(a0, a1, a2, b0, b1, b2 float64) *big.Rat {
-	return proofarith.RatSquaredDistance3(a0, a1, a2, b0, b1, b2)
-}
-
-func straightEdgeBound(held float64, squared proofarith.Dyadic, ok bool, endpointDeltas ...float64) float64 {
-	return capcontour.StraightEdgeBound(held, squared, ok, endpointDeltas...)
-}
-
-func capEdgeLengthBound(held float64, end, start Point2, delta float64) float64 {
-	return capcontour.CapEdgeLengthBound(held, end, start, delta)
-}
-
-func capApexArcBound(j cornerJoin, d, dDelta, held float64, wraps int, delta float64) float64 {
-	return capcontour.CapApexArcBound(
-		capcontour.ApexJoin{VU: j.vU, VV: j.vV, PA: j.pA, PB: j.pB}, d, dDelta, held, wraps, delta,
-	)
-}
-
-func capCircleLengthBound(radius proofbound.RatInterval, held float64) float64 {
-	return capcontour.CapCircleLengthBound(radius, held)
-}
-
-func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64, wraps int, delta, radialShift float64) float64 {
-	return capcontour.CapWallArcBound(cU, cV, start, end, capRadius, held, wraps, delta, radialShift)
-}
-
-func capSweepAllow(cU, cV, radius float64, start, end Point2, held float64, wraps int, delta float64) float64 {
-	return capcontour.CapSweepAllow(cU, cV, radius, start, end, held, wraps, delta)
 }
 
 // errCapPatchHeldUnbounded is the refusal for a circular band patch whose held
@@ -327,110 +234,22 @@ func capApexHeldAllow(j cornerJoin, dc float64, foot0, foot1 Point2, th0, th1 fl
 // Every term is zero where the walks' ends are recorded, every arc's End lies
 // at its Start's radius and both cap feet of every circular patch lie at one
 // exact distance, so an axis-aligned section's band charges nothing here.
-type capBandClosure struct {
-	rim, sideLevel, capLevel, reach float64
-}
+type capBandClosure = capband.Closure
 
-// zero reports whether the band needs no closure charge.
-func (c capBandClosure) zero() bool { return c == capBandClosure{} }
-
-// capBandClosureOf measures one band's capBandClosure from its walks, corner
-// joins and corner rulings (slantIn/slantOut, with their arithmetic-only length
-// bounds).
+// capBandClosureOf converts the built band's corner and edge records into the
+// held values used by the closure proof.
 func capBandClosureOf(walks []survey2d.SideWalk, joins []cornerJoin, slantIn, slantOut []*Edge, slantInHeld, slantOutHeld []float64) (capBandClosure, error) {
-	n := len(walks)
-	var out capBandClosure
-	sideGap := make([]float64, n)
-	capSpread := make([]float64, n)
-	for i, w := range walks {
-		if !w.IsCircular() {
-			bS, bE := proofbound.WalkEndBoundAllow(w.StartBound), proofbound.WalkEndBoundAllow(w.EndBound)
-			if proofbound.IsNonFinite(bS) || proofbound.IsNonFinite(bE) {
-				return capBandClosure{}, errCapPatchHeldUnbounded
-			}
-			if b := proofbound.AbsSumUpper(bS, bE); b > 0 {
-				out.sideLevel = proofbound.AbsSumUpper(out.sideLevel, proofbound.ProductUpper(proofbound.AbsSumUpper(w.Length, w.LengthBound, b), b))
-			}
-			continue
-		}
-		// The side reference is the record's own circle. Where both ends are
-		// recorded (an ArcSeg's pinned Start and End) that circle runs through
-		// Start, so the one gap is how far End sits off Start's radius;
-		// otherwise each end is bounded against the walk's own radius bracket.
-		var gap float64
-		var ok bool
-		if (w.StartBound == proofbound.WalkEndBound{}) && (w.EndBound == proofbound.WalkEndBound{}) {
-			_, gap, ok = capband.RadiusAllow(w.CU, w.CV, 0, capband.Point{U: w.StartU, V: w.StartV}, capband.Point{U: w.EndU, V: w.EndV})
-		} else {
-			gap, ok = capcontour.CircularWalkEndGap(w)
-		}
-		start, end := capWallFoot(joins, i, n)
-		_, spread, okS := capband.RadiusAllow(w.CU, w.CV, 0, start, end)
-		if !ok || !okS {
-			return capBandClosure{}, errCapPatchHeldUnbounded
-		}
-		sideGap[i], capSpread[i] = gap, spread
+	in := make([]float64, len(slantIn))
+	out := make([]float64, len(slantOut))
+	for i, edge := range slantIn {
+		in[i] = edge.length
 	}
-	for i := range n {
-		pi := (i + n - 1) % n
-		prev, cur := walks[pi], walks[i]
-		j := joins[i]
-		du := new(big.Rat).Sub(proofarith.FloatRat(prev.EndU), proofarith.FloatRat(cur.StartU))
-		dv := new(big.Rat).Sub(proofarith.FloatRat(prev.EndV), proofarith.FloatRat(cur.StartV))
-		gap := proofbound.RatFloatUp(new(big.Rat).Add(du.Abs(du), dv.Abs(dv)))
-		if prev.IsCircular() {
-			gap = proofbound.AbsSumUpper(gap, proofbound.WalkEndBoundAllow(prev.EndBound), sideGap[pi], capSpread[pi])
-		}
-		if cur.IsCircular() {
-			gap = proofbound.AbsSumUpper(gap, proofbound.WalkEndBoundAllow(cur.StartBound), sideGap[i], capSpread[i])
-		}
-		rulings := []float64{proofbound.AbsSumUpper(slantIn[i].length, slantInHeld[i])}
-		if j.arc {
-			_, spread, ok := capband.RadiusAllow(j.vU, j.vV, 0, j.pA, j.pB)
-			if !ok {
-				return capBandClosure{}, errCapPatchHeldUnbounded
-			}
-			gap = proofbound.AbsSumUpper(gap, spread)
-			rulings = append(rulings, proofbound.AbsSumUpper(slantOut[i].length, slantOutHeld[i]))
-		}
-		if proofbound.IsNonFinite(gap) {
-			return capBandClosure{}, errCapPatchHeldUnbounded
-		}
-		if gap == 0 {
-			continue
-		}
-		for _, slant := range rulings {
-			out.rim = proofbound.AbsSumUpper(out.rim, proofbound.ProductUpper(proofbound.AbsSumUpper(slant, gap), gap))
-		}
-		corner := proofbound.ProductUpper(gap, gap)
-		out.sideLevel = proofbound.AbsSumUpper(out.sideLevel, corner)
-		out.capLevel = proofbound.AbsSumUpper(out.capLevel, corner)
-		out.reach = math.Max(out.reach, gap)
+	for i, edge := range slantOut {
+		out[i] = edge.length
 	}
-	return out, nil
-}
-
-// fluxAllow is the closure's bound on the band's raw flux (three times its
-// volume): a sliver's flux is at most its area times the largest |P·n| over
-// it, which is pointUpper on a ruling sliver and the level's own |z| on a flat
-// one.
-func (c capBandClosure) fluxAllow(pointUpper, sideZUpper, capZUpper float64) float64 {
-	return proofbound.AbsSumUpper(
-		proofbound.ProductUpper(pointUpper, c.rim),
-		proofbound.ProductUpper(sideZUpper, c.sideLevel),
-		proofbound.ProductUpper(capZUpper, c.capLevel),
-	)
-}
-
-// momentAllow is the closure's bound on each first-moment flux: the moment
-// fields (u²/2, 0, 0), (0, v²/2, 0) and (0, 0, z²/2) never exceed
-// pointUpper²/2 on a ruling sliver, and only the axial one crosses a flat one,
-// where it is the level's own z²/2.
-func (c capBandClosure) momentAllow(pointUpper, sideZUpper, capZUpper float64) (float64, float64) {
-	half := func(x float64) float64 { return proofbound.ProductUpper(0.5, proofbound.ProductUpper(x, x)) }
-	inPlane := proofbound.ProductUpper(half(pointUpper), c.rim)
-	axial := proofbound.AbsSumUpper(inPlane,
-		proofbound.ProductUpper(half(sideZUpper), c.sideLevel),
-		proofbound.ProductUpper(half(capZUpper), c.capLevel))
-	return inPlane, axial
+	closure, ok := capband.ClosureOf(walks, capContourJoins(joins), in, out, slantInHeld, slantOutHeld)
+	if !ok {
+		return capBandClosure{}, errCapPatchHeldUnbounded
+	}
+	return closure, nil
 }

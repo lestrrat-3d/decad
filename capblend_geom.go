@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -397,7 +398,9 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			curve: Arc3{Center: liftCap(Point2{U: j.vU, V: j.vV}), Axis: pl.dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
 			start: pAV, end: pBV,
 			convex: false,
-			length: arcLength, lengthBound: capApexArcBound(j, dc, dcDelta, arcLength, wraps, delta),
+			length: arcLength, lengthBound: capcontour.CapApexArcBound(
+				capcontour.ApexJoin{VU: j.vU, VV: j.vV, PA: j.pA, PB: j.pB},
+				dc, dcDelta, arcLength, wraps, delta),
 		}
 	}
 
@@ -487,7 +490,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// start/end are passed as (pB, pA) so the bracket's own end-minus-start
 		// convention reproduces atan2(pA)-atan2(pB), matching arcWraps[i]'s own
 		// unwrap direction (Pass 1's "for th1 > th0 { th1 -= 2*math.Pi }").
-		capThAllow := capSweepAllow(j.vU, j.vV, dc, j.pB, j.pA, arcTh0[i]-arcTh1[i], arcWraps[i], delta)
+		capThAllow := capcontour.CapSweepAllow(j.vU, j.vV, dc, j.pB, j.pA, arcTh0[i]-arcTh1[i], arcWraps[i], delta)
 		g := capPatchGeom{
 			Circular: true, SweepCCW: false,
 			CU: j.vU, CV: j.vV, SideRadius: 0, CapRadius: dc,
@@ -555,7 +558,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// g.CapTh0/g.CapTh1 (below) negates the raw difference but not its
 			// absolute value, and this bound is symmetric in sign (it bounds
 			// |held-true|), so computing it once, pre-swap, stays valid after.
-			capThAllow = capSweepAllow(w.CU, w.CV, capRadius, start, end, capTh1-capTh0, wraps, delta)
+			capThAllow = capcontour.CapSweepAllow(w.CU, w.CV, capRadius, start, end, capTh1-capTh0, wraps, delta)
 		}
 
 		var capEdge *Edge
@@ -567,13 +570,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			capEdge = &Edge{
 				curve: Line3{}, start: capA, end: capB, convex: true,
 				length:      held,
-				lengthBound: capEdgeLengthBound(held, end, start, delta),
+				lengthBound: capcontour.CapEdgeLengthBound(held, end, start, delta),
 			}
 		} else {
 			sweepSigned := capTh1 - capTh0
 			held := math.Abs(capRadius * sweepSigned)
 			capEdge = arcEdge(pl, w.CU, w.CV, capRadius, capZ, capA, capB, capTh0, capTh1, held,
-				capWallArcBound(w.CU, w.CV, start, end, capRadius, capRadius*sweepSigned, wraps, delta, radialShift))
+				capcontour.CapWallArcBound(w.CU, w.CV, start, end, capRadius, capRadius*sweepSigned, wraps, delta, radialShift))
 		}
 
 		var surf Surface
@@ -813,8 +816,8 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur survey2d.SideWalk, setback capSetback, affine bool) (*Edge, float64, error) {
 	dc, dcDelta := setback.dc, setback.dcDelta
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
-	squared, squaredOK := dySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
-	heldBound := straightEdgeBound(held, squared, squaredOK, delta, levelDelta)
+	squared, squaredOK := proofarith.DySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
+	heldBound := capcontour.StraightEdgeBound(held, squared, squaredOK, delta, levelDelta)
 	e := &Edge{
 		curve: Line3{}, start: capV, end: apex, convex: true,
 		length:      held,
@@ -880,7 +883,7 @@ func capMiterLocusUpper(budget *proofbound.WorkBudget, prev, cur survey2d.SideWa
 			return 0, false, err
 		}
 		t0, t1 := r[0], r[1]
-		speed, ok := miterLocusSpeedUpper(prev, cur, t0, t1, apexU, apexV)
+		speed, ok := capcontour.MiterLocusSpeedUpper(prev, cur, t0, t1, apexU, apexV)
 		if !ok {
 			return 0, false, nil
 		}
@@ -947,7 +950,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 		curve: Circle3{Center: pl.point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
 		start: seam, end: seam,
 		convex: ccw,
-		length: held, lengthBound: capCircleLengthBound(exactRadius, held),
+		length: held, lengthBound: capcontour.CapCircleLengthBound(exactRadius, held),
 	}
 }
 

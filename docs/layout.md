@@ -167,7 +167,7 @@ the rules leave to the byte budget.
 |---|---|
 | `capblend.go` | Complete-cap-loop chamfer: `capBlendPayload`, selection classification, build gates. See modify-reach §8.3/§4. |
 | `capblend_geom.go` | `buildCapBand`: trimmed side walls, cap faces, Plane/Cone band patches. See modify-reach §8.3. |
-| `capblend_contour.go` | Bounds cap contour displacement, length, held patch numbers and closure. See modify-reach §8.3-§8.4. |
+| `capblend_contour.go` | Adapts contour displacement, held patch bounds and closure. See modify-reach §8.3-§8.4. |
 | `capblend_centroid.go` | Cap-blend first moments and bounds. See modify-reach §8.4. |
 | `capblend_moments.go` | `evalCapBlendContext`: the cap-blend body and its area/volume. See modify-reach §8.4. |
 | `capblend_survey.go` | Cap-blend undercut and minimum-radius surveys. See modify-reach Table DX (DX7/DX8). |
@@ -313,9 +313,9 @@ the rules leave to the byte budget.
 | `internal/mirrorjoin/` | Exact line admission, reflection and record splice. See mirror-pattern §5. |
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
-| `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
+| `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, blends, joins, section records and displacement proofs. See modify §6–§9. |
-| `internal/capband/` | Cap-band patch records, admission, departure and moment proofs. See modify-reach §8.3–§8.4. |
+| `internal/capband/` | Cap-band patch, closure, departure and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, Bézier carriers. See verification §6. |
