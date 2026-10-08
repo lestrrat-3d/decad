@@ -24,8 +24,7 @@ import (
 // outer region O outward), and each faces modify §5's audit and an exact area
 // identity before shell_opening_brep.go builds the body from them. Every walk
 // of the section must be a line, along a section axis or oblique, or a
-// circular arc, and no end of the kept chain may join two arcs: arc–arc end
-// corners are that document's PR 5, refused here with SO5's sentinel.
+// circular arc.
 
 // sideOpeningSection is the three regions of one side opening (§3) and what
 // the record build reads beside them.
@@ -153,17 +152,6 @@ func requireSideOpeningWalks(walks []survey2d.SideWalk) error {
 		return fmt.Errorf(`%w: this evaluator builds a prism side opening only where every section walk is a line or a circular arc (shell-opening SO5)`, ErrUnsupported)
 	}
 	return nil
-}
-
-// requireOpeningEndCorner refuses an end of the kept chain where a circular
-// kept walk k meets a circular removed walk r: the record build keys no
-// junction of two circles until docs/shell-opening-design.md §12's PR 5, so
-// the corner is ErrUnsupported, SO5's sentinel, whichever caps are kept.
-func requireOpeningEndCorner(k, r survey2d.SideWalk) error {
-	if !k.IsCircular() || !r.IsCircular() {
-		return nil
-	}
-	return fmt.Errorf(`%w: a side opening whose kept and removed walks are both arcs at an end corner is not supported (shell-opening SO5)`, ErrUnsupported)
 }
 
 // arcStation is a point a piece on a removed circular walk's carrier starts
@@ -545,12 +533,12 @@ func sideOpeningHeight(pp prismPayload, keptCaps int, s float64, t units.Value, 
 
 // sideOpeningRegions builds and audits the three regions of a side opening
 // (§3, §4.7 steps 1–3) in §5's gate order: SO6 (a holed section, then the
-// run rule), the walk kinds this build takes and its arc–arc end corners
-// (SO5), SO3's height half, the open chain's offset (S11a per walk, SO1, SO2
-// and SO4 per end), each cut on a removed arc placed in the arc's own
-// parameterisation (SO5 where no range of its record names it), modify §5's
-// audit of W and of C (O outward) — S8, where a C with no area is
-// SO3, S11b and S9 — and the exact area identity, whose failure is SO5.
+// run rule), the walk kinds this build takes (SO5), SO3's height half, the
+// open chain's offset (S11a per walk, SO1, SO2 and SO4 per end), each cut on
+// a removed arc placed in the arc's own parameterisation (SO5 where no range
+// of its record names it), modify §5's audit of W and of C (O outward) — S8,
+// where a C with no area is SO3, S11b and S9 — and the exact area identity,
+// whose failure is SO5.
 // keptCaps is the number of caps the shell keeps.
 func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides map[int]struct{}, keptCaps int, s float64, t units.Value, tmm, tDelta float64) (sideOpeningSection, error) {
 	if len(pp.profile.Holes) > 0 {
@@ -588,11 +576,6 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 		}
 	}
 	first, last := chain[0], chain[len(chain)-1]
-	for _, corner := range [][2]survey2d.SideWalk{{first, rLast}, {last, rFirst}} {
-		if err := requireOpeningEndCorner(corner[0], corner[1]); err != nil {
-			return sideOpeningSection{}, err
-		}
-	}
 	start := chainEnd{kind: openingEnd, removed: rLast}
 	end := chainEnd{kind: openingEnd, removed: rFirst}
 	off, err := offsetOpenChain(budget, chain, axisFrame{}, start, end, s, tmm)

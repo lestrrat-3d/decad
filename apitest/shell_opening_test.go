@@ -903,12 +903,13 @@ func TestShellSideOpeningArcs(t *testing.T) {
 			})
 		}
 	})
-	t.Run("two arcs at an end corner (SO5)", func(t *testing.T) {
+	t.Run("a removed arc tangent to the kept chord (SO1)", func(t *testing.T) {
 		t.Parallel()
 		// The quarter arc about the origin from (0,−5) to (5,0) meets, at a
 		// right corner, the concave arc about (5,5) running to (0,5); the
 		// chord x = 0 closes the section. Removing the concave arc leaves
-		// the kept quarter arc meeting it at (5,0): two circles, SO5.
+		// its end (0,5) a cusp against the kept chord, which the arc touches
+		// there: no rim closes the wall, SO1.
 		doc, d := arcPrism(t, func(s *sketch.Sketch) {
 			o := s.CreatePoint(0, 0)
 			s.Fix(o)
@@ -926,7 +927,262 @@ func TestShellSideOpeningArcs(t *testing.T) {
 		before := snapshotDocument(t, doc)
 		_, err := d.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0])), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "SO1")
+		require.Equal(t, before.bodies, doc.Bodies())
+	})
+}
+
+// closedTerm is one term coeff·c of a closed form whose constant c is
+// bracketed to 50 digits by lo and hi.
+type closedTerm struct {
+	coeff  *big.Rat
+	lo, hi string
+}
+
+// The constants of TestShellSideOpeningCircleJunctions' closed forms.
+const (
+	piLo     = "3.14159265358979323846264338327950288419716939937510"
+	piHi     = "3.14159265358979323846264338327950288419716939937511"
+	acos35Lo = "0.92729521800161223242851246292242880405707410857224"
+	acos35Hi = "0.92729521800161223242851246292242880405707410857225"
+	// atan(8/15) = 2·atan(1/4).
+	atan815Lo = "0.48995732625372830834416496242255162182828819676236"
+	atan815Hi = "0.48995732625372830834416496242255162182828819676237"
+)
+
+// closedFormBracket is base + Σ coeff·c over the terms, each constant taken
+// at the end of its bracket that makes the sum lowest, and highest.
+func closedFormBracket(t *testing.T, base *big.Rat, terms ...closedTerm) (*big.Rat, *big.Rat) {
+	t.Helper()
+	lo, hi := new(big.Rat).Set(base), new(big.Rat).Set(base)
+	for _, term := range terms {
+		cLo, ok := new(big.Rat).SetString(term.lo)
+		require.True(t, ok)
+		cHi, ok := new(big.Rat).SetString(term.hi)
+		require.True(t, ok)
+		if term.coeff.Sign() < 0 {
+			cLo, cHi = cHi, cLo
+		}
+		lo.Add(lo, new(big.Rat).Mul(term.coeff, cLo))
+		hi.Add(hi, new(big.Rat).Mul(term.coeff, cHi))
+	}
+	return lo, hi
+}
+
+// requireVolumeBracketed asserts the body's volume interval holds the whole
+// closed-form bracket.
+func requireVolumeBracketed(t *testing.T, b *decad.Body, base *big.Rat, terms ...closedTerm) {
+	t.Helper()
+	vol, err := b.Volume()
+	require.NoError(t, err)
+	lo, hi := closedFormBracket(t, base, terms...)
+	requireRatEnclosed(t, vol, lo, hi)
+}
+
+// requireSoundMesh asserts the document verifies Sound and the body meshes
+// watertight with its occupied-volume proof.
+func requireSoundMesh(t *testing.T, doc *decad.Document, b *decad.Body) {
+	t.Helper()
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.True(t, mesh.VolumeVerified())
+}
+
+// notchSection is a section whose kept arc meets a removed arc at an end
+// corner: the concave arc of radius 13 about the origin from (0,13) to
+// (13,0), with the material outside it; the arc of radius 17 about (−2,8)
+// from (13,0) through (15,8) to (13,16); then x = 13 up to (13,20), y = 20
+// back to (0,20) and x = 0 down to (0,13).
+func notchSection(s *sketch.Sketch) {
+	o := s.CreatePoint(0, 0)
+	c := s.CreatePoint(-2, 8)
+	a := s.CreatePoint(0, 13)
+	b := s.CreatePoint(13, 0)
+	e := s.CreatePoint(13, 16)
+	f := s.CreatePoint(13, 20)
+	g := s.CreatePoint(0, 20)
+	for _, p := range []*sketch.Point{o, c, a, b, e, f, g} {
+		s.Fix(p)
+	}
+	s.CreateArc(o, b, a)
+	s.CreateArc(c, b, e)
+	s.CreateLine(e, f)
+	s.CreateLine(f, g)
+	s.CreateLine(g, a)
+}
+
+// halfLensSection is the half of the lens of two radius-5 circles about
+// (0,0) and (6,0) above y = 0: the arc about the origin from (5,0) to (3,4),
+// the arc about (6,0) from (3,4) to (1,0), and the chord y = 0.
+func halfLensSection(s *sketch.Sketch) {
+	a := s.CreatePoint(0, 0)
+	b := s.CreatePoint(6, 0)
+	p := s.CreatePoint(5, 0)
+	q := s.CreatePoint(3, 4)
+	r := s.CreatePoint(1, 0)
+	for _, pt := range []*sketch.Point{a, b, p, q, r} {
+		s.Fix(pt)
+	}
+	s.CreateArc(a, p, q)
+	s.CreateArc(b, q, r)
+	s.CreateLine(r, p)
+}
+
+// TestShellSideOpeningCircleJunctions covers docs/shell-opening-design.md
+// §4.3's junctions at one recorded point, each fixture 10 tall:
+//
+//   - two arcs at an end corner: notchSection without every walk but its
+//     concave arc, inward at t = 4. The kept arc's offset, radius 17 about
+//     the origin, meets the removed arc's circle at (15,8) and the removed
+//     x = 0 at (0,17), both exact. With β = atan(8/15), P has area 140 −
+//     169π/4 + 289β and C, the region beyond the offset arc, 156 − 72.25π +
+//     289β, so the body is 10·P − 2·C = 1088 − 278π + 2312β; with both caps
+//     removed W = P − C = 30π − 16 is a prism, 300π − 160;
+//   - two arcs at an interior corner: halfLensSection without its chord at
+//     t = 1.25. Both arcs offset to radius 3.75 and meet at the miter
+//     (3, 2.25); the chord's cuts are (3.75, 0) and (2.25, 0). With A =
+//     acos(3/5), P is 25A − 12 and C 14.0625(π/2 − A) − 6.75, so the body is
+//     10·P − 7.5·C = 355.46875A − 52.734375π − 69.375, and with both caps
+//     removed 10·(P − C) = 390.625A − 70.3125π − 52.5;
+//   - an arc join on a slanted wall: the right triangle (0,0) (12,0) (0,9)
+//     without its y = 0 leg, outward at t = 1, both caps kept. The corner
+//     (0,9) rounds to an arc of radius 1 tangent to the slanted offset
+//     3x + 4y = 41 at (0.6, 9.8) and to x = −1 at (−1, 9); the arc reads its
+//     radius from the float foot, so neither junction is an exact tangency.
+//     O is the triangle (−1,0) (41/3,0) (−1,11) less the corner's fillet,
+//     242/3 − 2 + (π − A)/2, so the body is 12·O − 10·54 = 404 + 6π − 6A.
+//
+// Shown to fail: with the circle–circle junction missing again, both arc
+// fixtures with a kept cap refused (SO5); with the arc–arc end corner refused
+// again in sideOpeningRegions, both notch fixtures refused; with the
+// line–circle junction at one recorded point deleted, the slanted wall
+// refused (SO5).
+func TestShellSideOpeningCircleJunctions(t *testing.T) {
+	t.Parallel()
+	notchRemoved := func(t *testing.T, d *decad.Body) *decad.FaceQuery {
+		t.Helper()
+		onArc := cylinderFaces(d, -2, 8, 17)
+		require.Len(t, onArc, 1)
+		return decad.Faces(decad.FaceCreatedBy(onArc[0].Origins()[0])).
+			Or(decad.Facing(r3.NewVec(1, 0, 0))).
+			Or(decad.Facing(r3.NewVec(0, 1, 0))).
+			Or(decad.Facing(r3.NewVec(-1, 0, 0)))
+	}
+	r := func(num, den int64) *big.Rat { return big.NewRat(num, den) }
+
+	t.Run("two arcs at an end corner", func(t *testing.T) {
+		t.Parallel()
+		doc, d := arcPrism(t, notchSection)
+		body, err := d.Shell(t.Context(), notchRemoved(t, d), units.Millimeters(4))
+		require.NoError(t, err)
+		requireVolumeBracketed(t, body, r(1088, 1),
+			closedTerm{r(-278, 1), piLo, piHi}, closedTerm{r(2312, 1), atan815Lo, atan815Hi})
+		// Two caps, the cavity's floor and ceiling, the kept arc and its
+		// offset, the removed arc's circle in three pieces (the rim column
+		// from (13,0) to (15,8) over [0, 10] and a strip in each cap slab),
+		// a strip in each cap slab on x = 13 and on y = 20, and the x = 0
+		// plane's one face, the rim (0,13)→(0,17) among it.
+		require.Len(t, body.Faces(), 14)
+		require.Len(t, cylinderFaces(body, 0, 0, 13), 1)
+		require.Len(t, cylinderFaces(body, 0, 0, 17), 1)
+		require.Len(t, cylinderFaces(body, -2, 8, 17), 3)
+		requireBrepRoles(t, body)
+		requireSoundMesh(t, doc, body)
+	})
+	t.Run("two arcs at an end corner, both caps removed", func(t *testing.T) {
+		t.Parallel()
+		doc, d := arcPrism(t, notchSection)
+		body, err := d.Shell(t.Context(), notchRemoved(t, d).Or(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(4))
+		require.NoError(t, err)
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		requirePiLinearEnclosed(t, vol, -160, 300)
+		requireSoundMesh(t, doc, body)
+	})
+	t.Run("two arcs at an end corner, a float cut under kept caps (SO5)", func(t *testing.T) {
+		t.Parallel()
+		// At t = 2 the cut y = 4(1 + √239)/17 is a float solve: the rim, a
+		// range of the removed arc's record, ends where its parameter
+		// evaluates, and the offset arc ends at the held cut, so the two
+		// circles meet at two walked ends and the record build misses.
+		doc, d := arcPrism(t, notchSection)
+		before := snapshotDocument(t, doc)
+		_, err := d.Shell(t.Context(), notchRemoved(t, d), units.Millimeters(2))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SO5")
 		require.Equal(t, before.bodies, doc.Bodies())
+	})
+	t.Run("two arcs at an interior corner", func(t *testing.T) {
+		t.Parallel()
+		for _, tc := range []struct {
+			name          string
+			capsRemoved   bool
+			base, a, pi   *big.Rat
+			faces, planes int
+		}{
+			// Two caps, the cavity's floor and ceiling, the two arcs and
+			// their offsets, and the chord plane's one face with the
+			// opening as its hole.
+			{"both caps kept", false, r(-555, 8), r(22750, 64), r(-3375, 64), 9, 5},
+			// The wall section's two caps, the two arcs, their offsets and
+			// the two rims on the chord's plane.
+			{"both caps removed", true, r(-105, 2), r(3125, 8), r(-1125, 16), 8, 4},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				doc, d := arcPrism(t, halfLensSection)
+				sel := decad.Faces(decad.Facing(r3.NewVec(0, -1, 0)))
+				if tc.capsRemoved {
+					sel = sel.Or(decad.NormalTo(r3.NewVec(0, 0, 1)))
+				}
+				body, err := d.Shell(t.Context(), sel, units.Millimeters(1.25))
+				require.NoError(t, err)
+				requireVolumeBracketed(t, body, tc.base,
+					closedTerm{tc.a, acos35Lo, acos35Hi}, closedTerm{tc.pi, piLo, piHi})
+				require.Len(t, body.Faces(), tc.faces)
+				require.Len(t, cylinderFaces(body, 0, 0, 3.75), 1)
+				require.Len(t, cylinderFaces(body, 6, 0, 3.75), 1)
+				planes := 0
+				for _, f := range body.Faces() {
+					if _, ok := f.Surface().(decad.Plane); ok {
+						planes++
+					}
+				}
+				require.Equal(t, tc.planes, planes)
+				requireSoundMesh(t, doc, body)
+			})
+		}
+	})
+	t.Run("an arc join on a slanted wall under kept caps", func(t *testing.T) {
+		t.Parallel()
+		doc, tri := polygonPrism(t, obliqueTriangle)
+		body, err := tri.Shell(t.Context(), decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(1),
+			decad.WithShellSense(decad.Outward))
+		require.NoError(t, err)
+		requireVolumeBracketed(t, body, r(404, 1),
+			closedTerm{r(6, 1), piLo, piHi}, closedTerm{r(-6, 1), acos35Lo, acos35Hi})
+		// Two caps, the cavity's floor and ceiling, the two kept walls, the
+		// slanted offset, the corner's cylinder, x = −1, and the y = 0 plane's
+		// one face whose hole is the removed leg.
+		require.Len(t, body.Faces(), 10)
+		cylinders := 0
+		for _, f := range body.Faces() {
+			c, ok := f.Surface().(decad.Cylinder)
+			if !ok {
+				continue
+			}
+			cylinders++
+			require.Equal(t, 0.0, c.Origin.X)
+			require.Equal(t, 9.0, c.Origin.Y)
+			require.InDelta(t, 1, c.Radius.Base(), 1e-12)
+		}
+		require.Equal(t, 1, cylinders)
+		requireOneHole(t, body, r3.NewVec(0, -1, 0), 0, r3.NewVec(0, 0, 0), r3.NewVec(12, 0, 10), 1e-12)
+		requireBrepRoles(t, body)
+		requireSoundMesh(t, doc, body)
 	})
 }
