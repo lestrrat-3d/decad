@@ -23,14 +23,14 @@ import (
 //   - prismVolumeMoments' occupied-volume error E zeroed: the mass of a grown
 //     or shrunk cup escapes.
 //   - The offset displacement charged as the offset region's sectionDelta
-//     (cupPayload.cavityPrism in shell_cup.go): with it dropped, a cup whose
+//     (cupView.cavityPrism in shell_cup.go): with it dropped, a cup whose
 //     cavity walls moved escapes.
 
 func TestCupMassChargesDisplacement(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	const delta = 1.0 / 1024
-	cp := cupPayload{
+	cp := cupView{
 		outer:  rectangleRecord(-8, -4, 8, 4),
 		cavity: rectangleRecord(-6, -2, 6, 2),
 		frame:  frame,

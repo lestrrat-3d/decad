@@ -586,7 +586,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 	}}}
 	cavity, err := offsetProfileBudget(proofbound.NewWorkBudget(t.Context()), outer, 1, 5)
 	require.NoError(t, err)
-	cp := cupPayload{
+	cp := cupView{
 		outer:     outer,
 		cavity:    cavity,
 		zOuter:    0,
@@ -618,7 +618,9 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, out.ok, `a malformed offset relation must not return the requested thickness`)
 
-	body := &Body{payload: bad}
+	badRecord, err := bad.payload(t.Context())
+	require.NoError(t, err)
+	body := &Body{payload: badRecord}
 	results, diags, err := runSurveys(proofbound.NewWorkBudget(t.Context()), body, verifyConfig{
 		Wall:     &wallSpec{Tool: units.Millimeters(1)},
 		ToolMM:   1,
@@ -703,7 +705,7 @@ func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 	outer := manySegmentProfile(proofbound.WorkPollInterval + 64)
 	cavity, err := offsetProfile(nil, outer, 1, 5)
 	require.NoError(t, err)
-	cp := cupPayload{
+	cp := cupView{
 		outer:     outer,
 		cavity:    cavity,
 		zOuter:    0,
@@ -744,7 +746,7 @@ func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
 	}}}
 	cavity, err := offsetProfile(proofbound.NewWorkBudget(t.Context()), outer, 1, 5)
 	require.NoError(t, err)
-	cp := cupPayload{
+	cp := cupView{
 		outer:     outer,
 		cavity:    cavity,
 		zOuter:    0,

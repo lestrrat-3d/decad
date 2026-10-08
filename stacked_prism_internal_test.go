@@ -162,3 +162,102 @@ func TestBlindStackedAdmissionLeavesOtherCutsToMesh(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, admitted)
 }
+
+// holedCupRecord is a k = 1 cup's stacked record, hand-built from rectangles:
+// a 100×60 outer region with a 20×20 hole, under a 90×50 cavity whose hole is
+// 30×30. The lining audit compares records only, so the cavity need not be
+// the exact offset.
+func holedCupRecord(t *testing.T) cupPayload {
+	t.Helper()
+	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	hole := func(u0, v0, u1, v1 float64) LoopRecord {
+		l, err := reverseLoopRecordContext(t.Context(), rectangleRecord(u0, v0, u1, v1).Outer)
+		require.NoError(t, err)
+		return l
+	}
+	outer := ProfileRecord{Outer: rectangleRecord(0, 0, 100, 60).Outer, Holes: []LoopRecord{hole(40, 20, 60, 40)}}
+	cavity := ProfileRecord{Outer: rectangleRecord(5, 5, 95, 55).Outer, Holes: []LoopRecord{hole(35, 15, 65, 45)}}
+	cp, err := cupView{outer: outer, cavity: cavity, frame: frame, zOuter: 0, zCav: 5, zOpen: 20,
+		thickness: 5, sense: Inward, xform: r3.Identity()}.payload(t.Context())
+	require.NoError(t, err)
+	return cp
+}
+
+// TestCupStackedRecord is modify-reach §9.1's cup migration: a cup with k
+// holes is one floor slab under one wall slab of 1 + k bands, joined through
+// the floor into exactly one lump, and the record audits and re-derives its
+// own interface.
+func TestCupStackedRecord(t *testing.T) {
+	cp := holedCupRecord(t)
+	require.Len(t, cp.stack.slabs, 2)
+	require.Len(t, cp.stack.slabs[0].regions, 1)
+	require.Len(t, cp.stack.slabs[1].regions, 2, `1 + k wall bands`)
+	require.NoError(t, falsifyStackedPayload(t.Context(), cp.stack))
+	derived, err := stackedInterfaces(t.Context(), cp.stack.slabs, cp.stack.interfaces)
+	require.NoError(t, err)
+	rederived := cp.stack
+	rederived.interfaces = derived
+	require.NoError(t, falsifyStackedPayload(t.Context(), rederived), `the derived spelling passes the same audit`)
+
+	d := New()
+	body, err := evalCupContext(t.Context(), d, d.nextProducerID(), cp)
+	require.NoError(t, err)
+	require.Len(t, body.Lumps(), 1)
+	require.Len(t, body.Shells(), 1)
+	for _, e := range body.Edges() {
+		require.Len(t, e.Faces(), 2)
+	}
+	// A_P·h − A_Q·(h − t), every term an exact float here.
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, Exact, volume.Exactness)
+	require.Equal(t, (100*60-20*20)*20.0-(90*50-30*30)*15.0, volume.Value.Base())
+	view := cp.view()
+	require.Equal(t, 0.0, view.zOuter)
+	require.Equal(t, 5.0, view.zCav)
+	require.Equal(t, 20.0, view.zOpen)
+	require.Equal(t, cp.stack.slabs[0].regions[0], view.outer)
+	require.Equal(t, cp.stack.interfaces[0].lowerExposed[0], view.cavity)
+}
+
+func TestStackedLiningAuditRejectsBrokenRecords(t *testing.T) {
+	base := holedCupRecord(t).stack
+	other, err := reverseLoopRecordContext(t.Context(), rectangleRecord(1, 1, 2, 2).Outer)
+	require.NoError(t, err)
+	cases := []struct {
+		name   string
+		change func(*stackedPrismPayload)
+		want   error
+	}{
+		{"extra narrow region", func(sp *stackedPrismPayload) {
+			sp.slabs[1].regions = append(sp.slabs[1].regions, sp.slabs[1].regions[1])
+		}, ErrUnsupported},
+		{"narrow outer differs", func(sp *stackedPrismPayload) {
+			sp.slabs[1].regions[0].Outer = rectangleRecord(1, 1, 99, 59).Outer
+		}, ErrUnsupported},
+		{"lining misses its wide hole", func(sp *stackedPrismPayload) {
+			sp.slabs[1].regions[1].Holes = []LoopRecord{other}
+		}, ErrUnsupported},
+		{"both sides several regions", func(sp *stackedPrismPayload) {
+			sp.slabs[0].regions = append(sp.slabs[0].regions, sp.slabs[0].regions[0])
+		}, ErrUnsupported},
+		{"exposed patch misses a hole", func(sp *stackedPrismPayload) {
+			sp.interfaces[0].lowerExposed = []ProfileRecord{{Outer: sp.interfaces[0].lowerExposed[0].Outer}}
+		}, ErrDegenerate},
+		{"exposed patch on the narrow side", func(sp *stackedPrismPayload) {
+			sp.interfaces[0].upperExposed = sp.interfaces[0].lowerExposed
+			sp.interfaces[0].lowerExposed = nil
+		}, ErrDegenerate},
+		{"exposed hole is not the lining's outer", func(sp *stackedPrismPayload) {
+			sp.interfaces[0].lowerExposed = []ProfileRecord{{Outer: sp.interfaces[0].lowerExposed[0].Outer, Holes: []LoopRecord{other}}}
+		}, ErrDegenerate},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sp := cloneStackedForAudit(base)
+			tc.change(&sp)
+			require.ErrorIs(t, falsifyStackedPayload(t.Context(), sp), tc.want)
+		})
+	}
+}

@@ -144,8 +144,8 @@ a retired body is S17, by core §6's retire rule.
 
 | R | Receiver payload | `Fillet` / `Chamfer` | `Shell` |
 |---|---|---|---|
-| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds** for lateral edges here; reach RX1 adds complete cap loops | **builds** for cap removal here; reach RX1 adds the B4 multi-lump result and side/no-opening cases |
-| **R2** | `cupPayload` — a one-cap shell (B5/B6) | S3 | S3 |
+| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds** for lateral edges here; reach RX1 adds complete cap loops | **builds** for cap removal here, the B4 multi-lump result through reach BX8; reach RX1 adds side/no-opening cases |
+| **R2** | `cupPayload` — a one-cap shell (B5/B6), recorded as a two-slab `stackedPrismPayload` (reach §9.1) | S3 | S3 |
 | **R3** | `revolvePayload` | reach RX2 for swept meridian junctions; otherwise S3/SX5 | reach RX2; otherwise S2/SX8 |
 | **R4** | `facetedPayload` — a boolean output | reach SX9 | reach SX9 |
 | **R5** | `capBlendPayload` | reach SX10 | reach SX10 |
@@ -178,7 +178,7 @@ sentinel follows from it and from nothing else.
 | **S9** | a rewrite whose loops neither cross nor make boundary contact but whose **nesting the audit cannot decide** (§5) | this evaluator cannot tell | `ErrUnsupported` — it declines rather than guess |
 | **S10** | an **inward** thickness that leaves **no cavity** — at or beyond the section's **inradius**, or, where a cap is **kept** (B5), at or beyond the sweep's **height**, which that cap's floor consumes | no — the cavity is empty; the wall has eaten the part, across the section or along the sweep. The two limits are independent, and an **outward** thickness has neither: a dilation of a non-empty region is never empty, and an outward floor *adds* height below the kept cap instead of eating it. A **both-caps** shell keeps no cap, so it grows no floor and its cavity runs the whole sweep: only the inradius limit can fire on B2/B4 | `ErrDegenerate` (§8) |
 | **S11** | a shell whose **exact offset changes the section's feature set**, `ErrUnsupported` in either of two shapes at two points in the order. **S11a — a feature the offset drops**, caught **as the offset is built**: a **segment** dropped (a circular segment with the material inside it and `R ≤ t` inward: its offset radius `R − t` reaches zero or goes negative, the arc vanishes and its neighbours miter), or a **loop** dropped (a hole narrower than `2t` outward, whose erosion is empty). It is **antecedent to the §5 audit** — a dropped feature leaves no constructed section to audit — so it precedes S8. **S11b — a loop the offset merges or splits**, caught **by the §5 audit's crossing test** (§5 test 3, in S7's slot between S8 and S9): a slot or gap narrower than `2t` inward, whose two offset walls cross — or, at exactly `2t`, touch. A merge is the expected outcome of an offset, so the shell owns that event and S7 never fires on an offset (§8). | yes | `ErrUnsupported` — this evaluator's offset is per-feature and topology-preserving; resolving either needs a trimmed-offset kernel it does not have (§8) |
-| **S12** | in the base increment, a **both-caps** shell of a **holed** section — the wall is one band around the outer loop plus one band lining each hole: `1 + k` lumps (B4); reach BX8 replaces this after the multi-region stacked payload lands | yes | `ErrUnsupported` — a base `prismPayload` holds one region, and the base evaluator has no multi-lump payload (§9, §14) |
+| **S12** | a **both-caps** shell of a **holed** section — the wall is one band around the outer loop plus one band lining each hole: `1 + k` lumps (B4). Reach BX8 builds it as a `stackedPrismPayload` prism group, so S12 refuses no call | yes | none: reach BX8 holds the `1 + k` bands (§9, §14) |
 | **S13** | a **zero radius** or a **zero distance** — a body identical to the one the caller already holds | it exists, and it is the receiver: a question with one answer and no content, exactly as `Verify`'s zero tool is (verification §2) | `ErrDegenerate` |
 | **S14** | a **zero thickness** shell | no — a face is removed and the wall is `P \ P`: the empty region, no solid at all | `ErrDegenerate` |
 | **S15** | a magnitude of the wrong `Kind`, a non-finite one, or a negative one | — | `ErrUnitKind` / `ErrNotFinite` / `ErrNegativeMagnitude` (core §12 names all three by role) |
@@ -202,16 +202,16 @@ the same for every op:
 | **2 — the receiver and its targets** | is this body one a modify op takes, and is what the query named a thing it can act on? | S3 (Table R's payload class), then S1 (every selected edge is lateral — or, for a `Chamfer`, every geometric edge of one or more complete cap loops, which leaves this route for reach §8.3 and takes reach Table SX's gates from here on) / S2 (every removed face is a cap) |
 | **3 — the construction's own gates** | does the rewrite the caller asked for exist, feature by feature? | fillet / chamfer: S4 (there is a corner), then S5 (a blend of that radius exists — fillet only). Shell: S18 (the inward section survey fits its fixed work limit), S10 (the cavity is non-empty — inward only: the eroded section, and the height a kept cap's floor leaves), then S11a (no feature the offset drops as it is built) |
 | **4 — the §5 audit of the rewritten profile** | do the pieces bound a simple, correctly nested region? | S8 (orientation — the existence question, so a consumed region never reads `ErrUnsupported`), then S6 (no walk consumed by its own corners — an offset mints none, §8), then S7 (no crossing and no boundary contact; for a **shell** either is S11b, §8), then S9 (nesting, which is decidable only once no two loops cross or touch) |
-| **5 — what the result can be held as** | the region is proven; can a payload hold it? | S12 (a both-caps shell of a holed section is `1 + k` lumps) |
+| **5 — what the result can be held as** | the region is proven; can a payload hold it? | S12's slot: a both-caps shell of a holed section is `1 + k` lumps, which reach BX8 holds |
 
 Each stage needs the one before it, and that is what fixes the order rather than
 taste: there is no cutback to measure until the blend centre exists (S5), no
 offset loop to orient until the evaluator can decide the cavity (S18), the
 cavity exists (S10), and the offset keeps its features
-(S11a), and no lump count to take until the offset bounds a proven region. **S12
-is therefore last** — an inward both-caps shell of a holed section at or beyond
-the survey limit is S18, one at or beyond the inradius is S10, and one whose
-offset merges two loops is S11b; none reaches the count (B4).
+(S11a), and no lump count to take until the offset bounds a proven region. **The
+bands are therefore built last** — an inward both-caps shell of a holed section
+at or beyond the survey limit is S18, one at or beyond the inradius is S10, and
+one whose offset merges two loops is S11b; none reaches the bands (B4).
 
 **S11a precedes S8 without contravening the existence-before-buildability rule.**
 That rule governs two gates asked on **one constructed section** — where both
@@ -604,8 +604,8 @@ because each needs the one before it to have passed.**
   the same principle evaluator §12 states for the tapered extrude.
 - **Can a payload hold the result?** Only now — with an offset that exists and
   bounds a proven region with `P`'s own feature set — is the wall's **lump count**
-  a question with an answer, and a result in more than one piece is S12 (B4).
-  Staged for the same reason, and **last** for this one.
+  a question with an answer, and a result in more than one piece is the
+  `1 + k` bands reach BX8 holds (B4), built **last** for this reason.
 
 **The offset section is a rewrite, so it faces the §5 audit like any other**, and
 the audit runs between the second gate and the third, in its own order (§4): an
@@ -651,8 +651,8 @@ inward, `P ⊕ t` outward.
 | **B1** | `Fillet` / `Chamfer` | — | — | any (`k ≥ 0`) | `prismPayload` over the **rewritten** section, same frame, same `[z0, z1]` | **1** | side walls `side(i,j)` over the rewritten record, two caps `capStart` / `capEnd`. The blend cylinder / bevel plane **is** one of those walls, and carries a **second** role `fillet(i,j)` / `chamfer(i,j)` naming the same `(loop, segment)` of the rewritten record | S1, S4, S5 (**a fillet only** — S5 is a condition on the two carriers' `r`-offsets, which only the blend computes; a chamfer's chord exists between any two distinct feet, §7), then the §5 audit: S8, S6, S7, S9 |
 | **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S18, S10 (its **section** limit only — no cap is kept, so no floor eats the sweep), S11a, then the §5 audit: S8, S11b, S9 |
 | **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S11a, then the §5 audit: S8, S11b, S9 (no S18 or S10 — outward shelling has no inradius survey or thickness limit) |
-| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | S18 and S10 (**`Inward` only**, with S10's **section** limit only — B2's reason), S11a, the §5 audit's S8, S11b and S9 — every one of them decided on the offset section, and so reached before the count is — then, and only then, **S12** |
-| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`, an interval S10's **height** limit is what proves non-empty. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S18, S10 (**both** its limits — this is the one row whose floor eats the sweep), S11a, then the §5 audit: S8, S11b, S9 (no S12 — one cap is kept, and every band hangs off the floor it leaves) |
+| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | a `stackedPrismPayload` prism group: one slab on `[z0, z1]` holding the `1 + k` bands as regions (reach BX8) | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | per band `m` (the outer band first, then the hole linings in record order): walls `slab(0).region(m).side(i,j)` and two rims `capStart` / `capEnd` | S18 and S10 (**`Inward` only**, with S10's **section** limit only — B2's reason), S11a, the §5 audit's S8, S11b and S9 — every one of them decided on the offset section — then the bands build |
+| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` less the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`, recorded as a floor slab over `P` on `[z0, z0 + t]` under a slab of the `1 + k` wall bands on `[z0 + t, z1]` (reach §9.1), an interval S10's **height** limit is what proves non-empty. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S18, S10 (**both** its limits — this is the one row whose floor eats the sweep), S11a, then the §5 audit: S8, S11b, S9 (no S12 — one cap is kept, and every band hangs off the floor it leaves) |
 | **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S11a, then the §5 audit: S8, S11b, S9 (no S18, S10, or S12, for B3's and B5's reasons) |
 
 **The Refusals column names what a row's own geometry refuses, in the order §4
@@ -855,8 +855,9 @@ do with; PR 1 builds on them and carries none of them.
   patches;
 - patch/offset merging remains a deliberate `ErrUnsupported` limit;
 - topology-changing offsets remain a deliberate `ErrUnsupported` limit;
-- `stackedPrismPayload` owns multi-region axial slabs, replaces `cupPayload`,
-  and lifts S12 by holding the B4 outer band plus every hole-lining band;
+- `stackedPrismPayload` owns multi-region axial slabs, holds the cup's record
+  beside its shell morphology, and lifts S12 by holding the B4 outer band plus
+  every hole-lining band;
 - minimum wall on cap-blend/stacked payloads deliberately reads `Suspect` when
   asked;
 - clearance reads exposed analytic faces of the new payloads and may return its

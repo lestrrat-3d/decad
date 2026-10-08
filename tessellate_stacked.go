@@ -108,8 +108,8 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		var points []Point2
 		var indices [][]int
 		var sags []float64
-		for _, ci := range slabColumns {
-			r := rings[ci]
+		for _, e := range slabColumns {
+			r := rings[e.column]
 			start := len(points)
 			points = append(points, r.samples...)
 			idx := make([]int, len(r.samples))
@@ -175,13 +175,13 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		faceAxial[face] = axial
 		return nil
 	}
-	capLoops := func(slabColumns []int, region int, top bool) []stackedPatchLoop {
+	capLoops := func(slabColumns []stackedSlabLoop, region int, top bool) []stackedPatchLoop {
 		var loops []stackedPatchLoop
-		for _, ci := range slabColumns {
-			if columns[ci].region != region {
+		for _, e := range slabColumns {
+			if e.region != region {
 				continue
 			}
-			loops = append(loops, stackedPatchLoop{column: ci, top: top, outer: columns[ci].loopIndex == 0})
+			loops = append(loops, stackedPatchLoop{column: e.column, top: top, outer: e.loop == 0})
 		}
 		return loops
 	}
@@ -256,8 +256,8 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	for k, slab := range sp.slabs {
 		var segments, perimeter float64
 		walks := 0
-		for _, ci := range bySlab[k] {
-			r := rings[ci]
+		for _, e := range bySlab[k] {
+			r := rings[e.column]
 			segments = proofbound.AbsSumUpper(segments, r.segmentArea)
 			perimeter = proofbound.AbsSumUpper(perimeter, r.perimeterUpper)
 			walks += r.walks

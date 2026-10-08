@@ -44,22 +44,11 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 		}
 		return profileRecordsEqual(budget, pa.profile, pb.profile)
 	case cupPayload:
-		pb, ok := b.payload.(cupPayload)
-		if !ok || pa.frame != pb.frame || pa.zOpen != pb.zOpen || pa.zOuter != pb.zOuter ||
-			pa.zCav != pb.zCav || pa.xform != pb.xform {
+		other, ok := b.payload.(cupPayload)
+		if !ok {
 			return false, nil
 		}
-		if pa.offsetDelta != 0 || pb.offsetDelta != 0 {
-			// The prism arm's rule for a displaced section: an offset region
-			// recorded only within offsetDelta of the one it denotes makes two
-			// equal records say nothing about the two sets. Undecided.
-			return false, nil
-		}
-		same, err := profileRecordsEqual(budget, pa.outer, pb.outer)
-		if err != nil || !same {
-			return false, err
-		}
-		return profileRecordsEqual(budget, pa.cavity, pb.cavity)
+		return cupViewsEqual(budget, pa.view(), other.view())
 	case revolvePayload:
 		pb, ok := b.payload.(revolvePayload)
 		if !ok || pa.frame != pb.frame || pa.ax != pb.ax || pa.phi0 != pb.phi0 ||
@@ -70,6 +59,26 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 	default:
 		return false, nil
 	}
+}
+
+// cupViewsEqual is analyticBodiesEqual's cup arm over two cup views: one
+// frame, one placement, the same three levels and the same two regions.
+func cupViewsEqual(budget *proofbound.WorkBudget, pa, pb cupView) (bool, error) {
+	if pa.frame != pb.frame || pa.zOpen != pb.zOpen || pa.zOuter != pb.zOuter ||
+		pa.zCav != pb.zCav || pa.xform != pb.xform {
+		return false, nil
+	}
+	if pa.offsetDelta != 0 || pb.offsetDelta != 0 {
+		// The prism arm's rule for a displaced section: an offset region
+		// recorded only within offsetDelta of the one it denotes makes two
+		// equal records say nothing about the two sets. Undecided.
+		return false, nil
+	}
+	same, err := profileRecordsEqual(budget, pa.outer, pb.outer)
+	if err != nil || !same {
+		return false, err
+	}
+	return profileRecordsEqual(budget, pa.cavity, pb.cavity)
 }
 
 // profileRecordsEqual reports exact structural equality of two recorded

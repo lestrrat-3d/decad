@@ -76,7 +76,7 @@ func TestEvalRevolveRejectsOverflowedMeasurements(t *testing.T) {
 
 func TestEvalCupRejectsOverflowedMeasurements(t *testing.T) {
 	t.Parallel()
-	body, err := evalCup(New(), producerID(0), cupPayload{
+	body, err := evalCup(New(), producerID(0), cupView{
 		outer:  overflowSquare(10),
 		cavity: overflowSquare(1),
 		frame:  overflowFrame(t),
@@ -91,7 +91,7 @@ func TestEvalCupRejectsOverflowedMeasurements(t *testing.T) {
 func TestEvalCupIgnoresUnusedOverflowedSecondMoments(t *testing.T) {
 	t.Parallel()
 	const outerSide = 1e100
-	body, err := evalCup(New(), producerID(0), cupPayload{
+	body, err := evalCup(New(), producerID(0), cupView{
 		outer:  overflowSquare(outerSide),
 		cavity: overflowSquare(outerSide / 2),
 		frame:  overflowFrame(t),

@@ -22,7 +22,7 @@ import (
 
 // cupMassProperties integrates the outer prism and the cavity prism and
 // publishes their difference.
-func cupMassProperties(ctx context.Context, b *Body, cp cupPayload, density units.Value) (MassProperties, error) {
+func cupMassProperties(ctx context.Context, b *Body, cp cupView, density units.Value) (MassProperties, error) {
 	outer := cp.outerPrism()
 	outer.profile = cp.outer
 	cavity := cp.cavityPrism()

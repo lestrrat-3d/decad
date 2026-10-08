@@ -95,6 +95,7 @@
 1	0.36	TestCornerSpanMatchesRationalForm
 1	0.01	TestCoverageTargetsRefusesAnEmptyEnumeration
 1	0.02	TestCupProofRecordCoversEveryPatchItHolds
+1	0.02	TestCupStackedRecord
 1	0.40	TestEvalLoftAuditCountsCandidatesNotPairs
 1	0.03	TestFacetedAxisSupportRefusesHoledFootprint
 1	0.01	TestFacetedAxisSupportRefusesTwoLowestFaces
@@ -131,6 +132,7 @@
 1	0.09	TestRunVerifyPairsReturnsLowestFailingError
 1	0.02	TestSheetMeshPublishesNoOccupiedVolumeProof
 1	0.01	TestSpanMatchedDeltaUpperEnclosesDenseSampleOnOrdinarySpans
+1	0.02	TestStackedLiningAuditRejectsBrokenRecords
 1	0.13	TestStitchCurvedMeshInheritsEverySourceFaceBound
 1	0.01	TestStitchTessellateClassBoundIsIndependentOfPlacement
 1	0.03	TestSweepPairBoundedFacetedFloorStrictClearReplay

@@ -59,7 +59,6 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`tangent_chain.go`) | `docs/modify-reach-design.md` §5 |
 | Closed shell (`WithNoOpenings`) of any receiver but a full revolve | `ErrUnsupported` (§14 row C; SX8/SX9/SX16) (`shell.go`) | `docs/modify-reach-design.md` §9, §14 |
 | Modify of a prism whose section carries a displacement bound | `ErrUnsupported` via `requireExactSection` | `docs/modify-design.md` |
-| Shell of a holed section with both caps removed | `ErrUnsupported` | `docs/modify-design.md` §8 |
 | Variable-radius fillet, face-to-face fillet | No entry point exists | none |
 
 ## Booleans

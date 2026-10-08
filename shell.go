@@ -22,13 +22,14 @@ import (
 // section's own exact offset (§7): P ⊖ t inward, P ⊕ t outward, per-feature and
 // topology-preserving. A both-caps shell of a hole-free section is a TUBE — a
 // plain prismPayload over the annular section {Outer, Hole} (Table B, B2/B3),
-// so nothing downstream needs a new case for it (§12). A one-cap shell is a CUP
-// — the new cupPayload, two co-directional prisms over the same plane (B5/B6).
+// so nothing downstream needs a new case for it (§12). A both-caps shell of a
+// section with k holes is 1 + k disjoint bands, one stacked slab with one
+// region per band (docs/modify-reach-design.md BX8). A one-cap shell is a CUP
+// — cupPayload, a floor slab under a slab of wall bands (B5/B6).
 //
 // The gate order is §4's, and the sentinel of each refusal follows the §1
-// existence test. Staged, never a wrong body: side-wall removal is S2, a
-// topology-changing offset is S11, a both-caps shell of a HOLED section is S12
-// (a prismPayload holds one region), each ErrUnsupported.
+// existence test. Staged, never a wrong body: side-wall removal is S2 and a
+// topology-changing offset is S11, each ErrUnsupported.
 
 // ShellOption configures Shell, including its wall sense.
 type ShellOption interface {
@@ -82,7 +83,9 @@ func WithShellSense(s ShellSense) ShellOption {
 // every other (S15); a zero t is S14 (the wall is the empty region). A removed
 // SIDE wall is S2, a receiver whose payload is not a prism is S3, both
 // ErrUnsupported. The offset section faces the §5 audit before anything is
-// built, so no unproven body is ever made.
+// built, so no unproven body is ever made. Removing both caps of a section
+// with k holes returns 1 + k lumps: the band inside the outer loop, then one
+// band lining each hole (docs/modify-reach-design.md BX8).
 //
 // A partial revolve is shelled when sel removes both of its angular caps and
 // nothing else: the wall is its meridian's offset swept over the same angle,
@@ -283,32 +286,33 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 
 	var body *Body
 	switch {
-	case bothCaps:
-		if holed {
-			// B4: the wall is one band around the outer loop plus one band lining
-			// each hole — 1 + k disjoint lumps, which no prismPayload holds (S12).
-			return nil, fmt.Errorf(`%w: a both-caps shell of a holed section is %d disjoint lumps; this evaluator has no multi-lump payload`, ErrUnsupported, 1+len(pp.profile.Holes))
-		}
+	case bothCaps && !holed:
 		body, err = evalTubeContext(ctx, d, ref, pp, offset, s)
+	case bothCaps:
+		// B4 / reach BX8: the wall is one band around the outer loop plus one
+		// band lining each hole — 1 + k disjoint lumps, one stacked slab with
+		// one region per band.
+		offsetDelta, derr := offsetSectionDelta(offsetBudget, pp.profile, s, tmm, tDelta)
+		if derr != nil {
+			return nil, shellCancelCause(derr)
+		}
+		body, err = evalShellBandsContext(ctx, d, ref, pp, offset, s, offsetDelta)
 	default:
 		// A one-cap shell is a cup (B5/B6), for any k ≥ 0: the offset section's
 		// loops are proven simple and correctly nested by the §5 audit above, and
-		// evalCup wraps a wall around each post, all hanging off the one floor slab
-		// (one lump). The holed BOTH-caps case keeps no floor and is 1 + k lumps
-		// (B4, S12), refused above.
+		// the cup wraps a wall band around each post, all hanging off the one
+		// floor slab (one lump).
 		// The offset section is a float evaluation of P ⊖ t*; the cup records
 		// how far it may sit from that denoted offset beside it (§9).
 		offsetDelta, derr := offsetSectionDelta(offsetBudget, pp.profile, s, tmm, tDelta)
 		if derr != nil {
-			if errors.Is(derr, context.Canceled) {
-				return nil, context.Canceled
-			}
-			if errors.Is(derr, context.DeadlineExceeded) {
-				return nil, context.DeadlineExceeded
-			}
-			return nil, derr
+			return nil, shellCancelCause(derr)
 		}
-		body, err = evalCupContext(ctx, d, ref, cupPayloadFor(pp, offset, s, tmm, tDelta, offsetDelta, removedEnd))
+		cup, perr := cupPayloadFor(pp, offset, s, tmm, tDelta, offsetDelta, removedEnd).payload(ctx)
+		if perr != nil {
+			return nil, perr
+		}
+		body, err = evalCupContext(ctx, d, ref, cup)
 	}
 	if err != nil {
 		return nil, err
@@ -322,6 +326,67 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	}
 	d.commit(body, b)
 	return body, nil
+}
+
+// shellCancelCause maps an error wrapping a context cancellation to the bare
+// context error, as every shell build stage reports it.
+func shellCancelCause(err error) error {
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	return err
+}
+
+// shellWallBands lists the bands a shell's wall section holds between the
+// outer region O and the cavity region C: the band between O's outer loop and
+// C's (C's outer reversed as its one hole), then, for each hole i of O, the
+// band between C's hole i (reversed, an outer) and O's hole i. Inward O is the
+// receiver's section P and C its erosion; outward O is the dilation and C is
+// P. The §5 audit has proven C's loops simple and nested in O's, so the bands
+// are regular and pairwise disjoint (docs/modify-reach-design.md §9.2).
+func shellWallBands(ctx context.Context, outer, cavity ProfileRecord) ([]ProfileRecord, error) {
+	if len(outer.Holes) != len(cavity.Holes) {
+		return nil, fmt.Errorf(`%w: the shell's outer and cavity regions have different loop counts`, ErrDegenerate)
+	}
+	cavityOuter, err := reverseLoopRecordContext(ctx, cavity.Outer)
+	if err != nil {
+		return nil, err
+	}
+	bands := []ProfileRecord{{Outer: outer.Outer, Holes: []LoopRecord{cavityOuter}}}
+	for i, hole := range cavity.Holes {
+		post, err := reverseLoopRecordContext(ctx, hole)
+		if err != nil {
+			return nil, err
+		}
+		bands = append(bands, ProfileRecord{Outer: post, Holes: []LoopRecord{outer.Holes[i]}})
+	}
+	return bands, nil
+}
+
+// evalShellBandsContext builds reach BX8: the both-caps shell of a section
+// with k >= 1 holes is 1 + k disjoint bands over the receiver's sweep, one
+// stacked slab holding one region per band (a prism group,
+// docs/stacked-prism-design.md §2.2). Each band is its own lump with its own
+// rim caps, capStart and capEnd, and its walls carry slab(0).region(m).side(i,j)
+// with the outer band first and the hole linings in ProfileRecord order. The
+// offset loops sit within offsetDelta of the offset the thickness denotes, so
+// the payload carries it as its section displacement.
+func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, offset ProfileRecord, s, offsetDelta float64) (*Body, error) {
+	outer, cavity := pp.profile, offset
+	if s < 0 {
+		outer, cavity = offset, pp.profile
+	}
+	bands, err := shellWallBands(ctx, outer, cavity)
+	if err != nil {
+		return nil, err
+	}
+	return evalStackedContext(ctx, d, ref, stackedPrismPayload{
+		slabs: []prismSlab{{regions: bands, z0: pp.z0, z1: pp.z1, z0Delta: pp.z0Delta, z1Delta: pp.z1Delta}},
+		frame: pp.frame, xform: pp.xform, sectionDelta: offsetDelta,
+	})
 }
 
 // refuseClosedShell is Shell's answer to WithNoOpenings on every receiver but
