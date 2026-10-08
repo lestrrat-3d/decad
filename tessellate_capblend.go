@@ -445,7 +445,9 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 	chords, err := tessellation.ChordCapBlendLoop(tessellation.CapBlendChordInput{
 		Walks: walks, Joins: capBlendSampleJoins(lm.joins),
 		Whole: lm.whole, Chamfered: lm.chamfered, D: cbp.loopOffset(li), Chord: chord,
-	}, budget, capBandRadius, capWallSweep, func(i int) (float64, error) {
+	}, budget, func(w survey2d.SideWalk, d float64) (float64, error) {
+		return capband.BandRadius(w, d, shellTol)
+	}, capband.WallSweep, func(i int) (float64, error) {
 		return capBlendCornerLocusGap(budget, cbp.loopSetback(li), walks, i, lm.joins[i], cbp.loopBandDelta(li))
 	})
 	if err != nil {
@@ -501,7 +503,7 @@ func capBlendSampleJoins(joins []cornerJoin) []tessellation.CapBlendJoin {
 // apart, so it lies inside the ellipse with those two endpoints as foci and
 // major axis L, whose semi-minor axis is sqrt(L² − c*²)/2. L is the same
 // subdivided bound capSlantEdge charges the ruling's own length against
-// (capMiterLocusUpper). The semi-minor axis only grows as the focal distance
+// (capband.MiterLocusUpper). The semi-minor axis only grows as the focal distance
 // shrinks, so c must be a proven LOWER bound on c*, the distance between the
 // locus's own ends: the denoted corner and the denoted foot, the stated side
 // setback ds* apart along the sweep. The held chord from the corner to the
@@ -526,7 +528,7 @@ func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, w
 	if j.g1 || (!prev.IsCircular() && !cur.IsCircular()) {
 		return 0, nil
 	}
-	locus, ok, err := capMiterLocusUpper(budget, prev, cur, j.vU, j.vV, setback.axialUpper(), setback.dc, setback.dcDelta)
+	locus, ok, err := capband.MiterLocusUpper(budget, prev, cur, j.vU, j.vV, setback.axialUpper(), setback.dc, setback.dcDelta)
 	if err != nil {
 		return 0, err
 	}

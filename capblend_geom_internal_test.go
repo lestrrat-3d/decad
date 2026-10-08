@@ -85,7 +85,7 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 					continue
 				}
 				start, end := capWallFoot(joins, i, n)
-				capTh0, capTh1, _ := capWallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
+				capTh0, capTh1, _ := capband.WallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
 				c0, c1 := capband.WindowOnBranch(capTh0, capTh1, w.Th0)
 				for _, corner := range []struct {
 					held      float64
@@ -136,13 +136,13 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 			continue
 		}
 		start, end := capWallFoot(joins, i, n)
-		capRadius, err := capBandRadius(w, dc)
+		capRadius, err := capband.BandRadius(w, dc, shellTol)
 		require.NoError(t, err)
 		radius, ok := capOffsetRadiusSpan(w, dc, 0)
 		require.True(t, ok)
 		gap := proofbound.IntervalFloatError(radius, capRadius)
 		require.Positive(t, gap, `the premise: R − dc is not a float64`)
-		capTh0, capTh1, wraps := capWallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
+		capTh0, capTh1, wraps := capband.WallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
 		sweep := capTh1 - capTh0
 		withoutRadial := capcontour.CapWallArcBound(w.CU, w.CV, start, end, capRadius, capRadius*sweep, wraps, delta, 0)
 
@@ -173,18 +173,18 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 func TestCapMiterLocusRangesTileTheOffsetSpan(t *testing.T) {
 	t.Parallel()
 	for _, span := range []float64{8.705582497752681, 0.1, 2.981098884280702, 4.928686} {
-		step := span / capMiterLocusSubdivisions
+		step := span / capband.MiterLocusSubdivisions
 		separate := false
-		for k := range capMiterLocusSubdivisions - 1 {
+		for k := range capband.MiterLocusSubdivisions - 1 {
 			if float64(k)*step+step != float64(k+1)*step {
 				separate = true
 			}
 		}
 		require.True(t, separate, `the premise: span %v rounds the two ends apart somewhere`, span)
 
-		ranges := capMiterLocusRanges(span)
+		ranges := capband.MiterLocusRanges(span)
 		require.Zero(t, ranges[0][0])
-		require.Equal(t, span, ranges[capMiterLocusSubdivisions-1][1])
+		require.Equal(t, span, ranges[capband.MiterLocusSubdivisions-1][1])
 		for k, r := range ranges {
 			require.Less(t, r[0], r[1], `span %v: sub-range %d runs forward`, span, k)
 			if k > 0 {
@@ -216,7 +216,7 @@ func TestCapMiterLocusUpperReadsTheStatedAxialRise(t *testing.T) {
 			continue
 		}
 		for _, axial := range []float64{1e-3, 0.3, 2, 50, 1e4} {
-			total, ok, err := capMiterLocusUpper(budget, prev, cur, j.vU, j.vV, axial, dc, 0)
+			total, ok, err := capband.MiterLocusUpper(budget, prev, cur, j.vU, j.vV, axial, dc, 0)
 			require.NoError(t, err)
 			require.True(t, ok)
 			chordSq := proofarith.RatSquaredDistance3(j.m.U, j.m.V, axial, j.vU, j.vV, 0)

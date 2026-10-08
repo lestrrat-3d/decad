@@ -269,7 +269,7 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 // the centre).
 //
 // g.CapTh0/g.CapTh1 and g.Th0/g.Th1 are not guaranteed to share a branch:
-// capWallSweep (capblend_geom.go) anchors capTh0 at a raw Atan2, always in
+// WallSweep anchors capTh0 at a raw Atan2, always in
 // (-pi, pi], while th0 comes from the recorded arc range and can sit a full
 // turn away for a major-arc wall — the same corner, described a multiple of
 // 2*pi apart. capWindowOnBranch puts the cap window back on th0's own branch,

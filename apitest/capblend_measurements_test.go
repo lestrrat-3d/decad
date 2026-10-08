@@ -1502,7 +1502,7 @@ func TestCapBlendFilletedPlateCentroidIsClosedForm(t *testing.T) {
 // loop rather than an outer one. minor picks which of the chord's two arcs
 // is the hole's own wall: true keeps the SHORT (<180 degrees) arc, false
 // the LONG (>180 degrees) one — the major-arc case is PR-122's own audited
-// branch-crossing repro (capWallSweep's raw Atan2 lands the offset foot's
+// branch-crossing repro (capband.WallSweep's raw Atan2 lands the offset foot's
 // angle a full turn from the wall's own recorded th0).
 func dHoleBody(t *testing.T, cx, cy, r, phi0Deg, phi1Deg float64, minor bool) *decad.Body {
 	t.Helper()
@@ -1544,7 +1544,7 @@ func dHoleBody(t *testing.T, cx, cy, r, phi0Deg, phi1Deg float64, minor bool) *d
 // tight-bound property for an outer-loop tangent fillet and a whole-turn
 // circle, but neither is a HOLE loop and neither has a genuinely
 // non-tangential miter corner, so neither could have caught PR-122's own
-// defect (a D-hole whose wall is the MAJOR arc: capWallSweep's raw Atan2
+// defect (a D-hole whose wall is the MAJOR arc: capband.WallSweep's raw Atan2
 // puts the offset foot's angle a full 2*pi from the wall's own recorded
 // th0, so chordLocusResidualAllow's windowSkewMax read close to 2*pi
 // instead of the corner's own small miter skew, and the published bound

@@ -119,7 +119,7 @@ func CapCircleLengthBound(radius proofbound.RatInterval, held float64) float64 {
 
 // capSweepBracket is the proofbound.Atan2Interval enclosure of a cap-level directrix's
 // swept angle — atan2(end−centre) − atan2(start−centre), unwrapped by
-// wraps·2π to the same branch capWallSweep's own float computation picked —
+// wraps·2π to the same branch capband.WallSweep's float computation picked —
 // plus the coordinate shift (the contour's own displacement, folded in by
 // the caller, plus each endpoint's own subtraction rounding) that a caller
 // turns into an allowance for how far those feet may sit from the point the
@@ -163,7 +163,7 @@ func capSweepBracket(cU, cV float64, start, end sectionrecord.Point2, wraps int,
 // so the sweep is bracketed straight from those feet, exactly the way
 // CapApexArcBound brackets a reflex corner's own connector: an proofbound.Atan2Interval
 // enclosure of the two feet's own turn about the centre, so no libm accuracy
-// is assumed of the sweep itself, plus wraps (capWallSweep's own unwrap count)
+// is assumed of the sweep itself, plus wraps (capband.WallSweep's unwrap count)
 // to reproduce the same branch, plus the turn the two feet's own contour
 // displacement can account for. radialShift is how far every radius the
 // denoted arc can have sits from capRadius: the rounding of the float offset
