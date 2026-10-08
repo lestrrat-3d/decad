@@ -648,6 +648,7 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 		v: make([]Point2, 2), w: make([]Point2, 2),
 		arcUpperV: arcUpperV, arcUpperW: arcUpperW,
 		matchedDelta: []float64{sectionMatchedDelta, 0},
+		faceted:      []bool{false, true},
 		// No arm placed these stations, so neither side carries a
 		// constant-speed claim: +Inf is the absence of a tangent-deviation
 		// energy proof, which proofbound.CellChordCurveAreaAllow spends as its
@@ -754,6 +755,7 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 		arcUpperV:      []float64{1.01, 0},
 		arcUpperW:      []float64{1.1, 0},
 		matchedDelta:   []float64{chordToCurve, 0},
+		faceted:        []bool{false, true},
 		tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
 		tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
 	}}
@@ -827,6 +829,7 @@ func underivableCapOffsetPairs(matched float64) []loftLoopPair {
 		arcUpperV:      []float64{1.01, 0},
 		arcUpperW:      []float64{1.1, 0},
 		matchedDelta:   []float64{matched, 0},
+		faceted:        []bool{false, true},
 		tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
 		tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
 	}}
@@ -916,11 +919,12 @@ func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
 // a mesh's area error accumulates over cells where a single point's departure
 // does not.
 //
-// The gate is the same one every other per-cell leg uses, the cell's own
-// proven chord-to-curve half, never a segment kind: the zero subtest drives
-// matchedDelta to 0 on both cells with the geometry untouched, so a leg
+// The gate is the same one every other per-cell leg uses, a FACETED cell with
+// a zero chord-to-curve half: the faceted subtest drives matchedDelta to 0
+// and flags both cells faceted with the geometry untouched, so a leg
 // accumulated outside that gate would show up as a positive sum on a build
-// that charges nothing else.
+// that charges nothing else. The last subtest pins the other side of the same
+// gate: the same zero departure on cells NOT flagged faceted is charged.
 func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 	t.Parallel()
 	// A genuinely twisted quad: wHi sits off the plane of the other three
@@ -939,18 +943,19 @@ func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 	// subtends: |vHi-vLo| = 1 and |wHi-wLo| = sqrt(1.09) ~= 1.044.
 	arcUpperV := []float64{1.01, 1.01}
 	arcUpperW := []float64{1.1, 1.1}
-	pairsWith := func(matched []float64) []loftLoopPair {
+	pairsWith := func(matched []float64, faceted bool) []loftLoopPair {
 		return []loftLoopPair{{
 			v: make([]Point2, 2), w: make([]Point2, 2),
 			arcUpperV: arcUpperV, arcUpperW: arcUpperW,
 			matchedDelta:   matched,
+			faceted:        []bool{faceted, faceted},
 			tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
 			tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
 		}}
 	}
 
 	t.Run("sums both charged cells", func(t *testing.T) {
-		chorded, err := computeLoftChordedAllow(pairsWith([]float64{0.5, 0.5}), vIdx, wIdx, verts, anchor, 0.5, 0, 2.0, false)
+		chorded, err := computeLoftChordedAllow(pairsWith([]float64{0.5, 0.5}, false), vIdx, wIdx, verts, anchor, 0.5, 0, 2.0, false)
 		require.NoError(t, err)
 
 		// The loop walks cell 0 as (v0, v1, w0, w1) and cell 1 as the wrap
@@ -965,10 +970,25 @@ func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 			"a two-cell build must publish more than either cell alone")
 	})
 
-	t.Run("charges nothing where no cell is chorded", func(t *testing.T) {
-		chorded, err := computeLoftChordedAllow(pairsWith([]float64{0, 0}), vIdx, wIdx, verts, anchor, 0, 0, 2.0, false)
+	t.Run("charges nothing where every cell is faceted", func(t *testing.T) {
+		chorded, err := computeLoftChordedAllow(pairsWith([]float64{0, 0}, true), vIdx, wIdx, verts, anchor, 0, 0, 2.0, false)
 		require.NoError(t, err)
 		require.Zero(t, chorded.TwistAreaAllow,
 			"a LineSeg-only build's held triangle pair IS its own boundary, so it charges no held-to-bilinear gap")
+	})
+
+	// A degree-1 free-form cell is straight on both sides, so its departure is
+	// 0, yet it stands for the bilinear patch through its corners. Shown to
+	// fail first: under the departure-only gate this subtest read a nil
+	// correction and zero legs.
+	t.Run("charges a zero-departure cell that is not faceted", func(t *testing.T) {
+		chorded, err := computeLoftChordedAllow(pairsWith([]float64{0, 0}, false), vIdx, wIdx, verts, anchor, 0, 0, 2.0, false)
+		require.NoError(t, err)
+		want := new(big.Rat).Add(proofbound.CellTwistVolume(vLo, vHi, wLo, wHi), proofbound.CellTwistVolume(vHi, vLo, wHi, wLo))
+		require.NotNil(t, chorded.TwistVolumeCorrection)
+		require.Zero(t, want.Cmp(chorded.TwistVolumeCorrection), "both cells' exact twist corrections are applied")
+		require.Positive(t, chorded.MaxTwistOffsetUpper)
+		require.Positive(t, chorded.TwistAreaAllow)
+		require.Positive(t, chorded.TwistVolumeUpper)
 	})
 }

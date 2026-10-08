@@ -62,9 +62,13 @@ type loftPayload struct {
 
 	// delta is the proven displacement of every held vertex from the exact
 	// point the record denotes for it (docs/loft-design.md §5, §12 PR 2a,
-	// a10-plan.md Part 3 PR 6): proofbound.AbsSumUpper(stationRound, placeAllow).
-	// placeAllow is zero for an unplaced body — pl.xform == r3.Identity(), an
-	// exact struct comparison, never a tolerance — and otherwise
+	// a10-plan.md Part 3 PR 6): stationRound, liftAllow and placeAllow summed
+	// through proofbound.AbsSumUpper (loftmesh.Assemble). liftAllow is the
+	// rounding each station's lift through its own section frame commits
+	// (loftmesh.FrameLiftRoundAllow), zero only on an XY-aligned frame whose
+	// origin lies on the Z axis. placeAllow is zero for an unplaced body —
+	// pl.xform == r3.Identity(), an exact struct comparison, never a
+	// tolerance — and otherwise
 	// internal/proofbound/bounds.go's proofbound.RigidRoundAllow, read at the pre-transform lifted point's
 	// own magnitude and the composed translation's magnitude. stationRound is
 	// each station's own displacement from the point the record denotes for
@@ -79,7 +83,7 @@ type loftPayload struct {
 	// pairing does not reach that zero, and a curved pairing is positive
 	// whenever a cell has an interior station or an arc end off its own
 	// recorded radius. So delta is zero exactly when
-	// BOTH terms are, no longer merely when the body is unplaced. Every
+	// all three terms are, never merely when the body is unplaced. Every
 	// measurement this payload publishes composes it.
 	delta float64
 
@@ -136,6 +140,13 @@ type loftPayload struct {
 	// matched term there, because a held cap polygon's own vertices are
 	// displaced as well as chorded.
 	sectionDelta float64
+
+	// chorded reports that the build holds a cell whose held triangle pair is
+	// NOT the boundary it denotes: a circular or free-form cell, which stands
+	// for a ruled patch (loftLoopPair.faceted). It is true on a degree-1
+	// free-form build whose sectionDelta is zero, so a consumer asking whether
+	// the held mesh IS the surface reads this field beside sectionDelta.
+	chorded bool
 
 	verts []r3.Vec
 	tris  [][3]int
@@ -356,8 +367,14 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// pairing's published measurements free of every chorded term: its held
 	// triangle pair IS the boundary §5 gives it, and a.delta already reaches
 	// its measurements through the accumulator's own delta-keyed legs.
+	//
+	// A build is chorded when any cell is NOT faceted (loftLoopPair.faceted),
+	// not only when a departure is positive: a degree-1 free-form pair has a
+	// zero departure on every cell and still stands for twisted bilinear
+	// patches, whose correction and twist legs must run.
+	chorded := sectionDelta > 0 || sectionMatchedDelta > 0 || loftHasUnfacetedCell(pairs)
 	matchedDelta := 0.0
-	if sectionDelta > 0 || sectionMatchedDelta > 0 {
+	if chorded {
 		matchedDelta = chordCellDeltaUpper(sectionMatchedDelta, a.delta)
 	}
 	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
@@ -368,27 +385,28 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// The chorded correction terms (docs/loft-design.md §5/§8, a10-plan.md
 	// Part 3 PR 6) read the mass accumulator's own coordUpper, which is only
 	// complete once every triangle has folded into it above — so this runs
-	// after the add loop, gated on EITHER sectionDelta or sectionMatchedDelta
-	// being positive rather than on sectionDelta alone: a free-form cell can
-	// carry a positive matchedDelta at an exactly-zero sagitta
-	// (internal/freeform/spline_sagitta.go's own counterexample), and skipping the computation
-	// there would silently drop a genuine chord-to-curve area/volume
-	// obligation. Left at its zero value (every field of loftmesh.LoftChordedAllow)
-	// for a LineSeg-only build, where both are zero.
+	// after the add loop, gated on the build being chorded rather than on
+	// sectionDelta alone: a free-form cell can carry a positive matchedDelta at
+	// an exactly-zero sagitta (internal/freeform/spline_sagitta.go's own
+	// counterexample), and a degree-1 free-form cell carries neither while its
+	// twisted bilinear patch still needs the exact correction. Skipping the
+	// computation there would silently drop a genuine area/volume obligation.
+	// Left at its zero value (every field of loftmesh.LoftChordedAllow) for a
+	// LineSeg-only build, whose every cell is faceted.
 	//
 	// It is also where S14's CONSTRUCTION arm decides the cap
 	// planeOffsetUpper term §5.2's table lists: an assembly stating no proven
 	// distance from the anchor to a held cap1 vertex refuses here
 	// (loftmesh.ErrLoftCapOffsetUnderivable, loft_moments.go) instead of measuring on,
 	// so no measurement below is ever composed from a substituted value.
-	if sectionDelta > 0 || sectionMatchedDelta > 0 {
-		chorded, err := computeLoftChordedAllow(
+	if chorded {
+		allow, err := computeLoftChordedAllow(
 			pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.DistUpper, a.reversed,
 		)
 		if err != nil {
 			return nil, err
 		}
-		mass.Chorded = chorded
+		mass.Chorded = allow
 	}
 	body.volume = mass.volume(a.verts, a.tris)
 	centroid, err := mass.centroid(a.verts, a.tris)
@@ -447,6 +465,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// positive for a same-kind circular one, to the sagitta its station
 	// chording commits.
 	pl.sectionDelta = sectionDelta
+	pl.chorded = chorded
 	body.payload = pl
 	return body, nil
 }

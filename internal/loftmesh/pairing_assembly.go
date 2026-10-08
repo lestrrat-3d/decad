@@ -17,6 +17,12 @@ type LoopPair struct {
 	ArcUpperV, ArcUpperW           []float64
 	MatchedDelta                   []float64
 	TangentEnergyV, TangentEnergyW []float64
+	// Faceted is parallel to V/W, one entry per cell: true exactly for a
+	// LineSeg pair's cell, whose held triangle pair IS the boundary §5 gives
+	// it. Every other cell stands for a bilinear ruled patch, whether or not
+	// its chord departs from its curve (docs/loft-design.md §5.2's
+	// maxTwistOffsetUpper row).
+	Faceted []bool
 }
 
 // PairRecords resolves Table P into one flat correspondence per loop, from
@@ -88,6 +94,9 @@ func PairRecords(p0, p1 RecordProfile, offsets []int, walks0, walks1 [][]survey2
 					return nil, 0, 0, 0, err
 				}
 				pair.appendFreeform(cell)
+				for range cell.MatchedDelta {
+					pair.Faceted = append(pair.Faceted, false)
+				}
 				sectionDelta = math.Max(sectionDelta, cell.Sagitta)
 				for _, d := range cell.MatchedDelta {
 					sectionMatchedDelta = math.Max(sectionMatchedDelta, d)
@@ -104,7 +113,9 @@ func PairRecords(p0, p1 RecordProfile, offsets []int, walks0, walks1 [][]survey2
 			cellArcW := PerCellArcUpper(seg1, w1, m)
 			cellEnergyV := PerCellTangentEnergy(seg0, w0, m)
 			cellEnergyW := PerCellTangentEnergy(seg1, w1, m)
+			faceted := w0.IsLine() && w1.IsLine()
 			for range m {
+				pair.Faceted = append(pair.Faceted, faceted)
 				pair.ArcUpperV = append(pair.ArcUpperV, cellArcV)
 				pair.ArcUpperW = append(pair.ArcUpperW, cellArcW)
 				pair.TangentEnergyV = append(pair.TangentEnergyV, cellEnergyV)

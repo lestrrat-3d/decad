@@ -17,6 +17,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -999,6 +1000,124 @@ func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported, "S8: the facet-pair ceiling")
 }
 
+// --- frame lift: docs/loft-design.md §5.2's liftAllow row ---
+
+// TestLoftFrameLiftRoundingChargedInDelta lofts one LineSeg quad between two
+// parallel planes, unplaced, on two frames whose ToWorldUV lift rounds: a
+// tilted frame, and an XY-aligned frame whose origin sits off the axis. In
+// both, the point a held vertex denotes is its station lifted through the
+// payload's own frame in exact arithmetic, so delta must cover every vertex's
+// gap from that point and Volume must enclose the polyhedron through the
+// exact lifts.
+//
+// Shown to fail first: on the build whose delta carried no frame-lift term
+// (placement only), the tilted quad published delta 0 with a vertex 1.9e-16
+// off its exact lift, and Volume 86.40000000000002 ± 1.57e-15 against an exact
+// volume 4.08e-15 away. The axis-offset frame published delta 0 too, its
+// vertices off the exact lift by the rounding of 0.1 + 1.3.
+func TestLoftFrameLiftRoundingChargedInDelta(t *testing.T) {
+	quad := [][2]float64{{1.3, -1.1}, {1.7, 1.9}, {-1.1, 1.3}, {-1.9, -1.7}}
+	tilted := func(t *testing.T) r3.Frame {
+		u := r3.NewVec(math.Cos(0.3), math.Sin(0.3)*math.Cos(0.7), math.Sin(0.3)*math.Sin(0.7))
+		f, err := r3.NewFrame(r3.NewVec(0.1, 0.2, 0.3), u, r3.NewVec(0.2, -0.5, 0.9).Cross(u))
+		require.NoError(t, err)
+		return f
+	}
+	axisOffset := func(t *testing.T) r3.Frame {
+		f, err := r3.NewFrame(r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+		require.NoError(t, err)
+		return f
+	}
+	for name, frameOf := range map[string]func(*testing.T) r3.Frame{"tilted": tilted, "axis-aligned off the axis": axisOffset} {
+		t.Run(name, func(t *testing.T) {
+			f0 := frameOf(t)
+			f1, err := r3.NewFrame(f0.Origin().Add(f0.N().Scale(10)), f0.U(), f0.V())
+			require.NoError(t, err)
+			w := sketch.NewWorld()
+			pl0, err := w.CreatePlaneFromFrame(f0)
+			require.NoError(t, err)
+			pl1, err := w.CreatePlaneFromFrame(f1)
+			require.NoError(t, err)
+			s0, p0 := straightSidedSketch(t, w, pl0, quad, false)
+			s1, p1 := straightSidedSketch(t, w, pl1, quad, false)
+			body, err := New().Loft(t.Context(), s0, p0, s1, p1)
+			require.NoError(t, err)
+			pl := body.payload.(loftPayload)
+
+			exact := exactLoftVertexLifts(t, pl)
+			sawGap := false
+			delta := proofarith.FloatRat(pl.delta)
+			delta2 := new(big.Rat).Mul(delta, delta)
+			for k, v := range pl.verts {
+				gap2 := new(big.Rat)
+				for axis, held := range [3]float64{v.X, v.Y, v.Z} {
+					d := new(big.Rat).Sub(proofarith.FloatRat(held), exact[k][axis])
+					gap2.Add(gap2, d.Mul(d, d))
+				}
+				sawGap = sawGap || gap2.Sign() > 0
+				require.LessOrEqual(t, gap2.Cmp(delta2), 0, "vertex %d sits past delta %g from its exact lift", k, pl.delta)
+			}
+			require.True(t, sawGap, "the fixture must hold a vertex the lift rounds")
+
+			vol, err := body.Volume()
+			require.NoError(t, err)
+			requireRatCovered(t, vol, exactRatMeshVolume(exact, pl.tris))
+		})
+	}
+}
+
+// exactLoftVertexLifts states, for every assembled vertex of an unplaced
+// loft, the point its station denotes: origin + u·U + v·V through that side's
+// own frame, over exact rationals.
+func exactLoftVertexLifts(t *testing.T, pl loftPayload) [][3]*big.Rat {
+	t.Helper()
+	require.Equal(t, r3.Identity(), pl.xform)
+	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	require.NoError(t, err)
+	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
+	require.NoError(t, err)
+	pairs, _, _, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	require.NoError(t, err)
+	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	require.NoError(t, err)
+	require.Equal(t, pl.verts, a.verts)
+	lift := func(f r3.Frame, p Point2) [3]*big.Rat {
+		o, u, v := f.Origin(), f.U(), f.V()
+		pu, pv := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
+		var out [3]*big.Rat
+		for axis, c := range [3][3]float64{{o.X, u.X, v.X}, {o.Y, u.Y, v.Y}, {o.Z, u.Z, v.Z}} {
+			out[axis] = new(big.Rat).Add(proofarith.FloatRat(c[0]), new(big.Rat).Mul(proofarith.FloatRat(c[1]), pu))
+			out[axis].Add(out[axis], new(big.Rat).Mul(proofarith.FloatRat(c[2]), pv))
+		}
+		return out
+	}
+	out := make([][3]*big.Rat, len(a.verts))
+	for i, p := range pairs {
+		for j, q := range p.v {
+			out[a.vIdx[i][j]] = lift(pl.frame0, q)
+		}
+		for j, q := range p.w {
+			out[a.wIdx[i][j]] = lift(pl.frame1, q)
+		}
+	}
+	return out
+}
+
+// exactRatMeshVolume is the closed triangle set's signed tetrahedron sum from
+// the origin over exact rational vertices.
+func exactRatMeshVolume(verts [][3]*big.Rat, tris [][3]int) *big.Rat {
+	sum := new(big.Rat)
+	mul := func(x, y *big.Rat) *big.Rat { return new(big.Rat).Mul(x, y) }
+	sub := func(x, y *big.Rat) *big.Rat { return new(big.Rat).Sub(x, y) }
+	for _, tri := range tris {
+		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+		sum.Add(sum, mul(a[0], sub(mul(b[1], c[2]), mul(b[2], c[1]))))
+		sum.Add(sum, mul(a[1], sub(mul(b[2], c[0]), mul(b[0], c[2]))))
+		sum.Add(sum, mul(a[2], sub(mul(b[0], c[1]), mul(b[1], c[0]))))
+	}
+	return sum.Quo(sum, big.NewRat(6, 1))
+}
+
 // --- capPolygonAreaRat: docs/loft-design.md §8's cap-polygon shoelace ---
 
 // assembleLoftFixture runs evalLoft's own pairing/assembly prefix
@@ -1515,6 +1634,7 @@ func TestComputeLoftChordedAllowReversesSignedCorrections(t *testing.T) {
 		arcUpperV:      []float64{4, 0},
 		arcUpperW:      []float64{4, 0},
 		matchedDelta:   []float64{0.01, 0},
+		faceted:        []bool{false, true},
 		tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
 		tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
 	}}

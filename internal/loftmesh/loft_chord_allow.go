@@ -16,6 +16,8 @@ type LoftChordPair struct {
 	ArcUpperV, ArcUpperW           []float64
 	MatchedDelta                   []float64
 	TangentEnergyV, TangentEnergyW []float64
+	// Faceted is LoopPair.Faceted: true exactly for a LineSeg pair's cell.
+	Faceted []bool
 }
 
 // ComputeLoftChordedAllow derives LoftChordedAllow's corrections and bounds by walking
@@ -46,36 +48,32 @@ type LoftChordPair struct {
 // tessellation's occupied-volume proof, maxTwistOffsetUpper (the MAX,
 // never a sum, of proofbound.CellTwistOffsetUpper), twistAreaAllow (the SUM of
 // proofbound.CellTwistAreaAllow, retained for the tessellation's own area slack) and
-// seamPerimeterUpper's own running
-// total ONLY when its own CHORD-TO-CURVE departure is positive
-// (pairs[i].MatchedDelta[j] > 0, the cell's own half of §5.2's matchedDelta
-// composition) — NEVER keyed on a segment kind (a10-plan.md Part 3 PR 9 Task
-// 1a): an exact LineSeg cell's true curve already IS its chord, so that half
-// is exactly 0 and the cell has nothing to contribute to any of those four
-// legs — its held triangle pair IS the boundary §5 gives it, and its own
-// vertex displacement is charged by the accumulator's delta-keyed legs
-// instead, never twice. The gate therefore reads the cell's chord-to-curve
-// half and never the composed matched value, which a placed build makes
-// positive on every cell including the straight ones.
-// Skipping such a cell also keeps the bound tighter than passing a zero
-// displacement through the same machinery would. Any OTHER cell with a
-// positive chord-to-curve half — circular today, a same-kind Tier A free-form cell once that
-// arm lands — is charged, regardless of which arm produced it: gating on the
-// PROVEN quantity itself, rather than on an enum naming which arm ran, is
-// what keeps a future arm from being silently exempted from this whole
-// charge the way an earlier version of this evaluator's kind-keyed gate
-// would have exempted it.
+// seamPerimeterUpper's own running total UNLESS it is a FACETED cell —
+// a LineSeg pair's cell (pairs[i].Faceted[j]) whose own CHORD-TO-CURVE
+// departure is zero (pairs[i].MatchedDelta[j] <= 0, the cell's own half of
+// §5.2's matchedDelta composition). Only such a cell's held triangle pair IS
+// the boundary §5 gives it, so it has nothing to contribute to any of those
+// legs, and its own vertex displacement is charged by the accumulator's
+// delta-keyed legs instead, never twice.
 //
-// perimeterUpperV/perimeterUpperW and walksV/walksW sum only the POSITIVE-
-// matchedDelta cells of their own cap, never every cell regardless of kind:
-// under the fixed-station chord-to-curve homotopy this whole function
-// reasons about, a LineSeg boundary never moves at all (its chord IS the
-// curve it denotes), so the symmetric difference between the held cap
-// polygon and the true denoted region is the union of the curved cells' own
-// lenses alone and already lies inside the tube proofbound.SectionDisplacementArea
-// takes over their own perimeter — including the straight cells would only
-// widen an already-sound bound, never repair an unsound one, so they are
-// left out.
+// Every other cell is charged, whatever its departure: a circular or
+// free-form cell stands for a bilinear ruled patch through its four held
+// corners, and a zero departure says only that its two sides are straight. A
+// degree-1 NURBSSeg pair twisted between its sections is exactly that case,
+// and skipping its twist correction published the triangulated polyhedron's
+// volume for a body that denotes the ruled one. The exemption names the ONE
+// arm proven faceted rather than the arms that are charged, so an arm added
+// later is charged by default, and a positive departure is charged even on a
+// cell flagged faceted.
+//
+// perimeterUpperV/perimeterUpperW and walksV/walksW sum only the charged
+// cells of their own cap: under the fixed-station chord-to-curve homotopy
+// this whole function reasons about, a faceted boundary never moves at all
+// (its chord IS the curve it denotes), so the symmetric difference between
+// the held cap polygon and the true denoted region lies inside the tube
+// proofbound.SectionDisplacementArea takes over the charged cells' own
+// perimeter — including the faceted cells would only widen an already-sound
+// bound, never repair an unsound one, so they are left out.
 //
 // h0 (cap0's own offset from anchor) is always exactly zero because anchor
 // IS a point on cap0's own plane (evalLoft's own anchor := xform.Apply(
@@ -157,16 +155,15 @@ func ComputeLoftChordedAllow(
 			jn := (j + 1) % n
 			vLo, vHi := verts[vIdx[i][j]], verts[vIdx[i][jn]]
 			wLo, wHi := verts[wIdx[i][j]], verts[wIdx[i][jn]]
-			if p.MatchedDelta[j] <= 0 {
-				// An exact LineSeg cell's own recorded chord IS the curve it
+			if p.Faceted[j] && p.MatchedDelta[j] <= 0 {
+				// A faceted cell's held triangle pair IS the boundary it
 				// denotes, so its true departure is exactly zero: excluding
 				// it from the cap's own perimeter/walks tally
 				// (proofbound.SectionDisplacementArea's own tube-plus-joints argument)
 				// is sound, not merely convenient — a zero-width segment of
 				// the tube contributes nothing to widen, and a joint whose
 				// own incident boundary never moves contributes no disk
-				// either. Gated on the proven matchedDelta itself, never on a
-				// segment kind (this function's own doc comment).
+				// either (this function's own doc comment).
 				continue
 			}
 			walksV++

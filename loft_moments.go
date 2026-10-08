@@ -115,7 +115,7 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 		neutral[i] = loftmesh.LoftChordPair{
 			Cells: len(p.v), ArcUpperV: p.arcUpperV, ArcUpperW: p.arcUpperW,
 			MatchedDelta: p.matchedDelta, TangentEnergyV: p.tangentEnergyV,
-			TangentEnergyW: p.tangentEnergyW,
+			TangentEnergyW: p.tangentEnergyW, Faceted: p.faceted,
 		}
 	}
 	return loftmesh.ComputeLoftChordedAllow(
