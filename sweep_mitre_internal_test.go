@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -493,4 +494,29 @@ func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
 			requireMitredSumsMatch(t, exact, tris, vertex(), fmt.Sprintf("trial %d", trial))
 		}
 	})
+	point := func(x, y, z int64) sweepRatVec {
+		return sweepRatVec{big.NewRat(x, 2), big.NewRat(y, 3), big.NewRat(z, 5)}
+	}
+	local := []sweepRatVec{point(0, 0, 0), point(2, 0, 0), point(0, 3, 0), point(0, 0, 5)}
+	anchor := sweepRatVec{big.NewRat(1, 3), big.NewRat(2, 7), big.NewRat(3, 11)}
+	tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
+	vol6, moments := mitredVolumeMoments(local, tris, anchor)
+	frame, err := r3.NewFrame(r3.NewVec(7, 11, 13), r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0))
+	require.NoError(t, err)
+	turn, err := r3.FromFrame(frame)
+	require.NoError(t, err)
+	reflection, err := r3.Reflection(identityFrame(t))
+	require.NoError(t, err)
+	for _, xform := range []r3.Transform{r3.Identity(), turn, reflection} {
+		placed := make([]sweepRatVec, len(local))
+		for i, p := range local {
+			placed[i] = mitredPlace(xform, p)
+		}
+		wantVol, wantMoments := mitredVolumeMoments(placed, tris, mitredPlace(xform, anchor))
+		gotVol, gotMoments := sweepmitre.PlacedVolumeMoments(vol6, moments, xform)
+		require.Zero(t, wantVol.Cmp(gotVol))
+		for axis := range 3 {
+			require.Zero(t, wantMoments[axis].Cmp(gotMoments[axis]), "moment axis %d", axis)
+		}
+	}
 }

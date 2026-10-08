@@ -105,8 +105,15 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 
 	stride := len(c.sections[0])
 	exact := make([]sweepRatVec, 0, stride*len(c.sections))
+	var localExact []sweepRatVec
+	if mp.localVol6 == nil && mp.xform != r3.Identity() {
+		localExact = make([]sweepRatVec, 0, cap(exact))
+	}
 	for _, section := range c.sections {
 		for _, p := range section {
+			if localExact != nil {
+				localExact = append(localExact, p)
+			}
 			exact = append(exact, mitredPlace(mp.xform, p))
 		}
 	}
@@ -141,7 +148,14 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	}
 
 	a := assembleMitredSweep(c, stride)
-	vol6, moments := mitredVolumeMoments(exact, a.tris, anchor)
+	localVol6, localMoments := mp.localVol6, mp.localMoments
+	if localVol6 == nil {
+		if localExact == nil {
+			localExact = exact
+		}
+		localVol6, localMoments = mitredVolumeMoments(localExact, a.tris, c.anchor)
+	}
+	vol6, moments := sweepmitre.PlacedVolumeMoments(localVol6, localMoments, mp.xform)
 	switch vol6.Sign() {
 	case 0:
 		return nil, fmt.Errorf(`%w: the mitred sweep encloses no volume`, ErrDegenerate)
@@ -215,6 +229,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 
 	mp.exact, mp.verts, mp.tris, mp.triFace, mp.faceRoles, mp.delta = exact, verts, a.tris, a.triFace, a.roles, delta
 	mp.vertexBound = vertexBound
+	mp.localVol6, mp.localMoments = localVol6, localMoments
 	body.payload = mp
 	return body, nil
 }

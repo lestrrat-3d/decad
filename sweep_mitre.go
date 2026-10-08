@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
@@ -146,13 +147,17 @@ type mitredSweepPayload struct {
 	factors []float64
 	xform   r3.Transform
 
-	exact       []sweepRatVec
-	verts       []r3.Vec
-	vertexBound []float64
-	tris        [][3]int
-	triFace     []int
-	faceRoles   []string
-	delta       float64
+	exact        []sweepRatVec
+	verts        []r3.Vec
+	vertexBound  []float64
+	tris         [][3]int
+	triFace      []int
+	faceRoles    []string
+	delta        float64
+	// These sums use the unplaced sections and canonical triangle winding.
+	// Placements reuse them before deciding the new shell orientation.
+	localVol6    *big.Rat
+	localMoments [3]*big.Rat
 }
 
 func (mp mitredSweepPayload) transform() r3.Transform { return mp.xform }
@@ -167,11 +172,13 @@ func (mp mitredSweepPayload) axialDelta() float64 { return mp.delta }
 // re-runs the crossing audit, so delta never accumulates across placements.
 func (mp mitredSweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	next := mitredSweepPayload{
-		profile: mp.profile,
-		plane:   mp.plane,
-		path:    mp.path,
-		factors: mp.factors,
-		xform:   composed,
+		profile:      mp.profile,
+		plane:        mp.plane,
+		path:         mp.path,
+		factors:      mp.factors,
+		xform:        composed,
+		localVol6:    mp.localVol6,
+		localMoments: mp.localMoments,
 	}
 	return evalMitredSweep(ctx, d, ref, next)
 }
