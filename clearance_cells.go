@@ -81,8 +81,7 @@ func (k *pairKernel) enumerateInto(sink *cellSink) (*cellSink, error) {
 			if err := check(); err != nil {
 				return nil, err
 			}
-			d := va.Sub(vb).Len()
-			sink.Candidate(k.tol, 1, d, d, true, va, vb)
+			sink.CandidateDist(k.tol, 1, clearance.PointPointDist(va, vb), va, vb)
 		}
 	}
 	for _, va := range k.a.verts {

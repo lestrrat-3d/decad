@@ -38,8 +38,8 @@ type CFace struct {
 	Major      float64 // torus major
 	// Rise and Run are a cone's slope: its radius grows by Rise for every Run
 	// along Axis from the apex, so its half angle is exactly atan(Rise/Run).
-	// The cells read the slope itself (ConeSinCos, ConeMeridian), never a
-	// float angle, so the carrier is the cone of exactly this slope.
+	// The cells read the slope itself (ConeDist, ConeSinCos, ConeMeridian),
+	// never a float angle, so the carrier is the cone of exactly this slope.
 	Rise, Run float64
 	Sweep     AngWindow
 	ZWin      LinWindow // cylinder: axial range; cone: axial range from apex
@@ -105,14 +105,12 @@ func (f *CFace) ConeSinCos() (float64, float64) {
 // ConeTan returns the tangent of a cone's half angle, Rise/Run.
 func (f *CFace) ConeTan() float64 { return f.Rise / f.Run }
 
-// ConeMeridian returns, for a point at axial offset z from a cone's apex and
-// radius rho from its axis, its distance from the generating ray,
+// ConeMeridian returns, in float, for a point at axial offset z from a cone's
+// apex and radius rho from its axis, its distance from the generating ray,
 // |rho·Run − z·Rise|/L, and its slant projection onto that ray,
-// (z·Run + rho·Rise)/L, with L = √(Rise² + Run²). Each numerator is formed
-// before the one division, so it carries no rounding of its own wherever the
-// four products and their sum are exact, as for integer coordinates and
-// slope, and a slope whose L is exact (a Pythagorean one) then reads the
-// correctly rounded distance.
+// (z·Run + rho·Rise)/L, with L = √(Rise² + Run²). The cells read it only to
+// pick a branch and place a foot; the distance they publish is ConeDist's
+// proven enclosure of the same expression.
 func (f *CFace) ConeMeridian(z, rho float64) (float64, float64) {
 	l := math.Sqrt(f.Rise*f.Rise + f.Run*f.Run)
 	return math.Abs(rho*f.Run-z*f.Rise) / l, (z*f.Run + rho*f.Rise) / l

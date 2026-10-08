@@ -41,9 +41,10 @@ func SpineOf(f *CFace) int {
 	}
 }
 
-func ExactCrit(a, b r3.Vec) SpineCrit {
-	d := a.Sub(b).Len()
-	return SpineCrit{Lo: d, Hi: d, Exact: true, Fa: a, Fb: b}
+// CritOf is the critical read as the proven enclosure d, attained at the
+// float feet a and b; it is exact only where d is a single point.
+func CritOf(d Dist, a, b r3.Vec) SpineCrit {
+	return SpineCrit{Lo: d.Lo, Hi: d.Hi, Exact: d.Exact(), Fa: a, Fb: b}
 }
 
 // LinePoint is the foot of p on the line (a, unit d).

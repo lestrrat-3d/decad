@@ -119,7 +119,8 @@ func (k *Kernel) linePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *clear
 			return
 		}
 		pa := f.O.Add(f.U.Scale(w[0])).Add(f.V.Scale(w[1]))
-		sink.Candidate(k.tol, hit, math.Abs(h), math.Abs(h), true, pa, pa.Add(f.N.Scale(h)))
+		d := clearance.Height(e.A, f.O, f.N).Abs().Widen(clearance.DirCharge([]r3.Vec{f.N}, []r3.Vec{e.A, f.O}))
+		sink.CandidateDist(k.tol, hit, d, pa, pa.Add(f.N.Scale(h)))
 		return
 	case clearance.DegUnknown:
 		if clearance.ClrBoxDist(f.Box, e.Box) > k.tol {
@@ -152,6 +153,11 @@ func (k *Kernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *cle
 	hu := e.Radius * f.N.Dot(e.RefU)
 	hv := e.Radius * f.N.Dot(e.RefV)
 	h := func(th float64) float64 { return base + hu*math.Cos(th) + hv*math.Sin(th) }
+	// The published heights are read exactly: the centre's height, and the
+	// circle's amplitude in it off the cross product of normal and axis, so
+	// no cosine or sine of the float critical azimuth enters a value.
+	charge := clearance.DirCharge([]r3.Vec{f.N, e.Axis}, []r3.Vec{e.Center, f.O}, e.Radius)
+	baseD := clearance.Height(e.Center, f.O, f.N)
 	parallel := k.oracle().Parallel(f.N, e.Axis)
 	if parallel == clearance.DegUnknown {
 		// A tilt too small to prove or disprove: the extremal azimuth the
@@ -178,6 +184,7 @@ func (k *Kernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *cle
 		if !e.Ang.Full {
 			mid = (e.Ang.Lo + e.Ang.Hi) / 2
 		}
+		d := baseD.Abs().Widen(charge)
 		for _, th := range []float64{mid, mid + math.Pi/2, mid + math.Pi, mid + 3*math.Pi/2} {
 			admit := clearance.CircleAngleAdmit(e, th, k.tol)
 			if admit == -1 {
@@ -186,12 +193,15 @@ func (k *Kernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *cle
 			pe := e.At(th)
 			foot := pe.Sub(f.N.Scale(base))
 			x, y := f.PlaneCoords(foot)
-			sink.Candidate(k.tol, clearance.AdmitState(admit, f.Region.Classify(x, y, k.tol)), math.Abs(base), math.Abs(base), true, foot, pe)
+			sink.CandidateDist(k.tol, clearance.AdmitState(admit, f.Region.Classify(x, y, k.tol)), d, foot, pe)
 		}
 		return
 	}
 	star := math.Atan2(hv, hu)
-	for _, th := range []float64{star, star + math.Pi} {
+	ampD := clearance.Amplitude(f.N, e.Axis, e.Radius)
+	// h(star) = base + amplitude, h(star + π) = base − amplitude.
+	extremes := []clearance.Dist{baseD.Plus(ampD).Abs().Widen(charge), baseD.Minus(ampD).Abs().Widen(charge)}
+	for i, th := range []float64{star, star + math.Pi} {
 		admit := clearance.CircleAngleAdmit(e, th, k.tol)
 		if admit == -1 {
 			continue
@@ -201,7 +211,7 @@ func (k *Kernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *cle
 		foot := pe.Sub(f.N.Scale(hh))
 		x, y := f.PlaneCoords(foot)
 		admit = clearance.AdmitState(admit, f.Region.Classify(x, y, k.tol))
-		sink.Candidate(k.tol, admit, math.Abs(hh), math.Abs(hh), true, foot, pe)
+		sink.CandidateDist(k.tol, admit, extremes[i], foot, pe)
 	}
 	lo, hi := 0.0, 2*math.Pi
 	if !e.Ang.Full {
@@ -245,19 +255,16 @@ func (k *Kernel) feOffsetEmit(sink *clearance.CellSink, f *clearance.CFace, pe, 
 	margin := k.tol + (dHi - dLo)
 	for _, sf := range []float64{1, -1} {
 		pf := spineFoot.Add(dir.Scale(sf * f.Radius))
-		rawLo, rawHi := dLo-sf*f.Radius, dHi-sf*f.Radius
+		raw := clearance.Dist{Lo: dLo, Hi: dHi}.Sub(sf * f.Radius)
 		admit := clearance.AdmitState(eAdmit, f.AdmitPoint(pf, margin))
-		if rawLo <= k.tol && rawHi >= -k.tol {
+		if raw.Lo <= k.tol && raw.Hi >= -k.tol {
 			if admit != -1 {
 				sink.Unsure = true
 			}
 			continue
 		}
-		lo, hi := math.Abs(rawLo), math.Abs(rawHi)
-		if lo > hi {
-			lo, hi = hi, lo
-		}
-		sink.Candidate(k.tol, admit, lo, hi, exact, pf, pe)
+		d := raw.Abs()
+		sink.Candidate(k.tol, admit, d.Lo, d.Hi, exact && d.Exact(), pf, pe)
 	}
 }
 
@@ -291,11 +298,15 @@ func (k *Kernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *clea
 	if !ok {
 		return
 	}
+	seg, okSeg := clearance.SegDir(e.A, e.B)
+	if !okSeg {
+		return
+	}
 	var crits []clearance.SpineCrit
 	switch clearance.SpineOf(f) {
 	case 0:
 		foot := clearance.LinePoint(e.A, u, f.Anchor)
-		crits = []clearance.SpineCrit{clearance.ExactCrit(foot, f.Anchor)}
+		crits = []clearance.SpineCrit{clearance.CritOf(clearance.PointLineDist(f.Anchor, e.A, seg), foot, f.Anchor)}
 	case 1:
 		switch k.oracle().ParallelSeg(e.A, e.B, f.Axis) {
 		case clearance.DegYes:
@@ -312,9 +323,13 @@ func (k *Kernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *clea
 			}
 			axPt := f.Anchor.Add(f.Axis.Scale(z))
 			pe := clearance.LinePoint(e.A, u, axPt)
-			crits = []clearance.SpineCrit{clearance.ExactCrit(pe, clearance.LinePoint(f.Anchor, f.Axis, pe))}
+			d := clearance.PointLineDist(e.A, f.Anchor, proofarith.DyVec(f.Axis)).
+				Widen(clearance.DirCharge([]r3.Vec{f.Axis}, []r3.Vec{e.A, f.Anchor}))
+			crits = []clearance.SpineCrit{clearance.CritOf(d, pe, clearance.LinePoint(f.Anchor, f.Axis, pe))}
 		case clearance.DegNo:
-			cs, okp := k.lineLinePerp(e.A, u, f.Anchor, f.Axis)
+			d := clearance.LineLineDist(e.A, seg, f.Anchor, proofarith.DyVec(f.Axis)).
+				Widen(clearance.DirCharge([]r3.Vec{f.Axis}, []r3.Vec{e.A, e.B, f.Anchor}))
+			cs, okp := k.lineLinePerp(e.A, u, f.Anchor, f.Axis, d)
 			if !okp {
 				sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 				return
@@ -351,9 +366,9 @@ func (k *Kernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *clea
 	}
 }
 
-func (k *Kernel) lineLinePerp(a, u, b, v r3.Vec) (clearance.SpineCrit, bool) {
+func (k *Kernel) lineLinePerp(a, u, b, v r3.Vec, d clearance.Dist) (clearance.SpineCrit, bool) {
 	e := k.spineEngine()
-	return e.LineLinePerp(a, u, b, v)
+	return e.LineLinePerp(a, u, b, v, d)
 }
 
 // circleOffsetFE: a circular edge against a cylinder, sphere or torus face —
@@ -385,7 +400,11 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 					th = (e.Ang.Lo + e.Ang.Hi) / 2
 				}
 				pe := e.At(th)
-				crits = []clearance.SpineCrit{clearance.ExactCrit(pe, clearance.LinePoint(f.Anchor, f.Axis, pe))}
+				// Every point of a circle about the axis line itself lies its
+				// radius from it.
+				d := clearance.PointDist(e.Radius).
+					Widen(clearance.DirCharge([]r3.Vec{e.Axis, f.Axis}, []r3.Vec{e.Center, f.Anchor}, e.Radius))
+				crits = []clearance.SpineCrit{clearance.CritOf(d, pe, clearance.LinePoint(f.Anchor, f.Axis, pe))}
 			case clearance.DegNo:
 				rel := e.Center.Sub(f.Anchor)
 				perp := rel.Sub(f.Axis.Scale(rel.Dot(f.Axis)))
@@ -396,9 +415,14 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 				}
 				near := clearance.AngleOf(e, dir.Scale(-1))
 				far := clearance.AngleOf(e, dir)
-				for _, th := range []float64{near, far} {
+				// In the circle's own plane the axis is one point ρ from the
+				// centre: the near point reads |ρ − r|, the far one ρ + r.
+				rho := clearance.PointLineDist(e.Center, f.Anchor, proofarith.DyVec(f.Axis))
+				charge := clearance.DirCharge([]r3.Vec{e.Axis, f.Axis}, []r3.Vec{e.Center, f.Anchor}, e.Radius)
+				dists := []clearance.Dist{rho.Sub(e.Radius).Abs().Widen(charge), rho.Add(e.Radius).Widen(charge)}
+				for i, th := range []float64{near, far} {
 					pe := e.At(th)
-					crits = append(crits, clearance.ExactCrit(pe, clearance.LinePoint(f.Anchor, f.Axis, pe)))
+					crits = append(crits, clearance.CritOf(dists[i], pe, clearance.LinePoint(f.Anchor, f.Axis, pe)))
 				}
 			default:
 				k.windowedCircleOrCoarse(f, e, sink)
@@ -573,6 +597,11 @@ func (k *Kernel) lineLineEE(ea, eb *clearance.CEdge, sink *clearance.CellSink) {
 	if !oka || !okb {
 		return
 	}
+	segA, okA := clearance.SegDir(ea.A, ea.B)
+	segB, okB := clearance.SegDir(eb.A, eb.B)
+	if !okA || !okB {
+		return
+	}
 	switch k.oracle().ParallelSegs(ea.A, ea.B, eb.A, eb.B) {
 	case clearance.DegYes:
 		// EXACTLY parallel: the constant family over the overlap of eb's
@@ -588,8 +617,9 @@ func (k *Kernel) lineLineEE(ea, eb *clearance.CEdge, sink *clearance.CellSink) {
 		t := (lo + hi) / 2
 		pa := ea.A.Add(ua.Scale(t))
 		pb := clearance.LinePoint(eb.A, ub, pa)
-		d := pa.Sub(pb).Len()
-		sink.Candidate(k.tol, 1, d, d, true, pa, pb)
+		// The family's value is the distance between the two exactly
+		// parallel lines, read off eb's own end.
+		sink.CandidateDist(k.tol, 1, clearance.PointLineDist(eb.A, ea.A, segA), pa, pb)
 		return
 	case clearance.DegUnknown:
 		// A tilt too small to prove or disprove: the constant family is not
@@ -600,14 +630,13 @@ func (k *Kernel) lineLineEE(ea, eb *clearance.CEdge, sink *clearance.CellSink) {
 		sink.Unsure = true
 		return
 	}
-	c, ok := k.lineLinePerp(ea.A, ua, eb.A, ub)
+	c, ok := k.lineLinePerp(ea.A, ua, eb.A, ub, clearance.LineLineDist(ea.A, segA, eb.A, segB))
 	if !ok {
 		sink.Coarse(ea.Box, eb.Box, clearance.EdgeWits(ea), clearance.EdgeWits(eb))
 		return
 	}
-	d := c.Fa.Sub(c.Fb).Len()
 	admit := clearance.AdmitState(clearance.LineParamAdmit(ea, c.Fa, k.tol), clearance.LineParamAdmit(eb, c.Fb, k.tol))
-	sink.Candidate(k.tol, admit, d, d, true, c.Fa, c.Fb)
+	sink.Candidate(k.tol, admit, c.Lo, c.Hi, c.Exact, c.Fa, c.Fb)
 }
 
 // lineCircleEE: the axis-parallel case is closed form; the general case is
@@ -623,13 +652,18 @@ func (k *Kernel) lineCircleEE(el, ec *clearance.CEdge, sink *clearance.CellSink)
 		// The segment is EXACTLY parallel to the circle's axis: in-plane
 		// point-to-circle geometry, closed form.
 		var ths []float64
+		var dists []clearance.Dist
+		charge := clearance.DirCharge([]r3.Vec{ec.Axis}, []r3.Vec{ec.Center, el.A}, ec.Radius)
 		switch k.oracle().OnAxis(el.A, ec.Center, ec.Axis) {
 		case clearance.DegYes:
 			th := 0.0
 			if !ec.Ang.Full {
 				th = (ec.Ang.Lo + ec.Ang.Hi) / 2
 			}
+			// The segment lies on the axis: every circle point is its radius
+			// from it.
 			ths = []float64{th}
+			dists = []clearance.Dist{clearance.PointDist(ec.Radius).Widen(charge)}
 		case clearance.DegNo:
 			rel := el.A.Sub(ec.Center)
 			perp := rel.Sub(ec.Axis.Scale(rel.Dot(ec.Axis)))
@@ -638,17 +672,24 @@ func (k *Kernel) lineCircleEE(el, ec *clearance.CEdge, sink *clearance.CellSink)
 				sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 				return
 			}
+			// In the circle's plane the segment is one point ρ from the
+			// centre: the near point reads |ρ − r|, the far one ρ + r.
+			segL, okL := clearance.SegDir(el.A, el.B)
+			if !okL {
+				return
+			}
+			rho := clearance.PointLineDist(ec.Center, el.A, segL)
 			ths = []float64{clearance.AngleOf(ec, dirP), clearance.AngleOf(ec, dirP.Scale(-1))}
+			dists = []clearance.Dist{rho.Sub(ec.Radius).Abs().Widen(charge), rho.Add(ec.Radius).Widen(charge)}
 		default:
 			sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 			return
 		}
-		for _, th := range ths {
+		for i, th := range ths {
 			pc := ec.At(th)
 			pl := clearance.LinePoint(el.A, u, pc)
-			d := pc.Sub(pl).Len()
 			admit := clearance.AdmitState(clearance.CircleAngleAdmit(ec, th, k.tol), clearance.LineParamAdmit(el, pl, k.tol))
-			sink.Candidate(k.tol, admit, d, d, true, pl, pc)
+			sink.CandidateDist(k.tol, admit, dists[i], pl, pc)
 		}
 		return
 	case clearance.DegUnknown:
