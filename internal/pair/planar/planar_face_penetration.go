@@ -183,7 +183,7 @@ func facePenetration(a, b *PlanarSolid, crossings []PlanarCrossing, mIsA bool, g
 		lo[axis] = new(big.Rat).Sub(lo[axis], grow.Rat())
 		hi[axis] = new(big.Rat).Add(hi[axis], grow.Rat())
 	}
-	_, columnClear, err := PlanarColumnClear(sSolid, n, q, lo, hi, poll)
+	columnClear, err := PlanarColumnApart(sSolid, n, q, lo, hi, poll)
 	if err != nil || !columnClear {
 		return PlanarManifold{}, err
 	}

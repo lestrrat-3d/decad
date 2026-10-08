@@ -28,6 +28,19 @@ import (
 // only through a boundary triangle that has a vertex in front. poll is
 // charged once per triangle.
 func PlanarColumnClear(s *PlanarSolid, n, q proof.DyV3, lo, hi [3]*big.Rat, poll func() error) (*big.Rat, bool, error) {
+	return planarColumnTest(s, n, q, lo, hi, poll, true)
+}
+
+// PlanarColumnApart applies the same exact column test when the caller does
+// not need the lateral clearance. It stops at the first certified separating
+// axis of each front triangle, without calculating a minimum gap.
+func PlanarColumnApart(s *PlanarSolid, n, q proof.DyV3, lo, hi [3]*big.Rat, poll func() error) (bool, error) {
+	_, apart, err := planarColumnTest(s, n, q, lo, hi, poll, false)
+	return apart, err
+}
+
+func planarColumnTest(s *PlanarSolid, n, q proof.DyV3, lo, hi [3]*big.Rat,
+	poll func() error, needClearance bool) (*big.Rat, bool, error) {
 	drop := 0
 	for k := 1; k < 3; k++ {
 		if proof.DyCmp(proof.DyAbs(n[k]), proof.DyAbs(n[drop])) > 0 {
@@ -55,7 +68,7 @@ func PlanarColumnClear(s *PlanarSolid, n, q proof.DyV3, lo, hi [3]*big.Rat, poll
 		for k, v := range tri {
 			corners[k] = [2]proof.Dyadic{s.Verts[v][i], s.Verts[v][j]}
 		}
-		gap, ok := columnTriangleGap(corners, box)
+		gap, ok := columnTriangleGap(corners, box, needClearance)
 		if !ok {
 			return nil, false, nil
 		}
@@ -110,8 +123,9 @@ func (b columnBox) project(x, y *big.Int) (*big.Int, *big.Int) {
 // triangle and a projected box, over the box's two axes and the triangle's
 // edge normals, each gap over an upper bound on its axis's length. ok is false
 // when no axis separates them strictly. The gaps compare in the
-// common-denominator form, and only a positive one becomes a big.Rat.
-func columnTriangleGap(tri [3][2]proof.Dyadic, box columnBox) (*big.Rat, bool) {
+// common-denominator form, and only a positive one becomes a big.Rat. When
+// needClearance is false, it stops at the first positive gap and returns nil.
+func columnTriangleGap(tri [3][2]proof.Dyadic, box columnBox, needClearance bool) (*big.Rat, bool) {
 	one := proof.DyInt(1)
 	axes := [][2]proof.Dyadic{{one, proof.DyZero()}, {proof.DyZero(), one}}
 	for k := range 3 {
@@ -152,14 +166,21 @@ func columnTriangleGap(tri [3][2]proof.Dyadic, box columnBox) (*big.Rat, bool) {
 		if gap.Sign() <= 0 {
 			continue
 		}
-		separation := new(big.Rat).SetFrac(gap, den)
 		// The box axes are unit vectors; an edge normal's length is bounded
-		// above by an exactly checked float square root.
+		// above by an exactly checked float square root. An unbounded float
+		// cannot certify this axis, even when only separation is requested.
+		length := 1.0
 		if slot >= 2 {
-			length := proof.DySqrtUp(proof.DyAdd(proof.DyMul(axis[0], axis[0]), proof.DyMul(axis[1], axis[1])))
+			length = proof.DySqrtUp(proof.DyAdd(proof.DyMul(axis[0], axis[0]), proof.DyMul(axis[1], axis[1])))
 			if math.IsInf(length, 0) || math.IsNaN(length) || length <= 0 {
 				continue
 			}
+		}
+		if !needClearance {
+			return nil, true
+		}
+		separation := new(big.Rat).SetFrac(gap, den)
+		if slot >= 2 {
 			separation.Quo(separation, proof.FloatRat(length))
 		}
 		if best == nil || separation.Cmp(best) > 0 {
