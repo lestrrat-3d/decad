@@ -1374,7 +1374,6 @@ func TestDecidePullMatchesOpposesPullAtZeroAllowance(t *testing.T) {
 // coalesced side walks of its recorded profile.
 type wallNormalDecisionFixture struct {
 	name  string
-	pp    prismPayload
 	m     survey2d.PlacedFrameMap
 	walks []survey2d.SideWalk
 }
@@ -1433,7 +1432,7 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 			walks = append(walks, loop...)
 		}
 		require.NotEmpty(t, walks)
-		out = append(out, wallNormalDecisionFixture{name: pl.name, pp: pp, m: m, walks: walks})
+		out = append(out, wallNormalDecisionFixture{name: pl.name, m: m, walks: walks})
 	}
 	return out
 }
@@ -1476,6 +1475,12 @@ func exactWallComponentSquared(w survey2d.SideWalk, m survey2d.PlacedFrameMap, p
 // <= -1, and never answers survey2d.PullClear when the exact component is provably
 // strictly inside (-1, 0) — asserted on the computed exact-rational ground
 // truth, not on which code path ran.
+//
+// Shown to fail: with circularWindowOf reading each window end as the
+// direction of its held angle again, the identity placement's arc about
+// (34, 19) answers PullClear for the pull (1, −3e−17, 0), whose component at
+// the recorded end (34, 25) is −3e−17. Sampling the held window in float64
+// with a 1e−9 margin passed that verdict.
 func TestWallNormalDecisionEnclosesExactComponent(t *testing.T) {
 	t.Parallel()
 	fixtures := wallNormalDecisionFixtures(t)
@@ -1490,6 +1495,10 @@ func TestWallNormalDecisionEnclosesExactComponent(t *testing.T) {
 		r3.NewVec(0.001, 1, 0),
 		r3.NewVec(2.5, -1.5, 4.25),
 		r3.NewVec(-1, -1, -1),
+		// Each runs along an identity arc's tangent at a recorded end, where
+		// the held angle math.Atan2 sits an ulp off the end's direction.
+		r3.NewVec(1, -3e-17, 0),
+		r3.NewVec(-1, 0, 0),
 	}
 	checked := 0
 	for _, fix := range fixtures {
@@ -1500,7 +1509,7 @@ func TestWallNormalDecisionEnclosesExactComponent(t *testing.T) {
 					continue
 				}
 				if w.IsCircular() {
-					requireSoundCircularVerdict(t, fix.name, verdict, fix.pp, w, pull)
+					requireSoundCircularVerdict(t, fix.name, verdict, fix.m, w, pull)
 					checked++
 					continue
 				}
@@ -1534,48 +1543,87 @@ func requireSoundVerdict(t *testing.T, fixture string, verdict survey2d.PullVerd
 }
 
 // requireSoundCircularVerdict is the circular-walk counterpart of
-// requireSoundVerdict. A circular walk's component varies continuously over
-// its window, so there is no single exact rational to compare against;
-// instead this densely samples sigma*(du*cosθ + dv*sinθ)/|pull| in float64
-// across [th0, th1] — an independent evaluation of the same closed form
-// survey2d.WallNormalDecision encloses, never calling its circular range or any of
-// its helpers — and checks the verdict against what that dense sample
-// (with a healthy float64 margin around the 0 and -1 boundaries, so an
-// ordinary rounding difference between the two evaluations never trips it)
-// can support: survey2d.PullOpposes only where a sampled point reads clearly inside
-// (-1, 0), and survey2d.PullClear only where no sampled point does.
-func requireSoundCircularVerdict(t *testing.T, fixture string, verdict survey2d.PullVerdict, pp prismPayload, w survey2d.SideWalk, pull r3.Vec) {
+// requireSoundVerdict, judged in exact arithmetic over the window the walk's
+// record denotes: counterclockwise from the direction of its low end to that
+// of its high end, each read as the exact difference of the recorded end and
+// the recorded centre. It never reads the held Th0 and Th1, which round those
+// directions' angles.
+//
+// The component at a unit direction d is f(d) = (a·d.u + b·d.v)/|pull| with
+// (a, b) = sigma·(du, dv), so f is a sinusoid over the window and its range is
+// the interval spanned by its values at the two ends and, where the direction
+// (a, b) or (−a, −b) lies in the window, by its peak or trough there. A point
+// strictly inside (−1, 0) exists exactly when that range's minimum is below
+// zero and its maximum above −1. Every test below compares signs and squares
+// of exact rationals, so no square root or trig function is taken.
+// survey2d.PullOpposes is sound only where such a point exists, and
+// survey2d.PullClear only where none does.
+func requireSoundCircularVerdict(t *testing.T, fixture string, verdict survey2d.PullVerdict, m survey2d.PlacedFrameMap, w survey2d.SideWalk, pull r3.Vec) {
 	t.Helper()
-	unit, ok := pull.Normalize()
-	if !ok {
-		return
-	}
-	du := pp.dir(1, 0, 0).Dot(unit)
-	dv := pp.dir(0, 1, 0).Dot(unit)
-	sigma := 1.0
+	pv, ok := proofbound.IvVec3Of(pull)
+	require.True(t, ok)
+	pull2 := proofbound.IvVec3NormSq(pv).Lo
+	sigma := big.NewRat(1, 1)
 	if w.Th1 < w.Th0 {
-		sigma = -1
+		sigma = big.NewRat(-1, 1)
 	}
-	lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
+	a := new(big.Rat).Mul(sigma, proofbound.IvVec3Dot(m.Du, pv).Lo)
+	b := new(big.Rat).Mul(sigma, proofbound.IvVec3Dot(m.Dv, pv).Lo)
+	flat := a.Sign() == 0 && b.Sign() == 0
 
-	const margin = 1e-9
-	sawStrictlyBetween := false
-	allClear := true
-	const samples = 2000
-	for i := 0; i <= samples; i++ {
-		th := lo + (hi-lo)*float64(i)/samples
-		c := sigma * (du*math.Cos(th) + dv*math.Sin(th))
-		if c < -margin && c > -1+margin {
-			sawStrictlyBetween = true
+	var strictlyBetween bool
+	if w.Closed {
+		strictlyBetween = !flat
+	} else {
+		require.Zerof(t, proofbound.WalkEndBoundAllow(w.StartBound), "%s: the fixture's arcs start at recorded points", fixture)
+		require.Zerof(t, proofbound.WalkEndBoundAllow(w.EndBound), "%s: the fixture's arcs end at recorded points", fixture)
+		vec := func(u, v float64) [2]*big.Rat {
+			return [2]*big.Rat{
+				new(big.Rat).Sub(proofarith.FloatRat(u), proofarith.FloatRat(w.CU)),
+				new(big.Rat).Sub(proofarith.FloatRat(v), proofarith.FloatRat(w.CV)),
+			}
 		}
-		if !(c >= -margin || c <= -1+margin) {
-			allClear = false
+		lo, hi := vec(w.StartU, w.StartV), vec(w.EndU, w.EndV)
+		if w.Th1 < w.Th0 {
+			lo, hi = hi, lo
 		}
+		cross := func(p, q [2]*big.Rat) int {
+			return new(big.Rat).Sub(new(big.Rat).Mul(p[0], q[1]), new(big.Rat).Mul(p[1], q[0])).Sign()
+		}
+		dot := func(p, q [2]*big.Rat) *big.Rat {
+			return new(big.Rat).Add(new(big.Rat).Mul(p[0], q[0]), new(big.Rat).Mul(p[1], q[1]))
+		}
+		turn := cross(lo, hi)
+		require.Falsef(t, turn == 0 && dot(lo, hi).Sign() > 0, "%s: an open arc's ends must not share a direction", fixture)
+		inWindow := func(d [2]*big.Rat) bool {
+			switch {
+			case turn > 0:
+				return cross(lo, d) >= 0 && cross(d, hi) >= 0
+			case turn < 0:
+				return cross(lo, d) >= 0 || cross(d, hi) >= 0
+			default:
+				return cross(lo, d) >= 0
+			}
+		}
+		// aboveAntiparallel reports f > −1 at the direction of v:
+		// a·v.u + b·v.v > −|pull|·|v|.
+		aboveAntiparallel := func(v [2]*big.Rat) bool {
+			g := dot([2]*big.Rat{a, b}, v)
+			if g.Sign() >= 0 {
+				return true
+			}
+			return new(big.Rat).Mul(g, g).Cmp(new(big.Rat).Mul(pull2, dot(v, v))) < 0
+		}
+		peak := [2]*big.Rat{a, b}
+		trough := [2]*big.Rat{new(big.Rat).Neg(a), new(big.Rat).Neg(b)}
+		minBelowZero := dot(peak, lo).Sign() < 0 || dot(peak, hi).Sign() < 0 || (!flat && inWindow(trough))
+		maxAboveAntiparallel := aboveAntiparallel(lo) || aboveAntiparallel(hi) || (!flat && inWindow(peak))
+		strictlyBetween = minBelowZero && maxAboveAntiparallel
 	}
 	switch verdict {
 	case survey2d.PullOpposes:
-		require.Truef(t, sawStrictlyBetween, "%s: pullOpposes but no sampled point reads inside (-1, 0)", fixture)
+		require.Truef(t, strictlyBetween, "%s: arc about (%g, %g), pull %v: pullOpposes but no point of the recorded window is strictly inside (-1, 0)", fixture, w.CU, w.CV, pull)
 	case survey2d.PullClear:
-		require.Truef(t, allClear, "%s: pullClear but a sampled point reads inside (-1, 0)", fixture)
+		require.Falsef(t, strictlyBetween, "%s: arc about (%g, %g), pull %v: pullClear but a point of the recorded window is strictly inside (-1, 0)", fixture, w.CU, w.CV, pull)
 	}
 }

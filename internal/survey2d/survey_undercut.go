@@ -116,7 +116,9 @@ func DecideCircularComponent(minLo, minHi, maxLo, maxHi, pull2 *big.Rat) PullVer
 // held Th0 and Th1 as the window: they are a float multiple of 2π for a
 // CircleSeg and math.Atan2 for an ArcSeg, so a window end can sit an ulp past
 // a direction where the component changes sign. Where an end's enclosure
-// leaves that sign open, the verdict is PullUndecided. du = m.du·pull and
+// leaves that sign open, the verdict is PullUndecided. It is PullUndecided too
+// for a window whose ends' angle enclosures overlap while its held sweep is a
+// half turn or more (circularWindow.unbracketed). du = m.du·pull and
 // dv = m.dv·pull are exact, since m's directions and the caller's pull are
 // both held floats. ok is false on any non-finite input, a failed enclosure,
 // or a free-form walk.
@@ -150,6 +152,9 @@ func WallNormalDecision(w SideWalk, m PlacedFrameMap, pull r3.Vec) (PullVerdict,
 			var ok bool
 			if win, ok = circularWindowOf(w); !ok {
 				return PullUndecided, false
+			}
+			if win.unbracketed {
+				return PullUndecided, true
 			}
 		}
 		minLo, minHi, maxLo, maxHi, ok := circularNormalRange(a, b, win, w.Closed)
@@ -239,8 +244,14 @@ func CapNormalDecision(m PlacedFrameMap, pull r3.Vec, sign float64) (PullVerdict
 // window's two denoted ends, kept unnormalized so that an exact end keeps its
 // exact sign against any exact direction, and the ones between are proven to
 // lie strictly inside the window.
+//
+// unbracketed marks a window whose ends' angle enclosures overlap while its
+// held sweep is a half turn or more. No direction is proven inside it, so it
+// cannot be cut into arcs shorter than a half turn, and xs, ys and ls are
+// empty.
 type circularWindow struct {
-	xs, ys, ls []proofbound.RatInterval
+	xs, ys, ls  []proofbound.RatInterval
+	unbracketed bool
 }
 
 func (cw *circularWindow) add(x, y, l proofbound.RatInterval) {
@@ -253,7 +264,8 @@ func (cw *circularWindow) add(x, y, l proofbound.RatInterval) {
 // ends are the points the walk's end bounds enclose, read as directions from
 // the recorded centre. Three angles split the part of the window both ends'
 // angle enclosures prove covered into four equal arcs. A window too narrow
-// for that keeps its two ends alone, one arc shorter than a half turn. ok is
+// for that keeps its two ends alone, one arc shorter than a half turn, when
+// its held sweep is under a half turn, and is unbracketed otherwise. ok is
 // false where an end's box reaches the centre or a coordinate does not lift.
 func circularWindowOf(w SideWalk) (circularWindow, bool) {
 	type end struct {
@@ -294,7 +306,7 @@ func circularWindowOf(w SideWalk) (circularWindow, bool) {
 			cw.add(cos, sin, one)
 		}
 	case math.Abs(w.Th1-w.Th0) >= math.Pi:
-		return circularWindow{}, false
+		return circularWindow{unbracketed: true}, true
 	}
 	cw.add(ends[1].x, ends[1].y, ends[1].l)
 	return cw, true

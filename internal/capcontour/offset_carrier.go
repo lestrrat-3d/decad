@@ -20,15 +20,6 @@ type Carrier struct {
 	R      proofbound.RatInterval
 }
 
-// CarrierOf is CarrierOver at the single offset amount d.
-func CarrierOf(w survey2d.SideWalk, d float64) (Carrier, bool) {
-	rd := proofarith.FloatRat(d)
-	if rd == nil {
-		return Carrier{}, false
-	}
-	return CarrierOver(w, proofbound.PointInterval(rd))
-}
-
 // Intersect encloses every root of the two offset carriers, dispatching
 // exactly as fillet.go's intersectOffsets does over the same three cases.
 func Intersect(a, b Carrier) ([]Point, bool) {
@@ -125,16 +116,12 @@ func circleCircle(a, b Carrier) ([]Point, bool) {
 	}, true
 }
 
-// carrierOverRange generalises CarrierOf to an OFFSET INTERVAL [t0, t1]
-// rather than one float, enclosing every carrier the wall's own offset
-// construction occupies as the offset amount ranges over it — the same
-// closed forms CarrierOf evaluates at one point, evaluated over the whole
-// range instead. A line's carrier stays a single line: only its anchor point
-// moves, along the line's own FIXED unit normal, so the direction needs no
-// widening at all. A circle's carrier stays a single concentric circle whose
-// radius now encloses the offset radius's own range rather than one value.
-// At t0 == t1 == d it reduces to CarrierOf(w, d)'s own enclosure, since
-// both build the offset amount from the identical closed form.
+// carrierOverRange is CarrierOver over the float offset range [t0, t1],
+// enclosing every carrier the wall's own offset construction occupies as the
+// offset amount ranges over it. A line's carrier stays a single line: only its
+// anchor point moves, along the line's own FIXED unit normal, so the direction
+// needs no widening at all. A circle's carrier stays a single concentric
+// circle whose radius encloses the offset radius's own range.
 func carrierOverRange(w survey2d.SideWalk, t0, t1 float64) (Carrier, bool) {
 	rt0, rt1 := proofarith.FloatRat(t0), proofarith.FloatRat(t1)
 	if rt0 == nil || rt1 == nil {
@@ -145,8 +132,7 @@ func carrierOverRange(w survey2d.SideWalk, t0, t1 float64) (Carrier, bool) {
 
 // CarrierOver is carrierOverRange over an offset interval stated exactly:
 // every carrier the wall's offset takes as the offset amount ranges over
-// span. A span of one point d is CarrierOf(w, d)'s own enclosure, rational
-// for rational. It is OffsetCarrierEnclosure's carrier.
+// span. It is OffsetCarrierEnclosure's carrier.
 //
 // A line's carrier runs from the start the walk's end bound encloses, along
 // the unit direction of the difference of the two enclosed endpoints. It never

@@ -66,10 +66,9 @@ func miterConstraintRow(w survey2d.SideWalk, c Carrier, foot Point) (Point, *big
 // line and a circle), so the true velocity is finite there, but this
 // decorrelated enclosure cannot tell that persistent tangency from a
 // momentary one and refuses on both. LineCircleLocusSpeedUpper below carries
-// the exact closed form that tells them apart for a line meeting a circle —
-// the common case, reached at every tangent-filleted corner in this
-// codebase's own test fixtures — and this generic solve is kept for the
-// circle-circle miter it does not cover, on the same reject-only footing
+// the exact closed form that tells them apart for a line meeting a circle,
+// and this generic solve is kept for the circle-circle miter it does not
+// cover, on the same reject-only footing
 // every other refusal here stands on: never a wrong bound, only a
 // conservative one at a tangent circle-circle corner.
 func CircleCircleLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (float64, bool) {
@@ -144,9 +143,7 @@ type lineWallFrame struct {
 // that difference rounded to float64, and normalize2 rounds its unit vector
 // again; §8.4 requires this frame to hold the direction the construction
 // DENOTES, so neither rounding may stand in for it. For a wall whose endpoints
-// are recorded and axis aligned, every enclosure here is a single point, which
-// is what lets LineCircleLocusSpeedUpper find Δ1 exactly zero at a
-// Fillet-built tangent corner.
+// are recorded and axis aligned, every enclosure here is a single point.
 func lineWallFrameOf(w survey2d.SideWalk) (lineWallFrame, bool) {
 	anchor, okA := WalkPointEnclosure(w.StartU, w.StartV, w.StartBound)
 	e, okE := walkTangentEnclosure(w, false)
@@ -160,11 +157,7 @@ func lineWallFrameOf(w survey2d.SideWalk) (lineWallFrame, bool) {
 // LineCircleLocusSpeedUpper bounds |dP/dt| for the corner foot where a
 // STRAIGHT wall's own offset carrier meets a CIRCULAR wall's, over the
 // offset range [t0, t1], by an EXACT closed form rather than
-// CircleCircleLocusSpeedUpper's decorrelated enclosure — which matters
-// because this is the common case, reached at every straight-to-arc
-// tangent-filleted corner this codebase builds (a rounded rectangle's own
-// corners among them), and that decorrelated method refuses on every one of
-// them (see CircleCircleLocusSpeedUpper's own doc comment).
+// CircleCircleLocusSpeedUpper's decorrelated enclosure.
 //
 // Parametrise a point on the offset line as anchor + t·n + s·e (n, e the
 // line's own fixed unit normal and tangent — offsetCarrier's own
@@ -194,16 +187,16 @@ func lineWallFrameOf(w survey2d.SideWalk) (lineWallFrame, bool) {
 // in [t0, t1], WITHOUT Δ1's own enclosure being exactly zero (a momentary
 // fold within this range), or any enclosure fails.
 //
-// A TANGENT join this evaluator itself built — Fillet's own corner rewrite
-// (fillet.go), which is exactly what a rounded-rectangle wall's corner is —
-// lands Δ1 at EXACTLY zero, bit for bit: the tangent condition
-// α = −inside·R the construction holds by is stated in the SAME floats this
-// derivation reads, with no residual from a numerical solve to round away.
-// A corner recorded through sketch's own solver need not be so exact, and
-// Δ1's enclosure straddling (rather than sitting AT) zero there still falls
-// through to the general bound below, which is sound but can refuse on a
-// near-tangent corner no public fixture reaches today — the PR body for
-// this change names that as a known limitation.
+// A build never reaches the persistent branch. Δ1 is zero exactly when the
+// line touches the circle with both walls running the same way at that point,
+// so offset2d.CornerJoin classifies the corner as a G1 join: its held
+// tangents' cross product is within the construction's tolerance and their
+// dot product is positive. capSlantEdge, capPatchCornerFlux and
+// capBlendCornerLocusGap step a G1 join's foot along the shared normal and
+// never ask for a locus speed. Every corner that reaches this function is not
+// a G1 join, so its Δ1 is nonzero and the general bound below decides. A
+// corner that turns only just past that tolerance can still refuse there,
+// since Δ's enclosure then reaches zero.
 func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (float64, bool) {
 	k, ok := lineCircleCornerOf(line, circle)
 	if !ok {
@@ -217,9 +210,7 @@ func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (
 	// own sign, which this branch never even reads — enters the answer. The
 	// bound is |n|'s own enclosed magnitude (n is unit by construction, so
 	// this is 1 up to its enclosure's own tiny sqrt rounding) rather than
-	// proofbound.Radius2D's √2-scaled one, since this specific case is common enough —
-	// every tangent-filleted corner in this codebase's own test fixtures —
-	// to be worth the tighter bound.
+	// proofbound.Radius2D's √2-scaled one.
 	if delta1.Lo.Sign() == 0 && delta1.Hi.Sign() == 0 {
 		nMagUpper := proofbound.RatSqrtUp(proofbound.IntervalAbsUpper(proofbound.IntervalAdd(proofbound.IntervalSquare(frame.n.U), proofbound.IntervalSquare(frame.n.V))))
 		if proofbound.IsNonFinite(nMagUpper) {
@@ -279,10 +270,8 @@ type lineCircleCorner struct {
 // recorded endpoints, the circle's recorded centre and every radius its record
 // denotes: the held radius widened by its RadiusBound (OffsetCircleRadius at
 // a zero offset), since an ArcSeg walk holds the math.Hypot of
-// Start − Center. Where that bound is nonzero, Δ1 is no longer a single point
-// at a tangent corner, so the persistent-tangency closed form does not apply
-// and the general bound decides. ok is false where a number does not lift or
-// the line's frame cannot be enclosed.
+// Start − Center. ok is false where a number does not lift or the line's
+// frame cannot be enclosed.
 func lineCircleCornerOf(line, circle survey2d.SideWalk) (lineCircleCorner, bool) {
 	frame, ok := lineWallFrameOf(line)
 	if !ok {
