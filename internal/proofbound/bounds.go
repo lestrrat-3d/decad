@@ -2410,19 +2410,35 @@ func ChordLocusVolumeAllow(denotedLo, denotedHi, fluxBuilt, builtBound, cornerFl
 // (ChordLocusCornerDeficitUpper). Every crossing's radius is at most r(z): T
 // lies on the cone, B and σ inside it by the triangle inequality.
 //
-// At a middle azimuth only T, at r(z), and B cross the ray, so the region
-// there lies in the shell of thickness dB under the cone. In a corner wedge
-// every crossing lies in [r(z) − dσ, r(z)], so the region there lies in the
-// shell of thickness dσ. Per unit angle the shell's cross-section at height z
-// is (r² − (r − d)²)/2 ≤ r·d, so the region's volume is at most
-// H·max(R0, R1)·(w·dB + (s0 + s1)·dσ), with w the middle window's width and
-// s0, s1 the two corner wedges' widths, which the corner skews bound
-// (ChordLocusShellUpper). That is second order in the skew; the region holds
-// no point the shell does not, the corner slivers included, so no corner
-// flux is charged beside it. A zero skew puts every corner's side and cap
-// ends on one ray, so each corner's locus, whose azimuth runs between those
-// two ends, is the straight ruling itself, and the built patch is the cone
-// sector: the region is empty.
+// Those facts are pointwise; the region term integrates sharper profiles of
+// them. Per unit angle the region's cross-section at a height is the
+// difference of half squared radii, (r² − ρ²)/2 for ρ the nearest crossing.
+// At a middle azimuth ρ is B's radius, and r² − |B|² =
+// 4·v·(1−v)·R0·R1·sin²((θC − θS)/2), whose integral over v ∈ [0, 1] is at
+// most R0·R1·sin²(Φ/2)·(2/3) ≤ max(R0, R1)²·Φ²/6; halved, max(R0, R1)²·Φ²/12
+// per unit angle and unit height fraction. In a corner wedge the nearest
+// crossing is B's, the same, or σ's, whose radius is at least
+// |Q|·cos(δ/2) for δ(v) the angle between P(z) and Q(z), so
+// r² − ρ² ≤ (r² − |Q|²) + r²·sin²(δ/2): the same dip profile over the whole
+// wedge, plus r²·δ²/8 over the sliver's own δ-wide angle only, which
+// integrates to max(R0, R1)²·∫ δ(v)³ dv/8 per corner. So the region's volume
+// is at most
+//
+//	H·max(R0, R1)²·((w + s0 + s1)·Φ²/12 + Σ ∫ δ³ dv/8),
+//
+// with w the middle window's width, which is at most the narrower of the two
+// windows', s0, s1 the two corner wedges' widths, which the corner skews
+// bound, and the sum over both corners (ChordLocusShellUpper).
+// sliverCubeUpper must bound Σ ∫ δ³ dv. Both P and Q move monotonically from
+// the corner's ray to the cap end, so δ never exceeds that corner's skew and
+// s0³ + s1³ always qualifies (ChordLocusSliverCubeUpper); capband's
+// chordLocusSliverCube reads the corner locus spans for a far smaller one.
+// That is second order in the skew; the region holds no point the shell
+// does not, the corner slivers included, so no corner flux is charged beside
+// it. A zero skew puts every corner's side and cap ends on one ray, so each
+// corner's locus, whose azimuth runs between those two ends, is the straight
+// ruling itself, and the built patch is the cone sector: the region is
+// empty.
 //
 // T and B here both run between the same two held levels, H apart. The held
 // side level's own displacement from the denoted one moves the whole body,
@@ -2430,12 +2446,13 @@ func ChordLocusVolumeAllow(denotedLo, denotedHi, fluxBuilt, builtBound, cornerFl
 // (capblend_moments.go's capBandLevelVolume), so no term here reads it.
 //
 // radiusUpper must bound both radii, windowUpper the middle window's width,
-// heightUpper |H|, and skewStart, skewEnd the two corner skews, each PROVEN,
-// with the larger below a quarter turn (capband.CornerSkewUpper). The result
-// is three times the volume, the flux units capband.ChordLocusVolume divides
-// by 3 once. An input that is negative or not finite answers +Inf.
-func ChordLocusRegionAllow(radiusUpper, windowUpper, skewStart, skewEnd, heightUpper float64) float64 {
-	for _, in := range []float64{radiusUpper, windowUpper, skewStart, skewEnd, heightUpper} {
+// heightUpper |H|, skewStart, skewEnd the two corner skews and
+// sliverCubeUpper Σ ∫ δ³ dv, each PROVEN, with the larger skew below a
+// quarter turn (capband.CornerSkewUpper). The result is three times the
+// volume, the flux units capband.ChordLocusVolume divides by 3 once. An input
+// that is negative or not finite answers +Inf.
+func ChordLocusRegionAllow(radiusUpper, windowUpper, skewStart, skewEnd, heightUpper, sliverCubeUpper float64) float64 {
+	for _, in := range []float64{radiusUpper, windowUpper, skewStart, skewEnd, heightUpper, sliverCubeUpper} {
 		if !(in >= 0) || IsNonFinite(in) {
 			return math.Inf(1)
 		}
@@ -2443,7 +2460,18 @@ func ChordLocusRegionAllow(radiusUpper, windowUpper, skewStart, skewEnd, heightU
 	if skewStart == 0 && skewEnd == 0 {
 		return 0
 	}
-	return ProductUpper(3, ChordLocusShellUpper(radiusUpper, windowUpper, skewStart, skewEnd, heightUpper))
+	return ProductUpper(3, ChordLocusShellUpper(radiusUpper, windowUpper, skewStart, skewEnd, heightUpper, sliverCubeUpper))
+}
+
+// ChordLocusSliverCubeUpper is the sliver term every patch qualifies for,
+// skewStart³ + skewEnd³, rounded up: each corner's sliver angle δ(v) never
+// exceeds that corner's skew. A negative or non-finite input answers +Inf.
+func ChordLocusSliverCubeUpper(skewStart, skewEnd float64) float64 {
+	if !(skewStart >= 0) || !(skewEnd >= 0) || IsNonFinite(skewStart) || IsNonFinite(skewEnd) {
+		return math.Inf(1)
+	}
+	cube := func(x float64) float64 { return ProductUpper(x, ProductUpper(x, x)) }
+	return AbsSumUpper(cube(skewStart), cube(skewEnd))
 }
 
 // ChordLocusBuiltDeficitUpper bounds how far inside the cone radius r(z) a
@@ -2471,19 +2499,19 @@ func ChordLocusCornerDeficitUpper(radiusUpper, windowSkewMax float64) float64 {
 }
 
 // ChordLocusShellUpper bounds the volume of ChordLocusRegionAllow's shell:
-// heightUpper·radiusUpper·(windowUpper·dB + (skewStart + skewEnd)·dσ), with
-// dB and dσ the built and corner deficits at the larger skew. Every operation
-// rounds up. A negative or non-finite input answers +Inf.
-func ChordLocusShellUpper(radiusUpper, windowUpper, skewStart, skewEnd, heightUpper float64) float64 {
-	for _, in := range []float64{radiusUpper, windowUpper, skewStart, skewEnd, heightUpper} {
+// heightUpper·radiusUpper²·((windowUpper + skewStart + skewEnd)·Φ²/12 +
+// sliverCubeUpper/8), with Φ the larger skew. Every operation rounds up. A
+// negative or non-finite input answers +Inf.
+func ChordLocusShellUpper(radiusUpper, windowUpper, skewStart, skewEnd, heightUpper, sliverCubeUpper float64) float64 {
+	for _, in := range []float64{radiusUpper, windowUpper, skewStart, skewEnd, heightUpper, sliverCubeUpper} {
 		if !(in >= 0) || IsNonFinite(in) {
 			return math.Inf(1)
 		}
 	}
 	skew := math.Max(skewStart, skewEnd)
-	middle := ProductUpper(windowUpper, ChordLocusBuiltDeficitUpper(radiusUpper, skew))
-	corners := ProductUpper(AbsSumUpper(skewStart, skewEnd), ChordLocusCornerDeficitUpper(radiusUpper, skew))
-	return ProductUpper(ProductUpper(heightUpper, radiusUpper), AbsSumUpper(middle, corners))
+	dip := ProductUpper(AbsSumUpper(windowUpper, skewStart, skewEnd), DivUpper(ProductUpper(skew, skew), 12))
+	sliver := DivUpper(sliverCubeUpper, 8)
+	return ProductUpper(ProductUpper(heightUpper, ProductUpper(radiusUpper, radiusUpper)), AbsSumUpper(dip, sliver))
 }
 
 // ChordLocusCornerFlux is one mitered corner's share of the chord-locus term

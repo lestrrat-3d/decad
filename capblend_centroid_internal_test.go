@@ -630,3 +630,122 @@ func TestSegmentCoordinateUpperCoversTheArc(t *testing.T) {
 	_, ok = segmentCoordinateUpper(LineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: -1, TEnd: 1})
 	require.False(t, ok, `a range past the entity's own reads the walk's envelope instead`)
 }
+
+// TestChordLocusSliverCubeCoversTheSlivers checks the sliver term the region
+// bound reads (capband.ChordLocusSliverCube) on the quarter disk R = 60
+// chamfered 4 mm. At height fraction v each corner's sliver spans the angle
+// between the corner-foot locus, the foot (√((R−t)² − t²), t) at t = 4v at
+// angle φ(v) from the corner's ray, and the built ruling's point
+// (1−v)·R0 + v·R1·e^{i·φ(1)}. The term must cover Σ ∫ δ³ dv over both
+// corners, integrated by Simpson's rule, and sit well under the skews'
+// cubes it replaces. The true slivers are thin (about 1.4e-14 here); the
+// term is set by the spans' own widths, about 2e-7, against the cubes'
+// 7.3e-4.
+//
+// Shown to fail on 2026-10-09: with the sliver term answering zero, it falls
+// below the reference.
+func TestChordLocusSliverCubeCoversTheSlivers(t *testing.T) {
+	t.Parallel()
+	const qR, qD = 60.0, 4.0
+	g := chamferedCircularBand(t, quarterDiskSection(qR), 20, qD, nil).geom
+	require.NotEmpty(t, g.Locus0)
+	phiAt := func(v float64) float64 {
+		off := v * qD
+		return math.Atan2(off, math.Sqrt((qR-off)*(qR-off)-off*off))
+	}
+	s := phiAt(1)
+	r0, r1 := g.SideRadius, g.CapRadius
+	const n = 2000
+	ref := 0.0
+	for i := range n + 1 {
+		v := float64(i) / n
+		w := 2.0
+		switch {
+		case i == 0 || i == n:
+			w = 1
+		case i%2 == 1:
+			w = 4
+		}
+		psi := math.Atan2(v*r1*math.Sin(s), (1-v)*r0+v*r1*math.Cos(s))
+		delta := math.Abs(phiAt(v) - psi)
+		ref += w / (3 * n) * delta * delta * delta
+	}
+	ref *= 2 // the two corners mirror each other
+	require.Positive(t, ref)
+
+	got := capband.ChordLocusSliverCube(g)
+	require.GreaterOrEqual(t, got, ref*(1-1e-9), `the sliver term %v must cover Σ ∫ δ³ dv = %v`, got, ref)
+	fallback := proofbound.ChordLocusSliverCubeUpper(g.SkewStart, g.SkewEnd)
+	require.LessOrEqual(t, got, fallback/8, `the spans must cut the skews' cubes %v by far, not to %v`, fallback, got)
+}
+
+// TestChordLocusRegionVolumeCoversTheDip checks the region volume the first
+// moment reads (capband.ChordLocusVolume) against the region's measure on the
+// quarter disk R = 60 chamfered 4 mm, computed from the geometry: at each
+// height the built patch's level curve dips inside the cone, and over the
+// azimuths where both the denoted surface (the cone over the window between
+// the two corner-foot loci) and the built patch cross, the region's
+// cross-section is ∫ (r² − |B|²)/2 dθ. The slivers between the loci and the
+// rulings add a measure of order ∫ δ³, about 1e-14 here, which the reference
+// leaves out. The term must cover the reference and sit within 8 times it
+// (here 9.63 against 2.86, which matches the published volume's own residual
+// against the erosion family).
+//
+// Shown to fail on 2026-10-09: with ChordLocusShellUpper's dip factor 1/12
+// cut to 1/48, the term falls below the reference.
+func TestChordLocusRegionVolumeCoversTheDip(t *testing.T) {
+	t.Parallel()
+	const qR, qD = 60.0, 4.0
+	g := chamferedCircularBand(t, quarterDiskSection(qR), 20, qD, nil).geom
+	phiAt := func(v float64) float64 {
+		off := v * qD
+		return math.Atan2(off, math.Sqrt((qR-off)*(qR-off)-off*off))
+	}
+	s := phiAt(1)
+	r0, r1 := g.SideRadius, g.CapRadius
+	h := math.Abs(g.CapZ - g.SideZ)
+	th0, th1 := g.Th0, g.Th1
+	c0, c1 := th0+s, th1-s
+	section := func(v float64) float64 {
+		r := r0 + (r1-r0)*v
+		lo, hi := th0+phiAt(v), th1-phiAt(v)
+		const m = 4000
+		area := 0.0
+		prevTh, prevF := 0.0, 0.0
+		for k := range m + 1 {
+			u := float64(k) / m
+			ts, tc := th0+u*(th1-th0), c0+u*(c1-c0)
+			x := (1-v)*r0*math.Cos(ts) + v*r1*math.Cos(tc)
+			y := (1-v)*r0*math.Sin(ts) + v*r1*math.Sin(tc)
+			th := math.Atan2(y, x)
+			f := 0.0
+			if th >= lo && th <= hi {
+				f = (r*r - (x*x + y*y)) / 2
+			}
+			if k > 0 {
+				area += (th - prevTh) * (f + prevF) / 2
+			}
+			prevTh, prevF = th, f
+		}
+		return area
+	}
+	const n = 200
+	ref := 0.0
+	for i := range n + 1 {
+		v := float64(i) / n
+		w := 2.0
+		switch {
+		case i == 0 || i == n:
+			w = 1
+		case i%2 == 1:
+			w = 4
+		}
+		ref += w / (3 * n) * section(v)
+	}
+	ref *= h
+	require.Positive(t, ref)
+
+	got, _ := capband.ChordLocusVolume(g)
+	require.GreaterOrEqual(t, got, ref*(1-1e-6), `the region volume %v must cover the dip's measure %v`, got, ref)
+	require.LessOrEqual(t, got, 8*ref, `the region volume %v must sit within 8 times the dip's measure %v`, got, ref)
+}

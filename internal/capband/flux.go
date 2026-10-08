@@ -413,7 +413,111 @@ func chordLocusRegionAllow(g Patch) float64 {
 		return math.Inf(1)
 	}
 	radius, window, height := chordLocusShellInputs(g)
-	return proofbound.ChordLocusRegionAllow(radius, window, g.SkewStart, g.SkewEnd, height)
+	return proofbound.ChordLocusRegionAllow(radius, window, g.SkewStart, g.SkewEnd, height, chordLocusSliverCube(g))
+}
+
+// chordLocusSliverCube bounds Σ ∫₀¹ δ(v)³ dv over the patch's two corners,
+// δ(v) the angle at height fraction v between the corner-foot locus and the
+// built ruling, both measured from the corner's ray
+// (proofbound.ChordLocusRegionAllow). Where the patch carries both corners'
+// locus spans it reads them span by span: over a span the locus's angle lies
+// in [Lo, Hi], the ruling's in the enclosure chordLocusRulingAngle forms, and
+// δ in the magnitude of their difference, cubed and weighted by the span's
+// share of the height. Otherwise each corner's δ is at most its skew
+// (proofbound.ChordLocusSliverCubeUpper). The smaller of the two is returned.
+func chordLocusSliverCube(g Patch) float64 {
+	fallback := proofbound.ChordLocusSliverCubeUpper(g.SkewStart, g.SkewEnd)
+	dc := proofarith.FloatRat(g.LocusSetback)
+	if len(g.Locus0) == 0 || len(g.Locus1) == 0 || dc == nil || dc.Sign() <= 0 {
+		return fallback
+	}
+	R0, ok0 := heldBox(g.SideRadius, g.Held.SideRadius)
+	R1, ok1 := heldBox(g.CapRadius, g.Held.CapRadius)
+	if !ok0 || !ok1 || R0.Lo.Sign() <= 0 || R1.Lo.Sign() <= 0 {
+		return fallback
+	}
+	total := new(big.Rat)
+	for _, spans := range [][]LocusSpan{g.Locus0, g.Locus1} {
+		last := spans[len(spans)-1]
+		sLo, sHi := proofarith.FloatRat(last.Lo), proofarith.FloatRat(last.Hi)
+		if sLo == nil || sHi == nil {
+			return fallback
+		}
+		for _, sp := range spans {
+			t0, t1 := proofarith.FloatRat(sp.T0), proofarith.FloatRat(sp.T1)
+			lo, hi := proofarith.FloatRat(sp.Lo), proofarith.FloatRat(sp.Hi)
+			if t0 == nil || t1 == nil || lo == nil || hi == nil {
+				return fallback
+			}
+			v0, v1 := new(big.Rat).Quo(t0, dc), new(big.Rat).Quo(t1, dc)
+			psi, ok := chordLocusRulingAngle(R0, R1, sLo, sHi, v0, v1)
+			if !ok {
+				return fallback
+			}
+			delta := proofbound.IntervalAbsUpper(proofbound.IntervalSub(proofbound.Interval(lo, hi), psi))
+			cube := new(big.Rat).Mul(delta, new(big.Rat).Mul(delta, delta))
+			total.Add(total, cube.Mul(cube, new(big.Rat).Sub(v1, v0)))
+		}
+	}
+	return math.Min(fallback, proofbound.RatFloatUp(total))
+}
+
+// chordLocusRulingAngle encloses the angle, from a corner's ray, of the built
+// ruling's point at every height fraction v in [v0, v1]: the point
+// (1−v)·R0 + v·R1·e^{i·s} in the corner's own frame, with s the cap end's
+// angle from the ray in [sLo, sHi] (the last locus span's enclosure, which
+// holds the locus's end) and the radii in their boxes. Writing the point as
+// (x, y) = ((1−v)·R0 + v·R1·cos s, v·R1·sin s), x stays positive below a
+// quarter turn, and atan(y/x) rises with y and, for y of one sign, moves
+// monotonically with x, so its extremes over the box of (x, y) sit at the
+// box's corners. Every sine and cosine is a certified enclosure; sine is
+// monotone below a quarter turn and cosine is bounded by its values at the
+// box's smallest and largest |s|. ok is false where x's enclosure reaches
+// zero or s leaves the quarter turn.
+func chordLocusRulingAngle(R0, R1 proofbound.RatInterval, sLo, sHi, v0, v1 *big.Rat) (proofbound.RatInterval, bool) {
+	halfPi := proofbound.HalfPiInterval().Lo
+	if new(big.Rat).Abs(sLo).Cmp(halfPi) >= 0 || new(big.Rat).Abs(sHi).Cmp(halfPi) >= 0 {
+		return proofbound.RatInterval{}, false
+	}
+	sinLo, cosAtLo, okL := proofbound.RadSinCosInterval(sLo)
+	sinHi, cosAtHi, okH := proofbound.RadSinCosInterval(sHi)
+	if !okL || !okH {
+		return proofbound.RatInterval{}, false
+	}
+	sin := proofbound.Interval(sinLo.Lo, sinHi.Hi)
+	cosLo := cosAtLo.Lo
+	if cosAtHi.Lo.Cmp(cosLo) < 0 {
+		cosLo = cosAtHi.Lo
+	}
+	cosHi := big.NewRat(1, 1)
+	if sLo.Sign() == sHi.Sign() && sLo.Sign() != 0 {
+		cosHi = cosAtLo.Hi
+		if cosAtHi.Hi.Cmp(cosHi) > 0 {
+			cosHi = cosAtHi.Hi
+		}
+	}
+	cos := proofbound.Interval(cosLo, cosHi)
+	v := proofbound.Interval(v0, v1)
+	oneMinusV := proofbound.Interval(new(big.Rat).Sub(big.NewRat(1, 1), v1), new(big.Rat).Sub(big.NewRat(1, 1), v0))
+	vR1 := proofbound.IntervalMul(v, R1)
+	x := proofbound.IntervalAdd(proofbound.IntervalMul(oneMinusV, R0), proofbound.IntervalMul(vR1, cos))
+	y := proofbound.IntervalMul(vR1, sin)
+	if x.Lo.Sign() <= 0 {
+		return proofbound.RatInterval{}, false
+	}
+	var lo, hi *big.Rat
+	for _, yy := range []*big.Rat{y.Lo, y.Hi} {
+		for _, xx := range []*big.Rat{x.Lo, x.Hi} {
+			a := proofbound.Atan2Interval(yy, xx, false)
+			if lo == nil || a.Lo.Cmp(lo) < 0 {
+				lo = a.Lo
+			}
+			if hi == nil || a.Hi.Cmp(hi) > 0 {
+				hi = a.Hi
+			}
+		}
+	}
+	return proofbound.Interval(lo, hi), true
 }
 
 // chordLocusShellInputs returns chordLocusRegionAllow's radius, middle-window
@@ -422,7 +526,9 @@ func chordLocusShellInputs(g Patch) (float64, float64, float64) {
 	radius := math.Max(
 		proofbound.AbsSumUpper(g.SideRadius, g.Held.SideRadius),
 		proofbound.AbsSumUpper(g.CapRadius, g.Held.CapRadius))
-	window := math.Max(
+	// The middle window is the two windows' intersection, so the narrower
+	// window's width bounds it.
+	window := math.Min(
 		proofbound.AbsSumUpper(absDiffUpper(g.Th1, g.Th0), g.Held.Th0, g.Held.Th1),
 		proofbound.AbsSumUpper(absDiffUpper(g.CapTh1, g.CapTh0), g.Held.CapTh0, g.Held.CapTh1))
 	return radius, window, absDiffUpper(g.CapZ, g.SideZ)
@@ -768,6 +874,10 @@ func tripleProductUpper(a, b, c r3.Vec) float64 {
 
 // RawFlux returns one cap band's patch flux and its proven bound.
 func RawFlux(g Patch) proofbound.BoundedScalar { return patchRawFlux(g) }
+
+// ChordLocusSliverCube returns the bound on Σ ∫ δ³ dv a Cone patch's region
+// term reads.
+func ChordLocusSliverCube(g Patch) float64 { return chordLocusSliverCube(g) }
 
 // ChordLocusSpanFlux encloses a Cone patch's denoted surface's flux about the
 // arc's axis from its corner locus spans.

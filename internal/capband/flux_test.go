@@ -17,8 +17,9 @@ import (
 // windows coincide to the last bit, which is what two float Atan2 readings can
 // return for corner ends whose exact angle differs, and the proven skews are
 // positive. The volume must carry the region term's shell at the proven
-// skews, H·R·(w·R·Φ²/4 + (s0 + s1)·(3/8)·R·Φ²), with R the larger radius, w
-// the window width and H the band height.
+// skews, H·R²·((w + s0 + s1)·Φ²/12 + (s0³ + s1³)/8), with R the larger
+// radius, w the window width and H the band height; the patch carries no
+// locus spans, so the sliver term is the skews' cubes.
 //
 // Shown to fail on 2026-10-09: with chordLocusRegionAllow reading
 // max(capTh0 − th0, th1 − capTh1) for the skews, the volume is zero, and with
@@ -41,7 +42,8 @@ func TestChordLocusVolumeChargesTheProvenCornerSkew(t *testing.T) {
 
 	charged, _ := capband.ChordLocusVolume(skewed)
 	shell := proofbound.ChordLocusShellUpper(skewed.SideRadius, skewed.Th1-skewed.Th0,
-		skewed.SkewStart, skewed.SkewEnd, skewed.CapZ-skewed.SideZ)
+		skewed.SkewStart, skewed.SkewEnd, skewed.CapZ-skewed.SideZ,
+		proofbound.ChordLocusSliverCubeUpper(skewed.SkewStart, skewed.SkewEnd))
 	require.Positive(t, shell)
 	require.GreaterOrEqual(t, charged, shell*(1-1e-12),
 		`the skewed patch's region volume %v carries the shell %v`, charged, shell)

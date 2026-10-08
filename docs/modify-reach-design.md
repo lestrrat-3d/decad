@@ -603,10 +603,17 @@ larger corner skew, since `r² − |B|² ≤ R0·R1·sin²(Φ/2)`. Inside a corn
 wedge every crossing, of the cone, the built patch or the joining segments,
 lies within `(3/8)·max(R0, R1)·Φ²` inside `r(z)`
 (`ChordLocusCornerDeficitUpper`). So the whole region lies in a shell under
-the cone, of the built deficit's thickness over the middle window and the
-corner deficit's over the two wedges, whose volume is at most
-`H·max(R0, R1)·(w·dB + (s0 + s1)·dσ)` (`ChordLocusShellUpper`): second order
-in the skew. The region term charges that shell and nothing else: the
+the cone. Its cross-section per unit angle is a difference of half squared
+radii, and the built patch's dip,
+`r² − |B|² = 4·v·(1−v)·R0·R1·sin²((θC − θS)/2)`, integrates over the height
+to at most `max(R0, R1)²·Φ²/12` per unit angle,
+over the union of the two windows. Each corner's sliver adds `r²·δ²/8` only
+over its own angle `δ(v)` between the locus and the built ruling, which the
+corner locus spans enclose span by span. The shell's volume is at most
+`H·max(R0, R1)²·((w + s0 + s1)·Φ²/12 + Σ ∫ δ³ dv/8)`, with `w` the narrower
+window's width (`ChordLocusShellUpper`): second order in the skew. On the
+quarter disk R = 60 chamfered 4 mm it is 9.6 mm³ against a measured dip of
+2.9 mm³. The region term charges that shell and nothing else: the
 corner slivers lie in the shell. A patch whose corner sliver could not be bounded answers an
 unbounded region, since its locus may fold back. The proof reads the
 corner-foot locus as the carrier root nearest the corner: the two roots

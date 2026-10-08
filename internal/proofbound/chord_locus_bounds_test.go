@@ -72,16 +72,14 @@ func TestChordLocusVolumeAllowRoundsOutward(t *testing.T) {
 }
 
 // shellExact is ChordLocusShellUpper's expression over rationals:
-// height·radius·(window·radius·Φ²/4 + (s0 + s1)·(3/8)·radius·Φ²), Φ the larger
-// skew.
-func shellExact(radius, window, s0, s1, height float64) *big.Rat {
+// height·radius²·((window + s0 + s1)·Φ²/12 + sliver/8), Φ the larger skew.
+func shellExact(radius, window, s0, s1, height, sliver float64) *big.Rat {
 	phi := ratOf(math.Max(s0, s1))
-	phi2 := new(big.Rat).Mul(phi, phi)
-	built := new(big.Rat).Mul(new(big.Rat).Mul(ratOf(radius), big.NewRat(1, 4)), phi2)
-	corner := new(big.Rat).Mul(new(big.Rat).Mul(ratOf(radius), big.NewRat(3, 8)), phi2)
-	sum := new(big.Rat).Mul(ratOf(window), built)
-	sum.Add(sum, new(big.Rat).Mul(new(big.Rat).Add(ratOf(s0), ratOf(s1)), corner))
-	return sum.Mul(sum, new(big.Rat).Mul(ratOf(height), ratOf(radius)))
+	dip := new(big.Rat).Add(ratOf(window), new(big.Rat).Add(ratOf(s0), ratOf(s1)))
+	dip.Mul(dip, new(big.Rat).Mul(new(big.Rat).Mul(phi, phi), big.NewRat(1, 12)))
+	dip.Add(dip, new(big.Rat).Mul(ratOf(sliver), big.NewRat(1, 8)))
+	r := ratOf(radius)
+	return dip.Mul(dip, new(big.Rat).Mul(ratOf(height), new(big.Rat).Mul(r, r)))
 }
 
 // TestChordLocusRegionAllowRoundsOutward checks the region term is three times
@@ -90,9 +88,8 @@ func shellExact(radius, window, s0, s1, height float64) *big.Rat {
 // that an input it cannot read refuses.
 //
 // Shown to fail on 2026-10-09: with the shell composed without its factor 3,
-// or with either deficit's factor cut (1/4 to 1/8, 3/8 to 1/4), the sweep
-// falls below the exact expression, and with a swept-volume term still added,
-// it rises past the ceiling.
+// with the dip's 1/12 cut to 1/24, or with the sliver term left out, the
+// sweep falls below the exact expression.
 func TestChordLocusRegionAllowRoundsOutward(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(19, 23))
@@ -101,22 +98,28 @@ func TestChordLocusRegionAllowRoundsOutward(t *testing.T) {
 		window := rng.Float64() * 6.3
 		s0, s1 := rng.Float64()*1.5, rng.Float64()*1.5
 		height := rng.Float64() * 1e3
-		got := proofbound.ChordLocusRegionAllow(radius, window, s0, s1, height)
-		exact := shellExact(radius, window, s0, s1, height)
+		sliver := rng.Float64() * 3
+		got := proofbound.ChordLocusRegionAllow(radius, window, s0, s1, height, sliver)
+		exact := shellExact(radius, window, s0, s1, height, sliver)
 		exact.Mul(exact, big.NewRat(3, 1))
 		require.GreaterOrEqual(t, ratOf(got).Cmp(exact), 0,
-			`radius=%v window=%v skews=%v,%v height=%v: %v is below the exact expression`, radius, window, s0, s1, height, got)
+			`radius=%v window=%v skews=%v,%v height=%v sliver=%v: %v is below the exact expression`, radius, window, s0, s1, height, sliver, got)
 		ceiling, _ := new(big.Rat).Mul(exact, big.NewRat(1000000000001, 1000000000000)).Float64()
 		require.LessOrEqual(t, got, ceiling,
 			`radius=%v window=%v skews=%v,%v height=%v: %v carries more than the shell`, radius, window, s0, s1, height, got)
 	}
-	require.Zero(t, proofbound.ChordLocusRegionAllow(10, 1, 0, 0, 2), `zero skews charge nothing`)
+	require.Zero(t, proofbound.ChordLocusRegionAllow(10, 1, 0, 0, 2, 0), `zero skews charge nothing`)
+	require.True(t, math.IsInf(proofbound.ChordLocusRegionAllow(10, 1, 0.1, 0.1, 2, math.NaN()), 1), `an unreadable sliver term states no bound`)
+	cube := new(big.Rat).SetFloat64(0.3)
+	cube.Mul(cube, new(big.Rat).Mul(cube, cube))
+	cube.Add(cube, new(big.Rat).Mul(ratOf(0.2), new(big.Rat).Mul(ratOf(0.2), ratOf(0.2))))
+	require.GreaterOrEqual(t, ratOf(proofbound.ChordLocusSliverCubeUpper(0.3, 0.2)).Cmp(cube), 0, `the fallback sliver term is the skews' cubes`)
 	for _, bad := range []float64{math.Inf(1), math.NaN(), -1} {
-		require.True(t, math.IsInf(proofbound.ChordLocusRegionAllow(10, 1, bad, 0.1, 2), 1),
+		require.True(t, math.IsInf(proofbound.ChordLocusRegionAllow(10, 1, bad, 0.1, 2, 0), 1),
 			`a skew of %v states no bound`, bad)
-		require.True(t, math.IsInf(proofbound.ChordLocusRegionAllow(10, bad, 0.1, 0.1, 2), 1),
+		require.True(t, math.IsInf(proofbound.ChordLocusRegionAllow(10, bad, 0.1, 0.1, 2, 0), 1),
 			`a window of %v states no bound`, bad)
-		require.True(t, math.IsInf(proofbound.ChordLocusShellUpper(bad, 1, 0.1, 0.1, 2), 1),
+		require.True(t, math.IsInf(proofbound.ChordLocusShellUpper(bad, 1, 0.1, 0.1, 2, 0), 1),
 			`a radius of %v states no shell`, bad)
 		require.True(t, math.IsInf(proofbound.ChordLocusBuiltDeficitUpper(bad, 0.1), 1),
 			`a radius of %v states no built deficit`, bad)
