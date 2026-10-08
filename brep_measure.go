@@ -130,6 +130,9 @@ func brepFaceBody(ctx context.Context, bp brepPayload, topo *brepTopology, fi in
 	f := bp.faces[fi]
 	pp := f.view(bp.xform)
 	origins := []FeatureRef{{producer: ref, Role: f.role}}
+	if f.blend != "" {
+		origins = append(origins, FeatureRef{producer: ref, Role: fmt.Sprintf("%s(%d)", f.blend, fi)})
+	}
 	if f.planar() {
 		frame, err := capFrame(pp, f.z0, !f.outward)
 		if err != nil {

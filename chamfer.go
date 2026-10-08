@@ -33,8 +33,9 @@ import (
 // option that has not shipped, §7). There is NO S5 gate: a chord exists between
 // any two distinct feet, so the fillet's no-blend-centre refusal has no chamfer
 // case (Table B, B1). A revolve receiver takes the same chord on its meridian
-// (revolve_blend.go, docs/modify-reach-design.md §7); any other non-prism
-// receiver is S3 (ErrUnsupported).
+// (revolve_blend.go, docs/modify-reach-design.md §7), and a brep or stacked
+// boolean result takes routes P and E of docs/brep-modify-design.md
+// (brep_modify.go); any other non-prism receiver is S3 (ErrUnsupported).
 //
 // Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
 // which the fillet does not: a selection covering every geometric edge of one
@@ -66,8 +67,10 @@ type ChamferOption interface {
 // over the receiver's own axis, sweep and placement. The bevel is a Cone, a
 // Cylinder where the chord runs parallel to the axis, or a Plane where it runs
 // perpendicular. Any other revolve edge — a cap edge, an edge on the axis — is
-// SX5 (ErrUnsupported). A receiver that is neither a prism nor a revolve is S3
-// (ErrUnsupported).
+// SX5 (ErrUnsupported).
+//
+// A receiver that is none of a prism, a revolve, or a brep or stacked
+// boolean result is S3 (ErrUnsupported).
 //
 // A selection of CAP edges is the cap-loop chamfer of
 // docs/modify-reach-design.md §8.3: sel covering every geometric edge of one
@@ -89,8 +92,15 @@ type ChamferOption interface {
 // along a reference axis is chamfered as that prism
 // (docs/brep-modify-design.md route P): lateral edges and complete cap loops
 // alike, so a cross-drilled hole's mouth takes a countersink. Any other
-// selection on such a body is ErrUnsupported (modify-reach SX16), as is a body
-// whose faces carry a section displacement (SB1).
+// selection of straight edges along one axis of such a body's face record
+// takes route E (§5): both end faces of each edge take the chord at their
+// corner, the two faces beside it are trimmed to the chord's feet, and one
+// planar wall carrying a chamfer(k) role is added; the result is a brep body
+// whose record pairs every edge again before it is built. A curved edge, two
+// selected edges sharing a vertex, an edge whose end face or side face is a
+// swept straight wall, a curved face or an earlier blend, end faces whose
+// chords disagree, and a body whose faces carry a section displacement (SB1)
+// are ErrUnsupported (Table SB).
 func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a chamfer`, ErrDegenerate)
@@ -143,15 +153,25 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if err := requireNotCapBlendReceiver(b.payload, "chamfers"); err != nil {
 		return nil, err
 	}
+	blend := revolveBlendOp{
+		kind: "chamfer",
+		corner: func(loop cornerLoop, ci int) (*cornerBlend, error) {
+			return computeChamfer(loop, ci, dmm)
+		},
+	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
 	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{op: "chamfers",
 		admits: func(pp prismPayload, caps prismCaps) error {
 			_, _, _, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
 			return err
-		}})
+		},
+		sel: sel, edges: edges, blend: &blend})
 	if err != nil {
 		return nil, err
+	}
+	if route.body != nil {
+		return commitModifyResult(ctx, b, route.body)
 	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
@@ -161,12 +181,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	// Reach RX2 (docs/modify-reach-design.md §7): a revolve receiver bevels its
 	// swept meridian junctions through the same corner rewrite.
 	if rp, ok := b.payload.(revolvePayload); ok {
-		return b.blendRevolveJunctions(ctx, sel, edges, rp, revolveBlendOp{
-			kind: "chamfer",
-			corner: func(loop cornerLoop, ci int) (*cornerBlend, error) {
-				return computeChamfer(loop, ci, dmm)
-			},
-		})
+		return b.blendRevolveJunctions(ctx, sel, edges, rp, blend)
 	}
 	pp, ok := b.payload.(prismPayload)
 	caps := prismCapsOf(b)

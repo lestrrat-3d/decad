@@ -39,6 +39,11 @@ import (
 // delta is the face's own section displacement and z0Delta/z1Delta its levels'
 // displacements (docs/prism-boolean-design.md §7); role is the face's role,
 // face(k) or wall(k) for its index k in the record.
+//
+// blend is "fillet" or "chamfer" on a swept face a modify op's route E built
+// (docs/brep-modify-design.md §5.3, Table BB's BB4), and empty on every other
+// face. The body build gives such a face a second role, fillet(k) or
+// chamfer(k) for its index k, so a placement re-mints it with the record.
 type brepFace struct {
 	frame            r3.Frame
 	region           *ProfileRecord
@@ -49,6 +54,7 @@ type brepFace struct {
 	side0, side1     []brepSplit
 	delta            float64
 	role             string
+	blend            string
 }
 
 // brepStack is the slabs an A1 result was built from

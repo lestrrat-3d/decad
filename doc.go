@@ -108,18 +108,21 @@
 //	Fillet/Chamfer  straight prism, lateral edges             builds
 //	Fillet/Chamfer  revolve meridian junction edges           builds
 //	Chamfer       complete prism cap loop(s)                  builds
+//	Fillet/Chamfer  brep or stacked boolean result, straight
+//	  edge along a reference axis                             builds
 //	  Fillet of a cap edge (the vertex blend)                 ErrUnsupported
 //	  partial or lateral-mixed cap-loop selection             ErrUnsupported
 //	  cap-loop setback the radius or sweep cannot name        ErrUnsupported
 //	  cap-loop corner whose offset cannot be enclosed         ErrUnsupported
 //	  revolve cap edge or edge on the axis                    ErrUnsupported
 //	  revolve blend arc centred across the axis               ErrUnsupported
+//	  brep edge curved, sharing a vertex, ending on a
+//	    swept wall or blend, or end faces disagreeing         ErrUnsupported
 //	  other receiver, or a cap-loop chamfer result            ErrUnsupported
 //	Shell         straight prism (tube or cup)                builds
 //	  both caps removed from a holed section                  ErrUnsupported
 //	Fillet/Chamfer/Shell  brep or stacked boolean result that
 //	                      reads as a prism along an axis      builds
-//	  brep edge selection no prism reading takes              ErrUnsupported
 //	  Shell of a brep that reads as no prism                  ErrUnsupported
 //	Loft          same-type segment pairs, distinct planes    builds
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported

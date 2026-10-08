@@ -12,8 +12,8 @@ import (
 
 // These fixtures pin docs/brep-modify-design.md's receiver dispatch (§2), its
 // stage-2a gates (§6), SB2 and SB1, and the refusals a receiver that passes
-// both meets outside route P: SB3, SB10, and modify-reach SX16 while route E
-// is not built.
+// both meets outside route P: SB3 and SB10 for a Shell, and route E's Table
+// SB rows for a Fillet or Chamfer.
 
 // requireBrepModifyRefuses runs Fillet, Chamfer and Shell on body and
 // requires each to refuse with ErrUnsupported naming want, leaving body live
@@ -54,14 +54,15 @@ func requireSB1Names(t *testing.T, body *Body) {
 }
 
 // TestBrepModifyOutsideRoutePRefuses pins the refusals that follow route P
-// (§2, §6): a selection no prism reading admits falls to route E, which is
-// not built, so a Fillet or Chamfer refuses with modify-reach SX16; a Shell
+// (§2, §6): a selection no prism reading admits falls to route E, where a
+// Fillet or Chamfer of every convex edge refuses with SB5, since the edges
+// share vertices (brep_modify_edge_internal_test.go pins route E); a Shell
 // refuses with SB3 where the body reads as a prism whose caps are not the
 // removed faces, and with SB10 where it reads as none. S1's convex edges
 // include cap edges, which no prism reading takes; the stacked pocket reads
 // as no prism. Every refusal leaves the receiver live. Shown to fail with
 // modifyBrepReceiver's shell arms deleted (each Shell read SX16) and with
-// its route E refusal replaced by a nil return (each Fillet and Chamfer fell
+// its route E arm replaced by a nil return (each Fillet and Chamfer fell
 // through to the generic "straight prism" refusal).
 func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 	t.Parallel()
@@ -70,9 +71,9 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 		before := body.doc.Bodies()
 		edges := Edges(Convex()).AtLeast(1)
 		_, err := body.Fillet(t.Context(), edges, units.Millimeters(1))
-		requireRefusesUnchanged(t, body, before, err, "brep-modify route E", "fillets", "SX16")
+		requireRefusesUnchanged(t, body, before, err, "brep-modify SB5", "fillets")
 		_, err = body.Chamfer(t.Context(), edges, units.Millimeters(1))
-		requireRefusesUnchanged(t, body, before, err, "brep-modify route E", "chamfers", "SX16")
+		requireRefusesUnchanged(t, body, before, err, "brep-modify SB5", "chamfers")
 		_, err = body.Shell(t.Context(), Faces(Planar()).AtLeast(1), units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, shell)
 	}

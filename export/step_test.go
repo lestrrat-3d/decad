@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/export"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/step"
 	"github.com/lestrrat-3d/step/ap214"
@@ -409,6 +410,38 @@ func TestNewSTEPFileClassBCutAnalytic(t *testing.T) {
 			require.Contains(t, string(data), "analytic decad solid")
 		})
 	}
+}
+
+// TestNewSTEPFileFilletedClassBCutAnalytic writes S1 after a Fillet of its
+// edge along z at the origin (docs/brep-modify-design.md §5, Table DB's DB10)
+// through the analytic arm: 8 faces, 6 planes, and two cylinders, the hole's
+// whole wall and the fillet's partial wall of two arcs and two lines, each
+// EDGE_CURVE used once in each sense. Shown to fail with the brep route's
+// blend-face walk-sense test inverted (the build then refused the fillet
+// wall's junction with the x = 0 wall as two walls walking the same way).
+func TestNewSTEPFileFilletedClassBCutAnalytic(t *testing.T) {
+	t.Parallel()
+	body := classBCut(t, func(s *sketch.Sketch) {
+		c := s.CreatePoint(20, 10)
+		s.Fix(c)
+		s.CreateCircle(c, 3)
+	})
+	sel := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.Vec{})).Exactly(1)
+	filleted, err := body.Fillet(t.Context(), sel, units.Millimeters(2))
+	require.NoError(t, err)
+	require.Len(t, filleted.Faces(), 8)
+	f, err := export.NewSTEPFile(t.Context(), filleted, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	counts, uses := entityUses(f)
+	require.Equal(t, 8, counts["ADVANCED_FACE"])
+	require.Equal(t, 6, counts["PLANE"])
+	require.Equal(t, 2, counts["CYLINDRICAL_SURFACE"])
+	for _, senses := range uses {
+		require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+	}
+	data, err := f.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "analytic decad solid")
 }
 
 func TestNewSTEPFileConeUsesFacetedFallback(t *testing.T) {
