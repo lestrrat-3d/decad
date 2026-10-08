@@ -151,7 +151,10 @@ func TestTriangulate2DHolesSharingOneBridgeAnchor(t *testing.T) {
 // base's top-left edge).
 func TestEarClipTShapedFaceKeepsEveryBoundaryEdge(t *testing.T) {
 	t.Parallel()
-	pts := []Point2{{-20, 0}, {20, 0}, {20, 10}, {5, 10}, {5, 25}, {-5, 25}, {-5, 10}, {-20, 10}}
+	pts := []Point2{
+		{U: -20, V: 0}, {U: 20, V: 0}, {U: 20, V: 10}, {U: 5, V: 10},
+		{U: 5, V: 25}, {U: -5, V: 25}, {U: -5, V: 10}, {U: -20, V: 10},
+	}
 	loop := []int{0, 1, 2, 3, 4, 5, 6, 7}
 	tris, err := EarClip(t.Context(), pts, loop)
 	require.NoError(t, err)
