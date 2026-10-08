@@ -625,12 +625,12 @@ func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
 	require.Equal(t, wantBox, got, "a patched copy's stop must read exactly as the unstitched cap's")
 }
 
-// TestBodyPatchRefusesAnUnboundedCurvedRim revolves a chain perpendicular to
-// its axis into a disk sheet whose one free edge is a revolve's latitude
-// circle. No builder proves that circle's own curve bound, so the patch
-// face fitted to it has no proven area and Body.Patch refuses (Table R
-// R46) rather than publish one.
-func TestBodyPatchRefusesAnUnboundedCurvedRim(t *testing.T) {
+// TestBodyPatchFillsARevolvedDiskRim revolves a chain perpendicular to its
+// axis into a disk sheet whose one free edge is the revolve's latitude
+// circle, and patches it. The revolve proves that circle's own curve bound
+// (docs/surface-design.md §5.2), so the patch face's area is bounded and
+// encloses the disk's 9π.
+func TestBodyPatchFillsARevolvedDiskRim(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -649,6 +649,14 @@ func TestBodyPatchRefusesAnUnboundedCurvedRim(t *testing.T) {
 	require.NoError(t, err)
 	_, isCircle := free[0].Curve().(decad.Circle3)
 	require.True(t, isCircle, "premise: the disk's rim is a latitude circle")
-	_, err = disk.Patch(t.Context(), decad.Edges(decad.Free()))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	patched, err := disk.Patch(t.Context(), decad.Edges(decad.Free()))
+	require.NoError(t, err)
+	patches, err := decad.Faces(decad.Planar()).SelectFaces(patched)
+	require.NoError(t, err)
+	for _, f := range patches {
+		area, err := f.Area()
+		require.NoError(t, err)
+		requireEnclosesPiMultiple(t, "patch area", area.Value.Base(), area.Bound.Base(), 9, 1)
+	}
+	require.NotEmpty(t, patches)
 }

@@ -666,12 +666,21 @@ larger end gap (the held vertex's bound plus its exact distance from the
 lifted record point). A circular edge's κ runs through its held circle: the
 edge's own curve bound (`Edge.curveBound`), the lifted record circle's
 centre gap and `massmoment.CircleImageGap`, and twice the larger end gap. A
-prism-family build stamps that curve bound on its cap rims
-(`prismPayload.circleCurveBound`), and every copier carries it through its
-placement (`placedCurveBound`). A rim edge with no curve bound — a revolve's
-latitude circle or cap arc, a cap blend's trimmed or apex arc — leaves the
-face with no proven area, and `Body.Patch` refuses with `ErrUnsupported`
-(R46).
+prism-family build stamps that curve bound on its cap rims and a cap
+blend on its whole, trimmed and apex arcs (`prismPayload.circleCurveBound`,
+the apex arc's centre widened by its corner's own end bounds). A revolve
+stamps it on every latitude circle and junction arc
+(`revolvemesh.RevolveLift.LatitudeGap`) and on every cap copy of a recorded
+circle (`revolvemesh.RevolveLift.CapArcGap`): each reads the recorded point
+or circle, the axis's own anchor and direction bounds, the end angle's
+certified sine and cosine and the placement as exact leaves, and
+`revolvemesh.CircleGap` bounds the whole image circle against the held one.
+Every copier carries the bound through its placement (`placedCurveBound`).
+A circular rim edge whose bound cannot be proven — a cap copy at an end with
+no denotation, or a bound not below half the radius — leaves the face with
+no proven area, and `Body.Patch` refuses with `ErrUnsupported` (R46). At an
+end with no denotation R6 refuses first, since that end's vertices carry no
+finite bound.
 
 **Filling a HOLE loop is one of this operation's own cases, and it keeps the
 holed face's normal rather than negating it.** A hole loop is walked
@@ -1544,7 +1553,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R43 | `Thicken` on a revolve sheet or a chain revolve shell whose axis is not stated exactly along a recorded plane axis, whose swept offset has no proven strictly positive radius from that axis over the whole interval, or whose assembled section leaves the axis side undecided (§16.5, §16.7) | `ErrUnsupported` |
 | R44 | `Thicken` on a chain-fed sheet holding more than one recorded walk, carrying a nonzero section displacement, or holding a walk outside §16.6's axis-parallel right-angle class | `ErrUnsupported` |
 | R45 | `ExtrudeChain` or `SweepChain`'s tessellation or export over a chain holding a curved (`CircleSeg`/`ArcSeg` fragment) or free-form wall, before the increment that chords that wall too | `ErrUnsupported` |
-| R46 | `Body.Patch` chain holding a circular edge no build stamped a curve bound on (a revolve's latitude circle or cap arc, a cap blend's trimmed or apex arc), so the new face has no proven area (§5.2) | `ErrUnsupported` |
+| R46 | `Body.Patch` chain holding a circular edge whose curve bound could not be proven (a cap copy at a sweep end with no denotation, a bound not below half the radius), so the new face has no proven area (§5.2) | `ErrUnsupported` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
 `docs/api-design.md` §8's own distinction: the input names real geometry and

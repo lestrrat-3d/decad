@@ -2,6 +2,7 @@ package revolvemesh
 
 import (
 	"math"
+	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -213,4 +214,167 @@ func (l RevolveLift) SweptPointGap(ab AxisBound, xform r3.Transform, u, v float6
 		perCoord = math.Max(perCoord, proofbound.IntervalFloatError(placed, VecComponent(held, i)))
 	}
 	return proofbound.Radius3D(perCoord)
+}
+
+// CircleGap bounds how far every point of a denoted circle lies from a held
+// circle about center, normal to axis, whose radius is radius. The denoted circle
+// is every point C + r·(cos t·X + sin t·Y) for C, X and Y anywhere in their
+// interval vectors and r in its interval, which covers an image of a circle
+// under any linear map the intervals enclose. A point c′ + R with
+// |c′ − center| ≤ g lies within g + |h| + |ρ − radius| of the held circle,
+// h = R·â its height off the held plane and ρ ≥ |R| − |h| its in-plane
+// radius, so within g + 2|R·â| + ||R| − radius|. Here
+// |R·â| ≤ r·(|X·â| + |Y·â|) and, since cos²t·|X|² + sin²t·|Y|² +
+// 2·sin t·cos t·X·Y lies within |X·Y| of [min, max] of |X|² and |Y|², |R|
+// lies in [r_lo·√m_lo, r_hi·√m_hi]. It answers +Inf for a non-finite held
+// value, an axis with no length, or a span whose lower end of |R| is not
+// positive.
+func CircleGap(c, x, y proofbound.IvVec3, r proofbound.RatInterval, center, axis r3.Vec, radius float64) float64 {
+	if !proofbound.FiniteVec(center) || !proofbound.FiniteVec(axis) || proofbound.IsNonFinite(radius) {
+		return math.Inf(1)
+	}
+	gap := 0.0
+	for i := range 3 {
+		gap = math.Max(gap, proofbound.IntervalFloatError(c[i], VecComponent(center, i)))
+	}
+	gap = proofbound.Radius3D(gap)
+	a, ok := proofbound.IvVec3Of(axis)
+	if !ok {
+		return math.Inf(1)
+	}
+	norm, ok := proofbound.IntervalSqrt(proofbound.IvVec3NormSq(a))
+	if !ok || norm.Lo.Sign() <= 0 {
+		return math.Inf(1)
+	}
+	tiltNum := new(big.Rat).Add(proofbound.IntervalAbsUpper(proofbound.IvVec3Dot(x, a)), proofbound.IntervalAbsUpper(proofbound.IvVec3Dot(y, a)))
+	rHi := proofbound.IntervalAbsUpper(r)
+	tilt := new(big.Rat).Mul(rHi, tiltNum)
+	tilt.Quo(tilt, norm.Lo)
+	xx, yy := proofbound.IvVec3NormSq(x), proofbound.IvVec3NormSq(y)
+	xy := proofbound.IntervalAbsUpper(proofbound.IvVec3Dot(x, y))
+	mLo := new(big.Rat).Sub(proofbound.RatMin(xx.Lo, yy.Lo), xy)
+	mHi := new(big.Rat).Add(proofbound.RatMax(xx.Hi, yy.Hi), xy)
+	if mLo.Sign() <= 0 || r.Lo.Sign() <= 0 {
+		return math.Inf(1)
+	}
+	m, ok := proofbound.IntervalSqrt(proofbound.Interval(mLo, mHi))
+	if !ok {
+		return math.Inf(1)
+	}
+	reachLo := new(big.Rat).Mul(r.Lo, m.Lo)
+	reachHi := new(big.Rat).Mul(r.Hi, m.Hi)
+	held := new(big.Rat).SetFloat64(radius)
+	radial := proofbound.RatMax(new(big.Rat).Sub(reachHi, held), new(big.Rat).Sub(held, reachLo))
+	if radial.Sign() < 0 {
+		radial = new(big.Rat)
+	}
+	return proofbound.AbsSumUpper(gap, proofbound.RatFloatUp(new(big.Rat).Add(new(big.Rat).Mul(big.NewRat(2, 1), tilt), radial)))
+}
+
+// placedLeaves reads the exact leaves SweptPointGap's construction lifts
+// through: the frame's origin, U and V, the axis anchor and direction
+// widened by ab, and the placement's basis and translation.
+type placedLeaves struct {
+	o, fu, fv, ex, ey, ez, tr proofbound.IvVec3
+	aU, aV, dU, dV            proofbound.RatInterval
+}
+
+func (l RevolveLift) placedLeaves(ab AxisBound, xform r3.Transform) (placedLeaves, bool) {
+	basis := xform.Basis()
+	vecs := [...]r3.Vec{l.Frame.Origin(), l.Frame.U(), l.Frame.V(), basis.EX, basis.EY, basis.EZ, xform.Translation()}
+	var iv [len(vecs)]proofbound.IvVec3
+	for i, w := range vecs {
+		enc, ok := proofbound.IvVec3Of(w)
+		if !ok {
+			return placedLeaves{}, false
+		}
+		iv[i] = enc
+	}
+	var leaves [4]proofbound.RatInterval
+	for i, pair := range [...][2]float64{{l.AU, ab.AU}, {l.AV, ab.AV}, {l.DU, ab.DU}, {l.DV, ab.DV}} {
+		enc, ok := widenLeaf(pair[0], pair[1])
+		if !ok {
+			return placedLeaves{}, false
+		}
+		leaves[i] = enc
+	}
+	return placedLeaves{o: iv[0], fu: iv[1], fv: iv[2], ex: iv[3], ey: iv[4], ez: iv[5], tr: iv[6],
+		aU: leaves[0], aV: leaves[1], dU: leaves[2], dV: leaves[3]}, true
+}
+
+// basis is the axis basis (A3, W, E0, E1) over the leaves, E1 the cross
+// product of W and E0.
+func (p placedLeaves) basis() (a3, w, e0, e1 proofbound.IvVec3) {
+	a3 = proofbound.IvVec3Add(p.o, proofbound.IvVec3Add(proofbound.IvVec3Mul(p.fu, p.aU), proofbound.IvVec3Mul(p.fv, p.aV)))
+	w = proofbound.IvVec3Add(proofbound.IvVec3Mul(p.fu, p.dU), proofbound.IvVec3Mul(p.fv, p.dV))
+	e0 = proofbound.IvVec3Add(proofbound.IvVec3Mul(p.fu, proofbound.IntervalNeg(p.dV)), proofbound.IvVec3Mul(p.fv, p.dU))
+	return a3, w, e0, proofbound.IvVec3Cross(w, e0)
+}
+
+// dir carries a direction through the placement's basis.
+func (p placedLeaves) dir(v proofbound.IvVec3) proofbound.IvVec3 {
+	return proofbound.IvVec3Add(proofbound.IvVec3Add(proofbound.IvVec3Mul(p.ex, v[0]), proofbound.IvVec3Mul(p.ey, v[1])), proofbound.IvVec3Mul(p.ez, v[2]))
+}
+
+// point carries a point through the placement.
+func (p placedLeaves) point(v proofbound.IvVec3) proofbound.IvVec3 {
+	return proofbound.IvVec3Add(p.dir(v), p.tr)
+}
+
+// LatitudeGap is an Edge's curve bound for a junction's latitude circle or
+// arc: the recorded plane-local point (u, v), within uv, swept about the
+// axis the record names (its anchor and direction widened by ab) and placed
+// by xform. Every point it reaches at any angle is C + ρ·(cos φ·B·E0 +
+// sin φ·B·E1) with C = B·(A3 + W·z) + t, so CircleGap bounds the whole
+// circle, and with it any arc of it, against the held circle.
+func (l RevolveLift) LatitudeGap(ab AxisBound, xform r3.Transform, u, v float64, uv proofbound.WalkEndBound, center, axis r3.Vec, radius float64) float64 {
+	p, ok := l.placedLeaves(ab, xform)
+	if !ok {
+		return math.Inf(1)
+	}
+	pu, okU := widenLeaf(u, uv.U)
+	pv, okV := widenLeaf(v, uv.V)
+	if !okU || !okV {
+		return math.Inf(1)
+	}
+	du, dv := proofbound.IntervalSub(pu, p.aU), proofbound.IntervalSub(pv, p.aV)
+	z := proofbound.IntervalAdd(proofbound.IntervalMul(du, p.dU), proofbound.IntervalMul(dv, p.dV))
+	rho := proofbound.IntervalSub(proofbound.IntervalMul(dv, p.dU), proofbound.IntervalMul(du, p.dV))
+	if rho.Hi.Sign() < 0 {
+		rho = proofbound.IntervalNeg(rho)
+	}
+	a3, w, e0, e1 := p.basis()
+	c := p.point(proofbound.IvVec3Add(a3, proofbound.IvVec3Mul(w, z)))
+	return CircleGap(c, p.dir(e0), p.dir(e1), rho, center, axis, radius)
+}
+
+// CapArcGap is an Edge's curve bound for a partial sweep's cap copy of a
+// recorded circular segment: the circle of radius r about the plane-local
+// centre (cu, cv), the centre within cuv and the radius within rBound,
+// re-expressed about the axis the record names (widened by ab), rotated to
+// the end angle whose sine and cosine sin and cos enclose, and placed by
+// xform. A plane point p maps to B·(A3 + W·z(p) + ρ(p)·R) + t with
+// R = E0·cos + E1·sin, and z and ρ are linear in p, so the copy is
+// C + r·(cos t·X + sin t·Y) with X = B·(W·dU − R·dV), Y = B·(W·dV + R·dU)
+// and C the image of the centre; CircleGap bounds it.
+func (l RevolveLift) CapArcGap(ab AxisBound, xform r3.Transform, cu, cv float64, cuv proofbound.WalkEndBound, r, rBound float64, sin, cos proofbound.RatInterval, center, axis r3.Vec, radius float64) float64 {
+	p, ok := l.placedLeaves(ab, xform)
+	if !ok {
+		return math.Inf(1)
+	}
+	pu, okU := widenLeaf(cu, cuv.U)
+	pv, okV := widenLeaf(cv, cuv.V)
+	rr, okR := widenLeaf(r, rBound)
+	if !okU || !okV || !okR {
+		return math.Inf(1)
+	}
+	du, dv := proofbound.IntervalSub(pu, p.aU), proofbound.IntervalSub(pv, p.aV)
+	z := proofbound.IntervalAdd(proofbound.IntervalMul(du, p.dU), proofbound.IntervalMul(dv, p.dV))
+	rho := proofbound.IntervalSub(proofbound.IntervalMul(dv, p.dU), proofbound.IntervalMul(du, p.dV))
+	a3, w, e0, e1 := p.basis()
+	rot := proofbound.IvVec3Add(proofbound.IvVec3Mul(e0, cos), proofbound.IvVec3Mul(e1, sin))
+	c := p.point(proofbound.IvVec3Add(a3, proofbound.IvVec3Add(proofbound.IvVec3Mul(w, z), proofbound.IvVec3Mul(rot, rho))))
+	x := proofbound.IvVec3Sub(proofbound.IvVec3Mul(w, p.dU), proofbound.IvVec3Mul(rot, p.dV))
+	y := proofbound.IvVec3Add(proofbound.IvVec3Mul(w, p.dV), proofbound.IvVec3Mul(rot, p.dU))
+	return CircleGap(c, p.dir(x), p.dir(y), rr, center, axis, radius)
 }

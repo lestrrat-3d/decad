@@ -52,6 +52,11 @@ import (
 //     any fixture here going red: a circle's area does not move with its
 //     centre, and the π enclosure's own width already covers what its radius
 //     terms charge on these rims;
+//   - the chain revolve's latitude curve bound and the revolve's cap-arc
+//     curve bound: the revolve latitude and cap circle patches refused with
+//     R46. A revolve junction arc and a cap blend's arcs carry vertex bounds
+//     Body.Patch refuses first (R6), so TestCurveBoundsCoverMappedReference
+//     checks their curve bounds directly;
 //   - the endpoint-support arm of auditAdjacentSweepSpans: the rotated
 //     composite sweep refused as "not certified on opposite sides".
 //
@@ -61,6 +66,9 @@ import (
 // ulps, which reads as a miss of up to 1.23× on a fitted patch face.
 
 const frameDefectPrec = 512
+
+// fdTilted names the variant built on the tilted plane under the identity.
+const fdTilted = "tilted"
 
 func fdf(x float64) *big.Float { return new(big.Float).SetPrec(frameDefectPrec).SetFloat64(x) }
 
@@ -104,10 +112,22 @@ func (a fdVec) unit() fdVec {
 type fdMap struct{ cols [3]fdVec }
 
 func fdMapOf(frame r3.Frame, place r3.Transform) fdMap {
+	return fdMapThrough(frame, place, false)
+}
+
+// fdMapThrough is fdMapOf with the third column the exact U×V where
+// exactCross is set: the map a revolve denotes through
+// (docs/evaluator-design.md §6).
+func fdMapThrough(frame r3.Frame, place r3.Transform, exactCross bool) fdMap {
 	b := place.Basis()
 	ex, ey, ez := fdVecOf(b.EX), fdVecOf(b.EY), fdVecOf(b.EZ)
 	lin := func(v fdVec) fdVec { return ex.scale(v[0]).add(ey.scale(v[1])).add(ez.scale(v[2])) }
-	return fdMap{cols: [3]fdVec{lin(fdVecOf(frame.U())), lin(fdVecOf(frame.V())), lin(fdVecOf(frame.N()))}}
+	u, v := fdVecOf(frame.U()), fdVecOf(frame.V())
+	n := fdVecOf(frame.N())
+	if exactCross {
+		n = u.cross(v)
+	}
+	return fdMap{cols: [3]fdVec{lin(u), lin(v), lin(n)}}
 }
 
 func (m fdMap) apply(x fdVec) fdVec {
@@ -287,6 +307,56 @@ func fdSlotSheet(t *testing.T, f r3.Frame, length, r float64) *Body {
 	return b
 }
 
+// fdAxisU is the sketch's own U axis.
+var fdAxisU = SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+
+// fdRadialChainSheet revolves the line from (0, 0) to (0, 3), perpendicular
+// to the sketch's U axis, by ext into a disk or a sector of one.
+func fdRadialChainSheet(t *testing.T, f r3.Frame, ext AngularExtent) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	pl, err := w.CreatePlaneFromFrame(f)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(pl)
+	require.NoError(t, err)
+	a, b := s.CreatePoint(0, 0), s.CreatePoint(0, 3)
+	s.Fix(a)
+	s.Fix(b)
+	s.CreateLine(a, b)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := New().RevolveChain(s, s.Chains()[0], fdAxisU, ext)
+	require.NoError(t, err)
+	return body
+}
+
+// fdSlotSolid extrudes the slot whose caps of radius 2 sit at (0, 0) and
+// (5, 0).
+func fdSlotSolid(t *testing.T, f r3.Frame) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	pl, err := w.CreatePlaneFromFrame(f)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(pl)
+	require.NoError(t, err)
+	pt := func(x, y float64) *sketch.Point {
+		p := s.CreatePoint(x, y)
+		s.Fix(p)
+		return p
+	}
+	c1, c2 := pt(0, 0), pt(5, 0)
+	p1l, p1r, p2l, p2r := pt(0, 2), pt(0, -2), pt(5, 2), pt(5, -2)
+	s.CreateArc(c1, p1l, p1r)
+	s.CreateArc(c2, p2r, p2l)
+	s.CreateLine(p1r, p2r)
+	s.CreateLine(p2l, p1l)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	b, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	require.NoError(t, err)
+	return b
+}
+
 // fdCompositeSweep sweeps a unit square on XY along an arc and a line:
 // docs/sweep-design.md's composite path.
 func fdCompositeSweep(t *testing.T) (*Body, error) {
@@ -314,7 +384,9 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 		// xyOnly builds on the XY frame alone, so only the rotated variant
 		// runs.
 		xyOnly bool
-		build  func(t *testing.T, f r3.Frame) (*Body, error)
+		// exactCross reads the revolve's map, whose third column is U×V.
+		exactCross bool
+		build      func(t *testing.T, f r3.Frame) (*Body, error)
 	}
 	kinds := []kind{
 		{name: "prism", build: func(t *testing.T, f r3.Frame) (*Body, error) { return fdExtrude(t, f), nil }},
@@ -402,6 +474,30 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 		{name: "thin slot body patch", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			return fdSlotSheet(t, f, 100, 1.0/128).Patch(t.Context(), Edges(Free()))
 		}},
+		// A revolve's latitude circle: a radial line swept a full turn about
+		// the sketch's U axis into a disk whose one free edge it is. On a
+		// tilted plane the rim's vertices carry bounds, which Body.Patch
+		// refuses (R6), so only the placed copy runs.
+		{name: "revolve latitude patch", xyOnly: true, exactCross: true, build: func(t *testing.T, f r3.Frame) (*Body, error) {
+			return fdRadialChainSheet(t, f, FullRevolution{}).Patch(t.Context(), Edges(Free()))
+		}},
+		// A revolve's cap arc: a circle swept a quarter turn as a sheet; its
+		// start cap copy, at the exact angle zero, is patched.
+		{name: "revolve cap circle patch", xyOnly: true, exactCross: true, build: func(t *testing.T, f r3.Frame) (*Body, error) {
+			w := sketch.NewWorld()
+			pl, err := w.CreatePlaneFromFrame(f)
+			require.NoError(t, err)
+			s, err := w.CreateSketch(pl)
+			require.NoError(t, err)
+			c := s.CreatePoint(0, 3)
+			s.Fix(c)
+			s.CreateCircle(c, 1)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			b, err := New().Revolve(s, s.Profiles()[0], fdAxisU, AngleExtent{A: units.Degrees(90), Dir: Along}, WithSurfaceResult())
+			require.NoError(t, err)
+			return b.Patch(t.Context(), Edges(Free(), EndpointAt(r3.NewVec(1, 3, 0))))
+		}},
 		{name: "class B drill", xyOnly: true, build: func(t *testing.T, _ r3.Frame) (*Body, error) {
 			w := sketch.NewWorld()
 			s0, p0 := fdSketch(t, w, w.XY(), [][2]float64{{0, 0}, {40, 0}, {40, 20}, {0, 20}})
@@ -438,7 +534,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			require.NoError(t, err)
 			variants := []variant{{"rotated", xy, rot}}
 			if !k.xyOnly {
-				variants = append(variants, variant{"tilted", tilted, r3.Identity()}, variant{"tilted and rotated", tilted, rot})
+				variants = append(variants, variant{fdTilted, tilted, r3.Identity()}, variant{"tilted and rotated", tilted, rot})
 			}
 			for _, v := range variants {
 				t.Run(v.name, func(t *testing.T) {
@@ -448,7 +544,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 						b, err = b.Placed(t.Context(), v.place)
 						require.NoError(t, err)
 					}
-					requireCoversMappedReference(t, ref, b, fdMapOf(fdRecordedFrame(t, v.frame), v.place))
+					requireCoversMappedReference(t, ref, b, fdMapThrough(fdRecordedFrame(t, v.frame), v.place, k.exactCross))
 				})
 			}
 		})
@@ -580,7 +676,7 @@ func TestPlaneMapMassCoversFrameDefect(t *testing.T) {
 			}
 			variants := []variant{{"rotated", xy, rot}}
 			if !c.xyOnly {
-				variants = append(variants, variant{"tilted", tilted, r3.Identity()}, variant{"tilted and rotated", tilted, rot})
+				variants = append(variants, variant{fdTilted, tilted, r3.Identity()}, variant{"tilted and rotated", tilted, rot})
 			}
 			for _, v := range variants {
 				t.Run(v.name, func(t *testing.T) {
@@ -601,6 +697,167 @@ func TestPlaneMapMassCoversFrameDefect(t *testing.T) {
 					want := new(big.Float).SetPrec(frameDefectPrec).SetRat(new(big.Rat).Mul(c.volume, new(big.Rat).SetFloat64(density.Mag())))
 					want.Mul(want, factor)
 					requireEnclosesBig(t, m1.Mass.Value.Base(), m1.Mass.Bound.Base(), want, "mass")
+				})
+			}
+		})
+	}
+}
+
+// fdCirclePoints is sixteen rational points of the unit circle, from the
+// triples (1, 0), (4/5, 3/5) and (3/5, 4/5) in every quadrant.
+func fdCirclePoints() [][2]*big.Float {
+	var out [][2]*big.Float
+	for _, q := range [][2]int64{{5, 0}, {4, 3}, {3, 4}, {0, 5}} {
+		for _, sgn := range [][2]int64{{1, 1}, {-1, 1}, {-1, -1}, {1, -1}} {
+			c := new(big.Float).SetPrec(frameDefectPrec).SetRat(big.NewRat(q[0]*sgn[0], 5))
+			sn := new(big.Float).SetPrec(frameDefectPrec).SetRat(big.NewRat(q[1]*sgn[1], 5))
+			out = append(out, [2]*big.Float{c, sn})
+		}
+	}
+	return out
+}
+
+// fdCircleGap is the distance from p to the circle about center normal to
+// axis whose radius is radius: √(h² + (r − radius)²), h the height off its plane
+// and r the in-plane distance from its centre.
+func fdCircleGap(p, center, axis fdVec, radius *big.Float) *big.Float {
+	d := p.add(center.scale(fdf(-1)))
+	h := d.dot(axis.unit())
+	r2 := new(big.Float).SetPrec(frameDefectPrec).Sub(d.dot(d), new(big.Float).SetPrec(frameDefectPrec).Mul(h, h))
+	if r2.Sign() < 0 {
+		r2.SetInt64(0)
+	}
+	r := new(big.Float).SetPrec(frameDefectPrec).Sqrt(r2)
+	r.Sub(r, radius)
+	sum := new(big.Float).SetPrec(frameDefectPrec).Mul(h, h)
+	sum.Add(sum, new(big.Float).SetPrec(frameDefectPrec).Mul(r, r))
+	return sum.Sqrt(sum)
+}
+
+// TestCurveBoundsCoverMappedReference builds each body on the exact XY
+// frame as its reference, then on a tilted plane, under a rotation, or both,
+// and requires every circular edge of the second to carry a curve bound
+// that covers the reference's held circle carried through the denoted map
+// Φ(x) = B·(O + L·x) + t: a point q of the reference circle sits within the
+// reference's own bound κ₀ of a point the reference denotes, whose image Φ
+// denotes, so Φ(q) lies within κ₁ + (1 + e)·κ₀ of the held circle, e the
+// orthonormality defect of B·L. Most of these rims carry vertex bounds that
+// Body.Patch refuses (R6), so the bound is checked here directly.
+//
+// Shown to fail: before the revolve and cap-blend builds stamped a curve
+// bound, every revolve latitude circle, junction arc and cap arc and every
+// cap blend trimmed and apex arc here carried none.
+func TestCurveBoundsCoverMappedReference(t *testing.T) {
+	t.Parallel()
+	tilted, err := r3.NewFrame(r3.NewVec(1, 2, 3), r3.NewVec(1, 1, 0), r3.NewVec(-1, 1, 1))
+	require.NoError(t, err)
+	xy, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
+	require.NoError(t, err)
+	revolveBlock := func(ext AngularExtent) func(t *testing.T, f r3.Frame) *Body {
+		return func(t *testing.T, f r3.Frame) *Body {
+			w := sketch.NewWorld()
+			pl, err := w.CreatePlaneFromFrame(f)
+			require.NoError(t, err)
+			s, p := fdSketch(t, w, pl, [][2]float64{{1, 0}, {3, 0}, {3, 1}, {1, 1}})
+			b, err := New().Revolve(s, p, coilAxisV, ext)
+			require.NoError(t, err)
+			return b
+		}
+	}
+	for _, c := range []struct {
+		name       string
+		exactCross bool
+		build      func(t *testing.T, f r3.Frame) *Body
+	}{
+		{"revolve latitude circles", true, revolveBlock(FullRevolution{})},
+		{"revolve junction arcs", true, revolveBlock(AngleExtent{A: units.Degrees(90), Dir: Along})},
+		{"revolve cap circles", true, func(t *testing.T, f r3.Frame) *Body {
+			w := sketch.NewWorld()
+			pl, err := w.CreatePlaneFromFrame(f)
+			require.NoError(t, err)
+			s, err := w.CreateSketch(pl)
+			require.NoError(t, err)
+			c := s.CreatePoint(0, 3)
+			s.Fix(c)
+			s.CreateCircle(c, 1)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			b, err := New().Revolve(s, s.Profiles()[0], fdAxisU, AngleExtent{A: units.Degrees(90), Dir: Along})
+			require.NoError(t, err)
+			return b
+		}},
+		{"chain revolve arcs", true, func(t *testing.T, f r3.Frame) *Body {
+			return fdRadialChainSheet(t, f, AngleExtent{A: units.Degrees(90), Dir: Along})
+		}},
+		{"cap chamfer trimmed arcs", false, func(t *testing.T, f r3.Frame) *Body {
+			b := fdSlotSolid(t, f)
+			chamfered, err := b.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(b))), units.Millimeters(0.25))
+			require.NoError(t, err)
+			return chamfered
+		}},
+		{"cap chamfer apex arc", false, func(t *testing.T, f r3.Frame) *Body {
+			b := fdExtrudeLoop(t, f, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {2, 2}, {2, 4}, {0, 4}})
+			chamfered, err := b.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(b))), units.Millimeters(0.25))
+			require.NoError(t, err)
+			return chamfered
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			ref := c.build(t, xy)
+			for _, v := range []struct {
+				name  string
+				frame r3.Frame
+				place r3.Transform
+			}{{fdTilted, tilted, r3.Identity()}, {"rotated", xy, rot}, {"tilted and rotated", tilted, rot}} {
+				t.Run(v.name, func(t *testing.T) {
+					b := c.build(t, v.frame)
+					if v.place != r3.Identity() {
+						var err error
+						b, err = b.Placed(t.Context(), v.place)
+						require.NoError(t, err)
+					}
+					frame := fdRecordedFrame(t, v.frame)
+					m := fdMapThrough(frame, v.place, c.exactCross)
+					origin := fdVecOf(v.place.Apply(r3.Vec{}))
+					o := fdVecOf(frame.Origin())
+					originImage := fdMapThrough(xy, v.place, false).apply(o).add(origin)
+					onePlus := fdf(1 + 1e-12)
+					re, be := ref.Edges(), b.Edges()
+					require.Len(t, be, len(re))
+					circles := 0
+					for i := range re {
+						c0, a0, r0, ok := circleOf(re[i].curve)
+						if !ok {
+							continue
+						}
+						circles++
+						require.True(t, re[i].curveBounded, "reference edge %d carries no curve bound", i)
+						require.True(t, be[i].curveBounded, "edge %d carries no curve bound", i)
+						c1, a1, r1, ok := circleOf(be[i].curve)
+						require.True(t, ok)
+						an := fdVecOf(a0).unit()
+						e1 := fdVecOf(r3.NewVec(1, 0, 0)).cross(an)
+						if n, _ := e1.norm().Float64(); n < 0.5 {
+							e1 = fdVecOf(r3.NewVec(0, 1, 0)).cross(an)
+						}
+						e1 = e1.unit()
+						e2 := an.cross(e1)
+						allow := new(big.Float).SetPrec(frameDefectPrec).Mul(onePlus, fdf(re[i].curveBound))
+						allow.Add(allow, fdf(be[i].curveBound))
+						// Rational points of the unit circle, so every sample
+						// lies on the reference circle to 512 bits.
+						for k, cs := range fdCirclePoints() {
+							phi := k
+							q := fdVecOf(c0).add(e1.scale(new(big.Float).SetPrec(frameDefectPrec).Mul(fdf(r0), cs[0]))).add(e2.scale(new(big.Float).SetPrec(frameDefectPrec).Mul(fdf(r0), cs[1])))
+							p := m.apply(q).add(originImage)
+							gap := fdCircleGap(p, fdVecOf(c1), fdVecOf(a1), fdf(r1))
+							require.LessOrEqual(t, gap.Cmp(allow), 0, "edge %d at φ %v sits %s off, past %s", i, phi, gap.Text('g', 6), allow.Text('g', 6))
+						}
+					}
+					require.Positive(t, circles)
 				})
 			}
 		})
