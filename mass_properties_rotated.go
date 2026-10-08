@@ -141,7 +141,7 @@ func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbo
 			perimeter = proofbound.AbsSumUpper(perimeter, w.Length, w.LengthBound)
 		}
 	}
-	coordUpper, err := profileCoordinateEnvelope(pp.profile, work, walks)
+	coordUpper, err := momentinput.CoordinateEnvelope(pp.profile, work, walks)
 	if err != nil {
 		return nil, nil, err
 	}

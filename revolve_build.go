@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
@@ -533,7 +534,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		Bound:     units.SquareMillimeters(area.Bound),
 	}
 
-	coordUpper, err := profileCoordinateUpper(rp.profile, work, nil)
+	coordUpper, err := momentinput.CoordinateUpper(rp.profile, work, nil)
 	if err != nil {
 		return nil, err
 	}

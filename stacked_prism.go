@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -475,7 +476,7 @@ func stackedRegionPart(ctx context.Context, sp stackedPrismPayload, base prismPa
 		}
 	}
 	if loopArea > 0 {
-		coord, err := profileCoordinateEnvelope(region, work, nil)
+		coord, err := momentinput.CoordinateEnvelope(region, work, nil)
 		if err != nil {
 			return stackedPart{}, err
 		}

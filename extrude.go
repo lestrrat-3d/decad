@@ -606,7 +606,7 @@ type chainWalkCapture struct {
 
 // chainBoundsWalks reads the exact pre-widening walks buildChainSides already
 // resolved. The cache is local to this build; its per-segment measured charges
-// are replayed by resolveOrRead at each bounds read.
+// are replayed by momentinput.ResolveOrRead at each bounds read.
 func chainBoundsWalks(profile ProfileRecord, captures []chainWalkCapture) *momentinput.ProfileWalks {
 	reads := make([][]momentinput.WalkReadCharge, len(captures))
 	walks := &momentinput.ProfileWalks{Profile: profile, ReadCharges: reads}

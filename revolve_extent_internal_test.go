@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 
 	"github.com/lestrrat-3d/r3"
@@ -55,7 +56,7 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 			require.NoError(t, err)
 			cached, err := resolveAnalyticRevolveExtentProfile(t.Context(), test.profile, freeform.NewFreeformWork())
 			require.NoError(t, err)
-			envelope, err := profileCoordinateEnvelope(test.profile, freeform.NewFreeformWork(), nil)
+			envelope, err := momentinput.CoordinateEnvelope(test.profile, freeform.NewFreeformWork(), nil)
 			require.NoError(t, err)
 			require.Equal(t, envelope, cached.coordUpper)
 

@@ -401,7 +401,7 @@ func walkEndFromModel(w survey2d.SegmentWalk) Point2 {
 
 // This file pins the fix for docs/spline-design.md §5.2's own discipline:
 // within ONE evalPrismContext call, buildLoopSidesAs,
-// profileCoordinateEnvelope (via prismCentroidGeometryBound and, four times
+// momentinput.CoordinateEnvelope (via prismCentroidGeometryBound and, four times
 // over, prismBoundsContext's per-axis extentBoundedAlong) and
 // boundaryExtremesBoundedContext (three times, also via extentBoundedAlong)
 // each used to call walkOf on the SAME recorded segment, so one free-form
@@ -540,11 +540,11 @@ func TestProfileWalksMismatchRefuses(t *testing.T) {
 	require.False(t, wrongWalks.Matches(involute), "matches must catch the shape mismatch")
 
 	t.Run("profileCoordinateEnvelope", func(t *testing.T) {
-		_, err := profileCoordinateEnvelope(involute, freeform.NewFreeformWork(), wrongWalks)
+		_, err := momentinput.CoordinateEnvelope(involute, freeform.NewFreeformWork(), wrongWalks)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("profileCoordinateUpper", func(t *testing.T) {
-		_, err := profileCoordinateUpper(involute, freeform.NewFreeformWork(), wrongWalks)
+		_, err := momentinput.CoordinateUpper(involute, freeform.NewFreeformWork(), wrongWalks)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("boundaryExtremesBoundedContext", func(t *testing.T) {
@@ -567,7 +567,7 @@ func lineEndProfile(end Point2) ProfileRecord {
 // exists for: a *momentinput.ProfileWalks resolved from one profile must not be read
 // against a DIFFERENT profile of the same shape. Comparing counts alone let
 // such a pair through, and the cached read then published the first section's
-// geometry as the second's — profileCoordinateEnvelope reporting 1 for a
+// geometry as the second's — momentinput.CoordinateEnvelope reporting 1 for a
 // section whose own envelope is 2, with no error anywhere. The comparison is
 // over the recorded segments themselves, exactly: the one-ulp subtest below
 // pins that it carries no tolerance and no "close enough" arm.
@@ -587,20 +587,20 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 
 	// The two readings the mismatch used to conflate: near's coordinate
 	// envelope is 1, far's is 2.
-	nearUpper, err := profileCoordinateEnvelope(near, freeform.NewFreeformWork(), pw)
+	nearUpper, err := momentinput.CoordinateEnvelope(near, freeform.NewFreeformWork(), pw)
 	require.NoError(t, err)
 	require.Equal(t, 1.0, nearUpper, "near's own envelope, read through its own resolved walks")
-	farUpper, err := profileCoordinateEnvelope(far, freeform.NewFreeformWork(), nil)
+	farUpper, err := momentinput.CoordinateEnvelope(far, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, 2.0, farUpper, "far's true envelope, resolved from far's own segment")
 
 	t.Run("profileCoordinateEnvelope", func(t *testing.T) {
-		_, err := profileCoordinateEnvelope(far, freeform.NewFreeformWork(), pw)
+		_, err := momentinput.CoordinateEnvelope(far, freeform.NewFreeformWork(), pw)
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("profileCoordinateUpper", func(t *testing.T) {
-		_, err := profileCoordinateUpper(far, freeform.NewFreeformWork(), pw)
+		_, err := momentinput.CoordinateUpper(far, freeform.NewFreeformWork(), pw)
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 	t.Run("boundaryExtremesBoundedContext", func(t *testing.T) {
@@ -616,7 +616,7 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 	t.Run("one ulp apart", func(t *testing.T) {
 		ulp := lineEndProfile(Point2{U: math.Nextafter(1, 2), V: 0})
 		require.False(t, pw.Matches(ulp), "the comparison is exact: one ulp of difference is a mismatch")
-		_, err := profileCoordinateEnvelope(ulp, freeform.NewFreeformWork(), pw)
+		_, err := momentinput.CoordinateEnvelope(ulp, freeform.NewFreeformWork(), pw)
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 	t.Run("hole data", func(t *testing.T) {
@@ -627,7 +627,7 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 		other := near
 		other.Holes = []LoopRecord{lineEndProfile(Point2{U: 1, V: 3}).Outer}
 		require.False(t, holed.Matches(other), "a hole loop's own segment data is compared too")
-		_, err = profileCoordinateEnvelope(other, freeform.NewFreeformWork(), holed)
+		_, err = momentinput.CoordinateEnvelope(other, freeform.NewFreeformWork(), holed)
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 }
@@ -653,9 +653,9 @@ func TestProfileWalksReadBackMatchesFreshResolution(t *testing.T) {
 
 	// The whole cached-read path still produces the reading it did before:
 	// the involute section's own coordinate envelope, unchanged by the guard.
-	cached, err := profileCoordinateEnvelope(profile, freeform.NewFreeformWork(), pw)
+	cached, err := momentinput.CoordinateEnvelope(profile, freeform.NewFreeformWork(), pw)
 	require.NoError(t, err)
-	direct, err := profileCoordinateEnvelope(profile, freeform.NewFreeformWork(), nil)
+	direct, err := momentinput.CoordinateEnvelope(profile, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, direct, cached, "reading the cache must give the resolve-every-segment answer")
 	require.Greater(t, cached, 0.0)

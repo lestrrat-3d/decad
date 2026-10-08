@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -29,7 +30,7 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 	}
 	switch pl := b.payload.(type) {
 	case prismPayload:
-		coordUpper, err := profileCoordinateEnvelope(pl.profile, freeform.NewFreeformWork(), pl.walks)
+		coordUpper, err := momentinput.CoordinateEnvelope(pl.profile, freeform.NewFreeformWork(), pl.walks)
 		if err != nil {
 			return math.Inf(1)
 		}
@@ -42,7 +43,7 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 			proofbound.ProductUpper(vecL1(pl.frame.N()), zUpper),
 		)
 	case revolvePayload:
-		coordUpper, err := profileCoordinateUpper(pl.profile, freeform.NewFreeformWork(), nil)
+		coordUpper, err := momentinput.CoordinateUpper(pl.profile, freeform.NewFreeformWork(), nil)
 		if err != nil {
 			return math.Inf(1)
 		}

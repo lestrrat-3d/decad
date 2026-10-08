@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -184,7 +185,7 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 
 	// The side gate charges the scan's dot-product rounding separately from
 	// the positional bounds returned with the extremes.
-	coordUpper, err := profileCoordinateEnvelope(profile, work, nil)
+	coordUpper, err := momentinput.CoordinateEnvelope(profile, work, nil)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}

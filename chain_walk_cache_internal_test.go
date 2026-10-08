@@ -84,7 +84,7 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 				}
 				near := freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - charge.Spent + 1}
 				cachedNear, freshNear := near, near
-				_, cachedErr := resolveOrRead(segment, &cachedNear, cachedWalks, ci, si)
+				_, cachedErr := momentinput.ResolveOrRead(segment, &cachedNear, cachedWalks, ci, si)
 				_, freshErr := boundarywalk.WalkOf(segment, &freshNear)
 				require.ErrorIs(t, cachedErr, ErrUnsupported)
 				require.ErrorIs(t, freshErr, ErrUnsupported)

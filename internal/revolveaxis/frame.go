@@ -46,7 +46,7 @@ func (ax Frame) ToAxisRhoBound(u, v float64) float64 {
 // the radial distance ρ = |cross(d, p−a)| from THIS resolved axis to any
 // boundary point p the caller's own coordUpper covers. coordUpper is a proven
 // upper bound on p's plane-local coordinates about the FRAME origin
-// (profileCoordinateUpper for a whole profile, survey2d.SegmentWalk.coordUpper for one
+// (momentinput.CoordinateUpper for a whole profile, survey2d.SegmentWalk.coordUpper for one
 // walk), and ρ is measured from the AXIS, so the anchor a's own offset is the
 // whole difference between the two: |p−a| ≤ |p| + |a|, with the anchor read
 // through its own recorded bounds. Every reading whose error scales with ρ —
