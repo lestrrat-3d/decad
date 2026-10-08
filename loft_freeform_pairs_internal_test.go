@@ -143,11 +143,12 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 	margin := toleranceRel / ratio
 	t.Logf("A10b wedge Verify margin: binding=%s ratio=%.6g margin=%.3gx", reading, ratio, margin)
 	require.Greater(t, margin, 1.0)
-	// Centroid binds at a measured ~3.32x once Area no longer does. Pinned
-	// with generous slack, the arc wedge's own rule, so host rounding never
-	// flips it.
-	require.Equal(t, "Centroid", reading)
-	require.InEpsilon(t, 3.32, margin, 0.25)
+	// Volume binds at a measured ~4.3x once Area no longer does and
+	// Centroid's bound is the shift form (docs/loft-gear-bounds-design.md
+	// §3). Pinned with generous slack, the arc wedge's own rule, so host
+	// rounding never flips it.
+	require.Equal(t, "Volume", reading)
+	require.InEpsilon(t, 4.3, margin, 0.25)
 
 	area, err := body.Area()
 	require.NoError(t, err)

@@ -165,9 +165,7 @@ func lobeTrueBoundary(bulgeOffset, twist float64, perArc int) []r3.Vec {
 func loftCentroidRebuild(t *testing.T, pl loftPayload) (*loftMassAccumulator, loftAssembly, float64) {
 	t.Helper()
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, work0, work1)
-	require.NoError(t, err)
-	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
+	offsets, walks0, walks1, target, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
 	require.NoError(t, err)
 	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
@@ -241,7 +239,7 @@ func retiredAnchorCentroidBound(t *testing.T, mass *loftMassAccumulator, a loftA
 //
 // Shown to fail: dropping the shift (Bound = rounding only) fails the
 // enclosure on all seven rows; deleting R_c's max(matchedDelta, delta) term
-// fails the radius assertion on the four rows whose farthest true point falls
+// fails the radius assertion on the six rows whose farthest true point falls
 // between two stations, at the chord target shipped with this test.
 func TestLoftCentroidShiftFormEnclosesTwoArcLobe(t *testing.T) {
 	t.Parallel()
@@ -411,24 +409,21 @@ func loftCentroidRatio(t *testing.T, body *Body, bound float64) (float64, float6
 // the retired anchor-based centroid bound grew with the gear. The shift form
 // measures R_c from the published centroid instead, so it reads the tooth.
 //
-// Each row asserts that R_c is within the tooth's own diameter, and that the
-// Centroid reading's ratio is below the retired form's. The z8 and z20 rows
-// also assert the ratio is below 2.5e-4·4. The z40 row reads 1.03e-3 there
-// with the chord target this test ships against, which scales with the
-// gear's radius; docs/loft-gear-bounds-design.md §5's feature-size target
-// brings it under, and that increment adds the z40 threshold leg. Verify's
-// verdict is not asserted: Volume reads Suspect on these teeth until §2's
-// volume residual lands.
+// Each row asserts that R_c is within the tooth's own diameter and that the
+// Centroid reading's ratio is below both the retired form's and 2.5e-4·4.
+// Verify's verdict is not asserted: Volume's binding residual is §2's
+// increment, not this one.
 //
 // Shown to fail: the retired anchor-based form, rebuilt beside it, exceeds
-// 2.5e-4·4 on every row, as the assertion on it records.
+// 2.5e-4·4 on the z20 and z40 rows, where the anchor is farthest from the
+// tooth, as the assertion on it records.
 func TestLoftCentroidToothBoundReadsToothSize(t *testing.T) {
 	t.Parallel()
 	const threshold = 2.5e-4 * 4
 	for _, row := range []struct {
-		teeth      float64
-		underLimit bool
-	}{{8, true}, {20, true}, {40, false}} {
+		teeth        float64
+		retiredFails bool
+	}{{8, false}, {20, true}, {40, true}} {
 		t.Run(fmt.Sprintf("z%g", row.teeth), func(t *testing.T) {
 			t.Parallel()
 			body := helicalToothLoft(t, involuteGear{module: 2, teeth: row.teeth, pressure: 20 * math.Pi / 180, fitPoints: 5})
@@ -445,9 +440,9 @@ func TestLoftCentroidToothBoundReadsToothSize(t *testing.T) {
 				radius, diameter, mass.DistUpper, ratio, retiredRatio)
 			require.LessOrEqual(t, radius, diameter, "R_c must read the tooth's own size")
 			require.Less(t, ratio, retiredRatio, "the shift form must be below the retired anchor form")
-			require.Greater(t, retiredRatio, threshold, "the retired anchor form exceeds the threshold, which is what this test guards")
-			if row.underLimit {
-				require.Less(t, ratio, threshold, "the shift form must leave Centroid within the threshold")
+			require.Less(t, ratio, threshold, "the shift form must leave Centroid within the threshold")
+			if row.retiredFails {
+				require.Greater(t, retiredRatio, threshold, "the retired anchor form exceeds the threshold, which is what this test guards")
 			}
 		})
 	}

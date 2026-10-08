@@ -2286,11 +2286,11 @@ quarter-arc lofted between `z=0` and `z=10` — has a feature size of
 The joint walk-up settles at `m = 75`: the certified sagitta first meets the
 target there, and at `m = 74` both the certified and the exact sagitta are
 still over it. `Verify` at the default `1e-3` tolerance reads `Sound` with
-`Centroid` binding at about 2.9x
+`Volume` binding at about 3.8x
 (`loft_chord_calibration_internal_test.go`'s `loftChordFractionPinM`,
 `TestLoftArcWedgeVerifiesSound`). The matching fit-spline wedge, chorded by
 §5.1's free-form arm with its matched-departure bisection, takes 120 cells
-and reads `Sound` with `Centroid` binding at about 3.3x
+and reads `Sound` with `Volume` binding at about 4.3x
 (`TestLoftFitSplineWedgeVerifiesSound`).
 
 **`loftStationCap`'s value is resolved.** §5.1 states the rule the cap obeys
