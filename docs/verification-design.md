@@ -570,8 +570,8 @@ that allowance, and every point of a wall of radius `R` lies within
 `2R·sin(3.75°)` of a station, so a farthest pair between two walls is missed
 by at most that much at each end.
 
-**A `revolvePayload` reads its meridian stations swept to two or three
-angles.** Two points on circles of radii `r1` and `r2` about the axis, `dz`
+**Every `revolvePayload` reads its meridian stations swept to two or three
+angles**, solid or sheet, with or without a section displacement. Two points on circles of radii `r1` and `r2` about the axis, `dz`
 apart along it, sit `√(dz² + r1² + r2² − 2·r1·r2·cos Δφ)` apart, which grows
 with the angle `Δφ` between them up to half a turn. The farthest pair
 therefore sits at the widest angle apart the sweep allows, up to half a turn.
@@ -583,7 +583,9 @@ own held angle. `revolvemesh.RevolveLift.SweptPointGap` compares each held
 point exactly against the point it denotes: the recorded station, widened by
 its own gap and `sectionDelta`, rotated about the recorded axis to the
 denoted angle and lifted through the frame and placement. The maximum is
-shrunk by the widest gap. An end that states no angle (a `ToFaceAngular`
+shrunk by the widest gap. A sheet's stations lie on its walls, and a line
+wall's two ends are the only stations it gives, so a meridian line on the
+axis adds only its ends. An end that states no angle (a `ToFaceAngular`
 stop) withholds the diameter.
 
 **A draft body reads both caps' stations.** `draftGateDiameter` reads the
@@ -754,10 +756,13 @@ around its end cap is `√264` across, while the receiver's corners at the cap
 read `√300`. A loop chamfered on a cap is read from that cap's side level, the
 float sum the build places the band's side level at, and an unchamfered loop
 over the whole interval. `capBlendPayload.axialDelta` bounds how far each of
-those levels sits from the one it denotes. The cap contour is not read, so a
-chamfered body whose farthest pair ends on its cap contour reads below its
-diameter: a disc of radius 5 extruded 20 mm and chamfered 2 mm reads `√424`
-against `√464`.
+those levels sits from the one it denotes. `capBlendGatePoints` joins those
+stations with the stations on every whole cap circle (the cap contour a
+cornerless closed circle offsets into, held at its centre and offset radius
+within the band's contour displacement) and with the body's vertices, which
+hold every cap contour corner. A disc of radius 5 extruded 20 mm and
+chamfered 2 mm around both caps is `√436` across, between its two cap
+circles. A cap contour arc a corner trims is read at its ends alone.
 
 What `fallbackGateDiameter` reports is `stationGateDiameter`'s reading over
 those witness prisms. A station is a point of the body only when the witness

@@ -194,8 +194,34 @@ func TestCapBlendGateDiameterReadsSideLevels(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 		upper := new(big.Rat).Add(ratSquare(2*r-setback), ratSquare(h))
-		requireGateDiameterWithin(t, d, math.Hypot(2*r*math.Cos(gateStationStep/2), h-setback), upper)
+		requireGateDiameterWithin(t, d, math.Hypot(r+(r-setback)*math.Cos(gateStationStep/2), h), upper)
 	})
+}
+
+// A disc chamfered around both caps is widest between its two cap contours:
+// radius 5 - 2 = 3 at z = 0 and z = 20, sqrt((3 + 3)^2 + 20^2) = sqrt(436)
+// apart. Its walls between the side levels reach sqrt((5 + 5)^2 + 16^2) and
+// its vertices, the two cap seams, 20.
+//
+// Shown to fail first: the side-level stations alone read 18.8679623, and
+// with the vertices joined but no cap circle stations 19.9999999999999645,
+// against a floor of
+// sqrt((3 + 3*cos(7.5 degrees))^2 + 20^2) = 20.8732526.
+func TestCapBlendGateDiameterReadsCapContours(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	body := internalCircleBody(t, doc, 0, 5, 0, Distance{D: units.Millimeters(20), Dir: Along})
+	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapStart(body))).Or(CreatedBy(CapEnd(body))), units.Millimeters(2))
+	require.NoError(t, err)
+	cbp, isCapBlend := chamfered.payload.(capBlendPayload)
+	require.True(t, isCapBlend)
+	require.Len(t, cbp.startLoops, 1)
+	require.Len(t, cbp.endLoops, 1)
+
+	d, ok, err := bodyGateDiameter(t.Context(), chamfered)
+	require.NoError(t, err)
+	require.True(t, ok)
+	requireGateDiameterWithin(t, d, math.Hypot(3+3*math.Cos(gateStationStep/2), 20), big.NewRat(436, 1))
 }
 
 // Every point a gate diameter reads must carry a proven gap from a point of
@@ -311,6 +337,24 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			least := new(big.Rat).Sub(new(big.Rat).SetFloat64(dp.d), new(big.Rat).SetFloat64(dp.dDelta))
 			upper := exactDraftSquareDiameterSquare(view, 5, least)
 			requireGateDiameterWithin(t, read(t, placed), floatSqrtOf(upper)-gateFarSlack(), upper)
+		}
+	})
+	t.Run("chamfered disc", func(t *testing.T) {
+		t.Parallel()
+		// The disc of TestCapBlendGateDiameterReadsSideLevels: its diameter
+		// runs from the bottom rim to the cap contour, sqrt(8^2 + 20^2).
+		for i := range placements {
+			chamfered, _ := chamferedSectionBody(t, func(s *sketch.Sketch) {
+				c := s.CreatePoint(0, 0)
+				s.Fix(c)
+				s.CreateCircle(c, 5)
+			}, 2)
+			placement := gateFarPlacement(t, i)
+			placed, err := chamfered.Placed(t.Context(), placement)
+			require.NoError(t, err)
+			upper := new(big.Rat).Mul(big.NewRat(464, 1), placedStretchSquare(placement))
+			lower := math.Hypot(5+3*math.Cos(gateStationStep/2), 20) - gateFarSlack()
+			requireGateDiameterWithin(t, read(t, placed), lower, upper)
 		}
 	})
 	t.Run("draft disc", func(t *testing.T) {
@@ -550,5 +594,60 @@ func TestPairGateDiameterReadsStations(t *testing.T) {
 			stretched := new(big.Rat).Mul(upper, placedStretchSquare(placement))
 			requireGateDiameterWithin(t, d, lower-gateFarSlack(), stretched)
 		}
+	})
+}
+
+// Every revolve reads its meridian stations, whether or not the clearance
+// kernel's exact model covers it. A full-turn sheet of a radius-10 half disc
+// is the sphere of diameter 20; its stations sweep the meridian's equator to
+// angles half a turn apart. A solid revolve whose meridian carries a section
+// displacement charges it on every station, so the reading sits below the
+// recorded body's own diameter by at least twice that displacement.
+//
+// Shown to fail first: before every revolve read its stations, both read no
+// diameter at all.
+func TestRevolveGateDiameterReadsSheetsAndDisplacedSections(t *testing.T) {
+	t.Parallel()
+	halfDisc := func(t *testing.T, opts ...RevolveOption) *Body {
+		t.Helper()
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		o := s.CreatePoint(-10, 0)
+		s.Fix(o)
+		end := s.CreatePoint(10, 0)
+		c := s.CreatePoint(0, 0)
+		s.Fix(c)
+		s.CreateLine(o, end)
+		s.CreateArc(c, end, o)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		body, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, FullRevolution{}, opts...)
+		require.NoError(t, err)
+		return body
+	}
+	t.Run("sheet", func(t *testing.T) {
+		t.Parallel()
+		sheet := halfDisc(t, WithSurfaceResult())
+		rp := sheet.payload.(revolvePayload)
+		require.True(t, rp.surfaceResult)
+		d, ok, err := bodyGateDiameter(t.Context(), sheet)
+		require.NoError(t, err)
+		require.True(t, ok)
+		requireGateDiameterWithin(t, d, 20*math.Cos(gateStationStep/2), big.NewRat(400, 1))
+	})
+	t.Run("displaced section", func(t *testing.T) {
+		t.Parallel()
+		solid := halfDisc(t)
+		exact, ok, err := bodyGateDiameter(t.Context(), solid)
+		require.NoError(t, err)
+		require.True(t, ok)
+		rp := solid.payload.(revolvePayload)
+		rp.sectionDelta = math.Ldexp(1, -20)
+		d, ok, err := bodyGateDiameter(t.Context(), &Body{payload: rp})
+		require.NoError(t, err)
+		require.True(t, ok)
+		requireGateDiameterWithin(t, d, 20*math.Cos(gateStationStep/2)-4*rp.sectionDelta, big.NewRat(400, 1))
+		require.LessOrEqual(t, d, exact-2*rp.sectionDelta, `the section displacement is charged on both ends of the pair`)
 	})
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // This file lists the points a gate diameter reads (docs/verification-design.md
@@ -389,6 +390,75 @@ func chainGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *B
 	return g, true, nil
 }
 
+// capBlendGateDiameter is bodyGateDiameter's arm for a cap-loop chamfer,
+// read over capBlendGatePoints.
+func capBlendGateDiameter(ctx context.Context, budget *proofbound.WorkBudget, body *Body, cbp capBlendPayload) (float64, bool, error) {
+	g, ok, err := capBlendGatePoints(ctx, budget, body, cbp)
+	if err != nil || !ok {
+		return 0, false, err
+	}
+	return g.diameter(budget)
+}
+
+// capBlendGatePoints lists points a cap-loop chamfer proves lie on its body.
+// It joins three sets:
+//
+//   - the stations of capBlendWitnessPrisms: every loop's wall between the
+//     side levels its bands leave, charged their gaps and the levels'
+//     displacement (capBlendPayload.axialDelta);
+//   - the stations on every whole cap circle, the cap contour a cornerless
+//     closed circle offsets into, at its cap level. The band holds that
+//     circle at its own centre and offset radius, and each station carries
+//     its gap from the held circle, the widest band's contour displacement
+//     (bandDelta, capband.WholeCircleDisplacement for such a band) and the
+//     axial term;
+//   - the body's vertices with their published bounds, which hold every cap
+//     contour corner.
+//
+// A cap contour arc that a corner trims is read at its ends alone, through
+// the vertices. ok is false, with no error, when the side-level stations or
+// the vertices cannot be read.
+func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Body, cbp capBlendPayload) (gatePoints, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return gatePoints{}, false, err
+	}
+	g, ok, err := prismGatePoints(budget, capBlendWitnessPrisms(cbp), cbp.axialDelta())
+	if err != nil || !ok {
+		return gatePoints{}, false, err
+	}
+	contour := 0.0
+	for _, d := range cbp.bandDelta {
+		contour = math.Max(contour, d)
+	}
+	var rims []prismPayload
+	for _, p := range cbp.patches {
+		if !p.geom.Circular || !p.geom.WholeTurn {
+			continue
+		}
+		rim := cbp.prismLike(p.geom.CapZ, p.geom.CapZ)
+		rim.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{CircleSeg{
+			Center: Point2{U: p.geom.CU, V: p.geom.CV}, Radius: units.Millimeters(p.geom.CapRadius),
+			CCW: true, TStart: 0, TEnd: 1,
+		}}}}
+		rims = append(rims, rim)
+	}
+	if len(rims) > 0 {
+		caps, ok, err := prismGatePoints(budget, rims, proofbound.AbsSumUpper(cbp.axialDelta(), contour))
+		if err != nil {
+			return gatePoints{}, false, err
+		}
+		if ok {
+			g.join(caps)
+		}
+	}
+	vertices, ok, err := vertexGatePoints(budget, body, 0)
+	if err != nil || !ok {
+		return gatePoints{}, false, err
+	}
+	g.join(vertices)
+	return g, true, nil
+}
+
 // brepGateDiameter is bodyGateDiameter's arm for a brepPayload
 // (docs/general-boolean-design.md §4.5), read over brepGatePoints.
 func brepGateDiameter(ctx context.Context, body *Body, bp brepPayload) (float64, bool, error) {
@@ -436,7 +506,8 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 // diameter arm reads where that arm reads points: a faceted, loft, mitred
 // sweep or stitched body's held vertex table with its published delta, an
 // ExtrudeChain body's vertices and stations, a brep's vertices and face
-// stations, a draft body's stations on both caps, an analytic prism's or a revolve's stations, and the stations of
+// stations, a draft body's stations on both caps, a cap-loop chamfer's side
+// levels, whole cap circles and vertices, an analytic prism's or a revolve's stations, and the stations of
 // the witness prisms fallbackGateDiameter reads. Every other body, and any of
 // those whose stations cannot be read, reads its vertices with their
 // published bounds. ok is false, with no error, when none of those can be
@@ -466,6 +537,8 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 			return g, ok, err
 		}
 		return vertexGatePoints(budget, body, 0)
+	case capBlendPayload:
+		return capBlendGatePoints(ctx, budget, body, pl)
 	case prismPayload:
 		if pl.sectionDelta == 0 {
 			if g, ok, err := prismGatePoints(budget, []prismPayload{pl}, pl.axialDelta()); err != nil || ok {

@@ -48,10 +48,10 @@ import (
 // WITHHOLDS its answer on each of the paths its own doc comment lists, and a
 // body it withholds from falls through exactly like any other miss. Every miss
 // reaches fallbackGateDiameter, which covers the payloads the exact model does
-// not (cup, cap-loop chamfer, and a prismPayload whose own sectionDelta is
-// nonzero) with a bound that is sound for THIS gate without being eligible
-// for that stronger trust, and answers for nothing else — so a free-form-walled
-// prismPayload whose own arm declined ends with no gate diameter at all.
+// not (cup, and a prismPayload whose own sectionDelta is nonzero) with a bound
+// that is sound for THIS gate without being eligible for that stronger trust,
+// and answers for nothing else — so a free-form-walled prismPayload whose own
+// arm declined ends with no gate diameter at all.
 //
 // The exact model decides only which arm reads the body. Its carrier
 // witnesses (CFace.Wit) are float samples with no proven gap, and a placed
@@ -60,10 +60,11 @@ import (
 // (stationGateDiameter), each held within a proven gap of a point of the
 // body, and shrinks their maximum by twice the widest gap plus its
 // axialDelta. fallbackGateDiameter applies the same reading to the prisms it
-// reads, over each one's own displacement. A revolve sweeps its meridian
-// stations to the angles its farthest pair sits at (revolveGateDiameter) and
-// compares each held point exactly against the point it denotes, the sweep
-// angle's own displacement included.
+// reads, over each one's own displacement. Every revolve, solid or sheet and
+// whatever its section displacement, sweeps its meridian stations to the
+// angles its farthest pair sits at (revolveGateDiameter) and compares each
+// held point exactly against the point it denotes, the sweep angle's own
+// displacement included. A cap-loop chamfer reads capBlendGateDiameter.
 //
 // A loftPayload reads its OWN held vertex-set diameter (pointSetDiameterContext),
 // never an envelope: the boundary is a polyhedron, and a convex-hull diameter
@@ -231,16 +232,22 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return d, ok, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
+	switch payload := body.payload.(type) {
+	case revolvePayload:
+		// Every revolve reads its meridian stations, solid or sheet, with or
+		// without a section displacement: each point carries its own gap,
+		// sectionDelta included, so the exact model's coverage decides nothing.
+		return revolveGateDiameter(budget, payload)
+	case capBlendPayload:
+		return capBlendGateDiameter(ctx, budget, body, payload)
+	}
 	_, ok, err := newBodyGeomBudget(budget, body)
 	if err != nil {
 		return 0, false, err
 	}
 	if ok {
-		switch payload := body.payload.(type) {
-		case prismPayload:
+		if payload, isPrism := body.payload.(prismPayload); isPrism {
 			return stationGateDiameter(budget, []prismPayload{payload}, payload.axialDelta())
-		case revolvePayload:
-			return revolveGateDiameter(budget, payload)
 		}
 		return 0, false, nil
 	}
@@ -492,7 +499,9 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 // runs, a displaced section and a sweep's witness prism (the straight prism
 // itself, or the start section at one level). A cap-loop chamfer cuts the
 // receiver's walls back at the cap levels, so its witness prisms
-// (capBlendWitnessPrisms) stop each chamfered loop at its band's side level.
+// (capBlendWitnessPrisms) stop each chamfered loop at its band's side level;
+// bodyGateDiameter reads such a body through capBlendGateDiameter, which
+// adds its cap circles and vertices to those stations.
 //
 // For an all-line section the reading reaches the farthest pair, which is
 // realized at vertices. A circular wall that sweeps past 180 degrees holds a
