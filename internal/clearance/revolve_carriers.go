@@ -9,15 +9,22 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// RevolveWall is a resolved meridian walk and the surface it sweeps.
+// RevolveWall is a resolved meridian walk and the surface it sweeps. First
+// and Last are the PLANE-local walks of the first and last recorded segments
+// Walk covers (the same segment for a walk no neighbour coalesced into): the
+// recorded geometry Walk's float axis coordinates were re-expressed from.
 type RevolveWall struct {
-	Walk survey2d.SideWalk
-	Kind revolveaxis.WallKind
+	Walk        survey2d.SideWalk
+	Kind        revolveaxis.WallKind
+	First, Last survey2d.SegmentWalk
 }
 
-// RevolveCarrierInput is the validated sweep geometry read by the clearance kernel.
+// RevolveCarrierInput is the validated sweep geometry read by the clearance
+// kernel. Axis is the resolved axis's own proven anchor and direction
+// displacement.
 type RevolveCarrierInput struct {
 	Lift       revolvemesh.RevolveLift
+	Axis       revolvemesh.AxisBound
 	Transform  r3.Transform
 	Full       bool
 	Phi0, Phi1 float64
@@ -25,17 +32,30 @@ type RevolveCarrierInput struct {
 }
 
 // RevolveCarrierResult holds ordered carrier faces and singular axis points.
+//
+// AxisGap is a proven upper bound on how far any point of any carrier sits
+// from the recorded meridian swept about the recorded axis
+// (revolvemesh.RevolveLift.MeridianGap, measured at every carrier's own
+// recorded samples; docs/clearance-design.md §2). It covers what the walk's
+// float axis coordinates leave out: their re-expression rounding, an endpoint
+// snapped onto the axis, a sphere centre read as on the axis, and the axis's
+// own anchor and direction error. The caller folds it into the body's own
+// displacement; it is zero for a revolve whose every carrier matches its
+// record exactly.
 type RevolveCarrierResult struct {
 	Faces           []*CFace
 	Vertices        []r3.Vec
 	AxisRadiusUpper float64
+	AxisGap         float64
 }
 
 // BuildRevolveCarriers constructs trimmed carriers from resolved meridian walks.
 // The caller MUST have validated the walks and charged their work budget.
 // Every axis point it lifts through in.Lift's basis and in.Transform — an
 // anchor, a plane origin, a box end, a synthesized singular point — widens the
-// LiftRound of the face it builds by that lift's own exact rounding.
+// LiftRound of the face it builds by that lift's own exact rounding, and every
+// carrier it builds is measured against its record into AxisGap
+// (revolveGapMeter).
 func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 	b := in.Lift.Basis()
 	a3p := in.Transform.Apply(b.A3)
@@ -48,6 +68,7 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 		sweep = NewAngWindow(in.Phi0, in.Phi1)
 	}
 	midPhi := (in.Phi0 + in.Phi1) / 2
+	meter := newRevolveGapMeter(in, a3p, wp, e0p, e1p)
 	onAxis := func(f *CFace, z float64) r3.Vec {
 		held := a3p.Add(wp.Scale(z))
 		f.LiftRound = math.Max(f.LiftRound, in.Lift.ExactPointRound(in.Transform, z, 0, 1, 0, held))
@@ -83,6 +104,7 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 			f.Box = BoxUnion(CircleBox(onAxis(f, w.StartU), wp, r), CircleBox(onAxis(f, w.EndU), wp, r))
 			f.Wit = append(f.Wit, sample((w.StartU+w.EndU)/2, r, midPhi), sample(w.StartU, r, in.Phi0))
 			out.Faces = append(out.Faces, f)
+			meter.wall(wall, f)
 		case revolveaxis.WallPlane:
 			rlo := math.Min(w.StartV, w.EndV)
 			rhi := math.Max(w.StartV, w.EndV)
@@ -100,6 +122,7 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 			f.Box = CapBox(f)
 			f.Wit = CapWitnesses(f)
 			out.Faces = append(out.Faces, f)
+			meter.wall(wall, f)
 		case revolveaxis.WallCone:
 			dz, dr := w.EndU-w.StartU, w.EndV-w.StartV
 			apexZ := w.StartU - w.StartV*dz/dr
@@ -119,6 +142,7 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 			f.Box = BoxUnion(CircleBox(onAxis(f, w.StartU), wp, w.StartV), CircleBox(onAxis(f, w.EndU), wp, w.EndV))
 			f.Wit = append(f.Wit, sample((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, midPhi))
 			out.Faces = append(out.Faces, f)
+			meter.wall(wall, f)
 			if w.StartV <= 0 || w.EndV <= 0 {
 				// The apex sits on the trimmed face: a surface singular
 				// point, synthesized as a vertex-like candidate (§3).
@@ -144,6 +168,7 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 			midTh := (w.Th0 + w.Th1) / 2
 			f.Wit = append(f.Wit, sample(w.CU+w.Radius*math.Cos(midTh), math.Max(0, w.Radius*math.Sin(midTh)), midPhi))
 			out.Faces = append(out.Faces, f)
+			meter.wall(wall, f)
 		case revolveaxis.WallTorus:
 			f := &CFace{
 				Kind: CkTorus,
@@ -165,6 +190,7 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 			midTh := (w.Th0 + w.Th1) / 2
 			f.Wit = append(f.Wit, sample(w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), midPhi))
 			out.Faces = append(out.Faces, f)
+			meter.wall(wall, f)
 			// A spindle patch reaching the axis at a walk endpoint has a
 			// singular axis-collapse point there, synthesized like a cone
 			// apex (§3).
@@ -199,6 +225,10 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 			f.Wit = CapWitnesses(f)
 			out.Faces = append(out.Faces, f)
 		}
+		for _, wall := range in.Walls {
+			meter.capRegion(wall)
+		}
 	}
+	out.AxisGap = meter.gap
 	return out
 }

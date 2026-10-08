@@ -394,6 +394,9 @@
 2	0.01	TestClearanceParallelCirclePlacementBound
 2	0.00	TestClearancePlacedRotatedCube
 2	0.00	TestClearancePlacedStopBuiltStackTouchingIsUndecided
+2	0.01	TestClearanceRevolveAxisCornerContainsTruth
+2	0.01	TestClearanceRevolveAxisReexpressionContainsTruth
+2	0.01	TestClearanceRevolveAxisSnapContainsTruth
 2	0.00	TestClearanceStackedCubes
 2	0.00	TestClearanceStopBuiltStackTouching
 2	0.00	TestClearanceTiltedPlanePairIntervalContainsTruth
