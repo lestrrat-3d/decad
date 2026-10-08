@@ -540,14 +540,20 @@ fluxes are read about the
 arc's own axis at the side level, where the cone's flux density `R0·r(z)`
 never changes sign; about the plane-local origin the density changes sign,
 the sandwich fails, and the flux difference grows with the section's distance
-from that origin. The built ruled patch's own flux `B` about the same point is
-enclosed by the same certified closed form, and `ε` is how far that
-enclosure reaches past the interval between the two reference fluxes, so the
-built flux lies within `ε` of the interval with no claim about where the
-ruled surface sits. Two numbers, one inside an interval and one within `ε`
-of it, differ by at most the interval's width plus `ε`, so the about-axis
-gap is at most `|W − N|`, both reference bounds and `ε`; `ε` is zero
-wherever the built enclosure sits inside the interval. The gap is never
+from that origin. The same monotone azimuth tightens the sandwich. Over
+each of 32 offset sub-ranges a locus's angle from its corner's ray lies
+between the angles of the corner feet at the sub-range's two ends, which
+`capband.CornerLocusSpans` encloses, so the denoted window's width is
+enclosed at every height to within the loci's movement over one sub-range,
+and integrating the flux density against those widths encloses the denoted
+flux within about a thirtieth of `|W − N|`. A reflex foot and a G1 join run
+along the wall's own radial, an angle of zero. The term keeps the
+intersection of that enclosure and the sandwich; a setback with conversion
+rounding, whose offset-to-height map is not exact, keeps the sandwich alone.
+The built ruled patch's own flux `B` about the same point is enclosed by the
+same certified closed form, with no claim about where the ruled surface
+sits, and the about-axis gap is at most the larger distance from `B`'s
+enclosure to either end of the denoted enclosure. The gap is never
 taken as `|W − B|` through a displacement-times-area bound: the wide sector
 and the built patch end on different rulings, and the corner triangle
 between them carries a flux of about `½·R0·R1·H·Φ` per corner, which no

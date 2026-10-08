@@ -89,10 +89,11 @@ import (
 //     BandLevelAreaAllow;
 //   - the VOLUME gap between a cap-loop chamfer's straight-ruled Cone patch
 //     and the curved miter locus it denotes at a non-tangential corner →
-//     ChordLocusVolumeAllow, an erosion-monotonicity sandwich between the two
-//     shared-window cone-sector fluxes, the built patch's own enclosed flux's
-//     reach past that interval (ChordLocusBuiltExcursion), plus each
-//     mitered corner's sliver flux (ChordLocusCornerFlux); the MEASURE of the
+//     ChordLocusVolumeAllow, the farther end of an enclosure of the denoted
+//     surface's flux (an erosion-monotonicity sandwich, tightened by the
+//     corner loci's own enclosed angles) from the built patch's enclosed
+//     flux, plus each mitered corner's sliver flux (ChordLocusCornerFlux);
+//     the MEASURE of the
 //     region between the two solids, which the first moment reads, is
 //     ChordLocusRegionAllow, a thin shell under the cone that holds every
 //     point where the two solids differ (ChordLocusShellUpper);
@@ -2281,16 +2282,16 @@ func BandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
 // |Flux_c(true) − Flux_c(built)|, but not the about-O difference the band's
 // volume reads.
 //
-// The about-c part reads three fluxes, each a capband.RawFlux value with its
-// proven bound, all at the patch's own radii and levels and about c: W, the
-// rotationally symmetric cone sector over the UNION of the side window
-// (th0, th1) and the cap window (capTh0, capTh1) on both directrices; N, the
-// same sector over their INTERSECTION; and B, the built ruled patch itself.
-// When both corners trim the cap window inside the side window, W is the side
-// sector and N the cap sector. A clockwise-walked patch negates all three, so
-// the interval below is the one between N and W in either order.
+// The about-c part reads an enclosure [denotedLo, denotedHi] of T's own flux
+// about c and B's flux with its proven bound, all at the patch's own radii and
+// levels. capband's chordLocusDenotedFlux forms the enclosure from two
+// sources and keeps their intersection:
 //
-//   - Flux_c(T) lies between N and W. At height z, T is the cone over the
+//   - The sandwich. W is the rotationally symmetric cone sector over the
+//     UNION of the side window (th0, th1) and the cap window (capTh0, capTh1)
+//     on both directrices, and N the same sector over their INTERSECTION.
+//     When both corners trim the cap window inside the side window, W is the
+//     side sector and N the cap sector. At height z, T is the cone over the
 //     window [a(z), b(z)] whose ends are the two corner-foot loci's azimuths
 //     about the centre. Each locus runs from the corner, at the side window's
 //     end, to the cap-level foot, at the cap window's end, and its azimuth is
@@ -2303,67 +2304,55 @@ func BandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
 //     both cases φ stays on one side of its reference line while the two
 //     carriers never touch, which capband.MiterLocusSliverFlux requires
 //     before it bounds the corner (a refusal makes cornerFlux +Inf and this
-//     term unbounded). A reflex foot and a G1 join run along a straight
-//     ruling between the two ends. So a(z) lies between th0 and capTh0 and
-//     b(z) between th1 and capTh1, and T's window holds the intersection and
-//     lies in the union. Its flux is sandwiched the same way only where the
-//     flux density has one sign over the cone, so all three fluxes are taken
-//     about the arc's own axis at the side level (capband's
-//     chordLocusResidualAllow moves the centre to the origin and the side
-//     level to zero). About that point, the cone at angle θ and axial offset z
-//     has radius r(z) = R0 + (R1-R0)·z/H, and its flux density per dθ·dz is
-//     R0·r(z), never negative. About any other point the density changes sign
-//     across the cone and the sandwich fails.
-//   - Flux_c(B) lies within ε of the interval between N and W, with
-//     ε = ChordLocusBuiltExcursion of the three enclosures: how far B's
-//     enclosure reaches past the ends of that interval. ε is proven because
-//     each enclosure is, and it needs no claim about where the ruled surface
-//     sits. ε is zero wherever B's enclosure lies inside the interval with
-//     room for the three bounds.
+//     term unbounded). A reflex foot and a G1 join run along the circular
+//     wall's own radial. So a(z) lies between th0 and capTh0 and b(z) between
+//     th1 and capTh1, and T's window holds the intersection and lies in the
+//     union. Its flux is sandwiched the same way only where the flux density
+//     has one sign over the cone, so every flux here is taken about the arc's
+//     own axis at the side level (capband's chordLocusFluxes moves the centre
+//     to the origin and the side level to zero). About that point, the cone
+//     at angle θ and axial offset z has radius r(z) = R0 + (R1-R0)·z/H, and
+//     its flux density per dθ·dz is R0·r(z), never negative. About any other
+//     point the density changes sign across the cone and the sandwich fails.
+//   - The locus spans. The same monotone azimuth puts each locus's angle over
+//     an offset sub-range between its two ends' angles, which
+//     capband.CornerLocusSpans encloses from the corner feet at the range
+//     ends, so T's window width at each height is enclosed to within the two
+//     loci's movement over one sub-range. Integrating the density over each
+//     sub-range against those enclosures (capband's chordLocusSpanFlux)
+//     encloses T's flux to within about 1/32 of the sandwich's width.
 //
-// A number inside an interval and a number within ε of it differ by at most
-// the interval's width plus ε, so the about-c part is |W − N| plus both
-// reference bounds, plus ε. The bound never reads |W − B| alone. B and W end on different
-// rulings at each corner, and the corner triangle between those rulings
-// carries a flux of about ½·R0·R1·H·Φ for a corner skew Φ, which no bound on
-// how far B's interior points sit from W accounts for.
+// T's flux lies in [denotedLo, denotedHi] and B's within builtBound of
+// fluxBuilt, so the two differ by at most the larger of
+// denotedHi − (fluxBuilt − builtBound) and (fluxBuilt + builtBound) −
+// denotedLo. The bound never reads |W − B| through a displacement bound: B
+// and W end on different rulings at each corner, and the corner triangle
+// between those rulings carries a flux of about ½·R0·R1·H·Φ for a corner skew
+// Φ, which no bound on how far B's interior points sit from W accounts for.
 //
-// Every operation rounds outward: the sums and differences, the corner flux
-// included, are taken exactly and rounded up once. A flux or bound that does not lift, or a cornerFlux
-// that is negative or not finite, answers an unbounded term.
-func ChordLocusVolumeAllow(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound, cornerFlux float64) float64 {
-	if !(cornerFlux >= 0) || IsNonFinite(cornerFlux) {
+// Every operation rounds outward: the differences and the corner flux are
+// taken exactly and rounded up once. An input that does not lift, a
+// builtBound that is negative or not finite, an empty enclosure, or a
+// cornerFlux that is negative or not finite answers an unbounded term.
+func ChordLocusVolumeAllow(denotedLo, denotedHi, fluxBuilt, builtBound, cornerFlux float64) float64 {
+	if !(cornerFlux >= 0) || IsNonFinite(cornerFlux) || !(builtBound >= 0) {
 		return math.Inf(1)
 	}
-	slack, ok := chordLocusEnvelopeSlack(fluxWide, wideBound, fluxNarrow, narrowBound)
-	if !ok {
+	lo, hi := proofarith.FloatRat(denotedLo), proofarith.FloatRat(denotedHi)
+	b, bb := proofarith.FloatRat(fluxBuilt), proofarith.FloatRat(builtBound)
+	if lo == nil || hi == nil || b == nil || bb == nil || lo.Cmp(hi) > 0 {
 		return math.Inf(1)
 	}
-	excursion, ok := chordLocusExcursion(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound)
-	if !ok {
-		return math.Inf(1)
+	above := new(big.Rat).Sub(hi, new(big.Rat).Sub(b, bb))
+	below := new(big.Rat).Sub(new(big.Rat).Add(b, bb), lo)
+	gap := new(big.Rat)
+	if above.Cmp(gap) > 0 {
+		gap = above
 	}
-	slack.Add(slack, excursion)
-	return RatFloatUp(slack.Add(slack, proofarith.FloatRat(cornerFlux)))
-}
-
-// ChordLocusBuiltExcursion is ChordLocusVolumeAllow's ε, rounded up: an
-// ε ≥ 0 for which every built flux B within builtBound of fluxBuilt lies in
-// [min(W, N) − ε, max(W, N) + ε] for every wide flux W within wideBound of
-// fluxWide and every narrow flux N within narrowBound of fluxNarrow. With
-// w = fluxWide, n = fluxNarrow, b = fluxBuilt and their bounds wb, nb, bb, it
-// is
-//
-//	max(0, (b + bb) − max(w − wb, n − nb), min(w + wb, n + nb) − (b − bb)).
-//
-// It is taken exactly. An input that does not lift, or a bound that is
-// negative or not finite, answers +Inf.
-func ChordLocusBuiltExcursion(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound float64) float64 {
-	excursion, ok := chordLocusExcursion(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound)
-	if !ok {
-		return math.Inf(1)
+	if below.Cmp(gap) > 0 {
+		gap = below
 	}
-	return RatFloatUp(excursion)
+	return RatFloatUp(gap.Add(gap, proofarith.FloatRat(cornerFlux)))
 }
 
 // ChordLocusRegionAllow bounds three times the VOLUME of the region between
@@ -2495,69 +2484,6 @@ func ChordLocusShellUpper(radiusUpper, windowUpper, skewStart, skewEnd, heightUp
 	middle := ProductUpper(windowUpper, ChordLocusBuiltDeficitUpper(radiusUpper, skew))
 	corners := ProductUpper(AbsSumUpper(skewStart, skewEnd), ChordLocusCornerDeficitUpper(radiusUpper, skew))
 	return ProductUpper(ProductUpper(heightUpper, radiusUpper), AbsSumUpper(middle, corners))
-}
-
-// chordLocusEnvelopeSlack is |fluxWide − fluxNarrow| + wideBound + narrowBound
-// taken exactly: the most the true wide and narrow fluxes can differ by. A
-// value that does not lift, or a bound that is negative or not finite,
-// answers false.
-func chordLocusEnvelopeSlack(fluxWide, wideBound, fluxNarrow, narrowBound float64) (*big.Rat, bool) {
-	rs, ok := liftChordLocusFluxes(fluxWide, wideBound, fluxNarrow, narrowBound)
-	if !ok {
-		return nil, false
-	}
-	slack := new(big.Rat).Abs(new(big.Rat).Sub(rs[0], rs[2]))
-	return slack.Add(slack, rs[1]).Add(slack, rs[3]), true
-}
-
-// chordLocusExcursion is ChordLocusBuiltExcursion taken exactly.
-func chordLocusExcursion(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound float64) (*big.Rat, bool) {
-	rs, ok := liftChordLocusFluxes(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound)
-	if !ok {
-		return nil, false
-	}
-	w, wb, n, nb, b, bb := rs[0], rs[1], rs[2], rs[3], rs[4], rs[5]
-	// lowerTop is the least the interval's top end can be, upperBottom the
-	// most its bottom end can be.
-	lowerTop := ratMax(new(big.Rat).Sub(w, wb), new(big.Rat).Sub(n, nb))
-	upperBottom := ratMin(new(big.Rat).Add(w, wb), new(big.Rat).Add(n, nb))
-	above := new(big.Rat).Add(b, bb)
-	above.Sub(above, lowerTop)
-	below := new(big.Rat).Sub(upperBottom, b)
-	below.Add(below, bb)
-	return ratMax(new(big.Rat), ratMax(above, below)), true
-}
-
-func ratMax(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) >= 0 {
-		return a
-	}
-	return b
-}
-
-func ratMin(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) <= 0 {
-		return a
-	}
-	return b
-}
-
-// liftChordLocusFluxes lifts (value, bound) pairs to exact rationals. A value
-// that does not lift, or a bound that is negative or not finite, answers
-// false.
-func liftChordLocusFluxes(pairs ...float64) ([]*big.Rat, bool) {
-	out := make([]*big.Rat, len(pairs))
-	for i, x := range pairs {
-		if i%2 == 1 && !(x >= 0) {
-			return nil, false
-		}
-		r := proofarith.FloatRat(x)
-		if r == nil {
-			return nil, false
-		}
-		out[i] = r
-	}
-	return out, true
 }
 
 // ChordLocusCornerFlux is one mitered corner's share of the chord-locus term

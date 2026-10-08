@@ -120,6 +120,15 @@ type Patch struct {
 	// turn, and every corner whose locus is straight (a reflex foot or a G1
 	// join), and +Inf where a corner's sliver could not be bounded.
 	CornerFlux float64
+	// Locus0 and Locus1 enclose the corner-foot loci at the Th0 and Th1
+	// corners, span by span over the offset range [0, LocusSetback]: each
+	// span's angle about the centre, measured counter-clockwise from the ray
+	// through that corner's side directrix end (CornerLocusSpans). The
+	// chord-versus-locus term reads them to enclose the denoted surface's own
+	// flux. Either one empty, or LocusSetback not positive, leaves the term
+	// on the wide and narrow sectors alone.
+	Locus0, Locus1 []LocusSpan
+	LocusSetback   float64
 	// Held is how far each held number of a circular patch sits from the value
 	// the band's closed surface reads there (HeldAllow). The Cone arms of
 	// RawFlux and FirstMomentFlux enclose their closed forms over every value
@@ -151,4 +160,12 @@ type HeldAllow struct {
 // zero reports whether every field is exactly zero.
 func (h HeldAllow) zero() bool {
 	return h == HeldAllow{}
+}
+
+// LocusSpan is one offset sub-range [T0, T1] of a corner-foot locus and a
+// proven enclosure [Lo, Hi] of the locus's angle about the patch centre over
+// it, measured counter-clockwise from the ray through the corner's side
+// directrix end.
+type LocusSpan struct {
+	T0, T1, Lo, Hi float64
 }

@@ -665,7 +665,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				return capBandResult{}, err
 			}
 			g.Held = held
-			if g.Th1 < g.Th0 {
+			swapped := g.Th1 < g.Th0
+			if swapped {
 				// The SAME swap, applied to both pairs together: g.Th0 must
 				// keep pairing with g.CapTh0 (both the wall's OWN start
 				// corner) and g.Th1 with g.CapTh1 (both its end corner), or
@@ -686,6 +687,9 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				return capBandResult{}, err
 			}
 			g.CornerFlux = cornerFlux
+			if err := setCapPatchLocusSpans(budget, &g, walks, joins, i, setback, swapped); err != nil {
+				return capBandResult{}, err
+			}
 		} else {
 			g.SideA = Point2{U: w.StartU, V: w.StartV}
 			g.SideB = Point2{U: w.EndU, V: w.EndV}
@@ -741,6 +745,50 @@ func setCapPatchSkews(g *capPatchGeom, side0, side1, cap0, cap1 Point2) error {
 		return errCapPatchSkewUnbounded
 	}
 	g.SkewStart, g.SkewEnd = s0, s1
+	return nil
+}
+
+// setCapPatchLocusSpans stores circular wall i's two corner-foot loci as
+// angle spans (capband.CornerLocusSpans), the start corner's on Locus0 and
+// the end corner's on Locus1, or the other way round where the patch's
+// window was swapped to run Th0 < Th1. A reflex foot and a G1 join run along
+// the wall's own radial (capband.StraightLocusSpans). The spans map offset to
+// height through the setback dc, so a setback with conversion rounding, whose
+// true dc is known only to within dcDelta, stores none, and neither does a
+// corner whose sliver was not bounded or whose feet were not enclosed: the
+// chord-versus-locus term then reads the wide and narrow sectors alone.
+func setCapPatchLocusSpans(budget *proofbound.WorkBudget, g *capPatchGeom, walks []survey2d.SideWalk, joins []cornerJoin, i int, setback capSetback, swapped bool) error {
+	if setback.dcDelta != 0 || !(g.CornerFlux < math.Inf(1)) {
+		return nil
+	}
+	n := len(walks)
+	w := walks[i]
+	spansAt := func(k int, sideU, sideV float64) ([]capband.LocusSpan, error) {
+		j := joins[k]
+		if j.arc || j.g1 {
+			return capband.StraightLocusSpans(setback.dc), nil
+		}
+		spans, ok, err := capband.CornerLocusSpans(budget, walks[(k+n-1)%n], walks[k], w.CU, w.CV, sideU, sideV, j.vU, j.vV, setback.dc)
+		if err != nil || !ok {
+			return nil, err
+		}
+		return spans, nil
+	}
+	start, err := spansAt(i, w.StartU, w.StartV)
+	if err != nil {
+		return err
+	}
+	end, err := spansAt((i+1)%n, w.EndU, w.EndV)
+	if err != nil {
+		return err
+	}
+	if start == nil || end == nil {
+		return nil
+	}
+	if swapped {
+		start, end = end, start
+	}
+	g.Locus0, g.Locus1, g.LocusSetback = start, end, setback.dc
 	return nil
 }
 

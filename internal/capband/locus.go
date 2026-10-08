@@ -75,7 +75,7 @@ func MiterLocusUpper(budget *proofbound.WorkBudget, prev, cur survey2d.SideWalk,
 // distance from the centre is the moment arm. A corner between two circular
 // walls encloses the locus velocity over each of the MiterSliverSubdivisions
 // ranges (capcontour.CircleCircleLocusVelocity) and the corner foot at each
-// range end (capcontour.CircleCircleLocusFoot), encloses the sliver from them
+// range end (capcontour.LocusFoot), encloses the sliver from them
 // (capcontour.LocusVelocityHull), and crosses it with the corner's own arm
 // from the centre (circleCircleSliverMoment). Each range, and the
 // closed form, charges one work step. A false result means no finite bound
@@ -135,7 +135,7 @@ func MiterLocusSliverFlux(budget *proofbound.WorkBudget, prev, cur survey2d.Side
 func circleCircleSliverMoment(budget *proofbound.WorkBudget, prev, cur survey2d.SideWalk,
 	cU, cV, apexU, apexV, lo, span float64) (float64, bool, error) {
 	var hull capcontour.LocusVelocityHull
-	start, ok := capcontour.CircleCircleLocusFoot(prev, cur, 0, apexU, apexV)
+	start, ok := capcontour.LocusFoot(prev, cur, 0, apexU, apexV)
 	if !ok {
 		return 0, false, nil
 	}
@@ -147,7 +147,7 @@ func circleCircleSliverMoment(budget *proofbound.WorkBudget, prev, cur survey2d.
 		if !ok {
 			return 0, false, nil
 		}
-		end, ok := capcontour.CircleCircleLocusFoot(prev, cur, r[1], apexU, apexV)
+		end, ok := capcontour.LocusFoot(prev, cur, r[1], apexU, apexV)
 		if !ok {
 			return 0, false, nil
 		}
@@ -196,4 +196,91 @@ func locusRanges(span float64, n int) [][2]float64 {
 		t0 = t1
 	}
 	return ranges
+}
+
+// CornerLocusSpans encloses the corner-foot locus of the corner between the
+// walls prev and cur, at (apexU, apexV), over each of the
+// MiterLocusSubdivisions ranges of [0, dc]: the locus's angle about the
+// circular patch's centre (cU, cV), measured counter-clockwise from the ray
+// through (sideU, sideV), the patch's own side directrix end at this corner.
+//
+// The foot at each range end is enclosed by capcontour.LocusFoot, whose
+// nearest root is the locus wherever the corner's sliver was bounded
+// (MiterLocusSliverFlux), and the angle of a box is the hull of its four
+// corners' angles: the directions a convex box subtends from a point outside
+// it run between two of its vertices. Every corner must lie less than a
+// quarter turn from the ray, which also keeps the centre out of the box. The
+// locus's angle is monotone in the offset amount while the carriers do not
+// touch (proofbound.ChordLocusVolumeAllow derives it), so over each range it
+// lies between its two ends' angles. Each foot charges one work step. ok is
+// false where a foot is not enclosed or a corner leaves the quarter turn.
+func CornerLocusSpans(budget *proofbound.WorkBudget, prev, cur survey2d.SideWalk,
+	cU, cV, sideU, sideV, apexU, apexV, dc float64) ([]LocusSpan, bool, error) {
+	if !(dc > 0) || proofbound.IsNonFinite(dc) {
+		return nil, false, nil
+	}
+	rc := func(x float64) *big.Rat { return proofarith.FloatRat(x) }
+	ru, rv, rsu, rsv := rc(cU), rc(cV), rc(sideU), rc(sideV)
+	if ru == nil || rv == nil || rsu == nil || rsv == nil {
+		return nil, false, nil
+	}
+	au, av := new(big.Rat).Sub(rsu, ru), new(big.Rat).Sub(rsv, rv)
+	angle := func(t float64) (*big.Rat, *big.Rat, bool, error) {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
+			return nil, nil, false, err
+		}
+		foot, ok := capcontour.LocusFoot(prev, cur, t, apexU, apexV)
+		if !ok {
+			return nil, nil, false, nil
+		}
+		var lo, hi *big.Rat
+		for _, pu := range []*big.Rat{foot.U.Lo, foot.U.Hi} {
+			for _, pv := range []*big.Rat{foot.V.Lo, foot.V.Hi} {
+				du, dv := new(big.Rat).Sub(pu, ru), new(big.Rat).Sub(pv, rv)
+				cross := new(big.Rat).Sub(new(big.Rat).Mul(au, dv), new(big.Rat).Mul(av, du))
+				dot := new(big.Rat).Add(new(big.Rat).Mul(au, du), new(big.Rat).Mul(av, dv))
+				if dot.Sign() <= 0 {
+					return nil, nil, false, nil
+				}
+				a := proofbound.Atan2Interval(cross, dot, false)
+				if lo == nil || a.Lo.Cmp(lo) < 0 {
+					lo = a.Lo
+				}
+				if hi == nil || a.Hi.Cmp(hi) > 0 {
+					hi = a.Hi
+				}
+			}
+		}
+		return lo, hi, true, nil
+	}
+	ranges := MiterLocusRanges(dc)
+	spans := make([]LocusSpan, 0, len(ranges))
+	prevLo, prevHi, ok, err := angle(0)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	for _, r := range ranges {
+		lo, hi, ok, err := angle(r[1])
+		if err != nil || !ok {
+			return nil, false, err
+		}
+		spanLo, spanHi := prevLo, prevHi
+		if lo.Cmp(spanLo) < 0 {
+			spanLo = lo
+		}
+		if hi.Cmp(spanHi) > 0 {
+			spanHi = hi
+		}
+		spans = append(spans, LocusSpan{T0: r[0], T1: r[1],
+			Lo: proofbound.RatFloatDown(spanLo), Hi: proofbound.RatFloatUp(spanHi)})
+		prevLo, prevHi = lo, hi
+	}
+	return spans, true, nil
+}
+
+// StraightLocusSpans is the span list of a corner whose locus runs along the
+// circular wall's own radial through the corner, a reflex foot or a G1 join:
+// its angle from that ray is zero over the whole range [0, dc].
+func StraightLocusSpans(dc float64) []LocusSpan {
+	return []LocusSpan{{T0: 0, T1: dc}}
 }

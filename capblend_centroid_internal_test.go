@@ -505,3 +505,61 @@ func TestCapBandCoordUpperCoversTheCornerLoci(t *testing.T) {
 	}
 	require.Greater(t, reach, cx+r, `the loci reach past the hole's own coordinates`)
 }
+
+// TestChordLocusSpanFluxEnclosesTheDenotedFlux checks the denoted surface's
+// flux enclosure the chord-versus-locus volume term reads
+// (capband.ChordLocusSpanFlux) on the quarter disk R = 60 chamfered 4 mm, a
+// real build whose two corners carry locus spans. The reference integrates
+// the cone's flux density about the arc's axis, r(v)·R0·h per unit angle and
+// height fraction, over the window between the two corner-foot loci, which
+// for a corner where a line through the centre meets the arc is the foot
+// (√((R−t)² − t²), t) at offset t = v·d. The enclosure must hold the
+// reference and be at most an eighth as wide as the sandwich between the
+// wide and narrow sectors.
+//
+// Shown to fail on 2026-10-09: with chordLocusSpanFlux leaving out the end
+// corner's share, the enclosure misses the reference.
+func TestChordLocusSpanFluxEnclosesTheDenotedFlux(t *testing.T) {
+	t.Parallel()
+	const qR, qD = 60.0, 4.0
+	g := chamferedCircularBand(t, quarterDiskSection(qR), 20, qD, nil).geom
+	require.NotEmpty(t, g.Locus0)
+	require.NotEmpty(t, g.Locus1)
+
+	sideZ, capZ := capband.AxisAnchoredLevels(g.SideZ, g.CapZ)
+	h := capZ - sideZ
+	// Composite Simpson's rule over 2000 intervals; the integrand is smooth
+	// on [0, 1], so its error sits far below the tolerance.
+	const n = 2000
+	ref := 0.0
+	for i := range n + 1 {
+		v := float64(i) / n
+		w := 2.0
+		switch {
+		case i == 0 || i == n:
+			w = 1
+		case i%2 == 1:
+			w = 4
+		}
+		off := v * qD
+		foot := math.Sqrt((qR-off)*(qR-off) - off*off)
+		phi := math.Atan2(off, foot)
+		r := g.SideRadius + (g.CapRadius-g.SideRadius)*v
+		width := (g.Th1 - g.Th0) - 2*phi
+		ref += w / (3 * n) * r * (g.SideRadius*h - sideZ*(g.CapRadius-g.SideRadius)) * width
+	}
+	if !g.SweepCCW {
+		ref = -ref
+	}
+
+	span, ok := capband.ChordLocusSpanFlux(g)
+	require.True(t, ok)
+	lo, _ := span.Lo.Float64()
+	hi, _ := span.Hi.Float64()
+	tol := 1e-12 * math.Abs(ref)
+	require.True(t, lo-tol <= ref && ref <= hi+tol, `the span enclosure [%v, %v] must hold the denoted flux %v`, lo, hi, ref)
+
+	wide, narrow, _ := capband.ChordLocusFluxes(g)
+	require.LessOrEqual(t, hi-lo, math.Abs(wide.Value-narrow.Value)/8,
+		`the span enclosure (%v wide) must be far tighter than the sandwich (%v)`, hi-lo, math.Abs(wide.Value-narrow.Value))
+}
