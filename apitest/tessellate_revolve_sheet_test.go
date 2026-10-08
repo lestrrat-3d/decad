@@ -323,7 +323,7 @@ func TestSurfaceRevolveSheetReachesNoBoolean(t *testing.T) {
 // offAxisSemicircleSketch builds semicircleSketch's own half-disc shifted
 // entirely clear of the revolve axis (diameter at v=10, arc bulging to
 // v=15): a two-walk loop — one straight, one circular — whose CIRCULAR
-// walk's revolveMeridianMin is 1 (unlike semicircleSketch's own 2, since
+// walk's revolvesampling.MeridianMin is 1 (unlike semicircleSketch's own 2, since
 // neither of ITS endpoints sits on the axis here), so a coarse tolerance can
 // chord it to a single chord with no interior station.
 func offAxisSemicircleSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {

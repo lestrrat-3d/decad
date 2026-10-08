@@ -351,15 +351,15 @@ func TestChordCountHonoursTheWalkMinimum(t *testing.T) {
 		// A circular generator with both ends on the axis cannot chord to a
 		// single on-axis segment (docs/tessellation-design.md §9).
 		meridian := survey2d.SegmentWalk{Radius: 5, Th0: 0, Th1: math.Pi, Kind: survey2d.WalkCircular, StartV: 0, EndV: 0}
-		require.Equal(t, 2, revolveMeridianMin(meridian))
-		n, _, err := chordCount(meridian, 1000, revolveMeridianMin(meridian))
+		require.Equal(t, 2, revolvesampling.MeridianMin(meridian))
+		n, _, err := chordCount(meridian, 1000, revolvesampling.MeridianMin(meridian))
 		require.NoError(t, err)
 		require.Equal(t, 2, n)
 
 		offAxis := survey2d.SegmentWalk{Radius: 5, Th0: 0, Th1: math.Pi, Kind: survey2d.WalkCircular, StartV: 1, EndV: 2}
-		require.Equal(t, 1, revolveMeridianMin(offAxis))
+		require.Equal(t, 1, revolvesampling.MeridianMin(offAxis))
 		closed := survey2d.SegmentWalk{Radius: 5, Th0: 0, Th1: 2 * math.Pi, Kind: survey2d.WalkCircular, Closed: true}
-		require.Equal(t, 3, revolveMeridianMin(closed))
+		require.Equal(t, 3, revolvesampling.MeridianMin(closed))
 	})
 
 	t.Run("a minimum past the per-walk cap refuses", func(t *testing.T) {

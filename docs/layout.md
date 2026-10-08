@@ -304,8 +304,8 @@ the rules leave to the byte budget.
 | `internal/tessellation/` | Recorded-loop chording, prism/cup topology, mesh bounds, cap-blend rings, audits and chording refusal errors. |
 | `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums and mesh proofs. |
-| `internal/revolvemesh/` | Revolve rings, construction and proofs. |
-| `internal/revolvesampling/` | Certified revolve meridian junctions, circular stations and sampled walks. |
+| `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs. |
+| `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
 | `internal/stackedrecord/` | Derives and audits slab interfaces, wall columns, and exposed patch rings. See stacked-prism §2.2–§3. |

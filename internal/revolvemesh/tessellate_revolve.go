@@ -1,7 +1,12 @@
 package revolvemesh
 
 import (
+	"context"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
+	"github.com/lestrrat-3d/r3"
 )
 
 // RevMeridian is one meridian sample: either a junction between two
@@ -36,4 +41,66 @@ func (s RevMeridian) At(l int) int {
 		return s.Ring[0]
 	}
 	return s.Ring[l%len(s.Ring)]
+}
+
+// CoordinateAreaAllow charges the coordinate displacement of each facet at
+// its three corners. The combined construction and placement displacement
+// covers the ideal, stored unplaced, and placed triangles.
+func CoordinateAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 {
+	if delta <= 0 {
+		return 0
+	}
+	total := 0.0
+	for _, tri := range tris {
+		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+		total = proofbound.AbsSumUpper(total, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))
+	}
+	return total
+}
+
+// EmitCellTriangles writes one meridian cell's facets across the complete
+// angular sequence. With material to the walk's left in (z, rho) and a
+// right-handed increasing angle, dX/dt cross dX/dphi points outward, so the
+// fixed (meridian, angle) diagonal gives the outward winding. The axis side
+// is already in the caller's axis frame; a reflected placement reverses the
+// assembled mesh afterward. A ring on the axis emits one fan triangle per
+// angular interval.
+func EmitCellTriangles(lo, hi RevMeridian, nPhi int, emit func([3]int)) {
+	for l := range nPhi {
+		a, d := lo.At(l), lo.At(l+1)
+		b, c := hi.At(l), hi.At(l+1)
+		switch {
+		case lo.OnAxis:
+			emit([3]int{a, b, c})
+		case hi.OnAxis:
+			emit([3]int{a, b, d})
+		default:
+			emit([3]int{a, b, c})
+			emit([3]int{a, c, d})
+		}
+	}
+}
+
+// EmitCapTriangles triangulates the meridian region once in the (z, rho)
+// plane and maps each triangle onto the two already allocated end rings.
+// The end winding follows that plane's normal; the start winding reverses it.
+// Pole samples reuse their single interned vertex at both ends.
+func EmitCapTriangles(ctx context.Context, samples [][]RevMeridian, pts []sectionrecord.Point2,
+	loopIdx [][]int, last int, emit func(end, start [3]int)) error {
+	var startV, endV []int
+	for _, loop := range samples {
+		for _, s := range loop {
+			startV = append(startV, s.At(0))
+			endV = append(endV, s.At(last))
+		}
+	}
+	tris, err := triangulation.Triangulate(ctx, pts, loopIdx)
+	if err != nil {
+		return err
+	}
+	for _, tri := range tris {
+		emit([3]int{endV[tri[0]], endV[tri[1]], endV[tri[2]]},
+			[3]int{startV[tri[0]], startV[tri[2]], startV[tri[1]]})
+	}
+	return nil
 }

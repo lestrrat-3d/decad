@@ -13,7 +13,7 @@ import (
 // ChordWalkMin is docs/tessellation-design.md §3's default walk minimum: a
 // whole closed curve needs at least three chords to bound a polygon, and every
 // other walk needs one. A revolve meridian has a third case of its own
-// (revolveMeridianMin), which is why the minimum is chordCount's parameter
+// (revolvesampling.MeridianMin), which is why the minimum is chordCount's parameter
 // rather than a property it reads off the walk.
 func ChordWalkMin(w survey2d.SegmentWalk) int {
 	if w.Closed {
@@ -28,7 +28,7 @@ func ChordWalkMin(w survey2d.SegmentWalk) int {
 // sagitta r·(1 − cos(Δθ/2)) it encloses. The per-chord angle never exceeds π,
 // so consecutive samples are always distinct.
 //
-// nMin is the walk's own minimum count (chordWalkMin, or revolveMeridianMin for
+// nMin is the walk's own minimum count (chordWalkMin, or revolvesampling.MeridianMin for
 // a revolve meridian). docs/tessellation-design.md §3 asks for it to be tried
 // FIRST: when its own sagitta already fits the budget it is the answer, and the
 // inverse below — which is undefined for a budget at or above 2r — is never
