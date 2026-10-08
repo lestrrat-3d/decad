@@ -93,7 +93,8 @@ type LoftChordedAllow struct {
 	// departure rather than the build-wide maximum. SkirtLeg is that section's
 	// skirt between each held seam and its projection onto the cap plane,
 	// productUpper(productUpper(matchedDelta, delta), perimeter), the
-	// perimeter summed over EVERY seam cell's arc-length upper bounds, and
+	// perimeter summed over EVERY held seam cell, each side the larger of
+	// its arc-length upper bound and its held chord's exact length, and
 	// exactly 0 at delta == 0. Together with the vertex sweep they bound the
 	// MEASURE of the region the chord-to-curve homotopy sweeps, which is what
 	// MassAccumulator.Centroid's shift form spends.

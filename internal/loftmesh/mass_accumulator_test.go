@@ -39,6 +39,10 @@ func TestCentroidClearanceIsExact(t *testing.T) {
 		require.Positive(t, next.Cmp(gap), "the clearance must be the largest float at or below the exact gap")
 	}
 
+	huge := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 1100))
+	require.Equal(t, math.MaxFloat64, loftmesh.CentroidClearance(huge, 1),
+		"a gap past float64's range answers the largest finite float, never a panic")
+
 	require.Zero(t, loftmesh.CentroidClearance(vol, volValue), "an allowance at or above the volume leaves no clearance")
 	require.Zero(t, loftmesh.CentroidClearance(vol, math.NaN()), "a NaN allowance states no bound")
 	require.Zero(t, loftmesh.CentroidClearance(vol, math.Inf(1)), "an infinite allowance states no bound")

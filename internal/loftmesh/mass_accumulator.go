@@ -327,6 +327,12 @@ func CentroidClearance(vol *big.Rat, allow float64) float64 {
 		return 0
 	}
 	f, _ := gap.Float64()
+	if math.IsInf(f, 1) {
+		// The gap is past float64's range, so the largest finite float is
+		// still at or below it; the volume itself is refused downstream as
+		// non-finite.
+		return math.MaxFloat64
+	}
 	if new(big.Rat).SetFloat64(f).Cmp(gap) > 0 {
 		f = math.Nextafter(f, math.Inf(-1))
 	}
@@ -415,15 +421,18 @@ func (m *MassAccumulator) Centroid(verts []r3.Vec, tris [][3]int) (r3.Vec, float
 
 // CentroidMeasureAllow is Centroid's epsV (docs/loft-gear-bounds-design.md
 // §3): a proven upper bound on the measure of the region where the true solid
-// and the corrected held body differ. That region is swept in three steps, and
-// each has its charge:
+// and the corrected held body differ. One homotopy sweeps it, every cell
+// moving at once so the surface stays closed at the rungs cells share, and
+// each part of the motion has its charge:
 //
 //   - the held caps, each within delta of its cap plane, project onto the
-//     plane, and every cell whose chord departure is zero moves to its exact
-//     place, both at speed at most delta over held triangles:
-//     proofbound.SweptVolumeAllow over the perturbed area, zero at delta == 0;
-//   - every chorded cell moves from its ruled patch to the true surface:
-//     LoftChordedAllow.WallLeg, each cell at its own matched departure;
+//     plane, and every cell whose chord departure is zero moves by vertex
+//     interpolation to its exact place, both at speed at most delta over held
+//     triangles: proofbound.SweptVolumeAllow over the perturbed area, zero at
+//     delta == 0;
+//   - every chorded cell moves from its ruled patch to the true surface under
+//     the chord-to-curve homotopy: LoftChordedAllow.WallLeg, each cell at its
+//     own matched departure;
 //   - the skirt joining every held seam cell to the cap plane moves with it:
 //     LoftChordedAllow.SkirtLeg, zero at delta == 0.
 //

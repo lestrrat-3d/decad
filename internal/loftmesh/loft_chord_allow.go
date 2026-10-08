@@ -158,12 +158,18 @@ func ComputeLoftChordedAllow(
 	for i, p := range pairs {
 		n := p.Cells
 		for j := range n {
-			// The skirt runs along every seam cell, a zero-departure one
-			// included: its held seam is as far off the cap plane as any.
-			skirtPerimeterUpper = proofbound.AbsSumUpper(skirtPerimeterUpper, p.ArcUpperV[j], p.ArcUpperW[j])
 			jn := (j + 1) % n
 			vLo, vHi := verts[vIdx[i][j]], verts[vIdx[i][jn]]
 			wLo, wHi := verts[wIdx[i][j]], verts[wIdx[i][jn]]
+			// The skirt runs along every HELD seam cell, a zero-departure one
+			// included: its held seam is as far off the cap plane as any.
+			// ArcUpper bounds the true segment, and a held chord joining two
+			// displaced stations can be up to 2·delta longer, so each side
+			// takes the larger of that and the held chord's own exact length.
+			skirtPerimeterUpper = proofbound.AbsSumUpper(skirtPerimeterUpper,
+				math.Max(p.ArcUpperV[j], proofbound.CellSpanUpper(vLo, vHi)),
+				math.Max(p.ArcUpperW[j], proofbound.CellSpanUpper(wLo, wHi)),
+			)
 			if p.Faceted[j] && p.MatchedDelta[j] <= 0 {
 				// A faceted cell's held triangle pair IS the boundary it
 				// denotes, so its true departure is exactly zero: excluding

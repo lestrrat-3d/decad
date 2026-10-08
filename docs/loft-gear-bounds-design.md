@@ -161,19 +161,26 @@ vertex sweep, or loft §8.1's residual where that is still the shipped form):
 the clearance reads `Volume`'s proven enclosure of `V'`, so S12 stays exactly
 the test `Volume` states.
 
-**The measure `epsV` covers a three-step sweep, each step charged.** The
-winding argument needs `∫ |w_1 − w_0| ≤ epsV` for a homotopy that keeps the
-surface closed, and with `delta > 0` the held caps are not in their planes:
+**The measure `epsV` covers one closed-surface sweep, each part charged.**
+The winding argument needs `∫ |w_1 − w_0| ≤ epsV` for a homotopy that keeps
+the surface closed, and with `delta > 0` the held caps are not in their
+planes. Every part moves at once, over the same `t`, so cells that share a
+rung stay joined along it; moving one family of cells first would tear the
+surface at those rungs.
 
-1. project each held cap onto its plane `Π` and move every cell whose chord
-   departure is zero (`p.MatchedDelta[j] <= 0`, which no chorded leg
-   charges) to its exact place; both move held triangles at speed at most
-   `delta`, so `sweptVolumeAllow(delta, perturbedAreaUpper)` charges them;
-2. apply `Φ` to every chorded cell, charged per cell by `wallLeg`;
-3. add the skirt between every seam cell, zero-departure cells included, and
-   its projection onto `Π`: width at most `delta`, speed at most
-   `matchedDelta`, so `skirtLeg = productUpper(productUpper(matchedDelta,
-   delta), Σ_all cells (arcLenUpperV_k + arcLenUpperW_k))`.
+- each held cap projects onto its plane `Π`, and every cell whose chord
+  departure is zero (`p.MatchedDelta[j] <= 0`, which no chorded leg charges)
+  moves by vertex interpolation to its exact place; both move held
+  triangles at speed at most `delta`, so
+  `sweptVolumeAllow(delta, perturbedAreaUpper)` charges them;
+- every chorded cell moves by `Φ`, charged per cell by `wallLeg`; its corners
+  are the same held vertices the faceted cells interpolate;
+- the skirt between every held seam cell, zero-departure cells included, and
+  its projection onto `Π` has width at most `delta` and moves at speed at
+  most `matchedDelta`, so `skirtLeg = productUpper(productUpper(matchedDelta,
+  delta), Σ_all cells (seamV_k + seamW_k))`. Each `seam_k` is the larger of
+  the cell's `arcLenUpper_k`, which bounds the TRUE segment, and the held
+  chord's exact length `cellSpanUpper`, which can exceed it by `2·delta`.
 
 The vertex sweep is therefore REQUIRED in `epsV` whenever `delta > 0`.
 
