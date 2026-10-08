@@ -154,15 +154,16 @@ Three consequences the table makes visible:
 `MirrorCornerJoin` in `internal/offset2d/section.go`'s family: `k` is the kept
 walk and `r` the removed neighbour; `atEnd` says whether `v` is `k`'s end
 (`K`'s end, `r` follows) or its start (`K`'s start, `r` precedes). It returns
-`Join{VertU, VertV: v, M: q}` with `Arc` and `G1` false; the caller writes the
-rim segment from `v`, `q` and `r`'s record (a `LineSeg`, or an `ArcSeg` about
-`r`'s centre in `r`'s own sense).
+`Join{VertU, VertV: v, M: q}` with `Arc` and `G1` false. `offset2d.RimSegment`
+writes the rim segment from that join and `r`'s record: a `LineSeg`, or an
+`ArcSeg` about `r`'s centre turning in the entering sense from `v` to `q`, and
+the other way when the caller's loop walks it from `q` to `v`.
 
 | Step | Rule |
 |---|---|
 | classify | `cross = k̂ × r̂`, `dot = k̂ · r̂` on the held unit tangents, with modify §8's dead zone: `|cross| ≤ tol` is SO1 (`ErrUnsupported`) whatever `dot` is — a smooth join and a cusp alike |
 | entering direction | `r̂ · n̂ > 0` forward, else backward; `n̂` is `k`'s left unit normal at `v` times `s` |
-| exact pairs | both carriers axis-aligned lines in the section plane (`k` with `du = 0` or `dv = 0`, `r` on the other axis): `q` is the pair of levels — `r`'s constant coordinate and `k`'s offset level `v_coord + s·t` — read as `stackedbrep`'s plane–plane junction reads it, so the record and the engine hold one point. A right-angle end whose float `dot` is exactly zero and whose walks are not both axis-aligned keeps the foot `v + s·t·n̂`, bit for bit what `offsetOpenChain` writes today. An axis-aligned line `r` through the centre of a circular `k`: `q` is the centre moved by `k'`'s radius along that axis |
+| exact pairs | a straight `r` whose raw tangent at `v` has a float dot product of exactly zero with `k`'s: `q` is `k`'s offset foot `v + s·t·n̂` along `k`'s held unit normal, bit for bit what the right-angle open chain wrote before this rule. Two axis-aligned lines (`k` with `du = 0` or `dv = 0`, `r` on the other axis) are such a pair, and there the foot is the pair of levels — `r`'s constant coordinate, which `v` carries, and `k`'s offset level `v_coord + s·t` — read as `stackedbrep`'s plane–plane junction reads it, so the record and the engine hold one point. An axis-aligned line `r` through the centre of a circular `k`: `q` is the centre moved by `k'`'s radius along that axis |
 | float solve | otherwise `Intersect(offsetCarrier(k, s, t), offsetCarrier(r, s, 0))` over all roots, choosing the first root reached from `v` in the entering direction: along a line by signed parameter; around a circle by the signed sweep from `v` in the entering sense. No root, or the first root reached lying on `carrier(k)` (the circle re-crosses `k` before `k'`), is SO1 |
 | span | the forward cut must lie strictly inside `r`'s span: a line by parameter in `(0, 1)`, an arc by sweep strictly below `r`'s own; otherwise SO2. A backward cut lies off `r`'s span by construction and has no span test; the audits of §4.7 decide whether it crosses anything |
 | consumption | `k'` trimmed at `q` must still advance along `k` (`WalkConsumed` with `q` as the trimmed end, modify §7's S11a reading); a consumed `k'` is S11a |
@@ -173,10 +174,19 @@ form is re-evaluated over rational intervals across the whole thickness
 interval `[t − tDelta, t + tDelta]`, with `k`'s walk taken exactly and `r`'s
 carrier exact at offset zero, the roots enclosed with outward-rounded square
 roots, and the held `q` charged its enclosure's greatest reach.
-`offset2d.ChainReach(walks, ends, s, t, amount, tol)` is `LoopReach` for an
-open chain: interior corners as `LoopReach` reads them, each end through the
-rim cut's enclosure. The exact pairs above have a reach of the level sum's
-rounding plus `tDelta` alone. A reach the enclosure cannot bound is
+`offset2d.OpeningReach` is that enclosure for one opening end: `k`'s offset
+carrier and `r`'s own carrier are enclosed as `LoopReach` encloses a miter's,
+every root is enclosed, and the denoted cut is the root the entering
+direction reaches first — on a straight `r` the one whose advance from `v` is
+certainly positive and certainly smallest, on a circular `r` the one the
+orientation of `v` and the two roots places first around the circle. It never
+takes the root nearest the held `q`. `offset2d.ChainReach(chain, line, end0,
+end1, s, t, amount, tol)` is `LoopReach` for an open chain: interior corners
+as `LoopReach` reads them, a mirror end against the widened axis line, and an
+opening end (`ChainEnd` with its `Removed` walk) through `OpeningReach`. A
+cut whose enclosure is the held float — the exact pairs over exact
+coordinates and an exactly converted thickness — reaches zero. A root the
+enclosures cannot place or order, or a reach the enclosure cannot bound, is
 `ErrUnbounded` (SO4).
 
 ## 3. The three regions
@@ -385,7 +395,11 @@ BO3.
 ## 7. Table DO — downstream
 
 A BO1 result is a prism and modify Table D covers it. A BO3 result is a
-revolve and reach Table DX's revolve column covers it. A BO2 result is an
+revolve and reach Table DX's revolve column covers it; where its wall carries
+a nonzero `sectionDelta` (§8), every reading charges it as reach §9.3.1 and
+`docs/surface-intersection-design.md` §7.2 state, the clearance, wall,
+minimum-radius and undercut surveys read `Suspect`, and a second shell or a
+junction blend refuses. A BO2 result is an
 ordinary `brepPayload`, and general-boolean §4.5 reads it unchanged:
 
 | DO | Consumer | BO2 |
@@ -405,9 +419,8 @@ ordinary `brepPayload`, and general-boolean §4.5 reads it unchanged:
 
 ## 8. The revolve's slanted rim
 
-Reach §9.3.2 admits an opening end only where the removed walk is straight and
-meets the kept walk at a right angle (`requireOpeningRim`). Table RO replaces
-that test: `offsetOpenChain`'s opening end calls `OpeningJoin`, and the wall
+A revolve side opening (reach §9.3.2) closes each opening end by Table RO:
+`offsetOpenChain`'s opening end calls `OpeningJoin`, and the wall
 region's rim is the piece of `carrier(r)` from `v` to `q` — a `LineSeg`
 sweeping a cone or a plane, or an `ArcSeg` about `r`'s centre sweeping a
 torus or a sphere, all surfaces `evalRevolve` builds from any line/arc
@@ -421,13 +434,16 @@ things differ from the prism and are stated here:
 
 - the exact-pair rule keeps today's right-angle feet bit for bit (§2.4), so
   every body §9.3.2 builds today is unchanged;
-- `sectionDelta` stays zero, as reach §9.3.1 states for every join of the
-  wall region: the revolve's wall record is the body's truth in the sense
-  modify §10 gives a fillet's foot. The prism route charges the cut (§4.4)
-  because a `brepPayload` carries a per-face displacement and the closed
-  prism shell charges its offset the same way.
+- the displacement is the whole wall's, not a face's: reach §9.3.1's
+  `openChainSectionDelta` encloses every interior miter, every axis join and
+  each opening's rim cut (`OpeningReach`, §2.4) and publishes three times the
+  largest reach as the revolve's `sectionDelta`, with `sectionWhole` set,
+  only where it is nonzero. A cut whose enclosure is the held float — a
+  right-angle rim on axis-aligned walks, the cone fixture's `(6.5, 4)` —
+  adds nothing, so those bodies stay bit for bit undisplaced. The prism route
+  charges the same reach per face (§4.4).
 
-SO1 and SO2 replace `requireOpeningRim`'s refusals; an opening end adjacent to
+SO1 and SO2 are the revolve's opening-end refusals; an opening end adjacent to
 the axis walk never arises (the run touches the axis walk, reach §9.3.2).
 
 ## 9. Required tests
@@ -508,14 +524,29 @@ through `(5,0)` from `(0,−5)` to `(0,5)`, then the chord `x = 0` — height
 **Revolve slanted rim** (PR 1). Meridian `(ρ,z) = (0,0),(8,0),(8,2),(5,6),
 (0,6)`, a full turn, `t = 1.5`, the cone `(8,2)→(5,6)` and the top disc
 removed: the cut `(6.5, 4)` on the cone's line, the rim a cone frustum between
-radii 8 and 6.5; volume `300π − 172.125π = 1023π/8`; the same body outward
-within its bound of the closed form the test derives the same way; the
-right-angle fixtures of `TestRevolveShellSideOpening` unchanged bit for bit;
-the top disc removed alone, `t = 1` (the obtuse end at `(5,6)` against the
-kept cone): `q = (3.75, 6)`, the cavity `(0,1),(7,1),(7,5/3),(3.75,6),(0,6)`
-a cylinder under a frustum, volume `300π − 1455.0625π/9 = 19919π/144`; a
-cone shorter than its own cut → SO2; a meridian whose removed walk is tangent
-to the kept one → SO1.
+radii 8 and 6.5; volume `300π − 172.125π = 1023π/8`. Outward at `t = 1.5` the
+cone's line walked back from `(8,2)` reaches `ρ = 9.5` at `z = 0`, the end of
+the corner arc about `(8,0)`, so the trimmed cylinder offset has no length
+left (S11a); outward at `t = 0.75` the cut is `(8.75, 1)` and the wall's
+`∫ρ dA` is `24 + 0.140625 + 6.28125 + 3.09375 + 1.125π`. The right-angle
+fixtures of `TestRevolveShellSideOpening` unchanged, and `OpeningJoin`
+reproducing the right-angle foot bit for bit; the top disc removed alone,
+`t = 1` (the obtuse end at `(5,6)` against the kept cone): `q = (3.75, 6)`,
+the cavity `(0,1),(7,1),(7,5/3),(3.75,6),(0,6)` a cylinder under a frustum,
+volume `300π − 1455.0625π/9 = 19919π/144`. The cone `(ρ,z) = (0,0),(10,0),
+(0,20)` without its base disk, `t = 1`: the acute end cuts the base plane at
+`ρ = (20 − √5)/2`, the wall's `∫ρ dA` is `(8000 − L³)/24` with `L = 20 − √5`.
+The bead — the chord `ρ = 6` from `z = 0` to `10` under the arc of radius 5
+about `(z,ρ) = (5,6)` — without its arc, `t = 1`: the cuts `(5 ± √24, 7)`
+inward and `(5 ± √24, 5)` outward, the rims torus bands about the arc's own
+centre, the wall's `∫ρ dA` `6(√24 + 25·asin 0.2) ± 2(125 − 24√24)/3`. Each float
+cut — the `5/3` miter, the `√5` acute cut, the bead's `√24` cuts — sweeps a
+seam vertex whose position bound is nonzero and encloses the closed form,
+while the cone fixture's exact `(6.5, 4)` cut and every right-angle rim on
+axis-aligned walks publish a zero `sectionDelta`. The
+cone shorter than its own cut (`t = 3.5`) → SO2; a ridge of two slants
+filleted and the fillet removed, so both ends of the kept chain are smooth →
+SO1.
 
 **Record and refusal fixtures** (every PR). `OpeningJoin` on each row of
 §2.3 against hand-derived points; the exact-pair rule reproducing the foot
@@ -563,8 +594,9 @@ carrying every new name and `go test . ./apitest/ -run '^TestCI'` passing.
 - **Section limit**: none for a side opening; S11a and SO3 decide existence
   (§5).
 - **Smooth end corners**: refused (SO1), not built as a zero-thickness edge.
-- **Displacement**: charged on the prism route (`brepFace.delta`), zero on the
-  revolve route as reach §9.3.1 states (§8).
+- **Displacement**: charged on both routes: per face on the prism route
+  (`brepFace.delta`), and on the revolve route as the wall's whole-section
+  `sectionDelta`, published only where nonzero (§8, reach §9.3.1).
 - **Side openings on brep and stacked receivers**: not in this design (SO7).
   Mapping a brep face to a segment of the recognised prism's section is a
   change to brep-modify §4.2 and ships, if at all, there.
@@ -579,8 +611,8 @@ every new root file. This document ships with PR 1.
 
 | PR | Lands | Files and functions | Proves | After |
 |---|---|---|---|---|
-| **1** | `offset2d.OpeningJoin` (§2.4) with its exact pairs and root choice; `offsetOpenChain` moved to `shell_chain.go` with an end-kind parameter; the revolve slanted rim (§8): `revolveShellSideWall` writes the rim from `OpeningJoin`, `requireOpeningRim` deleted | `internal/offset2d/opening.go`, `shell_chain.go`, `shell_revolve.go`, `apitest/revolve_shell_side_test.go` | the revolve fixtures of §9; `OpeningJoin`'s corner rows; right-angle bodies bit for bit | — |
-| **2** | the prism side opening, rectilinear: `classifyRemovedFaces` (caps by role, sides by `side(0,j)`, SO6), the three regions and the §4.7 audit (`shell_opening.go`), the stack through the engine into a `brepPayload` and the both-caps prism (`shell_opening_brep.go`), `offset2d.ChainReach` and the `delta` composition, `brepgeom.StackedWallRegions` with holes, `Engine.Event`; every non-axis-aligned walk in `K` or `R` refused with SO5's sentinel until PRs 3–4 | `shell_opening.go`, `shell_opening_brep.go`, `shell.go` (S2 replaced by the dispatch), `internal/offset2d/reach.go`, `internal/brepgeom/stacked_wall.go`, `internal/stackedbrep/record.go`, `apitest/shell_opening_test.go`, `shell_opening_internal_test.go` | the U-channel and L fixtures of §9, every sense and cap variant, DO11's route E on the result | 1 |
+| **1** (landed) | `offset2d.OpeningJoin` (§2.4) with its exact pairs and root choice; `offsetOpenChain` moved to `shell_chain.go` with an end-kind parameter; the revolve slanted rim (§8): `revolveShellSideWall` writes the rim from `OpeningJoin`, `requireOpeningRim` deleted; `offset2d.OpeningReach` charging each rim cut through `ChainReach` into the wall's `sectionDelta` | `internal/offset2d/opening.go`, `internal/offset2d/reach.go`, `shell_chain.go`, `shell_revolve.go`, `apitest/revolve_shell_side_test.go`, `internal/offset2d/opening_test.go`, `shell_chain_internal_test.go` | the revolve fixtures of §9; `OpeningJoin`'s corner rows; right-angle bodies bit for bit; float cuts charged, exact ones not | — |
+| **2** | the prism side opening, rectilinear: `classifyRemovedFaces` (caps by role, sides by `side(0,j)`, SO6), the three regions and the §4.7 audit (`shell_opening.go`), the stack through the engine into a `brepPayload` and the both-caps prism (`shell_opening_brep.go`), the `delta` composition over `offset2d.ChainReach`, `brepgeom.StackedWallRegions` with holes, `Engine.Event`; every non-axis-aligned walk in `K` or `R` refused with SO5's sentinel until PRs 3–4 | `shell_opening.go`, `shell_opening_brep.go`, `shell.go` (S2 replaced by the dispatch), `internal/offset2d/reach.go`, `internal/brepgeom/stacked_wall.go`, `internal/stackedbrep/record.go`, `apitest/shell_opening_test.go`, `shell_opening_internal_test.go` | the U-channel and L fixtures of §9, every sense and cap variant, DO11's route E on the result | 1 |
 | **3** | circular walks in `K` and `R`: line–arc and arc–line cuts through `ChainReach`'s circle enclosures; the refusal of PR 2 narrowed to oblique lines and arc–arc end corners | `shell_opening.go`, `internal/offset2d/opening.go`, `internal/offset2d/reach.go`, tests | the D fixtures of §9 | 2 |
 | **4** | oblique straight walks in `K` and `R`: the cap slabs' pre-split record of `r` at forward cuts (§4.2), the acute, obtuse and slanted-reflex corners; the refusal of PR 2 narrowed to arc–arc end corners | `shell_opening.go`, `shell_opening_brep.go`, tests | the triangle and trapezoid fixtures of §9 | 2 |
 | **5** | the engine's circle–circle junction at one recorded point (§4.3); arc–arc interior corners of `K` and arc–arc end corners | `internal/stackedbrep/record.go`, `shell_opening.go`, tests | two consecutive arcs at an end corner build; distinct walked ends still miss | 3 |

@@ -117,10 +117,13 @@ func cornerReach(prev, cur survey2d.SideWalk, j Join, amount proofbound.RatInter
 
 // ChainEnd is how one end of an open offset chain closes: on a line the
 // chain meets at its own mirror image (MirrorCornerJoin), or at a side
-// opening, where the end takes the walk's own offset foot.
+// opening, where the end takes OpeningJoin's rim cut against the removed
+// neighbour walk.
 type ChainEnd struct {
 	// Mirror is true for an end on the mirror line.
 	Mirror bool
+	// Removed is an opening end's removed neighbour walk.
+	Removed survey2d.SideWalk
 	// Join is the end's join exactly as the build took it.
 	Join Join
 }
@@ -128,7 +131,7 @@ type ChainEnd struct {
 // ChainReach is LoopReach for an open chain whose two ends close by end0
 // (at chain[0]'s start) and end1 (at the last walk's end). Interior corners
 // read LoopReach's own enclosures, through CornerJoin's rule. An opening end
-// encloses the walk's offset foot. A mirror end encloses the join
+// encloses its rim cut (OpeningReach). A mirror end encloses the join
 // MirrorCornerJoin builds against line, the mirror line widened by its own
 // proven bounds: a miter is the walk's offset carrier met with that line, a
 // G1 join and an arc's line end are the line point amount from the corner
@@ -166,7 +169,7 @@ func ChainReach(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, line M
 		atEnd bool
 		end   ChainEnd
 	}{{chain[0], false, end0}, {chain[m-1], true, end1}} {
-		r, err := chainEndReach(e.w, e.atEnd, e.end, line, amount)
+		r, err := chainEndReach(e.w, e.atEnd, e.end, line, s, amount, tol)
 		if err != nil {
 			return 0, err
 		}
@@ -183,7 +186,10 @@ type MirrorLine struct {
 }
 
 // chainEndReach encloses one end join of an open chain (ChainReach).
-func chainEndReach(w survey2d.SideWalk, atEnd bool, end ChainEnd, line MirrorLine, amount proofbound.RatInterval) (float64, error) {
+func chainEndReach(w survey2d.SideWalk, atEnd bool, end ChainEnd, line MirrorLine, s float64, amount proofbound.RatInterval, tol float64) (float64, error) {
+	if !end.Mirror {
+		return OpeningReach(w, end.Removed, atEnd, s, end.Join, amount, tol)
+	}
 	cu, cv, cb := w.StartU, w.StartV, w.StartBound
 	if atEnd {
 		cu, cv, cb = w.EndU, w.EndV, w.EndBound
@@ -196,9 +202,6 @@ func chainEndReach(w survey2d.SideWalk, atEnd bool, end ChainEnd, line MirrorLin
 	foot, ok := capcontour.OffsetFootEnclosure(corner, w, atEnd, amount)
 	if !ok {
 		return 0, ErrUnbounded
-	}
-	if !end.Mirror {
-		return foot.Reach(j.M.U, j.M.V), nil
 	}
 	if !line.Held.IsLine || !line.Enclosure.IsLine {
 		return 0, ErrUnbounded

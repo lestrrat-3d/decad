@@ -157,6 +157,7 @@ the rules leave to the byte budget.
 | `shell_offset.go` | Adapts Shell section offsets and proofs; audits the record. See modify §7–§9. |
 | `shell_cup.go` | `cupPayload`, its stacked record and view. See modify-reach §9.1. |
 | `shell_revolve.go` | `Body.Shell` of a revolve. See modify-reach §9.3. |
+| `shell_chain.go` | Offsets an open chain with axis and opening ends. See shell-opening §3. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See `docs/brep-modify-design.md`. |
 | `brep_modify_edge.go` | Route E: Table EB, restatement, the end-face blends, trims, blend faces and closure. See brep-modify §5. |
 
