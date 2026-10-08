@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 )
@@ -66,7 +67,7 @@ func revolveArcStation(ax axisFrame, seg CurveSegment, k, n int) (revolvemesh.Re
 	if err != nil {
 		return revolvemesh.RevMeridian{}, 0, err
 	}
-	start, span, ok := circularSegmentRange(seg)
+	start, span, ok := loftmesh.CircularSegmentRange(seg)
 	if !ok || n <= 0 || k <= 0 || k >= n {
 		return revolvemesh.RevMeridian{}, 0, revolvemesh.ErrRevolveStationEnclosure
 	}

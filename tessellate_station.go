@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -51,7 +52,7 @@ func chordStationBound(seg CurveSegment, k, n int, heldU, heldV float64) proofbo
 	if err != nil {
 		return underivable
 	}
-	start, span, ok := circularSegmentRange(seg)
+	start, span, ok := loftmesh.CircularSegmentRange(seg)
 	if !ok {
 		return underivable
 	}
@@ -84,7 +85,7 @@ func capOffsetStationBound(seg CurveSegment, k, n int, radiusOffset *big.Rat, he
 	if err != nil {
 		return underivable
 	}
-	start, span, ok := circularSegmentRange(seg)
+	start, span, ok := loftmesh.CircularSegmentRange(seg)
 	if !ok {
 		return underivable
 	}

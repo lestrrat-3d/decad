@@ -176,7 +176,7 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 			measured := sampledTangentEnergy(t, samples, p.v[j], p.v[jn])
 			require.InEpsilon(t, measured, p.tangentEnergyV[j], 1e-3, "cell %d: side 0's energy", j)
 			require.InEpsilon(t, measured, p.tangentEnergyW[j], 1e-3, "cell %d: side 1's energy", j)
-			md := chordCellDeltaUpper(p.matchedDelta[j], a.delta)
+			md := loftmesh.ChordCellDeltaUpper(p.matchedDelta[j], a.delta)
 			c := vHi.Sub(vLo).Len()
 			energyRuled := untwistedRuledLeg(c, wedgeHeight, md, p.arcUpperV[j], p.arcUpperW[j], measured, measured)
 			infRuled := untwistedRuledLeg(c, wedgeHeight, md, p.arcUpperV[j], p.arcUpperW[j], math.Inf(1), math.Inf(1))
@@ -552,9 +552,9 @@ func TestLoftFreeformPairPastItsShareRefusesS15(t *testing.T) {
 	_, _, _, _, err := loftPairings(p, p, []int{0}, walks, walks, 1, freeform.NewFreeformWork(), freeform.NewFreeformWork()) //nolint:dogsled // only the refusal is under test.
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorIs(t, err, freeform.ErrTooManyChords)
-	var capErr *loftStationCapError
+	var capErr *loftmesh.StationCapError
 	require.ErrorAs(t, err, &capErr)
-	require.Equal(t, loftStationCapError{Loop: 0, Seg: 1, M: 2, MMax: 1, AtLeast: true}, *capErr)
+	require.Equal(t, loftmesh.StationCapError{Loop: 0, Seg: 1, M: 2, MMax: 1, AtLeast: true}, *capErr)
 }
 
 // TestLoftDegreeOneTwistedPairPublishesTheRuledBody lofts the square

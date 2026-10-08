@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -33,7 +34,7 @@ func (b loftMassBuild) matchedDelta() float64 {
 	if b.sectionDelta <= 0 && b.sectionMatchedDelta <= 0 {
 		return 0
 	}
-	return chordCellDeltaUpper(b.sectionMatchedDelta, b.a.delta)
+	return loftmesh.ChordCellDeltaUpper(b.sectionMatchedDelta, b.a.delta)
 }
 
 // stationsPerLoop is the number of wall cells on the outer loop.
@@ -198,7 +199,7 @@ func TestLoftVolumeResidualIsPerCellWallLegPlusSkirt(t *testing.T) {
 					if p.faceted[j] && p.matchedDelta[j] <= 0 {
 						continue
 					}
-					cellMatched := chordCellDeltaUpper(p.matchedDelta[j], a.delta)
+					cellMatched := loftmesh.ChordCellDeltaUpper(p.matchedDelta[j], a.delta)
 					cellWall := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, p.arcUpperV[j], p.arcUpperW[j], cellMatched)
 					wallLeg = proofbound.AbsSumUpper(wallLeg, proofbound.ProductUpper(cellMatched, cellWall))
 				}
@@ -313,7 +314,7 @@ func TestLoftAreaCapTubeIsPerCell(t *testing.T) {
 					walks++
 					perimV = proofbound.AbsSumUpper(perimV, p.arcUpperV[j])
 					perimW = proofbound.AbsSumUpper(perimW, p.arcUpperW[j])
-					cellMatched := chordCellDeltaUpper(p.matchedDelta[j], b.a.delta)
+					cellMatched := loftmesh.ChordCellDeltaUpper(p.matchedDelta[j], b.a.delta)
 					joint := proofbound.ProductUpper(piUp, proofbound.ProductUpper(cellMatched, cellMatched))
 					twice := proofbound.ProductUpper(2, cellMatched)
 					tube = proofbound.AbsSumUpper(tube,

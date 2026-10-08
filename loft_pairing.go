@@ -13,7 +13,7 @@ import (
 // validateLoftRecords keeps the station cap after the record-only pairing
 // gates, preserving the refusal order in docs/loft-design.md §4. It also
 // returns the build's one chord target, which the station cap gate reads once
-// from recordArea and the walks resolved here (loftStationCapGate), so the
+// from recordArea and the walks resolved here (loftmesh.StationCapGate), so the
 // station generators chord at the target the gate decided S15 against.
 //
 // Before it resolves a single walk it raises both records' free-form work
@@ -42,7 +42,7 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 	if err != nil {
 		return nil, nil, nil, 0, err
 	}
-	target, err := loftStationCapGate(p0, p1, recordArea, offsets, walks0, walks1)
+	target, err := loftmesh.StationCapGate(p0, p1, recordArea, offsets, walks0, walks1)
 	if err != nil {
 		return nil, nil, nil, 0, err
 	}
@@ -61,18 +61,18 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 //
 // arcUpperV/arcUpperW and matchedDelta are parallel to v/w, one entry per
 // station: arcUpperV[j]/arcUpperW[j] is that station's own OUTGOING cell's
-// per-side arc-length upper bound (perCellArcUpper), and matchedDelta[j] is
+// per-side arc-length upper bound (loftmesh.PerCellArcUpper), and matchedDelta[j] is
 // that cell's own PARAMETER-MATCHED bound on |curve(s) - idealChord(s)| at the
 // same s: the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's matchedDelta
 // row, stated for the ideal chord joining the two points the record denotes.
 // The consumer composes it with the build's own delta through
-// chordCellDeltaUpper to reach the bound internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper
+// loftmesh.ChordCellDeltaUpper to reach the bound internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper
 // obligates for the chord the build actually DREW (computeLoftChordedAllow,
 // loft_moments.go); this field is never that composed bound on its own, and
 // never the SET-distance sagitta sectionDelta names either.
 // A LineSeg cell's own chord IS the curve it denotes, so its entry is
 // exactly 0; a circular cell's own sagitta discharges this half exactly
-// (loftCircularCellStations' own doc comment), so its entry equals its
+// (loftmesh.CircularCellPoints' own doc comment), so its entry equals its
 // sagitta; a free-form cell's entry is freeform.SpanMatchedDeltaUpper's own
 // per-cell reading (freeform.PairChainStations), which can differ cell to cell
 // within one paired segment where the bisection settled at different depths.
@@ -93,7 +93,7 @@ type loftLoopPair struct {
 	matchedDelta         []float64
 	// tangentEnergyV/tangentEnergyW are parallel to v/w too:
 	// the per-side reading for that station's OUTGOING cell —
-	// perCellTangentEnergy's for a line or circular arm,
+	// loftmesh.PerCellTangentEnergy's for a line or circular arm,
 	// freeform.SpanTangentEnergyUpper's for a free-form one —
 	// internal/proofbound/bounds.go's proofbound.CellChordCurveAreaAllow tangentEnergyUpper obligation.
 	// +Inf where the arm that placed the stations proves no such bound, which

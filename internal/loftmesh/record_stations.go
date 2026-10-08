@@ -208,7 +208,7 @@ func StationShare(p, c uint64) int {
 // whose radius is a math.Hypot and whose angles are a math.Atan2 the walk
 // itself declares it cannot enclose (extrude.go's circularWalk).
 //
-// target is loftChordTarget's own single per-build reading, never
+// target is ChordTarget's own single per-build reading, never
 // recomputed per cell. work0/work1 are the two records' own free-form work
 // counters (docs/spline-design.md §5.2). Neither arm below charges them;
 // FreeformCellPoints, the free-form arm, charges the same two counters.
@@ -226,7 +226,7 @@ func StationShare(p, c uint64) int {
 //
 // matchedDelta is the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's
 // matchedDelta row — the half a consumer composes with the build's own delta
-// (chordCellDeltaUpper) to reach internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper own
+// (ChordCellDeltaUpper) to reach internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper own
 // matchedDeltaUpper obligation (F1's rule) — ONE ENTRY PER CELL, never a single per-segment
 // scalar, since the bisected free-form arm (FreeformCellPoints) settles cells
 // of one paired segment at different depths and so at different readings.

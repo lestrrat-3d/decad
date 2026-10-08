@@ -317,7 +317,7 @@ func requireLoftGearSound(t *testing.T, c loftGearCase) {
 	lp := body.payload.(loftPayload)
 	p := uint64(len(lp.profile0.Outer.Segments))
 	stations := lp.walls / 2
-	require.Less(t, stations, loftStationCap(p), "the build must settle inside stationCap(P)")
+	require.Less(t, stations, loftmesh.StationCap(p), "the build must settle inside stationCap(P)")
 
 	ref := loftGearReference(t, lp)
 	vol, err := body.Volume()

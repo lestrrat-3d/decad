@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -172,7 +173,7 @@ func loftCentroidRebuild(t *testing.T, pl loftPayload) (*loftMassAccumulator, lo
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
 	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
-	matchedDelta := chordCellDeltaUpper(sectionMatchedDelta, a.delta)
+	matchedDelta := loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.delta)
 	return mass, a, matchedDelta
 }
 

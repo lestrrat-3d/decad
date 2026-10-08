@@ -513,7 +513,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	require.NoError(t, err)
 
 	stationWork := &freeform.FreeformWork{}
-	share := loftStationShare(k, k)
+	share := loftmesh.StationShare(k, k)
 	for _, w := range walks {
 		_, err := loftmesh.FreeformCellPoints(w, w, target, share, stationWork, stationWork)
 		require.NoError(t, err)
@@ -869,12 +869,12 @@ func loftRecordAreasOrZero(p0, p1 ProfileRecord) [2]float64 {
 }
 
 // loftTestChordTarget is the chord target a real build of p0 and p1 chords
-// at: loftChordTarget over the records' own areas and loftPerimeterUpper of
+// at: loftmesh.ChordTarget over the records' own areas and loftmesh.PerimeterUpper of
 // the resolved walks.
 func loftTestChordTarget(t testing.TB, p0, p1 ProfileRecord, walks0, walks1 [][]survey2d.SegmentWalk) float64 {
 	t.Helper()
 	areas := loftRecordAreas(t, p0, p1)
-	target, err := loftChordTarget(areas[0], loftPerimeterUpper(p0, walks0), areas[1], loftPerimeterUpper(p1, walks1))
+	target, err := loftmesh.ChordTarget(areas[0], loftmesh.PerimeterUpper(p0, walks0), areas[1], loftmesh.PerimeterUpper(p1, walks1))
 	require.NoError(t, err)
 	return target
 }

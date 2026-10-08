@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -265,7 +266,7 @@ func chainWalkEndpointAllow(ctx context.Context, chains []ChainRecord) (float64,
 			}
 			// An ArcSeg's recorded natural end can sit off the radius its
 			// denoted circle reads from Start, even when proofbound.WalkEndBound is zero.
-			residual := arcNaturalEndRadialUpper(segment)
+			residual := loftmesh.ArcNaturalEndRadialUpper(segment)
 			if !usableMagnitude(residual) {
 				return 0, false, nil
 			}

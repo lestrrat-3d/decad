@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -528,7 +529,7 @@ func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
 // with the build's own PARAMETER-MATCHED matched departure — NEVER
 // sectionDelta, the build's own MAX SAGITTA (a SET-distance). The
 // chord-to-curve half of that matched term coincides with the sagitta on a
-// circular-only build (loftCircularCellStations' own doc comment: a circular
+// circular-only build (loftmesh.CircularCellPoints' own doc comment: a circular
 // cell's own sagitta discharges that half exactly), so the two differ there
 // only by the delta leg §5.2's matchedDelta row adds — but a free-form cell
 // can carry a chord-to-curve half strictly LARGER than its own sagitta
@@ -631,7 +632,7 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 // count produces a computed station.
 //
 // FALSIFICATION: replace computeLoftChordedAllow's own per-cell
-// chordCellDeltaUpper(p.matchedDelta[j], delta) with p.matchedDelta[j], or its
+// loftmesh.ChordCellDeltaUpper(p.matchedDelta[j], delta) with p.matchedDelta[j], or its
 // skirt's matchedDelta argument with the chord-to-curve half alone, and
 // the matching leg below turns red — verified by hand (apply the shim, rerun,
 // confirm failure, restore). The fixture is potent BECAUSE delta is the same
@@ -664,7 +665,7 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 	}}
 	anchor := r3.NewVec(-1, -1, -1)
 
-	matched := chordCellDeltaUpper(chordToCurve, delta)
+	matched := loftmesh.ChordCellDeltaUpper(chordToCurve, delta)
 	require.Greater(t, matched, chordToCurve, "the composition must actually widen the term it replaces")
 
 	got := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matched, delta, false)

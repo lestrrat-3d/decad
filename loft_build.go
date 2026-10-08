@@ -62,7 +62,7 @@ type loftPayload struct {
 
 	// recordArea holds each record's own exact region integral, the value
 	// falsifyRecordedArea computed and compared against sketch's area in
-	// Loft. The chord target reads it (loftChordTarget,
+	// Loft. The chord target reads it (loftmesh.ChordTarget,
 	// docs/loft-gear-bounds-design.md §5), so no evaluation integrates a
 	// record a second time to size its chords. A rigid placement moves
 	// neither record, so placed carries it over unchanged.
@@ -83,7 +83,7 @@ type loftPayload struct {
 	// it — an exact-rational trig enclosure rounded once into a Point2 for a
 	// circular station, lerp2's own gap from dyLerp for a LineSeg station
 	// sitting at a TRIMMED parameter, and the arc-end radial residual
-	// (arcNaturalEndRadialUpper) at an untrimmed ArcSeg's t == 1 end, whose
+	// (loftmesh.ArcNaturalEndRadialUpper) at an untrimmed ArcSeg's t == 1 end, whose
 	// recorded coordinate the record states while denoting another point
 	// there. It is zero exactly where every station publishes a zero
 	// (docs/loft-design.md §5.2's guaranteed-zero list), which no segment KIND
@@ -124,7 +124,7 @@ type loftPayload struct {
 	// the matchedDelta evalLoft composes: loftPairings accumulates each
 	// cell's own chord-to-curve departure into a MAX beside sectionDelta,
 	// and buildLoftMass sums that MAX with the delta above through
-	// chordCellDeltaUpper before passing it — never this field — to
+	// loftmesh.ChordCellDeltaUpper before passing it — never this field — to
 	// newLoftMassAccumulator and computeLoftChordedAllow (loft_moments.go),
 	// which is where the skirt leg's, the centroid radius' and every other
 	// build-wide matched argument comes from;
@@ -455,7 +455,7 @@ func buildLoftMass(pl loftPayload, a loftAssembly, pairs []loftLoopPair, section
 	chorded := loftIsChorded(pairs, sectionDelta, sectionMatchedDelta)
 	matchedDelta := 0.0
 	if chorded {
-		matchedDelta = chordCellDeltaUpper(sectionMatchedDelta, a.delta)
+		matchedDelta = loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.delta)
 	}
 	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
 	for k, t := range a.tris {
@@ -506,7 +506,7 @@ func buildLoftMass(pl loftPayload, a loftAssembly, pairs []loftLoopPair, section
 func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta float64) loftMeshProof {
 	return loftMeshProof{
 		facetDeparture: proofbound.AbsSumUpper(
-			chordCellDeltaUpper(sectionMatchedDelta, a.delta),
+			loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.delta),
 			m.Chorded.MaxTwistOffsetUpper,
 		),
 		areaSlack: proofbound.AbsSumUpper(

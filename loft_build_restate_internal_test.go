@@ -92,7 +92,7 @@ func TestLoftMeshProofComposition(t *testing.T) {
 		lp, proof := loftProofOf(t, evalLoftFixture(t, pl))
 		require.Positive(t, lp.delta, "a placed build's every held vertex carries the motion's own rounding")
 		require.Zero(t, lp.sectionDelta, "a LineSeg pairing chords no curve")
-		// The composition is proofbound.AbsSumUpper(chordCellDeltaUpper(0, delta), 0),
+		// The composition is proofbound.AbsSumUpper(loftmesh.ChordCellDeltaUpper(0, delta), 0),
 		// which is delta widened only by its own outward rounding. It must
 		// never read as the ZERO the build's chorded gate is left at.
 		require.Positive(t, proof.facetDeparture)

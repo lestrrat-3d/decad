@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -150,7 +151,7 @@ const referenceUlpSlack = 8 * proofbound.UnitRoundoff
 var loftTwistSweepDegrees = []float64{0, 5, 15, 30}
 
 // ruledArc is a CONSTANT-SPEED circular directrix — the same uniform-ANGLE
-// parametrization loftCircularCellStations places its stations under, which is
+// parametrization loftmesh.CircularCellPoints places its stations under, which is
 // what makes proofbound.UniformSpeedTangentEnergyUpper's own premise hold for it.
 type ruledArc struct {
 	centre r3.Vec
@@ -178,7 +179,7 @@ func (a ruledArc) arcLen() float64 { return math.Abs(a.radius * a.dt) }
 // than R*(1-cos(sweep/2)) — the identical shape the real build charges, and a
 // strict upper bound on the true departure because 1-cos(x) <= x^2/2. Under the
 // uniform-angle parametrization that departure IS the ordinary sagitta
-// (loftCircularCellStations' own doc comment), and
+// (loftmesh.CircularCellPoints' own doc comment), and
 // TestCellChordCurveAreaAllowSagittaIsParameterMatched checks it by sampling
 // rather than assuming it.
 func (a ruledArc) sagittaUpper() float64 {
@@ -263,7 +264,7 @@ func twistedArcCellPair(phi, offCentre, radius, height, t0, dt float64) (ruledAr
 // own analytic geometry discharges: the exact arc length as the tangent bound,
 // the parameter-matched sagitta as matchedDelta, and
 // proofbound.UniformSpeedTangentEnergyUpper over a chord rounded DOWN twice as the
-// tangent-deviation energy — the same discharge perCellTangentEnergy's own
+// tangent-deviation energy — the same discharge loftmesh.PerCellTangentEnergy's own
 // circular arm makes in the real build.
 func cellAllowFor(a, b ruledArc) float64 {
 	vLo, vHi := a.at(0), a.at(1)
@@ -551,7 +552,7 @@ func TestCellChordCurveAreaAllowRefusesBrokenClaims(t *testing.T) {
 		"an exactly straight cell has no ruled-versus-chord gap to charge")
 }
 
-// TestLoftCertifiedChordLowerIsALowerBound pins perCellTangentEnergy's own
+// TestLoftCertifiedChordLowerIsALowerBound pins loftmesh.PerCellTangentEnergy's own
 // chord reading over a sweep of whole-circle records: the published value must
 // never exceed the true cell chord 2*R*sin(sweep/(2m)), which is what keeps
 // the energy it feeds from being understated.
@@ -567,7 +568,7 @@ func TestLoftCertifiedChordLowerIsALowerBound(t *testing.T) {
 				TStart: 0,
 				TEnd:   turn,
 			}
-			got := loftCertifiedChordLower(seg, m)
+			got := loftmesh.CertifiedChordLower(seg, m)
 			sweep := 2 * math.Pi * turn
 			want := 2 * radius * math.Sin(sweep/(2*float64(m)))
 			// math.Sin is itself accurate only to about an ulp, so the
@@ -586,9 +587,9 @@ func TestLoftCertifiedChordLowerIsALowerBound(t *testing.T) {
 		}
 	}
 	zero := CircleSeg{Center: Point2{}, Radius: units.Millimeters(1), CCW: true, TStart: 0.25, TEnd: 0.25}
-	require.Equal(t, 0.0, loftCertifiedChordLower(zero, 4), "a zero sweep has no chord to bound")
-	require.Equal(t, 0.0, loftCertifiedChordLower(LineSeg{}, 4), "a record with no circular enclosure publishes the empty bound")
-	require.Equal(t, 0.0, loftCertifiedChordLower(zero, 0), "a non-positive station count has no cell to bound")
+	require.Equal(t, 0.0, loftmesh.CertifiedChordLower(zero, 4), "a zero sweep has no chord to bound")
+	require.Equal(t, 0.0, loftmesh.CertifiedChordLower(LineSeg{}, 4), "a record with no circular enclosure publishes the empty bound")
+	require.Equal(t, 0.0, loftmesh.CertifiedChordLower(zero, 0), "a non-positive station count has no cell to bound")
 }
 
 // TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats is the regression witness
@@ -635,7 +636,7 @@ func TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats(t *testing.T) {
 	chord2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
 	trueChordUpper := proofbound.RatSqrtUp(chord2)
 
-	got := loftCertifiedChordLower(seg, 1)
+	got := loftmesh.CertifiedChordLower(seg, 1)
 	require.Greater(t, got, 0.0, "the fixture must reach a real bound rather than the empty one")
 	require.LessOrEqual(t, got, trueChordUpper,
 		"the published chord lower bound must not exceed the true chord |End-Start|")
@@ -643,8 +644,8 @@ func TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats(t *testing.T) {
 	// The energy that bound feeds must stay an UPPER bound on L^2-c^2: with
 	// the chord overstated it fell BELOW the true energy on this record.
 	w := survey2d.SegmentWalk{Kind: survey2d.WalkCircular}
-	arcUpper := perCellArcUpper(seg, w, 1)
-	energy := perCellTangentEnergy(seg, w, 1)
+	arcUpper := loftmesh.PerCellArcUpper(seg, w, 1)
+	energy := loftmesh.PerCellTangentEnergy(seg, w, 1)
 	require.Greater(t, energy, 0.0, "a curved cell carries a positive tangent-deviation energy")
 	require.GreaterOrEqual(t, energy, (arcUpper-trueChordUpper)*(arcUpper+trueChordUpper),
 		"the published energy must dominate the L^2-c^2 reading its own arc-length bound and the true chord give")
@@ -1103,10 +1104,10 @@ func TestDisplacedStationCellNeedsTheStationShiftLeg(t *testing.T) {
 			chordLo := func(a ruledArc) float64 {
 				return freeform.DownRound(freeform.DownRound(2 * math.Abs(a.radius) * math.Sin(math.Abs(a.dt)/2)))
 			}
-			// The build's own per-cell obligations: chordCellDeltaUpper
+			// The build's own per-cell obligations: loftmesh.ChordCellDeltaUpper
 			// composes the certified sagitta with the station displacement,
-			// and perCellTangentEnergy's circular arm discharges the energy.
-			md := chordCellDeltaUpper(math.Max(lo.sagittaUpper(), hi.sagittaUpper()), tc.delta)
+			// and loftmesh.PerCellTangentEnergy's circular arm discharges the energy.
+			md := loftmesh.ChordCellDeltaUpper(math.Max(lo.sagittaUpper(), hi.sagittaUpper()), tc.delta)
 			ruled := proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md,
 				proofbound.UniformSpeedTangentEnergyUpper(arcA, chordLo(lo)),
 				proofbound.UniformSpeedTangentEnergyUpper(arcB, chordLo(hi)))
