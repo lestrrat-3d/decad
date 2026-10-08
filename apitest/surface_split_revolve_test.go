@@ -278,14 +278,13 @@ func TestSurfaceSplitRevolveClosedForms(t *testing.T) {
 				requireSplitEncloses(t, "volume", g.volume, want.volume)
 				// The bound must carry the cut parameters' own rounding, not
 				// only the build's float noise. Forcing splitRevolve's
-				// sectionDelta to 0 leaves every line, circle and arc-free
-				// fixture here at most 2.9e-13 mm³ of bound, while the charged
-				// bounds measure at least 1.1e-11 mm³; 1e-12 sits between the
-				// two. Shown-to-fail: that forcing turns this assertion red
-				// on every fixture but the ball, and leaves every enclosure
-				// above green, so this is the leg proving §7.2's charge
-				// reaches each piece. The ball's bound is the trimmed arc's
-				// own region-integral envelope, far larger than either.
+				// sectionDelta to 0 leaves every fixture here at most 2.9e-13
+				// mm³ of bound, while the charged bounds measure at least
+				// 1.1e-11 mm³; 1e-12 sits between the two. Shown-to-fail:
+				// that forcing turns this assertion red on every fixture, the
+				// ball's narrowed meridian arc included, and leaves every
+				// enclosure above green, so this is the leg proving §7.2's
+				// charge reaches each piece.
 				require.Greater(t, g.volume.Bound.Base(), 1e-12)
 				// The value itself, held to the closed form's float image: a
 				// bound that encloses a wrong value only by being wide is

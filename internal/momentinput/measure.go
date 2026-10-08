@@ -222,8 +222,9 @@ type Integrals struct {
 	// which composes rational intervals, so no float conditioning needs the
 	// anchor and no re-referencing step follows the walk. A line or Tier A
 	// span contributes a point interval, a circular walk its enclosure.
-	// thirdDead records a contribution with no enclosure — a trimmed ArcSeg
-	// fragment — after which the region has no third-order moments at all.
+	// thirdDead records a contribution with no enclosure — a circular record
+	// no rational states — after which the region has no third-order moments
+	// at all.
 	Third     [4]proofbound.RatInterval
 	ThirdDead bool
 }

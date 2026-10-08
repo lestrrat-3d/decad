@@ -240,9 +240,242 @@ func TestCircularThirdMomentWholeCircle(t *testing.T) {
 			requireIntervalWidthAtMost(t, name, got[i], 1e-65)
 		}
 	}
+}
 
-	trimmed, _, _ := driftedArcFixture(t)
-	trimmed.TEnd = 0.5
-	_, ok := circularThirdMomentInterval(trimmed)
-	require.False(t, ok, `a trimmed ArcSeg fragment has no third-order enclosure`)
+// fragmentForm is a + b·√2 + c·π over rationals: every moment of a walk on
+// the radius-5 circle between multiples of π/4 lands in it, since its
+// endpoint sines and cosines are 0, ±1 or ±√2/2 and its swept angle is a
+// rational multiple of π that only ever multiplies rationals.
+type fragmentForm struct{ a, b, c *big.Rat }
+
+var (
+	fragmentSqrt2Lo = mustFragmentDecimal("1.414213562373095048801688724209698078569671875376948073176679737")
+	fragmentSqrt2Hi = mustFragmentDecimal("1.414213562373095048801688724209698078569671875376948073176679738")
+	fragmentPiLo    = mustFragmentDecimal("3.141592653589793238462643383279502884197169399375105820974944592")
+	fragmentPiHi    = mustFragmentDecimal("3.141592653589793238462643383279502884197169399375105820974944593")
+)
+
+func mustFragmentDecimal(s string) *big.Rat {
+	r, ok := new(big.Rat).SetString(s)
+	if !ok {
+		panic("invalid decimal " + s)
+	}
+	return r
+}
+
+func ffRat(r *big.Rat) fragmentForm {
+	return fragmentForm{new(big.Rat).Set(r), new(big.Rat), new(big.Rat)}
+}
+
+func ffInt(n int64) fragmentForm { return ffRat(big.NewRat(n, 1)) }
+
+func (f fragmentForm) add(g fragmentForm) fragmentForm {
+	return fragmentForm{
+		new(big.Rat).Add(f.a, g.a), new(big.Rat).Add(f.b, g.b), new(big.Rat).Add(f.c, g.c),
+	}
+}
+
+func (f fragmentForm) sub(g fragmentForm) fragmentForm { return f.add(g.scale(big.NewRat(-1, 1))) }
+
+func (f fragmentForm) scale(s *big.Rat) fragmentForm {
+	return fragmentForm{new(big.Rat).Mul(f.a, s), new(big.Rat).Mul(f.b, s), new(big.Rat).Mul(f.c, s)}
+}
+
+// mul multiplies two forms; a product that would need π·√2 or π² is outside
+// the form, and no moment below produces one.
+func (f fragmentForm) mul(t *testing.T, g fragmentForm) fragmentForm {
+	t.Helper()
+	cross := new(big.Rat).Add(new(big.Rat).Mul(f.b, g.c), new(big.Rat).Mul(f.c, g.b))
+	require.Zero(t, cross.Sign(), "a π·√2 term is outside the form")
+	require.Zero(t, new(big.Rat).Mul(f.c, g.c).Sign(), "a π² term is outside the form")
+	a := new(big.Rat).Add(new(big.Rat).Mul(f.a, g.a), new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Mul(f.b, g.b)))
+	b := new(big.Rat).Add(new(big.Rat).Mul(f.a, g.b), new(big.Rat).Mul(f.b, g.a))
+	c := new(big.Rat).Add(new(big.Rat).Mul(f.a, g.c), new(big.Rat).Mul(f.c, g.a))
+	return fragmentForm{a, b, c}
+}
+
+func (f fragmentForm) pow(t *testing.T, n int) fragmentForm {
+	out := ffInt(1)
+	for range n {
+		out = out.mul(t, f)
+	}
+	return out
+}
+
+func (f fragmentForm) bracket() (*big.Rat, *big.Rat) {
+	term := func(c, lo, hi *big.Rat) (*big.Rat, *big.Rat) {
+		a, b := new(big.Rat).Mul(c, lo), new(big.Rat).Mul(c, hi)
+		if a.Cmp(b) > 0 {
+			a, b = b, a
+		}
+		return a, b
+	}
+	l1, h1 := term(f.b, fragmentSqrt2Lo, fragmentSqrt2Hi)
+	l2, h2 := term(f.c, fragmentPiLo, fragmentPiHi)
+	lo := new(big.Rat).Add(f.a, new(big.Rat).Add(l1, l2))
+	hi := new(big.Rat).Add(f.a, new(big.Rat).Add(h1, h2))
+	return lo, hi
+}
+
+// quarterPiSinCos is sin and cos of k·π/4 for k in [−2, 2].
+func quarterPiSinCos(k int) (fragmentForm, fragmentForm) {
+	half := fragmentForm{new(big.Rat), big.NewRat(1, 2), new(big.Rat)}
+	neg := func(f fragmentForm) fragmentForm { return f.scale(big.NewRat(-1, 1)) }
+	switch k {
+	case -2:
+		return ffInt(-1), ffInt(0)
+	case -1:
+		return neg(half), half
+	case 0:
+		return ffInt(0), ffInt(1)
+	case 1:
+		return half, half
+	default:
+		return ffInt(1), ffInt(0)
+	}
+}
+
+func requireIntervalEncloses(t *testing.T, name string, got proofbound.RatInterval, want fragmentForm) {
+	t.Helper()
+	lo, hi := want.bracket()
+	require.LessOrEqual(t, got.Lo.Cmp(lo), 0, "%s: [%s, %s] starts above the closed form %s", name,
+		got.Lo.FloatString(30), got.Hi.FloatString(30), lo.FloatString(30))
+	require.GreaterOrEqual(t, got.Hi.Cmp(hi), 0, "%s: [%s, %s] ends below the closed form %s", name,
+		got.Lo.FloatString(30), got.Hi.FloatString(30), hi.FloatString(30))
+	requireIntervalWidthAtMost(t, name, got, 1e-20)
+}
+
+// TestNarrowedArcIntervalsEncloseClosedForms holds every circular bracket of
+// an ArcSeg walked over a narrowed range to the walk's own closed form. The
+// arc is the radius-5 semicircle from (0, −5) through (5, 0) to (0, 5), so
+// θ(t) = −π/2 + t·π, and each range ends on a multiple of π/4. About the
+// anchor (−3, 2) the centre sits at (cU, cV) = (3, −2); with X = r·cos θ,
+// Y = r·sin θ, [g] = g(θ1) − g(θ0) and Δθ the signed sweep:
+//
+//	A    = ½(r²Δθ + cU[Y] − cV[X])
+//	∫u   = ½∫(cU + X)²·X dθ,    ∫v  = ½∫(cV + Y)²·Y dθ
+//	∫u²  = ⅓∫(cU + X)³·X dθ,    ∫v² = ⅓∫(cV + Y)³·Y dθ
+//	∫uv  = ½∫(cU + X)²(cV + Y)·X dθ,  ∫u³ = ¼∫(cU + X)⁴·X dθ
+//
+// each expanded into the power integrals ∫cosⁿ, ∫sinⁿ, ∫cosᵃsinᵇ written out
+// below. The axial moment about the v-parallel axis through the anchor is
+// r·(3·|Δθ| + r·(sin hi − sin lo)).
+//
+// Shown-to-fail: replacing arcOffsetAt's proofbound.RadSinCosSpan by the
+// point enclosure of math.Sincos at the angle's lower end separates every
+// region moment (area through ∫u³) of all eight ranges from its closed form.
+// Dropping the tLo shift from circularAxisMomentInterval's ArcSeg arm
+// separates the axial moment of the interior and middle ranges, both ways;
+// the two ranges ending at t == 1 mirror their unshifted walks about θ = 0,
+// so their sine differences agree and that leg cannot see them.
+func TestNarrowedArcIntervalsEncloseClosedForms(t *testing.T) {
+	t.Parallel()
+	const r = 5
+	anchor := Point2{U: -3, V: 2}
+	cU, cV := ffInt(3), ffInt(-2)
+	ax := NewAxisFrame(anchor.U, anchor.V, 0, 0, 0, -1, 0, 0)
+	for _, tc := range []struct {
+		name   string
+		t0, t1 float64
+	}{
+		{"interior", 0.25, 0.75},
+		{"interior reversed", 0.75, 0.25},
+		{"to the natural end", 0.75, 1},
+		{"from the natural start", 0, 0.25},
+		{"to the natural start, reversed", 0.25, 0},
+		{"through the middle", 0.25, 1},
+		{"from the middle", 0.5, 0.75},
+		{"to the middle, reversed", 0.75, 0.5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			seg := ArcSeg{
+				Center: Point2{U: 0, V: 0}, Start: Point2{U: 0, V: -5}, End: Point2{U: 0, V: 5},
+				TStart: tc.t0, TEnd: tc.t1,
+			}
+			k0, k1 := int(4*tc.t0)-2, int(4*tc.t1)-2
+			s0, c0 := quarterPiSinCos(k0)
+			s1, c1 := quarterPiSinCos(k1)
+			rr := func(n int) *big.Rat { return new(big.Rat).SetInt64(int64(math.Pow(r, float64(n)))) }
+			dth := fragmentForm{new(big.Rat), new(big.Rat), new(big.Rat).SetFloat64(tc.t1 - tc.t0)}
+			diff := func(g func(s, c fragmentForm) fragmentForm) fragmentForm { return g(s1, c1).sub(g(s0, c0)) }
+			sin2 := func(s, c fragmentForm) fragmentForm { return s.mul(t, c).scale(big.NewRat(2, 1)) }
+			sin4 := func(s, c fragmentForm) fragmentForm {
+				return sin2(s, c).mul(t, c.mul(t, c).sub(s.mul(t, s))).scale(big.NewRat(2, 1))
+			}
+			// ∫Xⁿ dθ and ∫Yⁿ dθ, each the trig-power antiderivative times rⁿ.
+			intX := map[int]fragmentForm{
+				1: diff(func(s, _ fragmentForm) fragmentForm { return s }),
+				2: dth.scale(big.NewRat(1, 2)).add(diff(sin2).scale(big.NewRat(1, 4))),
+				3: diff(func(s, _ fragmentForm) fragmentForm { return s.sub(s.pow(t, 3).scale(big.NewRat(1, 3))) }),
+				4: dth.scale(big.NewRat(3, 8)).add(diff(sin2).scale(big.NewRat(1, 4))).add(diff(sin4).scale(big.NewRat(1, 32))),
+				5: diff(func(s, _ fragmentForm) fragmentForm {
+					return s.sub(s.pow(t, 3).scale(big.NewRat(2, 3))).add(s.pow(t, 5).scale(big.NewRat(1, 5)))
+				}),
+			}
+			intY := map[int]fragmentForm{
+				1: diff(func(_, c fragmentForm) fragmentForm { return c }).scale(big.NewRat(-1, 1)),
+				2: dth.scale(big.NewRat(1, 2)).sub(diff(sin2).scale(big.NewRat(1, 4))),
+				3: diff(func(_, c fragmentForm) fragmentForm { return c.pow(t, 3).scale(big.NewRat(1, 3)).sub(c) }),
+				4: dth.scale(big.NewRat(3, 8)).sub(diff(sin2).scale(big.NewRat(1, 4))).add(diff(sin4).scale(big.NewRat(1, 32))),
+			}
+			for n, f := range intX {
+				intX[n] = f.scale(rr(n))
+			}
+			for n, f := range intY {
+				intY[n] = f.scale(rr(n))
+			}
+			// ∫XY, ∫X²Y, ∫X³Y: r^(a+b)·[sin²/2], [−cos³/3], [−cos⁴/4].
+			intXY := diff(func(s, _ fragmentForm) fragmentForm { return s.pow(t, 2).scale(big.NewRat(1, 2)) }).scale(rr(2))
+			intX2Y := diff(func(_, c fragmentForm) fragmentForm { return c.pow(t, 3).scale(big.NewRat(-1, 3)) }).scale(rr(3))
+			intX3Y := diff(func(_, c fragmentForm) fragmentForm { return c.pow(t, 4).scale(big.NewRat(-1, 4)) }).scale(rr(4))
+			// [Y] = ∫X dθ and [X] = −∫Y dθ.
+			area := dth.scale(rr(2)).add(cU.mul(t, intX[1])).add(cV.mul(t, intY[1])).scale(big.NewRat(1, 2))
+			mu := cU.pow(t, 2).mul(t, intX[1]).add(cU.mul(t, intX[2]).scale(big.NewRat(2, 1))).add(intX[3]).
+				scale(big.NewRat(1, 2))
+			mv := cV.pow(t, 2).mul(t, intY[1]).add(cV.mul(t, intY[2]).scale(big.NewRat(2, 1))).add(intY[3]).
+				scale(big.NewRat(1, 2))
+			muu := cU.pow(t, 3).mul(t, intX[1]).add(cU.pow(t, 2).mul(t, intX[2]).scale(big.NewRat(3, 1))).
+				add(cU.mul(t, intX[3]).scale(big.NewRat(3, 1))).add(intX[4]).scale(big.NewRat(1, 3))
+			mvv := cV.pow(t, 3).mul(t, intY[1]).add(cV.pow(t, 2).mul(t, intY[2]).scale(big.NewRat(3, 1))).
+				add(cV.mul(t, intY[3]).scale(big.NewRat(3, 1))).add(intY[4]).scale(big.NewRat(1, 3))
+			// (cU² + 2cU·X + X²)(cV + Y)·X, term by term.
+			muv := cU.pow(t, 2).mul(t, cV).mul(t, intX[1]).
+				add(cU.pow(t, 2).mul(t, intXY)).
+				add(cU.mul(t, cV).mul(t, intX[2]).scale(big.NewRat(2, 1))).
+				add(cU.mul(t, intX2Y).scale(big.NewRat(2, 1))).
+				add(cV.mul(t, intX[3])).
+				add(intX3Y).
+				scale(big.NewRat(1, 2))
+			// ∫u³ dA about the plane origin, where the centre is (0, 0).
+			u3 := intX[5].scale(big.NewRat(1, 4))
+
+			sLo, sHi := s0, s1
+			absDth := dth
+			if tc.t1 < tc.t0 {
+				sLo, sHi = s1, s0
+				absDth = dth.scale(big.NewRat(-1, 1))
+			}
+			axial := absDth.scale(big.NewRat(3, 1)).add(sHi.sub(sLo).scale(rr(1))).scale(rr(1))
+
+			gotArea, ok := circularAreaInterval(seg, anchor)
+			require.True(t, ok)
+			requireIntervalEncloses(t, "area", gotArea, area)
+			gotMU, gotMV, ok := circularFirstMomentInterval(seg, anchor)
+			require.True(t, ok)
+			requireIntervalEncloses(t, "mu", gotMU, mu)
+			requireIntervalEncloses(t, "mv", gotMV, mv)
+			gotMUU, gotMUV, gotMVV, ok := circularSecondMomentInterval(seg, anchor)
+			require.True(t, ok)
+			requireIntervalEncloses(t, "muu", gotMUU, muu)
+			requireIntervalEncloses(t, "muv", gotMUV, muv)
+			requireIntervalEncloses(t, "mvv", gotMVV, mvv)
+			third, ok := circularThirdMomentInterval(seg)
+			require.True(t, ok)
+			requireIntervalEncloses(t, "u³", third[0], u3)
+			gotAxial, ok := circularAxisMomentInterval(seg, ax)
+			require.True(t, ok)
+			requireIntervalEncloses(t, "axial", gotAxial, axial)
+		})
+	}
 }

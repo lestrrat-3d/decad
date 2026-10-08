@@ -109,7 +109,6 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Surveys (undercut, wall, concave radius) of bodies other than prisms, revolves, cups, cap blends | `Verify` reports `Suspect` | `docs/verification-design.md` |
 | Wall survey of a sphere's revolve, solid or hollow (its meridian arcs meet the axis at both ends) | `Verify` reports `Suspect` (`DiagUndecidedWall`) | `docs/verification-design.md` |
 | Wall, undercut and concave-radius surveys, clearance and the tolerance gate's revolve arm on a revolve whose meridian carries a displacement bound | `Verify` reports `Suspect`; the gate diameter is withheld | `docs/surface-intersection-design.md` §7.2 |
-| Tight volume, area and centroid bounds of a revolve whose meridian holds an `ArcSeg` recorded over a narrowed range (a ball `Split` across its axis, a sketch-cut sphere cap) | The reading encloses the true value, but its bound can exceed the value: `circularbounds.AreaInterval` proves no trimmed `ArcSeg`, so its float envelope bounds the region integral | none |
 
 ## Model structure — v1 non-goals
 

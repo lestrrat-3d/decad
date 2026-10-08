@@ -65,6 +65,115 @@ func arcEndRadialRatio(r2, endR2 *big.Rat) (proofbound.RatInterval, bool) {
 	return proofbound.Interval(lo, hi), true
 }
 
+// arcAngleSweep encloses a recorded ArcSeg's Start angle a0 and its natural
+// sweep, the counter-clockwise angle from Start to End, from the exact
+// coordinate differences (dx0, dy0) = Start − Center and (dx1, dy1) =
+// End − Center. Each angle is proofbound.Atan2Interval's enclosure, and the
+// sweep takes +2π where the caller's own float angles put End at or before
+// Start (heldDX0..heldDY1 are those float differences), so the bracket
+// encloses the same branch the float evaluation walks.
+func arcAngleSweep(dx0, dy0, dx1, dy1 *big.Rat, heldDX0, heldDY0, heldDX1, heldDY1 float64) (proofbound.RatInterval, proofbound.RatInterval) {
+	a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+	a1 := proofbound.Atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+	sweep := proofbound.IntervalSub(a1, a0)
+	if math.Atan2(heldDY1, heldDX1)-math.Atan2(heldDY0, heldDX0) <= 0 {
+		sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
+	}
+	return a0, sweep
+}
+
+// arcDeltas holds a recorded ArcSeg's exact offsets from its Center, Start's
+// exact squared radius r2, and rho, arcEndRadialRatio's bracket of
+// |Start − Center| / |End − Center|.
+type arcDeltas struct {
+	dx0, dy0, dx1, dy1, r2 *big.Rat
+	rho                    proofbound.RatInterval
+}
+
+// arcDeltasOf states seg's arcDeltas. It answers false where End sits on
+// Center, which has no radial ratio.
+func arcDeltasOf(seg ArcSeg) (arcDeltas, bool) {
+	d := arcDeltas{
+		dx0: exactCoordinateDelta(seg.Start.U, seg.Center.U),
+		dy0: exactCoordinateDelta(seg.Start.V, seg.Center.V),
+		dx1: exactCoordinateDelta(seg.End.U, seg.Center.U),
+		dy1: exactCoordinateDelta(seg.End.V, seg.Center.V),
+	}
+	d.r2 = proofbound.RatAdd(proofbound.RatMul(d.dx0, d.dx0), proofbound.RatMul(d.dy0, d.dy0))
+	rho, ok := arcEndRadialRatio(d.r2, proofbound.RatAdd(proofbound.RatMul(d.dx1, d.dx1), proofbound.RatMul(d.dy1, d.dy1)))
+	if !ok {
+		return arcDeltas{}, false
+	}
+	d.rho = rho
+	return d, true
+}
+
+// arcOffsets is a recorded ArcSeg's walk over its own recorded range, stated
+// for the moment brackets: the radius-scaled offsets (x, y) = r·(cos θ, sin θ)
+// from Center at the walk's start θ(TStart) and end θ(TEnd), and the signed
+// swept angle θ(TEnd) − θ(TStart).
+type arcOffsets struct {
+	x0, y0, x1, y1, dtheta proofbound.RatInterval
+}
+
+// arcWalkOffsets encloses seg's walk over [TStart, TEnd], in the record's
+// order, so a reversed record walks backwards. The arc denotes
+// θ(t) = a0 + t·sweep on Start's radius r (docs/evaluator-design.md §4), so
+// the signed swept angle is the exact rational (TEnd − TStart) times the
+// sweep enclosure. Each end's offset comes from the record wherever the
+// record states it: Start's own difference at t == 0, and ρ·(End − Center)
+// at t == 1, the point on Start's circle at End's angle. A cut end at any
+// other t states no point, so its offset is r·(cos θ(t), sin θ(t)), with r
+// the proofbound.RatSqrtDown/proofbound.RatSqrtUp bracket of the exact r² and
+// the sine and cosine proofbound.RadSinCosSpan's enclosure over the enclosed
+// angle. A whole arc therefore reads exactly the intervals its forward
+// (0 → 1) or reverse (1 → 0) walk always has.
+func arcWalkOffsets(seg ArcSeg, d arcDeltas, a0, sweep proofbound.RatInterval) (arcOffsets, bool) {
+	t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
+	if t0 == nil || t1 == nil {
+		return arcOffsets{}, false
+	}
+	x0, y0, ok := arcOffsetAt(seg.TStart, t0, d, a0, sweep)
+	if !ok {
+		return arcOffsets{}, false
+	}
+	x1, y1, ok := arcOffsetAt(seg.TEnd, t1, d, a0, sweep)
+	if !ok {
+		return arcOffsets{}, false
+	}
+	return arcOffsets{
+		x0: x0, y0: y0, x1: x1, y1: y1,
+		dtheta: proofbound.IntervalScale(sweep, new(big.Rat).Sub(t1, t0)),
+	}, true
+}
+
+// arcOffsetAt encloses one arc walk end's radius-scaled offset from Center
+// at parameter t (rt is t as an exact rational); see arcWalkOffsets.
+func arcOffsetAt(t float64, rt *big.Rat, d arcDeltas, a0, sweep proofbound.RatInterval) (proofbound.RatInterval, proofbound.RatInterval, bool) {
+	switch t {
+	case 0:
+		return proofbound.PointInterval(d.dx0), proofbound.PointInterval(d.dy0), true
+	case 1:
+		return proofbound.IntervalScale(d.rho, d.dx1), proofbound.IntervalScale(d.rho, d.dy1), true
+	}
+	sin, cos, ok := proofbound.RadSinCosSpan(proofbound.IntervalAdd(a0, proofbound.IntervalScale(sweep, rt)))
+	if !ok {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	rLo, rHi := proofarith.FloatRat(proofbound.RatSqrtDown(d.r2)), proofarith.FloatRat(proofbound.RatSqrtUp(d.r2))
+	if rLo == nil || rHi == nil {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	r := proofbound.Interval(rLo, rHi)
+	return proofbound.IntervalMul(r, cos), proofbound.IntervalMul(r, sin), true
+}
+
+// isWholeArc reports whether seg walks its full recorded range, forward or
+// reverse.
+func isWholeArc(seg ArcSeg) bool {
+	return (seg.TStart == 0 && seg.TEnd == 1) || (seg.TStart == 1 && seg.TEnd == 0)
+}
+
 // circularAreaInterval brackets one circular walk's exact area contribution
 // about the walk anchor. The segment holds the RECORDED coordinates and the
 // anchor is subtracted here over rationals: every radial term is a difference
@@ -76,10 +185,12 @@ func arcEndRadialRatio(r2, endR2 *big.Rat) (proofbound.RatInterval, bool) {
 // covers a trimmed fragment the same way the whole-turn fast path covers a
 // full sweep: every non-trig factor (the radius, the recentred centre
 // coordinates, the swept angle) is an exact rational, and only the endpoint
-// sine/cosine terms are enclosed, exactly the substitution the ArcSeg arm
-// below makes for its own endpoints — differing only in where those
-// sine/cosine values come from (an exact ratio there, a certified bracket
-// here, because a CircleSeg's endpoints are not recorded coordinates).
+// sine/cosine terms are enclosed, exactly the substitution the ArcSeg arms
+// below make for their own endpoints — differing only in where those
+// sine/cosine values come from (an exact ratio at a whole arc's ends, a
+// certified bracket here, because a CircleSeg's endpoints are not recorded
+// coordinates). An ArcSeg over a narrowed range takes
+// narrowedArcAreaInterval, whose cut ends are certified brackets too.
 func circularAreaInterval(seg CurveSegment, anchor Point2) (proofbound.RatInterval, bool) {
 	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
@@ -120,11 +231,10 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (proofbound.RatInterv
 		// factor exact and every trig factor enclosed.
 		return proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalAdd(sector, uTerm), vTerm), big.NewRat(1, 2)), true
 	case ArcSeg:
-		forward := seg.TStart == 0 && seg.TEnd == 1
-		reverse := seg.TStart == 1 && seg.TEnd == 0
-		if !forward && !reverse {
-			return proofbound.RatInterval{}, false
+		if !isWholeArc(seg) {
+			return narrowedArcAreaInterval(seg, anchor)
 		}
+		reverse := seg.TStart == 1
 		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
@@ -216,6 +326,29 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (proofbound.RatInterv
 	default:
 		return proofbound.RatInterval{}, false
 	}
+}
+
+// narrowedArcAreaInterval is circularAreaInterval's arm for an ArcSeg
+// recorded over a narrowed range. With u = cU + X, v = cV + Y about the
+// recentred centre (cU, cV), dv = X dθ and du = −Y dθ, so the Green's-theorem
+// area ½∮(u dv − v du) of the walk is
+//
+//	A = ½·(r²·Δθ + cU·(Y1 − Y0) − cV·(X1 − X0))
+//
+// with r² exact, Δθ the signed swept angle, and (X, Y) each end's
+// radius-scaled offset, all from arcWalkOffsets. The held branch test reads
+// the anchor-shifted coordinates, as the whole-arc arm does.
+func narrowedArcAreaInterval(seg ArcSeg, anchor Point2) (proofbound.RatInterval, bool) {
+	walk, r2, ok := anchoredArcWalk(seg, anchor)
+	if !ok {
+		return proofbound.RatInterval{}, false
+	}
+	centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(anchor.U))
+	centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), proofarith.FloatRat(anchor.V))
+	sector := proofbound.IntervalScale(walk.dtheta, r2)
+	uTerm := proofbound.IntervalScale(proofbound.IntervalSub(walk.y1, walk.y0), centerU)
+	vTerm := proofbound.IntervalScale(proofbound.IntervalSub(walk.x1, walk.x0), centerV)
+	return proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalAdd(sector, uTerm), vTerm), big.NewRat(1, 2)), true
 }
 
 // circularWalkEnclosures brackets the two quantities a recorded circular

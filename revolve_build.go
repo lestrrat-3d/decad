@@ -1359,17 +1359,16 @@ func (rp revolvePayload) capDenotation(end sweptEnd, start bool) *surfacenormal.
 // shrink the published bound, never widen it, following internal/proofbound/bounded.go's own
 // convention.
 //
-// The circular arm's held value is still the axis-frame closed form (w.th0/
-// w.th1, math.Atan2 results with no enclosure of their own), but its bound
-// now takes math.Min against circularAxisMomentInterval's rational-interval
+// The circular arm's held value is the axis-frame closed form (w.th0/
+// w.th1, math.Atan2 results with no enclosure of their own), and its bound
+// takes math.Min against circularAxisMomentInterval's rational-interval
 // closed form over the wall's own RECORDED segments (segs, moments_circular.go),
 // summed additively — a coalesced wall covers exactly one recorded segment
 // today (coalesceWalks never merges a circular kind), but the sum is written
 // for whatever a future coalescing rule hands it. A segment
-// circularAxisMomentInterval cannot bracket (a trimmed ArcSeg fragment, an
-// axis whose direction carries a non-finite bound) withholds the whole sum,
-// leaving the envelope as the only proof standing, exactly as before this
-// change.
+// circularAxisMomentInterval cannot bracket (an axis whose direction carries
+// a non-finite bound, a record no rational states) withholds the whole sum,
+// leaving the envelope as the only proof standing.
 func walkAxisMoment(w survey2d.SegmentWalk, kind wallKind, segs []CurveSegment, ax axisFrame) proofbound.BoundedScalar {
 	if kind == wallAxis {
 		return proofbound.BoundedScalar{}
