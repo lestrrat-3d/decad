@@ -500,7 +500,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 	// stitch_weld.go — the zero value for a class no member carries one for)
 	// under xform, composing rather than overwriting so a token nested
 	// through more than one placement still states the true accumulated
-	// motion (denotation.go's curveToken.compose).
+	// motion (internal/denotation's CurveToken.Compose).
 	vertexForClass := func(class int) *Vertex {
 		if nv, ok := newVertByClass[class]; ok {
 			return nv
@@ -509,7 +509,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
-		nv := &Vertex{position: verts[class], bound: units.Millimeters(bound), denot: plan.table.Tokens[class].compose(xform)}
+		nv := &Vertex{position: verts[class], bound: units.Millimeters(bound), denot: plan.table.Tokens[class].Compose(xform)}
 		newVertByClass[class] = nv
 		classOf[nv] = class
 		return nv
@@ -556,7 +556,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			// curve (Table J), so the FIRST one reached here — the only one
 			// that ever builds a new Edge for the group, per buildByGroup
 			// above — is a sound representative for the other's identity too.
-			denot: old.denot.compose(xform),
+			denot: old.denot.Compose(xform),
 		}
 		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
 		buildByOld[old] = eb

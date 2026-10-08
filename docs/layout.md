@@ -110,7 +110,7 @@ the rules leave to the byte budget.
 | `thicken_axis.go` | Assembles thicken sections. See surface §16. |
 | `offset.go` | `Body.Offset` builds a second sheet at a stated normal distance, leaving the receiver live. See surface §17. |
 | `patch_body.go` | `Body.Patch` topology adapter and face build. See surface §5.2. |
-| `denotation.go` | The shared-denotation certificate: minted plane (LEVEL) and curve/point (CURVE) identities. See surface §5.2, §6.2. |
+| `denotation.go` | Mints document tokens. |
 | `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |
 | `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |
 | `stitch_flux.go` | Stitch curved-face mass adapter. See surface §6.4. |
@@ -334,6 +334,7 @@ the rules leave to the byte budget.
 | `internal/clearance/spine/` | Point, line and circle spine cell pairs. See clearance §4. |
 | `internal/stitchflux/` | Stitch bounded scalars and flux. See surface §6.4. |
 | `internal/stitchweld/` | Stitch welds, topology and bounds. See surface §6.2–6.4. |
+| `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `_gallery/` | Nested module for README images, landing and linkage clips, dynamics scenes; excludes SolidLens. See `main.go`. |
 | `_shardgen/` | Nested module: packs root and `apitest` tests into cost-balanced race shards; `_` hides it from root tools. See `main.go` doc comment. |
