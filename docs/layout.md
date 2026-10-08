@@ -171,10 +171,10 @@ the rules leave to the byte budget.
 |---|---|
 | `verify.go` | `Document.Verify` orchestration and ordered report assembly. See `docs/verification-design.md` §1–§3 and the file's doc comment. |
 | `verify_pairs.go` | `Verify`'s bounded pair workers and ordered outcomes. See `docs/interference-design.md` §2, §5.3 and §7.2. |
-| `report.go` | `Verify`'s report types: `Status`, `Diagnostic`, `Interference`, `Clearance` and their enums. See `docs/verification-design.md` §1-§3. |
+| `report.go` | Public aliases and body/pair diagnostics. See verification §1. |
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
 | `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
-| `verify_result.go` | Verify report types and accessors; `verify_publish.go` builds their values. |
+| `verify_result.go` | Report records and accessors; `verify_publish.go` builds them. |
 | `verify_publish.go` | Builds `Verify` reports from private survey results. See `docs/verification-design.md`. |
 | `clearance.go` | The pair kernel: `clearancePair` proves one pair's relation and gap; `sheetSolidPair` decides a sheet pair. See `docs/clearance-design.md` §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned box prisms and bounds their gap from exact box planes ahead of the kernel. |
@@ -266,6 +266,7 @@ the rules leave to the byte budget.
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/surfacegeom/` | Sealed face and edge geometry variants. See `docs/api-design.md` §6.1. |
+| `internal/reportvocab/` | Verification outcome and diagnostic enums. See verification §1. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation and segment record. See surface §5.2. |
 | `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
