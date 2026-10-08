@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -70,10 +71,10 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	capZ := half
 	sideZ := capZ - d
 	g := capPatchGeom{
-		circular: true, sideRadius: rho, capRadius: rho + d,
-		th0: 0, th1: 2 * math.Pi, capTh0: 0, capTh1: 2 * math.Pi,
-		sweepCCW: false, wholeTurn: true,
-		sideZ: sideZ, capZ: capZ,
+		Circular: true, SideRadius: rho, CapRadius: rho + d,
+		Th0: 0, Th1: 2 * math.Pi, CapTh0: 0, CapTh1: 2 * math.Pi,
+		SweepCCW: false, WholeTurn: true,
+		SideZ: sideZ, CapZ: capZ,
 	}
 
 	// delta amplified well past the record's own rounding so the coordUpper
@@ -86,7 +87,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	// The SAME area terms capBandMoment itself composes into areaUpper,
 	// gathered independently here only to state the required minimum —
 	// nothing about the coordUpper mechanism under test is re-derived.
-	patchArea, patchAreaBound := patchAreaOf(g)
+	patchArea, patchAreaBound := capband.AreaOf(g)
 	capArea, err := loopEnclosedAreaContext(t.Context(), capBoundary)
 	require.NoError(t, err)
 	areaUpper := proofbound.AbsSumUpper(patchArea, patchAreaBound, capArea.Value, capArea.Bound)
@@ -142,7 +143,7 @@ func TestFixPatchOrientation(t *testing.T) {
 			// (docs/api-design.md's r3.Frame contract), so decomposing the
 			// TRUE outward normal against it is a dot product, never a
 			// matrix solve.
-			valid := band.pl.point(band.geom.cU+band.geom.sideRadius, band.geom.cV, band.geom.sideZ)
+			valid := band.pl.point(band.geom.CU+band.geom.SideRadius, band.geom.CV, band.geom.SideZ)
 			truth, err := band.face.NormalAt(valid)
 			require.NoError(t, err, "the band built successfully, so its own sample point must read")
 			eu, ev, en := band.pl.dir(1, 0, 0), band.pl.dir(0, 1, 0), band.pl.dir(0, 0, 1)
@@ -191,10 +192,10 @@ func capBandCircle(t *testing.T, r, d, capZ float64) proofbound.BoundedScalar {
 		endLoops: map[int]bool{0: true},
 	}
 	g := capPatchGeom{
-		circular: true, sideRadius: r, capRadius: r - d,
-		th0: 0, th1: 2 * math.Pi, capTh0: 0, capTh1: 2 * math.Pi,
-		sweepCCW: true, wholeTurn: true,
-		sideZ: capZ - d, capZ: capZ,
+		Circular: true, SideRadius: r, CapRadius: r - d,
+		Th0: 0, Th1: 2 * math.Pi, CapTh0: 0, CapTh1: 2 * math.Pi,
+		SweepCCW: true, WholeTurn: true,
+		SideZ: capZ - d, CapZ: capZ,
 	}
 	v, err := capBandVolume(t.Context(), loop, cbp, []capPatchGeom{g}, capZ, -1, 0)
 	require.NoError(t, err)
@@ -221,10 +222,10 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sideZ := capZ + tc.matSign*d
 			geom := []capPatchGeom{
-				{sideA: Point2{U: 0, V: 0}, sideB: Point2{U: 1, V: 0}, capA: Point2{U: d, V: d}, capB: Point2{U: 1 - d, V: d}, sideZ: sideZ, capZ: capZ},
-				{sideA: Point2{U: 1, V: 0}, sideB: Point2{U: 1, V: 1}, capA: Point2{U: 1 - d, V: d}, capB: Point2{U: 1 - d, V: 1 - d}, sideZ: sideZ, capZ: capZ},
-				{sideA: Point2{U: 1, V: 1}, sideB: Point2{U: 0, V: 1}, capA: Point2{U: 1 - d, V: 1 - d}, capB: Point2{U: d, V: 1 - d}, sideZ: sideZ, capZ: capZ},
-				{sideA: Point2{U: 0, V: 1}, sideB: Point2{U: 0, V: 0}, capA: Point2{U: d, V: 1 - d}, capB: Point2{U: d, V: d}, sideZ: sideZ, capZ: capZ},
+				{SideA: Point2{U: 0, V: 0}, SideB: Point2{U: 1, V: 0}, CapA: Point2{U: d, V: d}, CapB: Point2{U: 1 - d, V: d}, SideZ: sideZ, CapZ: capZ},
+				{SideA: Point2{U: 1, V: 0}, SideB: Point2{U: 1, V: 1}, CapA: Point2{U: 1 - d, V: d}, CapB: Point2{U: 1 - d, V: 1 - d}, SideZ: sideZ, CapZ: capZ},
+				{SideA: Point2{U: 1, V: 1}, SideB: Point2{U: 0, V: 1}, CapA: Point2{U: 1 - d, V: 1 - d}, CapB: Point2{U: d, V: 1 - d}, SideZ: sideZ, CapZ: capZ},
+				{SideA: Point2{U: 0, V: 1}, SideB: Point2{U: 0, V: 0}, CapA: Point2{U: d, V: 1 - d}, CapB: Point2{U: d, V: d}, SideZ: sideZ, CapZ: capZ},
 			}
 			withoutDelta := tc.payload
 			withoutDelta.z0Delta = 0
@@ -359,12 +360,12 @@ func TestPatchAreaOfChargesTheSideLevelRounding(t *testing.T) {
 		const R = 10.0
 		capR := R - d
 		g := capPatchGeom{
-			circular: true, sideRadius: R, capRadius: capR,
-			th0: 0, th1: 2 * math.Pi, capTh0: 0, capTh1: 2 * math.Pi,
-			sweepCCW: true, wholeTurn: true,
-			sideZ: sideZ, capZ: capZ, levelDelta: levelDelta,
+			Circular: true, SideRadius: R, CapRadius: capR,
+			Th0: 0, Th1: 2 * math.Pi, CapTh0: 0, CapTh1: 2 * math.Pi,
+			SweepCCW: true, WholeTurn: true,
+			SideZ: sideZ, CapZ: capZ, LevelDelta: levelDelta,
 		}
-		area, bound := patchAreaOf(g)
+		area, bound := capband.AreaOf(g)
 		denoted := math.Pi * (R + capR) * math.Hypot(R-capR, d)
 		residual := math.Abs(area - denoted)
 		require.Greater(t, residual, 1.0, "the premise: whole mm^2 of it")
@@ -378,17 +379,17 @@ func TestPatchAreaOfChargesTheSideLevelRounding(t *testing.T) {
 		// inset by the setback at both ends.
 		const L = 3e6
 		g := capPatchGeom{
-			sideA: Point2{U: 0, V: 0}, sideB: Point2{U: L, V: 0},
-			capA: Point2{U: d, V: d}, capB: Point2{U: L - d, V: d},
-			sideZ: sideZ, capZ: capZ, levelDelta: levelDelta,
+			SideA: Point2{U: 0, V: 0}, SideB: Point2{U: L, V: 0},
+			CapA: Point2{U: d, V: d}, CapB: Point2{U: L - d, V: d},
+			SideZ: sideZ, CapZ: capZ, LevelDelta: levelDelta,
 		}
-		area, bound := patchAreaOf(g)
+		area, bound := capband.AreaOf(g)
 
 		// The same two-triangle sum, at the denoted separation.
-		v0 := r3.NewVec(g.sideA.U, g.sideA.V, -d)
-		v1 := r3.NewVec(g.sideB.U, g.sideB.V, -d)
-		v2 := r3.NewVec(g.capB.U, g.capB.V, 0)
-		v3 := r3.NewVec(g.capA.U, g.capA.V, 0)
+		v0 := r3.NewVec(g.SideA.U, g.SideA.V, -d)
+		v1 := r3.NewVec(g.SideB.U, g.SideB.V, -d)
+		v2 := r3.NewVec(g.CapB.U, g.CapB.V, 0)
+		v3 := r3.NewVec(g.CapA.U, g.CapA.V, 0)
 		denoted := v1.Sub(v0).Cross(v2.Sub(v0)).Len()/2 + v2.Sub(v0).Cross(v3.Sub(v0)).Len()/2
 
 		residual := math.Abs(area - denoted)
@@ -428,28 +429,28 @@ func TestPatchAreaOfEnclosesRoundedRadiusDifference(t *testing.T) {
 	const piDigits = "3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798"
 
 	g := capPatchGeom{
-		circular: true, sideRadius: 9.011281351443861, capRadius: 25.512209970360068,
-		th0: 0, th1: 2 * math.Pi, capTh0: 0, capTh1: 2 * math.Pi,
-		wholeTurn: true,
-		sideZ:     23.49907138108379, capZ: 40,
-		capThAllow: 2.449293598294707e-16,
+		Circular: true, SideRadius: 9.011281351443861, CapRadius: 25.512209970360068,
+		Th0: 0, Th1: 2 * math.Pi, CapTh0: 0, CapTh1: 2 * math.Pi,
+		WholeTurn: true,
+		SideZ:     23.49907138108379, CapZ: 40,
+		CapThAllow: 2.449293598294707e-16,
 	}
 	ratOf := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
-	exactDR := new(big.Rat).Sub(ratOf(g.capRadius), ratOf(g.sideRadius))
-	require.NotEqual(t, 0, ratOf(g.capRadius-g.sideRadius).Cmp(exactDR),
+	exactDR := new(big.Rat).Sub(ratOf(g.CapRadius), ratOf(g.SideRadius))
+	require.NotEqual(t, 0, ratOf(g.CapRadius-g.SideRadius).Cmp(exactDR),
 		"the premise: fl(R1-R0) really does round at this radius and setback")
 
-	area, bound := patchAreaOf(g)
+	area, bound := capband.AreaOf(g)
 
 	bf := func(r *big.Rat) *big.Float { return new(big.Float).SetPrec(prec).SetRat(r) }
 	pi, ok := new(big.Float).SetPrec(prec).SetString(piDigits)
 	require.True(t, ok)
-	H := ratOf(g.capZ - g.sideZ)
+	H := ratOf(g.CapZ - g.SideZ)
 	slant := new(big.Float).SetPrec(prec).Sqrt(bf(new(big.Rat).Add(
 		new(big.Rat).Mul(exactDR, exactDR),
 		new(big.Rat).Mul(H, H),
 	)))
-	radii := bf(new(big.Rat).Add(ratOf(g.sideRadius), ratOf(g.capRadius)))
+	radii := bf(new(big.Rat).Add(ratOf(g.SideRadius), ratOf(g.CapRadius)))
 	ref, _ := new(big.Float).SetPrec(prec).Mul(pi,
 		new(big.Float).SetPrec(prec).Mul(radii, slant)).Float64()
 
@@ -517,7 +518,7 @@ func TestConeFrustumAreaBracketEnclosesReference(t *testing.T) {
 				"the case's own premise about whether fl(R1-R0) rounds")
 
 			held := tc.dth / 2 * (tc.R0 + tc.R1) * math.Hypot(dR, H)
-			bound := coneFrustumAreaBracket(tc.R0, tc.R1, H, tc.dth, tc.allow, held)
+			bound := capband.FrustumAreaBracket(tc.R0, tc.R1, H, tc.dth, tc.allow, held)
 			require.False(t, math.IsInf(bound, 1), "the bracket must build for well-formed finite inputs")
 
 			// The reference slant is the EXACT R1-R0, the difference the held
@@ -582,7 +583,7 @@ func chamferedCircularBand(t *testing.T, section func(*sketch.Sketch), h, d floa
 	var out bandUnderTest
 	found := 0
 	for _, patch := range cbp.patches {
-		if !patch.geom.circular {
+		if !patch.geom.Circular {
 			continue
 		}
 		found++
@@ -660,7 +661,7 @@ func chamferedRectFlatPatches(t *testing.T, motion r3.Transform) []bandUnderTest
 	pl := cbp.prismLike(cbp.z0, cbp.z1)
 	var out []bandUnderTest
 	for _, patch := range cbp.patches {
-		if patch.geom.circular {
+		if patch.geom.Circular {
 			continue
 		}
 		face := roles[patch.role]
@@ -735,10 +736,10 @@ func TestCapPatchNormalRangeCoversWhatAFlatPatchTakes(t *testing.T) {
 			// leading slant.
 			g := band.geom
 			corners := []r3.Vec{
-				band.pl.point(g.sideA.U, g.sideA.V, g.sideZ),
-				band.pl.point(g.sideB.U, g.sideB.V, g.sideZ),
-				band.pl.point(g.capB.U, g.capB.V, g.capZ),
-				band.pl.point(g.capA.U, g.capA.V, g.capZ),
+				band.pl.point(g.SideA.U, g.SideA.V, g.SideZ),
+				band.pl.point(g.SideB.U, g.SideB.V, g.SideZ),
+				band.pl.point(g.CapB.U, g.CapB.V, g.CapZ),
+				band.pl.point(g.CapA.U, g.CapA.V, g.CapZ),
 			}
 			points := append([]r3.Vec(nil), corners...)
 			for i, c := range corners {
@@ -772,7 +773,7 @@ func (b bandUnderTest) componentAt(t *testing.T, theta float64, pull r3.Vec) (fl
 	t.Helper()
 	sin, cos := math.Sincos(theta)
 	g := b.geom
-	n, err := b.face.NormalAt(b.pl.point(g.cU+g.capRadius*cos, g.cV+g.capRadius*sin, g.capZ))
+	n, err := b.face.NormalAt(b.pl.point(g.CU+g.CapRadius*cos, g.CV+g.CapRadius*sin, g.CapZ))
 	require.NoError(t, err)
 	bound, err := n.Bound.In(units.One)
 	require.NoError(t, err)
@@ -857,12 +858,12 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 
 			g := band.geom
 			if tc.centreFar > 0 {
-				require.Greater(t, band.pl.point(g.cU, g.cV, g.capZ).Len(), tc.centreFar,
+				require.Greater(t, band.pl.point(g.CU, g.CV, g.CapZ).Len(), tc.centreFar,
 					"this case charges the frame origin's rounding, so its patch must sit that far out")
 			}
 			arms := 0.0
 			for _, off := range []float64{0, math.Pi / 2, math.Pi} {
-				_, _, arm := band.componentAt(t, g.th0+off, pull)
+				_, _, arm := band.componentAt(t, g.Th0+off, pull)
 				arms += arm
 			}
 			require.Positive(t, arms, "a Cone arm's own cosine and sine are not exact")
@@ -877,7 +878,7 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 			const samples = 512
 			low, high := math.Inf(1), math.Inf(-1)
 			for k := range samples + 1 {
-				theta := g.th0 + (g.th1-g.th0)*float64(k)/samples
+				theta := g.Th0 + (g.Th1-g.Th0)*float64(k)/samples
 				v, bound, _ := band.componentAt(t, theta, pull)
 				require.GreaterOrEqual(t, v+bound, lo-allow,
 					"azimuth %v takes a component below the reported range", theta)
@@ -1091,13 +1092,13 @@ func legendreNodes(n int) ([]float64, []float64) {
 // arc over its window put on th0's branch, both angles linear in one
 // parameter, by tensor Gauss-Legendre over the exact partial derivatives.
 func builtRuledPatchArea(g capPatchGeom, n int) float64 {
-	capTh0, capTh1 := capWindowOnBranch(g.capTh0, g.capTh1, g.th0)
+	capTh0, capTh1 := capband.WindowOnBranch(g.CapTh0, g.CapTh1, g.Th0)
 	xs, ws := legendreNodes(n)
-	as, ac := g.th1-g.th0, capTh1-capTh0
-	r0, r1, h := g.sideRadius, g.capRadius, g.capZ-g.sideZ
+	as, ac := g.Th1-g.Th0, capTh1-capTh0
+	r0, r1, h := g.SideRadius, g.CapRadius, g.CapZ-g.SideZ
 	total := 0.0
 	for i, u := range xs {
-		ts, tc := g.th0+u*as, capTh0+u*ac
+		ts, tc := g.Th0+u*as, capTh0+u*ac
 		sx, sy := r0*math.Cos(ts), r0*math.Sin(ts)
 		cx, cy := r1*math.Cos(tc), r1*math.Sin(tc)
 		dx, dy := cx-sx, cy-sy
@@ -1200,13 +1201,13 @@ func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
 			mitered := 0
 			for _, p := range cbp.patches {
 				g := p.geom
-				if !g.circular || g.sideRadius == 0 || g.wholeTurn || capPatchWindowSkew(g) == 0 {
+				if !g.Circular || g.SideRadius == 0 || g.WholeTurn || capPatchWindowSkew(g) == 0 {
 					continue
 				}
 				mitered++
 				ruled := builtRuledPatchArea(g, 64)
 				require.InDelta(t, ruled, builtRuledPatchArea(g, 96), 1e-12*ruled, `the quadrature has converged`)
-				area, bound := patchAreaOf(g)
+				area, bound := capband.AreaOf(g)
 				require.GreaterOrEqual(t, bound, math.Abs(ruled-area),
 					`patch %s publishes %v ± %v, and the ruled patch holds %v`, p.role, area, bound, ruled)
 			}

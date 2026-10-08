@@ -159,130 +159,7 @@ type capBandResult struct {
 	delta   float64
 }
 
-// capPatchGeom is one patch's exact analytic description, plane-local (u, v)
-// plus the two axial levels, kept alongside the topology for the moments and
-// tessellation passes (docs/modify-reach-design.md §8.4).
-type capPatchGeom struct {
-	circular bool
-	// Plane patch (circular == false): the two side-level (original) points
-	// and the two cap-level (offset) points, in walk order.
-	sideA, sideB, capA, capB Point2
-	// Cone patch (circular == true): concentric center, the two radii
-	// (side = original wall radius, cap = offset radius) and the angular
-	// EXTENT — always normalized to th0 < th1, never the walk's own sense,
-	// since patchRawFlux carries the material side in its own sign
-	// corrections and the DX7 survey reads an increasing window.
-	cU, cV                float64
-	sideRadius, capRadius float64
-	th0, th1              float64
-	// sweepCCW records whether the patch's OWN angular walk runs
-	// counter-clockwise (increasing theta). th0/th1 above are normalized to
-	// th0 < th1 because the DX7 survey reads them as an increasing window,
-	// and that normalization discards the walk's sense — so patchRawFlux
-	// reads it from here: a clockwise-walked patch integrated over the
-	// normalized window comes out with its surface facing the wrong way, and
-	// its flux is negated. A reflex corner's apex patch is always clockwise
-	// (the inward offset's connector arc runs pA -> pB with theta
-	// decreasing), and a plane patch never reads this field at all — its own
-	// walk lives in the sideA -> sideB vertex order.
-	sweepCCW bool
-	// wholeTurn records that this patch's angular window really is the FULL
-	// period — the single closed circle a cornerless loop offsets into, the
-	// one shape below that is built without a corner join. It is set from
-	// that structural fact and never from a comparison of th0 and th1: fl(2π)
-	// is not 2π, so no float window ever proves a full period. It is read by
-	// capblend_moments.go's flux bound alone, where ∮cos = ∮sin = 0 over a
-	// full period makes the eccentric term's TRUE value exactly zero, so the
-	// whole held value is its own error and no Sincos magnitude envelope is
-	// owed for it.
-	wholeTurn bool
-
-	// capTh0, capTh1 are the CAP-LEVEL directrix's own angular window,
-	// normalized (and swapped, where th0/th1 are) the SAME way — capTh0
-	// paired with th0's own corner, capTh1 with th1's. A regular wall's cap
-	// contour is the offset arc TRIMMED at the mitered corner feet
-	// (capWallFoot), which sit at a DIFFERENT angle than the wall's own
-	// endpoints wherever the corner is a genuine (non-tangent) miter
-	// (docs/modify-reach-design.md §8.3): th0/th1 above stay the wall's own
-	// full recorded sweep — the SIDE directrix, which the DX7 survey reads
-	// because the patch genuinely attains it there — while capTh0/capTh1 is
-	// the trimmed CAP directrix, and patchRawFlux integrates the
-	// straight-ruled patch BETWEEN the two windows rather than assume a
-	// single rotationally-symmetric cone sector spanning one shared window.
-	// patchAreaOf does not: its own area stays the constant-slant
-	// frustum-sector formula read against the trimmed CAP window alone, with
-	// the two windows genuinely differing widening its BOUND by the proven
-	// corner-skew allowance (skewStart/skewEnd below) rather than its own
-	// integral.
-	// A reflex corner's apex patch (side radius zero, so no side angle
-	// matters) and the single cornerless closed circle (no corner trims it
-	// at all, so both windows are the identical full period) set
-	// capTh0/capTh1 equal to th0/th1, which is what lets every circular
-	// patch route through the one general formula.
-	capTh0, capTh1 float64
-
-	sideZ, capZ float64
-
-	// contourAllow is this ONE patch's own proven allowance for how far its
-	// area can differ from the ruled quad the construction denotes, given the
-	// cap-level directrix's own displacement (internal/proofbound/bounds.go's
-	// proofbound.BandPatchAreaAllow) — computed once, at build time, from this patch's
-	// own held chord length and slant distance, and added into patchAreaOf's
-	// returned bound. It is zero wherever the band's own contour displacement
-	// is zero (an axis-aligned section's exact miters), which is what leaves
-	// patchAreaOf's Plane/Cone bound carrying only its own arithmetic and the
-	// side level's allowance (levelDelta below) there.
-	contourAllow float64
-
-	// levelDelta is the SIDE level's conversion and float-sum rounding: sideZ
-	// is the single float sum capZ + matSign*ds, so this patch's whole side
-	// directrix sits that far from the level it denotes — the same term
-	// capSlantEdge charges into a slant edge's length and capBandVolume charges
-	// for the identical level.
-	// patchAreaOf reads it as the axial half of its own displacement
-	// allowance (internal/proofbound/bounds.go's proofbound.BandLevelAreaAllow), beside contourAllow's
-	// cap-level half; without it both of that function's arms would read the
-	// side level as an exact input and bound only the patch they BUILT.
-	levelDelta float64
-
-	// capThAllow is the proven bound on |held (capTh1−capTh0) − true window|,
-	// derived at build time from the same proofbound.Atan2Interval bracket capWallArcBound
-	// builds for this wall's own cap-level arc (capSweepAllow,
-	// capblend_contour.go), or from proofbound.PiLower/proofbound.PiUpper directly for the one
-	// whole-turn circle, whose cap-level sweep is a structural fact of that
-	// construction (wholeTurn) rather than an offset corner's own computed
-	// feet. patchAreaOf's Cone arm reads it to bracket the frustum-sector
-	// formula's Δθ factor; nothing else does.
-	capThAllow float64
-
-	// skewStart and skewEnd are capband.CornerSkewUpper's proven bounds on the
-	// exact angle between the side directrix's end and the cap directrix's end
-	// at the (th0, capTh0) and (th1, capTh1) corners, read from the held
-	// plane-local ends. patchAreaOf's Cone arm turns them into the ruled
-	// patch's distance from the frustum sector it publishes. An apex patch
-	// holds zero for both: its side directrix is the corner point, the same
-	// point at every angle, so its rulings pair the cap arc with that point at
-	// the cap arc's own angle.
-	skewStart, skewEnd float64
-}
-
-func (g capPatchGeom) patch() capband.Patch {
-	point := func(p Point2) capband.Point { return capband.Point{U: p.U, V: p.V} }
-	return capband.Patch{
-		Circular: g.circular,
-		SideA:    point(g.sideA), SideB: point(g.sideB),
-		CapA: point(g.capA), CapB: point(g.capB),
-		CU: g.cU, CV: g.cV,
-		SideRadius: g.sideRadius, CapRadius: g.capRadius,
-		Th0: g.th0, Th1: g.th1,
-		SweepCCW: g.sweepCCW, WholeTurn: g.wholeTurn,
-		CapTh0: g.capTh0, CapTh1: g.capTh1,
-		SideZ: g.sideZ, CapZ: g.capZ,
-		ContourAllow: g.contourAllow,
-		LevelDelta:   g.levelDelta, CapThAllow: g.capThAllow,
-		SkewStart: g.skewStart, SkewEnd: g.skewEnd,
-	}
-}
+type capPatchGeom = capband.Patch
 
 // buildCapBand builds the chamfer band for one loop selected on one cap: the
 // patch faces between the cap contour (offset dc into material, at capZ) and
@@ -384,7 +261,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// against the axial one), the two factors proofbound.BandPatchAreaAllow needs.
 		chordUpper := proofbound.AbsSumUpper(capEdge.length, capEdge.lengthBound)
 		slant := math.Hypot(math.Abs(capRadius-w.Radius), math.Abs(capZ-sideZ))
-		// capThAllow: the whole-turn patch's cap-level sweep is the WALL's own
+		// CapThAllow: the whole-turn patch's cap-level sweep is the WALL's own
 		// recorded th0/th1 (there is no offset corner to trim it — wholeTurn is
 		// exactly this structural fact), so its true value is 2π as a fact of
 		// the construction rather than something an offset solve computed. The
@@ -394,7 +271,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// circumference.
 		dthHeld := gth1 - gth0
 		capThAllow := proofbound.IntervalFloatError(proofbound.TwoPiInterval(), dthHeld)
-		geom := capPatchGeom{circular: true, cU: w.CU, cV: w.CV, sideRadius: w.Radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.Th1 > w.Th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant), levelDelta: levelDelta, capThAllow: capThAllow}
+		geom := capPatchGeom{Circular: true, CU: w.CU, CV: w.CV, SideRadius: w.Radius, CapRadius: capRadius, Th0: gth0, Th1: gth1, CapTh0: gth0, CapTh1: gth1, SweepCCW: w.Th1 > w.Th0, WholeTurn: true, SideZ: sideZ, CapZ: capZ, ContourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant), LevelDelta: levelDelta, CapThAllow: capThAllow}
 		// The two circles pair at their seams, the side wall's own walk start
 		// and the cap circle's (cU + capRadius, cV), and keep that pairing all
 		// the way round, so both corner skews are the seams' one angle.
@@ -591,7 +468,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			proofbound.AbsSumUpper(slantOut[i].length, slantOutHeld[i]),
 			proofbound.AbsSumUpper(slantIn[i].length, slantInHeld[i]),
 		)
-		// capThAllow: this apex patch's own connector runs pA -> pB (the same
+		// CapThAllow: this apex patch's own connector runs pA -> pB (the same
 		// capApexArcBound bracket capApexArcBound already builds for the
 		// connector's own arc LENGTH above), so capSweepAllow reads the
 		// identical proofbound.Atan2Interval enclosure and reports it against the raw
@@ -601,12 +478,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// unwrap direction (Pass 1's "for th1 > th0 { th1 -= 2*math.Pi }").
 		capThAllow := capSweepAllow(j.vU, j.vV, dc, j.pB, j.pA, arcTh0[i]-arcTh1[i], arcWraps[i], delta)
 		g := capPatchGeom{
-			circular: true, sweepCCW: false,
-			cU: j.vU, cV: j.vV, sideRadius: 0, capRadius: dc,
-			th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sideZ: sideZ, capZ: capZ,
-			contourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant),
-			levelDelta:   levelDelta,
-			capThAllow:   capThAllow,
+			Circular: true, SweepCCW: false,
+			CU: j.vU, CV: j.vV, SideRadius: 0, CapRadius: dc,
+			Th0: gth0, Th1: gth1, CapTh0: gth0, CapTh1: gth1, SideZ: sideZ, CapZ: capZ,
+			ContourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant),
+			LevelDelta:   levelDelta,
+			CapThAllow:   capThAllow,
 		}
 		// The apex patch's rulings all leave the ORIGINAL corner vertex, which
 		// is the cone tag's own apex: a point side directrix.
@@ -659,7 +536,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// capThAllow is capSweepAllow's own enclosure of THIS sweep
 			// (capTh1-capTh0), computed here where start/end/wraps are still
 			// the ones capWallSweep just resolved: patchAreaOf's later swap of
-			// g.capTh0/g.capTh1 (below) negates the raw difference but not its
+			// g.CapTh0/g.CapTh1 (below) negates the raw difference but not its
 			// absolute value, and this bound is symmetric in sign (it bounds
 			// |held-true|), so computing it once, pre-swap, stays valid after.
 			capThAllow = capSweepAllow(w.CU, w.CV, capRadius, start, end, capTh1-capTh0, wraps, delta)
@@ -745,28 +622,28 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		leadSlant.faces = append(leadSlant.faces, face)
 		patches = append(patches, face)
 
-		g := capPatchGeom{sideZ: sideZ, capZ: capZ, levelDelta: levelDelta}
+		g := capPatchGeom{SideZ: sideZ, CapZ: capZ, LevelDelta: levelDelta}
 		if w.IsCircular() {
-			g.circular = true
-			g.cU, g.cV = w.CU, w.CV
-			g.sideRadius, g.capRadius = w.Radius, capRadius
+			g.Circular = true
+			g.CU, g.CV = w.CU, w.CV
+			g.SideRadius, g.CapRadius = w.Radius, capRadius
 			// th0, th1 record the ANGULAR EXTENT, not the wall's own walked
 			// sense — see the single-closed-circle branch's comment above;
 			// the same normalization applies to a partial arc wall, and
 			// sweepCCW keeps the sense the normalization drops.
-			g.sweepCCW = w.Th1 > w.Th0
-			g.th0, g.th1 = w.Th0, w.Th1
-			g.capTh0, g.capTh1 = capTh0, capTh1
-			g.capThAllow = capThAllow
+			g.SweepCCW = w.Th1 > w.Th0
+			g.Th0, g.Th1 = w.Th0, w.Th1
+			g.CapTh0, g.CapTh1 = capTh0, capTh1
+			g.CapThAllow = capThAllow
 			side0, side1 := Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV}
 			cap0, cap1 := start, end
-			if g.th1 < g.th0 {
-				// The SAME swap, applied to both pairs together: g.th0 must
-				// keep pairing with g.capTh0 (both the wall's OWN start
-				// corner) and g.th1 with g.capTh1 (both its end corner), or
+			if g.Th1 < g.Th0 {
+				// The SAME swap, applied to both pairs together: g.Th0 must
+				// keep pairing with g.CapTh0 (both the wall's OWN start
+				// corner) and g.Th1 with g.CapTh1 (both its end corner), or
 				// patchRawFlux's ruled-angle term pairs the wrong corners.
-				g.th0, g.th1 = g.th1, g.th0
-				g.capTh0, g.capTh1 = g.capTh1, g.capTh0
+				g.Th0, g.Th1 = g.Th1, g.Th0
+				g.CapTh0, g.CapTh1 = g.CapTh1, g.CapTh0
 				side0, side1 = side1, side0
 				cap0, cap1 = cap1, cap0
 			}
@@ -774,9 +651,9 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				return capBandResult{}, err
 			}
 		} else {
-			g.sideA = Point2{U: w.StartU, V: w.StartV}
-			g.sideB = Point2{U: w.EndU, V: w.EndV}
-			g.capA, g.capB = start, end
+			g.SideA = Point2{U: w.StartU, V: w.StartV}
+			g.SideB = Point2{U: w.EndU, V: w.EndV}
+			g.CapA, g.CapB = start, end
 		}
 		// chordUpper/slant are this wall patch's own held chord (its cap-level
 		// edge) and slant distance (either of its two bounding slant edges,
@@ -787,7 +664,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			proofbound.AbsSumUpper(leadSlant.length, slantOutHeld[i]),
 			proofbound.AbsSumUpper(trailSlant.length, slantInHeld[nextI]),
 		)
-		g.contourAllow = proofbound.BandPatchAreaAllow(delta, chordUpper, slant)
+		g.ContourAllow = proofbound.BandPatchAreaAllow(delta, chordUpper, slant)
 		// The two rulings this wall patch is bounded by, paired end for end:
 		// leadSlant joins the side wall's own start vertex to capA, trailSlant
 		// its end vertex to capB. Both patch kinds read the pair: a Plane
@@ -817,14 +694,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 // ErrUnsupported: the requested band exists, and only this evaluator cannot
 // bound its area.
 func setCapPatchSkews(g *capPatchGeom, side0, side1, cap0, cap1 Point2) error {
-	c0, c1 := capWindowOnBranch(g.capTh0, g.capTh1, g.th0)
-	point := func(p Point2) capband.Point { return capband.Point{U: p.U, V: p.V} }
-	s0, ok0 := capband.CornerSkewUpper(g.cU, g.cV, point(side0), point(cap0), c0-g.th0)
-	s1, ok1 := capband.CornerSkewUpper(g.cU, g.cV, point(side1), point(cap1), c1-g.th1)
+	c0, c1 := capband.WindowOnBranch(g.CapTh0, g.CapTh1, g.Th0)
+	s0, ok0 := capband.CornerSkewUpper(g.CU, g.CV, side0, cap0, c0-g.Th0)
+	s1, ok1 := capband.CornerSkewUpper(g.CU, g.CV, side1, cap1, c1-g.Th1)
 	if !ok0 || !ok1 {
 		return errCapPatchSkewUnbounded
 	}
-	g.skewStart, g.skewEnd = s0, s1
+	g.SkewStart, g.SkewEnd = s0, s1
 	return nil
 }
 
@@ -859,7 +735,7 @@ var errCapPatchSkewUnbounded = fmt.Errorf(`%w: a cap-loop chamfer's circular ban
 // geometry the moments pass then integrates, so those two can never disagree
 // either.
 func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
-	f.area, f.areaBound = patchAreaOf(g)
+	f.area, f.areaBound = capband.AreaOf(g)
 	f.normalBound = capPatchNormalAllow(f, g, built)
 }
 
@@ -1139,10 +1015,10 @@ func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) Surface {
 // two windows. The mesh reads it too, for the distance from the ruled patch to
 // the cone it is tagged as (docs/tessellation-reach-design.md §7's skewGap).
 func capPatchWindowSkew(g capPatchGeom) float64 {
-	if !g.circular {
+	if !g.Circular {
 		return 0
 	}
-	return math.Max(g.skewStart, g.skewEnd)
+	return math.Max(g.SkewStart, g.SkewEnd)
 }
 
 // buildConePatch builds a full-turn Cone chamfer patch (a whole circular

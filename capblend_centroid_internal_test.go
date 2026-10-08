@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -37,7 +38,7 @@ func TestCapBlendConeMomentCoefficientsMatchReference(t *testing.T) {
 		{10, 12, -0.5, -988, 2.7, 2.3},
 		{0, 2, 0.25, 7, 0.9, 0.9},
 	}
-	check := func(t *testing.T, label string, got []phaseTerm, want []referencePhaseTerm) {
+	check := func(t *testing.T, label string, got []capband.PhaseTerm, want []referencePhaseTerm) {
 		t.Helper()
 		require.Len(t, got, len(want), `%s: term count`, label)
 		for i := range want {
@@ -55,15 +56,15 @@ func TestCapBlendConeMomentCoefficientsMatchReference(t *testing.T) {
 		R0, R1, H := proofarith.FloatRat(tc.R0), proofarith.FloatRat(tc.R1), proofarith.FloatRat(tc.H)
 		c, dS, dC := proofarith.FloatRat(tc.c), proofarith.FloatRat(tc.dS), proofarith.FloatRat(tc.dC)
 		label := fmt.Sprintf(`%+v`, tc)
-		check(t, label+` X`, coneMomentTermsX(R0, R1, H, c, dS, dC),
+		check(t, label+` X`, capband.ConeMomentTermsX(R0, R1, H, c, dS, dC),
 			referenceMomentTermsX(tc.R0, tc.R1, tc.H, tc.c, tc.dS, tc.dC))
-		check(t, label+` Y`, coneMomentTermsY(R0, R1, H, c, dS, dC),
+		check(t, label+` Y`, capband.ConeMomentTermsY(R0, R1, H, c, dS, dC),
 			referenceMomentTermsY(tc.R0, tc.R1, tc.H, tc.c, tc.dS, tc.dC))
 		// The far level is -1000, not -1e6: at -1e6 the float reference loses
 		// about 3e-10 relative to cancellation of its z0² terms, while the
 		// rational stays exact.
 		for _, z0 := range []float64{15.5, -1000} {
-			check(t, fmt.Sprintf(`%s Z z0=%g`, label, z0), coneMomentTermsZ(R0, R1, H, proofarith.FloatRat(z0), dS, dC),
+			check(t, fmt.Sprintf(`%s Z z0=%g`, label, z0), capband.ConeMomentTermsZ(R0, R1, H, proofarith.FloatRat(z0), dS, dC),
 				referenceMomentTermsZ(tc.R0, tc.R1, tc.H, z0, tc.dS, tc.dC))
 		}
 	}
@@ -84,21 +85,21 @@ func TestCapBlendConeMomentCoefficientsMatchReference(t *testing.T) {
 func TestCapBlendConeFluxIntervalEnclosesFloatClosedForm(t *testing.T) {
 	t.Parallel()
 	plate := capPatchGeom{
-		circular: true, sweepCCW: true,
-		cU: 36, cV: 22, sideRadius: 12, capRadius: 11.5,
-		th0: 0, th1: math.Pi / 2, capTh0: 0, capTh1: math.Pi / 2,
-		sideZ: 15.5, capZ: 16,
+		Circular: true, SweepCCW: true,
+		CU: 36, CV: 22, SideRadius: 12, CapRadius: 11.5,
+		Th0: 0, Th1: math.Pi / 2, CapTh0: 0, CapTh1: math.Pi / 2,
+		SideZ: 15.5, CapZ: 16,
 	}
 	far := plate
-	far.cU, far.cV = 988, 1000
+	far.CU, far.CV = 988, 1000
 	skewed := plate
-	skewed.th0, skewed.th1, skewed.capTh0, skewed.capTh1 = 0.3, 2.1, 0.35, 2.05
+	skewed.Th0, skewed.Th1, skewed.CapTh0, skewed.CapTh1 = 0.3, 2.1, 0.35, 2.05
 	major := plate
-	major.th0, major.th1, major.capTh0, major.capTh1 = -2.9, 2.9, -2.85, 2.85
+	major.Th0, major.Th1, major.CapTh0, major.CapTh1 = -2.9, 2.9, -2.85, 2.85
 	hole := plate
-	hole.cU, hole.cV = 50, 50
-	hole.sideRadius, hole.capRadius = 10, 10.5
-	hole.th0, hole.th1, hole.capTh0, hole.capTh1 = 0.2, 1.4, 0.25, 1.35
+	hole.CU, hole.CV = 50, 50
+	hole.SideRadius, hole.CapRadius = 10, 10.5
+	hole.Th0, hole.Th1, hole.CapTh0, hole.CapTh1 = 0.2, 1.4, 0.25, 1.35
 
 	for _, tc := range []struct {
 		name string
@@ -113,12 +114,12 @@ func TestCapBlendConeFluxIntervalEnclosesFloatClosedForm(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			g := tc.g
-			iv, ok := conePatchFluxInterval(g)
+			iv, ok := capband.ConeFluxInterval(g)
 			require.True(t, ok)
 
-			H := g.capZ - g.sideZ
-			envelope := math.Abs(H) * (math.Abs(g.sideRadius) + math.Abs(g.capRadius)) *
-				(math.Abs(g.cU) + math.Abs(g.cV) + math.Abs(g.sideRadius) + math.Abs(g.capRadius) + math.Abs(g.sideZ))
+			H := g.CapZ - g.SideZ
+			envelope := math.Abs(H) * (math.Abs(g.SideRadius) + math.Abs(g.CapRadius)) *
+				(math.Abs(g.CU) + math.Abs(g.CV) + math.Abs(g.SideRadius) + math.Abs(g.CapRadius) + math.Abs(g.SideZ))
 			width, _ := new(big.Rat).Sub(iv.Hi, iv.Lo).Float64()
 			require.LessOrEqual(t, width, 1e-24*(1+envelope),
 				`%s: the enclosure (%v wide) must stay at the radian grid's own level`, tc.name, width)
@@ -130,7 +131,7 @@ func TestCapBlendConeFluxIntervalEnclosesFloatClosedForm(t *testing.T) {
 
 			// patchRawFlux holds the enclosure's midpoint and publishes at
 			// least the enclosure's reach from it, which is never zero.
-			flux := patchRawFlux(g)
+			flux := capband.RawFlux(g)
 			require.Equal(t, mid, flux.Value, `%s: patchRawFlux must hold the enclosure's midpoint`, tc.name)
 			require.Greater(t, flux.Bound, 0.0, `%s: patchRawFlux's bound must be positive`, tc.name)
 			require.GreaterOrEqual(t, flux.Bound, proofbound.IntervalFloatError(iv, mid),
@@ -143,10 +144,10 @@ func TestCapBlendConeFluxIntervalEnclosesFloatClosedForm(t *testing.T) {
 // fallback evaluates (poly + origin + cross·ruledAngleCos), copied term for
 // term.
 func referenceConeFlux(g capPatchGeom) float64 {
-	R0, R1 := g.sideRadius, g.capRadius
-	z0, z1 := g.sideZ, g.capZ
-	thS0, thS1 := g.th0, g.th1
-	thC0, thC1 := g.capTh0, g.capTh1
+	R0, R1 := g.SideRadius, g.CapRadius
+	z0, z1 := g.SideZ, g.CapZ
+	thS0, thS1 := g.Th0, g.Th1
+	thC0, thC1 := g.CapTh0, g.CapTh1
 	H := z1 - z0
 	dS := thS1 - thS0
 	dC := thC1 - thC0
@@ -154,8 +155,8 @@ func referenceConeFlux(g capPatchGeom) float64 {
 	sinS1, cosS1 := math.Sincos(thS1)
 	sinC0, cosC0 := math.Sincos(thC0)
 	sinC1, cosC1 := math.Sincos(thC1)
-	originR0 := H / 2 * R0 * (g.cU*(sinS1-sinS0) + g.cV*(cosS0-cosS1))
-	originR1 := H / 2 * R1 * (g.cU*(sinC1-sinC0) + g.cV*(cosC0-cosC1))
+	originR0 := H / 2 * R0 * (g.CU*(sinS1-sinS0) + g.CV*(cosS0-cosS1))
+	originR1 := H / 2 * R1 * (g.CU*(sinC1-sinC0) + g.CV*(cosC0-cosC1))
 	origin := originR0 + originR1
 	dR := R1 - R0
 	dSC := dS - dC
@@ -163,7 +164,7 @@ func referenceConeFlux(g capPatchGeom) float64 {
 	poly := z0*polyZ0/2 + R0*R0*H*dS/2
 	crossZ0 := -R0 * R1 * dSC
 	cross := z0*crossZ0/2 + R0*R1*H*dC/2
-	intCos := ruledAngleCos(thS0, thS1, thC0, thC1)
+	intCos := capband.RuledAngleCos(thS0, thS1, thC0, thC1)
 	return poly + origin + cross*intCos
 }
 

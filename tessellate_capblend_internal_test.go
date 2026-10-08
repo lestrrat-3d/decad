@@ -183,13 +183,13 @@ func TestCapBlendMeshChargesTheWindowSkew(t *testing.T) {
 	roles := facesByRole(chamfered)
 	found := 0
 	for _, patch := range cbp.patches {
-		if !patch.geom.circular {
+		if !patch.geom.Circular {
 			continue
 		}
 		found++
 		skew := capPatchWindowSkew(patch.geom)
 		require.Positive(t, skew, `a mitered arc's two windows differ`)
-		skewTerm := proofbound.ProductUpper(patch.geom.capRadius, skew)
+		skewTerm := proofbound.ProductUpper(patch.geom.CapRadius, skew)
 		require.Positive(t, skewTerm)
 		face := roles[patch.role]
 		require.NotNil(t, face)
@@ -250,7 +250,7 @@ func TestCapBlendHoleApexPatchBoundCoversConnectorSagitta(t *testing.T) {
 	roles := facesByRole(chamfered)
 	apexCount := 0
 	for _, patch := range cbp.patches {
-		if !patch.geom.circular || patch.geom.sideRadius != 0 {
+		if !patch.geom.Circular || patch.geom.SideRadius != 0 {
 			continue
 		}
 		apexCount++

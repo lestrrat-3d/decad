@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -43,24 +42,6 @@ import (
 // package's own shipped volume formula (both reproduced independently, never
 // merely asserted) — see capBandMoment's own doc for the disk/patch sign
 // composition, identical to capBandVolume's.
-
-func patchFirstMomentFlux(g capPatchGeom) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar) {
-	return capband.FirstMomentFlux(g.patch())
-}
-
-type phaseTerm = capband.PhaseTerm
-
-func coneMomentTermsX(R0, R1, H, cU, dS, dC *big.Rat) []phaseTerm {
-	return capband.ConeMomentTermsX(R0, R1, H, cU, dS, dC)
-}
-
-func coneMomentTermsY(R0, R1, H, cV, dS, dC *big.Rat) []phaseTerm {
-	return capband.ConeMomentTermsY(R0, R1, H, cV, dS, dC)
-}
-
-func coneMomentTermsZ(R0, R1, H, z0, dS, dC *big.Rat) []phaseTerm {
-	return capband.ConeMomentTermsZ(R0, R1, H, z0, dS, dC)
-}
 
 // loopCoordinateUpper is one loop's own coordinate envelope
 // (profileCoordinateUpper, extrude.go, wrapped as a single-outer-loop
@@ -139,12 +120,12 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 
 	patchAreaTotal := proofbound.BoundedScalar{}
 	for _, g := range geom {
-		pmu, pmv, pmz := patchFirstMomentFlux(g)
+		pmu, pmv, pmz := capband.FirstMomentFlux(g)
 		sign := -matSign * orient
 		muTotal = proofbound.BoundedAdd(muTotal, proofbound.MeasuredScalar(sign*pmu.Value, pmu.Bound))
 		mvTotal = proofbound.BoundedAdd(mvTotal, proofbound.MeasuredScalar(sign*pmv.Value, pmv.Bound))
 		mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*pmz.Value, pmz.Bound))
-		pa, pb := patchAreaOf(g)
+		pa, pb := capband.AreaOf(g)
 		patchAreaTotal = proofbound.BoundedAdd(patchAreaTotal, proofbound.MeasuredScalar(pa, pb))
 	}
 

@@ -312,7 +312,7 @@ the rules leave to the byte budget.
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, blends, joins, section records and displacement proofs. See modify §6–§9. |
-| `internal/capband/` | Cap-band admission, departure and moment proofs. See modify-reach §8.3–§8.4. |
+| `internal/capband/` | Cap-band patch records, admission, departure and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, Bézier carriers. See verification §6. |
