@@ -517,14 +517,25 @@ RULES it, with straight `Line3` rulings between the side-level directrix
 meets the exact offset family only at `s=0` and `s=1` and chords the true
 curve strictly between them. That residual is bounded, never ignored:
 erosion by an increasing offset is monotone, so the true swept flux is
-sandwiched between the ordinary cone-sector flux read at the wide (side)
-window and the narrow (cap) one. Both reference fluxes are read about the
+sandwiched between the ordinary cone-sector flux `W` read at the wide (side)
+window and `N` read at the narrow (cap) one. Both reference fluxes are read about the
 arc's own axis at the side level, where the cone's flux density `R0·r(z)`
 never changes sign; about the plane-local origin the density changes sign,
 the sandwich fails, and the flux difference grows with the section's distance
-from that origin. The ruled patch's own point-for-point
-departure from the wide cone is bounded in closed form from the two windows'
-angular skew. The band's volume sums every patch's flux about the plane-local
+from that origin. The built ruled patch's own flux `B` about the same point is
+enclosed by the same certified closed form, and `ε` is how far that
+enclosure reaches past the interval between the two reference fluxes, so the
+built flux lies within `ε` of the interval with no claim about where the
+ruled surface sits. Two numbers, one inside an interval and one within `ε`
+of it, differ by at most the interval's width plus `ε`, so the about-axis
+gap is at most `|W − N|`, both reference bounds and `ε`; `ε` is zero
+wherever the built enclosure sits inside the interval. The gap is never
+taken as `|W − B|` through a displacement-times-area bound: the wide sector
+and the built patch end on different rulings, and the corner triangle
+between them carries a flux of about `½·R0·R1·H·Φ` per corner, which no
+bound on how far interior points move accounts for. On a 0.001 rad window
+of radius 10 trimmed 2e-4 rad at each corner, `W − B` is 0.018 while such a
+bound gives about 1e-4. The band's volume sums every patch's flux about the plane-local
 origin, and moving a patch's flux from the arc's axis to that origin adds the
 axis point times the patch's vector area, which depends only on the patch's
 boundary. The true and built patches end on different curves at each mitered
@@ -537,21 +548,38 @@ across the ruling carries with the opposite sign. Split at the corner vertex
 share is zero, because the sliver lies in its plane. Where a line meets a
 circle the locus is a parabola and `|W| = dc³·Δ1²/(6·(y0 + y1)³)` in closed
 form, with the line's distance from the centre as the moment arm. Between two
-circles, `|W|` is at most `dc²/4` times the diagonal of the hull of the locus
-velocity enclosures over the 32 offset sub-ranges. The share is zero at a
+circles, `|W|` is at most `dc²/8` times the diagonal of the hull of the locus
+velocity enclosures over the 32 offset sub-ranges: `W` is the integral of
+`(dc/2 − t)` times the velocity's distance from the hull's centre. The share is zero at a
 reflex foot, a G1 join and a whole turn, whose loci are straight, and a corner
 whose share cannot be bounded makes the volume bound unbounded. The built
 volume's own error holds none of this flux: it cancels between the two
 patches a ruling joins. It is owed because each `Cone` patch's bound is taken
 about its own axis. `ChordLocusVolumeAllow` composes the three terms into one
-proven volume bound. The skew it reads is the larger of the patch's two proven corner
+proven volume bound.
+
+That bound covers the signed volume gap, which can be smaller than the
+volume of the region between the two solids when the built patch lies
+outside the denoted surface in one place and inside it in another. The first
+moment (§8.4) needs the region's volume, so it reads `ChordLocusRegionAllow`
+instead: the same `|W − N|` and corner terms, plus the volume the straight
+homotopy from the wide sector to the built patch passes through. The cones
+from the axis point over the denoted surface lie between those over the two
+reference sectors, so the region lies in the shell between those two cones or
+on a surface of that homotopy. The homotopy moves each point by at most
+`R1·Φ`, `Φ` the larger corner skew, and its swept volume is at most that
+times an area bound for EVERY surface on it, `ChordLocusHomotopyAreaUpper`:
+`max(R0, R1)·max(dS, dC)·(|R1 − R0| + R1·Φ + |H|)`, from the two partial
+derivatives' lengths. The built patch's own area does not bound it, since the
+wide sector at the homotopy's start spans the side window. The skew the
+region term reads is the larger of the patch's two proven corner
 skews (§8.4's `CornerSkewUpper`), the exact angle between each corner's held
-side end and held cap end. The difference of the two held windows is not used:
+side end and held cap end; the volume term reads it only to test for zero. The difference of the two held windows is not used:
 each end of it is a float `Atan2`, and over a 600-sector sweep drawn away from
 the sketch origin that difference fell below the exact corner angle on 120 of
-568 patches. The term rounds every operation outward: the flux difference is
-taken exactly, `√(R0·R1)` through `RatSqrtUp`, and `sin(Φ/2)` at the top of its
-certified enclosure. A skew that is not finite answers an unbounded volume. The
+568 patches. Both terms round every operation outward: the flux sums and
+differences are taken exactly and rounded once, and every product is rounded
+up. A skew that is not finite answers an unbounded volume. The
 residual, and its bound, are exactly zero wherever both proven skews are: an
 apex patch, and a join or whole turn whose two directrix ends lie on one ray
 from the centre. A tangent join is modify §7's G1 row: its cap-level foot is
@@ -877,7 +905,8 @@ coefficients over interval arithmetic (`internal/capband/moment.go`'s
 `ivRing`). The published bound is that box's reach from the held value, so
 the value is unchanged and the bound covers the patch at its references. The
 chord-versus-locus term's two reference sectors (§8.3) take their own
-window's allowances on both directrices. The area's frustum sector charges
+window's allowances on both directrices, and the built patch it reads keeps
+all of its own. The area's frustum sector charges
 the side radius allowance as `αc·e·(2·(R0+R1) + |H| + e)`. Its corner-skew
 term is not monotone in the side radius, because the slant shrinks as `R0`
 grows toward `R1`, so it reads `R0 + e` and the held slant plus `e` (the
@@ -1051,8 +1080,8 @@ its two circles at their seams and keeps that pairing all the way round, so
 both skews are the seams' one angle, zero when both seams lie on one ray.
 
 Every other reader of a patch's skew reads the same two proven numbers
-(`capPatchWindowSkew`, the larger of them): the volume's chord-versus-locus
-term (§8.3), the mesh's `skewGap` and the gate on its per-cell twist term
+(`capPatchWindowSkew`, the larger of them): the chord-versus-locus volume and
+region terms (§8.3), the mesh's `skewGap` and the gate on its per-cell twist term
 (`docs/tessellation-reach-design.md` §7), and DX8's undecided gate. None reads
 a difference of the held windows `th0`, `th1`, `capTh0`, `capTh1`.
 
@@ -1097,8 +1126,8 @@ reach of those terms' coefficients with both swept angles read as `2π` — the
 moment's own analogue of the volume's zero-valued eccentric origin term
 there. Each ruled `Cone` patch also charges the first moment for its
 chord-versus-locus gap (§8.3). The region between the built solid and the
-denoted one has at most the volume term's own measure (its flux divided by
-3). Every point of it lies within the band's coordinate envelope (the
+denoted one has at most the region term's measure (`ChordLocusRegionAllow`
+divided by 3). Every point of it lies within the band's coordinate envelope (the
 original loop, the cap boundary widened by the contour displacement, and both
 levels) plus the patch's radial gap `|R0 − R1|`, so each moment component's
 bound grows by that volume times that reach (`capband.ChordLocusVolume`).

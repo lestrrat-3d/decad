@@ -27,7 +27,6 @@
 0	0.01	TestCapBlendChamferPolygonLoop
 0	1.51	TestCapBlendChamferedPinAsTool
 0	0.06	TestCapBlendChordLocusBoundIgnoresPlacement
-0	1.07	TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux
 0	0.03	TestCapBlendConeAreaEnclosesTheDenotedPatch
 0	0.02	TestCapBlendConePatchNormalOutwardBothCaps
 0	0.01	TestCapBlendPatchNormalBoundCoversDenotedWall

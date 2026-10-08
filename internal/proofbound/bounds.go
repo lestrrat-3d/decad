@@ -89,10 +89,14 @@ import (
 //     BandLevelAreaAllow;
 //   - the VOLUME gap between a cap-loop chamfer's straight-ruled Cone patch
 //     and the curved miter locus it denotes at a non-tangential corner →
-//     ChordLocusVolumeAllow, an erosion-monotonicity sandwich against the
-//     ordinary shared-window cone-sector flux plus a swept-volume term over
-//     the built patch's own closed-form displacement from it, plus each
-//     mitered corner's sliver flux (ChordLocusCornerFlux);
+//     ChordLocusVolumeAllow, an erosion-monotonicity sandwich between the two
+//     shared-window cone-sector fluxes, the built patch's own enclosed flux's
+//     reach past that interval (ChordLocusBuiltExcursion), plus each
+//     mitered corner's sliver flux (ChordLocusCornerFlux); the MEASURE of the
+//     region between the two solids, which the first moment reads, is
+//     ChordLocusRegionAllow, the same sandwich plus a swept-volume term over a
+//     homotopy from the wide sector to the built patch
+//     (ChordLocusHomotopyAreaUpper);
 //   - the FIRST MOMENT a cap-loop chamfer's contour displacement can move →
 //     SweptMomentAllow, SweptVolumeAllow's own one-dimension-higher sibling;
 //   - the FIRST MOMENT a loft's chorded boundary can move under the same
@@ -2187,15 +2191,14 @@ func BandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
 }
 
 // ChordLocusVolumeAllow bounds capblend_moments.go's chord-versus-locus
-// residual: the gap between a cap-loop chamfer's regular-wall Cone patch — the
-// STRAIGHT-RULED surface the topology actually builds between its two
-// directrices — and the TRUE denoted miter locus (docs/modify-reach-design.md
-// §8.3: "at axial fraction s, the denoted miter locus is the parallel section
-// offset by s*dc" — a contract the ruled Cone patch meets only at s=0 and
-// s=1, chording the true curve strictly between them), at a non-tangential
-// corner where the cap-level directrix (capTh0, capTh1) sweeps a window
-// narrower than the side-level one (th0, th1) by windowSkewMax at its widest
-// corner.
+// residual: the flux gap between a cap-loop chamfer's regular-wall Cone patch
+// B, the straight-ruled surface the topology builds between its two
+// directrices, and the denoted miter-locus surface T
+// (docs/modify-reach-design.md §8.3: "at axial fraction s, the denoted miter
+// locus is the parallel section offset by s*dc"). B meets T only at s=0 and
+// s=1 and chords it in between wherever the cap-level directrix
+// (capTh0, capTh1) sweeps a narrower window than the side-level one
+// (th0, th1).
 //
 // The band's volume is a third of the summed fluxes of its closed surface
 // about the plane-local origin O, but this term is taken about the arc's axis point
@@ -2219,85 +2222,235 @@ func BandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
 // |Flux_c(true) − Flux_c(built)|, but not the about-O difference the band's
 // volume reads.
 //
-// The about-c part is a two-term decomposition, |Vol(true)-Vol(built)| <=
-// |Vol(true)-Vol(wide)| + |Vol(wide)-Vol(built)|, where "wide"/"narrow" are
-// the ordinary ROTATIONALLY-SYMMETRIC cone-sector flux capband.RawFlux gives
-// for the SIDE window (th0, th1) shared by both directrices, and for the CAP
-// window (capTh0, capTh1) shared by both:
+// The about-c part reads three fluxes, each a capband.RawFlux value with its
+// proven bound, all at the patch's own radii and levels and about c: W, the
+// rotationally symmetric cone sector over the SIDE window (th0, th1) on both
+// directrices; N, the same sector over the CAP window (capTh0, capTh1); and
+// B, the built ruled patch itself. A clockwise-walked patch negates all
+// three, so the interval below is the one between N and W in either order.
 //
-//   - Vol(true) in [Vol(narrow), Vol(wide)]. Erosion is monotonic in its
-//     offset amount (a point surviving the deepest cut d always survived
-//     every shallower one, and every survivor of any cut is a point of the
-//     wall's own un-eroded extent), so the true swept solid's own
-//     cross-sectional window at every axial fraction s is a SET sandwiched
-//     between the cap window and the side window. Its flux is sandwiched the
-//     same way only where the flux density has one sign over the cone, so
-//     both reference fluxes are taken about the arc's own axis at the side
-//     level (capband's chordLocusResidualAllow moves the centre to the origin
-//     and the side level to zero). About that point, the cone at angle θ and
-//     axial offset z has radius r(z) = R0 + (R1-R0)·z/H, and its flux density
-//     per dθ·dz is R0·r(z), never negative. So envelopeSlack =
-//     |Vol(wide)-Vol(narrow)| bounds |Vol(true)-Vol(wide)|, and neither the
-//     section's in-plane distance from the plane-local origin nor its height
-//     above the sketch plane enters it. About any other point the density
-//     changes sign across the cone and the sandwich fails.
-//   - |Vol(wide)-Vol(built)| <= SweptVolumeAllow(patchDeviation, areaUpper):
-//     the built patch is a convex combination, in Cartesian coordinates, of a
-//     side-level point at radius sideRadius and angle in [th0, th1] and a
-//     cap-level point at radius capRadius and angle in [capTh0, capTh1], so
-//     (triangle inequality on the two component vectors) its own radius never
-//     exceeds the radius the wide cone's own linear taper gives at that axial
-//     level, and (a convex combination of two rays stays angularly between
-//     them) its own angle never leaves [th0, th1] either — patchDeviation is
-//     the proven per-point cap on how far the built surface can then sit from
-//     the wide cone's own surface (a radial term from the two directrices'
-//     radii and the corner skew's own cosine, an angular term the same skew
-//     scaled by the larger radius), and SweptVolumeAllow turns a per-point
-//     displacement bound into a volume one exactly as it already does for a
-//     mesh vertex.
+//   - Flux_c(T) lies between N and W. Erosion is monotonic in its offset amount (a
+//     point surviving the deepest cut d always survived every shallower one,
+//     and every survivor of any cut is a point of the wall's own un-eroded
+//     extent), so the true swept solid's own cross-sectional window at every
+//     axial fraction s is a SET sandwiched between the cap window and the
+//     side window. Its flux is sandwiched the same way only where the flux
+//     density has one sign over the cone, so all three fluxes are taken about
+//     the arc's own axis at the side level (capband's chordLocusResidualAllow
+//     moves the centre to the origin and the side level to zero). About that
+//     point, the cone at angle θ and axial offset z has radius
+//     r(z) = R0 + (R1-R0)·z/H, and its flux density per dθ·dz is R0·r(z),
+//     never negative. About any other point the density changes sign across
+//     the cone and the sandwich fails.
+//   - Flux_c(B) lies within ε of the interval between N and W, with
+//     ε = ChordLocusBuiltExcursion of the three enclosures: how far B's
+//     enclosure reaches past the ends of that interval. ε is proven because
+//     each enclosure is, and it needs no claim about where the ruled surface
+//     sits. ε is zero wherever B's enclosure lies inside the interval with
+//     room for the three bounds.
 //
-// windowSkewMax must be a PROVEN upper bound on the larger corner skew, below
-// a quarter turn (capband.CornerSkewUpper): the radial term grows with the
-// skew there, so an upper bound on the skew bounds it. A zero (both corners'
-// directrix ends on one ray from the centre) leaves the term at zero,
-// unchanged from the tangent-junction, apex and whole-turn readings.
+// A number inside an interval and a number within ε of it differ by at most
+// the interval's width plus ε, so the about-c part is |W − N| plus both
+// reference bounds, plus ε. The bound never reads |W − B| alone. B and W end on different
+// rulings at each corner, and the corner triangle between those rulings
+// carries a flux of about ½·R0·R1·H·Φ for a corner skew Φ, which no bound on
+// how far B's interior points sit from W accounts for.
 //
-// Every operation rounds outward. The two fluxes' difference is taken exactly
-// and rounded up, √(R0·R1) is read from the exact product through RatSqrtUp,
-// and sin(Φ/2) is the upper end of its certified enclosure, so no libm
-// accuracy is assumed. A cornerFlux that is negative or not finite answers an
-// unbounded term.
-func ChordLocusVolumeAllow(fluxWide, fluxWideBound, fluxNarrow, fluxNarrowBound, sideRadius, capRadius, windowSkewMax, areaUpper, cornerFlux float64) float64 {
+// Every operation rounds outward: the sums and differences, the corner flux
+// included, are taken exactly and rounded up once. A flux or bound that does not lift, or a cornerFlux
+// that is negative or not finite, answers an unbounded term.
+func ChordLocusVolumeAllow(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound, cornerFlux float64) float64 {
 	if !(cornerFlux >= 0) || IsNonFinite(cornerFlux) {
 		return math.Inf(1)
 	}
-	if windowSkewMax <= 0 {
-		return cornerFlux
-	}
-	rWide, rNarrow := proofarith.FloatRat(fluxWide), proofarith.FloatRat(fluxNarrow)
-	rR0, rR1, rSkew := proofarith.FloatRat(math.Abs(sideRadius)), proofarith.FloatRat(math.Abs(capRadius)), proofarith.FloatRat(windowSkewMax)
-	if rWide == nil || rNarrow == nil || rR0 == nil || rR1 == nil || rSkew == nil {
-		return math.Inf(1)
-	}
-	envelopeSlack := AbsSumUpper(RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(rWide, rNarrow))), fluxWideBound, fluxNarrowBound)
-	// 1 - cos(x) = 2*sin(x/2)^2 states the radial deficit through sin(x/2),
-	// which has no cancellation at a small skew.
-	sinHalf, _, ok := RadSinCosInterval(new(big.Rat).Mul(rSkew, big.NewRat(1, 2)))
+	slack, ok := chordLocusEnvelopeSlack(fluxWide, wideBound, fluxNarrow, narrowBound)
 	if !ok {
 		return math.Inf(1)
 	}
-	sinUpper := math.Max(RatFloatUp(new(big.Rat).Abs(sinHalf.Lo)), RatFloatUp(new(big.Rat).Abs(sinHalf.Hi)))
-	radialDeficit := ProductUpper(RatSqrtUp(new(big.Rat).Mul(rR0, rR1)), sinUpper)
-	maxRadius := math.Max(math.Abs(sideRadius), math.Abs(capRadius))
-	patchDeviation := AbsSumUpper(radialDeficit, ProductUpper(maxRadius, windowSkewMax))
-	// SweptVolumeAllow returns a VOLUME, but this function's return value is a
-	// FLUX term (envelopeSlack is a difference of two patchRawFlux results,
-	// three times a volume) that patchRawFlux's own bound folds into, to be
-	// divided by 3 exactly once at capBandVolume's single division of the
-	// summed flux (capblend_moments.go). Scaling this volume term up by 3 here
-	// is what makes that later division land it back at its true size instead
-	// of a third of it. cornerFlux is already a flux.
-	return AbsSumUpper(envelopeSlack, ProductUpper(3, SweptVolumeAllow(patchDeviation, areaUpper)), cornerFlux)
+	excursion, ok := chordLocusExcursion(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound)
+	if !ok {
+		return math.Inf(1)
+	}
+	slack.Add(slack, excursion)
+	return RatFloatUp(slack.Add(slack, proofarith.FloatRat(cornerFlux)))
+}
+
+// ChordLocusBuiltExcursion is ChordLocusVolumeAllow's ε, rounded up: an
+// ε ≥ 0 for which every built flux B within builtBound of fluxBuilt lies in
+// [min(W, N) − ε, max(W, N) + ε] for every wide flux W within wideBound of
+// fluxWide and every narrow flux N within narrowBound of fluxNarrow. With
+// w = fluxWide, n = fluxNarrow, b = fluxBuilt and their bounds wb, nb, bb, it
+// is
+//
+//	max(0, (b + bb) − max(w − wb, n − nb), min(w + wb, n + nb) − (b − bb)).
+//
+// It is taken exactly. An input that does not lift, or a bound that is
+// negative or not finite, answers +Inf.
+func ChordLocusBuiltExcursion(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound float64) float64 {
+	excursion, ok := chordLocusExcursion(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound)
+	if !ok {
+		return math.Inf(1)
+	}
+	return RatFloatUp(excursion)
+}
+
+// ChordLocusRegionAllow bounds three times the VOLUME of the region between
+// the solid a cap-loop chamfer's regular-wall Cone patch B bounds and the
+// solid the denoted surface T bounds: the measure capband.ChordLocusVolume
+// hands to the band's first-moment bound, which moves by at most that volume
+// times the largest coordinate the region holds. ChordLocusVolumeAllow bounds
+// only the signed flux gap, which can be smaller than the region's measure
+// when B lies outside T in one place and inside it in another, so the moment
+// term reads this one.
+//
+// Write K(X) for the cone from the axis point c over a surface X, so a third
+// of Flux_c(X) is the volume of K(X) wherever the flux density is
+// non-negative (ChordLocusVolumeAllow's first bullet). The sectors nest as
+// K(N) ⊂ K(T) ⊂ K(W), so K(W) \ K(N) has volume |W − N|/3. Ride W and B on one
+// parametrisation (u, v) over the unit square: W(u, v) is
+// ((1−v)·R0 + v·R1)·e^{iθS(u)} at level v·H, and B(u, v) is
+// (1−v)·R0·e^{iθS(u)} + v·R1·e^{iθC(u)} at the same level, θS and θC linear
+// in u across the side and cap windows. The straight homotopy
+// H_λ = (1−λ)·W + λ·B moves each point by B − W = v·R1·(e^{iθC(u)} − e^{iθS(u)}),
+// at most R1·Φ: θC(u) − θS(u) is linear in u between the two corner skews,
+// so its magnitude never exceeds the larger one, Φ = windowSkewMax.
+//
+// A point of K(T) outside K(B), or of K(B) outside K(T), lies in K(W) \ K(N)
+// or on some H_λ. At an angle inside the cap window, a point in K(N) that is
+// not in K(B) starts inside K(H_0) = K(W) and ends outside K(H_1) = K(B), so
+// a surface bounding K(H_λ) crosses it: H_λ itself, or the cone over one of
+// H_λ's edges. The cones over the two corner rulings stay at angles between
+// the side and cap ends, outside the cap window. The top edge starts and ends
+// on the same cap arc at those angles, so a crossing through the cone over it
+// is undone by a second one. Every other point of the region lies at a
+// corner angle, inside K(W) \ K(N), or is crossed by H_λ in the same way.
+// The cones over the two corner slivers, between each corner's locus and its
+// ruling, hold the rest of the region, and their flux is cornerFlux, as in
+// ChordLocusVolumeAllow.
+//
+// The set the homotopy passes through has volume at most
+// ∫∫∫ |∂λH|·|∂uH × ∂vH| ≤ R1·Φ·sup_λ Area(H_λ), which is SweptVolumeAllow of
+// that displacement against an area bound for EVERY H_λ, λ in [0, 1].
+// homotopyAreaUpper must be such a bound: ChordLocusHomotopyAreaUpper forms
+// one. The area of B alone does not qualify, since W, at λ = 0, spans the
+// wider side window.
+//
+// radiusUpper must bound both radii, so R1·Φ ≤ radiusUpper·windowSkewMax, and
+// windowSkewMax must be a PROVEN upper bound on the larger corner skew, below
+// a quarter turn (capband.CornerSkewUpper). The swept volume is scaled by 3 to
+// the flux units of the other two terms, which capband.ChordLocusVolume
+// divides by 3 once. A zero skew charges cornerFlux alone. A skew, radius,
+// area, flux or bound that does not lift, or a cornerFlux that is negative or
+// not finite, answers +Inf.
+func ChordLocusRegionAllow(fluxWide, wideBound, fluxNarrow, narrowBound, radiusUpper, windowSkewMax, homotopyAreaUpper, cornerFlux float64) float64 {
+	if !(cornerFlux >= 0) || IsNonFinite(cornerFlux) || !(windowSkewMax >= 0) || IsNonFinite(windowSkewMax) {
+		return math.Inf(1)
+	}
+	if windowSkewMax == 0 {
+		return cornerFlux
+	}
+	if !(radiusUpper >= 0) || !(homotopyAreaUpper >= 0) || IsNonFinite(radiusUpper) || IsNonFinite(homotopyAreaUpper) {
+		return math.Inf(1)
+	}
+	slack, ok := chordLocusEnvelopeSlack(fluxWide, wideBound, fluxNarrow, narrowBound)
+	if !ok {
+		return math.Inf(1)
+	}
+	swept := SweptVolumeAllow(ProductUpper(radiusUpper, windowSkewMax), homotopyAreaUpper)
+	sweptFlux := ProductUpper(3, swept)
+	if IsNonFinite(sweptFlux) {
+		return math.Inf(1)
+	}
+	slack.Add(slack, proofarith.FloatRat(sweptFlux))
+	return RatFloatUp(slack.Add(slack, proofarith.FloatRat(cornerFlux)))
+}
+
+// ChordLocusHomotopyAreaUpper bounds the area of every surface
+// H_λ = (1−λ)·W + λ·B, λ in [0, 1], between a Cone patch's wide reference
+// sector W and its built ruled patch B (ChordLocusRegionAllow states the
+// parametrisation). With dS and dC the side and cap window widths,
+//
+//	∂uH = i·((1−v)·R0·dS·e^{iθS} + v·R1·((1−λ)·dS·e^{iθS} + λ·dC·e^{iθC})),
+//
+// so |∂uH| ≤ max(R0, R1)·max(dS, dC), and ∂vH has in-plane part
+// (R1 − R0)·e^{iθS} + λ·R1·(e^{iθC} − e^{iθS}) and axial part H, so
+// |∂vH| ≤ |R1 − R0| + R1·Φ + |H|. The area is at most the integral of
+// |∂uH|·|∂vH| over the unit square, which is at most the product of the two
+// bounds. radiusUpper must bound both radii, windowUpper both window widths,
+// radialGapUpper |R1 − R0|, heightUpper |H| and windowSkewMax the larger
+// corner skew Φ, each proven. Every operation rounds up. A negative or
+// non-finite input answers +Inf.
+func ChordLocusHomotopyAreaUpper(radiusUpper, windowUpper, radialGapUpper, heightUpper, windowSkewMax float64) float64 {
+	for _, in := range []float64{radiusUpper, windowUpper, radialGapUpper, heightUpper, windowSkewMax} {
+		if !(in >= 0) || IsNonFinite(in) {
+			return math.Inf(1)
+		}
+	}
+	slant := AbsSumUpper(radialGapUpper, ProductUpper(radiusUpper, windowSkewMax), heightUpper)
+	return ProductUpper(ProductUpper(radiusUpper, windowUpper), slant)
+}
+
+// chordLocusEnvelopeSlack is |fluxWide − fluxNarrow| + wideBound + narrowBound
+// taken exactly: the most the true wide and narrow fluxes can differ by. A
+// value that does not lift, or a bound that is negative or not finite,
+// answers false.
+func chordLocusEnvelopeSlack(fluxWide, wideBound, fluxNarrow, narrowBound float64) (*big.Rat, bool) {
+	rs, ok := liftChordLocusFluxes(fluxWide, wideBound, fluxNarrow, narrowBound)
+	if !ok {
+		return nil, false
+	}
+	slack := new(big.Rat).Abs(new(big.Rat).Sub(rs[0], rs[2]))
+	return slack.Add(slack, rs[1]).Add(slack, rs[3]), true
+}
+
+// chordLocusExcursion is ChordLocusBuiltExcursion taken exactly.
+func chordLocusExcursion(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound float64) (*big.Rat, bool) {
+	rs, ok := liftChordLocusFluxes(fluxWide, wideBound, fluxNarrow, narrowBound, fluxBuilt, builtBound)
+	if !ok {
+		return nil, false
+	}
+	w, wb, n, nb, b, bb := rs[0], rs[1], rs[2], rs[3], rs[4], rs[5]
+	// lowerTop is the least the interval's top end can be, upperBottom the
+	// most its bottom end can be.
+	lowerTop := ratMax(new(big.Rat).Sub(w, wb), new(big.Rat).Sub(n, nb))
+	upperBottom := ratMin(new(big.Rat).Add(w, wb), new(big.Rat).Add(n, nb))
+	above := new(big.Rat).Add(b, bb)
+	above.Sub(above, lowerTop)
+	below := new(big.Rat).Sub(upperBottom, b)
+	below.Add(below, bb)
+	return ratMax(new(big.Rat), ratMax(above, below)), true
+}
+
+func ratMax(a, b *big.Rat) *big.Rat {
+	if a.Cmp(b) >= 0 {
+		return a
+	}
+	return b
+}
+
+func ratMin(a, b *big.Rat) *big.Rat {
+	if a.Cmp(b) <= 0 {
+		return a
+	}
+	return b
+}
+
+// liftChordLocusFluxes lifts (value, bound) pairs to exact rationals. A value
+// that does not lift, or a bound that is negative or not finite, answers
+// false.
+func liftChordLocusFluxes(pairs ...float64) ([]*big.Rat, bool) {
+	out := make([]*big.Rat, len(pairs))
+	for i, x := range pairs {
+		if i%2 == 1 && !(x >= 0) {
+			return nil, false
+		}
+		r := proofarith.FloatRat(x)
+		if r == nil {
+			return nil, false
+		}
+		out[i] = r
+	}
+	return out, true
 }
 
 // ChordLocusCornerFlux is one mitered corner's share of the chord-locus term

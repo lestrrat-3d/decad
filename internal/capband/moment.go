@@ -505,32 +505,33 @@ func FirstMomentFlux(g Patch) (proofbound.BoundedScalar, proofbound.BoundedScala
 	return patchFirstMomentFlux(g)
 }
 
-// ChordLocusVolume returns the volume a Cone patch's chord-versus-locus term
-// charges (the flux patchRawFlux adds to its bound, divided by 3 and rounded
-// up) and the radial gap |SideRadius-CapRadius|, rounded up. Both are zero for
-// a Plane patch, a whole turn, and a patch whose corner skews and corner flux
-// (Patch.CornerFlux) are all zero: patchRawFlux charges none of them the term.
-// The corner flux is part of the volume returned, so the first-moment term
-// below grows with it.
+// ChordLocusVolume returns a bound on the volume of the region between the
+// solid a Cone patch's built ruled surface bounds and the solid its denoted
+// miter locus bounds (chordLocusRegionAllow, divided by 3 and rounded up), and
+// the radial gap |SideRadius-CapRadius|, rounded up. Both are zero for a Plane
+// patch, a whole turn, and a patch whose corner skews and corner flux
+// (Patch.CornerFlux) are all zero. The corner flux is part of the volume
+// returned, so the first-moment term below grows with it.
 //
-// The first-moment sibling of the volume term reads the two together. The
-// volume term bounds the measure of the region between the built solid and
-// the denoted one: the denoted solid lies inside the wide reference sector and
-// contains the narrow one, and every point the built patch moves through on
-// its way from the wide sector lies in the region proofbound.SweptVolumeAllow
-// measures. Every point of that region lies on a straight segment between a
-// wide-sector point and a built-patch point. A built-patch point is a convex
-// combination of a side-directrix point and a cap-directrix point. A
-// wide-sector point at angle θ lies on the ray from the centre through the
-// side directrix's own point at θ, at most the radial gap from it. So a bound
-// C on every side- and cap-directrix coordinate magnitude bounds every
-// coordinate of the region by C plus the radial gap, and the region's first
-// moment by the volume times that sum.
+// The first-moment sibling of the volume term reads the two together: the
+// region moves the first moment by at most its volume times the largest
+// coordinate magnitude it holds. The region is bounded by the denoted
+// surface, the built patch and the corner slivers between them, so it lies in
+// the convex hull of their points. A denoted-surface point lies on the wide
+// cone (internal/proofbound/bounds.go's proofbound.ChordLocusRegionAllow), and
+// a wide-cone point at angle θ lies on the ray from the centre through the
+// side directrix's own point at θ, at most the radial gap from it. A
+// built-patch point is a convex combination of a side-directrix point and a
+// cap-directrix point. So a bound C on every side- and cap-directrix
+// coordinate magnitude bounds every coordinate of the region by C plus the
+// radial gap. A sliver's corner-foot locus at offset t lies on the section
+// offset by t, which lies between the original loop and the cap contour, so a
+// C taken over both loops covers it too.
 func ChordLocusVolume(g Patch) (volume, radialGap float64) {
 	if !g.Circular || g.WholeTurn {
 		return 0, 0
 	}
-	flux := chordLocusResidualAllow(g)
+	flux := chordLocusRegionAllow(g)
 	if flux <= 0 {
 		return 0, 0
 	}
