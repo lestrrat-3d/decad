@@ -285,7 +285,7 @@ the rules leave to the byte budget.
 | `internal/momentinput/` | Validates moment inputs. See spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
-| `internal/tessellation/` | Chord bounds and samples, section clearance, and mesh audits. |
+| `internal/tessellation/` | Chords, cap-blend rings, bands, proofs, clearance and audits. |
 | `internal/loftmesh/` | Loft pairing, stations, assembly, mass sums, mesh proofs and restatement. |
 | `internal/revolvemesh/` | Revolve rings, construction and proofs. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |

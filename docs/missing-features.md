@@ -22,7 +22,6 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Fillet, chamfer and shell refuse every non-prism body, including every boolean result | Modify operations |
 | No draft: nonzero extrude taper refuses, and no face-draft op exists | Feature operations |
 | No helical path → no threads, springs or coils | Feature operations |
-| Loft refuses free-form segment pairs (e.g. an involute gear flank) | Feature operations |
 | No import of any file format | Data exchange |
 | Booleans outside the exact prism classes fall to a faceted mesh result, and refuse touching contact | Booleans |
 
@@ -37,7 +36,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Helical or free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
 | Composite path in `SweepChain` | `ErrUnsupported` (R34); one straight span only | `docs/surface-design.md` §1.2 |
 | Loft over more than two sections, guide rails, centerline | No entry point; `Loft` takes exactly two profiles | `docs/loft-design.md` §1 "Deferred reach" |
-| Loft of a same-kind free-form pair | `ErrUnsupported` (S3); designed, evaluator integration staged | `docs/loft-design.md` §1, §12 PR 4 |
+| Loft of a same-kind free-form pair whose curves convert to different Bézier span counts | `ErrUnsupported` (S17) | `docs/loft-design.md` §12 PR 5 |
 | Loft with differing loop or segment counts | `ErrUnsupported` (S1/S2) | `docs/loft-design.md` Table S |
 | Loft of mixed-kind or reversed pairs | Refused permanently | `docs/loft-design.md` §1 "Permanently out of scope" |
 | `LoftChain` with curved segments or non-parallel planes | `ErrUnsupported` (R36, R35) | `docs/surface-design.md` §1.2 |

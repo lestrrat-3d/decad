@@ -78,10 +78,12 @@ const LoftStationCap = 500
 
 // PairCounts reads docs/loft-design.md §5.1's two build-wide counts off
 // Table P over both records: P, the total paired-segment count, and C, the
-// number of same-kind circular pairs among them. Both are decided from the two
-// authenticated records alone — no station is generated to read either.
+// number of CHORDED pairs among them — same-kind circular and same-kind Tier A
+// free-form together. Both are decided from the two authenticated records
+// alone — no station is generated to read either.
 //
-// A pair is circular when BOTH sides' walks are circular; a mixed-kind pair is
+// A pair is chorded when BOTH sides' walks are circular or BOTH are free-form;
+// a mixed-kind pair is
 // S3's refusal (validateLoftRecords) and is counted in P like any other, since
 // P's own entitlement is one station per paired segment whatever its kind. Only
 // loop0's segment counts are read: S2 has already proved loop1 carries the same
@@ -101,7 +103,7 @@ func PairCounts(loops0 []sectionrecord.LoopRecord, offsets []int, walks0, walks1
 				return 0, 0, false
 			}
 			k := (j + off) % n
-			if walks0[i][j].Kind == survey2d.WalkCircular && walks1[i][k].Kind == survey2d.WalkCircular {
+			if IsChordedPair(walks0[i][j], walks1[i][k]) {
 				if c, ok = proofbound.WallCheckedAdd(c, 1); !ok {
 					return 0, 0, false
 				}
@@ -111,20 +113,26 @@ func PairCounts(loops0 []sectionrecord.LoopRecord, offsets []int, walks0, walks1
 	return p, c, true
 }
 
+// IsChordedPair reports whether a paired segment chords (docs/loft-design.md
+// §5.1): both sides circular, or both free-form.
+func IsChordedPair(w0, w1 survey2d.SegmentWalk) bool {
+	return w0.Kind == w1.Kind && (w0.Kind == survey2d.WalkCircular || w0.Kind == survey2d.WalkFreeform)
+}
+
 // StationShare allocates docs/loft-design.md §5.1's per-segment share of
 // the station cap:
 //
 //	mMax = 1 + max(0, (LoftStationCap - P) / C)      // integer division
 //
 // Every paired segment is entitled to its first station — a LineSeg pair's
-// whole entitlement (m = 1, §7) — and each of the C circular pairs may take at
-// most mMax. Because C counts the circular pairs AMONG P, a circular pair's m
+// whole entitlement (m = 1, §7) — and each of the C chorded pairs may take at
+// most mMax. Because C counts the chorded pairs AMONG P, a chorded pair's m
 // stations SUBSUME that first-station entitlement rather than adding to it, so
 // §5.1's own sum shows no build every pair of which passes S15 can exceed the
 // cap.
 //
 // The caller must not reach here with C == 0: §5.1 states a build with no
-// circular pair never consults the cap at all, and dividing by C would be
+// chorded pair never consults the cap at all, and dividing by C would be
 // undefined besides.
 //
 // A record whose own P already exceeds the cap clamps to mMax = 1, which §5.1
@@ -137,14 +145,14 @@ func StationShare(p, c uint64) int {
 	return 1 + int(q)
 }
 
-// RecordCellStations generates one paired loft segment's shared chord stations:
-// a kind switch on w0/w1's own survey2d.WalkKind, fixed here for every future arm
-// (a10-plan.md Part 3 PR 5's own constraint). Every arm publishes the
-// identical contract — two per-plane station chains at a SHARED count, plus
-// the sagitta this cell's own chording commits — so a later Tier A free-form
-// arm (docs/spline-design.md §6.2.1) is an added case, never a rewrite of
-// this one: an arc-shaped signature naming a radius or a sweep would force
-// exactly the rewrite this ordering exists to avoid.
+// RecordCellStations generates one paired LineSeg or circular loft segment's
+// shared chord stations: a kind switch on w0/w1's own survey2d.WalkKind. Both
+// arms publish the identical contract — two per-plane station chains at a
+// SHARED count, plus the sagitta this cell's own chording commits. A
+// same-kind Tier A free-form pair is FreeformCellPoints' arm instead, which
+// PairRecords dispatches itself: that arm needs the segment's share of the
+// station cap and publishes a per-cell arc-length bound, and neither fits
+// this signature.
 //
 // stations0/stations1 each carry ONLY this segment's own interior stations,
 // never its shared end point — the next segment's own first station (or the
@@ -172,12 +180,8 @@ func StationShare(p, c uint64) int {
 //
 // target is loftChordTarget's own single per-build reading, never
 // recomputed per cell. work0/work1 are the two records' own free-form work
-// counters (docs/spline-design.md §5.2): unused by both arms below, carried
-// through so a future free-form arm never needs a second counter — the same
-// pass-through shape evalLoft's own doc comment already states for its own
-// work0/work1 parameters, and this generator's own interface constraint
-// (a10-plan.md Part 3 PR 5) fixes them into the signature ahead of that arm
-// existing to consume them.
+// counters (docs/spline-design.md §5.2). Neither arm below charges them;
+// FreeformCellPoints, the free-form arm, charges the same two counters.
 //
 // stationRoundUpper is docs/loft-design.md Table S row S14 (a10-plan.md Part
 // 3 PR 6): the proven rounding a COMPUTED station commits, taken as a MAX
@@ -194,15 +198,13 @@ func StationShare(p, c uint64) int {
 // matchedDelta row — the half a consumer composes with the build's own delta
 // (chordCellDeltaUpper) to reach internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper own
 // matchedDeltaUpper obligation (F1's rule) — ONE ENTRY PER CELL, never a single per-segment
-// scalar, since a bisected free-form arm can settle cells of that one paired
-// segment at different depths and so at different matched-delta readings.
+// scalar, since the bisected free-form arm (FreeformCellPoints) settles cells
+// of one paired segment at different depths and so at different readings.
 // len(matchedDelta) always equals len(stations0), the per-cell count every
 // arm below publishes. It is read per cell rather than from sagittaUpper: the
 // LineSeg arm's chord IS the curve, so every entry is exactly 0; the circular
 // arm's own sagitta discharges that half exactly, so every entry equals
-// the segment's own sagittaUpper (CircularCellPoints' own doc comment);
-// a future free-form arm's own per-cell reading can vary within these two
-// extremes cell to cell.
+// the segment's own sagittaUpper (CircularCellPoints' own doc comment).
 func RecordCellStations(w0, w1 survey2d.SegmentWalk, seg0, seg1 sectionrecord.CurveSegment, target float64, work0, work1 *freeform.FreeformWork) ([]sectionrecord.Point2, []sectionrecord.Point2, float64, []float64, float64, error) {
 	switch {
 	case w0.Kind == survey2d.WalkLine && w1.Kind == survey2d.WalkLine:
@@ -210,12 +212,12 @@ func RecordCellStations(w0, w1 survey2d.SegmentWalk, seg0, seg1 sectionrecord.Cu
 	case w0.Kind == survey2d.WalkCircular && w1.Kind == survey2d.WalkCircular:
 		return CircularCellPoints(w0, w1, seg0, seg1, target)
 	default:
-		// Unreached from any real build today: validateLoftRecords' own S3
-		// gate refuses every mixed-kind pair before loftPairings ever calls
-		// this function (loftSameKindGate). A defensive refusal, not a dead
-		// branch a caller could reach silently: a future kind this switch
-		// has no case for yet must still fail loud rather than fall through
-		// into either analytic arm's own assumptions.
+		// Unreached from any real build: validateLoftRecords' own S3 gate
+		// refuses every mixed-kind pair before loftPairings ever calls this
+		// function (SameKindGate), and PairRecords sends a free-form pair to
+		// FreeformCellPoints. A defensive refusal, so a kind this switch has
+		// no case for fails loud rather than falling into either analytic
+		// arm's own assumptions.
 		return nil, nil, 0, nil, 0, fmt.Errorf(`%w: this loft evaluator has no chord station rule for this segment-kind pairing`, decaderr.ErrUnsupported)
 	}
 }
@@ -303,9 +305,9 @@ func PerCellArcUpper(seg sectionrecord.CurveSegment, w survey2d.SegmentWalk, m i
 // placed the stations, not of the cell's geometry. The circular arm's
 // uniform-ANGLE stations (CircularCellPoints) are constant speed on a
 // circle, which is what discharges it; a straight walk's chord IS its curve, so
-// its deviation is identically zero. Any FUTURE kind — the free-form arm's own
+// its deviation is identically zero. Every other kind — the free-form arm's
 // span-uniform native fraction above all, which is NOT constant speed — answers
-// +Inf here until it carries a proof of its own, so it degrades
+// +Inf here, so it degrades
 // proofbound.CellChordCurveAreaAllow to that helper's premise-free arm rather than being
 // silently handed a bound whose premise it does not meet.
 func PerCellTangentEnergy(seg sectionrecord.CurveSegment, w survey2d.SegmentWalk, m int) float64 {

@@ -1,6 +1,8 @@
 package apitest_test
 
 import (
+	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -176,99 +178,110 @@ func TestDocumentRemoveLeavesDerivedBodiesUnaffected(t *testing.T) {
 	require.Equal(t, 2875.0, volumeMM(t, grownVol))
 }
 
-// Remove and Verify share the guarded live set: run under -race, any
-// unguarded read or write of it fails this test. Every report must be one
-// consistent snapshot — sound, and holding only the document's own bodies.
+// Remove, Bodies and Verify share the guarded live set (core §12). Verify runs
+// in lock-step with the removals: call i+1 starts while Remove(order[i]) runs,
+// and nothing but the document's lock orders the two. The race detector flags
+// any two accesses nothing orders, overlapping in time or not, so under -race
+// an unguarded live set fails this test on every run. Every report must be one
+// consistent snapshot of the live set: sound, and exactly the bodies the
+// document held at one moment of the removals.
 func TestDocumentRemoveConcurrentWithVerify(t *testing.T) {
 	t.Parallel()
 	const count = 6
+	ctx := t.Context()
 	doc := decad.New()
-	all := make(map[*decad.Body]struct{}, count)
 	order := make([]*decad.Body, 0, count)
 	for i := range count {
 		x := float64(20 * i)
-		b := boxBody(t, doc, x, 0, x+10, 10, 10)
-		all[b] = struct{}{}
-		order = append(order, b)
+		order = append(order, boxBody(t, doc, x, 0, x+10, 10, 10))
+	}
+	// The removals take order's front body first and keep the last, so every
+	// live set the document passes through is order[j:] for one j in
+	// [0, count). suffix returns that j, or -1 when bodies is no such set.
+	suffix := func(bodies []*decad.Body) int {
+		for j := range count {
+			if slices.Equal(bodies, order[j:]) {
+				return j
+			}
+		}
+		return -1
 	}
 
-	var wg sync.WaitGroup
+	// The Bodies reader checks done only after each call, so at least one
+	// call runs with nothing ordering it against the removals. The live set
+	// only shrinks, so one reader's snapshots never grow back.
 	done := make(chan struct{})
-	// ready opens once the Verify reader is running, so the removals below
-	// always overlap at least one Verify call.
-	ready := make(chan struct{})
-	readerErrs := make(chan error, 2)
-	type snapshot struct {
-		passed bool
-		bodies []*decad.Body
-	}
-	reports := make(chan snapshot, 1024)
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		close(ready)
+	var wg sync.WaitGroup
+	var bodiesSeen int
+	var bodiesErr error
+	wg.Go(func() {
+		last := 0
 		for {
+			got := doc.Bodies()
+			j := suffix(got)
+			if j < last {
+				bodiesErr = fmt.Errorf(`Bodies returned %d bodies, not a live set at or after order[%d:]`, len(got), last)
+				return
+			}
+			last = j
+			bodiesSeen++
 			select {
 			case <-done:
 				return
-			default:
-			}
-			r, err := doc.Verify(t.Context())
-			if err != nil {
-				readerErrs <- err
+			case <-ctx.Done():
 				return
-			}
-			s := snapshot{passed: r.Passed()}
-			for _, br := range r.Bodies {
-				s.bodies = append(s.bodies, br.Body)
-			}
-			select {
-			case reports <- s:
 			default:
 			}
 		}
-	}()
+	})
+
+	type verified struct {
+		report *decad.Report
+		err    error
+	}
+	// verifications is unbuffered: call i+1 starts only once the test has
+	// taken call i's report, and Remove(order[i]) runs right after that.
+	verifications := make(chan verified)
 	go func() {
-		defer wg.Done()
-		for {
+		for range count {
+			r, err := doc.Verify(ctx)
 			select {
-			case <-done:
+			case verifications <- verified{report: r, err: err}:
+			case <-ctx.Done():
 				return
-			default:
 			}
-			select {
-			case reports <- snapshot{passed: true, bodies: doc.Bodies()}:
-			default:
+			if err != nil {
+				return
 			}
 		}
 	}()
 
-	// Remove all but the last body while both readers run.
-	<-ready
-	for _, b := range order[:count-1] {
-		require.NoError(t, doc.Remove(b))
+	for i := range count {
+		got := <-verifications
+		require.NoError(t, got.err)
+		require.True(t, got.report.Passed(), `disjoint cubes always verify sound`)
+		bodies := make([]*decad.Body, 0, len(got.report.Bodies))
+		for _, br := range got.report.Bodies {
+			bodies = append(bodies, br.Body)
+		}
+		j := suffix(bodies)
+		if i == 0 {
+			require.Zero(t, j, `the first call ends before any removal, so it reports every body`)
+		} else {
+			require.Contains(t, []int{i - 1, i}, j,
+				`call %d reports the live set just before or just after Remove(order[%d])`, i, i-1)
+		}
+		if i < count-1 {
+			require.NoError(t, doc.Remove(order[i]))
+		}
 	}
 	close(done)
 	wg.Wait()
-	close(readerErrs)
-	close(reports)
-	for err := range readerErrs {
-		require.NoError(t, err)
-	}
-	seen := 0
-	for s := range reports {
-		seen++
-		require.True(t, s.passed, `disjoint cubes always verify sound`)
-		require.NotEmpty(t, s.bodies)
-		require.LessOrEqual(t, len(s.bodies), count)
-		for _, b := range s.bodies {
-			require.Contains(t, all, b, `a snapshot holds only the document's own bodies`)
-		}
-	}
-	require.Positive(t, seen)
+	require.NoError(t, bodiesErr)
+	require.Positive(t, bodiesSeen)
 
 	require.Equal(t, []*decad.Body{order[count-1]}, doc.Bodies())
-	report, err := doc.Verify(t.Context())
+	report, err := doc.Verify(ctx)
 	require.NoError(t, err)
 	require.True(t, report.Passed())
 	require.Len(t, report.Bodies, 1)

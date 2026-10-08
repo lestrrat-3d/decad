@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -25,31 +24,10 @@ import (
 const loftStationCap = loftmesh.LoftStationCap
 
 // loftStationCapError is docs/loft-design.md Table S row S15's refusal: a
-// same-kind circular pair whose settled station count `m` (§5.1's joint
-// walk-up) exceeds the per-segment share loftStationShare allocates it.
-//
-// It is a type rather than an fmt.Errorf wrapper because the refusal must NAME
-// the segment whose own share it exceeded (§5.1) while still answering
-// errors.Is for freeform.ErrTooManyChords, the sentinel §5.1 assigns this row (spline
-// design Table R row R8). Wrapping freeform.ErrTooManyChords with %w would prepend that
-// sentinel's own text — "the chord tolerance asks for more than 16384 chords
-// on one curve" — which names no segment and describes a caller-supplied
-// tessellation tolerance a loft has no such knob for (§5.1: "The target is not
-// a caller option"). Unwrap keeps errors.Is answering for both freeform.ErrTooManyChords
-// and, through it, ErrUnsupported.
-type loftStationCapError struct {
-	loop, seg int
-	m, mMax   int
-}
-
-func (e *loftStationCapError) Error() string {
-	return fmt.Sprintf(
-		`%s: loop %d segment %d needs %d chord cells to meet the loft chord target, past the %d its share of the %d-station cap allows`,
-		ErrUnsupported.Error(), e.loop, e.seg, e.m, e.mMax, loftStationCap,
-	)
-}
-
-func (e *loftStationCapError) Unwrap() error { return freeform.ErrTooManyChords }
+// chorded pair whose station count `m` exceeds the per-segment share
+// loftStationShare allocates it. loftmesh.StationCapError owns its message and
+// its errors.Is answer for freeform.ErrTooManyChords.
+type loftStationCapError = loftmesh.StationCapError
 
 func loftPairCounts(loops0 []LoopRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk) (uint64, uint64, bool) {
 	return loftmesh.PairCounts(loops0, offsets, walks0, walks1)
@@ -64,11 +42,15 @@ func loftStationShare(p, c uint64) int { return loftmesh.StationShare(p, c) }
 // makes that possible: m and mMax are each a function of the two records, so
 // the construction phase settles the identical m this gate reads.
 //
-// A build with no same-kind circular pair (C == 0) never consults the cap and
-// never even reads the chord target: its Σstations is Σn_i exactly, the count
-// the record itself states, and S8 is its only resource refusal. That early
-// return is why an all-LineSeg build — every build this evaluator admits
-// today, S3 refusing every other kind — pays nothing for this gate.
+// A build with no chorded pair (C == 0) never consults the cap and never even
+// reads the chord target: its Σstations is Σn_i exactly, the count the record
+// itself states, and S8 is its only resource refusal. That early return is why
+// an all-LineSeg build pays nothing for this gate.
+//
+// Only a circular pair settles its count here. A same-kind free-form pair's
+// count is what its dyadic walk settles, so that walk carries the same share as
+// its own ceiling and refuses S15 as it runs (loftmesh.FreeformCellPoints),
+// with no second walk spent here to learn the count first.
 //
 // The refusal NAMES the segment whose own share was exceeded, since the share
 // is that segment's (loftStationCapError). A walk-up that cannot settle at all
@@ -108,7 +90,7 @@ func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]
 				return err
 			}
 			if m > mMax {
-				return &loftStationCapError{loop: i, seg: j, m: m, mMax: mMax}
+				return &loftStationCapError{Loop: i, Seg: j, M: m, MMax: mMax}
 			}
 		}
 	}
@@ -118,7 +100,7 @@ func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]
 // loftChordFraction is the coefficient a10-plan.md Part 2 Q2's chord-target
 // rule applies to a whole section's own coordinate envelope:
 //
-//	chordTarget = loftChordFraction * max(profileCoordinateUpper(p0), profileCoordinateUpper(p1))
+//	chordTarget = loftChordFraction * max(profileCoordinateEnvelope(p0), profileCoordinateEnvelope(p1))
 //
 // It is calibrated by measurement, never assumed (merged PR #188,
 // loft_chord_calibration_internal_test.go): against two hand-chorded
@@ -150,35 +132,32 @@ func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]
 // added to the public API for it (a10-plan.md Q2).
 const loftChordFraction = 3.76491e-05
 
-// loftChordTarget is one loft build's own chord target (a10-plan.md Q2): the
-// coordinate envelope is a WHOLE-PROFILE quantity, so it is read once here,
-// never re-derived per paired segment.
+// loftChordTarget is one loft build's own chord target (docs/loft-design.md
+// §5.1): the coordinate envelope is a WHOLE-PROFILE quantity, so it is read
+// once here, never re-derived per paired segment.
 //
-// It reads profileCoordinateUpper, never its non-refusing twin
-// profileCoordinateEnvelope, deliberately: every segment kind this evaluator
-// admits into a pairing today (LineSeg; ArcSeg/CircleSeg once the arc
-// correspondence lands) is analytic, so the placed-cap-frame requirement
-// profileCoordinateUpper carries costs nothing here. A future free-form
-// pairing has no such frame to ask for, so its own caller switches this
-// reading to profileCoordinateEnvelope instead — extrude.go's own doc
-// comment names it as exactly that twin.
+// It reads profileCoordinateEnvelope, the non-refusing reader §5.1 names: an
+// analytic walk states the same coordUpper profileCoordinateUpper would
+// return, and a free-form walk states its control-point extent, which a
+// free-form pair needs and which profileCoordinateUpper's placed-cap-frame
+// requirement would refuse.
 //
 // walks0/walks1 are validateLoftRecords' own already-resolved walks
 // (outer at index 0, each hole at index i+1): wrapping them in a
-// *profileWalks view here, rather than passing nil and letting
-// profileCoordinateUpper resolve again, is what keeps this reading inside
-// Task 1's resolve-once rule. The two views are deliberately UNMETERED —
-// validateLoftRecords charged this work against its own counters, and a view
-// that restated the charge as its own would let a later replay levy it twice.
-// Neither leaves this function, so neither can reach a payload that replays it.
+// *profileWalks view here, rather than passing nil and resolving again, keeps
+// this reading inside the resolve-once rule. The two views are deliberately
+// UNMETERED — validateLoftRecords charged this work against its own counters,
+// and a view that restated the charge as its own would let a later replay levy
+// it twice. Neither leaves this function, so neither can reach a payload that
+// replays it.
 func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]survey2d.SegmentWalk) (float64, error) {
 	pw0 := &profileWalks{profile: p0, outer: walks0[0], holes: walks0[1:]}
 	pw1 := &profileWalks{profile: p1, outer: walks1[0], holes: walks1[1:]}
-	u0, err := profileCoordinateUpper(p0, nil, pw0)
+	u0, err := profileCoordinateEnvelope(p0, nil, pw0)
 	if err != nil {
 		return 0, err
 	}
-	u1, err := profileCoordinateUpper(p1, nil, pw1)
+	u1, err := profileCoordinateEnvelope(p1, nil, pw1)
 	if err != nil {
 		return 0, err
 	}

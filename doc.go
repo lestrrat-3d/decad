@@ -119,7 +119,8 @@
 //	  both caps removed from a holed section                  ErrUnsupported
 //	Loft          same-type segment pairs, distinct planes    builds
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
-//	  a pair not two LineSegs, ArcSegs or CircleSegs          ErrUnsupported
+//	  a pair not the same line, arc, circle or Tier A type    ErrUnsupported
+//	  a free-form pair of unequal Bézier span counts          ErrUnsupported
 //	  a chorded pair past the fixed station cap               ErrUnsupported
 //	  a chorded pair whose displacement has no derivation     ErrUnsupported
 //	  a chord cell collapsing on one section only             ErrUnsupported

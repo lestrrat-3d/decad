@@ -64,14 +64,18 @@ func WithLoftAlignment(offsets ...int) LoftOption {
 // unrecordable profile is the seam's own sentinel.
 //
 // Every corresponding segment pair must be same-kind, over the recorded
-// segment type: both LineSeg, both ArcSeg, or both CircleSeg. An ArcSeg
-// paired against a CircleSeg is a mixed-kind pairing like any other. A
-// mixed-kind or free-form pairing is [ErrUnsupported] (§1, P5, S3). A circular
-// pair's walls are chorded (§5.1), which carries three refusals of its own,
-// each [ErrUnsupported]: a pair the fixed station cap cannot chord to its
-// chord target (S15), a build whose certified sagitta or station displacement
-// has no derivation from the two records (S14), and a chord cell that
-// collapses to one point on exactly one of the two sections (S16).
+// segment type: both LineSeg, both ArcSeg, both CircleSeg, or both the same
+// Tier A free-form type (SplineSeg, ClosedSplineSeg, a NURBSSeg with equal
+// weights, or FitSplineSeg). An ArcSeg paired against a CircleSeg, or a
+// SplineSeg against a FitSplineSeg, is a mixed-kind pairing like any other,
+// and a mixed-kind pairing is [ErrUnsupported] (§1, P5, S3). A free-form pair
+// whose two curves convert to different Bézier span counts is
+// [ErrUnsupported] too (S17). A circular or free-form pair's walls are chorded
+// (§5.1), which carries three refusals of its own, each [ErrUnsupported]: a
+// pair the fixed station cap cannot chord to its chord target (S15), a build
+// whose certified sagitta or station displacement has no derivation from the
+// two records (S14), and a chord cell that collapses to one point on exactly
+// one of the two sections (S16).
 // The two profiles must lie on distinct geometric planes;
 // coplanar sections are [ErrDegenerate] (§4, S5), since every wall vertex
 // would then lie in one plane and the solid has zero volume by construction.

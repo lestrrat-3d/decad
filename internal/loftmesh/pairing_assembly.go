@@ -1,6 +1,7 @@
 package loftmesh
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
@@ -27,10 +28,11 @@ type LoopPair struct {
 // own natural order into correspondence here, at the point of use, exactly
 // as validateLoftRecords' own S3 check already does.
 //
-// Each paired segment's own station chain now comes from RecordCellStations
-// (a10-plan.md Part 3 PR 5), so a loop's v/w lists carry more than one entry
-// per segment exactly when that segment's own arm does — a LineSeg pairing
-// stays exactly one entry per segment, bit-identical to before. sectionDelta
+// Each paired segment's own station chain comes from RecordCellStations for a
+// LineSeg or circular pair and from FreeformCellPoints for a same-kind Tier A
+// free-form pair, so a loop's v/w lists carry more than one entry per segment
+// exactly when that segment's own arm does — a LineSeg pairing stays exactly
+// one entry per segment. sectionDelta
 // is the MAX of every cell's own SAGITTA across the whole build, never a sum:
 // a boundary point lies in exactly one cell, so only the widest cell's own
 // departure bounds the whole section. sectionMatchedDelta is the analogous
@@ -62,19 +64,37 @@ func PairRecords(p0, p1 RecordProfile, offsets []int, walks0, walks1 [][]survey2
 	sectionDelta := 0.0
 	sectionMatchedDelta := 0.0
 	stationRound := 0.0
+	shareMax, err := freeformShare(loops0, offsets, walks0, walks1)
+	if err != nil {
+		return nil, 0, 0, 0, err
+	}
 	for i := range loops0 {
 		n := len(loops0[i].Segments)
 		off := offsets[i]
-		var v, w []sectionrecord.Point2
-		var arcUpperV, arcUpperW []float64
-		var tangentEnergyV, tangentEnergyW []float64
-		var matchedDelta []float64
+		var pair LoopPair
 		for j := range n {
 			w0 := walks0[i][j]
 			k := (j + off) % n
 			w1 := walks1[i][k]
 			seg0 := loops0[i].Segments[j]
 			seg1 := loops1[i].Segments[k]
+			if w0.Kind == survey2d.WalkFreeform && w1.Kind == survey2d.WalkFreeform {
+				cell, err := FreeformCellPoints(w0, w1, target, shareMax, work0, work1)
+				if err != nil {
+					var capErr *StationCapError
+					if errors.As(err, &capErr) {
+						capErr.Loop, capErr.Seg = i, j
+					}
+					return nil, 0, 0, 0, err
+				}
+				pair.appendFreeform(cell)
+				sectionDelta = math.Max(sectionDelta, cell.Sagitta)
+				for _, d := range cell.MatchedDelta {
+					sectionMatchedDelta = math.Max(sectionMatchedDelta, d)
+				}
+				stationRound = math.Max(stationRound, cell.Round)
+				continue
+			}
 			stations0, stations1, sagitta, cellMatchedDelta, round, err := RecordCellStations(w0, w1, seg0, seg1, target, work0, work1)
 			if err != nil {
 				return nil, 0, 0, 0, err
@@ -85,31 +105,73 @@ func PairRecords(p0, p1 RecordProfile, offsets []int, walks0, walks1 [][]survey2
 			cellEnergyV := PerCellTangentEnergy(seg0, w0, m)
 			cellEnergyW := PerCellTangentEnergy(seg1, w1, m)
 			for range m {
-				arcUpperV = append(arcUpperV, cellArcV)
-				arcUpperW = append(arcUpperW, cellArcW)
-				tangentEnergyV = append(tangentEnergyV, cellEnergyV)
-				tangentEnergyW = append(tangentEnergyW, cellEnergyW)
+				pair.ArcUpperV = append(pair.ArcUpperV, cellArcV)
+				pair.ArcUpperW = append(pair.ArcUpperW, cellArcW)
+				pair.TangentEnergyV = append(pair.TangentEnergyV, cellEnergyV)
+				pair.TangentEnergyW = append(pair.TangentEnergyW, cellEnergyW)
 			}
-			matchedDelta = append(matchedDelta, cellMatchedDelta...)
-			v = append(v, stations0...)
-			w = append(w, stations1...)
+			pair.MatchedDelta = append(pair.MatchedDelta, cellMatchedDelta...)
+			pair.V = append(pair.V, stations0...)
+			pair.W = append(pair.W, stations1...)
 			sectionDelta = math.Max(sectionDelta, sagitta)
 			for _, d := range cellMatchedDelta {
 				sectionMatchedDelta = math.Max(sectionMatchedDelta, d)
 			}
 			stationRound = math.Max(stationRound, round)
 		}
-		if err := oneSidedCellGate(i, v, w); err != nil {
+		pairs[i] = pair
+	}
+	// S16 runs after every loop's stations exist, so a free-form pair's S15
+	// and S14 refusals, decided as its stations are generated, come before
+	// any loop's collapsed-cell refusal (docs/loft-design.md §4's gate order).
+	for i, pair := range pairs {
+		if err := oneSidedCellGate(i, pair.V, pair.W); err != nil {
 			return nil, 0, 0, 0, err
-		}
-		pairs[i] = LoopPair{
-			V: v, W: w,
-			ArcUpperV: arcUpperV, ArcUpperW: arcUpperW,
-			MatchedDelta:   matchedDelta,
-			TangentEnergyV: tangentEnergyV, TangentEnergyW: tangentEnergyW,
 		}
 	}
 	return pairs, sectionDelta, sectionMatchedDelta, stationRound, nil
+}
+
+// appendFreeform appends one free-form pair's cells to the loop. A free-form
+// cell's native parameter is not constant speed, so neither side proves a
+// tangent energy and both entries are +Inf, which costs
+// proofbound.CellChordCurveAreaAllow its sharper arm and never its soundness
+// (docs/loft-design.md §5.2's tangentEnergy_k row).
+func (p *LoopPair) appendFreeform(cell FreeformCell) {
+	p.V = append(p.V, cell.Stations0...)
+	p.W = append(p.W, cell.Stations1...)
+	p.ArcUpperV = append(p.ArcUpperV, cell.ArcUpper0...)
+	p.ArcUpperW = append(p.ArcUpperW, cell.ArcUpper1...)
+	p.MatchedDelta = append(p.MatchedDelta, cell.MatchedDelta...)
+	for range cell.MatchedDelta {
+		p.TangentEnergyV = append(p.TangentEnergyV, math.Inf(1))
+		p.TangentEnergyW = append(p.TangentEnergyW, math.Inf(1))
+	}
+}
+
+// freeformShare is the per-segment station share docs/loft-design.md §5.1
+// allocates a chorded pair, read for the free-form arm, whose dyadic walk
+// stops at it: the walk itself is what settles a free-form pair's count, so
+// S15 is decided as that walk runs rather than by a separate settle step.
+// A build with no free-form pair answers 0 and reads nothing.
+func freeformShare(loops0 []sectionrecord.LoopRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk) (int, error) {
+	found := false
+	for i := range loops0 {
+		n := len(loops0[i].Segments)
+		for j := range n {
+			if walks0[i][j].Kind == survey2d.WalkFreeform && walks1[i][(j+offsets[i])%n].Kind == survey2d.WalkFreeform {
+				found = true
+			}
+		}
+	}
+	if !found {
+		return 0, nil
+	}
+	p, c, ok := PairCounts(loops0, offsets, walks0, walks1)
+	if !ok {
+		return 0, fmt.Errorf(`%w: this loft's paired-segment count overflows the station-cap arithmetic`, decaderr.ErrUnsupported)
+	}
+	return StationShare(p, c), nil
 }
 
 // oneSidedCellGate is docs/loft-design.md Table S row S16, decided over one

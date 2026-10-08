@@ -75,18 +75,12 @@ between two full-circle loops is not reachable by this construction.
   need it either: a bevel gear is two 2-section lofts, not one 3-section
   loft. §12 defers this reach to PR 5; this design does not reserve a shape
   for it.
-- **Same-kind Tier A free-form correspondence's implementation.** A paired
-  segment whose two sides are the SAME Tier A free-form kind
-  (`docs/spline-design.md` Table F) is ruled between chorded stations placed
-  at shared dyadic fractions of the span-index coordinate their two Bézier
-  span decompositions define (§5.1), the wall staying flat triangles and the
-  departure of that chord chain from the two recorded curves publishing as a
-  section displacement (§5.2) — exactly as §5.1/§5.2 already state for a
-  same-kind circular pair. The pair is ADMITTED, and its construction and
-  certified allowance inputs are stated. §12 PR 4 lands the evaluator
-  integration. §12's own reach row names what stays outside that increment —
-  a same-kind Tier A free-form pair whose two curves reduce to different
-  Bézier span counts (Table S row S17) among them.
+- **A same-kind Tier A free-form pair whose two curves reduce to different
+  Bézier span counts.** An equal-span pair is ruled between chorded stations
+  placed at shared dyadic fractions of the span-index coordinate its two
+  Bézier span decompositions define (§5.1), and §12 PR 4 builds it. An
+  unequal pair has no shared station coordinate under that rule and refuses
+  as Table S row S17; §12's reach row names it.
 
 **Permanently out of scope, for reasons stated once:**
 
@@ -370,8 +364,7 @@ completely, leaving no such term without a phase.
 certified terms answers `+Inf`.** `spanSpeedUpper` supplies each free-form
 cell's length/speed upper bound, and `spanMatchedDeltaUpper` supplies its
 native-parameter matched departure (§5.2). A finite pair therefore passes
-S14 on those terms. §12 PR 4 stages only the evaluator integration, not a
-missing derivation or an unconditional refusal.
+S14 on those terms.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
 gate decided from the records rather than from the call — S1, S2, S3, S4's
@@ -715,7 +708,16 @@ chord target above, `P` and `C` — so S15 is DECIDABLE from the two records,
 with no station built. A pair whose certified sagitta has no derivation
 refuses S14 beside it, since the process that settles `m` — the joint walk-up
 for a circular pair, the measure-then-bisect loop for a free-form pair
-(§5.1's free-form arm) — is what asks for it. Every product and sum
+(§5.1's free-form arm) — is what asks for it. **For a free-form pair that loop
+IS the station generator, so the evaluator runs it once rather than twice:**
+the walk takes the pair's `mMax` share as its own chord ceiling and refuses
+S15 the moment its proven lower bound on the chord count passes it, and it
+refuses S14 the moment a measured sagitta, speed bound or matched-departure
+bound is non-finite. Both refusals therefore come after every record-only
+gate above and before construction's first gate (S13), and S16 waits until
+every loop's stations exist, so the relative order §4 states for S14, S15
+and S16 holds. A second walk run only to learn `m` would charge the records'
+free-form work counters twice (§5.1's work-budget paragraph). Every product and sum
 in the `mMax` comparison and in §6's own `F*(F-1)/2` preflight is evaluated
 with checked arithmetic and refuses on overflow rather than wrapping, the
 identical preflight-before-allocation discipline §6 states for the pair-test
@@ -1452,8 +1454,7 @@ placement.
 shared parameter.** Each cell reads `spanSpeedUpper` for its per-side
 length/speed bound and `spanMatchedDeltaUpper` plus `delta` for its held
 chord departure (§5.2). Table S row S14 applies only if one of those actual
-terms is underivable, non-finite, or saturates during composition. §12 PR 4
-lands the evaluator integration.
+terms is underivable, non-finite, or saturates during composition.
 
 **`Centroid` publishes three exact rational coordinates as a
 `VecMeasurement`, not a `units.Value`.** Round each coordinate once into the
@@ -1694,7 +1695,7 @@ global evaluator increment.
 | 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2). **This row is landed.** | D3/D4's analytic-kernel case, D5 |
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
-| 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `spanSpeedUpper` length/speed bound, and `spanMatchedDeltaUpper` native-parameter bound plus `delta` (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row stages implementation only; the certified spline derivations already exist.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `spanSpeedUpper` length/speed bound, and `spanMatchedDeltaUpper` native-parameter bound plus `delta` (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row is landed.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel, an unequal Bézier span count between a same-kind Tier A free-form pair's two sides (which would retire S17), a spatial-index broad-phase for §6's audit — one pruning the pair ENUMERATION itself, which §6's own two float tiers do not touch and S8's `F*(F-1)/2` preflight is what bounds today | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
@@ -2033,9 +2034,10 @@ against this budget.
   follows lands with §12 PR 4's free-form arm** (§8.1), and is stated here so
   that increment carries it rather than writes it fresh. The A10b wedge —
   two `LineSeg`s and one 5-point `FitSplineSeg` through a radius-5 quarter
-  circle, on `z=0` and `z=10` — BUILDS, and `Verify` at the default tolerance
-  returns `Sound` with the achieved margin asserted, never the verdict alone.
-  `Volume.Bound` ENCLOSES `|held - true|` against a high-precision reference
+  circle, on `z=0` and `z=10` — BUILDS. `Verify` at the default tolerance
+  returning `Sound` with the achieved margin asserted waits on §14's
+  free-form tangent-energy question, since today's `Area` bound reads
+  `Suspect` there. `Volume.Bound` ENCLOSES `|held - true|` against a high-precision reference
   for the chorded body, and all four readings are `Approximate` with positive
   bounds. Correspondence is asserted on built wall COORDINATES, never
   counts: a same-span-count fit-spline pair maps each station of one side to
@@ -2221,9 +2223,28 @@ cap. Nothing else in this document reads the number: every station count named
 here, the reference fixture's FORCED 64 included, is stated against the chord
 target above rather than against the cap.
 
-Every design variable this document depends on is resolved above, and §12's
-PR 4 and PR 5 rows are future implementation work rather than open questions
-of this design.
+**A free-form wall cell's tangent energy.** §5.2's `tangentEnergy_k` row
+gives a same-kind Tier A free-form cell `+Inf`, because its span-native
+parameter is not constant speed and `uniformSpeedTangentEnergyUpper`'s
+premise does not hold. That is sound, and it costs the wall's ruled area leg
+its sharp arm: `cellChordCurveAreaAllow` then publishes its premise-free arm,
+which is first order in the cell's own chord. On the A10b wedge at the
+calibrated `loftChordFraction` the published `Area` reads `217.548 mm²` with
+a bound of `157.3 mm²`, a gate ratio of `0.72` against the default `1e-3`
+tolerance, so `Verify` reads `Suspect` on `Area` alone while `Volume`,
+`Centroid` and `Bounds` clear it. The quantity the sharp arm needs exists
+in closed form for a polynomial span: `∫₀¹ |C'(s) − Δ|² ds` over a cell's
+own dyadic sub-span is the integral of a polynomial with exact rational
+coefficients, so it is an exact rational that one outward rounding
+publishes, and the sharp arm's own derivation needs only the mean-zero
+property `∫(C' − Δ) ds = 0`, which holds under any parametrization.
+**Recommendation:** add that exact energy as the free-form arm's
+`tangentEnergy_k` source, with its derivation written into §5.2's row, as a
+follow-up to §12 PR 4.
+
+Every other design variable this document depends on is resolved above, and
+§12's PR 5 row is future implementation work rather than an open question of
+this design.
 
 ## 15. Companion contracts
 
