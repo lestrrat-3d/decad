@@ -543,11 +543,15 @@ publishes in another dimension):
   ray from the centre, the same condition under which modify-reach §8.3 zeroes the skew half of the normal
   departure.
 - `locusGap = sqrt(L² − c²)/2` with `L = dc·sqrt(speedUpper² + (axialSpan/dc)²)`, `axialSpan` the stated
-  side setback (at most `|ds| + dsDelta`) and `L` summed over 32 offset sub-ranges that share their ends,
-  `c` the built ruling's
-  chord — the boundary ruling (tagged `Line3`) to the conic miter locus it stands for: a curve of length `L`
-  between endpoints `c` apart lies inside the ellipse with those foci and major axis `L`, whose semi-minor
-  axis is `sqrt(L²−c²)/2`. `speedUpper` is `miterLocusSpeedUpper` (`capblend_contour.go`), the same input
+  side setback (at most `|ds| + dsDelta`) and `L` summed over 32 offset sub-ranges that share their ends —
+  the boundary ruling (tagged `Line3`) to the conic miter locus it stands for: a curve of length `L`
+  between endpoints `c*` apart lies inside the ellipse with those foci and major axis `L`, whose semi-minor
+  axis is `sqrt(L²−c*²)/2`. That axis only grows as the focal distance shrinks, so `c` is a proven LOWER
+  bound on `c*`, the distance from the denoted corner to the denoted foot the stated `ds` along the sweep:
+  the held chord from the corner to the held foot at the held `ds`, its square exact and its root rounded
+  down, less `band.delta`, the corner's own walk end bound and `dsDelta`. The held chord alone is not one,
+  since the held foot and `ds` can sit farther apart than the denoted ones. A millimetre setback on a
+  recorded section with exact feet subtracts nothing. `speedUpper` is `miterLocusSpeedUpper` (`capblend_contour.go`), the same input
   `chordLocusLengthAllow` reads. Zero at a line-line miter, every reflex foot and every G1 join (modify §7's
   dead-zone rule; all three loci affine). Charged on BOTH patches sharing the ruling.
 - `capRadiusRound = addRoundError(r, ∓d, capRadius)` — the held cap directrix radius against the exact

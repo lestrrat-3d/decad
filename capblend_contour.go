@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -253,4 +254,183 @@ func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64,
 
 func capSweepAllow(cU, cV, radius float64, start, end Point2, held float64, wraps int, delta float64) float64 {
 	return capcontour.CapSweepAllow(cU, cV, radius, start, end, held, wraps, delta)
+}
+
+// errCapPatchHeldUnbounded is the refusal for a circular band patch whose held
+// angles or radii this evaluator cannot enclose against the values the band's
+// closed surface reads there: a window end on its own centre, a walk end whose
+// displacement states no bound, or a coordinate that does not lift.
+var errCapPatchHeldUnbounded = fmt.Errorf(`%w: a cap-loop chamfer's circular band patch holds an angle or radius this evaluator cannot bound against the point it names, so no measurement integrated over it can be published with a proven bound`, ErrUnsupported)
+
+// capWallHeldAllow is a circular wall patch's capband.HeldAllow, before the
+// patch normalizes its window (th0, th1 are the walk's own, start and end its
+// cap feet in walk order, capTh0 and capTh1 capWallSweep's angles of them).
+//
+// The side window ends are float angles of the walk's two ends, and each end
+// names the point the record denotes there to within its own proven end bound,
+// so the side reference is the exact angle of that denoted point. The cap
+// window ends are Atan2s of the held cap feet, which are the cap face's own
+// recorded vertices, so the cap reference is their exact angle. The side
+// radius is the walk's own RadiusBound — the gap between an ArcSeg's
+// math.Hypot and the record's |Start − Center| — and the cap radius is
+// allowed to reach either foot's exact distance from the centre, since the cap
+// face records this arc through one foot (offset2d.ArcSegment) and states its
+// radius from it.
+func capWallHeldAllow(w survey2d.SideWalk, capRadius float64, start, end Point2, capTh0, capTh1 float64) (capband.HeldAllow, error) {
+	a0, ok0 := capband.AngleAllow(w.CU, w.CV, capband.Point{U: w.StartU, V: w.StartV}, proofbound.WalkEndBoundAllow(w.StartBound), w.Th0)
+	a1, ok1 := capband.AngleAllow(w.CU, w.CV, capband.Point{U: w.EndU, V: w.EndV}, proofbound.WalkEndBoundAllow(w.EndBound), w.Th1)
+	c0, okC0 := capband.AngleAllow(w.CU, w.CV, start, 0, capTh0)
+	c1, okC1 := capband.AngleAllow(w.CU, w.CV, end, 0, capTh1)
+	r1, _, okR := capband.RadiusAllow(w.CU, w.CV, capRadius, start, end)
+	if !ok0 || !ok1 || !okC0 || !okC1 || !okR || !(w.RadiusBound >= 0) || proofbound.IsNonFinite(w.RadiusBound) {
+		return capband.HeldAllow{}, errCapPatchHeldUnbounded
+	}
+	return capband.HeldAllow{Th0: a0, Th1: a1, CapTh0: c0, CapTh1: c1, SideRadius: w.RadiusBound, CapRadius: r1}, nil
+}
+
+// capApexHeldAllow is a reflex corner's apex patch's capband.HeldAllow. Its
+// window ends th0 and th1 are the float angles of the offset feet foot0 and
+// foot1 about the recorded corner, and the cap face records the connector
+// through one of them, so the cap reference is their exact angle and either
+// foot's exact distance from the corner. The side directrix is the corner
+// point itself: with a side radius of exactly zero no term of the closed forms
+// reads a side angle, so the side window holds no allowance.
+func capApexHeldAllow(j cornerJoin, dc float64, foot0, foot1 Point2, th0, th1 float64) (capband.HeldAllow, error) {
+	c0, ok0 := capband.AngleAllow(j.vU, j.vV, foot0, 0, th0)
+	c1, ok1 := capband.AngleAllow(j.vU, j.vV, foot1, 0, th1)
+	r1, _, okR := capband.RadiusAllow(j.vU, j.vV, dc, foot0, foot1)
+	if !ok0 || !ok1 || !okR {
+		return capband.HeldAllow{}, errCapPatchHeldUnbounded
+	}
+	return capband.HeldAllow{CapTh0: c0, CapTh1: c1, CapRadius: r1}, nil
+}
+
+// capBandClosure bounds the slivers that separate a band's integrated patches
+// from a closed surface (docs/modify-reach-design.md §8.4).
+//
+// The flux and moment integrals read each patch over its own held numbers,
+// boxed by capband.HeldAllow so a circular patch's directrices are the ones the
+// two faces record. The patches then meet the faces exactly along every
+// directrix and meet each other along the corner rulings to within a gap: the
+// held ends two walks meet at need not be one float, a walk end names its
+// denoted point only to within its end bound, an ArcSeg's End need not lie at
+// the radius its Start states, and a cap arc's recorded radius is read through
+// one foot while the other sits at its own distance. Between two rulings a
+// distance at most gap apart, each at most slant long, lies a ruled sliver of
+// area at most (slant + gap)·gap; rim sums that over every ruling. A straight
+// wall whose ends carry a bound integrates its held side edge while the side
+// face records the denoted one, and sideLevel sums the strip between them,
+// (L + bS + bE)·(bS + bE), with each corner's own gap² at both levels. reach is
+// the largest gap, which widens the coordinate envelope a sliver's points sit
+// in.
+//
+// Every term is zero where the walks' ends are recorded, every arc's End lies
+// at its Start's radius and both cap feet of every circular patch lie at one
+// exact distance, so an axis-aligned section's band charges nothing here.
+type capBandClosure struct {
+	rim, sideLevel, capLevel, reach float64
+}
+
+// zero reports whether the band needs no closure charge.
+func (c capBandClosure) zero() bool { return c == capBandClosure{} }
+
+// capBandClosureOf measures one band's capBandClosure from its walks, corner
+// joins and corner rulings (slantIn/slantOut, with their arithmetic-only length
+// bounds).
+func capBandClosureOf(walks []survey2d.SideWalk, joins []cornerJoin, slantIn, slantOut []*Edge, slantInHeld, slantOutHeld []float64) (capBandClosure, error) {
+	n := len(walks)
+	var out capBandClosure
+	sideGap := make([]float64, n)
+	capSpread := make([]float64, n)
+	for i, w := range walks {
+		if !w.IsCircular() {
+			bS, bE := proofbound.WalkEndBoundAllow(w.StartBound), proofbound.WalkEndBoundAllow(w.EndBound)
+			if proofbound.IsNonFinite(bS) || proofbound.IsNonFinite(bE) {
+				return capBandClosure{}, errCapPatchHeldUnbounded
+			}
+			if b := proofbound.AbsSumUpper(bS, bE); b > 0 {
+				out.sideLevel = proofbound.AbsSumUpper(out.sideLevel, proofbound.ProductUpper(proofbound.AbsSumUpper(w.Length, w.LengthBound, b), b))
+			}
+			continue
+		}
+		// The side reference is the record's own circle. Where both ends are
+		// recorded (an ArcSeg's pinned Start and End) that circle runs through
+		// Start, so the one gap is how far End sits off Start's radius;
+		// otherwise each end is bounded against the walk's own radius bracket.
+		var gap float64
+		var ok bool
+		if (w.StartBound == proofbound.WalkEndBound{}) && (w.EndBound == proofbound.WalkEndBound{}) {
+			_, gap, ok = capband.RadiusAllow(w.CU, w.CV, 0, capband.Point{U: w.StartU, V: w.StartV}, capband.Point{U: w.EndU, V: w.EndV})
+		} else {
+			gap, ok = capcontour.CircularWalkEndGap(w)
+		}
+		start, end := capWallFoot(joins, i, n)
+		_, spread, okS := capband.RadiusAllow(w.CU, w.CV, 0, start, end)
+		if !ok || !okS {
+			return capBandClosure{}, errCapPatchHeldUnbounded
+		}
+		sideGap[i], capSpread[i] = gap, spread
+	}
+	for i := range n {
+		pi := (i + n - 1) % n
+		prev, cur := walks[pi], walks[i]
+		j := joins[i]
+		du := new(big.Rat).Sub(proofarith.FloatRat(prev.EndU), proofarith.FloatRat(cur.StartU))
+		dv := new(big.Rat).Sub(proofarith.FloatRat(prev.EndV), proofarith.FloatRat(cur.StartV))
+		gap := proofbound.RatFloatUp(new(big.Rat).Add(du.Abs(du), dv.Abs(dv)))
+		if prev.IsCircular() {
+			gap = proofbound.AbsSumUpper(gap, proofbound.WalkEndBoundAllow(prev.EndBound), sideGap[pi], capSpread[pi])
+		}
+		if cur.IsCircular() {
+			gap = proofbound.AbsSumUpper(gap, proofbound.WalkEndBoundAllow(cur.StartBound), sideGap[i], capSpread[i])
+		}
+		rulings := []float64{proofbound.AbsSumUpper(slantIn[i].length, slantInHeld[i])}
+		if j.arc {
+			_, spread, ok := capband.RadiusAllow(j.vU, j.vV, 0, j.pA, j.pB)
+			if !ok {
+				return capBandClosure{}, errCapPatchHeldUnbounded
+			}
+			gap = proofbound.AbsSumUpper(gap, spread)
+			rulings = append(rulings, proofbound.AbsSumUpper(slantOut[i].length, slantOutHeld[i]))
+		}
+		if proofbound.IsNonFinite(gap) {
+			return capBandClosure{}, errCapPatchHeldUnbounded
+		}
+		if gap == 0 {
+			continue
+		}
+		for _, slant := range rulings {
+			out.rim = proofbound.AbsSumUpper(out.rim, proofbound.ProductUpper(proofbound.AbsSumUpper(slant, gap), gap))
+		}
+		corner := proofbound.ProductUpper(gap, gap)
+		out.sideLevel = proofbound.AbsSumUpper(out.sideLevel, corner)
+		out.capLevel = proofbound.AbsSumUpper(out.capLevel, corner)
+		out.reach = math.Max(out.reach, gap)
+	}
+	return out, nil
+}
+
+// fluxAllow is the closure's bound on the band's raw flux (three times its
+// volume): a sliver's flux is at most its area times the largest |P·n| over
+// it, which is pointUpper on a ruling sliver and the level's own |z| on a flat
+// one.
+func (c capBandClosure) fluxAllow(pointUpper, sideZUpper, capZUpper float64) float64 {
+	return proofbound.AbsSumUpper(
+		proofbound.ProductUpper(pointUpper, c.rim),
+		proofbound.ProductUpper(sideZUpper, c.sideLevel),
+		proofbound.ProductUpper(capZUpper, c.capLevel),
+	)
+}
+
+// momentAllow is the closure's bound on each first-moment flux: the moment
+// fields (u²/2, 0, 0), (0, v²/2, 0) and (0, 0, z²/2) never exceed
+// pointUpper²/2 on a ruling sliver, and only the axial one crosses a flat one,
+// where it is the level's own z²/2.
+func (c capBandClosure) momentAllow(pointUpper, sideZUpper, capZUpper float64) (float64, float64) {
+	half := func(x float64) float64 { return proofbound.ProductUpper(0.5, proofbound.ProductUpper(x, x)) }
+	inPlane := proofbound.ProductUpper(half(pointUpper), c.rim)
+	axial := proofbound.AbsSumUpper(inPlane,
+		proofbound.ProductUpper(half(sideZUpper), c.sideLevel),
+		proofbound.ProductUpper(half(capZUpper), c.capLevel))
+	return inPlane, axial
 }

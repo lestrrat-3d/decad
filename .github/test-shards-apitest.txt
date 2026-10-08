@@ -1549,3 +1549,4 @@
 2	0.01	TestStitchRefusesRevolveTagOffItsRecord
 2	0.01	TestStitchDecimalFrustumEnclosesItsRecord
 5	0.13	TestLoftHugeCircleRefusesNonFiniteVolume
+1	0.03	TestCapBlendVolumeBoundCoversHeldAngles

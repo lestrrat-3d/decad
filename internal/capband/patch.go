@@ -36,11 +36,10 @@ type Patch struct {
 	// period — the single closed circle a cornerless loop offsets into, the
 	// one shape below that is built without a corner join. It is set from
 	// that structural fact and never from a comparison of Th0 and Th1: fl(2π)
-	// is not 2π, so no float window ever proves a full period. It is read by
-	// capblend_moments.go's flux bound alone, where ∮cos = ∮sin = 0 over a
-	// full period makes the eccentric term's TRUE value exactly zero, so the
-	// whole held value is its own error and no Sincos magnitude envelope is
-	// owed for it.
+	// is not 2π, so no float window ever proves a full period. The flux and
+	// first-moment bounds read it: ∮cos = ∮sin = 0 over a full period makes
+	// the eccentric terms' TRUE values exactly zero, and both swept angles
+	// are read as exactly 2π rather than as the held window's difference.
 	WholeTurn bool
 
 	// CapTh0, CapTh1 are the CAP-LEVEL directrix's own angular window,
@@ -110,4 +109,35 @@ type Patch struct {
 	// point at every angle, so its rulings pair the cap arc with that point at
 	// the cap arc's own angle.
 	SkewStart, SkewEnd float64
+	// Held is how far each held number of a circular patch sits from the value
+	// the band's closed surface reads there (HeldAllow). The Cone arms of
+	// RawFlux and FirstMomentFlux enclose their closed forms over every value
+	// it allows, and the Cone arm of AreaOf charges its side radius.
+	Held HeldAllow
+}
+
+// HeldAllow bounds |held − reference| for each held number of a circular
+// patch whose float the build computed rather than recorded
+// (docs/modify-reach-design.md §8.4).
+//
+// The four angles are float Atan2 results, and the reference is the exact
+// angle about the centre of the point each window end names: the side
+// directrix's end as the record denotes it, and the held cap-level vertex. The
+// side radius is an ArcSeg's math.Hypot of its recorded Start, and the
+// reference is the record's own radius |Start − Center|. The cap radius is the
+// float offset radius, and the reference is the radius of the cap-level arc
+// the band's cap face records: the distance from the centre to the arc's
+// recorded start, which is one of the two held cap vertices.
+//
+// A whole-turn patch states its angles structurally and reads none of the
+// four angle fields. A zero field states that the held number is its
+// reference.
+type HeldAllow struct {
+	Th0, Th1, CapTh0, CapTh1 float64
+	SideRadius, CapRadius    float64
+}
+
+// zero reports whether every field is exactly zero.
+func (h HeldAllow) zero() bool {
+	return h == HeldAllow{}
 }

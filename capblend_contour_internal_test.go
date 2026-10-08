@@ -6,10 +6,13 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -224,4 +227,215 @@ func TestStraightEdgeBoundExactSquareSkipsTheBracket(t *testing.T) {
 func isExactFloat(q *big.Rat) bool {
 	_, exact := q.Float64()
 	return exact
+}
+
+const capRefPrec = 256
+
+const capRefPi = `3.14159265358979323846264338327950288419716939937510582097494459230781640628620899`
+
+func capRefFloat(x float64) *big.Float { return new(big.Float).SetPrec(capRefPrec).SetFloat64(x) }
+
+// capRefAtan is atan(z) for |z| <= 1 in 256-bit arithmetic: three argument
+// halvings atan(z) = 2·atan(z/(1+√(1+z²))) bring |z| under 0.13, where the
+// Taylor series converges past the working precision in 80 terms.
+func capRefAtan(z *big.Float) *big.Float {
+	one := capRefFloat(1)
+	x := new(big.Float).SetPrec(capRefPrec).Set(z)
+	for range 3 {
+		root := new(big.Float).SetPrec(capRefPrec).Sqrt(new(big.Float).SetPrec(capRefPrec).Add(one, new(big.Float).SetPrec(capRefPrec).Mul(x, x)))
+		x.Quo(x, new(big.Float).SetPrec(capRefPrec).Add(one, root))
+	}
+	sum := capRefFloat(0)
+	term := new(big.Float).SetPrec(capRefPrec).Set(x)
+	x2 := new(big.Float).SetPrec(capRefPrec).Mul(x, x)
+	for k := range 80 {
+		piece := new(big.Float).SetPrec(capRefPrec).Quo(term, capRefFloat(float64(2*k+1)))
+		if k%2 == 0 {
+			sum.Add(sum, piece)
+		} else {
+			sum.Sub(sum, piece)
+		}
+		term.Mul(term, x2)
+	}
+	return sum.Mul(sum, capRefFloat(8))
+}
+
+// capRefAngle is the exact angle of the float direction (du, dv), on the
+// branch nearest held.
+func capRefAngle(du, dv, held float64) *big.Float {
+	pi, _ := new(big.Float).SetPrec(capRefPrec).SetString(capRefPi)
+	half := new(big.Float).SetPrec(capRefPrec).Quo(pi, capRefFloat(2))
+	ax, ay := math.Abs(du), math.Abs(dv)
+	var base *big.Float
+	switch {
+	case ax == 0:
+		base = half
+	case ay <= ax:
+		base = capRefAtan(new(big.Float).SetPrec(capRefPrec).Quo(capRefFloat(ay), capRefFloat(ax)))
+	default:
+		base = new(big.Float).SetPrec(capRefPrec).Sub(half, capRefAtan(new(big.Float).SetPrec(capRefPrec).Quo(capRefFloat(ax), capRefFloat(ay))))
+	}
+	if du < 0 {
+		base = new(big.Float).SetPrec(capRefPrec).Sub(pi, base)
+	}
+	if dv < 0 {
+		base.Neg(base)
+	}
+	approx, _ := base.Float64()
+	turns := math.Round((held - approx) / (2 * math.Pi))
+	return base.Add(base, new(big.Float).SetPrec(capRefPrec).Mul(pi, capRefFloat(2*turns)))
+}
+
+// capRefBracket is the two float64s either side of r, or r twice where r is a
+// float64.
+func capRefBracket(r *big.Float) [2]float64 {
+	f, acc := r.Float64()
+	switch acc {
+	case big.Below:
+		return [2]float64{f, math.Nextafter(f, math.Inf(1))}
+	case big.Above:
+		return [2]float64{math.Nextafter(f, math.Inf(-1)), f}
+	}
+	return [2]float64{f, f}
+}
+
+// capHeldBody extrudes section h tall and chamfers its end cap loop by d.
+func capHeldBody(t *testing.T, section func(*sketch.Sketch), h, d float64) capBlendPayload {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	section(s)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
+	require.NoError(t, err)
+	cbp, ok := chamfered.payload.(capBlendPayload)
+	require.True(t, ok)
+	return cbp
+}
+
+// capHeldSlot draws a slot whose two end centres sit at (cU, cV) and
+// (cU, cV) + k·(−b, a), each end a half turn of radius |(a, b)| from
+// (a, b) round to −(a, b).
+func capHeldSlot(cU, cV, a, b, k float64) func(*sketch.Sketch) {
+	return func(s *sketch.Sketch) {
+		c1 := s.CreatePoint(cU, cV)
+		c2 := s.CreatePoint(cU-b*k, cV+a*k)
+		p0 := s.CreatePoint(cU+a, cV+b)
+		p1 := s.CreatePoint(cU-b*k+a, cV+a*k+b)
+		p2 := s.CreatePoint(cU-b*k-a, cV+a*k-b)
+		p3 := s.CreatePoint(cU-a, cV-b)
+		for _, p := range []*sketch.Point{c1, c2, p0, p1, p2, p3} {
+			s.Fix(p)
+		}
+		s.CreateLine(p0, p1)
+		s.CreateArc(c2, p1, p2)
+		s.CreateLine(p2, p3)
+		s.CreateArc(c1, p3, p0)
+	}
+}
+
+// TestCapPatchIntegralsCoverTheirHeldNumbers checks that a circular band
+// patch's published flux and first-moment bounds cover the patch at the exact
+// angles and radius its held floats stand for. Each exact value sits between
+// two adjacent float64s; the patch moved to either of them must land within
+// the two readings' bounds of the built one.
+//
+// Two slots make the held numbers matter. One runs along the u axis with its
+// ends centred 2^30 mm up the v axis: a half-turn end's flux reads
+// cV·R·H·(cos θ0 − cos θ1)/2, exactly zero at the true ±π/2 but turned by
+// cV·R·H/2 per radian of the held angles' own rounding, and its G1 feet
+// are exact, so both directrices' angles are checked. The other is turned
+// off the axes so its end radius 100·√5 is no float64, and is swept 2^30 mm,
+// where the first moments read the held radius through z0²·R0 against a
+// difference of squares the setback makes 900 times smaller; it checks the
+// side radius and side angles. The flux is checked only where the patch's
+// corner skews are zero, so the chord-versus-locus term adds nothing to its
+// bound.
+//
+// Shown to fail: with capWallHeldAllow's four angle allowances zeroed, the
+// slot up the v axis reads a v moment 3200 mm⁴ off against a 0.52 mm⁴ bound;
+// with its two radius allowances zeroed, the turned slot reads a flux
+// 0.021 mm³ off against a 0.013 mm³ bound.
+func TestCapPatchIntegralsCoverTheirHeldNumbers(t *testing.T) {
+	t.Parallel()
+	const far = 1 << 30
+	for _, tc := range []struct {
+		name         string
+		section      func(*sketch.Sketch)
+		h, d         float64
+		dirs         [][2]float64
+		capDirs      bool
+		sideRadius   float64
+		radiusSquare float64
+	}{
+		{name: `a slot far up the v axis`, section: capHeldSlot(0, far, 0, -50, 0.01), h: 10, d: 1,
+			dirs: [][2]float64{{0, 50}, {0, -50}}, capDirs: true},
+		{name: `a turned slot swept far`, section: capHeldSlot(0, 0, 100, 200, 0.5), h: far, d: 0.25,
+			dirs: [][2]float64{{100, 200}, {-100, -200}}, radiusSquare: 50000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cbp := capHeldBody(t, tc.section, tc.h, tc.d)
+			checked := 0
+			for _, p := range cbp.patches {
+				g := p.geom
+				if !g.Circular || g.WholeTurn {
+					continue
+				}
+				refAngle := func(held float64) *big.Float {
+					for _, d := range tc.dirs {
+						if math.Abs(math.Remainder(math.Atan2(d[1], d[0])-held, 2*math.Pi)) < 1e-6 {
+							return capRefAngle(d[0], d[1], held)
+						}
+					}
+					t.Fatalf(`no drawn direction names the held angle %v`, held)
+					return nil
+				}
+				type move struct {
+					field *float64
+					to    [2]float64
+				}
+				moved := g
+				moves := []move{
+					{&moved.Th0, capRefBracket(refAngle(g.Th0))},
+					{&moved.Th1, capRefBracket(refAngle(g.Th1))},
+				}
+				if tc.capDirs {
+					moves = append(moves, move{&moved.CapTh0, capRefBracket(refAngle(g.CapTh0))},
+						move{&moved.CapTh1, capRefBracket(refAngle(g.CapTh1))})
+				}
+				if tc.radiusSquare > 0 {
+					r := new(big.Float).SetPrec(capRefPrec).Sqrt(capRefFloat(tc.radiusSquare))
+					moves = append(moves, move{&moved.SideRadius, capRefBracket(r)})
+				}
+				flux := capband.RawFlux(g)
+				mu, mv, mz := capband.FirstMomentFlux(g)
+				for mi, m := range moves {
+					for _, to := range m.to {
+						moved = g
+						moved.Held = capband.HeldAllow{}
+						moved.SkewStart, moved.SkewEnd = 0, 0
+						*m.field = to
+						if g.SkewStart == 0 && g.SkewEnd == 0 {
+							got := capband.RawFlux(moved)
+							require.LessOrEqual(t, math.Abs(got.Value-flux.Value), proofbound.AbsSumUpper(flux.Bound, got.Bound),
+								`the flux bound covers held number %d at %v`, mi, to)
+						}
+						gu, gv, gz := capband.FirstMomentFlux(moved)
+						for axis, pair := range [][2]proofbound.BoundedScalar{{mu, gu}, {mv, gv}, {mz, gz}} {
+							require.LessOrEqual(t, math.Abs(pair[1].Value-pair[0].Value), proofbound.AbsSumUpper(pair[0].Bound, pair[1].Bound),
+								`moment %d's bound covers held number %d at %v`, axis, mi, to)
+						}
+					}
+				}
+				checked++
+			}
+			require.Positive(t, checked, `the section holds a circular patch`)
+		})
+	}
 }

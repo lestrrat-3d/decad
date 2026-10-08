@@ -34,12 +34,17 @@ import (
 //
 // A Cone patch's flux holds sines and cosines no rational carries, so
 // conePatchFluxInterval evaluates the same closed form over exact rationals
-// with each trig factor read through a certified enclosure, and the bound is
-// that interval's reach from its held midpoint. The enclosure always has
-// width, so a mixed section holding one circular wall stays Approximate
-// however exactly its Plane patches integrate. The whole-turn arm (no trig
-// term survives) and a patch whose parameters do not lift keep the float
-// closed form and its envelope bound.
+// with each trig factor read through a certified enclosure, and the held
+// value is that interval's midpoint. The bound is the reach, from it, of the
+// same closed form with each held angle and radius boxed by its g.Held
+// allowance (coneFluxEnclosures), since the held floats are not the values
+// the band's closed surface reads. The enclosure always has width, so a
+// mixed section holding one circular wall stays Approximate however exactly
+// its Plane patches integrate. The whole-turn arm holds the float closed form
+// and is bounded by wholeTurnFluxInterval's enclosure of the true full-period
+// flux. A patch whose parameters do not lift keeps the float closed form and
+// its envelope bound where it carries no allowance, and answers an infinite
+// bound where it does.
 //
 // A regular wall's Cone patch (Patch.Circular with a nonzero
 // sideRadius, i.e. neither a reflex corner's apex patch nor a cornerless
@@ -190,19 +195,33 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 	case g.WholeTurn:
 		// Structural: this patch's window is a genuinely FULL period built
 		// from the SAME floats on both directrices (capblend_geom.go's
-		// cornerless closed circle branch, and every apex patch's degenerate
-		// R0 = 0 side), so thetaS(u) == thetaC(u) identically for every u —
-		// ruledAngleCos's TRUE value is exactly 1, never read off Sincos or
-		// sinc here at all — and origin's own TRUE value is exactly zero (a
-		// full period integrates both cos and sin to zero, capblend_geom.go's
-		// structural flag, never a comparison of the windows). The held
-		// origin is therefore its own whole error, and cross (now ordinary
-		// arithmetic, no trig) is charged the same rounding budget poly is.
+		// cornerless closed circle branch), so thetaS(u) == thetaC(u)
+		// identically for every u — ruledAngleCos's TRUE value is exactly 1 —
+		// and origin's own TRUE value is exactly zero (a full period
+		// integrates both cos and sin to zero, capblend_geom.go's structural
+		// flag, never a comparison of the windows). The held value keeps the
+		// float form; wholeTurnFluxInterval encloses the true flux with both
+		// swept angles 2π, so the held origin and the held windows' own
+		// distance from 2π are inside the reach it publishes. The envelope
+		// below stands only where a parameter does not lift.
 		flux = poly + cross + origin
+		if iv, ok := wholeTurnFluxInterval(g); ok {
+			bound = proofbound.IntervalFloatError(iv, flux)
+			break
+		}
+		if !g.Held.zero() {
+			bound = math.Inf(1)
+			break
+		}
 		trigBound := proofbound.UpRound(math.Abs(origin))
 		bound = proofbound.AbsSumUpper(proofbound.AnalyticRoundBound(proofbound.AbsSumUpper(polyEnv, originEnv, crossEnv)), trigBound)
 	default:
-		iv, ok := conePatchFluxInterval(g)
+		iv, wide, ok := coneFluxEnclosures(g)
+		if !ok && !g.Held.zero() {
+			flux = poly + origin + cross*ruledAngleCos(thS0, thS1, thC0, thC1)
+			bound = math.Inf(1)
+			break
+		}
 		if !ok {
 			// A parameter that does not lift (non-finite geometry) leaves the
 			// float closed form and its structural magnitude envelope.
@@ -215,7 +234,7 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 		}
 		held, _ := intervalMid(iv).Float64()
 		flux = held
-		bound = proofbound.IntervalFloatError(iv, held)
+		bound = proofbound.IntervalFloatError(wide, held)
 	}
 	if !g.WholeTurn {
 		// The arithmetic bound above is only for the STRAIGHT-RULED patch
@@ -280,6 +299,10 @@ func chordLocusResidualAllow(g Patch) float64 {
 	narrowGeom.CapTh0, narrowGeom.CapTh1 = capTh0, capTh1
 	wideGeom.SkewStart, wideGeom.SkewEnd = 0, 0
 	narrowGeom.SkewStart, narrowGeom.SkewEnd = 0, 0
+	// Each reference reads the window it takes with that window's own
+	// allowances on both directrices.
+	wideGeom.Held.CapTh0, wideGeom.Held.CapTh1 = g.Held.Th0, g.Held.Th1
+	narrowGeom.Held.Th0, narrowGeom.Held.Th1 = g.Held.CapTh0, g.Held.CapTh1
 	wide := patchRawFlux(wideGeom)
 	narrow := patchRawFlux(narrowGeom)
 	pa, pb := patchAreaOf(g)
@@ -390,58 +413,143 @@ func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv proofbound.RatInterval
 // for a non-whole-turn patch: proofbound.RadSinCosInterval answers a non-point interval
 // for every nonzero rational, so a Cone patch stays Approximate.
 func conePatchFluxInterval(g Patch) (proofbound.RatInterval, bool) {
-	R0, R1 := proofarith.FloatRat(g.SideRadius), proofarith.FloatRat(g.CapRadius)
-	z0, z1 := proofarith.FloatRat(g.SideZ), proofarith.FloatRat(g.CapZ)
+	held, _, ok := coneFluxEnclosures(g)
+	return held, ok
+}
+
+// coneFluxEnclosures is conePatchFluxInterval at the held parameters (held)
+// and over every parameter g.Held admits (wide). The held angles are float
+// Atan2 results and an ArcSeg's held side radius a math.Hypot, so the patch
+// the closed band needs is the one at the reference values HeldAllow names,
+// which the held enclosure does not contain. wide does: each angle, and each
+// radius, is the box [held − allowance, held + allowance], every sine and
+// cosine is widened by its angle's allowance (both are 1-Lipschitz), and the
+// ruled-angle integral by the larger of its two phase ends' allowances, since
+// the phase is linear between them. With every allowance zero the two are the
+// same rational interval.
+//
+// The caller holds the midpoint of held, so the value is the one the held
+// parameters give, and publishes wide's reach from it. ok is false where a
+// parameter does not lift or an allowance is not finite.
+func coneFluxEnclosures(g Patch) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	thS0, thS1 := proofarith.FloatRat(g.Th0), proofarith.FloatRat(g.Th1)
 	thC0, thC1 := proofarith.FloatRat(g.CapTh0), proofarith.FloatRat(g.CapTh1)
-	cU, cV := proofarith.FloatRat(g.CU), proofarith.FloatRat(g.CV)
-	for _, r := range []*big.Rat{R0, R1, z0, z1, thS0, thS1, thC0, thC1, cU, cV} {
-		if r == nil {
-			return proofbound.RatInterval{}, false
-		}
+	if thS0 == nil || thS1 == nil || thC0 == nil || thC1 == nil || !g.Held.finite() {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
-	half := big.NewRat(1, 2)
-	H := new(big.Rat).Sub(z1, z0)
-	dS := new(big.Rat).Sub(thS1, thS0)
-	dC := new(big.Rat).Sub(thC1, thC0)
-	dR := new(big.Rat).Sub(R1, R0)
-	dSC := new(big.Rat).Sub(dS, dC)
-
 	sS0, cS0, okS0 := proofbound.RadSinCosInterval(thS0)
 	sS1, cS1, okS1 := proofbound.RadSinCosInterval(thS1)
 	sC0, cC0, okC0 := proofbound.RadSinCosInterval(thC0)
 	sC1, cC1, okC1 := proofbound.RadSinCosInterval(thC1)
 	if !okS0 || !okS1 || !okC0 || !okC1 {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	// intCos = ∫₀¹ cos(thS(u) − thC(u)) du, the phase running from
+	// phi0 = thS0−thC0 to phi1 = thS1−thC1: ruledAngleCos's
+	// cos((phi0+phi1)/2)·sincHalf(phi1−phi0), enclosed.
+	intCos, _, ok := phaseIntegralInterval(new(big.Rat).Sub(thS0, thC0), new(big.Rat).Sub(thS1, thC1))
+	if !ok {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	tr := coneTrig{sS0: sS0, cS0: cS0, sS1: sS1, cS1: cS1, sC0: sC0, cC0: cC0, sC1: sC1, cC1: cC1, intCos: intCos}
+	held, okH := coneFluxCombine(g, tr, HeldAllow{})
+	if !okH {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	if g.Held.zero() {
+		return held, held, true
+	}
+	wide, okW := coneFluxCombine(g, tr, g.Held)
+	if !okW {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	return held, wide, true
+}
+
+// coneTrig holds a Cone patch's trigonometric enclosures at its held angles.
+type coneTrig struct {
+	sS0, cS0, sS1, cS1, sC0, cC0, sC1, cC1, intCos proofbound.RatInterval
+}
+
+// coneFluxCombine assembles the ruled patch's closed form from tr, with every
+// held number boxed by its allowance in a.
+func coneFluxCombine(g Patch, tr coneTrig, a HeldAllow) (proofbound.RatInterval, bool) {
+	R0, ok0 := heldBox(g.SideRadius, a.SideRadius)
+	R1, ok1 := heldBox(g.CapRadius, a.CapRadius)
+	thS0, okS0 := heldBox(g.Th0, a.Th0)
+	thS1, okS1 := heldBox(g.Th1, a.Th1)
+	thC0, okC0 := heldBox(g.CapTh0, a.CapTh0)
+	thC1, okC1 := heldBox(g.CapTh1, a.CapTh1)
+	z0, z1 := proofarith.FloatRat(g.SideZ), proofarith.FloatRat(g.CapZ)
+	cU, cV := proofarith.FloatRat(g.CU), proofarith.FloatRat(g.CV)
+	if !ok0 || !ok1 || !okS0 || !okS1 || !okC0 || !okC1 || z0 == nil || z1 == nil || cU == nil || cV == nil {
 		return proofbound.RatInterval{}, false
 	}
+	sS0, cS0 := widenBy(tr.sS0, a.Th0), widenBy(tr.cS0, a.Th0)
+	sS1, cS1 := widenBy(tr.sS1, a.Th1), widenBy(tr.cS1, a.Th1)
+	sC0, cC0 := widenBy(tr.sC0, a.CapTh0), widenBy(tr.cC0, a.CapTh0)
+	sC1, cC1 := widenBy(tr.sC1, a.CapTh1), widenBy(tr.cC1, a.CapTh1)
+	intCos := widenBy(tr.intCos, a.phaseAllow(1, -1))
+
+	half := big.NewRat(1, 2)
+	H := new(big.Rat).Sub(z1, z0)
+	hHalf := new(big.Rat).Mul(H, half)
+	dS := proofbound.IntervalSub(thS1, thS0)
+	dC := proofbound.IntervalSub(thC1, thC0)
+	dR := proofbound.IntervalSub(R1, R0)
+	dSC := proofbound.IntervalSub(dS, dC)
+
 	// origin = H/2·R0·(cU·(sinS1−sinS0) + cV·(cosS0−cosS1))
 	//        + H/2·R1·(cU·(sinC1−sinC0) + cV·(cosC0−cosC1)).
-	originR0 := proofbound.IntervalScale(
+	originR0 := proofbound.IntervalScale(proofbound.IntervalMul(
 		proofbound.IntervalAdd(proofbound.IntervalScale(proofbound.IntervalSub(sS1, sS0), cU), proofbound.IntervalScale(proofbound.IntervalSub(cS0, cS1), cV)),
-		proofbound.RatMul(H, half, R0))
-	originR1 := proofbound.IntervalScale(
+		R0), hHalf)
+	originR1 := proofbound.IntervalScale(proofbound.IntervalMul(
 		proofbound.IntervalAdd(proofbound.IntervalScale(proofbound.IntervalSub(sC1, sC0), cU), proofbound.IntervalScale(proofbound.IntervalSub(cC0, cC1), cV)),
-		proofbound.RatMul(H, half, R1))
+		R1), hHalf)
 	origin := proofbound.IntervalAdd(originR0, originR1)
 
 	// poly = z0·(R1²·dSC − dS·dR·(R0+R1))/2 + R0²·H·dS/2 and
 	// cross = z0·(−R0·R1·dSC)/2 + R0·R1·H·dC/2, patchRawFlux's own regrouped
 	// forms — exact identities, so the grouping costs nothing over rationals.
-	polyZ0 := new(big.Rat).Sub(proofbound.RatMul(R1, R1, dSC), proofbound.RatMul(dS, dR, proofbound.RatAdd(R0, R1)))
-	poly := proofbound.RatAdd(proofbound.RatMul(z0, polyZ0, half), proofbound.RatMul(R0, R0, H, dS, half))
-	crossZ0 := new(big.Rat).Neg(proofbound.RatMul(R0, R1, dSC))
-	cross := proofbound.RatAdd(proofbound.RatMul(z0, crossZ0, half), proofbound.RatMul(R0, R1, H, dC, half))
+	z0Half := new(big.Rat).Mul(z0, half)
+	r0r1 := proofbound.IntervalMul(R0, R1)
+	polyZ0 := proofbound.IntervalSub(
+		proofbound.IntervalMul(proofbound.IntervalMul(R1, R1), dSC),
+		proofbound.IntervalMul(proofbound.IntervalMul(dS, dR), proofbound.IntervalAdd(R0, R1)))
+	poly := proofbound.IntervalAdd(
+		proofbound.IntervalScale(polyZ0, z0Half),
+		proofbound.IntervalScale(proofbound.IntervalMul(proofbound.IntervalMul(R0, R0), dS), hHalf))
+	cross := proofbound.IntervalAdd(
+		proofbound.IntervalScale(proofbound.IntervalNeg(proofbound.IntervalMul(r0r1, dSC)), z0Half),
+		proofbound.IntervalScale(proofbound.IntervalMul(r0r1, dC), hHalf))
+	return proofbound.IntervalAdd(proofbound.IntervalAdd(poly, origin), proofbound.IntervalMul(intCos, cross)), true
+}
 
-	// intCos = ∫₀¹ cos(thS(u) − thC(u)) du, the phase running from
-	// phi0 = thS0−thC0 to phi1 = thS1−thC1: ruledAngleCos's
-	// cos((phi0+phi1)/2)·sincHalf(phi1−phi0), enclosed.
-	phi0 := new(big.Rat).Sub(thS0, thC0)
-	phi1 := new(big.Rat).Sub(thS1, thC1)
-	intCos, _, ok := phaseIntegralInterval(phi0, phi1)
-	if !ok {
+// wholeTurnFluxInterval encloses a whole-turn patch's exact raw flux. Its
+// window is a full period by construction (Patch.WholeTurn), so the true
+// swept angle of both directrices is exactly 2π, read from the rational
+// bracket of π rather than from the held float windows, which do not span
+// 2π; origin's true value is zero and intCos's is one, so only poly and cross
+// survive. Each radius is boxed by its allowance. ok is false where a
+// parameter does not lift or an allowance is not finite.
+func wholeTurnFluxInterval(g Patch) (proofbound.RatInterval, bool) {
+	R0, ok0 := heldBox(g.SideRadius, g.Held.SideRadius)
+	R1, ok1 := heldBox(g.CapRadius, g.Held.CapRadius)
+	z0, z1 := proofarith.FloatRat(g.SideZ), proofarith.FloatRat(g.CapZ)
+	if !ok0 || !ok1 || z0 == nil || z1 == nil {
 		return proofbound.RatInterval{}, false
 	}
-	return proofbound.IntervalAdd(proofbound.IntervalAdd(proofbound.PointInterval(poly), origin), proofbound.IntervalScale(intCos, cross)), true
+	half := big.NewRat(1, 2)
+	turn := proofbound.TwoPiInterval()
+	H := new(big.Rat).Sub(z1, z0)
+	dR := proofbound.IntervalSub(R1, R0)
+	// poly = z0·(−dS·dR·(R0+R1))/2 + R0²·H·dS/2, cross = R0·R1·H·dS/2.
+	poly := proofbound.IntervalAdd(
+		proofbound.IntervalScale(proofbound.IntervalNeg(proofbound.IntervalMul(proofbound.IntervalMul(turn, dR), proofbound.IntervalAdd(R0, R1))), new(big.Rat).Mul(z0, half)),
+		proofbound.IntervalScale(proofbound.IntervalMul(proofbound.IntervalMul(R0, R0), turn), new(big.Rat).Mul(H, half)))
+	cross := proofbound.IntervalScale(proofbound.IntervalMul(proofbound.IntervalMul(R0, R1), turn), new(big.Rat).Mul(H, half))
+	return proofbound.IntervalAdd(poly, cross), true
 }
 
 // tripleProductUpper bounds |a·(b×c)| and every intermediate the float

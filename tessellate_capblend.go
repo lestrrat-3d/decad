@@ -446,7 +446,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 		Walks: walks, Joins: capBlendSampleJoins(lm.joins),
 		Whole: lm.whole, Chamfered: lm.chamfered, D: cbp.loopOffset(li), Chord: chord,
 	}, budget, capBandRadius, capWallSweep, func(i int) (float64, error) {
-		return capBlendCornerLocusGap(budget, cbp.loopSetback(li), walks, i, lm.joins[i])
+		return capBlendCornerLocusGap(budget, cbp.loopSetback(li), walks, i, lm.joins[i], cbp.loopBandDelta(li))
 	})
 	if err != nil {
 		return capBlendLoopMesh{}, err
@@ -497,12 +497,20 @@ func capBlendSampleJoins(joins []cornerJoin) []tessellation.CapBlendJoin {
 // can sit from the conic miter locus it stands for
 // (docs/tessellation-reach-design.md §7's locusGap).
 //
-// The locus is a curve of proven length at most L between two endpoints exactly
-// c apart, so it lies inside the ellipse with those two endpoints as foci and
-// major axis L, whose semi-minor axis is sqrt(L² − c²)/2. L is the same
+// The locus is a curve of proven length at most L between two endpoints c*
+// apart, so it lies inside the ellipse with those two endpoints as foci and
+// major axis L, whose semi-minor axis is sqrt(L² − c*²)/2. L is the same
 // subdivided bound capSlantEdge charges the ruling's own length against
-// (capMiterLocusUpper), and c² is taken exactly over the rationals so the
-// difference is never inflated by a square root this package cannot bound.
+// (capMiterLocusUpper). The semi-minor axis only grows as the focal distance
+// shrinks, so c must be a proven LOWER bound on c*, the distance between the
+// locus's own ends: the denoted corner and the denoted foot, the stated side
+// setback ds* apart along the sweep. The held chord from the corner to the
+// held foot m at the held ds is not one. The foot sits within the band's
+// contour displacement footDelta of the denoted foot, the corner within its
+// walk's own end bound of the denoted corner, and ds within dsDelta of ds*, so
+// c is the held chord, its square taken exactly over the rationals and its
+// root rounded down, less those three. A setback stated in millimetres on a
+// recorded section with exact feet subtracts nothing.
 //
 // It is zero where both loci are affine in the offset amount — a line-line
 // miter, every reflex corner's own two feet, which ride one carrier each, and
@@ -512,7 +520,7 @@ func capBlendSampleJoins(joins []cornerJoin) []tessellation.CapBlendJoin {
 // the sign of an axial span both take the magnitude of. The locus runs dc in
 // the plane and ds along the sweep (docs/modify-reach-design.md §8.3.1). A
 // sub-range whose speed cannot be enclosed answers +Inf, which refuses.
-func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, walks []survey2d.SideWalk, i int, j cornerJoin) (float64, error) {
+func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, walks []survey2d.SideWalk, i int, j cornerJoin, footDelta float64) (float64, error) {
 	n := len(walks)
 	prev, cur := walks[(i+n-1)%n], walks[i]
 	if j.g1 || (!prev.IsCircular() && !cur.IsCircular()) {
@@ -529,6 +537,17 @@ func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, w
 	chordSqDown, exact := chordSq.Float64()
 	if !exact {
 		chordSqDown = math.Nextafter(chordSqDown, math.Inf(-1))
+	}
+	cornerDelta := proofbound.WalkEndBoundAllow(cur.StartBound)
+	if proofbound.IsNonFinite(cornerDelta) || proofbound.IsNonFinite(footDelta) {
+		return 0, fmt.Errorf(`%w: a cap-loop chamfer's miter corner states no bound on its own ends, so this mesh can publish no displacement bound for the patches that share its ruling`, ErrUnsupported)
+	}
+	if shift := proofbound.AbsSumUpper(footDelta, cornerDelta, setback.dsDelta); shift > 0 {
+		chordLower := freeform.DownRound(proofbound.RatSqrtDown(chordSq) - shift)
+		chordSqDown = 0
+		if chordLower > 0 {
+			chordSqDown = freeform.DownRound(chordLower * chordLower)
+		}
 	}
 	diff := proofbound.UpRound(proofbound.ProductUpper(locus, locus) - chordSqDown)
 	if diff <= 0 {

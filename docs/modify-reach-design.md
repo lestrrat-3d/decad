@@ -800,14 +800,67 @@ A trigonometric endpoint term is ENCLOSED, never trusted from `math`. A `Cone`
 patch's volume flux and first moments are evaluated over exact rationals with
 the sine and cosine of each held float angle read through the certified radian
 enclosure (`internal/proofbound/interval_trig.go`'s `RadSinCosInterval`, over
-`internal/proofbound/turn_trig.go`'s series), so the published bound is the
-enclosure's reach from the held
-value — the same `intervalFloatError` discipline every certified circular
-bracket already publishes — and it neither grows with the arc centre's
-distance from the plane-local origin nor with the term's own magnitude. The
-magnitude envelope (`conservativeValueError`) stands only where no enclosure
-can be built: a non-finite coordinate. A `Cone` patch is never `Exact`: the
-enclosure always has width, and that width is the bound.
+`internal/proofbound/turn_trig.go`'s series). The held value is the midpoint of
+that enclosure at the held parameters. The magnitude envelope
+(`conservativeValueError`) stands only where no enclosure can be built: a
+non-finite coordinate. A `Cone` patch is never `Exact`: the enclosure always
+has width.
+
+**The held numbers.** The parameters the closed forms read are not all the
+values the band's closed surface needs. Each window end `th0`, `th1`, `capTh0`,
+`capTh1` is a float `Atan2`, an `ArcSeg` wall's side radius is the
+`math.Hypot` of its recorded `Start`, and the cap radius is the float offset
+`R ∓ dc`. The two closing disks are the side record's own region and the cap
+face's recorded loop, so a patch integrated at the held floats does not meet
+them, and a patch's flux is not translation invariant: the gap is read
+against the centre's distance from the plane-local origin. A slot whose
+half-turn ends sit `10⁶` mm up the `v` axis published a volume `6.11e-08` mm³
+from its exact value under a `5.72e-08` mm³ bound, and an L at the sketch
+origin missed by `7.854e-13` against `7.852e-13`. So each patch carries a
+`capband.HeldAllow`, a proven bound on `|held − reference|` for each of those
+six numbers:
+
+| Held number | Reference | Allowance |
+|---|---|---|
+| side `th0`, `th1` | exact angle of the point the record denotes at that walk end | `AngleAllow`: `Atan2Interval` of the held end, widened by `(π/2)·b/ρ` for the walk's own end bound `b` |
+| cap `capTh0`, `capTh1` | exact angle of the held cap vertex | `AngleAllow` with no reach |
+| side radius | the record's `|Start − Center|` | the walk's `RadiusBound`; zero for a `CircleSeg` |
+| cap radius | the cap face arc's radius, read through one foot (`offset2d.ArcSegment`) | `RadiusAllow`: either foot's exact distance from the centre |
+
+An apex patch's side directrix is the corner itself, a radius of exactly zero,
+so no term reads its side angles and they carry no allowance. A whole turn
+reads its windows as exactly `2π` from the rational bracket of `π`, never the
+held `fl(2π·T)` difference, and its cap face records the circle at the held
+cap radius, so only its side radius has an allowance. The flux and first
+moments are enclosed a second time with every held number boxed by its
+allowance: each sine and cosine widened by its angle's allowance (both are
+1-Lipschitz), the ruled-angle and phase integrals by the larger of their two
+ends' phase allowances (the phase is linear between them), and the moment
+coefficients over interval arithmetic (`internal/capband/moment.go`'s
+`ivRing`). The published bound is that box's reach from the held value, so
+the value is unchanged and the bound covers the patch at its references. The
+chord-versus-locus term's two reference sectors (§8.3) take their own
+window's allowances on both directrices. The area's frustum sector charges
+the side radius allowance as `αc·e·(2·(R0+R1) + |H| + e)`, and its corner-skew
+term reads the side radius at the top of that allowance.
+
+At the references every patch meets both disks along its directrices, and two
+patches meet along a corner ruling only to within a gap: the held ends two
+walks meet at need not be one float, a walk end names its denoted point only
+to within its end bound, an `ArcSeg`'s `End` need not lie at its `Start`'s
+radius, and a cap arc is recorded through one foot while the other sits at its
+own distance. `capBandClosure` (`capblend_contour.go`) sums those gaps per
+corner. Two rulings at most `gap` apart and at most `slant` long bound a
+sliver of area at most `(slant + gap)·gap`, whose flux is at most that area
+times `|P|` over the band and whose first moment is at most that area times
+`|P|²/2`. A straight wall whose ends carry a bound integrates its held side edge
+while the side face records the denoted one, which leaves a flat strip of area
+at most `(L + bS + bE)·(bS + bE)` at the side level, read at that level's `|z|`
+(`z²/2` for the axial moment), with each corner's `gap²` at both levels. Every
+closure term is zero for a section whose walk ends are recorded, whose arcs end
+at their start radius and whose circular patches' cap feet lie at one exact
+distance from the centre, so an axis-aligned section's band charges nothing
+here and its `Plane` patches' exact readings are unchanged.
 
 Compute bounds from patch boundary extrema plus interior stationary points.
 An unisolated stationary family is `ErrUnsupported` at build, not a loose Exact
@@ -988,11 +1041,15 @@ whole-turn patch's is a closed-form Fourier sum over a finite set of phases
 `k·θS+m·θC` (`|k|+|m| <= 3`) whose coefficients are exact rationals in the
 patch's own held floats, each phase's integral `cos(mid)·sinc(width/2)` (and
 the sine analogue) enclosed through the same certified radian enclosure the
-volume's own eccentric origin term and ruled cross term take, so the bound is
-the enclosure's reach from the held value and never a magnitude envelope of
-the coefficients; the whole-turn window collapses to the `k+m = 0` terms,
-exact rationals with no trigonometric enclosure at all — the moment's own
-analogue of the volume's zero-valued eccentric origin term there. The centroid divides the
+volume's own eccentric origin term and ruled cross term take; the bound is
+the reach, from that held value, of the same sum over the patch's held
+numbers boxed by their allowances (the held numbers paragraph above), and
+never a magnitude envelope of the coefficients. The whole-turn window
+collapses to the `k+m = 0` terms, whose phases are identically zero, so the
+held value is an exact rational in the held floats and the bound is the
+reach of those terms' coefficients with both swept angles read as `2π` — the
+moment's own analogue of the volume's zero-valued eccentric origin term
+there. The centroid divides the
 summed first moment by the body's own volume and lifts the plane-local
 quotient to world through the same frame/placement lift a prism centroid
 uses, with the geometric safety-net bound (the true centroid lies within the
@@ -1621,3 +1678,7 @@ the cap-blend build/measurement code (`capblend_geom.go`, `capblend.go`,
 cap-blend reading composes `sectionDelta`, and no `sectionDelta` consumer reads
 the cap contour's displacement. `capBlendPayload` separately preserves its
 receiver's per-end axial displacement and the selected-end setback rounding.
+`capblend_contour.go` also states each circular patch's held allowances
+(`capWallHeldAllow`, `capApexHeldAllow`) and each band's closure slivers
+(`capBandClosure`), which `capblend_moments.go` and `capblend_centroid.go`
+charge beside the patch integrals (§8.4's held numbers paragraph).

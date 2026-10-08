@@ -164,7 +164,7 @@ the rules leave to the byte budget.
 |---|---|
 | `capblend.go` | Complete-cap-loop chamfer: `capBlendPayload`, selection classification, build gates. See modify-reach §8.3/§4. |
 | `capblend_geom.go` | `buildCapBand`: trimmed side walls, cap faces, Plane/Cone band patches. See modify-reach §8.3. |
-| `capblend_contour.go` | Bounds cap contour displacement and length through `internal/capcontour/`. See modify-reach §8.3-§8.4. |
+| `capblend_contour.go` | Bounds cap contour displacement, length, held patch numbers and closure. See modify-reach §8.3-§8.4. |
 | `capblend_centroid.go` | Cap-blend first moments and bounds. See modify-reach §8.4. |
 | `capblend_moments.go` | `evalCapBlendContext`: the cap-blend body and its area/volume. See modify-reach §8.4. |
 | `capblend_survey.go` | Cap-blend undercut and minimum-radius surveys. See modify-reach Table DX (DX7/DX8). |
