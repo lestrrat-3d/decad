@@ -13,10 +13,21 @@ import (
 // and Last are the PLANE-local walks of the first and last recorded segments
 // Walk covers (the same segment for a walk no neighbour coalesced into): the
 // recorded geometry Walk's float axis coordinates were re-expressed from.
+// Joints holds every interior junction of a walk that covers more than one
+// recorded segment, in walk order.
 type RevolveWall struct {
 	Walk        survey2d.SideWalk
 	Kind        revolveaxis.WallKind
 	First, Last survey2d.SegmentWalk
+	Joints      []RevolveJoint
+}
+
+// RevolveJoint is one junction a coalesced walk dropped: its own float axis
+// coordinates (Z, Rho), read off the re-expressed walk that starts there, and
+// the recorded plane-local point Rec they were re-expressed from.
+type RevolveJoint struct {
+	Z, Rho float64
+	Rec    revolvemesh.RecordedMeridian
 }
 
 // RevolveCarrierInput is the validated sweep geometry read by the clearance
@@ -38,8 +49,9 @@ type RevolveCarrierInput struct {
 // (revolvemesh.RevolveLift.MeridianGap, measured at every carrier's own
 // recorded samples; docs/clearance-design.md §2). It covers what the walk's
 // float axis coordinates leave out: their re-expression rounding, an endpoint
-// snapped onto the axis, a sphere centre read as on the axis, and the axis's
-// own anchor and direction error. The caller folds it into the body's own
+// snapped onto the axis, a sphere centre read as on the axis, a junction a
+// coalesced wall dropped, and the axis's own anchor and direction error, and
+// for a cone the apex and axial window its carrier rebuilt in float. The caller folds it into the body's own
 // displacement; it is zero for a revolve whose every carrier matches its
 // record exactly.
 type RevolveCarrierResult struct {
@@ -142,7 +154,7 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 			f.Box = BoxUnion(CircleBox(onAxis(f, w.StartU), wp, w.StartV), CircleBox(onAxis(f, w.EndU), wp, w.EndV))
 			f.Wit = append(f.Wit, sample((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, midPhi))
 			out.Faces = append(out.Faces, f)
-			meter.wall(wall, f)
+			meter.cone(wall, f, apexZ, dz, dr)
 			if w.StartV <= 0 || w.EndV <= 0 {
 				// The apex sits on the trimmed face: a surface singular
 				// point, synthesized as a vertex-like candidate (§3).

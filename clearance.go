@@ -253,7 +253,7 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 	if !ok {
 		return pairResult{diam: diam}, nil
 	}
-	lo, hi, exact = clearanceDeltaWiden(lo, hi, exact, ga.delta, gb.delta)
+	lo, hi, exact = clearanceDeltaWiden(lo, hi, exact, ga.widenDelta(), gb.widenDelta())
 	if lo <= k.tol {
 		return pairResult{diam: diam}, nil
 	}
@@ -545,7 +545,7 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, c
 	if !ok {
 		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
 	}
-	lo, hi, exact = clearanceDeltaWiden(lo, hi, exact, gs.delta, gb.delta)
+	lo, hi, exact = clearanceDeltaWiden(lo, hi, exact, gs.widenDelta(), gb.widenDelta())
 	if lo <= k.tol {
 		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
 	}
