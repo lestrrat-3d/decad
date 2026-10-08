@@ -155,7 +155,7 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 			// The patch's own surface IS the Cone (or Plane) it publishes AND
 			// every reading it was assembled from is exact, so the range above
 			// is exact and decides the patch outright.
-			if opposesPull(mn, mx) {
+			if survey2d.OpposesPull(mn, mx) {
 				faces = append(faces, f)
 			}
 			continue

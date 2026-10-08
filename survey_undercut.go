@@ -12,7 +12,7 @@ import (
 //
 // Before this file, a receiver face's normal-component range was read as a
 // bare float (survey.go's now-removed wallNormalRange) and handed to
-// opposesPull's strict `m < 0 && M > -1` test — sound only where floating
+// survey2d.OpposesPull's strict `m < 0 && M > -1` test — sound only where floating
 // point lands exactly where the test expects, which a genuinely
 // perpendicular or antiparallel face need not do (fu155's own repro:
 // -4.6811112914356013e-17 and -0.99999999999999989 for faces whose exact
