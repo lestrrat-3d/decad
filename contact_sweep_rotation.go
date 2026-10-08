@@ -46,7 +46,8 @@ func (p rotationalSweepPath) departurePath() sweepdeparture.Path {
 	return sweepdeparture.Path{
 		Box: p.startBox.pairBox(), Delta: p.path.delta,
 		Axis: p.frame.Axis, Center: p.frame.Center, Velocity: p.velocity,
-		Duration: p.path.duration, Drift: p.path.drift != nil, Screw: p.path.screw != nil,
+		Duration: p.path.duration, OmegaUpper: p.omegaHigh,
+		Drift: p.path.drift != nil, Screw: p.path.screw != nil,
 	}
 }
 
@@ -1027,73 +1028,7 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 		(side == 0 && proofarith.DyCmp(boxB.hi[axis], boxA.lo[axis]) != 0) {
 		return nil, false
 	}
-	var omega, difference, velocity [3]*big.Rat
-	for i := range 3 {
-		if r.a.frame.Axis[i].Cmp(r.b.frame.Axis[i]) != 0 {
-			return nil, false
-		}
-		omega[i] = r.a.frame.Axis[i]
-		centers := [2]float64{r.a.path.drift.Center.X, r.b.path.drift.Center.X}
-		switch i {
-		case 1:
-			centers = [2]float64{r.a.path.drift.Center.Y, r.b.path.drift.Center.Y}
-		case 2:
-			centers = [2]float64{r.a.path.drift.Center.Z, r.b.path.drift.Center.Z}
-		}
-		difference[i] = new(big.Rat).Sub(proofarith.FloatRat(centers[1]), proofarith.FloatRat(centers[0]))
-		velocity[i] = new(big.Rat).Sub(r.b.velocity[i], r.a.velocity[i])
-	}
-	sign := int64(1)
-	if side == 0 {
-		sign = -1
-	}
-	derivative := new(big.Rat).Mul(velocity[axis], big.NewRat(sign, 1))
-	normal := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
-	normal[axis] = big.NewRat(sign, 1)
-	cross := [3]*big.Rat{
-		new(big.Rat).Sub(new(big.Rat).Mul(omega[1], normal[2]),
-			new(big.Rat).Mul(omega[2], normal[1])),
-		new(big.Rat).Sub(new(big.Rat).Mul(omega[2], normal[0]),
-			new(big.Rat).Mul(omega[0], normal[2])),
-		new(big.Rat).Sub(new(big.Rat).Mul(omega[0], normal[1]),
-			new(big.Rat).Mul(omega[1], normal[0])),
-	}
-	for i := range 3 {
-		derivative.Add(derivative, new(big.Rat).Mul(cross[i], difference[i]))
-	}
-	if derivative.Sign() <= 0 {
-		return nil, false
-	}
-	normUpper := func(vector [3]*big.Rat) *big.Rat {
-		squared := new(big.Rat)
-		for i := range 3 {
-			squared.Add(squared, new(big.Rat).Mul(vector[i], vector[i]))
-		}
-		root := proofbound.RatSqrtUp(squared)
-		if !finiteMeasurementValues(root) {
-			return nil
-		}
-		return proofarith.FloatRat(root)
-	}
-	dNorm, vNorm := normUpper(difference), normUpper(velocity)
-	if dNorm == nil || vNorm == nil {
-		return nil, false
-	}
-	omegaUpper := r.a.omegaHigh
-	omegaSquared := new(big.Rat).Mul(omegaUpper, omegaUpper)
-	curvature := new(big.Rat).Add(new(big.Rat).Mul(omegaSquared, dNorm),
-		new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Mul(omegaUpper, vNorm)))
-	curvature.Add(curvature, new(big.Rat).Mul(omegaSquared,
-		new(big.Rat).Mul(vNorm, r.a.path.duration)))
-	fraction := big.NewRat(1, 1)
-	for range 60 {
-		until := new(big.Rat).Mul(fraction, r.a.path.duration)
-		if new(big.Rat).Mul(curvature, until).Cmp(derivative) < 0 {
-			return fraction, true
-		}
-		fraction = new(big.Rat).Quo(fraction, big.NewRat(2, 1))
-	}
-	return nil, false
+	return sweepdeparture.CommonSpin([2]sweepdeparture.Path{r.a.departurePath(), r.b.departurePath()}, axis, side)
 }
 
 // obliqueAffineDepartureFraction proves an open-at-zero gap between the
@@ -1167,30 +1102,7 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 		proofarith.DyCmp(faceA.origin[axis], faceB.origin[axis]) != 0 {
 		return nil, false
 	}
-	velocity := func(path rotationalSweepPath) (*big.Rat, bool) {
-		if path.path.drift == nil {
-			return new(big.Rat).Quo(path.path.delta[axis].Rat(), path.path.duration), true
-		}
-		for other := range 3 {
-			if other != axis && path.frame.Axis[other].Sign() != 0 {
-				return nil, false
-			}
-		}
-		return path.velocity[axis], true
-	}
-	vA, validA := velocity(r.a)
-	vB, validB := velocity(r.b)
-	if !validA || !validB {
-		return nil, false
-	}
-	derivative := new(big.Rat).Sub(vB, vA)
-	if side == 0 {
-		derivative.Neg(derivative)
-	}
-	if derivative.Sign() <= 0 {
-		return nil, false
-	}
-	return big.NewRat(1, 2), true
+	return sweepdeparture.AxisFace([2]sweepdeparture.Path{r.a.departurePath(), r.b.departurePath()}, axis, side)
 }
 
 func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSample,

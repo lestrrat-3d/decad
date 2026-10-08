@@ -258,3 +258,192 @@ func SpanSpeedUpper(w *FreeformWork, span BezierSpan) (float64, error) {
 	}
 	return proofbound.AbsSumUpper(chord, gap), nil
 }
+
+// TangentDeviationCoefficientCost is SpanTangentDeviationCoefficients' own
+// per-point operation count: 3 for the u coefficient (Sub, Mul, Sub), 3 for v,
+// 2 for the running binomial C(q,i+1) = C(q,i)·(q−i)/(i+1) (one big.Int Mul
+// and one Quo), and 2 NORMALISING big.Rat.Mul by that binomial at 3 each.
+// 3 + 3 + 2 + 6 = 14. It is charged per POINT rather than per coefficient,
+// which over-covers the loop's own n−1 coefficients.
+const TangentDeviationCoefficientCost = 14
+
+// TangentEnergyPairCost is BernsteinSquaredNormIntegral's own per-PAIR
+// operation count: one dot product of two coefficients folded into its
+// product coefficient, 2 normalising Mul and 2 normalising Add at 3 each. 12.
+const TangentEnergyPairCost = 12
+
+// TangentEnergyDegreeCost is BernsteinSquaredNormIntegral's own per-product-
+// coefficient operation count: the running binomial C(2q,k+1) =
+// C(2q,k)·(2q−k)/(k+1) (one big.Int Mul and one Quo), then a normalising Quo
+// by C(2q,k) and a normalising Add into the sum, at 3 each. 2 + 3 + 3 = 8.
+const TangentEnergyDegreeCost = 8
+
+// TangentEnergyCloseCost is BernsteinSquaredNormIntegral's closing normalising
+// Quo by 2q+1. 3.
+const TangentEnergyCloseCost = 3
+
+// RatFloatUpCost is ChargedRatFloatUp's own per-call operation count: the
+// big.Rat.Float64 conversion, the exact lift of that float back into a
+// rational, one Cmp, and at most one Nextafter. 4.
+const RatFloatUpCost = 4
+
+// ChargedRatFloatUp is the metered entry point for proofbound.RatFloatUp, the
+// one outward rounding a reading commits when the quantity it publishes is the
+// exact rational itself rather than its square root.
+//
+// It charges RatFloatUpCost at the rational's own width, first.
+func ChargedRatFloatUp(w *FreeformWork, q *big.Rat) (float64, error) {
+	if err := w.Step(CostMul(RatFloatUpCost, WidthUnits(RatBitWidth(q)))); err != nil {
+		return 0, err
+	}
+	return proofbound.RatFloatUp(q), nil
+}
+
+// SpanTangentDeviationCoefficients returns the SCALED Bernstein coefficients of
+// a Tier A span's tangent deviation e(t) = C'(t) − Δ, Δ = P_p − P_0 the span's
+// own chord vector:
+//
+//	g_i = C(q,i)·(p·(P_{i+1} − P_i) − Δ),   i = 0..q,  q = p − 1,
+//
+// so that e(t) = Σ g_i·t^i·(1−t)^(q−i). The unscaled coefficients are the ones
+// SpanHodographGapSquared bounds: C'(t) is the hodograph Σ p·(P_{i+1} − P_i)·
+// B_i^q(t), and Δ = Σ Δ·B_i^q(t) because the Bernstein basis sums to 1. The
+// binomial is folded in here so BernsteinSquaredNormIntegral multiplies plain
+// monomials t^i·(1−t)^(q−i).
+//
+// A span with fewer than 2 control points has no chord and no hodograph, so it
+// returns no coefficients without charging, SpanHodographGapSquared's own
+// guard. Otherwise the chord vector charges itself, then this function charges
+// TangentDeviationCoefficientCost per control point at the span's own width
+// widened by the control count, which covers the binomial's q+1 bits and the
+// degree factor's bits, first.
+func SpanTangentDeviationCoefficients(w *FreeformWork, span BezierSpan) ([]RatPoint, error) {
+	n := len(span)
+	if n < 2 {
+		return nil, nil
+	}
+	dxU, dxV, err := SpanChordVector(w, span)
+	if err != nil {
+		return nil, err
+	}
+	if err := w.Step(CostMul(CostMul(TangentDeviationCoefficientCost, uint64(n)), WidthUnits(SpanBitWidth(span)+n))); err != nil {
+		return nil, err
+	}
+	q := n - 2
+	p := big.NewRat(int64(n-1), 1)
+	binom := big.NewInt(1)
+	out := make([]RatPoint, q+1)
+	for i := range q + 1 {
+		scale := new(big.Rat).SetInt(binom)
+		gu := new(big.Rat).Sub(span[i+1].U, span[i].U)
+		gu.Mul(gu, p)
+		gu.Sub(gu, dxU)
+		gu.Mul(gu, scale)
+		gv := new(big.Rat).Sub(span[i+1].V, span[i].V)
+		gv.Mul(gv, p)
+		gv.Sub(gv, dxV)
+		gv.Mul(gv, scale)
+		out[i] = RatPoint{U: gu, V: gv}
+		binom.Mul(binom, big.NewInt(int64(q-i)))
+		binom.Quo(binom, big.NewInt(int64(i+1)))
+	}
+	return out, nil
+}
+
+// BernsteinSquaredNormIntegral is the EXACT integral over t in [0, 1] of
+// |e(t)|², e(t) = Σ g_i·t^i·(1−t)^(q−i) with the scaled coefficients
+// SpanTangentDeviationCoefficients returns. Expanding the square,
+//
+//	|e(t)|² = Σ_k c_k·t^k·(1−t)^(2q−k),   c_k = Σ_{i+j=k} g_i·g_j,
+//
+// and the Beta integral ∫ t^k·(1−t)^(2q−k) dt = k!·(2q−k)!/(2q+1)! =
+// 1/((2q+1)·C(2q,k)) gives
+//
+//	∫ |e|² dt = Σ_k c_k / ((2q+1)·C(2q,k)),
+//
+// a finite sum of products and quotients of exact rationals, so the result is
+// the integral itself and never an enclosure of it.
+//
+// No coefficients means no deviation, an exact 0 without charging. Otherwise it
+// charges its whole count first — TangentEnergyPairCost per (i, j) pair,
+// TangentEnergyDegreeCost per k, TangentEnergyCloseCost once — at a width of
+// twice the widest coefficient (a product's operands) plus 3(q+1) bits. Those
+// bits cover the denominator the sum accumulates from the binomials: it
+// divides lcm over k of C(2q,k), which is lcm(1..2q+1)/(2q+1), and lcm(1..m)
+// is below e^(1.03883·m) (Rosser and Schoenfeld's bound on Chebyshev's ψ), so
+// fewer than 1.5·(2q+1) ≤ 3(q+1) bits.
+func BernsteinSquaredNormIntegral(w *FreeformWork, g []RatPoint) (*big.Rat, error) {
+	if len(g) == 0 {
+		return new(big.Rat), nil
+	}
+	q := len(g) - 1
+	width := 0
+	for _, c := range g {
+		width = max(width, RatBitWidth(c.U, c.V))
+	}
+	cost := CostAdd(
+		CostAdd(
+			CostMul(TangentEnergyPairCost, CostMul(uint64(q+1), uint64(q+1))),
+			CostMul(TangentEnergyDegreeCost, uint64(2*q+1)),
+		),
+		TangentEnergyCloseCost,
+	)
+	if err := w.Step(CostMul(cost, WidthUnits(2*width+3*(q+1)))); err != nil {
+		return nil, err
+	}
+	sum := new(big.Rat)
+	binom := big.NewInt(1)
+	for k := range 2*q + 1 {
+		ck := new(big.Rat)
+		for i := max(0, k-q); i <= min(q, k); i++ {
+			ck.Add(ck, new(big.Rat).Mul(g[i].U, g[k-i].U))
+			ck.Add(ck, new(big.Rat).Mul(g[i].V, g[k-i].V))
+		}
+		ck.Quo(ck, new(big.Rat).SetInt(binom))
+		sum.Add(sum, ck)
+		binom.Mul(binom, big.NewInt(int64(2*q-k)))
+		binom.Quo(binom, big.NewInt(int64(k+1)))
+	}
+	return sum.Quo(sum, big.NewRat(int64(2*q+1), 1)), nil
+}
+
+// SpanTangentEnergyUpper is docs/loft-design.md §5.2's free-form
+// tangentEnergy_k: a proven upper bound on
+//
+//	J = ∫₀¹ |C'(t) − Δ|² dt
+//
+// for a Tier A span under its own NATIVE parameter t — the parameter
+// SpanSpeedUpper and SpanMatchedDeltaUpper are stated under, and the one a
+// same-kind free-form loft cell shares between its two sides (§5.1). It is
+// internal/proofbound/bounds.go's proofbound.CellChordCurveAreaAllow
+// tangentEnergyUpper obligation, discharged without the constant-speed premise
+// proofbound.UniformSpeedTangentEnergyUpper needs: e(t) = C'(t) − Δ is a
+// polynomial with exact rational Bernstein coefficients
+// (SpanTangentDeviationCoefficients), so J is an exact rational
+// (BernsteinSquaredNormIntegral), and its one outward rounding
+// (ChargedRatFloatUp) is the only step between it and the published float.
+//
+// The consumer's sharp arm also needs ∫e dt = 0. That holds under any
+// parametrization: ∫C'(t) dt = C(1) − C(0) = Δ, because a Bézier interpolates
+// its own end control points.
+//
+// A span with fewer than 2 control points has no chord, so it reports 0
+// without charging. A degree-1 span reports an exact 0 from the general
+// formula, since every coefficient p·(P_1 − P_0) − Δ is the zero vector. A J
+// past the float64 range rounds to +Inf, which the consumer reads as no energy
+// proof and answers with its premise-free arm. The only error is the counter's
+// own Table R row R7 refusal.
+func SpanTangentEnergyUpper(w *FreeformWork, span BezierSpan) (float64, error) {
+	if len(span) < 2 {
+		return 0, nil
+	}
+	g, err := SpanTangentDeviationCoefficients(w, span)
+	if err != nil {
+		return 0, err
+	}
+	energy, err := BernsteinSquaredNormIntegral(w, g)
+	if err != nil {
+		return 0, err
+	}
+	return ChargedRatFloatUp(w, energy)
+}

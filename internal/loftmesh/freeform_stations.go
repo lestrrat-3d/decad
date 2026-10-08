@@ -54,14 +54,17 @@ func (e *StationCapError) Unwrap() error { return freeform.ErrTooManyChords }
 // entry per cell, parallel to the station lists. ArcUpper0/ArcUpper1 are each
 // side's SpanSpeedUpper over the cell's own dyadic sub-span, and MatchedDelta
 // is the larger of the two sides' SpanMatchedDeltaUpper over the same
-// sub-spans — the chord-to-curve half of §5.2's matchedDelta row. Sagitta is
-// the largest measured cell sagitta over both sides, and Round is the largest
-// station rounding over both sides, the segment's own end included.
+// sub-spans — the chord-to-curve half of §5.2's matchedDelta row.
+// Energy0/Energy1 are each side's SpanTangentEnergyUpper over the same
+// sub-span, §5.2's tangentEnergy_k row. Sagitta is the largest measured cell
+// sagitta over both sides, and Round is the largest station rounding over both
+// sides, the segment's own end included.
 type FreeformCell struct {
 	Stations0, Stations1 []sectionrecord.Point2
 	Sagitta              float64
 	MatchedDelta         []float64
 	ArcUpper0, ArcUpper1 []float64
+	Energy0, Energy1     []float64
 	Round                float64
 }
 
@@ -99,7 +102,9 @@ func SpanCountGate(w0, w1 survey2d.SegmentWalk, loop, j, k int) error {
 // with a StationCapError whose M is the walk's proven lower bound (S15), and
 // the caller names the loop and segment. A cell whose measured sagitta is
 // non-finite refuses with ErrLoftSagittaUnderivable (S14) rather than bisecting
-// to the ceiling, and so does a non-finite speed or matched-departure bound.
+// to the ceiling, and so does a non-finite speed or matched-departure bound. A
+// non-finite tangent energy does not refuse: §5.2's tangentEnergy_k row passes
+// it on as +Inf, which costs the ruled area leg its sharp arm and nothing else.
 //
 // Every station is an exact rational point on the curve, rounded once into a
 // Point2. Its rounding is charged as §5.2's free-form stationRound arm states:
@@ -134,6 +139,8 @@ func FreeformCellPoints(w0, w1 survey2d.SegmentWalk, target float64, maxCells in
 		MatchedDelta: chain.MatchedDelta,
 		ArcUpper0:    chain.ArcUpper[0],
 		ArcUpper1:    chain.ArcUpper[1],
+		Energy0:      chain.TangentEnergy[0],
+		Energy1:      chain.TangentEnergy[1],
 		Round:        math.Max(WalkEndPlaneDelta(w0.EndBound), WalkEndPlaneDelta(w1.EndBound)),
 	}
 	for side, stations := range chain.Stations {
