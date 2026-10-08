@@ -1044,6 +1044,103 @@ func TestCapBlendCapContourVertexBoundEncloses(t *testing.T) {
 	}
 }
 
+// TestCapBlendCapContourVertexBoundCoversWallDirection is the same enclosure on
+// a triangle whose walls' held tangents are rounded. The corner (−1e−15, 0) sits
+// below half an ulp of 24 from the origin, so both walls through it hold the
+// tangents (24, 0) and (−24, −32) while their recorded endpoints differ by
+// 24 + 1e−15. The hypotenuse's held tangent has the exact length 40, so an
+// enclosure built on it is a single point, and the build's miter lands on that
+// point. The cap-level vertex bound must still cover the distance to the miter
+// the recorded endpoints denote, which the test solves at 400 bits.
+//
+// Shown to fail: with capcontour's line carriers reading the held tangent
+// again, the vertex near the origin publishes a zero bound against a true
+// distance of 9.9e−16.
+func TestCapBlendCapContourVertexBoundCoversWallDirection(t *testing.T) {
+	t.Parallel()
+	const height, d = 20.0, 0.25
+	corners := [][2]float64{{-1e-15, 0}, {24, 0}, {24, 32}}
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	pts := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		pts[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(pts[i])
+	}
+	for i := range pts {
+		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	require.NoError(t, err)
+	held := map[[2]float64]bool{}
+	for _, v := range body.Vertices() {
+		if p := v.Position().Value; p.Z == 0 {
+			held[[2]float64{p.X, p.Y}] = true
+		}
+	}
+	require.Equal(t, map[[2]float64]bool{corners[0]: true, corners[1]: true, corners[2]: true}, held,
+		`the fixture is about these exact corners`)
+
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+	n := len(corners)
+	miters := make([][2]*big.Float, n)
+	for i := range n {
+		miters[i] = exactOffsetMiter(corners[(i+n-1)%n], corners[i], corners[(i+1)%n], d)
+	}
+	checked := 0
+	for _, v := range chamfered.Vertices() {
+		p := v.Position()
+		if p.Value.Z != height {
+			continue
+		}
+		checked++
+		var gap *big.Float
+		for _, m := range miters {
+			du := new(big.Float).SetPrec(400).Sub(new(big.Float).SetFloat64(p.Value.X), m[0])
+			dv := new(big.Float).SetPrec(400).Sub(new(big.Float).SetFloat64(p.Value.Y), m[1])
+			dist := new(big.Float).SetPrec(400).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
+			dist.Sqrt(dist)
+			if gap == nil || dist.Cmp(gap) < 0 {
+				gap = dist
+			}
+		}
+		require.LessOrEqual(t, gap.Cmp(new(big.Float).SetFloat64(p.Bound.Mag())), 0,
+			`vertex %v publishes bound %g against a true distance %s to the denoted miter`,
+			p.Value, p.Bound.Mag(), gap.Text('g', 6))
+	}
+	require.Equal(t, n, checked, `one cap-level foot per corner`)
+}
+
+// exactOffsetMiter is, at 400 bits, the meeting point of the walls prev→v and
+// v→next each moved d along its own left unit normal, with each wall's
+// direction taken from its exact endpoint difference.
+func exactOffsetMiter(prev, v, next [2]float64, d float64) [2]*big.Float {
+	const prec = 400
+	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
+	// row is the offset wall (−dy, dx)·X = (−dy, dx)·p0 + d·|(dx, dy)|.
+	row := func(p0, p1 [2]float64) (*big.Float, *big.Float, *big.Float) {
+		dx := new(big.Float).SetPrec(prec).Sub(f(p1[0]), f(p0[0]))
+		dy := new(big.Float).SetPrec(prec).Sub(f(p1[1]), f(p0[1]))
+		l := new(big.Float).SetPrec(prec).Add(new(big.Float).Mul(dx, dx), new(big.Float).Mul(dy, dy))
+		l.Sqrt(l)
+		nu := new(big.Float).SetPrec(prec).Neg(dy)
+		c := new(big.Float).SetPrec(prec).Add(new(big.Float).Mul(nu, f(p0[0])), new(big.Float).Mul(dx, f(p0[1])))
+		c.Add(c, new(big.Float).Mul(f(d), l))
+		return nu, dx, c
+	}
+	au, av, ac := row(prev, v)
+	bu, bv, bc := row(v, next)
+	det := new(big.Float).SetPrec(prec).Sub(new(big.Float).Mul(au, bv), new(big.Float).Mul(av, bu))
+	mu := new(big.Float).SetPrec(prec).Sub(new(big.Float).Mul(ac, bv), new(big.Float).Mul(av, bc))
+	mv := new(big.Float).SetPrec(prec).Sub(new(big.Float).Mul(au, bc), new(big.Float).Mul(ac, bu))
+	return [2]*big.Float{mu.Quo(mu, det), mv.Quo(mv, det)}
+}
+
 // ratDistance2D is the distance from a float64 point to an exact rational one,
 // rounded upward through a 200-bit square root so the test never asks the
 // bound to cover its own arithmetic.

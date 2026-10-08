@@ -48,8 +48,8 @@ func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (f
 		}
 		prev, cur := walks[(i+n-1)%n], walks[i]
 		if j.Arc || j.G1 {
-			a, okA := OffsetFootOver(j.VU, j.VV, prev.TanOutU, prev.TanOutV, span)
-			b, okB := OffsetFootOver(j.VU, j.VV, cur.TanInU, cur.TanInV, span)
+			a, okA := joinFoot(j, prev, true, span)
+			b, okB := joinFoot(j, cur, false, span)
 			if !okA || !okB {
 				return 0, false
 			}
@@ -80,4 +80,29 @@ func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (f
 		return 0, false
 	}
 	return delta, true
+}
+
+// joinFoot encloses one wall's offset foot at corner j over span: the end of
+// prev when atEnd, else the start of cur. A line wall's foot stands on the
+// endpoint its own end bound encloses and steps along the normal of the
+// difference of its two enclosed endpoints (OffsetFootEnclosure), never along
+// its held tangent, which is that difference rounded to float64. A circular
+// wall's foot reads the held corner and tangent.
+func joinFoot(j Join, w survey2d.SideWalk, atEnd bool, span proofbound.RatInterval) (Point, bool) {
+	if w.IsCircular() {
+		tu, tv := w.TanInU, w.TanInV
+		if atEnd {
+			tu, tv = w.TanOutU, w.TanOutV
+		}
+		return OffsetFootOver(j.VU, j.VV, tu, tv, span)
+	}
+	u, v, bound := w.StartU, w.StartV, w.StartBound
+	if atEnd {
+		u, v, bound = w.EndU, w.EndV, w.EndBound
+	}
+	corner, ok := WalkPointEnclosure(u, v, bound)
+	if !ok {
+		return Point{}, false
+	}
+	return OffsetFootEnclosure(corner, w, atEnd, span)
 }

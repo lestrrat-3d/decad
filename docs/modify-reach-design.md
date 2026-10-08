@@ -881,11 +881,14 @@ infinite one, beside a finite value, bounds nothing.
 Derive it as an ENCLOSURE, never as an error model: re-evaluate the same closed
 forms over rational intervals with the recorded coordinates taken exactly and
 outward-rounded square roots, and report the enclosure's greatest reach from the
-float point the build holds. The offset amount is itself an interval: the
-setback the caller stated lies within its own unit-conversion rounding of the
-float `dc` (§8.3.1), so every carrier, foot and radius is enclosed over that
-whole span. Interval arithmetic is inclusion-monotonic, so the
-box holds the denoted point whatever the platform's `sqrt` and `hypot` did, and
+float point the build holds. A straight wall's carrier, foot and frame run
+along the difference of its two enclosed endpoints, never along the walk's
+held tangent, which is that difference rounded to float64. The offset amount
+is itself an interval: the setback the caller stated lies within its own
+unit-conversion rounding of the float `dc` (§8.3.1), so every carrier, foot
+and radius is enclosed over that whole span. Interval arithmetic is
+inclusion-monotonic, so the box holds the denoted point whatever the
+platform's `sqrt` and `hypot` did, and
 nothing in the derivation assumes an ulp contract. Where no bounded box exists
 the call is SX14. A G1 join's corner is not a carrier intersection: its
 denoted point is `v + dc·n̂` for the leaving wall's exact unit normal, and the

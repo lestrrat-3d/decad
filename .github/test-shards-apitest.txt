@@ -21,6 +21,7 @@
 0	0.08	TestCapBlendBooleanChargesTheMiterDisplacement
 0	0.02	TestCapBlendBothCapsBuildsWhenClear
 0	0.04	TestCapBlendBoundsEnclosesPlacedVertices
+0	0.01	TestCapBlendCapContourVertexBoundCoversWallDirection
 0	0.07	TestCapBlendCapContourVertexBoundEncloses
 0	0.01	TestCapBlendChamferPolygonLoop
 0	1.51	TestCapBlendChamferedPinAsTool

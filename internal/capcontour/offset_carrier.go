@@ -20,24 +20,13 @@ type Carrier struct {
 	R      proofbound.RatInterval
 }
 
+// CarrierOf is CarrierOver at the single offset amount d.
 func CarrierOf(w survey2d.SideWalk, d float64) (Carrier, bool) {
-	if !w.IsCircular() {
-		p, okP := OffsetFoot(w.StartU, w.StartV, w.TanInU, w.TanInV, d)
-		dir, okD := UnitVec(w.TanInU, w.TanInV)
-		if !okP || !okD {
-			return Carrier{}, false
-		}
-		return Carrier{IsLine: true, P: p, Dir: dir}, true
-	}
-	r, ok := ExactOffsetRadius(w, d)
-	if !ok {
+	rd := proofarith.FloatRat(d)
+	if rd == nil {
 		return Carrier{}, false
 	}
-	c, okC := ExactPoint(w.CU, w.CV)
-	if !okC {
-		return Carrier{}, false
-	}
-	return Carrier{C: c, R: proofbound.PointInterval(r)}, true
+	return CarrierOver(w, proofbound.PointInterval(rd))
 }
 
 // ExactOffsetRadius is offsetRadius's own R − insideSign·d taken EXACTLY:
@@ -177,14 +166,15 @@ func carrierOverRange(w survey2d.SideWalk, t0, t1 float64) (Carrier, bool) {
 // every carrier the wall's offset takes as the offset amount ranges over
 // span. A span of one point d is CarrierOf(w, d)'s own enclosure, rational
 // for rational.
+//
+// A line's carrier is OffsetCarrierEnclosure's: it runs from the start the
+// walk's end bound encloses, along the unit direction of the difference of
+// the two enclosed endpoints. It never reads the walk's held tangent, which is
+// that difference rounded to float64 and so tilts the carrier by up to half an
+// ulp of each component.
 func CarrierOver(w survey2d.SideWalk, span proofbound.RatInterval) (Carrier, bool) {
 	if !w.IsCircular() {
-		p, okP := offsetFootRange(w.StartU, w.StartV, w.TanInU, w.TanInV, span)
-		dir, okD := UnitVec(w.TanInU, w.TanInV)
-		if !okP || !okD {
-			return Carrier{}, false
-		}
-		return Carrier{IsLine: true, P: p, Dir: dir}, true
+		return OffsetCarrierEnclosure(w, span)
 	}
 	r, ok := ExactOffsetRadiusOver(w, span)
 	if !ok {

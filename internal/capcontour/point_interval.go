@@ -112,25 +112,6 @@ func UnitVec(x, y float64) (Point, bool) {
 	return Point{U: u, V: v}, true
 }
 
-// OffsetFoot encloses the exact material-side foot v + d·rot90(unit(t)) —
-// the point shell_offset.go and capblend_geom.go both spell
-// v + d·(−ty, tx) after normalize2.
-func OffsetFoot(vU, vV, tu, tv, d float64) (Point, bool) {
-	n, ok := UnitVec(tu, tv)
-	if !ok {
-		return Point{}, false
-	}
-	v, okV := ExactPoint(vU, vV)
-	rd := proofarith.FloatRat(d)
-	if !okV || rd == nil {
-		return Point{}, false
-	}
-	return Point{
-		U: proofbound.IntervalAdd(v.U, proofbound.IntervalScale(proofbound.IntervalNeg(n.V), rd)),
-		V: proofbound.IntervalAdd(v.V, proofbound.IntervalScale(n.U, rd)),
-	}, true
-}
-
 // Nearest encloses intersectOffsets' own "root nearest the corner". A
 // candidate whose squared-distance interval starts beyond another's end is
 // PROVEN not to be the nearest and is dropped; every candidate the exact
@@ -179,18 +160,11 @@ func NearestTo(cands []Point, corner Point) (Point, bool) {
 	return out, found
 }
 
-// OffsetFootOver is OffsetFoot over every offset amount span holds. A span
-// of one point d is OffsetFoot(vU, vV, tu, tv, d)'s own enclosure, rational
-// for rational.
+// OffsetFootOver encloses the material-side foot v + t·rot90(unit(tu, tv))
+// for every offset amount t in span, reading the float pair (tu, tv) as an
+// exact direction. A held walk tangent is not one for a line walk, whose
+// recorded endpoints state the direction (OffsetFootEnclosure).
 func OffsetFootOver(vU, vV, tu, tv float64, span proofbound.RatInterval) (Point, bool) {
-	return offsetFootRange(vU, vV, tu, tv, span)
-}
-
-// offsetFootRange generalises OffsetFoot to an OFFSET INTERVAL rather
-// than one float: the enclosure of v + t·rot90(unit(t)) for every offset
-// amount t in tRange, the point family a line carrier's own anchor sweeps as
-// the offset amount varies. OffsetFoot is this at one degenerate point.
-func offsetFootRange(vU, vV, tu, tv float64, tRange proofbound.RatInterval) (Point, bool) {
 	n, ok := UnitVec(tu, tv)
 	if !ok {
 		return Point{}, false
@@ -200,7 +174,7 @@ func offsetFootRange(vU, vV, tu, tv float64, tRange proofbound.RatInterval) (Poi
 		return Point{}, false
 	}
 	return Point{
-		U: proofbound.IntervalAdd(v.U, proofbound.IntervalMul(proofbound.IntervalNeg(n.V), tRange)),
-		V: proofbound.IntervalAdd(v.V, proofbound.IntervalMul(n.U, tRange)),
+		U: proofbound.IntervalAdd(v.U, proofbound.IntervalMul(proofbound.IntervalNeg(n.V), span)),
+		V: proofbound.IntervalAdd(v.V, proofbound.IntervalMul(n.U, span)),
 	}, true
 }
