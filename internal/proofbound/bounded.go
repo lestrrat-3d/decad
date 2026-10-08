@@ -109,6 +109,18 @@ func BoundedDiv(a, b BoundedScalar) BoundedScalar {
 	return BoundedQuotient(a.Value, a.Bound, b.Value, b.Bound)
 }
 
+// BoundedStretch keeps a's held value and widens its bound to cover the true
+// quantity multiplied by an unknown factor f in [1 − r, 1 + r]: with t the
+// true unscaled value, |f·t − a.Value| ≤ |f − 1|·|t| + |t − a.Value| ≤
+// r·(|a.Value| + a.Bound) + a.Bound. r ≤ 0 returns a unchanged, so an exact
+// factor keeps the bound bit for bit.
+func BoundedStretch(a BoundedScalar, r float64) BoundedScalar {
+	if r <= 0 {
+		return a
+	}
+	return MeasuredScalar(a.Value, AbsSumUpper(a.Bound, ProductUpper(r, AbsSumUpper(a.Value, a.Bound))))
+}
+
 // SurvAdmission is the three-valued reading of a bounded quantity against a
 // threshold: the answer a HELD float cannot give, because the held float is not
 // the quantity. It is the single owner of that reading — the survey kernel, the

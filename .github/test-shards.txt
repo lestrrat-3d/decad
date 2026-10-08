@@ -715,6 +715,7 @@
 3	0.00	TestRevolvePayloadProvesSimple
 3	0.00	TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
 3	0.00	TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating
+3	0.02	TestRevolveReadingsCoverFrameDefect
 3	0.00	TestRevolveSweepUpperNeverUnderstatesAFullTurn
 3	0.04	TestRevolveSymDiffRefusesAnAbsentAngularTerm
 3	0.00	TestRevolveVertexIsolatedDecidesACapFanAgainstTheNextChordWall

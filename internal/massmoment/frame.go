@@ -79,6 +79,25 @@ func RevolveRotation(frame r3.Frame, dUFloat, dVFloat float64, xform r3.Transfor
 	return out, nil
 }
 
+// PlaneMap is the exact linear map L = B·[U V U×V] that carries plane
+// coordinates (u, v, n) to world directions: the frame's held U and V, their
+// exact cross product, and the placement's held basis B. It is
+// RevolveRotation's construction about the plane's own U axis, since the local
+// basis (W, E0, E1) is then (U, V, U×V).
+func PlaneMap(frame r3.Frame, xform r3.Transform) ([3][3]*big.Rat, error) {
+	return RevolveRotation(frame, 1, 0, xform)
+}
+
+// Determinant is the exact determinant of m.
+func Determinant(m [3][3]*big.Rat) *big.Rat {
+	minor := func(i, j, k, l int) *big.Rat {
+		return new(big.Rat).Sub(proofbound.RatMul(m[i][k], m[j][l]), proofbound.RatMul(m[i][l], m[j][k]))
+	}
+	det := proofbound.RatMul(m[0][0], minor(1, 2, 1, 2))
+	det.Sub(det, proofbound.RatMul(m[0][1], minor(1, 2, 0, 2)))
+	return det.Add(det, proofbound.RatMul(m[0][2], minor(1, 2, 0, 1)))
+}
+
 // PlacementRotation reads the exact rational linear part of a placement.
 func PlacementRotation(placement r3.Transform) ([3][3]*big.Rat, error) {
 	basis := placement.Basis()
