@@ -294,13 +294,13 @@ func TestRevolveSphere(t *testing.T) {
 	_, err = body.Faces()[0].NormalAt(r3.NewVec(5, 0, 0))
 	require.ErrorIs(t, err, decad.ErrDegenerate, `the sphere center has no normal`)
 
-	// A loop-less closed face is valid by construction. Its rounded centroid
-	// has no support-point diameter for the tolerance gate, so Verify refuses
-	// to call the bounded reading Sound.
+	// A loop-less closed face is valid by construction. The gate reads the
+	// sphere's diameter off its meridian swept to the angles half a turn
+	// apart, and every bounded reading clears the default tolerance against it.
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
-	require.False(t, report.Passed())
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Passed())
 }
 
 // TestRevolveSemicircleFullTurnCentroidBoundTightens is design §15's T110:
@@ -405,9 +405,11 @@ func TestRevolveTorus(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, -1.0, n.Value.Y, 1e-9)
 
+	// The gate reads the torus's diameter off its meridian swept half a turn,
+	// and every bounded reading clears the default tolerance against it.
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
 
 	// A quarter of the same torus: the patch keeps both cap circles as
 	// separate loops with seam vertices, mirroring the whole-circle prism
@@ -1095,7 +1097,7 @@ func TestRevolveReflectedSphereAndConeNormals(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status, `every bounded reading clears the gate against its body's diameter`)
 }
 
 // holedSketch builds the annular rectangle with a circular hole at (5, 10),

@@ -436,7 +436,7 @@ func TestClearancePolyBracketContainsTruth(t *testing.T) {
 
 			report, err := doc.Verify(t.Context(), decad.WithClearances())
 			require.NoError(t, err)
-			require.Equal(t, decad.Suspect, report.Status)
+			require.Equal(t, decad.Sound, report.Status)
 			requireBoundedGapContains(t, report, gap)
 		}
 	})
@@ -471,7 +471,7 @@ func TestClearancePolyBracketContainsTruth(t *testing.T) {
 			require.LessOrEqualf(t, lo, gap+1e-6, "P8 lower bound over-claims the gap (iter %d)", iter)
 			require.GreaterOrEqualf(t, hi, gap-1e-6, "P8 upper bound falls short of the truth (iter %d)", iter)
 			// The certified bracket must be tight enough to clear the gate.
-			require.Equal(t, decad.Suspect, report.Status, "bounded torus mass results remain visible")
+			require.Equal(t, decad.Sound, report.Status, "bounded torus readings clear the gate")
 			require.LessOrEqual(t, 2*row.Gap.Bound.Mag(), 1e-3*row.Gap.Value.Mag(), "the P8 bracket width exceeds the rel=1e-3 noise floor")
 		}
 	})
