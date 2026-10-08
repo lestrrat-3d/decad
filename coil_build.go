@@ -9,7 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -26,8 +26,12 @@ import (
 // (x, y) in the plane and z along its normal, with the frame's held U, V and
 // N and the placement's held basis and translation read as exact rationals,
 // the convention docs/loft-design.md §5's lift and the mitred sweep's
-// placement already follow. In those coordinates the profile vertex p of axis
-// coordinates (ρ, ζ) sits at station fraction t at
+// placement already follow. r3 holds those vectors orthonormal only to
+// rounding, so the map L = [U V N] the record denotes through is affine and
+// not exactly rigid; coilWorld.affine reads its determinant and its
+// orthonormality defect for the readings and the bounds that charge it
+// (docs/helix-design.md §5.3). In plane coordinates the profile vertex p of
+// axis coordinates (ρ, ζ) sits at station fraction t at
 //
 //	p + ρ·(cos 2πt − 1)·e_r + pitch·t·d,   z = σ·Side·ρ·sin 2πt
 //
@@ -58,6 +62,19 @@ func coilWorldOf(frame r3.Frame, xform r3.Transform) coilWorld {
 	w.o = sweeparc.Add(linear(w.o), sweeparc.VecOf(xform.Translation()))
 	w.u, w.v, w.n = linear(w.u), linear(w.v), linear(w.n)
 	return w
+}
+
+// affine reads the denoted map L = [U V N] off the exact world vectors: its
+// determinant, exact, and its orthonormality defect e, the entrywise absolute
+// sum of LᵀL − I. Every eigenvalue of LᵀL lies in [1 − e, 1 + e], so L
+// scales a length by a factor in [1 − e, 1 + e] (for e ≤ 1) and an area by
+// one in the same range; an exactly orthonormal map answers det 1 and e 0.
+func (w coilWorld) affine() (*big.Rat, *big.Rat) {
+	var m [3][3]*big.Rat
+	for k := range 3 {
+		m[k] = [3]*big.Rat{w.u[k], w.v[k], w.n[k]}
+	}
+	return sweeparc.Dot(w.u, sweeparc.Cross(w.v, w.n)), massmoment.OrthonormalityDefect(m)
 }
 
 // point lifts plane coordinates given as intervals.
@@ -100,6 +117,11 @@ type coilRecord struct {
 	sigma   int
 	n       int64
 	world   coilWorld
+	// det and defect are coilWorld.affine's two readings; stretch is
+	// 1 + defect rounded up, the factor every plane-coordinate distance is
+	// multiplied by to bound its world image.
+	det, defect *big.Rat
+	stretch     float64
 }
 
 func readCoilRecord(cp coilPayload) (coilRecord, error) {
@@ -119,6 +141,11 @@ func readCoilRecord(cp coilPayload) (coilRecord, error) {
 	if cp.leftHand {
 		rec.sigma = -1
 	}
+	rec.det, rec.defect = rec.world.affine()
+	if rec.defect.Cmp(big.NewRat(1, 2)) >= 0 {
+		return coilRecord{}, fmt.Errorf(`%w: the coil's placed frame departs from orthonormal by %s`, ErrUnsupported, rec.defect.FloatString(3))
+	}
+	rec.stretch = proofbound.RatFloatUp(new(big.Rat).Add(big.NewRat(1, 1), rec.defect))
 	n, ok := coil.StationCount(rec.turns, coilStationsPerTurn)
 	if !ok || n > maxCoilStations {
 		return coilRecord{}, fmt.Errorf(`%w: the coil's station count exceeds its ceiling`, ErrUnsupported)
@@ -168,18 +195,43 @@ func buildCoilShell(ctx context.Context, rec coilRecord) (coilShell, error) {
 	n := rec.n
 	sh := coilShell{stride: stride}
 
-	// The per-vertex terms of the station formula, lifted once:
+	// The per-vertex terms of the station formula, lifted once as exact
+	// intervals and held as bounded floats:
 	// X(v, j) = P_v + (cos θ_j − 1)·B_v + t_j·D + sin θ_j·S_v.
+	// Each station point is then evaluated in float arithmetic whose bound
+	// charges every operand's own bound and every product's and sum's exact
+	// rounding (coil.Mul, coil.Add), so the held coordinate and its round are
+	// proven without an interval evaluation per vertex. Station 0 reads P_v
+	// alone: every other term is an exact zero there.
 	erU, erV := rec.axis.Radial()
 	zero := coil.Point(new(big.Rat))
-	pv := make([]proofbound.IvVec3, stride)
-	bv := make([]proofbound.IvVec3, stride)
-	sv := make([]proofbound.IvVec3, stride)
+	held := func(x coil.Iv) (proofbound.BoundedScalar, error) {
+		b, ok := coil.Held(x)
+		if !ok {
+			return b, fmt.Errorf(`%w: a coil station term runs past the representable float64 range`, ErrUnsupported)
+		}
+		return b, nil
+	}
+	pv := make([][3]proofbound.BoundedScalar, stride)
+	bv := make([][3]proofbound.BoundedScalar, stride)
+	sv := make([][3]proofbound.BoundedScalar, stride)
 	tilt := big.NewRat(int64(rec.sigma*rec.axis.Side), 1)
 	for v := range stride {
-		pv[v] = rec.world.point(coil.Point(rec.u[v]), coil.Point(rec.v[v]), zero)
-		bv[v] = rec.world.vector(proofbound.IntervalMul(rec.rho[v], erU), proofbound.IntervalMul(rec.rho[v], erV), zero)
-		sv[v] = rec.world.vector(zero, zero, proofbound.IntervalScale(rec.rho[v], tilt))
+		p := rec.world.point(coil.Point(rec.u[v]), coil.Point(rec.v[v]), zero)
+		b := rec.world.vector(proofbound.IntervalMul(rec.rho[v], erU), proofbound.IntervalMul(rec.rho[v], erV), zero)
+		q := rec.world.vector(zero, zero, proofbound.IntervalScale(rec.rho[v], tilt))
+		for axis := range 3 {
+			var err error
+			if pv[v][axis], err = held(p[axis]); err != nil {
+				return coilShell{}, err
+			}
+			if bv[v][axis], err = held(b[axis]); err != nil {
+				return coilShell{}, err
+			}
+			if sv[v][axis], err = held(q[axis]); err != nil {
+				return coilShell{}, err
+			}
+		}
 	}
 	pitchIv := coil.Point(rec.pitch)
 	dvec := rec.world.vector(proofbound.IntervalMul(pitchIv, rec.axis.DU), proofbound.IntervalMul(pitchIv, rec.axis.DV), zero)
@@ -194,21 +246,32 @@ func buildCoilShell(ctx context.Context, rec coilRecord) (coilShell, error) {
 		}
 		t := coil.Fraction(rec.turns, j, n)
 		sinT, cosT := coil.TurnSinCos(t)
-		cm1 := proofbound.IntervalSub(cosT, one)
+		cm1, err := held(proofbound.IntervalSub(cosT, one))
+		if err != nil {
+			return coilShell{}, err
+		}
+		sn, err := held(sinT)
+		if err != nil {
+			return coilShell{}, err
+		}
+		var slide [3]proofbound.BoundedScalar
+		for axis := range 3 {
+			if slide[axis], err = held(proofbound.IntervalScale(dvec[axis], t)); err != nil {
+				return coilShell{}, err
+			}
+		}
 		for v := range stride {
 			var coords [3]float64
 			worst := 0.0
 			for axis := range 3 {
-				c := pv[v][axis]
-				c = proofbound.IntervalAdd(c, proofbound.IntervalMul(cm1, bv[v][axis]))
-				c = proofbound.IntervalAdd(c, proofbound.IntervalScale(dvec[axis], t))
-				c = proofbound.IntervalAdd(c, proofbound.IntervalMul(sinT, sv[v][axis]))
-				held, _ := coil.Mid(c).Float64()
-				if math.IsNaN(held) || math.IsInf(held, 0) {
+				c := coil.Add(pv[v][axis], coil.Mul(cm1, bv[v][axis]))
+				c = coil.Add(c, slide[axis])
+				c = coil.Add(c, coil.Mul(sn, sv[v][axis]))
+				if proofbound.IsNonFinite(c.Value) || proofbound.IsNonFinite(c.Bound) {
 					return coilShell{}, fmt.Errorf(`%w: a coil station point runs past the representable float64 range`, ErrUnsupported)
 				}
-				coords[axis] = held
-				worst = math.Max(worst, proofbound.IntervalFloatError(c, held))
+				coords[axis] = c.Value
+				worst = math.Max(worst, c.Bound)
 			}
 			k := sh.at(j, v)
 			sh.verts[k] = r3.NewVec(coords[0], coords[1], coords[2])
@@ -257,18 +320,34 @@ func buildCoilShell(ctx context.Context, rec coilRecord) (coilShell, error) {
 		}
 	}
 	for k, t := range sh.tris {
-		if loftmesh.TriangleCollapsed(sh.verts, t) {
+		if !coilTriangleOpen(sh.verts[t[0]], sh.verts[t[1]], sh.verts[t[2]]) && loftmesh.TriangleCollapsed(sh.verts, t) {
 			return coilShell{}, fmt.Errorf(`%w: rounding the coil's station points collapsed its triangle %d`, ErrUnsupported, k)
 		}
 	}
 
-	// β (§5.4): every cell's departure — the helix sag at the matching
-	// parameter, the cell's largest corner rounding (the bilinear patch
-	// through the held corners against the one through the true corners), and
-	// the held triangles' twist against that patch — charged to each of its
-	// four corners.
+	// β (§5.4): every cell's departure — the analytic leg of its segment
+	// (coil.CellDepartureUpper: sag, twist and shift under the shifted
+	// correspondence, carried through L by its stretch) plus the cell's
+	// largest corner rounding — charged to each of its four corners. The
+	// analytic leg depends on the segment and the station step alone, so it
+	// is read once per segment.
 	sh.vertexBound = append([]float64(nil), round...)
 	dt := new(big.Rat).Quo(rec.turns, big.NewRat(n, 1))
+	analytic := make([]float64, stride)
+	for _, idx := range rec.loopIdx {
+		m := len(idx)
+		for k := range m {
+			v, w := idx[k], idx[(k+1)%m]
+			dep, ok := coil.CellDepartureUpper(rec.rho[v], rec.rho[w], rec.pitch, dt)
+			if !ok {
+				return coilShell{}, fmt.Errorf(`%w: coil profile segment %d is not proven off the axis`, ErrUnsupported, v)
+			}
+			analytic[v] = proofbound.ProductUpper(proofbound.RatFloatUp(dep), rec.stretch)
+			if proofbound.IsNonFinite(analytic[v]) {
+				return coilShell{}, fmt.Errorf(`%w: a coil wall cell states no finite departure`, ErrUnsupported)
+			}
+		}
+	}
 	for j := range n {
 		if err := ctx.Err(); err != nil {
 			return coilShell{}, err
@@ -277,21 +356,12 @@ func buildCoilShell(ctx context.Context, rec coilRecord) (coilShell, error) {
 			m := len(idx)
 			for k := range m {
 				v, w := idx[k], idx[(k+1)%m]
-				rhoMax := rec.rho[v].Hi
-				if rec.rho[w].Hi.Cmp(rhoMax) > 0 {
-					rhoMax = rec.rho[w].Hi
-				}
-				sag := proofbound.RatFloatUp(coil.SagUpper(rhoMax, dt))
 				corners := [4]int{sh.at(j, v), sh.at(j+1, v), sh.at(j, w), sh.at(j+1, w)}
 				cellRound := 0.0
 				for _, c := range corners {
 					cellRound = math.Max(cellRound, round[c])
 				}
-				twist := proofbound.CellTwistOffsetUpper(sh.verts[corners[0]], sh.verts[corners[1]], sh.verts[corners[2]], sh.verts[corners[3]])
-				departure := proofbound.AbsSumUpper(sag, cellRound, twist)
-				if math.IsNaN(departure) || math.IsInf(departure, 0) {
-					return coilShell{}, fmt.Errorf(`%w: a coil wall cell states no finite departure`, ErrUnsupported)
-				}
+				departure := proofbound.AbsSumUpper(analytic[v], cellRound)
 				for _, c := range corners {
 					sh.vertexBound[c] = math.Max(sh.vertexBound[c], departure)
 				}
@@ -318,6 +388,32 @@ func buildCoilShell(ctx context.Context, rec coilRecord) (coilShell, error) {
 	return sh, nil
 }
 
+// coilTriangleOpen is a float certificate that a held triangle is NOT
+// collapsed: one coordinate plane's 2D orientation determinant of its corners
+// whose float value exceeds that evaluation's own error bound. The products
+// are rounded by explicit conversions, so the bound below holds for the
+// operations as written: each difference, each product and the final
+// difference round once, and |error| ≤ 4u·(|l| + |r|) with u = 2⁻⁵³ is far
+// inside the 1e-15 factor read here. A tiny sum, where underflow could break
+// that relative bound, certifies nothing. False proves nothing; the caller
+// then asks the exact test.
+func coilTriangleOpen(a, b, c r3.Vec) bool {
+	pa, pb, pc := [3]float64{a.X, a.Y, a.Z}, [3]float64{b.X, b.Y, b.Z}, [3]float64{c.X, c.Y, c.Z}
+	for i := range 3 {
+		j := (i + 1) % 3
+		l := float64((pb[i] - pa[i]) * (pc[j] - pa[j]))
+		r := float64((pb[j] - pa[j]) * (pc[i] - pa[i]))
+		sum := math.Abs(l) + math.Abs(r)
+		if !(sum > 0x1p-900) || proofbound.IsNonFinite(sum) {
+			continue
+		}
+		if math.Abs(float64(l-r)) > 1e-15*sum {
+			return true
+		}
+	}
+	return false
+}
+
 // coilHeld rounds an interval to its nearest float with the exact outward
 // error, refusing a non-finite value (CS10).
 func coilHeld(x coil.Iv, what string) (float64, float64, error) {
@@ -330,13 +426,4 @@ func coilHeld(x coil.Iv, what string) (float64, float64, error) {
 		return 0, 0, fmt.Errorf(`%w: the coil's %s has no finite bound`, ErrUnsupported, what)
 	}
 	return held, bound, nil
-}
-
-// coilRatHeld is coilHeld over an exact rational.
-func coilRatHeld(x *big.Rat, what string) (float64, float64, error) {
-	held, _ := x.Float64()
-	if math.IsNaN(held) || math.IsInf(held, 0) {
-		return 0, 0, fmt.Errorf(`%w: the coil's %s is not finite`, ErrUnsupported, what)
-	}
-	return held, proofarith.RationalFloatError(x, held), nil
 }

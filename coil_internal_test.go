@@ -619,12 +619,52 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, placedA.payload.(coilPayload).verts, placedB.payload.(coilPayload).verts)
 
+	// L = rot·[U V N] is orthonormal only to rounding, so the placed coil
+	// denotes the affine image of the unplaced one: its volume is det(L)
+	// times the unplaced closed form and a cap's area is |L·U × L·V| times
+	// the recorded one. Both are read here off the placement's own floats as
+	// exact rationals, independently of the build.
+	basis := rot.Basis()
+	col := func(v r3.Vec) [3]*big.Rat {
+		return [3]*big.Rat{new(big.Rat).SetFloat64(v.X), new(big.Rat).SetFloat64(v.Y), new(big.Rat).SetFloat64(v.Z)}
+	}
+	ex, ey, ez := col(basis.EX), col(basis.EY), col(basis.EZ)
+	cross := func(a, b [3]*big.Rat) [3]*big.Rat {
+		c := func(i, j int) *big.Rat {
+			return new(big.Rat).Sub(new(big.Rat).Mul(a[i], b[j]), new(big.Rat).Mul(a[j], b[i]))
+		}
+		return [3]*big.Rat{c(1, 2), c(2, 0), c(0, 1)}
+	}
+	dot := func(a, b [3]*big.Rat) *big.Rat {
+		out := new(big.Rat)
+		for i := range 3 {
+			out.Add(out, new(big.Rat).Mul(a[i], b[i]))
+		}
+		return out
+	}
+	det := dot(ex, cross(ey, ez))
+	require.NotZero(t, det.Cmp(big.NewRat(1, 1)), "the fixture's rotation must not be exactly orthonormal")
+	pcp := placedA.payload.(coilPayload)
+	prec, err := readCoilRecord(pcp)
+	require.NoError(t, err)
+	pm := coil.RegionMoments(prec.rho, prec.zeta, prec.loopIdx, big.NewRat(1, 1), prec.axis.Side)
+	wantVol := new(big.Float).SetPrec(512).Mul(bigPi(), big.NewFloat(12.5))
+	wantVol.Mul(wantVol, new(big.Float).SetPrec(512).SetRat(det))
+	requireIntervalHolds(t, coilVolume(prec, pm), wantVol, "placed volume enclosure")
+	ux := cross(ex, ey)
+	capScale := new(big.Float).SetPrec(512).SetRat(dot(ux, ux))
+	capScale.Sqrt(capScale)
+	capArea, err := coilFace(t, placedA, roleCapStart).Area()
+	require.NoError(t, err)
+	requireEnclosesBig(t, capArea.Value.Base(), capArea.Bound.Base(), capScale, "placed cap area")
+
+	// Volume and area stay within both bodies' bounds of the unplaced ones.
 	pv, err := placedA.Volume()
 	require.NoError(t, err)
-	require.Equal(t, fv, pv)
+	require.LessOrEqual(t, math.Abs(pv.Value.Base()-fv.Value.Base()), pv.Bound.Base()+fv.Bound.Base())
 	pa, err := placedA.Area()
 	require.NoError(t, err)
-	require.Equal(t, fa, pa)
+	require.LessOrEqual(t, math.Abs(pa.Value.Base()-fa.Value.Base()), pa.Bound.Base()+fa.Bound.Base())
 	pc, err := placedA.Centroid()
 	require.NoError(t, err)
 	moved := rot.Apply(fc.Value)
@@ -646,4 +686,118 @@ func TestCoilTessellationIsStaged(t *testing.T) {
 	require.NoError(t, err)
 	_, err = b.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.True(t, errors.Is(err, ErrUnsupported))
+}
+
+// closestOnTriangle is the distance from p to the closed triangle abc,
+// Ericson's Voronoi-region walk in float64.
+func closestOnTriangle(p, a, b, c r3.Vec) float64 {
+	ab, ac, ap := b.Sub(a), c.Sub(a), p.Sub(a)
+	d1, d2 := ab.Dot(ap), ac.Dot(ap)
+	if d1 <= 0 && d2 <= 0 {
+		return ap.Len()
+	}
+	bp := p.Sub(b)
+	d3, d4 := ab.Dot(bp), ac.Dot(bp)
+	if d3 >= 0 && d4 <= d3 {
+		return bp.Len()
+	}
+	vc := d1*d4 - d3*d2
+	if vc <= 0 && d1 >= 0 && d3 <= 0 {
+		return p.Sub(a.Add(ab.Scale(d1 / (d1 - d3)))).Len()
+	}
+	cp := p.Sub(c)
+	d5, d6 := ab.Dot(cp), ac.Dot(cp)
+	if d6 >= 0 && d5 <= d6 {
+		return cp.Len()
+	}
+	vb := d5*d2 - d1*d6
+	if vb <= 0 && d2 >= 0 && d6 <= 0 {
+		return p.Sub(a.Add(ac.Scale(d2 / (d2 - d6)))).Len()
+	}
+	va := d3*d6 - d5*d4
+	if va <= 0 && d4-d3 >= 0 && d5-d6 >= 0 {
+		w := (d4 - d3) / ((d4 - d3) + (d5 - d6))
+		return p.Sub(b.Add(c.Sub(b).Scale(w))).Len()
+	}
+	denom := 1 / (va + vb + vc)
+	return p.Sub(a.Add(ab.Scale(vb * denom)).Add(ac.Scale(vc * denom))).Len()
+}
+
+// TestCoilFacetBoundHoldsTheSurface samples the true helicoidal wall of
+// every cell of each fixture — Φ evaluated in float64 straight from §3's
+// formula — and asserts each sample lies within the cell's facet bound (the
+// largest β over its four corners) of the cell's two held triangles. It is a
+// falsifier of docs/helix-design.md §5.4's β, never its proof. Legs shown to
+// fail by deleting them and watching this test go red, then restoring them:
+//
+//   - the twist leg of coil.CellDepartureUpper: the annular walls of every
+//     fixture went red;
+//   - the sag leg: the split band's middle band went red.
+//
+// The wide profile ρ ∈ [2, 4] read Suspect on Bounds under the matched-corner
+// bound |Δρ|·sin(π/256)/2 ≈ 1.2e-2 mm against a tolerance near 9e-3 mm; it
+// verifies Sound under the shifted correspondence.
+func TestCoilFacetBoundHoldsTheSurface(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		loop  [][2]float64
+		turns float64
+	}{
+		{"square spring", [][2]float64{{2, 0}, {3, 0}, {3, 1}, {2, 1}}, 2},
+		{"wide profile", [][2]float64{{2, 0}, {4, 0}, {4, 1}, {2, 1}}, 1.5},
+		{"near the axis", [][2]float64{{0.5, 0}, {3, 0}, {3, 1}, {0.5, 1}}, 1},
+		// The band between ζ = 0.3 and ζ = 0.6 touches no annular wall, so
+		// its facet bound is its own sag and rounding alone.
+		{"split band", [][2]float64{{2, 0}, {3, 0}, {3, 0.3}, {3, 0.6}, {3, 1}, {2, 1}}, 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s, p := coilLoopsSketch(t, c.loop)
+			doc := New()
+			const pitch = 1.5
+			b, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(pitch), units.Scalar(c.turns))
+			require.NoError(t, err)
+			cp := b.payload.(coilPayload)
+			rec, err := readCoilRecord(cp)
+			require.NoError(t, err)
+			stride, n := len(rec.pts), rec.n
+			k := pitch / (2 * math.Pi)
+			theta := 2 * math.Pi * c.turns
+			worst := 0.0
+			for j := range n {
+				idx := rec.loopIdx[0]
+				for kk := range stride {
+					v, w := idx[kk], idx[(kk+1)%stride]
+					pv, pw := rec.pts[v], rec.pts[w]
+					corners := []int{int(j)*stride + v, int(j)*stride + w, int(j+1)*stride + v, int(j+1)*stride + w}
+					facet := 0.0
+					for _, q := range corners {
+						facet = math.Max(facet, cp.vertexBound[q])
+					}
+					cell := 2 * (int(j)*stride + kk)
+					tris := [][3]int{cp.tris[cell], cp.tris[cell+1]}
+					for _, l := range []float64{0, 0.25, 0.5, 0.75, 1} {
+						for _, sf := range []float64{0, 0.2, 0.4, 0.5, 0.6, 0.8, 1} {
+							rho := pv.U + l*(pw.U-pv.U)
+							zeta := pv.V + l*(pw.V-pv.V)
+							th := theta * (float64(j) + sf) / float64(n)
+							q := r3.NewVec(rho*math.Cos(th), zeta+k*th, -rho*math.Sin(th))
+							d := math.Inf(1)
+							for _, tri := range tris {
+								d = math.Min(d, closestOnTriangle(q, cp.verts[tri[0]], cp.verts[tri[1]], cp.verts[tri[2]]))
+							}
+							// The sample's own float evaluation is off by a few ulps.
+							require.LessOrEqual(t, d, facet+1e-12, "cell %d of segment %d at (%v, %v)", j, v, l, sf)
+							worst = math.Max(worst, d/facet)
+						}
+					}
+				}
+			}
+			require.Positive(t, worst)
+			rep, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			if c.name != "near the axis" {
+				require.Equal(t, Sound, rep.Status)
+			}
+		})
+	}
 }

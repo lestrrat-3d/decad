@@ -1124,6 +1124,7 @@
 5	0.01	TestClassBCrossingSlotFloorCornersReadConcave
 5	0.01	TestClassBRootedCutKeepsThePrismsConvexity
 5	0.62	TestCoilBoundsEncloseTheSolid
+5	0.60	TestCoilFacetBoundHoldsTheSurface
 5	0.24	TestCoilSquareSpring
 3	0.01	TestLoftFreeformWalkBisectsOnMatched
 5	1.70	TestLoftSweepEnumeratesEveryTouchingPair

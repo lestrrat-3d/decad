@@ -190,7 +190,7 @@ The existence rule applies: a requested solid that does not exist is
 | **CS7** | a profile segment, on any loop, that is not a `LineSeg` (PR 1), or not a `LineSeg`, `ArcSeg` or `CircleSeg` (PR 3 onward); a trimmed `LineSeg`, or a loop whose recorded segment ends do not meet exactly, which has no exact recorded polygon vertex for station 0 to hold (no increment lifts this) | `ErrUnsupported` |
 | **CS8** | the station count `N = ⌈turns · coilStationsPerTurn⌉` exceeds `maxCoilStations`, or the wall and cap triangle count exceeds `maxCoilFacets = 1 << 20` | `ErrUnsupported` (a resource ceiling) |
 | **CS9** | the held crossing audit proves two non-adjacent held triangles meet; or its pair budget runs out | `ErrUnsupported` in both arms: CP5 has already proven the TRUE solid simple, so a held crossing is a station artefact (two true turns closer than twice the chord departure), never a defect of the solid |
-| **CS10** | a computed station, vertex, reading or bound is non-finite, or a held triangle collapses from rounding | `ErrUnsupported` |
+| **CS10** | a computed station, vertex, reading or bound is non-finite, a held triangle collapses from rounding, or the denoted map's orthonormality defect (§5.3) is at or above `1/2` | `ErrUnsupported` |
 | **CS11** | `WithSurfaceResult()` — it is not a `CoilOption`, so this is a compile-time refusal, stated here so no later increment admits it silently | — |
 
 Gate order is normative:
@@ -237,16 +237,19 @@ rational.
 `1 << 15`; the defining source constants own both values and their
 derivation. At 256 stations per turn the helix sag (§5.4) is
 `ρ_max · π²/(2·256²) ≈ 7.5e-5 · ρ_max`. The twist term is first order in
-the station step: a segment whose two ends sit at different radii carries
-`|Δρ| · sin(π/256)/2 ≈ 6.1e-3 · |Δρ|`, so `δ` is dominated by the profile's
-radial extent, not by the sag. The square spring of §13 reads
-`δ ≈ 6.4e-3 mm` against a gate diameter near 8.5 mm, inside the default
-`Verify` tolerance (`docs/verification-design.md` §2); a profile whose radial
-extent approaches its outer radius reads `Bounds` past that tolerance and
-verifies `Suspect`. Only `Bounds` and the faceted bounds carry `δ`; the three
-other readings are closed forms. The cap admits 128 turns of any profile,
-and the facet-pair budget (`proofbound.MaxFacetPairTestsPerCall`) bounds what
-the audit can run.
+the station step, but §5.4's shifted correspondence moves its tangential
+part along the true surface and leaves only the part normal to it: a segment
+whose ends sit at radii `ρ_min < ρ_max` carries about
+`|Δρ| · (π/256)/2 · (π/256 + k/ρ_min)` while `|Δρ| ≤ ρ_min`. The square
+spring of §13 reads `δ ≈ 1.04e-3 mm`, and a profile `ρ ∈ [2, 4]` reads
+`δ ≈ 1.95e-3 mm`, each inside the default `Verify` tolerance
+(`docs/verification-design.md` §2). A profile whose radial run exceeds its
+inner radius loses part of that gain (§5.4's `c < 1`) and can still read
+`Bounds` past the tolerance and verify `Suspect`: the profile
+`ρ ∈ [0.5, 3]` reads `δ ≈ 1.4e-2 mm`. Only `Bounds` and the faceted bounds
+carry `δ`; the three other readings are closed forms. The cap admits 128
+turns of any profile, and the facet-pair budget
+(`proofbound.MaxFacetPairTestsPerCall`) bounds what the audit can run.
 
 ### 5.3 Held vertices
 
@@ -260,15 +263,42 @@ The build evaluates it in the plane frame's coordinates as
 `p_v + ρ_v·(cos θ_j − 1)·e_r + pitch·t_j·d` in the plane and
 `σ·Side·ρ_v·sin θ_j` along the plane normal, since `e_t = Side·N`; the
 recorded point `p_v` is exact, so station 0 and every whole turn's station
-carry no axis-frame width. The frame's held `U`, `V`, `N` and the placement's
-held basis and translation are read as exact rationals, the convention the
-loft lift and the mitred placement already follow. Every term is an
-interval: `ρ_v`, `e_r` and `d` carry the axis frame's own bounds, and
-`cos θ_j`, `sin θ_j` the trig enclosure. Each coordinate is held as the nearest float to the
-interval's midpoint, and `round(v, j)` is `proofbound.IntervalFloatError`'s
-outward distance from the held coordinate to the far end of the interval,
-read per coordinate and turned into a 3D radius by `proofbound.Radius3D`.
-Station 0 holds the recorded lift exactly where the lift is exact (CP2).
+carry no axis-frame width.
+
+**The denoted map.** The frame's held `U`, `V`, `N` and the placement's held
+basis and translation are read as exact rationals, the convention the loft
+lift and the mitred placement already follow: the coil denotes the image of
+the plane-coordinate screw sweep under the affine map
+`x ↦ O + L·x`, `L = B·[U V N]`. r3 does not make `L` exactly orthonormal.
+`r3.NewFrame` and `r3.FromBasis` normalize in float64, so each stored axis is
+unit and orthogonal only to a few ulps, and `IsValid` admits a departure up
+to `1e-9`; `N` is the float cross product `U × V`. The build therefore reads
+two numbers off `L`'s exact columns: `det L`, exactly, and the orthonormality
+defect `e`, the entrywise absolute sum of `LᵀL − I`. Every eigenvalue of
+`LᵀL` lies in `[1 − e, 1 + e]`, so `L` scales a length and an area by a
+factor in `[1 − e, 1 + e]` and a volume by exactly `|det L|`. Table CM
+charges both: `Volume` is `|det L|·Θ·Q`; every area and length closed form
+is widened to `[lo·(1 − e), hi·(1 + e)]`; §5.4's analytic legs, derived in
+plane coordinates, are multiplied by `1 + e`. The centroid of an affine image
+is the image of the centroid, so `Centroid` maps the plane-coordinate closed
+form through `L` exactly and needs no charge. An axis-aligned sketch plane
+with the identity placement has `det L = 1` and `e = 0` exactly, and every
+reading is then the plane-coordinate closed form unchanged. A defect at or
+above `1/2` refuses `ErrUnsupported` (CS10); r3's own `1e-9` admission keeps
+every real frame far below it.
+
+**The held coordinates.** Each per-vertex term `P_v`, `B_v`, `S_v`, each
+station's `cos θ_j − 1`, `sin θ_j` and slide `t_j·D` is an exact interval,
+held once as the float nearest its midpoint with the outward distance to its
+far end. The station point is then evaluated in float64,
+`P_v + (cos θ_j − 1)·B_v + t_j·D + sin θ_j·S_v`, each product and sum rounded
+once by an explicit conversion so no step fuses into another, and its bound
+charges both operands' bounds and that operation's exact rounding
+(`coil.Mul`, `coil.Add`; the exact residual comes from `math.FMA` or TwoSum).
+`round(v, j)` is the largest coordinate's bound, turned into a 3D radius by
+`proofbound.Radius3D`. Station 0 holds the recorded lift `P_v` exactly where
+the lift is exact (CP2): every other term is an exact zero there, and adding
+an exact zero rounds nothing.
 
 The held vertex table is station-major: vertex `v` of station `j` is index
 `j · stride + v`, with `stride` the profile's vertex count over every loop,
@@ -284,20 +314,65 @@ per turn fraction `Δt = turns / N`. The held cell is the two triangles the
 quad splits into along the diagonal `tessellate.go` uses for a prism's
 lateral quad.
 
+Write `h = Δθ/2 = π·Δt`, `k = pitch/2π`, `Δρ = ρ_w − ρ_v`,
+`ρ_min`/`ρ_max` the smaller/larger of the cell's two radii, and parametrize
+the cell by `(λ, s) ∈ [0, 1]²` with `θ(s) = θ_j + 2h·s`. The held point at
+`(λ, s)` is the barycentric point of the two held triangles (the diagonal
+runs from `(0, 0)` to `(1, 1)`); `Tri(λ, s)` is the same point on the four
+TRUE corners, `B(λ, s)` the bilinear patch through them and `S(λ, θ)` the
+true surface. On the cell, `Tri − B = m·T` with
+`m = min(s(1 − λ), λ(1 − s)) ≤ 1/4` and the true twist vector
+`T = Δρ·(e(θ_{j+1}) − e(θ_j)) = 2Δρ·sin h·t̂(θ_mid)`, which is TANGENT to
+the helix: the matched-parameter twist `|T|/4 = |Δρ|·sin h/2` is first order
+in the step but lies almost entirely along the true surface.
+
+**The shifted correspondence.** Map the held point at `(λ, s)` to
+`H(λ, s) = S(λ, θ(s) + ε)` with `ε = c·m·2Δρ·sin h / ρ(λ)` and
+`c = min(1, ρ_min/|Δρ|)`. `ε` vanishes on the cell's boundary, so `H` agrees
+across cells and with the matched map on every edge; `c` keeps
+`|ε| ≤ 2h·min(s, 1 − s)`, so `θ(s) + ε` stays in the cell's own angular
+span and `H` lands on the true cell. The map `(λ, s) ↦ (λ, θ(s) + ε)` is the
+identity on the square's boundary up to the affine `θ(s)`, so it has degree
+one onto the parameter rectangle and `H` reaches EVERY true point of the
+cell: the correspondence is two-sided without any monotonicity argument.
+Expanding `S` in `θ` to second order (`∂θS = ρ·t̂ + k·n`, `|∂²θS| = ρ`):
+
+```text
+Tri − H = (B − S(λ, θ(s)))
+        + m·2Δρ·sin h·[(1 − c)·t̂(θ_mid) + c·(t̂(θ_mid) − t̂(θ(s))) − c·(k/ρ(λ))·n]
+        − R₂,          |R₂| ≤ ε²·ρ(λ)/2
+```
+
+with `|t̂(θ_mid) − t̂(θ(s))| ≤ h`. The `n` component is the part of the
+twist normal to the true surface, scaled by `k/ρ` against the tangential
+part the shift absorbs.
+
 | Term | Bounds | Derivation | Rounding |
 |---|---|---|---|
-| `sag(cell)` | the distance from any true point of the cell to the bilinear patch through its four TRUE corners, at the matching `(λ, θ)` | each helix arc departs from the linear interpolation of its chord at the same `θ` by at most `ρ·Δθ²/8`, since its circular part has curvature vector of length `ρ` (the slide is linear in `θ` and the chord interpolates it exactly), and a ruling between two arc points lies within the larger of its ends' departures of the ruling between the chord points; take `ρ_max(cell)·π²·Δt²/2` with `π`'s upper end. The sagitta `ρ·(1 − cos(Δθ/2))` bounds the arc's midpoint only, not the matched departure at every `θ` | up |
-| `twist(cell)` | the distance between the bilinear patch through the four HELD corners and the two held triangles | `proofbound.CellTwistOffsetUpper` over the four held corners (loft §5.2's own term, unchanged) | up |
+| `sag(cell)` | `\|B − S(λ, θ(s))\|` | each helix arc departs from the linear interpolation of its chord at the same `θ` by at most `ρ·(2h)²/8`, since its circular part has curvature vector of length `ρ` (the slide is linear in `θ` and the chord interpolates it exactly), and `S` and `B` are both linear in `λ` between the two arcs; take `ρ_max·h²/2`. The sagitta `ρ·(1 − cos h)` bounds the arc's midpoint only, not the matched departure at every `θ` | up |
+| `twist(cell)` | the bracket above | `\|Δρ\|·h/2·((1 − c) + c·(h + k/ρ_min))`, from `m ≤ 1/4` and `sin h ≤ h` | up |
+| `shift(cell)` | `\|R₂\|` | `c²·Δρ²·h²/(8·ρ_min)`, from `\|ε\| ≤ c·\|Δρ\|·sin h/(2ρ(λ))` | up |
 | `round(v, j)` | the held corner's distance from the point `X(v, j)` denotes | §5.3 | up |
-| `β(v, j)` | the per-vertex bound of `docs/faceted-vertex-bounds-design.md` §2 | the largest `sag + maxRound + twist` over the cells that touch the vertex, where `maxRound` is the cell's largest corner `round`: the bilinear patch through the held corners lies within it of the one through the true corners. It is never below `round(v, j)`; a cap vertex touches cells on one side only | `absSumUpper` |
+| `β(v, j)` | the per-vertex bound of `docs/faceted-vertex-bounds-design.md` §2 | the largest `(1 + e)·(sag + twist + shift) + maxRound` over the cells that touch the vertex, where `maxRound` is the cell's largest corner `round` (the held triangles lie within it of `Tri`, by convexity) and `1 + e` carries the plane-coordinate legs through `L` (§5.3). It is never below `round(v, j)`; a cap vertex touches cells on one side only | `absSumUpper` |
 | `δ` | the payload's displacement | the largest `β` over the table | max |
+
+`coil.CellDepartureUpper` evaluates `sag + twist + shift` exactly over the
+radii's interval ends, once per segment: the three legs depend on the
+segment and the station step alone. Every interval end is read on the side
+that makes the sum larger, and `c` is computed from the same ends, so the
+`c` the bound uses satisfies the range condition for the true radii too.
 
 `β` folds each facet's own departure into every corner, which is what
 `docs/faceted-vertex-bounds-design.md` §2.1 requires of a curved payload
-that publishes a per-vertex record: every true point of a cell is within
-`sag + twist` of the held cell under the `(λ, θ)` correspondence, and every
-held point within the same distance of a true point, so the facet bound
-`max corner β` is two-sided.
+that publishes a per-vertex record: every held point of a cell is within its
+cell's departure of a true point under `H`, and every true point of the cell
+is `H` of a held point, so the facet bound `max corner β` is two-sided.
+
+The matched-parameter correspondence `(λ, s) ↦ S(λ, θ(s))` stays the one
+§8.1 and §8.2 integrate over; its displacement is `sag + maxRound +
+twistHeld`, with `twistHeld` the held corners' own
+`proofbound.CellTwistOffsetUpper`. It is several times wider than `β` on a
+cell with a radial run, and only those two sums read it.
 
 ### 5.5 Triangles, orientation and the crossing audit
 
@@ -321,15 +396,17 @@ mesh consumer (`BoundaryVerified`, the boolean) reads.
 
 ### 5.6 Placement
 
-A placement re-runs §5.1–§5.5 from the record under the composed motion:
-`C`, `n`, `e_r` and `e_t` are mapped through the transform with
-`proofbound.DirRoundAllow`'s own charge on the frame vectors, the stations
-and trig are recomputed, and the held table, `β`, `δ`, orientation and
-audit are rebuilt. `δ` never accumulates across placements. The four
-readings are re-derived from the closed forms under the composed motion:
-`Volume` and `Area` are invariant; `Centroid` maps the unplaced centroid
-through the motion with its own rounding charge; `Bounds` reads the new
-held table.
+A placement re-runs §5.1–§5.5 from the record under the composed map
+`L = B·[U V N]` with the composed translation, both read exactly (§5.3):
+the stations and trig are recomputed, and the held table, `β`, `δ`,
+orientation and audit are rebuilt. `δ` never accumulates across placements.
+The four readings are re-derived from the closed forms under the composed
+map: `Volume` is the plane-coordinate closed form times the composed
+`|det L|`, and `Area` the plane-coordinate closed forms widened by the
+composed defect, so each stays within both bodies' bounds of the unplaced
+reading and is bit-identical only when the placement's basis is exactly
+orthonormal; `Centroid` is the composed image of the plane-coordinate
+centroid, rounded once; `Bounds` reads the new held table.
 
 ## 6. Table CB — the result
 
@@ -373,9 +450,9 @@ is the exact shoelace area of the recorded vertices.
 
 | Reading | Closed form | Exactness and bound |
 |---|---|---|
-| `Volume` | `Θ · Q = 2π · turns · Q` (CP4, Pappus) | `Approximate` always: `2π` enters through `proofbound.TwoPiInterval`, and the bound is that enclosure's width times `turns · Q` plus the moment's own bound, through `proofbound.BoundedMul`. Relative width is of order `1e-16` |
-| `Centroid` | `C + (I/Q)·(sin Θ / Θ)·e_r + σ·(I/Q)·((1 − cos Θ)/Θ)·e_t + (M/Q + pitch·turns/2)·n` | `sin Θ`, `cos Θ` from `TurnSinCosInterval(turns)`; at a whole number of turns both are exact and the transverse terms vanish, leaving `C + (M/Q + pitch·turns/2)·n`, which is `Exact` when the frame is exact and the rationals round exactly |
-| `Area` | `2·A_Ω` for the two caps, plus per segment `v → w` with `Δρ = ρ_w − ρ_v`, `Δζ = ζ_w − ζ_v`, `L² = Δρ² + Δζ²`: for `Δρ = 0`, `Θ · ρ_v · \|Δζ\|`; otherwise `(1 / (L·\|Δρ\|)) · [ Θ·(F₁ − F₀) + (turns · pitch² · Δρ² / 4π) · (asinh(u₁/m) − asinh(u₀/m)) ]` with `u = L·ρ`, `u₀ ≤ u₁`, `m = k·\|Δρ\|`, `F(u) = (u/2)·sqrt(u² + m²)`. Where `Δρ`'s enclosure contains zero without being exactly zero (a segment parallel to a tilted axis), the integrand lies between `L·ρ` and `L·ρ + m²/(2·L·ρ_min)`, so the area lies between `Θ·L·(ρ_v + ρ_w)/2` and that plus `Θ·m²/(2·L·ρ_min)` | `Approximate`: the π enclosure, the certified square root (`proofbound.SqrtFixed`, new) and `proofbound.AsinhInterval` (new, §7.1) each contribute their width; a cylindrical band (`Δρ = 0`) carries the π enclosure alone |
+| `Volume` | `\|det L\| · Θ · Q = \|det L\| · 2π · turns · Q` (CP4, Pappus, under §5.3's map) | `Approximate` always: `2π` enters through `proofbound.TwoPiInterval` and `det L` is exact, so the enclosure is that interval times the exact `turns · Q · \|det L\|`, rounded once. Relative width is of order `1e-16` |
+| `Centroid` | `C + (I/Q)·(sin Θ / Θ)·e_r + σ·(I/Q)·((1 − cos Θ)/Θ)·e_t + (M/Q + pitch·turns/2)·n`, in plane coordinates, mapped through §5.3's `L` exactly | `sin Θ`, `cos Θ` from `TurnSinCosInterval(turns)`; at a whole number of turns both are exact and the transverse terms vanish, leaving `C + (M/Q + pitch·turns/2)·n`, which is `Exact` when the frame is exact and the rationals round exactly |
+| `Area` | `2·A_Ω` for the two caps, plus per segment `v → w` with `Δρ = ρ_w − ρ_v`, `Δζ = ζ_w − ζ_v`, `L² = Δρ² + Δζ²`: for `Δρ = 0`, `Θ · ρ_v · \|Δζ\|`; otherwise `(1 / (L·\|Δρ\|)) · [ Θ·(F₁ − F₀) + (turns · pitch² · Δρ² / 4π) · (asinh(u₁/m) − asinh(u₀/m)) ]` with `u = L·ρ`, `u₀ ≤ u₁`, `m = k·\|Δρ\|`, `F(u) = (u/2)·sqrt(u² + m²)`. Where `Δρ`'s enclosure contains zero without being exactly zero (a segment parallel to a tilted axis), the integrand lies between `L·ρ` and `L·ρ + m²/(2·L·ρ_min)`, so the area lies between `Θ·L·(ρ_v + ρ_w)/2` and that plus `Θ·m²/(2·L·ρ_min)` | `Approximate`: the π enclosure, the certified square root (`proofbound.SqrtFixed`, new) and `proofbound.AsinhInterval` (new, §7.1) each contribute their width; a cylindrical band (`Δρ = 0`) carries the π enclosure alone. Every area, and every rim and helix edge length, is then widened to `[lo·(1 − e), hi·(1 + e)]` by §5.3's defect, a no-op when `e = 0` |
 | `Bounds` | per-axis extremes over the held vertex table, widened outward by `δ` | `Approximate` with bound `δ` plus the largest station rounding plus the widening's outward step: the box holds the true body, and every held vertex is within its own rounding of a true point; `Exact` only when `δ = 0`, which no coil reaches |
 
 The area integrand is derived once: `∂Φ/∂λ = Δρ·e_r(θ) + Δζ·n` and
@@ -450,10 +527,11 @@ and the two bodies share it up to `round`): the true body is the union of
 wedges `W_j = Φ(Ω × [θ_j, θ_{j+1}])` and the held shell the union of the
 prismatoids `P_j` between consecutive held sections. `B △ M ⊂ ⋃ (W_j △ P_j)`,
 and each `W_j △ P_j` is swept by the lateral homotopy between the true cell
-and its held triangles, whose every point moves at most `sag + twist`. So
+and its held triangles under §5.4's matched-parameter correspondence, whose
+every point moves at most `sag + twistHeld`. So
 
 ```text
-volSymDiff = Σ_cells (sag + twist)(cell) · rulingLenUpper(cell) · helixRateUpper(cell) · Δθ
+volSymDiff = Σ_cells (sag + twistHeld)(cell) · rulingLenUpper(cell) · helixRateUpper(cell) · Δθ
            + Σ_cells CellTwistVolumeAllow(cell)
            + sweptVolumeAllow(roundMax, sectionAreaUpper · (N + 1))
 ```
@@ -518,13 +596,16 @@ A coil built directly (no boolean) reads Table CM: `Volume` within
 
 Equal profile record, axis, pitch, turns, hand and placement produce the
 same stations, held table, triangle order, roles and readings: every trig
-value is a fixed-precision enclosure's midpoint, so no step reads a
-transcendental library or depends on FMA contraction. The build polls `ctx`
+value is a fixed-precision enclosure's midpoint, and every float product and
+sum of §5.3's station evaluation is rounded by an explicit conversion, so no
+step reads a transcendental library or depends on FMA contraction. The build polls `ctx`
 per station ring, inside the audit's pair loop and per segment of the area
 sum, and returns `ctx.Err()` unchanged. CS8's caps bound `N` and the facet
 count before any allocation; the trig enclosure runs once per station
-(`N + 1` calls, each a fixed 200-bit series), and the audit's work is
-charged against `proofbound.MaxFacetPairTestsPerCall`.
+(`N + 1` calls, each a fixed 200-bit series), every vertex costs a dozen
+float operations, and the audit's work is charged against
+`proofbound.MaxFacetPairTestsPerCall`. The crossing audit's exact pair
+classifications take most of a build's time.
 
 ## 11. Increments
 
@@ -642,7 +723,18 @@ PR 1:
   with `turns = 0.75` (builds); CS8 past `maxCoilStations`.
 - Repeated construction and `Placed` under a rotation reproduce
   bit-identical held tables, roles and readings; `Placed` keeps `Volume`
-  and `Area` bit-identical and maps `Centroid` within its bound.
+  and `Area` within both bodies' bounds and maps `Centroid` within its
+  bound. Under that rotation, `Volume`'s exact enclosure holds
+  `det L · 12.5π` and the start cap's `Area` holds `|L·U × L·V|`, each read
+  off the rotation's own floats as exact rationals. Legs shown to fail: the
+  `|det L|` factor, the cap area's defect widening.
+- §5.4's `β`: dense samples of every cell's true wall lie within the cell's
+  facet bound of its two held triangles, on the square spring, a profile
+  `ρ ∈ [2, 4]` (which verifies `Sound`), a profile `ρ ∈ [0.5, 3]`
+  (`c < 1`) and a profile whose middle band touches no annular wall; and
+  `coil.CellDepartureUpper` encloses the shifted correspondence's own
+  displacement, sampled over a cell of each segment kind. Legs shown to
+  fail: twist, sag, and twist's `(1 − c)` part.
 - `proofbound.LnInterval`/`AsinhInterval` as §7.1 states.
 - `Verify` on the spring: `Validity` proven, every reading within the
   default tolerance, `Status` `Sound`; the gate diameter equals the held

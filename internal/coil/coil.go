@@ -1,11 +1,14 @@
 // Package coil holds the pure arithmetic of docs/helix-design.md: the
 // station fractions and their trig, a profile vertex's axis coordinates, the
 // region's axis-frame moments, the four readings' closed forms and the cell
-// departure terms. Every function reads exact rationals or rational
-// intervals and returns an enclosure, so the root package only rounds.
+// departure terms. Every closed form reads exact rationals or rational
+// intervals and returns an enclosure; Held, Mul and Add carry a station
+// point's float evaluation beside a proven bound on its distance from that
+// enclosure.
 package coil
 
 import (
+	"math"
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -319,7 +322,8 @@ func HelixLength(rho Iv, pitch, turns *big.Rat) (Iv, bool) {
 }
 
 // SagUpper bounds how far a helix arc of radius at most rhoMax over one
-// station step of dt turns sits from its chord at the matching parameter:
+// station step of dt turns sits from its chord at the matching parameter, the
+// sag leg of CellDepartureUpper:
 // the arc's circular part has curvature vector of length ρ, so linear
 // interpolation over Δθ = 2π·dt departs by at most ρ·Δθ²/8 = ρ·π²·dt²/2,
 // read with π's upper end. The slide is linear in θ and departs by nothing.
@@ -329,6 +333,95 @@ func SagUpper(rhoMax, dt *big.Rat) *big.Rat {
 	out.Mul(out, new(big.Rat).Mul(dt, dt))
 	out.Mul(out, rhoMax)
 	return out.Quo(out, big.NewRat(2, 1))
+}
+
+// CellDepartureUpper bounds docs/helix-design.md §5.4's analytic departure of
+// one wall cell: profile segment v → w, at radii rhoV and rhoW, over one
+// station step of dt turns at the given pitch. Every point of the two
+// triangles on the cell's four TRUE corners lies within the returned distance
+// of the true helicoidal cell under §5.4's shifted correspondence, and every
+// point of that true cell is reached by it. The sum is
+//
+//	sag   = ρ_max·h²/2
+//	twist = |Δρ|·h/2·((1 − c) + c·(h + k/ρ_min))
+//	shift = c²·Δρ²·h²/(8·ρ_min)
+//
+// with h = π·dt, k = pitch/2π and c = min(1, ρ_min/|Δρ|), each read at the
+// end of its interval that makes the sum larger. ok is false when ρ_min is
+// not proven positive.
+func CellDepartureUpper(rhoV, rhoW Iv, pitch, dt *big.Rat) (*big.Rat, bool) {
+	rhoMin := rhoV.Lo
+	if rhoW.Lo.Cmp(rhoMin) < 0 {
+		rhoMin = rhoW.Lo
+	}
+	if rhoMin.Sign() <= 0 {
+		return nil, false
+	}
+	rhoMax := rhoV.Hi
+	if rhoW.Hi.Cmp(rhoMax) > 0 {
+		rhoMax = rhoW.Hi
+	}
+	out := SagUpper(rhoMax, dt)
+	dr := proofbound.IntervalAbsUpper(proofbound.IntervalSub(rhoW, rhoV))
+	if dr.Sign() == 0 {
+		return out, true
+	}
+	h := new(big.Rat).Mul(proofbound.PiUpper, dt)
+	k := new(big.Rat).Quo(pitch, new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiLower))
+	one := big.NewRat(1, 1)
+	c := new(big.Rat).Quo(rhoMin, dr)
+	if c.Cmp(one) > 0 {
+		c = one
+	}
+	// twist = |Δρ|·h/2·((1 − c) + c·(h + k/ρ_min))
+	inner := new(big.Rat).Add(h, new(big.Rat).Quo(k, rhoMin))
+	inner.Mul(inner, c)
+	inner.Add(inner, new(big.Rat).Sub(one, c))
+	twist := new(big.Rat).Mul(dr, h)
+	twist.Mul(twist, inner)
+	twist.Quo(twist, big.NewRat(2, 1))
+	// shift = c²·Δρ²·h²/(8·ρ_min)
+	cdh := new(big.Rat).Mul(c, dr)
+	cdh.Mul(cdh, h)
+	shift := new(big.Rat).Mul(cdh, cdh)
+	shift.Quo(shift, new(big.Rat).Mul(big.NewRat(8, 1), rhoMin))
+	out.Add(out, twist)
+	return out.Add(out, shift), true
+}
+
+// Held is the float nearest an interval's midpoint, carried with the
+// outward distance from it to the interval's far end: the bounded float every
+// point of the interval lies within. ok is false when either is not finite.
+func Held(x Iv) (proofbound.BoundedScalar, bool) {
+	held, _ := Mid(x).Float64()
+	if proofbound.IsNonFinite(held) {
+		return proofbound.BoundedScalar{}, false
+	}
+	bound := proofbound.IntervalFloatError(x, held)
+	if proofbound.IsNonFinite(bound) {
+		return proofbound.BoundedScalar{}, false
+	}
+	return proofbound.MeasuredScalar(held, bound), true
+}
+
+// Mul is a·b over bounded floats: the held product, rounded once by an
+// explicit conversion so no step fuses it into a later addition, and a bound
+// that charges both operands' bounds and that product's own exact rounding.
+func Mul(a, b proofbound.BoundedScalar) proofbound.BoundedScalar {
+	value := float64(a.Value * b.Value)
+	return proofbound.MeasuredScalar(value, proofbound.AbsSumUpper(
+		proofbound.ProductUpper(math.Abs(a.Value), b.Bound),
+		proofbound.ProductUpper(math.Abs(b.Value), a.Bound),
+		proofbound.ProductUpper(a.Bound, b.Bound),
+		proofarith.MulRoundError(a.Value, b.Value, value),
+	))
+}
+
+// Add is a + b over bounded floats, rounded once by an explicit conversion,
+// charging both bounds and the sum's own exact rounding.
+func Add(a, b proofbound.BoundedScalar) proofbound.BoundedScalar {
+	value := float64(a.Value + b.Value)
+	return proofbound.MeasuredScalar(value, proofbound.AbsSumUpper(a.Bound, b.Bound, proofarith.AddRoundError(a.Value, b.Value, value)))
 }
 
 // Mid is an interval's midpoint.
