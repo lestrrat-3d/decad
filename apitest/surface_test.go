@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -661,7 +662,13 @@ func TestSheetSolidPairSeparatedBoxesVerifySound(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 	require.Empty(t, report.Diagnostics)
 	require.Empty(t, report.Interferences)
-	requireExactGap(t, report, 90*math.Sqrt(2))
+	// The corners (10, 10) and (100, 100) lie 90·√2 = √16200 apart, which
+	// no float holds, so the row is an Approximate enclosure of it. Seen red
+	// before the cells read their distances as enclosures: the row read
+	// 127.27922061357856 Exact, 4.7e-15 off.
+	require.Len(t, report.Clearances, 1)
+	require.Equal(t, decad.Approximate, report.Clearances[0].Gap.Exactness)
+	requireGapEnclosesSurd(t, report.Clearances[0].Gap, new(big.Rat), 1, big.NewRat(16200, 1))
 	require.Same(t, sheet, report.Clearances[0].A)
 	require.Same(t, solid, report.Clearances[0].B)
 

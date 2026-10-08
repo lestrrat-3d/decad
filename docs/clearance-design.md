@@ -31,8 +31,9 @@ everywhere it does not look (§5), proves a minimum.
 
 **The answer is an interval, and exactness is the interval's, not the winning
 candidate's.** Every candidate distance the kernel computes is carried as a
-proven interval `[lo, hi]` — degenerate (`[v, v]`) when the candidate is
-closed-form, a certified bracket otherwise (§4/§5). The gap over a candidate
+proven interval `[lo, hi]` — for a closed-form candidate, its exact value
+enclosed by outward rounding, degenerate (`[v, v]`) only where a float holds
+that value; a certified bracket otherwise (§4/§5). The gap over a candidate
 set is the minimum of intervals: `Gap ∈ [min lo_i, min hi_i]`. The ideal
 midpoint is `(lo + hi)/2` and the ideal half-width is `(hi − lo)/2`. The row
 reports the computed midpoint and an outward bound covering the ideal
@@ -162,18 +163,16 @@ share this displacement and add only the float evaluation of their own
 centre (`docs/evaluator-design.md` §6). A cone carrier holds the slope the
 comparison reads (`clearance.CFace`'s `Rise` and `Run`), never a half angle:
 the cone cells take the half angle's sine, cosine and tangent, and a point's
-distance from the generating ray and its slant along it, off that slope in a
-few divisions and a square root (`CFace.ConeMeridian`), so the cone they read
-is the cone compared. For a point whose axial offset and radius are
-integers, against a Pythagorean slope, the distance is the correctly rounded
-truth. One rounding sits outside the comparison, the size of the float
-evaluation every cell commits again on the same carrier. A cap's in-plane
-direction is rounded from the held angle's cosine and sine: across the cap
-it tilts the plane by about 1e-16 radians, the size of the rounding the cells
-commit evaluating that plane's equation from its origin on the axis, and
-along the cap it moves only the trim, which changes a distance to second
-order. In fixtures 2²⁰ from their axis the truth sits at most a quarter of
-the published bound from the row's value. The cap's corners, where that
+distance from the generating ray and its slant along it, off that slope
+(`CFace.ConeDist` for the published distance, §5; `CFace.ConeMeridian` for
+the branch and the foot), so the cone they read is the cone compared. One
+rounding sits outside the comparison. A cap's in-plane direction is rounded
+from the held angle's cosine and sine: across the cap it tilts the plane by
+about 1e-16 radians, which the cells' charge for a plane normal off the
+coordinate axes covers (§5's `clearance.DirCharge`), and along the cap it
+moves only the trim, which changes a distance to second order. In fixtures
+2²⁰ from their axis the truth sits at most a quarter of the published bound
+from the row's value. The cap's corners, where that
 rounding moves a point to first order, are vertices, and their own bounds
 widen the row (§5).
 
@@ -593,6 +592,41 @@ trimmed inner face alone and asks the oracle nothing:
   failure is a loose bound — it costs refinement, never soundness — the same
   one-sided discipline as verification §4's noise floor, which may sit too
   low but never too high.
+- **A closed-form reading encloses its exact value.** Every closed-form
+  cell reads its distance off the carriers' floats as a proven interval
+  (`clearance.Dist`, `internal/clearance/cell_dist.go`). Sums, differences
+  and products are exact dyadic arithmetic, and each square root or
+  quotient is rounded outward by an exact comparison of its square. The
+  readings are:
+  - a vertex pair, `|a − b|`;
+  - a point over a plane, `(p − o)·n/|n|`;
+  - a point or a line against a line, the cross-product forms;
+  - a point against a circle, `√(z² + (ρ ∓ r)²)` over the enclosure of `ρ`;
+  - a circle's height amplitude above a plane, `r·|n × axis|/(|n|·|axis|)`;
+  - a cone's meridian distance, `|ρ·Run − z·Rise|/√(Rise² + Run²)` over the
+    enclosures of `ρ` and `z`;
+  - an offset face's radius, added or subtracted with outward rounding.
+
+  No reading takes a cosine, a sine or `math.Hypot`: a float critical
+  azimuth only places the foot that admission reads. The interval is a
+  single point only where a float holds the exact value, so such a row
+  stays `Exact`: two integer corners `13` apart, or a box face at `fl(0.3)`
+  from a rod of radius `fl(0.1)`. An irrational distance reads
+  `Approximate` at about an ulp: `√3` between integer corners, or
+  `3.5·√2 − 3` from a box edge to a rod. So does `1 − fl(0.3) − fl(0.6)`
+  between rods on axes `1` apart, which no float holds.
+
+  A reading through a direction other than a signed coordinate axis (a
+  slanted wall's normal, a tilted axis) is exact only over that float
+  direction. The direction itself sits a few roundings off the direction it
+  was built from. Such a reading is widened by `AnalyticRoundBound` over an
+  envelope of every point and radius it reads (`clearance.DirCharge`): the
+  tilt times any lever arm inside that envelope is far smaller. A box edge
+  `√2` from a slanted prism wall reads a bound of about `5e-13`. The coarse
+  enclosure charges the same envelope bound against its box distance and
+  its witness distance, because a box corner and a witness are floats a few
+  roundings off the hull and the face they stand for. The P4/P8 brackets
+  already carry the kernel's slack in their half-width.
 - **Pruning reads the bounds it just proved.** Body boxes prune first (the
   shipped `boxesDisjoint` machinery), then cells. The enumeration (§3) keeps
   `H`, the least `hi` among the contributions so far, and skips a vertex ×

@@ -170,20 +170,16 @@ func (k *Kernel) emitOffsetCombos(sink *clearance.CellSink, f, g *clearance.CFac
 		for _, sg := range []float64{1, -1} {
 			pf := c.Fa.Add(dir.Scale(sf * rf))
 			pg := c.Fb.Sub(dir.Scale(sg * rg))
-			rawLo := c.Lo - sf*rf - sg*rg
-			rawHi := c.Hi - sf*rf - sg*rg
+			raw := clearance.Dist{Lo: c.Lo, Hi: c.Hi}.Sub(sf * rf).Sub(sg * rg)
 			admit := clearance.AdmitState(f.AdmitPoint(pf, margin), g.AdmitPoint(pg, margin))
-			if rawLo <= k.tol && rawHi >= -k.tol {
+			if raw.Lo <= k.tol && raw.Hi >= -k.tol {
 				if admit != -1 {
 					sink.Unsure = true
 				}
 				continue
 			}
-			lo, hi := math.Abs(rawLo), math.Abs(rawHi)
-			if lo > hi {
-				lo, hi = hi, lo
-			}
-			sink.Candidate(k.tol, admit, lo, hi, c.Exact, pf, pg)
+			d := raw.Abs()
+			sink.Candidate(k.tol, admit, d.Lo, d.Hi, c.Exact && d.Exact(), pf, pg)
 		}
 	}
 	return false
@@ -310,6 +306,17 @@ func (k *Kernel) emitRingCombos(sink *clearance.CellSink, f, g *clearance.CFace,
 	if clearance.SpineOf(f) == 0 && clearance.SpineOf(g) == 0 {
 		dirs = append(dirs, axis, axis.Scale(-1))
 	}
+	// The family's two values are the radii's difference and sum, taken
+	// exactly; a line spine off the coordinate axes charges its tilt.
+	var spineAxes []r3.Vec
+	for _, fc := range []*clearance.CFace{f, g} {
+		if clearance.SpineOf(fc) == 1 {
+			spineAxes = append(spineAxes, fc.Axis)
+		}
+	}
+	charge := clearance.DirCharge(spineAxes, []r3.Vec{f.Anchor, g.Anchor}, rf, rg)
+	nearD := clearance.PointDist(rf).Sub(rg).Abs().Widen(charge)
+	farD := clearance.PointDist(rf).Add(rg).Widen(charge)
 	margin := k.tol + (c.Hi - c.Lo)
 	nearAdmitted := false
 	for _, dir := range dirs {
@@ -318,16 +325,16 @@ func (k *Kernel) emitRingCombos(sink *clearance.CellSink, f, g *clearance.CFace,
 		far := c.Fb.Sub(dir.Scale(rg))
 		if a := clearance.AdmitState(f.AdmitPoint(pf, margin), g.AdmitPoint(near, margin)); a != -1 {
 			nearAdmitted = true
-			sink.Candidate(k.tol, a, math.Abs(rf-rg), math.Abs(rf-rg), c.Exact, pf, near)
+			sink.Candidate(k.tol, a, nearD.Lo, nearD.Hi, c.Exact && nearD.Exact(), pf, near)
 		}
 		if a := clearance.AdmitState(f.AdmitPoint(pf, margin), g.AdmitPoint(far, margin)); a != -1 {
-			sink.Candidate(k.tol, a, rf+rg, rf+rg, c.Exact, pf, far)
+			sink.Candidate(k.tol, a, farD.Lo, farD.Hi, c.Exact && farD.Exact(), pf, far)
 		}
 	}
 	if !nearAdmitted {
 		// The near pairing is the small one: a far pairing can never hold the
 		// minimum the near pairing does not. Unproven absence keeps its bound.
-		sink.LoOnly(math.Abs(rf - rg))
+		sink.LoOnly(nearD.Lo)
 	}
 }
 
@@ -355,13 +362,14 @@ func (k *Kernel) planePlane(f, g *clearance.CFace, sink *clearance.CellSink) {
 			}
 			return
 		}
+		d := clearance.Height(g.O, f.O, f.N).Abs().Widen(clearance.DirCharge([]r3.Vec{f.N, g.N}, []r3.Vec{f.O, g.O}))
 		switch rel {
 		case 1:
 			pa := f.O.Add(f.U.Scale(wit[0])).Add(f.V.Scale(wit[1]))
 			pb := pa.Add(f.N.Scale(h))
-			sink.Candidate(k.tol, 1, math.Abs(h), math.Abs(h), true, pa, pb)
+			sink.CandidateDist(k.tol, 1, d, pa, pb)
 		case 0:
-			sink.LoOnly(math.Abs(h))
+			sink.LoOnly(d.Lo)
 		}
 		return
 	}
@@ -421,10 +429,11 @@ func (k *Kernel) planeCylinder(f, g *clearance.CFace, sink *clearance.CellSink) 
 	toward := f.N.Scale(-side) // radial direction from the axis toward the plane
 	switch {
 	case d-g.Radius > k.tol:
+		axisD := clearance.Height(g.Anchor, f.O, f.N).Abs().
+			Widen(clearance.DirCharge([]r3.Vec{f.N, g.Axis}, []r3.Vec{g.Anchor, f.O}, g.Radius))
 		for _, dirSign := range []float64{1, -1} {
 			radial := toward.Scale(dirSign)
-			v := d - dirSign*g.Radius
-			k.rulingCandidate(f, g, radial, v, sink)
+			k.rulingCandidate(f, g, radial, axisD.Sub(dirSign*g.Radius), sink)
 		}
 	case g.Radius-d > k.tol:
 		// Crossing along two rulings at ±acos(d/R) around the toward
@@ -456,7 +465,7 @@ func (k *Kernel) planeCylinder(f, g *clearance.CFace, sink *clearance.CellSink) 
 
 // rulingCandidate emits the plateau candidate carried by one cylinder
 // ruling at radial direction `radial` and plane distance v.
-func (k *Kernel) rulingCandidate(f, g *clearance.CFace, radial r3.Vec, v float64, sink *clearance.CellSink) {
+func (k *Kernel) rulingCandidate(f, g *clearance.CFace, radial r3.Vec, v clearance.Dist, sink *clearance.CellSink) {
 	th := math.Atan2(radial.Dot(g.RefV), radial.Dot(g.RefU))
 	angAdmit := g.Sweep.Classify(th, k.tol/math.Max(g.Radius, 1e-30))
 	if angAdmit == -1 {
@@ -474,7 +483,7 @@ func (k *Kernel) rulingCandidate(f, g *clearance.CFace, radial r3.Vec, v float64
 	pa := f.O.Add(f.U.Scale(w[0])).Add(f.V.Scale(w[1]))
 	h := f.N.Dot(p0.Sub(f.O))
 	pb := pa.Add(f.N.Scale(h))
-	sink.Candidate(k.tol, admit, v, v, true, pa, pb)
+	sink.CandidateDist(k.tol, admit, v, pa, pb)
 }
 
 // rulingRelation classifies one carrier-crossing ruling through both trims.
@@ -589,12 +598,14 @@ func (k *Kernel) planeSphere(f, g *clearance.CFace, sink *clearance.CellSink) {
 	}
 	switch {
 	case d-g.Radius > k.tol:
+		centreD := clearance.Height(g.Anchor, f.O, f.N).Abs().
+			Widen(clearance.DirCharge([]r3.Vec{f.N}, []r3.Vec{g.Anchor, f.O}, g.Radius))
 		for _, dirSign := range []float64{1, -1} {
 			pb := g.Anchor.Sub(f.N.Scale(side * dirSign * g.Radius))
 			foot := pb.Sub(f.N.Scale(f.N.Dot(pb.Sub(f.O))))
 			x, y := f.PlaneCoords(foot)
 			admit := clearance.AdmitState(f.Region.Classify(x, y, k.tol), g.AdmitPoint(pb, k.tol))
-			sink.Candidate(k.tol, admit, d-dirSign*g.Radius, d-dirSign*g.Radius, true, foot, pb)
+			sink.CandidateDist(k.tol, admit, centreD.Sub(dirSign*g.Radius), foot, pb)
 		}
 	case g.Radius-d > k.tol:
 		if clearance.ClrBoxDist(f.Box, g.Box) > k.tol {
@@ -633,6 +644,13 @@ func (k *Kernel) planeTorus(f, g *clearance.CFace, sink *clearance.CellSink) {
 	mn, mx := clearance.TrigRange(au, av, lo, hi)
 	hLo, hHi := base+mn, base+mx
 	if hLo-g.Radius > k.tol || -hHi-g.Radius > k.tol {
+		// The spine extreme nearest the plane reads |base| − amplitude − minor
+		// radius, every term taken exactly; it bounds every point of the
+		// window from below too, since the window's own extreme is no nearer
+		// than the whole spine's.
+		reading := clearance.Height(g.Anchor, f.O, f.N).Abs().
+			Minus(clearance.Amplitude(f.N, g.Axis, g.Major)).Sub(g.Radius).
+			Widen(clearance.DirCharge([]r3.Vec{f.N, g.Axis}, []r3.Vec{g.Anchor, f.O}, g.Major, g.Radius))
 		side := 1.0
 		if hHi < 0 {
 			side = -1
@@ -644,16 +662,15 @@ func (k *Kernel) planeTorus(f, g *clearance.CFace, sink *clearance.CellSink) {
 			star += math.Pi
 		}
 		if g.Sweep.Classify(star, clearance.ClrAngTol*10) != 1 && !g.Sweep.Full {
-			sink.LoOnly(math.Min(math.Abs(hLo), math.Abs(hHi)) - g.Radius)
+			sink.LoOnly(reading.Lo)
 			return
 		}
 		sp := g.Anchor.Add(g.RefU.Scale(g.Major * math.Cos(star))).Add(g.RefV.Scale(g.Major * math.Sin(star)))
 		pb := sp.Sub(f.N.Scale(side * g.Radius))
 		foot := pb.Sub(f.N.Scale(f.N.Dot(pb.Sub(f.O))))
 		x, y := f.PlaneCoords(foot)
-		v := math.Min(math.Abs(hLo), math.Abs(hHi)) - g.Radius
 		admit := clearance.AdmitState(f.Region.Classify(x, y, k.tol), g.AdmitPoint(pb, k.tol))
-		sink.Candidate(k.tol, admit, v, v, true, foot, pb)
+		sink.CandidateDist(k.tol, admit, reading, foot, pb)
 		return
 	}
 	if clearance.ClrBoxDist(f.Box, g.Box) > k.tol {
@@ -679,9 +696,11 @@ func (k *Kernel) coneSphere(f, g *clearance.CFace, sink *clearance.CellSink) {
 	z := rel.Dot(cone.Axis)
 	perp := rel.Sub(cone.Axis.Scale(z))
 	rho := perp.Len()
-	// The meridian reading comes off the cone's slope, so it adds nothing
-	// beyond its own few float operations (clearance.CFace.ConeMeridian).
+	// The float meridian reading decides the branch and places the foot; the
+	// published value is ConeDist's enclosure less the sphere's radius.
 	dCarrier, t := cone.ConeMeridian(z, rho)
+	reading := cone.ConeDist(sph.Anchor).Sub(sph.Radius).
+		Widen(clearance.DirCharge([]r3.Vec{cone.Axis}, []r3.Vec{sph.Anchor, cone.Anchor}, sph.Radius))
 	sinA, cosA := cone.ConeSinCos()
 	var radial r3.Vec
 	switch k.oracle().OnAxis(sph.Anchor, cone.Anchor, cone.Axis) {
@@ -701,7 +720,7 @@ func (k *Kernel) coneSphere(f, g *clearance.CFace, sink *clearance.CellSink) {
 		// is not: an offset in the undecided band normalizes to a garbage
 		// direction. The carrier distance still bounds the trimmed pair from
 		// below, so it stands as the honest lower bound it is.
-		sink.LoOnly(dCarrier - sph.Radius)
+		sink.LoOnly(reading.Lo)
 		return
 	}
 	if t <= k.tol {
@@ -724,7 +743,7 @@ func (k *Kernel) coneSphere(f, g *clearance.CFace, sink *clearance.CellSink) {
 		}
 		pg := sph.Anchor.Add(dir.Scale(sph.Radius))
 		admit := clearance.AdmitState(cone.AdmitPoint(pf, k.tol), sph.AdmitPoint(pg, k.tol))
-		sink.Candidate(k.tol, admit, v, v, true, pf, pg)
+		sink.CandidateDist(k.tol, admit, reading, pf, pg)
 	case v < -k.tol:
 		if clearance.ClrBoxDist(f.Box, g.Box) > k.tol {
 			return

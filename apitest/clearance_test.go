@@ -3,6 +3,7 @@ package apitest_test
 import (
 	"context"
 	"math"
+	"math/big"
 	"runtime"
 	"strings"
 	"testing"
@@ -489,7 +490,10 @@ func TestClearanceBeyondBoxesInHole(t *testing.T) {
 	// box separation proves nothing — the always-on kernel proves the
 	// partition by boundary clearance plus the §2 nesting-exclusion casts.
 	// The gap is the hole wall against the cube's corner edges:
-	// 10 − 2.5·√2, Exact.
+	// 10 − 2.5·√2 = 10 − √12.5, which no float holds, so the row is an
+	// Approximate enclosure of it (docs/clearance-design.md §5). Seen red
+	// before the cells read their distances as enclosures: the row read
+	// 6.4644660940672614 Exact, 1.0e-15 off.
 	doc := decad.New()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -513,7 +517,10 @@ func TestClearanceBeyondBoxesInHole(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 2)
 	require.Equal(t, decad.Sound, report.Status)
-	requireExactGap(t, report, 10-2.5*math.Sqrt2)
+	require.Len(t, report.Clearances, 1)
+	gap := report.Clearances[0].Gap
+	require.Equal(t, decad.Approximate, gap.Exactness)
+	requireGapEnclosesSurd(t, gap, big.NewRat(10, 1), -1, big.NewRat(25, 2))
 }
 
 func TestClearanceCoaxialPegInTube(t *testing.T) {

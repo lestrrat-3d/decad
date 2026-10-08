@@ -56,6 +56,22 @@ func SpineDistOf(f *CFace, p r3.Vec) (float64, r3.Vec) {
 	}
 }
 
+// SpineDist is SpineDistOf's distance read as a proven enclosure: the exact
+// distance from p to the point, axis line or spine circle of an offset face,
+// charged by DirCharge for an axis that is not a signed coordinate axis.
+func SpineDist(f *CFace, p r3.Vec) Dist {
+	switch SpineOf(f) {
+	case 0:
+		return PointPointDist(p, f.Anchor)
+	case 1:
+		return PointLineDist(p, f.Anchor, proofarith.DyVec(f.Axis)).
+			Widen(DirCharge([]r3.Vec{f.Axis}, []r3.Vec{p, f.Anchor}))
+	default:
+		return PointCircleDist(p, f.Anchor, f.Axis, f.Major, 1).
+			Widen(DirCharge([]r3.Vec{f.Axis}, []r3.Vec{p, f.Anchor}, f.Major))
+	}
+}
+
 // AngleOf is the carrier angle of a direction in the edge's frame.
 func AngleOf(e *CEdge, dir r3.Vec) float64 {
 	return math.Atan2(dir.Dot(e.RefV), dir.Dot(e.RefU))

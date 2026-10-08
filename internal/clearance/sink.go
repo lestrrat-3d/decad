@@ -124,6 +124,12 @@ func (s *CellSink) Candidate(tol float64, admit int, lo, hi float64, exact bool,
 	s.Contribs = append(s.Contribs, GapContrib{Lo: lo, Hi: hi, Exact: exact})
 }
 
+// CandidateDist folds an admission state into a contribution read as the
+// proven enclosure d; it is exact only where d is a single point.
+func (s *CellSink) CandidateDist(tol float64, admit int, d Dist, pa, pb r3.Vec) {
+	s.Candidate(tol, admit, d.Lo, d.Hi, d.Exact(), pa, pb)
+}
+
 // LoOnly contributes a bare proven lower bound.
 func (s *CellSink) LoOnly(lo float64) {
 	s.Contribs = append(s.Contribs, GapContrib{Lo: math.Max(0, lo), Hi: math.Inf(1)})
@@ -143,16 +149,24 @@ func (s *CellSink) CoarseWith(lo, hi float64, boxA, boxB [2]r3.Vec, witA, witB [
 // Coarse contributes a conservative enclosure for a pair no shipped cell can
 // solve: the boxes' distance below, the closest admitted witness pair above
 // (§5 — enclosure distance never exceeds true distance, a witness is always
-// an upper bound).
+// an upper bound). Both ends carry EnvelopeCharge over the boxes' and the
+// witnesses' coordinates: a box corner is a float a few roundings off the
+// hull it encloses, and a witness is a float sample a few roundings off its
+// face, so neither distance is the true one.
 func (s *CellSink) Coarse(boxA, boxB [2]r3.Vec, witA, witB []r3.Vec) {
 	lo := ClrBoxDist(boxA, boxB)
+	lo = sumDown(lo, -EnvelopeCharge([]r3.Vec{boxA[0], boxA[1], boxB[0], boxB[1]}))
 	hi := math.Inf(1)
+	var pair []r3.Vec
 	for _, wa := range witA {
 		for _, wb := range witB {
 			if d := wa.Sub(wb).Len(); d < hi {
-				hi = d
+				hi, pair = d, []r3.Vec{wa, wb}
 			}
 		}
+	}
+	if pair != nil {
+		hi = sumUp(hi, EnvelopeCharge(pair))
 	}
 	s.Contribs = append(s.Contribs, GapContrib{Lo: math.Max(0, lo), Hi: hi})
 }

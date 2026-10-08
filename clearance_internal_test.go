@@ -230,9 +230,16 @@ func TestDegCircleCircleCritsNeedExactCoaxiality(t *testing.T) {
 	})
 
 	t.Run("an offset ALONG the axis is still coaxial", func(t *testing.T) {
+		// The constant distance is √(3² + 5²) = √34, which no float holds:
+		// the critical encloses it and is not Exact. Seen red before the
+		// coaxial reading was an enclosure: it read math.Hypot's float as
+		// Exact.
 		crits, ok := k.circleCircleCrits(torFace(r3.NewVec(0, 0, 3), z, 5, 1), outer)
 		require.True(t, ok)
-		require.True(t, crits[0].Exact)
+		require.False(t, crits[0].Exact)
+		lo, hi := new(big.Rat).SetFloat64(crits[0].Lo), new(big.Rat).SetFloat64(crits[0].Hi)
+		require.LessOrEqual(t, new(big.Rat).Mul(lo, lo).Cmp(big.NewRat(34, 1)), 0)
+		require.GreaterOrEqual(t, new(big.Rat).Mul(hi, hi).Cmp(big.NewRat(34, 1)), 0)
 		require.InDelta(t, math.Hypot(3, 5), crits[0].Lo, 1e-12)
 	})
 }

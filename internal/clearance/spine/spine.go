@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -37,10 +38,12 @@ func (e *Engine) SpineCriticals(f, g *clearance.CFace) ([]clearance.SpineCrit, b
 	}
 	switch {
 	case sf == 0 && sg == 0:
-		return []clearance.SpineCrit{clearance.ExactCrit(f.Anchor, g.Anchor)}, true
+		return []clearance.SpineCrit{clearance.CritOf(clearance.PointPointDist(f.Anchor, g.Anchor), f.Anchor, g.Anchor)}, true
 	case sf == 0 && sg == 1:
 		foot := clearance.LinePoint(g.Anchor, g.Axis, f.Anchor)
-		return []clearance.SpineCrit{clearance.ExactCrit(f.Anchor, foot)}, true
+		d := clearance.PointLineDist(f.Anchor, g.Anchor, proofarith.DyVec(g.Axis)).
+			Widen(clearance.DirCharge([]r3.Vec{g.Axis}, []r3.Vec{f.Anchor, g.Anchor}))
+		return []clearance.SpineCrit{clearance.CritOf(d, f.Anchor, foot)}, true
 	case sf == 0 && sg == 2:
 		return e.PointCircleCrits(f.Anchor, g.Anchor, g.Axis, g.RefU, g.RefV, g.Major, g.Sweep)
 	case sf == 1 && sg == 1:
@@ -59,9 +62,9 @@ func (e *Engine) SpineCriticals(f, g *clearance.CFace) ([]clearance.SpineCrit, b
 }
 
 // PointCircleCrits are the near and far criticals of a point against a
-// circle — closed form. A point PROVENLY on the circle's axis has the same
-// distance at every azimuth, so one representative inside the trim's own
-// window carries the whole family; a point provenly off the axis has the two
+// circle — closed form, each read as clearance.PointCircleDist. A point
+// PROVENLY on the circle's axis has the same distance at every azimuth, so
+// one representative inside the trim's own window carries the whole family; a point provenly off the axis has the two
 // criticals along its radial direction. An offset the oracle cannot decide
 // leaves the radial direction unresolvable — and the azimuth it would produce
 // decides a trim admission — so the cell reports no criticals rather than
@@ -75,7 +78,8 @@ func (e *Engine) PointCircleCrits(p, c, axis, refU, refV r3.Vec, rad float64, wi
 		}
 		s, cs := math.Sincos(th)
 		q := c.Add(refU.Scale(rad * cs)).Add(refV.Scale(rad * s))
-		return []clearance.SpineCrit{clearance.ExactCrit(p, q)}, true
+		d := clearance.PointCircleDist(p, c, axis, rad, 1).Widen(clearance.DirCharge([]r3.Vec{axis}, []r3.Vec{p, c}, rad))
+		return []clearance.SpineCrit{clearance.CritOf(d, p, q)}, true
 	case clearance.DegNo:
 		rel := p.Sub(c)
 		perp := rel.Sub(axis.Scale(rel.Dot(axis)))
@@ -85,7 +89,11 @@ func (e *Engine) PointCircleCrits(p, c, axis, refU, refV r3.Vec, rad float64, wi
 		}
 		near := c.Add(dir.Scale(rad))
 		far := c.Sub(dir.Scale(rad))
-		return []clearance.SpineCrit{clearance.ExactCrit(p, near), clearance.ExactCrit(p, far)}, true
+		charge := clearance.DirCharge([]r3.Vec{axis}, []r3.Vec{p, c}, rad)
+		return []clearance.SpineCrit{
+			clearance.CritOf(clearance.PointCircleDist(p, c, axis, rad, 1).Widen(charge), p, near),
+			clearance.CritOf(clearance.PointCircleDist(p, c, axis, rad, -1).Widen(charge), p, far),
+		}, true
 	default:
 		return nil, false
 	}
@@ -118,9 +126,16 @@ func (e *Engine) LineLineCrits(f, g *clearance.CFace) ([]clearance.SpineCrit, bo
 			z = math.Max(f.ZWin.Lo, math.Min(f.ZWin.Hi, (gw.Lo+gw.Hi)/2))
 		}
 		fa := f.Anchor.Add(f.Axis.Scale(z))
-		return []clearance.SpineCrit{clearance.ExactCrit(fa, clearance.LinePoint(g.Anchor, g.Axis, fa))}, true
+		// The family's constant value is the distance between the two
+		// exactly parallel axis lines, read off g's anchor, never off the
+		// float representative.
+		d := clearance.PointLineDist(g.Anchor, f.Anchor, proofarith.DyVec(f.Axis)).
+			Widen(clearance.DirCharge([]r3.Vec{f.Axis, g.Axis}, []r3.Vec{f.Anchor, g.Anchor}))
+		return []clearance.SpineCrit{clearance.CritOf(d, fa, clearance.LinePoint(g.Anchor, g.Axis, fa))}, true
 	case clearance.DegNo:
-		c, ok := e.LineLinePerp(f.Anchor, f.Axis, g.Anchor, g.Axis)
+		d := clearance.LineLineDist(f.Anchor, proofarith.DyVec(f.Axis), g.Anchor, proofarith.DyVec(g.Axis)).
+			Widen(clearance.DirCharge([]r3.Vec{f.Axis, g.Axis}, []r3.Vec{f.Anchor, g.Anchor}))
+		c, ok := e.LineLinePerp(f.Anchor, f.Axis, g.Anchor, g.Axis, d)
 		if !ok {
 			return nil, false
 		}
@@ -143,10 +158,22 @@ func (e *Engine) LineCircleBracketCrits(cp CircleParam, center, refU, refV, la, 
 	}
 	if !ok {
 		// Constant distance over the circle (a coaxial configuration):
-		// closed form at a deterministic azimuth.
+		// closed form at a deterministic azimuth. The distance is read off
+		// the circle point centre + R·refU taken exactly, never off the
+		// float q.
 		q := center.Add(refU.Scale(cp.R))
-		d := q.Sub(clearance.LinePoint(la, ld, q)).Len()
-		return []clearance.SpineCrit{{Lo: d, Hi: d, Exact: true, Fa: clearance.LinePoint(la, ld, q), Fb: q}}, true
+		d := clearance.Dist{Lo: 0, Hi: math.Inf(1)}
+		dc, okC := clearance.DyVecOf(center)
+		dla, okL := clearance.DyVecOf(la)
+		if dr, okR := proofarith.DyOf(cp.R); okC && okL && okR {
+			ru := proofarith.DyVec(refU)
+			dq := proofarith.DvAdd(dc, proofarith.DyV3{
+				proofarith.DyMul(ru[0], dr), proofarith.DyMul(ru[1], dr), proofarith.DyMul(ru[2], dr),
+			})
+			d = clearance.DyPointLineDist(dq, dla, proofarith.DyVec(ld))
+		}
+		d = d.Widen(clearance.DirCharge([]r3.Vec{refU, refV, ld}, []r3.Vec{center, la}, cp.R))
+		return []clearance.SpineCrit{clearance.CritOf(d, clearance.LinePoint(la, ld, q), q)}, true
 	}
 	var out []clearance.SpineCrit
 	for _, br := range brs {
@@ -169,8 +196,8 @@ func (e *Engine) CircleCircleCrits(f, g *clearance.CFace) ([]clearance.SpineCrit
 	switch e.oracle().Coaxial(g, f) {
 	case clearance.DegYes:
 		// Coaxial: constant distance hypot(dz, ΔR) at matched azimuths.
-		dz := rel.Dot(g.Axis)
-		d := math.Hypot(dz, f.Major-g.Major)
+		d := clearance.CircleCircleCoaxialDist(f.Anchor, g.Anchor, g.Axis, f.Major, g.Major).
+			Widen(clearance.DirCharge([]r3.Vec{f.Axis, g.Axis}, []r3.Vec{f.Anchor, g.Anchor}, f.Major, g.Major))
 		pf := f.Anchor.Add(f.RefU.Scale(f.Major))
 		perp := pf.Sub(g.Anchor).Sub(g.Axis.Scale(pf.Sub(g.Anchor).Dot(g.Axis)))
 		dir, ok := perp.Normalize()
@@ -178,7 +205,7 @@ func (e *Engine) CircleCircleCrits(f, g *clearance.CFace) ([]clearance.SpineCrit
 			return nil, false
 		}
 		pg := g.Anchor.Add(dir.Scale(g.Major))
-		return []clearance.SpineCrit{{Lo: d, Hi: d, Exact: true, Fa: pf, Fb: pg}}, true
+		return []clearance.SpineCrit{clearance.CritOf(d, pf, pg)}, true
 	case clearance.DegUnknown:
 		return nil, false
 	}
@@ -231,12 +258,14 @@ func (e *Engine) CircleCircleCrits(f, g *clearance.CFace) ([]clearance.SpineCrit
 }
 
 // LineLinePerp is the common perpendicular critical between a segment carrier
-// and a spine line — for lines the oracle has already proven NOT parallel. The
-// solve still owes a guard: cancellation can drive the denominator to zero (or
-// the feet to infinity) on a pair the oracle only just separated, and a
-// non-finite foot is no critical at all. ok is false there — the caller owes
+// and a spine line — for lines the oracle has already proven NOT parallel —
+// carrying d, the caller's proven enclosure of the lines' distance; the solve
+// below places only the float feet. The solve still owes a guard:
+// cancellation can drive the denominator to zero (or the feet to infinity)
+// on a pair the oracle only just separated, and a non-finite foot is no
+// critical at all. ok is false there — the caller owes
 // an enclosure, never a fabricated critical.
-func (e *Engine) LineLinePerp(a, u, b, v r3.Vec) (clearance.SpineCrit, bool) {
+func (e *Engine) LineLinePerp(a, u, b, v r3.Vec, d clearance.Dist) (clearance.SpineCrit, bool) {
 	rel := b.Sub(a)
 	uv := u.Dot(v)
 	den := 1 - uv*uv
@@ -252,5 +281,5 @@ func (e *Engine) LineLinePerp(a, u, b, v r3.Vec) (clearance.SpineCrit, bool) {
 	if !proofbound.FiniteVec(fa) || !proofbound.FiniteVec(fb) {
 		return clearance.SpineCrit{}, false
 	}
-	return clearance.ExactCrit(fa, fb), true
+	return clearance.CritOf(d, fa, fb), true
 }

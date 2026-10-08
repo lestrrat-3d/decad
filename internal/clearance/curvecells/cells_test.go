@@ -137,7 +137,10 @@ func TestWindowedCircleKeepsTheCoarseEnclosure(t *testing.T) {
 	require.False(t, sink.Unsure)
 	lo, hi, _, ok := sink.Interval()
 	require.True(t, ok, `the coarse witnesses bound the pair above`)
-	require.GreaterOrEqual(t, lo, 12.0)
+	// The boxes lie 12 apart; the coarse lower bound reads that less the
+	// charge for the boxes' own float corners (clearance.CellSink.Coarse).
+	require.LessOrEqual(t, lo, 12.0)
+	require.InDelta(t, 12.0, lo, tol)
 	require.False(t, math.IsInf(hi, 1))
 	require.GreaterOrEqual(t, hi, lo)
 }
