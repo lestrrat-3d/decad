@@ -792,6 +792,7 @@
 2	0.09	TestShellInwardSectionWorkBudget
 2	0.01	TestShellNoOpenings
 2	0.01	TestShellSelectorAdmission
+2	0.05	TestShellSideOpeningArcExtension
 2	0.05	TestShellSideOpeningArcs
 2	0.05	TestShellSideOpeningCircleJunctions
 2	0.05	TestShellSideOpeningLPrism

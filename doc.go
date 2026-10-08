@@ -136,9 +136,8 @@
 //	              removed, every walk a line or an arc        builds
 //	  a prism side opening with an oblique removed end face
 //	    of several segments, a rim cut no range of a removed
-//	    arc's record names, a float arc–arc end cut under a
-//	    kept cap, or a kept arc whose offset runs past its
-//	    own end                                               ErrUnsupported
+//	    arc's record names, or a float arc–arc end cut under
+//	    a kept cap                                            ErrUnsupported
 //	  a kept angular cap                                      ErrUnsupported
 //	  revolve side run in pieces, a smooth end corner, or a
 //	    rim past the removed walk's far end                   ErrUnsupported

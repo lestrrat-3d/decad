@@ -542,3 +542,134 @@ func TestSideOpeningRegionsArcArcCut(t *testing.T) {
 	require.LessOrEqual(t, root(lo).Cmp(big.NewRat(239, 1)), 0, "the displacement reaches down to the cut")
 	require.GreaterOrEqual(t, root(hi).Cmp(big.NewRat(239, 1)), 0, "the displacement reaches up to the cut")
 }
+
+// internalArcSectionPrism sweeps 10 along +z the section that build draws on
+// a fixed XY sketch, and returns the prism and the indices of its outer-loop
+// segments other than the concave arc of radius 13 about the origin.
+func internalArcSectionPrism(t *testing.T, build func(s *sketch.Sketch)) (prismPayload, map[int]struct{}) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	build(s)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	require.NoError(t, err)
+	pp := body.payload.(prismPayload)
+	removed := map[int]struct{}{}
+	for i, seg := range pp.profile.Outer.Segments {
+		if a, ok := seg.(ArcSeg); ok && a.Center == (Point2{}) {
+			continue
+		}
+		removed[i] = struct{}{}
+	}
+	return pp, removed
+}
+
+// internalFixedArcSection draws, on fixed points, the arc about center from
+// start counter-clockwise to end and the lines start → rest[0] → … → end.
+func internalFixedArcSection(center, start, end [2]float64, rest ...[2]float64) func(s *sketch.Sketch) {
+	return func(s *sketch.Sketch) {
+		fix := func(p [2]float64) *sketch.Point {
+			pt := s.CreatePoint(p[0], p[1])
+			s.Fix(pt)
+			return pt
+		}
+		c, a, b := fix(center), fix(start), fix(end)
+		s.CreateArc(c, a, b)
+		prev := a
+		for _, p := range rest {
+			next := fix(p)
+			s.CreateLine(prev, next)
+			prev = next
+		}
+		s.CreateLine(prev, b)
+	}
+}
+
+// TestSideOpeningRegionsArcExtension pins a kept arc whose offset runs past
+// its own end to the rim cut (docs/shell-opening-design.md §2.4), outward,
+// every walk but the concave arc of radius 13 about the origin removed:
+//
+//   - the arc from (0,13) to (5,12), then x = 5, y = 20 and x = 0: at
+//     t = 2.375 the offset arc of radius 10.625 runs from the exact cut
+//     (0, 10.625) past the arc's end angle to the exact cut (5, 9.375) on
+//     x = 5, so the outer region O walks K' from (0, 10.625) and then R'
+//     from (5, 9.375), and the displacement is zero;
+//   - the notch, whose arc runs to (13,0) against the arc of radius 17 about
+//     (−2,8): at t = 4 the offset arc of radius 9 runs past (13,0) to the
+//     float cut q with 17·q.v + 140 = 2√38, so with both caps removed the
+//     displacement is nonzero and covers the held cut's distance from it.
+//
+// Shown to fail with chainSectionDelta's reach zeroed (the t = 4 displacement
+// then 0), and with offsetOpenChain reading every walk through WalkConsumed
+// (both fixtures then S11a).
+func TestSideOpeningRegionsArcExtension(t *testing.T) {
+	t.Parallel()
+	regions := func(t *testing.T, pp prismPayload, removed map[int]struct{}, keptCaps int, tmm float64) sideOpeningSection {
+		t.Helper()
+		sec, err := sideOpeningRegions(proofbound.NewWorkBudget(t.Context()), pp, removed, keptCaps, -1, units.Millimeters(tmm), tmm, 0)
+		require.NoError(t, err)
+		return sec
+	}
+	// offsetArc is where O's first segment, K', an arc about the origin,
+	// starts and ends.
+	offsetArc := func(t *testing.T, sec sideOpeningSection) (Point2, Point2) {
+		t.Helper()
+		arc, ok := sec.caps.Outer.Segments[0].(ArcSeg)
+		require.True(t, ok, "O opens with the offset arc")
+		require.Equal(t, Point2{}, arc.Center)
+		from, to, ok := offset2d.WalkedEnds(arc)
+		require.True(t, ok)
+		return from, to
+	}
+
+	t.Run("an exact cut on a vertical end face", func(t *testing.T) {
+		t.Parallel()
+		pp, removed := internalArcSectionPrism(t, internalFixedArcSection([2]float64{0, 0}, [2]float64{5, 12}, [2]float64{0, 13},
+			[2]float64{5, 20}, [2]float64{0, 20}))
+		require.Len(t, removed, 3)
+		sec := regions(t, pp, removed, 2, 2.375)
+		from, to := offsetArc(t, sec)
+		require.Equal(t, Point2{U: 0, V: 10.625}, from)
+		require.Equal(t, Point2{U: 5, V: 9.375}, to)
+		// 9.375/5 < 12/5: the cut lies past the arc's own end angle.
+		require.Equal(t, Point2{U: 5, V: 9.375}, internalWalkedPoints(t, sec.caps.Outer)[1], "R' starts at the cut")
+		require.Zero(t, sec.delta)
+		require.Zero(t, sec.cutGap, "the rims are lines")
+	})
+	t.Run("a float cut on the notch's removed arc", func(t *testing.T) {
+		t.Parallel()
+		pp, removed := internalArcSectionPrism(t, func(s *sketch.Sketch) {
+			pts := map[string]*sketch.Point{}
+			for name, p := range map[string][2]float64{"o": {0, 0}, "c": {-2, 8}, "a": {0, 13}, "b": {13, 0}, "e": {13, 16}, "f": {13, 20}, "g": {0, 20}} {
+				pts[name] = s.CreatePoint(p[0], p[1])
+				s.Fix(pts[name])
+			}
+			s.CreateArc(pts["o"], pts["b"], pts["a"])
+			s.CreateArc(pts["c"], pts["b"], pts["e"])
+			s.CreateLine(pts["e"], pts["f"])
+			s.CreateLine(pts["f"], pts["g"])
+			s.CreateLine(pts["g"], pts["a"])
+		})
+		require.Len(t, removed, 4)
+		sec := regions(t, pp, removed, 0, 4)
+		from, q := offsetArc(t, sec)
+		require.Equal(t, Point2{U: 0, V: 9}, from)
+		require.Negative(t, q.V, "the offset arc runs past (13, 0)")
+		require.Positive(t, sec.delta)
+		require.Positive(t, sec.cutGap, "the rim is a range of the removed arc's complement")
+		// 17v + 140 = 2√38 at the exact cut, so (17v + 140)² = 152.
+		root := func(v *big.Rat) *big.Rat {
+			x := new(big.Rat).Mul(v, big.NewRat(17, 1))
+			x.Add(x, big.NewRat(140, 1))
+			return x.Mul(x, x)
+		}
+		lo := new(big.Rat).Sub(proofarith.FloatRat(q.V), proofarith.FloatRat(sec.delta))
+		hi := new(big.Rat).Add(proofarith.FloatRat(q.V), proofarith.FloatRat(sec.delta))
+		require.Positive(t, new(big.Rat).Add(new(big.Rat).Mul(lo, big.NewRat(17, 1)), big.NewRat(140, 1)).Sign())
+		require.LessOrEqual(t, root(lo).Cmp(big.NewRat(152, 1)), 0, "the displacement reaches down to the cut")
+		require.GreaterOrEqual(t, root(hi).Cmp(big.NewRat(152, 1)), 0, "the displacement reaches up to the cut")
+	})
+}

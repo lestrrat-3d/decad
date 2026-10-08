@@ -1186,3 +1186,165 @@ func TestShellSideOpeningCircleJunctions(t *testing.T) {
 		requireSoundMesh(t, doc, body)
 	})
 }
+
+// The constants of TestShellSideOpeningArcExtension's closed forms, each
+// bracketed to 50 digits. The outward notch at t = 4 cuts the removed arc's
+// circle at q = ((35 + 8√38)/17, (−140 + 2√38)/17); phiQ is q's angle about
+// the origin and psiQ its angle about the removed arc's centre (−2, 8).
+const (
+	atan512Lo = "0.39479111969976151674009953038958058689517020757570"
+	atan512Hi = "0.39479111969976151674009953038958058689517020757571"
+	sqrt38Lo  = "6.16441400296897645025019238145424422523562402344457"
+	sqrt38Hi  = "6.16441400296897645025019238145424422523562402344458"
+	phiQLo    = "-0.98713781515123056742052203586530040837764883202801"
+	phiQHi    = "-0.98713781515123056742052203586530040837764883202800"
+	psiQLo    = "-1.14900488525731485852274066345089293337645014963932"
+	psiQHi    = "-1.14900488525731485852274066345089293337645014963931"
+)
+
+// notchEndSection is notchSection's kept arc ended at (5, 12) against a
+// vertical removed face: the concave arc of radius 13 about the origin from
+// (0,13) to (5,12), with the material outside it, then x = 5 up to (5,20),
+// y = 20 back to (0,20) and x = 0 down to (0,13).
+func notchEndSection(s *sketch.Sketch) {
+	o := s.CreatePoint(0, 0)
+	a := s.CreatePoint(0, 13)
+	b := s.CreatePoint(5, 12)
+	e := s.CreatePoint(5, 20)
+	g := s.CreatePoint(0, 20)
+	for _, p := range []*sketch.Point{o, a, b, e, g} {
+		s.Fix(p)
+	}
+	s.CreateArc(o, b, a)
+	s.CreateLine(b, e)
+	s.CreateLine(e, g)
+	s.CreateLine(g, a)
+}
+
+// TestShellSideOpeningArcExtension covers a kept arc whose offset runs past
+// its own end to the rim cut (docs/shell-opening-design.md §2.4's consumption
+// row), each fixture 10 tall and shelled outward with every walk but the
+// concave arc removed:
+//
+//   - notchEndSection at t = 2.375: the offset arc, radius 10.625 about the
+//     origin, starts at the exact cut (0, 10.625) and runs past the arc's end
+//     angle atan(12/5) to the cut (5, 9.375) on x = 5. With β = atan(8/15) and
+//     A = atan(5/12), P is 70 − 84.5A, the outer region O = K' then R' is
+//     76.5625 − 56.4453125β, and the wall W = O − P, so the body is
+//     10·W + 2·2.375·O = 27475/64 − (426275/512)β + 845A with both caps
+//     kept and 10·W = 525/8 − (36125/64)β + 845A with both removed;
+//   - notchSection at t = 4: the offset arc of radius 9 runs past (13,0) to
+//     the removed arc's circle at q, a float solve on the arc's complement.
+//     With both caps removed the wall W, by Green's theorem over its four
+//     pieces, is 22π − 52 + 2√38 + 40.5φ − 144.5(β + ψ), φ and ψ q's angles
+//     about the two centres, and the body is 10·W; with a cap kept the rim's
+//     range and the offset arc end at two walked points, so the record build
+//     misses (SO5), as at the inward notch's float cut;
+//   - notchEndSection's arc started instead by the slant (−7,18)→(0,13): the
+//     slant's cut trims the offset arc to the angle 59.8°, past the
+//     extended end at 61.9°, so the trimmed arc runs backward (S11a).
+//
+// Shown to fail: with offsetOpenChain reading every walk through WalkConsumed
+// again, every building fixture here refused S11a.
+func TestShellSideOpeningArcExtension(t *testing.T) {
+	t.Parallel()
+	r := func(num, den int64) *big.Rat { return big.NewRat(num, den) }
+	outward := decad.WithShellSense(decad.Outward)
+	// planes names the x = 5 (or x = 13), y = 20 and x = 0 faces; Or extends
+	// the query it is called on, so each subtest takes its own.
+	planes := func() *decad.FaceQuery {
+		return decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))).
+			Or(decad.Facing(r3.NewVec(0, 1, 0))).
+			Or(decad.Facing(r3.NewVec(-1, 0, 0)))
+	}
+	notchRemoved := func(t *testing.T, d *decad.Body) *decad.FaceQuery {
+		t.Helper()
+		onArc := cylinderFaces(d, -2, 8, 17)
+		require.Len(t, onArc, 1)
+		return planes().Or(decad.FaceCreatedBy(onArc[0].Origins()[0]))
+	}
+
+	t.Run("a vertical end face", func(t *testing.T) {
+		t.Parallel()
+		for _, tc := range []struct {
+			name        string
+			capsRemoved bool
+			base, beta  *big.Rat
+			faces       int
+		}{
+			// Two caps, the two faces exposing P at z = 0 and z = 10, the
+			// kept arc and its offset, the x = 5 and x = 0 planes each one
+			// face around the opening, and a strip of y = 20 in each cap
+			// slab.
+			{"both caps kept", false, r(27475, 64), r(-426275, 512), 10},
+			// The wall section's two caps, the kept arc, its offset and the
+			// two rims.
+			{"both caps removed", true, r(525, 8), r(-36125, 64), 6},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				doc, d := arcPrism(t, notchEndSection)
+				sel := planes()
+				if tc.capsRemoved {
+					sel = sel.Or(decad.NormalTo(r3.NewVec(0, 0, 1)))
+				}
+				body, err := d.Shell(t.Context(), sel, units.Millimeters(2.375), outward)
+				require.NoError(t, err)
+				requireVolumeBracketed(t, body, tc.base,
+					closedTerm{tc.beta, atan815Lo, atan815Hi}, closedTerm{r(845, 1), atan512Lo, atan512Hi})
+				require.Len(t, cylinderFaces(body, 0, 0, 13), 1)
+				require.Len(t, cylinderFaces(body, 0, 0, 10.625), 1)
+				require.Len(t, body.Faces(), tc.faces)
+				requireSoundMesh(t, doc, body)
+			})
+		}
+	})
+	t.Run("the notch, both caps removed", func(t *testing.T) {
+		t.Parallel()
+		doc, d := arcPrism(t, notchSection)
+		sel := notchRemoved(t, d).Or(decad.NormalTo(r3.NewVec(0, 0, 1)))
+		body, err := d.Shell(t.Context(), sel, units.Millimeters(4), outward)
+		require.NoError(t, err)
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		require.Positive(t, vol.Bound.Base(), "the float cut is charged")
+		requireVolumeBracketed(t, body, r(-520, 1),
+			closedTerm{r(220, 1), piLo, piHi}, closedTerm{r(20, 1), sqrt38Lo, sqrt38Hi},
+			closedTerm{r(405, 1), phiQLo, phiQHi}, closedTerm{r(-1445, 1), atan815Lo, atan815Hi},
+			closedTerm{r(-1445, 1), psiQLo, psiQHi})
+		requireSoundMesh(t, doc, body)
+	})
+	t.Run("the notch, a cap kept (SO5)", func(t *testing.T) {
+		t.Parallel()
+		doc, d := arcPrism(t, notchSection)
+		before := snapshotDocument(t, doc)
+		_, err := d.Shell(t.Context(), notchRemoved(t, d), units.Millimeters(4), outward)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "SO5")
+		require.Equal(t, before.bodies, doc.Bodies())
+	})
+	t.Run("a trim past the extended end (S11a)", func(t *testing.T) {
+		t.Parallel()
+		doc, d := arcPrism(t, func(s *sketch.Sketch) {
+			o := s.CreatePoint(0, 0)
+			a := s.CreatePoint(0, 13)
+			b := s.CreatePoint(5, 12)
+			e := s.CreatePoint(5, 20)
+			f := s.CreatePoint(-7, 20)
+			g := s.CreatePoint(-7, 18)
+			for _, p := range []*sketch.Point{o, a, b, e, f, g} {
+				s.Fix(p)
+			}
+			s.CreateArc(o, b, a)
+			s.CreateLine(b, e)
+			s.CreateLine(e, f)
+			s.CreateLine(f, g)
+			s.CreateLine(g, a)
+		})
+		before := snapshotDocument(t, doc)
+		_, err := d.Shell(t.Context(), planes().Or(decad.Facing(r3.NewVec(-5, -7, 0))), units.Millimeters(2.375), outward)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "drops a section feature")
+		require.Equal(t, before.bodies, doc.Bodies())
+	})
+}

@@ -169,7 +169,7 @@ instead (§4.2).
 | exact pairs | a straight `r` whose raw tangent at `v` has a float dot product of exactly zero with `k`'s: `q` is `k`'s offset foot `v + s·t·n̂` along `k`'s held unit normal, bit for bit what the right-angle open chain wrote before this rule. Two axis-aligned lines (`k` with `du = 0` or `dv = 0`, `r` on the other axis) are such a pair, and there the foot is the pair of levels — `r`'s constant coordinate, which `v` carries, and `k`'s offset level `v_coord + s·t` — read as `stackedbrep`'s plane–plane junction reads it, so the record and the engine hold one point. An axis-aligned line `r` through the centre of a circular `k`: `q` is the centre moved by `k'`'s radius along that axis |
 | float solve | otherwise `Intersect(offsetCarrier(k, s, t), offsetCarrier(r, s, 0))` over all roots, choosing the first root reached from `v` in the entering direction: along a line by signed parameter; around a circle by the signed sweep from `v` in the entering sense. No root, or the first root reached lying on `carrier(k)` (the circle re-crosses `k` before `k'`), is SO1. A straight `r` along a section axis holds `v`'s coordinate across that axis bit for bit, since `q` lies on `r`'s carrier: the record states the cut on `r`'s own plane, and the reach charges the solved coordinate |
 | span | the forward cut must lie strictly inside `r`'s span: a line by parameter in `(0, 1)`, an arc by sweep strictly below `r`'s own; otherwise SO2. A backward cut lies off `r`'s span by construction and has no span test; the audits of §4.7 decide whether it crosses anything |
-| consumption | `k'` trimmed at `q` must still advance along `k` (`WalkConsumed` with `q` as the trimmed end, modify §7's S11a reading); a consumed `k'` is S11a |
+| consumption | `k'` trimmed at `q` must still advance along `k` (`offset2d.OpenWalkConsumed` with `q` as the trimmed end, modify §7's S11a reading); a consumed `k'` is S11a. A cut past the foot extends `k'` beyond `k`'s own end: a line by any length, an arc by the angle from `k`'s end angle to `q` about its centre, read in the walk's sense and wrapped to `(−π, π]`. A reading strictly between `0` and `π/2` is an extension, since a straight rim from `v` to `q` inside the band subtends less than `π/2`. Such an arc is consumed only when its held sweep exceeds its source's sweep plus the extensions, or when that allowance reaches a full turn. Every other end reads as `WalkConsumed` reads it. The extended arc ends at the held `q`, which `OpeningReach` charges |
 
 The cut's **displacement** is proven as modify §9 proves a cup's joins
 (`offset2d.LoopReach`'s method, `capcontour`'s enclosures): the same closed
@@ -200,8 +200,9 @@ an **axis end** (`MirrorCornerJoin`, the revolve's), and an **opening end**
 (`OpeningJoin` with the removed neighbour walk). It returns `K'` in `K`'s own
 walk order from `qA` to `qB`, the join at each interior corner as modify §7
 rules (miter, arc of radius `t` about the corner, G1 foot), and the two cut
-points. Every walk of `K'` passes `WalkConsumed` (S11a) as `offsetOpenChain`
-checks today.
+points. Every walk of `K'` passes S11a's consumption test in
+`offsetOpenChain`: `offset2d.OpenWalkConsumed`, which lets the walk at an
+opening end run past its own end to the cut (§2.4).
 
 With `R'` the removed run re-cut at both ends — `r_B` (the walk after `vB`)
 starting at `qB` instead of `vB`, `r_A` (the walk before `vA`) ending at `qA`
@@ -442,10 +443,10 @@ No section limit (modify S10, S18) runs: the cavity opens through the removed
 faces, so the inradius of `P` bounds nothing. A cavity that closes by
 consuming walks reports S11a, as the revolve side opening does today; SO3's
 section half fires only on a chain that survives and encloses nothing. A kept
-arc whose offset must run past its own end — Table RO's extension of `k'` at
-a reflex end corner on a circular `k` — reports S11a too: `WalkConsumed`
-reads an offset arc that sweeps more than its source as one taking the long
-way round.
+arc whose offset runs past its own end to the cut, Table RO's extension of
+`k'` on a circular `k`, builds (§2.4's consumption row). Where that cut is a
+float solve on a removed arc's circle and a cap is kept, the rim's range and
+the extended arc end at two walked points, and the engine misses (SO5).
 
 ## 6. Table BO — results and roles
 
@@ -655,6 +656,30 @@ through `(5,0)` from `(0,−5)` to `(0,5)`, then the chord `x = 0` — height
   recorded point builds; an oblique chord's two crossings of its circle are
   two vertices.
 
+**Arc extension** (PR 6). Each 10 tall, outward, every walk but the concave
+arc of radius 13 about the origin removed:
+
+- the end section — that arc from `(0,13)` to `(5,12)`, then `x = 5` to
+  `(5,20)`, `y = 20` and `x = 0` — at `t = 2.375`: the offset arc of radius
+  `10.625` runs from the exact cut `(0, 10.625)` past the arc's end angle to
+  the exact cut `(5, 9.375)`; with `β = atan(8/15)` and `A = atan(5/12)`,
+  `P = 70 − 84.5A`, `O = 76.5625 − 56.4453125β`, volume
+  `27475/64 − (426275/512)β + 845A` with both caps kept (10 faces) and
+  `525/8 − (36125/64)β + 845A` with both removed, the displacement zero;
+  revolved a full turn about the `x` axis, the same wall is a spherical band,
+  volume `2π · 5(169 − 10.625²)/2`;
+- the notch of the circle-junction fixtures at `t = 4`: the offset arc of
+  radius 9 runs past `(13,0)` to the float cut `((35 + 8√38)/17,
+  (−140 + 2√38)/17)` on the removed arc's complement; with both caps removed
+  the prism's volume `220π − 520 + 20√38 + 405φ − 1445(β + ψ)`, `φ` and `ψ` the
+  cut's angles about the two centres, lies within its bound, and the
+  displacement encloses the cut; with a cap kept the engine misses (SO5);
+- the end section with `x = 0` replaced by the slant `(−7,18) → (0,13)`: the
+  slant's cut trims the offset arc to `59.8°`, past its extended end at
+  `61.9°`, so the arc runs backward (S11a);
+- every closed-shell, cup, tube, revolve and side-opening reading of the
+  existing fixtures bit for bit unchanged.
+
 **Revolve slanted rim** (PR 1). Meridian `(ρ,z) = (0,0),(8,0),(8,2),(5,6),
 (0,6)`, a full turn, `t = 1.5`, the cone `(8,2)→(5,6)` and the top disc
 removed: the cut `(6.5, 4)` on the cone's line, the rim a cone frustum between
@@ -753,6 +778,7 @@ every new root file. This document ships with PR 1.
 | **3** (landed) | circular walks in `K` and `R`: line–arc and arc–line cuts through `ChainReach`'s circle enclosures; `R`, `R'` and the rims stated in pieces on a removed arc's circle, each a parameter range of the arc's own record or its complement, with BO1 charging the cut gap (§4.2, §4.4); the refusal narrowed to arc–arc end corners; the engine's tangent line–circle junction (§4.3), so an offset arc join between axis-aligned walks builds under a kept cap | `shell_opening.go`, `internal/offset2d/opening.go`, `internal/stackedbrep/record.go`, `tessellate_brep.go` (a side line's column holds its own splits alone), tests | the D fixtures of §9; the outward U-channel with both caps kept | 2 |
 | **4** (landed) | oblique straight walks in `K` and `R`: the pre-split record of `r` at forward cuts and of `R'` at backward ones, with the oblique end vertices marked (§4.2), the axis hold of a float cut on an axis-aligned `r` (§2.4), the acute, obtuse and slanted-reflex corners; the refusal of PR 2 narrowed to circular walks, which PR 3 lifts | `shell_opening.go`, `internal/offset2d/opening.go`, tests | the triangle and trapezoid fixtures of §9 | 2 |
 | **5** (landed) | the engine's circle–circle junction at one recorded point (§4.3); arc–arc interior corners of `K` and arc–arc end corners; the line–circle junction at one recorded point, so an offset arc join between oblique walks builds under a kept cap | `internal/stackedbrep/record.go`, `shell_opening.go`, `internal/stackedbrep/record_test.go`, tests | the circle-junction fixtures of §9; distinct walked ends still miss | 3 |
+| **6** (landed) | a kept arc's offset extended past its own end to an opening cut (§2.4's consumption row): `offset2d.OpenWalkConsumed`, read by `offsetOpenChain` on both routes | `internal/offset2d/section.go`, `shell_chain.go`, tests | the arc-extension fixtures of §9; consumption still S11a; every existing shell reading bit for bit | 5 |
 
 PRs 3 and 4 run in parallel: they share PR 2's files but touch disjoint
 functions (the circle cases of `OpeningJoin`/`ChainReach` against the cap
@@ -767,4 +793,5 @@ Increment table — what still refuses after each PR:
 | 2 | a prism side opening with any circular or oblique walk (SO5's sentinel); an offset arc join under a kept cap (SO5, §4.3); the revolve rows of reach SX8 |
 | 3 | oblique walks; arc–arc end corners; a rim cut no range of a removed arc's record names (SO5, §4.2) |
 | 4 | arc–arc end corners; a rim cut no range of a removed arc's record names; an offset arc join between oblique walks under a kept cap (SO5) |
-| 5 | Table SO alone |
+| 5 | Table SO; a kept arc whose offset runs past its own end (S11a) |
+| 6 | Table SO alone |
