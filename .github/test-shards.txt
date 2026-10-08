@@ -607,6 +607,10 @@
 3	0.05	TestPatternedSixPinsGroup
 3	0.10	TestPlacedGateDiameterChargesEveryPoint
 3	0.26	TestPlanarPairVerdictTouchNeedsZeroDisplacement
+3	0.30	TestPlanarPairVerdictCoilAgainstPrism
+3	0.30	TestPlanarPairAdmitsCoilPartners
+3	0.30	TestVerifyCoilClearanceAgainstPrism
+3	0.40	TestVerifyCoilClearanceAgainstRevolveStaysSuspect
 3	0.00	TestPlanarReplayLowerGapChargesTravel
 3	0.05	TestPlaneMapMassCoversFrameDefect
 3	0.10	TestPlaneMapReadingsCoverFrameDefect

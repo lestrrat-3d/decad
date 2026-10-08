@@ -24,29 +24,44 @@ import (
 // enclosed outward.
 
 // planarPairAdmits reports whether the exact planar arm serves this pair.
-// It exists for the two payload classes the analytic kernel has no carrier
-// model for — a mitred sweep (docs/sweep-design.md Table DM row DM5) and a
-// faceted Boolean result (docs/payload-verification-design.md §7) — each read
-// off its own held triangle set with that set's displacement, and it admits a
-// prism or a stitched solid only as their partner, read exactly off its own
-// record (contact_faceted_pair.go's planarPrismSolid and planarStitchSolid).
-// A pair of prisms or stitched solids keeps the analytic kernel's answer,
-// and every other payload keeps its own design's staging: a cup is never
-// tessellated for verification (payload verification §1), and a loft, a
-// composite sweep and a cap-loop chamfer stay undecided until their own
-// adapters land.
+// It exists for the payload classes the analytic kernel has no carrier model
+// for — a mitred sweep (docs/sweep-design.md Table DM row DM5), a faceted
+// Boolean result (docs/payload-verification-design.md §7) and a coil
+// (docs/helix-design.md Table CD row CD5) — each read off its own held
+// triangle set with that set's displacement, and it admits a prism or a
+// stitched solid only as their partner, read exactly off its own record
+// (contact_faceted_pair.go's planarPrismSolid and planarStitchSolid). A coil
+// is served only against a prism or a stitched solid: a coil against a
+// mitred sweep, a faceted result or another coil stays undecided. A pair of
+// prisms or stitched solids keeps the analytic kernel's answer, and every
+// other payload keeps its own design's staging: a cup is never tessellated
+// for verification (payload verification §1), and a loft, a composite sweep
+// and a cap-loop chamfer stay undecided until their own adapters land.
 func planarPairAdmits(a, b *Body) bool {
-	served := false
+	served, coils := false, 0
 	for _, body := range []*Body{a, b} {
 		switch body.payload.(type) {
 		case mitredSweepPayload, facetedPayload:
 			served = true
+		case coilPayload:
+			served = true
+			coils++
 		case prismPayload, stitchPayload:
 		default:
 			return false
 		}
 	}
-	return served
+	if coils == 0 {
+		return served
+	}
+	for _, body := range []*Body{a, b} {
+		switch body.payload.(type) {
+		case coilPayload, prismPayload, stitchPayload:
+		default:
+			return false
+		}
+	}
+	return coils == 1
 }
 
 // planarPairVerdict decides an admitted pair (planarPairAdmits) through the
