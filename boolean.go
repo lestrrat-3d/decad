@@ -136,8 +136,8 @@ func booleanOperandStaging(op meshbool.OperationKind, err error) error {
 }
 
 // heldFloorOf is the bound below which a RESTATING operand cannot give a mesh
-// (docs/faceted-vertex-bounds-design.md §5): a boolean result's meshBound or a
-// mitred sweep's delta. Its restatement returns the same vertices at any
+// (docs/faceted-vertex-bounds-design.md §5): a boolean result's meshBound, or
+// a mitred sweep's or a coil's delta (docs/helix-design.md Table CD row CD3). Its restatement returns the same vertices at any
 // tolerance at or above the floor. restating is false for every other
 // payload, whose request stays the pair tolerance and whose facets the local
 // gate does not read.
@@ -146,6 +146,8 @@ func heldFloorOf(b *Body) (floor float64, restating bool) {
 	case facetedPayload:
 		return p.meshBound, true
 	case mitredSweepPayload:
+		return p.delta, true
+	case coilPayload:
 		return p.delta, true
 	default:
 		return 0, false

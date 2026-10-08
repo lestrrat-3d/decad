@@ -480,8 +480,10 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// held triangles, refused below the payload's own delta.
 		return tessellateMitredSweep(ctx, b, mp, chord)
 	}
-	if _, ok := b.payload.(coilPayload); ok {
-		return nil, fmt.Errorf(`%w: tessellation of a coil is staged (docs/helix-design.md Table CD row CD2)`, ErrUnsupported)
+	if cp, ok := b.payload.(coilPayload); ok {
+		// docs/helix-design.md Table CD row CD2: an exact restatement of the
+		// held triangles, refused below the payload's own delta.
+		return tessellateCoil(ctx, b, cp, chord, verify)
 	}
 	if sp, ok := b.payload.(sweepPayload); ok {
 		// docs/sweep-design.md Table D row D2's one exception: a one-span
@@ -499,7 +501,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, stacked prism, brep, chain-fed prism, one-span straight sweep, mitred sweep, revolve, cup, loft, cap-loop chamfer, stitch, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, stacked prism, brep, chain-fed prism, one-span straight sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, stitch, and faceted`, ErrUnsupported, b.payload)
 	}
 	return tessellatePrism(ctx, b, pp, prismWallRole, chord, verify)
 }

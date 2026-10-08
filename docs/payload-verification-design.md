@@ -1,7 +1,7 @@
 # Payload Verification Design
 
 How `Verify` answers every question for `cupPayload`, `loftPayload`,
-`sweepPayload`, `mitredSweepPayload`, and `facetedPayload`.
+`sweepPayload`, `mitredSweepPayload`, `coilPayload`, and `facetedPayload`.
 Companion to:
 
 - `docs/verification-design.md` — report meaning, tolerance, absence, status;
@@ -26,6 +26,7 @@ case into nil, an empty list, or `Sound`.
 | `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `sweepPayload` | exact construction audit | bounds-disjoint shortcut; all other pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `mitredSweepPayload` | exact construction audit | bounds-disjoint shortcut; the exact planar arm (§7) against a prism, a stitched solid, a faceted result or another mitred sweep; overlap volume through the mesh-boolean path | `Unavailable` | `Unavailable` | `Unavailable` |
+| `coilPayload` | exact construction proof (`docs/helix-design.md` CP5) and the build's held-shell audit | bounds-disjoint shortcut; `WithClearances` stays `Suspect` until `docs/helix-design.md` CD5 lands; overlap volume through the mesh-boolean path, for a partner whose pair tolerance the coil's facets meet | `Unavailable` | `Unavailable` | `Unavailable` |
 | `facetedPayload` | bounded boundary proof (§6) | the exact planar arm (§7) against the same partners | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
 
 The `prismPayload` row's own four right-hand columns are the ANALYTIC-walled

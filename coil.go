@@ -65,8 +65,9 @@ func WithLeftHand() CoilOption {
 // re-runs §5 from — plus the build that record produced.
 //
 // verts is the held vertex table, station-major (§5.3); vertexBound is each
-// vertex's β of §5.4 and delta the largest of them; tris is the globally
-// oriented held triangle set, walls first, then capStart and capEnd.
+// vertex's β of §5.4 and delta the largest of them; maxRound is the largest
+// station rounding; tris is the globally oriented held triangle set, walls
+// first, then capStart and capEnd.
 type coilPayload struct {
 	profile  ProfileRecord
 	frame    r3.Frame
@@ -81,6 +82,7 @@ type coilPayload struct {
 	vertexBound []float64
 	tris        [][3]int
 	delta       float64
+	maxRound    float64
 }
 
 func (cp coilPayload) transform() r3.Transform { return cp.xform }
@@ -88,7 +90,8 @@ func (cp coilPayload) transform() r3.Transform { return cp.xform }
 // placed re-runs §5 from the record under the composed motion (§5.6, Table CD
 // row CD7): the stations, the held table, β, δ, the orientation and the audit
 // are rebuilt, so δ never accumulates across placements. Volume and Area
-// read the record alone and come out bit-identical.
+// read the record's closed forms under the composed map (§5.3), so they move
+// only by that map's determinant and defect.
 func (cp coilPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	next := coilPayload{
 		profile:  cp.profile,

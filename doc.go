@@ -106,8 +106,8 @@
 //	  arc, circle, free-form or trimmed profile segment       ErrUnsupported
 //	  past 32768 stations or 1048576 triangles                ErrUnsupported
 //	  held shell crossing itself between stations             ErrUnsupported
-//	  Tessellate, a boolean operand, MassProperties           ErrUnsupported
-//	Union/Cut/Intersect  prism/revolve/loft/faceted/mitred sweep,
+//	  crossing audit scanning past its pair ceiling           ErrUnsupported
+//	Union/Cut/Intersect  prism/revolve/loft/faceted/mitred sweep/coil,
 //	                     crossings                            builds
 //	  held-mesh operand coarser than the pair tolerance
 //	    where the pair meets it                               ErrUnsupported
