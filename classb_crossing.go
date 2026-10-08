@@ -11,7 +11,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 )
 
 // This file is the crossing reach of the class-B Cut
@@ -296,116 +295,38 @@ func (b *cbBuild) chords(ctx context.Context, op int, f cbCarrier) ([]cbChord, e
 		}
 	}
 	fixedValue := frame.sign[fixedLocal] * plane.level
-	lo, hi := math.Inf(1), math.Inf(-1)
-	for _, seg := range p.profile.Outer.Segments {
-		box, err := classBSegmentBox(seg)
-		if err != nil {
-			return nil, err
-		}
-		l, _ := box.Lo[1-fixedLocal].Float64()
-		h, _ := box.Hi[1-fixedLocal].Float64()
-		lo, hi = math.Min(lo, l), math.Max(hi, h)
-	}
-	span := hi - lo + 1
-	lo, hi = lo-span, hi+span
-	var a, z Point2
-	if fixedLocal == 0 {
-		a, z = Point2{U: fixedValue, V: lo}, Point2{U: fixedValue, V: hi}
-	} else {
-		a, z = Point2{U: lo, V: fixedValue}, Point2{U: hi, V: fixedValue}
-	}
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
-	if err != nil {
-		return nil, err
-	}
-	points := map[Point2]*sketch.Point{}
-	point := func(q Point2) *sketch.Point {
-		if pt, ok := points[q]; ok {
-			return pt
-		}
-		pt := s.CreatePoint(q.U, q.V)
-		s.Fix(pt)
-		points[q] = pt
-		return pt
-	}
-	entity := map[sketch.Entity]cbSeg{}
-	for _, cs := range cbSectionSegs(op, p) {
-		ent, err := classbgeom.CreateNaturalSegment(s, point, cs.Seg)
-		if err != nil {
-			return nil, err
-		}
-		entity[ent] = cs
-	}
-	trace := LineSeg{Start: a, End: z, TStart: 0, TEnd: 1}
-	traceEnt := s.CreateLine(point(a), point(z))
-	entity[traceEnt] = cbSeg{Seg: trace, Carrier: f}
-	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	traces, trace, err := classbgeom.TraceChords(ctx, cbSectionSegs(op, p), fixedLocal, fixedValue, f, errCBMiss)
 	if err != nil {
 		return nil, err
 	}
 	// The chord sweeps over op's own interval, so its rectangle's corners sit
 	// on op's own two caps.
 	caps := []cbCarrier{{op, -1}, {op, -2}}
-	seen := map[[2]float64]struct{}{}
 	var out []cbChord
-	for _, prof := range profiles {
-		if !prof.Valid || len(prof.Holes) != 0 {
-			return nil, errCBMiss
+	for _, t := range traces {
+		var chord cbChord
+		for k := range 2 {
+			end := t.Ends[k]
+			x := frame.toX([3]float64{end.U, end.V, 0})
+			delta := proofbound.AbsSumUpper(proofbound.CutDisplacementAllow(classBSpeed(trace)),
+				proofbound.WalkEndBoundAllow(t.Bounds[k]))
+			var vx cbVertex
+			for _, c := range caps {
+				var err error
+				// The chord end fills the table; it becomes a vertex only
+				// where a face's region keeps it.
+				vx, err = b.canonicalPoint(f, t.Crossed[k], c, b.withAxial(x, c), delta)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if k == 0 {
+				chord.lo, chord.cLo = vx.point, t.Crossed[k]
+			} else {
+				chord.hi, chord.cHi = vx.point, t.Crossed[k]
+			}
 		}
-		edges := prof.Outer
-		for i, e := range edges {
-			if e.Entity != traceEnt {
-				continue
-			}
-			if e.Partial && !e.TExact {
-				return nil, errCBMiss
-			}
-			t0, t1 := math.Min(e.TStart, e.TEnd), math.Max(e.TStart, e.TEnd)
-			if _, dup := seen[[2]float64{t0, t1}]; dup {
-				continue
-			}
-			seen[[2]float64{t0, t1}] = struct{}{}
-			// The chord's neighbours in the cell are the section carriers
-			// it ends on.
-			prev, next := edges[(i+len(edges)-1)%len(edges)], edges[(i+1)%len(edges)]
-			cPrev, okPrev := entity[prev.Entity]
-			cNext, okNext := entity[next.Entity]
-			if !okPrev || !okNext {
-				return nil, errCBMiss
-			}
-			ends := [2]float64{e.TStart, e.TEnd}
-			crossed := [2]cbCarrier{cPrev.Carrier, cNext.Carrier}
-			piece, err := walkOf(LineSeg{Start: a, End: z, TStart: ends[0], TEnd: ends[1]}, nil)
-			if err != nil {
-				return nil, err
-			}
-			var chord cbChord
-			for k := range 2 {
-				u, v, bound := piece.StartU, piece.StartV, piece.StartBound
-				if k == 1 {
-					u, v, bound = piece.EndU, piece.EndV, piece.EndBound
-				}
-				x := frame.toX([3]float64{u, v, 0})
-				delta := proofbound.AbsSumUpper(proofbound.CutDisplacementAllow(classBSpeed(trace)), proofbound.WalkEndBoundAllow(bound))
-				var vx cbVertex
-				for _, c := range caps {
-					var err error
-					// The chord end fills the table; it becomes a vertex only
-					// where a face's region keeps it.
-					vx, err = b.canonicalPoint(f, crossed[k], c, b.withAxial(x, c), delta)
-					if err != nil {
-						return nil, err
-					}
-				}
-				if k == 0 {
-					chord.lo, chord.cLo = vx.point, crossed[k]
-				} else {
-					chord.hi, chord.cHi = vx.point, crossed[k]
-				}
-			}
-			out = append(out, chord)
-		}
+		out = append(out, chord)
 	}
 	return out, nil
 }

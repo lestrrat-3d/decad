@@ -282,12 +282,7 @@ func (r *rollingPairSweep) support(poll func() error) (rulingPlane, bool, error)
 // (rimDrift), which needs gram <= 1/16 and |α(u)| <= 1/4. An exact start, a
 // signed-axis pose with α = 0, has a zero constant and lateralBase, and its
 // drift r·√(2·(1 − s)) <= (3/2)·r·β·u holds with no gate.
-type rollingCoefficients struct {
-	constant, rate, quadratic *big.Rat
-	lateralBase, lateral      *big.Rat
-	alpha, beta               *big.Rat // |α| and an upper bound on β
-	gated                     bool     // |α| + β·t <= 1/4 must hold through t
-}
+type rollingCoefficients = planarsweep.RollingCoefficients
 
 func (r *rollingPairSweep) coefficients(support rulingPlane) (rollingCoefficients, bool) {
 	motionM, okM := planarMotionOf(&r.paths[r.m])
@@ -295,58 +290,11 @@ func (r *rollingPairSweep) coefficients(support rulingPlane) (rollingCoefficient
 	if !okM || !okS || motionS.Rotating || proofarith.DyCmp(r.cylinder.gram, rulingGramLimit) > 0 {
 		return rollingCoefficients{}, false
 	}
-	radius := r.cylinder.radius.Rat()
-	normal := ratOfDyV3(support.normal)
-	relative := ratSub3(motionM.Velocity, motionS.Velocity)
-	out := rollingCoefficients{rate: new(big.Rat), quadratic: new(big.Rat), constant: new(big.Rat),
-		alpha: new(big.Rat).Abs(support.alpha.Rat())}
-	for i, c := range r.paths[r.m].startPoints {
-		lever := ratCross3(motionM.Omega, ratSub3(ratOfDyV3(c), motionM.Center))
-		rate := ratDot3(normal, ratAdd3(relative, lever))
-		if rate.Abs(rate).Cmp(out.rate) > 0 {
-			out.rate = rate
-		}
-		curvature, ok := ratSqrtUpRat(proofbound.RatMul(motionM.OmegaSq, ratDot3(lever, lever)))
-		if !ok {
-			return rollingCoefficients{}, false
-		}
-		if k := proofbound.RatMul(curvature, big.NewRat(1, 2)); k.Cmp(out.quadratic) > 0 {
-			out.quadratic = k
-		}
-		if h := new(big.Rat).Abs(support.heights[i].Rat()); h.Cmp(out.constant) > 0 {
-			out.constant = h
-		}
-	}
-	// β² = |ω|²·|ã|² − (ω·ã)², exact.
-	axis := ratOfDyV3(r.cylinder.columns[r.cylinder.axis])
-	along := ratDot3(motionM.Omega, axis)
-	tiltSq := new(big.Rat).Sub(proofbound.RatMul(motionM.OmegaSq, ratDot3(axis, axis)), proofbound.RatMul(along, along))
-	tilt, ok := ratSqrtUpRat(tiltSq)
-	if !ok {
-		return rollingCoefficients{}, false
-	}
-	out.beta = tilt
-	out.constant = proofbound.RatAdd(out.constant, r.cylinder.sectionDrift(support.alpha).Rat())
-	out.rate = proofbound.RatAdd(out.rate, proofbound.RatMul(big.NewRat(2, 1), radius, tilt, out.alpha))
-	out.quadratic = proofbound.RatAdd(out.quadratic, proofbound.RatMul(radius, tiltSq))
-	out.lateral = proofbound.RatMul(big.NewRat(3, 2), radius, tilt)
-	out.lateralBase = new(big.Rat)
-	if r.cylinder.gram.Sign() != 0 || support.alpha.Sign() != 0 {
-		out.gated = true
-		out.lateralBase = r.cylinder.rimDrift(support.alpha.Rat())
-	}
-	return out, true
-}
-
-// at is the band depth and the rim drift at t seconds.
-func (c rollingCoefficients) at(t *big.Rat) (*big.Rat, *big.Rat) {
-	return proofbound.RatAdd(c.constant, proofbound.RatMul(c.rate, t), proofbound.RatMul(c.quadratic, t, t)),
-		proofbound.RatAdd(c.lateralBase, proofbound.RatMul(c.lateral, t))
-}
-
-// driftAdmitted reports whether the rim drift's gate holds through t.
-func (c rollingCoefficients) driftAdmitted(t *big.Rat) bool {
-	return !c.gated || proofbound.RatAdd(c.alpha, proofbound.RatMul(c.beta, t)).Cmp(big.NewRat(1, 4)) <= 0
+	return planarsweep.RollingCoefficientsOf(planarsweep.RollingInput{
+		Cylinder: r.cylinder.geometry(), Moving: motionM, Support: motionS,
+		Points: r.paths[r.m].startPoints, Normal: support.normal,
+		Heights: support.heights, Alpha: support.alpha,
+	})
 }
 
 // band proves the rolling track. Each end's foot must stay inside S's face:
@@ -376,10 +324,10 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 			return false, err
 		}
 		t := new(big.Rat).Mul(f, duration)
-		if !coefficients.driftAdmitted(t) {
+		if !coefficients.DriftAdmitted(t) {
 			return false, nil
 		}
-		depth, lateral := coefficients.at(t)
+		depth, lateral := coefficients.At(t)
 		if !r.footInside(support, f, proofbound.RatAdd(depth, lateral)) {
 			return false, nil
 		}
@@ -389,7 +337,7 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	depth, _ := coefficients.at(new(big.Rat).Mul(end, duration))
+	depth, _ := coefficients.At(new(big.Rat).Mul(end, duration))
 	return r.track(first, support, coefficients, end, depth)
 }
 
@@ -398,18 +346,10 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 // bound on r·√(1 + gram), the farthest any cylinder point lies from the point
 // of its axis segment in the same section: that offset is B·w with |w| <= r,
 // and |B·w|² <= (1 + gram)·|w|².
-type rollingColumnBox struct {
-	corners []proofarith.DyV3
-	reach   *big.Rat
-}
+type rollingColumnBox = planarsweep.RollingColumnBox
 
 func (r *rollingPairSweep) columnBox() (rollingColumnBox, bool) {
-	corners := r.cylinder.stagedCorners()
-	stretch, ok := ratSqrtUpRat(proofbound.RatAdd(big.NewRat(1, 1), r.cylinder.gram.Rat()))
-	if !ok {
-		return rollingColumnBox{}, false
-	}
-	return rollingColumnBox{corners: corners[:], reach: proofbound.RatMul(r.cylinder.radius.Rat(), stretch)}, true
+	return planarsweep.RollingColumnBoxOf(r.cylinder.geometry())
 }
 
 // column is §10.6's column test through fraction f on a face-local plane.
@@ -431,19 +371,10 @@ func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *
 	zero := new(big.Rat)
 	path := r.paths[r.m]
 	centers := path.cornerSpan(zero, f)
-	path.startPoints = box.corners
+	path.startPoints = box.Corners
 	corners := path.cornerSpan(zero, f)
 	S := &r.paths[r.s]
-	var lo, hi [3]*big.Rat
-	for axis := range 3 {
-		low, high := corners.Hull(axis)
-		axisLow, axisHigh := centers.Hull(axis)
-		low = proofbound.RatMax(low, new(big.Rat).Sub(axisLow, box.reach))
-		high = proofbound.RatMin(high, new(big.Rat).Add(axisHigh, box.reach))
-		shift := new(big.Rat).Mul(S.path.delta[axis].Rat(), f)
-		lo[axis] = new(big.Rat).Sub(low, proofbound.RatMax(shift, zero))
-		hi[axis] = new(big.Rat).Sub(high, proofbound.RatMin(shift, zero))
-	}
+	lo, hi := planarsweep.RollingColumnBounds(centers, corners, box.Reach, S.path.delta, f)
 	solid := planar.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
 	_, apart, err := planar.PlanarColumnClear(&solid, support.normal, S.startPoints[support.origin], lo, hi, poll)
 	return apart, err
@@ -452,14 +383,7 @@ func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *
 func (r *rollingPairSweep) footInside(support rulingPlane, f, growth *big.Rat) bool {
 	S := &r.paths[r.s]
 	spans := r.paths[r.m].cornerSpan(new(big.Rat), f)
-	var lo, hi [2]*big.Rat
-	for slot, axis := range [2]int{(support.axis + 1) % 3, (support.axis + 2) % 3} {
-		low, high := spans.Hull(axis)
-		shift := new(big.Rat).Mul(S.path.delta[axis].Rat(), f)
-		shiftLo, shiftHi := proofbound.RatMin(shift, new(big.Rat)), proofbound.RatMax(shift, new(big.Rat))
-		lo[slot] = proofbound.RatAdd(low, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(growth))
-		hi[slot] = proofbound.RatAdd(high, new(big.Rat).Neg(shiftLo), growth)
-	}
+	lo, hi := planarsweep.RollingFootBounds(spans, S.path.delta, support.axis, f, growth)
 	return support.face.HoldsBox(lo, hi)
 }
 
@@ -527,7 +451,7 @@ func (r *rollingPairSweep) track(first *SweepSample, support rulingPlane,
 // depthThrough is the band depth over [0, f]: every coefficient's term is
 // nondecreasing in time, so their value at f bounds every earlier instant.
 func (p *rollingTrackProof) depthThrough(f *big.Rat) *big.Rat {
-	depth, _ := p.coefficients.at(new(big.Rat).Mul(f, p.paths[p.m].path.duration))
+	depth, _ := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].path.duration))
 	return depth
 }
 
@@ -574,7 +498,7 @@ func (p *rollingTrackProof) manifoldAt(f *big.Rat, req ContactRequest) (*Contact
 	}
 	n := ratOfDyV3(p.normal)
 	q := ratOfDyV3(vertsS[p.origin])
-	_, lateral := p.coefficients.at(new(big.Rat).Mul(f, p.paths[p.m].path.duration))
+	_, lateral := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].path.duration))
 	separation := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(p.depthUp),
 		Exactness: exactnessFromBound(p.depthUp)}
 	points := make([]ContactPoint, 0, len(p.ends))

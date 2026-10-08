@@ -718,12 +718,3 @@ func ratCross3(a, b motionbound.RatVec) motionbound.RatVec {
 		new(big.Rat).Sub(new(big.Rat).Mul(a[0], b[1]), new(big.Rat).Mul(a[1], b[0])),
 	}
 }
-
-// ratSqrtUpRat is an exact upper bound on the square root of q.
-func ratSqrtUpRat(q *big.Rat) (*big.Rat, bool) {
-	up := proofbound.RatSqrtUp(q)
-	if !finiteMeasurementValues(up) {
-		return nil, false
-	}
-	return proofarith.FloatRat(up), true
-}

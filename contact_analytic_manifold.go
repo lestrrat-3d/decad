@@ -330,11 +330,6 @@ func (c *placedCylinder) rimDrift(alpha *big.Rat) *big.Rat {
 	return c.geometry().RimDrift(alpha)
 }
 
-// stagedCorners delegates to the placed-ruling proof.
-func (c *placedCylinder) stagedCorners() [8]proofarith.DyV3 {
-	return c.geometry().StagedCorners()
-}
-
 // rulingPlane is the face plane of an exact planar body S that a placed
 // cylinder rests on. A face-local plane (docs/multibody-dynamics-design.md
 // §10.6) has S material in front of it; clearance is then the lateral
