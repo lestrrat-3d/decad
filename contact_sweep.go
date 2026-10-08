@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -96,15 +97,15 @@ func validateRestSpeed(v units.Value) error {
 type SweepOutcome int
 
 const (
-	SweepClear SweepOutcome = iota + 1
-	SweepDepartedClear
-	SweepPersistentTouch
-	SweepContactTransitionBracket
-	SweepImpactBracket
-	SweepInitiallyTouching
-	SweepInitiallyOverlapping
-	SweepUndecided
-	SweepGrazingTouch
+	SweepClear                    SweepOutcome = SweepOutcome(reportvocab.SweepClear)
+	SweepDepartedClear            SweepOutcome = SweepOutcome(reportvocab.SweepDepartedClear)
+	SweepPersistentTouch          SweepOutcome = SweepOutcome(reportvocab.SweepPersistentTouch)
+	SweepContactTransitionBracket SweepOutcome = SweepOutcome(reportvocab.SweepContactTransitionBracket)
+	SweepImpactBracket            SweepOutcome = SweepOutcome(reportvocab.SweepImpactBracket)
+	SweepInitiallyTouching        SweepOutcome = SweepOutcome(reportvocab.SweepInitiallyTouching)
+	SweepInitiallyOverlapping     SweepOutcome = SweepOutcome(reportvocab.SweepInitiallyOverlapping)
+	SweepUndecided                SweepOutcome = SweepOutcome(reportvocab.SweepUndecided)
+	SweepGrazingTouch             SweepOutcome = SweepOutcome(reportvocab.SweepGrazingTouch)
 	// SweepPersistentBand: the pair stays within a certified band of one
 	// normal through its contact track. At every instant of the track the
 	// signed separation along Normal() of every point the track publishes
@@ -113,7 +114,7 @@ const (
 	// publish stays strictly in front of the support plane, and the source
 	// features are stable. Depth
 	// is the track's Band(). The track may end before the duration.
-	SweepPersistentBand
+	SweepPersistentBand SweepOutcome = SweepOutcome(reportvocab.SweepPersistentBand)
 )
 
 // SweepCause explains why a continuous claim was not proved.

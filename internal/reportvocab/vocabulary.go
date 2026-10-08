@@ -10,13 +10,11 @@ const (
 	tokenUndecided    = "undecided"
 )
 
-// This package holds the result vocabulary Verify's report is written in: the
-// outcome enums, the effective-request records, the bounded reading
-// wrappers, the per-survey result records, and Report/BodyReport themselves
-// (docs/verification-design.md §1-§9). It holds TYPES and the two pure
-// predicates over them (Passed, ForBody) alone; verify_publish.go builds a
-// Report and its BodyReport entries from real survey outcomes and certified
-// readings, and verify.go and survey.go feed it.
+// This package holds ContactRelation and SweepOutcome. It also holds Verify's
+// report vocabulary: outcome enums, effective-request records, bounded
+// readings, survey result records, and Report/BodyReport
+// (docs/verification-design.md §1-§9). Verify publication builds a Report
+// from survey outcomes and certified readings in verify_publish.go.
 
 // ScalarOutcome is a whole-body scalar survey's primary outcome (Wall or
 // ConcaveRadius): whether the question was asked, and if so, whether the

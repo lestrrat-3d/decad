@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -41,19 +42,17 @@ func TestPlanarReplayLowerGapChargesTravel(t *testing.T) {
 // accepts f = 1/2 at resolution −1/4. The left gap g is a credit, not a
 // charge: deleting it only refuses more.
 func TestRotatingBracketDepthChargesTravelAndDeviation(t *testing.T) {
-	proof := sweepReplayProof{bracketLo: big.NewRat(1, 2), bracketHi: big.NewRat(1, 1),
-		bracketGap: big.NewRat(1, 4), bracketTravel: big.NewRat(4, 1)}
+	lo, hi, gap, travel := big.NewRat(1, 2), big.NewRat(1, 1), big.NewRat(1, 4), big.NewRat(4, 1)
 	deviation := big.NewRat(1, 8)
 	// (3/4 − 1/2)·4 − 1/4 + 1/8 = 7/8.
-	require.True(t, proof.bracketDepthWithin(big.NewRat(3, 4), deviation, big.NewRat(7, 8)))
-	require.False(t, proof.bracketDepthWithin(big.NewRat(3, 4), deviation, big.NewRat(3, 4)))
+	require.True(t, sweepmemo.BracketDepthWithin(big.NewRat(3, 4), deviation, big.NewRat(7, 8), lo, hi, gap, travel))
+	require.False(t, sweepmemo.BracketDepthWithin(big.NewRat(3, 4), deviation, big.NewRat(3, 4), lo, hi, gap, travel))
 	// At the left edge the gap alone remains: −1/4 + 1/8 = −1/8.
-	require.True(t, proof.bracketDepthWithin(big.NewRat(1, 2), deviation, new(big.Rat)))
-	require.False(t, proof.bracketDepthWithin(big.NewRat(1, 2), deviation, big.NewRat(-1, 4)))
+	require.True(t, sweepmemo.BracketDepthWithin(big.NewRat(1, 2), deviation, new(big.Rat), lo, hi, gap, travel))
+	require.False(t, sweepmemo.BracketDepthWithin(big.NewRat(1, 2), deviation, big.NewRat(-1, 4), lo, hi, gap, travel))
 	// Past the right edge nothing replays.
-	require.False(t, proof.bracketDepthWithin(big.NewRat(9, 8), deviation, big.NewRat(100, 1)))
-	require.False(t, (&sweepReplayProof{bracketLo: big.NewRat(1, 2), bracketHi: big.NewRat(1, 1)}).
-		bracketDepthWithin(big.NewRat(3, 4), deviation, big.NewRat(100, 1)))
+	require.False(t, sweepmemo.BracketDepthWithin(big.NewRat(9, 8), deviation, big.NewRat(100, 1), lo, hi, gap, travel))
+	require.False(t, sweepmemo.BracketDepthWithin(big.NewRat(3, 4), deviation, big.NewRat(100, 1), lo, hi, nil, nil))
 }
 
 // TestPlanarDepartureLowerGapIsBoundedByLateralClearance reads §10.6's lower

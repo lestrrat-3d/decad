@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -62,10 +63,10 @@ func validateNonnegativeLength(v units.Value, name string) error {
 type ContactRelation int
 
 const (
-	ContactUndecided ContactRelation = iota
-	ContactSeparated
-	ContactTouching
-	ContactOverlapping
+	ContactUndecided   ContactRelation = ContactRelation(reportvocab.ContactUndecided)
+	ContactSeparated   ContactRelation = ContactRelation(reportvocab.ContactSeparated)
+	ContactTouching    ContactRelation = ContactRelation(reportvocab.ContactTouching)
+	ContactOverlapping ContactRelation = ContactRelation(reportvocab.ContactOverlapping)
 	// ContactBand is published for a body whose held boundary carries a
 	// positive displacement (docs/multibody-dynamics-design.md §10.4), or for
 	// an exact planar pair apart by at most the request's SupportBand
@@ -73,7 +74,7 @@ const (
 	// width Gap.Bound around Gap.Value, which is zero. A displaced pair's
 	// manifold Separation intervals carry the same band; an exact pair's
 	// manifold is its support set, each point at its exact height.
-	ContactBand
+	ContactBand ContactRelation = ContactRelation(reportvocab.ContactBand)
 )
 
 // ContactReason explains an undecided relation or an absent manifold.

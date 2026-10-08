@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -148,7 +148,12 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 }
 
 func (r *SweepReport) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
-	if !r.replayFractionCovered(f) {
+	var trackEnd *big.Rat
+	if r.replay.track != nil && (r.replay.track.planar != nil || r.replay.track.rolling != nil) {
+		trackEnd = r.replay.track.end
+	}
+	if !sweepmemo.FractionCovered(reportvocab.SweepOutcome(r.replay.outcome), f, trackEnd, r.replay.bracketLo,
+		r.replay.bracketHi, r.replay.bracketGap, r.replay.rotation != nil) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the certified sweep prefix", ErrUnsupported)
 	}
 	if r.replay.rotation != nil {
@@ -199,7 +204,8 @@ func (r *SweepReport) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transf
 	}
 	contact := &ContactReport{Request: r.replay.request}
 	classifySourceBoxes(contact, actualA, actualB)
-	if !r.replayRelationCovered(f, contact.Relation, actualA, actualB, resolution) {
+	if !sweepmemo.RelationCovered(reportvocab.SweepOutcome(r.replay.outcome), f, r.replay.bracketLo,
+		resolution, reportvocab.ContactRelation(contact.Relation), actualA.axisBox(), actualB.axisBox()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose changes the certified relation", ErrUnsupported)
 	}
 	return poseA, poseB, nil
@@ -438,7 +444,8 @@ func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 	threshold := new(big.Rat).Mul(radius2, proofarith.DvDot(outward, outward).Rat())
 	idealSign := ideal2.Cmp(threshold)
 	observedSign := observed2.Cmp(radius2)
-	if ideal.Sign() <= 0 || !p.orientedSphereRelationCovered(f, idealSign, observedSign) {
+	if ideal.Sign() <= 0 || !sweepmemo.OrientedSphereRelationCovered(reportvocab.SweepOutcome(p.outcome), f,
+		p.bracketLo, p.bracketHi, idealSign, observedSign) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere changes the certified relation", ErrUnsupported)
 	}
 	return poseA, poseB, nil
@@ -467,31 +474,6 @@ func spherePairCenterDistance2(a, b [3]*big.Rat) *big.Rat {
 		squared.Add(squared, new(big.Rat).Mul(delta, delta))
 	}
 	return squared
-}
-
-func (p *sweepReplayProof) orientedSphereRelationCovered(f *big.Rat, ideal, observed int) bool {
-	switch p.outcome {
-	case SweepClear:
-		return ideal > 0 && observed > 0
-	case SweepDepartedClear:
-		if f.Sign() == 0 {
-			return ideal == 0 && observed == 0
-		}
-		return ideal > 0 && observed > 0
-	case SweepImpactBracket:
-		if p.bracketLo == nil || p.bracketHi == nil {
-			return false
-		}
-		if f.Cmp(p.bracketLo) < 0 && (ideal <= 0 || observed <= 0) {
-			return false
-		}
-		if f.Cmp(p.bracketHi) == 0 && ideal > 0 {
-			return false
-		}
-		return true
-	default:
-		return false
-	}
 }
 
 // A clear rotating sweep certifies the ideal source boxes over every fraction.
@@ -528,7 +510,8 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 	}
 	if r.replay.outcome == SweepImpactBracket && r.replay.bracketLo != nil && f.Cmp(r.replay.bracketLo) > 0 {
 		deviation := new(big.Rat).Add(proofarith.FloatRat(deviation[0]), proofarith.FloatRat(deviation[1]))
-		if !r.replay.bracketDepthWithin(f, deviation, resolution) {
+		if !sweepmemo.BracketDepthWithin(f, deviation, resolution, r.replay.bracketLo,
+			r.replay.bracketHi, r.replay.bracketGap, r.replay.bracketTravel) {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating impact pose leaves the point resolution of contact", ErrUnsupported)
 		}
 		return pose[0], pose[1], nil
@@ -692,94 +675,11 @@ func (r *SweepReport) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3
 	observedGap := proofarith.DySubScalar(faceDistance, sphere.radius).Rat()
 	idealGap := new(big.Rat).Add(p.sphereGap.Rat(), new(big.Rat).Mul(p.sphereSlope.Rat(), f))
 	difference := new(big.Rat).Sub(observedGap, idealGap)
-	if difference.Abs(difference).Cmp(resolution) > 0 || !p.sphereRelationCovered(f, idealGap, observedGap, resolution) {
+	if difference.Abs(difference).Cmp(resolution) > 0 || !sweepmemo.SphereRelationCovered(reportvocab.SweepOutcome(p.outcome),
+		f, p.bracketLo, p.bracketHi, idealGap, observedGap, resolution) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere changes the certified relation", ErrUnsupported)
 	}
 	return poseA, poseB, nil
-}
-
-func (p *sweepReplayProof) sphereRelationCovered(f, ideal, observed, resolution *big.Rat) bool {
-	switch p.outcome {
-	case SweepClear:
-		return ideal.Sign() > 0 && observed.Sign() > 0
-	case SweepDepartedClear:
-		if f.Sign() == 0 {
-			return ideal.Sign() == 0 && observed.Sign() == 0
-		}
-		return ideal.Sign() > 0 && observed.Sign() > 0
-	case SweepPersistentTouch:
-		return ideal.Sign() == 0 && new(big.Rat).Abs(observed).Cmp(resolution) <= 0
-	case SweepImpactBracket:
-		if p.bracketLo == nil || p.bracketHi == nil {
-			return false
-		}
-		if f.Cmp(p.bracketLo) < 0 && ideal.Sign() <= 0 {
-			return false
-		}
-		if f.Cmp(p.bracketHi) == 0 && ideal.Sign() > 0 {
-			return false
-		}
-		return true
-	default:
-		return false
-	}
-}
-
-func (r *SweepReport) replayFractionCovered(f *big.Rat) bool {
-	if r.replay.track != nil && (r.replay.track.planar != nil || r.replay.track.rolling != nil) {
-		return f.Sign() >= 0 && f.Cmp(r.replay.track.end) <= 0
-	}
-	if r.replay.rotation != nil && r.replay.outcome == SweepImpactBracket {
-		// The producer proves clear intervals only through the left bracket
-		// edge; the bracket itself, through its right edge, replays by the
-		// travel from the left edge's proven gap (bracketDepthWithin).
-		if r.replay.bracketGap != nil && r.replay.bracketHi != nil {
-			return r.replay.bracketLo != nil && f.Cmp(r.replay.bracketHi) <= 0
-		}
-		return r.replay.bracketLo != nil && f.Cmp(r.replay.bracketLo) <= 0
-	}
-	switch r.replay.outcome {
-	case SweepClear, SweepDepartedClear, SweepPersistentTouch, SweepGrazingTouch:
-		return true
-	case SweepImpactBracket, SweepContactTransitionBracket:
-		return r.replay.bracketHi != nil && f.Cmp(r.replay.bracketHi) <= 0
-	default:
-		return false
-	}
-}
-
-func (r *SweepReport) replayRelationCovered(f *big.Rat, relation ContactRelation,
-	a, b sourceBoxContactProof, resolution *big.Rat) bool {
-	switch r.replay.outcome {
-	case SweepClear:
-		return relation == ContactSeparated
-	case SweepDepartedClear:
-		if f.Sign() == 0 {
-			return relation == ContactTouching
-		}
-		return relation == ContactSeparated
-	case SweepPersistentTouch:
-		return relation == ContactTouching ||
-			(relation == ContactSeparated || relation == ContactOverlapping) &&
-				boxRelationDistanceWithin(a, b, resolution)
-	case SweepImpactBracket:
-		if r.replay.bracketLo == nil {
-			return false
-		}
-		return relation == ContactSeparated || relation == ContactTouching ||
-			relation == ContactOverlapping && boxRelationDistanceWithin(a, b, resolution)
-	case SweepContactTransitionBracket:
-		return relation == ContactTouching || relation == ContactSeparated ||
-			relation == ContactOverlapping && boxRelationDistanceWithin(a, b, resolution)
-	default:
-		return false
-	}
-}
-
-// For axis-aligned boxes, the least support gap (separated case) or least
-// penetration depth (overlap case) is bounded directly from exact endpoints.
-func boxRelationDistanceWithin(a, b sourceBoxContactProof, limit *big.Rat) bool {
-	return box.RelationDistanceWithin(a.axisBox(), b.axisBox(), limit)
 }
 
 // certifiedPlanarPosesAtFraction replays a general planar sweep without
@@ -831,7 +731,8 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 		return poses[0], poses[1], nil
 	}
 	if p.bracketLo != nil && f.Cmp(p.bracketLo) > 0 {
-		if !p.bracketDepthWithin(f, new(big.Rat).Add(deviation, displacement), resolution) {
+		if !sweepmemo.BracketDepthWithin(f, new(big.Rat).Add(deviation, displacement), resolution,
+			p.bracketLo, p.bracketHi, p.bracketGap, p.bracketTravel) {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar impact pose leaves the point resolution of contact", ErrUnsupported)
 		}
 		return poses[0], poses[1], nil
@@ -841,23 +742,4 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay gap does not exceed pose error", ErrUnsupported)
 	}
 	return poses[0], poses[1], nil
-}
-
-// bracketDepthWithin decides a fraction inside a rotating impact bracket,
-// after its left edge lo and through its right one, where the pair meets. The
-// left edge's certified lower gap g and the §4.3 travel bound T per unit
-// fraction place every ideal point within (f − lo)·T of its position at the
-// left edge, where the pair was separated by g; the rounded pose adds its
-// deviation, which for a displaced body (§10.4) carries its charge. The
-// rounded pair therefore lies within (f − lo)·T − g + deviation of a
-// separated pair, and replay requires that within PointResolution, the claim
-// the affine source-box replay makes inside its bracket.
-func (p *sweepReplayProof) bracketDepthWithin(f, deviation, resolution *big.Rat) bool {
-	if p.bracketGap == nil || p.bracketTravel == nil || p.bracketHi == nil || f.Cmp(p.bracketHi) > 0 {
-		return false
-	}
-	depth := new(big.Rat).Mul(new(big.Rat).Sub(f, p.bracketLo), p.bracketTravel)
-	depth.Sub(depth, p.bracketGap)
-	depth.Add(depth, deviation)
-	return depth.Cmp(resolution) <= 0
 }
