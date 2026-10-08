@@ -245,9 +245,9 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 // both this same patchRawFlux formula, degenerate to the ordinary
 // rotationally-symmetric cone sector once a patch's two directrices share one
 // window) and this patch's own held area, the surface internal/proofbound/bounds.go's
-// proofbound.SweptVolumeAllow needs. Zero wherever the two windows already coincide (a
-// tangent join, or either degenerate patch), matching every already-shipped
-// reading those configurations publish.
+// proofbound.SweptVolumeAllow needs. Zero wherever both proven corner skews are
+// zero (an apex patch, and a join whose two directrix ends lie on one ray from
+// the centre).
 //
 // g.CapTh0/g.CapTh1 and g.Th0/g.Th1 are not guaranteed to share a branch:
 // capWallSweep (capblend_geom.go) anchors capTh0 at a raw Atan2, always in
@@ -261,27 +261,25 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 // cannot change, so this is the one site the mismatch reaches.
 func chordLocusResidualAllow(g Patch) float64 {
 	capTh0, capTh1 := capWindowOnBranch(g.CapTh0, g.CapTh1, g.Th0)
-	windowSkewMax := math.Max(capTh0-g.Th0, g.Th1-capTh1)
-	// windowSkewMax is never negative: this is a checkable fact, not a
-	// defensive assumption. The cap window is the SIDE window trimmed by
-	// erosion — the cap contour is the wall's own offset, and offsetting a
-	// point radially preserves its polar angle about the wall's centre — so
-	// the cap window is always a SUBSET of the side window and can only be
-	// narrower or equal, never wider. For a circle/line miter this reduces to
-	// a closed form: with the corner's own half-angle cosine a = cos(alpha)
-	// and in-plane setback d (the cap setback dc), the per-corner skew is
-	// a' - a = d(1-a)/(R+d) >= 0 for a hole wall (offset radius R+d) and
-	// d(1+a)/(R-d) >= 0 for an outer wall (offset radius R-d) — both
-	// non-negative for every admitted 0 < d < R
-	// and -1 <= a <= 1, zero only at a tangent join (a = 1) or a
-	// degenerate/whole-turn patch, which is the only way this guard fires.
+	// windowSkewMax is the larger of the two PROVEN corner skews
+	// (CornerSkewUpper): the exact angle about the centre between each
+	// corner's side directrix end and cap directrix end, read from the held
+	// points rather than from a difference of two float Atan2 readings, which
+	// can understate it. It is zero only where both corners' ends lie on one
+	// ray from the centre — a tangent join drawn on an axis, an apex patch, or
+	// a whole turn whose seams align.
+	windowSkewMax := math.Max(g.SkewStart, g.SkewEnd)
 	if windowSkewMax <= 0 {
 		return 0
 	}
+	// The two references are rotationally symmetric sectors, one window shared
+	// by both directrices, so neither has a corner skew of its own.
 	wideGeom, narrowGeom := g, g
 	wideGeom.CapTh0, wideGeom.CapTh1 = g.Th0, g.Th1
 	narrowGeom.Th0, narrowGeom.Th1 = capTh0, capTh1
 	narrowGeom.CapTh0, narrowGeom.CapTh1 = capTh0, capTh1
+	wideGeom.SkewStart, wideGeom.SkewEnd = 0, 0
+	narrowGeom.SkewStart, narrowGeom.SkewEnd = 0, 0
 	wide := patchRawFlux(wideGeom)
 	narrow := patchRawFlux(narrowGeom)
 	pa, pb := patchAreaOf(g)

@@ -1105,3 +1105,8 @@
 1	1.35	TestLoftGearToothVerifiesSound
 2	1.22	TestLoftStationWalkRefusesAtTheRaisedWorkLimit
 4	0.00	TestLoftStationCapScalesWithPairs
+3	0.05	TestCapPatchWindowSkewCoversTheExactCornerAngle
+3	0.03	TestCapWallArcBoundChargesTheRoundedOffsetRadius
+3	0.01	TestCapMiterLocusRangesTileTheOffsetSpan
+3	0.03	TestCapMiterLocusUpperReadsTheStatedAxialRise
+3	0.03	TestCapBlendAuditReadsTheSetbackSpan

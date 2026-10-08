@@ -66,7 +66,7 @@ func chordStationBound(seg CurveSegment, k, n int, heldU, heldV float64) proofbo
 // k == 0 and k == n are the two corner feet.
 //
 // radiusOffset is the exact rational the offset adds to the segment's own
-// radius — −insideSign·d, ivExactOffsetRadius's own sign — and the enclosure
+// radius — −insideSign·d, capcontour.ExactOffsetRadius's own sign — and the enclosure
 // is circularOffsetEndpointInterval's, so neither the offset nor the station's
 // parameter is ever rounded to a float before it is enclosed.
 //

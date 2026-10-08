@@ -516,7 +516,7 @@ func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, w
 	if j.g1 || (!prev.IsCircular() && !cur.IsCircular()) {
 		return 0, nil
 	}
-	locus, ok, err := capMiterLocusUpper(budget, prev, cur, j.vU, j.vV, setback.ds, setback.dc, setback.dcDelta)
+	locus, ok, err := capMiterLocusUpper(budget, prev, cur, j.vU, j.vV, setback.axialUpper(), setback.dc, setback.dcDelta)
 	if err != nil {
 		return 0, err
 	}

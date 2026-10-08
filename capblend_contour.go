@@ -64,10 +64,7 @@ var errCapContourUnbounded = fmt.Errorf(`%w: this evaluator cannot prove a bound
 type ivPoint = capcontour.Point
 type ivCarrier = capcontour.Carrier
 
-func ivUnion(a, b ivPoint) ivPoint { return capcontour.Union(a, b) }
-func ivExactOffsetRadius(w survey2d.SideWalk, d float64) (*big.Rat, bool) {
-	return capcontour.ExactOffsetRadius(w, d)
-}
+func ivUnion(a, b ivPoint) ivPoint                            { return capcontour.Union(a, b) }
 func ivIntersect(a, b ivCarrier) ([]ivPoint, bool)            { return capcontour.Intersect(a, b) }
 func ivNearest(cands []ivPoint, u, v float64) (ivPoint, bool) { return capcontour.Nearest(cands, u, v) }
 func miterLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (float64, bool) {

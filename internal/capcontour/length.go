@@ -165,10 +165,13 @@ func capSweepBracket(cU, cV float64, start, end sectionrecord.Point2, wraps int,
 // enclosure of the two feet's own turn about the centre, so no libm accuracy
 // is assumed of the sweep itself, plus wraps (capWallSweep's own unwrap count)
 // to reproduce the same branch, plus the turn the two feet's own contour
-// displacement can account for. radialShift is how far the denoted arc's
-// radius can sit from capRadius beyond the offset solve's own rounding: the
-// unit conversion's rounding of the setback across the cap, zero for a setback
-// stated in millimetres.
+// displacement can account for. radialShift is how far every radius the
+// denoted arc can have sits from capRadius: the rounding of the float offset
+// radius R ∓ dc itself, plus the unit conversion's rounding of the setback
+// across the cap. It is zero only where R ∓ dc is a float64 and the setback
+// was stated in millimetres. The turn term moves the arc's two ends along the
+// held circle and so does not cover it: an arc whose radius is off by
+// radialShift is off in length by that much per radian swept.
 func CapWallArcBound(cU, cV float64, start, end sectionrecord.Point2, capRadius, held float64, wraps int, delta, radialShift float64) float64 {
 	radiusUpper := math.Abs(capRadius)
 	if radialShift > 0 {
@@ -190,9 +193,10 @@ func CapWallArcBound(cU, cV float64, start, end sectionrecord.Point2, capRadius,
 	}
 	bound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(proofbound.IntervalScale(sweep, rd), held), turn)
 	if radialShift > 0 {
-		// The denoted arc runs radialShift off the held radius along its whole
-		// sweep, which moves its length by that much per radian swept: the
-		// held feet's bracketed turn plus the turn their displacement allows.
+		// The denoted arc runs up to radialShift off the held radius along its
+		// whole sweep, which moves its length by that much per radian swept:
+		// the held feet's bracketed turn plus the turn their displacement
+		// allows.
 		sweepUpper := proofbound.AbsSumUpper(intervalMagnitudeUpper(sweep), proofbound.UpRound(turn/r))
 		bound = proofbound.AbsSumUpper(bound, proofbound.ProductUpper(sweepUpper, radialShift))
 	}

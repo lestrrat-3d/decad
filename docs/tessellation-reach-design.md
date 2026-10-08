@@ -517,8 +517,8 @@ over all of them.
 | Patch | Cells | Departure of a held facet from the DENOTED surface |
 |---|---|---|
 | `Plane` | one quad (`sideA, sideB, capA, capB` — two parallel segments, coplanar), two triangles | `band.delta + levelDelta + deltaAxial + deltaStore` — a line offset is affine, so the quad IS the denoted family (modify-reach §8.3) |
-| `Cone`, windows differ | `n(w)` quads between side sample `k` and cap sample `k`, fixed diagonal, two triangles each | `twist + sagitta + skewGap + locusGap + capRadiusRound + band.delta + levelDelta + deltaAxial + deltaStore` |
-| `Cone`, `wholeTurn` or tangent join | same, but same azimuths both rings → planar quads (tess §9's cone cell) | as above with `twist == 0`, `skewGap == 0`, `locusGap == 0` |
+| `Cone`, proven skew positive | `n(w)` quads between side sample `k` and cap sample `k`, fixed diagonal, two triangles each | `twist + sagitta + skewGap + locusGap + capRadiusRound + band.delta + levelDelta + deltaAxial + deltaStore` |
+| `Cone`, proven skew zero (`wholeTurn` or a join whose held ends lie on one ray) | same, but same azimuths both rings → planar quads (tess §9's cone cell) | as above with `twist == 0` and `skewGap == 0`; `locusGap` is zero at a G1 or reflex corner |
 | apex (`sideRadius == 0`) | fan from the interned corner vertex at `sideZ` to the connector arc's samples | `sagitta(cap arc) + band.delta + levelDelta + deltaAxial + deltaStore` |
 | trimmed side wall, cap face | the prism's own cells | the prism's own terms (§3), the cap face's `deltaTrim` read over the contour ring |
 
@@ -535,16 +535,23 @@ publishes in another dimension):
 - `skewGap = productUpper(capRadius, capPatchWindowSkew(g))` — ruled-between-arcs to the denoted cone: the
   ruling from side point at azimuth `θ` to cap point at `θ + σ` differs from the cone's generator through
   the side point (which reaches the cap circle at `θ`) by `s·|P_cap(θ+σ) − P_cap(θ)| <= capRadius·σ`, and
-  the generator point lies on the cone. Zero where the windows coincide, the same condition under which
-  modify-reach §8.3 zeroes the skew half of the normal departure.
-- `locusGap = sqrt(L² − c²)/2` with `L = dc·sqrt(speedUpper² + (axialSpan/dc)²)`, `c` the built ruling's
+  the generator point lies on the cone. `σ` is linear between the two corners, so the larger corner skew
+  bounds it everywhere. `capPatchWindowSkew` is the larger of the patch's two PROVEN corner skews
+  (modify-reach §8.4's `CornerSkewUpper`), never a difference of its held float windows, which can fall
+  below the exact corner angle. The same number gates `twist`: a patch whose proven skew is positive
+  charges it, even where the skew is rounding-level. Zero where both held ends of each corner lie on one
+  ray from the centre, the same condition under which modify-reach §8.3 zeroes the skew half of the normal
+  departure.
+- `locusGap = sqrt(L² − c²)/2` with `L = dc·sqrt(speedUpper² + (axialSpan/dc)²)`, `axialSpan` the stated
+  side setback (at most `|ds| + dsDelta`) and `L` summed over 32 offset sub-ranges that share their ends,
+  `c` the built ruling's
   chord — the boundary ruling (tagged `Line3`) to the conic miter locus it stands for: a curve of length `L`
   between endpoints `c` apart lies inside the ellipse with those foci and major axis `L`, whose semi-minor
   axis is `sqrt(L²−c²)/2`. `speedUpper` is `miterLocusSpeedUpper` (`capblend_contour.go`), the same input
   `chordLocusLengthAllow` reads. Zero at a line-line miter, every reflex foot and every G1 join (modify §7's
   dead-zone rule; all three loci affine). Charged on BOTH patches sharing the ruling.
 - `capRadiusRound = addRoundError(r, ∓d, capRadius)` — the held cap directrix radius against the exact
-  offset radius `ivExactOffsetRadius` states.
+  offset radius `capcontour.ExactOffsetRadius` states.
 - `band.delta`, `levelDelta`, `deltaAxial` (`capBandLevel`), `deltaStore` (§3's mechanism over `prismLike`).
 
 `faceBound(patch) = upRound(Σ terms)`; `bound = max`. `areaSlack` per patch: `perturbedTriangleAreaAllow`
@@ -606,7 +613,7 @@ the largest per-vertex displacement:
 | Vertex | Per-vertex motion (each term already proven; summed through `absSumUpper`) |
 |---|---|
 | side ring, level `L` ∈ {`zLo`, `zHi`} | `walkEndBoundAllow(sideBound)` — `chordStationBound` at `k/n` for an interior station, the walk's own `startBound` at a junction — plus `exactPrismPointRound` plus `L.bound` |
-| cap ring, station `k` of a circular walk (`k = 0` is the foot verbatim) | `walkEndBoundAllow(capOffsetStationBound(seg, k, n, ∓d))` — `circularEndpointInterval`'s enclosure with the exact offset radius `R ∓ d` (`ivExactOffsetRadius`), read at the exact fraction `k/n` of the SIDE window — plus `exactPrismPointRound` plus `capBandLevel(capZ).bound` |
+| cap ring, station `k` of a circular walk (`k = 0` is the foot verbatim) | `walkEndBoundAllow(capOffsetStationBound(seg, k, n, ∓d))` — `circularEndpointInterval`'s enclosure with the exact offset radius `R ∓ d` (`capcontour.ExactOffsetRadius`), read at the exact fraction `k/n` of the SIDE window — plus `exactPrismPointRound` plus `capBandLevel(capZ).bound` |
 | cap ring, a straight walk's foot preceded by a circular walk | the same enclosure on the PRECEDING walk at `k = n`, plus the same two terms |
 | cap ring, a line-line miter foot | `band.delta` (`capContourDelta`'s enclosure of the exact miter point) plus the same two terms |
 

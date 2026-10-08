@@ -2148,19 +2148,34 @@ func BandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
 //     displacement bound into a volume one exactly as it already does for a
 //     mesh vertex.
 //
-// windowSkewMax <= 0 (a tangent join, or either degenerate patch, where the
-// two windows coincide) leaves the term at zero, unchanged from the
-// already-shipped tangent-junction/apex/whole-turn readings.
+// windowSkewMax must be a PROVEN upper bound on the larger corner skew, below
+// a quarter turn (capband.CornerSkewUpper): the radial term grows with the
+// skew there, so an upper bound on the skew bounds it. A zero (both corners'
+// directrix ends on one ray from the centre) leaves the term at zero,
+// unchanged from the tangent-junction, apex and whole-turn readings.
+//
+// Every operation rounds outward. The two fluxes' difference is taken exactly
+// and rounded up, √(R0·R1) is read from the exact product through RatSqrtUp,
+// and sin(Φ/2) is the upper end of its certified enclosure, so no libm
+// accuracy is assumed.
 func ChordLocusVolumeAllow(fluxWide, fluxWideBound, fluxNarrow, fluxNarrowBound, sideRadius, capRadius, windowSkewMax, areaUpper float64) float64 {
-	if windowSkewMax <= 0 || IsNonFinite(windowSkewMax) {
+	if windowSkewMax <= 0 {
 		return 0
 	}
-	envelopeSlack := AbsSumUpper(fluxWide-fluxNarrow, fluxWideBound, fluxNarrowBound)
-	// 1 - cos(x) = 2*sin(x/2)^2, the numerically stable form: the naive
-	// subtraction cancels catastrophically for a small skew, while sin(x/2)
-	// itself is computed directly and squaring a small accurate value stays
-	// accurate.
-	radialDeficit := math.Sqrt(math.Max(0, sideRadius*capRadius)) * math.Abs(math.Sin(windowSkewMax/2))
+	rWide, rNarrow := proofarith.FloatRat(fluxWide), proofarith.FloatRat(fluxNarrow)
+	rR0, rR1, rSkew := proofarith.FloatRat(math.Abs(sideRadius)), proofarith.FloatRat(math.Abs(capRadius)), proofarith.FloatRat(windowSkewMax)
+	if rWide == nil || rNarrow == nil || rR0 == nil || rR1 == nil || rSkew == nil {
+		return math.Inf(1)
+	}
+	envelopeSlack := AbsSumUpper(RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(rWide, rNarrow))), fluxWideBound, fluxNarrowBound)
+	// 1 - cos(x) = 2*sin(x/2)^2 states the radial deficit through sin(x/2),
+	// which has no cancellation at a small skew.
+	sinHalf, _, ok := RadSinCosInterval(new(big.Rat).Mul(rSkew, big.NewRat(1, 2)))
+	if !ok {
+		return math.Inf(1)
+	}
+	sinUpper := math.Max(RatFloatUp(new(big.Rat).Abs(sinHalf.Lo)), RatFloatUp(new(big.Rat).Abs(sinHalf.Hi)))
+	radialDeficit := ProductUpper(RatSqrtUp(new(big.Rat).Mul(rR0, rR1)), sinUpper)
 	maxRadius := math.Max(math.Abs(sideRadius), math.Abs(capRadius))
 	patchDeviation := AbsSumUpper(radialDeficit, ProductUpper(maxRadius, windowSkewMax))
 	// SweptVolumeAllow returns a VOLUME, but this function's return value is a
