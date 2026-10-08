@@ -233,33 +233,6 @@ func heldVolumeExactRat(verts []r3.Vec, tris [][3]int) float64 {
 	return f
 }
 
-// bilinearPatchAreaNumeric estimates, by a fine midpoint Riemann sum, the
-// area of the bilinear ruled patch X(s,r) = (1-r)*((1-s)*vLo + s*vHi) +
-// r*((1-s)*wLo + s*wHi) over the unit square. It is a NUMERICAL REFERENCE
-// this file's own regression tests compare proofbound.CellChordCurveAreaUpper's
-// published bound against, never a proof of its own: every cell this file
-// feeds it is either flat or mildly curved, well within what a 400x400 grid
-// resolves far past the margin these tests require.
-func bilinearPatchAreaNumeric(vLo, vHi, wLo, wHi r3.Vec) float64 {
-	const nGrid = 400
-	const step = 1.0 / nGrid
-	total := 0.0
-	edgeA := vHi.Sub(vLo)
-	edgeB := wHi.Sub(wLo)
-	for i := range nGrid {
-		s := (float64(i) + 0.5) * step
-		a := vLo.Add(edgeA.Scale(s))
-		b := wLo.Add(edgeB.Scale(s))
-		rung := b.Sub(a)
-		for j := range nGrid {
-			r := (float64(j) + 0.5) * step
-			ds := edgeA.Scale(1 - r).Add(edgeB.Scale(r))
-			total += ds.Cross(rung).Len() * step * step
-		}
-	}
-	return total
-}
-
 // chordedAllowBreakdown separates a twisted pie slice's own
 // proofbound.ChordedBoundaryVolumeAllow composition into the REFINED chorded-arc wall
 // cells (the n cells whose own geometry shrinks and multiplies as the
