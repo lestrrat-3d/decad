@@ -118,15 +118,47 @@ func (pp prismPayload) point(u, v, z float64) r3.Vec {
 	return pp.xform.Apply(local.Add(n.Scale(z)))
 }
 
-// prismPointBound carries plane-local coordinate error through the isometric
+// prismPointBound carries plane-local coordinate error through the
 // frame/placement and charges the float operations that evaluate both maps.
+// The source error is a ball of radius Radius3D of the largest coordinate
+// bound, and the lift moves it by the held linear map
+// L = placement basis · [U V N] (massmoment.PrismRotation), which stretches
+// it by at most prismLiftFactor; the exact rounding pp.point commits is
+// charged beside it.
 func prismPointBound(pp prismPayload, u, v, z proofbound.BoundedScalar) float64 {
+	return prismPointBoundWith(pp, prismLiftFactor(pp), u, v, z)
+}
+
+// prismPointBoundWith is prismPointBound with the lift factor read once by a
+// caller that lifts many points through the same payload.
+func prismPointBoundWith(pp prismPayload, factor float64, u, v, z proofbound.BoundedScalar) float64 {
 	source := proofbound.Radius3D(max(u.Bound, v.Bound, z.Bound))
 	held := pp.point(u.Value, v.Value, z.Value)
 	round := exactPrismPointRound(pp, u.Value, v.Value, z.Value, held)
-	// Frame and transform constructors enforce near-orthonormal maps. A factor
-	// four safely carries the source ball through both held linear maps.
-	return proofbound.AbsSumUpper(proofbound.ProductUpper(4, source), round)
+	return proofbound.AbsSumUpper(proofbound.ProductUpper(factor, source), round)
+}
+
+// prismLiftFactor bounds how far pp's held lift stretches a plane-local
+// displacement: 1 + e, rounded up, with e the orthonormality defect of the
+// held linear map L, the entrywise absolute sum of LᵀL − I
+// (massmoment.MapChargeOf's Stretch). Every eigenvalue of LᵀL lies in
+// [1 − e, 1 + e], so |L·d| ≤ √(1 + e)·|d| ≤ (1 + e)·|d|. An exactly
+// orthonormal L, an axis-aligned frame without placement among them, answers
+// exactly 1. A map that is not finite, or whose defect reaches 1/2, answers
+// +Inf.
+func prismLiftFactor(pp prismPayload) float64 {
+	l, err := massmoment.PrismRotation(pp.frame, pp.xform)
+	if err != nil {
+		return math.Inf(1)
+	}
+	charge, err := massmoment.MapChargeOf(l)
+	if err != nil {
+		return math.Inf(1)
+	}
+	if charge.Stretch == 0 {
+		return 1
+	}
+	return proofbound.AbsSumUpper(1, charge.Stretch)
 }
 
 // exactPrismPointRound is proofbound.ExactFrameLiftRound read through pp's own

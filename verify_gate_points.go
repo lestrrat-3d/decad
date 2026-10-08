@@ -101,9 +101,10 @@ func prismStationWitnesses(budget *proofbound.WorkBudget, pp prismPayload, work 
 	}
 	pts := make([]r3.Vec, 0, 2*len(stations))
 	allow := 0.0
+	factor := prismLiftFactor(pp)
 	for _, s := range stations {
 		for _, z := range [2]float64{pp.z0, pp.z1} {
-			a := prismPointBound(pp, proofbound.MeasuredScalar(s.U, s.Bound.U), proofbound.MeasuredScalar(s.V, s.Bound.V),
+			a := prismPointBoundWith(pp, factor, proofbound.MeasuredScalar(s.U, s.Bound.U), proofbound.MeasuredScalar(s.V, s.Bound.V),
 				proofbound.MeasuredScalar(z, 0))
 			if !tolerance.UsableMagnitude(a) {
 				return nil, 0, false, nil
