@@ -402,6 +402,7 @@
 2	0.00	TestChamferRefusals
 2	0.00	TestChamferSelectorAdmission
 2	0.00	TestCircleSegMomentRadiusErrorsUseDecadSentinels
+2	0.02	TestClassBCrossingVertexFarFromOrigin
 2	0.00	TestClearanceAxisAlignedPairOf300IsExact
 2	0.00	TestClearanceAxisBoxesNearTolerance
 2	0.01	TestClearanceCellReadingsContainTruth
