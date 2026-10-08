@@ -51,11 +51,12 @@ import (
 // measured (rationalFloatError), not budgeted. The Cone arm escapes it the
 // same way: its closed form is an exact-rational interval whose trig factors
 // are certified enclosures, so its bound is the interval's reach from the held
-// midpoint (proofbound.IntervalFloatError). Only the whole-turn arm, which has no trig
-// term to enclose, and the non-finite fallback, which has no rational to
-// carry, still pass through math.Sincos; there the magnitude envelope
-// internal/proofbound/bounded.go's proofbound.AnalyticRoundBound doc reserves for a libm result stands, never
-// that helper's roundoff budget alone.
+// midpoint, boxed by the held numbers' own allowances (capband.HeldAllow).
+// The whole-turn arm holds its float closed form under the reach of an
+// enclosure of the true full-period flux. Only the non-finite fallback, which
+// has no rational to carry, still rests on math.Sincos; there the magnitude
+// envelope internal/proofbound/bounded.go's proofbound.AnalyticRoundBound doc reserves for a
+// libm result stands, never that helper's roundoff budget alone.
 
 // evalCapBlendContext builds the analytic cap-blend body from the payload
 // (BX3): the trimmed prism side walls (buildLoopSidesAs, unmodified) plus,
@@ -184,7 +185,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			bandDeltas[capBandKey{loop: li, start: true}] = band.delta
 			startCo = band.capCo
 			startBand = band
-			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta)
+			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta, band.closure, work)
 			if err != nil {
 				return nil, err
 			}
@@ -193,7 +194,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 				pa, pb := capband.AreaOf(g)
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
-			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta, work)
+			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta, band.closure, work)
 			if err != nil {
 				return nil, err
 			}
@@ -211,7 +212,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			bandDeltas[capBandKey{loop: li, start: false}] = band.delta
 			endCo = band.capCo
 			endBand = band
-			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta)
+			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta, band.closure, work)
 			if err != nil {
 				return nil, err
 			}
@@ -220,7 +221,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 				pa, pb := capband.AreaOf(g)
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
-			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta, work)
+			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta, band.closure, work)
 			if err != nil {
 				return nil, err
 			}
@@ -423,7 +424,7 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 // via internal/proofbound/bounds.go's proofbound.SweptVolumeAllow(delta, areaUpper): charging it inside
 // capArea's own bound, or inside each patchRawFlux term, would count the SAME
 // displaced coordinates twice, since patchRawFlux already reads them.
-func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64) (proofbound.BoundedScalar, error) {
+func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure, work *freeform.FreeformWork) (proofbound.BoundedScalar, error) {
 	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)
 	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
@@ -490,6 +491,17 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 		pa, pb := capband.AreaOf(g)
 		patchAreaTotal = proofbound.BoundedAdd(patchAreaTotal, proofbound.MeasuredScalar(pa, pb))
 	}
+	// The patch integrals and the two disks meet one another only to within
+	// the band's own closure slivers (capBandClosure), whose flux is charged
+	// here, before the division, beside the terms it sits with.
+	if !closure.zero() {
+		pointUpper, err := capBandPointUpper(loop, capBoundary, delta, closure, sideZB, capZB, work)
+		if err != nil {
+			return proofbound.BoundedScalar{}, err
+		}
+		fluxTotal.Bound = proofbound.AbsSumUpper(fluxTotal.Bound, closure.fluxAllow(pointUpper,
+			proofbound.AbsSumUpper(sideZB.Value, sideZB.Bound), proofbound.AbsSumUpper(capZB.Value, capZB.Bound)))
+	}
 	result := proofbound.BoundedQuotient(fluxTotal.Value, fluxTotal.Bound, 3, 0)
 	// areaUpper is the surface the contour's own displacement acted on: this
 	// band's patches plus the cap disk they close on (capArea) — the same two
@@ -539,4 +551,23 @@ func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freef
 		Exactness: exactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
+}
+
+// capBandPointUpper is an upper bound on |P| = |(u, v, z)| over every point a
+// band and its closure slivers hold: the original loop's and the built cap
+// boundary's own |u| + |v| envelopes (the latter widened by the contour's
+// displacement delta), plus the larger of the two levels' magnitudes, plus the
+// closure's own largest gap.
+func capBandPointUpper(loop, capBoundary LoopRecord, delta float64, closure capBandClosure, sideZB, capZB proofbound.BoundedScalar, work *freeform.FreeformWork) (float64, error) {
+	coordUpper, err := loopCoordinateUpper(loop, work)
+	if err != nil {
+		return 0, err
+	}
+	capCoordUpper, err := loopCoordinateUpper(capBoundary, work)
+	if err != nil {
+		return 0, err
+	}
+	planeUpper := math.Max(coordUpper, proofbound.AbsSumUpper(capCoordUpper, delta))
+	zUpper := math.Max(proofbound.AbsSumUpper(sideZB.Value, sideZB.Bound), proofbound.AbsSumUpper(capZB.Value, capZB.Bound))
+	return proofbound.AbsSumUpper(planeUpper, zUpper, closure.reach), nil
 }

@@ -83,7 +83,7 @@ func loopCoordinateUpper(loop LoopRecord, work *freeform.FreeformWork) (float64,
 // OUTWARD — capArea's own boundary is exactly that displaced coordinate set,
 // and proofbound.SweptMomentAllow's own contract (internal/proofbound/bounds.go) requires coordUpper to
 // bound every point the difference volume can hold.
-func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, work *freeform.FreeformWork) (mu, mv, mz proofbound.BoundedScalar, err error) {
+func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure, work *freeform.FreeformWork) (mu, mv, mz proofbound.BoundedScalar, err error) {
 	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)
 	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
@@ -146,6 +146,19 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 		muTotal.Bound = proofbound.AbsSumUpper(muTotal.Bound, allow)
 		mvTotal.Bound = proofbound.AbsSumUpper(mvTotal.Bound, allow)
 		mzTotal.Bound = proofbound.AbsSumUpper(mzTotal.Bound, allow)
+	}
+	// The closure slivers between the patch integrals and the disks
+	// (capBandClosure) carry moment too, charged once per band like delta's.
+	if !closure.zero() {
+		pointUpper, cerr := capBandPointUpper(loop, capBoundary, delta, closure, sideZB, capZB, work)
+		if cerr != nil {
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, cerr
+		}
+		inPlane, axial := closure.momentAllow(pointUpper,
+			proofbound.AbsSumUpper(sideZB.Value, sideZB.Bound), proofbound.AbsSumUpper(capZB.Value, capZB.Bound))
+		muTotal.Bound = proofbound.AbsSumUpper(muTotal.Bound, inPlane)
+		mvTotal.Bound = proofbound.AbsSumUpper(mvTotal.Bound, inPlane)
+		mzTotal.Bound = proofbound.AbsSumUpper(mzTotal.Bound, axial)
 	}
 	return muTotal, mvTotal, mzTotal, nil
 }

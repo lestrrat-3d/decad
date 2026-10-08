@@ -81,7 +81,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	// mechanism's own contribution — not masked by ordinary O(1)-scale
 	// arithmetic rounding elsewhere in the band — decides the bound.
 	const delta = 1e-6
-	mu, mv, _, err := capBandMoment(t.Context(), loop, cbp, []capPatchGeom{g}, capZ, -1, delta, work)
+	mu, mv, _, err := capBandMoment(t.Context(), loop, cbp, []capPatchGeom{g}, capZ, -1, delta, capBandClosure{}, work)
 	require.NoError(t, err)
 
 	// The SAME area terms capBandMoment itself composes into areaUpper,
@@ -197,7 +197,7 @@ func capBandCircle(t *testing.T, r, d, capZ float64) proofbound.BoundedScalar {
 		SweepCCW: true, WholeTurn: true,
 		SideZ: capZ - d, CapZ: capZ,
 	}
-	v, err := capBandVolume(t.Context(), loop, cbp, []capPatchGeom{g}, capZ, -1, 0)
+	v, err := capBandVolume(t.Context(), loop, cbp, []capPatchGeom{g}, capZ, -1, 0, capBandClosure{}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	return v
 }
@@ -231,16 +231,16 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 			withoutDelta.z0Delta = 0
 			withoutDelta.z1Delta = 0
 
-			volumeWith, err := capBandVolume(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0)
+			volumeWith, err := capBandVolume(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
 			require.NoError(t, err)
-			volumeWithout, err := capBandVolume(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0)
+			volumeWithout, err := capBandVolume(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			require.Greater(t, volumeWith.Bound, volumeWithout.Bound,
 				`the cap disk's inherited axial displacement must reach the band volume bound`)
 
-			_, _, momentWith, err := capBandMoment(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0, freeform.NewFreeformWork())
+			_, _, momentWith, err := capBandMoment(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
 			require.NoError(t, err)
-			_, _, momentWithout, err := capBandMoment(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0, freeform.NewFreeformWork())
+			_, _, momentWithout, err := capBandMoment(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			require.Greater(t, momentWith.Bound, momentWithout.Bound,
 				`the cap disk's inherited axial displacement must reach the band first-moment bound`)

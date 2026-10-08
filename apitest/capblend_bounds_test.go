@@ -503,6 +503,119 @@ func TestCapBlendVolumeBoundEnclosesExactVolume(t *testing.T) {
 	}
 }
 
+// heldAngleSection extrudes a fixed sketch section 10 mm and chamfers its
+// START cap loop by d. The start cap sits at z = 0, so its closing disk adds
+// no flux of its own and the band's patches carry the reading.
+func heldAngleSection(t *testing.T, draw func(s *sketch.Sketch), d float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	draw(s)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	chamfered, err := body.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapStart(body))), units.Millimeters(d))
+	require.NoError(t, err)
+	return chamfered
+}
+
+// TestCapBlendVolumeBoundCoversHeldAngles checks the volume bound of a
+// cap-loop chamfer whose circular patches are integrated at float Atan2
+// window ends. Both sections hold only exact corner feet, so no contour
+// displacement widens the bound, and the volume is checked against its
+// closed form in 400-bit arithmetic:
+//
+//   - an L at the sketch origin, 40 mm square with a 20 mm notch, whose
+//     reflex corner rounds into an apex patch: the slab A·(h−d) plus the
+//     band A·d − P·d²/2 + (5 − π/4)·d³/3 (reflexLChamferVolume's closed form);
+//   - a slot 10^6 mm up the v axis whose ends are half turns of radius
+//     50 mm joined by 0.5 mm sides at G1 feet: (π·r² + 2·r·l)·h less the
+//     chamfered ring π·d²·(r − d/3) and the straight sides' l·d².
+//
+// Shown to fail: with the patches' held numbers read as exact
+// (capWallHeldAllow and capApexHeldAllow answering a zero HeldAllow), the
+// L's volume misses by 7.854e-13 mm³ against a 7.852e-13 mm³ bound. The
+// slot's misses by 6.11e-08 mm³ against 5.72e-08 mm³ only with the band's
+// closure charge (capBandClosure) zeroed as well: its G1 feet sit an ulp off
+// their exact positions, and the charge for that gap alone covers the held
+// angles' error there.
+func TestCapBlendVolumeBoundCoversHeldAngles(t *testing.T) {
+	t.Parallel()
+	pi, ok := new(big.Float).SetPrec(volumeRefPrec).SetString(piRef)
+	require.True(t, ok)
+	bf := func(x float64) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).SetFloat64(x) }
+	mul := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).Mul(a, b) }
+	add := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).Add(a, b) }
+	sub := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).Sub(a, b) }
+	quo := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).Quo(a, b) }
+	fixed := func(s *sketch.Sketch, u, v float64) *sketch.Point {
+		p := s.CreatePoint(u, v)
+		s.Fix(p)
+		return p
+	}
+	const h = 10.0
+	for _, tc := range []struct {
+		name  string
+		draw  func(s *sketch.Sketch)
+		d     float64
+		exact func(d float64) *big.Float
+	}{
+		{
+			name: `a reflex L at the sketch origin`,
+			draw: func(s *sketch.Sketch) {
+				coords := [][2]float64{{0, 0}, {40, 0}, {40, 20}, {20, 20}, {20, 40}, {0, 40}}
+				pts := make([]*sketch.Point, len(coords))
+				for i, c := range coords {
+					pts[i] = fixed(s, c[0], c[1])
+				}
+				for i := range pts {
+					s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+				}
+			},
+			d: 1,
+			exact: func(d float64) *big.Float {
+				A, P, D := bf(1200), bf(160), bf(d)
+				corner := sub(bf(5), quo(pi, bf(4)))
+				band := add(sub(mul(A, D), quo(mul(P, mul(D, D)), bf(2))), quo(mul(corner, mul(D, mul(D, D))), bf(3)))
+				return add(mul(A, sub(bf(h), D)), band)
+			},
+		},
+		{
+			name: `a slot far up the v axis`,
+			draw: func(s *sketch.Sketch) {
+				const cv, l, r = 1e6, 0.5, 50.0
+				a, b := fixed(s, -l/2, cv-r), fixed(s, l/2, cv-r)
+				c, d := fixed(s, l/2, cv+r), fixed(s, -l/2, cv+r)
+				oR, oL := fixed(s, l/2, cv), fixed(s, -l/2, cv)
+				s.CreateLine(a, b)
+				s.CreateArc(oR, b, c)
+				s.CreateLine(c, d)
+				s.CreateArc(oL, d, a)
+			},
+			d: 1,
+			exact: func(d float64) *big.Float {
+				R, L, D := bf(50), bf(0.5), bf(d)
+				prism := mul(add(mul(pi, mul(R, R)), mul(bf(2), mul(R, L))), bf(h))
+				ring := mul(mul(pi, mul(D, D)), sub(R, quo(D, bf(3))))
+				return sub(sub(prism, ring), mul(L, mul(D, D)))
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			vol, err := heldAngleSection(t, tc.draw, tc.d).Volume()
+			require.NoError(t, err)
+			residual := new(big.Float).SetPrec(volumeRefPrec).Sub(bf(vol.Value.Mag()), tc.exact(tc.d))
+			got, _ := new(big.Float).Abs(residual).Float64()
+			require.Positive(t, got, `the reading is not the exact volume`)
+			require.LessOrEqual(t, got, vol.Bound.Mag(), `the published bound contains the true volume`)
+		})
+	}
+}
+
 // TestCapBlendUnrepresentableRadialChangeRefused is the other half of the same
 // rule. Where the setback is so small beside the radius that `R - d` rounds back
 // onto `R`, the cap contour this evaluator would build is the original circle

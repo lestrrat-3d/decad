@@ -158,6 +158,10 @@ type capBandResult struct {
 	capCo   []coedge
 	geom    []capPatchGeom
 	delta   float64
+	// closure is the band's capBandClosure: the area of the slivers between its
+	// patches' integrated boundaries and the surface those patches meet, which
+	// capBandVolume and capBandMoment charge beside the patch integrals.
+	closure capBandClosure
 }
 
 type capPatchGeom = capband.Patch
@@ -273,6 +277,10 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		dthHeld := gth1 - gth0
 		capThAllow := proofbound.IntervalFloatError(proofbound.TwoPiInterval(), dthHeld)
 		geom := capPatchGeom{Circular: true, CU: w.CU, CV: w.CV, SideRadius: w.Radius, CapRadius: capRadius, Th0: gth0, Th1: gth1, CapTh0: gth0, CapTh1: gth1, SweepCCW: w.Th1 > w.Th0, WholeTurn: true, SideZ: sideZ, CapZ: capZ, ContourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant), LevelDelta: levelDelta, CapThAllow: capThAllow}
+		// A whole turn reads its two windows structurally, as 2π, and its cap
+		// face records the circle at capRadius itself, so only the side radius
+		// owes an allowance: the circle record's own (zero for a CircleSeg).
+		geom.Held = capband.HeldAllow{SideRadius: w.RadiusBound}
 		// The two circles pair at their seams, the side wall's own walk start
 		// and the cap circle's (cU + capRadius, cV), and keep that pairing all
 		// the way round, so both corner skews are the seams' one angle.
@@ -456,8 +464,10 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// arc is walked CLOCKWISE (arcTh1 below arcTh0 by construction), and
 		// sweepCCW is what carries that fact to patchRawFlux.
 		gth0, gth1 := arcTh0[i], arcTh1[i]
+		foot0, foot1 := j.pA, j.pB
 		if gth1 < gth0 {
 			gth0, gth1 = gth1, gth0
+			foot0, foot1 = foot1, foot0
 		}
 		// chordUpper/slant are this apex patch's own held chord (the arc
 		// joining the two offset feet) and slant distance (either of its two
@@ -486,6 +496,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			LevelDelta:   levelDelta,
 			CapThAllow:   capThAllow,
 		}
+		held, err := capApexHeldAllow(j, dc, foot0, foot1, gth0, gth1)
+		if err != nil {
+			return capBandResult{}, err
+		}
+		g.Held = held
 		// The apex patch's rulings all leave the ORIGINAL corner vertex, which
 		// is the cone tag's own apex: a point side directrix.
 		setPatchReadings(face, g, capBuiltApexPatch(sideVertexAt(i), arc, []*Vertex{arc.Start(), arc.End()}))
@@ -638,6 +653,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			g.CapThAllow = capThAllow
 			side0, side1 := Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV}
 			cap0, cap1 := start, end
+			held, err := capWallHeldAllow(w, capRadius, start, end, capTh0, capTh1)
+			if err != nil {
+				return capBandResult{}, err
+			}
+			g.Held = held
 			if g.Th1 < g.Th0 {
 				// The SAME swap, applied to both pairs together: g.Th0 must
 				// keep pairing with g.CapTh0 (both the wall's OWN start
@@ -645,6 +665,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				// patchRawFlux's ruled-angle term pairs the wrong corners.
 				g.Th0, g.Th1 = g.Th1, g.Th0
 				g.CapTh0, g.CapTh1 = g.CapTh1, g.CapTh0
+				g.Held.Th0, g.Held.Th1 = g.Held.Th1, g.Held.Th0
+				g.Held.CapTh0, g.Held.CapTh1 = g.Held.CapTh1, g.Held.CapTh0
 				side0, side1 = side1, side0
 				cap0, cap1 = cap1, cap0
 			}
@@ -683,7 +705,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			capCo = append(capCo, coedge{edge: arc, forward: true})
 		}
 	}
-	return capBandResult{patches: patches, capCo: capCo, geom: geoms, delta: delta}, nil
+	closure, err := capBandClosureOf(walks, joins, slantIn, slantOut, slantInHeld, slantOutHeld)
+	if err != nil {
+		return capBandResult{}, err
+	}
+	return capBandResult{patches: patches, capCo: capCo, geom: geoms, delta: delta, closure: closure}, nil
 }
 
 // setCapPatchSkews stamps a circular wall patch's two corner skews: the proven

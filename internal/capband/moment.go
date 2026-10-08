@@ -165,63 +165,144 @@ type PhaseTerm struct {
 // slab term) reproduces the closed-form frustum-plus-slab centroid
 // 3.9881863539 to float64 precision.
 func coneMomentTermsX(R0, R1, H, cU, dS, dC *big.Rat) []PhaseTerm {
-	two, four, nine, twentyFour := big.NewRat(2, 1), big.NewRat(4, 1), big.NewRat(9, 1), big.NewRat(24, 1)
-	return []PhaseTerm{
-		{0, 0, ratScale(proofbound.RatMul(H, cU, proofbound.RatAdd(proofbound.RatMul(R0, R0, dS), proofbound.RatMul(R1, R1, dC))), 1, 6), new(big.Rat)},
-		{0, 1, ratScale(proofbound.RatMul(H, R1, proofbound.RatAdd(proofbound.RatMul(two, R0, R0, dC), proofbound.RatMul(four, R0, R0, dS), proofbound.RatMul(nine, R1, R1, dC), proofbound.RatMul(twentyFour, cU, cU, dC))), 1, 96), new(big.Rat)},
-		{1, 0, ratScale(proofbound.RatMul(H, R0, proofbound.RatAdd(proofbound.RatMul(nine, R0, R0, dS), proofbound.RatMul(four, R1, R1, dC), proofbound.RatMul(two, R1, R1, dS), proofbound.RatMul(twentyFour, cU, cU, dS))), 1, 96), new(big.Rat)},
-		{0, 2, ratScale(proofbound.RatMul(H, R1, R1, cU, dC), 1, 6), new(big.Rat)},
-		{1, -1, ratScale(proofbound.RatMul(H, R0, R1, cU, proofbound.RatAdd(dC, dS)), 1, 12), new(big.Rat)},
-		{1, 1, ratScale(proofbound.RatMul(H, R0, R1, cU, proofbound.RatAdd(dC, dS)), 1, 12), new(big.Rat)},
-		{2, 0, ratScale(proofbound.RatMul(H, R0, R0, cU, dS), 1, 6), new(big.Rat)},
-		{0, 3, ratScale(proofbound.RatMul(H, R1, R1, R1, dC), 1, 32), new(big.Rat)},
-		{1, -2, ratScale(proofbound.RatMul(H, R0, R1, R1, proofbound.RatAdd(proofbound.RatMul(two, dC), dS)), 1, 96), new(big.Rat)},
-		{1, 2, ratScale(proofbound.RatMul(H, R0, R1, R1, proofbound.RatAdd(proofbound.RatMul(two, dC), dS)), 1, 96), new(big.Rat)},
-		{2, -1, ratScale(proofbound.RatMul(H, R0, R0, R1, proofbound.RatAdd(dC, proofbound.RatMul(two, dS))), 1, 96), new(big.Rat)},
-		{2, 1, ratScale(proofbound.RatMul(H, R0, R0, R1, proofbound.RatAdd(dC, proofbound.RatMul(two, dS))), 1, 96), new(big.Rat)},
-		{3, 0, ratScale(proofbound.RatMul(H, R0, R0, R0, dS), 1, 32), new(big.Rat)},
-	}
+	return ratTerms(momentTermsX(ratRing{}, R0, R1, H, cU, dS, dC))
 }
 
 func coneMomentTermsY(R0, R1, H, cV, dS, dC *big.Rat) []PhaseTerm {
-	two, four, nine, twentyFour := big.NewRat(2, 1), big.NewRat(4, 1), big.NewRat(9, 1), big.NewRat(24, 1)
-	return []PhaseTerm{
-		{0, 0, ratScale(proofbound.RatMul(H, cV, proofbound.RatAdd(proofbound.RatMul(R0, R0, dS), proofbound.RatMul(R1, R1, dC))), 1, 6), new(big.Rat)},
-		{0, 1, new(big.Rat), ratScale(proofbound.RatMul(H, R1, proofbound.RatAdd(proofbound.RatMul(two, R0, R0, dC), proofbound.RatMul(four, R0, R0, dS), proofbound.RatMul(nine, R1, R1, dC), proofbound.RatMul(twentyFour, cV, cV, dC))), 1, 96)},
-		{1, 0, new(big.Rat), ratScale(proofbound.RatMul(H, R0, proofbound.RatAdd(proofbound.RatMul(nine, R0, R0, dS), proofbound.RatMul(four, R1, R1, dC), proofbound.RatMul(two, R1, R1, dS), proofbound.RatMul(twentyFour, cV, cV, dS))), 1, 96)},
-		{0, 2, ratScale(proofbound.RatMul(H, R1, R1, cV, dC), -1, 6), new(big.Rat)},
-		{1, -1, ratScale(proofbound.RatMul(H, R0, R1, cV, proofbound.RatAdd(dC, dS)), 1, 12), new(big.Rat)},
-		{1, 1, ratScale(proofbound.RatMul(H, R0, R1, cV, proofbound.RatAdd(dC, dS)), -1, 12), new(big.Rat)},
-		{2, 0, ratScale(proofbound.RatMul(H, R0, R0, cV, dS), -1, 6), new(big.Rat)},
-		{0, 3, new(big.Rat), ratScale(proofbound.RatMul(H, R1, R1, R1, dC), -1, 32)},
-		{1, -2, new(big.Rat), ratScale(proofbound.RatMul(H, R0, R1, R1, proofbound.RatAdd(proofbound.RatMul(two, dC), dS)), -1, 96)},
-		{1, 2, new(big.Rat), ratScale(proofbound.RatMul(H, R0, R1, R1, proofbound.RatAdd(proofbound.RatMul(two, dC), dS)), -1, 96)},
-		{2, -1, new(big.Rat), ratScale(proofbound.RatMul(H, R0, R0, R1, proofbound.RatAdd(dC, proofbound.RatMul(two, dS))), 1, 96)},
-		{2, 1, new(big.Rat), ratScale(proofbound.RatMul(H, R0, R0, R1, proofbound.RatAdd(dC, proofbound.RatMul(two, dS))), -1, 96)},
-		{3, 0, new(big.Rat), ratScale(proofbound.RatMul(H, R0, R0, R0, dS), -1, 32)},
-	}
+	return ratTerms(momentTermsY(ratRing{}, R0, R1, H, cV, dS, dC))
 }
 
 func coneMomentTermsZ(R0, R1, H, z0, dS, dC *big.Rat) []PhaseTerm {
-	three, four, six, eight := big.NewRat(3, 1), big.NewRat(4, 1), big.NewRat(6, 1), big.NewRat(8, 1)
-	neg := func(v *big.Rat) *big.Rat { return new(big.Rat).Neg(v) }
-	return []PhaseTerm{
-		{0, 0, ratScale(proofbound.RatAdd(
-			proofbound.RatMul(H, H, R0, R0, dS),
-			neg(proofbound.RatMul(three, H, H, R1, R1, dC)),
-			proofbound.RatMul(four, H, R0, R0, dS, z0),
-			neg(proofbound.RatMul(eight, H, R1, R1, dC, z0)),
-			proofbound.RatMul(six, R0, R0, dS, z0, z0),
-			neg(proofbound.RatMul(six, R1, R1, dC, z0, z0)),
-		), 1, 24), new(big.Rat)},
-		{1, -1, ratScale(proofbound.RatMul(R0, R1, proofbound.RatAdd(
-			proofbound.RatMul(three, H, H, dC),
-			neg(proofbound.RatMul(H, H, dS)),
-			proofbound.RatMul(eight, H, dC, z0),
-			neg(proofbound.RatMul(four, H, dS, z0)),
-			proofbound.RatMul(six, dC, z0, z0),
-			neg(proofbound.RatMul(six, dS, z0, z0)),
-		)), 1, 24), new(big.Rat)},
+	return ratTerms(momentTermsZ(ratRing{}, R0, R1, H, z0, dS, dC))
+}
+
+// momentTerm is one PhaseTerm over the number type T: exact rationals for the
+// held parameters, rational intervals for parameters boxed by their HeldAllow.
+type momentTerm[T any] struct {
+	k, m   int
+	ac, as T
+}
+
+// ring is the arithmetic the moment coefficients are built from. ratRing
+// computes them exactly; ivRing encloses them over intervals, and is
+// inclusion-monotonic, so a coefficient built from boxed parameters contains
+// the coefficient at every parameter value the boxes hold.
+type ring[T any] interface {
+	mul(xs ...T) T
+	add(xs ...T) T
+	scale(x T, num, den int64) T
+	int(n int64) T
+	zero() T
+}
+
+// Both rings satisfy ring for the number type they build over.
+var (
+	_ ring[*big.Rat]               = ratRing{}
+	_ ring[proofbound.RatInterval] = ivRing{}
+)
+
+type ratRing struct{}
+
+func (ratRing) mul(xs ...*big.Rat) *big.Rat               { return proofbound.RatMul(xs...) }
+func (ratRing) add(xs ...*big.Rat) *big.Rat               { return proofbound.RatAdd(xs...) }
+func (ratRing) scale(x *big.Rat, num, den int64) *big.Rat { return ratScale(x, num, den) }
+func (ratRing) int(n int64) *big.Rat                      { return big.NewRat(n, 1) }
+func (ratRing) zero() *big.Rat                            { return new(big.Rat) }
+
+type ivRing struct{}
+
+func (ivRing) mul(xs ...proofbound.RatInterval) proofbound.RatInterval {
+	out := xs[0]
+	for _, x := range xs[1:] {
+		out = proofbound.IntervalMul(out, x)
+	}
+	return out
+}
+
+func (ivRing) add(xs ...proofbound.RatInterval) proofbound.RatInterval {
+	out := xs[0]
+	for _, x := range xs[1:] {
+		out = proofbound.IntervalAdd(out, x)
+	}
+	return out
+}
+
+func (ivRing) scale(x proofbound.RatInterval, num, den int64) proofbound.RatInterval {
+	return proofbound.IntervalScale(x, big.NewRat(num, den))
+}
+
+func (ivRing) int(n int64) proofbound.RatInterval {
+	return proofbound.PointInterval(big.NewRat(n, 1))
+}
+
+func (ivRing) zero() proofbound.RatInterval { return proofbound.PointInterval(new(big.Rat)) }
+
+func ratTerms(terms []momentTerm[*big.Rat]) []PhaseTerm {
+	out := make([]PhaseTerm, len(terms))
+	for i, t := range terms {
+		out[i] = PhaseTerm(t)
+	}
+	return out
+}
+
+func momentTermsX[T any](r ring[T], R0, R1, H, cU, dS, dC T) []momentTerm[T] {
+	two, four, nine, twentyFour := r.int(2), r.int(4), r.int(9), r.int(24)
+	return []momentTerm[T]{
+		{0, 0, r.scale(r.mul(H, cU, r.add(r.mul(R0, R0, dS), r.mul(R1, R1, dC))), 1, 6), r.zero()},
+		{0, 1, r.scale(r.mul(H, R1, r.add(r.mul(two, R0, R0, dC), r.mul(four, R0, R0, dS), r.mul(nine, R1, R1, dC), r.mul(twentyFour, cU, cU, dC))), 1, 96), r.zero()},
+		{1, 0, r.scale(r.mul(H, R0, r.add(r.mul(nine, R0, R0, dS), r.mul(four, R1, R1, dC), r.mul(two, R1, R1, dS), r.mul(twentyFour, cU, cU, dS))), 1, 96), r.zero()},
+		{0, 2, r.scale(r.mul(H, R1, R1, cU, dC), 1, 6), r.zero()},
+		{1, -1, r.scale(r.mul(H, R0, R1, cU, r.add(dC, dS)), 1, 12), r.zero()},
+		{1, 1, r.scale(r.mul(H, R0, R1, cU, r.add(dC, dS)), 1, 12), r.zero()},
+		{2, 0, r.scale(r.mul(H, R0, R0, cU, dS), 1, 6), r.zero()},
+		{0, 3, r.scale(r.mul(H, R1, R1, R1, dC), 1, 32), r.zero()},
+		{1, -2, r.scale(r.mul(H, R0, R1, R1, r.add(r.mul(two, dC), dS)), 1, 96), r.zero()},
+		{1, 2, r.scale(r.mul(H, R0, R1, R1, r.add(r.mul(two, dC), dS)), 1, 96), r.zero()},
+		{2, -1, r.scale(r.mul(H, R0, R0, R1, r.add(dC, r.mul(two, dS))), 1, 96), r.zero()},
+		{2, 1, r.scale(r.mul(H, R0, R0, R1, r.add(dC, r.mul(two, dS))), 1, 96), r.zero()},
+		{3, 0, r.scale(r.mul(H, R0, R0, R0, dS), 1, 32), r.zero()},
+	}
+}
+
+func momentTermsY[T any](r ring[T], R0, R1, H, cV, dS, dC T) []momentTerm[T] {
+	two, four, nine, twentyFour := r.int(2), r.int(4), r.int(9), r.int(24)
+	return []momentTerm[T]{
+		{0, 0, r.scale(r.mul(H, cV, r.add(r.mul(R0, R0, dS), r.mul(R1, R1, dC))), 1, 6), r.zero()},
+		{0, 1, r.zero(), r.scale(r.mul(H, R1, r.add(r.mul(two, R0, R0, dC), r.mul(four, R0, R0, dS), r.mul(nine, R1, R1, dC), r.mul(twentyFour, cV, cV, dC))), 1, 96)},
+		{1, 0, r.zero(), r.scale(r.mul(H, R0, r.add(r.mul(nine, R0, R0, dS), r.mul(four, R1, R1, dC), r.mul(two, R1, R1, dS), r.mul(twentyFour, cV, cV, dS))), 1, 96)},
+		{0, 2, r.scale(r.mul(H, R1, R1, cV, dC), -1, 6), r.zero()},
+		{1, -1, r.scale(r.mul(H, R0, R1, cV, r.add(dC, dS)), 1, 12), r.zero()},
+		{1, 1, r.scale(r.mul(H, R0, R1, cV, r.add(dC, dS)), -1, 12), r.zero()},
+		{2, 0, r.scale(r.mul(H, R0, R0, cV, dS), -1, 6), r.zero()},
+		{0, 3, r.zero(), r.scale(r.mul(H, R1, R1, R1, dC), -1, 32)},
+		{1, -2, r.zero(), r.scale(r.mul(H, R0, R1, R1, r.add(r.mul(two, dC), dS)), -1, 96)},
+		{1, 2, r.zero(), r.scale(r.mul(H, R0, R1, R1, r.add(r.mul(two, dC), dS)), -1, 96)},
+		{2, -1, r.zero(), r.scale(r.mul(H, R0, R0, R1, r.add(dC, r.mul(two, dS))), 1, 96)},
+		{2, 1, r.zero(), r.scale(r.mul(H, R0, R0, R1, r.add(dC, r.mul(two, dS))), -1, 96)},
+		{3, 0, r.zero(), r.scale(r.mul(H, R0, R0, R0, dS), -1, 32)},
+	}
+}
+
+func momentTermsZ[T any](r ring[T], R0, R1, H, z0, dS, dC T) []momentTerm[T] {
+	three, four, six, eight := r.int(3), r.int(4), r.int(6), r.int(8)
+	neg := func(v T) T { return r.scale(v, -1, 1) }
+	return []momentTerm[T]{
+		{0, 0, r.scale(r.add(
+			r.mul(H, H, R0, R0, dS),
+			neg(r.mul(three, H, H, R1, R1, dC)),
+			r.mul(four, H, R0, R0, dS, z0),
+			neg(r.mul(eight, H, R1, R1, dC, z0)),
+			r.mul(six, R0, R0, dS, z0, z0),
+			neg(r.mul(six, R1, R1, dC, z0, z0)),
+		), 1, 24), r.zero()},
+		{1, -1, r.scale(r.mul(R0, R1, r.add(
+			r.mul(three, H, H, dC),
+			neg(r.mul(H, H, dS)),
+			r.mul(eight, H, dC, z0),
+			neg(r.mul(four, H, dS, z0)),
+			r.mul(six, dC, z0, z0),
+			neg(r.mul(six, dS, z0, z0)),
+		)), 1, 24), r.zero()},
 	}
 }
 
@@ -288,19 +369,30 @@ func wholeTurnPhaseSum(terms []PhaseTerm) *big.Rat {
 // moment, with its own proven bound. Every held parameter lifts to an exact
 // rational and H, dS, dC are formed exactly, so each Fourier coefficient is
 // exact (coneMomentTermsX/Y/Z). A whole-turn patch's sum is then an exact
-// rational (wholeTurnPhaseSum) and its bound is that rational's one rounding
-// into a float64 (rationalFloatError). Every other patch's sum is an interval
-// whose phase integrals are certified enclosures (phaseSumInterval); the
-// held value is the nearest float to its midpoint and the bound is the
-// interval's reach from it (proofbound.IntervalFloatError), so it grows with neither the
-// arc centre's distance from the plane-local origin nor the coefficients'
-// magnitude. A parameter that does not lift (non-finite geometry, which
-// buildCapBand already refuses) answers 0 with an infinite bound rather than
-// a reading nothing proves. sweepCCW's negation mirrors patchRawFlux's own:
-// the closed form is taken over the NORMALIZED (th0 < th1) window, which is
-// the patch's actual orientation only while its own walk runs
-// counter-clockwise.
+// rational (wholeTurnPhaseSum); every other patch's sum is an interval whose
+// phase integrals are certified enclosures (phaseSumInterval), and the held
+// value is the nearest float to its midpoint.
+//
+// The bound is not read off that held enclosure, because the held angles are
+// float Atan2 results and an ArcSeg's held side radius a math.Hypot: the patch
+// the closed band needs is the one at the reference values g.Held names. The
+// same closed form is enclosed again with each angle and radius boxed by its
+// allowance — the coefficients over interval arithmetic (ivRing), each phase
+// integral widened by its phase's own allowance (HeldAllow.phaseAllow) — and the
+// bound is that enclosure's reach from the held value. A whole-turn patch's
+// windows are a full period by construction, so its boxed sum reads both
+// swept angles as exactly 2π from the rational bracket of π rather than from
+// the held floats. Neither grows with the arc centre's distance from the
+// plane-local origin beyond the enclosure's own width.
+//
+// A parameter that does not lift (non-finite geometry, which buildCapBand
+// already refuses) or an allowance that is not finite answers 0 with an
+// infinite bound rather than a reading nothing proves. sweepCCW's negation
+// mirrors patchRawFlux's own: the closed form is taken over the NORMALIZED
+// (th0 < th1) window, which is the patch's actual orientation only while its
+// own walk runs counter-clockwise.
 func conePatchMoment(g Patch) (mu, mv, mz proofbound.BoundedScalar) {
+	unproven := proofbound.MeasuredScalar(0, math.Inf(1))
 	R0, R1 := proofarith.FloatRat(g.SideRadius), proofarith.FloatRat(g.CapRadius)
 	z0, z1 := proofarith.FloatRat(g.SideZ), proofarith.FloatRat(g.CapZ)
 	thS0, thS1 := proofarith.FloatRat(g.Th0), proofarith.FloatRat(g.Th1)
@@ -308,37 +400,104 @@ func conePatchMoment(g Patch) (mu, mv, mz proofbound.BoundedScalar) {
 	cU, cV := proofarith.FloatRat(g.CU), proofarith.FloatRat(g.CV)
 	for _, r := range []*big.Rat{R0, R1, z0, z1, thS0, thS1, thC0, thC1, cU, cV} {
 		if r == nil {
-			unproven := proofbound.MeasuredScalar(0, math.Inf(1))
 			return unproven, unproven, unproven
 		}
+	}
+	boxes, ok := momentBoxes(g)
+	if !ok {
+		return unproven, unproven, unproven
 	}
 	H := new(big.Rat).Sub(z1, z0)
 	dS := new(big.Rat).Sub(thS1, thS0)
 	dC := new(big.Rat).Sub(thC1, thC0)
 
 	phases := make(map[[2]int][2]proofbound.RatInterval)
-	sum := func(terms []PhaseTerm) proofbound.BoundedScalar {
+	sum := func(terms []PhaseTerm, wide []momentTerm[proofbound.RatInterval]) proofbound.BoundedScalar {
 		if g.WholeTurn {
 			exact := wholeTurnPhaseSum(terms)
 			held, _ := exact.Float64()
-			return proofbound.MeasuredScalar(held, proofarith.RationalFloatError(exact, held))
+			return proofbound.MeasuredScalar(held, proofbound.IntervalFloatError(wholeTurnPhaseSumInterval(wide), held))
 		}
 		iv, ok := phaseSumInterval(terms, thS0, thS1, thC0, thC1, phases)
 		if !ok {
-			return proofbound.MeasuredScalar(0, math.Inf(1))
+			return unproven
 		}
 		held, _ := intervalMid(iv).Float64()
-		return proofbound.MeasuredScalar(held, proofbound.IntervalFloatError(iv, held))
+		if g.Held.zero() {
+			return proofbound.MeasuredScalar(held, proofbound.IntervalFloatError(iv, held))
+		}
+		total := proofbound.PointInterval(new(big.Rat))
+		for _, t := range wide {
+			enclosure := phases[[2]int{t.k, t.m}]
+			allow := g.Held.phaseAllow(t.k, t.m)
+			total = proofbound.IntervalAdd(total, proofbound.IntervalAdd(
+				proofbound.IntervalMul(widenBy(enclosure[0], allow), t.ac),
+				proofbound.IntervalMul(widenBy(enclosure[1], allow), t.as)))
+		}
+		return proofbound.MeasuredScalar(held, proofbound.IntervalFloatError(total, held))
 	}
 
-	mxR := sum(coneMomentTermsX(R0, R1, H, cU, dS, dC))
-	myR := sum(coneMomentTermsY(R0, R1, H, cV, dS, dC))
-	mzR := sum(coneMomentTermsZ(R0, R1, H, z0, dS, dC))
+	mxR := sum(coneMomentTermsX(R0, R1, H, cU, dS, dC), momentTermsX(ivRing{}, boxes.R0, boxes.R1, boxes.H, boxes.cU, boxes.dS, boxes.dC))
+	myR := sum(coneMomentTermsY(R0, R1, H, cV, dS, dC), momentTermsY(ivRing{}, boxes.R0, boxes.R1, boxes.H, boxes.cV, boxes.dS, boxes.dC))
+	mzR := sum(coneMomentTermsZ(R0, R1, H, z0, dS, dC), momentTermsZ(ivRing{}, boxes.R0, boxes.R1, boxes.H, boxes.z0, boxes.dS, boxes.dC))
 
 	if !g.SweepCCW {
 		mxR.Value, myR.Value, mzR.Value = -mxR.Value, -myR.Value, -mzR.Value
 	}
 	return mxR, myR, mzR
+}
+
+// momentParams are a Cone patch's moment parameters as intervals, each held
+// number boxed by its g.Held allowance and every recorded or exactly formed one
+// a point.
+type momentParams struct {
+	R0, R1, H, cU, cV, z0, dS, dC proofbound.RatInterval
+}
+
+// momentBoxes boxes g's moment parameters. A whole-turn patch's two swept
+// angles are its true 2π, never the held window's difference. ok is false where
+// a parameter does not lift or an allowance is not finite.
+func momentBoxes(g Patch) (momentParams, bool) {
+	if !g.Held.finite() {
+		return momentParams{}, false
+	}
+	R0, ok0 := heldBox(g.SideRadius, g.Held.SideRadius)
+	R1, ok1 := heldBox(g.CapRadius, g.Held.CapRadius)
+	thS0, okS0 := heldBox(g.Th0, g.Held.Th0)
+	thS1, okS1 := heldBox(g.Th1, g.Held.Th1)
+	thC0, okC0 := heldBox(g.CapTh0, g.Held.CapTh0)
+	thC1, okC1 := heldBox(g.CapTh1, g.Held.CapTh1)
+	z0, z1 := proofarith.FloatRat(g.SideZ), proofarith.FloatRat(g.CapZ)
+	cU, cV := proofarith.FloatRat(g.CU), proofarith.FloatRat(g.CV)
+	if !ok0 || !ok1 || !okS0 || !okS1 || !okC0 || !okC1 || z0 == nil || z1 == nil || cU == nil || cV == nil {
+		return momentParams{}, false
+	}
+	out := momentParams{
+		R0: R0, R1: R1,
+		H:  proofbound.PointInterval(new(big.Rat).Sub(z1, z0)),
+		cU: proofbound.PointInterval(cU), cV: proofbound.PointInterval(cV), z0: proofbound.PointInterval(z0),
+		dS: proofbound.IntervalSub(thS1, thS0),
+		dC: proofbound.IntervalSub(thC1, thC0),
+	}
+	if g.WholeTurn {
+		out.dS, out.dC = proofbound.TwoPiInterval(), proofbound.TwoPiInterval()
+	}
+	return out, true
+}
+
+// wholeTurnPhaseSumInterval is wholeTurnPhaseSum over interval coefficients:
+// every k+m = 0 term's phase is identically zero, so it contributes its cosine
+// coefficient exactly, and every other term integrates to zero over the full
+// period.
+func wholeTurnPhaseSumInterval(terms []momentTerm[proofbound.RatInterval]) proofbound.RatInterval {
+	sum := proofbound.PointInterval(new(big.Rat))
+	for _, t := range terms {
+		if t.k+t.m != 0 {
+			continue
+		}
+		sum = proofbound.IntervalAdd(sum, t.ac)
+	}
+	return sum
 }
 
 // FirstMomentFlux returns one cap band's patch first moments and bounds.

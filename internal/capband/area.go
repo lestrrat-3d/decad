@@ -82,7 +82,16 @@ func patchAreaOf(g Patch) (float64, float64) {
 	// bound on how far that ruled patch's area sits from this formula's
 	// frustum sector at the same cap window. It is zero wherever the two
 	// directrices' ends lie on one ray from the centre at both corners.
-	skewAllow := coneSkewAreaAllow(g)
+	//
+	// The held side radius is an ArcSeg's math.Hypot of its recorded Start, up
+	// to g.Held.SideRadius from the radius the record states, and both terms
+	// read it: the skew term at the top of that span, since it only grows with
+	// the radius, and sideRadiusAreaAllow for the frustum sector itself.
+	skewGeom := g
+	if g.Held.SideRadius > 0 {
+		skewGeom.SideRadius = proofbound.AbsSumUpper(R0, g.Held.SideRadius)
+	}
+	skewAllow := proofbound.AbsSumUpper(coneSkewAreaAllow(skewGeom), sideRadiusAreaAllow(g))
 	// The core term (everything but skewAllow, contourAllow and the level
 	// allowance, which stand unchanged either way) takes the SMALLER of
 	// two independently sound
@@ -96,6 +105,25 @@ func patchAreaOf(g Patch) (float64, float64) {
 	)
 	bound := proofbound.AbsSumUpper(core, skewAllow, patchDisplacementAreaAllow(g))
 	return area, bound
+}
+
+// sideRadiusAreaAllow bounds how far the frustum sector
+// A = (αc/2)·(R0+R1)·L, L = √(ΔR²+H²), moves when its side radius R0 moves
+// by e = g.Held.SideRadius. L is 1-Lipschitz in R0 and never exceeds
+// R0 + R1 + |H|, so |ΔA| ≤ (αc/2)·e·(L + R0 + R1 + e) ≤ αc·e·(2·(R0+R1) + |H| + e),
+// with αc read at |held| + CapThAllow. Every step rounds up, and a non-finite
+// input answers +Inf.
+func sideRadiusAreaAllow(g Patch) float64 {
+	e := g.Held.SideRadius
+	if e == 0 {
+		return 0
+	}
+	if !(e > 0) || proofbound.IsNonFinite(e) {
+		return math.Inf(1)
+	}
+	alpha := proofbound.AbsSumUpper(math.Abs(g.CapTh1-g.CapTh0), g.CapThAllow)
+	reach := proofbound.AbsSumUpper(g.SideRadius, g.CapRadius, g.SideRadius, g.CapRadius, proofbound.UpRound(math.Abs(g.CapZ-g.SideZ)), e)
+	return proofbound.ProductUpper(proofbound.ProductUpper(alpha, e), reach)
 }
 
 // coneSkewAreaAllow is the proven bound on |A − A₀| for a Cone patch, where A

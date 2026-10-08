@@ -1111,3 +1111,4 @@
 3	0.01	TestCapMiterLocusRangesTileTheOffsetSpan
 3	0.03	TestCapMiterLocusUpperReadsTheStatedAxialRise
 3	0.03	TestCapBlendAuditReadsTheSetbackSpan
+3	0.17	TestCapPatchIntegralsCoverTheirHeldNumbers

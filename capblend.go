@@ -127,6 +127,18 @@ func (cbp capBlendPayload) loopSetback(li int) capSetback {
 	return cbp.end
 }
 
+// loopBandDelta is the larger contour displacement of loop li's chamfer bands
+// (evalCapBlendContext's bandDelta), zero where it is chamfered on neither cap.
+func (cbp capBlendPayload) loopBandDelta(li int) float64 {
+	delta := 0.0
+	for _, start := range [...]bool{true, false} {
+		if d, ok := cbp.bandDelta[capBandKey{loop: li, start: start}]; ok {
+			delta = math.Max(delta, d)
+		}
+	}
+	return delta
+}
+
 // loopOffset is loop li's own in-plane offset, its loopSetback's dc.
 func (cbp capBlendPayload) loopOffset(li int) float64 { return cbp.loopSetback(li).dc }
 
