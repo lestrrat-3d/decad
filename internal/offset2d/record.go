@@ -3,6 +3,7 @@ package offset2d
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -16,6 +17,37 @@ var ErrDrop = fmt.Errorf(`%w: the offset drops a section feature; a trimmed-offs
 
 // ErrTopology reports offset carriers that cannot close into a miter (S11).
 var ErrTopology = fmt.Errorf(`%w: the offset changes the section's topology; a trimmed-offset kernel is not available`, decaderr.ErrUnsupported)
+
+// CornerTopologyError is ErrTopology at one corner: the walks' offset carriers
+// meeting at (U, V) do not intersect. Loop is the index of the section loop
+// the corner sits on, or −1 where the caller has not named one (InLoop). It
+// unwraps to ErrTopology, so errors.Is reads it as that sentinel.
+type CornerTopologyError struct {
+	U, V float64
+	Loop int
+}
+
+func (e *CornerTopologyError) Error() string {
+	where := fmt.Sprintf(`(%v, %v)`, e.U, e.V)
+	if e.Loop >= 0 {
+		where = fmt.Sprintf(`(%v, %v) on loop %d`, e.U, e.V, e.Loop)
+	}
+	return fmt.Sprintf(`%v: the offsets of the two walls meeting at %s do not intersect`, ErrTopology, where)
+}
+
+func (e *CornerTopologyError) Unwrap() error { return ErrTopology }
+
+// InLoop names loop li on a CornerTopologyError that names no loop yet, and
+// returns every other error unchanged.
+func InLoop(err error, li int) error {
+	var ce *CornerTopologyError
+	if !errors.As(err, &ce) || ce.Loop >= 0 {
+		return err
+	}
+	named := *ce
+	named.Loop = li
+	return &named
+}
 
 // BuildLoop offsets a coalesced section loop by s*t while retaining its walk
 // sense. Circular walks and consumed straight walks are rejected before a
@@ -80,14 +112,21 @@ func BuildLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t, t
 	return segs, nil
 }
 
-// SectionJoinsBudget maps carrier refusals to section offset errors.
+// SectionJoinsBudget maps carrier refusals to section offset errors. Carriers
+// that do not meet are a CornerTopologyError naming the corner; the caller
+// names the loop with InLoop.
 func SectionJoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t, tol float64) ([]Join, error) {
 	joins, err := JoinsBudget(budget, walks, s, t, tol)
 	if errors.Is(err, ErrNoDirection) {
 		return nil, fmt.Errorf(`%w: a corner walk has no direction`, decaderr.ErrDegenerate)
 	}
 	if errors.Is(err, ErrNoIntersection) {
-		return nil, ErrTopology
+		u, v := math.NaN(), math.NaN()
+		var ce *cornerError
+		if errors.As(err, &ce) {
+			u, v = ce.u, ce.v
+		}
+		return nil, &CornerTopologyError{U: u, V: v, Loop: -1}
 	}
 	return joins, err
 }

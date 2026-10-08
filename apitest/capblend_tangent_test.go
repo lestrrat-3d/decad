@@ -157,15 +157,20 @@ func TestTangentJoinedRotatedSlotChamfer(t *testing.T) {
 // up to (30, 10·sin 3π/4) and back. At kink 2e−9 the corner at (0, −10) turns
 // past the G1 tolerance by too little to enclose where the offset walls meet.
 // At kink 1e−7 the same corner turns enough and the chamfer builds; its volume
-// lies below the prism's and its bound is finite.
+// lies below the prism's and its bound is finite. With the arc starting at
+// 0.9π instead, the kink 2e−9 refuses earlier, in the offset itself: the float
+// miter solve finds no point where the two offset walls meet (modify S11), and
+// that refusal names the loop and the corner too.
 //
 // The cusp profile is the region between the circle of radius 10 about
 // (0, 10), its tangent line y = 0 and the line x = 10. The arc and the line
 // meet tangentially at (0, 0) but run in opposite directions there, so the
 // corner foot leaves the corner at unbounded speed.
 //
-// Shown to fail: without requireCapBlendCornerLoci, both refusing chamfers
-// answer ErrNotFinite ("the analytic body's volume measurement is not
+// Shown to fail: with offset2d.SectionJoinsBudget returning the bare
+// ErrTopology again, the 0.9π refusal names no corner. Without
+// requireCapBlendCornerLoci, the other two refusing chamfers answer
+// ErrNotFinite ("the analytic body's volume measurement is not
 // finite"), from capPatchCornerFlux's +Inf corner flux.
 func TestCapLoopChamferRefusesNearTangentCorner(t *testing.T) {
 	t.Parallel()
@@ -190,9 +195,9 @@ func TestCapLoopChamferRefusesNearTangentCorner(t *testing.T) {
 			return p
 		}
 	}
-	kinked := func(t *testing.T, kink float64) *decad.Body {
+	kinked := func(t *testing.T, th, kink float64) *decad.Body {
 		t.Helper()
-		const r, l, th = 10.0, 30.0, 3 * math.Pi / 4
+		const r, l = 10.0, 30.0
 		s, fix := newSketch(t)
 		start, corner := fix(r*math.Cos(th), r*math.Sin(th)), fix(0, -r)
 		far, top := fix(l, -r+l*kink), fix(l, r*math.Sin(th))
@@ -212,11 +217,19 @@ func TestCapLoopChamferRefusesNearTangentCorner(t *testing.T) {
 
 	t.Run("kink 2e-9", func(t *testing.T) {
 		t.Parallel()
-		requireRefusal(t, kinked(t, 2e-9), `(0, -10)`)
+		requireRefusal(t, kinked(t, 3*math.Pi/4, 2e-9), `(0, -10)`)
+	})
+	t.Run("kink 2e-9 from 0.9π", func(t *testing.T) {
+		t.Parallel()
+		body := kinked(t, 0.9*math.Pi, 2e-9)
+		_, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(0.5))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, `the offset changes the section's topology`)
+		require.ErrorContains(t, err, `the two walls meeting at (0, -10) on loop 0`)
 	})
 	t.Run("kink 1e-7 builds", func(t *testing.T) {
 		t.Parallel()
-		body := kinked(t, 1e-7)
+		body := kinked(t, 3*math.Pi/4, 1e-7)
 		before, err := body.Volume()
 		require.NoError(t, err)
 		chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(0.5))
