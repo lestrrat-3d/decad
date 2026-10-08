@@ -313,7 +313,7 @@ the rules leave to the byte budget.
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Motion variants, validation, exact parameters, poses and sweeps. |
-| `internal/planarsweep/` | Plane selection, motion, vertex rates, curvature and depth bounds. |
+| `internal/planarsweep/` | Plane selection, motion, vertex rates, depth and rolling bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
 | `internal/sweepmemo/` | Sweep memo tables. See contact-sweep §6–§7. |
 | `internal/spherepath/` | Sphere path gaps and brackets. See contact-sweep §4–§5. |
