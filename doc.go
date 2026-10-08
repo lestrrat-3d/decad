@@ -116,8 +116,9 @@
 //	  cap-loop corner whose offset cannot be enclosed         ErrUnsupported
 //	  revolve cap edge or edge on the axis                    ErrUnsupported
 //	  revolve blend arc centred across the axis               ErrUnsupported
-//	  brep edge curved, sharing a vertex, ending on a
-//	    swept wall or blend, or end faces disagreeing         ErrUnsupported
+//	  brep edge curved, sharing a vertex, ending on a curved
+//	    face or blend, on or along a split, oblique or
+//	    displaced straight wall, or end faces disagreeing     ErrUnsupported
 //	  other receiver, or a cap-loop chamfer result            ErrUnsupported
 //	Shell         straight prism (tube or cup)                builds
 //	  both caps removed from a holed section                  ErrUnsupported

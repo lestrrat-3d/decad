@@ -154,7 +154,7 @@ the rules leave to the byte budget.
 | `shell_offset.go` | Shell section record, audit and displacement proof. See modify §7–§9. |
 | `shell_cup.go` | `cupPayload` and `evalCup`: the two-prism body a one-cap `Shell` builds, with its mass properties and roles. See `docs/modify-design.md` §9, §12 D6. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See `docs/brep-modify-design.md`. |
-| `brep_modify_edge.go` | Route E: Table EB, the end-face blends, trims, blend faces and closure. See brep-modify §5. |
+| `brep_modify_edge.go` | Route E: Table EB, restatement, the end-face blends, trims, blend faces and closure. See brep-modify §5. |
 
 ### Cap-loop chamfer
 
@@ -281,7 +281,7 @@ the rules leave to the byte budget.
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
 | `internal/classbgeom/` | Class-B boxes, record gates, and through reach. See general-boolean §3 B. |
-| `internal/brepgeom/` / `internal/stackedbrep/` | BRep joins, frames and stacked records. See general-boolean §4. |
+| `internal/brepgeom/` / `internal/stackedbrep/` | BRep joins, frames, restatement and stacked records. See general-boolean §4. |
 | `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap charges and extent bounds. See evaluator §6. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |

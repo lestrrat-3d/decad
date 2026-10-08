@@ -215,7 +215,11 @@ therefore one planar face for both.
 
 `brepgeom.Restate(face, ref)`: the wall is a `LineSeg` over its natural range,
 axis-aligned in its frame (exactly one of `du`, `dv` is zero), with empty
-`side0`/`side1`; an oblique or split wall cannot be restated. The four corners
+`side0`/`side1` and neither level displaced (`z0Delta`, `z1Delta` zero); an
+oblique, split or displaced wall cannot be restated. A level of the swept
+face is a section coordinate of the planar one, and RB1 holds section
+displacement at zero, so a displaced level has no place in the restated
+record; route P's P2(c) refuses the same wall for the same reason. The four corners
 `(Start, z0), (End, z0), (End, z1), (Start, z1)` are mapped to reference
 coordinates (`Embed.Canon`), the constant reference axis and its level give the
 plane, and `brepgeom.PlanarFrame(ref, axis, sign)` is the right-handed frame
@@ -224,9 +228,14 @@ builds for `stacked_union_brep.go`'s `wallFaces`. The region is the one loop
 through the four corners in the wall's own boundary order — rim at `z0`
 forward, side line up, rim at `z1` backward, side line down — the order
 `brepgeom.Build` already walks, which is counter-clockwise from outside; the
-face is `outward: true`. Every coordinate is a recorded float moved by a signed
-permutation, so the restated face pairs with every neighbour by identity
-exactly as the swept one did.
+face is `outward: true`, its level and section displacements the wall's
+section displacement. `Restate` refuses a rectangle that turns clockwise in
+the new frame, a reject-only check of the orientation reading. Every
+coordinate is a recorded float moved by a signed permutation, so the restated
+face pairs with every neighbour by identity exactly as the swept one did: the
+second pass reads the restated record's topology again, its closure proving
+the pairing, and matches every selected edge in it again, since the record
+numbers its edge uses afresh.
 
 ### 5.3 The construction
 
@@ -335,8 +344,8 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | **SB4** | a selected edge that is not a straight line along a reference axis: a hole rim or boss root (`Circle3`/`Arc3`), an oblique line | yes; a cone or torus band on a brep face is not a face kind this record holds | `ErrUnsupported` |
 | **SB5** | two selected edges sharing a vertex | yes; the vertex blend | `ErrUnsupported` |
 | **SB6** | an edge vertex with other than three incident edges, or an edge that is one piece of a split side line | yes | `ErrUnsupported` |
-| **SB7** | the third face at an edge vertex is not, and cannot be restated as, a plane across the edge's axis: a cylinder, a plane along the axis, an oblique or split straight wall, a blend face of an earlier call | yes; the edge ends on a blend or a curved face | `ErrUnsupported` |
-| **SB8** | an adjacent face outside EB4/EB5: a rim-adjacent wall that is oblique or split, a (pl) face whose neighbours at `e` are not straight and across the axis, a narrowed range, consecutive segments on one carrier | yes | `ErrUnsupported` |
+| **SB7** | the third face at an edge vertex is not, and cannot be restated as, a plane across the edge's axis: a cylinder, a plane along the axis, an oblique, split or level-displaced straight wall, a blend face of an earlier call | yes; the edge ends on a blend or a curved face | `ErrUnsupported` |
+| **SB8** | an adjacent face outside EB4/EB5: a rim-adjacent wall that is oblique, split or level-displaced, a (pl) face whose neighbours at `e` are not straight and across the axis, a narrowed range, consecutive segments on one carrier | yes | `ErrUnsupported` |
 | **SB9** | the two end faces' blends disagree in reference coordinates | — (a falsifier) | `ErrUnsupported` |
 | **SB10** | Shell of a brep that reads as a prism along no axis | yes; the three-dimensional offset puts a cylinder along every reflex straight edge, a torus around a reflex circle and a sphere at a reflex vertex, none of which this record holds | `ErrUnsupported` |
 
@@ -476,7 +485,10 @@ Refusals:
   displacement; a prism-group stacked receiver → SB2; S1's hole rims
   selected → SB4 (Pocket cut by a Ø4 through hole takes the mesh path, and
   its result is reach SX9's); Pocket shell → SB10; S1 chamfered at `d = 25`
-  along its `z` edge at the origin → S6 in the end face.
+  along its `z` edge at the origin → S6 in the end face; S1 by hand with its
+  `x = 0` wall's side line at `y = 0` split at `z = 10` (the `y = 0` face's
+  segment split to match): its edge along `x` at the origin → SB7, its edge
+  along `y` there → SB8.
 - Every refusal leaves the receiver live and the document unchanged.
 - `TestBrepModifyOpsAreStaged` is replaced by these; `.github/test-shards.txt`
   carries every new name, and `go test . ./apitest/ -run '^TestCI'` passes.
@@ -547,4 +559,4 @@ Increment table — what still refuses after each PR:
 | 0 (landed) | every brep and stacked modify op except SB1/SB2 (reach SX16's text) |
 | 1 (landed) | every non-prism brep; every route E edge |
 | 2a (landed) | edges whose end or rim-adjacent face is a swept straight wall (SB7/SB8 until 2b) |
-| 2b | Table SB alone |
+| 2b (landed) | Table SB alone |

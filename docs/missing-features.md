@@ -48,7 +48,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Today | Owner |
 |---|---|---|
 | Fillet/chamfer of a sweep, loft, faceted boolean result or cap blend | `ErrUnsupported`: "fillets a straight prism or a revolve only", SX9, SX10 (`fillet.go`, `chamfer.go`) | `docs/modify-reach-design.md` Table RX |
-| Fillet/chamfer of a brep or stacked boolean result's curved edge, edges sharing a vertex, or an edge ending on a swept wall, a curved face or an earlier blend, where no prism reading takes the selection | `ErrUnsupported` (brep-modify SB4–SB9) (`brep_modify_edge.go`) | `docs/brep-modify-design.md` Table SB, §12 |
+| Fillet/chamfer of a brep or stacked boolean result's curved edge, edges sharing a vertex, an edge ending on a curved face or an earlier blend, or an edge on or along a straight wall that is oblique, split or has a displaced level, where no prism reading takes the selection | `ErrUnsupported` (brep-modify SB4–SB9) (`brep_modify_edge.go`) | `docs/brep-modify-design.md` Table SB, §12 |
 | Shell of any non-prism body, revolve included; a brep that reads as a prism builds | `ErrUnsupported`: "shells a straight prism only", brep-modify SB3/SB10 (`shell.go`, `brep_modify.go`) | `docs/modify-reach-design.md` §9.3, §14 PR D; `docs/brep-modify-design.md` SB10 |
 | Fillet/chamfer of a revolve cap edge or an edge on the axis | `ErrUnsupported` (SX5) (`revolve_blend.go`) | `docs/modify-reach-design.md` §7 |
 | Fillet of a cap edge (vertex blend) | `ErrUnsupported`, "the vertex-blend problem, not yet supported" (`fillet.go`) | `docs/modify-design.md` §6 |
