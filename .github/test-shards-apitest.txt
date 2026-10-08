@@ -327,6 +327,12 @@
 2	0.01	FuzzFillet
 2	0.01	TestAnalyticChordsAreCharged
 2	0.38	TestAnalyticPlateWithCircularHolesArea
+2	0.01	TestAsymmetricChamferFeet
+2	0.01	TestAsymmetricChamferOverrunEachSide
+2	0.01	TestAsymmetricChamferReferenceRefused
+2	0.01	TestAsymmetricChamferRepeatable
+2	0.01	TestAsymmetricChamferRevolveJunction
+2	0.01	TestAsymmetricChamferStagedReceivers
 2	0.00	TestBetweenPoseAt
 2	0.01	TestBlindPocketFilletsItsOuterEdges
 2	0.00	TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne
@@ -557,6 +563,7 @@
 2	0.25	TestMirroredCopyEveryPayload
 2	0.01	TestMirroredCopyFlipsTheLsFacing
 2	0.01	TestMirroredRetiresTheReceiver
+2	0.01	TestModifyOptionGates
 2	0.00	TestMotionPoseAt
 2	0.01	TestMultiSegmentFreeformRegionRoundsOnce
 2	0.00	TestNURBSCurveSealsIntoCurve
@@ -742,6 +749,7 @@
 2	0.03	TestShellCupTessellateOutwardBox
 2	0.01	TestShellCupTessellateReflected
 2	0.09	TestShellInwardSectionWorkBudget
+2	0.01	TestShellNoOpenings
 2	0.01	TestShellSelectorAdmission
 2	0.01	TestStackedUnionEnclosedVoidTakesMeshPath
 2	0.00	TestStatusString
@@ -826,6 +834,10 @@
 2	0.04	TestSweepStraightIsABooleanOperand
 2	0.00	TestSweepTessellationStagesEveryOtherReduction
 2	0.00	TestSweptBoxStrictlyDisjoint
+2	0.01	TestTangentChainNearTangentStops
+2	0.01	TestTangentChainOvalArcArc
+2	0.01	TestTangentChainSlotCapLoop
+2	0.01	TestTangentChainUndecidedRefused
 2	0.13	TestTangentJoinedSlotChamferAtOffsetOrigin
 2	0.00	TestTessellateBoundIncludesComputedLevelDisplacement
 2	0.02	TestTessellateCapBlendPlacedStaysWatertight

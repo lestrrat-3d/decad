@@ -41,9 +41,8 @@ import (
 // routes P and E of docs/brep-modify-design.md (brep_modify.go); any other
 // receiver is S3 (ErrUnsupported).
 
-// FilletOption configures Fillet. No options are currently supported; the
-// option group exists so a variable-radius or setback option can be added
-// without changing the signature.
+// FilletOption configures Fillet. WithTangentChain is the one option a
+// fillet takes (docs/modify-reach-design.md §2).
 type FilletOption interface {
 	option.Interface
 	filletOption()
@@ -64,6 +63,13 @@ const filletTol = sectionaudit.Tolerance
 // S13. A selected edge that is not a lateral edge — a cap edge — is S1
 // (ErrUnsupported). The rewritten section faces the §5 audit before anything
 // is built, so no unproven body is ever made.
+//
+// WithTangentChain expands the edges sel resolves to across every edge that
+// continues them with proven G1 continuity before any receiver gate runs
+// (docs/modify-reach-design.md §5); sel's cardinality assertion applies to
+// the seeds it names. A continuation that branches or that this evaluator
+// cannot decide is ErrUnsupported (SX2), and so is a faceted boolean result
+// (SX9), refused before expansion.
 //
 // On a revolve, Fillet rounds swept meridian junctions instead
 // (docs/modify-reach-design.md §7): a latitude Circle3 of a full turn or a
@@ -109,10 +115,9 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	if err := refuseSheetOperand(b, "Fillet"); err != nil {
 		return nil, err
 	}
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
+	o, err := decodeFilletOptions(opts)
+	if err != nil {
+		return nil, err
 	}
 	rmm, err := magnitudeIn(r, units.Length, units.Millimeter, "the fillet radius")
 	if err != nil {
@@ -137,6 +142,13 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	if err != nil {
 		return nil, err
 	}
+	// Reach stage 2 (docs/modify-reach-design.md §4/§5): the seed query's
+	// cardinality has been enforced above; the tangent chain expands it.
+	if o.TangentChain {
+		if edges, err = expandTangentChain(ctx, b, sel, edges); err != nil {
+			return nil, err
+		}
+	}
 
 	// SX10: a capBlendPayload receiver is staged before the generic "not a
 	// prism" refusal, so the more specific reason leads.
@@ -145,7 +157,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	}
 	blend := revolveBlendOp{
 		kind: "fillet",
-		corner: func(loop cornerLoop, ci int) (*cornerBlend, error) {
+		corner: func(loop cornerLoop, _, ci int, _ *Edge) (*cornerBlend, error) {
 			return computeFillet(loop, ci, rmm)
 		},
 	}

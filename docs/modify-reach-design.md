@@ -72,8 +72,20 @@ func WithNoOpenings() ShellOption
 The option constructors copy their selector inputs at the call boundary. The
 selectors resolve against the receiver during evaluation; resolved faces and
 topology indices are never retained.
-| Shell with openings | removed-face query | thickness | `ShellOpts` |
-| Shell with no openings | empty | thickness | `ShellOpts{NoOpenings:true}` |
+
+Each call decodes its options into a private record (`modify_options.go`):
+`filletOpts{TangentChain}`, `chamferOpts{TangentChain, Asymmetric}` and
+`shellOpts{Sense, NoOpenings}`. A shell with openings states a removed-face
+query and a thickness; a shell with no openings states no selector, a
+thickness and `shellOpts{NoOpenings: true}`.
+
+An option repeated with the same intent counts once: `WithTangentChain`,
+`WithNoOpenings`, and one `WithShellSense` sense given twice. Two
+`WithShellSense` options naming different senses, and a second
+`WithAsymmetricChamfer`, name two intents and are SX1. The other distance
+passes the positional distance's magnitude gates as it is decoded: base S15
+for a wrong `Kind`, a non-finite or a negative value, and `ErrDegenerate` for
+zero, since §6 requires both distances strictly positive.
 
 Cardinality on the seed edge query applies **before** tangent expansion. This
 keeps `Exactly(n)` an assertion about what the caller named, not about an
@@ -142,7 +154,7 @@ Gate order:
 
 | Stage | Gates |
 |---|---|
-| 1. call | base S17/S15/S13-or-S14; option decode; SX1; seed selector S16 unless no-openings |
+| 1. call | base S17; option decode; SX1; base S15/S13-or-S14; seed selector S16 unless no-openings |
 | 2. expansion | resolve seed; expand tangent chain; SX2 |
 | 3. reference | resolve asymmetric reference; SX3 |
 | 4. receiver/target | base R + RX; SX4/SX5/SX8/SX9/SX10/SX16 |
@@ -245,6 +257,30 @@ is body order, so replay and role assignment stay deterministic.
 Faceted curves/surfaces never enter the oracle. They route to SX9 before
 expansion.
 
+### 5.1 Implementation
+
+`tangent_chain.go` runs this section; `Body.Fillet` and `Body.Chamfer` call it
+right after the seed query resolves. The oracle is the clearance kernel's
+`Oracle.ParallelExact` (`internal/clearance/oracle.go`): an exact zero cross
+product over the held floats proves "parallel", a cross above `ClrAngTol`
+relative to the two lengths disproves it, and the band between is undecided.
+Opposite rays and equal normals additionally need the sign of the exact dot
+product, which decides "no" by itself wherever it has the wrong sign.
+
+A plane's frame normal, a cylinder's radial offset (scaled by the held axis's
+own squared length, so a not exactly unit axis keeps the direction exact) and
+a sphere's offset from its centre are exact over the held floats. A cone's or
+a torus's normal needs a square root or a trigonometric value, so the oracle
+reads its float normal and that answer decides "no" only, never "yes".
+
+Test 3 tries both one-to-one maps of the two face pairs, and a continuation
+is proven when either map proves both normal pairs equal. A face shared by
+both edges maps to itself. An edge with other than two adjacent faces is
+undecided.
+
+A full circle has no endpoint, so it neither expands nor continues another
+edge.
+
 ## 6. Asymmetric chamfer
 
 Without `WithAsymmetricChamfer`, setback remains equal on both adjacent faces.
@@ -261,6 +297,14 @@ With it:
 Extra/missing/dual adjacency is SX3. This avoids defining “first side” from a
 traversal-dependent coedge direction.
 
+On a prism or a revolve receiver, each adjacent wall carries `side(i,j)`
+roles naming the recorded segments it is built from, and the reference face's
+roles pick the walk that takes `d`: the arriving or the leaving walk of the
+coalesced corner walk. A reference face whose roles name segments of both
+walks, or of neither, is `ErrUnsupported`.
+`docs/brep-modify-design.md` states no asymmetric setback for either brep
+route, so the option on a brep or stacked receiver is SX16.
+
 For a prism lateral edge or revolve junction, adjacent faces map to arriving
 and leaving walks of the section/meridian. Set each foot back by its assigned
 arc length and connect the feet by the existing chord. Base S6 audits the two
@@ -275,7 +319,11 @@ A reference query may instead name one side face per edge. The per-edge
 one-adjacent-face rule keeps that spelling unambiguous. One complete loop MUST
 use one assignment throughout: cap referenced for every edge, or side
 referenced for every edge. A mixed assignment gives adjacent patches different
-axial setbacks and is SX4.
+axial setbacks and is SX4. SX3 runs first and always catches it: a cap face
+borders every edge of its loops, so a reference naming it for one edge names
+it for all, and a side face named beside it gives that edge two reference
+faces. The cap-loop band builds at an equal setback only (§14 row E), so an
+asymmetric chamfer of a complete cap loop is `ErrUnsupported`.
 
 ## 7. Revolve junction rewrite
 
@@ -353,9 +401,10 @@ profile. Its `blendSegs`/`blendKind` fields carry the blend roles, so
 clears them. Measurements, topology, tessellation and the surveys are the
 revolve's own (Table DX).
 
-**Asymmetric chamfer.** PR A's `WithAsymmetricChamfer` has not landed, so a
-revolve chamfer is equal-distance only; the cutback assignment above waits on
-that option.
+**Asymmetric chamfer.** The junction's two adjacent walls are swept walks of
+the meridian, and each carries the `side(i,j)` roles of the recorded segments
+it sweeps. §6's role reading picks which plane-local walk takes `d`, and
+`computeChamfer` sets each walk back by its own distance.
 
 ## 8. Complete prism cap-loop blends
 
@@ -1237,11 +1286,11 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **A** | option records/codecs; tangent expansion; asymmetric prism chamfer | revolve/cap/shell reach; all SX9/SX10 |
-| **B** (landed) | revolve junction rewrite + roles + surveys, equal-distance chamfer only | cap loops; shell reach; the asymmetric revolve chamfer, which waits on PR A's option |
+| **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; the asymmetric cap-loop chamfer; the asymmetric chamfer of a brep or stacked receiver (SX16); all SX9/SX10 |
+| **B** (landed) | revolve junction rewrite + roles + surveys | cap loops; shell reach |
 | **C** | multi-region `stackedPrismPayload`; migrate cups; lift base S12 through BX8; closed + side-opening prism shell; tessellation/clearance cases | cap loops; revolve shell |
-| **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7), §9.3.1 | full-turn shells: a side opening is S2 until C's §9.2 wall section lands, and `WithNoOpenings` waits on A; a partial-turn side opening is S2 until C; cap loops |
-| **E** | `capBlendPayload`; complete cap-loop chamfer; analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
+| **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7), §9.3.1 | full-turn shells: a side opening is S2 until C's §9.2 wall section lands, and `WithNoOpenings` (landed with A) is refused for a full turn until this row builds it; a partial-turn side opening is S2 until C; cap loops |
+| **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback; analytic integrals | the asymmetric cap-loop chamfer; complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, and
 tests together. A PR may leave a DX question staged only where

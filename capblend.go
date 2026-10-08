@@ -22,8 +22,9 @@ import (
 // prism cap loops, never mixed with lateral edges — S4), gates
 // SX4/SX6/SX7/SX10/SX12/SX13, the BX3 roles, and the build. The cap-loop FILLET
 // (§8.2, Cylinder/Torus/Sphere patches) is in row E's staged column and is
-// not implemented here; neither is WithAsymmetricChamfer (PR A) — this PR
-// covers the equal-setback case only, dc = ds = d (§8.3).
+// not implemented here, and the band builds at an equal setback only,
+// dc = ds = d (§8.3): Chamfer refuses WithAsymmetricChamfer on a cap loop
+// (errAsymmetricCapLoop) before it reaches this file.
 //
 // The reduction mirrors modify-design §2's lateral-edge one: the selected
 // cap loop's boundary is offset dc = d into the material (the "cap contour",

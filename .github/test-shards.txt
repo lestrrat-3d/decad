@@ -314,6 +314,7 @@
 3	0.00	TestChainGateDiameterCancelledBuildReturnsContextError
 3	0.04	TestChainStationsBracketsEveryCellArcByItsChord
 3	3.53	TestChainStationsRefusals
+3	0.01	TestChainStep
 3	0.00	TestChainWalkEndpointAllowChargesComputedCircularEnds
 3	0.00	TestChainWalkEndpointAllowKeepsExactArcEndsAtZero
 3	0.00	TestChargesScaleWithOperandWidth
@@ -810,6 +811,8 @@
 3	0.00	TestSweepDenotationHalfTurnExcess
 3	0.02	TestSweepPairRealFacetedUnionTouchContinuations
 3	0.00	TestSweepRadiusMemoEvictsOldest
+3	0.01	TestTangentChainBodyOrderAndCycle
+3	0.01	TestTangentContinuesFaceSheets
 3	0.00	TestTessellateChainBuildsOneExactQuadPerWall
 3	0.00	TestTessellateChainReflectedPlacementFlipsWinding
 3	0.00	TestTessellateChainRejectsWronglyAttributedWalls
