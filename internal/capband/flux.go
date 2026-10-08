@@ -263,10 +263,11 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 // (the wide, side-window-only reading and the narrow, cap-window-only one —
 // both this same patchRawFlux formula, degenerate to the ordinary
 // rotationally-symmetric cone sector once a patch's two directrices share one
-// window) and this patch's own held area, the surface internal/proofbound/bounds.go's
-// proofbound.SweptVolumeAllow needs. Zero wherever both proven corner skews are
-// zero (an apex patch, and a join whose two directrix ends lie on one ray from
-// the centre).
+// window), this patch's own held area, the surface internal/proofbound/bounds.go's
+// proofbound.SweptVolumeAllow needs, and its corner slivers' flux
+// (Patch.CornerFlux). Only that last term remains wherever both proven corner
+// skews are zero (an apex patch, and a join whose two directrix ends lie on
+// one ray from the centre).
 //
 // g.CapTh0/g.CapTh1 and g.Th0/g.Th1 are not guaranteed to share a branch:
 // WallSweep anchors capTh0 at a raw Atan2, always in
@@ -289,7 +290,7 @@ func chordLocusResidualAllow(g Patch) float64 {
 	// a whole turn whose seams align.
 	windowSkewMax := math.Max(g.SkewStart, g.SkewEnd)
 	if windowSkewMax <= 0 {
-		return 0
+		return proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, 0, 0, 0, 0, g.CornerFlux)
 	}
 	// The two references are rotationally symmetric sectors, one window shared
 	// by both directrices, so neither has a corner skew of its own. Both are
@@ -305,6 +306,8 @@ func chordLocusResidualAllow(g Patch) float64 {
 	narrowGeom.CapTh0, narrowGeom.CapTh1 = capTh0, capTh1
 	wideGeom.SkewStart, wideGeom.SkewEnd = 0, 0
 	narrowGeom.SkewStart, narrowGeom.SkewEnd = 0, 0
+	// The references are whole sectors with no mitered corner of their own.
+	wideGeom.CornerFlux, narrowGeom.CornerFlux = 0, 0
 	// Each reference reads the window it takes with that window's own
 	// allowances on both directrices.
 	wideGeom.Held.CapTh0, wideGeom.Held.CapTh1 = g.Held.Th0, g.Held.Th1
@@ -313,7 +316,7 @@ func chordLocusResidualAllow(g Patch) float64 {
 	narrow := patchRawFlux(narrowGeom)
 	pa, pb := patchAreaOf(g)
 	return proofbound.ChordLocusVolumeAllow(wide.Value, wide.Bound, narrow.Value, narrow.Bound,
-		g.SideRadius, g.CapRadius, windowSkewMax, proofbound.AbsSumUpper(pa, pb))
+		g.SideRadius, g.CapRadius, windowSkewMax, proofbound.AbsSumUpper(pa, pb), g.CornerFlux)
 }
 
 // axisAnchoredLevels translates the two levels (sideZ, capZ) axially so the

@@ -109,6 +109,13 @@ type Patch struct {
 	// point at every angle, so its rulings pair the cap arc with that point at
 	// the cap arc's own angle.
 	SkewStart, SkewEnd float64
+	// CornerFlux is a proven upper bound on the flux this patch's two mitered
+	// corners' slivers add to its chord-locus term
+	// (proofbound.ChordLocusVolumeAllow's cornerFlux), summed from
+	// MiterLocusSliverFlux at build time. It is zero for an apex patch, a whole
+	// turn, and every corner whose locus is straight (a reflex foot or a G1
+	// join), and +Inf where a corner's sliver could not be bounded.
+	CornerFlux float64
 	// Held is how far each held number of a circular patch sits from the value
 	// the band's closed surface reads there (HeldAllow). The Cone arms of
 	// RawFlux and FirstMomentFlux enclose their closed forms over every value

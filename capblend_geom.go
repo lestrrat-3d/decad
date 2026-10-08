@@ -619,6 +619,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			if err := setCapPatchSkews(&g, side0, side1, cap0, cap1); err != nil {
 				return capBandResult{}, err
 			}
+			cornerFlux, err := capPatchCornerFlux(budget, walks, joins, i, setback)
+			if err != nil {
+				return capBandResult{}, err
+			}
+			g.CornerFlux = cornerFlux
 		} else {
 			g.SideA = Point2{U: w.StartU, V: w.StartV}
 			g.SideB = Point2{U: w.EndU, V: w.EndV}
@@ -675,6 +680,35 @@ func setCapPatchSkews(g *capPatchGeom, side0, side1, cap0, cap1 Point2) error {
 	}
 	g.SkewStart, g.SkewEnd = s0, s1
 	return nil
+}
+
+// capPatchCornerFlux sums the corner-sliver flux of circular wall i's two
+// corners, i at its start and i+1 at its end, into the bound its chord-locus
+// term charges (capband.MiterLocusSliverFlux, docs/modify-reach-design.md
+// §8.3). A reflex corner and a G1 join have a straight corner locus and add
+// nothing. A corner whose sliver cannot be bounded makes the sum +Inf, so the
+// band's volume publishes an unbounded bound rather than an understated one.
+func capPatchCornerFlux(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, joins []cornerJoin, i int, setback capSetback) (float64, error) {
+	n := len(walks)
+	w := walks[i]
+	total := 0.0
+	for _, k := range [2]int{i, (i + 1) % n} {
+		j := joins[k]
+		if j.arc || j.g1 {
+			continue
+		}
+		prev, cur := walks[(k+n-1)%n], walks[k]
+		flux, ok, err := capband.MiterLocusSliverFlux(budget, prev, cur, w.CU, w.CV, j.vU, j.vV,
+			setback.axialUpper(), setback.dc, setback.dcDelta)
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			return math.Inf(1), nil
+		}
+		total = proofbound.AbsSumUpper(total, flux)
+	}
+	return total, nil
 }
 
 // errCapPatchSkewUnbounded is the refusal for a circular band patch whose
