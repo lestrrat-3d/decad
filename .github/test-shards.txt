@@ -275,6 +275,7 @@
 3	0.04	TestCapBlendChordVolumeChargesEachCapsBandHeight
 3	0.00	TestCapBlendConeFluxIntervalEnclosesFloatClosedForm
 3	0.00	TestCapBlendConeMomentCoefficientsMatchReference
+3	0.03	TestCapBlendCornerChordReachesArcNaturalEnd
 3	0.04	TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus
 3	0.04	TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine
 3	0.02	TestCapBlendMeshCapMotionCarriesSetbackRounding

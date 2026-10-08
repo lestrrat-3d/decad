@@ -549,7 +549,9 @@ publishes in another dimension):
   axis is `sqrt(L²−c*²)/2`. That axis only grows as the focal distance shrinks, so `c` is a proven LOWER
   bound on `c*`, the distance from the denoted corner to the denoted foot the stated `ds` along the sweep:
   the held chord from the corner to the held foot at the held `ds`, its square exact and its root rounded
-  down, less `band.delta`, the corner's own walk end bound and `dsDelta`. The held chord alone is not one,
+  down, less `band.delta`, the corner's bound and `dsDelta`. The corner's bound reaches the points both
+  neighbouring walks' records denote there (`boundarywalk.JunctionStartBound`), which adds an arc's radial
+  residual at its natural `t = 1` end, where the record holds `End` off Start's radius. The held chord alone is not one,
   since the held foot and `ds` can sit farther apart than the denoted ones. A millimetre setback on a
   recorded section with exact feet subtracts nothing. `speedUpper` is `miterLocusSpeedUpper` (`capblend_contour.go`), the same input
   `chordLocusLengthAllow` reads. Zero at a line-line miter, every reflex foot and every G1 join (modify §7's
