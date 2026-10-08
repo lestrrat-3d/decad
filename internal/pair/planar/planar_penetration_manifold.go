@@ -33,13 +33,14 @@ func PlanarPenetrationSupport(a, b *PlanarSolid, poll func() error) ([]PatchPoin
 		return nil, nil, nil
 	}
 	sa, sb := newPatchSide(a, true, true), newPatchSide(b, true, false)
-	axes := make([]proof.DyV3, 0, len(a.Tris)+len(b.Tris)+len(sa.prep.edges)*len(sb.prep.edges))
+	edgesA := uniqueEdgeDirections(a.Verts, sa.prep.edges)
+	edgesB := uniqueEdgeDirections(b.Verts, sb.prep.edges)
+	axes := make([]proof.DyV3, 0, len(a.Tris)+len(b.Tris)+len(edgesA)*len(edgesB))
 	axes = append(axes, sa.prep.normal...)
 	axes = append(axes, sb.prep.normal...)
-	for _, ea := range sa.prep.edges {
-		da := proof.DvSub(a.Verts[ea[1]], a.Verts[ea[0]])
-		for _, eb := range sb.prep.edges {
-			axes = append(axes, proof.DvCross(da, proof.DvSub(b.Verts[eb[1]], b.Verts[eb[0]])))
+	for _, da := range edgesA {
+		for _, db := range edgesB {
+			axes = append(axes, proof.DvCross(da, db))
 		}
 	}
 	var best frac
@@ -140,6 +141,30 @@ func PlanarPenetrationSupport(a, b *PlanarSolid, poll func() error) ([]PatchPoin
 			Normal: bestDir, Separation: separation})
 	}
 	return points, nil, nil
+}
+
+// uniqueEdgeDirections retains the first edge in each parallel direction.
+// Opposite edges share an axis: the penetration scan checks both translations
+// along each axis, so their cross products give the same candidates.
+func uniqueEdgeDirections(verts []proof.DyV3, edges [][2]int) []proof.DyV3 {
+	directions := make([]proof.DyV3, 0, len(edges))
+	for _, edge := range edges {
+		direction := proof.DvSub(verts[edge[1]], verts[edge[0]])
+		if proof.DvIsZero(direction) {
+			continue
+		}
+		duplicate := false
+		for _, held := range directions {
+			if proof.DvIsZero(proof.DvCross(direction, held)) {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			directions = append(directions, direction)
+		}
+	}
+	return directions
 }
 
 // shallowSupport publishes a convex guest poking through face h of the host
