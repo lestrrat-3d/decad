@@ -215,7 +215,17 @@ func Enclosure(lo, hi *big.Rat) (float64, float64) {
 
 // OrientSign reads det[b−a, c−a, d−a] over exact rationals.
 func OrientSign(a, b, c, d sweeparc.RatVec) int {
-	return sweeparc.Dot(sweeparc.Cross(sweeparc.Sub(b, a), sweeparc.Sub(c, a)), sweeparc.Sub(d, a)).Sign()
+	// All four vertices share one positive denominator. The determinant's
+	// integer numerator has the same sign as its rational value.
+	_, rel := ScaleVertices([]sweeparc.RatVec{b, c, d}, a)
+	var cross, term, sum big.Int
+	for axis := range 3 {
+		j, k := (axis+1)%3, (axis+2)%3
+		cross.Mul(rel[0][j], rel[1][k])
+		cross.Sub(&cross, term.Mul(rel[0][k], rel[1][j]))
+		sum.Add(&sum, term.Mul(&cross, rel[2][axis]))
+	}
+	return sum.Sign()
 }
 
 // Centroid rounds the exact centroid coordinates once and bounds their 3D gap.
