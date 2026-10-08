@@ -19,7 +19,7 @@ import (
 // which dominates the Euclidean one. A prism reads its profile coordinate
 // envelope (prism_payload.go) widened by its section displacement, and its
 // sweep levels widened by their axial displacement; a revolve reads the
-// generator envelope and axis anchor revolveCentroidGeometryBound already
+// generator envelope and axis anchor revolvemass.Centroid already
 // bounds a rotated material point with. Any other payload states no record
 // radius and answers +Inf, which motionbound.PoseDeviation charges only where the pose's
 // linear part departs from the ideal one.

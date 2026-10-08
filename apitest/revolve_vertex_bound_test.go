@@ -297,7 +297,7 @@ func fullRevolveTiltedCentroid(ax, ay, x0, y0, x1, y1 *big.Rat) [3]*big.Rat {
 // A3 + W·axial against the exact centroid of a full turn, for axes whose own
 // direction or anchor rounds and frames whose anchor lift rounds.
 //
-// Shown to fail: on the build before revolveCentroidLift.charge,
+// Shown to fail: on the build before revolvemass.Centroid's axis-lift charge,
 // far-frame-anchor published a 5.7e-15 bound against a 2.3e-11 residual (the
 // anchor's own aUBound, uncharged in the lift) and far-tilted-frame a
 // 1.6e-322 bound against 4.4e-11 (A3's frame-lift rounding at the frame
