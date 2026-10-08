@@ -233,7 +233,7 @@ the rules leave to the byte budget.
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`'s interference path. See its doc comment. |
 | `brep_payload.go` / `brep_measure.go` | BRep face views, topology and readings. See general-boolean §4. |
 | `classb.go` | Class-B admission adapters. See general-boolean §3 B. |
-| `classb_crossing.go` / `classb_canonical.go` | Class-B crossing and keyed vertices. See general-boolean §5, §10. |
+| `classb_crossing.go` | Class-B scene and BRep adapters. See general-boolean §5, §10. |
 | `surface_trim.go` / `surface_split_revolve.go` | `Trim`/`Extend`/`Split` gates and adapters, then `Split`'s revolve arm. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
 | `boolean_body.go` | Builds faceted bodies and measurements from an audited mesh; adapts `internal/facetedtopology/`. See evaluator §9. |
@@ -282,7 +282,7 @@ the rules leave to the byte budget.
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks, coalescing and analytic survey loops over recorded segments. |
-| `internal/classbgeom/` | Class-B boxes, gates, through reach, crossing scenes and edge splitting. See general-boolean §3 B, §5. |
+| `internal/classbgeom/` | Class-B boxes, gates, through reach, crossing face planning, keyed vertices, canonical edges and cylinder pieces. See general-boolean §3 B, §5. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep joins, crossing offsets, frames, restatement and stacked records. See general-boolean §4, §5. |
 | `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap charges and extent bounds. See evaluator §6. |
 | `internal/revolvemass/` | Revolve axis and wall moments. |
