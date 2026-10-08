@@ -1260,176 +1260,26 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 		return nil, err
 	}
 
-	// Side walls: one outward quad per chord — the same winding the prism uses,
-	// tangent × N outward for a counter-clockwise walk (O's outer, a post) and a
-	// clockwise walk (an O tunnel, C's reversed outer) alike.
-	addWalls := func(r ring) {
-		n := len(r.loV)
-		for j := range r.loV {
-			g0, g1 := j, (j+1)%n
-			mesh.addTriangle([3]int{r.loV[g0], r.loV[g1], r.hiV[g1]}, r.faces[j])
-			mesh.addTriangle([3]int{r.loV[g0], r.hiV[g1], r.hiV[g0]}, r.faces[j])
-		}
+	// The cup topology shares every chorded ring across its wall, floor and rim.
+	toTopologyRing := func(r ring) tessellation.CupRing[*Face] {
+		return tessellation.CupRing[*Face]{Samples: r.samples, LoV: r.loV, HiV: r.hiV, Faces: r.faces, Sag: r.sag}
 	}
+	oTopology := make([]tessellation.CupRing[*Face], len(oRings))
+	cTopology := make([]tessellation.CupRing[*Face], len(cRings))
 	for i := range oRings {
-		addWalls(oRings[i])
+		oTopology[i] = toTopologyRing(oRings[i])
 	}
 	for i := range cRings {
-		addWalls(cRings[i])
+		cTopology[i] = toTopologyRing(cRings[i])
 	}
-
-	// Every region loop must clear every other by more than their combined
-	// chord bounds, or a cap or rim band cannot prove it represents that
-	// topology — the same proof the prism's own loop clearance runs, now over
-	// all O and C loops (nested rings, tunnels and posts included).
-	var clrPts []Point2
-	var clrIdx [][]int
-	var clrSag []float64
-	addClr := func(r ring) {
-		base0 := len(clrPts)
-		clrPts = append(clrPts, r.samples...)
-		idx := make([]int, len(r.samples))
-		for k := range r.samples {
-			idx[k] = base0 + k
-		}
-		clrIdx = append(clrIdx, idx)
-		clrSag = append(clrSag, r.sag)
-	}
-	for i := range oRings {
-		addClr(oRings[i])
-	}
-	for i := range cRings {
-		addClr(cRings[i])
-	}
-	if err := requireLoopClearance(ctx, clrPts, clrIdx, clrSag); err != nil {
-		return nil, err
-	}
-
-	// The vertex each ring contributes to the open end (its rim) and to its own
-	// floor cap — whichever ring, lo or hi, that plane falls on.
-	openV := func(r ring) []int {
-		if openIsMax {
-			return r.hiV
-		}
-		return r.loV
-	}
-	floorV := func(r ring) []int {
-		if openIsMax {
-			return r.loV
-		}
-		return r.hiV
-	}
-
-	// A cap whose outward normal is −N reverses the counter-clockwise cap
-	// triangulation; +N uses it as-is (the same rule the prism's two caps use).
-	emit := func(tris [][3]int, vtx []int, reverse bool, face *Face) {
-		for _, tri := range tris {
-			a, bb, c := vtx[tri[0]], vtx[tri[1]], vtx[tri[2]]
-			if reverse {
-				bb, c = c, bb
-			}
-			mesh.addTriangle([3]int{a, bb, c}, face)
-		}
-	}
-
-	// triRegion triangulates a polygon-with-holes: each loop's samples go into
-	// one pts array (aligned to its floor/open vertex ring), and reverse[i]
-	// flips a loop's index order to the sense triangulate2D wants — loops[0]
-	// counter-clockwise, holes clockwise.
-	triRegion := func(samples [][]Point2, vtxRings [][]int, reverse []bool) ([][3]int, []int, error) {
-		var pts []Point2
-		var vtx []int
-		var loops [][]int
-		for i := range samples {
-			base0 := len(pts)
-			pts = append(pts, samples[i]...)
-			vtx = append(vtx, vtxRings[i]...)
-			idx := make([]int, len(samples[i]))
-			for k := range samples[i] {
-				idx[k] = base0 + k
-			}
-			if reverse[i] {
-				for a, z := 0, len(idx)-1; a < z; a, z = a+1, z-1 {
-					idx[a], idx[z] = idx[z], idx[a]
-				}
-			}
-			loops = append(loops, idx)
-		}
-		tris, err := triangulate2DContext(ctx, pts, loops)
-		return tris, vtx, err
-	}
-
-	// capStart over O — the kept outer floor, outward −N when the open end is on
-	// top. O's outer is already counter-clockwise and its holes (tunnels)
-	// clockwise, so no loop needs reversing.
-	oSamples := make([][]Point2, len(oRings))
-	oFloor := make([][]int, len(oRings))
-	oReverse := make([]bool, len(oRings))
-	for i := range oRings {
-		oSamples[i] = oRings[i].samples
-		oFloor[i] = floorV(oRings[i])
-	}
-	capTris, capVtx, err := triRegion(oSamples, oFloor, oReverse)
+	rimFace := func(i int) (*Face, error) { return faceOfRole(fmt.Sprintf("rim(%d)", i)) }
+	assembled, err := tessellation.AssembleCup(ctx, oTopology, cTopology, openIsMax, capStart, shellCap,
+		rimFace, requireLoopClearance, triangulate2DContext, faceTrim, faceAxial,
+		cp.zOuterDelta, cp.zCavDelta, cp.zOpenDelta)
 	if err != nil {
 		return nil, err
 	}
-	emit(capTris, capVtx, openIsMax, capStart)
-	// A planar patch's trim displacement is the largest sagitta over the loops
-	// that bound it, and its axial displacement its own level's.
-	for i := range oRings {
-		faceTrim[capStart] = math.Max(faceTrim[capStart], oRings[i].sag)
-	}
-	faceAxial[capStart] = cp.zOuterDelta
-
-	// shellCap over C — the pocket floor, outward +N when the open end is on
-	// top. C's samples are the reversed loops (outer clockwise, holes/posts
-	// counter-clockwise), so reversing every loop's order restores the cap's
-	// own sense: outer counter-clockwise, each post a clockwise hole.
-	cSamples := make([][]Point2, len(cRings))
-	cCav := make([][]int, len(cRings))
-	cReverse := make([]bool, len(cRings))
-	for i := range cRings {
-		cSamples[i] = cRings[i].samples
-		cCav[i] = floorV(cRings[i])
-		cReverse[i] = true
-	}
-	shellTris, shellVtx, err := triRegion(cSamples, cCav, cReverse)
-	if err != nil {
-		return nil, err
-	}
-	emit(shellTris, shellVtx, !openIsMax, shellCap)
-	for i := range cRings {
-		faceTrim[shellCap] = math.Max(faceTrim[shellCap], cRings[i].sag)
-	}
-	faceAxial[shellCap] = cp.zCavDelta
-
-	// Rims: one band per region loop at the open end. rim(0) spans O's outer
-	// (counter-clockwise) and C's reversed outer (clockwise hole); a post rim
-	// rim(i≥1) spans C's reversed hole (counter-clockwise, the wider post
-	// opening) and O's tunnel (clockwise hole) — the outer/hole roles swap, as
-	// evalCup's own build does.
-	for i := range oLoops {
-		rim, err := faceOfRole(fmt.Sprintf("rim(%d)", i))
-		if err != nil {
-			return nil, err
-		}
-		var samples [][]Point2
-		var vtxRings [][]int
-		if i == 0 {
-			samples = [][]Point2{oRings[0].samples, cRings[0].samples}
-			vtxRings = [][]int{openV(oRings[0]), openV(cRings[0])}
-		} else {
-			samples = [][]Point2{cRings[i].samples, oRings[i].samples}
-			vtxRings = [][]int{openV(cRings[i]), openV(oRings[i])}
-		}
-		rimTris, rimVtx, err := triRegion(samples, vtxRings, []bool{false, false})
-		if err != nil {
-			return nil, err
-		}
-		emit(rimTris, rimVtx, !openIsMax, rim)
-		faceTrim[rim] = math.Max(faceTrim[rim], math.Max(oRings[i].sag, cRings[i].sag))
-		faceAxial[rim] = cp.zOpenDelta
-	}
+	mesh.triangles, mesh.source = assembled.Triangles, assembled.Sources
 
 	// A reflected placement flips handedness, turning every counter-clockwise
 	// winding clockwise; reversing the windings restores outward orientation.
