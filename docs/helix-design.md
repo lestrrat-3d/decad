@@ -1,0 +1,692 @@
+# Helix Design
+
+`Document.Coil` builds one solid by moving a closed planar profile along a
+screw motion about an axis that lies in the profile's own plane: the section
+turns about the axis and slides along it at a stated pitch, staying in the
+axis plane throughout. A thread cutter, a spring and a coil are this one
+build. This document owns the entry point, the screw-motion frame, the
+refusals, the construction, the result's topology, the four readings and
+their closed forms, downstream coverage, the thread use case and the staged
+delivery.
+
+Companion contracts stay authoritative for their own areas:
+
+- `docs/api-design.md` owns the public model and the sketch-profile seam;
+- `docs/evaluator-design.md` §6 owns `Revolve`, whose axis vocabulary,
+  in-plane axis resolution and side gate this build reuses;
+- `docs/sweep-design.md` owns `Path` and `Sweep`, which this build does NOT
+  extend (§12 states why);
+- `docs/loft-design.md` §5–§6 own the held-triangle shell model and the
+  crossing audit this build reuses;
+- `docs/faceted-vertex-bounds-design.md` owns the per-vertex bound model the
+  held shell publishes;
+- `docs/tessellation-design.md` owns mesh proofs and boolean admission;
+- `docs/verification-design.md` owns report meaning and the tolerance gate.
+
+Five tables are normative:
+
+| Table | States | Section |
+|---|---|---|
+| **CP** | the screw motion and the section frame | §3 |
+| **CS** | what refuses a coil, and its sentinel | §4 |
+| **CB** | the result's topology, faces and roles | §6 |
+| **CM** | the four readings, their closed forms and bounds | §7 |
+| **CD** | downstream coverage and staging | §8 |
+
+Question router (navigation, not authority):
+
+| Your question | Section |
+|---|---|
+| What does `Coil` take, and what do pitch, turns and hand mean | §2 |
+| Why the section stays in the axis plane, not normal to the helix | §3 |
+| Which inputs refuse, with which sentinel, in which order | §4 |
+| How the held shell is built, and what every vertex's bound is | §5 |
+| What faces, edges and vertices the body has | §6 |
+| What `Volume`, `Area`, `Centroid` and `Bounds` read, and how tight | §7 |
+| What `Verify`, `Tessellate`, booleans, `Placed` and STEP do | §8 |
+| How to cut an external or internal thread, and what it measures | §9 |
+| Which PR lands what, and what each must prove first | §11 |
+| Why not a `Helix` path segment, or a Frenet frame | §12 |
+
+## 1. Scope
+
+The admitted operation has one closed planar profile, one axis in the
+profile's plane, a positive pitch and a positive number of turns. The build
+admits:
+
+- a profile whose every segment, on the outer loop and on every hole, is a
+  `LineSeg` (PR 1); `ArcSeg` and `CircleSeg` segments land with PR 3;
+- an axis stated as `SketchLine`, `ConstructionAxis` or `EdgeAxis`, resolved
+  into the sketch plane exactly as `Revolve` resolves it;
+- any positive finite pitch and any positive finite turn count, whole or
+  fractional;
+- a right-hand coil by default, a left-hand coil through `WithLeftHand()`;
+- a solid result only.
+
+The build refuses, with Table CS, a profile that touches or crosses the
+axis, a profile wider along the axis than one pitch when the coil makes one
+turn or more, a free-form profile segment, `WithSurfaceResult()`, and a
+station count past the fixed cap.
+
+Outside this design, with no increment planned here:
+
+- a `Helix` segment in `Path` (§12 states why `Coil` is a verb);
+- a section carried normal to the helix (a Frenet or rotation-minimizing
+  frame) rather than in the axis plane (§3 states why);
+- a variable pitch, a conical (tapered) helix, a spring's closed or ground
+  end, and a thread's lead-in chamfer: each is a later boolean or a later
+  build, never a parameter of this one;
+- `CoilChain` (an open sketch chain swept into a helicoidal sheet);
+- modify operations on a coil.
+
+`Revolve` remains the operation for a zero pitch. `Coil` refuses a zero
+pitch (CS4) rather than reducing to it.
+
+## 2. Public API
+
+```go
+// Coil moves the closed profile p of sketch s along the screw motion about
+// axis: turns full rotations about the axis, right-handed about the axis
+// direction, advancing pitch along that direction per rotation. The axis
+// MUST lie in the sketch plane, and the profile MUST lie strictly on one
+// side of it. The section stays in the axis plane throughout, so a thread
+// profile drawn beside the axis cuts the thread it draws.
+func (d *Document) Coil(
+    ctx context.Context,
+    s *sketch.Sketch,
+    p *sketch.Profile,
+    axis Axis,
+    pitch units.Value,
+    turns units.Value,
+    opts ...CoilOption,
+) (*Body, error)
+
+// CoilOption configures Coil. Sealed.
+type CoilOption interface { /* sealed */ }
+
+// WithLeftHand turns the section left-handed about the axis direction while
+// it advances along it. The default is right-handed.
+func WithLeftHand() CoilOption
+```
+
+| Parameter | Kind | Meaning |
+|---|---|---|
+| `axis` | `Axis` | `SketchLine`, `ConstructionAxis` or `EdgeAxis` — `Revolve`'s own sealed vocabulary (`revolve.go`), resolved into the sketch plane by `axisInPlane` (`revolve_axis.go`). The axis direction fixes the advance direction |
+| `pitch` | `units.Length`, finite, `> 0` | the axial advance per full turn |
+| `turns` | `units.Dimensionless` (`units.Scalar`), finite, `> 0` | the number of full turns; the total angle is `Θ = 2π·turns` |
+| `WithLeftHand()` | option, at most once | reverses the rotation sense; the advance direction is unchanged |
+
+Stating the extent in turns rather than in height keeps the angular extent
+a RATIONAL multiple of a turn: `turns` is a float, so `Θ/2π` is exact, and
+the height `pitch·turns` is an exact rational product. A thread of length
+`L` at pitch `p` passes `units.Scalar(L/p)`; the body then denotes
+`turns` as the float the caller passed, and the height it denotes is
+`pitch × that float`, never `L` itself. The executable example states this
+in its comment.
+
+A profile beside a `SketchLine` axis is the common thread case: the sketch
+holds the V or trapezoid groove profile and a construction line for the
+axis. Both pass through the unchanged sketch seam, and the seam's own
+sentinel wins before any axis geometry is read.
+
+## 3. Table CP — the screw motion and the section frame
+
+Resolve the axis into the sketch plane as `Revolve` does: `axisInPlane`
+gives a plane-local point `a = (aU, aV)` and a unit direction
+`d = (dU, dV)`, each with the rounding bound `revolveaxis.AxisInPlane`
+proves. Let `n` be the world unit vector along `d` (lifted through the
+plane frame), `e_r` the world unit vector along the plane-local normal
+`(−dV, dU)` or its negation — the sign that puts the profile on the
+POSITIVE side, decided by `revolveaxis.ResolveSide` — and `e_t = n × e_r`.
+`e_t` is the plane's own normal or its negation, decided by an exact sign.
+Let `C` be the world point of `a`.
+
+Every profile point has plane-local axis coordinates `(ρ, ζ)`: `ρ` its
+signed distance from the axis along `e_r`, `ζ` its coordinate along `n`,
+each a bounded reading charging the axis frame's own bound exactly as
+`Revolve`'s radial and axial readings do.
+
+Write `k = pitch / 2π`, `Θ = 2π·turns`, and `σ = +1` for a right-hand coil
+and `−1` under `WithLeftHand()`. The screw motion is
+
+```text
+Φ(ρ, ζ, θ) = C + ρ·(cos θ · e_r + σ·sin θ · e_t) + (ζ + k·θ) · n,   θ ∈ [0, Θ]
+```
+
+| CP | Rule |
+|---|---|
+| **CP1** | The section at angle `θ` is the recorded profile under the rigid motion `Φ(·, ·, θ)`: a rotation by `σθ` about the axis followed by a slide `kθ` along it. It lies in the plane through `C + kθ·n` spanned by `n` and `cos θ·e_r + σ sin θ·e_t`, which CONTAINS the axis. |
+| **CP2** | The section at `θ = 0` is the recorded profile in its own plane, exactly: `Φ(ρ, ζ, 0)` is the recorded lift. The start cap is the recorded region. |
+| **CP3** | No Frenet and no rotation-minimizing frame is used. The section is never normal to the helix; the helix tangent makes the lead angle `atan(k / ρ)` with the section plane at radius `ρ`. |
+| **CP4** | The map `Φ` has Jacobian determinant of magnitude `ρ`, the same as a revolve's. Every closed form in Table CM is a revolve's with `Θ` for the sweep angle plus the slide's own term. |
+| **CP5** | `Φ` is injective on `Ω × [0, Θ]` whenever `ρ > 0` on `Ω` and either `turns < 1` or the profile's axial extent `H = max ζ − min ζ` is below `pitch`. Proof: `Φ(ρ,ζ,θ) = Φ(ρ',ζ',θ')` projects onto the plane normal to `n` as `ρ·e(θ) = ρ'·e(θ')` with both radii positive, so `ρ = ρ'` and `θ' = θ + 2πm`; the axial components then give `ζ' = ζ − pitch·m`. For `turns < 1` only `m = 0` fits in `[0, Θ]`. For `turns ≥ 1`, `m ≠ 0` needs two points of `Ω` at one radius whose axial coordinates differ by at least `pitch > H`, which `Ω` has none of. |
+
+**Why the axis plane.** A thread is DEFINED by its axial section: ISO,
+UN and trapezoidal thread forms state the groove in the plane through the
+axis, and a cutter that holds that section while it screws along the axis
+cuts exactly that thread. A section carried normal to the helix would cut a
+different groove, tilted by the lead angle, and would have no closed-form
+volume or centroid of its own. The axis-plane motion is a revolve with a
+slide, so every reading a revolve has, this build has (CP4), and injectivity
+is a one-paragraph proof (CP5) rather than a facet audit. A round-wire
+spring modelled this way has a wire whose section normal to the helix is
+not exactly circular; it is exactly the wire a lathe-wound coil of that
+axial section has, and its volume is exact in the same closed form.
+
+## 4. Table CS — what refuses a coil
+
+The existence rule applies: a requested solid that does not exist is
+`ErrDegenerate`; a solid that exists but this evaluator cannot build is
+`ErrUnsupported`.
+
+| CS | Condition | Sentinel |
+|---|---|---|
+| **CS1** | nil context, document, sketch, profile or axis; nil or foreign option; `WithLeftHand()` repeated | `ErrDegenerate` |
+| **CS2** | profile seam rejection | the seam's own sentinel |
+| **CS3** | an axis variant this evaluator cannot resolve, or an axis that does not lie in the sketch plane | what `axisInPlane` answers: `ErrUnsupported` for the variant, `revolveaxis.AxisInPlane`'s own sentinel for the placement |
+| **CS4** | `pitch` not a length, or `turns` not dimensionless; either non-finite; either at or below zero | `ErrUnitKind`; `ErrNotFinite`; `ErrDegenerate` (a zero pitch names a revolve, a zero turn count names no solid) |
+| **CS5** | the profile's near-axis radial extreme is not proven positive: proven at or below zero refuses outright; an interval straddling zero (a tilted axis whose own rounding leaves the sign undecided) refuses as undecided | `ErrDegenerate`; `ErrUnsupported`. Stricter than `Revolve`'s side gate: a point on the axis sweeps to a segment of the axis and pinches the wall, so no contact is admitted |
+| **CS6** | `turns ≥ 1` and the upper bound of the profile's axial extent `H` is at or above `pitch` | `ErrUnsupported`: CP5 proves the solid simple only below one pitch; the refusal names `H`, `pitch` and the turn count |
+| **CS7** | a profile segment, on any loop, that is not a `LineSeg` (PR 1), or not a `LineSeg`, `ArcSeg` or `CircleSeg` (PR 3 onward) | `ErrUnsupported` |
+| **CS8** | the station count `N = ⌈turns · coilStationsPerTurn⌉` exceeds `maxCoilStations`, or the wall triangle count exceeds the facet cap | `ErrUnsupported` (a resource ceiling) |
+| **CS9** | the held crossing audit proves two non-adjacent held triangles meet; or its pair budget runs out | `ErrUnsupported` in both arms: CP5 has already proven the TRUE solid simple, so a held crossing is a station artefact (two true turns closer than twice the chord departure), never a defect of the solid |
+| **CS10** | a computed station, vertex, reading or bound is non-finite, or a held triangle collapses from rounding | `ErrUnsupported` |
+| **CS11** | `WithSurfaceResult()` — it is not a `CoilOption`, so this is a compile-time refusal, stated here so no later increment admits it silently | — |
+
+Gate order is normative:
+
+1. Validate context, nils, owned options and option arity (CS1).
+2. Authenticate and record the planar profile (CS2).
+3. Validate pitch and turns (CS4).
+4. Resolve the axis into the plane (CS3), read the profile's radial and
+   axial extremes, decide the side (CS5) and the pitch clearance (CS6).
+5. Check every profile segment's kind (CS7) and preflight the station and
+   facet counts (CS8).
+6. Build the held shell, round once, orient once, run the crossing audit
+   (CS9, CS10).
+7. Compute the four readings and their bounds (Table CM).
+8. Commit once.
+
+Every failure leaves document membership and producer numbering unchanged.
+
+## 5. Construction
+
+### 5.1 Axis coordinates
+
+`axisInPlane` and `revolveaxis.ResolveSide` give the axis line and the
+profile's side exactly as `Revolve`'s step 4 does, over the same
+`SideExtremes` the profile's walk resolves (`revolveaxis.ResolveLoop`).
+CS5 reads the near-axis extreme's proven interval: lower end above zero
+admits; upper end at or below zero is `ErrDegenerate`; anything else is
+`ErrUnsupported`. CS6 reads the axial extremes' outer interval. Both are
+reject-only readings off the profile's own record.
+
+### 5.2 Stations
+
+The sweep is cut at `N + 1` stations, `N = ⌈turns · coilStationsPerTurn⌉`,
+at the exact turn fractions `t_j = turns · j / N`, `j = 0 … N`. Every `t_j`
+is a rational, `t_0 = 0` and `t_N = turns` exactly. The angle at station
+`j` is `θ_j = 2π t_j`, enclosed through `proofbound.TurnSinCosInterval(t_j)`
+— the turn-space enclosure that is zero-width at every octant boundary, so
+a whole, half or quarter turn is exact. The slide at station `j` is
+`pitch · t_j`, an exact rational.
+
+`coilStationsPerTurn` is `256`, a power of two, and `maxCoilStations` is
+`1 << 15`; the defining source constants own both values and their
+derivation. At 256 stations per turn the chord departure (§5.4) is
+`ρ_max · (1 − cos(π/256)) ≈ 7.5e-5 · ρ_max`, two decades below the
+default `Verify` tolerance (`docs/verification-design.md` §2) on every
+reading that carries it. The cap admits 128 turns of any profile, and the
+facet-pair budget (`proofbound.MaxFacetPairTestsPerCall`) bounds what the
+audit can run: a few hundred thousand wall triangles.
+
+### 5.3 Held vertices
+
+For profile vertex `v` with axis coordinates `(ρ_v, ζ_v)` and station `j`:
+
+```text
+X(v, j) = C + ρ_v·(cos θ_j·e_r + σ sin θ_j·e_t) + (ζ_v + pitch·t_j)·n
+```
+
+Every term is an interval: `ρ_v`, `ζ_v`, `C`, `e_r`, `e_t` and `n` carry
+the axis frame's and the lift's own bounds, and `cos θ_j`, `sin θ_j` the
+trig enclosure. Each coordinate is held as the nearest float to the
+interval's midpoint, and `round(v, j)` is `proofbound.IntervalFloatError`'s
+outward distance from the held coordinate to the far end of the interval,
+read per coordinate and turned into a 3D radius by `proofbound.Radius3D`.
+Station 0 holds the recorded lift exactly where the lift is exact (CP2).
+
+The held vertex table is station-major: vertex `v` of station `j` is index
+`j · stride + v`, with `stride` the profile's vertex count over every loop,
+in `internal/sweepmitre.Loops`'s own loop-major order.
+
+### 5.4 Chord departure and the per-vertex bound
+
+A wall cell is profile segment `v → w` over stations `j → j + 1`. Because
+the segment is straight, `Φ` is linear along it at every fixed `θ`, so
+the true cell is a ruled surface whose rulings are the segment's images and
+whose two edges are helix arcs of radii `ρ_v` and `ρ_w` over `Δθ = 2π/N`
+per turn fraction `Δt = turns / N`. The held cell is the two triangles the
+quad splits into along the diagonal `tessellate.go` uses for a prism's
+lateral quad.
+
+| Term | Bounds | Derivation | Rounding |
+|---|---|---|---|
+| `sag(cell)` | the distance from any true point of the cell to the bilinear patch through its four held corners | each helix arc lies within `ρ·(1 − cos(Δθ/2))` of its chord (the slide is linear in `θ` and the chord interpolates it exactly, so only the circular component departs), and a ruling between two arc points lies within the larger of its ends' departures of the ruling between the chord points; take `ρ_max(cell)·(1 − cos(Δθ/2))` with `1 − cos` read off `TurnSinCosInterval(Δt/2)`'s upper end | up |
+| `twist(cell)` | the distance between the bilinear patch and the two held triangles | `proofbound.CellTwistOffsetUpper` over the four held corners (loft §5.2's own term, unchanged) | up |
+| `round(v, j)` | the held corner's distance from the point `X(v, j)` denotes | §5.3 | up |
+| `β(v, j)` | the per-vertex bound of `docs/faceted-vertex-bounds-design.md` §2 | `round(v, j)` plus the largest `sag + twist` over the cells that touch the vertex; a cap vertex touches cells on one side only | `absSumUpper` |
+| `δ` | the payload's displacement | the largest `β` over the table | max |
+
+`β` folds each facet's own departure into every corner, which is what
+`docs/faceted-vertex-bounds-design.md` §2.1 requires of a curved payload
+that publishes a per-vertex record: every true point of a cell is within
+`sag + twist` of the held cell under the `(λ, θ)` correspondence, and every
+held point within the same distance of a true point, so the facet bound
+`max corner β` is two-sided.
+
+### 5.5 Triangles, orientation and the crossing audit
+
+Walls are emitted ring by ring, `j = 0 … N − 1`, loop by loop, segment by
+segment, two triangles per cell in the prism's lateral order; both carry
+the role `side(i, j_seg)` of the segment that generated them. `capStart`
+is `triangulate.go`'s triangulation of the recorded region, reversed by
+swapping each triangle's second and third vertices; `capEnd` is the same
+index triples on station `N`, retained — the identical seeding loft §5
+and sweep §16.3 use. The whole shell is then oriented once by the sign of
+the exact tetrahedron sum over the held floats (each a rational), anchored
+at `C`; a negative sum reverses every triangle. A collapsed held triangle
+is CS10.
+
+`loftmesh.LoftCrossingAudit` runs over the complete held set with
+`proofbound.MaxFacetPairTestsPerCall` as its pair ceiling (CS9). No
+`F·(F−1)/2` preflight runs: the audit's sweep-and-prune charges candidate
+pairs, and the facet cap of CS8 bounds the set. The true solid's simplicity
+is CP5's; the audit proves the HELD shell embedded, which is what every
+mesh consumer (`BoundaryVerified`, the boolean) reads.
+
+### 5.6 Placement
+
+A placement re-runs §5.1–§5.5 from the record under the composed motion:
+`C`, `n`, `e_r` and `e_t` are mapped through the transform with
+`proofbound.DirRoundAllow`'s own charge on the frame vectors, the stations
+and trig are recomputed, and the held table, `β`, `δ`, orientation and
+audit are rebuilt. `δ` never accumulates across placements. The four
+readings are re-derived from the closed forms under the composed motion:
+`Volume` and `Area` are invariant; `Centroid` maps the unplaced centroid
+through the motion with its own rounding charge; `Bounds` reads the new
+held table.
+
+## 6. Table CB — the result
+
+For loop `i` (`0` the outer loop, `1 + h` for hole `h`), profile segment
+`j` of that loop, and profile vertex `v`:
+
+| Entity | Count | Geometry | Role |
+|---|---|---|---|
+| start cap | 1 | `Plane` over the recorded region, frame the recorded plane's own (exact) | `capStart` |
+| end cap | 1 | `Plane` over the section at `θ = Θ`, frame from the station-`N` trig, within `δ` | `capEnd` |
+| wall | one per `(i, j)` | `Faceted{Bound}` — the whole helicoidal band of segment `j` over every turn, `Bound` the largest `β` over the vertices its triangles touch | `side(i, j)` |
+| rim edge | one per profile segment per cap | `Line3` between the cap's two held vertices (PR 1); `Arc3` for an arc segment (PR 3) | through its two faces' origins |
+| helix edge | one per profile vertex | `FacetedCurve{Bound}`: the chain of held chords of vertex `v` over every station, `Bound` the largest `β` along it | through its two walls' origins |
+| vertex | one per profile vertex per cap | position the held station-`0` or station-`N` point, bound its `β` | — |
+
+Interior stations are mesh vertices, never topology: a wall is ONE face
+whose loop is rim, helix edge, rim reversed, helix edge reversed. For a
+hole-free profile of `m` vertices the body has `2 + m` faces, `3m` edges
+and `2m` vertices. One lump, one outer shell; a hole loop is a void passage
+through every turn, never a second lump.
+
+`Edge.IsConvex` keeps evaluator §3's meanings. A helix edge is a junction
+edge and takes the sign of the profile's own corner turn at `v`, exactly as
+a prism's vertical edge does: left turn convex. A rim edge takes the rim
+rule: a straight wall by the role of its loop, outer convex, hole concave.
+
+The wall's `Faceted` variant is the honest surface kind: the true band is
+a helicoidal surface no sealed analytic variant names, and `Faceted`'s
+contract (`internal/surfacegeom/geometry.go`) is that the face IS its
+polygons within `Bound` of the surface it stands for. `Face.Area()` on a
+wall reads Table CM's closed form for its segment, not the held triangles'
+sum.
+
+## 7. Table CM — measurements and bounds
+
+Let `Q = ∫_Ω ρ dA`, `I = ∫_Ω ρ² dA` and `M = ∫_Ω ρζ dA` be the profile's
+axis-frame moments, read through `revolvemass.AxisMoments` off the
+profile's `momentinput.Integrals` with their own bounds (exact rationals for
+a `LineSeg`-only profile), and `A_Ω` its area.
+
+| Reading | Closed form | Exactness and bound |
+|---|---|---|
+| `Volume` | `Θ · Q = 2π · turns · Q` (CP4, Pappus) | `Approximate` always: `2π` enters through `proofbound.TwoPiInterval`, and the bound is that enclosure's width times `turns · Q` plus the moment's own bound, through `proofbound.BoundedMul`. Relative width is of order `1e-16` |
+| `Centroid` | `C + (I/Q)·(sin Θ / Θ)·e_r + σ·(I/Q)·((1 − cos Θ)/Θ)·e_t + (M/Q + pitch·turns/2)·n` | `sin Θ`, `cos Θ` from `TurnSinCosInterval(turns)`; at a whole number of turns both are exact and the transverse terms vanish, leaving `C + (M/Q + pitch·turns/2)·n`, which is `Exact` when the frame is exact and the rationals round exactly |
+| `Area` | `2·A_Ω` for the two caps, plus per segment `v → w` with `Δρ = ρ_w − ρ_v`, `Δζ = ζ_w − ζ_v`, `L² = Δρ² + Δζ²`: for `Δρ = 0`, `Θ · ρ_v · \|Δζ\|`; otherwise `(1 / (L·\|Δρ\|)) · [ Θ·(F₁ − F₀) + (turns · pitch² · Δρ² / 2π) · (asinh(u₁/m) − asinh(u₀/m)) ]` with `u = L·ρ`, `m = k·\|Δρ\|`, `F(u) = (u/2)·sqrt(u² + m²)` | `Approximate`: the π enclosure, the certified square root (`internal/sweepmitre`'s `ratSqrt` pair) and `proofbound.AsinhInterval` (new, §7.1) each contribute their width; a cylindrical band (`Δρ = 0`) carries the π enclosure alone |
+| `Bounds` | per-axis extremes over the held vertex table, widened outward by `δ` | `Approximate` with bound `δ` plus the one outward rounding; `Exact` only when `δ = 0`, which no coil reaches |
+
+The area integrand is derived once: `∂Φ/∂λ = Δρ·e_r(θ) + Δζ·n` and
+`∂Φ/∂θ = ρ·σ e_t(θ) + k·n` give `|∂λ × ∂θ|² = L²·ρ² + k²·Δρ²`, so a
+segment's wall area is `Θ · ∫₀¹ sqrt(L²·ρ(λ)² + k²·Δρ²) dλ` with
+`ρ(λ) = ρ_v + λ·Δρ`; the substitution `u = L·ρ` gives the stated
+antiderivative. A hand-written integrator never replaces it: §13's tests
+compare the published value against an independent quadrature, and the
+published BOUND must enclose that quadrature's own error.
+
+Every bound composes through `proofbound.BoundedAdd`/`BoundedMul` and
+rounds outward at every publication. `Exact` requires every term exact;
+operation history grants nothing.
+
+The tolerance-gate diameter is the loft arm's (`verify_gate.go`): the held
+table's own `pointSetDiameterContext` less `2·δ`, rounded down.
+
+### 7.1 `proofbound.AsinhInterval`
+
+PR 1 adds `LnInterval(x RatInterval) RatInterval` and
+`AsinhInterval(x RatInterval) RatInterval` to `internal/proofbound`, on the
+fixed-point grid `turn_trig.go` already uses:
+
+- `ln y` for a rational `y > 0`: write `y = 2^e · m` with `m ∈ [1, 2)`
+  (exact), then `ln y = e·ln 2 + 2·artanh((m − 1)/(m + 1))`; the artanh
+  series `Σ w^(2n+1)/(2n+1)` has positive terms and the tail bound
+  `w^(2K+1) / ((2K+1)(1 − w²))`, with `w ≤ 1/3`; `ln 2` is the same series
+  at `w = 1/3`. Evaluate at both ends of `x` and take the outer interval;
+  `ln` is increasing, so the ends decide the enclosure.
+- `asinh x = ln(x + sqrt(x² + 1))`, the square root enclosed by the
+  package's rational square-root bracket; odd symmetry for `x < 0`;
+  exactly zero at zero.
+
+Tests: `ln 1 = 0` exactly, `ln 2` against the held constant, random
+rationals against `math.Log`/`math.Asinh` (enclosure contains, width below
+`2^-150`), and the §13 area fixtures.
+
+## 8. Table CD — downstream
+
+| CD | Consumer | Status |
+|---|---|---|
+| **CD1** | structural `Verify` + tolerance gate | lands with PR 1. Validity is proven by construction: CP5 over CS5/CS6 proves the true solid simple, and the held audit proves the shell embedded, so `payloadProvesSimple` answers true for a `coilPayload`. All four readings are judged. The gate diameter is §7's |
+| **CD2** | `Tessellate` / STL / OBJ / 3MF / faceted STEP | lands with PR 2 as an exact restatement of the held triangles at any tolerance at or above `δ` (below it `ErrUnsupported`, `docs/tessellation-design.md` §7's rule): each vertex's `β` as its `vertexBound`, `sourceBound(face)` the largest corner `β` over that face's triangles, `Bound` `δ`, `areaSlack` §8.1's term, `volSymDiff` §8.2's with `symDiffOK == true`, and the boundary proof the build's own audit. PR 2 adds the `coilPayload` row to `docs/tessellation-design.md` §2's table. Before PR 2, `Tessellate` is `ErrUnsupported` |
+| **CD3** | mesh booleans | lands with PR 2: an operand on `docs/tessellation-design.md` §11's terms, through CD2's proof. The boolean asks a coil for its mesh at the pair tolerance raised to `δ`, which the restatement always meets. §9 is the use case |
+| **CD4** | interference | lands with PR 2 through `Verify`'s read-only mesh intersection (`docs/interference-design.md` §5) for every partner the mesh boolean admits |
+| **CD5** | clearance | box separation at once; `WithClearances` reads the exact planar arm (`clearance_planar.go`) once PR 4 adds `coilPayload` to `planarPairAdmits`, against a prism or a stitched solid, the held gap widened by `δ`; `Suspect` against every other payload |
+| **CD6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with the unsupported-survey diagnostic |
+| **CD7** | `Placed`, `Duplicate`, `PlacedCopy` | §5.6 |
+| **CD8** | modify operations | `ErrUnsupported`; no receiver row |
+| **CD9** | mass properties (`dynamics`) | the verified-mesh ladder (`mass_properties_mesh.go`) once CD2 lands: a restated mesh settles at its first step. `ErrUnsupported` before PR 2 |
+| **CD10** | STEP | the faceted AP214 writer: a `Faceted` wall has no analytic arm, so the whole body writes as held facets, which `docs/step-export-design.md` already states for any body with a non-planar, non-cylindrical face |
+
+### 8.1 `areaSlack`
+
+The cut-stable area allowance sums, over every wall cell, the held-to-
+bilinear term `proofbound.CellTwistAreaAllow` and the bilinear-to-true
+term: the local density difference `|∂λΦ × ∂θΦ| − |∂λB × ∂θB|` is at most
+`|∂λ(Φ − B)|·|∂θΦ| + |∂λB|·|∂θ(Φ − B)|`, with `|∂λ(Φ − B)| ≤ 2·sag(cell)`
+(the difference of the two edge departures) and `|∂θ(Φ − B)| ≤ Δθ·ρ_max·
+(Δθ/2 + Δθ²/24)` (the helix tangent against its chord, transverse part
+only: the slide is linear and cancels). Integrate those constants over the
+cell's `(λ, θ)` rectangle. Both caps add `proofbound.PerturbedTriangleArea
+Allow` at `δ` per triangle. Every term through `absSumUpper`.
+
+### 8.2 `volSymDiff`
+
+Slice both the true body and the held shell at every station plane
+(`Φ(·, ·, θ_j)` is a rigid image of `Ω`, so the station section is planar
+and the two bodies share it up to `round`): the true body is the union of
+wedges `W_j = Φ(Ω × [θ_j, θ_{j+1}])` and the held shell the union of the
+prismatoids `P_j` between consecutive held sections. `B △ M ⊂ ⋃ (W_j △ P_j)`,
+and each `W_j △ P_j` is swept by the lateral homotopy between the true cell
+and its held triangles, whose every point moves at most `sag + twist`. So
+
+```text
+volSymDiff = Σ_cells (sag + twist)(cell) · rulingLenUpper(cell) · helixRateUpper(cell) · Δθ
+           + Σ_cells CellTwistVolumeAllow(cell)
+           + sweptVolumeAllow(roundMax, sectionAreaUpper · (N + 1))
+```
+
+with `rulingLenUpper` the segment's image length upper bound, `helixRate`
+`sqrt(ρ_max² + k²)` rounded up, and the last term the station rounding's
+own allowance. `symDiffOK` is true. No `Mesh.Bound × area` shortcut.
+
+## 9. The thread use case
+
+Both threads are a `Cut` whose tool is a coil. The cylinder stays what it
+was built as; the coil is the mesh-path operand CD3 admits; the result is a
+`facetedPayload` (`docs/evaluator-design.md` §9).
+
+**External thread.** A cylinder of radius `R` and height `L` from
+`Revolve` or `Extrude`. In a sketch on a plane through the cylinder's
+axis, draw the groove profile — a V or trapezoid whose root lies at radius
+`R − depth` and whose mouth opens past `R` — beside a construction line on
+the axis. `Coil` it with the thread's pitch over `turns` chosen so the coil
+starts and ends INSIDE the cylinder's height: the coil's two caps then meet
+the cylinder wall transversally and nothing is coplanar. `doc.Cut(ctx,
+cylinder, coil)`.
+
+```go
+coil, err := doc.Coil(ctx, s, s.Profiles()[0], decad.SketchLine{Start: a, End: b},
+    units.Millimeters(1.5), units.Scalar(8))
+threaded, err := doc.Cut(ctx, cylinder, coil)
+```
+
+A thread that runs out of the cylinder's end is a coil whose caps sit
+outside the cylinder: build the coil longer than the cylinder and let the
+boolean trim it. What is refused is a coil cap lying IN the cylinder's end
+plane: that is the coplanar contact the mesh boolean's hidden-tangency gate
+refuses (`docs/general-boolean-design.md` §2), and the repair is to start
+the coil a fraction of a pitch outside the end plane.
+
+**Internal thread.** A block with a bore (an `Extrude` of an annular
+profile, or a block minus a cylinder). The groove profile sits at the bore
+wall with its root at `R + depth` and its mouth opening into the bore past
+`R`. `Coil` and `Cut` as above.
+
+**What the result reads.** The cylinder's interior `ρ ≤ R` is invariant
+under the screw motion, so the material the cut removes is the screw sweep
+of the CLIPPED profile `Ω ∩ {ρ ≤ R}` (external) or `Ω ∩ {ρ ≥ R}`
+(internal), and its volume is `Θ · Q(clipped)` by CP4. For a `LineSeg`
+profile the clipped region is a polygon whose moment is an exact rational,
+so the expected result volume `V_cylinder − Θ·Q(clipped)` is a closed form
+the test computes independently.
+
+| Reading on the threaded body | Value |
+|---|---|
+| `Volume` | `Approximate`: the mesh boolean composes the cylinder operand's own chord `volSymDiff` at the pair tolerance, the coil's §8.2 term, and the rim terms of `docs/faceted-vertex-bounds-design.md` §3. The published interval encloses the closed form above; that enclosure is §13's assertion |
+| `Area`, `Centroid`, `Bounds` | `Approximate`, composed the same way |
+| faces | `Faceted` throughout: a boolean result loses analytic identity (`docs/api-design.md` §6.1) |
+| `Verify` | validity by the faceted verdict (`docs/payload-verification-design.md` §6.4): the held audit is clean and the feature scale — the crest-to-crest gap, a fraction of the pitch — clears `2·δ`, so validity is proven; `Status` is then the tolerance gate's answer over the composed bounds, `Sound` at the default tolerance for the §13 fixtures. It is never `Suspect` for a reason the thread itself introduces |
+
+A coil built directly (no boolean) reads Table CM: `Volume` within
+`1e-16` relative, `Area` and `Centroid` tight, `Bounds` within `δ`, and
+`Verify` `Sound`.
+
+## 10. Determinism, cancellation and budgets
+
+Equal profile record, axis, pitch, turns, hand and placement produce the
+same stations, held table, triangle order, roles and readings: every trig
+value is a fixed-precision enclosure's midpoint, so no step reads a
+transcendental library or depends on FMA contraction. The build polls `ctx`
+per station ring, inside the audit's pair loop and per segment of the area
+sum, and returns `ctx.Err()` unchanged. CS8's caps bound `N` and the facet
+count before any allocation; the trig enclosure runs once per station
+(`N + 1` calls, each a fixed 200-bit series), and the audit's work is
+charged against `proofbound.MaxFacetPairTestsPerCall`.
+
+## 11. Increments
+
+The design ships inside PR 1. Each PR's tests assert computed geometry
+against closed forms, and every bound fixture is shown to fail first: delete
+the leg it guards, watch the assertion go red, restore it, and record the
+legs shown to fail in the test's own comment. PR 1 does not wait on any
+open PR: `#1033` moves the contact-sweep motion planner into
+`internal/sweeppath/`, which is the PAIR-sweep path of
+`docs/contact-sweep-design.md`, not `Sweep`'s `Path`, and no coil file
+touches it.
+
+| PR | Model | Lands | Still staged |
+|---|---|---|---|
+| **1** | Opus (proof spec) | `Document.Coil`, `CoilOption`, `WithLeftHand`; Table CS; §5's construction over a `LineSeg`-only profile; Table CB; Table CM with `proofbound.LnInterval`/`AsinhInterval`; CD1 and CD7; the design doc, its layout row, `doc.go`'s support map, `docs/missing-features.md`; the executable example `examples/decad_coil_example_test.go` (a square-wire spring: `Volume`, `Centroid`, face count, `Verify` status) | CD2–CD5, CD9, arcs, threads |
+| **2** | Opus (proof spec) | `tessellate_coil.go`: CD2 with §5.4's `β`, §8.1, §8.2; CD3, CD4, CD9 follow; the `coilPayload` row in `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md` §1; the thread examples `examples/decad_thread_external_example_test.go` and `..._internal_...` | arcs, CD5 |
+| **3** | Opus (proof spec) | `ArcSeg`/`CircleSeg` profile segments: the profile station chain for an arc ruling (loft §5.1's chord chain, so a cell is chorded in both directions), `sag` folding the profile chord's own sagitta, the arc wall area by the Taylor-model bracket of §11.1, `Arc3` rim edges; the round-wire spring example | CD5 |
+| **4** | Sonnet (file-by-file) | CD5: `coilPayload` in `planarPairAdmits` and `planarPairVerdict`; the `Verify` clearance fixture against a prism | `CoilChain`, `WithSurfaceResult()`, modify |
+
+### 11.1 The arc wall area bracket (PR 3)
+
+For an arc segment `ρ(φ) = c_ρ + r cos φ`, `ζ(φ) = c_ζ + r sin φ` the
+integrand `sqrt(h(φ))`, `h = r²·ρ(φ)² + k²·r²·sin²φ`, has no elementary
+antiderivative. Over each station sub-interval of the arc expand
+`sqrt(h)` at the cell's `h_m` to second order: the linear and quadratic
+terms integrate exactly (`h` and `h²` are trig polynomials, their
+integrals certified sines and cosines at the ends), and the remainder
+`|h − h_m|³ / (16·h_lo^{5/2})` is bounded by the cell's own `h` range.
+Width is fourth order in the sub-interval, so 1024 sub-intervals per arc
+give a relative width near `1e-12`.
+
+### 11.2 Files
+
+| File | Owns |
+|---|---|
+| `coil.go` | `Coil`, `CoilOption`, `WithLeftHand`, option validation, Table CS's gates in §4's order, `coilPayload` and its placement |
+| `coil_build.go` | §5: stations, the held table and `β`, triangles, orientation, the audit |
+| `coil_body.go` | Table CB's topology and Table CM's four readings |
+| `tessellate_coil.go` | CD2 (PR 2) |
+| `internal/coil/` | station fractions and trig, the lift to axis coordinates, the segment area closed form, the cell departure terms, §8.1 and §8.2's sums — every function pure over `big.Rat`/`RatInterval` inputs and unit-tested against hand values |
+| `internal/proofbound/log.go` | `LnInterval`, `AsinhInterval` (§7.1) |
+
+Every root file gets a `docs/layout.md` row in the PR that adds it; the
+design row lands with this document.
+
+## 12. Do not do this
+
+- **Add a `Helix` segment to `Path`.** Every Table P rule of
+  `docs/sweep-design.md` fails for it: its end is a derived transcendental
+  point, so P4's "the next segment's start is a recorded coordinate" and
+  §3.1's "`Path.End()` returns a recorded coordinate" cannot hold; its
+  section is not normal to the path (CP3), so P6 and P7 do not describe it;
+  and the path's start point is REDUNDANT — any point of the sketch plane
+  off the axis names the same solid — which makes it a parameter that
+  changes nothing and a refusal (`S5`) that guards nothing. A verb beside
+  `Revolve`, taking `Revolve`'s own axis, states exactly the inputs the
+  solid depends on.
+- **Carry the section in a Frenet or rotation-minimizing frame.** It does
+  not cut a thread (§3), and its volume has no closed form unless the
+  section's centroid rides the helix.
+- **Reuse `r3.Screw.At` or `internal/sweeppath`'s screw pose as the
+  geometry.** Those are float poses for the pair-sweep motion checker; a
+  held station is an interval-enclosed point with a published rounding
+  gap, never a float pose.
+- **Prove simplicity by the facet audit.** CP5 is the proof; the audit
+  proves the HELD shell embedded. A held crossing on a solid CP5 admits is
+  CS9's `ErrUnsupported`, never `ErrDegenerate`.
+- **Read `Volume` or `Area` off the held triangles.** The tetrahedron sum
+  carries `δ·A`; the closed forms carry `1e-16`. The held table serves
+  `Bounds`, topology and the mesh alone.
+- **Refine the station count on an audit failure.** One count per turn
+  count, decided before allocation; a loop that doubles until the audit
+  passes makes the body's facet count depend on a predicate's outcome and
+  the build's cost unbounded.
+- **Admit a wide profile over one turn by a per-fibre test.** CS6's extent
+  rule is sufficient and reject-only; a fibre test that ADMITS is an
+  admission gate on decad's own arithmetic, which `CLAUDE.md` forbids.
+- **Let a zero pitch reduce to `Revolve`.** Two spellings of one solid; CS4
+  refuses and names the other verb.
+- **Publish the wall as a `NURBSSurface`.** A helix is not rational; the
+  wall would be a surface the variant's own contract says it is not.
+
+## 13. Required tests
+
+Every row asserts computed geometry or a proof bound; each bound leg is
+deleted once and watched fail. Fixtures assert against the production
+path, never a local model.
+
+PR 1:
+
+- A `1 × 1` square section at `ρ ∈ [2, 3]`, `ζ ∈ [0, 1]`, about the
+  sketch's `V` axis, pitch `1.5`, `2` turns: `Volume` encloses `10π` within
+  its bound, and the bound is below `1e-12`; `Centroid` is `Exact` at
+  `(0, 0, 2)` in the sketch frame's axis coordinates (`M/Q = 0.5`,
+  `pitch·turns/2 = 1.5`); the two cylindrical bands read `8π` and `12π`
+  within bound; the two flat annular walls read
+  `4π·∫₂³ sqrt(ρ² + k²) dρ` within bound against an independent
+  high-precision quadrature; `Bounds` encloses dense samples of `Φ` over
+  the solid and exceeds them by at most `δ`; the body has `6` faces, `12`
+  edges, `8` vertices; every edge has two incident faces. Legs shown to
+  fail: the π enclosure, the asinh term, the `δ` widening.
+- The same section with `2.5` turns: `Centroid` is `Approximate`, its
+  transverse part equals `(I/Q)·(sin Θ/Θ, (1 − cos Θ)/Θ)` with
+  `sin Θ = 0`, `cos Θ = −1` exactly; `Volume` is `12.5π`.
+- `WithLeftHand()`: the same readings with the `e_t` term negated; every
+  held vertex is the right-hand vertex mirrored in the sketch plane.
+- A tilted `ConstructionAxis` in the plane: `Volume` and `Area` agree with
+  the axis-aligned case within both bounds; `Centroid` is `Approximate`.
+- A hole loop sweeps to a void passage: `Volume` subtracts the hole's
+  `Θ·Q` exactly, and the body has one lump and one outer shell.
+- Each Table CS row refuses with its sentinel before any commit: live set,
+  order and next producer identity unchanged. CS5 at a profile touching
+  the axis (`ErrDegenerate`) and at a straddling tilted axis
+  (`ErrUnsupported`); CS6 at `H = pitch` with `turns = 1` (refuses) and
+  with `turns = 0.75` (builds); CS8 past `maxCoilStations`.
+- Repeated construction and `Placed` under a rotation reproduce
+  bit-identical held tables, roles and readings; `Placed` keeps `Volume`
+  and `Area` bit-identical and maps `Centroid` within its bound.
+- `proofbound.LnInterval`/`AsinhInterval` as §7.1 states.
+- `Verify` on the spring: `Validity` proven, every reading within the
+  default tolerance, `Status` `Sound`; the gate diameter equals the held
+  diameter less `2δ`.
+
+PR 2:
+
+- The spring's mesh: every vertex's `vertexBound` equals its `β`; `Bound`
+  equals `δ`; a dense sample of the true surface lies within each facet's
+  bound of that facet (falsifier only, never the proof); the STL and 3MF
+  round trips are watertight; a tolerance below `δ` is `ErrUnsupported`.
+- The external thread of §9 on a `Revolve` cylinder (`R = 5`, `L = 20`,
+  a `60°` V of depth `0.9` at pitch `1.5`, `8` turns inside the height):
+  the result is one lump of one shell, `Volume` encloses
+  `π R² L − Θ·Q(clipped)` with `Q(clipped)` the exact polygon moment;
+  `Verify` validity proven and `Status` `Sound`; the faceted mesh is
+  watertight.
+- The internal thread on an annular `Extrude`: the same enclosure with
+  `Ω ∩ {ρ ≥ R}`.
+- A coil cap in the cylinder's end plane refuses with the boolean's
+  contact code; starting it `pitch/4` outside builds.
+- The union of a coil with a coaxial cylinder through its core (a
+  threaded rod built by union rather than cut) encloses
+  `V_cylinder + Θ·Q(Ω ∩ {ρ ≥ R})`.
+- `MassProperties` of the spring settles at the ladder's first step and
+  its mass encloses `density·10π`.
+
+PR 3:
+
+- A round-wire spring (wire radius `0.5` at `ρ = 3`, pitch `1.5`, `5`
+  turns): `Volume` encloses `2π·5·3·π·0.25`; `Area` encloses the §11.1
+  bracket's own value within a bound below `1e-9` relative; `Bounds`
+  within `δ`; rim edges are `Arc3`.
+- CS6 at a wire diameter equal to the pitch refuses.
+
+PR 4:
+
+- `Verify` `WithClearances` on a coil beside a prism reads a gap within
+  `δ` of the hand-computed value; beside a revolve it reads `Suspect`.
+
+## 14. Companion edits
+
+Landing this design makes these contract edits, each in the PR that lands
+the behaviour:
+
+- `docs/api-design.md` §8 adds `Coil` and points here for its signature,
+  axis and extent contract; §13's non-goals need no change;
+- `docs/layout.md` lists this document (with the design) and every file of
+  §11.2 (with PR 1 and PR 2);
+- `docs/missing-features.md`: PR 1 narrows "Helical or free-form sweep
+  path" to the free-form path alone, narrows "Hole, thread, rib, web,
+  emboss, coil features" to drop thread and coil, and adds rows for CD2's
+  staging and CS7's arc refusal; PR 2 and PR 3 delete those rows;
+- `doc.go`'s support map adds `Coil` with CS5–CS9's refusals;
+- `docs/evaluator-design.md` §11 points to this document's staged delivery;
+- `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md`
+  §1 add the `coilPayload` row with PR 2;
+- `docs/sweep-design.md` §1 names this document as the owner of the helical
+  case it does not admit.
+
+No 2D answer this design needs is one `sketch` cannot give today: the
+profile's axis-frame extremes and moments are read off decad's own recorded
+walk exactly as `Revolve` reads them, and no hand-off to `sketch`, `r3` or
+`units` is required.

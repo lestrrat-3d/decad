@@ -39,6 +39,7 @@ the rules leave to the byte budget.
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
 | `docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
 | `docs/sweep-design.md` | `Path`/`Sweep` transport, refusals, topology, measurements, `SweepChain`, mitred sweeps (§16), and reach. |
+| `docs/helix-design.md` | `Document.Coil`: a profile screwed about an in-plane axis; Tables CP/CS/CB/CM/CD, closed forms, threads, PR split. |
 | `docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms: entry gate, private `sketch` scene, displacement bounds. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
 | `docs/mirror-pattern-design.md` | `Mirrored`/`MirroredCopy`, the exact mirror join, `PatternCopies`/`Patterned` and the prism group. |
@@ -75,7 +76,7 @@ the rules leave to the byte budget.
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
 | `record.go` | `ProfileRecord` and public record aliases. See `docs/sketch-seam-design.md` §2. |
 | `seam.go` | `RecordProfile`/`RecordChain` adapters. See sketch-seam §1–§2. |
-| `path.go` | The immutable spatial `Path` and its sealed `LineTo` / `ArcThrough` segment vocabulary. See `docs/sweep-design.md` §2–§3. |
+| `path.go` | The immutable spatial `Path` and its sealed segment vocabulary. See sweep §2–§3. |
 | `extent.go` | Public extent aliases and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |
 | `selection_error.go` | `SelectionError` and the shared `*Query.String()` rendering. See `docs/api-design.md` §9. |
@@ -116,12 +117,12 @@ the rules leave to the byte budget.
 | `extrude.go` | `Document.Extrude`, `WithTaper`, and linear-extent resolution into a `linearSweep`. See evaluator §5. |
 | `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, and span payloads. See `docs/sweep-design.md` and `docs/surface-design.md` §4. |
 | `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
-| `sweep_composite.go` | Composite Sweep join topology, its boundary audit and a surface result's cap omission. See `docs/sweep-design.md` PR 4 and surface §4. |
+| `sweep_composite.go` | Composite Sweep join topology, boundary audit and cap omission. See sweep PR 4 and surface §4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and combined body measurements. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Composite Sweep adjacent-span and remote-span separation proofs. See `docs/sweep-design.md` §7. |
 | `sweep_mitre.go` | Mitred options, entry adapters, payload, placement and restatement. See sweep §16. |
 | `sweep_mitre_build.go` | Adapts mitred construction, rounding and SM8 audit. See sweep §16.3–§16.4. |
-| `sweep_mitre_body.go` | Builds Table BM's topology and publishes §16.6's readings. See `docs/sweep-design.md` §16.5–§16.6. |
+| `sweep_mitre_body.go` | Builds Table BM's topology and publishes §16.6's readings. See sweep §16.5–§16.6. |
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
 | `prism_payload.go` | `prismPayload`, its coordinate readings and envelopes. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces with displacement bounds. See `docs/evaluator-design.md` §5. |
