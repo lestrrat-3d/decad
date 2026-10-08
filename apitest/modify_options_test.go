@@ -24,8 +24,9 @@ import (
 // instead of refusing SX2; assigning the
 // positional distance to the arriving walk regardless of the reference face
 // sends the reference-swap and revolve tests red (the two feet trade
-// places); skipping the deep copy in WithAsymmetricChamfer sends the
-// selector-copy subtest red; and resolving the reference without the
+// places); skipping the deep copy in WithAsymmetricChamfer sends both
+// selector-copy subtests red, and sharing the caller's branch list with spare
+// capacity sends the union one red; and resolving the reference without the
 // one-face-per-edge count builds the dual and extra references.
 
 // slotBody extrudes a stadium: straight walls from (0,0) to (10,0) and from
@@ -402,6 +403,23 @@ func TestAsymmetricChamferFeet(t *testing.T) {
 		require.InDelta(t, 100-6.35, feet[0].X, 1e-12)
 		require.Equal(t, 60.0, feet[0].Y)
 		require.Equal(t, r3.NewVec(100, 57, 0), feet[1])
+	})
+	t.Run("UnionSelectorDeepCopy", func(t *testing.T) {
+		// Four lateral edges and a two-branch union naming the x = 0 and
+		// x = 100 walls. After the option copied it, the caller adds a branch
+		// naming the y = 60 wall (which would give two corners two reference
+		// faces) and asserts a count the union never meets; the chamfer
+		// resolves the copy, both branches and its own Exactly(2).
+		_, box := filletBox(t)
+		ref := decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))).Or(decad.Facing(r3.NewVec(1, 0, 0))).Exactly(2)
+		opt := decad.WithAsymmetricChamfer(ref, units.Millimeters(5))
+		ref.Or(decad.Facing(r3.NewVec(0, 1, 0))).Exactly(7)
+		out := mustChamfer(t, box, verticalEdges(), 3, opt)
+		require.Equal(t, []r3.Vec{
+			r3.NewVec(0, 3, 0), r3.NewVec(0, 57, 0), r3.NewVec(5, 0, 0), r3.NewVec(5, 60, 0),
+			r3.NewVec(95, 0, 0), r3.NewVec(95, 60, 0), r3.NewVec(100, 3, 0), r3.NewVec(100, 57, 0),
+		}, chamferFeet(t, out))
+		decadtest.MeasuresVolume(t, out, units.CubicMillimeters(100*60*h-4*7.5*h), decadtest.Exactly())
 	})
 	t.Run("SelectorDeepCopy", func(t *testing.T) {
 		// The caller's query changes after the option copied it; the chamfer

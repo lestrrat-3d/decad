@@ -62,7 +62,14 @@ func WithAsymmetricChamfer(reference FaceSelector, otherDistance units.Value) Ch
 	case nil:
 	case *FaceQuery:
 		if q != nil {
-			a.Reference = &FaceQuery{preds: slices.Clone(q.preds), card: q.card}
+			// Copy every union branch and its predicates: a later Or on the
+			// caller's query appends to its branch list, and that append
+			// must not reach a shared backing array.
+			branches := make([][]FacePredicate, len(q.branches))
+			for i, b := range q.branches {
+				branches[i] = slices.Clone(b)
+			}
+			a.Reference = &FaceQuery{branches: branches, card: q.card}
 		}
 	default:
 		a.foreign = fmt.Sprintf(`%T`, reference)
