@@ -1002,6 +1002,7 @@
 5	0.04	TestLoftCircularCellStationsRefusesOneSidedCollapse
 5	0.02	TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest
 5	0.40	TestLoftFitSplineWedgeMatchesExtrude
+5	0.30	TestLoftFitSplineWedgeVerifiesSound
 5	0.05	TestLoftFreeformMixedPairsRefuseS3
 5	0.05	TestLoftFreeformPairPastItsShareRefusesS15
 5	0.40	TestLoftFreeformReversedRangeBuildsTheSameStations
@@ -1034,6 +1035,8 @@
 5	0.52	TestRunVerifyPairsKeepsJobOrder
 5	0.06	TestSegFilterNeverRejectsAnExactHit
 5	0.03	TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses
+5	0.01	TestSpanTangentEnergyUpperChargesItsOwnCodePath
+5	0.01	TestSpanTangentEnergyUpperIsTheExactIntegral
 5	0.01	TestStackedPayloadAuditRejectsBrokenRecords
 5	0.01	TestStackedUnionExtentReadsEveryRun
 5	0.01	TestStackedUnionGateDiameterStaysOnTheBody

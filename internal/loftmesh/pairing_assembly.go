@@ -132,21 +132,20 @@ func PairRecords(p0, p1 RecordProfile, offsets []int, walks0, walks1 [][]survey2
 	return pairs, sectionDelta, sectionMatchedDelta, stationRound, nil
 }
 
-// appendFreeform appends one free-form pair's cells to the loop. A free-form
-// cell's native parameter is not constant speed, so neither side proves a
-// tangent energy and both entries are +Inf, which costs
-// proofbound.CellChordCurveAreaAllow its sharper arm and never its soundness
-// (docs/loft-design.md §5.2's tangentEnergy_k row).
+// appendFreeform appends one free-form pair's cells to the loop. Each side's
+// tangent energy is the exact integral freeform.SpanTangentEnergyUpper reads
+// off that cell's own dyadic sub-span under the cell's shared native parameter
+// (docs/loft-design.md §5.2's tangentEnergy_k row), so
+// proofbound.CellChordCurveAreaAllow can take its sharp arm on a free-form
+// cell without the constant-speed premise the circular arm discharges.
 func (p *LoopPair) appendFreeform(cell FreeformCell) {
 	p.V = append(p.V, cell.Stations0...)
 	p.W = append(p.W, cell.Stations1...)
 	p.ArcUpperV = append(p.ArcUpperV, cell.ArcUpper0...)
 	p.ArcUpperW = append(p.ArcUpperW, cell.ArcUpper1...)
 	p.MatchedDelta = append(p.MatchedDelta, cell.MatchedDelta...)
-	for range cell.MatchedDelta {
-		p.TangentEnergyV = append(p.TangentEnergyV, math.Inf(1))
-		p.TangentEnergyW = append(p.TangentEnergyW, math.Inf(1))
-	}
+	p.TangentEnergyV = append(p.TangentEnergyV, cell.Energy0...)
+	p.TangentEnergyW = append(p.TangentEnergyW, cell.Energy1...)
 }
 
 // freeformShare is the per-segment station share docs/loft-design.md §5.1

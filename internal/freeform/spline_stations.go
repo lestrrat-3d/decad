@@ -142,17 +142,21 @@ type PairChainLimits struct {
 // carry PairStations' own meanings. ArcUpper[side][k] is SpanSpeedUpper of
 // accepted cell k's own dyadic sub-span on that side: a proven upper bound on
 // the cell's tangent speed under its native [0, 1] parameter, and so on its arc
-// length, never below its chord length.
+// length, never below its chord length. TangentEnergy[side][k] is
+// SpanTangentEnergyUpper of that same sub-span: the exact integral of
+// |C'(t) − Δ|² under the same parameter, rounded outward once.
 type PairChain struct {
-	Stations     [2][]RatPoint
-	MatchedDelta []float64
-	ArcUpper     [2][]float64
-	Sagitta      float64
+	Stations      [2][]RatPoint
+	MatchedDelta  []float64
+	ArcUpper      [2][]float64
+	TangentEnergy [2][]float64
+	Sagitta       float64
 }
 
 // PairChainStations is PairStations under a caller's own limits, returning the
-// per-cell speed bounds a same-kind free-form loft cell needs beside the
-// matched-departure bounds (docs/loft-design.md §5.2's arcLenUpper_k row). The
+// per-cell speed bounds and tangent energies a same-kind free-form loft cell
+// needs beside the matched-departure bounds (docs/loft-design.md §5.2's
+// arcLenUpper_k and tangentEnergy_k rows). The
 // walk, its sharing of one dyadic cell set between the two sides, its
 // determinism and its charging are PairStations' own.
 func PairChainStations(spans0, spans1 []BezierSpan, target float64, limits PairChainLimits, work0, work1 *FreeformWork) (PairChain, error) {
@@ -165,10 +169,11 @@ func PairChainStations(spans0, spans1 []BezierSpan, target float64, limits PairC
 		return PairChain{}, err
 	}
 	return PairChain{
-		Stations:     [2][]RatPoint{stations0, stations1},
-		MatchedDelta: reader.MatchedDelta,
-		ArcUpper:     reader.ArcUpper,
-		Sagitta:      gen.SagittaUpper,
+		Stations:      [2][]RatPoint{stations0, stations1},
+		MatchedDelta:  reader.MatchedDelta,
+		ArcUpper:      reader.ArcUpper,
+		TangentEnergy: reader.TangentEnergy,
+		Sagitta:       gen.SagittaUpper,
 	}, nil
 }
 
@@ -440,11 +445,13 @@ func (r *PairMatchedDeltaReader) AcceptCell(spans []BezierSpan, works []*Freefor
 }
 
 // PairCellReader is PairChainStations' reading: PairMatchedDeltaReader's
-// per-cell matched-departure bound, plus each side's SpanSpeedUpper over the
-// same accepted dyadic sub-span, in the same left-to-right cell order.
+// per-cell matched-departure bound, plus each side's SpanSpeedUpper and
+// SpanTangentEnergyUpper over the same accepted dyadic sub-span, in the same
+// left-to-right cell order.
 type PairCellReader struct {
 	PairMatchedDeltaReader
-	ArcUpper [2][]float64
+	ArcUpper      [2][]float64
+	TangentEnergy [2][]float64
 }
 
 func (r *PairCellReader) AcceptCell(spans []BezierSpan, works []*FreeformWork) error {
@@ -456,7 +463,12 @@ func (r *PairCellReader) AcceptCell(spans []BezierSpan, works []*FreeformWork) e
 		if err != nil {
 			return err
 		}
+		energy, err := SpanTangentEnergyUpper(works[side], spans[side])
+		if err != nil {
+			return err
+		}
 		r.ArcUpper[side] = append(r.ArcUpper[side], arc)
+		r.TangentEnergy[side] = append(r.TangentEnergy[side], energy)
 	}
 	return nil
 }

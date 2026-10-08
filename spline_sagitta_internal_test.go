@@ -1750,3 +1750,124 @@ func TestChainStationsChargesTheCounterItIsHanded(t *testing.T) {
 	_, err = freeform.ChainStations(spans, 1e-3, exhausted)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
+
+// --- D: the free-form tangent energy (docs/loft-design.md §5.2's
+// tangentEnergy_k row) — freeform.SpanTangentEnergyUpper ---
+
+// denseTangentEnergy integrates |C'(t) − Δ|² over a span's native [0, 1] in
+// float64 by 4-point Gauss-Legendre on 256 equal pieces. C'(t) is the float
+// hodograph p·(P_{i+1} − P_i) evaluated by evalFloatBezierSpan's independent de
+// Casteljau, never by freeform's exact coefficient path.
+func denseTangentEnergy(span freeform.BezierSpan) float64 {
+	fs := floatBezierSpanOf(span)
+	p := float64(len(fs) - 1)
+	hod := make(floatBezierSpan, len(fs)-1)
+	for i := range hod {
+		hod[i] = [2]float64{p * (fs[i+1][0] - fs[i][0]), p * (fs[i+1][1] - fs[i][1])}
+	}
+	du, dv := fs[len(fs)-1][0]-fs[0][0], fs[len(fs)-1][1]-fs[0][1]
+	nodes := [4][2]float64{
+		{-0.3399810435848563, 0.6521451548625461},
+		{0.3399810435848563, 0.6521451548625461},
+		{-0.8611363115940526, 0.3478548451374538},
+		{0.8611363115940526, 0.3478548451374538},
+	}
+	const pieces = 256
+	total := 0.0
+	for k := range pieces {
+		mid := (float64(k) + 0.5) / pieces
+		for _, nd := range nodes {
+			at := mid + nd[0]/(2*pieces)
+			u, v := evalFloatBezierSpan(hod, at)
+			total += nd[1] / (2 * pieces) * ((u-du)*(u-du) + (v-dv)*(v-dv))
+		}
+	}
+	return total
+}
+
+func tangentEnergyOf(t *testing.T, span freeform.BezierSpan) float64 {
+	t.Helper()
+	energy, err := freeform.SpanTangentEnergyUpper(nil, span)
+	require.NoError(t, err)
+	return energy
+}
+
+// TestSpanTangentEnergyUpperIsTheExactIntegral pins the energy as the
+// integral itself, rounded outward once, never an enclosure wider than that
+// rounding.
+//
+// The quadratic P_0 = (0,0), P_1 = (1/2 + ε, 0), P_2 = (1,0) has the closed
+// form C'(t) − Δ = 2ε·(1 − 2t), so J = 4ε²/3, and at ε = 1/8 the published
+// value must be exactly 1/48 rounded up. A degree-1 span has C' = Δ, so J is
+// exactly 0. On the A10b fit spline's spans, a cubic and a quartic, J agrees
+// with an independent float quadrature to 1e-12 relative.
+//
+// Shown to fail first: with BernsteinSquaredNormIntegral's 1/C(2q,k) weight
+// dropped (every k weighted 1), the closed-form 1/48 case fails. With the
+// binomial scaling in SpanTangentDeviationCoefficients dropped, the quartic's
+// quadrature comparison fails. The cubics cannot see that mutation: for q = 2
+// it changes J by h_1·(h_0 + h_1 + h_2)/10, and that sum is 3·∫e dt = 0.
+func TestSpanTangentEnergyUpperIsTheExactIntegral(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, proofbound.RatFloatUp(big.NewRat(1, 48)), tangentEnergyOf(t, nearMidpointQuadraticSpan(big.NewRat(1, 8))))
+	require.Equal(t, proofbound.RatFloatUp(big.NewRat(4, 3)), tangentEnergyOf(t, ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})))
+
+	require.Zero(t, tangentEnergyOf(t, ratSpan([][2]float64{{0.25, -3}, {7, 1.5}})), "a degree-1 span's tangent IS its chord")
+	require.Zero(t, tangentEnergyOf(t, ratSpan([][2]float64{{0, 0}, {1, 0}, {2, 0}})), "a uniformly spaced straight span runs at its chord's own velocity")
+	require.Zero(t, tangentEnergyOf(t, ratSpan([][2]float64{{4, 4}})), "a one-point span has no chord")
+
+	spans := append(quarterCircleFitSpans(t),
+		ratSpan([][2]float64{{0, 0}, {-3, 0.01}, {4, 0.01}, {1, 0}}),
+		ratSpan([][2]float64{{0, 0}, {1, 2}, {3, -1}, {5, 3}, {6, 0}}))
+	for i, span := range spans {
+		got := tangentEnergyOf(t, span)
+		ref := denseTangentEnergy(span)
+		require.Positive(t, ref, "span %d must carry a tangent deviation for this comparison to mean anything", i)
+		require.InEpsilon(t, ref, got, 1e-12, "span %d: the published energy must be the integral itself", i)
+
+		// The premise-free reading CellChordCurveAreaAllow falls back to is
+		// (speed + chord)², which must never be below the exact energy.
+		chord := math.Hypot(floatOfRatPointDiff(t, span[len(span)-1], span[0]))
+		free := (speedOf(t, span) + chord) * (speedOf(t, span) + chord)
+		require.LessOrEqual(t, got, free, "span %d", i)
+	}
+}
+
+// floatOfRatPointDiff is b − a in float64, for a chord length a test compares
+// loosely.
+func floatOfRatPointDiff(t *testing.T, b, a freeform.RatPoint) (float64, float64) {
+	t.Helper()
+	bu, bv := floatOfRatPoint(t, b)
+	au, av := floatOfRatPoint(t, a)
+	return bu - au, bv - av
+}
+
+// TestSpanTangentEnergyUpperChargesItsOwnCodePath pins the energy's charge,
+// written from the literals rather than the constants under test, on a span of
+// one-word integers: the chord vector (2), one coefficient pass over three
+// points (14 each), the product integral over q = 1 (four pairs at 12, three
+// product coefficients at 8, and the closing 3), and one outward rounding (4).
+// A counter one unit short refuses as R7, and one that covers it exactly ends
+// at the limit.
+//
+// Shown to fail first: with BernsteinSquaredNormIntegral's own charge removed,
+// the total drops by 75 and the equality fails.
+func TestSpanTangentEnergyUpperChargesItsOwnCodePath(t *testing.T) {
+	t.Parallel()
+	span := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
+	const want = 2 + 3*14 + (4*12 + 3*8 + 3) + 4
+
+	work := freeform.NewFreeformWork()
+	_, err := freeform.SpanTangentEnergyUpper(work, span)
+	require.NoError(t, err)
+	require.Equal(t, uint64(want), work.Spent)
+
+	exact := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - want}
+	_, err = freeform.SpanTangentEnergyUpper(exact, span)
+	require.NoError(t, err)
+	require.Equal(t, freeform.FreeformWorkLimit, exact.Spent)
+
+	short := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - want + 1}
+	_, err = freeform.SpanTangentEnergyUpper(short, span)
+	require.ErrorIs(t, err, ErrUnsupported)
+}
