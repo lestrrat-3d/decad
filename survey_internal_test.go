@@ -753,7 +753,7 @@ func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
 		thickness: 5,
 		sense:     Inward,
 	}
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "integralsBudget"}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "IntegralsBudget"}
 
 	_, err = cupWall(proofbound.NewWorkBudget(ctx), cp, 15*math.Pi/180)
 
