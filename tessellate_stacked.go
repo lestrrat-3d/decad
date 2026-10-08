@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -161,7 +162,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 				return err
 			}
 		}
-		tris, err := triangulate2DContext(ctx, points, indexLoops)
+		tris, err := triangulation.Triangulate(ctx, points, indexLoops)
 		if err != nil {
 			return err
 		}

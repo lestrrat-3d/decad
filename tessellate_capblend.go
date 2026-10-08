@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -652,7 +653,7 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 		}
 		m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, capBlendRingSegmentArea(lm, chamfered, cbp.loopOffset(lm.li)))
 	}
-	tris, err := triangulate2DContext(ctx, pts, loopIdx)
+	tris, err := triangulation.Triangulate(ctx, pts, loopIdx)
 	if err != nil {
 		return err
 	}

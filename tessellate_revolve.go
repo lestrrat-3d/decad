@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -515,7 +516,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	case rp.full:
 		// no cap in either kind.
 	case sheet:
-		// emitRevolveCaps' own triangulate2DContext call is what would
+		// emitRevolveCaps' own triangulation.Triangulate call is what would
 		// otherwise refuse a loop chording to fewer than three meridian
 		// samples ("a cap needs at least three boundary samples",
 		// triangulate.go); a sheet mints no cap to carry that refusal, so it
@@ -895,7 +896,7 @@ func emitRevolveCaps(ctx context.Context, m *Mesh, loops []revLoopMesh, pts []Po
 			endV = append(endV, s.At(last))
 		}
 	}
-	tris, err := triangulate2DContext(ctx, pts, loopIdx)
+	tris, err := triangulation.Triangulate(ctx, pts, loopIdx)
 	if err != nil {
 		return err
 	}

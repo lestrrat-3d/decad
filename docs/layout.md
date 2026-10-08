@@ -256,7 +256,6 @@ the rules leave to the byte budget.
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
 | `tessellate_capblend.go` | `tessellateCapBlend`, the cap-loop chamfer mesh over `internal/tessellation/` rings. See tessellation reach §7. |
-| `triangulate.go` | Maps cap points and expected chording errors between `Point2` and `internal/triangulation/`; `cross2` serves root mesh clearance. |
 | `export/` | STL, OBJ, and 3MF mesh writers and the analytic/faceted AP214 writer. See `docs/step-export-design.md` and `docs/3mf-export-design.md`. |
 
 ### Repository
@@ -294,11 +293,11 @@ the rules leave to the byte budget.
 | `internal/momentinput/` | Owns profile records, validation and measurements. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
-| `internal/tessellation/` | Chords, prism/cup topology, mesh bounds, cap-blend rings and audits. |
+| `internal/tessellation/` | Chords, prism/cup topology, mesh bounds, cap-blend rings, audits and chording refusal errors. |
 | `internal/loftmesh/` | Loft pairing, stations, assembly, mass sums, mesh proofs and restatement. |
 | `internal/revolvemesh/` | Revolve rings, construction and proofs. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
-| `internal/triangulation/` | Cap hole bridging and ear clipping; indexed triangles, chording refusals. |
+| `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons and body reference formulas. See verification §2-§3. |

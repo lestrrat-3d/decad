@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -325,7 +326,7 @@ func planarPrismSolid(ctx context.Context, budget *proofbound.WorkBudget,
 		Frame: pp.frame, Transform: pp.xform, Z0: pp.z0, Z1: pp.z1,
 		SectionDelta: pp.sectionDelta, Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
 		SurfaceResult: pp.surfaceResult, CapStartRole: roleCapStart, CapEndRole: roleCapEnd,
-	}, faceIndex, triangulate2DContext)
+	}, faceIndex, triangulation.Triangulate)
 }
 
 // planarFacetedSolid reads a Boolean's held mesh. A zero-bound mesh is its

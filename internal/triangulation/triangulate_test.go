@@ -158,7 +158,7 @@ func TestEarClipTShapedFaceKeepsEveryBoundaryEdge(t *testing.T) {
 	area := 0.0
 	edges := map[[2]int]int{}
 	for _, tri := range tris {
-		a := cross2(pts[tri[0]], pts[tri[1]], pts[tri[2]]) / 2
+		a := Cross2(pts[tri[0]], pts[tri[1]], pts[tri[2]]) / 2
 		require.Positive(t, a, "every emitted triangle winds counter-clockwise")
 		area += a
 		for k := range 3 {

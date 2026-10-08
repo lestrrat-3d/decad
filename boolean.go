@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -515,7 +516,7 @@ func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b 
 	// back here.
 	ma, restatingA, err := meshes.operandMesh(ctx, a, tolMM)
 	if err != nil {
-		var coarse *tessellationExpectedError
+		var coarse *tessellation.ExpectedError
 		if errors.As(err, &coarse) {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedCoarseTessellation, err)
 		} else if errors.Is(err, ErrUnsupported) {
@@ -531,7 +532,7 @@ func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b 
 	}
 	mb, restatingB, err := meshes.operandMesh(ctx, b, tolMM)
 	if err != nil {
-		var coarse *tessellationExpectedError
+		var coarse *tessellation.ExpectedError
 		if errors.As(err, &coarse) {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedCoarseTessellation, err)
 		} else if errors.Is(err, ErrUnsupported) {

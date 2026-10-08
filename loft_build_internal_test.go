@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -1320,7 +1321,7 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	// polyRat is EXACTLY the sum of the SAME triangulation's own triangle
 	// areas (the square-root-free 2D formula, so this comparison is exact
 	// rather than a proven-bound enclosure).
-	tris0, err := triangulate2DContext(t.Context(), a.pts0, a.loopIdx0)
+	tris0, err := triangulation.Triangulate(t.Context(), a.pts0, a.loopIdx0)
 	require.NoError(t, err)
 	require.NotEmpty(t, tris0)
 	triSum := new(big.Rat)
