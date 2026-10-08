@@ -906,8 +906,8 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 		theirs = dr.pathOf(other, below)
 	}
 	side := func(m int, bound linkBound, hull bool) (projectionSide, bool) {
-		h := make([]*big.Rat, 0, len(bound.path)-below)
-		for _, j := range bound.path[below:] {
+		h := make([]*big.Rat, 0, len(bound.Path)-below)
+		for _, j := range bound.Path[below:] {
 			jt := dr.spec.joints[j]
 			var span *big.Rat
 			if jt.dep == nil {
@@ -934,7 +934,7 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 				return projectionSide{}, false
 			}
 			params := make([]motionbound.MotionParam, len(dr.spec.joints))
-			for _, j := range bound.path[below:] {
+			for _, j := range bound.Path[below:] {
 				if dr.spec.joints[j].dep != nil {
 					// A dependent is read at its centre, the midpoint of its
 					// enclosure at the cell's centre (§5.8).
@@ -943,19 +943,19 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 				}
 				params[j] = jointParam(dr.spec.joints[j], c.centre(j))
 			}
-			if corners, ok = roundCorners(readPoints(dr.spec, dr.frames, params, bound, below, points)); !ok {
+			if corners, ok = linkagebound.RoundCorners(readPoints(dr.spec, dr.frames, params, bound, below, points)); !ok {
 				return projectionSide{}, false
 			}
 			readings[key] = corners
 		}
-		return projectionSide{corners: corners, h: h, rem: projectionRemainder(bound, below, h)}, true
+		return projectionSide{Corners: corners, H: h, Rem: linkagebound.Remainder(bound.Rho[below:], h)}, true
 	}
 	partner := func(hull bool) (projectionSide, bool) {
 		if other >= 0 {
 			return side(other, theirs, hull)
 		}
 		corners, ok := b.staticReading(k, hull)
-		return projectionSide{corners: corners}, ok
+		return projectionSide{Corners: corners}, ok
 	}
 	axisOf := func(joint int) int {
 		if ld := dr.spec.joints[joint].dep; ld != nil {
@@ -971,12 +971,12 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 	if !ok {
 		return nil, nil
 	}
-	bound := projectionLower(a, p)
+	bound := linkagebound.Lower(a, p)
 	shares := make(map[int]*big.Rat)
-	axis, sense := linkagebound.AttainedDirection(a.boundSide(), p.boundSide(), bound)
-	linkagebound.AddAxisShares(shares, a.boundSide(), mine.rho[below:], projectionAxes(mine, below, axisOf), axis, sense)
+	axis, sense := linkagebound.AttainedDirection(a, p, bound)
+	linkagebound.AddAxisShares(shares, a, mine.Rho[below:], projectionAxes(mine, below, axisOf), axis, sense)
 	if other >= 0 {
-		linkagebound.AddAxisShares(shares, p.boundSide(), theirs.rho[below:], projectionAxes(theirs, below, axisOf), axis, -sense)
+		linkagebound.AddAxisShares(shares, p, theirs.Rho[below:], projectionAxes(theirs, below, axisOf), axis, -sense)
 	}
 	// The hull bound (§5.8): the same expansion over each body's hull points
 	// along every candidate direction, the larger of the two serving.
@@ -985,16 +985,16 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 	if !okA || !okP {
 		return bound, shares
 	}
-	witness := linkagebound.LowerHullWithWitness(ah.boundSide(), ph.boundSide())
+	witness := linkagebound.LowerHullWithWitness(ah, ph)
 	hull := witness.Bound
 	if hull == nil || hull.Cmp(bound) <= 0 {
 		return bound, shares
 	}
 	shares = make(map[int]*big.Rat)
-	linkagebound.AddHullShares(shares, ah.boundSide(), mine.rho[below:], projectionAxes(mine, below, axisOf),
+	linkagebound.AddHullShares(shares, ah, mine.Rho[below:], projectionAxes(mine, below, axisOf),
 		witness.Axis, witness.Norm, witness.Sense)
 	if other >= 0 {
-		linkagebound.AddHullShares(shares, ph.boundSide(), theirs.rho[below:], projectionAxes(theirs, below, axisOf),
+		linkagebound.AddHullShares(shares, ph, theirs.Rho[below:], projectionAxes(theirs, below, axisOf),
 			witness.Axis, witness.Norm, -witness.Sense)
 	}
 	return hull, shares
@@ -1020,7 +1020,7 @@ func (b *boxRun) staticReading(k int, hull bool) (cornerBounds, bool) {
 	if !ok {
 		return cornerBounds{}, false
 	}
-	reading, ok := roundCorners(points)
+	reading, ok := linkagebound.RoundCorners(points)
 	if !ok {
 		return cornerBounds{}, false
 	}
@@ -1034,8 +1034,8 @@ func (b *boxRun) staticReading(k int, hull bool) (cornerBounds, bool) {
 // projectionAxes maps the relative path's joints to the split axes used by
 // the projection share calculation.
 func projectionAxes(b linkBound, below int, axisOf func(int) int) []int {
-	axes := make([]int, len(b.path)-below)
-	for n, joint := range b.path[below:] {
+	axes := make([]int, len(b.Path)-below)
+	for n, joint := range b.Path[below:] {
 		axes[n] = axisOf(joint)
 	}
 	return axes
@@ -1101,10 +1101,10 @@ func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []jointTerm) {
 		return joint, jointParam(jt, c.lo[joint]).SpanUpper(jointParam(jt, c.hi[joint]))
 	}
 	terms := func(bound linkBound, below int, out []jointTerm) []jointTerm {
-		for n := below; n < len(bound.path); n++ {
-			axis, term := span(bound.path[n])
-			if bound.rho[n] != nil {
-				term.Mul(term, bound.rho[n])
+		for n := below; n < len(bound.Path); n++ {
+			axis, term := span(bound.Path[n])
+			if bound.Rho[n] != nil {
+				term.Mul(term, bound.Rho[n])
 			}
 			out = append(out, jointTerm{joint: axis, value: term})
 		}

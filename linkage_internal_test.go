@@ -127,23 +127,23 @@ func TestLinkageBallReading(t *testing.T) {
 		{60 + 28 + r4 + 10, -1, 28 + r4, -1},
 	}
 	for k, b := range bounds {
-		require.Len(t, b.path, k+1)
-		for n := range b.path {
-			require.Equal(t, n, b.path[n])
+		require.Len(t, b.Path, k+1)
+		for n := range b.Path {
+			require.Equal(t, n, b.Path[n])
 			if want[k][n] < 0 {
-				require.Nil(t, b.rho[n], `a prismatic joint carries no ρ`)
+				require.Nil(t, b.Rho[n], `a prismatic joint carries no ρ`)
 				continue
 			}
-			got := linkRatFloat(t, b.rho[n])
+			got := linkRatFloat(t, b.Rho[n])
 			require.InDelta(t, want[k][n], got, 1e-9, "ρ_%d%d", n+1, k+1)
 		}
 	}
 	// Link 2's ρ_12: its own prismatic ball centred on (30, 0, 2.5), radius
 	// the half-diagonal √131.25 plus 10, at distance 30 from joint 1's axis.
-	require.InDelta(t, 30+math.Sqrt(131.25)+10, linkRatFloat(t, bounds[1].rho[0]), 1e-9)
-	reach := linkRatFloat(t, bounds[3].reach)
+	require.InDelta(t, 30+math.Sqrt(131.25)+10, linkRatFloat(t, bounds[1].Rho[0]), 1e-9)
+	reach := linkRatFloat(t, bounds[3].Reach)
 	require.InDelta(t, (60+math.Sqrt(788)+r4+10)*math.Pi/2+10+(28+r4)*math.Pi/4+6, reach, 1e-9)
-	reach3 := linkRatFloat(t, bounds[2].reach)
+	reach3 := linkRatFloat(t, bounds[2].Reach)
 	require.InDelta(t, (60+r3ball+10)*math.Pi/2+10+math.Sqrt(425)*math.Pi/4, reach3, 1e-9)
 
 	// Scene 1's forearm about the shoulder: the cylinder about the elbow,
@@ -151,7 +151,7 @@ func TestLinkageBallReading(t *testing.T) {
 	// exactly 98, where the ball reads 48 + √(48² + 14² + 22²).
 	run, _, _ := foldingArmRun(t)
 	arm := run.drive.(*linkageDriver).bounds[1]
-	require.Zero(t, arm.rho[0].Cmp(big.NewRat(98, 1)))
+	require.Zero(t, arm.Rho[0].Cmp(big.NewRat(98, 1)))
 
 	// A revolute about X above one about Z: the axes cross, so the cylinder
 	// about the elbow cannot reach above it and ρ_12 is the ball's — the
@@ -172,7 +172,7 @@ func TestLinkageBallReading(t *testing.T) {
 	require.True(t, ok)
 	crossed, ok := readLinkBounds(spec, frames)
 	require.True(t, ok)
-	require.InDelta(t, math.Sqrt(150), linkRatFloat(t, crossed[1].rho[0]), 1e-9)
+	require.InDelta(t, math.Sqrt(150), linkRatFloat(t, crossed[1].Rho[0]), 1e-9)
 }
 
 // TestLinkageChainTravel pins τ^(L)_k's telescoping sum on linkageChain over
@@ -186,16 +186,16 @@ func TestLinkageChainTravel(t *testing.T) {
 	t.Parallel()
 	spec, _, bounds := linkageChain(t)
 	a, b := big.NewRat(1, 4), big.NewRat(1, 2)
-	rho14, rho34 := linkRatFloat(t, bounds[3].rho[0]), linkRatFloat(t, bounds[3].rho[2])
+	rho14, rho34 := linkRatFloat(t, bounds[3].Rho[0]), linkRatFloat(t, bounds[3].Rho[2])
 	static := linkRatFloat(t, chainTravel(spec, bounds[3], 0, a, b))
 	require.InDelta(t, rho14*(math.Pi/2)/4+10.0/4+rho34*(math.Pi/4)/4+6.0/4, static, 1e-9)
 
-	below := commonDepth(bounds[3].path, bounds[2].path)
+	below := linkagebound.CommonDepth(bounds[3].Path, bounds[2].Path)
 	require.Equal(t, 3, below)
 	require.Zero(t, chainTravel(spec, bounds[3], below, a, b).Cmp(big.NewRat(3, 2)))
 	require.Zero(t, chainTravel(spec, bounds[2], below, a, b).Sign())
 
-	below = commonDepth(bounds[3].path, bounds[1].path)
+	below = linkagebound.CommonDepth(bounds[3].Path, bounds[1].Path)
 	require.Equal(t, 2, below)
 	require.InDelta(t, rho34*(math.Pi/4)/4+6.0/4, linkRatFloat(t, chainTravel(spec, bounds[3], below, a, b)), 1e-9)
 	require.Zero(t, chainTravel(spec, bounds[1], below, a, b).Sign())
@@ -237,7 +237,7 @@ func TestLinkageChainTravelAcrossWaypoints(t *testing.T) {
 	bounds, ok := readLinkBounds(spec, frames)
 	require.True(t, ok)
 
-	rho := linkRatFloat(t, bounds[0].rho[0])
+	rho := linkRatFloat(t, bounds[0].Rho[0])
 	require.InDelta(t, math.Sqrt(50*50+0.5*0.5), rho, 1e-9)
 	deg := math.Pi / 180
 	for _, tc := range []struct {
@@ -251,7 +251,7 @@ func TestLinkageChainTravelAcrossWaypoints(t *testing.T) {
 		got := linkRatFloat(t, chainTravel(spec, bounds[0], 0, tc.a, tc.b))
 		require.InDelta(t, rho*tc.degrees*deg, got, 1e-9, "[%s, %s]", tc.a, tc.b)
 	}
-	below := commonDepth(bounds[1].path, bounds[0].path)
+	below := linkagebound.CommonDepth(bounds[1].Path, bounds[0].Path)
 	require.Equal(t, 1, below)
 	require.Zero(t, chainTravel(spec, bounds[1], below, big.NewRat(1, 4), big.NewRat(3, 4)).Cmp(big.NewRat(10, 1)))
 
@@ -533,7 +533,7 @@ func TestLinkageSecondDerivativeBound(t *testing.T) {
 									fd = at(step, step).Sub(at(step, -step)).Sub(at(-step, step)).Add(at(-step, -step)).Scale(1 / (4 * step * step))
 								}
 								bound := 0.0
-								if w := secondDerivativeBound(bounds[k], m, n); w != nil {
+								if w := linkagebound.DerivativeBound(bounds[k].Rho, m, n); w != nil {
 									bound = linkRatFloat(t, w)
 								}
 								for _, d := range []float64{fd.X, fd.Y, fd.Z} {
@@ -548,9 +548,9 @@ func TestLinkageSecondDerivativeBound(t *testing.T) {
 		}
 	}
 	require.NotZero(t, checked)
-	require.Nil(t, secondDerivativeBound(bounds[3], 1, 2), `a prismatic ancestor turns nothing`)
-	require.Zero(t, secondDerivativeBound(bounds[3], 0, 1).Cmp(big.NewRat(1, 1)), `a revolute ancestor turns a slide's unit velocity`)
-	require.Zero(t, secondDerivativeBound(bounds[3], 0, 2).Cmp(bounds[3].rho[2]), `a revolute ancestor turns a revolute's velocity, at most ρ_jk long`)
+	require.Nil(t, linkagebound.DerivativeBound(bounds[3].Rho, 1, 2), `a prismatic ancestor turns nothing`)
+	require.Zero(t, linkagebound.DerivativeBound(bounds[3].Rho, 0, 1).Cmp(big.NewRat(1, 1)), `a revolute ancestor turns a slide's unit velocity`)
+	require.Zero(t, linkagebound.DerivativeBound(bounds[3].Rho, 0, 2).Cmp(bounds[3].Rho[2]), `a revolute ancestor turns a revolute's velocity, at most ρ_jk long`)
 }
 
 // TestLinkageCornerVelocity pins v_{i,c} of docs/linkage-check-design.md
@@ -584,15 +584,15 @@ func TestLinkageCornerVelocity(t *testing.T) {
 		}
 	}
 	found := false
-	for c, pos := range reading.pos {
+	for c, pos := range reading.Pos {
 		if linkRatFloat(t, pos[0].Lo) < 85 || linkRatFloat(t, pos[1].Lo) < 35 || linkRatFloat(t, pos[2].Lo) < 21 {
 			continue
 		}
 		found = true
 		requireEncloses(t, x, pos)
-		require.Len(t, reading.vel[c], 2)
-		requireEncloses(t, r3.NewVec(-x.Y, x.X, 0), reading.vel[c][0])
-		requireEncloses(t, r3.NewVec(-14, 48, 0), reading.vel[c][1])
+		require.Len(t, reading.Vel[c], 2)
+		requireEncloses(t, r3.NewVec(-x.Y, x.X, 0), reading.Vel[c][0])
+		requireEncloses(t, r3.NewVec(-14, 48, 0), reading.Vel[c][1])
 	}
 	require.True(t, found, `the corner (96, 14, 22) is read`)
 }
@@ -630,7 +630,7 @@ func TestLinkageProjectionBoundHandSum(t *testing.T) {
 	h := linkRatFloat(t, jointSpan(dr.spec.joints[0], fa, fb))
 	require.InDelta(t, math.Pi/32, h, 1e-15)
 	rho := math.Sqrt(50*50 + 5*5)
-	require.InDelta(t, rho, linkRatFloat(t, dr.bounds[0].rho[0]), 1e-12)
+	require.InDelta(t, rho, linkRatFloat(t, dr.bounds[0].Rho[0]), 1e-12)
 	rem := rho * h * h / 2
 	fromA := 20 - (-40 + 5*h) - rem
 	reach := math.Inf(-1)
@@ -721,21 +721,21 @@ func TestLinkageProjectionSegmentTerm(t *testing.T) {
 	require.True(t, ok)
 	steps := dr.projectionSteps(b0, 0, fa, fb)
 	require.Len(t, steps, 1)
-	rem := projectionRemainder(b0, 0, h)
+	rem := linkagebound.Remainder(b0.Rho, h)
 	hf := math.Pi / 32
 	remF := linkRatFloat(t, rem)
 	require.InDelta(t, math.Sqrt(50*50+5*5)*hf*hf/2, remF, 1e-9)
 
 	ca, ok := dr.cornersAt(a, 0, b0, 0, false)
 	require.True(t, ok)
-	up, _ := projectionSide{corners: ca, h: h, seg: stepsFrom(steps, false), rem: rem}.extents()
+	up, _ := (projectionSide{Corners: ca, H: h, Seg: stepsFrom(steps, false), Rem: rem}).Extents()
 	require.InDelta(t, -40+5*hf+remF, linkRatFloat(t, up[1]), 1e-9)
 
 	cb, ok := dr.cornersAt(b, 0, b0, 0, false)
 	require.True(t, ok)
-	up, _ = projectionSide{corners: cb, h: h, seg: stepsFrom(steps, true), rem: rem}.extents()
+	up, _ = (projectionSide{Corners: cb, H: h, Seg: stepsFrom(steps, true), Rem: rem}).Extents()
 	require.InDelta(t, 5*math.Sin(hf)-40*math.Cos(hf)+remF, linkRatFloat(t, up[1]), 1e-9)
-	boxUp, _ := projectionSide{corners: cb, h: h, rem: rem}.extents()
+	boxUp, _ := (projectionSide{Corners: cb, H: h, Rem: rem}).Extents()
 	require.Greater(t, linkRatFloat(t, boxUp[1]), linkRatFloat(t, up[1]), `the box form charges the rising corners too`)
 
 	ends := []*big.Rat{big.NewRat(1, 4), big.NewRat(1, 2)}
@@ -791,21 +791,21 @@ func TestLinkageHullPoints(t *testing.T) {
 	side := func(b *Body, pad *big.Rat) projectionSide {
 		reading, ok := bodyPoints(b, true)
 		require.True(t, ok)
-		reading.pad = pad
-		bounds, ok := roundCorners(reading)
+		reading.Pad = pad
+		bounds, ok := linkagebound.RoundCorners(reading)
 		require.True(t, ok)
-		return projectionSide{corners: bounds}
+		return projectionSide{Corners: bounds}
 	}
 	a, b := side(block, nil), side(far, nil)
-	require.Zero(t, projectionLowerHull(a, b).Cmp(big.NewRat(10, 1)))
-	witness := linkagebound.LowerHullWithWitness(a.boundSide(), b.boundSide())
+	require.Zero(t, linkagebound.LowerHull(a, b).Cmp(big.NewRat(10, 1)))
+	witness := linkagebound.LowerHullWithWitness(a, b)
 	require.Zero(t, witness.Bound.Cmp(big.NewRat(10, 1)))
 	require.Zero(t, witness.Axis[0].Cmp(big.NewRat(1, 1)))
 	require.Zero(t, witness.Axis[1].Sign())
 	require.Zero(t, witness.Axis[2].Sign())
 	require.Zero(t, witness.Norm.Cmp(big.NewRat(1, 1)))
 	require.Equal(t, 1, witness.Sense)
-	require.Zero(t, projectionLowerHull(side(block, big.NewRat(1, 2)), side(far, big.NewRat(1, 4))).Cmp(big.NewRat(37, 4)))
+	require.Zero(t, linkagebound.LowerHull(side(block, big.NewRat(1, 2)), side(far, big.NewRat(1, 4))).Cmp(big.NewRat(37, 4)))
 }
 
 // TestLinkageHullPointsInsideRestBox pins the containment
