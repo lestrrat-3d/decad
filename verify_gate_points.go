@@ -243,7 +243,7 @@ func capBlendGateDiameter(ctx context.Context, budget *proofbound.WorkBudget, bo
 }
 
 // capBlendGatePoints lists points a cap-loop chamfer proves lie on its body.
-// It joins three sets:
+// It joins four sets:
 //
 //   - the stations of capBlendWitnessPrisms: every loop's wall between the
 //     side levels its bands leave, charged their gaps and the levels'
@@ -254,12 +254,15 @@ func capBlendGateDiameter(ctx context.Context, budget *proofbound.WorkBudget, bo
 //     its gap from the held circle, the widest band's contour displacement
 //     (bandDelta, capband.WholeCircleDisplacement for such a band) and the
 //     axial term;
+//   - the stations on every cap contour arc a corner trims, the offset of a
+//     circular wall cut back at its two corner feet, at its cap level
+//     (capArcRim);
 //   - the body's vertices with their published bounds, which hold every cap
 //     contour corner.
 //
-// A cap contour arc that a corner trims is read at its ends alone, through
-// the vertices. ok is false, with no error, when the side-level stations or
-// the vertices cannot be read.
+// A reflex corner's connector arc is read at its ends alone, through the
+// vertices. ok is false, with no error, when the side-level stations or the
+// vertices cannot be read.
 func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Body, cbp capBlendPayload) (gatePoints, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return gatePoints{}, false, err
@@ -293,12 +296,90 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 			g.join(caps)
 		}
 	}
+	for _, p := range cbp.patches {
+		rim, arcAllow, ok := capArcRim(cbp, p.geom, contour)
+		if !ok {
+			continue
+		}
+		arc, ok, err := prismGatePoints(budget, []prismPayload{rim}, proofbound.AbsSumUpper(cbp.axialDelta(), arcAllow))
+		if err != nil {
+			return gatePoints{}, false, err
+		}
+		if ok {
+			g.join(arc)
+		}
+	}
 	vertices, ok, err := vertexGatePoints(budget, body, 0)
 	if err != nil || !ok {
 		return gatePoints{}, false, err
 	}
 	g.join(vertices)
 	return g, true, nil
+}
+
+// capArcRim returns a station prism over the cap contour arc a circular wall
+// patch g holds trimmed by its two corners, and how far any point of that arc
+// sits from the arc the band denotes. contour is a proven upper bound on the
+// band's contour displacement (bandDelta). ok is false for any other patch,
+// and wherever the bound cannot be stated.
+//
+// The prism's one segment is the ArcSeg the cap face records: counter-clockwise
+// about the wall's centre (g.CU, g.CV) from the held cap vertex g.CapA, at
+// g.CapTh0, to g.CapB, at g.CapTh1, at the cap level g.CapZ. Its stations
+// (diameter.SectionStations) each carry their gap from that recorded arc. The
+// band denotes the offset of the wall's circle trimmed at the two corner feet
+// F0 and F1. A point of the recorded arc at angle θ lies at radius r, the
+// distance from the centre to g.CapA:
+//
+//   - r is within g.Held.CapRadius of the held offset radius g.CapRadius
+//     (capband.WallHeldAllow), and g.CapRadius within contour of every radius
+//     the band denotes, since capcontour.Displacement's circular term is that
+//     distance. So r is within the sum of the two of the denoted radius, and a
+//     point at angle θ inside the denoted window is within that sum of the
+//     denoted arc.
+//   - Each held cap vertex lies within contour of its corner foot, and both
+//     sit at least rMin = g.CapRadius − max(g.Held.CapRadius, contour) from
+//     the centre. Two points at least rMin out and c apart subtend at most
+//     2·asin(c/(2·rMin)) ≤ (π/2)·c/rMin. So each end of the recorded window
+//     sits within beta = (π/2)·contour/rMin of the denoted window's end, and
+//     a point of the recorded arc outside the denoted window lies within
+//     r·beta of the point at the denoted end's angle and radius r, and so
+//     within r·beta plus the radius term of the denoted end F0 or F1.
+//
+// The allowance is the radius term plus (g.CapRadius + g.Held.CapRadius)·beta.
+// The recorded arc's own sweep must agree with the held window to 1e-9 rad,
+// a check that can only refuse: a mismatch would name the complementary arc.
+func capArcRim(cbp capBlendPayload, g capPatchGeom, contour float64) (prismPayload, float64, bool) {
+	if !g.Circular || g.WholeTurn || g.SideRadius <= 0 || !(g.CapTh1 > g.CapTh0) {
+		return prismPayload{}, 0, false
+	}
+	center := Point2{U: g.CU, V: g.CV}
+	if g.CapA == center || g.CapB == center {
+		return prismPayload{}, 0, false
+	}
+	a0 := math.Atan2(g.CapA.V-g.CV, g.CapA.U-g.CU)
+	sweep := math.Mod(math.Atan2(g.CapB.V-g.CV, g.CapB.U-g.CU)-a0, 2*math.Pi)
+	if sweep <= 0 {
+		sweep += 2 * math.Pi
+	}
+	if math.Abs(sweep-(g.CapTh1-g.CapTh0)) > 1e-9 {
+		return prismPayload{}, 0, false
+	}
+	rMin := math.Nextafter(g.CapRadius-math.Max(g.Held.CapRadius, contour), 0)
+	if !(rMin > contour) || proofbound.IsNonFinite(rMin) {
+		return prismPayload{}, 0, false
+	}
+	beta := proofbound.DivUpper(proofbound.ProductUpper(math.Nextafter(math.Pi/2, math.Inf(1)), contour), rMin)
+	radial := proofbound.AbsSumUpper(g.Held.CapRadius, contour)
+	allow := proofbound.AbsSumUpper(radial, proofbound.ProductUpper(proofbound.AbsSumUpper(g.CapRadius, g.Held.CapRadius), beta))
+	if !tolerance.UsableMagnitude(allow) {
+		return prismPayload{}, 0, false
+	}
+	rim := cbp.prismLike(g.CapZ, g.CapZ)
+	rim.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{ArcSeg{
+		Center: center, Start: g.CapA, End: g.CapB, TStart: 0, TEnd: 1,
+	}}}}
+	return rim, allow, true
 }
 
 // brepGateDiameter is bodyGateDiameter's arm for a brepPayload

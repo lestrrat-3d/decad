@@ -11,7 +11,11 @@ type Point = sectionrecord.Point2
 type Patch struct {
 	Circular bool
 	// Plane patch (Circular == false): the two side-level (original) points
-	// and the two cap-level (offset) points, in walk order.
+	// and the two cap-level (offset) points, in walk order. A circular wall
+	// patch (Circular, SideRadius > 0, not WholeTurn) holds its two held
+	// cap-level vertices in CapA and CapB, CapA at CapTh0 and CapB at CapTh1,
+	// and leaves SideA and SideB zero; an apex patch and a whole turn leave
+	// all four zero.
 	SideA, SideB, CapA, CapB Point
 	// Cone patch (Circular == true): concentric center, the two radii
 	// (side = original wall radius, cap = offset radius) and the angular

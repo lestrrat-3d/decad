@@ -676,6 +676,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				side0, side1 = side1, side0
 				cap0, cap1 = cap1, cap0
 			}
+			g.CapA, g.CapB = cap0, cap1
 			if err := setCapPatchSkews(&g, side0, side1, cap0, cap1); err != nil {
 				return capBandResult{}, err
 			}
