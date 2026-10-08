@@ -609,7 +609,8 @@ its one level. A face whose stations cannot be read adds none.
 **The pair's `D` reads both bodies' points together.** `pairGateDiameter`
 (`verify_gate_points.go`) joins the point sets each body proves lie on it
 (`bodyGatePoints`: the points its own gate arm reads, or its vertices with
-their published bounds) and reads the largest distance among them, pairs
+their published bounds; a coil reads every held station vertex, each within
+its station rounding of a point of its true helix edge) and reads the largest distance among them, pairs
 across the two bodies included, shrunk by twice the larger gap. The
 clearance kernel's pair reading (`pairKernel.pairDiameter`) and
 `interferencePairDiameter` both read it; neither reads the carriers'

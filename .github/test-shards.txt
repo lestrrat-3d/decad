@@ -576,6 +576,7 @@
 3	0.00	TestPairGapMeasurementChargeReachesToleranceGate
 3	0.00	TestPairGapMeasurementEnclosesProvenInterval
 3	0.10	TestPairGateDiameterReadsStations
+3	0.16	TestPairGateDiameterReadsCoilStations
 3	0.00	TestPairReportKeyIsBitExact
 3	0.00	TestPairReportMemoEvictsOldest
 3	4.24	TestPairStationsAcceptsTheStatedChordCap

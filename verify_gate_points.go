@@ -504,7 +504,8 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 // bodyGatePoints lists points the body proves lie on it, for the pair
 // diameter (pairGateDiameter). Each payload reads the points its own gate
 // diameter arm reads where that arm reads points: a faceted, loft, mitred
-// sweep or stitched body's held vertex table with its published delta, an
+// sweep or stitched body's held vertex table with its published delta, a
+// coil's held station table with its largest station rounding, an
 // ExtrudeChain body's vertices and stations, a brep's vertices and face
 // stations, a draft body's stations on both caps, a cap-loop chamfer's side
 // levels, whole cap circles and vertices, an analytic prism's or a revolve's stations, and the stations of
@@ -520,6 +521,11 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 		return gatePoints{pts: pl.verts, allow: pl.delta}, true, nil
 	case mitredSweepPayload:
 		return gatePoints{pts: pl.verts, allow: pl.delta}, true, nil
+	case coilPayload:
+		// Every held station vertex lies within its own station rounding of
+		// the point X(v, j) it denotes, a point of the coil's true helix edge
+		// (docs/helix-design.md §5.3), so the largest rounding is the gap.
+		return gatePoints{pts: pl.verts, allow: pl.maxRound}, true, nil
 	case stitchPayload:
 		return gatePoints{pts: pl.verts, allow: pl.delta}, true, nil
 	case chainPayload:

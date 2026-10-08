@@ -651,3 +651,36 @@ func TestRevolveGateDiameterReadsSheetsAndDisplacedSections(t *testing.T) {
 		require.LessOrEqual(t, d, exact-2*rp.sectionDelta, `the section displacement is charged on both ends of the pair`)
 	})
 }
+
+// TestPairGateDiameterReadsCoilStations pairs docs/helix-design.md §13's
+// square spring (ρ ∈ [2, 3], ζ ∈ [0, 1], pitch 1.5, 2 turns about V) with a
+// 0.2 mm cube inside its bore. The station at θ = 0 holds (3, 0, 0) and the
+// one at θ = 3π, an exact quarter-turn station, holds (−3, 3.25, 0), so the
+// reading reaches √(36 + 3.25²) less the stations' own rounding. Every point
+// of the spring lies within radius 3 of its axis and between heights 0 and
+// 4, and the cube within 0.3 of the origin, so the pair is at most √52
+// across.
+//
+// Shown to fail first: without the coil arm in bodyGatePoints the pair read
+// the spring's cap vertices and the cube's alone, 5.14 against the floor 6.82.
+func TestPairGateDiameterReadsCoilStations(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	s, p := coilSquare(t)
+	spring, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+	require.NoError(t, err)
+	w := sketch.NewWorld()
+	cs, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := cs.CreateRectangle(-0.1, -0.1, 0.1, 0.1)
+	cs.Fix(rect.A)
+	_, err = cs.Solve(t.Context())
+	require.NoError(t, err)
+	cube, err := doc.Extrude(cs, cs.Profiles()[0], Distance{D: units.Millimeters(0.2), Dir: Along})
+	require.NoError(t, err)
+
+	d, err := interferencePairDiameter(t.Context(), spring, cube)
+	require.NoError(t, err)
+	floor := math.Hypot(6, 3.25) - 2*spring.payload.(coilPayload).maxRound - 1e-12
+	requireGateDiameterWithin(t, d, floor, big.NewRat(52, 1))
+}
