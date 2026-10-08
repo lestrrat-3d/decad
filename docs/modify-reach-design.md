@@ -35,7 +35,8 @@ The extension does **not** add a general B-rep kernel:
 - no mixed lateral-edge + cap-edge blend in one call;
 - no variable-radius fillet;
 - no topology-changing offset;
-- no faceted/boolean receiver;
+- no faceted receiver (a brep or stacked receiver is
+  `docs/brep-modify-design.md`'s);
 - no partial-revolve shell that keeps an angular cap.
 
 Each excluded body exists. Table SX stages it with `ErrUnsupported` at the
@@ -89,11 +90,11 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 |---|---|---|---|
 | **RX1** | `prismPayload` | base lateral junctions; OR every geometric edge of one or more complete cap loops. Never both classes in one call | base cap openings, with BX8 replacing base S12 after the stacked payload lands; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR, for a hole-free section, `WithNoOpenings` |
 | **RX2** | `revolvePayload` | off-axis swept meridian junctions only: a full-turn latitude `Circle3` or partial-turn junction `Arc3` | full turn: one proper connected run of generated side faces, or `WithNoOpenings`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
-| **RX3** | `stackedPrismPayload` | SX10 | SX10 |
+| **RX3** | `stackedPrismPayload` | through its face view, `docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
 | **RX5** | `cupPayload` during migration to `stackedPrismPayload` | base S3 | base S3 |
 | **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | SX9 | SX9 |
-| **RX7** | `brepPayload` (`docs/general-boolean-design.md` §4) | SX16 | SX16 |
+| **RX7** | `brepPayload` (`docs/general-boolean-design.md` §4) | `docs/brep-modify-design.md` Table RB; outside it, SX16 | the same |
 
 Definitions:
 
@@ -129,13 +130,13 @@ more specific SX row replaces that base refusal.
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
 | **SX8** | shell side/no-opening extension is used on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap | body exists outside extension | `ErrUnsupported` |
 | **SX9** | any modify op on `facetedPayload` | body exists; analytic carrier + stable topology absent | `ErrUnsupported` |
-| **SX10** | another modify op on `stackedPrismPayload` or `capBlendPayload` | body exists; compound feature composition not built | `ErrUnsupported` |
+| **SX10** | another modify op on `capBlendPayload`, or on a `stackedPrismPayload` whose face view refuses (`docs/brep-modify-design.md` SB2) | body exists; compound feature composition not built | `ErrUnsupported` |
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
 | **SX13** | a cap-loop chamfer whose setback rounds away against the level it displaces: the cap contour's offset radius rounds back onto a circular wall's own radius (`R -/+ d == R`), or the band's side level rounds back onto its own cap level (`z1 - d == z1` on the end cap, `z0 + d == z0` on the start cap) | body exists; its taper is real but finer than float64 names at that radius or at that sweep level, so the band's patches cannot be told from a cylinder or from the cap plane | `ErrUnsupported` |
 | **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root. A G1 join (modify §7's dead-zone rule) intersects no carriers — its corner is the shared-normal foot, enclosed as a reflex corner's feet are — so SX14 never fires on one | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement | `ErrUnsupported` |
 | **SX15** | a cap-loop chamfer whose band patch's outward orientation cannot be certified: the patch's own `Face.NormalAt` refuses at the build's orientation sample point | body exists and its patches are real; the evaluator cannot evaluate its own orientation sample on this patch, so it cannot state which side of the patch is outward | `ErrUnsupported` |
-| **SX16** | any modify op on `brepPayload` | body exists; rewriting a planar face's region and re-trimming its walls is not built. Staged, not SX9's permanent exclusion: the faces are analytic carriers with recorded trims | `ErrUnsupported` |
+| **SX16** | a modify op on a `brepPayload`, or on a stacked receiver through its face view, outside `docs/brep-modify-design.md` Tables RB/EB | body exists; that document's Table SB names the row | `ErrUnsupported` |
 
 Gate order:
 
@@ -944,8 +945,10 @@ meaning, while an exact kernel would modify a different B-rep. SX9 is therefore 
 permanent limit of this evaluator reach, not an unfinished zero-bound shortcut.
 
 **What SX9 leaves a caller proving.** Because SX9 never lifts, a caller whose
-part fillets or chamfers a boolean result cannot reach the modified solid here at
-all, and waiting is not one of the options. What replaces it is a proof of the
+part fillets or chamfers a faceted boolean result cannot reach the modified
+solid here at all, and waiting is not one of the options (an analytic
+`brepPayload` result is `docs/brep-modify-design.md`'s and is admitted there).
+What replaces it is a proof of the
 op's INPUTS rather than of its output: resolve the selector against the
 boolean body and assert the edge set the step would collect, then assert the
 material the op would leave — the wall or radius the requested size implies —
@@ -1190,8 +1193,8 @@ Each PR lands its result payload, structural topology, measurement path, and
 tests together. A PR may leave a DX question staged only where
 Table DX explicitly says `Suspect` or `ErrUnsupported`.
 
-No implementation PR changes SX9. Supporting boolean receivers requires a
-separate carrier-preserving B-rep design, not another row in this extension.
+No implementation PR changes SX9. Brep and stacked receivers are
+`docs/brep-modify-design.md`'s, not another row in this extension.
 
 ## Implementation notes
 

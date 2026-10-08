@@ -161,9 +161,9 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if err := requireNotCapBlendReceiver(b.payload, "shells"); err != nil {
 		return nil, err
 	}
-	// SX16 (modify-reach Table RX's RX7): a brep receiver is staged the same
-	// way, ahead of the generic refusal.
-	if err := requireNotBrepReceiver(b.payload, "shells"); err != nil {
+	// A brep or stacked receiver takes the brep route
+	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
+	if err := modifyBrepReceiver(ctx, b.payload, "shells"); err != nil {
 		return nil, err
 	}
 

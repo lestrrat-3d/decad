@@ -148,7 +148,8 @@ a retired body is S17, by core §6's retire rule.
 | **R2** | `cupPayload` — a one-cap shell (B5/B6) | S3 | S3 |
 | **R3** | `revolvePayload` | reach RX2 for swept meridian junctions; otherwise S3/SX5 | reach RX2; otherwise S3/SX8 |
 | **R4** | `facetedPayload` — a boolean output | reach SX9 | reach SX9 |
-| **R5** | reach payload (`stackedPrismPayload` / `capBlendPayload`) | reach SX10 | reach SX10 |
+| **R5** | `capBlendPayload` | reach SX10 | reach SX10 |
+| **R6** | `brepPayload`, or `stackedPrismPayload` through its face view | `docs/brep-modify-design.md` Table RB | Table RB |
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
 (evaluator §5 emits no seam), so a cylinder has no edge the corner rewrite can

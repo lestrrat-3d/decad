@@ -1086,6 +1086,8 @@
 3	0.01	TestBrepArcWallHasTheAnalyticSTEPShape
 3	0.01	TestBrepClearanceReadsItsCarriers
 3	0.01	TestBrepModifyOpsAreStaged
+3	0.02	TestBrepModifySB1RefusesADisplacedReceiver
+3	0.01	TestBrepModifySB2RefusesAPrismGroup
 3	0.01	TestBrepConsumersOnTheClassBCutResult
 0	0.00	TestPrismSharedWallMirroredL
 0	0.00	TestPrismSharedWallDisplacedInteriorSpanFallsBack
