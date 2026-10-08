@@ -4,6 +4,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
@@ -226,7 +227,7 @@ func (b *cbBuild) canonicalize(f *cbFace) error {
 		out := make([]CurveSegment, n)
 		for i := range segs {
 			from, to := ends[(i+n-1)%n], ends[i]
-			out[i] = cbBetween(walks[i], f.frame, from, to)
+			out[i] = classbgeom.BetweenVertices(walks[i], f.frame.axis, f.frame.sign, from, to)
 		}
 		loops[li] = LoopRecord{Segments: out}
 		f.carriers[li] = carriers
@@ -246,49 +247,16 @@ func (b *cbBuild) mergeSeams(segs []CurveSegment, carriers []cbCarrier) ([]Curve
 	outS, outC := []CurveSegment{}, []cbCarrier{}
 	for i := range n {
 		if i > 0 && carriers[i] == outC[len(outC)-1] && b.geom(carriers[i]).cyl {
-			outS[len(outS)-1] = cbJoin(outS[len(outS)-1], segs[i])
+			outS[len(outS)-1] = classbgeom.JoinCircleFragments(outS[len(outS)-1], segs[i])
 			continue
 		}
 		outS, outC = append(outS, segs[i]), append(outC, carriers[i])
 	}
 	if len(outS) > 1 && outC[0] == outC[len(outC)-1] && b.geom(outC[0]).cyl {
-		outS[0] = cbJoin(outS[len(outS)-1], outS[0])
+		outS[0] = classbgeom.JoinCircleFragments(outS[len(outS)-1], outS[0])
 		outS, outC = outS[:len(outS)-1], outC[:len(outC)-1]
 	}
 	return outS, outC
-}
-
-// cbJoin joins two consecutive fragments of one circle into one fragment
-// over both parameter ranges, reading a whole circle's range as one turn.
-func cbJoin(a, b CurveSegment) CurveSegment {
-	ca, okA := a.(CircleSeg)
-	cb, okB := b.(CircleSeg)
-	if !okA || !okB {
-		return a
-	}
-	out := ca
-	switch {
-	case ca.TEnd == 1 && cb.TStart == 0:
-		out.TEnd = 1 + cb.TEnd
-	case ca.TEnd == 0 && cb.TStart == 1:
-		out.TEnd = cb.TEnd - 1
-	default:
-		out.TEnd = cb.TEnd
-	}
-	return out
-}
-
-// cbBetween rewrites one region segment to run from one canonical vertex to
-// the next: a line as a whole line, a circular fragment as an arc pinned at
-// both, about the carrier's own recorded centre and in the fragment's own
-// sense.
-func cbBetween(w survey2d.SegmentWalk, frame cbFrame, from, to [3]float64) CurveSegment {
-	pf, pt := frame.toLocal(from), frame.toLocal(to)
-	start, end := Point2{U: pf[0], V: pf[1]}, Point2{U: pt[0], V: pt[1]}
-	if w.IsLine() {
-		return LineSeg{Start: start, End: end, TStart: 0, TEnd: 1}
-	}
-	return arcSegment(Point2{U: w.CU, V: w.CV}, start, end, w.Th1 > w.Th0)
 }
 
 // split cuts every edge of a face at every canonical vertex lying on it: a
@@ -573,34 +541,9 @@ func (b *cbBuild) axisPoint(frame cbFrame, level float64) [3]float64 {
 // reframe restates a segment of a face in from in frame to: both frames'
 // normals land on one X axis, so the in-plane coordinates permute exactly.
 func (b *cbBuild) reframe(seg CurveSegment, from, to cbFrame) (CurveSegment, error) {
-	mapPt := func(p Point2) Point2 {
-		l := to.toLocal(from.toX([3]float64{p.U, p.V, 0}))
-		return Point2{U: l[0], V: l[1]}
+	ret, ok := classbgeom.ReframeSegment(seg, from.axis, to.axis, from.sign, to.sign)
+	if !ok {
+		return nil, errCBMiss
 	}
-	reflected := false
-	{
-		// A map that swaps handedness in the plane reverses every sense.
-		e1 := to.toLocal(from.toX([3]float64{1, 0, 0}))
-		e2 := to.toLocal(from.toX([3]float64{0, 1, 0}))
-		reflected = e1[0]*e2[1]-e1[1]*e2[0] < 0
-	}
-	switch s := seg.(type) {
-	case LineSeg:
-		s.Start, s.End = mapPt(s.Start), mapPt(s.End)
-		return s, nil
-	case ArcSeg:
-		s.Center, s.Start, s.End = mapPt(s.Center), mapPt(s.Start), mapPt(s.End)
-		if reflected {
-			s.Start, s.End = s.End, s.Start
-		}
-		return s, nil
-	case CircleSeg:
-		s.Center = mapPt(s.Center)
-		if reflected {
-			s.CCW = !s.CCW
-			s.TStart, s.TEnd = s.TEnd, s.TStart
-		}
-		return s, nil
-	}
-	return nil, errCBMiss
+	return ret, nil
 }

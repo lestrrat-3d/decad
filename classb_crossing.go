@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -50,19 +51,11 @@ type cbFrame struct {
 }
 
 func (f cbFrame) toLocal(x [3]float64) [3]float64 {
-	var out [3]float64
-	for i := range out {
-		out[i] = f.sign[i]*x[f.axis[i]] + 0
-	}
-	return out
+	return classbgeom.ToLocal(x, f.axis, f.sign)
 }
 
 func (f cbFrame) toX(l [3]float64) [3]float64 {
-	var out [3]float64
-	for i, c := range l {
-		out[f.axis[i]] = f.sign[i]*c + 0
-	}
-	return out
+	return classbgeom.ToX(l, f.axis, f.sign)
 }
 
 // cbFace is one planar face of the result while it is built: its carrier,
@@ -245,39 +238,12 @@ func (b *cbBuild) brepFace(f cbFace) brepFace {
 
 // cbSeg is one input segment of a face scene with its carrier, in the
 // face's frame coordinates.
-type cbSeg struct {
-	seg     CurveSegment
-	carrier cbCarrier
-}
+type cbSeg = classbgeom.CarrierSegment[cbCarrier]
 
 // cbRectLoop builds a loop through corners given in X's local axes, each edge on
 // its carrier, counter-clockwise in frame.
 func cbRectLoop(frame cbFrame, corners [][3]float64, carriers []cbCarrier) []cbSeg {
-	pts := make([]Point2, len(corners))
-	for i, c := range corners {
-		l := frame.toLocal(c)
-		pts[i] = Point2{U: l[0], V: l[1]}
-	}
-	area := 0.0
-	for i := range pts {
-		j := (i + 1) % len(pts)
-		area += pts[i].U*pts[j].V - pts[j].U*pts[i].V
-	}
-	edgeCarriers := slices.Clone(carriers)
-	if area < 0 {
-		slices.Reverse(pts)
-		// Edge i ran from corner i to i+1; reversed, edge k runs from
-		// corner n−1−k to n−2−k, which is old edge n−2−k.
-		n := len(pts)
-		for k := range n {
-			edgeCarriers[k] = carriers[(2*n-2-k)%n]
-		}
-	}
-	segs := make([]cbSeg, len(pts))
-	for i := range pts {
-		segs[i] = cbSeg{seg: LineSeg{Start: pts[i], End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1}, carrier: edgeCarriers[i]}
-	}
-	return segs
+	return classbgeom.RectLoop(frame.axis, frame.sign, corners, carriers)
 }
 
 // cbSectionSegs lists an operand's own section in its own frame, each
@@ -285,7 +251,7 @@ func cbRectLoop(frame cbFrame, corners [][3]float64, carriers []cbCarrier) []cbS
 func cbSectionSegs(op int, p prismPayload) []cbSeg {
 	var out []cbSeg
 	for i, seg := range p.profile.Outer.Segments {
-		out = append(out, cbSeg{seg: seg, carrier: cbCarrier{op, i}})
+		out = append(out, cbSeg{Seg: seg, Carrier: cbCarrier{op, i}})
 	}
 	return out
 }
@@ -353,7 +319,7 @@ func (b *cbBuild) chords(ctx context.Context, op int, f cbCarrier) ([]cbChord, e
 	}
 	entity := map[sketch.Entity]cbSeg{}
 	for _, cs := range cbSectionSegs(op, p) {
-		ent, err := cbCreate(s, point, cs.seg)
+		ent, err := classbgeom.CreateNaturalSegment(s, point, cs.Seg)
 		if err != nil {
 			return nil, err
 		}
@@ -361,7 +327,7 @@ func (b *cbBuild) chords(ctx context.Context, op int, f cbCarrier) ([]cbChord, e
 	}
 	trace := LineSeg{Start: a, End: z, TStart: 0, TEnd: 1}
 	traceEnt := s.CreateLine(point(a), point(z))
-	entity[traceEnt] = cbSeg{seg: trace, carrier: f}
+	entity[traceEnt] = cbSeg{Seg: trace, Carrier: f}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
 		return nil, err
@@ -397,7 +363,7 @@ func (b *cbBuild) chords(ctx context.Context, op int, f cbCarrier) ([]cbChord, e
 				return nil, errCBMiss
 			}
 			ends := [2]float64{e.TStart, e.TEnd}
-			crossed := [2]cbCarrier{cPrev.carrier, cNext.carrier}
+			crossed := [2]cbCarrier{cPrev.Carrier, cNext.Carrier}
 			piece, err := walkOf(LineSeg{Start: a, End: z, TStart: ends[0], TEnd: ends[1]}, nil)
 			if err != nil {
 				return nil, err
@@ -446,27 +412,6 @@ func classBSpeed(seg CurveSegment) float64 {
 		return math.Inf(1)
 	}
 	return speed
-}
-
-// cbCreate adds one natural-range segment to a scene as buildPrismScene adds
-// it.
-func cbCreate(s *sketch.Sketch, point func(Point2) *sketch.Point, seg CurveSegment) (sketch.Entity, error) {
-	w, err := walkOf(seg, nil)
-	if err != nil {
-		return nil, err
-	}
-	switch {
-	case w.IsLine():
-		return s.CreateLine(point(Point2{U: w.StartU, V: w.StartV}), point(Point2{U: w.EndU, V: w.EndV})), nil
-	case w.Closed:
-		return s.CreateCircle(point(Point2{U: w.CU, V: w.CV}), w.Radius), nil
-	default:
-		lo, hi := Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV}
-		if w.Th1 < w.Th0 {
-			lo, hi = hi, lo
-		}
-		return s.CreateArc(point(Point2{U: w.CU, V: w.CV}), point(lo), point(hi)), nil
-	}
 }
 
 // buildXFaces decides every planar face of X: both caps, against the chords
@@ -674,7 +619,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 	toLoop := func(segs []cbSeg) LoopRecord {
 		var l LoopRecord
 		for _, s := range segs {
-			l.Segments = append(l.Segments, s.seg)
+			l.Segments = append(l.Segments, s.Seg)
 		}
 		return l
 	}
@@ -683,9 +628,9 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 		inputs = append(inputs, o...)
 	}
 	add := func(region ProfileRecord) error {
-		carriers, err := cbCarriersOf(region, inputs)
-		if err != nil {
-			return err
+		carriers, ok := classbgeom.CarriersOf(append([]LoopRecord{region.Outer}, region.Holes...), inputs)
+		if !ok {
+			return errCBMiss
 		}
 		b.faces = append(b.faces, cbFace{carrier: f, frame: frame, level: level, outward: outward,
 			region: region, carriers: carriers})
@@ -779,45 +724,4 @@ func loopSignedAreaCB(loop LoopRecord) (float64, error) {
 		}
 	}
 	return ig.area, nil
-}
-
-// cbCarriersOf names the carrier of every segment of a scene's region by its
-// defining data — a line by its two endpoints, a circle by its centre and
-// radius, an arc by its centre and two pinned points — which the scene
-// records verbatim from the entity each fragment was cut from.
-func cbCarriersOf(region ProfileRecord, inputs []cbSeg) ([][]cbCarrier, error) {
-	var out [][]cbCarrier
-	for _, loop := range append([]LoopRecord{region.Outer}, region.Holes...) {
-		var row []cbCarrier
-		for _, seg := range loop.Segments {
-			found := false
-			for _, in := range inputs {
-				if cbSameCarrier(seg, in.seg) {
-					row = append(row, in.carrier)
-					found = true
-					break
-				}
-			}
-			if !found {
-				return nil, errCBMiss
-			}
-		}
-		out = append(out, row)
-	}
-	return out, nil
-}
-
-func cbSameCarrier(a, b CurveSegment) bool {
-	switch x := a.(type) {
-	case LineSeg:
-		y, ok := b.(LineSeg)
-		return ok && ((x.Start == y.Start && x.End == y.End) || (x.Start == y.End && x.End == y.Start))
-	case CircleSeg:
-		y, ok := b.(CircleSeg)
-		return ok && x.Center == y.Center && x.Radius == y.Radius
-	case ArcSeg:
-		y, ok := b.(ArcSeg)
-		return ok && x.Center == y.Center && ((x.Start == y.Start && x.End == y.End) || (x.Start == y.End && x.End == y.Start))
-	}
-	return false
 }
