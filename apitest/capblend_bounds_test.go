@@ -1116,6 +1116,118 @@ func TestCapBlendCapContourVertexBoundCoversWallDirection(t *testing.T) {
 	require.Equal(t, n, checked, `one cap-level foot per corner`)
 }
 
+// TestCapBlendCapContourVertexBoundCoversArcWallNormal is the same enclosure
+// on a keyhole: a counterclockwise arc about c from a to b, closed by a slot
+// whose walls leave the arc at reflex corners. Each reflex corner joins two
+// offset feet with a connector arc, and the arc wall's foot steps from the
+// corner along the radius from the recorded centre. The arc walk holds its end
+// tangents as math.Sincos at angles it computed through math.Atan2, so a foot
+// stepped along them sits off the denoted one. The test solves every denoted
+// cap-level point at 400 bits: the two arc feet, the two slot walls' feet and
+// the slot's two miters.
+//
+// Shown to fail: with capcontour's joinFoot reading the held corner and the
+// held tangent for circular walls again, the arc foot at b publishes a bound
+// of 2.05e−15 against a true distance of 2.46e−15 on amd64.
+func TestCapBlendCapContourVertexBoundCoversArcWallNormal(t *testing.T) {
+	t.Parallel()
+	const height, d = 20.0, 0.31640625
+	c := [2]float64{0.11346681095459132, -38.244242030011335}
+	a := [2]float64{-1.623199116552638, -38.0723150662318}
+	b := [2]float64{-1.2595344613648685, -37.16700717592977}
+	b2 := [2]float64{-6.1176851442196565, -35.21547476153628}
+	a2 := [2]float64{-6.481349799407426, -36.12078265183831}
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	fix := func(p [2]float64) *sketch.Point {
+		q := s.CreatePoint(p[0], p[1])
+		s.Fix(q)
+		return q
+	}
+	pc, pa, pb, pb2, pa2 := fix(c), fix(a), fix(b), fix(b2), fix(a2)
+	s.CreateArc(pc, pa, pb)
+	s.CreateLine(pb, pb2)
+	s.CreateLine(pb2, pa2)
+	s.CreateLine(pa2, pa)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	require.NoError(t, err)
+	held := map[[2]float64]bool{}
+	for _, v := range body.Vertices() {
+		if p := v.Position().Value; p.Z == 0 {
+			held[[2]float64{p.X, p.Y}] = true
+		}
+	}
+	require.Equal(t, map[[2]float64]bool{a: true, b: true, b2: true, a2: true}, held,
+		`the fixture is about these exact corners`)
+
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+	denoted := [][2]*big.Float{
+		exactArcFoot(c, a, d), exactArcFoot(c, b, d),
+		exactWallFoot(a2, a, a, d), exactWallFoot(b, b2, b, d),
+		exactOffsetMiter(b, b2, a2, d), exactOffsetMiter(b2, a2, a, d),
+	}
+	checked := 0
+	for _, v := range chamfered.Vertices() {
+		p := v.Position()
+		if p.Value.Z != height {
+			continue
+		}
+		checked++
+		var gap *big.Float
+		for _, m := range denoted {
+			du := new(big.Float).SetPrec(400).Sub(new(big.Float).SetFloat64(p.Value.X), m[0])
+			dv := new(big.Float).SetPrec(400).Sub(new(big.Float).SetFloat64(p.Value.Y), m[1])
+			dist := new(big.Float).SetPrec(400).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
+			dist.Sqrt(dist)
+			if gap == nil || dist.Cmp(gap) < 0 {
+				gap = dist
+			}
+		}
+		require.LessOrEqual(t, gap.Cmp(new(big.Float).SetFloat64(p.Bound.Mag())), 0,
+			`vertex %v publishes bound %g against a true distance %s to its denoted point`,
+			p.Value, p.Bound.Mag(), gap.Text('g', 6))
+	}
+	require.Equal(t, len(denoted), checked, `one cap-level point per denoted point`)
+}
+
+// exactArcFoot is, at 400 bits, corner − d·(corner − c)/|corner − c|: the
+// offset foot of a counterclockwise arc about c, whose material lies toward
+// its centre.
+func exactArcFoot(c, corner [2]float64, d float64) [2]*big.Float {
+	const prec = 400
+	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
+	du := new(big.Float).SetPrec(prec).Sub(f(corner[0]), f(c[0]))
+	dv := new(big.Float).SetPrec(prec).Sub(f(corner[1]), f(c[1]))
+	l := new(big.Float).SetPrec(prec).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
+	l.Sqrt(l)
+	k := new(big.Float).SetPrec(prec).Quo(f(d), l)
+	return [2]*big.Float{
+		new(big.Float).SetPrec(prec).Sub(f(corner[0]), new(big.Float).Mul(k, du)),
+		new(big.Float).SetPrec(prec).Sub(f(corner[1]), new(big.Float).Mul(k, dv)),
+	}
+}
+
+// exactWallFoot is, at 400 bits, corner + d·n̂ for the left unit normal n̂ of
+// the wall p0→p1, its direction taken from the exact endpoint difference.
+func exactWallFoot(p0, p1, corner [2]float64, d float64) [2]*big.Float {
+	const prec = 400
+	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
+	du := new(big.Float).SetPrec(prec).Sub(f(p1[0]), f(p0[0]))
+	dv := new(big.Float).SetPrec(prec).Sub(f(p1[1]), f(p0[1]))
+	l := new(big.Float).SetPrec(prec).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
+	l.Sqrt(l)
+	k := new(big.Float).SetPrec(prec).Quo(f(d), l)
+	return [2]*big.Float{
+		new(big.Float).SetPrec(prec).Sub(f(corner[0]), new(big.Float).Mul(k, dv)),
+		new(big.Float).SetPrec(prec).Add(f(corner[1]), new(big.Float).Mul(k, du)),
+	}
+}
+
 // exactOffsetMiter is, at 400 bits, the meeting point of the walls prev→v and
 // v→next each moved d along its own left unit normal, with each wall's
 // direction taken from its exact endpoint difference.

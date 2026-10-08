@@ -69,8 +69,7 @@ const (
 	Unproven
 )
 
-// UnitVec3 encloses the exact unit vector of an enclosed direction. It is
-// the 3D sibling of internal/capcontour's UnitVec, and like it the only
+// UnitVec3 encloses the exact unit vector of an enclosed direction. The only
 // widening a held-float input suffers is the length's own outward-rounded
 // square root.
 func UnitVec3(a proofbound.IvVec3) (proofbound.IvVec3, Status) {

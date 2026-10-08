@@ -65,7 +65,7 @@ func TestJoinFootEnclosesDenotedLineNormal(t *testing.T) {
 		if atEnd {
 			cu, cv = w.EndU, w.EndV
 		}
-		foot, ok := joinFoot(Join{VU: cu, VV: cv}, w, atEnd, span)
+		foot, ok := joinFoot(w, atEnd, span)
 		require.True(t, ok)
 		// corner + d·(−e.V, e.U)
 		wantU := new(big.Float).SetPrec(400).Mul(big.NewFloat(d), ev)
@@ -75,4 +75,65 @@ func TestJoinFootEnclosesDenotedLineNormal(t *testing.T) {
 		requireEncloses(t, foot.U, wantU, `foot u`)
 		requireEncloses(t, foot.V, wantV, `foot v`)
 	}
+}
+
+// TestJoinFootEnclosesDenotedArcNormal pins Displacement's arc and G1 foot
+// for a circular wall: the foot steps from the corner the walk's end bound
+// encloses along the radius from the recorded centre to that corner. The arc
+// runs about the origin between (3, 4) and (−4, 3), so every denoted foot is
+// the rational corner ∓ d·corner/5. The walk holds its tangents as math.Sincos
+// at math.Atan2 angles, which no float pair can make parallel to (−4, 3) or
+// (3, 4) with an exact unit, so a foot read from them misses. Both senses run:
+// counterclockwise steps toward the centre and clockwise away from it.
+//
+// Shown to fail: with joinFoot reading OffsetFootOver(j.VU, j.VV, held
+// tangent) for circular walls again, the enclosure misses the denoted foot,
+// first at the counterclockwise wall's start.
+func TestJoinFootEnclosesDenotedArcNormal(t *testing.T) {
+	t.Parallel()
+	const d = 0.25
+	p := sectionrecord.Point2{U: 3, V: 4}
+	q := sectionrecord.Point2{U: -4, V: 3}
+	span := proofbound.PointInterval(new(big.Rat).SetFloat64(d))
+	for _, ccw := range []bool{true, false} {
+		seg := sectionrecord.ArcSeg{Center: sectionrecord.Point2{}, Start: p, End: q, TStart: 0, TEnd: 1}
+		if !ccw {
+			seg.TStart, seg.TEnd = 1, 0
+		}
+		w, err := boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
+		require.NoError(t, err)
+		require.True(t, w.IsCircular())
+		for _, atEnd := range []bool{false, true} {
+			corner := p
+			if atEnd == ccw {
+				corner = q
+			}
+			tu, tv := w.TanInU, w.TanInV
+			if atEnd {
+				tu, tv = w.TanOutU, w.TanOutV
+			}
+			cu, cv := new(big.Rat).SetFloat64(corner.U), new(big.Rat).SetFloat64(corner.V)
+			// The held tangent is not perpendicular to the radius to its corner.
+			radial := new(big.Rat).Add(new(big.Rat).Mul(new(big.Rat).SetFloat64(tu), cu), new(big.Rat).Mul(new(big.Rat).SetFloat64(tv), cv))
+			require.NotZero(t, radial.Sign(), `the fixture needs a held tangent off the denoted one`)
+
+			foot, ok := joinFoot(survey2d.SideWalk{SegmentWalk: w}, atEnd, span)
+			require.True(t, ok)
+			// corner − s·d·corner/5, s = +1 counterclockwise and −1 clockwise.
+			k := big.NewRat(1, 20) // d/5
+			if !ccw {
+				k.Neg(k)
+			}
+			wantU := new(big.Rat).Sub(cu, new(big.Rat).Mul(k, cu))
+			wantV := new(big.Rat).Sub(cv, new(big.Rat).Mul(k, cv))
+			requireEnclosesRat(t, foot.U, wantU, `foot u`)
+			requireEnclosesRat(t, foot.V, wantV, `foot v`)
+		}
+	}
+}
+
+func requireEnclosesRat(t *testing.T, iv proofbound.RatInterval, x *big.Rat, what string) {
+	t.Helper()
+	require.True(t, iv.Lo.Cmp(x) <= 0 && x.Cmp(iv.Hi) <= 0, `%s: [%s, %s] must hold %s`,
+		what, iv.Lo.FloatString(20), iv.Hi.FloatString(20), x.FloatString(20))
 }
