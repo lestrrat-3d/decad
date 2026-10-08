@@ -185,7 +185,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// the identical level, and it rides onto every patch's own capPatchGeom,
 	// where patchAreaOf charges it against the patch's area
 	// (capblend_moments.go).
-	levelDelta := proofbound.AbsSumUpper(setback.dsDelta, proofarith.AddRoundError(capZ, matSign*ds, sideZ))
+	levelDelta := capBandLevelDelta(capZ, matSign, setback)
 	// capDelta is the inherited displacement of the cap level itself. The cap
 	// contour moves only in the cap plane, so its delta does not cover this
 	// independent axial term.
@@ -1078,4 +1078,15 @@ func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, ref
 		f.reversed = !f.reversed
 	}
 	return nil
+}
+
+// capBandLevelDelta is how far a band's held side level, the float sum
+// capZ + matSign·ds, sits from the level the stated side setback denotes: the
+// setback's own conversion rounding plus the sum's rounding. The band
+// readings that place the side directrix read it (buildCapBand's edges and
+// patch areas), and so do capBandVolume and capBandMoment, which charge the
+// band's own change when its side level moves.
+func capBandLevelDelta(capZ, matSign float64, setback capSetback) float64 {
+	sideZ := capZ + matSign*setback.ds
+	return proofbound.AbsSumUpper(setback.dsDelta, proofarith.AddRoundError(capZ, matSign*setback.ds, sideZ))
 }

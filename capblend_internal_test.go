@@ -250,6 +250,54 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 	}
 }
 
+// TestCapBandMassBoundsChargeTheSideLevelMove checks the band volume and
+// first-moment bounds charge the band's own move when its held side level sits
+// off the denoted one (capBandLevelVolume): a unit square at (100, 100), its
+// end cap chamfered 0.1 with a side setback known only to 1e-3. Every
+// patch's flux reads the held level, so the band built is the denoted band
+// of a side setback up to 1e-3 away, and the body differs from the denoted
+// one by up to the larger section area times that. The volume bound must
+// grow by at least that much over the same band with an exact setback, and
+// the first-moment bound in u, which no level term otherwise reaches, by at
+// least that volume times the coordinate bound.
+//
+// Shown to fail on 2026-10-09: without capBandLevelVolume, the volume bound
+// grows by a third of the charge (the side disk's own term) and the u-moment
+// bound not at all.
+func TestCapBandMassBoundsChargeTheSideLevelMove(t *testing.T) {
+	t.Parallel()
+	const capZ, d, dsDelta, u0 = 2.0, 0.1, 1e-3, 100.0
+	loop := synthRectLoop(u0, u0, u0+1, u0+1)
+	sideZ := capZ - d
+	geom := []capPatchGeom{
+		{SideA: Point2{U: u0, V: u0}, SideB: Point2{U: u0 + 1, V: u0}, CapA: Point2{U: u0 + d, V: u0 + d}, CapB: Point2{U: u0 + 1 - d, V: u0 + d}, SideZ: sideZ, CapZ: capZ},
+		{SideA: Point2{U: u0 + 1, V: u0}, SideB: Point2{U: u0 + 1, V: u0 + 1}, CapA: Point2{U: u0 + 1 - d, V: u0 + d}, CapB: Point2{U: u0 + 1 - d, V: u0 + 1 - d}, SideZ: sideZ, CapZ: capZ},
+		{SideA: Point2{U: u0 + 1, V: u0 + 1}, SideB: Point2{U: u0, V: u0 + 1}, CapA: Point2{U: u0 + 1 - d, V: u0 + 1 - d}, CapB: Point2{U: u0 + d, V: u0 + 1 - d}, SideZ: sideZ, CapZ: capZ},
+		{SideA: Point2{U: u0, V: u0 + 1}, SideB: Point2{U: u0, V: u0}, CapA: Point2{U: u0 + d, V: u0 + 1 - d}, CapB: Point2{U: u0 + d, V: u0 + d}, SideZ: sideZ, CapZ: capZ},
+	}
+	exact := capBlendPayload{end: capSetback{dc: d, ds: d}}
+	loose := capBlendPayload{end: capSetback{dc: d, ds: d, dsDelta: dsDelta}}
+	levelDelta := capBandLevelDelta(capZ, -1, loose.end)
+	require.GreaterOrEqual(t, levelDelta, dsDelta)
+	// The side loop's area, 1, is the larger section.
+	charge := levelDelta * 1
+
+	work := freeform.NewFreeformWork()
+	volExact, err := capBandVolume(t.Context(), loop, exact, geom, capZ, -1, 0, capBandClosure{}, work)
+	require.NoError(t, err)
+	volLoose, err := capBandVolume(t.Context(), loop, loose, geom, capZ, -1, 0, capBandClosure{}, work)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, volLoose.Bound-volExact.Bound, charge*(1-1e-9),
+		`the volume bound must grow by the side level's move, %v, not %v`, charge, volLoose.Bound-volExact.Bound)
+
+	muExact, _, _, err := capBandMoment(t.Context(), loop, exact, geom, capZ, -1, 0, capBandClosure{}, work)
+	require.NoError(t, err)
+	muLoose, _, _, err := capBandMoment(t.Context(), loop, loose, geom, capZ, -1, 0, capBandClosure{}, work)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, muLoose.Bound-muExact.Bound, charge*(u0+1)*(1-1e-9),
+		`the u-moment bound must grow by the moved volume times the coordinate bound, not %v`, muLoose.Bound-muExact.Bound)
+}
+
 // TestCapBlendSetbackConversionCarriesAllDerivedSideLevels keeps a cap-loop
 // chamfer from treating a non-millimetre setback as exact after it reaches the
 // payload. Both cap senses derive the side level from that converted setback,

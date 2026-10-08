@@ -509,9 +509,9 @@ func FirstMomentFlux(g Patch) (proofbound.BoundedScalar, proofbound.BoundedScala
 // solid a Cone patch's built ruled surface bounds and the solid its denoted
 // miter locus bounds (chordLocusRegionAllow, divided by 3 and rounded up), and
 // the radial gap |SideRadius-CapRadius|, rounded up. Both are zero for a Plane
-// patch, a whole turn, and a patch whose corner skews and corner flux
-// (Patch.CornerFlux) are all zero. The corner flux is part of the volume
-// returned, so the first-moment term below grows with it.
+// patch, a whole turn, and a patch whose corner skews are both zero. The
+// corner slivers lie in the region's corner shell, so Patch.CornerFlux, which
+// the volume term charges, does not enter it.
 //
 // The first-moment sibling of the volume term reads the two together: the
 // region moves the first moment by at most its volume times the largest

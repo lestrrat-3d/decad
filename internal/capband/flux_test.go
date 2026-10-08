@@ -52,12 +52,13 @@ func TestChordLocusVolumeChargesTheProvenCornerSkew(t *testing.T) {
 // TestRawFluxChargesTheCornerFlux checks a Cone patch's chord-locus term
 // carries its corner slivers' flux (Patch.CornerFlux) on top of the rest of
 // its bound, with the corner skews zero and with them positive, and that the
-// first-moment reading ChordLocusVolume returns at least a third of it. The
-// held flux does not move.
+// first-moment reading ChordLocusVolume does not read it: the corner slivers
+// lie in the region term's corner shell. The held flux does not move.
 //
 // Shown to fail on 2026-10-09: with chordLocusResidualAllow passing zero for
-// the corner flux, every charged bound equals the plain one and the
-// zero-skew patch's ChordLocusVolume is zero.
+// the corner flux, every charged bound equals the plain one, and with
+// chordLocusRegionAllow still adding the corner flux, the two patches'
+// ChordLocusVolume readings differ.
 func TestRawFluxChargesTheCornerFlux(t *testing.T) {
 	t.Parallel()
 	const corner = 0.25
@@ -85,8 +86,9 @@ func TestRawFluxChargesTheCornerFlux(t *testing.T) {
 			require.GreaterOrEqual(t, c.Bound, p.Bound+corner*(1-1e-12),
 				`the charged bound %v must carry the corner flux %v on top of %v`, c.Bound, corner, p.Bound)
 
-			vol, _ := capband.ChordLocusVolume(charged)
-			require.GreaterOrEqual(t, vol, corner/3, `the first-moment reading's volume must carry the corner flux`)
+			plainVol, _ := capband.ChordLocusVolume(plain)
+			chargedVol, _ := capband.ChordLocusVolume(charged)
+			require.Equal(t, plainVol, chargedVol, `the region volume holds the slivers in its shell, not the corner flux`)
 		})
 	}
 }
@@ -127,9 +129,9 @@ func TestAxisAnchoredLevelsKeepsTheExactHeight(t *testing.T) {
 // from the side arc (SideRadius over side0..side1 at level 0) to the cap arc
 // (CapRadius over cap0..cap1 at level CapZ − SideZ), both angles linear in u,
 // about the arc's axis at the side level. The integrand is a cubic in v and
-// smooth in u, so tensor Gauss-Legendre at n = 32 sits at float64 roundoff.
-func ruledFluxAboutAxis(g capband.Patch, side0, side1, cap0, cap1 float64, n int) float64 {
-	xs, ws := gaussLegendre(n)
+// smooth in u, so tensor Gauss-Legendre at 32 nodes sits at float64 roundoff.
+func ruledFluxAboutAxis(g capband.Patch, side0, side1, cap0, cap1 float64) float64 {
+	xs, ws := gaussLegendre(32)
 	as, ac := side1-side0, cap1-cap0
 	r0, r1, h := g.SideRadius, g.CapRadius, g.CapZ-g.SideZ
 	total := 0.0
@@ -197,11 +199,9 @@ func TestChordLocusFluxTermCoversTheBuiltPatch(t *testing.T) {
 	t.Parallel()
 	g := skewedPatch(t, 0.3, 0.301, 0, 2e-4)
 	g.SweepCCW = true
-	const n = 32
-
-	refW := ruledFluxAboutAxis(g, g.Th0, g.Th1, g.Th0, g.Th1, n)
-	refN := ruledFluxAboutAxis(g, g.CapTh0, g.CapTh1, g.CapTh0, g.CapTh1, n)
-	refB := ruledFluxAboutAxis(g, g.Th0, g.Th1, g.CapTh0, g.CapTh1, n)
+	refW := ruledFluxAboutAxis(g, g.Th0, g.Th1, g.Th0, g.Th1)
+	refN := ruledFluxAboutAxis(g, g.CapTh0, g.CapTh1, g.CapTh0, g.CapTh1)
+	refB := ruledFluxAboutAxis(g, g.Th0, g.Th1, g.CapTh0, g.CapTh1)
 	// quad absorbs the quadrature's float64 roundoff, far below every gap
 	// the test reads.
 	quad := 1e-12 * refW
@@ -259,4 +259,62 @@ func TestChordLocusHomotopyAreaCoversEverySurface(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestChordLocusFluxTermCoversATurnedWindow checks the chord-versus-locus
+// flux term when one corner narrows the window and the other widens it: the
+// narrow window of TestChordLocusFluxTermCoversTheBuiltPatch with its cap
+// window turned 2e-4 rad, so neither window holds the other. The denoted
+// surface is modelled with corner-foot azimuths a(v) = th0 + τ·v² and
+// b(v) = th1 + τ·√v, each monotone between its corner's side and cap ends as
+// every real locus is, and its flux is integrated as the cone sector over
+// [a(v), b(v)]. The term must cover the gap between that flux and the built
+// patch's, and the references must hold the denoted flux between them.
+//
+// Shown to fail on 2026-10-09: with chordLocusFluxes reading the side and
+// cap windows as the references, both sectors have the same width and flux,
+// the side sector's flux falls below the denoted one, and the term, 9e-10,
+// no longer covers the 0.0064 gap.
+func TestChordLocusFluxTermCoversATurnedWindow(t *testing.T) {
+	t.Parallel()
+	const tau = 2e-4
+	g := skewedPatch(t, 0.3, 0.301, tau, 0)
+	g.SweepCCW = true
+	xs, ws := gaussLegendre(64)
+	h := g.CapZ - g.SideZ
+	denoted := 0.0
+	for i, v := range xs {
+		r := g.SideRadius + (g.CapRadius-g.SideRadius)*v
+		a := g.Th0 + tau*v*v
+		b := g.Th1 + tau*math.Sqrt(v)
+		denoted += ws[i] * h * g.SideRadius * r * (b - a)
+	}
+	built := ruledFluxAboutAxis(g, g.Th0, g.Th1, g.CapTh0, g.CapTh1)
+	gap := math.Abs(denoted - built)
+	require.Positive(t, gap)
+
+	wide, narrow, _ := capband.ChordLocusFluxes(g)
+	require.LessOrEqual(t, narrow.Value-narrow.Bound, denoted, `the intersection sector's flux must not exceed the denoted flux`)
+	require.GreaterOrEqual(t, wide.Value+wide.Bound, denoted, `the union sector's flux must reach the denoted flux`)
+	term := capband.ChordLocusFluxAllow(g)
+	require.GreaterOrEqual(t, term, gap*(1+1e-9),
+		`the term %v must cover the gap %v between the denoted and built fluxes`, term, gap)
+}
+
+// TestChordLocusVolumeRefusesAnUnboundedCorner checks the region term the
+// first moment reads answers +Inf for a patch whose corner flux the build
+// could not bound: its proof reads each corner-foot locus's azimuth as
+// monotone, which a fold, where the two carriers touch, breaks.
+//
+// Shown to fail on 2026-10-09: with chordLocusRegionAllow not reading the
+// corner flux, the volume is finite.
+func TestChordLocusVolumeRefusesAnUnboundedCorner(t *testing.T) {
+	t.Parallel()
+	g := skewedPatch(t, 0.3, 1.2, 0, 0.05)
+	finite, _ := capband.ChordLocusVolume(g)
+	require.Positive(t, finite)
+	require.False(t, math.IsInf(finite, 1))
+	g.CornerFlux = math.Inf(1)
+	vol, _ := capband.ChordLocusVolume(g)
+	require.True(t, math.IsInf(vol, 1), `an unbounded corner leaves the region unbounded, not %v`, vol)
 }
