@@ -121,7 +121,7 @@ func TestRevolveFanAreaSlackIsHalfTheDensityGap(t *testing.T) {
 func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
 	t.Parallel()
 	t.Run("a full turn from zero uses exact rational turns", func(t *testing.T) {
-		seq, err := revolveAngularSequence(revolvePayload{phi0: 0, phi1: 2 * math.Pi, full: true}, 12)
+		seq, err := revolvemesh.AngularSequence(revolvemesh.AngularInput{Phi0: 0, Phi1: 2 * math.Pi, Full: true}, 12)
 		require.NoError(t, err)
 		require.Len(t, seq.Cos, 12, `a full turn stores no seam sample`)
 		require.LessOrEqual(t, seq.Gap, revolvemesh.RevolveTrigGapPrior)
@@ -136,7 +136,7 @@ func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
 	})
 
 	t.Run("a partial sweep includes both ends", func(t *testing.T) {
-		seq, err := revolveAngularSequence(revolvePayload{phi0: 0.25, phi1: 1.5}, 5)
+		seq, err := revolvemesh.AngularSequence(revolvemesh.AngularInput{Phi0: 0.25, Phi1: 1.5}, 5)
 		require.NoError(t, err)
 		require.Len(t, seq.Cos, 6)
 		require.InDelta(t, math.Cos(0.25), seq.Cos[0], 1e-12)
@@ -145,7 +145,7 @@ func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
 	})
 
 	t.Run("a non-finite sweep refuses", func(t *testing.T) {
-		_, err := revolveAngularSequence(revolvePayload{phi0: 0, phi1: math.Inf(1)}, 4)
+		_, err := revolvemesh.AngularSequence(revolvemesh.AngularInput{Phi0: 0, Phi1: math.Inf(1)}, 4)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 }
@@ -221,13 +221,13 @@ func TestRequireVertexLinksRejectsAPinchedVertex(t *testing.T) {
 	}
 	m := &Mesh{vertices: verts, triangles: tris}
 	require.NoError(t, tessellation.RequireClosedMesh(m.triangles), `the directed-edge audit passes, which is why the link audit exists`)
-	err := requireVertexLinks(t.Context(), m)
+	err := tessellation.RequireVertexLinks(t.Context(), len(m.vertices), m.triangles)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "cycles rather than one")
 
 	// One cone alone has a sound link at every vertex.
 	single := &Mesh{vertices: verts[:4], triangles: tris[:4]}
-	require.NoError(t, requireVertexLinks(t.Context(), single))
+	require.NoError(t, tessellation.RequireVertexLinks(t.Context(), len(single.vertices), single.triangles))
 }
 
 // auditRevolveFacets runs the two facet audits buildRevolveMesh runs, in its

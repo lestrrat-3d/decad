@@ -26,7 +26,8 @@ import (
 // (docs/tessellation-reach-design.md §6, R3 and R4): revolve tessellation. It
 // assembles the meridian samples, global angular sequence, rings, cells, poles
 // and caps. internal/revolveproof computes envelopes, budgets, cell area slack
-// and volume bounds. tessellate_revolve_proof.go wires the facet audits, and
+// and volume bounds. internal/revolvemesh/revolve_proof.go checks the angular
+// sequence and axis basis. internal/tessellation audits vertex links.
 // tessellate_revolve_arc.go handles circular meridian generators.
 //
 // A free-form (Tier A NURBS) revolve generator is still refused, by
@@ -220,7 +221,7 @@ type revolveResolution struct {
 // builder used (revolveaxis.ResolveLoop), then measures the count-independent
 // coordinate ceilings §8 spends before the split.
 func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution, error) {
-	ideal, ok := revolveIdealBasis(rp)
+	ideal, ok := revolvemesh.IdealBasis(rp.frame, rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV)
 	if !ok {
 		return nil, fmt.Errorf(`%w: this revolve's axis basis holds a coordinate that cannot be enclosed, so the mesh can state no construction bound`, ErrUnsupported)
 	}
@@ -440,7 +441,9 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	if err := revolvePreflightFacets(loopMesh, p.nPhi, rp.full, sheet, p.verify >= VerifyBoundary, p.work); err != nil {
 		return nil, err
 	}
-	angular, err := revolveAngularSequence(rp, p.nPhi)
+	angular, err := revolvemesh.AngularSequence(revolvemesh.AngularInput{
+		Phi0: rp.phi0, Phi1: rp.phi1, Full: rp.full, Den: rp.den,
+	}, p.nPhi)
 	if err != nil {
 		return nil, err
 	}
@@ -575,7 +578,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	}
 
 	// A BodySolid keeps the closed-mesh audit plus its own pole-vertex safety
-	// net (requireVertexLinks, §9); a BodySheet runs
+	// net (tessellation.RequireVertexLinks, §9); a BodySheet runs
 	// docs/tessellation-design.md §1.2's manifold-with-boundary audit plus
 	// its own cycle-or-path vertex-link safety net in their place
 	// (requireMeshAudit, tessellate.go — the same dispatch the prism sheet
@@ -590,7 +593,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
 			return nil, fmt.Errorf(`%w: this revolve's cells do not close into a watertight boundary`, ErrUnsupported)
 		}
-		if err := requireVertexLinks(ctx, mesh); err != nil {
+		if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
 			return nil, err
 		}
 	}

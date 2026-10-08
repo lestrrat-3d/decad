@@ -341,7 +341,7 @@ tess §§8–11 are the theory; this section maps each paragraph to code. No new
 |---|---|
 | `tessellate_revolve.go` | `tessellateRevolve`: walk resolution, the axis-incidence and section gates, the angular count, cell and cap assembly, orientation, and the assembled mesh's own audits (tess §8, §9) |
 | `internal/revolvemesh/revolve_ring.go` | Ring vertex emission, indices, and construction and placement rounding measurements (tess §8, §9) |
-| `tessellate_revolve_proof.go` | Certified trig, `deltaC`/`deltaR`, the tolerance split, facet and vertex-link audits (tess §8–§10) |
+| `internal/revolvemesh/revolve_proof.go` | Certified angular samples, axis basis and vertex-link audit (tess §8–§9) |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, `Ecell`, `Mmeridian`, and `volSymDiff_revolve` composition (tess §8–§11) |
 
 ### Shared with the builder
@@ -364,7 +364,7 @@ composes both in one expression.
 | tess paragraph | Function | Notes |
 |---|---|---|
 | §8 profile → `(z, ρ)`, `rhoMax`, `zAbsMax`, `coordMax` | `revolveExtents(walks)` | endpoints plus cardinal points inside a circular walk's interval; non-positive `rhoMax` is an invariant failure |
-| §8 `deltaC` | `revolveIdealBasis` + `revolveMeridianEnclosure` + `revolveIdealPoint`, measured per vertex | `ratInterval` arithmetic over the whole path — the axis basis, the meridian `(z, ρ)` with its endpoint bound and its axis SNAP, and `X` itself; the angular `sin`/`cos` are `turnSinCosInterval` for a full turn from zero and `radSinCosInterval`/`radSinCosSpan` otherwise, and the mesh STORES the float nearest each enclosure's midpoint rather than calling `math.Sincos`, which is what makes the trig gap a construction fact (`revolveTrigGapPrior`) instead of a library assumption; final gap per vertex via `intervalFloatError`, max over vertices, `radius3D` |
+| §8 `deltaC` | `revolvemesh.IdealBasis`, `revolveMeridianEnclosure`, `revolveIdealPoint` | Certified intervals enclose each unplaced vertex; `deltaC` bounds its stored float coordinate. |
 | §8 `deltaR` | `min(rigidRoundAllow(coordMax + deltaC, translationMax), exactRigidPointRound per vertex)` | the second term measures the same displacement exactly, so it is 0 under an exact identity and tighter elsewhere; `exactPrismPointRound`'s own mechanism |
 | §8 budget order | `revolveConstructionPrior` + `rigidRoundAllow` before the count, the measured pair after | §8 splits the tolerance BEFORE the counts, and the count decides how many angles there are, so the split spends count-INDEPENDENT ceilings: the meridian gap (per sample, not per angle), the stored trig's own ceiling, and the evaluation's ulps at `coordMax`. The measured `deltaC`/`deltaR` are checked against them and refuse on a violation, so the a-priori figure is held to account rather than trusted |
 | §8 tolerance split | `revolveBudget(tol, deltaC, deltaR)` | `available = downRound(downRound(tol − deltaC − deltaR))`; `<= 0` refuses; meridian gets `available/2`; angular gets `available − deltaM` |
@@ -376,11 +376,18 @@ composes both in one expression.
 | §4 orientation | walk sense × sweep sense, then reflection | rule: with material on the walk's left in `(z, ρ)` and a right-handed sweep about `w`, `∂X/∂t × ∂X/∂φ` is ρ times the outward in-plane normal, so cell triangles are `(m_k,l), (m_{k+1},l), (m_{k+1},l+1)` and `(m_k,l), (m_{k+1},l+1), (m_k,l+1)`; the axis SIDE needs no negation of its own (see the caps row); negate for `rp.reflected()`; then the signed-volume audit |
 | §9 positive facet area | `requireRevolveFacetAreas(budget, verts, tris, deltaC + deltaR)` | tess §1's Geometry row, linear in the facets, run at EVERY verification level and never inside the pair audit below. It also builds the `revolveAuditTri` data that audit consumes, so the two share one pass over the facets and one work budget |
 | §9 endpoint + homotopy audits | `revolveContactAudit(budget, data, tris, deltaC + deltaR)`, at `VerifyBoundary` and above | ONE pass, at the final stored coordinates, against the COMBINED displacement. Every mesh on either homotopy is a vertex-wise displacement of the stored one by at most that (the placement between the two stages is an exact isometry), and every predicate the classification consults is multilinear in the vertices, so a stored reading exceeding its own perturbation allowance fixes the sign for the whole family. A pair sharing nothing is proven apart by an exact separating axis with the same margin; a pair sharing a vertex or an edge is proven to meet ONLY there by a boundary plane built as a polynomial in the pair's own corners, so the plane keeps containing the shared feature identically. Facet-pair count preflighted against `maxFacetPairTestsPerCall` (tess §3), as `internal/loftmesh/loft_audit.go` does |
-| §9 link audit | `requireVertexLinks(mesh)` | every link one connected degree-two cycle; a pinched pole is `ErrUnsupported` |
+| §9 link audit | `tessellation.RequireVertexLinks` | every link one connected degree-two cycle; a pinched pole is `ErrUnsupported` |
 | §10.1 bounds | `faceBound`: wall `deltaM + deltaPhi + deltaC + deltaR`; partial cap `deltaM + deltaC + deltaR`; exact-line cap `deltaC + deltaR` | `bound` = max |
 | §10.2 `Ecell` | `revolveCellAreaSlack` / `revolveFanAreaSlack` over `absLinearIntegral` | tess §15's choice for T2, recorded there: COMPLETE SIGN DECOMPOSITION in closed form, with no root isolation at all. For a straight generator `Jtrue = L·dφ·ρ(t)` does not depend on `u` and `Jheld` is constant on each half of the domain the fixed diagonal cuts, so the difference is LINEAR in `t`, its single zero is an exact rational quotient, and each sign-fixed piece integrates through its own primitive. `internal/polynomial/sturm.go`'s Sturm engine is not reached, and `cos dφ`/`sin dφ` enter only through the ideal triangle's own area — never inside a root isolation — so the widening §9's open question worried about cannot lose a sign. One evaluation answers for every angular interval: interval `l`'s ideal samples are the exact rotation of interval 0's, and a rotation is an isometry |
 | §10.2 caps + coordinate stages | circular-segment areas (R4); `perturbedTriangleAreaAllow(·, deltaC + deltaR)` per facet | a straight generator's cap trim is exact, so a cap contributes no chording area at all; the combined displacement covers the ideal, stored-unplaced and placed triangles alike. Summed upward, after `Ecell` |
 | §3 ceilings | `revolvePreflightFacets`: facet count, cumulative facet work AND, at a level that runs the facet-contact audit, that audit's own `F·(F−1)/2`, all with checked unsigned arithmetic before any slice | charging the pair ceiling here rather than at the audit is strictly earlier than §3 asks. It binds at `VerifyBoundary` and above, where a revolve mesh therefore carries at most 4000 facets. At `VerifyNone` no pair predicate runs, so §3 charges that ceiling nothing and `maxFacetsPerMesh` binds instead, at 65_536 facets |
+
+`deltaC` uses rational intervals for the axis basis, the meridian `(z, ρ)`
+with its endpoint bound and axis snap, and the ideal point `X`. The global
+angular sequence uses exact turn intervals for a full turn from zero and
+certified radian intervals otherwise. It stores the float nearest each
+enclosure's midpoint rather than calling `math.Sincos`. The largest per-vertex
+gap uses `proofbound.IntervalFloatError` and the three-dimensional radius.
 
 R3 refuses a section carrying any circular walk with `ErrUnsupported` ("circular meridian generators are
 T3"); R4 retires that refusal. Its mesh carries `symDiffOK == false`, so the boolean refuses a revolve
@@ -432,7 +439,7 @@ its derivation, and is the authority on both.
 | positive-radius ring collapse; erased generator | `revolveMeridianSamples`, `tessellateRevolve`'s own cell loop |
 | meridian simplicity/nesting/clearance | `requireLoopClearance`, `requireWalkClearance` after refinement exhausts |
 | non-adjacent facets intersect; homotopy sign not fixed | `revolveContactAudit` |
-| directed-edge / link / zero area | `tessellation.RequireClosedMesh`, `requireVertexLinks` |
+| directed-edge / link / zero area | `tessellation.RequireClosedMesh`, `tessellation.RequireVertexLinks` |
 | a payload class with no occupied-volume proof in a boolean | `requireVolumeProvingPayload` before the mesh, `operandSymDiff` (R0) after it |
 
 ### Tests
@@ -780,9 +787,9 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
     orientation; dispatch; refuse circular walks. **Pattern:** `tessellateCup` for ring sharing and cap
     emission. **Depends on:** 6, 14. **Tests:** R3's list in new `apitest/tessellate_revolve_test.go`; export byte
     identity there too.
-16. **Files:** new `tessellate_revolve_proof.go`. **What:** `revolveAngularSequence` and its certified trig,
-    `deltaC` (`revolveIdealBasis`/`revolveMeridianEnclosure`/`revolveIdealPoint`), `deltaR`
-    (`exactRigidPointRound`), `revolveBudget`, `revolveContactAudit`, `requireVertexLinks`, `Ecell` by sign
+16. **Files:** `internal/revolvemesh/revolve_proof.go` and `tessellate_revolve.go`. **What:** `revolvemesh.AngularSequence` and its certified trig,
+    `deltaC` (`revolvemesh.IdealBasis`/`revolveMeridianEnclosure`/`revolveIdealPoint`), `deltaR`
+    (`exactRigidPointRound`), `revolveBudget`, `revolveContactAudit`, `tessellation.RequireVertexLinks`, `Ecell` by sign
     decomposition, coordinate-stage area terms. **Pattern:** `internal/loftmesh/loft_audit.go` for the pair audit;
     `capblend_contour.go` for `ratInterval`. **Depends on:** 15. **Tests:** internal: `absLinearIntegral`
     against a dense reference; `Ecell` against the closed form on a cylinder cell and a pole fan; `deltaR`
@@ -795,7 +802,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 18. **Files:** `tessellate.go`, `tessellate_revolve.go`. **What:** `chordCount` gains `nMin`; circular
     meridian chording; axis-to-axis minimum; `requireWalkClearance`; deterministic refinement loop; ring
     collapse detection. **Depends on:** 16. **Tests:** R4's fixtures.
-19. **Files:** `tessellate_revolve_proof.go`. **What:** `Ecell` by certified subdivision for sphere/torus
+19. **Files:** `internal/revolvemesh/`. **What:** `Ecell` by certified subdivision for sphere/torus
     cells; circular-segment cap areas. **Depends on:** 18. **Tests:** the inner-torus sign-changing cell.
 
 ### R5 — revolve booleans

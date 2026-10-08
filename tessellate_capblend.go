@@ -245,7 +245,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
 		return nil, fmt.Errorf(`%w: this cap-loop chamfer's cells do not close into a watertight boundary`, ErrUnsupported)
 	}
-	if err := requireVertexLinks(ctx, &mesh); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
 		return nil, err
 	}
 	if err := requireCapBlendFacetAreas(&mesh); err != nil {

@@ -5,8 +5,11 @@ package tessellation
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -370,4 +373,76 @@ func OrientationSign(vertices []r3.Vec, triangles [][3]int, anchor r3.Vec) int {
 		sum = proof.DyAdd(sum, proof.DvDot(a, proof.DvCross(b, c)))
 	}
 	return sum.Sign()
+}
+
+// RequireVertexLinks is docs/tessellation-design.md §9's construction safety
+// net: the combinatorial link of every stored vertex — the edge each incident
+// triangle contributes between its other two corners — must be ONE connected
+// cycle with every vertex of degree two. A pinched pole passes the
+// directed-edge audit and fails here, which is the whole reason the link audit
+// exists beside it.
+func RequireVertexLinks(ctx context.Context, vertexCount int, triangles [][3]int) error {
+	budget := proofbound.NewWorkBudget(ctx)
+	links := make(map[int]map[int][]int, vertexCount)
+	add := func(center, from, to int) {
+		l, ok := links[center]
+		if !ok {
+			l = map[int][]int{}
+			links[center] = l
+		}
+		l[from] = append(l[from], to)
+		l[to] = append(l[to], from)
+	}
+	for _, tri := range triangles {
+		if err := budget.Step(); err != nil {
+			return err
+		}
+		add(tri[0], tri[1], tri[2])
+		add(tri[1], tri[2], tri[0])
+		add(tri[2], tri[0], tri[1])
+	}
+	// Vertex index order, never map order: a refusal names the FIRST vertex
+	// that fails, so two runs over the same mesh report the same one.
+	for center := range vertexCount {
+		link, ok := links[center]
+		if !ok {
+			continue
+		}
+		if err := budget.Step(); err != nil {
+			return err
+		}
+		start := -1
+		for v, nbrs := range link {
+			if len(nbrs) != 2 {
+				return fmt.Errorf(`%w: the mesh vertex at index %d has a pinched link: its neighbour %d meets %d link edges rather than two`, decaderr.ErrUnsupported, center, v, len(nbrs))
+			}
+			if start < 0 || v < start {
+				start = v
+			}
+		}
+		if start < 0 {
+			continue
+		}
+		seen := map[int]struct{}{start: {}}
+		prev, cur := -1, start
+		for {
+			nbrs := link[cur]
+			next := nbrs[0]
+			if next == prev {
+				next = nbrs[1]
+			}
+			if next == start {
+				break
+			}
+			if _, done := seen[next]; done {
+				return fmt.Errorf(`%w: the mesh vertex at index %d has a pinched link`, decaderr.ErrUnsupported, center)
+			}
+			seen[next] = struct{}{}
+			prev, cur = cur, next
+		}
+		if len(seen) != len(link) {
+			return fmt.Errorf(`%w: the mesh vertex at index %d has a link of %d cycles rather than one`, decaderr.ErrUnsupported, center, 1+len(link)-len(seen))
+		}
+	}
+	return budget.Err()
 }

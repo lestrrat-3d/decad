@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -164,7 +165,7 @@ func auditMassMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, contactAu
 		}
 		return fmt.Errorf("%w: mesh mass shell audit failed: %v", ErrUnsupported, err)
 	}
-	if err := requireVertexLinks(ctx, &Mesh{vertices: verts, triangles: tris}); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
