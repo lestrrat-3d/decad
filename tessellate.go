@@ -18,6 +18,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -968,7 +969,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 			w = loopWalks[i]
 		} else {
 			var err error
-			w, err = walkOf(seg, work)
+			w, err = boundarywalk.WalkOf(seg, work)
 			if err != nil {
 				return chordedLoop{}, err
 			}
@@ -976,7 +977,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 		perimeterUpper = proofbound.AbsSumUpper(perimeterUpper, w.Length, w.LengthBound)
 		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 	}
-	walks, err := coalesceWalksContext(ctx, raw)
+	walks, err := boundarywalk.CoalesceWalksContext(ctx, raw)
 	if err != nil {
 		return chordedLoop{}, err
 	}

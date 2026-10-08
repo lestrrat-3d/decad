@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -93,7 +94,7 @@ func TestChainWalkEndpointAllowChargesComputedCircularEnds(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Positive(t, allow)
-			walk, err := walkOf(tc.segment, freeform.NewFreeformWork())
+			walk, err := boundarywalk.WalkOf(tc.segment, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, allow, proofbound.WalkEndBoundAllow(walk.StartBound))
 			require.GreaterOrEqual(t, allow, proofbound.WalkEndBoundAllow(walk.EndBound))

@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -61,7 +62,7 @@ func ratLineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 		new(big.Rat).Mul(dv, dv),
 	)
 	heldRat := proofarith.FloatRat(held)
-	coordUpper := math.Max(ratL1Upper(u0, v0), ratL1Upper(u1, v1))
+	coordUpper := math.Max(boundarywalk.RatL1Upper(u0, v0), boundarywalk.RatL1Upper(u1, v1))
 	if heldRat != nil && new(big.Rat).Mul(heldRat, heldRat).Cmp(lengthSquared) == 0 {
 		return 0, held, coordUpper
 	}
@@ -141,16 +142,15 @@ func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 		length := math.Hypot(du, dv)
 		for _, held := range []float64{length, math.Nextafter(length, math.Inf(1))} {
 			wb, wu, wc := ratLineWalkBounds(seg, held)
-			gb, gu, gc := lineWalkBounds(seg, held)
+			gb, gu, gc := boundarywalk.LineWalkBounds(seg, held)
 			requireSameFloatBits(t, wb, gb, "length bound of %+v at %v", seg, held)
 			requireSameFloatBits(t, wu, gu, "length upper of %+v at %v", seg, held)
 			requireSameFloatBits(t, wc, gc, "coordinate upper of %+v at %v", seg, held)
 		}
-		requireSameFloatBits(t, ratLineWalkTangentBound(seg, du, dv), lineWalkTangentBound(seg, du, dv),
-			"tangent bound of %+v", seg)
+		requireSameFloatBits(t, ratLineWalkTangentBound(seg, du, dv), boundarywalk.LineWalkTangentBound(seg, du, dv), "tangent bound of %+v", seg)
 		for _, end := range [][3]float64{{seg.TStart, u0, v0}, {seg.TEnd, u1, v1}} {
 			want := ratLineWalkEndBound(seg, end[0], end[1], end[2])
-			got := lineWalkEndBound(seg, end[0], end[1], end[2])
+			got := boundarywalk.LineWalkEndBound(seg, end[0], end[1], end[2])
 			requireSameFloatBits(t, want.U, got.U, "end u of %+v at t=%v", seg, end[0])
 			requireSameFloatBits(t, want.V, got.V, "end v of %+v at t=%v", seg, end[0])
 		}
@@ -169,7 +169,7 @@ func ratArcWalk(seg ArcSeg) survey2d.SegmentWalk {
 	if sweep <= 0 {
 		sweep += 2 * math.Pi
 	}
-	w := circularWalk(
+	w := boundarywalk.CircularWalk(
 		seg.Center.U,
 		seg.Center.V,
 		radius,
@@ -178,8 +178,8 @@ func ratArcWalk(seg ArcSeg) survey2d.SegmentWalk {
 		arcRadiusUpper(seg),
 		proofbound.CircularSweepUpper(seg.TStart, seg.TEnd),
 	)
-	w.RadiusBound = arcWalkRadiusBound(seg, radius)
-	pinArcWalkEnds(&w, seg)
+	w.RadiusBound = boundarywalk.ArcWalkRadiusBound(seg, radius)
+	boundarywalk.PinArcWalkEnds(&w, seg)
 	if iv, ok := circularLengthInterval(seg); ok {
 		w.LengthBound = math.Min(w.LengthBound, proofbound.IntervalFloatError(iv, w.Length))
 	}
@@ -203,7 +203,7 @@ func TestArcWalkRadiusBoundMatchesEnclosureBracket(t *testing.T) {
 	rng := rand.New(rand.NewPCG(11, 13))
 	check := func(t *testing.T, seg ArcSeg) {
 		t.Helper()
-		got, err := walkOf(seg, nil)
+		got, err := boundarywalk.WalkOf(seg, nil)
 		require.NoError(t, err, "%+v", seg)
 		want := ratArcWalk(seg)
 		requireSameFloatBits(t, want.RadiusBound, got.RadiusBound, "radius bound of %+v", seg)
@@ -242,7 +242,7 @@ func TestArcWalkRadiusBoundMatchesEnclosureBracket(t *testing.T) {
 	_, _, ok := circularWalkEnclosures(overflow)
 	require.False(t, ok, "the fixture must overflow the radius bracket to reach the refusal arm")
 	check(t, overflow)
-	got, err := walkOf(overflow, nil)
+	got, err := boundarywalk.WalkOf(overflow, nil)
 	require.NoError(t, err)
 	require.True(t, math.IsInf(got.RadiusBound, 1), "an overflowed bracket refuses with +Inf")
 }

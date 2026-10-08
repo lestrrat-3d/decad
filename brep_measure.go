@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -376,7 +377,7 @@ func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
 			}
 			verdict, ok = survey2d.CapNormalDecision(m, pull, sign)
 		} else {
-			w, err := walkOf(f.wall, work)
+			w, err := boundarywalk.WalkOf(f.wall, work)
 			if err != nil {
 				return undercutOutcome{}
 			}
@@ -412,7 +413,7 @@ func brepMinRadius(bp brepPayload) (radiusOutcome, bool) {
 		if f.planar() {
 			continue
 		}
-		w, err := walkOf(f.wall, work)
+		w, err := boundarywalk.WalkOf(f.wall, work)
 		if err != nil {
 			return radiusOutcome{}, false
 		}

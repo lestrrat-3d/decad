@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -56,7 +57,7 @@ func chordStationBound(seg CurveSegment, k, n int, heldU, heldV float64) proofbo
 	}
 	frac := new(big.Rat).SetFrac64(int64(k), int64(n))
 	rt := new(big.Rat).Add(start, new(big.Rat).Mul(frac, span))
-	return circularPointBound(seg, rt, heldU, heldV)
+	return boundarywalk.CircularPointBound(seg, rt, heldU, heldV)
 }
 
 // capOffsetStationBound is chordStationBound read on a wall's exact OFFSET

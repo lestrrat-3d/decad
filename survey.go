@@ -131,7 +131,7 @@ func recordLoops(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]surv
 			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return nil, err
 			}
-			w, err := walkOf(seg, work)
+			w, err := boundarywalk.WalkOf(seg, work)
 			if err != nil {
 				return nil, err
 			}
@@ -144,7 +144,7 @@ func recordLoops(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]surv
 			}
 			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 		}
-		walks, err := coalesceWalksBudget(raw, budget)
+		walks, err := boundarywalk.CoalesceWalksBudget(raw, budget)
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +190,7 @@ func revolveLoopsPlane(budget *proofbound.WorkBudget, rp revolvePayload) ([][]su
 			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return nil, nil, err
 			}
-			w, err := walkOf(seg, work)
+			w, err := boundarywalk.WalkOf(seg, work)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -200,7 +200,7 @@ func revolveLoopsPlane(budget *proofbound.WorkBudget, rp revolvePayload) ([][]su
 			plane[i] = w
 			raw[i] = survey2d.SideWalk{SegmentWalk: rp.ax.walk(w), Segs: []int{i}}
 		}
-		walks, err := coalesceWalksBudget(raw, budget)
+		walks, err := boundarywalk.CoalesceWalksBudget(raw, budget)
 		if err != nil {
 			return nil, nil, err
 		}

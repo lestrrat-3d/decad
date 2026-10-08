@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -121,7 +122,7 @@ func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
 		// A CCW semicircle from (10,0) to (−10,0) about the origin bulges to
 		// (0,10). Its endpoint box is 20 wide, 0 tall (diagonal 20); the TRUE box
 		// is 20 wide, 10 tall (diagonal √500).
-		w, err := walkOf(ArcSeg{
+		w, err := boundarywalk.WalkOf(ArcSeg{
 			Center: Point2{U: 0, V: 0},
 			Start:  Point2{U: 10, V: 0},
 			End:    Point2{U: -10, V: 0},
@@ -142,7 +143,7 @@ func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
 		// A whole circle of radius 5 is recorded as one closed segment whose start
 		// == end, so its endpoint box is a single point (diagonal 0); the TRUE box
 		// is 10×10 (diagonal √200).
-		w, err := walkOf(CircleSeg{
+		w, err := boundarywalk.WalkOf(CircleSeg{
 			Center: Point2{U: 0, V: 0},
 			Radius: units.Millimeters(5),
 			CCW:    true,
@@ -263,11 +264,11 @@ func sectionCornerLoops(t *testing.T, prof ProfileRecord) []cornerLoop {
 	for _, loop := range append([]LoopRecord{prof.Outer}, prof.Holes...) {
 		raw := make([]survey2d.SideWalk, len(loop.Segments))
 		for i, seg := range loop.Segments {
-			w, err := walkOf(seg, freeform.NewFreeformWork())
+			w, err := boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 		}
-		out = append(out, cornerLoop{walks: coalesceWalks(raw)})
+		out = append(out, cornerLoop{walks: boundarywalk.CoalesceWalks(raw)})
 	}
 	return out
 }

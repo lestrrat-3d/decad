@@ -171,7 +171,7 @@ func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, err
 				return LoopRecord{}, err
 			}
 		}
-		w, err := walkOf(seg, work)
+		w, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return LoopRecord{}, err
 		}

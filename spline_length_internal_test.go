@@ -18,6 +18,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +45,7 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 	for i, point := range control {
 		coords[i] = [2]float64{point.U, point.V}
 	}
-	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+	spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 
 	reference := denseSplineLength(t, coords)
@@ -123,7 +124,7 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 		name  string
 		scale float64
 	}{{"tiny", 1e-300}, {"huge", 1e300}} {
-		points, err := ratPointsOf([]Point2{
+		points, err := splinebezier.RatPointsOf([]Point2{
 			{U: 0, V: 0}, {U: scaled.scale, V: 2 * scaled.scale},
 			{U: 3 * scaled.scale, V: 2 * scaled.scale}, {U: 4 * scaled.scale, V: 0},
 		})
@@ -162,7 +163,7 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 			},
 		},
 	} {
-		points, err := ratPointsOf(tc.points)
+		points, err := splinebezier.RatPointsOf(tc.points)
 		require.NoError(t, err)
 		cases[tc.name] = points
 	}
@@ -237,7 +238,7 @@ func TestFreeformArcLengthRelativeWidthVariesWithTheSpan(t *testing.T) {
 		"the preflight admits 32 controls; a change here moves what this evaluator can bracket at all")
 
 	cubic := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	spans, err := splineBezierSpans(SplineSeg{Control: cubic, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+	spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: cubic, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
 	require.NoError(t, err)
@@ -247,7 +248,7 @@ func TestFreeformArcLengthRelativeWidthVariesWithTheSpan(t *testing.T) {
 	wide := windingControlNet(widest, 8, 10)
 	seg := equalWeightNURBS(wide)
 	require.NoError(t, validateNURBSSegment(seg), "the widest span is a well-formed record")
-	wideSpans, _, err := freeformBezierSpans(seg, &freeform.FreeformWork{})
+	wideSpans, _, err := splinebezier.FreeformBezierSpans(seg, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	require.Len(t, wideSpans, 1, "no interior knot, so the record IS one Bézier span")
 
@@ -312,7 +313,7 @@ func denseBezierLength(control []Point2, samples int) float64 {
 func TestFreeformArcLengthReportsPositiveBound(t *testing.T) {
 	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+	spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 
 	value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
@@ -346,13 +347,13 @@ func TestFreeformCoincidentControlNetRefused(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			seg := SplineSeg{Control: tc.control, TStart: 0, TEnd: 1}
 
-			spans, err := splineBezierSpans(seg, &freeform.FreeformWork{})
+			spans, err := splinebezier.SplineBezierSpans(seg, &freeform.FreeformWork{})
 			require.NoError(t, err, "the record itself converts")
 			_, _, err = freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
 			require.ErrorIs(t, err, ErrDegenerate)
 			require.Contains(t, err.Error(), "coincide")
 
-			_, err = walkOf(seg, freeform.NewFreeformWork())
+			_, err = boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 			require.ErrorIs(t, err, ErrDegenerate, "no walk carries a zero length bound")
 
 			_, _, _, err = validateFreeformMomentSegment(seg, &freeform.FreeformWork{})
@@ -442,7 +443,7 @@ func TestFreeformArcLengthBracketsAtExtremeScale(t *testing.T) {
 			for i, c := range coords {
 				control[i] = Point2{U: c[0], V: c[1]}
 			}
-			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+			spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 			require.NoError(t, err)
 
 			value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
@@ -471,7 +472,7 @@ func TestFreeformArcLengthNearDuplicateControlPair(t *testing.T) {
 			for i, c := range coords {
 				control[i] = Point2{U: c[0], V: c[1]}
 			}
-			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+			spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 			require.NoError(t, err)
 
 			value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
@@ -497,7 +498,7 @@ func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 		TEnd:    1,
 	}
 
-	spans, err := splineBezierSpans(seg, &freeform.FreeformWork{})
+	spans, err := splinebezier.SplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.NoError(t, err, "the record itself is finite and converts")
 
 	_, _, err = freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
@@ -505,7 +506,7 @@ func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 	require.NotErrorIs(t, err, ErrNotFinite, "every coordinate here is finite")
 	require.Contains(t, err.Error(), "representable float64 range")
 
-	_, err = walkOf(seg, freeform.NewFreeformWork())
+	_, err = boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "the walk carries the same refusal")
 	require.NotErrorIs(t, err, ErrNotFinite)
 }
@@ -517,7 +518,7 @@ func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
 	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	walk, err := walkOf(SplineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
+	walk, err := boundarywalk.WalkOf(SplineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err, "a Tier A segment resolves into a walk")
 	require.Equal(t, survey2d.WalkFreeform, walk.Kind)
 	require.False(t, walk.IsLine(), "a free-form walk is not a line")
@@ -557,7 +558,7 @@ func TestWideSpanBracketRefusesBeforeSubdividing(t *testing.T) {
 	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
 
 	work := &freeform.FreeformWork{}
-	spans, _, err := freeformBezierSpans(seg, work)
+	spans, _, err := splinebezier.FreeformBezierSpans(seg, work)
 	require.NoError(t, err, "a single span needs no knot insertion")
 	require.Len(t, spans, 1)
 
@@ -568,7 +569,7 @@ func TestWideSpanBracketRefusesBeforeSubdividing(t *testing.T) {
 	require.Less(t, time.Since(start), 10*time.Second, "the refusal precedes the subdivision")
 
 	start = time.Now()
-	_, err = walkOf(seg, freeform.NewFreeformWork())
+	_, err = boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
 	require.Less(t, time.Since(start), 10*time.Second, "the walk refuses on the same preflight")
@@ -631,7 +632,7 @@ func TestWalkSpendsTheRecordsRemainingCeiling(t *testing.T) {
 	runtime.GC()
 	runtime.ReadMemStats(&before)
 	start := time.Now()
-	_, err = walkOf(seg, pre.Work)
+	_, err = boundarywalk.WalkOf(seg, pre.Work)
 	elapsed := time.Since(start)
 	runtime.ReadMemStats(&after)
 
@@ -659,12 +660,12 @@ func TestWalkChargesTheCounterItIsGiven(t *testing.T) {
 	}
 	shared := freeform.NewFreeformWork()
 
-	_, err := walkOf(seg, shared)
+	_, err := boundarywalk.WalkOf(seg, shared)
 	require.NoError(t, err)
 	first := shared.Spent
 	require.Positive(t, first, "a free-form walk charges its conversion and its bracket")
 
-	_, err = walkOf(seg, shared)
+	_, err = boundarywalk.WalkOf(seg, shared)
 	require.NoError(t, err)
 	require.Equal(t, 2*first, shared.Spent,
 		"the second resolution accumulates onto the same counter")
@@ -679,12 +680,12 @@ func TestFreeformWalkWithoutCounterRefuses(t *testing.T) {
 		TStart:  0,
 		TEnd:    1,
 	}
-	_, err := walkOf(seg, nil)
+	_, err := boundarywalk.WalkOf(seg, nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work counter")
 
 	// An analytic walk charges nothing, so it is unaffected.
-	_, err = walkOf(LineSeg{Start: Point2{}, End: Point2{U: 1, V: 1}, TEnd: 1}, nil)
+	_, err = boundarywalk.WalkOf(LineSeg{Start: Point2{}, End: Point2{U: 1, V: 1}, TEnd: 1}, nil)
 	require.NoError(t, err)
 }
 
@@ -729,7 +730,7 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 		{name: "wide NURBS span", seg: equalWeightNURBS(windingControlNet(12, 3, 10))},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			spans, _, err := freeformBezierSpans(tc.seg, freeform.NewFreeformWork())
+			spans, _, err := splinebezier.FreeformBezierSpans(tc.seg, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			require.NotEmpty(t, spans)
 

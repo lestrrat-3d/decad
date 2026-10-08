@@ -8,18 +8,20 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
-)
 
-// This file exercises docs/tessellation-design.md §2's private proof record on
-// Mesh — the per-face displacement, the area slack's coordinate term, and the
-// occupied-volume bound — as docs/tessellation-reach-design.md §3 composes it
-// for the prism, cup and faceted paths. Every assertion here is on computed
-// geometry: a published bound against the closed form of the quantity it
-// bounds, never merely that a field is set.
+	// This file exercises docs/tessellation-design.md §2's private proof record on
+	// Mesh — the per-face displacement, the area slack's coordinate term, and the
+	// occupied-volume bound — as docs/tessellation-reach-design.md §3 composes it
+	// for the prism, cup and faceted paths. Every assertion here is on computed
+	// geometry: a published bound against the closed form of the quantity it
+	// bounds, never merely that a field is set.
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
+)
 
 // internalHoledPlateBody is apitest/tessellate_test.go's holedPlateBody built inside
 // the package, so a test can read the private proof record the public surface
@@ -156,7 +158,7 @@ func TestWalkSegmentAreaIsTheCircularSegmentClosedForm(t *testing.T) {
 		TStart: 0,
 		TEnd:   1,
 	}
-	w, err := walkOf(seg, freeform.NewFreeformWork())
+	w, err := boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.True(t, w.IsCircular())
 
@@ -432,7 +434,7 @@ func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
 			continue
 		}
 		var err error
-		spans, _, err = freeformBezierSpans(seg, freeform.NewFreeformWork())
+		spans, _, err = splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 		require.NoError(t, err)
 	}
 	require.NotEmpty(t, spans, `the fixture's own free-form segment`)

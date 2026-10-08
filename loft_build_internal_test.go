@@ -16,6 +16,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -387,7 +388,7 @@ func resolveLoftLoopWalks(t *testing.T, p ProfileRecord) [][]survey2d.SegmentWal
 		w := make([]survey2d.SegmentWalk, len(loop.Segments))
 		for j, seg := range loop.Segments {
 			var err error
-			w[j], err = walkOf(seg, work)
+			w[j], err = boundarywalk.WalkOf(seg, work)
 			require.NoError(t, err)
 		}
 		walks[i] = w
@@ -467,7 +468,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 
 	// The reference: what ONE walkOf(fit) costs on a fresh counter.
 	single := &freeform.FreeformWork{}
-	_, err := walkOf(fit, single)
+	_, err := boundarywalk.WalkOf(fit, single)
 	require.NoError(t, err)
 	require.Greater(t, single.Spent, uint64(0), "a FitSplineSeg's own walk must charge the free-form counter")
 
@@ -475,7 +476,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	loopWork := &freeform.FreeformWork{}
 	walks := make([]survey2d.SegmentWalk, k)
 	for i := range walks {
-		walks[i], err = walkOf(fit, loopWork)
+		walks[i], err = boundarywalk.WalkOf(fit, loopWork)
 		require.NoError(t, err)
 	}
 	require.Equal(t, k*single.Spent, loopWork.Spent,

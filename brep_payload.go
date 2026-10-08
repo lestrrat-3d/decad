@@ -393,7 +393,7 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 	faces := make([]brepgeom.FaceWalks, len(bp.faces))
 	work := freeform.NewFreeformWork()
 	walk := func(seg CurveSegment) (survey2d.SegmentWalk, error) {
-		w, err := walkOf(seg, work)
+		w, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return survey2d.SegmentWalk{}, err
 		}

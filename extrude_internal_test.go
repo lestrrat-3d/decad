@@ -12,6 +12,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -105,7 +106,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 		require.Equal(t, start.U+0.25*(end.U-start.U), uq)
 		require.Equal(t, start.V+0.25*(end.V-start.V), vq)
 
-		w, err := walkOf(LineSeg{Start: start, End: end, TStart: 0, TEnd: 1}, nil)
+		w, err := boundarywalk.WalkOf(LineSeg{Start: start, End: end, TStart: 0, TEnd: 1}, nil)
 		require.NoError(t, err)
 		require.Equal(t,
 			[4]float64{start.U, start.V, end.U, end.V},
@@ -113,7 +114,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 
 		// A reversed whole edge records TStart = 1, TEnd = 0 (seam.go), so the
 		// walk's own ends swap while each still states a recorded coordinate.
-		rev, err := walkOf(LineSeg{Start: start, End: end, TStart: 1, TEnd: 0}, nil)
+		rev, err := boundarywalk.WalkOf(LineSeg{Start: start, End: end, TStart: 1, TEnd: 0}, nil)
 		require.NoError(t, err)
 		require.Equal(t,
 			[4]float64{end.U, end.V, start.U, start.V},
@@ -130,7 +131,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 			TStart: 0, TEnd: 1,
 		}
 
-		w, err := walkOf(seg, nil)
+		w, err := boundarywalk.WalkOf(seg, nil)
 		require.NoError(t, err)
 
 		// Observation, not a requirement: whether THIS arc's own end angle
@@ -143,7 +144,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 			[4]float64{seg.Start.U, seg.Start.V, seg.End.U, seg.End.V},
 			[4]float64{w.StartU, w.StartV, w.EndU, w.EndV})
 
-		rev, err := walkOf(ArcSeg{
+		rev, err := boundarywalk.WalkOf(ArcSeg{
 			Center: seg.Center, Start: seg.Start, End: seg.End,
 			TStart: 1, TEnd: 0,
 		}, nil)
@@ -154,7 +155,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 
 		// A trimmed bound keeps the circular model's own value: the record
 		// states no coordinate there, and this seam never invents one.
-		part, err := walkOf(ArcSeg{
+		part, err := boundarywalk.WalkOf(ArcSeg{
 			Center: seg.Center, Start: seg.Start, End: seg.End,
 			TStart: 0, TEnd: 0.5,
 		}, nil)
@@ -184,7 +185,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 						End:    Point2{U: c.cu + c.r*math.Cos(a1), V: c.cv + c.r*math.Sin(a1)},
 						TStart: 0, TEnd: 1,
 					}
-					fw, err := walkOf(fam, nil)
+					fw, err := boundarywalk.WalkOf(fam, nil)
 					require.NoError(t, err)
 					require.Equal(t,
 						[4]float64{fam.Start.U, fam.Start.V, fam.End.U, fam.End.V},
@@ -267,7 +268,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		{name: "circle", seg: trimmedCircle},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			w, err := walkOf(tc.seg, nil)
+			w, err := boundarywalk.WalkOf(tc.seg, nil)
 			require.NoError(t, err)
 			require.Positive(t, w.StartBound.U, `a trimmed circular endpoint is not a recorded coordinate`)
 			require.Positive(t, w.EndBound.U, `a trimmed circular endpoint is not a recorded coordinate`)
@@ -297,7 +298,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		require.NotEqual(t, 0, truth.Cmp(proofarith.FloatRat(0.3*0.1)),
 			`premise: this trimmed line endpoint is not exactly representable`)
 
-		w, err := walkOf(seg, nil)
+		w, err := boundarywalk.WalkOf(seg, nil)
 		require.NoError(t, err)
 		require.Positive(t, w.StartBound.U)
 		require.Equal(t, proofbound.WalkEndBound{}, w.EndBound, `t = 1 names the recorded End`)
@@ -319,7 +320,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 			End:    Point2{U: 1, V: 1},
 			TStart: 0.5, TEnd: 1,
 		}
-		w, err := walkOf(seg, nil)
+		w, err := boundarywalk.WalkOf(seg, nil)
 		require.NoError(t, err)
 		require.False(t, w.StartBound.Derivable())
 
@@ -379,7 +380,7 @@ func TestBoundaryExtremesKeepAProvenZero(t *testing.T) {
 	// extreme while missing v — math.Cos returns 1 at that angle and math.Sin
 	// does not return 0 — so a direction reading u alone charges nothing while
 	// the v error is still stated rather than dropped.
-	w, err := walkOf(wholeCircle, nil)
+	w, err := boundarywalk.WalkOf(wholeCircle, nil)
 	require.NoError(t, err)
 	require.Equal(t, proofbound.WalkEndBound{}, w.StartBound)
 	require.Equal(t, 0.0, w.EndBound.U)
@@ -644,7 +645,7 @@ func TestProfileWalksReadBackMatchesFreshResolution(t *testing.T) {
 	require.True(t, pw.LoopMatches(0, profile.Outer))
 
 	for si, seg := range profile.Outer.Segments {
-		fresh, err := walkOf(seg, freeform.NewFreeformWork())
+		fresh, err := boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.Equal(t, fresh, pw.At(0, si),
 			"segment %d's read-back walk must be exactly the walk walkOf resolves for it", si)

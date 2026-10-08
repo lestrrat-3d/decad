@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -81,7 +82,7 @@ func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
 	require.Positive(t, bound, "an extreme held by an irrational interior root carries the bracket's own width")
 	require.Less(t, lo, hi)
 
-	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
+	spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	_, denseHi := denseSpanExtreme(t, spans, 0, 1, 20_000)
 	require.LessOrEqual(t, denseHi, hi+bound, "the enclosure's upper end must not fall below a dense sample")
@@ -191,7 +192,7 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 		TStart:  0, TEnd: 1,
 	}
 	require.NoError(t, validateNURBSSegment(seg))
-	spans, _, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, _, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 2, "the repeated interior knot splits the chain into two spans")
 	// The second span's three control points coincide (compared by rational

@@ -603,7 +603,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		if loopWalks != nil {
 			w = loopWalks[i]
 		} else {
-			w, err = walkOf(seg, work)
+			w, err = boundarywalk.WalkOf(seg, work)
 			if err != nil {
 				return nil, nil, nil, proofbound.BoundedScalar{}, err
 			}
@@ -612,7 +612,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(w.Length, w.LengthBound))
 	}
-	walks, err := coalesceWalksContext(ctx, raw)
+	walks, err := boundarywalk.CoalesceWalksContext(ctx, raw)
 	if err != nil {
 		return nil, nil, nil, proofbound.BoundedScalar{}, err
 	}

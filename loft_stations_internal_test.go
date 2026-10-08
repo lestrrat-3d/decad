@@ -14,6 +14,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -49,7 +50,7 @@ func arcFixture(t *testing.T, r, base, sweep, tStart, tEnd float64) (ArcSeg, sur
 		TStart: tStart,
 		TEnd:   tEnd,
 	}
-	w, err := walkOf(seg, nil)
+	w, err := boundarywalk.WalkOf(seg, nil)
 	require.NoError(t, err)
 	return seg, w
 }
@@ -63,7 +64,7 @@ func arcFixture(t *testing.T, r, base, sweep, tStart, tEnd float64) (ArcSeg, sur
 func degenerateArcFixture(t *testing.T) (ArcSeg, survey2d.SegmentWalk) {
 	t.Helper()
 	seg := ArcSeg{Center: pt(0, 0), Start: pt(0, 0), End: pt(0, 0), TStart: 0, TEnd: 1}
-	w, err := walkOf(seg, nil)
+	w, err := boundarywalk.WalkOf(seg, nil)
 	require.NoError(t, err)
 	return seg, w
 }
@@ -185,7 +186,7 @@ func trimmedStartSquareProfile() ProfileRecord {
 func trimmedStartWalk(t *testing.T) survey2d.SegmentWalk {
 	t.Helper()
 	seg := trimmedStartSegment()
-	w, err := walkOf(seg, nil)
+	w, err := boundarywalk.WalkOf(seg, nil)
 	require.NoError(t, err)
 
 	denotedStart := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
@@ -354,7 +355,7 @@ func TestLoftCircularCellStationsHandDerivedStationCount(t *testing.T) {
 		handN++
 	}
 
-	w := circularWalk(0, 0, wedgeRadius, 0, wedgeSweep, wedgeRadius, wedgeSweep)
+	w := boundarywalk.CircularWalk(0, 0, wedgeRadius, 0, wedgeSweep, wedgeRadius, wedgeSweep)
 	m, achieved, err := chordCount(w, target, chordWalkMin(w))
 	require.NoError(t, err)
 	require.LessOrEqual(t, achieved, target)
@@ -1141,7 +1142,7 @@ func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 	recomputedU, recomputedV := w.CU+w.Radius*cos, w.CV+w.Radius*sin
 	require.NotEqual(t, Point2{U: recomputedU, V: recomputedV}, stations[0],
 		"the fixture must be one where the two readings differ, or it proves nothing")
-	recomputedBound := circularWalkEndBound(seg, 0, recomputedU, recomputedV)
+	recomputedBound := boundarywalk.CircularWalkEndBound(seg, 0, recomputedU, recomputedV)
 	require.Positive(t, recomputedBound.U+recomputedBound.V,
 		"the recomputed station carries a positive displacement from the enclosure the record states")
 	t.Logf("recomputed station 0 sits %.5g, %.5g off the recorded coordinate under a bound of {%.5g, %.5g}",
@@ -1391,7 +1392,7 @@ func readLoftTarget(t *testing.T, s *sketch.Sketch, p *sketch.Profile) loftTarge
 	walks := [][]survey2d.SegmentWalk{make([]survey2d.SegmentWalk, len(rec.Outer.Segments))}
 	require.Empty(t, rec.Holes)
 	for j, seg := range rec.Outer.Segments {
-		walks[0][j], err = walkOf(seg, freeform.NewFreeformWork())
+		walks[0][j], err = boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 		require.NoError(t, err)
 	}
 	perimeter := loftPerimeterUpper(rec, walks)

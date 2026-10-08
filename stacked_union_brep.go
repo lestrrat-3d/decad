@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -535,7 +536,7 @@ func stackedBrepSweptFaces(geom *stackedbrep.Engine, levels []stackedUnionLevel,
 					return nil, err
 				}
 				for _, seg := range segs {
-					w, err := walkOf(seg, nil)
+					w, err := boundarywalk.WalkOf(seg, nil)
 					if err != nil {
 						return nil, err
 					}

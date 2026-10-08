@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -192,7 +193,7 @@ func TestExtendSetBoundWidensOnlyTheNamedEnd(t *testing.T) {
 			// The named end now stands on the carrier at the new parameter, and
 			// the other end has not moved a float.
 			wantU, wantV := recordPointAt(t, tc.seg, tc.bound)
-			walk, err := walkOf(widened, freeform.NewFreeformWork())
+			walk, err := boundarywalk.WalkOf(widened, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			movedU, movedV := walk.EndU, walk.EndV
 			stillU, stillV := walk.StartU, walk.StartV

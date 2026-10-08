@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/stretchr/testify/require"
 )
 
@@ -220,7 +221,7 @@ func TestSingleSignPolygonTurnsProveNoCurvatureSign(t *testing.T) {
 	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
 	require.NoError(t, validateSegment(seg), "record.go admits the net: no distinctness or convexity gate exists")
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err, "the record must convert: no gate rejects a net for its shape")
 	require.False(t, reversed, "the recorded walk runs with the curve's natural sense")
 	require.Len(t, spans, 1, "§5.1 converts this record to exactly one Bezier span")
@@ -280,7 +281,7 @@ func TestSingleSignPolygonTurnsProveNoCurvatureSign(t *testing.T) {
 func TestMixedCurvatureAtTheSubdivisionDepthCapRefusesR19(t *testing.T) {
 	t.Parallel()
 	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.False(t, reversed)
 	require.Len(t, spans, 1)
@@ -313,7 +314,7 @@ func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 	}
 	require.NoError(t, validateSegment(seg), "record.go admits the cusp net: no regularity gate exists at recording")
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.False(t, reversed)
 	require.Len(t, spans, 1, "a clamped 4-control SplineSeg converts to exactly one span")
@@ -372,7 +373,7 @@ func TestEndpointCuspEscapesAHalfOpenRootCount(t *testing.T) {
 	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1.0 / 3, V: 0}, {U: 1, V: 1}})
 	require.NoError(t, validateSegment(seg), "record.go admits coincident adjacent controls")
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.False(t, reversed)
 	require.Len(t, spans, 1)
@@ -412,7 +413,7 @@ func TestCollinearNetProvesTheZeroCurvatureNumerator(t *testing.T) {
 
 	require.NoError(t, validateSegment(seg), "record.go admits a collinear net too")
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.False(t, reversed)
 	require.Len(t, spans, 1)
@@ -440,7 +441,7 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
 
-	spans, err := fitSplineBezierSpans(seg, freeform.NewFreeformWork())
+	spans, err := splinebezier.FitSplineBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 3)
 	require.Len(t, spans[0], 4, "a FitSplineSeg records NO control points; these are §5.1.2's converted ones")
@@ -524,7 +525,7 @@ func TestDegreeOneSpansCarryAZeroCurvatureNumerator(t *testing.T) {
 	seg := degreeOneNURBS(0, 1)
 	require.NoError(t, validateSegment(seg), "record.go admits a degree-1 NURBS segment")
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.False(t, reversed)
 	require.Len(t, spans, 2, "a 3-control degree-1 record converts to two spans")
@@ -588,7 +589,7 @@ func TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree(t *testing.T) {
 	}
 	require.NoError(t, validateSegment(seg))
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 1)
 
@@ -635,7 +636,7 @@ func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
 	}
 	require.NoError(t, validateSegment(seg), "record.go gates a net's shape nowhere")
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 4)
 
@@ -674,7 +675,7 @@ func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
 func TestMidpointSplitCreatesAKnownZeroJoint(t *testing.T) {
 	t.Parallel()
 	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 1)
 
@@ -725,11 +726,11 @@ func TestReversedRangeConvertsToTheIdenticalUnreversedChain(t *testing.T) {
 	backward := degreeOneNURBS(1, 0)
 	require.NoError(t, validateSegment(backward), "record.go admits a reversed recorded range")
 
-	forwardSpans, forwardReversed, err := freeformBezierSpans(forward, freeform.NewFreeformWork())
+	forwardSpans, forwardReversed, err := splinebezier.FreeformBezierSpans(forward, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.False(t, forwardReversed)
 
-	backwardSpans, backwardReversed, err := freeformBezierSpans(backward, freeform.NewFreeformWork())
+	backwardSpans, backwardReversed, err := splinebezier.FreeformBezierSpans(backward, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.True(t, backwardReversed, "the reversal is REPORTED, not applied to the spans")
 
@@ -806,7 +807,7 @@ func degreeTwoConvexityFixture(t *testing.T) ([]freeform.BezierSpan, bool) {
 		TStart:  0,
 		TEnd:    1,
 	}
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 1)
 	return spans, reversed
@@ -914,9 +915,9 @@ func TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans(t *testing.T) {
 	// FitSplineSeg the identical way).
 	seg := FitSplineSeg{Fit: fit, TStart: 1, TEnd: 0}
 	require.NoError(t, validateSegment(seg))
-	require.True(t, isFitSplineSeg(seg), "the predicate must recognise this record's own kind")
+	require.True(t, splinebezier.IsFitSplineSeg(seg), "the predicate must recognise this record's own kind")
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.True(t, reversed, "the recorded range is TStart > TEnd")
 	require.Len(t, spans, 14, "15 active fit points convert to 14 spans")
@@ -972,9 +973,9 @@ func TestBoehmSplineJointsStayExactlyZeroOnTheSamePoints(t *testing.T) {
 	pts := involuteFitPoints()
 	seg := SplineSeg{Control: pts, TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
-	require.False(t, isFitSplineSeg(seg), "a SplineSeg is never the FitSplineSeg carve-out's subject")
+	require.False(t, splinebezier.IsFitSplineSeg(seg), "a SplineSeg is never the FitSplineSeg carve-out's subject")
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.False(t, reversed)
 	require.Len(t, spans, 12, "15 clamped cubic control points convert to 12 spans")
@@ -984,7 +985,7 @@ func TestBoehmSplineJointsStayExactlyZeroOnTheSamePoints(t *testing.T) {
 		require.Equal(t, 0, cross.Sign(), "joint %d->%d must be EXACTLY zero, the Boehm path's own C2 guarantee", i, i+1)
 	}
 
-	verdict, err := freeform.FreeformWallConvexityContext(t.Context(), spans, false, reversed, isFitSplineSeg(seg), freeform.NewFreeformWork())
+	verdict, err := freeform.FreeformWallConvexityContext(t.Context(), spans, false, reversed, splinebezier.IsFitSplineSeg(seg), freeform.NewFreeformWork())
 	require.NoError(t, err, "an exactly-zero joint never conflicts with anything")
 	require.NotEqual(t, freeform.FreeformConvexityStraight, verdict, "the curve genuinely turns; only the joints are zero, not the spans")
 }
@@ -1054,7 +1055,7 @@ func TestFitSplineGenuineSpanConflictStillRefuses(t *testing.T) {
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 4)
 
@@ -1111,7 +1112,7 @@ func TestFitSplineVanishingSpeedStillRefusesRegularity(t *testing.T) {
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 2)
 	require.Equal(t, [][]string{{"0", "0"}, {"1/2", "0"}, {"1", "0"}, {"1", "0"}}, spanStrings(spans[0]))
@@ -1132,16 +1133,16 @@ func TestFitSplineVanishingSpeedStillRefusesRegularity(t *testing.T) {
 func TestDegreeOneNURBSCornerIsNotFitInterpolatedAndStillFolds(t *testing.T) {
 	t.Parallel()
 	seg := degreeOneNURBS(0, 1)
-	require.False(t, isFitSplineSeg(seg), "a NURBSSeg is never the FitSplineSeg carve-out's subject")
+	require.False(t, splinebezier.IsFitSplineSeg(seg), "a NURBSSeg is never the FitSplineSeg carve-out's subject")
 
-	spans, reversed, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
+	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 2)
 
 	cross := jointCross(spans[0], spans[1])
 	require.Equal(t, "1", cross.RatString(), "the corner turns by exactly +1")
 
-	verdict, err := freeform.FreeformWallConvexityContext(t.Context(), spans, false, reversed, isFitSplineSeg(seg), freeform.NewFreeformWork())
+	verdict, err := freeform.FreeformWallConvexityContext(t.Context(), spans, false, reversed, splinebezier.IsFitSplineSeg(seg), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, freeform.FreeformConvexityPositive, verdict,
 		"the joint folds by its own cross product — the certificate never suppresses a NURBSSeg's corner")
@@ -1166,7 +1167,7 @@ func TestClosedFitSplineChainStillFoldsItsClosingJointByTheCrossProduct(t *testi
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg), "record.go admits Fit[0] == Fit[last]: no closure gate exists")
 
-	spans, err := fitSplineBezierSpans(seg, freeform.NewFreeformWork())
+	spans, err := splinebezier.FitSplineBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 4, "4 active fit points convert to 4 spans")
 

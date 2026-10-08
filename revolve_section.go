@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -49,7 +50,7 @@ func revolveSectionChargeOf(rp revolvePayload, work *freeform.FreeformWork) (rev
 	segments := 0
 	for _, loop := range append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...) {
 		for _, seg := range loop.Segments {
-			w, err := walkOf(seg, work)
+			w, err := boundarywalk.WalkOf(seg, work)
 			if err != nil {
 				return revolveSectionCharge{}, err
 			}

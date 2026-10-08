@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -251,7 +252,7 @@ func (w *brepPrismWalls) add(f brepFace, e, eF brepEmbed, k int, zlo, zhi float6
 		if !ok {
 			return false
 		}
-		walk, err := walkOf(seg, work)
+		walk, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return false
 		}
@@ -416,7 +417,7 @@ func (w *brepPrismWalls) claim(section ProfileRecord, work *freeform.FreeformWor
 	var walks []survey2d.SegmentWalk
 	for _, loop := range append([]LoopRecord{section.Outer}, section.Holes...) {
 		for _, seg := range loop.Segments {
-			walk, err := walkOf(seg, work)
+			walk, err := boundarywalk.WalkOf(seg, work)
 			if err != nil {
 				return false
 			}

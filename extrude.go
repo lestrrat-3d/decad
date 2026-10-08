@@ -634,7 +634,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			return nil, proofbound.BoundedScalar{}, err
 		}
 		before, beforeRecon := boundarywalk.WorkSpent(work)
-		w, err := walkOf(seg, work)
+		w, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
@@ -648,7 +648,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		w.LengthBound = proofbound.AbsSumUpper(w.LengthBound, walkLenAllow)
 		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 	}
-	walks, err := coalesceChainWalksContext(ctx, raw)
+	walks, err := boundarywalk.CoalesceChainWalksContext(ctx, raw)
 	if err != nil {
 		return nil, proofbound.BoundedScalar{}, err
 	}
