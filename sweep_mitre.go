@@ -147,13 +147,13 @@ type mitredSweepPayload struct {
 	factors []float64
 	xform   r3.Transform
 
-	exact        []sweepRatVec
-	verts        []r3.Vec
-	vertexBound  []float64
-	tris         [][3]int
-	triFace      []int
-	faceRoles    []string
-	delta        float64
+	exact       []sweepRatVec
+	verts       []r3.Vec
+	vertexBound []float64
+	tris        [][3]int
+	triFace     []int
+	faceRoles   []string
+	delta       float64
 	// These sums use the unplaced sections and canonical triangle winding.
 	// Placements reuse them before deciding the new shell orientation.
 	localVol6    *big.Rat
