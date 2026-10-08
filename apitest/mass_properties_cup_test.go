@@ -61,7 +61,7 @@ func TestMassPropertiesCupOuterMinusCavity(t *testing.T) {
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	q := polarFactor(heldRotation(pose, frame))
+	q := heldRotation(pose, frame)
 	requireMomentsReadings(t, turned, want, rho, pose, &q)
 }
 

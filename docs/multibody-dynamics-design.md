@@ -1018,13 +1018,14 @@ payload's mass takes. Each item carries the computed test of dynamic-mass §6 fo
 ### 8.1 Prism with a non-cardinal frame or placement basis
 
 Analytic, in `mass_properties_rotated.go`: frame-local `V, P, Q` about `(0, 0, zm)`, `zm` the recorded mid
-level, from `momentSecondOrder` section moments; then `M I Mᵀ` with `M` the product of the placement and
-frame bases read as exact rationals. The reading is about the rigid rotation `Q` nearest `M` (its polar
-factor). With `d` the entrywise absolute sum of `MᵀM − I`, an upper bound on its Frobenius norm,
-`‖M − Q‖_F ≤ d`, so each world component widens outward by `3·d·(2+d)·m`, `m` the local tensor's
-largest magnitude. Tensor positivity is proved before rotation: the local Gershgorin lower bound must
-exceed the summed full widths of all nine published world entries, since a rotation keeps eigenvalues.
-Cardinal, undisplaced prisms keep the signed-permutation path in `mass_properties.go`.
+level, from `momentSecondOrder` section moments. `M`, the product of the placement and frame bases read
+as exact rationals, is the map the prism's volume, areas and vertices denote through
+(`docs/evaluator-design.md` §5.1), and it is orthonormal only to rounding. The reading is that map's exact
+image (`massmoment.AffineInertia`, as 8.6): mass `ρ·|det M|·V`, and the inertia of the second moment
+`|det M|·M·S·Mᵀ`, so no defect widening enters. Positivity is proved by the leading principal minors of
+the published tensor. Cardinal, undisplaced prisms keep the signed-permutation path in
+`mass_properties.go`: an exact signed permutation has `|det M| = 1` and `MᵀM = I` exactly, so its image is
+the rigid one.
 
 ### 8.2 Prism with positive `z0Delta`, `z1Delta` or `sectionDelta`
 
@@ -1096,10 +1097,10 @@ Analytic, in `mass_properties_sweep.go`. A single straight span takes 8.1/8.2; a
 8.6 over the arc's partial revolve. A composite sweep integrates each `sweepSpanPayload` in its own local
 coordinates and sums `V`, `P` and `Q` about one shared anchor; no parallel-axis shortcut per span, since
 `P` and `Q` already refer to the shared anchor. Each span reaches the composite's unplaced coordinates
-through its own rigid motion: the exact image of its local origin and the rotation nearest its held frame
-matrix `F`, with `d` its orthonormality defect, widening each `P_i` by `d·‖P‖₁` and each `Q_ij` by
-`3·d·(2+d)·m` as 8.1 does. The sum reaches world axes through the one placement every span shares, by
-8.1's rotation, and positivity is proved as in 8.6. A span placement that differs from the first span's,
+as its exact image under its held frame matrix `F` (`massmoment.Transform`: `|det F|·V`, `|det F|·F·P`,
+`|det F|·F·Q·Fᵀ`) beside the exact image of its local origin. The sum reaches world axes as its exact
+image under the one placement basis every span shares (`massmoment.AffineInertia`), and positivity is
+proved as in 8.6. A span placement that differs from the first span's,
 or a span either path refuses (an arc span whose axis is not exact in its transported plane), leaves the
 sweep to 8.5.
 
@@ -1111,7 +1112,8 @@ exactly onto the outer prism's mid level first. `cupPayload` holds both sections
 their deltas; each level delta is charged on its prism, and the offset section's displacement
 (`offsetDelta`, `docs/modify-design.md` §9: the thickness conversion and the offset solve's rounding together)
 is charged as that region's `sectionDelta`, on the cavity for an inward cup and on the outer region for an
-outward one. The difference reaches world axes by 8.1's rotation and positivity is proved as in 8.6. A
+outward one. The difference reaches world axes as its exact image under 8.1's `M` and positivity is proved
+as in 8.6. A
 cup either prism refuses leaves the cup to 8.5.
 
 A dynamic body whose payload matches no item returns `ErrUnsupported` from `Body.MassProperties`, and

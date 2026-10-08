@@ -105,6 +105,27 @@ func (m massMoments) rotated(q [3][3]*big.Rat) massMoments {
 	return out
 }
 
+// image is m's exact image under q: rotated, then every moment scaled by
+// |det q|, the factor q scales each volume element by.
+func (m massMoments) image(q [3][3]*big.Rat) massMoments {
+	det := new(big.Rat)
+	for i := range 3 {
+		j, k := (i+1)%3, (i+2)%3
+		minor := new(big.Rat).Sub(ratProduct(q[1][j], q[2][k]), ratProduct(q[1][k], q[2][j]))
+		det.Add(det, ratProduct(q[0][i], minor))
+	}
+	det.Abs(det)
+	out := m.rotated(q)
+	out.volume = ratProduct(out.volume, det)
+	for i := range 3 {
+		out.first[i] = ratProduct(out.first[i], det)
+		for j := range 3 {
+			out.second[i][j] = ratProduct(out.second[i][j], det)
+		}
+	}
+	return out
+}
+
 func (m massMoments) plus(o massMoments, sign int64) massMoments {
 	s := big.NewRat(sign, 1)
 	out := massMoments{volume: ratSum(m.volume, ratProduct(s, o.volume))}
@@ -141,11 +162,19 @@ func (m massMoments) inertia(rho *big.Rat) [3][3]*big.Rat {
 }
 
 // requireMomentsReadings checks the mass, the center and all six inertia
-// components of got against the exact moments, rotated into world axes by q
-// (nil for the identity) about the placed center.
+// components of got against the exact moments carried into world axes as
+// their exact image under the held map q (nil for the identity) about the
+// placed center (docs/multibody-dynamics-design.md §8.1): mass ρ·|det q|·V
+// and the image's inertia (affineInertia).
 func requireMomentsReadings(t *testing.T, got decad.MassProperties, m massMoments, rho *big.Rat, pose r3.Transform, q *[3][3]*big.Float) {
 	t.Helper()
-	requireReadingCovers(t, got.Mass, ratProduct(rho, m.volume))
+	if q == nil {
+		requireReadingCovers(t, got.Mass, ratProduct(rho, m.volume))
+	} else {
+		det := wideDet(*q)
+		det.Abs(det)
+		requireWideCovers(t, got.Mass, newWide().Mul(newWide().SetRat(ratProduct(rho, m.volume)), det))
+	}
 	var center [3]float64
 	for i := range center {
 		center[i], _ = new(big.Rat).Quo(m.first[i], m.volume).Float64()
@@ -159,6 +188,16 @@ func requireMomentsReadings(t *testing.T, got decad.MassProperties, m massMoment
 	require.InDelta(t, placed.Z, got.Center.Value.Z, slack)
 
 	local := m.inertia(rho)
+	var image [3][3]*big.Float
+	if q != nil {
+		var wide [3][3]*big.Float
+		for i := range 3 {
+			for j := range 3 {
+				wide[i][j] = newWide().SetRat(local[i][j])
+			}
+		}
+		image = affineInertia(*q, wide, newWide().SetRat(rho))
+	}
 	for _, entry := range []struct {
 		reading decad.Measurement
 		i, j    int
@@ -169,13 +208,7 @@ func requireMomentsReadings(t *testing.T, got decad.MassProperties, m massMoment
 		require.Equal(t, units.MomentOfInertia, entry.reading.Value.Kind())
 		want := newWide().SetRat(local[entry.i][entry.j])
 		if q != nil {
-			want = newWide()
-			for k := range 3 {
-				for l := range 3 {
-					term := newWide().Mul(q[entry.i][k], q[entry.j][l])
-					want.Add(want, term.Mul(term, newWide().SetRat(local[k][l])))
-				}
-			}
+			want = image[entry.i][entry.j]
 		}
 		deviation := newWide().Sub(want, newWide().SetFloat64(entry.reading.Value.Base()))
 		deviation.Abs(deviation)
@@ -297,7 +330,7 @@ func TestMassPropertiesCompositeSweepSumsSpans(t *testing.T) {
 
 // TestMassPropertiesCompositeSweepPlaced places the composite sweep by a
 // composed rotation, whose held basis is not exactly orthonormal, and checks
-// the rotated tensor.
+// the readings against the exact image under that basis.
 func TestMassPropertiesCompositeSweepPlaced(t *testing.T) {
 	doc := decad.New()
 	body := compositeSweep(t, doc)
@@ -311,7 +344,7 @@ func TestMassPropertiesCompositeSweepPlaced(t *testing.T) {
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	q := polarFactor(heldRotation(pose, frame))
+	q := heldRotation(pose, frame)
 	rho := new(big.Rat).SetFloat64(density.Base())
 	requireMomentsReadings(t, got, compositeSweepSpans(t), rho, pose, &q)
 }
@@ -319,9 +352,9 @@ func TestMassPropertiesCompositeSweepPlaced(t *testing.T) {
 // TestMassPropertiesCompositeSweepTurnedFrame sweeps an 8×2 section whose
 // sketch axes are turned in plane by atan(4/3), so the held span frames are
 // orthonormal only to rounding, along two collinear straight spans. Each
-// span's expected moments are its frame-local box carried by the rigid
-// rotation nearest the held frame (a 512-bit polar factor) to the span's
-// own origin, summed before the centroidal tensor is formed.
+// span's expected moments are its frame-local box's exact image under the
+// held frame the span records, |det F|·F·P and |det F|·F·Q·Fᵀ, carried to the
+// span's own origin and summed before the centroidal tensor is formed.
 func TestMassPropertiesCompositeSweepTurnedFrame(t *testing.T) {
 	turned, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0.6, 0.8, 0), r3.NewVec(-0.8, 0.6, 0))
 	require.NoError(t, err)
@@ -347,15 +380,18 @@ func TestMassPropertiesCompositeSweepTurnedFrame(t *testing.T) {
 	got, err := body.MassProperties(t.Context(), density)
 	require.NoError(t, err)
 
-	polar := polarFactor(heldRotation(r3.Identity(), held))
+	// The span records the plane's axes normalized once more, as Sweep does.
+	recorded, err := r3.NewFrame(held.Origin(), held.U(), held.V())
+	require.NoError(t, err)
+	wide := heldRotation(r3.Identity(), recorded)
 	var q [3][3]*big.Rat
 	for i := range q {
 		for j := range q[i] {
-			q[i][j], _ = polar[i][j].Rat(nil)
+			q[i][j], _ = wide[i][j].Rat(nil)
 		}
 	}
-	lower := exactBoxMoments(ratVec(-4, -1, 0), ratVec(4, 1, 4)).rotated(q)
-	upper := exactBoxMoments(ratVec(-4, -1, 0), ratVec(4, 1, 6)).rotated(q).shifted(ratVec(0, 0, 4))
+	lower := exactBoxMoments(ratVec(-4, -1, 0), ratVec(4, 1, 4)).image(q)
+	upper := exactBoxMoments(ratVec(-4, -1, 0), ratVec(4, 1, 6)).image(q).shifted(ratVec(0, 0, 4))
 	rho := new(big.Rat).SetFloat64(density.Base())
 	requireMomentsReadings(t, got, lower.plus(upper, 1), rho, r3.Identity(), nil)
 	// The turned section couples X and Y.

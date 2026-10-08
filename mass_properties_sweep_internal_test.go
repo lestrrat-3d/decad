@@ -9,18 +9,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestRotateVolumeMomentsChargesDefect carries a box's moments through
-// f = (1 + ε)·R, R an exact rational rotation and ε = 2⁻²⁰. The rotation
-// nearest f is R itself, so the true rotated moments are R·P and R·Q·Rᵀ,
-// computed here exactly; both must lie in the widened intervals. A held
-// sweep frame is orthonormal to within an ulp, too close for a float
-// reading to see the widening, so the scaled matrix makes each leg visible.
+// TestTransformVolumeMomentsIsTheImage carries a box's moments through
+// f = (1 + ε)·R, R an exact rational rotation and ε = 2⁻²⁰, and requires the
+// image's own moments exactly: V·|det f|, |det f|·f·P and |det f|·f·Q·fᵀ,
+// computed here from the box directly. A held sweep frame is orthonormal to
+// within an ulp, too close for a float reading to see the scaling, so the
+// scaled matrix makes each factor visible.
 //
-// Legs shown to fail (each deleted in massmoment.Rotate, this fixture
-// watched go red, then restored):
-//   - the first-moment widening d·‖P‖₁: R·P escapes f·P;
-//   - the second-moment widening 3·d·(2+d)·m: R·Q·Rᵀ escapes f·Q·fᵀ.
-func TestRotateVolumeMomentsChargesDefect(t *testing.T) {
+// Leg shown to fail (deleted in massmoment.Transform, this fixture watched go
+// red, then restored): the |det f| factor, whose absence the volume missed.
+func TestTransformVolumeMomentsIsTheImage(t *testing.T) {
 	r := [3][3]*big.Rat{
 		{big.NewRat(3, 5), big.NewRat(-4, 5), new(big.Rat)},
 		{big.NewRat(4, 5), big.NewRat(3, 5), new(big.Rat)},
@@ -33,6 +31,7 @@ func TestRotateVolumeMomentsChargesDefect(t *testing.T) {
 			f[i][j] = new(big.Rat).Mul(scale, r[i][j])
 		}
 	}
+	det := new(big.Rat).Mul(scale, new(big.Rat).Mul(scale, scale))
 
 	// The box [-1, 1] × [-2, 2] × [-3, 3] moved to (1, 2, 3), so every first
 	// and second moment is nonzero.
@@ -52,23 +51,23 @@ func TestRotateVolumeMomentsChargesDefect(t *testing.T) {
 		return iv.Lo
 	}
 
-	got := massmoment.Rotate(local, f)
-	require.Zero(t, got.Volume.Lo.Cmp(exact(local.Volume)))
+	got := massmoment.Transform(local, f)
+	requireIntervalContains(t, got.Volume, new(big.Rat).Mul(det, exact(local.Volume)))
 	for i := range 3 {
 		want := new(big.Rat)
 		for k := range 3 {
-			want.Add(want, new(big.Rat).Mul(r[i][k], exact(local.First[k])))
+			want.Add(want, new(big.Rat).Mul(f[i][k], exact(local.First[k])))
 		}
-		requireIntervalContains(t, got.First[i], want)
+		requireIntervalContains(t, got.First[i], want.Mul(want, det))
 		for j := range 3 {
 			want := new(big.Rat)
 			for k := range 3 {
 				for l := range 3 {
-					term := new(big.Rat).Mul(r[i][k], r[j][l])
+					term := new(big.Rat).Mul(f[i][k], f[j][l])
 					want.Add(want, term.Mul(term, exact(local.Second[k][l])))
 				}
 			}
-			requireIntervalContains(t, got.Second[i][j], want)
+			requireIntervalContains(t, got.Second[i][j], want.Mul(want, det))
 		}
 	}
 }

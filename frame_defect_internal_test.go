@@ -42,12 +42,16 @@ import (
 //   - the basis term of revolveaxis.FrameRoundAllow:
 //     TestRevolveBoxChargesTheBasisRounding went red;
 //   - buildPatchFace's fitted-frame charge: the tilted and the rotated body
-//     patch went red.
+//     patch went red;
+//   - patchPolygonAreaBound in buildPatchFace: the thin body patch's fitted
+//     face missed in every variant, by up to 870× its bound;
+//   - the endpoint-support arm of auditAdjacentSweepSpans: the rotated
+//     composite sweep refused as "not certified on opposite sides".
 //
-// Under the tilted plane and the rotation together a body patch's fitted face
-// still read 1.23× its bound: its area also owes the rim's float
-// re-expression into the fitted frame, which no charge covers yet, so that
-// variant skips those faces.
+// Every expected factor reads the frame the payload records
+// (fdRecordedFrame), not the sketch plane's held frame: Extrude and its
+// siblings normalize the plane's axes once more, and the two differ by a few
+// ulps, which reads as a miss of up to 1.23× on a fitted patch face.
 
 const frameDefectPrec = 512
 
@@ -157,10 +161,15 @@ var fdRect = [][2]float64{{2, 1}, {5, 1}, {5, 3}, {2, 3}}
 
 func fdExtrude(t *testing.T, frame r3.Frame, opts ...ExtrudeOption) *Body {
 	t.Helper()
+	return fdExtrudeLoop(t, frame, fdRect, opts...)
+}
+
+func fdExtrudeLoop(t *testing.T, frame r3.Frame, loop [][2]float64, opts ...ExtrudeOption) *Body {
+	t.Helper()
 	w := sketch.NewWorld()
 	pl, err := w.CreatePlaneFromFrame(frame)
 	require.NoError(t, err)
-	s, p := fdSketch(t, w, pl, fdRect)
+	s, p := fdSketch(t, w, pl, loop)
 	b, err := New().Extrude(s, p, Distance{D: units.Millimeters(2), Dir: Along}, opts...)
 	require.NoError(t, err)
 	return b
@@ -182,9 +191,8 @@ func fdTwoPrisms(t *testing.T, f r3.Frame, h0, h1 float64) (*Body, *Body) {
 }
 
 // requireCoversMappedReference asserts every volume, planar face area and
-// line length of b covers the reference's reading carried through m. Faces
-// whose role is skip are not compared.
-func requireCoversMappedReference(t *testing.T, ref, b *Body, m fdMap, skip string) {
+// line length of b covers the reference's reading carried through m.
+func requireCoversMappedReference(t *testing.T, ref, b *Body, m fdMap) {
 	t.Helper()
 	const slack = 1 + 1e-9
 	checked := 0
@@ -201,7 +209,7 @@ func requireCoversMappedReference(t *testing.T, ref, b *Body, m fdMap, skip stri
 	require.Len(t, bf, len(rf))
 	for i := range rf {
 		pl, ok := rf[i].surface.(Plane)
-		if !ok || (skip != "" && rf[i].origins[0].Role == skip) {
+		if !ok {
 			continue
 		}
 		require.Equal(t, rf[i].origins[0].Role, bf[i].origins[0].Role)
@@ -231,6 +239,33 @@ func requireCoversMappedReference(t *testing.T, ref, b *Body, m fdMap, skip stri
 	require.Positive(t, checked)
 }
 
+// fdRecordedFrame is the frame a feature records for a sketch on a plane
+// built from f: the plane's held frame, normalized once more by r3.NewFrame
+// as Extrude and its siblings do, so its floats are the payload's own.
+func fdRecordedFrame(t *testing.T, f r3.Frame) r3.Frame {
+	t.Helper()
+	pl, err := sketch.NewWorld().CreatePlaneFromFrame(f)
+	require.NoError(t, err)
+	plane, err := pl.Frame()
+	require.NoError(t, err)
+	held, err := r3.NewFrame(plane.Origin(), plane.U(), plane.V())
+	require.NoError(t, err)
+	return held
+}
+
+// fdCompositeSweep sweeps a unit square on XY along an arc and a line:
+// docs/sweep-design.md's composite path.
+func fdCompositeSweep(t *testing.T) (*Body, error) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, p := fdSketch(t, w, w.XY(), [][2]float64{{-0.5, -0.5}, {0.5, -0.5}, {0.5, 0.5}, {-0.5, 0.5}})
+	path, err := NewPath(r3.NewVec(0, 0, 0),
+		ArcThrough{Through: r3.NewVec(2, 0, 4), End: r3.NewVec(5, 0, 5)},
+		LineTo{End: r3.NewVec(8, 0, 5)})
+	require.NoError(t, err)
+	return New().Sweep(t.Context(), s, p, path)
+}
+
 func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 	t.Parallel()
 	tilted, err := r3.NewFrame(r3.NewVec(1, 2, 3), r3.NewVec(1, 1, 0), r3.NewVec(-1, 1, 1))
@@ -245,9 +280,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 		// xyOnly builds on the XY frame alone, so only the rotated variant
 		// runs.
 		xyOnly bool
-		// skip names a face role the variant skipIn does not compare.
-		skip, skipIn string
-		build        func(t *testing.T, f r3.Frame) (*Body, error)
+		build  func(t *testing.T, f r3.Frame) (*Body, error)
 	}
 	kinds := []kind{
 		{name: "prism", build: func(t *testing.T, f r3.Frame) (*Body, error) { return fdExtrude(t, f), nil }},
@@ -307,9 +340,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			require.NoError(t, err)
 			return parts[0], nil
 		}},
-		// Under the tilted plane and the rotation together the faces fitted
-		// to the rims are not compared (see above).
-		{name: "body patch", skip: rolePatch, skipIn: "tilted and rotated", build: func(t *testing.T, f r3.Frame) (*Body, error) {
+		{name: "body patch", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			return fdExtrude(t, f, WithSurfaceResult()).Patch(t.Context(), Edges(Free()))
 		}},
 		{name: "line sweep", xyOnly: true, build: func(t *testing.T, f r3.Frame) (*Body, error) {
@@ -320,6 +351,16 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			path, err := NewPath(r3.Vec{}, LineTo{End: r3.NewVec(0, 0, 2)})
 			require.NoError(t, err)
 			return New().Sweep(t.Context(), s, p, path)
+		}},
+		{name: "composite sweep", xyOnly: true, build: func(t *testing.T, _ r3.Frame) (*Body, error) {
+			return fdCompositeSweep(t)
+		}},
+		// A long thin rim: its corners' own rounding and their float
+		// re-expression into the fitted frame scale with the perimeter, far
+		// past the fitted frame's own stretch of the area.
+		{name: "thin body patch", build: func(t *testing.T, f r3.Frame) (*Body, error) {
+			thin := [][2]float64{{0, 0}, {100, 0}, {100, 1.0 / 128}, {0, 1.0 / 128}}
+			return fdExtrudeLoop(t, f, thin, WithSurfaceResult()).Patch(t.Context(), Edges(Free()))
 		}},
 		{name: "class B drill", xyOnly: true, build: func(t *testing.T, _ r3.Frame) (*Body, error) {
 			w := sketch.NewWorld()
@@ -367,16 +408,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 						b, err = b.Placed(t.Context(), v.place)
 						require.NoError(t, err)
 					}
-					w := sketch.NewWorld()
-					pl, err := w.CreatePlaneFromFrame(v.frame)
-					require.NoError(t, err)
-					held, err := pl.Frame()
-					require.NoError(t, err)
-					skip := ""
-					if v.name == k.skipIn {
-						skip = k.skip
-					}
-					requireCoversMappedReference(t, ref, b, fdMapOf(held, v.place), skip)
+					requireCoversMappedReference(t, ref, b, fdMapOf(fdRecordedFrame(t, v.frame), v.place))
 				})
 			}
 		})
@@ -459,5 +491,78 @@ func TestRevolveBoxChargesTheBasisRounding(t *testing.T) {
 		// E1's coefficient multiplies ρ ≤ 3, so its gap moves the extreme by
 		// at most 3·gap; the allowance must cover at least that.
 		require.GreaterOrEqual(t, allow, 3*gapF, "axis %v", g)
+	}
+}
+
+// TestPlaneMapMassCoversFrameDefect requires the mass of a rotated prism, a
+// cup and a composite sweep to cover ρ·|det L|·V, the mass of the solid their
+// volume and vertices denote (docs/multibody-dynamics-design.md §8.1, §8.7,
+// §8.8), as the revolve's does. Shown to fail: on the rigid paths
+// (massmoment.RigidInertia, massmoment.Rotate) the prism's and the cup's
+// masses missed in every variant.
+func TestPlaneMapMassCoversFrameDefect(t *testing.T) {
+	t.Parallel()
+	tilted, err := r3.NewFrame(r3.NewVec(1, 2, 3), r3.NewVec(1, 1, 0), r3.NewVec(-1, 1, 1))
+	require.NoError(t, err)
+	xy, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
+	require.NoError(t, err)
+	// A dyadic density keeps ρ·V exact, so the rigid reading's mass
+	// publishes a zero bound and any |det L| ≠ 1 shows.
+	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
+	for _, c := range []struct {
+		name   string
+		xyOnly bool
+		// volume is the plane-coordinate volume where it is rational; nil
+		// compares against the reference body's own reading instead.
+		volume *big.Rat
+		build  func(t *testing.T, f r3.Frame) (*Body, error)
+	}{
+		{name: "prism", volume: big.NewRat(12, 1), build: func(t *testing.T, f r3.Frame) (*Body, error) { return fdExtrude(t, f), nil }},
+		// The cavity is 2.5 × 1.5 × 1.75 inside the 3 × 2 × 2 block.
+		{name: "cup", volume: big.NewRat(87, 16), build: func(t *testing.T, f r3.Frame) (*Body, error) {
+			b := fdExtrude(t, f)
+			return b.Shell(t.Context(), Faces(FaceCreatedBy(CapEnd(b))), units.Millimeters(0.25))
+		}},
+		{name: "composite sweep", xyOnly: true, build: func(t *testing.T, _ r3.Frame) (*Body, error) { return fdCompositeSweep(t) }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			ref, err := c.build(t, xy)
+			require.NoError(t, err)
+			m0, err := ref.MassProperties(t.Context(), density)
+			require.NoError(t, err)
+			type variant struct {
+				name  string
+				frame r3.Frame
+				place r3.Transform
+			}
+			variants := []variant{{"rotated", xy, rot}}
+			if !c.xyOnly {
+				variants = append(variants, variant{"tilted", tilted, r3.Identity()}, variant{"tilted and rotated", tilted, rot})
+			}
+			for _, v := range variants {
+				t.Run(v.name, func(t *testing.T) {
+					b, err := c.build(t, v.frame)
+					require.NoError(t, err)
+					if v.place != r3.Identity() {
+						b, err = b.Placed(t.Context(), v.place)
+						require.NoError(t, err)
+					}
+					m1, err := b.MassProperties(t.Context(), density)
+					require.NoError(t, err)
+					factor := fdMapOf(fdRecordedFrame(t, v.frame), v.place).volumeFactor()
+					if c.volume == nil {
+						r := fdMissRatio(m1.Mass.Value.Base(), m1.Mass.Bound.Base(), m0.Mass.Value.Base(), m0.Mass.Bound.Base(), factor)
+						require.LessOrEqual(t, r, 1+1e-9, "mass misses by %g× its bound", r)
+						return
+					}
+					want := new(big.Float).SetPrec(frameDefectPrec).SetRat(new(big.Rat).Mul(c.volume, new(big.Rat).SetFloat64(density.Mag())))
+					want.Mul(want, factor)
+					requireEnclosesBig(t, m1.Mass.Value.Base(), m1.Mass.Bound.Base(), want, "mass")
+				})
+			}
+		})
 	}
 }

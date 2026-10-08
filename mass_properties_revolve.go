@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -105,22 +104,6 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (massmoment.Mo
 		return massmoment.Moments{}, err
 	}
 	return massmoment.RevolveMoments(plane, rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV, angular)
-}
-
-// rigidMassProperties publishes the mass properties of a solid whose local
-// moments are m and whose local axes reach world axes through the rigid
-// rotation nearest the exact rational matrix rotation (its column k the
-// world image of local axis k). It forms the centroidal tensor from the one
-// V, P, Q enclosure, rotates it with docs/multibody-dynamics-design.md §8.1's
-// orthonormality-defect widening, and proves the PUBLISHED tensor positive
-// definite by its leading principal minors. center is the evaluator's own
-// bounded world centroid of the same solid.
-func rigidMassProperties(ctx context.Context, center VecMeasurement, m massmoment.Moments, rotation [3][3]*big.Rat, density units.Value) (MassProperties, error) {
-	world, rho, err := massmoment.RigidInertia(m, rotation, density)
-	if err != nil {
-		return MassProperties{}, err
-	}
-	return publishMassProperties(ctx, center, proofbound.IntervalScale(m.Volume, rho), world)
 }
 
 // publishMassProperties rounds a mass interval and a world inertia interval

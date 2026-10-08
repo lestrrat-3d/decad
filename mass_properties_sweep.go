@@ -20,14 +20,14 @@ import (
 // about ONE shared anchor. Each span is integrated in its own local
 // coordinates — a straight span's frame-local (u, v, z), an arc span's axis
 // basis (w, e0, e1) about its axis anchor — and reaches the composite's
-// unplaced coordinates through its own rigid motion: the exact rational image
-// of its local origin and the rotation nearest its exact rational frame
-// matrix, widened by that matrix's orthonormality defect
-// (massmoment.Rotate). The exact change of anchor (massmoment.Shift)
-// carries the span's P and Q to the shared anchor, so no span is reduced to
-// a centroidal tensor and moved by the parallel-axis rule. The summed
-// moments then reach world axes through the one placement every span shares,
-// as a single rotated solid (rigidMassProperties).
+// unplaced coordinates through its own frame: the exact rational image of
+// its local origin and the exact image under its rational frame matrix
+// (massmoment.Transform), the map the span's readings denote through. The
+// exact change of anchor (massmoment.Shift) carries the span's P and Q to
+// the shared anchor, so no span is reduced to a centroidal tensor and moved
+// by the parallel-axis rule. The summed moments then reach world axes as the
+// image under the one placement basis every span shares
+// (massmoment.AffineInertia).
 
 // sweepMassProperties dispatches a sweep body to the path its reduction
 // takes.
@@ -69,7 +69,7 @@ func compositeSweepMassProperties(ctx context.Context, b *Body, sp sweepPayload,
 		for k := range offset {
 			offset[k] = new(big.Rat).Sub(origin[k], anchor[k])
 		}
-		unplaced := massmoment.Shift(massmoment.Rotate(local, frame), offset)
+		unplaced := massmoment.Shift(massmoment.Transform(local, frame), offset)
 		if i == 0 {
 			total = unplaced
 			continue
@@ -80,7 +80,11 @@ func compositeSweepMassProperties(ctx context.Context, b *Body, sp sweepPayload,
 	if err != nil {
 		return MassProperties{}, err
 	}
-	return rigidMassProperties(ctx, b.centroid, total, rotation, density)
+	world, massIv, err := massmoment.AffineInertia(total, rotation, density)
+	if err != nil {
+		return MassProperties{}, err
+	}
+	return publishMassProperties(ctx, b.centroid, massIv, world)
 }
 
 // sweepSpanMoments returns one span's local moments, the exact rational

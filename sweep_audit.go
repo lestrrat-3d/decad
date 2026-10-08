@@ -100,12 +100,19 @@ func auditAdjacentSweepSpans(
 	if err != nil {
 		return err
 	}
-	_, beforeUpper := proofbound.BoundedEnds(proofbound.MeasuredScalar(beforeHi, beforeBound))
-	afterLower, _ := proofbound.BoundedEnds(proofbound.MeasuredScalar(afterLo, afterBound))
+	beforeLower, beforeUpper := proofbound.BoundedEnds(proofbound.MeasuredScalar(beforeHi, beforeBound))
+	afterLower, afterUpper := proofbound.BoundedEnds(proofbound.MeasuredScalar(afterLo, afterBound))
+	// A span whose own construction makes its endpoint cap a supporting
+	// plane (sweepAuditEndpointSupports) lies on its side of that cap's
+	// plane by construction, and the rim-pairing precondition proves the two
+	// caps denote one section, so the extent reading is then only a
+	// falsifier: it refuses an extreme proven past the plane, and admits
+	// nothing on its own. A placement's rounding widens both the extreme and
+	// the plane, so their held values need not be equal.
 	beforeSupported := beforeUpper <= planeLo ||
-		(beforeHi == planeValue && sweepAuditEndpointSupports(before.body))
+		(sweepAuditEndpointSupports(before.body) && beforeLower <= planeHi)
 	afterSupported := afterLower >= planeHi ||
-		(afterLo == planeValue && sweepAuditEndpointSupports(after.body))
+		(sweepAuditEndpointSupports(after.body) && afterUpper >= planeLo)
 	if !beforeSupported || !afterSupported {
 		return fmt.Errorf(
 			`%w: adjacent sweep spans are not certified on opposite sides of their shared section `+

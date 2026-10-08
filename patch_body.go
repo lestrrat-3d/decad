@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -775,6 +776,13 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		return nil, err
 	}
 	ig.AreaBound = frameCharge.AreaOf(proofbound.MeasuredScalar(ig.Area, ig.AreaBound)).Bound
+	// A straight-edged rim is a polygon whose corners are the chain's own
+	// vertices, so its area is bounded directly in world coordinates, which
+	// also charges the float re-expression of the rim into the fitted frame
+	// that the plane-coordinate integrals above cannot see.
+	if bound, ok := patchPolygonAreaBound(ig.Area, ordered, edgeCopy); ok {
+		ig.AreaBound = bound
+	}
 
 	budget := proofbound.NewWorkBudget(ctx)
 	segEntries, err := buildSegEntriesBudget(budget, []LoopRecord{{Segments: segs}})
@@ -1027,4 +1035,74 @@ func edgeSetsEqual(a, b []*Edge) bool {
 		}
 	}
 	return true
+}
+
+// patchPolygonAreaBound bounds how far area, the published area of a patch
+// face fitted to a straight-edged rim, sits from the area of the planar
+// polygon the rim denotes. The held corners p_i are the chain's own vertices
+// in rim order, each within its own proven bound β_i of the corner it
+// denotes. Over exact dyadics, the held polygon's vector area is
+// a = ½·Σ p_i × p_{i+1}; the published area's distance from |a| is read
+// exactly against a certified enclosure of the square root. The denoted
+// polygon q_i = p_i + d_i, |d_i| ≤ β_i, has vector area
+// a + ½·Σ d_i × (p_{i+1} − p_{i−1}) + ½·Σ d_i × d_{i+1}, so its area, |·| of
+// that planar vector, lies within ½·Σ β_i·|p_{i+1} − p_{i−1}| +
+// ½·Σ β_i·β_{i+1} of |a|. It answers false for a chain with a curved edge or
+// a non-finite corner, where the caller keeps its plane-coordinate bound.
+func patchPolygonAreaBound(area float64, ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) (float64, bool) {
+	n := len(ordered)
+	if n < 3 {
+		return 0, false
+	}
+	corners := make([]proofarith.DyV3, n)
+	beta := make([]float64, n)
+	for i, oe := range ordered {
+		ne := edgeCopy[oe.old]
+		if _, ok := ne.curve.(Line3); !ok {
+			return 0, false
+		}
+		v := ne.start
+		if !oe.forward {
+			v = ne.end
+		}
+		if !proofbound.FiniteVec(v.position) || proofbound.IsNonFinite(v.bound.Base()) {
+			return 0, false
+		}
+		corners[i] = proofarith.DyVec(v.position)
+		beta[i] = v.bound.Base()
+	}
+	var twice proofarith.DyV3
+	for i := range n {
+		twice = proofarith.DvAdd(twice, proofarith.DvCross(corners[i], corners[(i+1)%n]))
+	}
+	norm2 := proofarith.DvDot(twice, twice)
+	lo := proofarith.DySqrtDown(norm2) / 2
+	hi := proofarith.DySqrtUp(norm2) / 2
+	held, okHeld := proofarith.DyOf(area)
+	dLo, okLo := proofarith.DyOf(lo)
+	dHi, okHi := proofarith.DyOf(hi)
+	if !okHeld || !okLo || !okHi {
+		return 0, false
+	}
+	gap := max(
+		proofarith.DyFloatUp(proofarith.DyAbs(proofarith.DySubScalar(held, dLo))),
+		proofarith.DyFloatUp(proofarith.DyAbs(proofarith.DySubScalar(held, dHi))),
+	)
+	perturb := 0.0
+	for i := range n {
+		if beta[i] == 0 {
+			continue
+		}
+		span := proofarith.DvSub(corners[(i+1)%n], corners[(i+n-1)%n])
+		perturb = proofbound.AbsSumUpper(perturb,
+			proofbound.ProductUpper(beta[i], proofarith.DySqrtUp(proofarith.DvDot(span, span))),
+			proofbound.ProductUpper(beta[i], beta[(i+1)%n]))
+	}
+	if perturb > 0 {
+		gap = proofbound.AbsSumUpper(gap, proofbound.ProductUpper(0.5, perturb))
+	}
+	if proofbound.IsNonFinite(gap) {
+		return 0, false
+	}
+	return gap, true
 }

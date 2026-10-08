@@ -443,7 +443,11 @@ class-B brep take it as their last step; a brep's face frames are signed
 permutations of its first, so the first face's map stands for all. A face copy
 (`Body.Unstitch`, `Body.Patch`) carries its source's readings through its
 placement alone and takes the placement's own charge; a `Body.Patch` face
-fitted to a rim takes its fitted frame's. The centroid takes no charge: an
+fitted to a rim takes its fitted frame's, and one fitted to a straight-edged
+rim instead bounds its area directly against the polygon its own vertices
+denote (`patchPolygonAreaBound`), which also charges the rim's float
+re-expression into the fitted frame. `MassProperties` reads the exact image
+under the same map (`docs/multibody-dynamics-design.md` §8.1). The centroid takes no charge: an
 affine map carries a body's centroid to its image's centroid. The box takes
 none either: each reading is the extreme of the linear functional g·L over
 the plane-coordinate body, which is exact for any linear map, and the
