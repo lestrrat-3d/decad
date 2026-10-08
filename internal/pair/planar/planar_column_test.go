@@ -40,6 +40,9 @@ func columnClear(t *testing.T, tris ...[3][3]float64) (*big.Rat, bool) {
 	lo, hi := columnBox()
 	clearance, open, err := planar.PlanarColumnClear(&s, vec(0, 0, 1), vec(0, 0, 0), lo, hi, noPoll)
 	require.NoError(t, err)
+	apart, err := planar.PlanarColumnApart(&s, vec(0, 0, 1), vec(0, 0, 0), lo, hi, noPoll)
+	require.NoError(t, err)
+	require.Equal(t, open, apart)
 	return clearance, open
 }
 
