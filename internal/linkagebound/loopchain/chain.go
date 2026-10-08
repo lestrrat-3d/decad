@@ -2,11 +2,13 @@ package loopchain
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/sketch"
 )
 
 // LocatedAsk remembers the scene that certified an enclosure or refusal.
@@ -146,4 +148,170 @@ func (c *Chain) ChainCell(ctx context.Context, sub linkagebound.DriverSubsegment
 		return c.Cell(ctx, sub, a, b)
 	}
 	return c.Cell(ctx, sub, b, a)
+}
+
+// Decomposition is the certified parts of a drive and each dependent's reach.
+type Decomposition struct {
+	Certified [][2]*big.Rat
+	Hulls     []proofbound.RatInterval
+	Reach     []*big.Rat
+}
+
+// Decompose asks a drive as cells and bisects refused cells down to floor.
+// The caller serializes access to the chain and checks dependent joint limits.
+func (c *Chain) Decompose(ctx context.Context, dependents int, floor *big.Rat) (Decomposition, error) {
+	var result Decomposition
+	add := func(ask *LocatedAsk) {
+		if ask.Err != nil {
+			return
+		}
+		for j := range dependents {
+			iv := linkagebound.ValueInterval(c.Value(ask, j))
+			if len(result.Hulls) <= j {
+				result.Hulls = append(result.Hulls, iv)
+				continue
+			}
+			result.Hulls[j] = linkagebound.Hull(result.Hulls[j], iv)
+		}
+	}
+	for _, sub := range c.subs {
+		if sub.Straddle {
+			// Its neighbours' near ends are its values' sources.
+			continue
+		}
+		near, err := c.Point(ctx, sub, sub.Near)
+		if err != nil {
+			return Decomposition{}, err
+		}
+		add(near)
+	}
+	var walk func(a, b *big.Rat) error
+	walk = func(a, b *big.Rat) error {
+		var asks []*LocatedAsk
+		refused := false
+		for _, pc := range c.subs.Pieces(a, b) {
+			if pc.Sub.Straddle {
+				st, err := c.StraddleAsks(ctx, pc.Sub)
+				if err != nil {
+					return err
+				}
+				for _, ask := range st {
+					refused = refused || ask.Err != nil
+				}
+				asks = append(asks, st...)
+				continue
+			}
+			cell, err := c.ChainCell(ctx, pc.Sub, pc.Lo, pc.Hi)
+			if err != nil {
+				return err
+			}
+			refused = refused || cell.Err != nil
+			asks = append(asks, cell)
+			for _, end := range []*big.Rat{pc.Lo, pc.Hi} {
+				point, err := c.Point(ctx, pc.Sub, end)
+				if err != nil {
+					return err
+				}
+				asks = append(asks, point)
+			}
+		}
+		if !refused {
+			for _, ask := range asks {
+				add(ask)
+			}
+			result.Certified = append(result.Certified, [2]*big.Rat{a, b})
+			return nil
+		}
+		width := new(big.Rat).Sub(b, a)
+		if width.Cmp(floor) <= 0 {
+			return nil
+		}
+		mid := new(big.Rat).Add(a, b)
+		mid.Quo(mid, big.NewRat(2, 1))
+		if err := walk(a, mid); err != nil {
+			return err
+		}
+		return walk(mid, b)
+	}
+	if err := walk(new(big.Rat), big.NewRat(1, 1)); err != nil {
+		return Decomposition{}, err
+	}
+	result.Reach = make([]*big.Rat, dependents)
+	for j := range dependents {
+		result.Reach[j] = new(big.Rat)
+		if j < len(result.Hulls) {
+			result.Reach[j] = linkagebound.Magnitude(result.Hulls[j])
+		}
+	}
+	return result, nil
+}
+
+// IntervalSpans reads every dependent over [a, b] on each subsegment's chain.
+// refuse maps a certified ask's refusal into the caller's loop-specific error.
+func (c *Chain) IntervalSpans(ctx context.Context, a, b *big.Rat, dependents int,
+	reach []*big.Rat, refuse func(error) error) ([][]linkagebound.Span, error) {
+	var out [][]linkagebound.Span
+	for _, pc := range c.subs.Pieces(a, b) {
+		if pc.Sub.Straddle {
+			piece, err := c.straddleSpans(ctx, pc.Sub, dependents, reach, refuse)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, piece)
+			continue
+		}
+		pa, err := c.Point(ctx, pc.Sub, pc.Lo)
+		if err != nil {
+			return nil, err
+		}
+		pb, err := c.Point(ctx, pc.Sub, pc.Hi)
+		if err != nil {
+			return nil, err
+		}
+		cell, err := c.ChainCell(ctx, pc.Sub, pc.Lo, pc.Hi)
+		if err != nil {
+			return nil, err
+		}
+		for _, ask := range []*LocatedAsk{pa, cell, pb} {
+			if ask.Err != nil {
+				return nil, refuse(ask.Err)
+			}
+		}
+		piece := make([]linkagebound.Span, dependents)
+		for j := range dependents {
+			A, B, C := linkagebound.ValueInterval(c.Value(pa, j)), linkagebound.ValueInterval(c.Value(pb, j)),
+				linkagebound.ValueInterval(c.Value(cell, j))
+			H := linkagebound.Hull(A, B, C)
+			if linkagebound.Magnitude(H).Cmp(reach[j]) > 0 {
+				return nil, refuse(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
+			}
+			piece[j] = linkagebound.Span{Start: A, End: B, Hull: H}
+		}
+		out = append(out, piece)
+	}
+	return out, nil
+}
+
+// straddleSpans reads a whole straddle from its two neighbouring chains.
+func (c *Chain) straddleSpans(ctx context.Context, sub linkagebound.DriverSubsegment, dependents int,
+	reach []*big.Rat, refuse func(error) error) ([]linkagebound.Span, error) {
+	asks, err := c.StraddleAsks(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+	for _, ask := range asks {
+		if ask.Err != nil {
+			return nil, refuse(ask.Err)
+		}
+	}
+	piece := make([]linkagebound.Span, dependents)
+	for j := range dependents {
+		h := c.Hull(asks, j)
+		if linkagebound.Magnitude(h).Cmp(reach[j]) > 0 {
+			return nil, refuse(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
+		}
+		piece[j] = linkagebound.Span{Start: linkagebound.ValueInterval(c.Value(asks[1], j)),
+			End: linkagebound.ValueInterval(c.Value(asks[3], j)), Hull: h}
+	}
+	return piece, nil
 }

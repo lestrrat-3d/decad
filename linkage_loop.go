@@ -1084,100 +1084,16 @@ func (ld *loopDrive) sceneValue(side int, s *big.Rat) (float64, float64) {
 	return proofbound.RatFloatDown(lo.Add(lo, off.Lo)), proofbound.RatFloatUp(hi.Add(hi, off.Hi))
 }
 
-// decompose asks the drive as one cell, each piece of it in its own
-// sub-segment's chain, and replaces each cell some piece of which is refused
-// by its two halves down to floor (docs/linkage-check-design.md §15.7). The
-// hull of every certified piece and of the points at its ends bounds each
-// dependent's value over the certified drive: that is its reach m_i, every
-// later enclosure is held to it, and a dependent with limits must hold it
-// inside them.
+// decompose prepares the internal chain and checks the dependent limits.
 func (ld *loopDrive) decompose(ctx context.Context, spec *linkageSpec, floor *big.Rat) error {
 	ld.mu.Lock()
 	defer ld.mu.Unlock()
-	var hulls []proofbound.RatInterval
-	add := func(ask *loopchain.LocatedAsk) {
-		if ask.Err != nil {
-			return
-		}
-		for j := range ld.deps {
-			iv := linkagebound.ValueInterval(ld.chain.Value(ask, j))
-			if len(hulls) <= j {
-				hulls = append(hulls, iv)
-				continue
-			}
-			hulls[j] = linkagebound.Hull(hulls[j], iv)
-		}
-	}
-	for _, sub := range ld.subs {
-		if sub.Straddle {
-			// Its neighbours' near ends are its values' sources.
-			continue
-		}
-		near, err := ld.chain.Point(ctx, sub, sub.Near)
-		if err != nil {
-			return err
-		}
-		add(near)
-	}
-	var walk func(a, b *big.Rat) error
-	walk = func(a, b *big.Rat) error {
-		var asks []*loopchain.LocatedAsk
-		refused := false
-		for _, pc := range ld.subs.Pieces(a, b) {
-			if pc.Sub.Straddle {
-				st, err := ld.chain.StraddleAsks(ctx, pc.Sub)
-				if err != nil {
-					return err
-				}
-				for _, ask := range st {
-					refused = refused || ask.Err != nil
-				}
-				asks = append(asks, st...)
-				continue
-			}
-			c, err := ld.chain.ChainCell(ctx, pc.Sub, pc.Lo, pc.Hi)
-			if err != nil {
-				return err
-			}
-			refused = refused || c.Err != nil
-			asks = append(asks, c)
-			for _, end := range []*big.Rat{pc.Lo, pc.Hi} {
-				p, err := ld.chain.Point(ctx, pc.Sub, end)
-				if err != nil {
-					return err
-				}
-				asks = append(asks, p)
-			}
-		}
-		if !refused {
-			for _, ask := range asks {
-				add(ask)
-			}
-			ld.certified = append(ld.certified, [2]*big.Rat{a, b})
-			return nil
-		}
-		width := new(big.Rat).Sub(b, a)
-		if width.Cmp(floor) <= 0 {
-			return nil
-		}
-		mid := new(big.Rat).Add(a, b)
-		mid.Quo(mid, big.NewRat(2, 1))
-		if err := walk(a, mid); err != nil {
-			return err
-		}
-		return walk(mid, b)
-	}
-	if err := walk(new(big.Rat), big.NewRat(1, 1)); err != nil {
+	result, err := ld.chain.Decompose(ctx, len(ld.deps), floor)
+	if err != nil {
 		return err
 	}
-	ld.reach = make([]*big.Rat, len(ld.deps))
-	ld.hulls = hulls
-	for j := range ld.deps {
-		ld.reach[j] = new(big.Rat)
-		if j < len(hulls) {
-			ld.reach[j] = linkagebound.Magnitude(hulls[j])
-		}
-	}
+	ld.certified = append(ld.certified, result.Certified...)
+	ld.hulls, ld.reach = result.Hulls, result.Reach
 	return ld.checkLimits(spec)
 }
 
@@ -1284,80 +1200,17 @@ func (ld *loopDrive) unbuildable(err error) *unbuildableError {
 	return &unbuildableError{cause: ld.describe(err), loop: ld}
 }
 
-// intervalSpans reads every dependent's values over [a, b], cut at every
-// sub-segment boundary inside it: per piece, the values at its two ends and
-// the hull over it, from its sub-segment's point asks and the cell between
-// them; err is the refusal that leaves the interval undecided.
+// intervalSpans reads the internal chain and records its dependent spans.
 func (ld *loopDrive) intervalSpans(ctx context.Context, a, b *big.Rat) ([][]loopSpan, error) {
 	ld.mu.Lock()
 	defer ld.mu.Unlock()
-	var out [][]loopSpan
-	for _, pc := range ld.subs.Pieces(a, b) {
-		if pc.Sub.Straddle {
-			piece, err := ld.straddleSpans(ctx, pc.Sub)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, piece)
-			continue
-		}
-		pa, err := ld.chain.Point(ctx, pc.Sub, pc.Lo)
-		if err != nil {
-			return nil, err
-		}
-		pb, err := ld.chain.Point(ctx, pc.Sub, pc.Hi)
-		if err != nil {
-			return nil, err
-		}
-		c, err := ld.chain.ChainCell(ctx, pc.Sub, pc.Lo, pc.Hi)
-		if err != nil {
-			return nil, err
-		}
-		for _, ask := range []*loopchain.LocatedAsk{pa, c, pb} {
-			if ask.Err != nil {
-				return nil, ld.unbuildable(ask.Err)
-			}
-		}
-		piece := make([]loopSpan, len(ld.deps))
-		for j := range ld.deps {
-			A, B, C := linkagebound.ValueInterval(ld.chain.Value(pa, j)), linkagebound.ValueInterval(ld.chain.Value(pb, j)),
-				linkagebound.ValueInterval(ld.chain.Value(c, j))
-			H := linkagebound.Hull(A, B, C)
-			if !ld.withinReach(j, H) {
-				return nil, ld.unbuildable(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
-			}
-			piece[j] = loopSpan{Start: A, End: B, Hull: H}
-		}
-		out = append(out, piece)
-	}
-	ld.spans[linkagebound.IntervalKey(a, b)] = out
-	return out, nil
-}
-
-// straddleSpans reads every dependent over a whole straddle: its values at
-// the two cuts, the neighbours' points there, and the hull over its asks. An
-// interval is cut at both of a straddle's ends, so its piece is the whole
-// straddle. Callers hold mu.
-func (ld *loopDrive) straddleSpans(ctx context.Context, sub loopSub) ([]loopSpan, error) {
-	asks, err := ld.chain.StraddleAsks(ctx, sub)
+	out, err := ld.chain.IntervalSpans(ctx, a, b, len(ld.deps), ld.reach,
+		func(err error) error { return ld.unbuildable(err) })
 	if err != nil {
 		return nil, err
 	}
-	for _, ask := range asks {
-		if ask.Err != nil {
-			return nil, ld.unbuildable(ask.Err)
-		}
-	}
-	piece := make([]loopSpan, len(ld.deps))
-	for j := range ld.deps {
-		h := ld.chain.Hull(asks, j)
-		if !ld.withinReach(j, h) {
-			return nil, ld.unbuildable(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
-		}
-		piece[j] = loopSpan{Start: linkagebound.ValueInterval(ld.chain.Value(asks[1], j)),
-			End: linkagebound.ValueInterval(ld.chain.Value(asks[3], j)), Hull: h}
-	}
-	return piece, nil
+	ld.spans[linkagebound.IntervalKey(a, b)] = out
+	return out, nil
 }
 
 // span is a dependent joint's |Δq| over [sa, sb]: the sum of dependentSpan
