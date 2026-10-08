@@ -111,6 +111,8 @@ func CapBlendRingSegmentArea(lm CapBlendLoopProof, contour bool, d float64) floa
 }
 
 // CapBlendMotionInput names the exact side-window station of each cap sample.
+// D is the loop's in-plane setback and DDelta the rounding its unit
+// conversion committed, zero for a setback stated in millimetres.
 type CapBlendMotionInput struct {
 	CapBlendLoopProof
 	Loop         int
@@ -118,7 +120,7 @@ type CapBlendMotionInput struct {
 	CapPts       []sectionrecord.Point2
 	CapWallStart []int
 	Whole        bool
-	D            float64
+	D, DDelta    float64
 	BandDelta    [2]float64
 	HasBandDelta [2]bool
 }
@@ -137,6 +139,16 @@ func CapBlendCapMotion(budget *proofbound.WorkBudget, in CapBlendMotionInput,
 	}
 	n := len(in.Walks)
 	offset := func(w survey2d.SideWalk) *big.Rat { return capcontour.CapWallRadiusOffset(w, in.D) }
+	// A circular wall's sample is bounded against the offset circle at D. The
+	// denoted circle sits within DDelta of it radially, so a setback whose
+	// unit conversion rounded charges that on top.
+	circular := func(b proofbound.WalkEndBound) float64 {
+		allow := proofbound.WalkEndBoundAllow(b)
+		if in.DDelta > 0 {
+			allow = proofbound.AbsSumUpper(allow, in.DDelta)
+		}
+		return allow
+	}
 	if in.Whole {
 		w := in.Walks[0]
 		seg := in.Segments[w.Segs[0]]
@@ -146,7 +158,7 @@ func CapBlendCapMotion(budget *proofbound.WorkBudget, in CapBlendMotionInput,
 				return nil, err
 			}
 			p := in.CapPts[k]
-			capMotion[k] = proofbound.WalkEndBoundAllow(stationBound(seg, k, in.Count[0], off, p.U, p.V))
+			capMotion[k] = circular(stationBound(seg, k, in.Count[0], off, p.U, p.V))
 		}
 		return capMotion, nil
 	}
@@ -181,7 +193,7 @@ func CapBlendCapMotion(budget *proofbound.WorkBudget, in CapBlendMotionInput,
 			prevIdx := (i + n - 1) % n
 			prevSeg := in.Segments[prev.Segs[0]]
 			cnt := in.Count[prevIdx]
-			capMotion[base] = proofbound.WalkEndBoundAllow(stationBound(prevSeg, cnt, cnt, offset(prev), p.U, p.V))
+			capMotion[base] = circular(stationBound(prevSeg, cnt, cnt, offset(prev), p.U, p.V))
 			continue
 		}
 		seg := in.Segments[w.Segs[0]]
@@ -191,7 +203,7 @@ func CapBlendCapMotion(budget *proofbound.WorkBudget, in CapBlendMotionInput,
 				return nil, err
 			}
 			p := in.CapPts[base+k]
-			capMotion[base+k] = proofbound.WalkEndBoundAllow(stationBound(seg, k, in.Count[i], off, p.U, p.V))
+			capMotion[base+k] = circular(stationBound(seg, k, in.Count[i], off, p.U, p.V))
 		}
 	}
 	return capMotion, nil

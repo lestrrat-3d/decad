@@ -369,7 +369,7 @@ func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *c
 		CapBlendLoopProof: lm.proof(),
 		Loop:              lm.li, Segments: lm.loop.Segments,
 		CapPts: lm.capPts, CapWallStart: lm.capWallStart,
-		Whole: lm.whole, D: cbp.loopOffset(lm.li),
+		Whole: lm.whole, D: cbp.loopOffset(lm.li), DDelta: cbp.loopSetback(lm.li).dcDelta,
 	}
 	in.BandDelta[0], in.HasBandDelta[0] = cbp.bandDelta[capBandKey{loop: lm.li, start: true}]
 	in.BandDelta[1], in.HasBandDelta[1] = cbp.bandDelta[capBandKey{loop: lm.li, start: false}]
@@ -516,7 +516,7 @@ func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, w
 	if j.g1 || (!prev.IsCircular() && !cur.IsCircular()) {
 		return 0, nil
 	}
-	locus, ok, err := capMiterLocusUpper(budget, prev, cur, j.vU, j.vV, setback.ds, setback.dc)
+	locus, ok, err := capMiterLocusUpper(budget, prev, cur, j.vU, j.vV, setback.ds, setback.dc, setback.dcDelta)
 	if err != nil {
 		return 0, err
 	}

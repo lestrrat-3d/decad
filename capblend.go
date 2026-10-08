@@ -88,14 +88,13 @@ type capBlendPayload struct {
 // capSetback is one chamfered cap's two setbacks (docs/modify-reach-design.md
 // §8.3.1): dc across the cap face — the in-plane offset of the cap contour —
 // and ds down the side wall — the axial distance from the cap level to the
-// side level — beside dsDelta, the rounding ds's own unit conversion
-// committed, which every level built from ds charges. An equal chamfer holds
-// dc == ds == d.
-//
-// dc carries no conversion term: the offset reads it as an exact input, the
-// same way the equal-setback band reads d (§8.3.1).
+// side level — each beside the rounding its own unit conversion committed.
+// dsDelta is charged by every level built from ds. dcDelta is charged by the
+// cap contour's displacement (capContourDelta), which encloses the contour
+// over every offset amount within dcDelta of dc, and by every cap-level
+// length that reads dc as a radius. An equal chamfer holds dc == ds == d.
 type capSetback struct {
-	dc, ds, dsDelta float64
+	dc, dcDelta, ds, dsDelta float64
 }
 
 // setbackAt returns the setbacks of the cap a band with material sense
@@ -313,7 +312,8 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		if err != nil {
 			return 0, 0, 0, err
 		}
-		delta, err := loopContourDelta(ctx, loop, cbp.loopOffset(li))
+		setback := cbp.loopSetback(li)
+		delta, err := loopContourDelta(ctx, loop, setback.dc, setback.dcDelta)
 		if err != nil {
 			return 0, 0, 0, err
 		}

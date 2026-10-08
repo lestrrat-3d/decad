@@ -14,4 +14,11 @@ type Patch struct {
 	CapTh0, CapTh1                       float64
 	SideZ, CapZ                          float64
 	ContourAllow, LevelDelta, CapThAllow float64
+	// SkewStart and SkewEnd are proven upper bounds, in radians, on the exact
+	// angle about (CU, CV) between the side directrix's end and the cap
+	// directrix's end at the window's start (Th0, CapTh0) and end (Th1,
+	// CapTh1) corner (CornerSkewUpper). Both are zero on an apex patch, whose
+	// side directrix is the single point the corner is, and wherever the two
+	// ends lie on one ray from the centre. The Cone arm of AreaOf reads them.
+	SkewStart, SkewEnd float64
 }

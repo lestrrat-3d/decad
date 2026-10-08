@@ -367,6 +367,8 @@
 2	0.05	TestCapBlendAsymmetricPlacedKeepsSetbacksAndRoles
 2	0.05	TestCapBlendAsymmetricSideLevelCarriesOtherDistanceRounding
 2	0.05	TestCapBlendAsymmetricUnrepresentableSetbackRefused
+2	0.05	TestCapBlendCapCircleCarriesInPlaneDistanceRounding
+2	0.05	TestCapBlendCapContourCarriesInPlaneDistanceRounding
 2	0.01	TestCapBlendCapLevelEdgesReportFiniteLengths
 2	0.03	TestCapBlendCarrierCollapseRefused
 2	0.02	TestCapBlendConeAreaEnclosesRoundedRadiusDifference

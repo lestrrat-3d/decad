@@ -146,7 +146,7 @@ more specific SX row replaces that base refusal.
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
 | **SX13** | a cap-loop chamfer whose setback rounds away against the level it displaces: the cap contour's offset radius rounds back onto a circular wall's own radius (`R -/+ d == R`), or the band's side level rounds back onto its own cap level (`z1 - d == z1` on the end cap, `z0 + d == z0` on the start cap) | body exists; its taper is real but finer than float64 names at that radius or at that sweep level, so the band's patches cannot be told from a cylinder or from the cap plane | `ErrUnsupported` |
-| **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root. A G1 join (modify §7's dead-zone rule) intersects no carriers — its corner is the shared-normal foot, enclosed as a reflex corner's feet are — so SX14 never fires on one | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement | `ErrUnsupported` |
+| **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root. A G1 join (modify §7's dead-zone rule) intersects no carriers — its corner is the shared-normal foot, enclosed as a reflex corner's feet are — so SX14 never fires on one. Also a circular band patch whose corner skew between its side and cap directrices cannot be enclosed below a quarter turn (§8.4) | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement, or no area bound holds for the ruled patch at that skew | `ErrUnsupported` |
 | **SX15** | a cap-loop chamfer whose band patch's outward orientation cannot be certified: the patch's own `Face.NormalAt` refuses at the build's orientation sample point | body exists and its patches are real; the evaluator cannot evaluate its own orientation sample on this patch, so it cannot state which side of the patch is outward | `ErrUnsupported` |
 | **SX16** | a modify op on a `brepPayload`, or on a stacked receiver through its face view, outside `docs/brep-modify-design.md` Tables RB/EB | body exists; that document's Table SB names the row | `ErrUnsupported` |
 
@@ -712,8 +712,9 @@ reads the right component:
 
 - the cap contour displacement (§8.4), the cap-level vertex and edge bounds,
   the reflex connector arc's length bound, the cap face area's displacement
-  term, and every offset-radius rounding read `dc`: the contour is the
-  section offset by `dc`, and `ds` does not enter it;
+  term, and every offset-radius rounding read `dc` and its own
+  unit-conversion rounding: the contour is the section offset by `dc`, and
+  `ds` does not enter it;
 - the side level `capZ ± ds`, its rounding plus `ds`'s own unit-conversion
   rounding (`levelDelta`), the straight-slab levels, the axial extent terms
   and the tessellator's band height read `ds`: the side contour is the
@@ -727,21 +728,26 @@ reads the right component:
   amount whatever rate the side contour moves at, so the sandwich between the
   wide and narrow windows still encloses the true flux.
 
-Each derived bound encloses for the same reason it encloses at `dc = ds`:
-none of the derivations equates the two setbacks. One term is measured rather
-than derived: the `Cone` area's window-skew allowance
-(`internal/capband/area.go`), which scales with the patch's own slant
-`√(ΔR² + H²)` and so with both setbacks. It encloses a quadrature of the
-ruled patch at `dc/ds` from 1/8 to 8 with at least 2.8 times margin. The
-orientation sample references keep
+Each bound encloses for the same reason it encloses at `dc = ds`: none of the
+derivations equates the two setbacks. That includes the `Cone` area's
+corner-skew term (§8.4), which reads the two corner skews, the two radii and
+the two levels, and so both setbacks. The orientation sample references keep
 a positive dot product with the true outward normal for any positive pair:
 a wall patch's normal is `(ds·n̂_wall, ∓dc·ẑ)` against the reference
 `(n̂_wall, ∓ẑ)`, and an apex patch's is `(−ds·r̂, ∓dc·ẑ)` against
 `(−r̂, ∓ẑ)`, so each dot product is `dc + ds > 0`.
 
-The in-plane offset reads `dc` as an exact input, so `dc`'s own
-unit-conversion rounding is not charged to the cap contour; the equal-setback
-band reads `d` the same way.
+A setback stated in a unit other than millimetres reaches the band as a
+rescaled float, some rounding away from the quantity the caller stated
+(`magnitudeInBounded`). The side level charges `ds`'s rounding as `levelDelta`.
+The cap contour charges `dc`'s rounding `dcDelta` through its displacement
+(§8.4): the enclosures are taken over every offset amount in
+`[dc − dcDelta, dc + dcDelta]`. The reflex connector arc's length is bracketed
+over the same span, a circular wall's cap arc charges its sweep times
+`dcDelta`, and the miter locus is enclosed out to `dc + dcDelta` at an axial
+rate read against `dc − dcDelta`. The equal-setback band charges `d`'s rounding
+the same way. A millimetre setback converts exactly, its span is the single
+point `dc`, and every reading is the one `dc` alone gives.
 
 With no option, or with `otherDistance` equal to `d` in the same unit, the
 band reads `dc = ds = d` and builds the same body bit for bit.
@@ -786,7 +792,10 @@ infinite one, beside a finite value, bounds nothing.
 Derive it as an ENCLOSURE, never as an error model: re-evaluate the same closed
 forms over rational intervals with the recorded coordinates taken exactly and
 outward-rounded square roots, and report the enclosure's greatest reach from the
-float point the build holds. Interval arithmetic is inclusion-monotonic, so the
+float point the build holds. The offset amount is itself an interval: the
+setback the caller stated lies within its own unit-conversion rounding of the
+float `dc` (§8.3.1), so every carrier, foot and radius is enclosed over that
+whole span. Interval arithmetic is inclusion-monotonic, so the
 box holds the denoted point whatever the platform's `sqrt` and `hypot` did, and
 nothing in the derivation assumes an ulp contract. Where no bounded box exists
 the call is SX14. A G1 join's corner is not a carrier intersection: its
@@ -860,6 +869,53 @@ need it, each composing a different existing bound for a different reason:
 All four helpers are zero wherever delta is zero (an axis-aligned section's
 exact miters), which is what keeps an all-Plane cap loop's Exact volume and
 its exact-rational centroid unchanged in that case.
+
+**A `Cone` patch's area.** The patch publishes the frustum-sector area
+`A₀ = (αc/2)·(R0+R1)·L`, `L = √(ΔR² + H²)`, at its cap sweep `αc`. The patch
+the build holds is ruled between two windows that differ at a mitered corner:
+`P(u,t) = (1−t)·S(u) + t·C(u)` over `[0,1]²`, the side end `S(u)` at radius `R0`
+and angle `θs0 + u·αs`, the cap end `C(u)` at radius `R1` and angle
+`θc0 + u·αc`, and the two levels `H` apart. Its area differs from `A₀` by at
+most
+
+```text
+|A − A₀| ≤ L·(R0·(Φs+Φe)/2 + αc·R1·Φ²/4) + R1·Φ²·(αs·R0 + αc·R1)/4 + H·αc·R1·Φ/2
+```
+
+where `Φs` and `Φe` bound the corner skews `φ = θc − θs` at the window's two
+ends and `Φ = max(Φs, Φe)`. The derivation:
+
+- `φ(u)` is linear in `u`, so `|φ(u)| ≤ Φ` everywhere, and
+  `αs − αc = φ(0) − φ(1)`, so `|αs − αc| ≤ Φs + Φe`.
+- In the frame turned to `θs(u)` the integrand is `|V|`, with
+  `V = (b·H, −a·H, a·R1·sin φ − b·(R1·cos φ − R0))`,
+  `a = −t·αc·R1·sin φ` and `b = (1−t)·αs·R0 + t·αc·R1·cos φ`. `A₀`'s integrand
+  is `|G|` with `G = (b₀·H, 0, −b₀·ΔR)` and `b₀ = αc·((1−t)·R0 + t·R1)`.
+- The difference regroups exactly as `V − G = (b−b₀)·(H, 0, −ΔR) + (0, −a·H, 0)
+  + (0, 0, ((1−t)·αs·R0·R1 − t·αc·R1²)·(1 − cos φ))`, with
+  `b − b₀ = (1−t)·R0·(αs − αc) − t·αc·R1·(1 − cos φ)`.
+- `||V| − |G|| ≤ |V − G|`, `|sin φ| ≤ Φ` and `1 − cos φ ≤ Φ²/2`; integrating
+  over `t` (each of `t` and `1 − t` integrates to `1/2`) gives the bound.
+
+`αc` is read at `|held| + capThAllow` and `αs` at `αc + Φs + Φe`. Each corner
+skew is the angle between the two ends' directions from the wall's centre: both
+ends and the centre are float64s, so the directions are exact rationals, and
+the angle is the `Atan2Interval` enclosure of their cross and dot products. The
+patch's ruled correspondence takes the skew on the branch its held windows
+name, and that branch is the principal one wherever both the enclosure and the
+held skew lie inside `(−π/2, π/2)`, since any other branch sits more than `π`
+from the held skew. A corner outside that range is `ErrUnsupported` (SX14):
+the band exists and this evaluator proves no area bound for its ruled patch.
+The sum is formed over rationals with the one square root rounded up, so the
+bound assumes no ulp contract. The term compares the ruled patch the build
+holds with `A₀`. The cap contour's and the side level's displacements from the
+denoted patch are the separate `contourAllow` and `levelDelta` terms below.
+
+The term is zero where both corner skews are. An apex patch's side directrix
+is the corner point itself, the same point at every angle, so it pairs with
+the cap arc at the arc's own angle and both skews are zero. A whole turn pairs
+its two circles at their seams and keeps that pairing all the way round, so
+both skews are the seams' one angle, zero when both seams lie on one ray.
 
 A band's SIDE level is displaced too, and by a different mechanism, so it is a
 separate term with its own helper. `sideZ` is the single float sum

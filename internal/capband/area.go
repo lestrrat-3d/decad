@@ -76,45 +76,15 @@ func patchAreaOf(g Patch) (float64, float64) {
 	// fact patchRawFlux's ruled-patch integral reads off both windows.
 	dth := math.Abs(g.CapTh1 - g.CapTh0)
 	area := dth / 2 * (R0 + R1) * slant
-	// This formula is the constant-slant frustum-sector shape unchanged; it
-	// is never claimed exact even when the two windows coincide (a Plane
-	// patch's own two-triangle bound above is the same kind of arithmetic-
-	// only envelope, never a tight one). Where the windows genuinely differ,
-	// the true ruled surface's own rulings are not all the same length —
-	// this formula's own "slant" assumption — so windowSkew widens the
-	// envelope by the reading the OTHER window would have given, a sound
-	// (generous, not tight) allowance for the gap between the two: the true
-	// area lies within the family this envelope already covers, and
-	// windowSkew is zero wherever the windows coincide (a tangent join, or
-	// either degenerate patch), leaving the rest of the bound unchanged.
-	// A reviewer reported this term failing to enclose on a REACHABLE body — a
-	// pi/2 sector sketch extruded 1e15 mm, cap chamfered 0.3 mm — quoting a
-	// true ruled-patch area of 2.9431408325276074 mm^2 against a published
-	// bound of 1.9647343287969778 mm^2. That reference is wrong, not this
-	// bound: it applied TRAPEZOID weights (1,2,2,...,2,1 per axis) under
-	// Simpson's 1/(9n^2) normalizer, so it returns exactly 4/9 of the
-	// integral. Its ratio to a converged reference is 0.4444444457 at n=200,
-	// 0.4444444447 at n=400 and 0.4444444445 at n=1200 — approaching 4/9
-	// rather than shrinking, which a genuine discretization error would.
-	// Tensor-product Gauss-Legendre on [0,1]^2 of |P_u x P_t| gives
-	// 6.4373261229841905 (n=8) through 6.4373261229841869 (n=64), successive
-	// deltas at float64 roundoff, and a correctly weighted composite Simpson
-	// agrees at 6.4373261229841914 (n=800). The true residual there is
-	// 0.6331514578014259, which this bound encloses with 3.10x margin. A sweep
-	// of 451 reachable Cone patches (height 10..1e16, phi pi/6..6, d 0.05..4,
-	// R 3/10/250) against GL-64/GL-96 found zero violations at a minimum
-	// enclosure ratio of 2.875871x.
-	//
-	// What that sweep does NOT cover, and what this term is therefore still
-	// only measured on: a side window of [0,2pi] against a cap window of
-	// [0.25,0.251] does exceed the bound, but reaching it means assigning
-	// Patch's fields directly. A regular wall's cap window is the
-	// offset trimmed at its own miter feet, so the skew is corner-local, and
-	// no reachable body in the sweep produced one.
-	sideDth := math.Abs(g.Th1 - g.Th0)
-	windowSkew := proofbound.ProductUpper(math.Abs(sideDth-dth), proofbound.ProductUpper(proofbound.AbsSumUpper(R0, R1), slant))
-	// The core term (everything but windowSkew, contourAllow and the level
-	// allowance below, which stand unchanged either way) takes the SMALLER of
+	// This formula is the constant-slant frustum-sector shape, read against the
+	// cap window alone. The patch the build holds is ruled between two windows
+	// that differ at a mitered corner, and coneSkewAreaAllow is the proven
+	// bound on how far that ruled patch's area sits from this formula's
+	// frustum sector at the same cap window. It is zero wherever the two
+	// directrices' ends lie on one ray from the centre at both corners.
+	skewAllow := coneSkewAreaAllow(g)
+	// The core term (everything but skewAllow, contourAllow and the level
+	// allowance, which stand unchanged either way) takes the SMALLER of
 	// two independently sound
 	// bounds: the unconditional envelope proofbound.ConservativeValueError always gives,
 	// and coneFrustumAreaBracket's certified interval — sound wherever it
@@ -124,8 +94,132 @@ func patchAreaOf(g Patch) (float64, float64) {
 		proofbound.ConservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H))),
 		coneFrustumAreaBracket(R0, R1, H, dth, g.CapThAllow, area),
 	)
-	bound := proofbound.AbsSumUpper(core, windowSkew, patchDisplacementAreaAllow(g))
+	bound := proofbound.AbsSumUpper(core, skewAllow, patchDisplacementAreaAllow(g))
 	return area, bound
+}
+
+// coneSkewAreaAllow is the proven bound on |A − A₀| for a Cone patch, where A
+// is the area of the ruled patch the build holds and A₀ the frustum sector
+// (Δθ/2)·(R0+R1)·√(ΔR²+H²) at the patch's exact cap sweep αc
+// (docs/modify-reach-design.md §8.4 derives it).
+//
+// The ruled patch is P(u,t) = (1−t)·S(u) + t·C(u) over [0,1]², with the side
+// end S(u) at radius R0 and angle θs(u) = θs0 + u·αs, the cap end C(u) at
+// radius R1 and angle θc(u) = θc0 + u·αc, both linear in u, and the two levels
+// H apart. The corner skew φ(u) = θc(u) − θs(u) is linear in u, so |φ(u)| never
+// exceeds Φ = max(Φs, Φe), the larger corner skew (SkewStart, SkewEnd), and the
+// side sweep differs from the cap one by αs − αc = φ(0) − φ(1), at most
+// Φs + Φe. In the frame turned to θs(u), the area integrand is |V| with
+//
+//	V = (b·H, −a·H, a·R1·sin φ − b·(R1·cos φ − R0)),
+//	a = −t·αc·R1·sin φ,  b = (1−t)·αs·R0 + t·αc·R1·cos φ,
+//
+// and A₀'s integrand is |G| with G = (b₀·H, 0, −b₀·ΔR), b₀ = αc·((1−t)·R0 + t·R1).
+// Their difference regroups exactly as
+//
+//	V − G = (b−b₀)·(H, 0, −ΔR) + (0, −a·H, 0) + (0, 0, ((1−t)·αs·R0·R1 − t·αc·R1²)·(1 − cos φ)),
+//	b − b₀ = (1−t)·R0·(αs − αc) − t·αc·R1·(1 − cos φ),
+//
+// so with |sin φ| ≤ Φ and 1 − cos φ ≤ Φ²/2, and ||V| − |G|| ≤ |V − G|
+// integrated over t (each of t and 1−t integrates to 1/2):
+//
+//	|A − A₀| ≤ L·(R0·(Φs+Φe)/2 + αc·R1·Φ²/4) + R1·Φ²·(αs·R0 + αc·R1)/4 + H·αc·R1·Φ/2,
+//
+// with L = √(ΔR²+H²), αc read at its upper bound |held| + CapThAllow and αs at
+// αc + Φs + Φe. Every factor is lifted from a float64 exactly, the one square
+// root rounds up (RatSqrtUp), and the sum is formed over rationals and rounded
+// up once, so the bound assumes no ulp contract anywhere. It is exactly zero
+// when both corner skews are, whatever αc is.
+//
+// A non-finite input answers +Inf, which publishes an unbounded area rather
+// than an understated one.
+func coneSkewAreaAllow(g Patch) float64 {
+	if g.SkewStart == 0 && g.SkewEnd == 0 {
+		return 0
+	}
+	rR0, rR1 := proofarith.FloatRat(g.SideRadius), proofarith.FloatRat(g.CapRadius)
+	rCap, rSide := proofarith.FloatRat(g.CapZ), proofarith.FloatRat(g.SideZ)
+	rDth, rAllow := proofarith.FloatRat(math.Abs(g.CapTh1-g.CapTh0)), proofarith.FloatRat(g.CapThAllow)
+	rPs, rPe := proofarith.FloatRat(g.SkewStart), proofarith.FloatRat(g.SkewEnd)
+	if rR0 == nil || rR1 == nil || rCap == nil || rSide == nil || rDth == nil || rAllow == nil || rPs == nil || rPe == nil ||
+		rR0.Sign() < 0 || rR1.Sign() < 0 || rAllow.Sign() < 0 || rPs.Sign() < 0 || rPe.Sign() < 0 {
+		return math.Inf(1)
+	}
+	rat := func() *big.Rat { return new(big.Rat) }
+	h := rat().Abs(rat().Sub(rCap, rSide))
+	dR := rat().Sub(rR1, rR0)
+	slant := proofarith.FloatRat(proofbound.RatSqrtUp(rat().Add(rat().Mul(dR, dR), rat().Mul(h, h))))
+	if slant == nil {
+		return math.Inf(1)
+	}
+	phi := rPs
+	if rPe.Cmp(phi) > 0 {
+		phi = rPe
+	}
+	phiSq := rat().Mul(phi, phi)
+	skewSum := rat().Add(rPs, rPe)
+	alphaC := rat().Add(rDth, rAllow)
+	alphaS := rat().Add(alphaC, skewSum)
+	half, quarter := big.NewRat(1, 2), big.NewRat(1, 4)
+
+	// L·(R0·(Φs+Φe)/2 + αc·R1·Φ²/4)
+	first := rat().Mul(slant, rat().Add(
+		rat().Mul(half, rat().Mul(rR0, skewSum)),
+		rat().Mul(quarter, rat().Mul(alphaC, rat().Mul(rR1, phiSq))),
+	))
+	// R1·Φ²·(αs·R0 + αc·R1)/4
+	second := rat().Mul(quarter, rat().Mul(rR1, rat().Mul(phiSq,
+		rat().Add(rat().Mul(alphaS, rR0), rat().Mul(alphaC, rR1)))))
+	// H·αc·R1·Φ/2
+	third := rat().Mul(half, rat().Mul(h, rat().Mul(alphaC, rat().Mul(rR1, phi))))
+	return proofbound.RatFloatUp(rat().Add(first, rat().Add(second, third)))
+}
+
+// CornerSkewUpper is a proven upper bound on the exact angle about (cU, cV)
+// between one corner's side directrix end and its cap directrix end, the
+// corner skew coneSkewAreaAllow reads. Both ends and the centre are float64s,
+// so the two directions from the centre are exact rationals, and the angle
+// between them is the proofbound.Atan2Interval enclosure of their cross and dot
+// products: no libm accuracy is assumed.
+//
+// That enclosure is the principal angle, and the skew the ruled patch takes is
+// the one on the branch the held windows name, held (the cap window's own
+// corner angle, put on the side window's branch, minus the side window's). The
+// two agree when both lie inside (−π/2, π/2): any other branch sits more than π
+// from held. ok is false otherwise, and false where either direction is zero.
+func CornerSkewUpper(cU, cV float64, side, capEnd Point, held float64) (float64, bool) {
+	if !(math.Abs(held) < math.Pi/2) {
+		return 0, false
+	}
+	rc := func(a, b float64) *big.Rat {
+		ra, rb := proofarith.FloatRat(a), proofarith.FloatRat(b)
+		if ra == nil || rb == nil {
+			return nil
+		}
+		return new(big.Rat).Sub(ra, rb)
+	}
+	au, av := rc(side.U, cU), rc(side.V, cV)
+	bu, bv := rc(capEnd.U, cU), rc(capEnd.V, cV)
+	if au == nil || av == nil || bu == nil || bv == nil {
+		return 0, false
+	}
+	if (au.Sign() == 0 && av.Sign() == 0) || (bu.Sign() == 0 && bv.Sign() == 0) {
+		return 0, false
+	}
+	cross := new(big.Rat).Sub(new(big.Rat).Mul(au, bv), new(big.Rat).Mul(av, bu))
+	dot := new(big.Rat).Add(new(big.Rat).Mul(au, bu), new(big.Rat).Mul(av, bv))
+	if cross.Sign() == 0 && dot.Sign() > 0 {
+		return 0, true
+	}
+	angle := proofbound.Atan2Interval(cross, dot, false)
+	upper := new(big.Rat).Abs(angle.Hi)
+	if lo := new(big.Rat).Abs(angle.Lo); lo.Cmp(upper) > 0 {
+		upper = lo
+	}
+	if upper.Cmp(proofbound.HalfPiInterval().Lo) >= 0 {
+		return 0, false
+	}
+	return proofbound.RatFloatUp(upper), true
 }
 
 // patchDisplacementAreaAllow is the part of a band patch's own area bound that
@@ -237,3 +331,6 @@ func DisplacementAreaAllow(g Patch) float64 { return patchDisplacementAreaAllow(
 func FrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
 	return coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held)
 }
+
+// SkewAreaAllow bounds a Cone patch's ruled area against its frustum sector.
+func SkewAreaAllow(g Patch) float64 { return coneSkewAreaAllow(g) }
