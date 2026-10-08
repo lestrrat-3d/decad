@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -98,11 +99,11 @@ func TestMirrorJoinCircleImageKeepsItsSense(t *testing.T) {
 	require.Zero(t, charge)
 	want := CircleSeg{Center: Point2{U: -5, V: 5}, Radius: units.Millimeters(2), CCW: false, TStart: 1, TEnd: 0}
 	require.Equal(t, []CurveSegment{want}, img)
-	_, err = walkOf(img[0], nil)
+	_, err = boundarywalk.WalkOf(img[0], nil)
 	require.NoError(t, err)
 
 	flipped := want
 	flipped.CCW = true
-	_, err = walkOf(flipped, nil)
+	_, err = boundarywalk.WalkOf(flipped, nil)
 	require.Error(t, err, "the premise: a flipped flag contradicts the range")
 }

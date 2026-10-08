@@ -14,6 +14,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -606,9 +607,9 @@ func TestLoftArcSegAgainstCircleSegRefusesS3(t *testing.T) {
 
 	// The premise the refusal rests on: a survey2d.WalkKind test could not have made
 	// this decision, because both sides resolve to the SAME survey2d.WalkCircular.
-	w0, err := walkOf(ccwArc, freeform.NewFreeformWork())
+	w0, err := boundarywalk.WalkOf(ccwArc, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	w1, err := walkOf(ccwCircle, freeform.NewFreeformWork())
+	w1, err := boundarywalk.WalkOf(ccwCircle, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, survey2d.WalkCircular, w0.Kind)
 	require.Equal(t, w0.Kind, w1.Kind, "both sides resolve to one walk kind; only the recorded type separates them")

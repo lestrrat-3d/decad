@@ -287,7 +287,7 @@ func resolveAnalyticRevolveExtentProfile(
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			walk, err := walkOf(segment, work)
+			walk, err := boundarywalk.WalkOf(segment, work)
 			if err != nil {
 				return err
 			}

@@ -227,7 +227,7 @@ type regionSnapAllow struct {
 func (ax axisFrame) auditAxisContact(profile ProfileRecord, work *freeform.FreeformWork) (regionSnapAllow, error) {
 	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
 	snap, err := revolveaxis.AuditAxisContact(ax.numeric(), loops, func(seg CurveSegment) (survey2d.SegmentWalk, error) {
-		w, err := walkOf(seg, work)
+		w, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return survey2d.SegmentWalk{}, err
 		}

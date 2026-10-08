@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -133,13 +134,13 @@ func thickenRibbon(ctx context.Context, chain ChainRecord, side ThickenSide, amo
 		if _, ok := seg.(LineSeg); !ok {
 			return ProfileRecord{}, fmt.Errorf(`%w: the open walk requires line-only axis-parallel segments`, ErrUnsupported)
 		}
-		w, err := walkOf(seg, work)
+		w, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return ProfileRecord{}, err
 		}
 		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 	}
-	walks, err := coalesceChainWalksContext(ctx, raw)
+	walks, err := boundarywalk.CoalesceChainWalksContext(ctx, raw)
 	if err != nil {
 		return ProfileRecord{}, err
 	}

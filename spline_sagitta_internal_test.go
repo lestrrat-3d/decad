@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/stretchr/testify/require"
 )
 
@@ -249,7 +250,7 @@ func quarterCircleFitSpans(t *testing.T) []freeform.BezierSpan {
 		theta := float64(k) * math.Pi / 8
 		fit[k] = Point2{U: radius * math.Cos(theta), V: radius * math.Sin(theta)}
 	}
-	spans, err := fitSplineBezierSpans(FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
+	spans, err := splinebezier.FitSplineBezierSpans(FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.NotEmpty(t, spans)
 	return spans
@@ -385,7 +386,7 @@ func carrierLineDistanceUpper(t *testing.T, span freeform.BezierSpan) float64 {
 
 func floatOfRatPoint(t *testing.T, p freeform.RatPoint) (float64, float64) {
 	t.Helper()
-	pt, ok := point2Of(p)
+	pt, ok := splinebezier.Point2Of(p)
 	require.True(t, ok, "a test fixture's control point must be representable")
 	return pt.U, pt.V
 }

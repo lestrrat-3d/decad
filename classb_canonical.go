@@ -4,6 +4,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -58,7 +59,7 @@ func (b *cbBuild) seedRecordedCorners() error {
 			if gi.cyl == gj.cyl {
 				continue
 			}
-			w, err := walkOf(segs[i], nil)
+			w, err := boundarywalk.WalkOf(segs[i], nil)
 			if err != nil {
 				return err
 			}
@@ -204,7 +205,7 @@ func (b *cbBuild) canonicalize(f *cbFace) error {
 		}
 		walks := make([]survey2d.SegmentWalk, n)
 		for i, seg := range segs {
-			w, err := walkOf(seg, nil)
+			w, err := boundarywalk.WalkOf(seg, nil)
 			if err != nil {
 				return err
 			}
@@ -297,7 +298,7 @@ func (b *cbBuild) split(f *cbFace) error {
 }
 
 func (b *cbBuild) splitSegment(f *cbFace, seg CurveSegment, c cbCarrier) ([]CurveSegment, error) {
-	w, err := walkOf(seg, nil)
+	w, err := boundarywalk.WalkOf(seg, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +335,7 @@ func (b *cbBuild) cylinderPieces() ([]brepFace, error) {
 				if !g.cyl || f.frame.axis[2] != g.axis {
 					continue
 				}
-				w, err := walkOf(seg, nil)
+				w, err := boundarywalk.WalkOf(seg, nil)
 				if err != nil {
 					return nil, err
 				}
@@ -379,11 +380,11 @@ func (b *cbBuild) cylinderPieces() ([]brepFace, error) {
 		if k.c.op == cbY {
 			recorded = b.cp.y.profile.Outer.Segments[k.c.idx]
 		}
-		rw, err := walkOf(recorded, nil)
+		rw, err := boundarywalk.WalkOf(recorded, nil)
 		if err != nil {
 			return nil, err
 		}
-		ww, err := walkOf(wseg, nil)
+		ww, err := boundarywalk.WalkOf(wseg, nil)
 		if err != nil {
 			return nil, err
 		}

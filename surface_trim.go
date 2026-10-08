@@ -624,7 +624,7 @@ func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (proofbound.Walk
 func trimBoundsWalks(profile ProfileRecord, work *freeform.FreeformWork) (*momentinput.ProfileWalks, error) {
 	before, beforeRecon := boundarywalk.WorkSpent(work)
 	outer, holes, err := prismcells.TrimBoundsWalks(profile.Outer, profile.Holes, func(seg CurveSegment) (survey2d.SegmentWalk, error) {
-		return walkOf(seg, work)
+		return boundarywalk.WalkOf(seg, work)
 	})
 	if err != nil {
 		return nil, err

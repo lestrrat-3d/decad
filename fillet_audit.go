@@ -228,7 +228,7 @@ func buildSegEntriesBudget(budget *proofbound.WorkBudget, loops []LoopRecord) ([
 			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return nil, err
 			}
-			w, err := walkOf(seg, work)
+			w, err := boundarywalk.WalkOf(seg, work)
 			if err != nil {
 				return nil, auditError(err, fmt.Sprintf(`loop %d segment %d: %v`, li, i, err))
 			}

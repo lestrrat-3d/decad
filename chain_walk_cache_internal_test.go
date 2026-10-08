@@ -40,7 +40,7 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 		for ci, chain := range payload.chains {
 			for _, segment := range chain.Segments {
 				before, beforeRecon := boundarywalk.WorkSpent(work)
-				walk, err := walkOf(segment, work)
+				walk, err := boundarywalk.WalkOf(segment, work)
 				require.NoError(t, err)
 				after, afterRecon := boundarywalk.WorkSpent(work)
 				captures[ci].walks = append(captures[ci].walks, walk)
@@ -85,7 +85,7 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 				near := freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - charge.Spent + 1}
 				cachedNear, freshNear := near, near
 				_, cachedErr := resolveOrRead(segment, &cachedNear, cachedWalks, ci, si)
-				_, freshErr := walkOf(segment, &freshNear)
+				_, freshErr := boundarywalk.WalkOf(segment, &freshNear)
 				require.ErrorIs(t, cachedErr, ErrUnsupported)
 				require.ErrorIs(t, freshErr, ErrUnsupported)
 				require.EqualError(t, cachedErr, freshErr.Error())

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -125,7 +126,7 @@ func TestPrismReexpressionRewound(t *testing.T) {
 	for _, loop := range append([]LoopRecord{got.Outer}, got.Holes...) {
 		walks := make([]Point2, 0, 2*len(loop.Segments))
 		for _, seg := range loop.Segments {
-			w, err := walkOf(seg, nil)
+			w, err := boundarywalk.WalkOf(seg, nil)
 			require.NoError(t, err)
 			walks = append(walks, Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV})
 		}
@@ -145,7 +146,7 @@ func TestPrismReexpressionRewound(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, -math.Pi, holeArea, 1e-9, "the re-wound hole winds clockwise")
 
-	w, err := walkOf(narrowed, nil)
+	w, err := boundarywalk.WalkOf(narrowed, nil)
 	require.NoError(t, err)
 	wantCharge, err := walkChargeOf(narrowed, w)
 	require.NoError(t, err)
@@ -229,7 +230,7 @@ func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	require.True(t, ok)
 	want := 0.0
 	for _, seg := range pb.profile.Outer.Segments {
-		w, err := walkOf(seg, nil)
+		w, err := boundarywalk.WalkOf(seg, nil)
 		require.NoError(t, err)
 		c, err := walkChargeOf(seg, w)
 		require.NoError(t, err)

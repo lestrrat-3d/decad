@@ -91,8 +91,6 @@ the rules leave to the byte budget.
 | `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See `docs/multibody-dynamics-design.md` §8. |
 | `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See `docs/dynamic-mass-design.md`. |
 | `moments_circular.go` | Adapts circle and arc records to `internal/circularbounds/`. |
-| `spline_bezier.go` | Charges sketch reconstruction and adapts `internal/splinebezier/`. See `docs/spline-design.md` §5.1. |
-| `spline_fit.go` | Adapts fit-spline conversion from `internal/splinebezier/`. See `docs/spline-design.md` §5.1.2. |
 
 ### Features
 
@@ -127,7 +125,6 @@ the rules leave to the byte budget.
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
 | `prism_payload.go` | `prismPayload`, its coordinate readings and envelopes. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces with displacement bounds. See `docs/evaluator-design.md` §5. |
-| `segment_walk_adapters.go` | Adapts root walk callers to `internal/boundarywalk/`. |
 | `prism_extent.go` | Prism extent readings, directional reach and box, each a bounded interval. See `docs/evaluator-design.md` §5. |
 | `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |

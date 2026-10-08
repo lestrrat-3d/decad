@@ -15,6 +15,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-go/option/v3"
@@ -375,11 +376,11 @@ func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, w
 	walks0 := make([]survey2d.SegmentWalk, n)
 	walks1 := make([]survey2d.SegmentWalk, n)
 	for j := range n {
-		w0, err := walkOf(c0.Segments[j], work0)
+		w0, err := boundarywalk.WalkOf(c0.Segments[j], work0)
 		if err != nil {
 			return nil, nil, err
 		}
-		w1, err := walkOf(c1.Segments[j], work1)
+		w1, err := boundarywalk.WalkOf(c1.Segments[j], work1)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -722,7 +723,7 @@ func fitSplineWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane, n 
 // same span count sit at the same span-native parameter.
 func denseWalkSamples(t *testing.T, seg CurveSegment, perSpan int) []Point2 {
 	t.Helper()
-	w, err := walkOf(seg, freeform.NewFreeformWork())
+	w, err := boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, survey2d.WalkFreeform, w.Kind)
 	spans := w.Spans

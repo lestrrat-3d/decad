@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -261,14 +262,14 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 		if loopWalks != nil {
 			w = loopWalks[i]
 		} else {
-			w, err = walkOf(seg, work)
+			w, err = boundarywalk.WalkOf(seg, work)
 			if err != nil {
 				return nil, err
 			}
 		}
 		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 	}
-	walks, err := coalesceWalksContext(ctx, raw)
+	walks, err := boundarywalk.CoalesceWalksContext(ctx, raw)
 	if err != nil {
 		return nil, err
 	}

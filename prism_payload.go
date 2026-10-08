@@ -223,7 +223,7 @@ func resolveOrRead(seg CurveSegment, work *freeform.FreeformWork, walks *momenti
 		}
 		return walks.At(loopIndex, segIndex), nil
 	}
-	return walkOf(seg, work)
+	return boundarywalk.WalkOf(seg, work)
 }
 
 // prismCentroidGeometryBound is a second, formula-independent proof. A solid's

@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -172,7 +173,7 @@ func (b *cbBuild) geom(c cbCarrier) cbGeom {
 		}
 		return cbGeom{axis: frame.axis[1], level: frame.sign[1]*s.Start.V + 0}
 	default:
-		w, _ := walkOf(seg, nil)
+		w, _ := boundarywalk.WalkOf(seg, nil)
 		return cbGeom{cyl: true, axis: frame.axis[2], seg: seg, center: frame.toX([3]float64{w.CU, w.CV, 0})}
 	}
 }

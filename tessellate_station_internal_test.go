@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -54,7 +55,7 @@ func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 		TStart: 0,
 		TEnd:   1,
 	}
-	w, err := walkOf(seg, freeform.NewFreeformWork())
+	w, err := boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	const n = 4
 	dth := (w.Th1 - w.Th0) / n

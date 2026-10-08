@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -251,7 +252,7 @@ func chainWalkEndpointAllow(ctx context.Context, chains []ChainRecord) (float64,
 			if err := ctx.Err(); err != nil {
 				return 0, false, err
 			}
-			walk, err := walkOf(segment, work)
+			walk, err := boundarywalk.WalkOf(segment, work)
 			if err != nil {
 				return 0, false, nil //nolint:nilerr // structural walk refusal withholds the reference
 			}
@@ -672,7 +673,7 @@ func brepGateDiameter(ctx context.Context, body *Body, bp brepPayload) (float64,
 		if err := ctx.Err(); err != nil {
 			return 0, false, err
 		}
-		w, err := walkOf(f.wall, work)
+		w, err := boundarywalk.WalkOf(f.wall, work)
 		if err != nil {
 			return 0, false, err
 		}

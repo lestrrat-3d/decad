@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -410,7 +411,7 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 // brepCarrierWalk walks one brep wall for the clearance model. ok is false
 // for a wall this kernel cannot carry, which leaves the body with no model.
 func brepCarrierWalk(seg CurveSegment) (survey2d.SegmentWalk, bool) {
-	w, err := walkOf(seg, nil)
+	w, err := boundarywalk.WalkOf(seg, nil)
 	if err != nil {
 		return survey2d.SegmentWalk{}, false
 	}

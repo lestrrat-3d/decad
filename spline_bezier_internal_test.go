@@ -11,15 +11,17 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
-)
 
-// The conversion is only sound if the spans ARE the recorded curve. sketch's own
-// evaluator is the falsifier: evaluate both at the same parameter and require
-// agreement to machine precision. Any indexing, knot or basis mistake shows up
-// here rather than as a quietly wrong area.
+	// The conversion is only sound if the spans ARE the recorded curve. sketch's own
+	// evaluator is the falsifier: evaluate both at the same parameter and require
+	// agreement to machine precision. Any indexing, knot or basis mistake shows up
+	// here rather than as a quietly wrong area.
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+)
 
 func evalSpans(t *testing.T, spans []freeform.BezierSpan, at float64) (float64, float64) {
 	t.Helper()
@@ -115,7 +117,7 @@ func TestSplineBezierMatchesGeomEvaluator(t *testing.T) {
 		coords[i] = [2]float64{point.U, point.V}
 	}
 
-	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+	spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	require.Len(t, spans, len(control)-3, "a clamped cubic over n controls has n-3 spans")
 
@@ -225,7 +227,7 @@ func TestSplineBezierSpansUseSketchFloatKnots(t *testing.T) {
 				knots[i] = polynomial.MustRatOf(knot)
 			}
 
-			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+			spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 			require.NoError(t, err)
 			require.Len(t, spans, controls-3)
 
@@ -257,7 +259,7 @@ func TestClosedSplineBezierMatchesGeomEvaluator(t *testing.T) {
 		coords[i] = [2]float64{point.U, point.V}
 	}
 
-	spans, err := closedSplineBezierSpans(
+	spans, err := splinebezier.ClosedSplineBezierSpans(
 		ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
 		&freeform.FreeformWork{},
 	)
@@ -287,7 +289,7 @@ func TestNURBSBezierMatchesGeomEvaluator(t *testing.T) {
 	weights := []float64{1, 1, 1, 1, 1}
 	curve := geom.NewNURBS(3, coords, knots, weights)
 
-	spans, err := nurbsBezierSpans(NURBSSeg{
+	spans, err := splinebezier.NURBSBezierSpans(NURBSSeg{
 		Degree:  3,
 		Control: control,
 		Knots:   knots,
@@ -345,7 +347,7 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := freeformBezierSpans(tc.segment, &freeform.FreeformWork{})
+			_, _, err := splinebezier.FreeformBezierSpans(tc.segment, &freeform.FreeformWork{})
 			require.Error(t, err)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.Contains(t, err.Error(), tc.message)
@@ -389,7 +391,7 @@ func TestRationalNURBSReasonPrecedesTheConversionCharge(t *testing.T) {
 	// counter is empty.
 	const liftCost = 2*4 + 8 + 4
 	work := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - liftCost}
-	_, _, err := freeformBezierSpans(rationalNURBSFixture(), work)
+	_, _, err := splinebezier.FreeformBezierSpans(rationalNURBSFixture(), work)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "rational NURBS")
@@ -400,7 +402,7 @@ func TestRationalNURBSReasonPrecedesTheConversionCharge(t *testing.T) {
 	// reports R7 instead. Such a record is refused either way, so R7 is equally
 	// true of it.
 	exhausted := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit}
-	_, _, err = freeformBezierSpans(rationalNURBSFixture(), exhausted)
+	_, _, err = splinebezier.FreeformBezierSpans(rationalNURBSFixture(), exhausted)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
@@ -467,7 +469,7 @@ func TestNURBSLiftChargePrecedesTheContentScan(t *testing.T) {
 		"one more control point does not fit")
 
 	start := time.Now()
-	_, _, err := freeformBezierSpans(degreeOneNURBSWithTrailingNaN(admitted), &freeform.FreeformWork{})
+	_, _, err := splinebezier.FreeformBezierSpans(degreeOneNURBSWithTrailingNaN(admitted), &freeform.FreeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrNotFinite)
 	require.Contains(t, err.Error(), "must be finite",
@@ -475,7 +477,7 @@ func TestNURBSLiftChargePrecedesTheContentScan(t *testing.T) {
 	require.Less(t, time.Since(start), time.Second,
 		"and the charge is what bounds how long that scan can be")
 
-	_, _, err = freeformBezierSpans(degreeOneNURBSWithTrailingNaN(admitted+1), &freeform.FreeformWork{})
+	_, _, err = splinebezier.FreeformBezierSpans(degreeOneNURBSWithTrailingNaN(admitted+1), &freeform.FreeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget",
@@ -523,7 +525,7 @@ func TestFreeformPreflightBoundaryCost(t *testing.T) {
 
 	var err error
 	elapsed, mallocs, bytes := costOf(func() {
-		_, _, err = freeformBezierSpans(worst, &freeform.FreeformWork{})
+		_, _, err = splinebezier.FreeformBezierSpans(worst, &freeform.FreeformWork{})
 	})
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget",
@@ -536,7 +538,7 @@ func TestFreeformPreflightBoundaryCost(t *testing.T) {
 		"and it lifts no array of the record's own size")
 
 	elapsed, mallocs, _ = costOf(func() {
-		_, _, err = freeformBezierSpans(past, &freeform.FreeformWork{})
+		_, _, err = splinebezier.FreeformBezierSpans(past, &freeform.FreeformWork{})
 	})
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Less(t, elapsed, 50*time.Millisecond,
@@ -613,7 +615,7 @@ func TestReconstructionChordsRestateSketchSampling(t *testing.T) {
 		{name: "fit spline is 16 per fit point", segment: FitSplineSeg{Fit: controls(100)}, want: 1600},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.want, reconstructionChords(tc.segment))
+			require.Equal(t, tc.want, momentinput.ReconstructionChords(tc.segment))
 		})
 	}
 }
@@ -627,18 +629,18 @@ func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 4, V: 0}, {U: 2, V: 3}}
 	one := ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
 
-	single := reconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one}}})
+	single := momentinput.ReconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one}}})
 	require.Equal(t, uint64(64), single.Chords)
 	require.Equal(t, uint64(64*64), single.Arrangement)
 
-	pair := reconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one, one}}})
+	pair := momentinput.ReconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one, one}}})
 	require.Equal(t, uint64(128), pair.Chords, "the chord total is the whole record's")
 	require.Equal(t, uint64(128*128), pair.Arrangement)
 	require.Greater(t, pair.Arrangement, 2*single.Arrangement,
 		"a sum of per-source squares drops every cross-source pair")
 
 	// A hole's chords are in the same arrangement as the outer loop's.
-	withHole := reconstructionOf(ProfileRecord{
+	withHole := momentinput.ReconstructionOf(ProfileRecord{
 		Outer: LoopRecord{Segments: []CurveSegment{one}},
 		Holes: []LoopRecord{{Segments: []CurveSegment{one}}},
 	})
@@ -648,7 +650,7 @@ func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 	// arrangements the validation always runs, and reports the per-arrangement
 	// charge each candidate profile then levies for itself.
 	work := &freeform.FreeformWork{}
-	arrangement, err := chargeReconstruction(
+	arrangement, err := momentinput.ChargeReconstruction(
 		ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one}}},
 		work,
 	)
@@ -670,13 +672,13 @@ func TestReconstructionChargeInternsSharedAnalyticEntity(t *testing.T) {
 	second := first
 	second.TStart, second.TEnd = 0.5, 1
 
-	single := reconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first}}})
-	shared := reconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first, second}}})
+	single := momentinput.ReconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first}}})
+	shared := momentinput.ReconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first, second}}})
 	require.Equal(t, single.Chords, shared.Chords, "two fragments naming one circle are charged once")
 
 	distinct := second
 	distinct.Center = Point2{U: 9, V: 5}
-	twoEntities := reconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first, distinct}}})
+	twoEntities := momentinput.ReconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first, distinct}}})
 	require.Equal(t, 2*single.Chords, twoEntities.Chords, "two distinct circles each contribute their chords")
 }
 
@@ -775,7 +777,7 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 	t.Run("continuous", func(t *testing.T) {
 		// The two one-sided limits at every break are the same recorded point, so
 		// the four cubic pieces meet: one connected curve this slicer cannot cut.
-		ctrl, err := ratPointsOf(squareControls(Point2{U: 1, V: 0}))
+		ctrl, err := splinebezier.RatPointsOf(squareControls(Point2{U: 1, V: 0}))
 		require.NoError(t, err)
 		knots := quarterKnots()
 		require.Len(t, knots, len(ctrl)+3+1)
@@ -789,7 +791,7 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 	t.Run("discontinuous", func(t *testing.T) {
 		// Move the first break's right-hand limit away from its left-hand one and
 		// the curve genuinely jumps there.
-		ctrl, err := ratPointsOf(squareControls(Point2{U: 1.5, V: 0}))
+		ctrl, err := splinebezier.RatPointsOf(squareControls(Point2{U: 1.5, V: 0}))
 		require.NoError(t, err)
 
 		_, err = freeform.ClampedBezierSpans(3, ctrl, quarterKnots())
@@ -802,7 +804,7 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 		// A degree-2 vector clamped one repeat too far at the start: a single
 		// quadratic Bézier with one dead control point, continuous everywhere, but
 		// 3 control points do not stride into whole degree-2 spans.
-		ctrl, err := ratPointsOf([]Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}})
+		ctrl, err := splinebezier.RatPointsOf([]Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}})
 		require.NoError(t, err)
 		knots := []*big.Rat{
 			new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat),
@@ -841,7 +843,7 @@ func TestUnchargedKnotProbesRefuse(t *testing.T) {
 	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
 
 	start := time.Now()
-	_, _, err := freeformBezierSpans(seg, &freeform.FreeformWork{})
+	_, _, err := splinebezier.FreeformBezierSpans(seg, &freeform.FreeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
@@ -886,7 +888,7 @@ func TestWideSpanIntegrationRefusesBeforeExpanding(t *testing.T) {
 	seg := NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
 
-	spans, _, err := freeformBezierSpans(seg, &freeform.FreeformWork{})
+	spans, _, err := splinebezier.FreeformBezierSpans(seg, &freeform.FreeformWork{})
 	require.NoError(t, err, "a single span needs no knot insertion")
 	require.Len(t, spans, 1)
 

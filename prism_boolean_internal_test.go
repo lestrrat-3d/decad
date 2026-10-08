@@ -14,6 +14,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -1205,7 +1206,7 @@ func TestWalkChargeOf(t *testing.T) {
 		{"whole CircleSeg", func() CurveSegment { s := circle; s.TStart, s.TEnd = 0, 1; return s }()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			w, err := walkOf(tc.seg, nil)
+			w, err := boundarywalk.WalkOf(tc.seg, nil)
 			require.NoError(t, err)
 			got, err := walkChargeOf(tc.seg, w)
 			require.NoError(t, err)
@@ -1230,7 +1231,7 @@ func TestWalkChargeOf(t *testing.T) {
 		}()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			w, err := walkOf(tc.seg, nil)
+			w, err := boundarywalk.WalkOf(tc.seg, nil)
 			require.NoError(t, err)
 			got, err := walkChargeOf(tc.seg, w)
 			require.NoError(t, err)
@@ -1241,7 +1242,7 @@ func TestWalkChargeOf(t *testing.T) {
 
 	t.Run("non-finite coordinate answers +Inf", func(t *testing.T) {
 		bad := LineSeg{Start: Point2{U: math.NaN(), V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 0.4}
-		w, err := walkOf(bad, nil)
+		w, err := boundarywalk.WalkOf(bad, nil)
 		require.NoError(t, err)
 		got, err := walkChargeOf(bad, w)
 		require.NoError(t, err)
@@ -1296,7 +1297,7 @@ func TestPrismCircularWalkChargeImpliesRefusal(t *testing.T) {
 		} {
 			t.Run(base.kind+"/"+rng.name, func(t *testing.T) {
 				seg := withRange(base.seg, rng.tStart, rng.tEnd)
-				w, err := walkOf(seg, nil)
+				w, err := boundarywalk.WalkOf(seg, nil)
 				require.NoError(t, err)
 				charge, err := walkChargeOf(seg, w)
 				require.NoError(t, err)
@@ -1484,7 +1485,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			w, err := walkOf(tc.seg, nil)
+			w, err := boundarywalk.WalkOf(tc.seg, nil)
 			require.NoError(t, err)
 			charge, err := walkChargeOf(tc.seg, w)
 			require.NoError(t, err)
@@ -1611,7 +1612,7 @@ func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T)
 	// are ranges the walk's own tolerance reads as a closed turn, so a refusal
 	// that consulted the walk would let them through.
 	for _, seg := range []CircleSeg{circle(0, math.Nextafter(1, 0)), circle(math.Nextafter(0, 1), 1)} {
-		w, err := walkOf(seg, nil)
+		w, err := boundarywalk.WalkOf(seg, nil)
 		require.NoError(t, err)
 		require.True(t, w.Closed,
 			"fixture [%v, %v] must be one circularWalk's own tolerance calls closed", seg.TStart, seg.TEnd)

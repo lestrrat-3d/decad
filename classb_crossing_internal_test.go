@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -49,7 +50,7 @@ func requireKeyedCharge(t *testing.T, result *Body, bp brepPayload) {
 		if f.planar() || f.delta == 0 {
 			continue
 		}
-		w, err := walkOf(f.wall, nil)
+		w, err := boundarywalk.WalkOf(f.wall, nil)
 		require.NoError(t, err)
 		band = math.Max(band, 2*f.delta*w.Length*(f.z1-f.z0))
 	}

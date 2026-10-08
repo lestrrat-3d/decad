@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/stretchr/testify/require"
 )
@@ -56,10 +57,10 @@ func TestFitSplineBezierMatchesSpansToAFewULPs(t *testing.T) {
 	fit := []Point2{{U: 0, V: 0}, {U: 4, V: 3}, {U: 9, V: -1}, {U: 12, V: 2}, {U: 15, V: 0}}
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 
-	spans, err := fitSplineBezierSpans(seg, &freeform.FreeformWork{})
+	spans, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.NoError(t, err)
 
-	interp, err := geom.NewFitInterpolant(fitCoords(fit))
+	interp, err := geom.NewFitInterpolant(splinebezier.FitCoords(fit))
 	require.NoError(t, err)
 	geomSpans := interp.Spans()
 	require.Len(t, spans, len(geomSpans))
@@ -99,10 +100,10 @@ func TestFitSplineEndpointsAreFitZeroAndActiveLast(t *testing.T) {
 	}
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 
-	spans, err := fitSplineBezierSpans(seg, &freeform.FreeformWork{})
+	spans, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.NoError(t, err)
 
-	start, end, err := freeformEndpoints(spans, false)
+	start, end, err := splinebezier.FreeformEndpoints(spans, false)
 	require.NoError(t, err)
 	require.Equal(t, fit[0], start, "the chain's first control point is Fit[0] exactly")
 	require.NotEqual(t, fit[len(fit)-1], end,
@@ -110,7 +111,7 @@ func TestFitSplineEndpointsAreFitZeroAndActiveLast(t *testing.T) {
 	require.Equal(t, fit[2], end, "the active end is the FIRST of the collapsed run, Points[k-1]")
 
 	// Cross-checked against geom's own interpolant directly.
-	interp, err := geom.NewFitInterpolant(fitCoords(fit))
+	interp, err := geom.NewFitInterpolant(splinebezier.FitCoords(fit))
 	require.NoError(t, err)
 	last := interp.Points[len(interp.Points)-1]
 	require.Equal(t, Point2{U: last[0], V: last[1]}, end)
@@ -147,7 +148,7 @@ func TestFitInterpolantChargeRefusesBeforeSolving(t *testing.T) {
 
 	var err error
 	start := time.Now()
-	allocated := allocatedByFit(func() { _, err = fitSplineBezierSpans(seg, &freeform.FreeformWork{}) })
+	allocated := allocatedByFit(func() { _, err = splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{}) })
 	elapsed := time.Since(start)
 
 	require.Error(t, err)
@@ -183,7 +184,7 @@ func TestFitInterpolantNonFiniteMapsToR16(t *testing.T) {
 		Fit:    []Point2{{U: -1e308, V: 0}, {U: 1e308, V: 1}},
 		TStart: 0, TEnd: 1,
 	}
-	_, err := fitSplineBezierSpans(seg, &freeform.FreeformWork{})
+	_, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.NotErrorIs(t, err, ErrNotFinite)
@@ -196,7 +197,7 @@ func TestFitInterpolantNonFiniteMapsToR16(t *testing.T) {
 func TestFitSplineTooFewPointsRefuses(t *testing.T) {
 	t.Parallel()
 	seg := FitSplineSeg{Fit: []Point2{{U: 1}}, TStart: 0, TEnd: 1}
-	_, err := fitSplineBezierSpans(seg, &freeform.FreeformWork{})
+	_, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.Contains(t, err.Error(), "at least 2 fit points")
@@ -212,7 +213,7 @@ func TestFitSplineAllCoincidentReturnsNoSpans(t *testing.T) {
 		Fit:    []Point2{{U: 3, V: 4}, {U: 3, V: 4}, {U: 3, V: 4}},
 		TStart: 0, TEnd: 1,
 	}
-	spans, err := fitSplineBezierSpans(seg, &freeform.FreeformWork{})
+	spans, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	require.Empty(t, spans)
 }
@@ -226,7 +227,7 @@ func TestFitSplineTrimmedRangeRefusesAtFullDomainGate(t *testing.T) {
 		Fit:    []Point2{{U: 0}, {U: 1, V: 1}, {U: 2}},
 		TStart: 0.25, TEnd: 0.75,
 	}
-	_, err := fitSplineBezierSpans(seg, &freeform.FreeformWork{})
+	_, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "full domain")

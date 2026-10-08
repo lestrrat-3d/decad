@@ -12,6 +12,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -292,7 +293,7 @@ func denseFreeformCapPoints(t *testing.T, pp prismPayload, samples int) []r3.Vec
 	work := freeform.NewFreeformWork()
 	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
 		for _, seg := range loop.Segments {
-			w, err := walkOf(seg, work)
+			w, err := boundarywalk.WalkOf(seg, work)
 			require.NoError(t, err)
 			if w.Kind != survey2d.WalkFreeform {
 				pts = append(pts,

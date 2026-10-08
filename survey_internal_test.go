@@ -17,6 +17,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -322,7 +323,7 @@ func TestWholeArcCandidateCarriesArcRadiusBound(t *testing.T) {
 		TStart: 0,
 		TEnd:   1,
 	}
-	w, err := walkOf(seg, freeform.NewFreeformWork())
+	w, err := boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Greater(t, w.RadiusBound, 0.0, `a hypot radius is never exact`)
 	e, ok := walkElem(w)
@@ -1058,7 +1059,7 @@ func TestArcWalkRadiusBoundStaysUnderTheKernelSlack(t *testing.T) {
 				// The whole production chain, so the bound under test is the
 				// one an element really carries: the held radius is the walk's
 				// own math.Hypot of recorded differences, not an ideal radius.
-				w, err := walkOf(ArcSeg{
+				w, err := boundarywalk.WalkOf(ArcSeg{
 					Center: Point2{U: cu, V: cv},
 					Start:  Point2{U: cu + du, V: cv + dv},
 					End:    Point2{U: cu - du, V: cv - dv},
@@ -1117,7 +1118,7 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 	// 0.49999999999999994 is the float64 immediately below 0.5.
 	const nearV = 0.49999999999999994
 	require.Equal(t, nearV, math.Nextafter(0.5, 0))
-	w, err := walkOf(LineSeg{
+	w, err := boundarywalk.WalkOf(LineSeg{
 		Start:  Point2{U: 0, V: 0.5},
 		End:    Point2{U: 10, V: nearV},
 		TStart: 0,

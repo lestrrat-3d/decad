@@ -14,6 +14,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -1032,7 +1033,7 @@ func wedgePinStations(t *testing.T) int {
 func wedgeArcRecord(t *testing.T) (ArcSeg, survey2d.SegmentWalk) {
 	t.Helper()
 	seg := ArcSeg{Center: pt(0, 0), Start: pt(wedgeRadius, 0), End: pt(0, wedgeRadius), TStart: 0, TEnd: 1}
-	w, err := walkOf(seg, nil)
+	w, err := boundarywalk.WalkOf(seg, nil)
 	require.NoError(t, err)
 	require.Equal(t, wedgeRadius, w.Radius, "the recorded arc must resolve to the fixture's own radius")
 	require.Equal(t, wedgeSweep, w.Th1-w.Th0, "the recorded arc must resolve to the fixture's own sweep")

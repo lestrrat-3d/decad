@@ -772,7 +772,7 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 		if err := ctx.Err(); err != nil {
 			return revolveWalks{}, err
 		}
-		w, err := walkOf(seg, work)
+		w, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return revolveWalks{}, err
 		}
@@ -786,7 +786,7 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 		}
 		raw[i] = survey2d.SideWalk{SegmentWalk: axisWalk, Segs: []int{i}}
 	}
-	walks, err := coalesceWalksContext(ctx, raw)
+	walks, err := boundarywalk.CoalesceWalksContext(ctx, raw)
 	if err != nil {
 		return revolveWalks{}, err
 	}
@@ -1419,7 +1419,7 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 		if err := ctx.Err(); err != nil {
 			return revolveWalks{}, err
 		}
-		w, err := walkOf(seg, work)
+		w, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return revolveWalks{}, err
 		}
@@ -1433,7 +1433,7 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 		}
 		raw[i] = survey2d.SideWalk{SegmentWalk: axisWalk, Segs: []int{i}}
 	}
-	walks, err := coalesceChainWalksContext(ctx, raw)
+	walks, err := boundarywalk.CoalesceChainWalksContext(ctx, raw)
 	if err != nil {
 		return revolveWalks{}, err
 	}
