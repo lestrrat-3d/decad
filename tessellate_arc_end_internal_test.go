@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvesampling"
+	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/sketch"
@@ -119,7 +120,7 @@ func TestChordLoopSampleReachesArcNaturalEnd(t *testing.T) {
 	arc := onlyArc(t, pp.profile.Outer.Segments)
 	face := &Face{}
 	cl, err := tessellation.ChordLoop(t.Context(), pp.profile.Outer, 0.2, 10, freeform.NewFreeformWork(), nil, 0,
-		func(survey2d.SideWalk) (*Face, error) { return face, nil }, chordStationBound)
+		func(survey2d.SideWalk) (*Face, error) { return face, nil }, stationbound.ChordStationBound)
 	require.NoError(t, err)
 	found := false
 	for j, p := range cl.Samples {

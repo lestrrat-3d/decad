@@ -27,7 +27,7 @@ import (
 // The station's recorded parameter is TStart + (k/n)·(TEnd − TStart), taken as
 // an EXACT rational — rounding it to a float first would enclose the recorded
 // curve at a neighbouring parameter and prove a bound about a point this
-// chording never named (chordStationBound's own rule). The plane-local
+// chording never named (stationbound.ChordStationBound's own rule). The plane-local
 // enclosure comes from circularbounds.EndpointInterval, and
 // revolvemesh.AxisCoordInterval carries it
 // into (z, ρ) through the payload's own axis frame with no rounding.

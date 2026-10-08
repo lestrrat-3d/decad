@@ -1,12 +1,14 @@
-package decad
+package stationbound
 
 import (
 	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
 // This file owns the proven bound on ONE interior chord station of a circular
@@ -14,14 +16,14 @@ import (
 // sourceBound(face), which docs/tessellation-reach-design.md §3 names deltaStore.
 //
 // A walk's own two endpoints already state what they are worth
-// (survey2d.SegmentWalk.startBound/endBound, extrude.go). Every sample BETWEEN them is a
-// point this package computed: chordLoop evaluates math.Cos/math.Sin at an angle
+// (survey2d.SegmentWalk.startBound/endBound, extrude.go). Every sample BETWEEN
+// them is a point the tessellator computed: chordLoop evaluates math.Cos/math.Sin at an angle
 // it formed itself, from a centre, a radius and a sweep the walk had already
 // rounded. None of that arithmetic is a quantity the record states, so the
 // station's held (u, v) is not a recorded coordinate and publishing it as one
 // would claim an exactness the build never proved.
 
-// chordStationBound is circularWalkEndBound's interior-sample twin: the proven
+// ChordStationBound is circularWalkEndBound's interior-sample twin: the proven
 // per-component gap between a chord station's held (u, v) and the point the
 // RECORD denotes at that station's own parameter.
 //
@@ -43,12 +45,12 @@ import (
 // representable as a rational, and a station index outside the walk's own
 // interior all answer +Inf on both components — the underivable bound the
 // tessellation refuses on (docs/tessellation-design.md §12), never a zero.
-func chordStationBound(seg CurveSegment, k, n int, heldU, heldV float64) proofbound.WalkEndBound {
+func ChordStationBound(seg sectionrecord.CurveSegment, k, n int, heldU, heldV float64) proofbound.WalkEndBound {
 	underivable := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 	if n <= 0 || k <= 0 || k >= n {
 		return underivable
 	}
-	seg, err := normalizeSegment(seg)
+	seg, err := sectionrecord.NormalizeSegment(seg)
 	if err != nil {
 		return underivable
 	}
@@ -61,7 +63,7 @@ func chordStationBound(seg CurveSegment, k, n int, heldU, heldV float64) proofbo
 	return boundarywalk.CircularPointBound(seg, rt, heldU, heldV)
 }
 
-// capOffsetStationBound is chordStationBound read on a wall's exact OFFSET
+// CapOffsetStationBound is ChordStationBound read on a wall's exact OFFSET
 // circle at the exact fraction k/n of the wall's own recorded window, k in
 // [0, n] inclusive: the gap between a held cap-contour sample and the point
 // docs/tessellation-reach-design.md §7's ideal polyhedron B1 places there.
@@ -76,12 +78,12 @@ func chordStationBound(seg CurveSegment, k, n int, heldU, heldV float64) proofbo
 // coordinate that is not finite all answer +Inf on both components — the
 // underivable bound the tessellation refuses on (docs/tessellation-design.md
 // §12), never a zero.
-func capOffsetStationBound(seg CurveSegment, k, n int, radiusOffset *big.Rat, heldU, heldV float64) proofbound.WalkEndBound {
+func CapOffsetStationBound(seg sectionrecord.CurveSegment, k, n int, radiusOffset *big.Rat, heldU, heldV float64) proofbound.WalkEndBound {
 	underivable := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 	if n <= 0 || k < 0 || k > n || radiusOffset == nil {
 		return underivable
 	}
-	seg, err := normalizeSegment(seg)
+	seg, err := sectionrecord.NormalizeSegment(seg)
 	if err != nil {
 		return underivable
 	}
@@ -91,7 +93,7 @@ func capOffsetStationBound(seg CurveSegment, k, n int, radiusOffset *big.Rat, he
 	}
 	frac := new(big.Rat).SetFrac64(int64(k), int64(n))
 	rt := new(big.Rat).Add(start, new(big.Rat).Mul(frac, span))
-	uIv, vIv, ok := circularOffsetEndpointInterval(seg, rt, radiusOffset)
+	uIv, vIv, ok := circularbounds.OffsetEndpointInterval(circularbounds.RecordSegment(seg), rt, radiusOffset)
 	if !ok {
 		return underivable
 	}

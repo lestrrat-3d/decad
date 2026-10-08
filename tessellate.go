@@ -18,6 +18,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -613,7 +614,7 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 		}
 		cl, err := tessellation.ChordLoop(ctx, loop, budget, pp.z1-pp.z0, work, pw, li, func(w survey2d.SideWalk) (*Face, error) {
 			return faceOfRole(wallRole(li, w.Segs[0]))
-		}, chordStationBound)
+		}, stationbound.ChordStationBound)
 		if err != nil {
 			return nil, err
 		}
@@ -821,8 +822,8 @@ func liftTessellationError(err error) error {
 // requireDerivableStore folds the per-vertex store displacements into the
 // payload-wide maximum, refusing a mesh whose own construction it cannot state
 // (docs/tessellation-design.md §12: a non-finite proof is a refusal, never an
-// infinite bound). chordStationBound's +Inf for an underivable enclosure lands
-// here.
+// infinite bound). stationbound.ChordStationBound's +Inf for an underivable
+// enclosure lands here.
 func requireDerivableStore(store []float64) (float64, error) {
 	return tessellation.StoreMax(store)
 }
@@ -959,7 +960,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		// resolves through walkOf here as it always has.
 		cl, err := tessellation.ChordLoop(ctx, loop, chord, h, work, nil, 0, func(w survey2d.SideWalk) (*Face, error) {
 			return faceOfRole(fmt.Sprintf(role, w.Segs[0]))
-		}, chordStationBound)
+		}, stationbound.ChordStationBound)
 		if err != nil {
 			return ring{}, err
 		}

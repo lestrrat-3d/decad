@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -376,7 +377,7 @@ func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *c
 	}
 	in.BandDelta[0], in.HasBandDelta[0] = cbp.bandDelta[capBandKey{loop: lm.li, start: true}]
 	in.BandDelta[1], in.HasBandDelta[1] = cbp.bandDelta[capBandKey{loop: lm.li, start: false}]
-	motion, err := tessellation.CapBlendCapMotion(budget, in, capOffsetStationBound)
+	motion, err := tessellation.CapBlendCapMotion(budget, in, stationbound.CapOffsetStationBound)
 	if err != nil {
 		return err
 	}
@@ -472,7 +473,7 @@ func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm 
 		Count: lm.count, CapRadius: lm.capRadius, CapTh0: lm.capTh0, CapTh1: lm.capTh1,
 		ArcCount: lm.arcCount, ArcTh0: lm.arcTh0, ArcTh1: lm.arcTh1,
 		Whole: lm.whole, Chamfered: lm.chamfered, D: cbp.loopOffset(lm.li),
-	}, budget, chordStationBound)
+	}, budget, stationbound.ChordStationBound)
 	if err != nil {
 		return err
 	}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/units"
 )
@@ -81,7 +82,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			func(w survey2d.SideWalk) (*Face, error) {
 				return faceOfRole(fmt.Sprintf("slab(%d).region(%d).side(%d,%d)",
 					col.start, col.region, col.loopIndex, w.Segs[0]))
-			}, chordStationBound)
+			}, stationbound.ChordStationBound)
 		if err != nil {
 			return nil, err
 		}

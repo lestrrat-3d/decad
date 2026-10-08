@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stationbound"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/units"
@@ -30,7 +31,7 @@ func TestChordStationBoundEnclosesACircleSegStation(t *testing.T) {
 	th := math.Pi / 4
 	heldU, heldV := 2+r*math.Cos(th), -3+r*math.Sin(th)
 
-	got := chordStationBound(seg, 1, 2, heldU, heldV)
+	got := stationbound.ChordStationBound(seg, 1, 2, heldU, heldV)
 	require.True(t, got.Derivable())
 	limit := 4 * proofbound.UlpOf(r)
 	require.LessOrEqual(t, math.Abs(got.U), limit, `the station's own u gap is a handful of ulps of the radius`)
@@ -38,7 +39,7 @@ func TestChordStationBoundEnclosesACircleSegStation(t *testing.T) {
 
 	// Falsifier: a held pair displaced by a visible amount is caught, so the
 	// small answer above is a reading of this station and not a constant.
-	off := chordStationBound(seg, 1, 2, heldU+1e-6, heldV)
+	off := stationbound.ChordStationBound(seg, 1, 2, heldU+1e-6, heldV)
 	require.Greater(t, off.U, 9e-7)
 	require.LessOrEqual(t, math.Abs(off.V), limit)
 }
@@ -63,7 +64,7 @@ func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 		th := w.Th0 + float64(k)*dth
 		heldU := w.CU + w.Radius*math.Cos(th)
 		heldV := w.CV + w.Radius*math.Sin(th)
-		got := chordStationBound(seg, k, n, heldU, heldV)
+		got := stationbound.ChordStationBound(seg, k, n, heldU, heldV)
 		require.True(t, got.Derivable(), `k=%d`, k)
 		require.Positive(t, math.Max(got.U, got.V), `k=%d: an arc station is never held exactly`, k)
 		require.Less(t, math.Max(got.U, got.V), 1e-12, `k=%d: and its enclosure stays at coordinate-rounding scale`, k)
@@ -89,7 +90,7 @@ func TestChordStationBoundRefusesWhatItCannotEnclose(t *testing.T) {
 		{name: "an empty chording names no station", seg: circle, k: 1, n: 0},
 	} {
 		t.Run(row.name, func(t *testing.T) {
-			got := chordStationBound(row.seg, row.k, row.n, row.heldU, row.heldV)
+			got := stationbound.ChordStationBound(row.seg, row.k, row.n, row.heldU, row.heldV)
 			require.False(t, got.Derivable())
 			require.True(t, math.IsInf(got.U, 1))
 			require.True(t, math.IsInf(got.V, 1))
