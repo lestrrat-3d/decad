@@ -146,7 +146,7 @@ a retired body is S17, by core §6's retire rule.
 |---|---|---|---|
 | **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds** for lateral edges here; reach RX1 adds complete cap loops | **builds** for cap removal here; reach RX1 adds the B4 multi-lump result and side/no-opening cases |
 | **R2** | `cupPayload` — a one-cap shell (B5/B6) | S3 | S3 |
-| **R3** | `revolvePayload` | reach RX2 for swept meridian junctions; otherwise S3/SX5 | reach RX2; otherwise S3/SX8 |
+| **R3** | `revolvePayload` | reach RX2 for swept meridian junctions; otherwise S3/SX5 | reach RX2; otherwise S2/SX8 |
 | **R4** | `facetedPayload` — a boolean output | reach SX9 | reach SX9 |
 | **R5** | `capBlendPayload` | reach SX10 | reach SX10 |
 | **R6** | `brepPayload`, or `stackedPrismPayload` through its face view | `docs/brep-modify-design.md` Table RB | Table RB |

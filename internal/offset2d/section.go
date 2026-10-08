@@ -37,34 +37,108 @@ func JoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t,
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		prev := walks[(i+n-1)%n]
-		cur := walks[i]
-		vU, vV := cur.StartU, cur.StartV
-		aox, aoy, la := Normalize(prev.TanOutU, prev.TanOutV)
-		bix, biy, lb := Normalize(cur.TanInU, cur.TanInV)
-		if la == 0 || lb == 0 {
-			return nil, ErrNoDirection
+		j, err := CornerJoin(walks[(i+n-1)%n], walks[i], s, t, tol)
+		if err != nil {
+			return nil, err
 		}
-		cross := aox*biy - aoy*bix
-		pA := Point{U: vU + s*t*(-aoy), V: vV + s*t*aox}
-		pB := Point{U: vU + s*t*(-biy), V: vV + s*t*bix}
-		if math.Abs(cross) > tol && (cross > 0) == (s < 0) {
-			joins[i] = Join{Arc: true, VertU: vU, VertV: vV, PA: pA, PB: pB}
-			continue
-		}
-		if math.Abs(cross) <= tol && aox*bix+aoy*biy > 0 {
-			joins[i] = Join{G1: true, VertU: vU, VertV: vV, M: pB}
-			continue
-		}
-		offA := offsetCarrier(prev, s, t, tol)
-		offB := offsetCarrier(cur, s, t, tol)
-		mx, my, ok := Intersect(offA, offB, vU, vV)
-		if !ok {
-			return nil, ErrNoIntersection
-		}
-		joins[i] = Join{VertU: vU, VertV: vV, M: Point{U: mx, V: my}}
+		joins[i] = j
 	}
 	return joins, nil
+}
+
+// CornerJoin resolves the one corner where prev arrives at cur's start, by
+// the rule JoinsBudget applies to every corner of a loop. A caller offsetting
+// an open chain reads its interior corners through it.
+func CornerJoin(prev, cur survey2d.SideWalk, s, t, tol float64) (Join, error) {
+	vU, vV := cur.StartU, cur.StartV
+	aox, aoy, la := Normalize(prev.TanOutU, prev.TanOutV)
+	bix, biy, lb := Normalize(cur.TanInU, cur.TanInV)
+	if la == 0 || lb == 0 {
+		return Join{}, ErrNoDirection
+	}
+	cross := aox*biy - aoy*bix
+	pA := Point{U: vU + s*t*(-aoy), V: vV + s*t*aox}
+	pB := Point{U: vU + s*t*(-biy), V: vV + s*t*bix}
+	if math.Abs(cross) > tol && (cross > 0) == (s < 0) {
+		return Join{Arc: true, VertU: vU, VertV: vV, PA: pA, PB: pB}, nil
+	}
+	if math.Abs(cross) <= tol && aox*bix+aoy*biy > 0 {
+		return Join{G1: true, VertU: vU, VertV: vV, M: pB}, nil
+	}
+	offA := offsetCarrier(prev, s, t, tol)
+	offB := offsetCarrier(cur, s, t, tol)
+	mx, my, ok := Intersect(offA, offB, vU, vV)
+	if !ok {
+		return Join{}, ErrNoIntersection
+	}
+	return Join{VertU: vU, VertV: vV, M: Point{U: mx, V: my}}, nil
+}
+
+// MirrorCornerJoin resolves the corner a walk makes with its own mirror image
+// across a line, at the walk's endpoint on that line: its end when atEnd,
+// where the mirror image leaves, and its start otherwise, where the mirror
+// image arrives. axis is that line, a point and a unit direction. This is the
+// corner a revolve meridian's symmetric union shows where an on-axis walk was
+// cancelled (modify-reach §9.3), and the join is that corner's join cut back
+// to the walk's own side of the line, so the mirror image is never built.
+//
+// The mirror tangent is the walk's own reflected one, used only to classify
+// the corner by JoinsBudget's rule. The join's points come from the walk and
+// the line alone. A miter is the walk's offset carrier met with the line,
+// where the mirror carrier meets it too. A G1 join is the walk's own offset
+// foot. An arc runs from the walk's offset foot to the line point t from the
+// corner along the line, which is that arc's midpoint: at the end the arc runs
+// PA (the foot) to PB (the line point), and at the start PA (the line point) to
+// PB (the foot), in the same rotational sense JoinsBudget's connector takes.
+func MirrorCornerJoin(w survey2d.SideWalk, atEnd bool, axis Curve, s, t, tol float64) (Join, error) {
+	dx, dy, ld := Normalize(axis.DX, axis.DY)
+	if !axis.IsLine || ld == 0 {
+		return Join{}, ErrNoDirection
+	}
+	var vU, vV, ax, ay, bx, by float64
+	var la float64
+	if atEnd {
+		vU, vV = w.EndU, w.EndV
+		ax, ay, la = Normalize(w.TanOutU, w.TanOutV)
+		k := ax*dx + ay*dy
+		bx, by = ax-2*k*dx, ay-2*k*dy
+	} else {
+		vU, vV = w.StartU, w.StartV
+		bx, by, la = Normalize(w.TanInU, w.TanInV)
+		k := bx*dx + by*dy
+		ax, ay = bx-2*k*dx, by-2*k*dy
+	}
+	if la == 0 {
+		return Join{}, ErrNoDirection
+	}
+	// The walk's own unit left normal at the corner, and its offset foot.
+	nx, ny := -ay, ax
+	if !atEnd {
+		nx, ny = -by, bx
+	}
+	foot := Point{U: vU + s*t*nx, V: vV + s*t*ny}
+	cross := ax*by - ay*bx
+	if math.Abs(cross) > tol && (cross > 0) == (s < 0) {
+		// The two feet are mirror images, so the arc between them crosses the
+		// line on the bisector of the two normals, which is the line itself.
+		sign := 1.0
+		if nx*dx+ny*dy < 0 {
+			sign = -1.0
+		}
+		on := Point{U: vU + s*t*sign*dx, V: vV + s*t*sign*dy}
+		if atEnd {
+			return Join{Arc: true, VertU: vU, VertV: vV, PA: foot, PB: on}, nil
+		}
+		return Join{Arc: true, VertU: vU, VertV: vV, PA: on, PB: foot}, nil
+	}
+	if math.Abs(cross) <= tol && ax*bx+ay*by > 0 {
+		return Join{G1: true, VertU: vU, VertV: vV, M: foot}, nil
+	}
+	mx, my, ok := Intersect(offsetCarrier(w, s, t, tol), axis, vU, vV)
+	if !ok {
+		return Join{}, ErrNoIntersection
+	}
+	return Join{VertU: vU, VertV: vV, M: Point{U: mx, V: my}}, nil
 }
 
 // OffsetRadius returns R − s*inside*t. A counterclockwise walk has material
