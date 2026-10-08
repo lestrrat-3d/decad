@@ -969,7 +969,7 @@ over a full turn the way two equal ones do — but it is still closed-form
 without any contour-sum machinery: it reduces to the standard cone-shadow
 identity `S_F = π(R_lo² − R_hi²)·Axis`, `R_lo`/`R_hi` the two rims' own
 radii ordered by which sits nearer the apex, read through the identical
-`boundedCircleRadius` this file's other arms already use. `flux_F = (apex −
+`stitchflux.CircleRadius` this file's other arms already use. `flux_F = (apex −
 anchor)·S_F` — `K_F = 0`, since the vector from the apex to any surface
 point runs along a ruling and is therefore normal-orthogonal by the same
 argument `NormalAt`'s own `Cone` case already encodes (`n = cosβ·radial −
@@ -1016,9 +1016,9 @@ same identity the `Cylinder` arm uses, with `Center` standing in for a point
 on the cylinder's axis — giving `K_F = σ·Radius·f.area`, the identical shape
 `Cylinder`'s own `K_F` takes. `Sphere` carries `Radius` as a bare
 `units.Value` with no bound field, exactly like `Cylinder` and `Cone`, but
-this arm cannot read `boundedCircleRadius`'s edge-length route the way they
+this arm cannot read `stitchflux.CircleRadius`'s edge-length route the way they
 do: a zero-loop face has no rim edge to read a circumference from at all.
-Instead `boundedSphereRadius` inverts the face's own already-proven
+Instead `stitchflux.SphereRadius` inverts the face's own already-proven
 `area`/`areaBound` (`Area = 4πR²`, so `R = √(Area/4π)`) through
 `boundedQuotient` and `boundedSqrt` — a reuse of an already-published
 reading, on the same terms `Cylinder`'s own `K_F` reuses `f.area` rather
@@ -1096,7 +1096,7 @@ together — the identical ambiguity above. So this arm reads
 `torusAxisIsCoordinateAligned` (the axis is exactly a signed coordinate
 vector, and `Center` sits exactly on it through the world origin) — the one
 condition under which that read carries the identical zero bound
-`boundedCircleRadius`'s own doc comment names for the other radius fields'
+`stitchflux.CircleRadius`'s own doc comment names for the other radius fields'
 axis-dependent rounding. Given that gate, the two rims' own axial offsets
 from `Center` (`boundedDot`, EXACT under an axis-aligned `Axis`) are checked
 against `±Minor` EXACTLY — never a tolerance, since a small residual proves
