@@ -404,17 +404,16 @@ func TestExtrudeVertexReachesDenotedMergedRun(t *testing.T) {
 // TestChainVertexReachesDenotedCutEnd records the two open fragments the
 // radius-7.3 circle leaves of the 1370 mm line along v = 0.3. Each is one line
 // segment trimmed at a crossing, so its free end there is a lerp at the
-// recorded t. ExtrudeChain and a quarter-turn RevolveChain about v = 20 must
-// publish a bound at that end which reaches the denoted point, while the
-// line's natural end stays Exact.
+// recorded t. Every vertex ExtrudeChain and a quarter-turn RevolveChain about
+// v = 20 place there must reach the denoted point, and the extruded line's
+// natural end stays Exact. The quarter-turn image of every vertex also
+// carries the rotation's own rounding, so the revolve's natural end is
+// bounded there too.
 //
-// The quarter-turn image of every vertex also carries the rotation's own
-// rounding, so the revolve's natural end is bounded there too.
-//
-// Shown-to-fail: with no walk-end term at a chain's free ends, ExtrudeChain
-// publishes the trimmed end Exact, 1.8e-15 mm from its denoted point. The
-// revolve leg is coverage only: RevolveChain charged its free ends' own walk
-// bound already.
+// Shown-to-fail on amd64: with no walk-end term at a chain's free ends,
+// ExtrudeChain publishes the trimmed end Exact, 1.8e-15 mm from its denoted
+// point. The revolve leg is coverage only: RevolveChain charged its free
+// ends' own walk bound already.
 func TestChainVertexReachesDenotedCutEnd(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
@@ -439,8 +438,11 @@ func TestChainVertexReachesDenotedCutEnd(t *testing.T) {
 
 		body, err := doc.ExtrudeChain(s, ch, decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
 		require.NoError(t, err)
+		// Whether the trimmed end's held lerp rounds is arch-specific: an FMA
+		// evaluation lands on this lerp exactly, a two-step one does not. Only
+		// the natural end is Exact on every arch.
 		bounded, _ := requireVerticesReachDenoted(t, body, ends, inPlane)
-		require.Equal(t, 2, bounded, `the trimmed end's two vertices carry a bound`)
+		require.LessOrEqual(t, bounded, 2, `the natural end's two vertices stay Exact`)
 
 		body, err = doc.RevolveChain(s, ch, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		require.NoError(t, err)
