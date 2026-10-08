@@ -65,10 +65,6 @@ type ivPoint = capcontour.Point
 type ivCarrier = capcontour.Carrier
 
 func ivUnion(a, b ivPoint) ivPoint { return capcontour.Union(a, b) }
-func ivOffsetFoot(vU, vV, tu, tv, d float64) (ivPoint, bool) {
-	return capcontour.OffsetFoot(vU, vV, tu, tv, d)
-}
-func ivCarrierOf(w survey2d.SideWalk, d float64) (ivCarrier, bool) { return capcontour.CarrierOf(w, d) }
 func ivExactOffsetRadius(w survey2d.SideWalk, d float64) (*big.Rat, bool) {
 	return capcontour.ExactOffsetRadius(w, d)
 }
@@ -85,6 +81,15 @@ func miterLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (
 // charged this one number, so no reader can be told a different story about the
 // same contour.
 //
+// The point the construction denotes is the section offset by the setback the
+// caller STATED, and d is only the float the unit conversion rounded that
+// setback to. dDelta is that rounding (capSetback.dcDelta), so every enclosure
+// below is taken over the whole span of offset amounts [d − dDelta, d + dDelta]
+// rather than at d alone: a setback stated in inches moves every corner of the
+// contour, and a contour displacement read at d would publish the held corner
+// as the denoted one. A setback stated in millimetres converts exactly, its span
+// is the single point d, and every enclosure is the one d alone gives.
+//
 // It is a MAXIMUM over the contour's own pieces rather than a per-point figure
 // because the band's readings mix them: a wall's cap edge runs between two
 // corner feet, a patch quad holds two, and a survey walking the band reads
@@ -97,7 +102,11 @@ func miterLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (
 // Exactness or lengthBound, so an edge whose length field were ever widened
 // to signal uncertainty would silently match every LongerThan query instead.
 // Uncertainty belongs in lengthBound alone.
-func capContourDelta(walks []survey2d.SideWalk, joins []cornerJoin, d float64) (float64, error) {
+func capContourDelta(walks []survey2d.SideWalk, joins []cornerJoin, d, dDelta float64) (float64, error) {
+	span, ok := capcontour.OffsetSpan(d, dDelta)
+	if !ok {
+		return 0, errCapContourUnbounded
+	}
 	delta := 0.0
 	for _, w := range walks {
 		if !w.IsCircular() {
@@ -107,14 +116,14 @@ func capContourDelta(walks []survey2d.SideWalk, joins []cornerJoin, d float64) (
 		if err != nil {
 			return 0, err
 		}
-		exact, ok := ivExactOffsetRadius(w, d)
+		exact, ok := capcontour.ExactOffsetRadiusOver(w, span)
 		if !ok {
 			return 0, errCapContourUnbounded
 		}
 		// The emitted arc sits at the float radius about the exact centre while
-		// the denoted one sits at the exact radius about it, so the radial gap
-		// between them IS the displacement of every point of that arc.
-		delta = math.Max(delta, proofarith.RationalFloatError(exact, held))
+		// the denoted one sits at a radius the span encloses about it, so the
+		// radial gap between them IS the displacement of every point of that arc.
+		delta = math.Max(delta, proofbound.IntervalFloatError(exact, held))
 	}
 	n := len(walks)
 	for i, j := range joins {
@@ -123,8 +132,8 @@ func capContourDelta(walks []survey2d.SideWalk, joins []cornerJoin, d float64) (
 		}
 		prev, cur := walks[(i+n-1)%n], walks[i]
 		if j.arc {
-			a, okA := ivOffsetFoot(j.vU, j.vV, prev.TanOutU, prev.TanOutV, d)
-			b, okB := ivOffsetFoot(j.vU, j.vV, cur.TanInU, cur.TanInV, d)
+			a, okA := capcontour.OffsetFootOver(j.vU, j.vV, prev.TanOutU, prev.TanOutV, span)
+			b, okB := capcontour.OffsetFootOver(j.vU, j.vV, cur.TanInU, cur.TanInV, span)
 			if !okA || !okB {
 				return 0, errCapContourUnbounded
 			}
@@ -137,16 +146,16 @@ func capContourDelta(walks []survey2d.SideWalk, joins []cornerJoin, d float64) (
 			// the enclosure is the HULL of the two shared-normal feet, so a join the
 			// dead zone classified G1 with a residual turn is charged the spread
 			// between the two normals it could have taken.
-			a, okA := ivOffsetFoot(j.vU, j.vV, prev.TanOutU, prev.TanOutV, d)
-			b, okB := ivOffsetFoot(j.vU, j.vV, cur.TanInU, cur.TanInV, d)
+			a, okA := capcontour.OffsetFootOver(j.vU, j.vV, prev.TanOutU, prev.TanOutV, span)
+			b, okB := capcontour.OffsetFootOver(j.vU, j.vV, cur.TanInU, cur.TanInV, span)
 			if !okA || !okB {
 				return 0, errCapContourUnbounded
 			}
 			delta = math.Max(delta, ivUnion(a, b).Reach(j.m.U, j.m.V))
 			continue
 		}
-		ca, okA := ivCarrierOf(prev, d)
-		cb, okB := ivCarrierOf(cur, d)
+		ca, okA := capcontour.CarrierOver(prev, span)
+		cb, okB := capcontour.CarrierOver(cur, span)
 		if !okA || !okB {
 			return 0, errCapContourUnbounded
 		}
@@ -168,17 +177,28 @@ func capContourDelta(walks []survey2d.SideWalk, joins []cornerJoin, d float64) (
 
 // capWholeCircleDelta is the cornerless closed circle's own contour
 // displacement — the one shape with no corner join at all, whose whole contour
-// is the concentric circle at the offset radius.
-func capWholeCircleDelta(w survey2d.SideWalk, d float64) (float64, error) {
+// is the concentric circle at the offset radius. dDelta is the setback's own
+// unit-conversion rounding, read as capContourDelta reads it.
+func capWholeCircleDelta(w survey2d.SideWalk, d, dDelta float64) (float64, error) {
 	held, err := capBandRadius(w, d)
 	if err != nil {
 		return 0, err
 	}
-	exact, ok := ivExactOffsetRadius(w, d)
+	radius, ok := capOffsetRadiusSpan(w, d, dDelta)
 	if !ok {
 		return 0, errCapContourUnbounded
 	}
-	return proofarith.RationalFloatError(exact, held), nil
+	return proofbound.IntervalFloatError(radius, held), nil
+}
+
+// capOffsetRadiusSpan encloses every radius a circular wall's cap contour
+// denotes: the wall radius offset by each amount the setback's span holds.
+func capOffsetRadiusSpan(w survey2d.SideWalk, d, dDelta float64) (proofbound.RatInterval, bool) {
+	span, ok := capcontour.OffsetSpan(d, dDelta)
+	if !ok {
+		return proofbound.RatInterval{}, false
+	}
+	return capcontour.ExactOffsetRadiusOver(w, span)
 }
 
 // loopContourDelta re-derives one loop's contour displacement from the loop
@@ -186,7 +206,7 @@ func capWholeCircleDelta(w survey2d.SideWalk, d float64) (float64, error) {
 // extentAlong, which evaluates the same contour through capLoopBoundary. It
 // walks and joins the loop exactly as buildCapBand does, so the two can never
 // disagree about the same contour.
-func loopContourDelta(ctx context.Context, loop LoopRecord, d float64) (float64, error) {
+func loopContourDelta(ctx context.Context, loop LoopRecord, d, dDelta float64) (float64, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
 	cl, err := oneLoopCornerLoop(budget, loop, work)
@@ -194,13 +214,13 @@ func loopContourDelta(ctx context.Context, loop LoopRecord, d float64) (float64,
 		return 0, err
 	}
 	if len(cl.walks) == 1 && cl.walks[0].Closed {
-		return capWholeCircleDelta(cl.walks[0], d)
+		return capWholeCircleDelta(cl.walks[0], d, dDelta)
 	}
 	joins, err := capOffsetJoins(budget, cl, d)
 	if err != nil {
 		return 0, err
 	}
-	return capContourDelta(cl.walks, joins, d)
+	return capContourDelta(cl.walks, joins, d, dDelta)
 }
 
 // The root proof and geometry callers keep their existing private names.
@@ -220,18 +240,18 @@ func capEdgeLengthBound(held float64, end, start Point2, delta float64) float64 
 	return capcontour.CapEdgeLengthBound(held, end, start, delta)
 }
 
-func capApexArcBound(j cornerJoin, d, held float64, wraps int, delta float64) float64 {
+func capApexArcBound(j cornerJoin, d, dDelta, held float64, wraps int, delta float64) float64 {
 	return capcontour.CapApexArcBound(
-		capcontour.ApexJoin{VU: j.vU, VV: j.vV, PA: j.pA, PB: j.pB}, d, held, wraps, delta,
+		capcontour.ApexJoin{VU: j.vU, VV: j.vV, PA: j.pA, PB: j.pB}, d, dDelta, held, wraps, delta,
 	)
 }
 
-func capCircleLengthBound(exactRadius *big.Rat, held float64) float64 {
-	return capcontour.CapCircleLengthBound(exactRadius, held)
+func capCircleLengthBound(radius proofbound.RatInterval, held float64) float64 {
+	return capcontour.CapCircleLengthBound(radius, held)
 }
 
-func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64, wraps int, delta float64) float64 {
-	return capcontour.CapWallArcBound(cU, cV, start, end, capRadius, held, wraps, delta)
+func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64, wraps int, delta, radialShift float64) float64 {
+	return capcontour.CapWallArcBound(cU, cV, start, end, capRadius, held, wraps, delta, radialShift)
 }
 
 func capSweepAllow(cU, cV, radius float64, start, end Point2, held float64, wraps int, delta float64) float64 {

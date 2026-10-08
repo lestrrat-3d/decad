@@ -179,6 +179,13 @@ func NearestTo(cands []Point, corner Point) (Point, bool) {
 	return out, found
 }
 
+// OffsetFootOver is OffsetFoot over every offset amount span holds. A span
+// of one point d is OffsetFoot(vU, vV, tu, tv, d)'s own enclosure, rational
+// for rational.
+func OffsetFootOver(vU, vV, tu, tv float64, span proofbound.RatInterval) (Point, bool) {
+	return offsetFootRange(vU, vV, tu, tv, span)
+}
+
 // offsetFootRange generalises OffsetFoot to an OFFSET INTERVAL rather
 // than one float: the enclosure of v + t·rot90(unit(t)) for every offset
 // amount t in tRange, the point family a line carrier's own anchor sweeps as

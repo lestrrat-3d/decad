@@ -19,9 +19,9 @@ import (
 )
 
 // equalCapSetback is an equal chamfer's setbacks for one cap: d across the cap
-// and d down the side, the side level carrying dDelta.
+// and d down the side, each carrying dDelta.
 func equalCapSetback(d, dDelta float64) capSetback {
-	return capSetback{dc: d, ds: d, dsDelta: dDelta}
+	return capSetback{dc: d, dcDelta: dDelta, ds: d, dsDelta: dDelta}
 }
 
 // TestCapBandMomentCoordUpperCoversOffsetBoundary is the regression for the
@@ -1053,6 +1053,164 @@ func TestAsymmetricCapSetbacksRefuseMixedPicks(t *testing.T) {
 		start, end, err := a.capSetbacks(caps, edges, both, map[int]bool{1: true})
 		require.NoError(t, err)
 		require.Equal(t, capSetback{dc: d, ds: other, dsDelta: otherDelta}, start)
-		require.Equal(t, capSetback{dc: other, ds: d}, end)
+		require.Equal(t, capSetback{dc: other, dcDelta: otherDelta, ds: d}, end)
 	})
+}
+
+// legendreNodes returns the n-point Gauss-Legendre nodes and weights on [0, 1].
+func legendreNodes(n int) ([]float64, []float64) {
+	legendre := func(z float64) (float64, float64) {
+		p1, p2 := 1.0, 0.0
+		for j := 1; j <= n; j++ {
+			p1, p2 = ((2*float64(j)-1)*z*p1-(float64(j)-1)*p2)/float64(j), p1
+		}
+		return p1, float64(n) * (z*p1 - p2) / (z*z - 1)
+	}
+	x := make([]float64, n)
+	w := make([]float64, n)
+	for i := range n {
+		z := math.Cos(math.Pi * (float64(i) + 0.75) / (float64(n) + 0.5))
+		for range 100 {
+			p, dp := legendre(z)
+			next := z - p/dp
+			if math.Abs(next-z) < 1e-16 {
+				z = next
+				break
+			}
+			z = next
+		}
+		_, dp := legendre(z)
+		x[i] = (1 - z) / 2
+		w[i] = 1 / ((1 - z*z) * dp * dp)
+	}
+	return x, w
+}
+
+// builtRuledPatchArea integrates the area of the ruled patch a built Cone
+// patch's geometry names: rulings from the side arc over (th0, th1) to the cap
+// arc over its window put on th0's branch, both angles linear in one
+// parameter, by tensor Gauss-Legendre over the exact partial derivatives.
+func builtRuledPatchArea(g capPatchGeom, n int) float64 {
+	capTh0, capTh1 := capWindowOnBranch(g.capTh0, g.capTh1, g.th0)
+	xs, ws := legendreNodes(n)
+	as, ac := g.th1-g.th0, capTh1-capTh0
+	r0, r1, h := g.sideRadius, g.capRadius, g.capZ-g.sideZ
+	total := 0.0
+	for i, u := range xs {
+		ts, tc := g.th0+u*as, capTh0+u*ac
+		sx, sy := r0*math.Cos(ts), r0*math.Sin(ts)
+		cx, cy := r1*math.Cos(tc), r1*math.Sin(tc)
+		dx, dy := cx-sx, cy-sy
+		dsx, dsy := -as*r0*math.Sin(ts), as*r0*math.Cos(ts)
+		dcx, dcy := -ac*r1*math.Sin(tc), ac*r1*math.Cos(tc)
+		for j, t := range xs {
+			pu, pv := (1-t)*dsx+t*dcx, (1-t)*dsy+t*dcy
+			nx, ny, nz := pv*h, -pu*h, pu*dy-pv*dx
+			total += ws[i] * ws[j] * math.Sqrt(nx*nx+ny*ny+nz*nz)
+		}
+	}
+	return total
+}
+
+// sectorSection draws a circular sector of radius r and full angle phi centred
+// at (cx, cy): two radii and the arc between their far ends.
+func sectorSection(cx, cy, r, phi float64) func(*sketch.Sketch) {
+	return func(s *sketch.Sketch) {
+		o := s.CreatePoint(cx, cy)
+		s.Fix(o)
+		px := s.CreatePoint(cx+r, cy)
+		py := s.CreatePoint(cx+r*math.Cos(phi), cy+r*math.Sin(phi))
+		s.CreateLine(o, px)
+		s.CreateLine(py, o)
+		s.CreateArc(o, px, py)
+	}
+}
+
+// concaveSideSection draws a side x side square whose top side is an arc
+// bowed sag into the square, so the arc's material lies outside its circle and
+// its cap contour offsets outward, meeting the two vertical sides at convex
+// miters.
+func concaveSideSection(side, sag float64) func(*sketch.Sketch) {
+	return func(s *sketch.Sketch) {
+		half := side / 2
+		r := (half*half + sag*sag) / (2 * sag)
+		a := s.CreatePoint(0, 0)
+		s.Fix(a)
+		b := s.CreatePoint(side, 0)
+		c := s.CreatePoint(side, side)
+		d := s.CreatePoint(0, side)
+		s.CreateLine(a, b)
+		s.CreateLine(b, c)
+		s.CreateLine(d, a)
+		o := s.CreatePoint(half, side+r-sag)
+		s.CreateArc(o, d, c)
+	}
+}
+
+// TestCapBandConeAreaBoundEnclosesBuiltRuledPatch checks every mitered Cone
+// patch a two-distance cap-loop chamfer builds publishes an area bound that
+// covers the ruled patch its own geometry names, over setback ratios dc/ds
+// from 1/1000 to 1000: arcs offset inward meeting lines (sectors of 30, 90 and
+// 340 degrees), an arc bowed into the section and offset outward, a sector
+// drawn 1e5 mm from the sketch origin, and a quarter disk at 1e5 and at 1e-2
+// times its size.
+//
+// Shown to fail: with coneSkewAreaAllow returning zero, every row's bound
+// falls below its mitered patch's residual.
+func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		sec    func(*sketch.Sketch)
+		h      float64
+		dc, ds float64
+	}{
+		{`sector 30, dc/ds 1/1000`, sectorSection(0, 0, 10, math.Pi/6), 100, 0.01, 10},
+		{`sector 30, dc/ds 1000`, sectorSection(0, 0, 10, math.Pi/6), 100, 1, 0.001},
+		{`sector 340, dc/ds 1/100`, sectorSection(0, 0, 10, 340*math.Pi/180), 1000, 1, 100},
+		{`sector 340, dc/ds 1000`, sectorSection(0, 0, 10, 340*math.Pi/180), 100, 4, 0.004},
+		{`concave arc, dc/ds 1/1000`, concaveSideSection(20, 4), 100, 0.01, 10},
+		{`concave arc, dc/ds 1000`, concaveSideSection(20, 4), 100, 4, 0.004},
+		{`sector far from origin`, sectorSection(1e5, 1e5, 10, math.Pi/2), 100, 1, 0.5},
+		{`quarter disk at 1e5 scale`, sectorSection(0, 0, 1e5, math.Pi/2), 1e6, 4e4, 40},
+		{`quarter disk at 1e-2 scale`, sectorSection(0, 0, 1e-2, math.Pi/2), 1, 4e-6, 4e-3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			tc.sec(s)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			prof := s.Profiles()[0]
+			for _, p := range s.Profiles() {
+				if len(p.Holes) > len(prof.Holes) {
+					prof = p
+				}
+			}
+			body, err := New().Extrude(s, prof, Distance{D: units.Millimeters(tc.h), Dir: Along})
+			require.NoError(t, err)
+			out, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(tc.dc),
+				WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(tc.ds)))
+			require.NoError(t, err)
+			cbp, ok := out.payload.(capBlendPayload)
+			require.True(t, ok)
+
+			mitered := 0
+			for _, p := range cbp.patches {
+				g := p.geom
+				if !g.circular || g.sideRadius == 0 || g.wholeTurn || capPatchWindowSkew(g) == 0 {
+					continue
+				}
+				mitered++
+				ruled := builtRuledPatchArea(g, 64)
+				require.InDelta(t, ruled, builtRuledPatchArea(g, 96), 1e-12*ruled, `the quadrature has converged`)
+				area, bound := patchAreaOf(g)
+				require.GreaterOrEqual(t, bound, math.Abs(ruled-area),
+					`patch %s publishes %v ± %v, and the ruled patch holds %v`, p.role, area, bound, ruled)
+			}
+			require.Positive(t, mitered, `the section has a mitered circular wall`)
+		})
+	}
 }

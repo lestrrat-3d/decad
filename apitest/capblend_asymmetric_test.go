@@ -567,60 +567,79 @@ func TestTessellateCapBlendAsymmetric(t *testing.T) {
 	})
 }
 
+// legendreNodes returns the n-point Gauss-Legendre nodes and weights on [0, 1].
+func legendreNodes(n int) ([]float64, []float64) {
+	legendre := func(z float64) (float64, float64) {
+		p1, p2 := 1.0, 0.0
+		for j := 1; j <= n; j++ {
+			p1, p2 = ((2*float64(j)-1)*z*p1-(float64(j)-1)*p2)/float64(j), p1
+		}
+		return p1, float64(n) * (z*p1 - p2) / (z*z - 1)
+	}
+	x := make([]float64, n)
+	w := make([]float64, n)
+	for i := range n {
+		z := math.Cos(math.Pi * (float64(i) + 0.75) / (float64(n) + 0.5))
+		for range 100 {
+			p, dp := legendre(z)
+			next := z - p/dp
+			if math.Abs(next-z) < 1e-16 {
+				z = next
+				break
+			}
+			z = next
+		}
+		_, dp := legendre(z)
+		x[i] = (1 - z) / 2
+		w[i] = 1 / ((1 - z*z) * dp * dp)
+	}
+	return x, w
+}
+
 // ruledQuarterDiskPatchArea integrates the area of quarterDiskBody's mitered
 // Cone patch as the build rules it: straight rulings from the side-level arc
 // (radius r over [0, π/2], at z = 0) to the cap-level arc (radius r − dc over
-// the window its two miter feet trim, at z = ds), sample for sample. Composite
-// Simpson over both parameters; the surface is smooth, so n = 400 converges far
-// below the published bounds.
-func ruledQuarterDiskPatchArea(r, dc, ds float64) float64 {
-	const n = 400
+// the window its two miter feet trim, at z = ds), both angles linear in one
+// parameter. Tensor Gauss-Legendre over the exact partial derivatives; the
+// surface is smooth, so n points converge to float64 roundoff well before
+// n = 64.
+func ruledQuarterDiskPatchArea(r, dc, ds float64, n int) float64 {
 	rc := r - dc
 	a := math.Atan2(dc, math.Sqrt(r*r-2*r*dc))
 	th0, th1 := 0.0, math.Pi/2
 	c0, c1 := a, math.Pi/2-a
-	point := func(u, v float64) r3.Vec {
+	xs, ws := legendreNodes(n)
+	total := 0.0
+	for i, u := range xs {
 		ts, tc := th0+u*(th1-th0), c0+u*(c1-c0)
 		side := r3.NewVec(r*math.Cos(ts), r*math.Sin(ts), 0)
 		capP := r3.NewVec(rc*math.Cos(tc), rc*math.Sin(tc), ds)
-		return side.Scale(1 - v).Add(capP.Scale(v))
-	}
-	weight := func(i int) float64 {
-		switch {
-		case i == 0 || i == n:
-			return 1
-		case i%2 == 1:
-			return 4
-		default:
-			return 2
+		dSide := r3.NewVec(-r*math.Sin(ts), r*math.Cos(ts), 0).Scale(th1 - th0)
+		dCap := r3.NewVec(-rc*math.Sin(tc), rc*math.Cos(tc), 0).Scale(c1 - c0)
+		pv := capP.Sub(side)
+		for j, v := range xs {
+			pu := dSide.Scale(1 - v).Add(dCap.Scale(v))
+			total += ws[i] * ws[j] * pu.Cross(pv).Len()
 		}
 	}
-	const h = 1e-6
-	total := 0.0
-	for i := 0; i <= n; i++ {
-		u := float64(i) / n
-		for j := 0; j <= n; j++ {
-			v := float64(j) / n
-			// Pu by central difference; Pv is exact (the ruling).
-			pu := point(math.Min(u+h, 1), v).Sub(point(math.Max(u-h, 0), v)).Scale(1 / (math.Min(u+h, 1) - math.Max(u-h, 0)))
-			pv := point(u, 1).Sub(point(u, 0))
-			total += weight(i) * weight(j) * pu.Cross(pv).Len()
-		}
-	}
-	return total / (9 * n * n)
+	return total
 }
 
 // TestCapBlendAsymmetricMiteredConeAreaEncloses checks a mitered Cone patch's
 // published area bound covers the ruled patch it stands for at two distances,
-// the frustum formula's window-skew allowance included, over setback ratios on
-// either side of one. The allowance is measured, not derived
-// (internal/capband/area.go), and these rows leave it at least 2.8 times the
-// residual; at dc = 4, ds = 0.5 the cap window has closed to 0.11 rad against
-// the side window's π/2.
+// over setback ratios dc/ds from 1/1000 to 1000, the cap window closing from
+// the side window's π/2 to 0.11 rad at dc = 4. The bound's skew term is
+// proven (internal/capband/area.go), and every row leaves the whole published
+// bound between 1.29 and 1.84 times the residual.
+//
+// Shown to fail: with coneSkewAreaAllow returning zero, every row's bound
+// falls below its residual.
 func TestCapBlendAsymmetricMiteredConeAreaEncloses(t *testing.T) {
 	t.Parallel()
 	const r, h = 10.0, 20.0
-	for _, tc := range []struct{ dc, ds float64 }{{1, 8}, {0.5, 3}, {4, 0.5}, {3, 1}, {2, 2}} {
+	for _, tc := range []struct{ dc, ds float64 }{
+		{0.01, 10}, {0.1, 10}, {1, 8}, {0.5, 3}, {2, 2}, {3, 1}, {4, 0.5}, {4, 0.04}, {4, 0.004},
+	} {
 		t.Run(fmt.Sprintf("dc=%g,ds=%g", tc.dc, tc.ds), func(t *testing.T) {
 			t.Parallel()
 			body := quarterDiskBody(t, r, h)
@@ -636,9 +655,154 @@ func TestCapBlendAsymmetricMiteredConeAreaEncloses(t *testing.T) {
 			require.NotNil(t, cone)
 			area, err := cone.Area()
 			require.NoError(t, err)
-			want := ruledQuarterDiskPatchArea(r, tc.dc, tc.ds)
+			want := ruledQuarterDiskPatchArea(r, tc.dc, tc.ds, 64)
+			require.InDelta(t, want, ruledQuarterDiskPatchArea(r, tc.dc, tc.ds, 96), 1e-12*want, `the quadrature has converged`)
 			require.LessOrEqual(t, math.Abs(area.Value.Mag()-want), area.Bound.Mag(),
 				`the published bound %v covers the ruled patch's %v mm^2`, area.Bound.Mag(), want)
 		})
 	}
+}
+
+// inchConversion is v converted to millimetres both ways: the float the
+// evaluator holds and the exact rational the stated quantity denotes.
+func inchConversion(t *testing.T, v units.Value) (float64, *big.Rat) {
+	t.Helper()
+	held, err := v.In(units.Millimeter)
+	require.NoError(t, err)
+	exact := new(big.Rat).Quo(new(big.Rat).Mul(new(big.Rat).SetFloat64(v.Mag()), new(big.Rat).SetFloat64(v.Unit().Factor())),
+		new(big.Rat).SetFloat64(units.Millimeter.Factor()))
+	require.NotEqual(t, 0, exact.Cmp(new(big.Rat).SetFloat64(held)), `the premise: the conversion to millimetres rounds`)
+	return held, exact
+}
+
+// ratWithin reports whether |value − want| <= bound, compared exactly.
+func ratWithin(value float64, want *big.Rat, bound float64) bool {
+	gap := new(big.Rat).Abs(new(big.Rat).Sub(new(big.Rat).SetFloat64(value), want))
+	return gap.Cmp(new(big.Rat).SetFloat64(bound)) <= 0
+}
+
+// TestCapBlendCapContourCarriesInPlaneDistanceRounding checks the cap contour
+// charges the unit conversion of the distance across the cap. The 100x60
+// plate's start cap is chamfered 0.1 in across the cap, which is 2.54 mm only
+// to within the conversion's rounding (3.7e-17 mm), so every cap-level corner
+// sits off the corner the stated distance denotes by that rounding on top of
+// the offset solve's own. The volume leg guards the two-distance body's volume
+// against the same denoted offset.
+//
+// Shown to fail: with the conversion left out of the cap contour's
+// displacement (capContourDelta reading the point d rather than its span), the
+// corners (97.46, 57.46) and (2.54, 57.46) published a bound of 6.280e-15 mm
+// and sat 6.312e-15 mm from the denoted corner, in both rows.
+func TestCapBlendCapContourCarriesInPlaneDistanceRounding(t *testing.T) {
+	t.Parallel()
+	inch := units.Inches(0.1)
+	dc, exactDC := inchConversion(t, inch)
+	const L, W, h = 100.0, 60.0, filletBoxHeight
+	for _, tc := range []struct {
+		name  string
+		equal bool
+	}{
+		{name: `two distances: dc in inches, ds in millimetres`},
+		{name: `equal: d in inches`, equal: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, box := capBlendBox(t)
+			var opts []decad.ChamferOption
+			if !tc.equal {
+				opts = append(opts, decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(decad.CapStart(box))), units.Millimeters(2)))
+			}
+			out, err := box.Chamfer(t.Context(), capLoopEdgesOn(box, false), inch, opts...)
+			require.NoError(t, err)
+			requireManifold(t, out)
+
+			corner := func(u, v *big.Rat) [2]*big.Rat { return [2]*big.Rat{u, v} }
+			sub := func(a float64, b *big.Rat) *big.Rat { return new(big.Rat).Sub(new(big.Rat).SetFloat64(a), b) }
+			denoted := []([2]*big.Rat){
+				corner(exactDC, exactDC), corner(exactDC, sub(W, exactDC)),
+				corner(sub(L, exactDC), exactDC), corner(sub(L, exactDC), sub(W, exactDC)),
+			}
+			checked := 0
+			for _, v := range out.Vertices() {
+				p := v.Position()
+				if p.Value.Z != 0 || p.Value.X == 0 || p.Value.X == L || p.Value.Y == 0 || p.Value.Y == W {
+					continue
+				}
+				want := denoted[0]
+				best := -1.0
+				for _, c := range denoted {
+					du, _ := sub(p.Value.X, c[0]).Float64()
+					dv, _ := sub(p.Value.Y, c[1]).Float64()
+					if d := math.Hypot(du, dv); best < 0 || d < best {
+						best, want = d, c
+					}
+				}
+				du, dv := sub(p.Value.X, want[0]), sub(p.Value.Y, want[1])
+				gap2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
+				require.Positive(t, gap2.Sign(), `the premise: the held corner is not the denoted one`)
+				bound, err := p.Bound.In(units.Millimeter)
+				require.NoError(t, err)
+				rb := new(big.Rat).SetFloat64(bound)
+				require.LessOrEqual(t, gap2.Cmp(new(big.Rat).Mul(rb, rb)), 0,
+					`cap-level corner %v publishes bound %v but sits off the denoted corner`, p.Value, bound)
+				checked++
+			}
+			require.Equal(t, 4, checked, `the cap contour has four corners`)
+
+			if tc.equal {
+				return
+			}
+			// The denoted volume, boxCapBandVolume over the exact dc.
+			const ds = 2.0
+			lw := new(big.Rat).SetFloat64(L * W)
+			want := new(big.Rat).Mul(lw, new(big.Rat).SetFloat64(h-ds))
+			band := new(big.Rat).Sub(lw, new(big.Rat).Mul(new(big.Rat).SetFloat64(L+W), exactDC))
+			band.Add(band, new(big.Rat).Mul(big.NewRat(4, 3), new(big.Rat).Mul(exactDC, exactDC)))
+			want.Add(want, new(big.Rat).Mul(new(big.Rat).SetFloat64(ds), band))
+			vol, err := out.Volume()
+			require.NoError(t, err)
+			bound, err := vol.Bound.In(units.CubicMillimeter)
+			require.NoError(t, err)
+			require.True(t, ratWithin(vol.Value.Mag(), want, bound),
+				`volume %v ± %v must enclose the volume the stated dc = %v mm denotes`, vol.Value.Mag(), bound, dc)
+		})
+	}
+}
+
+// TestCapBlendCapCircleCarriesInPlaneDistanceRounding checks a cornerless
+// circle's cap contour charges the same conversion. A radius-10 disk chamfered
+// 0.1 in holds its cap circle at 10 − 2.54 = 7.46 mm, a subtraction that rounds
+// to nothing, so the offset solve's own displacement is zero and the cap
+// circle's seam vertex sits off the denoted one by the conversion alone.
+//
+// Shown to fail: with the conversion left out (capWholeCircleDelta reading
+// the point d), the seam vertex published an Exact position 3.7e-17 mm off the
+// denoted seam.
+func TestCapBlendCapCircleCarriesInPlaneDistanceRounding(t *testing.T) {
+	t.Parallel()
+	const r, h = 10.0, 8.0
+	inch := units.Inches(0.1)
+	dc, exactDC := inchConversion(t, inch)
+	body := circleProfile(t, r, h)
+	out, err := body.Chamfer(t.Context(), capLoopEdges(body), inch)
+	require.NoError(t, err)
+	requireManifold(t, out)
+
+	denoted := new(big.Rat).Sub(new(big.Rat).SetFloat64(r), exactDC)
+	seams := 0
+	for _, v := range out.Vertices() {
+		p := v.Position()
+		if p.Value.Z != h {
+			continue
+		}
+		require.Equal(t, r-dc, p.Value.X, `the cap circle's seam sits at the held offset radius`)
+		gap := new(big.Rat).Abs(new(big.Rat).Sub(new(big.Rat).SetFloat64(p.Value.X), denoted))
+		require.Positive(t, gap.Sign(), `the premise: the held seam is not the denoted one`)
+		bound, err := p.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.True(t, ratWithin(p.Value.X, denoted, bound),
+			`the cap seam publishes bound %v (%v) but sits off the denoted seam`, bound, p.Exactness)
+		seams++
+	}
+	require.Equal(t, 1, seams, `the cap circle has one seam vertex`)
 }

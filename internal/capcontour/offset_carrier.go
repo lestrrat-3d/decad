@@ -170,25 +170,24 @@ func carrierOverRange(w survey2d.SideWalk, t0, t1 float64) (Carrier, bool) {
 	if rt0 == nil || rt1 == nil {
 		return Carrier{}, false
 	}
-	tRange := proofbound.Interval(rt0, rt1)
+	return CarrierOver(w, proofbound.Interval(rt0, rt1))
+}
+
+// CarrierOver is carrierOverRange over an offset interval stated exactly:
+// every carrier the wall's offset takes as the offset amount ranges over
+// span. A span of one point d is CarrierOf(w, d)'s own enclosure, rational
+// for rational.
+func CarrierOver(w survey2d.SideWalk, span proofbound.RatInterval) (Carrier, bool) {
 	if !w.IsCircular() {
-		p, okP := offsetFootRange(w.StartU, w.StartV, w.TanInU, w.TanInV, tRange)
+		p, okP := offsetFootRange(w.StartU, w.StartV, w.TanInU, w.TanInV, span)
 		dir, okD := UnitVec(w.TanInU, w.TanInV)
 		if !okP || !okD {
 			return Carrier{}, false
 		}
 		return Carrier{IsLine: true, P: p, Dir: dir}, true
 	}
-	rr := proofarith.FloatRat(w.Radius)
-	if rr == nil {
-		return Carrier{}, false
-	}
-	inside := big.NewRat(1, 1)
-	if w.Th1 < w.Th0 { // a clockwise walk has its material outside the circle
-		inside = big.NewRat(-1, 1)
-	}
-	r := proofbound.IntervalSub(proofbound.PointInterval(rr), proofbound.IntervalMul(tRange, proofbound.PointInterval(inside)))
-	if r.Lo.Sign() <= 0 {
+	r, ok := ExactOffsetRadiusOver(w, span)
+	if !ok {
 		return Carrier{}, false
 	}
 	c, okC := ExactPoint(w.CU, w.CV)
@@ -196,4 +195,35 @@ func carrierOverRange(w survey2d.SideWalk, t0, t1 float64) (Carrier, bool) {
 		return Carrier{}, false
 	}
 	return Carrier{C: c, R: r}, true
+}
+
+// ExactOffsetRadiusOver is ExactOffsetRadius over every offset amount span
+// holds: R − insideSign·t for t in span, taken exactly. It refuses a span
+// that reaches or passes the centre anywhere.
+func ExactOffsetRadiusOver(w survey2d.SideWalk, span proofbound.RatInterval) (proofbound.RatInterval, bool) {
+	rr := proofarith.FloatRat(w.Radius)
+	if rr == nil || span.Lo == nil || span.Hi == nil {
+		return proofbound.RatInterval{}, false
+	}
+	r := proofbound.IntervalSub(proofbound.PointInterval(rr), proofbound.IntervalMul(span, proofbound.PointInterval(InsideSignOf(w))))
+	if r.Lo.Sign() <= 0 {
+		return proofbound.RatInterval{}, false
+	}
+	return r, true
+}
+
+// OffsetSpan is every offset amount a setback held as the float d denotes when
+// its unit conversion committed at most dDelta: [d − dDelta, d + dDelta],
+// formed exactly. A setback stated in millimetres converts with no rounding,
+// and its span is the single point d.
+func OffsetSpan(d, dDelta float64) (proofbound.RatInterval, bool) {
+	rd := proofarith.FloatRat(d)
+	if rd == nil || dDelta < 0 || proofbound.IsNonFinite(dDelta) {
+		return proofbound.RatInterval{}, false
+	}
+	if dDelta == 0 {
+		return proofbound.PointInterval(rd), true
+	}
+	rw := proofarith.FloatRat(dDelta)
+	return proofbound.Interval(new(big.Rat).Sub(rd, rw), new(big.Rat).Add(rd, rw)), true
 }

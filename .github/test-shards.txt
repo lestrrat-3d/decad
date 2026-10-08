@@ -266,6 +266,7 @@
 3	0.00	TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta
 3	0.00	TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame
 3	0.00	TestBuildPatchFaceRemapsACrossingChainToErrDegenerate
+3	0.30	TestCapBandConeAreaBoundEnclosesBuiltRuledPatch
 3	0.02	TestCapBandMassBoundsChargeInheritedCapLevel
 3	0.00	TestCapBandMomentCoordUpperCoversOffsetBoundary
 3	0.00	TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand
@@ -275,6 +276,7 @@
 3	0.00	TestCapBlendConeMomentCoefficientsMatchReference
 3	0.04	TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus
 3	0.04	TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine
+3	0.02	TestCapBlendMeshCapMotionCarriesSetbackRounding
 3	0.00	TestCapJoinIsG1IsExact
 3	0.00	TestCapOffsetStationBoundReadsTheExactOffsetCircle
 3	0.00	TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg

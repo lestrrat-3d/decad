@@ -252,7 +252,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		// An equal chamfer sets both caps back d across the cap and d down the
 		// side; a two-distance one takes each cap's pair from its reference
 		// face (docs/modify-reach-design.md §8.3.1).
-		start := capSetback{dc: dmm, ds: dmm, dsDelta: dDelta}
+		start := capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}
 		end := start
 		if asym != nil {
 			if start, end, err = asym.capSetbacks(caps, edges, startLoops, endLoops); err != nil {

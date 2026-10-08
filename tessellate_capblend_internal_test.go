@@ -71,7 +71,7 @@ func TestCapBlendPayloadStoresEachBandsContourDisplacement(t *testing.T) {
 	require.NoError(t, err)
 	joins, err := capOffsetJoins(budget, cl, cbp.loopOffset(0))
 	require.NoError(t, err)
-	want, err := capContourDelta(cl.walks, joins, cbp.loopOffset(0))
+	want, err := capContourDelta(cl.walks, joins, cbp.loopOffset(0), cbp.loopSetback(0).dcDelta)
 	require.NoError(t, err)
 	require.Equal(t, want, stored)
 	require.NotNil(t, chamfered)
@@ -697,4 +697,43 @@ func TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus(t *testing.T) {
 			require.Equal(t, 1, checked, `the corner at (r, 0)`)
 		})
 	}
+}
+
+// TestCapBlendMeshCapMotionCarriesSetbackRounding checks a whole circle's cap
+// sample motion charges the unit conversion of the setback across the cap. A
+// radius-10 disk chamfered 0.1 in holds its cap circle at 10 − 2.54 = 7.46 mm
+// with no rounding of the subtraction, so its seam sample sits exactly on the
+// held offset circle and off the denoted one by the conversion alone.
+//
+// Shown to fail: with CapBlendMotionInput.DDelta unread, the seam sample's
+// motion is zero against a 3.7e-17 mm gap.
+func TestCapBlendMeshCapMotionCarriesSetbackRounding(t *testing.T) {
+	t.Parallel()
+	const r, h, tol = 10.0, 8.0, 0.05
+	inch := units.Inches(0.1)
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	diskSection(0, 0, r)(s)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), inch)
+	require.NoError(t, err)
+	cbp, ok := chamfered.payload.(capBlendPayload)
+	require.True(t, ok)
+	require.Positive(t, cbp.end.dcDelta, `the premise: the conversion to millimetres rounds`)
+
+	exactDC := exactConversion(inch, units.Millimeter)
+	denoted := new(big.Rat).Sub(new(big.Rat).SetFloat64(r), exactDC)
+	lms, _ := capBlendMotionUnderTest(t, cbp, tol)
+	lm := lms[0]
+	require.True(t, lm.whole)
+	seam := lm.capPts[0]
+	require.Zero(t, seam.V)
+	gap := new(big.Rat).Abs(new(big.Rat).Sub(new(big.Rat).SetFloat64(seam.U), denoted))
+	require.Positive(t, gap.Sign(), `the premise: the seam sample is not the denoted seam`)
+	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(lm.capMotion[0]).Cmp(gap), 0,
+		`the seam sample's motion %v covers its gap from the denoted seam`, lm.capMotion[0])
 }

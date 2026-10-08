@@ -469,8 +469,8 @@ patch and the cap contour (below).
 ### Geometry the payload states
 
 `capBlendPayload` (`capblend.go`) holds the receiver's `profile`, `frame`, `z0/z1` with their axial
-displacements, each chamfered cap's two setbacks (`capSetback`: `dc` across the cap, `ds` down the side with
-its conversion rounding `dsDelta`; `docs/modify-reach-design.md` §8.3.1), the selected
+displacements, each chamfered cap's two setbacks (`capSetback`: `dc` across the cap and `ds` down the side,
+each with its conversion rounding `dcDelta`, `dsDelta`; `docs/modify-reach-design.md` §8.3.1), the selected
 `startLoops`/`endLoops`, and `patches []capPatch` — every
 `chamferCap(cap, loop, k)` role beside its plane-local `capPatchGeom` (`capblend_geom.go`): a `Plane` patch's
 four corners, or a `Cone` patch's centre, `sideRadius`/`capRadius`, side window `th0..th1`, cap window
@@ -479,7 +479,9 @@ band's cap contour displacement `band.delta` is `capBandResult.delta`; it must a
 payload (`bandDelta map[bandKey]float64`) for the tessellator to read.
 
 Below, `d` names the setback of whichever axis a term measures. An in-plane term — the cap contour, an
-offset radius `R ∓ d`, a connector arc of radius `d`, a G1 foot `P + s·d·n` — reads the cap's `dc`. An axial
+offset radius `R ∓ d`, a connector arc of radius `d`, a G1 foot `P + s·d·n` — reads the cap's `dc`, and its
+rounding `dcDelta` reaches it through the band's contour displacement and, for a circular wall's cap sample
+bounded against the offset circle at `dc`, as a radial term of its own. An axial
 term — a level pulled in by `d`, the band height `dUpper = d + dDelta`, a miter locus's axial span — reads
 the cap's `ds` and `dsDelta`. A loop chamfered on both caps takes one pair on both, so a per-loop count or
 gap serves either cap.

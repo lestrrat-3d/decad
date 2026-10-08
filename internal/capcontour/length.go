@@ -62,17 +62,23 @@ func arcSweepAllow(radius, delta float64) (float64, bool) {
 }
 
 // CapApexArcBound bounds the reflex connector arc's held length d·(th0 − th1).
-// The arc's centre is the ORIGINAL corner and its radius is exactly the
-// setback, both recorded, so the only error is in the sweep: the exact turn
-// between the two feet the build actually holds (an proofbound.Atan2Interval bracket, so
-// no libm accuracy is assumed) plus the turn those feet's own displacement can
-// account for.
-func CapApexArcBound(j ApexJoin, d, held float64, wraps int, delta float64) float64 {
-	fallback := proofbound.ConservativeValueError(held, proofbound.ProductUpper(proofbound.TwoPiUpper(), math.Abs(d)))
+// The arc's centre is the ORIGINAL corner, recorded, and its radius is the
+// setback, which denotes the offset amounts OffsetSpan(d, dDelta) holds: the
+// float d exactly for a setback stated in millimetres, and d widened by its own
+// unit conversion's rounding dDelta otherwise. The remaining error is in the
+// sweep: the exact turn between the two feet the build actually holds (an
+// proofbound.Atan2Interval bracket, so no libm accuracy is assumed) plus the turn
+// those feet's own displacement can account for.
+func CapApexArcBound(j ApexJoin, d, dDelta, held float64, wraps int, delta float64) float64 {
+	radiusUpper := math.Abs(d)
+	if dDelta > 0 {
+		radiusUpper = proofbound.AbsSumUpper(d, dDelta)
+	}
+	fallback := proofbound.ConservativeValueError(held, proofbound.ProductUpper(proofbound.TwoPiUpper(), radiusUpper))
 	aU, aV := proofarith.FloatRat(j.PA.U-j.VU), proofarith.FloatRat(j.PA.V-j.VV)
 	bU, bV := proofarith.FloatRat(j.PB.U-j.VU), proofarith.FloatRat(j.PB.V-j.VV)
-	rd := proofarith.FloatRat(d)
-	if aU == nil || aV == nil || bU == nil || bV == nil || rd == nil {
+	span, okSpan := OffsetSpan(d, dDelta)
+	if aU == nil || aV == nil || bU == nil || bV == nil || !okSpan {
 		return fallback
 	}
 	sweep := proofbound.IntervalSub(proofbound.Atan2Interval(aV, aU, false), proofbound.Atan2Interval(bV, bU, false))
@@ -95,18 +101,19 @@ func CapApexArcBound(j ApexJoin, d, held float64, wraps int, delta float64) floa
 	if !ok {
 		return fallback
 	}
-	bound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(proofbound.IntervalScale(sweep, rd), held), turn)
+	bound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(proofbound.IntervalMul(sweep, span), held), turn)
 	return math.Min(bound, fallback)
 }
 
-// CapCircleLengthBound bounds a whole cap-level circle's held 2πr against the
-// EXACT offset radius: π is bracketed by proofbound's rational constants,
-// so the enclosure needs no float value of π and no libm accuracy.
-func CapCircleLengthBound(exactRadius *big.Rat, held float64) float64 {
-	if exactRadius == nil {
+// CapCircleLengthBound bounds a whole cap-level circle's held 2πr against
+// every radius the offset denotes, radius (ExactOffsetRadiusOver): π is
+// bracketed by proofbound's rational constants, so the enclosure needs no
+// float value of π and no libm accuracy.
+func CapCircleLengthBound(radius proofbound.RatInterval, held float64) float64 {
+	if radius.Lo == nil || radius.Hi == nil {
 		return math.Inf(1)
 	}
-	circumference := proofbound.IntervalScale(proofbound.TwoPiInterval(), exactRadius)
+	circumference := proofbound.IntervalMul(proofbound.TwoPiInterval(), radius)
 	return proofbound.IntervalFloatError(circumference, held)
 }
 
@@ -158,9 +165,16 @@ func capSweepBracket(cU, cV float64, start, end sectionrecord.Point2, wraps int,
 // enclosure of the two feet's own turn about the centre, so no libm accuracy
 // is assumed of the sweep itself, plus wraps (capWallSweep's own unwrap count)
 // to reproduce the same branch, plus the turn the two feet's own contour
-// displacement can account for.
-func CapWallArcBound(cU, cV float64, start, end sectionrecord.Point2, capRadius, held float64, wraps int, delta float64) float64 {
-	fallback := proofbound.ConservativeValueError(held, proofbound.ProductUpper(proofbound.TwoPiUpper(), math.Abs(capRadius)))
+// displacement can account for. radialShift is how far the denoted arc's
+// radius can sit from capRadius beyond the offset solve's own rounding: the
+// unit conversion's rounding of the setback across the cap, zero for a setback
+// stated in millimetres.
+func CapWallArcBound(cU, cV float64, start, end sectionrecord.Point2, capRadius, held float64, wraps int, delta, radialShift float64) float64 {
+	radiusUpper := math.Abs(capRadius)
+	if radialShift > 0 {
+		radiusUpper = proofbound.AbsSumUpper(capRadius, radialShift)
+	}
+	fallback := proofbound.ConservativeValueError(held, proofbound.ProductUpper(proofbound.TwoPiUpper(), radiusUpper))
 	sweep, shift, ok := capSweepBracket(cU, cV, start, end, wraps, delta)
 	if !ok {
 		return fallback
@@ -169,12 +183,28 @@ func CapWallArcBound(cU, cV float64, start, end sectionrecord.Point2, capRadius,
 	if rd == nil {
 		return fallback
 	}
-	turn, ok := arcSweepAllow(freeform.DownRound(math.Abs(capRadius)), shift)
+	r := freeform.DownRound(math.Abs(capRadius))
+	turn, ok := arcSweepAllow(r, shift)
 	if !ok {
 		return fallback
 	}
 	bound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(proofbound.IntervalScale(sweep, rd), held), turn)
+	if radialShift > 0 {
+		// The denoted arc runs radialShift off the held radius along its whole
+		// sweep, which moves its length by that much per radian swept: the
+		// held feet's bracketed turn plus the turn their displacement allows.
+		sweepUpper := proofbound.AbsSumUpper(intervalMagnitudeUpper(sweep), proofbound.UpRound(turn/r))
+		bound = proofbound.AbsSumUpper(bound, proofbound.ProductUpper(sweepUpper, radialShift))
+	}
 	return math.Min(bound, fallback)
+}
+
+// intervalMagnitudeUpper is an upper bound on |x| over every x the interval
+// holds.
+func intervalMagnitudeUpper(iv proofbound.RatInterval) float64 {
+	lo := proofbound.RatFloatUp(new(big.Rat).Abs(iv.Lo))
+	hi := proofbound.RatFloatUp(new(big.Rat).Abs(iv.Hi))
+	return math.Max(lo, hi)
 }
 
 // CapSweepAllow bounds |held − trueSweep| for a cap-level directrix's own RAW
