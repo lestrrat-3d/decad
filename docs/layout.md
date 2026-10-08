@@ -296,7 +296,7 @@ the rules leave to the byte budget.
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
 | `internal/sweepmitre/` | Mitred profile gates, exact sections and measurements. See sweep §16. |
 | `internal/coil/` | Coil stations, axis coordinates, moments and closed forms. See helix §5, §7. |
-| `internal/coilshell/` | Held coil stations, vertex bounds, triangles, orientation, crossing audit and mesh proofs. See helix §5, §8. |
+| `internal/coilshell/` | Builds the held coil shell and mesh proofs. See helix §5, §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
 | `internal/momentinput/` | Owns profile records, validation, measurements and the profile walk cache. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
