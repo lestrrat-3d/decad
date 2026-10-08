@@ -149,6 +149,59 @@ func TestClassBCutCrossSlot(t *testing.T) {
 	require.Equal(t, Exact, result.centroid.Exactness)
 }
 
+// TestClassBRootedCutKeepsThePrismsConvexity drills a blind Ø6 hole along
+// −y into the wall y = 20 of an L prism, (0,0) (40,0) (40,20) (20,20)
+// (20,40) (0,40), z 0..20, through (30, ·, 10) down to y = 12. The pierced
+// wall becomes a planar face recording the prism's axis, so the vertical line
+// it shares with the swept wall x = 20 at the reflex corner (20, 20) is a
+// junction, read from the turn as the plain prism reads it: concave. Every
+// straight edge carries the plain prism's answer, and the hole's two circles
+// read concave. Shown to fail with the side-versus-planar arm of
+// brepgeom.Convex reading the planar face's loop role, and with the slab face
+// recording no sweep (the reflex line then read convex either way).
+func TestClassBRootedCutKeepsThePrismsConvexity(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	l := internalPolyPrismBody(t, doc, [][2]float64{{0, 0}, {40, 0}, {40, 20}, {20, 20}, {20, 40}, {0, 40}}, 20)
+	want := internalConvexityByEnds(t, l)
+	require.Len(t, want, 18)
+	require.False(t, want[[2]r3.Vec{r3.NewVec(20, 20, 0), r3.NewVec(20, 20, 20)}])
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.XZ(), -20)
+	require.NoError(t, err)
+	drill := internalClassBTool(t, doc, w, plane, 8, func(s *sketch.Sketch) {
+		c := s.CreatePoint(30, 10)
+		s.Fix(c)
+		s.CreateCircle(c, 3)
+	})
+	result, err := Cut(t.Context(), l, drill)
+	require.NoError(t, err)
+	bp, ok := result.payload.(brepPayload)
+	require.True(t, ok, `got %T`, result.payload)
+	requireClosedTopology(t, result)
+	// 24000 − 9π·8: the drill reaches y = 12 inside the arm x 20..40.
+	lo, hi := piEnclosed(big.NewRat(24000, 1), big.NewRat(-72, 1))
+	requireCoversInterval(t, result.volume, lo, hi)
+	pierced := 0
+	for _, f := range bp.faces {
+		if f.planar() && f.sweep != (r3.Vec{}) {
+			pierced++
+			require.Len(t, f.region.Holes, 1, "the pierced wall carries the hole")
+		}
+	}
+	require.Equal(t, 1, pierced)
+
+	require.Equal(t, want, internalConvexityByEnds(t, result))
+	circles := 0
+	for _, e := range result.Edges() {
+		if _, ok := e.Curve().(Circle3); ok {
+			circles++
+			require.False(t, e.IsConvex(), "a hole's rim reads concave")
+		}
+	}
+	require.Equal(t, 2, circles)
+}
+
 func TestClassBCutExactOffsetPlane(t *testing.T) {
 	t.Parallel()
 	// A drill sketched on a plane whose origin sits off the box's: the shift

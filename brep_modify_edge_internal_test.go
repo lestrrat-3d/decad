@@ -294,18 +294,17 @@ func TestBrepModifyEdgeChamferCornerBoss(t *testing.T) {
 
 // TestBrepModifyEdgeFilletConcavePlanarEdge rounds the inner vertical edge
 // of an L-shaped boss standing flush on the plate's corner, r = 1. Both
-// faces beside the edge are planar faces of the A1 brep, so the receiver's
-// Edge.IsConvex reads their outer loops' role and reports convex; the edge
-// is concave and the blend fills it, adding (1 − π/4)·15 to 17125. Shown to
-// fail with blendFace reading Edge.IsConvex for its walk sense, and with its
-// reversal deleted (the volume then read 17423.9 both times).
+// faces beside the edge are planar walls of the A1 brep recording the stack
+// axis, so the receiver's Edge.IsConvex reads the junction's turn and reports
+// concave; the blend fills it, adding (1 − π/4)·15 to 17125. Shown to fail
+// with blendFace's reversal deleted (the volume then read 17423.9).
 func TestBrepModifyEdgeFilletConcavePlanarEdge(t *testing.T) {
 	t.Parallel()
 	_, boss := internalFlushBossUnion(t, [][2]float64{{10, -20}, {20, -20}, {20, -10}, {15, -10}, {15, -15}, {10, -15}})
 	sel := edgeAt(routeEZ, r3.NewVec(15, -15, 25))
 	edges, err := sel.SelectEdges(boss)
 	require.NoError(t, err)
-	require.True(t, edges[0].IsConvex(), "the receiver reads a planar pair's edge from its loop role")
+	require.False(t, edges[0].IsConvex(), "the receiver reads a junction of two planar walls from the walk's turn")
 	out, err := boss.Fillet(t.Context(), sel, units.Millimeters(1))
 	require.NoError(t, err)
 	requireBrepResult(t, out, 12)
@@ -335,7 +334,8 @@ func pocketFloorEdges(t *testing.T, pocket *Body, dir r3.Vec, n int) *EdgeQuery 
 // 11 + 2 faces whose volume gains 2·(1 − π/4)·20. Shown to fail with
 // restateRims skipped (the y = 15 wall then read SB8 beside the edge), and
 // with findEndFaces refusing every swept straight wall (SB7 at the x = 10
-// wall).
+// wall). Its vertical lines read the receiver's turn; shown to fail with
+// restate recording no sweep (the pocket's corners then read convex).
 func TestBrepModifyEdgeFilletPocketFloorEdges(t *testing.T) {
 	t.Parallel()
 	_, pocket := internalRouteEPocket(t)
@@ -370,6 +370,32 @@ func TestBrepModifyEdgeFilletPocketFloorEdges(t *testing.T) {
 	floor := planarFaceAt(t, bp, routeEZ, 5).region.Outer
 	requireChord(t, floor, Point2{U: 10, V: 16}, Point2{U: 30, V: 16})
 	requireChord(t, floor, Point2{U: 10, V: 24}, Point2{U: 30, V: 24})
+
+	// Every vertical line is a junction of two walls sweeping along z, the
+	// pocket's four restated walls included, and reads the receiver's turn:
+	// the plate's corners convex, the pocket's corners concave.
+	turn := map[[2]float64]bool{}
+	for ends, convex := range internalConvexityByEnds(t, pocket) {
+		if ends[0].X == ends[1].X && ends[0].Y == ends[1].Y {
+			turn[[2]float64{ends[0].X, ends[0].Y}] = convex
+		}
+	}
+	require.Len(t, turn, 8)
+	vertical := 0
+	for ends, convex := range internalConvexityByEnds(t, out) {
+		if ends[0].X != ends[1].X || ends[0].Y != ends[1].Y {
+			continue
+		}
+		vertical++
+		want, ok := turn[[2]float64{ends[0].X, ends[0].Y}]
+		require.True(t, ok, "a vertical line at a receiver corner, got %v–%v", ends[0], ends[1])
+		require.Equal(t, want, convex, "edge %v–%v", ends[0], ends[1])
+	}
+	require.Equal(t, 8, vertical)
+	for xy, convex := range turn {
+		inPocket := xy[0] > 0 && xy[0] < 40
+		require.Equal(t, !inPocket, convex, "corner %v", xy)
+	}
 }
 
 // TestBrepModifyEdgeChamferS1AlongX bevels S1's edge along x at

@@ -480,22 +480,25 @@ func classBAcross(f brepFace, e brepEmbed, d int) (classBSlab, bool) {
 
 // classBSlabFace is one slab face rebuilt in g: its region before Y's
 // section is cut from it, its level along g's normal, the level's
-// displacement, the face's own section displacement, and its outward flag
-// against g's normal.
+// displacement, the face's own section displacement, its outward flag
+// against g's normal, and the sweep of the wall it restates (zero for a
+// cap; general-boolean §4.2).
 type classBSlabFace struct {
 	region     ProfileRecord
 	level      float64
 	levelDelta float64
 	delta      float64
 	outward    bool
+	sweep      r3.Vec
 }
 
 // classBSlabInG restates a slab face in g. A straight wall becomes the
 // rectangle it sweeps, whose outer edges lie on its own sweep's ends and so
-// move with those levels' displacements. A planar face's region maps through
-// the signed permutation between its frame and g; where that map reverses
-// the plane's orientation, the loops are walked back (rewindLoop), as a
-// reflected record is.
+// move with those levels' displacements, and records that sweep; a planar
+// face keeps its own sweep. A planar face's region maps through the signed
+// permutation between its frame and g; where that map reverses the plane's
+// orientation, the loops are walked back (rewindLoop), as a reflected record
+// is.
 func classBSlabInG(budget *proofbound.WorkBudget, cp classBPair, s classBSlab) (classBSlabFace, error) {
 	f := cp.x.faces[s.Face]
 	e := cp.embeds[s.Face]
@@ -504,8 +507,10 @@ func classBSlabInG(budget *proofbound.WorkBudget, cp classBPair, s classBSlab) (
 		level:      cp.sign[2]*s.Level + 0,
 		levelDelta: s.LevelDelta,
 		outward:    float64(s.Outward)*cp.sign[2] > 0,
+		sweep:      f.sweep,
 	}
 	if !f.planar() {
+		out.sweep = f.frame.N()
 		line, ok := f.wall.(LineSeg)
 		if !ok {
 			return classBSlabFace{}, fmt.Errorf(`%w: a slab wall of the through-nesting reach is not a line`, ErrDegenerate)
@@ -643,7 +648,7 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 	}
 	for _, s := range slabs {
 		region := s.region
-		out.faces = append(out.faces, brepFace{frame: cp.g, region: &region, outward: s.outward,
+		out.faces = append(out.faces, brepFace{frame: cp.g, region: &region, outward: s.outward, sweep: s.sweep,
 			z0: s.level, z1: s.level, z0Delta: s.levelDelta, z1Delta: s.levelDelta, delta: s.delta})
 	}
 	walls := func(loop LoopRecord, lo, hi end) {

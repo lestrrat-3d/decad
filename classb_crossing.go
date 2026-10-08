@@ -238,9 +238,21 @@ func (b *cbBuild) run(ctx context.Context) (brepPayload, error) {
 	return out, nil
 }
 
+// brepFace states a built face in the record. A face on a wall's carrier
+// records that operand's sweep, X's axis along which the wall runs; a cap's
+// records none (§4.2).
 func (b *cbBuild) brepFace(f cbFace) brepFace {
 	region := f.region
-	return brepFace{frame: f.frame.frame, region: &region, outward: f.outward, z0: f.level, z1: f.level, delta: f.delta}
+	out := brepFace{frame: f.frame.frame, region: &region, outward: f.outward, z0: f.level, z1: f.level, delta: f.delta}
+	if f.carrier.idx >= 0 {
+		axes := [3]r3.Vec{b.x.frame.U(), b.x.frame.V(), b.x.frame.N()}
+		sweep := b.fX.axis[2]
+		if f.carrier.op == cbY {
+			sweep = b.fG.axis[2]
+		}
+		out.sweep = axes[sweep]
+	}
+	return out
 }
 
 // cbSeg is one input segment of a face scene with its carrier, in the

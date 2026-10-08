@@ -260,9 +260,11 @@ above, so a result whose stack carries a section displacement (a crossing
 round boss) or a merged slab's walked fragments is a miss as an operand.
 A brep operand in a `Cut` or `Intersect`, or in a perpendicular pair, is
 class B's (§4.5). Edge convexity is evaluator
-§3's walked boundary: a line two planar faces share reads the owner's loop
-role, so the floor's edges along the boss's walls read convex, as the
-stacked body's rims along a square boss do.
+§3's walked boundary (§4.2). Every wall face records the stack axis as its
+sweep, so two walls meeting along a vertical line form a junction that reads
+the turn: an L boss's reflex corner reads concave. A line a floor and a wall
+share reads the owner's loop role, so the floor's edges along the boss's
+walls read convex, as the stacked body's rims along a square boss do.
 
 #### A4 — the reflected re-expression
 
@@ -558,6 +560,7 @@ type brepFace struct {
     // exactly one of:
     region  *ProfileRecord // planar: one outer loop and holes in frame coordinates, material left of each walk
     outward bool           // planar: true when the outward normal is frame.N()
+    sweep   r3.Vec         // planar: the direction, along a reference axis, a restated straight wall sweeps; zero for a cap
     wall    CurveSegment   // swept: a LineSeg/CircleSeg/ArcSeg in frame coordinates, material on its left
     z0, z1  float64        // swept: the sweep interval along frame.N(); planar: the level, z0 == z1
     z0Delta, z1Delta float64
@@ -620,10 +623,29 @@ boundary as evaluator §3 states. A rim reads the wall it runs along: a
 circular wall by its own turn, a straight wall by the role of the loop it
 belongs to. The planar face sharing the rim states that role: its own loop's
 role when it walks the rim the wall's way, the other role when it walks it
-the opposite way, as a stacked floor walks a reversed hole. A side line
-between two walls is a junction, convex when the walk turns left there. Any
-other line reads its planar face's loop role. `Lumps` and `Shells` are derived
-from face adjacency (`sheetLumps`). Roles are fresh under the boolean's producer identity:
+the opposite way, as a stacked floor walks a reversed hole.
+
+A line two walls of one sweep share is a junction, convex when the walk turns
+left there. A planar face that restates a straight wall records the axis that
+wall sweeps along (`sweep`): an A1 wall face the stack axis, a class-B face on
+a wall's carrier that operand's axis, a class-B slab and a wall route E
+restates (brep-modify §5.2) its source wall's. The
+junctions are a side line between two swept walls, a side line between a swept
+wall and a planar face whose sweep is the wall's axis, and a line two planar
+faces of one sweep share. Two swept walls compare their walk tangents. A
+planar wall reads the same turn from its own loop: the direction it runs from
+the line into the face (its frame normal crossed with the way its loop walks
+the line) makes the junction convex when it points to the inner side of the
+other wall. That wall's outward normal is a swept wall's tangent crossed with
+its axis, or a planar face's own normal. Every vector there except a swept
+wall's tangent is a signed reference axis, so the sign is that tangent
+component's sign, exactly. A zero turn reads concave, as two swept walls'
+zero tangent cross does. So an L boss's reflex corner, a slot's floor
+corners and a pierced L prism's reflex corner read concave. Any other line
+reads the owner planar face's loop role: outer convex, hole concave. That
+covers a cap meeting a wall, and two planar faces of different sweeps.
+
+`Lumps` and `Shells` are derived from face adjacency (`sheetLumps`). Roles are fresh under the boolean's producer identity:
 `face(k)` for planar faces, `wall(k)` for swept, both indexed by the result
 record, and `capStart`/`capEnd` are not minted (core §9: the helper returns a
 reference matching nothing). `Face.Origins` carry no operand provenance

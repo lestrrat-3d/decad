@@ -86,6 +86,74 @@ func TestStackedUnionBrepFlushCornerBoss(t *testing.T) {
 	require.Equal(t, big.NewRat(17500, 1), internalMeshVolumeRat(mesh))
 }
 
+// internalPolyPrismBodyAtZ extrudes a closed polygon drawn on the XY plane
+// moved to z0, every vertex pinned, by h along +z.
+func internalPolyPrismBodyAtZ(t *testing.T, doc *Document, pts [][2]float64, z0, h float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.XY(), z0)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	sp := make([]*sketch.Point, len(pts))
+	for i, p := range pts {
+		sp[i] = s.CreatePoint(p[0], p[1])
+		s.Fix(sp[i])
+	}
+	for i := range sp {
+		s.CreateLine(sp[i], sp[(i+1)%len(sp)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestStackedUnionBrepLBossReflexCornerReadsConcave stands an L boss, z 10..15,
+// flush in the plate's corner: footprint (0,−20) (20,−20) (20,0) (10,0)
+// (10,−10) (0,−10), sharing the walls x = 20 and y = −20. Every wall is a
+// planar face recording the stack axis, so the vertical line at the reflex
+// corner (10, −10) is a junction of two planar walls, and the walk turns right
+// there: it reads concave, and Concave() selects it alone. Every other edge
+// reads convex: the remaining vertical lines are left turns, and each rim
+// reads its outer loop's role, the boss's base on the plate top included.
+// Shown to fail with the planar-planar junction arm of brepgeom.Convex reading
+// the owner's loop role, and with wallFaces recording no sweep (the reflex
+// line then read convex either way).
+func TestStackedUnionBrepLBossReflexCornerReadsConcave(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10)
+	boss := internalPolyPrismBodyAtZ(t, doc, [][2]float64{{0, -20}, {20, -20}, {20, 0}, {10, 0}, {10, -10}, {0, -10}}, 10, 5)
+	bp := internalUnionBrep(t, plate, boss)
+	for _, f := range bp.faces {
+		require.True(t, f.planar())
+	}
+	got, err := Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	requireClosedTopology(t, got)
+	require.Equal(t, Exact, got.volume.Exactness)
+	require.Equal(t, 16000.0+300*5, got.volume.Value.Base())
+
+	reflex := [2]r3.Vec{r3.NewVec(10, -10, 10), r3.NewVec(10, -10, 15)}
+	convexity := internalConvexityByEnds(t, got)
+	require.Len(t, convexity, 27)
+	for ends, convex := range convexity {
+		require.Equal(t, ends != reflex, convex, "edge %v–%v", ends[0], ends[1])
+	}
+	concave, err := Edges(Concave()).Exactly(1).SelectEdges(got)
+	require.NoError(t, err)
+	require.Equal(t, reflex[0], concave[0].Start().Position().Value)
+	require.Equal(t, reflex[1], concave[0].End().Position().Value)
+	convex, err := Edges(Convex()).SelectEdges(got)
+	require.NoError(t, err)
+	require.Len(t, convex, 26)
+	require.NotContains(t, convex, concave[0])
+}
+
 // TestStackedUnionBrepFlushEdgeBoss is the flush edge boss: the boss shares
 // the plate's wall x = 20 along its middle, so that wall is one T-shaped
 // face of eight segments. The body has 10 faces and the same exact 17500 mm³

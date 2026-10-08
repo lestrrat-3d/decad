@@ -345,7 +345,8 @@ type brepRestated struct {
 
 // restate is brep-modify §5.2 on brep face fi, a swept face: the planar
 // rectangle its straight wall sweeps, recorded with its frame normal
-// outward, or brepgeom.ErrRestate naming why the wall is no such rectangle.
+// outward and the wall's own sweep (general-boolean §4.2), or
+// brepgeom.ErrRestate naming why the wall is no such rectangle.
 // A face restated earlier in the call is returned as it was.
 func (r *brepEdgeRoute) restate(fi int, restated map[int]brepRestated) (brepRestated, error) {
 	if rs, ok := restated[fi]; ok {
@@ -361,7 +362,7 @@ func (r *brepEdgeRoute) restate(fi int, restated map[int]brepRestated) (brepRest
 	}
 	region := ProfileRecord{Outer: rec.Region.Outer}
 	rs := brepRestated{embed: embed, face: brepFace{frame: rec.Frame, region: &region, outward: true,
-		z0: rec.Z0, z1: rec.Z1, z0Delta: rec.Z0Delta, z1Delta: rec.Z1Delta, delta: rec.Delta, role: rec.Role}}
+		sweep: f.frame.N(), z0: rec.Z0, z1: rec.Z1, z0Delta: rec.Z0Delta, z1Delta: rec.Z1Delta, delta: rec.Delta, role: rec.Role}}
 	restated[fi] = rs
 	return rs, nil
 }
@@ -849,10 +850,10 @@ func (r *brepEdgeRoute) auditFailure(f brepFace, err error) error {
 // wall is G0's connector, swept between the two end faces' levels, with the
 // solid's material on the wall's left.
 //
-// The walk sense reads G0's own record, not Edge.IsConvex: a straight edge
-// between two planar faces reads its convexity from a loop's role (an outer
-// loop's edge reads convex), which a concave edge of an A1 brep does not
-// match. G0's connector already walks with G0's region on its left. Near the
+// The walk sense reads G0's own record, not Edge.IsConvex: a line two planar
+// faces of different sweeps share reads its convexity from a loop's role (an
+// outer loop's edge reads convex), which a concave edge need not match
+// (general-boolean §4.2). G0's connector already walks with G0's region on its left. Near the
 // corner the solid between the two end faces is bounded by the two adjacent
 // faces alone, and its section there is G0's region where G1 lies on G0's
 // inner side (against G0's outward normal), and the rest of the plane where
