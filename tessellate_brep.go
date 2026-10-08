@@ -17,6 +17,9 @@ import (
 // mesh vertex indices in walk order (closed for a whole circle), its largest
 // sagitta, and the chord-versus-arc charges tessellation §5 reads.
 type brepWallMesh struct {
+	// rows holds one sample row per level from z0 through every side split
+	// to z1; bottom and top are its first and last.
+	rows        [][]int
 	bottom, top []int
 	sag         float64
 	wallSlack   float64
@@ -109,16 +112,18 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 				edgePoly[topo.edgeOf[ui]] = wm.bottom
 			case brepRim1:
 				edgePoly[topo.edgeOf[ui]] = wm.top
-			case brepSide0:
-				edgePoly[topo.edgeOf[ui]] = []int{wm.bottom[0], wm.top[0]}
-			case brepSide1:
-				last := len(wm.bottom) - 1
-				edgePoly[topo.edgeOf[ui]] = []int{wm.bottom[last], wm.top[last]}
+			case brepSide0, brepSide1:
+				// The piece's two vertices are the wall's own row ends at
+				// its levels, keyed by the same reference coordinates.
+				edgePoly[topo.edgeOf[ui]] = []int{addVertex(u.DirFrom, proofbound.WalkEndBound{}), addVertex(u.DirTo, proofbound.WalkEndBound{})}
 			}
 		}
-		for j := 0; j+1 < len(wm.bottom); j++ {
-			mesh.addTriangle([3]int{wm.bottom[j], wm.bottom[j+1], wm.top[j+1]}, face)
-			mesh.addTriangle([3]int{wm.bottom[j], wm.top[j+1], wm.top[j]}, face)
+		for r := 0; r+1 < len(wm.rows); r++ {
+			lower, upper := wm.rows[r], wm.rows[r+1]
+			for j := 0; j+1 < len(lower); j++ {
+				mesh.addTriangle([3]int{lower[j], lower[j+1], upper[j+1]}, face)
+				mesh.addTriangle([3]int{lower[j], upper[j+1], upper[j]}, face)
+			}
 		}
 		faceTrim[face] = wm.sag
 		faceAxial[face] = proofbound.AbsSumUpper(math.Max(f.z0Delta, f.z1Delta), f.delta)
@@ -284,14 +289,29 @@ func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e br
 	}
 	wm := brepWallMesh{sag: sampled.MaxSag, wallSlack: sampled.WallSlack, capSlack: sampled.CapSlack,
 		segmentArea: sampled.SegmentArea}
-	for j, p := range samples {
-		wm.bottom = append(wm.bottom, addVertex(e.Canon(p.U, p.V, f.z0), bounds[j]))
-		wm.top = append(wm.top, addVertex(e.Canon(p.U, p.V, f.z1), bounds[j]))
+	// A row at every level either side line is split at, so each side
+	// piece's vertices are the wall's own and the quads between rows close
+	// against the neighbouring faces' edges.
+	levels := []float64{f.z0}
+	for _, splits := range [][]brepSplit{f.side0, f.side1} {
+		for _, sp := range splits {
+			levels = append(levels, sp.Z)
+		}
 	}
-	if w.Closed {
-		wm.bottom = append(wm.bottom, wm.bottom[0])
-		wm.top = append(wm.top, wm.top[0])
+	levels = append(levels, f.z1)
+	slices.Sort(levels)
+	levels = slices.Compact(levels)
+	for _, z := range levels {
+		var row []int
+		for j, p := range samples {
+			row = append(row, addVertex(e.Canon(p.U, p.V, z), bounds[j]))
+		}
+		if w.Closed {
+			row = append(row, row[0])
+		}
+		wm.rows = append(wm.rows, row)
 	}
+	wm.bottom, wm.top = wm.rows[0], wm.rows[len(wm.rows)-1]
 	return wm, nil
 }
 

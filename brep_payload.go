@@ -31,6 +31,11 @@ import (
 // A swept face (wall set) is the wall segment, stated in frame coordinates and
 // walked with the material on its left, swept along frame.N() over [z0, z1].
 //
+// side0 and side1 are a swept face's side-line splits (§4.2): the levels
+// strictly inside (z0, z1), ascending, at which the wall's start and end
+// lines are vertices of the body, so each side line is one edge per piece
+// between consecutive levels.
+//
 // delta is the face's own section displacement and z0Delta/z1Delta its levels'
 // displacements (docs/prism-boolean-design.md §7); role is the face's role,
 // face(k) or wall(k) for its index k in the record.
@@ -41,6 +46,7 @@ type brepFace struct {
 	wall             CurveSegment
 	z0, z1           float64
 	z0Delta, z1Delta float64
+	side0, side1     []brepSplit
 	delta            float64
 	role             string
 }
@@ -55,6 +61,9 @@ type brepStack struct {
 	slabs []prismSlab
 	delta float64
 }
+
+// brepSplit is one side-line split: a level and its displacement.
+type brepSplit = brepgeom.Split
 
 // brepPayload is the evaluator's record of an analytically trimmed body. Every
 // face frame is stated in the payload's unplaced coordinates and xform places
@@ -308,6 +317,7 @@ func falsifyBrepPayload(ctx context.Context, bp brepPayload) error {
 		return brepgeom.FaceRecord{
 			Frame: f.frame, Region: region, Wall: f.wall,
 			Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta,
+			Side0: f.side0, Side1: f.side1,
 			Delta: f.delta, Role: f.role,
 		}
 	})
@@ -383,7 +393,8 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 			return nil, err
 		}
 		face := brepgeom.FaceWalks{Embed: embeds[fi], IsPlanar: f.planar(),
-			Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta}
+			Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta,
+			Side0: f.side0, Side1: f.side1}
 		if f.planar() {
 			loops := append([]LoopRecord{f.region.Outer}, f.region.Holes...)
 			face.Planar = make([][]survey2d.SegmentWalk, len(loops))
@@ -545,9 +556,16 @@ func brepEdge(ctx context.Context, bp brepPayload, topo *brepTopology, pair [2]i
 	}
 	switch owner.Part {
 	case brepSide0, brepSide1:
-		height := proofbound.BoundedSub(proofbound.MeasuredScalar(f.z1, f.z1Delta), proofbound.MeasuredScalar(f.z0, f.z0Delta))
+		// One piece of the side line: its own two levels, read along the
+		// sweep axis in reference coordinates.
+		axis := topo.embeds[owner.Face].Axis[2]
+		lo, hi := owner.DirFrom[axis], owner.DirTo[axis]
+		if lo > hi {
+			lo, hi = hi, lo
+		}
+		height := proofbound.BoundedSub(proofbound.MeasuredScalar(hi, owner.SideDelta[1]), proofbound.MeasuredScalar(lo, owner.SideDelta[0]))
 		return &Edge{curve: Line3{}, start: start, end: end, convex: convex,
-			length: f.z1 - f.z0, lengthBound: height.Bound}, nil
+			length: hi - lo, lengthBound: height.Bound}, nil
 	case brepRim0, brepRim1:
 		w := topo.walls[owner.Face]
 		pp := f.view(bp.xform)

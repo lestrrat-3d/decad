@@ -1069,14 +1069,15 @@ func (b *ubBuild) faceRecord(f ubFace) (ProfileRecord, error) {
 
 // sweptFaces builds every curved and oblique wall piece: each slab's unit
 // split at its vertices, the identical piece in consecutive slabs joined
-// into one face unless a vertex at the level between ends an edge at either
-// of its two side lines, which a swept face cannot carry.
+// into one face, with a vertex at the level between on either end recorded
+// as a split of that side line.
 func (b *ubBuild) sweptFaces(delta float64) ([]brepFace, error) {
 	type run struct {
 		seg      CurveSegment
 		from, to Point2
 		closed   bool
 		k0, k1   int
+		splits   [2][]brepSplit
 	}
 	var runs []*run
 	byKey := map[ubPieceKey]*run{}
@@ -1098,8 +1099,14 @@ func (b *ubBuild) sweptFaces(delta float64) ([]brepFace, error) {
 					from, to := Point2{U: w.StartU + 0, V: w.StartV + 0}, Point2{U: w.EndU + 0, V: w.EndV + 0}
 					key := ubPieceKey{c: u.c, from: from, to: to, ccw: u.ccw, closed: w.Closed}
 					if r, ok := byKey[key]; ok && r.k1 == k-1 {
-						if !w.Closed && (b.hasEvent(from, k) || b.hasEvent(to, k)) {
-							return nil, errUBMiss
+						// A vertex of the body at the level between, on either
+						// end, splits that side line there (§4.1).
+						if !w.Closed {
+							for side, p := range [2]Point2{from, to} {
+								if b.hasEvent(p, k) {
+									r.splits[side] = append(r.splits[side], brepSplit{Z: b.levels[k].held, ZDelta: b.levels[k].delta})
+								}
+							}
 						}
 						r.k1 = k
 						continue
@@ -1116,7 +1123,7 @@ func (b *ubBuild) sweptFaces(delta float64) ([]brepFace, error) {
 	for _, r := range runs {
 		lo, hi := b.levels[r.k0], b.levels[r.k1+1]
 		out = append(out, brepFace{frame: ref, wall: r.seg, z0: lo.held, z1: hi.held,
-			z0Delta: lo.delta, z1Delta: hi.delta, delta: delta})
+			z0Delta: lo.delta, z1Delta: hi.delta, side0: r.splits[0], side1: r.splits[1], delta: delta})
 	}
 	return out, nil
 }

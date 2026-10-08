@@ -1043,6 +1043,8 @@
 5	0.03	TestStackedUnionBrepOperandOverlappingBoss
 5	0.02	TestStackedUnionBrepOperandMisses
 5	0.01	TestClassifyRegionsReadsEachRecord
+5	0.03	TestStackedUnionBrepRootedCrossingBoss
+5	0.01	TestBrepSideSplitRecordAudit
 5	0.01	TestStackedUnionLevelChargesExactOffsetSum
 5	0.01	TestStackedUnionMirrorJoinRefuses
 5	0.01	TestStackedUnionPayloadAuditRejectsBrokenInterfaces

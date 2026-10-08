@@ -33,9 +33,11 @@ according to the writer path.
   are one full circle each, or chains of lines and arcs (at least three
   edges, or two when one is an arc). A cylindrical wall is either full —
   exactly two one-circle boundary loops whose start vertices align along its
-  axis — or partial: one loop of four edges alternating an `Arc3` about the
-  cylinder's axis (its `Axis` that axis or its negation, exactly) and a
-  `Line3` along it (an exactly zero cross product). Emit one `ADVANCED_FACE`
+  axis — or partial: one loop of at least four edges, each an `Arc3` about
+  the cylinder's axis (its `Axis` that axis or its negation, exactly) or a
+  `Line3` along it (an exactly zero cross product), with both kinds present,
+  since a side line split by a neighbouring face's vertex is several
+  `Line3`s. Emit one `ADVANCED_FACE`
   per body face. Share `VERTEX_POINT`s and `EDGE_CURVE`s by body topology
   identity. An `Arc3` edge is a `CIRCLE` placed about its own `Axis`, with the
   reference direction to its start vertex, trimmed by its two vertices; it

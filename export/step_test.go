@@ -636,3 +636,49 @@ func TestNewSTEPFileFlushBossUnionAnalytic(t *testing.T) {
 		})
 	}
 }
+
+// TestNewSTEPFileRootedCrossingBossAnalytic writes the rooted round crossing
+// boss (general-boolean §9): 8 planes and two partial cylinders, the
+// overhanging one bounded by six edges since its side lines split at the
+// plate's top, each file using every EDGE_CURVE once in each sense. Shown to
+// fail with supportsAnalyticPartialWall's four-edge rule restored (the file
+// took the faceted writer).
+func TestNewSTEPFileRootedCrossingBossAnalytic(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	w := sketch.NewWorld()
+	base, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := base.CreateRectangle(-20, -20, 20, 20)
+	base.Fix(rect.A)
+	_, err = base.Solve(t.Context())
+	require.NoError(t, err)
+	plate, err := doc.Extrude(base, base.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	plane, err := w.CreateOffsetPlane(w.XY(), 5)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	c := s.CreatePoint(18, 0)
+	s.Fix(c)
+	s.CreateCircle(c, 5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	boss, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	body, err := decad.Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	require.Len(t, body.Faces(), 10)
+	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	counts, uses := entityUses(f)
+	require.Equal(t, 10, counts["ADVANCED_FACE"])
+	require.Equal(t, 8, counts["PLANE"])
+	require.Equal(t, 2, counts["CYLINDRICAL_SURFACE"])
+	for _, senses := range uses {
+		require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+	}
+	data, err := f.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "analytic decad solid")
+}
