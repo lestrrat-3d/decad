@@ -265,6 +265,7 @@ the rules leave to the byte budget.
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact axis, oriented box and sphere-box proofs, patches, clips and bounded witnesses. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
+| `internal/planarsnapshot/` | Exact prism and held-mesh snapshots for planar contact. See multibody §9.1. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/surfacegeom/` | Sealed face and edge geometry variants. See `docs/api-design.md` §6.1. |
@@ -276,7 +277,7 @@ the rules leave to the byte budget.
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
 | `internal/classbgeom/` | Class-B boxes, record gates, and through reach. See general-boolean §3 B. |
-| `internal/brepgeom/` / `internal/stackedbrep/` | BRep joins, frames, topology and stacked records. See general-boolean §4, A1. |
+| `internal/brepgeom/` / `internal/stackedbrep/` | BRep joins, frames and stacked records. See general-boolean §4. |
 | `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap charges and extent bounds. See evaluator §6. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
@@ -290,7 +291,7 @@ the rules leave to the byte budget.
 | `internal/revolvemesh/` | Revolve rings, construction and proofs. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping; indexed triangles, chording refusals. |
-| `internal/proofbound/` | Bounded scalars and interval vectors, rational interval arithmetic, work budget, and certified trig. See file comments. |
+| `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons and body reference formulas. See verification §2-§3. |
 | `internal/prismextent/` | Prism extremes and bounds. See evaluator §5. |
@@ -321,7 +322,7 @@ the rules leave to the byte budget.
 | `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |
 | `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
-| `internal/clearance/spine/` | Stationary point, line and circle spine pairs for cells, with P4/P8 brackets. See clearance §4. |
+| `internal/clearance/spine/` | Point, line and circle spine cell pairs. See clearance §4. |
 | `internal/stitchflux/` | Stitch bounded scalars and flux. See surface §6.4. |
 | `internal/stitchweld/` | Stitch welds, topology and bounds. See surface §6.2–6.4. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
