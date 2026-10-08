@@ -43,17 +43,21 @@ func (k SelectorKind) String() string {
 	}
 }
 
-// PredicateResidual is the running match count after one clause of a query's
-// conjunction, evaluated cumulatively in query order: Remaining is the number
-// of candidates still matching after this clause AND every clause before it.
-// The clause whose Remaining reaches zero is the one that emptied the set.
+// PredicateResidual is the running match count after one clause of a query
+// branch's conjunction, evaluated cumulatively in query order: Remaining is
+// the number of candidates still matching after this clause AND every earlier
+// clause of the same branch. The clause whose Remaining reaches zero is the
+// one that emptied its branch.
 type PredicateResidual struct {
+	// Branch is the zero-based branch the clause belongs to: 0 for the
+	// clauses Edges or Faces took, i for the clauses of the i-th Or.
+	Branch int
 	// Predicate is the clause's stable rendering — "convex",
 	// "parallel_to(0,0,1)".
 	Predicate string
 	// Remaining is the candidate count still matching after this clause and
-	// every clause before it. It starts at the body's whole edge or face
-	// count and can only fall.
+	// every earlier clause of its branch. Each branch starts at the body's
+	// whole edge or face count, and within a branch the count can only fall.
 	Remaining int
 }
 
@@ -78,8 +82,13 @@ type SelectionError struct {
 	Expected string
 	// Actual is the total match count.
 	Actual int
-	// Residuals is the running match count after each clause, in query order.
+	// Residuals is the running match count after each clause, in query
+	// order: the branches one after another, each restarting from the whole
+	// count. A branch with no clauses contributes no entry.
 	Residuals []PredicateResidual
+	// branches is the query's branch count; above one, Error labels each
+	// emptied clause with its branch.
+	branches int
 	// err is the wrapped sentinel — ErrNoMatch or ErrCardinality — Unwrap
 	// returns for errors.Is.
 	err error
@@ -97,11 +106,16 @@ func (e *SelectionError) Error() string {
 	if e.Body != nil {
 		subject += " on body " + renderRef(e.Body.Origin())
 	}
-	msg := fmt.Sprintf("%s: %s matched %d %s, expected %s", e.err, subject, e.Actual, noun, e.Expected)
-	if clause, ok := e.emptiedClause(); ok {
-		msg += fmt.Sprintf("; the clause %s matched none", clause)
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s: %s matched %d %s, expected %s", e.err, subject, e.Actual, noun, e.Expected)
+	for _, r := range e.emptiedClauses() {
+		if e.branches > 1 {
+			fmt.Fprintf(&b, "; the clause %s of branch %d matched none", r.Predicate, r.Branch)
+			continue
+		}
+		fmt.Fprintf(&b, "; the clause %s matched none", r.Predicate)
 	}
-	return msg
+	return b.String()
 }
 
 // Unwrap returns the wrapped sentinel — ErrNoMatch or ErrCardinality — so
@@ -109,15 +123,23 @@ func (e *SelectionError) Error() string {
 // existed.
 func (e *SelectionError) Unwrap() error { return e.err }
 
-// emptiedClause names the first clause whose running match count reached zero,
-// if any — the clause that emptied the conjunction.
-func (e *SelectionError) emptiedClause() (string, bool) {
-	for _, r := range e.Residuals {
-		if r.Remaining == 0 {
-			return r.Predicate, true
+// emptiedClauses returns, per branch in order, the first clause whose running
+// match count reached zero — the clause that emptied that branch's
+// conjunction. A branch that kept a candidate contributes nothing.
+func (e *SelectionError) emptiedClauses() []PredicateResidual {
+	var out []PredicateResidual
+	for i, r := range e.Residuals {
+		if r.Remaining != 0 {
+			continue
 		}
+		// Only the first zero of a branch: every later clause of the same
+		// branch reads zero too.
+		if i > 0 && e.Residuals[i-1].Branch == r.Branch && e.Residuals[i-1].Remaining == 0 {
+			continue
+		}
+		out = append(out, r)
 	}
-	return "", false
+	return out
 }
 
 // expectedExactlyOne is the Expected an implicit exactly-one (ToFace,
@@ -151,8 +173,9 @@ func (c cardinality) suffix() string {
 	}
 }
 
-// String renders the query canonically: edges(<pred>, <pred>, …)<cardinality>.
-// The rendering is a deterministic function of the recorded content — equal
+// String renders the query canonically:
+// edges(<pred>, <pred>, …).or(<pred>, …)…<cardinality>, one .or(…) per Or
+// call in call order and the cardinality last. The rendering is a deterministic function of the recorded content — equal
 // recorded queries render identically, and a query and its decoded round-trip
 // render identically — built from the codec's own tagged vocabulary. It is an
 // identity for diagnostics and equality, not a parseable format.
@@ -160,35 +183,51 @@ func (q *EdgeQuery) String() string {
 	if q == nil {
 		return selKindEdges + "()"
 	}
-	preds := make([]string, len(q.preds))
-	for i, p := range q.preds {
-		preds[i] = p.render()
+	branches := make([][]string, len(q.branches))
+	for i, branch := range q.branches {
+		branches[i] = make([]string, len(branch))
+		for j, p := range branch {
+			branches[i][j] = p.render()
+		}
 	}
-	return renderQuery(selKindEdges, preds, q.card)
+	return renderQuery(selKindEdges, branches, q.card)
 }
 
-// String renders the query canonically: faces(<pred>, <pred>, …)<cardinality>,
-// the face analog of EdgeQuery.String.
+// String renders the query canonically:
+// faces(<pred>, <pred>, …).or(<pred>, …)…<cardinality>, the face analog of
+// EdgeQuery.String.
 func (q *FaceQuery) String() string {
 	if q == nil {
 		return selKindFaces + "()"
 	}
-	preds := make([]string, len(q.preds))
-	for i, p := range q.preds {
-		preds[i] = p.render()
+	branches := make([][]string, len(q.branches))
+	for i, branch := range q.branches {
+		branches[i] = make([]string, len(branch))
+		for j, p := range branch {
+			branches[i][j] = p.render()
+		}
 	}
-	return renderQuery(selKindFaces, preds, q.card)
+	return renderQuery(selKindFaces, branches, q.card)
 }
 
-// renderQuery assembles the shared query shape: the plural kind token, the
-// clauses in query order comma-separated, and the cardinality suffix. No
-// clause renders the empty parentheses of a predicate-less query.
-func renderQuery(kind string, preds []string, card cardinality) string {
+// renderQuery assembles the shared query shape: the plural kind token with
+// the first branch's clauses comma-separated, one ".or(…)" per further branch,
+// and the cardinality suffix. No clause renders empty parentheses. A
+// zero-value query holds no branch and renders as Edges() / Faces() do.
+func renderQuery(kind string, branches [][]string, card cardinality) string {
 	var b strings.Builder
 	b.WriteString(kind)
-	b.WriteByte('(')
-	b.WriteString(strings.Join(preds, ", "))
-	b.WriteByte(')')
+	for i, preds := range branches {
+		if i > 0 {
+			b.WriteString(".or")
+		}
+		b.WriteByte('(')
+		b.WriteString(strings.Join(preds, ", "))
+		b.WriteByte(')')
+	}
+	if len(branches) == 0 {
+		b.WriteString("()")
+	}
 	b.WriteString(card.suffix())
 	return b.String()
 }
@@ -268,6 +307,7 @@ func (q *EdgeQuery) selectionError(body *Body, actual int, expected string, sent
 		Expected:  expected,
 		Actual:    actual,
 		Residuals: q.residuals(body),
+		branches:  len(q.branches),
 		err:       sentinel,
 	}
 }
@@ -282,48 +322,48 @@ func (q *FaceQuery) selectionError(body *Body, actual int, expected string, sent
 		Expected:  expected,
 		Actual:    actual,
 		Residuals: q.residuals(body),
+		branches:  len(q.branches),
 		err:       sentinel,
 	}
 }
 
-// residuals evaluates the predicate conjunction cumulatively over the body's
-// edges, recording the running match count after each clause in query order.
-// Predicates were validated before this runs, so p.matches is safe.
+// residuals evaluates each branch's predicate conjunction cumulatively over
+// the body's edges, recording the running match count after each clause in
+// query order; every branch restarts from the whole edge list. Predicates were
+// validated before this runs, so p.matches is safe.
 func (q *EdgeQuery) residuals(body *Body) []PredicateResidual {
-	if len(q.preds) == 0 {
-		return nil
-	}
-	cands := body.Edges()
-	out := make([]PredicateResidual, 0, len(q.preds))
-	for _, p := range q.preds {
-		kept := make([]*Edge, 0, len(cands))
-		for _, e := range cands {
-			if p.matches(e) {
-				kept = append(kept, e)
+	var out []PredicateResidual
+	for bi, branch := range q.branches {
+		cands := body.Edges()
+		for _, p := range branch {
+			kept := make([]*Edge, 0, len(cands))
+			for _, e := range cands {
+				if p.matches(e) {
+					kept = append(kept, e)
+				}
 			}
+			cands = kept
+			out = append(out, PredicateResidual{Branch: bi, Predicate: p.render(), Remaining: len(cands)})
 		}
-		cands = kept
-		out = append(out, PredicateResidual{Predicate: p.render(), Remaining: len(cands)})
 	}
 	return out
 }
 
 // residuals is the face analog of EdgeQuery.residuals.
 func (q *FaceQuery) residuals(body *Body) []PredicateResidual {
-	if len(q.preds) == 0 {
-		return nil
-	}
-	cands := body.Faces()
-	out := make([]PredicateResidual, 0, len(q.preds))
-	for _, p := range q.preds {
-		kept := make([]*Face, 0, len(cands))
-		for _, f := range cands {
-			if p.matches(f) {
-				kept = append(kept, f)
+	var out []PredicateResidual
+	for bi, branch := range q.branches {
+		cands := body.Faces()
+		for _, p := range branch {
+			kept := make([]*Face, 0, len(cands))
+			for _, f := range cands {
+				if p.matches(f) {
+					kept = append(kept, f)
+				}
 			}
+			cands = kept
+			out = append(out, PredicateResidual{Branch: bi, Predicate: p.render(), Remaining: len(cands)})
 		}
-		cands = kept
-		out = append(out, PredicateResidual{Predicate: p.render(), Remaining: len(cands)})
 	}
 	return out
 }

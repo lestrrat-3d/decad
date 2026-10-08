@@ -1480,3 +1480,9 @@
 2	0.02	TestRevolveShellPlaced
 2	0.01	TestRevolveShellRefusals
 2	0.04	TestRevolveShellTessellates
+2	0.01	TestSelectorUnionShellsQuarterTurnRevolve
+2	0.00	TestSelectorUnionCardinalityCountsTheUnion
+2	0.00	TestSelectorUnionEdgesOnAPrism
+2	0.00	TestSelectorUnionErrorNamesEachEmptiedBranch
+2	0.00	TestSelectorUnionString
+2	0.00	TestSelectorUnionCopiesCallerSlice

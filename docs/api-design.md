@@ -1296,12 +1296,14 @@ func Faces(preds ...FacePredicate) *FaceQuery
 type EdgeQuery struct{ /* ... */ }
 
 func (q *EdgeQuery) SelectEdges(*Body) ([]*Edge, error)
+func (q *EdgeQuery) Or(preds ...EdgePredicate) *EdgeQuery // adds a union branch
 func (q *EdgeQuery) Exactly(n int) *EdgeQuery   // errors at resolve unless exactly n match
 func (q *EdgeQuery) AtLeast(n int) *EdgeQuery
 
 type FaceQuery struct{ /* ... */ }
 
 func (q *FaceQuery) SelectFaces(*Body) ([]*Face, error)
+func (q *FaceQuery) Or(preds ...FacePredicate) *FaceQuery
 func (q *FaceQuery) Exactly(n int) *FaceQuery
 func (q *FaceQuery) AtLeast(n int) *FaceQuery
 
@@ -1407,6 +1409,36 @@ decad.Edges(decad.Convex()).AtLeast(1)
 This is also why the decad code and the eventual Fusion code stay structurally
 parallel: a real Fusion script must pick edges by geometric predicate too.
 
+**A query is a union of branches, and each branch is a conjunction.**
+`Edges(preds...)` / `Faces(preds...)` start the query with one branch.
+Each `Or(preds...)` call appends one more branch and returns the receiver, as
+`Exactly` and `AtLeast` do. An entity matches the query when it satisfies every
+clause of at least one branch. A branch with no clauses matches every entity, as
+`Faces()` does. Resolution keeps the topology accessor's order, so an entity
+that two branches match appears once and counts once. `Exactly(n)` and
+`AtLeast(n)` assert the size of that final set, whether they are called before
+or after `Or`. Every branch's predicates are validated at resolve before any
+entity is examined.
+
+A partial-turn revolve whose angular caps are not coplanar needs this: no
+single conjunction matches both caps without also matching the planar end
+faces of its meridian. Its shell names the two caps by provenance:
+
+```go
+q := decad.Faces(decad.FaceCreatedBy(decad.CapStart(body))).
+    Or(decad.FaceCreatedBy(decad.CapEnd(body))).
+    Exactly(2)
+```
+
+The union lives on the query, not on a predicate. The rejected alternative is a
+predicate combinator, `AnyOf(preds ...FacePredicate) FacePredicate`. Go has no
+overloading, so it would need a separately named edge twin. A branch that is
+itself a conjunction would need a second combinator, `AllOf`, to nest inside it.
+And a nested clause has no single place in the per-clause running count that
+`SelectionError.Residuals` reports. `Or` adds one method per query type, and
+every existing consumer that type-asserts `*EdgeQuery` / `*FaceQuery` (the
+modify ops, `ToFace`, `EdgeAxis`) accepts a union unchanged.
+
 **A selector failure says which clause emptied the set.** A cardinality error
 that reports only a count tells an agent its assumption was wrong but not how,
 so it must reconstruct the query from source and probe it one clause at a time —
@@ -1427,16 +1459,22 @@ type SelectionError struct {
 }
 
 type PredicateResidual struct {
+    Branch    int    // the clause's branch: 0 for the Edges/Faces clauses, i for the i-th Or
     Predicate string // the clause's stable rendering — "convex", "parallel_to(0,0,1)"
-    Remaining int    // candidates still matching after this clause AND every clause before it
+    Remaining int    // candidates still matching after this clause AND every earlier clause of its branch
 }
 
 type SelectorKind int // EdgeSelectorKind / FaceSelectorKind; a stable String()
 ```
 
-`Residuals` is the conjunction evaluated cumulatively in query order: `Remaining`
-starts at the body's whole edge or face count and can only fall, and the clause
-whose `Remaining` reaches zero is the one that emptied the set. It is diagnostic
+`Residuals` is each branch's conjunction evaluated cumulatively in query order:
+`Remaining` starts at the body's whole edge or face count and can only fall, and
+the clause whose `Remaining` reaches zero is the one that emptied that branch.
+A union lists its branches one after another, in branch order, and each branch
+starts again from the whole count; a branch with no clauses contributes no
+entry. `Error()` names the clause that emptied the set. For a query with more
+than one branch it names the emptying clause of each branch that emptied, with
+the branch index: `the clause circular of branch 1 matched none`. It is diagnostic
 enrichment only — WHICH entities a satisfiable query matches, and the final match
 set, are exactly as §9 already defines them, and the residuals are computed only
 on the failing path, so a resolving query pays nothing. Modify ops (`Fillet` /
@@ -1488,18 +1526,22 @@ The rendering is a canonical, deterministic function of the query's content:
 equal query values render identically. It exists for diagnostics, not as a
 parseable or persistent format.
 
-`q.String()` is `<kind>(<pred>, <pred>, …)<cardinality>`:
+`q.String()` is `<kind>(<pred>, <pred>, …)<branches><cardinality>`:
 
 - **kind** is `edges` for an `EdgeQuery`, `faces` for a `FaceQuery`.
   (`SelectionError.Kind`'s `SelectorKind.String()` is the
   singular `edge` / `face`, naming the entity; the query prefix is plural and the
   error's kind field singular, deliberately distinct.)
-- **preds** are the clauses in query order, `, `-separated; no clause renders
-  `edges()`.
+- **preds** are the first branch's clauses in query order, `, `-separated; no
+  clause renders `edges()`.
+- **branches** is one `.or(<pred>, <pred>, …)` per `Or` call, in call order,
+  with the same clause list; an `Or()` with no clause renders `.or()`.
 - **cardinality** is empty for no assertion, `.exactly(<n>)` for `Exactly(n)`,
   `.at_least(<n>)` for `AtLeast(n)` — the codec's `exactly` / `at_least` keys.
-  (`SelectionError.Expected` renders the same assertion in prose — `exactly <n>`,
-  `at least <n>`, or `any` for none — a human line, not this suffix.)
+  It always renders last, after every branch, because it asserts the union's
+  size. (`SelectionError.Expected` renders the same assertion in prose —
+  `exactly <n>`, `at least <n>`, or `any` for none — a human line, not this
+  suffix.)
 
 Each predicate renders by its codec kind token and payload:
 
@@ -1539,7 +1581,10 @@ with these payload forms:
 So `Faces(Planar(), Facing(z)).Exactly(1)` renders
 `faces(planar, facing(0,0,1)).exactly(1)`, and
 `Edges(Convex(), ParallelTo(z)).Exactly(4)` renders
-`edges(convex, parallel_to(0,0,1)).exactly(4)`.
+`edges(convex, parallel_to(0,0,1)).exactly(4)`, and
+`Faces(FaceCreatedBy(CapStart(b))).Or(FaceCreatedBy(CapEnd(b))).Exactly(2)`
+renders `faces(face_created_by(3:"capStart")).or(face_created_by(3:"capEnd")).exactly(2)`
+when `b`'s producer is 3.
 
 This is also why the decad code and the eventual Fusion code stay structurally
 parallel: a real Fusion script must pick edges by geometric predicate too.
