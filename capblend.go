@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -95,6 +96,16 @@ type capBlendPayload struct {
 // length that reads dc as a radius. An equal chamfer holds dc == ds == d.
 type capSetback struct {
 	dc, dcDelta, ds, dsDelta float64
+}
+
+// axialUpper is a proven upper bound on the axial rise the band denotes: the
+// side setback the caller stated, which lies within dsDelta of ds. A setback
+// stated in millimetres converts exactly, and the bound is |ds| itself.
+func (s capSetback) axialUpper() float64 {
+	if s.dsDelta > 0 {
+		return proofbound.AbsSumUpper(s.ds, s.dsDelta)
+	}
+	return math.Abs(s.ds)
 }
 
 // setbackAt returns the setbacks of the cap a band with material sense
@@ -547,6 +558,9 @@ func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismP
 	if err := auditOffsetSectionBudget(budget, pp.profile, mixed); err != nil {
 		return nil, wrapCapBlendAuditError(err)
 	}
+	if err := auditCapBlendSetbackSpan(budget, pp.profile, cbp); err != nil {
+		return nil, err
+	}
 	if err := requireCapBlendLevelsSeparate(cbp); err != nil {
 		return nil, err
 	}
@@ -591,6 +605,68 @@ func requireCapBlendLevelsSeparate(cbp capBlendPayload) error {
 		return refuse(`end`, ds, cbp.z1)
 	}
 	return nil
+}
+
+// auditCapBlendSetbackSpan runs SX6 and the stage-6 offset audit again at the
+// top of each cap's setback span (docs/modify-reach-design.md §8.3.1). A
+// setback stated in a unit other than millimetres is held as a float dc some
+// dcDelta away from the value the caller stated, so the stated value is any
+// point of [dc − dcDelta, dc + dcDelta]. The audit at dc certifies every
+// offset up to dc and no further: SX12's monotonicity argument (a crossing or
+// contact anywhere in the offset family occurs no later than at its largest
+// member) runs the other way only. Auditing the offset at the span's top, the
+// smallest float at or above dc + dcDelta, certifies every offset the span
+// holds. A setback stated in millimetres has a one-point span and runs no
+// second audit.
+//
+// A refusal here means the held dc builds and some point of the span does
+// not, so this evaluator cannot decide whether the stated setback names a
+// body: it is ErrUnsupported whichever sentinel the audit itself raised, and
+// the audit's own error is folded in with %v so the refusal answers to one
+// sentinel only.
+func auditCapBlendSetbackSpan(budget *proofbound.WorkBudget, profile ProfileRecord, cbp capBlendPayload) error {
+	top, ok := cbp.setbackSpanTop()
+	if !ok {
+		return nil
+	}
+	mixed, err := mixedOffsetProfile(budget, top)
+	if err == nil {
+		err = auditOffsetSectionBudget(budget, profile, mixed)
+	}
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	return fmt.Errorf(`%w: the chamfer setback across the cap converts to a float within its own rounding of the stated value, and at the top of that span the cap contour fails the offset audit (%v); this evaluator cannot decide whether the stated setback builds`, ErrUnsupported, err)
+}
+
+// setbackSpanTop is cbp with each cap's dc moved to the top of its setback
+// span: the smallest float at or above dc + dcDelta, formed exactly. ok is
+// false when neither cap's dc carries a conversion rounding, so the span is
+// the held point and nothing differs.
+func (cbp capBlendPayload) setbackSpanTop() (capBlendPayload, bool) {
+	top := func(s capSetback) (capSetback, bool) {
+		if !(s.dcDelta > 0) {
+			return s, false
+		}
+		rd, rw := proofarith.FloatRat(s.dc), proofarith.FloatRat(s.dcDelta)
+		if rd == nil || rw == nil {
+			s.dc = math.Inf(1)
+			return s, true
+		}
+		s.dc = proofbound.RatFloatUp(new(big.Rat).Add(rd, rw))
+		return s, true
+	}
+	out := cbp
+	var okStart, okEnd bool
+	out.start, okStart = top(cbp.start)
+	out.end, okEnd = top(cbp.end)
+	return out, okStart || okEnd
 }
 
 // anyLoopSelected reports whether a per-cap loop set names at least one loop.

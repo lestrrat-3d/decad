@@ -521,12 +521,23 @@ sandwiched between the ordinary cone-sector flux read at the wide (side)
 window and the narrow (cap) one, and the ruled patch's own point-for-point
 departure from the wide cone is bounded in closed form from the two windows'
 angular skew; `chordLocusVolumeAllow` composes both terms into one proven
-volume bound. The residual, and its bound, are exactly zero wherever the two
-windows already coincide: a tangent join, an apex patch, and a whole turn. A
-tangent join is modify §7's G1 row: its cap-level foot is `v + dc·n̂` and its
-ruling runs from `v` to that foot, so the ruling IS the denoted corner locus
-`v + s·dc·n̂` — affine in `s`, exactly as a reflex foot is — and the two windows
-coincide because the foot sits on the circular wall's own radial through `v`.
+volume bound. The skew it reads is the larger of the patch's two proven corner
+skews (§8.4's `CornerSkewUpper`), the exact angle between each corner's held
+side end and held cap end. The difference of the two held windows is not used:
+each end of it is a float `Atan2`, and over a 600-sector sweep drawn away from
+the sketch origin that difference fell below the exact corner angle on 120 of
+568 patches. The term rounds every operation outward: the flux difference is
+taken exactly, `√(R0·R1)` through `RatSqrtUp`, and `sin(Φ/2)` at the top of its
+certified enclosure. A skew that is not finite answers an unbounded volume. The
+residual, and its bound, are exactly zero wherever both proven skews are: an
+apex patch, and a join or whole turn whose two directrix ends lie on one ray
+from the centre. A tangent join is modify §7's G1 row: its cap-level foot is
+`v + dc·n̂` and its ruling runs from `v` to that foot, so the ruling IS the
+denoted corner locus `v + s·dc·n̂` — affine in `s`, exactly as a reflex foot is
+— and the two denoted windows coincide because the foot sits on the circular
+wall's own radial through `v`. The held foot is a float point, so its proven
+skew is zero only where it lands on that radial exactly, as it does on a wall
+drawn on an axis; elsewhere the term charges the rounding-level skew.
 
 That residual is not only a quantity: it is a difference of KIND. A straight
 ruled surface between two arcs sweeping different windows has negative
@@ -682,7 +693,7 @@ second check over the resolved pairs and never the first answer. The other
 existence and audit gates read the component they are about:
 
 - SX6, SX12, SX14 and SX13's radial half read `dc`, the offset of the cap
-  contour;
+  contour. SX6 and the stage-6 audit also read the top of `dc`'s span (below);
 - SX7 reads `ds`: a loop's bands reach `ds(start) + ds(end)` along the sweep,
   and reaching the height is refused;
 - SX13's axial half reads `ds`: `z0 + ds == z0` or `z1 - ds == z1` refuses.
@@ -721,7 +732,12 @@ reads the right component:
   original loop moved by `ds`, and `dc` does not enter it;
 - the miter locus enclosure parametrises the corner foot by the in-plane
   offset `t ∈ [0, dc]` and moves it `t·ds/dc` along the sweep, so its length
-  bound sums the in-plane speed against the axial rate `ds/dc`;
+  bound sums the in-plane speed against the axial rate `ds/dc`. The rise it
+  reads is the stated `ds`, at most `|ds| + dsDelta`, never the held difference
+  of the two float levels, which a tall sweep rounds below `ds`. Each
+  sub-range starts at the float the previous one ends at, so the 32 sub-ranges
+  cover `[0, dc]` with no gap, and each sub-range's axial rise
+  `ds·width/dc` is rounded up;
 - the ruled patch's chord-versus-locus volume term, its departure from the
   `Cone` tag, the normal model DX7 reads, and the area brackets read the
   patch's radii, levels and windows. Erosion stays monotone in the offset
@@ -743,11 +759,29 @@ rescaled float, some rounding away from the quantity the caller stated
 The cap contour charges `dc`'s rounding `dcDelta` through its displacement
 (§8.4): the enclosures are taken over every offset amount in
 `[dc − dcDelta, dc + dcDelta]`. The reflex connector arc's length is bracketed
-over the same span, a circular wall's cap arc charges its sweep times
-`dcDelta`, and the miter locus is enclosed out to `dc + dcDelta` at an axial
-rate read against `dc − dcDelta`. The equal-setback band charges `d`'s rounding
-the same way. A millimetre setback converts exactly, its span is the single
-point `dc`, and every reading is the one `dc` alone gives.
+over the same span, and the miter locus is enclosed out to `dc + dcDelta` at
+an axial rate read against `dc − dcDelta`. A circular wall's cap arc charges
+its sweep times the largest gap between the held radius and any radius
+`R ∓ t` the span holds. That gap is nonzero even for a millimetre setback
+wherever `R ∓ dc` is not a float64, and the arc's turn term, which moves its
+two ends along the held circle, does not cover it.
+
+SX6 and the stage-6 audit (SX7/SX12, S8/S9) reject at one offset and certify
+every smaller one: SX12's monotonicity argument above runs one way. So
+`buildCapBlend` runs them a second time on the section offset by the top of
+the span, the smallest float at or above `dc + dcDelta`
+(`auditCapBlendSetbackSpan`). A section that passes at `dc` and fails there is
+`ErrUnsupported` whichever sentinel the second run raised, since the stated
+setback lies somewhere in the span and this evaluator cannot decide which
+side of the failure it is on. The contact floor (`1e-9` of the section's
+diameter) is about 10⁸ times a real conversion's rounding, so the second run
+changes the answer only where a corner's miter foot moves faster than that
+ratio per unit of offset; it is run rather than argued away because that
+speed is `1/sin(α/2)` at a corner of angle `α` and has no bound.
+
+The equal-setback band charges `d`'s rounding the same way. A millimetre
+setback converts exactly, its span is the single point `dc`, the second audit
+does not run, and every reading is the one `dc` alone gives.
 
 With no option, or with `otherDistance` equal to `d` in the same unit, the
 band reads `dc = ds = d` and builds the same body bit for bit.
@@ -916,6 +950,12 @@ is the corner point itself, the same point at every angle, so it pairs with
 the cap arc at the arc's own angle and both skews are zero. A whole turn pairs
 its two circles at their seams and keeps that pairing all the way round, so
 both skews are the seams' one angle, zero when both seams lie on one ray.
+
+Every other reader of a patch's skew reads the same two proven numbers
+(`capPatchWindowSkew`, the larger of them): the volume's chord-versus-locus
+term (§8.3), the mesh's `skewGap` and the gate on its per-cell twist term
+(`docs/tessellation-reach-design.md` §7), and DX8's undecided gate. None reads
+a difference of the held windows `th0`, `th1`, `capTh0`, `capTh1`.
 
 A band's SIDE level is displaced too, and by a different mechanism, so it is a
 separate term with its own helper. `sideZ` is the single float sum

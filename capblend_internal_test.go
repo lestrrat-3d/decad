@@ -1214,3 +1214,66 @@ func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
 		})
 	}
 }
+
+// TestCapBlendAuditReadsTheSetbackSpan checks the stage-6 offset audit refuses
+// a cap setback whose span overruns, even where the held dc passes. The plate
+// carries two holes of radius 0.25 whose centres sit √41.76 mm apart, so their
+// offset contours meet at a setback of about 2.981 mm. The held dc of 2.9 mm
+// clears that by a wide margin. A span of ±0.2 mm reaches past it and ±0.05 mm
+// does not. A unit conversion never rounds by anything near 0.2 mm; the spans
+// here are stated directly on the payload to make the two audits disagree by a
+// margin the contact floor cannot hide (1e-9 of the section's diameter,
+// about 7.2e-8 mm here, where a real conversion rounds by a few 1e-16 mm).
+//
+// Shown to fail: with buildCapBlend auditing the held dc alone again, the
+// ±0.2 mm row builds.
+func TestCapBlendAuditReadsTheSetbackSpan(t *testing.T) {
+	t.Parallel()
+	const dc = 2.9
+	for _, tc := range []struct {
+		name    string
+		dcDelta float64
+		refuse  bool
+	}{
+		{`a setback stated in millimetres`, 0, false},
+		{`a span clear of the contact`, 0.05, false},
+		{`a span reaching the contact`, 0.2, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			rect := s.CreateRectangle(0, 0, 60, 40)
+			s.Fix(rect.A)
+			s.CreateCircle(s.CreatePoint(20, 20), 0.25)
+			s.CreateCircle(s.CreatePoint(26, 22.4), 0.25)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			prof := s.Profiles()[0]
+			for _, p := range s.Profiles() {
+				if len(p.Holes) > len(prof.Holes) {
+					prof = p
+				}
+			}
+			require.Len(t, prof.Holes, 2)
+			body, err := New().Extrude(s, prof, Distance{D: units.Millimeters(20), Dir: Along})
+			require.NoError(t, err)
+			pp, ok := body.payload.(prismPayload)
+			require.True(t, ok)
+
+			end := capSetback{dc: dc, dcDelta: tc.dcDelta, ds: dc}
+			loops := map[int]bool{0: true, 1: true, 2: true}
+			doc := body.Document()
+			out, err := buildCapBlend(t.Context(), doc, doc.nextProducerID(), pp, capSetback{}, end, map[int]bool{}, loops)
+			if !tc.refuse {
+				require.NoError(t, err)
+				require.NotNil(t, out)
+				return
+			}
+			require.ErrorIs(t, err, ErrUnsupported)
+			require.False(t, errors.Is(err, ErrDegenerate), `the refusal answers to one sentinel`)
+			require.ErrorContains(t, err, `top of that span`)
+		})
+	}
+}
