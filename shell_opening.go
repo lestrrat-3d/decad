@@ -157,7 +157,7 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	end := offset2d.OpenEnd{Removed: rFirst}
 	off, err := offset2d.OffsetOpenChain(budget, chain, offset2d.Curve{}, start, end, s, tmm, shellTol)
 	if err != nil {
-		return sideOpeningSection{}, err
+		return sideOpeningSection{}, offset2d.InLoop(err, 0)
 	}
 	vA := Point2{U: first.StartU, V: first.StartV}
 	vB := Point2{U: last.EndU, V: last.EndV}

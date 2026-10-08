@@ -60,9 +60,10 @@ func SharpCornerJoin(prev, cur survey2d.SideWalk, s, t, tol float64) (Join, erro
 
 // SharpJoinsBudget resolves every corner of one coalesced loop of two or more
 // walks by SharpCornerJoin, in walk order: corner i sits at walk i's start. A
-// walk with no direction is ErrDegenerate and a cusp is ErrTopology, as
-// SectionJoinsBudget maps them. ErrCircularMiter is returned unwrapped, so the
-// caller states its own refusal for it.
+// walk with no direction is ErrDegenerate and a cusp is a CornerTopologyError
+// naming the corner, as SectionJoinsBudget maps them; the caller names the
+// loop with InLoop. ErrCircularMiter is returned unwrapped, so the caller
+// states its own refusal for it.
 func SharpJoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t, tol float64) ([]Join, error) {
 	n := len(walks)
 	joins := make([]Join, n)
@@ -75,7 +76,7 @@ func SharpJoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, 
 		case errors.Is(err, ErrNoDirection):
 			return nil, fmt.Errorf(`%w: a corner walk has no direction`, decaderr.ErrDegenerate)
 		case errors.Is(err, ErrNoIntersection):
-			return nil, ErrTopology
+			return nil, &CornerTopologyError{U: walks[i].StartU, V: walks[i].StartV, Loop: -1}
 		case err != nil:
 			return nil, err
 		}

@@ -31,7 +31,8 @@ type OpenChainOffset struct {
 
 // OffsetOpenChain offsets the open chain K by s*t. ax is the revolve axis an
 // axis end reads; a chain with no axis end ignores it. A dropped walk is S11a
-// and a miter that does not close is S11, as in BuildLoop; an opening
+// and a miter that does not close is S11, a CornerTopologyError naming the
+// corner, as in BuildLoop; the caller names the loop with InLoop. An opening
 // end's own refusals are ErrOpeningCorner (SO1) and
 // ErrOpeningSpan (SO2). A walk at an opening end may run past its own end to
 // the rim cut, and OpenWalkConsumed decides its S11a
@@ -61,23 +62,27 @@ func OffsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 	}
 	// joins[i] is the corner at chain[i]'s start; joins[m] is the corner at
 	// the last walk's end.
+	// cornerU, cornerV is the corner the last join resolved.
 	joins := make([]Join, m+1)
 	var err error
+	cornerU, cornerV := chain[0].StartU, chain[0].StartV
 	joins[0], err = endJoin(start, chain[0], false)
 	if err == nil {
+		cornerU, cornerV = chain[m-1].EndU, chain[m-1].EndV
 		joins[m], err = endJoin(end, chain[m-1], true)
 	}
 	for i := 1; err == nil && i < m; i++ {
 		if err = survey2d.WallBudgetStep(budget); err != nil {
 			return OpenChainOffset{}, err
 		}
+		cornerU, cornerV = chain[i].StartU, chain[i].StartV
 		joins[i], err = CornerJoin(chain[i-1], chain[i], s, t, tol)
 	}
 	switch {
 	case errors.Is(err, ErrNoDirection):
 		return OpenChainOffset{}, fmt.Errorf(`%w: a corner walk has no direction`, decaderr.ErrDegenerate)
 	case errors.Is(err, ErrNoIntersection):
-		return OpenChainOffset{}, ErrTopology
+		return OpenChainOffset{}, &CornerTopologyError{U: cornerU, V: cornerV, Loop: -1}
 	case err != nil:
 		return OpenChainOffset{}, err
 	}

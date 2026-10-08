@@ -63,7 +63,11 @@ func TestSharpJoinsMiterTheReflexCorner(t *testing.T) {
 // TestSharpJoinsKeepG1AndRefuseOthers covers the circular rows: a line leaving
 // an arc tangentially moves along the shared normal, a line meeting an arc at
 // a right angle is ErrCircularMiter (SD4), and two antiparallel lines (a cusp)
-// are ErrTopology (SD15).
+// are ErrTopology (SD15), naming the first cusp corner resolved, (0, 0), and
+// the loop once InLoop names it.
+//
+// Shown to fail: with SharpJoinsBudget returning the bare ErrTopology again,
+// the cusp refusal names no corner.
 func TestSharpJoinsKeepG1AndRefuseOthers(t *testing.T) {
 	const tt = 0.5
 	// A counter-clockwise quarter arc of radius 5 about the origin ending at
@@ -85,6 +89,8 @@ func TestSharpJoinsKeepG1AndRefuseOthers(t *testing.T) {
 	budget := proofbound.NewWorkBudget(t.Context())
 	_, err = offset2d.SharpJoinsBudget(budget, []survey2d.SideWalk{lineWalk(0, 0, 10, 0), lineWalk(10, 0, 0, 0)}, 1, tt, 1e-9)
 	require.ErrorIs(t, err, offset2d.ErrTopology)
+	require.ErrorContains(t, err, `the offsets of the two walls meeting at (0, 0) do not intersect`)
+	require.ErrorContains(t, offset2d.InLoop(err, 1), `meeting at (0, 0) on loop 1 do not intersect`)
 }
 
 // TestBuildSharpLoopConsumption reads the three outcomes of a square's offset

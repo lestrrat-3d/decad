@@ -185,3 +185,29 @@ func TestSectionJoinsNameTheCornerThatDoesNotMeet(t *testing.T) {
 	require.ErrorContains(t, named, `meeting at (0, 0) on loop 2 do not intersect`)
 	require.Equal(t, offset2d.ErrDrop, offset2d.InLoop(offset2d.ErrDrop, 2))
 }
+
+// TestOpenChainNamesTheCornerThatDoesNotMeet pins that an open chain's
+// interior corner whose offset carriers do not meet refuses as ErrTopology
+// naming that corner. The chain runs (0, 0) → (10, 0) and back to (0, 0), both
+// ends on the axis u = 0 at a right angle, so both end joins resolve and the
+// interior corner (10, 0) is a cusp whose offset lines run parallel.
+//
+// Shown to fail: with OffsetOpenChain returning the bare ErrTopology again,
+// the message names no corner.
+func TestOpenChainNamesTheCornerThatDoesNotMeet(t *testing.T) {
+	t.Parallel()
+	line := func(u0, v0, u1, v1 float64) survey2d.SideWalk {
+		du, dv := u1-u0, v1-v0
+		return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+			StartU: u0, StartV: v0, EndU: u1, EndV: v1,
+			TanInU: du, TanInV: dv, TanOutU: du, TanOutV: dv,
+		}}
+	}
+	chain := []survey2d.SideWalk{line(0, 0, 10, 0), line(10, 0, 0, 0)}
+	axis := offset2d.Curve{IsLine: true, DY: 1}
+	mirror := offset2d.OpenEnd{Mirror: true}
+	_, err := offset2d.OffsetOpenChain(proofbound.NewWorkBudget(t.Context()), chain, axis, mirror, mirror, 1, 0.5, 1e-9)
+	require.ErrorIs(t, err, offset2d.ErrTopology)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.ErrorContains(t, err, `the offsets of the two walls meeting at (10, 0) do not intersect`)
+}
