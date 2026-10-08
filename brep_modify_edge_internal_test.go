@@ -313,15 +313,141 @@ func TestBrepModifyEdgeFilletConcavePlanarEdge(t *testing.T) {
 	requireCoversInterval(t, out.volume, lo, hi)
 }
 
+// pocketFloorEdges selects the Pocket's floor edges along dir, or all four
+// when dir is zero: the edges of the face the stacked receiver names
+// floor(0,0).
+func pocketFloorEdges(t *testing.T, pocket *Body, dir r3.Vec, n int) *EdgeQuery {
+	t.Helper()
+	floor := FeatureRef{producer: pocket.origin.producer, Role: "floor(0,0)"}
+	if dir == (r3.Vec{}) {
+		return Edges(CreatedBy(floor)).Exactly(n)
+	}
+	return Edges(ParallelTo(dir), CreatedBy(floor)).Exactly(n)
+}
+
+// TestBrepModifyEdgeFilletPocketFloorEdges rounds the Pocket's two floor
+// edges along x (y = 15 and y = 25 at z = 5), concave, with r = 1 in one
+// call. Each edge ends on a pocket x-wall and runs along a pocket y-wall's
+// rim, so all four pocket walls are restated as planes (§5.2), each with its
+// frame normal outward: x = 10 (u along y, v along z) and x = 30 (u along z,
+// v along y) each carry the two arcs about the corners' centres, and each
+// y-wall's rim at the floor moves to z = 6. The result is a brep of
+// 11 + 2 faces whose volume gains 2·(1 − π/4)·20. Shown to fail with
+// restateRims skipped (the y = 15 wall then read SB8 beside the edge), and
+// with findEndFaces refusing every swept straight wall (SB7 at the x = 10
+// wall).
+func TestBrepModifyEdgeFilletPocketFloorEdges(t *testing.T) {
+	t.Parallel()
+	_, pocket := internalRouteEPocket(t)
+	out, err := pocket.Fillet(t.Context(), pocketFloorEdges(t, pocket, routeEX, 2), units.Millimeters(1))
+	require.NoError(t, err)
+	bp := requireBrepResult(t, out, 13)
+	lo, hi := piEnclosed(big.NewRat(15040, 1), big.NewRat(-10, 1))
+	requireCoversInterval(t, out.volume, lo, hi)
+	require.Len(t, blendFaces(out, "fillet"), 2)
+
+	swept := 0
+	for _, f := range bp.faces {
+		if !f.planar() && f.blend == "" {
+			swept++
+		}
+	}
+	require.Equal(t, 4, swept, "only the plate's four outer walls stay swept")
+	centres := func(f brepFace) []Point2 {
+		require.True(t, f.outward)
+		var out []Point2
+		for _, a := range loopArcs(f.region.Outer) {
+			out = append(out, a.center)
+		}
+		return out
+	}
+	require.ElementsMatch(t, []Point2{{U: 16, V: 6}, {U: 24, V: 6}}, centres(planarFaceAt(t, bp, routeEX, 10)))
+	require.ElementsMatch(t, []Point2{{U: 6, V: 16}, {U: 6, V: 24}}, centres(planarFaceAt(t, bp, routeEX.Scale(-1), -30)))
+	// The y = 15 wall's frame has u along z and v along x; the y = 25
+	// wall's, u along x and v along z.
+	requireChord(t, planarFaceAt(t, bp, r3.NewVec(0, 1, 0), 15).region.Outer, Point2{U: 6, V: 10}, Point2{U: 6, V: 30})
+	requireChord(t, planarFaceAt(t, bp, r3.NewVec(0, -1, 0), -25).region.Outer, Point2{U: 10, V: 6}, Point2{U: 30, V: 6})
+	floor := planarFaceAt(t, bp, routeEZ, 5).region.Outer
+	requireChord(t, floor, Point2{U: 10, V: 16}, Point2{U: 30, V: 16})
+	requireChord(t, floor, Point2{U: 10, V: 24}, Point2{U: 30, V: 24})
+}
+
+// TestBrepModifyEdgeChamferS1AlongX bevels S1's edge along x at
+// (y, z) = (0, 0) with d = 2. Both end faces are the box's x-walls, swept
+// along z, so both are restated as planes with their outward normals (§5.2)
+// and each carries the chord between the feet y = 2 and z = 2; the volume is
+// 16000 − 180π less the 2·40 the bevel removes. Shown to fail with
+// findEndFaces refusing every swept straight wall (SB7 at the x = 0 wall),
+// and with the edges not matched again on the restated record (the stale
+// use pair then read the z = 0 cap's neighbour of the edge as SB8).
+func TestBrepModifyEdgeChamferS1AlongX(t *testing.T) {
+	t.Parallel()
+	_, s1 := internalCrossDrilled(t)
+	out, err := s1.Chamfer(t.Context(), edgeAt(routeEX, r3.Vec{}), units.Millimeters(2))
+	require.NoError(t, err)
+	bp := requireBrepResult(t, out, 8)
+	lo, hi := piEnclosed(big.NewRat(15920, 1), big.NewRat(-180, 1))
+	requireCoversInterval(t, out.volume, lo, hi)
+	require.Len(t, blendFaces(out, "chamfer"), 1)
+	// x = 0: u along z, v along y; x = 40: u along y, v along z.
+	for _, f := range []brepFace{planarFaceAt(t, bp, routeEX.Scale(-1), 0), planarFaceAt(t, bp, routeEX, 40)} {
+		require.True(t, f.outward)
+		requireChord(t, f.region.Outer, Point2{U: 0, V: 2}, Point2{U: 2, V: 0})
+	}
+}
+
+// internalSplitWallS1 is S1 with one record edit that keeps it closed: the
+// x = 0 wall's side line at y = 0 is split at z = 10, and the y = 0 face's
+// segment along it is split there to match.
+func internalSplitWallS1(t *testing.T) *Body {
+	t.Helper()
+	doc, s1 := internalCrossDrilled(t)
+	bp := s1.payload.(brepPayload)
+	bp.faces = slices.Clone(bp.faces)
+	wall, side := -1, -1
+	for fi, f := range bp.faces {
+		if l, ok := f.wall.(LineSeg); ok && l.Start == (Point2{U: 0, V: 20}) && l.End == (Point2{}) {
+			wall = fi
+		}
+		if f.planar() && f.frame.N() == r3.NewVec(0, -1, 0) && f.z0 == 0 {
+			side = fi
+		}
+	}
+	require.GreaterOrEqual(t, wall, 0)
+	require.GreaterOrEqual(t, side, 0)
+	// The wall walks (0, 20) → (0, 0), so its side line at y = 0 is side1.
+	bp.faces[wall].side1 = []brepSplit{{Z: 10}}
+	region := *bp.faces[side].region
+	var segs []CurveSegment
+	for _, seg := range region.Outer.Segments {
+		if seg == CurveSegment(LineSeg{Start: Point2{U: 0, V: 20}, End: Point2{}, TStart: 0, TEnd: 1}) {
+			segs = append(segs,
+				LineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
+				LineSeg{Start: Point2{U: 0, V: 10}, End: Point2{}, TStart: 0, TEnd: 1})
+			continue
+		}
+		segs = append(segs, seg)
+	}
+	require.Len(t, segs, len(region.Outer.Segments)+1)
+	region.Outer = LoopRecord{Segments: segs}
+	bp.faces[side].region = &region
+	body := internalCommitBrep(t, doc, bp)
+	require.Equal(t, s1.volume, body.volume)
+	return body
+}
+
 // TestBrepModifyEdgeRefusals pins Table SB's route E rows on receivers the
-// public booleans build. Each refusal is ErrUnsupported naming its row, and
-// leaves the receiver live and the document's body set unchanged. Shown to
-// fail with each named gate deleted: SB4's Circle3 arm (the rim then read
-// SB4's generic text, naming no hole rim), SB5's shared-vertex test (the
-// twelve edges then read SB7 at the x = 0 wall), the SB7 arm naming a blend
-// face (the chained edge then read a straight wall), the SB9 foot comparison
-// (the boss's front edge then failed to pair at closure), and the planar
-// faces' audit (the large chamfer then read the trimmed wall's S6).
+// public booleans build, and on internalSplitWallS1. Each refusal is
+// ErrUnsupported naming its row, and leaves the receiver live and the
+// document's body set unchanged. Shown to fail with each named gate deleted:
+// SB4's Circle3 arm (the rim then read SB4's generic text, naming no hole
+// rim), SB5's shared-vertex test (the twelve edges and the four floor edges
+// then read the rewrite's later SB5, a corner claimed twice, without naming
+// the vertex), the SB7 arm naming a blend face (the chained edge then read
+// the chamfer face as an oblique wall), the SB9 foot comparison (the boss's
+// front edge then failed to pair at closure), the planar faces' audit (the
+// large chamfer then read the trimmed wall's S6), and brepgeom.Restate's
+// split arm (both split-wall cases then failed to pair the restated record).
 func TestBrepModifyEdgeRefusals(t *testing.T) {
 	t.Parallel()
 	chamferedS1 := func(t *testing.T) *Body {
@@ -342,6 +468,7 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 		_, body := internalCornerBoss(t)
 		return body
 	}
+	split := internalSplitWallS1
 	for _, tc := range []struct {
 		name    string
 		body    func(*testing.T) *Body
@@ -352,8 +479,11 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 	}{
 		{"hole rim", s1, false, Edges(Circular()).Exactly(2), 1, []string{"brep-modify SB4", "hole rim"}},
 		{"twelve box edges", s1, false, Edges(Convex()).Exactly(12), 1, []string{"brep-modify SB5", "shares the vertex"}},
-		{"edge ending on a straight wall", pocket, false, edgeAt(routeEX, r3.NewVec(10, 15, 5)), 1,
-			[]string{"brep-modify SB7", "a swept straight wall"}},
+		{"four floor edges", pocket, false, nil, 1, []string{"brep-modify SB5", "shares the vertex"}},
+		{"edge ending on a split wall", split, true, edgeAt(routeEX, r3.Vec{}), 1,
+			[]string{"brep-modify SB7", "does not read as a plane", "side line is split"}},
+		{"rim on a split wall", split, false, edgeAt(r3.NewVec(0, 1, 0), r3.Vec{}), 1,
+			[]string{"brep-modify SB8", "holds it as a rim", "side line is split"}},
 		{"edge ending on an earlier chamfer", chamferedS1, true, edgeAt(routeEX, r3.NewVec(40, 0, 0)), 1,
 			[]string{"brep-modify SB7", "the chamfer face of an earlier call"}},
 		{"boss front edge", boss, true, edgeAt(routeEZ, r3.NewVec(10, -20, 25)), 2,
@@ -364,11 +494,15 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 			t.Parallel()
 			body := tc.body(t)
 			before := body.doc.Bodies()
+			sel := tc.sel
+			if sel == nil {
+				sel = pocketFloorEdges(t, body, r3.Vec{}, 4)
+			}
 			var err error
 			if tc.chamfer {
-				_, err = body.Chamfer(t.Context(), tc.sel, units.Millimeters(tc.size))
+				_, err = body.Chamfer(t.Context(), sel, units.Millimeters(tc.size))
 			} else {
-				_, err = body.Fillet(t.Context(), tc.sel, units.Millimeters(tc.size))
+				_, err = body.Fillet(t.Context(), sel, units.Millimeters(tc.size))
 			}
 			require.ErrorIs(t, err, ErrUnsupported)
 			for _, w := range tc.want {

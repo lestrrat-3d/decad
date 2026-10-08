@@ -1106,4 +1106,6 @@
 1	0.02	TestBrepModifyEdgeFilletConcavePlanarEdge
 2	0.05	TestBrepModifyEdgeRefusals
 4	0.05	TestBrepModifyEdgeConsumersOnS1Fillet
+0	0.03	TestBrepModifyEdgeFilletPocketFloorEdges
+1	0.02	TestBrepModifyEdgeChamferS1AlongX
 5	0.00	TestAuditTrimmedWall

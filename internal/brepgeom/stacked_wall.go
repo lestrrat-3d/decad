@@ -24,32 +24,11 @@ type StackedWallSegment struct {
 	From, To [3]float64
 }
 
-// StackedWallFrame constructs the wall's right-handed signed-permutation frame.
+// StackedWallFrame constructs the wall's right-handed signed-permutation
+// frame: PlanarFrame on the wall's axis and material-side sign.
 func StackedWallFrame(ref r3.Frame, key StackedWallKey) (r3.Frame, Embed, error) {
-	axes := [3]r3.Vec{ref.U(), ref.V(), ref.N()}
-	var e Embed
-	switch {
-	case key.Axis == 0 && key.Sign > 0:
-		e = Embed{Axis: [3]int{1, 2, 0}, Sign: [3]float64{1, 1, 1}}
-	case key.Axis == 0:
-		e = Embed{Axis: [3]int{2, 1, 0}, Sign: [3]float64{1, 1, -1}}
-	case key.Sign > 0:
-		e = Embed{Axis: [3]int{2, 0, 1}, Sign: [3]float64{1, 1, 1}}
-	default:
-		e = Embed{Axis: [3]int{0, 2, 1}, Sign: [3]float64{1, 1, -1}}
-	}
-	var vecs [3]r3.Vec
-	for i := range 3 {
-		vecs[i] = axes[e.Axis[i]]
-		if e.Sign[i] < 0 {
-			vecs[i] = vecs[i].Scale(-1)
-		}
-	}
-	frame, err := r3.NewFrame(ref.Origin(), vecs[0], vecs[1])
+	frame, e, err := PlanarFrame(ref, key.Axis, key.Sign)
 	if err != nil {
-		return r3.Frame{}, Embed{}, ErrStackedWallMiss
-	}
-	if frame.U() != vecs[0] || frame.V() != vecs[1] || frame.N() != vecs[2] {
 		return r3.Frame{}, Embed{}, ErrStackedWallMiss
 	}
 	return frame, e, nil

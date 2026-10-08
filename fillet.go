@@ -79,16 +79,18 @@ const filletTol = sectionaudit.Tolerance
 // along a reference axis is filleted as that prism
 // (docs/brep-modify-design.md route P): its lateral edges are the prism's, and
 // the result is a prism. Any other selection of straight edges along one axis
-// of such a body's face record takes route E (§5): both end faces of each
-// edge take the tangent arc at their corner, the two faces beside it are
-// trimmed to the arc's feet, and one cylindrical wall carrying a fillet(k)
-// role is added; the result is a brep body whose record pairs every edge
-// again before it is built. A curved edge, two selected edges sharing a
-// vertex, an edge whose end face or side face is a swept straight wall, a
-// curved face or an earlier blend, end faces whose arcs disagree, and a body
-// whose faces carry a section displacement (SB1) are ErrUnsupported (Table
-// SB). Any other receiver that is neither a prism nor a revolve is S3
-// (ErrUnsupported).
+// of such a body's face record takes route E (§5): a swept straight wall
+// the edge ends on or runs along as a rim is first restated as the planar
+// rectangle it sweeps (§5.2), both end faces of each edge take the tangent
+// arc at their corner, the two faces beside it are trimmed to the arc's
+// feet, and one cylindrical wall carrying a fillet(k) role is added; the
+// result is a brep body whose record pairs every edge again before it is
+// built. A curved edge, two selected edges sharing a vertex, an edge whose
+// end face is a curved face or an earlier blend, a straight wall the route
+// needs as a plane that is oblique, split or carries a displaced level, end
+// faces whose arcs disagree, and a body whose faces carry a section
+// displacement (SB1) are ErrUnsupported (Table SB). Any other receiver that
+// is neither a prism nor a revolve is S3 (ErrUnsupported).
 func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)
