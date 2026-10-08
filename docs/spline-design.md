@@ -175,7 +175,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R6** | *retired at §10 P4b* — a Tier A free-form walk, `FitSplineSeg` among them, now builds | — | retired |
-| **R7** | exact-rational conversion, length bracketing, integration or topology reconstruction exceeds its work budget | `ErrUnsupported` | no, §5.2, §6.1 |
+| **R7** | exact-rational conversion, length bracketing, integration or topology reconstruction exceeds its work budget (2^20 exact-rational units, raised for a loft's station walk to `Spent + 8192 · stationCap(P)`; 2^28 reconstruction units) | `ErrUnsupported` | no, §5.2, §6.1 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
 | **R10** | a Tier B or Tier C walk reaches a BUILD before its moments land | `ErrUnsupported` | no, §8 |
@@ -677,10 +677,14 @@ a record no arrangement ever reads. The free-form charge stays at the preflight,
 which no such certificate can be reached from, so it also covers an evaluator
 preflight that never runs the reconstruction at all.
 
-The exact-rational ceiling stands at 2^20 charged units. The reconstruction
-ceiling stands at 2^26 charged units, admitting 5792 chords for validation's
-first two whole-scene arrangements; candidate authentications spend that same
-reconstruction counter. The larger reconstruction ceiling admits ordinary
+The exact-rational ceiling stands at 2^20 charged units. One operation raises
+it for its own two record counters: a loft, once its station cap gate has
+passed, raises each to `max(2^20, Spent + 8192 · stationCap(P))`, at most
+2^26 + 2^20 (`docs/loft-gear-bounds-design.md` §7). No other caller raises it,
+and a single charge that saturates the cost arithmetic refuses under any
+ceiling. The reconstruction ceiling stands at 2^28 charged units, admitting
+11585 chords for validation's first two whole-scene arrangements; candidate
+authentications spend that same reconstruction counter. The larger reconstruction ceiling admits ordinary
 analytic plates with several circular holes without widening the conversion and
 integration ceiling. The conversion charges beneath the exact-rational ceiling
 must still move ahead of the chains they precede, because a closed spline converts

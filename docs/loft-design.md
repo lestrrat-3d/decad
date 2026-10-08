@@ -216,7 +216,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S12** | ANY build — placed (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's shift `epsV · R_c / clearance` (§8) has no positive `clearance` left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
 | **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf`, decided in whichever of the two arms the gate-order paragraph below assigns that term | yes — the body exists; this evaluator cannot publish a finite certified enclosure for that term on this build | `ErrUnsupported` | no — an enclosure or numeric-range ceiling, not a shape rule |
-| **S15** | a paired segment whose chord target (§5.1) is not met inside the fixed station cap | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
+| **S15** | a paired segment whose chord target (§5.1) is not met inside its share of the station cap `stationCap(P) = min(max(512, 64·P), 8192)` | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
 | **S16** | a chord cell (§5.1) whose two stations coincide on exactly ONE of the two sections. A cell collapsing on BOTH sections, and a collapsed cap triangle, are S6's two arms rather than this row, so every collapse is covered exactly once | yes — a collapsed piece is a recordable curve piece whatever the provenance of the two stations that produced it, and a point-degenerate correspondence is a body a smarter kernel could still loft; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
 | **S17** | a same-kind Tier A free-form pair whose two sides' Bézier span chains (`docs/spline-design.md` §5.1) reduce to different span counts (P5) | yes — the ruled surface exists; this evaluator's span-uniform station rule (§5.1) has no shared station coordinate to chord it over | `ErrUnsupported` | no — §12's reach row, which would retire this refusal by admitting an unequal span count |
 
@@ -645,23 +645,25 @@ a wire field. The constant stays in source, and `LoftOpts` gains no new field
 for it (§10).
 
 **The station cap and the ceiling it answers to.** A build's total station
-count is capped by one unexported package constant, `loftStationCap` (§14
-names the increment that fixes its value). The cap exists to keep the chord
-chain from being what carries §6's audit past the pair-test ceiling that
-section already owns: §6 refuses under S8 when its candidate count exceeds
-`maxFacetPairTestsPerCall`, and that count never exceeds `F*(F-1)/2` over
-the assembled triangle count `F` (§7).
-`loftStationCap` is
-fixed so that a build whose `Σstations` reaches it assembles an `F` whose
-`F*(F-1)/2` is STRICTLY below that ceiling. A build chorded too finely for
-the audit therefore refuses as S15, carrying the chord-count message, rather
+count is capped by a function of its paired-segment count `P`,
+`docs/loft-gear-bounds-design.md` §7's
+
+```text
+stationCap(P) = min(max(512, 64·P), 8192)
+```
+
+(`loftmesh.StationCap`). The hard ceiling keeps the chord chain from being
+what carries §6's audit past its triangle ceiling: §7's `F` is at most
+`8·Σstations − 8`, and at `Σstations = 8192` that is the `8·8192 − 8`
+triangles S8 refuses past before the audit lifts one. A build chorded too
+finely therefore refuses as S15, carrying the chord-count message, rather
 than as S8 carrying the audit-budget one: **the cap is the soft limit and S8
 the hard one, and the two are never merged.** A record whose own
-paired-segment count already exceeds the cap is past chording altogether —
+paired-segment count already reaches the cap is past chording altogether —
 its `Σstations` is that segment count (§7) — and S8 is what refuses it,
 exactly as for an all-`LineSeg` build.
 
-**Allocating the cap.** `loftStationCap` bounds `Σstations`, the total over
+**Allocating the cap.** `stationCap(P)` bounds `Σstations`, the total over
 every loop (§7), because the `F` above depends on that total and on nothing
 per-loop. It is allocated per paired segment, which gives each loop a share
 proportional to its own paired-segment count, and a share of the part
@@ -674,7 +676,7 @@ paired segment is entitled to its first station, which is a `LineSeg` pair's
 whole entitlement (`m = 1`, §7), and each chorded pair may take at most
 
 ```text
-mMax = 1 + max(0, (loftStationCap - P) / C)      // integer division
+mMax = 1 + max(0, (stationCap(P) - P) / C)      // integer division
 ```
 
 stations. A chorded pair whose own settled `m` exceeds `mMax` is Table S
@@ -695,16 +697,16 @@ below carves out the one that is not — the build's total is therefore
 
 ```text
 Σstations = (P - C)·1 + Σm  ≤  (P - C) + C·mMax
-          =  P + C·floor((loftStationCap - P) / C)
-          ≤  loftStationCap
+          =  P + C·floor((stationCap(P) - P) / C)
+          ≤  stationCap(P)
 ```
 
 because integer division only ever UNDER-allocates:
-`C·floor((loftStationCap - P) / C) ≤ loftStationCap - P`. So for such a
+`C·floor((stationCap(P) - P) / C) ≤ stationCap(P) - P`. So for such a
 record no build every one of whose pairs passes S15 can exceed
-`loftStationCap`.
+`stationCap(P)`.
 
-**A record whose own `P` already exceeds the cap.** The `max(0, …)` term
+**A record whose own `P` already reaches the cap.** The `max(0, …)` term
 clamps to zero there, so `mMax = 1` and a pair settling at `m = 1` passes
 S15 with `Σstations` already past the cap. Such a record is past chording
 altogether (above), and S8 is what refuses it, over §6's candidate count
@@ -892,7 +894,7 @@ not of either curve's own parameterisation.
 
 **The station cap applies unchanged, and a free-form pair's share of it is
 counted by the same allocation stated above.** A free-form pair that cannot
-meet the chord target inside `loftStationCap` is S15, `errTooManyChords`,
+meet the chord target inside its share of `stationCap(P)` is S15, `errTooManyChords`,
 the identical refusal a circular pair reaches under the same cap. The
 `mMax` allocation above already counts a same-kind Tier A free-form pair as
 one of `C`'s CHORDED pairs, exactly as it counts a circular one — `C`'s own
@@ -906,9 +908,14 @@ Casteljau bisections and sagitta measurements are charged against
 `docs/spline-design.md` §5.2's `freeformWork` counter on each side's own
 record — the same counter `freeformBezierSpans` and the record's other
 free-form passes already spend, never a counter of the station generator's
-own. An exhausted counter refuses `ErrUnsupported` at spline design's own
-R7, decided the moment the charge would exceed `freeformWorkLimit`, never a
-silent fallback to an uncharged pass. Charging the two records' own
+own. Before `validateLoftRecords` resolves a single walk it raises each
+counter's ceiling to `max(freeformWorkLimit, spent + 8192·stationCap(P))`,
+at most `2^20 + 2^26` (`docs/loft-gear-bounds-design.md` §7), with `P` read
+from the first record's segment counts; the raise covers the walks' own
+length brackets and the station walk. An exhausted counter refuses
+`ErrUnsupported` at spline design's own R7, decided the moment the charge
+would exceed that ceiling, never a silent fallback to an uncharged pass.
+Charging the two records' own
 counters, rather than minting new ones for the station generator, is what
 keeps a build's total free-form work bounded across every segment a loft
 converts — the same discipline `docs/spline-design.md` §5.2's own "the
@@ -1768,6 +1775,7 @@ global evaluator increment.
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2). **This row is landed.** | D3/D4's analytic-kernel case, D5 |
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `spanSpeedUpper` length/speed bound, and `spanMatchedDeltaUpper` native-parameter bound plus `delta`, and the exact per-cell `SpanTangentEnergyUpper` energy (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row is landed.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 4b | `docs/loft-gear-bounds-design.md`'s five increments: the per-cell volume residual with its skirt leg and the per-cell cap tube (§8, §8.1), the centroid shift form (§8), the chord target read from the section's feature size with bisection on the matched departure (§5.1), the sweep-enumerated crossing audit with one proof per cap (§6), and the scaled ceilings — `stationCap(P)` (§5.1), the raised free-form work ceiling (§5.1) and the `1 << 28` reconstruction ceiling — under which full helical gear outlines up to 69 teeth build and verify `Sound`. **This row is landed.** | a profile past 11585 reconstruction chords (the same gear at 70 teeth); every item PR 4's row still lists |
 | 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel, an unequal Bézier span count between a same-kind Tier A free-form pair's two sides (which would retire S17) | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
@@ -2009,7 +2017,7 @@ against this budget.
   published zero bound. Two further underivable terms get their own fixtures
   over the same rule: a pair whose certified per-cell SAGITTA has no
   derivation (its radius or sweep enclosure answering no, §5.2), and a pair
-  whose cap `planeOffsetUpper` or per-cell `arcLenUpper_k` enclosure runs past
+  whose per-cell `arcLenUpper_k` enclosure runs past
   `MaxFloat64` (§5.2), each refuse S14 too, each asserted to refuse rather
   than fall back on a finite estimate, and each asserted to refuse in the S14
   arm §4's gate-order paragraph assigns its term. A DERIVED term that
@@ -2272,19 +2280,20 @@ still over it. `Verify` at the default `1e-3` tolerance reads `Sound` with
 and reads `Sound` with `Volume` binding at about 14.3x
 (`TestLoftFitSplineWedgeVerifiesSound`).
 
-**`loftStationCap`'s value is resolved.** §5.1 states the rule the cap obeys
+**The station cap's value is resolved.** §5.1 states the rule the cap obeys
 and everything an implementation needs to decide S15 from the record — the
-per-segment share, the `mMax` comparison, and the checked arithmetic — and the
-number itself is the unexported `loftStationCap` constant in `loft_stations.go`,
-whose own doc comment carries the derivation and is its ONE defining site.
-That derivation discharges the two constraints §5.1 states: a build whose
-`Σstations` reaches the cap assembles an `F` whose `F*(F-1)/2` is strictly
-below `maxFacetPairTestsPerCall` (§6), and the cap leaves room for every
-fixture §13 requires. The same existing cap at that defining site bounds the
-free-form station generator; the extension creates no second
-cap. Nothing else in this document reads the number: every station count named
-here, the reference wedge's 75 included, is stated against the chord
-target above rather than against the cap.
+per-segment share, the `mMax` comparison, and the checked arithmetic — and
+`stationCap(P)` itself is `loftmesh.StationCap` in
+`internal/loftmesh/record_stations.go`, whose own doc comment carries the
+derivation and is its ONE defining site. `docs/loft-gear-bounds-design.md` §7
+owns the shape and its measurements. The derivation discharges the two
+constraints §5.1 states: a build whose `Σstations` reaches the hard ceiling
+assembles at most the triangles S8's ceiling admits (§6), and the floor
+leaves room for every fixture §13 requires. The same cap bounds the free-form
+station generator; the extension creates no second cap. Nothing else in this
+document reads the number: every station count named here, the reference
+wedge's 75 included, is stated against the chord target above rather than
+against the cap.
 
 Every other design variable this document depends on is resolved above, and
 §12's PR 5 row is future implementation work rather than an open question of

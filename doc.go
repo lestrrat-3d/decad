@@ -140,7 +140,10 @@
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
 //	  a pair not the same line, arc, circle or Tier A type    ErrUnsupported
 //	  a free-form pair of unequal Bézier span counts          ErrUnsupported
-//	  a chorded pair past the fixed station cap               ErrUnsupported
+//	  a chorded pair past its share of the station cap
+//	    (64 per paired segment, 512 to 8192 in all)           ErrUnsupported
+//	  free-form work or sketch reconstruction past its budget
+//	    (a helical gear outline builds to 69 teeth)           ErrUnsupported
 //	  a chorded pair whose displacement has no derivation     ErrUnsupported
 //	  a chord cell collapsing on one section only             ErrUnsupported
 //	  audit's fixed pair-test budget exhausted                ErrUnsupported

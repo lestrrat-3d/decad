@@ -210,7 +210,7 @@ func LoftCertifiedChordLower(radius, sweep proofbound.RatInterval, enclosed bool
 // with m but is floored by its own enclosure width, so a target below that
 // floor would otherwise walk forever. That per-walk ceiling is NOT the station
 // cap: it bounds one curve's own chording and knows nothing of how many curves
-// the build holds, while loftStationCap bounds the build's station total.
+// the build holds, while StationCap bounds the build's station total.
 func LoftSettleStationCount(a, b LoftCircularSide, target float64) (int, float64, float64, error) {
 	m0, _, err := tessellation.ChordCount(a.Walk, target, tessellation.ChordWalkMin(a.Walk))
 	if err != nil {

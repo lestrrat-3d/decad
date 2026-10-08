@@ -530,8 +530,9 @@ func TestLoftFreeformMixedPairsRefuseS3(t *testing.T) {
 }
 
 // TestLoftFreeformPairPastItsShareRefusesS15 gives a free-form pair a share of
-// one station: its loop holds 500 paired segments, so P already reaches the
-// cap and §5.1's allocation clamps every chorded pair to mMax = 1. The pair's
+// one station: its loop holds loftmesh.StationCapCeiling paired segments, so P
+// already reaches the cap and §5.1's allocation clamps every chorded pair to
+// mMax = 1. The pair's
 // four Bézier spans need at least one cell each, so its dyadic walk refuses
 // before measuring a cell, and the refusal names the segment whose share it
 // passed (Table S row S15).
@@ -542,7 +543,7 @@ func TestLoftFreeformPairPastItsShareRefusesS15(t *testing.T) {
 	t.Parallel()
 	fit := FitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
 	segs := []CurveSegment{LineSeg{Start: pt(0, 0), End: pt(0, -1), TStart: 0, TEnd: 1}, fit}
-	for len(segs) < loftStationCap {
+	for len(segs) < loftmesh.StationCapCeiling {
 		segs = append(segs, LineSeg{Start: pt(4, 0), End: pt(0, 0), TStart: 0, TEnd: 1})
 	}
 	p := ProfileRecord{Outer: LoopRecord{Segments: segs}}

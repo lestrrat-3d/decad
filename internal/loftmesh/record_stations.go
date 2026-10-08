@@ -39,44 +39,70 @@ func stationPoints(stations []LoftStation) []sectionrecord.Point2 {
 	return points
 }
 
-// LoftStationCap is docs/loft-design.md §5.1's ceiling on a build's TOTAL
-// station count Σstations (§7) — the soft limit that keeps the chord chain
-// from being what carries §6's audit past the pair-test ceiling S8 owns. §14
-// points here for the value; the derivation follows.
+// StationCap is docs/loft-design.md §5.1's ceiling on a build's TOTAL station
+// count Σstations (§7), as a function of the build's paired-segment count P
+// (docs/loft-gear-bounds-design.md §7):
 //
-// §7 fixes the assembled triangle count: 2·Σstations wall triangles, plus each
-// of the two caps' own polygon-with-holes triangulation, which triangulate.go
-// bridges into a simple polygon and so answers Σstations + 2H − 2 triangles
-// over H hole loops. So
+//	stationCap(P) = min(max(StationCapFloor, StationsPerPair·P), StationCapCeiling)
 //
-//	F = 2·Σstations + 2·(Σstations + 2H − 2) = 4·Σstations + 4H − 4
+// The cap scales with P because a record's need for stations does: the
+// helical gear fixture of docs/loft-gear-bounds-design.md needs 124–132
+// stations for one tooth (P = 6) and 952–1960 for a full outline (P = 48–240).
+// S15 reads the cap through StationShare, which splits it evenly over the
+// chorded pairs, and a gear's flanks need far more cells than its arcs: the
+// z = 8 outline's flanks need 48 cells each. 64 stations per paired segment
+// gives them a share of 95; 32 would give 47 and refuse that outline. The
+// floor keeps a record of a few curves the room the docs/loft-design.md §14
+// reference wedges need.
 //
-// S8 (internal/loftmesh/loft_audit_sweep.go) refuses when the audit's candidate
-// pair count exceeds proofbound.MaxFacetPairTestsPerCall (8_000_000,
-// internal/proofbound/budget.go). That count never exceeds F*(F−1)/2, which
-// stays at or below the ceiling for F ≤ 4000: 4000·3999/2 = 7_998_000 does
-// and 4001·4000/2 = 8_002_000 does not.
+// The hard ceiling bounds what the cap protects. §7 fixes the assembled
+// triangle count at F = 4·Σstations + 4H − 4 over H hole loops, and H is at
+// most Σstations − 1 (every loop holds at least one segment and every paired
+// segment chords at m ≥ 1), so F ≤ 8·Σstations − 8. At Σstations =
+// StationCapCeiling that is MaxLoftAuditTriangles, the triangle ceiling S8
+// checks before the audit lifts a single triangle, so a build whose P is
+// below the cap and every pair of which passes S15 never reaches S8 on its
+// triangle count. The free-form work ceiling is sized from the same cap
+// (StationWorkLimit).
 //
-// H is bounded by Σstations itself. Every loop holds at least one segment and
-// every paired segment chords at m ≥ 1 (§5.1), so a build of L loops has
-// Σstations ≥ L and therefore H = L − 1 ≤ Σstations − 1. Taking that worst
-// case,
-//
-//	F ≤ 4·Σstations + 4·(Σstations − 1) − 4 = 8·Σstations − 8
-//
-// and at Σstations = 500 that is F ≤ 3992, whose 3992·3991/2 = 7_966_036 is
-// STRICTLY below the ceiling — which is the property §5.1 requires of this
-// constant. The hole-free shape §5.1's own "F ≈ 4Σ − 4" names is far smaller
-// still: F = 1996 at the cap, 1_991_010 pair tests.
-//
-// It also leaves room for every fixture §13 requires: that section's reference
-// wedge forces 64 stations and its calibrated twin settles at 65, so the cap
-// sits more than seven times above the largest fixture that ships.
-//
-// The cap is deliberately NOT freeform.MaxChordsPerWalk (tessellate.go). That constant
+// The cap is NOT freeform.MaxChordsPerWalk (tessellate.go). That constant
 // bounds how finely ONE curve may be chorded and knows nothing of how many
 // curves a build holds; this one bounds the build.
-const LoftStationCap = 500
+func StationCap(p uint64) int {
+	if p >= StationCapCeiling/StationsPerPair {
+		return StationCapCeiling
+	}
+	return int(max(StationCapFloor, StationsPerPair*p)) //nolint:gosec // p < StationCapCeiling/StationsPerPair here, so the product is below StationCapCeiling.
+}
+
+// StationCap's three constants (docs/loft-gear-bounds-design.md §7).
+const (
+	StationCapFloor   = 512
+	StationsPerPair   = 64
+	StationCapCeiling = 8192
+)
+
+// StationWorkUnits is the free-form work one station may charge each record's
+// counter. On the gear fixtures of docs/loft-gear-bounds-design.md the loft's
+// walk resolution and station walk together charge 5300–7000 units per
+// station per record, averaged over every station of the build, and
+// TestLoftStationWalkWorkPerStation keeps that average below this constant.
+const StationWorkUnits = 8192
+
+// StationWorkLimit is the free-form work ceiling a loft raises each record's
+// counter to before it resolves the records' walks
+// (docs/loft-gear-bounds-design.md §7):
+//
+//	max(freeform.FreeformWorkLimit, spent + StationWorkUnits·stationCap(P))
+//
+// spent is the counter's total at the raise. Every charge before the raise
+// met the default ceiling, so spent is at most freeform.FreeformWorkLimit and
+// the result is at most FreeformWorkLimit + StationWorkUnits·StationCapCeiling
+// = 2^20 + 2^26. The same counter stays the record's one counter for the
+// operation: the raise sets its ceiling and never resets what it has spent.
+func StationWorkLimit(spent, p uint64) uint64 {
+	return max(freeform.FreeformWorkLimit, spent+StationWorkUnits*uint64(StationCap(p))) //nolint:gosec // StationCap is in [StationCapFloor, StationCapCeiling].
+}
 
 // PairCounts reads docs/loft-design.md §5.1's two build-wide counts off
 // Table P over both records: P, the total paired-segment count, and C, the
@@ -124,7 +150,7 @@ func IsChordedPair(w0, w1 survey2d.SegmentWalk) bool {
 // StationShare allocates docs/loft-design.md §5.1's per-segment share of
 // the station cap:
 //
-//	mMax = 1 + max(0, (LoftStationCap - P) / C)      // integer division
+//	mMax = 1 + max(0, (stationCap(P) - P) / C)      // integer division
 //
 // Every paired segment is entitled to its first station — a LineSeg pair's
 // whole entitlement (m = 1, §7) — and each of the C chorded pairs may take at
@@ -137,13 +163,15 @@ func IsChordedPair(w0, w1 survey2d.SegmentWalk) bool {
 // chorded pair never consults the cap at all, and dividing by C would be
 // undefined besides.
 //
-// A record whose own P already exceeds the cap clamps to mMax = 1, which §5.1
-// carves out deliberately: such a record is past chording altogether and S8 is
-// what refuses it, over the assembled triangle count §6's own preflight
-// computes. Refusing it here instead would refuse a mixed build while
-// admitting an all-LineSeg build of the identical triangle count.
+// A record whose own P already reaches the cap — P at or above
+// StationCapCeiling, since below it the cap is at least 64·P — clamps to
+// mMax = 1, which §5.1 carves
+// out deliberately: such a record is past chording altogether and S8 is what
+// refuses it, over the assembled triangle count §6's own preflight computes.
+// Refusing it here instead would refuse a mixed build while admitting an
+// all-LineSeg build of the identical triangle count.
 func StationShare(p, c uint64) int {
-	q := max(int64(0), (int64(LoftStationCap)-int64(p))/int64(c)) //nolint:gosec // p and c are paired-segment counts proofbound.WallCheckedAdd already proved do not overflow, and a record large enough to pass int64 cannot be built from the process's memory limits.
+	q := max(int64(0), (int64(StationCap(p))-int64(p))/int64(c)) //nolint:gosec // p and c are paired-segment counts proofbound.WallCheckedAdd already proved do not overflow, and a record large enough to pass int64 cannot be built from the process's memory limits.
 	return 1 + int(q)
 }
 
