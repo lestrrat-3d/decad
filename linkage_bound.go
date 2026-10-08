@@ -53,11 +53,11 @@ type linkBound struct {
 func linkageFrames(spec *linkageSpec) ([]motionbound.MotionFrame, bool) {
 	frames := make([]motionbound.MotionFrame, len(spec.joints))
 	for k, jt := range spec.joints {
-		ms := motionSpec{kind: motionbound.MotionPrismatic, dir: jt.axis}
+		ms := motionbound.Spec{Kind: motionbound.MotionPrismatic, Dir: jt.axis}
 		if jt.revolute {
-			ms = motionSpec{kind: motionbound.MotionRevolute, center: jt.center, axis: jt.axis}
+			ms = motionbound.Spec{Kind: motionbound.MotionRevolute, Center: jt.center, Axis: jt.axis}
 		}
-		frame, ok := newMotionFrame(ms)
+		frame, ok := motionbound.NewMotionFrame(ms)
 		if !ok {
 			return nil, false
 		}
@@ -82,7 +82,7 @@ func jointReach(jt linkJoint) *big.Rat {
 // exact interpolation at the local fraction.
 func jointParam(jt linkJoint, s *big.Rat) motionbound.MotionParam {
 	seg, t := jt.segment(s)
-	return seg.fromP.Lerp(seg.toP, t)
+	return seg.FromP.Lerp(seg.ToP, t)
 }
 
 // jointSpan is |Δq_i| of docs/linkage-check-design.md §5.2 while the

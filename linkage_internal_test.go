@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -283,7 +284,7 @@ func foldingArmRun(t *testing.T) (*motionRun, *Body, *Body) {
 	require.True(t, ok)
 	bounds, ok := readLinkBounds(spec, frames)
 	require.True(t, ok)
-	cfg, err := resolveMotionOptions(nil, motionSpec{motionDomain: fractionDomain()})
+	cfg, err := motionoption.Resolve(nil, motionbound.FractionDomain())
 	require.NoError(t, err)
 	run := newLinkageRun(t.Context(), doc, spec, frames, bounds, cfg)
 	return run, upper, fore
@@ -341,7 +342,7 @@ func TestLinkagePairGapCarriesBothDeviations(t *testing.T) {
 	require.True(t, run.pairs[0][1].excluded)
 	run.pairs[0][1] = motionPair{other: 1}
 	f := big.NewRat(1, 3)
-	pose, err := run.evaluatePose(f, run.dom.label(f))
+	pose, err := run.evaluatePose(f, run.dom.Label(f))
 	require.NoError(t, err)
 	require.Len(t, run.pairs[0], 2, `the upper arm's row: the wall, then the forearm`)
 	require.Equal(t, 1, run.pairs[0][1].other)
@@ -442,12 +443,12 @@ func TestLinkageConstantPlacementIsReused(t *testing.T) {
 	require.True(t, ok)
 	bounds, ok := readLinkBounds(spec, frames)
 	require.True(t, ok)
-	cfg, err := resolveMotionOptions(nil, motionSpec{motionDomain: fractionDomain()})
+	cfg, err := motionoption.Resolve(nil, motionbound.FractionDomain())
 	require.NoError(t, err)
 	run := newLinkageRun(t.Context(), doc, spec, frames, bounds, cfg)
 	require.Equal(t, []linkStanding{linkConstant, linkMoving}, run.drive.(*linkageDriver).standing)
 
-	_, err = run.evaluatePose(new(big.Rat), run.dom.label(new(big.Rat)))
+	_, err = run.evaluatePose(new(big.Rat), run.dom.Label(new(big.Rat)))
 	require.NoError(t, err)
 	require.NotNil(t, run.constPlaced)
 	held := run.constPlaced[0]
@@ -455,7 +456,7 @@ func TestLinkageConstantPlacementIsReused(t *testing.T) {
 	require.NotSame(t, base, held.body, `a constant placement is a transient body`)
 	require.Nil(t, run.constPlaced[1], `a moving link's placement is never kept`)
 	half := big.NewRat(1, 2)
-	_, err = run.evaluatePose(half, run.dom.label(half))
+	_, err = run.evaluatePose(half, run.dom.Label(half))
 	require.NoError(t, err)
 	require.Same(t, held, run.constPlaced[0])
 	_, cached := run.cache.entries[held.body]
@@ -472,7 +473,7 @@ func linkageRunOf(t *testing.T, doc *Document, l *Linkage, drive Drive, opts ...
 	require.True(t, ok)
 	bounds, ok := readLinkBounds(spec, frames)
 	require.True(t, ok)
-	cfg, err := resolveMotionOptions(opts, motionSpec{motionDomain: fractionDomain()})
+	cfg, err := motionoption.Resolve(opts, motionbound.FractionDomain())
 	require.NoError(t, err)
 	return newLinkageRun(t.Context(), doc, spec, frames, bounds, cfg)
 }
@@ -619,9 +620,9 @@ func TestLinkageProjectionBoundHandSum(t *testing.T) {
 	run := linkageRunOf(t, doc, l, Drive{{Link: swing, From: units.Degrees(0), To: units.Degrees(90)}}, WithResolution(units.Scalar(1.0/16)))
 	dr := run.drive.(*linkageDriver)
 	fa, fb := new(big.Rat), big.NewRat(1, 16)
-	a, err := run.evaluatePose(fa, run.dom.label(fa))
+	a, err := run.evaluatePose(fa, run.dom.Label(fa))
 	require.NoError(t, err)
-	b, err := run.evaluatePose(fb, run.dom.label(fb))
+	b, err := run.evaluatePose(fb, run.dom.Label(fb))
 	require.NoError(t, err)
 	got := dr.projection(0, 0, a, b)
 	require.NotNil(t, got)
@@ -711,9 +712,9 @@ func TestLinkageProjectionSegmentTerm(t *testing.T) {
 	run := linkageRunOf(t, doc, l, Drive{{Link: swing, From: units.Degrees(0), To: units.Degrees(90)}}, WithResolution(units.Scalar(1.0/16)))
 	dr := run.drive.(*linkageDriver)
 	fa, fb := new(big.Rat), big.NewRat(1, 16)
-	a, err := run.evaluatePose(fa, run.dom.label(fa))
+	a, err := run.evaluatePose(fa, run.dom.Label(fa))
 	require.NoError(t, err)
-	b, err := run.evaluatePose(fb, run.dom.label(fb))
+	b, err := run.evaluatePose(fb, run.dom.Label(fb))
 	require.NoError(t, err)
 	b0 := dr.bounds[0]
 	h, ok := dr.projectionSpans(b0, 0, fa, fb, a)

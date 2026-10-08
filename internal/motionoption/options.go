@@ -11,13 +11,6 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// Domain is the parameter interval used to resolve motion options.
-type Domain struct {
-	Quantity   units.Kind
-	From, To   units.Value
-	FromP, ToP motionbound.MotionParam
-}
-
 // JointBoxOption configures VerifyJointBox (docs/linkage-check-design.md
 // §14.1). Every MotionOption is one, so WithMotionTolerance, WithResolution
 // and WithMinClearance pass to VerifyJointBox unchanged; WithCellBudget is the
@@ -108,7 +101,7 @@ type Config struct {
 // Resolve folds and validates the options against the resolved
 // parameter domain — a Motion's own, or a linkage drive's fraction — and
 // duplicates keep the last occurrence (verification §1.0).
-func Resolve(opts []MotionOption, spec Domain) (Config, error) {
+func Resolve(opts []MotionOption, spec motionbound.Domain) (Config, error) {
 	cfg := Config{Rel: 1e-3}
 	var resolution *units.Value
 	for _, o := range opts {

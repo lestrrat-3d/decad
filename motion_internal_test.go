@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/motionoption"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -20,7 +21,7 @@ import (
 // can drive a single pose through the production path.
 func motionRunFor(t *testing.T, doc *Document, moving []*Body, m Motion) *motionRun {
 	t.Helper()
-	spec, err := resolveMotion(m)
+	spec, err := motionbound.ResolveMotion(m)
 	require.NoError(t, err)
 	run := &motionRun{ctx: t.Context(), d: doc, spec: spec, cfg: motionConfig{Rel: 1e-3}, cache: &bodyGeomCache{}}
 	run.setup(moving)
@@ -66,7 +67,7 @@ func TestMotionPoseDeviationReachesThePoseGap(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, pairDisjoint, res.verdict)
 
-		eta, _ := motionbound.PoseDeviation(composed, placement, run.spec.frame.At(pose.param), run.movers[0].r0)
+		eta, _ := motionbound.PoseDeviation(composed, placement, run.spec.Frame.At(pose.param), run.movers[0].r0)
 		require.Greater(t, eta, 0.0)
 		require.Less(t, got.lo, res.lo, `η lowers the proven lower end`)
 		require.Greater(t, got.hi, res.hi, `η raises the proven upper end`)
@@ -103,7 +104,7 @@ func TestMotionPoseDeviationIsZeroForAnExactPose(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			spec, err := resolveMotion(tc.m)
+			spec, err := motionbound.ResolveMotion(tc.m)
 			require.NoError(t, err)
 			pose, err := tc.m.PoseAt(tc.at)
 			require.NoError(t, err)
@@ -112,7 +113,7 @@ func TestMotionPoseDeviationIsZeroForAnExactPose(t *testing.T) {
 			placement := arm.payload.transform()
 			composed, err := placement.Then(pose)
 			require.NoError(t, err)
-			eta, linear := motionbound.PoseDeviation(composed, placement, spec.frame.At(param), math.Inf(1))
+			eta, linear := motionbound.PoseDeviation(composed, placement, spec.Frame.At(param), math.Inf(1))
 			require.Zero(t, eta)
 			require.Zero(t, linear)
 		})
@@ -200,9 +201,9 @@ func TestMotionAxisRadiusReadsTheBox(t *testing.T) {
 		{r3.Vec{}, 50},
 		{r3.NewVec(0, -14, 0), math.Sqrt(48*48 + 28*28)},
 	} {
-		spec, err := resolveMotion(Revolute{Center: tc.center, Axis: r3.NewVec(0, 0, 3), From: units.Degrees(0), To: units.Degrees(90)})
+		spec, err := motionbound.ResolveMotion(Revolute{Center: tc.center, Axis: r3.NewVec(0, 0, 3), From: units.Degrees(0), To: units.Degrees(90)})
 		require.NoError(t, err)
-		rho := motionbound.MoverAxisRadius(arm.bounds, spec.frame)
+		rho := motionbound.MoverAxisRadius(arm.bounds, spec.Frame)
 		require.GreaterOrEqual(t, rho, tc.want)
 		require.InDelta(t, tc.want, rho, 1e-12)
 	}
@@ -326,7 +327,7 @@ func farCornerOverlap(t *testing.T, doc *Document, arm, block *Body, swing Revol
 	require.NoError(t, err)
 	transient, err := arm.payload.placed(t.Context(), doc, transientProducer, composed)
 	require.NoError(t, err)
-	eta, linear := motionbound.PoseDeviation(composed, placement, run.spec.frame.At(run.spec.toP), run.movers[0].r0)
+	eta, linear := motionbound.PoseDeviation(composed, placement, run.spec.Frame.At(run.spec.ToP), run.movers[0].r0)
 	require.Greater(t, eta, 0.0)
 	allowance := proofbound.SweptVolumeAllow(eta, motionbound.PathAreaUpper(run.movers[0].area, linear, run.movers[0].sigma, run.stretchEnd))
 	res, err := clearancePair(t.Context(), transient, block, false)
@@ -483,9 +484,9 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 		From: units.Millimeters(0),
 		To:   units.Millimeters(math.SmallestNonzeroFloat64),
 	}
-	spec, err := resolveMotion(motion)
+	spec, err := motionbound.ResolveMotion(motion)
 	require.NoError(t, err)
-	cfg, err := resolveMotionOptions(nil, spec)
+	cfg, err := motionoption.Resolve(nil, spec.Domain)
 	require.NoError(t, err)
 	require.Equal(t, units.Millimeters(math.SmallestNonzeroFloat64), cfg.Resolution)
 	reported, ok := motionbound.ExactMotionParam(cfg.Resolution)
@@ -506,23 +507,23 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 		From: units.Degrees(0),
 		To:   units.Degrees(math.SmallestNonzeroFloat64),
 	}
-	swingSpec, err := resolveMotion(swing)
+	swingSpec, err := motionbound.ResolveMotion(swing)
 	require.NoError(t, err)
-	swingCfg, err := resolveMotionOptions(nil, swingSpec)
+	swingCfg, err := motionoption.Resolve(nil, swingSpec.Domain)
 	require.NoError(t, err)
 	require.Greater(t, swingCfg.Resolution.Mag(), math.SmallestNonzeroFloat64)
 	swingReported, ok := motionbound.ExactMotionParam(swingCfg.Resolution)
 	require.True(t, ok)
 	require.Zero(t, swingReported.Turn.Cmp(swingCfg.ResolutionP.Turn))
-	_, err = resolveMotionOptions([]MotionOption{WithResolution(swingCfg.Resolution)}, swingSpec)
+	_, err = motionoption.Resolve([]MotionOption{WithResolution(swingCfg.Resolution)}, swingSpec.Domain)
 	require.NoError(t, err)
 
 	// The nominal 1/1024 step can round to a positive degree magnitude that
 	// still converts to zero radians. It must trigger the same fallback.
 	swing.To = units.Degrees(1024 * math.SmallestNonzeroFloat64)
-	swingSpec, err = resolveMotion(swing)
+	swingSpec, err = motionbound.ResolveMotion(swing)
 	require.NoError(t, err)
-	swingCfg, err = resolveMotionOptions(nil, swingSpec)
+	swingCfg, err = motionoption.Resolve(nil, swingSpec.Domain)
 	require.NoError(t, err)
 	require.Greater(t, swingCfg.Resolution.Mag(), math.SmallestNonzeroFloat64)
 	swingReported, ok = motionbound.ExactMotionParam(swingCfg.Resolution)
@@ -621,9 +622,9 @@ func TestMotionBetweenFrameReachesTo(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			spec, err := resolveMotion(tc.m)
+			spec, err := motionbound.ResolveMotion(tc.m)
 			require.NoError(t, err)
-			end := spec.frame.At(spec.toP)
+			end := spec.Frame.At(spec.ToP)
 			tol := 1e-9 * (1 + tc.m.To.Translation().Len())
 			for _, corner := range []r3.Vec{
 				r3.NewVec(0, -14, 0), r3.NewVec(48, -14, 0), r3.NewVec(0, 14, 0), r3.NewVec(48, 14, 0),

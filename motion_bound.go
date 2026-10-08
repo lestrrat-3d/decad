@@ -6,52 +6,12 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
-	"github.com/lestrrat-3d/decad/internal/motionbound"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/r3"
 )
 
-// This file converts the requested motion into motionbound.MotionFrame and
-// reads a mover's payload-specific record radius. internal/motionbound owns
-// the exact box corners, axis radius, swept box and interval calculations
-// described in docs/motion-check-design.md §5–§6.
-
-func newMotionFrame(spec motionSpec) (motionbound.MotionFrame, bool) {
-	dirVec := spec.dir
-	center := r3.Vec{}
-	switch spec.kind {
-	case motionbound.MotionRevolute:
-		dirVec, center = spec.axis, spec.center
-	case motionbound.MotionBetween:
-		dirVec, center = spec.screw.Axis, spec.screw.Point
-	}
-	axis, okA := motionbound.RatVecOf(dirVec)
-	pivot, okC := motionbound.RatVecOf(center)
-	if !okA || !okC {
-		return motionbound.MotionFrame{}, false
-	}
-	unit, ok := motionbound.UnitScaleInterval(axis)
-	if !ok {
-		return motionbound.MotionFrame{}, false
-	}
-	mf := motionbound.MotionFrame{Kind: spec.kind, Axis: axis, Unit: unit, Center: pivot}
-	if spec.kind != motionbound.MotionBetween {
-		return mf, true
-	}
-	theta, okT := motionbound.ExactMotionParam(spec.screw.Angle)
-	slide := proofarith.FloatRat(spec.screw.Slide)
-	fromRot, fromT, okF := motionbound.ExactTransform(spec.between.From)
-	toRot, toT, okTo := motionbound.ExactTransform(spec.between.To)
-	if !okT || slide == nil || !okF || !okTo {
-		return motionbound.MotionFrame{}, false
-	}
-	mf.Theta, mf.Slide = theta, slide
-	mf.FromRot, mf.FromT, mf.ToRot, mf.ToT = fromRot, fromT, toRot, toT
-	return mf, true
-}
+// This file reads a mover's payload-specific record radius. internal/motionbound
+// builds motion frames, box corners, axis radii, swept boxes and interval
+// calculations described in docs/motion-check-design.md §5–§6.
 
 // moverRecordRadius is R0 of docs/motion-check-design.md §5.1: a proven upper
 // bound on |p| for every point p of the mover's record before its own

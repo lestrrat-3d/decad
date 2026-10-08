@@ -271,10 +271,10 @@ func resolveJointOptions(opts []JointOption, kind units.Kind) (*JointLimits, err
 		if !ok {
 			return nil, fmt.Errorf(`%w: a joint option carries no value`, ErrDegenerate)
 		}
-		if err := motionKinds(kind, v.Min, v.Max); err != nil {
+		if err := motionbound.MotionKinds(kind, v.Min, v.Max); err != nil {
 			return nil, err
 		}
-		if err := motionFinite(v.Min, v.Max); err != nil {
+		if err := motionbound.MotionFinite(v.Min, v.Max); err != nil {
 			return nil, err
 		}
 		if c, ok := motionbound.ParamCompare(v.Min, v.Max); !ok || c >= 0 {
@@ -364,7 +364,7 @@ func (l *Linkage) PoseAt(d Drive, at units.Value) (LinkagePose, error) {
 	if err != nil {
 		return LinkagePose{}, err
 	}
-	if err := motionValueValid(at, units.Dimensionless, "the pose fraction"); err != nil {
+	if err := motionbound.MotionValueValid(at, units.Dimensionless, "the pose fraction"); err != nil {
 		return LinkagePose{}, err
 	}
 	p, ok := motionbound.ExactMotionParam(at)
@@ -443,7 +443,7 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 			return nil, fmt.Errorf(`%w: every sweep of a drive passes the same waypoints, but link %d's sweep has %d Via values and an earlier one %d`,
 				ErrDegenerate, link.index, len(sw.Via), segments-1)
 		}
-		if err := motionKinds(jt.kind, sw.From, sw.To); err != nil {
+		if err := motionbound.MotionKinds(jt.kind, sw.From, sw.To); err != nil {
 			return nil, err
 		}
 		for _, v := range sw.Via {
@@ -453,7 +453,7 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 		}
 		values := make([]units.Value, 0, segments+1)
 		values = append(append(append(values, sw.From), sw.Via...), sw.To)
-		if err := motionFinite(values...); err != nil {
+		if err := motionbound.MotionFinite(values...); err != nil {
 			return nil, err
 		}
 		points := make([]motionbound.MotionParam, len(values))
@@ -528,7 +528,7 @@ func (jt linkJoint) moves() bool {
 		return !jt.dep.held
 	}
 	for _, v := range jt.values[1:] {
-		if !sameMotionValue(jt.values[0], v) {
+		if !motionbound.SameMotionValue(jt.values[0], v) {
 			return true
 		}
 	}
@@ -541,7 +541,7 @@ func (jt linkJoint) moves() bool {
 // n covers [j/n, (j+1)/n]: a waypoint's fraction j/n takes segment j, 1 takes
 // the last segment, and an s outside [0, 1] extends the first or the last.
 // With one segment t is s itself.
-func (jt linkJoint) segment(s *big.Rat) (motionDomain, *big.Rat) {
+func (jt linkJoint) segment(s *big.Rat) (motionbound.Domain, *big.Rat) {
 	n := len(jt.points) - 1
 	j, t := 0, s
 	if n > 1 {
@@ -556,14 +556,14 @@ func (jt linkJoint) segment(s *big.Rat) (motionDomain, *big.Rat) {
 		}
 		t = ns.Sub(ns, big.NewRat(int64(j), 1))
 	}
-	return motionDomain{quantity: jt.kind, from: jt.values[j], to: jt.values[j+1], fromP: jt.points[j], toP: jt.points[j+1]}, t
+	return motionbound.Domain{Quantity: jt.kind, From: jt.values[j], To: jt.values[j+1], FromP: jt.points[j], ToP: jt.points[j+1]}, t
 }
 
 // label is the joint's published value at the exact fraction s: its
-// segment's label at the local fraction (motionDomain.label).
+// segment's label at the local fraction (motionbound.Domain.Label).
 func (jt linkJoint) label(s *big.Rat) units.Value {
 	seg, t := jt.segment(s)
-	return seg.label(t)
+	return seg.Label(t)
 }
 
 // holds reports whether every listed sweep of the drive holds its joint, so
@@ -580,9 +580,9 @@ func (s *linkageSpec) holds() bool {
 // pose is the joint's own float motion at the value q.
 func (jt linkJoint) pose(q units.Value) (r3.Transform, error) {
 	if jt.revolute {
-		return revolutePose(jt.center, jt.axis, q)
+		return motionbound.RevolutePose(jt.center, jt.axis, q)
 	}
-	return prismaticPose(jt.axis, q)
+	return motionbound.PrismaticPose(jt.axis, q)
 }
 
 // posesAt is every link's joint value and world pose at the exact fraction f
