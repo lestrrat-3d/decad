@@ -38,8 +38,10 @@ import (
 // exactly per lifted point, the same charge topology.go's Vertex.Position
 // takes), the payload's own proven axial or angular displacement, and the
 // per-face tilt a rounded carrier normal commits across that face's own extent
-// (clearance.BodyFaceTiltDelta, below). addStitchFaces folds in the body's own
-// largest proven vertex bound instead. It is exactly zero for an unplaced,
+// (clearance.BodyFaceTiltDelta, below); addRevolveFaces adds how far its
+// carriers sit off the recorded meridian swept about the recorded axis
+// (clearance.RevolveCarrierResult's AxisGap). addStitchFaces folds in the
+// body's own largest proven vertex bound instead. It is exactly zero for an unplaced,
 // axis-aligned, feature-built body whose lifts are exact for its own
 // coordinates, which is what keeps every such body's Clearance rows Exact.
 type bodyGeom struct {
@@ -402,35 +404,16 @@ func brepCarrierWalk(seg CurveSegment) (survey2d.SegmentWalk, bool) {
 // rp.angularDelta() — scaled by the radial envelope every witness can carry
 // it at, verify_gate.go's own reading of the same displacement — into
 // bodyGeom.delta below, beside the payload's own frame/placement point
-// rounding and the per-face tilt term every plane carrier here can commit
-// (bodyGeom's own doc comment).
+// rounding, the per-face tilt term every plane carrier here can commit
+// (bodyGeom's own doc comment) and how far the carriers sit off the recorded
+// meridian swept about the recorded axis (clearance.RevolveCarrierResult's
+// AxisGap).
 func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayload) (bool, error) {
-	loops, err := revolveLoops(budget, rp)
-	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return false, err
-		}
-		if errors.Is(err, ErrUnsupported) {
-			// An undecomposable meridian is an unsupported payload, not a
-			// failure: newBodyGeom answers with no model rather than a partial
-			// one. Other errors remain visible to the caller.
-			return false, nil
-		}
+	in, ok, err := revolveCarrierInput(budget, rp)
+	if err != nil || !ok {
 		return false, err
 	}
-	var walls []clearance.RevolveWall
-	for _, loop := range loops {
-		for _, w := range loop {
-			if err := budget.Step(); err != nil {
-				return false, err
-			}
-			walls = append(walls, clearance.RevolveWall{Walk: w, Kind: rp.ax.classify(w.SegmentWalk)})
-		}
-	}
-	built := clearance.BuildRevolveCarriers(clearance.RevolveCarrierInput{
-		Lift: rp.lift(), Transform: rp.xform, Full: rp.full,
-		Phi0: rp.phi0, Phi1: rp.phi1, Walls: walls,
-	})
+	built := clearance.BuildRevolveCarriers(in)
 	g.faces = append(g.faces, built.Faces...)
 	g.verts = append(g.verts, built.Vertices...)
 
@@ -455,7 +438,53 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 		// only seams and witnesses on the complete surface of revolution.
 		g.carrierDelta = proofbound.AbsSumUpper(pointTerm, tiltTerm)
 	}
+	// The carriers read the walk's float axis coordinates, so each sits off
+	// the record by what the re-expression, an axis snap and the axis's own
+	// error put between them (built.AxisGap). That moves the carrier itself,
+	// so it widens both figures. An absent gap folds nothing: AbsSumUpper
+	// up-rounds every term, zero included, and an exact revolve must read as
+	// it did before the charge existed.
+	if built.AxisGap > 0 {
+		g.delta = proofbound.AbsSumUpper(g.delta, built.AxisGap)
+		g.carrierDelta = proofbound.AbsSumUpper(g.carrierDelta, built.AxisGap)
+	}
 	return true, nil
+}
+
+// revolveCarrierInput resolves rp's meridian walks, each beside the recorded
+// plane-local walks it was re-expressed from, into the carrier builder's
+// input. ok is false for a meridian this kernel cannot decompose, which
+// leaves the body with no model.
+func revolveCarrierInput(budget *proofbound.WorkBudget, rp revolvePayload) (clearance.RevolveCarrierInput, bool, error) {
+	loops, planes, err := revolveLoopsPlane(budget, rp)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return clearance.RevolveCarrierInput{}, false, err
+		}
+		if errors.Is(err, ErrUnsupported) {
+			// An undecomposable meridian is an unsupported payload, not a
+			// failure: newBodyGeom answers with no model rather than a partial
+			// one. Other errors remain visible to the caller.
+			return clearance.RevolveCarrierInput{}, false, nil
+		}
+		return clearance.RevolveCarrierInput{}, false, err
+	}
+	var walls []clearance.RevolveWall
+	for li, loop := range loops {
+		for _, w := range loop {
+			if err := budget.Step(); err != nil {
+				return clearance.RevolveCarrierInput{}, false, err
+			}
+			walls = append(walls, clearance.RevolveWall{
+				Walk: w, Kind: rp.ax.classify(w.SegmentWalk),
+				First: planes[li][w.Segs[0]], Last: planes[li][w.Segs[len(w.Segs)-1]],
+			})
+		}
+	}
+	return clearance.RevolveCarrierInput{
+		Lift: rp.lift(), Axis: rp.axisBound(), Transform: rp.xform, Full: rp.full,
+		Phi0: rp.phi0, Phi1: rp.phi1, Walls: walls,
+	}, true, nil
 }
 
 // addStitchFaces builds one exact planar carrier per live face of a CLOSED,

@@ -361,9 +361,9 @@ attribute to one end). Every reading that folds a held sweep angle into a
 published measurement takes it: `Bounds`, the partial-sweep cap vertices and
 cap-copy seam vertices, the cap faces' own `Plane` normal, the mesh's angular
 sampling, the wall survey's cap wedge, and the tolerance gate's reference
-diameter. Clearance and interference stay on the prism's own precedent:
-neither reads the axial displacement there, and neither reads the angular
-one here.
+diameter. The clearance kernel reads it as one term of its per-body
+displacement (`bodyGeom.delta`, `docs/clearance-design.md` §2), as it reads
+the prism's axial displacement.
 Every junction, seam and cap vertex `buildRevolveLoop` and the `RevolveChain`
 build place is bounded by ONE exact comparison per sweep end
 (`revolvePayload.sweptVertex`, `revolvemesh.RevolveLift.SweptPointGap`). The
@@ -394,7 +394,12 @@ junction `Circle3`/`Arc3` takes its centre and radius from the walk's (z, ρ)
 (`junctionCircle`) and a cap `Arc3` its centre from the walk's (cU, cV).
 `revolve_blend.go` matches a selected edge against `junctionCircle` by
 float identity over the same payload, so it reads the same numbers and needs
-no bound.
+no bound. The clearance kernel reads them through `newCEdge`, and its revolve
+carriers read the same walk values, so the displacement it charges for the
+carriers (`clearance.RevolveCarrierResult`'s `AxisGap`,
+`docs/clearance-design.md` §2) is the one those edges share; they add only
+the float evaluation of the centre. STEP export, `stops.go`'s boundary
+probes and `stitch_flux.go`'s circle rims read the held curves as they stand.
 
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid

@@ -164,35 +164,49 @@ func recordLoopsBudget(budget *proofbound.WorkBudget, profile ProfileRecord) ([]
 // revolveLoops resolves the loops into axis coordinates (the U fields carry
 // z, the V fields ρ), mirroring buildRevolveLoop.
 func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2d.SideWalk, error) {
+	loops, _, err := revolveLoopsPlane(budget, rp)
+	return loops, err
+}
+
+// revolveLoopsPlane is revolveLoops with each loop's PLANE-local walks kept
+// beside it, indexed by recorded segment (SideWalk.Segs): the recorded
+// geometry the axis coordinates were re-expressed from, which a proof about
+// how far a reading sits from the record needs (revolveWalks.plane's own
+// reason).
+func revolveLoopsPlane(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2d.SideWalk, [][]survey2d.SegmentWalk, error) {
 	// One free-form counter for the whole record, as recordLoops opens.
 	work := freeform.NewFreeformWork()
 	var out [][]survey2d.SideWalk
+	var planes [][]survey2d.SegmentWalk
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	for _, loop := range loops {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		raw := make([]survey2d.SideWalk, len(loop.Segments))
+		plane := make([]survey2d.SegmentWalk, len(loop.Segments))
 		for i, seg := range loop.Segments {
 			if err := survey2d.WallBudgetStep(budget); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			w, err := walkOf(seg, work)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if err := requireAnalyticWalk(w, "the survey boundary walk"); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
+			plane[i] = w
 			raw[i] = survey2d.SideWalk{SegmentWalk: rp.ax.walk(w), Segs: []int{i}}
 		}
 		walks, err := coalesceWalksBudget(raw, budget)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		out = append(out, walks)
+		planes = append(planes, plane)
 	}
-	return out, nil
+	return out, planes, nil
 }
 
 // walkElem keeps the root callers of survey2d.WalkElem on one conversion path.

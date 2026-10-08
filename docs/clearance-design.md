@@ -128,6 +128,35 @@ geometry the body does not have (`docs/surface-design.md` §4.1), while a
 surface-result revolve is refused a model outright rather than the closed one
 its own builder would otherwise hand back.
 
+**A revolve's carriers are measured against the record they were
+re-expressed from** (`clearance.RevolveCarrierResult`'s `AxisGap`,
+`internal/clearance/revolve_axis_gap.go`). `addRevolveFaces` builds every
+carrier from the walk's float axis coordinates (z, ρ): a float
+re-expression of the recorded plane-local point that rounds, snaps an
+endpoint within the contact tolerance onto the axis, and reads an arc whose
+centre is that close to the axis as a sphere centred on it. Each carrier is
+compared with `revolvemesh.RevolveLift.MeridianGap`, which rebuilds the
+recorded meridian about the axis anchor and direction widened by their own
+proven bounds, sweeps and lifts it over rational intervals with the frame and
+placement as exact leaves, and bounds the carrier's distance from it at every
+sweep angle at once. A straight wall is compared at its two ends: carrier and
+record are both affine along the wall, so the worse end bounds every point
+between. A circular wall is compared over its whole circle, rotated back by
+the exact cosine and sine of the held angle the walk subtracted, plus the
+radius times the exact angle by which the carrier's rounded meridian window
+misses the recorded arc's ends; a whole circle pairs at any phase and takes
+an exactly unit axis direction as its own rotation. A partial sweep's caps are
+compared through their region elements in the same form. `addRevolveFaces`
+adds the largest of these to both `bodyGeom.delta` and its carrier part, and
+adds nothing when it is zero, which it is for an integer profile about a
+coordinate axis. The junction vertices and the `Circle3`/`Arc3` edges the
+kernel reads through `newCEdge` are built from the same walk values, so they
+share this displacement and add only the float evaluation of their own
+centre (`docs/evaluator-design.md` §6). Two roundings sit outside the
+comparison: a cone carrier's apex and half angle, rebuilt in float from the
+walk's ends the comparison reads, and a cap's in-plane direction, rounded
+from the radial pair the comparison rotates.
+
 **A stitched solid's model (`addStitchFaces`, `clearance_geom.go`) is one
 exact planar carrier per live face, read straight off the body's own rebuilt
 topology** — the plane frame from the face's own `Plane` tag (negated when the
@@ -142,7 +171,7 @@ refuses it. Instead, `newBodyGeomBudget` charges the body's own largest
 proven vertex bound into `bodyGeom.delta` (`stitchMaxVertexBound`,
 `stitch.go`), the same per-body displacement `addPrismFaces` and
 `addRevolveFaces` charge their own frame/placement rounding, axial or angular
-displacement, and per-face tilt into below, and `clearancePair` widens the
+displacement, per-face tilt and, for a revolve, the carriers' axis gap into, and `clearancePair` widens the
 proven interval by it once candidate aggregation completes (§5). A placed or
 certificate-welded stitched solid therefore reads a real, bounded `Clearance`
 row instead of leaving the pair undecided.
@@ -598,7 +627,10 @@ trimmed inner face alone and asks the oracle nothing:
   point (`clearance.CFace.LiftRound`), so an unplaced, axis-aligned,
   feature-built body whose lifts are exact for its own coordinates (an
   integer origin and integer coordinates, for one) keeps `bodyGeom.delta` at
-  exactly zero, and the subtraction is exact nothing for it. Witness points
+  exactly zero, and the subtraction is exact nothing for it. A revolve adds
+  its carriers' axis gap (§2), which is zero for an integer profile about a
+  coordinate axis and covers the axis re-expression, an axis snap and the
+  axis's own error everywhere else. Witness points
   are float samples the kernel never reads as recorded boundary points, so
   their lift charges nothing.
 

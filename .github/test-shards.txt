@@ -678,6 +678,7 @@
 3	0.00	TestRevolveBoundsSharedProfileMatchesIndependentExtents
 3	0.00	TestRevolveBoundsSharedProfilePollsCancellation
 3	0.00	TestRevolveBudgetReservesBothCoordinateStages
+3	0.01	TestRevolveCarrierAxisGapExactRevolvesStayZero
 3	0.00	TestRevolveCellAreaSlackBracketsTheTrueJacobianGap
 3	0.00	TestRevolveContactAuditRefusesACrossingPair
 3	0.00	TestRevolveCoordMaxCoversEveryIdealCoordinate
