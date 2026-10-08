@@ -1512,9 +1512,13 @@ answers this way:
   ends, each end widened by its own end bound, never the held angles `Th0`
   and `Th1`, which are a float multiple of 2π or a `math.Atan2`. An end whose
   widened direction straddles a sign change of the component leaves the wall
-  undecided, as does a window of a half turn or more whose two ends' angle
-  enclosures overlap. Every other wall keeps its own verdict. A tagged
-  analytic variant that is a bounded
+  undecided. A window whose end box holds the centre, or whose two ends' angle
+  enclosures overlap across a half turn or more, is read at the ends whose
+  directions it encloses only: a pull with no component in the section plane
+  is clear, and ends that read a component strictly inside (−1, 0), or one on
+  each side of zero, prove the wall opposes. Anything else leaves that wall
+  undecided, and every other wall keeps its own verdict. A tagged analytic
+  variant that is a bounded
   stand-in carries its own normal departure (`docs/modify-reach-design.md`
   §8.3) on top of that. A faceted survey proves the same all-clear only when
   every true patch's source-normal range clears. A missing or straddling
