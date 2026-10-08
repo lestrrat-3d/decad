@@ -525,41 +525,66 @@ any reference is consulted (`verify_tolerance.go`'s `scalarToleranceRef` and
 always forms a usable reference — its `payload.diameter` is guaranteed at build
 (`boolean_body.go:300-304`) and an edge length is a finite chord sum
 (`boolean_body.go:757-778`). For the other shipped payloads `bodyGateDiameter`
-(`verify_gate.go`) forms a body diameter too, through one of two carrier models. A
-`revolvePayload`, or an analytic-walled `prismPayload` whose two axial
-displacements are zero, reads it off the same analytic carrier the
-clearance kernel proves against (`newBodyGeomBudget`/`clearance_geom.go`) — a
-free-form-walled `prismPayload` has no arm there at all, whatever its axial
-displacements — a `NURBSSurface` side face is not a boundary the clearance
-kernel's exact carrier model can build a certificate over — and reads its
-diameter through the arm below when that arm can publish one, holding no
-reference at all when it withholds. A
-`prismPayload` with a
-nonzero `z0Delta` or `z1Delta` uses those held carrier witnesses too, but each
-witness can move by `axialDelta`; `bodyGateDiameter` returns the witness maximum
-minus `2*axialDelta`, rounded toward zero. That is a certified LOWER bound on
-the denoted body's diameter, so it can only tighten the gate.
+(`verify_gate.go`) forms a body diameter too. A `revolvePayload`, or an
+analytic-walled `prismPayload` with no section displacement, is a payload the
+clearance kernel's exact carrier model covers
+(`newBodyGeomBudget`/`clearance_geom.go`), and reads its diameter from
+stations on its walls. A free-form-walled `prismPayload` has no arm there at
+all, whatever its axial displacements — a `NURBSSurface` side face is not a
+boundary the clearance kernel's exact carrier model can build a certificate
+over — and reads its diameter through the arm below when that arm can publish
+one, holding no reference at all when it withholds.
 
-**A `prismPayload`'s carrier witnesses are joined by station witnesses for the
-diameter alone.** The carrier model gives a circular wall only two witnesses,
-the mid-angle point at mid-height and `th0` at `z0`; with the arc's end vertex
-that is three angles. An arc closed by its chord is worst at a 240° sweep,
-where those three angles sit `2R·sin(120°)` apart against the wall's own
-diameter `2R`, a factor of `2/√3`. `prismStationWitnesses` (`verify_gate.go`)
-therefore places further points on every wall at both `z0` and `z1`: each line
-wall's two walk ends, and on each circular wall the points at evenly spaced
-fractions of its recorded parameter range, at most 15° apart, plus the points
-opposite its start and its end when it sweeps past 180°. Each station is a
-point the record denotes, held within the gap
-`boundarywalk.CircularPointBound` proves (or a line end's own walk-end bound),
-and the station reading is shrunk by the widest such gap, carried through the
-frame and placement, on top of the displacement the carrier reading takes.
-`stationGateDiameter` keeps the larger of the two readings; both are lower
-bounds. The stations never join `CFace.Wit`, which the clearance search reads.
-A wall that sweeps past 180° then reads its own diameter up to rounding and
+**Every point a reading takes carries a proven gap from a point of the
+body, and the reading is shrunk by the widest one.** The witnesses the
+clearance model places on its carriers (`CFace.Wit`) are float samples with
+no stated gap: a 3×7×5 box turned and placed about 10⁶ mm from the origin
+reads about 5·10⁻¹¹ mm above its own diameter over them, because every lift
+rounds at that magnitude. No gate reading reads them. Each
+point the readings below take is a point the record denotes, held within a
+gap a proof states: the frame and placement rounding of its lift, its
+recorded coordinate's own bound, and the payload's section and level
+displacements. Two points each within `g` of body points are at most `2g`
+farther apart than those body points, so subtracting `2g` from the held
+maximum, rounded toward zero (`lowerDiameterForDisplacement`), leaves a
+certified LOWER bound on the denoted body's diameter.
+
+**A `prismPayload` reads station witnesses along its walls.** The carrier
+model gives a circular wall only two witnesses, the mid-angle point at
+mid-height and `th0` at `z0`; with the arc's end vertex that is three
+angles. An arc closed by its chord is worst at a 240° sweep, where those
+three angles sit `2R·sin(120°)` apart against the wall's own diameter `2R`,
+a factor of `2/√3`. `prismStationWitnesses` (`verify_gate.go`) places points
+on every wall at both `z0` and `z1`: each line wall's two walk ends, and on
+each circular wall the points at evenly spaced fractions of its recorded
+parameter range, at most 15° apart, plus the points opposite its start and
+its end when it sweeps past 180°. Each station is a point the record denotes,
+held within the gap `boundarywalk.CircularPointBound` proves (or a line end's
+own walk-end bound), and `prismPointBound` carries that gap through the frame
+and placement and adds the lift's own rounding. `stationGateDiameter` reads
+the stations alone and shrinks their maximum by the widest such gap plus
+`axialDelta`, since each held level sits within `axialDelta` of the level it
+denotes. The stations never join `CFace.Wit`, which the clearance search
+reads. A wall that sweeps past 180° reads its own diameter up to rounding and
 that allowance, and every point of a wall of radius `R` lies within
 `2R·sin(3.75°)` of a station, so a farthest pair between two walls is missed
 by at most that much at each end.
+
+**A `revolvePayload` reads its meridian stations swept to two or three
+angles.** Two points on circles of radii `r1` and `r2` about the axis, `dz`
+apart along it, sit `√(dz² + r1² + r2² − 2·r1·r2·cos Δφ)` apart, which grows
+with the angle `Δφ` between them up to half a turn. The farthest pair
+therefore sits at the widest angle apart the sweep allows, up to half a turn.
+`revolveGateDiameter` sweeps every meridian station (the same stations a
+prism section takes) to both sweep ends and, where it is proven inside the
+denoted sweep, to the angle half a turn past the start. That angle denotes a
+whole number of quarter turns exactly when the start does, and otherwise its
+own held angle. `revolvemesh.RevolveLift.SweptPointGap` compares each held
+point exactly against the point it denotes: the recorded station, widened by
+its own gap and `sectionDelta`, rotated about the recorded axis to the
+denoted angle and lifted through the frame and placement. The maximum is
+shrunk by the widest gap. An end that states no angle (a `ToFaceAngular`
+stop) withholds the diameter.
 
 **Every arm publishes through one witness-maximum reader, and that reader
 rounds toward zero.** `pointSetDiameterWithBudget` (`verify_gate.go`, backed by
@@ -588,13 +613,14 @@ reaches neither model: the clearance kernel's carrier model refuses it
 exact statement about a boundary and that payload holds its own only within
 `sectionDelta`. A diameter is not a certificate, so `gateWitnessPrism` below
 gives it the third arm of `fallbackGateDiameter`: the body's OWN recorded
-section, read through the same witness maximum every other prism is read
+section, read through the same station witnesses every other prism is read
 through. §7 proves each recorded boundary point sits within `sectionDelta` of
 the section the payload denotes, and each recorded level within `axialDelta` of
 the level it denotes; the two are perpendicular — one moves a coordinate IN the
-plane, the other moves a level ALONG the normal — so their sum bounds how far a
-lifted witness sits from the body point below it, and the witness maximum minus
-twice that sum is again a certified LOWER bound. This arm is not a containing
+plane, the other moves a level ALONG the normal — so their sum, plus a
+station's own gap, bounds how far a held station sits from the body point
+below it, and the station maximum minus twice that sum is again a certified
+LOWER bound. This arm is not a containing
 shape and does not need to be: the recorded section may sit either side of the
 denoted one, and only the subtraction decides the direction the reference errs
 in. `verify_diagnostics_test.go` pins the recovered reference against the
@@ -613,10 +639,12 @@ analytic section vertex at both cap heights, and every free-form span's own
 two endpoints at both cap heights. A Bézier interpolates its ends exactly, so
 each span endpoint is a point of the recorded curve itself
 (`docs/spline-design.md` §6.2), and every point in the set is a real point of
-the body's own boundary. Every distance the maximum ranges over is therefore
-realized between two real body points, and the shared reader publishes that
-maximum rounded toward zero, so the reading can only UNDERSTATE the
-body's true diameter and never overstate it — the same construction
+the body's own boundary. Each held witness sits within its own proven gap of
+that point: its recorded coordinate's or conversion's bound, carried through
+the frame and placement by `prismPointBound` together with the lift's own
+rounding. The maximum is shrunk by twice the widest gap, and the shared
+reader publishes it rounded toward zero, so the reading can only UNDERSTATE
+the body's true diameter and never overstate it — the same construction
 `bodyGateDiameter` already runs over a `loftPayload`'s own held vertex set
 (`verify_gate.go`), differing only in what the published displacement values earn
 (loft §12). A `LineSeg`-only loft whose published `delta == 0` has a
@@ -670,56 +698,49 @@ diameter instead does not widen a bound, it rewrites the public tolerance
 semantics §3 and §5 state.
 
 A `cupPayload` or `capBlendPayload` reduces to a modify op applied to a
-straight-prism receiver section, and `fallbackGateDiameter`/`gateWitnessPrism`
-read their diameter off a containing prism envelope rather than off the
-kernel's exact model, which does not cover them — the two arms read different
-geometry and contain the body for different reasons. The receiver's own
-section is its own denotation, because every modify op refuses a receiver
-carrying a section displacement (`fillet.go`'s `requireExactSection`), so a
-cap blend's and an inward cup's witnesses carry only the axial displacement
-below. An outward cup's outer region is the offset one, recorded within the
-cup's offset displacement of the region it denotes (`docs/modify-design.md`
-§9), so its witnesses carry that displacement beside the axial one.
-`capBlendPayload` reads
-the receiver's own unrewritten section on its unchanged interval: a cap-loop
-chamfer only ever cuts along a chord whose feet sit on the receiver's own
-recorded walls, and fills a concave corner strictly within the convex hull of
-its neighbors, so it can never place a point beyond the receiver's own
-extruded envelope — the same containment `docs/modify-reach-design.md`'s own
-`capBlendPayload` row relies on. `cupPayload` reads `pl.outer`, the cup's own
-outer region — the receiver's unmodified section for an INWARD shell, but the
-wider OFFSET (expanded) region for an OUTWARD one, since an outward shell adds
-material and `cupPayloadFor` (`shell_cup.go`) always assigns the wider of the
-two profiles to `outer` regardless of sense. Either way the whole cup solid —
-walls, floor and cavity alike — sits inside `pl.outer`'s own full-height
-envelope: the cavity never reaches farther than the outer region, the same
-containment `cupPayload.extentAlong` already relies on. As a **shape**, each
-arm's envelope therefore can only OVERSTATE the body's true diameter, never
-understate it — the reduction itself is sound.
+straight-prism receiver section, which the kernel's exact model does not
+cover, so `fallbackGateDiameter` reads stations off witness prisms built from
+the receiver's section. The two payloads read different geometry. The
+receiver's own section is its own denotation, because every modify op refuses
+a receiver carrying a section displacement (`fillet.go`'s
+`requireExactSection`), so a cap blend's and an inward cup's witnesses carry
+only an axial displacement. An outward cup's outer region is the offset one,
+recorded within the cup's offset displacement of the region it denotes
+(`docs/modify-design.md` §9), so its witnesses carry that displacement beside
+the axial one.
 
-When either envelope end has nonzero axial displacement, its witnesses sit on
-the held levels rather than the levels the payload denotes. Each witness can
-move by the envelope's `axialDelta`, plus an outward cup's offset displacement
-in the plane, so their maximum pair distance can overstate the denoted body's
-diameter by twice that sum. The fallback subtracts that amount, rounded toward
-zero, before publishing the reference. It then
-reports a conservative lower bound even when the envelope's held shape is
-larger than the body it contains.
+`cupPayload` reads `pl.outer`, the cup's own outer region — the receiver's
+unmodified section for an INWARD shell, but the wider OFFSET (expanded) region
+for an OUTWARD one, since an outward shell adds material and `cupPayloadFor`
+(`shell_cup.go`) always assigns the wider of the two profiles to `outer`
+regardless of sense. Its outer walls run the cup's full height, so every
+station on them is a point of the body.
 
-What `fallbackGateDiameter` reports is not that shape's true diameter, though,
-but a *reading* of it, taken through the same two readings a shipped
-`prismPayload` takes: the carrier witnesses `addPrismFaces` places on each
-witness prism, and the station witnesses above, keeping the larger. A station
-is a point of the body only when the witness prism's walls run the full height
-on the body. That holds for a cup's outer region, a stacked prism's outer runs,
-a displaced section and a sweep's witness prism (the straight prism itself, or
-the start section at one level). It fails for a cap-loop chamfer,
-whose band cuts the receiver's walls back at the cap levels, so a
-`capBlendPayload` reads the carrier witnesses alone. Either reading can still
-understate the true diameter where a farthest pair falls between sampled
-points, which stays inside the one direction this gate is free to err in (§3's
-own rule: an understated `D` tightens `Ref` and can turn a passing reading into
-a false `Suspect`; an overstated one only loosens the gate) — never a false
+`capBlendPayload` reads one witness prism per loop of the receiver's section
+(`capBlendWitnessPrisms`), over the interval that loop's wall runs on the
+body. A chamfer band cuts its loop's wall back from the cap level to the side
+level, the cap level moved `ds` into the material, so the receiver's walls at
+a chamfered cap level are not points of the body: a 10 mm cube chamfered 2 mm
+around its end cap is `√264` across, while the receiver's corners at the cap
+read `√300`. A loop chamfered on a cap is read from that cap's side level, the
+float sum the build places the band's side level at, and an unchamfered loop
+over the whole interval. `capBlendPayload.axialDelta` bounds how far each of
+those levels sits from the one it denotes. The cap contour is not read, so a
+chamfered body whose farthest pair ends on its cap contour reads below its
+diameter: a disc of radius 5 extruded 20 mm and chamfered 2 mm reads `√424`
+against `√464`.
+
+What `fallbackGateDiameter` reports is `stationGateDiameter`'s reading over
+those witness prisms. A station is a point of the body only when the witness
+prism's walls run the full height between its two levels on the body, which
+holds for every witness prism above, a stacked prism's outer runs, a
+displaced section and a sweep's witness prism (the straight prism itself, or
+the start section at one level). The maximum is shrunk by twice the witness
+prisms' displacement plus the widest station gap. The reading can still
+understate the true diameter where a farthest pair falls between stations,
+which stays inside the one direction this gate is free to err in (§3's own
+rule: an understated `D` tightens `Ref` and can turn a passing reading into a
+false `Suspect`; an overstated one only loosens the gate) — never a false
 `Sound`.
 
 Every tolerance-gate `Suspect` is therefore a genuine `bound > rel*Ref`,

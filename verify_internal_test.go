@@ -1005,11 +1005,11 @@ func requireStationDiameter(t *testing.T, d, h float64, upperSquare *big.Rat) {
 // A circular wall that sweeps past 180 degrees holds antipodal points the
 // carrier witnesses never reach: at 240 degrees they sample th0, the
 // mid-angle and th1 only, which read 2*sin(120 degrees) = sqrt(3) against the
-// unit wall's true 2. The stations prismStationWitnesses adds lift the
-// exact-carrier reading to the true diameter while it stays at or below it.
+// unit wall's true 2. The stations prismStationWitnesses places read the
+// true diameter while the reading stays at or below it.
 //
-// Shown to fail first: with stationGateDiameter returning its input reading
-// unchanged, the 240 degree h=0.001 case reads 1.7320511 against a floor of
+// Shown to fail first: with the gate reading the carrier witnesses alone,
+// the 240 degree h=0.001 case reads 1.7320511 against a floor of
 // 1.9828900, and the 270 degree h=1 case 2.1010030 against 2.2207773. With
 // the stations kept but their allowance dropped from the shrink, the 240
 // degree case reads above its exact upper bound on amd64: the rounding in
@@ -1047,8 +1047,8 @@ func TestBodyGateDiameterReadsCurvedWallStations(t *testing.T) {
 // shrinks the reading by twice the displacement plus the stations' own
 // allowance.
 //
-// Shown to fail first: with stationGateDiameter returning its input reading
-// unchanged, this reads 1.7320511 against a floor of 1.9828900.
+// Shown to fail first: with the gate reading the carrier witnesses alone,
+// this reads 1.7320511 against a floor of 1.9828900.
 func TestFallbackGateDiameterReadsCurvedWallStations(t *testing.T) {
 	t.Parallel()
 	body := internalArcChordPrism(t, New(), 240, 0.001)
