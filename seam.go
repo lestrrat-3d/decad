@@ -138,5 +138,3 @@ func edgeJoin(edge sketch.BoundaryEdge, segment CurveSegment) (loopJoin, error) 
 func falsifyLoopJoins(name string, joins []loopJoin) error {
 	return sketchrecord.FalsifyLoopJoins(name, joins)
 }
-
-func falsifyChainJoins(joins []loopJoin) error { return sketchrecord.FalsifyChainJoins(joins) }

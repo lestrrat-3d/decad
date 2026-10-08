@@ -2,9 +2,11 @@ package prismcells
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -57,6 +59,137 @@ func TrimNoCrossingSide(budget *proofbound.WorkBudget, tags map[sketch.Entity]Or
 	}
 
 	return false, false, nil
+}
+
+// ResolveSplitCells keeps the arranged cells on the target's material side.
+// A cell reproducing the target or fewer than two selected cells is no split.
+func ResolveSplitCells(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile, targetHoles int) ([]*sketch.Profile, error) {
+	unchanged, err := SplitUnchangedTargetCell(budget, tags, profiles, targetHoles)
+	if err != nil {
+		return nil, err
+	}
+	if unchanged {
+		return nil, fmt.Errorf(`%w: the tool separates no part of the target`, decaderr.ErrDegenerate)
+	}
+	matterTarget, err := ClassifySplit(budget, tags, profiles)
+	if err != nil {
+		return nil, err
+	}
+	selected, err := Select(budget, profiles, matterTarget, make([]bool, len(profiles)),
+		func(a, _ bool) bool { return a })
+	if err != nil {
+		return nil, err
+	}
+	if len(selected) < 2 {
+		return nil, fmt.Errorf(`%w: the tool separates no part of the target`, decaderr.ErrDegenerate)
+	}
+	return selected, nil
+}
+
+// SplitCellCutDelta charges every arranged boundary edge in one selected
+// cell, keeping the publication's outer-then-hole order.
+func SplitCellCutDelta(budget *proofbound.WorkBudget, cell *sketch.Profile) (float64, error) {
+	cutDelta := 0.0
+	for _, loop := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
+		for _, edge := range loop {
+			if err := budget.Step(); err != nil {
+				return 0, err
+			}
+			seg, err := sketchrecord.RecordEdge(edge)
+			if err != nil {
+				return 0, err
+			}
+			delta, err := CutDelta(edge, seg)
+			if err != nil {
+				return 0, err
+			}
+			cutDelta = math.Max(cutDelta, delta)
+		}
+	}
+	return cutDelta, nil
+}
+
+// ResolveExtendCut reads the receiver carrier's nearest published cut from
+// profile and chain fragments, in that order. The chain publication is called
+// only after the profile fragments and source entity are accepted.
+func ResolveExtendCut(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile, chains func() ([]*sketch.Chain, error),
+	t0, t1 float64, atStart bool) (float64, sketch.BoundaryEdge, bool, error) {
+	source := ExtendSource(tags)
+	if source == nil {
+		return 0, sketch.BoundaryEdge{}, false,
+			fmt.Errorf(`%w: the extended carrier has no scene entity`, decaderr.ErrUnsupported)
+	}
+	fragments, err := ExtendProfileFragments(profiles)
+	if err != nil {
+		return 0, sketch.BoundaryEdge{}, false, err
+	}
+	chainList, err := chains()
+	if err != nil {
+		return 0, sketch.BoundaryEdge{}, false, err
+	}
+	if err := budget.Err(); err != nil {
+		return 0, sketch.BoundaryEdge{}, false, err
+	}
+	fragments, err = AppendExtendChainFragments(fragments, chainList)
+	if err != nil {
+		return 0, sketch.BoundaryEdge{}, false, err
+	}
+	return NearestExtendCut(budget, fragments, source, t0, t1, atStart)
+}
+
+// ResolveTrimWalks selects the receiver fragments on the requested side and
+// chains them in the arrangement's order. It refuses unresolved or coincident
+// boundaries before the caller records any fragment.
+func ResolveTrimWalks(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile, receiverHoles int, keepInside bool) ([][]sketch.BoundaryEdge, error) {
+	insideTool, noCrossing, err := TrimNoCrossingSide(budget, tags, profiles, receiverHoles)
+	if err != nil {
+		return nil, err
+	}
+	if noCrossing {
+		if insideTool == keepInside {
+			return nil, fmt.Errorf(`%w: the tool separates no fragment of the receiver; every fragment is kept`, decaderr.ErrDegenerate)
+		}
+		return nil, fmt.Errorf(`%w: the tool separates no fragment of the receiver; none is kept`, decaderr.ErrDegenerate)
+	}
+
+	coincident, readable, err := CoincidentEdges(budget, tags, profiles)
+	if err != nil {
+		return nil, err
+	}
+	if !readable || len(coincident.Spans) > 0 {
+		return nil, fmt.Errorf(`%w: a receiver boundary fragment coincides with the tool's own boundary`, decaderr.ErrUnsupported)
+	}
+
+	matterRcv, matterTool, resolved, err := Classify(budget, tags, profiles)
+	if err != nil {
+		return nil, err
+	}
+	if !resolved {
+		return nil, fmt.Errorf(`%w: the receiver and tool's arrangement is not one this evaluator's crossing classifier resolves`, decaderr.ErrUnsupported)
+	}
+
+	survivors, total, err := SurvivingFragments(budget, tags, matterRcv, matterTool, profiles, keepInside)
+	if err != nil {
+		return nil, err
+	}
+	if len(survivors) == 0 {
+		return nil, fmt.Errorf(`%w: the tool separates no fragment of the receiver; none is kept`, decaderr.ErrDegenerate)
+	}
+	if len(survivors) == total {
+		return nil, fmt.Errorf(`%w: the tool separates no fragment of the receiver; every fragment is kept`, decaderr.ErrDegenerate)
+	}
+
+	walks, resolved, err := ChainSurvivorWalks(budget, survivors)
+	if err != nil {
+		return nil, err
+	}
+	if !resolved {
+		return nil, fmt.Errorf(`%w: the surviving fragments do not chain into open walks this evaluator resolves`, decaderr.ErrUnsupported)
+	}
+	return walks, nil
 }
 
 // SplitUnchangedTargetCell finds the target's original loops reproduced by
