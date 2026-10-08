@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
@@ -562,4 +563,70 @@ func TestChordLocusSpanFluxEnclosesTheDenotedFlux(t *testing.T) {
 	wide, narrow, _ := capband.ChordLocusFluxes(g)
 	require.LessOrEqual(t, hi-lo, math.Abs(wide.Value-narrow.Value)/8,
 		`the span enclosure (%v wide) must be far tighter than the sandwich (%v)`, hi-lo, math.Abs(wide.Value-narrow.Value))
+}
+
+// TestSegmentCoordinateUpperCoversTheArc checks the local coordinate envelope
+// capBandCoordUpper reads for an arc (segmentCoordinateUpper) against the arc
+// itself, over a randomized sweep of centres, radii and start and end
+// directions, minor and major arcs and arcs crossing every axis: every point
+// sampled along the counter-clockwise sweep must lie within the envelope, and
+// the envelope must sit within a few ulps of the arc's own largest coordinate
+// magnitude, read from its two ends and every axis direction the sweep
+// passes. A line's envelope is its larger end.
+//
+// Shown to fail on 2026-10-09: with the axis directions left out, sampled
+// points past the ends' reach leave the envelope; with the envelope read as
+// the walk's |cu| + |cv| + 2R, the tightness check fails.
+func TestSegmentCoordinateUpperCoversTheArc(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(43, 47))
+	for range 500 {
+		cu, cv := (rng.Float64()-0.5)*200, (rng.Float64()-0.5)*200
+		r := 0.5 + rng.Float64()*50
+		a0 := rng.Float64() * 2 * math.Pi
+		sweep := 0.01 + rng.Float64()*(2*math.Pi-0.02)
+		a1 := a0 + sweep
+		// End is pinned off the circle on purpose: the arc ends at radius r
+		// in its direction.
+		endScale := 0.5 + rng.Float64()
+		seg := ArcSeg{
+			Center: Point2{U: cu, V: cv},
+			Start:  Point2{U: cu + r*math.Cos(a0), V: cv + r*math.Sin(a0)},
+			End:    Point2{U: cu + endScale*r*math.Cos(a1), V: cv + endScale*r*math.Sin(a1)},
+			TStart: 0, TEnd: 1,
+		}
+		got, ok := segmentCoordinateUpper(seg)
+		require.True(t, ok)
+		radius := math.Hypot(seg.Start.U-cu, seg.Start.V-cv)
+		th0 := math.Atan2(seg.Start.V-cv, seg.Start.U-cu)
+		th1 := math.Atan2(seg.End.V-cv, seg.End.U-cu)
+		span := math.Mod(th1-th0, 2*math.Pi)
+		if span <= 0 {
+			span += 2 * math.Pi
+		}
+		at := func(th float64) float64 {
+			return math.Max(math.Abs(cu+radius*math.Cos(th)), math.Abs(cv+radius*math.Sin(th)))
+		}
+		want := math.Max(at(th0), at(th0+span))
+		for k := range 4 {
+			axis := th0 + math.Mod(float64(k)*math.Pi/2-th0+4*math.Pi, 2*math.Pi)
+			if axis <= th0+span {
+				want = math.Max(want, at(axis))
+			}
+		}
+		for i := range 400 {
+			p := at(th0 + span*float64(i)/399)
+			require.LessOrEqual(t, p, got*(1+1e-12),
+				`centre (%v, %v) r=%v sweep from %v by %v: the point at %v leaves the envelope %v`, cu, cv, r, th0, span, p, got)
+		}
+		require.LessOrEqual(t, got, want*(1+1e-9)+1e-9,
+			`centre (%v, %v) r=%v sweep from %v by %v: the envelope %v must sit at the arc's largest coordinate %v`, cu, cv, r, th0, span, got, want)
+	}
+
+	line := LineSeg{Start: Point2{U: -3, V: 1}, End: Point2{U: 2, V: -5}, TStart: 0, TEnd: 1}
+	got, ok := segmentCoordinateUpper(line)
+	require.True(t, ok)
+	require.Equal(t, 5.0, got)
+	_, ok = segmentCoordinateUpper(LineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: -1, TEnd: 1})
+	require.False(t, ok, `a range past the entity's own reads the walk's envelope instead`)
 }

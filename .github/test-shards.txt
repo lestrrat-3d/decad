@@ -1175,3 +1175,4 @@
 5	0.01	TestCapBandMassBoundsChargeTheSideLevelMove
 5	0.72	TestCoilCapFlushWithAnAxialFaceRefuses
 5	0.03	TestChordLocusSpanFluxEnclosesTheDenotedFlux
+5	0.01	TestSegmentCoordinateUpperCoversTheArc
