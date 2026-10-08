@@ -346,3 +346,73 @@ func TestClearanceCoarseWitnessContainsTruth(t *testing.T) {
 		})
 	}
 }
+
+// appleBody revolves the circular segment cut from the circle of radius 5
+// about (3, 0) by the v axis a full turn about that axis: a spindle torus
+// (minor radius 5 above major radius 3), the apple whose top and bottom rings
+// sit at ρ = 3, v = ±5.
+func appleBody(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c, a, b := s.CreatePoint(3, 0), s.CreatePoint(0, -4), s.CreatePoint(0, 4)
+	s.Fix(c)
+	s.Fix(a)
+	s.Fix(b)
+	s.CreateArc(c, a, b)
+	s.CreateLine(b, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := doc.Revolve(s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{})
+	require.NoError(t, err)
+	return body
+}
+
+// TestClearanceTiltedBoxContainsTruth reads two spindle tori, which only the
+// coarse enclosure reads (docs/clearance-design.md §5), so the row's lower end
+// is the two faces' box distance. The lower apple is turned 1e-8 rad about
+// the x axis, so its axis is (0, 1, s) with s = sin(1e-8) and its spine
+// circle of radius 3 rises 3s above y = 0 on one side; the upper apple is
+// moved 11 up, its bottom ring at y = 6. The lower apple's rotated ring point
+// (0, 5c + 3s, 5s − 3c), with c and s the placement's own matrix entries,
+// lies within √((1 − 5c − 3s + 5)² + (5s − 3c + 3)²), about 1 − 3e-8, of the
+// upper apple's point (0, 6, −3), so the row must hold a gap at most that.
+//
+// Shown to fail: before every face box was built over exact rationals and
+// rounded outward (internal/clearance/face_box.go), the spine circle's box
+// read its extent along y as 3·√(1 − a_y²) with a_y = fl(cos 1e-8) = 1, which
+// is zero, and the row's lower end read 0.99999999999885281, about 3e-8 above
+// the gap.
+func TestClearanceTiltedBoxContainsTruth(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	lower := appleBody(t, doc)
+	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(1e-8))
+	require.NoError(t, err)
+	_, err = lower.Placed(t.Context(), rot)
+	require.NoError(t, err)
+	upper := appleBody(t, doc)
+	up, err := r3.Translation(r3.NewVec(0, 11, 0))
+	require.NoError(t, err)
+	_, err = upper.Placed(t.Context(), up)
+	require.NoError(t, err)
+
+	// The rotation's own matrix: its z column is (0, −s, c), read exactly.
+	col := rot.ApplyDir(r3.NewVec(0, 0, 1))
+	s, c := ratOf(-col.Y), ratOf(col.Z)
+	five, three := big.NewRat(5, 1), big.NewRat(3, 1)
+	py := new(big.Rat).Add(new(big.Rat).Mul(five, c), new(big.Rat).Mul(three, s))
+	pz := new(big.Rat).Sub(new(big.Rat).Mul(five, s), new(big.Rat).Mul(three, c))
+	dy := new(big.Rat).Sub(big.NewRat(6, 1), py)
+	dz := new(big.Rat).Sub(big.NewRat(-3, 1), pz)
+	gap2 := new(big.Rat).Add(new(big.Rat).Mul(dy, dy), new(big.Rat).Mul(dz, dz))
+
+	gap := clearanceRow(t, doc)
+	lo := new(big.Rat).Sub(ratOf(gap.Value.Mag()), ratOf(gap.Bound.Mag()))
+	require.Positive(t, lo.Sign())
+	require.LessOrEqualf(t, new(big.Rat).Mul(lo, lo).Cmp(gap2), 0,
+		"the gap %.17g (%v) with bound %g has its low end above the truth", gap.Value.Mag(), gap.Exactness, gap.Bound.Mag())
+}

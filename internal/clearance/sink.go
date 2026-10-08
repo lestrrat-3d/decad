@@ -149,8 +149,9 @@ func (s *CellSink) CoarseWith(lo, hi float64, boxA, boxB [2]r3.Vec, witA, witB [
 // Coarse contributes a conservative enclosure for a pair no shipped cell can
 // solve: the boxes' distance below, the closest witness pair above (§5 —
 // enclosure distance never exceeds true distance, a witness is always an
-// upper bound). The lower end carries EnvelopeCharge over the boxes'
-// corners: a box corner is a float a few roundings off the hull it encloses.
+// upper bound). Each box holds its feature exactly (face_box.go), and the
+// lower end carries EnvelopeCharge over the boxes' corners for the float box
+// distance and the carriers' float directions, as DirCharge does.
 // The upper end reads each witness pair's distance as a proven enclosure
 // (PointPointDist) and adds both witnesses' own proven gaps (Witness): the
 // pair's two faces hold points no farther apart than the two witnesses plus

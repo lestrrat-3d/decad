@@ -113,7 +113,9 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 				Radius: r, ZWin: NewLinWindow(w.StartU, w.EndU), Sweep: sweep,
 				LiftRound: a3Round,
 			}
-			f.Box = BoxUnion(CircleBox(onAxis(f, w.StartU), wp, r), CircleBox(onAxis(f, w.EndU), wp, r))
+			onAxis(f, w.StartU)
+			onAxis(f, w.EndU)
+			f.Box = BoxUnion(AxisCircleBox(f.Anchor, f.Axis, f.ZWin.Lo, r), AxisCircleBox(f.Anchor, f.Axis, f.ZWin.Hi, r))
 			f.Wit = append(f.Wit, sample((w.StartU+w.EndU)/2, r, midPhi), sample(w.StartU, r, in.Phi0))
 			out.Faces = append(out.Faces, f)
 			meter.wall(wall, f)
@@ -152,7 +154,9 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 				Sweep: sweep,
 			}
 			f.Anchor = onAxis(f, apexZ)
-			f.Box = BoxUnion(CircleBox(onAxis(f, w.StartU), wp, w.StartV), CircleBox(onAxis(f, w.EndU), wp, w.EndV))
+			onAxis(f, w.StartU)
+			onAxis(f, w.EndU)
+			f.Box = coneBox(f)
 			f.Wit = append(f.Wit, sample((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, midPhi))
 			out.Faces = append(out.Faces, f)
 			meter.cone(wall, f, apexZ, dz, dr)
@@ -174,10 +178,7 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 			if !w.Closed {
 				f.Merid = NewAngWindow(w.Th0, w.Th1)
 			}
-			f.Box = [2]r3.Vec{
-				f.Anchor.Sub(r3.NewVec(w.Radius, w.Radius, w.Radius)),
-				f.Anchor.Add(r3.NewVec(w.Radius, w.Radius, w.Radius)),
-			}
+			f.Box = BallBox(f.Anchor, w.Radius)
 			midTh := (w.Th0 + w.Th1) / 2
 			f.Wit = append(f.Wit, sample(w.CU+w.Radius*math.Cos(midTh), math.Max(0, w.Radius*math.Sin(midTh)), midPhi))
 			out.Faces = append(out.Faces, f)
@@ -197,9 +198,7 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 			if !w.Closed {
 				f.Merid = NewAngWindow(w.Th0, w.Th1)
 			}
-			spineBox := CircleBox(f.Anchor, wp, f.Major)
-			pad := r3.NewVec(w.Radius, w.Radius, w.Radius)
-			f.Box = [2]r3.Vec{spineBox[0].Sub(pad), spineBox[1].Add(pad)}
+			f.Box = PadBox(CircleBox(f.Anchor, f.Axis, f.Major), w.Radius)
 			midTh := (w.Th0 + w.Th1) / 2
 			f.Wit = append(f.Wit, sample(w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), midPhi))
 			out.Faces = append(out.Faces, f)

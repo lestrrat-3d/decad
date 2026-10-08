@@ -175,16 +175,6 @@ func BoxUnion(a, b [2]r3.Vec) [2]r3.Vec {
 	}
 }
 
-// CircleBox is the exact box of a full 3D circle.
-func CircleBox(c, axis r3.Vec, r float64) [2]r3.Vec {
-	ext := r3.NewVec(
-		r*math.Sqrt(math.Max(0, 1-axis.X*axis.X)),
-		r*math.Sqrt(math.Max(0, 1-axis.Y*axis.Y)),
-		r*math.Sqrt(math.Max(0, 1-axis.Z*axis.Z)),
-	)
-	return [2]r3.Vec{c.Sub(ext), c.Add(ext)}
-}
-
 // ClrBoxDist is the distance between two boxes (zero when they meet).
 func ClrBoxDist(a, b [2]r3.Vec) float64 {
 	gap := func(alo, ahi, blo, bhi float64) float64 {
@@ -204,8 +194,8 @@ func ClrBoxDist(a, b [2]r3.Vec) float64 {
 
 // FaceFootExtent bounds |p − f.o| over every point p a planar face's own trim
 // can admit. f.box contains f.region by construction (every arm that builds a
-// CkPlane face's box — CapBox, BoxOf's own callers — grows it to cover the
-// region), so the farthest of the box's eight corners from the foot o is a
+// CkPlane face's box reads CapBox, which holds the region exactly), so the
+// farthest of the box's eight corners from the foot o is a
 // sound, if not tight, upper bound on the face's own extent.
 func FaceFootExtent(f *CFace) float64 {
 	best := 0.0
@@ -286,25 +276,6 @@ func PerpTo(a r3.Vec) r3.Vec {
 	}
 	p, _ := a.Cross(seed).Normalize()
 	return p
-}
-
-// CapBox is the world box of a planar face's region boundary (arcs taken as
-// their full circles — conservative, and a box only needs to contain).
-func CapBox(f *CFace) [2]r3.Vec {
-	at := func(x, y float64) r3.Vec { return f.O.Add(f.U.Scale(x)).Add(f.V.Scale(y)) }
-	box := [2]r3.Vec{
-		r3.NewVec(math.Inf(1), math.Inf(1), math.Inf(1)),
-		r3.NewVec(math.Inf(-1), math.Inf(-1), math.Inf(-1)),
-	}
-	for _, e := range f.Region.Elems {
-		if e.Kind == survey2d.SurveyLine {
-			box = BoxUnion(box, BoxOf(at(e.Ax, e.Ay), at(e.Bx, e.By)))
-			continue
-		}
-		axis := f.U.Cross(f.V)
-		box = BoxUnion(box, CircleBox(at(e.Qx, e.Qy), axis, e.Rr))
-	}
-	return box
 }
 
 // CapWitnesses returns on-face points: boundary samples plus a verified
