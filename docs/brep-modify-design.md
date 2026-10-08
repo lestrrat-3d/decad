@@ -340,7 +340,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | SB | Call | Exists? | Sentinel |
 |---|---|---|---|
 | **SB1** | a brep or stacked receiver with `sectionDelta() != 0` | yes; its rewrite has no proven displacement | `ErrUnsupported`, naming the displacement as `requireExactSection` does |
-| **SB2** | a stacked receiver `brepOfStacked` refuses (a prism group, several regions in one slab) | yes | that call's `ErrUnsupported` |
+| **SB2** | a stacked receiver `brepOfStacked` refuses (a prism group, several regions in one slab; a stack enclosing a cavity, a closed shell) | yes | that call's `ErrUnsupported` |
 | **SB3** | route P reads a prism along some axis, a Shell's removed faces are not its caps, and no other axis admits them | yes | modify S2 |
 | **SB4** | a selected edge that is not a straight line along a reference axis: a hole rim or boss root (`Circle3`/`Arc3`), an oblique line | yes; a cone or torus band on a brep face is not a face kind this record holds | `ErrUnsupported` |
 | **SB5** | two selected edges sharing a vertex | yes; the vertex blend | `ErrUnsupported` |

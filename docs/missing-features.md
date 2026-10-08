@@ -57,7 +57,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Chamfer of a partial cap loop, or cap and lateral edges together | `ErrUnsupported` (SX4) | `docs/modify-reach-design.md` Table SX |
 | Asymmetric chamfer of a brep or stacked boolean result | `ErrUnsupported` (SX16) (`chamfer.go`) | `docs/modify-reach-design.md` §6 |
 | Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`tangent_chain.go`) | `docs/modify-reach-design.md` §5 |
-| Closed shell (`WithNoOpenings`) of any receiver but a full revolve | `ErrUnsupported` (§14 row C; SX8/SX9/SX16) (`shell.go`) | `docs/modify-reach-design.md` §9, §14 |
+| Closed shell (`WithNoOpenings`) of any receiver but a full revolve or a hole-free straight prism | `ErrUnsupported` (SX8/SX9/SX16) (`shell.go`) | `docs/modify-reach-design.md` §9, §14 |
 | Modify of a prism whose section carries a displacement bound | `ErrUnsupported` via `requireExactSection` | `docs/modify-design.md` |
 | Variable-radius fillet, face-to-face fillet | No entry point exists | none |
 

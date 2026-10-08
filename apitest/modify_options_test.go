@@ -173,17 +173,17 @@ func mustChamfer(t *testing.T, b *decad.Body, sel decad.EdgeSelector, d float64,
 func TestShellNoOpenings(t *testing.T) {
 	t.Parallel()
 	t.Run("NilSelectorAccepted", func(t *testing.T) {
-		// The option lifts base S16's nil-selector refusal; no receiver builds
-		// a closed shell yet, so a hole-free prism reads the staged row.
-		doc, box := filletBox(t)
-		_, err := box.Shell(t.Context(), nil, units.Millimeters(5), decad.WithNoOpenings())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.NotErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "row C")
+		// The option lifts base S16's nil-selector refusal: a hole-free prism
+		// builds its closed shell (reach BX5), through a nil selector and a
+		// typed nil alike.
 		var typedNil *decad.FaceQuery
-		_, err = box.Shell(t.Context(), typedNil, units.Millimeters(5), decad.WithNoOpenings())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.Equal(t, []*decad.Body{box}, doc.Bodies())
+		for _, sel := range []decad.FaceSelector{nil, typedNil} {
+			doc, box := filletBox(t)
+			closed, err := box.Shell(t.Context(), sel, units.Millimeters(5), decad.WithNoOpenings())
+			require.NoError(t, err)
+			require.Len(t, closed.Shells(), 2)
+			require.Equal(t, []*decad.Body{closed}, doc.Bodies())
+		}
 	})
 	t.Run("NilSelectorWithoutOption", func(t *testing.T) {
 		_, box := filletBox(t)

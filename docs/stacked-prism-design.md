@@ -184,6 +184,7 @@ hole `i`, the band between `C`'s hole `i` reversed (an outer) and `O`'s hole
 | Result | Record |
 |---|---|
 | both caps removed, `k >= 1` holes (reach BX8) | a prism group: one slab over the receiver's sweep holding the `1 + k` bands; `sectionDelta` is the offset's proven displacement |
+| no opening, `k = 0` (reach BX5, `WithNoOpenings`) | three slabs: the cap region (`P` inward, `Q` outward) under the band `{O.Outer, reverse(C.Outer)}` under the cap region, both interfaces monotone, each exposing `C`; `sectionDelta` is the offset's proven displacement; the cavity is a void shell (§3) |
 | one cap removed, any `k` (a cup, modify B5/B6) | a floor slab over `O` and a wall slab over the bands, meeting at a lining interface (`k >= 1`) or a monotone one (`k = 0`) whose one exposed record is `C` itself; `sectionDelta` is zero |
 
 A cup is not handed over as a bare `stackedPrismPayload`: `cupPayload` holds
@@ -218,10 +219,13 @@ that level, so every edge bounds exactly two faces: a column that starts in
 slab 0 gives its bottom coedges to `capStart`, one that starts at an interface
 gives them to that interface's floor; a column that ends in the last slab gives
 its top coedges to `capEnd`, one that ends at an interface gives them to that
-interface's ceiling. The cup build (`shell_cup.go`) already pairs a reversed
-cavity wall's floor coedges with its pocket floor this way. `sheetLumps` derives
-the lump set from face adjacency, as `evalPrism` does; a stage-1 body is one
-lump with one shell.
+interface's ceiling. `stackedLumps` derives the lump set from face adjacency:
+each connected face set holding a region outer's wall or an end cap is one
+lump's outer shell, and a connected set holding neither — hole walls closed
+by a floor below and a ceiling above, a closed shell's cavity (§2.4) — is a
+void shell of the one outer lump. Several outer lumps beside a cavity would
+need a nesting proof and are `ErrUnsupported`. A stage-1 body is one lump
+with one shell.
 
 A prism group carries one bottom cap and one top cap per region, every one
 under `capStart` or `capEnd`, so `CapStart(body)` selects one face per lump,
@@ -321,7 +325,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | `Union` with a stacked operand | `docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
 | `Cut` by a prism-group tool | `docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |
 | `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
-| `Tessellate`, `export.STL` / `OBJ` / `STEP` | §5; one shell, so STEP's one-shell rule is met |
+| `Tessellate`, `export.STL` / `OBJ` / `STEP` | §5; a body with one shell meets STEP's one-shell rule, and a closed shell's void shell is STEP's refusal |
 | `ThroughAll` / `ThroughAllSide` stops | `extentAlong` (§4), `ErrUnsupported` at `sectionDelta > 0` as for a prism |
 | `ToFace` stops | read the selected face's own `axialDelta` |
 | `Verify` structural audit | every edge bounds two faces by construction (§3) |
@@ -330,7 +334,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | `Verify` undercut and minimum-radius surveys | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (stage 3 lifts both: DX7's exact per-face normals over the columns and planar patches, DX8's `prismMinRadius` over the outer loop plus every column's hole loop) |
 | `Verify` clearance | `newBodyGeomBudget` has no arm, so a pair the boxes do not separate reads `Suspect`; a box-disjoint pair is proven (stage 3 adds the exposed-face model, DX6) |
 | `Verify` interference | `analyticBodiesEqual` answers undecided; the read-only mesh intersection reads §5's proof |
-| `Fillet` / `Chamfer` / `Shell` | `ErrUnsupported` (modify-reach RX3 / SX10) |
+| `Fillet` / `Chamfer` / `Shell` | through the brep face view (modify-reach RX3); a prism group and a stack enclosing a cavity have none (brep-modify SB2) |
 | `Thicken` / `Offset` / `Patch` / `Stitch` | not reachable: the body is a solid |
 
 ## 7. Stages
