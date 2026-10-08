@@ -33,6 +33,18 @@ func internalCircleBody(t *testing.T, doc *Document, x, radius, z float64, exten
 	return body
 }
 
+// internalStackedUnion runs A1's analytic union and requires its stacked
+// payload.
+func internalStackedUnion(t *testing.T, a, b *Body) stackedPrismPayload {
+	t.Helper()
+	payload, ok, err := tryStackedUnion(t.Context(), a, b)
+	require.NoError(t, err)
+	require.True(t, ok)
+	sp, isStacked := payload.(stackedPrismPayload)
+	require.True(t, isStacked, "the union is a stacked prism, got %T", payload)
+	return sp
+}
+
 func internalBossOnPlate(t *testing.T, bossX, bossZ, bossHeight float64) (*Body, *Body) {
 	t.Helper()
 	doc := New()
@@ -44,9 +56,7 @@ func internalBossOnPlate(t *testing.T, bossX, bossZ, bossHeight float64) (*Body,
 func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 	t.Run("boss on plate", func(t *testing.T) {
 		plate, boss := internalBossOnPlate(t, 0, 10, 15)
-		sp, ok, err := tryStackedUnion(t.Context(), plate, boss)
-		require.NoError(t, err)
-		require.True(t, ok)
+		sp := internalStackedUnion(t, plate, boss)
 		require.Len(t, sp.slabs, 2)
 		require.Equal(t, [4]float64{0, 10, 10, 25},
 			[4]float64{sp.slabs[0].z0, sp.slabs[0].z1, sp.slabs[1].z0, sp.slabs[1].z1})
@@ -65,9 +75,7 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 	})
 	t.Run("rooted boss", func(t *testing.T) {
 		plate, boss := internalBossOnPlate(t, 0, 5, 20)
-		sp, ok, err := tryStackedUnion(t.Context(), plate, boss)
-		require.NoError(t, err)
-		require.True(t, ok)
+		sp := internalStackedUnion(t, plate, boss)
 		require.Len(t, sp.slabs, 3)
 		plateProfile := plate.payload.(prismPayload).profile
 		require.Equal(t, plateProfile, sp.slabs[1].regions[0],
@@ -88,24 +96,25 @@ func TestStackedUnionInterfaceReportsSplitBoundary(t *testing.T) {
 	require.Equal(t, stackedNestNone, m.nest)
 	require.True(t, m.split, "the interface scene reports a Partial edge where the boss crosses the outline")
 
-	// prism-boolean §4.4: an unresolved topology is a silent miss.
-	_, ok, err := tryStackedUnion(t.Context(), plate, crossing)
+	// The stacked record cannot state it; the brep build does
+	// (stacked_union_brep_internal_test.go).
+	payload, ok, err := tryStackedUnion(t.Context(), plate, crossing)
 	require.NoError(t, err)
-	require.False(t, ok)
+	require.True(t, ok)
+	_, isBrep := payload.(brepPayload)
+	require.True(t, isBrep)
 }
 
-// TestStackedUnionFlushBossFallsBack pins general-boolean §3 A1's flush-wall
-// fallback. A 10 mm square boss standing on a 40 mm plate's top in its
-// corner shares the plate's walls x = 20 and y = −20. The interface scene
-// answers the 2D question soundly through A3's shared-span reading: its cells
-// resolve, and the plate-only cells are the exposed floor, 1500 mm². The
-// stacked payload cannot state the result: the flush walls are one plane on
-// each side across the plate's column and the boss's, which evaluator §3's
-// canonicalization makes one face, while a stacked wall is one column's
-// segment swept over that column alone, and the floor's boundary takes part
-// of each column's ring where an interface patch takes whole rings. So the
-// union is a silent miss, and the pair takes the mesh path.
-func TestStackedUnionFlushBossFallsBack(t *testing.T) {
+// TestStackedUnionFlushBossBuildsBrep pins general-boolean §3 A1's flush
+// wall. A 10 mm square boss standing on a 40 mm plate's top in its corner
+// shares the plate's walls x = 20 and y = −20. The interface scene answers
+// the 2D question through A3's shared-span reading: its cells resolve, and
+// the plate-only cells are the exposed floor, 1500 mm². The stacked payload
+// cannot state the result (the flush walls are one plane across both
+// columns, and the floor's boundary takes part of each column's ring), so
+// the union is the brep of stacked_union_brep.go, whose floor is that
+// 1500 mm² cell.
+func TestStackedUnionFlushBossBuildsBrep(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10)
@@ -132,9 +141,21 @@ func TestStackedUnionFlushBossFallsBack(t *testing.T) {
 	}
 	require.InDelta(t, 1500, floor, 1e-9)
 
-	_, ok, err = tryStackedUnion(t.Context(), plate, boss)
+	payload, ok, err := tryStackedUnion(t.Context(), plate, boss)
 	require.NoError(t, err)
-	require.False(t, ok)
+	require.True(t, ok)
+	bp, isBrep := payload.(brepPayload)
+	require.True(t, isBrep, "got %T", payload)
+	floors := 0
+	for _, f := range bp.faces {
+		if f.planar() && f.outward && f.z0 == 10 && f.frame == base.frame {
+			floors++
+			area, err := loopSignedAreaCB(f.region.Outer)
+			require.NoError(t, err)
+			require.Equal(t, 1500.0, area)
+		}
+	}
+	require.Equal(t, 1, floors, "the exposed floor is the one plate-only cell")
 }
 
 // A B level that is no float rounds once, and the rounding is charged into
@@ -143,9 +164,7 @@ func TestStackedUnionLevelChargesExactOffsetSum(t *testing.T) {
 	doc := New()
 	plate := internalBoxBody(t, doc, -20, -20, 20, 20, 1)
 	boss := internalCircleBody(t, doc, 0, 5, 0.1, Symmetric{D: units.Millimeters(0.3)})
-	sp, ok, err := tryStackedUnion(t.Context(), plate, boss)
-	require.NoError(t, err)
-	require.True(t, ok)
+	sp := internalStackedUnion(t, plate, boss)
 	top := new(big.Rat).Add(proofarith.FloatRat(0.1), proofarith.FloatRat(0.3))
 	held, _ := top.Float64()
 	charge := proofarith.RationalFloatError(top, held)
@@ -173,9 +192,7 @@ func TestStackedUnionPlacedBossChargesSectionDisplacement(t *testing.T) {
 	require.NoError(t, err)
 	boss, err = boss.Placed(t.Context(), move)
 	require.NoError(t, err)
-	sp, ok, err := tryStackedUnion(t.Context(), plate, boss)
-	require.NoError(t, err)
-	require.True(t, ok)
+	sp := internalStackedUnion(t, plate, boss)
 	require.Positive(t, sp.sectionDelta)
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
@@ -188,9 +205,7 @@ func TestStackedUnionPlacedBossChargesSectionDisplacement(t *testing.T) {
 
 func TestStackedUnionPayloadAuditRejectsBrokenInterfaces(t *testing.T) {
 	plate, boss := internalBossOnPlate(t, 0, 10, 15)
-	base, ok, err := tryStackedUnion(t.Context(), plate, boss)
-	require.NoError(t, err)
-	require.True(t, ok)
+	base := internalStackedUnion(t, plate, boss)
 	require.NoError(t, falsifyStackedPayload(t.Context(), base))
 	bossOuter := boss.payload.(prismPayload).profile.Outer
 	cases := []struct {
@@ -241,9 +256,7 @@ func TestStackedUnionExtentReadsEveryRun(t *testing.T) {
 	doc := New()
 	shaft := internalDiscBody(t, doc, 5, 40)
 	flange := internalCircleBody(t, doc, 0, 15, 40, Distance{D: units.Millimeters(5), Dir: Along})
-	sp, ok, err := tryStackedUnion(t.Context(), shaft, flange)
-	require.NoError(t, err)
-	require.True(t, ok)
+	sp := internalStackedUnion(t, shaft, flange)
 	lo, hi, bound, err := sp.extentAlong(r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(hi-15), bound)

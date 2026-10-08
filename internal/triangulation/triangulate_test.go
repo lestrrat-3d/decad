@@ -137,3 +137,39 @@ func TestTriangulate2DHolesSharingOneBridgeAnchor(t *testing.T) {
 	}
 	triAssert(t, pts, outer, holes)
 }
+
+// TestEarClipTShapedFaceKeepsEveryBoundaryEdge pins the T-shaped face: a
+// 40-wide base 10 high with a 10-wide stem 15 high on top, walked
+// counter-clockwise. Its top side carries four vertices on one line, two at
+// the stem's root and two at the base's ends. An ear whose edge runs along
+// that line over a root vertex must be blocked by it, or the fan spans the
+// base's top edge instead of using it and the mesh cracks there. The fan
+// must cover the face's 550 area with every triangle counter-clockwise and
+// use every boundary edge exactly once. Shown to fail with earBlocked's
+// collinear arm reverted to the reflex-only test (the fan then used the
+// diagonal from the base's left end to the stem's right root and missed the
+// base's top-left edge).
+func TestEarClipTShapedFaceKeepsEveryBoundaryEdge(t *testing.T) {
+	t.Parallel()
+	pts := []Point2{{-20, 0}, {20, 0}, {20, 10}, {5, 10}, {5, 25}, {-5, 25}, {-5, 10}, {-20, 10}}
+	loop := []int{0, 1, 2, 3, 4, 5, 6, 7}
+	tris, err := EarClip(t.Context(), pts, loop)
+	require.NoError(t, err)
+	area := 0.0
+	edges := map[[2]int]int{}
+	for _, tri := range tris {
+		a := cross2(pts[tri[0]], pts[tri[1]], pts[tri[2]]) / 2
+		require.Positive(t, a, "every emitted triangle winds counter-clockwise")
+		area += a
+		for k := range 3 {
+			edges[[2]int{tri[k], tri[(k+1)%3]}]++
+		}
+	}
+	require.Equal(t, loopSignedArea2(pts, loop), area)
+	require.Equal(t, 550.0, area)
+	for i := range loop {
+		edge := [2]int{loop[i], loop[(i+1)%len(loop)]}
+		require.Equal(t, 1, edges[edge], "boundary edge %v is used once by the fan", edge)
+		require.Zero(t, edges[[2]int{edge[1], edge[0]}], "boundary edge %v is never used reversed", edge)
+	}
+}

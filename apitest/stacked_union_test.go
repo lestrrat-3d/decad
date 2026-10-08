@@ -164,9 +164,12 @@ func TestStackedUnionFlangeOnShaft(t *testing.T) {
 	requireMeshWatertightAt(t, chained, 0.05)
 }
 
-// A boss whose footprint crosses the plate's outline makes an interface the
-// clean-nesting match cannot resolve, so the union takes the mesh path.
-func TestStackedUnionCrossingBossTakesMeshPath(t *testing.T) {
+// A round boss rooted inside the plate with its footprint crossing the
+// outline puts the floor's corner on the overhanging wall piece's side line,
+// which the brep record cannot carry, so the union takes the mesh path. The
+// same boss standing on the plate's top builds analytically
+// (stacked_union_brep_test.go).
+func TestStackedUnionRootedCrossingBossTakesMeshPath(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, -20, -20, 20, 20, 10)
@@ -184,17 +187,6 @@ func TestStackedUnionCrossingBossTakesMeshPath(t *testing.T) {
 	want := 16000 + 25*15*math.Pi + 5*segment
 	require.Positive(t, boundMM3(t, volume))
 	require.LessOrEqual(t, math.Abs(volumeMM(t, volume)-want), boundMM3(t, volume))
-
-	// Standing on the plate's top, the same crossing boss shares the plate's
-	// top plane, which the mesh path refuses as a coplanar contact.
-	doc = decad.New()
-	plate = boxBody(t, doc, -20, -20, 20, 20, 10)
-	boss = circleBodyAtZ(t, doc, 18, 5, 10, 15)
-	_, err = decad.Union(t.Context(), plate, boss)
-	var be *decad.BooleanError
-	require.ErrorAs(t, err, &be)
-	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
-	require.Len(t, doc.Bodies(), 2, "a refused union consumes neither operand")
 }
 
 // The ceiling under a near-tangent square boss joins two rings from two slabs:

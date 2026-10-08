@@ -566,3 +566,73 @@ func TestNewSTEPFileRefusals(t *testing.T) {
 	_, err = export.NewSTEPFile(ctx, box(t, false), units.Millimeters(0.1), header())
 	require.True(t, errors.Is(err, context.Canceled))
 }
+
+// flushBossUnion is general-boolean §9's A1 brep fixture through the public
+// API: a 40×40×10 plate on XY unioned with a boss standing on its top at
+// z = 10..25, drawn by draw on the offset plane.
+func flushBossUnion(t *testing.T, draw func(s *sketch.Sketch)) *decad.Body {
+	t.Helper()
+	doc := decad.New()
+	w := sketch.NewWorld()
+	base, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := base.CreateRectangle(-20, -20, 20, 20)
+	base.Fix(rect.A)
+	_, err = base.Solve(t.Context())
+	require.NoError(t, err)
+	plate, err := doc.Extrude(base, base.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	plane, err := w.CreateOffsetPlane(w.XY(), 10)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	draw(s)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	boss, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
+	require.NoError(t, err)
+	result, err := decad.Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	return result
+}
+
+// TestNewSTEPFileFlushBossUnionAnalytic writes two A1 brep results through
+// the analytic arm: the flush corner boss (9 planes, two of them L-shaped
+// merged walls) and the round boss crossing the plate's outline (8 planes and
+// the boss's wall as two partial cylinders with arc rims). Each file uses
+// every EDGE_CURVE exactly once in each sense.
+func TestNewSTEPFileFlushBossUnionAnalytic(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name                     string
+		draw                     func(s *sketch.Sketch)
+		faces, planes, cylinders int
+	}{
+		{"flush corner boss", func(s *sketch.Sketch) {
+			r := s.CreateRectangle(10, -20, 20, -10)
+			s.Fix(r.A)
+		}, 9, 9, 0},
+		{"crossing round boss", func(s *sketch.Sketch) {
+			c := s.CreatePoint(18, 0)
+			s.Fix(c)
+			s.CreateCircle(c, 5)
+		}, 10, 8, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := flushBossUnion(t, tc.draw)
+			require.Len(t, body.Faces(), tc.faces)
+			f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+			require.NoError(t, err)
+			counts, uses := entityUses(f)
+			require.Equal(t, tc.faces, counts["ADVANCED_FACE"])
+			require.Equal(t, tc.planes, counts["PLANE"])
+			require.Equal(t, tc.cylinders, counts["CYLINDRICAL_SURFACE"])
+			for _, senses := range uses {
+				require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+			}
+			data, err := f.Marshal()
+			require.NoError(t, err)
+			require.Contains(t, string(data), "analytic decad solid")
+		})
+	}
+}
