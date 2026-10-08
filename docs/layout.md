@@ -236,8 +236,8 @@ the rules leave to the byte budget.
 | `brep_payload.go` / `brep_measure.go` | BRep face views, topology and readings. See general-boolean §4. |
 | `classb.go` | Class-B admission adapters. See general-boolean §3 B. |
 | `classb_crossing.go` / `classb_canonical.go` | Class-B crossing and keyed vertices. See general-boolean §5, §10. |
-| `surface_trim.go` | `Trim`/`Extend`/`Split` gates and payload adapters. See surface-intersection §2–§3. |
-| `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |
+| `surface_trim.go` / `surface_split_revolve.go` | `Trim`/`Extend`/`Split` gates and adapters, then `Split`'s revolve arm. See surface-intersection §2–§3. |
+| `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
 | `boolean_body.go` | Builds faceted bodies and measurements from an audited mesh; adapts `internal/facetedtopology/`. See evaluator §9. |
 
 ### Output

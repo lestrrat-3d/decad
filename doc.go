@@ -156,6 +156,10 @@
 //	  the two profiles lie in the same geometric plane        ErrDegenerate
 //	  a proven self-contact or self-intersection              ErrDegenerate
 //	  a circular pair whose two sides walk opposite senses    ErrDegenerate
+//	Split         solid prism or revolve, sheet sharing its
+//	              generator; one solid per piece              builds
+//	  any other pair, or a miss on the shared-generator gate  ErrUnsupported
+//	  a tool that separates no part of the target             ErrDegenerate
 //	Placed        any body this evaluator built               builds
 //	Verify        every body; surveys read prisms/revolves/cups/cap blends
 //	  a question the evaluator cannot decide                  Status Suspect

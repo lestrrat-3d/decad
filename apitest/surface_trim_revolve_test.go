@@ -191,16 +191,6 @@ func TestSurfaceTrimRevolveRefusalsNameTheirOwnGate(t *testing.T) {
 		require.Contains(t, err.Error(), "does not cover the receiver's")
 		require.Len(t, doc.Bodies(), 2)
 	})
-
-	t.Run("RS13 refuses Split over the revolve family", func(t *testing.T) {
-		doc := decad.New()
-		target := trimRevolveRing(t, doc, 3, 0, 5, 20, false)
-		tool := trimRevolveRing(t, doc, 2, 5, 8, 10, true)
-		_, err := doc.Split(t.Context(), target, tool)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.Contains(t, err.Error(), "Split over the revolve family")
-		require.Len(t, doc.Bodies(), 2)
-	})
 }
 
 // extendRevolveRibbon builds T183's receiver: the line meridian from (3, 0) to

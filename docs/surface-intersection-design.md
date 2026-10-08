@@ -49,8 +49,8 @@ this evaluator already holds.
 co-generated body publishes an analytic wall set whose every topology
 decision is a comparison of flags `sketch` set, never a float sign test; the
 published measurements carry the cut parameters' own rounding and nothing
-else; and the pieces a `Split` returns are ordinary prisms whose volumes sum
-to the target's own.
+else; and the pieces a `Split` returns are ordinary prisms or revolves whose
+volumes sum to the target's own.
 
 ## 2. The admitted class
 
@@ -71,7 +71,7 @@ this evaluator cannot build.
 | S1 | Both operands carry a payload of the same sweep family: prism-family (`prismPayload`, including a `surfaceResult` sheet, or `chainPayload`) or revolve-family (`revolvePayload`, `chainRevolvePayload`). | Structural. A mixed pair has two different generators and no common 2D section space, so its intersection is a genuine space curve (§4's own row). |
 | S2 | Neither operand's accumulated placement is a reflection (`!xform.IsReflection()`). | Prism G2's reason verbatim: a reflected operand flips winding and arc sense through the arrangement, and threading a sign correction through §3's selection is deferred rather than guessed. |
 | S3 | Every segment of both operands' records is a `LineSeg`, `CircleSeg` or `ArcSeg`. | Prism G4's reason verbatim: `TExact`'s own contract is a whole-scene gate (seam §1), so one free-form segment anywhere in the private arrangement makes every bound in it read `false`, including the line and arc bounds beside it. |
-| S4 | **The generators are the same, exactly.** Prism-family: prism G3's test unchanged — `worldNormalA == worldNormalB` (Go `==` on the stored `r3.Vec` floats) and `(worldOriginB − worldOriginA)·worldNormalA == 0.0` against the literal zero. Revolve-family: `frameA == frameB` and the resolved AXIS equal component-wise — its anchor `aU`/`aV`, its direction `dU`/`dV` and each of those four fields' own proven bound, the eight `axisInPlane` resolves and the side flip orients — both under Go `==` on the stored floats, with both meridians on the side `revolve_axis.go` already resolved and both proven clear of the axis, read off the axis snap that has ALREADY run (no walk endpoint sits at `ρ == 0`) rather than off a fresh measurement. The remaining `axisFrame` fields — `snapTol`, `radialAdmitAllow`, `axialExtentUpper`, `snap` — are each operand's own admission allowances, derived from its OWN section rather than from the generator, so two genuinely co-axial operands differ in them by construction and comparing them would refuse every admissible pair. | This is decad's own admission decision, so CLAUDE.md's reject-only rule binds it directly and a residual test here would be the admission gate on a residual that rule forbids. Prism §3.3 states what the exactness excludes and why loosening it is not the repair; the same reading governs here, and the revolve arm's frame equality is what makes §3.1's re-expression the identity by construction rather than by a computation. |
+| S4 | **The generators are the same, exactly.** Prism-family: prism G3's test unchanged — `worldNormalA == worldNormalB` (Go `==` on the stored `r3.Vec` floats) and `(worldOriginB − worldOriginA)·worldNormalA == 0.0` against the literal zero. Revolve-family: `frameA == frameB` and the resolved AXIS equal component-wise — its anchor `aU`/`aV`, its direction `dU`/`dV` and each of those four fields' own proven bound, the eight `axisInPlane` resolves and the side flip orients — both under Go `==` on the stored floats, with both meridians on the side `revolve_axis.go` already resolved. For `Trim` and `Extend` both meridians must also be proven clear of the axis, read off the axis snap that has ALREADY run (no walk endpoint sits at `ρ == 0`) rather than off a fresh measurement; `Split` does not take that clause (§2.2). The remaining `axisFrame` fields — `snapTol`, `radialAdmitAllow`, `axialExtentUpper`, `snap` — are each operand's own admission allowances, derived from its OWN section rather than from the generator, so two genuinely co-axial operands differ in them by construction and comparing them would refuse every admissible pair. | This is decad's own admission decision, so CLAUDE.md's reject-only rule binds it directly and a residual test here would be the admission gate on a residual that rule forbids. Prism §3.3 states what the exactness excludes and why loosening it is not the repair; the same reading governs here, and the revolve arm's frame equality is what makes §3.1's re-expression the identity by construction rather than by a computation. |
 | S5 | **For `Trim`, the tool's section is one closed hole-free loop** — for a prism-family tool that is `ProfileRecord.Outer` with `Holes` empty, and a `chainPayload` tool fails the row. `Extend` and `Split` do not take it. | The side reading (§3.2) is "does this cell lie inside the tool's own loop", and `sketch` answers it by which cells its arrangement publishes. A holed tool publishes its hole's interior as a bounded cell of its own, which that reading would misread as material; an open tool's section bounds no region, so there is no inside to name. `Extend` reads the nearest crossing and `Split` returns every piece, so neither reads a side and neither hazard reaches them. |
 | S6 | **The tool spans the receiver over the sweep parameter.** Prism-family: `z0_tool' <= z0_recv && z1_tool' >= z1_recv` after prism G5's origin shift `z' = z + (originB − originA)·normalA`. Revolve-family: the same relation over `phi0`/`phi1`. | A tool that stops inside the receiver ends its cut at a level the receiver's own record does not state, so the result would carry a face at that level and stop being the sweep of one section over one interval. The comparison is on already-exact endpoint floats and the shift is bookkeeping on an axis S4 certified. |
 | S7 | **Both operands carry a zero section displacement, the re-expression is the identity in the stored floats, and every segment either operand's own record CONSUMES spans its entity's natural domain** (prism's `wholeSegmentRange` reading, taken off the recorded range and never off the walk's closed-ness). `Extend`'s one exception is the segment being extended, whose recorded range must be narrower (§2.2) and whose entity §3.1 recreates over its full domain instead of walking it. | Prism §3.4 reroutes a split boundary to the mesh path under exactly these three causes — a source displacement, a walk charge, a nonidentity re-expression — because each can move a transverse cut by its displacement divided by the crossing sine and no certified crossing-sensitivity bound exists. A trim always splits a boundary, so the condition is never vacuous, and with no mesh path to reroute to the same three causes refuse. Stating the third as a record property rather than as a scene-time charge makes it decidable before the arrangement runs, which is what lets every miss be one refusal at the call. §5 states the cost and what would lift it. |
@@ -103,6 +103,16 @@ own reading is defined on.
 
 **`Split`'s tool needs no closed section**, because the operation returns
 every piece and reads no side at all.
+
+**`Split`'s revolve arm admits a meridian that meets the axis.** S4's clearance
+clause exists because `Trim` and `Extend` return an open-meridian sheet, and the
+chain-revolve build places no pole for a cut fragment ending on the axis.
+`Split` returns solids, and the solid revolve build places a pole for a meridian
+meeting the axis exactly as `Revolve` does. Each piece reruns the axis gates
+over its own meridian about the target's oriented axis (`revolveBlendAxis`:
+the side gate, the axis-contact audit and the snap allowances), so a piece the
+target's gates would not have admitted refuses with the sentinel `Revolve`
+gives it. A cylinder or a ball splits across its axis this way.
 
 **`Extend`'s revolve arm takes a FULL revolution alone.** §3.2 reads which end
 is being lengthened off the receiver's own topology, and a full revolution
@@ -284,7 +294,9 @@ every one of which reads the walk set and nothing else.
 
 `Split`'s pieces are ordinary `prismPayload`/`revolvePayload` values over the
 target's own sweep interval, each carrying that cell's own section
-displacement. Both payloads hold the field, and a solid revolve's build
+displacement. A revolve piece keeps the target's frame, sweep, angular
+denotation and placement, takes the axis §2.2 reruns over its own meridian,
+and sets `sectionWhole` false: only the cut ends a cell records moved. Both payloads hold the field, and a solid revolve's build
 charges it into every reading a solid publishes: §7.1 derives the area and
 the box, and §7.2 the Pappus volume, the centroid, a cap's area, the vertices,
 the walls' denoted normals and the mesh. `revolvePayload` also carries
@@ -355,7 +367,6 @@ point pointing here.
 | RS10 | A surviving walk's recorded segments do not join at an interior junction (`falsifyLoopJoins`, seam §3, run at interior junctions only per seam §2.2) | `ErrUnrecordableProfile` | No — a differently-drawn operand closes |
 | RS11 | `Trim`, `Extend` or `Split` handed a retired body, or bodies owned by different documents | `ErrRetiredBody` / `ErrForeignBody` | The existing uniform terms (core §6) |
 | RS12 | `Extend` handed a receiver whose section is a closed walk, or an edge that is not one of the two sweep edges its free ends carry | `ErrUnsupported` | Permanent for the closed receiver — the operation it wants is an extent, not an intersection |
-| RS13 | `Split` handed a revolve-family pair | `ErrUnsupported` | No — §11's Split increment lifts it, and states what it still owes |
 | RS14 | `Extend` handed a partially revolved ribbon, or a revolve pair either of whose meridians touches the resolved axis | `ErrUnsupported` | No — the first waits on a recorded free-end map (§2.2), the second on the pole topology a cut fragment ending on the axis would sweep |
 
 The work budget and cancellation are `internal/proofbound/budget.go`'s existing `workBudget` and
@@ -494,9 +505,10 @@ range TO a cut by construction. So the reading is honest rather than narrow,
 and nothing here publishes a zero bound over a walk that closes only to within
 `δ_cut`.
 
-`Split`'s pieces read `evalPrism`'s own composition unchanged, each over its
-own cell's `δ_cut`, so a piece is `Exact` only where its cell's every edge is
-whole — the piece the tool did not touch.
+`Split`'s prism pieces read `evalPrism`'s own composition unchanged and its
+revolve pieces read §7.2's, each over its own cell's `δ_cut`, so a piece is
+`Exact` only where its cell's every edge is whole — the piece the tool did not
+touch.
 
 ### 7.2 The revolve arm of the solid readings
 
@@ -657,7 +669,7 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
 | `Verify` | The sheet validity audit (surface §9.1) reads the surviving walks the same way it reads a ribbon's: a trimmed prism sheet earns the fourth leg by construction where every walk is proven simple and the sweep height positive, and a trimmed revolve sheet earns it on the full-turn argument alone. The tolerance gate reads the body's own recorded section and shrinks its witness maximum by twice the sum of `δ` and the axial displacement, `verify.go`'s `gateWitnessPrism` unchanged |
 | Surveys | The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings are staged at `δ > 0`, answering `Suspect`, on prism §12's own reasoning: a displacement is not a term either reading may absorb into its bound |
 | Modify ops | `Fillet`/`Chamfer`/`Shell` already refuse a sheet (surface Table X) and already refuse a displaced receiver (`fillet.go`'s `requireExactSection`), so a trimmed body reaches none of them by either route |
-| `Split`'s pieces | Ordinary prisms. Every consumer that admits a `prismPayload` admits a piece whose own cell was untouched; a piece carrying a cut reads as any other displaced prism does, under prism §12's own rows |
+| `Split`'s pieces | Ordinary prisms or revolves. Every consumer that admits a `prismPayload` or `revolvePayload` admits a piece whose own cell was untouched; a prism piece carrying a cut reads as any other displaced prism does, under prism §12's own rows, and a revolve piece as §7.2's displaced revolve does, under that section's last paragraph |
 
 ## 10. Decisions the user may want to overturn
 
@@ -711,13 +723,12 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
    S6, the meridian scene, and §7.1's fold into the axis-coordinate walk. Tests:
    T180, T182 and T183. A trimmed revolve sheet's own mesh waits on surface
    increment 4, exactly as a profile-fed revolve sheet's does.
-5. **PR5 — `Document.Split` over the revolve family.** Its solid half has
-   landed: `revolvePayload.sectionDelta` reaches the Pappus volume, the
-   centroid and every other solid reading (§7.2), and the solid build takes a
-   nonzero value. What it still owes is the revolve arm of `Split`'s cell
-   selection and the per-cell recording into `revolvePayload` pieces; the
-   deterministic order is PR2's. Until it lands, `Split` refuses a revolve pair
-   by name.
+5. **PR5 — `Document.Split` over the revolve family** (landed).
+   `revolvePayload.sectionDelta` reaches the Pappus volume, the centroid and
+   every other solid reading (§7.2). `surface_split_revolve.go` runs PR2's
+   `resolveSplit` over the two meridian views, reruns the axis gates per piece
+   (§2.2) and builds one `revolvePayload` per cell; the deterministic order is
+   PR2's. Tests: T184–T186.
 
 PR1 depends on surface increments 1 and 6 alone — increment 1 for `BodyKind`,
 `Edge.IsFree` and the sheet validity audit, increment 6 for `ChainRecord` and

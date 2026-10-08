@@ -87,7 +87,6 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | `Thicken` of sweep, loft, stitched, `Body.Patch` or `Unstitch` sheets | `ErrUnsupported` (R24) | `docs/surface-design.md` §16.8 |
 | `Stitch` closing a revolve sheet whose wall tags are not exactly their records: a tilted or round-anchored axis, a near-parallel or near-perpendicular side, a snapped centre | `ErrUnsupported` (R8, `stitchFluxTagsDenoted`) | `docs/surface-design.md` §6.4 |
 | `Extend` of a partially revolved ribbon | `ErrUnsupported` (RS14) | `docs/surface-intersection-design.md` §2.2 |
-| `Document.Split` of a revolve target | `ErrUnsupported` (RS13) | `docs/surface-intersection-design.md` §8 |
 | `Trim`/`Extend`/`Split` over a pair sharing no generator | Refused | `docs/surface-intersection-design.md` §4 |
 | Tolerant stitch, Ruled, Boundary Fill | Refused permanently | `docs/surface-design.md` §1.3 |
 | Reverse Normal | Named, staged for no increment | `docs/surface-design.md` §1.4 |
@@ -110,6 +109,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Surveys (undercut, wall, concave radius) of bodies other than prisms, revolves, cups, cap blends | `Verify` reports `Suspect` | `docs/verification-design.md` |
 | Wall survey of a sphere's revolve, solid or hollow (its meridian arcs meet the axis at both ends) | `Verify` reports `Suspect` (`DiagUndecidedWall`) | `docs/verification-design.md` |
 | Wall, undercut and concave-radius surveys, clearance and the tolerance gate's revolve arm on a revolve whose meridian carries a displacement bound | `Verify` reports `Suspect`; the gate diameter is withheld | `docs/surface-intersection-design.md` §7.2 |
+| Tight volume, area and centroid bounds of a revolve whose meridian holds an `ArcSeg` recorded over a narrowed range (a ball `Split` across its axis, a sketch-cut sphere cap) | The reading encloses the true value, but its bound can exceed the value: `circularbounds.AreaInterval` proves no trimmed `ArcSeg`, so its float envelope bounds the region integral | none |
 
 ## Model structure — v1 non-goals
 

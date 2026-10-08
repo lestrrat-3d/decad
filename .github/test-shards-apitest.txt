@@ -825,6 +825,9 @@
 2	0.00	TestSurfaceSplitCoincidentBoundarySeparatesNothing
 2	0.00	TestSurfaceSplitInsideStubDoesNotSeparate
 2	0.00	TestSurfaceSplitOutsideRibbonDoesNotSeparate
+2	0.05	TestSurfaceSplitRevolveClosedForms
+2	0.02	TestSurfaceSplitRevolveRefusals
+2	0.02	TestSurfaceSplitRevolveRolesAndSelectors
 2	0.00	TestSurfaceSweepLineIsASheet
 2	0.00	TestSurfaceSweepLineSheetVerifiesSound
 2	0.00	TestSurfaceSweepTessellationRefused
