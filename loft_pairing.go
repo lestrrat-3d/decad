@@ -28,9 +28,9 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 // loftLoopPair is Table P's correspondence for one loop: the two walk-ordered
 // STATION-chain lists, v from loop0's own segment order and w from loop1's,
 // already rotated by that loop's own alignment offset (P4). Each paired
-// segment contributes its own station count of entries — one per LineSeg or
-// the shared chord count a circular pair's own generator settles on
-// (loftCircularCellStations) — and every list still carries only each
+// segment contributes its own station count of entries — one per LineSeg, or
+// the shared chord count a circular or free-form pair's own generator settles
+// on — and every list still carries only each
 // segment's OWN interior stations, never its shared end point, exactly as
 // the one-point-per-LineSeg convention already did: the next segment's own
 // first station (or the loop's wrap) supplies it.
@@ -50,9 +50,8 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 // exactly 0; a circular cell's own sagitta discharges this half exactly
 // (loftCircularCellStations' own doc comment), so its entry equals its
 // sagitta; a free-form cell's entry is freeform.SpanMatchedDeltaUpper's own
-// per-cell reading (internal/freeform/spline_sagitta.go's freeform.PairStations), which can differ cell
-// to cell within one paired segment where the bisection settled at different
-// depths.
+// per-cell reading (freeform.PairChainStations), which can differ cell to cell
+// within one paired segment where the bisection settled at different depths.
 //
 // computeLoftChordedAllow (loft_moments.go) reads all three to charge
 // docs/loft-design.md §5/§8's chorded volume/centroid/area terms only where a

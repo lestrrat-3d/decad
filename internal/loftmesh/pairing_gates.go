@@ -18,7 +18,7 @@ type RecordProfile struct {
 }
 
 // ValidateRecordWalks applies docs/loft-design.md Table S rows S1, S2, S4, S3,
-// S7's STRUCTURAL arm and S5, in §4's stated gate order, from the two
+// S17, S7's STRUCTURAL arm and S5, in §4's stated gate order, from the two
 // authenticated records alone — no triangle is built. It returns the
 // normalized per-loop alignment
 // offsets (a nil alignment becomes every offset 0, §2) alongside every
@@ -42,14 +42,15 @@ type RecordProfile struct {
 // evaluator can.
 //
 // S3's admission test is a SAME-KIND test over the two RECORDED SEGMENT
-// TYPES, exactly the three-way enumeration docs/loft-design.md §1 and Table P
-// row P5 spell — both LineSeg, both ArcSeg, or both CircleSeg — never merely
-// because one side is a LineSeg. Mixed-kind and free-form pairs keep today's
-// refusal and today's sentinel (SameKindGate). Testing only after BOTH
-// sides are resolved (rather than each side against its own kind test, as the
-// LineSeg-only form did) is unavoidable once the admitted set has three
-// types, and it does not relax PRECEDENCE: the first (i, j) whose pair fails
-// is still the first refusal reported, in the same walk order as before.
+// TYPES, the enumeration docs/loft-design.md §1 and Table P row P5 spell —
+// both LineSeg, both ArcSeg, both CircleSeg, or both the same Tier A
+// free-form type — never merely because one side is a LineSeg. A mixed-kind
+// pair refuses with SameKindGate's sentinel. S17 sits immediately beside it
+// (SpanCountGate): a same-kind free-form pair whose two converted chains hold
+// different span counts refuses before any station is built. Testing only
+// after BOTH sides are resolved is unavoidable once the admitted set has more
+// than one type, and it does not relax PRECEDENCE: the first (i, j) whose
+// pair fails is still the first refusal reported, in walk order.
 func ValidateRecordWalks(p0, p1 RecordProfile, pl0, pl1 sectionrecord.PlaneRecord, alignment []int, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, error) {
 	if len(p0.Holes) != len(p1.Holes) {
 		return nil, nil, nil, fmt.Errorf(`%w: the two profiles have %d and %d holes; a loft has no positional pairing for a hole-count mismatch`,
@@ -104,6 +105,9 @@ func ValidateRecordWalks(p0, p1 RecordProfile, pl0, pl1 sectionrecord.PlaneRecor
 			if err := SameKindGate(loops0[i].Segments[j], loops1[i].Segments[k], i, j, k); err != nil {
 				return nil, nil, nil, err
 			}
+			if err := SpanCountGate(w0, w1, i, j, k); err != nil {
+				return nil, nil, nil, err
+			}
 			walks0[i][j] = w0
 			walks1[i][k] = w1
 		}
@@ -116,11 +120,12 @@ func ValidateRecordWalks(p0, p1 RecordProfile, pl0, pl1 sectionrecord.PlaneRecor
 	return offsets, walks0, walks1, nil
 }
 
-// SameKindGate is docs/loft-design.md Table S row S3 and Table P row P5
-// in their arc form (a10-plan.md Part 3 PR 6): a pairing is admitted only
-// when the two RECORDED SEGMENT TYPES are the same one of the three §1 and
-// P5 enumerate — both LineSeg, both ArcSeg, or both CircleSeg — so a
-// mixed-kind or free-form pair still refuses under today's sentinel.
+// SameKindGate is docs/loft-design.md Table S row S3 and Table P row P5: a
+// pairing is admitted only when the two RECORDED SEGMENT TYPES are the same
+// one of those §1 and P5 enumerate — both LineSeg, both ArcSeg, both
+// CircleSeg, or both the same Tier A free-form type (PairType) — so a
+// mixed-kind pair, a SplineSeg against a FitSplineSeg among them, refuses with
+// ErrUnsupported.
 //
 // The test is on the CONCRETE recorded type, never on the resolved walk's
 // own survey2d.WalkKind. survey2d.WalkCircular is one kind for a circle and an arc alike
@@ -157,10 +162,10 @@ func ValidateRecordWalks(p0, p1 RecordProfile, pl0, pl1 sectionrecord.PlaneRecor
 func SameKindGate(seg0, seg1 sectionrecord.CurveSegment, loop, j, k int) error {
 	t0, t1 := PairTypeOf(seg0), PairTypeOf(seg1)
 	if t0 == PairUnadmitted || t0 != t1 {
-		return fmt.Errorf(`%w: loop %d segment %d of the first profile and segment %d of the second are not the same admitted segment type; this evaluator pairs two LineSegs, two ArcSegs or two CircleSegs only`,
+		return fmt.Errorf(`%w: loop %d segment %d of the first profile and segment %d of the second are not the same admitted segment type; this evaluator pairs two LineSegs, two ArcSegs, two CircleSegs, or two segments of the same Tier A free-form kind only`,
 			decaderr.ErrUnsupported, loop, j, k)
 	}
-	if t0 == PairLine {
+	if t0 != PairArc && t0 != PairCircle {
 		return nil
 	}
 	ccw0, ok0 := circularSegmentCCW(seg0)
@@ -172,22 +177,31 @@ func SameKindGate(seg0, seg1 sectionrecord.CurveSegment, loop, j, k int) error {
 	return nil
 }
 
-// PairType is the three-way enumeration docs/loft-design.md §1 and Table
-// P row P5 admit a loft pairing over, plus PairUnadmitted for every other
-// recorded type. It reads the CONCRETE recorded segment type — the walk kind
+// PairType is the enumeration docs/loft-design.md §1 and Table P row P5
+// admit a loft pairing over, plus PairUnadmitted for every other recorded
+// type. It reads the CONCRETE recorded segment type — the walk kind
 // resolved from it is coarser (survey2d.WalkCircular covers a circle and an arc alike,
 // extrude.go) and cannot state this contract.
 type PairType uint8
 
 const (
-	// PairUnadmitted is every recorded type outside the three below —
-	// each free-form kind, and each conic kind the seam records. A pair is
-	// refused when either side reads this value, even when both do: §1
-	// admits three enumerated types and nothing else.
+	// PairUnadmitted is every recorded type outside those below — each
+	// conic kind the seam records. A pair is refused when either side reads
+	// this value, even when both do: §1 admits the enumerated types and
+	// nothing else.
 	PairUnadmitted PairType = iota
 	PairLine
 	PairArc
 	PairCircle
+	// PairSpline, PairClosedSpline, PairNURBS and PairFitSpline are the four
+	// recorded types docs/spline-design.md Table F can place in Tier A. A
+	// NURBSSeg with unequal weights and every Tier B kind never reach this
+	// gate as a pair: resolving either side's walk refuses first (spline
+	// design R10), which is why the type alone decides admission here.
+	PairSpline
+	PairClosedSpline
+	PairNURBS
+	PairFitSpline
 )
 
 // PairTypeOf classifies one recorded segment into PairType. A segment
@@ -208,6 +222,14 @@ func PairTypeOf(seg sectionrecord.CurveSegment) PairType {
 		return PairArc
 	case sectionrecord.CircleSeg:
 		return PairCircle
+	case sectionrecord.SplineSeg:
+		return PairSpline
+	case sectionrecord.ClosedSplineSeg:
+		return PairClosedSpline
+	case sectionrecord.NURBSSeg:
+		return PairNURBS
+	case sectionrecord.FitSplineSeg:
+		return PairFitSpline
 	default:
 		return PairUnadmitted
 	}

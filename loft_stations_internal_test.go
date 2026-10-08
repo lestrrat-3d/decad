@@ -928,11 +928,9 @@ func TestLoftStationShareAllocatesTheCap(t *testing.T) {
 // TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair is §5.1's C == 0
 // carve-out: an all-LineSeg build's Σstations is Σn_i exactly, the count the
 // record itself states, so S8 is its only resource refusal and the gate does
-// not even read the chord target. The fixture proves the second half by
-// handing the gate a free-form profile. profileCoordinateEnvelope supplies its
-// control-point envelope for §5.1's complete rule, while the currently staged
-// loftChordTarget still reaches profileCoordinateUpper and refuses before that
-// free-form arm lands; the gate must answer nil without consulting either.
+// not consult the cap. A free-form pair is counted in C, but the gate settles
+// no free-form count of its own — that pair's dyadic walk carries its share as
+// its own ceiling — so the gate passes it without walking it.
 func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 	t.Parallel()
 	p := unitSquareProfile()
@@ -942,10 +940,11 @@ func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 	fit := FitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
 	free := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{fit, fit, fit}}}
 	freeWalks := resolveLoftLoopWalks(t, free)
-	_, err := loftChordTarget(free, free, freeWalks, freeWalks)
-	require.Error(t, err, "the pre-free-form staging helper must still refuse this fixture")
+	_, c, ok := loftPairCounts([]LoopRecord{free.Outer}, make([]int, 1), freeWalks, freeWalks)
+	require.True(t, ok)
+	require.Equal(t, uint64(3), c, "a same-kind free-form pair is a chorded pair (§5.1)")
 	require.NoError(t, loftStationCapGate(free, free, make([]int, 1), freeWalks, freeWalks),
-		"a build with no circular pair must never consult the cap, nor the target it is measured against")
+		"the gate settles circular counts only, so a free-form build passes it")
 }
 
 // --- S16: the one-sided collapsed cell (defensive) ---
@@ -1283,11 +1282,11 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 
 // --- loftChordTarget ---
 
-// TestLoftChordTargetUsesTheAnalyticEnvelope isolates the staging gap §5.1's
-// free-form arm closes. profileCoordinateEnvelope must admit this FitSplineSeg
-// profile and read its control-point extent; the current loftChordTarget still
-// calls profileCoordinateUpper until that pairing arm lands, so it refuses the
-// same already-resolved walks.
+// TestLoftChordTargetUsesTheAnalyticEnvelope pins §5.1's chord-target reader:
+// loftChordTarget reads profileCoordinateEnvelope, which states a free-form
+// walk's control-point extent, so a FitSplineSeg profile gets a target of
+// loftChordFraction times that extent rather than the refusal
+// profileCoordinateUpper's placed-cap-frame requirement would give.
 func TestLoftChordTargetUsesTheAnalyticEnvelope(t *testing.T) {
 	t.Parallel()
 	fit := FitSplineSeg{
@@ -1309,6 +1308,7 @@ func TestLoftChordTargetUsesTheAnalyticEnvelope(t *testing.T) {
 	require.NoError(t, err)
 	require.Positive(t, envelope, "a free-form walk must supply its control-point coordinate envelope")
 
-	_, err = loftChordTarget(p, p, walks0, walks0)
-	require.ErrorIs(t, err, ErrUnsupported)
+	target, err := loftChordTarget(p, p, walks0, walks0)
+	require.NoError(t, err)
+	require.Equal(t, loftChordFraction*envelope, target)
 }

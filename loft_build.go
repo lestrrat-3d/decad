@@ -260,11 +260,10 @@ func validateLoftBodyMeasurements(body *Body) error {
 // §5.2): the R7 ceiling is one record's across a whole OPERATION, and
 // Loft also runs falsifyRecordedArea on both records before evalLoft
 // is called, so those counters — not two fresh ones minted here — must be
-// the ones every walkOf call site in this build spends against. S3 admits
-// only same-kind LineSeg or circular pairs, neither of which is a free-form
-// kind, so nothing here charges them yet — but the counters are still
-// threaded through so a future free-form correspondence does not silently
-// open a second ceiling per record.
+// the ones every walkOf call site in this build spends against, and the ones
+// a same-kind free-form pair's station generator charges
+// (docs/loft-design.md §5.1), so a build never opens a second ceiling per
+// record.
 func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, budget *proofbound.WorkBudget, work0, work1 *freeform.FreeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
