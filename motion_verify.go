@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -1567,142 +1568,50 @@ func minRat(running, candidate *big.Rat) *big.Rat {
 	return running
 }
 
-// motionConclusion is the part of a report every check publishes the same
-// way (docs/motion-check-design.md §4, docs/linkage-check-design.md §4).
-type motionConclusion struct {
-	request     MotionRequest
-	against     []*Body
-	intervals   []MotionInterval
-	clearance   *ScalarReading
-	assessment  Assessment
-	diagnostics []Diagnostic // interval findings, then pose findings, then the path reading's
-	status      Status
-}
-
 // conclude assembles the intervals, the whole-path reading, the assessment,
 // the diagnostics and the status from the evaluated poses and intervals.
-func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) motionConclusion {
-	c := motionConclusion{
-		request: MotionRequest{
-			RelativeTolerance: units.Scalar(r.cfg.Rel),
-			Resolution:        r.cfg.Resolution,
-			MinClearance:      r.cfg.Minimum,
-		},
-		against:     []*Body{},
-		diagnostics: []Diagnostic{},
-	}
+func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) reportvocab.MotionConclusion[*Body, JointCell] {
+	against := make([]*Body, 0, len(r.statics))
 	for _, st := range r.statics {
-		c.against = append(c.against, st.body)
+		against = append(against, st.body)
 	}
-
-	violated := anyViolated(poses)
-	allClear, met := true, true
-	var lowest *Measurement
-	for k := 0; k < len(spans); k++ {
-		span := spans[k]
-		a := poses[k]
-		// An unbuildable pose inside the path is no interval end: the
-		// intervals on its two sides merge into one undecided interval
-		// (docs/linkage-check-design.md §15.6). The path's own ends stay.
-		for poses[k+1].unbuildable != nil && k+2 < len(poses) {
-			k++
-			span = motionSpan{outcome: IntervalUndecided, note: firstNote(span.note, spans[k].note)}
-		}
-		b := poses[k+1]
-		interval := MotionInterval{From: a.result.At, To: b.result.At, Outcome: span.outcome, Clearance: span.clearance}
-		c.intervals = append(c.intervals, interval)
-		if span.outcome != IntervalClear {
-			allClear, met = false, false
-		}
-		if span.clearance != nil && (lowest == nil || span.clearance.Value.Base() < lowest.Value.Base()) {
-			lowest = span.clearance
-		}
-		switch {
-		case span.outcome == IntervalUndecided:
-			msg := fmt.Sprintf("the motion from %s to %s is neither certified clear nor bounded by a proven collision", a.result.At, b.result.At)
-			if span.note != "" {
-				msg += ": " + span.note
-			}
-			c.diagnostics = append(c.diagnostics, withAt(Diagnostic{
-				Code:    DiagMotionUndecidedInterval,
-				Status:  Suspect,
-				Reading: ReadingNone,
-				Message: msg,
-			}, a.result.At))
-		case span.outcome == IntervalClear && r.cfg.MinimumMM != nil && !r.meetsMinimum(span.clearance):
-			met = false
-			if violated {
-				break
-			}
-			obs := *span.clearance
-			c.diagnostics = append(c.diagnostics, withAt(Diagnostic{
-				Code:     DiagMotionUndecidedClearance,
-				Status:   Suspect,
-				Reading:  ReadingGap,
-				Observed: &obs,
-				Required: r.cfg.Minimum,
-				Message:  fmt.Sprintf("the motion from %s to %s is certified clear, but its proven lower bound does not reach the required minimum", a.result.At, b.result.At),
-			}, a.result.At))
+	poseFacts := make([]reportvocab.MotionPoseFinding[*Body, JointCell], len(poses))
+	for i, pose := range poses {
+		poseFacts[i] = reportvocab.MotionPoseFinding[*Body, JointCell]{
+			At: pose.result.At, Unbuildable: pose.unbuildable != nil,
+			Violated: pose.violated, Diagnostics: pose.findings,
 		}
 	}
-	switch {
-	case r.cfg.MinimumMM == nil:
-		c.assessment = AssessmentNotEvaluated
-	case violated:
-		c.assessment = AssessmentViolated
-	case met:
-		c.assessment = AssessmentMet
-	default:
-		c.assessment = AssessmentUndecided
-	}
-	for _, pose := range poses {
-		c.diagnostics = append(c.diagnostics, pose.findings...)
-	}
-	if allClear && lowest != nil {
-		if reading, diag := r.pathClearance(poses, lowest, "whole-path"); reading != nil {
-			c.clearance = reading
-			if diag != nil {
-				c.diagnostics = append(c.diagnostics, *diag)
-			}
+	spanFacts := make([]reportvocab.MotionSpanFinding, len(spans))
+	for i, span := range spans {
+		spanFacts[i] = reportvocab.MotionSpanFinding{
+			Outcome: span.outcome, Clearance: span.clearance, Note: span.note,
 		}
 	}
-	c.status = worstStatus(c.diagnostics)
-	return c
-}
-
-// firstNote is the first non-empty note.
-func firstNote(notes ...string) string {
-	for _, n := range notes {
-		if n != "" {
-			return n
-		}
+	request := MotionRequest{
+		RelativeTolerance: units.Scalar(r.cfg.Rel),
+		Resolution:        r.cfg.Resolution,
+		MinClearance:      r.cfg.Minimum,
 	}
-	return ""
-}
-
-// worstStatus is verification §6's worst-wins aggregate over a report's
-// findings: Sound when there is none.
-func worstStatus(diags []Diagnostic) Status {
-	status := Sound
-	for _, diag := range diags {
-		status = max(status, diag.Status)
-	}
-	return status
+	return reportvocab.ConcludeMotion(request, against, poseFacts, spanFacts, r.cfg.MinimumMM,
+		func(lowest *Measurement) (*ScalarReading, *Diagnostic) {
+			return r.pathClearance(poses, lowest, "whole-path")
+		})
 }
 
 // publish assembles VerifyMotion's report (docs/motion-check-design.md §4).
 func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionReport {
 	c := r.conclude(poses, spans)
 	report := &MotionReport{
-		Request:     c.request,
+		Request:     c.Request,
 		Motion:      r.spec.motion,
-		Against:     c.against,
-		Intervals:   c.intervals,
+		Against:     c.Against,
+		Intervals:   c.Intervals,
 		Collisions:  []Collision{},
-		Clearance:   c.clearance,
-		Assessment:  c.assessment,
-		Diagnostics: c.diagnostics,
-		Status:      c.status,
+		Clearance:   c.Clearance,
+		Assessment:  c.Assessment,
+		Diagnostics: c.Diagnostics,
+		Status:      c.Status,
 	}
 	for _, mv := range r.movers {
 		report.Moving = append(report.Moving, mv.body)

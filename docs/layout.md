@@ -277,7 +277,7 @@ the rules leave to the byte budget.
 | `internal/facetproof/` | Faceted shell audits, placement, restatement and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/surfacegeom/` | Sealed face and edge geometry variants. See `docs/api-design.md` §6.1. |
-| `internal/reportvocab/` | Contact, sweep, Verify, Motion, Linkage, and JointBox outcome enums and reports. |
+| `internal/reportvocab/` | Contact/sweep enums; Verify, Motion, Linkage and JointBox reports and conclusions. |
 | `internal/extent/` | Sealed linear and angular extent variants. See API §8.1. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation and segment record. See surface §5.2. |
 | `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |
