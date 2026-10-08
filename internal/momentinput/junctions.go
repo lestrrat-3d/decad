@@ -4,7 +4,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentline"
 	"github.com/lestrrat-3d/decad/internal/momentregion"
@@ -45,37 +45,19 @@ func copyRatPoint(p freeform.RatPoint) *freeform.RatPoint {
 }
 
 // endsOfWalk reads a segment's ends off its walk (survey2d.SegmentWalk's
-// StartBound/EndBound). An arc's natural bound pins the recorded End at zero
-// bound, but the arc DENOTES the point at Start's radius there, so that end
-// also carries the radial residual between the two
-// (circularbounds.ArcRadialResidualUpper).
+// StartBound/EndBound), each measured against the point the record denotes
+// there: an arc's natural t == 1 end also carries the radial residual between
+// the recorded End and Start's radius (boundarywalk.DenotedStartBound and
+// DenotedEndBound).
 func endsOfWalk(segment CurveSegment, walk survey2d.SegmentWalk) segmentEnds {
 	ends := segmentEnds{
 		start:      Point2{U: walk.StartU, V: walk.StartV},
 		end:        Point2{U: walk.EndU, V: walk.EndV},
-		startBound: walk.StartBound,
-		endBound:   walk.EndBound,
+		startBound: boundarywalk.DenotedStartBound(segment, walk),
+		endBound:   boundarywalk.DenotedEndBound(segment, walk),
 	}
 	if line, ok := segment.(LineSeg); ok {
 		ends.exactStart, ends.exactEnd = lineExactEnds(line)
-		return ends
-	}
-	arc, ok := segment.(ArcSeg)
-	if !ok || (arc.TStart != 1 && arc.TEnd != 1) {
-		return ends
-	}
-	residual := circularbounds.ArcRadialResidualUpper(arc)
-	if residual == 0 {
-		return ends
-	}
-	widen := func(b proofbound.WalkEndBound) proofbound.WalkEndBound {
-		return proofbound.WalkEndBound{U: proofbound.AbsSumUpper(b.U, residual), V: proofbound.AbsSumUpper(b.V, residual)}
-	}
-	if arc.TStart == 1 {
-		ends.startBound = widen(ends.startBound)
-	}
-	if arc.TEnd == 1 {
-		ends.endBound = widen(ends.endBound)
 	}
 	return ends
 }
@@ -118,9 +100,7 @@ func chargeLoopJunctions(ig *Integrals, loop LoopRecord, ends []segmentEnds, anc
 // one denoted point, so the junction needs no chord. Two ends meet when both
 // are stated exactly — zero bounds — at the same coordinate, which is every
 // junction of two natural line ends, or when both exact rationals agree. A
-// circle cut at its own seam meets itself too: two fragments of one recorded
-// circle meeting at t = 1 and t = 0, or at one shared t, denote the same point
-// whatever their walks hold.
+// circle cut at its own seam meets itself too (boundarywalk.SameCircleSeam).
 func sameDenotedJunction(prev, next CurveSegment, prevEnds, nextEnds segmentEnds) bool {
 	zero := proofbound.WalkEndBound{}
 	if prevEnds.endBound == zero && nextEnds.startBound == zero && prevEnds.end == nextEnds.start {
@@ -129,16 +109,7 @@ func sameDenotedJunction(prev, next CurveSegment, prevEnds, nextEnds segmentEnds
 	if p, q := prevEnds.exactEnd, nextEnds.exactStart; p != nil && q != nil {
 		return p.U.Cmp(q.U) == 0 && p.V.Cmp(q.V) == 0
 	}
-	a, ok := prev.(CircleSeg)
-	if !ok {
-		return false
-	}
-	b, ok := next.(CircleSeg)
-	if !ok || a.Center != b.Center || a.Radius != b.Radius {
-		return false
-	}
-	ta, tb := a.TEnd, b.TStart
-	return ta == tb || (ta == 1 && tb == 0) || (ta == 0 && tb == 1)
+	return boundarywalk.SameCircleSeam(prev, next)
 }
 
 // pointGapUpper bounds the distance between the two points p and q denote,

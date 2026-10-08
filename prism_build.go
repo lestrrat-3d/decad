@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 
@@ -322,19 +323,22 @@ func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
 	return f, nil
 }
 
-// freeformVertexAllow folds a junction vertex's bound with a FREE-FORM walk's
-// own endpoint bound (internal/proofbound/bounds.go's proofbound.WalkEndBoundAllow), and answers zero for
-// every other kind. A vertex the payload recorded is exact only where every
-// coordinate feeding it is; a free-form walk's endpoint is the converted
-// chain's own control point (§5.1), read into float64 by the one rounding
-// proofbound.WalkEndBoundAllow measures, so a vertex it touches must carry that rounding
-// too (topology.go's Vertex.Position contract). An analytic walk's own
-// endpoint bound is a separate question buildLoopSidesAs does not answer here.
-func freeformVertexAllow(w survey2d.SegmentWalk, bound proofbound.WalkEndBound) float64 {
-	if w.Kind != survey2d.WalkFreeform {
-		return 0
-	}
-	return proofbound.WalkEndBoundAllow(bound)
+// junctionVertexAt places the rim vertex where walk prev ends and walk next
+// starts, and returns its plane position with the 3D bound it owes against the
+// points BOTH walks denote there (boundarywalk.JunctionVertex): next's
+// recorded start and prev's recorded end, which differ at a cut junction
+// (docs/evaluator-design.md §3, §4). segs are the recorded segments the walks'
+// Segs index; a single whole closed walk passes itself as both neighbours.
+// Every kind charges its own walk-end bound: a trimmed line's lerp rounding, a
+// circle's or trimmed arc's trig enclosure, a free-form chain's control-point
+// rounding, and an arc's natural t = 1 radial residual. A vertex is therefore
+// Exact only where every end meeting there is a recorded coordinate it holds
+// verbatim (topology.go's Vertex.Position contract). proofbound.WalkEndBoundAllow
+// carries the per-component bound into world space.
+func junctionVertexAt(segs []CurveSegment, prev, next survey2d.SideWalk) (float64, float64, float64) {
+	u, v, bound := boundarywalk.JunctionVertex(
+		segs[prev.Segs[len(prev.Segs)-1]], prev.SegmentWalk, segs[next.Segs[0]], next.SegmentWalk)
+	return u, v, proofbound.WalkEndBoundAllow(bound)
 }
 
 // rimConvexity decides one walk's rim-edge convexity — evaluator §3's
@@ -651,9 +655,9 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	var seamBottom, seamTop *Vertex
 	if singleClosed {
 		w := walks[0]
-		extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(w.SegmentWalk, w.EndBound))
-		seamBottom = rimVertex(w.StartU, w.StartV, pp.z0, pp.z0Delta, extra, levelZ0)
-		seamTop = rimVertex(w.StartU, w.StartV, pp.z1, pp.z1Delta, extra, levelZ1)
+		u, v, extra := junctionVertexAt(loop.Segments, w, w)
+		seamBottom = rimVertex(u, v, pp.z0, pp.z0Delta, extra, levelZ0)
+		seamTop = rimVertex(u, v, pp.z1, pp.z1Delta, extra, levelZ1)
 	} else {
 		bottomV = make([]*Vertex, n)
 		topV = make([]*Vertex, n)
@@ -662,9 +666,9 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 				return nil, nil, nil, proofbound.BoundedScalar{}, err
 			}
 			prev := walks[(i+n-1)%n]
-			extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(prev.SegmentWalk, prev.EndBound))
-			bottomV[i] = rimVertex(w.StartU, w.StartV, pp.z0, pp.z0Delta, extra, levelZ0)
-			topV[i] = rimVertex(w.StartU, w.StartV, pp.z1, pp.z1Delta, extra, levelZ1)
+			u, v, extra := junctionVertexAt(loop.Segments, prev, w)
+			bottomV[i] = rimVertex(u, v, pp.z0, pp.z0Delta, extra, levelZ0)
+			topV[i] = rimVertex(u, v, pp.z1, pp.z1Delta, extra, levelZ1)
 		}
 	}
 

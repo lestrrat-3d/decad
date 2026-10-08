@@ -667,9 +667,11 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 
 	// Rim posts 0..n, no wraparound: post i sits at walk i's start for
 	// i < n, and at the LAST walk's own end for i == n — the chain's two free
-	// ends. A post touching a FREE-FORM walk's own end also folds in that
-	// walk's own endpoint bound (freeformVertexAllow), exactly as
-	// buildLoopSidesAs does for a closed loop's junctions.
+	// ends. A free end charges its one walk end's own bound against the point
+	// its segment denotes there (boundarywalk.DenotedStartBound and
+	// DenotedEndBound); an interior post charges both neighbours' ends
+	// (junctionVertexAt), exactly as buildLoopSidesAs does for a closed
+	// loop's junctions.
 	bottomV := make([]*Vertex, n+1)
 	topV := make([]*Vertex, n+1)
 	for i := 0; i <= n; i++ {
@@ -677,15 +679,16 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			return nil, proofbound.BoundedScalar{}, err
 		}
 		var u, v, extra float64
-		if i < n {
-			u, v = walks[i].StartU, walks[i].StartV
-			extra = freeformVertexAllow(walks[i].SegmentWalk, walks[i].StartBound)
-		} else {
-			u, v = walks[n-1].EndU, walks[n-1].EndV
-			extra = freeformVertexAllow(walks[n-1].SegmentWalk, walks[n-1].EndBound)
-		}
-		if i > 0 && i < n {
-			extra = math.Max(extra, freeformVertexAllow(walks[i-1].SegmentWalk, walks[i-1].EndBound))
+		switch i {
+		case n:
+			last := walks[n-1]
+			u, v = last.EndU, last.EndV
+			extra = proofbound.WalkEndBoundAllow(boundarywalk.DenotedEndBound(chain.Segments[last.Segs[len(last.Segs)-1]], last.SegmentWalk))
+		case 0:
+			u, v = walks[0].StartU, walks[0].StartV
+			extra = proofbound.WalkEndBoundAllow(boundarywalk.DenotedStartBound(chain.Segments[walks[0].Segs[0]], walks[0].SegmentWalk))
+		default:
+			u, v, extra = junctionVertexAt(chain.Segments, walks[i-1], walks[i])
 		}
 		bottomV[i] = rimVertex(u, v, pp.z0, pp.z0Delta, extra)
 		topV[i] = rimVertex(u, v, pp.z1, pp.z1Delta, extra)

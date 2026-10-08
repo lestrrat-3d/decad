@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -292,8 +291,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 	var verts []*Vertex
 	if singleClosed {
 		w := walks[0]
-		extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(w.SegmentWalk, w.EndBound))
-		seam = rimVertex(w.StartU, w.StartV, extra)
+		seam = rimVertex(junctionVertexAt(loop.Segments, w, w))
 	} else {
 		verts = make([]*Vertex, n)
 		for i, w := range walks {
@@ -301,8 +299,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 				return nil, err
 			}
 			prev := walks[(i+n-1)%n]
-			extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(prev.SegmentWalk, prev.EndBound))
-			verts[i] = rimVertex(w.StartU, w.StartV, extra)
+			verts[i] = rimVertex(junctionVertexAt(loop.Segments, prev, w))
 		}
 	}
 
