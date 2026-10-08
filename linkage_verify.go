@@ -634,19 +634,19 @@ func bodyPoints(b *Body, hull bool) (cornerReading, bool) {
 func publishLinkage(r *motionRun, l *Linkage, drive Drive, poses []*motionPose, spans []motionSpan) *LinkageReport {
 	c := r.conclude(poses, spans)
 	report := &LinkageReport{
-		Request:           c.request,
+		Request:           c.Request,
 		ReadingResolution: readingResolution(r.cfg),
 		Linkage:           l,
 		Drive:             slices.Clone(drive),
 		Links:             l.Links(),
 		JointContacts:     l.JointContacts(),
-		Against:           c.against,
-		Intervals:         c.intervals,
+		Against:           c.Against,
+		Intervals:         c.Intervals,
 		Collisions:        []LinkCollision{},
-		Clearance:         c.clearance,
-		Assessment:        c.assessment,
-		Diagnostics:       c.diagnostics,
-		Status:            c.status,
+		Clearance:         c.Clearance,
+		Assessment:        c.Assessment,
+		Diagnostics:       c.Diagnostics,
+		Status:            c.Status,
 	}
 	for _, pose := range poses {
 		if pose.unbuildable != nil {
