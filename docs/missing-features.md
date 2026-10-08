@@ -37,7 +37,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Composite path in `SweepChain` | `ErrUnsupported` (R34); one straight span only | `docs/surface-design.md` §1.2 |
 | Loft over more than two sections, guide rails, centerline | No entry point; `Loft` takes exactly two profiles | `docs/loft-design.md` §1 "Deferred reach" |
 | Loft of a same-kind free-form pair whose curves convert to different Bézier span counts | `ErrUnsupported` (S17) | `docs/loft-design.md` §12 PR 5 |
-| Loft of a full gear outline with free-form flanks (one tooth builds; every tested full gear, z=6–20, refuses) | `ErrUnsupported`: S15 station cap or R7 work budget | `docs/loft-design.md` Table S S15, `docs/spline-design.md` R7 |
+| Loft of a profile past 11585 reconstruction chords (the 5-fit-point helical gear outline builds to 69 teeth, refuses at 70) | `ErrUnsupported`: R7 sketch reconstruction work budget | `docs/loft-gear-bounds-design.md` §7, `docs/spline-design.md` R7 |
 | Loft with differing loop or segment counts | `ErrUnsupported` (S1/S2) | `docs/loft-design.md` Table S |
 | Loft of mixed-kind or reversed pairs | Refused permanently | `docs/loft-design.md` §1 "Permanently out of scope" |
 | `LoftChain` with curved segments or non-parallel planes | `ErrUnsupported` (R36, R35) | `docs/surface-design.md` §1.2 |

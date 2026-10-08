@@ -753,16 +753,17 @@ func quarterArcRingProfile(t *testing.T, n int) (ProfileRecord, [][]survey2d.Seg
 	return p, resolveLoftLoopWalks(t, p)
 }
 
-// TestLoftStationCapClearsTheAuditPairCeiling pins the DERIVATION behind
-// loftStationCap's value (docs/loft-design.md §5.1, §14): a build whose
-// Σstations reaches the cap must assemble an F whose F*(F-1)/2 is STRICTLY
-// below proofbound.MaxFacetPairTestsPerCall, the ceiling S8 enforces.
+// TestLoftStationCapFitsTheAuditTriangleCeiling pins the DERIVATION behind
+// loftmesh.StationCapCeiling (docs/loft-gear-bounds-design.md §7): a build
+// whose Σstations reaches the hard ceiling assembles at most
+// loftmesh.MaxLoftAuditTriangles triangles, the ceiling S8 checks before the
+// audit lifts a triangle.
 //
 // The F formula the derivation rests on is measured here on a real assembled
 // triangle set rather than assumed: a square-with-square-hole loft has
 // Σstations = 8 over H = 1 hole, and assembleLoft emits exactly
 // 4*8 + 4*1 - 4 = 32 triangles. A hole-free square gives 4*4 - 4 = 12.
-func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
+func TestLoftStationCapFitsTheAuditTriangleCeiling(t *testing.T) {
 	t.Parallel()
 	assembledTriangles := func(t *testing.T, p ProfileRecord) int {
 		t.Helper()
@@ -784,37 +785,63 @@ func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
 		"an 8-station one-hole loft must assemble 4*Σ + 4H - 4 triangles")
 
 	// H <= Σ - 1 (every loop holds at least one segment and every pair chords
-	// at m >= 1), so the worst F a build AT the cap can assemble is 8*cap - 8.
-	worstF := uint64(8*loftStationCap - 8)
-	worstPairs, ok := proofbound.WallChoose2(worstF)
-	require.True(t, ok, "the worst-case pair count at the cap must not overflow")
-	require.Less(t, worstPairs, uint64(proofbound.MaxFacetPairTestsPerCall),
-		"a build at the station cap must stay STRICTLY below S8's own pair ceiling")
+	// at m >= 1), so the worst F a build AT the hard ceiling can assemble is
+	// 8*ceiling - 8, and that is exactly the audit's triangle ceiling.
+	require.Equal(t, 8*loftmesh.StationCapCeiling-8, loftmesh.MaxLoftAuditTriangles,
+		"the station cap's hard ceiling and S8's triangle ceiling must describe the same build")
+	require.Equal(t, loftmesh.StationCapCeiling, loftStationCap(math.MaxUint64),
+		"no paired-segment count lifts the cap past its hard ceiling")
 
-	// The cap is not arbitrarily conservative either: two stations further in
-	// that same worst shape already breaks S8's ceiling, so the constant sits
-	// against the bound it is derived from rather than far under it.
-	overPairs, ok := proofbound.WallChoose2(uint64(8*(loftStationCap+2) - 8))
-	require.True(t, ok)
-	require.Greater(t, overPairs, uint64(proofbound.MaxFacetPairTestsPerCall),
-		"the cap must sit at the ceiling it is derived from, not far below it")
+	// And the floor leaves room for every fixture docs/loft-design.md §14
+	// names: the arc wedge settles at 75 stations and the fit-spline wedge at
+	// 120 cells.
+	require.Greater(t, loftStationCap(1), 120, "the cap must leave room for §14's own chorded fixtures")
+}
 
-	// And it leaves room for every fixture docs/loft-design.md §13 requires:
-	// that section's reference wedge forces 64 stations and its calibrated
-	// twin settles at 65.
-	require.Greater(t, loftStationCap, 65*4, "the cap must leave room for §13's own chorded fixtures")
+// TestLoftStationCapScalesWithPairs pins docs/loft-gear-bounds-design.md §7's
+// stationCap(P) = min(max(512, 64·P), 8192) at the paired-segment counts that
+// design names: a three-segment record, one gear tooth (P = 6), the z = 8,
+// z = 20 and z = 40 gear outlines (P = 48, 120 and 240), both edges of the
+// floor and the hard ceiling, and a record far past it. It also reads the cap
+// back through the per-segment share, which is how S15 consumes it.
+func TestLoftStationCapScalesWithPairs(t *testing.T) {
+	t.Parallel()
+	for _, row := range []struct {
+		p    uint64
+		want int
+	}{
+		{p: 3, want: 512},
+		{p: 6, want: 512},
+		{p: 8, want: 512},
+		{p: 9, want: 576},
+		{p: 48, want: 3072},
+		{p: 120, want: 7680},
+		{p: 127, want: 8128},
+		{p: 128, want: 8192},
+		{p: 240, want: 8192},
+		{p: 10_000, want: 8192},
+	} {
+		t.Run(fmt.Sprintf("P=%d", row.p), func(t *testing.T) {
+			require.Equal(t, row.want, loftStationCap(row.p))
+			if row.p < uint64(row.want) {
+				require.Equal(t, 1+(row.want-int(row.p))/int(row.p), loftStationShare(row.p, row.p), //nolint:gosec // p is a small table constant.
+					"S15's share divides the cap left after every pair's first station")
+			}
+		})
+	}
 }
 
 // TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling is Table S row
 // S15 (docs/loft-design.md §5.1): a same-kind circular pair whose settled
-// station count exceeds its own share of loftStationCap refuses with
+// station count exceeds its own share of the station cap refuses with
 // freeform.ErrTooManyChords, and the refusal NAMES the segment whose share it exceeded.
 //
 // It is also the fixture §13 requires for this row — one that fires BEFORE S8
 // on a construction that would otherwise reach the audit ceiling. That is
 // asserted, not asserted-by-narration: the settled count is read back, the F
 // the build would have assembled from it is computed through §7's own formula,
-// and its F*(F-1)/2 is shown to exceed proofbound.MaxFacetPairTestsPerCall.
+// and it is shown to exceed loftmesh.MaxLoftAuditTriangles, S8's triangle
+// ceiling.
 //
 // The refusal must NOT read as tessellate.go's own per-walk message. That text
 // blames a "chord tolerance" for asking "more than 16384 chords on one curve",
@@ -822,7 +849,7 @@ func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
 // option") — nor did any single curve here ask for 16384 of anything.
 func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 	t.Parallel()
-	const n = 24
+	const n = 400
 	p, walks := quarterArcRingProfile(t, n)
 
 	target := loftTestChordTarget(t, p, p, walks, walks)
@@ -834,11 +861,8 @@ func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 	require.Less(t, m, freeform.MaxChordsPerWalk, "the fixture must stay inside the per-walk ceiling, so only the CAP can refuse it")
 
 	// What this build would have assembled had the cap not fired: §7's
-	// F = 4*Σstations - 4 over this hole-free loop, and S8's own pair count
-	// over it (internal/loftmesh/loft_audit.go).
-	wouldBePairs, ok := proofbound.WallChoose2(uint64(4*n*m - 4))
-	require.True(t, ok)
-	require.Greater(t, wouldBePairs, uint64(proofbound.MaxFacetPairTestsPerCall),
+	// F = 4*Σstations - 4 over this hole-free loop, past S8's triangle ceiling.
+	require.Greater(t, 4*n*m-4, loftmesh.MaxLoftAuditTriangles,
 		"the fixture must be one that would otherwise reach S8's audit ceiling")
 
 	_, err = loftStationCapGate(p, p, loftRecordAreas(t, p, p), make([]int, 1), walks, walks)
@@ -881,17 +905,17 @@ func TestLoftStationShareAllocatesTheCap(t *testing.T) {
 		want    int
 		comment string
 	}{
-		{name: "one circular pair alone", p: 1, c: 1, want: 1 + (loftStationCap-1)/1},
-		{name: "four circular pairs", p: 4, c: 4, want: 1 + (loftStationCap-4)/4},
-		{name: "circular pairs among line pairs", p: 100, c: 4, want: 1 + (loftStationCap-100)/4},
+		{name: "one circular pair alone", p: 1, c: 1, want: 1 + (512-1)/1},
+		{name: "four circular pairs", p: 4, c: 4, want: 1 + (512-4)/4},
+		{name: "circular pairs among line pairs", p: 100, c: 4, want: 1 + (6400-100)/4},
 		{
-			name: "a record whose own P already exceeds the cap clamps to one",
-			p:    loftStationCap + 1, c: 1, want: 1,
+			name: "a record whose own P already reaches the cap clamps to one",
+			p:    loftmesh.StationCapCeiling, c: 1, want: 1,
 			comment: "such a record is past chording altogether and S8 is what refuses it",
 		},
 		{
 			name: "integer division only ever under-allocates",
-			p:    10, c: 7, want: 1 + (loftStationCap-10)/7,
+			p:    10, c: 7, want: 1 + (640-10)/7,
 		},
 	} {
 		t.Run(row.name, func(t *testing.T) {
@@ -904,9 +928,9 @@ func TestLoftStationShareAllocatesTheCap(t *testing.T) {
 			// (P - C)*1 + C*mMax — which can never pass the cap unless P
 			// alone already did.
 			require.LessOrEqual(t, row.c, row.p, "C counts the circular pairs among P, so it can never exceed it")
-			total := (row.p - row.c) + row.c*uint64(mMax) //nolint:gosec // mMax is a positive share bounded by loftStationCap.
-			if row.p <= loftStationCap {
-				require.LessOrEqual(t, total, uint64(loftStationCap),
+			total := (row.p - row.c) + row.c*uint64(mMax) //nolint:gosec // mMax is a positive share bounded by the station cap.
+			if row.p <= uint64(loftStationCap(row.p)) {
+				require.LessOrEqual(t, total, uint64(loftStationCap(row.p)),
 					"no build every pair of which passes S15 may exceed the cap")
 			}
 		})

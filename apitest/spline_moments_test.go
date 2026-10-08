@@ -559,8 +559,8 @@ func TestOverBudgetConversionRefusesBeforeLifting(t *testing.T) {
 // methods have no context and cannot cancel an arrangement that has started.
 //
 // Four quarter arcs are 256 chords and six are 384, so both records measure.
-// One hundred quarter arcs are 6400 chords, above the 5792-chord reconstruction
-// boundary, and refuse at the record-level preflight.
+// Two hundred quarter arcs are 12,800 chords, above the 11,585-chord
+// reconstruction boundary, and refuse at the record-level preflight.
 func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
 	t.Parallel()
 	for _, n := range []int{4, 6} {
@@ -572,8 +572,8 @@ func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
 	}
 
 	start := time.Now()
-	_, err := scallopedDiskRecord(100).Area()
-	require.Error(t, err, "100 arcs are past the reconstruction ceiling")
+	_, err := scallopedDiskRecord(200).Area()
+	require.Error(t, err, "200 arcs are past the reconstruction ceiling")
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
 	require.Contains(t, err.Error(), "profile record is invalid",
@@ -589,7 +589,7 @@ func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
 // source too, because sketch floors free-form sampling at 64 chords however few
 // control points a curve holds.
 //
-// One hundred three-control closed splines hold 6400 chords, past the
+// Two hundred three-control closed splines hold 12,800 chords, past the
 // reconstruction ceiling. A per-source charge misses the cross-source pairs;
 // the record-wide charge refuses before sketch starts its arrangement.
 //
@@ -597,7 +597,7 @@ func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
 // levied before sketch is asked anything.
 func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
 	t.Parallel()
-	segments := make([]decad.CurveSegment, 100)
+	segments := make([]decad.CurveSegment, 200)
 	for i := range segments {
 		control := make([]decad.Point2, 3)
 		for j := range control {
@@ -620,14 +620,14 @@ func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
 
 // Analytic sources are chorded and arranged beside the free-form ones, so they
 // have to be counted. A chord total that skips them bounds nothing about the
-// pass they are arranged in: a hundred quarter arcs contribute 6400 chords to
-// the same global pair loop one four-control spline contributes 64 to, and a
+// pass they are arranged in: two hundred quarter arcs contribute 12,800 chords
+// to the same global pair loop one four-control spline contributes 64 to, and a
 // charge reading only the spline admits the record and then spends seconds
 // arranging all of it.
 func TestAnalyticChordsAreCharged(t *testing.T) {
 	t.Parallel()
-	segments := make([]decad.CurveSegment, 0, 101)
-	for i := range 100 {
+	segments := make([]decad.CurveSegment, 0, 201)
+	for i := range 200 {
 		center := decad.Point2{U: float64(i) * 10}
 		segments = append(segments, decad.ArcSeg{
 			Center: center,

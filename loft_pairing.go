@@ -15,7 +15,25 @@ import (
 // returns the build's one chord target, which the station cap gate reads once
 // from recordArea and the walks resolved here (loftStationCapGate), so the
 // station generators chord at the target the gate decided S15 against.
+//
+// Before it resolves a single walk it raises both records' free-form work
+// ceilings to loftmesh.StationWorkLimit over P, the first profile's segment
+// count (docs/loft-gear-bounds-design.md §7). The raise covers the walks'
+// own length brackets as well as the station walk that follows: a full gear
+// outline's brackets alone pass the default ceiling (§7 measures them), and P
+// is read from the record, so it is known before the gates that check it.
+// Every charge before the raise met the default ceiling, and the counters
+// keep what they have spent.
 func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, recordArea [2]float64, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, float64, error) {
+	p := uint64(len(p0.Outer.Segments))
+	for _, hole := range p0.Holes {
+		p += uint64(len(hole.Segments))
+	}
+	for _, work := range []*freeform.FreeformWork{work0, work1} {
+		if work != nil {
+			work.RaiseLimit(loftmesh.StationWorkLimit(work.Spent, p))
+		}
+	}
 	offsets, walks0, walks1, err := loftmesh.ValidateRecordWalks(
 		loftmesh.RecordProfile{Outer: p0.Outer, Holes: p0.Holes},
 		loftmesh.RecordProfile{Outer: p1.Outer, Holes: p1.Holes},

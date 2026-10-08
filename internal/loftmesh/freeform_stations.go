@@ -37,8 +37,8 @@ func (e *StationCapError) Error() string {
 		needs = fmt.Sprintf("at least %d", e.M)
 	}
 	return fmt.Sprintf(
-		`%s: loop %d segment %d needs %s chord cells to meet the loft chord target, past the %d its share of the %d-station cap allows`,
-		decaderr.ErrUnsupported.Error(), e.Loop, e.Seg, needs, e.MMax, LoftStationCap,
+		`%s: loop %d segment %d needs %s chord cells to meet the loft chord target, past the %d its share of the station cap allows`,
+		decaderr.ErrUnsupported.Error(), e.Loop, e.Seg, needs, e.MMax,
 	)
 }
 

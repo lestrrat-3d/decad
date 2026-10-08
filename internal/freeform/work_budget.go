@@ -17,6 +17,11 @@ import (
 // what actually runs — would be unbounded. Public ProfileRecord methods take no
 // context, so the limit is fixed rather than caller-set, exactly as shellInradiusWorkLimit is for the inward shell survey.
 // Reaching it is Table R row R7: ErrUnsupported, never a widened float path.
+//
+// It is the DEFAULT ceiling. One operation raises it for its own record
+// counters (FreeformWork.Limit): a loft raises it, once its station cap gate
+// has passed, by a fixed charge per station its cap admits
+// (docs/loft-gear-bounds-design.md §7). No other caller raises it.
 const FreeformWorkLimit uint64 = 1 << 20
 
 // ReconstructionWorkLimit is the separate fixed ceiling on one record's sketch
@@ -24,7 +29,11 @@ const FreeformWorkLimit uint64 = 1 << 20
 // total, not exact-rational conversion or integration work, so it must not
 // consume the much smaller ceiling that bounds those passes. The public moment
 // methods take no context, so this counter is still fixed and record-wide.
-const ReconstructionWorkLimit uint64 = 1 << 26
+//
+// It is decad's model of sketch's quadratic arranger: 1 << 28 admits a record
+// of ReconstructionChordCeiling chords, which a forty-tooth gear outline's
+// 6640 chords fit under (docs/loft-gear-bounds-design.md §7).
+const ReconstructionWorkLimit uint64 = 1 << 28
 
 // FreeformCostCeiling is where the conservative cost arithmetic below
 // saturates. Any estimate that reaches it is already over budget on its own —
@@ -82,9 +91,14 @@ func ReconstructionCostMul(a, b uint64) uint64 {
 // FreeformWork holds one record's exact-rational and reconstruction counters.
 // They are separate because their cost models and safe ceilings are separate,
 // but each counter spans the whole operation over that record.
+//
+// Limit is the exact-rational counter's ceiling. Zero reads as
+// FreeformWorkLimit, so a counter minted by NewFreeformWork or as a literal
+// keeps the default. RaiseLimit is the one way an operation changes it.
 type FreeformWork struct {
 	Spent               uint64
 	ReconstructionSpent uint64
+	Limit               uint64
 }
 
 // NewFreeformWork opens ONE record's work state. Minting is deliberately
@@ -93,15 +107,40 @@ type FreeformWork struct {
 // in hand; everywhere else, pass the state the record already has.
 func NewFreeformWork() *FreeformWork { return &FreeformWork{} }
 
+// WorkLimit is the exact-rational counter's ceiling: Limit, or
+// FreeformWorkLimit where Limit is zero.
+func (w *FreeformWork) WorkLimit() uint64 {
+	if w.Limit == 0 {
+		return FreeformWorkLimit
+	}
+	return w.Limit
+}
+
+// RaiseLimit sets the exact-rational counter's ceiling to limit when that is
+// above the current one, and never lowers it.
+func (w *FreeformWork) RaiseLimit(limit uint64) {
+	if limit > w.WorkLimit() {
+		w.Limit = limit
+	}
+}
+
+// Step charges n units to the exact-rational counter and refuses with
+// ErrUnsupported (Table R row R7) once the total would pass WorkLimit.
+//
+// A charge at or above FreeformCostCeiling refuses whatever the limit is.
+// CostAdd and CostMul saturate there, so such a charge stands for an
+// estimate of unknown size; under a raised limit it would otherwise be
+// admitted as if it cost FreeformCostCeiling units.
 func (w *FreeformWork) Step(n uint64) error {
 	if w == nil {
 		return nil
 	}
-	if n > FreeformWorkLimit-w.Spent {
-		w.Spent = FreeformWorkLimit
+	limit := w.WorkLimit()
+	if n >= FreeformCostCeiling || n > limit-w.Spent {
+		w.Spent = limit
 		return fmt.Errorf(
 			`%w: free-form exact integration needs more than the fixed work budget of %d`,
-			decaderr.ErrUnsupported, FreeformWorkLimit,
+			decaderr.ErrUnsupported, limit,
 		)
 	}
 	w.Spent += n
@@ -224,8 +263,9 @@ type FreeformReconstruction struct {
 // ReconstructionChordCeiling is the largest chord total chargeReconstruction
 // can admit for validation's first two whole-scene arrangements. One unit more
 // exceeds ReconstructionWorkLimit, so the record refuses however the rest of it
-// reads, and reconstructionOf stops counting there.
-const ReconstructionChordCeiling uint64 = 5792
+// reads, and reconstructionOf stops counting there: 2·11585² is at most
+// 1 << 28 and 2·11586² is above it.
+const ReconstructionChordCeiling uint64 = 11585
 
 // FreeformChords is the per-control sample count with sketch's own floor. The
 // floor is what makes a record of many three-control splines expensive: each one

@@ -517,8 +517,8 @@
 3	0.30	TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface
 3	0.00	TestLoftSheetAuditRejectsCapInPlaceOfWall
 3	0.04	TestLoftShippedFractionOnReferenceWedge
-3	0.00	TestLoftStationCapClearsTheAuditPairCeiling
-3	0.01	TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling
+3	0.00	TestLoftStationCapFitsTheAuditTriangleCeiling
+3	2.76	TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling
 3	0.00	TestLoftStationShareAllocatesTheCap
 3	0.00	TestLoopSignedAreaMatchesFullIntegrator
 3	0.00	TestLoopSignedAreaPreservesBudgetAndErrors
@@ -969,7 +969,7 @@
 5	0.30	TestLoftFitSplineWedgeVerifiesSound
 5	0.01	TestLoftFrameLiftRoundingChargedInDelta
 5	0.05	TestLoftFreeformMixedPairsRefuseS3
-5	0.05	TestLoftFreeformPairPastItsShareRefusesS15
+5	0.11	TestLoftFreeformPairPastItsShareRefusesS15
 5	0.40	TestLoftFreeformReversedRangeBuildsTheSameStations
 5	0.10	TestLoftFreeformSpanCountMismatchRefusesS17
 5	1.50	TestLoftFreeformTwistedClosedSplineBracketsDenseReference
@@ -1090,3 +1090,8 @@
 0	0.05	TestLoftAuditTriangleCeilingRefuses
 0	1.30	TestLoftCentroidShiftFormEnclosesTwoArcLobe
 2	0.66	TestLoftCentroidToothBoundReadsToothSize
+5	10.62	TestLoftGearOutlineVerifiesSound
+0	5.70	TestLoftStationWalkWorkPerStation
+1	1.35	TestLoftGearToothVerifiesSound
+2	1.22	TestLoftStationWalkRefusesAtTheRaisedWorkLimit
+4	0.00	TestLoftStationCapScalesWithPairs

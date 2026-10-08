@@ -21,8 +21,6 @@ import (
 // bounded refuses through errLoftSagittaUnderivable. The station cap bounds
 // the work before any of it is done. See docs/loft-design.md §5.2.
 
-const loftStationCap = loftmesh.LoftStationCap
-
 // loftStationCapError is docs/loft-design.md Table S row S15's refusal: a
 // chorded pair whose station count `m` exceeds the per-segment share
 // loftStationShare allocates it. loftmesh.StationCapError owns its message and
@@ -34,6 +32,8 @@ func loftPairCounts(loops0 []LoopRecord, offsets []int, walks0, walks1 [][]surve
 }
 
 func loftStationShare(p, c uint64) int { return loftmesh.StationShare(p, c) }
+
+func loftStationCap(p uint64) int { return loftmesh.StationCap(p) }
 
 // loftStationCapGate decides docs/loft-design.md Table S row S15 from the two
 // RECORDS alone, at the phase §4's gate-order paragraph assigns it — among the
