@@ -3,15 +3,10 @@ package decad
 import (
 	"context"
 	"math"
-	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolveangle"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -48,10 +43,6 @@ func (g gatePoints) diameter(budget *proofbound.WorkBudget) (float64, bool, erro
 	d, ok = lowerDiameterForDisplacement(d, g.allow)
 	return d, ok, nil
 }
-
-// gateStationStep is the widest angle between two consecutive stations
-// sectionStations places along one circular wall: 15 degrees.
-const gateStationStep = math.Pi / 12
 
 // stationGateDiameter reads a diameter from the station witnesses of prisms
 // alone (prismGatePoints). ok is false, with no error, when any prism's
@@ -94,123 +85,17 @@ func prismGatePoints(budget *proofbound.WorkBudget, prisms []prismPayload, displ
 	return g, true, nil
 }
 
-// sectionStation is a plane-local point on one recorded wall, held within
-// bound of the point the record denotes there.
-type sectionStation struct {
-	u, v  float64
-	bound proofbound.WalkEndBound
-}
-
-// sectionStations lists points on every wall of loops for a gate diameter
-// alone. They never join a carrier's witnesses (CFace.Wit), which the
-// clearance search reads.
-//
-// The carrier witnesses addPrismFaces places give a circular wall only two
-// angles: th0, and the mid-angle at mid-height. With the arc's end vertex,
-// that is three angles. A wall that sweeps past 180 degrees holds points
-// opposite each other that none of the three reach. An arc closed by its
-// chord is worst at a 240 degree sweep: the three samples sit
-// 2R*sin(120 degrees) apart while the wall's diameter is 2R, so the carrier
-// witnesses alone understate the diameter by a factor of 2/sqrt(3).
-//
-// sectionStations adds the two walk ends of a line wall. On a circular wall
-// it adds stations at fractions of the recorded parameter range
-// (stationFractions). Every station is a point the record denotes, at a
-// rational parameter inside the recorded range. Its held (u, v) comes from
-// math.Sincos at the matching angle, so it carries the gap
-// boundarywalk.CircularPointBound proves against that denoted point. A line
-// end carries its own walk-end bound.
-//
-// ok is false, with no error, for a free-form wall, a segment the record
-// cannot normalize or walk, and a station with no finite position or gap.
-// Cancellation through budget returns the error.
-func sectionStations(budget *proofbound.WorkBudget, loops []LoopRecord, work *freeform.FreeformWork) ([]sectionStation, bool, error) {
-	var out []sectionStation
-	add := func(u, v float64, bound proofbound.WalkEndBound) bool {
-		if !proofbound.FiniteVec(r3.NewVec(u, v, 0)) || proofbound.IsNonFinite(bound.U) || proofbound.IsNonFinite(bound.V) {
-			return false
-		}
-		out = append(out, sectionStation{u: u, v: v, bound: bound})
-		return true
-	}
-	for _, loop := range loops {
-		for _, recorded := range loop.Segments {
-			if err := budget.Step(); err != nil {
-				return nil, false, err
-			}
-			seg, err := normalizeSegment(recorded)
-			if err != nil {
-				return nil, false, nil //nolint:nilerr // structural refusal withholds the station reading
-			}
-			w, err := boundarywalk.WalkOf(seg, work)
-			if err != nil {
-				return nil, false, nil //nolint:nilerr // structural refusal withholds the station reading
-			}
-			switch w.Kind {
-			case survey2d.WalkLine:
-				if !add(w.StartU, w.StartV, w.StartBound) || !add(w.EndU, w.EndV, w.EndBound) {
-					return nil, false, nil
-				}
-				continue
-			case survey2d.WalkCircular:
-			default:
-				return nil, false, nil
-			}
-			start, span, ok := loftmesh.CircularSegmentRange(seg)
-			if !ok {
-				return nil, false, nil
-			}
-			for _, frac := range stationFractions(math.Abs(w.Th1 - w.Th0)) {
-				if err := budget.Step(); err != nil {
-					return nil, false, err
-				}
-				f, _ := frac.Float64()
-				sin, cos := math.Sincos(w.Th0 + f*(w.Th1-w.Th0))
-				u, v := w.CU+w.Radius*cos, w.CV+w.Radius*sin
-				t := new(big.Rat).Add(start, new(big.Rat).Mul(frac, span))
-				if !add(u, v, boundarywalk.CircularPointBound(seg, t, u, v)) {
-					return nil, false, nil
-				}
-			}
-		}
-	}
-	return out, true, nil
-}
-
-// stationFractions lists the fractions of a circular wall's recorded
-// parameter range that sectionStations places a station at, for a wall that
-// sweeps sweep radians: k/n for k = 0..n, with n even and at least 2 and
-// consecutive stations at most gateStationStep apart, so k = n/2 is the
-// mid-angle. When the sweep exceeds 180 degrees it adds the two points
-// opposite the start and the end. Every point of the wall then lies within
-// gateStationStep/2 of a station in angle, and a wall that sweeps past 180
-// degrees holds the station opposite its start, so its own diameter 2R is
-// read up to rounding and the stations' gap.
-func stationFractions(sweep float64) []*big.Rat {
-	n := max(2, int(math.Ceil(sweep/gateStationStep)))
-	n += n % 2
-	fracs := make([]*big.Rat, 0, n+3)
-	for k := 0; k <= n; k++ {
-		fracs = append(fracs, big.NewRat(int64(k), int64(n)))
-	}
-	if sweep > math.Pi {
-		opposite := math.Pi / sweep
-		fracs = append(fracs, new(big.Rat).SetFloat64(opposite), new(big.Rat).SetFloat64(1-opposite))
-	}
-	return fracs
-}
-
-// prismStationWitnesses lifts the stations sectionStations lists on pp's
+// prismStationWitnesses lifts the stations diameter.SectionStations lists on pp's
 // walls to both z0 and z1. allow is
 // the widest proven distance from a held point to the point of pp's recorded
 // walls it stands for: the station's own gap carried through the frame and
 // placement by prismPointBound, together with the lift's own rounding.
 //
-// read is false, with no error, wherever sectionStations' is, and for a lift
+// read is false, with no error, wherever diameter.SectionStations' is, and for a lift
 // whose gap the proof cannot state. Cancellation through budget returns the
 // error.
 func prismStationWitnesses(budget *proofbound.WorkBudget, pp prismPayload, work *freeform.FreeformWork) ([]r3.Vec, float64, bool, error) {
-	stations, ok, err := sectionStations(budget, append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...), work)
+	stations, ok, err := diameter.SectionStations(budget, append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...), work)
 	if err != nil || !ok {
 		return nil, 0, false, err
 	}
@@ -218,13 +103,13 @@ func prismStationWitnesses(budget *proofbound.WorkBudget, pp prismPayload, work 
 	allow := 0.0
 	for _, s := range stations {
 		for _, z := range [2]float64{pp.z0, pp.z1} {
-			a := prismPointBound(pp, proofbound.MeasuredScalar(s.u, s.bound.U), proofbound.MeasuredScalar(s.v, s.bound.V),
+			a := prismPointBound(pp, proofbound.MeasuredScalar(s.U, s.Bound.U), proofbound.MeasuredScalar(s.V, s.Bound.V),
 				proofbound.MeasuredScalar(z, 0))
 			if !tolerance.UsableMagnitude(a) {
 				return nil, 0, false, nil
 			}
 			allow = math.Max(allow, a)
-			pts = append(pts, pp.point(s.u, s.v, z))
+			pts = append(pts, pp.point(s.U, s.V, z))
 		}
 	}
 	return pts, allow, true, nil
@@ -248,9 +133,9 @@ func revolveGateDiameter(budget *proofbound.WorkBudget, rp revolvePayload) (floa
 // grows with the angle dphi between them up to half a turn. The body's
 // farthest pair therefore sits at the widest angle apart the sweep allows, up
 // to half a turn: the two ends of a sweep of at most half a turn, or angles
-// half a turn apart otherwise. revolveGateAngles lists those angles, each
+// half a turn apart otherwise. diameter.RevolveGateAngles lists those angles, each
 // beside the sine and cosine of the angle it denotes. Every meridian station
-// (sectionStations) is swept to each of them.
+// (diameter.SectionStations) is swept to each of them.
 //
 // Each held point is compared exactly against the point it denotes:
 // revolvemesh.RevolveLift.SweptPointGap rotates the recorded station, widened
@@ -259,11 +144,11 @@ func revolveGateDiameter(budget *proofbound.WorkBudget, rp revolvePayload) (floa
 // the widest gap. ok is false, with no error, where the stations cannot be read, an end states
 // no angle (a ToFaceAngular stop), or a gap cannot be stated.
 func revolveGatePoints(budget *proofbound.WorkBudget, rp revolvePayload) (gatePoints, bool, error) {
-	angles, ok := revolveGateAngles(rp)
+	angles, ok := diameter.RevolveGateAngles(rp.phi0, rp.phi1, rp.den.Phi0, rp.den.Phi1)
 	if !ok {
 		return gatePoints{}, false, nil
 	}
-	stations, ok, err := sectionStations(budget, append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...),
+	stations, ok, err := diameter.SectionStations(budget, append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...),
 		freeform.NewFreeformWork())
 	if err != nil || !ok {
 		return gatePoints{}, false, err
@@ -273,16 +158,16 @@ func revolveGatePoints(budget *proofbound.WorkBudget, rp revolvePayload) (gatePo
 	allow := 0.0
 	for _, s := range stations {
 		uv := proofbound.WalkEndBound{
-			U: proofbound.AbsSumUpper(s.bound.U, rp.sectionDelta),
-			V: proofbound.AbsSumUpper(s.bound.V, rp.sectionDelta),
+			U: proofbound.AbsSumUpper(s.Bound.U, rp.sectionDelta),
+			V: proofbound.AbsSumUpper(s.Bound.V, rp.sectionDelta),
 		}
-		z, rho := ax.ToAxis(s.u, s.v)
+		z, rho := ax.ToAxis(s.U, s.V)
 		for _, a := range angles {
 			if err := budget.Step(); err != nil {
 				return gatePoints{}, false, err
 			}
-			held := rp.point(b, z, rho, a.phi)
-			gap := lift.SweptPointGap(ab, rp.xform, s.u, s.v, uv, a.sin, a.cos, held)
+			held := rp.point(b, z, rho, a.Phi)
+			gap := lift.SweptPointGap(ab, rp.xform, s.U, s.V, uv, a.Sin, a.Cos, held)
 			if !proofbound.FiniteVec(held) || !tolerance.UsableMagnitude(gap) {
 				return gatePoints{}, false, nil
 			}
@@ -291,49 +176,6 @@ func revolveGatePoints(budget *proofbound.WorkBudget, rp revolvePayload) (gatePo
 		}
 	}
 	return gatePoints{pts: pts, allow: allow}, true, nil
-}
-
-// gateAngle is one sweep angle revolveGatePoints places stations at: the
-// held angle, and enclosures of the sine and cosine of the angle it denotes.
-type gateAngle struct {
-	phi      float64
-	sin, cos proofbound.RatInterval
-}
-
-// revolveGateAngles lists the sweep angles revolveGatePoints reads: both
-// ends, and the angle half a turn past the start wherever that angle is
-// proven to lie inside the denoted sweep. The half-turn station denotes a
-// whole number of quarter turns exactly when the start does, and otherwise
-// denotes its own held angle. ok is false when an end states no angle.
-func revolveGateAngles(rp revolvePayload) ([]gateAngle, bool) {
-	at := func(phi float64, den revolveangle.Angle) (gateAngle, bool) {
-		if !den.Valid() {
-			return gateAngle{}, false
-		}
-		sin, cos, ok := den.SinCosFor(phi)
-		return gateAngle{phi: phi, sin: sin, cos: cos}, ok
-	}
-	start, ok0 := at(rp.phi0, rp.den.Phi0)
-	end, ok1 := at(rp.phi1, rp.den.Phi1)
-	if !ok0 || !ok1 {
-		return nil, false
-	}
-	angles := []gateAngle{start, end}
-	phi := rp.phi0 + math.Pi
-	den := revolveangle.Angle{Rad: proofarith.FloatRat(phi), Turn: new(big.Rat)}
-	if d0 := rp.den.Phi0; d0.Span == nil && d0.Rad.Sign() == 0 {
-		den = revolveangle.Angle{Rad: new(big.Rat), Turn: new(big.Rat).Add(d0.Turn, big.NewRat(1, 2))}
-	}
-	enc, ok := den.Enclosure()
-	enc0, ok0 := rp.den.Phi0.Enclosure()
-	enc1, ok1 := rp.den.Phi1.Enclosure()
-	if !ok || !ok0 || !ok1 || enc.Lo.Cmp(enc0.Hi) < 0 || enc.Hi.Cmp(enc1.Lo) > 0 {
-		return angles, true
-	}
-	if half, ok := at(phi, den); ok {
-		angles = append(angles, half)
-	}
-	return angles, true
 }
 
 // vertexGatePoints lists the body's vertices, each held within its published
