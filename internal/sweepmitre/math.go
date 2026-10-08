@@ -11,6 +11,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
+	"github.com/lestrrat-3d/r3"
 )
 
 // ScaleVertices lifts rational vertices relative to an anchor onto the
@@ -86,6 +87,32 @@ func VolumeMoments(exact []sweeparc.RatVec, tris [][3]int, anchor sweeparc.RatVe
 		moments[axis] = new(big.Rat).SetFrac(&momN[axis], den4)
 	}
 	return vol6, moments
+}
+
+// PlacedVolumeMoments applies a transform's exact float entries to a
+// tetrahedron sum about its anchor. Each determinant term scales by det(M),
+// and each relative first moment also maps through M. Fresh results keep the
+// source sums unchanged when orientation is corrected after placement.
+func PlacedVolumeMoments(vol6 *big.Rat, moments [3]*big.Rat, xform r3.Transform) (*big.Rat, [3]*big.Rat) {
+	if xform == r3.Identity() {
+		return new(big.Rat).Set(vol6), [3]*big.Rat{
+			new(big.Rat).Set(moments[0]),
+			new(big.Rat).Set(moments[1]),
+			new(big.Rat).Set(moments[2]),
+		}
+	}
+	basis := xform.Basis()
+	ex, ey, ez := sweeparc.VecOf(basis.EX), sweeparc.VecOf(basis.EY), sweeparc.VecOf(basis.EZ)
+	det := sweeparc.Dot(ex, sweeparc.Cross(ey, ez))
+	placed := sweeparc.Add(
+		sweeparc.Scale(ex, moments[0]),
+		sweeparc.Scale(ey, moments[1]),
+		sweeparc.Scale(ez, moments[2]),
+	)
+	for axis := range placed {
+		placed[axis].Mul(placed[axis], det)
+	}
+	return new(big.Rat).Mul(vol6, det), placed
 }
 
 // TriangleAreas encloses each exact triangle area with rational endpoints.
