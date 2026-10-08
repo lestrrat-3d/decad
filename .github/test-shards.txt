@@ -1038,6 +1038,11 @@
 5	0.01	TestStackedUnionBrepRootedFlushBoss
 5	0.02	TestStackedUnionBrepMisses
 5	0.01	TestStackedUnionBrepPlacedResult
+5	0.05	TestStackedUnionBrepOperandSecondBoss
+5	0.08	TestStackedUnionBrepOperandThirdBoss
+5	0.03	TestStackedUnionBrepOperandOverlappingBoss
+5	0.02	TestStackedUnionBrepOperandMisses
+5	0.01	TestClassifyRegionsReadsEachRecord
 5	0.01	TestStackedUnionLevelChargesExactOffsetSum
 5	0.01	TestStackedUnionMirrorJoinRefuses
 5	0.01	TestStackedUnionPayloadAuditRejectsBrokenInterfaces

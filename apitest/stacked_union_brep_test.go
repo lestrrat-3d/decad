@@ -167,3 +167,46 @@ func TestStackedUnionCrossingBossStanding(t *testing.T) {
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(volumeMM(t, volume)-want-500), boundMM3(t, volume))
 }
+
+// TestStackedUnionBrepOperandChain unions the flush corner boss result with
+// a second boss flush in the opposite corner, then a third on the plate's
+// edge, each through the public API: every result is analytic, exact, and
+// Sound, and every flush wall is one planar face.
+func TestStackedUnionBrepOperandChain(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := boxBody(t, doc, -20, -20, 20, 20, 10)
+	first := boxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15)
+	one, err := decad.Union(t.Context(), plate, first)
+	require.NoError(t, err)
+	second := boxBodyAtZ(t, doc, -20, 10, -10, 20, 10, 15)
+	two, err := decad.Union(t.Context(), one, second)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(two))
+	require.Len(t, two.Faces(), 12)
+	requireEveryEdgeOnTwoFaces(t, two)
+	requireOneWallFace(t, two, r3.NewVec(0, 0, -1), 1600)
+	volume, err := two.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, volume.Exactness)
+	require.Equal(t, 19000.0, volumeMM(t, volume))
+	area, err := two.Area()
+	require.NoError(t, err)
+	require.Equal(t, 6000.0, area.Value.Base())
+	requireMeshWatertightAt(t, two, 0.05)
+
+	third := boxBodyAtZ(t, doc, -5, 10, 5, 20, 10, 15)
+	three, err := decad.Union(t.Context(), two, third)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(three))
+	require.Len(t, three.Faces(), 16)
+	volume, err = three.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, volume.Exactness)
+	require.Equal(t, 20500.0, volumeMM(t, volume))
+	requireMeshWatertightAt(t, three, 0.05)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Len(t, doc.Bodies(), 1, "each union consumes both operands")
+}

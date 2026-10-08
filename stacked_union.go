@@ -40,6 +40,9 @@ import (
 type stackedUnionOperand struct {
 	proxy prismPayload
 	slabs []prismSlab
+	// brep marks an A1 result read through its stack: its slabs may hold
+	// several regions, and only the brep build arranges them.
+	brep bool
 }
 
 func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
@@ -51,6 +54,18 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 		}}}, true
 	case stackedPrismPayload:
 		return stackedUnionOperand{proxy: p.outerPrism(), slabs: p.slabs}, true
+	case brepPayload:
+		// An A1 result keeps the slabs it was built from; a class-B result
+		// keeps none and is no operand here.
+		if p.stack == nil || len(p.stack.slabs) == 0 {
+			return stackedUnionOperand{}, false
+		}
+		first, last := p.stack.slabs[0], p.stack.slabs[len(p.stack.slabs)-1]
+		return stackedUnionOperand{proxy: prismPayload{
+			profile: ProfileRecord{Outer: first.regions[0].Outer},
+			frame:   p.faces[0].frame, xform: p.xform, sectionDelta: p.stack.delta,
+			z0: first.z0, z0Delta: first.z0Delta, z1: last.z1, z1Delta: last.z1Delta,
+		}, slabs: p.stack.slabs, brep: true}, true
 	default:
 		return stackedUnionOperand{}, false
 	}
@@ -168,18 +183,29 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 	if _, _, ok, err := admitPrismPairBudget(budget, &Body{payload: va.proxy}, &Body{payload: vb.proxy}); err != nil || !ok {
 		return nil, false, err
 	}
+	// A brep operand, or a slab holding several regions, is the brep build's
+	// alone: the stacked record states one region per slab.
+	brepOnly := va.brep || vb.brep
 	for _, op := range []stackedUnionOperand{va, vb} {
 		for _, slab := range op.slabs {
-			if len(slab.regions) != 1 || len(slab.regions[0].Holes) != 0 { // G6
+			if len(slab.regions) == 0 {
 				return nil, false, nil
 			}
-			analytic, err := prismProfileIsAnalytic(budget, slab.regions[0]) // G4
-			if err != nil || !analytic {
-				return nil, false, err
+			if len(slab.regions) != 1 {
+				brepOnly = true
 			}
-			trimmed, err := prismProfileHasTrimmedCircularSource(budget, slab.regions[0])
-			if err != nil || trimmed {
-				return nil, false, err
+			for _, region := range slab.regions {
+				if len(region.Holes) != 0 { // G6
+					return nil, false, nil
+				}
+				analytic, err := prismProfileIsAnalytic(budget, region) // G4
+				if err != nil || !analytic {
+					return nil, false, err
+				}
+				trimmed, err := prismProfileHasTrimmedCircularSource(budget, region)
+				if err != nil || trimmed {
+					return nil, false, err
+				}
 			}
 		}
 	}
@@ -212,11 +238,20 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 		lo, hi := levels[k], levels[k+1]
 		ia := stackedUnionSlabOf(va, zero, lo.exact, hi.exact)
 		ib := stackedUnionSlabOf(vb, shift, lo.exact, hi.exact)
-		region, ok, err := st.slabRegion(ctx, ia, ib)
+		if ia < 0 && ib < 0 {
+			return nil, false, nil
+		}
+		reach = append(reach, [2]int{ia, ib})
+	}
+	if brepOnly {
+		return st.brep(ctx, levels, reach)
+	}
+	for k := 0; k+1 < len(levels); k++ {
+		lo, hi := levels[k], levels[k+1]
+		region, ok, err := st.slabRegion(ctx, reach[k][0], reach[k][1])
 		if err != nil || !ok {
 			return nil, false, err
 		}
-		reach = append(reach, [2]int{ia, ib})
 		sp.slabs = append(sp.slabs, prismSlab{regions: []ProfileRecord{region},
 			z0: lo.held, z1: hi.held, z0Delta: lo.delta, z1Delta: hi.delta})
 	}
@@ -229,7 +264,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 			// A1's flush or crossing interface: the slabs are right and the
 			// stacked record cannot state the result, so the brep build
 			// classifies every interface's cells instead.
-			return st.brep(ctx, sp.slabs, levels, reach)
+			return st.brep(ctx, levels, reach)
 		}
 		sp.interfaces = append(sp.interfaces, boundary)
 	}
@@ -279,14 +314,6 @@ type stackedUnionState struct {
 	walkInterface float64
 	cutDelta      float64
 	crossing      float64
-}
-
-// region is the record a reference names.
-func (st *stackedUnionState) region(ref stackedUnionRegionRef) ProfileRecord {
-	if ref.isB {
-		return st.vb.slabs[ref.slab].regions[0]
-	}
-	return st.va.slabs[ref.slab].regions[0]
 }
 
 // view is the prism a private scene reads for a reference: the region under

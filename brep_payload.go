@@ -45,12 +45,25 @@ type brepFace struct {
 	role             string
 }
 
+// brepStack is the slabs an A1 result was built from
+// (docs/general-boolean-design.md §3 "A1 as a brep", §4.1): each slab's
+// hole-free regions in the reference frame, and the section displacement
+// every region carries. A further co-directional Union reads it as its
+// operand's slabs (stackedUnionOperandOf); no consumer reads it, and a
+// placement leaves it unchanged, since it moves xform alone.
+type brepStack struct {
+	slabs []prismSlab
+	delta float64
+}
+
 // brepPayload is the evaluator's record of an analytically trimmed body. Every
 // face frame is stated in the payload's unplaced coordinates and xform places
-// the whole body, as every payload does.
+// the whole body, as every payload does. stack is nil for every record but
+// an A1 result's.
 type brepPayload struct {
 	faces []brepFace
 	xform r3.Transform
+	stack *brepStack
 }
 
 func (f brepFace) planar() bool { return f.region != nil }

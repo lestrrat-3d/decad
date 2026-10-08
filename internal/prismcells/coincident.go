@@ -102,6 +102,30 @@ type window struct {
 // this reading cannot attribute to one partner; callers treat the scene as
 // unresolved. An empty reading is the ordinary scene with no shared span.
 func CoincidentEdges(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (CoincidentReading, bool, error) {
+	return coincidentEdges(budget, tags, profiles, otherOperand)
+}
+
+// CoincidentEdgesRegions is CoincidentEdges with a span's partner taken from
+// any other record of the scene — another region of the same operand as
+// well as the other operand (docs/general-boolean-design.md §3 "A1 as a
+// brep") — so two records of one operand sharing a wall read as A3 reads
+// two operands sharing one.
+func CoincidentEdgesRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (CoincidentReading, bool, error) {
+	return coincidentEdges(budget, tags, profiles, otherRecord)
+}
+
+// otherOperand admits a partner of the other operand.
+func otherOperand(losing, candidate Origin) bool { return losing.IsB != candidate.IsB }
+
+// otherRecord admits a partner of any other record: the other operand, or
+// another region of the same one.
+func otherRecord(losing, candidate Origin) bool {
+	return losing.IsB != candidate.IsB || losing.Region != candidate.Region
+}
+
+// coincidentEdges is CoincidentEdges with other deciding which entities may
+// partner a losing entity's window.
+func coincidentEdges(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile, other func(losing, candidate Origin) bool) (CoincidentReading, bool, error) {
 	frags := map[sketch.Entity][]lineFrag{}
 	seen := map[edgeSpan]struct{}{}
 	for _, p := range profiles {
@@ -151,7 +175,7 @@ func CoincidentEdges(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 		if circle, ok := ent.(*sketch.Circle); ok && len(fs) == 0 {
 			// Withdrawn whole: either no bounded cell uses this circle at
 			// all, or the other operand holds the same circle.
-			partner, ok := sameCircle(tags, origin.IsB, frags, circle)
+			partner, ok := sameCircle(tags, origin, other, frags, circle)
 			if !ok {
 				return CoincidentReading{}, false, nil
 			}
@@ -173,7 +197,7 @@ func CoincidentEdges(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 			return CoincidentReading{}, false, nil
 		}
 		for _, w := range windows {
-			partner, edges, found, ok := spanPartner(tags, origin.IsB, ent, frags, w.pLo, w.pHi)
+			partner, edges, found, ok := spanPartner(tags, origin, other, ent, frags, w.pLo, w.pHi)
 			if !ok {
 				return CoincidentReading{}, false, nil
 			}
@@ -284,7 +308,7 @@ func entityEnds(windows []window, start, end [2]float64) ([]window, bool) {
 	return windows, true
 }
 
-// spanPartner finds the one entity of the operand other than isB, on the
+// spanPartner finds the one entity other admits for losing's origin, on the
 // same kind of carrier as losing, with fragment ends exactly at both a and b,
 // and returns its fragments between them, which must cover that range
 // without a gap. On a line the span runs between the two parameters in
@@ -292,12 +316,12 @@ func entityEnds(windows []window, start, end [2]float64) ([]window, bool) {
 // as the losing entity's window does, across a circle's seam if it must.
 // found=false with ok=true means no such entity; ok=false means two of them,
 // or one whose fragments leave a gap.
-func spanPartner(tags map[sketch.Entity]Origin, isB bool, losing sketch.Entity, frags map[sketch.Entity][]lineFrag, a, b [2]float64) (sketch.Entity, []edgeSpan, bool, bool) {
+func spanPartner(tags map[sketch.Entity]Origin, losingOrigin Origin, other func(losing, candidate Origin) bool, losing sketch.Entity, frags map[sketch.Entity][]lineFrag, a, b [2]float64) (sketch.Entity, []edgeSpan, bool, bool) {
 	_, losingLine := losing.(*sketch.Line)
 	var partner sketch.Entity
 	var edges []edgeSpan
 	for ent, origin := range tags {
-		if origin.IsB == isB {
+		if !other(losingOrigin, origin) {
 			continue
 		}
 		fs := frags[ent]
@@ -392,10 +416,10 @@ func fragParamAt(fs []lineFrag, p [2]float64, asEnd bool) (float64, bool) {
 // sameCircle finds the circle of the other operand whose recorded centre and
 // radius equal circle's bit for bit. partner=nil with ok=true means none;
 // ok=false means one exists but its fragments do not cover it whole.
-func sameCircle(tags map[sketch.Entity]Origin, isB bool, frags map[sketch.Entity][]lineFrag, circle *sketch.Circle) (sketch.Entity, bool) {
+func sameCircle(tags map[sketch.Entity]Origin, losingOrigin Origin, other func(losing, candidate Origin) bool, frags map[sketch.Entity][]lineFrag, circle *sketch.Circle) (sketch.Entity, bool) {
 	g := circle.Geometry()
 	for ent, origin := range tags {
-		if origin.IsB == isB {
+		if !other(losingOrigin, origin) {
 			continue
 		}
 		other, ok := ent.(*sketch.Circle)
