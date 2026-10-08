@@ -1294,3 +1294,106 @@ func TestCellTwistAreaAllowEnclosesTheBilinearGap(t *testing.T) {
 		})
 	}
 }
+
+// bilinearPatchAreaSimpson integrates the ruled patch's area element by
+// composite Simpson's rule in both parameters. The element is smooth, so the
+// rule's error is far below the gaps the projected arm bounds.
+func bilinearPatchAreaSimpson(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	const n = 200
+	edgeA := vHi.Sub(vLo)
+	edgeB := wHi.Sub(wLo)
+	weight := func(i int) float64 {
+		switch {
+		case i == 0 || i == n:
+			return 1
+		case i%2 == 1:
+			return 4
+		default:
+			return 2
+		}
+	}
+	total := 0.0
+	for i := 0; i <= n; i++ {
+		s := float64(i) / n
+		rung := wLo.Add(edgeB.Scale(s)).Sub(vLo.Add(edgeA.Scale(s)))
+		for j := 0; j <= n; j++ {
+			r := float64(j) / n
+			ds := edgeA.Scale(1 - r).Add(edgeB.Scale(r))
+			total += weight(i) * weight(j) * ds.Cross(rung).Len()
+		}
+	}
+	return total / (9 * n * n)
+}
+
+// helixCell is one wall cell of a coil segment from (ρ0, ζ0) to (ρ1, ζ1)
+// about the Z axis at pitch 1.5, over the station step [θ, θ + π/128].
+func helixCell(rho0, zeta0, rho1, zeta1, theta float64) (r3.Vec, r3.Vec, r3.Vec, r3.Vec) {
+	k := 1.5 / (2 * math.Pi)
+	at := func(rho, zeta, th float64) r3.Vec {
+		return r3.NewVec(rho*math.Cos(th), rho*math.Sin(th), zeta+k*th)
+	}
+	step := math.Pi / 128
+	return at(rho0, zeta0, theta), at(rho0, zeta0, theta+step), at(rho1, zeta1, theta), at(rho1, zeta1, theta+step)
+}
+
+// TestCellTwistAreaProjectedAllowEnclosesTheBilinearGap checks the projected
+// arm against an independent Simpson integration of the ruled patch less the
+// held triangle pair, on helical coil cells, on the quadratic arm's own rows
+// and on random cells where the arm states a bound. On a coil's annular wall
+// the arm is far below the quadratic arm. Legs shown to fail by deleting
+// them: reading |A|² and |B|² for |A⊥|² and |B⊥|² left every row green but
+// the sharpness checks red; dropping the |W·A| and |W·B| terms from c turned
+// the random rows red. The bound is within a factor of four of the true gap
+// on the coil annulus: dividing it by four turned that row red.
+func TestCellTwistAreaProjectedAllowEnclosesTheBilinearGap(t *testing.T) {
+	t.Parallel()
+	type cell struct {
+		name               string
+		vLo, vHi, wLo, wHi r3.Vec
+		sharp              bool
+	}
+	var cells []cell
+	for _, c := range []struct {
+		name                     string
+		rho0, zeta0, rho1, zeta1 float64
+		sharp                    bool
+	}{
+		{"coil annulus", 2, 0, 3, 0, true},
+		{"coil band", 3, 0, 3, 1, false},
+		{"coil cone", 2, 0, 3, 1, true},
+		{"coil thread flank", 4.1, 0, 5.3, 0.69, true},
+		{"coil near the axis", 0.5, 0, 3, 0, true},
+	} {
+		vLo, vHi, wLo, wHi := helixCell(c.rho0, c.zeta0, c.rho1, c.zeta1, 0.7)
+		cells = append(cells, cell{c.name, vLo, vHi, wLo, wHi, c.sharp})
+	}
+	cells = append(cells,
+		cell{"small rotational twist", r3.NewVec(9.5, 0, 0), r3.NewVec(9.49, 0.2, 0), r3.NewVec(9.49, 0.5, 5), r3.NewVec(9.47, 0.7, 5), false},
+		cell{"skew cell", r3.NewVec(0, 0, 0), r3.NewVec(2, 0.5, 0), r3.NewVec(0.2, -0.1, 3), r3.NewVec(1.8, 1.2, 3.2), false},
+	)
+	rng := rand.New(rand.NewPCG(0x91c0, 0x2b7d))
+	vec := func() r3.Vec { return r3.NewVec(rng.Float64()*2-1, rng.Float64()*2-1, rng.Float64()*2-1) }
+	for i := range 200 {
+		vLo, wLo := vec(), vec()
+		vHi := vLo.Add(vec().Scale(0.3))
+		wHi := wLo.Add(vec().Scale(0.3))
+		cells = append(cells, cell{fmt.Sprintf("random %d", i), vLo, vHi, wLo, wHi, false})
+	}
+	stated := 0
+	for _, c := range cells {
+		allow := proofbound.CellTwistAreaProjectedAllow(c.vLo, c.vHi, c.wLo, c.wHi)
+		if math.IsInf(allow, 1) {
+			continue
+		}
+		stated++
+		gap := math.Abs(bilinearPatchAreaSimpson(c.vLo, c.vHi, c.wLo, c.wHi) - heldTrianglePairArea(c.vLo, c.vHi, c.wLo, c.wHi))
+		require.LessOrEqual(t, gap, allow+1e-12, "%s: the arm must enclose the integrated gap", c.name)
+		if c.sharp {
+			require.Less(t, allow*10, proofbound.CellTwistAreaQuadraticAllow(c.vLo, c.vHi, c.wLo, c.wHi),
+				"%s: the projected arm must be far tighter on a helical cell", c.name)
+		}
+	}
+	require.Greater(t, stated, 100, "most cells must state a projected bound")
+	require.True(t, math.IsInf(proofbound.CellTwistAreaProjectedAllow(
+		r3.NewVec(math.NaN(), 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(1, 1, 1)), 1))
+}

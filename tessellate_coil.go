@@ -109,10 +109,12 @@ func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64,
 // (station, loop, segment) order, then both caps.
 //
 // areaSlack chains every wall cell from its held triangles to the bilinear
-// patch on its held corners (proofbound.CellTwistAreaAllow), to the bilinear
-// patch on its true corners (each corner moves at most r, the largest
-// station rounding), to the true cell (coil.CellProof.Density), each leg an
-// integral of the absolute area-density gap at one shared parameter; the
+// patch on its held corners (the cell's area gap,
+// proofbound.CellTwistAreaProjectedAllow, or proofbound.CellTwistAreaAllow
+// where that arm states no bound), to the bilinear patch on its true corners
+// (each corner moves at most r, the largest station rounding), to the true
+// cell (coil.CellProof.Density), the last two integrals of the absolute
+// area-density gap at one shared parameter; the
 // plane-coordinate legs are carried through the denoted map by its stretch
 // and by twice its defect over the bilinear patch's own area. Each cap
 // triangle adds proofbound.PerturbedTriangleAreaAllow at δ.
@@ -173,7 +175,10 @@ func coilMeshProofs(ctx context.Context, rec coilRecord, cp coilPayload, walls i
 		j, p := c/stride, c%stride
 		v, w := ends[p][0], ends[p][1]
 		at := func(station, vertex int) r3.Vec { return cp.verts[station*stride+vertex] }
-		twist := proofbound.CellTwistAreaAllow(at(j, v), at(j+1, v), at(j, w), at(j+1, w))
+		twist := proofbound.CellTwistAreaProjectedAllow(at(j, v), at(j+1, v), at(j, w), at(j+1, w))
+		if proofbound.IsNonFinite(twist) {
+			twist = proofbound.CellTwistAreaAllow(at(j, v), at(j+1, v), at(j, w), at(j+1, w))
+		}
 		slack = proofbound.AbsSumUpper(slack, twist, perSegment[p])
 	}
 	for _, t := range cp.tris[walls:] {

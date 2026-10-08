@@ -247,3 +247,72 @@ func TestLoopsRefusesNonLines(t *testing.T) {
 	_, _, err = coil.Loops(arc, nil)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
+
+// densityGapSampled integrates |J_S − J_B| over one wall cell by the midpoint
+// rule, each density from central differences of the true cell S and of the
+// bilinear patch B on its true corners, at pitch 1.5 and dt = 1/256.
+func densityGapSampled(rv, zv, rw, zw float64) float64 {
+	k := 1.5 / (2 * math.Pi)
+	h := math.Pi / 256
+	const th0 = 0.4
+	type v3 = [3]float64
+	at := func(r, z, th float64) v3 { return v3{r * math.Cos(th), r * math.Sin(th), z + k*th} }
+	surface := func(l, s float64) v3 { return at(rv+l*(rw-rv), zv+l*(zw-zv), th0+2*h*s) }
+	chord := func(r, z, s float64) v3 {
+		a, b := at(r, z, th0), at(r, z, th0+2*h)
+		return v3{a[0] + s*(b[0]-a[0]), a[1] + s*(b[1]-a[1]), a[2] + s*(b[2]-a[2])}
+	}
+	patch := func(l, s float64) v3 {
+		a, b := chord(rv, zv, s), chord(rw, zw, s)
+		return v3{a[0] + l*(b[0]-a[0]), a[1] + l*(b[1]-a[1]), a[2] + l*(b[2]-a[2])}
+	}
+	const e = 1e-6
+	density := func(f func(l, s float64) v3, l, s float64) float64 {
+		a, b := f(l+e, s), f(l-e, s)
+		c, d := f(l, s+e), f(l, s-e)
+		dl := v3{a[0] - b[0], a[1] - b[1], a[2] - b[2]}
+		ds := v3{c[0] - d[0], c[1] - d[1], c[2] - d[2]}
+		x := v3{dl[1]*ds[2] - dl[2]*ds[1], dl[2]*ds[0] - dl[0]*ds[2], dl[0]*ds[1] - dl[1]*ds[0]}
+		return math.Sqrt(x[0]*x[0]+x[1]*x[1]+x[2]*x[2]) / (4 * e * e)
+	}
+	const n = 100
+	sum := 0.0
+	for i := range n {
+		for j := range n {
+			l, s := (float64(i)+0.5)/n, (float64(j)+0.5)/n
+			sum += math.Abs(density(surface, l, s)-density(patch, l, s)) / (n * n)
+		}
+	}
+	return sum
+}
+
+// TestCellProofDensityEnclosesTheSampledGap checks CellProof.Density, the
+// closed-form bound on ∫|J_S − J_B|, against a sampled integral on one cell
+// of each segment kind, and pins that it is far below the matched tangent
+// term L·2ρ_max·h² it replaces. A falsifier, never the proof. Legs shown to
+// fail by deleting them: the 4h³k·|ΔζΔρ|·ρ_max term turned the cone red,
+// and the three h⁴ terms together turned the annulus, the band and the
+// near-axis cell red.
+func TestCellProofDensityEnclosesTheSampledGap(t *testing.T) {
+	pt := func(x float64) coil.Iv { return coil.Point(new(big.Rat).SetFloat64(x)) }
+	pitch, dt := big.NewRat(3, 2), big.NewRat(1, 256)
+	h := math.Pi / 256
+	for _, c := range []struct {
+		name           string
+		rv, zv, rw, zw float64
+	}{
+		{"annulus", 2, 0, 3, 0},
+		{"cylindrical band", 3, 0, 3, 1},
+		{"cone", 2, 0, 3, 1},
+		{"thread flank", 4.1, 0, 5.3, 0.69},
+		{"near the axis", 0.5, 0, 3, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			proof, ok := coil.CellProofUpper(pt(c.rv), pt(c.zv), pt(c.rw), pt(c.zw), pitch, dt)
+			require.True(t, ok)
+			require.LessOrEqual(t, densityGapSampled(c.rv, c.zv, c.rw, c.zw), proof.Density)
+			matched := math.Hypot(c.rw-c.rv, c.zw-c.zv) * 2 * math.Max(c.rv, c.rw) * h * h
+			require.Less(t, proof.Density*5, matched)
+		})
+	}
+}
