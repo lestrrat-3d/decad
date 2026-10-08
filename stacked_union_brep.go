@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -100,19 +99,8 @@ type ubEntry struct {
 	delta float64
 }
 
-// ubWallKey names one planar wall face: the carrier plane and which side
-// of it the material lies on.
-type ubWallKey struct {
-	axis  int
-	level float64
-	sign  float64
-}
-
-// ubSeg3 is one directed boundary piece of a wall face, in reference
-// coordinates.
-type ubSeg3 struct {
-	from, to [3]float64
-}
+type ubWallKey = brepgeom.StackedWallKey
+type ubSeg3 = brepgeom.StackedWallSegment
 
 // ubPieceKey names one swept piece of a curved or oblique wall by its
 // carrier, its two vertices and its sense.
@@ -146,7 +134,7 @@ type ubBuild struct {
 
 // errUBMiss marks a topology this build does not cover, found after a scene
 // was built: the caller treats it as a silent miss.
-var errUBMiss = errors.New("the stacked union brep build does not cover this pair")
+var errUBMiss = brepgeom.ErrStackedWallMiss
 
 // brep states the stacked union as a brepPayload. ok=false with a nil error
 // is a silent miss. A non-nil error is cancellation or a refusal past the
@@ -907,14 +895,14 @@ func (b *ubBuild) wallFaces(delta float64) ([]brepFace, error) {
 			pieces[key] = set
 			order = append(order, key)
 		}
-		if _, dup := set[ubSeg3{from: from, to: to}]; dup {
+		if _, dup := set[ubSeg3{From: from, To: to}]; dup {
 			return errUBMiss
 		}
-		if _, rev := set[ubSeg3{from: to, to: from}]; rev {
-			delete(set, ubSeg3{from: to, to: from})
+		if _, rev := set[ubSeg3{From: to, To: from}]; rev {
+			delete(set, ubSeg3{From: to, To: from})
 			return nil
 		}
-		set[ubSeg3{from: from, to: to}] = struct{}{}
+		set[ubSeg3{From: from, To: to}] = struct{}{}
 		return nil
 	}
 	for k, loop := range b.slabLoops {
@@ -923,16 +911,16 @@ func (b *ubBuild) wallFaces(delta float64) ([]brepFace, error) {
 			if u.c.kind != ubPlane {
 				continue
 			}
-			key := ubWallKey{axis: u.c.axis, level: u.c.level}
+			key := ubWallKey{Axis: u.c.axis, Level: u.c.level}
 			if u.c.axis == 0 {
-				key.sign = 1
+				key.Sign = 1
 				if u.to.V < u.from.V {
-					key.sign = -1
+					key.Sign = -1
 				}
 			} else {
-				key.sign = -1
+				key.Sign = -1
 				if u.to.U < u.from.U {
-					key.sign = 1
+					key.Sign = 1
 				}
 			}
 			at := func(p Point2, z float64) [3]float64 { return [3]float64{p.U + 0, p.V + 0, z} }
@@ -960,174 +948,23 @@ func (b *ubBuild) wallFaces(delta float64) ([]brepFace, error) {
 	}
 	var out []brepFace
 	for _, key := range order {
-		frame, embed, err := b.wallFrame(key)
+		frame, embed, err := brepgeom.StackedWallFrame(b.st.va.proxy.frame, key)
 		if err != nil {
 			return nil, err
 		}
-		loops, err := b.chainWall(pieces[key])
+		loops, err := brepgeom.ChainStackedWall(pieces[key], b.levelAt, b.events)
 		if err != nil {
 			return nil, err
 		}
 		for _, loop := range loops {
-			region, level, err := b.wallRegion(embed, loop)
+			wallRegion, level, err := brepgeom.StackedWallRegion(embed, loop)
 			if err != nil {
 				return nil, err
 			}
+			region := ProfileRecord{Outer: wallRegion.Outer, Holes: wallRegion.Holes}
 			out = append(out, brepFace{frame: frame, region: &region, outward: true,
 				z0: level, z1: level, delta: delta})
 		}
 	}
 	return out, nil
-}
-
-// wallFrame is the face frame of a wall plane: its normal the plane's
-// outward axis, its in-plane axes two reference axes, origin shared, with
-// the three a right-handed signed permutation of the reference frame.
-func (b *ubBuild) wallFrame(key ubWallKey) (r3.Frame, brepgeom.Embed, error) {
-	ref := b.st.va.proxy.frame
-	axes := [3]r3.Vec{ref.U(), ref.V(), ref.N()}
-	var e brepgeom.Embed
-	switch {
-	case key.axis == 0 && key.sign > 0:
-		e = brepgeom.Embed{Axis: [3]int{1, 2, 0}, Sign: [3]float64{1, 1, 1}}
-	case key.axis == 0:
-		e = brepgeom.Embed{Axis: [3]int{2, 1, 0}, Sign: [3]float64{1, 1, -1}}
-	case key.sign > 0:
-		e = brepgeom.Embed{Axis: [3]int{2, 0, 1}, Sign: [3]float64{1, 1, 1}}
-	default:
-		e = brepgeom.Embed{Axis: [3]int{0, 2, 1}, Sign: [3]float64{1, 1, -1}}
-	}
-	var vecs [3]r3.Vec
-	for i := range 3 {
-		vecs[i] = axes[e.Axis[i]]
-		if e.Sign[i] < 0 {
-			vecs[i] = vecs[i].Scale(-1)
-		}
-	}
-	frame, err := r3.NewFrame(ref.Origin(), vecs[0], vecs[1])
-	if err != nil {
-		return r3.Frame{}, brepgeom.Embed{}, errUBMiss
-	}
-	if frame.U() != vecs[0] || frame.V() != vecs[1] || frame.N() != vecs[2] {
-		return r3.Frame{}, brepgeom.Embed{}, errUBMiss
-	}
-	return frame, e, nil
-}
-
-// chainWall chains a wall's surviving pieces into closed loops, then joins
-// consecutive collinear pieces at a point that is no vertex of the body.
-func (b *ubBuild) chainWall(set map[ubSeg3]struct{}) ([][]ubSeg3, error) {
-	next := map[[3]float64]ubSeg3{}
-	for s := range set {
-		if _, dup := next[s.from]; dup {
-			return nil, errUBMiss
-		}
-		next[s.from] = s
-	}
-	for s := range set {
-		if _, ok := next[s.to]; !ok {
-			return nil, errUBMiss
-		}
-	}
-	used := map[ubSeg3]struct{}{}
-	var loops [][]ubSeg3
-	keys := make([]ubSeg3, 0, len(set))
-	for s := range set {
-		keys = append(keys, s)
-	}
-	slices.SortFunc(keys, func(x, y ubSeg3) int {
-		for i := range 3 {
-			if c := cmpFloat(x.from[i], y.from[i]); c != 0 {
-				return c
-			}
-		}
-		for i := range 3 {
-			if c := cmpFloat(x.to[i], y.to[i]); c != 0 {
-				return c
-			}
-		}
-		return 0
-	})
-	for _, first := range keys {
-		if _, done := used[first]; done {
-			continue
-		}
-		var loop []ubSeg3
-		for s := first; ; s = next[s.to] {
-			if _, done := used[s]; done {
-				return nil, errUBMiss
-			}
-			used[s] = struct{}{}
-			loop = append(loop, s)
-			if s.to == first.from {
-				break
-			}
-		}
-		loops = append(loops, b.joinCollinear(loop))
-	}
-	return loops, nil
-}
-
-// joinCollinear merges consecutive pieces along one axis in one sense whose
-// shared point is no vertex of the body.
-func (b *ubBuild) joinCollinear(loop []ubSeg3) []ubSeg3 {
-	axisOf := func(s ubSeg3) (int, float64) {
-		for i := range 3 {
-			if s.from[i] != s.to[i] {
-				return i, s.to[i] - s.from[i]
-			}
-		}
-		return -1, 0
-	}
-	for changed := true; changed && len(loop) > 1; {
-		changed = false
-		for i := range loop {
-			j := (i + 1) % len(loop)
-			a, c := loop[i], loop[j]
-			ai, ad := axisOf(a)
-			ci, cd := axisOf(c)
-			if ai < 0 || ai != ci || (ad > 0) != (cd > 0) {
-				continue
-			}
-			level, ok := b.levelAt[a.to[2]]
-			if !ok || b.hasEvent(Point2{U: a.to[0], V: a.to[1]}, level) {
-				continue
-			}
-			merged := ubSeg3{from: a.from, to: c.to}
-			loop[i] = merged
-			loop = slices.Delete(loop, j, j+1)
-			changed = true
-			break
-		}
-	}
-	return loop
-}
-
-// wallRegion writes one wall loop in the face frame, counter-clockwise
-// about the outward normal, and reads the face's level.
-func (b *ubBuild) wallRegion(e brepgeom.Embed, loop []ubSeg3) (ProfileRecord, float64, error) {
-	pts := make([]Point2, len(loop))
-	level := math.NaN()
-	for i, s := range loop {
-		l := e.Local(s.from)
-		pts[i] = Point2{U: l[0], V: l[1]}
-		if i == 0 {
-			level = l[2]
-		} else if l[2] != level {
-			return ProfileRecord{}, 0, errUBMiss
-		}
-	}
-	area := 0.0
-	for i := range pts {
-		j := (i + 1) % len(pts)
-		area += pts[i].U*pts[j].V - pts[j].U*pts[i].V
-	}
-	if !(area > 0) {
-		return ProfileRecord{}, 0, errUBMiss
-	}
-	var out LoopRecord
-	for i := range pts {
-		out.Segments = append(out.Segments, LineSeg{Start: pts[i], End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1})
-	}
-	return ProfileRecord{Outer: out}, level, nil
 }
