@@ -848,7 +848,7 @@ result.
 | at least one free edge remains | a `BodySheet`, open | the boundary is not closed; the residual free edges name exactly what did not join; an open multi-component assembly earns no lump-separation check either — it publishes no volume for a nested or interlocking pair of components to double-count |
 | every edge welded, more than one connected component, and some pair's own axis-aligned bounding box (held vertex coordinates, each widened on both sides by that vertex's own proven bound) is not proven separate in any axis | `ErrUnsupported` (R20) | runs right after the vertex-link audit and the open check, before the two remaining rows below: a nested or interlocking pair of lumps would otherwise double-count, since neither the tetrahedron sum nor the per-surface flux integral carries any notion of which lump a triangle or face belongs to (§6.4) |
 | every edge welded, all faces planar and straight-edged | a `BodySolid` | closure, manifoldness and non-self-intersection are proven, and the volume is exact (§6.4) |
-| every edge welded, some face not planar-and-straight-edged, every face admits a landed flux arm (`Plane`/`Cylinder`/`Cone`/`Sphere`, zero `normalBound`) and the single source body proves the boundary simple by construction | a `BodySolid` | closure and the per-surface flux integral together prove volume and centroid; manifoldness rests on the vertex-link audit alone, since the reused crossing audit has no triangle set to run on (§6.4) |
+| every edge welded, some face not planar-and-straight-edged, every face admits a landed flux arm (`Plane`/`Cylinder`/`Cone`/`Sphere`, zero `normalBound`, a revolve face's tag exactly its record, §6.4) and the single source body proves the boundary simple by construction | a `BodySolid` | closure and the per-surface flux integral together prove volume and centroid; manifoldness rests on the vertex-link audit alone, since the reused crossing audit has no triangle set to run on (§6.4) |
 | every edge welded, some face curved, and the set above does not admit | `ErrUnsupported` (R8) | closure is proven but this evaluator has no closed-form flux integral for the boundary as given — the surface kind, the face's own trim, or the construction proof is outside what has landed |
 | the welded set cannot be consistently oriented | `ErrDegenerate` (R7) | a non-orientable assembly bounds nothing; no later proof makes it a solid |
 | the crossing audit proves a self-contact or self-intersection | `ErrDegenerate` (R9) | the faces overlap, so the assembly is no solid's boundary |
@@ -952,8 +952,9 @@ piece of work. §14's increment 3 lands `Plane`, `Cylinder`, `Cone`, `Sphere`
 and `Torus`. Together they give a second admission rule beside the
 tetrahedron sum's: **every face is either a `Plane` bounded entirely by
 `Line3` edges (the tetrahedron path, unchanged), or a variant with a landed
-flux arm, and every face carries a zero `normalBound`.** `stitch_flux.go`
-owns the flux arms, `stitchRuleSAdmits` owns the second rule below.
+flux arm, and every face carries a zero `normalBound`, and every revolve
+face's tag is exactly its record.** `stitch_flux.go` owns the flux arms and
+the tag gate (below), `stitchRuleSAdmits` owns the second rule below.
 
 **The `Cone` arm needs no general trimmed-boundary contour sum**, for the
 identical reason `Plane` and `Cylinder` do not: this evaluator's own scope
@@ -1120,11 +1121,45 @@ anchor.
 Integrating a closed form over the tag would be unsound for such a face, so
 every admitting arm — the tetrahedron path included, not only the new flux
 arms — requires a zero `normalBound`. An `Unstitch`ed fillet or chamfer face
-re-stitched into a closed set refuses on this gate alone (§15's T38). A
-revolve wall's own departure from its tag is not a `normalBound`: `NormalAt`
-proves that wall's normal against the denoted surface it carries beside the
-tag (`docs/evaluator-design.md` §6), so this gate admits the revolve sheets it
-admits (T46, T50, T53) and their flux arms integrate the tag.
+re-stitched into a closed set refuses on this gate alone (§15's T38).
+
+**A revolve face is admitted only where its tag IS the surface its record
+denotes, decided exactly; the Cone arm's apex is the one departure it charges
+instead.** A revolve wall's departure from its tag is not a `normalBound`:
+the wall carries the surface its record denotes beside the tag (`Face.denoted`,
+`docs/evaluator-design.md` §6). The tag departs from it wherever the build
+re-expresses the record in float: a side within the classifier's 1e-9 slope of
+parallel or perpendicular is tagged a `Cylinder` or a `Plane`, a centre within
+the contact tolerance of the axis is snapped onto it, and every axial
+coordinate a far or tilted axis carries is rounded. The flux arms integrate
+the tag and charge none of that, and no per-face term could: each arm reads its
+own numbers off its own tag, so a departed tag leaves the modelled boundary open
+by an amount whose flux depends on the anchor. A side climbing 5e-10 over a
+unit run, tagged a `Cylinder`, published a volume 2.1e-9 mm³ off its record's
+under a 7.0e-15 bound. So `stitch.go` runs `stitch_flux.go`'s
+`stitchFluxTagsDenoted` over the unplaced operand faces, after Rule S and
+before any arm: every face carrying a denoted surface must have every leaf of
+it a point and its basis exactly orthonormal, and then its tag must equal it
+in exact rationals in the terms its arm reads — a `Cylinder`'s every recorded
+end at its radius, its origin on the axis line and its axis ±W; a `Plane`'s
+every recorded end at one z, its frame perpendicular to W and its origin at
+that z; a `Cone`'s every recorded segment meeting the axis at one point and
+its axis ±W; a `Sphere`'s recorded centre on the axis at its centre; a
+`Torus`'s centre, axis, major and minor radii. A straight wall's `Circle3`
+rims must each sit at one of its recorded ends too. Any other face refuses
+`ErrUnsupported` (R8, §15's T211): the near-parallel and near-perpendicular
+sides above, the snapped sphere, and every wall of a sheet revolved about an
+axis whose direction rounds (a tilted sketch line) or whose anchor makes an
+axial coordinate round. An axis-aligned axis anchored on representable
+coordinates re-expresses exactly, so T31's, T46's, T50's and T53's sheets
+admit unchanged. The `Cone`'s apex is the walk's float `z − ρ·Δz/Δρ`, which
+an integer frustum already rounds (T46's inner wall meets its axis at a
+third), so the arm compares everything else and charges the apex instead:
+`coneApexDeparture` reads the face itself, placed or not, takes the record's
+apex `o + W·z_a` from its denoted surface and widens every apex coordinate
+`stitchflux.ConeApex` returns by the largest coordinate of the tag's
+`Origin` minus it, which the arm's bounded arithmetic carries into the flux
+and the moment (§15's T212). A stitch's own placement is still `delta`.
 
 **The split is "`Plane` bounded entirely by `Line3`" versus everything
 else, never "planar versus curved".** The old wording ("all faces planar")
@@ -1386,13 +1421,15 @@ that displacement is a length, so no such composition covers it, and this
 package carries no separate term bounding how far a placement's own rounding
 rotates the tag frame off the true rotation — so a placed copy of a face
 whose `normalBound` is nonzero is `ErrUnsupported` rather than an invented
-bound. `stitch.go`'s `rebuildStitchTopology` carries the same three fields
-the same way, so a stitched body's own later placement never reopens this
-gap.
+bound. `stitch.go`'s `rebuildStitchTopology` and `Body.Patch`'s
+`copyPatchFacesUnder` (`patch_body.go`) carry the same three fields the same
+way, refusals included, so neither a stitched nor a patched body's own later
+placement reopens this gap, and neither publishes a reading tighter than its
+source face's (§15's T209, T210).
 
-**A revolve wall's copy also carries the surface its record denotes**
-(`Face.denoted`, `docs/evaluator-design.md` §6), which `NormalAt` proves the
-wall's normal against in place of its tag. Unlike `normalBound`, it composes
+**A revolve wall's or cap's copy also carries the surface its record
+denotes** (`Face.denoted`, `docs/evaluator-design.md` §6), which `NormalAt`
+proves the face's normal against in place of its tag. Unlike `normalBound`, it composes
 with any placement: it is an exact enclosure, so a placed copy holds its exact
 image under the placement's held basis and translation (`Face.denotedUnder`),
 never a re-reading of the copy's rounded tag. `copyFaceUnderContext`,
@@ -2801,6 +2838,15 @@ claiming more than the audit proves. No row in this group pins a bound to a
 literal: T196 asserts an exact zero because every station is pinned under the
 identity motion, and T208 asserts only that the placed bound is strictly
 positive.
+
+The copy and revolve-tag obligations are:
+
+| # | Fixture | Assertion |
+|---|---------|-----------|
+| T209 | a holed disk's end-cap chamfer, unstitched, each cone band sheet's free rims filled by `Body.Patch` | the copied band's `NormalAt` equals its source's, bound included, and placing the patched sheet is `ErrUnsupported`. Shown-to-fail: `copyPatchFacesUnder` without `normalBound` published 2.2e-16 against the source's 8.7e-16 and placed the copy |
+| T210 | a plate extruded 3 in, unstitched; its end cap and four walls stitched back into an open box whose bottom rim `Body.Patch` fills; a pin `ToFace` the patched cap | the pin's `Bounds` equal those of the same pin stopped at the unstitched cap, `Approximate`. Shown-to-fail: `copyPatchFacesUnder` without `axialDelta` published the stop `Exact` with a zero bound |
+| T211 | full-turn revolve sheets of a quadrilateral whose side climbs 5e-10 over a unit run (tagged `Cylinder`), and of one whose side leans 5e-10 off perpendicular (tagged `Plane`) | `Stitch` is `ErrUnsupported` (R8); were it admitted, its volume and centroid would have to enclose the record's exact Pappus readings. Shown-to-fail: without `stitchFluxTagsDenoted` the volumes sat 2.1e-9 and 1.6e-9 mm³ off under 7.0e-15 and 5.7e-15 bounds |
+| T212 | a decimal trapezoid's full-turn sheet (two `Cylinder`, two `Cone` walls), stitched; and, internally, T46-style cone wall whose tag apex is moved 1e-6 mm along the axis with its record unchanged | the stitched volume and centroid enclose the record's exact Pappus readings; the moved apex's flux and moment bounds enclose the exact-apex readings. Shown-to-fail: dropping `ConeInput.ApexBound`'s widening left the moved flux 9.4e-6 off under a 3.6e-14 bound |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `.github/test-shards-apitest.txt` one for every `apitest/` test, and

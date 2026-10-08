@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -591,4 +592,192 @@ func TestRevolveWallNormalIntegerStaysExact(t *testing.T) {
 		exact(t, f, r3.NewVec(10, 0, 0), r3.NewVec(1, 0, 0))
 		exact(t, f, r3.NewVec(5, 0, -5), r3.NewVec(0, 0, -1))
 	})
+}
+
+// oraclePiDigits is π to 200 decimal places, far past normalOraclePrec.
+const oraclePiDigits = "3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651328230664709384460955058223172535940812848111745028410270193852110555964462294895493038196"
+
+// oracleSinCos is sin and cos of x by their Taylor series in 512-bit
+// arithmetic; for |x| below 2π the 300 terms leave a remainder far below
+// every bound compared here.
+func oracleSinCos(x *big.Float) (*big.Float, *big.Float) {
+	sin, cos := onF(0), onF(0)
+	term := onF(1)
+	for k := range 300 {
+		switch k % 4 {
+		case 0:
+			cos.Add(cos, term)
+		case 1:
+			sin.Add(sin, term)
+		case 2:
+			cos.Sub(cos, term)
+		default:
+			sin.Sub(sin, term)
+		}
+		term = new(big.Float).SetPrec(normalOraclePrec).Mul(term, x)
+		term.Quo(term, onF(float64(k+1)))
+	}
+	return sin, cos
+}
+
+func (a onVec) cross(b onVec) onVec {
+	m := func(x, y *big.Float) *big.Float { return new(big.Float).SetPrec(normalOraclePrec).Mul(x, y) }
+	s := func(x, y *big.Float) *big.Float { return new(big.Float).SetPrec(normalOraclePrec).Sub(x, y) }
+	return onVec{s(m(a[1], b[2]), m(a[2], b[1])), s(m(a[2], b[0]), m(a[0], b[2])), s(m(a[0], b[1]), m(a[1], b[0]))}
+}
+
+// capFixture is a partial revolve of a recorded triangle on a recorded plane
+// about a recorded sketch-line axis, then placed by xf.
+type capFixture struct {
+	name  string
+	frame r3.Frame
+	ax    normalOracleAxis
+	pts   [][2]float64
+	deg   float64
+	xf    r3.Transform
+}
+
+// capNormalTruths is the normal, up to sign, of each cap the record denotes:
+// the plane through the recorded axis at the recorded angle 0 and at deg
+// (either sense), W × radial(φ), in the plane frame the revolve resolves —
+// the sketch frame re-normalized, as revolve.go builds it — and carried
+// through xf's held basis as exact leaves.
+func capNormalTruths(t *testing.T, fx capFixture, held r3.Frame) []onVec {
+	t.Helper()
+	frame, err := r3.NewFrame(held.Origin(), held.U(), held.V())
+	require.NoError(t, err)
+	u, v := onOf(frame.U()), onOf(frame.V())
+	du, dv := onF(fx.ax.end[0]-fx.ax.start[0]), onF(fx.ax.end[1]-fx.ax.start[1])
+	l := new(big.Float).SetPrec(normalOraclePrec).Sqrt(onVec{du, dv, onF(0)}.dot(onVec{du, dv, onF(0)}))
+	dU := new(big.Float).SetPrec(normalOraclePrec).Quo(du, l)
+	dV := new(big.Float).SetPrec(normalOraclePrec).Quo(dv, l)
+	w := u.scale(dU).add(v.scale(dV))
+	e0 := u.scale(new(big.Float).Neg(dV)).add(v.scale(dU))
+	e1 := w.cross(e0)
+	pi, _, err := big.ParseFloat(oraclePiDigits, 10, normalOraclePrec, big.ToNearestEven)
+	require.NoError(t, err)
+	phi := new(big.Float).SetPrec(normalOraclePrec).Mul(pi, onF(fx.deg))
+	phi.Quo(phi, onF(180))
+	sin, cos := oracleSinCos(phi)
+	b := fx.xf.Basis()
+	place := func(x onVec) onVec {
+		return onOf(b.EX).scale(x[0]).add(onOf(b.EY).scale(x[1])).add(onOf(b.EZ).scale(x[2]))
+	}
+	out := []onVec{place(w).cross(place(e0))}
+	for _, sense := range []float64{1, -1} {
+		radial := e0.scale(cos).add(e1.scale(new(big.Float).Mul(sin, onF(sense))))
+		out = append(out, place(w).cross(place(radial)))
+	}
+	return out
+}
+
+// requireCapNormalsEnclose builds fx and requires both caps' NormalAt to sit
+// within their own bound of the normal the record denotes. It returns the
+// worst ratio of residual to bound.
+func requireCapNormalsEnclose(t *testing.T, fx capFixture) float64 {
+	t.Helper()
+	w := sketch.NewWorld()
+	pl, err := w.CreatePlaneFromFrame(fx.frame)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(pl)
+	require.NoError(t, err)
+	sp := make([]*sketch.Point, len(fx.pts))
+	for i, p := range fx.pts {
+		sp[i] = s.CreatePoint(p[0], p[1])
+	}
+	s.Fix(sp[0])
+	for i := range sp {
+		s.CreateLine(sp[i], sp[(i+1)%len(sp)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	held, err := s.Plane().Frame()
+	require.NoError(t, err)
+	b, err := decad.New().Revolve(s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{U: fx.ax.start[0], V: fx.ax.start[1]}, End: decad.Point2{U: fx.ax.end[0], V: fx.ax.end[1]}},
+		decad.AngleExtent{A: units.Degrees(fx.deg), Dir: decad.Along})
+	require.NoError(t, err)
+	b, err = b.Placed(t.Context(), fx.xf)
+	require.NoError(t, err)
+	truths := capNormalTruths(t, fx, held)
+	var caps []*decad.Face
+	for _, ref := range []decad.FeatureRef{decad.CapStart(b), decad.CapEnd(b)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(ref)).SelectFaces(b)
+		require.NoError(t, err)
+		caps = append(caps, faces...)
+	}
+	require.Len(t, caps, 2)
+	worst := 0.0
+	for _, f := range caps {
+		p := f.Edges()[0].Start().Position().Value
+		n, err := f.NormalAt(p)
+		require.NoError(t, err)
+		res := math.Inf(1)
+		for _, truth := range truths {
+			res = math.Min(res, normalResidual(n.Value, truth.unit()))
+		}
+		require.Less(t, res, 1e-9, "the cap must point along a denoted cap normal")
+		require.LessOrEqualf(t, res, n.Bound.Base(), "the cap's normal sits %g off the denoted plane's, outside its bound %g", res, n.Bound.Base())
+		worst = math.Max(worst, res/n.Bound.Base())
+	}
+	return worst
+}
+
+// TestRevolveCapNormalCoversAxisFrameAndPlacement revolves triangles part of
+// a turn about tilted axes. A cap's tag is the plane the build spans from the
+// float axis direction, the float frame lift of it, the float sine and cosine
+// of the held angle and the placement's rounding; the record denotes the
+// plane through the recorded axis at the recorded angle.
+//
+// Shown to fail: before each cap carried the plane its record denotes
+// (Face.denoted, revolvemesh.RevolveLift.CapNormal), the caps' bound was the
+// tag's own arithmetic plus the angular displacement, and these caps sat
+// 1.31×, 1.33× and 1.23× that bound off the denoted normal (on amd64).
+func TestRevolveCapNormalCoversAxisFrameAndPlacement(t *testing.T) {
+	t.Parallel()
+	tilted, err := r3.NewFrame(r3.NewVec(1, 2, 3), r3.NewVec(1, 1, 0), r3.NewVec(-1, 1, 1))
+	require.NoError(t, err)
+	xy, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	mirror, err := r3.NewFrame(r3.NewVec(0.3, -2, 1), r3.NewVec(1, 0.2, 0.1), r3.NewVec(0, 1, -0.3))
+	require.NoError(t, err)
+	refl, err := r3.Reflection(mirror)
+	require.NoError(t, err)
+	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Radians(0.7))
+	require.NoError(t, err)
+	ax17 := normalOracleAxis{start: [2]float64{0.1, 0.3}, end: [2]float64{0.4, 2.4}}
+	tri17 := [][2]float64{{1.3, 0.2}, {2.1, 0.9}, {1.6, 1.9}}
+	for _, fx := range []capFixture{
+		{"tilted plane", tilted, normalOracleAxis{start: [2]float64{0.2, 1}, end: [2]float64{-1.2, 3.7}},
+			[][2]float64{{-0.83, 0.81}, {-1.56, 1.78}, {-2.03, 0.74}}, 271.3, r3.Identity()},
+		{"reflected", xy, ax17, tri17, 37, refl},
+		{"rotated", xy, ax17, tri17, 37, rot},
+	} {
+		t.Run(fx.name, func(t *testing.T) {
+			t.Parallel()
+			requireCapNormalsEnclose(t, fx)
+		})
+	}
+}
+
+// TestRevolveCapNormalStartStaysExact is the exact half: an integer square
+// about the world X axis, a quarter turn. The start cap lies in the sketch
+// plane at the exact angle zero, so its denoted normal is exactly −Z and the
+// tag's is too.
+//
+// Shown to fail: flooring the cap arm of surfacenormal.Revolved.Allow at
+// one ulp above zero turns it red.
+func TestRevolveCapNormalStartStaysExact(t *testing.T) {
+	t.Parallel()
+	s, p := polygonSketch(t, [][2]float64{{0, 1}, {1, 1}, {1, 2}, {0, 2}})
+	b, err := decad.New().Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	faces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(b))).SelectFaces(b)
+	require.NoError(t, err)
+	require.Len(t, faces, 1)
+	n, err := faces[0].NormalAt(r3.NewVec(0.5, 1.5, 0))
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, n.Exactness)
+	require.Zero(t, n.Bound.Base())
+	require.Equal(t, r3.NewVec(0, 0, -1), n.Value)
 }

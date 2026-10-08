@@ -1542,4 +1542,10 @@
 2	0.01	TestRevolveWallNormalCoversTiltedAxis
 2	0.01	TestRevolveWallNormalIntegerStaysExact
 2	0.01	TestRevolveWallNormalSurvivesUnstitch
+2	0.01	TestRevolveCapNormalCoversAxisFrameAndPlacement
+2	0.01	TestRevolveCapNormalStartStaysExact
+2	0.01	TestBodyPatchCopyKeepsBandNormalBound
+2	0.01	TestBodyPatchCopyKeepsCapAxialDelta
+2	0.01	TestStitchRefusesRevolveTagOffItsRecord
+2	0.01	TestStitchDecimalFrustumEnclosesItsRecord
 5	0.13	TestLoftHugeCircleRefusesNonFiniteVolume

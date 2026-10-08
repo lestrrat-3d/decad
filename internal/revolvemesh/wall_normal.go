@@ -35,6 +35,11 @@ func (l RevolveLift) StraightWallNormal(ab AxisBound, xform r3.Transform, ends [
 		du := proofbound.IntervalSub(pts[1][0], pts[0][0])
 		dv := proofbound.IntervalSub(pts[1][1], pts[0][1])
 		out.Runs = append(out.Runs, ax.reexpress(du, dv))
+		var ends [2][2]proofbound.RatInterval
+		for i, pt := range pts {
+			ends[i] = ax.reexpress(proofbound.IntervalSub(pt[0], ax.aU), proofbound.IntervalSub(pt[1], ax.aV))
+		}
+		out.Ends = append(out.Ends, ends)
 	}
 	out.Valid = len(out.Runs) > 0
 	return out
@@ -42,19 +47,66 @@ func (l RevolveLift) StraightWallNormal(ab AxisBound, xform r3.Transform, ends [
 
 // CircularWallNormal is StraightWallNormal's circular twin: the recorded
 // circle's centre, re-expressed into the same axis frame, is all a circular
-// wall's normal reads.
-func (l RevolveLift) CircularWallNormal(ab AxisBound, xform r3.Transform, centre RecordedMeridian) surfacenormal.Revolved {
+// wall's normal reads. Its radius, R widened by RBound, rides beside it. A
+// coalesced wall holds one recorded circle per segment it covers; the
+// enclosure is the hull of their centres and of their radii, so it holds
+// every one of them.
+func (l RevolveLift) CircularWallNormal(ab AxisBound, xform r3.Transform, circles []RecordedMeridian) surfacenormal.Revolved {
 	out, ax, ok := l.wallAxis(ab, xform)
+	if !ok || len(circles) == 0 {
+		return surfacenormal.Revolved{}
+	}
+	for i, c := range circles {
+		u, okU := widenLeaf(c.U, c.UV.U)
+		v, okV := widenLeaf(c.V, c.UV.V)
+		r, okR := widenLeaf(c.R, c.RBound)
+		if !okU || !okV || !okR {
+			return surfacenormal.Revolved{}
+		}
+		centre := ax.reexpress(proofbound.IntervalSub(u, ax.aU), proofbound.IntervalSub(v, ax.aV))
+		if i == 0 {
+			out.Centre, out.Radius = centre, r
+			continue
+		}
+		out.Centre = [2]proofbound.RatInterval{intervalHull(out.Centre[0], centre[0]), intervalHull(out.Centre[1], centre[1])}
+		out.Radius = intervalHull(out.Radius, r)
+	}
+	out.Circular = true
+	out.Valid = true
+	return out
+}
+
+// intervalHull is the smallest interval holding both a and b.
+func intervalHull(a, b proofbound.RatInterval) proofbound.RatInterval {
+	lo, hi := a.Lo, a.Hi
+	if b.Lo.Cmp(lo) < 0 {
+		lo = b.Lo
+	}
+	if b.Hi.Cmp(hi) > 0 {
+		hi = b.Hi
+	}
+	return proofbound.Interval(lo, hi)
+}
+
+// CapNormal encloses the planar cap a partial sweep ends in, at the angle
+// whose sine and cosine sin and cos enclose: the plane through the axis the
+// record names and the radial direction at that angle, under the same axis
+// frame, frame lift and placement leaves as StraightWallNormal. Its outward
+// normal is W × radial(φ) at the end cap and the negation at the start cap,
+// which is (−sin φ, cos φ) on (E0, E1) or its negation. Neither the float
+// sine and cosine of the held angle, the float axis direction nor any
+// rounding of the frame the build placed stands between it and the record.
+func (l RevolveLift) CapNormal(ab AxisBound, xform r3.Transform, sin, cos proofbound.RatInterval, start bool) surfacenormal.Revolved {
+	out, _, ok := l.wallAxis(ab, xform)
 	if !ok {
 		return surfacenormal.Revolved{}
 	}
-	u, okU := widenLeaf(centre.U, centre.UV.U)
-	v, okV := widenLeaf(centre.V, centre.UV.V)
-	if !okU || !okV {
-		return surfacenormal.Revolved{}
+	dir := [2]proofbound.RatInterval{proofbound.IntervalNeg(sin), cos}
+	if start {
+		dir = [2]proofbound.RatInterval{sin, proofbound.IntervalNeg(cos)}
 	}
-	out.Circular = true
-	out.Centre = ax.reexpress(proofbound.IntervalSub(u, ax.aU), proofbound.IntervalSub(v, ax.aV))
+	out.Cap = true
+	out.CapDir = dir
 	out.Valid = true
 	return out
 }

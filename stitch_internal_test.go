@@ -1267,3 +1267,70 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, mesh.symDiffOK, "two fully-overlapping lumps must not earn the zero occupied-volume proof")
 }
+
+// TestStitchConeArmChargesApexDeparture pins coneApexDeparture's leg on a
+// real revolve frustum's Cone wall: the wall from (4, 1) to (3, 2) about the
+// world X axis meets the axis at x = 5 exactly, so its tag's apex IS the
+// record's and the arm charges nothing. A copy of the tag with its apex
+// moved 1e-6 mm along the axis, the face's record unchanged, must publish a
+// flux and first moment whose bounds still enclose the exact-apex readings —
+// which only the departure charge can cover, since the shift moves both by
+// some 1e-5 against an arithmetic bound near 1e-14.
+//
+// Shown to fail: dropping ConeInput.ApexBound's widening in
+// stitchflux.ConeFaceFluxAndMoment turns it red: the moved flux sits
+// 9.4e-6 off under a 3.6e-14 bound.
+func TestStitchConeArmChargesApexDeparture(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	pts := [][2]float64{{0, 1}, {4, 1}, {3, 2}, {1, 2}}
+	sp := make([]*sketch.Point, len(pts))
+	for i, p := range pts {
+		sp[i] = s.CreatePoint(p[0], p[1])
+	}
+	s.Fix(sp[0])
+	for i := range sp {
+		s.CreateLine(sp[i], sp[(i+1)%len(sp)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+	sheet, err := New().Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	require.NoError(t, err)
+
+	var face *Face
+	var cone Cone
+	for _, f := range sheet.Faces() {
+		if c, ok := f.surface.(Cone); ok && c.Origin.X == 5 {
+			face, cone = f, c
+		}
+	}
+	require.NotNil(t, face)
+	require.True(t, revolveTagIsDenoted(face))
+	exactBound, ok := coneApexDeparture(face, cone)
+	require.True(t, ok)
+	require.Zero(t, exactBound, "an apex the walk states exactly is charged nothing")
+
+	anchor := r3.NewVec(0, 1, 0)
+	flux, mx, _, _, err := coneFaceFluxAndMoment(face, cone, anchor, 1)
+	require.NoError(t, err)
+
+	moved := cone
+	moved.Origin = cone.Origin.Add(r3.NewVec(1e-6, 0, 0))
+	movedBound, ok := coneApexDeparture(face, moved)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, movedBound, 1e-6)
+	mFlux, mMx, _, _, err := coneFaceFluxAndMoment(face, moved, anchor, 1)
+	require.NoError(t, err)
+	for _, pair := range []struct {
+		name           string
+		exact, shifted proofbound.BoundedScalar
+	}{{"flux", flux, mFlux}, {"x moment", mx, mMx}} {
+		gap := math.Abs(pair.shifted.Value - pair.exact.Value)
+		require.Greater(t, gap, 1e-7, "the shift must genuinely move the %s", pair.name)
+		require.LessOrEqualf(t, gap, pair.shifted.Bound+pair.exact.Bound,
+			"the moved apex's %s sits %g off the record's, outside its bound %g", pair.name, gap, pair.shifted.Bound)
+	}
+}

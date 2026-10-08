@@ -430,10 +430,24 @@ the unit normal is a coordinate axis, so an integer profile about a coordinate
 axis keeps those wall normals `Exact`. A plain float `atan2` was not seen to
 break the tag's own bound on its own; the snapped centre, a near-parallel or
 near-perpendicular segment, and a far or tilted axis do
-(`apitest/revolve_normal_bound_test.go`). The cap faces keep the tag arm and
-their `normalBound` (the angular displacement above). The departure is NOT a
-`normalBound`: no one dimensionless figure states it for every p, and
-`Stitch`'s flux arms gate on `normalBound` and integrate the tag
+(`apitest/revolve_normal_bound_test.go`). A partial sweep's cap carries its
+denoted plane the same way (`revolvePayload.capDenotation`,
+`revolvemesh.RevolveLift.CapNormal`): the plane through the recorded axis at
+the angle its end's record states, with outward normal (−sin φ, cos φ) on
+(E0, E1) at the end cap and its negation at the start cap, sin φ and cos φ
+the denotation's own certified enclosures. Its tag is spanned from the float
+axis direction through the frame's float lift, at the float sine and cosine of
+the held angle, and placed in float, and its `normalBound` charges only the
+angle; a tilted axis on a tilted plane, a rotation and a reflection each left
+a cap up to 1.33× that bound off its record's normal. `NormalAt` proves a cap
+carrying the plane against it in place of the tag arm and `normalBound`,
+which then stays the figure the gates that refuse a departed face read. An
+end with no denotation (a `ToFaceAngular` stop) carries none and keeps the tag
+arm composed with its `normalBound`. The start cap at the exact angle zero of
+an integer profile about a coordinate axis stays `Exact`. The departure is NOT
+a `normalBound`: no one dimensionless figure states it for every p. `Stitch`'s
+flux arms integrate the tag, so they admit a revolve face only where its tag
+is exactly its denoted surface, and charge a cone's float apex
 (`docs/surface-design.md` §6.4).
 
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4

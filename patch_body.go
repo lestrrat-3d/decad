@@ -570,9 +570,24 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 // patch never merges two DIFFERENT edges into one, it only gives an
 // already-free edge a second face once buildPatchFace's own coedge is
 // attached, so the plain per-pointer cache is the whole of what sharing
-// needs here. A revolve wall's denoted surface (Face.denoted) carries over as
-// its exact image under xform.
+// needs here.
+//
+// Each copy carries its source face's own axialDelta, hasAxialDelta and
+// normalBound, on unstitch.go's copyFaceUnderContext's terms: the copy holds
+// the identical surface and tag, so both figures are as true of it as of
+// the source. axialDelta widens by delta under a non-identity placement, and
+// a placed copy of a face whose normalBound is nonzero refuses with
+// [ErrUnsupported], since no dimensionless term bounds the placement's own
+// rotation of the tag frame. A revolve face's denoted surface (Face.denoted)
+// carries over as its exact image under xform.
 func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transform, delta float64) ([]*Face, map[*Edge]*Edge, error) {
+	if xform != r3.Identity() {
+		for _, f := range srcFaces {
+			if f.normalBound != 0 {
+				return nil, nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
+			}
+		}
+	}
 	newVertByOld := map[*Vertex]*Vertex{}
 	vertexFor := func(old *Vertex) (*Vertex, error) {
 		if nv, ok := newVertByOld[old]; ok {
@@ -638,14 +653,21 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if err != nil {
 			return nil, nil, err
 		}
+		axialDelta := f.axialDelta
+		if delta > 0 {
+			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
+		}
 		nf := &Face{
-			surface:    surface,
-			origins:    append([]FeatureRef(nil), f.origins...),
-			area:       f.area,
-			areaBound:  f.areaBound,
-			reversed:   f.reversed,
-			heldPlanar: f.heldPlanar,
-			denoted:    f.denotedUnder(xform),
+			surface:       surface,
+			origins:       append([]FeatureRef(nil), f.origins...),
+			area:          f.area,
+			areaBound:     f.areaBound,
+			reversed:      f.reversed,
+			heldPlanar:    f.heldPlanar,
+			axialDelta:    axialDelta,
+			hasAxialDelta: f.hasAxialDelta,
+			normalBound:   f.normalBound,
+			denoted:       f.denotedUnder(xform),
 		}
 		for _, l := range f.loops {
 			coedges := make([]coedge, len(l.coedges))
