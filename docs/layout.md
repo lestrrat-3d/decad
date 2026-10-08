@@ -180,10 +180,10 @@ the rules leave to the byte budget.
 |---|---|
 | `verify.go` | `Document.Verify` orchestration and ordered report assembly. See `docs/verification-design.md` §1–§3 and the file's doc comment. |
 | `verify_pairs.go` | `Verify`'s bounded pair workers and ordered outcomes. See `docs/interference-design.md` §2, §5.3 and §7.2. |
-| `report.go` | Public aliases and body/pair diagnostics. See verification §1. |
+| `report.go` | Public report aliases. |
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
 | `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
-| `verify_result.go` | Report records and accessors; `verify_publish.go` builds them. |
+| `verify_result.go` | Public verification result aliases. |
 | `verify_publish.go` | Builds `Verify` reports from private survey results. See `docs/verification-design.md`. |
 | `clearance.go` | The pair kernel: `clearancePair` proves a pair's relation and gap; `sheetSolidPair` decides a sheet pair. See clearance §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned box prisms and bounds their gap from exact box planes ahead of the kernel. |
@@ -278,7 +278,7 @@ the rules leave to the byte budget.
 | `internal/facetproof/` | Faceted shell audits, placement, restatement and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/surfacegeom/` | Sealed face and edge geometry variants. See `docs/api-design.md` §6.1. |
-| `internal/reportvocab/` | Verification outcome and diagnostic enums. See verification §1. |
+| `internal/reportvocab/` | Verification report types and outcome enums. See verification §1. |
 | `internal/extent/` | Sealed linear and angular extent variants. See API §8.1. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation and segment record. See surface §5.2. |
 | `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |

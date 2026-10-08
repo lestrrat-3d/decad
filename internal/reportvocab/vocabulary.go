@@ -10,7 +10,7 @@ const (
 	tokenUndecided    = "undecided"
 )
 
-// This file holds the result vocabulary Verify's report is written in: the
+// This package holds the result vocabulary Verify's report is written in: the
 // outcome enums, the effective-request records, the bounded reading
 // wrappers, the per-survey result records, and Report/BodyReport themselves
 // (docs/verification-design.md §1-§9). It holds TYPES and the two pure
