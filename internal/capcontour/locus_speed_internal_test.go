@@ -12,9 +12,10 @@ import (
 // enclose the unit direction and normal of the exact endpoint difference, and
 // the anchor encloses the exact lerp of a trimmed start.
 //
-// Shown to fail: with lineWallFrameOf reading UnitVec(TanInU, TanInV) and the
-// held start as an exact point, e misses the denoted direction, and the
-// trimmed wall's anchor misses its denoted start.
+// Shown to fail: with lineWallFrameOf taking the exact unit vector of the held
+// tangent (TanInU, TanInV) as e and the held start as an exact point, e misses
+// the denoted direction, and the trimmed wall's anchor misses its denoted
+// start.
 func TestLineWallFrameEnclosesDenotedWall(t *testing.T) {
 	t.Parallel()
 	eu, ev := exactWallUnit()

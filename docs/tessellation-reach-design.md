@@ -564,8 +564,10 @@ publishes in another dimension):
   recorded section with exact feet subtracts nothing. `speedUpper` is `miterLocusSpeedUpper` (`capblend_contour.go`), the same input
   `chordLocusLengthAllow` reads. Zero at a line-line miter, every reflex foot and every G1 join (modify §7's
   dead-zone rule; all three loci affine). Charged on BOTH patches sharing the ruling.
-- `capRadiusRound = addRoundError(r, ∓d, capRadius)` — the held cap directrix radius against the exact
-  offset radius `capcontour.ExactOffsetRadius` states.
+- `capRadiusRound = addRoundError(r, ∓d, capRadius)` — the held cap directrix radius against `r ∓ d`
+  taken exactly from the walk's held radius `r`. `band.delta` charges the gap from `r` to the radius
+  the record denotes (the walk's `RadiusBound`), since `capcontour.Displacement` reads every offset
+  radius through `capcontour.OffsetCircleRadius`.
 - `band.delta`, `levelDelta`, `deltaAxial` (`capBandLevel`), `deltaStore` (§3's mechanism over `prismLike`).
 
 `faceBound(patch) = upRound(Σ terms)`; `bound = max`. `areaSlack` per patch: `perturbedTriangleAreaAllow`
@@ -627,7 +629,7 @@ the largest per-vertex displacement:
 | Vertex | Per-vertex motion (each term already proven; summed through `absSumUpper`) |
 |---|---|
 | side ring, level `L` ∈ {`zLo`, `zHi`} | `walkEndBoundAllow(sideBound)` — `stationbound.ChordStationBound` at `k/n` for an interior station, the walk's own `startBound` at a junction — plus `exactPrismPointRound` plus `L.bound` |
-| cap ring, station `k` of a circular walk (`k = 0` is the foot verbatim) | `walkEndBoundAllow(stationbound.CapOffsetStationBound(seg, k, n, ∓d))` — `circularEndpointInterval`'s enclosure with the exact offset radius `R ∓ d` (`capcontour.ExactOffsetRadius`), read at the exact fraction `k/n` of the SIDE window — plus `exactPrismPointRound` plus `capBandLevel(capZ).bound` |
+| cap ring, station `k` of a circular walk (`k = 0` is the foot verbatim) | `walkEndBoundAllow(stationbound.CapOffsetStationBound(seg, k, n, ∓d))` — `circularEndpointInterval`'s enclosure with the exact offset `∓d` (`capcontour.CapWallRadiusOffset`) added to the record's radius `R`, read at the exact fraction `k/n` of the SIDE window — plus `exactPrismPointRound` plus `capBandLevel(capZ).bound` |
 | cap ring, a straight walk's foot preceded by a circular walk | the same enclosure on the PRECEDING walk at `k = n`, plus the same two terms |
 | cap ring, a line-line miter foot | `band.delta` (`capContourDelta`'s enclosure of the exact miter point) plus the same two terms |
 

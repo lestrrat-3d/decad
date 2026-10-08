@@ -106,7 +106,9 @@ func OffsetCarrierEnclosure(w survey2d.SideWalk, amount proofbound.RatInterval) 
 }
 
 // OffsetCircleRadius encloses offsetRadius's R − insideSign·(s·t) over every
-// signed offset in amount, R the walk's radius widened by its own bracket.
+// signed offset in amount and every radius R the walk's record denotes: the
+// held radius widened by RadiusBound on both sides. It refuses a negative or
+// non-finite RadiusBound and a radius interval that reaches the centre.
 func OffsetCircleRadius(w survey2d.SideWalk, amount proofbound.RatInterval) (proofbound.RatInterval, bool) {
 	rr, rb := proofarith.FloatRat(w.Radius), proofarith.FloatRat(w.RadiusBound)
 	if rr == nil || rb == nil || rb.Sign() < 0 {

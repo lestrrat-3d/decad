@@ -29,25 +29,6 @@ func CarrierOf(w survey2d.SideWalk, d float64) (Carrier, bool) {
 	return CarrierOver(w, proofbound.PointInterval(rd))
 }
 
-// ExactOffsetRadius is offsetRadius's own R − insideSign·d taken EXACTLY:
-// both operands are float64s, so their difference is a rational with no
-// rounding at all, and the float the build holds is the rounding of THIS value.
-func ExactOffsetRadius(w survey2d.SideWalk, d float64) (*big.Rat, bool) {
-	inside := 1.0
-	if w.Th1 < w.Th0 { // a clockwise walk has its material outside the circle
-		inside = -1.0
-	}
-	rr, rd := proofarith.FloatRat(w.Radius), proofarith.FloatRat(inside*d)
-	if rr == nil || rd == nil {
-		return nil, false
-	}
-	out := new(big.Rat).Sub(rr, rd)
-	if out.Sign() <= 0 {
-		return nil, false
-	}
-	return out, true
-}
-
 // Intersect encloses every root of the two offset carriers, dispatching
 // exactly as fillet.go's intersectOffsets does over the same three cases.
 func Intersect(a, b Carrier) ([]Point, bool) {
@@ -165,41 +146,18 @@ func carrierOverRange(w survey2d.SideWalk, t0, t1 float64) (Carrier, bool) {
 // CarrierOver is carrierOverRange over an offset interval stated exactly:
 // every carrier the wall's offset takes as the offset amount ranges over
 // span. A span of one point d is CarrierOf(w, d)'s own enclosure, rational
-// for rational.
+// for rational. It is OffsetCarrierEnclosure's carrier.
 //
-// A line's carrier is OffsetCarrierEnclosure's: it runs from the start the
-// walk's end bound encloses, along the unit direction of the difference of
-// the two enclosed endpoints. It never reads the walk's held tangent, which is
-// that difference rounded to float64 and so tilts the carrier by up to half an
-// ulp of each component.
+// A line's carrier runs from the start the walk's end bound encloses, along
+// the unit direction of the difference of the two enclosed endpoints. It never
+// reads the walk's held tangent, which is that difference rounded to float64
+// and so tilts the carrier by up to half an ulp of each component. A circle's
+// carrier is concentric about the recorded centre, at every radius
+// OffsetCircleRadius encloses. That radius starts from the walk's held radius
+// widened by its RadiusBound, since an ArcSeg walk holds the math.Hypot of its
+// recorded Start − Center, which can sit off the radius the record denotes.
 func CarrierOver(w survey2d.SideWalk, span proofbound.RatInterval) (Carrier, bool) {
-	if !w.IsCircular() {
-		return OffsetCarrierEnclosure(w, span)
-	}
-	r, ok := ExactOffsetRadiusOver(w, span)
-	if !ok {
-		return Carrier{}, false
-	}
-	c, okC := ExactPoint(w.CU, w.CV)
-	if !okC {
-		return Carrier{}, false
-	}
-	return Carrier{C: c, R: r}, true
-}
-
-// ExactOffsetRadiusOver is ExactOffsetRadius over every offset amount span
-// holds: R − insideSign·t for t in span, taken exactly. It refuses a span
-// that reaches or passes the centre anywhere.
-func ExactOffsetRadiusOver(w survey2d.SideWalk, span proofbound.RatInterval) (proofbound.RatInterval, bool) {
-	rr := proofarith.FloatRat(w.Radius)
-	if rr == nil || span.Lo == nil || span.Hi == nil {
-		return proofbound.RatInterval{}, false
-	}
-	r := proofbound.IntervalSub(proofbound.PointInterval(rr), proofbound.IntervalMul(span, proofbound.PointInterval(InsideSignOf(w))))
-	if r.Lo.Sign() <= 0 {
-		return proofbound.RatInterval{}, false
-	}
-	return r, true
+	return OffsetCarrierEnclosure(w, span)
 }
 
 // OffsetSpan is every offset amount a setback held as the float d denotes when

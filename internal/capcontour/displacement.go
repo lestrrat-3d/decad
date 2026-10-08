@@ -19,7 +19,10 @@ type Join struct {
 // Displacement bounds every held point of a cap contour against the point
 // denoted by its recorded walks and joins over the stated setback's span.
 // The caller first checks that each circular wall's offset radius survives
-// the construction's float gates.
+// the construction's float gates. A circular wall's term is the held offset
+// radius against every radius OffsetCircleRadius encloses, which widens the
+// walk's held radius by its RadiusBound: an ArcSeg walk holds the math.Hypot
+// of Start − Center, not the radius the record denotes.
 func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (float64, bool) {
 	span, ok := OffsetSpan(d, dDelta)
 	if !ok {
@@ -35,7 +38,7 @@ func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (f
 			inside = -1
 		}
 		held := w.Radius - inside*d
-		exact, ok := ExactOffsetRadiusOver(w, span)
+		exact, ok := OffsetCircleRadius(w, span)
 		if !ok {
 			return 0, false
 		}

@@ -909,6 +909,9 @@ along the difference of its two enclosed endpoints, never along the walk's
 held tangent, which is that difference rounded to float64. A circular wall's
 foot steps along the radius from its recorded centre to its enclosed walk end,
 never along the held tangent, which is a `math.Sincos` at a computed angle.
+A circular wall's carrier and offset radius start from every radius its
+record denotes: the walk's held radius widened by its `RadiusBound`, since an
+`ArcSeg` walk holds the `math.Hypot` of `Start − Center`.
 The offset amount is itself an interval: the setback the caller stated lies
 within its own unit-conversion rounding of the float `dc` (§8.3.1), so every
 carrier, foot and radius is enclosed over that whole span. Interval arithmetic
