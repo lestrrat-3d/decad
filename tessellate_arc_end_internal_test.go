@@ -290,13 +290,13 @@ func TestRevolveJunctionReachesArcNaturalEnd(t *testing.T) {
 
 // TestCapBlendCornerChordReachesArcNaturalEnd chamfers the pie prism's end
 // cap loop and reads the miter corner at End, where the arc meets the line to
-// the origin. capBlendCornerLocusGap's ellipse needs a lower bound on c*, the
+// the origin. CapBlendCornerLocusGap's ellipse needs a lower bound on c*, the
 // distance from the denoted corner to the denoted foot. The denoted corner is
 // the arc's denoted end D, and the denoted foot lies within footDelta and
 // dsDelta of the held foot m at the held ds, so c* is at least |m − D| less
 // those two. The published lower bound on c*² must not exceed that.
 //
-// Shown-to-fail: with capBlendCornerChordSqLower charging the corner only its
+// Shown-to-fail: with CapBlendCornerChordSqLower charging the corner only its
 // line walk's own StartBound (zero at the recorded End), the bound exceeds
 // the worst-case c*² because D sits about 1.8e-12 mm nearer the foot than
 // End does.
@@ -329,7 +329,7 @@ func TestCapBlendCornerChordReachesArcNaturalEnd(t *testing.T) {
 			continue
 		}
 		require.False(t, j.g1, `the corner at End is a miter`)
-		lower, err := capBlendCornerChordSqLower(setback, segs, walks, i, j, footDelta)
+		lower, err := tessellation.CapBlendCornerChordSqLower(capBlendLocusInput(cbp, walks, i, j))
 		require.NoError(t, err)
 		du, dv := arcDenotedEnd(arc)
 		toDenoted := dist(du, dv, j)

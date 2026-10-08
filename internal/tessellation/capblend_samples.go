@@ -11,7 +11,7 @@ import (
 
 // CapBlendJoin is the sampled part of a resolved cap-contour corner.
 type CapBlendJoin struct {
-	Arc       bool
+	Arc, G1   bool
 	VU, VV    float64
 	M, PA, PB sectionrecord.Point2
 }
