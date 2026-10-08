@@ -478,25 +478,25 @@ func TestLoopMixedCrossing(t *testing.T) {
 	ld.reach = []*big.Rat{big.NewRat(10, 1), big.NewRat(10, 1)}
 	require.Len(t, ld.subs, 3)
 	below, straddle, above := ld.subs[0], ld.subs[1], ld.subs[2]
-	require.True(t, straddle.straddle)
-	require.Equal(t, 1, below.side, `the crank below s₀ turns negative: the mirrored side`)
-	require.Equal(t, 0, above.side)
-	require.Zero(t, below.hi.Cmp(straddle.lo))
-	require.Zero(t, straddle.hi.Cmp(above.lo))
-	require.Zero(t, below.near.Cmp(below.hi), `the chain below starts at its cut`)
-	require.Zero(t, above.near.Cmp(above.lo))
-	width, _ := new(big.Rat).Sub(straddle.hi, straddle.lo).Float64()
+	require.True(t, straddle.Straddle)
+	require.Equal(t, 1, below.Side, `the crank below s₀ turns negative: the mirrored side`)
+	require.Equal(t, 0, above.Side)
+	require.Zero(t, below.Hi.Cmp(straddle.Lo))
+	require.Zero(t, straddle.Hi.Cmp(above.Lo))
+	require.Zero(t, below.Near.Cmp(below.Hi), `the chain below starts at its cut`)
+	require.Zero(t, above.Near.Cmp(above.Lo))
+	width, _ := new(big.Rat).Sub(straddle.Hi, straddle.Lo).Float64()
 	require.Positive(t, width)
 	require.Less(t, width, 1e-60)
 	s0 := (math.Pi / 6) / (1 + math.Pi/6)
-	lo, _ := straddle.lo.Float64()
+	lo, _ := straddle.Lo.Float64()
 	require.InDelta(t, s0, lo, 1e-15)
 
-	mid := new(big.Rat).Add(straddle.lo, straddle.hi)
+	mid := new(big.Rat).Add(straddle.Lo, straddle.Hi)
 	mid.Quo(mid, big.NewRat(2, 1))
 	values, err := ld.pointValues(t.Context(), mid)
 	require.NoError(t, err)
-	for _, cut := range []*big.Rat{straddle.lo, straddle.hi} {
+	for _, cut := range []*big.Rat{straddle.Lo, straddle.Hi} {
 		at, err := ld.pointValues(t.Context(), cut)
 		require.NoError(t, err)
 		for j := range ld.deps {
@@ -510,14 +510,14 @@ func TestLoopMixedCrossing(t *testing.T) {
 	}
 
 	a, b := big.NewRat(1, 4), big.NewRat(1, 2)
-	pieces := ld.pieces(a, b)
+	pieces := ld.subs.Pieces(a, b)
 	require.Len(t, pieces, 3)
-	require.Zero(t, pieces[0].lo.Cmp(a))
-	require.Zero(t, pieces[2].hi.Cmp(b))
+	require.Zero(t, pieces[0].Lo.Cmp(a))
+	require.Zero(t, pieces[2].Hi.Cmp(b))
 	for n := 1; n < len(pieces); n++ {
-		require.Zero(t, pieces[n-1].hi.Cmp(pieces[n].lo), `the pieces tile the interval`)
+		require.Zero(t, pieces[n-1].Hi.Cmp(pieces[n].Lo), `the pieces tile the interval`)
 	}
-	require.True(t, pieces[1].sub.straddle)
+	require.True(t, pieces[1].Sub.Straddle)
 	spans, err := ld.intervalSpans(t.Context(), a, b)
 	require.NoError(t, err)
 	require.Len(t, spans, 3)
