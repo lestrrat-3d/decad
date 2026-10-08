@@ -1070,6 +1070,12 @@ func coordDisplacementOf(ctx context.Context, b *Body) float64 {
 	if err != nil {
 		return 0
 	}
+	if rp.sectionDelta > 0 {
+		// The revolve tessellator reserves its section displacement beside the
+		// two coordinate stages (planRevolve), so all three come out of one
+		// tolerance.
+		return proofbound.AbsSumUpper(res.deltaCPrior, res.deltaRPrior, rp.sectionDelta)
+	}
 	return proofbound.AbsSumUpper(res.deltaCPrior, res.deltaRPrior)
 }
 

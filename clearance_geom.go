@@ -429,6 +429,13 @@ func brepCarrierWalk(seg CurveSegment) (survey2d.SegmentWalk, bool) {
 // meridian swept about the recorded axis (clearance.RevolveCarrierResult's
 // AxisGap).
 func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayload) (bool, error) {
+	if rp.sectionDelta != 0 {
+		// addPrismFaces' own refusal over the meridian: the carriers would be
+		// exact statements about a section the payload only holds within its
+		// displacement of (docs/surface-intersection-design.md §7.2). No model,
+		// so the pair stays undecided.
+		return false, nil
+	}
 	in, ok, err := revolveCarrierInput(budget, rp)
 	if err != nil || !ok {
 		return false, err

@@ -166,7 +166,7 @@ func thickenRadialOf(ax axisFrame) (thickenRadial, error) {
 // by offsetting its recorded meridian and spinning the annulus through the
 // sheet's own interval (docs/surface-design.md §16.5).
 func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
-	if !rp.surfaceResult || len(rp.profile.Holes) != 0 {
+	if !rp.surfaceResult || rp.sectionDelta != 0 || len(rp.profile.Holes) != 0 {
 		return nil, fmt.Errorf(`%w: this revolve sheet has no admitted Thicken section`, ErrUnsupported)
 	}
 	radial, err := thickenRadialOf(rp.ax)

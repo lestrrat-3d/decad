@@ -17,6 +17,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/units"
 )
 
 // This file is docs/tessellation-design.md §13's increments T2 and T3
@@ -116,6 +117,12 @@ type revolvePlan struct {
 	coordMax    float64
 	sweep       float64
 	chord       float64
+	// section is the payload's own section-displacement charge
+	// (revolveSectionChargeOf): the mesh is chorded from the RECORDED meridian,
+	// so every face bound, the area slack and the occupied-volume bound carry
+	// the distance from it to the meridian the record denotes. Zero for every
+	// payload no construction displaced.
+	section revolveSectionCharge
 	// verify is how much of docs/tessellation-design.md §1's proof this build
 	// runs: below VerifyBoundary the facet-contact audit is skipped and §3's
 	// pair-test ceiling is charged nothing, and below VerifyAll the per-cell
@@ -294,7 +301,25 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 	ideal, loops, resolved := res.ideal, res.loops, res.resolved
 	basis, rhoMax, coordMax := res.basis, res.rhoMax, res.coordMax
 	deltaCPrior, deltaRPrior := res.deltaCPrior, res.deltaRPrior
-	available, err := revolvemesh.RevolveBudget(chord, deltaCPrior, deltaRPrior)
+	// The section displacement is reserved out of the tolerance before the two
+	// coordinate stages, on the prism tessellator's own terms (tessellate.go):
+	// the mesh chords the recorded meridian, and the meridian it denotes sits
+	// up to sectionDelta from it. Both downward nudges are proven margin for
+	// the subtraction and for the upward-rounded sum the bound is published
+	// through.
+	budgetChord := chord
+	section, err := revolveSectionChargeOf(rp, freeform.NewFreeformWork())
+	if err != nil {
+		return nil, err
+	}
+	if rp.sectionDelta > 0 {
+		budgetChord = freeform.DownRound(freeform.DownRound(chord - rp.sectionDelta))
+		if budgetChord <= 0 {
+			requested, displacement := units.Millimeters(chord), units.Millimeters(rp.sectionDelta)
+			return nil, fmt.Errorf(`%w: requested tolerance %s leaves no chord budget above the body's own section displacement %s; retry with a tolerance greater than %s`, ErrUnsupported, requested, displacement, displacement)
+		}
+	}
+	available, err := revolvemesh.RevolveBudget(budgetChord, deltaCPrior, deltaRPrior)
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +366,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 		deltaM: deltaM, deltaPhi: deltaPhi,
 		deltaCPrior: deltaCPrior, deltaRPrior: deltaRPrior, samplePrior: res.samplePrior,
 		rhoMax: rhoMax, coordMax: coordMax, sweep: sweep, chord: chord,
-		verify: verify,
+		section: section, verify: verify,
 	}, nil
 }
 
@@ -953,7 +978,15 @@ func revolveSectionPoints(loops []revLoopMesh) ([]Point2, [][]int, [][]float64) 
 // it never added a term to, and is never read.
 func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolvePlan, deltaC, deltaR, cellSlack float64, cellVolume *big.Rat) error {
 	coord := proofbound.AbsSumUpper(deltaC, deltaR)
-	if proofbound.UpRound(proofbound.AbsSumUpper(p.deltaM, p.deltaPhi, coord)) > p.chord {
+	// moved is the section displacement every face reads beside its chording
+	// and coordinate stages (revolvePlan.section); zero folds nothing.
+	moved := func(bound float64) float64 {
+		if p.rp.sectionDelta > 0 {
+			return proofbound.AbsSumUpper(bound, p.rp.sectionDelta)
+		}
+		return bound
+	}
+	if proofbound.UpRound(moved(proofbound.AbsSumUpper(p.deltaM, p.deltaPhi, coord))) > p.chord {
 		// The chording component must stay inside the requested tolerance, and
 		// revolvemesh.RevolveBudget already reserved both coordinate stages out of it
 		// before the counts were chosen. Reaching here would mean the
@@ -962,13 +995,13 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		return fmt.Errorf(`%w: this revolve mesh's chording exceeds the tolerance its own budget reserved for it`, ErrUnsupported)
 	}
 	for f, ext := range faceCells {
-		bound := proofbound.UpRound(proofbound.AbsSumUpper(ext.sag, chordSagitta(ext.rho, p.sweep, p.nPhi), coord))
+		bound := proofbound.UpRound(moved(proofbound.AbsSumUpper(ext.sag, chordSagitta(ext.rho, p.sweep, p.nPhi), coord)))
 		if proofbound.IsNonFinite(bound) {
 			return fmt.Errorf(`%w: a revolve wall face's composed displacement is not finite`, ErrUnsupported)
 		}
 		m.setFaceBound(f, bound)
 	}
-	capBound := proofbound.UpRound(proofbound.AbsSumUpper(p.deltaM, coord))
+	capBound := proofbound.UpRound(moved(proofbound.AbsSumUpper(p.deltaM, coord)))
 	for _, f := range m.source {
 		if _, ok := m.faceBound[f]; !ok {
 			m.setFaceBound(f, capBound)
@@ -985,6 +1018,9 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		return nil
 	}
 	slack := proofbound.AbsSumUpper(cellSlack, meshCoordAreaAllow(m, coord))
+	if allow := revolveSectionAreaAllow(p, p.section); allow > 0 {
+		slack = proofbound.AbsSumUpper(slack, allow)
+	}
 	if proofbound.IsNonFinite(slack) {
 		return fmt.Errorf(`%w: this revolve mesh states no finite area slack`, ErrUnsupported)
 	}
@@ -995,6 +1031,9 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 	sym, err := revolveSymDiff(m, p, cellVolume, deltaC, deltaR)
 	if err != nil {
 		return err
+	}
+	if allow := revolveSectionVolumeAllow(p, p.section); allow > 0 {
+		sym = proofbound.AbsSumUpper(sym, allow)
 	}
 	m.volSymDiff = sym
 	m.symDiffOK = true

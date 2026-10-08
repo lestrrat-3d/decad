@@ -59,6 +59,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`tangent_chain.go`) | `docs/modify-reach-design.md` §5 |
 | Closed shell (`WithNoOpenings`) of any receiver but a full revolve or a hole-free straight prism | `ErrUnsupported` (SX8/SX9/SX16) (`shell.go`) | `docs/modify-reach-design.md` §9, §14 |
 | Modify of a prism whose section carries a displacement bound | `ErrUnsupported` via `requireExactSection` | `docs/modify-design.md` |
+| Shell or junction fillet/chamfer of a revolve whose meridian carries a displacement bound — a revolve shell with a slanted cut, such as a cone's | `ErrUnsupported` via `requireExactRevolveSection` | `docs/surface-intersection-design.md` §7.2 |
 | Variable-radius fillet, face-to-face fillet | No entry point exists | none |
 
 ## Booleans
@@ -108,6 +109,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Planar cross-section of a body | No entry point exists | none |
 | Surveys (undercut, wall, concave radius) of bodies other than prisms, revolves, cups, cap blends | `Verify` reports `Suspect` | `docs/verification-design.md` |
 | Wall survey of a sphere's revolve, solid or hollow (its meridian arcs meet the axis at both ends) | `Verify` reports `Suspect` (`DiagUndecidedWall`) | `docs/verification-design.md` |
+| Wall, undercut and concave-radius surveys, clearance and the tolerance gate's revolve arm on a revolve whose meridian carries a displacement bound | `Verify` reports `Suspect`; the gate diameter is withheld | `docs/surface-intersection-design.md` §7.2 |
 
 ## Model structure — v1 non-goals
 

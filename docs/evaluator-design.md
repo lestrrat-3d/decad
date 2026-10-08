@@ -392,7 +392,9 @@ coordinates and an exactly stated end, so an integer profile about a
 coordinate axis keeps its φ = 0 cap and seam vertices `Exact`. A trimmed
 `RevolveChain`'s section displacement (`sectionDelta`) is not in the vertex
 bound: `Area`, `Bounds` and the tolerance gate charge it, as they do for the
-prism's chain.
+prism's chain. A whole-section displacement — an offset construction's, which
+`sectionWhole` marks — is: the recorded point is widened by it per component
+before the comparison (`docs/surface-intersection-design.md` §7.2).
 The swept edges' curves are held floats with no bound of their own: a
 junction `Circle3`/`Arc3` takes its centre and radius from the walk's (z, ρ)
 (`junctionCircle`) and a cap `Arc3` its centre from the walk's (cU, cV).
@@ -427,7 +429,9 @@ exactly orthonormal. The bound therefore covers the re-expression, the snap,
 the classification, the angle and every placement rounding at once, and the
 tag's own arithmetic proof is not run. It is zero where every leaf is exact and
 the unit normal is a coordinate axis, so an integer profile about a coordinate
-axis keeps those wall normals `Exact`. A plain float `atan2` was not seen to
+axis keeps those wall normals `Exact`. Under a whole-section displacement each
+recorded leaf is widened by it per component first, so the bound holds the
+surface the displaced record denotes. A plain float `atan2` was not seen to
 break the tag's own bound on its own; the snapped centre, a near-parallel or
 near-perpendicular segment, and a far or tilted axis do
 (`apitest/revolve_normal_bound_test.go`). A partial sweep's cap carries its
@@ -481,6 +485,9 @@ one for `∫zρ dA`, all read in AXIS coordinates so a profile far down the axis
 pays its large `|z|` only where `z` appears. Every one of those charges is
 exactly zero for a profile whose on-axis endpoints already sit on the axis,
 which is what leaves an ordinary axis-incident revolve as `Exact` as before.
+A payload whose record sits within a proven `sectionDelta` of the meridian it
+denotes charges that distance beside the snap, into the same three readings
+and the region's own area (`docs/surface-intersection-design.md` §7.2).
 `Bounds` from per-face analytic extremes: each face's radial
 extreme about the axis (a cylinder's radius, a cone's two end radii, a
 torus/sphere's center distance ± minor/radius) and axial range, with a

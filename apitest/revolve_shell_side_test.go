@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -109,6 +110,55 @@ func TestRevolveShellSideOpening(t *testing.T) {
 		decadtest.MeasuresVolume(t, shelled, fullTurnVolume(1000-576))
 		require.ElementsMatch(t, []float64{8, 10}, cylinderRadii(t, shelled), `no wall grows along the axis`)
 		requireMeshWatertightAt(t, shelled, 0.05)
+	})
+	t.Run("slanted kept walk at a right-angle rim", func(t *testing.T) {
+		t.Parallel()
+		// The meridian (0, 0), (20, 0), (24, 8), (16, 12), (0, 12) loses the
+		// cone (20, 0)–(24, 8). The kept walk (24, 8)–(16, 12) leaves it at a
+		// right angle, so the rim is the removed cone's own line, but the kept
+		// walk is slanted: its offset foot at the opening is
+		// (24 − 1/√5, 8 − 2/√5), which the float build rounds. The wall's
+		// record carries a nonzero section displacement
+		// (docs/modify-reach-design.md §9.3.1), so the foot's swept vertex
+		// encloses the irrational point. Leg shown to fail before this
+		// fixture was accepted: publishing a zero displacement leaves the foot
+		// vertex Exact at a float that is not the foot.
+		doc := decad.New()
+		body := revolveMeridian(t, doc, [][2]float64{{0, 0}, {20, 0}, {24, 8}, {16, 12}, {0, 12}}, decad.FullRevolution{})
+		apexAt20 := func(s decad.Surface) bool {
+			c, ok := s.(decad.Cone)
+			return ok && math.Abs(c.Origin.X-20) < 1e-9
+		}
+		shelled, err := body.Shell(t.Context(), sideFace(t, body, apexAt20), units.Millimeters(1))
+		require.NoError(t, err)
+		requireManifold(t, shelled)
+		const prec = 400
+		ref := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
+		inv5 := new(big.Float).SetPrec(prec).Quo(ref(1), new(big.Float).SetPrec(prec).Sqrt(ref(5)))
+		footU := new(big.Float).SetPrec(prec).Sub(ref(24), inv5)
+		footV := new(big.Float).SetPrec(prec).Sub(ref(8), new(big.Float).SetPrec(prec).Mul(ref(2), inv5))
+		fu, _ := footU.Float64()
+		fv, _ := footV.Float64()
+		var foot *decad.Vertex
+		for _, v := range shelled.Vertices() {
+			p := v.Position().Value
+			if math.Abs(p.X-fu) < 1e-6 && math.Abs(math.Hypot(p.Y, p.Z)-fv) < 1e-6 {
+				foot = v
+			}
+		}
+		require.NotNil(t, foot, `the opening's offset foot sweeps a seam vertex`)
+		pos := foot.Position()
+		require.Positive(t, pos.Bound.Base())
+		// The seam sits at φ = 0, so the foot's world point is (u, v, 0).
+		du := new(big.Float).SetPrec(prec).Sub(ref(pos.Value.X), footU)
+		dv := new(big.Float).SetPrec(prec).Sub(ref(pos.Value.Y), footV)
+		dz := ref(pos.Value.Z)
+		sq := new(big.Float).SetPrec(prec).Mul(du, du)
+		sq.Add(sq, new(big.Float).SetPrec(prec).Mul(dv, dv))
+		sq.Add(sq, new(big.Float).SetPrec(prec).Mul(dz, dz))
+		b := ref(pos.Bound.Base())
+		require.LessOrEqual(t, sq.Cmp(new(big.Float).SetPrec(prec).Mul(b, b)), 0,
+			`the foot vertex %v ± %v encloses the irrational foot`, pos.Value, pos.Bound)
 	})
 	t.Run("solid cylinder outward", func(t *testing.T) {
 		t.Parallel()

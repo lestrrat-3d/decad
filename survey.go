@@ -266,6 +266,12 @@ func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
+	if rp.sectionDelta != 0 {
+		// prismWall's own reading over the meridian: a wall read off the
+		// recorded meridian proves nothing about the one it only sits within
+		// sectionDelta of. Undecided, which reads Suspect.
+		return wallOutcome{}, nil
+	}
 	loops, err := revolveLoops(budget, rp)
 	if err != nil {
 		return wallOutcome{}, err
@@ -387,6 +393,14 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 // wall's normal is n_ρ·radial(φ) + n_z·ŵ over the meridian range its walk
 // sweeps and the azimuth range of the sweep — both exact.
 func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
+	if rp.sectionDelta != 0 {
+		// The survey reads the recorded meridian's own tangents as exact, and a
+		// displaced meridian's tangents only sit within its displacement of the
+		// denoted ones: a planar wall recorded off a rounded miter tilts by an
+		// ulp and would list as an undercut. Undecided, which reads Suspect
+		// (docs/surface-intersection-design.md §7.2).
+		return undercutOutcome{}
+	}
 	p, ok := pull.Normalize()
 	if !ok {
 		return undercutOutcome{}
@@ -513,6 +527,11 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 
 // revolveMinRadius resolves the meridian walks for their bounded curvature reading.
 func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
+	if rp.sectionDelta != 0 {
+		// prismMinRadius' own reading over the meridian: a radius read off the
+		// recorded meridian, with no bound for its displacement.
+		return radiusOutcome{}, false
+	}
 	loops, err := revolveLoops(nil, rp)
 	if err != nil {
 		return radiusOutcome{}, false

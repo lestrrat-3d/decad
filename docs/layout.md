@@ -132,7 +132,8 @@ the rules leave to the byte budget.
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_build.go` | Builds a revolve's solid or sheet body and its measurements. See evaluator §6. |
-| `revolve_extent.go` | Adapts revolve extents over `internal/revolveaxis/` and `internal/revolveangle/`. See evaluator §6. |
+| `revolve_section.go` | Revolve section-displacement charges. See surface-intersection §7.2. |
+| `revolve_extent.go` | Revolve extents over `internal/revolveaxis/` and `revolveangle/`. See evaluator §6. |
 | `revolve_denotation.go` | Payload adapters for `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |
 | `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
 | `loft.go` | Loft entry points, chain ribbons, and option parsing. See loft §2/§4/§10/§16. |

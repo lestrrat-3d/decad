@@ -284,14 +284,13 @@ every one of which reads the walk set and nothing else.
 
 `Split`'s pieces are ordinary `prismPayload`/`revolvePayload` values over the
 target's own sweep interval, each carrying that cell's own section
-displacement. `prismPayload` holds the field already; **`revolvePayload` gains
-it in §11's Split increment and not before**, because a solid's displacement
-has to reach the Pappus volume and centroid as well as the area and the box,
-and §7.1 derives only the two readings a SHEET publishes. Until that increment
-lands, `revolvePayload` carries the field for the sheet readings alone and its
-solid build refuses a nonzero value outright rather than integrating a volume
-over a section it cannot charge. That refusal is reject-only and needs no
-tolerance: the field is either zero or it is not.
+displacement. Both payloads hold the field, and a solid revolve's build
+charges it into every reading a solid publishes: §7.1 derives the area and
+the box, and §7.2 the Pappus volume, the centroid, a cap's area, the vertices,
+the walls' denoted normals and the mesh. `revolvePayload` also carries
+`sectionWhole`, which says the displacement reaches every recorded coordinate
+(an offset construction, `docs/modify-reach-design.md` §9.3.1) rather than only
+the cut ends a trim records.
 
 `Extend`'s result is the receiver's own `chainPayload` or
 `chainRevolvePayload` with one range widened and its own section displacement
@@ -356,7 +355,7 @@ point pointing here.
 | RS10 | A surviving walk's recorded segments do not join at an interior junction (`falsifyLoopJoins`, seam §3, run at interior junctions only per seam §2.2) | `ErrUnrecordableProfile` | No — a differently-drawn operand closes |
 | RS11 | `Trim`, `Extend` or `Split` handed a retired body, or bodies owned by different documents | `ErrRetiredBody` / `ErrForeignBody` | The existing uniform terms (core §6) |
 | RS12 | `Extend` handed a receiver whose section is a closed walk, or an edge that is not one of the two sweep edges its free ends carry | `ErrUnsupported` | Permanent for the closed receiver — the operation it wants is an extent, not an intersection |
-| RS13 | `Split` handed a revolve-family pair, or any construction handing a `revolvePayload` carrying a nonzero section displacement to the solid build | `ErrUnsupported` | No — §11's Split increment lifts both, and §3.4 states what it owes first |
+| RS13 | `Split` handed a revolve-family pair | `ErrUnsupported` | No — §11's Split increment lifts it, and states what it still owes |
 | RS14 | `Extend` handed a partially revolved ribbon, or a revolve pair either of whose meridians touches the resolved axis | `ErrUnsupported` | No — the first waits on a recorded free-end map (§2.2), the second on the pole topology a cut fragment ending on the axis would sweep |
 
 The work budget and cancellation are `internal/proofbound/budget.go`'s existing `workBudget` and
@@ -470,17 +469,15 @@ the same `absSumUpper` the other four take. The envelope
 wherever the axis-frame and sweep-extreme terms read it, so those two are
 charged at an envelope covering the true section too.
 
-**The axis-contact audit never sees a displaced meridian.**
-`auditAxisContact`'s `regionSnapAllow` runs ONCE, at axis resolution, over the
-caller's own recorded profile, and a trimmed body reuses the receiver's
-already-resolved axis rather than resolving a new one. Its four figures are read
-in exactly one place, the solid build's region integrals — the area, first,
-mixed and second moments the Pappus volume and centroid are composed from — and
-`requireExactRevolveSection` refuses a nonzero displacement before any of them
-runs. So the audit's own exact-leaf reading of a plane-local coordinate stands
-unchanged, and the sheet readings this section derives reach it on no path at
-all. That is the same boundary §3.4 draws for `revolvePayload.sectionDelta`,
-read from the audit's side.
+**The axis-contact audit reads the record, not the denotation.**
+`auditAxisContact`'s `regionSnapAllow` compares the faces built from the
+SNAPPED meridian with the region integrated over the RECORDED one, and both
+are the record's own coordinates, so its exact-leaf reading of a plane-local
+coordinate is right for what it bounds. A trimmed body reuses the receiver's
+already-resolved axis; a shell resolves its wall's axis over the wall's own
+record. The distance from the recorded meridian to the denoted one is a
+second, separate term: §7.2 charges it beside the snap's four figures, and
+neither is read as covering the other.
 
 **A zero charge stays a zero charge.** Every one of these folds is taken only
 where the payload's own `sectionDelta` is nonzero, on the prism ribbon's own
@@ -500,6 +497,103 @@ and nothing here publishes a zero bound over a walk that closes only to within
 `Split`'s pieces read `evalPrism`'s own composition unchanged, each over its
 own cell's `δ_cut`, so a piece is `Exact` only where its cell's every edge is
 whole — the piece the tool did not touch.
+
+### 7.2 The revolve arm of the solid readings
+
+A solid revolve publishes readings a sheet does not: the Pappus volume, the
+centroid and, for a partial sweep, two cap areas. Each integrates the RECORDED
+region, and §3.4's piece or an offset construction's wall denotes a region
+whose boundary sits within `sectionDelta` of the recorded one, both ways. This
+section derives what each reading owes that displacement. The derivation is
+`revolve_section.go`'s, and every reading takes its term only where
+`sectionDelta` is nonzero, on §7.1's own rule: an undisplaced revolve reads bit
+for bit as it did.
+
+**The band.** The recorded region and the denoted one differ by a set inside
+the `δ`-neighbourhood of the recorded boundary: a point in one and not the other
+has both boundaries between it and either interior, so it is within `δ` of the
+recorded one. `proofbound.SectionDisplacementArea` encloses that
+neighbourhood's area as `2·δ·p + n·π·δ²`, `p` a proven upper bound on the
+recorded boundary's length (each segment's walk length plus its own bound) and
+`n` the recorded segment count. This is prism §7's cap term unchanged; call it
+`A`.
+
+**The envelope.** Every point of the band moves each plane-local coordinate by
+at most `δ` from the recorded boundary, so `revolveaxis.SectionCoordUpper`
+widens the recorded L1 coordinate envelope by `2δ`, and
+`axisFrame.radialUpper` turns it into `E`, a proven upper bound on the
+distance from the true axis anchor to any band point. For a unit axis
+direction both `|z|` and `|ρ|` are at most that distance.
+
+**The region readings.** Each axis-frame region integral moves by at most its
+integrand's envelope times `A`:
+
+- `|Δ∫ρ dA| ≤ E·A`, charged on `q`, so the volume `Δφ·q` carries it through
+  the bounded product it already runs;
+- `|Δ∫zρ dA| ≤ E²·A` on `mzr` and `|Δ∫ρ² dA| ≤ E²·A` on `mrr`, so the
+  centroid's axial quotient `mzr/q` and in-plane quotient `mrr/(Δφ·q)` carry
+  them through `BoundedDiv`;
+- a cap's area `∫dA` moves by at most `A`, charged on each cap face and on the
+  solid's area through the caps' own fields.
+
+The centroid's independent geometry bound reads the same widened envelope, so
+the `min` it takes against the quotient's bound never discards the charge.
+Every product rounds outward through `ProductUpper` and every sum through
+`AbsSumUpper`. The snap's own four figures (§7.1) compose beside these.
+
+**The per-walk readings** need to know WHICH coordinates moved. A trim moves
+only its cut ends, which §7.1's fold charges endpoint by endpoint. An offset
+construction moves every coordinate, which `revolvePayload.sectionWhole`
+states. Its premise has two halves, and both are needed. Every recorded
+boundary point sits within `δ` of the denoted boundary and every denoted point
+within `δ` of the recorded one, which the band, the mesh's `+δ` and
+`SectionExtentAllow` read. Each recorded segment also pairs with a denoted
+segment of the same kind whose two ends, and an arc's centre, each sit within
+`δ`, with the arc's sweep taken without a 2π wrap, which the per-walk terms
+below read. `offsetSectionDelta`'s figure meets both. Under it:
+
+- every walk takes §7.1's fold at BOTH ends with `(δ, δ)`, so a straight
+  wall's area, every junction latitude and arc length, and every cap edge's
+  length carry it through arithmetic that already exists;
+- a circular walk's length moves by up to `12·π·δ`
+  (`proofbound.SectionDisplacementLength`'s per-walk figure), its centre's
+  radial coordinate by the centre's own fold and its radius by `2δ`, each added
+  to the walk's own bound and envelope;
+- a circular wall's area moment `∫ρ ds` is enclosed for the recorded arc by its
+  envelope and its rational closed form, both read off the recorded segment, so
+  it takes one more term. Parameterise both walks at constant speed over
+  `[0, 1]`; then `|M − M*| ≤ |L − L*|·max ρ + L*·max|γ(s) − γ*(s)|`, since `ρ`
+  is 1-Lipschitz in the plane. An arc's points move by at most the centre's
+  `δ`, the radius's `2δ` and the angle's sweep at the denoted radius, which
+  the ends' `4δ` chord bounds by `2π·δ` while that radius is at least `4δ`
+  and by `8δ` outright below it, so `12δ` in every case, and the term is
+  `12·π·δ·ρ_upper + (L_upper + 12·π·δ)·12δ`. A line's is
+  `2δ·ρ_upper + (L_upper + 2δ)·δ`, which the mesh's area slack reads; a
+  straight wall's own area needs none beside the fold;
+- each swept vertex's recorded point and each wall's denoted-normal leaves are
+  widened by `δ` per component before the exact comparison
+  (`revolvemesh.RevolveLift.SweptPointGap`, `StraightWallNormal`,
+  `CircularWallNormal`), so a vertex's bound and `Face.NormalAt`'s bound hold
+  the denoted point and surface.
+
+**The mesh.** The revolve tessellator chords the recorded meridian. It reserves
+`δ` out of the tolerance before the two coordinate stages, on the prism
+tessellator's terms, refuses a tolerance that cannot pay for it, and adds `δ`
+to every face bound. The area slack gains every wall's moment term over the
+sweep and, for a partial solid, both caps' `A`. The occupied-volume bound gains
+`Δφ_upper·E·A`, the volume's own term, since the recorded and denoted solids
+differ by the band swept at a radius no greater than `E`. `pairChordTolerance`
+reads the reservation beside the two coordinate stages.
+
+**What stays undecided.** The consumers that read the recorded meridian as
+exact and carry no term for its displacement refuse or answer `Suspect`, each on
+the displaced prism's own precedent: the clearance kernel builds no model
+(`addRevolveFaces`), so a pair holding the body is undecided and the tolerance
+gate's revolve arm is withheld; the wall, minimum-radius and undercut surveys
+are undecided, the last because a planar wall recorded off a rounded miter
+tilts by an ulp and would read as opposing the pull; the sheet-validity leg reads no radial proof; equal records certify
+no interference; `Thicken`, a junction blend and a second shell refuse; and the
+general revolve's inertia path refuses, which falls back to the verified mesh.
 
 ## 8. Public API
 
@@ -617,12 +711,13 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
    S6, the meridian scene, and §7.1's fold into the axis-coordinate walk. Tests:
    T180, T182 and T183. A trimmed revolve sheet's own mesh waits on surface
    increment 4, exactly as a profile-fed revolve sheet's does.
-5. **PR5 — `Document.Split` over the revolve family.** It owes what PR4 does
-   not: `revolvePayload.sectionDelta` reaching the Pappus VOLUME and CENTROID
-   beside the area and the box, and the removal of the solid build's refusal
-   §3.4 states. `Split`'s cell selection, per-cell recording and deterministic
-   order are PR2's. Until it
-   lands, `Split` refuses a revolve pair by name.
+5. **PR5 — `Document.Split` over the revolve family.** Its solid half has
+   landed: `revolvePayload.sectionDelta` reaches the Pappus volume, the
+   centroid and every other solid reading (§7.2), and the solid build takes a
+   nonzero value. What it still owes is the revolve arm of `Split`'s cell
+   selection and the per-cell recording into `revolvePayload` pieces; the
+   deterministic order is PR2's. Until it lands, `Split` refuses a revolve pair
+   by name.
 
 PR1 depends on surface increments 1 and 6 alone — increment 1 for `BodyKind`,
 `Edge.IsFree` and the sheet validity audit, increment 6 for `ChainRecord` and

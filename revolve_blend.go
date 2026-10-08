@@ -58,9 +58,9 @@ type revolveJunction struct {
 // receiver, the magnitude and the selector — has already run in the caller.
 func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edges []*Edge, rp revolvePayload, op revolveBlendOp) (*Body, error) {
 	d := b.doc
-	// RS13's guard, read as a modify refusal: the rewrite is of the recorded
-	// meridian, and a meridian displaced from the one it denotes has no proven
-	// rewrite (requireExactSection's prism reading).
+	// The section-displacement guard, read as a modify refusal: the rewrite
+	// is of the recorded meridian, and a meridian displaced from the one it
+	// denotes has no proven rewrite (requireExactSection's prism reading).
 	if err := requireExactRevolveSection(rp, "this evaluator's junction "+op.kind); err != nil {
 		return nil, err
 	}

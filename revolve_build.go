@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
@@ -72,16 +73,27 @@ type revolvePayload struct {
 	xform         r3.Transform
 	surfaceResult bool
 	// sectionDelta is prismPayload's own §7 term over the MERIDIAN: the proven
-	// upper bound on how far any recorded meridian coordinate sits from the
-	// meridian its construction denotes. Only the SHEET readings charge it
-	// today — the wall areas, through docs/surface-intersection-design.md
-	// §7.1's fold into the axis-coordinate walk, and the box, through
-	// extentBoundedAlong's fifth mechanism. The Pappus VOLUME and CENTROID do
-	// not, so requireExactRevolveSection refuses a nonzero value at the solid
-	// build rather than integrating a region over a section it cannot charge
-	// (§3.4; §6's RS13). A revolve a caller draws directly leaves it zero and
-	// every reading takes the path it takes today, bit for bit.
+	// upper bound on how far any recorded meridian point sits from the
+	// meridian its construction denotes, and any denoted point from the
+	// recorded one, both ways. Where sectionWhole is set it also states that
+	// each recorded segment pairs with a denoted one of its kind whose ends
+	// (and an arc's centre) sit within it, the arc's sweep taken without a 2π
+	// wrap. The wall areas take it through
+	// docs/surface-intersection-design.md §7.1's fold into the axis-coordinate
+	// walk, the box through extentBoundedAlong's fifth mechanism, and the
+	// solid's region readings — the Pappus volume, the centroid and a cap's
+	// area — through §7.2's band (revolve_section.go). A revolve a caller draws
+	// directly leaves it zero and every reading takes the path it takes today,
+	// bit for bit.
 	sectionDelta float64
+	// sectionWhole says sectionDelta reaches every recorded coordinate — each
+	// segment's two ends and an arc's centre — as an offset construction's does
+	// (shell_revolve.go), rather than only the cut ends a trim records, and
+	// that the segment-wise pairing above holds. The per-walk readings then
+	// charge every end, every vertex and every wall's denoted normal (§7.2); a
+	// cut construction leaves it false and charges its own cut ends through
+	// trimRevolveSegmentCharges.
+	sectionWhole bool
 	// radialProof belongs to this exact profile and resolved axis. A path
 	// replacing either must clear it; placement alone preserves both.
 	radialProof bool
@@ -96,19 +108,11 @@ type revolvePayload struct {
 	blendKind string
 }
 
-// requireExactRevolveSection is RS13's reject-only guard: the solid build
-// integrates a volume and a centroid over the recorded meridian, and
-// docs/surface-intersection-design.md §7.1 derives the section displacement's
-// reach into the AREA and the BOX alone. The field is either zero or it is
-// not, so the guard needs no tolerance and can only refuse.
-//
-// It is also what keeps auditAxisContact's own exact-leaf reading of a
-// plane-local coordinate sound. That audit runs ONCE, at axis resolution, over
-// the caller's own undisplaced profile, and its four regionSnapAllow figures
-// are read in exactly one place — evalRevolveContextWork's region integrals
-// below, every one of them past this guard. A trimmed body reuses the
-// receiver's already-resolved axis and never re-runs the audit, so no
-// displaced meridian reaches it by either route.
+// requireExactRevolveSection is the reject-only guard an operation that
+// rewrites the recorded meridian takes — a junction blend, a shell: each
+// offsets or cuts the RECORDED meridian, and a meridian displaced from the one
+// it denotes has no proven rewrite. The field is either zero or it is not, so
+// the guard needs no tolerance and can only refuse.
 func requireExactRevolveSection(rp revolvePayload, what string) error {
 	if rp.sectionDelta == 0 {
 		return nil
@@ -231,6 +235,10 @@ func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec, work *freeform
 	if err != nil {
 		return 0, err
 	}
+	// The denoted section's points sit within sectionDelta of the recorded
+	// boundary, so the envelope that bounds the material is widened over it
+	// (docs/surface-intersection-design.md §7.2).
+	coordUpper = revolveaxis.SectionCoordUpper(coordUpper, rp.sectionDelta)
 	originUpper := vecL1(rp.frame.Origin())
 	profileUpper := proofbound.AbsSumUpper(
 		originUpper,
@@ -409,9 +417,6 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := requireExactRevolveSection(rp, "a profile-fed revolve"); err != nil {
-		return nil, err
-	}
 	ig, err := rp.profile.EvaluatorIntegralsUncheckedContext(ctx, freeform.MomentSecondOrder, work)
 	if err != nil {
 		return nil, err
@@ -505,6 +510,26 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 			normalBound: rp.phi1Delta(),
 			denoted:     rp.capDenotation(rp.end1(), false),
+		}
+	}
+
+	// The section displacement's region charge (docs/surface-intersection-design.md
+	// §7.2): the recorded and denoted regions differ by a band of at most
+	// section.band, so the cap area and the three axis-frame moments each move by
+	// their integrand's envelope over it. The snap's charges above are about the
+	// recorded region against the snapped one and compose beside this one. Zero
+	// for every payload no construction displaced, and folded nowhere then.
+	section, err := revolveSectionChargeOf(rp, work)
+	if err != nil {
+		return nil, err
+	}
+	if section.band > 0 {
+		q.Bound = proofbound.AbsSumUpper(q.Bound, section.first())
+		mzr.Bound = proofbound.AbsSumUpper(mzr.Bound, section.second())
+		mrr.Bound = proofbound.AbsSumUpper(mrr.Bound, section.second())
+		if !rp.full {
+			capStart.areaBound = proofbound.AbsSumUpper(capStart.areaBound, section.band)
+			capEnd.areaBound = proofbound.AbsSumUpper(capEnd.areaBound, section.band)
 		}
 	}
 
@@ -814,11 +839,11 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 			return revolveWalks{}, err
 		}
 		plane[i] = w
-		startCharge, endCharge, err := trimRevolveSegmentCharges(seg, rp.sectionDelta)
+		axisWalk, err := rp.chargedWalk(seg, w)
 		if err != nil {
 			return revolveWalks{}, err
 		}
-		raw[i] = survey2d.SideWalk{SegmentWalk: rp.ax.walkCharged(w, startCharge, endCharge), Segs: []int{i}}
+		raw[i] = survey2d.SideWalk{SegmentWalk: axisWalk, Segs: []int{i}}
 	}
 	walks, err := coalesceWalksContext(ctx, raw)
 	if err != nil {
@@ -867,7 +892,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// The recorded point the junction denotes: walk i's start is its
 			// first recorded segment's own start (revolveJunctions,
 			// tessellate_revolve.go, reads the same one).
-			at := walkStart(resolved.plane[w.Segs[0]])
+			at := rp.denotedPoint(walkStart(resolved.plane[w.Segs[0]]))
 			prev := walks[(i+n-1)%n]
 			turn := prev.TanOutU*w.TanInV - prev.TanOutV*w.TanInU
 			center, jAxis, jRadius := rp.junctionCircle(b, j.z, j.rho)
@@ -970,7 +995,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// A whole closed walk's seam vertex denotes its one recorded
 			// segment's own start; every other walk's cap edge takes the
 			// junction vertices above.
-			seam := walkStart(resolved.plane[w.Segs[0]])
+			seam := rp.denotedPoint(walkStart(resolved.plane[w.Segs[0]]))
 			cap0[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs0, ve0, seam, rp.end0(), holeLoop)
 			cap1[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs1, ve1, seam, rp.end1(), holeLoop)
 		}
@@ -1026,7 +1051,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		for j, si := range w.Segs {
 			segs[j] = loop.Segments[si]
 		}
-		faceArea := proofbound.BoundedMul(walkAxisMoment(w.SegmentWalk, kinds[i], segs, rp.ax), sweep)
+		faceArea := proofbound.BoundedMul(rp.wallMoment(w.SegmentWalk, kinds[i], segs), sweep)
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
@@ -1283,7 +1308,10 @@ func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plan
 		circles := make([]revolvemesh.RecordedMeridian, len(w.Segs))
 		for i, si := range w.Segs {
 			pw := plane[si]
-			circles[i] = revolvemesh.RecordedMeridian{U: pw.CU, V: pw.CV, R: pw.Radius, RBound: pw.RadiusBound}
+			circles[i] = revolvemesh.RecordedMeridian{
+				U: pw.CU, V: pw.CV, UV: rp.denotedBound(proofbound.WalkEndBound{}),
+				R: pw.Radius, RBound: rp.denotedRadiusBound(pw.RadiusBound),
+			}
 		}
 		den = lift.CircularWallNormal(ab, rp.xform, circles)
 	default:
@@ -1291,8 +1319,8 @@ func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plan
 		for i, si := range w.Segs {
 			pw := plane[si]
 			ends[i] = [2]revolvemesh.RecordedMeridian{
-				{U: pw.StartU, V: pw.StartV, UV: pw.StartBound},
-				{U: pw.EndU, V: pw.EndV, UV: pw.EndBound},
+				{U: pw.StartU, V: pw.StartV, UV: rp.denotedBound(pw.StartBound)},
+				{U: pw.EndU, V: pw.EndV, UV: rp.denotedBound(pw.EndBound)},
 			}
 		}
 		den = lift.StraightWallNormal(ab, rp.xform, ends)
@@ -1534,11 +1562,11 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 			return revolveWalks{}, err
 		}
 		plane[i] = w
-		startCharge, endCharge, err := trimRevolveSegmentCharges(seg, rp.sectionDelta)
+		axisWalk, err := rp.chargedWalk(seg, w)
 		if err != nil {
 			return revolveWalks{}, err
 		}
-		raw[i] = survey2d.SideWalk{SegmentWalk: rp.ax.walkCharged(w, startCharge, endCharge), Segs: []int{i}}
+		raw[i] = survey2d.SideWalk{SegmentWalk: axisWalk, Segs: []int{i}}
 	}
 	walks, err := coalesceChainWalksContext(ctx, raw)
 	if err != nil {
@@ -1582,10 +1610,10 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 	junctionSource := func(i int) (z, rho, rhoBound, axisRadiusUpper float64, at sweptPoint) {
 		if i < n {
 			w := walks[i]
-			return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper, walkStart(resolved.plane[w.Segs[0]])
+			return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper, rp.denotedPoint(walkStart(resolved.plane[w.Segs[0]]))
 		}
 		w := walks[n-1]
-		return w.EndU, w.EndV, w.EndVBound, w.AxisRadiusUpper, walkEnd(resolved.plane[w.Segs[len(w.Segs)-1]])
+		return w.EndU, w.EndV, w.EndVBound, w.AxisRadiusUpper, rp.denotedPoint(walkEnd(resolved.plane[w.Segs[len(w.Segs)-1]]))
 	}
 
 	js := make([]revJunction, n+1)
@@ -1674,7 +1702,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		for oi, si := range w.Segs {
 			segs[oi] = rp.profile.Outer.Segments[si]
 		}
-		faceArea := proofbound.BoundedMul(walkAxisMoment(w.SegmentWalk, kinds[i], segs, rp.ax), sweep)
+		faceArea := proofbound.BoundedMul(rp.wallMoment(w.SegmentWalk, kinds[i], segs), sweep)
 		face := &Face{
 			surface:   surf,
 			origins:   origins,

@@ -55,6 +55,11 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 			pa.phi1 != pb.phi1 || pa.full != pb.full || pa.xform != pb.xform {
 			return false, nil
 		}
+		if pa.sectionDelta != 0 || pb.sectionDelta != 0 {
+			// The prism arm's own reasoning: equal records certify equal sets
+			// only while each record is the set it denotes.
+			return false, nil
+		}
 		return profileRecordsEqual(budget, pa.profile, pb.profile)
 	default:
 		return false, nil
