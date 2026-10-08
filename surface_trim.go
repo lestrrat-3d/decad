@@ -279,26 +279,8 @@ func resolveExtend(ctx context.Context, budget *proofbound.WorkBudget, view pris
 	if err := budget.Err(); err != nil {
 		return nil, 0, err
 	}
-	source := prismcells.ExtendSource(tags)
-	if source == nil {
-		return nil, 0, fmt.Errorf(`%w: the extended carrier has no scene entity`, ErrUnsupported)
-	}
-	fragments, err := prismcells.ExtendProfileFragments(profiles)
-	if err != nil {
-		return nil, 0, err
-	}
-	chains, err := extendChainsContext(ctx, s.Chains)
-	if err != nil {
-		return nil, 0, err
-	}
-	if err := budget.Err(); err != nil {
-		return nil, 0, err
-	}
-	fragments, err = prismcells.AppendExtendChainFragments(fragments, chains)
-	if err != nil {
-		return nil, 0, err
-	}
-	nearest, edge, found, err := prismcells.NearestExtendCut(budget, fragments, source, t0, t1, atStart)
+	nearest, edge, found, err := prismcells.ResolveExtendCut(budget, tags, profiles,
+		func() ([]*sketch.Chain, error) { return prismcells.ChainsContext(ctx, s.Chains) }, t0, t1, atStart)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -318,23 +300,6 @@ func resolveExtend(ctx context.Context, budget *proofbound.WorkBudget, view pris
 		return nil, 0, err
 	}
 	return widened, delta, nil
-}
-
-// extendChainsContext gives the second bounded arrangement publication the
-// same cancellation discipline as prismProfilesContext.
-func extendChainsContext(ctx context.Context, chains func() []*sketch.Chain) ([]*sketch.Chain, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	done := make(chan []*sketch.Chain)
-	go func() { done <- chains() }()
-	select {
-	case result := <-done:
-		return result, nil
-	case <-ctx.Done():
-		<-done
-		return nil, ctx.Err()
-	}
 }
 
 // TrimSide names which pieces of the receiver a Trim keeps
@@ -632,10 +597,6 @@ func trimSegmentParamRange(seg CurveSegment) (float64, float64, error) {
 	return prismcells.SegmentParamRange(seg)
 }
 
-func trimCutChargeUV(seg CurveSegment) (float64, float64, error) {
-	return prismcells.TrimCutChargeUV(seg)
-}
-
 func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (proofbound.WalkEndBound, proofbound.WalkEndBound, error) {
 	return prismcells.TrimRevolveSegmentCharges(seg, delta)
 }
@@ -660,53 +621,11 @@ func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (proofbound.Walk
 // no augmentation.
 func trimBoundsWalks(profile ProfileRecord, work *freeform.FreeformWork) (*profileWalks, error) {
 	before, beforeRecon := workSpent(work)
-	walkCharged := func(seg CurveSegment) (survey2d.SegmentWalk, error) {
-		w, err := walkOf(seg, work)
-		if err != nil {
-			return survey2d.SegmentWalk{}, err
-		}
-		t0, t1, err := trimSegmentParamRange(seg)
-		if err != nil {
-			return survey2d.SegmentWalk{}, err
-		}
-		chargeU, chargeV, err := trimCutChargeUV(seg)
-		if err != nil {
-			return survey2d.SegmentWalk{}, err
-		}
-		if t0 != 0 && t0 != 1 {
-			w.StartBound = proofbound.WalkEndBound{
-				U: proofbound.AbsSumUpper(w.StartBound.U, chargeU),
-				V: proofbound.AbsSumUpper(w.StartBound.V, chargeV),
-			}
-		}
-		if t1 != 0 && t1 != 1 {
-			w.EndBound = proofbound.WalkEndBound{
-				U: proofbound.AbsSumUpper(w.EndBound.U, chargeU),
-				V: proofbound.AbsSumUpper(w.EndBound.V, chargeV),
-			}
-		}
-		return w, nil
-	}
-
-	outer := make([]survey2d.SegmentWalk, len(profile.Outer.Segments))
-	for i, seg := range profile.Outer.Segments {
-		w, err := walkCharged(seg)
-		if err != nil {
-			return nil, err
-		}
-		outer[i] = w
-	}
-	holes := make([][]survey2d.SegmentWalk, len(profile.Holes))
-	for hi, hole := range profile.Holes {
-		hw := make([]survey2d.SegmentWalk, len(hole.Segments))
-		for i, seg := range hole.Segments {
-			w, err := walkCharged(seg)
-			if err != nil {
-				return nil, err
-			}
-			hw[i] = w
-		}
-		holes[hi] = hw
+	outer, holes, err := prismcells.TrimBoundsWalks(profile.Outer, profile.Holes, func(seg CurveSegment) (survey2d.SegmentWalk, error) {
+		return walkOf(seg, work)
+	})
+	if err != nil {
+		return nil, err
 	}
 	after, afterRecon := workSpent(work)
 	return &profileWalks{
@@ -770,90 +689,15 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 	// propagation to reach across either. All three are genuine trim
 	// answers, not unresolved topology, so they are read structurally rather
 	// than reported as a classifier miss.
-	insideTool, noCrossing, err := prismcells.TrimNoCrossingSide(budget, tags, profiles, len(rcv.profile.Holes))
+	walks, err := prismcells.ResolveTrimWalks(budget, tags, profiles, len(rcv.profile.Holes), keepInside)
 	if err != nil {
 		return nil, 0, err
-	}
-	if noCrossing {
-		if insideTool == keepInside {
-			return nil, 0, fmt.Errorf(`%w: the tool separates no fragment of the receiver; every fragment is kept`, ErrDegenerate)
-		}
-		return nil, 0, fmt.Errorf(`%w: the tool separates no fragment of the receiver; none is kept`, ErrDegenerate)
-	}
-
-	// RS5: a span the tool shares with the receiver (a coincident carrier,
-	// prismcells.CoincidentEdges) is the receiver's boundary and the tool's
-	// at once, and sketch emits it under only one of them, so no side
-	// reading settles that fragment.
-	coincident, readable, err := prismcells.CoincidentEdges(budget, tags, profiles)
-	if err != nil {
-		return nil, 0, err
-	}
-	if !readable || len(coincident.Spans) > 0 {
-		return nil, 0, fmt.Errorf(`%w: a receiver boundary fragment coincides with the tool's own boundary`, ErrUnsupported)
-	}
-
-	matterRcv, matterTool, resolved, err := prismcells.Classify(budget, tags, profiles)
-	if err != nil {
-		return nil, 0, err
-	}
-	if !resolved {
-		return nil, 0, fmt.Errorf(`%w: the receiver and tool's arrangement is not one this evaluator's crossing classifier resolves`, ErrUnsupported)
-	}
-
-	survivors, total, err := prismcells.SurvivingFragments(budget, tags, matterRcv, matterTool, profiles, keepInside)
-	if err != nil {
-		return nil, 0, err
-	}
-	if len(survivors) == 0 {
-		return nil, 0, fmt.Errorf(`%w: the tool separates no fragment of the receiver; none is kept`, ErrDegenerate)
-	}
-	if len(survivors) == total {
-		return nil, 0, fmt.Errorf(`%w: the tool separates no fragment of the receiver; every fragment is kept`, ErrDegenerate)
-	}
-
-	walks, resolved, err := prismcells.ChainSurvivorWalks(budget, survivors)
-	if err != nil {
-		return nil, 0, err
-	}
-	if !resolved {
-		return nil, 0, fmt.Errorf(`%w: the surviving fragments do not chain into open walks this evaluator resolves`, ErrUnsupported)
 	}
 
 	// Point of no return: every further problem (a rejected TExact fragment,
 	// RS9; a walk that does not join at an interior junction, RS10) is
 	// genuine.
-	chains := make([]ChainRecord, len(walks))
-	cutDelta := 0.0
-	for wi, walk := range walks {
-		segs := make([]CurveSegment, len(walk))
-		joins := make([]loopJoin, len(walk))
-		for i, e := range walk {
-			if err := budget.Step(); err != nil {
-				return nil, 0, err
-			}
-			seg, err := recordEdge(e)
-			if err != nil {
-				return nil, 0, err
-			}
-			segs[i] = seg
-			join, err := edgeJoin(e, seg)
-			if err != nil {
-				return nil, 0, err
-			}
-			joins[i] = join
-			d, err := prismcells.CutDelta(e, seg)
-			if err != nil {
-				return nil, 0, err
-			}
-			cutDelta = math.Max(cutDelta, d)
-		}
-		if err := falsifyChainJoins(joins); err != nil {
-			return nil, 0, err
-		}
-		chains[wi] = ChainRecord{Segments: segs}
-	}
-	return chains, cutDelta, nil
+	return prismcells.RecordTrimWalks(budget, walks)
 }
 
 // Split cuts target with tool and returns one solid per arranged target cell
@@ -1035,24 +879,9 @@ func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, to
 	if len(profiles) == 0 {
 		return nil, fmt.Errorf(`%w: the split arrangement holds no bounded cell`, ErrUnsupported)
 	}
-	unchanged, err := prismcells.SplitUnchangedTargetCell(budget, tags, profiles, len(target.profile.Holes))
+	selected, err := prismcells.ResolveSplitCells(budget, tags, profiles, len(target.profile.Holes))
 	if err != nil {
 		return nil, err
-	}
-	if unchanged {
-		return nil, fmt.Errorf(`%w: the tool separates no part of the target`, ErrDegenerate)
-	}
-	matterTarget, err := prismcells.ClassifySplit(budget, tags, profiles)
-	if err != nil {
-		return nil, err
-	}
-	selected, err := prismcells.Select(budget, profiles, matterTarget, make([]bool, len(profiles)),
-		func(a, _ bool) bool { return a })
-	if err != nil {
-		return nil, err
-	}
-	if len(selected) < 2 {
-		return nil, fmt.Errorf(`%w: the tool separates no part of the target`, ErrDegenerate)
 	}
 	result := make([]prismPayload, len(selected))
 	for i, cell := range selected {
@@ -1063,22 +892,9 @@ func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, to
 		if err != nil {
 			return nil, err
 		}
-		cutDelta := 0.0
-		for _, loop := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
-			for _, edge := range loop {
-				if err := budget.Step(); err != nil {
-					return nil, err
-				}
-				seg, err := recordEdge(edge)
-				if err != nil {
-					return nil, err
-				}
-				delta, err := prismcells.CutDelta(edge, seg)
-				if err != nil {
-					return nil, err
-				}
-				cutDelta = math.Max(cutDelta, delta)
-			}
+		cutDelta, err := prismcells.SplitCellCutDelta(budget, cell)
+		if err != nil {
+			return nil, err
 		}
 		result[i] = prismPayload{
 			profile: record, frame: target.frame, xform: target.xform,

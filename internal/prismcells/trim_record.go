@@ -8,7 +8,63 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
+
+// TrimBoundsWalks resolves a trimmed profile in recorded outer-then-hole
+// order and charges each cut endpoint's own coordinate allowance.
+func TrimBoundsWalks(outerLoop sectionrecord.LoopRecord, holeLoops []sectionrecord.LoopRecord,
+	walk func(sectionrecord.CurveSegment) (survey2d.SegmentWalk, error)) (
+	[]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, error) {
+	walkCharged := func(seg sectionrecord.CurveSegment) (survey2d.SegmentWalk, error) {
+		w, err := walk(seg)
+		if err != nil {
+			return survey2d.SegmentWalk{}, err
+		}
+		t0, t1, err := SegmentParamRange(seg)
+		if err != nil {
+			return survey2d.SegmentWalk{}, err
+		}
+		chargeU, chargeV, err := TrimCutChargeUV(seg)
+		if err != nil {
+			return survey2d.SegmentWalk{}, err
+		}
+		if t0 != 0 && t0 != 1 {
+			w.StartBound = proofbound.WalkEndBound{
+				U: proofbound.AbsSumUpper(w.StartBound.U, chargeU),
+				V: proofbound.AbsSumUpper(w.StartBound.V, chargeV),
+			}
+		}
+		if t1 != 0 && t1 != 1 {
+			w.EndBound = proofbound.WalkEndBound{
+				U: proofbound.AbsSumUpper(w.EndBound.U, chargeU),
+				V: proofbound.AbsSumUpper(w.EndBound.V, chargeV),
+			}
+		}
+		return w, nil
+	}
+	outer := make([]survey2d.SegmentWalk, len(outerLoop.Segments))
+	for i, seg := range outerLoop.Segments {
+		w, err := walkCharged(seg)
+		if err != nil {
+			return nil, nil, err
+		}
+		outer[i] = w
+	}
+	holes := make([][]survey2d.SegmentWalk, len(holeLoops))
+	for hi, hole := range holeLoops {
+		hw := make([]survey2d.SegmentWalk, len(hole.Segments))
+		for i, seg := range hole.Segments {
+			w, err := walkCharged(seg)
+			if err != nil {
+				return nil, nil, err
+			}
+			hw[i] = w
+		}
+		holes[hi] = hw
+	}
+	return outer, holes, nil
+}
 
 // FullExtendSegment copies the entity's defining data and names its natural
 // parameter bounds, ALWAYS ascending — t from 0 to 1 — whichever way the

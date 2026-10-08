@@ -2,12 +2,51 @@ package prismcells
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
 )
+
+// RecordTrimWalks authenticates every selected fragment and its open-walk
+// joins, then returns the recorded chains and largest cut parameter charge.
+func RecordTrimWalks(budget *proofbound.WorkBudget,
+	walks [][]sketch.BoundaryEdge) ([]sectionrecord.ChainRecord, float64, error) {
+	chains := make([]sectionrecord.ChainRecord, len(walks))
+	cutDelta := 0.0
+	for wi, walk := range walks {
+		segs := make([]sectionrecord.CurveSegment, len(walk))
+		joins := make([]sketchrecord.LoopJoin, len(walk))
+		for i, e := range walk {
+			if err := budget.Step(); err != nil {
+				return nil, 0, err
+			}
+			seg, err := sketchrecord.RecordEdge(e)
+			if err != nil {
+				return nil, 0, err
+			}
+			segs[i] = seg
+			join, err := sketchrecord.EdgeJoin(e, seg)
+			if err != nil {
+				return nil, 0, err
+			}
+			joins[i] = join
+			d, err := CutDelta(e, seg)
+			if err != nil {
+				return nil, 0, err
+			}
+			cutDelta = math.Max(cutDelta, d)
+		}
+		if err := sketchrecord.FalsifyChainJoins(joins); err != nil {
+			return nil, 0, err
+		}
+		chains[wi] = sectionrecord.ChainRecord{Segments: segs}
+	}
+	return chains, cutDelta, nil
+}
 
 // SurvivingFragments reads §3.2's Trim side: for every RECEIVER boundary
 // fragment, Classify's own tool-side reading for the cell that is
