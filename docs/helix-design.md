@@ -55,7 +55,7 @@ profile's plane, a positive pitch and a positive number of turns. The build
 admits:
 
 - a profile whose every segment, on the outer loop and on every hole, is a
-  `LineSeg` (PR 1); `ArcSeg` and `CircleSeg` segments land with PR 3;
+  whole `LineSeg` (PR 1); `ArcSeg` and `CircleSeg` segments land with PR 3;
 - an axis stated as `SketchLine`, `ConstructionAxis` or `EdgeAxis`, resolved
   into the sketch plane exactly as `Revolve` resolves it;
 - any positive finite pitch and any positive finite turn count, whole or
@@ -187,8 +187,8 @@ The existence rule applies: a requested solid that does not exist is
 | **CS4** | `pitch` not a length, or `turns` not dimensionless; either non-finite; either at or below zero | `ErrUnitKind`; `ErrNotFinite`; `ErrDegenerate` (a zero pitch names a revolve, a zero turn count names no solid) |
 | **CS5** | the profile's near-axis radial extreme is not proven positive: proven at or below zero refuses outright; an interval straddling zero (a tilted axis whose own rounding leaves the sign undecided) refuses as undecided | `ErrDegenerate`; `ErrUnsupported`. Stricter than `Revolve`'s side gate: a point on the axis sweeps to a segment of the axis and pinches the wall, so no contact is admitted |
 | **CS6** | `turns ≥ 1` and the upper bound of the profile's axial extent `H` is at or above `pitch` | `ErrUnsupported`: CP5 proves the solid simple only below one pitch; the refusal names `H`, `pitch` and the turn count |
-| **CS7** | a profile segment, on any loop, that is not a `LineSeg` (PR 1), or not a `LineSeg`, `ArcSeg` or `CircleSeg` (PR 3 onward) | `ErrUnsupported` |
-| **CS8** | the station count `N = ⌈turns · coilStationsPerTurn⌉` exceeds `maxCoilStations`, or the wall triangle count exceeds the facet cap | `ErrUnsupported` (a resource ceiling) |
+| **CS7** | a profile segment, on any loop, that is not a `LineSeg` (PR 1), or not a `LineSeg`, `ArcSeg` or `CircleSeg` (PR 3 onward); a trimmed `LineSeg`, or a loop whose recorded segment ends do not meet exactly, which has no exact recorded polygon vertex for station 0 to hold (no increment lifts this) | `ErrUnsupported` |
+| **CS8** | the station count `N = ⌈turns · coilStationsPerTurn⌉` exceeds `maxCoilStations`, or the wall and cap triangle count exceeds `maxCoilFacets = 1 << 20` | `ErrUnsupported` (a resource ceiling) |
 | **CS9** | the held crossing audit proves two non-adjacent held triangles meet; or its pair budget runs out | `ErrUnsupported` in both arms: CP5 has already proven the TRUE solid simple, so a held crossing is a station artefact (two true turns closer than twice the chord departure), never a defect of the solid |
 | **CS10** | a computed station, vertex, reading or bound is non-finite, or a held triangle collapses from rounding | `ErrUnsupported` |
 | **CS11** | `WithSurfaceResult()` — it is not a `CoilOption`, so this is a compile-time refusal, stated here so no later increment admits it silently | — |
@@ -216,9 +216,9 @@ Every failure leaves document membership and producer numbering unchanged.
 `axisInPlane` and `revolveaxis.ResolveSide` give the axis line and the
 profile's side exactly as `Revolve`'s step 4 does, over the same
 `SideExtremes` the profile's walk resolves (`revolveaxis.ResolveLoop`).
-CS5 reads the near-axis extreme's proven interval: lower end above zero
-admits; upper end at or below zero is `ErrDegenerate`; anything else is
-`ErrUnsupported`. CS6 reads the axial extremes' outer interval. Both are
+CS5 reads the near-axis extreme's proven interval, which `ResolveSide`
+returns as `SideResult.Near`: lower end above zero admits; upper end at or
+below zero is `ErrDegenerate`; anything else is `ErrUnsupported`. CS6 reads the axial extremes' outer interval. Both are
 reject-only readings off the profile's own record.
 
 ### 5.2 Stations
@@ -226,19 +226,27 @@ reject-only readings off the profile's own record.
 The sweep is cut at `N + 1` stations, `N = ⌈turns · coilStationsPerTurn⌉`,
 at the exact turn fractions `t_j = turns · j / N`, `j = 0 … N`. Every `t_j`
 is a rational, `t_0 = 0` and `t_N = turns` exactly. The angle at station
-`j` is `θ_j = 2π t_j`, enclosed through `proofbound.TurnSinCosInterval(t_j)`
-— the turn-space enclosure that is zero-width at every octant boundary, so
-a whole, half or quarter turn is exact. The slide at station `j` is
-`pitch · t_j`, an exact rational.
+`j` is `θ_j = 2π t_j`, enclosed through `coil.TurnSinCos(t_j)`: a multiple
+of a quarter turn reads its exact sine and cosine, and every other turn reads
+`proofbound.TurnSinCosInterval(t_j)`, whose series margin keeps even an
+octant boundary a few `2^-200` grid steps wide. A whole, half or quarter turn
+is therefore exact. The slide at station `j` is `pitch · t_j`, an exact
+rational.
 
 `coilStationsPerTurn` is `256`, a power of two, and `maxCoilStations` is
 `1 << 15`; the defining source constants own both values and their
-derivation. At 256 stations per turn the chord departure (§5.4) is
-`ρ_max · (1 − cos(π/256)) ≈ 7.5e-5 · ρ_max`, two decades below the
-default `Verify` tolerance (`docs/verification-design.md` §2) on every
-reading that carries it. The cap admits 128 turns of any profile, and the
-facet-pair budget (`proofbound.MaxFacetPairTestsPerCall`) bounds what the
-audit can run: a few hundred thousand wall triangles.
+derivation. At 256 stations per turn the helix sag (§5.4) is
+`ρ_max · π²/(2·256²) ≈ 7.5e-5 · ρ_max`. The twist term is first order in
+the station step: a segment whose two ends sit at different radii carries
+`|Δρ| · sin(π/256)/2 ≈ 6.1e-3 · |Δρ|`, so `δ` is dominated by the profile's
+radial extent, not by the sag. The square spring of §13 reads
+`δ ≈ 6.4e-3 mm` against a gate diameter near 8.5 mm, inside the default
+`Verify` tolerance (`docs/verification-design.md` §2); a profile whose radial
+extent approaches its outer radius reads `Bounds` past that tolerance and
+verifies `Suspect`. Only `Bounds` and the faceted bounds carry `δ`; the three
+other readings are closed forms. The cap admits 128 turns of any profile,
+and the facet-pair budget (`proofbound.MaxFacetPairTestsPerCall`) bounds what
+the audit can run.
 
 ### 5.3 Held vertices
 
@@ -248,9 +256,15 @@ For profile vertex `v` with axis coordinates `(ρ_v, ζ_v)` and station `j`:
 X(v, j) = C + ρ_v·(cos θ_j·e_r + σ sin θ_j·e_t) + (ζ_v + pitch·t_j)·n
 ```
 
-Every term is an interval: `ρ_v`, `ζ_v`, `C`, `e_r`, `e_t` and `n` carry
-the axis frame's and the lift's own bounds, and `cos θ_j`, `sin θ_j` the
-trig enclosure. Each coordinate is held as the nearest float to the
+The build evaluates it in the plane frame's coordinates as
+`p_v + ρ_v·(cos θ_j − 1)·e_r + pitch·t_j·d` in the plane and
+`σ·Side·ρ_v·sin θ_j` along the plane normal, since `e_t = Side·N`; the
+recorded point `p_v` is exact, so station 0 and every whole turn's station
+carry no axis-frame width. The frame's held `U`, `V`, `N` and the placement's
+held basis and translation are read as exact rationals, the convention the
+loft lift and the mitred placement already follow. Every term is an
+interval: `ρ_v`, `e_r` and `d` carry the axis frame's own bounds, and
+`cos θ_j`, `sin θ_j` the trig enclosure. Each coordinate is held as the nearest float to the
 interval's midpoint, and `round(v, j)` is `proofbound.IntervalFloatError`'s
 outward distance from the held coordinate to the far end of the interval,
 read per coordinate and turned into a 3D radius by `proofbound.Radius3D`.
@@ -272,10 +286,10 @@ lateral quad.
 
 | Term | Bounds | Derivation | Rounding |
 |---|---|---|---|
-| `sag(cell)` | the distance from any true point of the cell to the bilinear patch through its four held corners | each helix arc lies within `ρ·(1 − cos(Δθ/2))` of its chord (the slide is linear in `θ` and the chord interpolates it exactly, so only the circular component departs), and a ruling between two arc points lies within the larger of its ends' departures of the ruling between the chord points; take `ρ_max(cell)·(1 − cos(Δθ/2))` with `1 − cos` read off `TurnSinCosInterval(Δt/2)`'s upper end | up |
-| `twist(cell)` | the distance between the bilinear patch and the two held triangles | `proofbound.CellTwistOffsetUpper` over the four held corners (loft §5.2's own term, unchanged) | up |
+| `sag(cell)` | the distance from any true point of the cell to the bilinear patch through its four TRUE corners, at the matching `(λ, θ)` | each helix arc departs from the linear interpolation of its chord at the same `θ` by at most `ρ·Δθ²/8`, since its circular part has curvature vector of length `ρ` (the slide is linear in `θ` and the chord interpolates it exactly), and a ruling between two arc points lies within the larger of its ends' departures of the ruling between the chord points; take `ρ_max(cell)·π²·Δt²/2` with `π`'s upper end. The sagitta `ρ·(1 − cos(Δθ/2))` bounds the arc's midpoint only, not the matched departure at every `θ` | up |
+| `twist(cell)` | the distance between the bilinear patch through the four HELD corners and the two held triangles | `proofbound.CellTwistOffsetUpper` over the four held corners (loft §5.2's own term, unchanged) | up |
 | `round(v, j)` | the held corner's distance from the point `X(v, j)` denotes | §5.3 | up |
-| `β(v, j)` | the per-vertex bound of `docs/faceted-vertex-bounds-design.md` §2 | `round(v, j)` plus the largest `sag + twist` over the cells that touch the vertex; a cap vertex touches cells on one side only | `absSumUpper` |
+| `β(v, j)` | the per-vertex bound of `docs/faceted-vertex-bounds-design.md` §2 | the largest `sag + maxRound + twist` over the cells that touch the vertex, where `maxRound` is the cell's largest corner `round`: the bilinear patch through the held corners lies within it of the one through the true corners. It is never below `round(v, j)`; a cap vertex touches cells on one side only | `absSumUpper` |
 | `δ` | the payload's displacement | the largest `β` over the table | max |
 
 `β` folds each facet's own departure into every corner, which is what
@@ -352,16 +366,17 @@ sum.
 ## 7. Table CM — measurements and bounds
 
 Let `Q = ∫_Ω ρ dA`, `I = ∫_Ω ρ² dA` and `M = ∫_Ω ρζ dA` be the profile's
-axis-frame moments, read through `revolvemass.AxisMoments` off the
-profile's `momentinput.Integrals` with their own bounds (exact rationals for
-a `LineSeg`-only profile), and `A_Ω` its area.
+axis-frame moments and `A_Ω` its area. For a `LineSeg`-only profile they
+are the polygon's own integrals over every vertex's `(ζ, ρ)` interval
+(`coil.RegionMoments`), exact rationals for an exact axis frame, and `A_Ω`
+is the exact shoelace area of the recorded vertices.
 
 | Reading | Closed form | Exactness and bound |
 |---|---|---|
 | `Volume` | `Θ · Q = 2π · turns · Q` (CP4, Pappus) | `Approximate` always: `2π` enters through `proofbound.TwoPiInterval`, and the bound is that enclosure's width times `turns · Q` plus the moment's own bound, through `proofbound.BoundedMul`. Relative width is of order `1e-16` |
 | `Centroid` | `C + (I/Q)·(sin Θ / Θ)·e_r + σ·(I/Q)·((1 − cos Θ)/Θ)·e_t + (M/Q + pitch·turns/2)·n` | `sin Θ`, `cos Θ` from `TurnSinCosInterval(turns)`; at a whole number of turns both are exact and the transverse terms vanish, leaving `C + (M/Q + pitch·turns/2)·n`, which is `Exact` when the frame is exact and the rationals round exactly |
-| `Area` | `2·A_Ω` for the two caps, plus per segment `v → w` with `Δρ = ρ_w − ρ_v`, `Δζ = ζ_w − ζ_v`, `L² = Δρ² + Δζ²`: for `Δρ = 0`, `Θ · ρ_v · \|Δζ\|`; otherwise `(1 / (L·\|Δρ\|)) · [ Θ·(F₁ − F₀) + (turns · pitch² · Δρ² / 2π) · (asinh(u₁/m) − asinh(u₀/m)) ]` with `u = L·ρ`, `m = k·\|Δρ\|`, `F(u) = (u/2)·sqrt(u² + m²)` | `Approximate`: the π enclosure, the certified square root (`internal/sweepmitre`'s `ratSqrt` pair) and `proofbound.AsinhInterval` (new, §7.1) each contribute their width; a cylindrical band (`Δρ = 0`) carries the π enclosure alone |
-| `Bounds` | per-axis extremes over the held vertex table, widened outward by `δ` | `Approximate` with bound `δ` plus the one outward rounding; `Exact` only when `δ = 0`, which no coil reaches |
+| `Area` | `2·A_Ω` for the two caps, plus per segment `v → w` with `Δρ = ρ_w − ρ_v`, `Δζ = ζ_w − ζ_v`, `L² = Δρ² + Δζ²`: for `Δρ = 0`, `Θ · ρ_v · \|Δζ\|`; otherwise `(1 / (L·\|Δρ\|)) · [ Θ·(F₁ − F₀) + (turns · pitch² · Δρ² / 4π) · (asinh(u₁/m) − asinh(u₀/m)) ]` with `u = L·ρ`, `u₀ ≤ u₁`, `m = k·\|Δρ\|`, `F(u) = (u/2)·sqrt(u² + m²)`. Where `Δρ`'s enclosure contains zero without being exactly zero (a segment parallel to a tilted axis), the integrand lies between `L·ρ` and `L·ρ + m²/(2·L·ρ_min)`, so the area lies between `Θ·L·(ρ_v + ρ_w)/2` and that plus `Θ·m²/(2·L·ρ_min)` | `Approximate`: the π enclosure, the certified square root (`proofbound.SqrtFixed`, new) and `proofbound.AsinhInterval` (new, §7.1) each contribute their width; a cylindrical band (`Δρ = 0`) carries the π enclosure alone |
+| `Bounds` | per-axis extremes over the held vertex table, widened outward by `δ` | `Approximate` with bound `δ` plus the largest station rounding plus the widening's outward step: the box holds the true body, and every held vertex is within its own rounding of a true point; `Exact` only when `δ = 0`, which no coil reaches |
 
 The area integrand is derived once: `∂Φ/∂λ = Δρ·e_r(θ) + Δζ·n` and
 `∂Φ/∂θ = ρ·σ e_t(θ) + k·n` give `|∂λ × ∂θ|² = L²·ρ² + k²·Δρ²`, so a
@@ -380,9 +395,10 @@ table's own `pointSetDiameterContext` less `2·δ`, rounded down.
 
 ### 7.1 `proofbound.AsinhInterval`
 
-PR 1 adds `LnInterval(x RatInterval) RatInterval` and
-`AsinhInterval(x RatInterval) RatInterval` to `internal/proofbound`, on the
-fixed-point grid `turn_trig.go` already uses:
+PR 1 adds `LnInterval(x RatInterval) (RatInterval, bool)` (false for an
+interval not above zero), `AsinhInterval(x RatInterval) RatInterval` and the
+square-root enclosures `SqrtFixed`/`SqrtInterval` to `internal/proofbound`,
+on the fixed-point grid `turn_trig.go` already uses:
 
 - `ln y` for a rational `y > 0`: write `y = 2^e · m` with `m ∈ [1, 2)`
   (exact), then `ln y = e·ln 2 + 2·artanh((m − 1)/(m + 1))`; the artanh
@@ -390,9 +406,10 @@ fixed-point grid `turn_trig.go` already uses:
   `w^(2K+1) / ((2K+1)(1 − w²))`, with `w ≤ 1/3`; `ln 2` is the same series
   at `w = 1/3`. Evaluate at both ends of `x` and take the outer interval;
   `ln` is increasing, so the ends decide the enclosure.
-- `asinh x = ln(x + sqrt(x² + 1))`, the square root enclosed by the
-  package's rational square-root bracket; odd symmetry for `x < 0`;
-  exactly zero at zero.
+- `asinh x = ln(x + sqrt(x² + 1))`, the square root enclosed by
+  `SqrtFixed`: with `N = floor(q·4^P)` and `s = isqrt(N)`,
+  `s/2^P ≤ sqrt(q) < (s + 1)/2^P`, a point when `q·4^P` is itself `s²`; odd
+  symmetry for `x < 0`; exactly zero at zero.
 
 Tests: `ln 1 = 0` exactly, `ln 2` against the held constant, random
 rationals against `math.Log`/`math.Asinh` (enclosure contains, width below
@@ -522,7 +539,7 @@ touches it.
 
 | PR | Model | Lands | Still staged |
 |---|---|---|---|
-| **1** | Opus (proof spec) | `Document.Coil`, `CoilOption`, `WithLeftHand`; Table CS; §5's construction over a `LineSeg`-only profile; Table CB; Table CM with `proofbound.LnInterval`/`AsinhInterval`; CD1 and CD7; the design doc, its layout row, `doc.go`'s support map, `docs/missing-features.md`; the executable example `examples/decad_coil_example_test.go` (a square-wire spring: `Volume`, `Centroid`, face count, `Verify` status) | CD2–CD5, CD9, arcs, threads |
+| **1** | Opus (proof spec) | `Document.Coil`, `CoilOption`, `WithLeftHand`; Table CS; §5's construction over a `LineSeg`-only profile; Table CB; Table CM with `proofbound.LnInterval`/`AsinhInterval`; CD1 and CD7; the design doc, its layout row, `doc.go`'s support map, `docs/missing-features.md`; the executable example `examples/decad_coil_example_test.go` (a square-wire spring: `Volume`, `Centroid`, face count, `Verify` status). **This row is landed.** | CD2–CD5, CD9, arcs, threads |
 | **2** | Opus (proof spec) | `tessellate_coil.go`: CD2 with §5.4's `β`, §8.1, §8.2; CD3, CD4, CD9 follow; the `coilPayload` row in `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md` §1; the thread examples `examples/decad_thread_external_example_test.go` and `..._internal_...` | arcs, CD5 |
 | **3** | Opus (proof spec) | `ArcSeg`/`CircleSeg` profile segments: the profile station chain for an arc ruling (loft §5.1's chord chain, so a cell is chorded in both directions), `sag` folding the profile chord's own sagitta, the arc wall area by the Taylor-model bracket of §11.1, `Arc3` rim edges; the round-wire spring example | CD5 |
 | **4** | Sonnet (file-by-file) | CD5: `coilPayload` in `planarPairAdmits` and `planarPairVerdict`; the `Verify` clearance fixture against a prism | `CoilChain`, `WithSurfaceResult()`, modify |

@@ -21,7 +21,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 |---|---|
 | Fillet, chamfer and shell take a boolean result only where it reads as a prism, or (fillet, chamfer) at straight edges along an axis | Modify operations |
 | No draft: nonzero extrude taper refuses, and no face-draft op exists | Feature operations |
-| No helical path → no threads, springs or coils | Feature operations |
+| A coil cannot tessellate or enter a boolean → no threads | Feature operations |
 | No import of any file format | Data exchange |
 | Booleans outside the exact prism classes fall to a faceted mesh result, and refuse touching contact | Booleans |
 
@@ -33,7 +33,9 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Draft of existing faces | No entry point exists | none |
 | Sweep twist | `WithSweepTwist` nonzero → `ErrUnsupported` (`sweep.go`) | `docs/sweep-design.md` |
 | Closed sweep path | `ErrUnsupported`, "closed sweep paths are not implemented" (`sweep.go`) | `docs/sweep-design.md` |
-| Helical or free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
+| Free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
+| Tessellation, export, booleans (threads) and mass properties of a coil | `ErrUnsupported`, "tessellation of a coil is staged" (`tessellate.go`) | `docs/helix-design.md` Table CD, §11 PR 2 |
+| Coil of a profile with arc, circle, free-form or trimmed segments | `ErrUnsupported` (CS7) (`internal/coil/profile.go`) | `docs/helix-design.md` CS7, §11 PR 3 |
 | Composite path in `SweepChain` | `ErrUnsupported` (R34); one straight span only | `docs/surface-design.md` §1.2 |
 | Loft over more than two sections, guide rails, centerline | No entry point; `Loft` takes exactly two profiles | `docs/loft-design.md` §1 "Deferred reach" |
 | Loft of a same-kind free-form pair whose curves convert to different Bézier span counts | `ErrUnsupported` (S17) | `docs/loft-design.md` §12 PR 5 |
@@ -41,7 +43,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Loft with differing loop or segment counts | `ErrUnsupported` (S1/S2) | `docs/loft-design.md` Table S |
 | Loft of mixed-kind or reversed pairs | Refused permanently | `docs/loft-design.md` §1 "Permanently out of scope" |
 | `LoftChain` with curved segments or non-parallel planes | `ErrUnsupported` (R36, R35) | `docs/surface-design.md` §1.2 |
-| Hole, thread, rib, web, emboss, coil features | No entry point exists | none |
+| Hole, rib, web, emboss features | No entry point exists | none |
 
 ## Modify operations
 

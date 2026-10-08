@@ -95,6 +95,14 @@
 //	  WithMitredJoins / WithSectionScale over a LineTo path
 //	    and a whole-line profile                              builds
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
+//	Coil          whole-line profile beside an in-plane axis  builds
+//	  profile proven to touch or cross the axis               ErrDegenerate
+//	  profile the axis's rounding leaves undecided            ErrUnsupported
+//	  one turn or more of a profile one pitch wide or wider   ErrUnsupported
+//	  arc, circle, free-form or trimmed profile segment       ErrUnsupported
+//	  past 32768 stations or 1048576 triangles                ErrUnsupported
+//	  held shell crossing itself between stations             ErrUnsupported
+//	  Tessellate, a boolean operand, MassProperties           ErrUnsupported
 //	Union/Cut/Intersect  prism/revolve/loft/faceted/mitred sweep,
 //	                     crossings                            builds
 //	  held-mesh operand coarser than the pair tolerance
@@ -189,7 +197,8 @@
 // a sweep's distributed twist, with nonzero twist staged as [ErrUnsupported].
 // WithLoftAlignment
 // picks a loft's per-loop correspondence rotation
-// and is accepted at most once; a repeat is [ErrDegenerate]. Separately,
+// and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated
+// WithLeftHand, which turns a coil left-handed. Separately,
 // Verify's options (WithTolerance, WithMinWallThickness, WithPullDirection,
 // WithConcaveRadius, WithClearances) take effect. The export package's STL and
 // OBJ writers take an explicit chord tolerance.

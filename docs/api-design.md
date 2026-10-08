@@ -772,14 +772,16 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, Sweep, Patch,
-Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve —
+Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, Sweep, Coil,
+Patch, Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve —
 **ExtrudeChain, RevolveChain, SweepChain, LoftChain** — which take a
 `*sketch.Chain` where their siblings take a `*sketch.Profile` and always build a
 sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
 rule, and its increment-1 scope. `docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.
+`docs/helix-design.md` owns `Coil`'s signature, its axis and its extent in
+turns.
 `docs/surface-design.md` owns `Patch`, `Stitch`, `Unstitch` and `Thicken`,
 together with `WithSurfaceResult()`, the option that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
@@ -790,9 +792,10 @@ sweep an open curve (§13 there).
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
 func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
 func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error)
+func (d *Document) Coil(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
 ```
 
-Both take the **sketch** as well as the profile, because a `sketch.Profile`'s
+Each takes the **sketch** as well as the profile, because a `sketch.Profile`'s
 geometry is plane-local and the plane is the sketch's (§7). `p` MUST be a
 current, unaltered profile of `s`: another sketch's profile or a foreign
 boundary entity is `ErrForeignProfile`, a stale one is `ErrStaleProfile`, and a
