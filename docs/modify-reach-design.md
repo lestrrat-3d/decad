@@ -946,8 +946,9 @@ or topology-changing offsets remain SX8.
 
 #### 9.3.1 Construction
 
-`shell_revolve.go` builds the partial turn without a side opening. It never
-materialises the mirror half. The effective offset cut back to `ρ ≥ 0` is the
+`shell_revolve.go` builds the partial turn without a side opening and the
+full turn under `WithNoOpenings`, from one wall region. It never materialises
+the mirror half. The effective offset cut back to `ρ ≥ 0` is the
 offset of the kept chain `K` alone, the recorded meridian less its on-axis walk
 `A`. Interior corners of `K` take modify §7's join. Each end of `K` takes the
 join of the corner `K` makes with its own mirror image there, read from the walk
@@ -956,7 +957,7 @@ and the axis line alone:
 | Corner `K` makes with its mirror | Cut-back join |
 |---|---|
 | miter | `K`'s offset carrier met with the axis line, where the mirror carrier meets it |
-| G1 (`K` meets the axis at a right angle) | `K`'s own offset foot |
+| G1 (`K` meets the axis at a right angle) | `K`'s own offset foot, taken as the axis point at distance `t` from the corner, so a foot stepped along a float normal (an arc's tangent read through its angle) cannot land a rounding off the axis |
 | arc | the arc about the corner from `K`'s offset foot to the axis point at distance `t` from the corner, which is the whole arc's midpoint |
 
 The mirror tangent `K`'s own tangent reflects to only classifies the corner by
@@ -994,9 +995,20 @@ axis, angular interval, denotation and placement, built by `evalRevolve`. Its
 `sectionDelta` is zero: the wall region is the body's own record, as a tube's
 annular section is (modify §10).
 
+A full turn sweeps that same wall region a whole turn, and evaluator §6's shell
+rule splits the result into an outer shell and one void shell. Off the axis the
+wall region's offset loop is a hole, which sweeps the toroidal cavity wall. With
+an on-axis walk the wall region is one loop meeting the axis along two walks,
+`E`–`qE` and `qB`–`B`. Its two runs, `K` and `Q`, sweep the two closed surfaces,
+and the run whose axis ends bracket the other's is the outer one: `K` inward,
+`Q` outward. The receiver's own surfaces are therefore the outer shell inward
+and the void shell outward. Only S10's section limit bounds the thickness, as
+for a partial turn, since a full turn keeps no angular floor.
+
 Stage 4's revolve gates run in this order: RS13's section-displacement guard,
 a holed meridian (SX8), a kept angular cap (SX8), a removed side face (S2, until
-§9.2 lands), then more than one on-axis walk (SX8).
+§9.2 lands), then more than one on-axis walk (SX8). `WithNoOpenings` on a
+partial turn or on a holed meridian is SX8 before the shell is routed here.
 
 ## 10. Table BX — results + roles
 
@@ -1007,7 +1019,7 @@ a holed meridian (SX8), a kept angular cap (SX8), a removed side face (S2, until
 | **BX3** | complete prism cap-loop fillet/chamfer | `capBlendPayload` | trimmed cap/sides + analytic blend patches | result side/cap roles; `filletCap(c,l,p)` / `chamferCap(c,l,p)` per patch |
 | **BX4** | prism shell with side opening | `stackedPrismPayload` | one connected outer shell under RX scope | `slab(k).region(m).side(i,j)`, exposed cap/rim roles, `shellSide(i,j)` |
 | **BX5** | prism `WithNoOpenings` | `stackedPrismPayload` | one lump; outer + void shell | outer/inner/result-slab roles |
-| **BX6** | full-revolve shell | `revolvePayload` over wall region | existing full-revolve shell rules | result `side(i,j)` roles |
+| **BX6** | full-revolve shell | `revolvePayload` over wall region | evaluator §6's full-turn shells: one lump, an outer shell and one void shell | result `side(i,j)` roles |
 | **BX7** | partial-revolve shell with both caps open | `revolvePayload` over wall region | one shell with two rim-band caps | result sides + `capStart` / `capEnd` |
 | **BX8** | prism cap-only shell with both caps removed from a section with `k ≥ 1` holes | `stackedPrismPayload` with one slab and `1 + k` regions | `1 + k` lumps: outer wall band, then one band lining each hole | `slab(0).region(m).side(i,j)` plus exposed rim roles |
 
@@ -1289,7 +1301,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; the asymmetric cap-loop chamfer; the asymmetric chamfer of a brep or stacked receiver (SX16); all SX9/SX10 |
 | **B** (landed) | revolve junction rewrite + roles + surveys | cap loops; shell reach |
 | **C** | multi-region `stackedPrismPayload`; migrate cups; lift base S12 through BX8; closed + side-opening prism shell; tessellation/clearance cases | cap loops; revolve shell |
-| **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7), §9.3.1 | full-turn shells: a side opening is S2 until C's §9.2 wall section lands, and `WithNoOpenings` (landed with A) is refused for a full turn until this row builds it; a partial-turn side opening is S2 until C; cap loops |
+| **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | a side opening, full or partial turn, is S2 until C's §9.2 wall section lands; cap loops |
 | **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback; analytic integrals | the asymmetric cap-loop chamfer; complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, and

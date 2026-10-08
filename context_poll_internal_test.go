@@ -35,7 +35,7 @@ func TestSideOriginsContextPollsEachSegment(t *testing.T) {
 func TestFullRevolveShellsContextPollsEachLoop(t *testing.T) {
 	t.Parallel()
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 2}
-	perLoop := [][]*Face{{}, {{}}}
+	perLoop := []revLoopParts{{}, {faces: []*Face{{}}, runs: []int{0}}}
 
 	shells, err := fullRevolveShellsContext(ctx, perLoop, false)
 

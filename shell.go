@@ -89,15 +89,18 @@ func WithShellSense(s ShellSense) ShellOption {
 // A partial revolve is shelled when sel removes both of its angular caps and
 // nothing else: the wall is its meridian's offset swept over the same angle,
 // and a meridian walk on the axis grows no wall
-// (docs/modify-reach-design.md §9.3). A full turn, a removed side face, a
-// kept angular cap, a holed meridian and an offset reaching the axis are
-// ErrUnsupported.
+// (docs/modify-reach-design.md §9.3). A removed side face, a kept angular
+// cap, a holed meridian, a meridian meeting the axis along more than one walk
+// and an offset reaching the axis are ErrUnsupported.
 //
 // WithNoOpenings asks for a closed hollow body that keeps every face; it is
 // the one call form that takes a nil sel, and a non-nil sel beside it is
-// ErrDegenerate (docs/modify-reach-design.md §2, SX1). No receiver builds it
-// yet, so the call returns ErrUnsupported after the stage-1 gates pass. Two
-// WithShellSense options naming different senses are ErrDegenerate (SX1).
+// ErrDegenerate (docs/modify-reach-design.md §2, SX1). A full-turn revolve
+// builds it: the meridian's wall region swept a whole turn, an outer shell
+// around one void shell (Shell.IsVoid) that is the cavity. Every other
+// receiver returns ErrUnsupported after the stage-1 gates pass, a partial
+// revolve among them, since it keeps both angular caps. Two WithShellSense
+// options naming different senses are ErrDegenerate (SX1).
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is shelled as that prism
@@ -146,11 +149,20 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		// solid at all.
 		return nil, fmt.Errorf(`%w: a zero-thickness shell leaves no wall`, ErrDegenerate)
 	}
+	s := 1.0 // inward: erode
+	if sense == Outward {
+		s = -1.0 // outward: dilate
+	}
 	if o.NoOpenings {
 		// The one nil-selector shell: no face is removed, so there is no
 		// selection to resolve. SX10 still leads for a cap-blend receiver.
 		if err := requireNotCapBlendReceiver(b.payload, "shells"); err != nil {
 			return nil, err
+		}
+		// Reach §9.3: a full turn over a hole-free meridian keeps every face
+		// and sweeps its closed wall region over the whole turn.
+		if rp, ok := b.payload.(revolvePayload); ok && rp.full && len(rp.profile.Holes) == 0 {
+			return b.shellRevolve(ctx, rp, nil, s, t, tmm, tDelta)
 		}
 		return nil, refuseClosedShell(b.payload)
 	}
@@ -174,10 +186,6 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	// Reach RX2 (docs/modify-reach-design.md §9.3): a revolve receiver shells
 	// its meridian and sweeps the wall over its own angular interval.
 	if rp, ok := b.payload.(revolvePayload); ok {
-		s := 1.0
-		if sense == Outward {
-			s = -1.0
-		}
 		return b.shellRevolve(ctx, rp, removed, s, t, tmm, tDelta)
 	}
 	// A brep or stacked receiver takes the brep route
@@ -210,10 +218,6 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	}
 	bothCaps := removedStart && removedEnd
 
-	s := 1.0 // inward: erode
-	if sense == Outward {
-		s = -1.0 // outward: dilate
-	}
 	holed := len(pp.profile.Holes) > 0
 	h := pp.z1 - pp.z0
 	offsetBudget := proofbound.NewWorkBudget(ctx)
@@ -322,14 +326,14 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	return body, nil
 }
 
-// refuseClosedShell is Shell's answer to WithNoOpenings on every receiver
-// today (docs/modify-reach-design.md Tables RX/SX, §14). Each receiver gets
-// the row that stages it: a faceted boolean result SX9, a brep or stacked
-// receiver SX16, a holed prism section or revolve meridian SX8, a partial
-// revolve SX8 (it keeps both angular caps), a hole-free prism the closed
-// prism shell §14 row C lands, a full revolve the revolve shell row D lands,
-// and any other receiver base S3. Every one is ErrUnsupported: the closed body
-// exists, and this evaluator does not build it yet.
+// refuseClosedShell is Shell's answer to WithNoOpenings on every receiver but
+// a full-turn revolve over a hole-free meridian, which shellRevolve builds
+// (docs/modify-reach-design.md Tables RX/SX, §14). Each receiver gets the row
+// that stages it: a faceted boolean result SX9, a brep or stacked receiver
+// SX16, a holed prism section or revolve meridian SX8, a partial revolve SX8
+// (it keeps both angular caps), a hole-free prism the closed prism shell §14
+// row C lands, and any other receiver base S3. Every one is ErrUnsupported:
+// the closed body exists, and this evaluator does not build it.
 func refuseClosedShell(payload featurePayload) error {
 	switch p := payload.(type) {
 	case facetedPayload:
@@ -345,10 +349,9 @@ func refuseClosedShell(payload featurePayload) error {
 		if len(p.profile.Holes) > 0 {
 			return fmt.Errorf(`%w: a closed shell of a revolve whose meridian holds a hole is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
 		}
-		if !p.full {
-			return fmt.Errorf(`%w: a closed shell of a partial revolve keeps both angular caps, whose walls are planes at constant distance that no revolve holds (modify-reach SX8)`, ErrUnsupported)
-		}
-		return fmt.Errorf(`%w: this evaluator does not build a closed full-revolve shell yet (modify-reach §14 row D)`, ErrUnsupported)
+		// Shell routes a full turn over a hole-free meridian to shellRevolve,
+		// so the revolve that arrives here is a partial turn.
+		return fmt.Errorf(`%w: a closed shell of a partial revolve keeps both angular caps, whose walls are planes at constant distance that no revolve holds (modify-reach SX8)`, ErrUnsupported)
 	default:
 		return fmt.Errorf(`%w: this evaluator shells a straight prism only`, ErrUnsupported)
 	}

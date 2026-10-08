@@ -399,7 +399,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 
 	sideArea := proofbound.BoundedScalar{}
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
-	perLoop := make([][]*Face, len(loops))
+	perLoop := make([]revLoopParts, len(loops))
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -408,7 +408,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		if err != nil {
 			return nil, err
 		}
-		perLoop[li] = parts.faces
+		perLoop[li] = parts
 		sideArea = proofbound.BoundedAdd(sideArea, parts.area)
 		if !rp.full {
 			capStart.loops = append(capStart.loops, &Loop{coedges: parts.startCo, outer: li == 0})
@@ -441,7 +441,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	} else {
 		var faces []*Face
 		for _, group := range perLoop {
-			faces = append(faces, group...)
+			faces = append(faces, group.faces...)
 		}
 		// A surface result omits both caps from the shell (Table W,
 		// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed
@@ -599,6 +599,12 @@ type revLoopParts struct {
 	startCo []coedge                 // the loop's start-cap coedges, walk order (partial only)
 	endCo   []coedge                 // the loop's end-cap coedges, walk order (partial only)
 	area    proofbound.BoundedScalar // the loop's side-face area
+	// runs[i] is faces[i]'s run: the off-axis stretch of the loop between two
+	// on-axis walks that holds it. A loop with fewer than two on-axis walks is
+	// one run. outerRun is the run holding the loop's on-axis junction of least
+	// axial coordinate.
+	runs     []int
+	outerRun int
 }
 
 // junctionRadiusInterval encloses a junction's radial coordinate ρ as
@@ -840,9 +846,35 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 	}
 
 	parts := revLoopParts{}
+	axisWalks := 0
+	for _, k := range kinds {
+		if k == wallAxis {
+			axisWalks++
+		}
+	}
+	// A full turn sweeps each run into its own closed surface: an on-axis
+	// junction sweeps a point, never an edge, so two runs share no edge. Of
+	// those surfaces the outer one encloses every other, so its two axis ends
+	// bracket theirs (fullRevolveShellsContext).
+	seen, leastZ := 0, math.Inf(1)
 	for i, w := range walks {
 		if err := ctx.Err(); err != nil {
 			return revLoopParts{}, err
+		}
+		run := 0
+		if axisWalks > 1 {
+			// The faces after the last on-axis walk close the loop onto the
+			// faces before the first, so they share its run.
+			run = seen % axisWalks
+		}
+		if kinds[i] == wallAxis {
+			seen++
+		} else {
+			for _, end := range [...][2]float64{{w.StartU, w.StartV}, {w.EndU, w.EndV}} {
+				if end[1] == 0 && end[0] < leastZ {
+					leastZ, parts.outerRun = end[0], run
+				}
+			}
 		}
 		if kinds[i] == wallAxis {
 			if !rp.full {
@@ -901,6 +933,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			return revLoopParts{}, err
 		}
 		parts.faces = append(parts.faces, face)
+		parts.runs = append(parts.runs, run)
 		parts.area = proofbound.BoundedAdd(parts.area, faceArea)
 		if !rp.full {
 			parts.startCo = append(parts.startCo, coedge{edge: cap0[i], forward: true})
@@ -910,24 +943,43 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 	return parts, nil
 }
 
-// fullRevolveShellsContext builds one shell per non-empty loop group. sheet is
-// rp.surfaceResult: a full revolution's wall set already closes on itself, so
-// every shell built here is closed regardless of kind, but shellIsOpen still
-// runs rather than assuming it — the same discipline every other shell in
-// this build follows (docs/surface-design.md §2.2). void is li != 0 on a
-// solid, whose hole loop bounds its own toroidal cavity (evaluator §3); a
-// sheet bounds no cavity at all (decision B, §2.2), so it is always false
-// there.
-func fullRevolveShellsContext(ctx context.Context, perLoop [][]*Face, sheet bool) ([]*Shell, error) {
+// fullRevolveShellsContext builds one shell per non-empty run of each loop
+// group. A loop meeting the axis along k ≥ 2 walks has k runs, and the full
+// turn sweeps each into its own closed surface (a hollow cylinder's meridian
+// sweeps an outer skin and a cavity wall); every other loop is one run. sheet
+// is rp.surfaceResult: a full revolution's wall set already closes on itself,
+// so every shell built here is closed regardless of kind, but shellIsOpen
+// still runs rather than assuming it — the same discipline every other shell
+// in this build follows (docs/surface-design.md §2.2). On a solid, a hole
+// loop's run bounds its own toroidal cavity (evaluator §6), and so does every
+// run of the outer loop but its outer one: the outer surface encloses the
+// others, so its two axis ends bracket every other on-axis junction of the
+// loop. A sheet bounds no cavity at all (decision B, §2.2), so void is always
+// false there.
+func fullRevolveShellsContext(ctx context.Context, perLoop []revLoopParts, sheet bool) ([]*Shell, error) {
 	var shells []*Shell
-	for li, group := range perLoop {
+	for li, parts := range perLoop {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if len(group) == 0 {
-			continue
+		// Runs in order of first appearance, the outer run first.
+		order := []int{parts.outerRun}
+		groups := map[int][]*Face{}
+		for i, f := range parts.faces {
+			r := parts.runs[i]
+			if _, ok := groups[r]; !ok && r != parts.outerRun {
+				order = append(order, r)
+			}
+			groups[r] = append(groups[r], f)
 		}
-		shells = append(shells, &Shell{faces: group, open: shellIsOpen(group), void: li != 0 && !sheet})
+		for _, r := range order {
+			group := groups[r]
+			if len(group) == 0 {
+				continue
+			}
+			void := !sheet && (li != 0 || r != parts.outerRun)
+			shells = append(shells, &Shell{faces: group, open: shellIsOpen(group), void: void})
+		}
 	}
 	return shells, nil
 }

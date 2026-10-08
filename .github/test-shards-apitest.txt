@@ -1486,3 +1486,7 @@
 2	0.00	TestSelectorUnionErrorNamesEachEmptiedBranch
 2	0.00	TestSelectorUnionString
 2	0.00	TestSelectorUnionCopiesCallerSlice
+2	0.40	TestRevolveShellClosed
+2	0.04	TestRevolveShellClosedShaft
+2	0.01	TestRevolveCavityMeridianSplitsShells
+2	0.02	TestRevolveShellClosedRefusals

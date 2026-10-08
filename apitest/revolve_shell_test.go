@@ -360,3 +360,270 @@ func TestRevolveShellTessellates(t *testing.T) {
 		})
 	}
 }
+
+// This half covers the closed full-turn shell of docs/modify-reach-design.md
+// §9.3 (Table BX row BX6): Shell(nil, t, WithNoOpenings()) on a full revolve.
+// The wall region is the same one a partial turn sweeps, swept a whole turn,
+// so V = 2π·∫ρ dA over it. An off-axis meridian's wall region is the meridian
+// with its offset as a hole loop, which the full turn sweeps into a void
+// shell. A meridian with an on-axis walk gives a wall region of one loop that
+// meets the axis twice; the full turn sweeps its two off-axis runs into two
+// closed surfaces, the outer skin and the cavity wall.
+//
+// Legs shown to fail before these fixtures were accepted: building every run
+// of a loop into one shell leaves the hollow cylinder, sphere and shaft with
+// one non-void shell, and the direct revolve of a cavity meridian likewise;
+// taking the loop's first run as the outer shell, rather than the run whose
+// axis ends bracket the others, marks the spool drawn from its bite inside
+// out; and stepping the sphere's G1 end join along the arc's float normal
+// leaves the cavity's pole 1.2e-16 below the axis, so the inward hollow
+// sphere refuses as SX8.
+
+// fullTurnVolume is Pappus over a full turn.
+func fullTurnVolume(q float64) units.Value { return units.CubicMillimeters(2 * math.Pi * q) }
+
+// sphereBody revolves semicircleSketch's half disk, radius 5 about (5, 0), a
+// full turn.
+func sphereBody(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	s, p := semicircleSketch(t)
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	return body
+}
+
+// shellArea sums the areas of a shell's faces in square millimetres.
+func shellArea(t *testing.T, sh *decad.Shell) float64 {
+	t.Helper()
+	total := 0.0
+	for _, f := range sh.Faces() {
+		a, err := f.Area()
+		require.NoError(t, err)
+		mm2, err := a.Value.In(units.SquareMillimeter)
+		require.NoError(t, err)
+		total += mm2
+	}
+	return total
+}
+
+// requireOuterAndVoid asserts the body is one lump of exactly two shells, the
+// second of them the one void shell, and returns them outer first.
+func requireOuterAndVoid(t *testing.T, b *decad.Body) (*decad.Shell, *decad.Shell) {
+	t.Helper()
+	lumps := b.Lumps()
+	require.Len(t, lumps, 1, `a closed shell is one piece of material`)
+	shells := lumps[0].Shells()
+	require.Len(t, shells, 2, `an outer skin and a cavity wall`)
+	require.False(t, shells[0].IsVoid(), `the outer skin bounds no cavity`)
+	require.True(t, shells[1].IsVoid(), `the cavity wall is the void shell`)
+	for _, sh := range shells {
+		require.False(t, sh.IsOpen())
+	}
+	return shells[0], shells[1]
+}
+
+func TestRevolveShellClosed(t *testing.T) {
+	t.Parallel()
+	outward := []decad.ShellOption{decad.WithNoOpenings(), decad.WithShellSense(decad.Outward)}
+	inward := []decad.ShellOption{decad.WithNoOpenings()}
+	ring := func(t *testing.T, doc *decad.Document) *decad.Body {
+		return revolveMeridian(t, doc, ringMeridian, decad.FullRevolution{})
+	}
+	cylinder := func(t *testing.T, doc *decad.Document) *decad.Body {
+		return revolveMeridian(t, doc, cylinderMeridian, decad.FullRevolution{})
+	}
+	torus := func(t *testing.T, doc *decad.Document) *decad.Body { return torusBody(t, doc, 10, 3) }
+	// Every case takes a 1 mm wall. wall is the wall region's ∫ρ dA. skin is
+	// the area of the surface the call keeps where it was: the receiver's
+	// outer skin inward, which becomes the cavity wall outward. other is the
+	// area of the surface the offset makes.
+	for _, tc := range []struct {
+		name  string
+		body  func(*testing.T, *decad.Document) *decad.Body
+		opts  []decad.ShellOption
+		wall  float64
+		skin  float64
+		other float64
+		// surveyed is false where the wall survey leaves the receiver itself
+		// undecided: a sphere meridian's arc meets the axis.
+		surveyed bool
+	}{
+		// A torus of tube radius 3 at 10 from the axis: ∫ρ dA = 10·π r², the
+		// area 4π²·10·r.
+		{"torus inward", torus, inward, 10 * math.Pi * (9 - 4), 4 * math.Pi * math.Pi * 30, 4 * math.Pi * math.Pi * 20, true},
+		{"torus outward", torus, outward, 10 * math.Pi * (16 - 9), 4 * math.Pi * math.Pi * 30, 4 * math.Pi * math.Pi * 40, true},
+		// ringMeridian: the cavity z ∈ [1, 19], ρ ∈ [6, 9] inward; outward
+		// the dilation of TestRevolveShellOffAxisRing's half turn.
+		{"ring inward", ring, inward, 345, 2*math.Pi*(5*20+10*20) + 2*math.Pi*75, 2*math.Pi*(6*18+9*18) + 2*math.Pi*45,
+			true},
+		{"ring outward", ring, outward, 375 + 7.5*math.Pi, 2*math.Pi*(5*20+10*20) + 2*math.Pi*75,
+			// Two cylinders of radii 4 and 11 over z ∈ [0, 20], two annuli
+			// ρ ∈ [5, 10] at z = −1 and 21, and four quarter tori of tube radius
+			// 1 swept around radii 5 and 10, two each: 2π·(π/2·ρ ∓ 1) each.
+			2*math.Pi*(4*20+11*20) + 2*math.Pi*75 + 2*2*math.Pi*(math.Pi/2*5-1) + 2*2*math.Pi*(math.Pi/2*10+1),
+			true},
+		// cylinderMeridian, a flat-ended solid cylinder R = 10, H = 20: the
+		// cavity z ∈ [1, 19], ρ ∈ [0, 9], so ∫ρ dA = 1000 − 81/2·18.
+		{"cylinder inward", cylinder, inward, 1000 - 729, 2*math.Pi*10*20 + 2*math.Pi*100, 2*math.Pi*9*18 + 2*math.Pi*81, true},
+		// Outward: z ∈ [0, 20], ρ ∈ [0, 11] (1210), the end disks moved 1 mm
+		// out (50 each), and two quarter disks of radius 1 at the rims
+		// (π/4·10 + 1/3 each). The skin gains the cylinder radius 11, two end
+		// disks of radius 10 and two quarter tori around radius 10.
+		{"cylinder outward", cylinder, outward, 1210 + 100 + 5*math.Pi + 2.0/3 - 1000, 2*math.Pi*10*20 + 2*math.Pi*100,
+			2*math.Pi*11*20 + 2*math.Pi*100 + 2*2*math.Pi*(math.Pi/2*10+1), true},
+		// A half disk of radius r has ∫ρ dA = 2r³/3 and sweeps a sphere of
+		// area 4πr².
+		{"sphere inward", sphereBody, inward, 2.0 * (125 - 64) / 3, 100 * math.Pi, 64 * math.Pi, false},
+		{"sphere outward", sphereBody, outward, 2.0 * (216 - 125) / 3, 100 * math.Pi, 144 * math.Pi, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			receiver := tc.body(t, doc)
+			shelled, err := receiver.Shell(t.Context(), nil, units.Millimeters(1), tc.opts...)
+			require.NoError(t, err)
+			require.Equal(t, []*decad.Body{shelled}, doc.Bodies(), `the shell retires its receiver`)
+			require.True(t, shelled.IsSolid())
+			requireManifold(t, shelled)
+			decadtest.MeasuresVolume(t, shelled, fullTurnVolume(tc.wall))
+
+			outer, cavity := requireOuterAndVoid(t, shelled)
+			outerArea, cavityArea := tc.skin, tc.other
+			if len(tc.opts) > 1 { // outward: the receiver's skin is the cavity
+				outerArea, cavityArea = tc.other, tc.skin
+			}
+			require.InEpsilon(t, outerArea, shellArea(t, outer), 1e-9)
+			require.InEpsilon(t, cavityArea, shellArea(t, cavity), 1e-9)
+
+			// DX3: the revolve tessellator meshes both shells watertight, and
+			// the mesh's occupied volume, the cavity subtracted, agrees with
+			// the analytic one.
+			mesh, err := shelled.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			requireWatertight(t, mesh)
+			vol, err := shelled.Volume()
+			require.NoError(t, err)
+			require.InEpsilon(t, vol.Value.Mag(), meshVolume(mesh), 0.03)
+
+			// DX9: the wall survey reads the shell thickness where it reads
+			// the receiver at all.
+			report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(0.5)))
+			require.NoError(t, err)
+			br := report.Bodies[0]
+			if !tc.surveyed {
+				require.Equal(t, decad.ScalarUndecided, br.Wall.Outcome)
+				require.Equal(t, decad.Suspect, report.Status)
+				return
+			}
+			require.Equal(t, decad.Sound, report.Status)
+			require.Equal(t, decad.ScalarMeasured, br.Wall.Outcome)
+			require.NotNil(t, br.Wall.Minimum)
+			decadtest.Measures(t, "wall", br.Wall.Minimum.Measurement, units.Millimeters(1))
+		})
+	}
+}
+
+func TestRevolveShellClosedShaft(t *testing.T) {
+	t.Parallel()
+	// shaftMeridian's 1 mm cavity is the mirror union's erosion cut back to
+	// the axis: z ∈ [1, 9], ρ ∈ [0, 9] beside z ∈ [9, 19], ρ ∈ [0, 4]
+	// (∫ρ dA = 81/2·8 + 16/2·10 = 404), joined at the shoulder's concave
+	// corner (10, 5) by an arc of radius 1 about it. The arc adds the square
+	// z ∈ [9, 10], ρ ∈ [4, 5] (4.5) less the quarter disk about the corner,
+	// whose centroid sits 4/(3π) below ρ = 5 (5π/4 − 1/3).
+	doc := decad.New()
+	shaft := revolveMeridian(t, doc, shaftMeridian, decad.FullRevolution{})
+	shelled, err := shaft.Shell(t.Context(), nil, units.Millimeters(1), decad.WithNoOpenings())
+	require.NoError(t, err)
+	requireManifold(t, shelled)
+	decadtest.MeasuresVolume(t, shelled, fullTurnVolume(shaftQ-404-4.5-1.0/3+5*math.Pi/4))
+	_, cavity := requireOuterAndVoid(t, shelled)
+	var radii []float64
+	for _, f := range cavity.Faces() {
+		if c, ok := f.Surface().(decad.Cylinder); ok {
+			r, err := c.Radius.In(units.Millimeter)
+			require.NoError(t, err)
+			radii = append(radii, r)
+		}
+	}
+	require.ElementsMatch(t, []float64{4, 9}, radii, `the cavity's two journals`)
+}
+
+func TestRevolveCavityMeridianSplitsShells(t *testing.T) {
+	t.Parallel()
+	// The spool meridian meets the axis along two walks: the rectangle
+	// z ∈ [0, 20], ρ ∈ [0, 10] less the bite z ∈ [5, 15], ρ ∈ [0, 5]. A full
+	// turn is a solid cylinder holding a closed cylindrical cavity, so its
+	// boundary is two shells, the bite's the void one. The outer shell is the
+	// run whose axis ends bracket the other's, wherever the loop's walk
+	// starts: drawn from the outer corner and from the bite alike.
+	for _, tc := range []struct {
+		name string
+		pts  [][2]float64
+	}{
+		{"outer first", [][2]float64{{0, 0}, {5, 0}, {5, 5}, {15, 5}, {15, 0}, {20, 0}, {20, 10}, {0, 10}}},
+		{"bite first", [][2]float64{{5, 5}, {15, 5}, {15, 0}, {20, 0}, {20, 10}, {0, 10}, {0, 0}, {5, 0}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			spool := revolveMeridian(t, doc, tc.pts, decad.FullRevolution{})
+			decadtest.MeasuresVolume(t, spool, fullTurnVolume(1000-125))
+			outer, cavity := requireOuterAndVoid(t, spool)
+			require.InEpsilon(t, 2*math.Pi*10*20+2*math.Pi*100, shellArea(t, outer), 1e-9)
+			require.InEpsilon(t, 2*math.Pi*5*10+2*math.Pi*25, shellArea(t, cavity), 1e-9)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, 1, report.Bodies[0].Topology.Voids)
+		})
+	}
+}
+
+func TestRevolveShellClosedRefusals(t *testing.T) {
+	t.Parallel()
+	noOpenings := decad.WithNoOpenings()
+	t.Run("partial turn", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		ring := revolveMeridian(t, doc, ringMeridian, halfTurn)
+		_, err := ring.Shell(t.Context(), nil, units.Millimeters(1), noOpenings)
+		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `SX8`)
+	})
+	t.Run("holed meridian", func(t *testing.T) {
+		t.Parallel()
+		s, p := holedSketch(t)
+		doc := decad.New()
+		body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+		require.NoError(t, err)
+		_, err = body.Shell(t.Context(), nil, units.Millimeters(1), noOpenings)
+		requireShellRefused(t, doc, body, err, decad.ErrUnsupported, `SX8`)
+	})
+	t.Run("two axis walks", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		spool := revolveMeridian(t, doc, [][2]float64{{0, 0}, {5, 0}, {5, 5}, {15, 5}, {15, 0}, {20, 0}, {20, 10}, {0, 10}}, decad.FullRevolution{})
+		_, err := spool.Shell(t.Context(), nil, units.Millimeters(1), noOpenings)
+		requireShellRefused(t, doc, spool, err, decad.ErrUnsupported, `more than one walk`)
+	})
+	t.Run("outward wall reaching across the axis", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		ring := revolveMeridian(t, doc, [][2]float64{{0, 1}, {20, 1}, {20, 5}, {0, 5}}, decad.FullRevolution{})
+		_, err := ring.Shell(t.Context(), nil, units.Millimeters(2), noOpenings, decad.WithShellSense(decad.Outward))
+		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `mirror image`)
+	})
+	t.Run("inward wall at the cavity limit", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		cyl := revolveMeridian(t, doc, cylinderMeridian, decad.FullRevolution{})
+		_, err := cyl.Shell(t.Context(), nil, units.Millimeters(10), noOpenings)
+		requireShellRefused(t, doc, cyl, err, decad.ErrDegenerate, `inradius`)
+	})
+	t.Run("selector beside the option", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		ring := revolveMeridian(t, doc, ringMeridian, decad.FullRevolution{})
+		_, err := ring.Shell(t.Context(), decad.Faces(decad.Planar()), units.Millimeters(1), noOpenings)
+		requireShellRefused(t, doc, ring, err, decad.ErrDegenerate, `SX1`)
+	})
+}

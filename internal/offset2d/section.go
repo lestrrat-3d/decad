@@ -86,7 +86,7 @@ func CornerJoin(prev, cur survey2d.SideWalk, s, t, tol float64) (Join, error) {
 // the corner by JoinsBudget's rule. The join's points come from the walk and
 // the line alone. A miter is the walk's offset carrier met with the line,
 // where the mirror carrier meets it too. A G1 join is the walk's own offset
-// foot. An arc runs from the walk's offset foot to the line point t from the
+// foot, taken as the line point t from the corner. An arc runs from the walk's offset foot to the line point t from the
 // corner along the line, which is that arc's midpoint: at the end the arc runs
 // PA (the foot) to PB (the line point), and at the start PA (the line point) to
 // PB (the foot), in the same rotational sense JoinsBudget's connector takes.
@@ -117,22 +117,28 @@ func MirrorCornerJoin(w survey2d.SideWalk, atEnd bool, axis Curve, s, t, tol flo
 		nx, ny = -by, bx
 	}
 	foot := Point{U: vU + s*t*nx, V: vV + s*t*ny}
+	// on is the line point t from the corner on the normal's side, stepped
+	// along the line's own direction so it stays on the line.
+	sign := 1.0
+	if nx*dx+ny*dy < 0 {
+		sign = -1.0
+	}
+	on := Point{U: vU + s*t*sign*dx, V: vV + s*t*sign*dy}
 	cross := ax*by - ay*bx
 	if math.Abs(cross) > tol && (cross > 0) == (s < 0) {
 		// The two feet are mirror images, so the arc between them crosses the
 		// line on the bisector of the two normals, which is the line itself.
-		sign := 1.0
-		if nx*dx+ny*dy < 0 {
-			sign = -1.0
-		}
-		on := Point{U: vU + s*t*sign*dx, V: vV + s*t*sign*dy}
 		if atEnd {
 			return Join{Arc: true, VertU: vU, VertV: vV, PA: foot, PB: on}, nil
 		}
 		return Join{Arc: true, VertU: vU, VertV: vV, PA: on, PB: foot}, nil
 	}
 	if math.Abs(cross) <= tol && ax*bx+ay*by > 0 {
-		return Join{G1: true, VertU: vU, VertV: vV, M: foot}, nil
+		// The walk meets the line at a right angle, so its offset foot is the
+		// line point on. A foot stepped along a float normal (an arc's
+		// tangent read through its angle) lands a rounding off the line, on
+		// either side of it; on does not.
+		return Join{G1: true, VertU: vU, VertV: vV, M: on}, nil
 	}
 	mx, my, ok := Intersect(offsetCarrier(w, s, t, tol), axis, vU, vV)
 	if !ok {

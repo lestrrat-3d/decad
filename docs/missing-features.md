@@ -50,14 +50,14 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Fillet/chamfer of a sweep, loft, faceted boolean result or cap blend | `ErrUnsupported`: "fillets a straight prism or a revolve only", SX9, SX10 (`fillet.go`, `chamfer.go`) | `docs/modify-reach-design.md` Table RX |
 | Fillet/chamfer of a brep or stacked boolean result's curved edge, edges sharing a vertex, an edge ending on a curved face or an earlier blend, or an edge on or along a straight wall that is oblique, split or has a displaced level, where no prism reading takes the selection | `ErrUnsupported` (brep-modify SB4–SB9) (`brep_modify_edge.go`) | `docs/brep-modify-design.md` Table SB, §12 |
 | Shell of a body that is neither a prism nor a revolve; a brep that reads as a prism builds | `ErrUnsupported`: "shells a straight prism only", brep-modify SB3/SB10 (`shell.go`, `brep_modify.go`) | `docs/brep-modify-design.md` SB10 |
-| Shell of a full-turn revolve, or one removing a revolve side face (a partial turn with both angular caps removed builds) | `ErrUnsupported` (S2) (`shell_revolve.go`) | `docs/modify-reach-design.md` §9.2–§9.3, §14 PR C–D |
+| Shell removing a revolve side face (a partial turn with both angular caps removed, and a full turn's `WithNoOpenings` closed shell, build) | `ErrUnsupported` (S2) (`shell_revolve.go`) | `docs/modify-reach-design.md` §9.2–§9.3, §14 PR C–D |
 | Shell of a revolve keeping an angular cap, with a holed meridian or one meeting the axis twice, or whose outward wall reaches the axis | `ErrUnsupported` (SX8) (`shell_revolve.go`) | `docs/modify-reach-design.md` §9.3 |
 | Fillet/chamfer of a revolve cap edge or an edge on the axis | `ErrUnsupported` (SX5) (`revolve_blend.go`) | `docs/modify-reach-design.md` §7 |
 | Fillet of a cap edge (vertex blend) | `ErrUnsupported`, "the vertex-blend problem, not yet supported" (`fillet.go`) | `docs/modify-design.md` §6 |
 | Chamfer of a partial cap loop, or cap and lateral edges together | `ErrUnsupported` (SX4) | `docs/modify-reach-design.md` Table SX |
 | Asymmetric chamfer of a complete cap loop, or of a brep or stacked boolean result | `ErrUnsupported` (§14 row E; SX16) (`chamfer.go`) | `docs/modify-reach-design.md` §6, §14 |
 | Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`tangent_chain.go`) | `docs/modify-reach-design.md` §5 |
-| Closed shell (`WithNoOpenings`) of any receiver | `ErrUnsupported` (§14 rows C/D; SX8/SX9/SX16) (`shell.go`) | `docs/modify-reach-design.md` §9, §14 |
+| Closed shell (`WithNoOpenings`) of any receiver but a full revolve | `ErrUnsupported` (§14 row C; SX8/SX9/SX16) (`shell.go`) | `docs/modify-reach-design.md` §9, §14 |
 | Modify of a prism whose section carries a displacement bound | `ErrUnsupported` via `requireExactSection` | `docs/modify-design.md` |
 | Shell of a holed section with both caps removed | `ErrUnsupported` | `docs/modify-design.md` §8 |
 | Variable-radius fillet, face-to-face fillet | No entry point exists | none |
@@ -106,6 +106,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Distance or closest point from a point to a body or face | No entry point exists; body-pair gaps come only from `Verify` `WithClearances` | `docs/clearance-design.md` |
 | Planar cross-section of a body | No entry point exists | none |
 | Surveys (undercut, wall, concave radius) of bodies other than prisms, revolves, cups, cap blends | `Verify` reports `Suspect` | `docs/verification-design.md` |
+| Wall survey of a sphere's revolve, solid or hollow (its meridian arcs meet the axis at both ends) | `Verify` reports `Suspect` (`DiagUndecidedWall`) | `docs/verification-design.md` |
 
 ## Model structure — v1 non-goals
 
