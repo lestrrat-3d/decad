@@ -193,14 +193,8 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		}
 		return chainVertexGateDiameter(ctx, body, proofbound.AbsSumUpper(payload.sectionDelta, endpointAllow))
 	}
-	if _, ok := body.payload.(draftPayload); ok {
-		// A draft body (docs/draft-design.md Table DD row DD6) has no exact
-		// carrier model here and no witness prism: its far section is not the
-		// receiver's section. Every vertex it holds, on both caps, publishes
-		// its own displacement from the point it denotes, so the held vertex
-		// set's diameter, shrunk by the widest of those, is a lower bound on
-		// the body's.
-		return chainVertexGateDiameter(ctx, body, 0)
+	if payload, ok := body.payload.(draftPayload); ok {
+		return draftGateDiameter(ctx, body, payload)
 	}
 	if _, ok := body.payload.(chainLoftPayload); ok {
 		return chainVertexGateDiameter(ctx, body, 0)
@@ -528,6 +522,30 @@ func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, b
 	return stationGateDiameter(budget, witnesses, displacement)
 }
 
+// draftGateDiameter is bodyGateDiameter's arm for a draft body
+// (docs/draft-design.md Table DD row DD6). The body has no exact carrier
+// model here and no single witness prism: its far section is not the near
+// one. It reads the stations sectionStations places on the near section P at
+// the near level and on the far section Q, read from the payload's own
+// far-section record, at the far level. Both are the boundaries of the
+// body's two caps, so every station is a point of the body. A near station
+// carries its own gap and the near level's displacement; a far station also
+// carries farDelta, the displacement of the recorded far contour from the one
+// the sweep and taper denote. Where the stations cannot be read, the arm
+// reads the body's vertices with their published bounds instead.
+func draftGateDiameter(ctx context.Context, body *Body, dp draftPayload) (float64, bool, error) {
+	nearZ, _, farZ, _ := dp.levels()
+	level := func(profile ProfileRecord, z float64) prismPayload {
+		return prismPayload{profile: profile, frame: dp.frame, z0: z, z1: z, xform: dp.xform}
+	}
+	prisms := []prismPayload{level(dp.profile, nearZ), level(dp.far, farZ)}
+	d, ok, err := stationGateDiameter(proofbound.NewWorkBudget(ctx), prisms, proofbound.AbsSumUpper(dp.axialDelta(), dp.farDelta))
+	if err != nil || ok {
+		return d, ok, err
+	}
+	return chainVertexGateDiameter(ctx, body, 0)
+}
+
 // gateStationStep is the widest angle between two consecutive stations
 // sectionStations places along one circular wall: 15 degrees.
 const gateStationStep = math.Pi / 12
@@ -547,8 +565,9 @@ const gateStationStep = math.Pi / 12
 // two stations at its own angle, at a station, or inside the section.
 //
 // Every prism handed in must have walls that run the full height from z0 to
-// z1 on the body, so that each station is a point of the body (within its
-// gap and displacement).
+// z1 on the body (or z0 equal to z1, with its section's boundary on the
+// body at that level), so that each station is a point of the body (within
+// its gap and displacement).
 func stationGateDiameter(budget *proofbound.WorkBudget, prisms []prismPayload, displacement float64) (float64, bool, error) {
 	work := freeform.NewFreeformWork()
 	var pts []r3.Vec

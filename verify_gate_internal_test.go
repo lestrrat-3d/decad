@@ -41,14 +41,20 @@ func gateFarSlack() float64 {
 // as the exact value it is.
 func exactPrismLift(pp prismPayload, u, v, z float64) [3]*big.Rat {
 	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
+	return exactLiftRat(pp, rat(u), rat(v), rat(z))
+}
+
+// exactLiftRat is exactPrismLift at rational plane-local coordinates.
+func exactLiftRat(pp prismPayload, u, v, z *big.Rat) [3]*big.Rat {
+	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
 	coords := func(w r3.Vec) [3]float64 { return [3]float64{w.X, w.Y, w.Z} }
 	o, fu, fv, fn := coords(pp.frame.Origin()), coords(pp.frame.U()), coords(pp.frame.V()), coords(pp.frame.N())
 	var local [3]*big.Rat
 	for i := range local {
 		s := rat(o[i])
-		s.Add(s, new(big.Rat).Mul(rat(fu[i]), rat(u)))
-		s.Add(s, new(big.Rat).Mul(rat(fv[i]), rat(v)))
-		local[i] = s.Add(s, new(big.Rat).Mul(rat(fn[i]), rat(z)))
+		s.Add(s, new(big.Rat).Mul(rat(fu[i]), u))
+		s.Add(s, new(big.Rat).Mul(rat(fv[i]), v))
+		local[i] = s.Add(s, new(big.Rat).Mul(rat(fn[i]), z))
 	}
 	basis := pp.xform.Basis()
 	ex, ey, ez, tr := coords(basis.EX), coords(basis.EY), coords(basis.EZ), coords(pp.xform.Translation())
@@ -207,14 +213,19 @@ func TestCapBlendGateDiameterReadsSideLevels(t *testing.T) {
 // 14.142135623751139 against 14.142135623730951, and the placed full revolve
 // 5.0000000000078026 against 5. The unplaced 90 degree revolve reads
 // 4.527692569094917 against sqrt(20.5) = 4.527692569068709, and the 270
-// degree one 4.8664135, below the floor its half-turn stations reach.
+// degree one 4.8664135, below the floor its half-turn stations reach. The
+// draft arm's earlier vertex reading stays at or below the placed square
+// frustum's diameter, but reads the placed tapered disc's seam alone:
+// 8.0109788 against a floor of 12.4816079.
 //
 // Legs shown to fail: dropping the stations' gap from stationGateDiameter's
 // shrink sends the prism and the displaced prism red; dropping
 // revolveGateDiameter's shrink sends every revolve red; dropping the vertex
 // bounds and station gaps from brepGateDiameter's shrink sends the brep red;
 // and charging the free-form arm each witness's walk-end bound in place of
-// its lift's gap sends the free-form triangle red.
+// its lift's gap sends the free-form triangle red. The draft's farDelta charge
+// is not separately observable here: the upper bound reads the least offset
+// the record denotes, which leaves more room than farDelta takes.
 func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 	t.Parallel()
 	const x0, y0, w, l, h = 1.0, 2.0, 3.0, 7.0, 5.0
@@ -280,6 +291,57 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			requireGateDiameterWithin(t, read(t, &Body{payload: pp}), floatSqrtOf(upper)-gateFarSlack(), upper)
 		}
 	})
+	t.Run("draft", func(t *testing.T) {
+		t.Parallel()
+		// A 10 mm square swept 8 mm at a 3 degree taper is a frustum whose far
+		// square is the near one offset inward by d = 8*tan(3 degrees). Every
+		// distance between its eight corners shrinks as d grows, so the
+		// corners offset by d - dDelta, the least offset the record denotes,
+		// bound its diameter from above.
+		for i := range placements {
+			body := draftSquare(t)
+			dp, isDraft := body.payload.(draftPayload)
+			require.True(t, isDraft)
+			placed, err := body.Placed(t.Context(), gateFarPlacement(t, i))
+			require.NoError(t, err)
+			pdp := placed.payload.(draftPayload)
+			nearZ, _, farZ, _ := pdp.levels()
+			view := prismPayload{frame: pdp.frame, xform: pdp.xform, z0: nearZ, z1: farZ}
+			least := new(big.Rat).Sub(new(big.Rat).SetFloat64(dp.d), new(big.Rat).SetFloat64(dp.dDelta))
+			upper := exactDraftSquareDiameterSquare(view, 5, least)
+			requireGateDiameterWithin(t, read(t, placed), floatSqrtOf(upper)-gateFarSlack(), upper)
+		}
+	})
+	t.Run("draft disc", func(t *testing.T) {
+		t.Parallel()
+		// A disc of radius 5 swept 8 mm at a 3 degree taper is a frustum
+		// whose far rim has radius 5 - d. Its diameter is the larger of the
+		// near rim's 10 and the antipodal rim pair's sqrt((10 - d)^2 + 8^2),
+		// widest at the least offset the record denotes. Stations antipodal
+		// on both rims reach the second at the greatest offset.
+		for i := range placements {
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			c := s.CreatePoint(0, 0)
+			s.Fix(c)
+			s.CreateCircle(c, 5)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along}, WithTaper(units.Degrees(3)))
+			require.NoError(t, err)
+			dp := body.payload.(draftPayload)
+			placement := gateFarPlacement(t, i)
+			placed, err := body.Placed(t.Context(), placement)
+			require.NoError(t, err)
+			least := new(big.Rat).Sub(new(big.Rat).SetFloat64(dp.d), new(big.Rat).SetFloat64(dp.dDelta))
+			across := new(big.Rat).Sub(big.NewRat(10, 1), least)
+			local := new(big.Rat).Add(across.Mul(across, across), big.NewRat(64, 1))
+			upper := new(big.Rat).Mul(local, placedStretchSquare(placement))
+			lower := math.Hypot(10-(dp.d+dp.dDelta), 8) - gateFarSlack()
+			requireGateDiameterWithin(t, read(t, placed), lower, upper)
+		}
+	})
 	t.Run("revolve", func(t *testing.T) {
 		t.Parallel()
 		// A rectangle 4 mm along the axis and r out from it, swept by
@@ -316,4 +378,53 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			})
 		}
 	})
+}
+
+// draftSquare extrudes a 10 mm square about the origin 8 mm along +z at a 3
+// degree taper.
+func draftSquare(t *testing.T) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	s.Fix(s.CreateRectangle(-5, -5, 5, 5).A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along}, WithTaper(units.Degrees(3)))
+	require.NoError(t, err)
+	return body
+}
+
+// exactDraftSquareDiameterSquare is the exact square of the diameter of the
+// frustum view denotes between the square of half-width half at view.z0 and
+// the one offset inward by offset at view.z1, placed by view's frame and
+// placement over exact rationals.
+func exactDraftSquareDiameterSquare(view prismPayload, half float64, offset *big.Rat) *big.Rat {
+	var corners [][3]*big.Rat
+	for _, su := range []float64{-1, 1} {
+		for _, sv := range []float64{-1, 1} {
+			corners = append(corners, exactPrismLift(view, su*half, sv*half, view.z0))
+		}
+	}
+	far := new(big.Rat).Sub(new(big.Rat).SetFloat64(half), offset)
+	for _, su := range []int64{-1, 1} {
+		for _, sv := range []int64{-1, 1} {
+			corners = append(corners, exactLiftRat(view, new(big.Rat).Mul(far, big.NewRat(su, 1)),
+				new(big.Rat).Mul(far, big.NewRat(sv, 1)), new(big.Rat).SetFloat64(view.z1)))
+		}
+	}
+	best := new(big.Rat)
+	for i := range corners {
+		for j := i + 1; j < len(corners); j++ {
+			s := new(big.Rat)
+			for k := range 3 {
+				d := new(big.Rat).Sub(corners[i][k], corners[j][k])
+				s.Add(s, d.Mul(d, d))
+			}
+			if s.Cmp(best) > 0 {
+				best = s
+			}
+		}
+	}
+	return best
 }

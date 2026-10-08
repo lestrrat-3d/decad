@@ -586,6 +586,13 @@ denoted angle and lifted through the frame and placement. The maximum is
 shrunk by the widest gap. An end that states no angle (a `ToFaceAngular`
 stop) withholds the diameter.
 
+**A draft body reads both caps' stations.** `draftGateDiameter` reads the
+stations on the near section at the near level and on the payload's own
+recorded far section at the far level; both are the boundaries of the body's
+caps. A far station also carries `farDelta`, the far contour's displacement
+from the one the sweep and taper denote. A 3° taper on a disc of radius 5
+swept 8 mm reads its antipodal rims, where its vertices alone read the seam.
+
 **Every arm publishes through one witness-maximum reader, and that reader
 rounds toward zero.** `pointSetDiameterWithBudget` (`verify_gate.go`, backed by
 `internal/diameter/points.go`) is the single
