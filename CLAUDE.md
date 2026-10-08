@@ -41,13 +41,13 @@ APIs are design-only.**
 ## Hard rules
 
 - **Layering is `decad -> sketch -> r3 -> units`.** decad imports all three
-  directly. NEVER import decad from any of them; they do not know it exists.
+  directly. NEVER import decad from any of them.
 - **Ask `sketch` for 2D answers by default.** Profile closure, DOF, constraint
   conflicts, sketch validity, an intersection, a cut parameter, a projection
   onto a curve → ask `sketch`, consume its answer. decad computes a 2D answer
   itself only where that clearly wins on performance or correctness, and the
   design doc owning that code states the reason (e.g. the coplanar contact
-  patch of two exact planar faces, clipped in exact rational arithmetic:
+  patch of two exact planar faces, clipped exactly:
   `docs/multibody-dynamics-design.md` §9.4). Building a private `sketch` scene
   from decad's OWN recorded entities and asking it to arrange them is the
   default's usual shape (`internal/momentinput/record_validation.go`,
@@ -68,8 +68,8 @@ APIs are design-only.**
   is an admission gate, and an admission gate on a residual is unsound. Reject-only,
   always.
 - **NEVER hand-roll coordinate math.** Vectors, frames, local↔world transforms →
-  `r3`. Its `Frame` is orthonormal, so the inverse is the transpose, never a
-  matrix solve.
+  `r3`. `Frame` is orthonormal to rounding: inverse = transpose, never a
+  solve; exact readings charge the defect (`massmoment.MapCharge`).
 - **Shapes belong HERE.** `r3` excludes them by charter; solids/surfaces/meshes/
   topology are this module's job.
 - **NEVER add a public API that contradicts the design docs** —
