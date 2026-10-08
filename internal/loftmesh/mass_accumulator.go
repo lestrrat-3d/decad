@@ -471,9 +471,8 @@ func (m *MassAccumulator) Bounds() (r3.Vec, r3.Vec, float64, bool) {
 // never derived from the published bound. A triangle's own area is a square
 // root of a rational and is generically irrational, so no arithmetic on the
 // bound can make the reading exactly representable; a bound that reaches zero
-// says only that the bound arithmetic ran out of scale to state (proofbound.SumSlop
-// underflowing on a subnormal wall triangle, a saturated wallAreaAbs), which
-// is a fact about the proof term and not about the value.
+// (a wall set with no triangle of positive area) is a fact about the proof
+// term and not about the value.
 //
 // Bound is proven independently, and every one of its base four terms is
 // charged at the magnitude where its own rounding happens:

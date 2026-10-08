@@ -27,8 +27,8 @@ import (
 //     unbounded as the surfaces approach tangency → meshbool.RimBound, which
 //     the root refuses once the inflated bound stops meaning anything;
 //   - float SUMMATION of the reported value itself → SumSlop, a proven bound
-//     for a NAIVE loop (never zero for a float-computed value, which is what
-//     keeps exactnessOf honest);
+//     for a NAIVE loop (never zero for a positive float-computed value, down
+//     to the subnormal range, which is what keeps exactnessOf honest);
 //   - ACCUMULATION over the N elements of a chain → ChainLengthBound;
 //   - RIGID-MOTION rounding → RigidRoundAllow, charged at the INPUT and
 //     translation magnitudes, which is where the rounding is actually
@@ -310,6 +310,16 @@ func DvLenAtLeast(claim float64, u proofarith.DyV3) bool {
 // is itself a float evaluation (a cross product, a norm, a square root): a
 // handful of ulps, charged as 4·u per term.
 //
+// Both of those charges are RELATIVE to absSum, and float64's relative error
+// model stops holding where a product or quotient lands in the subnormal
+// range: there one step's error is ABSOLUTE, up to 2⁻¹⁰⁷⁵ (half the subnormal
+// spacing), however small the result. The summation loop is unaffected — a
+// sum never rounds on underflow, since every partial sum below 2⁻¹⁰²² is a
+// multiple of 2⁻¹⁰⁷⁴ — but a term's own evaluation is, so each term is also
+// charged underflowTermUlps·2⁻¹⁰⁷⁴ absolute. Without that charge a subnormal
+// absSum rounds both relative charges to +0, and the facet whose float area is
+// 2⁻¹⁰⁷⁴ against an exact 1.25·2⁻¹⁰⁷⁴ would publish a zero bound.
+//
 // It is NEVER zero for a positive FINITE absSum. That is the point: a
 // float-computed value is not exactly representable, so it may never reach
 // Exact.
@@ -328,13 +338,35 @@ func SumSlop(n int, absSum float64) float64 {
 	}
 	loop := 2 * float64(n-1) * UnitRoundoff * absSum
 	terms := 4 * UnitRoundoff * absSum
-	return UpRound(loop + terms)
+	underflow := float64(n) * underflowTermUlps * math.SmallestNonzeroFloat64
+	return ProvenUpRound(loop + terms + underflow)
 }
+
+// underflowTermUlps is the absolute charge, in units of the smallest
+// subnormal 2⁻¹⁰⁷⁴, that SumSlop adds per term for the underflow the term's
+// own float evaluation can commit.
+//
+// The costliest term SumSlop's callers sum is a facet's halved cross-product
+// norm, b.Sub(a).Cross(c.Sub(a)).Len()/2. Subtraction and square root never
+// round on underflow, and r3's Len squares a component only when it is at
+// least 2⁻⁵¹¹, whose square is normal. That leaves nine steps whose underflow
+// reaches the term additively: the cross product's six products, the final
+// multiply of each of Len's two nested math.Hypot calls, and the halving.
+// Each is off by at most 2⁻¹⁰⁷⁵ and the norm is 1-Lipschitz, so together they
+// move the term by at most 9·2⁻¹⁰⁷⁵ = 4.5·2⁻¹⁰⁷⁴ before the (1 + u) factors
+// of the steps that follow, which keep it below 5·2⁻¹⁰⁷⁴. A Hypot's own
+// divide and square feed 1 + r² ≥ 1, so their underflow reaches the term only
+// as a relative error far below u, inside the 4·u per-term charge. A plain
+// length term, Len of a difference, commits only the two Hypot multiplies.
+//
+// A caller whose term commits more underflow-prone steps than this must
+// charge the excess itself.
+const underflowTermUlps = 5
 
 // ChainLengthBound is the proven bound on a boolean rim's length: the chain
 // holds nSegs chords whose two endpoints EACH move by up to delta, so the
 // held length can be off by 2·nSegs·delta — plus the float slop of summing
-// nSegs square roots. Never zero for a float-computed length, even when
+// nSegs square roots. Never zero for a positive float-computed length, even when
 // delta is (an all-planar boolean's rim is a float sum of sqrts, and the last
 // ulp is not free).
 func ChainLengthBound(nSegs int, delta, heldLen float64) float64 {
