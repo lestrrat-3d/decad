@@ -1124,7 +1124,9 @@ the same composition.
 Boolean composition then stays evaluator §9's:
 
 1. Tessellate both operands at the evaluator's internal tolerance `tol` and
-   at `VerifyAll`, passed explicitly rather than taken from the default. An
+   at `VerifyAll`, passed explicitly rather than taken from the default; `tol`
+   already sits at or above a coil's or a mitred sweep's held `delta`
+   (`docs/faceted-vertex-bounds-design.md` §5). An
    operand that restates a held mesh (a boolean result or a mitred sweep) is
    asked at `max(tol, heldFloor)`, `heldFloor` its payload's `meshBound` or
    `delta`, which its restatement always meets (§7); a chorded analytic

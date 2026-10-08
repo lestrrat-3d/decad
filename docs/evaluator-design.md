@@ -844,7 +844,10 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
 - **Tessellate both operands** with an evaluator-internal chord tolerance —
   a documented default derived from the pair's own diameter, raised past either
   operand's own section displacement, which no mesh of that operand can go
-  below (`docs/prism-boolean-design.md` §7, tessellation §5). An operand that
+  below (`docs/prism-boolean-design.md` §7, tessellation §5), and past a coil's
+  or a mitred sweep's held `delta`, which coarsens the partner's mesh but
+  leaves its published bounds proven (`docs/faceted-vertex-bounds-design.md`
+  §5). An operand that
   restates a held mesh (a boolean result or a mitred sweep) is asked at that
   tolerance raised to its own held floor, which its restatement always meets,
   so the request never refuses; which of its facets the pair may cut is the
@@ -1229,7 +1232,7 @@ Coil follows `docs/helix-design.md` §11's count-free four-PR plan: PRs 1
 and 2 build `Document.Coil` over whole-line profiles with its four readings,
 structural and tolerance `Verify`, placement, tessellation, boolean and
 interference operands and mass properties; arc profiles and clearance land
-with PRs 3 and 4, and the thread examples wait on helix §9's chain-depth refusal.
+with PRs 3 and 4.
 An unlanded Coil build returns `ErrUnsupported`; an unlanded verification
 question reads `Suspect`.
 

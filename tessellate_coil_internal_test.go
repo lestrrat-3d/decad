@@ -178,24 +178,3 @@ func TestCoilInterferenceAndUnionWithACore(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, Sound, rep.Status)
 }
-
-// TestCoilThreadRefusals pins the refusal docs/helix-design.md §9's thread
-// fixture meets today. The 60° V groove of depth 0.9 at pitch 1.5 on a
-// radius-5 cylinder builds for 8 turns, its crossing audit enumerating
-// through the grid; Cut then refuses at the boolean's chain-depth gate: the
-// groove's facets hold β near 9e-4 mm where the pair's chord tolerance, 2e-5
-// times its diameter, is near 5e-4 mm.
-func TestCoilThreadRefusals(t *testing.T) {
-	groove := [][2]float64{{4.1, 3}, {5.3, 3 - 0.6928}, {5.3, 3 + 0.6928}}
-	gs, gp := coilLoopsSketch(t, groove)
-	doc := New()
-	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
-	cylinder, err := doc.Revolve(cs, cpf, coilAxisV, FullRevolution{})
-	require.NoError(t, err)
-	tool, err := doc.Coil(t.Context(), gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(8))
-	require.NoError(t, err)
-	_, err = Cut(t.Context(), cylinder, tool)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.ErrorContains(t, err, "cut's tool holds its mesh")
-	require.Len(t, doc.Bodies(), 2)
-}

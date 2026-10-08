@@ -109,8 +109,9 @@
 //	  crossing audit scanning past its pair ceiling           ErrUnsupported
 //	Union/Cut/Intersect  prism/revolve/loft/faceted/mitred sweep/coil,
 //	                     crossings                            builds
-//	  held-mesh operand coarser than the pair tolerance
-//	    where the pair meets it                               ErrUnsupported
+//	  a coil cut from a cylinder or a bore (a thread)         builds
+//	  boolean-result operand coarser than the pair
+//	    tolerance where the pair meets it                     ErrUnsupported
 //	  cap-loop chamfer operand whose band has a mitered
 //	    circular wall or a reflex corner                      ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported

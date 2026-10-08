@@ -946,7 +946,10 @@ is composed per vertex from the operation that made it
 (`docs/faceted-vertex-bounds-design.md` §3): a surviving operand vertex keeps
 its operand's bound, a vertex the boolean creates carries its own facet pair's
 trim amplification, and each adds its own final rounding displacement. §9's
-chord tolerance for the next pair is a fixed fraction of that pair's diameter.
+chord tolerance for the next pair is a fixed fraction of that pair's diameter,
+raised to a coil's or a mitred sweep's held bound when that is larger, since
+those operands hold one fixed mesh: their partner is then meshed more
+coarsely, with its bounds still proven.
 The next boolean compares the two only where the new pair meets the operand
 (`docs/faceted-vertex-bounds-design.md` §5): every facet of an operand that
 restates a held mesh (a boolean result or a mitred sweep) that the contact
