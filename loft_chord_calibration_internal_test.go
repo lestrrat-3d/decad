@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -23,7 +24,7 @@ import (
 
 // This file is a10-plan.md's PR 1 (docs/loft-design.md's chord-target calibration,
 // Part 2 Q2/Q3, Part 3 PR 1): it MEASURES, rather than assumes, where the future
-// unexported constant loftChordFraction should land. That constant does not exist
+// unexported constant loftmesh.ChordFraction should land. That constant does not exist
 // yet — no production code changes here — so this file builds the fixture the plan
 // names for measuring it anyway: a hand-chorded LineSeg-only profile builds through
 // today's public Loft with no code change and publishes Exact readings and a zero
@@ -57,11 +58,11 @@ const (
 // production generator, never off a local cos/sin loop.
 //
 // This is what makes every A10a reading in this file a measurement of the
-// geometry decad actually builds. The vertices are circularStationChain's own
+// geometry decad actually builds. The vertices are loftmesh.CircularStationChain's own
 // output for the recorded quarter-arc and the walk walkOf resolves for it
 // (loft_build.go), closed by that walk's own end point — the station the NEXT
 // segment of a real loop would contribute, which is the arc's recorded End.
-// The delta is chordCellDeltaUpper over that same generator's two terms: the
+// The delta is loftmesh.ChordCellDeltaUpper over that same generator's two terms: the
 // certified per-cell sagitta and the generated stations' own displacement. A
 // local reimplementation of either would leave the fixture measuring itself:
 // it would keep reporting the same margins however far production's own
@@ -69,7 +70,7 @@ const (
 func wedgeArcChords(t *testing.T, m int) ([][2]float64, float64) {
 	t.Helper()
 	seg, w := wedgeArcRecord(t)
-	stations, stationDelta := circularStationChain(w, seg, m)
+	stations, stationDelta := loftmesh.CircularStationChain(w, seg, m)
 	require.False(t, proofbound.IsNonFinite(stationDelta), "the shipped generator must state its stations' own displacement at m=%d", m)
 	pts := make([][2]float64, 0, m+1)
 	for _, p := range stations {
@@ -77,7 +78,7 @@ func wedgeArcChords(t *testing.T, m int) ([][2]float64, float64) {
 	}
 	pts = append(pts, [2]float64{w.EndU, w.EndV})
 
-	sd := chordCellDeltaUpper(loftCertifiedSagittaUpper(seg, m), stationDelta)
+	sd := loftmesh.ChordCellDeltaUpper(loftmesh.CertifiedSagittaUpper(seg, m), stationDelta)
 	require.False(t, proofbound.IsNonFinite(sd), "the shipped generator must state a chord bound at m=%d", m)
 	return pts, sd
 }
@@ -230,8 +231,8 @@ func wedgeSplineSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*ske
 // wedgeFeatureSize reads the chord target's feature size off a TRUE wedge
 // record on both planes (docs/loft-gear-bounds-design.md §5): the smaller of
 // the two records' |area| over perimeter bound, each read the way a real build
-// reads it — falsifyRecordedArea's own area integral and loftPerimeterUpper
-// over the record's resolved walks. loftChordFraction times it is the target a
+// reads it — falsifyRecordedArea's own area integral and loftmesh.PerimeterUpper
+// over the record's resolved walks. loftmesh.ChordFraction times it is the target a
 // real build of that wedge chords at.
 func wedgeFeatureSize(t *testing.T, sketchOn func(*testing.T, *sketch.World, *sketch.Plane) (*sketch.Sketch, *sketch.Profile)) float64 {
 	t.Helper()
@@ -243,7 +244,7 @@ func wedgeFeatureSize(t *testing.T, sketchOn func(*testing.T, *sketch.World, *sk
 		require.NoError(t, err)
 		area, err := falsifyRecordedArea(rec, sketchArea, freeform.NewFreeformWork())
 		require.NoError(t, err)
-		size = math.Min(size, loftFeatureSize(area, loftPerimeterUpper(rec, resolveLoftLoopWalks(t, rec))))
+		size = math.Min(size, loftmesh.FeatureSize(area, loftmesh.PerimeterUpper(rec, resolveLoftLoopWalks(t, rec))))
 	}
 	return size
 }
@@ -927,7 +928,7 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 		ex := arcChordExcess(t, m)
 		meas := measureWedgeReadings(t, pts, sd, ex)
 		logWedgeMeasurement(t, "A10a(arc)", meas)
-		t.Logf("  A10a m=%d implied loftChordFraction = sagitta/featureSize = %.6g", m, sd/arcSize)
+		t.Logf("  A10a m=%d implied loftmesh.ChordFraction = sagitta/featureSize = %.6g", m, sd/arcSize)
 	}
 
 	for _, m := range ms {
@@ -936,7 +937,7 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 		ex := splineChordExcess(fs, m, wedgeHeight, splineDenseN)
 		meas := measureWedgeReadings(t, pts, sd, ex)
 		logWedgeMeasurement(t, "A10b(spline)", meas)
-		t.Logf("  A10b m=%d implied loftChordFraction = sagitta/featureSize = %.6g", m, sd/splineSize)
+		t.Logf("  A10b m=%d implied loftmesh.ChordFraction = sagitta/featureSize = %.6g", m, sd/splineSize)
 	}
 }
 
@@ -959,7 +960,7 @@ const loftChordBuildCeiling = 60 * time.Second
 
 // loftChordFractionPinM is the station count the SHIPPED generator settles the
 // reference arc wedge on at the shipped chord target:
-// loftCircularCellStations (loft_build.go), asked for loftChordFraction *
+// loftmesh.CircularCellPoints (loft_build.go), asked for loftmesh.ChordFraction *
 // wedgeArcFeatureSize, settles its joint walk-up at 75 chords. wedgePinStations
 // re-derives it from that generator at every run and requires the two to
 // agree, so every fixture below is chorded at a count production actually
@@ -974,7 +975,7 @@ const loftChordBuildCeiling = 60 * time.Second
 // (wedgePinStations asserts both).
 const loftChordFractionPinM = 75
 
-// wedgePinStations asks the PRODUCTION generator — loftCircularCellStations
+// wedgePinStations asks the PRODUCTION generator — loftmesh.CircularCellPoints
 // (loft_build.go), the same call a real build makes — how many stations the
 // reference arc wedge takes at the shipped chord target, and requires the
 // answer to be loftChordFractionPinM. Every fixture in this file is chorded at
@@ -983,15 +984,15 @@ const loftChordFractionPinM = 75
 //
 // It also ties wedgeArcChords to that same call: the vertices and the
 // sectionDelta every A10a reading below is measured on must be the ones
-// loftCircularCellStations itself hands a real build at the settled count. The
+// loftmesh.CircularCellPoints itself hands a real build at the settled count. The
 // count alone would not do it — a fixture that took the count from production
 // and its geometry from a local generator would keep reporting these margins
 // however far the shipped stations drifted.
 func wedgePinStations(t *testing.T) int {
 	t.Helper()
-	target := loftChordFraction * wedgeArcFeatureSize(t)
+	target := loftmesh.ChordFraction * wedgeArcFeatureSize(t)
 	seg, w := wedgeArcRecord(t)
-	stations, _, sagitta, _, stationUpper, err := loftCircularCellStations(w, w, seg, seg, target)
+	stations, _, sagitta, _, stationUpper, err := loftmesh.CircularCellPoints(w, w, seg, seg, target)
 	require.NoError(t, err)
 	m := len(stations)
 	require.LessOrEqual(t, sagitta, target, "the generator's own published sagitta must meet the target it was asked for")
@@ -1001,10 +1002,10 @@ func wedgePinStations(t *testing.T) int {
 	// composition of both halves — the certified sagitta alone bounds a chord
 	// between the EXACT recorded points, not the chord this build actually
 	// draws between two rounded stations.
-	certified := loftCertifiedSagittaUpper(seg, m)
+	certified := loftmesh.CertifiedSagittaUpper(seg, m)
 	chordPts, chordDelta := wedgeArcChords(t, m)
 	require.Equal(t, certified, sagitta, "the published sagitta is the certified reading at the settled count")
-	require.Equal(t, chordDelta, chordCellDeltaUpper(sagitta, stationUpper), "the fixture's chord bound composes the arm's own two published halves")
+	require.Equal(t, chordDelta, loftmesh.ChordCellDeltaUpper(sagitta, stationUpper), "the fixture's chord bound composes the arm's own two published halves")
 	require.Greater(t, stationUpper, 0.0, "the station displacement is a real term on this fixture, not a rounding that vanishes")
 	require.Len(t, chordPts, m+1, "the fixture's vertex list is the m stations plus the walk's own end point")
 	for k, p := range stations {
@@ -1014,7 +1015,7 @@ func wedgePinStations(t *testing.T) int {
 	// One station fewer misses the target on BOTH sagitta readings — the
 	// certified one the generator walks up against and the exact one the sweep
 	// measures — so the settled count is the smallest one the target admits.
-	require.Greater(t, loftCertifiedSagittaUpper(seg, m-1), target,
+	require.Greater(t, loftmesh.CertifiedSagittaUpper(seg, m-1), target,
 		"the certified sagitta at m=%d must exceed the target, or the walk-up would have stopped there", m-1)
 	require.Greater(t, arcSagitta(m-1), target,
 		"the exact sagitta at m=%d must exceed the target too, so the count is not a straddle between the two readings", m-1)
@@ -1130,7 +1131,7 @@ func TestLoftChordCalibrationPinsFraction(t *testing.T) {
 
 	// Each wedge's sagitta at this count over its own feature size is the
 	// fraction that count implies. Reported rather than asserted: the arc's sits
-	// just under loftChordFraction because the walk-up stops at the first count
+	// just under loftmesh.ChordFraction because the walk-up stops at the first count
 	// that meets the target, and the spline's is a dense-sample stand-in, not a
 	// generator reading.
 	finerFraction := min(arcFraction, splineFraction)

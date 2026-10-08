@@ -94,7 +94,7 @@ func WalkEndPlaneDelta(bound proofbound.WalkEndBound) float64 {
 // corner case: seam.go's recordEdge records a certified Partial line fragment
 // over a non-natural range verbatim, and no Table S row excludes one.
 //
-// The refusal is DEFENSIVE and no admitted record reaches it. walkEndPlaneDelta
+// The refusal is DEFENSIVE and no admitted record reaches it. WalkEndPlaneDelta
 // answers +Inf only where lineWalkEndBound could not state the denoted point as
 // a rational, and dyLerp fails solely on a non-finite coordinate — which the
 // record gates exclude long before any walk is resolved. It stands so that an
@@ -155,7 +155,7 @@ func LoftCertifiedSagittaUpper(radius, sweep proofbound.RatInterval, enclosed bo
 // overstate that chord.
 //
 // The quantity is 2·r·sin(Δθ/2m), r the segment's radius and Δθ the angle its
-// walk sweeps: the same two enclosures loftCertifiedSagittaUpper reads, from the
+// walk sweeps: the same two enclosures CertifiedSagittaUpper reads, from the
 // same owner (moments.go's circularWalkEnclosures), taken at the cell's own HALF
 // angle rather than its quarter. Reading them here rather than the walk's held
 // w.radius/w.th0/w.th1 is not a preference: those floats carry no enclosure
@@ -199,7 +199,7 @@ func LoftCertifiedChordLower(radius, sweep proofbound.RatInterval, enclosed bool
 //
 // It is a pure function of the two walks, the two RECORDED segments and the
 // target, and it charges no work budget — which is what lets the record-only
-// station-cap gate (loftStationCapGate, S15) settle the same m the
+// station-cap gate (StationCapGate, S15) settle the same m the
 // construction phase will, with no station built and no triangle assembled.
 //
 // The two refusals it raises are the two docs/loft-design.md §4's gate-order
@@ -286,7 +286,7 @@ func LoftSettleStationCount(a, b LoftCircularSide, target float64) (int, float64
 // DENOTES there: circularEndpointInterval (moments.go) takes the denoted
 // curve's radius from Start alone, so at t == 1 the denoted point sits at
 // Start's radius and End's own angle and misses the recorded End by the
-// arc-end radial residual. arcNaturalEndRadialUpper charges exactly that
+// arc-end radial residual. ArcNaturalEndRadialUpper charges exactly that
 // residual, at t == 1 alone, and docs/loft-design.md §5.2 owns the term.
 //
 // A station the record cannot enclose answers +Inf, which the caller refuses
@@ -312,13 +312,13 @@ func LoftCircularStationChain(side LoftCircularSide, m int) ([]LoftStation, floa
 }
 
 // LoftCircularCellStations is the circular arm. It settles the pair's shared
-// station count through loftSettleStationCount — docs/loft-design.md §5.1's
+// station count through SettleRecordStationCount — docs/loft-design.md §5.1's
 // JOINT WALK-UP, whose own doc comment owns that rule — and then walks BOTH
 // sides at the count it settles on, never at either side's own smaller count,
 // which is the correspondence a loft wall needs.
 //
 // What the walk-up compares against the target, and what this arm publishes,
-// is loftCertifiedSagittaUpper's enclosure over the RECORD's own radius and
+// is CertifiedSagittaUpper's enclosure over the RECORD's own radius and
 // sweep brackets — never the held float chordCount itself returns. That float
 // is computed from the walk's math.Hypot radius and its math.Atan2 sweep, with
 // no enclosure and no outward rounding, so it can decide a COUNT and nothing
@@ -360,7 +360,7 @@ func LoftCircularStationChain(side LoftCircularSide, m int) ([]LoftStation, floa
 //
 // matchedDelta is loftCellStations' own per-cell obligation — the CHORD-TO-
 // CURVE half of docs/loft-design.md §5.2's matchedDelta row, which the
-// consumer composes with the build's own delta (chordCellDeltaUpper), never
+// consumer composes with the build's own delta (ChordCellDeltaUpper), never
 // the whole row: this arm's sagitta discharges that half EXACTLY (the
 // paragraph above), and every cell of one uniformly-stepped circular segment
 // shares the same true angular width, so the same value — math.Max(s0, s1) —

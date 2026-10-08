@@ -46,11 +46,11 @@ type LoopPair struct {
 // rule) — a DIFFERENT quantity, never interchangeable with sectionDelta. It
 // is the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's matchedDelta row
 // and never that whole row: evalLoft composes it with the build's own delta
-// (chordCellDeltaUpper) before any chorded leg — each of which names a
+// (ChordCellDeltaUpper) before any chorded leg — each of which names a
 // parameter-matched matchedDelta obligation, never "the sagitta alone" —
 // reads it. The two accumulators here coincide bit-for-bit
 // on a circular-only build (every circular cell's own departure equals
-// its own sagitta exactly, loftCircularCellStations' own doc comment) and on
+// its own sagitta exactly, CircularCellPoints' own doc comment) and on
 // a LineSeg-only build (both exactly 0). stationRound is the analogous
 // MAX of every cell's own station displacement (Table S row S14, delta's own
 // component, never sectionDelta's or sectionMatchedDelta's) — the terms are

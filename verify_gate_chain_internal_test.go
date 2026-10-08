@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -98,14 +99,14 @@ func TestChainWalkEndpointAllowChargesComputedCircularEnds(t *testing.T) {
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, allow, proofbound.WalkEndBoundAllow(walk.StartBound))
 			require.GreaterOrEqual(t, allow, proofbound.WalkEndBoundAllow(walk.EndBound))
-			require.GreaterOrEqual(t, allow, arcNaturalEndRadialUpper(tc.segment))
+			require.GreaterOrEqual(t, allow, loftmesh.ArcNaturalEndRadialUpper(tc.segment))
 		})
 	}
 }
 
 func TestChainWalkEndpointAllowKeepsExactArcEndsAtZero(t *testing.T) {
 	arc := ArcSeg{Center: Point2{}, Start: Point2{U: 1}, End: Point2{V: 1}, TEnd: 1}
-	require.Zero(t, arcNaturalEndRadialUpper(arc))
+	require.Zero(t, loftmesh.ArcNaturalEndRadialUpper(arc))
 	allow, ok, err := chainWalkEndpointAllow(t.Context(), []ChainRecord{{Segments: []CurveSegment{arc}}})
 	require.NoError(t, err)
 	require.True(t, ok)

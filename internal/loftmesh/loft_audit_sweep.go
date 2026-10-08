@@ -183,7 +183,7 @@ func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 	// The cap proofs read the exact lifts, so a structured audit builds them
 	// before S8's candidate count. The triangle ceiling checked above is what
 	// bounds them there: the loft's own station cap (S15) does not, since
-	// loftStationCapGate never consults it for a build with no chorded pair.
+	// StationCapGate never consults it for a build with no chorded pair.
 	// The generic entry builds them only after S8 admits the call.
 	var data *LoftAuditData
 	var proven [2]bool

@@ -472,8 +472,8 @@ func chainLoftPlaneSideGate(pl0, pl1 PlaneRecord) error {
 // prism's n+1 rim posts (docs/surface-design.md §13.4).
 //
 // The returned stationRound is the MAX over every station of the displacement
-// §5.2 proves for it, each read through the same walkEndPlaneDelta the closed
-// build's own LineSeg arm reads (loftLineCellStations). A trimmed LineSeg
+// §5.2 proves for it, each read through the same loftmesh.WalkEndPlaneDelta the closed
+// build's own LineSeg arm reads (loftmesh.LineCellPoints). A trimmed LineSeg
 // station lands on walkOf's float lerp2 endpoint rather than the exact
 // rational the record denotes, so this term is not zero merely because the
 // pairing is straight.
@@ -483,7 +483,7 @@ func chainLoftStations(walks0, walks1 []survey2d.SegmentWalk) ([]Point2, []Point
 	w := make([]Point2, 0, n+1)
 	round := 0.0
 	for j := range n {
-		s0, s1, _, _, cellRound, err := loftLineCellStations(walks0[j], walks1[j])
+		s0, s1, _, _, cellRound, err := loftmesh.LineCellPoints(walks0[j], walks1[j])
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -491,9 +491,9 @@ func chainLoftStations(walks0, walks1 []survey2d.SegmentWalk) ([]Point2, []Point
 		w = append(w, s1...)
 		round = math.Max(round, cellRound)
 	}
-	terminal := math.Max(walkEndPlaneDelta(walks0[n-1].EndBound), walkEndPlaneDelta(walks1[n-1].EndBound))
+	terminal := math.Max(loftmesh.WalkEndPlaneDelta(walks0[n-1].EndBound), loftmesh.WalkEndPlaneDelta(walks1[n-1].EndBound))
 	if proofbound.IsNonFinite(terminal) {
-		return nil, nil, 0, errLoftStationDisplacementUnderivable
+		return nil, nil, 0, loftmesh.ErrLoftStationDisplacementUnderivable
 	}
 	v = append(v, Point2{U: walks0[n-1].EndU, V: walks0[n-1].EndV})
 	w = append(w, Point2{U: walks1[n-1].EndU, V: walks1[n-1].EndV})

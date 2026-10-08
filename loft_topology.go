@@ -68,7 +68,7 @@ type loftAssembly struct {
 	// its own rounding whether or not the body is later placed. Being a
 	// recorded endpoint is not that condition: an untrimmed ArcSeg's t == 1
 	// end is recorded verbatim and still carries the arc-end radial residual
-	// (arcNaturalEndRadialUpper).
+	// (loftmesh.ArcNaturalEndRadialUpper).
 	delta float64
 }
 

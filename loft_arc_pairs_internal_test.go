@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -263,7 +264,7 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	// sectionDelta/sectionMatchedDelta: the closed-form per-cell sagitta
 	// (chordSagitta's own formula, tessellate.go), the max over both radii —
 	// a circular cell's own matchedDelta equals its own sagitta exactly
-	// (loftCircularCellStations' own doc comment), so the two build-wide
+	// (loftmesh.CircularCellPoints' own doc comment), so the two build-wide
 	// accumulators coincide on this all-circular fixture.
 	sagitta0 := 2 * r0 * math.Sin(dth/4) * math.Sin(dth/4)
 	sagitta1 := 2 * r1 * math.Sin(dth/4) * math.Sin(dth/4)
@@ -281,7 +282,7 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 			matchedDelta[k] = sectionDelta
 			// Uniform-angle stations are constant speed on a circle, so
 			// proofbound.UniformSpeedTangentEnergyUpper discharges the per-cell energy
-			// obligation here exactly as perCellTangentEnergy's own circular
+			// obligation here exactly as loftmesh.PerCellTangentEnergy's own circular
 			// arm does in the real build; the half-chord is rounded DOWN
 			// twice so it stays the lower bound that helper requires.
 			energyV[k] = proofbound.UniformSpeedTangentEnergyUpper(arcUpperV[k], freeform.DownRound(freeform.DownRound(2*r0*math.Sin(dth/2))))
@@ -677,7 +678,7 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 	require.True(t, ok)
 	r0, r1 := arcSquaredRadii(arc)
 	require.Zero(t, r0.Cmp(r1), "the fixture's two arc radii must be EXACTLY equal for its zero delta to be earned from the record")
-	require.Zero(t, arcNaturalEndRadialUpper(arc), "equal recorded radii must charge no arc-end radial residual at all")
+	require.Zero(t, loftmesh.ArcNaturalEndRadialUpper(arc), "equal recorded radii must charge no arc-end radial residual at all")
 
 	p := ProfileRecord{Outer: loop}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
@@ -749,7 +750,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 	require.Positive(t, den.Sign())
 	want := new(big.Rat).Quo(num, den)
 
-	charged := arcNaturalEndRadialUpper(arc)
+	charged := loftmesh.ArcNaturalEndRadialUpper(arc)
 	require.GreaterOrEqual(t, proofarith.FloatRat(charged).Cmp(want), 0,
 		"the charged arc-end radial residual must dominate the record's own proven radial gap")
 
@@ -786,7 +787,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 // --- placement: both displacements, and sectionDelta invariant under motion ---
 
 // smallSweepWedgeSketch builds a two-line-plus-one-arc wedge (radius 5, a
-// 30-degree sweep — about 21 stations at the shipped loftChordFraction, per
+// 30-degree sweep — about 21 stations at the shipped loftmesh.ChordFraction, per
 // a10-plan.md's own Fixture sizing note: station count scales with sweep,
 // so a small-sweep arc keeps the repeated-PlacedCopy build cheap) on plane.
 func smallSweepWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
