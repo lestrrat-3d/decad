@@ -990,11 +990,10 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 	if !okA || !okP {
 		return bound, shares
 	}
-	hull := projectionLowerHull(ah, ph)
+	hull, n, norm, hullSense := linkagebound.LowerHullWithWitness(ah.boundSide(), ph.boundSide())
 	if hull == nil || hull.Cmp(bound) <= 0 {
 		return bound, shares
 	}
-	n, norm, hullSense := linkagebound.HullAttained(ah.boundSide(), ph.boundSide(), hull)
 	shares = make(map[int]*big.Rat)
 	linkagebound.AddHullShares(shares, ah.boundSide(), mine.rho[below:], projectionAxes(mine, below, axisOf), n, norm, hullSense)
 	if other >= 0 {

@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -49,51 +48,6 @@ func Remainder(rho, h []*big.Rat) *big.Rat {
 		}
 	}
 	return sum
-}
-
-// HullAttained is the direction n, an upper bound on |n|, and the sense,
-// ±1, along which projectionLowerHull attained bound: the first, in its own
-// order, whose L_n equals it. Sense +1 is the numerator that charges a's
-// extent along n, −1 the one that charges it along −n.
-func HullAttained(a, p Side, bound *big.Rat) (motionbound.RatVec, *big.Rat, int) {
-	one, zero := big.NewRat(1, 1), new(big.Rat)
-	dirs := []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
-	dirs = append(dirs, FaceNormals(a.Corners)...)
-	dirs = append(dirs, FaceNormals(p.Corners)...)
-	pads := new(big.Rat)
-	for _, pad := range []*big.Rat{a.Corners.Pad, p.Corners.Pad} {
-		if pad != nil {
-			pads.Add(pads, pad)
-		}
-	}
-	for _, n := range dirs {
-		sq := axisSq(n)
-		normUp := sqrtUpRat(sq)
-		normDown := proofarith.FloatRat(proofbound.RatSqrtDown(sq))
-		if normUp == nil || normDown == nil || normDown.Sign() <= 0 {
-			continue
-		}
-		aUp, aDown := a.ExtentsAlong(n, normUp)
-		pUp, pDown := p.ExtentsAlong(n, normUp)
-		for _, cand := range []struct {
-			sense int
-			num   *big.Rat
-		}{
-			{1, new(big.Rat).Neg(new(big.Rat).Add(pDown, aUp))},
-			{-1, new(big.Rat).Neg(new(big.Rat).Add(pUp, aDown))},
-		} {
-			sense, num := cand.sense, cand.num
-			norm := normDown
-			if num.Sign() > 0 {
-				norm = normUp
-			}
-			l := num.Quo(num, norm)
-			if l.Sub(l, pads).Cmp(bound) == 0 {
-				return n, normUp, sense
-			}
-		}
-	}
-	return dirs[0], one, 1
 }
 
 // AddHullShares is addProjectionShares along any direction n with |n| at

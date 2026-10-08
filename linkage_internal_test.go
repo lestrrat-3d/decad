@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -794,7 +795,15 @@ func TestLinkageHullPoints(t *testing.T) {
 		require.True(t, ok)
 		return projectionSide{corners: bounds}
 	}
-	require.Zero(t, projectionLowerHull(side(block, nil), side(far, nil)).Cmp(big.NewRat(10, 1)))
+	a, b := side(block, nil), side(far, nil)
+	require.Zero(t, projectionLowerHull(a, b).Cmp(big.NewRat(10, 1)))
+	bound, axis, norm, sense := linkagebound.LowerHullWithWitness(a.boundSide(), b.boundSide())
+	require.Zero(t, bound.Cmp(big.NewRat(10, 1)))
+	require.Zero(t, axis[0].Cmp(big.NewRat(1, 1)))
+	require.Zero(t, axis[1].Sign())
+	require.Zero(t, axis[2].Sign())
+	require.Zero(t, norm.Cmp(big.NewRat(1, 1)))
+	require.Equal(t, 1, sense)
 	require.Zero(t, projectionLowerHull(side(block, big.NewRat(1, 2)), side(far, big.NewRat(1, 4))).Cmp(big.NewRat(37, 4)))
 }
 
