@@ -11,8 +11,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
-
-	"github.com/lestrrat-3d/r3"
 )
 
 // analyticBodiesEqual is the exact set-identity fast path for evaluator
@@ -269,45 +267,12 @@ func interferenceOutcomeForExpected(expected *meshbool.BooleanExpectedError) int
 	}
 }
 
-// interferencePairDiameter reads the greatest supported point distance from
-// the pair. Analytic bodies contribute their exact support set from the
-// clearance model; a faceted payload contributes every held mesh vertex,
-// including interior tessellation vertices that have no B-rep Vertex. An
-// incomplete set can only understate D and tighten the noise floor, never
-// admit a coarse answer.
+// interferencePairDiameter reads the pair's diameter D through
+// pairGateDiameter: points each body proves lie on it, each charged its
+// proven gap, read across both bodies together. An incomplete set can only
+// understate D and tighten the noise floor, never admit a coarse answer.
 func interferencePairDiameter(ctx context.Context, a, b *Body) (float64, error) {
-	budget := proofbound.NewWorkBudget(ctx)
-	var points []r3.Vec
-	for _, body := range []*Body{a, b} {
-		if payload, ok := body.payload.(facetedPayload); ok {
-			points = append(points, payload.verts...)
-			continue
-		}
-		geom, ok, err := newBodyGeomBudget(budget, body)
-		if err != nil {
-			return 0, err
-		}
-		if ok {
-			points = append(points, geom.supports...)
-			continue
-		}
-		for _, vertex := range body.Vertices() {
-			if err := budget.Step(); err != nil {
-				return 0, err
-			}
-			points = append(points, vertex.position)
-		}
-	}
-	best := 0.0
-	for i := range points {
-		for j := i + 1; j < len(points); j++ {
-			if err := budget.Step(); err != nil {
-				return 0, err
-			}
-			best = math.Max(best, points[i].Sub(points[j]).Len())
-		}
-	}
-	return best, ctx.Err()
+	return pairGateDiameter(ctx, a, b)
 }
 
 // interferenceToleranceRef applies the pair-local volume gate and returns the

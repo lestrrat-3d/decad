@@ -412,24 +412,13 @@ func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
 }
 
 // pairDiameter reads the pair's diameter D — the greatest distance between
-// two points drawn from either body — from exact vertex positions and
-// per-face analytic support points (§7). The reading may understate the true
-// diameter, which only lowers the noise floor: the safe direction.
+// two points drawn from either body — through pairGateDiameter (§7,
+// verification §3): points each body proves lie on it, each charged its
+// proven gap. It never reads the carriers' witnesses (CFace.Wit), which carry
+// no gap. The reading may understate the true diameter, which only lowers the
+// noise floor: the safe direction.
 func (k *pairKernel) pairDiameter() (float64, error) {
-	pts := append(append([]r3.Vec{}, k.a.supports...), k.b.supports...)
-	best := 0.0
-	budget := proofbound.NewWorkBudget(k.ctx)
-	for i := range pts {
-		for j := i + 1; j < len(pts); j++ {
-			if err := budget.Step(); err != nil {
-				return 0, err
-			}
-			if d := pts[i].Sub(pts[j]).Len(); d > best {
-				best = d
-			}
-		}
-	}
-	return best, k.ctx.Err()
+	return pairGateDiameter(k.ctx, k.a.body, k.b.body)
 }
 
 // sheetSolidVerdict is docs/surface-design.md §9.3's pair decision procedure's

@@ -52,7 +52,6 @@ type bodyGeom struct {
 	edges    []*clearance.CEdge
 	verts    []r3.Vec
 	shellWit []r3.Vec // one witness per shell, void shells included (§2)
-	supports []r3.Vec // support points for the pair-D reading (§7)
 	delta    float64
 	// carrierDelta is the part of delta that can move a carrier the ruling
 	// certificates read. It equals delta except on a full revolve, whose
@@ -89,7 +88,7 @@ func newBodyGeom(b *Body) (*bodyGeom, bool) {
 }
 
 // newBodyGeomBudget is the cancellable form. Building a body's carrier faces,
-// edges, vertices and support points is linear in the body but is not free, and
+// edges and vertices is linear in the body but is not free, and
 // §7.2 carries the context through the entire read-only path — so the whole
 // build steps the caller's budget rather than making cancellation wait for both
 // operands to finish.
@@ -152,13 +151,6 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 	}
 	if ok, err = g.addTopology(budget, b); err != nil || !ok {
 		return nil, false, err
-	}
-	g.supports = append([]r3.Vec{}, g.verts...)
-	for _, f := range g.faces {
-		if err := budget.Step(); err != nil {
-			return nil, false, err
-		}
-		g.supports = append(g.supports, f.Wit...)
 	}
 	return g, true, nil
 }

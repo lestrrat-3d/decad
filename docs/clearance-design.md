@@ -805,8 +805,9 @@ the caller is owed unasked; no rung needs a gap the caller never asked for.
   Length: `Ref = max(|Value|, Quantum)` with `Quantum = δ = ε × D`, `D` the
   **pair's** diameter exactly as verification §3 defines it — the greatest
   distance between two points drawn from either body. The evaluator READS
-  that `D` from exact vertex pairs and per-face analytic support points, and
-  the reading may understate the true diameter; verification §4 already
+  that `D` from points each body proves lie on it, each charged its own
+  proven gap (`pairGateDiameter`, verification §3), and the reading may
+  understate the true diameter; verification §4 already
   admits exactly this for its own body-diameter reading, which understates a
   curved body by the chord error and by its own rounding step, because a
   floor's ingredients are magnitudes, not
