@@ -200,7 +200,7 @@ the rules leave to the byte budget.
 | `contact_sphere_oriented.go` / `contact_sphere_oriented_sweep.go` | Rotated sphere-box path. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See contact-sweep §4–§5. |
 | `contact_sweep_replay.go` | Replay adapters. See contact-sweep §6. |
-| `clearance_cells.go` | Pruned cell walk and face-pair adapter. See clearance §3–§5. |
+| `clearance_cells.go` | Pruned cell walk and face-pair adapter; `internal/clearance/` orders feature cells. See clearance §3–§5. |
 | `clearance_tiers.go` | Tier adapters and vertex budget. See clearance §3/§6. |
 | `clearance_geom.go` | `bodyGeom`: clearance faces, edges and nesting over `internal/clearance/`. See clearance §2–§3. |
 | `survey.go` | Adapts analytic wall, undercut and radius readers. See verification §6. |
