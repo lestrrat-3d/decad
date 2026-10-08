@@ -9,18 +9,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// EdgeWits returns on-edge sample points.
-func EdgeWits(e *CEdge) []r3.Vec {
-	if e.Line {
-		return []r3.Vec{e.A, e.B, e.A.Add(e.B).Scale(0.5)}
-	}
-	lo, hi := 0.0, 2*math.Pi
-	if !e.Ang.Full {
-		lo, hi = e.Ang.Lo, e.Ang.Hi
-	}
-	return []r3.Vec{e.At(lo), e.At((lo + hi) / 2)}
-}
-
 // LineParamAdmit classifies a point (assumed on the edge's carrier line)
 // against the segment's parameter range.
 func LineParamAdmit(e *CEdge, p r3.Vec, tol float64) int {

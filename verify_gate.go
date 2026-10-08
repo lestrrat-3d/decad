@@ -54,9 +54,9 @@ import (
 // arm declined ends with no gate diameter at all.
 //
 // The exact model decides only which arm reads the body. Its carrier
-// witnesses (CFace.Wit) are float samples with no proven gap, and a placed
-// body's carrier maximum reads above its own diameter, so no reading here
-// takes them. A prism reads station witnesses along its walls
+// witnesses (CFace.Wit) are float samples whose gaps (clearance.Witness) are
+// proven to the carriers, not to the body, and a placed body's carrier
+// maximum reads above its own diameter, so no reading here takes them. A prism reads station witnesses along its walls
 // (stationGateDiameter), each held within a proven gap of a point of the
 // body, and shrinks their maximum by twice the widest gap plus its
 // axialDelta. fallbackGateDiameter applies the same reading to the prisms it

@@ -63,8 +63,8 @@ func stationGateDiameter(budget *proofbound.WorkBudget, prisms []prismPayload, d
 // cannot be read.
 //
 // The carrier witnesses addPrismFaces places (CFace.Wit) are float samples
-// with no proven gap: a placed prism's held carrier maximum reads above the
-// body's own diameter. This reading never reads them. Each one sits between
+// with no proven gap to the body: a placed prism's held carrier maximum reads
+// above the body's own diameter. This reading never reads them. Each one sits between
 // two stations at its own angle, at a station, or inside the section.
 //
 // Every prism handed in must have walls that run the full height from z0 to

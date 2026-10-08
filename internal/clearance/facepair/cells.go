@@ -60,12 +60,12 @@ func (k *Kernel) FaceCell(f, g *clearance.CFace, sink *clearance.CellSink) {
 			k.coneSphere(f, g, sink)
 			return
 		}
-		sink.Coarse(f.Box, g.Box, f.Wit, g.Wit)
+		sink.Coarse(f.Box, g.Box, f.Witnesses(k.tol), g.Witnesses(k.tol))
 	case (f.Kind == clearance.CkTorus && f.Spindle) || (g.Kind == clearance.CkTorus && g.Spindle):
 		// A Minor ≥ Major torus leaves the polynomial path (§4): the pair
 		// takes the coarse enclosure — the face-box distance below, the
 		// closest witness pair above.
-		sink.Coarse(f.Box, g.Box, f.Wit, g.Wit)
+		sink.Coarse(f.Box, g.Box, f.Witnesses(k.tol), g.Witnesses(k.tol))
 	default:
 		k.offsetPair(f, g, sink)
 	}
@@ -87,11 +87,11 @@ func (k *Kernel) offsetPair(f, g *clearance.CFace, sink *clearance.CellSink) {
 		// prove more than the windowed one.
 		if f.Kind == clearance.CkCylinder && g.Kind == clearance.CkCylinder {
 			if lo, hi, ok := k.windowedNested(f, g); ok {
-				sink.CoarseWith(lo, hi, f.Box, g.Box, f.Wit, g.Wit)
+				sink.CoarseWith(lo, hi, f.Box, g.Box, f.Witnesses(k.tol), g.Witnesses(k.tol))
 				return
 			}
 		}
-		sink.Coarse(f.Box, g.Box, f.Wit, g.Wit)
+		sink.Coarse(f.Box, g.Box, f.Witnesses(k.tol), g.Witnesses(k.tol))
 		return
 	}
 	minLo := math.Inf(1)

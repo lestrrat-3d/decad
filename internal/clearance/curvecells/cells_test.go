@@ -2,6 +2,7 @@ package curvecells_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
@@ -11,7 +12,8 @@ import (
 )
 
 // windowedCylinder is a full cylinder face of radius r about the line through
-// anchor along the unit axis, trimmed to the axial window [z0, z1].
+// anchor along the unit axis, trimmed to the axial window [z0, z1], with one
+// witness at mid-window, where the trim admits its foot.
 func windowedCylinder(anchor, axis r3.Vec, r, z0, z1 float64) *clearance.CFace {
 	u := clearance.PerpTo(axis)
 	lo, hi := anchor.Add(axis.Scale(z0)), anchor.Add(axis.Scale(z1))
@@ -25,7 +27,7 @@ func windowedCylinder(anchor, axis r3.Vec, r, z0, z1 float64) *clearance.CFace {
 		Sweep:  clearance.AngWindow{Full: true},
 		ZWin:   clearance.NewLinWindow(z0, z1),
 		Box:    clearance.BoxUnion(clearance.CircleBox(lo, axis, r), clearance.CircleBox(hi, axis, r)),
-		Wit:    []r3.Vec{lo.Add(u.Scale(r))},
+		Wit:    []r3.Vec{anchor.Add(axis.Scale((z0 + z1) / 2)).Add(u.Scale(r))},
 	}
 }
 
@@ -53,9 +55,10 @@ func windowedRim(centre r3.Vec, r float64) *clearance.CEdge {
 // radius 5 whose centre sits 1e-14 off the rim's axis; and a pin tilted
 // 1e-12 rad, inside the parallel oracle's undecided band, stands inside the
 // bore's rim. Each reads its 0.5 mm gap within 2·tol, never Exact, and
-// decided. A rim that matches the pin's radius stays at the coarse
-// enclosure's zero lower bound. Seen red: deleting the reading leaves every
-// decided case at that zero.
+// decided, and its upper end holds the true gap, 0.5 less the 1e-14 offset
+// where a rim or the ball sits off the axis. A rim that matches the pin's
+// radius stays at the coarse enclosure's zero lower bound. Seen red:
+// deleting the reading leaves every decided case at that zero.
 func TestWindowedCircleEdge(t *testing.T) {
 	t.Parallel()
 	z := r3.NewVec(0, 0, 1)
@@ -78,12 +81,13 @@ func TestWindowedCircleEdge(t *testing.T) {
 		face *clearance.CFace
 		edge *clearance.CEdge
 		want float64
+		off  float64
 	}{
-		{"bore rim outside a pin", windowedCylinder(r3.NewVec(48, 0, -1), z, 5, 0, 10), windowedRim(r3.NewVec(48, 1e-14, 0), 5.5), 0.5},
-		{"pin rim inside a bore", windowedCylinder(r3.NewVec(48, 0, 0), z, 5.5, 0, 8), windowedRim(r3.NewVec(48, 1e-14, 4), 5), 0.5},
-		{"bore rim around a ball", ball, windowedRim(r3.NewVec(48, 0, 0), 5.5), 0.5},
-		{"tilted pin inside a bore rim", windowedCylinder(r3.NewVec(48, 0, 0), tilted, 5, -4, 4), windowedRim(r3.NewVec(48, 0, 0), 5.5), 0.5},
-		{"rim on the pin", windowedCylinder(r3.NewVec(48, 0, -1), z, 5, 0, 10), windowedRim(r3.NewVec(48, 1e-14, 0), 5), 0},
+		{"bore rim outside a pin", windowedCylinder(r3.NewVec(48, 0, -1), z, 5, 0, 10), windowedRim(r3.NewVec(48, 1e-14, 0), 5.5), 0.5, 1e-14},
+		{"pin rim inside a bore", windowedCylinder(r3.NewVec(48, 0, 0), z, 5.5, 0, 8), windowedRim(r3.NewVec(48, 1e-14, 4), 5), 0.5, 1e-14},
+		{"bore rim around a ball", ball, windowedRim(r3.NewVec(48, 0, 0), 5.5), 0.5, 1e-14},
+		{"tilted pin inside a bore rim", windowedCylinder(r3.NewVec(48, 0, 0), tilted, 5, -4, 4), windowedRim(r3.NewVec(48, 0, 0), 5.5), 0.5, 0},
+		{"rim on the pin", windowedCylinder(r3.NewVec(48, 0, -1), z, 5, 0, 10), windowedRim(r3.NewVec(48, 1e-14, 0), 5), 0, 0},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -100,7 +104,8 @@ func TestWindowedCircleEdge(t *testing.T) {
 			require.LessOrEqual(t, lo, c.want)
 			if c.want > 0 {
 				require.InDelta(t, c.want, hi, 2*tol)
-				require.GreaterOrEqual(t, hi, c.want)
+				truth := new(big.Rat).Sub(new(big.Rat).SetFloat64(c.want), new(big.Rat).SetFloat64(c.off))
+				require.GreaterOrEqual(t, new(big.Rat).SetFloat64(hi).Cmp(truth), 0, "the upper end %.17g holds the true gap", hi)
 			}
 		})
 	}

@@ -7,15 +7,17 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins three readings docs/clearance-design.md §2 and §5 owe a
+// This file pins four readings docs/clearance-design.md §2 and §5 owe a
 // published Clearance row: a cone carrier is measured as its float apex and
-// window stand, a topology vertex widens the row by its own proven bound, and
-// a coalesced wall stands only for exactly collinear segments. Each fixture's
+// window stand, a topology vertex widens the row by its own proven bound, a
+// coalesced wall stands only for exactly collinear segments, and a coarse
+// witness bounds the gap only with its own proven gap added. Each fixture's
 // truth is computed exactly (or, where it needs a sine, to 300 bits), never
 // read back from the kernel.
 
@@ -250,4 +252,97 @@ func TestClearanceKinkedWallContainsTruth(t *testing.T) {
 		ballAtCentre(t, doc, 500, 3, 0, 0.25)
 		requireGapEncloses(t, clearanceRow(t, doc), new(big.Rat).Sub(big.NewRat(3, 4), ratOf(k)))
 	})
+}
+
+// witnessConeBody revolves the triangle (0, 0), (e, e), (e, 0),
+// e = 1 + 2⁻³², by ±1 rad about the u axis, anchored at u = −2²⁰. Its slanted
+// wall is the 45° cone ρ = x from the apex at the origin, read in the axis
+// frame from z = 2²⁰ to z = 2²⁰ + e. Every axis coordinate is exact, and so
+// is the carrier, so the body's displacement is zero. The cone's one witness
+// sits at the mean of the two axial ends, 2²¹ + e, which rounds to 2²¹ + 1, so
+// the witness lands 2⁻³³ behind the wall along the axis at ρ = e/2: 2⁻³³/√2,
+// about 8.2e-11, outside the cone.
+func witnessConeBody(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	e := 1 + math.Ldexp(1, -32)
+	s := fixedPolygonSketch(t, [][2]float64{{0, 0}, {e, e}, {e, 0}})
+	const a = -1048576
+	body, err := doc.Revolve(s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{U: a, V: 0}, End: decad.Point2{U: a + 1, V: 0}},
+		decad.SymmetricAngle{A: units.Radians(1)})
+	require.NoError(t, err)
+	return body
+}
+
+// witnessSliceBody extrudes the quarter disc of radius r about (cx, cy),
+// bounded by the arc from −90° to 0°, over z ∈ [−1/2, 1/2]. Its cylinder
+// wall's mid witness sits at −45° and z = 0.
+func witnessSliceBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.XY(), -0.5)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	c, p1, p2 := s.CreatePoint(cx, cy), s.CreatePoint(cx, cy-r), s.CreatePoint(cx+r, cy)
+	s.Fix(c)
+	s.Fix(p1)
+	s.Fix(p2)
+	s.CreateArc(c, p1, p2)
+	s.CreateLine(p2, c)
+	s.CreateLine(c, p1)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestClearanceCoarseWitnessContainsTruth reads a cone × cylinder pair, which
+// no closed-form cell solves, so its upper end comes from the coarse
+// enclosure's closest witness pair (docs/clearance-design.md §5). The cone is
+// witnessConeBody's, its witness about 8.2e-11 outside the wall. A quarter
+// disc of radius 1/4 about (−1/2, 3/2) faces the wall's φ = 0 generator, the
+// line y = x, from √2 away, and its arc's mid witness at −45° is the slice's
+// nearest point. Every point of the cone has y ≤ x and every point of the
+// slice lies at least √2 − 1/4 from that half-space, which the cone point
+// (1/2, 1/2, 0) attains, so the true gap is √2 − 1/4. The two faces' boxes lie
+// about 0.354 apart, so the row is decided, with that lower end.
+//
+// "anchored far" reads the pair as built. "placed far" translates both bodies
+// by 2²⁰ along every axis, so both carry the placement's own displacement.
+//
+// Shown to fail: before the coarse enclosure added each witness's own proven
+// gap (clearance.Witness), "anchored far" read an upper end of
+// 1.1642135622908296, 8.2e-11 below the truth, because the envelope charge it
+// carried, about 5e-14, is read off the witnesses' own coordinates near the
+// origin while the witness rounded at the axis anchor's scale. "placed far"
+// held: its displacement, about 1.1e-7, covered the witness. Dropping both
+// gaps from clearance.CellSink.Coarse turns "anchored far" red again.
+func TestClearanceCoarseWitnessContainsTruth(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		off  r3.Vec
+	}{
+		{name: "anchored far"},
+		{name: "placed far", off: r3.NewVec(1<<20, 1<<20, 1<<20)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			cone := witnessConeBody(t, doc)
+			slice := witnessSliceBody(t, doc, -0.5, 1.5, 0.25)
+			if tc.off != (r3.Vec{}) {
+				tr, err := r3.Translation(tc.off)
+				require.NoError(t, err)
+				_, err = cone.Placed(t.Context(), tr)
+				require.NoError(t, err)
+				_, err = slice.Placed(t.Context(), tr)
+				require.NoError(t, err)
+			}
+			requireGapEnclosesSurd(t, clearanceRow(t, doc), big.NewRat(-1, 4), 1, big.NewRat(2, 1))
+		})
+	}
 }
