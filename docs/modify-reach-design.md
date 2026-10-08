@@ -146,7 +146,7 @@ more specific SX row replaces that base refusal.
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
 | **SX13** | a cap-loop chamfer whose setback rounds away against the level it displaces: the cap contour's offset radius rounds back onto a circular wall's own radius (`R -/+ d == R`), or the band's side level rounds back onto its own cap level (`z1 - d == z1` on the end cap, `z0 + d == z0` on the start cap) | body exists; its taper is real but finer than float64 names at that radius or at that sweep level, so the band's patches cannot be told from a cylinder or from the cap plane | `ErrUnsupported` |
-| **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root. A G1 join (modify §7's dead-zone rule) intersects no carriers — its corner is the shared-normal foot, enclosed as a reflex corner's feet are — so SX14 never fires on one. Also a circular band patch whose corner skew between its side and cap directrices cannot be enclosed below a quarter turn (§8.4) | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement, or no area bound holds for the ruled patch at that skew | `ErrUnsupported` |
+| **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root. A G1 join (modify §7's dead-zone rule) intersects no carriers — its corner is the shared-normal foot, enclosed as a reflex corner's feet are — so SX14 never fires on one. Also a circular band patch whose corner skew between its side and cap directrices cannot be enclosed below a quarter turn (§8.4). Also a miter corner at a circular wall whose corner-foot locus cannot be bounded (`capband.MiterLocusUpper`): a tangent cusp, or a corner that turns past the G1 dead zone by less than the arc's own radius enclosure resolves | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement, or no area bound holds for the ruled patch at that skew | `ErrUnsupported` |
 | **SX15** | a cap-loop chamfer whose band patch's outward orientation cannot be certified: the patch's own `Face.NormalAt` refuses at the build's orientation sample point | body exists and its patches are real; the evaluator cannot evaluate its own orientation sample on this patch, so it cannot state which side of the patch is outward | `ErrUnsupported` |
 | **SX16** | a modify op on a `brepPayload`, or on a stacked receiver through its face view, outside `docs/brep-modify-design.md` Tables RB/EB | body exists; that document's Table SB names the row | `ErrUnsupported` |
 
@@ -209,7 +209,13 @@ conditioning: the miter is a float solve over unit directions, so its result
 sits some distance from the point the offset denotes, and §8.4 requires every
 cap-level reading to publish that distance. Where the two offset carriers are so
 nearly parallel that no bounded box holds the denoted corner, there is no such
-distance to publish and the call refuses rather than name one.
+distance to publish and the call refuses rather than name one. The same row
+covers the path the corner foot takes as the offset grows (§8.3): the slant
+ruling's length and the circular patch's chord-locus term both bound it, and a
+corner whose carriers meet in a double root at the corner, or in a root pair
+closer than the radius enclosure resolves, has no such bound.
+`requireCapBlendCornerLoci` decides it after the other stage-6 audits and
+before the body is assembled, so the refusal names the corner.
 
 SX15 is decided as each patch is constructed, like SX13's radial half: the
 patch's own built surface is sampled at a point on it, and where that sample's
