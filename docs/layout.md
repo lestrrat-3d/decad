@@ -208,7 +208,7 @@ the rules leave to the byte budget.
 | `survey_undercut.go` | Folds three-valued undercut readings. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
 | `motion.go` / `motion_verify.go` | Motion aliases, options, and pose checks. See motion-check §2–§6. |
-| `motion_bound.go` | Swept-box and corner readings over `internal/motionbound/`. See its doc comment. |
+| `motion_bound.go` | Converts motion specs and reads payload record radii for `internal/motionbound/`. |
 | `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See linkage design. |
 | `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
 | `linkage_loop.go` | Closed loops and `Schedule`. See `docs/linkage-check-design.md` §15. |
@@ -317,7 +317,7 @@ the rules leave to the byte budget.
 | `internal/survey2d/` | 2D disks, prism readers, walks, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
-| `internal/motionbound/` | Motion variants, validation, exact parameters, poses and sweeps. |
+| `internal/motionbound/` | Motion variants, validation, exact parameters, poses, box bounds and sweeps. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, depth and rolling bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |

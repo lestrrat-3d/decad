@@ -495,7 +495,7 @@ func (r *motionRun) setup(moving []*Body) {
 	for i := range r.movers {
 		mv := &r.movers[i]
 		if r.spec.kind != motionbound.MotionPrismatic {
-			mv.rho = moverAxisRadius(mv.body, r.spec.frame)
+			mv.rho = motionbound.MoverAxisRadius(mv.body.bounds, r.spec.frame)
 		}
 		// The swept box covers every pose from where the path's box was read:
 		// for a Revolute or a Prismatic that is the mover at rest — the
@@ -506,7 +506,7 @@ func (r *motionRun) setup(moving []*Body) {
 			motionbound.MoverTravel(r.spec.frame, mv.rho, zero, r.spec.fromP),
 			motionbound.MoverTravel(r.spec.frame, mv.rho, zero, r.spec.toP),
 		)
-		lo, hi, ok := moverSweptBox(mv.body.bounds, r.spec.frame, travel)
+		lo, hi, ok := motionbound.MoverSweptBox(mv.body.bounds, r.spec.frame, travel)
 		swept[i] = motionSweptBox{lo: lo, hi: hi, ok: ok}
 	}
 	r.formPairs(swept)
@@ -594,7 +594,7 @@ func staticPair(mv motionMover, st motionStatic, swept motionSweptBox) motionPai
 		return pair
 	}
 	if swept.ok {
-		if lower, ok := sweptBoxLower(swept.lo, swept.hi, st.body.bounds); ok {
+		if lower, ok := motionbound.SweptBoxLower(swept.lo, swept.hi, st.body.bounds); ok {
 			pair.excluded, pair.lower = true, lower
 			return pair
 		}

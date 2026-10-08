@@ -422,12 +422,12 @@ interval holding one is bounded on both sides of it and certifies when its gaps 
 scene 5).
 
 **Reading `ρ_{ik}`.** Each link's rest box is the per-axis union of its bodies' `Bounds()` boxes, each
-inflated outward by its own `Bound`, read as exact rationals (`boxCornersExact`). The reading walks DOWN the
+inflated outward by its own `Bound`, read as exact rationals (`motionbound.BoxCornersExact`). The reading walks DOWN the
 path from link `k` toward joint `i`, carrying a ball that encloses link `k` under the joints walked so far:
 
 | step | enclosure carried |
 |---|---|
-| start, `i = k` | `ρ_{kk}` is `moverAxisRadius`'s reading: the largest exact distance of a rest-box corner from axis `k`, rooted upward. Distance from a line is convex, so the maximum over the box sits at a corner. No ball is needed. |
+| start, `i = k` | `ρ_{kk}` is `motionbound.MoverAxisRadius`'s reading: the largest exact distance of a rest-box corner from axis `k`, rooted upward. Distance from a line is convex, so the maximum over the box sits at a corner. No ball is needed. |
 | ball under joint `k` | revolute: centre `c_k` (the joint's `Center`), radius the largest corner distance from `c_k`, rooted upward — a rotation about any axis through `c_k` preserves distance to `c_k`. Prismatic: centre the box centre, radius the box's half-diagonal plus `m_k`, the largest `|w|` over the joint's waypoints, the farthest the joint slides over the drive (`0` for an unlisted joint); `q_k` is linear within each segment, so its extremes sit at waypoints. |
 | ball under joint `m`, given the ball `(c, R)` under joints `m+1..k` | revolute: `(c_m, |c − c_m| + R)` — every point within `R` of `c` stays within `|c − c_m| + R` of `c_m` under any rotation about an axis through `c_m`. Prismatic: `(c, R + m_m)`. |
 | `ρ_{ik}` for `i < k` | `dist(c, axis_i) + R`, where `(c, R)` is the ball under joints `i+1..k` and the distance from the exact centre to the exact axis line is `|(c − c_i) × a_i| / |a_i|`, squared exactly and rooted upward. |
@@ -588,7 +588,7 @@ about the ideal poses, as every interval claim is (§5.1).
   axes `X`, `Y`, `Z` and the exact cross product of its first two non-parallel slide directions, each
   admitted only when every slide is perpendicular to it.
 - A body's `a`-extent is the least and greatest exact `a·x` over the eight corners of its zero-pose
-  `Bounds()` box inflated by its own `Bound` (`boxCornersExact`); `a·x` is linear, so the extremes over the
+  `Bounds()` box inflated by its own `Bound` (`motionbound.BoxCornersExact`); `a·x` is linear, so the extremes over the
   box sit at corners.
 - `w` is compared strictly with zero: touching extents (`w = 0`) never exclude, so a link resting on its
   pivot's cap or on a table is evaluated, and a declared contact still reads as §5.4 says.
