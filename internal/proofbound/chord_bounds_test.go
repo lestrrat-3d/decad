@@ -1,4 +1,4 @@
-package decad
+package proofbound_test
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -156,16 +157,6 @@ func twistedPieSliceTrueVolume(radius, sweepRad, twistRad, h float64) float64 {
 	return (radius * radius * sweepRad * h / 6) * (2 + math.Cos(twistRad))
 }
 
-// ratOfFloat lifts a float64 into an exact big.Rat leaf: every coordinate
-// this test measures is itself a float64, hence an exact rational
-// (internal/polynomial/polynomial.go's take-the-floats-exactly discipline), so no rounding
-// is introduced by the lift.
-func ratOfFloat(x float64) *big.Rat {
-	r := new(big.Rat)
-	r.SetFloat64(x)
-	return r
-}
-
 // heldVolumeExact sums signed tetrahedra, anchored at the origin, over
 // EXACTLY the triangle set a test mesh builds — the same two-triangle-per-
 // wall-cell topology assembleLoft emits (loft_build.go) and
@@ -291,7 +282,7 @@ type chordedAllowBreakdown struct {
 //     that cell's own arc-length upper bound — the same quantities each
 //     proofbound.CellChordCurveAreaUpper call above already states.
 func chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h float64, n int) chordedAllowBreakdown {
-	sectionDelta := chordSagitta(radius, sweepRad, n)
+	sectionDelta := tessellation.ChordSagitta(radius, sweepRad, n)
 	verts, _ := twistedPieSliceMesh(radius, sweepRad, twistRad, h, n)
 
 	// Vertex layout from twistedPieSliceMesh: 0=centerB, 1=centerT, then per
@@ -722,7 +713,7 @@ func ringMesh(radius, twistRad, h float64, n int) (verts []r3.Vec, tris [][3]int
 // origin anchor to either loop's own true arc.
 func ringAllow(radius, twistRad, h float64, n int) (matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow float64) {
 	const sweepRad = 2 * math.Pi
-	matchedDelta = chordSagitta(radius, sweepRad, n)
+	matchedDelta = tessellation.ChordSagitta(radius, sweepRad, n)
 	arcPoint := func(i int, twist, z float64) r3.Vec {
 		theta := twist + sweepRad*float64(i)/float64(n)
 		return r3.NewVec(radius*math.Cos(theta), radius*math.Sin(theta), z)
