@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/extent"
 
 	"github.com/lestrrat-3d/decad/internal/capcontour"
@@ -74,7 +75,8 @@ func TestCapBlendPayloadStoresEachBandsContourDisplacement(t *testing.T) {
 	require.NoError(t, err)
 	joins, err := capOffsetJoins(budget, cl, cbp.loopOffset(0))
 	require.NoError(t, err)
-	want, err := capContourDelta(cl.walks, joins, cbp.loopOffset(0), cbp.loopSetback(0).dcDelta)
+	want, err := capband.ContourDisplacement(cl.walks, capContourJoins(joins),
+		cbp.loopOffset(0), cbp.loopSetback(0).dcDelta, shellTol)
 	require.NoError(t, err)
 	require.Equal(t, want, stored)
 	require.NotNil(t, chamfered)

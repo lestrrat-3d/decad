@@ -536,7 +536,7 @@ func heldAngleSection(t *testing.T, draw func(s *sketch.Sketch), d float64) *dec
 //     chamfered ring π·d²·(r − d/3) and the straight sides' l·d².
 //
 // Shown to fail: with the patches' held numbers read as exact
-// (capWallHeldAllow and capApexHeldAllow answering a zero HeldAllow), the
+// (capband.WallHeldAllow and capband.ApexHeldAllow answering a zero HeldAllow), the
 // L's volume misses by 7.854e-13 mm³ against a 7.852e-13 mm³ bound. The
 // slot's misses by 6.11e-08 mm³ against 5.72e-08 mm³ only with the band's
 // closure charge (capBandClosure) zeroed as well: its G1 feet sit an ulp off
