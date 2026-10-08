@@ -344,46 +344,30 @@ func TestRevolveWallNormalCoversFarAnchoredTorus(t *testing.T) {
 }
 
 // TestRevolveWallNormalCoversFarTiltedAxis revolves a rectangle about an
-// axis along (3, 4), whose rounded unit direction (0.6, 0.8) the axis
-// resolution bounds. Every wall tag is placed from axis coordinates rounded
-// at ulp(10⁶) in both world coordinates, so a Cylinder's own axis line sits
-// off the recorded one sideways, and the recorded corners, rounded at the
-// same scale, leave the inner side a hair off parallel. Where the anchor
-// sits 10⁵ mm back along the axis from the profile, the direction's own
-// rounding swings the held axis line some 1e-11 mm off the recorded one at
-// the profile, and the axial coordinates round at ulp(10⁵).
+// axis along (3, 4) whose recorded anchor sits 10⁵ mm back along it from the
+// profile. The axis's rounded unit direction (0.6, 0.8), which the axis
+// resolution bounds, swings the held axis line some 1e-11 mm off the recorded
+// one at the profile, and every wall tag is placed from axial coordinates
+// rounded at ulp(10⁵) in both world coordinates, so a Cylinder's own axis line
+// sits off the recorded one sideways. The profile itself stays near the
+// origin: sketch's own area check cannot reproduce a profile recorded at 10⁶.
 //
 // Shown to fail: before the denoted-normal comparison the inner Cylinder
-// published a 2.3e-16 bound 4.7e-11 off the denoted normal (far anchor) and a
-// 2.2e-16 bound 5.6e-12 off it (far along the axis). Dropping the axis's own
-// anchor and direction bounds from the denoted surface (a zero
-// revolvemesh.AxisBound in wallDenotation) turns "far along the axis" red
-// again, a 2.8e-12 bound against the same 5.6e-12.
+// published a 2.2e-16 bound 5.6e-12 off the denoted normal. Dropping the
+// axis's own anchor and direction bounds from the denoted surface (a zero
+// revolvemesh.AxisBound in wallDenotation) turns it red again, a 2.8e-12
+// bound against the same 5.6e-12.
 func TestRevolveWallNormalCoversFarTiltedAxis(t *testing.T) {
 	t.Parallel()
-	const o = 1e6
-	for _, tc := range []struct {
-		name string
-		ax   normalOracleAxis
-		// rect holds the axis coordinates (z, ρ) of (1, 1), (3, 1), (3, 2),
-		// (1, 2) along d = (0.6, 0.8) and e = (0.8, −0.6), z counted from
-		// the anchor, or from 10⁵ mm past it.
-		rect [][2]float64
-	}{
-		{"far anchor", normalOracleAxis{start: [2]float64{o, o}, end: [2]float64{o + 3, o + 4}},
-			[][2]float64{{o + 1.4, o + 0.2}, {o + 2.6, o + 1.8}, {o + 3.4, o + 1.2}, {o + 2.2, o - 0.4}}},
-		{"far along the axis", normalOracleAxis{start: [2]float64{-6e4, -8e4}, end: [2]float64{-6e4 + 3, -8e4 + 4}},
-			[][2]float64{{1.4, 0.2}, {2.6, 1.8}, {3.4, 1.2}, {2.2, -0.4}}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			s, p := polygonSketch(t, tc.rect)
-			b := revolveAbout(t, s, p, tc.ax)
-			worst := requireWallNormalsEnclose(t, b, decad.KindCylinder, radiusNear(1), tc.ax, tc.rect[0],
-				normalOracleWall{p0: tc.rect[0], p1: tc.rect[1]}, 0)
-			require.Greater(t, worst, 1e-13, "the fixture must genuinely depart from its tag")
-		})
-	}
+	ax := normalOracleAxis{start: [2]float64{-6e4, -8e4}, end: [2]float64{-6e4 + 3, -8e4 + 4}}
+	// The axis coordinates (z, ρ) of (10⁵+1, 1), (10⁵+3, 1), (10⁵+3, 2),
+	// (10⁵+1, 2) along d = (0.6, 0.8) and e = (0.8, −0.6).
+	rect := [][2]float64{{1.4, 0.2}, {2.6, 1.8}, {3.4, 1.2}, {2.2, -0.4}}
+	s, p := polygonSketch(t, rect)
+	b := revolveAbout(t, s, p, ax)
+	worst := requireWallNormalsEnclose(t, b, decad.KindCylinder, radiusNear(1), ax, rect[0],
+		normalOracleWall{p0: rect[0], p1: rect[1]}, 0)
+	require.Greater(t, worst, 1e-13, "the fixture must genuinely depart from its tag")
 }
 
 // requireStraightWallsEnclose samples each recorded straight wall of walls on
