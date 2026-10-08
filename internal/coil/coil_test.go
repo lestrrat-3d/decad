@@ -128,6 +128,100 @@ func TestSegmentAreaAndLengths(t *testing.T) {
 	require.InDelta(t, 3*math.Pi*math.Pi/(2*256*256), sag, 1e-15)
 }
 
+// shiftedDisplacement is the largest distance, over a dense (λ, s) grid of
+// one wall cell, between the point of the two triangles on the cell's TRUE
+// corners and the true helicoid point docs/helix-design.md §5.4's shifted
+// correspondence assigns it: S(λ, θ(s) + ε) with
+// ε = c·min(s(1−λ), λ(1−s))·2Δρ·sin h/ρ(λ). The cell spans θ ∈ [θ0, θ0 + 2h]
+// with the diagonal from (0, 0) to (1, 1), the split coil_build.go emits.
+func shiftedDisplacement(rv, zv, rw, zw, pitch, dt float64) float64 {
+	k := pitch / (2 * math.Pi)
+	h := math.Pi * dt
+	dr := rw - rv
+	surface := func(l, th float64) [3]float64 {
+		r := rv + l*dr
+		return [3]float64{r * math.Cos(th), r * math.Sin(th), zv + l*(zw-zv) + k*th}
+	}
+	lerp := func(a, b [3]float64, w float64) [3]float64 {
+		return [3]float64{a[0] + w*(b[0]-a[0]), a[1] + w*(b[1]-a[1]), a[2] + w*(b[2]-a[2])}
+	}
+	const th0 = 0.7
+	p00, p10 := surface(0, th0), surface(1, th0)
+	p01, p11 := surface(0, th0+2*h), surface(1, th0+2*h)
+	c := 1.0
+	if math.Abs(dr) > math.Min(rv, rw) {
+		c = math.Min(rv, rw) / math.Abs(dr)
+	}
+	worst := 0.0
+	const n = 300
+	for i := 0; i <= n; i++ {
+		for j := 0; j <= n; j++ {
+			l, s := float64(i)/n, float64(j)/n
+			var held [3]float64
+			if s <= l {
+				held = lerp(lerp(p00, p10, l), lerp(p00, p11, l), s/math.Max(l, 1e-300))
+			} else {
+				held = lerp(lerp(p00, p01, s), lerp(p00, p11, s), l/s)
+			}
+			m := math.Min(s*(1-l), l*(1-s))
+			eps := c * m * 2 * dr * math.Sin(h) / (rv + l*dr)
+			q := surface(l, th0+2*h*s+eps)
+			worst = math.Max(worst, math.Sqrt((held[0]-q[0])*(held[0]-q[0])+(held[1]-q[1])*(held[1]-q[1])+(held[2]-q[2])*(held[2]-q[2])))
+		}
+	}
+	return worst
+}
+
+// TestCellDepartureUpper checks §5.4's analytic leg against the shifted
+// correspondence it bounds, sampled densely over one cell. The sample is a
+// falsifier, never the proof. Legs shown to fail by deleting them and
+// watching this test go red, then restoring them:
+//
+//   - the twist leg: every cell with a radial run went red;
+//   - the sag leg: the cylindrical band and the thread flank went red;
+//   - the (1 − c) part of the twist leg: the near-axis cell went red.
+//
+// The shift leg is second order in the station step and stays below the
+// slack of the other legs on every cell sampled here, so deleting it left
+// the test green.
+func TestCellDepartureUpper(t *testing.T) {
+	pt := func(x float64) coil.Iv { return coil.Point(new(big.Rat).SetFloat64(x)) }
+	pitch, dt := big.NewRat(3, 2), big.NewRat(1, 256)
+	for _, c := range []struct {
+		name           string
+		rv, zv, rw, zw float64
+	}{
+		{"cylindrical band", 3, 0, 3, 1},
+		{"annulus", 2, 0, 3, 0},
+		{"annulus walked inward", 3, 1, 2, 1},
+		{"cone", 2, 0, 3, 1},
+		{"thread flank", 4.1, 0, 5.2, 0.6},
+		{"near the axis", 0.5, 0, 3, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dep, ok := coil.CellDepartureUpper(pt(c.rv), pt(c.rw), pitch, dt)
+			require.True(t, ok)
+			bound, _ := dep.Float64()
+			got := shiftedDisplacement(c.rv, c.zv, c.rw, c.zw, 1.5, 1.0/256)
+			require.LessOrEqual(t, got, bound)
+		})
+	}
+
+	// A band's cell is the matched chord alone: its departure is the sag.
+	band, ok := coil.CellDepartureUpper(pt(3), pt(3), pitch, dt)
+	require.True(t, ok)
+	require.Zero(t, band.Cmp(coil.SagUpper(big.NewRat(3, 1), dt)))
+	// The annulus' departure is below a fifth of the matched-corner bound:
+	// the twist |Δρ|·sin(π/256)/2 the cell's own corners carry, plus the sag.
+	ring, ok := coil.CellDepartureUpper(pt(2), pt(3), pitch, dt)
+	require.True(t, ok)
+	ringF, _ := ring.Float64()
+	require.Less(t, ringF, (math.Sin(math.Pi/256)/2+3*math.Pi*math.Pi/(2*256*256))/5)
+
+	_, ok = coil.CellDepartureUpper(pt(0), pt(3), pitch, dt)
+	require.False(t, ok, "a segment touching the axis states no departure")
+}
+
 func TestLoopsRefusesNonLines(t *testing.T) {
 	square := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 		sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 2}, End: sectionrecord.Point2{U: 3}, TStart: 0, TEnd: 1},

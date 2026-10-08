@@ -65,12 +65,32 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 	return body, nil
 }
 
-// publishCoilReadings is Table CM: Volume = Θ·Q; the centroid's closed form;
-// Area = 2·A_Ω plus every wall's closed form; Bounds over the held table
-// widened by δ. Each closed form is an exact enclosure rounded once.
+// stretched widens a positive plane-coordinate area or length enclosure by
+// the denoted map's defect: L scales either by a factor in [1 − e, 1 + e]
+// (coilWorld.affine). An exactly orthonormal map returns x unchanged.
+func (rec coilRecord) stretched(x coil.Iv) coil.Iv {
+	if rec.defect.Sign() == 0 {
+		return x
+	}
+	one := big.NewRat(1, 1)
+	lo := new(big.Rat).Mul(x.Lo, new(big.Rat).Sub(one, rec.defect))
+	hi := new(big.Rat).Mul(x.Hi, new(big.Rat).Add(one, rec.defect))
+	return proofbound.Interval(lo, hi)
+}
+
+// coilVolume is Table CM's Volume enclosure: Θ·Q in plane coordinates,
+// scaled exactly by |det L|, the volume factor of the denoted affine map.
+func coilVolume(rec coilRecord, m coil.Moments) coil.Iv {
+	return proofbound.IntervalScale(coil.Volume(m, rec.turns), new(big.Rat).Abs(rec.det))
+}
+
+// publishCoilReadings is Table CM: Volume = |det L|·Θ·Q; the centroid's
+// closed form; Area = 2·A_Ω plus every wall's closed form, widened by L's
+// defect; Bounds over the held table widened by δ. Each closed form is an
+// exact enclosure rounded once.
 func publishCoilReadings(body *Body, rec coilRecord, sh coilShell, areaRat *big.Rat, walls []coil.Iv) error {
 	m := coil.RegionMoments(rec.rho, rec.zeta, rec.loopIdx, areaRat, rec.axis.Side)
-	vol, volBound, err := coilHeld(coil.Volume(m, rec.turns), "volume")
+	vol, volBound, err := coilHeld(coilVolume(rec, m), "volume")
 	if err != nil {
 		return err
 	}
@@ -106,7 +126,7 @@ func publishCoilReadings(body *Body, rec coilRecord, sh coilShell, areaRat *big.
 		Bound:     units.Millimeters(centroidBound),
 	}
 
-	total := proofbound.IntervalScale(coil.Point(areaRat), big.NewRat(2, 1))
+	total := rec.stretched(proofbound.IntervalScale(coil.Point(areaRat), big.NewRat(2, 1)))
 	for _, w := range walls {
 		total = proofbound.IntervalAdd(total, w)
 	}
@@ -193,7 +213,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		if !ok {
 			return nil, fmt.Errorf(`%w: the coil rim of profile segment %d has no length`, ErrUnsupported, v)
 		}
-		length, lengthBound, err := coilHeld(l, "rim length")
+		length, lengthBound, err := coilHeld(rec.stretched(l), "rim length")
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +230,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		if !ok {
 			return nil, fmt.Errorf(`%w: the coil helix of profile vertex %d has no length`, ErrUnsupported, v)
 		}
-		hLength, hBound, err := coilHeld(hl, "helix length")
+		hLength, hBound, err := coilHeld(rec.stretched(hl), "helix length")
 		if err != nil {
 			return nil, err
 		}
@@ -235,7 +255,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		}
 	}
 
-	capArea, capBound, err := coilRatHeld(areaRat, "cap area")
+	capArea, capBound, err := coilHeld(rec.stretched(coil.Point(areaRat)), "cap area")
 	if err != nil {
 		return nil, err
 	}

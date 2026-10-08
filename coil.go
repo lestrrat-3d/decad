@@ -32,9 +32,9 @@ const coilStationsPerTurn = 256
 const maxCoilStations = 1 << 15
 
 // maxCoilFacets is Table CS row CS8's facet ceiling over the wall and cap
-// triangles together. Every held vertex costs an interval evaluation at the
-// trig grid's 200-bit precision, so the ceiling bounds the build's time and
-// memory before anything is allocated.
+// triangles together. Every triangle enters the crossing audit's exact pair
+// classification and every station a 200-bit trig enclosure, so the
+// ceiling bounds the build's time and memory before anything is allocated.
 const maxCoilFacets = 1 << 20
 
 // CoilOption configures Coil. Sealed: WithLeftHand is the one option.
