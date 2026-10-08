@@ -141,6 +141,14 @@ func (b *cbBuild) canonicalPoint(f, c1, c2 cbCarrier, x [3]float64, delta float6
 			return cbVertex{}, errCBMiss
 		}
 		free := 3 - g.axis - along.axis
+		// The point sits on the along plane at its exact level; its own
+		// distance from the crossing is proven exactly, since the scene's cut
+		// parameter is no closer to it than the coordinates' rounding.
+		offset := classbgeom.CrossingOffsetUpper(g.seg, x[free], g.center[free], along.level, g.center[along.axis])
+		if proofbound.IsNonFinite(offset) {
+			return cbVertex{}, errCBMiss
+		}
+		delta = max(delta, offset)
 		if math.Abs(x[free]-g.center[free]) <= 2*delta {
 			return cbVertex{}, errCBMiss // too close to tangency to key (§10)
 		}

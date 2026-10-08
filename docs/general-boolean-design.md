@@ -674,7 +674,11 @@ evaluator §4 accumulates: `g = ½∫(u dv − v du)`, `mu = ½∫u² dv`,
 and the placement as a prism's is. The volume and moment sums run in exact
 rational intervals: a line's terms and a line region's area are exact
 rationals, a circular term is the held float widened by its proven bound, and
-each published value is the sum rounded once.
+each published value is the sum rounded once. The walls need no junction
+chord (evaluator §4): every wall segment is a natural-range line or an arc
+pinned between vertices the record shares bit for bit, and a whole arc's
+terms read its recorded `End`, so consecutive walls meet exactly. A planar
+face's area is evaluator §4's region integral, junction charge included.
 
 Each face's `delta`, `z0Delta`, `z1Delta` enter as prism-boolean §7 enters
 them for a prism. A planar face's area carries `2·δ·p + n·π·δ²`; a wall's
@@ -769,6 +773,23 @@ vertex lying on both its face and its carrier, an arc at the angle of each
 vertex on its cylinder, read at the face's level. Two vertices of one
 cylinder closer than 1e-9 rad are not ordered and miss.
 
+A keyed vertex's displacement is at least its own proven distance from the
+crossing it names (`classbgeom.CrossingOffsetUpper`). The vertex lies on both
+planes at their exact levels, so in the plane across the cylinder's axis it
+sits on the along plane's trace at a free coordinate `f`, and the crossing on
+its side of the centre `c` sits at `c ± √b` with
+`b = R² − (level − c_along)²`. The distance is `|a − √b| = |a² − b|/(a + √b)`
+with `a = |f − c|`, exact rationals over the recorded floats and `√b` rounded
+down. decad states this 2D quantity itself because no `sketch` answer bounds
+it: the scene placed the vertex through a recorded cut parameter, and `δ_cut`
+charges that parameter 8 ulps of `[0, 1]` times the trace's speed, while far
+from the plane origin the parameter is off by the coordinates' own rounding,
+about `ulp(|f|)` over the trace length. A 40 mm box cut 100 m from the origin
+by a drill breaking out of its top places the vertex `5e-12` mm from the
+crossing against a `δ_cut` of `4e-14`, and every face pinned there inherits
+that distance. The bound is a charge, never an admission: it widens the faces
+that use the key and decides nothing.
+
 A circular wall's pieces are read off the planar faces across its axis: X's
 caps and Y's walls along e for a cylinder of X, Y's caps and X's walls across
 d for a cylinder of Y. Each arc those faces carry on the cylinder is a
@@ -786,7 +807,7 @@ The 3D computations decad performs, each with its bound:
 | Trace of a plane of Y in X's plane | two points of the plane through `Frame.ToLocal` into X's frame; under B4 every coordinate is a sum of signed stored floats, held exactly, and the trace is the line through them | zero under B4 (`rationalFloatError` of each coordinate is computed and must be `0`; a nonzero one refuses the pair in this increment) | — |
 | Level of a perpendicular face of Y along `N_X` | the exact rational `p · N_X` of a recorded point `p` of that face (`big.Rat` over stored floats); the held float is rounded once | `rationalFloatError` into that patch's `z0Delta`/`z1Delta`, prism-boolean G5's own mechanism | interval comparisons are exact over `big.Rat` |
 | Chord endpoints, surviving fragments | `sketch`'s certified cut parameters | `δ_cut` (prism-boolean §7's `cutDisplacementAllow`) plus the walk's rounding | `TExact == false` refuses (`ErrUnrecordableProfile`); the seam's range falsifier rejects a disproven flag |
-| Canonical vertex | three planes: their exact levels; a cylinder: the keyed table's one float (§10) | zero for three planes; the key's `δ_cut`, charged to every face that uses it | a crossing whose free coordinate lies within twice its displacement of the cylinder's centre is too close to tangency to key and misses |
+| Canonical vertex | three planes: their exact levels; a cylinder: the keyed table's one float (§10) | zero for three planes; the larger of the key's `δ_cut` plus walk rounding and the float's proven distance from the crossing (`classbgeom.CrossingOffsetUpper`), charged to every face that uses it | a crossing whose free coordinate lies within twice its displacement of the cylinder's centre is too close to tangency to key and misses |
 | Re-expression of Y's section into F's frame | one rigid 2D map per coordinate | zero under B4; `δ_reexpress` otherwise (§8) | — |
 | Curved × curved separation, B7 | outward-rounded per-wall boxes compared exactly | a decision | refuses any overlap, including false overlaps |
 | Closure of each face loop | the seam's junction falsifier on every assembled loop | — | rejects a contradicted junction (RB9) |
@@ -1040,9 +1061,11 @@ are relations, never literals.
   side of the cylinder's centre it lies on along the remaining axis; the
   first scene to reach a key records its float and displacement, every later
   one takes them, and every face that uses the key carries that
-  displacement. A recorded corner where a section's arc meets its line is
-  the key's float with displacement zero. A crossing too close to tangency to
-  decide its side misses to the mesh path; reject-only, it admits nothing.
+  displacement. The displacement covers the float's own proven distance from
+  the exact crossing (§5), not only the cut parameter's allowance. A recorded
+  corner where a section's arc meets its line is the key's float with
+  displacement zero. A crossing too close to tangency to decide its side
+  misses to the mesh path; reject-only, it admits nothing.
 - **S8's sphere facet cap.** Recommendation: separate task; raising the cap
   or deriving the boolean's tolerance per operand is a mesh-path change
   outside this design.
