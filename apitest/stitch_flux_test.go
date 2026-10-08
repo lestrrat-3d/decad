@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -739,4 +740,108 @@ func TestStitchSphereVolumeBoundEncloses(t *testing.T) {
 		decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(wantVol))
 		decadtest.MeasuresCentroid(t, solid, r3.NewVec(c.u0+r, 0, 0))
 	}
+}
+
+// revolvedPolygonTruth is the exact volume and centroid of the solid a
+// recorded polygon on the world XY plane sweeps in a full turn about the
+// world X axis, by Pappus over the recorded vertices: V = 2π∫v dA and
+// x̄ = ∫u·v dA / ∫v dA, each a polygon moment in exact rationals. Only π
+// rounds, at normalOraclePrec.
+func revolvedPolygonTruth(t *testing.T, pts [][2]float64) (*big.Float, onVec) {
+	t.Helper()
+	sA, sV, sUV := new(big.Rat), new(big.Rat), new(big.Rat)
+	two := big.NewRat(2, 1)
+	for i := range pts {
+		j := (i + 1) % len(pts)
+		x0, y0 := new(big.Rat).SetFloat64(pts[i][0]), new(big.Rat).SetFloat64(pts[i][1])
+		x1, y1 := new(big.Rat).SetFloat64(pts[j][0]), new(big.Rat).SetFloat64(pts[j][1])
+		c := new(big.Rat).Sub(new(big.Rat).Mul(x0, y1), new(big.Rat).Mul(x1, y0))
+		sA.Add(sA, c)
+		sV.Add(sV, new(big.Rat).Mul(new(big.Rat).Add(y0, y1), c))
+		k := new(big.Rat).Add(new(big.Rat).Mul(x0, y1), new(big.Rat).Mul(x1, y0))
+		k.Add(k, new(big.Rat).Mul(two, new(big.Rat).Mul(x0, y0)))
+		k.Add(k, new(big.Rat).Mul(two, new(big.Rat).Mul(x1, y1)))
+		sUV.Add(sUV, new(big.Rat).Mul(k, c))
+	}
+	if sA.Sign() < 0 {
+		sV.Neg(sV)
+		sUV.Neg(sUV)
+	}
+	firstV := new(big.Rat).Quo(sV, big.NewRat(6, 1))
+	firstUV := new(big.Rat).Quo(sUV, big.NewRat(24, 1))
+	pi, _, err := big.ParseFloat(oraclePiDigits, 10, normalOraclePrec, big.ToNearestEven)
+	require.NoError(t, err)
+	vol := new(big.Float).SetPrec(normalOraclePrec).Mul(pi, new(big.Float).SetPrec(normalOraclePrec).SetRat(firstV))
+	vol.Mul(vol, onF(2))
+	xbar := new(big.Float).SetPrec(normalOraclePrec).SetRat(new(big.Rat).Quo(firstUV, firstV))
+	return vol, onVec{xbar, onF(0), onF(0)}
+}
+
+// requireStitchedMassEncloses requires solid's Volume and Centroid to sit
+// within their own bounds of the exact readings.
+func requireStitchedMassEncloses(t *testing.T, solid *decad.Body, vol *big.Float, cen onVec) {
+	t.Helper()
+	v, err := solid.Volume()
+	require.NoError(t, err)
+	gap := new(big.Float).SetPrec(normalOraclePrec).Sub(onF(v.Value.Base()), vol)
+	volGap, _ := gap.Abs(gap).Float64()
+	require.LessOrEqualf(t, volGap, v.Bound.Base(), "the volume sits %g off the record's, outside its bound %g", volGap, v.Bound.Base())
+	c, err := solid.Centroid()
+	require.NoError(t, err)
+	cenGap, _ := onOf(c.Value).sub(cen).norm().Float64()
+	require.LessOrEqualf(t, cenGap, c.Bound.Base(), "the centroid sits %g off the record's, outside its bound %g", cenGap, c.Bound.Base())
+}
+
+// TestStitchRefusesRevolveTagOffItsRecord stitches full-turn revolve sheets
+// whose wall tags are not the surfaces their records denote: a side climbing
+// 5e-10 over a unit run, tagged a Cylinder, and a side leaning 5e-10 off
+// perpendicular, tagged a Plane. The flux arms integrate the tag, so Stitch
+// refuses rather than publish the tag's volume (docs/surface-design.md §6.4,
+// stitch_flux.go's stitchFluxTagsDenoted).
+//
+// Shown to fail: without that gate Stitch published volumes 2.1e-9 and
+// 1.6e-9 mm³ off the record's, under bounds of 7.0e-15 and 5.7e-15, and
+// centroids 1.1e-10 and 4.2e-10 mm off under bounds of 2.8e-15 and 2.6e-15.
+func TestStitchRefusesRevolveTagOffItsRecord(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		pts  [][2]float64
+	}{
+		{"near parallel", [][2]float64{{0, 1}, {1, 1}, {1, 2}, {0, 2 + 5e-10}}},
+		{"near perpendicular", [][2]float64{{0, 1}, {1, 1}, {1 + 5e-10, 2}, {0, 2}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s, p := polygonSketch(t, tc.pts)
+			sheet, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+			require.NoError(t, err)
+			solid, err := decad.Stitch(t.Context(), sheet)
+			if err == nil {
+				vol, cen := revolvedPolygonTruth(t, tc.pts)
+				requireStitchedMassEncloses(t, solid, vol, cen)
+			}
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+		})
+	}
+}
+
+// TestStitchDecimalFrustumEnclosesItsRecord stitches a trapezoid drawn at
+// decimal coordinates, two Cylinder and two Cone walls. Its walls ARE the
+// surfaces their records denote, but
+// each Cone tag's apex is the float z − ρ·Δz/Δρ of its walk, which rounds;
+// the Cone arm admits the face and charges how far that apex sits from the
+// record's (coneApexDeparture), so the volume and centroid enclose the
+// record's own.
+func TestStitchDecimalFrustumEnclosesItsRecord(t *testing.T) {
+	t.Parallel()
+	pts := [][2]float64{{0.1, 0.2}, {1.1, 0.2}, {0.7, 0.9}, {0.3, 0.9}}
+	s, p := polygonSketch(t, pts)
+	sheet, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	decadtest.HasSurfaceKinds(t, sheet, map[decad.SurfaceKind]int{decad.KindCone: 2, decad.KindCylinder: 2})
+	solid, err := decad.Stitch(t.Context(), sheet)
+	require.NoError(t, err)
+	vol, cen := revolvedPolygonTruth(t, pts)
+	requireStitchedMassEncloses(t, solid, vol, cen)
 }

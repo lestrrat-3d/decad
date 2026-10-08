@@ -31,9 +31,12 @@ type FaceInput struct {
 }
 
 // ConeInput carries a cone's surface tag without importing the root package.
+// ApexBound is a proven bound on how far each coordinate of Origin sits from
+// the apex the face's record denotes; the arm widens its apex by it.
 type ConeInput struct {
 	Origin, Axis      r3.Vec
 	Radius, HalfAngle units.Value
+	ApexBound         float64
 }
 
 // TorusInput carries a torus's surface tag without importing the root package.
@@ -360,6 +363,11 @@ func ConeFaceFluxAndMoment(f FaceInput, cone ConeInput, anchor r3.Vec, sign floa
 	apexX, apexY, apexZ, err := ConeApex(cone.HalfAngle, cone.Radius, cone.Origin)
 	if err != nil {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
+	}
+	if cone.ApexBound != 0 {
+		for _, c := range []*proofbound.BoundedScalar{&apexX, &apexY, &apexZ} {
+			c.Bound = proofbound.AbsSumUpper(c.Bound, cone.ApexBound)
+		}
 	}
 
 	var radii [2]proofbound.BoundedScalar

@@ -751,6 +751,7 @@
 3	0.00	TestStitchCurvedMassCorrectsInwardOrientationForCone
 3	0.01	TestStitchCurvedMassCorrectsInwardOrientationForSphere
 3	0.00	TestStitchCurvedMassCorrectsInwardOrientationForTorus
+3	0.00	TestStitchConeArmChargesApexDeparture
 3	0.00	TestStitchCurvedMassPlacementAllowanceWidensBounds
 3	0.00	TestStitchCurvedMeshNamesUnsupportedSurface
 3	0.20	TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound

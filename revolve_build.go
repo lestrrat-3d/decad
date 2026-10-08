@@ -473,7 +473,12 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// normalBound is the cap plane's own dimensionless tilt: the frame's
 		// unit normal rotates about the axis at unit rate in φ, so the angle
 		// this cap's own end denotes charges its plane's normal by exactly
-		// that end's proven displacement (docs/evaluator-design.md §6).
+		// that end's proven displacement. denoted is the plane the record
+		// states, which NormalAt proves the cap's normal against in place of
+		// the tag and normalBound, so the axis direction, the frame lift and
+		// every placement rounding are charged too; normalBound stays the
+		// figure the gates that refuse a departed face read
+		// (docs/evaluator-design.md §6).
 		//
 		// capAdmitAllow is revolveAxisAdmitBandCharge's own term (above): each
 		// cap face's LOOP is walked from the axis-snapped profile, while its
@@ -490,6 +495,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			area:        ig.Area,
 			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 			normalBound: rp.phi0Delta(),
+			denoted:     rp.capDenotation(rp.end0(), true),
 		}
 		capEnd = &Face{
 			surface:     Plane{Frame: endFrame},
@@ -498,6 +504,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			area:        ig.Area,
 			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 			normalBound: rp.phi1Delta(),
+			denoted:     rp.capDenotation(rp.end1(), false),
 		}
 	}
 
@@ -1264,15 +1271,21 @@ func (rp revolvePayload) wallSurface(b revolvemesh.RevolveBasis, w survey2d.Segm
 // segments, read off the plane-local walks they were re-expressed from, swept
 // about the recorded axis and placed (surfacenormal.Revolved). A straight
 // wall reads each recorded segment's own two ends, in walk order; a circular
-// wall reads its recorded centre. Face.NormalAt judges the wall's normal
-// against it (docs/evaluator-design.md §6).
+// wall reads each segment's recorded centre and radius. Face.NormalAt judges
+// the wall's normal against it, and Stitch's flux path admits the wall only
+// where its tag is exactly this surface (docs/evaluator-design.md §6,
+// docs/surface-design.md §6.4).
 func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plane []survey2d.SegmentWalk) *surfacenormal.Revolved {
 	lift, ab := rp.lift(), rp.axisBound()
 	var den surfacenormal.Revolved
 	switch kind {
 	case wallSphere, wallTorus:
-		first := plane[w.Segs[0]]
-		den = lift.CircularWallNormal(ab, rp.xform, revolvemesh.RecordedMeridian{U: first.CU, V: first.CV})
+		circles := make([]revolvemesh.RecordedMeridian, len(w.Segs))
+		for i, si := range w.Segs {
+			pw := plane[si]
+			circles[i] = revolvemesh.RecordedMeridian{U: pw.CU, V: pw.CV, R: pw.Radius, RBound: pw.RadiusBound}
+		}
+		den = lift.CircularWallNormal(ab, rp.xform, circles)
 	default:
 		ends := make([][2]revolvemesh.RecordedMeridian, len(w.Segs))
 		for i, si := range w.Segs {
@@ -1284,6 +1297,24 @@ func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plan
 		}
 		den = lift.StraightWallNormal(ab, rp.xform, ends)
 	}
+	return &den
+}
+
+// capDenotation encloses the plane a partial sweep's cap at end denotes: the
+// plane through the recorded axis at the angle end's record states, placed
+// (revolvemesh.RevolveLift.CapNormal). An end with no denotation — a
+// ToFaceAngular stop, or a payload literal built without one — states no
+// angle, so it returns nil and the cap keeps its tag's proof composed with
+// its normalBound, which is +Inf there.
+func (rp revolvePayload) capDenotation(end sweptEnd, start bool) *surfacenormal.Revolved {
+	if !end.den.valid() {
+		return nil
+	}
+	sin, cos, ok := end.den.sinCosFor(end.phi)
+	if !ok {
+		return nil
+	}
+	den := rp.lift().CapNormal(rp.axisBound(), rp.xform, sin, cos, start)
 	return &den
 }
 

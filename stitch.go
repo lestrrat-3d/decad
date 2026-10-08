@@ -368,6 +368,13 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		if !stitchRuleSAdmits(ctx, srcFaces) {
 			return nil, fmt.Errorf(`%w: Stitch closes a boundary this evaluator cannot prove simple by construction (docs/surface-design.md Table R row R8)`, ErrUnsupported)
 		}
+		// The flux arms integrate each face's tag, so a revolve face is
+		// admitted only where its tag is exactly the surface its record
+		// denotes. srcFaces are the unplaced operand faces; this stitch's own
+		// placement rounding is delta, charged below.
+		if !stitchFluxTagsDenoted(srcFaces) {
+			return nil, fmt.Errorf(`%w: Stitch's flux path integrates each face's tag, and a revolve face's tag here is not proven to be the surface its record denotes (docs/surface-design.md Table R row R8)`, ErrUnsupported)
+		}
 		// verts[0] anchors the flux sum exactly as newLoftMassAccumulator
 		// anchors the tetrahedron sum — but a fully boundary-less analytic
 		// face (a complete Sphere or Torus, which mints no edge at all) can
@@ -486,7 +493,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 // widens by delta under a non-identity placement. A placed copy of an
 // operand face whose normalBound is nonzero refuses with [ErrUnsupported]
 // rather than invent the dimensionless term a sound composition would need
-// (unstitch.go's copyFaceUnderContext doc comment). A revolve wall's denoted
+// (unstitch.go's copyFaceUnderContext doc comment). A revolve face's denoted
 // surface (Face.denoted) carries over as its exact image under xform.
 func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.Transform, verts []r3.Vec, delta float64, srcFaces []*Face) ([]*Face, map[*Vertex]int, map[*Edge]struct{}, error) {
 	if xform != r3.Identity() {

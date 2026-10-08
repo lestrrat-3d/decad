@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -510,4 +511,116 @@ func TestBodyPatchContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	_, err = sheet.Patch(nilContext, decad.Edges(decad.Free()).Exactly(1))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Len(t, doc.Bodies(), 1)
+}
+
+// TestBodyPatchCopyKeepsBandNormalBound patches the free rims of a
+// cap-loop chamfer's unstitched cone band. Body.Patch copies the band
+// unchanged, so the copy carries the same surface, the same tag and the same
+// departure of one from the other (Face.normalBound): its NormalAt must
+// publish exactly its source's reading, and a placed copy must refuse as an
+// unstitched or stitched copy of the band does, since no dimensionless term
+// bounds the placement's rotation of the tag.
+//
+// Shown to fail: copying the band without its normalBound
+// (copyPatchFacesUnder) published bounds of 2.2e-16 and 3.1e-16 against the
+// sources' 8.7e-16 and 1.2e-15, and placed the copy without refusing.
+func TestBodyPatchCopyKeepsBandNormalBound(t *testing.T) {
+	t.Parallel()
+	body := concentricDiskWithHole(t, 4, 1.5, 6)
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdgesOn(body, true), units.Millimeters(0.5))
+	require.NoError(t, err)
+	sheets, err := chamfered.Unstitch(t.Context())
+	require.NoError(t, err)
+	band := func(f *decad.Face) bool {
+		for _, o := range f.Origins() {
+			if strings.HasPrefix(o.Role, "chamferCap(") {
+				return true
+			}
+		}
+		return false
+	}
+	checked := 0
+	for _, sheet := range sheets {
+		src := sheet.Faces()[0]
+		if !band(src) {
+			continue
+		}
+		require.Equal(t, decad.KindCone, src.Surface().Kind())
+		p := src.Loops()[0].CoEdges()[0].Start().Position().Value
+		want, err := src.NormalAt(p)
+		require.NoError(t, err)
+		patched, err := sheet.Patch(t.Context(), decad.Edges(decad.Free()))
+		require.NoError(t, err)
+		var copied *decad.Face
+		for _, f := range patched.Faces() {
+			if band(f) {
+				require.Nil(t, copied, "the patched sheet holds one band copy")
+				copied = f
+			}
+		}
+		require.NotNil(t, copied)
+		got, err := copied.NormalAt(p)
+		require.NoError(t, err)
+		require.Equal(t, want, got, "the copy must publish its source's own normal reading")
+		require.Positive(t, got.Bound.Base())
+
+		far, err := r3.Translation(r3.NewVec(0.3, 0, 0))
+		require.NoError(t, err)
+		_, err = patched.Placed(t.Context(), far)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		checked++
+	}
+	require.Equal(t, 2, checked, "the chamfer cuts one band at each of the two rims")
+}
+
+// TestBodyPatchCopyKeepsCapAxialDelta stops a pin at the end cap of a plate
+// extruded 3 in, after the plate is unstitched, its end cap and four walls
+// are stitched back into an open box, and Body.Patch fills the box's exact
+// bottom rim. The inch depth's conversion into millimetres rounds, so the
+// cap's level carries a proven displacement (Face.axialDelta), and a stop
+// read off the patched body's copy of the cap must carry it exactly as the
+// same stop read off the unstitched cap does (docs/surface-design.md's T81
+// for Unstitch).
+//
+// Shown to fail: copying the cap without its axialDelta (copyPatchFacesUnder)
+// published the stop Exact, with a zero bound, where the unstitched cap's own
+// stop carries 7.1e-15 mm.
+func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
+	t.Parallel()
+	s, plateProf, pinProf := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Inches(3), Dir: decad.Along})
+	require.NoError(t, err)
+	capSelector := capEndFace(plate)
+	startSelector := capStartFace(plate)
+	sheets, err := plate.Unstitch(t.Context())
+	require.NoError(t, err)
+	var capSheet *decad.Body
+	var box []*decad.Body
+	for _, sh := range sheets {
+		if faces, err := startSelector.SelectFaces(sh); err == nil && len(faces) == 1 {
+			continue
+		}
+		if faces, err := capSelector.SelectFaces(sh); err == nil && len(faces) == 1 {
+			capSheet = sh
+		}
+		box = append(box, sh)
+	}
+	require.NotNil(t, capSheet)
+	require.Len(t, box, 5)
+	want, err := doc.Extrude(s, pinProf, decad.ToFace{Body: capSheet, Face: decad.Faces()})
+	require.NoError(t, err)
+	wantBox, err := want.Bounds()
+	require.NoError(t, err)
+
+	open, err := decad.Stitch(t.Context(), box...)
+	require.NoError(t, err)
+	patched, err := open.Patch(t.Context(), decad.Edges(decad.Free()))
+	require.NoError(t, err)
+	pin, err := doc.Extrude(s, pinProf, decad.ToFace{Body: patched, Face: capSelector})
+	require.NoError(t, err)
+	got, err := pin.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, wantBox.Exactness, "the depth's own conversion rounding must reach the stop")
+	require.Equal(t, wantBox, got, "a patched copy's stop must read exactly as the unstitched cap's")
 }

@@ -222,7 +222,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // own rounding can rotate the tag frame off the true rotation, so a placed
 // copy of a face whose normalBound is nonzero refuses with [ErrUnsupported]
 // rather than invent one — a narrowing is sound, but inventing an error
-// model is not. Face.denoted, a revolve wall's denoted surface, is an exact
+// model is not. Face.denoted, a revolve face's denoted surface, is an exact
 // enclosure rather than a dimensionless figure, so it does compose: the copy
 // carries its exact image under xform (Face.denotedUnder).
 func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform, delta float64) (*Face, error) {

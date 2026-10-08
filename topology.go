@@ -389,7 +389,8 @@ type Face struct {
 	// tagged variant the normal is computed from. It is zero for every face
 	// whose own geometry IS its tag, and for a revolve wall, whose departure
 	// rides in denoted instead. It is nonzero for a revolve's cap (its
-	// angular displacement) and for a cap-loop chamfer's band patch: the
+	// angular displacement, which NormalAt reads only where the cap carries
+	// no denoted plane) and for a cap-loop chamfer's band patch: the
 	// patch is RULED between two built directrices, and the `Cone` or `Plane`
 	// it publishes is that ruled surface only to within a bound measured from
 	// the numbers the body publishes for it
@@ -401,14 +402,17 @@ type Face struct {
 	// difference the built surface has. NormalAt separately composes its
 	// arithmetic proof (normal_bound.go).
 	normalBound float64
-	// denoted is the surface a revolve wall DENOTES — its recorded meridian
-	// segment swept about its recorded axis, enclosed exactly
+	// denoted is the surface a revolve wall or cap DENOTES — a wall's
+	// recorded meridian segment swept about its recorded axis, or a cap's
+	// plane through that axis at its end's recorded angle, enclosed exactly
 	// (surfacenormal.Revolved) — where the tag is only a float re-expression
 	// of it. NormalAt judges such a face's normal against it rather than
 	// against the tag, so the bound covers the tag's whole departure; nil
 	// for every face whose tag is its own denotation. It is not
-	// normalBound: no dimensionless term states the departure for every p,
-	// and Stitch's flux arms, which read normalBound, integrate the tag.
+	// normalBound: no dimensionless term states the departure for every p.
+	// Stitch's flux arms integrate the tag, so they admit a revolve wall only
+	// where its tag is exactly this surface (stitch_flux.go's
+	// stitchFluxTagsDenoted).
 	denoted *surfacenormal.Revolved
 }
 
@@ -426,9 +430,9 @@ func (f *Face) denotedUnder(xform r3.Transform) *surfacenormal.Revolved {
 // NormalAt returns the face's outward normal at p. Its bound combines the
 // arithmetic proof for the normal of the face's tagged surface
 // (normal_bound.go) and any proven departure of the surface actually carried
-// from that tag (normalBound). A revolve wall's bound is instead proven
-// against the surface its record denotes (Face.denoted), which covers its
-// tag's departure and the arm's arithmetic at once. It is Exact only when the
+// from that tag (normalBound). A revolve wall's or cap's bound is instead
+// proven against the surface its record denotes (Face.denoted), which covers
+// its tag's departure and the arm's arithmetic at once. It is Exact only when the
 // whole bound is zero. A point that gives the surface no direction is
 // ErrDegenerate. A reading whose own enclosure cannot separate the direction
 // from zero is ErrUnsupported.
@@ -507,20 +511,24 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 
 // normalMeasurement publishes one arm's computed geometric direction under
 // the face's own outward sign. tagAllow is the arm's proof against its tagged
-// surface; a face carrying its denoted surface is proven against that
-// instead, and tagAllow never runs. The face's own departure from its tag
-// (normalBound) composes by triangle inequality. The sign is exact, so it
-// never changes the bound.
+// surface, and the face's own departure from its tag (normalBound) composes
+// with it by triangle inequality. A face carrying its denoted surface is
+// proven against that instead: the comparison is with the surface the face
+// carries, so it covers the departure normalBound states, and neither
+// tagAllow nor normalBound enters. The sign is exact, so it never changes the
+// bound.
 func (f *Face) normalMeasurement(p, dir r3.Vec, tagAllow func() (float64, surfacenormal.Status), degenerate string) (VecMeasurement, error) {
 	if f.reversed {
 		dir = dir.Scale(-1)
 	}
 	var allow float64
 	var st surfacenormal.Status
+	departure := 0.0
 	if f.denoted != nil {
 		allow, st = f.denoted.Allow(p, dir, f.reversed)
 	} else {
 		allow, st = tagAllow()
+		departure = f.normalBound
 	}
 	switch st {
 	case surfacenormal.Zero:
@@ -528,8 +536,8 @@ func (f *Face) normalMeasurement(p, dir r3.Vec, tagAllow func() (float64, surfac
 	case surfacenormal.Unproven:
 		return VecMeasurement{}, fmt.Errorf(`%w: this normal's own direction is not proven away from zero, so no bound covers it`, ErrUnsupported)
 	}
-	if allow != 0 || f.normalBound != 0 {
-		allow = math.Nextafter(allow+f.normalBound, math.Inf(1))
+	if allow != 0 || departure != 0 {
+		allow = math.Nextafter(allow+departure, math.Inf(1))
 	}
 	return VecMeasurement{
 		Value:     dir,

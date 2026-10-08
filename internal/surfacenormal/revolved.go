@@ -8,8 +8,8 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// Revolved is the surface a revolve wall DENOTES, enclosed exactly, beside
-// the float tag the wall publishes. A revolve's tag is not its record: its
+// Revolved is the surface a revolve wall or cap DENOTES, enclosed exactly,
+// beside the float tag the face publishes. A revolve's tag is not its record: its
 // axis coordinates are a float re-expression of the recorded meridian, a
 // centre or end within the contact tolerance of the axis is snapped onto it,
 // a segment within the classifier's slope tolerance of parallel or
@@ -35,16 +35,28 @@ import (
 // G⁻ᵀ, which is cof(G)/det(G).
 //
 // A straight wall holds one meridian run (dz, dρ) per recorded segment it
-// covers, in walk order. A coalesced wall merges segments that are exactly
-// collinear in the float axis coordinates, which their records need not be,
-// so the reading takes the worst of its runs. A circular wall holds its
-// recorded centre (z, ρ); its radius never reaches the normal.
+// covers, in walk order, and beside it that segment's two ends (z, ρ). A
+// coalesced wall merges segments that are exactly collinear in the float
+// axis coordinates, which their records need not be, so the reading takes
+// the worst of its runs. A circular wall holds its recorded centre (z, ρ)
+// and radius; the radius never reaches the normal.
+//
+// A partial sweep's planar cap holds no meridian at all: Cap marks it, and
+// CapDir is its outward normal in the axis frame, (−sin φ, cos φ) on
+// (Basis[0], Basis[1]) for the end cap and the negation for the start cap,
+// at the angle φ that end's record denotes. The plane is spanned by the axis
+// and the radial direction at φ, so its normal is W × radial(φ), which the
+// cofactor matrix carries to exactly that.
 type Revolved struct {
 	Origin   proofbound.IvVec3
 	Basis    [3]proofbound.IvVec3
 	Runs     [][2]proofbound.RatInterval
+	Ends     [][2][2]proofbound.RatInterval
 	Circular bool
 	Centre   [2]proofbound.RatInterval
+	Radius   proofbound.RatInterval
+	Cap      bool
+	CapDir   [2]proofbound.RatInterval
 	// Valid is false when a leaf was not finite, and every reading then
 	// refuses.
 	Valid bool
@@ -83,9 +95,10 @@ func (r Revolved) Transformed(xform r3.Transform) Revolved {
 
 // Allow bounds how far held, the outward direction a wall's NormalAt
 // computed from its tag at p, sits from the outward unit normal of the
-// denoted surface at p. reversed is the wall's own outward sign, which a
-// circular wall reads: a straight wall's outward side follows from its walk,
-// whose material lies on its left.
+// denoted surface at p. reversed is the face's own outward sign, which a
+// circular wall and a cap read: a straight wall's outward side follows from
+// its walk, whose material lies on its left. A cap's normal is the same at
+// every p.
 //
 // p is located on the surface the way every NormalAt arm locates it: its
 // meridian half-plane is the one through p, and its normal there is
@@ -127,6 +140,13 @@ func (r Revolved) Allow(p, held r3.Vec, reversed bool) (float64, Status) {
 	world := func(n proofbound.IvVec3) proofbound.IvVec3 {
 		w := proofbound.IvVec3Add(proofbound.IvVec3Add(proofbound.IvVec3Mul(c0, n[0]), proofbound.IvVec3Mul(c1, n[1])), proofbound.IvVec3Mul(c2, n[2]))
 		return proofbound.IvVec3Mul(w, sig)
+	}
+	if r.Cap {
+		n := proofbound.IvVec3{r.CapDir[0], r.CapDir[1], zero}
+		if reversed {
+			n = proofbound.IvVec3Mul(n, proofbound.PointInterval(big.NewRat(-1, 1)))
+		}
+		return unitDirAllow(world(n), held)
 	}
 	if r.Circular {
 		return r.circularAllow(k, det, radial, world, held, reversed)
