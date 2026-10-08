@@ -375,7 +375,7 @@ them that neither operand's own loop encloses. Selecting every cell would
 fill it. So the select-all path first requires every cell to carry at least
 one boundary edge on its operand's material side — `Reversed` compared with
 the authored sense, the crossing sub-case's own flag comparison
-(`prismCellsHaveNoVoid`). One material-side edge puts the cell inside that
+(`prismcells.CellsHaveNoVoid`). One material-side edge puts the cell inside that
 operand, since membership is constant over a cell. A cell with none is
 outside every operand with an edge on it, and a cell bounded by one
 operand's edges alone would be a hole of that operand, which G6 excludes,
