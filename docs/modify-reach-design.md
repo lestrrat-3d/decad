@@ -128,7 +128,7 @@ more specific SX row replaces that base refusal.
 | **SX5** | selected revolve edge is not a swept meridian junction | body exists; cap-edge/general rolling blend not built | `ErrUnsupported` |
 | **SX6** | cap-loop offset loses a carrier, reaches an empty circular offset, or has no regular radius-`r` envelope | no regular requested blend | `ErrDegenerate` |
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
-| **SX8** | shell side/no-opening extension is used on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap | body exists outside extension | `ErrUnsupported` |
+| **SX8** | shell side/no-opening extension is used on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap; revolve meridian is holed or meets the axis along more than one walk; a revolve wall's offset reaches the axis | body exists outside extension | `ErrUnsupported` |
 | **SX9** | any modify op on `facetedPayload` | body exists; analytic carrier + stable topology absent | `ErrUnsupported` |
 | **SX10** | another modify op on `capBlendPayload`, or on a `stackedPrismPayload` whose face view refuses (`docs/brep-modify-design.md` SB2) | body exists; compound feature composition not built | `ErrUnsupported` |
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
@@ -895,6 +895,60 @@ by changing `phi0` / `phi1`.
 Receiver meridian profile MUST be hole-free for this extension. Hole-carrying
 or topology-changing offsets remain SX8.
 
+#### 9.3.1 Construction
+
+`shell_revolve.go` builds the partial turn without a side opening. It never
+materialises the mirror half. The effective offset cut back to `ρ ≥ 0` is the
+offset of the kept chain `K` alone, the recorded meridian less its on-axis walk
+`A`. Interior corners of `K` take modify §7's join. Each end of `K` takes the
+join of the corner `K` makes with its own mirror image there, read from the walk
+and the axis line alone:
+
+| Corner `K` makes with its mirror | Cut-back join |
+|---|---|
+| miter | `K`'s offset carrier met with the axis line, where the mirror carrier meets it |
+| G1 (`K` meets the axis at a right angle) | `K`'s own offset foot |
+| arc | the arc about the corner from `K`'s offset foot to the axis point at distance `t` from the corner, which is the whole arc's midpoint |
+
+The mirror tangent `K`'s own tangent reflects to only classifies the corner by
+modify §7's rule. The cut-back offset `Q` therefore starts at `qB` and ends at
+`qE`, both on the axis, and closes along it. `A` runs from `E`, where `K`
+arrives, to `B`, where it leaves. The wall region is one loop:
+
+- inward: `K`, the axis from `E` to `qE`, `Q` backward, the axis from `qB` to
+  `B`;
+- outward: `Q`, the axis from `qE` to `E`, `K` backward, the axis from `B` to
+  `qB`.
+
+The four axis points lie on `A`'s line in one order: `E, qE, qB, B` inward and
+`qE, E, B, qB` outward. An offset whose ends land out of that order has crossed
+its own mirror image on the axis, which is S11b. `Q` closed along the axis then
+faces modify §5's audit (S8, S11b, S9). The axis walk is never part of `K`, so it
+grows no wall. A meridian strictly off the axis is its own effective meridian,
+and its wall region is the tube section of modify Table B: `{P, Q}` inward and
+`{Q, P}` outward.
+
+S10's section limit reads the effective meridian's inradius. With an on-axis
+walk, the survey reads `K`'s walks and their mirrors in axis coordinates, where
+the mirror is `ρ ↦ −ρ` exactly. A solid cylinder of radius `R` and height `H`
+keeps a cavity below `min(R, H/2)`, not below the half-section's own inradius.
+
+The wall region then passes the revolve axis gates (evaluator §6) about the
+receiver's oriented axis. Where the gate finds the region across or touching
+the axis in a form it refuses, the offset has reached the axis and would meet
+its own mirror image. That is SX8 (`ErrUnsupported`), not the base call's
+`ErrDegenerate`: the shelled body exists. An outward wall off a meridian closer
+to the axis than `t` is the usual case.
+
+The result is a `revolvePayload` over the wall region with the receiver's frame,
+axis, angular interval, denotation and placement, built by `evalRevolve`. Its
+`sectionDelta` is zero: the wall region is the body's own record, as a tube's
+annular section is (modify §10).
+
+Stage 4's revolve gates run in this order: RS13's section-displacement guard,
+a holed meridian (SX8), a kept angular cap (SX8), a removed side face (S2, until
+§9.2 lands), then more than one on-axis walk (SX8).
+
 ## 10. Table BX — results + roles
 
 | BX | Call | Payload | Topology | Roles |
@@ -1186,7 +1240,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **A** | option records/codecs; tangent expansion; asymmetric prism chamfer | revolve/cap/shell reach; all SX9/SX10 |
 | **B** (landed) | revolve junction rewrite + roles + surveys, equal-distance chamfer only | cap loops; shell reach; the asymmetric revolve chamfer, which waits on PR A's option |
 | **C** | multi-region `stackedPrismPayload`; migrate cups; lift base S12 through BX8; closed + side-opening prism shell; tessellation/clearance cases | cap loops; revolve shell |
-| **D** | full/partial allowed revolve shell | cap loops |
+| **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7), §9.3.1 | full-turn shells: a side opening is S2 until C's §9.2 wall section lands, and `WithNoOpenings` waits on A; a partial-turn side opening is S2 until C; cap loops |
 | **E** | `capBlendPayload`; complete cap-loop chamfer; analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, and

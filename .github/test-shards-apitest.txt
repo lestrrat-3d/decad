@@ -1462,3 +1462,9 @@
 4	0.02	TestRevolveBlendRolesSurvivePlacementAndReplay
 4	0.02	TestRevolveFilletSurveys
 4	0.02	TestRevolveFilletTessellates
+2	0.01	TestRevolveShellOffAxisRing
+2	0.01	TestRevolveShellSolidCylinder
+2	0.01	TestRevolveShellConeApex
+2	0.02	TestRevolveShellPlaced
+2	0.01	TestRevolveShellRefusals
+2	0.04	TestRevolveShellTessellates

@@ -122,6 +122,10 @@
 //	  other receiver, or a cap-loop chamfer result            ErrUnsupported
 //	Shell         straight prism (tube or cup)                builds
 //	  both caps removed from a holed section                  ErrUnsupported
+//	Shell         partial revolve, both angular caps removed  builds
+//	  full turn, a side face removed, or a kept angular cap   ErrUnsupported
+//	  holed meridian, or one meeting the axis twice           ErrUnsupported
+//	  offset reaching across the axis                         ErrUnsupported
 //	Fillet/Chamfer/Shell  brep or stacked boolean result that
 //	                      reads as a prism along an axis      builds
 //	  Shell of a brep that reads as no prism                  ErrUnsupported

@@ -86,6 +86,13 @@ func WithShellSense(s ShellSense) ShellOption {
 // ErrUnsupported. The offset section faces the §5 audit before anything is
 // built, so no unproven body is ever made.
 //
+// A partial revolve is shelled when sel removes both of its angular caps and
+// nothing else: the wall is its meridian's offset swept over the same angle,
+// and a meridian walk on the axis grows no wall
+// (docs/modify-reach-design.md §9.3). A full turn, a removed side face, a
+// kept angular cap, a holed meridian and an offset reaching the axis are
+// ErrUnsupported.
+//
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is shelled as that prism
 // (docs/brep-modify-design.md route P) when the removed faces are its caps;
@@ -167,6 +174,15 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if err := requireNotCapBlendReceiver(b.payload, "shells"); err != nil {
 		return nil, err
 	}
+	// Reach RX2 (docs/modify-reach-design.md §9.3): a revolve receiver shells
+	// its meridian and sweeps the wall over its own angular interval.
+	if rp, ok := b.payload.(revolvePayload); ok {
+		s := 1.0
+		if sense == Outward {
+			s = -1.0
+		}
+		return b.shellRevolve(ctx, rp, removed, s, t, tmm, tDelta)
+	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
 	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{op: "shells", shell: true,
@@ -219,20 +235,8 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		if err != nil {
 			return nil, err
 		}
-		// The accept boundary sits shellTol*max(1, inradius) below the limit —
-		// a SCALE-RELATIVE rounding tolerance that grows with the part's scale,
-		// not a fixed sub-nanometre margin — so the refusal reports the computed
-		// accepted maximum thickness rather than the bare inradius (at a large
-		// scale the two differ by far more than a noise floor).
-		if maxT := inradius - shellTol*math.Max(1, inradius); !enough && tmm >= maxT {
-			if maxT <= 0 {
-				// The inradius itself is at or below the rounding tolerance, so
-				// the accepted maximum is non-positive — no positive thickness
-				// leaves a cavity. A smaller thickness cannot help; the section
-				// must be enlarged.
-				return nil, fmt.Errorf(`%w: the section's inradius %s is at or below the evaluator's rounding tolerance, so this evaluator accepts no positive shell thickness here (the tolerance-adjusted maximum is non-positive); enlarge the section`, ErrDegenerate, units.Millimeters(inradius))
-			}
-			return nil, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the section's inradius %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(inradius))
+		if err := requireSectionCavity(t, tmm, inradius, enough); err != nil {
+			return nil, err
 		}
 		// The height limit: where a cap is kept (a cup), the wall behind it is a
 		// floor t thick, so the cavity is swept over an interval of length h − t,
@@ -332,6 +336,28 @@ const shellTol = 1e-9
 // validation visit then charges the same counter.
 const shellInradiusWorkLimit uint64 = 1 << 20
 
+// requireSectionCavity is S10's section limit (docs/modify-design.md §8): P ⊖ t
+// is non-empty exactly when t is strictly less than the section's inradius.
+// enough reports that a contained disk already proved the thickness fits.
+// The accept boundary sits shellTol*max(1, inradius) below the limit — a
+// SCALE-RELATIVE rounding tolerance that grows with the part's scale, not a
+// fixed sub-nanometre margin — so the refusal reports the computed accepted
+// maximum thickness rather than the bare inradius (at a large scale the two
+// differ by far more than a noise floor).
+func requireSectionCavity(t units.Value, tmm, inradius float64, enough bool) error {
+	maxT := inradius - shellTol*math.Max(1, inradius)
+	if enough || tmm < maxT {
+		return nil
+	}
+	if maxT <= 0 {
+		// The inradius itself is at or below the rounding tolerance, so the
+		// accepted maximum is non-positive — no positive thickness leaves a
+		// cavity. A smaller thickness cannot help; the section must be enlarged.
+		return fmt.Errorf(`%w: the section's inradius %s is at or below the evaluator's rounding tolerance, so this evaluator accepts no positive shell thickness here (the tolerance-adjusted maximum is non-positive); enlarge the section`, ErrDegenerate, units.Millimeters(inradius))
+	}
+	return fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the section's inradius %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(inradius))
+}
+
 // classifyRemovedCaps decides which caps a removed-face set names: every face
 // must be one of the prism's two cap faces (else S2, a side wall —
 // ErrUnsupported), and it reports whether the start cap, the end cap, or both
@@ -401,15 +427,8 @@ func sectionInradius(budget *proofbound.WorkBudget, profile ProfileRecord, thick
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return 0, false, err
 	}
-	candidateWork, ok := proofbound.WallCandidateWork(len(elems), len(verts), false)
-	if err := survey2d.WallBudgetErr(budget); err != nil {
+	if err := requireWallSurveyWork(budget, len(elems), len(verts)); err != nil {
 		return 0, false, err
-	}
-	if !ok {
-		return 0, false, fmt.Errorf(`%w: inward shell section survey candidate count overflows the checked work counter (fixed work budget %d)`, ErrUnsupported, shellInradiusWorkLimit)
-	}
-	if candidateWork > shellInradiusWorkLimit {
-		return 0, false, fmt.Errorf(`%w: inward shell section survey needs %d candidate-family visits, above the fixed work budget of %d`, ErrUnsupported, candidateWork, shellInradiusWorkLimit)
 	}
 	// A contained disk can prove only the success side of S10. Failure and all
 	// diagnostics still use the full inradius survey. The S18 count above runs
@@ -421,27 +440,53 @@ func sectionInradius(budget *proofbound.WorkBudget, profile ProfileRecord, thick
 	if enough {
 		return 0, true, nil
 	}
+	inradius, err := wallSurveyInradius(budget, elems, verts)
+	return inradius, false, err
+}
+
+// requireWallSurveyWork is S18's preflight: the inward section survey's
+// candidate-family visits, counted under checked arithmetic before the wall
+// kernel starts, must stay within shellInradiusWorkLimit.
+func requireWallSurveyWork(budget *proofbound.WorkBudget, elems, verts int) error {
+	candidateWork, ok := proofbound.WallCandidateWork(elems, verts, false)
+	if err := survey2d.WallBudgetErr(budget); err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf(`%w: inward shell section survey candidate count overflows the checked work counter (fixed work budget %d)`, ErrUnsupported, shellInradiusWorkLimit)
+	}
+	if candidateWork > shellInradiusWorkLimit {
+		return fmt.Errorf(`%w: inward shell section survey needs %d candidate-family visits, above the fixed work budget of %d`, ErrUnsupported, candidateWork, shellInradiusWorkLimit)
+	}
+	return nil
+}
+
+// wallSurveyInradius runs internal/survey2d/wall_kernel.go over a section's
+// survey elements and returns its inradius, charging generation and validation
+// to S18's one shared work budget. An over-budget or undecided survey is
+// ErrUnsupported: a build-time gate has no Suspect result to fall back on.
+func wallSurveyInradius(budget *proofbound.WorkBudget, elems []survey2d.SurveyElem, verts [][2]float64) (float64, error) {
 	// fitMax is +Inf: the inradius is a property of the section alone, with no
 	// height constraint (that constraint only bears on spanning, not the
 	// largest inscribed disk).
 	k, err := survey2d.NewWallKernelBudget(budget, elems, nil, verts, 0, proofbound.ExactScalar(0), false, math.Inf(1))
 	if err != nil {
-		return 0, false, err
+		return 0, err
 	}
 	out, err := k.RunBudget(proofbound.NewWallWorkBudgetWithOperation(shellInradiusWorkLimit, budget))
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return 0, false, err
+		return 0, err
 	}
 	if errors.Is(err, proofbound.ErrWallWorkBudget) {
-		return 0, false, fmt.Errorf(`%w: inward shell section survey exceeded the fixed work budget of %d during candidate generation or validation`, ErrUnsupported, shellInradiusWorkLimit)
+		return 0, fmt.Errorf(`%w: inward shell section survey exceeded the fixed work budget of %d during candidate generation or validation`, ErrUnsupported, shellInradiusWorkLimit)
 	}
 	if err != nil {
-		return 0, false, fmt.Errorf(`%w: inward shell section survey failed: %v`, ErrUnsupported, err)
+		return 0, fmt.Errorf(`%w: inward shell section survey failed: %v`, ErrUnsupported, err)
 	}
 	if !out.Ok {
-		return 0, false, fmt.Errorf(`%w: this evaluator cannot prove the eroded section non-empty`, ErrUnsupported)
+		return 0, fmt.Errorf(`%w: this evaluator cannot prove the eroded section non-empty`, ErrUnsupported)
 	}
-	return out.Inradius, false, nil
+	return out.Inradius, nil
 }
 
 // shellRectCircleWitness proves a disk larger than the requested wall fits a

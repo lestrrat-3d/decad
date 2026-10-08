@@ -1192,13 +1192,14 @@ func TestVoidRevolveModifyOps(t *testing.T) {
 	decadtest.MeasuresVolume(t, filleted,
 		units.CubicMillimeters(2*math.Pi*(1000-40*math.Pi)-2*math.Pi*40*(1-math.Pi/4)))
 
-	// Shell of a revolve is not built (reach PR D): the receiver stays live and
-	// unchanged.
+	// A shell of a holed meridian is SX8 (docs/modify-reach-design.md §9.3):
+	// the receiver stays live and unchanged.
 	doc, body := voidRevolve(t)
 	before, err := body.Volume()
 	require.NoError(t, err)
 	_, err = body.Shell(t.Context(), decad.Faces(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, `SX8`)
 	after, err := body.Volume()
 	require.NoError(t, err)
 	require.Equal(t, before, after)
