@@ -841,8 +841,10 @@ coefficients over interval arithmetic (`internal/capband/moment.go`'s
 the value is unchanged and the bound covers the patch at its references. The
 chord-versus-locus term's two reference sectors (§8.3) take their own
 window's allowances on both directrices. The area's frustum sector charges
-the side radius allowance as `αc·e·(2·(R0+R1) + |H| + e)`, and its corner-skew
-term reads the side radius at the top of that allowance.
+the side radius allowance as `αc·e·(2·(R0+R1) + |H| + e)`. Its corner-skew
+term is not monotone in the side radius, because the slant shrinks as `R0`
+grows toward `R1`, so it reads `R0 + e` and the held slant plus `e` (the
+slant is 1-Lipschitz in `R0`) and bounds the term over the whole allowance.
 
 At the references every patch meets both disks along its directrices, and two
 patches meet along a corner ruling only to within a gap: the held ends two

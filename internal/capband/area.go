@@ -85,13 +85,9 @@ func patchAreaOf(g Patch) (float64, float64) {
 	//
 	// The held side radius is an ArcSeg's math.Hypot of its recorded Start, up
 	// to g.Held.SideRadius from the radius the record states, and both terms
-	// read it: the skew term at the top of that span, since it only grows with
-	// the radius, and sideRadiusAreaAllow for the frustum sector itself.
-	skewGeom := g
-	if g.Held.SideRadius > 0 {
-		skewGeom.SideRadius = proofbound.AbsSumUpper(R0, g.Held.SideRadius)
-	}
-	skewAllow := proofbound.AbsSumUpper(coneSkewAreaAllow(skewGeom), sideRadiusAreaAllow(g))
+	// charge that span: coneSkewAreaAllow bounds the skew term over the whole
+	// span, and sideRadiusAreaAllow bounds the frustum sector's own move.
+	skewAllow := proofbound.AbsSumUpper(coneSkewAreaAllow(g), sideRadiusAreaAllow(g))
 	// The core term (everything but skewAllow, contourAllow and the level
 	// allowance, which stand unchanged either way) takes the SMALLER of
 	// two independently sound
@@ -154,7 +150,16 @@ func sideRadiusAreaAllow(g Patch) float64 {
 //	|A − A₀| ≤ L·(R0·(Φs+Φe)/2 + αc·R1·Φ²/4) + R1·Φ²·(αs·R0 + αc·R1)/4 + H·αc·R1·Φ/2,
 //
 // with L = √(ΔR²+H²), αc read at its upper bound |held| + CapThAllow and αs at
-// αc + Φs + Φe. Every factor is lifted from a float64 exactly, the one square
+// αc + Φs + Φe.
+//
+// R0 here is the radius the side record states, which the held SideRadius
+// matches only to within e = Held.SideRadius. The term is not monotone in R0:
+// L shrinks as R0 grows toward R1, so on an outward patch (R1 > R0) with a
+// short slant the term is largest at the BOTTOM of the span. Every factor is
+// non-negative, so the term is bounded over the whole span |r − R0| ≤ e by
+// reading R0 at R0 + e and L at L(R0) + e, since L is 1-Lipschitz in R0.
+//
+// Every factor is lifted from a float64 exactly, the one square
 // root rounds up (RatSqrtUp), and the sum is formed over rationals and rounded
 // up once, so the bound assumes no ulp contract anywhere. It is exactly zero
 // when both corner skews are, whatever αc is.
@@ -165,21 +170,26 @@ func coneSkewAreaAllow(g Patch) float64 {
 	if g.SkewStart == 0 && g.SkewEnd == 0 {
 		return 0
 	}
-	rR0, rR1 := proofarith.FloatRat(g.SideRadius), proofarith.FloatRat(g.CapRadius)
+	rHeld, rE := proofarith.FloatRat(g.SideRadius), proofarith.FloatRat(g.Held.SideRadius)
+	rR1 := proofarith.FloatRat(g.CapRadius)
 	rCap, rSide := proofarith.FloatRat(g.CapZ), proofarith.FloatRat(g.SideZ)
 	rDth, rAllow := proofarith.FloatRat(math.Abs(g.CapTh1-g.CapTh0)), proofarith.FloatRat(g.CapThAllow)
 	rPs, rPe := proofarith.FloatRat(g.SkewStart), proofarith.FloatRat(g.SkewEnd)
-	if rR0 == nil || rR1 == nil || rCap == nil || rSide == nil || rDth == nil || rAllow == nil || rPs == nil || rPe == nil ||
-		rR0.Sign() < 0 || rR1.Sign() < 0 || rAllow.Sign() < 0 || rPs.Sign() < 0 || rPe.Sign() < 0 {
+	if rHeld == nil || rE == nil || rR1 == nil || rCap == nil || rSide == nil || rDth == nil || rAllow == nil || rPs == nil || rPe == nil ||
+		rHeld.Sign() < 0 || rE.Sign() < 0 || rR1.Sign() < 0 || rAllow.Sign() < 0 || rPs.Sign() < 0 || rPe.Sign() < 0 {
 		return math.Inf(1)
 	}
 	rat := func() *big.Rat { return new(big.Rat) }
 	h := rat().Abs(rat().Sub(rCap, rSide))
-	dR := rat().Sub(rR1, rR0)
-	slant := proofarith.FloatRat(proofbound.RatSqrtUp(rat().Add(rat().Mul(dR, dR), rat().Mul(h, h))))
-	if slant == nil {
+	// R0 and L are read at their upper bounds over the held side radius span
+	// |r − R0| ≤ e: R0 + e, and the held slant plus e (L is 1-Lipschitz in r).
+	rR0 := rat().Add(rHeld, rE)
+	dR := rat().Sub(rR1, rHeld)
+	slantHeld := proofarith.FloatRat(proofbound.RatSqrtUp(rat().Add(rat().Mul(dR, dR), rat().Mul(h, h))))
+	if slantHeld == nil {
 		return math.Inf(1)
 	}
+	slant := rat().Add(slantHeld, rE)
 	phi := rPs
 	if rPe.Cmp(phi) > 0 {
 		phi = rPe
