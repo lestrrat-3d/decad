@@ -21,7 +21,7 @@ import (
 //
 // proofbound.SumSlop alone is not the whole of it, because it charges each term a few
 // ulps of the term's OWN value and a band patch's cross product cancels
-// before that value is reached. crossProductUpper carries the envelope those
+// before that value is reached. proofbound.CrossProductUpper carries the envelope those
 // products actually reach, so the charge tracks the terms rather than what
 // they cancelled to — the same correction capBandVolume makes for the flux.
 //
@@ -59,8 +59,8 @@ func patchAreaOf(g Patch) (float64, float64) {
 		a2 := v2.Sub(v0).Cross(v3.Sub(v0)).Len() / 2
 		area := a1 + a2
 		crossEnv := proofbound.AbsSumUpper(
-			crossProductUpper(v1.Sub(v0), v2.Sub(v0)),
-			crossProductUpper(v2.Sub(v0), v3.Sub(v0)),
+			proofbound.CrossProductUpper(v1.Sub(v0), v2.Sub(v0)),
+			proofbound.CrossProductUpper(v2.Sub(v0), v3.Sub(v0)),
 		)
 		bound := proofbound.AbsSumUpper(proofbound.SumSlop(2, proofbound.AbsSumUpper(a1, a2)), proofbound.AnalyticRoundBound(crossEnv), patchDisplacementAreaAllow(g))
 		return area, bound

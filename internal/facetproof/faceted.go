@@ -70,15 +70,18 @@ func KeepPlacedEmbedded(ctx context.Context, src, held []r3.Vec, tris [][3]int, 
 
 // MeshAreaUpper is a proven upper bound on the held mesh's total facet area:
 // the float sum padded by the PROVEN naive-summation bound of the very loop
-// that computed it (internal/proofbound/bounds.go, proofbound.SumSlop) — not a fixed fraction, which no proof
-// backs at any facet count.
+// that computed it (internal/proofbound/bounds.go, proofbound.SumSlop) — not a
+// fixed fraction, which no proof backs at any facet count — and by each
+// facet's own evaluation charge, proofbound.FacetAreaTermSlop, which a sliver
+// facet's cancelling cross product needs at the scale of its edge products.
 func MeshAreaUpper(verts []r3.Vec, tris [][3]int) float64 {
-	total := 0.0
+	total, termSlop := 0.0, 0.0
 	for _, t := range tris {
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		total += b.Sub(a).Cross(c.Sub(a)).Len() / 2
+		termSlop = proofbound.AbsSumUpper(termSlop, proofbound.FacetAreaTermSlop(a, b, c))
 	}
-	return total + proofbound.SumSlop(len(tris), total) + 1e-300
+	return total + proofbound.SumSlop(len(tris), total) + termSlop + 1e-300
 }
 
 // FacetedAreaGeom is a face's geometric area allowance: the smaller of two

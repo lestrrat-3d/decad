@@ -417,6 +417,7 @@
 3	0.00	TestFacetFaceIndicesMapsConsistentFaces
 3	0.00	TestFacetFaceIndicesRejectsUnmappedFacet
 3	0.00	TestFacetedAreaBoundCompositionRoundsOutward
+3	0.01	TestFacetedAreaBoundsCoverSliverFacet
 3	0.00	TestFacetedExtremeErrorCoversAnInnerVertexsReach
 3	0.00	TestFacetedMeasurementSumsEncloseSmallAllowances
 3	1.06	TestFacetedPlacementChargesEachVertexAtItsOwnMagnitude

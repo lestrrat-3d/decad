@@ -248,6 +248,11 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	facePlanar := map[*Face]bool{}
 	facetFace := make([]*Face, len(tris))
 	compFaces := make([][]*Face, len(members))
+	// faceTermSlop is each face's summed per-facet evaluation charge
+	// (internal/proofbound/bounds.go, proofbound.FacetAreaTermSlop): a sliver
+	// facet's cross product cancels, and its rounding tracks its edge products
+	// rather than the area SumSlop's relative charge reads.
+	faceTermSlop := map[*Face]float64{}
 	for i, t := range tris {
 		if err := budget.Step(); err != nil {
 			return nil, err
@@ -268,6 +273,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		f.area += b.Sub(a).Cross(c.Sub(a)).Len() / 2
+		faceTermSlop[f] = proofbound.AbsSumUpper(faceTermSlop[f], proofbound.FacetAreaTermSlop(a, b, c))
 		facetFace[i] = f
 	}
 	// A face's bound is the largest δ(t) over its own facets, and its
@@ -288,9 +294,10 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// Per-face area bounds: the smaller of two proven geometric terms — the
 	// §4 shape, the face's own displacement times its own bounding edges, and
 	// docs/faceted-vertex-bounds-design.md §4.2's sum of each facet's
-	// perturbation at its own δ(t) — plus the operands' chord-length slack and
-	// the PROVEN slop of the float sum that produced the area. The perimeter
-	// the first multiplies is the UPPER one: an edge's held chord length is
+	// perturbation at its own δ(t) — plus the operands' chord-length slack, the
+	// PROVEN slop of the float sum that produced the area, and each facet's own
+	// evaluation charge. The perimeter the first multiplies is the UPPER one:
+	// an edge's held chord length is
 	// itself only known within its own bound (internal/proofbound/bounds.go,
 	// proofbound.ChainLengthBound).
 	facetsOf := map[*Face]int{}
@@ -314,7 +321,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			}
 			geom := facetedAreaGeom(faceDelta[f], loopLen, faceFacetArea[f])
 			bodyGeom = proofbound.AbsSumUpper(bodyGeom, geom)
-			f.areaBound = proofbound.AbsSumUpper(geom, pp.areaSlack, proofbound.SumSlop(facetsOf[f], f.area))
+			f.areaBound = proofbound.AbsSumUpper(geom, pp.areaSlack, proofbound.SumSlop(facetsOf[f], f.area), faceTermSlop[f])
 		}
 	}
 
@@ -363,20 +370,24 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 
-	areaF := 0.0
+	areaF, termSlop := 0.0, 0.0
 	for _, t := range tris {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		areaF += b.Sub(a).Cross(c.Sub(a)).Len() / 2
+		termSlop = proofbound.AbsSumUpper(termSlop, proofbound.FacetAreaTermSlop(a, b, c))
 	}
 	// The float area accumulation itself rounds, and the loop above sums
 	// NAIVELY: charge the proven naive-summation bound, never a pairwise one
-	// (internal/proofbound/bounds.go, proofbound.SumSlop). It is ulp-scale in the total, so a genuinely
-	// tiny-bound planar boolean stays tiny — and never zero, which would claim
-	// an exactness a float sum of square roots does not have.
-	areaBound := proofbound.AbsSumUpper(bodyGeom, pp.areaSlack, proofbound.SumSlop(len(tris), areaF))
+	// (internal/proofbound/bounds.go, proofbound.SumSlop), beside each term's
+	// own evaluation charge, which a sliver facet's cancelling cross product
+	// needs at the scale of its edge products (proofbound.FacetAreaTermSlop).
+	// Both are ulp-scale in the total, so a genuinely tiny-bound planar boolean
+	// stays tiny — and never zero, which would claim an exactness a float sum of
+	// square roots does not have.
+	areaBound := proofbound.AbsSumUpper(bodyGeom, pp.areaSlack, proofbound.SumSlop(len(tris), areaF), termSlop)
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(areaF),
 		Exactness: exactnessOf(areaBound),

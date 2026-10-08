@@ -363,6 +363,51 @@ func SumSlop(n int, absSum float64) float64 {
 // charge the excess itself.
 const underflowTermUlps = 5
 
+// CrossProductUpper bounds every component of a×b and every product the float
+// evaluation forms on the way: each component is a difference of two of the
+// six products below, so their absolute sum dominates all of them AND the
+// resulting vector's own norm. Where a and b are nearly parallel that
+// difference cancels, and the cross product's rounding error tracks this sum
+// rather than the norm it cancelled to.
+func CrossProductUpper(a, b r3.Vec) float64 {
+	return AbsSumUpper(
+		ProductUpper(math.Abs(a.Y), math.Abs(b.Z)),
+		ProductUpper(math.Abs(a.Z), math.Abs(b.Y)),
+		ProductUpper(math.Abs(a.Z), math.Abs(b.X)),
+		ProductUpper(math.Abs(a.X), math.Abs(b.Z)),
+		ProductUpper(math.Abs(a.X), math.Abs(b.Y)),
+		ProductUpper(math.Abs(a.Y), math.Abs(b.X)),
+	)
+}
+
+// FacetAreaTermSlop is a PROVEN bound on how far one facet's float area term,
+// b.Sub(a).Cross(c.Sub(a)).Len()/2, sits from the exact area of the triangle
+// its three held vertices span. A caller summing such terms adds it per facet
+// beside SumSlop, which bounds the summation loop.
+//
+// SumSlop's own per-term charge is RELATIVE to the term, and that is not
+// enough for a sliver. The two edge subtractions and the six products of the
+// cross product each round relative to their OWN magnitudes, which reach
+// |b−a|·|c−a| while the area can be smaller by any factor: a facet whose three
+// vertices are nearly collinear cancels in every component. The edge
+// subtractions move each product by at most (2u + u²) of itself, the products
+// round by u of themselves, so the cross product is off by at most
+// (3u + u²)·CrossProductUpper in the 1-norm, which dominates its 2-norm. The
+// norm is 1-Lipschitz, and the component subtractions, the norm's own
+// rounding and the halving are relative errors of a value no larger than
+// CrossProductUpper. AnalyticRoundBound's 256·u at that scale covers the whole
+// chain with room for a norm that carries no tight ulp contract — the same
+// charge internal/capband's patch areas take.
+//
+// Each of those steps can also underflow, where the error is absolute and no
+// relative charge speaks for it. The underflowTermUlps charge is added
+// unconditionally, so a facet whose float area flushes to exactly zero still
+// takes a positive bound.
+func FacetAreaTermSlop(a, b, c r3.Vec) float64 {
+	env := CrossProductUpper(b.Sub(a), c.Sub(a))
+	return AbsSumUpper(AnalyticRoundBound(env), underflowTermUlps*math.SmallestNonzeroFloat64)
+}
+
 // ChainLengthBound is the proven bound on a boolean rim's length: the chain
 // holds nSegs chords whose two endpoints EACH move by up to delta, so the
 // held length can be off by 2·nSegs·delta — plus the float slop of summing
