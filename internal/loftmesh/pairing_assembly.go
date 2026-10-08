@@ -4,14 +4,53 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// LoopPair holds the paired station chains and per-cell bounds for one loop.
+// LoopPair is Table P's correspondence for one loop: the two walk-ordered
+// STATION-chain lists, v from loop0's own segment order and w from loop1's,
+// already rotated by that loop's own alignment offset (P4). Each paired
+// segment contributes its own station count of entries — one per LineSeg, or
+// the shared chord count a circular or free-form pair's own generator settles
+// on — and every list still carries only each
+// segment's OWN interior stations, never its shared end point, exactly as
+// the one-point-per-LineSeg convention already did: the next segment's own
+// first station (or the loop's wrap) supplies it.
+//
+// arcUpperV/arcUpperW and matchedDelta are parallel to v/w, one entry per
+// station: arcUpperV[j]/arcUpperW[j] is that station's own OUTGOING cell's
+// per-side arc-length upper bound (PerCellArcUpper), and matchedDelta[j] is
+// that cell's own PARAMETER-MATCHED bound on |curve(s) - idealChord(s)| at the
+// same s: the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's matchedDelta
+// row, stated for the ideal chord joining the two points the record denotes.
+// The consumer composes it with the build's own delta through
+// ChordCellDeltaUpper to reach the bound internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper
+// obligates for the chord the build actually DREW (ComputeLoftChordedAllow,
+// loft_chord_allow.go); this field is never that composed bound on its own, and
+// never the SET-distance sagitta sectionDelta names either.
+// A LineSeg cell's own chord IS the curve it denotes, so its entry is
+// exactly 0; a circular cell's own sagitta discharges this half exactly
+// (CircularCellPoints' own doc comment), so its entry equals its
+// sagitta; a free-form cell's entry is freeform.SpanMatchedDeltaUpper's own
+// per-cell reading (freeform.PairChainStations), which can differ cell to cell
+// within one paired segment where the bisection settled at different depths.
+//
+// faceted is parallel to v/w too: true exactly for a LineSeg pair's cell,
+// whose held triangle pair IS the boundary §5 gives it.
+// ComputeLoftChordedAllow (loft_chord_allow.go) charges docs/loft-design.md
+// §5/§8's chorded volume/centroid/area terms on every cell EXCEPT a faceted
+// one with a zero chord-to-curve departure. A circular or free-form cell is
+// charged even at a zero departure, because it stands for the bilinear ruled
+// patch through its four held corners, which a twisted pair of straight sides
+// does not hold flat. The exemption names the one arm proven faceted, so an
+// arm added later is charged by default, and a positive matchedDelta is
+// charged whatever the flag says.
 type LoopPair struct {
 	V, W                           []sectionrecord.Point2
 	ArcUpperV, ArcUpperW           []float64
@@ -25,14 +64,25 @@ type LoopPair struct {
 	Faceted []bool
 }
 
+// HasUnfacetedCell reports whether any paired cell stands for a ruled patch
+// rather than its held triangle pair.
+func HasUnfacetedCell(pairs []LoopPair) bool {
+	for _, pair := range pairs {
+		if slices.Contains(pair.Faceted, false) {
+			return true
+		}
+	}
+	return false
+}
+
 // PairRecords resolves Table P into one flat correspondence per loop, from
-// validateLoftRecords' own already-resolved walks — it spends no further
+// ValidateLoftRecords' own already-resolved walks — it spends no further
 // walkOf call, and so no further free-form work (A10 plan Task 1). P1 pairs
 // by position in Holes, never by area or proximity; P6 is satisfied by
 // construction because each list is read in its own loop's own recorded walk
 // order and nothing reinterprets it. The alignment offset rotates walks1's
 // own natural order into correspondence here, at the point of use, exactly
-// as validateLoftRecords' own S3 check already does.
+// as ValidateLoftRecords' own S3 check already does.
 //
 // Each paired segment's own station chain comes from RecordCellStations for a
 // LineSeg or circular pair and from FreeformCellPoints for a same-kind Tier A
@@ -61,7 +111,7 @@ type LoopPair struct {
 // the RECORDED segment behind each side's walk (RecordCellStations' own doc
 // comment), so each side's segment is handed to the generator alongside its
 // walk, under the same alignment offset the walk itself is read at.
-func PairRecords(p0, p1 RecordProfile, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk, target float64, work0, work1 *freeform.FreeformWork) ([]LoopPair, float64, float64, float64, error) {
+func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk, target float64, work0, work1 *freeform.FreeformWork) ([]LoopPair, float64, float64, float64, error) {
 	loops0 := append([]sectionrecord.LoopRecord{p0.Outer}, p0.Holes...)
 	loops1 := append([]sectionrecord.LoopRecord{p1.Outer}, p1.Holes...)
 	pairs := make([]LoopPair, len(loops0))

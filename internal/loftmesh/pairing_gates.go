@@ -6,15 +6,45 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// RecordProfile contains the loop records needed for loft pairing gates.
-type RecordProfile struct {
-	Outer sectionrecord.LoopRecord
-	Holes []sectionrecord.LoopRecord
+// ValidateLoftRecords keeps the station cap after the record-only pairing
+// gates, preserving the refusal order in docs/loft-design.md §4. It also
+// returns the build's one chord target, which the station cap gate reads once
+// from recordArea and the walks resolved here (StationCapGate), so the
+// station generators chord at the target the gate decided S15 against.
+//
+// Before it resolves a single walk it raises both records' free-form work
+// ceilings to StationWorkLimit over P, the first profile's segment
+// count (docs/loft-gear-bounds-design.md §7). The raise covers the walks'
+// own length brackets as well as the station walk that follows: a full gear
+// outline's brackets alone pass the default ceiling (§7 measures them), and P
+// is read from the record, so it is known before the gates that check it.
+// Every charge before the raise met the default ceiling, and the counters
+// keep what they have spent.
+func ValidateLoftRecords(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.PlaneRecord, alignment []int, recordArea [2]float64, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, float64, error) {
+	p := uint64(len(p0.Outer.Segments))
+	for _, hole := range p0.Holes {
+		p += uint64(len(hole.Segments))
+	}
+	for _, work := range []*freeform.FreeformWork{work0, work1} {
+		if work != nil {
+			work.RaiseLimit(StationWorkLimit(work.Spent, p))
+		}
+	}
+	offsets, walks0, walks1, err := ValidateRecordWalks(p0, p1, pl0, pl1, alignment, work0, work1)
+	if err != nil {
+		return nil, nil, nil, 0, err
+	}
+	target, err := StationCapGate(p0, p1, recordArea, offsets, walks0, walks1)
+	if err != nil {
+		return nil, nil, nil, 0, err
+	}
+	return offsets, walks0, walks1, target, nil
 }
 
 // ValidateRecordWalks applies docs/loft-design.md Table S rows S1, S2, S4, S3,
@@ -24,7 +54,7 @@ type RecordProfile struct {
 // offsets (a nil alignment becomes every offset 0, §2) alongside every
 // segment's own resolved walk, one slice per loop, in that loop's own
 // recorded segment order — NOT rotated by the alignment offset, which stays
-// applied at loftPairings' own point of use, exactly as it is here for S3's
+// applied at PairRecords' own point of use, exactly as it is here for S3's
 // own check.
 //
 // Each segment is walked exactly ONCE, at the SAME point in the SAME
@@ -33,7 +63,7 @@ type RecordProfile struct {
 // to j+1 — never batched a whole loop ahead of that order. boundarywalk.WalkOf is neither
 // memoized nor free to call twice (it charges the free-form work budget on
 // every call, extrude.go's own doc comment), so resolving here and never
-// again (loftPairings reads this function's own output) is what Task 1
+// again (PairRecords reads this function's own output) is what Task 1
 // exists for; keeping the interleaving is what keeps S3's own refusal
 // PRECEDENCE unchanged — a record whose p0 fails S3 at an early segment
 // must still report that refusal even when p1 carries a later segment
@@ -51,7 +81,7 @@ type RecordProfile struct {
 // after BOTH sides are resolved is unavoidable once the admitted set has more
 // than one type, and it does not relax PRECEDENCE: the first (i, j) whose
 // pair fails is still the first refusal reported, in walk order.
-func ValidateRecordWalks(p0, p1 RecordProfile, pl0, pl1 sectionrecord.PlaneRecord, alignment []int, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, error) {
+func ValidateRecordWalks(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.PlaneRecord, alignment []int, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, error) {
 	if len(p0.Holes) != len(p1.Holes) {
 		return nil, nil, nil, fmt.Errorf(`%w: the two profiles have %d and %d holes; a loft has no positional pairing for a hole-count mismatch`,
 			decaderr.ErrUnsupported, len(p0.Holes), len(p1.Holes))

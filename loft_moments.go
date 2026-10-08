@@ -59,16 +59,3 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 		Bound: units.SquareMillimeters(bound),
 	}
 }
-
-// computeLoftChordedAllow maps built loft cells to the neutral chord proof.
-func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec, matchedDelta, delta float64, reversed bool) loftmesh.LoftChordedAllow {
-	neutral := make([]loftmesh.LoftChordPair, len(pairs))
-	for i, p := range pairs {
-		neutral[i] = loftmesh.LoftChordPair{
-			Cells: len(p.v), ArcUpperV: p.arcUpperV, ArcUpperW: p.arcUpperW,
-			MatchedDelta: p.matchedDelta, TangentEnergyV: p.tangentEnergyV,
-			TangentEnergyW: p.tangentEnergyW, Faceted: p.faceted,
-		}
-	}
-	return loftmesh.ComputeLoftChordedAllow(neutral, vIdx, wIdx, verts, anchor, matchedDelta, delta, reversed)
-}

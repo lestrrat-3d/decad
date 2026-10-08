@@ -16,7 +16,7 @@ import (
 
 // This file tests docs/loft-gear-bounds-design.md §2's volume residual —
 // sweptLeg + wallLeg + skirtLeg — and §4's per-cell cap tube, over the
-// production path: validateLoftRecords, loftPairings, assembleLoft and
+// production path: loftmesh.ValidateLoftRecords, loftmesh.PairRecords, assembleLoft and
 // buildLoftMass, the same steps evalLoft runs, at a chord target the test
 // chooses.
 
@@ -24,7 +24,7 @@ import (
 type loftMassBuild struct {
 	mass                *loftMassAccumulator
 	a                   loftAssembly
-	pairs               []loftLoopPair
+	pairs               []loftmesh.LoopPair
 	sectionDelta        float64
 	sectionMatchedDelta float64
 }
@@ -38,19 +38,19 @@ func (b loftMassBuild) matchedDelta() float64 {
 }
 
 // stationsPerLoop is the number of wall cells on the outer loop.
-func (b loftMassBuild) stationsPerLoop() int { return len(b.pairs[0].v) }
+func (b loftMassBuild) stationsPerLoop() int { return len(b.pairs[0].V) }
 
 // loftMassAtTarget runs evalLoft's own record, pairing, assembly and mass
 // steps at chord target target; a target of 0 reads the production target.
 func loftMassAtTarget(t *testing.T, pl loftPayload, target float64) loftMassBuild {
 	t.Helper()
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	offsets, walks0, walks1, production, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
+	offsets, walks0, walks1, production, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
 	require.NoError(t, err)
 	if target <= 0 {
 		target = production
 	}
-	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
@@ -187,20 +187,20 @@ func TestLoftVolumeResidualIsPerCellWallLegPlusSkirt(t *testing.T) {
 			// order ComputeLoftChordedAllow walks the cells.
 			var wallLeg, perimeter float64
 			for i, p := range b.pairs {
-				n := len(p.v)
+				n := len(p.V)
 				for j := range n {
 					jn := (j + 1) % n
 					vLo, vHi := a.verts[a.vIdx[i][j]], a.verts[a.vIdx[i][jn]]
 					wLo, wHi := a.verts[a.wIdx[i][j]], a.verts[a.wIdx[i][jn]]
 					perimeter = proofbound.AbsSumUpper(perimeter,
-						math.Max(p.arcUpperV[j], proofbound.CellSpanUpper(vLo, vHi)),
-						math.Max(p.arcUpperW[j], proofbound.CellSpanUpper(wLo, wHi)),
+						math.Max(p.ArcUpperV[j], proofbound.CellSpanUpper(vLo, vHi)),
+						math.Max(p.ArcUpperW[j], proofbound.CellSpanUpper(wLo, wHi)),
 					)
-					if p.faceted[j] && p.matchedDelta[j] <= 0 {
+					if p.Faceted[j] && p.MatchedDelta[j] <= 0 {
 						continue
 					}
-					cellMatched := loftmesh.ChordCellDeltaUpper(p.matchedDelta[j], a.delta)
-					cellWall := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, p.arcUpperV[j], p.arcUpperW[j], cellMatched)
+					cellMatched := loftmesh.ChordCellDeltaUpper(p.MatchedDelta[j], a.delta)
+					cellWall := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, p.ArcUpperV[j], p.ArcUpperW[j], cellMatched)
 					wallLeg = proofbound.AbsSumUpper(wallLeg, proofbound.ProductUpper(cellMatched, cellWall))
 				}
 			}
@@ -307,19 +307,19 @@ func TestLoftAreaCapTubeIsPerCell(t *testing.T) {
 			var tube, perimV, perimW float64
 			walks := 0
 			for _, p := range b.pairs {
-				for j := range p.v {
-					if p.faceted[j] && p.matchedDelta[j] <= 0 {
+				for j := range p.V {
+					if p.Faceted[j] && p.MatchedDelta[j] <= 0 {
 						continue
 					}
 					walks++
-					perimV = proofbound.AbsSumUpper(perimV, p.arcUpperV[j])
-					perimW = proofbound.AbsSumUpper(perimW, p.arcUpperW[j])
-					cellMatched := loftmesh.ChordCellDeltaUpper(p.matchedDelta[j], b.a.delta)
+					perimV = proofbound.AbsSumUpper(perimV, p.ArcUpperV[j])
+					perimW = proofbound.AbsSumUpper(perimW, p.ArcUpperW[j])
+					cellMatched := loftmesh.ChordCellDeltaUpper(p.MatchedDelta[j], b.a.delta)
 					joint := proofbound.ProductUpper(piUp, proofbound.ProductUpper(cellMatched, cellMatched))
 					twice := proofbound.ProductUpper(2, cellMatched)
 					tube = proofbound.AbsSumUpper(tube,
-						proofbound.ProductUpper(twice, p.arcUpperV[j]), joint,
-						proofbound.ProductUpper(twice, p.arcUpperW[j]), joint)
+						proofbound.ProductUpper(twice, p.ArcUpperV[j]), joint,
+						proofbound.ProductUpper(twice, p.ArcUpperW[j]), joint)
 				}
 			}
 			require.Equal(t, tube, b.mass.Chorded.CapAreaExcess)

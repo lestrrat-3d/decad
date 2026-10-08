@@ -10,16 +10,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// LoftChordPair carries one assembled loop's per-cell proof terms.
-type LoftChordPair struct {
-	Cells                          int
-	ArcUpperV, ArcUpperW           []float64
-	MatchedDelta                   []float64
-	TangentEnergyV, TangentEnergyW []float64
-	// Faceted is LoopPair.Faceted: true exactly for a LineSeg pair's cell.
-	Faceted []bool
-}
-
 // ComputeLoftChordedAllow derives LoftChordedAllow's corrections and bounds by walking
 // every wall cell of every loop pairs holds, over the SAME cell corner
 // convention assembleLoft's own Table B split uses (vLo, vHi = section-0's
@@ -107,7 +97,7 @@ type LoftChordPair struct {
 // proofbound.CellChordCurveAreaAllow's own composition section owns the split and why the
 // ruled reading is not widened by delta to stand in for the station shift.
 func ComputeLoftChordedAllow(
-	pairs []LoftChordPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec,
+	pairs []LoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec,
 	matchedDelta, delta float64, reversed bool,
 ) LoftChordedAllow {
 	var wallAreaUpper, wallLeg, twistVolumeUpper, maxTwistOffsetUpper, seamPerimeterUpper float64
@@ -121,7 +111,7 @@ func ComputeLoftChordedAllow(
 	areaCorrection := new(big.Rat)
 
 	for i, p := range pairs {
-		n := p.Cells
+		n := len(p.V)
 		for j := range n {
 			jn := (j + 1) % n
 			vLo, vHi := verts[vIdx[i][j]], verts[vIdx[i][jn]]

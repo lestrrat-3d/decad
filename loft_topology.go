@@ -81,20 +81,16 @@ type loftAssembly struct {
 // placed coordinate it emits, the anchor among them, is proven finite before
 // any of them is lifted into an exact dyadic.
 //
-// stationRound is loftPairings' own accumulated Table S row S14 term
+// stationRound is loftmesh.PairRecords' own accumulated Table S row S14 term
 // (a10-plan.md Part 3 PR 6): the proven rounding every COMPUTED circular
 // station commits, composed into delta beside the placement's own
 // proofbound.RigidRoundAllow term.
-func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
-	records := make([]loftmesh.LoopPair, len(pairs))
-	for i, pair := range pairs {
-		records[i] = loftmesh.LoopPair{V: pair.v, W: pair.w}
-	}
+func assembleLoft(ctx context.Context, pairs []loftmesh.LoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
 	triangulate := func(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, error) {
 		tris, err := triangulation.Triangulate(ctx, pts, loops)
 		return tris, wrapLoftTriangulationError(err)
 	}
-	a, err := loftmesh.Assemble(ctx, records, f0, f1, plane0, xform, stationRound,
+	a, err := loftmesh.Assemble(ctx, pairs, f0, f1, plane0, xform, stationRound,
 		triangulate, errLoftPointUnrepresentable)
 	if err != nil {
 		return loftAssembly{}, err

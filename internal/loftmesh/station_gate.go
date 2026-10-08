@@ -121,7 +121,7 @@ func FeatureSize(area, perimeterUpper float64) float64 {
 // length, every loop included: the sum over the record's segments of
 // PerCellArcUpper at one cell, which is the exact circularLengthInterval
 // bracket for a circular segment and the walk's own LengthUpper otherwise.
-// walks is validateLoftRecords' own per-loop list (outer at index 0, each hole
+// walks is ValidateLoftRecords' own per-loop list (outer at index 0, each hole
 // at index i+1), in the record's own segment order.
 func PerimeterUpper(p momentinput.Profile, walks [][]survey2d.SegmentWalk) float64 {
 	loops := append([]sectionrecord.LoopRecord{p.Outer}, p.Holes...)

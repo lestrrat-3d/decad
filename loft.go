@@ -25,7 +25,7 @@ import (
 // evaluator (loft_build.go). It owns the LoftOption surface, WithLoftAlignment,
 // gates S9-S11 and S4's arity half (§2/§4), and the atomic record->evaluate->
 // commit tail (§10). Every other gate — S1-S8 and S13's coordinate-range
-// gate — is validateLoftRecords', assembleLoft's and loftmesh.LoftCrossingAuditStructured's, run
+// gate — is loftmesh.ValidateLoftRecords', assembleLoft's and loftmesh.LoftCrossingAuditStructured's, run
 // inside evalLoft in §4's stated order.
 
 // LoftOption configures Loft.
@@ -363,7 +363,7 @@ func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.
 // never rotated: P4's modular wrap is exactly what an open walk drops, so
 // segment j pairs with segment j and the alignment offset a loop pair carries
 // has no counterpart here. Each segment is walked exactly ONCE, in the same
-// interleaved order validateLoftRecords uses, because walkOf charges the
+// interleaved order loftmesh.ValidateLoftRecords uses, because walkOf charges the
 // free-form work budget on every call.
 func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, work1 *freeform.FreeformWork) ([]survey2d.SegmentWalk, []survey2d.SegmentWalk, error) {
 	n := len(c0.Segments)
