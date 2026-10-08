@@ -98,8 +98,12 @@ Rules:
   the evaluated feature, and the provenance predicates — `CreatedBy`
   for edges, `FaceCreatedBy` for faces (core §9) — select the same entities
   under every run.
-- **Canonicalize at build.** Adjacent coplanar side faces merge, except no
-  Loft wall triangle merges with another face. This keeps
+- **Canonicalize at build.** Adjacent side faces merge where their two
+  recorded segments lie on one exact line: parallel chords over the
+  rationals that meet at one point, with no junction bound reaching off the
+  line (`internal/boundarywalk`). A near-collinear kink keeps both faces, so
+  no merge drops a vertex the record has. No Loft wall triangle merges with
+  another face. This keeps
   `side(i,j,0)`/`side(i,j,1)` distinct within a cell and preserves every
   cross-cell rung between coplanar Loft triangles. A full cylinder is one
   face with two circular-edge loops and no seam edge. v1 counts already match

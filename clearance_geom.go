@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -56,7 +57,23 @@ type bodyGeom struct {
 	// certificates read. It equals delta except on a full revolve, whose
 	// angular term charges end angles that no carrier of a full turn reads.
 	carrierDelta float64
+	// vertexDelta is the largest proven bound any topology vertex the kernel
+	// reads carries (Vertex.Position's own Bound). A vertex is lifted through
+	// its own float construction — a partial revolve's cap vertex through the
+	// held cosine and sine of its end angle, times a radius that can be the
+	// whole distance to a far axis — so it can sit farther from the record
+	// than any carrier does. widenDelta folds it in; the exact certificates of
+	// §6 read carriers alone and keep reading delta and carrierDelta.
+	vertexDelta float64
 }
+
+// widenDelta is the displacement clearanceDeltaWiden charges this body once
+// candidate aggregation completes: every candidate pairs carrier points,
+// edge points or vertices, so the larger of delta and vertexDelta bounds how
+// far any of them sits from the boundary the payload denotes. It is delta
+// itself wherever no vertex bound exceeds it, which keeps every row that did
+// not read an uncovered vertex exactly as it was.
+func (g *bodyGeom) widenDelta() float64 { return math.Max(g.delta, g.vertexDelta) }
 
 // newBodyGeom builds the kernel model for shipped single-lump analytic
 // payloads. Faceted and other multi-lump bodies bypass analytic containment
@@ -167,6 +184,9 @@ func (g *bodyGeom) addTopology(budget *proofbound.WorkBudget, b *Body) (bool, er
 			return false, err
 		}
 		g.verts = append(g.verts, v.position)
+		if m := v.Position().Bound.Mag(); m > g.vertexDelta {
+			g.vertexDelta = m
+		}
 	}
 	for _, sh := range b.Shells() {
 		if err := budget.Step(); err != nil {
@@ -475,10 +495,19 @@ func revolveCarrierInput(budget *proofbound.WorkBudget, rp revolvePayload) (clea
 			if err := budget.Step(); err != nil {
 				return clearance.RevolveCarrierInput{}, false, err
 			}
-			walls = append(walls, clearance.RevolveWall{
+			wall := clearance.RevolveWall{
 				Walk: w, Kind: rp.ax.classify(w.SegmentWalk),
 				First: planes[li][w.Segs[0]], Last: planes[li][w.Segs[len(w.Segs)-1]],
-			})
+			}
+			for _, seg := range w.Segs[1:] {
+				rec := planes[li][seg]
+				at := rp.ax.walk(rec)
+				wall.Joints = append(wall.Joints, clearance.RevolveJoint{
+					Z: at.StartU, Rho: at.StartV,
+					Rec: revolvemesh.RecordedMeridian{U: rec.StartU, V: rec.StartV, UV: rec.StartBound},
+				})
+			}
+			walls = append(walls, wall)
 		}
 	}
 	return clearance.RevolveCarrierInput{

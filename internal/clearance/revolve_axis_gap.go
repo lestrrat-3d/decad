@@ -29,10 +29,25 @@ import (
 // a point within Δ of an end sits within R·Δ of the recorded arc; that term is
 // charged beside the comparison.
 //
-// A cone is compared through the walk's own two ends rather than through the
-// apex and half angle its carrier rebuilds from them; the rounding of that
-// rebuild is the carrier's own construction, not the axis re-expression this
-// meter covers.
+// A straight walk that merged several recorded segments (survey2d.SideWalk's
+// Segs) is also compared at every interior junction, at the carrier point its
+// own float axis coordinate names (RevolveWall.Joints). Coalescing merges
+// only walks that are exactly collinear in those coordinates
+// (internal/boundarywalk), but the coordinates are a rounded re-expression, so
+// the recorded junction can still sit off the line; carrier and record are
+// affine between consecutive samples, so the worst sample bounds the wall.
+//
+// A cone is compared as its carrier stands: the apex the carrier rebuilt in
+// float from the walk's ends, at the two axial window ends it trims to, with
+// the radius growing at the exact slope |dρ|/|dz| of the walk's own float
+// differences, and its apex vertex where the walk reaches the axis. That
+// covers the apex's own rounding, which sits at the scale of the axial
+// coordinate and so can dwarf every world coordinate of a part whose axis
+// anchor lies far along its axis. What it leaves out is the half angle's
+// atan2 of that slope: one rounding of the angle itself, which moves a point
+// by its slant distance times a relative error of order 1e-16, the same
+// float evaluation every cone cell commits again when it takes math.Sincos of
+// it.
 type revolveGapMeter struct {
 	in         RevolveCarrierInput
 	a3p, wp    r3.Vec
@@ -169,6 +184,7 @@ func recordedEnds(wall RevolveWall) (revolvemesh.RecordedMeridian, revolvemesh.R
 }
 
 // wall charges the face f one wall built, read the way the kernel reads f.
+// A cone takes cone instead.
 func (m *revolveGapMeter) wall(wall RevolveWall, f *CFace) {
 	w := wall.Walk
 	start, end := recordedEnds(wall)
@@ -178,15 +194,17 @@ func (m *revolveGapMeter) wall(wall RevolveWall, f *CFace) {
 		o1, ok1 := m.along(w.EndU)
 		m.point(o0, ok0, m.walls, f.Radius, start)
 		m.point(o1, ok1, m.walls, f.Radius, end)
+		for _, j := range wall.Joints {
+			o, ok := m.along(j.Z)
+			m.point(o, ok, m.walls, f.Radius, j.Rec)
+		}
 	case revolveaxis.WallPlane:
 		o, ok := proofbound.IvVec3Of(f.O)
 		m.point(o, ok, m.walls, w.StartV, start)
 		m.point(o, ok, m.walls, w.EndV, end)
-	case revolveaxis.WallCone:
-		o0, ok0 := m.along(w.StartU)
-		o1, ok1 := m.along(w.EndU)
-		m.point(o0, ok0, m.walls, w.StartV, start)
-		m.point(o1, ok1, m.walls, w.EndV, end)
+		for _, j := range wall.Joints {
+			m.point(o, ok, m.walls, j.Rho, j.Rec)
+		}
 	case revolveaxis.WallSphere:
 		o, ok := proofbound.IvVec3Of(f.Anchor)
 		m.circle(o, ok, m.walls, 0, w.SegmentWalk, wall.First)
@@ -198,14 +216,23 @@ func (m *revolveGapMeter) wall(wall RevolveWall, f *CFace) {
 
 // capRegion charges one wall's element of the two caps' region: the cap
 // plane a3p + wp·z + V·ρ, its region read in the walk's own axis
-// coordinates — a straight walk's two ends, never a cylinder's mean radius,
-// and a circular walk's centre at its own radius, never one read as on the
-// axis. The comparison takes the cap's in-plane direction as the exact
-// rotation of the walls' radial pair by the held angle, so it holds at both
-// caps at once; how far the float V the cap was built from sits off that
-// rotation is the cap's own construction rounding, the family
-// BodyFaceTiltDelta charges for its normal, not the re-expression this meter
-// covers.
+// coordinates — a straight walk's two ends and its joints, never a
+// cylinder's mean radius, and a circular walk's centre at its own radius,
+// never one read as on the axis. The comparison takes the cap's in-plane
+// direction as the exact rotation of the walls' radial pair by the held
+// angle, so it holds at both caps at once.
+//
+// How far the float V the cap was built from sits off that rotation is not
+// charged, and it was not seen to matter (docs/clearance-design.md §2): it
+// tilts the cap plane by about 1e-16 radians, so it moves a point at radius ρ
+// across the plane by about ρ·1e-16, the size of the rounding every cell
+// commits evaluating the plane's equation from its origin on the axis, ρ
+// away; along the plane it moves only the region's trim, which changes a
+// distance to second order. Ball fixtures at ρ ≈ 2¹⁰ and 2²⁰, swept by 0.3
+// to 2.1 rad, put the truth at most a quarter of the published bound from
+// the row's value. The cap's corners, where the rounding moves a point to
+// first order, are topology vertices, and bodyGeom.widenDelta widens the row
+// by their own bounds.
 func (m *revolveGapMeter) capRegion(wall RevolveWall) {
 	w := wall.Walk
 	if w.IsCircular() {
@@ -218,4 +245,54 @@ func (m *revolveGapMeter) capRegion(wall RevolveWall) {
 	o1, ok1 := m.along(w.EndU)
 	m.point(o0, ok0, m.walls, w.StartV, start)
 	m.point(o1, ok1, m.walls, w.EndV, end)
+	for _, j := range wall.Joints {
+		o, ok := m.along(j.Z)
+		m.point(o, ok, m.walls, j.Rho, j.Rec)
+	}
+}
+
+// cone charges the cone carrier f one wall built about the float apex apexZ:
+// (f.Anchor + f.Axis·h) + Radial(φ)·h·s at each axial window end h (and at each
+// joint's own), with s = |dρ|/|dz| the exact slope of the walk's own float
+// differences, which is the tangent the carrier's half angle is the atan2 of.
+// An end on the axis is also the apex vertex BuildRevolveCarriers
+// synthesizes at f.Anchor, so that end is compared there too.
+func (m *revolveGapMeter) cone(wall RevolveWall, f *CFace, apexZ, dz, dr float64) {
+	w := wall.Walk
+	start, end := recordedEnds(wall)
+	anchor, aok := proofbound.IvVec3Of(f.Anchor)
+	axis, xok := proofbound.IvVec3Of(f.Axis)
+	num, den := proofarith.FloatRat(math.Abs(dr)), proofarith.FloatRat(math.Abs(dz))
+	if !aok || !xok || num == nil || den == nil || den.Sign() == 0 {
+		m.charge(math.Inf(1))
+		return
+	}
+	slope := proofbound.PointInterval(new(big.Rat).Quo(num, den))
+	at := func(z float64, rec revolvemesh.RecordedMeridian) {
+		h, ok := revolvemesh.FloatInterval(math.Abs(z - apexZ))
+		if !ok {
+			m.charge(math.Inf(1))
+			return
+		}
+		// The axial offset joins the origin as an exact sum, the form
+		// MeridianGap compares a point sample in.
+		zero := revolvemesh.ZeroInterval()
+		held := revolvemesh.HeldMeridian{
+			Origin: proofbound.IvVec3Add(anchor, proofbound.IvVec3Mul(axis, h)), Axis: f.Axis, Radial: m.walls,
+			Z:   [2]proofbound.RatInterval{zero, zero},
+			Rho: [3]proofbound.RatInterval{proofbound.IntervalMul(h, slope), zero, zero},
+		}
+		m.charge(m.in.Lift.MeridianGap(m.in.Axis, m.in.Transform, held, rec))
+	}
+	at(w.StartU, start)
+	at(w.EndU, end)
+	for _, j := range wall.Joints {
+		at(j.Z, j.Rec)
+	}
+	if w.StartV <= 0 {
+		m.point(anchor, true, m.walls, 0, start)
+	}
+	if w.EndV <= 0 {
+		m.point(anchor, true, m.walls, 0, end)
+	}
 }

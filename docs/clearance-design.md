@@ -139,9 +139,16 @@ compared with `revolvemesh.RevolveLift.MeridianGap`, which rebuilds the
 recorded meridian about the axis anchor and direction widened by their own
 proven bounds, sweeps and lifts it over rational intervals with the frame and
 placement as exact leaves, and bounds the carrier's distance from it at every
-sweep angle at once. A straight wall is compared at its two ends: carrier and
-record are both affine along the wall, so the worse end bounds every point
-between. A circular wall is compared over its whole circle, rotated back by
+sweep angle at once. A straight wall is compared at its two ends, and at
+every recorded junction a coalesced wall dropped, each at the carrier point
+its own float axis coordinate names (`clearance.RevolveWall`'s `Joints`):
+carrier and record are both affine between consecutive samples, so the worst
+sample bounds every point between. A cone is compared as its carrier stands,
+at its float apex, its two axial window ends and the exact slope of the
+walk's own float differences, and at that apex where the wall reaches the
+axis: the apex is rebuilt at the axial coordinate's own scale, so for an
+axis anchored far along itself it rounds by far more than any world
+coordinate of the part. A circular wall is compared over its whole circle, rotated back by
 the exact cosine and sine of the held angle the walk subtracted, plus the
 radius times the exact angle by which the carrier's rounded meridian window
 misses the recorded arc's ends; a whole circle pairs at any phase and takes
@@ -153,9 +160,26 @@ coordinate axis. The junction vertices and the `Circle3`/`Arc3` edges the
 kernel reads through `newCEdge` are built from the same walk values, so they
 share this displacement and add only the float evaluation of their own
 centre (`docs/evaluator-design.md` §6). Two roundings sit outside the
-comparison: a cone carrier's apex and half angle, rebuilt in float from the
-walk's ends the comparison reads, and a cap's in-plane direction, rounded
-from the radial pair the comparison rotates.
+comparison, each the size of the float evaluation every cell commits again
+on the same carrier. A cone's half angle is the atan2 of the slope the
+comparison reads: one rounding of the angle, which moves a point by its slant
+distance times about 1e-16, as the cells' own `math.Sincos` of it does. A
+cap's in-plane direction is rounded from the held angle's cosine and sine:
+across the cap it tilts the plane by about 1e-16 radians, the size of the
+rounding the cells commit evaluating that plane's equation from its origin
+on the axis, and along the cap it moves only the trim, which changes a
+distance to second order. In fixtures 2²⁰ from their axis the truth sits at
+most a quarter of the published bound from the row's value. The cap's corners, where that rounding moves a
+point to first order, are vertices, and their own bounds widen the row
+(§5).
+
+**A coalesced wall stands for exactly collinear segments only.** The walk
+decomposition every consumer shares merges two straight walks only where
+their chords are parallel over the rationals, they meet at one point, and
+no junction bound reaches off that line (`internal/boundarywalk`). The merged
+wall is then the record itself, for a prism's carriers as for its topology,
+surveys and tessellation, and a near-collinear kink keeps its own two walls
+and its vertex.
 
 **A stitched solid's model (`addStitchFaces`, `clearance_geom.go`) is one
 exact planar carrier per live face, read straight off the body's own rebuilt
@@ -633,6 +657,15 @@ trimmed inner face alone and asks the oracle nothing:
   axis's own error everywhere else. Witness points
   are float samples the kernel never reads as recorded boundary points, so
   their lift charges nothing.
+- **A vertex widens the row by its own bound.** The kernel reads every
+  topology vertex as a candidate, and each is lifted through its own float
+  construction: a partial revolve's cap corner through the held cosine and
+  sine of its end angle, times a radius that can be the whole distance to a
+  far axis. Its proven bound (`Vertex.Position`) can therefore exceed every
+  carrier term. `clearanceDeltaWiden` widens by `bodyGeom.widenDelta`, the
+  larger of `delta` and the body's largest vertex bound, which is `delta`
+  itself wherever no vertex bound exceeds it. The §6 certificates read
+  carriers alone and keep reading `delta`.
 
 ## 6. Touching pairs
 
