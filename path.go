@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/sweeparc"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -46,7 +48,7 @@ type pathSegmentRecord struct {
 	tangentOut sweepRatVec
 	arc        *sweepArcRecord
 	arcPhi     float64
-	arcAngle   angleDenotation
+	arcAngle   revolveangle.Angle
 }
 
 // NewPath records an ordered spatial path beginning at start. It requires at
@@ -98,7 +100,7 @@ func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error) {
 			if err != nil {
 				return nil, fmt.Errorf(`path segment %d: %w`, i, err)
 			}
-			phi, angle, err := sweepArcAngle(record.RadiusStart, record.RadiusEnd, record.Axis)
+			phi, angle, err := sweeparc.ArcAngle(record.RadiusStart, record.RadiusEnd, record.Axis)
 			if err != nil {
 				return nil, fmt.Errorf(`path segment %d: %w`, i, err)
 			}

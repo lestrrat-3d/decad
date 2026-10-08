@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -20,7 +21,7 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 		profile ProfileRecord
 		full    bool
 		phi1    float64
-		den     sweepDenotation
+		den     revolveangle.Sweep
 	}{
 		{
 			name:    "straight full turn",

@@ -44,7 +44,7 @@ import (
 // enclosed as enc(phi0) + (l/n)·(enc(phi1) − enc(phi0)), so the stored
 // cosine/sine is checked against the angle the RECORD denotes, not merely the
 // held float the resolver rounded to. Wherever the payload's denotation
-// cannot state an end exactly (den.phi0/den.phi1 invalid — a ToFaceAngular
+// cannot state an end exactly (den.Phi0/den.Phi1 invalid — a ToFaceAngular
 // stop, a payload literal with none, or an angle unit this evaluator does not
 // denote), this falls back to the prior reading over the held floats alone,
 // which reproduces today's construction exactly: a partial sweep's angle
@@ -62,8 +62,8 @@ func revolveAngularSequence(rp revolvePayload, n int) (revolvemesh.RevolveAngula
 	if r0 == nil || r1 == nil {
 		return revolvemesh.RevolveAngular{}, fmt.Errorf(`%w: the sweep interval is not finite, so no angular sample can be enclosed`, ErrUnsupported)
 	}
-	enc0, ok0 := rp.den.phi0.enclosure()
-	enc1, ok1 := rp.den.phi1.enclosure()
+	enc0, ok0 := rp.den.Phi0.Enclosure()
+	enc1, ok1 := rp.den.Phi1.Enclosure()
 	haveDen := ok0 && ok1
 	var diff proofbound.RatInterval
 	if haveDen {

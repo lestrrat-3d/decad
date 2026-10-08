@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -20,7 +21,7 @@ import (
 type sweepArcGeometry struct {
 	line axisLine2
 	phi  float64
-	den  angleDenotation
+	den  revolveangle.Angle
 }
 
 type sweepRatVec = sweeparc.RatVec
@@ -51,11 +52,11 @@ func evalArcSweepContext(
 	}
 
 	phi0, phi1 := 0.0, geometry.phi
-	den := sweepDenotation{phi0: zeroAngleDenotation(), phi1: geometry.den}
+	den := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: geometry.den}
 	reverseCaps := false
 	if side < 0 {
 		phi0, phi1 = -phi1, -phi0
-		den.phi0, den.phi1 = den.phi1.neg(), den.phi0.neg()
+		den.Phi0, den.Phi1 = den.Phi1.Neg(), den.Phi0.Neg()
 		reverseCaps = true
 	}
 	// The flag rides the REDUCED revolvePayload, not just the finishing
@@ -157,11 +158,6 @@ func sweepArcAxisLine(center, axis sweepRatVec, plane PlaneRecord) (axisLine2, e
 		dU: line.DU, dV: line.DV,
 		dUBound: line.DUBound, dVBound: line.DVBound,
 	}, nil
-}
-
-func sweepArcAngle(r0, r1, axis sweepRatVec) (float64, angleDenotation, error) {
-	phi, angle, err := sweeparc.ArcAngle(r0, r1, axis)
-	return phi, angleFromInternal(angle), err
 }
 
 func sweepRatHeld(value *big.Rat) (float64, float64, bool) {

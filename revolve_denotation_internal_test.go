@@ -5,37 +5,38 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
 // This file proves the reflex-sweep box bound (docs/evaluator-design.md §6):
-// sweepExtremeBounds' default arm certifies both extremes are the amplitude
+// revolveangle.ExtremeBounds' default arm certifies both extremes are the amplitude
 // once the sweep is proven at least a half turn wide, through
-// sweepDenotation.halfTurnExcessFor. Every assertion is a RELATION — a sign,
+// revolveangle.Sweep.HalfTurnExcessFor. Every assertion is a RELATION — a sign,
 // a containment, or a ratio ceiling — never a bound literal, since the bound
 // differs between amd64 and arm64 through FMA.
 
-// probeEnd resolves v to its held radian float64 and its own angleDenotation,
+// probeEnd resolves v to its held radian float64 and its own revolveangle.Angle,
 // the same pair resolveAngularExtent hands the evaluator.
-func probeEnd(t *testing.T, v units.Value) (float64, angleDenotation) {
+func probeEnd(t *testing.T, v units.Value) (float64, revolveangle.Angle) {
 	t.Helper()
 	held, err := v.In(units.Radian)
 	require.NoError(t, err)
-	return held, angleDenotationFromValue(v)
+	return held, revolveangle.FromValue(v)
 }
 
-// TestSweepDenotationHalfTurnExcess is design §9 test 1: halfTurnExcessFor's
+// TestSweepDenotationHalfTurnExcess is design §9 test 1: HalfTurnExcessFor's
 // sign certifies "at least a half turn" exactly at a degree-stated half turn
 // (the turn factor is exactly 1/2, so the excess is the point [0,0]),
 // strictly under it just below, strictly over it just above, and reproduces
 // today's held-float fallback wherever the denotation cannot state one.
 func TestSweepDenotationHalfTurnExcess(t *testing.T) {
-	deg := func(d float64) (float64, angleDenotation) { return probeEnd(t, units.Degrees(d)) }
+	deg := func(d float64) (float64, revolveangle.Angle) { return probeEnd(t, units.Degrees(d)) }
 
 	t.Run("exactly 180deg certifies exactly", func(t *testing.T) {
 		phi1, d1 := deg(180)
-		ex, ok := sweepDenotation{phi0: zeroAngleDenotation(), phi1: d1}.halfTurnExcessFor(0, phi1)
+		ex, ok := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: d1}.HalfTurnExcessFor(0, phi1)
 		require.True(t, ok)
 		require.Zero(t, ex.Lo.Sign())
 		require.Zero(t, ex.Hi.Sign())
@@ -43,14 +44,14 @@ func TestSweepDenotationHalfTurnExcess(t *testing.T) {
 
 	t.Run("179.99deg is strictly under", func(t *testing.T) {
 		phi1, d1 := deg(179.99)
-		ex, ok := sweepDenotation{phi0: zeroAngleDenotation(), phi1: d1}.halfTurnExcessFor(0, phi1)
+		ex, ok := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: d1}.HalfTurnExcessFor(0, phi1)
 		require.True(t, ok)
 		require.Negative(t, ex.Hi.Sign())
 	})
 
 	t.Run("180.01deg is strictly over", func(t *testing.T) {
 		phi1, d1 := deg(180.01)
-		ex, ok := sweepDenotation{phi0: zeroAngleDenotation(), phi1: d1}.halfTurnExcessFor(0, phi1)
+		ex, ok := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: d1}.HalfTurnExcessFor(0, phi1)
 		require.True(t, ok)
 		require.Positive(t, ex.Lo.Sign())
 	})
@@ -59,7 +60,7 @@ func TestSweepDenotationHalfTurnExcess(t *testing.T) {
 		// fl(math.Pi) sits 1.2e-16 BELOW true pi, so a radian-stated sweep of
 		// that width is certified strictly under a half turn.
 		r, dr := probeEnd(t, units.Radians(math.Pi))
-		ex, ok := sweepDenotation{phi0: zeroAngleDenotation(), phi1: dr}.halfTurnExcessFor(0, r)
+		ex, ok := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: dr}.HalfTurnExcessFor(0, r)
 		require.True(t, ok)
 		require.Negative(t, ex.Hi.Sign())
 	})
@@ -67,8 +68,8 @@ func TestSweepDenotationHalfTurnExcess(t *testing.T) {
 	t.Run("two-sided 90/90 certifies exactly", func(t *testing.T) {
 		phi0, d0neg := deg(90)
 		phi1, d1 := deg(90)
-		sd := sweepDenotation{phi0: d0neg.neg(), phi1: d1}
-		ex, ok := sd.halfTurnExcessFor(-phi0, phi1)
+		sd := revolveangle.Sweep{Phi0: d0neg.Neg(), Phi1: d1}
+		ex, ok := sd.HalfTurnExcessFor(-phi0, phi1)
 		require.True(t, ok)
 		require.Zero(t, ex.Lo.Sign())
 		require.Zero(t, ex.Hi.Sign())
@@ -77,31 +78,31 @@ func TestSweepDenotationHalfTurnExcess(t *testing.T) {
 	t.Run("mixed 2rad/-100deg is sign-definite positive", func(t *testing.T) {
 		phi1, d1 := probeEnd(t, units.Radians(2))
 		phi0, d0 := deg(100)
-		sd := sweepDenotation{phi0: d0.neg(), phi1: d1}
-		ex, ok := sd.halfTurnExcessFor(-phi0, phi1)
+		sd := revolveangle.Sweep{Phi0: d0.Neg(), Phi1: d1}
+		ex, ok := sd.HalfTurnExcessFor(-phi0, phi1)
 		require.True(t, ok)
 		require.Positive(t, ex.Lo.Sign())
 	})
 
 	t.Run("empty denotation falls back to the held floats", func(t *testing.T) {
-		ex, ok := sweepDenotation{}.halfTurnExcessFor(0, 3.2)
+		ex, ok := revolveangle.Sweep{}.HalfTurnExcessFor(0, 3.2)
 		require.True(t, ok)
 		require.Positive(t, ex.Lo.Sign())
 
-		ex, ok = sweepDenotation{}.halfTurnExcessFor(0, 3.1)
+		ex, ok = revolveangle.Sweep{}.HalfTurnExcessFor(0, 3.1)
 		require.True(t, ok)
 		require.Negative(t, ex.Hi.Sign())
 	})
 
 	t.Run("a NaN held float with no denotation answers not ok", func(t *testing.T) {
-		_, ok := sweepDenotation{}.halfTurnExcessFor(0, math.NaN())
+		_, ok := revolveangle.Sweep{}.HalfTurnExcessFor(0, math.NaN())
 		require.False(t, ok)
 	})
 }
 
 // bruteExtremes is an independent, non-certified oracle for m(φ) = c0 cos φ +
 // c1 sin φ's own min/max over [phi0, phi1]: a dense grid plus the exact
-// interior critical angles. It never shares code with sweepExtremeBounds.
+// interior critical angles. It never shares code with revolveangle.ExtremeBounds.
 func bruteExtremes(c0, c1, phi0, phi1 float64) (float64, float64) {
 	m := func(phi float64) float64 { return c0*math.Cos(phi) + c1*math.Sin(phi) }
 	lo, hi := math.Inf(1), math.Inf(-1)
@@ -140,34 +141,34 @@ func TestSweepExtremeBoundsReflexArm(t *testing.T) {
 		amp := math.Hypot(c0, c1)
 
 		var phi0, phi1 float64
-		var den sweepDenotation
+		var den revolveangle.Sweep
 		switch rng.Intn(4) {
 		case 0: // degrees, Along
 			d := 1 + rng.Float64()*358
-			phi0, den.phi0 = 0, zeroAngleDenotation()
-			phi1, den.phi1 = probeEnd(t, units.Degrees(d))
+			phi0, den.Phi0 = 0, revolveangle.Zero()
+			phi1, den.Phi1 = probeEnd(t, units.Degrees(d))
 		case 1: // radians, Along
 			r := 0.01 + rng.Float64()*6.27
-			phi0, den.phi0 = 0, zeroAngleDenotation()
-			phi1, den.phi1 = probeEnd(t, units.Radians(r))
+			phi0, den.Phi0 = 0, revolveangle.Zero()
+			phi1, den.Phi1 = probeEnd(t, units.Radians(r))
 		case 2: // two-sided degrees, both ends off zero
 			a := 1 + rng.Float64()*179
 			b := 1 + rng.Float64()*179
-			var neg angleDenotation
+			var neg revolveangle.Angle
 			phi0, neg = probeEnd(t, units.Degrees(b))
-			phi0, den.phi0 = -phi0, neg.neg()
-			phi1, den.phi1 = probeEnd(t, units.Degrees(a))
+			phi0, den.Phi0 = -phi0, neg.Neg()
+			phi1, den.Phi1 = probeEnd(t, units.Degrees(a))
 		default: // mixed: radians one side, degrees the other
 			a := 0.01 + rng.Float64()*3.1
 			b := 1 + rng.Float64()*179
-			var neg angleDenotation
+			var neg revolveangle.Angle
 			phi0, neg = probeEnd(t, units.Degrees(b))
-			phi0, den.phi0 = -phi0, neg.neg()
-			phi1, den.phi1 = probeEnd(t, units.Radians(a))
+			phi0, den.Phi0 = -phi0, neg.Neg()
+			phi1, den.Phi1 = probeEnd(t, units.Radians(a))
 		}
 
-		heldLo, heldHi := sweepExtremes(c0, c1, phi0, phi1, false)
-		loB, hiB := sweepExtremeBounds(c0, c1, phi0, phi1, den, heldLo, heldHi, false)
+		heldLo, heldHi := revolveangle.Extremes(c0, c1, phi0, phi1, false)
+		loB, hiB := revolveangle.ExtremeBounds(c0, c1, phi0, phi1, den, heldLo, heldHi, false)
 		trueLo, trueHi := bruteExtremes(c0, c1, phi0, phi1)
 
 		require.LessOrEqual(t, math.Abs(trueLo-heldLo), loB+1e-9*amp+1e-12,

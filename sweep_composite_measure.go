@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -235,11 +236,11 @@ func compositeArcSweepSpan(
 		return sweepSpanPayload{}, err
 	}
 	phi0, phi1 := 0.0, geometry.phi
-	den := sweepDenotation{phi0: zeroAngleDenotation(), phi1: geometry.den}
+	den := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: geometry.den}
 	reverseCaps := false
 	if side < 0 {
 		phi0, phi1 = -phi1, -phi0
-		den.phi0, den.phi1 = den.phi1.neg(), den.phi0.neg()
+		den.Phi0, den.Phi1 = den.Phi1.Neg(), den.Phi0.Neg()
 		reverseCaps = true
 	}
 	return sweepSpanPayload{

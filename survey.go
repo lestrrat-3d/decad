@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -341,7 +342,7 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	pw := rp.xform.ApplyDir(bas.W).Dot(p)
 	c0 := rp.xform.ApplyDir(bas.E0).Dot(p)
 	c1 := rp.xform.ApplyDir(bas.E1).Dot(p)
-	glo, ghi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
+	glo, ghi := revolveangle.Extremes(c0, c1, rp.phi0, rp.phi1, rp.full)
 	roles := facesByRole(b)
 	loops, err := revolveLoops(nil, rp)
 	if err != nil {

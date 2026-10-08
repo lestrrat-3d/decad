@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
 
 	"github.com/lestrrat-3d/r3"
@@ -65,12 +66,12 @@ func axisAlignedFrame(t *testing.T) r3.Frame {
 // zero-value den falls back to sweep()'s own conservative magnitude envelope
 // (revolve_denotation.go), which would swamp every other bound in this file
 // and defeat the isolation buildDipShaftBodyCharged exists for.
-func fullTurnDenotation() sweepDenotation {
-	return sweepDenotation{phi0: zeroAngleDenotation(), phi1: angleDenotation{rad: new(big.Rat), turn: big.NewRat(1, 1)}}
+func fullTurnDenotation() revolveangle.Sweep {
+	return revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: revolveangle.Angle{Rad: new(big.Rat), Turn: big.NewRat(1, 1)}}
 }
 
-func quarterTurnDenotation() sweepDenotation {
-	return sweepDenotation{phi0: zeroAngleDenotation(), phi1: angleDenotationFromValue(units.Radians(math.Pi / 2))}
+func quarterTurnDenotation() revolveangle.Sweep {
+	return revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: revolveangle.FromValue(units.Radians(math.Pi / 2))}
 }
 
 // buildDipShaftBodyCharged builds the revolvePayload from an axis-ALIGNED,
