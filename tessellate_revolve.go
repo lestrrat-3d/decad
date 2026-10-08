@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -29,7 +30,7 @@ import (
 // tessellate_revolve_arc.go handles circular meridian generators.
 //
 // A free-form (Tier A NURBS) revolve generator is still refused, by
-// revolveLoopWalks' own boundarywalk.RequireAnalyticWalk: those cells are §13's increment
+// revolveaxis.ResolveLoop's own boundarywalk.RequireAnalyticWalk: those cells are §13's increment
 // T5.
 //
 // Three structural facts shape everything below, and all three are
@@ -173,7 +174,7 @@ func (p *revolvePlan) refine(r revolveRefine) error {
 		p.deltaPhi = chordSagitta(p.rhoMax, p.sweep, n)
 		return nil
 	}
-	w := p.resolved[r.loop].walks[r.walk]
+	w := p.resolved[r.loop].Walks[r.walk]
 	if !w.IsCircular() {
 		return fmt.Errorf(`%w: a straight revolve generator carries no meridian chording to refine`, ErrUnsupported)
 	}
@@ -216,7 +217,7 @@ type revolveResolution struct {
 }
 
 // resolveRevolve reads the payload's loops through the SAME resolution the
-// builder used (revolveLoopWalks), then measures the count-independent
+// builder used (revolveaxis.ResolveLoop), then measures the count-independent
 // coordinate ceilings §8 spends before the split.
 func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution, error) {
 	ideal, ok := revolveIdealBasis(rp)
@@ -224,7 +225,7 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution,
 		return nil, fmt.Errorf(`%w: this revolve's axis basis holds a coordinate that cannot be enclosed, so the mesh can state no construction bound`, ErrUnsupported)
 	}
 
-	// One resolution of every loop, shared with the builder (revolveLoopWalks),
+	// One resolution of every loop, shared with the builder (revolveaxis.ResolveLoop),
 	// so the mesh is read off the walks the body was built from.
 	work := freeform.NewFreeformWork()
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
@@ -235,7 +236,8 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution,
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		r, err := revolveLoopWalks(ctx, rp, loop, work, "revolve tessellation")
+		r, err := revolveaxis.ResolveLoop(ctx, loop, work, "revolve tessellation",
+			rp.chargedWalk, rp.ax.snapTol)
 		if err != nil {
 			return nil, err
 		}
@@ -332,9 +334,9 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 	sags := make([][]float64, len(resolved))
 	deltaM := 0.0
 	for li, r := range resolved {
-		counts[li] = make([]int, len(r.walks))
-		sags[li] = make([]float64, len(r.walks))
-		for k, w := range r.walks {
+		counts[li] = make([]int, len(r.Walks))
+		sags[li] = make([]float64, len(r.Walks))
+		for k, w := range r.Walks {
 			counts[li][k] = 1
 			if !w.IsCircular() {
 				continue
@@ -494,13 +496,13 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			}
 			lo, hi := lm.samples[j], lm.samples[(j+1)%n]
 			k := lo.Walk
-			if lm.resolved.kinds[k] == wallAxis {
+			if lm.resolved.Kinds[k] == wallAxis {
 				continue
 			}
 			if lo.OnAxis && hi.OnAxis {
 				return nil, fmt.Errorf(`%w: a revolve generator with both ends on the axis sweeps no face, yet the recorded walk is not an axis line`, ErrUnsupported)
 			}
-			face, err := p.faceOf(fmt.Sprintf("side(%d,%d)", li, lm.resolved.walks[k].Segs[0]))
+			face, err := p.faceOf(fmt.Sprintf("side(%d,%d)", li, lm.resolved.Walks[k].Segs[0]))
 			if err != nil {
 				return nil, err
 			}
@@ -654,14 +656,14 @@ type revFaceExtent struct {
 // count-independent half of deltaC the tolerance split spends before any count
 // exists.
 func revolveJunctions(rp revolvePayload, r revolveWalks) ([]revolvemesh.RevMeridian, float64, error) {
-	out := make([]revolvemesh.RevMeridian, len(r.walks))
+	out := make([]revolvemesh.RevMeridian, len(r.Walks))
 	worst := 0.0
-	n := len(r.walks)
-	for k, w := range r.walks {
-		plane := r.plane[w.Segs[0]]
-		prev := r.walks[(k+n-1)%n]
+	n := len(r.Walks)
+	for k, w := range r.Walks {
+		plane := r.Plane[w.Segs[0]]
+		prev := r.Walks[(k+n-1)%n]
 		last := prev.Segs[len(prev.Segs)-1]
-		bound := boundarywalk.JunctionStartBound(r.segs[last], r.plane[last], r.segs[w.Segs[0]], plane)
+		bound := boundarywalk.JunctionStartBound(r.Segs[last], r.Plane[last], r.Segs[w.Segs[0]], plane)
 		zIv, rhoIv, ok := revolvemesh.RevolveMeridianEnclosure(rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV, plane.StartU, plane.StartV, bound)
 		if !ok {
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample states no enclosure of the axis coordinates its record denotes`, ErrUnsupported)
@@ -690,7 +692,7 @@ func revolveJunctions(rp revolvePayload, r revolveWalks) ([]revolvemesh.RevMerid
 func revolveMeridianSamples(rp revolvePayload, loop LoopRecord, r revolveWalks, junctions []revolvemesh.RevMeridian, counts []int, sags []float64) ([]revolvemesh.RevMeridian, float64, error) {
 	out := make([]revolvemesh.RevMeridian, 0, len(junctions))
 	worst := 0.0
-	for k, w := range r.walks {
+	for k, w := range r.Walks {
 		n := counts[k]
 		if n <= 0 {
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian walk carries no chord`, ErrUnsupported)
@@ -737,8 +739,8 @@ func requireRevolveMeridianOffAxis(loops []revLoopMesh) error {
 				offAxis[s.Walk] = true
 			}
 		}
-		for k, w := range lm.resolved.walks {
-			if !w.IsCircular() || lm.resolved.kinds[k] == wallAxis || offAxis[k] {
+		for k, w := range lm.resolved.Walks {
+			if !w.IsCircular() || lm.resolved.Kinds[k] == wallAxis || offAxis[k] {
 				continue
 			}
 			return &revolveRefineError{
@@ -774,13 +776,13 @@ func revolveSectionRetry(loops []revLoopMesh, err error) error {
 				continue
 			}
 			k := lm.samples[j].Walk
-			if lm.resolved.walks[k].IsCircular() {
+			if lm.resolved.Walks[k].IsCircular() {
 				return &revolveRefineError{err: err, retry: revolveRefine{loop: named.loop, walk: k}}
 			}
 		}
 	}
 	for li, lm := range loops {
-		for k, w := range lm.resolved.walks {
+		for k, w := range lm.resolved.Walks {
 			if w.IsCircular() {
 				return &revolveRefineError{err: err, retry: revolveRefine{loop: li, walk: k}}
 			}
@@ -813,8 +815,8 @@ func requireRevolveAxisIncidence(resolved []revolveWalks, junctions [][]revolvem
 				return fmt.Errorf(`%w: two recorded boundary junctions meet the revolve axis at the same point, so the swept solid pinches there`, ErrDegenerate)
 			}
 			seen[s.Z] = struct{}{}
-			incoming := resolved[li].kinds[(k+n-1)%n]
-			outgoing := resolved[li].kinds[k]
+			incoming := resolved[li].Kinds[(k+n-1)%n]
+			outgoing := resolved[li].Kinds[k]
 			if (incoming == wallAxis) == (outgoing == wallAxis) {
 				return fmt.Errorf(`%w: the recorded boundary meets the revolve axis at a junction with %s, which sweeps no manifold pole`, ErrDegenerate, axisIncidenceReason(incoming == wallAxis))
 			}
@@ -838,7 +840,7 @@ func revolveExtents(loops []revolveWalks) (float64, float64, error) {
 type revolveWalkView []revolveWalks
 
 func (loops revolveWalkView) Len() int                        { return len(loops) }
-func (loops revolveWalkView) Walks(i int) []survey2d.SideWalk { return loops[i].walks }
+func (loops revolveWalkView) Walks(i int) []survey2d.SideWalk { return loops[i].Walks }
 
 // revolveCapSegmentArea is the circular-segment area ONE partial cap's curved
 // trim omits (docs/tessellation-design.md §10.2): the chorded meridian region
@@ -848,7 +850,7 @@ func (loops revolveWalkView) Walks(i int) []survey2d.SideWalk { return loops[i].
 func revolveCapSegmentArea(p *revolvePlan) float64 {
 	total := 0.0
 	for li, r := range p.resolved {
-		for k, w := range r.walks {
+		for k, w := range r.Walks {
 			if !w.IsCircular() {
 				continue
 			}
@@ -873,7 +875,7 @@ type revolveFacetLoops []revLoopMesh
 func (loops revolveFacetLoops) Len() int                                { return len(loops) }
 func (loops revolveFacetLoops) Samples(i int) []revolvemesh.RevMeridian { return loops[i].samples }
 func (loops revolveFacetLoops) AxisWalk(i, walk int) bool {
-	return loops[i].resolved.kinds[walk] == wallAxis
+	return loops[i].resolved.Kinds[walk] == wallAxis
 }
 
 func addChecked(a, b uint64) (uint64, bool) { return revolveproof.AddChecked(a, b) }

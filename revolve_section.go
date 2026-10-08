@@ -169,8 +169,8 @@ func revolveSectionAreaAllow(p *revolvePlan, charge revolveSectionCharge) float6
 	sweepUpper := proofbound.AbsSumUpper(p.sweep, rp.sweep().Bound)
 	total := 0.0
 	for _, r := range p.resolved {
-		for i, w := range r.walks {
-			if r.kinds[i] == wallAxis {
+		for i, w := range r.Walks {
+			if r.Kinds[i] == wallAxis {
 				continue
 			}
 			total = proofbound.AbsSumUpper(total, wallMomentAllow(w.IsCircular(), rp.sectionDelta, w.LengthUpper, w.AxisRadiusUpper))

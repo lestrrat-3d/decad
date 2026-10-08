@@ -111,7 +111,7 @@ func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2
 // revolveLoopsPlane is revolveLoops with each loop's PLANE-local walks kept
 // beside it, indexed by recorded segment (SideWalk.Segs): the recorded
 // geometry the axis coordinates were re-expressed from, which a proof about
-// how far a reading sits from the record needs (revolveWalks.plane's own
+// how far a reading sits from the record needs (revolveWalks.Plane's own
 // reason).
 func revolveLoopsPlane(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2d.SideWalk, [][]survey2d.SegmentWalk, error) {
 	// One free-form counter for the whole record, as boundarywalk.SurveyLoops opens.
