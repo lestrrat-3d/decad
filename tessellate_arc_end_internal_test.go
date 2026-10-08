@@ -282,3 +282,62 @@ func TestRevolveJunctionReachesArcNaturalEnd(t *testing.T) {
 	}
 	require.True(t, found, `one junction sits at End`)
 }
+
+// TestCapBlendCornerChordReachesArcNaturalEnd chamfers the pie prism's end
+// cap loop and reads the miter corner at End, where the arc meets the line to
+// the origin. capBlendCornerLocusGap's ellipse needs a lower bound on c*, the
+// distance from the denoted corner to the denoted foot. The denoted corner is
+// the arc's denoted end D, and the denoted foot lies within footDelta and
+// dsDelta of the held foot m at the held ds, so c* is at least |m − D| less
+// those two. The published lower bound on c*² must not exceed that.
+//
+// Shown-to-fail: with capBlendCornerChordSqLower charging the corner only its
+// line walk's own StartBound (zero at the recorded End), the bound exceeds
+// the worst-case c*² because D sits about 1.8e-12 mm nearer the foot than
+// End does.
+func TestCapBlendCornerChordReachesArcNaturalEnd(t *testing.T) {
+	t.Parallel()
+	pie := arcEndPie(t, New())
+	chamfered, err := pie.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(pie))), units.Millimeters(1))
+	require.NoError(t, err)
+	cbp, ok := chamfered.payload.(capBlendPayload)
+	require.True(t, ok, `got %T`, chamfered.payload)
+	segs := cbp.loops()[0].Segments
+	arc := onlyArc(t, segs)
+	walks, joins := capBlendCornerSetup(t, cbp)
+	setback, footDelta := cbp.loopSetback(0), cbp.loopBandDelta(0)
+
+	const prec = 256
+	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
+	dist := func(u, v *big.Float, j cornerJoin) *big.Float {
+		du := new(big.Float).SetPrec(prec).Sub(f(j.m.U), u)
+		dv := new(big.Float).SetPrec(prec).Sub(f(j.m.V), v)
+		dz := f(setback.ds)
+		du.Mul(du, du)
+		dv.Mul(dv, dv)
+		dz.Mul(dz, dz)
+		return du.Add(du, dv).Add(du, dz).Sqrt(du)
+	}
+	checked := 0
+	for i, j := range joins {
+		if j.vU != arc.End.U || j.vV != arc.End.V {
+			continue
+		}
+		require.False(t, j.g1, `the corner at End is a miter`)
+		lower, err := capBlendCornerChordSqLower(setback, segs, walks, i, j, footDelta)
+		require.NoError(t, err)
+		du, dv := arcDenotedEnd(arc)
+		toDenoted := dist(du, dv, j)
+		held := dist(f(j.vU), f(j.vV), j)
+		require.Positive(t, new(big.Float).Sub(held, toDenoted).Sign(), `the denoted corner sits nearer the foot than End`)
+		worst := new(big.Float).SetPrec(prec).Sub(toDenoted, f(footDelta))
+		worst.Sub(worst, f(setback.dsDelta))
+		if worst.Sign() < 0 {
+			worst.SetFloat64(0)
+		}
+		worst.Mul(worst, worst)
+		require.LessOrEqualf(t, f(lower).Cmp(worst), 0, `the c*² lower bound %.17g exceeds the worst case %s`, lower, worst.Text('g', 20))
+		checked++
+	}
+	require.Equal(t, 1, checked, `one miter corner sits at End`)
+}

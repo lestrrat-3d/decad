@@ -278,7 +278,7 @@ func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
 		}, 3)
 		walks, joins := capBlendCornerSetup(t, cbp)
 		for i, j := range joins {
-			gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), walks, i, j, cbp.loopBandDelta(0))
+			gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), cbp.loops()[0].Segments, walks, i, j, cbp.loopBandDelta(0))
 			require.NoError(t, err)
 			require.Equal(t, 0.0, gap, `corner %d joins two straight walls`, i)
 		}
@@ -289,7 +289,7 @@ func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
 		walks, joins := capBlendCornerSetup(t, cbp)
 		positive := 0
 		for i, j := range joins {
-			gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), walks, i, j, cbp.loopBandDelta(0))
+			gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), cbp.loops()[0].Segments, walks, i, j, cbp.loopBandDelta(0))
 			require.NoError(t, err)
 			require.False(t, proofbound.IsNonFinite(gap))
 			if gap > 0 {
@@ -676,7 +676,7 @@ func TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus(t *testing.T) {
 			walks, joins := capBlendCornerSetup(t, cbp)
 			checked := 0
 			for i, j := range joins {
-				gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), walks, i, j, cbp.loopBandDelta(0))
+				gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), cbp.loops()[0].Segments, walks, i, j, cbp.loopBandDelta(0))
 				require.NoError(t, err)
 				if j.vU != r || j.vV != 0 {
 					continue

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -448,7 +449,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 	}, budget, func(w survey2d.SideWalk, d float64) (float64, error) {
 		return capband.BandRadius(w, d, shellTol)
 	}, capband.WallSweep, func(i int) (float64, error) {
-		return capBlendCornerLocusGap(budget, cbp.loopSetback(li), walks, i, lm.joins[i], cbp.loopBandDelta(li))
+		return capBlendCornerLocusGap(budget, cbp.loopSetback(li), loop.Segments, walks, i, lm.joins[i], cbp.loopBandDelta(li))
 	})
 	if err != nil {
 		return capBlendLoopMesh{}, err
@@ -508,10 +509,11 @@ func capBlendSampleJoins(joins []cornerJoin) []tessellation.CapBlendJoin {
 // locus's own ends: the denoted corner and the denoted foot, the stated side
 // setback ds* apart along the sweep. The held chord from the corner to the
 // held foot m at the held ds is not one. The foot sits within the band's
-// contour displacement footDelta of the denoted foot, the corner within its
-// walk's own end bound of the denoted corner, and ds within dsDelta of ds*, so
-// c is the held chord, its square taken exactly over the rationals and its
-// root rounded down, less those three. A setback stated in millimetres on a
+// contour displacement footDelta of the denoted foot, the corner within the
+// bound reaching both neighbours' denoted ends there of the denoted corner,
+// and ds within dsDelta of ds*, so c is the held chord, its square taken
+// exactly over the rationals and its root rounded down, less those three
+// (capBlendCornerChordSqLower). A setback stated in millimetres on a
 // recorded section with exact feet subtracts nothing.
 //
 // It is zero where both loci are affine in the offset amount — a line-line
@@ -522,7 +524,7 @@ func capBlendSampleJoins(joins []cornerJoin) []tessellation.CapBlendJoin {
 // the sign of an axial span both take the magnitude of. The locus runs dc in
 // the plane and ds along the sweep (docs/modify-reach-design.md §8.3.1). A
 // sub-range whose speed cannot be enclosed answers +Inf, which refuses.
-func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, walks []survey2d.SideWalk, i int, j cornerJoin, footDelta float64) (float64, error) {
+func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, segs []CurveSegment, walks []survey2d.SideWalk, i int, j cornerJoin, footDelta float64) (float64, error) {
 	n := len(walks)
 	prev, cur := walks[(i+n-1)%n], walks[i]
 	if j.g1 || (!prev.IsCircular() && !cur.IsCircular()) {
@@ -535,12 +537,36 @@ func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, w
 	if !ok || proofbound.IsNonFinite(locus) {
 		return 0, fmt.Errorf(`%w: a cap-loop chamfer's miter ruling states no enclosure of the locus it stands for, so this mesh can publish no displacement bound for the patches that share it`, ErrUnsupported)
 	}
+	chordSqDown, err := capBlendCornerChordSqLower(setback, segs, walks, i, j, footDelta)
+	if err != nil {
+		return 0, err
+	}
+	diff := proofbound.UpRound(proofbound.ProductUpper(locus, locus) - chordSqDown)
+	if diff <= 0 {
+		return 0, nil
+	}
+	return proofbound.UpRound(math.Sqrt(diff) / 2), nil
+}
+
+// capBlendCornerChordSqLower is the proven lower bound on c*², the squared
+// distance capBlendCornerLocusGap's ellipse takes between the locus's ends:
+// the held chord from the corner (j.vU, j.vV) at level 0 to the held foot m
+// at the held ds, its square exact and its root rounded down, less the foot's
+// footDelta, the corner's own bound and dsDelta. The corner is walk i's held
+// start, where walk i−1 ends, and its bound reaches the points both
+// neighbours' records denote there (boundarywalk.JunctionStartBound), so an
+// arc's natural t = 1 end, whose held End sits off Start's radius, is
+// reached. segs are the recorded segments the walks' Segs index.
+func capBlendCornerChordSqLower(setback capSetback, segs []CurveSegment, walks []survey2d.SideWalk, i int, j cornerJoin, footDelta float64) (float64, error) {
+	n := len(walks)
+	prev, cur := walks[(i+n-1)%n], walks[i]
 	chordSq := proofarith.RatSquaredDistance3(j.m.U, j.m.V, setback.ds, j.vU, j.vV, 0)
 	chordSqDown, exact := chordSq.Float64()
 	if !exact {
 		chordSqDown = math.Nextafter(chordSqDown, math.Inf(-1))
 	}
-	cornerDelta := proofbound.WalkEndBoundAllow(cur.StartBound)
+	cornerDelta := proofbound.WalkEndBoundAllow(boundarywalk.JunctionStartBound(
+		segs[prev.Segs[len(prev.Segs)-1]], prev.SegmentWalk, segs[cur.Segs[0]], cur.SegmentWalk))
 	if proofbound.IsNonFinite(cornerDelta) || proofbound.IsNonFinite(footDelta) {
 		return 0, fmt.Errorf(`%w: a cap-loop chamfer's miter corner states no bound on its own ends, so this mesh can publish no displacement bound for the patches that share its ruling`, ErrUnsupported)
 	}
@@ -551,11 +577,7 @@ func capBlendCornerLocusGap(budget *proofbound.WorkBudget, setback capSetback, w
 			chordSqDown = freeform.DownRound(chordLower * chordLower)
 		}
 	}
-	diff := proofbound.UpRound(proofbound.ProductUpper(locus, locus) - chordSqDown)
-	if diff <= 0 {
-		return 0, nil
-	}
-	return proofbound.UpRound(math.Sqrt(diff) / 2), nil
+	return chordSqDown, nil
 }
 
 // emitCapBand maps built patch roles to the numeric band emitter.
