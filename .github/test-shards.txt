@@ -607,6 +607,7 @@
 3	0.10	TestPlacedGateDiameterChargesEveryPoint
 3	0.26	TestPlanarPairVerdictTouchNeedsZeroDisplacement
 3	0.00	TestPlanarReplayLowerGapChargesTravel
+3	0.05	TestPlaneMapMassCoversFrameDefect
 3	0.10	TestPlaneMapReadingsCoverFrameDefect
 3	0.00	TestPointInBodyCancellationReachesTorusRootPath
 3	0.01	TestPolyArea2SignAgreesWithRationalArea
@@ -727,7 +728,6 @@
 3	0.00	TestRewriteLoopChargesEachWalkToBudget
 3	0.00	TestRigidRoundAllowEnclosesAPlacedCoordinate
 3	0.00	TestRigidRoundAllowIsAlwaysAFiniteBound
-3	0.00	TestRotateVolumeMomentsChargesDefect
 3	0.00	TestRotatedPrismMassChargesDisplacement
 3	0.00	TestRotatedPrismMassMatchesCardinalPath
 3	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
@@ -831,6 +831,7 @@
 3	0.00	TestThirdOrderMomentsOfASector
 3	0.00	TestTorusCrossingsCancellationReachesTheChainBuild
 3	0.00	TestTorusCrossingsRejectsNonFinitePolynomial
+3	0.00	TestTransformVolumeMomentsIsTheImage
 3	0.00	TestTransportSweepFramesAcrossOrthogonalBends
 3	0.00	TestTransportSweepFramesRejectsNonTangentJoin
 3	0.00	TestTransportSweepFramesRejectsReversedTangentJoin

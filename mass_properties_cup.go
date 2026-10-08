@@ -17,8 +17,9 @@ import (
 // interval before the subtraction; the offset region's prism charges the
 // cup's offsetDelta that way too. The cavity's moments are re-anchored
 // exactly onto the outer prism's mid level, subtracted at the V, P, Q level,
-// and the difference reaches world axes through the shared frame and
-// placement as one rotated solid.
+// and the difference reaches world axes as its exact image under the shared
+// frame and placement basis (massmoment.AffineInertia), the map the cup's
+// volume and vertices denote through.
 
 // cupMassProperties integrates the outer prism and the cavity prism and
 // publishes their difference.
@@ -53,5 +54,9 @@ func cupMassProperties(ctx context.Context, b *Body, cp cupView, density units.V
 	if err != nil {
 		return MassProperties{}, err
 	}
-	return rigidMassProperties(ctx, b.centroid, massmoment.Sub(solid, void), rotation, density)
+	world, massIv, err := massmoment.AffineInertia(massmoment.Sub(solid, void), rotation, density)
+	if err != nil {
+		return MassProperties{}, err
+	}
+	return publishMassProperties(ctx, b.centroid, massIv, world)
 }

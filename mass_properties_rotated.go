@@ -8,7 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/units"
@@ -27,12 +26,12 @@ import (
 //   - The occupied-volume error E between the recorded prism and the prism its
 //     construction denotes widens V by E, each P_i by R·E and each Q_ij by
 //     R²·E, R bounding every |q_i| over both prisms (dynamic-mass §2.2).
-//   - The held basis M is orthonormal only to rounding. The reading is about
-//     the rigid rotation Q nearest M (its polar factor), so each world
-//     component widens by 3·d·(2+d)·m, where d bounds ‖MᵀM − I‖_F and m is the
-//     largest local tensor magnitude: ‖M − Q‖_F ≤ d, so
-//     |(Q I Qᵀ − M I Mᵀ)_ij| ≤ ‖M − Q‖(‖I‖ + ‖M‖‖I‖) ≤ d(2+d)‖I‖_2 and
-//     ‖I‖_2 ≤ ‖I‖_F ≤ 3m.
+//   - The held basis M is orthonormal only to rounding. The prism's volume,
+//     areas and vertices denote the image of the frame-local solid under M
+//     read exactly (docs/evaluator-design.md §5.1), so the reading is that
+//     image's (massmoment.AffineInertia): mass ρ·|det M|·V, and the inertia
+//     of the second moment |det M|·M·S·Mᵀ. Positivity is proved on the
+//     published tensor by its leading principal minors.
 //
 // prismVolumeMoments and the internal/massmoment transforms are shared
 // with the sweep and cup paths, which
@@ -49,54 +48,15 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	if err != nil {
 		return MassProperties{}, err
 	}
-	local, rho, eigenLower, err := massmoment.PrismLocalInertia(moments, density)
-	if err != nil {
-		return MassProperties{}, err
-	}
 	basis, err := prismRotation(pp)
 	if err != nil {
 		return MassProperties{}, err
 	}
-	world := massmoment.RotatePrismInertia(basis, local)
-	result := MassProperties{Center: center}
-	result.Mass, err = massIntervalReading(proofbound.IntervalScale(moments.Volume, rho), units.Kilogram)
+	world, massIv, err := massmoment.AffineInertia(moments, basis, density)
 	if err != nil {
 		return MassProperties{}, err
 	}
-	if result.Mass.Bound.Mag() >= result.Mass.Value.Mag() {
-		return MassProperties{}, fmt.Errorf("%w: mass interval does not prove positive mass", ErrUnsupported)
-	}
-	entries := []struct {
-		i, j    int
-		reading *Measurement
-	}{
-		{0, 0, &result.Inertia.XX}, {1, 1, &result.Inertia.YY}, {2, 2, &result.Inertia.ZZ},
-		{0, 1, &result.Inertia.XY}, {0, 2, &result.Inertia.XZ}, {1, 2, &result.Inertia.YZ},
-	}
-	for _, entry := range entries {
-		*entry.reading, err = massIntervalReading(world[entry.i][entry.j], units.KilogramSquareMillimeter)
-		if err != nil {
-			return MassProperties{}, err
-		}
-	}
-	// Any tensor inside the published intervals differs from the true world
-	// tensor by at most twice each bound per entry, and the sum of those nine
-	// widths bounds the spectral norm of the difference.
-	spread := new(big.Rat)
-	for _, entry := range entries {
-		width := new(big.Rat).Mul(big.NewRat(2, 1), proofarith.FloatRat(entry.reading.Bound.Mag()))
-		if entry.i != entry.j {
-			width.Mul(width, big.NewRat(2, 1))
-		}
-		spread.Add(spread, width)
-	}
-	if eigenLower.Cmp(spread) <= 0 {
-		return MassProperties{}, fmt.Errorf("%w: inertia interval does not prove positive definiteness", ErrUnsupported)
-	}
-	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
-	}
-	return result, nil
+	return publishMassProperties(ctx, center, massIv, world)
 }
 
 // prismVolumeMoments integrates pp's admitted section moments over its axial

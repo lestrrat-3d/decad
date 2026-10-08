@@ -334,8 +334,14 @@ overlap while the centerline remains simple.
 
 The current composite evaluator uses a conservative separation audit. Adjacent
 spans must have certified support on opposite sides of their shared section
-plane. Every non-neighbour pair must have a strict separating gap between its
-bound-inflated axis-aligned boxes. A pair without either certificate returns
+plane. A span is supported there when its bound-inflated extent along the
+plane's normal proves it on its side, or when its own construction makes its
+endpoint cap a supporting plane (a prism, or an exact-turn arc of at most a
+half turn) and the extent does not prove it past the plane: the rim pairing
+already proves the two caps denote one section, so that extent reading only
+falsifies. A placement's rounding therefore cannot refuse a composite sweep
+whose spans touch only at their shared sections. Every non-neighbour pair must
+have a strict separating gap between its bound-inflated axis-aligned boxes. A pair without either certificate returns
 `ErrUnsupported`; the evaluator never infers disjointness from samples.
 
 The shared-grid tessellation increment will replace this conservative subset

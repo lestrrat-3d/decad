@@ -35,36 +35,27 @@ func Shift(m Moments, s [3]*big.Rat) Moments {
 	return out
 }
 
-// Rotate carries m through the rigid rotation Q nearest the
-// exact rational matrix f (its polar factor), f's column k the image of
-// local axis k. With d = OrthonormalityDefect(f) ≥ ‖f − Q‖_F:
-//   - each (Q·P)_i lies within d·‖P‖₁ of (f·P)_i, since
-//     |((Q − f)P)_i| ≤ ‖Q − f‖₂‖P‖₂ ≤ d·‖P‖₁;
-//   - each (Q·Q_m·Qᵀ)_ij lies within 3·d·(2+d)·m of (f·Q_m·fᵀ)_ij, m the
-//     largest entry magnitude of Q_m. Here ‖Q_m‖₂ ≤ 3m and the rotation
-//     defect bounds ‖f − Q‖₂, so this holds for any 3×3 matrix.
-func Rotate(m Moments, f [3][3]*big.Rat) Moments {
-	defect := OrthonormalityDefect(f)
-	firstNorm := new(big.Rat)
-	for _, component := range m.First {
-		firstNorm.Add(firstNorm, proofbound.IntervalAbsUpper(component))
-	}
-	firstWiden := new(big.Rat).Mul(defect, firstNorm)
-	out := Moments{Volume: m.Volume}
+// Transform carries m through the exact linear map f, f's column k the
+// image of local axis k: the image solid's moments are V′ = |det f|·V,
+// P′ = |det f|·f·P and Q′ = |det f|·f·Q·fᵀ, since f scales every volume
+// element by |det f|. It is exact for the image whatever f's departure from
+// orthonormal, the map every analytic payload's readings denote through
+// (docs/evaluator-design.md §5.1).
+func Transform(m Moments, f [3][3]*big.Rat) Moments {
+	det := Determinant(f)
+	det.Abs(det)
+	out := Moments{Volume: proofbound.IntervalScale(m.Volume, det)}
 	for i := range out.First {
 		sum := proofbound.PointInterval(new(big.Rat))
 		for k := range m.First {
 			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(m.First[k], f[i][k]))
 		}
-		out.First[i] = proofbound.IntervalWiden(sum, firstWiden)
+		out.First[i] = proofbound.IntervalScale(sum, det)
 	}
-	secondWiden := new(big.Rat).Mul(big.NewRat(3, 1), defect)
-	secondWiden.Mul(secondWiden, new(big.Rat).Add(big.NewRat(2, 1), defect))
-	secondWiden.Mul(secondWiden, TensorMagnitude(m.Second))
-	out.Second = RotateTensor(f, m.Second)
-	for i := range out.Second {
-		for j := range out.Second[i] {
-			out.Second[i][j] = proofbound.IntervalWiden(out.Second[i][j], secondWiden)
+	second := RotateTensor(f, m.Second)
+	for i := range second {
+		for j := range second[i] {
+			out.Second[i][j] = proofbound.IntervalScale(second[i][j], det)
 		}
 	}
 	return out

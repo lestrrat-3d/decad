@@ -15,21 +15,16 @@ import (
 // These fixtures check docs/multibody-dynamics-design.md §8.1 and §8.2: a
 // prism under a non-cardinal frame or placement basis, or with a displaced
 // level, publishes mass and all six world inertia components enclosing the
-// independent closed-form box tensor rotated by the rigid rotation decad
-// holds.
-//
-// The reference rotation is the polar factor Q of the held basis product M,
-// the rotation nearest M; it is computed by Newton iteration at 512 bits, so
-// its own error is far below any reading bound and the enclosure checks add
-// no slack. Side lengths, levels and the density are dyadic; the one
+// independent closed-form box's exact image under the held basis product M
+// read exactly, the map the prism's volume and vertices denote through. Side lengths, levels and the density are dyadic; the one
 // non-dyadic length is the denoted level of the inch extrusion, which is the
 // point of that fixture.
 //
 // Legs shown to fail (each deleted in mass_properties_rotated.go, the fixture
 // watched go red, then restored):
-//   - The orthonormality-defect widening 3·d·(2+d)·m: with it zeroed,
-//     TestMassPropertiesRotatedBox and TestMassPropertiesTiltedFrameBox both
-//     miss the reference XX component.
+//   - The affine image: on the rigid path (ρ·V and the polar factor's Q I Qᵀ
+//     widened by the defect) TestMassPropertiesRotatedBox and
+//     TestMassPropertiesTiltedFrameBox both miss the mass.
 //   - The occupied-volume error E, and its V leg alone: with either zeroed,
 //     TestMassPropertiesDisplacedLevelBox misses the denoted mass. The
 //     remaining legs are recorded in mass_properties_rotated_internal_test.go,
@@ -78,7 +73,10 @@ func TestMassPropertiesTiltedFrameBox(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	held, err := s.Plane().Frame()
+	plane2, err := s.Plane().Frame()
+	require.NoError(t, err)
+	// The prism records the plane's axes normalized once more, as Extrude does.
+	held, err := r3.NewFrame(plane2.Origin(), plane2.U(), plane2.V())
 	require.NoError(t, err)
 	doc := decad.New()
 	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
@@ -152,27 +150,28 @@ func requireRotatedBox(t *testing.T, got decad.MassProperties, pose r3.Transform
 }
 
 // requireRotatedBoxExact checks a box of the given frame-local (u, v, n) side
-// lengths: the exact mass, and each world inertia component against Q I Qᵀ.
+// lengths against its exact image under the held map M of pose and frame:
+// mass ρ·|det M|·V, and each world inertia component against the image's
+// (affineInertia). frame must be the frame the payload records.
 func requireRotatedBoxExact(t *testing.T, got decad.MassProperties, pose r3.Transform, frame r3.Frame, size [3]*big.Rat) {
 	t.Helper()
 	rho := new(big.Rat).SetFloat64(rotatedDensity)
 	mass := new(big.Rat).Mul(rho, new(big.Rat).Mul(size[0], new(big.Rat).Mul(size[1], size[2])))
-	requireReadingCovers(t, got.Mass, mass)
-	var local [3]*big.Rat
+	m := heldRotation(pose, frame)
+	det := wideDet(m)
+	det.Abs(det)
+	requireWideCovers(t, got.Mass, newWide().Mul(newWide().SetRat(mass), det))
+	var local [3][3]*big.Float
 	for i := range local {
 		a, b := size[(i+1)%3], size[(i+2)%3]
 		sum := new(big.Rat).Add(new(big.Rat).Mul(a, a), new(big.Rat).Mul(b, b))
-		local[i] = new(big.Rat).Quo(new(big.Rat).Mul(mass, sum), big.NewRat(12, 1))
-	}
-	q := polarFactor(heldRotation(pose, frame))
-	world := func(i, j int) *big.Float {
-		sum := newWide()
-		for k := range local {
-			term := newWide().Mul(q[i][k], q[j][k])
-			sum.Add(sum, term.Mul(term, newWide().SetRat(local[k])))
+		for j := range local[i] {
+			local[i][j] = newWide()
 		}
-		return sum
+		local[i][i] = newWide().SetRat(new(big.Rat).Quo(new(big.Rat).Mul(mass, sum), big.NewRat(12, 1)))
 	}
+	image := affineInertia(m, local, newWide().SetRat(rho))
+	world := func(i, j int) *big.Float { return image[i][j] }
 	for _, entry := range []struct {
 		reading decad.Measurement
 		i, j    int
@@ -209,37 +208,6 @@ func heldRotation(pose r3.Transform, frame r3.Frame) [3][3]*big.Float {
 		}
 	}
 	return out
-}
-
-// polarFactor iterates X ← (X + X⁻ᵀ)/2, which converges quadratically to the
-// orthogonal polar factor from a nearly orthogonal start.
-func polarFactor(m [3][3]*big.Float) [3][3]*big.Float {
-	x := m
-	for range 8 {
-		var cofactor [3][3]*big.Float
-		for i := range 3 {
-			for j := range 3 {
-				r0, r1 := (i+1)%3, (i+2)%3
-				c0, c1 := (j+1)%3, (j+2)%3
-				left := newWide().Mul(x[r0][c0], x[r1][c1])
-				cofactor[i][j] = left.Sub(left, newWide().Mul(x[r0][c1], x[r1][c0]))
-			}
-		}
-		det := newWide()
-		for j := range 3 {
-			det.Add(det, newWide().Mul(x[0][j], cofactor[0][j]))
-		}
-		var next [3][3]*big.Float
-		for i := range 3 {
-			for j := range 3 {
-				inverseT := newWide().Quo(cofactor[i][j], det)
-				sum := newWide().Add(x[i][j], inverseT)
-				next[i][j] = sum.Quo(sum, newWide().SetInt64(2))
-			}
-		}
-		x = next
-	}
-	return x
 }
 
 func newWide() *big.Float { return new(big.Float).SetPrec(512) }
