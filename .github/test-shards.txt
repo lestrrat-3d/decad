@@ -963,6 +963,7 @@
 5	0.04	TestBooleanRoundingUnderflowKeepsProofPositive
 5	0.02	TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly
 5	3.59	TestBoundedSqrtExactSquareMatchesBracket
+5	0.05	TestCapBandConePatchChargesItsCornerSlivers
 5	0.01	TestCapBlendMeshMotionCarriesEachLevelBound
 5	0.02	TestCapPatchNormalRangeCoversWhatAFlatPatchTakes
 5	0.05	TestCellBilinearAreaEnclosesDirectIntegral

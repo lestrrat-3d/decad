@@ -73,34 +73,11 @@ func miterConstraintRow(w survey2d.SideWalk, c Carrier, foot Point) (Point, *big
 // every other refusal here stands on: never a wrong bound, only a
 // conservative one at a tangent circle-circle corner.
 func CircleCircleLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (float64, bool) {
-	ca, okA := carrierOverRange(prev, t0, t1)
-	cb, okB := carrierOverRange(cur, t0, t1)
-	if !okA || !okB {
+	vel, ok := CircleCircleLocusVelocity(prev, cur, t0, t1, vU, vV)
+	if !ok {
 		return 0, false
 	}
-	cands, okI := Intersect(ca, cb)
-	if !okI {
-		return 0, false
-	}
-	foot, okN := Nearest(cands, vU, vV)
-	if !okN {
-		return 0, false
-	}
-	rowA, rhsA, okRA := miterConstraintRow(prev, ca, foot)
-	rowB, rhsB, okRB := miterConstraintRow(cur, cb, foot)
-	if !okRA || !okRB {
-		return 0, false
-	}
-	det := proofbound.IntervalSub(proofbound.IntervalMul(rowA.U, rowB.V), proofbound.IntervalMul(rowB.U, rowA.V))
-	if det.Lo.Sign() <= 0 && det.Hi.Sign() >= 0 {
-		return 0, false
-	}
-	pu, okU := proofbound.IntervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowB.V, rhsA), proofbound.IntervalScale(rowA.V, rhsB)), det)
-	pv, okV := proofbound.IntervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowA.U, rhsB), proofbound.IntervalScale(rowB.U, rhsA)), det)
-	if !okU || !okV {
-		return 0, false
-	}
-	mag, ok := proofbound.IntervalSqrt(proofbound.IntervalAdd(proofbound.IntervalSquare(pu), proofbound.IntervalSquare(pv)))
+	mag, ok := proofbound.IntervalSqrt(proofbound.IntervalAdd(proofbound.IntervalSquare(vel.U), proofbound.IntervalSquare(vel.V)))
 	if !ok {
 		return 0, false
 	}
@@ -112,6 +89,42 @@ func CircleCircleLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV flo
 		return 0, false
 	}
 	return upper, true
+}
+
+// CircleCircleLocusVelocity encloses the velocity dP/dt of the corner foot
+// where two circular walls' offset carriers meet, over the offset range
+// [t0, t1]: the box CircleCircleLocusSpeedUpper takes the magnitude of. Every
+// velocity the foot has at an offset amount in [t0, t1] lies in the box. ok is
+// false on the same refusals as CircleCircleLocusSpeedUpper.
+func CircleCircleLocusVelocity(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (Point, bool) {
+	ca, okA := carrierOverRange(prev, t0, t1)
+	cb, okB := carrierOverRange(cur, t0, t1)
+	if !okA || !okB {
+		return Point{}, false
+	}
+	cands, okI := Intersect(ca, cb)
+	if !okI {
+		return Point{}, false
+	}
+	foot, okN := Nearest(cands, vU, vV)
+	if !okN {
+		return Point{}, false
+	}
+	rowA, rhsA, okRA := miterConstraintRow(prev, ca, foot)
+	rowB, rhsB, okRB := miterConstraintRow(cur, cb, foot)
+	if !okRA || !okRB {
+		return Point{}, false
+	}
+	det := proofbound.IntervalSub(proofbound.IntervalMul(rowA.U, rowB.V), proofbound.IntervalMul(rowB.U, rowA.V))
+	if det.Lo.Sign() <= 0 && det.Hi.Sign() >= 0 {
+		return Point{}, false
+	}
+	pu, okU := proofbound.IntervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowB.V, rhsA), proofbound.IntervalScale(rowA.V, rhsB)), det)
+	pv, okV := proofbound.IntervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowA.U, rhsB), proofbound.IntervalScale(rowB.U, rhsA)), det)
+	if !okU || !okV {
+		return Point{}, false
+	}
+	return Point{U: pu, V: pv}, true
 }
 
 // lineWallFrame is a straight wall's own enclosed local frame: anchor encloses
@@ -192,23 +205,11 @@ func lineWallFrameOf(w survey2d.SideWalk) (lineWallFrame, bool) {
 // near-tangent corner no public fixture reaches today — the PR body for
 // this change names that as a known limitation.
 func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (float64, bool) {
-	frame, ok := lineWallFrameOf(line)
+	k, ok := lineCircleCornerOf(line, circle)
 	if !ok {
 		return 0, false
 	}
-	cx, cy := proofarith.FloatRat(circle.CU), proofarith.FloatRat(circle.CV)
-	radius := proofarith.FloatRat(circle.Radius)
-	if cx == nil || cy == nil || radius == nil {
-		return 0, false
-	}
-	w0u := proofbound.IntervalSub(frame.anchor.U, proofbound.PointInterval(cx))
-	w0v := proofbound.IntervalSub(frame.anchor.V, proofbound.PointInterval(cy))
-	alpha := proofbound.IntervalAdd(proofbound.IntervalMul(w0u, frame.n.U), proofbound.IntervalMul(w0v, frame.n.V))
-	inside := InsideSignOf(circle)
-
-	// Delta(t) = (R^2 - alpha^2) - 2*(alpha + inside*R)*t = delta0 + delta1*t.
-	delta0 := proofbound.IntervalSub(proofbound.IntervalSquare(proofbound.PointInterval(radius)), proofbound.IntervalSquare(alpha))
-	delta1 := proofbound.IntervalScale(proofbound.IntervalAdd(alpha, proofbound.IntervalScale(proofbound.PointInterval(radius), inside)), big.NewRat(-2, 1))
+	frame, delta1 := k.frame, k.delta1
 
 	// Delta1 == 0 EXACTLY (both ends of its own enclosure) is the persistent-
 	// tangency closed form this function's own doc comment derives: s(t) is
@@ -231,10 +232,7 @@ func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (
 	if rt0 == nil || rt1 == nil {
 		return 0, false
 	}
-	deltaAt := func(t *big.Rat) proofbound.RatInterval {
-		return proofbound.IntervalAdd(delta0, proofbound.IntervalMul(delta1, proofbound.PointInterval(t)))
-	}
-	d0, d1 := deltaAt(rt0), deltaAt(rt1)
+	d0, d1 := k.deltaAt(rt0), k.deltaAt(rt1)
 	// Delta is affine, so its minimum over [t0, t1] is at one of the two
 	// ends — no interior point needs checking.
 	deltaMinLo := d0.Lo
@@ -266,6 +264,44 @@ func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (
 		return 0, false
 	}
 	return upper, true
+}
+
+// lineCircleCorner is the enclosed discriminant of a straight wall's offset
+// carrier meeting a circular wall's (LineCircleLocusSpeedUpper's derivation):
+// Δ(t) = delta0 + delta1·t, with alpha = (anchor − c)·n the signed distance
+// from the circle's centre to the line, and frame the line's own frame.
+type lineCircleCorner struct {
+	frame                 lineWallFrame
+	alpha, delta0, delta1 proofbound.RatInterval
+}
+
+// lineCircleCornerOf encloses the corner's discriminant from the line's
+// recorded endpoints and the circle's held centre and radius. ok is false
+// where a number does not lift or the line's frame cannot be enclosed.
+func lineCircleCornerOf(line, circle survey2d.SideWalk) (lineCircleCorner, bool) {
+	frame, ok := lineWallFrameOf(line)
+	if !ok {
+		return lineCircleCorner{}, false
+	}
+	cx, cy := proofarith.FloatRat(circle.CU), proofarith.FloatRat(circle.CV)
+	radius := proofarith.FloatRat(circle.Radius)
+	if cx == nil || cy == nil || radius == nil {
+		return lineCircleCorner{}, false
+	}
+	w0u := proofbound.IntervalSub(frame.anchor.U, proofbound.PointInterval(cx))
+	w0v := proofbound.IntervalSub(frame.anchor.V, proofbound.PointInterval(cy))
+	alpha := proofbound.IntervalAdd(proofbound.IntervalMul(w0u, frame.n.U), proofbound.IntervalMul(w0v, frame.n.V))
+	inside := InsideSignOf(circle)
+
+	// Delta(t) = (R^2 - alpha^2) - 2*(alpha + inside*R)*t = delta0 + delta1*t.
+	delta0 := proofbound.IntervalSub(proofbound.IntervalSquare(proofbound.PointInterval(radius)), proofbound.IntervalSquare(alpha))
+	delta1 := proofbound.IntervalScale(proofbound.IntervalAdd(alpha, proofbound.IntervalScale(proofbound.PointInterval(radius), inside)), big.NewRat(-2, 1))
+	return lineCircleCorner{frame: frame, alpha: alpha, delta0: delta0, delta1: delta1}, true
+}
+
+// deltaAt encloses Δ(t) at the exact offset amount t.
+func (k lineCircleCorner) deltaAt(t *big.Rat) proofbound.RatInterval {
+	return proofbound.IntervalAdd(k.delta0, proofbound.IntervalMul(k.delta1, proofbound.PointInterval(t)))
 }
 
 // MiterLocusSpeedUpper bounds |dP/dt| — the in-plane speed of the corner

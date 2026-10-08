@@ -524,8 +524,27 @@ never changes sign; about the plane-local origin the density changes sign,
 the sandwich fails, and the flux difference grows with the section's distance
 from that origin. The ruled patch's own point-for-point
 departure from the wide cone is bounded in closed form from the two windows'
-angular skew; `chordLocusVolumeAllow` composes both terms into one proven
-volume bound. The skew it reads is the larger of the patch's two proven corner
+angular skew. The band's volume sums every patch's flux about the plane-local
+origin, and moving a patch's flux from the arc's axis to that origin adds the
+axis point times the patch's vector area, which depends only on the patch's
+boundary. The true and built patches end on different curves at each mitered
+corner: the curved corner-foot locus and the straight ruling. Their vector
+areas differ by the thin sliver between the two curves, which the patch
+across the ruling carries with the opposite sign. Split at the corner vertex
+`v`, the `Cone` patch's share is `(ds/dc)·|(v − c) × W|`, where
+`W = ∫₀^dc (P(t) − Q(t)) dt` integrates the in-plane gap between the locus
+`P` and the ruling `Q` ridden at the same offset rate. A `Plane` neighbour's
+share is zero, because the sliver lies in its plane. Where a line meets a
+circle the locus is a parabola and `|W| = dc³·Δ1²/(6·(y0 + y1)³)` in closed
+form, with the line's distance from the centre as the moment arm. Between two
+circles, `|W|` is at most `dc²/4` times the diagonal of the hull of the locus
+velocity enclosures over the 32 offset sub-ranges. The share is zero at a
+reflex foot, a G1 join and a whole turn, whose loci are straight, and a corner
+whose share cannot be bounded makes the volume bound unbounded. The built
+volume's own error holds none of this flux: it cancels between the two
+patches a ruling joins. It is owed because each `Cone` patch's bound is taken
+about its own axis. `ChordLocusVolumeAllow` composes the three terms into one
+proven volume bound. The skew it reads is the larger of the patch's two proven corner
 skews (§8.4's `CornerSkewUpper`), the exact angle between each corner's held
 side end and held cap end. The difference of the two held windows is not used:
 each end of it is a float `Atan2`, and over a 600-sector sweep drawn away from

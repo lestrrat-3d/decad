@@ -46,6 +46,48 @@ func TestRawFluxChargesTheProvenCornerSkew(t *testing.T) {
 		`the skewed patch's flux bound %v carries the swept term %v on top of %v`, charged.Bound, swept, plain.Bound)
 }
 
+// TestRawFluxChargesTheCornerFlux checks a Cone patch's chord-locus term
+// carries its corner slivers' flux (Patch.CornerFlux) on top of the rest of
+// its bound, with the corner skews zero and with them positive, and that the
+// first-moment reading ChordLocusVolume returns at least a third of it. The
+// held flux does not move.
+//
+// Shown to fail on 2026-10-09: with chordLocusResidualAllow passing zero for
+// the corner flux, every charged bound equals the plain one and the
+// zero-skew patch's ChordLocusVolume is zero.
+func TestRawFluxChargesTheCornerFlux(t *testing.T) {
+	t.Parallel()
+	const corner = 0.25
+	for _, tc := range []struct {
+		name       string
+		start, end float64
+	}{
+		{name: `zero skews`},
+		{name: `positive skews`, start: 3e-3, end: 5e-3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			plain := capband.Patch{
+				Circular: true, SweepCCW: true,
+				SideRadius: 10, CapRadius: 9,
+				Th0: 0.2, Th1: 1.4, CapTh0: 0.2 + tc.start, CapTh1: 1.4 - tc.end,
+				SkewStart: tc.start, SkewEnd: tc.end,
+				SideZ: 19, CapZ: 20,
+			}
+			charged := plain
+			charged.CornerFlux = corner
+
+			p, c := capband.RawFlux(plain), capband.RawFlux(charged)
+			require.Equal(t, p.Value, c.Value, `the corner flux moves the bound, never the held flux`)
+			require.GreaterOrEqual(t, c.Bound, p.Bound+corner*(1-1e-12),
+				`the charged bound %v must carry the corner flux %v on top of %v`, c.Bound, corner, p.Bound)
+
+			vol, _ := capband.ChordLocusVolume(charged)
+			require.GreaterOrEqual(t, vol, corner/3, `the first-moment reading's volume must carry the corner flux`)
+		})
+	}
+}
+
 // TestAxisAnchoredLevelsKeepsTheExactHeight checks the chord-versus-locus
 // references' axial shift. Their cone must keep the band's exact height, so
 // the shifted pair's exact difference must equal the original pair's, and the

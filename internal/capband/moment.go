@@ -508,8 +508,10 @@ func FirstMomentFlux(g Patch) (proofbound.BoundedScalar, proofbound.BoundedScala
 // ChordLocusVolume returns the volume a Cone patch's chord-versus-locus term
 // charges (the flux patchRawFlux adds to its bound, divided by 3 and rounded
 // up) and the radial gap |SideRadius-CapRadius|, rounded up. Both are zero for
-// a Plane patch, a whole turn, and a patch whose corner skews are both zero:
-// patchRawFlux charges none of them the term.
+// a Plane patch, a whole turn, and a patch whose corner skews and corner flux
+// (Patch.CornerFlux) are all zero: patchRawFlux charges none of them the term.
+// The corner flux is part of the volume returned, so the first-moment term
+// below grows with it.
 //
 // The first-moment sibling of the volume term reads the two together. The
 // volume term bounds the measure of the region between the built solid and

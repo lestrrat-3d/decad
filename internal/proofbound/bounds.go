@@ -91,7 +91,8 @@ import (
 //     and the curved miter locus it denotes at a non-tangential corner →
 //     ChordLocusVolumeAllow, an erosion-monotonicity sandwich against the
 //     ordinary shared-window cone-sector flux plus a swept-volume term over
-//     the built patch's own closed-form displacement from it;
+//     the built patch's own closed-form displacement from it, plus each
+//     mitered corner's sliver flux (ChordLocusCornerFlux);
 //   - the FIRST MOMENT a cap-loop chamfer's contour displacement can move →
 //     SweptMomentAllow, SweptVolumeAllow's own one-dimension-higher sibling;
 //   - the FIRST MOMENT a loft's chorded boundary can move under the same
@@ -2196,7 +2197,29 @@ func BandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
 // narrower than the side-level one (th0, th1) by windowSkewMax at its widest
 // corner.
 //
-// The proof is a two-term decomposition, |Vol(true)-Vol(built)| <=
+// The band's volume is a third of the summed fluxes of its closed surface
+// about the plane-local origin O, but this term is taken about the arc's axis point
+// c at the side level. For any surface X, Flux_O(X) = Flux_c(X) + c·A(X),
+// where A(X) is X's vector area, which depends only on X's boundary. The true
+// patch and the built one end on different curves at each mitered corner k:
+// the true patch on the curved corner-foot locus, the built patch on the
+// straight ruling. So A(true) − A(built) is the sum of ±δ_k, the vector area
+// of the closed loop the locus and the ruling form, and the patch across the
+// ruling carries the opposite sign. This patch's share of that shift,
+// split at the corner vertex v_k (at c's level), is |(c − v_k)·δ_k|. A Plane
+// neighbour's share is zero: the locus and the ruling both lie in its plane,
+// with v_k, so δ_k is normal to it. A Cone neighbour charges its own share
+// about its own axis. Both curves are ridden at height (ds/dc)·t for offset
+// amount t, so δ_k's horizontal part is (ds/dc)·rot90(W_k) with
+// W_k = ∫₀^dc (P(t) − Q(t)) dt, P the locus and Q the ruling, and the share is
+// (ds/dc)·|(v_k − c) × W_k|. cornerFlux must be a PROVEN upper bound on the
+// sum of this patch's two shares (ChordLocusCornerFlux forms each one). It is
+// zero wherever both corners' loci are straight: a reflex foot, a G1 join and
+// a whole turn. Without it the about-c bound below covers
+// |Flux_c(true) − Flux_c(built)|, but not the about-O difference the band's
+// volume reads.
+//
+// The about-c part is a two-term decomposition, |Vol(true)-Vol(built)| <=
 // |Vol(true)-Vol(wide)| + |Vol(wide)-Vol(built)|, where "wide"/"narrow" are
 // the ordinary ROTATIONALLY-SYMMETRIC cone-sector flux capband.RawFlux gives
 // for the SIDE window (th0, th1) shared by both directrices, and for the CAP
@@ -2242,10 +2265,14 @@ func BandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
 // Every operation rounds outward. The two fluxes' difference is taken exactly
 // and rounded up, √(R0·R1) is read from the exact product through RatSqrtUp,
 // and sin(Φ/2) is the upper end of its certified enclosure, so no libm
-// accuracy is assumed.
-func ChordLocusVolumeAllow(fluxWide, fluxWideBound, fluxNarrow, fluxNarrowBound, sideRadius, capRadius, windowSkewMax, areaUpper float64) float64 {
+// accuracy is assumed. A cornerFlux that is negative or not finite answers an
+// unbounded term.
+func ChordLocusVolumeAllow(fluxWide, fluxWideBound, fluxNarrow, fluxNarrowBound, sideRadius, capRadius, windowSkewMax, areaUpper, cornerFlux float64) float64 {
+	if !(cornerFlux >= 0) || IsNonFinite(cornerFlux) {
+		return math.Inf(1)
+	}
 	if windowSkewMax <= 0 {
-		return 0
+		return cornerFlux
 	}
 	rWide, rNarrow := proofarith.FloatRat(fluxWide), proofarith.FloatRat(fluxNarrow)
 	rR0, rR1, rSkew := proofarith.FloatRat(math.Abs(sideRadius)), proofarith.FloatRat(math.Abs(capRadius)), proofarith.FloatRat(windowSkewMax)
@@ -2266,11 +2293,31 @@ func ChordLocusVolumeAllow(fluxWide, fluxWideBound, fluxNarrow, fluxNarrowBound,
 	// SweptVolumeAllow returns a VOLUME, but this function's return value is a
 	// FLUX term (envelopeSlack is a difference of two patchRawFlux results,
 	// three times a volume) that patchRawFlux's own bound folds into, to be
-	// divided by 3 exactly once at capBandVolume's single division
-	// (capblend_moments.go:418). Scaling this volume term up by 3 here is what
-	// makes that later division land it back at its true size instead of a
-	// third of it.
-	return AbsSumUpper(envelopeSlack, ProductUpper(3, SweptVolumeAllow(patchDeviation, areaUpper)))
+	// divided by 3 exactly once at capBandVolume's single division of the
+	// summed flux (capblend_moments.go). Scaling this volume term up by 3 here
+	// is what makes that later division land it back at its true size instead
+	// of a third of it. cornerFlux is already a flux.
+	return AbsSumUpper(envelopeSlack, ProductUpper(3, SweptVolumeAllow(patchDeviation, areaUpper)), cornerFlux)
+}
+
+// ChordLocusCornerFlux is one mitered corner's share of the chord-locus term
+// (ChordLocusVolumeAllow's cornerFlux): (ds/dc)·|(v − c) × W|, rounded up.
+// axialUpper must be a proven upper bound on the side setback ds, dcLower a
+// proven positive lower bound on the cap setback dc, and momentUpper a proven
+// upper bound on the corner's in-plane sliver moment |(v − c) × W| about the
+// patch's centre (capcontour.LineCircleLocusSliverMoment and
+// capcontour.LocusVelocityHull bound it). A negative or non-finite input, or
+// a dcLower that is not positive, answers +Inf. Otherwise a zero moment, the
+// moment of a straight locus, charges nothing.
+func ChordLocusCornerFlux(axialUpper, dcLower, momentUpper float64) float64 {
+	if !(axialUpper >= 0) || !(momentUpper >= 0) || !(dcLower > 0) ||
+		IsNonFinite(axialUpper) || IsNonFinite(momentUpper) || IsNonFinite(dcLower) {
+		return math.Inf(1)
+	}
+	if momentUpper == 0 {
+		return 0
+	}
+	return ProductUpper(DivUpper(axialUpper, dcLower), momentUpper)
 }
 
 // ChordLocusLengthAllow bounds a cap-blend miter ruling's own chord-versus-

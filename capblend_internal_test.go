@@ -1218,6 +1218,84 @@ func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
 	}
 }
 
+// TestCapBandConePatchChargesItsCornerSlivers checks the chamfered concave
+// square of TestCapBandConeAreaBoundEnclosesBuiltRuledPatch (side 20, the top
+// bowed 4 mm in by an arc of radius 14.5 about (10, 30.5)) stamps its arc
+// patch with both corners' sliver flux (docs/modify-reach-design.md §8.3).
+// The reference follows the corner foot in closed form from the section
+// alone: at offset t the line x = t meets the circle of radius 14.5 + t at
+// v = 30.5 − √((14.5 + t)² − (t − 10)²). The chord runs at the same rate, so
+// W = ∫₀^dc (P − Q) dt points along v, the centre sits 10 mm from each side
+// line, and each corner's share is (ds/dc)·10·|W|. The two corners mirror
+// each other, so the patch owes twice that. The patch reads a closed form, so
+// its charge must match the reference within 1e-6 as well as cover it.
+//
+// The band's volume cannot show this term missing: each sliver's flux enters
+// the arc patch and the side patch with opposite signs, so the built volume's
+// true error holds none of it. The term is owed because the chord-locus bound
+// is taken about the arc's own axis, where the side patch's share is not.
+//
+// Shown to fail on 2026-10-09: with buildCapBand leaving CornerFlux unset,
+// both rows' charge is zero.
+func TestCapBandConePatchChargesItsCornerSlivers(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		dc, ds float64
+	}{
+		{name: `equal setbacks`, dc: 1, ds: 1},
+		{name: `dc 4, ds 2`, dc: 4, ds: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			concaveSideSection(20, 4)(s)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(100), Dir: Along})
+			require.NoError(t, err)
+			out, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(tc.dc),
+				WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(tc.ds)))
+			require.NoError(t, err)
+			cbp, ok := out.payload.(capBlendPayload)
+			require.True(t, ok)
+
+			const n = 4000
+			foot := func(x float64) float64 { return 30.5 - math.Sqrt((14.5+x)*(14.5+x)-(x-10)*(x-10)) }
+			end := foot(tc.dc)
+			sum := 0.0
+			for i := range n + 1 {
+				x := tc.dc * float64(i) / n
+				weight := 2.0
+				switch {
+				case i == 0 || i == n:
+					weight = 1
+				case i%2 == 1:
+					weight = 4
+				}
+				sum += weight * (foot(x) - (20 + (end-20)*x/tc.dc))
+			}
+			want := 2 * tc.ds / tc.dc * 10 * math.Abs(sum*tc.dc/n/3)
+
+			arcs := 0
+			for _, p := range cbp.patches {
+				g := p.geom
+				if !g.Circular || g.SideRadius == 0 {
+					continue
+				}
+				arcs++
+				require.GreaterOrEqual(t, g.CornerFlux, want*(1-1e-9),
+					`patch %s charges %v for its corner slivers, and they owe %v`, p.role, g.CornerFlux, want)
+				require.LessOrEqual(t, g.CornerFlux, want*(1+1e-6),
+					`patch %s charges %v for its corner slivers, and the closed form gives %v`, p.role, g.CornerFlux, want)
+			}
+			require.Equal(t, 1, arcs, `the section has one arc wall`)
+		})
+	}
+}
+
 // TestCapBlendAuditReadsTheSetbackSpan checks the stage-6 offset audit refuses
 // a cap setback whose span overruns, even where the held dc passes. The plate
 // carries two holes of radius 0.25 whose centres sit √41.76 mm apart, so their
