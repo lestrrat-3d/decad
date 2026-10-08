@@ -600,6 +600,39 @@ func TestNewSTEPFileRefusals(t *testing.T) {
 	require.True(t, errors.Is(err, context.Canceled))
 }
 
+// TestNewSTEPFileShellSideOpeningAnalytic writes docs/shell-opening-design.md
+// §9's U-channel — the 40×20×10 box shelled 2 mm inward with its x = 0 face
+// removed, both caps kept — through the analytic arm: 11 planar faces, the
+// x = 0 plane one face whose inner bound is the opening, and every
+// EDGE_CURVE used once in each sense.
+func TestNewSTEPFileShellSideOpeningAnalytic(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 40, 20)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	box, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	body, err := box.Shell(t.Context(), decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))), units.Millimeters(2))
+	require.NoError(t, err)
+	require.Len(t, body.Faces(), 11)
+	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	counts, uses := entityUses(f)
+	require.Equal(t, 11, counts["ADVANCED_FACE"])
+	require.Equal(t, 11, counts["PLANE"])
+	require.Equal(t, 1, counts["FACE_BOUND"], "the opening is the one inner bound")
+	for _, senses := range uses {
+		require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+	}
+	data, err := f.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "analytic decad solid")
+}
+
 // flushBossUnion is general-boolean §9's A1 brep fixture through the public
 // API: a 40×40×10 plate on XY unioned with a boss standing on its top at
 // z = 10..25, drawn by draw on the offset plane.

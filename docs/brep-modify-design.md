@@ -224,7 +224,7 @@ record; route P's P2(c) refuses the same wall for the same reason. The four corn
 coordinates (`Embed.Canon`), the constant reference axis and its level give the
 plane, and `brepgeom.PlanarFrame(ref, axis, sign)` is the right-handed frame
 whose `N` is the wall's outward normal — the same frame `StackedWallFrame`
-builds for `stacked_union_brep.go`'s `wallFaces`. The region is the one loop
+builds for `stacked_union_brep.go`'s `stackedBrepWallFaces`. The region is the one loop
 through the four corners in the wall's own boundary order — rim at `z0`
 forward, side line up, rim at `z1` backward, side line down — the order
 `brepgeom.Build` already walks, which is counter-clockwise from outside; the
