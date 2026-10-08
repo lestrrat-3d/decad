@@ -365,7 +365,8 @@ func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
 		if face == nil {
 			return undercutOutcome{}
 		}
-		m, ok := newPlacedFrameMap(f.view(bp.xform))
+		view := f.view(bp.xform)
+		m, ok := survey2d.NewPlacedFrameMap(view.frame, view.xform)
 		if !ok {
 			return undercutOutcome{}
 		}

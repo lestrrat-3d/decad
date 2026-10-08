@@ -84,7 +84,7 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	// chamfered loop's unchanged (non-band) portion has the same wall role
 	// and the same normal as an untouched one.
 	pl := cbp.prismLike(0, 0)
-	m, okM := newPlacedFrameMap(pl)
+	m, okM := survey2d.NewPlacedFrameMap(pl.frame, pl.xform)
 	if !okM {
 		return undercutOutcome{}
 	}

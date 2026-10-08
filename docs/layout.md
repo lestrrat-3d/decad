@@ -175,7 +175,7 @@ the rules leave to the byte budget.
 | `capblend_centroid.go` | Cap-blend first moments and bounds. See modify-reach §8.4. |
 | `capblend_moments.go` | `evalCapBlendContext`: the cap-blend body and its area/volume. See modify-reach §8.4. |
 | `capblend_survey.go` | Cap-blend undercut and minimum-radius surveys. See modify-reach Table DX (DX7/DX8). |
-| `capblend_normal.go` | Reads band-patch tags and placed frames for DX7's normal model. |
+| `capblend_normal.go` | Reads band-patch tags for DX7's normal model. |
 | `capblend_departure.go` | Reads band-patch tags and built edges for departure bounds. |
 | `capblend_admit.go` | Adapts cap-band occupied-volume admission. See tessellation-reach §7. |
 

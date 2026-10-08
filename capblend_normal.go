@@ -24,7 +24,7 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	if !ok {
 		return capPatchModel{}, false
 	}
-	world, ok := newPlacedFrameMap(pl)
+	world, ok := survey2d.NewPlacedFrameMap(pl.frame, pl.xform)
 	if !ok {
 		return capPatchModel{}, false
 	}
@@ -62,33 +62,6 @@ func coneTagTerms(f *Face) (proofbound.RatInterval, proofbound.RatInterval, r3.V
 	default:
 		return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 	}
-}
-
-func newPlacedFrameMap(pp prismPayload) (survey2d.PlacedFrameMap, bool) {
-	basis := pp.xform.Basis()
-	ex, okX := proofbound.IvVec3Of(basis.EX)
-	ey, okY := proofbound.IvVec3Of(basis.EY)
-	ez, okZ := proofbound.IvVec3Of(basis.EZ)
-	translation, okT := proofbound.IvVec3Of(pp.xform.Translation())
-	origin, okO := proofbound.IvVec3Of(pp.frame.Origin())
-	u, okU := proofbound.IvVec3Of(pp.frame.U())
-	v, okV := proofbound.IvVec3Of(pp.frame.V())
-	n, okN := proofbound.IvVec3Of(pp.frame.N())
-	if !okX || !okY || !okZ || !okT || !okO || !okU || !okV || !okN {
-		return survey2d.PlacedFrameMap{}, false
-	}
-	place := func(local proofbound.IvVec3) proofbound.IvVec3 {
-		return proofbound.IvVec3Add(
-			proofbound.IvVec3Mul(ex, local[0]),
-			proofbound.IvVec3Add(proofbound.IvVec3Mul(ey, local[1]), proofbound.IvVec3Mul(ez, local[2])),
-		)
-	}
-	return survey2d.PlacedFrameMap{
-		Origin: proofbound.IvVec3Add(place(origin), translation),
-		Du:     place(u),
-		Dv:     place(v),
-		Dn:     place(n),
-	}, true
 }
 
 // intervalMid is one rational strictly inside an enclosure, the point a bound
