@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismextent"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -105,11 +106,11 @@ func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *free
 //
 // walks is pp.profile's pre-resolved segment walks, or nil to resolve as
 // before through boundaryExtremesBoundedContext and profileCoordinateEnvelope's
-// own walkOf calls. prismBoundsContext passes the same *profileWalks to every
+// own walkOf calls. prismBoundsContext passes the same *momentinput.ProfileWalks to every
 // one of its three per-axis calls, so the record's boundary walks resolve
-// once for the whole box rather than once per axis (this file's profileWalks
+// once for the whole box rather than once per axis (this file's momentinput.ProfileWalks
 // doc comment).
-func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork, walks *profileWalks) (float64, float64, float64, error) {
+func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, float64, float64, error) {
 	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
 	gu := pp.dir(1, 0, 0).Dot(g)
 	gv := pp.dir(0, 1, 0).Dot(g)
@@ -156,10 +157,10 @@ func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) 
 //
 // walks is pp.profile's pre-resolved segment walks, or nil to resolve each
 // segment through walkOf as before. Passed straight to all three per-axis
-// extentBoundedAlong calls below (this file's profileWalks doc comment), so a
+// extentBoundedAlong calls below (this file's momentinput.ProfileWalks doc comment), so a
 // non-nil walks resolves the record's boundary once for the whole box instead
 // of once per axis.
-func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.FreeformWork, walks *profileWalks) (Box, error) {
+func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
 	extremeBound := 0.0
@@ -238,12 +239,12 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.Fre
 }
 
 // boundaryExtremesBoundedContext adapts recorded profile walks for prismextent.
-func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeform.FreeformWork, walks *profileWalks) (float64, float64, float64, error) {
+func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, float64, float64, error) {
 	if err := freeform.RequireFiniteDirection(gu, gv); err != nil {
 		return 0, 0, 0, err
 	}
-	if walks != nil && !walks.matches(profile) {
-		return 0, 0, 0, errResolvedWalksMismatch
+	if walks != nil && !walks.Matches(profile) {
+		return 0, 0, 0, momentinput.ErrResolvedWalksMismatch
 	}
 	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
 	counts := make([]int, len(loops))

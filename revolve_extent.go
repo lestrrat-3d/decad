@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
@@ -123,7 +125,7 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 // across the three axis reads of one bounds calculation. Only analytic walks
 // enter this cache: free-form walks charge a per-read work budget.
 type revolveExtentProfile struct {
-	walks      *profileWalks
+	walks      *momentinput.ProfileWalks
 	coordUpper float64
 }
 
@@ -274,10 +276,10 @@ func analyticRevolveProfile(ctx context.Context, profile ProfileRecord) (bool, e
 func resolveAnalyticRevolveExtentProfile(
 	ctx context.Context, profile ProfileRecord, work *freeform.FreeformWork,
 ) (*revolveExtentProfile, error) {
-	walks := &profileWalks{
-		profile: profile,
-		outer:   make([]survey2d.SegmentWalk, len(profile.Outer.Segments)),
-		holes:   make([][]survey2d.SegmentWalk, len(profile.Holes)),
+	walks := &momentinput.ProfileWalks{
+		Profile: profile,
+		Outer:   make([]survey2d.SegmentWalk, len(profile.Outer.Segments)),
+		Holes:   make([][]survey2d.SegmentWalk, len(profile.Holes)),
 	}
 	coordUpper := 0.0
 	resolve := func(segments []CurveSegment, result []survey2d.SegmentWalk) error {
@@ -289,7 +291,7 @@ func resolveAnalyticRevolveExtentProfile(
 			if err != nil {
 				return err
 			}
-			if err := requireAnalyticWalk(walk, "a placed cap frame"); err != nil {
+			if err := boundarywalk.RequireAnalyticWalk(walk, "a placed cap frame"); err != nil {
 				return err
 			}
 			result[i] = walk
@@ -297,12 +299,12 @@ func resolveAnalyticRevolveExtentProfile(
 		}
 		return nil
 	}
-	if err := resolve(profile.Outer.Segments, walks.outer); err != nil {
+	if err := resolve(profile.Outer.Segments, walks.Outer); err != nil {
 		return nil, err
 	}
 	for i, hole := range profile.Holes {
-		walks.holes[i] = make([]survey2d.SegmentWalk, len(hole.Segments))
-		if err := resolve(hole.Segments, walks.holes[i]); err != nil {
+		walks.Holes[i] = make([]survey2d.SegmentWalk, len(hole.Segments))
+		if err := resolve(hole.Segments, walks.Holes[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -333,7 +335,7 @@ func axisExtremeContext(
 	work *freeform.FreeformWork, profile *revolveExtentProfile,
 ) (float64, float64, error) {
 	gu, gv := rp.ax.planeDirection(wg, k)
-	var walks *profileWalks
+	var walks *momentinput.ProfileWalks
 	if profile != nil {
 		walks = profile.walks
 	}

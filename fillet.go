@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
@@ -420,7 +421,7 @@ func profileCornerLoopsBudget(budget *proofbound.WorkBudget, profile ProfileReco
 			if err != nil {
 				return nil, err
 			}
-			if err := requireAnalyticWalk(w, "a modify corner rewrite"); err != nil {
+			if err := boundarywalk.RequireAnalyticWalk(w, "a modify corner rewrite"); err != nil {
 				return nil, err
 			}
 			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}

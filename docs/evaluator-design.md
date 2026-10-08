@@ -580,7 +580,7 @@ charge, zero exactly for an axis-aligned frame under the identity placement.
 A placement changes the MOTION and nothing else, so a prism's re-evaluation
 reuses the plane-local walk resolution the original build published rather than
 resolving the same section again. `prismPayload` carries a private
-`*profileWalks` for its own record; `evalPrismContext` publishes the set it
+`*momentinput.ProfileWalks` for its own record; `evalPrismContext` publishes the set it
 resolved onto the body it just built, and `placed` — the one path that carries a
 payload forward unchanged but for `xform` — hands it back to the next build.
 What makes it sound is that a walk holds nothing placement-dependent: `walkOf`
@@ -597,9 +597,9 @@ free-form section would otherwise spend almost all of its time in the
 arc-length bracket under `walkOf`, while the chording itself — `chainStations`
 over the Bézier chain the walk already holds — is cheap.
 
-Reuse is decided by the record, never by the caller. `profileWalks.reusable`
+Reuse is decided by the record, never by the caller. `momentinput.ProfileWalks.Reusable`
 admits a set only when it was resolved from a bit-identical `ProfileRecord`
-(`matches`, compared by float BITS) and measured its own work charge, and every
+(`Matches`, compared by float BITS) and measured its own work charge, and every
 other payload — a plain extrude, a modify op's rewritten section, a boolean
 result, a cup's derived region — carries none and resolves as before. A record
 that changed in any way, including a rescale or a gained hole, is a different

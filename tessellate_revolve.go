@@ -27,7 +27,7 @@ import (
 // tessellate_revolve_arc.go handles circular meridian generators.
 //
 // A free-form (Tier A NURBS) revolve generator is still refused, by
-// revolveLoopWalks' own requireAnalyticWalk: those cells are §13's increment
+// revolveLoopWalks' own boundarywalk.RequireAnalyticWalk: those cells are §13's increment
 // T5.
 //
 // Three structural facts shape everything below, and all three are

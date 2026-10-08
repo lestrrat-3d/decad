@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -404,7 +405,7 @@ func walkEndFromModel(w survey2d.SegmentWalk) Point2 {
 // boundaryExtremesBoundedContext (three times, also via extentBoundedAlong)
 // each used to call walkOf on the SAME recorded segment, so one free-form
 // segment's conversion-and-bracket charge was spent eight times over instead
-// of once. profileWalks (extrude.go) resolves every segment's walk exactly
+// of once. momentinput.ProfileWalks (extrude.go) resolves every segment's walk exactly
 // once per evaluation and lets every consumer read it back.
 
 // involuteFitProfile is the requester's own reproduction fixture: 15
@@ -441,7 +442,7 @@ func involuteFitPrismPayload(t *testing.T) prismPayload {
 }
 
 // TestPrismWalkOnceInvoluteRecordFitsWorkBudget is the observable fix itself:
-// before profileWalks, this exact record's walk was resolved eight times
+// before momentinput.ProfileWalks, this exact record's walk was resolved eight times
 // over within one evalPrismContext call (230,168 units each), for
 // 1,841,344 units against a 1,048,576 ceiling — refused as ErrUnsupported.
 // With the walk resolved once and every consumer reading it back, the whole
@@ -462,7 +463,7 @@ func involuteFitPrismPayload(t *testing.T) prismPayload {
 // never pays, since it calls evalPrism directly on a hand-built
 // prismPayload/ProfileRecord rather than through RecordProfile. What both
 // numbers agree on is the walk resolving exactly ONCE per evaluation instead
-// of eight times: resolveProfileWalks's own charge is
+// of eight times: momentinput.ResolveProfileWalks's own charge is
 // TestResolveProfileWalksChargesSegmentOnce's 230,168, one occurrence of
 // which is common to both totals.
 func TestPrismWalkOnceInvoluteRecordFitsWorkBudget(t *testing.T) {
@@ -504,7 +505,7 @@ func TestPrismWalkOnceInvoluteRecordFitsWorkBudget(t *testing.T) {
 func TestResolveProfileWalksChargesSegmentOnce(t *testing.T) {
 	t.Parallel()
 	work := freeform.NewFreeformWork()
-	pw, err := resolveProfileWalks(involuteFitProfile(), work)
+	pw, err := momentinput.ResolveProfileWalks(involuteFitProfile(), work)
 	require.NoError(t, err)
 	require.NotNil(t, pw)
 	require.Equal(t, uint64(230168), work.Spent,
@@ -512,7 +513,7 @@ func TestResolveProfileWalksChargesSegmentOnce(t *testing.T) {
 }
 
 // TestProfileWalksMismatchRefuses pins the coarsest half of constraint 5's
-// reject-only guard: a *profileWalks resolved from one profile must never be
+// reject-only guard: a *momentinput.ProfileWalks resolved from one profile must never be
 // read against a profile of a DIFFERENT shape, silently or otherwise. The
 // same-shape half — a profile that differs only in its segment DATA — is
 // TestProfileWalksSegmentDataMismatchRefuses below. Either set applied anyway
@@ -529,13 +530,13 @@ func TestProfileWalksMismatchRefuses(t *testing.T) {
 		LineSeg{Start: Point2{U: 2, V: 2}, End: Point2{U: 0, V: 2}, TStart: 0, TEnd: 1},
 		LineSeg{Start: Point2{U: 0, V: 2}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
-	wrongWalks, err := resolveProfileWalks(square, freeform.NewFreeformWork())
+	wrongWalks, err := momentinput.ResolveProfileWalks(square, freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	involute := involuteFitProfile()
 	require.NotEqual(t, len(square.Outer.Segments), len(involute.Outer.Segments),
 		"premise: the two profiles must have different shapes for the guard to fire")
-	require.False(t, wrongWalks.matches(involute), "matches must catch the shape mismatch")
+	require.False(t, wrongWalks.Matches(involute), "matches must catch the shape mismatch")
 
 	t.Run("profileCoordinateEnvelope", func(t *testing.T) {
 		_, err := profileCoordinateEnvelope(involute, freeform.NewFreeformWork(), wrongWalks)
@@ -562,7 +563,7 @@ func lineEndProfile(end Point2) ProfileRecord {
 }
 
 // TestProfileWalksSegmentDataMismatchRefuses pins the guard on the reading it
-// exists for: a *profileWalks resolved from one profile must not be read
+// exists for: a *momentinput.ProfileWalks resolved from one profile must not be read
 // against a DIFFERENT profile of the same shape. Comparing counts alone let
 // such a pair through, and the cached read then published the first section's
 // geometry as the second's — profileCoordinateEnvelope reporting 1 for a
@@ -578,10 +579,10 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 	require.Empty(t, near.Holes)
 	require.Empty(t, far.Holes)
 
-	pw, err := resolveProfileWalks(near, freeform.NewFreeformWork())
+	pw, err := momentinput.ResolveProfileWalks(near, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	require.True(t, pw.matches(near), "premise: the resolved profile itself must still read back")
-	require.False(t, pw.matches(far), "a same-shaped profile with different segment data is not the resolved profile")
+	require.True(t, pw.Matches(near), "premise: the resolved profile itself must still read back")
+	require.False(t, pw.Matches(far), "a same-shaped profile with different segment data is not the resolved profile")
 
 	// The two readings the mismatch used to conflate: near's coordinate
 	// envelope is 1, far's is 2.
@@ -594,39 +595,39 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 
 	t.Run("profileCoordinateEnvelope", func(t *testing.T) {
 		_, err := profileCoordinateEnvelope(far, freeform.NewFreeformWork(), pw)
-		require.ErrorIs(t, err, errResolvedWalksMismatch)
+		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("profileCoordinateUpper", func(t *testing.T) {
 		_, err := profileCoordinateUpper(far, freeform.NewFreeformWork(), pw)
-		require.ErrorIs(t, err, errResolvedWalksMismatch)
+		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 	t.Run("boundaryExtremesBoundedContext", func(t *testing.T) {
 		_, _, _, err := boundaryExtremesBoundedContext(t.Context(), far, 1, 0, freeform.NewFreeformWork(), pw)
-		require.ErrorIs(t, err, errResolvedWalksMismatch)
+		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 	t.Run("buildLoopSidesAs", func(t *testing.T) {
 		pp := prismPayload{profile: near, frame: identityFrame(t), z1: 5, xform: r3.Identity()}
 		body := &Body{doc: New(), solid: true}
 		_, _, _, _, err := buildLoopSidesAs(t.Context(), body, 0, pp, 0, false, far.Outer, freeform.NewFreeformWork(), pw, levelToken{}, levelToken{}, false)
-		require.ErrorIs(t, err, errResolvedWalksMismatch)
+		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 	t.Run("one ulp apart", func(t *testing.T) {
 		ulp := lineEndProfile(Point2{U: math.Nextafter(1, 2), V: 0})
-		require.False(t, pw.matches(ulp), "the comparison is exact: one ulp of difference is a mismatch")
+		require.False(t, pw.Matches(ulp), "the comparison is exact: one ulp of difference is a mismatch")
 		_, err := profileCoordinateEnvelope(ulp, freeform.NewFreeformWork(), pw)
-		require.ErrorIs(t, err, errResolvedWalksMismatch)
+		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 	t.Run("hole data", func(t *testing.T) {
 		withHole := near
 		withHole.Holes = []LoopRecord{lineEndProfile(Point2{U: 1, V: 1}).Outer}
-		holed, err := resolveProfileWalks(withHole, freeform.NewFreeformWork())
+		holed, err := momentinput.ResolveProfileWalks(withHole, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		other := near
 		other.Holes = []LoopRecord{lineEndProfile(Point2{U: 1, V: 3}).Outer}
-		require.False(t, holed.matches(other), "a hole loop's own segment data is compared too")
+		require.False(t, holed.Matches(other), "a hole loop's own segment data is compared too")
 		_, err = profileCoordinateEnvelope(other, freeform.NewFreeformWork(), holed)
-		require.ErrorIs(t, err, errResolvedWalksMismatch)
+		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 }
 
@@ -637,15 +638,15 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 func TestProfileWalksReadBackMatchesFreshResolution(t *testing.T) {
 	t.Parallel()
 	profile := involuteFitProfile()
-	pw, err := resolveProfileWalks(profile, freeform.NewFreeformWork())
+	pw, err := momentinput.ResolveProfileWalks(profile, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	require.True(t, pw.matches(profile))
-	require.True(t, pw.loopMatches(0, profile.Outer))
+	require.True(t, pw.Matches(profile))
+	require.True(t, pw.LoopMatches(0, profile.Outer))
 
 	for si, seg := range profile.Outer.Segments {
 		fresh, err := walkOf(seg, freeform.NewFreeformWork())
 		require.NoError(t, err)
-		require.Equal(t, fresh, pw.at(0, si),
+		require.Equal(t, fresh, pw.At(0, si),
 			"segment %d's read-back walk must be exactly the walk walkOf resolves for it", si)
 	}
 
@@ -803,10 +804,10 @@ func TestPrismBuildPublishesItsOwnResolution(t *testing.T) {
 
 	published := prismPayloadOf(t, built)
 	require.NotNil(t, published.walks, "a completed build must publish its own resolution")
-	require.True(t, published.walks.metered, "the published resolution must know what it cost")
-	require.True(t, published.walks.reusable(published.profile), "it must read back against its own record")
-	require.Equal(t, uint64(230168), published.walks.spent,
-		"the published charge is resolveProfileWalks' own single-resolution cost for this record")
+	require.True(t, published.walks.Metered, "the published resolution must know what it cost")
+	require.True(t, published.walks.Reusable(published.profile), "it must read back against its own record")
+	require.Equal(t, uint64(230168), published.walks.Spent,
+		"the published charge is momentinput.ResolveProfileWalks' own single-resolution cost for this record")
 	require.Equal(t, source.profile, published.profile, "publishing a resolution must not disturb the record")
 }
 
@@ -816,7 +817,7 @@ func TestPrismBuildPublishesItsOwnResolution(t *testing.T) {
 // that resolution cost, so the record's ceiling binds it as before.
 //
 // Pointer identity is the proof that the work was skipped, not merely that the
-// answer came out the same: resolveProfileWalks allocates a new set on every
+// answer came out the same: momentinput.ResolveProfileWalks allocates a new set on every
 // call, so a placement that resolved again could not hand back this one.
 func TestPlacedReusesPublishedWalks(t *testing.T) {
 	t.Parallel()
@@ -852,12 +853,12 @@ func TestPlacedReusesPublishedWalks(t *testing.T) {
 		"the reconstruction counter is replayed on the same terms")
 	require.Equal(t, cold.Spent, warm.Spent,
 		"and that is the same figure the original build spent on this record")
-	require.Greater(t, warm.Spent, published(t, source).spent,
+	require.Greater(t, warm.Spent, published(t, source).Spent,
 		"premise: the whole build charges more than the walk resolution alone")
 }
 
 // published is the resolution a payload carries, asserted present.
-func published(t *testing.T, pp prismPayload) *profileWalks {
+func published(t *testing.T, pp prismPayload) *momentinput.ProfileWalks {
 	t.Helper()
 	require.NotNil(t, pp.walks)
 	return pp.walks
@@ -891,12 +892,12 @@ func TestPlacedWalksReuseMatchesUncachedBuild(t *testing.T) {
 // at a time, and returns the last body with the resolution each step carried.
 // drop clears the published resolution before every step, which is how the same
 // chain is run against the path that resolves its walks itself.
-func placementChain(t *testing.T, pp prismPayload, drop bool) (*Body, []*profileWalks) {
+func placementChain(t *testing.T, pp prismPayload, drop bool) (*Body, []*momentinput.ProfileWalks) {
 	t.Helper()
 	step, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), units.Radians(math.Pi/5))
 	require.NoError(t, err)
 
-	var carried []*profileWalks
+	var carried []*momentinput.ProfileWalks
 	var body *Body
 	for k := range 10 {
 		if drop {
@@ -972,28 +973,28 @@ func TestChangedRecordRefusesPublishedWalks(t *testing.T) {
 	nudged.Outer.Segments[0] = line
 
 	t.Run("one ulp of a coordinate", func(t *testing.T) {
-		require.False(t, source.walks.reusable(nudged), "one ulp of difference is a different record")
+		require.False(t, source.walks.Reusable(nudged), "one ulp of difference is a different record")
 		stale := source
 		stale.profile = nudged
 		rebuilt, err := evalPrism(New(), 0, stale, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.NotSame(t, source.walks, prismPayloadOf(t, rebuilt).walks,
 			"a changed record must resolve its own walks")
-		require.True(t, prismPayloadOf(t, rebuilt).walks.reusable(nudged),
+		require.True(t, prismPayloadOf(t, rebuilt).walks.Reusable(nudged),
 			"and publish them against the record it actually built")
 	})
 
 	t.Run("a new hole", func(t *testing.T) {
 		holed := source
 		holed.profile.Holes = []LoopRecord{lineEndProfile(Point2{U: 1, V: 1}).Outer}
-		require.False(t, source.walks.reusable(holed.profile), "a record that gained a hole is a different record")
+		require.False(t, source.walks.Reusable(holed.profile), "a record that gained a hole is a different record")
 	})
 
 	t.Run("a rescaled record", func(t *testing.T) {
 		scaled := ProfileRecord{Outer: LoopRecord{Segments: make([]CurveSegment, 0, 1)}}
 		scaled.Outer.Segments = append(scaled.Outer.Segments,
 			LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1})
-		require.False(t, source.walks.reusable(scaled),
+		require.False(t, source.walks.Reusable(scaled),
 			"a record in different coordinates is a different record, whatever produced it")
 	})
 }
@@ -1040,17 +1041,17 @@ func TestWalksChargeReplayRefusesAtTheCeiling(t *testing.T) {
 func TestUnmeteredWalksAreNeverReused(t *testing.T) {
 	t.Parallel()
 	profile := involuteFitProfile()
-	metered, err := resolveProfileWalks(profile, freeform.NewFreeformWork())
+	metered, err := momentinput.ResolveProfileWalks(profile, freeform.NewFreeformWork())
 	require.NoError(t, err)
 
-	view := &profileWalks{profile: profile, outer: metered.outer, holes: metered.holes}
-	require.True(t, view.matches(profile), "premise: the view is over this very record")
-	require.False(t, view.reusable(profile), "an unmetered set is never read back")
-	require.ErrorIs(t, view.charge(freeform.NewFreeformWork()), errUnmeteredWalksCharge)
-	require.ErrorIs(t, view.charge(freeform.NewFreeformWork()), ErrUnsupported)
+	view := &momentinput.ProfileWalks{Profile: profile, Outer: metered.Outer, Holes: metered.Holes}
+	require.True(t, view.Matches(profile), "premise: the view is over this very record")
+	require.False(t, view.Reusable(profile), "an unmetered set is never read back")
+	require.ErrorIs(t, view.Charge(freeform.NewFreeformWork()), momentinput.ErrUnmeteredWalksCharge)
+	require.ErrorIs(t, view.Charge(freeform.NewFreeformWork()), ErrUnsupported)
 
-	require.True(t, metered.reusable(profile), "the metered set it was built from still reads back")
-	require.NoError(t, metered.charge(freeform.NewFreeformWork()))
+	require.True(t, metered.Reusable(profile), "the metered set it was built from still reads back")
+	require.NoError(t, metered.Charge(freeform.NewFreeformWork()))
 }
 
 // TestPublishedWalksAreReadOnlyAcrossGoroutines runs two independent

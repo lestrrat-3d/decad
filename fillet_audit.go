@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
@@ -231,7 +232,7 @@ func buildSegEntriesBudget(budget *proofbound.WorkBudget, loops []LoopRecord) ([
 			if err != nil {
 				return nil, auditError(err, fmt.Sprintf(`loop %d segment %d: %v`, li, i, err))
 			}
-			if err := requireAnalyticWalk(w, "the section audit"); err != nil {
+			if err := boundarywalk.RequireAnalyticWalk(w, "the section audit"); err != nil {
 				return nil, auditError(err, fmt.Sprintf(`loop %d segment %d: %v`, li, i, err))
 			}
 			segs = append(segs, segEntry{loop: li, idx: i, n: n, w: w})

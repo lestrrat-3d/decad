@@ -394,7 +394,7 @@ func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeform.FreeformWork) (
 // It writes through the caller's own slice, so the chain it is handed MUST be
 // one the caller owns. validateFreeformMomentSegment converts its own through
 // freeformBezierSpans and passes that, which is what makes this safe today. A
-// survey2d.SegmentWalk's spans are NOT such a chain: one profileWalks set is read by the
+// survey2d.SegmentWalk's spans are NOT such a chain: one ProfileWalks set is read by the
 // build, the tessellation, the extent readings and every rigid re-evaluation of
 // the record, and this write would reach all of them at once, past a cache
 // guard that only ever compares the record (internal/boundarywalk/walk.go's spans field).

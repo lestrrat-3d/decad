@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -1402,7 +1403,7 @@ func readLoftTarget(t *testing.T, s *sketch.Sketch, p *sketch.Profile) loftTarge
 			held += w.Length
 		}
 	}
-	pw := &profileWalks{profile: rec, outer: walks[0], holes: walks[1:]}
+	pw := &momentinput.ProfileWalks{Profile: rec, Outer: walks[0], Holes: walks[1:]}
 	envelope, err := profileCoordinateEnvelope(rec, nil, pw)
 	require.NoError(t, err)
 	return loftTargetReading{target: target, area: area, perimeter: perimeter, heldLength: held, envelope: envelope}

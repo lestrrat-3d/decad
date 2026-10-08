@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
@@ -525,7 +526,7 @@ func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
 	_, ok := walkElem(walk)
 	require.False(t, ok, "there is no 2D boundary element for a free-form walk yet")
 
-	err = requireAnalyticWalk(walk, "the test consumer")
+	err = boundarywalk.RequireAnalyticWalk(walk, "the test consumer")
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 }

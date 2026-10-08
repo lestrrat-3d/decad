@@ -571,7 +571,7 @@ one per segment, never one per loop, and never one inside the walk resolution
 itself: a resolution handed no counter has no ceiling at all and refuses.
 
 Such a pass may REPLAY a recorded charge in place of doing the work again, and
-only on those terms. A resolution that measured what it cost — `profileWalks`,
+only on those terms. A resolution that measured what it cost — `momentinput.ProfileWalks`,
 which records the two counters' deltas across its own `walkOf` calls — can be
 read back by a later pass over a BIT-IDENTICAL record, and that pass charges its
 own fresh counter the recorded figures before reading a single walk. The ceiling

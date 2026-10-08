@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -98,7 +99,7 @@ type radiusOutcome struct {
 	reason  surveyReason
 }
 
-// errFreeformSection is recordLoops' OWN name for requireAnalyticWalk's
+// errFreeformSection is recordLoops' OWN name for boundarywalk.RequireAnalyticWalk's
 // free-form refusal (docs/spline-design.md §8.1, Table R row R9), and the one
 // error prismWall reads as an undecided wall reading rather than a failed
 // survey. It wraps ErrUnsupported exactly as the refusal it renames does, so
@@ -134,11 +135,11 @@ func recordLoops(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]surv
 			if err != nil {
 				return nil, err
 			}
-			// requireAnalyticWalk refuses exactly one thing — a free-form walk
+			// boundarywalk.RequireAnalyticWalk refuses exactly one thing — a free-form walk
 			// (extrude.go) — so its refusal returns under this file's own
 			// sentinel, carrying the same message and the same ErrUnsupported.
 			// Every other error above keeps its own identity.
-			if err := requireAnalyticWalk(w, "the wall survey"); err != nil {
+			if err := boundarywalk.RequireAnalyticWalk(w, "the wall survey"); err != nil {
 				return nil, errFreeformSection
 			}
 			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
@@ -193,7 +194,7 @@ func revolveLoopsPlane(budget *proofbound.WorkBudget, rp revolvePayload) ([][]su
 			if err != nil {
 				return nil, nil, err
 			}
-			if err := requireAnalyticWalk(w, "the survey boundary walk"); err != nil {
+			if err := boundarywalk.RequireAnalyticWalk(w, "the survey boundary walk"); err != nil {
 				return nil, nil, err
 			}
 			plane[i] = w

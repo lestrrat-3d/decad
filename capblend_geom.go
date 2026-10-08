@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -131,7 +132,7 @@ func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop LoopRecord, work *fre
 		if err != nil {
 			return cornerLoop{}, err
 		}
-		if err := requireAnalyticWalk(w, "a cap-loop chamfer"); err != nil {
+		if err := boundarywalk.RequireAnalyticWalk(w, "a cap-loop chamfer"); err != nil {
 			return cornerLoop{}, err
 		}
 		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -551,14 +553,14 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	// verbatim (trimBoundsWalks, surface_trim.go). A plain ExtrudeChain
 	// ribbon has zero sectionDelta and reuses the walks resolved for its sides.
 	view := pp.prism()
-	var boundsWalks *profileWalks
+	var boundsWalks *momentinput.ProfileWalks
 	if pp.sectionDelta != 0 {
 		var err error
 		boundsWalks, err = trimBoundsWalks(view.profile, work)
 		if err != nil {
 			return nil, err
 		}
-		if err := boundsWalks.charge(work); err != nil {
+		if err := boundsWalks.Charge(work); err != nil {
 			return nil, err
 		}
 	} else {
@@ -578,21 +580,21 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 
 type chainWalkCapture struct {
 	walks   []survey2d.SegmentWalk
-	charges []walkReadCharge
+	charges []momentinput.WalkReadCharge
 }
 
 // chainBoundsWalks reads the exact pre-widening walks buildChainSides already
 // resolved. The cache is local to this build; its per-segment measured charges
 // are replayed by resolveOrRead at each bounds read.
-func chainBoundsWalks(profile ProfileRecord, captures []chainWalkCapture) *profileWalks {
-	reads := make([][]walkReadCharge, len(captures))
-	walks := &profileWalks{profile: profile, readCharges: reads}
+func chainBoundsWalks(profile ProfileRecord, captures []chainWalkCapture) *momentinput.ProfileWalks {
+	reads := make([][]momentinput.WalkReadCharge, len(captures))
+	walks := &momentinput.ProfileWalks{Profile: profile, ReadCharges: reads}
 	for i, capture := range captures {
 		reads[i] = capture.charges
 		if i == 0 {
-			walks.outer = capture.walks
+			walks.Outer = capture.walks
 		} else {
-			walks.holes = append(walks.holes, capture.walks)
+			walks.Holes = append(walks.Holes, capture.walks)
 		}
 	}
 	return walks
@@ -623,21 +625,23 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	raw := make([]survey2d.SideWalk, len(chain.Segments))
 	if capture != nil {
 		capture.walks = make([]survey2d.SegmentWalk, len(chain.Segments))
-		capture.charges = make([]walkReadCharge, len(chain.Segments))
+		capture.charges = make([]momentinput.WalkReadCharge, len(chain.Segments))
 	}
 	for i, seg := range chain.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		before, beforeRecon := workSpent(work)
+		before, beforeRecon := boundarywalk.WorkSpent(work)
 		w, err := walkOf(seg, work)
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
 		if capture != nil {
-			after, afterRecon := workSpent(work)
+			after, afterRecon := boundarywalk.WorkSpent(work)
 			capture.walks[i] = w
-			capture.charges[i] = walkReadCharge{after - before, afterRecon - beforeRecon}
+			capture.charges[i] = momentinput.WalkReadCharge{
+				Spent: after - before, ReconstructionSpent: afterRecon - beforeRecon,
+			}
 		}
 		w.LengthBound = proofbound.AbsSumUpper(w.LengthBound, walkLenAllow)
 		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}

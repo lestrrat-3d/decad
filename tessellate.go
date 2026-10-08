@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -596,8 +597,8 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 	// section, a body an older evaluator built — leaves pw nil and every loop
 	// resolves through walkOf as before.
 	pw := pp.walks
-	if pw.reusable(pp.profile) {
-		if err := pw.charge(work); err != nil {
+	if pw.Reusable(pp.profile) {
+		if err := pw.Charge(work); err != nil {
 			return nil, err
 		}
 	} else {
@@ -924,7 +925,7 @@ type chordedLoop struct {
 // caller and shared by every loop of it: chording holds no preflight counter, so
 // the ceiling starts at the tessellation entry rather than at each loop.
 //
-// resolved is a *profileWalks whose loop index roleLoop holds this loop's
+// resolved is a *momentinput.ProfileWalks whose loop index roleLoop holds this loop's
 // pre-resolved walks, or nil to resolve each segment through walkOf as before —
 // buildLoopSidesAs' own parameter of the same name, read the same way. The
 // caller charges work what that resolution cost BEFORE the first read (the
@@ -932,7 +933,7 @@ type chordedLoop struct {
 // it binds a resolving one. A non-nil resolved whose loop at roleLoop was not
 // resolved from exactly this loop's recorded segments is a plumbing bug and
 // refuses rather than silently resolving anyway.
-func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work *freeform.FreeformWork, resolved *profileWalks, roleLoop int, wallFace func(w survey2d.SideWalk) (*Face, error)) (chordedLoop, error) {
+func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, roleLoop int, wallFace func(w survey2d.SideWalk) (*Face, error)) (chordedLoop, error) {
 	if len(loop.Segments) == 0 {
 		return chordedLoop{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
@@ -942,10 +943,10 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 	budget := proofbound.NewWorkBudget(ctx)
 	var loopWalks []survey2d.SegmentWalk
 	if resolved != nil {
-		if !resolved.loopMatches(roleLoop, loop) {
-			return chordedLoop{}, errResolvedWalksMismatch
+		if !resolved.LoopMatches(roleLoop, loop) {
+			return chordedLoop{}, momentinput.ErrResolvedWalksMismatch
 		}
-		loopWalks = resolved.loopWalks(roleLoop)
+		loopWalks = resolved.LoopWalks(roleLoop)
 	}
 	raw := make([]survey2d.SideWalk, len(loop.Segments))
 	// The loop's analytic length, upper bound included: buildLoopSidesAs sums the
@@ -957,7 +958,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 			return chordedLoop{}, err
 		}
 		// A resolved walk was already through walkOf once
-		// (resolveProfileWalks), so it carries the same refusal that
+		// (momentinput.ResolveProfileWalks), so it carries the same refusal that
 		// resolution would surface here, and it holds nothing
 		// placement-dependent to restate (docs/evaluator-design.md §8).
 		var w survey2d.SegmentWalk

@@ -66,6 +66,15 @@ func arcRadiusUpper(segment ArcSeg) float64 {
 	return proofbound.AbsSumUpper(segment.Start.U, segment.Center.U, segment.Start.V, segment.Center.V)
 }
 
+// RequireAnalyticWalk refuses a free-form walk for a consumer that supports
+// only line and circular boundaries. The consumer supplies its error context.
+func RequireAnalyticWalk(w survey2d.SegmentWalk, what string) error {
+	if w.Kind != survey2d.WalkFreeform {
+		return nil
+	}
+	return fmt.Errorf(`%w: %s does not support a free-form boundary segment`, ErrUnsupported, what)
+}
+
 // WalkOf resolves a recorded segment into a bounded walk.
 func WalkOf(segment CurveSegment, work *freeform.FreeformWork) (survey2d.SegmentWalk, error) {
 	return walkOf(segment, work)
