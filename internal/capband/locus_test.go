@@ -105,14 +105,16 @@ func arcWalk(cu, cv, r, th0, th1 float64) survey2d.SideWalk {
 // bows into it (material outside the circle), and an asymmetric lens whose
 // two arcs meet at a corner, read from each arc's own centre. A line-circle
 // corner reads a closed form, so its charge must also sit within 1e-6 of the
-// reference; a circle-circle corner reads a velocity hull and is required to
-// cover it and to stay within 20 times it (the two lens rows sit near 8 and
-// 18). The 1e-9 slack absorbs the Simpson and Newton error.
+// reference; a circle-circle corner reads per-range position and velocity
+// enclosures and must cover it and stay within 5% of it (the two lens rows
+// sit near 1.02 and 1.01). The 1e-9 slack absorbs the Simpson and Newton
+// error.
 //
 // Shown to fail on 2026-10-09: with MiterLocusSliverFlux answering zero
 // every row's charge falls below its reference, with the closed form's
-// 6 replaced by 8 every line-circle row does, and with the hull's sliver
-// bound at D·dc²/4 the lens row about arc A sits 35 times its reference.
+// 6 replaced by 8 every line-circle row does, and with circleCircleSliverMoment
+// reading only the hull bound (D·dc²/8 times the arm) the lens rows sit about
+// 4 and 8 times their references. At 32 sub-ranges they sit 1.16 and 1.30 times.
 func TestMiterLocusSliverFluxCoversTheExactCornerShare(t *testing.T) {
 	t.Parallel()
 	const alpha = 1.0
@@ -169,8 +171,8 @@ func TestMiterLocusSliverFluxCoversTheExactCornerShare(t *testing.T) {
 					`the closed form's charge %v must match the reference share %v`, flux, want)
 				return
 			}
-			require.LessOrEqual(t, flux, 20*want,
-				`the velocity hull's charge %v must stay within 20 times the reference share %v`, flux, want)
+			require.LessOrEqual(t, flux, 1.05*want,
+				`the per-range charge %v must stay within 5%% of the reference share %v`, flux, want)
 		})
 	}
 }
