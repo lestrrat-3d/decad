@@ -1135,7 +1135,6 @@
 1	1.35	TestLoftGearToothVerifiesSound
 2	1.22	TestLoftStationWalkRefusesAtTheRaisedWorkLimit
 2	0.07	TestDraftConeWallsReadNoChordLocusTerm
-2	0.01	TestDraftDenotedNormalAllow
 2	0.01	TestDraftOffsetEnclosesTheExactProduct
 2	0.05	TestDraftPayloadRecordsTheFarSection
 4	0.00	TestLoftStationCapScalesWithPairs

@@ -597,6 +597,19 @@ term:
   measurement, and it omits a direction difference the built surface has.
   `Face.NormalAt` separately composes its arithmetic proof
   (`normal_bound.go`).
+- The same stamp adds the turn between the built patch and the wall its records
+  denote (`capband.DenotedNormalAllow`). The cap directrix is the offset the
+  build solved, held within the contour displacement `δ` of the denoted one in
+  the plane and within the cap level's own displacement along the axis, and the
+  side level is held within its rounding. A flat patch's tag passes through its
+  side edge and one cap corner, and moving that corner by `e` turns the normal
+  by at most `2e/h`, `h` the axial height. A circular patch is coaxial with its
+  denoted cone, and its half angle moves by at most
+  `(e_r + |Δr|·e_z/h)/h`; its held side and cap radii widen `e_r` by their own
+  allowances. The term charges `2·(δ + δ_z·max(1, |Δr|/h))/h` with `h` at the
+  bottom of its span. It is zero only where every one of those displacements
+  is. Without it, a 0.1 mm chamfer on a 20 mm square drawn at `v = 10⁶` publishes
+  a `1.7e-16` bound on walls that sit `1.2e-10` from the exact 45° normal.
 - DX7 widens its own window reading by that bound. A point proven to oppose
   lists the patch; only an all-clear needs every point to clear. For the tagged
   normal-component range `[mn, mx]` and allowance `allow`, it lists when
@@ -666,8 +679,9 @@ only the skew half, and the placement's own independent rounding of every
 emitted coordinate leaves the other half in place on any placed band. So a
 coinciding window alone no longer answers DX8. Only a patch whose own stamped
 departure (`capblend_geom.go`'s `f.normalBound`, derived in
-`internal/capband/departure.go`) is an exact zero does — an axis-aligned `Plane` patch
-of an unplaced band reaches that, and nothing else does. `Face.NormalAt` and DX7
+`internal/capband/departure.go`, plus `capband.DenotedNormalAllow`) is an exact
+zero does — an axis-aligned `Plane` patch of an unplaced band whose cap contour
+and levels are held exactly reaches that, and nothing else does. `Face.NormalAt` and DX7
 already read that same stamp; DX8 now reads it too, rather than assuming a
 coinciding window buys back what only a zero stamp proves. A later PR could win
 the answer back for a placed or whole-turn band through a proven curvature
@@ -1627,6 +1641,10 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
   The section is drawn at the sketch origin and carried out by the PLACEMENT,
   never drawn at large sketch coordinates, so no arrangement weld is left a
   handful of ulps of margin for a platform to land either side of;
+- a band patch's `NormalAt` bound ENCLOSES its distance from the normal of the
+  wall its records denote, read in 400-bit arithmetic: a 0.1 mm chamfer on a
+  20 mm square and on a 20 mm disk, each drawn at `v = 10⁶`, whose cap contour
+  is held an ulp of `10⁶` off the denoted one;
 - a body whose ruled patch opposes a pull its published `Cone` does not is NOT
   passed by DX7 — the answer is undecided, never the proven all-clear — while
   an ordinary setback's band is still cleared outright under one pull and

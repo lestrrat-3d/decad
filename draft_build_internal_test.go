@@ -106,16 +106,3 @@ func TestDraftConeWallsReadNoChordLocusTerm(t *testing.T) {
 	}
 	require.Equal(t, 2, cones)
 }
-
-// TestDraftDenotedNormalAllow pins the wall normal's denoted-surface term: it
-// grows with the far contour's displacement, and a height its own span cannot
-// keep positive reads +Inf rather than a number that understates it.
-func TestDraftDenotedNormalAllow(t *testing.T) {
-	t.Parallel()
-	small := draftDenotedNormalAllow(1e-15, 0, 0, 10, 0)
-	large := draftDenotedNormalAllow(1e-12, 0, 0, 10, 0)
-	require.Greater(t, small, 0.0)
-	require.Greater(t, large, small)
-	require.GreaterOrEqual(t, small, 2e-16)
-	require.True(t, math.IsInf(draftDenotedNormalAllow(1e-15, 6, 6, 10, 0), 1))
-}

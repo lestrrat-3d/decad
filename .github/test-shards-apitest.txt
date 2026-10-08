@@ -30,6 +30,7 @@
 0	1.07	TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux
 0	0.03	TestCapBlendConeAreaEnclosesTheDenotedPatch
 0	0.02	TestCapBlendConePatchNormalOutwardBothCaps
+0	0.01	TestCapBlendPatchNormalBoundCoversDenotedWall
 0	0.20	TestCapBlendDHoleLoopBoundStaysTight
 0	0.40	TestCapBlendFilletedPlateCentroidIsClosedForm
 0	0.40	TestCapBlendFilletedPlateReadsSound

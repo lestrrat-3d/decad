@@ -874,7 +874,10 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 					"the displaced sample points cost more than the readings' own bounds")
 			}
 			if tc.underArmBounds > 0 {
-				require.Less(t, allow, tc.underArmBounds*arms,
+				// The patch's own normalBound is a separate charge: it covers the
+				// built surface against its tag and against the wall its records
+				// denote, which the offset radius's own rounding moves even here.
+				require.Less(t, allow-band.face.normalBound, tc.underArmBounds*arms,
 					"an undisplaced band must not be charged for a displacement it has not got")
 			}
 			const samples = 512
