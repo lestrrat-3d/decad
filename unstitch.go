@@ -285,6 +285,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			lengthUnbounded: old.lengthUnbounded,
 			denot:           old.denot.Compose(xform),
 		}
+		ne.curveBound, ne.curveBounded = placedCurveBound(old, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}

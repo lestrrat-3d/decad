@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -654,6 +655,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			lengthUnbounded: old.lengthUnbounded,
 			denot:           old.denot.Compose(xform),
 		}
+		ne.curveBound, ne.curveBounded = placedCurveBound(old, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}
@@ -782,6 +784,16 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	// that the plane-coordinate integrals above cannot see.
 	if bound, ok := patchPolygonAreaBound(ig.Area, ordered, edgeCopy); ok {
 		ig.AreaBound = bound
+	} else {
+		// A rim with a circular edge is bounded against the loop the
+		// integrals read, lifted through the fitted frame, edge by edge
+		// (patchCurvedAreaCharge); a rim it cannot bound refuses rather than
+		// publish an area its own truth may sit outside of.
+		charge, ok := patchCurvedAreaCharge(frame, frameMap, frameCharge.Stretch, segs, ordered, edgeCopy)
+		if !ok {
+			return nil, fmt.Errorf(`%w: a Body.Patch rim edge carries no proven bound on the curve it denotes, so its face area has none`, ErrUnsupported)
+		}
+		ig.AreaBound = proofbound.AbsSumUpper(ig.AreaBound, charge)
 	}
 
 	budget := proofbound.NewWorkBudget(ctx)
@@ -1105,4 +1117,162 @@ func patchPolygonAreaBound(area float64, ordered []patchOrientedEdge, edgeCopy m
 		return 0, false
 	}
 	return gap, true
+}
+
+// patchCurvedAreaCharge bounds how far the area of the planar region a rim
+// with circular edges denotes sits from the area of the loop segs records
+// in frame's plane coordinates, carried to world by frame's map l (stretch
+// its orthonormality defect): the area the integrals compute, up to l's own
+// stretch, which the caller charges.
+//
+// Both loops are closed planar curves, so each area is the length of its
+// vector area ½∮ x × dx. Given a continuous correspondence x_d(t) ↔ x_l(t)
+// with |x_d − x_l| ≤ κ, ∮ x_d × dx_d − ∮ x_l × dx_l = 2∮ d × dx_l + ∮ d × dd
+// for d = x_d − x_l, so the areas differ by at most
+// Σ κ_e·(1.5·len_l,e + 0.5·len_d,e) over the edges. Per edge:
+//
+//   - a line corresponds linearly between its two ends, so κ_e is the larger
+//     end gap: the held vertex's own bound plus its exact distance from the
+//     lifted record point;
+//   - a circular edge corresponds through its held circle: the denoted curve
+//     projects radially onto it within the edge's curveBound, the lifted
+//     record circle within its centre's exact gap plus
+//     massmoment.CircleImageGap's terms, and matching the ends adds twice
+//     the larger end gap, which includes how far an ArcSeg's recorded end
+//     sits off its own circle. A whole circle has no ends to match.
+//
+// len_d,e is the edge's own published length and bound, len_l,e the lifted
+// record curve's, a whole turn's for a circular one. It answers false when
+// any edge has no curve bound, no finite length or a gap not below half its
+// radius.
+func patchCurvedAreaCharge(frame r3.Frame, l [3][3]*big.Rat, stretch float64, segs []CurveSegment, ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) (float64, bool) {
+	if len(segs) != len(ordered) {
+		return 0, false
+	}
+	o, fu, fv := frame.Origin(), frame.U(), frame.V()
+	for _, v := range [...]r3.Vec{o, fu, fv} {
+		if !proofbound.FiniteVec(v) {
+			return 0, false
+		}
+	}
+	do, du, dv := proofarith.DyVec(o), proofarith.DyVec(fu), proofarith.DyVec(fv)
+	lift := func(p Point2) (proofarith.DyV3, bool) {
+		pu, okU := proofarith.DyOf(p.U)
+		pv, okV := proofarith.DyOf(p.V)
+		if !okU || !okV {
+			return proofarith.DyV3{}, false
+		}
+		var out proofarith.DyV3
+		for i := range 3 {
+			out[i] = proofarith.DyAdd(do[i], proofarith.DyAdd(proofarith.DyMul(du[i], pu), proofarith.DyMul(dv[i], pv)))
+		}
+		return out, true
+	}
+	dist := func(a proofarith.DyV3, b r3.Vec) (float64, bool) {
+		if !proofbound.FiniteVec(b) {
+			return 0, false
+		}
+		d := proofarith.DvSub(a, proofarith.DyVec(b))
+		return proofarith.DySqrtUp(proofarith.DvDot(d, d)), true
+	}
+	planeLen := func(a, b Point2) float64 {
+		da, _ := proofarith.DyOf(a.U)
+		db, _ := proofarith.DyOf(b.U)
+		ea, _ := proofarith.DyOf(a.V)
+		eb, _ := proofarith.DyOf(b.V)
+		x, y := proofarith.DySubScalar(db, da), proofarith.DySubScalar(eb, ea)
+		return proofarith.DySqrtUp(proofarith.DyAdd(proofarith.DyMul(x, x), proofarith.DyMul(y, y)))
+	}
+	onePlus := proofbound.AbsSumUpper(1, stretch)
+	twoPi := proofbound.TwoPiUpper()
+	total := 0.0
+	for i, oe := range ordered {
+		ne := edgeCopy[oe.old]
+		if ne.lengthUnbounded || proofbound.IsNonFinite(ne.length) || proofbound.IsNonFinite(ne.lengthBound) {
+			return 0, false
+		}
+		vs, ve := ne.start, ne.end
+		if !oe.forward {
+			vs, ve = ve, vs
+		}
+		endGap := func(v *Vertex, p Point2) (float64, bool) {
+			at, ok := lift(p)
+			if !ok || proofbound.IsNonFinite(v.bound.Base()) {
+				return 0, false
+			}
+			g, ok := dist(at, v.position)
+			return proofbound.AbsSumUpper(v.bound.Base(), g), ok
+		}
+		denotedLen := proofbound.AbsSumUpper(ne.length, ne.lengthBound)
+		var kappa, liftedLen float64
+		switch seg := segs[i].(type) {
+		case LineSeg:
+			gs, ok1 := endGap(vs, seg.Start)
+			ge, ok2 := endGap(ve, seg.End)
+			if !ok1 || !ok2 {
+				return 0, false
+			}
+			kappa = max(gs, ge)
+			liftedLen = proofbound.ProductUpper(onePlus, planeLen(seg.Start, seg.End))
+		case CircleSeg, ArcSeg:
+			var center Point2
+			var radius, radiusGap, ends float64
+			heldCenter, heldAxis, heldRadius, ok := circleOf(ne.curve)
+			if !ok || !ne.curveBounded {
+				return 0, false
+			}
+			switch c := seg.(type) {
+			case CircleSeg:
+				center, radius = c.Center, c.Radius.Base()
+				radiusGap = proofbound.RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(new(big.Rat).SetFloat64(radius), new(big.Rat).SetFloat64(heldRadius))))
+			case ArcSeg:
+				center = c.Center
+				r2 := planeLen(c.Center, c.Start)
+				radius = r2
+				radiusGap = proofbound.AbsSumUpper(math.Abs(r2-heldRadius), proofbound.ProductUpper(2, math.Abs(r2)*0x1p-52))
+				// The recorded end's own distance off the circle its start
+				// fixes is a jump the lifted loop makes there.
+				offCircle := proofbound.AbsSumUpper(math.Abs(planeLen(c.Center, c.End)-r2), proofbound.ProductUpper(4, math.Abs(r2)*0x1p-52))
+				gs, ok1 := endGap(vs, c.Start)
+				ge, ok2 := endGap(ve, c.End)
+				if !ok1 || !ok2 {
+					return 0, false
+				}
+				ends = proofbound.ProductUpper(2, proofbound.AbsSumUpper(max(gs, ge), proofbound.ProductUpper(onePlus, offCircle)))
+			}
+			at, ok := lift(center)
+			if !ok {
+				return 0, false
+			}
+			centerGap, ok := dist(at, heldCenter)
+			if !ok {
+				return 0, false
+			}
+			liftedGap := proofbound.AbsSumUpper(centerGap, massmoment.CircleImageGap(l, stretch, heldAxis, heldRadius, radiusGap))
+			if !(proofbound.ProductUpper(2, liftedGap) < heldRadius) {
+				return 0, false
+			}
+			kappa = proofbound.AbsSumUpper(ne.curveBound, liftedGap, ends)
+			liftedLen = proofbound.ProductUpper(onePlus, proofbound.ProductUpper(twoPi, proofbound.AbsSumUpper(radius, radiusGap)))
+		default:
+			return 0, false
+		}
+		edgeCharge := proofbound.ProductUpper(kappa, proofbound.AbsSumUpper(proofbound.ProductUpper(1.5, liftedLen), proofbound.ProductUpper(0.5, denotedLen)))
+		total = proofbound.AbsSumUpper(total, edgeCharge)
+	}
+	if proofbound.IsNonFinite(total) {
+		return 0, false
+	}
+	return total, true
+}
+
+// circleOf reads a circular curve's held centre, axis and radius.
+func circleOf(c Curve) (r3.Vec, r3.Vec, float64, bool) {
+	switch v := c.(type) {
+	case Circle3:
+		return v.Center, v.Axis, v.Radius.Base(), true
+	case Arc3:
+		return v.Center, v.Axis, v.Radius.Base(), true
+	}
+	return r3.Vec{}, r3.Vec{}, 0, false
 }

@@ -2,6 +2,7 @@ package massmoment
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -163,4 +164,46 @@ func (c MapCharge) AreaOf(x proofbound.BoundedScalar) proofbound.BoundedScalar {
 // once widened to cover the curve's image.
 func (c MapCharge) LengthBound(value, bound float64) float64 {
 	return proofbound.BoundedStretch(proofbound.MeasuredScalar(value, bound), c.Stretch).Bound
+}
+
+// CircleImageGap bounds how far the image under the linear map l of a
+// plane-coordinate circle of radius ρ, known to within radiusBound of the
+// held radius, lies from the held circle of the held radius about the same
+// centre with held axis axis. A point of the image is c + E with
+// E = ρ·(cos φ·l·u + sin φ·l·v); its distance from the held circle is at most
+// |h| + |r − ρ_h| with h = E·â its height off the held plane and r ≥ |E| − |h|
+// its in-plane radius, so at most 2|E·â| + ||E| − ρ_h|. Here
+// |E·â| ≤ (ρ_h + radiusBound)·(|l·u·â| + |l·v·â|) and, with every eigenvalue
+// of lᵀl in [1 − stretch, 1 + stretch], ||E| − ρ_h| ≤ radiusBound +
+// stretch·(ρ_h + radiusBound). It answers +Inf for a non-finite input or an
+// axis with no length.
+func CircleImageGap(l [3][3]*big.Rat, stretch float64, axis r3.Vec, radius, radiusBound float64) float64 {
+	a, ok := ExactVec(axis)
+	if !ok || proofbound.IsNonFinite(radius) || proofbound.IsNonFinite(radiusBound) || proofbound.IsNonFinite(stretch) {
+		return math.Inf(1)
+	}
+	norm2 := new(big.Rat)
+	for _, x := range a {
+		norm2.Add(norm2, new(big.Rat).Mul(x, x))
+	}
+	normLow := math.Sqrt(proofbound.RatFloatDown(norm2))
+	normLow = math.Nextafter(normLow, 0)
+	if !(normLow > 0) {
+		return math.Inf(1)
+	}
+	tilt := 0.0
+	for k := range 2 {
+		dot := new(big.Rat)
+		for i := range 3 {
+			dot.Add(dot, new(big.Rat).Mul(l[i][k], a[i]))
+		}
+		tilt = proofbound.AbsSumUpper(tilt, proofbound.RatFloatUp(dot.Abs(dot)))
+	}
+	tilt = proofbound.UpRound(tilt / normLow)
+	reach := proofbound.AbsSumUpper(radius, radiusBound)
+	return proofbound.AbsSumUpper(
+		proofbound.ProductUpper(2, proofbound.ProductUpper(reach, tilt)),
+		radiusBound,
+		proofbound.ProductUpper(stretch, reach),
+	)
 }

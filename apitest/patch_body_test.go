@@ -624,3 +624,31 @@ func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
 	require.Equal(t, decad.Approximate, wantBox.Exactness, "the depth's own conversion rounding must reach the stop")
 	require.Equal(t, wantBox, got, "a patched copy's stop must read exactly as the unstitched cap's")
 }
+
+// TestBodyPatchRefusesAnUnboundedCurvedRim revolves a chain perpendicular to
+// its axis into a disk sheet whose one free edge is a revolve's latitude
+// circle. No builder proves that circle's own curve bound, so the patch
+// face fitted to it has no proven area and Body.Patch refuses (Table R
+// R46) rather than publish one.
+func TestBodyPatchRefusesAnUnboundedCurvedRim(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	start := s.CreatePoint(0, 0)
+	s.Fix(start)
+	end := s.CreatePoint(0, 3)
+	s.Fix(end)
+	s.CreateLine(start, end)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	disk, err := decad.New().RevolveChain(s, s.Chains()[0], axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	free, err := decad.Edges(decad.Free()).Exactly(1).SelectEdges(disk)
+	require.NoError(t, err)
+	_, isCircle := free[0].Curve().(decad.Circle3)
+	require.True(t, isCircle, "premise: the disk's rim is a latitude circle")
+	_, err = disk.Patch(t.Context(), decad.Edges(decad.Free()))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}

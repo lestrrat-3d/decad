@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -133,6 +134,38 @@ func prismPointBound(pp prismPayload, u, v, z proofbound.BoundedScalar) float64 
 // lifting (u, v, z) to held.
 func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64 {
 	return proofbound.ExactFrameLiftRound(pp.frame, pp.xform, u, v, z, held)
+}
+
+// circleCurveBound is an Edge's curveBound for a rim circle or arc this
+// payload lifts from the recorded centre (cu, cv) at level z, held with
+// centre at center, its axis along axis, and the walk's radius, which sits within
+// radiusBound of the radius the record denotes. The denoted curve is the
+// recorded circle carried through L = B·[U V N] (massmoment.PrismRotation),
+// displaced by the level's own zDelta along L·N and by the section's own
+// sectionDelta in the plane. Its distance from the held circle is at most
+// the centre's exact lift rounding, massmoment.CircleImageGap's in-plane and
+// tilt terms, and those two displacements stretched by L. It answers +Inf,
+// and ok false, when that bound is not below half the radius, where radial
+// projection onto the held circle stops being continuous.
+func (pp prismPayload) circleCurveBound(cu, cv, z, zDelta, radius, radiusBound float64, center, axis r3.Vec) (float64, bool) {
+	l, err := massmoment.PrismRotation(pp.frame, pp.xform)
+	if err != nil {
+		return math.Inf(1), false
+	}
+	charge, err := massmoment.MapChargeOf(l)
+	if err != nil {
+		return math.Inf(1), false
+	}
+	displaced := proofbound.AbsSumUpper(zDelta, proofbound.ProductUpper(2, pp.sectionDelta))
+	bound := proofbound.AbsSumUpper(
+		exactPrismPointRound(pp, cu, cv, z, center),
+		massmoment.CircleImageGap(l, charge.Stretch, axis, radius, radiusBound),
+		proofbound.ProductUpper(proofbound.AbsSumUpper(1, charge.Stretch), displaced),
+	)
+	if proofbound.IsNonFinite(bound) || !(proofbound.ProductUpper(2, bound) < radius) {
+		return math.Inf(1), false
+	}
+	return bound, true
 }
 
 // liftedVertex lifts a plane-local (u, v) at height z through pp.point and
