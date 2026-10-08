@@ -444,83 +444,27 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 		}
 	}
 
-	areaUpper := 0.0
-	coordUpper := 0.0
+	envelopes := make([]stitchflux.MassEnvelopeFace, 0, len(faces))
 	for _, f := range faces {
-		areaUpper = proofbound.AbsSumUpper(areaUpper, f.area, f.areaBound)
-		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				coordUpper = math.Max(coordUpper, ce.Start().Position().Value.Sub(anchor).Len())
+		envelope := stitchflux.MassEnvelopeFace{Surface: f.surface, Area: f.area, AreaBound: f.areaBound}
+		for i, loop := range f.loops {
+			for _, ce := range loop.coedges {
+				envelope.Vertices = append(envelope.Vertices, ce.Start().Position().Value)
 			}
-		}
-		switch surf := f.surface.(type) {
-		case Cylinder:
-			if len(f.loops) > 0 && len(f.loops[0].coedges) > 0 {
-				// A rim vertex's own distance from anchor is what the loop
-				// above already folds in; this adds the cylinder's own
-				// radius — its PROVEN value plus bound, stitchflux.CircleRadius's
-				// own doc comment, never Cylinder.Radius.Base() read bare —
-				// as a blanket safety margin so coordUpper never understates
-				// a wall point that sits farther from anchor than either rim
-				// vertex does, however far the tagged Radius itself sits
-				// from the true one. Both rims share one radius, so reading
-				// either suffices.
-				edge := f.loops[0].coedges[0].edge
-				if rB, err := stitchflux.CircleRadius(edge.length, edge.lengthBound, edge.lengthUnbounded); err == nil {
-					coordUpper = proofbound.AbsSumUpper(coordUpper, rB.Value, rB.Bound)
+			if len(loop.coedges) > 0 {
+				edge := loop.coedges[0].edge
+				rim := stitchflux.CircleRim{
+					Length: edge.length, LengthBound: edge.lengthBound, LengthUnbounded: edge.lengthUnbounded,
 				}
-			}
-		case Cone:
-			// A cone wall is ruled (straight rulings from the apex), so the
-			// farthest wall point from any anchor lies on one of the two rim
-			// CIRCLES, not necessarily at either rim's own seam vertex — the
-			// identical gap the Cylinder margin above closes, but the two
-			// rims here carry DIFFERENT radii, so both need their own
-			// margin rather than just one.
-			for _, l := range f.loops {
-				if len(l.coedges) == 0 {
-					continue
-				}
-				edge := l.coedges[0].edge
-				if rB, err := stitchflux.CircleRadius(edge.length, edge.lengthBound, edge.lengthUnbounded); err == nil {
-					coordUpper = proofbound.AbsSumUpper(coordUpper, rB.Value, rB.Bound)
-				}
-			}
-		case Sphere:
-			// A zero-loop Sphere face contributes NOTHING to the loop-based
-			// scan above — it has no loop at all — so without this arm
-			// coordUpper would silently ignore the sphere's own surface
-			// entirely, however far it sits from anchor: exactly the "an
-			// intervening term happened to be zero" trap CLAUDE.md warns
-			// against, here because the fixture has no VERTEX to hide behind
-			// rather than a zero coordinate. Every point of the sphere sits
-			// within Center's own distance from anchor plus Radius, so that
-			// sum is the margin, with Radius read through
-			// stitchflux.SphereRadius — never Sphere.Radius bare — exactly as
-			// the Cylinder/Cone margins above read theirs through
-			// stitchflux.CircleRadius.
-			if rB, err := stitchflux.SphereRadius(f.area, f.areaBound); err == nil {
-				coordUpper = proofbound.AbsSumUpper(coordUpper, surf.Center.Sub(anchor).Len(), rB.Value, rB.Bound)
-			}
-		case Torus:
-			// Every point of a Torus face this file admits lies within
-			// Major+Minor of Center's own radial position and within Minor
-			// of its own axial position, regardless of which φ window the
-			// face spans, so Center's own distance from anchor plus
-			// Major+Minor is a safe margin — the same shape the Sphere
-			// case above takes. Reaching this loop at all means
-			// sumStitchFlux already ran torusFaceFluxAndMoment
-			// successfully for this face, which is what proves
-			// stitchflux.AxisIsCoordinateAligned and a positive Major/Minor
-			// here; this reads them bare only because that proof already
-			// ran, never in place of it.
-			if majorValue, merr := surf.Major.In(units.Millimeter); merr == nil {
-				if minorValue, nerr := surf.Minor.In(units.Millimeter); nerr == nil {
-					coordUpper = proofbound.AbsSumUpper(coordUpper, surf.Center.Sub(anchor).Len(), majorValue+minorValue)
+				envelope.Rims = append(envelope.Rims, rim)
+				if i == 0 {
+					envelope.FirstRim = &rim
 				}
 			}
 		}
+		envelopes = append(envelopes, envelope)
 	}
+	areaUpper, coordUpper := stitchflux.MassEnvelope(envelopes, anchor)
 
 	vol, centre, state := stitchflux.MassFromFlux(fluxSum,
 		[3]proofbound.BoundedScalar{momX, momY, momZ}, areaUpper, coordUpper, delta)
