@@ -101,6 +101,9 @@
 0	0.01	TestRevolveToFaceAngularHalfDiskCap
 0	0.01	TestSelectEdgesPredicates
 0	0.01	TestSheetSolidPairOutsideProvenSound
+0	0.08	TestShellClosedPrism
+0	0.08	TestShellClosedPrismCylinder
+0	0.08	TestShellClosedPrismGatesAndConsumers
 0	0.02	TestShellCupDownstream
 0	0.01	TestShellCupPlacedComposes
 0	0.06	TestShellCupWallOutwardCavityQualifyingPinch

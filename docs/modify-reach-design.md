@@ -1011,6 +1011,40 @@ is `h - k*t`, where `k` is kept cap count; reaching zero is SX11.
 inward, `Q \ P` outward. It produces one outer shell plus one void shell.
 `Shell.IsVoid()` is true only on the inner shell.
 
+`shellClosedPrism` (`shell.go`) builds it as three slabs: inward `P` on
+`[z0, z0 + t]`, the band `{P, reverse(Q)}` on `[z0 + t, z1 − t]` and `P` on
+`[z1 − t, z1]`; outward `Q` on `[z0 − t, z0]`, `{Q, reverse(P)}` on `[z0, z1]`
+and `Q` on `[z1, z1 + t]`. Both interfaces are monotone
+(`docs/stacked-prism-design.md` §2.2): the band's one hole is upper-only at the
+first and lower-only at the second, and each exposes the cavity region (`Q`
+inward, `P` outward) as the cavity's floor and ceiling. Each derived level
+carries its source end's displacement, the thickness conversion and its own
+float sum's rounding, as a cup's floor level does, and the offset loops'
+proven displacement is the stack's `sectionDelta`. The gates run in the order
+S18, S10's section limit, SX11 (`t` below `h/2`, inward), S11a, the §5 audit.
+The cavity's walls, floor and ceiling form a connected face set touching no
+outer wall and no end cap, which the stacked build reads as the void shell of
+the one outer lump. Roles are the stack's own: outer walls
+`slab(0).region(0).side(0,j)`, cavity walls `slab(1).region(0).side(1,j)`,
+`capStart`/`capEnd`, the floor `floor(0,0)` and the ceiling `ceiling(1,0)`.
+A stack enclosing a cavity has no brep face view, so a later modify op on the
+closed shell is `docs/brep-modify-design.md` SB2.
+
+**Open question (side opening).** The open-chain wall section above meets two
+problems this design does not resolve, so a removed prism side face stays base
+S2. First, where an end corner of `K` is a right angle — every box — the
+exact normal segment at that end is collinear with the removed run's first or
+last segment and overlaps it, so `P \ W` is not the record `R` followed by the
+wall section's own boundary: that record doubles back along the overlap, and
+the exposed floor needs `R` trimmed to where the normal segments end. Second,
+the walls along `K` change loop record between the cap slabs (`P`) and the
+middle slab (`W`), so a stack column, which is one loop record, cannot carry
+them as one face; and at a right-angle end the cap slabs' walls along `R` and
+the middle slab's normal-segment walls are coplanar, so canonical topology
+needs one planar face spanning all three slabs with the opening as its hole.
+Both need per-segment wall columns that merge coplanar pieces across slabs,
+which the stacked build does not have.
+
 For cap-only removal from a holed section, build the wall as one slab with
 `1 + k` regions: the band between the paired outer loops first, followed by one
 band between each paired hole loop in `ProfileRecord` order. The base
@@ -1430,7 +1464,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; the asymmetric chamfer of a brep or stacked receiver (SX16); all SX9/SX10 |
 | **B** (landed) | revolve junction rewrite + roles + surveys | cap loops; shell reach |
 | **C1** (landed) | multi-region `stackedPrismPayload` (the lining reading); cups recorded on it; base S12 lifted through BX8 | closed + side-opening prism shell; revolve side opening; cap loops |
-| **C2** | closed + side-opening prism shell (BX4/BX5); their tessellation/clearance cases | revolve side opening; cap loops |
+| **C2** (landed) | closed prism shell (BX5): the void-shell stack, its tessellation | side-opening prism shell (BX4, §9.2's open question); revolve side opening; cap loops |
 | **C3** | revolve shell side opening, full and partial turn (§9.3) | cap loops |
 | **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | a side opening, full or partial turn, is S2 until C's §9.2 wall section lands; cap loops |
 | **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |

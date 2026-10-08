@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/units"
@@ -98,9 +99,11 @@ func WithShellSense(s ShellSense) ShellOption {
 // the one call form that takes a nil sel, and a non-nil sel beside it is
 // ErrDegenerate (docs/modify-reach-design.md §2, SX1). A full-turn revolve
 // builds it: the meridian's wall region swept a whole turn, an outer shell
-// around one void shell (Shell.IsVoid) that is the cavity. Every other
-// receiver returns ErrUnsupported after the stage-1 gates pass, a partial
-// revolve among them, since it keeps both angular caps. Two WithShellSense
+// around one void shell (Shell.IsVoid) that is the cavity. So does a
+// hole-free straight prism: both caps keep a floor t thick, so an inward wall
+// needs t below half the sweep (SX11, ErrDegenerate). Every other receiver
+// returns ErrUnsupported after the stage-1 gates pass — a holed prism section,
+// and a partial revolve, since it keeps both angular caps. Two WithShellSense
 // options naming different senses are ErrDegenerate (SX1).
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism
@@ -164,6 +167,11 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		// and sweeps its closed wall region over the whole turn.
 		if rp, ok := b.payload.(revolvePayload); ok && rp.full && len(rp.profile.Holes) == 0 {
 			return b.shellRevolve(ctx, rp, nil, s, t, tmm, tDelta)
+		}
+		// Reach BX5: a hole-free straight prism keeps both caps and lines
+		// them with a wall, closing a cavity.
+		if pp, ok := b.payload.(prismPayload); ok && len(pp.profile.Holes) == 0 {
+			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
 		return nil, refuseClosedShell(b.payload)
 	}
@@ -390,13 +398,13 @@ func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp 
 }
 
 // refuseClosedShell is Shell's answer to WithNoOpenings on every receiver but
-// a full-turn revolve over a hole-free meridian, which shellRevolve builds
+// a full-turn revolve over a hole-free meridian, which shellRevolve builds,
+// and a hole-free straight prism, which shellClosedPrism builds
 // (docs/modify-reach-design.md Tables RX/SX, §14). Each receiver gets the row
 // that stages it: a faceted boolean result SX9, a brep or stacked receiver
 // SX16, a holed prism section or revolve meridian SX8, a partial revolve SX8
-// (it keeps both angular caps), a hole-free prism the closed prism shell §14
-// row C lands, and any other receiver base S3. Every one is ErrUnsupported:
-// the closed body exists, and this evaluator does not build it.
+// (it keeps both angular caps), and any other receiver base S3. Every one is
+// ErrUnsupported: the closed body exists, and this evaluator does not build it.
 func refuseClosedShell(payload featurePayload) error {
 	switch p := payload.(type) {
 	case facetedPayload:
@@ -404,10 +412,9 @@ func refuseClosedShell(payload featurePayload) error {
 	case brepPayload, stackedPrismPayload:
 		return fmt.Errorf(`%w: this evaluator does not build a closed shell of a brep or stacked receiver (modify-reach SX16)`, ErrUnsupported)
 	case prismPayload:
-		if len(p.profile.Holes) > 0 {
-			return fmt.Errorf(`%w: a closed shell of a holed prism section is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
-		}
-		return fmt.Errorf(`%w: this evaluator does not build a closed prism shell yet (modify-reach §14 row C)`, ErrUnsupported)
+		// Shell routes a hole-free section to shellClosedPrism, so the prism
+		// that arrives here is holed.
+		return fmt.Errorf(`%w: a closed shell of a holed prism section is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
 	case revolvePayload:
 		if len(p.profile.Holes) > 0 {
 			return fmt.Errorf(`%w: a closed shell of a revolve whose meridian holds a hole is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
@@ -418,6 +425,107 @@ func refuseClosedShell(payload featurePayload) error {
 	default:
 		return fmt.Errorf(`%w: this evaluator shells a straight prism only`, ErrUnsupported)
 	}
+}
+
+// shellClosedPrism is reach BX5 (docs/modify-reach-design.md §9.2): WithNoOpenings
+// on a hole-free straight prism keeps every face and lines it with a wall of
+// thickness t, closing a cavity. The record is three stacked slabs: inward,
+// the section P on [z0, z0 + t], the band between P and its erosion Q on
+// [z0 + t, z1 − t], and P on [z1 − t, z1]; outward, the dilation Q on
+// [z0 − t, z0], the band between Q and P on [z0, z1], and Q on [z1, z1 + t]. The
+// two interfaces expose the cavity region (Q inward, P outward) as the
+// cavity's floor and ceiling, and the cavity walls with them form one void
+// shell inside the outer one (Shell.IsVoid).
+//
+// The gates are the cup's with both caps kept: S18 and S10's section limit
+// (inward), then SX11, the axial cavity h − 2t, which must stay positive
+// (inward; ErrDegenerate), then S11a as the offset is built and the §5 audit.
+// The offset loops carry their proven displacement as the stack's section
+// displacement.
+func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
+	d := b.doc
+	if err := requireExactSection(pp, "shells"); err != nil {
+		return nil, err
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
+		return nil, err
+	}
+	if s > 0 {
+		inradius, enough, err := sectionInradius(budget, pp.profile, tmm, tDelta)
+		if err != nil {
+			return nil, err
+		}
+		if err := requireSectionCavity(t, tmm, inradius, enough); err != nil {
+			return nil, err
+		}
+		// SX11: the two kept caps each eat t of the sweep, so the cavity's
+		// axial height h − 2t is positive exactly when t < h/2, read with the
+		// section limit's scale-relative rounding tolerance.
+		h := pp.z1 - pp.z0
+		if maxT := h/2 - shellTol*math.Max(1, h); tmm >= maxT {
+			return nil, fmt.Errorf(`%w: the shell thickness %s leaves no cavity between the two kept caps of a %s sweep (the accepted maximum is %s, half the sweep less the evaluator's rounding tolerance; modify-reach SX11)`,
+				ErrDegenerate, t, units.Millimeters(h), units.Millimeters(math.Max(maxT, 0)))
+		}
+	}
+	offset, err := offsetProfile(budget, pp.profile, s, tmm)
+	if err != nil {
+		return nil, err
+	}
+	if err := auditOffsetSectionBudget(budget, pp.profile, offset); err != nil {
+		return nil, shellCancelCause(err)
+	}
+	offsetDelta, err := offsetSectionDelta(budget, pp.profile, s, tmm, tDelta)
+	if err != nil {
+		return nil, shellCancelCause(err)
+	}
+	outer, cavity := pp.profile, offset
+	if s < 0 {
+		outer, cavity = offset, pp.profile
+	}
+	bands, err := shellWallBands(ctx, outer, cavity)
+	if err != nil {
+		return nil, err
+	}
+	// Each derived level carries its source end's displacement, the thickness
+	// conversion and this float sum's rounding, as a cup's floor level does.
+	step := func(from, delta, by float64) (float64, float64) {
+		to := from + by
+		return to, proofbound.AbsSumUpper(delta, tDelta, proofarith.AddRoundError(from, by, to))
+	}
+	lo, loDelta := step(pp.z0, pp.z0Delta, s*tmm)
+	hi, hiDelta := step(pp.z1, pp.z1Delta, -s*tmm)
+	caps := prismSlab{regions: []ProfileRecord{outer}}
+	first, middle, last := caps, prismSlab{regions: bands}, caps
+	if s > 0 {
+		first.z0, first.z0Delta, first.z1, first.z1Delta = pp.z0, pp.z0Delta, lo, loDelta
+		middle.z0, middle.z0Delta, middle.z1, middle.z1Delta = lo, loDelta, hi, hiDelta
+		last.z0, last.z0Delta, last.z1, last.z1Delta = hi, hiDelta, pp.z1, pp.z1Delta
+	} else {
+		first.z0, first.z0Delta, first.z1, first.z1Delta = lo, loDelta, pp.z0, pp.z0Delta
+		middle.z0, middle.z0Delta, middle.z1, middle.z1Delta = pp.z0, pp.z0Delta, pp.z1, pp.z1Delta
+		last.z0, last.z0Delta, last.z1, last.z1Delta = pp.z1, pp.z1Delta, hi, hiDelta
+	}
+	exposed := []ProfileRecord{cavity}
+	ref := d.nextProducerID()
+	body, err := evalStackedContext(ctx, d, ref, stackedPrismPayload{
+		slabs:        []prismSlab{first, middle, last},
+		interfaces:   []prismSlabInterface{{lowerExposed: exposed}, {upperExposed: exposed}},
+		frame:        pp.frame,
+		xform:        pp.xform,
+		sectionDelta: offsetDelta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d.commit(body, b)
+	return body, nil
 }
 
 // shellTol is the closed-form degeneracy tolerance for the shell's own gates:

@@ -834,6 +834,58 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 	return evalStackedPlanContext(ctx, d, ref, sp, stackedOwnPlan{})
 }
 
+// stackedEnclosesCavity reports whether a stack encloses a cavity: a hole
+// column that starts and ends at interfaces, so an exposed floor closes it
+// below and an exposed ceiling above (§2.4's closed shell).
+func stackedEnclosesCavity(sp stackedPrismPayload) (bool, error) {
+	columns, _, err := stackedColumns(sp)
+	if err != nil {
+		return false, err
+	}
+	for _, col := range columns {
+		if col.loopIndex != 0 && col.start > 0 && col.end < len(sp.slabs)-1 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// stackedLumps groups a stacked body's faces into lumps and shells. Each
+// connected face set holding an anchor — a region outer's wall or an end cap,
+// the faces the body's exterior is made of — is one lump's outer shell. A
+// connected set holding none bounds a cavity: its walls are hole loops and its
+// planar faces are interface patches, all facing into it, so it is a void
+// shell (§2.4's closed shell). The cavity lies in the one outer shell's
+// material; a body with several outer shells and any cavity would need a
+// nesting proof this build does not run, and is ErrUnsupported.
+func stackedLumps(faces []*Face, anchors map[*Face]struct{}) ([]*Lump, error) {
+	var outer []*Lump
+	var voids []*Shell
+	for _, group := range splitConnectedFaces(faces) {
+		anchored := false
+		for _, f := range group {
+			if _, ok := anchors[f]; ok {
+				anchored = true
+				break
+			}
+		}
+		if !anchored {
+			voids = append(voids, &Shell{faces: group, open: shellIsOpen(group), void: true})
+			continue
+		}
+		outer = append(outer, &Lump{shells: []*Shell{{faces: group, open: shellIsOpen(group)}}})
+	}
+	switch {
+	case len(voids) == 0:
+		return outer, nil
+	case len(outer) != 1:
+		return nil, fmt.Errorf(`%w: a stacked body with %d outer shells and %d cavities needs a nesting proof this evaluator does not run`,
+			ErrUnsupported, len(outer), len(voids))
+	}
+	outer[0].shells = append(outer[0].shells, voids...)
+	return outer, nil
+}
+
 // stackedPart is one (slab, region) prism of a stacked body: its bounded
 // section area and its centroid lifted to the slab's bounded midpoint.
 type stackedPart struct {
@@ -915,6 +967,9 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	colDelta := make([]float64, len(columns))
 	maxColDelta := 0.0
 	var faces []*Face
+	// anchors are the faces on the body's own exterior: every region outer's
+	// wall and the first and last slabs' caps (stackedLumps).
+	anchors := map[*Face]struct{}{}
 	for ci := range columns {
 		col := &columns[ci]
 		colDelta[ci] = plan.columnDelta(*col)
@@ -936,6 +991,11 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		}
 		col.bottom, col.top, col.perimeter = bottom, top, perimeter
 		faces = append(faces, wallFaces...)
+		if col.loopIndex == 0 {
+			for _, f := range wallFaces {
+				anchors[f] = struct{}{}
+			}
+		}
 	}
 
 	// One part per (slab, region).
@@ -998,6 +1058,9 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		}
 	}
 	capCount := len(planar)
+	for _, f := range planar {
+		anchors[f] = struct{}{}
+	}
 	for k := range sp.interfaces {
 		z, axial := sp.slabs[k].z1, sp.slabs[k].z1Delta
 		patches, err := stackedInterfacePatches(sp, columns, bySlab, k)
@@ -1027,7 +1090,10 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		return nil, err
 	}
 	faces = append(faces, planar...)
-	body.lumps = sheetLumps(plan.order(faces))
+	body.lumps, err = stackedLumps(plan.order(faces), anchors)
+	if err != nil {
+		return nil, err
+	}
 
 	volume := proofbound.BoundedScalar{}
 	area := capArea

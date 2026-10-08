@@ -186,7 +186,8 @@ func brepOfPrism(pp prismPayload) (brepPayload, error) {
 // two caps and every interface's exposed floors and ceilings. The record is
 // audited first, so a stack its own build refuses has no face view either. A
 // prism group (one slab of several disjoint regions) has no face view and is
-// ErrUnsupported: the record states one region per cap.
+// ErrUnsupported: the record states one region per cap. So is a stack
+// enclosing a cavity (a closed shell, stackedEnclosesCavity).
 func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, error) {
 	if sp.isGroup() {
 		return brepPayload{}, fmt.Errorf(`%w: a prism group of %d disjoint regions has no face view`, ErrUnsupported, len(sp.slabs[0].regions))
@@ -194,7 +195,16 @@ func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, er
 	if err := falsifyStackedPayload(ctx, sp); err != nil {
 		return brepPayload{}, err
 	}
-	sp, err := brepJoinStacked(sp)
+	cavity, err := stackedEnclosesCavity(sp)
+	if err != nil {
+		return brepPayload{}, err
+	}
+	if cavity {
+		// A brep record's lumps are its connected face sets, so a cavity's
+		// faces would read as a second solid.
+		return brepPayload{}, fmt.Errorf(`%w: a stacked prism enclosing a cavity has no face view`, ErrUnsupported)
+	}
+	sp, err = brepJoinStacked(sp)
 	if err != nil {
 		return brepPayload{}, err
 	}

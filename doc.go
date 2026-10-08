@@ -129,6 +129,7 @@
 //	              loop when both caps leave a holed section)  builds
 //	Shell         partial revolve, both angular caps removed  builds
 //	Shell         full revolve, WithNoOpenings (closed)       builds
+//	Shell         hole-free prism, WithNoOpenings (closed)    builds
 //	  a side face removed, or a kept angular cap              ErrUnsupported
 //	  holed meridian, or one meeting the axis twice           ErrUnsupported
 //	  offset reaching across the axis                         ErrUnsupported
@@ -167,7 +168,8 @@
 // a signature change). WithTangentChain expands a Fillet's or Chamfer's edges
 // across proven tangent continuations, WithAsymmetricChamfer gives a Chamfer
 // two setbacks, WithShellSense picks a shell's wall sense, WithNoOpenings asks
-// for a closed shell (built for a full revolve, [ErrUnsupported] elsewhere),
+// for a closed shell (built for a full revolve and a hole-free prism,
+// [ErrUnsupported] elsewhere),
 // and WithTaper names an extrude taper — but a nonzero taper is
 // [ErrUnsupported], returned before the document changes. WithSweepTwist names
 // a sweep's distributed twist, with nonzero twist staged as [ErrUnsupported].

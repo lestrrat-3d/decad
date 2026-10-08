@@ -187,7 +187,9 @@
 2	0.20	TestRevolveMeshCarriesItsOccupiedVolumeProof
 2	0.03	TestRevolveMeshSymDiffBoundsTheCylinderVolumeDeficit
 2	0.27	TestRotationalSweepRadiusMatchesPerCornerForm
+2	0.02	TestShellClosedPrismLevelsCarryThicknessConversion
 2	0.01	TestSplineBezierMatchesGeomEvaluator
+2	0.02	TestStackedLumpsNeedsOneOuterShellForACavity
 2	0.01	TestSturmChainBuildPollsPerMember
 2	1.45	TestSweepExtremeBoundsReflexArm
 2	0.02	TestSweepPairFacetedFloorRefusesUnprovedPath
