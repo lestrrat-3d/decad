@@ -399,47 +399,63 @@ func tallTubeTriangles(n int) ([]r3.Vec, [][3]int) {
 	return verts, tris
 }
 
-// TestLoftAuditScanCeilingRefusesTallTube is S8 over the sweep's own scan. A
-// tall tube of 20000 triangles has few candidates but scans about 2·10^8
-// pairs on the sweep axis; the counting pass refuses once its scan passes the
-// ceiling, so the budget steps exactly F + ceiling + 1 times and no pair is
-// tested. The same shape built as a 3000-gon loft 100 tall refuses through
-// evalLoft, while the gear tooth and the 1200-gon prism
-// (TestLoftAuditCandidateCeilingRefuses, TestEvalLoftAuditCountsCandidatesNotPairs)
-// still build.
+// slantedStackTriangles builds n thin triangles, each rising from z = 0 to
+// z = 1 across the same unit square and shifted by 1e-4 along X from the
+// last, so every two boxes overlap on all three axes.
+func slantedStackTriangles(n int) ([]r3.Vec, [][3]int) {
+	verts := make([]r3.Vec, 0, 3*n)
+	tris := make([][3]int, 0, n)
+	for k := range n {
+		dx := 1e-4 * float64(k)
+		verts = append(verts, r3.NewVec(dx, 0, 0), r3.NewVec(1+dx, 0, 1), r3.NewVec(dx, 1, 1))
+		tris = append(tris, [3]int{3 * k, 3*k + 1, 3*k + 2})
+	}
+	return verts, tris
+}
+
+// TestLoftAuditEnumerationTracksCandidates is S8 over the enumeration's own
+// work. A tall tube of 20000 triangles overlaps on every sweep axis, so the
+// sweep would scan about 2·10^8 pairs to find about 3F candidates; the grid
+// works a small multiple of the candidates instead, and the audit and the
+// same shape built as a 3000-gon loft 100 tall both admit. A stack of 4100
+// triangles whose boxes all overlap has more candidates than the ceiling:
+// the counting pass refuses before any pair is tested, having stepped the
+// budget at most F + ceiling + 1 times.
 //
-// Shown to fail: with the scan limit removed from sweepOrder.visit the tube
-// audit passed after scanning every pair (2.1 s at F = 20000 against 0.15 s
-// with the limit, on the development host) and the 3000-gon loft built.
-func TestLoftAuditScanCeilingRefusesTallTube(t *testing.T) {
+// Shown to fail: with newPairScan returning the sweep alone, the tube and
+// the 3000-gon loft refused as S8.
+func TestLoftAuditEnumerationTracksCandidates(t *testing.T) {
 	t.Parallel()
-	t.Run("generic entry", func(t *testing.T) {
+	t.Run("tall tube", func(t *testing.T) {
 		const n = 10000
 		verts, tris := tallTubeTriangles(n)
-		calls := 0
-		budget := &proofbound.WorkBudget{
-			StepFn: func() error { calls++; return nil },
-			ErrFn:  func() error { return nil },
-		}
 		start := time.Now()
-		work, err := loftmesh.LoftCrossingAuditWork(budget, verts, tris, loftAuditProduction)
-		t.Logf("tall tube F=%d refused in %s", len(tris), time.Since(start))
-		require.ErrorIs(t, err, ErrUnsupported)
-		require.Equal(t, len(tris)+proofbound.MaxFacetPairTestsPerCall+1, calls,
-			"S6 steps once per triangle and the counting pass once per scanned pair, up to the ceiling")
-		require.Zero(t, work.Skips+work.EdgeCerts+work.VertexCerts+work.Classifications, "no pair may be tested")
+		work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+		t.Logf("tall tube F=%d: scanned=%d candidates=%d in %s", len(tris), work.Scanned, work.Candidates, time.Since(start))
+		require.NoError(t, err)
+		require.Less(t, work.Scanned, 20*work.Candidates, "the enumeration's work tracks the candidates")
 	})
 	t.Run("3000-gon loft 100 tall", func(t *testing.T) {
 		p := ProfileRecord{Outer: manyGonLoop(0, 0, 1, 3000)}
 		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 100))
 		pl := loftPayload{profile0: p, profile1: p, plane0: pl0, plane1: pl1,
 			frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1), xform: r3.Identity()}
-		start := time.Now()
 		_, err := evalLoft(t.Context(), New(), producerID(0), pl, proofbound.NewWorkBudget(t.Context()),
 			freeform.NewFreeformWork(), freeform.NewFreeformWork())
-		t.Logf("3000-gon tube refused in %s", time.Since(start))
+		require.NoError(t, err)
+	})
+	t.Run("overlapping stack", func(t *testing.T) {
+		verts, tris := slantedStackTriangles(4100)
+		calls := 0
+		budget := &proofbound.WorkBudget{
+			StepFn: func() error { calls++; return nil },
+			ErrFn:  func() error { return nil },
+		}
+		work, err := loftmesh.LoftCrossingAuditWork(budget, verts, tris, loftAuditProduction)
 		require.ErrorIs(t, err, ErrUnsupported)
-		require.Contains(t, err.Error(), "candidate pair count exceeds")
+		require.LessOrEqual(t, calls, len(tris)+proofbound.MaxFacetPairTestsPerCall+1,
+			"S6 steps once per triangle and the counting pass once per unit of work, up to the ceiling")
+		require.Zero(t, work.Skips+work.EdgeCerts+work.VertexCerts+work.Classifications, "no pair may be tested")
 	})
 }
 
