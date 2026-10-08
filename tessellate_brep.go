@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -163,7 +164,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			owner := topo.uses[topo.edges[ei][0]]
 			poly := edgePoly[ei]
 			if poly == nil {
-				poly = []int{addVertex(owner.DirFrom, owner.Walk.StartBound), addVertex(owner.DirTo, owner.Walk.EndBound)}
+				poly = []int{addVertex(owner.DirFrom, owner.StartBound()), addVertex(owner.DirTo, owner.EndBound())}
 				edgePoly[ei] = poly
 			}
 			if !topo.forward(ui) {
@@ -275,8 +276,12 @@ func brepPlanarDisplacement(f brepFace, walks [][]survey2d.SegmentWalk) float64 
 }
 
 // brepChordWall chords one swept face's wall with tessellation.SampleLoop
-// over its one walk and places its rim samples at both levels. An open wall's polyline ends at its walk's end; a whole
-// circle's closes on its first sample.
+// over its one walk and places its rim samples at both levels. An open wall's
+// polyline ends at its walk's end; a whole circle's closes on its first
+// sample. Each end sample is charged the bound from its held point to the
+// point the wall's record denotes there (boundarywalk.DenotedStartBound and
+// DenotedEndBound), which adds an arc's radial residual at its natural t = 1
+// end; addVertex keeps the largest bound any use places at one vertex.
 func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e brepEmbed, face *Face, chord float64,
 	work *freeform.FreeformWork, addVertex func([3]float64, proofbound.WalkEndBound) int) (brepWallMesh, error) {
 	walk := survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}
@@ -289,7 +294,7 @@ func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e br
 	samples, bounds := sampled.Samples, sampled.BoundOf
 	if !w.Closed {
 		samples = append(samples, Point2{U: w.EndU, V: w.EndV})
-		bounds = append(bounds, w.EndBound)
+		bounds = append(bounds, boundarywalk.DenotedEndBound(f.wall, w))
 	}
 	wm := brepWallMesh{sag: sampled.MaxSag, wallSlack: sampled.WallSlack, capSlack: sampled.CapSlack,
 		segmentArea: sampled.SegmentArea}

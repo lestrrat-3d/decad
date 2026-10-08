@@ -415,6 +415,25 @@ both consequences in the caller's terms. A whole closed circle uses at least
 three chords. A circular revolve generator whose two ends are on the axis uses
 at least two meridian chords (§9).
 
+Each walk's start sample is the junction it shares with the previous walk, and
+both walks' chords end there. Its stored point is the next walk's held start,
+and its gap (§5's `deltaStore`) reaches the points BOTH neighbours' records
+denote there (`boundarywalk.JunctionStartBound`, `docs/evaluator-design.md`
+§3–§4): in each component, the larger of the next walk's start bound and the
+gap between the two held ends plus the previous walk's end bound, or the
+smaller where both ends provably name one point of one circle. Each end bound
+is measured against the point its record denotes. At an arc's natural `t = 1`
+end the record holds `End` verbatim while the arc denotes Start's radius at
+End's angle, so that end adds the arc's radial residual
+(`circularbounds.ArcRadialResidualUpper`). A junction of two natural line ends,
+or of a line end and an arc's `t = 0` Start, at one recorded coordinate stays
+zero. The prism, cup and stacked-prism rings (`tessellation.SampleLoop`), a
+cap-loop chamfer's side ring (`tessellation.SampleCapBlend`) and a revolve's
+meridian junctions (§8) all charge it. A brep face's open wall
+(`docs/general-boolean-design.md` §4.4) is one walk with no neighbour in its
+own chording: each of its two end samples charges its own record's denoted
+end bound, and every other use placing a vertex there adds its own.
+
 One curve may use at most `maxChordsPerWalk` chords. The global revolve angular
 sequence has the same cap. The complete call also has these fixed ceilings:
 
@@ -727,7 +746,8 @@ coordMax = max_j upRound(
 
 Compute `deltaC` with directed-rounding enclosures over the complete path from
 the payload floats to a stored unplaced vertex: profile-to-axis meridian
-evaluation, axis-basis construction, angular `sin`/`cos`, every scale/product
+evaluation (a meridian junction enclosed from its held plane point under §3's
+junction bound, so it covers both neighbours' denoted ends), axis-basis construction, angular `sin`/`cos`, every scale/product
 and vector addition in `X`, axis-origin addition, and the final binary64 write.
 Transcendental and square-root operations require certified enclosures; an
 undocumented library error assumption is not a proof. Take the upward-rounded

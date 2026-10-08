@@ -248,6 +248,7 @@
 3	0.00	TestBoundedSqrtKeepsAZeroBoundOperandExact
 3	0.00	TestBoundedSqrtWidensABoundedOperand
 3	0.00	TestBoxesDisjointUsesExactInflatedEndpoints
+3	0.02	TestBrepChordWallReachesArcNaturalEnd
 3	0.01	TestBrepCrossDrilledBoxMeasuresAcrossPermutedFrames
 3	0.02	TestBrepFaceViewChargesSectionDisplacement
 3	0.02	TestBrepFaceViewJoinsACrossingBuiltPrism
@@ -277,6 +278,7 @@
 3	0.04	TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus
 3	0.04	TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine
 3	0.02	TestCapBlendMeshCapMotionCarriesSetbackRounding
+3	0.03	TestCapBlendSideRingReachesArcNaturalEnd
 3	0.00	TestCapJoinIsG1IsExact
 3	0.00	TestCapOffsetStationBoundReadsTheExactOffsetCircle
 3	0.00	TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg
@@ -304,6 +306,7 @@
 3	0.00	TestCheckedIntegerArithmeticRefusesOverflow
 3	0.00	TestChordCountHonoursTheWalkMinimum
 3	0.00	TestChordCountRefusesTheToleranceWindowAtTheMeshCap
+3	0.01	TestChordLoopSampleReachesArcNaturalEnd
 3	0.00	TestChordSagittaCoarsestClosedWalkStaysProven
 3	0.00	TestChordSagittaNeverUnderflowsToZero
 3	0.14	TestChordSagittaNeverUnderstatesTheHighPrecisionReference
@@ -695,6 +698,7 @@
 3	0.00	TestRevolveFacetAreaRefusesAFacetThinnerThanItsOwnDisplacement
 3	0.00	TestRevolveFanAreaSlackIsHalfTheDensityGap
 3	0.00	TestRevolveIdealPointMeasuresTheConstructionRounding
+3	0.01	TestRevolveJunctionReachesArcNaturalEnd
 3	0.00	TestRevolveLoopsCancellationIsBounded
 3	0.01	TestRevolveMassPropertiesRefusesUnchargedTerms
 3	0.00	TestRevolveMinRadiusNumeratorIsIntervalMinimum

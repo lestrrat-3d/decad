@@ -215,14 +215,20 @@ func (b *cbBuild) canonicalize(f *cbFace) error {
 		for i := range segs {
 			j := (i + 1) % n
 			// The scene's own point: a line's lerp keeps its fixed coordinate
-			// exact, so a line's end is preferred to an arc's.
+			// exact, so a line's end is preferred to an arc's. The bound is
+			// measured against the point the picked segment denotes there
+			// (boundarywalk.DenotedEndBound), which adds an arc's radial
+			// residual at its natural t = 1 end. An arc's end is picked only
+			// where both neighbours are circular, and canonicalPoint misses
+			// on two distinct cylinders before it reads delta, so that arm
+			// charges the residual for a vertex the reach never records.
 			pick, wk := segs[i], walks[i]
 			u, v := wk.EndU, wk.EndV
-			bound := wk.EndBound
+			bound := boundarywalk.DenotedEndBound(segs[i], wk)
 			if _, line := segs[i].(LineSeg); !line {
 				if _, nextLine := segs[j].(LineSeg); nextLine {
 					pick, wk = segs[j], walks[j]
-					u, v, bound = wk.StartU, wk.StartV, wk.StartBound
+					u, v, bound = wk.StartU, wk.StartV, boundarywalk.DenotedStartBound(segs[j], wk)
 				}
 			}
 			x := f.frame.toX([3]float64{u, v, f.level})
