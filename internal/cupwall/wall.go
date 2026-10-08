@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -26,7 +27,6 @@ type Operations struct {
 	Offset  func(*proofbound.WorkBudget, momentinput.Profile, float64, float64) (momentinput.Profile, error)
 	Equal   func(*proofbound.WorkBudget, momentinput.Profile, momentinput.Profile) (bool, error)
 	Audit   func(*proofbound.WorkBudget, momentinput.Profile, momentinput.Profile) error
-	Walks   func(*proofbound.WorkBudget, momentinput.Profile) ([][]survey2d.SideWalk, error)
 	Reverse func(*proofbound.WorkBudget, sectionrecord.LoopRecord) (sectionrecord.LoopRecord, error)
 }
 
@@ -156,7 +156,7 @@ func Evaluate(budget *proofbound.WorkBudget, cup Input, alpha float64, ops Opera
 		return false, true, nil
 	}
 
-	outerWalks, err := ops.Walks(budget, cup.Outer)
+	outerWalks, err := boundarywalk.SurveyLoopsBudget(budget, boundarywalk.Profile(cup.Outer))
 	if err != nil {
 		return Outcome{}, err
 	}
@@ -180,7 +180,7 @@ func Evaluate(budget *proofbound.WorkBudget, cup Input, alpha float64, ops Opera
 		if err != nil {
 			return Outcome{}, err
 		}
-		walks, err := ops.Walks(budget, momentinput.Profile{Outer: reversed})
+		walks, err := boundarywalk.SurveyLoopsBudget(budget, boundarywalk.Profile{Outer: reversed})
 		if err != nil {
 			return Outcome{}, err
 		}

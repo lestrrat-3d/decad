@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -92,7 +93,7 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	if !okM {
 		return undercutOutcome{}
 	}
-	loops, err := recordLoops(nil, cbp.profile)
+	loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(cbp.profile))
 	if err != nil {
 		return undercutOutcome{}
 	}

@@ -326,7 +326,7 @@ func TestWholeArcCandidateCarriesArcRadiusBound(t *testing.T) {
 	w, err := boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Greater(t, w.RadiusBound, 0.0, `a hypot radius is never exact`)
-	e, ok := walkElem(w)
+	e, ok := survey2d.WalkElem(w)
 	require.True(t, ok)
 	require.Equal(t, w.RadiusBound, e.RrBound, `the element must take the walk's own bound`)
 	require.True(t, e.MatInside, `the fixture must walk counter-clockwise, or no whole-arc disk is emitted`)
@@ -690,10 +690,10 @@ func newFrameWorkBudget(target string) (*proofbound.WorkBudget, *bool) {
 
 func TestRecordLoopsCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "recordLoops"}
-	_, err := recordLoops(proofbound.NewWorkBudget(ctx), manySegmentProfile(proofbound.WorkPollInterval+64))
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SurveyLoops"}
+	_, err := boundarywalk.SurveyLoops(proofbound.NewWorkBudget(ctx), boundarywalk.Profile(manySegmentProfile(proofbound.WorkPollInterval+64)))
 	require.ErrorIs(t, err, context.Canceled)
-	require.True(t, ctx.entered, `profile segment resolution must poll inside recordLoops`)
+	require.True(t, ctx.entered, `profile segment resolution must poll inside SurveyLoops`)
 }
 
 func TestRevolveLoopsCancellationIsBounded(t *testing.T) {
@@ -1067,7 +1067,7 @@ func TestArcWalkRadiusBoundStaysUnderTheKernelSlack(t *testing.T) {
 					TEnd:   1,
 				}, freeform.NewFreeformWork())
 				require.NoError(t, err)
-				e, ok := walkElem(w)
+				e, ok := survey2d.WalkElem(w)
 				require.True(t, ok)
 				require.Equal(t, w.RadiusBound, e.RrBound)
 
@@ -1202,7 +1202,8 @@ func TestPrismWallFreeformSectionPropagatesCancellation(t *testing.T) {
 // TestPrismWallPropagatesNonFreeformRefusals pins the other half of the same
 // rule: the undecided reading is keyed to the free-form refusal ALONE, so every
 // other reason a section fails to decompose still reaches the caller as the
-// error it is. Each row names a section recordLoops rejects for a reason that
+// error it is. Each row names a section boundarywalk.SurveyLoops rejects for a
+// reason that
 // is not the free-form staging limit — one of walkOf's ErrDegenerate arms, a
 // radius whose unit is not a length, and a free-form span the §6.1 length
 // bracket itself refuses as R15's ErrUnsupported. A reading of "undecided" on
@@ -1266,7 +1267,7 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 				require.ErrorIs(t, err, tc.is)
 			}
 			require.Contains(t, err.Error(), tc.message)
-			require.NotErrorIs(t, err, errFreeformSection,
+			require.NotErrorIs(t, err, boundarywalk.ErrFreeformSection,
 				`only the free-form staging limit carries the survey's own sentinel`)
 			require.False(t, out.ok)
 		})
@@ -1274,13 +1275,13 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 }
 
 // TestPrismWallFreeformRefusalKeepsItsSentinels pins the identity the undecided
-// reading is keyed to: recordLoops' free-form refusal is the survey's own
+// reading is keyed to: boundarywalk.SurveyLoops' free-form refusal is the survey's own
 // sentinel AND still the ErrUnsupported staging limit every other consumer of
 // the same decomposition branches on.
 func TestPrismWallFreeformRefusalKeepsItsSentinels(t *testing.T) {
 	t.Parallel()
-	_, err := recordLoops(proofbound.NewWorkBudget(t.Context()), freeformWallSection())
-	require.ErrorIs(t, err, errFreeformSection)
+	_, err := boundarywalk.SurveyLoops(proofbound.NewWorkBudget(t.Context()), boundarywalk.Profile(freeformWallSection()))
+	require.ErrorIs(t, err, boundarywalk.ErrFreeformSection)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "the wall survey does not support a free-form boundary segment")
 }
@@ -1425,7 +1426,7 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 		require.True(t, ok)
 		m, ok := newPlacedFrameMap(pp)
 		require.True(t, ok)
-		loops, err := recordLoops(nil, pp.profile)
+		loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(pp.profile))
 		require.NoError(t, err)
 		var walks []survey2d.SideWalk
 		for _, loop := range loops {

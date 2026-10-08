@@ -7,11 +7,13 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/units"
 )
@@ -197,7 +199,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 // not merely below the recorded half-section's own inradius.
 func revolveShellInradius(budget *proofbound.WorkBudget, rp revolvePayload, onAxis bool, tmm, tDelta float64) (float64, bool, error) {
 	if !onAxis {
-		return sectionInradius(budget, rp.profile, tmm, tDelta)
+		return shellsurvey.SectionInradius(budget, boundarywalk.Profile(rp.profile), tmm, tDelta, shellTol)
 	}
 	loops, err := revolveLoops(budget, rp)
 	if err != nil {
@@ -217,7 +219,7 @@ func revolveShellInradius(budget *proofbound.WorkBudget, rp revolvePayload, onAx
 		if rp.ax.IsAxis(w.SegmentWalk) {
 			continue
 		}
-		el, ok := walkElem(w.SegmentWalk)
+		el, ok := survey2d.WalkElem(w.SegmentWalk)
 		if !ok {
 			return 0, false, fmt.Errorf(`%w: this evaluator cannot survey the shell meridian's curve type`, ErrUnsupported)
 		}
@@ -234,10 +236,10 @@ func revolveShellInradius(budget *proofbound.WorkBudget, rp revolvePayload, onAx
 			}
 		}
 	}
-	if err := requireWallSurveyWork(budget, len(elems), len(verts)); err != nil {
+	if err := shellsurvey.RequireWallSurveyWork(budget, len(elems), len(verts)); err != nil {
 		return 0, false, err
 	}
-	inradius, err := wallSurveyInradius(budget, elems, verts)
+	inradius, err := shellsurvey.WallSurveyInradius(budget, elems, verts)
 	return inradius, false, err
 }
 

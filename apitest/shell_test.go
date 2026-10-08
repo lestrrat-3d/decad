@@ -147,7 +147,7 @@ func TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive(t *testing.
 func TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	ctx := &operationCancelContext{Context: t.Context(), target: "sectionInradius"}
+	ctx := &operationCancelContext{Context: t.Context(), target: "SectionInradius"}
 
 	body, err := box.Shell(ctx, topCap(box), units.Millimeters(5))
 
@@ -1092,7 +1092,7 @@ func TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged(t 
 	_, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
 	bodies := doc.Bodies()
-	ctx := &operationCancelContext{Context: t.Context(), target: "recordLoopsBudget"}
+	ctx := &operationCancelContext{Context: t.Context(), target: "SurveyLoopsBudget"}
 
 	report, err := doc.Verify(ctx, decad.WithMinWallThickness(units.Millimeters(1)))
 

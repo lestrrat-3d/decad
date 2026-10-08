@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -274,7 +274,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		// The section limit: P ⊖ t is non-empty exactly when t is strictly less
 		// than the section's inradius. A contained disk can certify success;
 		// otherwise internal/survey2d/wall_kernel.go computes the same reading Wall.Minimum answers.
-		inradius, enough, err := sectionInradius(offsetBudget, pp.profile, tmm, tDelta)
+		inradius, enough, err := shellsurvey.SectionInradius(offsetBudget, boundarywalk.Profile(pp.profile), tmm, tDelta, shellTol)
 		if err != nil {
 			return nil, err
 		}
@@ -485,7 +485,7 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 		return nil, err
 	}
 	if s > 0 {
-		inradius, enough, err := sectionInradius(budget, pp.profile, tmm, tDelta)
+		inradius, enough, err := shellsurvey.SectionInradius(budget, boundarywalk.Profile(pp.profile), tmm, tDelta, shellTol)
 		if err != nil {
 			return nil, err
 		}
@@ -566,12 +566,6 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 // exact geometry, so this only absorbs float noise, never an admission.
 const shellTol = 1e-9
 
-// shellInradiusWorkLimit is S18's hard ceiling over one inward shell's
-// candidate generation and whole-boundary validation. Candidate-family visits
-// are checked against it before the wall kernel starts; every generated and
-// validation visit then charges the same counter.
-const shellInradiusWorkLimit uint64 = 1 << 20
-
 // requireSectionCavity is S10's section limit (docs/modify-design.md §8): P ⊖ t
 // is non-empty exactly when t is strictly less than the section's inradius.
 // enough reports that a contained disk already proved the thickness fits.
@@ -615,123 +609,6 @@ func classifyRemovedCaps(caps prismCaps, removed []*Face) (bool, bool, error) {
 		}
 	}
 	return start, end, nil
-}
-
-// sectionInradius proves the requested thickness fits, or returns the largest
-// inscribed disk of a recorded section from internal/survey2d/wall_kernel.go
-// (docs/modify-design.md §8, the reading that answers Wall.Minimum). S18
-// checks the candidate-family count before entering the kernel and shares one
-// fixed work budget across its streamed generation and validation. An
-// undecided or over-budget build-time gate is ErrUnsupported: it has no
-// Suspect result to fall back on.
-//
-// The kernel publishes that inradius as an interval (survey2d.WallSurveyOut), and this
-// gate reads its midpoint: the caller's own accept boundary already sits a
-// scale-relative shellTol below the limit — 1e-9 of the section's own size,
-// decades above the aggregate's own half-width — so the interval cannot reach
-// across a decision the margin has not already made.
-func sectionInradius(budget *proofbound.WorkBudget, profile ProfileRecord, thickness, thicknessDelta float64) (float64, bool, error) {
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return 0, false, err
-	}
-	loops, err := recordLoopsBudget(budget, profile)
-	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return 0, false, err
-		}
-		return 0, false, fmt.Errorf(`%w: this evaluator cannot read the shell section: %v`, ErrUnsupported, err)
-	}
-	var elems []survey2d.SurveyElem
-	var verts [][2]float64
-	for _, loop := range loops {
-		single := len(loop) == 1 && loop[0].Closed
-		for _, w := range loop {
-			if err := survey2d.WallBudgetStep(budget); err != nil {
-				return 0, false, err
-			}
-			el, ok := walkElem(w.SegmentWalk)
-			if !ok {
-				return 0, false, fmt.Errorf(`%w: this evaluator cannot survey the shell section's curve type`, ErrUnsupported)
-			}
-			elems = append(elems, el)
-			if single {
-				continue
-			}
-			verts = append(verts, [2]float64{w.StartU, w.StartV})
-		}
-	}
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return 0, false, err
-	}
-	if err := requireWallSurveyWork(budget, len(elems), len(verts)); err != nil {
-		return 0, false, err
-	}
-	// A contained disk can prove only the success side of S10. Failure and all
-	// diagnostics still use the full inradius survey. The S18 count above runs
-	// first even when this shorter proof succeeds.
-	enough, err := shellRectCircleWitness(budget, profile, loops, thickness, thicknessDelta)
-	if err != nil {
-		return 0, false, err
-	}
-	if enough {
-		return 0, true, nil
-	}
-	inradius, err := wallSurveyInradius(budget, elems, verts)
-	return inradius, false, err
-}
-
-// requireWallSurveyWork is S18's preflight: the inward section survey's
-// candidate-family visits, counted under checked arithmetic before the wall
-// kernel starts, must stay within shellInradiusWorkLimit.
-func requireWallSurveyWork(budget *proofbound.WorkBudget, elems, verts int) error {
-	candidateWork, ok := proofbound.WallCandidateWork(elems, verts, false)
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf(`%w: inward shell section survey candidate count overflows the checked work counter (fixed work budget %d)`, ErrUnsupported, shellInradiusWorkLimit)
-	}
-	if candidateWork > shellInradiusWorkLimit {
-		return fmt.Errorf(`%w: inward shell section survey needs %d candidate-family visits, above the fixed work budget of %d`, ErrUnsupported, candidateWork, shellInradiusWorkLimit)
-	}
-	return nil
-}
-
-// wallSurveyInradius runs internal/survey2d/wall_kernel.go over a section's
-// survey elements and returns its inradius, charging generation and validation
-// to S18's one shared work budget. An over-budget or undecided survey is
-// ErrUnsupported: a build-time gate has no Suspect result to fall back on.
-func wallSurveyInradius(budget *proofbound.WorkBudget, elems []survey2d.SurveyElem, verts [][2]float64) (float64, error) {
-	// fitMax is +Inf: the inradius is a property of the section alone, with no
-	// height constraint (that constraint only bears on spanning, not the
-	// largest inscribed disk).
-	k, err := survey2d.NewWallKernelBudget(budget, elems, nil, verts, 0, proofbound.ExactScalar(0), false, math.Inf(1))
-	if err != nil {
-		return 0, err
-	}
-	out, err := k.RunBudget(proofbound.NewWallWorkBudgetWithOperation(shellInradiusWorkLimit, budget))
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return 0, err
-	}
-	if errors.Is(err, proofbound.ErrWallWorkBudget) {
-		return 0, fmt.Errorf(`%w: inward shell section survey exceeded the fixed work budget of %d during candidate generation or validation`, ErrUnsupported, shellInradiusWorkLimit)
-	}
-	if err != nil {
-		return 0, fmt.Errorf(`%w: inward shell section survey failed: %v`, ErrUnsupported, err)
-	}
-	if !out.Ok {
-		return 0, fmt.Errorf(`%w: this evaluator cannot prove the eroded section non-empty`, ErrUnsupported)
-	}
-	return out.Inradius, nil
-}
-
-// shellRectCircleWitness passes the shell's recorded holes and unit conversion
-// to the exact rectangular-section witness.
-func shellRectCircleWitness(budget *proofbound.WorkBudget, profile ProfileRecord, loops [][]survey2d.SideWalk, thickness, thicknessDelta float64) (bool, error) {
-	return survey2d.RectangleCircleWitness(budget, profile.Holes, loops, thickness, thicknessDelta, shellTol,
-		func(radius units.Value) (float64, float64, error) {
-			return extent.MagnitudeInBounded(radius, units.Length, units.Millimeter, "the hole radius")
-		})
 }
 
 // evalTube builds the both-caps hole-free shell (Table B, B2/B3): a plain prism

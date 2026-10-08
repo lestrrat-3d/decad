@@ -283,7 +283,7 @@ func shellWitness(sh *Shell) (r3.Vec, bool) {
 // faces, unconditionally and with no caller flag: a surface-result prism's
 // walls ARE its whole boundary, so a cap face in the model is geometry the
 // body does not have, and no caller ever wants a sheet modelled as the closed
-// solid it is not. The walk validity gate (walkElem, below) still runs for
+// solid it is not. The walk validity gate (survey2d.WalkElem, below) still runs for
 // every wall regardless — it is not cap-only construction, it is the shared
 // check that a wall's own segment kind is one this kernel can model at all —
 // only the cap-only region built from its result is skipped.
@@ -296,7 +296,7 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 		// against the wrong boundary.
 		return false, nil
 	}
-	loops, err := recordLoops(budget, pp.profile)
+	loops, err := boundarywalk.SurveyLoops(budget, boundarywalk.Profile(pp.profile))
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return false, err
@@ -368,7 +368,7 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 		pp := f.view(bp.xform)
 		var face *clearance.CFace
 		if f.planar() {
-			loops, err := recordLoops(budget, *f.region)
+			loops, err := boundarywalk.SurveyLoops(budget, boundarywalk.Profile(*f.region))
 			if err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return false, err
@@ -378,7 +378,7 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 			var elems []survey2d.SurveyElem
 			for _, loop := range loops {
 				for _, w := range loop {
-					el, ok := walkElem(w.SegmentWalk)
+					el, ok := survey2d.WalkElem(w.SegmentWalk)
 					if !ok {
 						return false, nil
 					}
@@ -415,7 +415,7 @@ func brepCarrierWalk(seg CurveSegment) (survey2d.SegmentWalk, bool) {
 	if err != nil {
 		return survey2d.SegmentWalk{}, false
 	}
-	_, ok := walkElem(w)
+	_, ok := survey2d.WalkElem(w)
 	return w, ok
 }
 

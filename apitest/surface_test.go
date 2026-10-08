@@ -756,7 +756,7 @@ func TestSheetSolidPairContainedProvenSound(t *testing.T) {
 // fourth leg is proven by construction for ANY surface-result prism with no
 // section displacement, regardless of wall kind (verify.go's
 // auditSheetBoundary) — but its one free-form wall has no analytic carrier
-// face the clearance kernel can build (walkElem, clearance_geom.go), the same
+// face the clearance kernel can build (survey2d.WalkElem, clearance_geom.go), the same
 // gap extrude_freeform_test.go already pins for the wall/undercut/
 // concave-radius surveys on the solid built from the same profile. With no
 // model to decide against, the pair stays undecided even though its boxes

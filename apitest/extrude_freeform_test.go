@@ -963,7 +963,7 @@ func TestFreeformPrismClearanceUndecided(t *testing.T) {
 
 // TestFreeformPrismMinWallThicknessUndecided pins WithMinWallThickness: an
 // Undecided BodyReport.Wall.Outcome with DiagUndecidedWall, never a silent
-// pass (survey.go's errFreeformSection through survey.go's DiagUndecidedWall).
+// pass (boundarywalk.ErrFreeformSection through survey.go's DiagUndecidedWall).
 func TestFreeformPrismMinWallThicknessUndecided(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
