@@ -130,7 +130,10 @@
 //	Shell         partial revolve, both angular caps removed  builds
 //	Shell         full revolve, WithNoOpenings (closed)       builds
 //	Shell         hole-free prism, WithNoOpenings (closed)    builds
-//	  a side face removed, or a kept angular cap              ErrUnsupported
+//	Shell         revolve, one run of side faces removed with
+//	              right-angle rims (and both angular caps)    builds
+//	  a prism side face, or a kept angular cap                ErrUnsupported
+//	  revolve side run in pieces, or with a slanted rim       ErrUnsupported
 //	  holed meridian, or one meeting the axis twice           ErrUnsupported
 //	  offset reaching across the axis                         ErrUnsupported
 //	  WithNoOpenings on any other receiver                    ErrUnsupported
