@@ -60,6 +60,19 @@ func RadSinCosSpan(x RatInterval) (RatInterval, RatInterval, bool) {
 	return IntervalWiden(sin, width), IntervalWiden(cos, width), true
 }
 
+// RadTanSpan encloses tan(x) over a rational radian interval: RadSinCosSpan's
+// sine enclosure divided by its cosine enclosure over exact rationals
+// (docs/draft-design.md §8.1). ok is false where either enclosure cannot be
+// built or the cosine enclosure reaches zero, since no box then encloses the
+// quotient.
+func RadTanSpan(x RatInterval) (RatInterval, bool) {
+	sin, cos, ok := RadSinCosSpan(x)
+	if !ok {
+		return RatInterval{}, false
+	}
+	return IntervalQuo(sin, cos)
+}
+
 // radSinCosMemoCap bounds the memo. The whole apitest suite reads about nine
 // thousand distinct angles, each entry four rationals of a few hundred bits;
 // a full memo is cleared before the next insert.

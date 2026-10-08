@@ -389,6 +389,26 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 	return LoopRecord{Segments: segs}, nil
 }
 
+// contourOf is capLoopBoundary read under cbp's corner rule: a draft view's
+// far section is the loop's sharp offset (offset2d.BuildSharpLoop), every
+// corner mitered, where a chamfer's cap contour closes a reflex corner with an
+// arc.
+func (cbp capBlendPayload) contourOf(ctx context.Context, loop LoopRecord, d float64) (LoopRecord, error) {
+	if !cbp.draft {
+		return capLoopBoundary(ctx, loop, d)
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
+	if err != nil {
+		return LoopRecord{}, err
+	}
+	segs, _, err := offset2d.BuildSharpLoop(budget, cl.walks, 1, d, shellTol)
+	if err != nil {
+		return LoopRecord{}, wrapDraftOffsetError(err)
+	}
+	return LoopRecord{Segments: segs}, nil
+}
+
 // capBandVolume is one loop's chamfer-band volume contribution (positive,
 // the material remaining in the band — the caller's "slab" term already
 // covers the straight portion), by the divergence theorem over the band's
@@ -454,7 +474,7 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}
-	capBoundary, err := capLoopBoundary(ctx, loop, setback.dc)
+	capBoundary, err := cbp.contourOf(ctx, loop, setback.dc)
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}

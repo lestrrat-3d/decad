@@ -47,6 +47,31 @@ func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]
 	return offsetJoinsBudget(budget, walks, 1, d)
 }
 
+// offsetJoins is capOffsetJoins read under cbp's corner rule. A draft view
+// (docs/draft-design.md §2) checks each circular wall's band radius exactly as
+// capOffsetJoins does and then resolves every corner by the sharp rule: a
+// reflex corner is mitered, a corner at a circular walk must be a G1 join
+// (SD4), and two moved lines that do not meet are a cusp (SD15).
+func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]cornerJoin, error) {
+	if !cbp.draft {
+		return capOffsetJoins(budget, cl, d)
+	}
+	if len(cl.walks) == 0 {
+		return nil, fmt.Errorf(`%w: a draft loop holds no walks`, ErrDegenerate)
+	}
+	for _, w := range cl.walks {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
+			return nil, err
+		}
+		if w.IsCircular() {
+			if _, err := capband.BandRadius(w, d, shellTol); err != nil {
+				return nil, wrapDraftOffsetError(err)
+			}
+		}
+	}
+	return sharpOffsetJoinsBudget(budget, cl.walks, d)
+}
+
 // capWallFoot returns the offset segment's own (start, end) feet for wall i,
 // exactly as offset2d.BuildLoop's per-wall trim does.
 func capWallFoot(joins []cornerJoin, i, n int) (Point2, Point2) {
@@ -166,6 +191,28 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// independent axial term.
 	capDelta := cbp.capBandLevel(capZ, matSign).Bound
 
+	// axialRef is the axial half of every wall patch's orientation reference:
+	// toward the cap the band leans to, where the contour moves INTO the
+	// material (dc > 0), and away from it where the contour moves out of it.
+	// Only a draft view's negative taper takes the second sign; with the in-plane
+	// half the wall's own outward normal, the reference then meets the true
+	// normal n̂·cos α + e·sin α at a positive dot product for every taper below
+	// a right angle (docs/draft-design.md §2).
+	axialRef := -matSign
+	if dc < 0 {
+		axialRef = matSign
+	}
+	// wallOrigins names wall i's patch: a chamfer's chamferCap(cap, loop, p)
+	// with p the patch's index in this band, or a draft view's side(loop, j)
+	// over the recorded segments the walk coalesced, exactly the roles a
+	// prism's own wall carries (docs/draft-design.md Table BD).
+	wallOrigins := func(segs []int, p int) ([]FeatureRef, error) {
+		if cbp.draft {
+			return sideOriginsContext(ctx, ref, li, segs)
+		}
+		return []FeatureRef{{producer: ref, Role: fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, p)}}, nil
+	}
+
 	// A single closed circle has no corner: one Cone patch, full turn.
 	if n == 1 && walks[0].Closed {
 		w := walks[0]
@@ -188,13 +235,17 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// capCircleLengthBound instead — and the seam vertex adds its own
 		// exact lift rounding there.
 		capEdge := wholeCircleEdge(pl, w.CU, w.CV, capRadius, capZ, w.Th1 > w.Th0, capLevelDelta, exactRadius)
-		patch := buildConePatch(pl, body, ref, li, 0, w.CU, w.CV, w.Radius, capRadius, sideZ, capZ, matSign, false, seam0, capEdge)
+		origins, err := wallOrigins(w.Segs, 0)
+		if err != nil {
+			return capBandResult{}, err
+		}
+		patch := buildConePatch(pl, body, origins, w.CU, w.CV, w.Radius, capRadius, sideZ, capZ, false, seam0, capEdge)
 		sign := 1.0
 		if w.Th1 < w.Th0 {
 			sign = -1
 		}
 		samplePoint := pl.point(w.CU+w.Radius, w.CV, sideZ)
-		if err := fixPatchOrientation(patch, pl, samplePoint, sign, 0, -matSign); err != nil {
+		if err := fixPatchOrientation(patch, pl, samplePoint, sign, 0, axialRef); err != nil {
 			return capBandResult{}, err
 		}
 		// th0, th1 record the patch's ANGULAR EXTENT, not the wall's own
@@ -237,11 +288,14 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// the one ruling its azimuth spread is measured on is the pair of SEAM
 		// vertices — the one place either circle names a parameter origin.
 		setPatchReadings(patch, geom, capBuiltPatch(seam0, capEdge, []*Vertex{seam0.Start()}, []*Vertex{capEdge.Start()}))
+		if cbp.draft {
+			patch.normalBound = proofbound.AbsSumUpper(patch.normalBound, draftDenotedNormalAllow(delta, capDelta, levelDelta, capZ-sideZ, capRadius-w.Radius))
+		}
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}, delta: delta}, nil
 	}
 
-	joins, err := capOffsetJoins(budget, cl, dc)
+	joins, err := cbp.offsetJoins(budget, cl, dc)
 	if err != nil {
 		return capBandResult{}, err
 	}
@@ -302,6 +356,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			e, held, err := capSlantEdge(budget, j.m, capV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, setback, j.g1)
 			if err != nil {
 				return capBandResult{}, err
+			}
+			if cbp.draft {
+				// A draft's ruling is a prism's lateral edge tilted: its
+				// convexity is the 2D turn of the two walks it joins, the rule
+				// buildLoopSidesAs applies to a vertical edge.
+				e.convex = prev.TanOutU*cur.TanInV-prev.TanOutV*cur.TanInU > 0
 			}
 			slantIn[i], slantOut[i] = e, e
 			slantInHeld[i], slantOutHeld[i] = held, held
@@ -511,7 +571,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// displacement; the square root's own committed error is measured
 			// against the exact squared length.
 			capEdge = &Edge{
-				curve: Line3{}, start: capA, end: capB, convex: true,
+				curve: Line3{}, start: capA, end: capB, convex: !cbp.draft || li == 0,
 				length:      held,
 				lengthBound: capcontour.CapEdgeLengthBound(held, end, start, delta),
 			}
@@ -543,10 +603,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// p is the patch's own index in this band's patch slice (Table BX row
 		// BX3), so an apex patch minted in pass 2 and a wall patch minted here
 		// never share a role — see the pass-2 comment.
-		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, len(patches))
+		origins, err := wallOrigins(w.Segs, len(patches))
+		if err != nil {
+			return capBandResult{}, err
+		}
 		face := &Face{
 			surface: surf,
-			origins: []FeatureRef{{producer: ref, Role: role}},
+			origins: origins,
 			body:    body,
 			loops: []*Loop{{coedges: []coedge{
 				{edge: side, forward: true},
@@ -575,7 +638,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			refU, refV = sign*math.Cos(w.Th0), sign*math.Sin(w.Th0)
 			samplePoint = pl.point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), sideZ)
 		}
-		if err := fixPatchOrientation(face, pl, samplePoint, refU, refV, -matSign); err != nil {
+		if err := fixPatchOrientation(face, pl, samplePoint, refU, refV, axialRef); err != nil {
 			return capBandResult{}, err
 		}
 		side.faces = append(side.faces, face)
@@ -642,6 +705,9 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// there.
 		setPatchReadings(face, g, capBuiltPatch(side, capEdge,
 			[]*Vertex{side.Start(), side.End()}, []*Vertex{capA, capB}))
+		if cbp.draft {
+			face.normalBound = proofbound.AbsSumUpper(face.normalBound, draftDenotedNormalAllow(delta, capDelta, levelDelta, capZ-sideZ, capRadius-w.Radius))
+		}
 		geoms = append(geoms, g)
 		capCo = append(capCo, coedge{edge: capEdge, forward: true})
 		if arc := arcByCorner[nextI]; arc != nil {
@@ -910,19 +976,19 @@ func capPatchWindowSkew(g capPatchGeom) float64 {
 	return math.Max(g.SkewStart, g.SkewEnd)
 }
 
-// buildConePatch builds a full-turn Cone chamfer patch (a whole circular
-// loop's own chamfer) between two full-circle edges. reversed follows the
+// buildConePatch builds a full-turn Cone band patch (a whole circular loop's
+// own chamfer, or a draft's wall over a whole circle) between two full-circle
+// edges, carrying origins as its roles. reversed follows the
 // original wall's own sense (a hole/clockwise wall's material lies outside
 // its cylinder, so its chamfer cone's geometric normal needs reversing too —
 // extrude.go's same rule for a clockwise circular wall).
-func buildConePatch(pl prismPayload, body *Body, ref producerID, li, patchIdx int, cu, cv, sideRadius, capRadius, sideZ, capZ float64, matSign float64, reversed bool, sideEdge, capEdge *Edge) *Face {
-	role := fmt.Sprintf("chamferCap(%s,%d,%d)", capNameOf(matSign), li, patchIdx)
+func buildConePatch(pl prismPayload, body *Body, origins []FeatureRef, cu, cv, sideRadius, capRadius, sideZ, capZ float64, reversed bool, sideEdge, capEdge *Edge) *Face {
 	surf := coneSurface(pl, cu, cv, sideRadius, capRadius, sideZ, capZ)
 	loops := []*Loop{
 		{coedges: []coedge{{edge: sideEdge, forward: true}}, outer: true},
 		{coedges: []coedge{{edge: capEdge, forward: false}}, outer: true},
 	}
-	face := &Face{surface: surf, origins: []FeatureRef{{producer: ref, Role: role}}, body: body, reversed: reversed, loops: loops}
+	face := &Face{surface: surf, origins: origins, body: body, reversed: reversed, loops: loops}
 	sideEdge.faces = append(sideEdge.faces, face)
 	capEdge.faces = append(capEdge.faces, face)
 	return face

@@ -1587,3 +1587,16 @@
 5	0.01	TestProfileRecordClosesLongLineTriangleAtCrossings
 5	0.04	TestStackedUnionCrossingBossFarFromOrigin
 4	0.02	TestCapBlendSectorCentroidBoundEnclosesChordLocus
+5	0.01	TestTaperAgainst
+5	0.02	TestTaperBox
+5	0.02	TestTaperDownstreamRefusals
+5	0.01	TestTaperFarCornerChargesTheTangentSpan
+5	0.30	TestTaperFarOrigin
+5	0.01	TestTaperFlare
+5	0.01	TestTaperFrustum
+5	0.02	TestTaperLSection
+5	0.02	TestTaperPlacedEquivalence
+5	0.20	TestTaperRefusals
+5	0.03	TestTaperRing
+5	0.05	TestTaperSlot
+5	0.15	TestTaperVerify

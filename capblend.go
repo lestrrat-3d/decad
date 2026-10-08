@@ -85,6 +85,13 @@ type capBlendPayload struct {
 	// second one from the same offset. It is plane-local and
 	// placement-invariant, exactly as patches is.
 	bandDelta map[capBandKey]float64
+	// draft marks the view a draft body builds its wall band through
+	// (draftPayload.band, draft_build.go): its corners take the sharp offset
+	// rule (offset2d.SharpJoinsBudget) rather than the reflex-corner arc, its
+	// wall patches carry the prism's side(i, j) roles, and its rim and ruling
+	// edges take the prism's convexity (docs/draft-design.md §2, §6). A
+	// cap-loop chamfer never sets it.
+	draft bool
 }
 
 // capSetback is one chamfered cap's two setbacks (docs/modify-reach-design.md
@@ -332,12 +339,12 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		// The cap contour is the band's cap-level directrix and the chamfered
 		// cap face's own boundary — the same offset loop the build emits, and
 		// the same displacement the band's own vertices and edges carry.
-		contour, err := capLoopBoundary(ctx, loop, cbp.loopOffset(li))
+		contour, err := cbp.contourOf(ctx, loop, cbp.loopOffset(li))
 		if err != nil {
 			return 0, 0, 0, err
 		}
 		setback := cbp.loopSetback(li)
-		delta, err := loopContourDelta(ctx, loop, setback.dc, setback.dcDelta)
+		delta, err := cbp.loopContourDelta(ctx, loop, setback.dc, setback.dcDelta)
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -393,6 +400,17 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 func requireNotCapBlendReceiver(payload featurePayload, op string) error {
 	if _, ok := payload.(capBlendPayload); ok {
 		return fmt.Errorf(`%w: this evaluator does not yet compose another modify op onto a cap-loop chamfer result; %s a receiver this evaluator built directly`, ErrUnsupported, op)
+	}
+	return nil
+}
+
+// requireNotDraftReceiver is modify S3 for a draft body
+// (docs/draft-design.md Table DD row DD14): no modify op takes a tapered
+// extrude as its receiver yet. It runs beside requireNotCapBlendReceiver, so
+// the refusal names the draft body rather than the generic class.
+func requireNotDraftReceiver(payload featurePayload, op string) error {
+	if _, ok := payload.(draftPayload); ok {
+		return fmt.Errorf(`%w: this evaluator %s a straight prism, a revolve or their modify results, never a draft body (a tapered extrude) (modify S3)`, ErrUnsupported, op)
 	}
 	return nil
 }

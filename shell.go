@@ -215,6 +215,9 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if err := requireNotCapBlendReceiver(b.payload, "shells"); err != nil {
 		return nil, err
 	}
+	if err := requireNotDraftReceiver(b.payload, "shells"); err != nil {
+		return nil, err
+	}
 	// Reach RX2 (docs/modify-reach-design.md §9.3): a revolve receiver shells
 	// its meridian and sweeps the wall over its own angular interval.
 	if rp, ok := b.payload.(revolvePayload); ok {

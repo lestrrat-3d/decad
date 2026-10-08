@@ -15,9 +15,9 @@ import (
 // repairs its next call instead of parsing a message. (Two failures keep their
 // own cause instead: Verify can return the context's cancellation directly, and
 // STL/OBJ preserve the writer's error.) Here two real refusals drive a repair: a
-// staged tapered extrude (ErrUnsupported) is retried straight, and an
-// over-asserted selector (ErrCardinality) is relaxed to a count the body can
-// meet.
+// staged tapered extrude (ErrUnsupported: a taper over a symmetric extent) is
+// retried straight, and an over-asserted selector (ErrCardinality) is relaxed
+// to a count the body can meet.
 func Example_decad_error_recovery() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -32,17 +32,18 @@ func Example_decad_error_recovery() {
 		return
 	}
 
-	// This evaluator refuses a nonzero taper before it records any step, so
-	// the failed call leaves the document untouched: the profile is still
-	// current and the repair is to drop the taper.
+	// This evaluator tapers a one-sided Distance extent only, and refuses a
+	// taper over a symmetric one before it records any step, so the failed
+	// call leaves the document untouched: the profile is still current and
+	// the repair is to drop the taper.
 	doc := decad.New()
 	prof := s.Profiles()[0]
 	body, err := doc.Extrude(s, prof,
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
+		decad.Symmetric{D: units.Millimeters(10)},
 		decad.WithTaper(units.Degrees(5)))
 	if errors.Is(err, decad.ErrUnsupported) {
 		fmt.Println("taper unsupported: retrying without it")
-		body, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		body, err = doc.Extrude(s, prof, decad.Symmetric{D: units.Millimeters(10)})
 	}
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)

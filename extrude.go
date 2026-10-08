@@ -35,6 +35,7 @@ import (
 // line/circle/arc boundary segment, and a NURBSSurface
 // (docs/spline-design.md §7) for a Tier A free-form one, with bounded mass
 // measurements throughout. Exactly representable results retain zero bounds.
+// A nonzero taper leaves this file for draft_build.go's extrudeDraft.
 
 // ExtrudeOption configures Extrude.
 type ExtrudeOption interface {
@@ -49,11 +50,12 @@ func (extrudeOption) extrudeOption() {}
 type identTaper struct{}
 
 // WithTaper sets the extrude taper: a SIGNED displacement angle — which way
-// the wall leans. A nonzero taper is [ErrUnsupported]
-// (docs/evaluator-design.md §5), returned before commit, so the
-// document is unchanged — because a tapered extrude of a general region is
-// an offset problem, and a wrong-but-confident prism is the failure decad
-// exists to prevent. Only a zero taper reaches evaluation.
+// the wall leans. A positive taper leans every wall into the material as it
+// leaves the sketch plane, so the body narrows toward the far end; a negative
+// one widens it (docs/draft-design.md §2). An angle at or past a right angle
+// is [ErrDegenerate]. A nonzero taper builds over a Distance extent only:
+// every other extent, and WithSurfaceResult, is [ErrUnsupported], returned
+// before commit. A zero taper builds the straight prism.
 func WithTaper(a units.Value) ExtrudeOption {
 	return extrudeOption{option.New(identTaper{}, a)}
 }
@@ -67,7 +69,7 @@ func WithTaper(a units.Value) ExtrudeOption {
 // and Tier A free-form segments (a spline, a closed spline, a fit spline, or a
 // unit-weight NURBS curve — docs/spline-design.md Table F); a Tier B or Tier C
 // free-form segment (a conic, a whole ellipse, or a NURBS curve with unequal
-// weights) is [ErrUnsupported], as is a nonzero WithTaper. A Tier A kind is
+// weights) is [ErrUnsupported]. A Tier A kind is
 // admitted but not thereby built: each free-form wall edge must also prove ONE
 // curvature sign across every span and joint of its chain
 // (docs/spline-design.md §6.5), and the whole profile's free-form work must fit
@@ -80,6 +82,15 @@ func WithTaper(a units.Value) ExtrudeOption {
 // evaluator converts the profile and plane to structural records; a failed
 // evaluation leaves the document untouched. WithSurfaceResult() omits the two
 // caps and publishes a sheet body instead of a solid (docs/surface-design.md §4).
+//
+// A nonzero WithTaper builds a draft body instead (docs/draft-design.md): the
+// far cap is the profile offset by h·tan α with every straight corner
+// mitered, each straight wall a Plane leaning by the taper and each circular
+// wall a Cone. Its profile must hold line, arc and circle segments only, and a
+// circular wall must meet each neighbour tangentially; anything else, and
+// every other row of that design's Table SD, is [ErrUnsupported] or
+// [ErrDegenerate] as the row states. Every measurement of a draft body is
+// Approximate, since the taper's tangent is only ever enclosed.
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
@@ -124,12 +135,12 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	if _, err := taper.In(units.Radian); err != nil {
 		return nil, fmt.Errorf(`%w: the taper is not representable: %s`, ErrNotFinite, err)
 	}
+	var alpha, alphaDelta float64
 	if taper.Mag() != 0 {
-		// Refused before commit: staging is explicit
-		// (docs/evaluator-design.md §2/§5), never a silent untapered prism.
-		return nil, fmt.Errorf(`%w: this evaluator extrudes straight (untapered) prisms only; omit WithTaper or pass a zero angle`, ErrUnsupported)
+		if alpha, alphaDelta, err = draftAngle(taper); err != nil {
+			return nil, err
+		}
 	}
-
 	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
@@ -138,6 +149,11 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	e, err = normalizeExtent(e)
 	if err != nil {
 		return nil, err
+	}
+	if taper.Mag() != 0 {
+		// A nonzero taper builds a draft body (docs/draft-design.md), never a
+		// straight prism.
+		return d.extrudeDraft(profile, frame, e, alpha, alphaDelta, surfaceResult)
 	}
 	sweep, err := d.resolveLinearExtent(e, frame)
 	if err != nil {

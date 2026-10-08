@@ -86,7 +86,11 @@
 //	  Tier A chain proving no single curvature sign across
 //	    its spans and joints (spline design §6.5, R19)        ErrUnsupported
 //	  free-form work past the fixed budget (R7)               ErrUnsupported
-//	  WithTaper   nonzero taper angle                         ErrUnsupported
+//	  WithTaper   line/circle/arc walls, G1 circular joins,
+//	    Distance extent (draft design PR 1)                   builds
+//	  WithTaper   free-form wall, non-G1 circular corner,
+//	    other extents, WithSurfaceResult                      ErrUnsupported
+//	  Tessellate/boolean/export/mass of a tapered extrude     ErrUnsupported
 //	Sweep         zero-twist LineTo / ArcThrough paths         builds
 //	  composite path without exact transported frames or
 //	    certified span separation                             ErrUnsupported
@@ -192,8 +196,10 @@
 // two setbacks, WithShellSense picks a shell's wall sense, WithNoOpenings asks
 // for a closed shell (built for a full revolve and a hole-free prism,
 // [ErrUnsupported] elsewhere),
-// and WithTaper names an extrude taper — but a nonzero taper is
-// [ErrUnsupported], returned before the document changes. WithSweepTwist names
+// and WithTaper drafts an extrude's walls by a signed angle, a positive one
+// narrowing the body away from the sketch plane (docs/draft-design.md); a
+// taper the support map does not list is [ErrUnsupported], returned before
+// the document changes. WithSweepTwist names
 // a sweep's distributed twist, with nonzero twist staged as [ErrUnsupported].
 // WithLoftAlignment
 // picks a loft's per-loop correspondence rotation

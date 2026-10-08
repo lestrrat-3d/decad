@@ -20,7 +20,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Section below |
 |---|---|
 | Fillet, chamfer and shell take a boolean result only where it reads as a prism, or (fillet, chamfer) at straight edges along an axis | Modify operations |
-| No draft: nonzero extrude taper refuses, and no face-draft op exists | Feature operations |
+| A tapered extrude has no mesh, export, boolean or mass reading, and no face-draft op exists | Feature operations |
 | A coil cannot tessellate or enter a boolean → no threads | Feature operations |
 | No import of any file format | Data exchange |
 | Booleans outside the exact prism classes fall to a faceted mesh result, and refuse touching contact | Booleans |
@@ -29,8 +29,9 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Draft angle on extrude | `WithTaper` nonzero → `ErrUnsupported` (`extrude.go`) | `docs/evaluator-design.md` §5 |
-| Draft of existing faces | No entry point exists | none |
+| Draft angle on a two-sided, through-all or to-face extrude, a free-form wall, a circular corner that is not G1, or a surface result | `ErrUnsupported`, draft SD3/SD4/SD11/SD12 (`draft_build.go`) | `docs/draft-design.md` §14 |
+| Mesh, boolean, export, mass and interference readings of a tapered extrude | `ErrUnsupported` through `Tessellate`'s default (`tessellate.go`); interference past a box-disjoint proof reads `Suspect` | `docs/draft-design.md` Table DD |
+| Draft of existing faces | No entry point exists | `docs/draft-design.md` §10 |
 | Sweep twist | `WithSweepTwist` nonzero → `ErrUnsupported` (`sweep.go`) | `docs/sweep-design.md` |
 | Closed sweep path | `ErrUnsupported`, "closed sweep paths are not implemented" (`sweep.go`) | `docs/sweep-design.md` |
 | Free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
@@ -49,7 +50,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Fillet/chamfer of a sweep, loft, faceted boolean result or cap blend | `ErrUnsupported`: "fillets a straight prism or a revolve only", SX9, SX10 (`fillet.go`, `chamfer.go`) | `docs/modify-reach-design.md` Table RX |
+| Fillet/chamfer of a sweep, loft, faceted boolean result, cap blend or draft body | `ErrUnsupported`: "fillets a straight prism or a revolve only", SX9, SX10, modify S3 for a draft body (`fillet.go`, `chamfer.go`) | `docs/modify-reach-design.md` Table RX |
 | Fillet/chamfer of a brep or stacked boolean result's curved edge, edges sharing a vertex, an edge ending on a curved face or an earlier blend, or an edge on or along a straight wall that is oblique, split or has a displaced level, where no prism reading takes the selection | `ErrUnsupported` (brep-modify SB4–SB9) (`brep_modify_edge.go`) | `docs/brep-modify-design.md` Table SB, §12 |
 | Shell of a body that is neither a prism nor a revolve; a brep that reads as a prism builds | `ErrUnsupported`: "shells a straight prism only", brep-modify SB3/SB10 (`shell.go`, `brep_modify.go`) | `docs/brep-modify-design.md` SB10 |
 | Shell side opening on a prism with an oblique removed end face recorded as several segments, a rim cut behind a removed arc whose recorded end lies off the circle its start defines, or a kept arc meeting a removed arc at an end corner whose cut is a float solve, under a kept cap; a revolve side run that leaves two wall pieces; a side opening meeting a kept face smoothly at an end, or whose rim runs past the removed walk's far end | `ErrUnsupported` (SO5 for a prism; SX8 for a revolve; SO1, SO2) (`shell_opening.go`, `shell_opening_brep.go`, `shell_revolve.go`, `internal/offset2d/opening.go`) | `docs/shell-opening-design.md` §5, §12, `docs/modify-reach-design.md` §9.3 |
