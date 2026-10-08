@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -170,8 +171,8 @@ func TestRequireAreaIdentityRefuses(t *testing.T) {
 		}
 		return ProfileRecord{Outer: loop}
 	}
-	require.NoError(t, requireAreaIdentity(rect(0, 0, 4, 2), rect(0, 0, 4, 1), rect(0, 1, 4, 2)))
-	err := requireAreaIdentity(rect(0, 0, 4, 2), rect(0, 0, 3, 1), rect(0, 1, 4, 2))
+	require.NoError(t, offset2d.RequireAreaIdentity(rect(0, 0, 4, 2), rect(0, 0, 4, 1), rect(0, 1, 4, 2)))
+	err := offset2d.RequireAreaIdentity(rect(0, 0, 4, 2), rect(0, 0, 3, 1), rect(0, 1, 4, 2))
 	require.True(t, errors.Is(err, ErrUnsupported))
 	require.ErrorContains(t, err, "SO5")
 }
@@ -348,7 +349,7 @@ func internalWalkedPoints(t *testing.T, loop LoopRecord) []Point2 {
 	t.Helper()
 	out := make([]Point2, len(loop.Segments))
 	for i, seg := range loop.Segments {
-		from, _, ok := walkedEnds(seg)
+		from, _, ok := offset2d.WalkedEnds(seg)
 		require.True(t, ok, "segment %d is %T", i, seg)
 		out[i] = from
 	}

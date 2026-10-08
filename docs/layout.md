@@ -155,7 +155,7 @@ the rules leave to the byte budget.
 | `shell_cup.go` | `cupPayload`, its stacked record and view. See modify-reach §9.1. |
 | `shell_revolve.go` | `Body.Shell` of a revolve. See modify-reach §9.3. |
 | `shell_chain.go` | Offsets an open chain with axis and opening ends. See shell-opening §3. |
-| `shell_opening.go` | Prism side opening: the removed run, the three regions and their audit. See shell-opening §3–§5. |
+| `shell_opening.go` | Prism side opening: classify removed faces and assemble the audited regions. See shell-opening §3–§5. |
 | `shell_opening_brep.go` | Records a prism side opening as a prism or a stacked brep. See shell-opening §4. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See `docs/brep-modify-design.md`. |
 | `brep_modify_edge.go` | Route E: Table EB, restatement, the end-face blends, trims, blend faces and closure. See brep-modify §5. |
@@ -315,7 +315,7 @@ the rules leave to the byte budget.
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
-| `internal/offset2d/` | Offset carriers, blends, joins, section records and displacement proofs. See modify §6–§9. |
+| `internal/offset2d/` | Offset carriers, joins, side-opening rim and removed-run records, and displacement proofs. See modify §6–§9 and shell-opening §3–§5. |
 | `internal/capband/` | Cap-band radius, window, miter locus, patch and mass proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |
