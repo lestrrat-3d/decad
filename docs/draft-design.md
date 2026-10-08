@@ -327,7 +327,16 @@ turns the normal by at most `2|e|/h`; a Cone wall's half angle moves by at most
 `(e_r + |Δr|·e_z/h)/h`. `capband.DenotedNormalAllow` charges
 `2·(δ + δ_z·max(1, |Δr|/h))/h` with `h` at the bottom of its span, and
 `setPatchReadings` (`capblend_geom.go`) adds it to every draft wall and chamfer
-patch alike.
+patch alike. `δ_z` is the far level's displacement beside the near level's
+rounding, and no near-level displacement enters. SD11 admits only a `Distance`
+extent, and `resolveLinearExtent` puts that extent's near end on the sketch
+plane at exactly zero with a zero displacement; only the far end carries the
+distance's conversion rounding. The near edge is therefore the recorded
+section itself. The far displacement stays in `δ_z` even though it would cancel
+for a chamfer, whose two levels both follow one held cap level: here
+`h = z1 − z0` is read from the held far level, so that displacement moves the
+height the taper is measured over. An extent that SD11 admits later and that
+moves the near level must add the near displacement to `δ_z`.
 
 **Exactness.** A draft measurement is `Exact` only where every term of it is
 exactly representable. The tangent of the taper is a certified enclosure of
