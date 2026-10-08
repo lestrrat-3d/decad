@@ -580,21 +580,7 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 	// vertex, so every face that meets a boundary curve reuses the SAME
 	// chording — watertightness by construction.
 	var mesh Mesh
-	var pts2 []Point2
-	var loopIdx [][]int
-	var loopSag []float64
-	// Parallel to pts2: each sample's own plane-local enclosure gap, which every
-	// mesh vertex it owns carries into its face's published displacement.
-	var sampleBound []proofbound.WalkEndBound
-	// The trim displacement a CAP carries: the largest sagitta over every loop
-	// bounding it, which is every loop of the section.
-	var capTrim float64
-	// The section's own walk count and proven perimeter upper bound, for the
-	// displacement's area charge below, and the summed circular-segment area its
-	// occupied-volume charge reads.
-	var walks int
-	var perimeterUpper float64
-	var segmentArea float64
+	var chorded []tessellation.PrismLoop[*Face]
 	// One free-form counter for the whole chorded record (see chordLoop).
 	work := freeform.NewFreeformWork()
 	// The build that produced this body already resolved every boundary
@@ -616,10 +602,6 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 		pw = nil
 	}
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
-	// faceTrim/faceAxial accumulate each face's own trim and axial displacement
-	// as the walls are emitted; the two caps' are stated once below.
-	faceTrim := map[*Face]float64{}
-	faceAxial := map[*Face]float64{}
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -630,50 +612,16 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 		if err != nil {
 			return nil, err
 		}
-		capTrim = math.Max(capTrim, cl.maxSag)
-		// A sheet carries no cap, so its areaSlack drops the cap half of this
-		// loop's chord-versus-arc deficit entirely; a solid charges it twice,
-		// once per cap it triangulates (chordedLoop's own doc comment).
-		if sheet {
-			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.wallSlack)
-		} else {
-			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
-		}
-		segmentArea = proofbound.AbsSumUpper(segmentArea, cl.segmentArea)
-		walks += cl.walks
-		perimeterUpper = proofbound.AbsSumUpper(perimeterUpper, cl.perimeterUpper)
-
-		base := len(pts2)
-		pts2 = append(pts2, cl.samples...)
-		sampleBound = append(sampleBound, cl.boundOf...)
-		idx := make([]int, len(cl.samples))
-		for j := range cl.samples {
-			idx[j] = base + j
-		}
-		loopIdx = append(loopIdx, idx)
-		loopSag = append(loopSag, cl.maxSag)
-
-		// Side walls: one quad per chord, split into two triangles wound
-		// outward (tangent × N is the outward side normal for a CCW outer
-		// walk and a CW hole walk alike).
-		for j := range cl.samples {
-			g0 := base + j
-			g1 := base + (j+1)%len(cl.samples)
-			mesh.addTriangle([3]int{meshBottom(g0), meshBottom(g1), meshTop(g1)}, cl.faceOf[j])
-			mesh.addTriangle([3]int{meshBottom(g0), meshTop(g1), meshTop(g0)}, cl.faceOf[j])
-			// A wall spans both ends, so it cannot attribute its axial
-			// displacement to one of them and takes the larger.
-			f := cl.faceOf[j]
-			faceTrim[f] = math.Max(faceTrim[f], cl.sagOf[j])
-			faceAxial[f] = pp.axialDelta()
-		}
+		chorded = append(chorded, tessellation.PrismLoop[*Face]{Samples: cl.samples, FaceOf: cl.faceOf,
+			SagOf: cl.sagOf, BoundOf: cl.boundOf, MaxSag: cl.maxSag,
+			WallSlack: cl.wallSlack, CapSlack: cl.capSlack, SegmentArea: cl.segmentArea,
+			Walks: cl.walks, PerimeterUpper: cl.perimeterUpper})
 	}
-	if !sheet {
-		faceTrim[capStart] = capTrim
-		faceTrim[capEnd] = capTrim
-		faceAxial[capStart] = pp.z0Delta
-		faceAxial[capEnd] = pp.z1Delta
-	}
+	topology := tessellation.PrismWalls(chorded, sheet, pp.axialDelta())
+	mesh.areaSlack = topology.AreaSlack
+	pts2, sampleBound := topology.Points, topology.Bounds
+	faceTrim, faceAxial := topology.FaceTrim, topology.FaceAxial
+	walks, perimeterUpper, segmentArea := topology.Walks, topology.PerimeterUpper, topology.SegmentArea
 
 	// The mesh vertices: bottom and top of every boundary sample, placed
 	// through the payload — exactly on the analytic boundary.
@@ -704,39 +652,12 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 		return nil, err
 	}
 
-	// Loops that touch — a hole tangent to the outline or to another hole —
-	// pinch the cap region, and a mesh at this tolerance cannot prove it
-	// represents that topology: the chorded loops must clear each other by
-	// more than their own sagitta bounds, or the tessellation refuses
-	// (an error, never a pinched or cracked mesh).
-	if err := requireLoopClearance(ctx, pts2, loopIdx, loopSag); err != nil {
+	// Prove loop clearance before both caps reuse the wall rings' vertices.
+	if err := tessellation.PrismCaps(ctx, &topology, sheet, capStart, capEnd,
+		pp.z0Delta, pp.z1Delta, requireLoopClearance, triangulate2DContext); err != nil {
 		return nil, err
 	}
-
-	if sheet {
-		// A sheet has no cap to triangulate and so never calls
-		// triangulate2DContext, but the minimum it would have refused on
-		// still binds the wall loop this build chords: a loop of fewer than
-		// three samples cannot bound a polygon (triangulate2DContext's own
-		// guard), so a wall built from one would be degenerate however few
-		// caps it carries.
-		if len(loopIdx) == 0 || len(loopIdx[0]) < 3 {
-			return nil, fmt.Errorf(`%w: a surface-result wall loop needs at least three boundary samples`, ErrDegenerate)
-		}
-	} else {
-		// Caps: both share one 2D triangulation of the chorded region — the
-		// same non-convex, hole-carrying polygon — mapped to the top
-		// vertices as-is (outward +N) and to the bottom vertices reversed
-		// (outward −N).
-		capTris, err := triangulate2DContext(ctx, pts2, loopIdx)
-		if err != nil {
-			return nil, err
-		}
-		for _, tri := range capTris {
-			mesh.addTriangle([3]int{meshTop(tri[0]), meshTop(tri[1]), meshTop(tri[2])}, capEnd)
-			mesh.addTriangle([3]int{meshBottom(tri[0]), meshBottom(tri[2]), meshBottom(tri[1])}, capStart)
-		}
-	}
+	mesh.triangles, mesh.source = topology.Triangles, topology.Sources
 
 	// A reflected placement flips handedness, turning every counter-clockwise
 	// winding clockwise; reversing the windings restores outward orientation.
@@ -898,14 +819,7 @@ func liftTessellationError(err error) error {
 // infinite bound). chordStationBound's +Inf for an underivable enclosure lands
 // here.
 func requireDerivableStore(store []float64) (float64, error) {
-	worst := 0.0
-	for _, d := range store {
-		if proofbound.IsNonFinite(d) {
-			return 0, fmt.Errorf(`%w: a chorded boundary sample states no enclosure of the point its own record denotes, so this mesh can publish no displacement bound for the faces that meet it`, ErrUnsupported)
-		}
-		worst = math.Max(worst, d)
-	}
-	return worst, nil
+	return tessellation.StoreMax(store)
 }
 
 // composeFaceBounds publishes docs/tessellation-design.md §2's sourceBound for
@@ -913,17 +827,11 @@ func requireDerivableStore(store []float64) (float64, error) {
 // and axial displacements, and lifts Mesh.bound to their maximum. Every source
 // face is present by construction: the walk is over mesh.source itself.
 func composeFaceBounds(m *Mesh, trim, axial map[*Face]float64, store []float64, section float64) error {
-	faceStore := map[*Face]float64{}
-	for i, f := range m.source {
-		for _, v := range m.triangles[i] {
-			faceStore[f] = math.Max(faceStore[f], store[v])
-		}
+	bounds, err := tessellation.FaceBounds(m.triangles, m.source, trim, axial, store, section)
+	if err != nil {
+		return err
 	}
-	for f, s := range faceStore {
-		bound := proofbound.UpRound(trim[f] + s + section + axial[f])
-		if proofbound.IsNonFinite(bound) {
-			return fmt.Errorf(`%w: a face's composed displacement is not finite, so this mesh can state no bound for it`, ErrUnsupported)
-		}
+	for f, bound := range bounds {
 		m.setFaceBound(f, bound)
 	}
 	return nil
@@ -933,16 +841,7 @@ func composeFaceBounds(m *Mesh, trim, axial map[*Face]float64, store []float64, 
 // allowance over the mesh, each facet charged the largest store displacement its
 // own three vertices carry.
 func meshStoreAreaAllow(m *Mesh, store []float64) float64 {
-	total := 0.0
-	for _, tri := range m.triangles {
-		d := math.Max(store[tri[0]], math.Max(store[tri[1]], store[tri[2]]))
-		if d <= 0 {
-			continue
-		}
-		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
-		total = proofbound.AbsSumUpper(total, proofbound.PerturbedTriangleAreaAllow(a, b, c, d))
-	}
-	return total
+	return tessellation.StoreAreaAllow(m.vertices, m.triangles, store)
 }
 
 // meshFaceAreaUpper bounds each source face's own true patch area from the
@@ -951,15 +850,7 @@ func meshStoreAreaAllow(m *Mesh, store []float64) float64 {
 // displacement is charged against — moving a planar patch's level by delta
 // displaces at most delta times that patch's own area.
 func meshFaceAreaUpper(m *Mesh, store []float64) map[*Face]float64 {
-	out := map[*Face]float64{}
-	for i, f := range m.source {
-		tri := m.triangles[i]
-		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
-		d := math.Max(store[tri[0]], math.Max(store[tri[1]], store[tri[2]]))
-		held := b.Sub(a).Cross(c.Sub(a)).Len() / 2
-		out[f] = proofbound.AbsSumUpper(out[f], held, proofbound.PerturbedTriangleAreaAllow(a, b, c, d))
-	}
-	return out
+	return tessellation.FaceAreaUpper(m.vertices, m.triangles, m.source, store)
 }
 
 // publishSymDiff sums an analytic payload's occupied-volume terms into the
@@ -967,9 +858,9 @@ func meshFaceAreaUpper(m *Mesh, store []float64) map[*Face]float64 {
 // state refuses (docs/tessellation-design.md §12) rather than publishing a
 // symmetric-difference bound the boolean would then compose into a result.
 func publishSymDiff(m *Mesh, terms []float64) error {
-	total := proofbound.AbsSumUpper(terms...)
-	if proofbound.IsNonFinite(total) {
-		return fmt.Errorf(`%w: this mesh states no finite bound on the volume it and the body it stands for differ by, so no boolean may consume it`, ErrUnsupported)
+	total, err := tessellation.SymDiff(terms)
+	if err != nil {
+		return err
 	}
 	m.volSymDiff = total
 	m.symDiffOK = true
@@ -1460,11 +1351,6 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 	}
 	return m, nil
 }
-
-// meshBottom and meshTop are the mesh vertex indices of 2D boundary sample g:
-// the vertices interleave bottom, top per sample.
-func meshBottom(g int) int { return 2 * g }
-func meshTop(g int) int    { return 2*g + 1 }
 
 // addTriangle appends one facet and its source face.
 func (m *Mesh) addTriangle(tri [3]int, src *Face) {
