@@ -237,7 +237,7 @@ from the input value alone.
 
 ### 4.3 Algorithm
 
-`cupWall(cp, alpha)`:
+`internal/cupwall.Evaluate(cp, alpha)`:
 
 1. Read positive finite `t` and the valid shell sense from the private morphology
    certificate. Reconfirm the exact axial construction relation used by that
@@ -707,7 +707,8 @@ lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
 | `clearance_geom.go` | `addCupFaces`, `addFacetedFaces`, payload delta |
 | `clearance.go` | bounded extent/contact gates + true interval expansion |
 | `shell.go` / `shell_cup.go` | expose/recheck exact morphology certificate internally |
-| `survey.go` | `cupWall`; dispatch faceted surveys |
+| `internal/cupwall/wall.go` | cup wall theorem and morphology recheck |
+| `survey.go` | cup wall adapter; dispatch faceted surveys |
 | `tessellate.go` | create/carry per-facet source certificates + `sourceBound` internally |
 | `boolean.go` / `boolean_body.go` | hidden-tangency `sourceBound` consumption; compose `boundaryCert`; preserve facet survey metadata |
 | `topology.go` | faceted `NormalAt` through certificate; no public type change |

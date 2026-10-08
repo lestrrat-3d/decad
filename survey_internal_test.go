@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -22,6 +23,11 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func cupWall(budget *proofbound.WorkBudget, cp cupView) (wallOutcome, error) {
+	wall, err := cupwall.Evaluate(budget, cupWallInput(cp), 15*math.Pi/180, cupWallOperations)
+	return wallOutcome{reading: wall.Reading, bound: wall.Bound, ok: wall.OK}, err
+}
 
 // This file is a deliberate internal-test exception (like
 // selector_internal_test.go): the kernel's sub-resolution web semantic is
@@ -596,7 +602,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 		sense:     Inward,
 	}
 
-	out, err := cupWall(proofbound.NewWorkBudget(t.Context()), cp, 15*math.Pi/180)
+	out, err := cupWall(proofbound.NewWorkBudget(t.Context()), cp)
 	require.NoError(t, err)
 	require.True(t, out.ok)
 	require.NotNil(t, out.reading)
@@ -614,7 +620,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 		bad.cavity.Outer.Segments[i] = moved
 	}
 
-	out, err = cupWall(proofbound.NewWorkBudget(t.Context()), bad, 15*math.Pi/180)
+	out, err = cupWall(proofbound.NewWorkBudget(t.Context()), bad)
 	require.NoError(t, err)
 	require.False(t, out.ok, `a malformed offset relation must not return the requested thickness`)
 
@@ -714,14 +720,14 @@ func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 		thickness: 5,
 		sense:     Inward,
 	}
-	out, err := cupWall(proofbound.NewWorkBudget(t.Context()), cp, 15*math.Pi/180)
+	out, err := cupWall(proofbound.NewWorkBudget(t.Context()), cp)
 	require.NoError(t, err)
 	require.True(t, out.ok)
 
 	for _, target := range []string{"coalesceWalksBudget", "crossingAuditBudget", "reverseLoopRecordBudget", "loopRecordsEqual"} {
 		t.Run(target, func(t *testing.T) {
 			budget, entered := newFrameWorkBudget(target)
-			_, err := cupWall(budget, cp, 15*math.Pi/180)
+			_, err := cupWall(budget, cp)
 			require.ErrorIs(t, err, context.Canceled)
 			require.True(t, *entered, `cup wall work must poll inside the named phase`)
 		})
@@ -757,7 +763,7 @@ func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "IntegralsBudget"}
 
-	_, err = cupWall(proofbound.NewWorkBudget(ctx), cp, 15*math.Pi/180)
+	_, err = cupWall(proofbound.NewWorkBudget(ctx), cp)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)

@@ -205,8 +205,8 @@ the rules leave to the byte budget.
 | `clearance_cells.go` | Pruned cell walk and face-pair adapter. See clearance §3–§5. |
 | `clearance_tiers.go` | Tier adapters and vertex budget. See clearance §3/§6. |
 | `clearance_geom.go` | `bodyGeom`: each body's clearance faces, edges and nesting test over `internal/clearance/`'s carriers. See `docs/clearance-design.md` §2–§3. |
-| `survey.go` | Adapts analytic payloads to wall, undercut and radius readers. See verification §6. |
-| `survey_undercut.go` | `listVerdict`, the surveys' per-list fold of `internal/survey2d/`'s three-valued undercut reader. |
+| `survey.go` | Adapts analytic wall, undercut and radius readers. See verification §6. |
+| `survey_undercut.go` | Folds three-valued undercut readings. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
 | `motion.go` / `motion_verify.go` | Motion aliases, options, and pose checks. See motion-check §2–§6. |
 | `motion_bound.go` | Swept-box and corner readings over `internal/motionbound/`. See its doc comment. |
@@ -315,7 +315,8 @@ the rules leave to the byte budget.
 | `internal/offset2d/` | Offset carriers, blends, joins, section records and displacement proofs. See modify §6–§9. |
 | `internal/capband/` | Cap-band admission, departure and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
-| `internal/survey2d/` | 2D disk geometry, prism readers, section walks, and Bézier carriers. See verification §6. |
+| `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |
+| `internal/survey2d/` | 2D disks, prism readers, walks, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Motion variants, validation, exact parameters, poses and sweeps. |
