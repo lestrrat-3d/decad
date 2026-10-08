@@ -101,16 +101,11 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 	}
 	prepared := rotationalSweepPath{body: body, path: path, fromRot: fromRot, fromT: fromT}
 	if path.drift == nil {
-		travelSquared := new(big.Rat)
-		for _, component := range path.delta {
-			value := component.Rat()
-			travelSquared.Add(travelSquared, new(big.Rat).Mul(value, value))
-		}
-		bound := proofbound.RatSqrtUp(travelSquared)
-		if !finiteMeasurementValues(bound) {
+		travel, ok := motionbound.SweepLinearTravel(path.delta)
+		if !ok {
 			return rotationalSweepPath{}, false
 		}
-		prepared.fullTravel = proofarith.FloatRat(bound)
+		prepared.fullTravel = travel
 		return prepared, true
 	}
 	drift := path.drift
@@ -118,40 +113,24 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 	angular := [3]units.Value{drift.AngularVelocity.X, drift.AngularVelocity.Y, drift.AngularVelocity.Z}
 	prepared.velocity = motionbound.RatVec{}
 	omega := motionbound.RatVec{}
-	vSquared, omegaSquared := new(big.Rat), new(big.Rat)
 	for axis := range 3 {
 		prepared.velocity[axis], _ = exactBaseValue(velocity[axis])
 		omega[axis], _ = exactBaseValue(angular[axis])
-		vSquared.Add(vSquared, new(big.Rat).Mul(prepared.velocity[axis], prepared.velocity[axis]))
-		omegaSquared.Add(omegaSquared, new(big.Rat).Mul(omega[axis], omega[axis]))
 	}
-	if omegaSquared.Sign() <= 0 {
-		return rotationalSweepPath{}, false
-	}
-	prepared.omegaLow = proofarith.FloatRat(proofbound.RatSqrtDown(omegaSquared))
-	prepared.omegaHigh = proofarith.FloatRat(proofbound.RatSqrtUp(omegaSquared))
-	if prepared.omegaLow == nil || prepared.omegaHigh == nil || prepared.omegaHigh.Sign() <= 0 {
-		return rotationalSweepPath{}, false
-	}
-	center, ok := motionbound.RatVecOf(drift.Center)
+	var vSquared *big.Rat
+	prepared.frame, prepared.omegaLow, prepared.omegaHigh, vSquared, ok =
+		motionbound.SweepAngularFrame(prepared.velocity, omega, drift.Center)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	unit, ok := motionbound.UnitScaleInterval(omega)
-	if !ok {
-		return rotationalSweepPath{}, false
-	}
-	prepared.frame = motionbound.MotionFrame{Kind: motionbound.MotionRevolute, Axis: omega, Unit: unit, Center: center}
 	radius, ok := rotationalSweepRadius(body, path.from, drift.Center, omega)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	vUp := proofbound.RatSqrtUp(vSquared)
-	if !finiteMeasurementValues(vUp) {
+	prepared.fullTravel, ok = motionbound.SweepRotatingTravel(vSquared, prepared.omegaHigh, radius, path.duration)
+	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	speed := new(big.Rat).Add(proofarith.FloatRat(vUp), new(big.Rat).Mul(radius, prepared.omegaHigh))
-	prepared.fullTravel = new(big.Rat).Mul(speed, path.duration)
 	if path.screw != nil {
 		angle, _ := exactBaseValue(path.screw.Angle)
 		angular := new(big.Rat).Quo(angle, path.duration)
@@ -211,20 +190,7 @@ func dyadicSweepRadius(body *Body, from r3.Transform, center r3.Vec, axis proofa
 	if !ok {
 		return nil, false
 	}
-	axisSquared := proofarith.DvDot(axis, axis)
-	if axisSquared.Sign() <= 0 {
-		return nil, false
-	}
-	pivot := proofarith.DyVec(center)
-	place := newExactContactMap(from)
-	best := proofarith.DyZero()
-	for _, corner := range corners {
-		cross := proofarith.DvCross(proofarith.DvSub(place.apply(corner), pivot), axis)
-		if squared := proofarith.DvDot(cross, cross); proofarith.DyCmp(squared, best) > 0 {
-			best = squared
-		}
-	}
-	return sweepRadiusOf(new(big.Rat).Quo(best.Rat(), axisSquared.Rat()))
+	return motionbound.SweepRadiusDyadic(corners[:], from, center, axis)
 }
 
 // rationalSweepRadius is rotationalSweepRadius over an axis with a
@@ -235,38 +201,7 @@ func rationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	if !ok {
 		return nil, false
 	}
-	axisSquared := new(big.Rat)
-	for k := range 3 {
-		axisSquared.Add(axisSquared, new(big.Rat).Mul(axis[k], axis[k]))
-	}
-	if axisSquared.Sign() <= 0 {
-		return nil, false
-	}
-	pivot := proofarith.DyVec(center)
-	best := new(big.Rat)
-	for _, corner := range corners {
-		delta := proofarith.DvSub(exactContactTransform(from, corner), pivot)
-		squared := new(big.Rat)
-		for k := range 3 {
-			i, j := (k+1)%3, (k+2)%3
-			component := new(big.Rat).Sub(new(big.Rat).Mul(delta[i].Rat(), axis[j]),
-				new(big.Rat).Mul(delta[j].Rat(), axis[i]))
-			squared.Add(squared, component.Mul(component, component))
-		}
-		if squared.Cmp(best) > 0 {
-			best = squared
-		}
-	}
-	return sweepRadiusOf(best.Quo(best, axisSquared))
-}
-
-// sweepRadiusOf rounds the exact squared radius's root up to a float.
-func sweepRadiusOf(squared *big.Rat) (*big.Rat, bool) {
-	radius := proofbound.RatSqrtUp(squared)
-	if !finiteMeasurementValues(radius) {
-		return nil, false
-	}
-	return proofarith.FloatRat(radius), true
+	return motionbound.SweepRadiusRational(corners[:], from, center, axis)
 }
 
 func (p rotationalSweepPath) poseAt(f *big.Rat) (r3.Transform, error) {
@@ -458,15 +393,7 @@ func (p rotationalSweepPath) pointDeviationFrom(pose r3.Transform, ideal sweepId
 // value pointDeviationFrom rounds up.
 func (p rotationalSweepPath) pointDeviationSquared(pose r3.Transform, ideal sweepIdealPose,
 	poll func() error) ([]proofarith.DyV3, *big.Rat, error) {
-	actual := make([]proofarith.DyV3, len(p.sourcePoints))
-	place := newExactContactMap(pose)
-	for i, source := range p.sourcePoints {
-		if err := poll(); err != nil {
-			return nil, nil, err
-		}
-		actual[i] = place.apply(source)
-	}
-	return actual, motionbound.SweepPointDeviationSquared(p.sourcePoints, actual, ideal.Rot, ideal.Shift), nil
+	return motionbound.SweepPointDeviation(p.sourcePoints, pose, ideal.Rot, ideal.Shift, poll)
 }
 
 // dyDenominatorExp is the exponent k of d's reduced denominator 2^k, the
