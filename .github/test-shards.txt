@@ -1085,3 +1085,5 @@
 4	0.36	TestLoftAuditCandidateCeilingRefuses
 3	0.40	TestLoftAuditScanCeilingRefusesTallTube
 0	0.05	TestLoftAuditTriangleCeilingRefuses
+0	1.30	TestLoftCentroidShiftFormEnclosesTwoArcLobe
+2	0.66	TestLoftCentroidToothBoundReadsToothSize

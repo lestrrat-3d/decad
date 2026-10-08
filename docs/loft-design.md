@@ -213,7 +213,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
-| **S12** | ANY build — placed (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's proven quotient bound has no positive denominator left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
+| **S12** | ANY build — placed (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's shift `epsV · R_c / clearance` (§8) has no positive `clearance` left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
 | **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf`, decided in whichever of the two arms the gate-order paragraph below assigns that term | yes — the body exists; this evaluator cannot publish a finite certified enclosure for that term on this build | `ErrUnsupported` | no — an enclosure or numeric-range ceiling, not a shape rule |
 | **S15** | a paired segment whose chord target (§5.1) is not met inside the fixed station cap | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
@@ -1558,31 +1558,28 @@ terms is underivable, non-finite, or saturates during composition.
 `VecMeasurement`, not a `units.Value`.** Round each coordinate once into the
 returned `r3.Vec`. Its `Bound` is the length radius enclosing all three
 coordinate-rounding errors, and it is `Exact` only when every coordinate has
-zero rounding error, the payload's displacement `delta` is zero, and the full
-`chordedBoundaryVolumeResidualAllow` and
-`chordedBoundaryMomentResidualAllow` terms (§5.2, §8.1), including their
-`matchedDelta` input, are both zero. This is the
-existing `moments.go` centroid publication pattern, extended from the
-plane-local two-coordinate result to this 3D triangulated boundary. A body
-whose `delta` is positive
-(§5.2) widens each coordinate's bound by the same quotient composition
-`internal/proofbound/bounded.go`'s `boundedQuotient` states, using `sweptVolumeAllow` as the
-denominator's own allowance and `sweptMomentAllow` as the numerator's. A body
-whose `sectionDelta` OR `matchedDelta` is positive first applies the exact
-bilinear-patch volume and first-moment corrections, then widens the quotient
-by the matching
-`chordedBoundaryVolumeResidualAllow` /
-`chordedBoundaryMomentResidualAllow` pair (`internal/proofbound/bounds.go`). The moment residual
-reads the relation a region of proven volume `V` inside radius `R` obeys,
-`|∫p dV| ≤ V·R`. Its wall chord-to-curve measure is
-`matchedDelta·wallAreaUpper` and can reach `matchedDelta` beyond the held
-coordinate envelope, so it uses `coordUpper+matchedDelta`. The cap and seam
-volume terms are signed identities rather than swept material and do not enter
-the moment residual. A build whose COMBINED volume allowance — the placement term,
-the chording term, or the two composed — is not smaller than the held volume
-leaves that quotient's denominator non-positive, and the centroid is
-unstateable — refused `ErrUnsupported` (Table S, S12) rather than published
-with a bound nobody could use.
+zero rounding error and the payload's displacement `delta`, `sectionDelta`
+and `matchedDelta` are all zero. This is the existing `moments.go` centroid
+publication pattern, extended from the plane-local two-coordinate result to
+this 3D triangulated boundary.
+
+**A placed or chorded body widens that radius by one shift of the held
+centroid, `epsV · R_c / clearance`** (`docs/loft-gear-bounds-design.md` §3
+owns the derivation). The value has already taken the exact bilinear-patch
+volume and first-moment corrections. `epsV` bounds the MEASURE of the region
+where the true solid and that corrected body differ: the vertex sweep
+`sweptVolumeAllow(delta, areaUpper)` beside the chord-to-curve homotopy's
+per-cell `wallLeg` and its `skirtLeg`. The cap and seam volume legs are signed
+identities rather than swept material and do not enter it. `R_c` bounds how
+far any point of that region lies from the PUBLISHED centroid: the farthest
+held vertex from it, plus its rounding, plus `max(matchedDelta, delta)`. It
+is the body's own size, never its distance from the mass anchor.
+`clearance` is the exact rational corrected volume minus `Volume`'s own
+allowance, rounded down once — a proven lower bound on the true volume. A
+build whose `Volume` allowance is not smaller than the held volume leaves no
+positive clearance, and the centroid is unstateable — refused
+`ErrUnsupported` (Table S, S12) rather than published with a bound nobody
+could use.
 
 **`Area` is never Exact.** A triangle's own area is `(1/2) * |(B-A) x
 (C-A)|` — a square root of a rational, generically irrational — so a wall
@@ -1745,12 +1742,9 @@ records and this document does not settle; leaving it in can only make the
 published total larger, and DOMINATION is proven leg by leg above whatever
 that question's answer turns out to be.
 
-**The moment twin applies the exact twist correction, then reads the wall
-residual as its only region measure.** The cap leg is an exact signed identity
-whose material never leaves its plane, and the seam leg is a contour residue
-attached to no region, so neither is multiplied by a coordinate radius.
-`chordedBoundaryMomentResidualAllow`'s doc comment owns the remaining
-measure-and-radius product; §8's `Centroid` paragraph states its radius.
+**`Centroid` reads no residual leg as a moment.** It applies the exact twist
+correction, then spends the measure legs alone in its shift form; §8's
+`Centroid` paragraph states the composition.
 
 
 ## 9. Table D — downstream

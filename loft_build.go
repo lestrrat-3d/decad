@@ -127,7 +127,7 @@ type loftPayload struct {
 	// chordCellDeltaUpper before passing it — never this field — to
 	// newLoftMassAccumulator and computeLoftChordedAllow (loft_moments.go),
 	// which is where every proofbound.ChordedBoundaryVolumeAllow,
-	// proofbound.ChordedBoundaryMomentAllow, proofbound.ChordedBoundarySeamAllow and cap-area
+	// proofbound.ChordedBoundarySeamAllow, centroid radius and cap-area
 	// matched argument comes from; proofbound.CellChordCurveAreaUpper reads the same
 	// composition per cell, over the cell's own chord-to-curve half.
 	// The raw matched quantity itself is a PER-BUILD LOCAL of evalLoft and is

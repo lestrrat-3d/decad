@@ -138,16 +138,44 @@ quotient about the anchor.**
 
 ```text
 epsV      = absSumUpper(sweptVolumeAllow(delta, perturbedAreaUpper), wallLeg, skirtLeg)
-clearance = nextafter(|V_value| − epsV, −Inf)            // S12 refuses at clearance <= 0, unchanged
-R_c       = absSumUpper(max_v ratSqrtUp(|v − c_f|²), radius3D(rounding), max(matchedDelta, delta))
+clearance = roundDown(|vol| − volumeAllow)               // exact rational vol; S12 refuses at clearance <= 0
+R_c       = absSumUpper(max_v sqrtUp(|v − c_f|²), radius3D(rounding), max(matchedDelta, delta))
 shift     = divUpper(productUpper(epsV, R_c), clearance)
 Bound     = absSumUpper(radius3D(rounding), shift)
 ```
 
 `c_f` is the published float centroid, `rounding` the largest per-coordinate
-rounding of the exact rational centroid into it, and `v` runs over every held
-vertex (`ratSqrtUp` over `ratSquaredDistance3`, the same exact route `distUpper`
-already takes).
+rounding of the exact rational centroid into it, and `v` runs over every
+vertex the triangle set references (an exact dyadic squared distance and its
+outward square root, the route `distUpper` takes over rationals). The radius
+term is the larger of `matchedDelta` and `delta`, never their sum.
+
+**The clearance is computed over exact rationals.** `vol` is the exact
+corrected volume `Volume` rounds and `volumeAllow` is `Volume`'s own proven
+allowance without that rounding; the difference rounds down once. Subtracting
+from the rounded `V_value` instead carries `V_value`'s half-ulp into the
+result, and where `epsV` is most of `V` that half-ulp is many ulps of the
+small difference, so no single outward step covers it. `volumeAllow` is
+whatever residual `Volume` composes (§2's `wallLeg + skirtLeg` beside the
+vertex sweep, or loft §8.1's residual where that is still the shipped form):
+the clearance reads `Volume`'s proven enclosure of `V'`, so S12 stays exactly
+the test `Volume` states.
+
+**The measure `epsV` covers a three-step sweep, each step charged.** The
+winding argument needs `∫ |w_1 − w_0| ≤ epsV` for a homotopy that keeps the
+surface closed, and with `delta > 0` the held caps are not in their planes:
+
+1. project each held cap onto its plane `Π` and move every cell whose chord
+   departure is zero (`p.MatchedDelta[j] <= 0`, which no chorded leg
+   charges) to its exact place; both move held triangles at speed at most
+   `delta`, so `sweptVolumeAllow(delta, perturbedAreaUpper)` charges them;
+2. apply `Φ` to every chorded cell, charged per cell by `wallLeg`;
+3. add the skirt between every seam cell, zero-departure cells included, and
+   its projection onto `Π`: width at most `delta`, speed at most
+   `matchedDelta`, so `skirtLeg = productUpper(productUpper(matchedDelta,
+   delta), Σ_all cells (arcLenUpperV_k + arcLenUpperW_k))`.
+
+The vertex sweep is therefore REQUIRED in `epsV` whenever `delta > 0`.
 
 **Derivation.** Let `w_0`, `w_1` be the winding functions of §2's `S_0` and `S_1`,
 `V' = ∫ w_1` the true volume and `c` the exact centroid of the ruled body, so that
@@ -159,7 +187,7 @@ within `delta` of a seam point, and every point of the vertex-displacement sweep
 (`sweptVolumeAllow`'s own homotopy) within `delta` of a held triangle; so
 `sup |p − c| ≤ max_v |v − c| + max(matchedDelta, delta)`, and `|c − c_f| ≤
 radius3D(rounding)` moves the reference from the exact centroid to the published
-one. `V' ≥ |V_value| − epsV` is the clearance S12 already tests.
+one. `V' ≥ clearance` because `Volume`'s proven enclosure contains `V'`.
 
 The old form reads `sweptMomentAllow` and `chordedBoundaryMomentResidualAllow` at
 `coordUpper`, the body's inf-norm extent from the mass ANCHOR, then multiplies the
@@ -406,8 +434,9 @@ asserted as ratios against the tolerance.
 |---|---|---|
 | `TestLoftVolumeResidualIsPerCellWallLegPlusSkirt` | on a twisted arc ring, `Volume.Bound` equals the per-cell sum plus skirt composed with the rounding; the skirt is exactly 0 at `delta == 0` and positive on the placed copy | dropping the skirt on the placed copy; charging the build-wide maximum instead of the per-cell sum (bound rises) |
 | `TestLoftVolumeBoundEnclosesRefinedRing` | the exact ring volume lies inside `[Value − Bound, Value + Bound]` at every station count `m` in 3..64, twisted and untwisted | deleting the wall leg |
-| `TestLoftCentroidShiftFormEnclosesRefinedRing` | the exact ring centroid lies inside `Bound` of the published one at every `m`; the bound is below the old form's on every row | deleting `R_c`'s `matchedDelta` term; deleting the shift |
-| `TestLoftCentroidToothReadsSound` | one tooth at z = 8, 20, 40 reads `Sound` with Centroid ratio below `2.5e-4 · 4` | reinstating the anchor-based form |
+| `TestLoftCentroidShiftFormEnclosesTwoArcLobe` | on a section of two circular arcs (no `LineSeg`, so every wall is ruled; a ring cannot show the shift red, its chorded centroid equals the true one by symmetry), untwisted, twisted and placed at three bulge offsets: the exact centroid lies inside `Bound` of the published one; `R_c` reaches every densely sampled true boundary point; the bound is below the old form's on every row | deleting `R_c`'s `max(matchedDelta, delta)` term (4 of 7 rows); deleting the shift (every row) |
+| `TestLoftCentroidToothBoundReadsToothSize` | one tooth at z = 8, 20, 40: `R_c` within the tooth's own diameter and the Centroid ratio below the old form's; z8 and z20 below `2.5e-4 · 4` at the envelope target, z40 (1.03e-3 there) once PR 4's target lands, which adds that leg | the anchor-based form exceeds `2.5e-4 · 4` on every row |
+| `TestCentroidClearanceIsExact` | `CentroidClearance` is the largest float at or below the exact `|vol| − volumeAllow` where that allowance sits inside `V_value`'s half-ulp | the rounded-volume form overstates it 1.7x |
 | `TestLoftAreaCapTubeIsPerCell` | `Area.Bound` composes the per-cell tube; it equals the maximum form when every cell's departure is equal (a uniform full circle) and is below it on the gear | charging the maximum form |
 | `TestLoftChordTargetReadsFeatureSize` | the target of a tooth, a gear and a copy of each translated 10 outer radii: `fraction · A/P` to one ulp, translation-invariant; an exact `LineSeg`/`NURBSSeg` record's target bits pinned, read on amd64 and arm64 by CI | reading the envelope rule |
 | `TestLoftFreeformWalkBisectsOnMatched` | on the zigzag span of `TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses` paired with itself, every accepted cell's matched value is at or below the target | bisecting on the sagitta alone |
@@ -430,7 +459,7 @@ the loft sections §12 lists for it.
 | PR | Files and functions | Proves itself by |
 |---|---|---|
 | **1 — volume residual and area tube** | `internal/loftmesh/loft_chord_allow.go`: `ComputeLoftChordedAllow` accumulates `WallLeg`, `SkirtLeg`, `CapAreaExcess` per cell and drops `CapVolumeUpper`, `SeamAllow`, `h1Upper`, `posUpper`; `loft_moments.go` (`computeLoftChordedAllow` loses the cap-offset scan); `internal/loftmesh/mass_accumulator.go` `Volume`/`Area`; `loft_build.go` `loftMeshProofOf` (`volSymDiff`); `internal/proofbound/bounds.go` deletes `ChordedBoundarySeamAllow`, `ChordedBoundaryVolumeAllow`, `ChordedBoundaryVolumeResidualAllow` and their tests | the first five tests of §8 that name Volume or Area |
-| **2 — centroid shift form** | `internal/loftmesh/mass_accumulator.go` `Centroid`; delete `PlacedCentroidAllow` and the loft's `ChordedBoundaryMomentAllow`/`ChordedBoundaryMomentResidualAllow` calls (helpers stay where modify reach reads them) | the two centroid tests |
+| **2 — centroid shift form** | `internal/loftmesh/mass_accumulator.go` `Centroid`, `CentroidMeasureAllow`, `CentroidRadius`, `CentroidClearance`, `VolumeAllow`; `loft_chord_allow.go` accumulates `WallLeg` and `SkirtLeg` (fields only; `Volume` keeps reading the shipped residual until PR 1); delete `PlacedCentroidAllow` and the loft's `ChordedBoundaryMomentResidualAllow` call (the `internal/proofbound` helpers stay) | the three centroid tests |
 | **3 — audit** | `internal/loftmesh/loft_audit.go`: `sweepCandidates`, `LoftCrossingAuditStructured`, `capFamilyProof`, `LoftAuditShortcuts.Sweep`/`.CapProof`; `loft_build.go` calls the structured entry with `a.walls`, `a.capStartCount`, `a.vIdx`, `a.wIdx`; `sweep_mitre_build.go` unchanged; `internal/proofbound/budget.go` comment on what S8 counts | the four audit tests |
 | **4 — chord target and matched bisection** | `loft_stations.go`: `loftChordTarget(area0, perim0, area1, perim1)`, `loftFeatureSize`, `loftChordFraction = 2.5e-4`; `loft.go` passes `falsifyRecordedArea`'s integrals on `loftPayload.recordArea`; `loftStationCapGate` computes the target from them and `loft_build.go` chords at it; `internal/freeform/spline_stations.go` `WalkCell` measures and forwards the matched value, `StationCellReader.AcceptCell` takes it; `loft_chord_calibration_internal_test.go` re-pinned | the target, walk and wedge tests |
 | **5 — ceilings and the gear fixture** | `internal/loftmesh/record_stations.go` `StationCap(P)` and `StationShare`; `loft_stations.go` `loftStationCapGate`; `internal/freeform/work_budget.go` `FreeformWork.Limit`, `Step` reads it, `ReconstructionWorkLimit = 1 << 28`, `ReconstructionChordCeiling = 11585`; `loft.go` raises the limit after the cap gate; `doc.go` support map, `docs/missing-features.md` gear row, loft §12 increment table | the gear, cap, work and S8 tests; `go test . ./apitest/ -run '^TestCI'` |
