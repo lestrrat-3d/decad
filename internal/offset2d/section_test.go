@@ -103,3 +103,58 @@ func TestMirrorCornerJoin(t *testing.T) {
 	require.True(t, g1.G1)
 	require.Equal(t, offset2d.Point{U: tt, V: 0}, g1.M)
 }
+
+// TestOpenWalkConsumed reads the concave arc of radius 13 about the origin,
+// walked clockwise from (0,13) to (5,12), offset outward to radius 10.625:
+//
+//   - trimmed at the exact cut (0, 10.625) and extended past its end angle to
+//     the cut (5, 9.375), it sweeps more than its source, which WalkConsumed
+//     reads as consumed and OpenWalkConsumed accepts when the end is an
+//     opening end, and only then;
+//   - started instead at the angle 59.8°, past that extended end, it runs
+//     backward and is consumed with the extension counted;
+//   - an end read 100° past the source's end is no rim's extension, so the
+//     reading counts nothing and the arc is consumed;
+//   - a counter-clockwise arc of nearly a full turn, extended so its
+//     allowance reaches a full turn, is consumed though its held sweep is
+//     small;
+//   - a line takes WalkConsumed's answer.
+//
+// Shown to fail: counting a reading up to π instead of π/2 accepts the 100°
+// end; dropping the full-turn test accepts the nearly full arc.
+func TestOpenWalkConsumed(t *testing.T) {
+	const tol = 1e-9
+	rho := 10.625
+	arc := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		StartU: 0, StartV: 13, EndU: 5, EndV: 12, CU: 0, CV: 0, Radius: 13,
+		Kind: survey2d.WalkCircular, Th0: math.Pi / 2, Th1: math.Atan2(12, 5),
+	}}
+	start := offset2d.Point{U: 0, V: rho}
+	end := offset2d.Point{U: 5, V: 9.375}
+	require.True(t, offset2d.WalkConsumed(arc, start, end, tol))
+	require.False(t, offset2d.OpenWalkConsumed(arc, start, end, false, true, tol))
+	require.False(t, offset2d.OpenWalkConsumed(arc, start, end, true, true, tol))
+	require.True(t, offset2d.OpenWalkConsumed(arc, start, end, true, false, tol), "the extension lies at the end")
+	require.True(t, offset2d.OpenWalkConsumed(arc, start, end, false, false, tol))
+
+	at := func(r, deg float64) offset2d.Point {
+		s, c := math.Sincos(deg * math.Pi / 180)
+		return offset2d.Point{U: r * c, V: r * s}
+	}
+	require.True(t, offset2d.OpenWalkConsumed(arc, at(rho, 59.8), end, true, true, tol), "the start trims past the extended end")
+	far := at(rho, math.Atan2(12, 5)*180/math.Pi-100)
+	require.True(t, offset2d.OpenWalkConsumed(arc, start, far, false, true, tol), "a 100° reading is no extension")
+
+	full := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		StartU: 1, EndU: math.Cos(-0.2), EndV: math.Sin(-0.2), Radius: 1,
+		Kind: survey2d.WalkCircular, Th0: 0, Th1: 2*math.Pi - 0.2,
+	}}
+	require.True(t, offset2d.OpenWalkConsumed(full, at(1, 0.05*180/math.Pi), at(1, 0.1*180/math.Pi), false, true, tol),
+		"an allowance of a full turn holds no recorded arc")
+
+	line := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{StartU: 0, EndU: 10, TanInU: 1, TanOutU: 1}}
+	back := offset2d.Point{U: -1}
+	require.Equal(t, offset2d.WalkConsumed(line, offset2d.Point{U: 2}, back, tol),
+		offset2d.OpenWalkConsumed(line, offset2d.Point{U: 2}, back, true, true, tol))
+	require.True(t, offset2d.OpenWalkConsumed(line, offset2d.Point{U: 2}, back, true, true, tol))
+}

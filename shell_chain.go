@@ -49,7 +49,9 @@ type openChainOffset struct {
 // axis end reads; a chain with no axis end ignores it. A dropped walk is S11a
 // and a miter that does not close is S11, as in offsetLoopBudget; an opening
 // end's own refusals are offset2d.ErrOpeningCorner (SO1) and
-// offset2d.ErrOpeningSpan (SO2).
+// offset2d.ErrOpeningSpan (SO2). A walk at an opening end may run past its
+// own end to the rim cut, and offset2d.OpenWalkConsumed decides its S11a
+// (docs/shell-opening-design.md §2.4).
 func offsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, ax axisFrame, start, end chainEnd, s, t float64) (openChainOffset, error) {
 	m := len(chain)
 	if m == 0 {
@@ -117,7 +119,12 @@ func offsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 		if tail.Arc {
 			to = pt(tail.PA)
 		}
-		if walkOffsetConsumed(w, from, to) {
+		// A walk at an opening end may run past its own end to the rim cut;
+		// at an axis end or an interior corner OpenWalkConsumed reads as
+		// WalkConsumed does.
+		openStart := i == 0 && start.kind == openingEnd
+		openEnd := i == m-1 && end.kind == openingEnd
+		if offset2d.OpenWalkConsumed(w, offset2d.Point{U: from.U, V: from.V}, offset2d.Point{U: to.U, V: to.V}, openStart, openEnd, shellTol) {
 			return openChainOffset{}, errOffsetDrop
 		}
 		seg, err := offsetWalkSegment(w, s, t, from, to)

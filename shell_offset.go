@@ -33,7 +33,7 @@ import (
 // circular segment whose offset radius reaches zero (offsetRadius), and a whole
 // loop whose erosion is empty — a polygonal hole narrower than 2t offset
 // outward, whose corner joins overshoot every walk so each runs backward
-// (walkOffsetConsumed). The eroded loop keeps its walk sense, so its signed
+// (offset2d.WalkConsumed). The eroded loop keeps its walk sense, so its signed
 // area does not change sign and the §5 audit's S8 cannot see it — which is why
 // the drop is decided per walk, here, before there is any section to audit. A
 // merge the audit catches later is S11b.
@@ -128,12 +128,6 @@ func offsetRadius(w survey2d.SideWalk, s, t float64) (float64, bool) {
 // offsetWalkSegment re-emits a walk's trimmed offset curve.
 func offsetWalkSegment(w survey2d.SideWalk, s, t float64, start, end Point2) (CurveSegment, error) {
 	return offset2d.WalkSegment(w, s, t, offset2d.Point{U: start.U, V: start.V},
-		offset2d.Point{U: end.U, V: end.V}, shellTol)
-}
-
-// walkOffsetConsumed reports whether an offset trimmed away a source walk.
-func walkOffsetConsumed(w survey2d.SideWalk, start, end Point2) bool {
-	return offset2d.WalkConsumed(w, offset2d.Point{U: start.U, V: start.V},
 		offset2d.Point{U: end.U, V: end.V}, shellTol)
 }
 

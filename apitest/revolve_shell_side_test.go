@@ -32,7 +32,9 @@ import (
 // through the other); reversing the rim arc's sense sends both bead
 // volumes red; and publishing a zero section displacement for the side wall
 // leaves the 5/3 miter, the √5 acute cut and both √24 bead cuts at seam
-// vertices with a zero bound. The one-axis-end ordering gate is not exhibited: on these
+// vertices with a zero bound; reading every open-chain walk through
+// WalkConsumed again sends the sphere extended past its arc's end to S11a.
+// The one-axis-end ordering gate is not exhibited: on these
 // meridians the S11a drop gate fires first.
 
 // sideFace names the one generated side face of b whose surface pick
@@ -340,6 +342,38 @@ func requireCutEnclosed(t *testing.T, b *decad.Body, z, rho *big.Float) {
 
 func TestRevolveShellSlantedRim(t *testing.T) {
 	t.Parallel()
+	t.Run("a kept arc extended past its end outward", func(t *testing.T) {
+		t.Parallel()
+		// notchEndSketch without its three planar and cylindrical faces,
+		// outward 2.375 mm: the sphere's offset, radius 10.625, runs from the
+		// exact cut (0, 10.625) past the arc's end at (5, 12) to the exact cut
+		// (5, 9.375) on z = 5. The wall's ∫ρ dA over z ∈ [0, 5] between the
+		// two circles is 5·(169 − 10.625²)/2 = 140.2734375.
+		doc := decad.New()
+		s, p := notchEndSketch(t)
+		body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+		require.NoError(t, err)
+		cylinder20 := func(s decad.Surface) bool {
+			c, ok := s.(decad.Cylinder)
+			return ok && c.Radius.Base() == 20
+		}
+		removed := sideFace(t, body, planeAtU(0)).
+			Or(decad.FaceCreatedBy(sideRole(t, body, planeAtU(5)))).
+			Or(decad.FaceCreatedBy(sideRole(t, body, cylinder20)))
+		shelled, err := body.Shell(t.Context(), removed, units.Millimeters(2.375), decad.WithShellSense(decad.Outward))
+		require.NoError(t, err)
+		requireManifold(t, shelled)
+		decadtest.MeasuresVolume(t, shelled, fullTurnVolume(140.2734375))
+		spheres := 0
+		for _, f := range shelled.Faces() {
+			if sp, ok := f.Surface().(decad.Sphere); ok {
+				spheres++
+				require.Contains(t, []float64{13, 10.625}, sp.Radius.Base())
+			}
+		}
+		require.Equal(t, 2, spheres, `the kept sphere and its offset`)
+		requireMeshWatertightAt(t, shelled, 0.05)
+	})
 	t.Run("obtuse end on a removed cone", func(t *testing.T) {
 		t.Parallel()
 		// Inward 1.5 mm with the cone and the top disc removed: the kept
@@ -452,6 +486,20 @@ func TestRevolveShellSlantedRim(t *testing.T) {
 			require.Equal(t, 2, tori, `each rim is a torus band on the removed arc's own circle`)
 		})
 	}
+}
+
+// notchEndSketch is apitest's notchEndSection as a meridian off the axis: the
+// concave arc of radius 13 about (0, 0), on the axis, from (0, 13) to (5, 12),
+// then z = 5 up to ρ = 20, ρ = 20 back to z = 0 and z = 0 down to ρ = 13.
+func notchEndSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	notchEndSection(s)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s, s.Profiles()[0]
 }
 
 func TestRevolveShellSlantedRimRefusals(t *testing.T) {

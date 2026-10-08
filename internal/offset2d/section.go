@@ -205,3 +205,77 @@ func WalkConsumed(w survey2d.SideWalk, start, end Point, tol float64) bool {
 	rr := math.Hypot(start.U-w.CU, start.V-w.CV)
 	return rr*overshoot > tol*math.Max(1, math.Abs(w.CU)+math.Abs(w.CV)+2*w.Radius)
 }
+
+// OpenWalkConsumed is WalkConsumed for one walk of an open chain whose start
+// (openStart), end (openEnd) or both is a side opening's rim cut
+// (docs/shell-opening-design.md §2.4). Table RO's cut can land past the
+// offset foot, so the trimmed offset arc runs along its own circle beyond the
+// source's end, and its sweep exceeds the source's by that extension.
+//
+// An opening end's extension is the angle from the source's own end angle
+// (Th1, or Th0 at the start) to the held point, signed in the walk's sense and
+// wrapped to (−π, π]. A reading strictly between 0 and π/2 counts. The rim
+// runs inside the band from v to q, so on a straight removed walk it subtends
+// less than π/2 about the centre, and a larger reading is never a straight
+// rim's extension. Every other reading counts as nothing. The offset arc is
+// consumed when its held sweep exceeds the source's sweep plus the counted
+// extensions by more than WalkConsumed's tolerance, or when that allowance
+// reaches a full turn, which no recorded arc holds. A trim at either end
+// leaves the held sweep below the allowance. Feet that swap sides make the
+// held sweep wrap to nearly a full turn, which exceeds it.
+//
+// A line, a walk with no opening end, and an arc whose opening ends extend by
+// nothing take WalkConsumed's answer unchanged.
+func OpenWalkConsumed(w survey2d.SideWalk, start, end Point, openStart, openEnd bool, tol float64) bool {
+	if !w.IsCircular() || (!openStart && !openEnd) {
+		return WalkConsumed(w, start, end, tol)
+	}
+	sense := 1.0
+	if w.Th1 < w.Th0 {
+		sense = -1.0
+	}
+	a0 := math.Atan2(start.V-w.CV, start.U-w.CU)
+	a1 := math.Atan2(end.V-w.CV, end.U-w.CU)
+	var ext float64
+	if openStart {
+		ext += countedExtension(-sense * wrapAngle(a0-w.Th0))
+	}
+	if openEnd {
+		ext += countedExtension(sense * wrapAngle(a1-w.Th1))
+	}
+	if ext == 0 {
+		return WalkConsumed(w, start, end, tol)
+	}
+	source := math.Abs(w.Th1 - w.Th0)
+	if source+ext >= 2*math.Pi {
+		return true
+	}
+	span := math.Mod(sense*(a1-a0), 2*math.Pi)
+	if span < 0 {
+		span += 2 * math.Pi
+	}
+	rr := math.Hypot(start.U-w.CU, start.V-w.CV)
+	return rr*(span-source-ext) > tol*math.Max(1, math.Abs(w.CU)+math.Abs(w.CV)+2*w.Radius)
+}
+
+// countedExtension is the part of an opening end's signed displacement past the
+// source's end that OpenWalkConsumed counts: a reading strictly between 0 and
+// π/2, and zero otherwise.
+func countedExtension(d float64) float64 {
+	if d > 0 && d < math.Pi/2 {
+		return d
+	}
+	return 0
+}
+
+// wrapAngle reduces an angle difference to (−π, π].
+func wrapAngle(a float64) float64 {
+	a = math.Mod(a, 2*math.Pi)
+	switch {
+	case a > math.Pi:
+		a -= 2 * math.Pi
+	case a <= -math.Pi:
+		a += 2 * math.Pi
+	}
+	return a
+}
