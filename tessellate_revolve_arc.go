@@ -13,7 +13,7 @@ import (
 // This file is docs/tessellation-design.md §13's increment T3
 // (docs/tessellation-reach-design.md §6, R4): the CIRCULAR meridian generator —
 // a sphere or a torus wall — as an extension of the straight-generator cells
-// tessellate_revolve.go assembles and tessellate_revolve_proof.go proves.
+// tessellate_revolve.go assembles and internal/revolvemesh/revolve_proof.go proves.
 //
 // It owns three things a straight generator never needs:
 //

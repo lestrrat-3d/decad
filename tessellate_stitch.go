@@ -308,7 +308,7 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 	if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
 		return nil, fmt.Errorf(`%w: the chorded stitched boundary is not a closed mesh`, ErrUnsupported)
 	}
-	if err := requireVertexLinks(ctx, mesh); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
 		return nil, err
 	}
 	if len(mesh.vertices) == 0 || tessellation.OrientationSign(mesh.vertices, mesh.triangles, mesh.vertices[0]) <= 0 {
@@ -441,7 +441,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	// asked whether an edge has one or two adjacent faces, never which face
 	// a mesh triangle attributes to — and tessellation.RequireSheetVertexLinks is its own
 	// vertex-link safety net for an open boundary vertex's link, a path
-	// rather than requireVertexLinks' cycle.
+	// rather than tessellation.RequireVertexLinks' cycle.
 	if b.Kind() == BodySheet {
 		if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
 			return nil, err
@@ -452,12 +452,12 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	// tessellation.RequireClosedMesh's own Degenerate refusal is rewrapped as ErrUnsupported to
 	// match — this evaluator's own restatement reach, never a claim the
 	// body's geometry is bad (docs/tessellation-design.md §12; §1.2's own
-	// note that a stitched solid mesh also runs requireVertexLinks beside
+	// note that a stitched solid mesh also runs tessellation.RequireVertexLinks beside
 	// it).
 	if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
 		return nil, fmt.Errorf(`%w: the stitched body's held triangle set is not a closed mesh, so it restates no boundary`, ErrUnsupported)
 	}
-	if err := requireVertexLinks(ctx, mesh); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
 		return nil, err
 	}
 	return mesh, nil

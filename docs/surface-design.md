@@ -2014,7 +2014,7 @@ At `VerifyNone`, the source revolve contact audit is skipped and
 `VerifyAll` passes that audit. An open sheet also keeps
 `VolumeVerified() == false` at every level.
 
-A closed result runs `internal/tessellation.RequireClosedMesh` and `requireVertexLinks` on the
+A closed result runs `internal/tessellation.RequireClosedMesh` and `tessellation.RequireVertexLinks` on the
 reattributed set. An open result runs `requireSheetMesh` and
 `internal/tessellation.RequireSheetVertexLinks` instead. A curved free `Edge` can contribute
 several free directed mesh edges: `requireSheetMesh` compares connected

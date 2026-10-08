@@ -207,7 +207,7 @@ pair a `VerifyAll` one does.
 §12's "a vertex link is not one connected cycle" refusal row assumes one
 runs.** Today only the revolve, cap-loop chamfer and stitched-solid
 restatement paths (§2's `stitchPayload` row, `tessellate_stitch.go`) actually
-call `requireVertexLinks` on their solid branch, beside `internal/tessellation.RequireClosedMesh`:
+call `tessellation.RequireVertexLinks` on their solid branch, beside `internal/tessellation.RequireClosedMesh`:
 each welds or joins independently walked or independently authored geometry,
 where nothing upstream already proves a pinched vertex cannot occur the way a
 single swept prism or cup section's own construction does.

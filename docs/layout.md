@@ -247,7 +247,6 @@ the rules leave to the byte budget.
 | `tessellate_brep.go` | Meshes a brep body and proves its occupied volume. See general-boolean §4.4. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
-| `tessellate_revolve_proof.go` | Wires `internal/revolvemesh/` audits. |
 | `tessellate_revolve_arc.go` | Builds circular meridian stations with `internal/revolvemesh/` bounds. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
 | `tessellate_station.go` | `chordStationBound`: one chord station's enclosure gap. See its doc comment. |
