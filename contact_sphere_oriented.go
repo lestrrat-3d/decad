@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -136,7 +138,7 @@ func orientedSphereSignedReading(distance2 *big.Rat, radius proofarith.Dyadic) (
 	}
 	low := new(big.Rat).Sub(proofarith.FloatRat(lower), radius.Rat())
 	high := new(big.Rat).Sub(proofarith.FloatRat(upper), radius.Rat())
-	value := ratFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1)))
+	value := sweeppath.RatFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1)))
 	bound := proofbound.RatFloatUp(proofbound.RatMax(new(big.Rat).Sub(proofarith.FloatRat(value), low),
 		new(big.Rat).Sub(high, proofarith.FloatRat(value))))
 	if !finiteMeasurementValues(value, bound) || bound < 0 {
@@ -159,7 +161,7 @@ func orientedSpherePoint(sphere sourceSphereContactProof, outward proofarith.DyV
 		b := new(big.Rat).Quo(outward[k].Rat(), proofarith.FloatRat(high))
 		first := new(big.Rat).Sub(sphere.center[k].Rat(), new(big.Rat).Mul(sphere.radius.Rat(), a))
 		second := new(big.Rat).Sub(sphere.center[k].Rat(), new(big.Rat).Mul(sphere.radius.Rat(), b))
-		value[k] = ratFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(first, second), big.NewRat(2, 1)))
+		value[k] = sweeppath.RatFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(first, second), big.NewRat(2, 1)))
 		if !finiteMeasurementValues(value[k]) {
 			return VecMeasurement{}, false
 		}

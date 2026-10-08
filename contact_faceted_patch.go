@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -124,7 +126,7 @@ func planarNormal(dir proofarith.DyV3) (VecMeasurement, units.Value, bool) {
 	if low <= 0 || !finiteMeasurementValues(low, high) {
 		return VecMeasurement{}, units.Value{}, false
 	}
-	raw := r3.Vec{X: ratFloatNearest(scaled[0]), Y: ratFloatNearest(scaled[1]), Z: ratFloatNearest(scaled[2])}
+	raw := r3.Vec{X: sweeppath.RatFloatNearest(scaled[0]), Y: sweeppath.RatFloatNearest(scaled[1]), Z: sweeppath.RatFloatNearest(scaled[2])}
 	value, ok := raw.Normalize()
 	if !ok || !proofbound.FiniteVec(value) {
 		return VecMeasurement{}, units.Value{}, false

@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/spherepath"
 
@@ -32,52 +34,52 @@ type sourceSphereSweepRun struct {
 func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
-	if (pa.drift == nil) == (pb.drift == nil) {
+	if (pa.Drift == nil) == (pb.Drift == nil) {
 		return nil, false, nil
 	}
 	sphereBody, spherePath, boxBody, boxPath, sphereFirst := b, &pb, a, pa, false
-	if pa.drift != nil {
+	if pa.Drift != nil {
 		sphereBody, spherePath, boxBody, boxPath, sphereFirst = a, &pa, b, pb, true
 	}
-	if boxPath.drift != nil || boxPath.screw != nil {
+	if boxPath.Drift != nil || boxPath.Screw != nil {
 		return nil, false, nil
 	}
-	sphere, sphereOK := sourceSphereAtPose(sphereBody, spherePath.from)
-	box, boxOK := sourceBoxAtPose(boxBody, boxPath.from)
+	sphere, sphereOK := sourceSphereAtPose(sphereBody, spherePath.From)
+	box, boxOK := sourceBoxAtPose(boxBody, boxPath.From)
 	if !sphereOK || !boxOK {
 		return nil, false, nil
 	}
 	// sourceSpherePathPoseAt sets the query translation to the center drift.
 	// That represents the requested rigid pose only when the source center is
 	// exactly at the query origin before rotation.
-	from := spherePath.from.Translation()
+	from := spherePath.From.Translation()
 	for axis, value := range [3]float64{from.X, from.Y, from.Z} {
 		if proofarith.DyCmp(sphere.center[axis], proofarith.MustDyOf(value)) != 0 {
 			report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-			report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
-				To: sweepInstant(big.NewRat(1, 1), pa.duration)}
+			report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
+				To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 			return report, true, nil
 		}
 	}
-	center := spherePath.drift.Center
+	center := spherePath.Drift.Center
 	for axis, value := range [3]float64{center.X, center.Y, center.Z} {
 		if proofarith.DyCmp(sphere.center[axis], proofarith.MustDyOf(value)) != 0 {
 			return nil, false, nil
 		}
 	}
-	velocity := [3]units.Value{spherePath.drift.LinearVelocity.X,
-		spherePath.drift.LinearVelocity.Y, spherePath.drift.LinearVelocity.Z}
+	velocity := [3]units.Value{spherePath.Drift.LinearVelocity.X,
+		spherePath.Drift.LinearVelocity.Y, spherePath.Drift.LinearVelocity.Z}
 	for axis, value := range velocity {
-		speed, ok := exactBaseValue(value)
+		speed, ok := sweeppath.ExactBaseValue(value)
 		if !ok {
 			return nil, false, nil
 		}
-		displacement := new(big.Rat).Mul(speed, spherePath.duration)
+		displacement := new(big.Rat).Mul(speed, spherePath.Duration)
 		component, ok := proofarith.DyOfRat(displacement)
 		if !ok {
 			return nil, false, nil
 		}
-		spherePath.delta[axis] = component
+		spherePath.Delta[axis] = component
 	}
 	run := &sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 		req: req, report: report, sphere: sphere, box: box, sphereFirst: sphereFirst}
@@ -86,7 +88,7 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 }
 
 func sourceSpherePathPoseAt(path affinePairPath, f *big.Rat) (r3.Transform, error) {
-	if path.drift != nil {
+	if path.Drift != nil {
 		pose, err := (rotationalSweepPath{path: path}).poseAt(f)
 		if err != nil {
 			return r3.Transform{}, err
@@ -94,13 +96,13 @@ func sourceSpherePathPoseAt(path affinePairPath, f *big.Rat) (r3.Transform, erro
 		if f.Sign() == 0 {
 			return pose, nil
 		}
-		start := path.from.Translation()
-		center := r3.Vec{X: start.X + ratFloatNearest(new(big.Rat).Mul(path.delta[0].Rat(), f)),
-			Y: start.Y + ratFloatNearest(new(big.Rat).Mul(path.delta[1].Rat(), f)),
-			Z: start.Z + ratFloatNearest(new(big.Rat).Mul(path.delta[2].Rat(), f))}
+		start := path.From.Translation()
+		center := r3.Vec{X: start.X + sweeppath.RatFloatNearest(new(big.Rat).Mul(path.Delta[0].Rat(), f)),
+			Y: start.Y + sweeppath.RatFloatNearest(new(big.Rat).Mul(path.Delta[1].Rat(), f)),
+			Z: start.Z + sweeppath.RatFloatNearest(new(big.Rat).Mul(path.Delta[2].Rat(), f))}
 		return r3.FromBasis(pose.Basis(), center)
 	}
-	return path.poseAt(f)
+	return path.PoseAt(f)
 }
 
 func translatedContactBox(box sourceBoxContactProof, delta [3]proofarith.Dyadic,
@@ -118,9 +120,9 @@ func translatedContactBox(box sourceBoxContactProof, delta [3]proofarith.Dyadic,
 
 func (r *sourceSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.Dyadic) {
 	if r.sphereFirst {
-		return r.pa.delta, r.pb.delta
+		return r.pa.Delta, r.pb.Delta
 	}
-	return r.pb.delta, r.pa.delta
+	return r.pb.Delta, r.pa.Delta
 }
 
 func (r *sourceSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
@@ -155,7 +157,7 @@ func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSa
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.pa.duration)
+	at := sweepInstant(f, r.pa.Duration)
 	ideal := r.idealAt(f, at)
 	r.transferManifold(f, poseA, poseB, contact, &ideal)
 	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: ideal,
@@ -206,7 +208,7 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 		diff := new(big.Rat).Sub(observedSphere.center[i].Rat(), center)
 		deviation.Add(deviation, diff.Abs(diff))
 	}
-	resolution, ok := exactBaseValue(r.req.PointResolution)
+	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if !ok {
 		ideal.Manifold = nil
 		ideal.Reason = ContactPointTooCoarse
@@ -245,8 +247,8 @@ func (r *sourceSphereSweepRun) boxBody() *Body {
 
 func (r *sourceSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.duration),
-		To: sweepInstant(to, r.pa.duration)}
+	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.Duration),
+		To: sweepInstant(to, r.pa.Duration)}
 	r.sortSamples()
 	return r.report
 }
@@ -331,10 +333,10 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
 	}
 	point := first.Ideal.Manifold.Points[0]
 	track := &SweepContactTrack{
-		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.duration),
+		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
 		request: r.req.ContactRequest, sphere: &r.sphere, sphereFirst: r.sphereFirst,
 		features: [2]ContactFeature{point.FeatureA, point.FeatureB}, normal: point.Normal,
-		deltaA: r.pa.delta, deltaB: r.pb.delta,
+		deltaA: r.pa.Delta, deltaB: r.pb.Delta,
 	}
 	if r.sphereFirst {
 		track.b = r.box
@@ -435,7 +437,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 		return r.report, nil
 	}
 	root := new(big.Rat).Quo(proofarith.DyNeg(gap).Rat(), slope.Rat())
-	leftF, rightF, ok := spherepath.ImpactBracket(root, r.pa.duration, resolution)
+	leftF, rightF, ok := spherepath.ImpactBracket(root, r.pa.Duration, resolution)
 	if !ok || leftF.Sign() <= 0 || rightF.Cmp(one) > 0 {
 		return r.undecided(zero, one, SweepTimeFloor), nil
 	}

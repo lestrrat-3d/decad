@@ -8,9 +8,9 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
-	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -26,29 +26,16 @@ var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 // source boxes, rotating source-box or centered-sphere rigid drifts, and any
 // path of two exact planar solids can receive continuous certificates; other
 // valid paths report an undecided sweep.
-type PairPath interface{ pairPath() }
+type PairPath = sweeppath.PairPath
 
 // PoseSegment joins two placements relative to the body's current placement.
-type PoseSegment struct {
-	From, To r3.Transform
-	Duration units.Value
-}
-
-func (PoseSegment) pairPath() {}
+type PoseSegment = sweeppath.PoseSegment
 
 // QuantityVec carries three components of one physical kind.
-type QuantityVec struct{ X, Y, Z units.Value }
+type QuantityVec = sweeppath.QuantityVec
 
 // RigidDriftSegment moves a center linearly while its orientation rotates.
-type RigidDriftSegment struct {
-	From            r3.Transform
-	Center          r3.Vec
-	LinearVelocity  QuantityVec
-	AngularVelocity QuantityVec
-	Duration        units.Value
-}
-
-func (RigidDriftSegment) pairPath() {}
+type RigidDriftSegment = sweeppath.RigidDriftSegment
 
 // SweepStartPolicy selects what to prove when the bodies initially touch.
 type SweepStartPolicy int
@@ -212,7 +199,7 @@ func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) {
 	if fraction.Kind() != units.Dimensionless {
 		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
 	}
-	f, ok := exactBaseValue(fraction)
+	f, ok := sweeppath.ExactBaseValue(fraction)
 	if !ok || !finiteMeasurementValues(fraction.Base()) {
 		return nil, fmt.Errorf("%w: nonfinite contact-track fraction", ErrNotFinite)
 	}
@@ -230,7 +217,7 @@ func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) {
 	default:
 		return nil, nil //nolint:nilnil // an exact touch track has no band, as Band() reports
 	}
-	value := ratFloatNearest(depth)
+	value := sweeppath.RatFloatNearest(depth)
 	bound := proofarith.RationalFloatError(depth, value)
 	if !finiteMeasurementValues(value, bound) {
 		return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
@@ -245,7 +232,7 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 	if fraction.Kind() != units.Dimensionless {
 		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
 	}
-	f, ok := exactBaseValue(fraction)
+	f, ok := sweeppath.ExactBaseValue(fraction)
 	if !ok || !finiteMeasurementValues(fraction.Base()) {
 		return nil, fmt.Errorf("%w: nonfinite contact-track fraction", ErrNotFinite)
 	}
@@ -373,150 +360,14 @@ func (r *SweepReport) BracketEndsAtDuration() bool {
 		r.bracketRight.Cmp(big.NewRat(1, 1)) == 0
 }
 
-type affinePairPath struct {
-	from, to  r3.Transform
-	delta     [3]proofarith.Dyadic // displacement over the full path, in millimetres
-	duration  *big.Rat             // exact seconds represented by the input value
-	drift     *RigidDriftSegment
-	screw     *r3.Screw
-	read      *r3.Screw // the read screw of a rotating PoseSegment, admitted or not
-	supported bool
-}
-
-func exactBaseValue(v units.Value) (*big.Rat, bool) {
-	m, f := proofarith.FloatRat(v.Mag()), proofarith.FloatRat(v.Unit().Factor())
-	if m == nil || f == nil {
-		return nil, false
-	}
-	return new(big.Rat).Mul(m, f), true
-}
-
-func validatePairPath(path PairPath) (affinePairPath, error) {
-	var out affinePairPath
-	switch p := path.(type) {
-	case PoseSegment:
-		out.from, out.to = p.From, p.To
-		if err := motionbound.ValidateBetween(Between{From: p.From, To: p.To}); err != nil {
-			return out, err
-		}
-		out.duration, _ = exactBaseValue(p.Duration)
-		if err := sweepDuration(p.Duration, out.duration); err != nil {
-			return out, err
-		}
-		if p.From.Basis() != p.To.Basis() {
-			inverse, err := p.From.Inverse()
-			if err != nil {
-				return out, err
-			}
-			relative, err := inverse.Then(p.To)
-			if err != nil {
-				return out, err
-			}
-			screw, err := relative.Screw()
-			if err != nil {
-				return out, err
-			}
-			out.read = &screw
-			if _, _, ok := clearance.SignedAxis(screw.Axis); ok && screw.Angle.Base() > 0 &&
-				finiteMeasurementValues(screw.Point.X, screw.Point.Y, screw.Point.Z, screw.Slide) {
-				out.screw, out.supported = &screw, true
-			}
-			return out, nil
-		}
-		start, end := p.From.Translation(), p.To.Translation()
-		out.delta = [3]proofarith.Dyadic{proofarith.DySubScalar(proofarith.MustDyOf(end.X), proofarith.MustDyOf(start.X)),
-			proofarith.DySubScalar(proofarith.MustDyOf(end.Y), proofarith.MustDyOf(start.Y)), proofarith.DySubScalar(proofarith.MustDyOf(end.Z), proofarith.MustDyOf(start.Z))}
-		out.supported = true
-	case RigidDriftSegment:
-		out.from = p.From
-		if !p.From.IsValid() || !proofbound.FiniteVec(p.Center) {
-			return out, fmt.Errorf("%w: invalid drift placement or center", ErrDegenerate)
-		}
-		out.duration, _ = exactBaseValue(p.Duration)
-		if err := sweepDuration(p.Duration, out.duration); err != nil {
-			return out, err
-		}
-		for _, v := range []units.Value{p.LinearVelocity.X, p.LinearVelocity.Y, p.LinearVelocity.Z} {
-			if err := motionbound.MotionValueValid(v, units.Velocity, "drift linear velocity"); err != nil {
-				return out, err
-			}
-		}
-		angularKind := units.Angle.Div(units.Time)
-		rotating := false
-		for _, v := range []units.Value{p.AngularVelocity.X, p.AngularVelocity.Y, p.AngularVelocity.Z} {
-			if v.Kind() != angularKind {
-				return out, fmt.Errorf("%w: drift angular velocity must have Angle/Time kind", ErrUnitKind)
-			}
-			registered, ok := units.Lookup(v.Unit().Symbol())
-			if !ok || registered != v.Unit() {
-				return out, fmt.Errorf("%w: drift angular velocity requires a registered unit", ErrUnitKind)
-			}
-			if !finiteMeasurementValues(v.Base()) {
-				return out, fmt.Errorf("%w: nonfinite drift angular velocity", ErrNotFinite)
-			}
-			if v.Base() != 0 {
-				rotating = true
-			}
-		}
-		if rotating {
-			out.drift = &p
-			out.supported = true
-			return out, nil
-		}
-		for i, v := range []units.Value{p.LinearVelocity.X, p.LinearVelocity.Y, p.LinearVelocity.Z} {
-			base, ok := exactBaseValue(v)
-			if !ok {
-				return out, fmt.Errorf("%w: nonfinite drift velocity", ErrNotFinite)
-			}
-			full := new(big.Rat).Mul(base, out.duration)
-			d, ok := proofarith.DyOfRat(full)
-			if !ok {
-				return out, fmt.Errorf("%w: drift displacement is not dyadic", ErrUnsupported)
-			}
-			out.delta[i] = d
-		}
-		out.supported = true
-	default:
-		return out, fmt.Errorf("%w: unknown pair path", ErrDegenerate)
-	}
-	return out, nil
-}
-
-func sweepDuration(v units.Value, base *big.Rat) error {
-	if err := motionbound.MotionValueValid(v, units.Time, "sweep duration"); err != nil {
-		return err
-	}
-	if base == nil || base.Sign() <= 0 {
-		return fmt.Errorf("%w: sweep duration must be positive", ErrDegenerate)
-	}
-	return nil
-}
-
-func (p affinePairPath) poseAt(f *big.Rat) (r3.Transform, error) {
-	if f.Sign() == 0 {
-		return p.from, nil
-	}
-	if f.Cmp(big.NewRat(1, 1)) == 0 && p.to.IsValid() {
-		return p.to, nil
-	}
-	d := r3.NewVec(ratFloatNearest(new(big.Rat).Mul(p.delta[0].Rat(), f)),
-		ratFloatNearest(new(big.Rat).Mul(p.delta[1].Rat(), f)),
-		ratFloatNearest(new(big.Rat).Mul(p.delta[2].Rat(), f)))
-	step, err := r3.Translation(d)
-	if err != nil {
-		return r3.Transform{}, err
-	}
-	return p.from.Then(step)
-}
-
-func ratFloatNearest(v *big.Rat) float64 { f, _ := v.Float64(); return f }
+type affinePairPath = sweeppath.AffinePath
 
 func sweepInstant(f, duration *big.Rat) SweepInstant {
 	t := new(big.Rat).Mul(f, duration)
-	value := ratFloatNearest(t)
+	value := sweeppath.RatFloatNearest(t)
 	bound := proofarith.RationalFloatError(t, value)
 	return SweepInstant{
-		Fraction: units.Scalar(ratFloatNearest(f)),
+		Fraction: units.Scalar(sweeppath.RatFloatNearest(f)),
 		Elapsed:  Measurement{Value: units.Seconds(value), Bound: units.Seconds(bound), Exactness: exactnessFromBound(bound)},
 	}
 }
@@ -564,22 +415,22 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	if a == b {
 		return nil, fmt.Errorf("%w: a pair must name distinct bodies", ErrDegenerate)
 	}
-	pa, err := validatePairPath(pathA)
+	pa, err := sweeppath.Validate(pathA)
 	if err != nil {
 		return nil, err
 	}
-	pb, err := validatePairPath(pathB)
+	pb, err := sweeppath.Validate(pathB)
 	if err != nil {
 		return nil, err
 	}
-	if pa.duration.Cmp(pb.duration) != 0 {
+	if pa.Duration.Cmp(pb.Duration) != 0 {
 		return nil, fmt.Errorf("%w: pair paths have different durations", ErrDegenerate)
 	}
-	resolution, ok := exactBaseValue(req.TimeResolution)
-	if err := sweepDuration(req.TimeResolution, resolution); err != nil {
+	resolution, ok := sweeppath.ExactBaseValue(req.TimeResolution)
+	if err := sweeppath.DurationValid(req.TimeResolution, resolution); err != nil {
 		return nil, err
 	}
-	if !ok || resolution.Cmp(pa.duration) > 0 || req.MaxPoseEvaluations < 2 ||
+	if !ok || resolution.Cmp(pa.Duration) > 0 || req.MaxPoseEvaluations < 2 ||
 		req.StartPolicy < StopAtInitialContact || req.StartPolicy > ContinueCertifiedTouch {
 		return nil, fmt.Errorf("%w: invalid sweep request", ErrDegenerate)
 	}
@@ -602,14 +453,14 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 		return nil, err
 	}
 	report := &SweepReport{A: a, B: b, PathA: pathA, PathB: pathB, Request: req}
-	if !pa.supported || !pb.supported {
+	if !pa.Supported || !pb.Supported {
 		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
+		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
+			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 		return report, nil
 	}
-	if pa.drift != nil || pb.drift != nil || pa.screw != nil || pb.screw != nil {
-		if pa.screw == nil && pb.screw == nil {
+	if pa.Drift != nil || pb.Drift != nil || pa.Screw != nil || pb.Screw != nil {
+		if pa.Screw == nil && pb.Screw == nil {
 			if result, admitted, err := d.sweepRotatingSpherePair(ctx, a, b, pa, pb, req, resolution, report); admitted {
 				return result, err
 			}
@@ -619,8 +470,8 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 		}
 		return d.sweepRotatingPair(ctx, a, b, pa, pb, req, resolution, report)
 	}
-	boxA, okA := sourceBoxAtPose(a, pa.from)
-	boxB, okB := sourceBoxAtPose(b, pb.from)
+	boxA, okA := sourceBoxAtPose(a, pa.From)
+	boxB, okB := sourceBoxAtPose(b, pb.From)
 	if !okA || !okB {
 		if okA {
 			if _, faceted := b.payload.(facetedPayload); faceted {
@@ -633,8 +484,8 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			}
 		}
 		if !okA && !okB {
-			sphereA, sphereOKA := sourceSphereAtPose(a, pa.from)
-			sphereB, sphereOKB := sourceSphereAtPose(b, pb.from)
+			sphereA, sphereOKA := sourceSphereAtPose(a, pa.From)
+			sphereB, sphereOKB := sourceSphereAtPose(b, pb.From)
 			if sphereOKA && sphereOKB {
 				pair := [2]sourceSphereContactProof{sphereA, sphereB}
 				report.replay = &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
@@ -644,37 +495,37 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			}
 		}
 		if okA && !okB {
-			if sphere, ok := sourceSphereAtPose(b, pb.from); ok {
+			if sphere, ok := sourceSphereAtPose(b, pb.From); ok {
 				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: req, report: report, sphere: sphere, box: boxA}).execute(ctx, resolution)
 			}
-			if cylinder, ok := sourceCylinderAtPose(b, pb.from); ok {
+			if cylinder, ok := sourceCylinderAtPose(b, pb.From); ok {
 				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, req, report, cylinder, boxA, false)
 			}
 		}
 		if okB && !okA {
-			if sphere, ok := sourceSphereAtPose(a, pa.from); ok {
+			if sphere, ok := sourceSphereAtPose(a, pa.From); ok {
 				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: req, report: report, sphere: sphere, box: boxB, sphereFirst: true}).execute(ctx, resolution)
 			}
-			if cylinder, ok := sourceCylinderAtPose(a, pa.from); ok {
+			if cylinder, ok := sourceCylinderAtPose(a, pa.From); ok {
 				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, req, report, cylinder, boxB, true)
 			}
 		}
-		if sphere, sphereOK := sourceSphereAtPose(a, pa.from); sphereOK {
-			if box, boxOK := sourceOrientedBoxAtPose(b, pb.from); boxOK {
+		if sphere, sphereOK := sourceSphereAtPose(a, pa.From); sphereOK {
+			if box, boxOK := sourceOrientedBoxAtPose(b, pb.From); boxOK {
 				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: req, report: report, sphere: sphere, box: box, sphereFirst: true}).execute(ctx, resolution)
 			}
 		}
-		if sphere, sphereOK := sourceSphereAtPose(b, pb.from); sphereOK {
-			if box, boxOK := sourceOrientedBoxAtPose(a, pa.from); boxOK {
+		if sphere, sphereOK := sourceSphereAtPose(b, pb.From); sphereOK {
+			if box, boxOK := sourceOrientedBoxAtPose(a, pa.From); boxOK {
 				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: req, report: report, sphere: sphere, box: box}).execute(ctx, resolution)
 			}
 		}
-		if _, orientedA := sourceOrientedBoxAtPose(a, pa.from); orientedA {
-			if _, orientedB := sourceOrientedBoxAtPose(b, pb.from); orientedB {
+		if _, orientedA := sourceOrientedBoxAtPose(a, pa.From); orientedA {
+			if _, orientedB := sourceOrientedBoxAtPose(b, pb.From); orientedB {
 				return d.sweepRotatingPair(ctx, a, b, pa, pb, req, resolution, report)
 			}
 		}
@@ -682,8 +533,8 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			return result, err
 		}
 		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
+		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
+			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 		return report, nil
 	}
 	report.replay = &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
@@ -715,11 +566,11 @@ func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, er
 	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
 		return nil, errSweepPoseBudget
 	}
-	poseA, err := r.pa.poseAt(f)
+	poseA, err := r.pa.PoseAt(f)
 	if err != nil {
 		return nil, err
 	}
-	poseB, err := r.pb.poseAt(f)
+	poseB, err := r.pb.PoseAt(f)
 	if err != nil {
 		return nil, err
 	}
@@ -727,7 +578,7 @@ func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, er
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.pa.duration)
+	at := sweepInstant(f, r.pa.Duration)
 	event := r.idealContact(f, at)
 	r.transferManifold(f, poseA, poseB, contact, &event)
 	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: event,
@@ -747,7 +598,7 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 	}
 	a, b := r.boxA, r.boxB
 	for i := range 3 {
-		moveA, moveB := proofarith.DyMul(r.pa.delta[i], fraction), proofarith.DyMul(r.pb.delta[i], fraction)
+		moveA, moveB := proofarith.DyMul(r.pa.Delta[i], fraction), proofarith.DyMul(r.pb.Delta[i], fraction)
 		a.lo[i], a.hi[i] = proofarith.DyAdd(a.lo[i], moveA), proofarith.DyAdd(a.hi[i], moveA)
 		b.lo[i], b.hi[i] = proofarith.DyAdd(b.lo[i], moveB), proofarith.DyAdd(b.hi[i], moveB)
 	}
@@ -805,9 +656,9 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 		useIdeal()
 		return
 	}
-	deviation := boxPoseDeviation(r.boxA, observedA, r.pa.delta, f)
-	deviation.Add(deviation, boxPoseDeviation(r.boxB, observedB, r.pb.delta, f))
-	resolution, ok := exactBaseValue(r.req.PointResolution)
+	deviation := boxPoseDeviation(r.boxA, observedA, r.pa.Delta, f)
+	deviation.Add(deviation, boxPoseDeviation(r.boxB, observedB, r.pb.Delta, f))
+	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if !ok {
 		useIdeal()
 		return
@@ -865,7 +716,7 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 	axis, side, ok := clearance.SignedAxis(normal.Value)
 	if !ok || normal.Bound.Base() != 0 ||
 		first.Ideal.Manifold.Points[0].NormalAngle.Base() != 0 ||
-		proofarith.DyCmp(r.pa.delta[axis], r.pb.delta[axis]) != 0 {
+		proofarith.DyCmp(r.pa.Delta[axis], r.pb.Delta[axis]) != 0 {
 		return nil
 	}
 	if side == 1 && proofarith.DyCmp(r.boxA.hi[axis], r.boxB.lo[axis]) != 0 ||
@@ -879,26 +730,26 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 		// Both projected overlap inequalities are affine, so strict endpoint
 		// tests prove positive overlap for every intervening time.
 		for _, f := range []*big.Rat{new(big.Rat), end} {
-			a, b, _ := translatedSourceBoxes(r.boxA, r.boxB, r.pa.delta, r.pb.delta, f)
+			a, b, _ := translatedSourceBoxes(r.boxA, r.boxB, r.pa.Delta, r.pb.Delta, f)
 			if proofarith.DyCmp(a.lo[i], b.hi[i]) >= 0 || proofarith.DyCmp(b.lo[i], a.hi[i]) >= 0 {
 				return nil
 			}
 		}
 		// A change of the lower or upper corner owner changes the patch
 		// structure. The first full-span increment refuses those transitions.
-		if box.AffineEqualityRootWithin(r.boxA.lo[i], r.pa.delta[i], r.boxB.lo[i], r.pb.delta[i], end) ||
-			box.AffineEqualityRootWithin(r.boxA.hi[i], r.pa.delta[i], r.boxB.hi[i], r.pb.delta[i], end) {
+		if box.AffineEqualityRootWithin(r.boxA.lo[i], r.pa.Delta[i], r.boxB.lo[i], r.pb.Delta[i], end) ||
+			box.AffineEqualityRootWithin(r.boxA.hi[i], r.pa.Delta[i], r.boxB.hi[i], r.pb.Delta[i], end) {
 			return nil
 		}
 	}
-	if !box.TrackPointsWithin(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.delta, r.pb.delta,
+	if !box.TrackPointsWithin(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.Delta, r.pb.Delta,
 		r.req.PointResolution.Base()) {
 		return nil
 	}
 	point := first.Ideal.Manifold.Points[0]
 	return &SweepContactTrack{
-		a: r.boxA, b: r.boxB, deltaA: r.pa.delta, deltaB: r.pb.delta,
-		start: new(big.Rat), end: new(big.Rat).Set(end), duration: new(big.Rat).Set(r.pa.duration),
+		a: r.boxA, b: r.boxB, deltaA: r.pa.Delta, deltaB: r.pb.Delta,
+		start: new(big.Rat), end: new(big.Rat).Set(end), duration: new(big.Rat).Set(r.pa.Duration),
 		request: r.req.ContactRequest, features: [2]ContactFeature{point.FeatureA, point.FeatureB},
 		normal: normal,
 	}
@@ -915,7 +766,7 @@ func (r *pairSweepRun) sourceBoxTransitionRoot(first *SweepSample) *big.Rat {
 	if !ok {
 		return nil
 	}
-	return box.TransitionRoot(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.delta, r.pb.delta, axis)
+	return box.TransitionRoot(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.Delta, r.pb.Delta, axis)
 }
 
 func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
@@ -954,7 +805,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 					}
 				}
 				if root := r.sourceBoxTransitionRoot(first); root != nil {
-					leftF, rightF, ok := box.ContactRootBracket(root, r.pa.duration, resolution)
+					leftF, rightF, ok := box.ContactRootBracket(root, r.pa.Duration, resolution)
 					if !ok || leftF.Sign() == 0 {
 						return r.undecided(zero, root, SweepFractionFloor), nil
 					}
@@ -1026,7 +877,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 		return r.undecided(zero, zero, SweepPoseRelation), nil
 	}
 	depth := 0
-	step := new(big.Rat).Set(paDurationFraction(resolution, r.pa.duration))
+	step := new(big.Rat).Set(paDurationFraction(resolution, r.pa.Duration))
 	step.Quo(step, big.NewRat(2, 1))
 	for step.Cmp(one) < 0 && depth < 60 {
 		depth++
@@ -1104,7 +955,7 @@ func (r *pairSweepRun) sortSamples() {
 
 func (r *pairSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.duration), To: sweepInstant(to, r.pa.duration)}
+	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.Duration), To: sweepInstant(to, r.pa.Duration)}
 	r.sortSamples()
 	return r.report
 }
@@ -1112,12 +963,12 @@ func (r *pairSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepRepo
 func (r *pairSweepRun) provesDeparture() bool {
 	for axis := range 3 {
 		if proofarith.DyCmp(r.boxA.hi[axis], r.boxB.lo[axis]) == 0 {
-			if proofarith.DySubScalar(r.pb.delta[axis], r.pa.delta[axis]).Sign() > 0 {
+			if proofarith.DySubScalar(r.pb.Delta[axis], r.pa.Delta[axis]).Sign() > 0 {
 				return true
 			}
 		}
 		if proofarith.DyCmp(r.boxB.hi[axis], r.boxA.lo[axis]) == 0 {
-			if proofarith.DySubScalar(r.pa.delta[axis], r.pb.delta[axis]).Sign() > 0 {
+			if proofarith.DySubScalar(r.pa.Delta[axis], r.pb.Delta[axis]).Sign() > 0 {
 				return true
 			}
 		}
@@ -1131,8 +982,8 @@ func (r *pairSweepRun) contactSpan() (*big.Rat, *big.Rat, bool) {
 	entry, exit := new(big.Rat), big.NewRat(1, 1)
 	for axis := range 3 {
 		constraints := [2][2]proofarith.Dyadic{
-			{proofarith.DySubScalar(r.boxA.hi[axis], r.boxB.lo[axis]), proofarith.DySubScalar(r.pa.delta[axis], r.pb.delta[axis])},
-			{proofarith.DySubScalar(r.boxB.hi[axis], r.boxA.lo[axis]), proofarith.DySubScalar(r.pb.delta[axis], r.pa.delta[axis])},
+			{proofarith.DySubScalar(r.boxA.hi[axis], r.boxB.lo[axis]), proofarith.DySubScalar(r.pa.Delta[axis], r.pb.Delta[axis])},
+			{proofarith.DySubScalar(r.boxB.hi[axis], r.boxA.lo[axis]), proofarith.DySubScalar(r.pb.Delta[axis], r.pa.Delta[axis])},
 		}
 		for _, c := range constraints {
 			start, slope := c[0], c[1]

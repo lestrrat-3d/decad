@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
@@ -90,7 +92,7 @@ func (r *SweepReport) HasAffineReplayProof() bool {
 		}
 	}
 	return r.replay.outcome == SweepPersistentTouch && r.replay.track != nil &&
-		r.replay.rotation[0].path.drift == nil && r.replay.rotation[1].path.drift == nil
+		r.replay.rotation[0].path.Drift == nil && r.replay.rotation[1].path.Drift == nil
 }
 
 // CertifiedPosesAt evaluates the recorded paths at elapsed time and checks
@@ -102,10 +104,10 @@ func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Tr
 		!finiteMeasurementValues(elapsed.Base()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no replay proof", ErrUnsupported)
 	}
-	t, ok := exactBaseValue(elapsed)
-	duration := r.replay.pa.duration
+	t, ok := sweeppath.ExactBaseValue(elapsed)
+	duration := r.replay.pa.Duration
 	if r.replay.rotation != nil {
-		duration = r.replay.rotation[0].path.duration
+		duration = r.replay.rotation[0].path.Duration
 	}
 	if !ok || t.Sign() < 0 || t.Cmp(duration) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the sweep", ErrDegenerate)
@@ -121,9 +123,9 @@ func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3
 		end.Kind() != units.Time || !finiteMeasurementValues(time.Base(), start.Base(), end.Base()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no replay proof", ErrUnsupported)
 	}
-	timeValue, timeOK := exactBaseValue(time)
-	startValue, startOK := exactBaseValue(start)
-	endValue, endOK := exactBaseValue(end)
+	timeValue, timeOK := sweeppath.ExactBaseValue(time)
+	startValue, startOK := sweeppath.ExactBaseValue(start)
+	endValue, endOK := sweeppath.ExactBaseValue(end)
 	if !timeOK || !startOK || !endOK {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is not finite", ErrDegenerate)
 	}
@@ -159,7 +161,7 @@ func (r *SweepReport) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transf
 	if r.replay.rotation != nil {
 		return r.certifiedRotationalPosesAtFraction(f)
 	}
-	poseAt := func(path affinePairPath) (r3.Transform, error) { return path.poseAt(f) }
+	poseAt := func(path affinePairPath) (r3.Transform, error) { return path.PoseAt(f) }
 	if r.replay.sphere != nil || r.replay.spherePair != nil {
 		poseAt = func(path affinePairPath) (r3.Transform, error) {
 			return sourceSpherePathPoseAt(path, f)
@@ -188,17 +190,17 @@ func (r *SweepReport) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transf
 	if r.replay.facetedClear != nil {
 		return r.certifiedBoundedFacetedPosesAtFraction(f, poseA, poseB)
 	}
-	actualA, ok := translatedReplayBox(r.replay.boxA, r.replay.pa.from, poseA)
+	actualA, ok := translatedReplayBox(r.replay.boxA, r.replay.pa.From, poseA)
 	if !ok {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay pose A is not an affine translation", ErrUnsupported)
 	}
-	actualB, ok := translatedReplayBox(r.replay.boxB, r.replay.pb.from, poseB)
+	actualB, ok := translatedReplayBox(r.replay.boxB, r.replay.pb.From, poseB)
 	if !ok {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay pose B is not an affine translation", ErrUnsupported)
 	}
-	deviation := boxPoseDeviation(r.replay.boxA, actualA, r.replay.pa.delta, f)
-	deviation.Add(deviation, boxPoseDeviation(r.replay.boxB, actualB, r.replay.pb.delta, f))
-	resolution, ok := exactBaseValue(r.replay.request.PointResolution)
+	deviation := boxPoseDeviation(r.replay.boxA, actualA, r.replay.pa.Delta, f)
+	deviation.Add(deviation, boxPoseDeviation(r.replay.boxB, actualB, r.replay.pb.Delta, f))
+	resolution, ok := sweeppath.ExactBaseValue(r.replay.request.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose exceeds point resolution", ErrUnsupported)
 	}
@@ -220,7 +222,7 @@ func (r *SweepReport) certifiedBoundedFacetedPosesAtFraction(f *big.Rat,
 	}
 	observedFloor, observedExtent, deviation, ok := boundedFacetedReplayBoxes(
 		floor, *p.facetedClear, p.pa, p.pb, poseA, poseB, f, p.facetedFirst)
-	resolution, valid := exactBaseValue(p.request.PointResolution)
+	resolution, valid := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok || !valid || deviation.Cmp(resolution) > 0 ||
 		!boundedFacetedInsideFloor(observedExtent, observedFloor) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: bounded faceted replay leaves its clear corridor", ErrUnsupported)
@@ -234,17 +236,17 @@ func (r *SweepReport) certifiedBoundedFacetedPosesAtFraction(f *big.Rat,
 func (r *SweepReport) certifiedCylinderPosesAtFraction(f *big.Rat, poseA, poseB r3.Transform) (
 	r3.Transform, r3.Transform, error) {
 	p := r.replay
-	actualA, okA := translatedReplayBox(p.boxA, p.pa.from, poseA)
-	actualB, okB := translatedReplayBox(p.boxB, p.pb.from, poseB)
+	actualA, okA := translatedReplayBox(p.boxA, p.pa.From, poseA)
+	actualB, okB := translatedReplayBox(p.boxB, p.pb.From, poseB)
 	if !okA || !okB {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay pose is not affine", ErrUnsupported)
 	}
-	resolution, ok := exactBaseValue(p.request.PointResolution)
+	resolution, ok := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay has no resolution", ErrUnsupported)
 	}
-	deviation := boxPoseDeviation(p.boxA, actualA, p.pa.delta, f)
-	deviation.Add(deviation, boxPoseDeviation(p.boxB, actualB, p.pb.delta, f))
+	deviation := boxPoseDeviation(p.boxA, actualA, p.pa.Delta, f)
+	deviation.Add(deviation, boxPoseDeviation(p.boxB, actualB, p.pb.Delta, f))
 	actualCylinder, actualBox := actualB, actualA
 	if p.cylinderFirst {
 		actualCylinder, actualBox = actualA, actualB
@@ -317,9 +319,9 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 	if !okA || !okB {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair replay pose is not affine", ErrUnsupported)
 	}
-	idealA := spherePairIdealCenter(start[0], p.pa.delta, f)
-	idealB := spherePairIdealCenter(start[1], p.pb.delta, f)
-	resolution, ok := exactBaseValue(p.request.PointResolution)
+	idealA := spherePairIdealCenter(start[0], p.pa.Delta, f)
+	idealB := spherePairIdealCenter(start[1], p.pb.Delta, f)
+	resolution, ok := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair replay resolution is invalid", ErrUnsupported)
 	}
@@ -409,19 +411,19 @@ func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 		spherePath, boxPath = p.pa, p.pb
 		spherePose, boxPose = poseA, poseB
 	}
-	sphere, okSphere := translatedReplaySphere(*p.orientedSphere, spherePath.from, spherePose)
-	box, okBox := translatedReplayOrientedBox(*p.orientedSphereBox, boxPath.from, boxPose)
+	sphere, okSphere := translatedReplaySphere(*p.orientedSphere, spherePath.From, spherePose)
+	box, okBox := translatedReplayOrientedBox(*p.orientedSphereBox, boxPath.From, boxPose)
 	if !okSphere || !okBox {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotated sphere replay is not affine", ErrUnsupported)
 	}
-	deviation := orientedBoxPoseDeviation(*p.orientedSphereBox, box, boxPath.delta, f)
+	deviation := orientedBoxPoseDeviation(*p.orientedSphereBox, box, boxPath.Delta, f)
 	for k := range 3 {
 		expected := new(big.Rat).Add(p.orientedSphere.center[k].Rat(),
-			new(big.Rat).Mul(spherePath.delta[k].Rat(), f))
+			new(big.Rat).Mul(spherePath.Delta[k].Rat(), f))
 		difference := new(big.Rat).Sub(sphere.center[k].Rat(), expected)
 		deviation.Add(deviation, difference.Abs(difference))
 	}
-	resolution, ok := exactBaseValue(p.request.PointResolution)
+	resolution, ok := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere pose exceeds point resolution", ErrUnsupported)
 	}
@@ -504,7 +506,7 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotating replay pose has no finite error bound", ErrUnsupported)
 		}
 	}
-	resolution, ok := exactBaseValue(r.replay.request.PointResolution)
+	resolution, ok := sweeppath.ExactBaseValue(r.replay.request.PointResolution)
 	if !ok || new(big.Rat).Add(proofarith.FloatRat(deviation[0]), proofarith.FloatRat(deviation[1])).Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose exceeds point resolution", ErrUnsupported)
 	}
@@ -543,7 +545,7 @@ func (r *SweepReport) certifiedOrientedTouchAtFraction(f *big.Rat, a, b oriented
 	track := r.replay.track
 	if track == nil || track.orientedA == nil || track.orientedB == nil ||
 		f.Cmp(track.start) < 0 || f.Cmp(track.end) > 0 ||
-		r.replay.rotation[0].path.drift != nil || r.replay.rotation[1].path.drift != nil {
+		r.replay.rotation[0].path.Drift != nil || r.replay.rotation[1].path.Drift != nil {
 		return false
 	}
 	report := &ContactReport{Request: r.replay.request}
@@ -606,13 +608,13 @@ func translatedReplaySphere(sphere sourceSphereContactProof, from, at r3.Transfo
 
 func rotatingReplaySphere(sphere sourceSphereContactProof, path affinePairPath,
 	at r3.Transform) (sourceSphereContactProof, bool) {
-	if path.drift == nil {
-		return translatedReplaySphere(sphere, path.from, at)
+	if path.Drift == nil {
+		return translatedReplaySphere(sphere, path.From, at)
 	}
-	if !at.IsValid() || at.IsReflection() || !path.from.IsValid() {
+	if !at.IsValid() || at.IsReflection() || !path.From.IsValid() {
 		return sourceSphereContactProof{}, false
 	}
-	from := path.from.Translation()
+	from := path.From.Translation()
 	if proofarith.DyCmp(sphere.center[0], proofarith.MustDyOf(from.X)) != 0 ||
 		proofarith.DyCmp(sphere.center[1], proofarith.MustDyOf(from.Y)) != 0 ||
 		proofarith.DyCmp(sphere.center[2], proofarith.MustDyOf(from.Z)) != 0 {
@@ -637,17 +639,17 @@ func (r *SweepReport) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3
 		box = p.boxB
 	}
 	sphere, okSphere := rotatingReplaySphere(*p.sphere, spherePath, spherePose)
-	observedBox, okBox := translatedReplayBox(box, boxPath.from, boxPose)
+	observedBox, okBox := translatedReplayBox(box, boxPath.From, boxPose)
 	if !okSphere || !okBox {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay pose is not an affine translation", ErrUnsupported)
 	}
-	resolution, ok := exactBaseValue(p.request.PointResolution)
+	resolution, ok := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay point resolution is invalid", ErrUnsupported)
 	}
-	deviation := boxPoseDeviation(box, observedBox, boxPath.delta, f)
+	deviation := boxPoseDeviation(box, observedBox, boxPath.Delta, f)
 	for i := range 3 {
-		ideal := new(big.Rat).Add(p.sphere.center[i].Rat(), new(big.Rat).Mul(spherePath.delta[i].Rat(), f))
+		ideal := new(big.Rat).Add(p.sphere.center[i].Rat(), new(big.Rat).Mul(spherePath.Delta[i].Rat(), f))
 		difference := new(big.Rat).Sub(sphere.center[i].Rat(), ideal)
 		deviation.Add(deviation, difference.Abs(difference))
 		if i == p.sphereAxis {
@@ -714,7 +716,7 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 		deviation.Add(deviation, bound)
 		displacement.Add(displacement, moved)
 	}
-	resolution, ok := exactBaseValue(p.request.PointResolution)
+	resolution, ok := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay pose exceeds point resolution", ErrUnsupported)
 	}

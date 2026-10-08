@@ -213,7 +213,7 @@ the rules leave to the byte budget.
 | `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
 | `linkage_loop.go` | Closed loops and `Schedule`. See `docs/linkage-check-design.md` §15. |
 | `linkage_bound.go` | Linkage reach and projection adapters. See linkage §5.2, §5.8. |
-| `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
+| `contact_sweep.go` | Pair path aliases, sweep entry point, reports, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift over source boxes or exact planar bodies. See contact-sweep design. |
 | `contact_sweep_memo.go` | Adapts `internal/sweepmemo/` to sweep paths and body radius readings. See contact-sweep §7. |
 | `contact_sweep_band.go` / `contact_sweep_rolling.go` | Planar and rolling sweep adapters. See multibody-dynamics §10.2–§10.6, §10.8. |
@@ -270,6 +270,7 @@ the rules leave to the byte budget.
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact box paths, contact, oriented and sphere-box proofs, patches, clips and witnesses. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
+| `internal/sweeppath/` | Sealed pair paths, validation, exact durations, and affine poses. See contact-sweep §2. |
 | `internal/planarsnapshot/` | Exact prism and held-mesh snapshots for planar contact. See multibody §9.1. |
 | `internal/placedruling/` | Placed cylinder support proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits, placement, restatement and bounds. See `docs/evaluator-design.md` §9. |

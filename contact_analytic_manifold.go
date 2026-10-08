@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/placedruling"
 
@@ -511,7 +513,7 @@ func placedRulingFootInside(c *placedCylinder, plane *rulingPlane, lateral *big.
 // the manifold with ContactPointTooCoarse.
 func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane *rulingPlane,
 	cylinderFirst bool, lateral, separation *big.Rat) {
-	resolution, ok := exactBaseValue(report.Request.PointResolution)
+	resolution, ok := sweeppath.ExactBaseValue(report.Request.PointResolution)
 	if !ok {
 		report.Reason = ContactPointTooCoarse
 		return
@@ -573,7 +575,7 @@ func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane
 // midpoint float and an outward bound covering both ends.
 func ratIntervalMeasurement(lo, hi *big.Rat) (Measurement, bool) {
 	mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
-	value := ratFloatNearest(mid)
+	value := sweeppath.RatFloatNearest(mid)
 	held := proofarith.FloatRat(value)
 	spread := proofbound.RatMax(new(big.Rat).Abs(new(big.Rat).Sub(lo, held)), new(big.Rat).Abs(new(big.Rat).Sub(hi, held)))
 	bound := proofbound.RatFloatUp(spread)

@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -46,8 +48,8 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 	bPath, okB := preparePlanarSweepPath(b, pb, &solidB, deltaB)
 	if !okA || !okB {
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
+		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
+			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 		return report, true, nil
 	}
 	attachSweepMemos(&aPath, &bPath)
@@ -154,8 +156,8 @@ func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepRepla
 		if result.Bracket == nil {
 			return nil
 		}
-		left, leftOK := exactBaseValue(result.Bracket.From.Fraction)
-		right, rightOK := exactBaseValue(result.Bracket.To.Fraction)
+		left, leftOK := sweeppath.ExactBaseValue(result.Bracket.From.Fraction)
+		right, rightOK := sweeppath.ExactBaseValue(result.Bracket.To.Fraction)
 		if !leftOK || !rightOK || left.Cmp(right) >= 0 {
 			return nil
 		}
@@ -204,8 +206,8 @@ func sampleLowerGap(sample *SweepSample) *big.Rat {
 	if sample.Ideal.Relation != ContactSeparated || sample.Ideal.Gap == nil {
 		return nil
 	}
-	value, okValue := exactBaseValue(sample.Ideal.Gap.Value)
-	bound, okBound := exactBaseValue(sample.Ideal.Gap.Bound)
+	value, okValue := sweeppath.ExactBaseValue(sample.Ideal.Gap.Value)
+	bound, okBound := sweeppath.ExactBaseValue(sample.Ideal.Gap.Bound)
 	if !okValue || !okBound {
 		return nil
 	}
@@ -232,7 +234,7 @@ func preparePlanarSweepPath(body *Body, path affinePairPath, solid *planar.Plana
 	prepared.sourcePoints = solid.Verts
 	prepared.startPoints = make([]proofarith.DyV3, len(solid.Verts))
 	for i, v := range solid.Verts {
-		prepared.startPoints[i] = exactContactTransform(path.from, v)
+		prepared.startPoints[i] = exactContactTransform(path.From, v)
 	}
 	return prepared, true
 }

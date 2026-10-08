@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
@@ -44,15 +46,15 @@ type rotationalSweepPath struct {
 
 func (p rotationalSweepPath) departurePath() sweepdeparture.Path {
 	return sweepdeparture.Path{
-		Box: p.startBox.pairBox(), Delta: p.path.delta,
+		Box: p.startBox.pairBox(), Delta: p.path.Delta,
 		Axis: p.frame.Axis, Center: p.frame.Center, Velocity: p.velocity,
-		Duration: p.path.duration, OmegaUpper: p.omegaHigh,
-		Drift: p.path.drift != nil, Screw: p.path.screw != nil,
+		Duration: p.path.Duration, OmegaUpper: p.omegaHigh,
+		Drift: p.path.Drift != nil, Screw: p.path.Screw != nil,
 	}
 }
 
 func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
-	startBox, ok := sourceOrientedBoxAtPose(body, path.from)
+	startBox, ok := sourceOrientedBoxAtPose(body, path.From)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
@@ -74,48 +76,48 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 // body. The travel radius reads the body's inflated bounds, so it holds for
 // any body; the caller supplies the source points.
 func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
-	if path.screw != nil {
-		axis := path.screw.Axis
-		angle, ok := exactBaseValue(path.screw.Angle)
-		if !ok || path.duration.Sign() <= 0 {
+	if path.Screw != nil {
+		axis := path.Screw.Axis
+		angle, ok := sweeppath.ExactBaseValue(path.Screw.Angle)
+		if !ok || path.Duration.Sign() <= 0 {
 			return rotationalSweepPath{}, false
 		}
-		angular := new(big.Rat).Quo(angle, path.duration)
-		linear := new(big.Rat).Quo(proofarith.FloatRat(path.screw.Slide), path.duration)
-		omega, speed := ratFloatNearest(angular), ratFloatNearest(linear)
+		angular := new(big.Rat).Quo(angle, path.Duration)
+		linear := new(big.Rat).Quo(proofarith.FloatRat(path.Screw.Slide), path.Duration)
+		omega, speed := sweeppath.RatFloatNearest(angular), sweeppath.RatFloatNearest(linear)
 		if !finiteMeasurementValues(omega, speed) {
 			return rotationalSweepPath{}, false
 		}
-		path.drift = &RigidDriftSegment{From: path.from, Center: path.screw.Point,
+		path.Drift = &RigidDriftSegment{From: path.From, Center: path.Screw.Point,
 			LinearVelocity: QuantityVec{X: units.MillimetersPerSecond(axis.X * speed),
 				Y: units.MillimetersPerSecond(axis.Y * speed),
 				Z: units.MillimetersPerSecond(axis.Z * speed)},
 			AngularVelocity: QuantityVec{X: units.RadiansPerSecond(axis.X * omega),
 				Y: units.RadiansPerSecond(axis.Y * omega),
 				Z: units.RadiansPerSecond(axis.Z * omega)},
-			Duration: units.Seconds(ratFloatNearest(path.duration))}
+			Duration: units.Seconds(sweeppath.RatFloatNearest(path.Duration))}
 	}
-	fromRot, fromT, ok := motionbound.ExactTransform(path.from)
+	fromRot, fromT, ok := motionbound.ExactTransform(path.From)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
 	prepared := rotationalSweepPath{body: body, path: path, fromRot: fromRot, fromT: fromT}
-	if path.drift == nil {
-		travel, ok := motionbound.SweepLinearTravel(path.delta)
+	if path.Drift == nil {
+		travel, ok := motionbound.SweepLinearTravel(path.Delta)
 		if !ok {
 			return rotationalSweepPath{}, false
 		}
 		prepared.fullTravel = travel
 		return prepared, true
 	}
-	drift := path.drift
+	drift := path.Drift
 	velocity := [3]units.Value{drift.LinearVelocity.X, drift.LinearVelocity.Y, drift.LinearVelocity.Z}
 	angular := [3]units.Value{drift.AngularVelocity.X, drift.AngularVelocity.Y, drift.AngularVelocity.Z}
 	prepared.velocity = motionbound.RatVec{}
 	omega := motionbound.RatVec{}
 	for axis := range 3 {
-		prepared.velocity[axis], _ = exactBaseValue(velocity[axis])
-		omega[axis], _ = exactBaseValue(angular[axis])
+		prepared.velocity[axis], _ = sweeppath.ExactBaseValue(velocity[axis])
+		omega[axis], _ = sweeppath.ExactBaseValue(angular[axis])
 	}
 	var vSquared *big.Rat
 	prepared.frame, prepared.omegaLow, prepared.omegaHigh, vSquared, ok =
@@ -123,24 +125,24 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	radius, ok := rotationalSweepRadius(body, path.from, drift.Center, omega)
+	radius, ok := rotationalSweepRadius(body, path.From, drift.Center, omega)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	prepared.fullTravel, ok = motionbound.SweepRotatingTravel(vSquared, prepared.omegaHigh, radius, path.duration)
+	prepared.fullTravel, ok = motionbound.SweepRotatingTravel(vSquared, prepared.omegaHigh, radius, path.Duration)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	if path.screw != nil {
-		angle, _ := exactBaseValue(path.screw.Angle)
-		angular := new(big.Rat).Quo(angle, path.duration)
-		linear := new(big.Rat).Quo(proofarith.FloatRat(path.screw.Slide), path.duration)
-		for axis, component := range [3]float64{path.screw.Axis.X, path.screw.Axis.Y, path.screw.Axis.Z} {
+	if path.Screw != nil {
+		angle, _ := sweeppath.ExactBaseValue(path.Screw.Angle)
+		angular := new(big.Rat).Quo(angle, path.Duration)
+		linear := new(big.Rat).Quo(proofarith.FloatRat(path.Screw.Slide), path.Duration)
+		for axis, component := range [3]float64{path.Screw.Axis.X, path.Screw.Axis.Y, path.Screw.Axis.Z} {
 			prepared.velocity[axis] = new(big.Rat).Mul(proofarith.FloatRat(component), linear)
 		}
 		prepared.omegaLow, prepared.omegaHigh = angular, angular
 		prepared.fullTravel = new(big.Rat).Mul(new(big.Rat).Add(new(big.Rat).Abs(linear),
-			new(big.Rat).Mul(radius, angular)), path.duration)
+			new(big.Rat).Mul(radius, angular)), path.Duration)
 	}
 	return prepared, true
 }
@@ -205,27 +207,27 @@ func rationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 }
 
 func (p rotationalSweepPath) poseAt(f *big.Rat) (r3.Transform, error) {
-	if p.path.screw != nil {
+	if p.path.Screw != nil {
 		if f.Sign() == 0 {
-			return p.path.from, nil
+			return p.path.From, nil
 		}
 		if f.Cmp(big.NewRat(1, 1)) == 0 {
-			return p.path.to, nil
+			return p.path.To, nil
 		}
-		step, err := p.path.screw.At(ratFloatNearest(f))
+		step, err := p.path.Screw.At(sweeppath.RatFloatNearest(f))
 		if err != nil {
 			return r3.Transform{}, err
 		}
-		return p.path.from.Then(step)
+		return p.path.From.Then(step)
 	}
-	if p.path.drift == nil {
-		return p.path.poseAt(f)
+	if p.path.Drift == nil {
+		return p.path.PoseAt(f)
 	}
 	if f.Sign() == 0 {
-		return p.path.from, nil
+		return p.path.From, nil
 	}
-	drift := p.path.drift
-	elapsed := ratFloatNearest(new(big.Rat).Mul(p.path.duration, f))
+	drift := p.path.Drift
+	elapsed := sweeppath.RatFloatNearest(new(big.Rat).Mul(p.path.Duration, f))
 	axis := r3.Vec{X: drift.AngularVelocity.X.Base(), Y: drift.AngularVelocity.Y.Base(),
 		Z: drift.AngularVelocity.Z.Base()}
 	norm := math.Hypot(axis.X, math.Hypot(axis.Y, axis.Z))
@@ -233,7 +235,7 @@ func (p rotationalSweepPath) poseAt(f *big.Rat) (r3.Transform, error) {
 	if err != nil {
 		return r3.Transform{}, err
 	}
-	pose, err := p.path.from.Then(turn)
+	pose, err := p.path.From.Then(turn)
 	if err != nil {
 		return r3.Transform{}, err
 	}
@@ -266,8 +268,8 @@ func (p rotationalSweepPath) idealAt(f *big.Rat) (sweepIdealPose, bool) {
 
 // idealAtAfresh is idealAt computed without the memo.
 func (p rotationalSweepPath) idealAtAfresh(f *big.Rat) (sweepIdealPose, bool) {
-	rot, shift, ok := motionbound.SweepIdealPoseAt(p.fromRot, p.fromT, p.path.delta,
-		p.frame, p.velocity, p.omegaLow, p.omegaHigh, p.path.duration, f, p.path.drift != nil)
+	rot, shift, ok := motionbound.SweepIdealPoseAt(p.fromRot, p.fromT, p.path.Delta,
+		p.frame, p.velocity, p.omegaLow, p.omegaHigh, p.path.Duration, f, p.path.Drift != nil)
 	return sweepIdealPose{Rot: rot, Shift: shift}, ok
 }
 
@@ -426,8 +428,8 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 			return result, err
 		}
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
+		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
+			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 		return report, nil
 	}
 	attachSweepMemos(&aPath, &bPath)
@@ -445,13 +447,13 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 		result.Outcome == SweepImpactBracket && result.Bracket != nil ||
 		result.Outcome == SweepPersistentTouch &&
 			result.ContactTrack != nil && result.ContactTrack.orientedA != nil &&
-			result.ContactTrack.orientedB != nil && aPath.path.drift == nil && bPath.path.drift == nil {
+			result.ContactTrack.orientedB != nil && aPath.path.Drift == nil && bPath.path.Drift == nil {
 		result.replay = &sweepReplayProof{rotation: &[2]rotationalSweepPath{aPath, bPath},
 			track: result.ContactTrack, request: req.ContactRequest}
 		result.replay.snapshot(result)
 		if result.Outcome == SweepImpactBracket {
-			left, leftOK := exactBaseValue(result.Bracket.From.Fraction)
-			right, rightOK := exactBaseValue(result.Bracket.To.Fraction)
+			left, leftOK := sweeppath.ExactBaseValue(result.Bracket.From.Fraction)
+			right, rightOK := sweeppath.ExactBaseValue(result.Bracket.To.Fraction)
 			if !leftOK || !rightOK || left.Cmp(right) >= 0 {
 				result.replay = nil
 			} else {
@@ -482,7 +484,7 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.a.path.duration)
+	at := sweepInstant(f, r.a.path.Duration)
 	var event SweepEvent
 	if r.planar {
 		event, err = r.planarIdealEvent(ctx, f, at, poseA, poseB, contact)
@@ -505,8 +507,8 @@ func separatedIdealGap(contact *ContactReport, etaA, etaB float64) (*Measurement
 	if contact.Gap == nil {
 		return nil, false
 	}
-	value, okValue := exactBaseValue(contact.Gap.Value)
-	bound, okBound := exactBaseValue(contact.Gap.Bound)
+	value, okValue := sweeppath.ExactBaseValue(contact.Gap.Value)
+	bound, okBound := sweeppath.ExactBaseValue(contact.Gap.Bound)
 	if !okValue || !okBound {
 		return nil, false
 	}
@@ -581,10 +583,10 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	stationary, spinning := -1, -1
 	paths := [2]rotationalSweepPath{r.a, r.b}
 	for i, path := range paths {
-		if path.path.drift == nil && path.path.delta == [3]proofarith.Dyadic{} {
+		if path.path.Drift == nil && path.path.Delta == [3]proofarith.Dyadic{} {
 			stationary = i
 		}
-		if path.path.drift != nil && path.frame.Axis[0].Sign() == 0 &&
+		if path.path.Drift != nil && path.frame.Axis[0].Sign() == 0 &&
 			path.frame.Axis[1].Sign() == 0 && path.frame.Axis[2].Sign() != 0 &&
 			path.velocity[0].Sign() == 0 && path.velocity[1].Sign() == 0 {
 			spinning = i
@@ -595,8 +597,8 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	}
 	poses := [2]r3.Transform{poseA, poseB}
 	base, okBase := sourceBoxAtPose(paths[stationary].body, poses[stationary])
-	startA, okA := sourceBoxAtPose(r.a.body, r.a.path.from)
-	startB, okB := sourceBoxAtPose(r.b.body, r.b.path.from)
+	startA, okA := sourceBoxAtPose(r.a.body, r.a.path.From)
+	startB, okB := sourceBoxAtPose(r.b.body, r.b.path.From)
 	if !okBase || !okA || !okB {
 		return SweepEvent{}, false
 	}
@@ -604,7 +606,7 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	if normal != (r3.Vec{Z: 1}) && normal != (r3.Vec{Z: -1}) {
 		return SweepEvent{}, false
 	}
-	elapsed := new(big.Rat).Mul(r.a.path.duration, f)
+	elapsed := new(big.Rat).Mul(r.a.path.Duration, f)
 	travel := new(big.Rat).Mul(paths[spinning].velocity[2], elapsed)
 	loA, hiA := startA.lo[2].Rat(), startA.hi[2].Rat()
 	loB, hiB := startB.lo[2].Rat(), startB.hi[2].Rat()
@@ -630,7 +632,7 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	if gap.Sign() > 0 {
 		return SweepEvent{}, false
 	}
-	value := ratFloatNearest(gap)
+	value := sweeppath.RatFloatNearest(gap)
 	bound := proofarith.RationalFloatError(gap, value)
 	if !finiteMeasurementValues(value, bound) {
 		return SweepEvent{}, false
@@ -673,7 +675,7 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 			Exactness: exactnessFromBound(bound)}
 	}
 	zero := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
-	event := SweepEvent{At: sweepInstant(f, r.a.path.duration), Manifold: &ContactManifold{Points: points}}
+	event := SweepEvent{At: sweepInstant(f, r.a.path.Duration), Manifold: &ContactManifold{Points: points}}
 	if gap.Sign() == 0 {
 		event.Relation, event.Gap = ContactTouching, &zero
 	} else {
@@ -711,9 +713,9 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 				return r.undecided(zero, one, SweepContactTrackUnproved), nil
 			}
 			r.report.ContactTrack = &SweepContactTrack{orientedA: &r.a.startBox,
-				orientedB: &r.b.startBox, orientedDelta: r.a.path.delta,
+				orientedB: &r.b.startBox, orientedDelta: r.a.path.Delta,
 				start: zero, end: one,
-				duration: r.a.path.duration, request: r.req.ContactRequest,
+				duration: r.a.path.Duration, request: r.req.ContactRequest,
 				pointCount: len(first.Ideal.Manifold.Points),
 				features: [2]ContactFeature{first.Ideal.Manifold.Points[0].FeatureA,
 					first.Ideal.Manifold.Points[0].FeatureB},
@@ -894,7 +896,7 @@ func (r *rotationalPairSweep) continuationCause() SweepCause {
 // completed (an edge or vertex on a face, or a support set) is left to the
 // planar continuation, since the oriented track rereads face patches only.
 func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
-	if r.a.path.drift != nil || r.b.path.drift != nil || first.Ideal.Manifold == nil {
+	if r.a.path.Drift != nil || r.b.path.Drift != nil || first.Ideal.Manifold == nil {
 		return false
 	}
 	for _, point := range first.Ideal.Manifold.Points {
@@ -903,7 +905,7 @@ func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
 		}
 	}
 	for axis := range 3 {
-		if proofarith.DyCmp(r.a.path.delta[axis], r.b.path.delta[axis]) != 0 {
+		if proofarith.DyCmp(r.a.path.Delta[axis], r.b.path.Delta[axis]) != 0 {
 			return false
 		}
 	}
@@ -939,7 +941,7 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 	if fraction, ok := r.axisFaceDepartureFraction(first); ok {
 		return fraction, true
 	}
-	if r.a.path.drift == nil || r.b.path.drift == nil || first.Ideal.Manifold == nil ||
+	if r.a.path.Drift == nil || r.b.path.Drift == nil || first.Ideal.Manifold == nil ||
 		len(first.Ideal.Manifold.Points) == 0 {
 		return nil, false
 	}
@@ -948,8 +950,8 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 	if !ok || point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
 		return nil, false
 	}
-	boxA, okA := sourceBoxAtPose(r.a.body, r.a.path.from)
-	boxB, okB := sourceBoxAtPose(r.b.body, r.b.path.from)
+	boxA, okA := sourceBoxAtPose(r.a.body, r.a.path.From)
+	boxB, okB := sourceBoxAtPose(r.b.body, r.b.path.From)
 	if !okA || !okB ||
 		(side == 1 && proofarith.DyCmp(boxA.hi[axis], boxB.lo[axis]) != 0) ||
 		(side == 0 && proofarith.DyCmp(boxB.hi[axis], boxA.lo[axis]) != 0) {
@@ -981,7 +983,7 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 		[2]sweepdeparture.Path{paths[0].departurePath(), paths[1].departurePath()},
 		first.Ideal.Manifold.Points[0].Normal.Value,
 		func(i int) (pairbox.OrientedBox, bool) {
-			box, ok := sourceOrientedBoxAtPose(paths[i].body, paths[i].path.from)
+			box, ok := sourceOrientedBoxAtPose(paths[i].body, paths[i].path.From)
 			return box.pairBox(), ok
 		},
 	)
@@ -1039,7 +1041,7 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 		r.intervalClear(left, right, lf, rf) {
 		return false, nil
 	}
-	width := new(big.Rat).Mul(new(big.Rat).Sub(rf, lf), r.a.path.duration)
+	width := new(big.Rat).Mul(new(big.Rat).Sub(rf, lf), r.a.path.Duration)
 	if width.Cmp(r.resolution) <= 0 {
 		if left.Ideal.Relation == ContactSeparated && meetingRelation(right.Ideal.Relation) {
 			left, right, err := r.narrowBracket(ctx, left, right)
@@ -1059,8 +1061,8 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 		return true, nil
 	}
 	middle := new(big.Rat).Quo(new(big.Rat).Add(lf, rf), big.NewRat(2, 1))
-	if ratFloatNearest(middle) == left.At.Fraction.Base() ||
-		ratFloatNearest(middle) == right.At.Fraction.Base() {
+	if sweeppath.RatFloatNearest(middle) == left.At.Fraction.Base() ||
+		sweeppath.RatFloatNearest(middle) == right.At.Fraction.Base() {
 		r.undecided(lf, rf, SweepFractionFloor)
 		return true, nil
 	}
@@ -1100,8 +1102,8 @@ func (r *rotationalPairSweep) narrowBracket(ctx context.Context, left, right *Sw
 	for !r.bracketRightReplays(left, right) {
 		lf, rf := proofarith.FloatRat(left.At.Fraction.Base()), proofarith.FloatRat(right.At.Fraction.Base())
 		middle := new(big.Rat).Quo(new(big.Rat).Add(lf, rf), big.NewRat(2, 1))
-		if ratFloatNearest(middle) == left.At.Fraction.Base() ||
-			ratFloatNearest(middle) == right.At.Fraction.Base() {
+		if sweeppath.RatFloatNearest(middle) == left.At.Fraction.Base() ||
+			sweeppath.RatFloatNearest(middle) == right.At.Fraction.Base() {
 			return left, right, nil
 		}
 		sample, err := r.sample(ctx, middle)
@@ -1132,7 +1134,7 @@ func (r *rotationalPairSweep) narrowBracket(ctx context.Context, left, right *Sw
 // bound, has nothing narrowing can settle and reports true.
 func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool {
 	gap := sampleLowerGap(left)
-	resolution, ok := exactBaseValue(r.req.PointResolution)
+	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if gap == nil || !ok {
 		return true
 	}
@@ -1165,8 +1167,8 @@ func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *bi
 		if sample.Ideal.Gap == nil {
 			return nil
 		}
-		value, okValue := exactBaseValue(sample.Ideal.Gap.Value)
-		bound, okBound := exactBaseValue(sample.Ideal.Gap.Bound)
+		value, okValue := sweeppath.ExactBaseValue(sample.Ideal.Gap.Value)
+		bound, okBound := sweeppath.ExactBaseValue(sample.Ideal.Gap.Bound)
 		if !okValue || !okBound {
 			return nil
 		}
@@ -1185,13 +1187,13 @@ func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *bi
 // positive throughout it. This also covers an oblique outward drift whose
 // world-axis hulls overlap after the boxes have separated.
 func (r *rotationalPairSweep) obliqueAffineIntervalClear(from, to *big.Rat) bool {
-	if r.a.path.drift != nil || r.b.path.drift != nil {
+	if r.a.path.Drift != nil || r.b.path.Drift != nil {
 		return false
 	}
-	a0, okA := translatedOrientedBox(r.a.startBox, r.a.path.delta, from)
-	b0, okB := translatedOrientedBox(r.b.startBox, r.b.path.delta, from)
-	a1, okC := translatedOrientedBox(r.a.startBox, r.a.path.delta, to)
-	b1, okD := translatedOrientedBox(r.b.startBox, r.b.path.delta, to)
+	a0, okA := translatedOrientedBox(r.a.startBox, r.a.path.Delta, from)
+	b0, okB := translatedOrientedBox(r.b.startBox, r.b.path.Delta, from)
+	a1, okC := translatedOrientedBox(r.a.startBox, r.a.path.Delta, to)
+	b1, okD := translatedOrientedBox(r.b.startBox, r.b.path.Delta, to)
 	if !okA || !okB || !okC || !okD {
 		return false
 	}
@@ -1266,8 +1268,8 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
 
 // cornerSpanAfresh is cornerSpan computed without the memo.
 func (p rotationalSweepPath) cornerSpanAfresh(from, to *big.Rat) cornerSpans {
-	spans := motionbound.SweepCornerSpan(p.startPoints, p.path.delta, p.frame, p.velocity,
-		p.omegaLow, p.omegaHigh, p.path.duration, from, to, p.path.drift != nil)
+	spans := motionbound.SweepCornerSpan(p.startPoints, p.path.Delta, p.frame, p.velocity,
+		p.omegaLow, p.omegaHigh, p.path.Duration, from, to, p.path.Drift != nil)
 	return cornerSpans{Den: spans.Den, Lo: spans.Lo, Hi: spans.Hi}
 }
 
@@ -1283,8 +1285,8 @@ func (r *rotationalPairSweep) sortSamples() {
 
 func (r *rotationalPairSweep) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.a.path.duration),
-		To: sweepInstant(to, r.a.path.duration)}
+	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.a.path.Duration),
+		To: sweepInstant(to, r.a.path.Duration)}
 	r.sortSamples()
 	return r.report
 }

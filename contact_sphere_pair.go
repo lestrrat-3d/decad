@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -148,7 +150,7 @@ func publishObliqueSpherePair(report *ContactReport, a, b sourceSphereContactPro
 	}
 	low := new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtDown(distance2)), radius.Rat())
 	high := new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtUp(distance2)), radius.Rat())
-	value := ratFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1)))
+	value := sweeppath.RatFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1)))
 	if !finiteMeasurementValues(value) {
 		report.Reason = ContactPointTooCoarse
 		return

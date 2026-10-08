@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -29,9 +31,9 @@ type orientedSphereSweepRun struct {
 
 func (r *orientedSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.Dyadic) {
 	if r.sphereFirst {
-		return r.pa.delta, r.pb.delta
+		return r.pa.Delta, r.pb.Delta
 	}
-	return r.pb.delta, r.pa.delta
+	return r.pb.Delta, r.pa.Delta
 }
 
 func (r *orientedSphereSweepRun) sourceCorridor() bool {
@@ -111,11 +113,11 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
 		return nil, errSweepPoseBudget
 	}
-	poseA, err := r.pa.poseAt(f)
+	poseA, err := r.pa.PoseAt(f)
 	if err != nil {
 		return nil, err
 	}
-	poseB, err := r.pb.poseAt(f)
+	poseB, err := r.pb.PoseAt(f)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +125,7 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.pa.duration)
+	at := sweepInstant(f, r.pa.Duration)
 	ideal := r.idealAt(f, at)
 	if ideal.Manifold != nil {
 		if contact.Manifold == nil || ideal.Relation != contact.Relation ||
@@ -135,7 +137,7 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 		} else {
 			deviation := r.poseDeviation(f, poseA, poseB)
 			point := contact.Manifold.Points[0]
-			resolution, _ := exactBaseValue(r.req.PointResolution)
+			resolution, _ := sweeppath.ExactBaseValue(r.req.PointResolution)
 			for _, witness := range []*VecMeasurement{&point.OnA, &point.OnB} {
 				bound := new(big.Rat).Add(proofarith.FloatRat(witness.Bound.Base()), deviation)
 				if bound.Cmp(resolution) > 0 {
@@ -162,12 +164,12 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 
 func (r *orientedSphereSweepRun) poseDeviation(f *big.Rat, poseA, poseB r3.Transform) *big.Rat {
 	spherePose, boxPose := poseB, poseA
-	sphereFrom, boxFrom := r.pb.from, r.pa.from
-	sphereDelta, boxDelta := r.pb.delta, r.pa.delta
+	sphereFrom, boxFrom := r.pb.From, r.pa.From
+	sphereDelta, boxDelta := r.pb.Delta, r.pa.Delta
 	if r.sphereFirst {
 		spherePose, boxPose = poseA, poseB
-		sphereFrom, boxFrom = r.pa.from, r.pb.from
-		sphereDelta, boxDelta = r.pa.delta, r.pb.delta
+		sphereFrom, boxFrom = r.pa.From, r.pb.From
+		sphereDelta, boxDelta = r.pa.Delta, r.pb.Delta
 	}
 	observedSphere, okSphere := translatedReplaySphere(r.sphere, sphereFrom, spherePose)
 	observedBox, okBox := translatedReplayOrientedBox(r.box, boxFrom, boxPose)
@@ -186,8 +188,8 @@ func (r *orientedSphereSweepRun) poseDeviation(f *big.Rat, poseA, poseB r3.Trans
 
 func (r *orientedSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.duration),
-		To: sweepInstant(to, r.pa.duration)}
+	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.Duration),
+		To: sweepInstant(to, r.pa.Duration)}
 	sort.Slice(r.report.Samples, func(i, j int) bool {
 		return r.report.Samples[i].At.Fraction.Base() < r.report.Samples[j].At.Fraction.Base()
 	})
@@ -197,7 +199,7 @@ func (r *orientedSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) 
 func (r *orientedSphereSweepRun) bracket(resolution *big.Rat) (*big.Rat, *big.Rat, bool) {
 	grid := big.NewInt(1)
 	for range 61 {
-		width := new(big.Rat).Quo(r.pa.duration, new(big.Rat).SetInt(grid))
+		width := new(big.Rat).Quo(r.pa.Duration, new(big.Rat).SetInt(grid))
 		if new(big.Rat).Mul(width, big.NewRat(4, 1)).Cmp(resolution) <= 0 {
 			leftIndex, rightIndex := big.NewInt(0), new(big.Int).Set(grid)
 			for new(big.Int).Sub(rightIndex, leftIndex).Cmp(big.NewInt(1)) > 0 {
@@ -217,11 +219,11 @@ func (r *orientedSphereSweepRun) bracket(resolution *big.Rat) (*big.Rat, *big.Ra
 			if right.Cmp(big.NewRat(1, 1)) > 0 {
 				right = big.NewRat(1, 1)
 			}
-			endSpan := new(big.Rat).Mul(new(big.Rat).Sub(big.NewRat(1, 1), left), r.pa.duration)
+			endSpan := new(big.Rat).Mul(new(big.Rat).Sub(big.NewRat(1, 1), left), r.pa.Duration)
 			if endSpan.Cmp(resolution) <= 0 && r.signedAt(big.NewRat(1, 1)) <= 0 {
 				right = big.NewRat(1, 1)
 			}
-			span := new(big.Rat).Mul(new(big.Rat).Sub(right, left), r.pa.duration)
+			span := new(big.Rat).Mul(new(big.Rat).Sub(right, left), r.pa.Duration)
 			return left, right, left.Sign() > 0 && span.Cmp(resolution) <= 0 &&
 				r.signedAt(left) > 0 && r.signedAt(right) <= 0
 		}

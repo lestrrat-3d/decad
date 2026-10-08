@@ -8,6 +8,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -101,7 +103,7 @@ func TestSweepPathMemoMatchesAfresh(t *testing.T) {
 			require.NoError(t, err, name)
 			poses = append(poses, pose)
 		}
-		poses = append(poses, path.path.from)
+		poses = append(poses, path.path.From)
 		for range 4 {
 			moved, err := poses[0].Then(randomContactPose(t, rng))
 			require.NoError(t, err, name)
@@ -349,7 +351,7 @@ func TestSweepRunMemoChangesNoReport(t *testing.T) {
 	}
 	floor := internalOffsetBox(t, box.body.doc, -200, -200, 200, 200, low-.05-10,
 		Distance{D: units.Millimeters(10), Dir: Along})
-	still, err := validatePairPath(PoseSegment{From: r3.Identity(), To: r3.Identity(),
+	still, err := sweeppath.Validate(PoseSegment{From: r3.Identity(), To: r3.Identity(),
 		Duration: units.Seconds(1.0 / 256)})
 	require.NoError(t, err)
 	floorPath, ok := prepareRotationalSweepPath(floor, still)
