@@ -472,7 +472,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 
 	// The section displacement's region charge (docs/surface-intersection-design.md
 	// §7.2): the recorded and denoted regions differ by a band of at most
-	// section.band, so the cap area and the three axis-frame moments each move by
+	// section.Band, so the cap area and the three axis-frame moments each move by
 	// their integrand's envelope over it. The snap's charges above are about the
 	// recorded region against the snapped one and compose beside this one. Zero
 	// for every payload no construction displaced, and folded nowhere then.
@@ -480,13 +480,13 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if err != nil {
 		return nil, err
 	}
-	if section.band > 0 {
-		q.Bound = proofbound.AbsSumUpper(q.Bound, section.first())
-		mzr.Bound = proofbound.AbsSumUpper(mzr.Bound, section.second())
-		mrr.Bound = proofbound.AbsSumUpper(mrr.Bound, section.second())
+	if section.Band > 0 {
+		q.Bound = proofbound.AbsSumUpper(q.Bound, section.First())
+		mzr.Bound = proofbound.AbsSumUpper(mzr.Bound, section.Second())
+		mrr.Bound = proofbound.AbsSumUpper(mrr.Bound, section.Second())
 		if !rp.full {
-			capStart.areaBound = proofbound.AbsSumUpper(capStart.areaBound, section.band)
-			capEnd.areaBound = proofbound.AbsSumUpper(capEnd.areaBound, section.band)
+			capStart.areaBound = proofbound.AbsSumUpper(capStart.areaBound, section.Band)
+			capEnd.areaBound = proofbound.AbsSumUpper(capEnd.areaBound, section.Band)
 		}
 	}
 	// Every charge above bounds the cap's plane-coordinate area; its image
@@ -1209,6 +1209,7 @@ func (rp revolvePayload) wallSurface(b revolvemesh.RevolveBasis, w survey2d.Segm
 // docs/surface-design.md §6.4).
 func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plane []survey2d.SegmentWalk) *surfacenormal.Revolved {
 	lift, ab := rp.lift(), rp.axisBound()
+	section := revolveaxis.SectionWholeCharges(rp.sectionWhole, rp.sectionDelta)
 	var den surfacenormal.Revolved
 	switch kind {
 	case wallSphere, wallTorus:
@@ -1216,8 +1217,8 @@ func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plan
 		for i, si := range w.Segs {
 			pw := plane[si]
 			circles[i] = revolvemesh.RecordedMeridian{
-				U: pw.CU, V: pw.CV, UV: rp.denotedBound(proofbound.WalkEndBound{}),
-				R: pw.Radius, RBound: rp.denotedRadiusBound(pw.RadiusBound),
+				U: pw.CU, V: pw.CV, UV: revolveaxis.DenotedBound(proofbound.WalkEndBound{}, section),
+				R: pw.Radius, RBound: revolveaxis.DenotedRadiusBound(pw.RadiusBound, section),
 			}
 		}
 		den = lift.CircularWallNormal(ab, rp.xform, circles)
@@ -1226,8 +1227,8 @@ func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plan
 		for i, si := range w.Segs {
 			pw := plane[si]
 			ends[i] = [2]revolvemesh.RecordedMeridian{
-				{U: pw.StartU, V: pw.StartV, UV: rp.denotedBound(pw.StartBound)},
-				{U: pw.EndU, V: pw.EndV, UV: rp.denotedBound(pw.EndBound)},
+				{U: pw.StartU, V: pw.StartV, UV: revolveaxis.DenotedBound(pw.StartBound, section)},
+				{U: pw.EndU, V: pw.EndV, UV: revolveaxis.DenotedBound(pw.EndBound, section)},
 			}
 		}
 		den = lift.StraightWallNormal(ab, rp.xform, ends)
