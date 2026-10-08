@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -35,12 +36,6 @@ type JointBox = reportvocab.JointBox[*Link]
 // JointRange is one link's range of joint values.
 type JointRange = reportvocab.JointRange[*Link]
 
-type jointBoxOption struct{ option.Interface }
-
-func (jointBoxOption) jointBoxOption() {}
-
-type identCellBudget struct{}
-
 // defaultCellBudget is WithCellBudget's default (docs/linkage-check-design.md
 // §14.1).
 const defaultCellBudget = 16384
@@ -52,7 +47,7 @@ const defaultCellBudget = 16384
 // evaluates the whole box's centre alone; cells < 1 is ErrDegenerate. It is a
 // JointBoxOption only, so VerifyMotion and VerifyLinkage do not accept it.
 func WithCellBudget(cells int) JointBoxOption {
-	return jointBoxOption{option.New(identCellBudget{}, cells)}
+	return motionoption.WithCellBudget(cells)
 }
 
 // JointConfiguration records every link's joint value and world pose.
@@ -204,7 +199,7 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 		// Min → Max; its scenes, its zero pose and its certifiable set, down
 		// to the verdict floor, before any cell, so a dependent's reach enters
 		// the bounds.
-		if err := spec.prepareLoops(ctx, cfg.resolutionP.Base); err != nil {
+		if err := spec.prepareLoops(ctx, cfg.ResolutionP.Base); err != nil {
 			return nil, err
 		}
 	}
@@ -331,7 +326,7 @@ func resolveJointBoxOptions(opts []JointBoxOption) (motionConfig, int, error) {
 		if o == nil {
 			return motionConfig{}, 0, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		if _, ok := o.Ident().(identCellBudget); ok {
+		if _, ok := o.Ident().(motionoption.IdentCellBudget); ok {
 			cells, ok := option.Get[int](o)
 			if !ok {
 				return motionConfig{}, 0, fmt.Errorf(`%w: a joint-box option carries no value`, ErrDegenerate)
@@ -352,11 +347,11 @@ func resolveJointBoxOptions(opts []JointBoxOption) (motionConfig, int, error) {
 	if err != nil {
 		return motionConfig{}, 0, err
 	}
-	if !cfg.stated {
+	if !cfg.Stated {
 		// Unstated, the reading refines past the verdict floor to its own,
 		// per axis, as a drive's does (docs/linkage-check-design.md §3, §14.1).
 		reading := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).SetFrac64(1, linkageReadingFloor)}
-		cfg.readingP = &reading
+		cfg.ReadingP = &reading
 	}
 	return cfg, budget, nil
 }
@@ -547,7 +542,7 @@ func (b *boxRun) nextReadingSplit() (int, int) {
 			}
 		}
 	}
-	if r.cfg.minimumMM != nil && !b.anyViolated && !r.meetsMinimum(c.clearance) {
+	if r.cfg.MinimumMM != nil && !b.anyViolated && !r.meetsMinimum(c.clearance) {
 		if axis := b.readingAxis(c, b.wide); axis >= 0 {
 			return smallest, axis
 		}
@@ -1212,17 +1207,17 @@ func (b *boxRun) splitAxis(c *boxCell) int {
 // joint's range, is wider than the resolution.
 func (b *boxRun) wide(c *boxCell, k int) bool {
 	width := new(big.Rat).Sub(c.hi[k], c.lo[k])
-	return width.Cmp(b.run.cfg.resolutionP.Base) > 0
+	return width.Cmp(b.run.cfg.ResolutionP.Base) > 0
 }
 
 // wideForReading reports whether cell c's span along joint k is wider than
 // the reading floor: its own when unstated, else the resolution.
 func (b *boxRun) wideForReading(c *boxCell, k int) bool {
-	if b.run.cfg.readingP == nil {
+	if b.run.cfg.ReadingP == nil {
 		return b.wide(c, k)
 	}
 	width := new(big.Rat).Sub(c.hi[k], c.lo[k])
-	return width.Cmp(b.run.cfg.readingP.Base) > 0
+	return width.Cmp(b.run.cfg.ReadingP.Base) > 0
 }
 
 // configuration is the joint configuration a cell's centre was evaluated at:
@@ -1245,9 +1240,9 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 	r := b.run
 	report := &JointBoxReport{
 		Request: JointBoxRequest{
-			RelativeTolerance: units.Scalar(r.cfg.rel),
-			Resolution:        r.cfg.resolution,
-			MinClearance:      r.cfg.minimum,
+			RelativeTolerance: units.Scalar(r.cfg.Rel),
+			Resolution:        r.cfg.Resolution,
+			MinClearance:      r.cfg.Minimum,
 			CellBudget:        b.budget,
 		},
 		ReadingResolution: readingResolution(r.cfg),
@@ -1301,7 +1296,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 					Message: msg,
 				}))
 			}
-		case r.cfg.minimumMM != nil && !r.meetsMinimum(c.clearance):
+		case r.cfg.MinimumMM != nil && !r.meetsMinimum(c.clearance):
 			met = false
 			if violated {
 				break
@@ -1312,7 +1307,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 				Status:   Suspect,
 				Reading:  ReadingGap,
 				Observed: &obs,
-				Required: r.cfg.minimum,
+				Required: r.cfg.Minimum,
 				Message:  fmt.Sprintf("the joint cell %s is certified clear, but its proven lower bound does not reach the required minimum", formatCell(c.cell)),
 			}))
 		}
@@ -1344,7 +1339,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 		})
 	}
 	switch {
-	case r.cfg.minimumMM == nil:
+	case r.cfg.MinimumMM == nil:
 		report.Assessment = AssessmentNotEvaluated
 	case violated:
 		report.Assessment = AssessmentViolated

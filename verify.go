@@ -3,16 +3,15 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/verifyoption"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the Verify of docs/evaluator-design.md §10/§11 and
@@ -31,223 +30,40 @@ import (
 // proof of the reference diameter that gate is anchored on.
 
 // VerifyOption configures Verify.
-type VerifyOption interface {
-	option.Interface
-	verifyOption()
-}
-
-type verifyOption struct{ option.Interface }
-
-func (verifyOption) verifyOption() {}
+type VerifyOption = verifyoption.VerifyOption
 
 // WallOption parameterizes WithMinWallThickness.
-type WallOption interface {
-	option.Interface
-	wallOption()
-}
+type WallOption = verifyoption.WallOption
 
-type wallOption struct{ option.Interface }
+type wallSpec = verifyoption.WallSpec
+type verifyConfig = verifyoption.Config
 
-func (wallOption) wallOption() {}
+// WithTolerance sets the relative tolerance gate of verification §2.
+func WithTolerance(rel units.Value) VerifyOption { return verifyoption.WithTolerance(rel) }
 
-type identTolerance struct{}
-type identMinWall struct{}
-type identPullDirection struct{}
-type identConcaveRadius struct{}
-type identClearances struct{}
-type identDraftAllowance struct{}
-
-// wallSpec is WithMinWallThickness's recorded question: the tool, and the
-// draft allowance drawing the line between a wall and an edge. nilOption
-// records a nil WallOption for Verify to reject — an option constructor has
-// no error to return.
-type wallSpec struct {
-	tool      units.Value
-	allowance units.Value
-	nilOption bool
-}
-
-// WithTolerance sets the relative tolerance gate of verification §2: the
-// largest error the caller accepts as a fraction of the quantity measured.
-// Dimensionless; the default is units.Scalar(1e-3) — three significant
-// figures. Exact answers carry a zero proven bound and pass at any
-// tolerance.
-func WithTolerance(rel units.Value) VerifyOption {
-	return verifyOption{option.New(identTolerance{}, rel)}
-}
-
-// WithMinWallThickness states the spec that no wall may be thinner than
-// minimum (verification §2), describing the comparison without assuming a
-// tool type. The reading is the infimum diameter over the body's spanning
-// inscribed balls — material between skins opposing within the draft
-// allowance — and minimum enters only where the interval rule decides the
-// reading against it (verification §6). A wall proven thinner is Violating.
+// WithMinWallThickness asks whether a wall is thinner than minimum.
 func WithMinWallThickness(minimum units.Value, opts ...WallOption) VerifyOption {
-	spec := wallSpec{tool: minimum, allowance: units.Degrees(15)}
-	for _, o := range opts {
-		if o == nil {
-			// An option constructor has no error to return; Verify rejects
-			// the recorded marker with ErrDegenerate.
-			spec.nilOption = true
-			continue
-		}
-		switch o.Ident().(type) {
-		case identDraftAllowance:
-			if a, ok := option.Get[units.Value](o); ok {
-				spec.allowance = a
-			}
-		}
-	}
-	return verifyOption{option.New(identMinWall{}, spec)}
+	return verifyoption.WithMinWallThickness(minimum, opts...)
 }
 
-// WithDraftAllowance sets how much draft opposition tolerates — where the
-// wall ends and the edge begins (verification §2). An angle in [0°, 90°);
-// the default is units.Degrees(15).
-func WithDraftAllowance(a units.Value) WallOption {
-	return wallOption{option.New(identDraftAllowance{}, a)}
-}
+// WithDraftAllowance sets the angle separating walls from edges.
+func WithDraftAllowance(a units.Value) WallOption { return verifyoption.WithDraftAllowance(a) }
 
-// WithPullDirection states the direction the part must pull along; every
-// reported undercut is a proven violation of it (verification §2), decided
-// per face from its normal range: a face with a provenly opposing point is
-// listed, exactly perpendicular is not opposed (the vertical wall clears),
-// and a non-empty listing is Violating. A bounded analytic stand-in widens
-// its range by its own proven departure before this comparison. It also
-// answers on a proven-valid surface-extruded prism sheet, reading each
-// wall's positive side in place of a solid's outward normal
-// (docs/surface-design.md §2.3, §9.1); every other sheet family reads
-// CoverageUnavailable.
-func WithPullDirection(v r3.Vec) VerifyOption {
-	return verifyOption{option.New(identPullDirection{}, v)}
-}
+// WithPullDirection asks for undercuts against the stated direction.
+func WithPullDirection(v r3.Vec) VerifyOption { return verifyoption.WithPullDirection(v) }
 
-// WithConcaveRadius asks for the tightest concave radius — a measurement,
-// not a verdict; Verify introduces no radius threshold or machining-access
-// assessment of its own (verification §2). On the analytic faces convexity
-// and curvature are exact facts, so the survey answers outright: the
-// tightest concave principal radius over every face, or nil — the proven
-// determination that no concave feature exists.
-func WithConcaveRadius() VerifyOption {
-	return verifyOption{option.New(identConcaveRadius{}, true)}
-}
+// WithConcaveRadius asks for the tightest concave radius.
+func WithConcaveRadius() VerifyOption { return verifyoption.WithConcaveRadius() }
 
-// WithClearances asks for the minimum gap between disjoint pairs — a
-// measurement, not a verdict (verification §2): the clearance spec lives
-// with the caller, and the gate judges only the measurement's own figures.
-// Each proven-disjoint pair gets a row whose Gap the clearance kernel proves
-// (docs/clearance-design.md); a gap the kernel cannot prove yields no row
-// and reads Suspect — asked and unanswered, never a fabricated number.
-func WithClearances() VerifyOption {
-	return verifyOption{option.New(identClearances{}, true)}
-}
+// WithClearances asks for minimum gaps between disjoint pairs.
+func WithClearances() VerifyOption { return verifyoption.WithClearances() }
 
-// verifyConfig is the folded option set. toolMM and allowRad carry the wall
-// spec resolved to the solver's base units (millimetres, radians).
-type verifyConfig struct {
-	rel           float64
-	wall          *wallSpec
-	toolMM        float64
-	allowRad      float64
-	pull          *r3.Vec
-	concaveRadius bool
-	clearances    bool
-}
-
-// resolveVerifyOptions folds and validates the options. Every parameter
-// error is returned from Verify — never deferred into the report
-// (verification §2, core §10).
 func resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
-	cfg := verifyConfig{rel: 1e-3}
-	for _, o := range opts {
-		if o == nil {
-			return verifyConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		switch o.Ident().(type) {
-		case identTolerance:
-			v, ok := option.Get[units.Value](o)
-			if !ok {
-				return verifyConfig{}, fmt.Errorf(`%w: WithTolerance carries no value`, ErrDegenerate)
-			}
-			rel, err := magnitudeIn(v, units.Dimensionless, units.One, "tolerance")
-			if err != nil {
-				return verifyConfig{}, err
-			}
-			cfg.rel = rel
-		case identMinWall:
-			spec, ok := option.Get[wallSpec](o)
-			if !ok {
-				return verifyConfig{}, fmt.Errorf(`%w: WithMinWallThickness carries no spec`, ErrDegenerate)
-			}
-			if spec.nilOption {
-				return verifyConfig{}, fmt.Errorf(`%w: a nil wall option names nothing to apply`, ErrDegenerate)
-			}
-			tool, err := magnitudeIn(spec.tool, units.Length, units.Millimeter, "wall tool")
-			if err != nil {
-				return verifyConfig{}, err
-			}
-			if tool == 0 {
-				// No thickness is thinner than zero: a comparison with a
-				// single outcome states no spec at all (verification §2).
-				return verifyConfig{}, fmt.Errorf(`%w: a zero wall tool poses no question`, ErrDegenerate)
-			}
-			allow, err := magnitudeIn(spec.allowance, units.Angle, units.Radian, "draft allowance")
-			if err != nil {
-				return verifyConfig{}, err
-			}
-			if allow >= math.Pi/2 {
-				// At 90° or beyond, skins meeting at a square corner would
-				// count as opposing: no longer a question about walls
-				// (verification §2). The legal range is [0°, 90°).
-				return verifyConfig{}, fmt.Errorf(`%w: a draft allowance must be under 90 degrees, got %s`, ErrDegenerate, spec.allowance)
-			}
-			cfg.wall = &spec
-			cfg.toolMM = tool
-			cfg.allowRad = allow
-		case identPullDirection:
-			v, ok := option.Get[r3.Vec](o)
-			if !ok {
-				return verifyConfig{}, fmt.Errorf(`%w: WithPullDirection carries no direction`, ErrDegenerate)
-			}
-			for _, c := range []float64{v.X, v.Y, v.Z} {
-				if math.IsNaN(c) || math.IsInf(c, 0) {
-					return verifyConfig{}, fmt.Errorf(`%w: a pull direction must be finite, got %v`, ErrNotFinite, v)
-				}
-			}
-			if v.X == 0 && v.Y == 0 && v.Z == 0 {
-				return verifyConfig{}, fmt.Errorf(`%w: a zero pull direction poses no direction at all`, ErrDegenerate)
-			}
-			cfg.pull = &v
-		case identConcaveRadius:
-			cfg.concaveRadius = true
-		case identClearances:
-			cfg.clearances = true
-		}
-	}
-	return cfg, nil
+	return verifyoption.Resolve(opts)
 }
 
-// effectiveVerifyRequest resolves cfg into the effective-request record
-// (proposal §5): the validated settings this Verify call actually used,
-// canonicalized to millimetres and radians, recorded even for an empty
-// document. The pull vector is kept exactly as accepted — never normalized —
-// so the recorded request shows the actual input the survey consumed.
 func effectiveVerifyRequest(cfg verifyConfig) VerifyRequest {
-	req := VerifyRequest{
-		RelativeTolerance: units.Scalar(cfg.rel),
-		ConcaveRadius:     cfg.concaveRadius,
-		Clearances:        cfg.clearances,
-	}
-	if cfg.wall != nil {
-		req.Wall = &WallRequest{
-			Minimum:        units.Millimeters(cfg.toolMM),
-			DraftAllowance: units.Radians(cfg.allowRad),
-		}
-	}
-	if cfg.pull != nil {
-		req.Undercut = &UndercutRequest{PullDirection: *cfg.pull}
-	}
-	return req
+	return verifyoption.EffectiveRequest(cfg)
 }
 
 // Verify is one non-mutating call over the live model: solidity and boundary
@@ -296,7 +112,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	// proof never consumes an operand or exposes a transient intersection
 	// through the document.
 	report := &Report{Interferences: []Interference{}}
-	if cfg.clearances {
+	if cfg.Clearances {
 		report.Clearances = []Clearance{}
 	}
 
@@ -341,7 +157,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 		return nil, err
 	}
 	var geomCache *bodyGeomCache
-	if cfg.clearances {
+	if cfg.Clearances {
 		geomCache = &bodyGeomCache{}
 	}
 	// Each body is meshed once, at one chord, for every pair that reaches the
@@ -582,7 +398,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	// DiagSurveyPrerequisite; publishBodyResult decides that from Validity
 	// alone, without a Surveys record.
 	if validity.Outcome == ValidityInvalid {
-		if _, _, err := bodyReadingDiagnostics(ctx, b, bodyReadingSet{Area: area, Bounds: bounds}, cfg.rel); err != nil {
+		if _, _, err := bodyReadingDiagnostics(ctx, b, bodyReadingSet{Area: area, Bounds: bounds}, cfg.Rel); err != nil {
 			return nil, err
 		}
 		return publishBodyResult(bodyPublishInput{
@@ -605,14 +421,14 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	// runSurveys itself cannot decide (a payload no shipped feature builds)
 	// leaves the asked question undecided, and a stated spec proven to fail
 	// is Violating. Each non-Sound survey outcome names itself in the slice.
-	surveysAsked := cfg.wall != nil || cfg.pull != nil || cfg.concaveRadius
+	surveysAsked := cfg.Wall != nil || cfg.Pull != nil || cfg.ConcaveRadius
 	// surveysRunnable widens haveRegion by exactly one case: a proven sheet
 	// with a pull requested. The undercut survey answers over a sheet's own
 	// walls (docs/surface-design.md §2.3, §9.1), and runSurveys itself
 	// gates the wall and concave-radius blocks back down to a solid, so
 	// admitting a sheet here never lets those two surveys run on one.
 	surveysRunnable := haveRegion ||
-		(validity.Outcome == ValidityValid && b.Kind() == BodySheet && cfg.pull != nil)
+		(validity.Outcome == ValidityValid && b.Kind() == BodySheet && cfg.Pull != nil)
 	violating, suspect := false, false
 	var surveys surveyResults
 	switch {
@@ -635,7 +451,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		// publishWallResult/publishConcaveRadiusResult, not by runSurveys, so
 		// they never appear in surveyDiags above; a sheet that asked either
 		// one still owes this body a Suspect for it.
-		if b.Kind() == BodySheet && (cfg.wall != nil || cfg.concaveRadius) {
+		if b.Kind() == BodySheet && (cfg.Wall != nil || cfg.ConcaveRadius) {
 			suspect = true
 		}
 	case validity.Outcome == ValidityValid && surveysAsked:
@@ -672,7 +488,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		Wall:     wallReading,
 		Radius:   radiusReading,
 	}
-	verdicts, diagSet, err := bodyReadingDiagnostics(ctx, b, readings, cfg.rel)
+	verdicts, diagSet, err := bodyReadingDiagnostics(ctx, b, readings, cfg.Rel)
 	if err != nil {
 		return nil, err
 	}

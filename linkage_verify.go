@@ -79,18 +79,18 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 	if err != nil {
 		return nil, err
 	}
-	if !cfg.stated {
+	if !cfg.Stated {
 		// docs/linkage-check-design.md §3: unstated, the reading refines
 		// past the verdict floor to its own.
 		reading := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).SetFrac64(1, linkageReadingFloor)}
-		cfg.readingP = &reading
+		cfg.ReadingP = &reading
 	}
 	var bounds []linkBound
 	if len(spec.loops) == 0 {
 		if bounds, ok = readLinkBounds(spec, frames); !ok {
 			return nil, linkageBoundsError()
 		}
-	} else if err := spec.prepareLoops(ctx, cfg.resolutionP.Base); err != nil {
+	} else if err := spec.prepareLoops(ctx, cfg.ResolutionP.Base); err != nil {
 		// docs/linkage-check-design.md §15.7: a driven loop's scene, its zero
 		// pose and its certifiable set, down to the verdict floor, before
 		// any pose; a dependent's reach enters the bounds.
@@ -117,8 +117,8 @@ const linkageReadingFloor = 16384
 // readingResolution is the reading floor a run used: the stated resolution,
 // or the default reading floor.
 func readingResolution(cfg motionConfig) units.Value {
-	if cfg.readingP == nil {
-		return cfg.resolution
+	if cfg.ReadingP == nil {
+		return cfg.Resolution
 	}
 	return units.Scalar(1.0 / linkageReadingFloor)
 }

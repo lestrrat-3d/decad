@@ -60,11 +60,6 @@ type motionDomain struct {
 	fromP, toP motionbound.MotionParam
 }
 
-// paramKind is the Kind the parameter, and so its resolution, is stated in.
-func (s motionDomain) paramKind() units.Kind {
-	return s.quantity
-}
-
 // fractionDomain is the Dimensionless fraction s ∈ [0, 1] a Between and a
 // linkage drive both run over.
 func fractionDomain() motionDomain {
@@ -159,21 +154,6 @@ func resolveMotion(m Motion) (motionSpec, error) {
 	}
 	spec.frame = frame
 	return spec, nil
-}
-
-// defaultResolution is the published default resolution, |To − From|/1024
-// carried in From's unit. When that value underflows in From's unit or its
-// base unit, it returns the smallest positive resolution in From's unit
-// accepted by WithResolution and reports clamped so the check uses that floor.
-func (s motionDomain) defaultResolution() (units.Value, bool) {
-	return motionbound.DefaultResolution(s.quantity, s.from, s.to, s.fromP, s.toP)
-}
-
-// defaultResolutionParam is |θ(To) − θ(From)|/1024 taken part by part over
-// exact rationals: never zero for a validated motion, and exactly one
-// dyadic step of depth ten whatever units From and To were stated in.
-func (s motionDomain) defaultResolutionParam() motionbound.MotionParam {
-	return motionbound.DefaultResolutionParam(s.fromP, s.toP)
 }
 
 // label is the published parameter of the pose at fraction f of the path:
@@ -922,26 +902,26 @@ func (r *motionRun) nextRefinement(poses []*motionPose, spans []motionSpan) int 
 			return smallest
 		}
 	}
-	if r.cfg.minimumMM != nil && r.wide(a, b) && !anyViolated(poses) && !r.meetsMinimum(spans[smallest].clearance) {
+	if r.cfg.MinimumMM != nil && r.wide(a, b) && !anyViolated(poses) && !r.meetsMinimum(spans[smallest].clearance) {
 		return smallest
 	}
 	return -1
 }
 
 // wideForReading reports whether the interval between two poses is wider
-// than the reading's own floor: cfg.readingP when the check sets one, and
+// than the reading's own floor: cfg.ReadingP when the check sets one, and
 // the resolution otherwise.
 func (r *motionRun) wideForReading(a, b *motionPose) bool {
-	if r.cfg.readingP == nil {
+	if r.cfg.ReadingP == nil {
 		return r.wide(a, b)
 	}
-	return motionbound.ExceedsResolution(a.param, b.param, *r.cfg.readingP)
+	return motionbound.ExceedsResolution(a.param, b.param, *r.cfg.ReadingP)
 }
 
 // wide reports whether the interval between two poses is wider than the
 // resolution.
 func (r *motionRun) wide(a, b *motionPose) bool {
-	return motionbound.ExceedsResolution(a.param, b.param, r.cfg.resolutionP)
+	return motionbound.ExceedsResolution(a.param, b.param, r.cfg.ResolutionP)
 }
 
 // meetsMinimum reports whether a certified interval lower bound proves the
@@ -950,7 +930,7 @@ func (r *motionRun) meetsMinimum(clearance *Measurement) bool {
 	if clearance == nil {
 		return true
 	}
-	return proofarith.FloatRat(clearance.Value.Base()).Cmp(r.cfg.minimumMM) >= 0
+	return proofarith.FloatRat(clearance.Value.Base()).Cmp(r.cfg.MinimumMM) >= 0
 }
 
 func anyViolated(poses []*motionPose) bool {
@@ -1298,7 +1278,7 @@ func (r *motionRun) collisionBeyond(a, b, mover, partner *Body, published Measur
 	if err != nil {
 		return Diagnostic{}, false, err
 	}
-	pass, ref, haveRef := interferenceToleranceRef(published, a, b, pairD, r.cfg.rel)
+	pass, ref, haveRef := interferenceToleranceRef(published, a, b, pairD, r.cfg.Rel)
 	if pass {
 		return Diagnostic{}, false, nil
 	}
@@ -1312,7 +1292,7 @@ func (r *motionRun) collisionBeyond(a, b, mover, partner *Body, published Measur
 		Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", published.Bound),
 	}
 	if haveRef {
-		beyond.Required = requiredThreshold(r.cfg.rel*ref, published.Value)
+		beyond.Required = requiredThreshold(r.cfg.Rel*ref, published.Value)
 	}
 	return beyond, true, nil
 }
@@ -1402,7 +1382,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, et
 	mp.pairs[i][k] = motionPairPose{hasGap: true, lo: lo, hi: hi, diam: res.diam}
 	gap := pairGapMeasurement(pairResult{lo: lo, hi: hi, exact: exact})
 	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: partner, Gap: gap})
-	if r.cfg.minimumMM != nil && proofarith.FloatRat(hi).Cmp(r.cfg.minimumMM) < 0 {
+	if r.cfg.MinimumMM != nil && proofarith.FloatRat(hi).Cmp(r.cfg.MinimumMM) < 0 {
 		// The proven upper end of the ideal pose's gap lies below the spec:
 		// the margin is disproven here, whatever the reading's precision.
 		mp.violated = true
@@ -1413,11 +1393,11 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, et
 			Pair:     &DiagnosticPair{A: mover, B: partner},
 			Reading:  ReadingGap,
 			Observed: &violation,
-			Required: r.cfg.minimum,
-			Message:  fmt.Sprintf("the gap at %s is proven below the required minimum %s", mp.where, *r.cfg.minimum),
+			Required: r.cfg.Minimum,
+			Message:  fmt.Sprintf("the gap at %s is proven below the required minimum %s", mp.where, *r.cfg.Minimum),
 		}))
 	}
-	pass, ref, haveRef := scalarToleranceRef(gap, r.cfg.rel, pairToleranceInputs{diameter: res.diam}.lengthReference)
+	pass, ref, haveRef := scalarToleranceRef(gap, r.cfg.Rel, pairToleranceInputs{diameter: res.diam}.lengthReference)
 	if pass {
 		return
 	}
@@ -1431,7 +1411,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, et
 		Message:  fmt.Sprintf("the gap reading's bound %s is beyond the relative tolerance", gap.Bound),
 	}
 	if haveRef {
-		beyond.Required = requiredThreshold(r.cfg.rel*ref, gap.Value)
+		beyond.Required = requiredThreshold(r.cfg.Rel*ref, gap.Value)
 	}
 	mp.findings = append(mp.findings, mp.stamp(beyond))
 }
@@ -1604,9 +1584,9 @@ type motionConclusion struct {
 func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) motionConclusion {
 	c := motionConclusion{
 		request: MotionRequest{
-			RelativeTolerance: units.Scalar(r.cfg.rel),
-			Resolution:        r.cfg.resolution,
-			MinClearance:      r.cfg.minimum,
+			RelativeTolerance: units.Scalar(r.cfg.Rel),
+			Resolution:        r.cfg.Resolution,
+			MinClearance:      r.cfg.Minimum,
 		},
 		against:     []*Body{},
 		diagnostics: []Diagnostic{},
@@ -1649,7 +1629,7 @@ func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) motionConc
 				Reading: ReadingNone,
 				Message: msg,
 			}, a.result.At))
-		case span.outcome == IntervalClear && r.cfg.minimumMM != nil && !r.meetsMinimum(span.clearance):
+		case span.outcome == IntervalClear && r.cfg.MinimumMM != nil && !r.meetsMinimum(span.clearance):
 			met = false
 			if violated {
 				break
@@ -1660,13 +1640,13 @@ func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) motionConc
 				Status:   Suspect,
 				Reading:  ReadingGap,
 				Observed: &obs,
-				Required: r.cfg.minimum,
+				Required: r.cfg.Minimum,
 				Message:  fmt.Sprintf("the motion from %s to %s is certified clear, but its proven lower bound does not reach the required minimum", a.result.At, b.result.At),
 			}, a.result.At))
 		}
 	}
 	switch {
-	case r.cfg.minimumMM == nil:
+	case r.cfg.MinimumMM == nil:
 		c.assessment = AssessmentNotEvaluated
 	case violated:
 		c.assessment = AssessmentViolated
@@ -1762,8 +1742,8 @@ func (r *motionRun) pathClearance(poses []*motionPose, lowest *Measurement, scop
 	lower := math.Min(lowest.Value.Base(), upper)
 	gap := pairGapMeasurement(pairResult{lo: lower, hi: upper})
 	gap.Exactness = Approximate
-	pass, ref, haveRef := scalarToleranceRef(gap, r.cfg.rel, pairToleranceInputs{diameter: diam}.lengthReference)
-	reading := &ScalarReading{Measurement: gap, Tolerance: judgeTolerance(pass, haveRef, r.cfg.rel, ref, gap.Value)}
+	pass, ref, haveRef := scalarToleranceRef(gap, r.cfg.Rel, pairToleranceInputs{diameter: diam}.lengthReference)
+	reading := &ScalarReading{Measurement: gap, Tolerance: judgeTolerance(pass, haveRef, r.cfg.Rel, ref, gap.Value)}
 	if pass {
 		return reading, nil
 	}

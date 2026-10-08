@@ -22,7 +22,7 @@ func motionRunFor(t *testing.T, doc *Document, moving []*Body, m Motion) *motion
 	t.Helper()
 	spec, err := resolveMotion(m)
 	require.NoError(t, err)
-	run := &motionRun{ctx: t.Context(), d: doc, spec: spec, cfg: motionConfig{rel: 1e-3}, cache: &bodyGeomCache{}}
+	run := &motionRun{ctx: t.Context(), d: doc, spec: spec, cfg: motionConfig{Rel: 1e-3}, cache: &bodyGeomCache{}}
 	run.setup(moving)
 	return run
 }
@@ -487,14 +487,14 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 	require.NoError(t, err)
 	cfg, err := resolveMotionOptions(nil, spec)
 	require.NoError(t, err)
-	require.Equal(t, units.Millimeters(math.SmallestNonzeroFloat64), cfg.resolution)
-	reported, ok := motionbound.ExactMotionParam(cfg.resolution)
+	require.Equal(t, units.Millimeters(math.SmallestNonzeroFloat64), cfg.Resolution)
+	reported, ok := motionbound.ExactMotionParam(cfg.Resolution)
 	require.True(t, ok)
-	require.Zero(t, reported.Base.Cmp(cfg.resolutionP.Base))
+	require.Zero(t, reported.Base.Cmp(cfg.ResolutionP.Base))
 
 	report, err := doc.VerifyMotion(t.Context(), []*Body{mover}, motion)
 	require.NoError(t, err)
-	require.Equal(t, cfg.resolution, report.Request.Resolution)
+	require.Equal(t, cfg.Resolution, report.Request.Resolution)
 	replayed, err := doc.VerifyMotion(t.Context(), []*Body{mover}, motion, WithResolution(report.Request.Resolution))
 	require.NoError(t, err)
 	require.Equal(t, report.Status, replayed.Status)
@@ -510,11 +510,11 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 	require.NoError(t, err)
 	swingCfg, err := resolveMotionOptions(nil, swingSpec)
 	require.NoError(t, err)
-	require.Greater(t, swingCfg.resolution.Mag(), math.SmallestNonzeroFloat64)
-	swingReported, ok := motionbound.ExactMotionParam(swingCfg.resolution)
+	require.Greater(t, swingCfg.Resolution.Mag(), math.SmallestNonzeroFloat64)
+	swingReported, ok := motionbound.ExactMotionParam(swingCfg.Resolution)
 	require.True(t, ok)
-	require.Zero(t, swingReported.Turn.Cmp(swingCfg.resolutionP.Turn))
-	_, err = resolveMotionOptions([]MotionOption{WithResolution(swingCfg.resolution)}, swingSpec)
+	require.Zero(t, swingReported.Turn.Cmp(swingCfg.ResolutionP.Turn))
+	_, err = resolveMotionOptions([]MotionOption{WithResolution(swingCfg.Resolution)}, swingSpec)
 	require.NoError(t, err)
 
 	// The nominal 1/1024 step can round to a positive degree magnitude that
@@ -524,13 +524,13 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 	require.NoError(t, err)
 	swingCfg, err = resolveMotionOptions(nil, swingSpec)
 	require.NoError(t, err)
-	require.Greater(t, swingCfg.resolution.Mag(), math.SmallestNonzeroFloat64)
-	swingReported, ok = motionbound.ExactMotionParam(swingCfg.resolution)
+	require.Greater(t, swingCfg.Resolution.Mag(), math.SmallestNonzeroFloat64)
+	swingReported, ok = motionbound.ExactMotionParam(swingCfg.Resolution)
 	require.True(t, ok)
-	require.Zero(t, swingReported.Turn.Cmp(swingCfg.resolutionP.Turn))
+	require.Zero(t, swingReported.Turn.Cmp(swingCfg.ResolutionP.Turn))
 	swingReport, err := doc.VerifyMotion(t.Context(), []*Body{mover}, swing)
 	require.NoError(t, err)
-	require.Equal(t, swingCfg.resolution, swingReport.Request.Resolution)
+	require.Equal(t, swingCfg.Resolution, swingReport.Request.Resolution)
 	_, err = doc.VerifyMotion(t.Context(), []*Body{mover}, swing, WithResolution(swingReport.Request.Resolution))
 	require.NoError(t, err)
 }
