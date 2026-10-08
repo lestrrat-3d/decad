@@ -2,7 +2,6 @@ package decad
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -88,7 +87,7 @@ type loftAssembly struct {
 func assembleLoft(ctx context.Context, pairs []loftmesh.LoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
 	triangulate := func(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, error) {
 		tris, err := triangulation.Triangulate(ctx, pts, loops)
-		return tris, wrapLoftTriangulationError(err)
+		return tris, triangulation.WrapLoftError(err)
 	}
 	a, err := loftmesh.Assemble(ctx, pairs, f0, f1, plane0, xform, stationRound,
 		triangulate, errLoftPointUnrepresentable)
@@ -126,21 +125,6 @@ func assembleLoft(ctx context.Context, pairs []loftmesh.LoopPair, f0, f1 r3.Fram
 // panic out of a public method rather than a returned error.
 func errLoftPointUnrepresentable(what string) error {
 	return fmt.Errorf(`%w: the loft's %s runs past the representable float64 range`, ErrUnsupported, what)
-}
-
-// wrapLoftTriangulationError re-sentinels triangulate.go's cap refusal as
-// ErrUnsupported (design O8): the caller's two profiles are each individually
-// valid per sketch (S9 authenticated them at the original Document.Loft
-// call, before any record reached evalLoft; a placement rebuilds from those
-// same authenticated records and re-runs no seam gate, §4),
-// so a triangulation refusal here is this evaluator's own triangulator
-// failing to state the body, never a claim that no such body exists — modify
-// §1's existence test applied verbatim. Cancellation is never relabeled.
-func wrapLoftTriangulationError(err error) error {
-	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return err
-	}
-	return fmt.Errorf(`%w: the loft cap triangulator could not state this profile: %s`, ErrUnsupported, err)
 }
 
 // loftVertex builds a vertex at a recorded (or lifted-from-recorded)

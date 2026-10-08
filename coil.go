@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -19,7 +18,7 @@ import (
 
 // This file is docs/helix-design.md's entry point: the CoilOption surface,
 // Table CS's gates in §4's order, the coilPayload that records a coil and
-// its placement. coil_build.go builds §5's held shell and coil_body.go
+// its placement. internal/coilshell builds §5's held shell and coil_body.go
 // publishes Table CB's topology and Table CM's readings.
 
 // coilStationsPerTurn is §5.2's station density: 256 stations per turn, a
@@ -321,19 +320,3 @@ func coilPreflight(turns float64, vertices, holes int) error {
 	}
 	return nil
 }
-
-// coilAxis turns the payload's resolved axis into Table CP's exact interval
-// form: every float reading widened by its own proven bound.
-func coilAxis(line axisLine2, side int) (coil.Axis, error) {
-	aU, ok1 := coil.Measured(line.aU, line.aUBound)
-	aV, ok2 := coil.Measured(line.aV, line.aVBound)
-	dU, ok3 := coil.Measured(line.dU, line.dUBound)
-	dV, ok4 := coil.Measured(line.dV, line.dVBound)
-	if !ok1 || !ok2 || !ok3 || !ok4 {
-		return coil.Axis{}, fmt.Errorf(`%w: the coil axis carries a non-finite reading`, ErrUnsupported)
-	}
-	return coil.Axis{AU: aU, AV: aV, DU: dU, DV: dV, Side: side}, nil
-}
-
-// ratOf is a float's exact rational; every caller passes a finite float.
-func ratOf(f float64) *big.Rat { return proofarith.FloatRat(f) }

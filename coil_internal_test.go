@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/coil"
+	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -193,14 +194,14 @@ func TestCoilSquareSpring(t *testing.T) {
 	})
 	t.Run("enclosures hold the exact values", func(t *testing.T) {
 		cp := b.payload.(coilPayload)
-		rec, err := readCoilRecord(cp)
+		rec, err := coilRecordOfPayload(cp)
 		require.NoError(t, err)
-		m := coil.RegionMoments(rec.rho, rec.zeta, rec.loopIdx, big.NewRat(1, 1), rec.axis.Side)
-		requireIntervalHolds(t, coil.Volume(m, rec.turns), mulPi(10), "volume enclosure")
-		band, ok := coil.SegmentArea(rec.rho[1], rec.zeta[1], rec.rho[2], rec.zeta[2], rec.pitch, rec.turns)
+		m := coil.RegionMoments(rec.Rho, rec.Zeta, rec.LoopIdx, big.NewRat(1, 1), rec.Axis.Side)
+		requireIntervalHolds(t, coil.Volume(m, rec.Turns), mulPi(10), "volume enclosure")
+		band, ok := coil.SegmentArea(rec.Rho[1], rec.Zeta[1], rec.Rho[2], rec.Zeta[2], rec.Pitch, rec.Turns)
 		require.True(t, ok)
 		requireIntervalHolds(t, band, mulPi(12), "band enclosure")
-		ring, ok := coil.SegmentArea(rec.rho[0], rec.zeta[0], rec.rho[1], rec.zeta[1], rec.pitch, rec.turns)
+		ring, ok := coil.SegmentArea(rec.Rho[0], rec.Zeta[0], rec.Rho[1], rec.Zeta[1], rec.Pitch, rec.Turns)
 		require.True(t, ok)
 		annulus, quadErr := annulusIntegral(2, 3, 1.5, 2)
 		lo := new(big.Float).SetPrec(512).SetRat(ring.Lo)
@@ -335,10 +336,10 @@ func TestCoilFractionalTurnCentroid(t *testing.T) {
 	requireEnclosesBig(t, c.Value.Z, c.Bound.Base(), wantZ, "centroid z")
 
 	cp := b.payload.(coilPayload)
-	rec, err := readCoilRecord(cp)
+	rec, err := coilRecordOfPayload(cp)
 	require.NoError(t, err)
-	m := coil.RegionMoments(rec.rho, rec.zeta, rec.loopIdx, big.NewRat(1, 1), rec.axis.Side)
-	r, tr, n, ok := coil.CentroidCoefficients(m, rec.pitch, rec.turns, rec.sigma)
+	m := coil.RegionMoments(rec.Rho, rec.Zeta, rec.LoopIdx, big.NewRat(1, 1), rec.Axis.Side)
+	r, tr, n, ok := coil.CentroidCoefficients(m, rec.Pitch, rec.Turns, rec.Sigma)
 	require.True(t, ok)
 	require.Zero(t, r.Lo.Sign())
 	require.Zero(t, r.Hi.Sign())
@@ -644,12 +645,12 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 	det := dot(ex, cross(ey, ez))
 	require.NotZero(t, det.Cmp(big.NewRat(1, 1)), "the fixture's rotation must not be exactly orthonormal")
 	pcp := placedA.payload.(coilPayload)
-	prec, err := readCoilRecord(pcp)
+	prec, err := coilRecordOfPayload(pcp)
 	require.NoError(t, err)
-	pm := coil.RegionMoments(prec.rho, prec.zeta, prec.loopIdx, big.NewRat(1, 1), prec.axis.Side)
+	pm := coil.RegionMoments(prec.Rho, prec.Zeta, prec.LoopIdx, big.NewRat(1, 1), prec.Axis.Side)
 	wantVol := new(big.Float).SetPrec(512).Mul(bigPi(), big.NewFloat(12.5))
 	wantVol.Mul(wantVol, new(big.Float).SetPrec(512).SetRat(det))
-	requireIntervalHolds(t, coilVolume(prec, pm), wantVol, "placed volume enclosure")
+	requireIntervalHolds(t, coilshell.Volume(prec, pm), wantVol, "placed volume enclosure")
 	ux := cross(ex, ey)
 	capScale := new(big.Float).SetPrec(512).SetRat(dot(ux, ux))
 	capScale.Sqrt(capScale)
@@ -748,17 +749,17 @@ func TestCoilFacetBoundHoldsTheSurface(t *testing.T) {
 			b, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(pitch), units.Scalar(c.turns))
 			require.NoError(t, err)
 			cp := b.payload.(coilPayload)
-			rec, err := readCoilRecord(cp)
+			rec, err := coilRecordOfPayload(cp)
 			require.NoError(t, err)
-			stride, n := len(rec.pts), rec.n
+			stride, n := len(rec.Pts), rec.N
 			k := pitch / (2 * math.Pi)
 			theta := 2 * math.Pi * c.turns
 			worst := 0.0
 			for j := range n {
-				idx := rec.loopIdx[0]
+				idx := rec.LoopIdx[0]
 				for kk := range stride {
 					v, w := idx[kk], idx[(kk+1)%stride]
-					pv, pw := rec.pts[v], rec.pts[w]
+					pv, pw := rec.Pts[v], rec.Pts[w]
 					corners := []int{int(j)*stride + v, int(j)*stride + w, int(j+1)*stride + v, int(j+1)*stride + w}
 					facet := 0.0
 					for _, q := range corners {
