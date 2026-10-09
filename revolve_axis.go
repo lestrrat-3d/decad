@@ -126,10 +126,6 @@ func (ax axisFrame) radialUpper(coordUpper float64) float64 {
 	return ax.numeric().RadialUpper(coordUpper)
 }
 
-func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
-	return ax.numeric().PlaneDirection(wg, k)
-}
-
 func (ax axisFrame) walk(w survey2d.SegmentWalk) survey2d.SegmentWalk {
 	return ax.numeric().Walk(w)
 }

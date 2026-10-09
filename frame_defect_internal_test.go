@@ -7,6 +7,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -621,9 +623,11 @@ func TestRevolveBoxChargesTheBasisRounding(t *testing.T) {
 
 	for _, g := range []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)} {
 		c1 := rp.xform.ApplyDir(basis.E1).Dot(g)
-		allow, err := rp.frameRoundAllow(g, basis, rp.xform.Apply(basis.A3).Dot(g), rp.xform.ApplyDir(basis.W).Dot(g),
-			rp.xform.ApplyDir(basis.E0).Dot(g), c1, freeform.NewFreeformWork(), nil)
+		coordUpper, err := momentinput.CoordinateUpper(rp.profile, freeform.NewFreeformWork(), nil)
 		require.NoError(t, err)
+		allow := revolveaxis.FrameRoundAllow(rp.ax.numeric(), rp.sectionDelta, rp.xform, g, basis,
+			rp.lift().BasisRound(basis), rp.xform.Apply(basis.A3).Dot(g), rp.xform.ApplyDir(basis.W).Dot(g),
+			rp.xform.ApplyDir(basis.E0).Dot(g), c1, coordUpper)
 		// E1's coefficient multiplies ρ ≤ 3, so its gap moves the extreme by
 		// at most 3·gap; the allowance must cover at least that.
 		require.GreaterOrEqual(t, allow, 3*gapF, "axis %v", g)

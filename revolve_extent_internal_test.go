@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -54,11 +55,11 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 			}
 			got, err := revolveBoundsContext(t.Context(), rp, freeform.NewFreeformWork())
 			require.NoError(t, err)
-			cached, err := resolveAnalyticRevolveExtentProfile(t.Context(), test.profile, freeform.NewFreeformWork())
+			cached, err := revolveaxis.ResolveAnalyticExtentProfile(t.Context(), test.profile, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			envelope, err := momentinput.CoordinateEnvelope(test.profile, freeform.NewFreeformWork(), nil)
 			require.NoError(t, err)
-			require.Equal(t, envelope, cached.coordUpper)
+			require.Equal(t, envelope, cached.CoordUpper)
 
 			axes := [3]r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 			var low, high [3]float64
@@ -99,6 +100,6 @@ func (ctx *cancelAfterExtentChecks) Err() error {
 func TestRevolveBoundsSharedProfilePollsCancellation(t *testing.T) {
 	t.Parallel()
 	ctx := &cancelAfterExtentChecks{remaining: 3}
-	_, err := resolveAnalyticRevolveExtentProfile(ctx, dipShaftBandProfile(10, 0), freeform.NewFreeformWork())
+	_, err := revolveaxis.ResolveAnalyticExtentProfile(ctx, dipShaftBandProfile(10, 0), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, context.Canceled)
 }

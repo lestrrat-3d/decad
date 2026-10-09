@@ -140,7 +140,7 @@ the rules leave to the byte budget.
 | `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_build.go` | Builds a revolve's solid or sheet body and its measurements. See evaluator §6. |
 | `revolve_section.go` | Adapts revolve section-displacement charges. See surface-intersection §7.2. |
-| `revolve_extent.go` | Revolve extents over `internal/revolveaxis/` and `revolveangle/`. See evaluator §6. |
+| `revolve_extent.go` | Adapts revolve extent and box readings to `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_denotation.go` | Payload sweep bounds over `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |
 | `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
 | `loft.go` | Loft entry points, chain ribbon assembly, and option parsing. See loft §2/§4/§10/§16. |
@@ -293,7 +293,7 @@ the rules leave to the byte budget.
 | `internal/boundarywalk/` | Bounded walks, coalescing and analytic survey loops over recorded segments. |
 | `internal/classbgeom/` | Class-B boolean geometry. See general-boolean §3 B, §5. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep joins, crossing offsets, frames, restatement and stacked records. See general-boolean §4, §5. |
-| `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap and section charges, and extent bounds. See evaluator §6. |
+| `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap and section charges, and extent readings. See evaluator §6. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
