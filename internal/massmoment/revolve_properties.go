@@ -63,18 +63,18 @@ func RevolveProfileMoments(ctx context.Context, p RevolveRecord) (Moments, error
 // RevolveProperties maps the local moments through the recorded axis frame
 // and placement, then publishes mass and world centroidal inertia.
 func RevolveProperties(ctx context.Context, p RevolveRecord, center measurement.VecMeasurement,
-	density units.Value) (MassProperties, error) {
+	density units.Value) (MassReadings, error) {
 	moments, err := RevolveProfileMoments(ctx, p)
 	if err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	linear, err := RevolveRotation(p.Frame, p.DU, p.DV, p.Transform)
 	if err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	world, massIv, err := AffineInertia(moments, linear, density)
 	if err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	return Publish(ctx, center, massIv, world)
 }

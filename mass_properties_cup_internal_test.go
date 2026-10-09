@@ -43,8 +43,8 @@ func TestCupMassChargesDisplacement(t *testing.T) {
 	}
 	rho := 1.0 / 1024
 	outer, cavity := massCupRecords(cp)
-	got, err := massmoment.CupProperties(t.Context(), outer, cavity, VecMeasurement{},
-		units.KilogramsPerCubicMillimeter(rho))
+	got, err := massPropertiesFromReadings(massmoment.CupProperties(t.Context(),
+		outer, cavity, VecMeasurement{}, units.KilogramsPerCubicMillimeter(rho)))
 	require.NoError(t, err)
 
 	whole := new(big.Rat).SetFloat64(delta)

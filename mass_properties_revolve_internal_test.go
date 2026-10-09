@@ -43,7 +43,8 @@ func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			rp := base
 			edit(&rp)
-			got, err := massmoment.RevolveProperties(t.Context(), massRevolveRecord(rp), body.centroid, density)
+			got, err := massPropertiesFromReadings(
+				massmoment.RevolveProperties(t.Context(), massRevolveRecord(rp), body.centroid, density))
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.Equal(t, MassProperties{}, got)
 		})

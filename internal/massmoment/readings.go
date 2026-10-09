@@ -17,19 +17,12 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// MassProperties contains uniform-density mass, world-space center, and
-// centroidal inertia. Each scalar carries an absolute error bound.
-type MassProperties struct {
-	Mass    measurement.Measurement
-	Center  measurement.VecMeasurement
-	Inertia InertiaReading
-}
-
-// InertiaReading is the symmetric inertia tensor about the mass center in
-// world axes. Mixed entries include the physical minus sign.
-type InertiaReading struct {
-	XX, YY, ZZ measurement.Measurement
-	XY, XZ, YZ measurement.Measurement
+// MassReadings carries the integrator's computed scalar and tensor entries.
+// The root package assembles the public MassProperties value.
+type MassReadings struct {
+	Mass   measurement.Measurement
+	Center measurement.VecMeasurement
+	Tensor [6]measurement.Measurement // XX, YY, ZZ, XY, XZ, YZ
 }
 
 func readingExactness(bound float64) measurement.Exactness {
@@ -67,91 +60,91 @@ func Reading(exact *big.Rat, unit units.Unit) (measurement.Measurement, error) {
 // Publish rounds a mass interval and world inertia intervals to readings and
 // proves that every tensor within the published bounds is positive definite.
 func Publish(ctx context.Context, center measurement.VecMeasurement,
-	massIv proofbound.RatInterval, world [3][3]proofbound.RatInterval) (MassProperties, error) {
+	massIv proofbound.RatInterval, world [3][3]proofbound.RatInterval) (MassReadings, error) {
 	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	var err error
-	result := MassProperties{Center: center}
+	result := MassReadings{Center: center}
 	result.Mass, err = IntervalReading(massIv, units.Kilogram)
 	if err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	if result.Mass.Bound.Base() >= result.Mass.Value.Base() {
-		return MassProperties{}, fmt.Errorf("%w: mass reading is not positive", decaderr.ErrUnsupported)
+		return MassReadings{}, fmt.Errorf("%w: mass reading is not positive", decaderr.ErrUnsupported)
 	}
 	entries := []struct {
 		iv      proofbound.RatInterval
 		reading *measurement.Measurement
 	}{
-		{world[0][0], &result.Inertia.XX}, {world[1][1], &result.Inertia.YY},
-		{world[2][2], &result.Inertia.ZZ}, {world[0][1], &result.Inertia.XY},
-		{world[0][2], &result.Inertia.XZ}, {world[1][2], &result.Inertia.YZ},
+		{world[0][0], &result.Tensor[0]}, {world[1][1], &result.Tensor[1]},
+		{world[2][2], &result.Tensor[2]}, {world[0][1], &result.Tensor[3]},
+		{world[0][2], &result.Tensor[4]}, {world[1][2], &result.Tensor[5]},
 	}
 	for _, entry := range entries {
 		*entry.reading, err = IntervalReading(entry.iv, units.KilogramSquareMillimeter)
 		if err != nil {
-			return MassProperties{}, err
+			return MassReadings{}, err
 		}
 	}
-	if !PositiveDefinite(publishedTensor(result.Inertia)) {
-		return MassProperties{}, fmt.Errorf("%w: inertia interval does not prove positive definiteness", decaderr.ErrUnsupported)
+	if !PositiveDefinite(publishedTensor(result.Tensor)) {
+		return MassReadings{}, fmt.Errorf("%w: inertia interval does not prove positive definiteness", decaderr.ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	return result, nil
 }
 
-// publishedTensor encloses exactly the six public inertia readings.
-func publishedTensor(reading InertiaReading) [3][3]proofbound.RatInterval {
+// publishedTensor encloses the six computed inertia readings.
+func publishedTensor(reading [6]measurement.Measurement) [3][3]proofbound.RatInterval {
 	entry := func(m measurement.Measurement) proofbound.RatInterval {
 		return proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(m.Value.Base())),
 			proofarith.FloatRat(m.Bound.Base()))
 	}
-	xy, xz, yz := entry(reading.XY), entry(reading.XZ), entry(reading.YZ)
+	xy, xz, yz := entry(reading[3]), entry(reading[4]), entry(reading[5])
 	return [3][3]proofbound.RatInterval{
-		{entry(reading.XX), xy, xz},
-		{xy, entry(reading.YY), yz},
-		{xz, yz, entry(reading.ZZ)},
+		{entry(reading[0]), xy, xz},
+		{xy, entry(reading[1]), yz},
+		{xz, yz, entry(reading[2])},
 	}
 }
 
 // HeldMeshMassProperties integrates an audited outward triangle set and
 // widens its moments by the certified occupied-volume difference.
 func HeldMeshMassProperties(ctx context.Context, bounds measurement.Box, anchor r3.Vec,
-	verts []r3.Vec, tris [][3]int, volSymDiff float64, density units.Value) (MassProperties, error) {
+	verts []r3.Vec, tris [][3]int, volSymDiff float64, density units.Value) (MassReadings, error) {
 	intervals, err := HeldMeshIntervals(ctx, MeshBounds{
 		Min: bounds.Min, Max: bounds.Max, Bound: bounds.Bound,
 	}, anchor, verts, tris, volSymDiff)
 	if err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
-	result := MassProperties{}
+	result := MassReadings{}
 	result.Mass, err = IntervalReading(proofbound.IntervalScale(intervals.Volume, rho), units.Kilogram)
 	if err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	var centerValue [3]float64
 	centerBound := 0.0
 	for i, enclosure := range intervals.Center {
 		centerValue[i], _ = new(big.Rat).Quo(new(big.Rat).Add(enclosure.Lo, enclosure.Hi), big.NewRat(2, 1)).Float64()
 		if proofbound.IsNonFinite(centerValue[i]) {
-			return MassProperties{}, fmt.Errorf("%w: mesh mass center is nonfinite", decaderr.ErrNotFinite)
+			return MassReadings{}, fmt.Errorf("%w: mesh mass center is nonfinite", decaderr.ErrNotFinite)
 		}
 		centerBound = math.Max(centerBound, proofbound.IntervalFloatError(enclosure, centerValue[i]))
 	}
 	centerBound = proofbound.Radius3D(centerBound)
 	if proofbound.IsNonFinite(centerBound) {
-		return MassProperties{}, fmt.Errorf("%w: mesh mass center bound is nonfinite", decaderr.ErrNotFinite)
+		return MassReadings{}, fmt.Errorf("%w: mesh mass center bound is nonfinite", decaderr.ErrNotFinite)
 	}
 	result.Center = measurement.VecMeasurement{
 		Value: r3.Vec{X: centerValue[0], Y: centerValue[1], Z: centerValue[2]},
 		Bound: units.Millimeters(centerBound), Exactness: readingExactness(centerBound),
 	}
-	components := [6]*measurement.Measurement{&result.Inertia.XX, &result.Inertia.YY, &result.Inertia.ZZ,
-		&result.Inertia.XY, &result.Inertia.XZ, &result.Inertia.YZ}
+	components := [6]*measurement.Measurement{&result.Tensor[0], &result.Tensor[1], &result.Tensor[2],
+		&result.Tensor[3], &result.Tensor[4], &result.Tensor[5]}
 	indices := [6][2]int{{0, 0}, {1, 1}, {2, 2}, {0, 1}, {0, 2}, {1, 2}}
 	for k, pair := range indices {
 		i, j := pair[0], pair[1]
@@ -161,19 +154,19 @@ func HeldMeshMassProperties(ctx context.Context, bounds measurement.Box, anchor 
 		}
 		*components[k], err = IntervalReading(proofbound.IntervalScale(term, rho), units.KilogramSquareMillimeter)
 		if err != nil {
-			return MassProperties{}, err
+			return MassReadings{}, err
 		}
 	}
 	read := func(m measurement.Measurement) proofbound.BoundedScalar {
 		return proofbound.BoundedScalar{Value: m.Value.Base(), Bound: m.Bound.Base()}
 	}
 	if !MeshReadingsPositive(read(result.Mass),
-		[3]proofbound.BoundedScalar{read(result.Inertia.XX), read(result.Inertia.YY), read(result.Inertia.ZZ)},
-		[3]proofbound.BoundedScalar{read(result.Inertia.XY), read(result.Inertia.XZ), read(result.Inertia.YZ)}) {
-		return MassProperties{}, ErrMeshIntervalUnproved
+		[3]proofbound.BoundedScalar{read(result.Tensor[0]), read(result.Tensor[1]), read(result.Tensor[2])},
+		[3]proofbound.BoundedScalar{read(result.Tensor[3]), read(result.Tensor[4]), read(result.Tensor[5])}) {
+		return MassReadings{}, ErrMeshIntervalUnproved
 	}
 	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	return result, nil
 }

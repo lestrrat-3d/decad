@@ -15,11 +15,33 @@ import (
 // MassProperties contains the uniform-density mass, world-space center, and
 // centroidal inertia of a solid. Each scalar is accompanied by an absolute
 // bound on its numerical error.
-type MassProperties = massmoment.MassProperties
+type MassProperties struct {
+	Mass    Measurement
+	Center  VecMeasurement
+	Inertia InertiaReading
+}
 
 // InertiaReading is the symmetric inertia tensor about the mass center in
 // world axes. Mixed entries include the physical minus sign.
-type InertiaReading = massmoment.InertiaReading
+type InertiaReading struct {
+	XX, YY, ZZ Measurement
+	XY, XZ, YZ Measurement
+}
+
+// massPropertiesFromReadings assembles the public record from integrator data.
+func massPropertiesFromReadings(readings massmoment.MassReadings, err error) (MassProperties, error) {
+	if err != nil {
+		return MassProperties{}, err
+	}
+	tensor := readings.Tensor
+	return MassProperties{
+		Mass: readings.Mass, Center: readings.Center,
+		Inertia: InertiaReading{
+			XX: tensor[0], YY: tensor[1], ZZ: tensor[2],
+			XY: tensor[3], XZ: tensor[4], YZ: tensor[5],
+		},
+	}, nil
+}
 
 // MassProperties computes the properties of b for a stated positive, uniform
 // density. The density must have kind units.Density. The current evaluator
@@ -63,16 +85,18 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
-		return massmoment.SourceSphere(ctx, sphere.radius, b.centroid, density)
+		return massPropertiesFromReadings(massmoment.SourceSphere(ctx, sphere.radius, b.centroid, density))
 	}
 	if cylinder, ok := sourceRevolvedCylinderAtPose(b, r3.Identity()); ok {
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
-		return massmoment.SourceCylinder(ctx, cylinder.axis, cylinder.box.lo, cylinder.box.hi, b.centroid, density)
+		return massPropertiesFromReadings(massmoment.SourceCylinder(ctx, cylinder.axis, cylinder.box.lo, cylinder.box.hi,
+			b.centroid, density))
 	}
 	if revolve, ok := b.payload.(revolvePayload); ok {
-		result, err := massmoment.RevolveProperties(ctx, massRevolveRecord(revolve), b.centroid, density)
+		result, err := massPropertiesFromReadings(
+			massmoment.RevolveProperties(ctx, massRevolveRecord(revolve), b.centroid, density))
 		if err == nil || !errors.Is(err, ErrUnsupported) || ctx.Err() != nil {
 			return result, err
 		}
@@ -84,12 +108,12 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return facetedMassProperties(ctx, b, faceted, density)
 	}
 	if sweep, ok := b.payload.(sweepPayload); ok {
-		result, err := massmoment.SweepProperties(ctx, massSweepRecord(sweep), b.centroid, density)
+		result, err := massPropertiesFromReadings(massmoment.SweepProperties(ctx, massSweepRecord(sweep), b.centroid, density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	if cup, ok := b.payload.(cupPayload); ok {
 		outer, cavity := massCupRecords(cup.view())
-		result, err := massmoment.CupProperties(ctx, outer, cavity, b.centroid, density)
+		result, err := massPropertiesFromReadings(massmoment.CupProperties(ctx, outer, cavity, b.centroid, density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	pp, ok := b.payload.(prismPayload)
@@ -106,16 +130,16 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
 		!cardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
 		!cardinalBasis(basis.EX, basis.EY, basis.EZ) {
-		return massmoment.GeneralPrismProperties(ctx, massPrismRecord(pp), b.centroid, density)
+		return massPropertiesFromReadings(massmoment.GeneralPrismProperties(ctx, massPrismRecord(pp), b.centroid, density))
 	}
 	if !rectangularProfile(pp.profile) {
-		return massmoment.CardinalPrismProperties(ctx, massPrismRecord(pp), b.centroid, density)
+		return massPropertiesFromReadings(massmoment.CardinalPrismProperties(ctx, massPrismRecord(pp), b.centroid, density))
 	}
 
 	// The recorded rectangle and levels are the source solid. Translation does
 	// not change its centroidal inertia, and a signed-permutation basis only
 	// reorders its three dimensions. Work in exact dyadics until division by 12.
-	return massmoment.CardinalBoxProperties(ctx, massPrismRecord(pp), b.centroid, density)
+	return massPropertiesFromReadings(massmoment.CardinalBoxProperties(ctx, massPrismRecord(pp), b.centroid, density))
 }
 
 // massPrismRecord presents a root prism payload to the mass integrator.

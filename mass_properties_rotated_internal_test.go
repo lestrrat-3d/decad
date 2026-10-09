@@ -50,8 +50,8 @@ func TestRotatedPrismMassChargesDisplacement(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	rho := 1.0 / 1024
-	got, err := massmoment.GeneralPrismProperties(t.Context(), massPrismRecord(pp), VecMeasurement{},
-		units.KilogramsPerCubicMillimeter(rho))
+	got, err := massPropertiesFromReadings(massmoment.GeneralPrismProperties(t.Context(),
+		massPrismRecord(pp), VecMeasurement{}, units.KilogramsPerCubicMillimeter(rho)))
 	require.NoError(t, err)
 
 	// A denoted section moves each boundary point by at most delta: here by
@@ -115,9 +115,11 @@ func TestRotatedPrismMassMatchesCardinalPath(t *testing.T) {
 		frame:   frame, z0: 0, z1: 10, xform: turn,
 	}
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
-	general, err := massmoment.GeneralPrismProperties(t.Context(), massPrismRecord(pp), VecMeasurement{}, density)
+	general, err := massPropertiesFromReadings(
+		massmoment.GeneralPrismProperties(t.Context(), massPrismRecord(pp), VecMeasurement{}, density))
 	require.NoError(t, err)
-	cardinal, err := massmoment.CardinalPrismProperties(t.Context(), massPrismRecord(pp), VecMeasurement{}, density)
+	cardinal, err := massPropertiesFromReadings(
+		massmoment.CardinalPrismProperties(t.Context(), massPrismRecord(pp), VecMeasurement{}, density))
 	require.NoError(t, err)
 	require.Equal(t, cardinal, general)
 }
