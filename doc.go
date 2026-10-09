@@ -187,7 +187,8 @@
 //	  any other pair, or a miss on the shared-generator gate  ErrUnsupported
 //	  a tool that separates no part of the target             ErrDegenerate
 //	Placed        any body this evaluator built               builds
-//	Verify        every body; surveys read prisms/revolves/cups/cap blends
+//	Verify        every body; surveys read prisms/revolves/cups/cap blends,
+//	  and the undercut survey reads draft bodies
 //	  a question the evaluator cannot decide                  Status Suspect
 //	Tessellate / export.STL / export.OBJ  prism, revolve, cup, loft,
 //	                        cap-loop chamfer, boolean body    builds
