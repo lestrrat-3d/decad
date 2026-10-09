@@ -4,10 +4,9 @@ import (
 	"context"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
-	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -38,83 +37,34 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 		}
 		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.sectionDelta)
 		zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.axialDelta())
-		return proofbound.AbsSumUpper(
-			vecL1(pl.frame.Origin()),
-			proofbound.ProductUpper(vecL1(pl.frame.U()), coordUpper),
-			proofbound.ProductUpper(vecL1(pl.frame.V()), coordUpper),
-			proofbound.ProductUpper(vecL1(pl.frame.N()), zUpper),
-		)
+		return motionbound.LinearRecordRadius(pl.frame, coordUpper, zUpper)
 	case draftPayload:
 		// Every point of a draft body lies on the near section, the far
 		// section, or a straight ruling or cone generator between matching
 		// points of the two, so each plane coordinate is bounded by the larger
 		// of the two sections' bounds, the far one widened by its contour
 		// displacement (docs/draft-design.md Table DD row DD17). Each section
-		// is read segment by segment (draftSectionCoordinateUpper), not from
+		// is read segment by segment (motionbound.DraftSectionCoordinateUpper), not from
 		// the walks' L1 envelopes.
-		nearUpper, err := draftSectionCoordinateUpper(pl.profile)
+		nearUpper, err := motionbound.DraftSectionCoordinateUpper(pl.profile)
 		if err != nil {
 			return math.Inf(1)
 		}
-		farUpper, err := draftSectionCoordinateUpper(pl.far)
+		farUpper, err := motionbound.DraftSectionCoordinateUpper(pl.far)
 		if err != nil {
 			return math.Inf(1)
 		}
 		coordUpper := math.Max(nearUpper, proofbound.AbsSumUpper(farUpper, pl.farDelta))
 		zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.axialDelta())
-		return proofbound.AbsSumUpper(
-			vecL1(pl.frame.Origin()),
-			proofbound.ProductUpper(vecL1(pl.frame.U()), coordUpper),
-			proofbound.ProductUpper(vecL1(pl.frame.V()), coordUpper),
-			proofbound.ProductUpper(vecL1(pl.frame.N()), zUpper),
-		)
+		return motionbound.LinearRecordRadius(pl.frame, coordUpper, zUpper)
 	case revolvePayload:
 		coordUpper, err := momentinput.CoordinateUpper(pl.profile, freeform.NewFreeformWork(), nil)
 		if err != nil {
 			return math.Inf(1)
 		}
 		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.sectionDelta)
-		originUpper := vecL1(pl.frame.Origin())
-		profileUpper := proofbound.AbsSumUpper(
-			originUpper,
-			proofbound.ProductUpper(vecL1(pl.frame.U()), coordUpper),
-			proofbound.ProductUpper(vecL1(pl.frame.V()), coordUpper),
-		)
-		axisUpper := proofbound.AbsSumUpper(
-			originUpper,
-			proofbound.ProductUpper(vecL1(pl.frame.U()), proofbound.AbsSumUpper(pl.ax.aU, pl.ax.aUBound)),
-			proofbound.ProductUpper(vecL1(pl.frame.V()), proofbound.AbsSumUpper(pl.ax.aV, pl.ax.aVBound)),
-		)
-		return proofbound.AbsSumUpper(proofbound.ProductUpper(3, profileUpper), proofbound.ProductUpper(4, axisUpper))
+		return motionbound.RevolveRecordRadius(pl.frame, coordUpper, pl.ax.aU, pl.ax.aUBound, pl.ax.aV, pl.ax.aVBound)
 	default:
 		return math.Inf(1)
 	}
-}
-
-// draftSectionCoordinateUpper bounds max(|u|, |v|) over every point of a
-// recorded section, segment by segment: a line by its recorded ends and an
-// arc by its recorded extent (capband.SegmentCoordinateUpper, the reading
-// capband.CoordUpper takes), a circle by its centre's larger coordinate plus
-// its radius with the radius's own bound, and anything else by its walk's
-// envelope, whichever is smallest.
-func draftSectionCoordinateUpper(profile ProfileRecord) (float64, error) {
-	work := freeform.NewFreeformWork()
-	upper := 0.0
-	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
-		for _, seg := range loop.Segments {
-			w, err := boundarywalk.WalkOf(seg, work)
-			if err != nil {
-				return 0, err
-			}
-			segUpper := w.CoordUpper
-			if local, ok := capband.SegmentCoordinateUpper(seg); ok {
-				segUpper = math.Min(segUpper, local)
-			}
-			if w.IsCircular() && !proofbound.IsNonFinite(w.RadiusBound) {
-				segUpper = math.Min(segUpper, proofbound.AbsSumUpper(math.Max(math.Abs(w.CU), math.Abs(w.CV)), w.Radius, w.RadiusBound))
-			}
-			upper = math.Max(upper, segUpper)
-		}
-	}
-	return upper, nil
 }

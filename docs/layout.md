@@ -334,7 +334,7 @@ the rules leave to the byte budget.
 | `internal/survey2d/` | 2D disks, prism readers, walks, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |
-| `internal/motionbound/` | Motion variants, specification validation, exact parameters, poses, box bounds and sweeps. |
+| `internal/motionbound/` | Motion variants, exact parameters, poses, box bounds, record radii, overlap transfer and sweeps. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, depth and rolling bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |

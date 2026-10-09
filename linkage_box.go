@@ -814,7 +814,7 @@ func (b *boxRun) classify(c *boxCell) {
 		c.outcome = CellUndecided
 		return
 	}
-	c.outcome, c.clearance = CellClear, lowerBoundMeasurement(lowest)
+	c.outcome, c.clearance = CellClear, motionbound.LowerBoundMeasurement(lowest)
 	if lowBound != nil && lowBound.Cmp(lowest) == 0 {
 		c.low = low
 	}

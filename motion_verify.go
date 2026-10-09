@@ -975,7 +975,7 @@ func (r *motionRun) settleConstant(i, k int) error {
 	if outcome != interferenceMeasured {
 		return nil
 	}
-	published, ok := transferredOverlap(volume, true, 0)
+	published, ok := motionbound.TransferredOverlap(volume, true, 0)
 	if !ok {
 		return nil
 	}
@@ -1099,7 +1099,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		r.poseDiag(mp, mp.stamp(diag))
 		return nil
 	}
-	published, ok := transferredOverlap(volume, outcome == interferenceMeasured, allowance)
+	published, ok := motionbound.TransferredOverlap(volume, outcome == interferenceMeasured, allowance)
 	if !ok && declared {
 		return nil
 	}
@@ -1178,34 +1178,6 @@ func (r *motionRun) publishCollision(mp *motionPose, i, k int, published Measure
 		finding.Observed = &observed
 		mp.findings = append(mp.findings, mp.stamp(finding))
 	}
-}
-
-// transferredOverlap is §5.1's collision transfer. An overlap measured at the
-// float pose is a collision at the ideal pose only when its proven lower end,
-// Value − Bound rounded down, strictly exceeds the volume the mover's boundary
-// can sweep between the two poses; the published volume then carries that
-// allowance in its Bound, so Value − Bound stays a proven lower bound on the
-// ideal overlap. An unmeasured overlap never transfers.
-func transferredOverlap(volume Measurement, measured bool, allowance float64) (Measurement, bool) {
-	if !measured || proofbound.IsNonFinite(allowance) {
-		return Measurement{}, false
-	}
-	value, bound := proofarith.FloatRat(volume.Value.Base()), proofarith.FloatRat(volume.Bound.Base())
-	if value == nil || bound == nil {
-		return Measurement{}, false
-	}
-	lower := proofbound.RatFloatDown(new(big.Rat).Sub(value, bound))
-	if !(lower > allowance) {
-		return Measurement{}, false
-	}
-	if allowance == 0 {
-		return volume, true
-	}
-	return Measurement{
-		Value:     volume.Value,
-		Exactness: Approximate,
-		Bound:     units.CubicMillimeters(proofbound.AbsSumUpper(volume.Bound.Base(), allowance)),
-	}, true
 }
 
 // poseDiag records an undecided or unsupported pair finding both on the pose
@@ -1344,7 +1316,7 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 	if !ok {
 		return IntervalUndecided, nil
 	}
-	return IntervalClear, lowerBoundMeasurement(lowest)
+	return IntervalClear, motionbound.LowerBoundMeasurement(lowest)
 }
 
 // collides reports whether some pair at the pose carries a proven collision.
@@ -1398,20 +1370,6 @@ func (r *motionRun) certifyPairs(certify func(i, k int) *big.Rat, held func(i, k
 		}
 	}
 	return lowest, ok
-}
-
-// lowerBoundMeasurement publishes a certificate's proven lower bound, rounded
-// down, as a Measurement that IS the claim: Approximate with a zero Bound. A
-// nil bound publishes nothing.
-func lowerBoundMeasurement(lowest *big.Rat) *Measurement {
-	if lowest == nil {
-		return nil
-	}
-	return &Measurement{
-		Value:     units.Millimeters(proofbound.RatFloatDown(lowest)),
-		Exactness: Approximate,
-		Bound:     units.Millimeters(0),
-	}
 }
 
 // minRat is the smaller of an optional running minimum and a candidate.
