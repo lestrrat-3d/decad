@@ -49,6 +49,14 @@ func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, 
 	if err != nil {
 		return nil, fmt.Errorf("along-side taper: %w", err)
 	}
+	negativePayload, ok := negative.payload.(draftPayload)
+	if !ok {
+		return nil, fmt.Errorf(`%w: the against-side taper lost its draft record`, ErrDegenerate)
+	}
+	positivePayload, ok := positive.payload.(draftPayload)
+	if !ok {
+		return nil, fmt.Errorf(`%w: the along-side taper lost its draft record`, ErrDegenerate)
+	}
 	parts := make([]compositeSpanPart, 2)
 	for i, part := range []*Body{negative, positive} {
 		parts[i], err = compositeSpanPartOf(part)
@@ -77,8 +85,8 @@ func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, 
 	if err := aggregateCompositeSweepMeasurements(ctx, body, parts, false); err != nil {
 		return nil, err
 	}
-	dp.negative = negative.payload.(draftPayload)
-	dp.positive = positive.payload.(draftPayload)
+	dp.negative = negativePayload
+	dp.positive = positivePayload
 	body.payload = dp
 	return body, nil
 }

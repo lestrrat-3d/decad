@@ -36,7 +36,11 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 		if err != nil {
 			return nil, err
 		}
-		mesh, err := tessellateDraft(ctx, part, part.payload.(draftPayload), chord, verify)
+		partPayload, ok := part.payload.(draftPayload)
+		if !ok {
+			return nil, fmt.Errorf(`%w: a two-sided taper half lost its draft record`, ErrDegenerate)
+		}
+		mesh, err := tessellateDraft(ctx, part, partPayload, chord, verify)
 		if err != nil {
 			return nil, err
 		}
