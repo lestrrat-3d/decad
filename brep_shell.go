@@ -547,13 +547,13 @@ func throughCapsCount(bp brepPayload, embeds []brepEmbed, k int) int {
 // own box. A box that is not separated is SG6. The test only refuses.
 func (tc throughCut) requireStripsClear(bp brepPayload, i int, dilated ProfileRecord, tmm, tDelta float64) error {
 	tool := tc.tools[i]
-	clear, err := throughshell.StripsClear(throughshell.StripInput{
+	separated, err := throughshell.StripsClear(throughshell.StripInput{
 		Tool: tool.prism.profile, Dilated: dilated, Receiver: tc.caps.section,
 		ToolFrame: tool.frameEmb, ReceiverFrame: tc.caps.eF,
 		SweepAxis: tc.k, PiercedAxis: tool.j, Lo: tool.lo, Hi: tool.hi,
 		Thickness: tmm, ThicknessDelta: tDelta,
 	})
-	if err != nil || clear {
+	if err != nil || separated {
 		return err
 	}
 	return fmt.Errorf(`%w: the tool through %s, dilated by the shell thickness, reaches past the wall it pierces into the material of the receiver, or this evaluator cannot separate it from there (modify-general SG6)`, ErrUnsupported, bp.faces[tool.w0].role)
