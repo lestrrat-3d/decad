@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -105,7 +106,7 @@ func TestPatternedOverlapIsNotProvenDisjoint(t *testing.T) {
 	b, charge, err := moveRegion(budget, a, mv)
 	require.NoError(t, err)
 	require.Zero(t, charge)
-	disjoint, _, err := provePrismRegionsDisjoint(t.Context(), budget, []ProfileRecord{a, b})
+	disjoint, _, err := prismcells.ProveGroupDisjoint(t.Context(), budget, []ProfileRecord{a, b})
 	require.NoError(t, err)
 	require.False(t, disjoint)
 }

@@ -39,7 +39,7 @@ func TestPrismGroupRegionsDisjointProof(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			proven, walk, err := provePrismRegionsDisjoint(t.Context(), proofbound.NewWorkBudget(t.Context()), tc.regions)
+			proven, walk, err := prismcells.ProveGroupDisjoint(t.Context(), proofbound.NewWorkBudget(t.Context()), tc.regions)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, proven)
 			require.Zero(t, walk)

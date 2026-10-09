@@ -229,7 +229,7 @@ func TestPatternedGates(t *testing.T) {
 	_, err = peg.Patterned(t.Context(), decad.LinearPattern{Dir: r3.NewVec(math.NaN(), 0, 0), Step: units.Millimeters(10), Count: 2})
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 
-	ctx := &operationCancelContext{Context: t.Context(), target: "prismProfilesContext"}
+	ctx := &operationCancelContext{Context: t.Context(), target: "ProfilesContext"}
 	_, err = peg.Patterned(ctx, spec)
 	require.True(t, ctx.entered, "the premise: the disjointness scene ran")
 	require.ErrorIs(t, err, context.Canceled)
