@@ -501,7 +501,7 @@ func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat
 			if !ok {
 				return nil, false
 			}
-			hull = proofbound.IntervalOwned(minRat(hull.Lo, at.Lo), maxRat(hull.Hi, at.Hi))
+			hull = proofbound.IntervalOwned(proofbound.RatMin(hull.Lo, at.Lo), maxRat(hull.Hi, at.Hi))
 			centre := linkagebound.Midpoint(at)
 			span = new(big.Rat).Sub(hull.Hi, centre)
 			if low := new(big.Rat).Sub(centre, hull.Lo); low.Cmp(span) > 0 {
