@@ -26,8 +26,8 @@ import (
 // (docs/linkage-check-design.md §6): validation, the swept-box exclusion, the
 // per-pose pair proof over transient placements, the two-sided interval
 // certificate, and the report assembly. motion.go owns the vocabulary and
-// internal/motionbound the bounds; linkage_verify.go drives the same engine over a
-// chain of joints.
+// internal/motionbound and internal/linkagebound the bounds; linkage_verify.go
+// drives the same engine over a chain of joints.
 //
 // The engine moves one or more GROUPS of bodies, each group rigid under one
 // pose per parameter, against every other live body of the document. A
@@ -519,72 +519,14 @@ func (m *singleMotion) projection(i, k int, a, b *motionPose) *big.Rat {
 		// with static bodies.
 		return nil
 	}
-	span := a.param.SpanUpper(b.param)
-	step, ok := motionStep(a.param, b.param)
-	if !ok {
-		return nil
-	}
-	var best *big.Rat
-	for _, hull := range []bool{false, true} {
-		partner, ok := m.staticPoints(k, hull)
-		if !ok {
-			continue
-		}
-		for n, end := range []*motionPose{a, b} {
-			mine, ok := m.moverPoints(end, i, hull)
-			if !ok {
-				continue
+	return linkagebound.MotionProjection(r.spec.Frame, r.movers[i].rho, a.param, b.param,
+		func(end int, hull bool) (cornerBounds, bool) {
+			if end == 0 {
+				return m.moverPoints(a, i, hull)
 			}
-			rem := m.remainder(i, span)
-			if rem == nil && r.spec.Frame.Kind != motionbound.MotionPrismatic {
-				continue
-			}
-			side := projectionSide{Corners: mine, H: []*big.Rat{span}, Seg: stepsFrom([]proofbound.RatInterval{step}, n == 1), Rem: rem}
-			var l *big.Rat
-			if hull {
-				l = linkagebound.LowerHull(side, projectionSide{Corners: partner})
-			} else {
-				l = linkagebound.Lower(side, projectionSide{Corners: partner})
-			}
-			if l != nil && (best == nil || l.Cmp(best) > 0) {
-				best = l
-			}
-		}
-	}
-	return best
-}
-
-// motionStep is the parameter's signed change from a to b, 2π·Δturn + Δbase
-// with π over its enclosure, widened to the floats around it.
-func motionStep(a, b motionbound.MotionParam) (proofbound.RatInterval, bool) {
-	turn := new(big.Rat).Sub(b.Turn, a.Turn)
-	base := new(big.Rat).Sub(b.Base, a.Base)
-	return linkagebound.RoundOut(proofbound.IntervalAdd(proofbound.IntervalScale(proofbound.TwoPiInterval(), turn), proofbound.PointInterval(base)))
-}
-
-// remainder is Rem = ½·B·h² of docs/linkage-check-design.md §5.8 for mover
-// i over a parameter span h (docs/motion-check-design.md §5.2): B bounds
-// the second derivative of every point's position in the parameter, a
-// point's distance from the axis — at most ρ_max, read from the box that
-// holds every hull point too — per radian² for a Revolute, θ² times it for a
-// Between, and nothing for a Prismatic, which moves every point along a
-// straight line. nil when ρ_max is not finite, or for a Prismatic.
-func (m *singleMotion) remainder(i int, h *big.Rat) *big.Rat {
-	f := m.r.spec.Frame
-	if f.Kind == motionbound.MotionPrismatic {
-		return nil
-	}
-	w := proofarith.FloatRat(m.r.movers[i].rho)
-	if w == nil {
-		return nil
-	}
-	if f.Kind == motionbound.MotionBetween {
-		theta := motionbound.ParamUpper(f.Theta)
-		w.Mul(w, theta.Mul(theta, theta))
-	}
-	rem := new(big.Rat).Mul(h, h)
-	rem.Mul(rem, w)
-	return rem.Quo(rem, big.NewRat(2, 1))
+			return m.moverPoints(b, i, hull)
+		},
+		func(hull bool) (cornerBounds, bool) { return m.staticPoints(k, hull) })
 }
 
 // moverPoints is mover i's projection reading at a pose: its points posed by
@@ -601,32 +543,7 @@ func (m *singleMotion) moverPoints(pose *motionPose, i int, hull bool) (cornerBo
 	if !ok {
 		return cornerBounds{}, false
 	}
-	f := m.r.spec.Frame
-	ideal := f.At(pose.param)
-	var unit motionbound.IvVec
-	for d := range 3 {
-		unit[d] = proofbound.IntervalScale(f.Unit, f.Axis[d])
-	}
-	centre := motionbound.PointVec(f.Center)
-	for c := range points.Pos {
-		x := linkagebound.ApplyIdeal(ideal, points.Pos[c])
-		points.Pos[c] = x
-		var v motionbound.IvVec
-		switch f.Kind {
-		case motionbound.MotionPrismatic:
-			v = unit
-		case motionbound.MotionRevolute:
-			v = linkagebound.IvCross(unit, motionbound.IvVecSub(x, centre))
-		default:
-			theta := proofbound.IntervalOwned(motionbound.ParamLower(f.Theta), motionbound.ParamUpper(f.Theta))
-			turn := linkagebound.IvCross(unit, motionbound.IvVecSub(x, centre))
-			for d := range 3 {
-				v[d] = proofbound.IntervalAdd(proofbound.IntervalMul(turn[d], theta), proofbound.IntervalScale(unit[d], f.Slide))
-			}
-		}
-		points.Vel[c] = []motionbound.IvVec{v}
-	}
-	reading, ok := linkagebound.RoundCorners(points)
+	reading, ok := linkagebound.MotionMoverPoints(m.r.spec.Frame, pose.param, points)
 	if !ok {
 		return cornerBounds{}, false
 	}
