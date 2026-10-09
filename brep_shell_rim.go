@@ -57,10 +57,10 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 
 	var removed []int
 	if rm.bottom {
-		removed = append(removed, tc.caps.bottom)
+		removed = append(removed, tc.caps.Bottom)
 	}
 	if rm.top {
-		removed = append(removed, tc.caps.top)
+		removed = append(removed, tc.caps.Top)
 	}
 	removed = append(removed, rm.walls...)
 	gone := map[int]struct{}{}
@@ -107,7 +107,7 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 			if !ok {
 				return brepPayload{}, throughRimError(r, "a cavity face in its plane does not map into its frame")
 			}
-			inF, ok := brepgeom.NewPrismMap(eQ, tc.caps.eF).Region(*q.region)
+			inF, ok := brepgeom.NewPrismMap(eQ, tc.caps.Embed).Region(*q.region)
 			if !ok && !rp.wall {
 				return brepPayload{}, throughRimError(r, "a cavity face in its plane does not map into the prism's frame")
 			}
@@ -193,13 +193,13 @@ func (tc throughCut) rimPlane(bp brepPayload, fi int) (throughRimPlane, error) {
 	if f.planar() {
 		return throughRimPlane{face: f, e: e, axis: e.Axis[2], level: brepLevel(f, e), wall: tc.kinds[fi] == throughPierced}, nil
 	}
-	wall, reason := throughshell.RestateWall(f.wall, e, bp.faces[0].frame, tc.k, tc.caps.zlo, tc.caps.zhi)
+	wall, reason := throughshell.RestateWall(f.wall, e, bp.faces[0].frame, tc.k, tc.caps.Zlo, tc.caps.Zhi)
 	if reason != "" {
 		return throughRimPlane{}, throughRimError(f, reason)
 	}
 	z := wall.Embed.Sign[2]*wall.Level + 0
 	face := brepFace{frame: wall.Frame, region: &wall.Region, outward: true,
-		sweep: tc.caps.frame.N(), z0: z, z1: z, role: f.role}
+		sweep: tc.caps.Frame.N(), z0: z, z1: z, role: f.role}
 	return throughRimPlane{face: face, e: wall.Embed, axis: wall.Axis, level: wall.Level, wall: true}, nil
 }
 
@@ -221,8 +221,8 @@ func (tc throughCut) rimPartner(ctx context.Context, fi int, rp throughRimPlane,
 		holes := make([]int, len(r.region.Holes))
 		for hi := range holes {
 			holes[hi] = hi
-			if fi == tc.caps.bottom {
-				holes[hi] = tc.caps.bottomLoop[1+hi] - 1
+			if fi == tc.caps.Bottom {
+				holes[hi] = tc.caps.BottomLoop[1+hi] - 1
 			}
 		}
 		return func(_, inF LoopRecord) (int, error) {

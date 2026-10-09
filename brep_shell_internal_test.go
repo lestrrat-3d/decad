@@ -746,7 +746,7 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok, reason)
 	budget := proofbound.NewWorkBudget(t.Context())
-	eroded, err := offsetProfile(budget, tc.caps.section, 1, 2)
+	eroded, err := offsetProfile(budget, tc.caps.Section, 1, 2)
 	require.NoError(t, err)
 	dilated := make([]ProfileRecord, len(tc.tools))
 	for i, tool := range tc.tools {

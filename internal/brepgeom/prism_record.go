@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/r3"
 )
 
 // PrismRect is a BRep face rectangle projected onto a prism section plane.
@@ -20,12 +21,14 @@ type PrismRect struct {
 // PrismRectFace contains the record fields used to recognize a rectangle
 // across or along a proposed prism axis.
 type PrismRectFace struct {
+	Frame            r3.Frame
 	Region           *momentinput.Profile
 	Wall             sectionrecord.CurveSegment
 	Z0, Z1           float64
 	Z0Delta, Z1Delta float64
 	Split0, Split1   bool
 	Outward          bool
+	Role             string
 }
 
 // PlanarPrismRect reads a planar face as four natural-range axis-aligned
