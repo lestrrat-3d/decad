@@ -786,7 +786,9 @@ turns.
 together with `WithSurfaceResult()`, the option that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the four chain-fed forms that
-sweep an open curve (§13 there).
+sweep an open curve (§13 there). `docs/draft-design.md` owns `WithTaper`'s
+build and `Body.Draft`, the face draft of an existing prism, with its
+`NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
@@ -1773,11 +1775,12 @@ the resulting bodies, measurements, and verification reports directly.
   thickness, the `LongerThan(l)` edge-predicate length (§9), the `WithTolerance`
   relative tolerance, the `WithMinWallThickness` tool size and its
   `WithDraftAllowance` draft allowance (§10, `docs/verification-design.md`), and
-  the `Tessellate` tolerance (§11). Two `units.Value` parameters are **signed
+  the `Tessellate` tolerance (§11). Three `units.Value` parameters are **signed
   displacements, not magnitudes**, and are outside it: `ToFace.Offset`, which
   displaces along the target face's normal and whose sign says which side of that
-  face the sweep stops on (§8.1); and `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
-  whose sign says which way the wall leans. Neither carries a `Direction` to reverse,
+  face the sweep stops on (§8.1); `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
+  whose sign says which way the wall leans; and `Body.Draft`'s angle
+  (`docs/draft-design.md` §10), read the same way about its neutral plane. Neither carries a `Direction` to reverse,
   so a negative value there is a legal intent, not an error.
 - **`ErrCardinality` takes precedence at zero matches.** A failed cardinality
   assertion is `ErrCardinality` **even when the selector matched nothing** — and

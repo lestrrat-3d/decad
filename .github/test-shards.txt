@@ -153,7 +153,9 @@
 2	0.02	TestCapPatchNormalRangeChargesAFlatPatchsDepartureOnce
 2	0.27	TestChordLoopRefusesMismatchedResolvedWalks
 2	0.01	TestCircularStationChainJunctionsMeetOnOneCoordinate
+2	0.01	TestCompleteWallSetReadsRoles
 2	0.01	TestDisplacedCupCentroidMoment
+2	0.01	TestDraftReceiverClasses
 2	0.02	TestEvalPrismContinuesCallerFreeformWork
 2	0.01	TestFreeformCoincidentControlNetRefused
 2	0.81	TestJointBoxShallowestFirst

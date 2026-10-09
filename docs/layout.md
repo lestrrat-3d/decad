@@ -40,17 +40,17 @@ the rules leave to the byte budget.
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
 | `docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
 | `docs/sweep-design.md` | `Path`/`Sweep` transport, refusals, topology, measurements, `SweepChain`, mitred sweeps (§16), and reach. |
-| `docs/helix-design.md` | `Document.Coil`: a profile screwed about an in-plane axis; Tables CP/CS/CB/CM/CD, closed forms, threads, PR split. |
+| `docs/helix-design.md` | `Document.Coil`: a profile screwed about an in-plane axis. |
 | `docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
 | `docs/mirror-pattern-design.md` | `Mirrored`/`MirroredCopy`, the exact mirror join, `PatternCopies`/`Patterned` and the prism group. |
 | `docs/general-boolean-design.md` | Boolean classes past the prism pair, and `brepPayload`. |
 | `docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
 | `docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies and their boolean composition. |
-| `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps: entry gate, private `sketch` scene, and cut bounds. |
+| `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps. |
 | `docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `docs/motion-check-design.md` | `VerifyMotion`: motions, the per-pose proof, the interval certificate, `MotionReport`. |
-| `docs/linkage-check-design.md` | `VerifyLinkage` and `VerifyJointBox`: links, joints, drives, boxes, contacts, loops, the chain travel bound. |
+| `docs/linkage-check-design.md` | `VerifyLinkage` and `VerifyJointBox`. |
 | `docs/collision-dynamics-design.md` | Pair contact/sweep in decad and rigid response in `dynamics`. |
 | `docs/contact-geometry-design.md` | Pair relation and contact manifold proofs. |
 | `docs/contact-sweep-design.md` | Two-body continuous sweep and first-contact brackets. |
@@ -116,6 +116,7 @@ the rules leave to the byte budget.
 | `stitch_flux.go` | Stitch face flux, mass and tag adapters. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split and placement. See surface §6.5. |
 | `extrude.go` | `Document.Extrude`, `WithTaper`, linear-extent resolution. See evaluator §5. |
+| `draft.go` | `Body.Draft`, `NeutralPlane`, `Walls` gates. See draft §10. |
 | `draft_payload.go` | `draftPayload`, its band view and offset span. See draft §6, §8.1. |
 | `draft_build.go` | Tapered extrude gates and assembly. See draft §5, §7. |
 | `draft_moments.go` | Draft body measurements. See draft §8. |

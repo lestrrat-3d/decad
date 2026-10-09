@@ -201,7 +201,7 @@ one constructed section the existence question is asked first (modify §4).
 | Stage | Gates, in order |
 |---|---|
 | 1 — the pre-gates | `Extrude`: the seam gates of core §7, then SD1, SD2 (the seam gates run first, as they do for SD1 on a straight prism). `Draft`: SD1, SD2, SD17, SD18, SD19's cardinality |
-| 2 — the receiver and its inputs | `Draft`: SD23, SD20, SD19's kind rules, SD22, SD21. `Extrude`: the extent's own validation (unchanged), SD11, SD12 |
+| 2 — the receiver and its inputs | `Draft`: SD23, SD20's `NeutralFrame` refusal, SD19's kind rules, SD20's cap test, SD22, SD21. `Extrude`: the extent's own validation (unchanged), SD11, SD12 |
 | 3 — the section's kinds | SD3; then per corner SD4 and SD15 |
 | 4 — the far section is built | the span of `d` (§8.1); SD5, SD7 and SD6's consumed outer loop as the walks are offset, then SD13 |
 | 5 — the audit | SD6, then SD8, then SD9, over the far section at `d` |
@@ -454,6 +454,13 @@ signature.
 5. §7 builds the body over `P`, `Q` and `[z0, z1]`; the far record sits at
    the far end. The result's roles are minted under the new producer.
 
+A `NeutralFace` whose `Body` is not the receiver passes SD19's cardinality and
+kind rules on that body's face and is then SD20, so a curved neutral face is
+`ErrDegenerate` wherever it lies. `Walls(b)` is a face predicate over the
+`side(i, j)` roles of `b`'s own producer (`selectorquery.WallsKind`), and the
+complete wall set SD21 tests is the receiver's faces carrying such a role,
+fillet and chamfer rounds included.
+
 The body `Draft` builds equals the body `Extrude` would build from the same
 sketch with `WithTaper(angle)` and a `Distance` extent toward the far end,
 bit for bit when the receiver is unplaced. §11 asserts it.
@@ -621,7 +628,7 @@ every new root file. This document ships with PR 1.
 |---|---|---|---|---|
 | **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `transform`/`placed`; `draft_build.go` (§7); `draft_moments.go` (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class; `Tessellate` refuses the class through its default | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `draft_payload.go`, `draft_build.go`, `draft_moments.go`, `extrude.go`, `capblend*.go` (the band's `draft` view), `verify_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `draft_build_internal_test.go`, `internal/offset2d/sharp_test.go`, `examples/decad_extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
 | **2** | tessellation and the mesh volume proof (DD1), which opens DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `tessellate_draft.go`, `tessellate.go` (dispatch), `mass_properties.go` (the mesh path needs no arm), `motion_bound.go`, `apitest/draft_mesh_test.go`, `tessellate_draft_internal_test.go` | the PR 2 fixtures | 1 |
-| **3** | `Body.Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `docs/api-design.md` §8/§12, `apitest/draft_test.go`, `draft_internal_test.go`, `examples/decad_draft_example_test.go` | D1–D5 | 1 |
+| **3** | `Body.Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `docs/api-design.md` §8/§12, `apitest/draft_test.go`, `draft_internal_test.go`, `examples/decad_draft_example_test.go` | D1–D5 | 1 |
 | **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
 | **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `draft.go`, `draft_build.go`, tests | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
 
@@ -630,13 +637,15 @@ PRs 1, 2 and 4 are proof specifications (bounds, closure terms, the mesh
 proof and the normal model) and are implemented at the higher reasoning
 tier; PRs 3 and 5 are file-by-file plans over PR 1's builder.
 
-Increment table — what still refuses after each PR:
+Increment table — what still refuses after each PR. PRs 2 and 3 land
+independently, so while PR 2 is planned every draft body, `Draft`'s included,
+keeps DD1's refusals:
 
 | After | State | Still refused |
 |---|---|---|
 | 1 | landed | every draft body's tessellation, boolean, export, mass and interference reading (DD1's dependants); `Body.Draft` (no entry point); surveys `Suspect`; SD3, SD4, SD11, SD12 |
 | 2 | planned | `Body.Draft`; surveys `Suspect`; SD3, SD4, SD11, SD12 |
-| 3 | planned | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21 |
+| 3 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21 |
 | 4 | planned | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20, SD21 |
 | 5 | planned | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
 
