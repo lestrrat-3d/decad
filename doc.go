@@ -96,7 +96,7 @@
 //	Body.Draft    prism receiver, its complete wall set or a
 //	  subset, about one of its caps (draft design PR 3, 5)    builds
 //	  subset moving one of two walls at a circular corner,
-//	    NeutralFrame, non-cap neutral face, receiver other
+//	    non-cap neutral face, receiver other
 //	    than a straight prism                                 ErrUnsupported
 //	Sweep         zero-twist LineTo / ArcThrough paths         builds
 //	  composite path without exact transported frames or

@@ -806,7 +806,7 @@ makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the four chain-fed forms that
 sweep an open curve (§13 there). `docs/draft-design.md` owns `WithTaper`'s
 build and `Body.Draft`, the face draft of an existing prism, with its
-`NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
+`NeutralFace` plane and the `Walls(b)` selector.
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
