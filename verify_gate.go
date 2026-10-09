@@ -5,10 +5,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/diameter"
-	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/r3"
@@ -27,7 +24,7 @@ import (
 
 // bodyGateDiameter returns the body's own diameter, never a document scale or
 // a bounds-box diagonal — and returns it as a value proven to be at or below
-// that diameter. Point witnesses publish through pointSetDiameterWithBudget,
+// that diameter. Point witnesses publish through diameter.PointsWithBudget,
 // and every arm charges each point it reads the gap a proof states between it
 // and a point of the body; a chain revolve's circular edge uses its certified
 // length interval.
@@ -66,7 +63,7 @@ import (
 // held point exactly against the point it denotes, the sweep angle's own
 // displacement included. A cap-loop chamfer reads capBlendGateDiameter.
 //
-// A loftPayload reads its OWN held vertex-set diameter (pointSetDiameterContext),
+// A loftPayload reads its OWN held vertex-set diameter (diameter.PointsContext),
 // never an envelope: the boundary is a polyhedron, and a convex-hull diameter
 // is realized at vertices, so the vertex set's own maximum IS AT OR BELOW the
 // body's true diameter — the strongest arm in this function, ahead of the
@@ -91,7 +88,7 @@ import (
 // answer UNCHANGED: no subtraction and no rounding of its own. What that
 // answer is, is the reader's to state — the largest float64 at or below the
 // held diameter, since the reader publishes every witness maximum rounded
-// toward zero (pointSetDiameterWithBudget) — so this arm publishes the
+// toward zero (diameter.PointsWithBudget) — so this arm publishes the
 // tightest lower bound a float64 can carry on a diameter that is itself
 // already at or below the true one. Subtracting a zero allowance on top of
 // it would move that reading in exchange for nothing, which is why
@@ -136,36 +133,36 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return payload.diameter, tolerance.UsableMagnitude(payload.diameter), nil
 	}
 	if payload, ok := body.payload.(loftPayload); ok {
-		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
+		d, ok, err := diameter.PointsContext(ctx, payload.verts)
 		if err != nil || !ok {
 			return d, ok, err
 		}
 		if payload.delta == 0 {
 			return d, true, nil
 		}
-		d, ok = lowerDiameterForDisplacement(d, payload.delta)
+		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
 	if payload, ok := body.payload.(mitredSweepPayload); ok {
 		// A mitred sweep's boundary is a polyhedron over its held vertex
 		// table, each vertex within delta of the exact one, so the loft arm's
 		// reading and shrink apply unchanged (docs/sweep-design.md §16.6).
-		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
+		d, ok, err := diameter.PointsContext(ctx, payload.verts)
 		if err != nil || !ok {
 			return d, ok, err
 		}
-		d, ok = lowerDiameterForDisplacement(d, payload.delta)
+		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
 	if payload, ok := body.payload.(coilPayload); ok {
 		// A coil's held shell is a polyhedron over its vertex table, each
 		// vertex within delta of a true point, so the mitred arm's reading
 		// and shrink apply unchanged (docs/helix-design.md §7).
-		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
+		d, ok, err := diameter.PointsContext(ctx, payload.verts)
 		if err != nil || !ok {
 			return d, ok, err
 		}
-		d, ok = lowerDiameterForDisplacement(d, payload.delta)
+		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
 	if payload, ok := body.payload.(stitchPayload); ok {
@@ -174,14 +171,14 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		// as a loft's is, so the same held-vertex-set diameter is a
 		// certified LOWER bound on the body's true diameter, tightened by
 		// the placement's own proven displacement.
-		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
+		d, ok, err := diameter.PointsContext(ctx, payload.verts)
 		if err != nil || !ok {
 			return d, ok, err
 		}
 		if payload.delta == 0 {
 			return d, true, nil
 		}
-		d, ok = lowerDiameterForDisplacement(d, payload.delta)
+		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
 	if payload, ok := body.payload.(chainPayload); ok {
@@ -212,13 +209,13 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		// instead: the largest single-axis extent of the body's own box is at
 		// or below the true diameter (a diameter realizes as SOME pair's
 		// distance, whose spread along at least one axis cannot exceed that
-		// axis's own box extent), and lowerDiameterForDisplacement shrinks it
+		// axis's own box extent), and diameter.LowerForDisplacement shrinks it
 		// by the box's own proven Bound so the box's uncertainty can only
 		// tighten the gate, never loosen it (docs/surface-design.md §5.1,
 		// verification §3).
 		box := body.bounds
 		d := math.Max(box.Max.X-box.Min.X, math.Max(box.Max.Y-box.Min.Y, box.Max.Z-box.Min.Z))
-		d, ok := lowerDiameterForDisplacement(d, box.Bound.Base())
+		d, ok := diameter.LowerForDisplacement(d, box.Bound.Base())
 		return d, ok, nil
 	}
 	if _, ok := body.payload.(bodyPatchPayload); ok {
@@ -228,7 +225,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		// applies for the same reason.
 		box := body.bounds
 		d := math.Max(box.Max.X-box.Min.X, math.Max(box.Max.Y-box.Min.Y, box.Max.Z-box.Min.Z))
-		d, ok := lowerDiameterForDisplacement(d, box.Bound.Base())
+		d, ok := diameter.LowerForDisplacement(d, box.Bound.Base())
 		return d, ok, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
@@ -259,41 +256,6 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	return fallbackGateDiameter(budget, body)
 }
 
-// chainWalkEndpointAllow covers the computed walk endpoint coordinates not
-// present in ExtrudeChain's topology-vertex bounds for analytic segments.
-// It reads every source segment, including those later coalesced into one
-// wall, so the result also covers a coalesced line's last endpoint.
-func chainWalkEndpointAllow(ctx context.Context, chains []chainRecord) (float64, bool, error) {
-	work := freeform.NewFreeformWork()
-	allow := 0.0
-	for _, chain := range chains {
-		for _, segment := range chain.Segments {
-			if err := ctx.Err(); err != nil {
-				return 0, false, err
-			}
-			walk, err := boundarywalk.WalkOf(segment, work)
-			if err != nil {
-				return 0, false, nil //nolint:nilerr // structural walk refusal withholds the reference
-			}
-			for _, bound := range [2]proofbound.WalkEndBound{walk.StartBound, walk.EndBound} {
-				endAllow := proofbound.WalkEndBoundAllow(bound)
-				if !tolerance.UsableMagnitude(endAllow) {
-					return 0, false, nil
-				}
-				allow = math.Max(allow, endAllow)
-			}
-			// An ArcSeg's recorded natural end can sit off the radius its
-			// denoted circle reads from Start, even when proofbound.WalkEndBound is zero.
-			residual := loftmesh.ArcNaturalEndRadialUpper(segment)
-			if !tolerance.UsableMagnitude(residual) {
-				return 0, false, nil
-			}
-			allow = math.Max(allow, residual)
-		}
-	}
-	return allow, true, ctx.Err()
-}
-
 // chainVertexGateDiameter reads only actual boundary vertices. Each builder
 // publishes the displacement of its held vertex in Position().Bound; the
 // supplied extra allowance covers section displacement and any endpoint
@@ -318,11 +280,11 @@ func chainVertexGateDiameter(ctx context.Context, body *Body, extraAllow float64
 		points = append(points, position.Value)
 		maxBound = math.Max(maxBound, bound)
 	}
-	d, ok, err := pointSetDiameterContext(ctx, points)
+	d, ok, err := diameter.PointsContext(ctx, points)
 	if err != nil || !ok {
 		return d, ok, err
 	}
-	d, ok = lowerDiameterForDisplacement(d, proofbound.AbsSumUpper(maxBound, extraAllow))
+	d, ok = diameter.LowerForDisplacement(d, proofbound.AbsSumUpper(maxBound, extraAllow))
 	return d, ok && d > 0, nil
 }
 
@@ -357,18 +319,12 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta 
 		lengthLow := new(big.Rat).Sub(new(big.Rat).SetFloat64(value), new(big.Rat).SetFloat64(bound))
 		denominator := new(big.Rat).SetFloat64(proofbound.TwoPiUpper())
 		diameterLow := new(big.Rat).Quo(lengthLow.Mul(lengthLow, big.NewRat(2, 1)), denominator)
-		d, ok := lowerDiameterForDisplacement(proofbound.RatFloatDown(diameterLow), sectionDelta)
+		d, ok := diameter.LowerForDisplacement(proofbound.RatFloatDown(diameterLow), sectionDelta)
 		if ok && d > 0 {
 			return d, true, nil
 		}
 	}
 	return 0, false, nil
-}
-
-// lowerDiameterForDisplacement adapts the held witness reading to
-// internal/diameter's displacement adjustment.
-func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
-	return diameter.LowerForDisplacement(d, displacement)
 }
 
 // freeformSectionGateDiameter is bodyGateDiameter's arm for a free-form-walled
@@ -394,7 +350,7 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // That is the witness set's own half of the claim, and it is only half: a
 // maximum over real body points is at or below the true diameter as a
 // QUANTITY, while what this arm publishes is a float64. The other half belongs
-// to the shared reader — pointSetDiameterWithBudget computes the winning pair's
+// to the shared reader — diameter.PointsWithBudget computes the winning pair's
 // distance over exact rationals and rounds it toward zero — so the published
 // number is at or below that maximum too. Composed, the reading can only
 // UNDERSTATE the true diameter and never overstate it, exactly the direction
@@ -412,7 +368,7 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // frame and placement by prismPointBound, together with the lift's own
 // rounding.
 // Composing the widest witness bound as one uniform displacement, rather than
-// a bound per point, is the same convention lowerDiameterForDisplacement's
+// a bound per point, is the same convention diameter.LowerForDisplacement's
 // other callers already use: every witness pair is presumed to move by up to
 // that much, so the subtracted amount is twice the WORST one, never a mix.
 //
@@ -432,11 +388,11 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 //   - a witness's own endpoint bound cannot be derived (proofbound.WalkEndBoundAllow's
 //     +Inf), since an absent bound must never read as a small one — this covers
 //     an analytic walk's own two endpoints and a free-form span's alike;
-//   - the shared reader declines the witness maximum (pointSetDiameterWithBudget
+//   - the shared reader declines the witness maximum (diameter.PointsWithBudget
 //     answering ok=false: an empty set, a pair distance that is not a usable
 //     magnitude, or a winning pair with no exact rational form);
 //   - the displacement subtraction collapses the reading to non-positive
-//     (lowerDiameterForDisplacement).
+//     (diameter.LowerForDisplacement).
 //
 // A withheld answer is not rescued downstream. bodyGateDiameter falls through to
 // fallbackGateDiameter, whose gateWitnessPrism has no arm for a prismPayload
@@ -447,7 +403,7 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 //
 // Every phase of this arm is cancellable, because neither of its two phases is
 // bounded by a work counter of its own: the segment loop polls ctx before each
-// segment, and the witness maximum polls it through pointSetDiameterContext,
+// segment, and the witness maximum polls it through diameter.PointsContext,
 // the same reader the loftPayload arm above uses. That second poll is the one
 // that matters for cost — the witness count grows with the profile's segment
 // count (four points per segment), and the maximum is quadratic in it, so an unpolled scan is by
@@ -606,7 +562,7 @@ func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
 // level sits within axialDelta of the level it denotes. Those two displacements
 // are perpendicular — one moves a coordinate IN the plane, the other moves a
 // level ALONG the normal — so their sum is an upper bound on how far a lifted
-// witness sits from the denoted body point below it, and lowerDiameterForDisplacement
+// witness sits from the denoted body point below it, and diameter.LowerForDisplacement
 // turns the held maximum into the lower bound the gate wants. The copy zeroes
 // sectionDelta because addPrismFaces (clearance_geom.go) refuses a displaced
 // section outright: it builds the clearance kernel's certificate carriers,
@@ -696,19 +652,4 @@ func capBlendWitnessPrisms(pl capBlendPayload) []prismPayload {
 		out = append(out, witness)
 	}
 	return out
-}
-
-func pointSetDiameter(points []r3.Vec) (float64, bool) {
-	d, ok, _ := pointSetDiameterWithBudget(nil, points)
-	return d, ok
-}
-
-func pointSetDiameterContext(ctx context.Context, points []r3.Vec) (float64, bool, error) {
-	return pointSetDiameterWithBudget(proofbound.NewWorkBudget(ctx), points)
-}
-
-// pointSetDiameterWithBudget adapts Verify's witness set to internal/diameter.
-// See docs/verification-design.md §3 for its lower-bound contract.
-func pointSetDiameterWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) (float64, bool, error) {
-	return diameter.PointsWithBudget(budget, points)
 }

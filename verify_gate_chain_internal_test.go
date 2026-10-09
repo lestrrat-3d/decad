@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 
@@ -91,7 +92,7 @@ func TestChainWalkEndpointAllowChargesComputedCircularEnds(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			allow, ok, err := chainWalkEndpointAllow(t.Context(), []chainRecord{{Segments: []curveSegment{tc.segment}}})
+			allow, ok, err := diameter.ChainWalkEndpointAllow(t.Context(), []chainRecord{{Segments: []curveSegment{tc.segment}}})
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Positive(t, allow)
@@ -107,7 +108,7 @@ func TestChainWalkEndpointAllowChargesComputedCircularEnds(t *testing.T) {
 func TestChainWalkEndpointAllowKeepsExactArcEndsAtZero(t *testing.T) {
 	arc := arcSeg{Center: Point2{}, Start: Point2{U: 1}, End: Point2{V: 1}, TEnd: 1}
 	require.Zero(t, loftmesh.ArcNaturalEndRadialUpper(arc))
-	allow, ok, err := chainWalkEndpointAllow(t.Context(), []chainRecord{{Segments: []curveSegment{arc}}})
+	allow, ok, err := diameter.ChainWalkEndpointAllow(t.Context(), []chainRecord{{Segments: []curveSegment{arc}}})
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Zero(t, allow)

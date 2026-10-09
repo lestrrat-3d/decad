@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -240,12 +241,12 @@ func TestMitredSweepReadingsEncloseExactValues(t *testing.T) {
 func TestMitredSweepGateDiameterShrinks(t *testing.T) {
 	t.Parallel()
 	body, mp := mitredTreeBranch(t)
-	held, ok := pointSetDiameter(mp.verts)
+	held, ok := diameter.Points(mp.verts)
 	require.True(t, ok)
 	got, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
-	want, ok := lowerDiameterForDisplacement(held, mp.delta)
+	want, ok := diameter.LowerForDisplacement(held, mp.delta)
 	require.True(t, ok)
 	require.Equal(t, want, got)
 	require.Less(t, got, held)

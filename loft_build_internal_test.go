@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
@@ -692,7 +693,7 @@ func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
 	pl := body.payload.(loftPayload)
 	require.Zero(t, pl.delta, "this fixture is unplaced AND every station of its untrimmed square is PINNED (docs/loft-design.md §5.2)")
 	require.Zero(t, pl.sectionDelta, "S3 admits only LineSeg pairs, so every wall cell's chord IS the recorded segment")
-	held, ok, err := pointSetDiameterContext(t.Context(), pl.verts)
+	held, ok, err := diameter.PointsContext(t.Context(), pl.verts)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, held, d, "an unplaced loft's reference must be the held diameter bit-for-bit")
@@ -748,7 +749,7 @@ func TestLoftPlacedGateDiameterRoundsTheShrinkOutward(t *testing.T) {
 			placedPl := placedBody.payload.(loftPayload)
 			require.Greater(t, placedPl.delta, 0.0)
 
-			held, ok, err := pointSetDiameterContext(t.Context(), placedPl.verts)
+			held, ok, err := diameter.PointsContext(t.Context(), placedPl.verts)
 			require.NoError(t, err)
 			require.True(t, ok)
 
@@ -797,7 +798,7 @@ func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
 			}
 
 			held := evalLoftFixture(t, pl).payload.(loftPayload)
-			d, ok, err := pointSetDiameterContext(t.Context(), held.verts)
+			d, ok, err := diameter.PointsContext(t.Context(), held.verts)
 			require.NoError(t, err)
 			require.True(t, ok)
 

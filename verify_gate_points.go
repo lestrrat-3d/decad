@@ -140,7 +140,7 @@ func vertexGatePoints(budget *proofbound.WorkBudget, body *Body, extraAllow floa
 // chainGatePoints lists an ExtrudeChain body's vertices beside the stations
 // along its chains at both levels. The vertices carry their published bounds
 // plus the section displacement and the walk-end rounding the topology does
-// not charge (chainWalkEndpointAllow). Vertices alone read only an arc's two
+// not charge (diameter.ChainWalkEndpointAllow). Vertices alone read only an arc's two
 // ends, so an arc closed by its chord would read the chord. The stations are
 // read off the payload's prism view, whose walls are the chains swept over
 // the whole interval, so every station is a point of the sheet; they carry
@@ -148,7 +148,7 @@ func vertexGatePoints(budget *proofbound.WorkBudget, body *Body, extraAllow floa
 // stations cannot read (a free-form segment) keeps its vertices alone. ok is
 // false, with no error, when the walk ends or vertices cannot be bounded.
 func chainGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Body, pp chainPayload) (gatePoints, bool, error) {
-	endpointAllow, ok, err := chainWalkEndpointAllow(ctx, pp.chains)
+	endpointAllow, ok, err := diameter.ChainWalkEndpointAllow(ctx, pp.chains)
 	if err != nil || !ok {
 		return gatePoints{}, false, err
 	}

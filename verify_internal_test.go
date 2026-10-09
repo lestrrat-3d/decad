@@ -351,7 +351,7 @@ func TestBodyGateDiameterFreeformArmUnderstatesNeverOverstates(t *testing.T) {
 	require.True(t, ok)
 	require.Positive(t, d)
 
-	trueD, denseOK := pointSetDiameter(denseFreeformCapPoints(t, pp, 4000))
+	trueD, denseOK := diameter.Points(denseFreeformCapPoints(t, pp, 4000))
 	require.True(t, denseOK)
 	require.Less(t, d, trueD,
 		"a span-endpoint-only witness set must understate a curve that bulges past them, never overstate it")
