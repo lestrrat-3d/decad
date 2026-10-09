@@ -5,12 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/r3"
 )
 
 // This file is route P of docs/brep-modify-design.md ("brep-modify §N"): a
@@ -126,203 +122,48 @@ func (r brepPrismRead) caps(b *Body, bp brepPayload) prismCaps {
 	}
 }
 
-// brepPrismWalls collects what P2 and P5 read from the record's other faces:
-// every swept face along the axis as its wall re-expressed into F, every
-// rectangle across it as its projection onto F's plane with the outward
-// normal there, and the level displacements the walls state at zlo and zhi.
-type brepPrismWalls struct {
-	walls              []survey2d.SegmentWalk
-	rects              []brepgeom.PrismRect
-	zloDelta, zhiDelta float64
+func prismFaceRecord(f brepFace) brepgeom.PrismRectFace {
+	return brepgeom.PrismRectFace{
+		Frame: f.frame, Region: f.region, Wall: f.wall, Z0: f.z0, Z1: f.z1,
+		Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Split0: len(f.side0) != 0,
+		Split1: len(f.side1) != 0, Outward: f.outward, Role: f.role,
+	}
 }
 
-// brepPrismCaps is what P1, P3 and P4 read: the record's two cap faces across
-// reference axis k, their levels, the prism frame F with its embed, the
-// section S in F, and which section loop each of the bottom's region loops is.
-type brepPrismCaps struct {
-	bottom, top int
-	zlo, zhi    float64
-	frame       r3.Frame
-	eF          brepEmbed
-	section     ProfileRecord
-	bottomLoop  []int
-}
-
-// readPrismCaps reads brep-modify §4.1's P1, P3 and P4 along reference axis
-// k, or reports false. It reads no wall, so a caller that classifies the other
-// faces itself (docs/modify-general-design.md Table TC) shares the cap reading
-// with recognisePrism.
-func readPrismCaps(bp brepPayload, embeds []brepEmbed, k int) (brepPrismCaps, bool) {
-	// P1: exactly two planar faces across the axis, bottom facing −k and top
-	// facing +k, with zlo < zhi.
-	bottom, top := -1, -1
-	planar := 0
-	for fi, f := range bp.faces {
-		if !f.planar() || embeds[fi].Axis[2] != k {
-			continue
-		}
-		planar++
-		if brepOutwardSign(f, embeds[fi]) < 0 {
-			bottom = fi
-		} else {
-			top = fi
-		}
+func prismFaceRecords(bp brepPayload) []brepgeom.PrismRectFace {
+	faces := make([]brepgeom.PrismRectFace, len(bp.faces))
+	for i, f := range bp.faces {
+		faces[i] = prismFaceRecord(f)
 	}
-	if planar != 2 || bottom < 0 || top < 0 {
-		return brepPrismCaps{}, false
-	}
-	zlo := brepLevel(bp.faces[bottom], embeds[bottom])
-	zhi := brepLevel(bp.faces[top], embeds[top])
-	if !(zlo < zhi) {
-		return brepPrismCaps{}, false
-	}
-
-	// P3: the prism frame F.
-	var frame r3.Frame
-	var eF brepEmbed
-	switch {
-	case embeds[top].Sign[2] > 0:
-		frame, eF = bp.faces[top].frame, embeds[top]
-	case embeds[bottom].Sign[2] > 0:
-		frame, eF = bp.faces[bottom].frame, embeds[bottom]
-	default:
-		var err error
-		frame, eF, err = brepgeom.AxisFrame(bp.faces[0].frame, k)
-		if err != nil {
-			return brepPrismCaps{}, false // no exact F is no prism reading
-		}
-	}
-
-	// P4: the section S is top's region in F; bottom's region in F equals it.
-	section, ok := brepgeom.NewPrismMap(embeds[top], eF).Region(*bp.faces[top].region)
-	if !ok {
-		return brepPrismCaps{}, false
-	}
-	bottomRegion, ok := brepgeom.NewPrismMap(embeds[bottom], eF).Region(*bp.faces[bottom].region)
-	if !ok {
-		return brepPrismCaps{}, false
-	}
-	bottomLoop, ok := brepgeom.SameRegion(section, bottomRegion)
-	if !ok {
-		return brepPrismCaps{}, false
-	}
-	return brepPrismCaps{
-		bottom: bottom, top: top, zlo: zlo, zhi: zhi,
-		frame: frame, eF: eF, section: section, bottomLoop: bottomLoop,
-	}, true
-}
-
-// classifyPrismWalls is brep-modify §4.1's P2 and P5 over the faces other than
-// the caps: every other face is a wall along the axis or a rectangle across
-// it, and each claims one segment of the section exactly once. It reports
-// false for a record that fails either. The error is a context error only.
-func classifyPrismWalls(ctx context.Context, bp brepPayload, embeds []brepEmbed, k int, caps brepPrismCaps) (brepPrismWalls, bool, error) {
-	// P2: every other face is a wall along the axis or a rectangle across it.
-	var walls brepPrismWalls
-	work := freeform.NewFreeformWork()
-	for fi, f := range bp.faces {
-		if err := ctx.Err(); err != nil {
-			return brepPrismWalls{}, false, err
-		}
-		if fi == caps.bottom || fi == caps.top {
-			continue
-		}
-		if !walls.add(f, embeds[fi], caps.eF, k, caps.zlo, caps.zhi, work) {
-			return brepPrismWalls{}, false, nil
-		}
-	}
-
-	// P5: every wall and rectangle claims one segment of S, each exactly once.
-	if !brepgeom.PrismWallsClaim(walls.walls, walls.rects, caps.section, work) {
-		return brepPrismWalls{}, false, nil
-	}
-	return walls, true, nil
+	return faces
 }
 
 // recognisePrism reads the record as a prism along reference axis k, or
-// reports false (brep-modify §4.1, P1–P5): readPrismCaps for P1, P3 and P4,
-// then classifyPrismWalls for P2 and P5. The error is a context error only.
+// reports false (brep-modify §4.1, P1–P5): brepgeom.ReadPrismCaps for P1, P3 and P4,
+// then brepgeom.ClassifyPrismWalls for P2 and P5. The error is a context error only.
 func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k int) (brepPrismRead, bool, error) {
-	caps, ok := readPrismCaps(bp, embeds, k)
+	faces := prismFaceRecords(bp)
+	caps, ok := brepgeom.ReadPrismCaps(faces, embeds, k)
 	if !ok {
 		return brepPrismRead{}, false, nil
 	}
-	walls, ok, err := classifyPrismWalls(ctx, bp, embeds, k, caps)
+	walls, ok, err := brepgeom.ClassifyPrismWalls(ctx, faces, embeds, k, caps)
 	if err != nil || !ok {
 		return brepPrismRead{}, false, err
 	}
 	return brepPrismRead{
 		pp: prismPayload{
-			profile: caps.section, frame: caps.frame, xform: bp.xform,
-			z0: caps.zlo, z1: caps.zhi,
-			z0Delta: max(bp.faces[caps.bottom].z0Delta, walls.zloDelta),
-			z1Delta: max(bp.faces[caps.top].z0Delta, walls.zhiDelta),
+			profile: caps.Section, frame: caps.Frame, xform: bp.xform,
+			z0: caps.Zlo, z1: caps.Zhi,
+			z0Delta: max(bp.faces[caps.Bottom].z0Delta, walls.ZloDelta),
+			z1Delta: max(bp.faces[caps.Top].z0Delta, walls.ZhiDelta),
 		},
-		bottom: caps.bottom, top: caps.top, bottomLoop: caps.bottomLoop,
+		bottom: caps.Bottom, top: caps.Top, bottomLoop: caps.BottomLoop,
 	}, true, nil
 }
 
 // brepLevel is a planar face's level as a reference coordinate.
 func brepLevel(f brepFace, e brepEmbed) float64 { return e.Sign[2]*f.z0 + 0 }
-
-// brepOutwardSign is the sign of a planar face's outward normal along its
-// reference axis.
-func brepOutwardSign(f brepFace, e brepEmbed) float64 {
-	if f.outward {
-		return e.Sign[2]
-	}
-	return -e.Sign[2]
-}
-
-// add classifies one face against P2 and records what P5 reads from it. It
-// reports false for a face P2 does not admit.
-func (w *brepPrismWalls) add(f brepFace, e, eF brepEmbed, k int, zlo, zhi float64, work *freeform.FreeformWork) bool {
-	record := brepgeom.PrismRectFace{
-		Region: f.region, Wall: f.wall, Z0: f.z0, Z1: f.z1,
-		Z0Delta: f.z0Delta, Z1Delta: f.z1Delta,
-		Split0: len(f.side0) != 0, Split1: len(f.side1) != 0, Outward: f.outward,
-	}
-	switch {
-	case !f.planar() && e.Axis[2] == k:
-		// (a): a wall along the axis over exactly [zlo, zhi], unsplit.
-		if len(f.side0) != 0 || len(f.side1) != 0 {
-			return false
-		}
-		l0, l1 := e.Sign[2]*f.z0+0, e.Sign[2]*f.z1+0
-		d0, d1 := f.z0Delta, f.z1Delta
-		if l0 > l1 {
-			l0, l1, d0, d1 = l1, l0, d1, d0
-		}
-		if l0 != zlo || l1 != zhi {
-			return false
-		}
-		seg, ok := brepgeom.NewPrismMap(e, eF).Segment(f.wall)
-		if !ok {
-			return false
-		}
-		walk, err := boundarywalk.WalkOf(seg, work)
-		if err != nil {
-			return false
-		}
-		w.walls = append(w.walls, walk)
-		w.zloDelta, w.zhiDelta = max(w.zloDelta, d0), max(w.zhiDelta, d1)
-		return true
-	case f.planar():
-		// (b): a rectangle across the axis spanning exactly [zlo, zhi].
-		rect, ok := brepgeom.PlanarPrismRect(record, e, eF, k, zlo, zhi)
-		if ok {
-			w.rects = append(w.rects, rect)
-		}
-		return ok
-	default:
-		// (c): the same rectangle stated as a straight wall along the axis.
-		rect, ok := brepgeom.SweptPrismRect(record, e, eF, k, zlo, zhi)
-		if ok {
-			w.rects = append(w.rects, rect)
-		}
-		return ok
-	}
-}
 
 // requireLateralEdges is Fillet's route P classification (brep-modify §4.2):
 // every selected edge is a lateral edge of pp, the junction at one corner of

@@ -296,8 +296,8 @@ the rules leave to the byte budget.
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks, coalescing and analytic survey loops over recorded segments. |
 | `internal/classbgeom/` | Class-B boolean geometry. See general-boolean §3 B, §5. |
-| `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry and topology. See general-boolean §4–§5. |
-| `internal/throughshell/` | Through-cut shell strip and rim geometry. See modify-general §3.3. |
+| `internal/brepgeom/` / `internal/stackedbrep/` | BRep prism reading, geometry and topology. See general-boolean §4–§5. |
+| `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
 | `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap and section charges, and extent readings. See evaluator §6. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
