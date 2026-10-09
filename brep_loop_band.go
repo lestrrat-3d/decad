@@ -188,11 +188,13 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 				if !on {
 					continue
 				}
-				if b.capWalk[i] < 0 || b.capWalk[i] >= len(capSegs) {
+				if b.capWalk[i] < -1 || b.capWalk[i] >= len(capSegs) {
 					return nil, fmt.Errorf(`%w: a partial fillet band's cap walk is missing`, ErrUnsupported)
 				}
-				if err := add(embeds[b.face], capSegs[b.capWalk[i]], f.z0); err != nil {
-					return nil, err
+				if b.capWalk[i] >= 0 {
+					if err := add(embeds[b.face], capSegs[b.capWalk[i]], f.z0); err != nil {
+						return nil, err
+					}
 				}
 				if k := (i + 1) % len(b.selected); b.capArc[k] >= 0 {
 					if b.capArc[k] >= len(capSegs) {
@@ -272,7 +274,9 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 			out.capBySeg[bi] = map[int]*Edge{}
 			for i, on := range b.selected {
 				if on {
-					capSelected[b.capWalk[i]] = true
+					if b.capWalk[i] >= 0 {
+						capSelected[b.capWalk[i]] = true
+					}
 					if arc := b.capArc[(i+1)%len(b.selected)]; arc >= 0 {
 						capSelected[arc] = true
 					}

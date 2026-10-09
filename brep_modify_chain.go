@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -78,9 +79,67 @@ func (r *brepLoopRead) partialSelectedLoop() (brepLoopSel, []bool, bool) {
 // arcs during the body build.
 func brepFilletPartialLoop(ctx context.Context, d *Document, bp brepPayload, call brepModifyRequest,
 	sel brepLoopSel, selected []bool) (*Body, error) {
-	er, blends, err := prepareBrepEdgeBlends(ctx, bp, call, true)
+	initial, err := newBrepLoopRead(ctx, bp, call)
 	if err != nil {
 		return nil, err
+	}
+	if err := initial.matchEdges(); err != nil {
+		return nil, err
+	}
+	lineCall := call
+	lineCall.edges = nil
+	var ordinals []int
+	terminals := map[[3]float64]bool{}
+	n := len(selected)
+	for i, on := range selected {
+		if !on {
+			continue
+		}
+		ui := initial.loopUse[[3]int{sel.face, sel.loop, i}]
+		u := initial.topo.uses[ui]
+		if !u.Walk.IsLine() {
+			continue
+		}
+		if !selected[(i+n-1)%n] {
+			terminals[u.From] = true
+		}
+		if !selected[(i+1)%n] {
+			terminals[u.To] = true
+		}
+		for ordinal, ei := range initial.matched {
+			if ei == initial.topo.edgeOf[ui] {
+				lineCall.edges = append(lineCall.edges, call.edges[ordinal])
+				ordinals = append(ordinals, ordinal)
+				break
+			}
+		}
+	}
+	if len(lineCall.edges) == 0 {
+		return nil, initial.refuse("SL1", `the selected partial loop has no straight walks`)
+	}
+	partialTerminals := terminals
+	if len(lineCall.edges) == len(call.edges) {
+		partialTerminals = nil
+	}
+	er, blends, err := prepareBrepEdgeBlends(ctx, bp, lineCall, true, partialTerminals)
+	if err != nil {
+		return nil, err
+	}
+	if partialTerminals == nil {
+		selectedAt := map[[3]float64]int{}
+		for _, eb := range blends {
+			for _, v := range eb.v {
+				selectedAt[v]++
+			}
+		}
+		for _, eb := range blends {
+			for k, v := range eb.v {
+				eb.terminal[k] = selectedAt[v] == 1
+			}
+		}
+	}
+	for i, eb := range blends {
+		eb.ordinal = ordinals[i]
 	}
 	r, err := newBrepLoopRead(ctx, er.bp, call)
 	if err != nil {
@@ -151,7 +210,28 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 			amounts[i] = r.call.loop.dc
 		}
 	}
-	segs, joins, capWalk, capArc, err := partialFilletContour(r.budget, cl.walks, selected, amounts)
+	fr, err := filletLoopOf(r.budget, orig, r.call.loop.dc, f.role, freeform.NewFreeformWork())
+	if err != nil {
+		return brepPayload{}, err
+	}
+	sphere := make([]bool, len(selected))
+	for i, on := range selected {
+		if !on {
+			continue
+		}
+		if cl.walks[i].IsCircular() && !filletSphereWalk(cl.walks[i], amounts[i]) {
+			return brepPayload{}, r.refuse("SL2", `a selected circular walk has no supported partial-loop patch`)
+		}
+		if !filletSphereWalk(cl.walks[i], amounts[i]) {
+			continue
+		}
+		next := (i + 1) % len(selected)
+		if fr.loop.Corners[i] != filletband.Tangent || fr.loop.Corners[next] != filletband.Tangent {
+			return brepPayload{}, r.refuse("SL2", `a selected sphere walk has a corner that is not tangent`)
+		}
+		sphere[i] = true
+	}
+	segs, joins, capWalk, capArc, err := partialFilletContour(r.budget, cl.walks, selected, sphere, amounts)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}
@@ -173,7 +253,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 			M:  Point2{U: j.M.U, V: j.M.V},
 			PA: Point2{U: j.PA.U, V: j.PA.V}, PB: Point2{U: j.PB.U, V: j.PB.V}}
 	}
-	delta, err := capband.AmountsContourDisplacement(cl.walks, readings, amounts, r.call.loop.dcDelta, shellTol)
+	delta, err := partialFilletContourDelta(cl.walks, readings, amounts, sphere, r.call.loop.dcDelta)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}
@@ -216,15 +296,9 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 		}
 	}
 
-	selectedAt := map[[3]float64]int{}
 	for _, eb := range blends {
-		for _, v := range eb.v {
-			selectedAt[v]++
-		}
-	}
-	for _, eb := range blends {
-		for k, v := range eb.v {
-			if selectedAt[v] != 1 {
+		for k := range eb.v {
+			if !eb.terminal[k] {
 				continue
 			}
 			capLoop := profile.Outer
@@ -292,7 +366,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 // fixed. Two selected walks retain the ordinary fillet's reflex connector;
 // a selected-to-unselected join uses the sharp carrier intersection.
 func partialFilletContour(budget *proofbound.WorkBudget, walks []survey2d.SideWalk,
-	selected []bool, amounts []float64) ([]curveSegment, []offset2d.Join, []int, []int, error) {
+	selected, sphere []bool, amounts []float64) ([]curveSegment, []offset2d.Join, []int, []int, error) {
 	n := len(walks)
 	joins := make([]offset2d.Join, n)
 	for k := range n {
@@ -312,8 +386,17 @@ func partialFilletContour(budget *proofbound.WorkBudget, walks []survey2d.SideWa
 		}
 		joins[k] = j
 	}
+	for i, on := range sphere {
+		if !on {
+			continue
+		}
+		pole := offset2d.Point{U: walks[i].CU, V: walks[i].CV}
+		next := (i + 1) % n
+		joins[i].M, joins[next].M = pole, pole
+	}
 	capWalk, capArc := make([]int, n), make([]int, n)
 	for i := range capArc {
+		capWalk[i] = -1
 		capArc[i] = -1
 	}
 	var segs []curveSegment
@@ -327,6 +410,13 @@ func partialFilletContour(budget *proofbound.WorkBudget, walks []survey2d.SideWa
 		}
 		if joins[(i+1)%n].Arc {
 			end = joins[(i+1)%n].PA
+		}
+		if sphere[i] {
+			pole := offset2d.Point{U: w.CU, V: w.CV}
+			if start != pole || end != pole {
+				return nil, nil, nil, nil, fmt.Errorf(`%w: a selected sphere walk does not end at its pole`, ErrUnsupported)
+			}
+			continue
 		}
 		if offset2d.WalkConsumed(w, start, end, shellTol) {
 			return nil, nil, nil, nil, offset2d.ErrDrop
@@ -348,6 +438,38 @@ func partialFilletContour(budget *proofbound.WorkBudget, walks []survey2d.SideWa
 	return segs, joins, capWalk, capArc, nil
 }
 
+// partialFilletContourDelta omits an exact sphere walk from the offset proof.
+// Its two straight neighbours meet at the recorded pole, as in a complete
+// loop fillet, while every unselected walk keeps its zero offset.
+func partialFilletContourDelta(walks []survey2d.SideWalk, joins []capcontour.Join,
+	amounts []float64, sphere []bool, radiusDelta float64) (float64, error) {
+	if !slices.Contains(sphere, true) {
+		return capband.AmountsContourDisplacement(walks, joins, amounts, radiusDelta, shellTol)
+	}
+	n := len(walks)
+	keptWalks := make([]survey2d.SideWalk, 0, n)
+	keptJoins := make([]capcontour.Join, 0, n)
+	keptAmounts := make([]float64, 0, n)
+	for i, w := range walks {
+		if sphere[i] {
+			continue
+		}
+		j := joins[i]
+		prev := (i + n - 1) % n
+		if sphere[prev] {
+			pole := Point2{U: walks[prev].CU, V: walks[prev].CV}
+			j = capcontour.Join{M: pole, VU: pole.U, VV: pole.V}
+		}
+		keptWalks = append(keptWalks, w)
+		keptJoins = append(keptJoins, j)
+		keptAmounts = append(keptAmounts, amounts[i])
+	}
+	if len(keptWalks) < 2 {
+		return 0, offset2d.ErrDrop
+	}
+	return capband.AmountsContourDisplacement(keptWalks, keptJoins, keptAmounts, radiusDelta, shellTol)
+}
+
 // partialTerminalBlend pins a chain end to the cap contour's actual foot.
 // At a hole mouth the selected cap walks move away from the hole, whereas a
 // standalone route E corner would trim the end wall toward the hole. The
@@ -363,7 +485,8 @@ func (r *brepLoopRead) partialTerminalBlend(sel brepLoopSel, orig, contour loopR
 			break
 		}
 	}
-	if seg < 0 || seg >= len(orig.Segments) || seg >= len(capWalk) || capWalk[seg] >= len(contour.Segments) {
+	if seg < 0 || seg >= len(orig.Segments) || seg >= len(capWalk) ||
+		capWalk[seg] < 0 || capWalk[seg] >= len(contour.Segments) {
 		return r.refuse("SL2", `a terminal has no selected cap segment`)
 	}
 	work := freeform.NewFreeformWork()

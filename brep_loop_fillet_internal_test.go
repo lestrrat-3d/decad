@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -756,6 +757,102 @@ func TestVertexBlendCrossFaceBrepCorner(t *testing.T) {
 	reading, err := report.ForBody(out)
 	require.NoError(t, err)
 	require.Equal(t, Sound, reading.Status)
+}
+
+func TestVertexBlendThreeEdgesAtOneBoxVertex(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	body := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	corner := r3.NewVec(0, 0, 20)
+	sel := Edges(ParallelTo(routeEX), EndpointAt(corner)).
+		Or(ParallelTo(r3.NewVec(0, 1, 0)), EndpointAt(corner)).
+		Or(ParallelTo(routeEZ), EndpointAt(corner)).Exactly(3)
+	out, err := body.Fillet(t.Context(), sel, units.Millimeters(2))
+	require.NoError(t, err)
+	requireClosedTopology(t, out)
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+	requireCornerSphere(t, out)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(out)
+	require.NoError(t, err)
+	require.Equal(t, Sound, reading.Status)
+}
+
+func TestVertexBlendPartialSphereAfterLateralEdge(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	body := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	corner := r3.NewVec(0, 0, 20)
+	step, err := body.Fillet(t.Context(), Edges(ParallelTo(routeEZ), EndpointAt(corner)).Exactly(1), units.Millimeters(2))
+	require.NoError(t, err)
+	top := planarBodyFace(t, step, routeEZ, corner).Loops()[0].Edges()
+	require.Len(t, top, 5)
+	out, err := step.Fillet(t.Context(), edgesQuery([]*Edge{top[0], top[3], top[4]}), units.Millimeters(2))
+	require.NoError(t, err)
+	requireClosedTopology(t, out)
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+	requireCornerSphere(t, out)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(out)
+	require.NoError(t, err)
+	require.Equal(t, Sound, reading.Status)
+}
+
+func requireCornerSphere(t *testing.T, body *Body) {
+	t.Helper()
+	spheres := 0
+	for _, face := range filletPatchesOf(body) {
+		if _, ok := face.Surface().(Sphere); ok {
+			spheres++
+		}
+	}
+	require.Equal(t, 1, spheres)
+}
+
+func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	body := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	corner := r3.NewVec(0, 0, 20)
+	step, err := body.Fillet(t.Context(), Edges(ParallelTo(routeEZ), EndpointAt(corner)).Exactly(1), units.Millimeters(2))
+	require.NoError(t, err)
+	top := planarBodyFace(t, step, routeEZ, corner).Loops()[0].Edges()
+	bp, err := brepOfPrism(step.payload.(prismPayload))
+	require.NoError(t, err)
+	r, err := newBrepLoopRead(t.Context(), bp, brepModifyRequest{edges: []*Edge{top[0], top[3], top[4]}})
+	require.NoError(t, err)
+	require.NoError(t, r.matchEdges())
+	sel, selected, ok := r.partialSelectedLoop()
+	require.True(t, ok)
+	cl, err := oneLoopCornerLoop(r.budget, bp.faces[sel.face].regionLoop(sel.loop), freeform.NewFreeformWork())
+	require.NoError(t, err)
+	amounts := make([]float64, len(selected))
+	sphere := make([]bool, len(selected))
+	for i, on := range selected {
+		if on {
+			amounts[i] = 2
+			sphere[i] = filletSphereWalk(cl.walks[i], 2)
+		}
+	}
+	segs, joins, capWalk, _, err := partialFilletContour(r.budget, cl.walks, selected, sphere, amounts)
+	require.NoError(t, err)
+	require.Len(t, segs, 4)
+	for i, w := range cl.walks {
+		if !w.IsCircular() {
+			continue
+		}
+		require.True(t, selected[i])
+		require.Equal(t, -1, capWalk[i])
+		pole := Point2{U: w.CU, V: w.CV}
+		require.Equal(t, pole, Point2{U: joins[i].M.U, V: joins[i].M.V})
+		require.Equal(t, pole, Point2{U: joins[(i+1)%len(joins)].M.U, V: joins[(i+1)%len(joins)].M.V})
+	}
 }
 
 func TestFilletSphereWalkRequiresExactRecordedRadius(t *testing.T) {
