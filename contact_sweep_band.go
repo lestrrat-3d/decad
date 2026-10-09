@@ -44,11 +44,19 @@ import (
 type planarMotion = planarsweep.Motion
 
 func planarMotionOf(p *rotationalSweepPath) (planarMotion, bool) {
-	return planarsweep.MotionOf(planarsweep.MotionInput{
-		Points: p.startPoints, Delta: p.path.Delta, Duration: p.path.Duration,
-		Velocity: p.velocity, Frame: p.frame,
-		Drift: p.path.Drift != nil, Screw: p.path.Screw != nil,
-	})
+	return planarsweep.MotionOf(planarSupportPathOf(p).Motion)
+}
+
+func planarSupportPathOf(p *rotationalSweepPath) planarsweep.SupportPath {
+	return planarsweep.SupportPath{
+		Points: p.startPoints, Solid: p.solid,
+		MovingOwner: p.path.Drift != nil || p.path.Screw != nil,
+		Motion: planarsweep.MotionInput{
+			Points: p.startPoints, Delta: p.path.Delta, Duration: p.path.Duration,
+			Velocity: p.velocity, Frame: p.frame,
+			Drift: p.path.Drift != nil, Screw: p.path.Screw != nil,
+		},
+	}
 }
 
 // planarSupport is one support plane of the touching pair. Paths index the
@@ -79,19 +87,6 @@ type planarSupport struct {
 // S's triangle order, each plane once.
 func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport, error) {
 	paths := [2]*rotationalSweepPath{&r.a, &r.b}
-	var motions [2]planarMotion
-	var spins [2][]*big.Rat
-	for i, path := range paths {
-		motion, ok := planarMotionOf(path)
-		if !ok {
-			return nil, nil
-		}
-		spin, ok := vertexSpins(path, motion)
-		if !ok {
-			return nil, nil
-		}
-		motions[i], spins[i] = motion, spin
-	}
 	rest := new(big.Rat)
 	if r.req.RestSpeed != (units.Value{}) {
 		speed, ok := sweeppath.ExactBaseValue(r.req.RestSpeed)
@@ -100,114 +95,23 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 		}
 		rest = speed
 	}
+	inputs := [2]planarsweep.SupportPath{planarSupportPathOf(paths[0]), planarSupportPathOf(paths[1])}
+	candidates, err := planarsweep.FindSupports(inputs, supportBandOf(r.req.ContactRequest), rest, poll)
+	if err != nil {
+		return nil, err
+	}
 	var out []planarSupport
-	for _, s := range []int{1, 0} {
-		m := 1 - s
-		S, M := paths[s], paths[m]
-		// A named local, read once: no array element is re-read across the
-		// calls below.
-		spinM := spins[m]
-		boxesM := make([]proofarith.FloatBox3, len(M.startPoints))
-		for i, v := range M.startPoints {
-			boxesM[i] = proofarith.DvFloatBox(v)
-		}
-		tried := make(map[string]struct{})
-		var key []byte
-		for t, tri := range S.solid.Tris {
-			if err := poll(); err != nil {
-				return nil, err
-			}
-			a := S.startPoints[tri[0]]
-			n := proofarith.DvCross(proofarith.DvSub(S.startPoints[tri[1]], a),
-				proofarith.DvSub(S.startPoints[tri[2]], a))
-			if proofarith.DvIsZero(n) {
-				continue
-			}
-			key = planarsweep.PlaneKey(key[:0], n, a)
-			if _, ok := tried[string(key)]; ok {
-				continue
-			}
-			tried[string(key)] = struct{}{}
-			if planarSupportRuledOut(boxesM, n, a, r.req.ContactRequest) {
-				continue
-			}
-			support, ok, err := planarSupportOf(S, M, n, a, r.req.ContactRequest, poll)
-			if err != nil {
-				return nil, err
-			}
-			if !ok {
-				continue
-			}
-			support.m, support.s, support.tri = m, s, t
-			support.motionM, support.motionS = motions[m], motions[s]
-			support.pathM, support.pathS = M, S
-			support.duration = r.a.path.Duration
-			support.rates = planarsweep.Rates(M.startPoints, n, support.motionM, support.motionS)
-			support.spin = spinM
-			support.rested = restedVertices(&support, rest)
-			out = append(out, support)
-		}
+	for _, c := range candidates {
+		out = append(out, planarSupport{
+			m: c.Guest, s: c.Owner, tri: c.Triangle,
+			normal: c.Normal, origin: c.Origin, local: c.Local,
+			heights: c.Heights, rates: c.Rates, contact: c.Contact, lifted: c.Lifted,
+			rested: c.Rested, spin: c.Spin, nLow: c.NormalLow, nHigh: c.NormalHigh,
+			motionM: c.GuestMotion, motionS: c.OwnerMotion,
+			pathM: paths[c.Guest], pathS: paths[c.Owner], duration: c.Duration,
+		})
 	}
 	return out, nil
-}
-
-// planarPlaneTried reports whether n through a names a plane already tried:
-// the same outward direction and the same offset.
-func planarPlaneTried(tried []planarSupport, n, a proofarith.DyV3) bool {
-	for _, p := range tried {
-		if proofarith.DvIsZero(proofarith.DvCross(n, p.normal)) &&
-			proofarith.DvDot(n, p.normal).Sign() > 0 &&
-			proofarith.DvDot(p.normal, proofarith.DvSub(a, p.origin)).Sign() == 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// planarSupportRuledOut is the root request adapter for the support-band check.
-func planarSupportRuledOut(boxesM []proofarith.FloatBox3, n, a proofarith.DyV3, req ContactRequest) bool {
-	return planarsweep.SupportRuledOut(boxesM, n, a, supportBandOf(req))
-}
-
-// planarSupportOf checks one plane: every M vertex on or in front of it, and
-// a nonempty support set (§10.5): at least one M vertex on it, or, under a
-// positive SupportBand, within the band above it, h² <= band²·n·n compared
-// exactly. A plane with an S vertex strictly in front of it is face-local
-// (§10.6): S must only translate, so the column test can read S's start
-// triangles less its translation, and the plane must be one flat face of S
-// (planarSupportFace). The column test itself depends on the horizon and runs
-// in the departure's and the band's grid searches.
-func planarSupportOf(S, M *rotationalSweepPath, n, a proofarith.DyV3, req ContactRequest,
-	poll func() error) (planarSupport, bool, error) {
-	read, ok, err := planarsweep.ReadSupport(S.startPoints, M.startPoints, n, a, supportBandOf(req),
-		S.path.Drift != nil || S.path.Screw != nil, poll)
-	if err != nil || !ok {
-		return planarSupport{}, false, err
-	}
-	support := planarSupport{
-		normal: n, origin: a, local: read.Local, pathS: S,
-		heights: read.Heights, contact: read.Contact, lifted: read.Lifted,
-	}
-	if read.Local {
-		if _, ok := planarSupportFace(&support); !ok {
-			return planarSupport{}, false, nil
-		}
-	}
-	squared := proofarith.DvDot(n, n).Rat()
-	low, high := proofbound.RatSqrtDown(squared), proofbound.RatSqrtUp(squared)
-	if low <= 0 || !finiteMeasurementValues(low, high) {
-		return planarSupport{}, false, nil
-	}
-	support.nLow, support.nHigh = proofarith.FloatRat(low), proofarith.FloatRat(high)
-	return support, true, nil
-}
-
-func vertexSpins(p *rotationalSweepPath, motion planarMotion) ([]*big.Rat, bool) {
-	return planarsweep.VertexSpins(p.startPoints, motion)
-}
-
-func restedVertices(s *planarSupport, rest *big.Rat) map[int]struct{} {
-	return planarsweep.RestedVertices(s.lifted, s.rates, s.nLow, rest)
 }
 
 func (s *planarSupport) curvature(t *big.Rat) ([]*big.Rat, bool) {
