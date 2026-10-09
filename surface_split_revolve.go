@@ -16,7 +16,7 @@ import (
 // selected cell becomes one solid revolvePayload over the target's own sweep,
 // carrying its cell's δ_cut as sectionDelta with sectionWhole false: only the
 // cut ends a cell records moved, and the solid build charges them through
-// trimRevolveSegmentCharges (§7.2).
+// prismcells.TrimRevolveSegmentCharges (§7.2).
 
 // splitRevolve is Split over a pair S1 has already routed to the revolve
 // family. Each piece's axis gates rerun over the piece's own meridian about

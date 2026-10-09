@@ -397,10 +397,6 @@ func trimProfileFullyWhole(budget *proofbound.WorkBudget, p profileRecord) (bool
 	return prismcells.TrimProfileFullyWhole(budget, p.Outer, p.Holes)
 }
 
-func trimRevolveSegmentCharges(seg curveSegment, delta float64) (proofbound.WalkEndBound, proofbound.WalkEndBound, error) {
-	return prismcells.TrimRevolveSegmentCharges(seg, delta)
-}
-
 // trimBoundsWalks resolves profile's Outer-then-Holes walks for a trimmed
 // ribbon's own Bounds reading (docs/surface-intersection-design.md §7),
 // charging trimCutChargeUV into exactly the endpoint bound whose OWN

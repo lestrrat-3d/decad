@@ -1,7 +1,11 @@
 package revolveaxis
 
 import (
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
@@ -10,6 +14,35 @@ import (
 type SectionCharge struct {
 	Band     float64
 	Envelope float64
+}
+
+// ChargeOf bounds the section band and its axis-coordinate envelope from the
+// recorded profile's boundary. A zero displacement needs no boundary walk.
+func ChargeOf(profile momentinput.Profile, ax Frame, delta float64,
+	work *freeform.FreeformWork) (SectionCharge, error) {
+	if delta == 0 {
+		return SectionCharge{}, nil
+	}
+	coordUpper, err := momentinput.CoordinateUpper(profile, work, nil)
+	if err != nil {
+		return SectionCharge{}, err
+	}
+	perimeter := 0.0
+	segments := 0
+	for _, loop := range append([]sectionrecord.LoopRecord{profile.Outer}, profile.Holes...) {
+		for _, seg := range loop.Segments {
+			w, err := boundarywalk.WalkOf(seg, work)
+			if err != nil {
+				return SectionCharge{}, err
+			}
+			perimeter = proofbound.AbsSumUpper(perimeter, w.Length, w.LengthBound)
+			segments++
+		}
+	}
+	return SectionCharge{
+		Band:     proofbound.SectionDisplacementArea(delta, segments, perimeter),
+		Envelope: ax.RadialUpper(SectionCoordUpper(coordUpper, delta)),
+	}, nil
 }
 
 // First bounds the change in the first radial moment of the section.

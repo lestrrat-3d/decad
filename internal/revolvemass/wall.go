@@ -50,6 +50,18 @@ func WallAxisMoment(w survey2d.SegmentWalk, kind revolveaxis.WallKind, segs []se
 	return result
 }
 
+// ChargedWallAxisMoment includes the displacement of a whole meridian from
+// its recorded circular wall. Cut constructions charge their own endpoints.
+func ChargedWallAxisMoment(w survey2d.SegmentWalk, kind revolveaxis.WallKind,
+	segs []sectionrecord.CurveSegment, ax revolveaxis.Frame, whole bool, delta float64) proofbound.BoundedScalar {
+	m := WallAxisMoment(w, kind, segs, ax)
+	if revolveaxis.SectionWholeCharges(whole, delta).U != 0 && w.IsCircular() && kind != revolveaxis.WallAxis {
+		allow := revolveaxis.WallMomentAllow(true, delta, w.LengthUpper, w.AxisRadiusUpper)
+		m.Bound = proofbound.AbsSumUpper(m.Bound, allow)
+	}
+	return m
+}
+
 // circularAxisMomentTotal sums the bounds over the recorded segments of a
 // circular wall. Every segment must have an enclosure to prove the total.
 func circularAxisMomentTotal(segs []sectionrecord.CurveSegment, ax revolveaxis.Frame) (proofbound.RatInterval, bool) {
