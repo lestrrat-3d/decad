@@ -340,7 +340,7 @@ the rules leave to the byte budget.
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, depth and rolling bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
 | `internal/sweepmemo/` | Sweep replay coverage and memo tables. See contact-sweep §6–§7. |
-| `internal/spherepath/` | Sphere path gaps and brackets. See contact-sweep §4–§5. |
+| `internal/spherepath/` | Sphere path gaps, brackets and pair replay. See contact-sweep §4–§6. |
 | `internal/linkagebound/` | Link bounds and projections. See linkage §5, §15. |
 | `internal/loopscene/` | Closed-loop sketch scenes. See linkage §15.2. |
 | `internal/linkagebound/loopchain/` | Sketch loop enclosures. See linkage §15. |
