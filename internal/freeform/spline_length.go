@@ -326,7 +326,7 @@ func (f *LengthSplitScratch) Split(points []DyadicPoint) {
 	f.Right[n-1].Exp = f.Work[n-1].Exp
 	for round := n - 1; round > 0; round-- {
 		for i := range round {
-			MidpointInto(&f.Work[i], f.Work[i], f.Work[i+1], &f.Tmp)
+			midpointInto(&f.Work[i], f.Work[i], f.Work[i+1], &f.Tmp)
 		}
 		f.Left[n-round].U.Set(f.Work[0].U)
 		f.Left[n-round].V.Set(f.Work[0].V)
@@ -337,7 +337,7 @@ func (f *LengthSplitScratch) Split(points []DyadicPoint) {
 	}
 }
 
-func MidpointInto(dst *DyadicPoint, a, b DyadicPoint, tmp *big.Int) {
+func midpointInto(dst *DyadicPoint, a, b DyadicPoint, tmp *big.Int) {
 	exp := max(a.Exp, b.Exp)
 	dst.U.Lsh(a.U, exp-a.Exp)
 	tmp.Lsh(b.U, exp-b.Exp)

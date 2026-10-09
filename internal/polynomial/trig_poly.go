@@ -46,7 +46,7 @@ func CsDerivTheta(x CsPoly) CsPoly {
 	return CsPoly{A: a, B: RpNeg(RpDeriv(x.A))}
 }
 
-func CsIsZero(x CsPoly) bool {
+func csIsZero(x CsPoly) bool {
 	return len(RpTrim(x.A)) == 0 && len(RpTrim(x.B)) == 0
 }
 
@@ -145,7 +145,7 @@ func (b CritBracket) Mid() float64 { return (b.ThLo + b.ThHi) / 2 }
 // second result is false when f is identically zero — a constant objective,
 // the caller's closed-form path.
 func TrigStationaryBracketsContext(ctx context.Context, f CsPoly, g func(float64) float64, lip, slack float64) ([]CritBracket, bool, error) {
-	if CsIsZero(f) {
+	if csIsZero(f) {
 		return nil, false, nil
 	}
 	var out []CritBracket
