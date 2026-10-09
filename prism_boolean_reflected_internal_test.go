@@ -205,7 +205,7 @@ func TestPrismReflectedSceneClassifiesTheRewoundWinding(t *testing.T) {
 	} {
 		selected, err := prismcells.Select(budget, profiles, matterA, matterB, tc.keep)
 		require.NoError(t, err)
-		merged, _, ok, err := mergePrismCells(budget, selected, tc.name)
+		merged, _, ok, err := prismcells.Merge(budget, selected, tc.name)
 		require.NoError(t, err)
 		require.True(t, ok, tc.name)
 		require.Zero(t, prismExactLineOnlyArea(t, merged).Cmp(big.NewRat(tc.area, 1)), "%s: area", tc.name)

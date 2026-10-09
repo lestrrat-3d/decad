@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -33,23 +34,23 @@ import (
 // topology is unresolved (§4.4): a disjoint footprint, an internal void, an
 // edge count outside {1, 2}, or a chain that does not close into one simple
 // loop. opName names the op for RB1's message alone.
-func Merge(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) (sectionrecord.LoopRecord, float64, bool, error) {
+func Merge(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) (momentinput.Profile, float64, bool, error) {
 	survivors, resolved, err := mergeSurvivors(budget, selected, opName)
 	if err != nil || !resolved {
-		return sectionrecord.LoopRecord{}, 0, false, err
+		return momentinput.Profile{}, 0, false, err
 	}
 	chain, resolved, err := ChainClosedSurvivors(budget, survivors)
 	if err != nil {
-		return sectionrecord.LoopRecord{}, 0, false, err
+		return momentinput.Profile{}, 0, false, err
 	}
 	if !resolved {
-		return sectionrecord.LoopRecord{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
+		return momentinput.Profile{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
 	}
 	loop, cutDelta, err := recordChain(budget, chain)
 	if err != nil {
-		return sectionrecord.LoopRecord{}, 0, false, err
+		return momentinput.Profile{}, 0, false, err
 	}
-	return loop, cutDelta, true, nil
+	return momentinput.Profile{Outer: loop}, cutDelta, true, nil
 }
 
 // MergeLoops is Merge for a selection whose survivors close into several

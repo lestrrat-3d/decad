@@ -132,7 +132,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if err != nil || !resolved {
 		return prismPayload{}, false, err
 	}
-	merged, cutDelta, resolved, err := mergePrismCells(budget, selected, "cut")
+	merged, cutDelta, resolved, err := prismcells.Merge(budget, selected, "cut")
 	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil || !resolved {
 		return prismPayload{}, false, err
 	}

@@ -83,6 +83,33 @@ func AdmittedShiftedInterval(pa, pb Operand) (*big.Rat, *big.Rat) {
 	return z0, z1
 }
 
+// IntersectLowerEnd chooses the higher of A's lower level and B's exact
+// shifted lower level. The chosen endpoint carries its own axial displacement.
+// A tie takes A's float with the larger displacement because both operands'
+// coordinates then equally denote the result. A shifted B endpoint rounds
+// once, and RationalFloatError charges that rounding beside B's displacement.
+func IntersectLowerEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64) (float64, float64) {
+	return intersectEnd(aVal, aDelta, bVal, bDelta, true)
+}
+
+// IntersectUpperEnd chooses the lower of A's upper level and B's exact
+// shifted upper level, charging B's rounding when B supplies the result.
+func IntersectUpperEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64) (float64, float64) {
+	return intersectEnd(aVal, aDelta, bVal, bDelta, false)
+}
+
+func intersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, lower bool) (float64, float64) {
+	cmp := proofarith.FloatRat(aVal).Cmp(bVal)
+	switch {
+	case cmp == 0:
+		return aVal, max(aDelta, bDelta)
+	case lower && cmp > 0 || !lower && cmp < 0:
+		return aVal, aDelta
+	}
+	held, _ := bVal.Float64()
+	return held, proofbound.AbsSumUpper(bDelta, proofarith.RationalFloatError(bVal, held))
+}
+
 // CutZIntervalSpans compares the shifted tool interval against both target
 // endpoints exactly. A cap meeting the target endpoint is a valid span.
 func CutZIntervalSpans(target, tool Operand) bool {

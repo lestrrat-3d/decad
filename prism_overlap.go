@@ -3,18 +3,15 @@ package decad
 import (
 	"context"
 	"errors"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
-	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -87,8 +84,8 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 	// §3.2's Intersect z-interval and per-end axial displacement, shared by
 	// every measured cell — the pair's own relation, not a per-cell one.
 	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
-	z0, z0Delta := prismIntersectEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta, func(c int) bool { return c > 0 })
-	z1, z1Delta := prismIntersectEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta, func(c int) bool { return c < 0 })
+	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta)
+	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta)
 
 	d := a.doc
 	values := make([]float64, 0, len(selected))
@@ -100,12 +97,12 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 
 		// Per-cell measurement: the cell's own closed directed walk,
 		// recorded through the existing recordEdge/edgeJoin/
-		// prismcells.CutDelta sequence mergePrismCells already uses — no
+		// prismcells.CutDelta sequence prismcells.Merge already uses — no
 		// count, drop or chain, since a cell is already one loop in
 		// sketch's own order. RB8/RB9 propagate here, exactly as they do on
 		// the body path, unless the cuts carry an amplified displacement
 		// (prismcells.AmplifiedFallback), which sends the pair to the mesh path.
-		cellProfile, cutDelta, err := recordPrismOverlapCell(budget, p.Outer)
+		cellProfile, cutDelta, err := prismcells.RecordOverlapCell(budget, p.Outer)
 		if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil {
 			return Measurement{}, false, err
 		}
@@ -156,45 +153,4 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 		Exactness: exactnessOf(bound),
 		Bound:     units.CubicMillimeters(bound),
 	}, true, nil
-}
-
-// recordPrismOverlapCell records one arrangement cell's own Outer boundary
-// edges into a ProfileRecord, the same recordEdge/edgeJoin/prismcells.CutDelta
-// sequence mergePrismCells (prism_boolean.go) already runs over its merged
-// chain — minus the count, drop and chain steps, which exist only to build
-// one loop out of many. A cell is already one closed directed walk in
-// sketch's own order (§4.5), so §5's authentication claim 2 is discharged for
-// free here, exactly as it is for the clean-nesting match. cutDelta is the
-// maximum §7 cut-parameter charge over the cell's own edges, zero when every
-// edge is whole.
-func recordPrismOverlapCell(budget *proofbound.WorkBudget, edges []sketch.BoundaryEdge) (profileRecord, float64, error) {
-	segs := make([]curveSegment, len(edges))
-	joins := make([]sketchrecord.LoopJoin, len(edges))
-	cutDelta := 0.0
-	for i, e := range edges {
-		if err := budget.Step(); err != nil {
-			return profileRecord{}, 0, err
-		}
-		seg, err := sketchrecord.RecordEdge(e)
-		if err != nil {
-			return profileRecord{}, 0, err
-		}
-		segs[i] = seg
-		join, err := sketchrecord.EdgeJoin(e, seg)
-		if err != nil {
-			return profileRecord{}, 0, err
-		}
-		joins[i] = join
-		delta, err := prismcells.CutDelta(e, seg)
-		if err != nil {
-			return profileRecord{}, 0, err
-		}
-		cutDelta = math.Max(cutDelta, delta)
-	}
-	// RB9 (§9): the seam's own junction falsifier, run on this cell's own
-	// recorded coordinates.
-	if err := sketchrecord.FalsifyLoopJoins("overlap cell", joins); err != nil {
-		return profileRecord{}, 0, err
-	}
-	return profileRecord{Outer: loopRecord{Segments: segs}}, cutDelta, nil
 }

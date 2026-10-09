@@ -41,7 +41,7 @@ import (
 // Union's resolution (§4.2) is the hole-free select-all/merge/chain path: the
 // candidate is assembled from every returned cell, and §6's audit re-proves
 // the assembly the same way every modify op re-checks its own rewrite. It
-// uses prismcells.Merge through mergePrismCells — the same chain/merge
+// uses prismcells.Merge — the same chain/merge
 // tail the crossing sub-case below reuses over its own, narrower cell
 // selection. Cut/Intersect's clean-nesting structural match (§4.2's "clean"
 // sub-case) is prism_boolean_nesting.go — see that file's own header for why
@@ -368,7 +368,7 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 	if err := budget.Err(); err != nil {
 		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
-	profiles, err := prismCellProfiles(ctx, budget, s)
+	profiles, err := prismcells.CellProfiles(ctx, budget, s)
 	if err != nil {
 		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
@@ -391,7 +391,7 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 	// Union, hole-free operands (G6): select every returned cell, which is
 	// the union once no cell is material of neither operand. Two hole-free
 	// operands can still enclose such a cell between them, so a scene with
-	// one is unresolved (§4.2, §4.4). mergePrismCells is the shared
+	// one is unresolved (§4.2, §4.4). prismcells.Merge is the shared
 	// merge/chain tail the crossing sub-case (prism_boolean_crossing.go)
 	// reuses over its OWN, narrower selected cell set.
 	voidFree, err := prismcells.CellsHaveNoVoid(budget, tags, profiles)
@@ -404,7 +404,7 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 	if ok, err := sceneDelta.SharedSpansBounded(budget, profiles); err != nil || !ok {
 		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
-	merged, cutDelta, resolved, err := mergePrismCells(budget, profiles, "union")
+	merged, cutDelta, resolved, err := prismcells.Merge(budget, profiles, "union")
 	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil {
 		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
@@ -412,41 +412,6 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 		return profileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: not a shape this increment covers
 	}
 	return merged, sceneDelta, cutDelta, true, nil
-}
-
-// mergePrismCells preserves the root caller's profile result around the cell merge.
-func mergePrismCells(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) (profileRecord, float64, bool, error) {
-	loop, cutDelta, resolved, err := prismcells.Merge(budget, selected, opName)
-	if err != nil || !resolved {
-		return profileRecord{}, 0, resolved, err
-	}
-	return profileRecord{Outer: loop}, cutDelta, true, nil
-}
-
-// prismCellProfiles is prismProfilesContext for a path that classifies and
-// merges the scene's cells: it restates each cell's line runs at the
-// vertices other cells report on the same line (prismcells.SplitRuns), so a
-// span two operands share names one edge key in every cell walking it. A
-// circular run it cannot restate returns no profile at all, which every
-// caller reads as a scene with no cell to resolve: the mesh path.
-func prismCellProfiles(ctx context.Context, budget *proofbound.WorkBudget, s *sketch.Sketch) ([]*sketch.Profile, error) {
-	profiles, err := prismProfilesContext(ctx, s.Profiles)
-	if err != nil {
-		return nil, err
-	}
-	split, resolved, err := prismcells.SplitRuns(budget, profiles)
-	if err != nil || !resolved {
-		return nil, err
-	}
-	return split, nil
-}
-
-// prismProfilesContext makes sketch's synchronous arrangement observable to a
-// caller's context. Cancellation waits for the bounded arrangement worker to
-// finish, so no worker survives the operation. Its discarded result cannot
-// reach the document or its operands.
-func prismProfilesContext(ctx context.Context, profiles func() []*sketch.Profile) ([]*sketch.Profile, error) {
-	return prismcells.ProfilesContext(ctx, profiles)
 }
 
 // auditPrismMergeSection runs the modify §5 audit (fillet_audit.go,

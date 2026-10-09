@@ -245,7 +245,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 	if err := b.st.budget.Err(); err != nil {
 		return nil, err
 	}
-	profiles, err := prismCellProfiles(ctx, b.st.budget, s)
+	profiles, err := prismcells.CellProfiles(ctx, b.st.budget, s)
 	if err != nil {
 		return nil, err
 	}

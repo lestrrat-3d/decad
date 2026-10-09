@@ -551,7 +551,7 @@ decision.
 (`prismProfileHasTrimmedCircularSource`), G6's hole-free arms, G5's Intersect
 z-relation (§3.2), the arrangement cap, the re-expression, `buildPrismScene`,
 `prismcells.Classify`, `prismcells.Select` under `Intersect`'s own `keep`,
-and §3.4's crossing charge. The reading begins where `mergePrismCells`
+and §3.4's crossing charge. The reading begins where `prismcells.Merge`
 would have been called, and replaces only that tail.
 
 **Selection.** The measured set is the arrangement's own bounded cells that
@@ -568,7 +568,7 @@ leave the whole reading unresolved.
 
 **Per-cell measurement.** Each selected cell is already a closed directed walk
 in `sketch`'s own order, so it is recorded through the existing
-`recordEdge`/`edgeJoin`/`falsifyLoopJoins` sequence `mergePrismCells` already
+`recordEdge`/`edgeJoin`/`falsifyLoopJoins` sequence `prismcells.Merge` already
 uses — minus the count, drop and chain steps, which exist only to build one
 loop out of many. §5's authentication applies with its claim 2 discharged for
 free, exactly as it is for the clean-nesting match: every recorded edge is one
@@ -1099,7 +1099,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
   the opposite of the smallest sound extension. `Verify` needs no body, so it
   is given the volume alone. The cost is a visible asymmetry: a pair `Verify`
   reports an `Interference` for is a pair `Intersect` still routes to the mesh
-  path. Two alternatives were rejected. Extending `mergePrismCells` to emit
+  path. Two alternatives were rejected. Extending `prismcells.Merge` to emit
   several loops cannot work at all — a `ProfileRecord` has one `Outer`.
   Restating the volume composition inside the reading, rather than building one
   `prismPayload` per cell and reusing `evalPrism`, would put a second owner on
@@ -1153,7 +1153,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    returns the inner operand's own geometry.
 3. **PR3 — crossing sub-case for `Cut`/`Intersect`.** §4.2's edge-orientation
    propagation over hole-free operands (`prism_boolean_crossing.go`), reusing
-   PR1's `mergePrismCells` chain/merge tail and §6's audit over its own
+   PR1's `prismcells.Merge` chain/merge tail and §6's audit over its own
    per-op cell selection. Tests: two overlapping (not coincident-carrier)
    prisms cut/intersect correctly against the mesh path's own answer on the
    same pair (property test, volumes agree within the analytic path's
