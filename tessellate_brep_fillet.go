@@ -1,12 +1,8 @@
 package decad
 
 import (
-	"fmt"
 	"math"
-	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/capcontour"
-	"github.com/lestrrat-3d/decad/internal/filletband"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -74,8 +70,20 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 	if err != nil {
 		return err
 	}
-	if err := bc.placeCurvedMiterRings(points); err != nil {
-		return err
+	if len(bc.curved) > 0 {
+		rIv, err := filletRadius(bc.band.setback)
+		if err != nil {
+			return err
+		}
+		bc.fillet.seamGap, err = tessellation.CurvedMiterRings(points, tessellation.CurvedMiterInput{
+			Walks: lm.walks, Curved: bc.curved, CapWallStart: lm.capWallStart,
+			Radius: rIv, HeldRadius: bc.band.setback.dc,
+			CapLevel: bc.face.z0, CapLevelDelta: bc.face.z0Delta,
+			MaterialSign: bc.band.matSign(bc.face),
+		})
+		if err != nil {
+			return err
+		}
 	}
 	N := len(lm.capPts)
 	fr := bc.fillet
@@ -95,71 +103,6 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 			fr.dev[k][c] = point.Delta
 			fr.ringV[k][c] = addVertex(e.Canon(point.Point.U, point.Point.V, point.Z),
 				proofbound.WalkEndBound{U: point.Delta, V: point.Delta})
-		}
-	}
-	return nil
-}
-
-// placeCurvedMiterRings replaces the affine corner stations with the actual
-// intersection of the two offset carriers. The foot's interval includes the
-// recorded wall errors; the speed bound charges the gap between the rounded
-// held offset and the true r(1-cos(phi)) of each ring.
-func (bc *brepBandChord) placeCurvedMiterRings(points [][]tessellation.FilletRingPoint) error {
-	if len(bc.curved) == 0 {
-		return nil
-	}
-	rIv, err := filletRadius(bc.band.setback)
-	if err != nil {
-		return err
-	}
-	rUpper := proofbound.RatFloatUp(rIv.Hi)
-	level, levelDelta := proofarith.FloatRat(bc.face.z0), proofarith.FloatRat(bc.face.z0Delta)
-	if level == nil || levelDelta == nil || proofbound.IsNonFinite(rUpper) {
-		return fmt.Errorf(`%w: a curved fillet's radius or cap level is not finite`, ErrNotFinite)
-	}
-	levelIv := proofbound.IntervalWiden(proofbound.PointInterval(level), levelDelta)
-	one := proofbound.PointInterval(big.NewRat(1, 1))
-	m := big.NewRat(int64(bc.band.matSign(bc.face)), 1)
-	bc.fillet.seamGap = make([]float64, len(bc.curved))
-	for corner, curved := range bc.curved {
-		if !curved {
-			continue
-		}
-		prev := bc.lm.walks[(corner+len(bc.lm.walks)-1)%len(bc.lm.walks)]
-		cur := bc.lm.walks[corner]
-		speed, ok := capcontour.MiterLocusSpeedUpper(prev, cur, 0, rUpper, cur.StartU, cur.StartV)
-		if !ok {
-			return fmt.Errorf(`%w: a curved fillet's offset locus folds`, ErrUnsupported)
-		}
-		gap, ok := filletband.CurvedMiterChordGap(prev, cur, rUpper, bc.fillet.n)
-		if !ok {
-			return fmt.Errorf(`%w: a curved fillet's seam chord has no bound`, ErrUnsupported)
-		}
-		bc.fillet.seamGap[corner] = proofbound.RatFloatUp(gap)
-		ci := bc.lm.capWallStart[corner]
-		for k := 1; k < bc.fillet.n; k++ {
-			phiIv := proofbound.IntervalScale(proofbound.HalfPiInterval(), big.NewRat(int64(k), int64(bc.fillet.n)))
-			sinIv, cosIv, ok := proofbound.RadSinCosSpan(phiIv)
-			if !ok {
-				return fmt.Errorf(`%w: a curved fillet's ring angle has no enclosure`, ErrUnsupported)
-			}
-			tIv := proofbound.IntervalMul(rIv, proofbound.IntervalSub(one, cosIv))
-			phi := float64(k) * (math.Pi / 2) / float64(bc.fillet.n)
-			tHeld := bc.band.setback.dc * (1 - math.Cos(phi))
-			p, ok := filletband.CurvedMiterPoint(prev, cur, bc.band.setback.dc, tHeld, cur.StartU, cur.StartV)
-			if !ok {
-				return fmt.Errorf(`%w: a curved fillet's ring has no intersection foot`, ErrUnsupported)
-			}
-			shift := proofbound.ProductUpper(speed, proofbound.IntervalFloatError(tIv, tHeld))
-			u, uBound := heldOf(p[0])
-			v, vBound := heldOf(p[1])
-			zIv := proofbound.IntervalAdd(levelIv, proofbound.IntervalScale(
-				proofbound.IntervalMul(rIv, proofbound.IntervalSub(one, sinIv)), m))
-			z := points[k][ci].Z
-			zBound := proofbound.IntervalFloatError(zIv, z)
-			delta := proofbound.AbsSumUpper(proofbound.Radius2D(
-				proofbound.AbsSumUpper(uBound, shift), proofbound.AbsSumUpper(vBound, shift)), zBound)
-			points[k][ci] = tessellation.FilletRingPoint{Point: Point2{U: u, V: v}, Z: z, Delta: delta}
 		}
 	}
 	return nil

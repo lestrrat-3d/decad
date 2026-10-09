@@ -6,13 +6,11 @@ import (
 	"math"
 	"slices"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -111,7 +109,14 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 			if !brepIsRim(u.Part) {
 				continue
 			}
-			samples, err := brepImposeWall(e, topo.embeds[u.Face], bp.faces[u.Face], topo.walls[u.Face], &lm, i, sideZ)
+			wallFace := bp.faces[u.Face]
+			samples, err := tessellation.ImposeBandWall[*Face](tessellation.BandWallInput{
+				FaceEmbed: e, WallEmbed: topo.embeds[u.Face],
+				WallSegment: wallFace.wall, WallWalk: topo.walls[u.Face],
+				WalkIndex: i, SideLevel: sideZ, WallHeight: wallFace.z1 - wallFace.z0,
+				Counts: lm.count, SideStarts: lm.sideStart, SidePoints: lm.sidePts,
+				SideBounds: lm.sideBound, SideSag: lm.sideSag,
+			})
 			if err != nil {
 				return nil, nil, fmt.Errorf("chamfer band %d: %w", bi, err)
 			}
@@ -151,82 +156,6 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 		bands[bi] = bc
 	}
 	return bands, imposed, nil
-}
-
-// brepImposeWall states the samples a swept face's wall takes from the band
-// that chords the receiver's wall walk i: the band's side-ring points of that
-// walk, carried into the wall's own frame exactly (a signed permutation) and
-// ordered along the wall's own walk, so that the wall's rim at the side level
-// and the band's side ring are one set of vertices. The wall's end samples
-// reach the points its own record denotes, as SampleLoop charges a lone open
-// wall. A walk the two disagree on, in position or direction, refuses.
-func brepImposeWall(eF, ew brepEmbed, f brepFace, w survey2d.SegmentWalk, lm *capBlendLoopMesh, i int, sideZ float64) (tessellation.ChordSamples[*Face], error) {
-	refuse := func(why string) error {
-		return fmt.Errorf(`%w: a chamfer band's side contour and the wall beside it %s`, ErrUnsupported, why)
-	}
-	n := len(lm.walks)
-	count := lm.count[i]
-	ring := func(k int) (Point2, proofbound.WalkEndBound) {
-		idx := lm.sideStart[i] + k
-		if k == count {
-			idx = lm.sideStart[(i+1)%n]
-		}
-		c := eF.Canon(lm.sidePts[idx].U, lm.sidePts[idx].V, sideZ)
-		l := ew.Local(c)
-		return Point2{U: l[0], V: l[1]}, lm.sideBound[idx]
-	}
-	order := make([]int, 0, count)
-	if !w.Closed {
-		start, end := Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV}
-		p0, _ := ring(0)
-		pn, _ := ring(count)
-		switch {
-		case p0 == start && pn == end:
-			for k := range count {
-				order = append(order, k)
-			}
-		case pn == start && p0 == end:
-			for k := count; k >= 1; k-- {
-				order = append(order, k)
-			}
-		default:
-			return tessellation.ChordSamples[*Face]{}, refuse(`disagree on the wall's ends`)
-		}
-	} else {
-		p0, _ := ring(0)
-		p1, _ := ring(1)
-		cross := (p0.U-w.CU)*(p1.V-w.CV) - (p0.V-w.CV)*(p1.U-w.CU)
-		if cross == 0 || !w.IsCircular() {
-			return tessellation.ChordSamples[*Face]{}, refuse(`disagree on the wall's direction`)
-		}
-		order = append(order, 0)
-		if (cross > 0) == (w.Th1 > w.Th0) {
-			for k := 1; k < count; k++ {
-				order = append(order, k)
-			}
-		} else {
-			for k := count - 1; k >= 1; k-- {
-				order = append(order, k)
-			}
-		}
-	}
-	out := tessellation.ChordSamples[*Face]{Walks: 1}
-	for j, k := range order {
-		p, bound := ring(k)
-		if j == 0 && !w.Closed {
-			bound = boundarywalk.DenotedStartBound(f.wall, w)
-		}
-		out.Samples = append(out.Samples, p)
-		out.BoundOf = append(out.BoundOf, bound)
-	}
-	if w.IsCircular() {
-		height := f.z1 - f.z0
-		out.MaxSag = lm.sideSag[i]
-		out.WallSlack = proofbound.ProductUpper(tessellation.WalkWallSlack(w, count, height), 1+1e-9)
-		out.CapSlack = proofbound.ProductUpper(tessellation.WalkSegmentArea(w, count), 1+1e-9)
-		out.SegmentArea = tessellation.WalkSegmentArea(w, count)
-	}
-	return out, nil
 }
 
 // place adds both rings' vertices: the side ring at the side level and the

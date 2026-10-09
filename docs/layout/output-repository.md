@@ -12,8 +12,8 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, prism/cup mesh assembly and dispatch. See tessellation design. |
 | `tessellate_stacked.go` | Stacked-slab mesh and volume proof. See stacked-prism §5. |
 | `tessellate_brep.go` | Meshes a brep body and proves its occupied volume. See general-boolean §4.4. |
-| `tessellate_brep_band.go` | Route L bands in a brep mesh. See modify-general DG3. |
-| `tessellate_brep_fillet.go` | Fillet band rings, strips and proof terms. See loop-fillet §7.1. |
+| `tessellate_brep_band.go` | Adapts route L band geometry to shared wall samples and emits mesh patches. See modify-general DG3. |
+| `tessellate_brep_fillet.go` | Adapts fillet band ring geometry, strips and proof terms. See loop-fillet §7.1. |
 | `tessellate_brep_partial_fillet.go` | Adapts `internal/partialband/` layouts to selected cap-edge fillet meshes. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1. |
 | `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
