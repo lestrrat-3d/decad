@@ -60,7 +60,7 @@ func ResolveAnalyticExtentProfile(
 				return err
 			}
 			result[i] = walk
-			coordUpper = math.Max(coordUpper, walk.CoordUpper)
+			coordUpper = math.Max(coordUpper, momentinput.WalkCoordinateUpper(walk))
 		}
 		return nil
 	}
