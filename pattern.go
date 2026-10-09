@@ -132,7 +132,7 @@ type resolvedPattern struct{ patternrecord.Spec }
 // placedInstance is the PlacedCopy arm: the payload re-evaluated under its
 // placement composed with instance i's motion.
 func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref producerID, payload featurePayload, i int) (*Body, error) {
-	m, err := rp.Spec.WorldMotion(i)
+	m, err := rp.WorldMotion(i)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: pattern instance %d has no rigid motion: %s`, ErrDegenerate, i, err)
 	}
@@ -214,7 +214,7 @@ func moveRegion(budget *proofbound.WorkBudget, region profileRecord, mv pointMot
 func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document, ref producerID, payload featurePayload, i int) (*Body, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	frame, xform, _, _ := patternFrameOf(payload)
-	mv, err := rp.Spec.Motion(frame, xform, i)
+	mv, err := rp.Motion(frame, xform, i)
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +373,7 @@ func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePaylo
 	all := append([]profileRecord(nil), regions...)
 	delta := 0.0
 	for i := 1; i < rp.Count; i++ {
-		mv, err := rp.Spec.Motion(frame, xform, i)
+		mv, err := rp.Motion(frame, xform, i)
 		if err != nil {
 			return stackedPrismPayload{}, false, err
 		}
