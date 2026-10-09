@@ -351,7 +351,15 @@ func TestDraftSubsetMesh(t *testing.T) {
 	rs, rp := taperSketch(t, r3.NewVec(0, 0, 0), 1, drawRing(ro, ri))
 	f7 := taperExtrude(t, doc, rs, rp, h, deg, decad.Along)
 	d, _ := bfMul(bf(h), taperTan(deg)).Float64()
-	walls := []func(s, th float64) r3.Vec{draftConeWall(0, ro, ro, h), draftConeWall(0, ri, ri+d, h)}
+	// wall samples the surface of revolution about the z axis whose radius runs
+	// from r0 at the sketch plane to r1 at the far end.
+	wall := func(r0, r1 float64) func(s, th float64) r3.Vec {
+		return func(s, th float64) r3.Vec {
+			rr := r0 + (r1-r0)*s
+			return r3.NewVec(rr*math.Cos(th), rr*math.Sin(th), h*s)
+		}
+	}
+	walls := []func(s, th float64) r3.Vec{wall(ro, ro), wall(ri, ri+d)}
 
 	for _, pair := range [][2]*decad.Body{{one, f1}, {hole, f7}} {
 		b, tapered := pair[0], pair[1]
@@ -377,10 +385,10 @@ func TestDraftSubsetMesh(t *testing.T) {
 				continue
 			}
 			require.LessOrEqual(t, nearRingSagitta(mesh, ro), bound, "tol %g", tol)
-			for _, wall := range walls {
+			for _, sample := range walls {
 				for i := range 9 {
 					for j := range 37 {
-						p := wall(float64(i)/8, 2*math.Pi*float64(j)/37)
+						p := sample(float64(i)/8, 2*math.Pi*float64(j)/37)
 						require.LessOrEqual(t, distanceToMesh(mesh, p), bound,
 							"tol %g: true wall sample %v is farther from the mesh than Bound", tol, p)
 					}
