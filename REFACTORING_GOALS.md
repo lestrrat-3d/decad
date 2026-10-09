@@ -22,6 +22,7 @@ internal boundary when needed to avoid an import cycle; an existing internal
 dependency is not by itself a reason to retain a public type's definition
 there. Keep definitions in internal packages when the types are implementation
 details. Record the concrete reason for each alias decision and definition move.
+The corresponding public API rule is in docs/api-design.md §2.
 
 PR #1231 removed DiagUnsupportedPair after confirming that Verify emits only
 the specific unsupported-pair diagnostic codes. That broad code had no
