@@ -51,7 +51,7 @@ func ratLerp(start, end, t float64) *big.Rat {
 // it — start + (end − start) can miss end by an ulp whenever the difference
 // itself rounds. That is not a repair of the input: it is the same value the
 // exact-rational twin ratLerp already returns at both bounds, and the same rule
-// seam.go's edgeJoin already applies when it reads an uncut bound
+// sketchrecord.EdgeJoin already applies when it reads an uncut bound
 // (TStart == 0 or TEnd == 1) off the record rather than off sketch's node.
 //
 // Reproducing the endpoint matters to every consumer that rebuilds geometry

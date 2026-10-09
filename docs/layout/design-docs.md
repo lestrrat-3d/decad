@@ -81,4 +81,3 @@ The rules for rows live in `docs/layout.md`.
 | `mass_properties_revolve.go` | Revolve mass. See multibody §8.6. |
 | `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See multibody §8. |
 | `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See dynamic-mass. |
-| `moments_circular.go` | Adapts circle and arc records to `internal/circularbounds/`. |

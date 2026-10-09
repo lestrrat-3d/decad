@@ -397,7 +397,7 @@ func (l mirrorLine) assemble(budget *proofbound.WorkBudget, region joinRegion) (
 func auditJoinedSection(budget *proofbound.WorkBudget, p profileRecord, work *freeform.FreeformWork) error {
 	loops := append([]loopRecord{p.Outer}, p.Holes...)
 	for li, loop := range loops {
-		joins := make([]loopJoin, len(loop.Segments))
+		joins := make([]sketchrecord.LoopJoin, len(loop.Segments))
 		for si, seg := range loop.Segments {
 			if err := budget.Step(); err != nil {
 				return err
@@ -409,7 +409,7 @@ func auditJoinedSection(budget *proofbound.WorkBudget, p profileRecord, work *fr
 			joins[si] = sketchrecord.RecordedJoin(
 				ends.Start, ends.End, ends.ComputedStart, ends.ComputedEnd, ends.Closed)
 		}
-		if err := falsifyLoopJoins(fmt.Sprintf("mirror join loop %d", li), joins); err != nil {
+		if err := sketchrecord.FalsifyLoopJoins(fmt.Sprintf("mirror join loop %d", li), joins); err != nil {
 			return err
 		}
 	}

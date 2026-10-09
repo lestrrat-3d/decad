@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -168,18 +169,18 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 // edge is whole.
 func recordPrismOverlapCell(budget *proofbound.WorkBudget, edges []sketch.BoundaryEdge) (profileRecord, float64, error) {
 	segs := make([]curveSegment, len(edges))
-	joins := make([]loopJoin, len(edges))
+	joins := make([]sketchrecord.LoopJoin, len(edges))
 	cutDelta := 0.0
 	for i, e := range edges {
 		if err := budget.Step(); err != nil {
 			return profileRecord{}, 0, err
 		}
-		seg, err := recordEdge(e)
+		seg, err := sketchrecord.RecordEdge(e)
 		if err != nil {
 			return profileRecord{}, 0, err
 		}
 		segs[i] = seg
-		join, err := edgeJoin(e, seg)
+		join, err := sketchrecord.EdgeJoin(e, seg)
 		if err != nil {
 			return profileRecord{}, 0, err
 		}
@@ -192,7 +193,7 @@ func recordPrismOverlapCell(budget *proofbound.WorkBudget, edges []sketch.Bounda
 	}
 	// RB9 (§9): the seam's own junction falsifier, run on this cell's own
 	// recorded coordinates.
-	if err := falsifyLoopJoins("overlap cell", joins); err != nil {
+	if err := sketchrecord.FalsifyLoopJoins("overlap cell", joins); err != nil {
 		return profileRecord{}, 0, err
 	}
 	return profileRecord{Outer: loopRecord{Segments: segs}}, cutDelta, nil

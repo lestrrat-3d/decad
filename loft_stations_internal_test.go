@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -581,7 +582,7 @@ func shortfallArc(t *testing.T, m int) (arcSeg, survey2d.SegmentWalk, float64, f
 // production publishes a lower bound on a displacement term.
 func certifiedSagittaLower(t *testing.T, seg curveSegment, m int) float64 {
 	t.Helper()
-	radius, sweep, ok := circularWalkEnclosures(seg)
+	radius, sweep, ok := circularbounds.WalkEnclosures(circularbounds.RecordSegment(seg))
 	require.True(t, ok)
 	sin, _, ok := proofbound.RadSinCosSpan(proofbound.IntervalScale(sweep, big.NewRat(1, 4*int64(m))))
 	require.True(t, ok)
@@ -1203,7 +1204,7 @@ func TestCircularStationChainDeltaBoundsEveryGeneratedStation(t *testing.T) {
 	worst := math.Max(loftmesh.WalkEndPlaneDelta(w.StartBound), loftmesh.WalkEndPlaneDelta(w.EndBound))
 	for k := 1; k < m; k++ {
 		tk := new(big.Rat).Add(tStart, new(big.Rat).Mul(big.NewRat(int64(k), int64(m)), dt))
-		uIv, vIv, ok := circularEndpointInterval(seg, tk)
+		uIv, vIv, ok := circularbounds.EndpointInterval(circularbounds.RecordSegment(seg), tk)
 		require.True(t, ok, "the record must enclose its own point at station %d's parameter", k)
 
 		// The enclosure is a bracket, so the station's own worst-case gap from

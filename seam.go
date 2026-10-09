@@ -118,24 +118,3 @@ func recordArrangedProfile(p *sketch.Profile) (profileRecord, error) {
 func recordChain(s *sketch.Sketch, ch *sketch.Chain) (chainRecord, planeRecord, error) {
 	return sketchrecord.RecordChain(s, ch)
 }
-
-// authenticateChain keeps root tests on the snapshot check before the validity gate.
-func authenticateChain(s *sketch.Sketch, ch *sketch.Chain) (*sketch.Chain, error) {
-	return sketchrecord.AuthenticateChain(s, ch)
-}
-
-func sameChainSnapshot(a, b *sketch.Chain) bool {
-	return sketchrecord.SameChainSnapshot(a, b)
-}
-
-type loopJoin = sketchrecord.LoopJoin
-
-func recordEdge(edge sketch.BoundaryEdge) (curveSegment, error) { return sketchrecord.RecordEdge(edge) }
-
-func edgeJoin(edge sketch.BoundaryEdge, segment curveSegment) (loopJoin, error) {
-	return sketchrecord.EdgeJoin(edge, segment)
-}
-
-func falsifyLoopJoins(name string, joins []loopJoin) error {
-	return sketchrecord.FalsifyLoopJoins(name, joins)
-}

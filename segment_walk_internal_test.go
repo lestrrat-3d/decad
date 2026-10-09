@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -180,7 +181,7 @@ func ratArcWalk(seg arcSeg) survey2d.SegmentWalk {
 	)
 	w.RadiusBound = boundarywalk.ArcWalkRadiusBound(seg, radius)
 	boundarywalk.PinArcWalkEnds(&w, seg)
-	if iv, ok := circularLengthInterval(seg); ok {
+	if iv, ok := circularbounds.LengthInterval(circularbounds.RecordSegment(seg)); ok {
 		w.LengthBound = math.Min(w.LengthBound, proofbound.IntervalFloatError(iv, w.Length))
 	}
 	return w
@@ -239,7 +240,7 @@ func TestArcWalkRadiusBoundMatchesEnclosureBracket(t *testing.T) {
 		End:    Point2{U: -1e308, V: 1e308},
 		TStart: 0, TEnd: 1,
 	}
-	_, _, ok := circularWalkEnclosures(overflow)
+	_, _, ok := circularbounds.WalkEnclosures(circularbounds.RecordSegment(overflow))
 	require.False(t, ok, "the fixture must overflow the radius bracket to reach the refusal arm")
 	check(t, overflow)
 	got, err := boundarywalk.WalkOf(overflow, nil)
