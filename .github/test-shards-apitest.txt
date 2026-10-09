@@ -1629,6 +1629,8 @@
 5	0.20	TestTaperRefusals
 5	0.03	TestTaperRing
 5	0.05	TestTaperSlot
+5	0.03	TestTaperStopExtents
+5	0.02	TestTaperToFaceOffsetBound
 5	0.15	TestTaperVerify
 5	0.01	TestWallsSelector
 5	1.00	TestDraftMesh

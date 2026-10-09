@@ -31,8 +31,9 @@ type draftPayload struct {
 	z0, z1  float64
 	z0Delta float64
 	z1Delta float64
-	// nearStart is true when P sits at z0 (an Along extent) and false when it
-	// sits at z1 (Against). The far section sits at the other end.
+	// nearStart is true when P sits at z0 (an Along or forward stop extent)
+	// and false when it sits at z1 (Against or backward stop). The far
+	// section sits at the other end.
 	nearStart bool
 	// taper is the signed taper in radians and taperDelta its unit
 	// conversion's rounding: the stated angle lies within taperDelta of it.
