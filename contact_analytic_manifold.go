@@ -266,20 +266,9 @@ func rulingSideNormal(side rulingSide, witness VecMeasurement,
 // largest absolute row sum of BᵀB − I, bounds that departure: every unit m
 // has |Bᵀm|² in [1 − gram, 1 + gram].
 type placedCylinder struct {
-	axis    int // the identity-frame axis index
-	radius  proofarith.Dyadic
-	length  proofarith.Dyadic
-	box     sourceBoxContactProof // the identity disk-by-interval box
-	source  [2]proofarith.DyV3    // end-disk centers at the identity pose
-	centers [2]proofarith.DyV3    // the same centers under the pose
-	columns [3]proofarith.DyV3    // the pose's basis columns
-	gram    proofarith.Dyadic
-	wall    *Face
-}
-
-func (c *placedCylinder) geometry() placedruling.Cylinder {
-	return placedruling.Cylinder{Axis: c.axis, Radius: c.radius, Gram: c.gram,
-		BoxLo: c.box.lo, BoxHi: c.box.hi, Centers: c.centers, Columns: c.columns}
+	placedruling.Cylinder
+	source [2]proofarith.DyV3 // end-disk centers at the identity pose
+	wall   *Face
 }
 
 // placedCylinderAt reads a full source cylinder at its identity pose and
@@ -298,80 +287,15 @@ func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
 	if wall == nil {
 		return placedCylinder{}, false
 	}
-	transverse := (source.axis + 1) % 3
-	c := placedCylinder{axis: source.axis, box: source.box, wall: wall, source: rollingEnds(source),
-		radius: proofarith.DyShift(proofarith.DySubScalar(source.box.hi[transverse], source.box.lo[transverse]), -1),
-		length: proofarith.DySubScalar(source.box.hi[source.axis], source.box.lo[source.axis])}
-	basis := pose.Basis()
-	c.columns = [3]proofarith.DyV3{proofarith.DyVec(basis.EX), proofarith.DyVec(basis.EY), proofarith.DyVec(basis.EZ)}
-	for i := range c.source {
-		c.centers[i] = proofarith.DvTransform(pose, c.source[i])
-	}
-	one := proofarith.DyInt(1)
-	for i := range 3 {
-		row := proofarith.DyZero()
-		for j := range 3 {
-			entry := proofarith.DvDot(c.columns[i], c.columns[j])
-			if i == j {
-				entry = proofarith.DySubScalar(entry, one)
-			}
-			row = proofarith.DyAdd(row, proofarith.DyAbs(entry))
-		}
-		c.gram = dyMax(c.gram, row)
-	}
+	ends := rollingEnds(source)
+	staged := placedruling.Stage(source.axis, source.box.lo, source.box.hi, ends, pose)
+	c := placedCylinder{Cylinder: staged, wall: wall, source: ends}
 	return c, true
-}
-
-// sectionDrift delegates to the placed-ruling proof.
-func (c *placedCylinder) sectionDrift(alpha proofarith.Dyadic) proofarith.Dyadic {
-	return c.geometry().SectionDrift(alpha)
-}
-
-// rimDrift delegates to the placed-ruling proof.
-func (c *placedCylinder) rimDrift(alpha *big.Rat) *big.Rat {
-	return c.geometry().RimDrift(alpha)
-}
-
-// rulingPlane is the face plane of an exact planar body S that a placed
-// cylinder rests on. A face-local plane (docs/multibody-dynamics-design.md
-// §10.6) has S material in front of it; clearance is then the lateral
-// clearance m of the staged corner box at f = 0, a lower bound on the
-// distance from the cylinder to that material, and nil for a plane with all
-// of S behind it.
-type rulingPlane struct {
-	normal    proofarith.DyV3   // n̂, S's unit outward normal there, a signed axis
-	axis      int               // n̂'s axis
-	origin    int               // an S vertex on the plane
-	offset    proofarith.Dyadic // the plane's coordinate on n̂'s axis
-	face      planarFace
-	alpha     proofarith.Dyadic    // α = n̂·Bâ, the staged axis column's normal component
-	heights   [2]proofarith.Dyadic // H± = n̂·(c± − q) − r, each end center's height less r
-	local     bool                 // an S vertex lies strictly in front of the plane
-	clearance *big.Rat
 }
 
 // The placed-ruling proof requires gram at most 1/16; its support selection
 // checks |α| at most 1/4, under which RimDrift holds.
 var rulingGramLimit = proofarith.MustDyOf(1.0 / 16)
-
-// rulingSupport adapts a sweep path to the placed-ruling support proof.
-func rulingSupport(c *placedCylinder, S *rotationalSweepPath, poll func() error) (rulingPlane, bool, error) {
-	p, ok, err := placedruling.Support(c.geometry(), S.solid, S.startPoints, poll)
-	if err != nil || !ok {
-		return rulingPlane{}, ok, err
-	}
-	return rulingPlane{normal: p.Normal, axis: p.Axis, origin: p.Origin,
-		offset: p.Offset, face: planarFace{p.Face}, alpha: p.Alpha,
-		heights: p.Heights, local: p.Local, clearance: p.Clearance}, true, nil
-}
-
-// clearsBand reports whether a touch or band of half-width w on the plane is
-// the pair's only contact: on a face-local plane the lateral clearance must
-// exceed w, so no material of S in front of the plane lies within the band; a
-// plane with all of S behind it, or an unbounded clearance, always clears.
-func (p *rulingPlane) clearsBand(w *big.Rat) bool {
-	return p.clearance == nil || p.clearance.Cmp(w) > 0
-}
 
 // classifyPlacedRuling is docs/contact-geometry-design.md §4.5 at placed
 // query poses: a full source cylinder M, at any pose with a positive
@@ -395,7 +319,7 @@ func (p *rulingPlane) clearsBand(w *big.Rat) bool {
 // material in front of the plane lies at least the lateral clearance m away
 // from the cylinder, so a gap's lower end is the lesser of the least height's
 // and m, its upper end unchanged; a touch or band publishes only when m
-// exceeds its half-width (clearsBand), and otherwise the pair is Undecided.
+// exceeds its half-width, and otherwise the pair is Undecided.
 func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, error) {
 	cylinderFirst := true
 	bodyM, bodyS, poseS := report.A, report.B, report.PoseB
@@ -406,7 +330,7 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 			return false, nil
 		}
 	}
-	if proofarith.DyCmp(cylinder.gram, rulingGramLimit) > 0 {
+	if proofarith.DyCmp(cylinder.Gram, rulingGramLimit) > 0 {
 		return false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
@@ -414,94 +338,38 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 	if err != nil || !ok || delta.Sign() != 0 {
 		return false, err
 	}
-	pathS := &rotationalSweepPath{body: bodyS, solid: &solid, startPoints: solid.Verts}
-	plane, ok, err := rulingSupport(&cylinder, pathS, budget.Step)
+	plane, ok, err := placedruling.Support(cylinder.Cylinder, &solid, solid.Verts, budget.Step)
 	if err != nil || !ok {
 		return false, err
 	}
-	lateral := new(big.Rat)
-	exact := cylinder.gram.Sign() == 0 && plane.alpha.Sign() == 0
-	if !exact {
-		lateral = cylinder.rimDrift(plane.alpha.Rat())
-	}
-	if !placedRulingFootInside(&cylinder, &plane, lateral) {
+	classification, ok := placedruling.Classify(cylinder.Cylinder, plane)
+	if !ok {
 		return false, nil
-	}
-	low := dyMin(plane.heights[0], plane.heights[1])
-	// The least height is low + r·(1 − ρ), ρ = |P·Bᵀn̂|, exactly low when the
-	// pose is exact.
-	sigmaLo, sigmaHi := low.Rat(), low.Rat()
-	slack := new(big.Rat)
-	if !exact {
-		var rhoSquared proofarith.Dyadic
-		for k := range 3 {
-			if k != cylinder.axis {
-				component := proofarith.DvDot(plane.normal, cylinder.columns[k])
-				rhoSquared = proofarith.DyAdd(rhoSquared, proofarith.DyMul(component, component))
-			}
-		}
-		rhoLo, rhoHi := proofarith.DySqrtDown(rhoSquared), proofarith.DySqrtUp(rhoSquared)
-		if !finiteMeasurementValues(rhoLo, rhoHi) {
-			return false, nil
-		}
-		r := cylinder.radius.Rat()
-		sigmaLo = new(big.Rat).Sub(proofbound.RatAdd(sigmaLo, r), proofbound.RatMul(r, proofarith.FloatRat(rhoHi)))
-		sigmaHi = new(big.Rat).Sub(proofbound.RatAdd(sigmaHi, r), proofbound.RatMul(r, proofarith.FloatRat(rhoLo)))
-		slack = proofbound.RatAdd(cylinder.sectionDrift(plane.alpha).Rat(),
-			proofbound.RatMul(new(big.Rat).Abs(plane.alpha.Rat()), cylinder.length.Rat()))
 	}
 	trial := ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
 		Request: report.Request}
-	switch {
-	case sigmaLo.Cmp(slack) > 0:
-		// On a face-local plane the material in front lies at least the
-		// clearance away, so the gap's lower end is the lesser of the two;
-		// its upper end stays the least height, since the ruling's feet lie
-		// inside the face and S has material under the cylinder there.
-		if plane.clearance != nil {
-			sigmaLo = proofbound.RatMin(sigmaLo, plane.clearance)
-		}
-		gap, ok := ratIntervalMeasurement(sigmaLo, sigmaHi)
+	switch classification.Relation {
+	case placedruling.Separated:
+		gap, ok := ratIntervalMeasurement(classification.GapLo, classification.GapHi)
 		if !ok {
 			return false, nil
 		}
 		trial.Relation, trial.Gap = ContactSeparated, &gap
-	case sigmaHi.Cmp(new(big.Rat).Neg(slack)) < 0:
-		return false, nil
-	case exact:
-		if !plane.clearsBand(new(big.Rat)) {
-			return false, nil
-		}
+	case placedruling.Touching:
 		trial.Relation = ContactTouching
 		trial.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
-		publishPlacedRulingManifold(&trial, &cylinder, &plane, cylinderFirst, lateral, new(big.Rat))
-	default:
-		band := proofbound.RatAdd(dyMax(proofarith.DyAbs(plane.heights[0]), proofarith.DyAbs(plane.heights[1])).Rat(),
-			cylinder.sectionDrift(plane.alpha).Rat())
-		width := proofbound.RatFloatUp(band)
-		if !finiteMeasurementValues(width) || !plane.clearsBand(proofarith.FloatRat(width)) {
-			return false, nil
-		}
+		publishPlacedRulingManifold(&trial, &cylinder, &plane, cylinderFirst,
+			classification.Lateral, new(big.Rat))
+	case placedruling.Band:
+		width := classification.BandWidth
 		trial.Relation = ContactBand
 		trial.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(width),
 			Exactness: exactnessFromBound(width)}
-		publishPlacedRulingManifold(&trial, &cylinder, &plane, cylinderFirst, lateral, proofarith.FloatRat(width))
+		publishPlacedRulingManifold(&trial, &cylinder, &plane, cylinderFirst,
+			classification.Lateral, proofarith.FloatRat(width))
 	}
 	*report = trial
 	return true, nil
-}
-
-// placedRulingFootInside checks that the feet of both rims' lowest points, the
-// points c± − r·n̂ grown by lateral, lie inside S's face. n̂ is a signed axis,
-// so dropping its axis projects onto the plane exactly.
-func placedRulingFootInside(c *placedCylinder, plane *rulingPlane, lateral *big.Rat) bool {
-	var lo, hi [2]*big.Rat
-	for slot, axis := range [2]int{(plane.face.Drop + 1) % 3, (plane.face.Drop + 2) % 3} {
-		a, b := c.centers[0][axis].Rat(), c.centers[1][axis].Rat()
-		lo[slot] = new(big.Rat).Sub(proofbound.RatMin(a, b), lateral)
-		hi[slot] = new(big.Rat).Add(proofbound.RatMax(a, b), lateral)
-	}
-	return plane.face.HoldsBox(lo, hi)
 }
 
 // publishPlacedRulingManifold publishes the two lowest rim points of a placed
@@ -511,7 +379,7 @@ func placedRulingFootInside(c *placedCylinder, plane *rulingPlane, lateral *big.
 // is M's own normal at its true lowest point. separation is the band's
 // half-width, zero for an exact touch. A point beyond the request withholds
 // the manifold with ContactPointTooCoarse.
-func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane *rulingPlane,
+func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane *placedruling.Plane,
 	cylinderFirst bool, lateral, separation *big.Rat) {
 	resolution, ok := sweeppath.ExactBaseValue(report.Request.PointResolution)
 	if !ok {
@@ -519,13 +387,13 @@ func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane
 		return
 	}
 	var rims [2]proofarith.DyV3
-	for i, center := range c.centers {
-		rims[i] = proofarith.DvSub(center, proofarith.DvScale(plane.normal, c.radius))
+	for i, center := range c.Centers {
+		rims[i] = proofarith.DvSub(center, proofarith.DvScale(plane.Normal, c.Radius))
 	}
 	if ordered := clearance.OrderedRulingEnds(rims); !proofarith.DvEqual(ordered[0], rims[0]) {
 		rims = ordered
 	}
-	direction := plane.normal
+	direction := plane.Normal
 	if cylinderFirst {
 		direction = proofarith.DvSub(proofarith.DyV3{}, direction)
 	}
@@ -538,16 +406,16 @@ func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane
 	if cylinderFirst {
 		faces = report.B.Faces()
 	}
-	if plane.face.ID < 0 || plane.face.ID >= len(faces) {
+	if plane.Face.ID < 0 || plane.Face.ID >= len(faces) {
 		report.Reason = ContactAmbiguousFeature
 		return
 	}
-	faceS := faces[plane.face.ID]
+	faceS := faces[plane.Face.ID]
 	bound := proofbound.RatFloatUp(separation)
 	points := make([]ContactPoint, 0, len(rims))
 	for _, rim := range rims {
 		foot := rim
-		foot[plane.axis] = plane.offset
+		foot[plane.Axis] = plane.Offset
 		onM, okM := planarTrackPoint([3]*big.Rat(ratOfDyV3(rim)), lateral, resolution)
 		onS, okS := planarTrackPoint([3]*big.Rat(ratOfDyV3(foot)), lateral, resolution)
 		if !okM || !okS {
