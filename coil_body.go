@@ -419,10 +419,11 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 		return nil, nil, err
 	}
 	cu, cv := coilCentre(seg)
-	centre0, axis0, centre1, axis1, err := coilRimFrames(rec, cu, cv)
+	rims, err := coilRimCircles(rec, cu, cv, seg.Radius, radius)
 	if err != nil {
 		return nil, nil, err
 	}
+	centre0, axis0, centre1, axis1 := rims[0].centre, rims[0].axis, rims[1].centre, rims[1].axis
 	// A walk against the circle's counter-clockwise sense, and a placement
 	// that reflects, each turn the rim clockwise about the plane normal.
 	sign := 1.0
@@ -442,8 +443,11 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 	} else {
 		c0, c1 = Arc3{Center: centre0, Axis: axis0.Scale(sign), Radius: r}, Arc3{Center: centre1, Axis: axis1.Scale(sign), Radius: r}
 	}
-	return &Edge{curve: c0, start: s0, end: s1, convex: convex, length: length, lengthBound: lengthBound},
-		&Edge{curve: c1, start: e0, end: e1, convex: convex, length: length, lengthBound: lengthBound}, nil
+	start := &Edge{curve: c0, start: s0, end: s1, convex: convex, length: length, lengthBound: lengthBound,
+		curveBound: rims[0].bound, curveBounded: rims[0].bounded}
+	end := &Edge{curve: c1, start: e0, end: e1, convex: convex, length: length, lengthBound: lengthBound,
+		curveBound: rims[1].bound, curveBounded: rims[1].bounded}
+	return start, end, nil
 }
 
 // coilCentre is a circular segment's recorded centre as exact rationals.
@@ -458,12 +462,24 @@ func coilCentre(seg coil.Segment) (*big.Rat, *big.Rat) {
 	return new(big.Rat).SetFloat64(c.U), new(big.Rat).SetFloat64(c.V)
 }
 
-// coilRimFrames lifts a plane point (cu, cv) and the plane normal through
-// the screw motion at θ = 0 and θ = Θ (§3, §5.3): the point moves to
-// (cu, cv) + (cos Θ − 1)·ρ_c·e_r + pitch·turns·d in the plane and
-// σ·Side·ρ_c·sin Θ along the normal, and the normal N = Side·e_t turns to
-// cos Θ·N − Side·σ·sin Θ·e_r. Each is the float nearest its enclosure.
-func coilRimFrames(rec coilshell.Record, cu, cv *big.Rat) (r3.Vec, r3.Vec, r3.Vec, r3.Vec, error) {
+// coilRimCircle is one held rim circle: its centre and unit axis, and the
+// Edge.curveBound of the circle the record denotes about it.
+type coilRimCircle struct {
+	centre, axis r3.Vec
+	bound        float64
+	bounded      bool
+}
+
+// coilRimCircles lifts a circular segment's rim circle, centre (cu, cv) and
+// radius enclosed by radius, through the screw motion at θ = 0 and θ = Θ
+// (§3, §5.3). A plane vector x turns to x + (x·e_r)·w with
+// w = (cos Θ − 1)·e_r + σ·sin Θ·Side·N, which carries the centre, the plane's
+// in-plane axes U and V, and turns the normal N = Side·e_t to
+// cos Θ·N − Side·σ·sin Θ·e_r. Each held centre and axis is the float nearest
+// its enclosure, and the held radius is heldRadius; coilRimCurveBound bounds
+// the denoted circle against them.
+func coilRimCircles(rec coilshell.Record, cu, cv *big.Rat, radius coil.Iv, heldRadius float64) ([2]coilRimCircle, error) {
+	var out [2]coilRimCircle
 	zero := coil.Point(new(big.Rat))
 	one := coil.Point(big.NewRat(1, 1))
 	rho, _ := rec.Axis.Coords(cu, cv)
@@ -476,39 +492,111 @@ func coilRimFrames(rec coilshell.Record, cu, cv *big.Rat) (r3.Vec, r3.Vec, r3.Ve
 	tilt := big.NewRat(int64(rec.Sigma*rec.Axis.Side), 1)
 	z := proofbound.IntervalScale(proofbound.IntervalMul(sinT, rho), tilt)
 	held := func(p proofbound.IvVec3, what string) (r3.Vec, error) {
-		var out [3]float64
+		var v [3]float64
 		for k := range 3 {
 			h, _, err := coilshell.Held(p[k], what)
 			if err != nil {
 				return r3.Vec{}, err
 			}
-			out[k] = h
+			v[k] = h
 		}
-		return r3.NewVec(out[0], out[1], out[2]), nil
-	}
-	c0, err := held(rec.World.Point(coil.Point(cu), coil.Point(cv), zero), "rim centre")
-	if err != nil {
-		return r3.Vec{}, r3.Vec{}, r3.Vec{}, r3.Vec{}, err
-	}
-	c1, err := held(rec.World.Point(x, y, z), "rim centre")
-	if err != nil {
-		return r3.Vec{}, r3.Vec{}, r3.Vec{}, r3.Vec{}, err
-	}
-	a0, err := held(rec.World.Vector(zero, zero, one), "rim axis")
-	if err != nil {
-		return r3.Vec{}, r3.Vec{}, r3.Vec{}, r3.Vec{}, err
+		return r3.NewVec(v[0], v[1], v[2]), nil
 	}
 	turn := proofbound.IntervalScale(sinT, tilt)
-	a1, err := held(rec.World.Vector(proofbound.IntervalNeg(proofbound.IntervalMul(turn, erU)), proofbound.IntervalNeg(proofbound.IntervalMul(turn, erV)), cosT), "rim axis")
-	if err != nil {
-		return r3.Vec{}, r3.Vec{}, r3.Vec{}, r3.Vec{}, err
+	w := [3]coil.Iv{proofbound.IntervalMul(cm1, erU), proofbound.IntervalMul(cm1, erV), turn}
+	turned := func(e [3]coil.Iv, along coil.Iv) [3]coil.Iv {
+		return [3]coil.Iv{
+			proofbound.IntervalAdd(e[0], proofbound.IntervalMul(along, w[0])),
+			proofbound.IntervalAdd(e[1], proofbound.IntervalMul(along, w[1])),
+			proofbound.IntervalAdd(e[2], proofbound.IntervalMul(along, w[2])),
+		}
 	}
-	n0, ok0 := a0.Normalize()
-	n1, ok1 := a1.Normalize()
-	if !ok0 || !ok1 {
-		return r3.Vec{}, r3.Vec{}, r3.Vec{}, r3.Vec{}, fmt.Errorf(`%w: the coil rim's plane has no normal`, ErrUnsupported)
+	e1, e2 := [3]coil.Iv{one, zero, zero}, [3]coil.Iv{zero, one, zero}
+	frames := [2]struct {
+		centre, normal proofbound.IvVec3
+		a, b           [3]coil.Iv
+	}{
+		{rec.World.Point(coil.Point(cu), coil.Point(cv), zero), rec.World.Vector(zero, zero, one), e1, e2},
+		{
+			rec.World.Point(x, y, z),
+			rec.World.Vector(proofbound.IntervalNeg(proofbound.IntervalMul(turn, erU)), proofbound.IntervalNeg(proofbound.IntervalMul(turn, erV)), cosT),
+			turned(e1, erU), turned(e2, erV),
+		},
 	}
-	return c0, n0, c1, n1, nil
+	for i, f := range frames {
+		c, err := held(f.centre, "rim centre")
+		if err != nil {
+			return out, err
+		}
+		a, err := held(f.normal, "rim axis")
+		if err != nil {
+			return out, err
+		}
+		n, ok := a.Normalize()
+		if !ok {
+			return out, fmt.Errorf(`%w: the coil rim's plane has no normal`, ErrUnsupported)
+		}
+		u := rec.World.Vector(f.a[0], f.a[1], f.a[2])
+		v := rec.World.Vector(f.b[0], f.b[1], f.b[2])
+		bound, bounded := coilRimCurveBound(f.centre, u, v, radius, c, n, heldRadius)
+		out[i] = coilRimCircle{centre: c, axis: n, bound: bound, bounded: bounded}
+	}
+	return out, nil
+}
+
+// coilRimCurveBound is Edge.curveBound for a coil rim: how far the denoted
+// circle {centre + r·(cos α·u + sin α·v)}, r in radius and u, v the images of
+// two orthonormal plane vectors under the denoted map, lies from the held
+// circle (heldCentre, the unit heldAxis, heldRadius). With D = centre −
+// heldCentre and q = r·(cos α·u + sin α·v), a denoted point sits at
+// D + q from the held centre. Its axial part is at most
+// ax = |A·D| + r·(|A·u| + |A·v|). |q|² = r²·(1 + x) with
+// |x| ≤ e = max(||u|² − 1|, ||v|² − 1|) + |u·v|, so ||q| − r| ≤ r·e for e ≤ 1,
+// and its radial part sits within |D| + r·e + |r − heldRadius| + ax of
+// heldRadius, since dropping the axial part shortens a vector by at most ax.
+// The sum 2·ax + |D| + r·e + |r − heldRadius| is rounded up once; it answers
+// false where e passes 1 or the bound is not below half the held radius.
+func coilRimCurveBound(centre, u, v proofbound.IvVec3, radius coil.Iv, heldCentre, heldAxis r3.Vec, heldRadius float64) (float64, bool) {
+	hc, ok1 := proofbound.IvVec3Of(heldCentre)
+	ha, ok2 := proofbound.IvVec3Of(heldAxis)
+	if !ok1 || !ok2 {
+		return math.Inf(1), false
+	}
+	d := proofbound.IvVec3Sub(centre, hc)
+	one := coil.Point(big.NewRat(1, 1))
+	defect := new(big.Rat).Add(
+		new(big.Rat).Set(maxRat(proofbound.IntervalAbsUpper(proofbound.IntervalSub(proofbound.IvVec3NormSq(u), one)),
+			proofbound.IntervalAbsUpper(proofbound.IntervalSub(proofbound.IvVec3NormSq(v), one)))),
+		proofbound.IntervalAbsUpper(proofbound.IvVec3Dot(u, v)),
+	)
+	if defect.Cmp(big.NewRat(1, 1)) > 0 {
+		return math.Inf(1), false
+	}
+	// A is the held axis over its own exact length, read from below.
+	norm, ok := proofbound.SqrtFixed(proofbound.IvVec3NormSq(ha).Lo)
+	if !ok || norm.Lo.Sign() <= 0 {
+		return math.Inf(1), false
+	}
+	r := radius.Hi
+	ax := new(big.Rat).Add(proofbound.IntervalAbsUpper(proofbound.IvVec3Dot(ha, u)), proofbound.IntervalAbsUpper(proofbound.IvVec3Dot(ha, v)))
+	ax.Mul(ax, r)
+	ax.Add(ax, proofbound.IntervalAbsUpper(proofbound.IvVec3Dot(ha, d)))
+	ax.Quo(ax, norm.Lo)
+	dLen, ok := proofbound.SqrtFixed(proofbound.IvVec3NormSq(d).Hi)
+	if !ok {
+		return math.Inf(1), false
+	}
+	held := new(big.Rat).SetFloat64(heldRadius)
+	gap := maxRat(new(big.Rat).Abs(new(big.Rat).Sub(radius.Lo, held)), new(big.Rat).Abs(new(big.Rat).Sub(radius.Hi, held)))
+	total := new(big.Rat).Mul(ax, big.NewRat(2, 1))
+	total.Add(total, dLen.Hi)
+	total.Add(total, new(big.Rat).Mul(r, defect))
+	total.Add(total, gap)
+	bound := proofbound.RatFloatUp(total)
+	if proofbound.IsNonFinite(bound) || !(proofbound.ProductUpper(2, bound) < heldRadius) {
+		return math.Inf(1), false
+	}
+	return bound, true
 }
 
 // coilTangent is segment i's exact walk tangent at its walk start (atStart)

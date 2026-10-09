@@ -1194,3 +1194,6 @@
 2	0.90	TestCoilArcMeshProofsEncloseTheBody
 4	0.40	TestCoilArcRefusals
 2	0.02	TestDraftMeshEmbeddedCheckRefusesACrossing
+3	1.67	TestCoilFullTurnArcClosesLikeACircle
+4	6.56	TestCoilRimCurveBoundHoldsTheDenotedCircle
+1	0.74	TestCoilUnstitchCarriesTheRimCurveBound

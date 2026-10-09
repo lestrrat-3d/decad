@@ -675,6 +675,12 @@ circle (`revolvemesh.RevolveLift.CapArcGap`): each reads the recorded point
 or circle, the axis's own anchor and direction bounds, the end angle's
 certified sine and cosine and the placement as exact leaves, and
 `revolvemesh.CircleGap` bounds the whole image circle against the held one.
+A coil stamps it on both cap rims of every arc and circle
+(`coilRimCurveBound`, `docs/helix-design.md` Table CB): the recorded circle
+carried through the screw motion at the cap's turn and the exact denoted
+map, its centre, its two in-plane axes and its radius as exact leaves. A
+coil's rim vertices carry their station bound `β`, so `Body.Patch` refuses
+a coil sheet's rim at R6 before it reads the curve bound.
 Every copier carries the bound through its placement (`placedCurveBound`).
 A circular rim edge whose bound cannot be proven — a cap copy at an end with
 no denotation, or a bound not below half the radius — leaves the face with

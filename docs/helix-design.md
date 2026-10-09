@@ -468,7 +468,7 @@ segment `j` of that loop, and junction `v`, the walk start of a segment:
 | start cap | 1 | `Plane` over the recorded region, frame the recorded plane's own (exact) | `capStart` |
 | end cap | 1 | `Plane` over the section at `θ = Θ`, frame from the station-`N` trig, within `δ` | `capEnd` |
 | wall | one per `(i, j)` | `Faceted{Bound}` — the whole helicoidal band of segment `j` over every turn, `Bound` the largest `β` over the vertices its triangles touch | `side(i, j)` |
-| rim edge | one per profile segment per cap | `Line3` between the cap's two held vertices; `Arc3` for an `ArcSeg`, its centre and axis the arc's centre and the section plane's normal lifted through `Φ` at `θ = 0` or `θ = Θ`, signed so the rim runs counter-clockwise from its start vertex to its end vertex; `Circle3` for a whole circle, which closes on one vertex | through its two faces' origins |
+| rim edge | one per profile segment per cap | `Line3` between the cap's two held vertices; `Arc3` for an `ArcSeg`, its centre and axis the arc's centre and the section plane's normal lifted through `Φ` at `θ = 0` or `θ = Θ`, signed so the rim runs counter-clockwise from its start vertex to its end vertex; `Circle3` for a whole circle or an arc whose `End` is its `Start` alone in its loop, which closes on one vertex. Every circular rim carries `Edge.curveBound`: twice the axial reach `|A·D| + r·(|A·u| + |A·v|)`, plus `|D|`, `r·e` and `|r − R|`, with `D` the denoted centre less the held one, `u`, `v` the denoted map's images of the turned in-plane axes, `e` their orthonormality defect, `A` the held axis and `R` the held radius (`coilRimCurveBound`) | through its two faces' origins |
 | helix edge | one per junction | `FacetedCurve{Bound}`: the chain of held chords of junction `v` over every station, `Bound` the largest `β` along it | through its two walls' origins |
 | vertex | one per junction per cap; a whole circle's walk start is its seam vertex | position the held station-`0` or station-`N` point, bound its `β` | — |
 
@@ -478,7 +478,9 @@ helix edge reversed. For a hole-free profile of `m` segments the body has
 `2 + m` faces, `3m` edges and `2m` vertices. A whole circle has no
 junction: its wall is a band with two loops, its two rim circles, the
 prism's closed-band rule, so a round wire has 3 faces, 2 edges and 2
-vertices. One lump, one outer shell; a hole loop is a void passage
+vertices. An `ArcSeg` whose `End` is its `Start`, alone in its loop, sweeps
+the same whole turn and builds the same band, so no wall loop holds one
+edge twice. One lump, one outer shell; a hole loop is a void passage
 through every turn, never a second lump.
 
 `Edge.IsConvex` keeps evaluator §3's meanings. A helix edge is a junction
