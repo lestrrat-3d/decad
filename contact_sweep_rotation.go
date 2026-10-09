@@ -434,7 +434,8 @@ func (r *rotationalPairSweep) orientedIdealEvent(f *big.Rat, at SweepInstant,
 				event.Relation, event.Gap, event.Reason = ContactSeparated, gap, ContactNoReason
 			}
 		case ContactOverlapping:
-			if orientedInteriorWitness(boxA, boxB, proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)) {
+			if pairbox.OrientedInteriorWitness(boxA.pairBox(), boxB.pairBox(),
+				proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)) {
 				event.Relation, event.Reason = ContactOverlapping, contact.Reason
 			}
 			if proof, ok := r.horizontalSpinContact(f, poseA, poseB, contact,
@@ -918,10 +919,11 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 	if side == 0 {
 		sideA, sideB = 0, 1
 	}
-	var faceA, faceB orientedFace
-	if !orientedAxisFace(&r.a.startBox, axis, sideA, &faceA) ||
-		!orientedAxisFace(&r.b.startBox, axis, sideB, &faceB) ||
-		proofarith.DyCmp(faceA.origin[axis], faceB.origin[axis]) != 0 {
+	boxA, boxB := r.a.startBox.pairBox(), r.b.startBox.pairBox()
+	var faceA, faceB pairbox.OrientedFace
+	if !pairbox.OrientedAxisFace(&boxA, axis, sideA, &faceA) ||
+		!pairbox.OrientedAxisFace(&boxB, axis, sideB, &faceB) ||
+		proofarith.DyCmp(faceA.Origin[axis], faceB.Origin[axis]) != 0 {
 		return nil, false
 	}
 	return sweepdeparture.AxisFace([2]sweepdeparture.Path{r.a.departurePath(), r.b.departurePath()}, axis, side)
@@ -1090,16 +1092,17 @@ func (r *rotationalPairSweep) obliqueAffineIntervalClear(from, to *big.Rat) bool
 	if !okA || !okB || !okC || !okD {
 		return false
 	}
+	pa0, pb0, pa1, pb1 := a0.pairBox(), b0.pairBox(), a1.pairBox(), b1.pairBox()
 	for axis := range 3 {
 		i, j := (axis+1)%3, (axis+2)%3
 		normal := proofarith.DvCross(r.a.startBox.edge[i], r.a.startBox.edge[j])
 		if proofarith.DvIsZero(normal) {
 			continue
 		}
-		alo0, ahi0 := orientedProjection(a0, normal)
-		blo0, bhi0 := orientedProjection(b0, normal)
-		alo1, ahi1 := orientedProjection(a1, normal)
-		blo1, bhi1 := orientedProjection(b1, normal)
+		alo0, ahi0 := pairbox.OrientedProjection(pa0, normal)
+		blo0, bhi0 := pairbox.OrientedProjection(pb0, normal)
+		alo1, ahi1 := pairbox.OrientedProjection(pa1, normal)
+		blo1, bhi1 := pairbox.OrientedProjection(pb1, normal)
 		if proofarith.DyCmp(ahi0, blo0) < 0 && proofarith.DyCmp(ahi1, blo1) < 0 ||
 			proofarith.DyCmp(bhi0, alo0) < 0 && proofarith.DyCmp(bhi1, alo1) < 0 {
 			return true

@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -82,9 +83,9 @@ func TestOrientedVertexFaceFootMatchesRationalForm(t *testing.T) {
 	inside, outside := 0, 0
 	for _, target := range boxes {
 		for _, from := range boxes {
-			vertices := orientedWitnessSamples(from)
+			vertices := pairbox.OrientedWitnessSamples(from.pairBox())
 			for _, offset := range []float64{0, 3.25, -7.5} {
-				for _, sample := range orientedWitnessSamples(from)[:8] {
+				for _, sample := range pairbox.OrientedWitnessSamples(from.pairBox())[:8] {
 					shifted := proofarith.DvAdd(sample, proofarith.DyVec(r3.Vec{X: offset, Y: offset / 2, Z: -offset}))
 					vertices = append(vertices, shifted)
 				}
@@ -93,16 +94,18 @@ func TestOrientedVertexFaceFootMatchesRationalForm(t *testing.T) {
 				for axis := range 3 {
 					for side := range 2 {
 						wantFoot, wantDistance := orientedVertexFaceFootRational(vertex, target, axis, side)
-						gotFoot, gotDistance := orientedVertexFaceFoot(vertex, target, axis, side)
+						gotFoot, gotDistance := pairbox.OrientedVertexFaceFoot(vertex, target.pairBox(), axis, side)
 						require.Equal(t, wantDistance == nil, gotDistance == nil)
-						require.Equal(t, wantDistance == nil, orientedVertexFaceDistanceSquared(vertex, target, axis, side) == nil)
+						require.Equal(t, wantDistance == nil,
+							pairbox.OrientedVertexFaceDistanceSquared(vertex, target.pairBox(), axis, side) == nil)
 						if wantDistance == nil {
 							outside++
 							continue
 						}
 						inside++
 						require.Zero(t, wantDistance.Cmp(gotDistance))
-						require.Zero(t, wantDistance.Cmp(orientedVertexFaceDistanceSquared(vertex, target, axis, side)))
+						require.Zero(t, wantDistance.Cmp(pairbox.OrientedVertexFaceDistanceSquared(
+							vertex, target.pairBox(), axis, side)))
 						for k := range 3 {
 							require.Zero(t, wantFoot[k].Cmp(gotFoot[k]))
 						}

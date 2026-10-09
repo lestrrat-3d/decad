@@ -89,7 +89,8 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 	if vertical < 0 {
 		return false
 	}
-	minZ, maxZ := orientedProjection(rotated, proofarith.DyV3{proofarith.DyZero(), proofarith.DyZero(), proofarith.MustDyOf(1)})
+	minZ, maxZ := pairbox.OrientedProjection(rotated.pairBox(),
+		proofarith.DyV3{proofarith.DyZero(), proofarith.DyZero(), proofarith.MustDyOf(1)})
 	var faceZ proofarith.Dyadic
 	baseSide := 0
 	normalZ := -1.0
