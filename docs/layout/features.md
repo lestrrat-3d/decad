@@ -13,7 +13,7 @@ The rules for rows live in `docs/layout.md`.
 | `document.go` | `Document`: live body set, commit, `Remove`, liveness gates, placement and duplication. See evaluator §8. |
 | `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
 | `mirror_join.go` | `WithJoin` adapters and section audit. See mirror-pattern §5. |
-| `pattern.go` | Pattern entry points and payload adapters. See mirror-pattern §6. |
+| `pattern.go` | Public pattern specs, entry points and payload adapters. See mirror-pattern §4.3, §6. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, shell/lump and free-edge adapters over `internal/surfacegroup/`. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken`. See surface §16. |
