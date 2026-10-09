@@ -19,6 +19,7 @@ type Spec struct {
 	Count        int
 	Circular     bool
 	Dir          r3.Vec
+	StepMM       float64
 	StepRat      *big.Rat
 	Center, Axis r3.Vec
 }

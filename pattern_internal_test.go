@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/patternrecord"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -129,11 +130,11 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 // 10 mm step moves a point by exactly (6, 8).
 func TestPatternLinearMotionUsesTheDenotedStep(t *testing.T) {
 	t.Parallel()
-	rp, err := resolvePattern(LinearPattern{Dir: r3.NewVec(3, 4, 0), Step: units.Millimeters(10), Count: 2})
+	rp, err := patternrecord.Resolve(LinearPattern{Dir: r3.NewVec(3, 4, 0), Step: units.Millimeters(10), Count: 2})
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	mv, err := rp.linearMotion(frame, r3.Identity(), 1)
+	mv, err := rp.LinearMotion(frame, r3.Identity(), 1)
 	require.NoError(t, err)
 	p, charge, err := mv(Point2{U: 1, V: 2})
 	require.NoError(t, err)
