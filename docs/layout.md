@@ -36,6 +36,7 @@ the rules leave to the byte budget.
 | `docs/modify-reach-design.md` | Modify reach: tangent chains, asymmetric chamfers, cap-loop blends, shell reach and staging. |
 | `docs/brep-modify-design.md` | Modify ops on brep and stacked receivers; Tables RB/EB/SB/BB/DB. |
 | `docs/modify-general-design.md` | Shell of a through-cut brep (S), complete-loop chamfers (L); Tables TC/SG/LB/SL. |
+| `docs/loop-fillet-design.md` | Route L's fillet arm: pipe bands on a planar face's loop; Tables LF/RF/SF/BF/DF/CF. |
 | `docs/shell-opening-design.md` | Shell side openings on a prism and a revolve: rim rule, brep record, Tables RO/SO/BO/DO. |
 | `docs/draft-design.md` | `WithTaper` and `Body.Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
@@ -44,7 +45,7 @@ the rules leave to the byte budget.
 | `docs/helix-design.md` | `Document.Coil`: a profile screwed about an in-plane axis. |
 | `docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
-| `docs/mirror-pattern-design.md` | `Mirrored`/`MirroredCopy`, the exact mirror join, `PatternCopies`/`Patterned` and the prism group. |
+| `docs/mirror-pattern-design.md` | Mirror and pattern entry points, the exact mirror join, the prism group. |
 | `docs/general-boolean-design.md` | Boolean classes past the prism pair, and `brepPayload`. |
 | `docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
 | `docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies and their boolean composition. |
@@ -109,7 +110,7 @@ the rules leave to the byte budget.
 | `thicken.go` | `Body.Thicken`. See surface §16. |
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
 | `thicken_axis.go` | Assembles thicken sections. See surface §16. |
-| `offset.go` | `Body.Offset` builds a second sheet at a stated normal distance, leaving the receiver live. See surface §17. |
+| `offset.go` | `Body.Offset`: a second sheet at a normal distance. See surface §17. |
 | `patch_body.go` | `Body.Patch` topology adapter and face build. See surface §5.2. |
 | `denotation.go` | Mints document tokens. |
 | `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |
@@ -196,7 +197,7 @@ the rules leave to the byte budget.
 | `verify_result.go` | Public verification result aliases. |
 | `verify_publish.go` | Adapts private surveys to `internal/reportvocab` publication. See verification §1, §6. |
 | `clearance.go` | The pair kernel: `clearancePair` and `sheetSolidPair`. See clearance §1-§3/§6. |
-| `clearance_box.go` | Certifies unplaced axis-aligned box prisms and bounds their gap from exact box planes ahead of the kernel. |
+| `clearance_box.go` | Unplaced axis-aligned box pairs: gap from exact planes, ahead of the kernel. |
 | `clearance_planar.go` | The exact planar pair arm for mitred, faceted and coil bodies: interference §3.2. |
 | `contact_pair.go` / `contact_pair_memo.go` | Pair gates, reports, and memo. See contact-geometry. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See contact-geometry §4. |

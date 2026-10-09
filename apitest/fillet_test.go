@@ -853,6 +853,15 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `a fillet of a cap edge is the vertex-blend problem`)
 
+		// Both complete cap loops of the box reach route L's fillet arm
+		// (docs/loop-fillet-design.md RF3), whose refusal is modify-general SL3.
+		_, box = filletBox(t)
+		_, err = box.Fillet(t.Context(), bothCapLoops(), units.Millimeters(5))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		requireReasonLeads(t, err, `a fillet of a complete loop is the vertex-blend problem`)
+		require.ErrorContains(t, err, `modify-general SL3`)
+		require.Equal(t, []*decad.Body{box}, box.Document().Bodies(), `the refusal leaves the receiver live`)
+
 		// Chamfer's cap-loop reach (§8.3, RX1) reclassifies this selection: it
 		// is two of the four edges of each cap's rim loop — a partial loop —
 		// so it now reads SX4's more specific reason instead of the base

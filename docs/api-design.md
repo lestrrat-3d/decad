@@ -492,6 +492,17 @@ type Curve interface{ curve() } // sealed
 type Line3 struct   { /* ... */ }
 type Circle3 struct { /* ... */ }
 type Arc3 struct    { /* ... */ }
+// Ellipse3 is an elliptical arc edge, swept counter-clockwise about Axis from
+// the start vertex to the end vertex as Arc3 is: the point at angle φ from the
+// unit semi-major direction Major is
+// Center + SemiMajor·cos φ·Major + SemiMinor·sin φ·(Axis × Major)
+// (docs/loop-fillet-design.md §2). A placement maps Center and Major as
+// points and directions; a reflection also negates Axis, so the arc keeps its
+// sense between its mapped vertices.
+type Ellipse3 struct {
+	Center, Axis, Major  r3.Vec
+	SemiMajor, SemiMinor units.Value
+}
 // NURBSCurve is a free-form edge's geometry, NURBSSurface's 1-D analog
 // (docs/spline-design.md §7).
 type NURBSCurve struct{ /* private */ }

@@ -30,13 +30,25 @@ import (
 // moved along F's normal to the side level. setback is the band's two
 // setbacks, dc = ds = d (modify-general §7). sigma is −1 when the walls beside
 // the loop descend into the body, so the band removes a wedge, and +1 when
-// they rise off F, so the band fills the concave corner (Table LB, LB6).
+// they rise off F, so the band fills the concave corner (Table LB, LB6). kind
+// is the band's surface family (docs/loop-fillet-design.md §4 step 3).
 type brepLoopBand struct {
 	face, loop int
 	orig       LoopRecord
 	setback    capSetback
 	sigma      float64
+	kind       brepBandKind
 }
+
+// brepBandKind is a loop band's surface family: a chamfer's ruled patches or a
+// fillet's pipe patches (docs/loop-fillet-design.md). Route L builds only
+// chamfer bands so far.
+type brepBandKind string
+
+const (
+	brepBandChamfer brepBandKind = "chamfer"
+	brepBandFillet  brepBandKind = "fillet"
+)
 
 // matSign is the band's material sense in F's frame, the sign
 // buildCapBand reads: the side level is F's level plus matSign·ds. A
@@ -95,6 +107,8 @@ func (b brepLoopBand) validate(bp brepPayload, bi int) error {
 		return refuse(`names no planar face of the record`)
 	case b.loop < 0 || b.loop > len(bp.faces[b.face].region.Holes):
 		return refuse(`names no loop of its face`)
+	case b.kind != brepBandChamfer:
+		return refuse(`is no chamfer band, the only kind route L builds`)
 	case b.sigma != 1 && b.sigma != -1:
 		return refuse(`states no side of its face`)
 	case !(b.setback.dc > 0) || b.setback.dc != b.setback.ds || math.IsInf(b.setback.dc, 1):

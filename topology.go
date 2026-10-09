@@ -108,6 +108,9 @@ type Circle3 = surfacegeom.Circle3
 // Arc3 is a circular arc edge's geometry.
 type Arc3 = surfacegeom.Arc3
 
+// Ellipse3 is an elliptical arc edge's geometry.
+type Ellipse3 = surfacegeom.Ellipse3
+
 // NURBSCurve is a free-form edge's geometry.
 type NURBSCurve = surfacegeom.NURBSCurve
 

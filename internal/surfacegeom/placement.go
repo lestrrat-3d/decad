@@ -51,6 +51,17 @@ func TransformCurve(c Curve, xf r3.Transform) (Curve, error) {
 		return Circle3{Center: xf.Apply(v.Center), Axis: xf.ApplyDir(v.Axis), Radius: v.Radius}, nil
 	case Arc3:
 		return Arc3{Center: xf.Apply(v.Center), Axis: xf.ApplyDir(v.Axis), Radius: v.Radius}, nil
+	case Ellipse3:
+		// A reflection reverses the sense of rotation, so the placed arc stays
+		// counter-clockwise from its start to its end about the negated axis.
+		axis := xf.ApplyDir(v.Axis)
+		if xf.IsReflection() {
+			axis = axis.Scale(-1)
+		}
+		return Ellipse3{
+			Center: xf.Apply(v.Center), Axis: axis, Major: xf.ApplyDir(v.Major),
+			SemiMajor: v.SemiMajor, SemiMinor: v.SemiMinor,
+		}, nil
 	case NURBSCurve:
 		return v, nil
 	case FacetedCurve:
