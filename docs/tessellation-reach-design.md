@@ -340,8 +340,8 @@ tess §§8–11 are the theory; this section maps each paragraph to code. No new
 | File | Owns |
 |---|---|
 | `tessellate_revolve.go` | `tessellateRevolve`: walk resolution, the axis-incidence and section gates, the angular count, cell and cap assembly, orientation, and the assembled mesh's own audits (tess §8, §9) |
-| `internal/revolvesampling/meridian.go` | Certified meridian junctions and circular stations (tess §8–§9) |
-| `internal/revolvemesh/revolve_ring.go` | Ring vertex emission, indices, and construction and placement rounding measurements (tess §8, §9) |
+| `internal/revolvesampling/meridian.go` and `section.go` | Certified meridian junctions, circular stations and section readings (tess §8–§9) |
+| `internal/revolvemesh/revolve_ring.go` and `tessellate_revolve.go` | Ring, cell and cap emission, indices, area charge, and construction and placement rounding measurements (tess §8–§10) |
 | `internal/revolvemesh/revolve_proof.go` | Certified angular samples and axis basis (tess §8) |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, `Ecell`, `Mmeridian`, and `volSymDiff_revolve` composition (tess §8–§11) |
 
@@ -355,7 +355,7 @@ recorded segment. Both the builder and the tessellator call it, so the mesh read
 was built from (tess §3: "read the evaluator's payload, NEVER live sketch input"), and the proof reads the
 recorded plane point the axis re-expression consumed rather than the re-expressed floats, which
 `axisFrame.walk` states no axial bound for and SNAPS a near-axis radial one to zero. The evaluator §6
-axis-incidence audit runs from the tessellator as `requireRevolveAxisIncidence` (tess §9's "also run").
+axis-incidence audit runs from the tessellator as `revolvesampling.RequireAxisIncidence` (tess §9's "also run").
 `revolveBasis` (`rp.basis()`) gives `a3, w, e0, e1`; the tessellator evaluates `X(z, ρ, φ)` UNPLACED in
 binary64, stores, then applies `rp.xform` once (tess §8's two stages) — it does not use `rp.point`, which
 composes both in one expression.
@@ -364,16 +364,16 @@ composes both in one expression.
 
 | tess paragraph | Function | Notes |
 |---|---|---|
-| §8 profile → `(z, ρ)`, `rhoMax`, `zAbsMax`, `coordMax` | `revolveExtents(walks)` | endpoints plus cardinal points inside a circular walk's interval; non-positive `rhoMax` is an invariant failure |
+| §8 profile → `(z, ρ)`, `rhoMax`, `zAbsMax`, `coordMax` | `revolveproof.Extents(walks)` | endpoints plus cardinal points inside a circular walk's interval; non-positive `rhoMax` is an invariant failure |
 | §8 `deltaC` | `revolvemesh.IdealBasis`, `revolveMeridianEnclosure`, `revolveIdealPoint` | Certified intervals enclose each unplaced vertex; `deltaC` bounds its stored float coordinate. |
 | §8 `deltaR` | `min(rigidRoundAllow(coordMax + deltaC, translationMax), exactRigidPointRound per vertex)` | the second term measures the same displacement exactly, so it is 0 under an exact identity and tighter elsewhere; `exactPrismPointRound`'s own mechanism |
 | §8 budget order | `revolveConstructionPrior` + `rigidRoundAllow` before the count, the measured pair after | §8 splits the tolerance BEFORE the counts, and the count decides how many angles there are, so the split spends count-INDEPENDENT ceilings: the meridian gap (per sample, not per angle), the stored trig's own ceiling, and the evaluation's ulps at `coordMax`. The measured `deltaC`/`deltaR` are checked against them and refuse on a violation, so the a-priori figure is held to account rather than trusted |
 | §8 tolerance split | `revolveBudget(tol, deltaC, deltaR)` | `available = downRound(downRound(tol − deltaC − deltaR))`; `<= 0` refuses; meridian gets `available/2`; angular gets `available − deltaM` |
 | §3/§8 counts | `chordCount` for each circular meridian walk (R4) and for the global angular sequence with `radius = rhoMax`, `sweep = |φ1−φ0|` or `2π`, `closed = full` | the downward-then-upward correction and the cap are `chordCount`'s own; R3 sections have no circular meridian walk, so `deltaM == 0` |
-| §9 section proof | `revolveSectionPoints` + `requireLoopClearance` over the `(z, ρ)` samples, run for a full and a partial sweep alike before any cell is formed (line-only sections: the homotopy is the identity, so the endpoint checks are the proof) | R4 adds the intra-loop tube check |
+| §9 section proof | `revolvesampling.SectionPoints` + `requireLoopClearance` over the `(z, ρ)` samples, run for a full and a partial sweep alike before any cell is formed (line-only sections: the homotopy is the identity, so the endpoint checks are the proof) | R4 adds the intra-loop tube check |
 | §9 rings + poles | `tessellateRevolve`'s ring loop, read back through `revMeridian.at` | `ρ > 0` → `nPhi` (full) or `nPhi+1` (partial) vertices; `ρ == 0` → ONE vertex, answered for every angle and for both caps, so the interning is structural rather than a lookup |
-| §9 cells | `emitRevolveCell` | both off axis → planar quad, fixed `(m_k, φ_l) → (m_{k+1}, φ_{l+1})` diagonal; one on axis → fan; both on axis → nothing only for `wallAxis`, else refuse "erased generator" |
-| §9 partial caps | `emitRevolveCaps`: `triangulate2DContext` over the `(z, ρ)` samples | the `(u, v) → (z, ρ)` map is a ROTATION for either axis side, so the recorded loop's own sense survives it and no index order is reversed; the `(z, ρ)` frame's normal is the sweep-velocity direction, so the END cap takes the triangulation as it stands and the start cap reverses it. Pole vertices are ordinary 2D samples mapping to the interned vertex, so the on-axis line's edge is shared by both caps |
+| §9 cells | `revolvemesh.EmitCellTriangles` | both off axis → planar quad, fixed `(m_k, φ_l) → (m_{k+1}, φ_{l+1})` diagonal; one on axis → fan; both on axis → nothing only for `wallAxis`, else refuse "erased generator" |
+| §9 partial caps | `revolvemesh.EmitCapTriangles`: `triangulation.Triangulate` over the `(z, ρ)` samples | the `(u, v) → (z, ρ)` map is a ROTATION for either axis side, so the recorded loop's own sense survives it and no index order is reversed; the `(z, ρ)` frame's normal is the sweep-velocity direction, so the END cap takes the triangulation as it stands and the start cap reverses it. Pole vertices are ordinary 2D samples mapping to the interned vertex, so the on-axis line's edge is shared by both caps |
 | §4 orientation | walk sense × sweep sense, then reflection | rule: with material on the walk's left in `(z, ρ)` and a right-handed sweep about `w`, `∂X/∂t × ∂X/∂φ` is ρ times the outward in-plane normal, so cell triangles are `(m_k,l), (m_{k+1},l), (m_{k+1},l+1)` and `(m_k,l), (m_{k+1},l+1), (m_k,l+1)`; the axis SIDE needs no negation of its own (see the caps row); negate for `rp.reflected()`; then the signed-volume audit |
 | §9 positive facet area | `requireRevolveFacetAreas(budget, verts, tris, deltaC + deltaR)` | tess §1's Geometry row, linear in the facets, run at EVERY verification level and never inside the pair audit below. It also builds the `revolveAuditTri` data that audit consumes, so the two share one pass over the facets and one work budget |
 | §9 endpoint + homotopy audits | `revolveContactAudit(budget, data, tris, deltaC + deltaR)`, at `VerifyBoundary` and above | ONE pass, at the final stored coordinates, against the COMBINED displacement. Every mesh on either homotopy is a vertex-wise displacement of the stored one by at most that (the placement between the two stages is an exact isometry), and every predicate the classification consults is multilinear in the vertices, so a stored reading exceeding its own perturbation allowance fixes the sign for the whole family. A pair sharing nothing is proven apart by an exact separating axis with the same margin; a pair sharing a vertex or an edge is proven to meet ONLY there by a boundary plane built as a polynomial in the pair's own corners, so the plane keeps containing the shared feature identically. Facet-pair count preflighted against `maxFacetPairTestsPerCall` (tess §3), as `internal/loftmesh/loft_audit.go` does |
@@ -436,7 +436,7 @@ its derivation, and is the authority on both.
 |---|---|
 | non-positive `available` | `revolveBudget` |
 | inverse underflow / unrepresentable ceiling / cap | `chordCount` (unchanged) |
-| on-axis incidence malformed | `requireRevolveAxisIncidence` (`ErrDegenerate`) |
+| on-axis incidence malformed | `revolvesampling.RequireAxisIncidence` (`ErrDegenerate`) |
 | positive-radius ring collapse; erased generator | `revolvesampling.MeridianSamples`, `tessellateRevolve`'s own cell loop |
 | meridian simplicity/nesting/clearance | `requireLoopClearance`, `requireWalkClearance` after refinement exhausts |
 | non-adjacent facets intersect; homotopy sign not fixed | `revolveContactAudit` |
@@ -786,8 +786,8 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
     walks, their kinds, `singleClosed` and the plane-local walks the proof reads. **Tests:** existing revolve
     tests unchanged.
 15. **Files:** `tessellate_revolve.go`, `internal/revolvesampling/meridian.go`. **What:**
-    `revolvesampling.MeridianSamples`, `requireRevolveAxisIncidence`,
-    `revolveExtents`, `revolvePreflightFacets`, rings, poles, `emitRevolveCell`, `emitRevolveCaps`,
+    `revolvesampling.MeridianSamples`, `revolvesampling.RequireAxisIncidence`,
+    `revolveproof.Extents`, `revolvePreflightFacets`, rings, poles, `revolvemesh.EmitCellTriangles`, `revolvemesh.EmitCapTriangles`,
     orientation; dispatch; refuse circular walks. **Pattern:** `tessellateCup` for ring sharing and cap
     emission. **Depends on:** 6, 14. **Tests:** R3's list in new `apitest/tessellate_revolve_test.go`; export byte
     identity there too.

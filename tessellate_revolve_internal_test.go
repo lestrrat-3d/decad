@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -412,19 +413,19 @@ func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 
 func TestCheckedIntegerArithmeticRefusesOverflow(t *testing.T) {
 	t.Parallel()
-	sum, ok := addChecked(math.MaxUint64, 1)
+	sum, ok := revolveproof.AddChecked(math.MaxUint64, 1)
 	require.False(t, ok)
 	require.Equal(t, uint64(0), sum)
-	sum, ok = addChecked(7, 5)
+	sum, ok = revolveproof.AddChecked(7, 5)
 	require.True(t, ok)
 	require.Equal(t, uint64(12), sum)
 
-	_, ok = mulChecked(math.MaxUint64/2+1, 3)
+	_, ok = revolveproof.MulChecked(math.MaxUint64/2+1, 3)
 	require.False(t, ok)
-	product, ok := mulChecked(6, 7)
+	product, ok := revolveproof.MulChecked(6, 7)
 	require.True(t, ok)
 	require.Equal(t, uint64(42), product)
-	product, ok = mulChecked(0, math.MaxUint64)
+	product, ok = revolveproof.MulChecked(0, math.MaxUint64)
 	require.True(t, ok)
 	require.Equal(t, uint64(0), product)
 }

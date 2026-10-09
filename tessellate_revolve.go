@@ -12,7 +12,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/revolvesampling"
-	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -249,11 +248,11 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution,
 		junctionGap = math.Max(junctionGap, gap)
 		resolved[li], junctions[li] = r, js
 	}
-	if err := requireRevolveAxisIncidence(resolved, junctions); err != nil {
+	if err := revolvesampling.RequireAxisIncidence(resolved, junctions); err != nil {
 		return nil, err
 	}
 
-	rhoMax, zAbsMax, err := revolveExtents(resolved)
+	rhoMax, zAbsMax, err := revolveproof.Extents(revolveWalkView(resolved))
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +341,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 			if !w.IsCircular() {
 				continue
 			}
-			n, sag, err := chordCount(w.SegmentWalk, meridian, revolveMeridianMin(w.SegmentWalk))
+			n, sag, err := chordCount(w.SegmentWalk, meridian, revolvesampling.MeridianMin(w.SegmentWalk))
 			if err != nil {
 				return nil, err
 			}
@@ -374,20 +373,6 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 	}, nil
 }
 
-// revolveMeridianMin is docs/tessellation-design.md §9's meridian minimum:
-// three chords for a whole closed generator, so it bounds a polygon; TWO for a
-// circular generator whose two ends both sit on the axis — a sphere meridian —
-// so it cannot chord to a single on-axis segment; and one otherwise.
-func revolveMeridianMin(w survey2d.SegmentWalk) int {
-	if w.Closed {
-		return 3
-	}
-	if w.StartV == 0 && w.EndV == 0 {
-		return 2
-	}
-	return 1
-}
-
 // buildRevolveMesh is one attempt at the whole mesh, at the plan's current
 // counts. A failure a finer chording could still answer is wrapped in a
 // revolveRefineError naming what to refine; every other failure is final.
@@ -409,6 +394,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	sheet := rp.surfaceResult
 	mesh := &Mesh{}
 	loopMesh := make([]revLoopMesh, len(p.resolved))
+	meridianSamples := make([][]revolvemesh.RevMeridian, len(p.resolved))
 	sampleGap := 0.0
 	for li := range p.resolved {
 		samples, gap, err := revolvesampling.MeridianSamples(
@@ -418,12 +404,16 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		}
 		sampleGap = math.Max(sampleGap, gap)
 		loopMesh[li] = revLoopMesh{resolved: p.resolved[li], samples: samples}
+		meridianSamples[li] = samples
 	}
 	if sampleGap > p.samplePrior {
 		return nil, fmt.Errorf(`%w: a revolve meridian sample sits farther from the axis coordinates its record denotes than the tolerance split reserved for it`, ErrUnsupported)
 	}
-	if err := requireRevolveMeridianOffAxis(loopMesh); err != nil {
-		return nil, err
+	if li, k, erased := revolvesampling.OffAxisWalk(p.resolved, meridianSamples); erased {
+		return nil, &revolveRefineError{
+			err:   fmt.Errorf(`%w: a circular revolve generator chords to a polyline lying entirely on the axis, which sweeps no face`, ErrUnsupported),
+			retry: revolveRefine{loop: li, walk: k},
+		}
 	}
 
 	// docs/tessellation-design.md §9's meridian section proof, run for a full
@@ -431,7 +421,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// formed: every loop simple and correctly nested, and every non-adjacent
 	// chord pair — across loops and WITHIN one loop — clear of the two sagitta
 	// tubes the analytic-to-chord homotopy moves inside.
-	sectionPts, sectionLoops, sectionSag := revolveSectionPoints(loopMesh)
+	sectionPts, sectionLoops, sectionSag := revolvesampling.SectionPoints(meridianSamples)
 	if err := requireLoopClearance(ctx, sectionPts, sectionLoops, revolveproof.LoopMaxSagitta(sectionSag)); err != nil {
 		return nil, revolveSectionRetry(loopMesh, err)
 	}
@@ -452,12 +442,8 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// Rings share their meridian samples with the cell builder, so the
 	// emitted vertex indices stay attached to the same samples.
 	budget := proofbound.NewWorkBudget(ctx)
-	samples := make([][]revolvemesh.RevMeridian, len(loopMesh))
-	for li := range loopMesh {
-		samples[li] = loopMesh[li].samples
-	}
 	vertices, deltaC, deltaR, err := revolvemesh.EmitRings(
-		samples, angular, p.basis, p.ideal, rp.xform, rp.full, budget)
+		meridianSamples, angular, p.basis, p.ideal, rp.xform, rp.full, budget)
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +496,9 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			if err != nil {
 				return nil, err
 			}
-			emitRevolveCell(mesh, lo, hi, p.nPhi, face)
+			revolvemesh.EmitCellTriangles(lo, hi, p.nPhi, func(tri [3]int) {
+				mesh.addTriangle(tri, face)
+			})
 			cur := faceCells[face]
 			cur.rho = math.Max(cur.rho, math.Max(lo.Rho, hi.Rho))
 			cur.sag = math.Max(cur.sag, lo.Sag)
@@ -548,7 +536,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	case rp.full:
 		// no cap in either kind.
 	case sheet:
-		// emitRevolveCaps' own triangulation.Triangulate call is what would
+		// revolvemesh.EmitCapTriangles' triangulation call is what would
 		// otherwise refuse a loop chording to fewer than three meridian
 		// samples ("a cap needs at least three boundary samples",
 		// triangulate.go); a sheet mints no cap to carry that refusal, so it
@@ -559,11 +547,24 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			return nil, fmt.Errorf(`%w: a surface-result revolve wall loop needs at least three meridian samples`, ErrDegenerate)
 		}
 	default:
-		if err := emitRevolveCaps(ctx, mesh, loopMesh, sectionPts, sectionLoops, angular.Samples-1, p.faceOf); err != nil {
+		capStart, err := p.faceOf(roleCapStart)
+		if err != nil {
+			return nil, err
+		}
+		capEnd, err := p.faceOf(roleCapEnd)
+		if err != nil {
+			return nil, err
+		}
+		if err := revolvemesh.EmitCapTriangles(ctx, meridianSamples, sectionPts, sectionLoops,
+			angular.Samples-1, func(end, start [3]int) {
+				mesh.addTriangle(end, capEnd)
+				mesh.addTriangle(start, capStart)
+			}); err != nil {
 			return nil, err
 		}
 		if proofs {
-			cellSlack = proofbound.AbsSumUpper(cellSlack, proofbound.ProductUpper(2, revolveCapSegmentArea(p)))
+			cellSlack = proofbound.AbsSumUpper(cellSlack,
+				proofbound.ProductUpper(2, revolvesampling.CapSegmentArea(p.resolved, p.counts)))
 		}
 	}
 	if len(mesh.triangles) == 0 {
@@ -646,32 +647,6 @@ type revFaceExtent struct {
 	rho, sag float64
 }
 
-// requireRevolveMeridianOffAxis is docs/tessellation-design.md §9's rule that a
-// circular generator with positive interior ρ may not chord to an axis-only
-// polyline: a sphere meridian whose two ends are both on the axis MUST produce
-// at least one proven off-axis interior sample. Failing it asks for a finer
-// chording of that walk, and refuses when the refinement budget runs out.
-func requireRevolveMeridianOffAxis(loops []revLoopMesh) error {
-	for li, lm := range loops {
-		offAxis := map[int]bool{}
-		for _, s := range lm.samples {
-			if !s.OnAxis {
-				offAxis[s.Walk] = true
-			}
-		}
-		for k, w := range lm.resolved.Walks {
-			if !w.IsCircular() || lm.resolved.Kinds[k] == wallAxis || offAxis[k] {
-				continue
-			}
-			return &revolveRefineError{
-				err:   fmt.Errorf(`%w: a circular revolve generator chords to a polyline lying entirely on the axis, which sweeps no face`, ErrUnsupported),
-				retry: revolveRefine{loop: li, walk: k},
-			}
-		}
-	}
-	return nil
-}
-
 // revolveSectionRetry turns a section-proof refusal into the deterministic
 // refinement docs/tessellation-design.md §3 names: the FIRST FAILING meridian
 // walk in payload order.
@@ -711,74 +686,10 @@ func revolveSectionRetry(loops []revLoopMesh, err error) error {
 	return err
 }
 
-// requireRevolveAxisIncidence re-runs docs/evaluator-design.md §6's exact
-// axis-incidence audit over the resolved walks, which
-// docs/tessellation-design.md §9 requires before any sample is emitted: a
-// manifold pole has exactly one off-axis walk end and one on-axis line end from
-// the same loop, and no two on-axis junctions may land on the same axis point.
-// A second off-axis sector, a repeated incidence, or a missing on-axis
-// continuation is ErrDegenerate — the profile itself does not revolve into a
-// solid, so no tolerance can rescue it.
-//
-// It reads the JUNCTIONS alone. An interior chord station never sits on the
-// axis (revolvesampling.ArcStation refuses one that does), so a chorded meridian adds no
-// incidence this audit could miss.
-func requireRevolveAxisIncidence(resolved []revolveWalks, junctions [][]revolvemesh.RevMeridian) error {
-	seen := map[float64]struct{}{}
-	for li, js := range junctions {
-		n := len(js)
-		for k, s := range js {
-			if !s.OnAxis {
-				continue
-			}
-			if _, dup := seen[s.Z]; dup {
-				return fmt.Errorf(`%w: two recorded boundary junctions meet the revolve axis at the same point, so the swept solid pinches there`, ErrDegenerate)
-			}
-			seen[s.Z] = struct{}{}
-			incoming := resolved[li].Kinds[(k+n-1)%n]
-			outgoing := resolved[li].Kinds[k]
-			if (incoming == wallAxis) == (outgoing == wallAxis) {
-				return fmt.Errorf(`%w: the recorded boundary meets the revolve axis at a junction with %s, which sweeps no manifold pole`, ErrDegenerate, axisIncidenceReason(incoming == wallAxis))
-			}
-		}
-	}
-	return nil
-}
-
-func axisIncidenceReason(bothAxis bool) string {
-	if bothAxis {
-		return "two on-axis segments"
-	}
-	return "two off-axis segments"
-}
-
-// revolveExtents adapts the resolved meridian walks to the envelope reader.
-func revolveExtents(loops []revolveWalks) (float64, float64, error) {
-	return revolveproof.Extents(revolveWalkView(loops))
-}
-
 type revolveWalkView []revolveWalks
 
 func (loops revolveWalkView) Len() int                        { return len(loops) }
 func (loops revolveWalkView) Walks(i int) []survey2d.SideWalk { return loops[i].Walks }
-
-// revolveCapSegmentArea is the circular-segment area ONE partial cap's curved
-// trim omits (docs/tessellation-design.md §10.2): the chorded meridian region
-// differs from the region it denotes by exactly the segments between each
-// circular walk's arc and its chords, summed in ABSOLUTE value because a hole
-// gains what an outline loses and area slack admits no cancellation.
-func revolveCapSegmentArea(p *revolvePlan) float64 {
-	total := 0.0
-	for li, r := range p.resolved {
-		for k, w := range r.Walks {
-			if !w.IsCircular() {
-				continue
-			}
-			total = proofbound.AbsSumUpper(total, revolvemesh.ChordSegmentArea(w.Radius, math.Abs(w.Th1-w.Th0), p.counts[li][k]))
-		}
-	}
-	return total
-}
 
 // revolvePreflightFacets adapts the builder's loops to the facet budget.
 func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full, sheet, audit bool, work *revolveWork) error {
@@ -796,95 +707,6 @@ func (loops revolveFacetLoops) Len() int                                { return
 func (loops revolveFacetLoops) Samples(i int) []revolvemesh.RevMeridian { return loops[i].samples }
 func (loops revolveFacetLoops) AxisWalk(i, walk int) bool {
 	return loops[i].resolved.Kinds[walk] == wallAxis
-}
-
-func addChecked(a, b uint64) (uint64, bool) { return revolveproof.AddChecked(a, b) }
-func mulChecked(a, b uint64) (uint64, bool) { return revolveproof.MulChecked(a, b) }
-
-// emitRevolveCell writes one meridian cell's facets across the whole angular
-// sequence (docs/tessellation-design.md §9's cell table).
-//
-// The winding is the one §4's rule gives: with the region's material on the
-// walk's LEFT in (z, ρ) and φ increasing right-handedly about the axis,
-// ∂X/∂t × ∂X/∂φ is ρ times the outward in-plane normal, so a facet wound
-// counter-clockwise in (t, φ) faces outward. Nothing here corrects for the
-// axis side — resolveAxisSide already folded it into the axis frame, and the
-// (u, v) → (z, ρ) map is a rotation either way, so the recorded loop's own
-// sense survives it — and the reflection correction is applied once, over the
-// whole assembled mesh, by the caller.
-func emitRevolveCell(m *Mesh, lo, hi revolvemesh.RevMeridian, nPhi int, face *Face) {
-	for l := range nPhi {
-		a, d := lo.At(l), lo.At(l+1)
-		bb, c := hi.At(l), hi.At(l+1)
-		switch {
-		case lo.OnAxis:
-			m.addTriangle([3]int{a, bb, c}, face)
-		case hi.OnAxis:
-			m.addTriangle([3]int{a, bb, d}, face)
-		default:
-			m.addTriangle([3]int{a, bb, c}, face)
-			m.addTriangle([3]int{a, c, d}, face)
-		}
-	}
-}
-
-// emitRevolveCaps triangulates the meridian region once in the (z, ρ) plane and
-// maps it onto the wall vertices at φ0 and φ1 (docs/tessellation-design.md §9).
-// The (z, ρ) frame's own normal is the sweep-velocity direction, which IS the
-// end cap's outward normal, so the end cap takes the triangulation as it stands
-// and the start cap reverses it. Pole samples answer their one interned vertex
-// for either angle, which is how an on-axis line's single geometric edge ends
-// up shared by both caps.
-func emitRevolveCaps(ctx context.Context, m *Mesh, loops []revLoopMesh, pts []Point2, loopIdx [][]int, last int, faceOfRole func(string) (*Face, error)) error {
-	capStart, err := faceOfRole(roleCapStart)
-	if err != nil {
-		return err
-	}
-	capEnd, err := faceOfRole(roleCapEnd)
-	if err != nil {
-		return err
-	}
-	var startV, endV []int
-	for _, lm := range loops {
-		for _, s := range lm.samples {
-			startV = append(startV, s.At(0))
-			endV = append(endV, s.At(last))
-		}
-	}
-	tris, err := triangulation.Triangulate(ctx, pts, loopIdx)
-	if err != nil {
-		return err
-	}
-	for _, tri := range tris {
-		m.addTriangle([3]int{endV[tri[0]], endV[tri[1]], endV[tri[2]]}, capEnd)
-		m.addTriangle([3]int{startV[tri[0]], startV[tri[2]], startV[tri[1]]}, capStart)
-	}
-	return nil
-}
-
-// revolveSectionPoints flattens every loop's meridian polyline into the one
-// (z, ρ) sample array the section proof and the partial caps both read, in the
-// same order the rings were allocated in — so index j of the flat array is the
-// j-th sample overall and needs no second mapping. The third result is each
-// sample's OUTGOING chord sagitta, which is the tube half the section proof
-// gives that chord.
-func revolveSectionPoints(loops []revLoopMesh) ([]Point2, [][]int, [][]float64) {
-	var pts []Point2
-	var loopIdx [][]int
-	var loopSag [][]float64
-	for _, lm := range loops {
-		base := len(pts)
-		idx := make([]int, len(lm.samples))
-		sag := make([]float64, len(lm.samples))
-		for k, s := range lm.samples {
-			pts = append(pts, Point2{U: s.Z, V: s.Rho})
-			idx[k] = base + k
-			sag[k] = s.Sag
-		}
-		loopIdx = append(loopIdx, idx)
-		loopSag = append(loopSag, sag)
-	}
-	return pts, loopIdx, loopSag
 }
 
 // publishRevolveProof writes docs/tessellation-design.md §2's proof record for
@@ -947,7 +769,7 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		// would otherwise leave behind).
 		return nil
 	}
-	slack := proofbound.AbsSumUpper(cellSlack, meshCoordAreaAllow(m, coord))
+	slack := proofbound.AbsSumUpper(cellSlack, revolvemesh.CoordinateAreaAllow(m.vertices, m.triangles, coord))
 	if allow := revolveaxis.SectionAreaAllow(p.rp.sectionDelta, p.sweep, p.rp.sweep().Bound,
 		p.resolved, !p.rp.full && !p.rp.surfaceResult, p.section); allow > 0 {
 		slack = proofbound.AbsSumUpper(slack, allow)
@@ -969,21 +791,4 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 	m.volSymDiff = sym
 	m.symDiffOK = true
 	return nil
-}
-
-// meshCoordAreaAllow is docs/tessellation-design.md §10.2's coordinate-stage
-// area charge: every facet's own area can move by what a displacement of delta
-// at each of its three corners allows, and the two stages are charged together
-// against the composed displacement, which covers the ideal, stored unplaced
-// and placed triangles alike.
-func meshCoordAreaAllow(m *Mesh, delta float64) float64 {
-	if delta <= 0 {
-		return 0
-	}
-	total := 0.0
-	for _, tri := range m.triangles {
-		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
-		total = proofbound.AbsSumUpper(total, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))
-	}
-	return total
 }
