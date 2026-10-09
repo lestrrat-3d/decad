@@ -7,7 +7,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// A FitSplineSeg profile's Area, Centroid and SecondMoments now answer
+// A fit-spline profile's Area, Centroid and SecondMoments answer
 // (docs/spline-design.md Table F): the recorded fit points are sketch's own
 // defining data for the natural-cubic interpolant, taken exactly, so the
 // boundary integral is an exact rational — reported Exact when that rational
@@ -43,18 +43,18 @@ func Example_decad_fitSplineMoments() {
 			break
 		}
 	}
-	rec, _, err := decad.RecordProfile(s, prof)
+	measured, err := decad.MeasureProfile(s, prof)
 	if err != nil {
-		fmt.Printf("failed to record profile: %s\n", err)
+		fmt.Printf("failed to measure profile: %s\n", err)
 		return
 	}
 
-	area, err := rec.Area()
+	area, err := measured.Area()
 	if err != nil {
 		fmt.Printf("failed to measure area: %s\n", err)
 		return
 	}
-	centroid, err := rec.Centroid()
+	centroid, err := measured.Centroid()
 	if err != nil {
 		fmt.Printf("failed to measure centroid: %s\n", err)
 		return
