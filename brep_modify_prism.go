@@ -132,9 +132,23 @@ type brepPrismRect struct {
 	nu, nv float64
 }
 
-// recognisePrism reads the record as a prism along reference axis k, or
-// reports false (brep-modify §4.1, P1–P5). The error is a context error only.
-func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k int) (brepPrismRead, bool, error) {
+// brepPrismCaps is what P1, P3 and P4 read: the record's two cap faces across
+// reference axis k, their levels, the prism frame F with its embed, the
+// section S in F, and which section loop each of the bottom's region loops is.
+type brepPrismCaps struct {
+	bottom, top int
+	zlo, zhi    float64
+	frame       r3.Frame
+	eF          brepEmbed
+	section     ProfileRecord
+	bottomLoop  []int
+}
+
+// readPrismCaps reads brep-modify §4.1's P1, P3 and P4 along reference axis
+// k, or reports false. It reads no wall, so a caller that classifies the other
+// faces itself (docs/modify-general-design.md Table TC) shares the cap reading
+// with recognisePrism.
+func readPrismCaps(bp brepPayload, embeds []brepEmbed, k int) (brepPrismCaps, bool) {
 	// P1: exactly two planar faces across the axis, bottom facing −k and top
 	// facing +k, with zlo < zhi.
 	bottom, top := -1, -1
@@ -151,12 +165,12 @@ func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 		}
 	}
 	if planar != 2 || bottom < 0 || top < 0 {
-		return brepPrismRead{}, false, nil
+		return brepPrismCaps{}, false
 	}
 	zlo := brepLevel(bp.faces[bottom], embeds[bottom])
 	zhi := brepLevel(bp.faces[top], embeds[top])
 	if !(zlo < zhi) {
-		return brepPrismRead{}, false, nil
+		return brepPrismCaps{}, false
 	}
 
 	// P3: the prism frame F.
@@ -171,51 +185,76 @@ func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 		var err error
 		frame, eF, err = brepgeom.AxisFrame(bp.faces[0].frame, k)
 		if err != nil {
-			return brepPrismRead{}, false, nil //nolint:nilerr // no exact F is no prism reading
+			return brepPrismCaps{}, false // no exact F is no prism reading
 		}
 	}
 
 	// P4: the section S is top's region in F; bottom's region in F equals it.
 	section, ok := newBrepPlaneMap(embeds[top], eF).region(*bp.faces[top].region)
 	if !ok {
-		return brepPrismRead{}, false, nil
+		return brepPrismCaps{}, false
 	}
 	bottomRegion, ok := newBrepPlaneMap(embeds[bottom], eF).region(*bp.faces[bottom].region)
 	if !ok {
-		return brepPrismRead{}, false, nil
+		return brepPrismCaps{}, false
 	}
 	bottomLoop, ok := brepSameRegion(section, bottomRegion)
 	if !ok {
-		return brepPrismRead{}, false, nil
+		return brepPrismCaps{}, false
 	}
+	return brepPrismCaps{
+		bottom: bottom, top: top, zlo: zlo, zhi: zhi,
+		frame: frame, eF: eF, section: section, bottomLoop: bottomLoop,
+	}, true
+}
 
+// classifyPrismWalls is brep-modify §4.1's P2 and P5 over the faces other than
+// the caps: every other face is a wall along the axis or a rectangle across
+// it, and each claims one segment of the section exactly once. It reports
+// false for a record that fails either. The error is a context error only.
+func classifyPrismWalls(ctx context.Context, bp brepPayload, embeds []brepEmbed, k int, caps brepPrismCaps) (brepPrismWalls, bool, error) {
 	// P2: every other face is a wall along the axis or a rectangle across it.
 	var walls brepPrismWalls
 	work := freeform.NewFreeformWork()
 	for fi, f := range bp.faces {
 		if err := ctx.Err(); err != nil {
-			return brepPrismRead{}, false, err
+			return brepPrismWalls{}, false, err
 		}
-		if fi == bottom || fi == top {
+		if fi == caps.bottom || fi == caps.top {
 			continue
 		}
-		if !walls.add(f, embeds[fi], eF, k, zlo, zhi, work) {
-			return brepPrismRead{}, false, nil
+		if !walls.add(f, embeds[fi], caps.eF, k, caps.zlo, caps.zhi, work) {
+			return brepPrismWalls{}, false, nil
 		}
 	}
 
 	// P5: every wall and rectangle claims one segment of S, each exactly once.
-	if !walls.claim(section, work) {
+	if !walls.claim(caps.section, work) {
+		return brepPrismWalls{}, false, nil
+	}
+	return walls, true, nil
+}
+
+// recognisePrism reads the record as a prism along reference axis k, or
+// reports false (brep-modify §4.1, P1–P5): readPrismCaps for P1, P3 and P4,
+// then classifyPrismWalls for P2 and P5. The error is a context error only.
+func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k int) (brepPrismRead, bool, error) {
+	caps, ok := readPrismCaps(bp, embeds, k)
+	if !ok {
 		return brepPrismRead{}, false, nil
+	}
+	walls, ok, err := classifyPrismWalls(ctx, bp, embeds, k, caps)
+	if err != nil || !ok {
+		return brepPrismRead{}, false, err
 	}
 	return brepPrismRead{
 		pp: prismPayload{
-			profile: section, frame: frame, xform: bp.xform,
-			z0: zlo, z1: zhi,
-			z0Delta: max(bp.faces[bottom].z0Delta, walls.zloDelta),
-			z1Delta: max(bp.faces[top].z0Delta, walls.zhiDelta),
+			profile: caps.section, frame: caps.frame, xform: bp.xform,
+			z0: caps.zlo, z1: caps.zhi,
+			z0Delta: max(bp.faces[caps.bottom].z0Delta, walls.zloDelta),
+			z1Delta: max(bp.faces[caps.top].z0Delta, walls.zhiDelta),
 		},
-		bottom: bottom, top: top, bottomLoop: bottomLoop,
+		bottom: caps.bottom, top: caps.top, bottomLoop: caps.bottomLoop,
 	}, true, nil
 }
 

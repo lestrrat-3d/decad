@@ -1109,11 +1109,14 @@
 3	0.02	TestBrepModifyRecognisesThePrism
 3	0.02	TestBrepModifyRoutePMapsTheStartCapsHoles
 3	0.01	TestBrepConsumersOnTheClassBCutResult
+3	0.02	TestBrepFaceReversedFlipsTheOutwardSide
 0	0.00	TestPrismSharedWallMirroredL
 0	0.00	TestPrismSharedWallDisplacedInteriorSpanFallsBack
 0	0.00	TestPrismSharedWallChargesTheGap
 0	0.00	TestRevolveBlendAxisGate
 3	0.02	TestBrepModifyEdgeFilletS1VerticalEdge
+3	0.02	TestBrepModifySplitsThePrismReading
+3	0.02	TestBuildCapBandTakesSuppliedCapCoedges
 4	0.02	TestBrepModifyEdgeChamferB1VerticalEdge
 5	0.03	TestBrepModifyEdgeFilletPocketCorners
 0	0.02	TestBrepModifyEdgeChamferCornerBoss
@@ -1170,6 +1173,7 @@
 3	0.03	TestCapMiterLocusUpperReadsTheStatedAxialRise
 3	0.03	TestCapBlendAuditReadsTheSetbackSpan
 3	0.17	TestCapPatchIntegralsCoverTheirHeldNumbers
+3	0.02	TestClassBOfPayloadsBuildsWithoutBodies
 3	0.05	TestRevolveSectionDisplacementEnclosesDenoted
 3	0.01	TestRevolveSectionDisplacementNormal
 3	0.20	TestRevolveSectionDisplacementTessellates
@@ -1196,6 +1200,7 @@
 4	0.40	TestCoilArcRefusals
 2	0.02	TestDraftMeshEmbeddedCheckRefusesACrossing
 3	1.67	TestCoilFullTurnArcClosesLikeACircle
+3	0.02	TestReverseSegmentWalksACircleTheOtherWay
 4	6.56	TestCoilRimCurveBoundHoldsTheDenotedCircle
 1	0.74	TestCoilUnstitchCarriesTheRimCurveBound
 2	0.02	TestPrismMoverRecordRadiusReadsArcsTightly

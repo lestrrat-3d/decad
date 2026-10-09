@@ -91,6 +91,21 @@ type brepPayload struct {
 
 func (f brepFace) planar() bool { return f.region != nil }
 
+// reversed is the face with its outward side exchanged, the rule a record
+// applies to a face of a cavity (docs/modify-general-design.md §3.3 step 5):
+// a planar face flips outward, and a swept face walks its wall the other way
+// and exchanges its start-line and end-line splits. Levels, frame and
+// displacements are unchanged.
+func (f brepFace) reversed() brepFace {
+	if f.planar() {
+		f.outward = !f.outward
+		return f
+	}
+	f.wall = reverseSegment(f.wall)
+	f.side0, f.side1 = f.side1, f.side0
+	return f
+}
+
 // view is the prism the face's own frame, levels and displacements describe.
 // A planar face's view carries its whole region at a zero height; a swept
 // face's carries its one wall segment as an open single-segment loop, which

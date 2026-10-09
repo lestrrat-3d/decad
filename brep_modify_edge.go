@@ -876,10 +876,15 @@ func (r *brepEdgeRoute) blendFace(eb *brepEdgeBlend) brepFace {
 		z0Delta: z0Delta, z1Delta: z1Delta, blend: r.call.blend.kind}
 }
 
-// reverseSegment walks a natural-range line or arc the other way: the same
-// record over the reversed range.
+// reverseSegment walks a natural-range line, arc or circle the other way. A
+// line or arc is the same record over the reversed range. A circle flips its
+// CCW sense and swaps its range, so its centre and radius are unchanged.
 func reverseSegment(seg CurveSegment) CurveSegment {
 	switch s := seg.(type) {
+	case CircleSeg:
+		s.CCW = !s.CCW
+		s.TStart, s.TEnd = s.TEnd, s.TStart
+		return s
 	case LineSeg:
 		s.TStart, s.TEnd = s.TEnd, s.TStart
 		return s

@@ -1,0 +1,596 @@
+# Modify General Design
+
+The next reach of `Body.Fillet`, `Body.Chamfer` and `Body.Shell` over
+analytic boolean results: a `brepPayload` (`docs/general-boolean-design.md`
+§4, "general-boolean §N" below) and a `stackedPrismPayload` through its face
+view (`docs/stacked-prism-design.md`). Companion to
+`docs/brep-modify-design.md` ("brep-modify §N"), whose routes P and E this
+document extends with route S (shell) and route L (complete-loop chamfer),
+and whose Table SB rows SB3, SB4, SB5 and SB10 it narrows. `docs/modify-design.md`
+("modify §N") keeps the call contracts, the base gates and the §5 audit;
+`docs/modify-reach-design.md` ("reach §N") keeps the cap-loop chamfer's
+construction and proofs (§8.3, §8.4), which route L reuses.
+
+Six tables are normative:
+
+| Table | Owns | Section |
+|---|---|---|
+| **SV** | the reference-part survey: what refuses today, with its code | §1 |
+| **TC** | the through-cut record route S recognises | §3.1 |
+| **SG** | every refusal route S adds, with its sentinel and gate order | §3.4 |
+| **LB** | the loop selection route L admits | §4.1 |
+| **SL** | every refusal route L adds | §4.4 |
+| **BG** / **DG** | result payloads and what every consumer reads | §5 |
+
+## 1. Survey — Table SV
+
+Nine reference parts, each built from operations decad ships today through
+the public API, and the fillet, chamfer and shell requests an ordinary Fusion
+part makes on them. Every cell was read off the live code with the probe under
+`.tmp/probe-modify/` (not tracked). "builds" names the route that built it.
+
+| Part | Receiver | Request | Today |
+|---|---|---|---|
+| **P1** cross-drilled bar: 40×20×20 box, Ø6 hole along y | brep (class B) | fillet the 4 edges along y | builds (route P) |
+| | | fillet one edge along z | builds (route E) |
+| | | fillet or chamfer every straight edge, or the 8 along x and z | SB5 |
+| | | chamfer a hole rim, or both | builds (route P cap loop) |
+| | | fillet a hole rim | SB4 |
+| | | shell removing one y wall, or both | builds (route P cup, tube) |
+| | | shell removing the top face | SB3 |
+| **P2** pocketed plate: 40×40×10, blind 20×10 pocket 5 deep | stacked | fillet the pocket's 4 vertical edges | builds (route E) |
+| | | fillet the 4 floor edges, or the 4 mouth edges | SB5 |
+| | | chamfer the 4 mouth edges, or the plate's top loop | SB5 |
+| | | fillet the plate's 4 vertical edges | builds (route E) |
+| | | shell removing the top or the bottom | SB10 |
+| **P3** round boss on a plate: 40×40×10 ∪ Ø10 boss 15 tall | stacked (A1) | fillet the boss root circle | SB4 |
+| | | chamfer or fillet the boss top rim | SB4 |
+| | | fillet the plate's vertical edges | builds (route E) |
+| | | shell removing the bottom | SB10 |
+| **P4** drilled plate: 60×40×8 with four Ø5 holes in the sketch | prism | chamfer the hole mouths, the top loop, or both | builds (cap loop) |
+| | | fillet the hole mouths, or the top loop | S1 (vertex blend) |
+| | | fillet the vertical edges; shell removing the top | builds |
+| **P5** counterbored hole: Ø6 through, Ø10 counterbore 3 deep | faceted | any request | no analytic edge or face to name; the boolean took the mesh path (stacked §7 stage 2 is not landed) |
+| **P6** enclosure: 60×40×30 box, 20×10 port through both x walls | brep (class B) | chamfer the port mouth's 4 edges | builds (route P cap loop) |
+| | | fillet the 4 vertical edges | builds (route E) |
+| | | shell removing both x walls | builds (route P tube) |
+| | | shell removing the top face | SB3 (the top is no cap of the prism along x) |
+| **P6c** enclosure with a blind port into one x wall | brep (class B) | chamfer one port mouth edge | builds (route E) |
+| | | chamfer the port mouth's 4 edges | SB5 |
+| | | shell removing the top | SB10 |
+| **P6b** enclosure shelled first, port cut after | faceted | any request | the cup is no analytic boolean operand; the cut took the mesh path |
+| **P7** L bracket: L section 40×40, 8 thick, 30 tall, Ø6 hole along x through the upright leg | brep (class B) | fillet the inner corner edge, or the leg's two outer edges | builds (route E) |
+| | | fillet or chamfer the hole rims | SB4 |
+| | | chamfer the top cap's loop (6 edges) | SB5 |
+| | | shell removing the top | SB10 |
+| **P8** rounded plate drilled across: 40×20×20 box, 4 vertical edges filleted r = 3, then Ø6 hole along y | brep (class B) | chamfer a hole rim | SB4 |
+| | | chamfer the top cap's loop (4 lines, 4 arcs) | SB4 |
+| | | fillet one top edge along x | SB7 (its end face is a fillet cylinder) |
+| | | shell removing the top, or one y wall | SB10 |
+| **P9** round rod with a cross hole | faceted | any request | SX9's class (`chamfers a straight prism or a revolve only`); cylinder × cylinder has no analytic class |
+
+Ranked by the parts each refusal blocks:
+
+| Rank | Refusal | Blocks | What the body needs |
+|---|---|---|---|
+| 1 | SB10 / SB3: shell of a brep that reads as no prism, or whose removed face is no cap of the prism it reads as | P1, P2, P3, P6, P6c, P7, P8 | the erosion of the receiver: planes and cylinders along reference axes for a through-cut body (§3); spheres, tori or elliptical edges for a blind pocket or a union |
+| 2 | SB5, and S1 on a prism: edges sharing a vertex, a cap edge's fillet | P1, P2, P4, P6c, P7 | a chamfer of a complete loop needs the cap-loop band on any planar face (§4); a fillet of a loop needs tori and spheres (§6) |
+| 3 | SB4: a curved edge of a brep or stacked record | P1, P3, P7, P8 | a cone band around a hole rim or boss root on a face the body reads as no prism's cap (§4); a fillet needs a torus (§6) |
+| 4 | SB7: an edge ending on a curved face or a blend | P8 | the complete-loop fillet (§6) |
+| 5 | a faceted receiver | P5, P6b, P9 | an analytic boolean: `docs/stacked-prism-design.md` §7 stage 2, a cup as a boolean operand, cylinder × cylinder; reach SX9 stays permanent |
+
+Routes S and L below clear every brep and stacked row of ranks 1–3 whose
+body is planes and cylinders along reference axes, meeting in lines, circles
+and arcs. Rank 4, every loop fillet, and ranks 1–3's spheres, tori and
+elliptical edges stay refused with the codes of §6.
+
+## 2. The two increments
+
+**Route S — shell of a through-cut record.** Erosion distributes over
+intersection: for a body `A \ T₁ \ … \ Tₙ`, `(A \ ⋃Tᵢ) ⊖ t = (A ⊖ t) \ ⋃(Tᵢ ⊕ t)`
+exactly, as sets. When `A` is a prism along a reference axis and every `Tᵢ`
+is a prism along another reference axis passing through `A`, every piece is
+a shape decad already builds: `A ⊖ t` is modify §8's section erosion over
+the cup's interval, `Tᵢ ⊕ t` is the same offset outward, and the difference
+is the class-B `Cut` general-boolean §3 ships. The cavity's faces are planes
+and cylinders along reference axes — a dilated square port's corners are
+quarter cylinders along the port's axis, which is modify §8's outward rule
+applied to the tool's section — so the result is an ordinary `brepPayload`.
+No new face kind, no new proof: the shelled body is the receiver's kept
+faces, the cavity's faces reversed, and one rim region per removed face.
+
+**Route L — chamfer of a complete loop on any planar face.** Reach §8.3's
+cap-loop chamfer is local: a band between the loop offset into its face's
+material (the cap contour) and the loop moved along the face's normal (the
+side contour), a `Plane` patch per line walk, a `Cone` per circular walk, an
+apex `Cone` per reflex connector. It needs the face to be planar and every
+adjacent face to be swept along the face's normal, or to be a plane holding
+the loop's edge between two lines along that normal — exactly route E's
+(sw)/(pl) classes. Nothing in it needs the body to be a prism, so route L runs
+reach §8.3's construction and proofs on a loop of any planar brep face and
+attaches the band at body build, as `capBlendPayload` does.
+
+Neither increment admits a residual, samples a surface or asks `sketch` a
+question the shipped code does not already ask: route S's 2D work is modify
+§8's exact offset and general-boolean §5's private scenes, route L's is
+reach §8.3's. Every new gate below rejects; none admits.
+
+## 3. Route S — shell of a through-cut record
+
+### 3.1 Table TC — recognition
+
+Route S reads the receiver's face record (`brepPayload`, or `brepOfStacked`
+for a stacked receiver; SB1 and SB2 run first, as for every brep route) as a
+prism `A` along reference axis `k` cut by through tools, or refuses (SG3).
+Every test is an exact comparison of recorded floats and records; the
+reference frame, embeds and `brepTopology` are brep-modify §4.1's.
+
+| TC | Condition |
+|---|---|
+| TC1 | Route P's P1, P3 and P4 along `k`: exactly two planar faces across `k`, bottom facing `−k` and top `+k`, `zlo < zhi`, both regions one section `S` in the prism frame `F`. |
+| TC2 | Every other face is one of: **(a)** a wall of `A`: route P's P2(a); **(b)** a pierced wall of `A`: a planar face with `Axis[2] = j ≠ k` whose outer loop is P2(b)'s rectangle and which holds zero or more hole loops; **(c)** a tool wall: a swept face with `Axis[2] = j ≠ k`, natural range, empty `side0`/`side1`, whose two levels are the levels of two (b) faces across `j`. |
+| TC3 | Route P's P5 over the (a) walls and the (b) outer rectangles: each claims one segment of `S` with the right outward normal, and every segment of `S` is claimed once. |
+| TC4 | Tools. In `brepTopology`, each (c) face's two rims pair with one hole-loop segment of a (b) face each; call them `W0` (at the lower level `L0`) and `W1` (at `L1`). A tool is one hole loop `H` of some `W0`: every segment of `H` pairs with a (c) face whose other rim pairs with a segment of one hole loop `H'` of one `W1`, and `H'` re-expressed into `W0`'s frame equals `H` as P4 compares loops. The tool is `prismPayload{profile: {Outer: reverse(H)}, frame: brepgeom.AxisFrame(ref, j), z0: L0, z1: L1}`, its section in `F_j`'s coordinates. |
+| TC5 | Every hole loop of every (b) face belongs to exactly one tool, and every (c) face to exactly one tool. |
+| TC6 | Every face has `delta = 0` (SB1) and every (c) face's two levels carry zero displacement; a (b) face's level displacement passes through as a prism's does. |
+
+A stacked union (a boss on a plate) fails TC1: three planar faces across
+`k`. A blind pocket fails TC2: its floor is a third planar face across `k`,
+and its walls' levels are no wall's. A keyway, a boss crossing a plate's
+outline, a hole breaking out of a face, a split side line and an oblique
+wall fail TC2 or TC6. Each is SG3, which names the first face the table does
+not take.
+
+### 3.2 Removed faces and the sense
+
+The removed faces are read against the recognised record:
+
+| Removed face | PR | Rule |
+|---|---|---|
+| a cap of `A` (TC1's bottom or top), one or both | S-1 | `A ⊖ t` keeps a removed cap's level and moves a kept one by `t`: modify §9's cup interval `[zlo + t·kept₀, zhi − t·kept₁]` |
+| a wall of `A` (an (a) or (b) face), one proper connected run of whole walls of `S`'s outer loop | S-2 | `A ⊖ t`'s section is `docs/shell-opening-design.md` §3's cavity section `C` over the kept chain, with that document's rim rule at each end (`sideOpeningRegions`); its SO1–SO6 refusals keep their codes |
+| a tool wall, a tool's floor, a face of a hole of `S` | — | SG4 |
+| two removed faces sharing an edge, other than the runs above | — | SG5 |
+
+Only `Inward` builds. The dilation `(A \ T) ⊕ t` does not distribute over the
+difference and rounds every convex edge of the receiver — a hole mouth's rim
+into a torus, a box corner into a sphere — so `Outward` is SG1.
+`WithNoOpenings` is SG2: a brep record's lumps are its connected face sets
+(general-boolean §4.2), and a closed cavity's faces would read as a second
+solid; the void shell `shellClosedPrism` builds lives on the stacked record
+alone.
+
+### 3.3 Construction
+
+With `s = +1`, `t` the thickness in millimetres with its conversion bound
+`tDelta` (`extent.MagnitudeInBounded`), and the receiver live:
+
+1. **Gates on `S`.** Modify §8's shell gates on `A`'s section, in modify §4's
+   order: S18, S10's section limit (`shellsurvey.SectionInradius`), S10's
+   height limit per kept cap (`t < h` with one cap kept, `t < h/2` with both:
+   reach SX11's reading), S11a as `offsetProfile(S, +1, t)` is built, then
+   `auditOffsetSectionBudget` (S8, S11b, S9).
+2. **Each tool dilated.** `Dᵢ = offsetProfile(Tᵢ.profile, −1, t)`: S11a for a
+   dropped feature, then the same audit on `Dᵢ` against `Tᵢ`'s section. The
+   dilation rounds the tool's convex corners into arcs of radius `t` and
+   miters its reflex ones, modify §8's outward row, so a square port's cavity
+   gets four quarter cylinders along the port's axis.
+3. **TC7 — the strips beyond the pierced walls.** Beyond `W0` the dilated
+   tool reaches into `{j ∈ [L0 − t, L0)}` over `Dᵢ`'s box, and beyond `W1`
+   into `{j ∈ (L1, L1 + t]}`. That slab must hold no material of `A`: with
+   `A` a prism along `k`, the question is 2D in `S`'s plane — the strip
+   `[L0 − t, L0) × [m₀ − t, m₁ + t]` (`m` the third axis, `[m₀, m₁]` the
+   tool section's `m`-extent) meets `S` only where some segment of `S` other
+   than the pierced wall's own crosses it, since the strip touches that wall
+   from outside. Every other segment's outward-rounded bounding box must be
+   separated from the strip box along some axis by an exact comparison; a
+   box that is not is SG6. The test is reject-only and may refuse a valid
+   body (a far segment whose box happens to reach the strip).
+4. **The cavity.** `A' = prismPayload{profile: S ⊖ t, frame: F, z0, z1}` on
+   step 1's interval, with the moved level's displacement `z0Delta + tDelta +`
+   the float sum's rounding, as `shellClosedPrism` derives it, and every face
+   of its view carrying `offsetSectionDelta(S, +1, t, tDelta)` (modify §9's
+   figure). `Tᵢ' = prismPayload{profile: Dᵢ, frame: F_j, z0: L0 − t, z1: L1 + t}`
+   with `offsetSectionDelta(Tᵢ, −1, t, tDelta)`. The cavity is
+   `Cut(…Cut(A', T₁'), …, Tₙ')` through class B's own entry over payloads
+   (PR 0's `classBOfPayloads`, the body-free form of `tryClassB`): each cut
+   must build a `brepPayload`; a pair class B does not admit — two dilated
+   holes closer than `2t` (B7), a dilated tool reaching a cap of `A'` within
+   `t` of a hole (the crossing reach or the mesh path) — is SG6, naming the
+   tool. The private cuts build no `Body` and touch no document.
+5. **Assemble.** The result record is: every receiver face but the removed
+   ones, verbatim; every cavity face reversed, except those lying in a
+   removed face's plane; and one rim region per removed face `R`. Reversal
+   flips a planar face's `outward` and walks a swept face's wall the other
+   way (`reverseSegment`, extended to a `CircleSeg` by flipping `CCW` and
+   swapping its range, with `side0`/`side1` exchanged), the rule
+   `brepPayload.placed` applies under a reflection. The rim at `R` (level
+   `L_R`, outward as `R`'s): the cavity faces in `R`'s plane are the planar
+   cavity faces across `R`'s axis at level `L_R`, re-expressed into `R`'s
+   frame through `brepgeom.NewMap2`'s signed permutation (a reflecting map
+   re-winds the loops, general-boolean A4). The rim's record is
+   `{Outer: R.Outer, Holes: R.Holes'}` where `R.Holes'` holds, for each such
+   cavity face `Q`, `reverse(Q.Outer)`; and for each hole `h` of `R` — a hole
+   of `S`, since `R`'s region is `S` — the band `{Outer: reverse(Q.hole),
+   Holes: [h]}`, where `Q.hole` is the one hole of some `Q` whose record
+   equals `(S ⊖ t).Holes[i]`, `i` the index of `h` in `S`; a hole of `R` with
+   no such partner, a `Q` hole that partners no `h`, or a `Q` holding a loop
+   that is neither its outer nor such a hole, is SG7. The rim regions and
+   bands carry `offsetSectionDelta` as their `delta`.
+6. **Audit.** Every rim region and band runs modify §5's audit: S8, S7, S9.
+7. **Closure.** `assignRoles`, `falsifyBrepPayload`, `brepTopologyContext`:
+   an unpaired edge is `ErrUnsupported` (general-boolean §4.2's count), the
+   proof that the receiver's kept faces, the cavity and the rims close.
+   `evalBrepContext` builds and measures; a non-positive volume is
+   `ErrDegenerate`. `commitModifyResult` retires the receiver.
+
+Why the pieces pair by identity: a removed cap's region is `S` (TC1), the
+cavity's cap there is `S ⊖ t` verbatim where no tool reaches the cap plane
+(general-boolean B.3: a tool along `j ≠ k` meets only faces across `j`), and
+its hole `i` is `(S ⊖ t).Holes[i]` as `offsetProfile` keeps loop order. A
+tool that does reach the cap plane splits or notches that cap through the
+crossing reach; step 5 then reads the pieces as they come and step 6 proves
+the rim's nesting, so a notched cavity cap builds where its loops still
+partner, and refuses honestly where they do not.
+
+### 3.4 Table SG — refusals and gate order
+
+Modify §1's test picks every sentinel.
+
+| SG | Call | Exists? | Sentinel |
+|---|---|---|---|
+| **SG1** | `WithShellSense(Outward)` on a brep or stacked receiver | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
+| **SG2** | `WithNoOpenings` on a brep or stacked receiver | yes; a brep record holds no void shell | `ErrUnsupported` (replaces SX16's text for this call) |
+| **SG3** | the record is no through-cut record (Table TC): a stacked union, a blind pocket or port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion holds a sphere at each reflex vertex, a torus around each reflex circle, or an elliptical edge where two reflex edges meet | `ErrUnsupported`, naming the first face Table TC does not take |
+| **SG4** | a removed face that is a tool wall, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
+| **SG5** | two removed faces sharing an edge outside §3.2's runs; before S-2, any removed wall | yes | `ErrUnsupported` |
+| **SG6** | a tool's dilation reaches material beyond its pierced wall (TC7), or a private class-B cut does not build a brep: two dilated tools within `2t`, a dilated tool reaching a cap of `A'` | yes | `ErrUnsupported`, naming the tool |
+| **SG7** | a rim's loops do not partner the cavity's trace (step 5) | — (a falsifier) | `ErrUnsupported` |
+
+Gate order for a brep or stacked `Shell`, after modify §4's stage 1 and
+reach SX10:
+
+| Stage | Gates |
+|---|---|
+| 2a. record | RB dispatch; SB2; SB1 |
+| 2b. route P | brep-modify §4.2 unchanged: an axis whose prism takes the removed faces as caps builds the prism's own cup or tube |
+| 2c. route S entry | SG1; SG2; Table TC (SG3); the removed faces against the record (SG4, SG5) |
+| 3. existence | S18; S10 (section and height limits); S11a on `S` and on each tool |
+| 4. offset audit | S8, S11b, S9 on `S ⊖ t` and on each `Tᵢ ⊕ t`; TC7 (SG6) |
+| 5. cavity | the private cuts (SG6) |
+| 6. assembly | SG7; the rim audit S8, S7, S9 |
+| 7. closure | `falsifyBrepPayload`, `brepTopologyContext`, `evalBrepContext` |
+
+SB10 narrows to a record route S also refuses, and its text names SG3's
+reason. SB3 narrows likewise: a record that reads as a prism along some axis
+whose caps are not the removed faces is read again by Table TC along every
+axis before it refuses.
+
+## 4. Route L — chamfer of a complete loop on a planar face
+
+### 4.1 Table LB — the admitted selection
+
+Route L runs for `Chamfer` on a brep or stacked receiver when route P takes no
+axis and route E's EB1 finds the selection is not single straight edges, and
+for a `Fillet` only to refuse (SL3). Each selected edge is matched to one
+loop segment of one planar face of the record by lifting the segment's ends
+(a circle: its centre and radius) through the reference frame and placement
+and comparing within `1e-6`, as route E's `admitEdge` does; the match
+identifies and admits no geometry.
+
+| LB | Condition | Refusal |
+|---|---|---|
+| **LB1** | The selected edges are exactly the segments of one or more whole loops of planar faces: every segment of each touched loop is selected and no selected edge lies outside a touched loop. | SL1 |
+| **LB2** | No two touched loops share an edge, and no touched loop lies on a face with `delta ≠ 0`. | SL1 / SB1 |
+| **LB3** | Each segment of a touched loop on face `F` (normal axis `n`) pairs in `brepTopology` with a face that is **(sw)** a swept face along `n` whose rim is the segment, natural range, empty `side0`/`side1`; or **(pl)** a planar face across an axis `≠ n` holding the segment as a loop segment whose two neighbours are `LineSeg`s along `n` over their natural range. | SL2 |
+| **LB4** | Every segment of the loop and of the adjacent faces' loops runs over its natural range, and no loop holds two consecutive segments on one carrier (route E's EB5). | SL2 |
+| **LB5** | The side level `L_F ∓ d` lies strictly inside every (sw) face's interval and strictly short of every (pl) neighbour line's far end: the band reaches `d` along the wall and must not reach another vertex (reach SX7's `reach ≥ height`, read per adjacent face). | SX7 |
+| **LB6** | The adjacent faces all leave `F` on one side: every (sw) face's interval and every (pl) neighbour line lie on `F`'s inner side (against `F`'s outward normal), or all on its outer side. | SL2 |
+
+LB6 decides the band's sense. A loop whose walls descend into the body — a
+cap's outer loop, a hole mouth, a pocket mouth, a port mouth — is reach
+§8.3's chamfer and removes a wedge. A loop whose walls rise off the face — a
+boss root — is modify §7's concave corner: the cap contour is still the loop
+offset into `F`'s material (away from the boss), the side contour is the
+loop moved up the boss, and the band fills the wedge between them. Both are
+the one construction; only the side level's sign and the patches' outward
+orientation differ.
+
+### 4.2 Construction
+
+For each touched loop `ℓ` of face `F` with setback `d` (`dc = ds = d`;
+`WithAsymmetricChamfer` stays SX16, §7):
+
+1. **The cap contour.** `ℓ` offset `d` into `F`'s material by reach §8.3's
+   construction (`capLoopBoundary`): SX6 for a dropped carrier, SX13's radial
+   half per circular wall, SX14 per corner. `F`'s region is rewritten with the
+   contour in `ℓ`'s place, and the second offset at the top of `d`'s
+   conversion span runs as `auditCapBlendSetbackSpan` does.
+2. **The side level.** `sideZ = L_F + σ·d` with `σ = −1` for a loop whose
+   walls descend into the body and `+1` for one whose walls rise (LB6), its
+   displacement `levelDelta` the float sum's rounding plus `dDelta`; SX13's
+   axial half where `sideZ == L_F`.
+3. **Trims.** Each (sw) face's level at `F` becomes `sideZ` with
+   `levelDelta`. Each (pl) face's segment on `ℓ` moves to `sideZ` along `n`,
+   its two neighbour lines shortened or lengthened to it, a connector-free
+   blend at both corners whose cutback is `d` (route E's (pl) rule); the face
+   runs modify §5's audit (S8, S6, S7, S9).
+4. **The face audit.** `F`'s rewritten region runs modify §5's audit (S8,
+   S7 — the contour against `F`'s other loops, SX7's text — and S9).
+5. **The band.** The record stores `loopBands`: `(face, loop, dc, ds, σ)`
+   per touched loop, beside the rewritten faces; no face record holds a cone.
+   At body build, after `evalBrepContext` has built every face and edge of
+   the record, each band is attached by reach §8.3's `buildCapBand` run in
+   `F`'s own frame (`prismLike` over `F.frame`, cap level `L_F`, side level
+   `sideZ`, `matSign` from `σ` and `F.outward`), with both of its directrices
+   handed in as the brep's own coedges: the cap contour's edges are `F`'s new
+   loop coedges, the side contour's edges are the (sw) faces' rims at `sideZ`
+   and the (pl) faces' moved segments. PR 0 refactors `buildCapBand` to take
+   the cap-level coedges from its caller; the prism cap blend passes the
+   ones it minted. Patches, their readings (`setPatchReadings`), their
+   orientation (`fixPatchOrientation` against reach §8.3.1's reference
+   `(ds·n̂_wall, σ·dc·n̂_F)`, which has a positive dot product with the true
+   outward normal in both senses), their skews, locus spans and corner flux
+   are reach §8.3's and §8.4's unchanged.
+6. **Closure.** The record's faces pair by `brepTopologyContext` as before;
+   the band's patches each bound two faces by construction (the contour edge
+   on `F`, the side edge on the adjacent face, the corner rulings between
+   neighbouring patches), and `attachFaceLoopsContext` proves every edge
+   bounds exactly two faces over the whole body.
+
+The contour displacement (reach §8.4, `capband.ContourDisplacement`) is
+charged into `F.delta` and into every rim it trims, so every reading of `F`
+and of the bands carries it, and a later modify op on a body whose contour
+was a float solve refuses with SB1 — as it does for a cup. An axis-aligned
+loop at a millimetre setback has an exact contour and keeps `delta = 0`, so a
+second loop on the same body chamfers in a later call.
+
+### 4.3 Measurements
+
+`measureBrepContext` sums general-boolean §4.3's face terms over the
+rewritten record, then adds each band's terms through reach §8.4's readers
+(`readBandMass`): its volume flux and first moments about the plane-local
+origin, which is the reference origin every face frame shares bit for bit
+(`brepEmbeds`), each `Cone` patch's chord-versus-locus terms, the closure
+slivers (`capBandClosure`), and `capband.LevelVolume` for the side level's
+displacement. `F`'s area composes `sectionDisplacementArea` over the contour
+displacement as a cap face does; each patch publishes its own bounded area.
+A body whose bands are all `Plane` patches at exact coordinates reports
+`Exact` where its true volume is a float; one holding a `Cone` is
+`Approximate`. `Bounds` adds each band's patch extrema with the contour
+displacement (reach DX5). The centroid divides the summed moments by the
+volume and lifts through the reference frame.
+
+### 4.4 Table SL — refusals
+
+| SL | Call | Exists? | Sentinel |
+|---|---|---|---|
+| **SL1** | a selection that is not whole loops of planar faces: a partial loop, loops mixed with single edges (route E's class, including a lateral edge meeting a loop at a vertex), two loops sharing an edge | yes; the corner where a band meets a lateral blend is a plane in no reference frame, and a partial loop's free end needs the setback transition reach SX4 refuses | `ErrUnsupported` (reach SX4's text for a partial loop) |
+| **SL2** | an adjacent face outside LB3/LB4/LB6: a curved or oblique neighbour, a split side line, a neighbour whose own loop continues past the vertex on a curve, walls on both sides of `F` | yes | `ErrUnsupported` |
+| **SL3** | a `Fillet` of a loop, on a brep or stacked receiver or (base S1) on a prism | yes; the band is a cylinder, a torus and spheres (reach §8.2), none a face this record holds; §6 | `ErrUnsupported` ("the vertex-blend problem", unchanged text) |
+| **SL4** | `WithAsymmetricChamfer` on a brep or stacked receiver | yes | reach SX16, unchanged |
+
+Reach SX6, SX7, SX12, SX13, SX14 and SX15 keep their meanings per band, and
+base S6/S7/S8/S9 per rewritten face.
+
+Gate order for a brep or stacked `Chamfer`, after modify §4's stage 1,
+reach SX10, SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
+
+| Stage | Gates |
+|---|---|
+| 2c. entry | route E's EB1 per edge: every edge a straight line along an axis → route E (brep-modify §6); otherwise route L: LB1, LB2 (SL1), SL4 |
+| 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
+| 4. existence | SX6, SX13 per band as the contour is built |
+| 5. audit | per band SX14, SX7, SX12 on the contour; per (pl) face S8, S6, S7, S9; per `F` S8, S7, S9 |
+| 6. build | the record's closure; `buildCapBand` per band (SX15 as each patch is oriented) |
+
+## 5. Tables BG and DG — results and downstream
+
+| BG | Call | Payload | Topology | Roles |
+|---|---|---|---|---|
+| **BG1** | route S shell | `brepPayload`, `stack` nil | the receiver's kept faces, the cavity's faces reversed, one rim per removed face; every edge on exactly two faces | `face(k)` / `wall(k)` by result index; no `capStart`/`capEnd` |
+| **BG2** | route L chamfer | `brepPayload` with `loopBands`, `stack` nil | the rewritten record's faces plus the band patches | `face(k)` / `wall(k)`; each patch `chamferLoop(f,l,p)` for face `f`, loop `l`, patch `p` in its band's own order |
+
+A BG1 result is an ordinary brep: general-boolean §4.5 reads it unchanged.
+A BG2 result is a brep whose body carries extra faces, and each consumer
+below reads the bands where the plain brep reader would miss them:
+
+| DG | Consumer | BG1 | BG2 |
+|---|---|---|---|
+| **DG1** | mass properties, `Bounds` | general-boolean §4.3 with the cavity and rim faces' `delta` | §4.3 |
+| **DG2** | `Verify` validity, tolerance gate | by construction; `brepGateDiameter` reads every vertex | the same; the bands' vertices are body vertices |
+| **DG3** | `Tessellate`, STL/OBJ/3MF | general-boolean §4.4 | §4.4 for the record's faces, with one count per band walk shared by the trimmed wall, the patch and the contour (`docs/tessellation-reach-design.md` §7's rule), imposed on the brep tessellator through a per-(face, loop, segment) count; `emitCapBand` writes each band's strip and its departure terms into the occupied-volume proof |
+| **DG4** | mesh boolean operand | class B over the face view where it admits, else the mesh path | the mesh path only; admitted under `capBlendOccupiedVolumeAdmission`'s rule per band (every corner a line–line miter, an exact G1 join or a whole turn), else `ErrUnsupported` |
+| **DG5** | `ThroughAll`/`ToFace` | the per-face extremes; refuses at `delta > 0` as a prism does | the same, plus each band's extrema under the contour displacement |
+| **DG6** | clearance | `addBrepFaces`; no model when any face carries `delta > 0` | no model: the pair reads `Suspect` unless its boxes decide it (reach DX6's staging) |
+| **DG7** | undercut survey | per face | per face, and per patch through `Face.NormalAt` with reach DX7's three-valued rule and allowance |
+| **DG8** | concave-radius survey | the cavity's dilated hole walls are read; undecided when any face carries `delta > 0` | undecided when any band holds a patch whose stamped departure is not exactly zero (reach DX8) |
+| **DG9** | wall survey | staged `Suspect`, as for every brep. The wall behind every kept face is `t` by construction, but the material between two features the erosion left solid is not, and no reader proves which is which | staged `Suspect` |
+| **DG10** | STEP | analytic: planes and cylinders | analytic where every patch is a `Plane`; a `Cone` sends the whole body to the faceted writer (`docs/step-export-design.md`) |
+| **DG11** | a later `Fillet`/`Chamfer`/`Shell` | Tables RB/EB/SB/TC/LB over the record; RB1 needs `delta = 0`, so a shell whose offsets are exact floats takes route E or L again, and one whose offsets rounded is SB1 | the same over the rewritten record; an edge of a band patch is not in the record and matches nothing (route E's SB6, route L's SL1) |
+| **DG12** | `Placed`, `Mirrored`, `PatternCopies` | re-lifts every face frame | the same; `loopBands` are re-attached by the re-evaluation, as `capBlendPayload.placed` re-derives its bands |
+
+## 6. What stays refused, and why
+
+| Request | Code | Why not here |
+|---|---|---|
+| fillet of a complete loop: a hole mouth, a plate's top loop, a pocket mouth (P2, P4) | S1 / SL3 | reach §8.2's band is cylinders along the lines, tori around the arcs and spheres at the miters; the brep record holds no torus or sphere, and the prism cap-loop fillet (reach §14 PR E's staged column) is not implemented either. The construction to port exists on paper; its proofs — torus and sphere patch integrals with enclosed trigonometric terms, a spherical normal polygon per miter — are reach §8.4's unwritten half |
+| fillet of a boss root or hole rim on a brep (P1, P3, P7) | SB4 | the same torus |
+| fillets or chamfers of edges sharing a vertex that are not one loop of one face: all twelve edges of a box, a lateral edge meeting a cap loop (P1, P6c) | SB5 / SL1 | the corner patch is a sphere (fillet) or a plane whose normal is no reference axis (chamfer); the record holds neither |
+| an edge ending on a blend or a curved face (P8) | SB7 | its honest form is the complete-loop fillet above |
+| shell of a blind pocket or port, a stacked union, a keyway (P2, P3, P6c) | SG3 | spheres at the pocket's floor corners, a torus around a round boss's root, elliptical edges where two reflex edges meet at a square boss's corner |
+| an outward or closed shell of a brep | SG1 / SG2 | §3.2 |
+| any op on a faceted result (P5, P6b, P9) | reach SX9 | permanent (reach §11); the boolean is the owner |
+
+## 7. Decided questions
+
+- **Build the cavity through the shipped class-B `Cut`, not face by face.**
+  The erosion algebra makes the cavity an ordinary boolean result; a direct
+  3D assembly would re-derive general-boolean §5's scenes and §10's keyed
+  crossings for one caller.
+- **Charge route L's contour displacement into `F.delta`, not a per-loop
+  field.** One reader path; it is zero for every axis-aligned loop at a
+  millimetre setback, and a per-loop displacement can be added later without
+  changing a published measurement.
+- **Route S PR 1 takes removed caps only.** A removed wall needs the
+  shell-opening section with its own rim rule and refusals; it is one
+  increment behind, not a change of design.
+- **`Outward` and `WithNoOpenings` refuse.** §3.2; neither has a record.
+- **Asymmetric route L chamfers stay SX16.** Reach §8.3.1's two-distance band
+  is one more parameter pair through the same construction and can follow
+  without a design change; it is not in these PRs.
+- **Hand-offs: none.** No capability is needed from `sketch`, `r3` or
+  `units`.
+
+## 8. Do not do this
+
+- **Build the cavity as a face offset with sharp reflex edges.** It is a
+  different, wrong solid: the wall at a reflex corner would be thinner than
+  `t` measured to the corner. decad's shell is modify §8's erosion, and the
+  rounded reflex edges are the dilated tools' arcs.
+- **Erode a stacked union slab by slab.** Erosion does not distribute over
+  union; the boss base's two reflex edges meet in an elliptical edge no slab
+  record states. SG3.
+- **Admit a dilated blind tool by ignoring its rounded floor.** The cavity
+  under a pocket floor is bounded by cylinders and spheres, not by the
+  dilated section swept to the floor level. SG3.
+- **Decide TC7 by distance from the hole to the wall's ends.** A U-shaped
+  section's other arm can lie within `t` of the strip; the per-segment box
+  test is the exact reject-only reading.
+- **Let the private cut fall back to the mesh path.** A faceted cavity has
+  no record to assemble; SG6 refuses.
+- **Match a rim's holes to the cavity's by order.** The crossing reach can
+  renumber a notched cap's loops; step 5 matches by record identity and SG7
+  refuses a miss.
+- **Store a cone in a `brepFace`.** The record's faces are planes and
+  axis-aligned swept segments, and every reader of it relies on that; a band
+  is attached at build from its loop and setbacks, as `capBlendPayload`'s is.
+- **Sample a patch to decide its orientation where the reference dot is
+  ambiguous.** Reach §8.3.1's reference has a positive dot product with the
+  true normal for any positive setback pair in either sense; SX15 refuses
+  where `NormalAt` cannot answer.
+- **Patch a corner where a band meets a lateral blend with a triangle.** Its
+  plane is in no reference frame; SL1.
+- **Admit a loop fillet with a cylinder-only band and a mitred corner.** The
+  corner is a sphere; SL3 until the record holds one.
+
+## 9. Required tests
+
+Every test asserts computed geometry against a closed form, bounds as
+relations, through the public booleans. Fixtures are §1's parts.
+
+Route S (S-1):
+
+- P1, shell removing the top, `t = 2`: a brep of 13 faces (the receiver's 6
+  kept, the cavity's 6 reversed, one rim), volume within its bound of
+  `5632 + 220π` (receiver `16000 − 180π` less the cavity
+  `36·16·18 − 25π·16`), the rim one planar face at `z = 20` with the
+  eroded rectangle as its hole, the cavity's hole wall a cylinder of radius 5
+  along y, `Verify` `Sound`, the mesh's occupied-volume proof covering the
+  same figure, STEP analytic.
+- P6, shell removing the top, `t = 2`: 23 faces, volume within its bound of
+  `21472 + 224π` (cavity `56·36·28 − 56·(320 + 4π)`), the cavity's port four
+  planes and four quarter cylinders of radius 2 along x.
+- P7, shell removing the top, `t = 2`: volume within its bound of
+  `9552 + 56π` (cavity `28·(276 − π) − 4·25π`): the L's reflex corner
+  erodes to a quarter cylinder of radius 2 along z, the dilated hole runs
+  through the eroded leg's 4 mm.
+- P8, shell removing the top, `t = 2`: volume within its bound of
+  `4984 + 382π` (cavity `18·(572 + π) − 16·25π`).
+- P1 with both caps removed: the rims at both levels, volume within its
+  bound of `5632 + 220π − 36·16·2 + 25π·2` (the cavity grows the bottom
+  slab); P1 placed by a translation reproducing the volume. A stacked
+  receiver always holds a blind interface, so Table TC refuses every one
+  (SG3): P2 is that fixture.
+- Bound fixture, shown to fail first: P1 drawn at the sketch origin, placed
+  `10⁶` mm along x, shelled at `units.Inches(0.1)`: the volume's bound
+  encloses the exact rational closed form, and deleting the cavity faces'
+  `offsetSectionDelta` (set `delta` to zero in step 4) turns the fixture red;
+  the test records that leg.
+- Refusals: P2 and P6c → SG3 naming the pocket floor; P3 → SG3 naming the
+  third planar face across z; a removed hole wall → SG4; a removed wall → SG5
+  (until S-2); P1 with a second Ø6 hole along y 7 mm from the first → SG6
+  (the dilated holes meet); a hole 1.5 mm under the top on a 2 mm shell →
+  SG6 or a notched cap that builds, whichever the crossing reach answers,
+  asserted as the one it does; `Outward` → SG1; `WithNoOpenings` → SG2.
+  Every refusal leaves the receiver live.
+
+Route S (S-2):
+
+- P6 with one x wall removed and the top kept (a U-channel with its port):
+  the shell-opening rim rule at the wall's four corners, volume within its
+  bound of the closed form over `C`; P1 with one y wall and the top removed.
+
+Route L (L-1):
+
+- P2, chamfer the pocket mouth, `d = 1.5`: `Exact` `15000 − 72`
+  (`30d² + 4d³/3`), four `Plane` patches, the top face's hole loop a 23×13
+  rectangle, each pocket wall's level at `z = 8.5`.
+- P2, chamfer the plate's top loop, `d = 1.5`: `Exact` `15000 − 175.5`
+  (`80d² − 4d³/3`), the plate's four walls trimmed through the (pl) rule.
+- P1, chamfer the top and bottom loops in one call, `d = 1.5`: volume within
+  its bound of `15739 − 180π`; both y walls (pl) and both x walls (sw)
+  trimmed.
+- P3, chamfer the boss top rim, `d = 1`: a `Cone`, volume within its bound of
+  `16000 + 1064π/3`; chamfer the boss root, `d = 1`: a `Cone` that fills,
+  volume within its bound of `16000 + 1141π/3`, `Edge.IsConvex` false on the
+  root's trimmed circle, the plate top's hole of radius 6.
+- P6c, chamfer the port mouth, `d = 1.5`: `Exact` `69400 − 72`.
+- P7, chamfer the top loop, `d = 1`: an apex `Cone` at the reflex corner,
+  volume within its bound of `17280 − 72π − (80 − (5 − π/4)/3)`.
+- P8, chamfer a hole rim, `d = 1`: volume within its bound of
+  `15280 − 10π/3`; chamfer the top loop, `d = 1`: four `Plane` and four
+  `Cone` patches at G1 joins, volume within its bound of `15232 − 8π/3`.
+- Bound fixture, shown to fail first: a brep whose top face's outer loop has
+  a 60° corner (a trapezoid cut by a cross hole), chamfered `d = 1`: every
+  cap-level vertex's bound encloses its exact rational distance to the
+  denoted contour corner; deleting the `F.delta` charge turns it red; the
+  test records the leg.
+- Refusals: a partial loop → SL1 (SX4's text); the top loop with one vertical
+  edge → SL1; the top loop and the x = 40 wall's loop → SL1; P8's top loop
+  chamfered at `d = 3` → SX6 (the fillet arcs' offsets vanish); the pocket
+  mouth at `d = 5` → SX7 (the band reaches the floor); a loop on a face with
+  `delta > 0` → SB1; a fillet of any loop → SL3; `WithAsymmetricChamfer` →
+  SX16.
+
+Route L (L-2):
+
+- The mesh of P2's mouth chamfer is closed and its occupied-volume proof
+  covers `14928`; P3's rim chamfer tessellates with one count on the cone's
+  two circles; P8's loop chamfer exports faceted STEP and P2's analytic;
+  `Verify` `Sound` on each; the undercut survey lists P3's rim cone under a
+  pull along `+z` and clears it along `−z`; the concave-radius survey reads
+  P2's mouth chamfer's absence of concave features and P3's root cone
+  undecided; a clearance pair against P2's result reads `Suspect` where its
+  boxes do not decide it.
+
+## 10. PR split
+
+Each PR ships code, tests and the documentation its lifted refusals touch:
+this document's increment table, `doc.go`'s support map,
+`docs/missing-features.md`'s Modify rows, `docs/brep-modify-design.md`'s
+Table SB text for SB3/SB4/SB5/SB10, the functions' doc comments, a
+`docs/layout.md` row per new root file, and `.github/test-shards.txt`. This
+document ships with PR 0.
+
+| PR | Model | Lands | Files and functions | Proves | After |
+|---|---|---|---|---|---|
+| **0** | Sonnet, file-by-file | the hooks: `classBOfPayloads` (class B's entry over two payloads and one placement, `tryClassB` rewritten over it); `recognisePrism` split into `readPrismCaps` (P1, P3, P4) and the wall classifier, both exported to route S; `reverseSegment` over a `CircleSeg` and a `brepFace` reversal helper; `buildCapBand` taking its cap-level coedges from the caller; `modifyBrepReceiver`'s two new arms calling stubs that return SB10's and SX16's refusals | `classb.go`, `brep_modify_prism.go`, `brep_modify_edge.go`, `brep_payload.go`, `capblend_geom.go`, `capblend_moments.go`, `brep_modify.go` | every existing brep-modify, class-B and cap-blend fixture bit for bit | — |
+| **S-1** | Opus, proof spec | route S with removed caps: Table TC, the gates, TC7, the private cuts, the rim assembly, SG1–SG7 | `brep_shell.go` (new: `readThroughCut`, `shellThroughCut`, `throughCutRims`), `brep_modify.go`, `shell.go` (doc comment), `brep_shell_internal_test.go`, `apitest/brep_shell_test.go` | §9's S-1 fixtures | 0 |
+| **S-2** | Opus, proof spec | route S with a removed wall run: `sideOpeningRegions`'s cavity section as `A ⊖ t`'s section, the rim at a pierced wall as bands, SG5 narrowed | `brep_shell.go`, `shell_opening.go`, tests | §9's S-2 fixtures | S-1 |
+| **L-1** | Opus, proof spec | route L: Table LB, the record rewrite and trims, `loopBands` on `brepPayload`, the band attached at build, measurements, SL1–SL4; tessellation, clearance, the surveys and STEP refuse a body with `loopBands` until L-2 (`ErrUnsupported`, naming L-2) | `brep_modify_loop.go` (new: `brepLoopRoute`, `admitLoops`, `rewriteLoopFaces`), `brep_loop_band.go` (new: the `buildCapBand` adapter and `readBandMass` sums), `brep_payload.go`, `brep_measure.go`, `chamfer.go` (doc comment), `brep_modify_loop_internal_test.go`, `apitest/brep_loop_chamfer_test.go` | §9's L-1 fixtures | 0 |
+| **L-2** | Sonnet, file-by-file: each consumer copies its cap-blend twin | DG3 (`tessellateBrep` with imposed counts and `emitCapBand`), DG4 (`capBlendOccupiedVolumeAdmission` per band in `boolean_mesh.go`), DG6 (`addBrepFaces` returns no model), DG7/DG8 (`brepUndercuts`, `brepMinRadius` reading the patch faces through `capblend_survey.go`'s readers), DG10 (the STEP writer's cone fallback), DG12 | `tessellate_brep.go`, `boolean_mesh.go`, `clearance_geom.go`, `brep_measure.go`, `survey.go`, `export/step.go`, tests | §9's L-2 fixtures | L-1 |
+
+S-1 and L-1 run in parallel after PR 0: they add disjoint files and touch
+`brep_modify.go` only through the arms PR 0 placed. S-2 follows S-1; L-2
+follows L-1 and runs in parallel with S-2.
+
+Increment table — what still refuses after each PR:
+
+| After | Still refused |
+|---|---|
+| 0 | everything Table SB refuses today |
+| S-1 | a removed wall (SG5); every shell of §6; every route L loop |
+| S-2 | every shell of §6; every route L loop |
+| L-1 | every consumer of a route L body but mass properties, `Verify`'s structural audit and gate, placement and later modify ops (L-2); §6 |
+| L-2 | §6 alone |

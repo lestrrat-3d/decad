@@ -146,7 +146,14 @@ type capPatchGeom = capband.Patch
 // cap-level coedges that replace the loop's boundary in the cap face. The
 // side-level boundary reuses the trimmed side wall's own near-cap coedges
 // (sideCo, from buildLoopSidesAs) — shared, never re-derived.
-func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendPayload, li int, loop LoopRecord, capZ float64, matSign float64, sideCo []coedge, work *freeform.FreeformWork) (capBandResult, error) {
+//
+// suppliedCap is the cap level's boundary when the caller owns it
+// (docs/modify-general-design.md §4.2 step 5): the cap contour's coedges in
+// walk order, one per wall and one reflex-corner arc after the wall leading
+// into that corner, all forward, whose vertices the band's slant edges then
+// start from. Nil mints them here, as a prism's cap blend does. A supplied
+// boundary whose shape or joined vertices are not the band's is an error.
+func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendPayload, li int, loop LoopRecord, capZ float64, matSign float64, sideCo []coedge, suppliedCap []coedge, work *freeform.FreeformWork) (capBandResult, error) {
 	if err := ctx.Err(); err != nil {
 		return capBandResult{}, err
 	}
@@ -251,7 +258,16 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// bound — its returned Edge's own lengthBound comes from
 		// capCircleLengthBound instead — and the seam vertex adds its own
 		// exact lift rounding there.
-		capEdge := wholeCircleEdge(pl, w.CU, w.CV, capRadius, capZ, w.Th1 > w.Th0, capLevelDelta, exactRadius)
+		var capEdge *Edge
+		if suppliedCap != nil {
+			split, err := suppliedCapWalls(suppliedCap, nil, 1)
+			if err != nil {
+				return capBandResult{}, err
+			}
+			capEdge = split.wall[0]
+		} else {
+			capEdge = wholeCircleEdge(pl, w.CU, w.CV, capRadius, capZ, w.Th1 > w.Th0, capLevelDelta, exactRadius)
+		}
 		origins, err := wallOrigins(w.Segs, 0)
 		if err != nil {
 			return capBandResult{}, err
@@ -314,6 +330,14 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		return capBandResult{}, err
 	}
 
+	var supplied suppliedCapEdges
+	if suppliedCap != nil {
+		supplied, err = suppliedCapWalls(suppliedCap, joins, n)
+		if err != nil {
+			return capBandResult{}, err
+		}
+	}
+
 	// delta is this band's CONTOUR DISPLACEMENT (capblend_contour.go): the one
 	// proven upper bound on how far a cap-level point the build emits sits from
 	// the point the offset denotes. Every cap-level vertex and every cap-level
@@ -371,7 +395,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		apex := sideVertexAt(i)
 		prev, cur := walks[(i+n-1)%n], walks[i]
 		if !j.arc {
-			capV := capVertexAt(j.m, capLevelDelta)
+			var capV *Vertex
+			if suppliedCap != nil {
+				capV = supplied.wall[i].start
+			} else {
+				capV = capVertexAt(j.m, capLevelDelta)
+			}
 			e, held, err := capSlantEdge(budget, j.m, capV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, setback, j.g1)
 			if err != nil {
 				return capBandResult{}, err
@@ -386,8 +415,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			slantInHeld[i], slantOutHeld[i] = held, held
 			continue
 		}
-		pAV := capVertexAt(j.pA, capLevelDelta)
-		pBV := capVertexAt(j.pB, capLevelDelta)
+		var pAV, pBV *Vertex
+		if suppliedCap != nil {
+			pAV, pBV = supplied.arc[i].start, supplied.arc[i].end
+		} else {
+			pAV = capVertexAt(j.pA, capLevelDelta)
+			pBV = capVertexAt(j.pB, capLevelDelta)
+		}
 		var errA, errB error
 		slantIn[i], slantInHeld[i], errA = capSlantEdge(budget, j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, capSetback{}, true)
 		if errA != nil {
@@ -416,6 +450,10 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		arcWraps[i] = wraps
 		arcTh0[i], arcTh1[i] = th0, th1
 		arcLength := dc * (th0 - th1)
+		if suppliedCap != nil {
+			arcByCorner[i] = supplied.arc[i]
+			continue
+		}
 		arcByCorner[i] = &Edge{
 			curve: Arc3{Center: liftCap(Point2{U: j.vU, V: j.vV}), Axis: pl.dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
 			start: pAV, end: pBV,
@@ -592,7 +630,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		}
 
 		var capEdge *Edge
-		if !w.IsCircular() {
+		switch {
+		case suppliedCap != nil:
+			capEdge = supplied.wall[i]
+			if capEdge.start != capA || capEdge.end != capB {
+				return capBandResult{}, fmt.Errorf("a cap-loop band's supplied cap edge %d does not join the vertices its slant edges start from", i)
+			}
+		case !w.IsCircular():
 			held := math.Hypot(end.U-start.U, end.V-start.V)
 			// Both endpoints are contour points, so both carry the band's own
 			// displacement; the square root's own committed error is measured
@@ -602,7 +646,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				length:      held,
 				lengthBound: capcontour.CapEdgeLengthBound(held, end, start, delta),
 			}
-		} else {
+		default:
 			sweepSigned := capTh1 - capTh0
 			held := math.Abs(capRadius * sweepSigned)
 			capEdge = arcEdge(pl, w.CU, w.CV, capRadius, capZ, capA, capB, capTh0, capTh1, held,
@@ -761,6 +805,46 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		return capBandResult{}, err
 	}
 	return capBandResult{patches: patches, capCo: capCo, geom: geoms, delta: delta, closure: closure}, nil
+}
+
+// suppliedCapEdges is a caller-supplied cap-level boundary split by role:
+// wall[i] is wall i's cap edge, and arc[i] the reflex arc at corner i (the
+// start of wall i), nil at a corner with none.
+type suppliedCapEdges struct {
+	wall, arc []*Edge
+}
+
+// suppliedCapWalls splits a supplied cap boundary, in walk order, into the
+// band's n wall edges and the arcs of the reflex corners joins marks. A
+// single closed circle passes joins nil. A boundary of another length, or a
+// backward coedge, is not the band's.
+func suppliedCapWalls(co []coedge, joins []cornerJoin, n int) (suppliedCapEdges, error) {
+	out := suppliedCapEdges{wall: make([]*Edge, n), arc: make([]*Edge, n)}
+	next := 0
+	take := func() (*Edge, error) {
+		if next >= len(co) || !co[next].forward {
+			return nil, fmt.Errorf("a cap-loop band's supplied cap boundary of %d coedges is not the band's %d walls and their reflex arcs", len(co), n)
+		}
+		next++
+		return co[next-1].edge, nil
+	}
+	for i := range n {
+		e, err := take()
+		if err != nil {
+			return suppliedCapEdges{}, err
+		}
+		out.wall[i] = e
+		if joins == nil || !joins[(i+1)%n].arc {
+			continue
+		}
+		if out.arc[(i+1)%n], err = take(); err != nil {
+			return suppliedCapEdges{}, err
+		}
+	}
+	if next != len(co) {
+		return suppliedCapEdges{}, fmt.Errorf("a cap-loop band's supplied cap boundary of %d coedges is not the band's %d walls and their reflex arcs", len(co), n)
+	}
+	return out, nil
 }
 
 // setCapPatchSkews stamps a circular wall patch's two corner skews: the proven
