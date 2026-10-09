@@ -851,9 +851,9 @@ func widenCurvedMiterExtent(fr filletLoopRead, radius float64, r, side proofboun
 	if !hasCurved {
 		return old, nil
 	}
-	cap := proofbound.IntervalAdd(side, proofbound.IntervalScale(r, big.NewRat(int64(-m), 1)))
+	capLevel := proofbound.IntervalAdd(side, proofbound.IntervalScale(r, big.NewRat(int64(-m), 1)))
 	zAbs := new(big.Rat)
-	for _, v := range []*big.Rat{side.Lo, side.Hi, cap.Lo, cap.Hi} {
+	for _, v := range []*big.Rat{side.Lo, side.Hi, capLevel.Lo, capLevel.Hi} {
 		if a := new(big.Rat).Abs(v); a.Cmp(zAbs) > 0 {
 			zAbs = a
 		}
@@ -903,7 +903,7 @@ func widenCurvedMiterExtent(fr filletLoopRead, radius float64, r, side proofboun
 		if !ok {
 			return proofbound.RatInterval{}, fmt.Errorf(`%w: a curved fillet extent has no cap endpoint`, ErrUnsupported)
 		}
-		consider(foot[0], foot[1], cap)
+		consider(foot[0], foot[1], capLevel)
 	}
 	if lower == nil {
 		return old, nil
