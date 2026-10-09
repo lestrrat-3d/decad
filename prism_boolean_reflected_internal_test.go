@@ -1,10 +1,11 @@
 package decad
 
 import (
-	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"math"
 	"math/big"
 	"testing"
+
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/meshbool"

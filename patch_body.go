@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"math"
+
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"

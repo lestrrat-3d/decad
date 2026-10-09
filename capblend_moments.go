@@ -2,8 +2,9 @@ package decad
 
 import (
 	"context"
-	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"math"
+
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"

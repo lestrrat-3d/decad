@@ -1,12 +1,13 @@
 package decad
 
 import (
-	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"math"
 	"math/big"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"

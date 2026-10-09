@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
