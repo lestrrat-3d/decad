@@ -69,46 +69,22 @@ func (sp stackedPrismPayload) outerPrism() prismPayload {
 // The union of the runs' prisms is the body's outer envelope, which is what
 // Bounds, extentAlong, the centroid's geometric cap and the tolerance gate's
 // witnesses read.
-func (sp stackedPrismPayload) outerRuns() ([]prismPayload, error) {
+func (sp stackedPrismPayload) outerRuns() []prismPayload {
 	base := sp.outerPrism()
-	var runs []prismPayload
-	if sp.isGroup() {
-		// A prism group's regions are disjoint lumps over one interval: one
-		// run per region.
-		slab := sp.slabs[0]
-		for _, region := range slab.regions {
-			run := base
-			run.profile = profileRecord{Outer: region.Outer}
-			runs = append(runs, run)
-		}
-		return runs, nil
-	}
-	for k, slab := range sp.slabs {
-		if k > 0 {
-			same, err := loopRecordsEqual(nil, sp.slabs[k-1].regions[0].Outer, slab.regions[0].Outer)
-			if err != nil {
-				return nil, err
-			}
-			if same {
-				last := &runs[len(runs)-1]
-				last.z1, last.z1Delta = slab.z1, slab.z1Delta
-				continue
-			}
-		}
+	planned := stackedrecord.OuterRuns(stackedRecordOf(sp).Slabs)
+	runs := make([]prismPayload, len(planned))
+	for i, slab := range planned {
 		run := base
-		run.profile = profileRecord{Outer: slab.regions[0].Outer}
-		run.z0, run.z0Delta = slab.z0, slab.z0Delta
-		run.z1, run.z1Delta = slab.z1, slab.z1Delta
-		runs = append(runs, run)
+		run.profile = slab.Regions[0]
+		run.z0, run.z0Delta = slab.Z0, slab.Z0Delta
+		run.z1, run.z1Delta = slab.Z1, slab.Z1Delta
+		runs[i] = run
 	}
-	return runs, nil
+	return runs
 }
 
 func (sp stackedPrismPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
-	runs, err := sp.outerRuns()
-	if err != nil {
-		return 0, 0, 0, err
-	}
+	runs := sp.outerRuns()
 	var lo, hi, bound float64
 	for i, run := range runs {
 		rlo, rhi, rbound, err := run.extentAlong(g)
@@ -130,10 +106,7 @@ func (sp stackedPrismPayload) extentAlong(g r3.Vec) (float64, float64, float64, 
 // column displacement any run's outer loop carries beyond sectionDelta
 // (stackedPlan.columnDelta), charged to every run as its section displacement.
 func stackedBoundsContext(ctx context.Context, sp stackedPrismPayload, outerDelta float64, work *freeform.FreeformWork) (Box, error) {
-	runs, err := sp.outerRuns()
-	if err != nil {
-		return Box{}, err
-	}
+	runs := sp.outerRuns()
 	var out Box
 	bound := 0.0
 	for i, run := range runs {
@@ -675,10 +648,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	centroid := r3.Vec{X: x.Value, Y: y.Value, Z: z.Value}
 	centroidBound := proofbound.Radius3D(max(x.Bound, y.Bound, z.Bound))
 	if sp.sectionDelta > 0 || maxColDelta > 0 {
-		runs, err := sp.outerRuns()
-		if err != nil {
-			return nil, err
-		}
+		runs := sp.outerRuns()
 		// Every material point lies in one run's prism, so the largest run
 		// envelope caps the centroid's distance from the held point.
 		geometryBound := 0.0

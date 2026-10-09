@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedbrep"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -75,7 +76,7 @@ func (sc *ubScene) key(ref ubRef) (prismcells.RegionKey, bool) {
 // ubBuild is one brep build over the stacked union's slabs.
 type ubBuild struct {
 	st     *stackedUnionState
-	levels []stackedUnionLevel
+	levels []stackedrecord.UnionLevel
 	// reach names, per result slab, each operand's slab reaching it (−1
 	// when it does not).
 	reach  [][2]int
@@ -95,7 +96,7 @@ var errUBMiss = brepgeom.ErrStackedWallMiss
 // brep states the stacked union as a brepPayload. ok=false with a nil error
 // is a silent miss. A non-nil error is cancellation or a refusal past the
 // gate that the stacked path itself raises.
-func (st *stackedUnionState) brep(ctx context.Context, levels []stackedUnionLevel, reach [][2]int) (featurePayload, bool, error) {
+func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.UnionLevel, reach [][2]int) (featurePayload, bool, error) {
 	if !st.reexpress.Identity || st.va.proxy.sectionDelta != 0 || st.vb.proxy.sectionDelta != 0 {
 		// B's records enter every scene verbatim only under the identity
 		// re-expression; a re-expressed B would be recorded once per scene.
@@ -107,7 +108,7 @@ func (st *stackedUnionState) brep(ctx context.Context, levels []stackedUnionLeve
 	}
 	held := make([]float64, len(levels))
 	for i, level := range levels {
-		held[i] = level.held
+		held[i] = level.Held
 	}
 	b := &ubBuild{st: st, levels: levels, reach: reach,
 		scenes: map[string]*ubScene{}, geom: stackedbrep.NewEngine(held)}
@@ -169,7 +170,11 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	// delta of the face it denotes: the merges' cut charge plus the largest
 	// allowance of any canonical vertex, charged to every face alike.
 	delta := proofbound.AbsSumUpper(b.cutDelta, b.geom.Allow())
-	out, err := stackedBrepRecord(ctx, b.st.budget, b.geom, b.levels, b.st.va.proxy.frame, b.st.va.proxy.xform, delta)
+	faceLevels := make([]stackedbrep.Level, len(b.levels))
+	for i, level := range b.levels {
+		faceLevels[i] = stackedbrep.Level{Held: level.Held, Delta: level.Delta}
+	}
+	out, err := stackedBrepRecord(ctx, b.st.budget, b.geom, faceLevels, b.st.va.proxy.frame, b.st.va.proxy.xform, delta)
 	if err != nil {
 		return brepPayload{}, err
 	}
@@ -179,7 +184,7 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	for k, regions := range b.slabs {
 		lo, hi := b.levels[k], b.levels[k+1]
 		stack.slabs = append(stack.slabs, prismSlab{regions: regions,
-			z0: lo.held, z1: hi.held, z0Delta: lo.delta, z1Delta: hi.delta})
+			z0: lo.Held, z1: hi.Held, z0Delta: lo.Delta, z1Delta: hi.Delta})
 	}
 	out.stack = stack
 	return out, nil
@@ -454,12 +459,8 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 // assigned, and the record must close by counting (§4.2). geom has read
 // every slab loop and horizontal face and recorded its junctions. A topology
 // the engine does not cover is brepgeom.ErrStackedWallMiss.
-func stackedBrepRecord(ctx context.Context, budget *proofbound.WorkBudget, geom *stackedbrep.Engine, levels []stackedUnionLevel, ref r3.Frame, xform r3.Transform, delta float64) (brepPayload, error) {
-	faceLevels := make([]stackedbrep.Level, len(levels))
-	for i, level := range levels {
-		faceLevels[i] = stackedbrep.Level{Held: level.held, Delta: level.delta}
-	}
-	faces, err := geom.AssembleFaces(faceLevels, ref, delta)
+func stackedBrepRecord(ctx context.Context, budget *proofbound.WorkBudget, geom *stackedbrep.Engine, levels []stackedbrep.Level, ref r3.Frame, xform r3.Transform, delta float64) (brepPayload, error) {
+	faces, err := geom.AssembleFaces(levels, ref, delta)
 	if err != nil {
 		return brepPayload{}, err
 	}

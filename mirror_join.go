@@ -264,9 +264,7 @@ func joinPrismPayload(budget *proofbound.WorkBudget, pp prismPayload, walls []jo
 func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp stackedPrismPayload, walls []joinWall) (stackedPrismPayload, error) {
 	// J1: the join re-derives each interface from exclusive holes, which a
 	// union-built stack's changing outer loop does not record.
-	if runs, err := sp.outerRuns(); err != nil {
-		return stackedPrismPayload{}, err
-	} else if len(runs) != 1 {
+	if len(sp.outerRuns()) != 1 {
 		return stackedPrismPayload{}, fmt.Errorf(`%w: a union-built stack changes its outer loop between slabs, which the join does not rewrite; join the operands before the union (J1)`, ErrUnsupported)
 	}
 	regions := make([]joinRegion, len(sp.slabs))

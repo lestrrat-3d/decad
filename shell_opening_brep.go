@@ -50,9 +50,9 @@ func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp p
 // shellLevel is one derived level of a shell's stack: from moved by `by`,
 // carrying its source end's displacement, the thickness conversion and this
 // float sum's own rounding (docs/shell-opening-design.md §3).
-func shellLevel(from, delta, by, tDelta float64) stackedUnionLevel {
+func shellLevel(from, delta, by, tDelta float64) stackedbrep.Level {
 	to := from + by
-	return stackedUnionLevel{held: to, delta: proofbound.AbsSumUpper(delta, tDelta, proofarith.AddRoundError(from, by, to))}
+	return stackedbrep.Level{Held: to, Delta: proofbound.AbsSumUpper(delta, tDelta, proofarith.AddRoundError(from, by, to))}
 }
 
 // sideOpeningBrep states BO2 (§4.1–§4.5). Inward the stack is the cap region
@@ -66,9 +66,9 @@ func shellLevel(from, delta, by, tDelta float64) stackedUnionLevel {
 // the larger of the offset's displacement and the engine's largest
 // canonical-vertex allowance (§4.4). An engine miss is SO5, ErrUnsupported.
 func sideOpeningBrep(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload, sec sideOpeningSection, removedStart, removedEnd bool, s, tmm, tDelta float64) (brepPayload, error) {
-	bottom := stackedUnionLevel{held: pp.z0, delta: pp.z0Delta}
-	top := stackedUnionLevel{held: pp.z1, delta: pp.z1Delta}
-	var levels []stackedUnionLevel
+	bottom := stackedbrep.Level{Held: pp.z0, Delta: pp.z0Delta}
+	top := stackedbrep.Level{Held: pp.z1, Delta: pp.z1Delta}
+	var levels []stackedbrep.Level
 	var regions []profileRecord
 	wallAt := 0
 	if s > 0 {
@@ -101,7 +101,7 @@ func sideOpeningBrep(ctx context.Context, budget *proofbound.WorkBudget, pp pris
 		}
 	}
 	for i := 1; i < len(levels); i++ {
-		if !(levels[i].held > levels[i-1].held) {
+		if !(levels[i].Held > levels[i-1].Held) {
 			return brepPayload{}, fmt.Errorf(`%w: a side opening's slab levels do not ascend (shell-opening SO3)`, ErrDegenerate)
 		}
 	}
@@ -114,11 +114,11 @@ func sideOpeningBrep(ctx context.Context, budget *proofbound.WorkBudget, pp pris
 
 // sideOpeningRecord runs the engine over the slabs between consecutive
 // levels, regions[k] being slab k's one region and wallAt the wall slab.
-func sideOpeningRecord(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload, sec sideOpeningSection, levels []stackedUnionLevel, regions []profileRecord, wallAt int) (brepPayload, error) {
+func sideOpeningRecord(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload, sec sideOpeningSection, levels []stackedbrep.Level, regions []profileRecord, wallAt int) (brepPayload, error) {
 	n := len(regions)
 	held := make([]float64, len(levels))
 	for i, l := range levels {
-		held[i] = l.held
+		held[i] = l.Held
 	}
 	geom := stackedbrep.NewEngine(held)
 	for _, region := range regions {
