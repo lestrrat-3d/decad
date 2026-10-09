@@ -342,7 +342,8 @@ Modify §1's test picks every sentinel.
 | **SF1** | a convex corner of the loop where a straight walk meets a circular one, or two circular walks meet, not tangent (LF8): a plate with a semicircular bite, a D-shaped boss rim | yes; its miter is a space curve no `Curve` names and its strip integrals are not polynomial | `ErrUnsupported`, naming the corner |
 | **SF2** | `Face.NormalAt` at an LF6 apex vertex, which lies on the horn torus's own axis | the point exists; the surface normal there does not | `ErrDegenerate` (the survey samples interior points only) |
 
-Everything else is an existing row: SL1 (a partial loop, with SX4's text),
+Everything else is an existing row: SL1 (a partial loop outside the
+selected-chain route in `docs/vertex-blend-design.md`),
 SL2 (LB3/LB4/LB6), SB1 (`delta ≠ 0`), SX6
 (`R − r < 0` on an LF2 wall, a dropped carrier), SX7 (band reach, two bands
 on one wall), SX12/SX14 (the contour at `r`), SX13 (`R ∓ r == R` or
@@ -481,7 +482,8 @@ is the enclosures' reach alone and cannot be made to fail by deleting one
 term, which the test records.
 
 Refusals: a plate with a semicircular bite on its outer loop, top loop →
-SF1 naming the two non-tangent corners; a partial loop → SL1 (SX4's text);
+SF1 naming the two non-tangent corners; a partial loop outside the
+selected-chain route → SL1;
 P8's top loop at `r = 4` → SX6; the P2 mouth at `r = 5` → SX7;
 a partial revolve's cap loop → SX5; a stacked
 receiver whose section carries a displacement → SB1. Every refusal leaves the

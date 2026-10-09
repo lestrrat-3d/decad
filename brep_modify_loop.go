@@ -101,6 +101,9 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 			}
 			return next.buildSelectedLoops(ctx, d, loops)
 		}
+		if sel, selected, ok := r.partialSelectedLoop(); ok {
+			return brepFilletPartialLoop(ctx, d, bp, call, sel, selected)
+		}
 	}
 	return r.buildLoops(ctx, d)
 }

@@ -72,10 +72,30 @@ type Piece struct {
 // its walks' end rates.
 func (l Loop) Pieces() ([]Piece, error) {
 	n := len(l.Walks)
+	selected := make([]bool, n)
+	for i := range selected {
+		selected[i] = true
+	}
+	return l.PiecesSelected(selected)
+}
+
+// PiecesSelected measures only the selected walks of a loop. At a boundary
+// between a selected straight walk and an unselected straight walk, the
+// selected offset meets the unselected carrier. Its signed end rate is
+// -cot(theta), where theta is the turn between the two walks. A corner
+// between two selected walks keeps the ordinary loop-fillet class.
+func (l Loop) PiecesSelected(selected []bool) ([]Piece, error) {
+	n := len(l.Walks)
 	if n == 0 {
 		return nil, fmt.Errorf(`%w: a loop fillet's loop holds no walks`, decaderr.ErrDegenerate)
 	}
+	if len(selected) != n {
+		return nil, fmt.Errorf(`%w: a loop fillet selects %d of %d walks`, decaderr.ErrDegenerate, len(selected), n)
+	}
 	if l.WholeTurn() {
+		if !selected[0] {
+			return nil, fmt.Errorf(`%w: a loop fillet selects no walks`, decaderr.ErrDegenerate)
+		}
 		p, err := circularPiece(l.Walks[0], 0)
 		if err != nil {
 			return nil, err
@@ -86,12 +106,33 @@ func (l Loop) Pieces() ([]Piece, error) {
 		return nil, fmt.Errorf(`%w: a loop fillet's loop of %d walks classifies %d corners`, decaderr.ErrUnsupported, n, len(l.Corners))
 	}
 	kappa := make([]Interval, n)
+	chosen := 0
 	for k, c := range l.Corners {
 		kappa[k] = pointInt(0)
-		if c != Miter {
+		prev := (k + n - 1) % n
+		if selected[prev] != selected[k] {
+			if l.Walks[prev].Circular || l.Walks[k].Circular {
+				return nil, fmt.Errorf(`%w: an open fillet chain ends beside a circular walk`, decaderr.ErrUnsupported)
+			}
+			a, err := direction(l.Walks[prev])
+			if err != nil {
+				return nil, err
+			}
+			b, err := direction(l.Walks[k])
+			if err != nil {
+				return nil, err
+			}
+			cross := a.cross(b)
+			if cross.Sign() == 0 {
+				return nil, fmt.Errorf(`%w: an open fillet chain ends at a parallel join`, decaderr.ErrUnsupported)
+			}
+			kappa[k] = point(new(big.Rat).Quo(new(big.Rat).Neg(a.dot(b)), cross))
 			continue
 		}
-		kv, err := Kappa(l.Walks[(k+n-1)%n], l.Walks[k])
+		if !selected[k] || c != Miter {
+			continue
+		}
+		kv, err := Kappa(l.Walks[prev], l.Walks[k])
 		if err != nil {
 			return nil, err
 		}
@@ -99,6 +140,10 @@ func (l Loop) Pieces() ([]Piece, error) {
 	}
 	var out []Piece
 	for i, w := range l.Walks {
+		if !selected[i] {
+			continue
+		}
+		chosen++
 		var p Piece
 		var err error
 		if w.Circular {
@@ -111,7 +156,7 @@ func (l Loop) Pieces() ([]Piece, error) {
 		}
 		out = append(out, p)
 		k := (i + 1) % n
-		if l.Corners[k] != Reflex {
+		if !selected[k] || l.Corners[k] != Reflex {
 			continue
 		}
 		rp, err := reflexPiece(l.Walks[i], l.Walks[k], k)
@@ -119,6 +164,9 @@ func (l Loop) Pieces() ([]Piece, error) {
 			return nil, err
 		}
 		out = append(out, rp)
+	}
+	if chosen == 0 {
+		return nil, fmt.Errorf(`%w: a loop fillet selects no walks`, decaderr.ErrDegenerate)
 	}
 	return out, nil
 }

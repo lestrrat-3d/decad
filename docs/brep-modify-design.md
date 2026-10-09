@@ -351,7 +351,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | **SB2** | a stacked receiver `brepOfStacked` refuses (a prism group, several regions in one slab; a stack enclosing a cavity, a closed shell) | yes | that call's `ErrUnsupported` |
 | **SB3** | route P reads a prism along some axis, a Shell's removed faces are not its caps, no other axis admits them, and route S reads no through-cut record along any axis (modify-general Table TC) | yes | modify S2, with SG3's reason |
 | **SB4** | route E reading an edge that is not a straight line along a reference axis; only single straight edges reach route E, and every other Fillet or Chamfer selection takes route L (modify-general §4, `docs/loop-fillet-design.md`), which builds a hole rim, a boss root or a cornered loop or refuses with Table SL or SF | — (a falsifier) | `ErrUnsupported` |
-| **SB5** | selected single straight edges share a vertex outside route V's complete-loop fillet (`docs/vertex-blend-design.md` §2); a mixed `Chamfer` still takes SL1 | yes | `ErrUnsupported` (SL1's text) |
+| **SB5** | selected single straight edges share a vertex outside route V's complete-loop or selected-chain fillet (`docs/vertex-blend-design.md` §2); a mixed `Chamfer` still takes SL1 | yes | `ErrUnsupported` (SL1's text) |
 | **SB6** | an edge vertex with other than three incident edges, or an edge that is one piece of a split side line | yes | `ErrUnsupported` |
 | **SB7** | the third face at an edge vertex is not, and cannot be restated as, a plane across the edge's axis: a cylinder, a plane along the axis, an oblique, split or level-displaced straight wall, a blend face of an earlier call, a trimmed wall whose rim ends on a loop band's patch | yes; the edge ends on a blend or a curved face, whose honest form is the complete loop's fillet (`docs/loop-fillet-design.md`) | `ErrUnsupported` |
 | **SB8** | an adjacent face outside EB4/EB5: a rim-adjacent wall that is oblique, split or level-displaced, a (pl) face whose neighbours at `e` are not straight and across the axis, a narrowed range, consecutive segments on one carrier | yes | `ErrUnsupported` |
@@ -523,7 +523,8 @@ Refusals:
   not the solid's convexity for a rim, or for a line two planar faces of
   different sweeps share.
 - **Patch a vertex where two independent route E blends meet.** SB5 still
-  refuses that selection. Route V builds a sphere where a complete-loop
+  refuses a selection outside one planar-face loop. A selected chain on
+  one such loop uses a band; route V builds a sphere where a complete-loop
   fillet meets a straight-edge fillet (`docs/vertex-blend-design.md`).
 - **Build a hole-rim chamfer on a brep face as a planar region.** A cone band
   is not a region of any plane; the brep needs a band face kind, which is a

@@ -159,6 +159,87 @@ func TestVertexBlendPublicBoxAllEdges(t *testing.T) {
 	require.Contains(t, step.String(), "ISO-10303-21")
 }
 
+func TestVertexBlendTwoAdjacentCapEdges(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := boxBody(t, doc, 0, 0, 40, 20, 20)
+	corner := r3.NewVec(0, 0, 20)
+	sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
+		Or(decad.ParallelTo(r3.NewVec(0, 1, 0)), decad.EndpointAt(corner)).Exactly(2)
+	got, err := box.Fillet(t.Context(), sel, units.Millimeters(2))
+	require.NoError(t, err)
+	requireEveryEdgeOnTwoFaces(t, got)
+	volume, err := got.Volume()
+	require.NoError(t, err)
+	requireMeasurementHoldsPi(t, volume, big.NewRat(47320, 3), big.NewRat(56, 1))
+	var cylinders, ellipses int
+	for _, f := range got.Faces() {
+		if c, ok := f.Surface().(decad.Cylinder); ok && c.Radius.Base() == 2 {
+			cylinders++
+		}
+	}
+	for _, e := range got.Edges() {
+		if _, ok := e.Curve().(decad.Ellipse3); ok {
+			ellipses++
+		}
+	}
+	require.Equal(t, 2, cylinders)
+	require.Equal(t, 1, ellipses)
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+}
+
+func TestBrepSingleYCapEdgeAfterRestatement(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := boxBody(t, doc, 0, 0, 40, 20, 20)
+	sel := decad.Edges(decad.ParallelTo(r3.NewVec(0, 1, 0)),
+		decad.EndpointAt(r3.NewVec(0, 0, 20))).Exactly(1)
+	got, err := box.Fillet(t.Context(), sel, units.Millimeters(2))
+	require.NoError(t, err)
+	requireEveryEdgeOnTwoFaces(t, got)
+	volume, err := got.Volume()
+	require.NoError(t, err)
+	requireMeasurementHoldsPi(t, volume, big.NewRat(15920, 1), big.NewRat(20, 1))
+}
+
+func TestVertexBlendThreeEdgeOpenChain(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := boxBody(t, doc, 0, 0, 40, 20, 20)
+	sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
+		decad.EndpointAt(r3.NewVec(0, 0, 20))).
+		Or(decad.ParallelTo(r3.NewVec(0, 1, 0)),
+			decad.EndpointAt(r3.NewVec(40, 0, 20))).
+		Or(decad.ParallelTo(r3.NewVec(1, 0, 0)),
+			decad.EndpointAt(r3.NewVec(40, 20, 20))).Exactly(3)
+	got, err := box.Fillet(t.Context(), sel, units.Millimeters(2))
+	require.NoError(t, err)
+	requireEveryEdgeOnTwoFaces(t, got)
+	var cylinders, ellipses int
+	for _, f := range got.Faces() {
+		if c, ok := f.Surface().(decad.Cylinder); ok && c.Radius.Base() == 2 {
+			cylinders++
+		}
+	}
+	for _, e := range got.Edges() {
+		if _, ok := e.Curve().(decad.Ellipse3); ok {
+			ellipses++
+		}
+	}
+	require.Equal(t, 3, cylinders)
+	require.Equal(t, 2, ellipses)
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(got)
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, reading.Status)
+}
+
 // TestBrepLoopFilletPublicRevolveCapRefuses pins loop-fillet RF4: a complete
 // loop of a partial revolve's planar cap is a loop of cap edges whose walls
 // are revolved surfaces, so it stays modify-reach SX5 and leaves the receiver

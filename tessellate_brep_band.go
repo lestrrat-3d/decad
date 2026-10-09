@@ -53,7 +53,8 @@ type brepBandChord struct {
 	sideV, capV []int
 	// fillet holds a fillet band's interior rings (tessellate_brep_fillet.go),
 	// nil for a chamfer band.
-	fillet *filletRings
+	fillet  *filletRings
+	partial *partialBandMesh
 }
 
 // brepChordBands chords every band of the record and imposes each wall walk's
@@ -79,6 +80,14 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 		}
 		f := bp.faces[b.face]
 		cbp := b.tessView(f, bp.xform)
+		if b.selected != nil {
+			bc, err := chordPartialFilletBand(ctx, b, f, cbp, chord)
+			if err != nil {
+				return nil, nil, err
+			}
+			bands[bi] = bc
+			continue
+		}
 		lm, err := chordCapBlendLoop(ctx, budget, cbp, 0, b.orig, chord, work)
 		if err != nil {
 			return nil, nil, err
@@ -197,6 +206,10 @@ func brepImposeWall(eF, ew brepEmbed, f brepFace, w survey2d.SegmentWalk, lm *ca
 // cap contour ring at F's level, each sample keyed by its reference
 // coordinates so a wall's rim sample at the same point is the same vertex.
 func (bc *brepBandChord) place(e brepEmbed, addVertex func([3]float64, proofbound.WalkEndBound) int) {
+	if bc.partial != nil {
+		bc.placePartial(e, addVertex)
+		return
+	}
 	for j, p := range bc.lm.sidePts {
 		bc.sideV = append(bc.sideV, addVertex(e.Canon(p.U, p.V, bc.sideZ), bc.lm.sideBound[j]))
 	}
@@ -210,6 +223,18 @@ func (bc *brepBandChord) place(e brepEmbed, addVertex func([3]float64, proofboun
 // patches face the other way (attachBrepLoopBands), so its windings turn over.
 func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[string]capPatchGeom,
 	faceOfRole func(string) (*Face, error), bump func(*Face, float64)) error {
+	if bc.partial != nil {
+		first := len(m.triangles)
+		if err := bc.emitPartialFillet(m, faceOfRole, bump); err != nil {
+			return err
+		}
+		if bc.band.sigma > 0 {
+			for i := first; i < len(m.triangles); i++ {
+				m.triangles[i][1], m.triangles[i][2] = m.triangles[i][2], m.triangles[i][1]
+			}
+		}
+		return nil
+	}
 	if bc.fillet != nil {
 		first := len(m.triangles)
 		if err := bc.emitFillet(m, faceOfRole, bump); err != nil {
@@ -250,6 +275,10 @@ func brepBandMotion(ctx context.Context, bands []brepBandChord, store, round []f
 	budget := proofbound.NewWorkBudget(ctx)
 	for bi := range bands {
 		bc := &bands[bi]
+		if bc.partial != nil {
+			bc.partialMotion(motion, store, round)
+			continue
+		}
 		for _, vi := range bc.sideV {
 			motion[vi] = math.Max(motion[vi], proofbound.AbsSumUpper(store[vi], bc.sideDelta))
 		}

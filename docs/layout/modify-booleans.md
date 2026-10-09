@@ -25,7 +25,9 @@ The rules for rows live in `docs/layout.md`.
 | `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |
 | `brep_modify_edge.go` | Route E: Table EB, restatement, blends, trims and closure. See brep-modify §5. |
 | `brep_modify_loop.go` / `brep_loop_band.go` | Route L: record rewrite, bands and mass. See modify-general §4. |
+| `brep_modify_chain.go` | Route L: selected cap-edge chains and their partial-loop record rewrite. |
 | `brep_loop_fillet.go` | Route L's fillet arm. See loop-fillet. |
+| `brep_loop_partial_fillet.go` | Closes partial-loop fillet bands with corner patches and terminal arcs. |
 
 ### Booleans
 

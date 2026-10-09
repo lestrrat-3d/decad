@@ -1000,8 +1000,6 @@ func TestBrepLoopFilletRefusals(t *testing.T) {
 		want []string
 	}{
 		{"a semicircular bite", bite, topLoop(10), 1, ErrUnsupported, []string{"loop-fillet SF1", "(25, 20)"}},
-		{"part of a loop", pocket, func(t *testing.T, b *Body) []*Edge { return mouth(t, b)[:3] }, 1.5, ErrUnsupported,
-			[]string{rowSL1, "covers only part of a loop"}},
 		{"a contour that crosses", func(t *testing.T) *Body { return internalRoundedPlate(t) }, topLoop(20), 4, ErrDegenerate,
 			[]string{"no regular cap contour"}},
 		{"a band reaching the floor", pocket, mouth, 5, ErrUnsupported, []string{"modify-reach SX7", "the fillet band"}},
@@ -1020,6 +1018,34 @@ func TestBrepLoopFilletRefusals(t *testing.T) {
 			require.Equal(t, before, body.doc.Bodies())
 		})
 	}
+}
+
+func TestVertexBlendPocketMouthOpenChain(t *testing.T) {
+	t.Parallel()
+	doc, body := internalRouteEPocket(t)
+	mouth := planarBodyFace(t, body, routeEZ, r3.NewVec(0, 0, 10)).Loops()[1].Edges()
+	out, err := body.Fillet(t.Context(), edgesQuery(mouth[:3]), units.Millimeters(1.5))
+	require.NoError(t, err)
+	requireClosedTopology(t, out)
+	var cylinders, tori int
+	for _, f := range filletPatchesOf(out) {
+		switch f.Surface().(type) {
+		case Cylinder:
+			cylinders++
+		case Torus:
+			tori++
+		}
+	}
+	require.Equal(t, 3, cylinders)
+	require.Equal(t, 2, tori)
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(out)
+	require.NoError(t, err)
+	require.Equal(t, Sound, reading.Status)
 }
 
 // TestBrepLoopFilletConsumers runs Table DF's F-1 readers over P1's top-loop

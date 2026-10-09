@@ -628,6 +628,12 @@ func (bp brepPayload) filletRestored(topo *brepTopology) ([]brepFace, error) {
 		if b.kind != brepBandFillet {
 			continue
 		}
+		if b.selected != nil {
+			for fi, original := range b.restore {
+				out[fi] = original
+			}
+			continue
+		}
 		f := bp.faces[b.face]
 		eF := topo.embeds[b.face]
 		n := eF.Axis[2]
