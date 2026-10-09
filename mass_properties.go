@@ -84,7 +84,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return facetedMassProperties(ctx, b, faceted, density)
 	}
 	if sweep, ok := b.payload.(sweepPayload); ok {
-		result, err := sweepMassProperties(ctx, b, sweep, density)
+		result, err := massmoment.SweepProperties(ctx, massSweepRecord(sweep), b.centroid, density)
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	if cup, ok := b.payload.(cupPayload); ok {
@@ -147,6 +147,29 @@ func massRevolveRecord(rp revolvePayload) massmoment.RevolveRecord {
 		SectionDelta: rp.sectionDelta, RadialAdmitAllow: rp.ax.radialAdmitAllow,
 		AxisSnap: rp.ax.snap != (regionSnapAllow{}),
 	}
+}
+
+// massSweepRecord presents the sweep's certified span reductions to the mass integrator.
+func massSweepRecord(sp sweepPayload) massmoment.SweepRecord {
+	record := massmoment.SweepRecord{Arc: sp.arc}
+	if len(sp.spans) == 0 {
+		if sp.arc {
+			record.Revolve = massRevolveRecord(sp.revolve)
+		} else {
+			record.Prism = massPrismRecord(sp.prism)
+		}
+		return record
+	}
+	record.Spans = make([]massmoment.SweepSpanRecord, len(sp.spans))
+	for i, span := range sp.spans {
+		record.Spans[i] = massmoment.SweepSpanRecord{Arc: span.arc}
+		if span.arc {
+			record.Spans[i].Revolve = massRevolveRecord(span.revolve)
+		} else {
+			record.Spans[i].Prism = massPrismRecord(span.prism)
+		}
+	}
+	return record
 }
 
 // analyticOrMeshMassProperties keeps an analytic arm's result unless that arm

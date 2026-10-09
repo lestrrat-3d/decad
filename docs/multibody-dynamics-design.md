@@ -1093,7 +1093,7 @@ undenoted sweep end and a section displacement, none of which it charges.
 
 ### 8.7 Sweep
 
-Analytic, in `mass_properties_sweep.go`. A single straight span takes 8.1/8.2; a single arc span takes
+Analytic, in `internal/massmoment/sweep_properties.go`. A single straight span takes 8.1/8.2; a single arc span takes
 8.6 over the arc's partial revolve. A composite sweep integrates each `sweepSpanPayload` in its own local
 coordinates and sums `V`, `P` and `Q` about one shared anchor; no parallel-axis shortcut per span, since
 `P` and `Q` already refer to the shared anchor. Each span reaches the composite's unplaced coordinates
@@ -2792,7 +2792,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 17 (Phase 3) — sweep and cup mass
 
 - Delivers §8.7 and §8.8.
-- Files: `mass_properties_sweep.go`, `internal/massmoment/cup_properties.go`.
+- Files: `internal/massmoment/sweep_properties.go`, `internal/massmoment/cup_properties.go`.
 - Test (root): a composite sweep against the sum of its spans; the cup against outer minus cavity.
 - Depends on: PRs 7, 16.
 
