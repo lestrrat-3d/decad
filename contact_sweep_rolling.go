@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/placedruling"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -167,7 +168,7 @@ func prepareRollingSweepPath(body *Body, path affinePairPath,
 		}
 		prepared.sourcePoints = append(prepared.sourcePoints, corner)
 	}
-	prepared.startPoints = append(prepared.startPoints, source.centers[:]...)
+	prepared.startPoints = append(prepared.startPoints, source.Centers[:]...)
 	return prepared, true
 }
 
@@ -268,7 +269,7 @@ func (r *rollingPairSweep) undecided(from, to *big.Rat, cause SweepCause) *Sweep
 
 // support finds the plane of S the cylinder's ruling rests on
 // (rulingSupport): ContactPair reads the same plane at the start poses.
-func (r *rollingPairSweep) support(poll func() error) (rulingPlane, bool, error) {
+func (r *rollingPairSweep) support(poll func() error) (placedruling.Plane, bool, error) {
 	return rulingSupport(&r.cylinder, &r.paths[r.s], poll)
 }
 
@@ -286,16 +287,16 @@ func (r *rollingPairSweep) support(poll func() error) (rulingPlane, bool, error)
 // drift r·√(2·(1 − s)) <= (3/2)·r·β·u holds with no gate.
 type rollingCoefficients = planarsweep.RollingCoefficients
 
-func (r *rollingPairSweep) coefficients(support rulingPlane) (rollingCoefficients, bool) {
+func (r *rollingPairSweep) coefficients(support placedruling.Plane) (rollingCoefficients, bool) {
 	motionM, okM := planarMotionOf(&r.paths[r.m])
 	motionS, okS := planarMotionOf(&r.paths[r.s])
-	if !okM || !okS || motionS.Rotating || proofarith.DyCmp(r.cylinder.gram, rulingGramLimit) > 0 {
+	if !okM || !okS || motionS.Rotating || proofarith.DyCmp(r.cylinder.Gram, rulingGramLimit) > 0 {
 		return rollingCoefficients{}, false
 	}
 	return planarsweep.RollingCoefficientsOf(planarsweep.RollingInput{
-		Cylinder: r.cylinder.geometry(), Moving: motionM, Support: motionS,
-		Points: r.paths[r.m].startPoints, Normal: support.normal,
-		Heights: support.heights, Alpha: support.alpha,
+		Cylinder: r.cylinder.Cylinder, Moving: motionM, Support: motionS,
+		Points: r.paths[r.m].startPoints, Normal: support.Normal,
+		Heights: support.Heights, Alpha: support.Alpha,
 	})
 }
 
@@ -351,7 +352,7 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 type rollingColumnBox = planarsweep.RollingColumnBox
 
 func (r *rollingPairSweep) columnBox() (rollingColumnBox, bool) {
-	return planarsweep.RollingColumnBoxOf(r.cylinder.geometry())
+	return planarsweep.RollingColumnBoxOf(r.cylinder.Cylinder)
 }
 
 // column is §10.6's column test through fraction f on a face-local plane.
@@ -365,9 +366,9 @@ func (r *rollingPairSweep) columnBox() (rollingColumnBox, bool) {
 // the end centers of a cylinder turning about its own axis barely move, so
 // the second box carries a whole turn. Both grow with f, so the test is
 // monotone. A plane with all of S behind it needs no test.
-func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *big.Rat,
+func (r *rollingPairSweep) column(support placedruling.Plane, box rollingColumnBox, f *big.Rat,
 	poll func() error) (bool, error) {
-	if !support.local {
+	if !support.Local {
 		return true, nil
 	}
 	zero := new(big.Rat)
@@ -378,27 +379,27 @@ func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *
 	S := &r.paths[r.s]
 	lo, hi := planarsweep.RollingColumnBounds(centers, corners, box.Reach, S.path.Delta, f)
 	solid := planar.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
-	return planar.PlanarColumnApart(&solid, support.normal, S.startPoints[support.origin], lo, hi, poll)
+	return planar.PlanarColumnApart(&solid, support.Normal, S.startPoints[support.Origin], lo, hi, poll)
 }
 
-func (r *rollingPairSweep) footInside(support rulingPlane, f, growth *big.Rat) bool {
+func (r *rollingPairSweep) footInside(support placedruling.Plane, f, growth *big.Rat) bool {
 	S := &r.paths[r.s]
 	spans := r.paths[r.m].cornerSpan(new(big.Rat), f)
-	lo, hi := planarsweep.RollingFootBounds(spans, S.path.Delta, support.axis, f, growth)
-	return support.face.HoldsBox(lo, hi)
+	lo, hi := planarsweep.RollingFootBounds(spans, S.path.Delta, support.Axis, f, growth)
+	return support.Face.HoldsBox(lo, hi)
 }
 
 // track builds the public track. The start manifold ContactPair published
 // must name the same two faces, and the track's own start manifold must
 // publish.
-func (r *rollingPairSweep) track(first *SweepSample, support rulingPlane,
+func (r *rollingPairSweep) track(first *SweepSample, support placedruling.Plane,
 	coefficients rollingCoefficients, end, depth *big.Rat) (*SweepContactTrack, bool, error) {
 	S, M := &r.paths[r.s], &r.paths[r.m]
 	faces := S.body.Faces()
-	if support.face.ID < 0 || support.face.ID >= len(faces) {
+	if support.Face.ID < 0 || support.Face.ID >= len(faces) {
 		return nil, false, nil
 	}
-	featureS := ContactFeature{Face: faces[support.face.ID]}
+	featureS := ContactFeature{Face: faces[support.Face.ID]}
 	featureM := ContactFeature{Face: r.cylinder.wall}
 	if first.Ideal.Manifold != nil {
 		for _, point := range first.Ideal.Manifold.Points {
@@ -411,7 +412,7 @@ func (r *rollingPairSweep) track(first *SweepSample, support rulingPlane,
 			}
 		}
 	}
-	direction := support.normal
+	direction := support.Normal
 	if r.m == 0 {
 		direction = proofarith.DvSub(proofarith.DyV3{}, direction)
 	}
@@ -426,8 +427,8 @@ func (r *rollingPairSweep) track(first *SweepSample, support rulingPlane,
 	if ordered := clearance.OrderedRulingEnds(starts); !proofarith.DvEqual(ordered[0], starts[0]) {
 		ends = [2]proofarith.DyV3{ends[1], ends[0]}
 	}
-	proof := &rollingTrackProof{paths: r.paths, m: r.m, s: r.s, ends: ends, radius: r.cylinder.radius.Rat(),
-		normal: support.normal, origin: support.origin, featureM: featureM, featureS: featureS,
+	proof := &rollingTrackProof{paths: r.paths, m: r.m, s: r.s, ends: ends, radius: r.cylinder.Radius.Rat(),
+		normal: support.Normal, origin: support.Origin, featureM: featureM, featureS: featureS,
 		direction: normal, angle: angle, coefficients: coefficients, depth: depth, depthUp: proofbound.RatFloatUp(depth)}
 	if !finiteMeasurementValues(proof.depthUp) {
 		return nil, false, nil

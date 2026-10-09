@@ -7,15 +7,43 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 )
 
 // Cylinder holds the exact geometric data of a source cylinder at a query pose.
 type Cylinder struct {
-	Axis         int
-	Radius, Gram proofarith.Dyadic
-	BoxLo, BoxHi [3]proofarith.Dyadic
-	Centers      [2]proofarith.DyV3
-	Columns      [3]proofarith.DyV3
+	Axis                 int
+	Radius, Length, Gram proofarith.Dyadic
+	BoxLo, BoxHi         [3]proofarith.Dyadic
+	Centers              [2]proofarith.DyV3
+	Columns              [3]proofarith.DyV3
+}
+
+// Stage maps a source cylinder's end centers and basis through a positive
+// determinant pose. The caller checks the pose before staging it.
+func Stage(axis int, lo, hi [3]proofarith.Dyadic, source [2]proofarith.DyV3, pose r3.Transform) Cylinder {
+	transverse := (axis + 1) % 3
+	c := Cylinder{Axis: axis, BoxLo: lo, BoxHi: hi,
+		Radius: proofarith.DyShift(proofarith.DySubScalar(hi[transverse], lo[transverse]), -1),
+		Length: proofarith.DySubScalar(hi[axis], lo[axis])}
+	basis := pose.Basis()
+	c.Columns = [3]proofarith.DyV3{proofarith.DyVec(basis.EX), proofarith.DyVec(basis.EY), proofarith.DyVec(basis.EZ)}
+	for i := range source {
+		c.Centers[i] = proofarith.DvTransform(pose, source[i])
+	}
+	one := proofarith.DyInt(1)
+	for i := range 3 {
+		row := proofarith.DyZero()
+		for j := range 3 {
+			entry := proofarith.DvDot(c.Columns[i], c.Columns[j])
+			if i == j {
+				entry = proofarith.DySubScalar(entry, one)
+			}
+			row = proofarith.DyAdd(row, proofarith.DyAbs(entry))
+		}
+		c.Gram = maxDy(c.Gram, row)
+	}
+	return c
 }
 
 // SectionDrift is r·gram + r·α², the bound on how far the staged section's
