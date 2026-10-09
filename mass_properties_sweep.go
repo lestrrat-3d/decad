@@ -113,11 +113,12 @@ func sweepSpanMoments(ctx context.Context, span sweepSpanPayload) (massmoment.Mo
 	if err != nil {
 		return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 	}
-	local, err := prismVolumeMoments(ctx, pp)
+	local, err := massmoment.PrismProfileMoments(ctx, pp.profile, pp.z0, pp.z1,
+		pp.sectionDelta, pp.z0Delta, pp.z1Delta)
 	if err != nil {
 		return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 	}
-	// prismVolumeMoments is about (0, 0, zm); the span's rigid motion is
+	// massmoment.PrismProfileMoments is about (0, 0, zm); the span's rigid motion is
 	// anchored at the frame origin.
 	local = massmoment.Shift(local, [3]*big.Rat{new(big.Rat), new(big.Rat), mid})
 	pp.xform = r3.Identity()
