@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tangentchain"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -28,90 +29,25 @@ func expandTangentChain(ctx context.Context, b *Body, sel EdgeSelector, seeds []
 	if _, ok := b.payload.(facetedPayload); ok {
 		return nil, fmt.Errorf(`%w: a faceted boolean result carries no analytic carrier to prove a tangent continuation over; this evaluator modifies no faceted body (modify-reach SX9)`, ErrUnsupported)
 	}
-	bodyEdges := b.Edges()
-	incident := make(map[*Vertex][]*Edge)
-	for _, e := range bodyEdges {
-		if e.start != nil {
-			incident[e.start] = append(incident[e.start], e)
-		}
-		if e.end != nil && e.end != e.start {
-			incident[e.end] = append(incident[e.end], e)
-		}
-	}
-	in := make(map[*Edge]struct{}, len(seeds))
-	queue := make([]*Edge, 0, len(seeds))
-	for _, e := range seeds {
-		if _, ok := in[e]; ok {
-			continue
-		}
-		in[e] = struct{}{}
-		queue = append(queue, e)
-	}
-	for len(queue) > 0 {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		e := queue[0]
-		queue = queue[1:]
-		// A closed curve has no endpoint corner; its seam vertex does not make
-		// it a partial chain (§3's geometric edge).
-		if e.start == nil || e.end == nil || e.start == e.end {
-			continue
-		}
-		for _, v := range [2]*Vertex{e.start, e.end} {
-			cands := incident[v]
-			states := make([]clearance.DegState, len(cands))
-			for i, c := range cands {
-				if c == e {
-					states[i] = clearance.DegNo
-					continue
-				}
-				states[i] = tangentContinues(e, c, v)
-			}
-			next, err := chainStep(states)
-			if err != nil {
-				return nil, fmt.Errorf(`%w; selector %s, the chain through (%s)`, err, sel, renderVec(v.position))
-			}
-			if next < 0 {
-				continue
-			}
-			c := cands[next]
-			if _, ok := in[c]; ok {
-				continue
-			}
-			in[c] = struct{}{}
-			queue = append(queue, c)
-		}
-	}
-	out := make([]*Edge, 0, len(in))
-	for _, e := range bodyEdges {
-		if _, ok := in[e]; ok {
-			out = append(out, e)
-		}
-	}
-	return out, nil
+	return tangentchain.Expand(ctx, tangentChainGraph{edges: b.Edges(), selector: sel}, seeds)
 }
 
-// chainStep is §5's per-endpoint outcome table over the candidates' oracle
-// answers: no proven candidate and none undecided stops the chain (-1); one
-// proven and none undecided continues through that candidate's index; more
-// than one proven, or any undecided, is SX2. Candidate order breaks no tie.
-func chainStep(states []clearance.DegState) (int, error) {
-	proven, undecided, next := 0, 0, -1
-	for i, s := range states {
-		switch s {
-		case clearance.DegYes:
-			proven++
-			next = i
-		case clearance.DegUnknown:
-			undecided++
-		}
-	}
-	if proven > 1 || undecided > 0 {
-		return -1, fmt.Errorf(`%w: the tangent chain branches or cannot be decided here: %d edges continue it and %d cannot be decided; this evaluator does not choose a branch or stop early (modify-reach SX2)`,
-			ErrUnsupported, proven, undecided)
-	}
-	return next, nil
+type tangentChainGraph struct {
+	edges    []*Edge
+	selector EdgeSelector
+}
+
+func (g tangentChainGraph) Edges() []*Edge { return g.edges }
+
+func (g tangentChainGraph) Endpoints(e *Edge) (*Vertex, *Vertex) { return e.start, e.end }
+
+func (g tangentChainGraph) Continue(e, c *Edge, v *Vertex) clearance.DegState {
+	return tangentContinues(e, c, v)
+}
+
+func (g tangentChainGraph) Ambiguous(v *Vertex, proven, undecided int) error {
+	return fmt.Errorf(`%w: the tangent chain branches or cannot be decided here: %d edges continue it and %d cannot be decided; this evaluator does not choose a branch or stop early (modify-reach SX2); selector %s, the chain through (%s)`,
+		ErrUnsupported, proven, undecided, g.selector, renderVec(v.position))
 }
 
 // tangentContinues decides whether c continues e through their shared vertex

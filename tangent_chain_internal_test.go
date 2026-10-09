@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/tangentchain"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -40,13 +41,13 @@ func TestChainStep(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			next, err := chainStep(tc.states)
+			next, proven, undecided := tangentchain.Step(tc.states)
 			if tc.sx2 {
-				require.ErrorIs(t, err, ErrUnsupported)
-				require.ErrorContains(t, err, "SX2")
+				require.True(t, proven > 1 || undecided > 0)
 				return
 			}
-			require.NoError(t, err)
+			require.LessOrEqual(t, proven, 1)
+			require.Zero(t, undecided)
 			require.Equal(t, tc.next, next)
 		})
 	}
