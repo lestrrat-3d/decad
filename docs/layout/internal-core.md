@@ -45,6 +45,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums and mesh proofs. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs. |
+| `internal/revolveplan/` | Revolve mesh walk resolution, coordinate ceilings and chord counts. See tessellation §8. |
 | `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |

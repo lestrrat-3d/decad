@@ -339,7 +339,8 @@ tess §§8–11 are the theory; this section maps each paragraph to code. No new
 
 | File | Owns |
 |---|---|
-| `tessellate_revolve.go` | `tessellateRevolve`: walk resolution, the axis-incidence and section gates, the angular count, cell and cap assembly, orientation, and the assembled mesh's own audits (tess §8, §9) |
+| `tessellate_revolve.go` | `tessellateRevolve`: section gates, cell and cap assembly, orientation, and the assembled mesh's own audits (tess §8, §9) |
+| `internal/revolveplan/` | Walk resolution, axis-incidence gate, coordinate ceilings, meridian and angular counts, and count refinement (tess §8, §9) |
 | `internal/revolvesampling/meridian.go` and `section.go` | Certified meridian junctions, circular stations and section readings (tess §8–§9) |
 | `internal/revolvemesh/revolve_ring.go` and `tessellate_revolve.go` | Ring, cell and cap emission, indices, area charge, and construction and placement rounding measurements (tess §8–§10) |
 | `internal/revolvemesh/revolve_proof.go` | Certified angular samples and axis basis (tess §8) |
