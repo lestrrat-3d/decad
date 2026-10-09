@@ -194,8 +194,8 @@ func TestBrepModifyRoutePChamfersB1SquareHole(t *testing.T) {
 // frame faces +y, and S top's region re-expressed into F and re-wound, bit
 // for bit. P5 refuses a hand-built S1 whose hole wall is walked against its
 // material, and one whose z = 0 face faces into the material. Shown to fail
-// with brepWalkKeyOf ignoring the circular sense (the reversed wall then
-// read), with brepPrismRect.matches ignoring the normal (the inward-facing
+// with brepgeom.WalkKeyOf ignoring the circular sense (the reversed wall then
+// read), with brepgeom.PrismRect.matches ignoring the normal (the inward-facing
 // rectangle then read), and with the two rectangle readers ignoring their
 // levels' displacements (each displaced case then read).
 func TestBrepModifyRecognisesThePrism(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -315,7 +316,7 @@ func TestBrepShellThroughCutP1(t *testing.T) {
 	require.Len(t, rim.region.Holes, 1)
 	var corners []Point2
 	for _, seg := range rim.region.Holes[0].Segments {
-		from, _, ok := brepNaturalLine(seg)
+		from, _, ok := brepgeom.NaturalLine(seg)
 		require.True(t, ok)
 		corners = append(corners, from)
 	}
