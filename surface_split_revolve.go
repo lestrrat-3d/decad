@@ -11,8 +11,8 @@ import (
 
 // This file is Document.Split over the revolve family
 // (docs/surface-intersection-design.md §11's PR5). The cell selection and the
-// per-cell recording are the prism arm's resolveSplit, run over the two
-// operands' MERIDIAN views exactly as Trim's revolve arm runs resolveTrim. Each
+// per-cell recording run through prismcells over the two operands' MERIDIAN
+// views, as they do for Trim's revolve arm. Each
 // selected cell becomes one solid revolvePayload over the target's own sweep,
 // carrying its cell's δ_cut as sectionDelta with sectionWhole false: only the
 // cut ends a cell records moved, and the solid build charges them through
