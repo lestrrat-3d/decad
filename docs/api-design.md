@@ -549,6 +549,13 @@ are load-bearing; the rest are deferred, not undecided.
 
 **Profile records and provenance.** `RecordProfile` converts a live sketch profile and plane into structural, plane-local `ProfileRecord` and `PlaneRecord` values. The evaluator uses those records internally for analytic construction and measurement. They are geometry snapshots, not a serialized model or replay format.
 
+`MeasureProfile` authenticates the same live sketch profile and returns a
+`MeasuredProfile` snapshot. Its `Area`, `Centroid`, and `SecondMoments` methods
+give bounded plane-local 2D readings without exposing the evaluator's curve
+records. Callers obtain the sketch plane through `s.Plane().Frame()` when they
+need to place the centroid in world coordinates. Each method reports its own
+unsupported or degenerate input independently of the other readings.
+
 `FeatureRef` is an opaque provenance value returned by bodies and topology. Its `Role` field is public for inspection; the document-local producer identity is private. Callers pass returned references to `CreatedBy` or `FaceCreatedBy` instead of constructing or persisting producer numbers. `CapStart` and `CapEnd` provide the common cap references.
 
 The public selector roots are `EdgeSelector` and `FaceSelector`. There is no exported common selector interface because feature signatures already state which topology family they accept.

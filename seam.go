@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -11,6 +12,35 @@ import (
 // place a live sketch profile becomes the structural records the evaluator
 // carries. sketch answers every 2D question and decad consumes the answers —
 // nothing here re-derives a trim, projects a point, or fits a curve.
+
+// MeasuredProfile is a snapshot of a validated sketch profile for bounded
+// plane-local measurements. Its recorded geometry is private.
+type MeasuredProfile struct {
+	record momentinput.Profile
+}
+
+// MeasureProfile authenticates a current profile from s and records its
+// boundary for 2D measurement. It returns the same admission errors as
+// RecordProfile. Neither s nor p may be nil.
+func MeasureProfile(s *sketch.Sketch, p *sketch.Profile) (MeasuredProfile, error) {
+	record, _, _, err := recordProfile(s, p)
+	if err != nil {
+		return MeasuredProfile{}, err
+	}
+	return MeasuredProfile{record: record}, nil
+}
+
+// Area measures the profile's plane-local area with a bound.
+func (p MeasuredProfile) Area() (Measurement, error) { return p.record.Area() }
+
+// Centroid measures the profile's plane-local centroid with a bound.
+// The value is (u, v, 0); use the sketch plane's frame to place it in space.
+func (p MeasuredProfile) Centroid() (VecMeasurement, error) { return p.record.Centroid() }
+
+// SecondMoments measures area moments about the sketch plane's origin.
+func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
+	return p.record.SecondMoments()
+}
 
 // RecordProfile converts a sketch profile into the structural records a
 // the evaluator carries: the region as a [ProfileRecord] — the entity's own
