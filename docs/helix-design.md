@@ -55,7 +55,8 @@ profile's plane, a positive pitch and a positive number of turns. The build
 admits:
 
 - a profile whose every segment, on the outer loop and on every hole, is a
-  whole `LineSeg` (PR 1); `ArcSeg` and `CircleSeg` segments land with PR 3;
+  whole `LineSeg`, a whole `ArcSeg` or a whole `CircleSeg`, the circle a
+  loop on its own;
 - an axis stated as `SketchLine`, `ConstructionAxis` or `EdgeAxis`, resolved
   into the sketch plane exactly as `Revolve` resolves it;
 - any positive finite pitch and any positive finite turn count, whole or
@@ -65,8 +66,8 @@ admits:
 
 The build refuses, with Table CS, a profile that touches or crosses the
 axis, a profile wider along the axis than one pitch when the coil makes one
-turn or more, a free-form profile segment, `WithSurfaceResult()`, and a
-station count past the fixed cap.
+turn or more, a free-form, elliptical or trimmed profile segment,
+`WithSurfaceResult()`, and a station count past the fixed cap.
 
 Outside this design, with no increment planned here:
 
@@ -187,7 +188,7 @@ The existence rule applies: a requested solid that does not exist is
 | **CS4** | `pitch` not a length, or `turns` not dimensionless; either non-finite; either at or below zero | `ErrUnitKind`; `ErrNotFinite`; `ErrDegenerate` (a zero pitch names a revolve, a zero turn count names no solid) |
 | **CS5** | the profile's near-axis radial extreme is not proven positive: proven at or below zero refuses outright; an interval straddling zero (a tilted axis whose own rounding leaves the sign undecided) refuses as undecided | `ErrDegenerate`; `ErrUnsupported`. Stricter than `Revolve`'s side gate: a point on the axis sweeps to a segment of the axis and pinches the wall, so no contact is admitted |
 | **CS6** | `turns ≥ 1` and the upper bound of the profile's axial extent `H` is at or above `pitch` | `ErrUnsupported`: CP5 proves the solid simple only below one pitch; the refusal names `H`, `pitch` and the turn count |
-| **CS7** | a profile segment, on any loop, that is not a `LineSeg` (PR 1), or not a `LineSeg`, `ArcSeg` or `CircleSeg` (PR 3 onward); a trimmed `LineSeg`, or a loop whose recorded segment ends do not meet exactly, which has no exact recorded polygon vertex for station 0 to hold (no increment lifts this) | `ErrUnsupported` |
+| **CS7** | a profile segment, on any loop, that is not a `LineSeg`, `ArcSeg` or `CircleSeg`; a trimmed segment of any kind, a whole circle sharing its loop, or a loop whose recorded segment ends do not meet exactly, none of which has an exact recorded vertex for station 0 to hold at the junction (no increment lifts these) | `ErrUnsupported` |
 | **CS8** | the station count `N = ⌈turns · coilStationsPerTurn⌉` exceeds `maxCoilStations`, or the wall and cap triangle count exceeds `maxCoilFacets = 1 << 20` | `ErrUnsupported` (a resource ceiling) |
 | **CS9** | the held crossing audit proves two non-adjacent held triangles meet; or its pair budget runs out | `ErrUnsupported` in both arms: CP5 has already proven the TRUE solid simple, so a held crossing is a station artefact (two true turns closer than twice the chord departure), never a defect of the solid |
 | **CS10** | a computed station, vertex, reading or bound is non-finite, a held triangle collapses from rounding, or the denoted map's orthonormality defect (§5.3) is at or above `1/2` | `ErrUnsupported` |
@@ -253,7 +254,35 @@ turns of any profile, and the facet-pair budget
 
 ### 5.3 Held vertices
 
-For profile vertex `v` with axis coordinates `(ρ_v, ζ_v)` and station `j`:
+**The profile station chain.** The held profile is a chain of stations,
+loft §5.1's chord chain read on one section (`coil.Loops`). A `LineSeg`
+contributes its walk start, a recorded point. An `ArcSeg` or a whole
+`CircleSeg` contributes its walk start and the `m − 1` interior stations of
+its `m` chords, at the exact parameters `t_k = TStart + (k/m)·(TEnd − TStart)`,
+so a wall cell is chorded along the profile as well as along the helix. An
+arc of sweep `Δ` takes `m = ⌈coilArcChordsPerTurn·Δ/2π⌉` chords, at least
+one, and a whole circle takes `coilArcChordsPerTurn`, both decided from the
+held float sweep, which decides a count and nothing else.
+`coilArcChordsPerTurn` is `16`: every chord cell enters §5.5's crossing
+audit beside the helix stations, and at 16 a 5-turn round wire holds 40 960
+wall triangles, inside the audit's ceiling of 65 528 triangles; at 24 it
+holds 61 440, and a sixth turn passes the ceiling. A whole circle at 16
+chords reaches the ceiling at 8 turns.
+
+Every station carries a plane round `s_v`, the distance from its held point
+to the point the record denotes there: zero at a line end and at an arc's
+`Start`, which is the denoted start; the radial residual
+(`circularbounds.ArcRadialResidualUpper`) at an arc's `End`, which the arc
+denotes on `Start`'s radius at `End`'s angle and which the next segment
+shares as its walk start; and at a generated station, the plane distance
+from the float nearest the midpoint of `circularbounds.EndpointInterval`'s
+enclosure to its far corner. A whole circle records no point at all, so even
+its walk start is generated. The station's held coordinates `(ρ_v, ζ_v)` lift
+the held point exactly; every bound and closed form reads them widened by
+`s_v`, which encloses the denoted point.
+
+For profile station `v` with axis coordinates `(ρ_v, ζ_v)` and helix station
+`j`:
 
 ```text
 X(v, j) = C + ρ_v·(cos θ_j·e_r + σ sin θ_j·e_t) + (ζ_v + pitch·t_j)·n
@@ -302,19 +331,21 @@ once by an explicit conversion so no step fuses into another, and its bound
 charges both operands' bounds and that operation's exact rounding
 (`coil.Mul`, `coil.Add`; the exact residual comes from `math.FMA` or TwoSum).
 `round(v, j)` is the largest coordinate's bound, turned into a 3D radius by
-`proofbound.Radius3D`. Station 0 holds the recorded lift `P_v` exactly where
-the lift is exact (CP2): every other term is an exact zero there, and adding
-an exact zero rounds nothing.
+`proofbound.Radius3D`, plus `(1 + e)·s_v`: `Φ` is a rigid motion of the axis
+plane at every `θ`, so the held profile station's image sits `s_v` from the
+denoted point's in plane coordinates. Station 0 holds the recorded lift `P_v`
+exactly where the lift is exact (CP2): every other term is an exact zero
+there, and adding an exact zero rounds nothing.
 
 The held vertex table is station-major: vertex `v` of station `j` is index
-`j · stride + v`, with `stride` the profile's vertex count over every loop,
-in `internal/sweepmitre.Loops`'s own loop-major order.
+`j · stride + v`, with `stride` the profile's station count over every loop,
+in `coil.Loops`'s loop-major order.
 
 ### 5.4 Chord departure and the per-vertex bound
 
-A wall cell is profile segment `v → w` over stations `j → j + 1`. Because
-the segment is straight, `Φ` is linear along it at every fixed `θ`, so
-the true cell is a ruled surface whose rulings are the segment's images and
+A wall cell is profile chord `v → w` over stations `j → j + 1`. On a line,
+the chord is the segment; because it is straight, `Φ` is linear along it at
+every fixed `θ`, so the true cell is a ruled surface whose rulings are the segment's images and
 whose two edges are helix arcs of radii `ρ_v` and `ρ_w` over `Δθ = 2π/N`
 per turn fraction `Δt = turns / N`. The held cell is the two triangles the
 quad splits into along the diagonal `tessellate.go` uses for a prism's
@@ -358,13 +389,26 @@ part the shift absorbs.
 | `sag(cell)` | `\|B − S(λ, θ(s))\|` | each helix arc departs from the linear interpolation of its chord at the same `θ` by at most `ρ·(2h)²/8`, since its circular part has curvature vector of length `ρ` (the slide is linear in `θ` and the chord interpolates it exactly), and `S` and `B` are both linear in `λ` between the two arcs; take `ρ_max·h²/2`. The sagitta `ρ·(1 − cos h)` bounds the arc's midpoint only, not the matched departure at every `θ` | up |
 | `twist(cell)` | the bracket above | `\|Δρ\|·h/2·((1 − c) + c·(h + k/ρ_min))`, from `m ≤ 1/4` and `sin h ≤ h` | up |
 | `shift(cell)` | `\|R₂\|` | `c²·Δρ²·h²/(8·ρ_min)`, from `\|ε\| ≤ c·\|Δρ\|·sin h/(2ρ(λ))` | up |
-| `round(v, j)` | the held corner's distance from the point `X(v, j)` denotes | §5.3 | up |
-| `β(v, j)` | the per-vertex bound of `docs/faceted-vertex-bounds-design.md` §2 | the largest `(1 + e)·(sag + twist + shift) + maxRound` over the cells that touch the vertex, where `maxRound` is the cell's largest corner `round` (the held triangles lie within it of `Tri`, by convexity) and `1 + e` carries the plane-coordinate legs through `L` (§5.3). It is never below `round(v, j)`; a cap vertex touches cells on one side only | `absSumUpper` |
+| `arcSag(cell)` | an arc chord's own departure: `\|A(φ(λ)) − lerp(λ)\|` | the recorded arc departs from the linear interpolation of its chord between its two denoted ends, at the matched parameter, by at most `r·Δφ²/8`, its curvature vector being of length `r·Δφ²` in `λ`; read with the radius's and the sweep's upper ends over `m`. Zero on a line | up |
+| `round(v, j)` | the held corner's distance from the point `X(v, j)` denotes | §5.3, with the station's plane round | up |
+| `β(v, j)` | the per-vertex bound of `docs/faceted-vertex-bounds-design.md` §2 | the largest `(1 + e)·(sag + twist + shift + arcSag) + maxRound` over the cells that touch the vertex, where `maxRound` is the cell's largest corner `round` (the held triangles lie within it of `Tri`, by convexity) and `1 + e` carries the plane-coordinate legs through `L` (§5.3). It is never below `round(v, j)`; a cap vertex touches cells on one side only | `absSumUpper` |
 | `δ` | the payload's displacement | the largest `β` over the table | max |
 
+**An arc chord.** The true cell of an arc chord is the screw sweep of the
+arc piece `A(φ(λ))`, `φ` affine in `λ` between the chord's two stations,
+not of the chord through its two denoted ends. The shifted correspondence
+carries over: map the held point at `(λ, s)` to
+`H_arc(λ, s) = Φ(A(φ(λ)), θ(s) + ε)`, with `ε` the chord's own shift. `Φ`
+is a rigid motion of the axis plane at each `θ`, so `|H_arc − H| ≤ arcSag`
+pointwise, and `(λ, s) ↦ (φ(λ), θ(s) + ε)` keeps degree one onto the arc
+cell's parameter rectangle, so the correspondence stays two-sided. The
+chord's own legs read the radii of its two DENOTED ends, the held radii
+widened by the stations' plane rounds; the triangles on those denoted
+corners lie within `maxRound` of the held ones.
+
 `coil.CellDepartureUpper` evaluates `sag + twist + shift` exactly over the
-radii's interval ends, once per segment: the three legs depend on the
-segment and the station step alone. Every interval end is read on the side
+radii's interval ends, once per chord, and the build adds `arcSag`: the
+legs depend on the chord and the station step alone. Every interval end is read on the side
 that makes the sum larger, and `c` is computed from the same ends, so the
 `c` the bound uses satisfies the range condition for the true radii too.
 
@@ -379,13 +423,16 @@ area-density legs stay at matched parameters `(λ, s) ↦ S(λ, θ(s))`.
 
 ### 5.5 Triangles, orientation and the crossing audit
 
-Walls are emitted ring by ring, `j = 0 … N − 1`, loop by loop, segment by
-segment, two triangles per cell in the prism's lateral order; both carry
-the role `side(i, j_seg)` of the segment that generated them. `capStart`
-is `triangulate.go`'s triangulation of the recorded region, reversed by
-swapping each triangle's second and third vertices; `capEnd` is the same
-index triples on station `N`, retained — the identical seeding loft §5
-and sweep §16.3 use. The whole shell is then oriented once by the sign of
+Walls are emitted ring by ring, `j = 0 … N − 1`, loop by loop, chord by
+chord, two triangles per cell in the prism's lateral order; both carry the
+role `side(i, j_seg)` of the recorded segment whose chord generated them.
+`capStart` is `triangulate.go`'s triangulation of the station polygon,
+reversed by swapping each triangle's second and third vertices; `capEnd` is
+the same index triples on station `N`, retained — the identical seeding
+loft §5 and sweep §16.3 use. Where a chord stands for an arc, the true cap
+adds or removes the circular segment between them, every point of which
+lies within `arcSag` of both; the chord's two end stations carry `β` at or
+above `(1 + e)·arcSag`, so the cap facet holding the chord covers it. The whole shell is then oriented once by the sign of
 the exact tetrahedron sum over the held floats (each a rational), anchored
 at `C`; a negative sum reverses every triangle. A collapsed held triangle
 is CS10.
@@ -413,28 +460,34 @@ centroid, rounded once; `Bounds` reads the new held table.
 
 ## 6. Table CB — the result
 
-For loop `i` (`0` the outer loop, `1 + h` for hole `h`), profile segment
-`j` of that loop, and profile vertex `v`:
+For loop `i` (`0` the outer loop, `1 + h` for hole `h`), recorded profile
+segment `j` of that loop, and junction `v`, the walk start of a segment:
 
 | Entity | Count | Geometry | Role |
 |---|---|---|---|
 | start cap | 1 | `Plane` over the recorded region, frame the recorded plane's own (exact) | `capStart` |
 | end cap | 1 | `Plane` over the section at `θ = Θ`, frame from the station-`N` trig, within `δ` | `capEnd` |
 | wall | one per `(i, j)` | `Faceted{Bound}` — the whole helicoidal band of segment `j` over every turn, `Bound` the largest `β` over the vertices its triangles touch | `side(i, j)` |
-| rim edge | one per profile segment per cap | `Line3` between the cap's two held vertices (PR 1); `Arc3` for an arc segment (PR 3) | through its two faces' origins |
-| helix edge | one per profile vertex | `FacetedCurve{Bound}`: the chain of held chords of vertex `v` over every station, `Bound` the largest `β` along it | through its two walls' origins |
-| vertex | one per profile vertex per cap | position the held station-`0` or station-`N` point, bound its `β` | — |
+| rim edge | one per profile segment per cap | `Line3` between the cap's two held vertices; `Arc3` for an `ArcSeg`, its centre and axis the arc's centre and the section plane's normal lifted through `Φ` at `θ = 0` or `θ = Θ`, signed so the rim runs counter-clockwise from its start vertex to its end vertex; `Circle3` for a whole circle, which closes on one vertex | through its two faces' origins |
+| helix edge | one per junction | `FacetedCurve{Bound}`: the chain of held chords of junction `v` over every station, `Bound` the largest `β` along it | through its two walls' origins |
+| vertex | one per junction per cap; a whole circle's walk start is its seam vertex | position the held station-`0` or station-`N` point, bound its `β` | — |
 
-Interior stations are mesh vertices, never topology: a wall is ONE face
-whose loop is rim, helix edge, rim reversed, helix edge reversed. For a
-hole-free profile of `m` vertices the body has `2 + m` faces, `3m` edges
-and `2m` vertices. One lump, one outer shell; a hole loop is a void passage
+Interior stations, helix and chord alike, are mesh vertices, never
+topology: a wall is ONE face whose loop is rim, helix edge, rim reversed,
+helix edge reversed. For a hole-free profile of `m` segments the body has
+`2 + m` faces, `3m` edges and `2m` vertices. A whole circle has no
+junction: its wall is a band with two loops, its two rim circles, the
+prism's closed-band rule, so a round wire has 3 faces, 2 edges and 2
+vertices. One lump, one outer shell; a hole loop is a void passage
 through every turn, never a second lump.
 
 `Edge.IsConvex` keeps evaluator §3's meanings. A helix edge is a junction
 edge and takes the sign of the profile's own corner turn at `v`, exactly as
-a prism's vertical edge does: left turn convex. A rim edge takes the rim
-rule: a straight wall by the role of its loop, outer convex, hole concave.
+a prism's vertical edge does: left turn convex, read off the two exact
+walk tangents there (a line's run, an arc's radius turned a quarter turn in
+the walk's sense), so a tangent junction is not convex. A rim edge takes
+the rim rule: a straight wall by the role of its loop, outer convex, hole
+concave; a circular one by its walk, counter-clockwise convex.
 
 The wall's `Faceted` variant is the honest surface kind: the true band is
 a helicoidal surface no sealed analytic variant names, and `Faceted`'s
@@ -449,13 +502,19 @@ Let `Q = ∫_Ω ρ dA`, `I = ∫_Ω ρ² dA` and `M = ∫_Ω ρζ dA` be the pro
 axis-frame moments and `A_Ω` its area. For a `LineSeg`-only profile they
 are the polygon's own integrals over every vertex's `(ζ, ρ)` interval
 (`coil.RegionMoments`), exact rationals for an exact axis frame, and `A_Ω`
-is the exact shoelace area of the recorded vertices.
+is the exact shoelace area of the recorded vertices. A profile with an arc
+reads the recorded region's plane-origin integrals `∫dA`, `∫u dA`, `∫v dA`,
+`∫u² dA`, `∫uv dA` and `∫v² dA`, the ones `Revolve` reads, each enclosed by
+its own proven bound, and re-references them into the axis frame over
+intervals (`coil.Axis.Moments`): with `x = u − a_U`, `y = v − a_V`,
+`ρ = e_r·(x, y)` and `ζ = d·(x, y)`, so `Q`, `I` and `M` are linear in the
+anchor-relative first and second moments.
 
 | Reading | Closed form | Exactness and bound |
 |---|---|---|
 | `Volume` | `\|det L\| · Θ · Q = \|det L\| · 2π · turns · Q` (CP4, Pappus, under §5.3's map) | `Approximate` always: `2π` enters through `proofbound.TwoPiInterval` and `det L` is exact, so the enclosure is that interval times the exact `turns · Q · \|det L\|`, rounded once. Relative width is of order `1e-16` |
 | `Centroid` | `C + (I/Q)·(sin Θ / Θ)·e_r + σ·(I/Q)·((1 − cos Θ)/Θ)·e_t + (M/Q + pitch·turns/2)·n`, in plane coordinates, mapped through §5.3's `L` exactly | `sin Θ`, `cos Θ` from `TurnSinCosInterval(turns)`; at a whole number of turns both are exact and the transverse terms vanish, leaving `C + (M/Q + pitch·turns/2)·n`, which is `Exact` when the frame is exact and the rationals round exactly |
-| `Area` | `2·A_Ω` for the two caps, plus per segment `v → w` with `Δρ = ρ_w − ρ_v`, `Δζ = ζ_w − ζ_v`, `L² = Δρ² + Δζ²`: for `Δρ = 0`, `Θ · ρ_v · \|Δζ\|`; otherwise `(1 / (L·\|Δρ\|)) · [ Θ·(F₁ − F₀) + (turns · pitch² · Δρ² / 4π) · (asinh(u₁/m) − asinh(u₀/m)) ]` with `u = L·ρ`, `u₀ ≤ u₁`, `m = k·\|Δρ\|`, `F(u) = (u/2)·sqrt(u² + m²)`. Where `Δρ`'s enclosure contains zero without being exactly zero (a segment parallel to a tilted axis), the integrand lies between `L·ρ` and `L·ρ + m²/(2·L·ρ_min)`, so the area lies between `Θ·L·(ρ_v + ρ_w)/2` and that plus `Θ·m²/(2·L·ρ_min)` | `Approximate`: the π enclosure, the certified square root (`proofbound.SqrtFixed`, new) and `proofbound.AsinhInterval` (new, §7.1) each contribute their width; a cylindrical band (`Δρ = 0`) carries the π enclosure alone. Every area, and every rim and helix edge length, is then widened to `[lo·(1 − e), hi·(1 + e)]` by §5.3's defect, a no-op when `e = 0` |
+| `Area` | `2·A_Ω` for the two caps, plus per `LineSeg` `v → w` with `Δρ = ρ_w − ρ_v`, `Δζ = ζ_w − ζ_v`, `L² = Δρ² + Δζ²`: for `Δρ = 0`, `Θ · ρ_v · \|Δζ\|`; otherwise `(1 / (L·\|Δρ\|)) · [ Θ·(F₁ − F₀) + (turns · pitch² · Δρ² / 4π) · (asinh(u₁/m) − asinh(u₀/m)) ]` with `u = L·ρ`, `u₀ ≤ u₁`, `m = k·\|Δρ\|`, `F(u) = (u/2)·sqrt(u² + m²)`. Where `Δρ`'s enclosure contains zero without being exactly zero (a segment parallel to a tilted axis), the integrand lies between `L·ρ` and `L·ρ + m²/(2·L·ρ_min)`, so the area lies between `Θ·L·(ρ_v + ρ_w)/2` and that plus `Θ·m²/(2·L·ρ_min)`; per `ArcSeg` or whole `CircleSeg`, §11.1's bracket | `Approximate`: the π enclosure, the certified square root (`proofbound.SqrtFixed`, new) and `proofbound.AsinhInterval` (new, §7.1) each contribute their width; a cylindrical band (`Δρ = 0`) carries the π enclosure alone; an arc's wall carries §11.1's remainder. Every area, and every rim and helix edge length, is then widened to `[lo·(1 − e), hi·(1 + e)]` by §5.3's defect, a no-op when `e = 0` |
 | `Bounds` | per-axis extremes over the held vertex table, widened outward by `δ` | `Approximate` with bound `δ` plus the largest station rounding plus the widening's outward step: the box holds the true body, and every held vertex is within its own rounding of a true point; `Exact` only when `δ = 0`, which no coil reaches |
 
 The area integrand is derived once: `∂Φ/∂λ = Δρ·e_r(θ) + Δζ·n` and
@@ -540,11 +599,19 @@ then adds the caps:
    derived in plane coordinates; `L` carries a density by a factor in
    `[1 − e, 1 + e]` that differs between the two surfaces' tangent planes,
    so the world gap adds `2e` times the patch's own area, at most
-   `L·helix`, to `(1 + e)` times the plane gap.
+   `L·helix`, to `(1 + e)` times the plane gap. On an arc chord the true
+   cell is the arc piece's sweep, not the chord's, and the leg adds the gap
+   between the two: both densities are `2h·|(L·ρ, k·a)|`, `a` the radial
+   part of `∂λ`, so they differ by at most
+   `2h·[(Arc − L)·(ρ_max + arcSag) + L·arcSag + (8/3)·k·arcSag]`, with
+   `Arc = r·Δφ` the arc piece's length (the derivation sits on
+   `coil.CellProofUpper`).
 
 Both caps add `proofbound.PerturbedTriangleAreaAllow` at `δ` per triangle:
-the true cap is the planar section on the true corners. Every term through
-`absSumUpper`. On §13's spring the allowance is near `0.064 mm²` of an area
+the true cap is the planar section on the true corners, plus or minus the
+circular segment between each arc chord and its arc, of area at most
+`r²·Δφ³/12 ≤ Arc·arcSag`, which each cap adds once per arc chord. Every
+term through `absSumUpper`. On §13's spring the allowance is near `0.064 mm²` of an area
 near `128 mm²`, and the spring's union with a 60 mm core verifies `Sound`.
 
 ### 8.2 `volSymDiff`
@@ -556,23 +623,27 @@ membership changes is swept, so their swept volumes bound `B △ M`
 
 1. `M` → the triangles on the TRUE corners, every vertex moving at most `r`
    along a straight line: `sweptVolumeAllow(r, perturbedAreaUpper(M, r))`,
-   whose area argument covers every surface on the path. The caps are then
-   exact: the true cap is the planar section on the true corners.
-2. Those triangles → the true walls, caps fixed, under §5.4's shifted
-   correspondence `H`, cell by cell: `G(λ, s, τ) = Tri + τ·(H − Tri)`. `H`
-   agrees with the matched map on every cell edge (`ε` vanishes there), and
-   a rim edge is a ruling the triangles hold exactly, so the caps stay put
-   and adjacent cells share their edge motion. Per cell the swept volume is
-   at most `∫|∂τG|·|∂λG|·|∂sG|`, with `|∂τG| ≤ sag + twist + shift`
+   whose area argument covers every surface on the path. On a line-only
+   profile the caps are then exact: the true cap is the planar section on
+   the true corners.
+2. Those triangles → the true walls under §5.4's shifted correspondence
+   `H`, cell by cell: `G(λ, s, τ) = Tri + τ·(H − Tri)`. `H` agrees with the
+   matched map on every cell edge (`ε` vanishes there), so adjacent cells
+   share their edge motion. A line's rim edge is a ruling the triangles hold
+   exactly, so its cap stays put; an arc chord's rim moves from the chord to
+   the arc inside the cap's own plane, and the cap follows it there, which
+   sweeps no volume. Per cell the swept volume is
+   at most `∫|∂τG|·|∂λG|·|∂sG|`, with `|∂τG| ≤ sag + twist + shift + arcSag`
    (§5.4's plane-coordinate departure), `|∂sG| ≤ helix·(1 + q)` and
-   `|∂λG| ≤ L + helix·q·(1 + |Δρ|/(4ρ_min))`, where `q = c·|Δρ|/ρ_min ≤ 1`
+   `|∂λG| ≤ max(L, Arc) + helix·q·(1 + |Δρ|/(4ρ_min))`, `helix` read at
+   `ρ_max + arcSag`, where `q = c·|Δρ|/ρ_min ≤ 1`
    bounds `|∂sε| ≤ 2h·q` and `|∂λε| ≤ 2h·q·(1 + |Δρ|/(4ρ_min))`
    (`coil.CellProof.Swept`). The homotopy runs in plane coordinates, and
    `L` maps its swept set to one of exactly `|det L|` times its volume.
 
 ```text
 volSymDiff = sweptVolumeAllow(r, perturbedAreaUpper(M, r))
-           + |det L| · N · Σ_segments CellProof.Swept
+           + |det L| · N · Σ_chords CellProof.Swept
 ```
 
 `symDiffOK` is true. No `Mesh.Bound × area` shortcut. On §13's spring the
@@ -672,8 +743,8 @@ same stations, held table, triangle order, roles and readings: every trig
 value is a fixed-precision enclosure's midpoint, and every float product and
 sum of §5.3's station evaluation is rounded by an explicit conversion, so no
 step reads a transcendental library or depends on FMA contraction. The build polls `ctx`
-per station ring, inside the audit's pair loop and per segment of the area
-sum, and returns `ctx.Err()` unchanged. CS8's caps bound `N` and the facet
+per station ring, inside the audit's pair loop, per segment of the area
+sum and per piece of §11.1's bracket, and returns `ctx.Err()` unchanged. CS8's caps bound `N` and the facet
 count before any allocation; the trig enclosure runs once per station
 (`N + 1` calls, each a fixed 200-bit series), every vertex costs a dozen
 float operations, and the audit's work is charged against
@@ -695,7 +766,7 @@ touches it.
 |---|---|---|---|
 | **1** | Opus (proof spec) | `Document.Coil`, `CoilOption`, `WithLeftHand`; Table CS; §5's construction over a `LineSeg`-only profile; Table CB; Table CM with `proofbound.LnInterval`/`AsinhInterval`; CD1 and CD7; the design doc, its layout row, `doc.go`'s support map, `docs/missing-features.md`; the executable example `examples/decad_coil_example_test.go` (a square-wire spring: `Volume`, `Centroid`, face count, `Verify` status). **This row is landed.** | CD2–CD5, CD9, arcs, threads |
 | **2** | Opus (proof spec) | `tessellate_coil.go`: CD2 with §5.4's `β`, §8.1, §8.2; CD3, CD4, CD9 follow; the `coilPayload` row in `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md` §1. The thread examples `examples/decad_thread_external_example_test.go` and `..._internal_...`. **This row is landed.** | arcs, CD5 |
-| **3** | Opus (proof spec) | `ArcSeg`/`CircleSeg` profile segments: the profile station chain for an arc ruling (loft §5.1's chord chain, so a cell is chorded in both directions), `sag` folding the profile chord's own sagitta, the arc wall area by the Taylor-model bracket of §11.1, `Arc3` rim edges; the round-wire spring example | CD5 |
+| **3** | Opus (proof spec) | `ArcSeg`/`CircleSeg` profile segments: the profile station chain for an arc ruling (loft §5.1's chord chain, so a cell is chorded in both directions), `sag` folding the profile chord's own sagitta, the arc wall area by the Taylor-model bracket of §11.1, `Arc3` rim edges; the round-wire spring example `examples/decad_coil_round_wire_example_test.go`. **This row is landed**, with three choices the row left open: the chord count is a fixed `coilArcChordsPerTurn = 16` per turn of arc (§5.3), where loft §5.1 walks a count up to a sagitta target, since the crossing audit's triangle ceiling, not the sagitta, decides what a coil of several turns can hold; a whole circle's rim is a closed `Circle3`, the edge contract every builder follows for a closed circle, where §13 names `Arc3`; and a profile with an arc reads its region moments from the recorded region's bounded plane integrals (§7) | CD5 |
 | **4** | Sonnet (file-by-file) | CD5: `coilPayload` in `planarPairAdmits` and the planar snapshot; the `Verify` clearance fixture against a prism. **This row is landed.** | `CoilChain`, `WithSurfaceResult()`, modify |
 
 ### 11.1 The arc wall area bracket (PR 3)
@@ -707,8 +778,25 @@ antiderivative. Over each station sub-interval of the arc expand
 terms integrate exactly (`h` and `h²` are trig polynomials, their
 integrals certified sines and cosines at the ends), and the remainder
 `|h − h_m|³ / (16·h_lo^{5/2})` is bounded by the cell's own `h` range.
-Width is fourth order in the sub-interval, so 1024 sub-intervals per arc
-give a relative width near `1e-12`.
+
+`coil.ArcArea` reads it in the arc's own angle `α` about its centre, with
+`A = e_r·(cos α, sin α)` and `B = A'`, so `ρ = ρ_c + r·A` and
+`h = a₀ + a₁·A + a₂·A² + a₃·B²` with `a₀ = r²ρ_c²`, `a₁ = 2r³ρ_c`,
+`a₂ = r⁴` and `a₃ = k²r²`. It cuts the arc into `coil.ArcAreaPieces = 1024`
+equal pieces and reads `A` and `B` at every piece's two ends and midpoint:
+a whole circle at exact turn fractions through `TurnSinCos`, an arc by
+turning its `Start` direction step by step through one enclosed sine and
+cosine of the step. Over a piece of width `Δ`, `h_m = g²` with `g` the
+float nearest `√h` at the midpoint, so `√h_m` is exact; `∫A`, `∫A²`, `∫B²`,
+`∫A³`, `∫A·B²`, `∫A⁴`, `∫B⁴` and `∫A²·B²` are closed forms in `Δ` and the
+ends' `A` and `B` (`A = cos φ`, `B = −sin φ` up to a phase), so `∫h` and
+`∫h²` are exact intervals. `|h'| = |a₁·B + (a₂ − a₃)·2A·B| ≤ |a₁| + |a₂ − a₃|`
+bounds the drift from the midpoint, which gives both `|h − g²|` and
+`h_lo` over the piece. Every per-piece enclosure is rounded outward onto a
+`2⁻¹⁶⁰` grid. On §13's round wire the bracket's relative width is near
+`1e-10`; the Taylor remainder is odd about each midpoint, so the true error
+cancels far below the bound, and over four pieces the bound is what holds
+the bracket around the integral.
 
 ### 11.2 Files
 
@@ -718,7 +806,7 @@ give a relative width near `1e-12`.
 | `internal/coilshell/` | §5 and §8: stations, `β`, triangles, crossing audit and mesh proofs |
 | `coil_body.go` | Table CB's topology and Table CM's four readings |
 | `tessellate_coil.go` | CD2 (PR 2) |
-| `internal/coil/` | station fractions and trig, the lift to axis coordinates, the segment area closed form, the cell departure terms, §8.1 and §8.2's sums — every function pure over `big.Rat`/`RatInterval` inputs and unit-tested against hand values |
+| `internal/coil/` | station fractions and trig, the profile station chain (§5.3), the lift to axis coordinates, the segment area closed form, §11.1's arc bracket, the cell departure terms, §8.1 and §8.2's sums — every function pure over `big.Rat`/`RatInterval` inputs and unit-tested against hand values |
 | `internal/proofbound/log.go` | `LnInterval`, `AsinhInterval` (§7.1) |
 
 Every root file gets a `docs/layout.md` row in the PR that adds it; the
@@ -852,10 +940,21 @@ PR 2:
 PR 3:
 
 - A round-wire spring (wire radius `0.5` at `ρ = 3`, pitch `1.5`, `5`
-  turns): `Volume` encloses `2π·5·3·π·0.25`; `Area` encloses the §11.1
-  bracket's own value within a bound below `1e-9` relative; `Bounds`
-  within `δ`; rim edges are `Arc3`.
+  turns): `Volume` encloses `2π·5·3·π·0.25`; `Area` encloses an
+  independent quadrature of the wall within a bound below `1e-9` relative;
+  `Bounds` within `δ`; the two rim edges are closed `Circle3` edges, and a
+  slot's arc rims are `Arc3`, each running counter-clockwise from its start
+  vertex to its end vertex.
 - CS6 at a wire diameter equal to the pitch refuses.
+- §11.1's bracket encloses independent quadratures of a whole circle, a
+  semicircle and an arc walked in reverse, below `1e-9` relative; over four
+  pieces only the remainder holds it. Leg shown to fail: the remainder.
+- `β` over arc chords: dense samples of every chord cell's true wall lie
+  within the cell's facet bound of its two held triangles. Leg shown to
+  fail: `arcSag`.
+- The round wire's mesh: signed volume within `volSymDiff` of `Θ·Q` and
+  area within `areaSlack` of `Area`. Legs shown to fail: the arc legs of
+  `CellProof.Swept` and `CellProof.Density`.
 
 PR 4:
 
@@ -874,7 +973,9 @@ the behaviour:
 - `docs/missing-features.md`: PR 1 narrows "Helical or free-form sweep
   path" to the free-form path alone, narrows "Hole, thread, rib, web,
   emboss, coil features" to drop thread and coil, and adds rows for CD2's
-  staging and CS7's arc refusal; PR 2 and PR 3 delete those rows;
+  staging and CS7's arc refusal; PR 2 deletes the first, and PR 3 narrows
+  the second to the free-form, elliptical and trimmed segments CS7 still
+  refuses;
 - `doc.go`'s support map adds `Coil` with CS5–CS9's refusals;
 - `docs/evaluator-design.md` §11 points to this document's staged delivery;
 - `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md`

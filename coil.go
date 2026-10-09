@@ -27,6 +27,13 @@ import (
 // below the default Verify tolerance.
 const coilStationsPerTurn = 256
 
+// coilArcChordsPerTurn is the number of chords a full turn of a circular
+// profile segment is cut into (docs/helix-design.md §5.4, §11 PR 3): an arc
+// of sweep Δ takes ⌈coilArcChordsPerTurn·Δ/2π⌉. Every chord cell enters the
+// crossing audit beside the helix stations, so the count is held where a
+// round-wire spring of a few turns stays inside the audit's pair budget.
+const coilArcChordsPerTurn = 16
+
 // maxCoilStations is Table CS row CS8's station ceiling: 128 turns at
 // coilStationsPerTurn.
 const maxCoilStations = 1 << 15
@@ -121,15 +128,17 @@ func (cp coilPayload) placed(ctx context.Context, d *Document, ref producerID, c
 // touch or cross it is ErrDegenerate, and one whose side the axis's own
 // rounding leaves undecided is ErrUnsupported. With one turn or more, the
 // profile's extent along the axis MUST stay below the pitch, or two turns
-// would meet (ErrUnsupported). Every profile segment MUST be a whole LineSeg
-// (ErrUnsupported). A coil needing more than 32768 stations at 256 per turn,
-// or more than 1048576 triangles, is ErrUnsupported, as is one whose held
-// shell crosses itself where two turns pass closer than the station chords
-// resolve.
+// would meet (ErrUnsupported). Every profile segment MUST be a whole LineSeg,
+// ArcSeg or CircleSeg (ErrUnsupported); an arc is held as 16 chords per turn
+// of its sweep. A coil needing more than 32768 stations at 256 per turn, or
+// more than 1048576 triangles, is ErrUnsupported, as is one whose held shell
+// crosses itself where two turns pass closer than the station chords
+// resolve, or whose crossing audit passes its triangle or pair ceiling.
 //
 // The result is a solid: two planar caps, one faceted wall per profile
-// segment spanning every turn, read through Table CM's closed forms. A
-// failed call leaves the document untouched.
+// segment spanning every turn, read through Table CM's closed forms and, on
+// an arc, docs/helix-design.md §11.1's area bracket. A failed call leaves
+// the document untouched.
 func (d *Document) Coil(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error) {
 	// CS1: nils, owned options and option arity.
 	if ctx == nil {
@@ -214,11 +223,11 @@ func (d *Document) Coil(ctx context.Context, s *sketch.Sketch, p *sketch.Profile
 	}
 
 	// CS7 and CS8.
-	pts, loopIdx, err := coil.Loops(profile.Outer, profile.Holes)
+	prof, err := coil.Loops(profile.Outer, profile.Holes, coilArcChordsPerTurn)
 	if err != nil {
 		return nil, err
 	}
-	if err := coilPreflight(turnCount, len(pts), len(loopIdx)-1); err != nil {
+	if err := coilPreflight(turnCount, len(prof.Pts), len(prof.LoopIdx)-1); err != nil {
 		return nil, err
 	}
 

@@ -18,8 +18,8 @@ import (
 // tessellateCoil restates a coil's held triangles. A tolerance below δ asks
 // for a mesh closer to the body than its held vertices are, which no
 // restatement can give (docs/tessellation-design.md §7's rule). Every wall
-// triangle attributes to its segment's side(i, k) face and every cap
-// triangle to its cap. The boundary proof is the build's own crossing audit,
+// triangle attributes to the side(i, k) face of the recorded segment whose
+// chord its cell sweeps, and every cap triangle to its cap. The boundary proof is the build's own crossing audit,
 // so the mesh runs no facet-contact audit of its own. The area slack and the
 // occupied-volume proof run at VerifyAll alone; tessellateContext withholds
 // both below it.
@@ -45,15 +45,13 @@ func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64,
 		return f, nil
 	}
 	stride := len(rec.Pts)
-	segment := make([]*Face, 0, stride)
-	for i, idx := range rec.LoopIdx {
-		for k := range idx {
-			f, err := face(fmt.Sprintf("side(%d,%d)", i, k))
-			if err != nil {
-				return nil, err
-			}
-			segment = append(segment, f)
+	segment := make([]*Face, 0, len(rec.Profile.Segments))
+	for _, seg := range rec.Profile.Segments {
+		f, err := face(fmt.Sprintf("side(%d,%d)", seg.Loop, seg.Index))
+		if err != nil {
+			return nil, err
 		}
+		segment = append(segment, f)
 	}
 	capStart, err := face(roleCapStart)
 	if err != nil {
@@ -72,7 +70,7 @@ func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64,
 	for t := range cp.tris {
 		switch {
 		case t < walls:
-			src[t] = segment[(t/2)%stride]
+			src[t] = segment[rec.Profile.Chord[(t/2)%stride].Segment]
 		case t < walls+capCount:
 			src[t] = capStart
 		default:

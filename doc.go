@@ -105,11 +105,12 @@
 //	  WithMitredJoins / WithSectionScale over a LineTo path
 //	    and a whole-line profile                              builds
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
-//	Coil          whole-line profile beside an in-plane axis  builds
+//	Coil          profile of whole lines, arcs and circles
+//	              beside an in-plane axis                     builds
 //	  profile proven to touch or cross the axis               ErrDegenerate
 //	  profile the axis's rounding leaves undecided            ErrUnsupported
 //	  one turn or more of a profile one pitch wide or wider   ErrUnsupported
-//	  arc, circle, free-form or trimmed profile segment       ErrUnsupported
+//	  free-form, elliptical or trimmed profile segment        ErrUnsupported
 //	  past 32768 stations or 1048576 triangles                ErrUnsupported
 //	  held shell crossing itself between stations             ErrUnsupported
 //	  crossing audit scanning past its pair ceiling           ErrUnsupported

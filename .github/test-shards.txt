@@ -1188,3 +1188,8 @@
 2	0.30	TestDraftMeshVolumeProofCoversTheClosedForm
 2	0.01	TestDraftMeshSharesTheNearRing
 2	0.05	TestDraftMoverRecordRadiusEnclosesTheBody
+0	3.81	TestCoilSlotSpring
+5	2.67	TestCoilRoundWireSpring
+1	1.71	TestCoilArcFacetBoundHoldsTheSurface
+2	0.90	TestCoilArcMeshProofsEncloseTheBody
+4	0.40	TestCoilArcRefusals

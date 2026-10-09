@@ -28,17 +28,20 @@ type MeshInput struct {
 // proofbound.CellTwistAreaProjectedAllow, or proofbound.CellTwistAreaAllow
 // where that arm states no bound), to the bilinear patch on its true corners
 // (each corner moves at most r, the largest station rounding), to the true
-// cell (coil.CellProof.Density), the last two integrals of the absolute
-// area-density gap at one shared parameter; the
-// plane-coordinate legs are carried through the denoted map by its stretch
-// and by twice its defect over the bilinear patch's own area. Each cap
-// triangle adds proofbound.PerturbedTriangleAreaAllow at δ.
+// cell (coil.CellProof.Density, which charges an arc chord's own cell
+// against its chord's), the last two integrals of the absolute area-density
+// gap at one shared parameter; the plane-coordinate legs are carried through
+// the denoted map by its stretch and by twice its defect over the bilinear
+// patch's own area. Each cap triangle adds proofbound.PerturbedTriangleAreaAllow
+// at δ, and each cap adds every arc chord's circular segment, at most
+// Arc·Sag.
 //
 // volSymDiff composes two homotopies of the whole closed boundary: the held
 // set to the triangles on the true corners, every vertex moving at most r
 // (proofbound.SweptVolumeAllow over the area the motion visits), and those
-// triangles to the true walls at matched parameters with both caps fixed
-// (coil.CellProof.Swept per cell, carried through the map by |det L|).
+// triangles to the true walls under the shifted correspondence, a line's cap
+// fixed and an arc chord's cap moving inside its own plane, which sweeps no
+// volume (coil.CellProof.Swept per cell, carried through the map by |det L|).
 func MeshProofs(ctx context.Context, rec Record, mesh MeshInput, walls int) (float64, float64, error) {
 	stride := len(rec.Pts)
 	n := rec.N
@@ -56,7 +59,7 @@ func MeshProofs(ctx context.Context, rec Record, mesh MeshInput, walls int) (flo
 		for k := range m {
 			v, w := idx[k], idx[(k+1)%m]
 			ends[pos] = [2]int{v, w}
-			proof, ok := coil.CellProofUpper(rec.Rho[v], rec.Zeta[v], rec.Rho[w], rec.Zeta[w], rec.Pitch, dt)
+			proof, ok := coil.CellProofUpper(rec.Rho[v], rec.Zeta[v], rec.Rho[w], rec.Zeta[w], rec.Profile.Chord[v], rec.Pitch, dt)
 			if !ok {
 				return 0, 0, fmt.Errorf(`%w: the coil wall of profile segment %d states no mesh proof`, decaderr.ErrUnsupported, v)
 			}
@@ -98,6 +101,16 @@ func MeshProofs(ctx context.Context, rec Record, mesh MeshInput, walls int) (flo
 	}
 	for _, t := range mesh.Tris[walls:] {
 		slack = proofbound.AbsSumUpper(slack, proofbound.PerturbedTriangleAreaAllow(mesh.Verts[t[0]], mesh.Verts[t[1]], mesh.Verts[t[2]], mesh.Delta))
+	}
+	// An arc chord's cap triangle stops at the chord: the true cap adds or
+	// removes the circular segment between chord and arc, of area at most
+	// r²·Δφ³/12 ≤ Arc·Sag, once per cap.
+	for _, c := range rec.Profile.Chord {
+		if c.Sag == nil {
+			continue
+		}
+		piece := proofbound.RatFloatUp(new(big.Rat).Mul(c.Arc, c.Sag))
+		slack = proofbound.AbsSumUpper(slack, proofbound.ProductUpper(2, proofbound.ProductUpper(rec.Stretch, piece)))
 	}
 
 	area, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris, r)

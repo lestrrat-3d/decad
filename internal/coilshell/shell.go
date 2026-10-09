@@ -86,22 +86,27 @@ func (w World) Vector(x, y, z coil.Iv) proofbound.IvVec3 {
 	return out
 }
 
-// Record is the record's exact reading: the profile polygon, every
-// vertex's axis coordinates and the axis itself, shared by the held table and
-// the readings.
+// Record is the record's exact reading: the profile's station chain, every
+// station's axis coordinates and the axis itself, shared by the held table
+// and the readings. HeldRho and HeldZeta are the held station's own exact
+// coordinates, which the station formula lifts; Rho and Zeta widen them by
+// the station's Round to enclose the point the record denotes there, which
+// every bound and closed form reads. On a line-only profile the two agree.
 type Record struct {
-	Pts             []sectionrecord.Point2
-	LoopIdx         [][]int
-	U, V            []*big.Rat
-	Rho, Zeta       []coil.Iv
-	Axis            coil.Axis
-	Pitch, Turns    *big.Rat
-	Sigma           int
-	N               int64
-	World           World
-	Det, Defect     *big.Rat
-	Stretch         float64
-	StationsPerTurn int64
+	Profile           coil.Profile
+	Pts               []sectionrecord.Point2
+	LoopIdx           [][]int
+	U, V              []*big.Rat
+	HeldRho, HeldZeta []coil.Iv
+	Rho, Zeta         []coil.Iv
+	Axis              coil.Axis
+	Pitch, Turns      *big.Rat
+	Sigma             int
+	N                 int64
+	World             World
+	Det, Defect       *big.Rat
+	Stretch           float64
+	StationsPerTurn   int64
 }
 
 // Stretched widens a positive plane-coordinate area or length enclosure by
@@ -131,6 +136,9 @@ type Input struct {
 	LeftHand        bool
 	StationsPerTurn int64
 	MaxStations     int64
+	// ArcChordsPerTurn is the number of chords a full turn of a circular
+	// profile segment is cut into (coil.Loops).
+	ArcChordsPerTurn int
 }
 
 // AxisInput holds the measured point and direction of the profile-plane axis.
@@ -153,16 +161,17 @@ func axisOf(in AxisInput) (coil.Axis, error) {
 
 // Read resolves the recorded coil into exact section and placement inputs.
 func Read(in Input) (Record, error) {
-	pts, loopIdx, err := coil.Loops(in.Profile.Outer, in.Profile.Holes)
+	prof, err := coil.Loops(in.Profile.Outer, in.Profile.Holes, in.ArcChordsPerTurn)
 	if err != nil {
 		return Record{}, err
 	}
+	pts, loopIdx := prof.Pts, prof.LoopIdx
 	axis, err := axisOf(in.Axis)
 	if err != nil {
 		return Record{}, err
 	}
 	rec := Record{
-		Pts: pts, LoopIdx: loopIdx, Axis: axis,
+		Profile: prof, Pts: pts, LoopIdx: loopIdx, Axis: axis,
 		Pitch: proofarith.FloatRat(in.Pitch), Turns: proofarith.FloatRat(in.Turns), Sigma: 1,
 		World: worldOf(in.Frame, in.Transform), StationsPerTurn: in.StationsPerTurn,
 	}
@@ -181,11 +190,18 @@ func Read(in Input) (Record, error) {
 	rec.N = n
 	rec.U = make([]*big.Rat, len(pts))
 	rec.V = make([]*big.Rat, len(pts))
+	rec.HeldRho = make([]coil.Iv, len(pts))
+	rec.HeldZeta = make([]coil.Iv, len(pts))
 	rec.Rho = make([]coil.Iv, len(pts))
 	rec.Zeta = make([]coil.Iv, len(pts))
 	for i, p := range pts {
 		rec.U[i], rec.V[i] = proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
-		rec.Rho[i], rec.Zeta[i] = axis.Coords(rec.U[i], rec.V[i])
+		rec.HeldRho[i], rec.HeldZeta[i] = axis.Coords(rec.U[i], rec.V[i])
+		rec.Rho[i], rec.Zeta[i] = rec.HeldRho[i], rec.HeldZeta[i]
+		if r := prof.Round[i]; r > 0 {
+			w := proofarith.FloatRat(r)
+			rec.Rho[i], rec.Zeta[i] = proofbound.IntervalWiden(rec.Rho[i], w), proofbound.IntervalWiden(rec.Zeta[i], w)
+		}
 		if rec.Rho[i].Lo.Sign() <= 0 {
 			return Record{}, fmt.Errorf(`%w: coil profile vertex %d is not proven off the axis`, decaderr.ErrUnsupported, i)
 		}
@@ -244,8 +260,8 @@ func Build(ctx context.Context, rec Record) (Shell, error) {
 	tilt := big.NewRat(int64(rec.Sigma*rec.Axis.Side), 1)
 	for v := range stride {
 		p := rec.World.Point(coil.Point(rec.U[v]), coil.Point(rec.V[v]), zero)
-		b := rec.World.Vector(proofbound.IntervalMul(rec.Rho[v], erU), proofbound.IntervalMul(rec.Rho[v], erV), zero)
-		q := rec.World.Vector(zero, zero, proofbound.IntervalScale(rec.Rho[v], tilt))
+		b := rec.World.Vector(proofbound.IntervalMul(rec.HeldRho[v], erU), proofbound.IntervalMul(rec.HeldRho[v], erV), zero)
+		q := rec.World.Vector(zero, zero, proofbound.IntervalScale(rec.HeldRho[v], tilt))
 		for axis := range 3 {
 			var err error
 			if pv[v][axis], err = held(p[axis]); err != nil {
@@ -263,6 +279,15 @@ func Build(ctx context.Context, rec Record) (Shell, error) {
 	dvec := rec.World.Vector(proofbound.IntervalMul(pitchIv, rec.Axis.DU), proofbound.IntervalMul(pitchIv, rec.Axis.DV), zero)
 	one := coil.Point(big.NewRat(1, 1))
 
+	// A generated station sits off the point the record denotes there by its
+	// plane round, which the screw motion carries rigidly and L stretches
+	// by at most 1 + e: every held corner's round charges it.
+	planeRound := make([]float64, stride)
+	for v, r := range rec.Profile.Round {
+		if r > 0 {
+			planeRound[v] = proofbound.ProductUpper(rec.Stretch, r)
+		}
+	}
 	total := int(n+1) * stride
 	sh.Verts = make([]r3.Vec, total)
 	round := make([]float64, total)
@@ -302,6 +327,9 @@ func Build(ctx context.Context, rec Record) (Shell, error) {
 			k := sh.At(j, v)
 			sh.Verts[k] = r3.NewVec(coords[0], coords[1], coords[2])
 			round[k] = proofbound.Radius3D(worst)
+			if planeRound[v] > 0 {
+				round[k] = proofbound.AbsSumUpper(round[k], planeRound[v])
+			}
 			sh.MaxRound = math.Max(sh.MaxRound, round[k])
 		}
 	}
@@ -351,12 +379,12 @@ func Build(ctx context.Context, rec Record) (Shell, error) {
 		}
 	}
 
-	// β (§5.4): every cell's departure — the analytic leg of its segment
+	// β (§5.4): every cell's departure — the analytic leg of its chord
 	// (coil.CellDepartureUpper: sag, twist and shift under the shifted
-	// correspondence, carried through L by its stretch) plus the cell's
-	// largest corner rounding — charged to each of its four corners. The
-	// analytic leg depends on the segment and the station step alone, so it
-	// is read once per segment.
+	// correspondence, plus an arc chord's own sagitta, carried through L by
+	// its stretch) plus the cell's largest corner rounding — charged to each
+	// of its four corners. The analytic leg depends on the chord and the
+	// station step alone, so it is read once per chord.
 	sh.VertexBound = append([]float64(nil), round...)
 	dt := new(big.Rat).Quo(rec.Turns, big.NewRat(n, 1))
 	analytic := make([]float64, stride)
@@ -367,6 +395,9 @@ func Build(ctx context.Context, rec Record) (Shell, error) {
 			dep, ok := coil.CellDepartureUpper(rec.Rho[v], rec.Rho[w], rec.Pitch, dt)
 			if !ok {
 				return Shell{}, fmt.Errorf(`%w: coil profile segment %d is not proven off the axis`, decaderr.ErrUnsupported, v)
+			}
+			if sag := rec.Profile.Chord[v].Sag; sag != nil {
+				dep.Add(dep, sag)
 			}
 			analytic[v] = proofbound.ProductUpper(proofbound.RatFloatUp(dep), rec.Stretch)
 			if proofbound.IsNonFinite(analytic[v]) {
