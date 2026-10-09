@@ -102,7 +102,6 @@
 //	  composite path without exact transported frames or
 //	    certified span separation                             ErrUnsupported
 //	  closed path                                             ErrUnsupported
-//	  WithSweepTwist nonzero twist                            ErrUnsupported
 //	  WithMitredJoins / WithSectionScale over a LineTo path
 //	    and a whole-line profile                              builds
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
@@ -231,8 +230,6 @@
 // taper the support map does not list is [ErrUnsupported], returned before
 // the document changes. Body.Draft leans an existing prism's walls, all of
 // them or a selected subset, the same way about one of its caps.
-// WithSweepTwist names a sweep's distributed twist, with nonzero twist
-// staged as [ErrUnsupported].
 // WithLoftAlignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated

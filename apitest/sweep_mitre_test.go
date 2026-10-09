@@ -493,7 +493,6 @@ func TestSweepMitredRefusals(t *testing.T) {
 		{"SM6 join plane behind span", square, mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), r3.NewVec(1e-300, 0, 0)), mitre, decad.ErrDegenerate, "does not reach its end section plane forward"},
 		{"SM6 wall line parallel to join plane", func(tb testing.TB) (*sketch.Sketch, *sketch.Profile) { return squareSweepSketch(tb, 4) }, mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), r3.NewVec(-10, 0, 1)), []decad.SweepOption{decad.WithMitredJoins(), decad.WithSectionScale(scalars(0.5, 0.5)...)}, decad.ErrDegenerate, "parallel to the end section plane"},
 		{"SM9 surface result", square, ell, []decad.SweepOption{decad.WithMitredJoins(), decad.WithSurfaceResult()}, decad.ErrUnsupported, "SM9"},
-		{"SM9 twist", square, ell, []decad.SweepOption{decad.WithMitredJoins(), decad.WithSweepTwist(units.Degrees(10))}, decad.ErrUnsupported, "twist"},
 		{"SM9 closed path", square, mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 10), r3.NewVec(10, 0, 10), r3.NewVec(10, 0, 0), r3.NewVec(0, 0, 0)), mitre, decad.ErrUnsupported, "closed"},
 		{"SM10 span ceiling", square, mustPath(t, zigzag...), mitre, decad.ErrUnsupported, "span ceiling"},
 		{"SM10 facet pairs", func(tb testing.TB) (*sketch.Sketch, *sketch.Profile) { return polygonSweepSketch(tb, 64, 2) }, mustPath(t, zigzag[:41]...), mitre, decad.ErrUnsupported, "facet-pair ceiling"},
