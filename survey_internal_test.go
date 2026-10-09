@@ -12,6 +12,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -28,6 +30,12 @@ import (
 func cupWall(budget *proofbound.WorkBudget, cp cupView) (wallOutcome, error) {
 	wall, err := cupwall.Evaluate(budget, cupWallInput(cp), 15*math.Pi/180, cupWallOperations)
 	return wallOutcome{reading: wall.Reading, bound: wall.Bound, ok: wall.OK}, err
+}
+
+func testPrismWall(budget *proofbound.WorkBudget, pp prismPayload) (reportvocab.ScalarSurvey, error) {
+	return wallsurvey.PrismWall(budget, pp.profile,
+		survey2d.PrismHeight{Z0: pp.z0, Z1: pp.z1, Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta},
+		pp.sectionDelta, 15*math.Pi/180)
 }
 
 // This file is a deliberate internal-test exception (like
@@ -570,9 +578,9 @@ func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 		},
 		z0: 0, z1: 10,
 	}
-	out, err := prismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 	require.NoError(t, err)
-	require.False(t, out.ok, `undecided, never a silent pass`)
+	require.False(t, out.OK, `undecided, never a silent pass`)
 }
 
 func TestCupWallRequiresExactMorphology(t *testing.T) {
@@ -698,13 +706,11 @@ func TestRecordLoopsCancellationIsBounded(t *testing.T) {
 
 func TestRevolveLoopsCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "revolveLoops"}
-	_, err := revolveLoops(proofbound.NewWorkBudget(ctx), revolvePayload{
-		profile: manySegmentProfile(proofbound.WorkPollInterval + 64),
-		ax:      axisFrame{dU: 1},
-	})
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "RevolveLoops"}
+	_, err := wallsurvey.RevolveLoops(proofbound.NewWorkBudget(ctx),
+		manySegmentProfile(proofbound.WorkPollInterval+64), axisFrame{dU: 1}.numeric())
 	require.ErrorIs(t, err, context.Canceled)
-	require.True(t, ctx.entered, `profile segment resolution must poll inside revolveLoops`)
+	require.True(t, ctx.entered, `profile segment resolution must poll inside RevolveLoops`)
 }
 
 func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
@@ -1159,7 +1165,7 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 // freeformWallSection is a fit-spline arc closed by a chord — the same shape
 // docs/spline-design.md §10 P4b's own fixture uses — built as a raw record
 // rather than through sketch, mirroring TestPrismWallSubToleranceWebIsUndecided
-// above. prismWall never validates profile closure itself (§8.1), so a raw
+// above. wallsurvey.PrismWall never validates profile closure itself (§8.1), so a raw
 // record is enough to exercise the wall kernel's free-form arm.
 func freeformWallSection() ProfileRecord {
 	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
@@ -1174,16 +1180,16 @@ func freeformWallSection() ProfileRecord {
 // TestPrismWallFreeformSectionReadsUndecided pins PR 1
 // (docs/spline-design.md §8.1, Table R R9): a free-form boundary segment must
 // leave the wall survey undecided — Suspect through Verify — never return an
-// error out of prismWall. Reaching this through the public surface now runs
-// through Extrude (§10 P4b); this test still calls prismWall directly, as the
+// error out of wallsurvey.PrismWall. Reaching this through the public surface now runs
+// through Extrude (§10 P4b); this test calls wallsurvey.PrismWall through a test adapter, as the
 // sub-tolerance-web test above does, to isolate the survey from the build.
 func TestPrismWallFreeformSectionReadsUndecided(t *testing.T) {
 	t.Parallel()
 	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
-	out, err := prismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 	require.NoError(t, err, `a free-form section must not error out of Verify`)
-	require.False(t, out.ok, `undecided, never a silent pass`)
-	require.Equal(t, surveyUndecided, out.reason)
+	require.False(t, out.OK, `undecided, never a silent pass`)
+	require.Equal(t, surveyUndecided, out.Reason)
 }
 
 // TestPrismWallFreeformSectionPropagatesCancellation pins that swallowing the
@@ -1195,7 +1201,7 @@ func TestPrismWallFreeformSectionPropagatesCancellation(t *testing.T) {
 	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err := prismWall(proofbound.NewWorkBudget(ctx), pp, 15*math.Pi/180)
+	_, err := testPrismWall(proofbound.NewWorkBudget(ctx), pp)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -1261,7 +1267,7 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 				profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}},
 				z0:      0, z1: 10,
 			}
-			out, err := prismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
+			out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 			require.Error(t, err, `a section the survey never read is a failure, never an undecided reading`)
 			if tc.is != nil {
 				require.ErrorIs(t, err, tc.is)
@@ -1269,7 +1275,7 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 			require.Contains(t, err.Error(), tc.message)
 			require.NotErrorIs(t, err, boundarywalk.ErrFreeformSection,
 				`only the free-form staging limit carries the survey's own sentinel`)
-			require.False(t, out.ok)
+			require.False(t, out.OK)
 		})
 	}
 }
@@ -1303,12 +1309,12 @@ func TestPrismWallAnalyticSectionRegression(t *testing.T) {
 		}}},
 		z0: 0, z1: 10,
 	}
-	out, err := prismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 	require.NoError(t, err)
-	require.True(t, out.ok)
-	require.NotNil(t, out.reading)
-	require.InDelta(t, 10.0, *out.reading, 1e-9, `a 10mm square's spanning diameter is 10mm`)
-	require.Equal(t, 0.0, out.bound, `an all-analytic square's spanning diameter is Exact`)
+	require.True(t, out.OK)
+	require.NotNil(t, out.Reading)
+	require.InDelta(t, 10.0, *out.Reading, 1e-9, `a 10mm square's spanning diameter is 10mm`)
+	require.Equal(t, 0.0, out.Bound, `an all-analytic square's spanning diameter is Exact`)
 }
 
 // This file is survey_undercut.go's own internal coverage: survey2d.DecidePull's

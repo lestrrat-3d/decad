@@ -14,6 +14,11 @@ type Frame struct {
 	SnapTol                  float64
 }
 
+// IsAxis reports whether a resolved meridian walk sweeps no face.
+func (ax Frame) IsAxis(w survey2d.SegmentWalk) bool {
+	return Classify(w, ax.SnapTol) == WallAxis
+}
+
 // ToAxis maps a plane-local point into (z, ρ) axis coordinates. It reads
 // aU/aV/dU/dV as exact leaves and states no bound of its own: decad's
 // revolvemass.AxisMoments folds their proven dUBound/dVBound/aUBound/aVBound into the
