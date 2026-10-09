@@ -42,9 +42,10 @@ type filletLoopRead struct {
 // (filletband.Turn): a right turn the cap contour closes with a connector arc
 // is LF6; a left turn between two straight walks the contour mitres is LF4; a
 // tangent join capband.JoinIsG1 proves on the recorded segments, which the
-// contour reads as a G1 foot, is LF5. Every other corner — a left turn at a
-// circular walk, a tangent join the record does not make exactly tangent, a
-// cusp — is SF1. A loop of one whole circle (LF7) has no corner. role names
+// contour reads as a G1 foot, is LF5. A sharp left turn involving a circular
+// walk is LF8 when its offset locus is regular. A class that disagrees with
+// the contour join, or a cusp, is SF1. A loop of one whole circle (LF7) has
+// no corner. role names
 // F in the refusal.
 func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, role string, work *freeform.FreeformWork) (filletLoopRead, error) {
 	cl, err := oneLoopCornerLoop(budget, loop, work)
@@ -74,7 +75,7 @@ func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, rol
 				return filletLoopRead{}, err
 			}
 			if class == 0 {
-				return filletLoopRead{}, fmt.Errorf(`%w: a fillet of a complete loop of brep face %s meets the corner (%s, %s) between recorded segments %d and %d, where a straight walk meets a circular one or two circular walks meet, not exactly tangent; the two pipes there meet along a space curve no edge kind names and the strip the fillet removes is no polynomial in its offset (loop-fillet SF1)`,
+				return filletLoopRead{}, fmt.Errorf(`%w: a fillet of a complete loop of brep face %s has no supported join at corner (%s, %s) between recorded segments %d and %d (loop-fillet SF1)`,
 					ErrUnsupported, role, renderCoord(cl.walks[k].StartU), renderCoord(cl.walks[k].StartV),
 					cl.walks[(k+n-1)%n].Segs[len(cl.walks[(k+n-1)%n].Segs)-1], cl.walks[k].Segs[0])
 			}
@@ -284,6 +285,8 @@ func filletCornerClass(loop loopRecord, walks []survey2d.SideWalk, fw []filletba
 		return filletband.Reflex, nil
 	case turn > 0 && prev.IsLine() && cur.IsLine() && !j.arc && !j.g1:
 		return filletband.Miter, nil
+	case turn > 0 && (prev.IsCircular() || cur.IsCircular()) && !j.arc && !j.g1:
+		return filletband.CurvedMiter, nil
 	case turn == 0 && j.g1:
 		prevSeg, err := normalizeSegment(loop.Segments[prev.Segs[len(prev.Segs)-1]])
 		if err != nil {
@@ -323,8 +326,9 @@ func heldOf(iv proofbound.RatInterval) (float64, float64) {
 // side contact edge on the trimmed wall (side), the end curve at the corner
 // after it, its cap contact edge on F (cap) reversed, and the end curve at
 // the corner before it: an LF4 corner's end curve is one Ellipse3 the two
-// cylinders share, an LF5 join's one Arc3 meridian, and an LF6 corner's two
-// Arc3 meridians, at its connector arc's ends pA and pB, the horn torus
+// cylinders share, an LF5 join's one Arc3 meridian, an LF8 join's one
+// FilletMiter3 intersection, and an LF6 corner's two Arc3 meridians at its
+// connector arc's ends pA and pB, the horn torus
 // between them closing on the corner's own side vertex. Every vertex is one
 // the record's band boundary edges already placed (brepOpenEdges): the cap
 // contour's at F's level, carrying F's section displacement, and the loop's
@@ -367,7 +371,23 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 	area := proofbound.BoundedScalar{}
 	newPatch := func(surf Surface, loops []*Loop, capV *Vertex) error {
 		p := len(patches)
-		held, bound := heldOf(filletband.PatchArea(fr.pieces[p], rIv))
+		piece := fr.pieces[p]
+		areaIv := filletband.PatchArea(piece, rIv)
+		if piece.Walk >= 0 && len(fr.loop.Corners) > 0 {
+			i := piece.Walk
+			for _, k := range [2]int{i, (i + 1) % n} {
+				if fr.loop.Corners[k] != filletband.CurvedMiter {
+					continue
+				}
+				prev := fr.walks[(k+n-1)%n]
+				allow, ok := filletband.CurvedMiterPatchAreaAllowance(piece, fr.walks[i], prev, fr.walks[k], i == k, rIv)
+				if !ok {
+					return fmt.Errorf(`%w: a curved fillet patch has no area allowance`, ErrUnsupported)
+				}
+				areaIv = proofbound.IntervalWiden(areaIv, allow)
+			}
+		}
+		held, bound := heldOf(areaIv)
 		face := &Face{surface: surf, origins: []FeatureRef{{producer: ref, Role: b.patchRole(p)}}, body: body,
 			loops: loops, area: held, areaBound: bound}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
@@ -490,6 +510,17 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				prev := fr.walks[(k+n-1)%n]
 				lead[k] = meridian(j.m, w, straightWalk(prev, &w), capAt(k), sideV)
 				trail[k] = lead[k]
+			case filletband.CurvedMiter:
+				prev := fr.walks[(k+n-1)%n]
+				length, ok := filletband.CurvedMiterLength(prev, w, r)
+				if !ok {
+					return nil, brepBandMass{}, fmt.Errorf(`%w: a loop fillet's curved miter at (%s, %s) has no regular offset locus (loop-fillet SF1)`,
+						ErrUnsupported, renderCoord(w.StartU), renderCoord(w.StartV))
+				}
+				held, bound := heldOf(length)
+				lead[k] = &Edge{curve: FilletMiter3{}, start: capAt(k), end: sideV,
+					convex: convex, length: held, lengthBound: bound}
+				trail[k] = lead[k]
 			default:
 				kappa, err := filletband.Kappa(fr.loop.Walks[(k+n-1)%n], fr.loop.Walks[k])
 				if err != nil {
@@ -564,8 +595,38 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 	if err != nil {
 		return nil, brepBandMass{}, err
 	}
+	if err := widenCurvedMiterMass(&mass, f, e, fr, rIv); err != nil {
+		return nil, brepBandMass{}, err
+	}
 	mass.area = area
 	return patches, mass, nil
+}
+
+// widenCurvedMiterMass charges the corner regions the polynomial walk pieces
+// do not integrate. Each difference is inside a proven disk around its corner;
+// its sign may be either way, so every affected divergence term is widened.
+func widenCurvedMiterMass(mass *brepBandMass, f brepFace, e brepEmbed, fr filletLoopRead, r proofbound.RatInterval) error {
+	level, delta := proofarith.FloatRat(f.z0), proofarith.FloatRat(f.z0Delta)
+	if level == nil || delta == nil {
+		return fmt.Errorf(`%w: a curved fillet's cap level is not finite`, ErrNotFinite)
+	}
+	zReach := new(big.Rat).Add(new(big.Rat).Abs(level), delta)
+	zReach.Add(zReach, r.Hi)
+	for k, class := range fr.loop.Corners {
+		if class != filletband.CurvedMiter {
+			continue
+		}
+		prev := fr.walks[(k+len(fr.walks)-1)%len(fr.walks)]
+		volume, mu, mv, ok := filletband.CurvedMiterMassAllowance(prev, fr.walks[k], r)
+		if !ok {
+			return fmt.Errorf(`%w: a curved fillet's strip has no mass allowance`, ErrUnsupported)
+		}
+		mass.vol3 = proofbound.IntervalWiden(mass.vol3, new(big.Rat).Mul(volume, big.NewRat(3, 1)))
+		mass.moments[e.Axis[0]] = proofbound.IntervalWiden(mass.moments[e.Axis[0]], mu)
+		mass.moments[e.Axis[1]] = proofbound.IntervalWiden(mass.moments[e.Axis[1]], mv)
+		mass.moments[e.Axis[2]] = proofbound.IntervalWiden(mass.moments[e.Axis[2]], new(big.Rat).Mul(volume, zReach))
+	}
+	return nil
 }
 
 // filletStripMass is one fillet band's share of the body's divergence sums in
@@ -745,7 +806,15 @@ func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.
 	if err != nil {
 		return 0, 0, 0, err
 	}
+	hiIv, err = widenCurvedMiterExtent(fr, b.setback.dc, rIv, sideIv, m, gp, hiIv)
+	if err != nil {
+		return 0, 0, 0, err
+	}
 	loIv, err := filletband.Extreme(fr.pieces, rIv, sideIv, int64(m), gn)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	loIv, err = widenCurvedMiterExtent(fr, b.setback.dc, rIv, sideIv, m, gn, loIv)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -767,6 +836,79 @@ func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.
 	bound := proofbound.AbsSumUpper(math.Max(loErr, hiErr), placeAllow, sideDelta,
 		math.Max(proofbound.ExactSumRound(loEnd, base, lo), proofbound.ExactSumRound(hiEnd, base, hi)))
 	return loEnd, hiEnd, bound, nil
+}
+
+// widenCurvedMiterExtent includes the changed corner portions that the
+// straight-rate patch extrema omit. Their planar positions stay in a proven
+// disk around the corner, while their heights remain between side and cap.
+// The actual seam's side endpoint gives a lower bound on the band's maximum.
+func widenCurvedMiterExtent(fr filletLoopRead, radius float64, r, side proofbound.RatInterval, m float64,
+	g [3]*big.Rat, old proofbound.RatInterval) (proofbound.RatInterval, error) {
+	hasCurved := false
+	for _, class := range fr.loop.Corners {
+		hasCurved = hasCurved || class == filletband.CurvedMiter
+	}
+	if !hasCurved {
+		return old, nil
+	}
+	capLevel := proofbound.IntervalAdd(side, proofbound.IntervalScale(r, big.NewRat(int64(-m), 1)))
+	zAbs := new(big.Rat)
+	for _, v := range []*big.Rat{side.Lo, side.Hi, capLevel.Lo, capLevel.Hi} {
+		if a := new(big.Rat).Abs(v); a.Cmp(zAbs) > 0 {
+			zAbs = a
+		}
+	}
+	planarNorm, ok := proofbound.SqrtInterval(proofbound.PointInterval(new(big.Rat).Add(
+		new(big.Rat).Mul(g[0], g[0]), new(big.Rat).Mul(g[1], g[1]))))
+	if !ok {
+		return proofbound.RatInterval{}, fmt.Errorf(`%w: a curved fillet extent has no planar direction bound`, ErrUnsupported)
+	}
+	upper := old.Hi
+	var lower *big.Rat
+	consider := func(u, v, z proofbound.RatInterval) {
+		anchor := proofbound.IntervalAdd(proofbound.IntervalAdd(
+			proofbound.IntervalMul(proofbound.PointInterval(g[0]), u),
+			proofbound.IntervalMul(proofbound.PointInterval(g[1]), v)),
+			proofbound.IntervalMul(proofbound.PointInterval(g[2]), z))
+		if lower == nil || anchor.Lo.Cmp(lower) > 0 {
+			lower = anchor.Lo
+		}
+	}
+	for _, w := range fr.walks {
+		endError := proofarith.FloatRat(proofbound.WalkEndBoundAllow(w.StartBound))
+		u := proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(w.StartU)), endError)
+		v := proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(w.StartV)), endError)
+		consider(u, v, side)
+	}
+	for k, class := range fr.loop.Corners {
+		if class != filletband.CurvedMiter {
+			continue
+		}
+		cur := fr.walks[k]
+		prev := fr.walks[(k+len(fr.walks)-1)%len(fr.walks)]
+		reach, ok := filletband.CurvedMiterReachUpper(prev, cur, r)
+		if !ok {
+			return proofbound.RatInterval{}, fmt.Errorf(`%w: a curved fillet extent has no corner reach bound`, ErrUnsupported)
+		}
+		reachRat := proofarith.FloatRat(reach)
+		corner := new(big.Rat).Add(new(big.Rat).Mul(g[0], proofarith.FloatRat(cur.StartU)),
+			new(big.Rat).Mul(g[1], proofarith.FloatRat(cur.StartV)))
+		candidate := new(big.Rat).Add(corner, new(big.Rat).Mul(planarNorm.Hi, reachRat))
+		candidate.Add(candidate, new(big.Rat).Mul(new(big.Rat).Abs(g[2]), zAbs))
+		if candidate.Cmp(upper) > 0 {
+			upper = candidate
+		}
+		foot, ok := filletband.CurvedMiterPoint(prev, cur, radius, radius,
+			cur.StartU, cur.StartV)
+		if !ok {
+			return proofbound.RatInterval{}, fmt.Errorf(`%w: a curved fillet extent has no cap endpoint`, ErrUnsupported)
+		}
+		consider(foot[0], foot[1], capLevel)
+	}
+	if lower == nil {
+		return old, nil
+	}
+	return proofbound.Interval(lower, upper), nil
 }
 
 // hasFilletBand reports whether the record carries a fillet band.

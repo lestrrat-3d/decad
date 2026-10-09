@@ -170,6 +170,12 @@ type Ellipse3 struct {
 	SemiMajor, SemiMinor units.Value
 }
 
+// FilletMiter3 names the exact intersection edge of two adjacent fillet
+// patches at a sharp corner involving a circular wall. The edge's vertices
+// and adjacent faces identify the branch; its offset-foot parameterization
+// stays in the fillet band's record.
+type FilletMiter3 struct{}
+
 // NURBSCurve is a free-form edge's geometry, NURBSSurface's 1-D analog
 // (docs/spline-design.md §7). It reports no Kind at all: Curve is sealed by
 // its marker method alone and declares no Kind method, so this variant seals
@@ -189,6 +195,7 @@ func (Line3) curve()        {}
 func (Circle3) curve()      {}
 func (Arc3) curve()         {}
 func (Ellipse3) curve()     {}
+func (FilletMiter3) curve() {}
 func (NURBSCurve) curve()   {}
 func (FacetedCurve) curve() {}
 

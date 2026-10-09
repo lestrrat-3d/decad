@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -55,6 +56,9 @@ type brepBandChord struct {
 	// nil for a chamfer band.
 	fillet  *filletRings
 	partial *partialBandMesh
+	// curved marks LF8 seams at the start of each walk. Their interior ring
+	// positions follow offset-carrier intersections instead of affine ends.
+	curved []bool
 }
 
 // brepChordBands chords every band of the record and imposes each wall walk's
@@ -119,7 +123,29 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 			imposed[u.Face] = samples
 		}
 		if b.kind == brepBandFillet {
-			bc.fillet = &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), chord)}
+			rings := tessellation.FilletRingCount(b.setback.axialUpper(), chord)
+			fr, err := filletLoopOf(budget, b.orig, b.setback.dc, f.role, work)
+			if err != nil {
+				return nil, nil, err
+			}
+			bc.curved = make([]bool, len(fr.walks))
+			for k, class := range fr.loop.Corners {
+				if class != filletband.CurvedMiter {
+					continue
+				}
+				bc.curved[k] = true
+				prev := fr.walks[(k+len(fr.walks)-1)%len(fr.walks)]
+				length, ok := filletband.CurvedMiterLength(prev, fr.walks[k], b.setback.axialUpper())
+				if !ok {
+					return nil, nil, fmt.Errorf(`%w: fillet band %d's curved miter has no length enclosure`, ErrUnsupported, bi)
+				}
+				needed := math.Ceil(2 * proofbound.RatFloatUp(length.Hi) / chord)
+				if proofbound.IsNonFinite(needed) || needed > 4096 {
+					return nil, nil, fmt.Errorf(`%w: fillet band %d's curved miter exceeds the mesh ring budget`, ErrUnsupported, bi)
+				}
+				rings = max(rings, int(needed))
+			}
+			bc.fillet = &filletRings{n: rings}
 		}
 		bands[bi] = bc
 	}

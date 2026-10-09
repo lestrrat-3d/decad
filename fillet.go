@@ -104,15 +104,16 @@ const filletTol = sectionaudit.Tolerance
 // such a body's edges is route L's (docs/modify-general-design.md §4): complete
 // loops of planar faces are filleted as a pipe band at radius r
 // (docs/loop-fillet-design.md) — a quarter cylinder along each line, a torus
-// around each arc and at each reflex corner, two cylinders meeting along an
-// Ellipse3 at each convex corner — the walls beside each loop trimmed to its
+// around each arc and at each reflex corner, cylinders meeting along an
+// Ellipse3 at a line-line miter, and a FilletMiter3 at a regular sharp
+// corner involving an arc — the walls beside each loop trimmed to its
 // side level and the face holding it to its offset contour; the result is a
 // brep body whose patches carry filletLoop(f,l,p). Selected straight edges
 // on part of one planar loop form a partial band; a swept common wall can be
 // restated as that planar loop. Loops sharing an edge are SL1; complete loops
 // mixed with independent straight edges take route V. A neighbour route L
-// cannot trim SL2, and a convex corner where a straight walk meets a circular
-// one, or two circular walks meet, not tangent, is SF1 (all ErrUnsupported).
+// cannot trim SL2, and an offset miter that folds or cannot be bounded is
+// SF1 (both ErrUnsupported).
 // A prism's complete cap loops take the same arm through its face view and
 // return a brep body (RF3). Any other
 // receiver that is neither a prism nor a revolve is S3 (ErrUnsupported).

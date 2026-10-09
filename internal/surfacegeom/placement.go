@@ -62,6 +62,8 @@ func TransformCurve(c Curve, xf r3.Transform) (Curve, error) {
 			Center: xf.Apply(v.Center), Axis: axis, Major: xf.ApplyDir(v.Major),
 			SemiMajor: v.SemiMajor, SemiMinor: v.SemiMinor,
 		}, nil
+	case FilletMiter3:
+		return v, nil
 	case NURBSCurve:
 		return v, nil
 	case FacetedCurve:

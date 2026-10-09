@@ -143,8 +143,8 @@
 //	Fillet        complete prism cap loop(s), as a brep       builds
 //	  Fillet of single straight prism cap edges              builds
 //	  Fillet of cap loops with independent straight edges    builds
-//	  loop fillet at a convex line-arc or arc-arc corner,
-//	    not tangent (SF1)                                     ErrUnsupported
+//	  loop fillet at a regular convex line-arc or arc-arc
+//	    corner, not tangent (LF8)                              builds
 //	  mesh, STEP, mesh boolean and surveys of a loop-filleted
 //	    body                                                  builds
 //	  brep loop selection partial or sharing an edge;

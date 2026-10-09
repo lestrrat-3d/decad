@@ -503,6 +503,12 @@ type Ellipse3 struct {
 	Center, Axis, Major  r3.Vec
 	SemiMajor, SemiMinor units.Value
 }
+// FilletMiter3 is the intersection edge of two adjacent analytic fillet
+// patches at a sharp corner involving a circular wall. Its endpoints and
+// adjacent faces identify the continuous intersection branch. The evaluator
+// keeps the offset-foot parameterization private; the edge is not a NURBS or
+// a chain of chords.
+type FilletMiter3 struct{ /* private */ }
 // NURBSCurve is a free-form edge's geometry, NURBSSurface's 1-D analog
 // (docs/spline-design.md §7).
 type NURBSCurve struct{ /* private */ }
