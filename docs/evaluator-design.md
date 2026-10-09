@@ -19,8 +19,9 @@ never silently approximated.
 
 **The evaluator consumes structural profile records, never live sketch geometry.**
 A feature call gates its live inputs (core §7), converts the profile and plane
-to `ProfileRecord` and `PlaneRecord`, and evaluates from those values. The live
-`*sketch.Profile` is never read after conversion.
+to internal `momentinput.Profile` and `sectionrecord.PlaneRecord` values, and
+evaluates from those values. The live `*sketch.Profile` is never read after
+conversion.
 
 The one thing the evaluator reads from the live profile, at feature-call time
 only, is a **falsifier input**: `Profile.Area` (sketch's own area answer) is
@@ -200,8 +201,8 @@ areas of the bodies built from it are decad's 3D job. The boundary is:
   asserted against sketch's answer by the §1 falsifier at every feature
   call).
 
-Caller-built and decoded records carry no live sketch answer. Public
-`ProfileRecord` mass-property methods MUST validate before integration:
+Internally built and decoded records carry no live sketch answer.
+`momentinput.Profile` mass-property methods MUST validate before integration:
 finite supported fields/ranges first, then region topology through a private
 `sketch` reconstruction that exactly matches the recorded walks. Whole-circle
 regions use direct disk containment/separation, preserving valid thin annuli

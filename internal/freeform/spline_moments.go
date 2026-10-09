@@ -44,7 +44,7 @@ func FreeformSpanCost(controls int) uint64 {
 // then integrates the chain the preflight already paid for. A record whose
 // integration cannot fit the budget must refuse before anything downstream of
 // the conversion samples or reconstructs the curve, since the ceiling exists
-// precisely because the public ProfileRecord methods take no context and cannot
+// precisely because the public MeasuredProfile methods take no context and cannot
 // be cancelled.
 func ChargeFreeformSpans(spans []BezierSpan, work *FreeformWork) error {
 	for _, span := range spans {

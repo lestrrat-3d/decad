@@ -514,7 +514,7 @@ finite fit coordinates give a cumulative chord parameter or a span coefficient
 that leaves float64 range, or a parameter that stalls. The fit points
 themselves are finite — checked by `internal/splinebezier/fit.go`'s scan immediately
 before the call, since `record.go`'s validation runs only at JSON decode and a
-caller-built `ProfileRecord` reaches this reduction without ever passing
+internally assembled `momentinput.Profile` reaches this reduction without passing
 through it — so this is `ErrUnsupported` — the curve exists, described by
 finite fit points, and this evaluator cannot state it — never `ErrNotFinite`,
 whose subject is a non-finite INPUT and is refused by that same scan ahead of
@@ -590,7 +590,7 @@ charged — is never replayed; it refuses rather than levy a zero it never
 measured, which is the reject-only direction every other guard here takes.
 
 Charge EARLY as well as conservatively. The ceiling is fixed because the public
-`ProfileRecord` methods take no context and so cannot be cancelled, so every
+`MeasuredProfile` methods take no context and so cannot be cancelled, so every
 pass whose cost grows with the record must sit BEHIND a charge already levied —
 the knot-multiplicity probes the conversion runs, including the probes that
 insert nothing, and the sketch reconstruction validation samples the curve
@@ -1655,7 +1655,7 @@ still `ErrUnsupported` at EVERY build until §10's P9 supplies that tier's
 moments (§5.3, §5.4) — Table R R10. "Tier A section"
 below names exactly that condition, and includes a section holding a
 `FitSplineSeg` walk (§5.1.2) — its moments are Tier A, and P4b is the
-increment that extends that reach to the build. A `ProfileRecord` moment
+increment that extends that reach to the build. A `MeasuredProfile` moment
 reading is not a build and is unaffected — `FitSplineSeg` already had that
 reach for the moments path (§5.1.2) before P4b.
 
@@ -1667,7 +1667,7 @@ every walk of the section is itself exactly rational (§3).
 
 | Capability | Free-form reach | Construction |
 |---|---|---|
-| `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
+| `MeasuredProfile.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
 | `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4; a wall edge's convexity is §6.5 |
 | `Loft` | a same-kind Tier A free-form paired segment (`docs/loft-design.md` §1, §5.1's free-form arm), chorded at shared dyadic fractions of the span-index coordinate the two curves' own Bézier span decompositions define, never of a recorded knot domain; every reading carries the applicable chorded allowance (`docs/loft-design.md` §5.2). Existing `spanSpeedUpper` and `spanMatchedDeltaUpper` derivations satisfy the bound inputs, and `SpanTangentEnergyUpper` integrates each cell's tangent deviation energy exactly; an unequal Bézier span count between the two sides is `ErrUnsupported` (`docs/loft-design.md` S17) | §6.2.1's sagitta, measured per dyadic level under the existing Loft station cap; the wall stays flat triangles built between held stations and needs no §7 surface. Downstream reach follows `docs/loft-design.md` Table D rows D1–D3, not this document's P5 |
 | `Tessellate`, `STL`, `OBJ` | an EXTRUDED free-form-walled body chords through §6.2.1's dyadic station chain, like every OTHER body `Extrude` builds; the fixed work budget (R7) and the per-curve chord cap (R8) are its only refusals. Loft follows `docs/loft-design.md` Table D row D1 | §6.2.1's sagitta over the single-chain station walk; rides the existing prism path, NOT tessellation T5 (`docs/tessellation-reach-design.md` §5) |
@@ -1734,7 +1734,7 @@ half-silent. These stages do not consume a global evaluator increment number.
 | # | Lands | Public effect |
 |---|---|---|
 | **P1** | this document + the core/evaluator table updates it resolves | none |
-| **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
+| **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `MeasuredProfile.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
 | **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading and into §6.4's straddle-narrowed through-all stop gate | none on its own — the bracket's reach through the public surface waits on P4b, below; the stop charges a met body's bracket to the level it resolves and R11 refuses only a straddling one, `extentAlongWork`'s wider refusal serving the clearance short-circuit alone, and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
 | **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a wall edge whose curvature sign the chain does not prove is R19 |

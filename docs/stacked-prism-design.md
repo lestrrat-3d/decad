@@ -46,14 +46,14 @@ different heights.
 
 ```go
 type prismSlab struct {
-    regions          []ProfileRecord // one region, or several under §2.2's group and lining readings
+    regions          []profileRecord // one region, or several under §2.2's group and lining readings
     z0, z1           float64         // evaluator coordinates on the frame's normal
     z0Delta, z1Delta float64         // each level's proven axial displacement
 }
 
 type prismSlabInterface struct {
-    lowerExposed []ProfileRecord // material below the plane only: a floor, outward +N
-    upperExposed []ProfileRecord // material above the plane only: a ceiling, outward -N
+    lowerExposed []profileRecord // material below the plane only: a floor, outward +N
+    upperExposed []profileRecord // material above the plane only: a ceiling, outward -N
 }
 
 type stackedPrismPayload struct {
