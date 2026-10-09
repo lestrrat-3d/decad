@@ -2,6 +2,7 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -193,7 +194,8 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 // selected face; a sidewall touch has a complete axial line contact set.
 func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderContactProof,
 	box sourceBoxContactProof, cylinderFirst bool) {
-	axis, side, signedGap, ok := sourceCylinderBoxFace(cylinder, box)
+	axis, side, signedGap, ok := pairbox.CylinderFaceCorridor(
+		cylinder.box.axisBox(), box.axisBox(), cylinder.axis, cylinder.wall != nil)
 	if !ok {
 		report.Reason = ContactNoGapProof
 		return
@@ -228,37 +230,19 @@ func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderCon
 		report.Reason = ContactNoNormalProof
 		return
 	}
-	var boxPoint, cylinderPoint proofarith.DyV3
-	for i := range 3 {
-		if i == axis {
-			if side == 1 {
-				boxPoint[i], cylinderPoint[i] = box.hi[i], cylinder.box.lo[i]
-			} else {
-				boxPoint[i], cylinderPoint[i] = box.lo[i], cylinder.box.hi[i]
-			}
-			continue
-		}
-		center := proofarith.DyMul(proofarith.DyAdd(cylinder.box.lo[i], cylinder.box.hi[i]), proofarith.MustDyOf(.5))
-		boxPoint[i], cylinderPoint[i] = center, center
-	}
-	boxWitness, okBox := sourceBoxPointAt(&boxPoint)
-	cylinderWitness, okCylinder := sourceBoxPointAt(&cylinderPoint)
-	if !okBox || !okCylinder ||
-		boxWitness.Bound.Base() > report.Request.PointResolution.Base() ||
-		cylinderWitness.Bound.Base() > report.Request.PointResolution.Base() {
-		report.Reason = ContactPointTooCoarse
-		return
-	}
-	separation, ok := sourceBoxSignedReading(signedGap)
+	boxReading, cylinderReading, signedReading, ok := pairbox.CylinderFacePoint(
+		cylinder.box.axisBox(), box.axisBox(), axis, side, signedGap,
+		report.Request.PointResolution.Base())
 	if !ok {
 		report.Reason = ContactPointTooCoarse
 		return
 	}
 	sign := signIfBoxSide(side)
+	boxWitness, cylinderWitness := sourceBoxPointMeasurement(boxReading), sourceBoxPointMeasurement(cylinderReading)
 	point := ContactPoint{OnA: boxWitness, OnB: cylinderWitness,
 		FaceA: boxFace, FaceB: cylinderFace,
 		FeatureA: ContactFeature{Face: boxFace}, FeatureB: ContactFeature{Face: cylinderFace},
-		NormalAngle: units.Radians(0), Separation: separation}
+		NormalAngle: units.Radians(0), Separation: sourceBoxScalar(signedReading)}
 	if cylinderFirst {
 		point.OnA, point.OnB = point.OnB, point.OnA
 		point.FaceA, point.FaceB = point.FaceB, point.FaceA
@@ -276,57 +260,4 @@ func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderCon
 	}
 	point.Normal = VecMeasurement{Value: normal, Bound: units.Scalar(0), Exactness: Exact}
 	report.Manifold = &ContactManifold{Points: []ContactPoint{point}}
-}
-
-// sourceCylinderBoxFace selects one complete box-face corridor. A circular
-// sidewall supports a transverse axis at the same exact extremum as its outer
-// box; the other transverse coordinate and the full axial interval stay
-// strictly within the source-box face.
-func sourceCylinderBoxFace(cylinder sourceCylinderContactProof,
-	box sourceBoxContactProof) (int, int, proofarith.Dyadic, bool) {
-	selected := -1
-	var selectedSide int
-	var selectedGap proofarith.Dyadic
-	for axis := range 3 {
-		if axis != cylinder.axis && (cylinder.wall == nil || cylinder.axis != 2) {
-			continue
-		}
-		if !cylinderInsideBoxFace(cylinder.box, box, axis) {
-			continue
-		}
-		var side int
-		var gap proofarith.Dyadic
-		switch {
-		case proofarith.DyCmp(cylinder.box.lo[axis], box.hi[axis]) >= 0:
-			side, gap = 1, proofarith.DySubScalar(cylinder.box.lo[axis], box.hi[axis])
-		case proofarith.DyCmp(cylinder.box.hi[axis], box.lo[axis]) <= 0:
-			side, gap = 0, proofarith.DySubScalar(box.lo[axis], cylinder.box.hi[axis])
-		case proofarith.DyCmp(cylinder.box.lo[axis], box.lo[axis]) > 0 &&
-			proofarith.DyCmp(cylinder.box.hi[axis], box.hi[axis]) > 0:
-			side, gap = 1, proofarith.DySubScalar(cylinder.box.lo[axis], box.hi[axis])
-		case proofarith.DyCmp(cylinder.box.hi[axis], box.hi[axis]) < 0 &&
-			proofarith.DyCmp(cylinder.box.lo[axis], box.lo[axis]) < 0:
-			side, gap = 0, proofarith.DySubScalar(box.lo[axis], cylinder.box.hi[axis])
-		default:
-			continue
-		}
-		if selected >= 0 {
-			return 0, 0, proofarith.Dyadic{}, false
-		}
-		selected, selectedSide, selectedGap = axis, side, gap
-	}
-	return selected, selectedSide, selectedGap, selected >= 0
-}
-
-func cylinderInsideBoxFace(cylinder, box sourceBoxContactProof, normalAxis int) bool {
-	for axis := range 3 {
-		if axis == normalAxis {
-			continue
-		}
-		if proofarith.DyCmp(cylinder.lo[axis], box.lo[axis]) <= 0 ||
-			proofarith.DyCmp(cylinder.hi[axis], box.hi[axis]) >= 0 {
-			return false
-		}
-	}
-	return true
 }

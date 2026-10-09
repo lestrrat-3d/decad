@@ -30,7 +30,7 @@ The rules for rows live in `docs/layout.md`.
 | `contact_oriented_patch.go` | Publishes oblique box patches from `internal/pair/box/` geometry. See contact geometry §4. |
 | `contact_clipped_patch.go` | Publishes horizontal box patches from exact polygon clips. See contact geometry §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box contact and sweep. See contact-sweep §4–§5. |
-| `contact_cylinder.go` / `contact_cylinder_sweep.go` | Cylinder contact and sweep. See contact-sweep §4–§5. |
+| `contact_cylinder.go` / `contact_cylinder_sweep.go` | Cylinder contact and sweep adapters over `internal/pair/box/`. See contact-sweep §4–§5. |
 | `contact_analytic_manifold.go` | Ruling contact adapters. See contact-geometry §4.5. |
 | `contact_sphere_oriented.go` / `contact_sphere_oriented_sweep.go` | Rotated sphere-box path. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See contact-sweep §4–§5. |
