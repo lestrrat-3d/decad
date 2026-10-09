@@ -21,7 +21,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching, query rendering, and failure diagnostics. See API §9. |
 | `internal/surfacegeom/` | Sealed face and edge variants and placement transforms. See API §6.1, surface §6. |
-| `internal/reportvocab/` | Contact/sweep carriers and enums; Verify, Motion, Linkage and JointBox reports, survey diagnostics and conclusions. |
+| `internal/reportvocab/` | Contact/sweep carriers, enums and pair memo; Verify, Motion, Linkage and JointBox reports and survey diagnostics. |
 | `internal/extent/` | Extent variants, unit bounds and stop levels. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation, segment record and area bounds. See surface §5.2. |
 | `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact and nesting checks. See modify §5. |
