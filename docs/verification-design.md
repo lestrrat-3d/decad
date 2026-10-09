@@ -347,12 +347,6 @@ const (
     // neither way (§1). Reading ReadingNone, Observed* and Required nil.
     // Contributes Suspect.
     DiagUndecidedPair
-    // DiagUnsupportedPair — the deprecated broad compatibility code for a
-    // staged pair. The constant stays declared for existing callers that
-    // still branch on it, but Verify no longer emits it into a returned
-    // report — only the matching cause-specific code below.
-    // Deprecated: branch on the cause-specific code for detail.
-    DiagUnsupportedPair
     // DiagUndecidedClearance — a pair whose partition IS proven disjoint (by box
     // or by the kernel) but whose REQUESTED WithClearances gap the kernel could
     // not prove: no Clearance row is emitted for it, and the report reads
@@ -469,7 +463,6 @@ renders `"reading(<n>)"` with `<n>` the integer, never a panic.
 - `DiagUndecidedMinRadius` → `"undecided_min_radius"`
 - `DiagInterference` → `"interference"`
 - `DiagUndecidedPair` → `"undecided_pair"`
-- `DiagUnsupportedPair` → `"unsupported_pair"`
 - `DiagUnsupportedPairPayload` → `"unsupported_pair_payload"`
 - `DiagUnsupportedPairContact` → `"unsupported_pair_contact"`
 - `DiagUnsupportedPairPipeline` → `"unsupported_pair_pipeline"`
@@ -511,9 +504,7 @@ incomplete-survey finding can both be present. That per-body segment is empty
 order, and the pair diagnostics that follow every body's segment keep their
 own stable pair order (§1, interference design §2).
 
-For a staged pair cause, the slice carries only the cause-specific entry; the
-deprecated `DiagUnsupportedPair` constant stays declared for existing callers
-that still branch on it, but Verify no longer emits it into a returned report.
+For a staged pair cause, the slice carries only the cause-specific entry.
 
 Every shipped payload class forms its tolerance reference, so `Suspect` from
 `DiagToleranceReferenceUnavailable` — a reading with no usable reference,
@@ -796,8 +787,7 @@ could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or
 one of `DiagUnsupportedPairPayload`, `DiagUnsupportedPairSheet`,
 `DiagUnsupportedPairContact`, or
 `DiagUnsupportedPairPipeline` naming the exact staged cause is emitted — that
-one cause-specific entry alone; the deprecated broad `DiagUnsupportedPair`
-constant is not emitted into a returned report —
+one cause-specific entry alone —
 a pair proven apart whose asked gap the kernel could not measure emits a
 `DiagUndecidedClearance` instead, and a pair proven to overlap whose overlap
 volume the evaluator could not bound emits a `DiagUndecidedInterference` —

@@ -251,10 +251,8 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 // in-pipeline limits each keep their own code and action; only an overlap with
 // an otherwise undecided measurement is DiagUndecidedInterference; an
 // unresolved partition is DiagUndecidedPair. Verify emits only this
-// cause-specific diagnostic — the deprecated broad DiagUnsupportedPair
-// constant stays declared for existing callers that still branch on it, but
-// no longer appears in a returned report (proposal §10). A pair holding a
-// sheet operand never reaches this function at all: it is resolved earlier,
+// cause-specific diagnostic. A pair holding a sheet operand never reaches
+// this function: it is resolved earlier,
 // by box separation or the sheet decision procedure (sheetSolidPair,
 // clearance.go), and takes DiagUnsupportedPairSheet or DiagSheetSolidCrossing
 // instead (docs/surface-design.md §9.3).

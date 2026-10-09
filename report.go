@@ -50,7 +50,6 @@ const (
 	DiagUndecidedMinRadius            = reportvocab.DiagUndecidedMinRadius
 	DiagInterference                  = reportvocab.DiagInterference
 	DiagUndecidedPair                 = reportvocab.DiagUndecidedPair
-	DiagUnsupportedPair               = reportvocab.DiagUnsupportedPair
 	DiagUndecidedClearance            = reportvocab.DiagUndecidedClearance
 	DiagUndecidedInterference         = reportvocab.DiagUndecidedInterference
 	DiagUnsupportedPairPayload        = reportvocab.DiagUnsupportedPairPayload
