@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -80,141 +78,44 @@ func (topo *brepTopology) region(ctx context.Context, bp brepPayload, fi int) (b
 	return r, nil
 }
 
-// brepRestoredRegion integrates a planar face the measurement reads restored
-// (brepPayload.filletRestored), walking its region afresh.
-func brepRestoredRegion(ctx context.Context, f brepFace) (brepRegion, error) {
-	work := freeform.NewFreeformWork()
-	var walks [][]survey2d.SegmentWalk
-	for _, loop := range append([]loopRecord{f.region.Outer}, f.region.Holes...) {
-		var ws []survey2d.SegmentWalk
-		for _, seg := range loop.Segments {
-			w, err := boundarywalk.WalkOf(seg, work)
-			if err != nil {
-				return brepRegion{}, err
-			}
-			ws = append(ws, w)
-		}
-		walks = append(walks, ws)
-	}
-	return brepgeom.RegionOf(ctx, f.region, f.delta, walks)
-}
-
-// measureBrepContext publishes the body's volume, area, centroid and box.
-//
-// In reference coordinates a planar face at level z with outward sign s
-// contributes s·z·A to 3V, and ½·s·σ·z²·A to the first moment along the
-// reference axis its normal lands on (σ that axis's sign); a swept face over
-// height h contributes 2·h·g to 3V and σ·h·mu, σ·h·mv to the moments along the
-// axes its u and v land on (brepgeom.SegmentIntegrals). Over a closed boundary
-// these are ∮(p·n)/3 and ½∮x_i²·n_i, the divergence theorem's volume and
-// first moments. Each face's displacements enter as evalPrism composes them
-// for a prism: a swept face's section band times its height, and a planar
-// face's level displacement times its area, bound the volume the denoted body
-// can differ by; that volume times the coordinate envelope bounds each moment's.
-//
-// bands is what a route L record's band patches add to the same three sums
-// (docs/modify-general-design.md §4.3, brepBandMassOf): the record's faces
-// and the patches together are the body's whole boundary. The box needs no
-// band term: every patch is ruled between its cap contour, a loop of a
-// record face, and its side contour, a rim or segment of the faces beside it,
-// so a linear functional over a patch is extremized on those two directrices,
-// which the record's faces already hold within their own displacements.
-//
-// A fillet band's patches are never integrated (docs/loop-fillet-design.md
-// §5.3): bands carries its strip terms σ·V_strip and σ·M_strip, and the
-// volume and moment sums read every face the band rewrote restored to the
-// receiver's (filletRestored), whose difference from the rewritten faces is
-// exactly the strip terms the patches' flux would add. Area still reads the
-// rewritten faces, and the box adds each fillet band's own extents
-// (brepBoundsContext).
+// measureBrepContext adapts the body's face records to brepgeom.IntegrateFaces
+// and publishes its readings, topology bounds and final validation.
 func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology, body *Body, bands brepBandMass) error {
-	vol3 := bands.vol3
-	moments := bands.moments
-	area := bands.area
-	displaced := 0.0
-	envelope := topo.coordUpper
 	restored, err := bp.filletRestored(topo)
 	if err != nil {
 		return err
 	}
-	for fi, f := range bp.faces {
-		if err := ctx.Err(); err != nil {
-			return err
+	readings, err := brepgeom.IntegrateFaces(ctx, len(bp.faces), func(fi int) (brepgeom.FaceMeasure, error) {
+		f, rf := bp.faces[fi], restored[fi]
+		record := brepgeom.FaceMeasure{
+			Embed: topo.embeds[fi], Planar: f.planar(), Outward: f.outward,
+			Z0: f.z0, Z1: f.z1, RestoredZ0: rf.z0, RestoredZ1: rf.z1,
+			Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Delta: f.delta,
 		}
-		e := topo.embeds[fi]
-		rf := restored[fi]
-		z0, z1 := proofarith.FloatRat(rf.z0), proofarith.FloatRat(rf.z1)
-		if f.planar() {
-			region, err := topo.region(ctx, bp, fi)
-			if err != nil {
-				return err
-			}
-			volRegion := region
-			if rf.region != f.region {
-				if volRegion, err = brepRestoredRegion(ctx, rf); err != nil {
-					return err
-				}
-			}
-			s := big.NewRat(-1, 1)
-			if f.outward {
-				s = big.NewRat(1, 1)
-			}
-			vol3 = proofbound.IntervalAdd(vol3, proofbound.IntervalScale(volRegion.Area, proofbound.RatMul(s, z0)))
-			k := e.Axis[2]
-			half := proofbound.RatMul(big.NewRat(1, 2), s, big.NewRat(int64(e.Sign[2]), 1), z0, z0)
-			moments[k] = proofbound.IntervalAdd(moments[k], proofbound.IntervalScale(volRegion.Area, half))
-			area = proofbound.BoundedAdd(area, region.Published)
-			displaced = proofbound.AbsSumUpper(displaced,
-				proofbound.ProductUpper(f.z0Delta, proofbound.AbsSumUpper(volRegion.Upper, volRegion.Displacement)))
-			continue
+		if !record.Planar {
+			record.Wall, record.Walk = f.wall, topo.walls[fi]
+			return record, nil
 		}
-		w := topo.walls[fi]
-		terms, err := brepgeom.SegmentIntegrals(f.wall)
+		region, err := topo.region(ctx, bp, fi)
 		if err != nil {
-			return err
+			return brepgeom.FaceMeasure{}, err
 		}
-		h := new(big.Rat).Sub(z1, z0)
-		vol3 = proofbound.IntervalAdd(vol3, proofbound.IntervalScale(terms[0], proofbound.RatMul(big.NewRat(2, 1), h)))
-		for i, mom := range [2]proofbound.RatInterval{terms[1], terms[2]} {
-			scale := proofbound.RatMul(big.NewRat(int64(e.Sign[i]), 1), h)
-			moments[e.Axis[i]] = proofbound.IntervalAdd(moments[e.Axis[i]], proofbound.IntervalScale(mom, scale))
+		record.Region, record.RestoredRegion = region, region
+		if rf.region != f.region {
+			record.RestoredRegion, err = brepgeom.RestoredRegion(ctx, rf.region, rf.delta)
 		}
-		area = proofbound.BoundedAdd(area, brepgeom.WallArea(f.delta, f.z0, f.z1, f.z0Delta, f.z1Delta, w))
-		heightUpper := proofbound.AbsSumUpper(proofbound.UpRound(rf.z1-rf.z0), f.z0Delta, f.z1Delta)
-		band := proofbound.SectionDisplacementArea(f.delta, 1, proofbound.AbsSumUpper(w.Length, w.LengthBound))
-		displaced = proofbound.AbsSumUpper(displaced, proofbound.ProductUpper(heightUpper, band))
+		return record, err
+	}, brepgeom.FaceMass{Vol3: bands.vol3, Moments: bands.moments, Area: bands.area},
+		topo.coordUpper, bp.sectionDelta(), bp.axialDelta())
+	if err != nil {
+		return err
 	}
-	envelope = proofbound.AbsSumUpper(envelope, bp.sectionDelta(), bp.axialDelta())
-	volume := proofbound.IntervalScale(vol3, big.NewRat(1, 3))
-	heldVolume := brepgeom.Held(volume)
-	if !(heldVolume > 0) {
-		return fmt.Errorf(`%w: a brep body encloses no volume`, ErrDegenerate)
-	}
-	volumeScalar := proofbound.MeasuredScalar(heldVolume,
-		proofbound.AbsSumUpper(proofbound.IntervalFloatError(volume, heldVolume), displaced))
-	body.volume = Measurement{Value: units.CubicMillimeters(volumeScalar.Value),
-		Exactness: exactnessOf(volumeScalar.Bound), Bound: units.CubicMillimeters(volumeScalar.Bound)}
-	body.area = Measurement{Value: units.SquareMillimeters(area.Value), Exactness: exactnessOf(area.Bound),
-		Bound: units.SquareMillimeters(area.Bound)}
-
-	var c [3]proofbound.BoundedScalar
-	exact := displaced == 0 && volume.Lo.Cmp(volume.Hi) == 0
-	for i := range moments {
-		exact = exact && moments[i].Lo.Cmp(moments[i].Hi) == 0
-	}
-	for i, mom := range moments {
-		if exact {
-			q := new(big.Rat).Quo(mom.Lo, volume.Lo)
-			held, _ := q.Float64()
-			c[i] = proofbound.MeasuredScalar(held, proofarith.RationalFloatError(q, held))
-			continue
-		}
-		heldMoment := brepgeom.Held(mom)
-		momBound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(mom, heldMoment),
-			proofbound.ProductUpper(displaced, envelope))
-		c[i] = proofbound.BoundedDiv(proofbound.MeasuredScalar(heldMoment, momBound), volumeScalar)
-	}
+	body.volume = Measurement{Value: units.CubicMillimeters(readings.Volume.Value),
+		Exactness: exactnessOf(readings.Volume.Bound), Bound: units.CubicMillimeters(readings.Volume.Bound)}
+	body.area = Measurement{Value: units.SquareMillimeters(readings.Area.Value),
+		Exactness: exactnessOf(readings.Area.Bound), Bound: units.SquareMillimeters(readings.Area.Bound)}
 	refView := bp.refView()
+	c := readings.Centroid
 	centroidBound := prismPointBound(refView, c[0], c[1], c[2])
 	body.centroid = VecMeasurement{Value: refView.point(c[0].Value, c[1].Value, c[2].Value),
 		Exactness: exactnessOf(centroidBound), Bound: units.Millimeters(centroidBound)}
