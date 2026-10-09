@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
@@ -16,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/throughshell"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -547,98 +547,16 @@ func throughCapsCount(bp brepPayload, embeds []brepEmbed, k int) int {
 // own box. A box that is not separated is SG6. The test only refuses.
 func (tc throughCut) requireStripsClear(bp brepPayload, i int, dilated ProfileRecord, tmm, tDelta float64) error {
 	tool := tc.tools[i]
-	rat := proofarith.FloatRat
-	j := tool.j
-	m := 3 - tc.k - j
-	reach := new(big.Rat).Add(rat(tmm), rat(tDelta))
-
-	// The tool's m-extent, from its section and its dilated record, both in
-	// the tool's frame.
-	mLo, mHi, err := throughExtent(tool.prism.profile, tool.frameEmb, m)
-	if err != nil {
+	separated, err := throughshell.StripsClear(throughshell.StripInput{
+		Tool: tool.prism.profile, Dilated: dilated, Receiver: tc.caps.section,
+		ToolFrame: tool.frameEmb, ReceiverFrame: tc.caps.eF,
+		SweepAxis: tc.k, PiercedAxis: tool.j, Lo: tool.lo, Hi: tool.hi,
+		Thickness: tmm, ThicknessDelta: tDelta,
+	})
+	if err != nil || separated {
 		return err
 	}
-	dLo, dHi, err := throughExtent(dilated, tool.frameEmb, m)
-	if err != nil {
-		return err
-	}
-	stripMLo := ratMin(new(big.Rat).Sub(mLo, reach), dLo)
-	stripMHi := ratMax(new(big.Rat).Add(mHi, reach), dHi)
-	lo, hi := rat(tool.lo), rat(tool.hi)
-	strip0Lo := new(big.Rat).Sub(lo, reach)
-	strip1Hi := new(big.Rat).Add(hi, reach)
-
-	for _, loop := range append([]LoopRecord{tc.caps.section.Outer}, tc.caps.section.Holes...) {
-		for _, seg := range loop.Segments {
-			box, err := classbgeom.SegmentBox(seg)
-			if err != nil {
-				return err
-			}
-			jLo, jHi := throughBoxAxis(box, tc.caps.eF, j)
-			sLo, sHi := throughBoxAxis(box, tc.caps.eF, m)
-			mApart := sHi.Cmp(stripMLo) < 0 || sLo.Cmp(stripMHi) > 0
-			apart0 := mApart || jHi.Cmp(strip0Lo) < 0 || jLo.Cmp(lo) >= 0
-			apart1 := mApart || jHi.Cmp(hi) <= 0 || jLo.Cmp(strip1Hi) > 0
-			if apart0 && apart1 {
-				continue
-			}
-			return fmt.Errorf(`%w: the tool through %s, dilated by the shell thickness, reaches past the wall it pierces into the material of the receiver, or this evaluator cannot separate it from there (modify-general SG6)`, ErrUnsupported, bp.faces[tool.w0].role)
-		}
-	}
-	return nil
-}
-
-// throughExtent is the exact extent of a region stated in a frame with embed
-// e along reference axis a: the union of its segments' outward boxes.
-func throughExtent(p ProfileRecord, e brepEmbed, a int) (*big.Rat, *big.Rat, error) {
-	var lo, hi *big.Rat
-	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
-		for _, seg := range loop.Segments {
-			box, err := classbgeom.SegmentBox(seg)
-			if err != nil {
-				return nil, nil, err
-			}
-			l, h := throughBoxAxis(box, e, a)
-			if lo == nil {
-				lo, hi = l, h
-				continue
-			}
-			lo, hi = ratMin(lo, l), ratMax(hi, h)
-		}
-	}
-	if lo == nil {
-		return nil, nil, fmt.Errorf(`%w: a tool section holds no segment`, ErrDegenerate)
-	}
-	return lo, hi, nil
-}
-
-// throughBoxAxis reads a plane-local box's interval along reference axis
-// axis, which must be one of the frame's two in-plane axes.
-func throughBoxAxis(box classbgeom.Box2, e brepEmbed, axis int) (*big.Rat, *big.Rat) {
-	for i := range 2 {
-		if e.Axis[i] != axis {
-			continue
-		}
-		if e.Sign[i] > 0 {
-			return box.Lo[i], box.Hi[i]
-		}
-		return new(big.Rat).Neg(box.Hi[i]), new(big.Rat).Neg(box.Lo[i])
-	}
-	panic("throughBoxAxis: the axis is not in the frame's plane")
-}
-
-func ratMin(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) <= 0 {
-		return a
-	}
-	return b
-}
-
-func ratMax(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) >= 0 {
-		return a
-	}
-	return b
+	return fmt.Errorf(`%w: the tool through %s, dilated by the shell thickness, reaches past the wall it pierces into the material of the receiver, or this evaluator cannot separate it from there (modify-general SG6)`, ErrUnsupported, bp.faces[tool.w0].role)
 }
 
 // cavity builds A' \ T₁' \ … \ Tₙ' (modify-general §3.3 step 4): A' is
