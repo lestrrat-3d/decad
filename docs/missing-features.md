@@ -19,7 +19,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Section below |
 |---|---|
-| Fillet, chamfer and shell take a boolean result only where it reads as a prism, or (fillet, chamfer) at straight edges along an axis | Modify operations |
+| Fillet, chamfer and shell take a boolean result only where it reads as a prism, (shell) as a prism cut by through tools with its caps removed, or (fillet, chamfer) at straight edges along an axis | Modify operations |
 | No import of any file format | Data exchange |
 | Booleans outside the exact prism classes fall to a faceted mesh result, and refuse touching contact | Booleans |
 
@@ -49,7 +49,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 |---|---|---|
 | Fillet/chamfer of a sweep, loft, faceted boolean result, cap blend or draft body | `ErrUnsupported`: "fillets a straight prism or a revolve only", SX9, SX10, modify S3 for a draft body (`fillet.go`, `chamfer.go`) | `docs/modify-reach-design.md` Table RX |
 | Fillet/chamfer of a brep or stacked boolean result's curved edge, edges sharing a vertex, an edge ending on a curved face or an earlier blend, or an edge on or along a straight wall that is oblique, split or has a displaced level, where no prism reading takes the selection | `ErrUnsupported` (brep-modify SB4–SB9) (`brep_modify_edge.go`) | `docs/brep-modify-design.md` Table SB, §12 |
-| Shell of a body that is neither a prism nor a revolve; a brep that reads as a prism builds | `ErrUnsupported`: "shells a straight prism only", brep-modify SB3/SB10 (`shell.go`, `brep_modify.go`) | `docs/brep-modify-design.md` SB10 |
+| Shell of a body that is neither a prism nor a revolve, where a brep or stacked result reads neither as a prism nor as a prism cut by through tools (a blind pocket or port, a stacked union, a keyway); of a through-cut brep outward, removing a wall, or whose dilated tools meet, reach a cap or the material past their walls, or erode to miters off their axes | `ErrUnsupported`: "shells a straight prism only", brep-modify SB3/SB10 with modify-general SG3, SG1, SG4–SG7 (`shell.go`, `brep_modify.go`, `brep_shell.go`) | `docs/modify-general-design.md` §3.4, §6 |
 | Shell side opening on a prism with an oblique removed end face recorded as several segments, a rim cut behind a removed arc whose recorded end lies off the circle its start defines, or a kept arc meeting a removed arc at an end corner whose cut is a float solve, under a kept cap; a revolve side run that leaves two wall pieces; a side opening meeting a kept face smoothly at an end, or whose rim runs past the removed walk's far end | `ErrUnsupported` (SO5 for a prism; SX8 for a revolve; SO1, SO2) (`shell_opening.go`, `shell_opening_brep.go`, `shell_revolve.go`, `internal/offset2d/opening.go`) | `docs/shell-opening-design.md` §5, §12, `docs/modify-reach-design.md` §9.3 |
 | Shell of a revolve keeping an angular cap, with a holed meridian or one meeting the axis twice, or whose outward wall reaches the axis | `ErrUnsupported` (SX8) (`shell_revolve.go`) | `docs/modify-reach-design.md` §9.3 |
 | Fillet/chamfer of a revolve cap edge or an edge on the axis | `ErrUnsupported` (SX5) (`revolve_blend.go`) | `docs/modify-reach-design.md` §7 |
@@ -58,7 +58,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Cap-loop chamfer at a corner where a circular wall meets a neighbour tangentially but runs back against it (a tangent cusp), or turns past the G1 tolerance too slightly to enclose | `ErrUnsupported` (SX14) (`capblend.go`) | `docs/modify-reach-design.md` Table SX |
 | Asymmetric chamfer of a brep or stacked boolean result | `ErrUnsupported` (SX16) (`chamfer.go`) | `docs/modify-reach-design.md` §6 |
 | Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`tangent_chain.go`) | `docs/modify-reach-design.md` §5 |
-| Closed shell (`WithNoOpenings`) of any receiver but a full revolve or a hole-free straight prism | `ErrUnsupported` (SX8/SX9/SX16) (`shell.go`) | `docs/modify-reach-design.md` §9, §14 |
+| Closed shell (`WithNoOpenings`) of any receiver but a full revolve or a hole-free straight prism | `ErrUnsupported` (SX8/SX9; modify-general SG2 for a brep or stacked receiver) (`shell.go`) | `docs/modify-reach-design.md` §9, §14 |
 | Modify of a prism whose section carries a displacement bound | `ErrUnsupported` via `requireExactSection` | `docs/modify-design.md` |
 | Shell or junction fillet/chamfer of a revolve whose meridian carries a displacement bound — a revolve shell with a slanted cut, such as a cone's | `ErrUnsupported` via `requireExactRevolveSection` | `docs/surface-intersection-design.md` §7.2 |
 | Variable-radius fillet, face-to-face fillet | No entry point exists | none |

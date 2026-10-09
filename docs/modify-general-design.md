@@ -37,16 +37,16 @@ part makes on them. Every cell was read off the live code with the probe under
 | | | chamfer a hole rim, or both | builds (route P cap loop) |
 | | | fillet a hole rim | SB4 |
 | | | shell removing one y wall, or both | builds (route P cup, tube) |
-| | | shell removing the top face | SB3 |
+| | | shell removing the top face, or both caps | builds (route S) |
 | **P2** pocketed plate: 40×40×10, blind 20×10 pocket 5 deep | stacked | fillet the pocket's 4 vertical edges | builds (route E) |
 | | | fillet the 4 floor edges, or the 4 mouth edges | SB5 |
 | | | chamfer the 4 mouth edges, or the plate's top loop | SB5 |
 | | | fillet the plate's 4 vertical edges | builds (route E) |
-| | | shell removing the top or the bottom | SB10 |
+| | | shell removing the top or the bottom | SG3 |
 | **P3** round boss on a plate: 40×40×10 ∪ Ø10 boss 15 tall | stacked (A1) | fillet the boss root circle | SB4 |
 | | | chamfer or fillet the boss top rim | SB4 |
 | | | fillet the plate's vertical edges | builds (route E) |
-| | | shell removing the bottom | SB10 |
+| | | shell removing the bottom | SG3 |
 | **P4** drilled plate: 60×40×8 with four Ø5 holes in the sketch | prism | chamfer the hole mouths, the top loop, or both | builds (cap loop) |
 | | | fillet the hole mouths, or the top loop | S1 (vertex blend) |
 | | | fillet the vertical edges; shell removing the top | builds |
@@ -54,19 +54,20 @@ part makes on them. Every cell was read off the live code with the probe under
 | **P6** enclosure: 60×40×30 box, 20×10 port through both x walls | brep (class B) | chamfer the port mouth's 4 edges | builds (route P cap loop) |
 | | | fillet the 4 vertical edges | builds (route E) |
 | | | shell removing both x walls | builds (route P tube) |
-| | | shell removing the top face | SB3 (the top is no cap of the prism along x) |
+| | | shell removing the top face | builds (route S) |
 | **P6c** enclosure with a blind port into one x wall | brep (class B) | chamfer one port mouth edge | builds (route E) |
 | | | chamfer the port mouth's 4 edges | SB5 |
-| | | shell removing the top | SB10 |
+| | | shell removing the top | SG3 (the port floor) |
 | **P6b** enclosure shelled first, port cut after | faceted | any request | the cup is no analytic boolean operand; the cut took the mesh path |
 | **P7** L bracket: L section 40×40, 8 thick, 30 tall, Ø6 hole along x through the upright leg | brep (class B) | fillet the inner corner edge, or the leg's two outer edges | builds (route E) |
 | | | fillet or chamfer the hole rims | SB4 |
 | | | chamfer the top cap's loop (6 edges) | SB5 |
-| | | shell removing the top | SB10 |
+| | | shell removing the top | builds (route S) |
 | **P8** rounded plate drilled across: 40×20×20 box, 4 vertical edges filleted r = 3, then Ø6 hole along y | brep (class B) | chamfer a hole rim | SB4 |
 | | | chamfer the top cap's loop (4 lines, 4 arcs) | SB4 |
 | | | fillet one top edge along x | SB7 (its end face is a fillet cylinder) |
-| | | shell removing the top, or one y wall | SB10 |
+| | | shell removing the top | builds (route S) |
+| | | shell removing one y wall | SG5 |
 | **P9** round rod with a cross hole | faceted | any request | SX9's class (`chamfers a straight prism or a revolve only`); cylinder × cylinder has no analytic class |
 
 Ranked by the parts each refusal blocks:
@@ -132,14 +133,15 @@ reference frame, embeds and `brepTopology` are brep-modify §4.1's.
 | TC3 | Route P's P5 over the (a) walls and the (b) outer rectangles: each claims one segment of `S` with the right outward normal, and every segment of `S` is claimed once. |
 | TC4 | Tools. In `brepTopology`, each (c) face's two rims pair with one hole-loop segment of a (b) face each; call them `W0` (at the lower level `L0`) and `W1` (at `L1`). A tool is one hole loop `H` of some `W0`: every segment of `H` pairs with a (c) face whose other rim pairs with a segment of one hole loop `H'` of one `W1`, and `H'` re-expressed into `W0`'s frame equals `H` as P4 compares loops. The tool is `prismPayload{profile: {Outer: reverse(H)}, frame: brepgeom.AxisFrame(ref, j), z0: L0, z1: L1}`, its section in `F_j`'s coordinates. |
 | TC5 | Every hole loop of every (b) face belongs to exactly one tool, and every (c) face to exactly one tool. |
-| TC6 | Every face has `delta = 0` (SB1) and every (c) face's two levels carry zero displacement; a (b) face's level displacement passes through as a prism's does. |
+| TC6 | Every face has `delta = 0` (SB1) and every (c) face's two levels carry zero displacement; a (b) face whose level carries a displacement reads as no rectangle, as route P's P2(b) reader refuses it. |
 
 A stacked union (a boss on a plate) fails TC1: three planar faces across
 `k`. A blind pocket fails TC2: its floor is a third planar face across `k`,
 and its walls' levels are no wall's. A keyway, a boss crossing a plate's
 outline, a hole breaking out of a face, a split side line and an oblique
 wall fail TC2 or TC6. Each is SG3, which names the first face the table does
-not take.
+not take along the first axis whose caps TC1 reads, else the third planar
+face across the first axis holding more than two, else axis 0's reason.
 
 ### 3.2 Removed faces and the sense
 
@@ -197,7 +199,17 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    must build a `brepPayload`; a pair class B does not admit — two dilated
    holes closer than `2t` (B7), a dilated tool reaching a cap of `A'` within
    `t` of a hole (the crossing reach or the mesh path) — is SG6, naming the
-   tool. The private cuts build no `Body` and touch no document.
+   tool. The private cuts build no `Body` and touch no document. Class B
+   admits no section displacement (general-boolean B5), so the cuts run on
+   the offsets' recorded floats with every displacement zero, and every
+   cavity face then takes `δ`, the largest of the offsets' displacements
+   above, as its section displacement, and the largest of `δ` and the cap
+   levels' displacements on both its levels: an upper bound on each face's
+   own. Class B also needs every line exactly along a reference axis (B6),
+   so an eroded polygon whose float miters drift off the axis — any convex
+   corner at a thickness that is no exact float, such as 0.1 in — is SG6; a
+   section whose corners are arcs erodes through G1 joins that keep each line
+   on its axis.
 5. **Assemble.** The result record is: every receiver face but the removed
    ones, verbatim; every cavity face reversed, except those lying in a
    removed face's plane; and one rim region per removed face `R`. Reversal
@@ -216,7 +228,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    equals `(S ⊖ t).Holes[i]`, `i` the index of `h` in `S`; a hole of `R` with
    no such partner, a `Q` hole that partners no `h`, or a `Q` holding a loop
    that is neither its outer nor such a hole, is SG7. The rim regions and
-   bands carry `offsetSectionDelta` as their `delta`.
+   bands carry the cavity's section displacement `δ` as their `delta`.
 6. **Audit.** Every rim region and band runs modify §5's audit: S8, S7, S9.
 7. **Closure.** `assignRoles`, `falsifyBrepPayload`, `brepTopologyContext`:
    an unpaired edge is `ErrUnsupported` (general-boolean §4.2's count), the
@@ -244,7 +256,7 @@ Modify §1's test picks every sentinel.
 | **SG3** | the record is no through-cut record (Table TC): a stacked union, a blind pocket or port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion holds a sphere at each reflex vertex, a torus around each reflex circle, or an elliptical edge where two reflex edges meet | `ErrUnsupported`, naming the first face Table TC does not take |
 | **SG4** | a removed face that is a tool wall, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
 | **SG5** | two removed faces sharing an edge outside §3.2's runs; before S-2, any removed wall | yes | `ErrUnsupported` |
-| **SG6** | a tool's dilation reaches material beyond its pierced wall (TC7), or a private class-B cut does not build a brep: two dilated tools within `2t`, a dilated tool reaching a cap of `A'` | yes | `ErrUnsupported`, naming the tool |
+| **SG6** | a tool's dilation reaches material beyond its pierced wall (TC7), or a private class-B cut does not build a brep: two dilated tools within `2t`, a dilated tool reaching a cap of `A'`, an eroded miter off its axis | yes | `ErrUnsupported`, naming the tool |
 | **SG7** | a rim's loops do not partner the cavity's trace (step 5) | — (a falsifier) | `ErrUnsupported` |
 
 Gate order for a brep or stacked `Shell`, after modify §4's stage 1 and
@@ -498,21 +510,30 @@ Route S (S-1):
 - P8, shell removing the top, `t = 2`: volume within its bound of
   `4984 + 382π` (cavity `18·(572 + π) − 16·25π`).
 - P1 with both caps removed: the rims at both levels, volume within its
-  bound of `5632 + 220π − 36·16·2 + 25π·2` (the cavity grows the bottom
-  slab); P1 placed by a translation reproducing the volume. A stacked
-  receiver always holds a blind interface, so Table TC refuses every one
-  (SG3): P2 is that fixture.
-- Bound fixture, shown to fail first: P1 drawn at the sketch origin, placed
-  `10⁶` mm along x, shelled at `units.Inches(0.1)`: the volume's bound
-  encloses the exact rational closed form, and deleting the cavity faces'
-  `offsetSectionDelta` (set `delta` to zero in step 4) turns the fixture red;
-  the test records that leg.
+  bound of `4480 + 220π` (`5632 + 220π − 36·16·2`: the cavity grows by the
+  bottom slab, which the dilated hole does not reach); P1 placed by a
+  translation reproducing the volume. A stacked receiver always holds a
+  blind interface, so Table TC refuses every one (SG3): P2 is that fixture.
+- Bands: P1 with a Ø4 hole along z through `(8, 10)`, top removed: the rim
+  and one band between the receiver's hole and the cavity's, volume
+  `5632 + 428π`; both caps removed, `4480 + 460π`, the band's wall a lump of
+  its own.
+- Bound fixture, shown to fail first: P8 shelled at `units.Inches(0.1)`
+  (P1 at that thickness is SG6, its float miters off their axes; P8's arc
+  corners keep every line on its axis): every cavity vertex at
+  `x = 40 − t` on `y = 3` and `y = 17` encloses its exact rational position,
+  and deleting the cavity faces' `δ` (set to zero in step 4) turns those
+  vertices red; the test records that leg. The volume encloses the exact
+  rational closed form, unplaced and placed `10⁶` mm along x; its own
+  rounding bound exceeds `δ`'s charge, so it does not see the leg.
 - Refusals: P2 and P6c → SG3 naming the pocket floor; P3 → SG3 naming the
   third planar face across z; a removed hole wall → SG4; a removed wall → SG5
   (until S-2); P1 with a second Ø6 hole along y 7 mm from the first → SG6
-  (the dilated holes meet); a hole 1.5 mm under the top on a 2 mm shell →
-  SG6 or a notched cap that builds, whichever the crossing reach answers,
-  asserted as the one it does; `Outward` → SG1; `WithNoOpenings` → SG2.
+  (the dilated holes meet); P1 at 0.1 in → SG6; a U section with a 1 mm
+  slot, drilled through one arm → SG6 through TC7; `Outward` → SG1;
+  `WithNoOpenings` → SG2. A hole 1.5 mm under the top on a 2 mm shell builds
+  through the crossing reach: the cavity's top splits in two, the rim holds
+  both pieces, and the volume is `5632 + 220π − 16·(25·acos 0.9 − 4.5·√4.75)`.
   Every refusal leaves the receiver live.
 
 Route S (S-2):
@@ -590,7 +611,7 @@ Increment table — what still refuses after each PR:
 | After | Still refused |
 |---|---|
 | 0 | everything Table SB refuses today |
-| S-1 | a removed wall (SG5); every shell of §6; every route L loop |
+| S-1 (landed) | a removed wall (SG5); every shell of §6; every route L loop |
 | S-2 | every shell of §6; every route L loop |
 | L-1 | every consumer of a route L body but mass properties, `Verify`'s structural audit and gate, placement and later modify ops (L-2); §6 |
 | L-2 | §6 alone |

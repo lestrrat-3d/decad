@@ -1110,6 +1110,17 @@
 3	0.02	TestBrepModifyRoutePMapsTheStartCapsHoles
 3	0.01	TestBrepConsumersOnTheClassBCutResult
 3	0.02	TestBrepFaceReversedFlipsTheOutwardSide
+3	0.05	TestBrepShellThroughCutReadsP1
+3	0.10	TestBrepShellThroughCutP1
+3	0.13	TestBrepShellThroughCutBothCaps
+3	0.08	TestBrepShellThroughCutP6
+3	0.10	TestBrepShellThroughCutP7
+3	0.14	TestBrepShellThroughCutP8
+3	0.10	TestBrepShellThroughCutBands
+3	0.13	TestBrepShellThroughCutNotchedCap
+3	0.20	TestBrepShellThroughCutDisplacedOffset
+3	0.30	TestBrepShellThroughCutRefusals
+3	0.10	TestBrepShellThroughCutRimFalsifier
 0	0.00	TestPrismSharedWallMirroredL
 0	0.00	TestPrismSharedWallDisplacedInteriorSpanFallsBack
 0	0.00	TestPrismSharedWallChargesTheGap

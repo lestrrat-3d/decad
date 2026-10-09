@@ -167,7 +167,11 @@
 //	  WithNoOpenings on any other receiver                    ErrUnsupported
 //	Fillet/Chamfer/Shell  brep or stacked boolean result that
 //	                      reads as a prism along an axis      builds
-//	  Shell of a brep that reads as no prism                  ErrUnsupported
+//	Shell         brep read as a prism cut by through tools,
+//	              inward, one or both caps removed            builds
+//	  a brep or stacked result that reads as neither          ErrUnsupported
+//	  outward; a removed wall; dilated tools that meet, reach
+//	    a cap or the material past their walls                ErrUnsupported
 //	Loft          same-type segment pairs, distinct planes    builds
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
 //	  a pair not the same line, arc, circle or Tier A type    ErrUnsupported

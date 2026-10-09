@@ -126,14 +126,24 @@ func WithShellSense(s ShellSense) ShellOption {
 // hole-free straight prism: both caps keep a floor t thick, so an inward wall
 // needs t below half the sweep (SX11, ErrDegenerate). Every other receiver
 // returns ErrUnsupported after the stage-1 gates pass — a holed prism section,
-// and a partial revolve, since it keeps both angular caps. Two WithShellSense
+// a partial revolve, since it keeps both angular caps, and a brep or stacked
+// receiver, whose record holds no void shell (SG2). Two WithShellSense
 // options naming different senses are ErrDegenerate (SX1).
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is shelled as that prism
-// (docs/brep-modify-design.md route P) when the removed faces are its caps;
-// otherwise it is ErrUnsupported: SB3, the prism's own S2, where it reads as
-// a prism, and SB10 where it reads as none.
+// (docs/brep-modify-design.md route P) when the removed faces are its caps.
+// A brep that reads as a prism along one reference axis cut by through tools
+// along others is shelled inward with one or both of that prism's caps
+// removed (docs/modify-general-design.md route S): the cavity is the eroded
+// prism cut by each tool dilated by t, and the result is a brep holding the
+// receiver's kept faces, the cavity's faces and one rim per removed cap. On
+// such a record an outward shell (SG1), a removed tool or hole wall (SG4) or
+// side wall (SG5), and dilated tools that meet, reach a cap of the cavity or
+// the material past the walls they pierce (SG6) are ErrUnsupported. A brep or
+// stacked result that reads as neither is ErrUnsupported: SB3, the prism's own
+// S2, where it reads as a prism, and SB10 where it does not, each naming the
+// first face route S does not take (SG3).
 func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a shell`, ErrDegenerate)
@@ -229,9 +239,13 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		admits: func(_ prismPayload, caps prismCaps) error {
 			_, _, err := classifyRemovedCaps(caps, removed)
 			return err
-		}})
+		},
+		shellCall: brepShellCall{removed: removed, sense: sense, t: t, tmm: tmm, tDelta: tDelta}})
 	if err != nil {
 		return nil, err
+	}
+	if route.body != nil {
+		return commitModifyResult(ctx, b, route.body)
 	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then the removed faces:
@@ -439,15 +453,16 @@ func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp 
 // and a hole-free straight prism, which shellClosedPrism builds
 // (docs/modify-reach-design.md Tables RX/SX, §14). Each receiver gets the row
 // that stages it: a faceted boolean result SX9, a brep or stacked receiver
-// SX16, a holed prism section or revolve meridian SX8, a partial revolve SX8
-// (it keeps both angular caps), and any other receiver base S3. Every one is
+// docs/modify-general-design.md's SG2, a holed prism section or revolve
+// meridian SX8, a partial revolve SX8 (it keeps both angular caps), and any
+// other receiver base S3. Every one is
 // ErrUnsupported: the closed body exists, and this evaluator does not build it.
 func refuseClosedShell(payload featurePayload) error {
 	switch p := payload.(type) {
 	case facetedPayload:
 		return fmt.Errorf(`%w: this evaluator modifies no faceted boolean result (modify-reach SX9)`, ErrUnsupported)
 	case brepPayload, stackedPrismPayload:
-		return fmt.Errorf(`%w: this evaluator does not build a closed shell of a brep or stacked receiver (modify-reach SX16)`, ErrUnsupported)
+		return fmt.Errorf(`%w: this evaluator does not build a closed shell of a brep or stacked receiver; a brep record's lumps are its connected face sets, so it holds no void shell (modify-general SG2)`, ErrUnsupported)
 	case prismPayload:
 		// Shell routes a hole-free section to shellClosedPrism, so the prism
 		// that arrives here is holed.

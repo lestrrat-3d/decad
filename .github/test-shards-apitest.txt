@@ -105,6 +105,7 @@
 0	0.01	TestSelectEdgesPredicates
 0	0.01	TestSheetSolidPairOutsideProvenSound
 0	0.08	TestShellClosedPrism
+0	0.05	TestBrepShellRemovesTheTop
 0	0.08	TestShellClosedPrismCylinder
 0	0.08	TestShellClosedPrismGatesAndConsumers
 0	0.02	TestShellCupDownstream

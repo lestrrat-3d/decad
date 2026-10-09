@@ -89,10 +89,10 @@ the rules leave to the byte budget.
 |---|---|
 | `moments.go` / `moments_validate.go` | Moment aliases and adapters. See evaluator §4. |
 | `mass_properties.go` / `mass_properties_rotated.go` | Prism mass. See `docs/dynamic-mass-design.md` §2–§3. |
-| `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Sphere and cylinder mass. See `docs/dynamic-mass-design.md`. |
+| `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Sphere and cylinder mass. See dynamic-mass. |
 | `mass_properties_revolve.go` | Revolve mass. See `docs/multibody-dynamics-design.md` §8.6. |
 | `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See `docs/multibody-dynamics-design.md` §8. |
-| `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See `docs/dynamic-mass-design.md`. |
+| `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See dynamic-mass. |
 | `moments_circular.go` | Adapts circle and arc records to `internal/circularbounds/`. |
 
 ### Features
@@ -164,7 +164,8 @@ the rules leave to the byte budget.
 | `shell_revolve.go` | `Body.Shell` of a revolve. See modify-reach §9.3. |
 | `shell_opening.go` | Prism side opening: classify removed faces and assemble the audited regions. See shell-opening §3–§5. |
 | `shell_opening_brep.go` | Records a prism side opening as a prism or a stacked brep. See shell-opening §4. |
-| `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See `docs/brep-modify-design.md`. |
+| `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
+| `brep_shell.go` | Route S: shell of a through-cut brep. See modify-general §3. |
 | `brep_modify_edge.go` | Route E: Table EB, restatement, blends, trims and closure. See brep-modify §5. |
 
 ### Cap-loop chamfer
@@ -196,12 +197,12 @@ the rules leave to the byte budget.
 | `clearance_box.go` | Certifies unplaced axis-aligned box prisms and bounds their gap from exact box planes ahead of the kernel. |
 | `clearance_planar.go` | The exact planar pair arm for mitred, faceted and coil bodies: interference §3.2. |
 | `contact_pair.go` / `contact_pair_memo.go` | Pair gates, reports, and memo. See `docs/contact-geometry-design.md`. |
-| `contact_box.go` | Source-box admission and public face/measurement mapping. See `docs/contact-geometry-design.md` §4. |
+| `contact_box.go` | Source-box admission and public face/measurement mapping. See contact-geometry §4. |
 | `contact_faceted_pair.go` | Planar admission, convexity and the bands. See `docs/multibody-dynamics-design.md` §9–§10. |
 | `contact_faceted_manifold.go` / `contact_faceted_patch.go` | Planar manifold faces and witnesses. See multibody §9. |
-| `contact_faceted_support.go` | Exact faceted support-face proof and bounded strict separation. See `docs/contact-geometry-design.md` §4. |
-| `contact_faceted_sweep.go` | Faceted floor sweeps: exact support face, or clearance by swept boxes. See `docs/contact-sweep-design.md`. |
-| `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
+| `contact_faceted_support.go` | Exact faceted support-face proof and bounded strict separation. See contact-geometry §4. |
+| `contact_faceted_sweep.go` | Faceted floor sweeps: exact support face, or clearance by swept boxes. See contact-sweep. |
+| `contact_oriented_box.go` | Rotated boxes. See contact-geometry §4. |
 | `contact_oriented_patch.go` | Publishes oblique box patches from `internal/pair/box/` geometry. See contact geometry §4. |
 | `contact_clipped_patch.go` | Publishes horizontal box patches from exact polygon clips. See contact geometry §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box contact and sweep. See contact-sweep §4–§5. |
@@ -233,7 +234,7 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect` and the `BooleanError` mapping. See evaluator §9. |
-| `prism_boolean.go` | Analytic Union/Cut/Intersect of co-directional coplanar or offset-plane prisms. See `docs/prism-boolean-design.md`. |
+| `prism_boolean.go` | Analytic Union/Cut/Intersect of co-directional coplanar or offset-plane prisms. See prism-boolean. |
 | `prism_boolean_nesting.go` | Clean-nesting scene adapters. See prism-boolean §4.2. |
 | `prism_boolean_blind.go` | Blind and spanning Cuts via the whole-loop match. See `docs/prism-boolean-design.md` §3.2. |
 | `stacked_prism.go` | Stacked slabs, walls and measurements. See `docs/stacked-prism-design.md`. |
@@ -281,7 +282,7 @@ the rules leave to the byte budget.
 | `internal/sweeppath/` | Pair paths, validation, rounded poses, and motion travel bounds. |
 | `internal/planarsnapshot/` | Exact prism and held-mesh snapshots for planar contact. See multibody §9.1. |
 | `internal/placedruling/` | Placed cylinder support proofs. See contact-geometry §4.5. |
-| `internal/facetproof/` | Faceted shell audits, placement, restatement, bounds, and axis support proofs. See `docs/evaluator-design.md` §9. |
+| `internal/facetproof/` | Faceted shell audits, placement, restatement, bounds, and axis support proofs. See evaluator §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/surfacegeom/` | Sealed face and edge variants, placement transforms and circular curve bound. See API §6.1, surface §6. |
 | `internal/reportvocab/` | Contact/sweep enums; Verify, Motion, Linkage and JointBox reports, survey diagnostics and conclusions. |

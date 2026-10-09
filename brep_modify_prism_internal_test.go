@@ -133,13 +133,13 @@ func TestBrepModifyRoutePChamfersS1HoleRim(t *testing.T) {
 	require.Equal(t, DiagUndecidedMinRadius, br.ConcaveRadius.Diagnostics[0].Code)
 }
 
-// TestBrepModifyRoutePShellsS1 pins BB3 and SB3: removing S1's y = 20 face
-// shells the recognised prism into a cup open at y = 20, and removing its
-// x = 0 face, a side wall of every prism it reads as, refuses with the prism
-// path's S2. The cup is 20·(800 − 9π) less the cavity 18·(576 − 25π). Shown
-// to fail with brepPrismRead.caps swapping the start and end caps (the cup
-// opened at y = 0, its +y faces all at y = 20) and with modifyBrepReceiver's
-// SB3 arm deleted (the side-wall removal read SB10).
+// TestBrepModifyRoutePShellsS1 pins BB3: removing S1's y = 20 face shells
+// the recognised prism into a cup open at y = 20, and removing its x = 0
+// face, a side wall of every prism it reads as, falls past route P to route
+// S, which reads S1 as the box along z and refuses a removed wall
+// (docs/modify-general-design.md SG5). The cup is 20·(800 − 9π) less the
+// cavity 18·(576 − 25π). Shown to fail with brepPrismRead.caps swapping the
+// start and end caps (the cup opened at y = 0, its +y faces all at y = 20).
 func TestBrepModifyRoutePShellsS1(t *testing.T) {
 	t.Parallel()
 	y := r3.NewVec(0, 1, 0)
@@ -168,7 +168,7 @@ func TestBrepModifyRoutePShellsS1(t *testing.T) {
 		doc, s1 := internalCrossDrilled(t)
 		before := doc.Bodies()
 		_, err := s1.Shell(t.Context(), Faces(Facing(r3.NewVec(-1, 0, 0))).Exactly(1), units.Millimeters(2))
-		requireRefusesUnchanged(t, s1, before, err, "removes a side wall", "brep-modify SB3")
+		requireRefusesUnchanged(t, s1, before, err, "a wall of the prism", "modify-general SG5")
 	})
 }
 

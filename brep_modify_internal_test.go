@@ -57,16 +57,18 @@ func requireSB1Names(t *testing.T, body *Body) {
 // (§2, §6): a selection no prism reading admits falls to route E, where a
 // Fillet or Chamfer of every convex edge refuses with SB5, since the edges
 // share vertices (brep_modify_edge_internal_test.go pins route E); a Shell
-// refuses with SB3 where the body reads as a prism whose caps are not the
-// removed faces, and with SB10 where it reads as none. S1's convex edges
-// include cap edges, which no prism reading takes; the stacked pocket reads
-// as no prism. Every refusal leaves the receiver live. Shown to fail with
-// modifyBrepReceiver's shell arms deleted (each Shell read SX16) and with
-// its route E arm replaced by a nil return (each Fillet and Chamfer fell
-// through to the generic "straight prism" refusal).
+// falls to route S (docs/modify-general-design.md §3), which refuses S1's
+// every planar face with SG5, since S1 reads as the box along z cut by the
+// tool along y and the selection removes its walls, and refuses the stacked
+// pocket with SB10's and SG3's text, since it reads as neither a prism nor a
+// through-cut record. S1's convex edges include cap edges, which no prism
+// reading takes. Every refusal leaves the receiver live. Shown to fail with
+// modifyBrepReceiver's shell arm deleted (each Shell then fell to route L's
+// arm and read SX16) and with its route E arm replaced by a nil return (each
+// Fillet and Chamfer fell through to the generic "straight prism" refusal).
 func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 	t.Parallel()
-	refuses := func(t *testing.T, body *Body, shell string) {
+	refuses := func(t *testing.T, body *Body, shell ...string) {
 		t.Helper()
 		before := body.doc.Bodies()
 		edges := Edges(Convex()).AtLeast(1)
@@ -75,12 +77,12 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 		_, err = body.Chamfer(t.Context(), edges, units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, "brep-modify SB5", "chamfers")
 		_, err = body.Shell(t.Context(), Faces(Planar()).AtLeast(1), units.Millimeters(1))
-		requireRefusesUnchanged(t, body, before, err, shell)
+		requireRefusesUnchanged(t, body, before, err, shell...)
 	}
 	t.Run("brep", func(t *testing.T) {
 		t.Parallel()
 		_, s1 := internalCrossDrilled(t)
-		refuses(t, s1, "brep-modify SB3")
+		refuses(t, s1, "modify-general SG5")
 	})
 	t.Run("stacked pocket", func(t *testing.T) {
 		t.Parallel()
@@ -88,7 +90,7 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 		sp, ok := pocket.payload.(stackedPrismPayload)
 		require.True(t, ok, "the pocket is a stacked prism, got %T", pocket.payload)
 		require.Zero(t, sp.sectionDelta)
-		refuses(t, pocket, "brep-modify SB10")
+		refuses(t, pocket, "brep-modify SB10", "modify-general SG3")
 	})
 }
 
