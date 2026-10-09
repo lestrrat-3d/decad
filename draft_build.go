@@ -281,11 +281,7 @@ func sharpOffsetJoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.Side
 	if err != nil {
 		return nil, wrapDraftOffsetError(err)
 	}
-	joins := make([]cornerJoin, len(result))
-	for i, j := range result {
-		joins[i] = cornerJoin{g1: j.G1, vU: j.VertU, vV: j.VertV, m: Point2{U: j.M.U, V: j.M.V}}
-	}
-	return joins, nil
+	return result, nil
 }
 
 // wrapDraftOffsetError states an offset refusal as the Table SD row it is.

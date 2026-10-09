@@ -219,10 +219,10 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 		if !on {
 			continue
 		}
-		if cl.walks[i].IsCircular() && !filletSphereWalk(cl.walks[i], amounts[i]) {
+		if cl.walks[i].IsCircular() && !filletband.SphereWalk(cl.walks[i], amounts[i]) {
 			return brepPayload{}, r.refuse("SL2", `a selected circular walk has no supported partial-loop patch`)
 		}
-		if !filletSphereWalk(cl.walks[i], amounts[i]) {
+		if !filletband.SphereWalk(cl.walks[i], amounts[i]) {
 			continue
 		}
 		next := (i + 1) % len(selected)

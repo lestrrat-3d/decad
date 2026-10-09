@@ -315,8 +315,8 @@ func TestCapBlendCornerChordReachesArcNaturalEnd(t *testing.T) {
 	const prec = 256
 	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
 	dist := func(u, v *big.Float, j cornerJoin) *big.Float {
-		du := new(big.Float).SetPrec(prec).Sub(f(j.m.U), u)
-		dv := new(big.Float).SetPrec(prec).Sub(f(j.m.V), v)
+		du := new(big.Float).SetPrec(prec).Sub(f(j.M.U), u)
+		dv := new(big.Float).SetPrec(prec).Sub(f(j.M.V), v)
 		dz := f(setback.ds)
 		du.Mul(du, du)
 		dv.Mul(dv, dv)
@@ -325,15 +325,15 @@ func TestCapBlendCornerChordReachesArcNaturalEnd(t *testing.T) {
 	}
 	checked := 0
 	for i, j := range joins {
-		if j.vU != arc.End.U || j.vV != arc.End.V {
+		if j.VertU != arc.End.U || j.VertV != arc.End.V {
 			continue
 		}
-		require.False(t, j.g1, `the corner at End is a miter`)
+		require.False(t, j.G1, `the corner at End is a miter`)
 		lower, err := tessellation.CapBlendCornerChordSqLower(capBlendLocusInput(cbp, walks, i, j))
 		require.NoError(t, err)
 		du, dv := arcDenotedEnd(arc)
 		toDenoted := dist(du, dv, j)
-		held := dist(f(j.vU), f(j.vV), j)
+		held := dist(f(j.VertU), f(j.VertV), j)
 		require.Positive(t, new(big.Float).Sub(held, toDenoted).Sign(), `the denoted corner sits nearer the foot than End`)
 		worst := new(big.Float).SetPrec(prec).Sub(toDenoted, f(footDelta))
 		worst.Sub(worst, f(setback.dsDelta))

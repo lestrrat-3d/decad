@@ -694,13 +694,13 @@ func TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus(t *testing.T) {
 				gap, err := tessellation.CapBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()),
 					capBlendLocusInput(cbp, walks, i, j))
 				require.NoError(t, err)
-				if j.vU != r || j.vV != 0 {
+				if j.VertU != r || j.VertV != 0 {
 					continue
 				}
 				locus := func(s float64) r3.Vec {
 					return r3.NewVec(math.Sqrt(r*r-2*r*tc.dc*s), s*tc.dc, s*tc.ds)
 				}
-				a, b := locus(0), r3.NewVec(j.m.U, j.m.V, tc.ds)
+				a, b := locus(0), r3.NewVec(j.M.U, j.M.V, tc.ds)
 				axis := b.Sub(a)
 				worst := 0.0
 				for k := range 4097 {

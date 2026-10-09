@@ -61,35 +61,11 @@ func offsetProfile(budget *proofbound.WorkBudget, profile profileRecord, s, t fl
 // decided by offset2d.SectionJoinsBudget. The build (offset2d.BuildLoop) and
 // its displacement proof (offsetSectionDelta) read those same joins.
 func offsetJoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t float64) ([]cornerJoin, error) {
-	result, err := offset2d.SectionJoinsBudget(budget, walks, s, t, shellTol)
-	if err != nil {
-		return nil, err
-	}
-	joins := make([]cornerJoin, len(result))
-	for i, j := range result {
-		joins[i] = cornerJoin{
-			arc: j.Arc, g1: j.G1, vU: j.VertU, vV: j.VertV,
-			m:  Point2{U: j.M.U, V: j.M.V},
-			pA: Point2{U: j.PA.U, V: j.PA.V},
-			pB: Point2{U: j.PB.U, V: j.PB.V},
-		}
-	}
-	return joins, nil
+	return offset2d.SectionJoinsBudget(budget, walks, s, t, shellTol)
 }
 
-// cornerJoin is one corner's resolved offset join: a miter point m, or an arc
-// of radius t about (vU, vV) from pA (the arriving walk's offset end) to pB (the
-// leaving walk's offset start).
-type cornerJoin struct {
-	arc bool
-	// g1 marks a G1 join (modify §7): m is the leaving walk's offset start
-	// v + s·t·n̂, not a carrier intersection, and the corner ruling v→m is the
-	// exact affine locus.
-	g1     bool
-	vU, vV float64
-	m      Point2
-	pA, pB Point2
-}
+// cornerJoin is the shared section offset join read by the root builders.
+type cornerJoin = offset2d.Join
 
 // auditOffsetSectionBudget runs the shared §5 audit (fillet_audit.go) on a shell's
 // offset section, in §4's order: S8 (orientation — an offset loop turned inside

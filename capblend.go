@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -670,15 +671,15 @@ func requireCapBlendCornerLoci(budget *proofbound.WorkBudget, cbp capBlendPayloa
 		n := len(walks)
 		for i, j := range joins {
 			prev, cur := walks[(i+n-1)%n], walks[i]
-			if j.arc || j.g1 || (!prev.IsCircular() && !cur.IsCircular()) {
+			if j.Arc || j.G1 || (!prev.IsCircular() && !cur.IsCircular()) {
 				continue
 			}
-			_, ok, err := capband.MiterLocusUpper(budget, prev, cur, j.vU, j.vV, setback.axialUpper(), setback.dc, setback.dcDelta)
+			_, ok, err := capband.MiterLocusUpper(budget, prev, cur, j.VertU, j.VertV, setback.axialUpper(), setback.dc, setback.dcDelta)
 			if err != nil {
 				return err
 			}
 			if !ok {
-				return fmt.Errorf(`%w: loop %d of this cap-loop chamfer has a corner at (%v, %v) where a circular wall meets its neighbour tangentially or nearly so without running on as one smooth wall, and this evaluator cannot bound the path the corner's offset foot takes there, so no cap-level ruling at that corner can be built with a proven bound`, ErrUnsupported, li, j.vU, j.vV)
+				return fmt.Errorf(`%w: loop %d of this cap-loop chamfer has a corner at (%v, %v) where a circular wall meets its neighbour tangentially or nearly so without running on as one smooth wall, and this evaluator cannot bound the path the corner's offset foot takes there, so no cap-level ruling at that corner can be built with a proven bound`, ErrUnsupported, li, j.VertU, j.VertV)
 			}
 		}
 	}
@@ -819,11 +820,11 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (pro
 		}
 		var segs []curveSegment
 		if cbp.fillet && (len(loops[li].walks) != 1 || !loops[li].walks[0].Closed) {
-			joins, joinErr := filletOffsetJoins(budget, loops[li], cbp.loopOffset(li), cbp.loopSetback(li).dcDelta)
+			joins, joinErr := filletband.OffsetJoins(budget, loops[li].walks, cbp.loopOffset(li), cbp.loopSetback(li).dcDelta, shellTol)
 			if joinErr != nil {
 				return profileRecord{}, offset2d.InLoop(joinErr, li)
 			}
-			segs, err = filletOffsetLoop(budget, loops[li].walks, joins, cbp.loopOffset(li))
+			segs, err = filletband.OffsetLoop(budget, loops[li].walks, joins, cbp.loopOffset(li), shellTol)
 		} else {
 			segs, err = offset2d.BuildLoop(budget, loops[li].walks, 1, cbp.loopOffset(li), shellTol)
 		}

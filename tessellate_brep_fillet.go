@@ -242,7 +242,7 @@ func (bc *brepBandChord) emitFillet(m *Mesh, faceOfRole func(string) (*Face, err
 		eps := proofbound.AbsSumUpper(sPhi, ring, twist[p], fr.seamGap[i], fr.seamGap[(i+1)%n])
 		bc.finishPatch(m, faces[p], eps, delta, levelDelta, axial, first[p], last[p], bump)
 		p++
-		if ni := (i + 1) % n; lm.joins != nil && lm.joins[ni].arc {
+		if ni := (i + 1) % n; lm.joins != nil && lm.joins[ni].Arc {
 			eps := proofbound.AbsSumUpper(sPhi, lm.arcSag[ni], twist[p])
 			bc.finishPatch(m, faces[p], eps, delta, levelDelta, axial, first[p], last[p], bump)
 			p++

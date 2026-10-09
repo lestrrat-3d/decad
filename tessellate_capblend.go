@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
@@ -484,7 +485,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 		Whole: lm.whole, Chamfered: lm.chamfered, D: cbp.loopOffset(li), Chord: chord,
 		Setback: capBlendProofSetback(cbp.loopSetback(li)), FootDelta: cbp.loopBandDelta(li),
 	}, budget, func(w survey2d.SideWalk, d float64) (float64, error) {
-		if cbp.fillet && filletSphereWalk(w, d) {
+		if cbp.fillet && filletband.SphereWalk(w, d) {
 			return 0, nil
 		}
 		// A subset draft's kept wall keeps its own radius (walkAmounts).
@@ -531,7 +532,7 @@ func capBlendSampleJoins(joins []cornerJoin) []tessellation.CapBlendJoin {
 	out := make([]tessellation.CapBlendJoin, len(joins))
 	for i, j := range joins {
 		out[i] = tessellation.CapBlendJoin{
-			Arc: j.arc, G1: j.g1, VU: j.vU, VV: j.vV, M: j.m, PA: j.pA, PB: j.pB,
+			Arc: j.Arc, G1: j.G1, VU: j.VertU, VV: j.VertV, M: j.M, PA: j.PA, PB: j.PB,
 		}
 	}
 	return out
