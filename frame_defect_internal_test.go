@@ -60,7 +60,7 @@ import (
 //     R46. A revolve junction arc and a cap blend's arcs carry vertex bounds
 //     Body.Patch refuses first (R6), so TestCurveBoundsCoverMappedReference
 //     checks their curve bounds directly;
-//   - the endpoint-support arm of auditAdjacentSweepSpans: the rotated
+//   - the endpoint-support arm of compositesweep's adjacent-span audit: the rotated
 //     composite sweep refused as "not certified on opposite sides".
 //
 // Every expected factor reads the frame the payload records

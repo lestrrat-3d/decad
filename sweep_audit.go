@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -20,22 +18,14 @@ type sweepAuditSpan struct {
 	endCap   *Face
 }
 
-// auditCompositeSweep conservatively proves that the closed span bodies can
-// be united without adding contact beyond their intended shared sections.
-// The caller must first prove that every adjacent cap pair has matching rim
-// topology. Adjacent spans are then certified on opposite sides of that cap's
-// plane, while non-neighbours require strictly separated bounded boxes.
 func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if len(spans) < 2 {
-		return fmt.Errorf(`%w: a composite sweep audit requires at least two spans`, ErrDegenerate)
+		return compositesweep.Audit(ctx, nil)
 	}
-	pairs, ok := proofbound.WallChoose2(uint64(len(spans)))
-	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: the composite sweep audit exceeds its fixed pair budget`, ErrUnsupported)
-	}
+	audit := make([]compositesweep.AuditSpan, len(spans))
 	for i, span := range spans {
 		if span.body == nil || span.startCap == nil || span.endCap == nil {
 			return fmt.Errorf(`%w: composite sweep span %d has incomplete audit geometry`, ErrUnsupported, i)
@@ -43,84 +33,35 @@ func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
 		if span.startCap.body != span.body || span.endCap.body != span.body {
 			return fmt.Errorf(`%w: composite sweep span %d has a cap from another body`, ErrUnsupported, i)
 		}
-	}
-
-	operation := proofbound.NewWorkBudget(ctx)
-	geometry := freeform.NewFreeformWork()
-	for i := range spans {
-		for j := i + 1; j < len(spans); j++ {
-			if err := operation.Step(); err != nil {
-				return err
-			}
-			var err error
-			if j == i+1 {
-				err = auditAdjacentSweepSpans(ctx, spans[i], spans[j], geometry)
-			} else if !sweepAuditBoxesStrictlySeparated(spans[i].body.bounds, spans[j].body.bounds) {
-				err = fmt.Errorf(`%w: sweep spans %d and %d have no strict bounded-box separation`, ErrUnsupported, i, j)
-			}
-			if err != nil {
-				return err
-			}
+		startPlane, startPlanar := span.startCap.surface.(Plane)
+		_, endPlanar := span.endCap.surface.(Plane)
+		bounds := span.body.bounds
+		audit[i] = compositesweep.AuditSpan{
+			StartPlane:       startPlane,
+			StartPlanar:      startPlanar,
+			EndPlanar:        endPlanar,
+			EndpointSupports: sweepAuditEndpointSupports(span.body),
+			Box: compositesweep.AuditBox{
+				Min: bounds.Min, Max: bounds.Max, Bound: bounds.Bound.Base(),
+			},
+			Extent: span,
 		}
 	}
-	return operation.Err()
+	return compositesweep.Audit(ctx, audit)
 }
 
-func auditAdjacentSweepSpans(
-	ctx context.Context,
-	before, after sweepAuditSpan,
-	geometry *freeform.FreeformWork,
-) error {
-	if _, ok := before.endCap.surface.(Plane); !ok {
-		return fmt.Errorf(`%w: an adjacent sweep section is not planar`, ErrUnsupported)
+// AuditExtent reads the analytic extent of a built sweep span.
+func (span sweepAuditSpan) AuditExtent(
+	ctx context.Context, direction r3.Vec, work *freeform.FreeformWork,
+) (float64, float64, float64, error) {
+	switch payload := span.body.payload.(type) {
+	case prismPayload:
+		return payload.extentBoundedAlong(ctx, direction, work, payload.walks)
+	case revolvePayload:
+		return payload.extentBoundedAlong(ctx, direction, work)
+	default:
+		return 0, 0, 0, fmt.Errorf(`%w: a composite sweep span has no analytic extent certificate`, ErrUnsupported)
 	}
-	startPlane, ok := after.startCap.surface.(Plane)
-	if !ok {
-		return fmt.Errorf(`%w: an adjacent sweep section is not planar`, ErrUnsupported)
-	}
-	// The next span starts from the certified transported frame, while a
-	// preceding arc's independently evaluated end cap may hold a rounded image
-	// of that frame. The rim-pairing precondition proves both caps denote one
-	// section. Use the next span's exact start plane as the separating plane,
-	// rather than requiring the two held cap frames to be bit-identical.
-	startNormal := startPlane.Frame.N()
-	direction := startNormal.Scale(-1)
-	startOrigin := startPlane.Frame.Origin()
-	if !proofbound.FiniteVec(direction) || !proofbound.FiniteVec(startOrigin) {
-		return fmt.Errorf(`%w: an adjacent sweep section has no finite separating plane`, ErrUnsupported)
-	}
-	planeValue := startOrigin.Dot(direction)
-	planeBound := proofbound.ExactIsometryDotRound(r3.Identity(), startOrigin, direction, false, planeValue)
-	planeLo, planeHi := proofbound.BoundedEnds(proofbound.MeasuredScalar(planeValue, planeBound))
-	_, beforeHi, beforeBound, err := sweepAuditExtent(ctx, before.body, direction, geometry)
-	if err != nil {
-		return err
-	}
-	afterLo, _, afterBound, err := sweepAuditExtent(ctx, after.body, direction, geometry)
-	if err != nil {
-		return err
-	}
-	beforeLower, beforeUpper := proofbound.BoundedEnds(proofbound.MeasuredScalar(beforeHi, beforeBound))
-	afterLower, afterUpper := proofbound.BoundedEnds(proofbound.MeasuredScalar(afterLo, afterBound))
-	// A span whose own construction makes its endpoint cap a supporting
-	// plane (sweepAuditEndpointSupports) lies on its side of that cap's
-	// plane by construction, and the rim-pairing precondition proves the two
-	// caps denote one section, so the extent reading is then only a
-	// falsifier: it refuses an extreme proven past the plane, and admits
-	// nothing on its own. A placement's rounding widens both the extreme and
-	// the plane, so their held values need not be equal.
-	beforeSupported := beforeUpper <= planeLo ||
-		(sweepAuditEndpointSupports(before.body) && beforeLower <= planeHi)
-	afterSupported := afterLower >= planeHi ||
-		(sweepAuditEndpointSupports(after.body) && afterUpper >= planeLo)
-	if !beforeSupported || !afterSupported {
-		return fmt.Errorf(
-			`%w: adjacent sweep spans are not certified on opposite sides of their shared section `+
-				`(before upper %g, plane [%g,%g], after lower %g)`,
-			ErrUnsupported, beforeUpper, planeLo, planeHi, afterLower,
-		)
-	}
-	return nil
 }
 
 // sweepAuditEndpointSupports reports whether a span's local construction
@@ -146,40 +87,4 @@ func sweepAuditEndpointSupports(body *Body) bool {
 	default:
 		return false
 	}
-}
-
-func sweepAuditExtent(
-	ctx context.Context,
-	body *Body,
-	direction r3.Vec,
-	work *freeform.FreeformWork,
-) (float64, float64, float64, error) {
-	switch payload := body.payload.(type) {
-	case prismPayload:
-		return payload.extentBoundedAlong(ctx, direction, work, payload.walks)
-	case revolvePayload:
-		return payload.extentBoundedAlong(ctx, direction, work)
-	default:
-		return 0, 0, 0, fmt.Errorf(`%w: a composite sweep span has no analytic extent certificate`, ErrUnsupported)
-	}
-}
-
-// sweepAuditBoxesStrictlySeparated requires a positive certified gap. Equality
-// is intentionally rejected because non-neighbour sweep spans may not touch.
-func sweepAuditBoxesStrictlySeparated(a, b Box) bool {
-	aBound, bBound := a.Bound.Base(), b.Bound.Base()
-	for _, axis := range [][4]float64{
-		{a.Min.X, a.Max.X, b.Min.X, b.Max.X},
-		{a.Min.Y, a.Max.Y, b.Min.Y, b.Max.Y},
-		{a.Min.Z, a.Max.Z, b.Min.Z, b.Max.Z},
-	} {
-		aMin, _ := proofbound.BoundedEnds(proofbound.MeasuredScalar(axis[0], aBound))
-		_, aMax := proofbound.BoundedEnds(proofbound.MeasuredScalar(axis[1], aBound))
-		bMin, _ := proofbound.BoundedEnds(proofbound.MeasuredScalar(axis[2], bBound))
-		_, bMax := proofbound.BoundedEnds(proofbound.MeasuredScalar(axis[3], bBound))
-		if aMax < bMin || bMax < aMin {
-			return true
-		}
-	}
-	return false
 }
