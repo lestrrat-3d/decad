@@ -122,6 +122,7 @@
 //	    tolerance where the pair meets it                     ErrUnsupported
 //	  cap-loop chamfer operand whose band has a mitered
 //	    circular wall or a reflex corner                      ErrUnsupported
+//	  brep operand carrying complete-loop chamfer bands       ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
 //	  exact coplanar / face-on-face / point contact outside
 //	    the admitted analytic prism reduction                 ErrUnsupported
@@ -136,15 +137,21 @@
 //	Chamfer       complete prism cap loop(s)                  builds
 //	Fillet/Chamfer  brep or stacked boolean result, straight
 //	  edge along a reference axis                             builds
+//	Chamfer       complete loop(s) of planar faces of a brep
+//	  or stacked boolean result                               builds
 //	  Fillet of a cap edge (the vertex blend)                 ErrUnsupported
+//	  brep loop selection partial, mixed with lone edges
+//	    or sharing an edge; a face beside the loop curved,
+//	    oblique, split, or on both sides of its face          ErrUnsupported
 //	  partial or lateral-mixed cap-loop selection             ErrUnsupported
 //	  cap-loop setback the radius or sweep cannot name        ErrUnsupported
 //	  cap-loop corner whose offset cannot be enclosed         ErrUnsupported
 //	  revolve cap edge or edge on the axis                    ErrUnsupported
 //	  revolve blend arc centred across the axis               ErrUnsupported
-//	  brep edge curved, sharing a vertex, ending on a curved
-//	    face or blend, on or along a split, oblique or
-//	    displaced straight wall, or end faces disagreeing     ErrUnsupported
+//	  brep edge curved or sharing a vertex outside complete
+//	    loops, ending on a curved face or blend, on or along
+//	    a split, oblique or displaced straight wall, or end
+//	    faces disagreeing                                     ErrUnsupported
 //	  other receiver, or a cap-loop chamfer result            ErrUnsupported
 //	Shell         straight prism (tube, cup, or one band per
 //	              loop when both caps leave a holed section)  builds
@@ -201,6 +208,7 @@
 //	  revolve whose tolerance its coordinate stages exhaust   ErrUnsupported
 //	  revolve chording no bounded refinement can prove        ErrUnsupported
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
+//	  brep body carrying complete-loop chamfer bands          ErrUnsupported
 //	  a chorded free-form wall past the fixed work budget     ErrUnsupported
 //
 // Options: among the MODEL-CONSTRUCTION verbs, New and Revolve expose option

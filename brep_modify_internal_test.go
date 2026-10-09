@@ -54,18 +54,20 @@ func requireSB1Names(t *testing.T, body *Body) {
 }
 
 // TestBrepModifyOutsideRoutePRefuses pins the refusals that follow route P
-// (§2, §6): a selection no prism reading admits falls to route E, where a
-// Fillet or Chamfer of every convex edge refuses with SB5, since the edges
-// share vertices (brep_modify_edge_internal_test.go pins route E); a Shell
-// falls to route S (docs/modify-general-design.md §3), which refuses S1's
-// every planar face with SG5, since S1 reads as the box along z cut by the
-// tool along y and the selection removes its walls, and refuses the stacked
-// pocket with SB10's and SG3's text, since it reads as neither a prism nor a
-// through-cut record. S1's convex edges include cap edges, which no prism
-// reading takes. Every refusal leaves the receiver live. Shown to fail with
-// modifyBrepReceiver's shell arm deleted (each Shell then fell to route L's
-// arm and read SX16) and with its route E arm replaced by a nil return (each
-// Fillet and Chamfer fell through to the generic "straight prism" refusal).
+// (§2, §6): a selection no prism reading admits falls to route E or route L
+// (docs/modify-general-design.md §4). A Fillet of every convex edge refuses
+// with route E's SB5, since the edges share vertices and form no set of
+// complete loops (brep_modify_edge_internal_test.go pins route E); a Chamfer
+// of them refuses with route L's SL1 for the same reason; a Shell falls to
+// route S (docs/modify-general-design.md §3), which refuses S1's every planar
+// face with SG5, since S1 reads as the box along z cut by the tool along y and
+// the selection removes its walls, and refuses the stacked pocket with SB10's
+// and SG3's text, since it reads as neither a prism nor a through-cut record.
+// S1's convex edges include cap edges, which no prism reading takes. Every
+// refusal leaves the receiver live. Shown to fail with modifyBrepReceiver's
+// shell arm deleted (each Shell then fell to the Fillet and Chamfer arm) and
+// with its route E arm replaced by a nil return (each Fillet and Chamfer fell
+// through to the generic "straight prism" refusal).
 func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 	t.Parallel()
 	refuses := func(t *testing.T, body *Body, shell ...string) {
@@ -75,7 +77,7 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 		_, err := body.Fillet(t.Context(), edges, units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, "brep-modify SB5", "fillets")
 		_, err = body.Chamfer(t.Context(), edges, units.Millimeters(1))
-		requireRefusesUnchanged(t, body, before, err, "brep-modify SB5", "chamfers")
+		requireRefusesUnchanged(t, body, before, err, "modify-general SL1", "chamfers")
 		_, err = body.Shell(t.Context(), Faces(Planar()).AtLeast(1), units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, shell...)
 	}

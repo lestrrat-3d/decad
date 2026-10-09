@@ -8,9 +8,11 @@ import (
 // This file is the receiver dispatch of docs/brep-modify-design.md
 // ("brep-modify §N" below): which record Fillet, Chamfer and Shell hand to the
 // brep route (§2, Table RB), the gates every brep or stacked receiver passes
-// before any route runs (Table SB's SB1 and SB2), and the order of the two
-// routes: route P (brep_modify_prism.go), then route E for a Fillet or
-// Chamfer (brep_modify_edge.go).
+// before any route runs (Table SB's SB1 and SB2), and the order of the
+// routes: route P (brep_modify_prism.go), then, for a Fillet or Chamfer,
+// route E (brep_modify_edge.go) or route L
+// (docs/modify-general-design.md §4, brep_modify_loop.go), which
+// brepLoopRoute picks.
 
 // brepModifyRequest is what one modify op hands the brep route
 // (brep-modify §2): the verb its refusals name ("fillets", "chamfers" or
@@ -21,7 +23,9 @@ import (
 // Chamfer's selector, its resolved edges and its per-corner construction
 // (computeFillet or computeChamfer, bound to the op's magnitude), which route
 // E (§5) reads; a Shell leaves them nil. shellCall is a Shell's removed faces,
-// sense and thickness, which route S (brep_shell.go) reads.
+// sense and thickness, which route S (brep_shell.go) reads. loop is a
+// Chamfer's setbacks, which route L bands each complete loop with
+// (docs/modify-general-design.md §4); a Fillet and a Shell leave it nil.
 type brepModifyRequest struct {
 	op        string
 	shell     bool
@@ -30,6 +34,7 @@ type brepModifyRequest struct {
 	edges     []*Edge
 	blend     *revolveBlendOp
 	shellCall brepShellCall
+	loop      *capSetback
 }
 
 // brepRoute is what the brep route hands back to the op. It is empty for a
@@ -52,8 +57,9 @@ type brepRoute struct {
 // rule (SB1) — and then route P (§4): the first reference axis along which
 // the record reads as a prism the op's classification admits. When none
 // admits, a Shell takes route S (docs/modify-general-design.md §3), which
-// builds the result or refuses, and a Fillet or Chamfer takes route E (§5),
-// which builds the result or refuses with a Table SB row.
+// builds the result or refuses, and a Fillet or Chamfer takes route E (§5) or
+// route L (docs/modify-general-design.md §4), as brepLoopRoute picks, which
+// builds the result or refuses with a Table SB or Table SL row.
 func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (brepRoute, error) {
 	bp, ok, err := brepModifyRecord(ctx, b.payload, req.op)
 	if err != nil || !ok {
@@ -74,10 +80,8 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 			return brepRoute{}, err
 		}
 		return brepRoute{body: body}, nil
-	case req.blend == nil:
-		return brepRoute{}, brepLoopChamfer(req)
 	default:
-		body, err := brepBlendEdges(ctx, b.doc, bp, req)
+		body, err := brepLoopRoute(ctx, b.doc, bp, req)
 		if err != nil {
 			return brepRoute{}, err
 		}
@@ -93,13 +97,6 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 // either (SG3).
 func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepModifyRequest, refusal error) (*Body, error) {
 	return shellThroughCut(ctx, b, bp, req.shellCall, refusal)
-}
-
-// brepLoopChamfer is route L's arm (docs/modify-general-design.md §4): a
-// Chamfer of a brep or stacked receiver with no blend to build. It builds
-// nothing yet and returns modify-reach SX16's refusal.
-func brepLoopChamfer(req brepModifyRequest) error {
-	return fmt.Errorf(`%w: this evaluator %s a brep or stacked receiver through route P or route E only (modify-reach SX16)`, ErrUnsupported, req.op)
 }
 
 // commitModifyResult commits a modify op's result in place of its receiver,

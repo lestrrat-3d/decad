@@ -133,6 +133,12 @@ func classBFaceView(ctx context.Context, payload featurePayload) (brepPayload, b
 		}
 		return bp, true, nil
 	case brepPayload:
+		// A route L body's band patches are no face of its record, so the
+		// record is no face view of the body (docs/modify-general-design.md
+		// Table DG's DG4): the pair takes the mesh path.
+		if len(p.loopBands) > 0 {
+			return brepPayload{}, false, nil
+		}
 		return p, true, nil
 	default:
 		return brepPayload{}, false, nil

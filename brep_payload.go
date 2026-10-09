@@ -82,11 +82,15 @@ type brepSplit = brepgeom.Split
 // brepPayload is the evaluator's record of an analytically trimmed body. Every
 // face frame is stated in the payload's unplaced coordinates and xform places
 // the whole body, as every payload does. stack is nil for every record but
-// an A1 result's.
+// an A1 result's. loopBands holds a route L chamfer's bands
+// (docs/modify-general-design.md §4.2 step 5): each band's patches are faces
+// of the body and no face of the record, and the body build attaches them
+// (brep_loop_band.go). It is nil for every record route L did not build.
 type brepPayload struct {
-	faces []brepFace
-	xform r3.Transform
-	stack *brepStack
+	faces     []brepFace
+	xform     r3.Transform
+	stack     *brepStack
+	loopBands []brepLoopBand
 }
 
 func (f brepFace) planar() bool { return f.region != nil }
@@ -382,8 +386,14 @@ type brepTopology struct {
 	// where the edge has one, then a side line, then a loop segment. The
 	// owner's natural direction is the edge's direction.
 	edges [][2]int
-	// edgeOf maps a use index to its edge index.
+	// edgeOf maps a use index to its edge index, -1 for an open use.
 	edgeOf []int
+	// open lists the uses on a route L band's boundary
+	// (docs/modify-general-design.md §4.2): the cap contour's segments on the
+	// band's face and the side contour's on the faces beside it. The record
+	// bounds each such edge on one side only, and the band's patches bound
+	// it on the other (brep_loop_band.go).
+	open []int
 	// faceUses lists each face's use indices in loop order: a swept face's
 	// rim0, side1, rim1, side0 (a whole circle's rim0 and rim1 alone); a
 	// planar face's loops in record order.
@@ -398,7 +408,9 @@ type brepTopology struct {
 // brepTopologyContext walks every face, keys every edge use, and pairs them.
 // An edge that does not bound exactly two distinct faces refuses: the build
 // proves closure by counting (§4.2), so an unpaired use is a record this
-// evaluator cannot close and is ErrUnsupported.
+// evaluator cannot close and is ErrUnsupported. The one exception is a
+// route L band's boundary (brepPayload.loopBandKeys): each such edge must
+// bound exactly one face of the record, and its use is listed in open.
 func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, error) {
 	if err := falsifyBrepPayload(ctx, bp); err != nil {
 		return nil, err
@@ -458,12 +470,16 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 		face.Wall, face.WallSeg = w, f.wall
 		faces[fi] = face
 	}
-	built, err := brepgeom.Build(faces, ErrUnsupported)
+	open, err := bp.loopBandKeys(embeds, walk)
+	if err != nil {
+		return nil, err
+	}
+	built, err := brepgeom.Build(faces, open, ErrUnsupported)
 	if err != nil {
 		return nil, err
 	}
 	return &brepTopology{embeds: embeds, walls: built.Walls, planar: built.Planar,
-		uses: built.Uses, edges: built.Edges, edgeOf: built.EdgeOf,
+		uses: built.Uses, edges: built.Edges, edgeOf: built.EdgeOf, open: built.Open,
 		faceUses: built.FaceUses, coordUpper: built.CoordUpper}, nil
 }
 
@@ -480,7 +496,9 @@ func brepIsRim(p brepPart) bool { return brepgeom.IsRim(p) }
 // edge is shared by exactly two faces, identified by record identity in the
 // reference frame, so the body closes by construction and the count proves it.
 // Roles are the record's own face(k)/wall(k) under ref; no capStart or capEnd
-// is minted and no operand provenance is carried.
+// is minted and no operand provenance is carried. A route L band's boundary
+// edges bound one record face each, and the band's patches, attached after
+// the record's faces, bound their other side (brep_loop_band.go).
 func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPayload) (*Body, error) {
 	topo, err := brepTopologyContext(ctx, bp)
 	if err != nil {
@@ -521,10 +539,12 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		}
 		return pv.v
 	}
-	for _, u := range topo.uses {
+	for ui, u := range topo.uses {
 		// A whole circle's seam is its rim's: a loop that walks the same
-		// circle from another seam places no vertex of its own.
-		if (u.Part != brepLoopSeg && !brepIsRim(u.Part)) || (u.Part == brepLoopSeg && u.Key.Closed) {
+		// circle from another seam places no vertex of its own. A band's
+		// whole circle places its seam with its band edge (brepOpenEdges).
+		closedOpen := u.Key.Closed && topo.edgeOf[ui] < 0
+		if (u.Part != brepLoopSeg && !brepIsRim(u.Part)) || (u.Part == brepLoopSeg && u.Key.Closed) || closedOpen {
 			continue
 		}
 		f := bp.faces[u.Face]
@@ -543,8 +563,15 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		}
 		edges[ei] = edge
 	}
+	open, err := brepOpenEdges(ctx, bp, topo, placeVertex)
+	if err != nil {
+		return nil, err
+	}
 	coedgeOf := func(ui int) coedge {
-		return coedge{edge: edges[topo.edgeOf[ui]], forward: topo.forward(ui)}
+		if ei := topo.edgeOf[ui]; ei >= 0 {
+			return coedge{edge: edges[ei], forward: topo.forward(ui)}
+		}
+		return open.coedge[ui]
 	}
 
 	faces := make([]*Face, len(bp.faces))
@@ -585,8 +612,12 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	if err := attachFaceLoopsContext(ctx, faces); err != nil {
 		return nil, err
 	}
-	body.lumps = sheetLumps(faces)
-	if err := measureBrepContext(ctx, bp, topo, body); err != nil {
+	bands, err := attachBrepLoopBands(ctx, body, ref, bp, open)
+	if err != nil {
+		return nil, err
+	}
+	body.lumps = sheetLumps(append(faces, bands.patches...))
+	if err := measureBrepContext(ctx, bp, topo, body, bands.mass); err != nil {
 		return nil, err
 	}
 	// Every face frame is a signed permutation of the first (brepEmbeds), so

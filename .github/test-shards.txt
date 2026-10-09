@@ -1216,3 +1216,13 @@
 1	0.74	TestCoilUnstitchCarriesTheRimCurveBound
 2	0.02	TestPrismMoverRecordRadiusReadsArcsTightly
 2	0.02	TestBrepCoordinateEnvelopeReadsArcsTightly
+3	0.07	TestBrepLoopChamferPocketMouth
+3	0.02	TestBrepLoopChamferPlateTopLoop
+3	0.07	TestBrepLoopChamferCrossDrilledBothLoops
+3	0.05	TestBrepLoopChamferBossRimAndRoot
+3	0.07	TestBrepLoopChamferBlindPortMouth
+3	0.06	TestBrepLoopChamferLBracketTopLoop
+3	0.10	TestBrepLoopChamferRoundedPlate
+3	0.03	TestBrepLoopChamferContourBound
+3	0.05	TestBrepLoopChamferRefusals
+3	0.08	TestBrepLoopChamferConsumers

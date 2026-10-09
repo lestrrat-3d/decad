@@ -654,6 +654,12 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		case draftPayload:
 			out = draftUndercuts(b, pl, *cfg.Pull)
 		case brepPayload:
+			// A route L body's band patches are no face of its record
+			// (docs/modify-general-design.md Table DG's DG7, PR L-2).
+			if len(pl.loopBands) > 0 {
+				out.reason = surveyPayloadStaged
+				break
+			}
 			out = brepUndercuts(b, pl, *cfg.Pull)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
@@ -685,6 +691,11 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		case capBlendPayload:
 			out, ok = capBlendMinRadius(b, pl)
 		case brepPayload:
+			// DG8 lands in PR L-2, as DG7 does above.
+			if len(pl.loopBands) > 0 {
+				out.reason = surveyPayloadStaged
+				break
+			}
 			out, ok = brepMinRadius(pl)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported

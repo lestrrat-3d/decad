@@ -167,6 +167,7 @@ the rules leave to the byte budget.
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
 | `brep_shell.go` | Route S: shell of a through-cut brep. See modify-general §3. |
 | `brep_modify_edge.go` | Route E: Table EB, restatement, blends, trims and closure. See brep-modify §5. |
+| `brep_modify_loop.go` / `brep_loop_band.go` | Route L: Table LB, record rewrite, band build and mass. See modify-general §4. |
 
 ### Cap-loop chamfer
 
@@ -234,7 +235,7 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect` and the `BooleanError` mapping. See evaluator §9. |
-| `prism_boolean.go` | Analytic Union/Cut/Intersect of co-directional coplanar or offset-plane prisms. See prism-boolean. |
+| `prism_boolean.go` | Analytic booleans of co-directional prisms. See `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Clean-nesting scene adapters. See prism-boolean §4.2. |
 | `prism_boolean_blind.go` | Blind and spanning Cuts via the whole-loop match. See `docs/prism-boolean-design.md` §3.2. |
 | `stacked_prism.go` | Stacked slabs, walls and measurements. See `docs/stacked-prism-design.md`. |
@@ -247,7 +248,7 @@ the rules leave to the byte budget.
 | `classb_crossing.go` | Class-B scene and BRep adapters. See general-boolean §5, §10. |
 | `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
-| `boolean_body.go` | Builds faceted bodies and measurements from an audited mesh; adapts `internal/facetedtopology/`. See evaluator §9. |
+| `boolean_body.go` | Builds faceted bodies and readings from an audited mesh. See evaluator §9. |
 
 ### Output
 
@@ -282,7 +283,7 @@ the rules leave to the byte budget.
 | `internal/sweeppath/` | Pair paths, validation, rounded poses, and motion travel bounds. |
 | `internal/planarsnapshot/` | Exact prism and held-mesh snapshots for planar contact. See multibody §9.1. |
 | `internal/placedruling/` | Placed cylinder support proofs. See contact-geometry §4.5. |
-| `internal/facetproof/` | Faceted shell audits, placement, restatement, bounds, and axis support proofs. See evaluator §9. |
+| `internal/facetproof/` | Faceted shell audits and proofs. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/surfacegeom/` | Sealed face and edge variants, placement transforms and circular curve bound. See API §6.1, surface §6. |
 | `internal/reportvocab/` | Contact/sweep enums; Verify, Motion, Linkage and JointBox reports, survey diagnostics and conclusions. |
@@ -293,7 +294,7 @@ the rules leave to the byte budget.
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks, coalescing and analytic survey loops over recorded segments. |
 | `internal/classbgeom/` | Class-B boolean geometry. See general-boolean §3 B, §5. |
-| `internal/brepgeom/` / `internal/stackedbrep/` | BRep joins, crossing offsets, frames, restatement and stacked records. See general-boolean §4, §5. |
+| `internal/brepgeom/` / `internal/stackedbrep/` | BRep record joins, frames and restatement. See general-boolean §4, §5. |
 | `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap and section charges, and extent readings. See evaluator §6. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
@@ -305,7 +306,7 @@ the rules leave to the byte budget.
 | `internal/momentinput/` | Profile records, moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
-| `internal/tessellation/` | Recorded-loop chording, prism/cup topology, mesh bounds, cap-blend rings, audits and chording refusal errors. |
+| `internal/tessellation/` | Recorded-loop chording, mesh topology, bounds and audits. See tessellation-design. |
 | `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums and mesh proofs. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs. |

@@ -228,19 +228,25 @@ func (f FaceWalks) SideLevels(side1 bool) []Split {
 }
 
 // Topology holds each face's uses in walk order and paired edge indices.
+// Open lists the uses whose key the caller named open, one per key, in use
+// order; EdgeOf holds -1 for each of them.
 type Topology struct {
 	Walls      map[int]survey2d.SegmentWalk
 	Planar     map[int][][]survey2d.SegmentWalk
 	Uses       []Use
 	Edges      [][2]int
 	EdgeOf     []int
+	Open       []int
 	FaceUses   [][]int
 	CoordUpper float64
 }
 
 // Build records every face's uses, then pairs them by exact edge identity.
 // Every face's walks must already have passed the caller's record audit.
-func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
+// open names edge keys the record bounds on one side only, because a face
+// outside the record closes them (a route L band,
+// docs/modify-general-design.md §4.2); nil names none.
+func Build(faces []FaceWalks, open map[EdgeKey]struct{}, unsupported error) (*Topology, error) {
 	topo := &Topology{
 		Walls:    map[int]survey2d.SegmentWalk{},
 		Planar:   map[int][][]survey2d.SegmentWalk{},
@@ -257,7 +263,7 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 			for li, loop := range f.Planar {
 				for si, w := range loop {
 					topo.CoordUpper = math.Max(topo.CoordUpper, momentinput.WalkCoordinateUpper(w))
-					u := Use{Face: fi, Loop: li, Seg: si, Part: LoopSeg, Walk: w,
+					u := Use{Face: fi, Loop: li, Seg: si, Part: LoopSeg, Walk: w, Record: f.PlanarSegs[li][si],
 						Level: f.Z0, LevelDelta: f.Z0Delta, Sweep: f.Sweep, Outward: f.Outward}
 					u.Key, u.Sense = CurveKey(e, w, f.Z0)
 					u.DirSense = u.Sense
@@ -307,7 +313,7 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 		}
 	}
 	var err error
-	topo.Edges, topo.EdgeOf, err = Pair(topo.Uses, unsupported)
+	topo.Edges, topo.EdgeOf, topo.Open, err = Pair(topo.Uses, open, unsupported)
 	if err != nil {
 		return nil, err
 	}
@@ -315,8 +321,10 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 }
 
 // Pair requires each edge to bound exactly two distinct faces. The first use
-// is the owner whose natural direction and geometry define the edge.
-func Pair(uses []Use, unsupported error) ([][2]int, []int, error) {
+// is the owner whose natural direction and geometry define the edge. A key in
+// open must instead be used exactly once, and every key in open must be used:
+// its use is returned in the third result, and its EdgeOf entry is -1.
+func Pair(uses []Use, open map[EdgeKey]struct{}, unsupported error) ([][2]int, []int, []int, error) {
 	byKey := map[EdgeKey][]int{}
 	var order []EdgeKey
 	for ui, u := range uses {
@@ -327,25 +335,37 @@ func Pair(uses []Use, unsupported error) ([][2]int, []int, error) {
 	}
 	edgeOf := make([]int, len(uses))
 	var edges [][2]int
+	var openUses []int
 	for _, key := range order {
 		pair := byKey[key]
+		if _, ok := open[key]; ok {
+			if len(pair) != 1 {
+				return nil, nil, nil, fmt.Errorf(`%w: a chamfer band's boundary edge must bound exactly one face of the record; one bounds %d face uses`, unsupported, len(pair))
+			}
+			edgeOf[pair[0]] = -1
+			openUses = append(openUses, pair[0])
+			continue
+		}
 		if len(pair) != 2 || uses[pair[0]].Face == uses[pair[1]].Face {
-			return nil, nil, fmt.Errorf(`%w: a brep edge must bound exactly two distinct faces; one bounds %d face uses`, unsupported, len(pair))
+			return nil, nil, nil, fmt.Errorf(`%w: a brep edge must bound exactly two distinct faces; one bounds %d face uses`, unsupported, len(pair))
 		}
 		a, b := pair[0], pair[1]
 		if ownerRank(uses[b].Part) < ownerRank(uses[a].Part) {
 			a, b = b, a
 		}
 		if key.Circular && uses[a].Part == LoopSeg {
-			return nil, nil, fmt.Errorf(`%w: a circular brep edge must bound a swept face`, unsupported)
+			return nil, nil, nil, fmt.Errorf(`%w: a circular brep edge must bound a swept face`, unsupported)
 		}
 		if IsRim(uses[a].Part) && uses[b].Part != LoopSeg {
-			return nil, nil, fmt.Errorf(`%w: a swept face's rim must meet a planar face`, unsupported)
+			return nil, nil, nil, fmt.Errorf(`%w: a swept face's rim must meet a planar face`, unsupported)
 		}
 		edgeOf[a], edgeOf[b] = len(edges), len(edges)
 		edges = append(edges, [2]int{a, b})
 	}
-	return edges, edgeOf, nil
+	if len(openUses) != len(open) {
+		return nil, nil, nil, fmt.Errorf(`%w: a chamfer band's boundary holds %d edges and the record bounds %d of them`, unsupported, len(open), len(openUses))
+	}
+	return edges, edgeOf, openUses, nil
 }
 
 // Forward reports whether use ui walks its owner's natural direction.
