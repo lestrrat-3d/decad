@@ -18,31 +18,7 @@ import (
 // bodies' points together. Every point is held within a gap a proof states
 // from a point of the body it belongs to.
 
-// gatePoints is a set of held points, each within allow of a point of the
-// body (or bodies) it was read from.
-type gatePoints struct {
-	pts   []r3.Vec
-	allow float64
-}
-
-// join adds o's points; the joined set's allow is the larger of the two.
-func (g *gatePoints) join(o gatePoints) {
-	g.pts = append(g.pts, o.pts...)
-	g.allow = math.Max(g.allow, o.allow)
-}
-
-// diameter is the lower bound g proves on the diameter of the geometry its
-// points belong to: the largest pair distance among the held points, rounded
-// toward zero (pointSetDiameterWithBudget), shrunk by twice allow, since each
-// end of that pair sits within allow of a point of the geometry.
-func (g gatePoints) diameter(budget *proofbound.WorkBudget) (float64, bool, error) {
-	d, ok, err := pointSetDiameterWithBudget(budget, g.pts)
-	if err != nil || !ok {
-		return 0, false, err
-	}
-	d, ok = lowerDiameterForDisplacement(d, g.allow)
-	return d, ok, nil
-}
+type gatePoints = diameter.GatePoints
 
 // stationGateDiameter reads a diameter from the station witnesses of prisms
 // alone (prismGatePoints). ok is false, with no error, when any prism's
@@ -52,7 +28,7 @@ func stationGateDiameter(budget *proofbound.WorkBudget, prisms []prismPayload, d
 	if err != nil || !ok {
 		return 0, false, err
 	}
-	return g.diameter(budget)
+	return g.Diameter(budget)
 }
 
 // prismGatePoints lists the station witnesses of prisms
@@ -79,9 +55,9 @@ func prismGatePoints(budget *proofbound.WorkBudget, prisms []prismPayload, displ
 		if err != nil || !read {
 			return gatePoints{}, false, err
 		}
-		g.join(gatePoints{pts: stations, allow: stationAllow})
+		g.Join(gatePoints{Points: stations, Allow: stationAllow})
 	}
-	g.allow = proofbound.AbsSumUpper(displacement, g.allow)
+	g.Allow = proofbound.AbsSumUpper(displacement, g.Allow)
 	return g, true, nil
 }
 
@@ -123,60 +99,18 @@ func revolveGateDiameter(budget *proofbound.WorkBudget, rp revolvePayload) (floa
 	if err != nil || !ok {
 		return 0, false, err
 	}
-	return g.diameter(budget)
+	return g.Diameter(budget)
 }
 
-// revolveGatePoints lists points a revolvePayload proves lie on its body, for
-// a gate diameter alone (docs/verification-design.md §3).
-//
-// Two points on circles of radii r1 and r2 about the axis, at axial
-// separation dz, sit sqrt(dz^2 + r1^2 + r2^2 - 2*r1*r2*cos(dphi)) apart, which
-// grows with the angle dphi between them up to half a turn. The body's
-// farthest pair therefore sits at the widest angle apart the sweep allows, up
-// to half a turn: the two ends of a sweep of at most half a turn, or angles
-// half a turn apart otherwise. diameter.RevolveGateAngles lists those angles, each
-// beside the sine and cosine of the angle it denotes. Every meridian station
-// (diameter.SectionStations) is swept to each of them.
-//
-// Each held point is compared exactly against the point it denotes:
-// revolvemesh.RevolveLift.SweptPointGap rotates the recorded station, widened
-// by its own gap and the payload's sectionDelta, about the recorded axis to
-// the denoted angle and lifts it through the frame and placement. allow is
-// the widest gap. ok is false, with no error, where the stations cannot be read, an end states
-// no angle (a ToFaceAngular stop), or a gap cannot be stated.
+// revolveGatePoints passes the payload's recorded meridian, axis, and pose
+// to the witness calculation used by its diameter gate.
 func revolveGatePoints(budget *proofbound.WorkBudget, rp revolvePayload) (gatePoints, bool, error) {
-	angles, ok := diameter.RevolveGateAngles(rp.phi0, rp.phi1, rp.den.Phi0, rp.den.Phi1)
-	if !ok {
-		return gatePoints{}, false, nil
-	}
-	stations, ok, err := diameter.SectionStations(budget, append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...),
-		freeform.NewFreeformWork())
-	if err != nil || !ok {
-		return gatePoints{}, false, err
-	}
-	b, lift, ab, ax := rp.basis(), rp.lift(), rp.axisBound(), rp.ax.numeric()
-	pts := make([]r3.Vec, 0, len(stations)*len(angles))
-	allow := 0.0
-	for _, s := range stations {
-		uv := proofbound.WalkEndBound{
-			U: proofbound.AbsSumUpper(s.Bound.U, rp.sectionDelta),
-			V: proofbound.AbsSumUpper(s.Bound.V, rp.sectionDelta),
-		}
-		z, rho := ax.ToAxis(s.U, s.V)
-		for _, a := range angles {
-			if err := budget.Step(); err != nil {
-				return gatePoints{}, false, err
-			}
-			held := rp.point(b, z, rho, a.Phi)
-			gap := lift.SweptPointGap(ab, rp.xform, s.U, s.V, uv, a.Sin, a.Cos, held)
-			if !proofbound.FiniteVec(held) || !tolerance.UsableMagnitude(gap) {
-				return gatePoints{}, false, nil
-			}
-			allow = math.Max(allow, gap)
-			pts = append(pts, held)
-		}
-	}
-	return gatePoints{pts: pts, allow: allow}, true, nil
+	return diameter.RevolveWitnesses(budget, diameter.RevolveWitnessInput{
+		Phi0: rp.phi0, Phi1: rp.phi1, Den0: rp.den.Phi0, Den1: rp.den.Phi1,
+		Loops: append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...),
+		Lift:  rp.lift(), AxisBound: rp.axisBound(), Axis: rp.ax.numeric(),
+		Transform: rp.xform, SectionDelta: rp.sectionDelta,
+	})
 }
 
 // vertexGatePoints lists the body's vertices, each held within its published
@@ -186,7 +120,7 @@ func revolveGatePoints(budget *proofbound.WorkBudget, rp revolvePayload) (gatePo
 // usable bound.
 func vertexGatePoints(budget *proofbound.WorkBudget, body *Body, extraAllow float64) (gatePoints, bool, error) {
 	vertices := body.Vertices()
-	g := gatePoints{pts: make([]r3.Vec, 0, len(vertices))}
+	g := gatePoints{Points: make([]r3.Vec, 0, len(vertices))}
 	for _, vertex := range vertices {
 		if err := budget.Step(); err != nil {
 			return gatePoints{}, false, err
@@ -196,10 +130,10 @@ func vertexGatePoints(budget *proofbound.WorkBudget, body *Body, extraAllow floa
 		if !proofbound.FiniteVec(position.Value) || !tolerance.UsableMagnitude(bound) {
 			return gatePoints{}, false, nil
 		}
-		g.pts = append(g.pts, position.Value)
-		g.allow = math.Max(g.allow, bound)
+		g.Points = append(g.Points, position.Value)
+		g.Allow = math.Max(g.Allow, bound)
 	}
-	g.allow = proofbound.AbsSumUpper(g.allow, extraAllow)
+	g.Allow = proofbound.AbsSumUpper(g.Allow, extraAllow)
 	return g, true, nil
 }
 
@@ -228,7 +162,7 @@ func chainGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *B
 		return gatePoints{}, false, err
 	}
 	if read {
-		g.join(stations)
+		g.Join(stations)
 	}
 	return g, true, nil
 }
@@ -240,7 +174,7 @@ func capBlendGateDiameter(ctx context.Context, budget *proofbound.WorkBudget, bo
 	if err != nil || !ok {
 		return 0, false, err
 	}
-	return g.diameter(budget)
+	return g.Diameter(budget)
 }
 
 // capBlendGatePoints lists points a cap-loop chamfer proves lie on its body.
@@ -294,7 +228,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 			return gatePoints{}, false, err
 		}
 		if ok {
-			g.join(caps)
+			g.Join(caps)
 		}
 	}
 	for _, p := range cbp.patches {
@@ -307,80 +241,29 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 			return gatePoints{}, false, err
 		}
 		if ok {
-			g.join(arc)
+			g.Join(arc)
 		}
 	}
 	vertices, ok, err := vertexGatePoints(budget, body, 0)
 	if err != nil || !ok {
 		return gatePoints{}, false, err
 	}
-	g.join(vertices)
+	g.Join(vertices)
 	return g, true, nil
 }
 
-// capArcRim returns a station prism over the cap contour arc a circular wall
-// patch g holds trimmed by its two corners, and how far any point of that arc
-// sits from the arc the band denotes. contour is a proven upper bound on the
-// band's contour displacement (bandDelta). ok is false for any other patch,
-// and wherever the bound cannot be stated.
-//
-// The prism's one segment is the ArcSeg the cap face records: counter-clockwise
-// about the wall's centre (g.CU, g.CV) from the held cap vertex g.CapA, at
-// g.CapTh0, to g.CapB, at g.CapTh1, at the cap level g.CapZ. Its stations
-// (diameter.SectionStations) each carry their gap from that recorded arc. The
-// band denotes the offset of the wall's circle trimmed at the two corner feet
-// F0 and F1. A point of the recorded arc at angle θ lies at radius r, the
-// distance from the centre to g.CapA:
-//
-//   - r is within g.Held.CapRadius of the held offset radius g.CapRadius
-//     (capband.WallHeldAllow), and g.CapRadius within contour of every radius
-//     the band denotes, since capcontour.Displacement's circular term is that
-//     distance. So r is within the sum of the two of the denoted radius, and a
-//     point at angle θ inside the denoted window is within that sum of the
-//     denoted arc.
-//   - Each held cap vertex lies within contour of its corner foot, and both
-//     sit at least rMin = g.CapRadius − max(g.Held.CapRadius, contour) from
-//     the centre. Two points at least rMin out and c apart subtend at most
-//     2·asin(c/(2·rMin)) ≤ (π/2)·c/rMin. So each end of the recorded window
-//     sits within beta = (π/2)·contour/rMin of the denoted window's end, and
-//     a point of the recorded arc outside the denoted window lies within
-//     r·beta of the point at the denoted end's angle and radius r, and so
-//     within r·beta plus the radius term of the denoted end F0 or F1.
-//
-// The allowance is the radius term plus (g.CapRadius + g.Held.CapRadius)·beta.
-// The recorded arc's own sweep must agree with the held window to 1e-9 rad,
-// a check that can only refuse: a mismatch would name the complementary arc.
+// capArcRim builds the cap contour arc that diameter.CapArcWitness bounds as
+// a station prism for the shared prism witness reader.
 func capArcRim(cbp capBlendPayload, g capPatchGeom, contour float64) (prismPayload, float64, bool) {
-	if !g.Circular || g.WholeTurn || g.SideRadius <= 0 || !(g.CapTh1 > g.CapTh0) {
+	arc, ok := diameter.CapArcWitness(g, contour)
+	if !ok {
 		return prismPayload{}, 0, false
 	}
-	center := Point2{U: g.CU, V: g.CV}
-	if g.CapA == center || g.CapB == center {
-		return prismPayload{}, 0, false
-	}
-	a0 := math.Atan2(g.CapA.V-g.CV, g.CapA.U-g.CU)
-	sweep := math.Mod(math.Atan2(g.CapB.V-g.CV, g.CapB.U-g.CU)-a0, 2*math.Pi)
-	if sweep <= 0 {
-		sweep += 2 * math.Pi
-	}
-	if math.Abs(sweep-(g.CapTh1-g.CapTh0)) > 1e-9 {
-		return prismPayload{}, 0, false
-	}
-	rMin := math.Nextafter(g.CapRadius-math.Max(g.Held.CapRadius, contour), 0)
-	if !(rMin > contour) || proofbound.IsNonFinite(rMin) {
-		return prismPayload{}, 0, false
-	}
-	beta := proofbound.DivUpper(proofbound.ProductUpper(math.Nextafter(math.Pi/2, math.Inf(1)), contour), rMin)
-	radial := proofbound.AbsSumUpper(g.Held.CapRadius, contour)
-	allow := proofbound.AbsSumUpper(radial, proofbound.ProductUpper(proofbound.AbsSumUpper(g.CapRadius, g.Held.CapRadius), beta))
-	if !tolerance.UsableMagnitude(allow) {
-		return prismPayload{}, 0, false
-	}
-	rim := cbp.prismLike(g.CapZ, g.CapZ)
+	rim := cbp.prismLike(arc.Level, arc.Level)
 	rim.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{ArcSeg{
-		Center: center, Start: g.CapA, End: g.CapB, TStart: 0, TEnd: 1,
+		Center: arc.Center, Start: arc.Start, End: arc.End, TStart: 0, TEnd: 1,
 	}}}}
-	return rim, allow, true
+	return rim, arc.Allow, true
 }
 
 // brepGateDiameter is bodyGateDiameter's arm for a brepPayload
@@ -391,7 +274,7 @@ func brepGateDiameter(ctx context.Context, body *Body, bp brepPayload) (float64,
 	if err != nil || !ok {
 		return 0, false, err
 	}
-	return g.diameter(budget)
+	return g.Diameter(budget)
 }
 
 // brepGatePoints lists every body vertex, held within its published
@@ -418,10 +301,10 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 			return gatePoints{}, false, err
 		}
 		if read {
-			g.join(gatePoints{pts: stations, allow: stationAllow})
+			g.Join(gatePoints{Points: stations, Allow: stationAllow})
 		}
 	}
-	g.allow = proofbound.AbsSumUpper(bp.sectionDelta(), bp.axialDelta(), g.allow)
+	g.Allow = proofbound.AbsSumUpper(bp.sectionDelta(), bp.axialDelta(), g.Allow)
 	return g, true, nil
 }
 
@@ -440,18 +323,18 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Body) (gatePoints, bool, error) {
 	switch pl := body.payload.(type) {
 	case facetedPayload:
-		return gatePoints{pts: pl.verts}, true, nil
+		return gatePoints{Points: pl.verts}, true, nil
 	case loftPayload:
-		return gatePoints{pts: pl.verts, allow: pl.delta}, true, nil
+		return gatePoints{Points: pl.verts, Allow: pl.delta}, true, nil
 	case mitredSweepPayload:
-		return gatePoints{pts: pl.verts, allow: pl.delta}, true, nil
+		return gatePoints{Points: pl.verts, Allow: pl.delta}, true, nil
 	case coilPayload:
 		// Every held station vertex lies within its own station rounding of
 		// the point X(v, j) it denotes, a point of the coil's true helix edge
 		// (docs/helix-design.md §5.3), so the largest rounding is the gap.
-		return gatePoints{pts: pl.verts, allow: pl.maxRound}, true, nil
+		return gatePoints{Points: pl.verts, Allow: pl.maxRound}, true, nil
 	case stitchPayload:
-		return gatePoints{pts: pl.verts, allow: pl.delta}, true, nil
+		return gatePoints{Points: pl.verts, Allow: pl.delta}, true, nil
 	case chainPayload:
 		return chainGatePoints(ctx, budget, body, pl)
 	case brepPayload:
@@ -503,10 +386,10 @@ func pairGateDiameter(ctx context.Context, a, b *Body) (float64, error) {
 			return 0, err
 		}
 		if ok {
-			g.join(points)
+			g.Join(points)
 		}
 	}
-	d, ok, err := g.diameter(budget)
+	d, ok, err := g.Diameter(budget)
 	if err != nil || !ok {
 		return 0, err
 	}
