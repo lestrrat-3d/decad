@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/units"
@@ -28,9 +29,9 @@ func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, dens
 		mesh.volSymDiff != pp.volSymDiff || mesh.bound != pp.meshBound {
 		return MassProperties{}, fmt.Errorf("%w: faceted mass has no matching verified mesh certificate", ErrUnsupported)
 	}
-	if err := auditMassMesh(ctx, pp.verts, pp.tris, false); err != nil {
+	if err := massmoment.AuditMesh(ctx, pp.verts, pp.tris, false); err != nil {
 		return MassProperties{}, err
 	}
 	// Anchor at a held corner before summing tetrahedra.
-	return heldMeshMassProperties(ctx, b.bounds, pp.verts[0], pp.verts, pp.tris, pp.volSymDiff, density)
+	return massmoment.HeldMeshMassProperties(ctx, b.bounds, pp.verts[0], pp.verts, pp.tris, pp.volSymDiff, density)
 }

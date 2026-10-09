@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -36,14 +37,14 @@ func sourceSphereMassProperties(ctx context.Context, b *Body, sphere sourceSpher
 	}
 	result := MassProperties{Center: b.centroid}
 	var err error
-	result.Mass, err = massIntervalReading(massInterval, units.Kilogram)
+	result.Mass, err = massmoment.IntervalReading(massInterval, units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
 	if result.Mass.Bound.Base() >= result.Mass.Value.Base() {
 		return MassProperties{}, fmt.Errorf("%w: source sphere mass reading is not positive", ErrUnsupported)
 	}
-	diagonal, err := massIntervalReading(inertiaInterval, units.KilogramSquareMillimeter)
+	diagonal, err := massmoment.IntervalReading(inertiaInterval, units.KilogramSquareMillimeter)
 	if err != nil {
 		return MassProperties{}, err
 	}
