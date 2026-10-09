@@ -166,7 +166,7 @@ func analyticOrMeshMassProperties(ctx context.Context, b *Body, density units.Va
 // tensor to world axes reorders and negates entries without new rounding;
 // every other prism takes rotatedPrismMassProperties.
 func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density units.Value) (MassProperties, error) {
-	section, err := prismSectionMoments(ctx, pp)
+	section, err := massmoment.PrismSectionMoments(ctx, pp.profile)
 	if err != nil {
 		return MassProperties{}, err
 	}

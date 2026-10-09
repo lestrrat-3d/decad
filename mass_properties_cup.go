@@ -12,7 +12,7 @@ import (
 // docs/dynamic-mass-design.md §2 and §3). A cup is its outer prism minus its
 // cavity prism: the two share the plane frame and the placement, and the
 // cavity lies inside the outer solid. Each prism is integrated on its own
-// interval by prismVolumeMoments, which charges its own level displacements
+// interval by massmoment.PrismProfileMoments, which charges its own level displacements
 // as an occupied-volume error, so each contribution carries its own outward
 // interval before the subtraction; the offset region's prism charges the
 // cup's offsetDelta that way too. The cavity's moments are re-anchored
@@ -39,11 +39,13 @@ func cupMassProperties(ctx context.Context, b *Body, cp cupView, density units.V
 	if err != nil {
 		return MassProperties{}, err
 	}
-	solid, err := prismVolumeMoments(ctx, outer)
+	solid, err := massmoment.PrismProfileMoments(ctx, outer.profile, outer.z0, outer.z1,
+		outer.sectionDelta, outer.z0Delta, outer.z1Delta)
 	if err != nil {
 		return MassProperties{}, err
 	}
-	void, err := prismVolumeMoments(ctx, cavity)
+	void, err := massmoment.PrismProfileMoments(ctx, cavity.profile, cavity.z0, cavity.z1,
+		cavity.sectionDelta, cavity.z0Delta, cavity.z1Delta)
 	if err != nil {
 		return MassProperties{}, err
 	}

@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -23,6 +24,21 @@ type SectionInputs struct {
 	ExactAvailable bool
 	Exact          [6]*big.Rat
 	Bounded        [6]proofbound.BoundedScalar
+}
+
+// SectionInputsOf reads the held and exact second-order values recorded by
+// the section moment evaluator.
+func SectionInputsOf(ig momentinput.Integrals) SectionInputs {
+	input := SectionInputs{Bounded: [6]proofbound.BoundedScalar{
+		{Value: ig.Area, Bound: ig.AreaBound}, {Value: ig.Mu, Bound: ig.MuBound},
+		{Value: ig.Mv, Bound: ig.MvBound}, {Value: ig.Muu, Bound: ig.MuuBound},
+		{Value: ig.Muv, Bound: ig.MuvBound}, {Value: ig.Mvv, Bound: ig.MvvBound},
+	}}
+	if !ig.ExactDead && ig.Exact.Complete() {
+		input.ExactAvailable = true
+		input.Exact = ig.Exact.Fields()
+	}
+	return input
 }
 
 // SectionIntervals keeps exact moments as points and widens held moments by their individual bounds.

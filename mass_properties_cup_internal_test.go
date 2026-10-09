@@ -20,7 +20,7 @@ import (
 //
 // Legs shown to fail (each deleted, the fixture watched go red, then
 // restored):
-//   - prismVolumeMoments' occupied-volume error E zeroed: the mass of a grown
+//   - massmoment.PrismProfileMoments' occupied-volume error E zeroed: the mass of a grown
 //     or shrunk cup escapes.
 //   - The offset displacement charged as the offset region's sectionDelta
 //     (cupView.cavityPrism in shell_cup.go): with it dropped, a cup whose

@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -87,15 +85,11 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (massmoment.Mo
 		return massmoment.Moments{}, err
 	}
 
-	ig, err := rp.profile.EvaluatorIntegralsContext(ctx, freeform.MomentThirdOrder, nil)
+	plane, err := massmoment.RevolveSectionMoments(ctx, rp.profile)
 	if err != nil {
 		return massmoment.Moments{}, err
 	}
-	plane, err := revolveSectionMoments(ig)
-	if err != nil {
-		return massmoment.Moments{}, err
-	}
-	angular, ok := revolveAngularFactors(rp)
+	angular, ok := massmoment.RevolveSweepFactors(rp.den, rp.phi0, rp.phi1)
 	if !ok {
 		return massmoment.Moments{}, fmt.Errorf("%w: revolve sweep has no certified angular factors", ErrUnsupported)
 	}
@@ -103,41 +97,4 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (massmoment.Mo
 		return massmoment.Moments{}, err
 	}
 	return massmoment.RevolveMoments(plane, rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV, angular)
-}
-
-// revolveSectionMoments returns the recorded section's plane-origin moments
-// m[p][q] = ∫u^p·v^q dA for p + q ≤ 3 as rational enclosures. Orders up to
-// two are the region's exact rationals where it has them and otherwise its
-// published values widened by their proven bounds, as prismMassProperties
-// reads them; the third order is the engine's own enclosure.
-func revolveSectionMoments(ig regionIntegrals) ([4][4]proofbound.RatInterval, error) {
-	var m [4][4]proofbound.RatInterval
-	slots := [6]*proofbound.RatInterval{&m[0][0], &m[1][0], &m[0][1], &m[2][0], &m[1][1], &m[0][2]}
-	section, err := massmoment.SectionIntervals(sectionMomentInputs(ig))
-	for i, value := range section {
-		*slots[i] = value
-	}
-	if err != nil {
-		return m, err
-	}
-	third, ok := ig.ThirdMoments()
-	if !ok {
-		return m, fmt.Errorf("%w: revolve section has no third-order moment enclosure", ErrUnsupported)
-	}
-	m[3][0], m[2][1], m[1][2], m[0][3] = third[0], third[1], third[2], third[3]
-	return m, nil
-}
-
-// revolveAngularFactors reads the sweep's certified width and endpoint values.
-func revolveAngularFactors(rp revolvePayload) (massmoment.RevolveAngular, bool) {
-	width, ok := rp.den.WidthInterval()
-	if !ok {
-		return massmoment.RevolveAngular{}, false
-	}
-	s0, c0, ok0 := rp.den.Phi0.SinCosFor(rp.phi0)
-	s1, c1, ok1 := rp.den.Phi1.SinCosFor(rp.phi1)
-	if !ok0 || !ok1 {
-		return massmoment.RevolveAngular{}, false
-	}
-	return massmoment.AngularFactors(width, s0, c0, s1, c1), true
 }
