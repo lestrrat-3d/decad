@@ -1193,3 +1193,4 @@
 1	1.71	TestCoilArcFacetBoundHoldsTheSurface
 2	0.90	TestCoilArcMeshProofsEncloseTheBody
 4	0.40	TestCoilArcRefusals
+2	0.02	TestDraftMeshEmbeddedCheckRefusesACrossing

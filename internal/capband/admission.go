@@ -3,6 +3,7 @@ package capband
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -48,12 +49,12 @@ func OccupiedVolumeAdmission(
 			return nil, err
 		}
 		n := len(walks)
-		for i, w := range walks {
+		for _, w := range walks {
 			if !w.IsLine() && !w.IsCircular() {
 				// Unreachable today: Chamfer refuses a free-form wall before a
 				// payload exists. The arm keeps the predicate's own contract
 				// true for any payload that reaches it.
-				return admissionRefusal(noun, li, i, `a wall that is neither straight nor circular`), nil
+				return admissionRefusal(noun, li, wallAt(w), `a wall that is neither straight nor circular`), nil
 			}
 		}
 		if n == 1 && walks[0].Closed {
@@ -61,7 +62,7 @@ func OccupiedVolumeAdmission(
 			// directrices sweep the same exact window.
 			continue
 		}
-		for i, w := range walks {
+		for _, w := range walks {
 			for _, si := range w.Segs {
 				if err := budget.Step(); err != nil {
 					return nil, err
@@ -71,7 +72,7 @@ func OccupiedVolumeAdmission(
 					return nil, err
 				}
 				if why := SegmentRefusal(seg); why != "" {
-					return admissionRefusal(noun, li, i, why), nil
+					return admissionRefusal(noun, li, fmt.Sprintf(`recorded segment %d`, si), why), nil
 				}
 			}
 		}
@@ -88,7 +89,7 @@ func OccupiedVolumeAdmission(
 			}
 			prev, cur := walks[(i+n-1)%n], walks[i]
 			if arcs[i] {
-				return admissionRefusal(noun, li, i, `a reflex corner, whose apex fan's stations no recorded window states`), nil
+				return admissionRefusal(noun, li, cornerAt(prev, cur), `a reflex corner, whose apex fan's stations no recorded window states`), nil
 			}
 			if prev.IsLine() && cur.IsLine() {
 				// A line-line miter: the foot is the intersection of two offset
@@ -104,7 +105,13 @@ func OccupiedVolumeAdmission(
 				return nil, err
 			}
 			if !JoinIsG1(prevSeg, curSeg) {
-				return admissionRefusal(noun, li, i, `a corner this evaluator cannot prove a line-line miter or an exactly tangent join`), nil
+				// A join the build's held-tangent rule read as tangent lands
+				// here too when the recorded floats do not make it exactly
+				// tangent: the true corner then turns by a sliver, its foot
+				// locus is a conic, and no term here bounds the volume between
+				// that locus and the ruled cells (docs/draft-design.md §9.1).
+				return admissionRefusal(noun, li, cornerAt(prev, cur), `a corner this evaluator cannot prove a line-line miter or an exactly tangent join`,
+					`; the two recorded segments' exact tangents there are not parallel or their recorded ends differ, and a join recorded exactly tangent, its arc's centre on the line's normal through the shared end, is admitted`), nil
 			}
 		}
 	}
@@ -112,11 +119,26 @@ func OccupiedVolumeAdmission(
 }
 
 // admissionRefusal is the staging ErrUnsupported a band the proof does
-// not cover surfaces, naming the loop and the walk (corner) it fails on. Its
-// text carries "no proof of the volume", the phrase Verify's diagnostic and
-// every caller matching on the cause read.
-func admissionRefusal(noun string, li, corner int, why string) error {
-	return fmt.Errorf(`%w: loop %d of this %s has %s at walk %d, so its mesh carries no proof of the volume it and the body it stands for differ by, and no boolean may compose it`, decaderr.ErrUnsupported, li, noun, why, corner)
+// not cover surfaces, naming the loop and where in it the proof fails: a
+// recorded segment, or a corner by its plane-local point and the two
+// recorded segments meeting there. Its text carries "no proof of the
+// volume", the phrase Verify's diagnostic and every caller matching on the
+// cause read.
+// hint, when given, follows the refusal and says what the record would need
+// to be admitted.
+func admissionRefusal(noun string, li int, where, why string, hint ...string) error {
+	return fmt.Errorf(`%w: loop %d of this %s has %s at %s, so its mesh carries no proof of the volume it and the body it stands for differ by, and no boolean may compose it%s`, decaderr.ErrUnsupported, li, noun, why, where, strings.Join(hint, ""))
+}
+
+// cornerAt names the corner where prev arrives at cur: its plane-local point
+// and the recorded segments that meet there.
+func cornerAt(prev, cur survey2d.SideWalk) string {
+	return fmt.Sprintf(`the corner (%g, %g) between recorded segments %d and %d`, cur.StartU, cur.StartV, prev.Segs[len(prev.Segs)-1], cur.Segs[0])
+}
+
+// wallAt names a walk by the recorded segments it covers.
+func wallAt(w survey2d.SideWalk) string {
+	return fmt.Sprintf(`the wall over recorded segments %v`, w.Segs)
 }
 
 // SegmentRefusal states why one recorded segment of a cornered loop

@@ -396,7 +396,7 @@ nothing else.
 | **DD14** | `Fillet`, `Chamfer`, `Shell` | modify S3, `ErrUnsupported`; each refusal message names the draft body among the classes it does not take. A shell of a draft body — the molded cup — is the first reach a later design should take: its cavity is a draft body of the same angle over the section offset by `t / cos α`, floored `t` above the kept cap. Not scheduled here | — |
 | **DD15** | `Draft` of a draft body | SD23 | — |
 | **DD16** | `Thicken`, `Offset`, `Patch`, `Stitch`, `Trim`/`Extend`/`Split` | not reached: a draft body is a solid (SD12 refuses the sheet form) | — |
-| **DD17** | Motion and linkage bounds | `motion_bound.go`'s record radius arm: the larger of the two records' coordinate envelopes, the far one widened by `farDelta`, since every point lies on a ruling or generator between them | 2 |
+| **DD17** | Motion and linkage bounds | `motion_bound.go`'s record radius arm: the larger of the two records' coordinate bounds, the far one widened by `farDelta`, since every point lies on a ruling or generator between them. Each record is read segment by segment: a line by its ends, an arc by its extent (`capband.SegmentCoordinateUpper`), a circle by its centre plus its radius | 2 |
 | **DD18** | Selectors | `Planar()`, `FaceCreatedBy`, `CapStart`/`CapEnd` and the new `Walls(b)` (§10) select as on a prism. `Facing(v)` and `NormalTo(v)` match a drafted `Plane` wall only for its own tilted normal, since both require parallelism; a caller naming a drafted wall by direction passes that normal, or selects by role | 1, 3 |
 
 ### 9.1 The mesh
@@ -424,7 +424,19 @@ The admission refuses what it refuses for a chamfer: a circular wall whose
 join is G1 by the held-tangent rule but not exactly tangent over the
 rationals, a trimmed segment, or an arc whose recorded end is off its circle.
 That mesh serves export, and every boolean, interference and mass reading
-refuses it with the loop and corner.
+refuses it, naming the loop, the corner's plane-local point and the two
+recorded segments that meet there (or the one segment).
+
+The refusal of a near-tangent join is required, not a missing tolerance. Such
+a corner turns by a sliver over the rationals, so the sharp offset family's
+foot there runs along a conic, not along the ruling the mesh holds, and the
+slice-wise proof's premise (every band section is a chord polygon of the true
+offset section) fails at that corner. A bound on the tangents' cross product
+would admit on a residual, which `CLAUDE.md` forbids, and a Hausdorff bound
+times area is not an occupied-volume proof (tessellation §11). Admitting it
+needs a proven bound on the area between the conic foot locus and the ruling
+in every slice, integrated over the sweep: the per-cell integral of
+`docs/tessellation-reach-design.md` §9's open question, a separate increment.
 
 ## 10. `Body.Draft`
 

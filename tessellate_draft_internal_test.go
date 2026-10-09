@@ -6,7 +6,10 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -159,9 +162,11 @@ func draftMeshFixtures() []draftMeshFixture {
 
 // TestDraftMeshVolumeProofCoversTheClosedForm is the PR 2 fixture set of
 // docs/draft-design.md §11 on the volume proof: F1–F7, each at three chord
-// tolerances, mesh closed by the production audits, the proof admitted, and
-// the held mesh's exact volume within volSymDiff of the body's closed form.
-// volSymDiff stays below a relative ceiling, so the proof is not vacuous.
+// tolerances, mesh closed by the production audits, its held facets proven
+// embedded by the exact facet-pair audit (requireDraftMeshEmbedded), the proof
+// admitted, and the held mesh's exact volume within volSymDiff of the body's
+// closed form. volSymDiff stays below a relative ceiling, so the proof is not
+// vacuous.
 //
 // Shown to fail first: with the draft's band height in capBlendChordVolume
 // zeroed (draftBandHeightUpper's term), F2 at tol 0.25 published a volSymDiff
@@ -179,6 +184,7 @@ func TestDraftMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 				mesh, err := b.Tessellate(t.Context(), units.Millimeters(tol))
 				require.NoError(t, err, "tol %g", tol)
 				require.NoError(t, tessellation.RequireClosedMesh(mesh.triangles))
+				requireDraftMeshEmbedded(t, mesh.vertices, mesh.triangles)
 				require.True(t, mesh.symDiffOK, "tol %g: a draft band of miters and exact G1 joins is admitted", tol)
 				got := new(big.Float).SetPrec(draftMeshPrec).SetRat(internalMeshVolumeRat(mesh))
 				gap, _ := new(big.Float).Abs(dmAdd(got, dmNeg(fx.volume))).Float64()
@@ -188,6 +194,50 @@ func TestDraftMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 			}
 		})
 	}
+}
+
+// requireDraftMeshEmbedded proves the held facets embedded: every facet has
+// positive area, adjacent facets meet only along the vertex or edge their
+// indices share, and no other pair touches. It is the revolve tessellator's
+// exact facet-pair audit (docs/tessellation-design.md §9) run at a zero
+// displacement, so it reads the held coordinates and nothing else. The draft
+// tessellator runs no such audit itself; Mesh.BoundaryVerified reads true for
+// it by construction (payloadAuditsFacetContact).
+func requireDraftMeshEmbedded(t *testing.T, verts []r3.Vec, tris [][3]int) {
+	t.Helper()
+	require.NoError(t, draftMeshContactAudit(t, verts, tris))
+}
+
+func draftMeshContactAudit(t *testing.T, verts []r3.Vec, tris [][3]int) error {
+	t.Helper()
+	budget := proofbound.NewWorkBudget(t.Context())
+	data, err := revolvemesh.RequireRevolveFacetAreas(budget, verts, tris, 0)
+	if err != nil {
+		return err
+	}
+	return revolvemesh.RevolveContactAudit(budget, data, tris, 0)
+}
+
+// TestDraftMeshEmbeddedCheckRefusesACrossing keeps requireDraftMeshEmbedded
+// from passing vacuously: F1's mesh with one far corner pushed through the
+// near cap, so its two walls cross the cap's facets, refuses.
+func TestDraftMeshEmbeddedCheckRefusesACrossing(t *testing.T) {
+	t.Parallel()
+	b := draftMeshFixtures()[0].build(t)
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NoError(t, draftMeshContactAudit(t, mesh.vertices, mesh.triangles))
+	verts := append([]r3.Vec(nil), mesh.vertices...)
+	moved := false
+	for i, v := range verts {
+		if v.Z == 10 {
+			verts[i] = r3.NewVec(v.X, v.Y, -5)
+			moved = true
+			break
+		}
+	}
+	require.True(t, moved)
+	require.ErrorIs(t, draftMeshContactAudit(t, verts, mesh.triangles), ErrUnsupported)
 }
 
 // TestDraftMeshSharesTheNearRing pins the structure that makes a draft mesh
@@ -213,9 +263,12 @@ func TestDraftMeshSharesTheNearRing(t *testing.T) {
 }
 
 // TestDraftMoverRecordRadiusEnclosesTheBody pins Table DD row DD17's record
-// radius: finite, and at least the L1 norm of every vertex of the body's mesh,
-// which samples both sections and every wall. Without the draftPayload arm it
-// read +Inf, as every unlisted payload class does.
+// radius: finite, at least the L1 norm of every vertex of the body's mesh,
+// which samples both sections and every wall, and at most twice the largest.
+// Without the draftPayload arm it read +Inf, as every unlisted payload class
+// does. Shown to fail first: read through the walks' whole-circle envelopes
+// (momentinput.CoordinateEnvelope), F3's slot stated 178 mm against a 29.5 mm
+// vertex, past the factor of two.
 func TestDraftMoverRecordRadiusEnclosesTheBody(t *testing.T) {
 	t.Parallel()
 	for _, fx := range draftMeshFixtures() {
@@ -231,6 +284,7 @@ func TestDraftMoverRecordRadiusEnclosesTheBody(t *testing.T) {
 			}
 			require.False(t, math.IsInf(radius, 1), "a draft body states a finite record radius")
 			require.LessOrEqual(t, worst, radius, fmt.Sprintf("%s: record radius %g below a vertex at %g", fx.name, radius, worst))
+			require.LessOrEqual(t, radius, 2*worst, fmt.Sprintf("%s: record radius %g past twice the largest vertex at %g", fx.name, radius, worst))
 		})
 	}
 }
