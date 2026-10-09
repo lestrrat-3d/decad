@@ -43,16 +43,16 @@ import (
 
 // revolveMeridianMoment reads the circular meridian displacement.
 func revolveMeridianMoment(p *revolvePlan) float64 {
-	return revolveproof.MeridianMoment(revolveWalkView(p.resolved), p.counts, p.sweep, p.rp.full)
+	return revolveproof.MeridianMoment(revolveWalkView(p.resolved), p.Meridian, p.Sweep, p.rp.full)
 }
 
 // revolveSweepUpper reads the outward bound on the swept angle.
 func revolveSweepUpper(p *revolvePlan) float64 {
-	return revolveproof.SweepUpper(p.sweep, p.rp.full)
+	return revolveproof.SweepUpper(p.Sweep, p.rp.full)
 }
 
 // revolveSymDiff reads the occupied-volume difference bound.
 func revolveSymDiff(m *Mesh, p *revolvePlan, angular *big.Rat, deltaC, deltaR float64) (float64, error) {
 	return revolveproof.SymDiff(m.vertices, m.triangles, revolveWalkView(p.resolved),
-		p.counts, p.sweep, p.rp.full, angular, deltaC, deltaR)
+		p.Meridian, p.Sweep, p.rp.full, angular, deltaC, deltaR)
 }
