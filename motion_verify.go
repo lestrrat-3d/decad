@@ -1210,25 +1210,13 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 		if !pa.hasGap || !pb.hasGap {
 			return nil
 		}
-		var bound *big.Rat
 		tau := r.drive.travel(i, k, a.param, b.param)
 		if r.pairs[i][k].once != nil {
 			// A constant pair travels nothing (docs/linkage-check-design.md
 			// §5.9).
 			tau = new(big.Rat)
 		}
-		if tau != nil {
-			bound = new(big.Rat).Add(proofarith.FloatRat(pa.lo), proofarith.FloatRat(pb.lo))
-			bound.Sub(bound, tau)
-			bound.Quo(bound, big.NewRat(2, 1))
-		}
-		if proj := r.drive.projection(i, k, a, b); proj != nil && (bound == nil || proj.Cmp(bound) > 0) {
-			bound = proj
-		}
-		if bound == nil || bound.Sign() <= 0 {
-			return nil
-		}
-		return bound
+		return motionbound.IntervalPairLower(pa.lo, pb.lo, tau, r.drive.projection(i, k, a, b))
 	}, nil)
 	if !ok {
 		return IntervalUndecided, nil
@@ -1248,53 +1236,18 @@ func (r *motionRun) collides(mp *motionPose) bool {
 	return false
 }
 
-// certifyPairs is the pair walk every certificate shares, an interval's
-// (docs/motion-check-design.md §5.2) and a joint-box cell's
-// (docs/linkage-check-design.md §14.3). It visits every pair that enters a
-// certificate, in pair order — a declared or unformed pair enters none — and
-// returns the smallest proven lower bound over them, nil when no pair
-// contributes one: an excluded pair contributes its whole-call bound, and an
-// evaluated pair the bound certify returns, nil when the pair does not
-// certify. A pair that is never evaluated (an invalid operand, a sheet)
-// certifies nothing. ok is false when some pair does not certify; held, when
-// given, is told each such pair and the walk goes on, and otherwise the walk
-// stops at the first.
+// certifyPairs adapts the motion run's pair states to motionbound's shared
+// interval and joint-box certificate walk. A declared or unformed pair enters
+// no certificate; an invalid or sheet pair cannot certify one.
 func (r *motionRun) certifyPairs(certify func(i, k int) *big.Rat, held func(i, k int)) (*big.Rat, bool) {
-	var lowest *big.Rat
-	ok := true
-	for i := range r.movers {
-		for k, pair := range r.pairs[i] {
-			if pair.declared || pair.unformed {
-				continue
+	return motionbound.CertifyPairs(len(r.movers), func(i int) int { return len(r.pairs[i]) },
+		func(i, k int) motionbound.CertificatePair {
+			p := r.pairs[i][k]
+			return motionbound.CertificatePair{
+				Skip: p.declared || p.unformed, Excluded: p.excluded,
+				Lower: p.lower, Evaluated: p.evaluated(),
 			}
-			if pair.excluded {
-				lowest = minRat(lowest, proofarith.FloatRat(pair.lower))
-				continue
-			}
-			var bound *big.Rat
-			if pair.evaluated() {
-				bound = certify(i, k)
-			}
-			if bound != nil {
-				lowest = minRat(lowest, bound)
-				continue
-			}
-			if held == nil {
-				return nil, false
-			}
-			ok = false
-			held(i, k)
-		}
-	}
-	return lowest, ok
-}
-
-// minRat is the smaller of an optional running minimum and a candidate.
-func minRat(running, candidate *big.Rat) *big.Rat {
-	if running == nil || candidate.Cmp(running) < 0 {
-		return candidate
-	}
-	return running
+		}, certify, held)
 }
 
 // conclude assembles the intervals, the whole-path reading, the assessment,
