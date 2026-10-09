@@ -20,7 +20,7 @@ The rules for rows live in `docs/layout.md`.
 | `clearance.go` | The pair kernel: `clearancePair` and `sheetSolidPair`. See clearance §1-§3/§6. |
 | `clearance_box.go` | Unplaced axis-aligned box pairs: gap from exact planes, ahead of the kernel. |
 | `clearance_planar.go` | The exact planar pair arm for mitred, faceted and coil bodies: interference §3.2. |
-| `contact_pair.go` / `contact_pair_memo.go` | Pair gates, reports, and memo. See contact-geometry. |
+| `contact_pair.go` / `contact_pair_memo.go` | Pair gates, report aliases, and memo. See contact-geometry. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See contact-geometry §4. |
 | `contact_faceted_pair.go` | Planar admission, convexity and the bands. See multibody §9–§10. |
 | `contact_faceted_manifold.go` / `contact_faceted_patch.go` | Planar manifold faces and witnesses. See multibody §9. |
@@ -47,7 +47,7 @@ The rules for rows live in `docs/layout.md`.
 | `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
 | `linkage_loop.go` | Closed loops and `Schedule`. See `docs/linkage-check-design.md` §15. |
 | `linkage_bound.go` | Linkage reach and projection adapters. See linkage §5.2, §5.8. |
-| `contact_sweep.go` | Sweeps, reports, and tracks. |
+| `contact_sweep.go` | Sweeps, report aliases, and tracks. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating and planar sweep adapters. See contact-sweep §4. |
 | `contact_sweep_memo.go` | Sweep memo adapter. See contact-sweep §7. |
 | `contact_sweep_band.go` / `contact_sweep_rolling.go` | Contact bands and rolling. See multibody §10. |
