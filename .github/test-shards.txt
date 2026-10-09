@@ -1124,6 +1124,8 @@
 3	0.30	TestBrepShellThroughCutWallRun
 3	0.05	TestBrepShellThroughCutWallOpeningDisplaced
 3	0.02	TestBrepShellThroughCutWallRimCharge
+3	0.10	TestBrepShellThroughCutDisplacedCrossing
+3	0.10	TestBrepShellThroughCutDisplacedWallGap
 0	0.00	TestPrismSharedWallMirroredL
 0	0.00	TestPrismSharedWallDisplacedInteriorSpanFallsBack
 0	0.00	TestPrismSharedWallChargesTheGap

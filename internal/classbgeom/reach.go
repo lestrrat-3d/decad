@@ -10,8 +10,15 @@ import (
 
 // ThroughReach finds one or two target faces crossing the tool's section tube.
 // Each face must lie across the tool sweep and strictly inside its interval.
-func ThroughReach(ctx context.Context, faces []FaceRecord, tool ToolRecord) ([]Slab, bool, error) {
+// widen is a displacement every face and the tool may carry beyond their
+// records: each face box and the tube grow by it on every side, and each
+// slab's level band grows by it, so a recorded gap of at most 2·widen
+// between a face and the tube reads as a meeting. A face that then meets the
+// tube without lying across the sweep makes the reach miss. Class B's own
+// boolean passes zero.
+func ThroughReach(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen float64) ([]Slab, bool, error) {
 	rat := proofarith.FloatRat
+	grow := rat(widen)
 	d := tool.Axis[2]
 	var section Box2
 	for i, seg := range tool.Profile.Outer.Segments {
@@ -25,7 +32,7 @@ func ThroughReach(ctx context.Context, faces []FaceRecord, tool ToolRecord) ([]S
 		}
 		section = Union(section, b)
 	}
-	tube := Place(section, rat(min(tool.Z0, tool.Z1)), rat(max(tool.Z0, tool.Z1)), tool.Axis, tool.Sign)
+	tube := Place(section, rat(min(tool.Z0, tool.Z1)), rat(max(tool.Z0, tool.Z1)), tool.Axis, tool.Sign).Widened(grow)
 	var slabs []Slab
 	for fi, f := range faces {
 		if err := ctx.Err(); err != nil {
@@ -35,7 +42,7 @@ func ThroughReach(ctx context.Context, faces []FaceRecord, tool ToolRecord) ([]S
 		if err != nil {
 			return nil, false, err
 		}
-		if b.Apart(tube) {
+		if b.Widened(grow).Apart(tube) {
 			continue
 		}
 		slab, ok := Across(AcrossFace{
@@ -53,7 +60,7 @@ func ThroughReach(ctx context.Context, faces []FaceRecord, tool ToolRecord) ([]S
 	}
 	lowY := tool.Sign[2]*tool.Z0 + 0
 	highY := tool.Sign[2]*tool.Z1 + 0
-	if !QualifySlabs(slabs, lowY, highY, tool.Z0Delta, tool.Z1Delta) {
+	if !QualifySlabs(slabs, lowY, highY, tool.Z0Delta, tool.Z1Delta, widen) {
 		return nil, false, nil
 	}
 	return slabs, true, nil
@@ -111,9 +118,10 @@ func Across(f AcrossFace, d int) (Slab, bool) {
 	return Slab{}, false
 }
 
-// QualifySlabs checks one or two faces against the tool's displaced interval.
-// It sorts two slabs by level in place. The caller has checked the count.
-func QualifySlabs(slabs []Slab, lowY, highY, lowDelta, highDelta float64) bool {
+// QualifySlabs checks one or two faces against the tool's displaced interval,
+// each face's level band grown by widen beyond its own displacement. It sorts
+// two slabs by level in place. The caller has checked the count.
+func QualifySlabs(slabs []Slab, lowY, highY, lowDelta, highDelta, widen float64) bool {
 	if len(slabs) == 2 && slabs[1].Level < slabs[0].Level {
 		slabs[0], slabs[1] = slabs[1], slabs[0]
 	}
@@ -127,9 +135,11 @@ func QualifySlabs(slabs []Slab, lowY, highY, lowDelta, highDelta float64) bool {
 	rat := proofarith.FloatRat
 	b0 := new(big.Rat).Add(rat(lowY), rat(lowDelta))
 	b1 := new(big.Rat).Sub(rat(highY), rat(highDelta))
+	grow := rat(widen)
 	for _, s := range slabs {
-		lo := new(big.Rat).Sub(rat(s.Level), rat(s.LevelDelta))
-		hi := new(big.Rat).Add(rat(s.Level), rat(s.LevelDelta))
+		band := new(big.Rat).Add(rat(s.LevelDelta), grow)
+		lo := new(big.Rat).Sub(rat(s.Level), band)
+		hi := new(big.Rat).Add(rat(s.Level), band)
 		if b0.Cmp(lo) >= 0 || hi.Cmp(b1) >= 0 {
 			return false
 		}

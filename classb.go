@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // This file is class B of docs/general-boolean-design.md §3: an operand X read
@@ -58,7 +59,7 @@ func tryClassB(ctx context.Context, op meshbool.OperationKind, a, b *Body) (feat
 	if a.payload == nil || b.payload == nil {
 		return nil, false, nil
 	}
-	return classBOfPayloads(ctx, op, a.payload, b.payload, a.payload.transform())
+	return classBOfPayloads(ctx, op, a.payload, b.payload, a.payload.transform(), 0)
 }
 
 // classBOfPayloads is class B's entry over two payloads and the one placement
@@ -70,20 +71,27 @@ func tryClassB(ctx context.Context, op meshbool.OperationKind, a, b *Body) (feat
 // the tool; Union and Intersect, being symmetric, also try the operands the
 // other way round, so a brep payload or a stacked prism enters in either
 // position. A payload whose transform is not placement is a silent miss.
-func classBOfPayloads(ctx context.Context, op meshbool.OperationKind, a, b featurePayload, placement r3.Transform) (featurePayload, bool, error) {
+//
+// delta is a displacement the caller charges every face of both operands
+// afterwards, beyond what their records state (route S's offsets,
+// docs/modify-general-design.md §3.3 step 4); a class-B boolean passes zero.
+// A positive delta widens every box B7 and the through reach compare by it,
+// and refuses the crossing reach, which charges the crossings it cuts no
+// angle for a displacement its records do not carry.
+func classBOfPayloads(ctx context.Context, op meshbool.OperationKind, a, b featurePayload, placement r3.Transform, delta float64) (featurePayload, bool, error) {
 	pairs := [][2]featurePayload{{a, b}}
 	if op != meshbool.OpCut {
 		pairs = append(pairs, [2]featurePayload{b, a})
 	}
 	for _, pair := range pairs {
-		cp, ok, err := admitClassBPair(ctx, pair[0], pair[1], placement)
+		cp, ok, err := admitClassBPair(ctx, pair[0], pair[1], placement, delta)
 		if err != nil {
 			return nil, false, err
 		}
 		if !ok {
 			continue
 		}
-		slabs, ok, err := classbgeom.ThroughReach(ctx, cp.faces, cp.tool)
+		slabs, ok, err := classbgeom.ThroughReach(ctx, cp.faces, cp.tool, delta)
 		if err != nil {
 			return nil, false, err
 		}
@@ -95,6 +103,9 @@ func classBOfPayloads(ctx context.Context, op meshbool.OperationKind, a, b featu
 		x, isPrism := pair[0].(prismPayload)
 		if op != meshbool.OpCut || !isPrism {
 			continue
+		}
+		if delta > 0 {
+			return nil, false, fmt.Errorf(`%w: the tool leaves class B's through reach, so the cut would take its crossing reach, and the crossings that reach cuts carry no charge for the displacement %s its operands carry beyond their records`, ErrUnsupported, units.Millimeters(delta))
 		}
 		bp, ok, err := tryClassBCrossingCut(ctx, x, cp)
 		if err != nil || ok {
@@ -148,8 +159,8 @@ func classBFaceView(ctx context.Context, payload featurePayload) (brepPayload, b
 // admitClassBPair runs §3's entry gate B1–B8 in order, plus the two conditions
 // the brep record itself needs: one shared placement, and Y's axes carried
 // bit for bit as signed reference axes at the reference origin (§4.1). Every
-// miss is silent.
-func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, placement r3.Transform) (classBPair, bool, error) {
+// miss is silent. delta widens B7's boxes (classBOfPayloads).
+func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, placement r3.Transform, delta float64) (classBPair, bool, error) {
 	// B1: X exposes a face view; Y is a prism.
 	y, okY := yPayload.(prismPayload)
 	if !okY || y.surfaceResult {
@@ -250,7 +261,7 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, pla
 	if !classbgeom.AxisAlignedPair(cp.faces, cp.tool.Profile) {
 		return classBPair{}, false, nil
 	}
-	ok, err = classbgeom.CurvedApart(ctx, cp.faces, cp.tool)
+	ok, err = classbgeom.CurvedApart(ctx, cp.faces, cp.tool, delta)
 	if err != nil || !ok {
 		return classBPair{}, false, err
 	}

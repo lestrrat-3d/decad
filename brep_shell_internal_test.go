@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -1035,4 +1036,131 @@ func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 	for _, f := range out.faces[n-2:] {
 		require.GreaterOrEqual(t, f.delta, 1e-9, "the wall's rim")
 	}
+}
+
+// TestBrepShellThroughCutDisplacedCrossing pins modify-general §3.3 step 4's
+// crossing rule: a private cut whose offsets carry a positive displacement
+// refuses class B's crossing reach (SG6), since that reach charges the
+// crossings it cuts nothing for a displacement its records do not carry. The
+// 40×20×20 box drilled with R = 3.1 along y through (20, ·, 15.90004) and
+// shelled at its top by 1 mm has a dilated hole (radius fl(3.1 + 1), 4.4e-16
+// below the denoted 3.1 + 1) reaching 4e-5 past the removed cap's plane, so
+// the cut notches the cavity's top through the crossing reach. The notch
+// vertex on y = 1 moves by the radius's error times rr/w (w the half-chord,
+// about 0.026), which the flat offset displacement does not cover.
+//
+// Shown to fail with classBOfPayloads' delta > 0 refusal deleted: the shell
+// then built, and the published bound of the rim vertex near
+// (19.981889273896304, 1, 20), 5.09e-14 mm, missed its exact position
+// x = 20 − √((3.1 + 1)² − (20 − 15.90004)²), 7.40e-14 mm away; the coverage
+// check below is that leg.
+func TestBrepShellThroughCutDisplacedCrossing(t *testing.T) {
+	t.Parallel()
+	const zc = 15.90004
+	doc := New()
+	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	body, err := Cut(t.Context(), box, internalDrillAlongY(t, doc, 20, zc, 3.1))
+	require.NoError(t, err)
+	_, ok := body.payload.(brepPayload)
+	require.True(t, ok, "the drilled box is a brep, got %T", body.payload)
+	before := doc.Bodies()
+
+	result, err := body.Shell(t.Context(), Faces(Facing(shellUp)).Exactly(1), units.Millimeters(1))
+	if err == nil {
+		rat := proofarith.FloatRat
+		rr := new(big.Rat).Add(rat(3.1), big.NewRat(1, 1))
+		d := new(big.Rat).Sub(big.NewRat(20, 1), rat(zc))
+		wLo, wHi := sqrtEnclosed(t, new(big.Rat).Sub(new(big.Rat).Mul(rr, rr), new(big.Rat).Mul(d, d)))
+		checked := 0
+		for _, v := range result.Vertices() {
+			p := v.Position()
+			if p.Value.Z != 20 || p.Value.Y != 1 || math.Abs(p.Value.X-20) > 1.5 || p.Value.X == 20 {
+				continue
+			}
+			lo, hi := new(big.Rat).Add(big.NewRat(20, 1), wLo), new(big.Rat).Add(big.NewRat(20, 1), wHi)
+			if p.Value.X < 20 {
+				lo, hi = new(big.Rat).Sub(big.NewRat(20, 1), wHi), new(big.Rat).Sub(big.NewRat(20, 1), wLo)
+			}
+			for _, x := range []*big.Rat{lo, hi} {
+				requireCentroidCovers(t, p, [3]*big.Rat{x, big.NewRat(1, 1), big.NewRat(20, 1)})
+			}
+			checked++
+		}
+		require.Equal(t, 2, checked)
+	}
+	requireRefusesUnchanged(t, body, before, err, "modify-general SG6", "crossing reach", "carry no charge")
+}
+
+// TestBrepShellThroughCutDisplacedWallGap pins modify-general §3.3 step 4's
+// box rule: a private cut widens every face box of the eroded prism and every
+// tool box by the cavity's displacement before class B's through reach and
+// B7 compare them, so a recorded gap within it refuses (SG6). The box
+// x ∈ [32.5, 50], y ∈ [16.5, 20], z ∈ [0, 30], drilled with R = 2.69 along y
+// through (44.990000000000002, ·, 15) and shelled at its top by 1.16 mm, has
+// an eroded wall fl(50 − 1.16) recorded 3.6e-15 beyond the denoted 50 − 1.16,
+// so the dilated hole's recorded box lies strictly apart from it while the
+// denoted tube reaches 1.8e-15 past the denoted wall.
+//
+// Shown to fail with the widening deleted (classBOfPayloads passing zero to
+// ThroughReach and CurvedApart): the shell then built 13 faces that Verify
+// read Sound, and the published area 2275.247229100661 ± 3.03e-11 mm² lay
+// wholly above the denoted area, at most 2275.247228548644 mm²: the
+// same-topology closed form, π enclosed by proofbound.PiLower/PiUpper, less
+// the strips the denoted tube cuts from the wall. The area check below is
+// that leg. B7's widening and the slab band's are not seen here, and no
+// route S cut reaches them alone: a curved wall within B7's widened reach of
+// the tool meets the widened tube too, and a slab level lies 2t inside the
+// tool's ends.
+func TestBrepShellThroughCutDisplacedWallGap(t *testing.T) {
+	t.Parallel()
+	const (
+		th, r, xc     = 1.16, 2.69, 44.990000000000002
+		x0, y0, x1, h = 32.5, 16.5, 50.0, 30.0
+	)
+	doc := New()
+	box := internalBoxBody(t, doc, x0, y0, x1, 20, h)
+	body, err := Cut(t.Context(), box, internalDrillAlongY(t, doc, xc, 15, r))
+	require.NoError(t, err)
+	_, ok := body.payload.(brepPayload)
+	require.True(t, ok, "the drilled box is a brep, got %T", body.payload)
+	before := doc.Bodies()
+
+	result, err := body.Shell(t.Context(), Faces(Facing(shellUp)).Exactly(1), units.Millimeters(th))
+	if err == nil {
+		rat := proofarith.FloatRat
+		mul := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
+		add := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Add(a, b) }
+		sub := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Sub(a, b) }
+		ri := func(x int64) *big.Rat { return big.NewRat(x, 1) }
+		T, R, XC, X0, Y0, X1, H := rat(th), rat(r), rat(xc), rat(x0), rat(y0), rat(x1), rat(h)
+		rr := add(R, T)
+		// The denoted tube meets the eroded wall x = x1 − t with penetration
+		// p over a strip of half-width w along the cavity's y-span ly.
+		dist := sub(sub(X1, T), XC)
+		p := sub(rr, dist)
+		require.Positive(t, p.Sign())
+		wLo, _ := sqrtEnclosed(t, sub(mul(rr, rr), mul(dist, dist)))
+		_, wHi := sqrtEnclosed(t, sub(mul(rr, rr), mul(dist, dist)))
+		ly := sub(sub(ri(20), T), add(Y0, T))
+		lossLo := sub(mul(ri(4), mul(wLo, ly)), mul(ri(4), mul(wHi, p)))
+		area := func(pi *big.Rat) *big.Rat {
+			sx, sy := sub(X1, X0), sub(ri(20), Y0)
+			ex, ey := sub(sx, mul(ri(2), T)), sub(sy, mul(ri(2), T))
+			hc := sub(H, T)
+			sum := mul(sx, sy)                                                 // receiver bottom
+			sum = add(sum, mul(ri(2), mul(sy, H)))                             // receiver x walls
+			sum = add(sum, mul(ri(2), sub(mul(sx, H), mul(pi, mul(R, R)))))    // receiver y walls less the hole
+			sum = add(sum, mul(mul(ri(2), pi), mul(R, sy)))                    // receiver hole
+			sum = add(sum, sub(mul(sx, sy), mul(ex, ey)))                      // rim
+			sum = add(sum, mul(ex, ey))                                        // cavity floor
+			sum = add(sum, mul(ri(2), mul(ey, hc)))                            // cavity x walls
+			sum = add(sum, mul(ri(2), sub(mul(ex, hc), mul(pi, mul(rr, rr))))) // cavity y walls less the dilated hole
+			return add(sum, mul(mul(ri(2), pi), mul(rr, ey)))                  // dilated hole
+		}
+		denotedHi := sub(ratMax(area(proofbound.PiLower), area(proofbound.PiUpper)), lossLo)
+		held, bound := rat(result.area.Value.Base()), rat(result.area.Bound.Base())
+		require.LessOrEqual(t, sub(held, bound).Cmp(denotedHi), 0,
+			"%s ± %s lies above the denoted area, at most %s", result.area.Value, result.area.Bound, denotedHi.FloatString(12))
+	}
+	requireRefusesUnchanged(t, body, before, err, "modify-general SG6")
 }

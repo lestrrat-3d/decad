@@ -69,8 +69,12 @@ func AxisAlignedPair(faces []FaceRecord, tool momentinput.Profile) bool {
 	return true
 }
 
-// CurvedApart is B7: each curved wall pair has outward boxes separated on an axis.
-func CurvedApart(ctx context.Context, faces []FaceRecord, tool ToolRecord) (bool, error) {
+// CurvedApart is B7: each curved wall pair has outward boxes separated on an
+// axis. widen is a displacement every face and the tool may carry beyond
+// their records: both boxes of a pair grow by it on every side before the
+// comparison. Class B's own boolean passes zero.
+func CurvedApart(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen float64) (bool, error) {
+	grow := proofarith.FloatRat(widen)
 	var xs []Box3
 	for _, f := range faces {
 		if err := ctx.Err(); err != nil {
@@ -86,7 +90,7 @@ func CurvedApart(ctx context.Context, faces []FaceRecord, tool ToolRecord) (bool
 		if err != nil {
 			return false, err
 		}
-		xs = append(xs, b)
+		xs = append(xs, b.Widened(grow))
 	}
 	var ys []Box3
 	rat := proofarith.FloatRat
@@ -99,7 +103,7 @@ func CurvedApart(ctx context.Context, faces []FaceRecord, tool ToolRecord) (bool
 		if err != nil {
 			return false, err
 		}
-		ys = append(ys, Place(b, lz, hz, tool.Axis, tool.Sign))
+		ys = append(ys, Place(b, lz, hz, tool.Axis, tool.Sign).Widened(grow))
 	}
 	for _, a := range xs {
 		for _, b := range ys {
