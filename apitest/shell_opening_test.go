@@ -375,7 +375,7 @@ var lPrism = [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {10, 30}, {0, 30}
 // cavity C = (10,28) (2,28) (2,2) (28,2) (28,8) (10,8) has area 316 and the
 // body 5000 − 316·6 = 3104. The x = 10 plane holds two faces: a U facing +x
 // and the rim (10,8)→(10,10) over the cavity's height facing −x. Shown to
-// fail with sideOpeningRecord's Engine.Event marks deleted: the cavity's walk
+// fail with the stack engine's Event marks deleted: the cavity's walk
 // along x = 10 then held no vertex at the reflex end (10,10), its edges did
 // not pair with the rim's and the U's, and the build refused (SO5).
 func TestShellSideOpeningLPrism(t *testing.T) {
