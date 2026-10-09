@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -49,6 +50,24 @@ func RegionOf(ctx context.Context, profile *momentinput.Profile, delta float64,
 		Area: area, Published: proofbound.MeasuredScalar(ig.Area, proofbound.AbsSumUpper(ig.AreaBound, displacement)),
 		Displacement: displacement, Upper: proofbound.AbsSumUpper(ig.Area, ig.AreaBound),
 	}, nil
+}
+
+// RestoredRegion resolves a restored planar contour before integrating it.
+func RestoredRegion(ctx context.Context, profile *momentinput.Profile, delta float64) (Region, error) {
+	work := freeform.NewFreeformWork()
+	var walks [][]survey2d.SegmentWalk
+	for _, loop := range append([]sectionrecord.LoopRecord{profile.Outer}, profile.Holes...) {
+		var ws []survey2d.SegmentWalk
+		for _, seg := range loop.Segments {
+			w, err := boundarywalk.WalkOf(seg, work)
+			if err != nil {
+				return Region{}, err
+			}
+			ws = append(ws, w)
+		}
+		walks = append(walks, ws)
+	}
+	return RegionOf(ctx, profile, delta, walks)
 }
 
 // Enclosure reads an exact value or widens a held float by its proven bound.
