@@ -3,13 +3,12 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -134,61 +133,32 @@ func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology,
 // fillet band's patches bulge past their directrices along an oblique axis,
 // so each adds its own extents (filletBandExtent).
 func brepBoundsContext(ctx context.Context, bp brepPayload) (Box, error) {
-	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
-	minC := [3]float64{math.Inf(1), math.Inf(1), math.Inf(1)}
-	maxC := [3]float64{math.Inf(-1), math.Inf(-1), math.Inf(-1)}
-	extremeBound := 0.0
-	work := freeform.NewFreeformWork()
-	for _, f := range bp.faces {
-		pp := f.view(bp.xform)
-		for i, axis := range axes {
-			if err := ctx.Err(); err != nil {
-				return Box{}, err
-			}
-			lo, hi, bound, err := pp.extentBoundedAlong(ctx, axis, work, nil)
-			if err != nil {
-				return Box{}, err
-			}
-			minC[i], maxC[i] = math.Min(minC[i], lo), math.Max(maxC[i], hi)
-			extremeBound = math.Max(extremeBound, bound)
-		}
-	}
-	for _, b := range bp.loopBands {
-		if b.kind != brepBandFillet {
-			continue
-		}
-		for i, axis := range axes {
-			if err := ctx.Err(); err != nil {
-				return Box{}, err
-			}
-			lo, hi, bound, err := filletBandExtent(ctx, b, bp.faces[b.face], bp.xform, axis, work)
-			if err != nil {
-				return Box{}, err
-			}
-			minC[i], maxC[i] = math.Min(minC[i], lo), math.Max(maxC[i], hi)
-			extremeBound = math.Max(extremeBound, bound)
-		}
-	}
-	terms := make([]float64, 0, 3)
-	for _, term := range []float64{bp.sectionDelta(), extremeBound, bp.axialDelta()} {
-		if term != 0 {
-			terms = append(terms, term)
-		}
-	}
-	bound := 0.0
-	switch len(terms) {
-	case 0:
-	case 1:
-		bound = terms[0]
-	default:
-		bound = proofbound.AbsSumUpper(terms...)
+	minC, maxC, bound, err := brepgeom.Bounds(ctx, len(bp.faces)+len(bp.loopBands), bp.extentAt,
+		bp.sectionDelta(), bp.axialDelta())
+	if err != nil {
+		return Box{}, err
 	}
 	return Box{
-		Min:       r3.NewVec(minC[0], minC[1], minC[2]),
-		Max:       r3.NewVec(maxC[0], maxC[1], maxC[2]),
+		Min:       minC,
+		Max:       maxC,
 		Exactness: exactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
+}
+
+// extentAt adapts one face or band to the shared BRep extent reader.
+func (bp brepPayload) extentAt(ctx context.Context, item int, axis r3.Vec,
+	work *freeform.FreeformWork) (float64, float64, float64, bool, error) {
+	if item < len(bp.faces) {
+		lo, hi, bound, err := bp.faces[item].view(bp.xform).extentBoundedAlong(ctx, axis, work, nil)
+		return lo, hi, bound, true, err
+	}
+	band := bp.loopBands[item-len(bp.faces)]
+	if band.kind != brepBandFillet {
+		return 0, 0, 0, false, nil
+	}
+	lo, hi, bound, err := filletBandExtent(ctx, band, bp.faces[band.face], bp.xform, axis, work)
+	return lo, hi, bound, true, err
 }
 
 // extentAlong is the through-all stop's reading (stops.go): the union of every
@@ -200,26 +170,7 @@ func (bp brepPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 	if bp.sectionDelta() != 0 {
 		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a brep body with a proven section displacement`, ErrUnsupported)
 	}
-	lo, hi, bound := math.Inf(1), math.Inf(-1), 0.0
-	work := freeform.NewFreeformWork()
-	for _, f := range bp.faces {
-		l, h, b, err := f.view(bp.xform).extentBoundedAlong(context.Background(), g, work, nil)
-		if err != nil {
-			return 0, 0, 0, err
-		}
-		lo, hi, bound = math.Min(lo, l), math.Max(hi, h), math.Max(bound, b)
-	}
-	for _, band := range bp.loopBands {
-		if band.kind != brepBandFillet {
-			continue
-		}
-		l, h, b, err := filletBandExtent(context.Background(), band, bp.faces[band.face], bp.xform, g, work)
-		if err != nil {
-			return 0, 0, 0, err
-		}
-		lo, hi, bound = math.Min(lo, l), math.Max(hi, h), math.Max(bound, b)
-	}
-	return lo, hi, bound, nil
+	return brepgeom.ExtentAlong(context.Background(), len(bp.faces)+len(bp.loopBands), g, bp.extentAt)
 }
 
 // brepUndercuts surveys a brep body's faces against the pull
@@ -248,25 +199,10 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 		if face == nil {
 			return undercutOutcome{}
 		}
-		view := f.view(bp.xform)
-		m, ok := survey2d.NewPlacedFrameMap(view.frame, view.xform)
-		if !ok {
-			return undercutOutcome{}
-		}
-		var verdict survey2d.PullVerdict
-		if f.planar() {
-			sign := -1.0
-			if f.outward {
-				sign = 1
-			}
-			verdict, ok = survey2d.CapNormalDecision(m, pull, sign)
-		} else {
-			w, err := boundarywalk.WalkOf(f.wall, work)
-			if err != nil {
-				return undercutOutcome{}
-			}
-			verdict, ok = survey2d.WallNormalDecision(survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, m, pull)
-		}
+		verdict, ok := brepgeom.PullDecision(brepgeom.PullFace{
+			Frame: f.frame, Transform: bp.xform, Wall: f.wall,
+			Planar: f.planar(), Outward: f.outward,
+		}, pull, work)
 		if !listVerdict(&faces, &undecided, face, verdict, ok) {
 			return undercutOutcome{}
 		}
@@ -331,27 +267,22 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 			}
 		}
 	}
-	agg := survey2d.MinAggregate()
-	work := freeform.NewFreeformWork()
+	fillets := make([]radiussurvey.BrepFilletRadius, 0, len(bp.loopBands))
 	for _, band := range bp.loopBands {
 		if band.kind == brepBandFillet && band.sigma > 0 {
 			// The tag's Minor or Radius, which a placement leaves unchanged,
 			// within the radius's unit conversion.
-			agg.Take(band.setback.dc, band.setback.dcDelta)
+			fillets = append(fillets, radiussurvey.BrepFilletRadius{
+				Radius: band.setback.dc, Bound: band.setback.dcDelta,
+			})
 		}
 	}
+	walls := make([]sectionrecord.CurveSegment, 0, len(bp.faces))
 	for _, f := range bp.faces {
-		if f.planar() {
-			continue
-		}
-		w, err := boundarywalk.WalkOf(f.wall, work)
-		if err != nil {
-			return radiusOutcome{}, false
-		}
-		if w.IsCircular() && w.Th1 < w.Th0 {
-			agg.Take(w.Radius, w.RadiusBound)
+		if !f.planar() {
+			walls = append(walls, f.wall)
 		}
 	}
-	reading := radiussurvey.Resolve(agg)
+	reading := radiussurvey.Brep(walls, fillets, bp.sectionDelta())
 	return radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 }
