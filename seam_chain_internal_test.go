@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -16,7 +17,7 @@ import (
 // one construction that DOES re-rank is sketch's own coincident-duplicate
 // fixture (chains_test.go's TestChainsRenameReranksWithoutStaleness), whose
 // chains are Chain.Valid == false and so never reach ExtrudeChain at all.
-// authenticateChain runs before that Valid gate, so it is exercised directly
+// sketchrecord.AuthenticateChain runs before that Valid gate, so it is exercised directly
 // here, over exactly that fixture.
 
 // TestAuthenticateChainMatchesByContentAfterRename is T138: three coincident
@@ -24,7 +25,7 @@ import (
 // (chains.go's compareChains rung 2). Renaming the entity the held chain
 // walks moves its own chain to a different index in a fresh Sketch.Chains()
 // call, changing NOTHING Sketch.Revision() covers, so the held chain stays
-// fresh (Chain.IsStale() == false) throughout. authenticateChain must still
+// fresh (Chain.IsStale() == false) throughout. sketchrecord.AuthenticateChain must still
 // find it — by content, never by the index it once held.
 func TestAuthenticateChainMatchesByContentAfterRename(t *testing.T) {
 	t.Parallel()
@@ -57,10 +58,10 @@ func TestAuthenticateChainMatchesByContentAfterRename(t *testing.T) {
 	// Shown-to-fail: an index-based match — comparing target only against
 	// fresh[0] — finds a snapshot mismatch (fresh[0] walks "B", not "A"/"Z"),
 	// which is exactly the wrong ErrInvalidProfile T138 names.
-	require.False(t, sameChainSnapshot(target, fresh[0]),
+	require.False(t, sketchrecord.SameChainSnapshot(target, fresh[0]),
 		"an index-based read would find the wrong chain at the held index")
 
-	trusted, err := authenticateChain(s, target)
+	trusted, err := sketchrecord.AuthenticateChain(s, target)
 	require.NoError(t, err)
 	require.Same(t, lines[0], trusted.Entities[0], "matched by content, not by the stale index")
 }

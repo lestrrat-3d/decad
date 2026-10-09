@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -588,7 +589,7 @@ func TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 // circle and an arc alike) and both walk CCW, so the CCW disagreement gate
 // says nothing and only the segment-type test refuses. Through the public
 // API the same pairing is reachable as a full-turn ArcSeg loop against a
-// CircleSeg loop, since seam.go's falsifyLoopJoins forces a lone ArcSeg loop
+// CircleSeg loop, since sketchrecord.FalsifyLoopJoins forces a lone ArcSeg loop
 // to close; at the record level it needs no full turn.
 func TestLoftArcSegAgainstCircleSegRefusesS3(t *testing.T) {
 	t.Parallel()
@@ -650,10 +651,10 @@ func arcWedgeLoopEqualRadii(u, v float64) loopRecord {
 // decide the arc-end radial residual from these and never from a float
 // comparison, which would make the assertion architecture-dependent.
 func arcSquaredRadii(arc arcSeg) (*big.Rat, *big.Rat) {
-	dx0 := exactCoordinateDelta(arc.Start.U, arc.Center.U)
-	dy0 := exactCoordinateDelta(arc.Start.V, arc.Center.V)
-	dx1 := exactCoordinateDelta(arc.End.U, arc.Center.U)
-	dy1 := exactCoordinateDelta(arc.End.V, arc.Center.V)
+	dx0 := circularbounds.ExactCoordinateDelta(arc.Start.U, arc.Center.U)
+	dy0 := circularbounds.ExactCoordinateDelta(arc.Start.V, arc.Center.V)
+	dx1 := circularbounds.ExactCoordinateDelta(arc.End.U, arc.Center.U)
+	dy1 := circularbounds.ExactCoordinateDelta(arc.End.V, arc.Center.V)
 	return new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0)),
 		new(big.Rat).Add(new(big.Rat).Mul(dx1, dx1), new(big.Rat).Mul(dy1, dy1))
 }
@@ -716,7 +717,7 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 // The fixture is the same equal-radii wedge with the arc's recorded End moved
 // to (u+d, v): the record still states that coordinate verbatim and
 // arcWalkEnd still PINS the walk to it, but the curve the record DENOTES at
-// t == 1 sits at Start's radius and End's angle (circularEndpointInterval),
+// t == 1 sits at Start's radius and End's angle (circularbounds.EndpointInterval),
 // so the held vertex misses the denoted point by | |End-C| - |Start-C| |.
 // Before that residual was charged, this build published delta == 0 and took
 // bodyGateDiameter's unshrunk fast path on the false premise that every held
