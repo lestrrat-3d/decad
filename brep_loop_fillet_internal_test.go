@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -1143,6 +1144,30 @@ func TestBrepLoopFilletRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			body := tc.body(t)
+			if tc.name == "a semicircular bite" {
+				pp, ok := body.payload.(prismPayload)
+				require.True(t, ok)
+				walk, walkErr := oneLoopCornerLoop(proofbound.NewWorkBudget(t.Context()), pp.profile.Outer,
+					freeform.NewFreeformWork())
+				require.NoError(t, walkErr)
+				found := false
+				for k, cur := range walk.walks {
+					if cur.StartU != 25 || cur.StartV != 20 {
+						continue
+					}
+					prev := walk.walks[(k+len(walk.walks)-1)%len(walk.walks)]
+					point, pointOK := filletband.CurvedMiterPoint(prev, cur, 1, 0.5, 25, 20)
+					require.True(t, pointOK)
+					u, _ := point[0].Lo.Float64()
+					v, _ := point[1].Lo.Float64()
+					require.InDelta(t, 20+math.Sqrt(30), u, 1e-8)
+					require.InDelta(t, 19.5, v, 1e-8)
+					_, lengthOK := filletband.CurvedMiterLength(prev, cur, 1)
+					require.True(t, lengthOK)
+					found = true
+				}
+				require.True(t, found)
+			}
 			before := body.doc.Bodies()
 			_, err := body.Fillet(t.Context(), edgesQuery(tc.sel(t, body)), units.Millimeters(tc.r))
 			require.ErrorIs(t, err, tc.is)
