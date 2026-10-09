@@ -122,7 +122,8 @@
 //	    tolerance where the pair meets it                     ErrUnsupported
 //	  cap-loop chamfer operand whose band has a mitered
 //	    circular wall or a reflex corner                      ErrUnsupported
-//	  brep operand carrying complete-loop chamfer bands       ErrUnsupported
+//	  brep operand carrying complete-loop chamfer bands
+//	    of such a wall or corner                              ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
 //	  exact coplanar / face-on-face / point contact outside
 //	    the admitted analytic prism reduction                 ErrUnsupported
@@ -204,11 +205,11 @@
 //	  and the undercut survey reads draft bodies
 //	  a question the evaluator cannot decide                  Status Suspect
 //	Tessellate / export.STL / export.OBJ  prism, revolve, cup, loft,
-//	                        cap-loop chamfer, boolean body    builds
+//	                        cap-loop chamfer, boolean body,
+//	                        brep body with complete-loop bands builds
 //	  revolve whose tolerance its coordinate stages exhaust   ErrUnsupported
 //	  revolve chording no bounded refinement can prove        ErrUnsupported
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
-//	  brep body carrying complete-loop chamfer bands          ErrUnsupported
 //	  a chorded free-form wall past the fixed work budget     ErrUnsupported
 //
 // Options: among the MODEL-CONSTRUCTION verbs, New and Revolve expose option

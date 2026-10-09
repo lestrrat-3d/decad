@@ -91,6 +91,12 @@ type brepPayload struct {
 	xform     r3.Transform
 	stack     *brepStack
 	loopBands []brepLoopBand
+	// loopPatches is each band's patch geometry, beside its role
+	// chamferLoop(f,l,p), in band order. The body build fills it
+	// (attachBrepLoopBands); a record handed to the build carries none, and
+	// the tessellator and the surveys read it from the payload the build
+	// left on the body, as capBlendPayload.patches is read.
+	loopPatches [][]capPatch
 }
 
 func (f brepFace) planar() bool { return f.region != nil }
@@ -625,6 +631,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	if err := chargePrismMap(body, bp.faces[0].frame, bp.xform); err != nil {
 		return nil, err
 	}
+	bp.loopPatches = bands.geom
 	body.payload = bp
 	return body, nil
 }

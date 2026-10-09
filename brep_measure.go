@@ -360,7 +360,8 @@ func (bp brepPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 // The reading is a normal-direction membership, unaffected by a face's
 // displacements, as a prism's is (docs/prism-boolean-design.md §12).
 func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
-	if _, ok := pull.Normalize(); !ok {
+	p, ok := pull.Normalize()
+	if !ok {
 		return undercutOutcome{}
 	}
 	roles := facesByRole(b)
@@ -395,6 +396,18 @@ func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
 			return undercutOutcome{}
 		}
 	}
+	// A route L body's band patches are no face of the record: each is read
+	// through its own built Face.NormalAt in its band's face frame, by the
+	// reader a cap-blend body's patches take (modify-general Table DG's DG7).
+	for bi, band := range bp.loopBands {
+		if bi >= len(bp.loopPatches) {
+			return undercutOutcome{}
+		}
+		pl := bp.faces[band.face].view(bp.xform)
+		if !capPatchUndercuts(roles, pl, bp.loopPatches[bi], p, &faces, &undecided) {
+			return undercutOutcome{}
+		}
+	}
 	if undecided && len(faces) == 0 {
 		// Keep an entirely undecided result distinct from a proven all-clear.
 		faces = nil
@@ -411,9 +424,29 @@ func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
 // carry no radius. A record carrying any section displacement leaves the
 // question undecided, as prismMinRadius does: the radius is read off the
 // recorded wall, which the face only denotes within that displacement.
-func brepMinRadius(bp brepPayload) (radiusOutcome, bool) {
+//
+// A route L body's band patches add no radius the record's walls do not
+// already read, on capBlendMinRadius's reduction (capblend_survey.go): a
+// Plane is flat, a Cone's tightest azimuthal radius is its side wall's own,
+// and an apex Cone shrinks to zero only at a boundary vertex. That holds only
+// for a patch the build proves is the Cone it publishes, so a band whose
+// patch carries a skew or a non-zero stamped departure leaves the survey
+// undecided (modify-general Table DG's DG8).
+func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 	if bp.sectionDelta() != 0 {
 		return radiusOutcome{}, false
+	}
+	if len(bp.loopPatches) != len(bp.loopBands) {
+		return radiusOutcome{}, false
+	}
+	roles := facesByRole(b)
+	for _, patches := range bp.loopPatches {
+		for _, patch := range patches {
+			f := roles[patch.role]
+			if f == nil || capPatchWindowSkew(patch.geom) > 0 || f.normalBound != 0 {
+				return radiusOutcome{}, false
+			}
+		}
 	}
 	agg := survey2d.MinAggregate()
 	work := freeform.NewFreeformWork()

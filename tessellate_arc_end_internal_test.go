@@ -201,7 +201,7 @@ func TestBrepChordWallReachesArcNaturalEnd(t *testing.T) {
 			index++
 			return index - 1
 		}
-		_, err := brepChordWall(t.Context(), f, w, e, nil, 0.2, freeform.NewFreeformWork(), capture)
+		_, err := brepChordWall(t.Context(), f, w, e, nil, 0.2, freeform.NewFreeformWork(), nil, capture)
 		require.NoError(t, err)
 		for _, z := range []float64{f.z0, f.z1} {
 			bound, ok := bounds[e.Canon(w.EndU, w.EndV, z)]

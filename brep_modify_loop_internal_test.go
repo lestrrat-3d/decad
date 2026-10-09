@@ -40,7 +40,7 @@ func internalRoundBoss(t *testing.T) *Body {
 
 // internalBlindPort is modify-general §1's P6c: the 60×40×30 enclosure with
 // a 20×10 port 13 deep into its x = 60 wall, y ∈ [10, 30], z ∈ [10, 20].
-func internalBlindPort(t *testing.T) (*Document, *Body) {
+func internalBlindPort(t *testing.T) *Body {
 	t.Helper()
 	doc := New()
 	box := internalBoxBody(t, doc, 0, 0, 60, 40, 30)
@@ -57,7 +57,7 @@ func internalBlindPort(t *testing.T) (*Document, *Body) {
 	require.NoError(t, err)
 	out, err := Cut(t.Context(), box, tool)
 	require.NoError(t, err)
-	return doc, out
+	return out
 }
 
 // planarBodyFace finds the one planar face of body whose outward normal is n
@@ -392,7 +392,7 @@ const sigmaRise = 1.0
 // πd³/3).
 func TestBrepLoopChamferBlindPortMouth(t *testing.T) {
 	t.Parallel()
-	_, port := internalBlindPort(t)
+	port := internalBlindPort(t)
 	out, _ := chamferLoopOf(t, port, r3.NewVec(1, 0, 0), r3.NewVec(60, 0, 0), 1, 1.5)
 	lo, hi := piEnclosed(big.NewRat(138665, 2), big.NewRat(-9, 8))
 	requireCoversInterval(t, out.volume, lo, hi)
@@ -605,19 +605,17 @@ func TestBrepLoopChamferRefusals(t *testing.T) {
 	})
 }
 
-// TestBrepLoopChamferConsumers runs modify-general Table DG's L-1 readers
-// over the Pocket's top-loop chamfer. Verify is Sound; the volume is Exact,
-// the area encloses its closed form, and the box is the plate's own, Exact,
-// the band lying inside its record's faces; a translated copy reproduces volume
-// and area; Tessellate refuses naming L-2; the undercut and concave-radius
-// surveys report the payload staged; the clearance pairs with two boxes read
-// disjoint and unmeasured, with no clearance row; and a further chamfer of
-// the pocket's mouth on the result builds the volume of both bands. Shown to
-// fail with tessellate's loopBands refusal deleted (the brep tessellator then
-// indexed a band boundary edge the record does not pair and panicked), with
-// the undercut survey's loopBands arm deleted (it then read the record's
-// faces alone), and with addBrepFaces' (the clearance pairs then read
-// measured gaps to the record's faces).
+// TestBrepLoopChamferConsumers runs modify-general Table DG's readers over the
+// Pocket's top-loop chamfer. Verify is Sound; the volume is Exact, the area
+// encloses its closed form, and the box is the plate's own, Exact, the band
+// lying inside its record's faces; a translated copy reproduces volume and
+// area; Tessellate meshes it (tessellate_brep_band_internal_test.go owns the
+// mesh's proofs); the undercut and concave-radius surveys decide; the
+// clearance pairs with two boxes read disjoint and unmeasured, with no
+// clearance row; and a further chamfer of the pocket's mouth on the result
+// builds the volume of both bands. Shown to fail with addBrepFaces' band guard
+// deleted (the clearance pairs then read measured gaps to the record's faces
+// alone, missing the band patches).
 func TestBrepLoopChamferConsumers(t *testing.T) {
 	t.Parallel()
 	doc, pocket := internalRouteEPocket(t)
@@ -655,15 +653,15 @@ func TestBrepLoopChamferConsumers(t *testing.T) {
 	require.Len(t, loopPatches(placed), 4)
 
 	_, err = tessellateContext(t.Context(), out, units.Millimeters(0.05), VerifyAll)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.ErrorContains(t, err, "modify-general L-2")
+	require.NoError(t, err)
 
 	rep, err = doc.Verify(t.Context(), WithPullDirection(routeEZ), WithConcaveRadius(), WithClearances())
 	require.NoError(t, err)
 	br, err = rep.ForBody(out)
 	require.NoError(t, err)
-	require.Equal(t, CoverageUnavailable, br.Undercut.Coverage)
-	require.Equal(t, ScalarUnavailable, br.ConcaveRadius.Outcome)
+	require.Equal(t, CoverageComplete, br.Undercut.Coverage)
+	require.Empty(t, br.Undercut.Faces, "no face of the top-loop chamfer opposes a pull along +z")
+	require.Equal(t, ScalarAbsent, br.ConcaveRadius.Outcome)
 	for _, row := range rep.Clearances {
 		require.NotSame(t, out, row.A, "no clearance row reads the chamfered body")
 		require.NotSame(t, out, row.B, "no clearance row reads the chamfered body")
