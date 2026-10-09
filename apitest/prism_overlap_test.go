@@ -110,7 +110,6 @@ func TestVerifyMultiRegionOverlapReportsSummedVolume(t *testing.T) {
 	for _, d := range report.Diagnostics {
 		require.NotEqual(t, decad.DiagUnsupportedPairContact, d.Code,
 			`a published row on a coplanar pair can only have come from the analytic reading`)
-		require.NotEqual(t, decad.DiagUnsupportedPair, d.Code)
 	}
 	requireDocumentUnchanged(t, doc, before)
 }
@@ -523,7 +522,6 @@ func TestVerifyGearScaleEightRegionOverlapReportsSummedVolume(t *testing.T) {
 	for _, d := range report.Diagnostics {
 		require.NotEqual(t, decad.DiagUnsupportedPairContact, d.Code,
 			"a published row on a coplanar pair can only have come from the analytic reading")
-		require.NotEqual(t, decad.DiagUnsupportedPair, d.Code)
 		require.NotEqual(t, decad.DiagUnsupportedPairPipeline, d.Code)
 	}
 	requireDocumentUnchanged(t, doc, before)

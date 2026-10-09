@@ -413,8 +413,6 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged revolve operand is not an undecided partition`)
-	_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
-	require.False(t, broad, `an overlapping revolve pair no longer emits the deprecated broad compatibility code`)
 	_, contact := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
 	require.False(t, contact, `payload staging is not a contact refusal`)
 	_, pipeline := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPipeline)

@@ -727,7 +727,6 @@ func TestDiagnosticCodeTokens(t *testing.T) {
 	require.Equal(t, "undecided_min_radius", decad.DiagUndecidedMinRadius.String())
 	require.Equal(t, "interference", decad.DiagInterference.String())
 	require.Equal(t, "undecided_pair", decad.DiagUndecidedPair.String())
-	require.Equal(t, "unsupported_pair", decad.DiagUnsupportedPair.String())
 	require.Equal(t, "undecided_clearance", decad.DiagUndecidedClearance.String())
 	require.Equal(t, "undecided_interference", decad.DiagUndecidedInterference.String())
 	require.Equal(t, "unsupported_pair_payload", decad.DiagUnsupportedPairPayload.String())
@@ -924,8 +923,6 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged contact is not an undecided partition`)
-	_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
-	require.False(t, broad, `a staged contact no longer emits the deprecated broad compatibility code`)
 	_, payload := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPayload)
 	require.False(t, payload, `a contact refusal is not a payload capability limit`)
 	_, pipeline := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPipeline)
@@ -935,9 +932,8 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 // TestVerifyUnsupportedPairEmitsOneCause is proposal §16's "Unsupported pair
 // reasons" acceptance case, on the real coplanar-contact fixture also used by
 // TestVerifyDiagnosticsUnsupportedPairStagedContact: an unsupported pair
-// emits its specific cause once, the deprecated broad DiagUnsupportedPair
-// never appears, and a waiver matching that one cause and that exact pair
-// accepts nothing else in the report.
+// emits its specific cause once, and a waiver matching that cause and that
+// exact pair accepts nothing else in the report.
 func TestVerifyUnsupportedPairEmitsOneCause(t *testing.T) {
 	t.Parallel()
 	doc := coplanarContactPairDocument(t)
@@ -956,8 +952,6 @@ func TestVerifyUnsupportedPairEmitsOneCause(t *testing.T) {
 		}
 	}
 	require.Equal(t, 1, count, `the cause-specific entry appears exactly once`)
-	_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
-	require.False(t, broad, `the deprecated broad entry is never emitted`)
 
 	// A waiver matching this one cause and this exact pair accepts every
 	// other entry in the report — there is none, so nothing remains unwaived.
@@ -976,7 +970,7 @@ func TestVerifyUnsupportedPairEmitsOneCause(t *testing.T) {
 // (interference_test.go): a container box and a taller, footprint-nested box
 // sharing the container's own coplanar base plane. Before
 // docs/prism-boolean-design.md §14 PR4 this exact pair staged a boolean
-// contact (DiagUnsupportedPairContact / DiagUnsupportedPair, Suspect) because
+// contact (DiagUnsupportedPairContact, Suspect) because
 // measuredInterference never reached the analytic opIntersect dispatch. Now
 // it resolves analytically, so neither contact diagnostic fires and the
 // report reads Interfering with a DiagInterference row instead.
@@ -994,8 +988,6 @@ func TestVerifyDiagnosticsAdmittedCoplanarPrismPairHasNoContactDiagnostic(t *tes
 
 	_, contact := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
 	require.False(t, contact, `an admitted coplanar pair no longer stages a boolean contact`)
-	_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
-	require.False(t, broad, `an admitted coplanar pair no longer trips the broad compatibility code either`)
 
 	d, ok := findDiagnostic(report.Diagnostics, decad.DiagInterference)
 	require.True(t, ok, `the analytic path proves a positive overlap`)

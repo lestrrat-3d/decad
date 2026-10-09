@@ -401,14 +401,6 @@ const (
 	// DiagUndecidedPair — a pair the disjoint/overlap PARTITION proof resolved
 	// neither way (§1). Reading ReadingNone. Contributes Suspect.
 	DiagUndecidedPair
-	// DiagUnsupportedPair is the broad compatibility code for a staged pair.
-	// Verify no longer emits it; every unsupported pair gets one of the
-	// cause-specific codes below instead. Reading ReadingNone. Contributes
-	// Suspect.
-	//
-	// Deprecated: branch on DiagUnsupportedPairPayload,
-	// DiagUnsupportedPairContact, or DiagUnsupportedPairPipeline.
-	DiagUnsupportedPair
 	// DiagUndecidedClearance — a pair PROVEN disjoint (by box or kernel) whose
 	// requested WithClearances gap the kernel could not prove: no Clearance row
 	// is emitted and the report reads Suspect. Distinct from DiagUndecidedPair
@@ -524,8 +516,6 @@ func (c DiagnosticCode) String() string {
 		return "interference"
 	case DiagUndecidedPair:
 		return "undecided_pair"
-	case DiagUnsupportedPair:
-		return "unsupported_pair"
 	case DiagUndecidedClearance:
 		return "undecided_clearance"
 	case DiagUndecidedInterference:

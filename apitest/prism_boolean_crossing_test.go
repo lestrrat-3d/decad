@@ -118,8 +118,6 @@ func TestVerifyCrossingCoplanarBoxesReportsInterference(t *testing.T) {
 	for _, d := range report.Diagnostics {
 		require.NotEqual(t, decad.DiagUnsupportedPairContact, d.Code,
 			`the crossing pair no longer stages a boolean contact`)
-		require.NotEqual(t, decad.DiagUnsupportedPair, d.Code,
-			`the crossing pair no longer trips the broad compatibility code either`)
 	}
 }
 
