@@ -157,13 +157,12 @@ func prepareRollingSweepPath(body *Body, path affinePairPath,
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	box := source.box
 	for i := range 8 {
 		var corner proofarith.DyV3
 		for k := range 3 {
-			corner[k] = box.lo[k]
+			corner[k] = source.BoxLo[k]
 			if i&(1<<k) != 0 {
-				corner[k] = box.hi[k]
+				corner[k] = source.BoxHi[k]
 			}
 		}
 		prepared.sourcePoints = append(prepared.sourcePoints, corner)
@@ -267,12 +266,6 @@ func (r *rollingPairSweep) undecided(from, to *big.Rat, cause SweepCause) *Sweep
 	return r.report
 }
 
-// support finds the plane of S the cylinder's ruling rests on
-// (rulingSupport): ContactPair reads the same plane at the start poses.
-func (r *rollingPairSweep) support(poll func() error) (placedruling.Plane, bool, error) {
-	return rulingSupport(&r.cylinder, &r.paths[r.s], poll)
-}
-
 // rollingCoefficients are the depth bound's terms, constant + rate·t +
 // quadratic·t², and the rim drift's, lateralBase + lateral·t. With ã the
 // staged axis column, α = n̂·ã, β = |ω×ã| and both ends' H±:
@@ -309,7 +302,8 @@ func (r *rollingPairSweep) coefficients(support placedruling.Plane) (rollingCoef
 // (column) must hold through f as well.
 func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*SweepContactTrack, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	support, ok, err := r.support(budget.Step)
+	S := &r.paths[r.s]
+	support, ok, err := placedruling.Support(r.cylinder.Cylinder, S.solid, S.startPoints, budget.Step)
 	if err != nil || !ok {
 		return nil, false, err
 	}

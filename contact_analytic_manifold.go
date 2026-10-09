@@ -267,8 +267,7 @@ func rulingSideNormal(side rulingSide, witness VecMeasurement,
 // has |Bᵀm|² in [1 − gram, 1 + gram].
 type placedCylinder struct {
 	placedruling.Cylinder
-	box    sourceBoxContactProof // the identity disk-by-interval box
-	source [2]proofarith.DyV3    // end-disk centers at the identity pose
+	source [2]proofarith.DyV3 // end-disk centers at the identity pose
 	wall   *Face
 }
 
@@ -290,18 +289,13 @@ func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
 	}
 	ends := rollingEnds(source)
 	staged := placedruling.Stage(source.axis, source.box.lo, source.box.hi, ends, pose)
-	c := placedCylinder{Cylinder: staged, box: source.box, wall: wall, source: ends}
+	c := placedCylinder{Cylinder: staged, wall: wall, source: ends}
 	return c, true
 }
 
 // The placed-ruling proof requires gram at most 1/16; its support selection
 // checks |α| at most 1/4, under which RimDrift holds.
 var rulingGramLimit = proofarith.MustDyOf(1.0 / 16)
-
-// rulingSupport adapts a sweep path to the placed-ruling support proof.
-func rulingSupport(c *placedCylinder, S *rotationalSweepPath, poll func() error) (placedruling.Plane, bool, error) {
-	return placedruling.Support(c.Cylinder, S.solid, S.startPoints, poll)
-}
 
 // classifyPlacedRuling is docs/contact-geometry-design.md §4.5 at placed
 // query poses: a full source cylinder M, at any pose with a positive
@@ -325,7 +319,7 @@ func rulingSupport(c *placedCylinder, S *rotationalSweepPath, poll func() error)
 // material in front of the plane lies at least the lateral clearance m away
 // from the cylinder, so a gap's lower end is the lesser of the least height's
 // and m, its upper end unchanged; a touch or band publishes only when m
-// exceeds its half-width (clearsBand), and otherwise the pair is Undecided.
+// exceeds its half-width, and otherwise the pair is Undecided.
 func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, error) {
 	cylinderFirst := true
 	bodyM, bodyS, poseS := report.A, report.B, report.PoseB
@@ -344,8 +338,7 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 	if err != nil || !ok || delta.Sign() != 0 {
 		return false, err
 	}
-	pathS := &rotationalSweepPath{body: bodyS, solid: &solid, startPoints: solid.Verts}
-	plane, ok, err := rulingSupport(&cylinder, pathS, budget.Step)
+	plane, ok, err := placedruling.Support(cylinder.Cylinder, &solid, solid.Verts, budget.Step)
 	if err != nil || !ok {
 		return false, err
 	}

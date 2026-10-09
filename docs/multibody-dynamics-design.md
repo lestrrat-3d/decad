@@ -1938,7 +1938,7 @@ fails the column test, because the rim's triangles lie in front of the floor's p
 the body; a box in a tray corner touches two faces and has no single plane (§10.2). Both stay
 `SweepUndecided`. PR 15 keeps every release at least `20 mm` inside the walls.
 
-The placed ruling of contact-geometry §4.5 (`rulingSupport`, `contact_analytic_manifold.go`) reads a
+The placed ruling of contact-geometry §4.5 (`placedruling.Support`) reads a
 face-local plane the same way: a signed-axis face plane of `S` with an `S` vertex strictly in front is
 admitted when the column test holds at `f = 0` over the coordinate box of the eight staged corners of the
 cylinder's identity box, whose hull holds the cylinder, and it records that box's lateral clearance `m`. A
@@ -2965,7 +2965,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 ### PR 20e (Phase 3) — the face-local ruling plane
 
-- Delivers §10.6 for the placed ruling and the rolling track: `rulingSupport` admits a face-local plane
+- Delivers §10.6 for the placed ruling and the rolling track: `placedruling.Support` admits a face-local plane
   under the column test at `f = 0` over the cylinder's staged corner box and records `m`;
   `classifyPlacedRuling` publishes a separated gap with lower end `min(σ_lo, m)` and a touch or band only
   when `m` exceeds its half-width; the rolling track's band search runs the column test over the corners'
