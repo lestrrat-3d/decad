@@ -504,12 +504,12 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 		rimBottom[j] = loftEdge(vertexObjs, verts, vIdx[j], vIdx[j+1], true, delta)
 		rimTop[j] = loftEdge(vertexObjs, verts, wIdx[j], wIdx[j+1], true, delta)
 		diagE[j] = loftEdge(vertexObjs, verts, vIdx[j], wIdx[j+1],
-			junctionConvex(verts, lowerTri[j], upperTri[j], vIdx[j], wIdx[j+1]), delta)
+			loftmesh.JunctionConvex(verts, lowerTri[j], upperTri[j], vIdx[j], wIdx[j+1]), delta)
 	}
 	for j := 0; j <= n; j++ {
 		convex := false
 		if j > 0 && j < n {
-			convex = junctionConvex(verts, lowerTri[j-1], upperTri[j], vIdx[j], wIdx[j])
+			convex = loftmesh.JunctionConvex(verts, lowerTri[j-1], upperTri[j], vIdx[j], wIdx[j])
 		}
 		rungE[j] = loftEdge(vertexObjs, verts, vIdx[j], wIdx[j], convex, delta)
 	}

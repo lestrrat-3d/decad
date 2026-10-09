@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/r3"
@@ -105,7 +106,7 @@ func mitredOrientSign(a, b, c, d sweepRatVec) int {
 // outward-wound triangle against the apex of other's. Zero is a decided flat,
 // non-convex edge.
 func mitredJunctionConvex(exact []sweepRatVec, primary, other [3]int, a, b int) bool {
-	apex := junctionApex(other, a, b)
+	apex := loftmesh.JunctionApex(other, a, b)
 	return mitredOrientSign(exact[primary[0]], exact[primary[1]], exact[primary[2]], exact[apex]) < 0
 }
 
