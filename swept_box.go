@@ -9,8 +9,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -98,127 +96,24 @@ func sweptBoxOf(b *Body, p affinePairPath) (SweptBox, bool) {
 	if !ok {
 		return SweptBox{}, false
 	}
-	out := SweptBox{body: b}
-	for i, corner := range corners {
-		mapped := exactContactTransform(p.From, corner)
-		for axis := range 3 {
-			if i == 0 || proofarith.DyCmp(mapped[axis], out.lo[axis]) < 0 {
-				out.lo[axis] = mapped[axis]
-			}
-			if i == 0 || proofarith.DyCmp(mapped[axis], out.hi[axis]) > 0 {
-				out.hi[axis] = mapped[axis]
-			}
-		}
-	}
-	var travel *big.Rat
-	switch {
-	case p.Drift != nil:
-		travel, ok = driftTravel(b, p)
-	case p.Read != nil:
-		travel, ok = screwTravel(b, p)
-	default:
-		for axis := range 3 {
-			out.lo[axis] = dyMin(out.lo[axis], proofarith.DyAdd(out.lo[axis], p.Delta[axis]))
-			out.hi[axis] = dyMax(out.hi[axis], proofarith.DyAdd(out.hi[axis], p.Delta[axis]))
-		}
-		return out, true
-	}
+	bounds, ok := sweeppath.SweepBounds(corners, p, exactContactTransform,
+		func(from r3.Transform, center r3.Vec, axis motionbound.RatVec) (*big.Rat, bool) {
+			return rotationalSweepRadius(b, from, center, axis)
+		})
 	if !ok {
 		return SweptBox{}, false
 	}
-	up := proofbound.RatFloatUp(travel)
-	if !finiteMeasurementValues(up) {
-		return SweptBox{}, false
-	}
-	grow := proofarith.MustDyOf(up)
-	for axis := range 3 {
-		out.lo[axis] = proofarith.DySubScalar(out.lo[axis], grow)
-		out.hi[axis] = proofarith.DyAdd(out.hi[axis], grow)
-	}
-	return out, true
-}
-
-// driftTravel is contact-sweep §4.1's τ_drift over the whole duration:
-// (V + ρΩ)·Duration, with ρ the largest distance of the From-mapped bounds
-// corners from the rotation line through Center.
-func driftTravel(b *Body, p affinePairPath) (*big.Rat, bool) {
-	drift := p.Drift
-	linear := [3]units.Value{drift.LinearVelocity.X, drift.LinearVelocity.Y, drift.LinearVelocity.Z}
-	angular := [3]units.Value{drift.AngularVelocity.X, drift.AngularVelocity.Y, drift.AngularVelocity.Z}
-	var omega motionbound.RatVec
-	vSquared, omegaSquared := new(big.Rat), new(big.Rat)
-	for axis := range 3 {
-		v, okV := sweeppath.ExactBaseValue(linear[axis])
-		w, okW := sweeppath.ExactBaseValue(angular[axis])
-		if !okV || !okW {
-			return nil, false
-		}
-		omega[axis] = w
-		vSquared.Add(vSquared, new(big.Rat).Mul(v, v))
-		omegaSquared.Add(omegaSquared, new(big.Rat).Mul(w, w))
-	}
-	speed, spin := proofbound.RatSqrtUp(vSquared), proofbound.RatSqrtUp(omegaSquared)
-	if !finiteMeasurementValues(speed, spin) {
-		return nil, false
-	}
-	radius, ok := rotationalSweepRadius(b, p.From, drift.Center, omega)
-	if !ok {
-		return nil, false
-	}
-	rate := new(big.Rat).Add(proofarith.FloatRat(speed), new(big.Rat).Mul(radius, proofarith.FloatRat(spin)))
-	return rate.Mul(rate, p.Duration), true
-}
-
-// screwTravel is contact-sweep §4.1's τ_screw over the whole path: ρ|θ| + |d|,
-// with ρ the largest distance of the From-mapped bounds corners from the
-// read screw's axis line.
-func screwTravel(b *Body, p affinePairPath) (*big.Rat, bool) {
-	screw := p.Read
-	angle, okAngle := sweeppath.ExactBaseValue(screw.Angle)
-	slide := proofarith.FloatRat(screw.Slide)
-	if !okAngle || slide == nil {
-		return nil, false
-	}
-	travel := new(big.Rat).Abs(slide)
-	if angle.Sign() == 0 {
-		return travel, true
-	}
-	axis, ok := motionbound.RatVecOf(screw.Axis)
-	if !ok {
-		return nil, false
-	}
-	radius, ok := rotationalSweepRadius(b, p.From, screw.Point, axis)
-	if !ok {
-		return nil, false
-	}
-	return travel.Add(travel, new(big.Rat).Mul(radius, angle.Abs(angle))), true
+	return SweptBox{lo: bounds.Lo, hi: bounds.Hi, body: b}, true
 }
 
 // inflatedBoundsCorners returns the eight corners of b's Bounds() at its
 // current placement, each coordinate pushed outward by the box's Bound.
 func inflatedBoundsCorners(b *Body) ([8]proofarith.DyV3, bool) {
-	var corners [8]proofarith.DyV3
 	box, err := b.Bounds()
 	if err != nil || box.Bound.Kind() != units.Length ||
 		!finiteMeasurementValues(box.Bound.Base(), box.Min.X, box.Min.Y, box.Min.Z,
 			box.Max.X, box.Max.Y, box.Max.Z) || box.Bound.Base() < 0 {
-		return corners, false
+		return [8]proofarith.DyV3{}, false
 	}
-	minimum := [3]float64{box.Min.X, box.Min.Y, box.Min.Z}
-	maximum := [3]float64{box.Max.X, box.Max.Y, box.Max.Z}
-	var extremes [3][2]proofarith.Dyadic
-	bound := proofarith.MustDyOf(box.Bound.Base())
-	for axis := range 3 {
-		if minimum[axis] > maximum[axis] {
-			return corners, false
-		}
-		extremes[axis] = [2]proofarith.Dyadic{proofarith.DySubScalar(proofarith.MustDyOf(minimum[axis]), bound),
-			proofarith.DyAdd(proofarith.MustDyOf(maximum[axis]), bound)}
-	}
-	for index := range corners {
-		for axis := range 3 {
-			corners[index][axis] = extremes[axis][(index>>axis)&1]
-		}
-	}
-	return corners, true
+	return sweeppath.InflatedBoundsCorners(box.Min, box.Max, box.Bound.Base())
 }
