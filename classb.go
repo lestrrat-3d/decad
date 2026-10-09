@@ -130,9 +130,8 @@ func classBFaceView(ctx context.Context, payload featurePayload) (brepPayload, b
 		if p.isGroup() {
 			return brepPayload{}, false, nil
 		}
-		runs, err := p.outerRuns()
-		if err != nil || len(runs) != 1 {
-			return brepPayload{}, false, err
+		if len(p.outerRuns()) != 1 {
+			return brepPayload{}, false, nil
 		}
 		bp, err := brepOfStacked(ctx, p)
 		if err != nil {

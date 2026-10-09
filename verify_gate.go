@@ -607,10 +607,7 @@ func gateWitnessPrisms(payload featurePayload) ([]prismPayload, float64, bool) {
 		return capBlendWitnessPrisms(pl), pl.axialDelta(), true
 	}
 	if pl, ok := payload.(stackedPrismPayload); ok {
-		runs, err := pl.outerRuns()
-		if err != nil {
-			return nil, 0, false
-		}
+		runs := pl.outerRuns()
 		for i := range runs {
 			runs[i].sectionDelta = 0
 		}

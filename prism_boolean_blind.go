@@ -159,8 +159,8 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 	// A union-built stack changes its outer loop at an interface. Its exposed
 	// patches are not the exclusive-hole patches this cut re-derives below, so
 	// it takes the mesh path (docs/stacked-prism-design.md §6).
-	if runs, err := sp.outerRuns(); err != nil || len(runs) != 1 {
-		return stackedPrismPayload{}, false, err
+	if len(sp.outerRuns()) != 1 {
+		return stackedPrismPayload{}, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	outer := sp.outerPrism()

@@ -29,6 +29,31 @@ type Record struct {
 	Interfaces []Interface
 }
 
+// OuterRuns groups consecutive slabs with the same outer loop. A prism group
+// contributes one run per disjoint region. Each run keeps only its outer loop
+// because bounds and geometric caps read the body's outer envelope.
+func OuterRuns(slabs []Slab) []Slab {
+	var runs []Slab
+	if len(slabs) == 1 && len(slabs[0].Regions) >= 2 {
+		for _, region := range slabs[0].Regions {
+			run := slabs[0]
+			run.Regions = []momentinput.Profile{{Outer: region.Outer}}
+			runs = append(runs, run)
+		}
+		return runs
+	}
+	for k, slab := range slabs {
+		if k > 0 && equalLoop(slabs[k-1].Regions[0].Outer, slab.Regions[0].Outer) {
+			last := &runs[len(runs)-1]
+			last.Z1, last.Z1Delta = slab.Z1, slab.Z1Delta
+			continue
+		}
+		slab.Regions = []momentinput.Profile{{Outer: slab.Regions[0].Outer}}
+		runs = append(runs, slab)
+	}
+	return runs
+}
+
 func (sp Record) isGroup() bool {
 	return len(sp.Slabs) == 1 && len(sp.Slabs[0].Regions) >= 2
 }

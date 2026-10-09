@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
@@ -82,89 +81,6 @@ func (o stackedUnionOperand) view(region profileRecord) prismPayload {
 	return v
 }
 
-// stackedUnionLevel is one distinct level of the union: its exact rational,
-// the float the result holds, and that level's proven axial displacement.
-type stackedUnionLevel struct {
-	exact *big.Rat
-	held  float64
-	delta float64
-}
-
-// stackedUnionLevels lists both operands' slab boundaries on A's axis, sorted
-// exactly. A's levels are its own floats. B's are floatRat(z) + s, rounded
-// once to the nearest float, with rationalFloatError of that rounding added
-// to B's own displacement (general-boolean §3 A1, stacked §1's blind-cut
-// charge). A tie keeps A's float and the larger displacement. ok is false when
-// a level does not lift or two distinct levels round to one float, either of
-// which is a silent miss.
-func stackedUnionLevels(va, vb stackedUnionOperand, shift *big.Rat) ([]stackedUnionLevel, bool) {
-	var levels []stackedUnionLevel
-	add := func(z, delta float64, shifted bool) bool {
-		exact := proofarith.FloatRat(z)
-		if exact == nil {
-			return false
-		}
-		held := z
-		if shifted {
-			exact.Add(exact, shift)
-			held, _ = exact.Float64()
-			if round := proofarith.RationalFloatError(exact, held); round != 0 {
-				if delta == 0 {
-					delta = round
-				} else {
-					delta = proofbound.AbsSumUpper(delta, round)
-				}
-			}
-		}
-		levels = append(levels, stackedUnionLevel{exact: exact, held: held, delta: delta})
-		return true
-	}
-	for _, op := range []struct {
-		v       stackedUnionOperand
-		shifted bool
-	}{{va, false}, {vb, true}} {
-		for i, slab := range op.v.slabs {
-			if i == 0 && !add(slab.z0, slab.z0Delta, op.shifted) {
-				return nil, false
-			}
-			if !add(slab.z1, slab.z1Delta, op.shifted) {
-				return nil, false
-			}
-		}
-	}
-	sort.SliceStable(levels, func(i, j int) bool { return levels[i].exact.Cmp(levels[j].exact) < 0 })
-	out := levels[:0]
-	for _, l := range levels {
-		if n := len(out); n > 0 && out[n-1].exact.Cmp(l.exact) == 0 {
-			// A's levels are added first and the sort is stable, so the kept
-			// entry is A's whenever A states this level.
-			out[n-1].delta = max(out[n-1].delta, l.delta)
-			continue
-		}
-		out = append(out, l)
-	}
-	for i := 1; i < len(out); i++ {
-		if out[i-1].held >= out[i].held {
-			return nil, false
-		}
-	}
-	return out, true
-}
-
-// stackedUnionSlabOf finds the operand slab whose interval covers [lo, hi],
-// shifted by shift, compared exactly; -1 when the operand does not reach it.
-func stackedUnionSlabOf(o stackedUnionOperand, shift *big.Rat, lo, hi *big.Rat) int {
-	for i, slab := range o.slabs {
-		z0, z1 := proofarith.FloatRat(slab.z0), proofarith.FloatRat(slab.z1)
-		z0.Add(z0, shift)
-		z1.Add(z1, shift)
-		if z0.Cmp(lo) <= 0 && z1.Cmp(hi) >= 0 {
-			return i
-		}
-	}
-	return -1
-}
-
 // tryStackedUnion is general-boolean §3 A1. ok=false with a nil error is a
 // silent miss: the caller takes the mesh path. A non-nil error is a genuine
 // refusal the caller propagates (prism-boolean §3.4). The payload is a
@@ -212,7 +128,9 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 		}
 	}
 	shift := prismplacement.ZShift(prismPlacementOf(va.proxy), prismPlacementOf(vb.proxy))
-	levels, ok := stackedUnionLevels(va, vb, shift)
+	slabsA := stackedRecordOf(stackedPrismPayload{slabs: va.slabs}).Slabs
+	slabsB := stackedRecordOf(stackedPrismPayload{slabs: vb.slabs}).Slabs
+	levels, ok := stackedrecord.UnionLevels(slabsA, slabsB, shift)
 	if !ok || len(levels) < 3 {
 		// Equal intervals are prism-boolean §3.2's Union row, not a stack.
 		return nil, false, nil
@@ -238,8 +156,8 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 	var reach [][2]int
 	for k := 0; k+1 < len(levels); k++ {
 		lo, hi := levels[k], levels[k+1]
-		ia := stackedUnionSlabOf(va, zero, lo.exact, hi.exact)
-		ib := stackedUnionSlabOf(vb, shift, lo.exact, hi.exact)
+		ia := stackedrecord.UnionSlabOf(slabsA, zero, lo.Exact, hi.Exact)
+		ib := stackedrecord.UnionSlabOf(slabsB, shift, lo.Exact, hi.Exact)
 		if ia < 0 && ib < 0 {
 			return nil, false, nil
 		}
@@ -255,7 +173,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 			return nil, false, err
 		}
 		sp.slabs = append(sp.slabs, prismSlab{regions: []profileRecord{region},
-			z0: lo.held, z1: hi.held, z0Delta: lo.delta, z1Delta: hi.delta})
+			z0: lo.Held, z1: hi.Held, z0Delta: lo.Delta, z1Delta: hi.Delta})
 	}
 	for k := 0; k+1 < len(sp.slabs); k++ {
 		boundary, ok, err := st.interfaceOf(ctx, sp.slabs[k].regions[0], sp.slabs[k+1].regions[0])

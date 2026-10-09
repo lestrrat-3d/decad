@@ -356,10 +356,7 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 			}
 		}
 		if delta != 0 {
-			runs, err := p.outerRuns()
-			if err != nil {
-				return nil, err
-			}
+			runs := p.outerRuns()
 			if len(runs) != 1 {
 				// A union-built stack's narrower outer sits inside the wider
 				// one by construction, which no audit re-proves. A motion that
@@ -476,10 +473,7 @@ func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePaylo
 			sectionDelta = p.sectionDelta
 			break
 		}
-		runs, err := p.outerRuns()
-		if err != nil {
-			return stackedPrismPayload{}, false, err
-		}
+		runs := p.outerRuns()
 		if len(runs) != 1 {
 			return stackedPrismPayload{}, false, nil
 		}
