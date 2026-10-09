@@ -25,7 +25,8 @@ import (
 // beside the loop is trimmed to the band's side level, and the band is
 // recorded on the result (brepLoopBand) and attached at body build
 // (brep_loop_band.go). A Fillet whose selection is complete loops refuses
-// (SL3); any other Fillet selection takes route E and its refusals.
+// (SL3, the fillet arm of docs/loop-fillet-design.md until its band is built);
+// any other Fillet selection takes route E and its refusals.
 
 // brepLoopRead holds one route L call's readings of the receiver: its record,
 // topology, each planar loop segment's use, and the record edge each selected
@@ -70,15 +71,9 @@ type brepLoopBeside struct {
 // SL3; any other Fillet selection, a hole rim or boss root circle among them
 // (modify-general §6), takes route E, whose own Table SB rows refuse it.
 func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepModifyRequest) (*Body, error) {
-	topo, err := brepTopologyContext(ctx, bp)
+	r, err := newBrepLoopRead(ctx, bp, call)
 	if err != nil {
 		return nil, err
-	}
-	r := &brepLoopRead{bp: bp, topo: topo, call: call, budget: proofbound.NewWorkBudget(ctx), loopUse: map[[3]int]int{}}
-	for ui, u := range topo.uses {
-		if u.Part == brepLoopSeg {
-			r.loopUse[[3]int{u.Face, u.Loop, u.Seg}] = ui
-		}
 	}
 	if err := r.matchEdges(); err != nil {
 		return nil, err
@@ -89,8 +84,7 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 	loops, err := r.admitLoops()
 	if call.loop == nil {
 		if err == nil && r.anyCornered(loops) {
-			return nil, fmt.Errorf(`%w: a fillet of a complete loop is the vertex-blend problem, not yet supported: its band is a cylinder along each line, a torus around each arc and a sphere at each corner, none of them a face this record holds (modify-general SL3); selector %s matched [%s]`,
-				ErrUnsupported, call.sel, selectedEdgesContext(call.edges))
+			return nil, r.filletLoops()
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
@@ -117,6 +111,56 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 			ErrDegenerate, call.sel, selectedEdgesContext(call.edges))
 	}
 	return body, nil
+}
+
+// newBrepLoopRead reads the receiver record bp for one route L call: its
+// topology and each planar loop segment's use. Matching the selected edges is
+// matchEdges's.
+func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest) (*brepLoopRead, error) {
+	topo, err := brepTopologyContext(ctx, bp)
+	if err != nil {
+		return nil, err
+	}
+	r := &brepLoopRead{bp: bp, topo: topo, call: call, budget: proofbound.NewWorkBudget(ctx), loopUse: map[[3]int]int{}}
+	for ui, u := range topo.uses {
+		if u.Part == brepLoopSeg {
+			r.loopUse[[3]int{u.Face, u.Loop, u.Seg}] = ui
+		}
+	}
+	return r, nil
+}
+
+// filletLoops is route L's fillet arm (docs/loop-fillet-design.md §4) for the
+// admitted loops, one or more of which has a corner. The pipe band is not yet
+// built, so it refuses SL3 and always returns an error.
+func (r *brepLoopRead) filletLoops() error {
+	return fmt.Errorf(`%w: a fillet of a complete loop is the vertex-blend problem, not yet supported: its band is a cylinder along each line, a torus around each arc and a sphere at each corner, none of them a face this record holds (modify-general SL3); selector %s matched [%s]`,
+		ErrUnsupported, r.call.sel, selectedEdgesContext(r.call.edges))
+}
+
+// prismCapFilletRefusal is RF3 (docs/loop-fillet-design.md §3) for a Fillet of
+// a prism receiver whose selection holds an edge that is no lateral edge: the
+// prism is read through its face view and route L's fillet arm is asked about
+// the selection. It returns the arm's refusal when the selection is complete
+// loops of planar faces one of which has a corner, and nil for every other
+// selection, which the prism path refuses as its S1.
+func prismCapFilletRefusal(ctx context.Context, pp prismPayload, call brepModifyRequest) error {
+	bp, err := brepOfPrism(pp)
+	if err != nil {
+		return ctx.Err()
+	}
+	r, err := newBrepLoopRead(ctx, bp, call)
+	if err != nil {
+		return ctx.Err()
+	}
+	if err := r.matchEdges(); err != nil {
+		return err
+	}
+	loops, err := r.admitLoops()
+	if err != nil || !r.anyCornered(loops) {
+		return ctx.Err()
+	}
+	return r.filletLoops()
 }
 
 // anyCornered reports whether one of the loops holds two or more segments,
@@ -588,7 +632,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		f := r.bp.faces[sel.face]
 		eF := r.topo.embeds[sel.face]
 		n := eF.Axis[2]
-		band := brepLoopBand{face: sel.face, loop: sel.loop, orig: cloneLoopRecord(f.regionLoop(sel.loop)), setback: setback, sigma: sel.sigma}
+		band := brepLoopBand{face: sel.face, loop: sel.loop, orig: cloneLoopRecord(f.regionLoop(sel.loop)), setback: setback, sigma: sel.sigma, kind: brepBandChamfer}
 		delta, err := loopContourDelta(ctx, band.orig, setback.dc, setback.dcDelta)
 		if err != nil {
 			return brepPayload{}, r.wrapFace(sel.face, err)

@@ -158,6 +158,18 @@ type Arc3 struct {
 	Radius units.Value
 }
 
+// Ellipse3 is an elliptical arc edge: Center (mm), Axis the unit normal of the
+// ellipse's plane, Major the unit direction of the semi-major axis (in that
+// plane), SemiMajor and SemiMinor the semi-axis lengths. The arc is swept
+// counter-clockwise about Axis from the start vertex to the end vertex, as
+// Arc3 is, so the point at angle φ from Major is
+// Center + SemiMajor·cos φ·Major + SemiMinor·sin φ·(Axis × Major)
+// (docs/loop-fillet-design.md §2).
+type Ellipse3 struct {
+	Center, Axis, Major  r3.Vec
+	SemiMajor, SemiMinor units.Value
+}
+
 // NURBSCurve is a free-form edge's geometry, NURBSSurface's 1-D analog
 // (docs/spline-design.md §7). It reports no Kind at all: Curve is sealed by
 // its marker method alone and declares no Kind method, so this variant seals
@@ -176,6 +188,7 @@ type FacetedCurve struct {
 func (Line3) curve()        {}
 func (Circle3) curve()      {}
 func (Arc3) curve()         {}
+func (Ellipse3) curve()     {}
 func (NURBSCurve) curve()   {}
 func (FacetedCurve) curve() {}
 

@@ -100,7 +100,10 @@ const filletTol = sectionaudit.Tolerance
 // displacement (SB1) are ErrUnsupported (Table SB). A selection of complete
 // loops of such a body's planar faces, one of them with a corner, is the
 // vertex-blend problem and ErrUnsupported (docs/modify-general-design.md
-// SL3). Any other receiver that is neither a prism nor a revolve is S3
+// SL3). So is a selection of a prism's cap edges that form complete loops, one
+// of them with a corner
+// (docs/loop-fillet-design.md RF3); any other cap-edge selection is S1. Any
+// other receiver that is neither a prism nor a revolve is S3
 // (ErrUnsupported).
 func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if ctx == nil {
@@ -220,6 +223,14 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 			return nil, err
 		}
 		if !found {
+			// RF3 (docs/loop-fillet-design.md §3): complete cornered cap loops
+			// reach route L's fillet arm, whose refusal is SL3's; any other
+			// cap-edge selection is S1.
+			if err := prismCapFilletRefusal(ctx, pp, brepModifyRequest{
+				op: "fillets", sel: sel, edges: edges, blend: &blend,
+			}); err != nil {
+				return nil, err
+			}
 			return nil, fmt.Errorf(`%w: a fillet of a cap edge is the vertex-blend problem, not yet supported; selector %s, %s`,
 				ErrUnsupported, sel, selectedEdgeContext(ei, e))
 		}
@@ -350,6 +361,11 @@ func selectedEdgeContext(ordinal int, edge *Edge) string {
 	if c, ok := edge.curve.(Circle3); ok {
 		return fmt.Sprintf(`selected edge[%d] closed circle through (%s), centre (%s), radius %s`,
 			ordinal, renderVec(edge.start.position), renderVec(c.Center), c.Radius)
+	}
+	if c, ok := edge.curve.(Ellipse3); ok {
+		return fmt.Sprintf(`selected edge[%d] ellipse arc from (%s) to (%s), centre (%s), semi-axes %s and %s`,
+			ordinal, renderVec(edge.start.position), renderVec(edge.end.position), renderVec(c.Center),
+			c.SemiMajor, c.SemiMinor)
 	}
 	if edge.start == edge.end {
 		return fmt.Sprintf(`selected edge[%d] closed through (%s)`, ordinal, renderVec(edge.start.position))
