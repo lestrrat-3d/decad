@@ -6,7 +6,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/units"
 )
@@ -64,7 +63,7 @@ func revolveMassProperties(ctx context.Context, b *Body, rp revolvePayload, dens
 	if err != nil {
 		return MassProperties{}, err
 	}
-	return publishMassProperties(ctx, b.centroid, massIv, world)
+	return massmoment.Publish(ctx, b.centroid, massIv, world)
 }
 
 // revolveVolumeMoments integrates the revolve's V, P and Q about the axis
@@ -104,61 +103,6 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (massmoment.Mo
 		return massmoment.Moments{}, err
 	}
 	return massmoment.RevolveMoments(plane, rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV, angular)
-}
-
-// publishMassProperties rounds a mass interval and a world inertia interval
-// to readings and proves the published tensor positive definite.
-func publishMassProperties(ctx context.Context, center VecMeasurement, massIv proofbound.RatInterval, world [3][3]proofbound.RatInterval) (MassProperties, error) {
-	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
-	}
-	var err error
-	result := MassProperties{Center: center}
-	result.Mass, err = massmoment.IntervalReading(massIv, units.Kilogram)
-	if err != nil {
-		return MassProperties{}, err
-	}
-	if result.Mass.Bound.Base() >= result.Mass.Value.Base() {
-		return MassProperties{}, fmt.Errorf("%w: mass reading is not positive", ErrUnsupported)
-	}
-	entries := []struct {
-		iv      proofbound.RatInterval
-		reading *Measurement
-	}{
-		{world[0][0], &result.Inertia.XX}, {world[1][1], &result.Inertia.YY},
-		{world[2][2], &result.Inertia.ZZ}, {world[0][1], &result.Inertia.XY},
-		{world[0][2], &result.Inertia.XZ}, {world[1][2], &result.Inertia.YZ},
-	}
-	for _, entry := range entries {
-		*entry.reading, err = massmoment.IntervalReading(entry.iv, units.KilogramSquareMillimeter)
-		if err != nil {
-			return MassProperties{}, err
-		}
-	}
-	// The proof runs on the PUBLISHED readings, so every tensor a caller can
-	// read inside the six bounds is positive definite, not only the rational
-	// box they were rounded from.
-	if !massmoment.PositiveDefinite(publishedTensor(result.Inertia)) {
-		return MassProperties{}, fmt.Errorf("%w: inertia interval does not prove positive definiteness", ErrUnsupported)
-	}
-	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
-	}
-	return result, nil
-}
-
-// publishedTensor is the interval tensor the six readings state: each held
-// value widened by its own bound, both read as exact rationals.
-func publishedTensor(reading InertiaReading) [3][3]proofbound.RatInterval {
-	entry := func(m Measurement) proofbound.RatInterval {
-		return proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(m.Value.Base())), proofarith.FloatRat(m.Bound.Base()))
-	}
-	xy, xz, yz := entry(reading.XY), entry(reading.XZ), entry(reading.YZ)
-	return [3][3]proofbound.RatInterval{
-		{entry(reading.XX), xy, xz},
-		{xy, entry(reading.YY), yz},
-		{xz, yz, entry(reading.ZZ)},
-	}
 }
 
 // revolveSectionMoments returns the recorded section's plane-origin moments

@@ -84,7 +84,7 @@ func compositeSweepMassProperties(ctx context.Context, b *Body, sp sweepPayload,
 	if err != nil {
 		return MassProperties{}, err
 	}
-	return publishMassProperties(ctx, b.centroid, massIv, world)
+	return massmoment.Publish(ctx, b.centroid, massIv, world)
 }
 
 // sweepSpanMoments returns one span's local moments, the exact rational
@@ -109,7 +109,7 @@ func sweepSpanMoments(ctx context.Context, span sweepSpanPayload) (massmoment.Mo
 		return local, frame, origin, nil
 	}
 	pp := span.prism
-	mid, err := prismMidLevel(pp)
+	mid, err := massmoment.PrismMidLevel(pp.z0, pp.z1)
 	if err != nil {
 		return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 	}
@@ -121,7 +121,7 @@ func sweepSpanMoments(ctx context.Context, span sweepSpanPayload) (massmoment.Mo
 	// anchored at the frame origin.
 	local = massmoment.Shift(local, [3]*big.Rat{new(big.Rat), new(big.Rat), mid})
 	pp.xform = r3.Identity()
-	frame, err := prismRotation(pp)
+	frame, err := massmoment.PrismRotation(pp.frame, pp.xform)
 	if err != nil {
 		return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 	}
