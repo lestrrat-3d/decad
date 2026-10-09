@@ -14,12 +14,14 @@ how the proposed public signature preserves intended option constraints.
 Assess aliases on their own merits. If callers need an operation but not its current alias, consider a clearer public signature instead of preserving the alias automatically.
 
 For each alias, make two separate decisions: whether callers need its root-package
-name, and where its actual definition belongs. A useful root name does not by
-itself justify an internal definition. Keep a definition internal when shared
-internal use or package dependencies give it a clear owner there. Consider
-defining it in the root package when the type is part of the public CAD model
-and moving it would not create an import cycle or duplicate a shared type.
-Record the concrete dependency or ownership reason for either placement.
+name, and where its actual definition belongs. Define types that users need to
+name, construct, or inspect in the root package, rather than exposing aliases
+of definitions in internal packages. Internal packages should consume the data
+from those public types through values passed by the root package. Refactor the
+internal boundary when needed to avoid an import cycle; an existing internal
+dependency is not by itself a reason to retain a public type's definition
+there. Keep definitions in internal packages when the types are implementation
+details. Record the concrete reason for each alias decision and definition move.
 
 PR #1231 removed DiagUnsupportedPair after confirming that Verify emits only
 the specific unsupported-pair diagnostic codes. That broad code had no
