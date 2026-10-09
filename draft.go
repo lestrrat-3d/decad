@@ -8,7 +8,6 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is Body.Draft (docs/draft-design.md §10): the face draft of an
@@ -60,13 +59,6 @@ type NeutralFrame struct {
 func (NeutralFace) neutralPlane()  {}
 func (NeutralFrame) neutralPlane() {}
 
-// DraftOption configures [Body.Draft]. The tier carries no option today; it
-// exists so one can be added without changing Draft's signature.
-type DraftOption interface {
-	option.Interface
-	draftOption()
-}
-
 // errNilNeutralPlane rejects a nil plane, or a nil variant pointer: either
 // names no plane to tilt about.
 var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
@@ -111,17 +103,12 @@ var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 // extrude. ctx, sel and neutral MUST NOT be nil; a nil one is [ErrDegenerate].
 // Every measurement of the result is Approximate: the tangent of the angle is
 // only ever enclosed.
-func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralPlane, angle units.Value, opts ...DraftOption) (*Body, error) {
+func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralPlane, angle units.Value) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a draft`, ErrDegenerate)
 	}
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
-	}
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
 	}
 	d := b.doc
 

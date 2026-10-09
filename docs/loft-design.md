@@ -2456,10 +2456,10 @@ on the other plane — does not produce.
 **`WithLoftAlignment` therefore carries nothing for a chain pair.** P4's own
 row above forces the offset to `0`, so a `WithLoftAlignment` payload names a
 correspondence that does not exist. The refusal is the COMPILER rather than a
-sentinel: the option returns a `LoftOption` and `LoftChain` takes the sealed
-`ChainLoftOption` tier (§16.3), so Table SL carries no row for it, exactly as
-Table R carries none for `WithSurfaceResult()` against a chain-fed call
-(`docs/surface-design.md` §13.5). The rejected alternative is a chain-only reversal option
+sentinel: `LoftChain` takes no options (§16.3), so Table SL carries no row for
+it, exactly as Table R carries none for `WithSurfaceResult()` against a
+chain-fed call (`docs/surface-design.md` §13.5). The rejected alternative is
+a chain-only reversal option
 pairing segment `j` against segment `n-1-j`: §1 excludes a reversed
 correspondence permanently, because reversal changes which vertices are
 material-adjacent and needs its own audit story, and an open walk changes
@@ -2527,11 +2527,7 @@ is where a non-parallel chain loft would land once it can state one.
 
 ```go
 func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch,
-    c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain,
-    opts ...ChainLoftOption) (*Body, error)
-
-// ChainLoftOption configures LoftChain. It is its own sealed tier.
-type ChainLoftOption interface { /* sealed */ }
+    c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain) (*Body, error)
 ```
 
 `s0`/`c0` is the **from** chain and `s1`/`c1` the **to** chain — the same
@@ -2540,14 +2536,11 @@ gate reads `N0` from. Two sketches are required for the reason `Loft` requires
 them: `sketch.Sketch` has one plane, and two sections on distinct planes need
 two.
 
-**`ChainLoftOption` is a sealed tier of its own rather than `LoftOption`**, on
-`docs/surface-design.md` §13.2's own reasoning: `WithSurfaceResult()` must not
-compile against a chain-fed call, since a chain loft is always a sheet and
-there is no cap for the option to omit. `WithLoftAlignment` is not a member
-either, for §16.1's reason — the offset is forced to `0`, so the option names
-nothing. The tier carries no member in this increment. The rejected alternative
-is the `LoftOption` tier the staged signature first landed with, which
-type-checks both of those options against a call that can honour neither.
+**`LoftChain` takes no options.** `WithSurfaceResult()` cannot compile against
+this call, since a chain loft is always a sheet and there is no cap for the
+option to omit. `WithLoftAlignment` cannot compile either: §16.1 forces the
+offset to `0`, so the option names no valid correspondence. Accepting either
+option as a no-op would give it two meanings.
 
 **A chain-fed result is always a sheet**: `Kind()` is `BodySheet` by
 construction, `IsSolid()` is `false`, and `Volume()`/`Centroid()` answer
@@ -2620,7 +2613,7 @@ not build change nothing about that.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **L1** | `Document.LoftChain` over a `LineSeg`-only correspondence: the sealed `ChainLoftOption` tier, Table SL rows SL1 through SL6, §16.2's plane gate, the open-walk cell walk, and the four readings §16.5 states | a curved correspondence (SL7); a non-parallel plane pair; every Table D consumer beyond D6 |
+| **L1** | `Document.LoftChain` over a `LineSeg`-only correspondence: Table SL rows SL1 through SL6, §16.2's plane gate, the open-walk cell walk, and the four readings §16.5 states | a curved correspondence (SL7); a non-parallel plane pair; every Table D consumer beyond D6 |
 | **L2** | a same-kind `ArcSeg` correspondence, once §5.1's station generator states each COMPUTED station's own side against the from-plane rather than inheriting it from the plane pair | a non-parallel plane pair |
 | **L3 (reach, not committed by this document)** | a non-parallel plane pair, which needs a stated positive side that the two planes' own offset no longer supplies | — |
 
