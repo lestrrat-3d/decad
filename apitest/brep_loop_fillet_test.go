@@ -128,6 +128,37 @@ func TestBrepLoopFilletPublicBoxCaps(t *testing.T) {
 	requireMeasurementHoldsPi(t, volume, big.NewRat(317000, 3), big.NewRat(3500, 1))
 }
 
+func TestVertexBlendPublicBoxAllEdges(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := boxBody(t, doc, 0, 0, 40, 20, 20)
+	got, err := box.Fillet(t.Context(), decad.Edges().Exactly(12), units.Millimeters(2))
+	require.NoError(t, err)
+	requireEveryEdgeOnTwoFaces(t, got)
+	volume, err := got.Volume()
+	require.NoError(t, err)
+	requireMeasurementHoldsPi(t, volume, big.NewRat(14848, 1), big.NewRat(848, 3))
+	var spheres int
+	for _, f := range filletLoopPatches(got) {
+		if _, ok := f.Surface().(decad.Sphere); ok {
+			spheres++
+		}
+	}
+	require.Equal(t, 8, spheres)
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(got)
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, reading.Status)
+	var step bytes.Buffer
+	require.NoError(t, export.STEP(t.Context(), &step, got, units.Millimeters(0.1),
+		export.WithSTEPName("vertex blend"), export.WithSTEPAuthor("test"), export.WithSTEPOrganization("test")))
+	require.Contains(t, step.String(), "ISO-10303-21")
+}
+
 // TestBrepLoopFilletPublicRevolveCapRefuses pins loop-fillet RF4: a complete
 // loop of a partial revolve's planar cap is a loop of cap edges whose walls
 // are revolved surfaces, so it stays modify-reach SX5 and leaves the receiver

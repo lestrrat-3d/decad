@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -599,6 +600,154 @@ func TestBrepLoopFilletRoundedPlate(t *testing.T) {
 	requireNormalFaces(t, patches, p, r3.NewVec(-1, -1, math.Sqrt2))
 }
 
+// The four radius-3 side arcs collapse to the centres of four spherical
+// octants when P8's top loop is filleted at the same radius.
+func TestBrepLoopFilletSphereAtEqualRadius(t *testing.T) {
+	t.Parallel()
+	out, _ := filletLoopOfFace(t, internalRoundedPlate(t), routeEZ, r3.NewVec(0, 0, 20), 0, 3)
+	requireVolumePi(t, out, pp(q(14416, 1), q(207, 1), q(0, 1)))
+	patches := filletPatchesOf(out)
+	require.Len(t, patches, 8)
+	var spheres int
+	for _, f := range patches {
+		if sphere, ok := f.Surface().(Sphere); ok {
+			spheres++
+			require.Equal(t, 3.0, sphere.Radius.Base())
+		}
+	}
+	require.Equal(t, 4, spheres)
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+}
+
+func TestVertexBlendBoxAllEdges(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	out, err := box.Fillet(t.Context(), Edges().Exactly(12), units.Millimeters(2))
+	require.NoError(t, err)
+	requireClosedTopology(t, out)
+	requireVolumePi(t, out, pp(q(14848, 1), q(848, 3), q(0, 1)))
+	var spheres int
+	for _, f := range filletPatchesOf(out) {
+		if _, ok := f.Surface().(Sphere); ok {
+			spheres++
+		}
+	}
+	require.Equal(t, 8, spheres)
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+}
+
+func TestVertexBlendBoxTopAndVerticalEdges(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	sel := Edges(EndpointAt(r3.NewVec(0, 0, 20))).Or(EndpointAt(r3.NewVec(40, 20, 20))).Or(ParallelTo(routeEZ)).Exactly(8)
+	out, _ := filletSelection(t, box, sel, 2, 1)
+	requireVolumePi(t, out, pp(q(15264, 1), q(544, 3), q(0, 1)))
+	var spheres int
+	for _, f := range filletPatchesOf(out) {
+		if _, ok := f.Surface().(Sphere); ok {
+			spheres++
+		}
+	}
+	require.Equal(t, 4, spheres)
+}
+
+func TestVertexBlendSinglePrismCapEdge(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	out, err := box.Fillet(t.Context(), Edges(ParallelTo(routeEX), EndpointAt(r3.NewVec(0, 0, 20))).Exactly(1), units.Millimeters(2))
+	require.NoError(t, err)
+	requireClosedTopology(t, out)
+	requireVolumePi(t, out, pp(q(15840, 1), q(40, 1), q(0, 1)))
+}
+
+func TestVertexBlendPocketFloor(t *testing.T) {
+	t.Parallel()
+	_, pocket := internalRouteEPocket(t)
+	sel := Edges(EndpointAt(r3.NewVec(10, 15, 5))).Or(EndpointAt(r3.NewVec(30, 25, 5))).Or(ParallelTo(routeEZ), Concave()).Exactly(8)
+	out, _ := filletSelection(t, pocket, sel, 1.5, 1)
+	requireVolumePi(t, out, pp(q(15153, 1), q(-297, 8), q(0, 1)))
+	var spheres int
+	for _, f := range filletPatchesOf(out) {
+		if _, ok := f.Surface().(Sphere); ok {
+			spheres++
+		}
+	}
+	require.Equal(t, 4, spheres)
+}
+
+func TestVertexBlendBoxPartialCornerSet(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	sel := Edges(ParallelTo(routeEX), EndpointAt(r3.NewVec(0, 0, 20))).
+		Or(ParallelTo(r3.NewVec(0, 1, 0)), EndpointAt(r3.NewVec(0, 0, 20))).
+		Or(ParallelTo(routeEX), EndpointAt(r3.NewVec(40, 20, 20))).
+		Or(ParallelTo(r3.NewVec(0, 1, 0)), EndpointAt(r3.NewVec(40, 20, 20))).
+		Or(ParallelTo(routeEZ), EndpointAt(r3.NewVec(0, 0, 0))).
+		Or(ParallelTo(routeEZ), EndpointAt(r3.NewVec(40, 0, 0))).Exactly(6)
+	out, _ := filletSelection(t, box, sel, 2, 1)
+	var spheres, ellipses int
+	for _, f := range filletPatchesOf(out) {
+		if _, ok := f.Surface().(Sphere); ok {
+			spheres++
+		}
+	}
+	for _, e := range out.Edges() {
+		if _, ok := e.Curve().(Ellipse3); ok {
+			ellipses++
+		}
+	}
+	require.Equal(t, 2, spheres)
+	require.Equal(t, 2, ellipses)
+}
+
+// The slanted corner's pinned arc endpoints do not both lie exactly one
+// millimetre from its centre, so a radius-one sphere cannot close against it.
+func TestVertexBlendTrapezoidRefusal(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	body := internalPolygonPrism(t, doc, [][2]float64{{0, 0}, {100, 0}, {72, 45}, {28, 45}}, 10)
+	_, err := body.Fillet(t.Context(), Edges().Exactly(12), units.Millimeters(1))
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "recorded endpoints to lie exactly at the fillet radius")
+	require.NoError(t, doc.requireLive(body))
+}
+
+func TestFilletSphereWalkRequiresExactRecordedRadius(t *testing.T) {
+	t.Parallel()
+	w := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		Kind: survey2d.WalkCircular, Radius: 1, StartU: 1, EndV: 1, Th1: math.Pi / 2,
+	}}
+	require.True(t, filletSphereWalk(w, 1))
+	w.EndU, w.EndV = 0.6, 0.8
+	require.Equal(t, 1.0, math.Hypot(w.EndU, w.EndV))
+	require.False(t, filletSphereWalk(w, 1))
+}
+
+func TestVertexBlendCrossDrilledBar(t *testing.T) {
+	t.Parallel()
+	_, body := internalCrossDrilled(t)
+	sel := Edges(ParallelTo(routeEX)).Or(ParallelTo(r3.NewVec(0, 1, 0))).Or(ParallelTo(routeEZ)).Exactly(12)
+	out, err := body.Fillet(t.Context(), sel, units.Millimeters(2))
+	require.NoError(t, err)
+	requireClosedTopology(t, out)
+	requireVolumePi(t, out, pp(q(14848, 1), q(308, 3), q(0, 1)))
+	var spheres int
+	for _, f := range filletPatchesOf(out) {
+		if _, ok := f.Surface().(Sphere); ok {
+			spheres++
+		}
+	}
+	require.Equal(t, 8, spheres)
+}
+
 // trapezoidStrip is the bound fixture's strip polynomial derived from the
 // polygon alone: the trapezoid's area and first moment less its offset by t,
 // whose corners are the exact meets of the offset lines, at t = 1, 2, 3,
@@ -785,7 +934,7 @@ func TestBrepLoopFilletBoundFixture(t *testing.T) {
 // outer loop is SF1 at the bite's two non-tangent corners; part of P2's mouth
 // is SL1; P1's top loop with one vertical edge, which is one segment of its
 // y = 0 wall's loop, is SL1; P8's top loop at r = 3
-// is SX6 (ErrDegenerate), the corner arcs' offsets vanishing; P2's mouth at
+// at r = 4 is SX6 (ErrDegenerate), the corner arcs' offsets crossing; P2's mouth at
 // r = 5 is SX7, the band reaching the pocket's floor; and a stacked receiver
 // whose section carries a displacement is SB1. Shown to fail with
 // filletCornerClass's left-turn arm admitting a circular walk: the bite then
@@ -822,10 +971,6 @@ func TestBrepLoopFilletRefusals(t *testing.T) {
 		_, body := internalRouteEPocket(t)
 		return body
 	}
-	s1 := func(t *testing.T) *Body {
-		_, body := internalCrossDrilled(t)
-		return body
-	}
 	displaced := func(t *testing.T) *Body {
 		doc := New()
 		plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10)
@@ -857,12 +1002,7 @@ func TestBrepLoopFilletRefusals(t *testing.T) {
 		{"a semicircular bite", bite, topLoop(10), 1, ErrUnsupported, []string{"loop-fillet SF1", "(25, 20)"}},
 		{"part of a loop", pocket, func(t *testing.T, b *Body) []*Edge { return mouth(t, b)[:3] }, 1.5, ErrUnsupported,
 			[]string{rowSL1, "covers only part of a loop"}},
-		{"a loop with a lateral edge", s1, func(t *testing.T, b *Body) []*Edge {
-			lateral, err := edgeAt(routeEZ, r3.Vec{}).SelectEdges(b)
-			require.NoError(t, err)
-			return append(topLoop(20)(t, b), lateral...)
-		}, 2, ErrUnsupported, []string{rowSL1, "covers only part of a loop"}},
-		{"a contour that vanishes", func(t *testing.T) *Body { return internalRoundedPlate(t) }, topLoop(20), 3, ErrDegenerate,
+		{"a contour that crosses", func(t *testing.T) *Body { return internalRoundedPlate(t) }, topLoop(20), 4, ErrDegenerate,
 			[]string{"no regular cap contour"}},
 		{"a band reaching the floor", pocket, mouth, 5, ErrUnsupported, []string{"modify-reach SX7", "the fillet band"}},
 		{"a displaced receiver", displaced, topLoop(10), 1, ErrUnsupported, []string{"brep-modify SB1"}},

@@ -23,6 +23,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/brep-modify-design.md` | Modify ops on brep and stacked receivers; Tables RB/EB/SB/BB/DB. |
 | `docs/modify-general-design.md` | Shell of a through-cut brep (S), complete-loop chamfers (L); Tables TC/SG/LB/SL. |
 | `docs/loop-fillet-design.md` | Route L's fillet arm: pipe bands on a planar face's loop. |
+| `docs/vertex-blend-design.md` | Three-edge fillets, sphere patches, route V, and exact-radius refusals. |
 | `docs/shell-opening-design.md` | Shell side openings on a prism and a revolve: rim rule, brep record, Tables RO/SO/BO/DO. |
 | `docs/draft-design.md` | `WithTaper` and `Body.Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |

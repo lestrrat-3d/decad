@@ -59,10 +59,9 @@ Scenes (general-boolean §2, §9) and what each route unlocks:
 | counterbore | stacked → face view | none | rims as complete loops (`docs/loop-fillet-design.md`) |
 | boss on plate (stacked) | stacked → face view | none | boss edges; root circle as a complete loop (`docs/loop-fillet-design.md`) |
 
-A vertex blend — three blends meeting at a corner, a blend ending on a blend —
-stays refused, as it does for a prism (modify §6). A curved rim, or any
-complete loop of a planar face, is filleted as a pipe band by route L's
-fillet arm (`docs/loop-fillet-design.md`).
+A complete-loop fillet with independent straight edges builds through route V
+(`docs/vertex-blend-design.md`). A curved rim or a complete loop without
+single edges uses route L (`docs/loop-fillet-design.md`).
 
 ## 2. Routes and dispatch
 
@@ -352,7 +351,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | **SB2** | a stacked receiver `brepOfStacked` refuses (a prism group, several regions in one slab; a stack enclosing a cavity, a closed shell) | yes | that call's `ErrUnsupported` |
 | **SB3** | route P reads a prism along some axis, a Shell's removed faces are not its caps, no other axis admits them, and route S reads no through-cut record along any axis (modify-general Table TC) | yes | modify S2, with SG3's reason |
 | **SB4** | route E reading an edge that is not a straight line along a reference axis; only single straight edges reach route E, and every other Fillet or Chamfer selection takes route L (modify-general §4, `docs/loop-fillet-design.md`), which builds a hole rim, a boss root or a cornered loop or refuses with Table SL or SF | — (a falsifier) | `ErrUnsupported` |
-| **SB5** | three blended edges meeting at a vertex (all twelve edges of a box): a Fillet or Chamfer of edges sharing a vertex takes route L, which refuses with SL1 what is no complete loop; the sphere such a corner needs is no loop band's (`docs/loop-fillet-design.md` §2) | yes; the vertex blend | `ErrUnsupported` (SL1's text) |
+| **SB5** | selected single straight edges share a vertex outside route V's complete-loop fillet (`docs/vertex-blend-design.md` §2); a mixed `Chamfer` still takes SL1 | yes | `ErrUnsupported` (SL1's text) |
 | **SB6** | an edge vertex with other than three incident edges, or an edge that is one piece of a split side line | yes | `ErrUnsupported` |
 | **SB7** | the third face at an edge vertex is not, and cannot be restated as, a plane across the edge's axis: a cylinder, a plane along the axis, an oblique, split or level-displaced straight wall, a blend face of an earlier call, a trimmed wall whose rim ends on a loop band's patch | yes; the edge ends on a blend or a curved face, whose honest form is the complete loop's fillet (`docs/loop-fillet-design.md`) | `ErrUnsupported` |
 | **SB8** | an adjacent face outside EB4/EB5: a rim-adjacent wall that is oblique, split or level-displaced, a (pl) face whose neighbours at `e` are not straight and across the axis, a narrowed range, consecutive segments on one carrier | yes | `ErrUnsupported` |
@@ -369,7 +368,7 @@ Gate order for a brep receiver, after modify §4's stage 1 and reach SX10:
 |---|---|
 | 2a. record | RB dispatch; SB2; SB1 |
 | 2b. route P | P1–P5 per axis; the prism path's own stage 2 onward where an axis admits; a shell with no admitting axis takes route S at 2c, and SB3 where a prism read and route S reads none |
-| 2c. route E entry | route S (Shell; modify-general §3.4); a selection other than single straight edges along axes, no two sharing a vertex, takes route L (modify-general §4.4, `docs/loop-fillet-design.md` §6); EB1/SB4 per edge; EB7/SB5 over the set |
+| 2c. route E entry | route S (Shell; modify-general §3.4); independent straight edges take route E; a `Fillet` of complete loops with independent straight edges takes route V (`docs/vertex-blend-design.md` §2); other selections take route L or refuse; EB1/SB4 and EB7/SB5 apply to route E's set |
 | 3. edge topology | EB2/SB6; the restatement passes (§5.2): EB3/SB7, then EB4/SB8; EB5/SB8; EB6 |
 | 4. construction | per edge: S4, S5 in `G0`; the recomputation in `G1`, SB9 |
 | 5. audit | per planar face: S8, S6, S7, S9; per trimmed wall: S6 |
@@ -483,8 +482,8 @@ Route E:
   and `x = 40` walls are restated, volume within its bound of
   `16000 − 180π − 80`.
 - Chaining: chamfer S1's edge along `z` at `(0, 0)`, then chamfer the edge
-  along `x` at `(y, z) = (0, 0)` on the result → SB7; fillet all twelve box
-  edges of S1 in one call → SB5.
+  along `x` at `(y, z) = (0, 0)` on the result → SB7. Filleting all twelve
+  straight edges of S1 takes route V (`docs/vertex-blend-design.md`).
 - Consumers on the S1 fillet result: `Verify` `Sound` at the default
   tolerance, the mesh's occupied-volume proof covering `15920 − 160π`, STEP's
   analytic arm (the fillet wall two arcs and two lines), the undercut survey
@@ -523,8 +522,9 @@ Refusals:
   5) and the corner rewrite reads each face's own loop. `Edge.IsConvex()` is
   not the solid's convexity for a rim, or for a line two planar faces of
   different sweeps share.
-- **Patch a vertex where two blends meet.** The spherical or conical corner
-  patch is the vertex blend modify §6 excludes; SB5 and SB7 refuse it.
+- **Patch a vertex where two independent route E blends meet.** SB5 still
+  refuses that selection. Route V builds a sphere where a complete-loop
+  fillet meets a straight-edge fillet (`docs/vertex-blend-design.md`).
 - **Build a hole-rim chamfer on a brep face as a planar region.** A cone band
   is not a region of any plane; the brep needs a band face kind, which is a
   design of its own (reach §8.3 is the construction to port).

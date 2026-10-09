@@ -144,7 +144,7 @@ a retired body is S17, by core §6's retire rule.
 
 | R | Receiver payload | `Fillet` / `Chamfer` | `Shell` |
 |---|---|---|---|
-| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds** for lateral edges here; reach RX1 adds complete cap loops | **builds** for cap removal here, the B4 multi-lump result through reach BX8; reach RX1 adds side/no-opening cases |
+| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds** for lateral edges here; reach RX1 adds complete cap loops, and route V adds single straight cap edges and mixed complete-loop fillets (`docs/vertex-blend-design.md`) | **builds** for cap removal here, the B4 multi-lump result through reach BX8; reach RX1 adds side/no-opening cases |
 | **R2** | `cupPayload` — a one-cap shell (B5/B6), recorded as a two-slab `stackedPrismPayload` (reach §9.1) | S3 | S3 |
 | **R3** | `revolvePayload` | reach RX2 for swept meridian junctions; otherwise S3/SX5 | reach RX2; otherwise S2/SX8 |
 | **R4** | `facetedPayload` — a boolean output | reach SX9 | reach SX9 |
@@ -153,12 +153,8 @@ a retired body is S17, by core §6's retire rule.
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
 (evaluator §5 emits no seam), so a cylinder has no edge the corner rewrite can
-name but its cap rims — and a query naming one is S1 for a `Fillet`, a query
-naming nothing is S16. That is the honest reading of the class, not an
-oversight: the rolling blend of a cap edge is the vertex-blend problem (§6), and
-this increment does not solve it. A `Chamfer` of that same rim leaves the corner
-rewrite instead of refusing, because a cylinder's rim **is** one complete cap
-loop and reach §8.3 builds it (RX1's second class).
+name but its cap rims. A complete rim takes route L's loop fillet; a query
+naming nothing is S16. A `Chamfer` of that rim takes reach §8.3.
 
 ## 4. Table S — the refusals
 
@@ -167,7 +163,7 @@ sentinel follows from it and from nothing else.
 
 | S | The call asked for | Does that body exist? | Sentinel |
 |---|---|---|---|
-| **S1** | in the base increment, a fillet or chamfer of an edge that is not a **lateral** edge — reach RX1 replaces this only for complete prism cap loops | yes | `ErrUnsupported` — partial-loop endpoint transition not built |
+| **S1** | in the base increment, a fillet or chamfer of an edge that is not a **lateral** edge; route V adds single straight prism cap edges and mixed complete-loop fillets (`docs/vertex-blend-design.md`) | yes | `ErrUnsupported` — remaining partial-loop endpoint transitions are not built |
 | **S2** | in the base increment, a shell that removes a **side wall** — reach RX1 replaces this only for its one proper outer-loop run | yes | `ErrUnsupported` — general open-chain offset not built |
 | **S3** | a modify op on a receiver/target not admitted by Table R or reach Table RX | yes | `ErrUnsupported` |
 | **S4** | a blend or bevel of a corner whose two segments meet **smoothly** (tangent) or in a **cusp** (anti-tangent) | no — there is no corner to blend | `ErrDegenerate` |
@@ -439,8 +435,9 @@ never share a vertex** —
 distinct lateral edges are disjoint, and each blend runs cap to cap, so there is
 no vertex at which two of them meet and no patch that would close one. A cap
 edge is base S1. Reach §8 admits only a **complete** cap loop: its closed
-material-side center path gives named cylinder/torus patches and spherical
-miter patches, while every partial chain remains SX4.
+material-side center path gives named cylinder/torus patches; LF9 adds a
+sphere where a previously filleted lateral edge's arc collapses. Every
+remaining partial chain stays SX4.
 
 Two lateral blends can still **interfere**, and interference is refused, never
 patched. Two corners of one wall claim it from both ends: S6. Two corners that

@@ -94,6 +94,9 @@ type capBlendPayload struct {
 	// edges take the prism's convexity (docs/draft-design.md §2, §6). A
 	// cap-loop chamfer never sets it.
 	draft bool
+	// fillet marks a route L view whose inward circular walk may collapse to
+	// one pole. A chamfer or draft never uses that contour rule.
+	fillet bool
 	// draftKept is a draft view's draftPayload.kept: the recorded segments of
 	// the walls a subset draft leaves in place, which every per-walk reading
 	// of the band offsets by zero (walkAmounts). Empty moves every wall.
@@ -659,7 +662,7 @@ func requireCapBlendCornerLoci(budget *proofbound.WorkBudget, cbp capBlendPayloa
 		if err != nil {
 			return err
 		}
-		joins, err := capOffsetJoins(budget, cl, setback.dc)
+		joins, err := cbp.offsetJoins(budget, li, cl, setback.dc)
 		if err != nil {
 			return err
 		}
@@ -814,7 +817,16 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (Pro
 			out[li] = cloneLoopRecord(orig[li])
 			continue
 		}
-		segs, err := offset2d.BuildLoop(budget, loops[li].walks, 1, cbp.loopOffset(li), shellTol)
+		var segs []CurveSegment
+		if cbp.fillet && (len(loops[li].walks) != 1 || !loops[li].walks[0].Closed) {
+			joins, joinErr := filletOffsetJoins(budget, loops[li], cbp.loopOffset(li), cbp.loopSetback(li).dcDelta)
+			if joinErr != nil {
+				return ProfileRecord{}, offset2d.InLoop(joinErr, li)
+			}
+			segs, err = filletOffsetLoop(budget, loops[li].walks, joins, cbp.loopOffset(li))
+		} else {
+			segs, err = offset2d.BuildLoop(budget, loops[li].walks, 1, cbp.loopOffset(li), shellTol)
+		}
 		if err != nil {
 			return ProfileRecord{}, offset2d.InLoop(err, li)
 		}

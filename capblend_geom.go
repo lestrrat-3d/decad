@@ -57,6 +57,9 @@ func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]
 // between two walks moved alike (SD4), and two moved lines that do not meet
 // are a cusp (SD15).
 func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, li int, cl cornerLoop, d float64) ([]cornerJoin, error) {
+	if cbp.fillet {
+		return filletOffsetJoins(budget, cl, d, cbp.loopSetback(li).dcDelta)
+	}
 	if !cbp.draft {
 		return capOffsetJoins(budget, cl, d)
 	}

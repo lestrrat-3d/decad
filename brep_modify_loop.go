@@ -15,12 +15,14 @@ import (
 )
 
 // This file is route L of docs/modify-general-design.md ("modify-general §N"
-// below): a Chamfer or Fillet of one or more complete loops of planar faces of
-// a brep or stacked receiver (§4; docs/loop-fillet-design.md, "loop-fillet
+// below) and route V of docs/vertex-blend-design.md: a Chamfer or Fillet of
+// complete planar-face loops on a brep or stacked receiver (§4;
+// docs/loop-fillet-design.md, "loop-fillet
 // §N", for the fillet arm). It also decides, for a Fillet or Chamfer that
 // route P does not take, which of route E (docs/brep-modify-design.md §5) and
 // route L reads the selection: route E takes single straight edges along
-// reference axes, no two sharing a vertex, and route L every other selection.
+// reference axes, no two sharing a vertex. Route V takes a Fillet of those
+// edges with complete loops, and route L reads the remaining selections.
 // Table LB admits the loops (admitLoops, classifyLoop); the record is
 // rewritten (rewriteLoopFaces): each loop's face takes the loop's cap contour,
 // each face beside the loop is trimmed to the band's side level, and the band
@@ -62,11 +64,10 @@ type brepLoopBeside struct {
 }
 
 // brepLoopRoute is the brep route of a Fillet or Chamfer that route P does not
-// take (modify-general §4.4's stage 2c, loop-fillet §6). A selection of single
-// straight edges along reference axes, no two sharing a vertex, is route E's
-// (brepBlendEdges). Otherwise route L reads it as complete loops of planar
-// faces (LB1, LB2) and builds them (buildLoops), or refuses SL1 when the
-// selection is no such loops.
+// take (modify-general §4.4's stage 2c, loop-fillet §6). Independent straight
+// edges take route E. A Fillet of independent straight edges and complete
+// planar loops takes route V, which runs E then L. Other selections take L
+// or its SL1 refusal.
 func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepModifyRequest) (*Body, error) {
 	r, err := newBrepLoopRead(ctx, bp, call)
 	if err != nil {
@@ -78,7 +79,130 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 	if r.singleStraightEdges() {
 		return brepBlendEdges(ctx, d, bp, call)
 	}
+	if call.loopKind == brepBandFillet {
+		loops, singles, mixed, err := r.splitVertexBlend()
+		if err != nil {
+			return nil, err
+		}
+		if mixed {
+			stepCall := call
+			stepCall.edges = singles
+			step, err := brepBlendEdges(ctx, d, bp, stepCall)
+			if err != nil {
+				return nil, err
+			}
+			rewritten, ok := step.payload.(brepPayload)
+			if !ok {
+				return nil, fmt.Errorf(`%w: the straight-edge fillet produced no brep record`, ErrUnsupported)
+			}
+			next, err := newBrepLoopRead(ctx, rewritten, call)
+			if err != nil {
+				return nil, err
+			}
+			return next.buildSelectedLoops(ctx, d, loops)
+		}
+	}
 	return r.buildLoops(ctx, d)
+}
+
+// splitVertexBlend finds complete selected planar loops and the remaining
+// independent straight edges. Face and loop indices survive route E's rewrite.
+func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) {
+	// A box-like selection can complete loops on several pairs of opposite
+	// faces. Assign one reference axis's independent edges to route E first;
+	// the remaining selected edges then name their cap loops unambiguously.
+	for axis := range 3 {
+		var singles, loopEdges []*Edge
+		var singleMatches, loopMatches []int
+		for i, ei := range r.matched {
+			if ei < 0 {
+				return nil, nil, false, nil
+			}
+			owner := r.topo.uses[r.topo.edges[ei][0]]
+			along := !owner.Key.Circular && owner.DirFrom[axis] != owner.DirTo[axis]
+			for other := range 3 {
+				if other != axis && owner.DirFrom[other] != owner.DirTo[other] {
+					along = false
+				}
+			}
+			if along {
+				singles = append(singles, r.call.edges[i])
+				singleMatches = append(singleMatches, ei)
+			} else {
+				loopEdges = append(loopEdges, r.call.edges[i])
+				loopMatches = append(loopMatches, ei)
+			}
+		}
+		if len(singles) == 0 || len(loopEdges) == 0 {
+			continue
+		}
+		singleRead := *r
+		singleRead.call.edges, singleRead.matched = singles, singleMatches
+		if !singleRead.singleStraightEdges() {
+			continue
+		}
+		loopRead := *r
+		loopRead.call.edges, loopRead.matched = loopEdges, loopMatches
+		loops, err := loopRead.admitLoops()
+		if err == nil {
+			return loops, singles, true, nil
+		}
+	}
+
+	type faceLoop struct{ face, loop int }
+	selected := map[faceLoop]map[int]struct{}{}
+	for _, ei := range r.matched {
+		if ei < 0 {
+			return nil, nil, false, nil // admitLoops gives the existing SL1 reason
+		}
+		for _, ui := range r.topo.edges[ei] {
+			u := r.topo.uses[ui]
+			if u.Part != brepLoopSeg {
+				continue
+			}
+			fl := faceLoop{u.Face, u.Loop}
+			if selected[fl] == nil {
+				selected[fl] = map[int]struct{}{}
+			}
+			selected[fl][u.Seg] = struct{}{}
+		}
+	}
+	var loopEdges, singles []*Edge
+	var loopMatches, singleMatches []int
+	for i, ei := range r.matched {
+		covering := 0
+		for _, ui := range r.topo.edges[ei] {
+			u := r.topo.uses[ui]
+			if u.Part == brepLoopSeg && len(selected[faceLoop{u.Face, u.Loop}]) == len(r.topo.planar[u.Face][u.Loop]) {
+				covering++
+			}
+		}
+		if covering > 1 {
+			return nil, nil, false, r.refuse("SL1", fmt.Sprintf(`%s lies on two selected complete loops`, selectedEdgeContext(i, r.call.edges[i])))
+		}
+		if covering == 1 {
+			loopEdges = append(loopEdges, r.call.edges[i])
+			loopMatches = append(loopMatches, ei)
+			continue
+		}
+		singles = append(singles, r.call.edges[i])
+		singleMatches = append(singleMatches, ei)
+	}
+	if len(loopEdges) == 0 || len(singles) == 0 {
+		return nil, nil, false, nil
+	}
+	singleRead := *r
+	singleRead.call.edges, singleRead.matched = singles, singleMatches
+	if !singleRead.singleStraightEdges() {
+		return nil, nil, false, r.refuse("SL1", `the edges outside the complete loops are not independent straight edges along reference axes`)
+	}
+	loopRead := *r
+	loopRead.call.edges, loopRead.matched = loopEdges, loopMatches
+	loops, err := loopRead.admitLoops()
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return loops, singles, true, nil
 }
 
 // buildLoops is route L over the matched selection: Table LB admits the
@@ -93,6 +217,11 @@ func (r *brepLoopRead) buildLoops(ctx context.Context, d *Document) (*Body, erro
 	if err != nil {
 		return nil, err
 	}
+	return r.buildSelectedLoops(ctx, d, loops)
+}
+
+func (r *brepLoopRead) buildSelectedLoops(ctx context.Context, d *Document, loops []brepLoopSel) (*Body, error) {
+	call := r.call
 	out, err := r.rewriteLoopFaces(ctx, loops)
 	if err != nil {
 		return nil, err
@@ -131,11 +260,8 @@ func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest
 
 // prismCapLoopFillet is RF3 (loop-fillet §3) for a Fillet of a prism receiver
 // whose selection holds an edge that is no lateral edge: the prism is read
-// through its face view (brepOfPrism), SB1 holds on it, and route L builds
-// the selection's complete loops with the fillet arm, returning a brep body
-// (BF1) or route L's refusal. A selection of single straight edges, which
-// route E would read on a brep, returns a nil body and a nil error: the
-// prism path refuses it as its S1.
+// through its face view (brepOfPrism), SB1 holds on it, and route E, L or V
+// builds the selection as a brep body or returns its specific refusal.
 func prismCapLoopFillet(ctx context.Context, d *Document, pp prismPayload, call brepModifyRequest) (*Body, error) {
 	bp, err := brepOfPrism(pp)
 	if err != nil {
@@ -144,17 +270,7 @@ func prismCapLoopFillet(ctx context.Context, d *Document, pp prismPayload, call 
 	if err := requireExactBrepSection(bp, call.op); err != nil {
 		return nil, err
 	}
-	r, err := newBrepLoopRead(ctx, bp, call)
-	if err != nil {
-		return nil, err
-	}
-	if err := r.matchEdges(); err != nil {
-		return nil, err
-	}
-	if r.singleStraightEdges() {
-		return nil, nil //nolint:nilnil // no loop selection: the caller's S1 follows
-	}
-	return r.buildLoops(ctx, d)
+	return brepLoopRoute(ctx, d, bp, call)
 }
 
 // refuse is one route L refusal naming its row and the selection.
@@ -511,6 +627,7 @@ func (r *brepLoopRead) loopFaceView(fi int, sels []brepLoopSel) capBlendPayload 
 		z0: f.z0, z1: f.z0, z0Delta: f.z0Delta, z1Delta: f.z0Delta,
 		start: *r.call.loop, end: *r.call.loop,
 		startLoops: map[int]bool{}, endLoops: map[int]bool{},
+		fillet: r.call.loopKind == brepBandFillet,
 	}
 	for _, sel := range sels {
 		if sel.face != fi {
@@ -583,7 +700,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		if len(cl.walks) == 1 && cl.walks[0].Closed {
 			_, err = capband.BandRadius(cl.walks[0], setback.dc, shellTol)
 		} else {
-			_, err = capOffsetJoins(r.budget, cl, setback.dc)
+			_, err = views[sel.face].offsetJoins(r.budget, sel.loop, cl, setback.dc)
 		}
 		if err != nil {
 			return brepPayload{}, r.wrapFace(sel.face, err)
@@ -625,7 +742,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		eF := r.topo.embeds[sel.face]
 		n := eF.Axis[2]
 		band := brepLoopBand{face: sel.face, loop: sel.loop, orig: cloneLoopRecord(f.regionLoop(sel.loop)), setback: setback, sigma: sel.sigma, kind: r.call.loopKind}
-		delta, err := loopContourDelta(ctx, band.orig, setback.dc, setback.dcDelta)
+		delta, err := views[sel.face].loopContourDelta(ctx, sel.loop, band.orig, setback.dc, setback.dcDelta)
 		if err != nil {
 			return brepPayload{}, r.wrapFace(sel.face, err)
 		}

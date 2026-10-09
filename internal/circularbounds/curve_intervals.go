@@ -486,6 +486,9 @@ func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat)
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		r.Add(r, radiusOffset)
+		if r.Sign() == 0 {
+			return proofbound.PointInterval(cu), proofbound.PointInterval(cv), true
+		}
 		if radiusOffset.Sign() != 0 && r.Sign() <= 0 {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
@@ -502,6 +505,9 @@ func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat)
 		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
 		r2 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
+		if radiusOffset.Sign() < 0 && r2.Cmp(new(big.Rat).Mul(radiusOffset, radiusOffset)) == 0 {
+			return proofbound.PointInterval(cu), proofbound.PointInterval(cv), true
+		}
 		rLo, rHi := proofarith.FloatRat(proofbound.RatSqrtDown(r2)), proofarith.FloatRat(proofbound.RatSqrtUp(r2))
 		if rLo == nil || rHi == nil {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, false

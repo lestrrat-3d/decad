@@ -463,9 +463,7 @@ func internalSplitWallS1(t *testing.T) *Body {
 }
 
 // TestBrepModifyEdgeRefusals pins Table SB's route E rows on receivers the
-// public booleans build, and on internalSplitWallS1; a Fillet of S1's twelve
-// convex edges is no set of complete loops and refuses with route L's SL1
-// before route E reads it (docs/loop-fillet-design.md §6), and a hole rim or a
+// public booleans build, and on internalSplitWallS1. A hole rim or a
 // pocket floor loop is a complete loop route L's fillet arm builds
 // (brep_loop_fillet_internal_test.go). Each refusal is
 // ErrUnsupported naming its row, and leaves the receiver live and the
@@ -501,7 +499,6 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 		size    float64
 		want    []string
 	}{
-		{"twelve box edges", s1, false, Edges(Convex()).Exactly(12), 1, []string{rowSL1, "which share it"}},
 		{"edge ending on a split wall", split, true, edgeAt(routeEX, r3.Vec{}), 1,
 			[]string{"brep-modify SB7", "does not read as a plane", "side line is split"}},
 		{"rim on a split wall", split, false, edgeAt(r3.NewVec(0, 1, 0), r3.Vec{}), 1,

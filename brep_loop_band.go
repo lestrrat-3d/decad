@@ -79,6 +79,7 @@ func (b brepLoopBand) view(f brepFace, xform r3.Transform) capBlendPayload {
 		z0: f.z0, z1: f.z0, z0Delta: f.z0Delta, z1Delta: f.z0Delta,
 		start: b.setback, end: b.setback,
 		startLoops: map[int]bool{}, endLoops: map[int]bool{},
+		fillet: b.kind == brepBandFillet,
 	}
 	if b.matSign(f) > 0 {
 		cbp.startLoops[0] = true

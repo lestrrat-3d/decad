@@ -33,7 +33,7 @@ part makes on them. Every cell was read off the live code with the probe under
 |---|---|---|---|
 | **P1** cross-drilled bar: 40×20×20 box, Ø6 hole along y | brep (class B) | fillet the 4 edges along y | builds (route P) |
 | | | fillet one edge along z | builds (route E) |
-| | | fillet every straight edge | SL1 |
+| | | fillet every straight edge | builds (route V; `docs/vertex-blend-design.md`) |
 | | | chamfer every straight edge | SL1 |
 | | | chamfer the 8 along x and z, the top and bottom loops | builds (route L) |
 | | | fillet the top and bottom loops | builds (route L fillet arm) |
@@ -81,7 +81,7 @@ Ranked by the parts each refusal blocks:
 | Rank | Refusal | Blocks | What the body needs |
 |---|---|---|---|
 | 1 | SB10 / SB3: shell of a brep that reads as no prism, or whose removed face is no cap of the prism it reads as | P1, P2, P3, P6, P6c, P7, P8 | the erosion of the receiver: planes and cylinders along reference axes for a through-cut body (§3); spheres, tori or elliptical edges for a blind pocket or a union |
-| 2 | SL1: edges sharing a vertex outside complete loops | P1 | a corner patch in no reference frame, or the three-edge vertex blend (§6) |
+| 2 | SL1: edges sharing a vertex outside complete loops | P1 | route V builds fillets when independent single edges and complete loops partition the selection; chamfers still refuse (`docs/vertex-blend-design.md`) |
 | 3 | a loop fillet: the curved-edge and cornered-loop fillets this survey found refused | P1, P2, P3, P4, P7 | `docs/loop-fillet-design.md`'s pipe band, which builds them |
 | 4 | SB7: an edge ending on a curved face or a blend | P8 | the complete-loop fillet, which builds P8's top loop |
 | 5 | a faceted receiver | P5, P6b, P9 | an analytic boolean: `docs/stacked-prism-design.md` §7 stage 2, a cup as a boolean operand, cylinder × cylinder; reach SX9 stays permanent |
@@ -89,8 +89,8 @@ Ranked by the parts each refusal blocks:
 Routes S and L below clear every brep and stacked row of ranks 1–2 whose
 body is planes and cylinders along reference axes, meeting in lines, circles
 and arcs; route L's fillet arm (`docs/loop-fillet-design.md`) clears ranks 3
-and 4. Ranks 1–2's spheres, tori and elliptical edges stay refused with the
-codes of §6.
+and 4. Route V builds the sphere corners of an exact-radius three-edge
+fillet (`docs/vertex-blend-design.md`).
 
 ## 2. The two increments
 
@@ -443,7 +443,7 @@ volume and lifts through the reference frame.
 
 | SL | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SL1** | a selection that is not whole loops of planar faces: a partial loop, loops mixed with single edges (route E's class, including a lateral edge meeting a loop at a vertex), two loops sharing an edge | yes; the corner where a band meets a lateral blend is a plane in no reference frame, and a partial loop's free end needs the setback transition reach SX4 refuses | `ErrUnsupported` (reach SX4's text for a partial loop) |
+| **SL1** | a partial loop, two loops sharing an edge after route V's partition, or loops mixed with single edges for a `Chamfer`; a `Fillet` with independent straight edges and complete loops takes route V | yes | `ErrUnsupported` (reach SX4's text for a partial loop) |
 | **SL2** | an adjacent face outside LB3/LB4/LB6: a curved or oblique neighbour, a split side line, a neighbour whose own loop continues past the vertex on a curve, walls on both sides of `F` | yes | `ErrUnsupported` |
 | **SL3** | retired: a `Fillet` of complete loops builds through `docs/loop-fillet-design.md`'s fillet arm or refuses with that document's Table SF | — | — |
 | **SL4** | `WithAsymmetricChamfer` on a brep or stacked receiver | yes | reach SX16, unchanged |
@@ -457,6 +457,9 @@ reach SX10, SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
 | Stage | Gates |
 |---|---|
 | 2c. entry | SL4; every edge a straight line along an axis (EB1) and no two sharing a vertex (EB7) → route E (brep-modify §6); otherwise route L: LB1, LB2 (SL1) |
+
+For a `Fillet`, route V also partitions complete loops and independent
+straight edges before LB1/LB2 (`docs/vertex-blend-design.md` §2).
 | 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
 | 4. existence | SX6, SX13 per band as the contour is built |
 | 5. audit | per band SX14, SX7, SX12 on the contour; per (pl) face S8, S6, S7, S9; per `F` S8, S7, S9 |
@@ -492,7 +495,7 @@ below reads the bands where the plain brep reader would miss them:
 
 | Request | Code | Why not here |
 |---|---|---|
-| fillets or chamfers of edges sharing a vertex that are not one loop of one face: all twelve edges of a box, a lateral edge meeting a cap loop (P1, P6c) | SB5 / SL1 | the corner patch is a sphere (fillet) or a plane whose normal is no reference axis (chamfer); the record holds neither |
+| chamfers of edges sharing a vertex outside one loop, or fillets whose single edges share a vertex outside route V's complete loops | SB5 / SL1 | the mixed chamfer's corner plane has no reference-axis normal; route V admits the fillet cases in `docs/vertex-blend-design.md` |
 | an edge ending on a blend or a curved face (P8) | SB7 | its honest form is the complete-loop fillet, `docs/loop-fillet-design.md` |
 | shell of a blind pocket or port, a stacked union, a keyway (P2, P3, P6c) | SG3 | spheres at the pocket's floor corners, a torus around a round boss's root, elliptical edges where two reflex edges meet at a square boss's corner |
 | an outward or closed shell of a brep | SG1 / SG2 | §3.2 |
@@ -685,8 +688,8 @@ Route L (L-1):
   denoted contour corner; deleting the `F.delta` charge turns it red; the
   test records the leg. No float pair holds a 60° slope with a rational unit
   normal.
-- Refusals: a partial loop → SL1 (SX4's text); the top loop with one vertical
-  edge → SL1; P1's top loop and its planar y = 0 wall's outer loop, which
+- Refusals: a partial loop → SL1 (SX4's text); a chamfer of the top loop with
+  one vertical edge → SL1; P1's top loop and its planar y = 0 wall's outer loop, which
   share an edge → SL1; P8's y = 0 wall's outer loop, whose top neighbour
   continues on a fillet arc → SL2; P8's top loop chamfered at `d = 3` → SX6
   (the fillet arcs' offsets vanish); the pocket mouth at `d = 5` → SX7 (the

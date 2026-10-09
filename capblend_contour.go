@@ -50,6 +50,9 @@ func loopContourDelta(ctx context.Context, loop LoopRecord, d, dDelta float64) (
 // displacement is enclosed over the sharp joins, never over the reflex-corner
 // arcs a chamfer's contour holds.
 func (cbp capBlendPayload) loopContourDelta(ctx context.Context, li int, loop LoopRecord, d, dDelta float64) (float64, error) {
+	if cbp.fillet {
+		return filletContourDelta(ctx, loop, d, dDelta)
+	}
 	if !cbp.draft {
 		return loopContourDelta(ctx, loop, d, dDelta)
 	}

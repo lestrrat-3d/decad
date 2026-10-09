@@ -241,9 +241,13 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			bc := &bands[bi]
 			proof := bc.lm.proof()
 			sag := tessellation.CapBlendRingSagitta(proof, true)
-			for j, p := range bc.lm.capPts {
+			capPts, capV := bc.lm.capPts, bc.capV
+			if bc.cbp.fillet {
+				capPts, capV = compactCapBlendRing(capPts, capV)
+			}
+			for j, p := range capPts {
 				pts = append(pts, p)
-				meshIdx = append(meshIdx, bc.capV[j])
+				meshIdx = append(meshIdx, capV[j])
 				loops[bc.band.loop] = append(loops[bc.band.loop], len(pts)-1)
 			}
 			trim = math.Max(trim, sag)
