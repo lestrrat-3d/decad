@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/spherepath"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
@@ -253,7 +254,7 @@ func (r *SweepReport) certifiedCylinderPosesAtFraction(f *big.Rat, poseA, poseB 
 		actualCylinder, actualBox = actualA, actualB
 	}
 	if deviation.Cmp(resolution) > 0 ||
-		!cylinderInsideBoxFace(actualCylinder, actualBox, p.clearAxis) {
+		!pairbox.CylinderInsideFace(actualCylinder.axisBox(), actualBox.axisBox(), p.clearAxis) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay loses its separated outer boxes", ErrUnsupported)
 	}
 	if p.outcome == SweepClear {

@@ -32,7 +32,8 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 		return cylinderSweepUndecided(report, pa.Duration), nil
 	}
 	resolution, _ := sweeppath.ExactBaseValue(req.PointResolution)
-	axis, _, signedGap, selected := sourceCylinderBoxFace(cylinder, box)
+	axis, _, signedGap, selected := pairbox.CylinderFaceCorridor(
+		cylinder.box.axisBox(), box.axisBox(), cylinder.axis, cylinder.wall != nil)
 	if !selected || signedGap.Sign() < 0 {
 		return cylinderSweepUndecided(report, pa.Duration), nil
 	}
@@ -61,8 +62,8 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 	endBox := translatedAffineBox(startBox, boxDelta)
 	// Every transverse edge difference is affine. Strict containment at both
 	// endpoints therefore keeps the disk inside the same face for the full path.
-	if !cylinderInsideBoxFace(startCylinder, startBox, axis) ||
-		!cylinderInsideBoxFace(endCylinder, endBox, axis) {
+	if !pairbox.CylinderInsideFace(startCylinder.axisBox(), startBox.axisBox(), axis) ||
+		!pairbox.CylinderInsideFace(endCylinder.axisBox(), endBox.axisBox(), axis) {
 		return cylinderSweepUndecided(report, pa.Duration), nil
 	}
 	if !ok {
