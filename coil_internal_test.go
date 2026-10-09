@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -250,9 +251,9 @@ func TestCoilSquareSpring(t *testing.T) {
 		require.Equal(t, Sound, rep.Status)
 		require.Equal(t, ValidityValid, rep.Bodies[0].Validity.Outcome)
 		cp := b.payload.(coilPayload)
-		held, ok := pointSetDiameter(cp.verts)
+		held, ok := diameter.Points(cp.verts)
 		require.True(t, ok)
-		want, ok := lowerDiameterForDisplacement(held, cp.delta)
+		want, ok := diameter.LowerForDisplacement(held, cp.delta)
 		require.True(t, ok)
 		got, ok, err := bodyGateDiameter(t.Context(), b)
 		require.NoError(t, err)

@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -86,7 +87,7 @@ type facetedPayload struct {
 	// tolerance gate. It is computed from every payload vertex, including
 	// interior tessellation vertices that have no B-rep Vertex, and rebuilt
 	// after every placement. It is read through the one witness-maximum reader
-	// every gate diameter is published through (pointSetDiameterWithBudget,
+	// every gate diameter is published through (diameter.PointsWithBudget,
 	// verify.go), so it sits at or below the held boundary's own diameter.
 	diameter float64
 
@@ -185,7 +186,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	verts, tris := pp.verts, pp.tris
-	diameter, ok, err := pointSetDiameterContext(ctx, verts)
+	diameter, ok, err := diameter.PointsContext(ctx, verts)
 	if err != nil {
 		return nil, err
 	}

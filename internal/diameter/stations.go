@@ -1,6 +1,7 @@
 package diameter
 
 import (
+	"context"
 	"math"
 	"math/big"
 
@@ -86,6 +87,40 @@ func SectionStations(budget *proofbound.WorkBudget, loops []sectionrecord.LoopRe
 		}
 	}
 	return out, true, nil
+}
+
+// ChainWalkEndpointAllow covers computed walk endpoint coordinates omitted
+// from a chain body's topology-vertex bounds. It reads every source segment,
+// including segments later coalesced into a single wall.
+func ChainWalkEndpointAllow(ctx context.Context, chains []sectionrecord.ChainRecord) (float64, bool, error) {
+	work := freeform.NewFreeformWork()
+	allow := 0.0
+	for _, chain := range chains {
+		for _, segment := range chain.Segments {
+			if err := ctx.Err(); err != nil {
+				return 0, false, err
+			}
+			walk, err := boundarywalk.WalkOf(segment, work)
+			if err != nil {
+				return 0, false, nil //nolint:nilerr // structural walk refusal withholds the reference
+			}
+			for _, bound := range [2]proofbound.WalkEndBound{walk.StartBound, walk.EndBound} {
+				endAllow := proofbound.WalkEndBoundAllow(bound)
+				if !usableMagnitude(endAllow) {
+					return 0, false, nil
+				}
+				allow = math.Max(allow, endAllow)
+			}
+			// An arc's recorded natural end can sit off the radius its
+			// denoted circle reads from Start even with zero walk-end bound.
+			residual := loftmesh.ArcNaturalEndRadialUpper(segment)
+			if !usableMagnitude(residual) {
+				return 0, false, nil
+			}
+			allow = math.Max(allow, residual)
+		}
+	}
+	return allow, true, ctx.Err()
 }
 
 // stationFractions lists exact fractions of one circular wall's recorded

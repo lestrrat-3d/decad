@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
@@ -47,7 +48,7 @@ func (c *internalBooleanBuildCancelContext) Err() error {
 
 func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 	t.Parallel()
-	for _, target := range []string{"pointSetDiameterContext", "facetFaceIndices"} {
+	for _, target := range []string{"PointsContext", "facetFaceIndices"} {
 		t.Run(target, func(t *testing.T) {
 			doc := New()
 			a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
@@ -1145,7 +1146,7 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	placed, err := before.placed(t.Context(), doc, producerID(1), placement)
 	require.NoError(t, err)
 	after := placed.payload.(facetedPayload)
-	want, ok := pointSetDiameter(after.verts)
+	want, ok := diameter.Points(after.verts)
 	require.True(t, ok)
 	require.NotEqual(t, before.diameter, want, "the placement must make a stale cached diameter observable")
 	require.Equal(t, want, after.diameter)

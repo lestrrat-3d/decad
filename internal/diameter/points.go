@@ -3,6 +3,7 @@
 package diameter
 
 import (
+	"context"
 	"math"
 	"math/big"
 
@@ -11,6 +12,17 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
+
+// Points reads a witness set without a work budget.
+func Points(points []r3.Vec) (float64, bool) {
+	d, ok, _ := PointsWithBudget(nil, points)
+	return d, ok
+}
+
+// PointsContext reads a witness set with cancellation through ctx.
+func PointsContext(ctx context.Context, points []r3.Vec) (float64, bool, error) {
+	return PointsWithBudget(proofbound.NewWorkBudget(ctx), points)
+}
 
 // PointsWithBudget selects a witness pair in float arithmetic, then publishes
 // that pair's exact-rational distance rounded down. A float scan can choose

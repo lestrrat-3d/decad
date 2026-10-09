@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 
@@ -702,7 +703,7 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
-	held, ok, err := pointSetDiameterContext(t.Context(), loaded.verts)
+	held, ok, err := diameter.PointsContext(t.Context(), loaded.verts)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, held, d, "delta == 0 takes the unshrunk fast path: the shared reader's own answer, unchanged")
@@ -779,7 +780,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
-	held, ok, err := pointSetDiameterContext(t.Context(), loaded.verts)
+	held, ok, err := diameter.PointsContext(t.Context(), loaded.verts)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Less(t, d, held, "a positive delta must take the 2*delta-shrunk reference, never the unshrunk fast path")
