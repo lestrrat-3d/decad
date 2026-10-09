@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/featureoption"
+	"github.com/lestrrat-3d/decad/internal/surfacegroup"
 )
 
 // This file is the shared surface-result vocabulary of docs/surface-design.md
@@ -17,12 +18,9 @@ import (
 // rule for one added later. boolean.go, fillet.go, chamfer.go, shell.go and
 // stops.go consume refuseSheetOperand at their own gates.
 //
-// It also holds the two topology helpers every surface-result build shares
-// (docs/surface-design.md §2.2): shellIsOpen, which reads a shell's open
-// state off its faces' own edge adjacency rather than the option that built
-// it, and splitConnectedFaces/sheetLumps, which give a face set the Lump
-// each of its truly connected pieces is entitled to instead of one lump
-// regardless of connectivity.
+// Its topology adapters read face and edge adjacency for internal/surfacegroup:
+// shellIsOpen reads a shell's open state from its edges, while
+// splitConnectedFaces/sheetLumps build one Lump per connected face group.
 
 // SurfaceResultOption configures every feature WithSurfaceResult reaches
 // (docs/surface-design.md §3). A feature this evaluator cannot yet build as a
@@ -78,10 +76,6 @@ func shellIsOpen(faces []*Face) bool {
 // order; the slices themselves are ordered by the first face of theirs that
 // appears in faces.
 func splitConnectedFaces(faces []*Face) [][]*Face {
-	parent := make(map[*Face]*Face, len(faces))
-	for _, f := range faces {
-		parent[f] = f
-	}
 	byEdge := map[*Edge][]*Face{}
 	for _, f := range faces {
 		for _, l := range f.loops {
@@ -90,42 +84,7 @@ func splitConnectedFaces(faces []*Face) [][]*Face {
 			}
 		}
 	}
-	for _, group := range byEdge {
-		for i := 1; i < len(group); i++ {
-			ra, rb := unionFindRoot(parent, group[0]), unionFindRoot(parent, group[i])
-			if ra != rb {
-				parent[ra] = rb
-			}
-		}
-	}
-	order := make([]*Face, 0, len(faces))
-	groups := map[*Face][]*Face{}
-	for _, f := range faces {
-		root := unionFindRoot(parent, f)
-		if _, ok := groups[root]; !ok {
-			order = append(order, root)
-		}
-		groups[root] = append(groups[root], f)
-	}
-	out := make([][]*Face, len(order))
-	for i, root := range order {
-		out[i] = groups[root]
-	}
-	return out
-}
-
-// unionFindRoot is splitConnectedFaces's own path-compressing find: it walks
-// parent to f's representative, flattening every visited link to that
-// representative's grandparent on the way so a later find over the same set
-// stays cheap. A top-level function rather than a closure over parent, since
-// a self-referential closure cannot be declared and assigned in one
-// statement (staticcheck S1021 does not account for the recursion).
-func unionFindRoot(parent map[*Face]*Face, f *Face) *Face {
-	for parent[f] != f {
-		parent[f] = parent[parent[f]]
-		f = parent[f]
-	}
-	return f
+	return surfacegroup.Connected(faces, byEdge)
 }
 
 // freeChainCountsByFace groups the body's own recorded free Edges by their
@@ -153,49 +112,9 @@ func freeChainCountsByFace(b *Body) map[*Face]int {
 	}
 	counts := make(map[*Face]int, len(byFace))
 	for face, edges := range byFace {
-		counts[face] = countVertexChains(edges)
+		counts[face] = surfacegroup.ChainCount(edges)
 	}
 	return counts
-}
-
-// countVertexChains counts the connected components of the undirected graph
-// one face's free Edges form over their own Vertex pointers, mirroring
-// surface.go's splitConnectedFaces/unionFindRoot shape — the same
-// union-find over pointer identity, keyed on *Vertex here instead of *Face.
-func countVertexChains(edges [][2]*Vertex) int {
-	parent := map[*Vertex]*Vertex{}
-	for _, e := range edges {
-		if _, ok := parent[e[0]]; !ok {
-			parent[e[0]] = e[0]
-		}
-		if _, ok := parent[e[1]]; !ok {
-			parent[e[1]] = e[1]
-		}
-	}
-	for _, e := range edges {
-		ra, rb := vertexChainRoot(parent, e[0]), vertexChainRoot(parent, e[1])
-		if ra != rb {
-			parent[ra] = rb
-		}
-	}
-	roots := map[*Vertex]struct{}{}
-	for v := range parent {
-		roots[vertexChainRoot(parent, v)] = struct{}{}
-	}
-	return len(roots)
-}
-
-// vertexChainRoot is countVertexChains's own path-compressing find, a
-// top-level function rather than a closure over parent for the same reason
-// surface.go's unionFindRoot is: a self-referential closure cannot be
-// declared and assigned in one statement (staticcheck S1021 does not account
-// for the recursion).
-func vertexChainRoot(parent map[*Vertex]*Vertex, v *Vertex) *Vertex {
-	for parent[v] != v {
-		parent[v] = parent[parent[v]]
-		v = parent[v]
-	}
-	return v
 }
 
 // sheetLumps builds one Lump per connected piece of faces, each holding one

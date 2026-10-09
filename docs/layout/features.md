@@ -14,7 +14,7 @@ The rules for rows live in `docs/layout.md`.
 | `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
 | `mirror_join.go` | `WithJoin` adapters and section audit. See mirror-pattern §5. |
 | `pattern.go` | Pattern entry points and payload adapters. See mirror-pattern §6. |
-| `surface.go` | `WithSurfaceResult`, sheet refusal, shell/lump helpers, free-edge chains. See surface §2-§4, §7, §11. |
+| `surface.go` | `WithSurfaceResult`, sheet refusal, shell/lump and free-edge adapters over `internal/surfacegroup/`. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken`. See surface §16. |
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
@@ -34,7 +34,7 @@ The rules for rows live in `docs/layout.md`.
 | `draft_survey.go` | Draft body undercut survey. See draft DD7. |
 | `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, span payloads. See sweep design. |
 | `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
-| `sweep_composite.go` | Composite Sweep join topology, boundary audit, surface-result caps. See sweep PR 4. |
+| `sweep_composite.go` | Composite Sweep join topology, boundary adapter over `internal/surfacegroup/`, surface-result caps. See sweep PR 4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and body measurement adapters. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Composite Sweep adjacent-span and remote-span separation proofs. See `docs/sweep-design.md` §7. |
 | `sweep_mitre.go` | Mitred options, entry adapters, payload, placement and restatement. See sweep §16. |
