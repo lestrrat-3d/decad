@@ -13,7 +13,7 @@ The rules for rows live in `docs/layout.md`.
 | `chamfer.go` | `Body.Chamfer`; cap loops route to `capblend.go`. See modify §7. |
 | `modify_options.go` | Reach options, their records, SX1 and the asymmetric reference (SX3). See modify-reach §2, §6. |
 | `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |
-| `fillet_audit.go` | Fillet, Chamfer and Shell audit orchestration over `internal/sectionaudit/`. See modify §5. |
+| `fillet_audit.go` | Adapts corner cutbacks to `internal/sectionaudit/` and renders its detailed refusals. See modify §5. |
 | `shell.go` | `Body.Shell`: a prism tube, cup or band group, or a side opening. See modify §8. |
 | `shell_offset.go` | Adapts Shell section offsets and proofs; audits the record. See modify §7–§9. |
 | `shell_cup.go` | `cupPayload`, its stacked record and view. See modify-reach §9.1. |

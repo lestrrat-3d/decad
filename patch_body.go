@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -808,11 +809,11 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	}
 
 	budget := proofbound.NewWorkBudget(ctx)
-	segEntries, err := buildSegEntriesBudget(budget, []loopRecord{{Segments: segs}})
+	segEntries, err := sectionaudit.EntriesOf(budget, []loopRecord{{Segments: segs}})
 	if err != nil {
 		return nil, patchRemapCrossingError(err)
 	}
-	if err := crossingAuditBudget(budget, segEntries); err != nil {
+	if err := sectionaudit.Crossing(budget, segEntries); err != nil {
 		return nil, patchRemapCrossingError(err)
 	}
 

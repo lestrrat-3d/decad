@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"math"
 	"math/big"
 	"slices"
@@ -610,9 +611,9 @@ func TestBrepModifyEdgeConsumersOnS1Fillet(t *testing.T) {
 func TestAuditTrimmedWall(t *testing.T) {
 	t.Parallel()
 	w := survey2d.SegmentWalk{StartU: 0, StartV: 0, EndU: 0, EndV: 20, Length: 20}
-	require.NoError(t, auditTrimmedWall(w, 9, 10))
-	require.ErrorIs(t, auditTrimmedWall(w, 10, 10), ErrUnsupported)
-	require.ErrorIs(t, auditTrimmedWall(w, 25, 0), ErrUnsupported)
+	require.NoError(t, sectionaudit.TrimmedWall(w, 9, 10))
+	require.ErrorIs(t, sectionaudit.TrimmedWall(w, 10, 10), ErrUnsupported)
+	require.ErrorIs(t, sectionaudit.TrimmedWall(w, 25, 0), ErrUnsupported)
 }
 
 // TestReverseSegmentWalksACircleTheOtherWay pins docs/modify-general-design.md

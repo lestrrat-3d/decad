@@ -630,7 +630,7 @@ Four gates, in this order, and each is reject-only:
    (fitted from its own proven-exact vertices) and a zero `axialDelta`,
    unchanged.
 4. **Each chain is simple in that plane.** The plane-local walk does not cross
-   or touch itself, decided by `fillet_audit.go`'s existing §5 section audit —
+   or touch itself, decided by `internal/sectionaudit`'s §5 section audit —
    the same orientation, self-consuming-trim, crossing and nesting checks a
    modify op's rewritten section passes. That audit's own refusal is
    `ErrUnsupported` (an evaluator-reach reading, §5's own convention), which

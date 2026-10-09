@@ -291,8 +291,8 @@ func TestOrientPatchChainRejectsDisagreeingAdjacentFaces(t *testing.T) {
 // puts in contact — cross at its center. orientPatchChain's own "opposite
 // sense" derivation succeeds (every builder here agrees, by construction: a
 // single adjacent face per edge, each walked forward), so this reaches gate
-// 4, whose ErrUnsupported crossing refusal (fillet_audit.go's
-// crossingAuditBudget) is remapped to ErrDegenerate at Body.Patch's own
+// 4, whose ErrUnsupported crossing refusal (sectionaudit.Crossing) is
+// remapped to ErrDegenerate at Body.Patch's own
 // boundary (docs/surface-design.md Table R row R5).
 func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 	t.Parallel()

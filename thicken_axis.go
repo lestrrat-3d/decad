@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -63,14 +64,14 @@ func thickenAxisSection(ctx context.Context, profile profileRecord, side Thicken
 	if err != nil {
 		return thickenSection{}, err
 	}
-	entries, err := buildSegEntriesBudget(budget, []loopRecord{sec.outer.Outer, hole})
+	entries, err := sectionaudit.EntriesOf(budget, []loopRecord{sec.outer.Outer, hole})
 	if err != nil {
 		return thickenSection{}, err
 	}
-	if err := thickenAuditRefusal(crossingAuditBudget(budget, entries)); err != nil {
+	if err := thickenAuditRefusal(sectionaudit.Crossing(budget, entries)); err != nil {
 		return thickenSection{}, err
 	}
-	if err := thickenAuditRefusal(nestingAuditBudget(budget, entries, 2)); err != nil {
+	if err := thickenAuditRefusal(sectionaudit.Nesting(budget, entries, 2)); err != nil {
 		return thickenSection{}, err
 	}
 	return sec, nil
@@ -157,11 +158,11 @@ func thickenRibbon(ctx context.Context, chain chainRecord, side ThickenSide, amo
 		return profileRecord{}, err
 	}
 	section := profileRecord{Outer: loop}
-	entries, err := buildSegEntriesBudget(budget, []loopRecord{section.Outer})
+	entries, err := sectionaudit.EntriesOf(budget, []loopRecord{section.Outer})
 	if err != nil {
 		return profileRecord{}, err
 	}
-	if err := thickenAuditRefusal(crossingAuditBudget(budget, entries)); err != nil {
+	if err := thickenAuditRefusal(sectionaudit.Crossing(budget, entries)); err != nil {
 		return profileRecord{}, err
 	}
 	return section, nil

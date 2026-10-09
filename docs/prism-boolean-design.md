@@ -673,10 +673,10 @@ every modify op already re-checks its own rewrite.
 
 ## 6. Build-time audit (Union's merge only)
 
-Reuses the modify §5 machinery verbatim — `crossingAuditBudget`,
-`nestingAuditBudget`, and `loopSignedAreaBudget` (`fillet_audit.go`) already
-take generic `[]segEntry`/`LoopRecord` shapes with no fillet-specific
-coupling, so the merged `ProfileRecord` feeds them directly with an empty
+Reuses the modify §5 machinery verbatim — `sectionaudit.LoopSignedArea`,
+`sectionaudit.EntriesOf`, `sectionaudit.Crossing`, and `sectionaudit.Nesting`
+take generic section records and walks with no fillet-specific coupling,
+so the merged `ProfileRecord` feeds them directly with an empty
 blend map (`shell_offset.go`'s own precedent for "no cutback data, still run
 the shared audit"). Order matches modify §4's:
 
