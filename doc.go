@@ -144,7 +144,8 @@
 //	  Fillet of single straight cap edges (the vertex blend)  ErrUnsupported
 //	  loop fillet at a convex line-arc or arc-arc corner,
 //	    not tangent (SF1)                                     ErrUnsupported
-//	  mesh, STEP, mesh boolean of a loop-filleted body        ErrUnsupported
+//	  mesh, STEP, mesh boolean and surveys of a loop-filleted
+//	    body                                                  builds
 //	  brep loop selection partial, mixed with lone edges
 //	    or sharing an edge; a face beside the loop curved,
 //	    oblique, split, or on both sides of its face          ErrUnsupported

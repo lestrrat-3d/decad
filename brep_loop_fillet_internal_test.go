@@ -887,9 +887,8 @@ func TestBrepLoopFilletRefusals(t *testing.T) {
 // the same volume, area and roles; under a rotation about z the box still
 // holds every patch, read against the oblique extents; the through-all
 // extent along (1, 0, 1) reaches the x = 40 patch's stationary point
-// 56 + 2√2 past the record's own faces; and the readers PR F-2 lands refuse
-// or stage: Tessellate and a Cut naming PR F-2, the undercut and
-// concave-radius surveys staged. Shown to fail with brepBoundsContext's band
+// 56 + 2√2 past the record's own faces; and the mesh closes with its proof.
+// Shown to fail with brepBoundsContext's band
 // extents deleted (the rotated box then missed the patches' bulge) and with
 // extentAlong's band arm deleted (the stop then read the record's faces
 // alone, 58/√2).
@@ -936,20 +935,9 @@ func TestBrepLoopFilletConsumers(t *testing.T) {
 		}
 	}
 
-	_, err = tessellateContext(t.Context(), out, units.Millimeters(0.05), VerifyAll)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.ErrorContains(t, err, "loop-fillet PR F-2")
-	tool := internalBoxBody(t, doc, 30, -5, 50, 25, 25)
-	before := doc.Bodies()
-	_, err = Cut(t.Context(), out, tool)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.ErrorContains(t, err, "loop-fillet PR F-2")
-	require.Equal(t, before, doc.Bodies())
-
-	rep, err = doc.Verify(t.Context(), WithPullDirection(routeEZ), WithConcaveRadius())
+	// The readers of PR F-2 (tessellation, the mesh boolean, the surveys) have
+	// their own tests in tessellate_brep_fillet_internal_test.go.
+	m, err := tessellateContext(t.Context(), out, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
-	br, err = rep.ForBody(out)
-	require.NoError(t, err)
-	require.NotEqual(t, CoverageComplete, br.Undercut.Coverage)
-	require.NotEqual(t, ScalarAbsent, br.ConcaveRadius.Outcome)
+	require.True(t, m.symDiffOK)
 }

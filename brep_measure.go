@@ -424,18 +424,13 @@ func (bp brepPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 // face's own placed frame, so a straddling face sets undecided without
 // discarding a face already proven to oppose. Every outward normal maps
 // through the placement's linear part, which a reflection maps correctly. A
-// body carrying a fillet band is staged until docs/loop-fillet-design.md's
-// PR F-2 reads its pipe patches (Table DF's DF7).
+// fillet band's pipe patches are read by brepFilletUndercuts (Table DF's DF7).
 // The reading is a normal-direction membership, unaffected by a face's
 // displacements, as a prism's is (docs/prism-boolean-design.md §12).
-func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
+func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
 	p, ok := pull.Normalize()
 	if !ok {
 		return undercutOutcome{}
-	}
-	if bp.hasFilletBand() {
-		// Table DF's DF7 lands with docs/loop-fillet-design.md's PR F-2.
-		return undercutOutcome{reason: surveyPayloadStaged}
 	}
 	roles := facesByRole(b)
 	faces := []*Face{}
@@ -476,6 +471,12 @@ func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
 		if bi >= len(bp.loopPatches) {
 			return undercutOutcome{}
 		}
+		if band.kind == brepBandFillet {
+			if !brepFilletUndercuts(budget, roles, bp, band, pull, &faces, &undecided, work) {
+				return undercutOutcome{}
+			}
+			continue
+		}
 		pl := bp.faces[band.face].view(bp.xform)
 		if !capPatchUndercuts(roles, pl, bp.loopPatches[bi], p, &faces, &undecided) {
 			return undercutOutcome{}
@@ -504,13 +505,10 @@ func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
 // and an apex Cone shrinks to zero only at a boundary vertex. That holds only
 // for a patch the build proves is the Cone it publishes, so a band whose
 // patch carries a skew or a non-zero stamped departure leaves the survey
-// undecided (modify-general Table DG's DG8). A body carrying a fillet band is
-// staged until docs/loop-fillet-design.md's PR F-2 (Table DF's DF8).
+// undecided (modify-general Table DG's DG8). A fillet band that fills a
+// concave corner adds its tube radius exactly; one that removes material is
+// convex in its tube direction and adds none (loop-fillet Table DF's DF8).
 func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
-	if bp.hasFilletBand() {
-		// Table DF's DF8 lands with docs/loop-fillet-design.md's PR F-2.
-		return radiusOutcome{reason: surveyPayloadStaged}, false
-	}
 	if bp.sectionDelta() != 0 {
 		return radiusOutcome{}, false
 	}
@@ -528,6 +526,13 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 	}
 	agg := survey2d.MinAggregate()
 	work := freeform.NewFreeformWork()
+	for _, band := range bp.loopBands {
+		if band.kind == brepBandFillet && band.sigma > 0 {
+			// The tag's Minor or Radius, which a placement leaves unchanged,
+			// within the radius's unit conversion.
+			agg.Take(band.setback.dc, band.setback.dcDelta)
+		}
+	}
 	for _, f := range bp.faces {
 		if f.planar() {
 			continue

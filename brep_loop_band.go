@@ -483,6 +483,13 @@ func brepBandsOccupiedVolumeAdmission(budget *proofbound.WorkBudget, bp brepPayl
 		if err := b.validate(bp, bi); err != nil {
 			return nil, err
 		}
+		if b.kind == brepBandFillet {
+			// Every corner class a fillet band holds is one its strips chord
+			// slice by slice; SF1 refused the rest at the build, and the LF6
+			// fan's stations are the connector arc's azimuths at every ring
+			// (loop-fillet DF5).
+			continue
+		}
 		refusal, err := capBlendOccupiedVolumeAdmission(budget, b.tessView(bp.faces[b.face], bp.xform))
 		if err != nil || refusal != nil {
 			return refusal, err

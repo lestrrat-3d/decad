@@ -654,7 +654,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		case draftPayload:
 			out = draftUndercuts(b, pl, *cfg.Pull)
 		case brepPayload:
-			out = brepUndercuts(b, pl, *cfg.Pull)
+			out = brepUndercuts(budget, b, pl, *cfg.Pull)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		default:

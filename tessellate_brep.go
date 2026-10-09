@@ -167,6 +167,11 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	bandsOf := map[int][]int{}
 	for bi := range bands {
 		bands[bi].place(topo.embeds[bands[bi].band.face], addVertex)
+		if bands[bi].fillet != nil {
+			if err := bands[bi].placeRings(topo.embeds[bands[bi].band.face], addVertex); err != nil {
+				return nil, err
+			}
+		}
 		bandsOf[bands[bi].band.face] = append(bandsOf[bands[bi].band.face], bi)
 	}
 
@@ -360,6 +365,17 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			return nil, err
 		}
 		terms = append(terms, brepBandChordVolume(bands))
+		for bi := range bands {
+			// A fillet strip lies within its patch's stated distance of the
+			// pipe it chords: the symmetric difference is at most its area
+			// times that distance (loop-fillet §7.1).
+			if bands[bi].fillet == nil {
+				continue
+			}
+			for face, eps := range bands[bi].fillet.patchEps {
+				terms = append(terms, proofbound.ProductUpper(areaUpper[face], eps))
+			}
+		}
 	}
 	terms = append(terms, proofbound.SweptVolumeAllow(storeMax,
 		proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)))

@@ -1247,4 +1247,11 @@
 3	0.10	TestTessellateBrepBandsPlaced
 3	0.10	TestBrepBandBooleanAdmission
 3	0.10	TestBrepBandSurveys
+3	1.00	TestTessellateBrepFilletBands
+3	1.00	TestTessellateBrepFilletPatchesWithinBound
+3	1.00	TestBrepFilletMotionCoversEnds
+3	1.00	TestBrepFilletBooleanOperand
+3	1.00	TestTessellateBrepFilletPlaced
+3	1.00	TestBrepFilletSurveys
+3	1.00	TestBrepFilletUndercutAgainstSamples
 3	0.01	TestBrepBandMotionCoversContourDisplacement

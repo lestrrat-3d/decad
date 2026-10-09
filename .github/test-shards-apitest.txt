@@ -1646,3 +1646,4 @@
 2	0.05	TestBrepLoopFilletPublicPlateTopLoop
 2	0.05	TestBrepLoopFilletPublicBoxCaps
 2	0.05	TestBrepLoopFilletPublicRevolveCapRefuses
+2	0.05	TestBrepLoopFilletPublicSTEP
