@@ -3,7 +3,7 @@ package decad
 import (
 	"fmt"
 
-	"github.com/lestrrat-go/option/v3"
+	"github.com/lestrrat-3d/decad/internal/featureoption"
 )
 
 // This file is the shared surface-result vocabulary of docs/surface-design.md
@@ -27,21 +27,7 @@ import (
 // SurfaceResultOption configures every feature WithSurfaceResult reaches
 // (docs/surface-design.md §3). A feature this evaluator cannot yet build as a
 // surface refuses it with [ErrUnsupported] (Table R row R1).
-type SurfaceResultOption interface {
-	ExtrudeOption
-	RevolveOption
-	SweepOption
-	LoftOption
-}
-
-type surfaceResultOption struct{ option.Interface }
-
-func (surfaceResultOption) extrudeOption() {}
-func (surfaceResultOption) revolveOption() {}
-func (surfaceResultOption) sweepOption()   {}
-func (surfaceResultOption) loftOption()    {}
-
-type identSurfaceResult struct{}
+type SurfaceResultOption = featureoption.SurfaceResultOption
 
 // WithSurfaceResult builds the feature's wall set and omits every face that
 // exists only to close the solid, publishing a sheet body — Kind() ==
@@ -49,7 +35,7 @@ type identSurfaceResult struct{}
 // payload of its own; its identity is the whole of the signal, and a repeated
 // WithSurfaceResult() is idempotent, never an error.
 func WithSurfaceResult() SurfaceResultOption {
-	return surfaceResultOption{option.New(identSurfaceResult{}, struct{}{})}
+	return featureoption.WithSurfaceResult()
 }
 
 // refuseSheetOperand reports [ErrUnsupported] when b is live and a sheet
