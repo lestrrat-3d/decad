@@ -15,10 +15,12 @@ import (
 // supportsAnalyticSTEP selects the complete face set before writing any faces.
 // A plane's loops are a single full circle or a chain of lines and arcs; a
 // cylinder is a full wall (two one-circle loops whose starts align along its
-// axis) or a partial wall (one loop of an arc, a line, an arc and a line, the
-// lines along its axis and the arcs about it). An unsupported edge or wall
-// sends the entire body through the faceted writer, so one file never mixes
-// two unrelated boundary constructions.
+// axis) or a partial wall (one loop of lines along its axis closed by arcs
+// about it or by ellipses); a torus is a whole turn (two one-circle loops
+// whose starts share an azimuth) or a patch of parallel and meridian arcs
+// (supportsAnalyticTorus). An unsupported edge or wall sends the entire body
+// through the faceted writer, so one file never mixes two unrelated boundary
+// constructions.
 func supportsAnalyticSTEP(ctx context.Context, body *decad.Body) (bool, error) {
 	for _, face := range body.Faces() {
 		if err := ctx.Err(); err != nil {
@@ -56,6 +58,10 @@ func supportsAnalyticSTEP(ctx context.Context, body *decad.Body) (bool, error) {
 			if seam == (r3.Vec{}) || seam.Cross(surface.Axis) != (r3.Vec{}) {
 				return false, nil
 			}
+		case decad.Torus:
+			if !supportsAnalyticTorus(loops, surface) {
+				return false, nil
+			}
 		default:
 			return false, nil
 		}
@@ -82,26 +88,43 @@ func supportsAnalyticPlanarLoop(loop *decad.Loop) bool {
 	return len(coedges) >= 3 || (len(coedges) == 2 && arcs > 0)
 }
 
+// axisRounding bounds the rounding a frame lift leaves in a unit axis: a loop
+// fillet's meridian arc about a wall built from a rotated frame carries an
+// Axis a few ulps off the cylinder's own (-2.2e-16 in one component). It
+// separates one construction's rounding from a different axis, which differs
+// at the scale of the geometry; a larger cross product only rejects.
+const axisRounding = 1e-12
+
+// axesAlign reports whether two unit axes are parallel or antiparallel to
+// within axisRounding.
+func axesAlign(a, b r3.Vec) bool {
+	return a.Cross(b).Len() <= axisRounding
+}
+
 // supportsAnalyticPartialWall admits a cylinder face bounded by one loop of
 // at least four edges, each an Arc3 about the cylinder's own axis (its Axis
-// equal to the cylinder's or its negation, exactly) or a Line3 along it (an
-// exactly zero cross product with the axis), with both kinds present: the
-// wall a prism sweeps from an arc, whose side lines may be split into
-// several edges where neighbouring faces put vertices on them.
+// parallel to the cylinder's within axisRounding), an Ellipse3 or a Line3
+// along the axis (an exactly zero cross product with it), with lines and at
+// least one arc or ellipse present: the wall a prism sweeps from an arc,
+// whose side lines may be split into several edges where neighbouring faces
+// put vertices on them, or a loop fillet's straight-walk patch, whose two
+// ends are the meridian arcs or mitre ellipses it shares with its neighbours.
 func supportsAnalyticPartialWall(loop *decad.Loop, cylinder decad.Cylinder) bool {
 	coedges := loop.CoEdges()
 	if len(coedges) < 4 {
 		return false
 	}
-	arcs, lines := 0, 0
+	curved, lines := 0, 0
 	for _, ce := range coedges {
 		edge := ce.Edge()
 		switch c := edge.Curve().(type) {
+		case decad.Ellipse3:
+			curved++
 		case decad.Arc3:
-			if c.Axis != cylinder.Axis && c.Axis != cylinder.Axis.Scale(-1) {
+			if !axesAlign(c.Axis, cylinder.Axis) {
 				return false
 			}
-			arcs++
+			curved++
 		case decad.Line3:
 			run := edge.End().Position().Value.Sub(edge.Start().Position().Value)
 			if run == (r3.Vec{}) || run.Cross(cylinder.Axis) != (r3.Vec{}) {
@@ -112,7 +135,7 @@ func supportsAnalyticPartialWall(loop *decad.Loop, cylinder decad.Cylinder) bool
 			return false
 		}
 	}
-	return arcs > 0 && lines > 0
+	return curved > 0 && lines > 0
 }
 
 func supportsAnalyticCircleLoop(loop *decad.Loop) bool {
@@ -154,6 +177,8 @@ func (b *fileBuilder) addAnalyticFaces(ctx context.Context, body *decad.Body) ([
 			ref, err = a.addPlanarFace(ctx, face)
 		case decad.Cylinder:
 			ref, err = a.addCylinderFace(ctx, face, surface)
+		case decad.Torus:
+			ref, err = a.addTorusFace(ctx, face, surface)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("export: STEP analytic face %d: %w", i, err)
@@ -231,6 +256,21 @@ func (b *analyticSTEPBuilder) addEdge(edge *decad.Edge) (step.Reference, error) 
 		}
 		placement := b.addPlacement(geometry.Center, geometry.Axis, radial)
 		curve = b.add(ap214.Circle(0, "", placement, step.Real(radius)))
+	case decad.Ellipse3:
+		// An ellipse arc is its ellipse trimmed by the edge's own two
+		// vertices. Ellipse3 is swept counter-clockwise about its Axis from
+		// Major, as STEP's ELLIPSE is about its placement axis from its
+		// reference direction, so the edge keeps the curve's sense.
+		semiMajor, err := geometry.SemiMajor.In(units.Millimeter)
+		if err != nil {
+			return 0, err
+		}
+		semiMinor, err := geometry.SemiMinor.In(units.Millimeter)
+		if err != nil {
+			return 0, err
+		}
+		placement := b.addPlacement(geometry.Center, geometry.Axis, geometry.Major)
+		curve = b.add(ap214.Ellipse(0, "", placement, step.Real(semiMajor), step.Real(semiMinor)))
 	default:
 		return 0, fmt.Errorf("%w: unsupported analytic edge %T", decad.ErrUnsupported, geometry)
 	}
@@ -440,28 +480,58 @@ func areaLoopPlacement(face *decad.Face, loop *decad.Loop) (r3.Vec, r3.Vec, r3.V
 // counter-clockwise about the outward radial direction, since ∂θ × ∂z is the
 // radial direction. An arc advances θ by its sweep, signed by whether the
 // coedge walks it counter-clockwise about the cylinder's axis; a line along
-// the axis keeps θ and moves z.
+// the axis keeps θ and moves z. An ellipse advances θ by the signed angle
+// between its end vertices' radial directions and is taken as the chord
+// between them in the (θ, z) plane: only the sign of the area is read, and a
+// patch's chord polygon is simple, so it has the sign of the curved loop.
 func partialWallArea(loop *decad.Loop, cylinder decad.Cylinder) (float64, bool) {
 	theta, area := 0.0, 0.0
 	for _, ce := range loop.CoEdges() {
 		z0 := ce.Start().Position().Value.Sub(cylinder.Origin).Dot(cylinder.Axis)
 		z1 := ce.End().Position().Value.Sub(cylinder.Origin).Dot(cylinder.Axis)
 		next := theta
-		if arc, ok := ce.Edge().Curve().(decad.Arc3); ok {
-			sweep, ok := arcSweep(ce.Edge(), arc)
+		switch curve := ce.Edge().Curve().(type) {
+		case decad.Arc3:
+			sweep, ok := arcSweep(ce.Edge(), curve)
 			if !ok {
 				return 0, false
 			}
-			if ce.IsForward() == (arc.Axis.Dot(cylinder.Axis) > 0) {
+			if ce.IsForward() == (curve.Axis.Dot(cylinder.Axis) > 0) {
 				next += sweep
 			} else {
 				next -= sweep
 			}
+		case decad.Ellipse3:
+			advance, ok := radialAdvance(cylinder, ce.Start().Position().Value, ce.End().Position().Value)
+			if !ok {
+				return 0, false
+			}
+			next += advance
 		}
 		area += (theta*z1 - next*z0) / 2
 		theta = next
 	}
 	return area, true
+}
+
+// radialAdvance is the signed angle about the cylinder's axis from the radial
+// direction of a to that of b, in (−π, π].
+func radialAdvance(cylinder decad.Cylinder, a, b r3.Vec) (float64, bool) {
+	ra, ok := radialAbout(cylinder.Origin, cylinder.Axis, a)
+	if !ok {
+		return 0, false
+	}
+	rb, ok := radialAbout(cylinder.Origin, cylinder.Axis, b)
+	if !ok {
+		return 0, false
+	}
+	return math.Atan2(cylinder.Axis.Dot(ra.Cross(rb)), ra.Dot(rb)), true
+}
+
+// radialAbout is the unit direction from the line (origin, axis) to p.
+func radialAbout(origin, axis, p r3.Vec) (r3.Vec, bool) {
+	v := p.Sub(origin)
+	return v.Sub(axis.Scale(v.Dot(axis))).Normalize()
 }
 
 // partialWallSense is a partial cylinder face's STEP face sense (its outward
