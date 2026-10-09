@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
@@ -79,7 +80,7 @@ func TestPrismProofRecordChargesEveryFaceItsOwnDisplacement(t *testing.T) {
 	// sample per chord on it beside the outline's four corners.
 	stations := len(mesh.vertices)/2 - 4
 	require.Greater(t, stations, 2)
-	sagitta := chordSagitta(10, 2*math.Pi, stations)
+	sagitta := tessellation.ChordSagitta(10, 2*math.Pi, stations)
 	require.Positive(t, sagitta)
 
 	var sawWall, sawStraight, sawCap int
@@ -164,21 +165,21 @@ func TestWalkSegmentAreaIsTheCircularSegmentClosedForm(t *testing.T) {
 
 	for _, n := range []int{1, 2, 5, 32} {
 		want := r * r / 2 * (math.Pi/2 - float64(n)*math.Sin(math.Pi/2/float64(n)))
-		require.InEpsilon(t, want, walkSegmentArea(w, n), 1e-12, `n=%d`, n)
+		require.InEpsilon(t, want, tessellation.WalkSegmentArea(w, n), 1e-12, `n=%d`, n)
 	}
 	// The composed helper is still the padded wall term plus both caps' worth
 	// of the segment term, so the existing area slack is unchanged.
 	const h = 7.0
 	require.InEpsilon(t,
-		(walkWallSlack(w, 8, h)+2*walkSegmentArea(w, 8))*(1+1e-9),
-		walkAreaSlack(w, 8, h), 1e-15)
-	require.Positive(t, walkWallSlack(w, 8, h))
+		(tessellation.WalkWallSlack(w, 8, h)+2*tessellation.WalkSegmentArea(w, 8))*(1+1e-9),
+		tessellation.WalkAreaSlack(w, 8, h), 1e-15)
+	require.Positive(t, tessellation.WalkWallSlack(w, 8, h))
 
 	// Refining the chording shrinks the omission monotonically and never turns
 	// it negative — the max(…, 0) arm holds once the difference is all rounding.
 	prev := math.Inf(1)
 	for n := 1; n <= 1<<20; n *= 4 {
-		got := walkSegmentArea(w, n)
+		got := tessellation.WalkSegmentArea(w, n)
 		require.GreaterOrEqual(t, got, 0.0, `n=%d`, n)
 		require.Less(t, got, prev, `n=%d`, n)
 		prev = got

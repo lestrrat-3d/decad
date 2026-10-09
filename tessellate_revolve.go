@@ -577,7 +577,7 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		return fmt.Errorf(`%w: this revolve mesh's chording exceeds the tolerance its own budget reserved for it`, ErrUnsupported)
 	}
 	for f, ext := range faceCells {
-		bound := proofbound.UpRound(moved(proofbound.AbsSumUpper(ext.sag, chordSagitta(ext.rho, p.Sweep, p.Angular), coord)))
+		bound := proofbound.UpRound(moved(proofbound.AbsSumUpper(ext.sag, tessellation.ChordSagitta(ext.rho, p.Sweep, p.Angular), coord)))
 		if proofbound.IsNonFinite(bound) {
 			return fmt.Errorf(`%w: a revolve wall face's composed displacement is not finite`, ErrUnsupported)
 		}

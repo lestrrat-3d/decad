@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvesampling"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -328,7 +329,7 @@ func TestChordCountHonoursTheWalkMinimum(t *testing.T) {
 		// above 2r — 5 mm among them — must choose the minimum count without
 		// evaluating an out-of-domain inverse.
 		for _, tol := range []float64{2, 5, 100} {
-			n, s, err := chordCount(whole, tol, chordWalkMin(whole))
+			n, s, err := tessellation.ChordCount(whole, tol, tessellation.ChordWalkMin(whole))
 			require.NoError(t, err)
 			require.Equal(t, 3, n, `tol=%v`, tol)
 			require.LessOrEqual(t, s, tol)
@@ -336,13 +337,13 @@ func TestChordCountHonoursTheWalkMinimum(t *testing.T) {
 	})
 
 	t.Run("the radius-1 full-turn threshold sits at n = 122", func(t *testing.T) {
-		at122 := chordSagitta(1, 2*math.Pi, 122)
-		n, s, err := chordCount(whole, at122, chordWalkMin(whole))
+		at122 := tessellation.ChordSagitta(1, 2*math.Pi, 122)
+		n, s, err := tessellation.ChordCount(whole, at122, tessellation.ChordWalkMin(whole))
 		require.NoError(t, err)
 		require.Equal(t, 122, n)
 		require.Equal(t, at122, s)
 
-		n, _, err = chordCount(whole, math.Nextafter(at122, 0), chordWalkMin(whole))
+		n, _, err = tessellation.ChordCount(whole, math.Nextafter(at122, 0), tessellation.ChordWalkMin(whole))
 		require.NoError(t, err)
 		require.Equal(t, 123, n, `one ulp below the threshold buys one more chord`)
 	})
@@ -352,7 +353,7 @@ func TestChordCountHonoursTheWalkMinimum(t *testing.T) {
 		// single on-axis segment (docs/tessellation-design.md §9).
 		meridian := survey2d.SegmentWalk{Radius: 5, Th0: 0, Th1: math.Pi, Kind: survey2d.WalkCircular, StartV: 0, EndV: 0}
 		require.Equal(t, 2, revolvesampling.MeridianMin(meridian))
-		n, _, err := chordCount(meridian, 1000, revolvesampling.MeridianMin(meridian))
+		n, _, err := tessellation.ChordCount(meridian, 1000, revolvesampling.MeridianMin(meridian))
 		require.NoError(t, err)
 		require.Equal(t, 2, n)
 
@@ -363,7 +364,7 @@ func TestChordCountHonoursTheWalkMinimum(t *testing.T) {
 	})
 
 	t.Run("a minimum past the per-walk cap refuses", func(t *testing.T) {
-		_, _, err := chordCount(whole, 1, freeform.MaxChordsPerWalk+1)
+		_, _, err := tessellation.ChordCount(whole, 1, freeform.MaxChordsPerWalk+1)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 }

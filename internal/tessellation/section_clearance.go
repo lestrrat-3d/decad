@@ -5,10 +5,11 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
 // SectionPoint is a plane-local vertex of a chorded section.
-type SectionPoint struct{ U, V float64 }
+type SectionPoint = sectionrecord.Point2
 
 // LoopClearanceFailure names the first pair of distinct loops whose measured
 // chord distance does not exceed their sagitta bounds plus the rounding floor.

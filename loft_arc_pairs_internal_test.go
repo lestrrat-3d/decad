@@ -264,7 +264,7 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	dth := sweep / float64(m)
 
 	// sectionDelta/sectionMatchedDelta: the closed-form per-cell sagitta
-	// (chordSagitta's own formula, tessellate.go), the max over both radii —
+	// (ChordSagitta's own formula, internal/tessellation), the max over both radii —
 	// a circular cell's own matchedDelta equals its own sagitta exactly
 	// (loftmesh.CircularCellPoints' own doc comment), so the two build-wide
 	// accumulators coincide on this all-circular fixture.

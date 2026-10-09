@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -183,7 +184,7 @@ func (a ruledArc) arcLen() float64 { return math.Abs(a.radius * a.dt) }
 // TestCellChordCurveAreaAllowSagittaIsParameterMatched checks it by sampling
 // rather than assuming it.
 func (a ruledArc) sagittaUpper() float64 {
-	return chordSagitta(math.Abs(a.radius), math.Abs(a.dt), 1)
+	return tessellation.ChordSagitta(math.Abs(a.radius), math.Abs(a.dt), 1)
 }
 
 // ruledPatchAreaGap integrates Area(true ruled patch) − Area(bilinear chord

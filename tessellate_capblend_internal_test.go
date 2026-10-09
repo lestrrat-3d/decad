@@ -144,13 +144,13 @@ func requireCapBlendSharedCount(t *testing.T, cbp capBlendPayload, li int, tol f
 			continue
 		}
 		circular++
-		nSide, _, err := chordCount(w.SegmentWalk, tol, chordWalkMin(w.SegmentWalk))
+		nSide, _, err := tessellation.ChordCount(w.SegmentWalk, tol, tessellation.ChordWalkMin(w.SegmentWalk))
 		require.NoError(t, err)
 		capWalk := survey2d.SegmentWalk{
 			Kind: survey2d.WalkCircular, Radius: lm.capRadius[i],
 			Th0: lm.capTh0[i], Th1: lm.capTh1[i], Closed: w.Closed,
 		}
-		nCap, _, err := chordCount(capWalk, tol, chordWalkMin(capWalk))
+		nCap, _, err := tessellation.ChordCount(capWalk, tol, tessellation.ChordWalkMin(capWalk))
 		require.NoError(t, err)
 		require.Equal(t, max(nSide, nCap), lm.count[i],
 			`the shared count is the larger of what the two directrices need`)
