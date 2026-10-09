@@ -118,7 +118,7 @@ func edgesQuery(edges []*Edge) *EdgeQuery {
 // rationals no float holds, (9/5, 1) at the origin among them. The design
 // names a 60° corner; no float pair holds a 60° slope with a rational unit
 // normal, and 58° is the nearest Pythagorean angle with small sides.
-func internalTrapezoidPocket(t *testing.T) (*Document, *Body) {
+func internalTrapezoidPocket(t *testing.T) *Body {
 	t.Helper()
 	doc := New()
 	prism := internalPolygonPrism(t, doc, [][2]float64{{0, 0}, {100, 0}, {72, 45}, {28, 45}}, 10)
@@ -127,7 +127,7 @@ func internalTrapezoidPocket(t *testing.T) (*Document, *Body) {
 	require.NoError(t, err)
 	_, ok := out.payload.(stackedPrismPayload)
 	require.True(t, ok, "the trapezoid pocket is a stacked prism, got %T", out.payload)
-	return doc, out
+	return out
 }
 
 // loopPatches lists the body's faces carrying a chamferLoop(f,l,p) role.
@@ -453,7 +453,7 @@ func TestBrepLoopChamferRoundedPlate(t *testing.T) {
 // so a later chamfer of its bottom loop refuses with SB1.
 func TestBrepLoopChamferContourBound(t *testing.T) {
 	t.Parallel()
-	_, body := internalTrapezoidPocket(t)
+	body := internalTrapezoidPocket(t)
 	out, bp := chamferLoopOf(t, body, routeEZ, r3.NewVec(0, 0, 10), 0, 1)
 	require.Positive(t, planarFaceAt(t, bp, routeEZ, 10).delta)
 
