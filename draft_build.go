@@ -45,11 +45,15 @@ func draftAngle(taper units.Value) (float64, float64, error) {
 
 // extrudeDraft is Extrude's path for a nonzero taper alpha (radians, within
 // alphaDelta of the stated angle, past SD1 and SD2): the stage-2 gates SD11
-// and SD12 on the extent and the option, then the build. Every gate runs
-// before the document changes.
+// and SD12 on the extent and the option, then the build. A one-sided stop
+// resolves its far level and axial bound before the same single-slab build.
+// Every gate runs before the document changes.
 func (d *Document) extrudeDraft(profile profileRecord, frame r3.Frame, e Extent, alpha, alphaDelta float64, surfaceResult bool) (*Body, error) {
-	if _, ok := e.(Distance); !ok {
-		return nil, fmt.Errorf(`%w: this evaluator tapers a Distance extent only; a Symmetric, TwoSided, ThroughAll or ToFace extent with a nonzero taper needs a two-sided draft record or a stop-face level (draft SD11)`, ErrUnsupported)
+	switch e.(type) {
+	case Distance, ThroughAll, ToFace:
+		// Each resolves to one nonzero end while the sketch plane stays at zero.
+	default:
+		return nil, fmt.Errorf(`%w: a tapered Symmetric or TwoSided extent needs a two-slab draft record (draft SD11)`, ErrUnsupported)
 	}
 	if surfaceResult {
 		return nil, fmt.Errorf(`%w: this evaluator builds a tapered extrude as a solid only; omit WithSurfaceResult or the taper (draft SD12)`, ErrUnsupported)

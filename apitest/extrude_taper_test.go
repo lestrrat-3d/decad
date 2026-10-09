@@ -167,9 +167,101 @@ const boxSide, boxHeight = 20.0, 10.0
 
 // boxVolume is F1's h(a² − 2ad + 4d²/3) for a = boxSide, h = boxHeight.
 func boxVolume(d *big.Float) *big.Float {
-	A, H := bf(boxSide), bf(boxHeight)
+	return taperBoxVolume(boxHeight, d)
+}
+
+func taperBoxVolume(h float64, d *big.Float) *big.Float {
+	return taperBoxVolumeExact(bf(h), d)
+}
+
+func taperBoxVolumeExact(h, d *big.Float) *big.Float {
+	A := bf(boxSide)
 	inner := bfAdd(bfSub(bfMul(A, A), bfMul(bf(2), A, d)), bfQuo(bfMul(bf(4), d, d), bf(3)))
-	return bfMul(H, inner)
+	return bfMul(h, inner)
+}
+
+// TestTaperStopExtents uses a real stop body to resolve the far level. The
+// tapered body must carry that level into its cap and volume readings.
+func TestTaperStopExtents(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		extent func(*decad.Body) decad.Extent
+		stopZ  float64
+		farZ   float64
+	}{
+		{"to face", func(stop *decad.Body) decad.Extent {
+			return decad.ToFace{Body: stop, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(stop)))}
+		}, 30, 30},
+		{"through all", func(*decad.Body) decad.Extent {
+			return decad.ThroughAll{Dir: decad.Along}
+		}, 30, 35},
+		{"to face against", func(stop *decad.Body) decad.Extent {
+			return decad.ToFace{Body: stop, Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stop)))}
+		}, -35, -30},
+		{"through all against", func(*decad.Body) decad.Extent {
+			return decad.ThroughAll{Dir: decad.Against}
+		}, -35, -35},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			stopSketch, stopProfile := taperSketch(t, r3.NewVec(0, 0, tc.stopZ), 0, drawSquare(0, 60))
+			stop, err := doc.Extrude(stopSketch, stopProfile,
+				decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+			require.NoError(t, err)
+			s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
+			body, err := doc.Extrude(s, p, tc.extent(stop), decad.WithTaper(units.Degrees(5)))
+			require.NoError(t, err)
+			requireManifold(t, body)
+			height := math.Abs(tc.farZ)
+			d := bfMul(bf(height), taperTan(5))
+			volume, err := body.Volume()
+			require.NoError(t, err)
+			requireMeasurementCovers(t, "stop draft volume", volume,
+				taperBoxVolume(height, d), taperCeiling)
+			mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			requireWatertight(t, mesh)
+			require.True(t, mesh.VolumeVerified())
+			want, _ := taperBoxVolume(height, d).Float64()
+			require.InDelta(t, want, meshVolume(mesh), 1e-6)
+			x := bfSub(bf(boxSide/2), d)
+			frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+			require.NoError(t, err)
+			requireVertexAt(t, body, liftExact(frame, r3.Identity(), x, x, bf(tc.farZ)))
+		})
+	}
+}
+
+// The stop offset is converted from inches before the draft computes h·tan α.
+// The volume and far vertex must enclose the stated inch value, not merely the
+// rounded millimetre level used to build the cap.
+func TestTaperToFaceOffsetBound(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	stopSketch, stopProfile := taperSketch(t, r3.NewVec(0, 0, 30), 0, drawSquare(0, 60))
+	stop, err := doc.Extrude(stopSketch, stopProfile,
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
+	end := decad.ToFace{
+		Body:   stop,
+		Face:   decad.Faces(decad.FaceCreatedBy(decad.CapStart(stop))),
+		Offset: units.Inches(0.1),
+	}
+	body, err := doc.Extrude(s, p, end, decad.WithTaper(units.Degrees(5)))
+	require.NoError(t, err)
+	h := bfAdd(bf(30), bfMul(bf(0.1), bf(units.Inch.Factor())))
+	d := bfMul(h, taperTan(5))
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	requireMeasurementCovers(t, "offset stop draft volume", volume,
+		taperBoxVolumeExact(h, d), taperCeiling)
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	x := bfSub(bf(boxSide/2), d)
+	requireVertexAt(t, body, liftExact(frame, r3.Identity(), x, x, h))
 }
 
 const taperCeiling = 1e-9
@@ -799,7 +891,10 @@ func TestTaperRefusals(t *testing.T) {
 			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(18))}, decad.ErrDegenerate},
 		{"SD11 symmetric", 0, drawSquare(0, 20), decad.Symmetric{D: units.Millimeters(10)},
 			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(5))}, decad.ErrUnsupported},
-		{"SD11 through all", 0, drawSquare(0, 20), decad.ThroughAll{Dir: decad.Along},
+		{"SD11 two sided", 0, drawSquare(0, 20), decad.TwoSided{
+			One: decad.DistanceSide{D: units.Millimeters(6)},
+			Two: decad.DistanceSide{D: units.Millimeters(4)},
+		},
 			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(5))}, decad.ErrUnsupported},
 		{"SD12 surface result", 0, drawSquare(0, 20), decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(5)), decad.WithSurfaceResult()}, decad.ErrUnsupported},
@@ -816,18 +911,6 @@ func TestTaperRefusals(t *testing.T) {
 			require.Empty(t, doc.Bodies())
 		})
 	}
-	t.Run("SD11 to face", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New()
-		ps, pp := taperSketch(t, r3.NewVec(0, 0, 30), 0, drawSquare(0, 60))
-		plate, err := doc.Extrude(ps, pp, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
-		require.NoError(t, err)
-		s, p := taperSketch(t, origin, 0, drawSquare(0, 20))
-		_, err = doc.Extrude(s, p, decad.ToFace{Body: plate, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(plate)))},
-			decad.WithTaper(units.Degrees(5)))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.Equal(t, []*decad.Body{plate}, doc.Bodies())
-	})
 }
 
 // TestTaperDownstreamRefusals pins what stays refused on a draft body

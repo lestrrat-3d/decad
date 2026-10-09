@@ -149,7 +149,7 @@ file is written.
 
 | RD | Entry point | Admits | Result |
 |---|---|---|---|
-| **RD1** | `Extrude` with nonzero `WithTaper` | a profile of `LineSeg`, `ArcSeg` and `CircleSeg` walks in which every corner at a circular walk is a G1 join; a `Distance` extent, `Along` or `Against`; `|α| < 90°`; no `WithSurfaceResult` | a `draftPayload` solid (Table BD) |
+| **RD1** | `Extrude` with nonzero `WithTaper` | a profile of `LineSeg`, `ArcSeg` and `CircleSeg` walks in which every corner at a circular walk is a G1 join; a one-sided `Distance`, `ToFace` or `ThroughAll` extent; `|α| < 90°`; no `WithSurfaceResult` | a `draftPayload` solid (Table BD) |
 | **RD2** | `Body.Draft` | a live `prismPayload` receiver (an extrude, a filleted or chamfered body, a tube, or any of these `Placed`) whose section carries no displacement; a `NeutralFace` naming one cap of the receiver; a selection resolving to exactly the receiver's complete wall set; `0 < |α| < 90°` | a `draftPayload` solid over the receiver's section, the receiver retired |
 | **RD3** | `Body.Draft` | as RD2 with a selection naming a **subset** of the walls, where every corner between a selected and an unselected wall is a line–line corner | a `draftPayload` whose far section moves the selected walls only (§10.2) |
 
@@ -172,7 +172,7 @@ any evaluator?) and the sentinel that follows from it.
 | **SD8** | far loops that cross or make boundary contact at modify §5's scale-anchored floor (S7/S11b) — two walls closing on each other, a widened hole reaching the outer loop | yes | `ErrUnsupported` |
 | **SD9** | far loops whose nesting the containment classifier cannot decide (modify S9) | undecidable here | `ErrUnsupported` |
 | **SD10** | a far section that passes every audit at the held `d` and fails at the top of `d`'s span (§8.1; modify-reach §8.3.1's second audit) | undecidable here | `ErrUnsupported` |
-| **SD11** | a nonzero taper with an extent other than `Distance` — `Symmetric`, `TwoSided`, `ThroughAll`, `ToFace`, or a side form | yes | `ErrUnsupported` (staged, §14) |
+| **SD11** | a nonzero taper with `Symmetric`, `TwoSided`, or a side form: the sketch plane lies inside the sweep and each side needs its own offset direction | yes | `ErrUnsupported` (staged, §14) |
 | **SD12** | a nonzero taper with `WithSurfaceResult` | yes | `ErrUnsupported` (staged, §14) |
 | **SD13** | a `d` that rounds to zero, a far vertex bit-identical to its near vertex, or a far radius bit-identical to its near radius (`capband.BandRadius`) | yes — float64 cannot name the far section at this scale | `ErrUnsupported` (modify-reach SX13) |
 | **SD14** | a far corner whose displacement enclosure cannot be built (`offset2d.ErrUnbounded`) | yes | `ErrUnsupported` (SX14) |
@@ -328,11 +328,11 @@ turns the normal by at most `2|e|/h`; a Cone wall's half angle moves by at most
 `2·(δ + δ_z·max(1, |Δr|/h))/h` with `h` at the bottom of its span, and
 `setPatchReadings` (`capblend_geom.go`) adds it to every draft wall and chamfer
 patch alike. `δ_z` is the far level's displacement beside the near level's
-rounding, and no near-level displacement enters. SD11 admits only a `Distance`
-extent, and `resolveLinearExtent` puts that extent's near end on the sketch
-plane at exactly zero with a zero displacement; only the far end carries the
-distance's conversion rounding. The near edge is therefore the recorded
-section itself. The far displacement stays in `δ_z` even though it would cancel
+rounding, and no near-level displacement enters. Every admitted one-sided
+extent puts its near end on the sketch plane at exactly zero with a zero
+displacement; the far end carries the distance's conversion rounding or the
+stop level's bound. The near edge is therefore the recorded section itself.
+The far displacement stays in `δ_z` even though it would cancel
 for a chamfer, whose two levels both follow one held cap level: here
 `h = z1 − z0` is read from the held far level, so that displacement moves the
 height the taper is measured over. An extent that SD11 admits later and that
@@ -416,9 +416,9 @@ every reading of the body charged. Three things differ from a chamfer's mesh:
   both ends' displacements (`draftBandHeightUpper`), not over a side setback.
 
 A wall face's bound charges the far level's displacement and the band's, as a
-chamfer patch's does, and no near-level term: the near end of a `Distance`
-extent is the sketch plane, exact (§8). An extent SD11 admits later that moves
-the near level must add it there, as it must to `δ_z`.
+chamfer patch's does, and no near-level term: the near end of every admitted
+one-sided extent is the sketch plane, exact (§8). An extent SD11 admits later
+that moves the near level must add it there, as it must to `δ_z`.
 
 The admission refuses what it refuses for a chamfer: a circular wall whose
 join is G1 by the held-tangent rule but not exactly tangent over the
@@ -581,6 +581,7 @@ the red run's failing assertion in the test's comment, and restores the leg.
 | F8 far origin | F1 and F3 on a sketch plane whose origin is `(10⁶ + 0.1, 0.1, 0)` and under a rotation placement; F3 drawn at `v = 10⁶` in the plane | every vertex's published bound covers the exact rational lift (the `apitest/vertex_frame_origin_test.go` pattern); F1's volume and area and F3's volume bounds cover their closed forms; the slot at `v = 10⁶` covers its volume, its centroid and each straight wall's denoted normal |
 | F9 placed equivalence | F1 built, then `Placed` under a translation and a rotation | volume, area and centroid equal the unplaced readings within bounds; `Bounds` covers the placed box |
 | F10 tangent span | F1 with `a = 2` | each far corner `a/2 − d`, a Sterbenz subtraction exact for the held `d`, lies within its bound of the exact corner the stated taper denotes |
+| F11 stop extents | F1's section, with a planar stop at 30 mm and a 5 mm thick stop body | `ToFace` ends at +30 or −30 mm; `ThroughAll` ends at +35 or −35 mm; an offset in inches propagates its rounding; the far corner and `Volume = h(a² − 2ad + 4d²/3)` lie within their bounds |
 
 **Refusal fixtures**, one per SD row that `Extrude` can reach, each asserting
 `errors.Is` on the sentinel and that `Document.Bodies()` is unchanged: SD2
@@ -588,7 +589,7 @@ the red run's failing assertion in the test's comment, and restores the leg.
 right angles), SD5 (F2 with `α` such that `d ≥ R`), SD6 (F1 with `d ≥ a/2`,
 and F7 with `d` closing the ring), SD7 (a thin rectangle whose short walls'
 miters cross), SD8 (a plate whose off-centre hole widens across the outer
-wall), SD11 (`Symmetric`, `ToFace`, `ThroughAll`), SD12, SD13 (an angle of
+wall), SD11 (`Symmetric`, `TwoSided`), SD12, SD13 (an angle of
 `1e-14°` on a 1 mm sweep). SD15 is pinned in `internal/offset2d/sharp_test.go`
 (§5). Beside them, the draft body's downstream refusals: `Fillet`, `Chamfer`
 and `Shell` refuse it by name (DD14), and `MirroredCopy` builds it (DD12).
@@ -706,8 +707,8 @@ undecided.
 - **Free-form walks**: refused (SD3); the chorded alternative is a loft and
   is rejected (§12).
 - **Exactness**: every draft measurement is `Approximate` (§8).
-- **Extents**: `Distance` only; the two-sided families need a two-slab draft
-  record and are deferred (SD11, §14).
+- **Extents**: one-sided `Distance`, `ToFace` and `ThroughAll`; the two-sided
+  families need a two-slab draft record and are deferred (SD11, §14).
 - **Neutral plane**: a cap of the receiver, through a `NeutralFace`; a
   `NeutralFrame` and an interior neutral level are deferred (SD20, §14).
 - **Selection vocabulary**: `Walls(b)` added as a `FacePredicate` beside
@@ -730,6 +731,7 @@ every new root file. This document ships with PR 1.
 | **3** | `Body.Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `docs/api-design.md` §8/§12, `apitest/draft_test.go`, `draft_internal_test.go`, `examples/decad_draft_example_test.go` | D1–D5 | 1 |
 | **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `capblend_survey.go` (`capPatchUndercuts`, the patch loop both surveys run), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
 | **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `internal/capcontour/displacement.go`, `internal/capband/`, `draft.go`, `draft_build.go`, `draft_payload.go`, `capblend*.go` (the band view's per-walk amounts), `tessellate_capblend.go` and `internal/tessellation/` (the mesh's per-walk setbacks), `apitest/draft_subset_test.go` | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
+| **6** | RD1 with a one-sided `ToFace` or `ThroughAll`: resolve the stop through `resolveLinearExtent`, then build the existing single-slab draft with the stop's axial bound | `draft_build.go`, `apitest/extrude_taper_test.go` | the far-cap vertex and volume match the selected stop level within their bounds | 5 |
 
 PRs 2 and 3 run in parallel after PR 1; PR 4 follows 2; PR 5 follows 3.
 PRs 1, 2 and 4 are proof specifications (bounds, closure terms, the mesh
@@ -746,6 +748,7 @@ draft body, `Draft`'s included:
 | 3 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21 |
 | 4 | landed | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20 |
 | 5 | landed | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
+| 6 | landed | DD8; SD3, SD4, two-sided SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); `NeutralFrame` and the interior neutral level |
 
 The unscheduled reach, in the order a later design should take it: the
 drafted shell (DD14, the molded cup), the two-sided extents and the interior

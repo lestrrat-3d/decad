@@ -417,9 +417,10 @@ dependency is ambient at the CALL but never in the RECORD: core §6.2's depends-
 case explicitly — the feature call resolves which live bodies actually bound
 the stops from live bodies without consuming them. (`ToFaceAngular` is the
 revolve analog and lands there, §6/§11.) A nonzero
-`WithTaper` builds a draft body over a `Distance` extent and refuses every
-other extent. `docs/draft-design.md` owns the tapered extrude: its sharp
-offset family, its `draftPayload`, its refusals and its staging.
+`WithTaper` builds a draft body over a one-sided `Distance`, `ToFace`, or
+`ThroughAll` extent and refuses two-sided extents. `docs/draft-design.md`
+owns the tapered extrude: its sharp offset family, its `draftPayload`, its
+refusals and its staging.
 
 ### 5.1 The denoted map
 
