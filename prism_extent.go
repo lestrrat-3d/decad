@@ -3,15 +3,12 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismextent"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -81,64 +78,20 @@ func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *free
 	return lo, hi, nil
 }
 
-// extentBoundedAlong is the bounded reading itself: the interval AND its
-// proven half-width, folded from boundaryExtremesBoundedContext's own
-// per-candidate enclosures (docs/spline-design.md §6.2) AND from the frame and
-// placement's own rounding (prismPlacementCoeffAllow). The boundary-scan term
-// follows the CANDIDATES the extremes are held by, never the section's kind: a
-// section whose extremes are all values the record states — straight walls,
-// and an arc or circle read where its own recorded endpoint or its exactly
-// representable apex wins — carries only zero-width candidates, while a
-// trimmed circular endpoint, a computed arc radius or a free-form span's
-// enclosure each publish the width their own construction owes. The frame and
-// placement term is independent of it and composes outward: a straight-walled
-// section under a tilted placement still widens, and an unplaced or
-// axis-aligned section still reports zero for this term, which is what keeps
-// an ordinary prism's box Exact.
-//
-// A THIRD term composes outward with both: the reading's own final summation
-// base + lo + zlo, charged exactly against the same terms by proofbound.ExactSumRound
-// (internal/proofbound/bounds.go). It is not covered by either of the other two — a pure
-// translation leaves every coefficient exactly right and every multiply exact,
-// and the addition that follows still rounds — and it is zero exactly where
-// that addition is exactly representable, so an unplaced prism's box stays
-// Exact.
-//
-// walks is pp.profile's pre-resolved segment walks, or nil to resolve as
-// before through boundaryExtremesBoundedContext and momentinput.CoordinateEnvelope's
-// own walkOf calls. prismBoundsContext passes the same *momentinput.ProfileWalks to every
-// one of its three per-axis calls, so the record's boundary walks resolve
-// once for the whole box rather than once per axis (this file's momentinput.ProfileWalks
-// doc comment).
+// extentBoundedAlong passes the payload's placement coefficients to
+// prismextent.ExtentAlong. Its bound covers the section candidates, frame
+// and placement rounding, and the final endpoint sums. A non-nil walks
+// reuses the profile's resolved segments across all three box axes.
 func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, float64, float64, error) {
 	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
 	gu := pp.dir(1, 0, 0).Dot(g)
 	gv := pp.dir(0, 1, 0).Dot(g)
 	gz := pp.dir(0, 0, 1).Dot(g)
-	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, pp.profile, gu, gv, work, walks)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	zlo := math.Min(pp.z0*gz, pp.z1*gz)
-	zhi := math.Max(pp.z0*gz, pp.z1*gz)
-	coordUpper, err := momentinput.CoordinateEnvelope(pp.profile, work, walks)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	zUpper := math.Max(math.Abs(pp.z0), math.Abs(pp.z1))
-	placeAllow := prismPlacementCoeffAllow(pp, g, base, gu, gv, gz, coordUpper, zUpper)
-	// The recombination is charged per ENDPOINT and composed outward: the two
-	// ends are summed from different terms and round by different amounts, while
-	// the scan's and the placement's terms speak for both ends alike, so the
-	// reading publishes the larger of the two per-end totals — the same shape
-	// revolvePayload.extentBoundedAlong states for its own per-end composition.
-	loEnd, hiEnd := base+lo+zlo, base+hi+zhi
-	sumAllow := math.Max(
-		proofbound.ExactSumRound(loEnd, base, lo, zlo),
-		proofbound.ExactSumRound(hiEnd, base, hi, zhi),
-	)
-	bound = proofbound.AbsSumUpper(bound, placeAllow, sumAllow)
-	return loEnd, hiEnd, bound, nil
+	return prismextent.ExtentAlong(ctx, prismextent.ExtentInput{
+		Profile: pp.profile, Frame: pp.frame, Transform: pp.xform,
+		Z0: pp.z0, Z1: pp.z1, Base: base, GU: gu, GV: gv, GZ: gz,
+		Direction: g,
+	}, work, walks, boundaryExtremesBoundedContext)
 }
 
 // prismPlacementCoeffAllow adapts the held prism frame for prismextent.
@@ -150,89 +103,16 @@ func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) 
 	return prismextent.DecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper)
 }
 
-// prismBoundsContext computes the exact axis-aligned bounds of the placed prism:
-// for each world axis, the directional extreme of the region boundary under
-// the lifted linear functional, plus the sweep's own extreme
-// (docs/evaluator-design.md §5).
-//
-// walks is pp.profile's pre-resolved segment walks, or nil to resolve each
-// segment through walkOf as before. Passed straight to all three per-axis
-// extentBoundedAlong calls below (this file's momentinput.ProfileWalks doc comment), so a
-// non-nil walks resolves the record's boundary once for the whole box instead
-// of once per axis.
+// prismBoundsContext adapts the internal three-axis reading to Box. A cached
+// walk set is reused across axes; nil resolves each axis as before.
 func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (Box, error) {
-	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
-	var minC, maxC [3]float64
-	extremeBound := 0.0
-	for i, axis := range axes {
-		if err := ctx.Err(); err != nil {
-			return Box{}, err
-		}
-		lo, hi, bound, err := pp.extentBoundedAlong(ctx, axis, work, walks)
-		if err != nil {
-			return Box{}, err
-		}
-		minC[i] = lo
-		maxC[i] = hi
-		extremeBound = math.Max(extremeBound, bound)
-	}
-	// A displaced section displaces every extreme it holds, so the box's own
-	// error carries the section displacement itself — δ outward on every face
-	// (docs/prism-boolean-design.md §7) — summed with the boundary's own
-	// directional-extreme bracket bound (docs/spline-design.md §6.2) and with
-	// the frame and placement's own rounding (prismPlacementCoeffAllow) and the
-	// endpoint summation's (proofbound.ExactSumRound), both folded into
-	// extentBoundedAlong's own returned bound above: the frame and
-	// placement ARE isometries in exact arithmetic, but their FLOAT evaluation
-	// rounds wherever the frame is not axis-aligned or the placement is not the
-	// identity, and adding the resulting terms into one published coordinate
-	// rounds again — for a pure translation it is the ONLY rounding there is —
-	// so a box that reads either as an exact leaf can miss
-	// the true extreme by a representable amount. All three terms are zero for
-	// a caller-drawn, unplaced, axis-aligned payload whose extremes are all
-	// values its record states, which keeps the ordinary prism's box Exact as
-	// before. The bracket's own term is what decides the rest, never the
-	// section's kind: a straight-walled section reports zero, an analytic one whose extreme is
-	// held by a trimmed circular endpoint or a computed arc radius reports that
-	// candidate's own width, and a free-form section whose extremes along
-	// these three axes are all held by exactly representable candidate values
-	// reports a zero width and stays Exact too (a span monotone along an axis
-	// contributes its two exactly interpolated endpoints and nothing else),
-	// while an extreme held by an irrational interior root publishes that
-	// bracket's width and is Approximate — §6.2's own stated contract
-	// consequence. The sum only
-	// goes through proofbound.AbsSumUpper's own per-term rounding where there are two
-	// genuine terms to compose: bumping a lone sectionDelta a second time for
-	// an always-zero extremeBound term would grow the box's bound past the
-	// single proofbound.UpRound tessellate.go's own mesh bound composes it against.
-	//
-	// The sweep's own ends enter the same way. Each axis reading takes the
-	// levels through zlo/zhi scaled by |gz| ≤ 1 (a unit axis against a placed
-	// unit normal), so the larger end displacement bounds the box face either
-	// level can move, and it composes with the section's term because the two
-	// displace along different axes.
-	axial := pp.axialDelta()
-	terms := make([]float64, 0, 3)
-	if pp.sectionDelta != 0 {
-		terms = append(terms, pp.sectionDelta)
-	}
-	if extremeBound != 0 {
-		terms = append(terms, extremeBound)
-	}
-	if axial != 0 {
-		terms = append(terms, axial)
-	}
-	bound := 0.0
-	switch len(terms) {
-	case 0:
-	case 1:
-		bound = terms[0]
-	default:
-		bound = proofbound.AbsSumUpper(terms...)
+	low, high, bound, err := prismextent.Bounds(ctx, work, walks, pp.sectionDelta, pp.axialDelta(), pp.extentBoundedAlong)
+	if err != nil {
+		return Box{}, err
 	}
 	return Box{
-		Min:       r3.NewVec(minC[0], minC[1], minC[2]),
-		Max:       r3.NewVec(maxC[0], maxC[1], maxC[2]),
+		Min:       low,
+		Max:       high,
 		Exactness: exactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
