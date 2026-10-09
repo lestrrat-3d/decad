@@ -3,13 +3,11 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -20,7 +18,7 @@ import (
 // surfaces an error on a miss — the caller falls back to the unchanged mesh
 // path exactly as it did before this file existed. Where either input
 // carries a section displacement, a consumed source segment's own walk
-// computed a coordinate (§7's δ_walk, walkChargeOf), or B's re-expression is
+// computed a coordinate (§7's δ_walk, prismcells.WalkChargeOf), or B's re-expression is
 // nonidentity, every crossing the arrangement cuts can amplify that
 // displacement by 1/sin θ, and docs/general-boolean-design.md §3 A6 charges
 // it (prismSceneDelta.ChargeCrossings, prismcells.CrossingCharge). Such a
@@ -36,7 +34,7 @@ import (
 // trimmed circular carrier (ArcSeg/CircleSeg) moves by more than a
 // coordinate displacement can state, so this file refuses that pair before
 // building the scene at all rather than under-charge it
-// (prismProfileHasTrimmedCircularSource). Only once §4.2's remaining
+// (prismcells.ProfileHasTrimmedCircularSource). Only once §4.2's remaining
 // resolution finds a unique candidate does a further problem become a
 // genuine, typed refusal (§3.4, §9) rather than a reroute to the mesh path.
 //
@@ -116,12 +114,12 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	// publish an under-charged bound for it, the pair is refused before the
 	// scene is even built, the same silent-fallback shape the entry gate
 	// above already uses (§3.4).
-	trimmedCircular, err := prismProfileHasTrimmedCircularSource(budget, pa.profile)
+	trimmedCircular, err := prismcells.ProfileHasTrimmedCircularSource(budget, pa.profile.Outer, pa.profile.Holes)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
 	if !trimmedCircular {
-		if trimmedCircular, err = prismProfileHasTrimmedCircularSource(budget, pb.profile); err != nil {
+		if trimmedCircular, err = prismcells.ProfileHasTrimmedCircularSource(budget, pb.profile.Outer, pb.profile.Holes); err != nil {
 			return prismPayload{}, false, err
 		}
 	}
@@ -134,7 +132,7 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 		if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6: both hole-free
 			return prismPayload{}, false, nil
 		}
-		if !prismUnionZIntervalMatches(pa, pb) { // G5, §3.2's Union row
+		if !prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb)) { // G5
 			return prismPayload{}, false, nil
 		}
 	case meshbool.OpCut:
@@ -150,14 +148,14 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 		return prismPayload{}, false, nil
 	}
 
-	segments, withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.profile, pb.profile)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
 	if !withinCap {
 		return prismPayload{}, false, fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
-			ErrUnsupported, op, segments, prismMaxArrangementSegments)
+			ErrUnsupported, op, segments, prismcells.MaxArrangementSegments)
 	}
 
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
@@ -175,10 +173,10 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 
 // admitPrismIntersectPair runs Intersect's own per-op preamble from
 // tryPrismBoolean — G1-G4 (admitPrismPairBudget), the trimmed-circular
-// refusal (prismProfileHasTrimmedCircularSource) on both operands, G6's
+// refusal (prismcells.ProfileHasTrimmedCircularSource) on both operands, G6's
 // hole-free arms, G5's Intersect z-interval overlap
-// (prismIntersectZIntervalOverlaps), the arrangement work cap
-// (prismSceneWithinWorkCap), and the operand re-expression
+// (prismplacement.IntersectZIntervalOverlaps), the arrangement work cap
+// (prismcells.RegionsWithinWorkCap), and the operand re-expression
 // (prismcells.NewReexpression) — factored out of tryPrismBoolean's meshbool.OpIntersect arm
 // (docs/prism-boolean-design.md §4.5's "Entry" paragraph) so a second caller
 // can share it unchanged rather than duplicate it: tryPrismBoolean's own
@@ -205,12 +203,12 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 		return nil, prismPayload{}, prismPayload{}, nil, false, nil
 	}
 
-	trimmedCircular, err := prismProfileHasTrimmedCircularSource(budget, pa.profile)
+	trimmedCircular, err := prismcells.ProfileHasTrimmedCircularSource(budget, pa.profile.Outer, pa.profile.Holes)
 	if err != nil {
 		return nil, prismPayload{}, prismPayload{}, nil, false, err
 	}
 	if !trimmedCircular {
-		if trimmedCircular, err = prismProfileHasTrimmedCircularSource(budget, pb.profile); err != nil {
+		if trimmedCircular, err = prismcells.ProfileHasTrimmedCircularSource(budget, pb.profile.Outer, pb.profile.Holes); err != nil {
 			return nil, prismPayload{}, prismPayload{}, nil, false, err
 		}
 	}
@@ -221,18 +219,18 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 	if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6: both hole-free (§4.4's multi-lump row is why)
 		return nil, prismPayload{}, prismPayload{}, nil, false, nil
 	}
-	if !prismIntersectZIntervalOverlaps(pa, pb) { // G5, §3.2's Intersect row
+	if !prismplacement.IntersectZIntervalOverlaps(prismPlacementOf(pa), prismPlacementOf(pb)) { // G5
 		return nil, prismPayload{}, prismPayload{}, nil, false, nil
 	}
 
-	segments, withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.profile, pb.profile)
 	if err != nil {
 		return nil, prismPayload{}, prismPayload{}, nil, false, err
 	}
 	if !withinCap {
 		return nil, prismPayload{}, prismPayload{}, nil, false, fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
-			ErrUnsupported, meshbool.OpIntersect, segments, prismMaxArrangementSegments)
+			ErrUnsupported, meshbool.OpIntersect, segments, prismcells.MaxArrangementSegments)
 	}
 
 	reexpress, err = prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
@@ -295,7 +293,7 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 // it in G3's shared-axis arm and need no re-expression.
 //
 // G3 has two arms. The shared-axis
-// arm (prismSharedAxisOf) needs one placement, bit-identical U/V and a
+// arm (prismplacement.SharedAxisOf) needs one placement, bit-identical U/V and a
 // frame-origin difference whose cross product with N is exactly zero over the
 // stored floats; the coplanar arm needs the float dot product of the world
 // origin difference with the world normal to be the literal zero. Every
@@ -329,7 +327,7 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, a, b *Body) (pa, pb pri
 	if worldNormalA != worldNormalB { // G3: co-directional, bit-identical
 		return prismPayload{}, prismPayload{}, false, nil
 	}
-	if !prismSharedAxisOf(pa, pb).ok { // G3's shared-axis arm (exact, §3.1)
+	if !prismplacement.SharedAxisOf(prismPlacementOf(pa), prismPlacementOf(pb)).OK { // G3
 		worldOriginA := pa.xform.Apply(pa.frame.Origin())
 		worldOriginB := pb.xform.Apply(pb.frame.Origin())
 		if worldOriginB.Sub(worldOriginA).Dot(worldNormalA) != 0.0 { // G3's coplanar arm, unchanged
@@ -344,107 +342,8 @@ func admitPrismPair(a, b *Body) (pa, pb prismPayload, ok bool) {
 	return pa, pb, ok
 }
 
-// prismMaxArrangementSegments bounds the private sketch arrangement before
-// s.Profiles starts. The pinned sketch arranger densifies each line to one tiny
-// segment and each admitted circle or arc to no more than 256, then compares
-// every tiny-segment pair in one O(n^2) pass. sketch.Sketch.Profiles takes no
-// context, so that pass is the longest stretch a cancelled caller must wait
-// through, and this cap is what bounds it (§10). The pass costs about
-// 8.3e-5 ms per segment squared, so this value bounds one arrangement at
-// roughly 1.4 seconds, and it admits a rectangular plate carrying fourteen
-// circular holes against one more circular tool. It bounds latency alone:
-// peak memory at twice this many segments is under 16 MB.
-const prismMaxArrangementSegments = 4096
-
-func prismSceneWithinWorkCap(budget *proofbound.WorkBudget, pa, pb prismPayload) (int, bool, error) {
-	return prismRegionsWithinWorkCap(budget, pa.profile, pb.profile)
-}
-
-// prismRegionsWithinWorkCap is prismSceneWithinWorkCap over every region a
-// private scene will hold, a prism group's lumps included.
-func prismRegionsWithinWorkCap(budget *proofbound.WorkBudget, profiles ...ProfileRecord) (int, bool, error) {
-	segments := 0
-	for _, profile := range profiles {
-		for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
-			for _, seg := range loop.Segments {
-				if err := budget.Step(); err != nil {
-					return segments, false, err
-				}
-				switch seg.(type) {
-				case LineSeg:
-					segments++
-				case CircleSeg, ArcSeg:
-					segments += 256
-				default:
-					return segments, false, nil // G4 already excluded this case.
-				}
-				if segments > prismMaxArrangementSegments {
-					return segments, false, nil
-				}
-			}
-		}
-	}
-	return segments, true, nil
-}
-
-// prismSharedAxis is G3's shared-axis arm (docs/prism-boolean-design.md §3.1):
-// ok when the two operands share one placement and bit-identical U/V and B's
-// frame origin sits on A's normal axis EXACTLY, with shift the exact rational
-// s for which originB − originA == s·N over the stored floats. A pair drawn on
-// one frame is the arm's d = 0 case.
-type prismSharedAxis struct {
-	ok    bool
-	shift *big.Rat
-}
-
 func prismPlacementOf(p prismPayload) prismplacement.Operand {
 	return prismplacement.Operand{Frame: p.frame, Xform: p.xform, Z0: p.z0, Z1: p.z1}
-}
-
-// prismSharedAxisOf decides G3's shared-axis arm over the stored floats taken
-// exactly. B's denoted prism {X(oB + uU + vV + zN)} is then
-// {X(oA + uU + vV + (z+s)N)} term for term, with no orthonormality assumption
-// on the stored frame, so B's Point2 fields are A-frame coordinates verbatim
-// and only the sweep interval moves, by s. It is reject-only: anything but an
-// exactly zero cross product of the origin difference with N refuses the arm.
-// No float arithmetic is performed — dvSub, dvCross, dyadic.rat and
-// big.Rat.Quo are exact.
-func prismSharedAxisOf(pa, pb prismPayload) prismSharedAxis {
-	axis := prismplacement.SharedAxisOf(prismPlacementOf(pa), prismPlacementOf(pb))
-	return prismSharedAxis{ok: axis.OK, shift: axis.Shift}
-}
-
-// prismZShift is G5's shift s as an exact rational (§3.1): the shared-axis
-// arm's d_i/N_i, or the literal zero in G3's coplanar arm, whose float dot
-// product G3 required to be exactly 0.0. No float operation is performed.
-// Every op's G5 check, and Intersect's result interval, read this SAME shift.
-func prismZShift(pa, pb prismPayload) *big.Rat {
-	return prismplacement.ZShift(prismPlacementOf(pa), prismPlacementOf(pb))
-}
-
-// prismShiftedInterval is operand B's [z0, z1] re-expressed onto operand A's
-// axis exactly: floatRat(z) + s per end. ok is false when a level does not
-// lift (non-finite), which every G5 check treats as a miss.
-func prismShiftedInterval(pa, pb prismPayload) (*big.Rat, *big.Rat, bool) {
-	return prismplacement.ShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
-}
-
-// prismShiftedIntervalAdmitted is prismShiftedInterval for a pair G5 already
-// admitted (so the lift cannot fail); it panics naming this gate otherwise,
-// the mustDyOf contract.
-func prismShiftedIntervalAdmitted(pa, pb prismPayload) (*big.Rat, *big.Rat) {
-	z0, z1, ok := prismShiftedInterval(pa, pb)
-	if !ok {
-		panic("decad: G5 admitted a prism pair whose sweep interval does not lift exactly")
-	}
-	return z0, z1
-}
-
-// prismUnionZIntervalMatches is G5 for Union (§3.2): operand B's [z0, z1] is
-// re-expressed onto operand A's normal axis by prismShiftedInterval, and Union
-// requires the two intervals to match exactly, compared as rationals.
-func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
-	return prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb))
 }
 
 // resolvePrismUnion is §4.2's hole-free select-all/merge/chain path. It
@@ -524,11 +423,6 @@ func mergePrismCells(budget *proofbound.WorkBudget, selected []*sketch.Profile, 
 	return ProfileRecord{Outer: loop}, cutDelta, true, nil
 }
 
-// prismProfilesHaveSplitBoundary keeps the existing root test seam.
-func prismProfilesHaveSplitBoundary(budget *proofbound.WorkBudget, profiles []*sketch.Profile) (bool, error) {
-	return prismcells.HasSplitBoundary(budget, profiles)
-}
-
 // prismCellProfiles is prismProfilesContext for a path that classifies and
 // merges the scene's cells: it restates each cell's line runs at the
 // vertices other cells report on the same line (prismcells.SplitRuns), so a
@@ -581,16 +475,6 @@ func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merg
 	return auditRewriteBudget(budget, orig, merged, loops, blendAt)
 }
 
-// prismProfileHasTrimmedCircularSource preserves the root admission seam.
-func prismProfileHasTrimmedCircularSource(budget *proofbound.WorkBudget, p ProfileRecord) (bool, error) {
-	return prismcells.ProfileHasTrimmedCircularSource(budget, p.Outer, p.Holes)
-}
-
-// walkChargeOf preserves the root scene builder and its test seam.
-func walkChargeOf(seg CurveSegment, w survey2d.SegmentWalk) (float64, error) {
-	return prismcells.WalkChargeOf(seg, w)
-}
-
 // prismSceneDelta names the internal scene charge carried through boolean paths.
 type prismSceneDelta = prismcells.SceneDelta
 
@@ -638,7 +522,7 @@ type prismSceneDelta = prismcells.SceneDelta
 //
 // A segment whose recorded range narrows its own natural domain enters the
 // scene at that WALKED endpoint — a coordinate this evaluator computed, not
-// one the record states verbatim — and walkChargeOf's allowance for it is
+// one the record states verbatim — and prismcells.WalkChargeOf's allowance for it is
 // accumulated into the returned prismSceneDelta, the largest such charge over
 // each operand's own consumed segments (§7's δ_walk).
 func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {

@@ -221,13 +221,13 @@ func resolveExtend(ctx context.Context, budget *proofbound.WorkBudget, view pris
 		return nil, 0, err
 	}
 	view.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{full}}}
-	segments, withinCap, err := prismSceneWithinWorkCap(budget, view, tool)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, view.profile, tool.profile)
 	if err != nil {
 		return nil, 0, err
 	}
 	if !withinCap {
 		return nil, 0, fmt.Errorf(`%w: the extend scene charges %d segments against the cap of %d`,
-			ErrUnsupported, segments, prismMaxArrangementSegments)
+			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(view), prismPlacementOf(tool))
 	if err != nil {
@@ -539,14 +539,14 @@ func trimBoundsWalks(profile ProfileRecord, work *freeform.FreeformWork) (*momen
 // keepInside selects prismcells.Classify's own tool-membership label a
 // surviving fragment must carry.
 func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl prismPayload, keepInside bool) ([]ChainRecord, float64, error) {
-	segments, withinCap, err := prismSceneWithinWorkCap(budget, rcv, tl)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, rcv.profile, tl.profile)
 	if err != nil {
 		return nil, 0, err
 	}
 	if !withinCap {
 		return nil, 0, fmt.Errorf(
 			`%w: the trim scene charges at least %d arranger segments against this evaluator's cap of %d; simplify the receiver or tool before trimming`,
-			ErrUnsupported, segments, prismMaxArrangementSegments)
+			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
 
 	// S7 already proved this is the identity; buildPrismScene still takes it
@@ -697,13 +697,13 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 // carrying the cell's own δ_cut. The revolve arm passes MERIDIAN views, whose
 // sweep fields are zero, and reads only each cell's profile and displacement.
 func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload) ([]prismPayload, error) {
-	segments, withinCap, err := prismSceneWithinWorkCap(budget, target, tool)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, target.profile, tool.profile)
 	if err != nil {
 		return nil, err
 	}
 	if !withinCap {
 		return nil, fmt.Errorf(`%w: the split scene charges %d arranger segments against the cap of %d`,
-			ErrUnsupported, segments, prismMaxArrangementSegments)
+			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(tool))
 	if err != nil {

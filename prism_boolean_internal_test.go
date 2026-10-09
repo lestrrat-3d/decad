@@ -105,9 +105,9 @@ func TestPrismBooleanGateG1RequiresBothOperandsPrismPayload(t *testing.T) {
 
 // TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes isolates G3's
 // two arms (§3.1). Shown to fail, one deletion at a time: with
-// admitPrismPairBudget's prismSharedAxisOf call deleted (the coplanar arm
+// admitPrismPairBudget's prismplacement.SharedAxisOf call deleted (the coplanar arm
 // alone), "offset frame on the normal axis clears G3" went red; with
-// prismSharedAxisOf's exact cross-product test deleted, "an in-plane origin
+// prismplacement.SharedAxisOf's exact cross-product test deleted, "an in-plane origin
 // component refuses" went red; with its placement comparison deleted,
 // "placed along the normal stays outside the shared-axis arm" went red; with
 // its U/V comparison deleted, "U/V bits one ulp apart refuse" went red.
@@ -149,7 +149,8 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		b := &Body{payload: offsetPP}
 		pa, pb, ok := admitPrismPair(a, b)
 		require.True(t, ok)
-		require.Zero(t, prismZShift(pa, pb).Cmp(big.NewRat(-16, 1)), "G5's shift is the exact origin offset along N")
+		require.Zero(t, prismplacement.ZShift(prismPlacementOf(pa), prismPlacementOf(pb)).Cmp(big.NewRat(-16, 1)),
+			"G5's shift is the exact origin offset along N")
 	})
 
 	t.Run("an in-plane origin component refuses", func(t *testing.T) {
@@ -244,7 +245,7 @@ func TestPrismBooleanGateG5RequiresMatchingZInterval(t *testing.T) {
 	t.Run("unequal heights from the same plane", func(t *testing.T) {
 		pb := pa
 		pb.z1 = 15
-		require.False(t, prismUnionZIntervalMatches(pa, pb))
+		require.False(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb)))
 	})
 
 	t.Run("matching interval, re-expressed through an offset frame", func(t *testing.T) {
@@ -255,11 +256,12 @@ func TestPrismBooleanGateG5RequiresMatchingZInterval(t *testing.T) {
 		require.NoError(t, err)
 		pb := pa
 		pb.frame = offset
-		require.False(t, prismUnionZIntervalMatches(pa, pb), "A's [0,10] must not match B's shifted [3,13]")
+		require.False(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb)),
+			"A's [0,10] must not match B's shifted [3,13]")
 
 		paShiftedToMatch := pa
 		paShiftedToMatch.z0, paShiftedToMatch.z1 = 3, 13
-		require.True(t, prismUnionZIntervalMatches(paShiftedToMatch, pb))
+		require.True(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(paShiftedToMatch), prismPlacementOf(pb)))
 	})
 }
 
@@ -303,14 +305,18 @@ func TestPrismBooleanGateG5ShiftIsExactRational(t *testing.T) {
 
 	t.Run("union matches the shifted interval exactly", func(t *testing.T) {
 		pa := payload(frame, 0, 10)
-		require.True(t, prismUnionZIntervalMatches(pa, payload(offsetBy(t, -16), 16, 26)))
-		require.False(t, prismUnionZIntervalMatches(pa, payload(offsetBy(t, -16), 16, 26.000000000000004)))
+		require.True(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(pa),
+			prismPlacementOf(payload(offsetBy(t, -16), 16, 26))))
+		require.False(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(pa),
+			prismPlacementOf(payload(offsetBy(t, -16), 16, 26.000000000000004))))
 	})
 
 	t.Run("intersect overlap over the shifted interval", func(t *testing.T) {
 		pa := payload(frame, 0, 10)
-		require.True(t, prismIntersectZIntervalOverlaps(pa, payload(offsetBy(t, -16), 20, 30)))
-		require.False(t, prismIntersectZIntervalOverlaps(pa, payload(offsetBy(t, -16), 26, 30)))
+		require.True(t, prismplacement.IntersectZIntervalOverlaps(prismPlacementOf(pa),
+			prismPlacementOf(payload(offsetBy(t, -16), 20, 30))))
+		require.False(t, prismplacement.IntersectZIntervalOverlaps(prismPlacementOf(pa),
+			prismPlacementOf(payload(offsetBy(t, -16), 26, 30))))
 	})
 }
 
@@ -422,7 +428,8 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	pb.xform = rotation
 	_, _, admitted := admitPrismPair(&Body{payload: pa}, &Body{payload: pb})
 	require.True(t, admitted, "the fixture must clear G1-G4 before the split guard runs")
-	require.True(t, prismUnionZIntervalMatches(pa, pb), "the fixture must clear G5")
+	require.True(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb)),
+		"the fixture must clear G5")
 
 	reexpression, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
@@ -566,7 +573,7 @@ func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 	require.NoError(t, err)
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
-	split, err := prismProfilesHaveSplitBoundary(proofbound.NewWorkBudget(t.Context()), profiles)
+	split, err := prismcells.HasSplitBoundary(proofbound.NewWorkBudget(t.Context()), profiles)
 	require.NoError(t, err)
 	require.True(t, split, "the shallow crossing must create a trimmed edge")
 
@@ -605,7 +612,7 @@ func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthDenseRectLoop(prismMaxArrangementSegments/8 + 1)},
+		profile: ProfileRecord{Outer: synthDenseRectLoop(prismcells.MaxArrangementSegments/8 + 1)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{payload: pp}
@@ -1180,7 +1187,7 @@ func TestPrismBooleanWholeSourceSegmentsChargeNothing(t *testing.T) {
 	})
 }
 
-// TestWalkChargeOf is a table test over walkChargeOf itself: 0 for a whole
+// TestWalkChargeOf is a table test over prismcells.WalkChargeOf itself: 0 for a whole
 // segment of every admitted kind, a positive finite value for a trimmed one,
 // and +Inf for a non-finite coordinate — never 0 for an unknown or uncertain
 // case (this task's own risk: an absent bound must never read as a small
@@ -1210,7 +1217,7 @@ func TestWalkChargeOf(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w, err := boundarywalk.WalkOf(tc.seg, nil)
 			require.NoError(t, err)
-			got, err := walkChargeOf(tc.seg, w)
+			got, err := prismcells.WalkChargeOf(tc.seg, w)
 			require.NoError(t, err)
 			require.Equal(t, 0.0, got)
 		})
@@ -1235,7 +1242,7 @@ func TestWalkChargeOf(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w, err := boundarywalk.WalkOf(tc.seg, nil)
 			require.NoError(t, err)
-			got, err := walkChargeOf(tc.seg, w)
+			got, err := prismcells.WalkChargeOf(tc.seg, w)
 			require.NoError(t, err)
 			require.Positive(t, got)
 			require.False(t, math.IsInf(got, 0))
@@ -1246,7 +1253,7 @@ func TestWalkChargeOf(t *testing.T) {
 		bad := LineSeg{Start: Point2{U: math.NaN(), V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 0.4}
 		w, err := boundarywalk.WalkOf(bad, nil)
 		require.NoError(t, err)
-		got, err := walkChargeOf(bad, w)
+		got, err := prismcells.WalkChargeOf(bad, w)
 		require.NoError(t, err)
 		require.True(t, math.IsInf(got, 1), "an absent bound must never read as a small one")
 	})
@@ -1254,8 +1261,8 @@ func TestWalkChargeOf(t *testing.T) {
 
 // TestPrismCircularWalkChargeImpliesRefusal mechanises the reach §7 states for
 // δ_walk: a positive charge is only ever computed over a trimmed LineSeg,
-// because every circular carrier walkChargeOf could charge is one
-// prismProfileHasTrimmedCircularSource refuses before buildPrismScene runs
+// because every circular carrier prismcells.WalkChargeOf could charge is one
+// prismcells.ProfileHasTrimmedCircularSource refuses before buildPrismScene runs
 // (§4.1). Over the circular ranges either side of that boundary, the charge
 // being positive and the refusal firing must be the SAME condition — so a
 // circular carrier admitted into a scene always charges zero, and the two
@@ -1301,11 +1308,12 @@ func TestPrismCircularWalkChargeImpliesRefusal(t *testing.T) {
 				seg := withRange(base.seg, rng.tStart, rng.tEnd)
 				w, err := boundarywalk.WalkOf(seg, nil)
 				require.NoError(t, err)
-				charge, err := walkChargeOf(seg, w)
+				charge, err := prismcells.WalkChargeOf(seg, w)
 				require.NoError(t, err)
 
 				profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
-				refused, err := prismProfileHasTrimmedCircularSource(proofbound.NewWorkBudget(t.Context()), profile)
+				refused, err := prismcells.ProfileHasTrimmedCircularSource(
+					proofbound.NewWorkBudget(t.Context()), profile.Outer, profile.Holes)
 				require.NoError(t, err)
 
 				require.Equal(t, rng.wantRefusal, refused,
@@ -1489,7 +1497,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w, err := boundarywalk.WalkOf(tc.seg, nil)
 			require.NoError(t, err)
-			charge, err := walkChargeOf(tc.seg, w)
+			charge, err := prismcells.WalkChargeOf(tc.seg, w)
 			require.NoError(t, err)
 			require.Positive(t, charge)
 			require.False(t, math.IsInf(charge, 0))
@@ -1639,7 +1647,8 @@ func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T)
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}}
-			got, err := prismProfileHasTrimmedCircularSource(proofbound.NewWorkBudget(t.Context()), profile)
+			got, err := prismcells.ProfileHasTrimmedCircularSource(
+				proofbound.NewWorkBudget(t.Context()), profile.Outer, profile.Holes)
 			require.NoError(t, err)
 			require.Equal(t, tc.trimmed, got)
 		})
@@ -1711,7 +1720,7 @@ func TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing(t *testing.T) {
 	require.Positive(t, sceneDelta.A, "operand A's own trimmed bottom/top walls must carry a walk charge")
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
-	split, err := prismProfilesHaveSplitBoundary(proofbound.NewWorkBudget(t.Context()), profiles)
+	split, err := prismcells.HasSplitBoundary(proofbound.NewWorkBudget(t.Context()), profiles)
 	require.NoError(t, err)
 	require.True(t, split, "the overlapping box must genuinely split A's own right wall")
 
@@ -1887,7 +1896,7 @@ func TestPrismOverlapVolumeDeclinesExactlyTangentPair(t *testing.T) {
 }
 
 // TestPrismOverlapVolumeArrangementCapRefuses is §9's RB7: a combined scene
-// exceeding prismMaxArrangementSegments refuses with ErrUnsupported before
+// exceeding prismcells.MaxArrangementSegments refuses with ErrUnsupported before
 // s.Profiles runs, wrapped as meshbool.BooleanExpectedUnsupported exactly as
 // evaluateAnalyticIntersect's own RB7 is, so measuredInterference reads it as
 // interferenceUnsupportedPipeline and Verify reports Suspect rather than
@@ -1897,7 +1906,7 @@ func TestPrismOverlapVolumeArrangementCapRefuses(t *testing.T) {
 	doc := New()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthDenseRectLoop(prismMaxArrangementSegments/8 + 1)},
+		profile: ProfileRecord{Outer: synthDenseRectLoop(prismcells.MaxArrangementSegments/8 + 1)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{doc: doc, payload: pp}

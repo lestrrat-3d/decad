@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -84,7 +85,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 
 	// §3.2's Intersect z-interval and per-end axial displacement, shared by
 	// every measured cell — the pair's own relation, not a per-cell one.
-	pbZ0, pbZ1 := prismShiftedIntervalAdmitted(pa, pb)
+	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
 	z0, z0Delta := prismIntersectEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta, func(c int) bool { return c > 0 })
 	z1, z1Delta := prismIntersectEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta, func(c int) bool { return c < 0 })
 

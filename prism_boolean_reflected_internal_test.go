@@ -148,7 +148,7 @@ func TestPrismReexpressionRewound(t *testing.T) {
 
 	w, err := boundarywalk.WalkOf(narrowed, nil)
 	require.NoError(t, err)
-	wantCharge, err := walkChargeOf(narrowed, w)
+	wantCharge, err := prismcells.WalkChargeOf(narrowed, w)
 	require.NoError(t, err)
 	require.Positive(t, wantCharge)
 	require.Equal(t, wantCharge, charge, "the narrowed line's own walk charge")
@@ -214,7 +214,7 @@ func TestPrismReflectedSceneClassifiesTheRewoundWinding(t *testing.T) {
 // re-wound record on a live operand: the split-left-cell fixture, whose
 // bottom and top walls are recorded over narrowed ranges, reflected across
 // x = 0 and set strictly inside a box. buildPrismScene's walk charge for B
-// must equal the largest walkChargeOf over B's own recorded segments, the
+// must equal the largest prismcells.WalkChargeOf over B's own recorded segments, the
 // same charge the unreflected path takes, and the union must publish a
 // sectionDelta covering it. Shown to fail with buildPrismScene's fold of
 // rewound's charge into sceneDelta.B deleted: sceneDelta.B read 0.
@@ -232,7 +232,7 @@ func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	for _, seg := range pb.profile.Outer.Segments {
 		w, err := boundarywalk.WalkOf(seg, nil)
 		require.NoError(t, err)
-		c, err := walkChargeOf(seg, w)
+		c, err := prismcells.WalkChargeOf(seg, w)
 		require.NoError(t, err)
 		want = math.Max(want, c)
 	}

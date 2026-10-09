@@ -387,13 +387,13 @@ func classBPerpendicularRegion(ctx context.Context, cp classBPair, region Profil
 	budget := proofbound.NewWorkBudget(ctx)
 	target := prismPayload{profile: region, frame: cp.g, xform: cp.x.xform, z0: 0, z1: 1}
 	tool := prismPayload{profile: cp.y.profile, frame: cp.g, xform: cp.x.xform, z0: 0, z1: 1}
-	segments, within, err := prismSceneWithinWorkCap(budget, target, tool)
+	segments, within, err := prismcells.RegionsWithinWorkCap(budget, target.profile, tool.profile)
 	if err != nil {
 		return ProfileRecord{}, false, err
 	}
 	if !within {
 		return ProfileRecord{}, false, fmt.Errorf(`%w: the class-B face scene charges at least %d arranger segments against this evaluator's cap of %d`,
-			ErrUnsupported, segments, prismMaxArrangementSegments)
+			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(tool))
 	if err != nil {

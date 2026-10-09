@@ -2123,8 +2123,8 @@ func CutDisplacementAllow(tangentUpper float64) float64 {
 //
 // A trimmed line is the only carrier the analytic boolean charges here. A
 // trimmed circular one is refused before its scene is built
-// (prismProfileHasTrimmedCircularSource), since its rebuilt radius and sweep
-// move as well as its endpoints, so walkChargeOf's circular arm — which
+// (prismcells.ProfileHasTrimmedCircularSource), since its rebuilt radius and sweep
+// move as well as its endpoints, so prismcells.WalkChargeOf's circular arm — which
 // passes segmentWalk.coordUpper, whose |c|+|c|+r+r L1 form bounds the centre
 // and radius a cos/sin walk works on — is unreachable through that path. It
 // stands so a widening of that refusal meets a charge rather than a silent
