@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -427,7 +428,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// the recorded corner, which both neighbouring walks' held ends
 		// enclose within their own bounds.
 		if span, ok := capcontour.OffsetSpan(dc, dcDelta); ok {
-			center, axis, _, _ := circleOf(arcByCorner[i].curve)
+			center, axis, _, _ := surfacegeom.CircleOf(arcByCorner[i].curve)
 			cornerDelta := math.Min(capCornerGap(j.vU, j.vV, prev.EndU, prev.EndV, prev.EndBound), capCornerGap(j.vU, j.vV, cur.StartU, cur.StartV, cur.StartBound))
 			arcByCorner[i].curveBound, arcByCorner[i].curveBounded = pl.circleCurveBound(j.vU, j.vV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
 		}
@@ -609,7 +610,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// The trimmed arc lies on the offset circle about the wall's
 			// recorded centre, every radius of which sits within radialShift
 			// of the held capRadius.
-			center, axis, _, _ := circleOf(capEdge.curve)
+			center, axis, _, _ := surfacegeom.CircleOf(capEdge.curve)
 			capEdge.curveBound, capEdge.curveBounded = pl.circleCurveBound(w.CU, w.CV, capZ, capDelta, 0, capRadius, radialShift, center, axis)
 		}
 

@@ -282,10 +282,10 @@ the rules leave to the byte budget.
 | `internal/placedruling/` | Placed cylinder support proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits, placement, restatement, bounds, and axis support proofs. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
-| `internal/surfacegeom/` | Sealed face and edge geometry variants. See `docs/api-design.md` §6.1. |
+| `internal/surfacegeom/` | Sealed face and edge variants, placement transforms and circular curve bound. See API §6.1, surface §6. |
 | `internal/reportvocab/` | Contact/sweep enums; Verify, Motion, Linkage and JointBox reports, survey diagnostics and conclusions. |
 | `internal/extent/` | Extent variants, unit bounds and stop levels. See API §8.1, evaluator §5/§6. |
-| `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation and segment record. See surface §5.2. |
+| `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation, segment record and area bounds. See surface §5.2. |
 | `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
