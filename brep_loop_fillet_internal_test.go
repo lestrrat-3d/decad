@@ -721,6 +721,66 @@ func TestVertexBlendTrapezoidRefusal(t *testing.T) {
 	require.NoError(t, doc.requireLive(body))
 }
 
+func TestVertexBlendObliqueTopEdge(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	body := internalPolygonPrism(t, doc, [][2]float64{{0, 0}, {100, 0}, {72, 45}, {28, 45}}, 10)
+	sel := Edges(EndpointAt(r3.NewVec(100, 0, 10)), EndpointAt(r3.NewVec(72, 45, 10))).Exactly(1)
+	out, err := body.Fillet(t.Context(), sel, units.Millimeters(1))
+	require.NoError(t, err)
+	require.Error(t, doc.requireLive(body))
+	require.Equal(t, []*Body{out}, doc.Bodies())
+	_, faceted := out.payload.(facetedPayload)
+	require.True(t, faceted)
+	wantVolume := 32400 - 53*(1-math.Pi/4)
+	require.LessOrEqual(t, math.Abs(out.volume.Value.Base()-wantVolume), out.volume.Bound.Base()+1e-6)
+	requireClosedTopology(t, out)
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(out)
+	require.NoError(t, err)
+	require.Equal(t, ValidityValid, reading.Validity.Outcome)
+}
+
+func TestVertexBlendEdgeBesideObliqueWalls(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	body := internalPolygonPrism(t, doc, [][2]float64{{0, 0}, {100, 0}, {72, 45}, {28, 45}}, 10)
+	sel := Edges(EndpointAt(r3.NewVec(28, 45, 10)), EndpointAt(r3.NewVec(72, 45, 10))).Exactly(1)
+	out, err := body.Fillet(t.Context(), sel, units.Millimeters(1))
+	require.NoError(t, err)
+	require.Error(t, doc.requireLive(body))
+	require.Equal(t, []*Body{out}, doc.Bodies())
+	_, faceted := out.payload.(facetedPayload)
+	require.True(t, faceted)
+	wantVolume := 32400 - 44*(1-math.Pi/4) - (28.0/45.0)*(5.0/3.0-math.Pi/2)
+	require.LessOrEqual(t, math.Abs(out.volume.Value.Base()-wantVolume), out.volume.Bound.Base()+1e-6)
+	requireClosedTopology(t, out)
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(out)
+	require.NoError(t, err)
+	require.Equal(t, ValidityValid, reading.Validity.Outcome)
+}
+
+func TestVertexBlendObliqueBottomEdge(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	body := internalPolygonPrism(t, doc, [][2]float64{{0, 0}, {100, 0}, {72, 45}, {28, 45}}, 10)
+	sel := Edges(EndpointAt(r3.NewVec(100, 0, 0)), EndpointAt(r3.NewVec(72, 45, 0))).Exactly(1)
+	out, err := body.Fillet(t.Context(), sel, units.Millimeters(1))
+	require.NoError(t, err)
+	requireClosedTopology(t, out)
+	wantVolume := 32400 - 53*(1-math.Pi/4)
+	require.LessOrEqual(t, math.Abs(out.volume.Value.Base()-wantVolume), out.volume.Bound.Base()+1e-6)
+}
+
 func TestVertexBlendCrossFaceTwoEdgeCorner(t *testing.T) {
 	t.Parallel()
 	doc := New()
