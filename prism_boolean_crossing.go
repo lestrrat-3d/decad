@@ -40,8 +40,8 @@ import (
 // mesh path, unchanged from before this increment.
 //
 // Once classified, membership selects a per-op cell subset — Cut keeps "A
-// and not B", Intersect keeps "A and B" — and mergePrismCells
-// (prism_boolean.go) assembles the selected cells' surviving boundary edges
+// and not B", Intersect keeps "A and B" — and prismcells.Merge
+// assembles the selected cells' surviving boundary edges
 // into one candidate ProfileRecord, exactly the mechanism Union's own
 // select-all path already uses over its own (unfiltered) selection.
 // auditPrismMergeSection then re-proves the assembly, the same §6 audit
@@ -96,7 +96,7 @@ func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *proofbound.Wor
 
 // resolveAndBuildPrismIntersectCrossing is the Intersect twin: keeps the
 // cells that are material of BOTH operands. §3.2's Intersect z-interval and
-// axial displacement selection reuse prismplacement.ZShift/prismIntersectEnd
+// axial displacement selection reuse prismplacement.ZShift/IntersectLowerEnd/IntersectUpperEnd
 // (prism_boolean_nesting.go) unchanged.
 func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 {
@@ -118,11 +118,11 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbou
 
 	// §3.2's Intersect row, after G5's exact shift (prismplacement.ZShift) is applied
 	// to B's own recorded interval, exactly as the clean-nesting path's own
-	// Intersect builder does; prismIntersectEnd charges a shifted endpoint's
+	// Intersect builder does; prismplacement.IntersectLowerEnd/IntersectUpperEnd charge a shifted endpoint's
 	// single rounding.
 	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
-	z0, z0Delta := prismIntersectEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta, func(c int) bool { return c > 0 })
-	z1, z1Delta := prismIntersectEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta, func(c int) bool { return c < 0 })
+	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta)
+	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta)
 
 	result := prismPayload{
 		profile:      merged,
@@ -139,11 +139,11 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbou
 
 // resolvePrismCrossing is the shared resolution shape behind both builders
 // above: resolvePrismCrossingCells's selection (scene, classification,
-// per-op keep, crossing charge), then mergePrismCells's assembly
-// (prism_boolean.go). resolved=false (err always nil in that case) is silent
+// per-op keep, crossing charge), then prismcells.Merge's assembly.
+// resolved=false (err always nil in that case) is silent
 // fallback, which includes a near-tangent crossing A6's charge cannot bound
 // and a merge failure on cuts that carry an amplified displacement. opName
-// feeds mergePrismCells's own RB1 message.
+// feeds prismcells.Merge's own RB1 message.
 func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool, opName string) (profileRecord, prismSceneDelta, float64, bool, error) {
 	selected, sceneDelta, resolved, err := resolvePrismCrossingCells(ctx, budget, pa, pb, reexpress, keep)
 	if err != nil {
@@ -153,7 +153,7 @@ func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa
 		return profileRecord{}, prismSceneDelta{}, 0, false, nil
 	}
 
-	merged, cutDelta, mergedResolved, err := mergePrismCells(budget, selected, opName)
+	merged, cutDelta, mergedResolved, err := prismcells.Merge(budget, selected, opName)
 	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil {
 		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
@@ -167,7 +167,7 @@ func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa
 // first half of resolvePrismCrossing's own shape: build the private scene,
 // classify every cell (prismcells.Classify), select the op's own subset
 // (keep), and charge every crossing the operands' incoming displacement can
-// move (A6, prismSceneDelta.ChargeCrossings) — stopping short of mergePrismCells's
+// move (A6, prismSceneDelta.ChargeCrossings) — stopping short of prismcells.Merge's
 // assembly tail, which requires the selected cells to chain into one closed
 // loop and so cannot answer a multi-region selection at all
 // (docs/prism-boolean-design.md §4.4). resolvePrismCrossing above is this
@@ -185,7 +185,7 @@ func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudge
 	if err := budget.Err(); err != nil {
 		return nil, prismSceneDelta{}, false, err
 	}
-	profiles, err := prismCellProfiles(ctx, budget, s)
+	profiles, err := prismcells.CellProfiles(ctx, budget, s)
 	if err != nil {
 		return nil, prismSceneDelta{}, false, err
 	}

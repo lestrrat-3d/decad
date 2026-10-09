@@ -3,12 +3,10 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -172,11 +170,11 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 	// §3.2's Intersect row, after G5's exact shift (prismplacement.ZShift) is applied
 	// to B's own recorded interval. Each result endpoint is A's own recorded
 	// float, or B's shifted endpoint rounded once with that rounding charged
-	// (prismIntersectEnd); a tie takes the larger of the two displacements,
-	// since both operands' own coordinates then equally denote it.
+	// (prismplacement.IntersectLowerEnd and IntersectUpperEnd); a tie takes
+	// the larger displacement, since both operands' coordinates denote it.
 	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
-	z0, z0Delta := prismIntersectEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta, func(c int) bool { return c > 0 })
-	z1, z1Delta := prismIntersectEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta, func(c int) bool { return c < 0 })
+	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta)
+	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta)
 
 	// §7/Task 4.4: the record traces to the NESTED operand alone, so only
 	// that operand's own displacement term (now including its own walk
@@ -203,28 +201,6 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		sectionDelta: sectionDelta,
 	}
 	return result, true, nil
-}
-
-// prismIntersectEnd picks §3.2's Intersect result at one sweep end over exact
-// rationals, carrying the chosen end's own axial displacement — never the max
-// of both, since only one operand's coordinate reaches the result.
-// pickA(cmp) reports whether A's own endpoint wins given
-// cmp = floatRat(aVal).Cmp(bVal) (cmp > 0 for z0's max, cmp < 0 for z1's
-// min). A tie takes A's float with the larger displacement, since both
-// operands' own coordinates then equally denote the result. When B's SHIFTED
-// endpoint wins it is rounded to the nearest float once and
-// rationalFloatError charges that rounding into the end's axial displacement
-// beside B's own (§7).
-func prismIntersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, pickA func(cmp int) bool) (float64, float64) {
-	cmp := proofarith.FloatRat(aVal).Cmp(bVal) // aVal is a payload level: finite by construction, G5 lifted it already
-	switch {
-	case cmp == 0:
-		return aVal, max(aDelta, bDelta)
-	case pickA(cmp):
-		return aVal, aDelta
-	}
-	held, _ := bVal.Float64()
-	return held, proofbound.AbsSumUpper(bDelta, proofarith.RationalFloatError(bVal, held))
 }
 
 // resolvePrismCut is §4.2's clean-nesting match for Cut(target, tool): when
@@ -266,7 +242,7 @@ func resolvePrismCutWithTags(ctx context.Context, budget *proofbound.WorkBudget,
 	if err := budget.Err(); err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
-	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	profiles, err := prismcells.ProfilesContext(ctx, s.Profiles)
 	if err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
@@ -308,7 +284,7 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 	if err := budget.Err(); err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
-	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	profiles, err := prismcells.ProfilesContext(ctx, s.Profiles)
 	if err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
@@ -328,7 +304,7 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 
 // prismRecordProfileContext makes RecordProfile's own internal re-arrangement
 // (sketchrecord.AuthenticateProfile's fresh s.Profiles() call) observable to a
-// caller's context, the same way prismProfilesContext wraps the FIRST
+// caller's context, the same way prismcells.ProfilesContext wraps the FIRST
 // arrangement. The scene is already capped by prismcells.MaxArrangementSegments, so
 // this second pass over it stays bounded too. The returned PlaneRecord is not
 // read here — the caller keeps operand A's own frame/xform (§4.1) — so only

@@ -323,7 +323,7 @@ func TestPrismBooleanGateG5ShiftIsExactRational(t *testing.T) {
 // TestPrismIntersectShiftedEndpointChargesItsRounding is §7's one new axial
 // term: Intersect publishes B's shifted cap fl(0.1) + fl(0.3), which is no
 // float, rounded once and charged into z1Delta. Shown to fail: with the
-// rationalFloatError term deleted from prismIntersectEnd, z1Delta came back
+// rationalFloatError term deleted from prismplacement.IntersectUpperEnd, z1Delta came back
 // 0 and the require.Positive assertion went red.
 func TestPrismIntersectShiftedEndpointChargesItsRounding(t *testing.T) {
 	t.Parallel()
@@ -436,7 +436,7 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	require.False(t, reexpression.Identity)
 	scene, _, _, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
-	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
+	profiles, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
 
 	split := false
@@ -571,7 +571,7 @@ func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 
 	scene, _, _, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), first, shallow, reexpression)
 	require.NoError(t, err)
-	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
+	profiles, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
 	split, err := prismcells.HasSplitBoundary(proofbound.NewWorkBudget(t.Context()), profiles)
 	require.NoError(t, err)
@@ -661,7 +661,7 @@ func TestPrismProfilesContextWaitsForArrangementAfterCancellation(t *testing.T) 
 	}
 	result := make(chan error, 1)
 	go func() {
-		_, err := prismProfilesContext(ctx, profiles)
+		_, err := prismcells.ProfilesContext(ctx, profiles)
 		result <- err
 	}()
 
@@ -669,7 +669,7 @@ func TestPrismProfilesContextWaitsForArrangementAfterCancellation(t *testing.T) 
 	cancel()
 	select {
 	case err := <-result:
-		t.Fatalf("prismProfilesContext returned before arrangement finished: %v", err)
+		t.Fatalf("prismcells.ProfilesContext returned before arrangement finished: %v", err)
 	case <-time.After(100 * time.Millisecond):
 	}
 
@@ -1718,7 +1718,7 @@ func TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing(t *testing.T) {
 	scene, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
 	require.Positive(t, sceneDelta.A, "operand A's own trimmed bottom/top walls must carry a walk charge")
-	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
+	profiles, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
 	split, err := prismcells.HasSplitBoundary(proofbound.NewWorkBudget(t.Context()), profiles)
 	require.NoError(t, err)

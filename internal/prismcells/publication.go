@@ -3,8 +3,26 @@ package prismcells
 import (
 	"context"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
 )
+
+// CellProfiles reads arranged cells and restates split straight runs at the
+// vertices that neighboring cells report on the same carrier. This gives a
+// shared span the same edge key in every cell that walks it. An unresolved
+// circular run declines the whole scene, returning no profiles for the caller
+// to route to its mesh path.
+func CellProfiles(ctx context.Context, budget *proofbound.WorkBudget, s *sketch.Sketch) ([]*sketch.Profile, error) {
+	profiles, err := ProfilesContext(ctx, s.Profiles)
+	if err != nil {
+		return nil, err
+	}
+	split, resolved, err := SplitRuns(budget, profiles)
+	if err != nil || !resolved {
+		return nil, err
+	}
+	return split, nil
+}
 
 // ProfilesContext waits for sketch's synchronous arrangement publication even
 // after cancellation, so the worker cannot outlive this operation.

@@ -168,7 +168,7 @@ func TestClassifyRegionsReadsEachRecord(t *testing.T) {
 	budget := proofbound.NewWorkBudget(t.Context())
 	s, tags, _, err := buildPrismSceneRegions(budget, []profileRecord{plate, boss1}, []profileRecord{boss2}, &prismReexpression{Identity: true})
 	require.NoError(t, err)
-	profiles, err := prismCellProfiles(t.Context(), budget, s)
+	profiles, err := prismcells.CellProfiles(t.Context(), budget, s)
 	require.NoError(t, err)
 	reading, ok, err := prismcells.CoincidentEdgesRegions(budget, tags, profiles)
 	require.NoError(t, err)
