@@ -175,7 +175,7 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `capblend.go` | Complete-cap-loop chamfer: `capBlendPayload`, selection classification, build gates. See modify-reach §8.3/§4. |
+| `capblend.go` | Complete-cap-loop chamfer: `capBlendPayload` and build gates. See modify-reach §8.3/§4. |
 | `capblend_geom.go` | `buildCapBand`: band patches and cap edges, also a draft's walls. See modify-reach §8.3. |
 | `capblend_contour.go` | Adapts built corner and edge records to `internal/capband/` contour and closure proofs. |
 | `capblend_moments.go` | Builds the cap-blend body and adapts its mass readings to `internal/capband/`. See modify-reach §8.4. |
@@ -214,7 +214,7 @@ the rules leave to the byte budget.
 | `contact_sphere_oriented.go` / `contact_sphere_oriented_sweep.go` | Rotated sphere-box path. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See contact-sweep §4–§5. |
 | `contact_sweep_replay.go` | Replay adapters. See contact-sweep §6. |
-| `clearance_cells.go` | Pruned cell walk and face-pair adapter; `internal/clearance/` orders feature cells. See clearance §3–§5. |
+| `clearance_cells.go` | Pruned cell walk and face-pair adapter. See clearance §3–§5. |
 | `clearance_tiers.go` | Tier adapters and vertex budget. See clearance §3/§6. |
 | `clearance_geom.go` | `bodyGeom`: clearance faces, edges and nesting over `internal/clearance/`. See clearance §2–§3. |
 | `survey.go` | Adapts analytic wall, undercut and radius readers. See verification §6. |
@@ -288,7 +288,7 @@ the rules leave to the byte budget.
 | `internal/placedruling/` | Placed cylinder support proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits and proofs. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
-| `internal/surfacegeom/` | Sealed face and edge variants, placement transforms and circular curve bound. See API §6.1, surface §6. |
+| `internal/surfacegeom/` | Sealed face and edge variants and placement transforms. See API §6.1, surface §6. |
 | `internal/reportvocab/` | Contact/sweep enums; Verify, Motion, Linkage and JointBox reports, survey diagnostics and conclusions. |
 | `internal/extent/` | Extent variants, unit bounds and stop levels. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation, segment record and area bounds. See surface §5.2. |
@@ -353,7 +353,7 @@ the rules leave to the byte budget.
 | `internal/freeform/` | Free-form curve proofs. |
 | `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding, audits. See evaluator §9. |
 | `internal/facetedtopology/` | Chains audited mesh face boundaries and selects loops. See evaluator §9. |
-| `internal/clearance/` | Clearance geometry, cell sums, coplanar trim classification and degeneracy checks. See clearance design. |
+| `internal/clearance/` | Clearance geometry and cell sums. See clearance design. |
 | `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |
 | `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
