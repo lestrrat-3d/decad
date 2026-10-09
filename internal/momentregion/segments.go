@@ -73,9 +73,12 @@ func (s State) AddLine(seg sectionrecord.LineSeg, anchor sectionrecord.Point2, o
 }
 
 // AddCircular folds a bounded circular integral into the region sums.
+// envelope is a proven bound on |u| + |v| over the segment in the anchor's
+// coordinates (circularL1Upper); the region's coordinate envelope takes the
+// smaller of it and the integrator's own |cu| + |cv| + 2·radiusUpper.
 func (s State) AddCircular(
 	c sectionrecord.Point2,
-	r, th0, th1, radiusUpper, sweepUpper float64,
+	r, th0, th1, radiusUpper, sweepUpper, envelope float64,
 	areaProof proofbound.RatInterval,
 	haveAreaProof bool,
 	muProof, mvProof proofbound.RatInterval,
@@ -95,7 +98,7 @@ func (s State) AddCircular(
 		areaProof, haveAreaProof, muProof, mvProof, haveMomentProof,
 		muuProof, muvProof, mvvProof, haveSecondMomentProof, order,
 	)
-	*s.CoordUpper = math.Max(*s.CoordUpper, held.CoordUpper)
+	*s.CoordUpper = math.Max(*s.CoordUpper, math.Min(held.CoordUpper, envelope))
 	// Circular integrals have no exact rational because they contain π and trig terms.
 	s.DropExact()
 	for i, field := range s.Fields {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -33,8 +34,10 @@ func CoordUpper(loop, capBoundary sectionrecord.LoopRecord, delta float64,
 }
 
 // loopLocalCoordinateUpper bounds max(|u|, |v|) over every point of a loop.
-// For each segment it takes the smaller of the walk's coordinate envelope
-// and SegmentCoordinateUpper's tighter recorded line or arc extent.
+// For each segment it takes the smaller of the walk's L1 envelope
+// (momentinput.WalkCoordinateUpper, which dominates max(|u|, |v|) and is the
+// reading a whole circle gets) and SegmentCoordinateUpper's tighter recorded
+// line or arc extent.
 func loopLocalCoordinateUpper(loop sectionrecord.LoopRecord, work *freeform.FreeformWork) (float64, error) {
 	upper := 0.0
 	for _, seg := range loop.Segments {
@@ -42,7 +45,7 @@ func loopLocalCoordinateUpper(loop sectionrecord.LoopRecord, work *freeform.Free
 		if err != nil {
 			return 0, err
 		}
-		segUpper := w.CoordUpper
+		segUpper := momentinput.WalkCoordinateUpper(w)
 		if local, ok := SegmentCoordinateUpper(seg); ok {
 			segUpper = math.Min(segUpper, local)
 		}

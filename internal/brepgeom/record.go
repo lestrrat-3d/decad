@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -255,7 +256,7 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 		if f.IsPlanar {
 			for li, loop := range f.Planar {
 				for si, w := range loop {
-					topo.CoordUpper = math.Max(topo.CoordUpper, w.CoordUpper)
+					topo.CoordUpper = math.Max(topo.CoordUpper, momentinput.WalkCoordinateUpper(w))
 					u := Use{Face: fi, Loop: li, Seg: si, Part: LoopSeg, Walk: w,
 						Level: f.Z0, LevelDelta: f.Z0Delta, Sweep: f.Sweep, Outward: f.Outward}
 					u.Key, u.Sense = CurveKey(e, w, f.Z0)
@@ -269,7 +270,7 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 			continue
 		}
 		w := f.Wall
-		topo.CoordUpper = math.Max(topo.CoordUpper, w.CoordUpper)
+		topo.CoordUpper = math.Max(topo.CoordUpper, momentinput.WalkCoordinateUpper(w))
 		topo.Walls[fi] = w
 		s0, s1 := e.Canon(w.StartU, w.StartV, f.Z0), e.Canon(w.StartU, w.StartV, f.Z1)
 		t0, t1 := e.Canon(w.EndU, w.EndV, f.Z0), e.Canon(w.EndU, w.EndV, f.Z1)
