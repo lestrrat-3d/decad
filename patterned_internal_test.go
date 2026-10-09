@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/patternrecord"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -96,11 +97,11 @@ func TestPatternedOverlapIsNotProvenDisjoint(t *testing.T) {
 		lineSeg{Start: Point2{U: 15, V: 5}, End: Point2{U: 0, V: 5}, TStart: 0, TEnd: 1},
 		lineSeg{Start: Point2{U: 0, V: 5}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
-	rp, err := resolvePattern(LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 2})
+	rp, err := patternrecord.Resolve(LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 2})
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	mv, err := rp.instanceMotion(frame, r3.Identity(), 1)
+	mv, err := rp.Motion(frame, r3.Identity(), 1)
 	require.NoError(t, err)
 	budget := proofbound.NewWorkBudget(t.Context())
 	b, charge, err := moveRegion(budget, a, mv)
