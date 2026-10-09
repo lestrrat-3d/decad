@@ -111,7 +111,7 @@ func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b proofboun
 //     diameter exceeds the smallest denoted cup's.
 //   - The interference guard (interference.go): two equal displaced records
 //     read as one set.
-	//   - radiussurvey.Cup's offset term: the cavity radius misses.
+//   - radiussurvey.Cup's offset term: the cavity radius misses.
 //   - tessellateCup's face, area-slack and occupied-volume terms: the cavity
 //     wall's face bound, the mesh area and the mesh volume each miss.
 //
@@ -348,7 +348,7 @@ func TestDisplacedCupMinRadius(t *testing.T) {
 	cavity, err := offsetProfile(budget, rectangleRecord(-6, -2, 6, 2), -1, 1)
 	require.NoError(t, err)
 	cp := displacedCup(t, Inward)
-	cp.outer, cp.cavity, cp.thickness = outer, cavity, 1
+	cp.outer, cp.cavity = outer, cavity
 	out := radiussurvey.Cup(cp.outer, cp.cavity, cp.offsetDelta)
 	require.True(t, out.OK)
 	require.NotNil(t, out.Reading)
