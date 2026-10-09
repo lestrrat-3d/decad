@@ -38,7 +38,7 @@ func internalAlongXTool(t *testing.T, doc *Document, at, depth float64, draw fun
 
 // internalEnclosure is §1's P6: the 60×40×30 box with a 20×10 port along x
 // over y ∈ [10, 30], z ∈ [10, 20], through both x walls.
-func internalEnclosure(t *testing.T) (*Document, *Body) {
+func internalEnclosure(t *testing.T) *Body {
 	t.Helper()
 	doc := New()
 	box := internalBoxBody(t, doc, 0, 0, 60, 40, 30)
@@ -48,7 +48,7 @@ func internalEnclosure(t *testing.T) (*Document, *Body) {
 	})
 	out, err := Cut(t.Context(), box, port)
 	require.NoError(t, err)
-	return doc, out
+	return out
 }
 
 // internalPolygonPrism extrudes the polygon pts on XY by h.
@@ -157,6 +157,13 @@ func internalCircleBodyAt(t *testing.T, doc *Document, x, y, r, z, h float64) *B
 // shellFaceAt selects the one planar face facing dir at level along dir.
 func shellFaceAt(t *testing.T, body *Body, dir r3.Vec, level float64) *FaceQuery {
 	t.Helper()
+	return Faces(shellFacePred(t, body, dir, level)).Exactly(1)
+}
+
+// shellFacePred is the predicate naming the one planar face facing dir at
+// level along dir.
+func shellFacePred(t *testing.T, body *Body, dir r3.Vec, level float64) FacePredicate {
+	t.Helper()
 	faces, err := Faces(Facing(dir)).SelectFaces(body)
 	require.NoError(t, err)
 	var found *Face
@@ -168,7 +175,7 @@ func shellFaceAt(t *testing.T, body *Body, dir r3.Vec, level float64) *FaceQuery
 		found = f
 	}
 	require.NotNil(t, found, "a face faces %v at %g", dir, level)
-	return Faces(FaceCreatedBy(found.Origins()[0])).Exactly(1)
+	return FaceCreatedBy(found.Origins()[0])
 }
 
 // shellRecordRole is the role of the record's one planar face across
@@ -381,7 +388,7 @@ func TestBrepShellThroughCutBothCaps(t *testing.T) {
 // cavity's port shrank and the volume missed).
 func TestBrepShellThroughCutP6(t *testing.T) {
 	t.Parallel()
-	_, p6 := internalEnclosure(t)
+	p6 := internalEnclosure(t)
 	result, bp := requireThroughShell(t, p6, shellFaceAt(t, p6, shellUp, 30), units.Millimeters(2),
 		big.NewRat(21472, 1), big.NewRat(224, 1))
 	require.Len(t, bp.faces, 23)
@@ -608,8 +615,12 @@ func TestBrepShellThroughCutDisplacedOffset(t *testing.T) {
 //   - a stacked pocket (P2) and a blind port (P6c) are SG3 naming the
 //     floor, and a stacked boss (P3) SG3 naming the third planar face across
 //     z, with SB10's text, since none reads as a prism either;
-//   - P1's cylinder removed is SG4, its x = 0 wall SG5, and P8's y = 0 wall
-//     SG5;
+//   - P1's cylinder removed is SG4; P8's fillet cylinder, a curved wall whose
+//     rim is no planar face, is SG5, and so is P7's y = 8 wall, whose end at
+//     the L's reflex corner cuts back along its carrier into the material;
+//   - a removed wall run keeps the side opening's own codes: P8's y = 0 wall
+//     meets its fillets smoothly (shell-opening SO1), and P1's two x walls are
+//     no connected run (SO6);
 //   - P1 with a second hole 7 mm from the first is SG6: the dilated holes
 //     meet, and the second cut meets the first's wall;
 //   - P1 at 0.1 in is SG6: its eroded rectangle's miters are not exactly
@@ -620,9 +631,12 @@ func TestBrepShellThroughCutDisplacedOffset(t *testing.T) {
 //   - Outward is SG1 and WithNoOpenings SG2.
 //
 // Shown to fail with requireStripsClear's call deleted (the U fixture then
-// refused with class B's SG6 text instead of TC7's) and with
+// refused with class B's SG6 text instead of TC7's), with
 // readThroughCutAnyAxis naming axis 0's reason always (P2, P3 and P6c then
-// named no face).
+// named no face), with removedFaces' straight-wall test deleted (the fillet
+// cylinder then refused with SO1's text, its ends meeting the walls
+// smoothly), and with openingThroughSection's reflex-end test deleted (P7's
+// wall then refused with S11b's crossing text).
 func TestBrepShellThroughCutRefusals(t *testing.T) {
 	t.Parallel()
 	refuses := func(t *testing.T, body *Body, sel FaceSelector, th units.Value, opts []ShellOption, want ...string) {
@@ -670,9 +684,20 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 		t.Parallel()
 		_, s1 := internalCrossDrilled(t)
 		refuses(t, s1, Faces(Cylindrical()).Exactly(1), mm2, nil, "modify-general SG4")
-		refuses(t, s1, Faces(Facing(shellX.Scale(-1))).Exactly(1), mm2, nil, "modify-general SG5")
+		refuses(t, s1, Faces(NormalTo(shellX)).Exactly(2), mm2, nil, "shell-opening SO6")
 		p8 := internalRoundedPlate(t)
-		refuses(t, p8, Faces(Facing(shellY.Scale(-1))).Exactly(1), mm2, nil, "modify-general SG5")
+		refuses(t, p8, Faces(Facing(shellY.Scale(-1))).Exactly(1), mm2, nil, "shell-opening SO1")
+		var fillet *Face
+		for _, f := range p8.Faces() {
+			if c, ok := f.Surface().(Cylinder); ok && c.Axis.Cross(shellUp) == (r3.Vec{}) {
+				fillet = f
+				break
+			}
+		}
+		require.NotNil(t, fillet)
+		refuses(t, p8, Faces(FaceCreatedBy(fillet.Origins()[0])).Exactly(1), mm2, nil, "modify-general SG5", "straight wall along a section axis")
+		p7 := internalLBracket(t)
+		refuses(t, p7, shellFaceAt(t, p7, shellY, 8), mm2, nil, "modify-general SG5", "reflex corner")
 	})
 	t.Run("SG6 two holes", func(t *testing.T) {
 		t.Parallel()
@@ -727,9 +752,10 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 		dilated[i], err = offsetProfile(budget, tool.prism.profile, -1, 2)
 		require.NoError(t, err)
 	}
-	cavity, err := tc.cavity(t.Context(), bp, eroded, dilated, false, true, brepShellCall{tmm: 2}, 0)
+	topOnly := throughRemoval{top: true}
+	cavity, err := tc.cavity(t.Context(), bp, eroded, dilated, topOnly, brepShellCall{tmm: 2}, 0)
 	require.NoError(t, err)
-	_, err = throughCutRims(t.Context(), budget, bp, tc, cavity, eroded, false, true)
+	_, err = throughCutRims(t.Context(), budget, bp, tc, cavity, eroded, dilated, topOnly)
 	require.NoError(t, err, "the undoctored cavity assembles")
 
 	doctor := func(edit func(*ProfileRecord)) brepPayload {
@@ -745,13 +771,268 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 		}
 		return out
 	}
-	_, err = throughCutRims(t.Context(), budget, bp, tc, doctor(func(r *ProfileRecord) { r.Holes = nil }), eroded, false, true)
+	_, err = throughCutRims(t.Context(), budget, bp, tc, doctor(func(r *ProfileRecord) { r.Holes = nil }), eroded, dilated, topOnly)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "has no cavity hole to partner")
 	require.ErrorContains(t, err, "modify-general SG7")
 	_, err = throughCutRims(t.Context(), budget, bp, tc, doctor(func(r *ProfileRecord) {
 		r.Holes = append(r.Holes, LoopRecord{Segments: []CurveSegment{CircleSeg{Center: Point2{U: 30, V: 10}, Radius: units.Millimeters(1), TEnd: 1}}})
-	}), eroded, false, true)
+	}), eroded, dilated, topOnly)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "neither its outer loop nor a hole of the eroded section")
+}
+
+// shellLoopCorners lists, in reference coordinates, the walked start of
+// every line of one loop of record face fi.
+func shellLoopCorners(t *testing.T, bp brepPayload, fi int, loop LoopRecord) [][3]float64 {
+	t.Helper()
+	embeds, err := brepEmbeds(bp.faces)
+	require.NoError(t, err)
+	out := make([][3]float64, 0, len(loop.Segments))
+	for _, seg := range loop.Segments {
+		from, _, ok := brepgeom.NaturalLine(seg)
+		require.True(t, ok, "a rim loop holds lines only, got %T", seg)
+		out = append(out, embeds[fi].Canon(from.U, from.V, bp.faces[fi].z0))
+	}
+	return out
+}
+
+// requireShellSound requires Verify to read the result Sound and its mesh's
+// occupied-volume proof to cover a + b·π.
+func requireShellSound(t *testing.T, result *Body, a, b *big.Rat) {
+	t.Helper()
+	rep, err := result.doc.Verify(t.Context())
+	require.NoError(t, err)
+	br, err := rep.ForBody(result)
+	require.NoError(t, err)
+	require.Equal(t, Sound, br.Status)
+	mesh, err := tessellateContext(t.Context(), result, units.Millimeters(0.05), VerifyAll)
+	require.NoError(t, err)
+	require.True(t, mesh.symDiffOK)
+	lo, hi := piEnclosed(a, b)
+	held := internalMeshVolumeRat(mesh)
+	bound := new(big.Rat).SetFloat64(mesh.volSymDiff)
+	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, lo)).Cmp(bound), 0)
+	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, hi)).Cmp(bound), 0)
+}
+
+// TestBrepShellThroughCutWallRun pins §9's S-2 fixtures (§3.2's second row):
+// a removed wall run takes the side opening's cavity section C, each end cut
+// by the rim rule of docs/shell-opening-design.md Table RO, and the rim at
+// each removed face is that face less the cavity's trace.
+//
+//   - P6 with its y = 0 wall removed and both caps kept, a U-channel with its
+//     port through both x walls: C is [2, 58] × [0, 38] (the right-angle rim
+//     cuts at x = 2 and x = 58), the cavity C × [2, 28] less the dilated port
+//     over x ∈ [2, 58], so the volume is 60000 − (2128·26 − 56·(320 + 4π)) =
+//     22592 + 224π. The rim is the wall's rectangle holding the opening's
+//     four corners (2, 0, 2), (58, 0, 2), (58, 0, 28), (2, 0, 28) as its hole.
+//     §9 names P6 with an x wall removed; P6 reads as a prism along x, so route
+//     P builds that as its own cup, and the y wall is the U-channel route S
+//     takes.
+//   - P1 with its y = 0 wall and its top removed: C is [2, 38] × [0, 18], the
+//     cavity C × [2, 20] less the hole dilated to radius 5 over y ∈ [0, 18],
+//     so the volume is 16000 − 180π − (648·18 − 450π) = 4336 + 270π. The two
+//     rims reach each other's edge: the top's is the U [0, 40] × [0, 20] less
+//     C, and the wall's the U [0, 40] × [0, 20] less [2, 38] × [2, 20] in
+//     (x, z), with one band between the cavity's hole (radius 5) and the
+//     receiver's (radius 3).
+//   - P1 with its y = 0 wall and both caps removed: the cavity grows by the
+//     floor slab, 4336 + 270π − 648·2 = 3040 + 270π, and the wall's rim falls
+//     into two rectangles beside the band.
+//   - P6 with its y = 0 and x = 0 walls removed, a run of two walls, caps kept:
+//     C is [0, 58] × [0, 38], so the volume is
+//     60000 − (2204·26 − 58·(320 + 4π)) = 21256 + 232π.
+//
+// Each result is one lump, every edge bounds two faces, Verify reads it Sound
+// and its mesh's occupied-volume proof covers the figure. Shown to fail with
+// throughSweptTrace reporting no trace (the U-channel kept the cavity's face
+// on the removed carrier beside a rim holding no hole, and the cavity closed
+// into a second lump), with throughRimRegions cancelling no piece (the
+// touching rims read as R's loop holding a hole that meets it, and S7 refused
+// them), and with openingThroughSection handing sideOpeningRegions one
+// removed wall alone (the two-wall run then kept the x = 0 wall's cavity face
+// whole, and SG7 found no cavity hole to partner the port there).
+func TestBrepShellThroughCutWallRun(t *testing.T) {
+	t.Parallel()
+	mm2 := units.Millimeters(2)
+	t.Run("P6 channel", func(t *testing.T) {
+		t.Parallel()
+		p6 := internalEnclosure(t)
+		a, b := big.NewRat(22592, 1), big.NewRat(224, 1)
+		result, bp := requireThroughShell(t, p6, shellFaceAt(t, p6, shellY.Scale(-1), 0), mm2, a, b)
+		require.Len(t, bp.faces, 23)
+		fi := len(bp.faces) - 1
+		rim := bp.faces[fi]
+		require.True(t, rim.planar())
+		require.ElementsMatch(t, [][3]float64{{0, 0, 0}, {60, 0, 0}, {60, 0, 30}, {0, 0, 30}}, shellLoopCorners(t, bp, fi, rim.region.Outer))
+		require.Len(t, rim.region.Holes, 1)
+		require.ElementsMatch(t, [][3]float64{{2, 0, 2}, {58, 0, 2}, {58, 0, 28}, {2, 0, 28}}, shellLoopCorners(t, bp, fi, rim.region.Holes[0]))
+		require.Len(t, shellCylinders(result, 2, shellX), 4)
+		requireShellSound(t, result, a, b)
+	})
+	t.Run("P1 wall and top", func(t *testing.T) {
+		t.Parallel()
+		_, s1 := internalCrossDrilled(t)
+		a, b := big.NewRat(4336, 1), big.NewRat(270, 1)
+		sel := Faces(shellFacePred(t, s1, shellY.Scale(-1), 0)).Or(Facing(shellUp)).Exactly(2)
+		result, bp := requireThroughShell(t, s1, sel, mm2, a, b)
+		require.Len(t, bp.faces, 13)
+		n := len(bp.faces)
+		top, wall, band := bp.faces[n-3], bp.faces[n-2], bp.faces[n-1]
+		require.Empty(t, top.region.Holes)
+		require.ElementsMatch(t, [][3]float64{{0, 0, 20}, {2, 0, 20}, {2, 18, 20}, {38, 18, 20}, {38, 0, 20}, {40, 0, 20}, {40, 20, 20}, {0, 20, 20}},
+			shellLoopCorners(t, bp, n-3, top.region.Outer))
+		require.Empty(t, wall.region.Holes)
+		require.ElementsMatch(t, [][3]float64{{0, 0, 0}, {40, 0, 0}, {40, 0, 20}, {38, 0, 20}, {38, 0, 2}, {2, 0, 2}, {2, 0, 20}, {0, 0, 20}},
+			shellLoopCorners(t, bp, n-2, wall.region.Outer))
+		outer, ok := band.region.Outer.Segments[0].(CircleSeg)
+		require.True(t, ok)
+		require.Len(t, band.region.Holes, 1)
+		hole, ok := band.region.Holes[0].Segments[0].(CircleSeg)
+		require.True(t, ok)
+		require.Equal(t, [2]float64{5, 3}, [2]float64{outer.Radius.Base(), hole.Radius.Base()})
+		requireShellSound(t, result, a, b)
+	})
+	t.Run("P1 wall and both caps", func(t *testing.T) {
+		t.Parallel()
+		_, s1 := internalCrossDrilled(t)
+		a, b := big.NewRat(3040, 1), big.NewRat(270, 1)
+		sel := Faces(shellFacePred(t, s1, shellY.Scale(-1), 0)).Or(NormalTo(shellUp)).Exactly(3)
+		result, bp := requireThroughShell(t, s1, sel, mm2, a, b)
+		n := len(bp.faces)
+		for fi := n - 3; fi < n-1; fi++ {
+			require.Empty(t, bp.faces[fi].region.Holes)
+			require.Len(t, shellLoopCorners(t, bp, fi, bp.faces[fi].region.Outer), 4)
+		}
+		requireShellSound(t, result, a, b)
+	})
+	t.Run("P6 two walls", func(t *testing.T) {
+		t.Parallel()
+		p6 := internalEnclosure(t)
+		a, b := big.NewRat(21256, 1), big.NewRat(232, 1)
+		sel := Faces(shellFacePred(t, p6, shellY.Scale(-1), 0)).Or(shellFacePred(t, p6, shellX.Scale(-1), 0)).Exactly(2)
+		result, _ := requireThroughShell(t, p6, sel, mm2, a, b)
+		requireShellSound(t, result, a, b)
+	})
+}
+
+// internalHalfRoundedPlate is the 40×20×20 box with its two vertical edges
+// at y = 20 filleted r = 3, drilled Ø6 along y through (20, ·, 10): P8 with
+// right-angle corners at y = 0, so removing the y = 0 wall cuts each end of
+// the kept chain at a right angle (Table RO's exact pair) and every other
+// corner of C is a G1 join that keeps its lines on their axes.
+func internalHalfRoundedPlate(t *testing.T) *Body {
+	t.Helper()
+	doc := New()
+	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	at := func(x float64) EdgePredicate { return EndpointAt(r3.NewVec(x, 20, 0)) }
+	rounded, err := box.Fillet(t.Context(), Edges(ParallelTo(shellUp), at(0)).Or(ParallelTo(shellUp), at(40)).Exactly(2), units.Millimeters(3))
+	require.NoError(t, err)
+	out, err := Cut(t.Context(), rounded, internalDrillAlongY(t, doc, 20, 10, 3))
+	require.NoError(t, err)
+	return out
+}
+
+// shellWallOpeningInchClosedForm is the half-rounded plate shelled at its
+// y = 0 wall by t = 127/50 mm (0.1 in), both caps kept: the receiver
+// 20·(782 + 9π/2) − 180π less the cavity, C — [t, 40 − t] × [0, 20 − t] with
+// its two far corners rounded to 3 − t — over 20 − 2t, less the hole dilated
+// to 3 + t over C's y-extent 20 − t. It returns a and b of a + b·π.
+func shellWallOpeningInchClosedForm() (*big.Rat, *big.Rat) {
+	th := big.NewRat(127, 50)
+	r := func(x int64) *big.Rat { return big.NewRat(x, 1) }
+	sub := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Sub(a, b) }
+	add := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Add(a, b) }
+	mul := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
+	two := mul(r(2), th)
+	h := sub(r(20), two)
+	corner := mul(sub(r(3), th), sub(r(3), th))
+	hole := mul(add(r(3), th), add(r(3), th))
+	section := sub(mul(sub(r(40), two), sub(r(20), th)), mul(r(2), corner))
+	a := sub(r(15640), mul(h, section))
+	b := add(sub(r(-90), mul(h, mul(big.NewRat(1, 2), corner))), mul(hole, sub(r(20), th)))
+	return a, b
+}
+
+// TestBrepShellThroughCutWallOpeningDisplaced is S-2's bound fixture. The
+// half-rounded plate shelled at its y = 0 wall at 0.1 in builds: the cuts at
+// both ends are right-angle exact pairs and the far corners erode through G1
+// joins, so every line of C stays on its axis, and the side opening's chain
+// reach charges the cavity a positive displacement. Every cavity vertex at
+// x = 40 − t on y = 0 and y = 17 encloses its exact rational position, and
+// the volume encloses the exact closed form. Shown to fail with
+// openingThroughSection's displacement deleted (the vertices' bounds then
+// missed their exact positions). The volume does not see that leg: its own
+// rounding bound exceeds the charge.
+func TestBrepShellThroughCutWallOpeningDisplaced(t *testing.T) {
+	t.Parallel()
+	a, b := shellWallOpeningInchClosedForm()
+	th := big.NewRat(127, 50)
+	body := internalHalfRoundedPlate(t)
+	result, bp := requireThroughShell(t, body, shellFaceAt(t, body, shellY.Scale(-1), 0), units.Inches(0.1), a, b)
+	require.Positive(t, bp.sectionDelta())
+	x := new(big.Rat).Sub(big.NewRat(40, 1), th)
+	checked := 0
+	for _, v := range result.Vertices() {
+		p := v.Position()
+		if p.Value.X < 37 || p.Value.X > 38 || (p.Value.Y != 0 && p.Value.Y != 17) {
+			continue
+		}
+		z := new(big.Rat).Sub(big.NewRat(20, 1), th)
+		if p.Value.Z < 10 {
+			z = th
+		}
+		requireCentroidCovers(t, p, [3]*big.Rat{x, new(big.Rat).SetFloat64(p.Value.Y), z})
+		checked++
+	}
+	require.Equal(t, 4, checked)
+}
+
+// TestBrepShellThroughCutWallRimCharge pins the wall rim's displacement
+// (§3.3 step 5 over a removed wall): its region states the cavity's levels
+// and the receiver's cap levels as in-plane coordinates, so it carries the
+// largest of the cavity's section displacement and every cavity level's. On
+// P1 with its y = 0 wall and top removed, a cavity built with a thickness
+// conversion bound of 10⁻⁹ and no section displacement charges its floor's
+// level by that bound; the wall's rim regions and band carry at least it,
+// and the cap's rim the section displacement alone. In every real fixture
+// the section displacement covers the levels', so no reading sees this leg.
+// Shown to fail with the wall rim charged the cavity's section displacement
+// alone (its delta then read zero).
+func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
+	t.Parallel()
+	_, s1 := internalCrossDrilled(t)
+	bp := s1.payload.(brepPayload)
+	embeds, err := brepEmbeds(bp.faces)
+	require.NoError(t, err)
+	tc, reason, ok, err := readThroughCut(t.Context(), bp, embeds, 2)
+	require.NoError(t, err)
+	require.True(t, ok, reason)
+	removed, err := Faces(shellFacePred(t, s1, shellY.Scale(-1), 0)).Or(Facing(shellUp)).Exactly(2).SelectFaces(s1)
+	require.NoError(t, err)
+	rm, err := tc.removedFaces(s1, bp, removed)
+	require.NoError(t, err)
+	require.True(t, rm.top)
+	require.Len(t, rm.walls, 1)
+
+	budget := proofbound.NewWorkBudget(t.Context())
+	call := brepShellCall{t: units.Millimeters(2), tmm: 2, tDelta: 1e-9}
+	sec, err := tc.openingThroughSection(budget, bp, rm, call)
+	require.NoError(t, err)
+	dilated := make([]ProfileRecord, len(tc.tools))
+	for i, tool := range tc.tools {
+		dilated[i], err = offsetProfile(budget, tool.prism.profile, -1, 2)
+		require.NoError(t, err)
+	}
+	cavity, err := tc.cavity(t.Context(), bp, sec.eroded, dilated, rm, call, 0)
+	require.NoError(t, err)
+	require.Zero(t, cavity.sectionDelta())
+	out, err := throughCutRims(t.Context(), budget, bp, tc, cavity, sec.eroded, dilated, rm)
+	require.NoError(t, err)
+	n := len(out.faces)
+	require.Zero(t, out.faces[n-3].delta, "the cap's rim")
+	for _, f := range out.faces[n-2:] {
+		require.GreaterOrEqual(t, f.delta, 1e-9, "the wall's rim")
+	}
 }

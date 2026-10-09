@@ -16,21 +16,23 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
-	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/units"
 )
 
 // This file is route S of docs/modify-general-design.md ("modify-general §N"
 // below): the shell of a brep or stacked receiver that reads as a prism A
 // along a reference axis k cut by through tools T₁…Tₙ along other axes
-// (Table TC, §3.1), with one or both of A's caps removed (§3.2). The shell is
-// the erosion (A \ ⋃Tᵢ) ⊖ t = (A ⊖ t) \ ⋃(Tᵢ ⊕ t): A ⊖ t is the eroded section
-// swept over the cup's interval, each Tᵢ ⊕ t the tool's dilated section swept t
-// past both walls it pierces, and the difference is class B's own Cut
-// (classBOfPayloads), run privately. The result record is the receiver's kept
-// faces, the cavity's faces reversed, and one rim region per removed cap
-// (§3.3). Every test below either compares recorded floats exactly or
-// refuses; none admits on a residual.
+// (Table TC, §3.1), with one or both of A's caps, one run of A's walls, or
+// both removed (§3.2). The shell is the erosion
+// (A \ ⋃Tᵢ) ⊖ t = (A ⊖ t) \ ⋃(Tᵢ ⊕ t): A ⊖ t is the eroded section — S ⊖ t,
+// or with a removed wall run the side opening's cavity section C
+// (shell_opening.go) — swept over the cup's interval, each Tᵢ ⊕ t the tool's
+// dilated section swept t past both walls it pierces, and the difference is
+// class B's own Cut (classBOfPayloads), run privately. The result record is
+// the receiver's kept faces, the cavity's faces reversed, and the rim at each
+// removed face (§3.3, brep_shell_rim.go). Every test below either compares
+// recorded floats exactly or refuses; none admits on a residual.
 
 // brepShellCall is what Shell hands route S beside the brep request: the
 // faces to remove, the wall sense, and the thickness as given, in
@@ -55,27 +57,30 @@ const (
 
 // throughCut is one Table TC reading of a record along reference axis k: the
 // prism A (its caps, section and levels, readPrismCaps's reading), the level
-// displacements A's walls state at each cap level, the through tools, and
-// what each face of the record is.
+// displacements A's walls state at each cap level, the through tools, what
+// each face of the record is, and the record's face embeds.
 type throughCut struct {
 	k                  int
 	caps               brepPrismCaps
 	zloDelta, zhiDelta float64
 	tools              []throughToolRead
 	kinds              []throughFace
+	embeds             []brepEmbed
 }
 
-// throughToolRead is one through tool (TC4): the prism over a hole loop of
-// face w0 at the lower level lo along reference axis j, through to the face
-// w1 at hi, its section stated in brepgeom.AxisFrame(ref, j) (whose embed is
+// throughToolRead is one through tool (TC4): the prism over hole loop loop0
+// of face w0 at the lower level lo along reference axis j, through to hole
+// loop loop1 of the face w1 at hi (each 1 + the index in the face's Holes),
+// its section stated in brepgeom.AxisFrame(ref, j) (whose embed is
 // frameEmb), and the tool walls between them.
 type throughToolRead struct {
-	j        int
-	w0, w1   int
-	lo, hi   float64
-	prism    prismPayload
-	walls    []int
-	frameEmb brepEmbed
+	j            int
+	w0, w1       int
+	loop0, loop1 int
+	lo, hi       float64
+	prism        prismPayload
+	walls        []int
+	frameEmb     brepEmbed
 }
 
 // readThroughCut reads the record as Table TC's through-cut record along
@@ -88,7 +93,7 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 	if !ok {
 		return throughCut{}, throughCapsReason(bp, embeds, k), false, nil
 	}
-	tc := throughCut{k: k, caps: caps, kinds: make([]throughFace, len(bp.faces))}
+	tc := throughCut{k: k, caps: caps, kinds: make([]throughFace, len(bp.faces)), embeds: embeds}
 	tc.kinds[caps.bottom], tc.kinds[caps.top] = throughCap, throughCap
 
 	// TC2, first pass: walls along k (a) and planar walls across j ≠ k (b).
@@ -344,7 +349,8 @@ func readThroughTools(ctx context.Context, bp brepPayload, embeds []brepEmbed, k
 		}
 		lo, hi := brepLevel(w0, e0), brepLevel(w1, e1)
 		tools = append(tools, throughToolRead{
-			j: j, w0: lower.face, w1: upper.face, lo: lo, hi: hi, walls: walls, frameEmb: eJ,
+			j: j, w0: lower.face, w1: upper.face, loop0: lower.loop, loop1: upper.loop,
+			lo: lo, hi: hi, walls: walls, frameEmb: eJ,
 			prism: prismPayload{profile: ProfileRecord{Outer: outer}, frame: frame, z0: lo, z1: hi, xform: bp.xform},
 		})
 	}
@@ -362,12 +368,34 @@ func readThroughTools(ctx context.Context, bp brepPayload, embeds []brepEmbed, k
 	return tools, "", nil
 }
 
-// removedCaps is §3.2 over the recognised record (Table SG's SG4 and SG5):
-// every removed face must be one of A's two caps. A tool wall or a wall
-// lining a hole of S is SG4; any other wall is SG5 until a removed wall run
-// is built (modify-general S-2). It reports whether the bottom (A's start)
-// and the top (A's end) were removed.
-func (tc throughCut) removedCaps(b *Body, bp brepPayload, removed []*Face) (bool, bool, error) {
+// throughRemoval is §3.2's reading of the removed faces against the
+// recognised record: whether the bottom (A's start) and the top (A's end) go,
+// and the removed walls of A with the segments of S's outer loop they claim.
+type throughRemoval struct {
+	bottom, top bool
+	walls       []int
+	sides       map[int]struct{}
+}
+
+// keptCaps is the number of A's caps the shell keeps.
+func (rm throughRemoval) keptCaps() int {
+	n := 0
+	for _, removed := range []bool{rm.bottom, rm.top} {
+		if !removed {
+			n++
+		}
+	}
+	return n
+}
+
+// removedFaces is §3.2 over the recognised record (Table SG's SG4 and SG5):
+// every removed face must be one of A's two caps or a wall of A claiming a
+// segment of S's outer loop. A tool wall, or a wall lining a hole of S, is
+// SG4. A removed wall must be a straight wall along a section axis, since its
+// rim is a planar face (§3.3 step 5); any other is SG5. Whether the removed
+// walls form one proper connected run of whole walks is shell-opening SO6's
+// question, which sideOpeningRegions answers.
+func (tc throughCut) removedFaces(b *Body, bp brepPayload, removed []*Face) (throughRemoval, error) {
 	index := map[*Face]int{}
 	if _, ok := b.payload.(brepPayload); ok {
 		roles := facesByRole(b)
@@ -377,23 +405,76 @@ func (tc throughCut) removedCaps(b *Body, bp brepPayload, removed []*Face) (bool
 			}
 		}
 	}
-	var bottom, top bool
+	rm := throughRemoval{sides: map[int]struct{}{}}
+	work := freeform.NewFreeformWork()
 	for _, face := range removed {
 		fi, ok := index[face]
 		switch {
 		case !ok:
-			return false, false, fmt.Errorf(`%w: this evaluator shells a through-cut record by removing its caps only, and a removed face names no face of its record (modify-general SG5)`, ErrUnsupported)
+			return throughRemoval{}, fmt.Errorf(`%w: this evaluator shells a through-cut record by removing its caps or a run of its walls, and a removed face names no face of its record (modify-general SG5)`, ErrUnsupported)
 		case fi == tc.caps.bottom:
-			bottom = true
+			rm.bottom = true
+			continue
 		case fi == tc.caps.top:
-			top = true
+			rm.top = true
+			continue
 		case tc.kinds[fi] == throughTool || tc.kinds[fi] == throughHoleWall:
-			return false, false, fmt.Errorf(`%w: this evaluator shells a through-cut record by removing its caps only, and %s is a wall of a through tool or of a hole of the section (modify-general SG4)`, ErrUnsupported, bp.faces[fi].role)
-		default:
-			return false, false, fmt.Errorf(`%w: this evaluator shells a through-cut record by removing its caps only; removing %s, a wall of the prism, is not supported (modify-general SG5)`, ErrUnsupported, bp.faces[fi].role)
+			return throughRemoval{}, throughHoleRemovedError(bp, fi)
+		}
+		si, ok := tc.claimedSide(bp, fi, work)
+		if !ok {
+			return throughRemoval{}, throughHoleRemovedError(bp, fi)
+		}
+		seg := tc.caps.section.Outer.Segments[si]
+		if from, to, ok := brepgeom.NaturalLine(seg); !ok || (from.U == to.U) == (from.V == to.V) {
+			return throughRemoval{}, fmt.Errorf(`%w: this evaluator removes a wall of a through-cut record only where it is a straight wall along a section axis, whose rim is a planar face; %s is not (modify-general SG5)`, ErrUnsupported, bp.faces[fi].role)
+		}
+		rm.walls = append(rm.walls, fi)
+		rm.sides[si] = struct{}{}
+	}
+	return rm, nil
+}
+
+// throughHoleRemovedError is SG4, naming the removed face.
+func throughHoleRemovedError(bp brepPayload, fi int) error {
+	return fmt.Errorf(`%w: this evaluator shells a through-cut record by removing its caps or a run of its walls, and %s is a wall of a through tool or of a hole of the section (modify-general SG4)`, ErrUnsupported, bp.faces[fi].role)
+}
+
+// claimedSide is the index of the segment of S's outer loop that wall face fi
+// claims (TC3), read as Table TC read it: a wall along k by its walk, a
+// pierced wall by its outer rectangle's trace. It reports false for a wall
+// claiming a segment of a hole of S.
+func (tc throughCut) claimedSide(bp brepPayload, fi int, work *freeform.FreeformWork) (int, bool) {
+	f, e := bp.faces[fi], tc.embeds[fi]
+	var match func(survey2d.SegmentWalk) bool
+	if f.planar() {
+		outer := *f.region
+		outer.Holes = nil
+		face := brepgeom.PrismRectFace{Region: &outer, Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Outward: f.outward}
+		rect, ok := brepgeom.PlanarPrismRect(face, e, tc.caps.eF, tc.k, tc.caps.zlo, tc.caps.zhi)
+		if !ok {
+			return 0, false
+		}
+		match = rect.Matches
+	} else {
+		seg, ok := brepgeom.NewPrismMap(e, tc.caps.eF).Segment(f.wall)
+		if !ok {
+			return 0, false
+		}
+		w, err := boundarywalk.WalkOf(seg, work)
+		if err != nil {
+			return 0, false
+		}
+		key := brepgeom.WalkKeyOf(w)
+		match = func(s survey2d.SegmentWalk) bool { return brepgeom.WalkKeyOf(s) == key }
+	}
+	for si, seg := range tc.caps.section.Outer.Segments {
+		w, err := boundarywalk.WalkOf(seg, work)
+		if err == nil && match(w) {
+			return si, true
 		}
 	}
-	return bottom, top, nil
+	return 0, false
 }
 
 // shellThroughCut is route S (modify-general §3.3) for a receiver route P
@@ -411,30 +492,23 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	if err != nil {
 		return nil, err
 	}
-	removedBottom, removedTop, err := tc.removedCaps(b, bp, call.removed)
+	rm, err := tc.removedFaces(b, bp, call.removed)
 	if err != nil {
 		return nil, err
 	}
-
-	// Stage 3: S18 and S10's section limit on S, S10's height limit for the
-	// kept cap, then S11a on S and on each tool as the offsets are built.
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	section := tc.caps.section
-	inradius, enough, err := shellsurvey.SectionInradius(budget, boundarywalk.Profile(section), call.tmm, call.tDelta, shellTol)
-	if err != nil {
-		return nil, err
+
+	// Stage 3: A ⊖ t's section (eroded, with its proven displacement for a
+	// removed wall run), then S11a on each tool as its dilation is built.
+	var sec throughSection
+	if len(rm.walls) == 0 {
+		sec, err = tc.erodeThroughSection(budget, rm, call)
+	} else {
+		sec, err = tc.openingThroughSection(budget, bp, rm, call)
 	}
-	if err := requireSectionCavity(call.t, call.tmm, inradius, enough); err != nil {
-		return nil, err
-	}
-	h := tc.caps.zhi - tc.caps.zlo
-	if maxT := h - shellTol*math.Max(1, h); (!removedBottom || !removedTop) && call.tmm >= maxT {
-		return nil, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the sweep height %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, call.t, units.Millimeters(max(maxT, 0)), units.Millimeters(h))
-	}
-	eroded, err := offsetProfile(budget, section, 1, call.tmm)
 	if err != nil {
 		return nil, err
 	}
@@ -446,9 +520,12 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 		}
 	}
 
-	// Stage 4: the offset audit on S ⊖ t and on each Tᵢ ⊕ t, then TC7.
-	if err := auditOffsetSectionBudget(budget, section, eroded); err != nil {
-		return nil, shellCancelCause(err)
+	// Stage 4: the offset audit on S ⊖ t (the side opening ran its own) and on
+	// each Tᵢ ⊕ t, then TC7.
+	if len(rm.walls) == 0 {
+		if err := auditOffsetSectionBudget(budget, tc.caps.section, sec.eroded); err != nil {
+			return nil, shellCancelCause(err)
+		}
 	}
 	for i, tool := range tc.tools {
 		if err := auditOffsetSectionBudget(budget, tool.prism.profile, dilated[i]); err != nil {
@@ -463,9 +540,11 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 
 	// The offsets' proven displacements (modify §9): the cavity's faces and
 	// the rims carry the largest of them.
-	delta, err := offsetSectionDelta(budget, section, 1, call.tmm, call.tDelta)
-	if err != nil {
-		return nil, shellCancelCause(err)
+	delta := sec.delta
+	if len(rm.walls) == 0 {
+		if delta, err = offsetSectionDelta(budget, tc.caps.section, 1, call.tmm, call.tDelta); err != nil {
+			return nil, shellCancelCause(err)
+		}
 	}
 	for _, tool := range tc.tools {
 		d, err := offsetSectionDelta(budget, tool.prism.profile, -1, call.tmm, call.tDelta)
@@ -476,13 +555,13 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	}
 
 	// Stage 5: the cavity, (A ⊖ t) \ ⋃(Tᵢ ⊕ t), through class B's own Cut.
-	cavity, err := tc.cavity(ctx, bp, eroded, dilated, removedBottom, removedTop, call, delta)
+	cavity, err := tc.cavity(ctx, bp, sec.eroded, dilated, rm, call, delta)
 	if err != nil {
 		return nil, err
 	}
 
 	// Stage 6: the rims, SG7, and the rim audit.
-	out, err := throughCutRims(ctx, budget, bp, tc, cavity, eroded, removedBottom, removedTop)
+	out, err := throughCutRims(ctx, budget, bp, tc, cavity, sec.eroded, dilated, rm)
 	if err != nil {
 		return nil, err
 	}
@@ -492,6 +571,65 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	// the body (a non-positive volume is ErrDegenerate).
 	out.assignRoles()
 	return evalBrepContext(ctx, b.doc, b.doc.nextProducerID(), out)
+}
+
+// throughSection is A ⊖ t's section: eroded, and for a removed wall run the
+// side opening's proven section displacement (shell-opening §4.4).
+type throughSection struct {
+	eroded ProfileRecord
+	delta  float64
+}
+
+// erodeThroughSection is stage 3 on S with caps alone removed (§3.3 step 1):
+// S18 and S10's section limit, S10's height limit for a kept cap, then S11a
+// as offsetProfile(S, +1, t) is built. The caller audits the offset and
+// proves its displacement.
+func (tc throughCut) erodeThroughSection(budget *proofbound.WorkBudget, rm throughRemoval, call brepShellCall) (throughSection, error) {
+	section := tc.caps.section
+	inradius, enough, err := shellsurvey.SectionInradius(budget, boundarywalk.Profile(section), call.tmm, call.tDelta, shellTol)
+	if err != nil {
+		return throughSection{}, err
+	}
+	if err := requireSectionCavity(call.t, call.tmm, inradius, enough); err != nil {
+		return throughSection{}, err
+	}
+	h := tc.caps.zhi - tc.caps.zlo
+	if maxT := h - shellTol*math.Max(1, h); rm.keptCaps() > 0 && call.tmm >= maxT {
+		return throughSection{}, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the sweep height %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, call.t, units.Millimeters(max(maxT, 0)), units.Millimeters(h))
+	}
+	eroded, err := offsetProfile(budget, section, 1, call.tmm)
+	if err != nil {
+		return throughSection{}, err
+	}
+	return throughSection{eroded: eroded}, nil
+}
+
+// openingThroughSection is stage 3 on S with a removed wall run (§3.2's
+// second row): A ⊖ t's section is the side opening's cavity section C over
+// the kept chain, cut at each end by the rim rule of
+// docs/shell-opening-design.md Table RO, built and audited by
+// sideOpeningRegions in that document's gate order (SO6, SO3's height half,
+// S11a and SO1, SO2, SO4 per end, modify §5's audit of W and C, the exact area
+// identity), whose refusals keep their codes. No section limit runs: the
+// cavity opens through the removed walls (shell-opening §5). The displacement
+// is the chain's figure plus three times the cut gap, as evalSideOpeningPrism
+// charges a section that publishes C. A cut that runs back along the removed
+// walk's carrier (a reflex end) leaves a rim inside the material that is no
+// piece of a removed face, which route S does not state: SG5.
+func (tc throughCut) openingThroughSection(budget *proofbound.WorkBudget, bp brepPayload, rm throughRemoval, call brepShellCall) (throughSection, error) {
+	pp := prismPayload{profile: tc.caps.section, frame: tc.caps.frame, xform: bp.xform, z0: tc.caps.zlo, z1: tc.caps.zhi}
+	sec, err := sideOpeningRegions(budget, pp, rm.sides, rm.keptCaps(), 1, call.t, call.tmm, call.tDelta)
+	if err != nil {
+		return throughSection{}, shellCancelCause(err)
+	}
+	if len(sec.corners) > 0 {
+		return throughSection{}, fmt.Errorf(`%w: the removed wall run meets a kept wall at a reflex corner, where the rim runs back along the removed wall's carrier into the material, a face this evaluator does not state for a through-cut record (modify-general SG5)`, ErrUnsupported)
+	}
+	delta := sec.delta
+	if sec.cutGap > 0 {
+		delta = proofbound.AbsSumUpper(delta, proofbound.ProductUpper(3, sec.cutGap))
+	}
+	return throughSection{eroded: sec.cavity, delta: delta}, nil
 }
 
 // readThroughCutAnyAxis reads Table TC along reference axes 0, 1, 2 in order
@@ -649,8 +787,9 @@ func ratMax(a, b *big.Rat) *big.Rat {
 	return b
 }
 
-// cavity builds A' \ T₁' \ … \ Tₙ' (modify-general §3.3 step 4): A' is the
-// eroded section over the cup's interval, a kept cap's level moved by t, and
+// cavity builds A' \ T₁' \ … \ Tₙ' (modify-general §3.3 step 4): A' is
+// A ⊖ t's section (eroded) over the cup's interval, a kept cap's level moved
+// by t, and
 // Tᵢ' the dilated tool section over [L0 − t, L1 + t]. Each private Cut is
 // class B's own entry over payloads, so it builds no Body and touches no
 // document; a pair class B does not take is SG6, naming the tool.
@@ -661,17 +800,17 @@ func ratMax(a, b *big.Rat) *big.Rat {
 // offset displacement, as its section displacement, and the largest of delta
 // and the cap levels' displacements on both levels. The largest bound covers
 // each face's own, so the charge is an upper bound for every face.
-func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded ProfileRecord, dilated []ProfileRecord, removedBottom, removedTop bool, call brepShellCall, delta float64) (brepPayload, error) {
+func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded ProfileRecord, dilated []ProfileRecord, rm throughRemoval, call brepShellCall, delta float64) (brepPayload, error) {
 	step := func(from, d, by float64) (float64, float64) {
 		to := from + by
 		return to, proofbound.AbsSumUpper(d, call.tDelta, proofarith.AddRoundError(from, by, to))
 	}
 	z0, z0Delta := tc.caps.zlo, max(tc.zloDelta, bp.faces[tc.caps.bottom].z0Delta)
 	z1, z1Delta := tc.caps.zhi, max(tc.zhiDelta, bp.faces[tc.caps.top].z0Delta)
-	if !removedBottom {
+	if !rm.bottom {
 		z0, z0Delta = step(z0, z0Delta, call.tmm)
 	}
-	if !removedTop {
+	if !rm.top {
 		z1, z1Delta = step(z1, z1Delta, -call.tmm)
 	}
 	var cut featurePayload = prismPayload{profile: eroded, frame: tc.caps.frame, z0: z0, z1: z1, xform: bp.xform}
@@ -716,166 +855,4 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded ProfileR
 	}
 	cavity.faces = faces
 	return cavity, nil
-}
-
-// throughCutRims assembles the shell's record (modify-general §3.3 steps 5
-// and 6): the receiver's faces but the removed caps, verbatim; the cavity's
-// faces reversed, except those lying in a removed cap's plane; and, per
-// removed cap R, its rim: R's outer loop holding each cavity face Q in R's
-// plane as a hole (Q's outer loop reversed), and for each hole h of R the band
-// between h and the hole of some Q equal to (S ⊖ t)'s hole of h's index. A
-// loop with no partner is SG7. Every rim region and band runs modify §5's
-// audit (S8, S7, S9) and carries the cavity's displacement.
-func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepPayload, tc throughCut, cavity brepPayload, eroded ProfileRecord, removedBottom, removedTop bool) (brepPayload, error) {
-	frames := make([]r3.Frame, 0, 1+len(cavity.faces))
-	frames = append(frames, bp.faces[0].frame)
-	for _, f := range cavity.faces {
-		frames = append(frames, f.frame)
-	}
-	embeds, err := brepgeom.Embeds(frames, ErrUnsupported)
-	if err != nil {
-		return brepPayload{}, err
-	}
-	cavEmbeds := embeds[1:]
-	recEmbeds, err := brepEmbeds(bp.faces)
-	if err != nil {
-		return brepPayload{}, err
-	}
-	joined, _, err := brepJoinProfile(eroded)
-	if err != nil {
-		return brepPayload{}, err
-	}
-
-	type removedCap struct {
-		face  int
-		holes []int // section hole index of each of the face's region holes
-	}
-	var caps []removedCap
-	if removedBottom {
-		holes := make([]int, len(bp.faces[tc.caps.bottom].region.Holes))
-		for hi := range holes {
-			holes[hi] = tc.caps.bottomLoop[1+hi] - 1
-		}
-		caps = append(caps, removedCap{face: tc.caps.bottom, holes: holes})
-	}
-	if removedTop {
-		holes := make([]int, len(bp.faces[tc.caps.top].region.Holes))
-		for hi := range holes {
-			holes[hi] = hi
-		}
-		caps = append(caps, removedCap{face: tc.caps.top, holes: holes})
-	}
-
-	inPlane := map[int]struct{}{}
-	var rims []brepFace
-	for _, rc := range caps {
-		if err := ctx.Err(); err != nil {
-			return brepPayload{}, err
-		}
-		r, eR := bp.faces[rc.face], recEmbeds[rc.face]
-		level := brepLevel(r, eR)
-		main := ProfileRecord{Outer: r.region.Outer}
-		var bands []ProfileRecord
-		partnered := map[int]struct{}{}
-		// Each cavity face in R's plane, its region in R's frame and in F.
-		for ci, q := range cavity.faces {
-			eQ := cavEmbeds[ci]
-			if !q.planar() || eQ.Axis[2] != tc.k || brepLevel(q, eQ) != level {
-				continue
-			}
-			inPlane[ci] = struct{}{}
-			inR, ok := brepgeom.NewPrismMap(eQ, eR).Region(*q.region)
-			if !ok {
-				return brepPayload{}, throughRimError(r, "a cavity face in its plane does not map into its frame")
-			}
-			inF, ok := brepgeom.NewPrismMap(eQ, tc.caps.eF).Region(*q.region)
-			if !ok {
-				return brepPayload{}, throughRimError(r, "a cavity face in its plane does not map into the prism's frame")
-			}
-			outer, err := offset2d.ReverseLoopRecordContext(ctx, inR.Outer)
-			if err != nil {
-				return brepPayload{}, err
-			}
-			main.Holes = append(main.Holes, outer)
-			for qh, hole := range inF.Holes {
-				si := -1
-				for i, want := range joined.Holes {
-					if brepgeom.LoopsEqual(want, hole) {
-						si = i
-						break
-					}
-				}
-				if si < 0 {
-					return brepPayload{}, throughRimError(r, "a cavity face in its plane holds a loop that is neither its outer loop nor a hole of the eroded section")
-				}
-				hi := -1
-				for i, want := range rc.holes {
-					if want == si {
-						hi = i
-					}
-				}
-				if _, dup := partnered[hi]; hi < 0 || dup {
-					return brepPayload{}, throughRimError(r, "a hole of the eroded section partners no hole of the removed face, or two")
-				}
-				partnered[hi] = struct{}{}
-				band, err := offset2d.ReverseLoopRecordContext(ctx, inR.Holes[qh])
-				if err != nil {
-					return brepPayload{}, err
-				}
-				bands = append(bands, ProfileRecord{Outer: band, Holes: []LoopRecord{r.region.Holes[hi]}})
-			}
-		}
-		if len(partnered) != len(rc.holes) {
-			return brepPayload{}, throughRimError(r, "a hole of the removed face has no cavity hole to partner")
-		}
-		for _, region := range append([]ProfileRecord{main}, bands...) {
-			if err := auditThroughRim(budget, region); err != nil {
-				return brepPayload{}, err
-			}
-			region := region
-			rims = append(rims, brepFace{frame: r.frame, region: &region, outward: r.outward,
-				z0: r.z0, z1: r.z0, z0Delta: r.z0Delta, z1Delta: r.z0Delta, delta: cavity.sectionDelta()})
-		}
-	}
-
-	out := brepPayload{xform: bp.xform}
-	for fi, f := range bp.faces {
-		if (removedBottom && fi == tc.caps.bottom) || (removedTop && fi == tc.caps.top) {
-			continue
-		}
-		out.faces = append(out.faces, f)
-	}
-	for ci, f := range cavity.faces {
-		if _, gone := inPlane[ci]; gone {
-			continue
-		}
-		out.faces = append(out.faces, f.reversed())
-	}
-	out.faces = append(out.faces, rims...)
-	return out, nil
-}
-
-// throughRimError is SG7, naming the removed face.
-func throughRimError(r brepFace, what string) error {
-	return fmt.Errorf(`%w: the shell's rim at %s does not partner the cavity's trace: %s (modify-general SG7)`, ErrUnsupported, r.role, what)
-}
-
-// auditThroughRim is modify §5's audit on one rim region or band: S8 (the
-// outer loop walks counter-clockwise and every hole clockwise, each with a
-// non-zero area), then S7 (no crossing or contact) and S9 (nesting) through
-// the shared audit.
-func auditThroughRim(budget *proofbound.WorkBudget, region ProfileRecord) error {
-	for li, loop := range append([]LoopRecord{region.Outer}, region.Holes...) {
-		area, err := loopSignedAreaBudget(budget, loop)
-		if err != nil {
-			return shellCancelCause(err)
-		}
-		if (li == 0 && !(area > 0)) || (li > 0 && !(area < 0)) {
-			return fmt.Errorf(`%w: the shell's rim loop %d is walked against its material`, ErrDegenerate, li)
-		}
-	}
-	if err := auditOffsetSectionBudget(budget, region, region); err != nil {
-		return shellCancelCause(err)
-	}
-	return nil
 }

@@ -181,14 +181,17 @@ func PrismWallsClaim(walls []survey2d.SegmentWalk, rects []PrismRect, section mo
 		}
 	}
 	for _, rect := range rects {
-		if !take(rect.matches) {
+		if !take(rect.Matches) {
 			return false
 		}
 	}
 	return true
 }
 
-func (r PrismRect) matches(s survey2d.SegmentWalk) bool {
+// Matches reports whether a straight section walk is the rectangle's trace:
+// the same two ends as a set, and the walk's right-hand normal (outward, with
+// the material on the walk's left) along the rectangle's outward normal.
+func (r PrismRect) Matches(s survey2d.SegmentWalk) bool {
 	if s.IsCircular() || s.Closed {
 		return false
 	}

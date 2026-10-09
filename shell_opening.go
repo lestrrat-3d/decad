@@ -116,7 +116,9 @@ func sideOpeningHeight(pp prismPayload, keptCaps int, s float64, t units.Value, 
 // of its record names it), modify §5's audit of W and of C (O outward) — S8,
 // where a C with no area is SO3, S11b and S9 — and the exact area identity,
 // whose failure is SO5.
-// keptCaps is the number of caps the shell keeps.
+// keptCaps is the number of caps the shell keeps. pp's profile, z0 and z1 are
+// read; route S (brep_shell.go) hands it a through-cut record's prism A and
+// takes C as A ⊖ t's section (docs/modify-general-design.md §3.2).
 func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides map[int]struct{}, keptCaps int, s float64, t units.Value, tmm, tDelta float64) (sideOpeningSection, error) {
 	if len(pp.profile.Holes) > 0 {
 		return sideOpeningSection{}, fmt.Errorf(`%w: a side opening of a prism whose section holds %d hole(s) is not supported (modify-reach SX8, shell-opening SO6)`, ErrUnsupported, len(pp.profile.Holes))
