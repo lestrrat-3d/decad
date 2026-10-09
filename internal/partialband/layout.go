@@ -95,19 +95,19 @@ func PartialFilletLayout(walks []survey2d.SideWalk, orig, contour []sectionrecor
 		if capWalk[i] >= len(contour) {
 			return nil, fmt.Errorf(`%w: a partial fillet band's selected cap segment is missing`, decaderr.ErrUnsupported)
 		}
-		cap, err := boundarywalk.WalkOf(contour[capWalk[i]], work)
+		capView, err := boundarywalk.WalkOf(contour[capWalk[i]], work)
 		if err != nil {
 			return nil, err
 		}
-		if !side.IsLine() || !cap.IsLine() {
+		if !side.IsLine() || !capView.IsLine() {
 			return nil, fmt.Errorf(`%w: a selected partial fillet walk is curved`, decaderr.ErrUnsupported)
 		}
 		walkCols[i] = [2]int{len(partial.Columns), len(partial.Columns) + 1}
 		partial.Columns = append(partial.Columns,
 			PartialBandColumn{Side: sectionrecord.Point2{U: side.StartU, V: side.StartV},
-				Cap: sectionrecord.Point2{U: cap.StartU, V: cap.StartV}},
+				Cap: sectionrecord.Point2{U: capView.StartU, V: capView.StartV}},
 			PartialBandColumn{Side: sectionrecord.Point2{U: side.EndU, V: side.EndV},
-				Cap: sectionrecord.Point2{U: cap.EndU, V: cap.EndV}})
+				Cap: sectionrecord.Point2{U: capView.EndU, V: capView.EndV}})
 		partial.Walks = append(partial.Walks, PartialBandWalk{Index: i, Cols: []int{walkCols[i][0], walkCols[i][1]}})
 	}
 	if len(partial.Walks) == 0 {
