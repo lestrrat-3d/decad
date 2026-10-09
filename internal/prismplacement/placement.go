@@ -73,6 +73,16 @@ func ShiftedInterval(pa, pb Operand) (*big.Rat, *big.Rat, bool) {
 	return b0.Add(b0, shift), b1.Add(b1, shift), true
 }
 
+// AdmittedShiftedInterval reads the exact interval after G5 has admitted the
+// pair. A failed lift here violates that gate's contract.
+func AdmittedShiftedInterval(pa, pb Operand) (*big.Rat, *big.Rat) {
+	z0, z1, ok := ShiftedInterval(pa, pb)
+	if !ok {
+		panic("decad: G5 admitted a prism pair whose sweep interval does not lift exactly")
+	}
+	return z0, z1
+}
+
 // CutZIntervalSpans compares the shifted tool interval against both target
 // endpoints exactly. A cap meeting the target endpoint is a valid span.
 func CutZIntervalSpans(target, tool Operand) bool {
@@ -92,6 +102,17 @@ func UnionZIntervalMatches(pa, pb Operand) bool {
 		return false
 	}
 	return a0.Cmp(z0) == 0 && a1.Cmp(z1) == 0
+}
+
+// IntersectZIntervalOverlaps compares the shifted B interval with A's own
+// interval exactly. A pair touching only at a cap has no overlap.
+func IntersectZIntervalOverlaps(pa, pb Operand) bool {
+	a0, a1 := proofarith.FloatRat(pa.Z0), proofarith.FloatRat(pa.Z1)
+	z0, z1, ok := ShiftedInterval(pa, pb)
+	if a0 == nil || a1 == nil || !ok {
+		return false
+	}
+	return a0.Cmp(z1) < 0 && z0.Cmp(a1) < 0
 }
 
 // Relative is the composed map from B's plane-local coordinates into A's.

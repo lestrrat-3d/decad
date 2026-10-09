@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -203,14 +204,14 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 				if err != nil || !analytic {
 					return nil, false, err
 				}
-				trimmed, err := prismProfileHasTrimmedCircularSource(budget, region)
+				trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, region.Outer, region.Holes)
 				if err != nil || trimmed {
 					return nil, false, err
 				}
 			}
 		}
 	}
-	shift := prismZShift(va.proxy, vb.proxy)
+	shift := prismplacement.ZShift(prismPlacementOf(va.proxy), prismPlacementOf(vb.proxy))
 	levels, ok := stackedUnionLevels(va, vb, shift)
 	if !ok || len(levels) < 3 {
 		// Equal intervals are prism-boolean §3.2's Union row, not a stack.
@@ -533,14 +534,14 @@ func (st *stackedUnionState) withinCap(pa, pb prismPayload) error {
 }
 
 func stackedSceneWithinCap(budget *proofbound.WorkBudget, pa, pb prismPayload) error {
-	segments, withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.profile, pb.profile)
 	if err != nil {
 		return err
 	}
 	if !withinCap {
 		return fmt.Errorf(
 			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
-			ErrUnsupported, segments, prismMaxArrangementSegments)
+			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
 	return nil
 }
@@ -623,7 +624,7 @@ func stackedNestingOf(ctx context.Context, budget *proofbound.WorkBudget, pa, pb
 		out.nest = dir.nest
 		return out, nil
 	}
-	out.split, err = prismProfilesHaveSplitBoundary(budget, profiles)
+	out.split, err = prismcells.HasSplitBoundary(budget, profiles)
 	if err != nil {
 		return stackedNesting{}, err
 	}

@@ -223,14 +223,15 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 	for _, ref := range refsB {
 		regionsB = append(regionsB, b.record(ref))
 	}
-	segments, within, err := prismRegionsWithinWorkCap(b.st.budget, append(append([]ProfileRecord{}, regionsA...), regionsB...)...)
+	segments, within, err := prismcells.RegionsWithinWorkCap(b.st.budget,
+		append(append([]ProfileRecord{}, regionsA...), regionsB...)...)
 	if err != nil {
 		return nil, err
 	}
 	if !within {
 		return nil, fmt.Errorf(
 			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
-			ErrUnsupported, segments, prismMaxArrangementSegments)
+			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
 	s, tags, delta, err := buildPrismSceneRegions(b.st.budget, regionsA, regionsB, &prismReexpression{Identity: true})
 	if err != nil {

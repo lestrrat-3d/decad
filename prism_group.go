@@ -77,7 +77,7 @@ func admitPrismGroupPair(budget *proofbound.WorkBudget, oa, ob prismGroupOperand
 			if err != nil || !analytic {
 				return false, err
 			}
-			trimmed, err := prismProfileHasTrimmedCircularSource(budget, region)
+			trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, region.Outer, region.Holes)
 			if err != nil || trimmed {
 				return false, err
 			}
@@ -91,14 +91,14 @@ func prismGroupWithinCap(budget *proofbound.WorkBudget, op string, regions ...[]
 	for _, rs := range regions {
 		all = append(all, rs...)
 	}
-	segments, withinCap, err := prismRegionsWithinWorkCap(budget, all...)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, all...)
 	if err != nil {
 		return err
 	}
 	if !withinCap {
 		return fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
-			ErrUnsupported, op, segments, prismMaxArrangementSegments)
+			ErrUnsupported, op, segments, prismcells.MaxArrangementSegments)
 	}
 	return nil
 }
@@ -253,7 +253,7 @@ func tryPrismGroupUnion(ctx context.Context, a, b *Body) (featurePayload, bool, 
 	if ok, err := admitPrismGroupPair(budget, oa, ob, true, true); err != nil || !ok {
 		return nil, false, err
 	}
-	if !prismUnionZIntervalMatches(oa.proxy, ob.proxy) { // G5 for Union: one interval
+	if !prismplacement.UnionZIntervalMatches(prismPlacementOf(oa.proxy), prismPlacementOf(ob.proxy)) { // G5
 		return nil, false, nil
 	}
 	if err := prismGroupWithinCap(budget, "union", oa.regions, ob.regions); err != nil {

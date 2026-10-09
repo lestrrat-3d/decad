@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/patternrecord"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -273,7 +274,7 @@ func (rp resolvedPattern) keepsFrame(budget *proofbound.WorkBudget, payload feat
 				}
 			}
 		}
-		trimmed, err := prismProfileHasTrimmedCircularSource(budget, region)
+		trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, region.Outer, region.Holes)
 		if err != nil {
 			return false, err
 		}

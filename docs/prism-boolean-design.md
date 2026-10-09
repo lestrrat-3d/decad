@@ -130,7 +130,7 @@ that pair.
 | G2 | None: a reflected accumulated placement admits (`docs/general-boolean-design.md` §3 A4). When the composed relative map of §4.1 is a reflection (`Transform.IsReflection`), operand B's record is re-wound before any entity is created; two operands under one reflected placement meet G3's shared-axis arm with no re-expression. | G3 reads the world normal through `ApplyDir`, which maps a reflection's sweep direction like any other. The re-winding restores the "outer CCW, holes CW" convention §4.2's flag comparison reads. |
 | G3 | The two operands' **composed world planes** (`xform ∘ frame`, core §5.2/§6.2's r3 vocabulary — `worldOrigin = xform.Apply(frame.Origin())`, `worldNormal = xform.ApplyDir(frame.N())`) share one sweep axis, exactly: `worldNormalA == worldNormalB` (Go `==` on the stored `r3.Vec` floats — component-wise exact equality, which treats `-0.0` and `0.0` as equal, §3.3; "co-directional" — the same outward sweep sense, never antiparallel) **and** one of two arms holds. **Coplanar arm:** `(worldOriginB − worldOriginA)·worldNormalA == 0.0` (an ordinary float64 dot product compared against the literal zero). **Shared-axis arm:** `xformA == xformB`, `frameA.U() == frameB.U()` and `frameA.V() == frameB.V()` (all Go `==` on the stored floats), and the frame-origin difference `d = frameB.Origin() − frameA.Origin()`, taken EXACTLY over the stored floats (`internal/proof/dyadic.go`'s `DvSub`), has an exactly zero cross product with the shared `frame.N()` (`DvCross`, `DvIsZero`) — `d` is an exact multiple `s·N` of the stored normal. `sketch.CreateOffsetPlane` on a datum or any axis-aligned base plane produces exactly this arm: it re-uses the base frame's `U`/`V` and adds `N·dist` to the origin, so `d = (0, 0, dist)`-shaped with literal zeros (probe `.tmp/repro/probe`); a tilted base re-normalises `U` one ulp apart and misses the arm, soundly. | This is decad's own admission decision, not a question `sketch` answers, so CLAUDE.md's reject-only rule binds it directly: a residual test here would be an admission gate on a residual, which the hard rule forbids outright. Every quantity is read off the stored `r3.Vec` floats as-is (the `clearance_degen.go` discipline: exact arithmetic on the payload's own floats, never a re-derived angle) — never loosened to a tolerance. The shared-axis arm is exact without any orthonormality assumption on the stored frame: B's denoted prism `{X(oB + uU + vV + zN)}` IS `{X(oA + uU + vV + (z + s)N)}` term for term, so B's `Point2` fields are A-frame coordinates verbatim and only the sweep interval moves, by the exact rational `s` (G5). A parallel pair outside both arms — a different placement, `U`/`V` bits that differ, an in-plane origin component — takes the mesh path. §3.3 covers what this excludes and why it is not fixed here. |
 | G4 | Every segment of both operands' `ProfileRecord` (`Outer` and every loop of `Holes`) is a `LineSeg`, `CircleSeg`, or `ArcSeg`. | `geom.BoundaryEdge.TExact`'s own contract is a **whole-scene** gate (`sketch`'s `geom/region.go`): one `Ellipse`/`EllipticalArc`/`Conic`/`Spline`/`ClosedSpline`/`FitSpline`/`NURBS` anywhere in an arrangement makes every bound in it — including unrelated line/circle/arc edges — report `TExact = false`. A single free-form segment on either operand would silently blind the whole combination, not just its own edges, so the gate excludes the kind entirely rather than trying to admit "the free-form parts don't touch." Staged: §9's free-form row. |
-| G5 | The z-interval relation the op needs (§3.2) holds, computed after re-expressing operand B's `[z0, z1]` onto operand A's normal axis by the shift `s`: `z' = z + s`, where `s` is the exact rational `d_i / N_i` for the largest-magnitude component `i` of the shared `N` in G3's shared-axis arm (the same value for every nonzero component, since `d = s·N` exactly), and the literal zero in G3's coplanar arm. Each `z'` is an exact `big.Rat` sum (`floatRat(z) + s`, `prismShiftedInterval`), and every §3.2 comparison is a `big.Rat` comparison against A's own endpoint lifted by `floatRat`. No float operation is performed. | A shift, not a containment test — G3 already certified the shared axis; this is bookkeeping on it, and the bookkeeping is exact: a float sum `z + shift` could round onto A's endpoint and admit a tool whose cap falls a hair short of the target's, which is a blessing by rounding. The shift is only a comparison input for `Union` and `Cut`, whose result interval is one operand's own endpoints verbatim (§3.2). For `Intersect` a shifted endpoint can reach the result: it is rounded to the nearest float once, and `rationalFloatError` over the exact rational charges that rounding into THAT end's axial displacement (`z0Delta`/`z1Delta`), beside B's own incoming displacement (§7). |
+| G5 | The z-interval relation the op needs (§3.2) holds, computed after re-expressing operand B's `[z0, z1]` onto operand A's normal axis by the shift `s`: `z' = z + s`, where `s` is the exact rational `d_i / N_i` for the largest-magnitude component `i` of the shared `N` in G3's shared-axis arm (the same value for every nonzero component, since `d = s·N` exactly), and the literal zero in G3's coplanar arm. Each `z'` is an exact `big.Rat` sum (`floatRat(z) + s`, `prismplacement.ShiftedInterval`), and every §3.2 comparison is a `big.Rat` comparison against A's own endpoint lifted by `floatRat`. No float operation is performed. | A shift, not a containment test — G3 already certified the shared axis; this is bookkeeping on it, and the bookkeeping is exact: a float sum `z + shift` could round onto A's endpoint and admit a tool whose cap falls a hair short of the target's, which is a blessing by rounding. The shift is only a comparison input for `Union` and `Cut`, whose result interval is one operand's own endpoints verbatim (§3.2). For `Intersect` a shifted endpoint can reach the result: it is rounded to the nearest float once, and `rationalFloatError` over the exact rational charges that rounding into THAT end's axial displacement (`z0Delta`/`z1Delta`), beside B's own incoming displacement (§7). |
 | G6 | `Union` needs both operands hole-free. `Cut` needs the tool hole-free; the target may carry holes. `Intersect` needs both operands hole-free except for the one-hole clean-nesting arm below. | `Union`'s select-all rule would include a hole's void. A holed `Cut` tool can leave separate lumps that one `ProfileRecord` cannot carry. The admitted holed `Intersect` has one nested result profile, including its hole. |
 
 G1–G6 are the only conditions checked before touching `sketch`. **Passing
@@ -241,7 +241,7 @@ silent fallback stops being available:
 1. **Entry gate (§3.1–3.2).** Cheap, pre-`sketch`, structural. A miss here is
    never an error — the unchanged mesh path runs exactly as it does today.
 2. **Bounded region resolution (§4).** Before `s.Profiles()` runs, the
-   code-owned `prismMaxArrangementSegments` cap bounds the pinned
+   code-owned `prismcells.MaxArrangementSegments` cap bounds the pinned
    arrangers' tiny-segment pair work. Exceeding it is an `ErrUnsupported`
    refusal (§9), never an unbounded private worker. A pair within the cap
    builds the private scene, arranges it, and attempts to resolve a unique
@@ -970,7 +970,7 @@ never performs.
 | RB4 | §6's S7-equivalent: a non-adjacent pair crosses, or contacts within the diameter-anchored noise floor | `ErrUnsupported` | No |
 | RB5 | §6's S9-equivalent, decidably broken (a hole proven outside the outer loop or nested wrong) | `ErrDegenerate` | No |
 | RB6 | §6's S9-equivalent, undecidable | `ErrUnsupported` | No |
-| RB7 | The bounded work budget (§10) exhausts, or the private scene exceeds `prismMaxArrangementSegments`, before resolution or the audit completes | `ErrUnsupported` | No — a coarser/simpler input may clear it |
+| RB7 | The bounded work budget (§10) exhausts, or the private scene exceeds `prismcells.MaxArrangementSegments`, before resolution or the audit completes | `ErrUnsupported` | No — a coarser/simpler input may clear it |
 | RB8 | `recordEdge`/`falsifyRange` rejects a surviving segment (`TExact` disproven on a merged edge — an internal `sketch` inconsistency, reported upstream per seam §3) | `ErrUnrecordableProfile` | No, but should not occur on a certified arrangement; a defensive check |
 | RB9 | The merged loop's recorded segments do not join (`falsifyLoopJoins`, seam §3) — a whole-to-whole junction the assembly restates as two segments' own defining coordinates, which the merge did not compute and so did not round to agreement. Not RB8's class: the mismatch is inherited from an operand's own record (typically one carrying `Partial` cut fragments), not an internal `sketch` inconsistency | `ErrUnrecordableProfile` | No — a differently-drawn operand may close |
 | RB10 | A stacked result's slabs fail `docs/stacked-prism-design.md` §2.2's audit after every slab's scene resolved — the per-slab reproductions of one target loop differ, or an interface is not monotone | `ErrUnsupported` | No — the audit reads the records this pair produced |
@@ -989,11 +989,11 @@ construction (one charge per created entity), the §4.2 selection/merge walk
 (one charge per candidate edge/cell touched, matching `crossingAuditBudget`'s
 own per-pair charge shape), and §6's audit (its existing budget parameter,
 unchanged). Polled at phase boundaries and at least every 256 candidates,
-identical to the existing pattern. `prismMaxArrangementSegments` is the
+identical to the existing pattern. `prismcells.MaxArrangementSegments` is the
 single code-owned pre-`Profiles` cap: it bounds the private arrangers'
 tiny-segment pair work for the pinned line/circle/arc density. That pair work
 is one `O(n^2)` pass with no broadphase, so the cap bounds a single
-uninterruptible arrangement; the value in `prism_boolean.go` states what it
+uninterruptible arrangement; the value in `internal/prismcells/work_cap.go` states what it
 costs and what it admits. `sketch.Sketch.Profiles` is synchronous and has no
 context parameter, so a capped private
 scene runs in one worker while the caller selects its result against
@@ -1293,7 +1293,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   with the document untouched, matching the existing modify-op
   contract.
 - Arrangement cap: two line-only prism records whose combined upper bound
-  exceeds `prismMaxArrangementSegments` refuse with `ErrUnsupported`
+  exceeds `prismcells.MaxArrangementSegments` refuse with `ErrUnsupported`
   before `s.Profiles()` runs.
 - Repeated direct construction of an admitted union produces matching
   `Exactness`, `Bound`, topology roles, and measurements.
@@ -1323,7 +1323,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   own recorded floats (`math/big.Rat`), never a second float computation.
 - Cancellation and the cap: a context cancelled during the reading returns
   `ctx.Err()` and leaves the document and both operands unchanged; a pair
-  whose scene exceeds `prismMaxArrangementSegments` reports `Suspect` through
+  whose scene exceeds `prismcells.MaxArrangementSegments` reports `Suspect` through
   the existing `ErrUnsupported` mapping, with no report-level error.
 - G3's shared-axis arm, end to end: a 96×68×16 plate on XY cut by three
   cylinder tools sketched on `CreateOffsetPlane(XY, −16)` and extruded 48 mm

@@ -351,7 +351,7 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 // The rest of this file is the MULTIREGION-TASKS.md Task 3 fixture: a pair of
 // interleaved comb prisms sized to sit past the consumer's own real-scale
 // gear pair (gearScaleConsumerSegments), proving §4.5's reading answers
-// at that scale and recording what prismMaxArrangementSegments (4096,
+// at that scale and recording what prismcells.MaxArrangementSegments (4096,
 // prism_boolean.go) does to a pair that crosses it. Task 1 and Task 2 already
 // shipped the production code this exercises; this file adds no new
 // capability, tests and measurement only.
@@ -441,8 +441,8 @@ var (
 		math.Max(gearScaleABase, gearScaleBTeethBottom)
 )
 
-// gearScaleSegmentCount is the combined LineSeg count prismSceneWithinWorkCap
-// (prism_boolean.go) charges an n-tooth interleavedCombBodies pair: 2 combs,
+// gearScaleSegmentCount is the combined LineSeg count prismcells.RegionsWithinWorkCap
+// charges an n-tooth interleavedCombBodies pair: 2 combs,
 // each with combUpPts's own 4+4n raw points-and-edges, each edge subdivided
 // gearScaleSubdiv-fold.
 func gearScaleSegmentCount(n int) int {
@@ -484,7 +484,7 @@ func interleavedCombBodies(t *testing.T, doc *decad.Document, n int) (a, b *deca
 // headline (MULTIREGION-TASKS.md Task 3, observable test 1): an 8-tooth
 // interleaved-comb pair at gearScaleEightToothSegments combined segments —
 // above the consumer's own gearScaleConsumerSegments, and safely below
-// prismMaxArrangementSegments' 4096 cap — still reports one summed
+// prismcells.MaxArrangementSegments' 4096 cap — still reports one summed
 // Interference row within a tiny bound. The wall-clock cost is logged for
 // comparison against the real gear pair's own measured ~16s Suspect
 // (MULTIREGION-TASKS.md's "already measured" note).

@@ -55,7 +55,7 @@ var offsetCutTools = []struct{ cx, r float64 }{{0, 18}, {-36, 7}, {36, 7}}
 // TestPrismCutOffsetPlaneToolsChainAnalytically drills three holes with tools
 // sketched on CreateOffsetPlane(XY, -16): every step stays analytic and
 // matches its closed-form volume, and every chain's result still fillets. Shown to
-// fail: with admitPrismPairBudget's prismSharedAxisOf arm deleted, the first
+// fail: with admitPrismPairBudget's prismplacement.SharedAxisOf arm deleted, the first
 // cut took the mesh path and the first anyFaceIsFaceted assertion went red.
 func TestPrismCutOffsetPlaneToolsChainAnalytically(t *testing.T) {
 	t.Parallel()
@@ -133,7 +133,7 @@ func TestPrismCutOffsetPlaneToolsChainAnalytically(t *testing.T) {
 // TestPrismCutOffsetPlaneExclusionsTakeMeshPath keeps every parallel pair
 // outside G3's shared-axis arm on the mesh path (§4.4): each subtest's single
 // Cut builds and its result carries a Faceted face. Shown to fail, one
-// deletion at a time in prismSharedAxisOf: without the exact cross-product
+// deletion at a time in prismplacement.SharedAxisOf: without the exact cross-product
 // test "in-plane origin component" went red, without the placement
 // comparison "placed along the normal" went red, and without the U/V
 // comparison "tilted base" went red.
@@ -211,7 +211,7 @@ func TestPrismCutOffsetPlaneExclusionsTakeMeshPath(t *testing.T) {
 // keeps the sketch frame and records the interval [-48, 0], so the tool shares
 // the plate's frame bits and G3's shared-axis arm admits it with shift 32: the
 // same z -16..32 solid as a tool sketched below and extruded Along. Shown to
-// fail: with admitPrismPairBudget's prismSharedAxisOf arm deleted, the pair
+// fail: with admitPrismPairBudget's prismplacement.SharedAxisOf arm deleted, the pair
 // took the mesh path and the anyFaceIsFaceted assertion went red.
 func TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic(t *testing.T) {
 	t.Parallel()

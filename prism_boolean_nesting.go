@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
@@ -37,7 +38,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 		return prismPayload{}, false, err
 	}
 	for _, profile := range []ProfileRecord{pa.profile, pb.profile} {
-		trimmed, err := prismProfileHasTrimmedCircularSource(budget, profile)
+		trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, profile.Outer, profile.Holes)
 		if err != nil {
 			return prismPayload{}, false, err
 		}
@@ -45,17 +46,17 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 			return prismPayload{}, false, nil
 		}
 	}
-	if !prismIntersectZIntervalOverlaps(pa, pb) {
+	if !prismplacement.IntersectZIntervalOverlaps(prismPlacementOf(pa), prismPlacementOf(pb)) {
 		return prismPayload{}, false, nil
 	}
-	segments, withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.profile, pb.profile)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
 	if !withinCap {
 		return prismPayload{}, false, fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d`,
-			ErrUnsupported, meshbool.OpIntersect, segments, prismMaxArrangementSegments)
+			ErrUnsupported, meshbool.OpIntersect, segments, prismcells.MaxArrangementSegments)
 	}
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	if err != nil {
@@ -82,7 +83,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 // but a consumed source segment whose OWN recorded range already narrows its
 // natural domain still entered buildPrismScene's private scene at a walked
 // endpoint the boolean computed, and that charge (§7's δ_walk,
-// prism_boolean.go's walkChargeOf) composes into both ops' own sectionDelta
+// prismcells.WalkChargeOf) composes into both ops' own sectionDelta
 // here, exactly as it does on Union's own merge path. A scene with a split
 // boundary never matches (some entity is not whole), so it reaches the
 // crossing sub-case, which charges its crossings (A6).
@@ -168,12 +169,12 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		return prismPayload{}, false, err
 	}
 
-	// §3.2's Intersect row, after G5's exact shift (prismZShift) is applied
+	// §3.2's Intersect row, after G5's exact shift (prismplacement.ZShift) is applied
 	// to B's own recorded interval. Each result endpoint is A's own recorded
 	// float, or B's shifted endpoint rounded once with that rounding charged
 	// (prismIntersectEnd); a tie takes the larger of the two displacements,
 	// since both operands' own coordinates then equally denote it.
-	pbZ0, pbZ1 := prismShiftedIntervalAdmitted(pa, pb)
+	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
 	z0, z0Delta := prismIntersectEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta, func(c int) bool { return c > 0 })
 	z1, z1Delta := prismIntersectEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta, func(c int) bool { return c < 0 })
 
@@ -202,17 +203,6 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		sectionDelta: sectionDelta,
 	}
 	return result, true, nil
-}
-
-// prismIntersectZIntervalOverlaps is G5 for Intersect (§3.2): the two
-// re-expressed intervals must overlap, compared as exact rationals.
-func prismIntersectZIntervalOverlaps(pa, pb prismPayload) bool {
-	a0, a1 := proofarith.FloatRat(pa.z0), proofarith.FloatRat(pa.z1)
-	z0, z1, ok := prismShiftedInterval(pa, pb)
-	if a0 == nil || a1 == nil || !ok {
-		return false
-	}
-	return a0.Cmp(z1) < 0 && z0.Cmp(a1) < 0
 }
 
 // prismIntersectEnd picks §3.2's Intersect result at one sweep end over exact
@@ -339,7 +329,7 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 // prismRecordProfileContext makes RecordProfile's own internal re-arrangement
 // (sketchrecord.AuthenticateProfile's fresh s.Profiles() call) observable to a
 // caller's context, the same way prismProfilesContext wraps the FIRST
-// arrangement. The scene is already capped by prismMaxArrangementSegments, so
+// arrangement. The scene is already capped by prismcells.MaxArrangementSegments, so
 // this second pass over it stays bounded too. The returned PlaneRecord is not
 // read here — the caller keeps operand A's own frame/xform (§4.1) — so only
 // the ProfileRecord and error are surfaced.

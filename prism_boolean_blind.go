@@ -60,7 +60,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 		return stackedPrismPayload{}, false, nil
 	}
 	for _, profile := range []ProfileRecord{target.profile, tool.profile} {
-		trimmed, err := prismProfileHasTrimmedCircularSource(budget, profile)
+		trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, profile.Outer, profile.Holes)
 		if err != nil {
 			return stackedPrismPayload{}, false, err
 		}
@@ -68,7 +68,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 			return stackedPrismPayload{}, false, nil
 		}
 	}
-	z0, z1, ok := prismShiftedInterval(target, tool)
+	z0, z1, ok := prismplacement.ShiftedInterval(prismPlacementOf(target), prismPlacementOf(tool))
 	if !ok {
 		return stackedPrismPayload{}, false, nil
 	}
@@ -81,14 +81,14 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	if !openAtTop && !openAtBottom {
 		return stackedPrismPayload{}, false, nil
 	}
-	segments, withinCap, err := prismSceneWithinWorkCap(budget, target, tool)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, target.profile, tool.profile)
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
 	if !withinCap {
 		return stackedPrismPayload{}, false, fmt.Errorf(
 			`%w: the analytic cut scene charges %d arranger segments against the cap of %d`,
-			ErrUnsupported, segments, prismMaxArrangementSegments)
+			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(tool))
 	if err != nil {
@@ -173,7 +173,7 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 		!prismplacement.CutZIntervalSpans(prismPlacementOf(outer), prismPlacementOf(tool)) {
 		return stackedPrismPayload{}, false, nil
 	}
-	trimmed, err := prismProfileHasTrimmedCircularSource(budget, tool.profile)
+	trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, tool.profile.Outer, tool.profile.Holes)
 	if err != nil || trimmed {
 		return stackedPrismPayload{}, false, err
 	}
@@ -192,18 +192,18 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 		target.profile = slab.regions[0]
 		target.z0, target.z1 = slab.z0, slab.z1
 		target.z0Delta, target.z1Delta = slab.z0Delta, slab.z1Delta
-		trimmed, err := prismProfileHasTrimmedCircularSource(budget, target.profile)
+		trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, target.profile.Outer, target.profile.Holes)
 		if err != nil || trimmed {
 			return stackedPrismPayload{}, false, err
 		}
-		segments, withinCap, err := prismSceneWithinWorkCap(budget, target, tool)
+		segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, target.profile, tool.profile)
 		if err != nil {
 			return stackedPrismPayload{}, false, err
 		}
 		if !withinCap {
 			return stackedPrismPayload{}, false, fmt.Errorf(
 				`%w: slab %d's analytic cut scene charges %d arranger segments against the cap of %d`,
-				ErrUnsupported, k, segments, prismMaxArrangementSegments)
+				ErrUnsupported, k, segments, prismcells.MaxArrangementSegments)
 		}
 		scene, match, tags, sceneDelta, resolved, err := resolvePrismCutWithTags(ctx, budget, target, tool, reexpress)
 		if err != nil || !resolved {

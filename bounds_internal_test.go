@@ -136,7 +136,7 @@ func exactApply(move r3.Transform, p r3.Vec) [3]*big.Float {
 // at that magnitude, a zero envelope answers zero, and a non-finite envelope
 // answers +Inf rather than a number a caller's own `> 0` widening could skip.
 //
-// That the CALLER hands over the right envelope is walkChargeOf's own claim,
+// That the CALLER hands over the right envelope is prismcells.WalkChargeOf's own claim,
 // proven against exact rational residuals over cancelling carriers in
 // prism_boolean_internal_test.go's TestWalkChargeOfCoversLerpCancellation.
 func TestWalkEndpointAllow(t *testing.T) {

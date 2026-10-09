@@ -178,7 +178,7 @@ func TestPrismGroupDisplacedToolChargesTheCrossing(t *testing.T) {
 		require.False(t, re.Identity)
 		s, _, _, err := buildPrismSceneRegions(proofbound.NewWorkBudget(t.Context()), []ProfileRecord{target.profile}, toolOp.regions, re)
 		require.NoError(t, err)
-		split, err := prismProfilesHaveSplitBoundary(proofbound.NewWorkBudget(t.Context()), s.Profiles())
+		split, err := prismcells.HasSplitBoundary(proofbound.NewWorkBudget(t.Context()), s.Profiles())
 		require.NoError(t, err)
 		require.True(t, split, "the turned lumps must cross the plate's edge, or the fixture tests nothing")
 		require.Positive(t, re.Delta)
