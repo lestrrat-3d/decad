@@ -487,11 +487,6 @@ func TestFilletRefusals(t *testing.T) {
 	_, err = box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Concave()), units.Millimeters(5))
 	require.ErrorIs(t, err, decad.ErrNoMatch, `a box has no concave lateral edge`)
 
-	// A cap-edge selector is the vertex-blend problem: S1, staged.
-	capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)))
-	_, err = box.Fillet(t.Context(), capEdges, units.Millimeters(5))
-	require.ErrorIs(t, err, decad.ErrUnsupported, `a fillet of a cap edge is not supported`)
-
 	// The refusals left the document untouched — the box is still live.
 	require.Equal(t, []*decad.Body{box}, box.Document().Bodies())
 }
@@ -845,32 +840,10 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 	})
 
 	t.Run(`cap edge`, func(t *testing.T) {
-		// Single straight cap edges are the base vertex-blend refusal (S1).
+		// A partial cap loop still refuses a chamfer with a leading reason.
 		capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)))
 		_, box := filletBox(t)
-		_, err := box.Fillet(t.Context(), capEdges, units.Millimeters(5))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		requireReasonLeads(t, err, `a fillet of a cap edge is the vertex-blend problem`)
-
-		// Both complete cap loops of the box reach route L's fillet arm
-		// (docs/loop-fillet-design.md RF3), which builds them; mixed with the
-		// four lateral edges they are no set of complete loops, and route L
-		// refuses them with modify-general SL1, its reason leading.
-		_, box = filletBox(t)
-		mixed := bothCapLoops()
-		mixed.Or(decad.ParallelTo(r3.NewVec(0, 0, 1)))
-		_, err = box.Fillet(t.Context(), mixed, units.Millimeters(5))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		requireReasonLeads(t, err, `lies on no loop of a planar face`)
-		require.ErrorContains(t, err, `modify-general SL1`)
-		require.Equal(t, []*decad.Body{box}, box.Document().Bodies(), `the refusal leaves the receiver live`)
-
-		// Chamfer's cap-loop reach (§8.3, RX1) reclassifies this selection: it
-		// is two of the four edges of each cap's rim loop — a partial loop —
-		// so it now reads SX4's more specific reason instead of the base
-		// vertex-blend one.
-		_, box = filletBox(t)
-		_, err = box.Chamfer(t.Context(), capEdges, units.Millimeters(5))
+		_, err := box.Chamfer(t.Context(), capEdges, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `the selection covers only part of a cap loop`)
 	})
@@ -906,11 +879,10 @@ func TestModifyRefusalRendersAClosedCircleAsClosed(t *testing.T) {
 	require.NotContains(t, err.Error(), `to (0,5,0)`,
 		`no selected circle renders through the from/to form at all`)
 
-	// The two renderings are distinguishable: a straight cap edge — the only
-	// shape whose coincident endpoints would mean a genuine collapse — still
-	// reads from/to, with the two distinct coordinates it really has.
+	// The two renderings are distinguishable: a straight cap edge still reads
+	// from/to, with the two distinct coordinates it really has.
 	_, box := filletBox(t)
-	_, err = box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))), units.Millimeters(5))
+	_, err = box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))), units.Millimeters(60))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, `selected edge[0] from (0,0,0) to (100,0,0)`,
 		`a non-circular edge keeps the from/to form`)

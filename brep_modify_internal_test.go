@@ -54,29 +54,24 @@ func requireSB1Names(t *testing.T, body *Body) {
 }
 
 // TestBrepModifyOutsideRoutePRefuses pins the refusals that follow route P
-// (§2, §6): a selection no prism reading admits falls to route E or route L
-// (docs/modify-general-design.md §4). A Fillet or a Chamfer of every convex
-// edge refuses with route L's SL1, since the edges share vertices and form no
-// set of complete loops (docs/loop-fillet-design.md §6); a Shell falls to
-// route S (docs/modify-general-design.md §3), which refuses S1's every planar
+// (§2, §6): a selection no prism reading admits falls to route E, L or V
+// (docs/vertex-blend-design.md §2). A Chamfer of every convex edge refuses
+// with SL1 because the selected loops share vertices. A Shell takes route S
+// (docs/modify-general-design.md §3), which refuses S1's every planar
 // face with shell-opening SO6, since S1 reads as the box along z cut by the
 // tool along y and the selection removes every one of its walls, no proper
 // run, and refuses the stacked pocket with SB10's
 // and SG3's text, since it reads as neither a prism nor a through-cut record.
 // S1's convex edges include cap edges, which no prism reading takes. Every
 // refusal leaves the receiver live. Shown to fail with modifyBrepReceiver's
-// shell arm deleted (each Shell then fell to the Fillet and Chamfer arm) and
-// with its route E arm replaced by a nil return (each Fillet and Chamfer fell
-// through to the generic "straight prism" refusal).
+// shell arm deleted, or its route E arm replaced by a nil return.
 func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 	t.Parallel()
 	refuses := func(t *testing.T, body *Body, shell ...string) {
 		t.Helper()
 		before := body.doc.Bodies()
 		edges := Edges(Convex()).AtLeast(1)
-		_, err := body.Fillet(t.Context(), edges, units.Millimeters(1))
-		requireRefusesUnchanged(t, body, before, err, rowSL1, "fillets")
-		_, err = body.Chamfer(t.Context(), edges, units.Millimeters(1))
+		_, err := body.Chamfer(t.Context(), edges, units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, rowSL1, "chamfers")
 		_, err = body.Shell(t.Context(), Faces(Planar()).AtLeast(1), units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, shell...)
