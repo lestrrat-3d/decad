@@ -8,12 +8,12 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the chamfer of docs/modify-design.md §7: Body.Chamfer bevels the
@@ -49,10 +49,7 @@ import (
 
 // ChamferOption configures Chamfer: WithTangentChain and
 // WithAsymmetricChamfer (docs/modify-reach-design.md §2).
-type ChamferOption interface {
-	option.Interface
-	chamferOption()
-}
+type ChamferOption = modifyoption.ChamferOption
 
 // Chamfer bevels the selected lateral edges of a straight prism with a straight
 // chord set back a distance d along each adjacent wall, returning the new body
@@ -157,7 +154,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if err := refuseSheetOperand(b, "Chamfer"); err != nil {
 		return nil, err
 	}
-	o, err := decodeChamferOptions(opts)
+	o, err := modifyoption.DecodeChamfer[*FaceQuery](opts)
 	if err != nil {
 		return nil, err
 	}
@@ -199,8 +196,8 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		if err != nil {
 			return nil, err
 		}
-		asym = &asymmetricChamfer{body: b, refs: refs, d: dmm, other: o.Asymmetric.otherMM,
-			dDelta: dDelta, otherDelta: o.Asymmetric.otherDelta}
+		asym = &asymmetricChamfer{body: b, refs: refs, d: dmm, other: o.Asymmetric.OtherMM,
+			dDelta: dDelta, otherDelta: o.Asymmetric.OtherDelta}
 	}
 
 	// SX10: a capBlendPayload receiver is staged before the generic

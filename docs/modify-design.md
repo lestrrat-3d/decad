@@ -510,7 +510,7 @@ thickness is a magnitude, so it carries no sign (core §8.1's rule, applied
 here): the sense is a `ShellSense` — `Inward` (the wall grows into the original
 solid; the outer skin does not move) or `Outward` (the wall grows off it; the
 original solid becomes the cavity) — set by `WithShellSense`, decoded into
-the call's private `shellOpts` record, and defaulting to `Inward`, which is
+the call's `internal/modifyoption.ShellConfig` record, and defaulting to `Inward`, which is
 what "shell this box" means everywhere it is said. Two `WithShellSense`
 options naming different senses are reach SX1. The thickness passes the magnitude
 gates before either question below is asked: a wrong `Kind`, a non-finite or a

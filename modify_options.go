@@ -4,37 +4,17 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/lestrrat-3d/decad/internal/extent"
-
+	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is the option vocabulary of docs/modify-reach-design.md §2: the
-// three reach options, the private records each modify call decodes its
-// options into, the SX1 gate (Table SX) that rejects an option list naming
-// no single intent, and the asymmetric chamfer's reference resolution (§6,
-// SX3). The decoders run in stage 1 of the reach gate order (§4), and the
-// reference resolves in stage 3, after tangent expansion.
+// Reach option constructors copy query input, then the internal option codec
+// validates and folds the options. The reference resolver uses root topology.
 
 // FilletChamferOption is accepted by both Fillet and Chamfer.
-type FilletChamferOption interface {
-	FilletOption
-	ChamferOption
-}
+type FilletChamferOption = modifyoption.FilletChamferOption
 
-type filletChamferOption struct{ option.Interface }
-
-func (filletChamferOption) filletOption()  {}
-func (filletChamferOption) chamferOption() {}
-
-type chamferOption struct{ option.Interface }
-
-func (chamferOption) chamferOption() {}
-
-type identTangentChain struct{}
-type identAsymmetricChamfer struct{}
-type identNoOpenings struct{}
+type asymmetricChamferOpts = modifyoption.Asymmetric[*FaceQuery]
 
 // WithTangentChain expands each selected seed edge across the edges that
 // continue it with proven G1 continuity (docs/modify-reach-design.md §5): an
@@ -46,7 +26,7 @@ type identNoOpenings struct{}
 // decide, is ErrUnsupported; the call never picks a branch or stops early.
 // Repeating the option is the same as passing it once.
 func WithTangentChain() FilletChamferOption {
-	return filletChamferOption{option.New(identTangentChain{}, struct{}{})}
+	return modifyoption.WithTangentChain()
 }
 
 // WithAsymmetricChamfer sets back the chamfer's positional distance across
@@ -74,9 +54,9 @@ func WithAsymmetricChamfer(reference FaceSelector, otherDistance units.Value) Ch
 			a.Reference = &FaceQuery{branches: branches, card: q.card}
 		}
 	default:
-		a.foreign = fmt.Sprintf(`%T`, reference)
+		a.Foreign = fmt.Sprintf(`%T`, reference)
 	}
-	return chamferOption{option.New(identAsymmetricChamfer{}, a)}
+	return modifyoption.WithAsymmetricChamfer(a)
 }
 
 // WithNoOpenings asks Shell to keep every face and build a closed hollow body
@@ -85,158 +65,7 @@ func WithAsymmetricChamfer(reference FaceSelector, otherDistance units.Value) Ch
 // ErrDegenerate. No receiver builds a closed shell yet: Shell returns
 // ErrUnsupported for every receiver it accepts the option on.
 func WithNoOpenings() ShellOption {
-	return shellOption{option.New(identNoOpenings{}, struct{}{})}
-}
-
-// filletOpts is the record a Fillet call decodes its options into.
-type filletOpts struct {
-	TangentChain bool
-}
-
-// chamferOpts is the record a Chamfer call decodes its options into.
-type chamferOpts struct {
-	TangentChain bool
-	Asymmetric   *asymmetricChamferOpts
-}
-
-// asymmetricChamferOpts is WithAsymmetricChamfer's payload: the copied
-// reference query, or the type name of a selector decad does not own, and
-// the other distance as the caller stated it. otherMM is that distance in
-// millimetres and otherDelta the rounding its unit conversion committed,
-// both filled by the decoder once the magnitude gates pass.
-type asymmetricChamferOpts struct {
-	Reference  *FaceQuery
-	foreign    string
-	Other      units.Value
-	otherMM    float64
-	otherDelta float64
-}
-
-// shellOpts is the record a Shell call decodes its options into
-// (docs/modify-reach-design.md §2's ShellOpts): the wall sense, and whether
-// the shell keeps every face.
-type shellOpts struct {
-	Sense      ShellSense
-	NoOpenings bool
-}
-
-// errOptionConflict is SX1's sentinel wording for an option list naming no
-// single intent.
-func errOptionConflict(format string, args ...any) error {
-	return fmt.Errorf(`%w: `+format+` (modify-reach SX1)`, append([]any{ErrDegenerate}, args...)...)
-}
-
-// decodeFilletOptions folds a Fillet call's options into filletOpts. A nil
-// option, an implementation decad does not own, or a payload the option
-// cannot carry is ErrDegenerate.
-func decodeFilletOptions(opts []FilletOption) (filletOpts, error) {
-	var out filletOpts
-	for _, raw := range opts {
-		if raw == nil {
-			return filletOpts{}, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		// Embedding FilletOption can promote its sealed marker onto a foreign
-		// type, so admit the owned concrete implementation before invoking
-		// any option callback.
-		o, ok := raw.(filletChamferOption)
-		if !ok {
-			return filletOpts{}, fmt.Errorf(`%w: the fillet option is not a decad fillet option (%T)`, ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identTangentChain:
-			out.TangentChain = true
-		default:
-			return filletOpts{}, errOptionConflict(`unknown fillet option identifier %T`, ident)
-		}
-	}
-	return out, nil
-}
-
-// decodeChamferOptions folds a Chamfer call's options into chamferOpts. A
-// second WithAsymmetricChamfer names a second reference and distance pair,
-// which is SX1. The other distance passes the magnitude gates here: a wrong
-// Kind, a non-finite or a negative value is base S15, and zero is
-// ErrDegenerate, since §6 requires both distances strictly positive.
-func decodeChamferOptions(opts []ChamferOption) (chamferOpts, error) {
-	var out chamferOpts
-	for _, raw := range opts {
-		if raw == nil {
-			return chamferOpts{}, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		var o option.Interface
-		switch v := raw.(type) {
-		case filletChamferOption:
-			o = v
-		case chamferOption:
-			o = v
-		default:
-			return chamferOpts{}, fmt.Errorf(`%w: the chamfer option is not a decad chamfer option (%T)`, ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identTangentChain:
-			out.TangentChain = true
-		case identAsymmetricChamfer:
-			if out.Asymmetric != nil {
-				return chamferOpts{}, errOptionConflict(`WithAsymmetricChamfer is given twice; one chamfer takes one reference and one other distance`)
-			}
-			a, ok := option.Get[asymmetricChamferOpts](o)
-			if !ok {
-				return chamferOpts{}, errOptionConflict(`WithAsymmetricChamfer carries no reference and distance`)
-			}
-			mm, mmDelta, err := extent.MagnitudeInBounded(a.Other, units.Length, units.Millimeter, "the asymmetric chamfer's other distance")
-			if err != nil {
-				return chamferOpts{}, err
-			}
-			if mm == 0 {
-				return chamferOpts{}, fmt.Errorf(`%w: an asymmetric chamfer's other distance must be positive; a zero setback leaves that face where it is`, ErrDegenerate)
-			}
-			a.otherMM, a.otherDelta = mm, mmDelta
-			out.Asymmetric = &a
-		default:
-			return chamferOpts{}, errOptionConflict(`unknown chamfer option identifier %T`, ident)
-		}
-	}
-	return out, nil
-}
-
-// decodeShellOptions folds a Shell call's options into shellOpts, the sense
-// defaulting to Inward. Two WithShellSense options naming different senses
-// are SX1; repeating one sense, or WithNoOpenings, is the same as passing it
-// once.
-func decodeShellOptions(opts []ShellOption) (shellOpts, error) {
-	out := shellOpts{Sense: Inward}
-	sensed := false
-	for _, raw := range opts {
-		if raw == nil {
-			return shellOpts{}, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		// decad owns the option vocabulary. Embedding ShellOption can promote
-		// its sealed marker onto a foreign type, so admit the owned concrete
-		// implementation before invoking any option callback.
-		o, ok := raw.(shellOption)
-		if !ok {
-			return shellOpts{}, fmt.Errorf(`%w: the shell option is not a decad shell option (%T)`, ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identShellSense:
-			v, ok := option.Get[ShellSense](o)
-			if !ok {
-				return shellOpts{}, fmt.Errorf(`%w: WithShellSense carries no sense`, ErrDegenerate)
-			}
-			if v != Inward && v != Outward {
-				return shellOpts{}, fmt.Errorf(`%w: unknown shell sense %d`, ErrDegenerate, int(v))
-			}
-			if sensed && v != out.Sense {
-				return shellOpts{}, errOptionConflict(`WithShellSense names both %s and %s`, out.Sense, v)
-			}
-			out.Sense, sensed = v, true
-		case identNoOpenings:
-			out.NoOpenings = true
-		default:
-			return shellOpts{}, fmt.Errorf(`%w: unknown shell option identifier %T`, ErrDegenerate, ident)
-		}
-	}
-	return out, nil
+	return modifyoption.WithNoOpenings()
 }
 
 // resolveAsymmetricReference is stage 3 of the reach gate order: it resolves
@@ -247,8 +76,8 @@ func decodeShellOptions(opts []ShellOption) (shellOpts, error) {
 // the resolved set, or with both, and a resolved face adjacent to no
 // expanded edge, are ErrCardinality.
 func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge) (map[*Edge]*Face, error) {
-	if a.foreign != "" {
-		return nil, fmt.Errorf(`%w: the asymmetric chamfer's reference is not a decad face query (%s)`, ErrDegenerate, a.foreign)
+	if a.Foreign != "" {
+		return nil, fmt.Errorf(`%w: the asymmetric chamfer's reference is not a decad face query (%s)`, ErrDegenerate, a.Foreign)
 	}
 	if a.Reference == nil {
 		return nil, fmt.Errorf(`%w (the asymmetric chamfer's reference)`, errNilSelector)

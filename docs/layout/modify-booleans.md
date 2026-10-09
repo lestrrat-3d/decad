@@ -12,7 +12,7 @@ The rules for rows live in `docs/layout.md`.
 | `fillet.go` | Fillet entry and section rewrite adapter. See modify §6. |
 | `fillet_oblique_cap.go` | Applies `internal/capedge/` admission and cutter to a single oblique prism cap-edge fillet. |
 | `chamfer.go` | `Body.Chamfer`; cap loops route to `capblend.go`. See modify §7. |
-| `modify_options.go` | Reach options, their records, SX1 and the asymmetric reference (SX3). See modify-reach §2, §6. |
+| `modify_options.go` | Reach option constructors and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
 | `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |
 | `fillet_audit.go` | Adapts corner cutbacks to `internal/sectionaudit/` and renders its detailed refusals. See modify §5. |
 | `shell.go` | `Body.Shell`: a prism tube, cup or band group, or a side opening. See modify §8. |
