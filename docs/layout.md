@@ -244,7 +244,7 @@ the rules leave to the byte budget.
 | `brep_payload.go` / `brep_measure.go` | BRep face views, topology and readings. See general-boolean §4. |
 | `classb.go` | Class-B admission and result adapters. See general-boolean §3 B. |
 | `classb_crossing.go` | Class-B scene and BRep adapters. See general-boolean §5, §10. |
-| `surface_trim.go` / `surface_split_revolve.go` | `Trim`/`Extend`/`Split` gates and adapters, then `Split`'s revolve arm. See surface-intersection §2–§3. |
+| `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
 | `boolean_body.go` | Builds faceted bodies and measurements from an audited mesh; adapts `internal/facetedtopology/`. See evaluator §9. |
 
@@ -319,9 +319,9 @@ the rules leave to the byte budget.
 | `internal/verifyoption/` | Verify options. See verification §2. |
 | `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
 | `internal/prismextent/` | Prism extremes, bounds and extent readings. See evaluator §5. |
-| `internal/prismplacement/` | Exact prism axis shifts and relative placement. See prism-boolean §3. |
+| `internal/prismplacement/` | Exact prism axis shifts, sweep spans and relative placement. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |
-| `internal/prismcells/` | Prism scene mapping, cells, surface cuts, charges and trim walks. See prism-boolean §4. |
+| `internal/prismcells/` | Prism profile and surface gates, scene cells, cuts, charges and trim walks. See prism-boolean §4. |
 | `internal/mirrorjoin/` | Exact line admission, reflection and record splice. See mirror-pattern §5. |
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |

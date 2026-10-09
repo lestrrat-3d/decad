@@ -199,7 +199,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 				if len(region.Holes) != 0 { // G6
 					return nil, false, nil
 				}
-				analytic, err := prismProfileIsAnalytic(budget, region) // G4
+				analytic, err := prismcells.ProfileAnalytic(budget, region) // G4
 				if err != nil || !analytic {
 					return nil, false, err
 				}

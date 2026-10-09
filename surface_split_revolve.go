@@ -114,11 +114,11 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 	}
 
 	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
-	rcvAnalytic, err := prismProfileIsAnalytic(budget, rcv.profile)
+	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcv.profile)
 	if err != nil {
 		return pass(err)
 	}
-	tlAnalytic, err := prismProfileIsAnalytic(budget, tl.profile)
+	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.profile)
 	if err != nil {
 		return pass(err)
 	}

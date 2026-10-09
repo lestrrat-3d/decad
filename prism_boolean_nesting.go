@@ -204,20 +204,6 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 	return result, true, nil
 }
 
-// prismCutZIntervalSpans is G5 for Cut (§3.2): the tool's re-expressed
-// [z0, z1] must span the target's — the tool removes material across the
-// target's whole height, which is exactly what §3.2's result row assumes
-// when it takes the target's own interval verbatim. A boundary case (the
-// tool's cap exactly meeting the target's) is a valid span.
-func prismCutZIntervalSpans(target, tool prismPayload) bool {
-	t0, t1 := proofarith.FloatRat(target.z0), proofarith.FloatRat(target.z1)
-	z0, z1, ok := prismShiftedInterval(target, tool)
-	if t0 == nil || t1 == nil || !ok {
-		return false
-	}
-	return z0.Cmp(t0) <= 0 && z1.Cmp(t1) >= 0
-}
-
 // prismIntersectZIntervalOverlaps is G5 for Intersect (§3.2): the two
 // re-expressed intervals must overlap, compared as exact rationals.
 func prismIntersectZIntervalOverlaps(pa, pb prismPayload) bool {

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -72,7 +73,7 @@ func admitPrismGroupPair(budget *proofbound.WorkBudget, oa, ob prismGroupOperand
 			if op.holeFree && len(region.Holes) != 0 { // G6
 				return false, nil
 			}
-			analytic, err := prismProfileIsAnalytic(budget, region) // G4
+			analytic, err := prismcells.ProfileAnalytic(budget, region) // G4
 			if err != nil || !analytic {
 				return false, err
 			}
@@ -122,7 +123,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if ok, err := admitPrismGroupPair(budget, targetOp, tool, false, true); err != nil || !ok {
 		return prismPayload{}, false, err
 	}
-	if !prismCutZIntervalSpans(target, tool.proxy) { // G5: the tool spans the target
+	if !prismplacement.CutZIntervalSpans(prismPlacementOf(target), prismPlacementOf(tool.proxy)) { // G5
 		return prismPayload{}, false, nil
 	}
 	if err := prismGroupWithinCap(budget, "cut", targetOp.regions, tool.regions); err != nil {
