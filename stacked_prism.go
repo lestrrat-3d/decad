@@ -174,67 +174,25 @@ func stackedInterfaces(ctx context.Context, slabs []prismSlab, prior []prismSlab
 	return out, nil
 }
 
-// stackedPatchLoop is one loop of a planar patch: the column whose ring it
-// reads, which ring (the column's top or its bottom), and whether the loop is
-// the patch's outer boundary.
-type stackedPatchLoop struct {
-	column int
-	top    bool
-	outer  bool
-}
-
-// stackedPatch is one exposed planar patch at an interface: a floor (material
-// below only, outward +N) or a ceiling (material above only, outward -N).
-type stackedPatch struct {
-	role   string
-	floor  bool
-	record profileRecord
-	loops  []stackedPatchLoop
-}
-
-// stackedInterfacePatches adapts the record plan's patch rings to the body build.
-func stackedInterfacePatches(sp stackedPrismPayload, columns []stackedColumn, bySlab [][]stackedSlabLoop, k int) ([]stackedPatch, error) {
+// stackedInterfacePatches passes the recorded columns to the shared patch plan.
+func stackedInterfacePatches(sp stackedPrismPayload, columns []stackedColumn, bySlab [][]stackedrecord.SlabLoop, k int) ([]stackedrecord.Patch, error) {
 	plannedColumns := make([]stackedrecord.Column, len(columns))
 	for i, col := range columns {
-		plannedColumns[i] = stackedrecord.Column{
-			Loop: col.loop, Start: col.start, End: col.end,
-			Region: col.region, LoopIndex: col.loopIndex,
-		}
+		plannedColumns[i] = col.Column
 	}
-	plannedLoops := make([][]stackedrecord.SlabLoop, len(bySlab))
-	for slab, entries := range bySlab {
-		plannedLoops[slab] = make([]stackedrecord.SlabLoop, len(entries))
-		for i, entry := range entries {
-			plannedLoops[slab][i] = stackedrecord.SlabLoop{
-				Column: entry.column, Region: entry.region, Loop: entry.loop,
-			}
-		}
-	}
-	planned, err := stackedrecord.InterfacePatches(stackedRecordOf(sp), plannedColumns, plannedLoops, k)
-	if err != nil {
-		return nil, err
-	}
-	patches := make([]stackedPatch, len(planned))
-	for i, patch := range planned {
-		loops := make([]stackedPatchLoop, len(patch.Loops))
-		for j, loop := range patch.Loops {
-			loops[j] = stackedPatchLoop{column: loop.Column, top: loop.Top, outer: loop.Outer}
-		}
-		patches[i] = stackedPatch{role: patch.Role, floor: patch.Floor, record: patch.Record, loops: loops}
-	}
-	return patches, nil
+	return stackedrecord.InterfacePatches(stackedRecordOf(sp), plannedColumns, bySlab, k)
 }
 
 // stackedPatchArea is a patch record's area: its outer loop's enclosed area
 // less each hole's, with sectionDisplacementArea over every loop's walks and
 // proven perimeter folded into the bound (§4), and each loop's own column
 // displacement (colDelta) over that loop alone.
-func stackedPatchArea(ctx context.Context, sectionDelta float64, colDelta []float64, columns []stackedColumn, patch stackedPatch) (proofbound.BoundedScalar, error) {
-	area, err := loopEnclosedAreaContext(ctx, patch.record.Outer)
+func stackedPatchArea(ctx context.Context, sectionDelta float64, colDelta []float64, columns []stackedColumn, patch stackedrecord.Patch) (proofbound.BoundedScalar, error) {
+	area, err := loopEnclosedAreaContext(ctx, patch.Record.Outer)
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}
-	for _, hole := range patch.record.Holes {
+	for _, hole := range patch.Record.Holes {
 		holeArea, err := loopEnclosedAreaContext(ctx, hole)
 		if err != nil {
 			return proofbound.BoundedScalar{}, err
@@ -243,14 +201,14 @@ func stackedPatchArea(ctx context.Context, sectionDelta float64, colDelta []floa
 	}
 	walks := 0
 	perimeter := 0.0
-	for _, pl := range patch.loops {
-		col := columns[pl.column]
-		walks += len(col.loop.Segments)
+	for _, pl := range patch.Loops {
+		col := columns[pl.Column]
+		walks += len(col.Loop.Segments)
 		loopPerimeter := proofbound.AbsSumUpper(col.perimeter.Value, col.perimeter.Bound)
 		perimeter = proofbound.AbsSumUpper(perimeter, loopPerimeter)
-		if delta := colDelta[pl.column]; delta > 0 {
+		if delta := colDelta[pl.Column]; delta > 0 {
 			area.Bound = proofbound.AbsSumUpper(area.Bound,
-				proofbound.SectionDisplacementArea(delta, len(col.loop.Segments), loopPerimeter))
+				proofbound.SectionDisplacementArea(delta, len(col.Loop.Segments), loopPerimeter))
 		}
 	}
 	area.Bound = proofbound.AbsSumUpper(area.Bound, proofbound.SectionDisplacementArea(sectionDelta, walks, perimeter))
@@ -258,45 +216,23 @@ func stackedPatchArea(ctx context.Context, sectionDelta float64, colDelta []floa
 }
 
 type stackedColumn struct {
-	loop       loopRecord
-	start, end int
-	region     int
-	loopIndex  int
-	bottom     []coedge
-	top        []coedge
-	perimeter  proofbound.BoundedScalar
-}
-
-// stackedSlabLoop is one loop of one slab's region: the column that carries
-// it, the region it belongs to in that slab, and its index in that region
-// (0 the outer, i >= 1 hole i-1).
-type stackedSlabLoop struct {
-	column, region, loop int
+	stackedrecord.Column
+	bottom    []coedge
+	top       []coedge
+	perimeter proofbound.BoundedScalar
 }
 
 // stackedColumns adapts recorded wall columns for the topology build.
-func stackedColumns(sp stackedPrismPayload) ([]stackedColumn, [][]stackedSlabLoop, error) {
+func stackedColumns(sp stackedPrismPayload) ([]stackedColumn, [][]stackedrecord.SlabLoop, error) {
 	planned, loops, err := stackedrecord.Columns(stackedRecordOf(sp))
 	if err != nil {
 		return nil, nil, err
 	}
 	columns := make([]stackedColumn, len(planned))
 	for i, col := range planned {
-		columns[i] = stackedColumn{
-			loop: col.Loop, start: col.Start, end: col.End,
-			region: col.Region, loopIndex: col.LoopIndex,
-		}
+		columns[i] = stackedColumn{Column: col}
 	}
-	bySlab := make([][]stackedSlabLoop, len(loops))
-	for k, entries := range loops {
-		bySlab[k] = make([]stackedSlabLoop, len(entries))
-		for i, entry := range entries {
-			bySlab[k][i] = stackedSlabLoop{
-				column: entry.Column, region: entry.Region, loop: entry.Loop,
-			}
-		}
-	}
-	return columns, bySlab, nil
+	return columns, loops, nil
 }
 
 // stackedPlan names a stacked body's faces and states the displacement each
@@ -315,7 +251,7 @@ type stackedPlan interface {
 	// first or the last slab.
 	capRole(slab, region int, top bool) string
 	// patchRole names an exposed interface patch.
-	patchRole(patch stackedPatch) string
+	patchRole(patch stackedrecord.Patch) string
 	// columnDelta is the section displacement column col's loop carries
 	// beyond the payload's sectionDelta.
 	columnDelta(col stackedColumn) float64
@@ -326,12 +262,12 @@ type stackedPlan interface {
 // stackedOwnPlan is the stacked payload's own naming (§3).
 type stackedOwnPlan struct{}
 
-func (stackedOwnPlan) wallRoleLoop(col stackedColumn) int { return col.loopIndex }
+func (stackedOwnPlan) wallRoleLoop(col stackedColumn) int { return col.LoopIndex }
 
 func (stackedOwnPlan) nameWalls(_ context.Context, col stackedColumn, faces []*Face, _ producerID) error {
 	for _, face := range faces {
 		for i := range face.origins {
-			face.origins[i].Role = fmt.Sprintf("slab(%d).region(%d).%s", col.start, col.region, face.origins[i].Role)
+			face.origins[i].Role = fmt.Sprintf("slab(%d).region(%d).%s", col.Start, col.Region, face.origins[i].Role)
 		}
 	}
 	return nil
@@ -344,7 +280,7 @@ func (stackedOwnPlan) capRole(_, _ int, top bool) string {
 	return roleCapStart
 }
 
-func (stackedOwnPlan) patchRole(patch stackedPatch) string { return patch.role }
+func (stackedOwnPlan) patchRole(patch stackedrecord.Patch) string { return patch.Role }
 
 func (stackedOwnPlan) columnDelta(stackedColumn) float64 { return 0 }
 
@@ -363,7 +299,7 @@ func stackedEnclosesCavity(sp stackedPrismPayload) (bool, error) {
 		return false, err
 	}
 	for _, col := range columns {
-		if col.loopIndex != 0 && col.start > 0 && col.end < len(sp.slabs)-1 {
+		if col.LoopIndex != 0 && col.Start > 0 && col.End < len(sp.slabs)-1 {
 			return true, nil
 		}
 	}
@@ -422,7 +358,7 @@ type stackedPart struct {
 // times the farthest coordinate the displaced boundary can reach, as
 // displacedRegionIntegrals does, so the centroid quotient covers it.
 func stackedRegionPart(ctx context.Context, sp stackedPrismPayload, base prismPayload, columns []stackedColumn, colDelta []float64,
-	entries []stackedSlabLoop, k, r int, work *freeform.FreeformWork) (stackedPart, error) {
+	entries []stackedrecord.SlabLoop, k, r int, work *freeform.FreeformWork) (stackedPart, error) {
 	slab := sp.slabs[k]
 	region := slab.regions[r]
 	ig, err := region.EvaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
@@ -436,14 +372,14 @@ func stackedRegionPart(ctx context.Context, sp stackedPrismPayload, base prismPa
 	walks := 0
 	loopArea, loopReach := 0.0, 0.0
 	for _, e := range entries {
-		if e.region != r {
+		if e.Region != r {
 			continue
 		}
-		col := columns[e.column]
+		col := columns[e.Column]
 		perimeter = proofbound.BoundedAdd(perimeter, col.perimeter)
-		walks += len(col.loop.Segments)
-		if delta := colDelta[e.column]; delta > 0 {
-			loopArea = proofbound.AbsSumUpper(loopArea, proofbound.SectionDisplacementArea(delta, len(col.loop.Segments),
+		walks += len(col.Loop.Segments)
+		if delta := colDelta[e.Column]; delta > 0 {
+			loopArea = proofbound.AbsSumUpper(loopArea, proofbound.SectionDisplacementArea(delta, len(col.Loop.Segments),
 				proofbound.AbsSumUpper(col.perimeter.Value, col.perimeter.Bound)))
 			loopReach = max(loopReach, delta)
 		}
@@ -494,7 +430,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		col := &columns[ci]
 		colDelta[ci] = plan.columnDelta(*col)
 		maxColDelta = max(maxColDelta, colDelta[ci])
-		first, last := sp.slabs[col.start], sp.slabs[col.end]
+		first, last := sp.slabs[col.Start], sp.slabs[col.End]
 		pp := base
 		pp.z0, pp.z0Delta = first.z0, first.z0Delta
 		pp.z1, pp.z1Delta = last.z1, last.z1Delta
@@ -502,7 +438,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 			pp.sectionDelta = proofbound.AbsSumUpper(sp.sectionDelta, colDelta[ci])
 		}
 		wallFaces, bottom, top, perimeter, err := buildLoopSidesAs(ctx, body, ref, pp,
-			plan.wallRoleLoop(*col), col.loopIndex != 0, col.loop, work, nil, levelToken{}, levelToken{}, false)
+			plan.wallRoleLoop(*col), col.LoopIndex != 0, col.Loop, work, nil, levelToken{}, levelToken{}, false)
 		if err != nil {
 			return nil, err
 		}
@@ -511,7 +447,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		}
 		col.bottom, col.top, col.perimeter = bottom, top, perimeter
 		faces = append(faces, wallFaces...)
-		if col.loopIndex == 0 {
+		if col.LoopIndex == 0 {
 			for _, f := range wallFaces {
 				anchors[f] = struct{}{}
 			}
@@ -560,14 +496,14 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 				return nil, err
 			}
 			for _, e := range bySlab[end.slab] {
-				if e.region != part.region {
+				if e.Region != part.region {
 					continue
 				}
-				coedges := columns[e.column].bottom
+				coedges := columns[e.Column].bottom
 				if end.top {
-					coedges = columns[e.column].top
+					coedges = columns[e.Column].top
 				}
-				f.loops = append(f.loops, &Loop{coedges: coedges, outer: e.loop == 0})
+				f.loops = append(f.loops, &Loop{coedges: coedges, outer: e.Loop == 0})
 			}
 			if len(planar) == 0 {
 				capArea = part.area
@@ -592,16 +528,16 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 			if err != nil {
 				return nil, err
 			}
-			f, err := newPlane(z, axial, !patch.floor, plan.patchRole(patch), area)
+			f, err := newPlane(z, axial, !patch.Floor, plan.patchRole(patch), area)
 			if err != nil {
 				return nil, err
 			}
-			for _, pl := range patch.loops {
-				coedges := columns[pl.column].bottom
-				if pl.top {
-					coedges = columns[pl.column].top
+			for _, pl := range patch.Loops {
+				coedges := columns[pl.Column].bottom
+				if pl.Top {
+					coedges = columns[pl.Column].top
 				}
-				f.loops = append(f.loops, &Loop{coedges: coedges, outer: pl.outer})
+				f.loops = append(f.loops, &Loop{coedges: coedges, outer: pl.Outer})
 			}
 			planar = append(planar, f)
 		}
@@ -630,7 +566,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		}
 	}
 	for _, col := range columns {
-		a, b := sp.slabs[col.start], sp.slabs[col.end]
+		a, b := sp.slabs[col.Start], sp.slabs[col.End]
 		height := proofbound.BoundedSub(proofbound.MeasuredScalar(b.z1, b.z1Delta), proofbound.MeasuredScalar(a.z0, a.z0Delta))
 		area = proofbound.BoundedAdd(area, proofbound.BoundedMul(col.perimeter, height))
 	}
@@ -680,8 +616,8 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	outerDelta := 0.0
 	for _, entries := range bySlab {
 		for _, e := range entries {
-			if e.loop == 0 && (e.region == 0 || sp.isGroup()) {
-				outerDelta = max(outerDelta, colDelta[e.column])
+			if e.Loop == 0 && (e.Region == 0 || sp.isGroup()) {
+				outerDelta = max(outerDelta, colDelta[e.Column])
 			}
 		}
 	}

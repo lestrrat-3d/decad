@@ -67,11 +67,11 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		first, last := sp.slabs[col.start], sp.slabs[col.end]
-		cl, err := tessellation.ChordLoop(ctx, col.loop, budget, last.z1-first.z0, work, nil, col.loopIndex,
+		first, last := sp.slabs[col.Start], sp.slabs[col.End]
+		cl, err := tessellation.ChordLoop(ctx, col.Loop, budget, last.z1-first.z0, work, nil, col.LoopIndex,
 			func(w survey2d.SideWalk) (*Face, error) {
 				return faceOfRole(fmt.Sprintf("slab(%d).region(%d).side(%d,%d)",
-					col.start, col.region, col.loopIndex, w.Segs[0]))
+					col.Start, col.Region, col.LoopIndex, w.Segs[0]))
 			}, stationbound.ChordStationBound)
 		if err != nil {
 			return nil, err
@@ -101,7 +101,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	for _, slabColumns := range bySlab {
 		columnsInSlab := make([]int, len(slabColumns))
 		for i, entry := range slabColumns {
-			columnsInSlab[i] = entry.column
+			columnsInSlab[i] = entry.Column
 		}
 		if err := tessellation.StackedSlabClearance(ctx, rings, columnsInSlab, requireLoopClearance); err != nil {
 			return nil, err
@@ -111,12 +111,12 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	// column runs CCW, a hole column CW. A patch triangulates its outer CCW and
 	// its holes CW, so a ring whose column winding differs from the role it
 	// plays in the patch is read reversed; a -N patch flips its triangles.
-	emitPatch := func(face *Face, loops []stackedPatchLoop, reverseFace bool, axial float64) error {
+	emitPatch := func(face *Face, loops []stackedrecord.PatchLoop, reverseFace bool, axial float64) error {
 		patchLoops := make([]tessellation.StackedPatchLoop, len(loops))
 		for i, loop := range loops {
 			patchLoops[i] = tessellation.StackedPatchLoop{
-				Column: loop.column, Top: loop.top, Outer: loop.outer,
-				ColumnOuter: columns[loop.column].loopIndex == 0,
+				Column: loop.Column, Top: loop.Top, Outer: loop.Outer,
+				ColumnOuter: columns[loop.Column].LoopIndex == 0,
 			}
 		}
 		patch, err := tessellation.StackedPatchTriangles(ctx, rings, patchLoops, reverseFace,
@@ -131,13 +131,13 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		faceAxial[face] = axial
 		return nil
 	}
-	capLoops := func(slabColumns []stackedSlabLoop, region int, top bool) []stackedPatchLoop {
-		var loops []stackedPatchLoop
+	capLoops := func(slabColumns []stackedrecord.SlabLoop, region int, top bool) []stackedrecord.PatchLoop {
+		var loops []stackedrecord.PatchLoop
 		for _, e := range slabColumns {
-			if e.region != region {
+			if e.Region != region {
 				continue
 			}
-			loops = append(loops, stackedPatchLoop{column: e.column, top: top, outer: e.loop == 0})
+			loops = append(loops, stackedrecord.PatchLoop{Column: e.Column, Top: top, Outer: e.Loop == 0})
 		}
 		return loops
 	}
@@ -165,11 +165,11 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			return nil, err
 		}
 		for _, patch := range patches {
-			face, err := faceOfRole(patch.role)
+			face, err := faceOfRole(patch.Role)
 			if err != nil {
 				return nil, err
 			}
-			if err := emitPatch(face, patch.loops, !patch.floor, sp.slabs[k].z1Delta); err != nil {
+			if err := emitPatch(face, patch.Loops, !patch.Floor, sp.slabs[k].z1Delta); err != nil {
 				return nil, err
 			}
 		}
@@ -190,7 +190,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	}
 	columnHeights := make([]float64, len(columns))
 	for i, column := range columns {
-		columnHeights[i] = sp.slabs[column.end].z1 - sp.slabs[column.start].z0
+		columnHeights[i] = sp.slabs[column.End].z1 - sp.slabs[column.Start].z0
 	}
 	slabHeights := make([]float64, len(sp.slabs))
 	slabColumns := make([][]int, len(bySlab))
@@ -198,7 +198,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		slabHeights[k] = slab.z1 - slab.z0
 		slabColumns[k] = make([]int, len(bySlab[k]))
 		for i, entry := range bySlab[k] {
-			slabColumns[k][i] = entry.column
+			slabColumns[k][i] = entry.Column
 		}
 	}
 	proof := tessellation.ProveStacked(tessellation.StackedProofInput[*Face]{

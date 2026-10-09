@@ -245,8 +245,8 @@ func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, er
 	}
 	bp := brepPayload{xform: sp.xform}
 	for _, col := range columns {
-		first, last := sp.slabs[col.start], sp.slabs[col.end]
-		for _, seg := range col.loop.Segments {
+		first, last := sp.slabs[col.Start], sp.slabs[col.End]
+		for _, seg := range col.Loop.Segments {
 			bp.faces = append(bp.faces, brepFace{
 				frame: sp.frame, wall: seg, z0: first.z0, z1: last.z1,
 				z0Delta: first.z0Delta, z1Delta: last.z1Delta, delta: sp.sectionDelta,

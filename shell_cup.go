@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -360,14 +361,14 @@ type cupPlan struct {
 // A wall-slab region m >= 1 lines O's hole m-1 with C's hole m-1, so loop m
 // of either region; region 0 holds both outers, loop 0 of each.
 func (p cupPlan) wallRoleLoop(col stackedColumn) int {
-	if col.start != col.end && col.start == p.floor {
-		return col.loopIndex
+	if col.Start != col.End && col.Start == p.floor {
+		return col.LoopIndex
 	}
-	return col.region
+	return col.Region
 }
 
 func (p cupPlan) nameWalls(ctx context.Context, col stackedColumn, faces []*Face, ref producerID) error {
-	if col.start != col.end {
+	if col.Start != col.End {
 		return nil
 	}
 	return renameCavityRoles(ctx, faces, ref)
@@ -380,10 +381,10 @@ func (p cupPlan) capRole(slab, region int, _ bool) string {
 	return fmt.Sprintf("rim(%d)", region)
 }
 
-func (cupPlan) patchRole(stackedPatch) string { return "shellCap" }
+func (cupPlan) patchRole(stackedrecord.Patch) string { return "shellCap" }
 
 func (p cupPlan) columnDelta(col stackedColumn) float64 {
-	if (col.start == col.end) == (p.sense != Outward) {
+	if (col.Start == col.End) == (p.sense != Outward) {
 		return p.offsetDelta
 	}
 	return 0
