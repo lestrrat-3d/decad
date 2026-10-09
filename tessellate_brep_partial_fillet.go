@@ -2,41 +2,15 @@ package decad
 
 import (
 	"context"
-	"fmt"
 	"math"
-	"slices"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
-	"github.com/lestrrat-3d/decad/internal/brepgeom"
-	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
-// partialBandMesh carries the two end columns of each selected straight walk.
-// Adjacent walks share their vertex columns through the mesh's coordinate key.
-type partialBandMesh struct {
-	walks    []partialBandWalk
-	columns  []partialBandColumn
-	cells    []filletCell
-	patchSag []float64
-	arcCols  map[int][]int
-}
-
-type partialBandWalk struct {
-	index int
-	cols  []int
-	sag   float64
-}
-
-type partialBandColumn struct {
-	side, cap Point2
-	sideBound proofbound.WalkEndBound
-	capBound  proofbound.WalkEndBound
-}
-
+// chordPartialFilletBand adapts the recorded band to its internal sample layout.
 func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 	cbp capBlendPayload, chord float64) (brepBandChord, error) {
 	budget := proofbound.NewWorkBudget(ctx)
@@ -45,115 +19,11 @@ func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 	if err != nil {
 		return brepBandChord{}, err
 	}
-	if len(side.walks) != len(b.selected) {
-		return brepBandChord{}, fmt.Errorf(`%w: a partial fillet band's side walks disagree with its selection`, ErrUnsupported)
-	}
 	contour := f.regionLoop(b.loop)
-	partial := &partialBandMesh{arcCols: map[int][]int{}}
-	walkCols := make([][2]int, len(b.selected))
-	for i, on := range b.selected {
-		if !on {
-			continue
-		}
-		s := side.walks[i]
-		if b.capWalk[i] < 0 {
-			if !filletband.SphereWalk(s, b.setback.dc) {
-				return brepBandChord{}, fmt.Errorf(`%w: a partial fillet band's selected cap segment is missing`, ErrUnsupported)
-			}
-			seg := b.orig.Segments[i]
-			count, sag, err := tessellation.ChordCount(s.SegmentWalk, chord,
-				tessellation.ChordWalkMin(s.SegmentWalk))
-			if err != nil {
-				return brepBandChord{}, err
-			}
-			cols := make([]int, count+1)
-			pole := Point2{U: s.CU, V: s.CV}
-			dth := (s.Th1 - s.Th0) / float64(count)
-			for j := range cols {
-				theta := s.Th0 + float64(j)*dth
-				p := Point2{U: s.CU + s.Radius*math.Cos(theta),
-					V: s.CV + s.Radius*math.Sin(theta)}
-				switch j {
-				case 0:
-					p = Point2{U: s.StartU, V: s.StartV}
-				case count:
-					p = Point2{U: s.EndU, V: s.EndV}
-				}
-				cols[j] = len(partial.columns)
-				bound := stationbound.ChordStationBound(seg, j, count, p.U, p.V)
-				switch j {
-				case 0:
-					bound = boundarywalk.DenotedStartBound(seg, s.SegmentWalk)
-				case count:
-					bound = boundarywalk.DenotedEndBound(seg, s.SegmentWalk)
-				}
-				partial.columns = append(partial.columns, partialBandColumn{side: p, cap: pole, sideBound: bound})
-			}
-			walkCols[i] = [2]int{cols[0], cols[count]}
-			partial.walks = append(partial.walks, partialBandWalk{index: i, cols: cols, sag: sag})
-			continue
-		}
-		if b.capWalk[i] >= len(contour.Segments) {
-			return brepBandChord{}, fmt.Errorf(`%w: a partial fillet band's selected cap segment is missing`, ErrUnsupported)
-		}
-		c, err := boundarywalk.WalkOf(contour.Segments[b.capWalk[i]], work)
-		if err != nil {
-			return brepBandChord{}, err
-		}
-		if !s.IsLine() || !c.IsLine() {
-			return brepBandChord{}, fmt.Errorf(`%w: a selected partial fillet walk is curved`, ErrUnsupported)
-		}
-		walkCols[i] = [2]int{len(partial.columns), len(partial.columns) + 1}
-		partial.columns = append(partial.columns,
-			partialBandColumn{side: Point2{U: s.StartU, V: s.StartV}, cap: Point2{U: c.StartU, V: c.StartV}},
-			partialBandColumn{side: Point2{U: s.EndU, V: s.EndV}, cap: Point2{U: c.EndU, V: c.EndV}})
-		partial.walks = append(partial.walks, partialBandWalk{index: i, cols: []int{walkCols[i][0], walkCols[i][1]}})
-	}
-	if len(partial.walks) == 0 {
-		return brepBandChord{}, fmt.Errorf(`%w: a partial fillet band selects no walks`, ErrUnsupported)
-	}
-	for _, w := range partial.walks {
-		i := w.index
-		for j := range len(w.cols) - 1 {
-			partial.cells = append(partial.cells, filletCell{C0: w.cols[j], C1: w.cols[j+1], Patch: len(partial.patchSag)})
-		}
-		partial.patchSag = append(partial.patchSag, w.sag)
-		k := (i + 1) % len(b.selected)
-		if b.capArc[k] < 0 {
-			continue
-		}
-		if b.capArc[k] >= len(contour.Segments) || !b.selected[k] {
-			return brepBandChord{}, fmt.Errorf(`%w: a partial fillet band's reflex connector is missing`, ErrUnsupported)
-		}
-		seg := contour.Segments[b.capArc[k]]
-		arc, err := boundarywalk.WalkOf(seg, work)
-		if err != nil {
-			return brepBandChord{}, err
-		}
-		if !arc.IsCircular() || arc.Closed {
-			return brepBandChord{}, fmt.Errorf(`%w: a partial fillet's connector is not an open arc`, ErrUnsupported)
-		}
-		count, sag, err := tessellation.ChordCount(arc, chord/2, 1)
-		if err != nil {
-			return brepBandChord{}, err
-		}
-		cols := []int{walkCols[i][1]}
-		corner := side.walks[k]
-		for j := 1; j < count; j++ {
-			theta := arc.Th0 + (arc.Th1-arc.Th0)*float64(j)/float64(count)
-			p := Point2{U: arc.CU + arc.Radius*math.Cos(theta),
-				V: arc.CV + arc.Radius*math.Sin(theta)}
-			cols = append(cols, len(partial.columns))
-			partial.columns = append(partial.columns, partialBandColumn{
-				side: Point2{U: corner.StartU, V: corner.StartV}, cap: p,
-				capBound: stationbound.ChordStationBound(seg, j, count, p.U, p.V)})
-		}
-		cols = append(cols, walkCols[k][0])
-		partial.arcCols[b.capArc[k]] = cols
-		for j := range len(cols) - 1 {
-			partial.cells = append(partial.cells, filletCell{C0: cols[j], C1: cols[j+1], Patch: len(partial.patchSag)})
-		}
-		partial.patchSag = append(partial.patchSag, sag)
+	partial, err := partialband.PartialFilletLayout(side.walks, b.orig.Segments,
+		contour.Segments, b.selected, b.capWalk, b.capArc, b.setback.dc, chord, work)
+	if err != nil {
+		return brepBandChord{}, err
 	}
 	sideZ, sideDelta := b.sideLevel(f)
 	return brepBandChord{band: b, face: f, cbp: cbp, start: b.matSign(f) > 0,
@@ -162,10 +32,10 @@ func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 }
 
 func (bc *brepBandChord) placePartial(e brepEmbed, addVertex func([3]float64, proofbound.WalkEndBound) int) {
-	for _, col := range bc.partial.columns {
-		s, c := col.side, col.cap
-		bc.sideV = append(bc.sideV, addVertex(e.Canon(s.U, s.V, bc.sideZ), col.sideBound))
-		bc.capV = append(bc.capV, addVertex(e.Canon(c.U, c.V, bc.face.z0), col.capBound))
+	for _, col := range bc.partial.Columns {
+		s, c := col.Side, col.Cap
+		bc.sideV = append(bc.sideV, addVertex(e.Canon(s.U, s.V, bc.sideZ), col.SideBound))
+		bc.capV = append(bc.capV, addVertex(e.Canon(c.U, c.V, bc.face.z0), col.CapBound))
 	}
 }
 
@@ -177,8 +47,8 @@ func (bc *brepBandChord) placePartialRings(e brepEmbed,
 	fr.dev = make([][]float64, n+1)
 	fr.ringV[0], fr.ringV[n] = bc.sideV, bc.capV
 	side, capPoints := make([]Point2, N), make([]Point2, N)
-	for c, col := range bc.partial.columns {
-		side[c], capPoints[c] = col.side, col.cap
+	for c, col := range bc.partial.Columns {
+		side[c], capPoints[c] = col.Side, col.Cap
 	}
 	points, err := tessellation.FilletRingGeometry(tessellation.FilletRingInput{
 		Side: side, Cap: capPoints, Radius: bc.band.setback.dc,
@@ -202,105 +72,18 @@ func (bc *brepBandChord) placePartialRings(e brepEmbed,
 	return nil
 }
 
-// partialOpenPolys gives terminal meridians and cap connector arcs the same
-// stations as their adjacent patches, in each record face's walk direction.
+// partialOpenPolys adapts recorded B-rep uses to the internal band layout.
 func (bc *brepBandChord) partialOpenPolys(topo *brepTopology, canon [][3]float64) (map[int][]int, error) {
-	out := map[int][]int{}
-	for _, t := range bc.band.terminals {
-		ui := -1
-		for _, candidate := range topo.faceUses[t.face] {
-			u := topo.uses[candidate]
-			if u.Part == brepLoopSeg && u.Loop == t.loop && u.Seg == t.seg {
-				ui = candidate
-				break
-			}
-		}
-		if ui < 0 {
-			return nil, fmt.Errorf(`%w: a partial fillet's terminal has no face use`, ErrUnsupported)
-		}
-		u := topo.uses[ui]
-		for c := range bc.capV {
-			lo, hi := canon[bc.fillet.ringV[0][c]], canon[bc.fillet.ringV[bc.fillet.n][c]]
-			if u.From != lo || u.To != hi {
-				if u.From != hi || u.To != lo {
-					continue
-				}
-			}
-			poly := make([]int, bc.fillet.n+1)
-			for k := range poly {
-				poly[k] = bc.fillet.ringV[k][c]
-			}
-			if u.From == hi {
-				slices.Reverse(poly)
-			}
-			out[ui] = poly
-			break
-		}
-		if out[ui] == nil {
-			return nil, fmt.Errorf(`%w: a partial fillet's terminal arc has no matching meridian`, ErrUnsupported)
-		}
+	terminals := make([]partialband.Terminal, len(bc.band.terminals))
+	for i, terminal := range bc.band.terminals {
+		terminals[i] = partialband.Terminal{Face: terminal.face, Loop: terminal.loop, Seg: terminal.seg}
 	}
-	for seg, cols := range bc.partial.arcCols {
-		ui := -1
-		for _, candidate := range topo.faceUses[bc.band.face] {
-			u := topo.uses[candidate]
-			if u.Part == brepLoopSeg && u.Loop == bc.band.loop && u.Seg == seg {
-				ui = candidate
-				break
-			}
-		}
-		if ui < 0 {
-			return nil, fmt.Errorf(`%w: a partial fillet's cap connector has no face use`, ErrUnsupported)
-		}
-		poly := make([]int, len(cols))
-		for j, col := range cols {
-			poly[j] = bc.fillet.ringV[bc.fillet.n][col]
-		}
-		u := topo.uses[ui]
-		switch {
-		case canon[poly[0]] == u.From && canon[poly[len(poly)-1]] == u.To:
-		case canon[poly[0]] == u.To && canon[poly[len(poly)-1]] == u.From:
-			slices.Reverse(poly)
-		default:
-			return nil, fmt.Errorf(`%w: a partial fillet's cap connector disagrees with its samples`, ErrUnsupported)
-		}
-		out[ui] = poly
-	}
-	work := freeform.NewFreeformWork()
-	for _, walk := range bc.partial.walks {
-		if bc.band.capWalk[walk.index] >= 0 {
-			continue
-		}
-		w, err := boundarywalk.WalkOf(bc.band.orig.Segments[walk.index], work)
-		if err != nil {
-			return nil, err
-		}
-		key, _ := brepgeom.CurveKey(topo.embeds[bc.band.face], w, bc.sideZ)
-		ui := -1
-		for _, candidate := range topo.open {
-			if topo.uses[candidate].Key == key {
-				ui = candidate
-				break
-			}
-		}
-		if ui < 0 {
-			return nil, fmt.Errorf(`%w: a partial fillet's sphere has no side contour use`, ErrUnsupported)
-		}
-		poly := make([]int, len(walk.cols))
-		for j, col := range walk.cols {
-			poly[j] = bc.fillet.ringV[0][col]
-		}
-		u := topo.uses[ui]
-		switch {
-		case canon[poly[0]] == u.From && canon[poly[len(poly)-1]] == u.To:
-		case canon[poly[0]] == u.To && canon[poly[len(poly)-1]] == u.From:
-			slices.Reverse(poly)
-		default:
-			return nil, fmt.Errorf(`%w: a partial fillet's sphere side disagrees with its samples`, ErrUnsupported)
-		}
-		out[ui] = poly
-	}
-	return out, nil
+	return partialband.OpenPolys(partialband.OpenPolyInput{
+		Layout: bc.partial, Face: bc.band.face, Loop: bc.band.loop,
+		Orig: bc.band.orig.Segments, CapWalk: bc.band.capWalk, Terminals: terminals,
+		RingV: bc.fillet.ringV, Canon: canon, Uses: topo.uses, FaceUses: topo.faceUses,
+		Open: topo.open, Embed: topo.embeds[bc.band.face], SideZ: bc.sideZ,
+	})
 }
 
 func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Face, error),
@@ -313,7 +96,7 @@ func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Fa
 	delta := bc.face.delta
 	levelDelta := proofbound.AbsSumUpper(bc.band.setback.dsDelta, bc.sideDelta)
 	axial := bc.cbp.capBandLevel(bc.face.z0, bc.band.matSign(bc.face)).Bound
-	for p := range bc.partial.patchSag {
+	for p := range bc.partial.PatchSag {
 		face, err := faceOfRole(bc.band.patchRole(p))
 		if err != nil {
 			return err
@@ -325,7 +108,7 @@ func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Fa
 				m.addTriangle([3]int{a, b, c}, face)
 			}
 		}
-		for _, cell := range bc.partial.cells {
+		for _, cell := range bc.partial.Cells {
 			if cell.Patch != p {
 				continue
 			}
@@ -345,7 +128,7 @@ func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Fa
 				}
 			}
 		}
-		eps := proofbound.AbsSumUpper(sPhi, bc.partial.patchSag[p], twist)
+		eps := proofbound.AbsSumUpper(sPhi, bc.partial.PatchSag[p], twist)
 		bc.finishPatch(m, face, eps, delta, levelDelta, axial, first, len(m.triangles), bump)
 	}
 	return nil

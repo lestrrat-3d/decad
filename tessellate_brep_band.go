@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -55,7 +56,7 @@ type brepBandChord struct {
 	// fillet holds a fillet band's interior rings (tessellate_brep_fillet.go),
 	// nil for a chamfer band.
 	fillet  *filletRings
-	partial *partialBandMesh
+	partial *partialband.PartialBandLayout
 	// curved marks LF8 seams at the start of each walk. Their interior ring
 	// positions follow offset-carrier intersections instead of affine ends.
 	curved []bool

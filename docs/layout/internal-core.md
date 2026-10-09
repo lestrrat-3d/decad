@@ -46,6 +46,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Recorded-loop chording, mesh topology, bounds and audits. See tessellation-design. |
+| `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines. See loop-fillet §7.1. |
 | `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums and mesh proofs. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs. |
