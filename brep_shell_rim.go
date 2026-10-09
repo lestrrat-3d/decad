@@ -55,13 +55,13 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 	}
 
 	var removed []int
-	if rm.bottom {
+	if rm.Bottom {
 		removed = append(removed, tc.caps.Bottom)
 	}
-	if rm.top {
+	if rm.Top {
 		removed = append(removed, tc.caps.Top)
 	}
-	removed = append(removed, rm.walls...)
+	removed = append(removed, rm.Walls...)
 	rimTools := make([]throughshell.RimTool, len(tc.tools))
 	for i, tool := range tc.tools {
 		rimTools[i] = throughshell.RimTool{W0: tool.w0, W1: tool.w1,

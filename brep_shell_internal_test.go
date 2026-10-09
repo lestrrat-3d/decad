@@ -753,7 +753,7 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 		dilated[i], err = offsetProfile(budget, tool.prism.profile, -1, 2)
 		require.NoError(t, err)
 	}
-	topOnly := throughRemoval{top: true}
+	topOnly := throughRemoval{Top: true}
 	cavity, err := tc.cavity(t.Context(), bp, eroded, dilated, topOnly, brepShellCall{tmm: 2}, 0)
 	require.NoError(t, err)
 	_, err = throughCutRims(t.Context(), budget, bp, tc, cavity, eroded, dilated, topOnly)
@@ -1014,8 +1014,8 @@ func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 	require.NoError(t, err)
 	rm, err := tc.removedFaces(s1, bp, removed)
 	require.NoError(t, err)
-	require.True(t, rm.top)
-	require.Len(t, rm.walls, 1)
+	require.True(t, rm.Top)
+	require.Len(t, rm.Walls, 1)
 
 	budget := proofbound.NewWorkBudget(t.Context())
 	call := brepShellCall{t: units.Millimeters(2), tmm: 2, tDelta: 1e-9}
