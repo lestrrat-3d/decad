@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -27,7 +26,7 @@ import (
 // and 6): the receiver's faces but the removed ones, verbatim; the cavity's
 // faces reversed, except those lying in a removed face's plane; and, per
 // removed face R, its rim: R's region less every cavity face Q in R's plane
-// (throughRimRegions), and for each hole h of R the band between h and the
+// (throughshell.RimRegions), and for each hole h of R the band between h and the
 // hole of some Q that partners it — at a cap the hole of the eroded section
 // of h's index, at a pierced wall the section of the tool through h dilated
 // by t. A loop with no partner is SG7. Every rim region and band runs modify
@@ -63,6 +62,11 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 		removed = append(removed, tc.caps.Top)
 	}
 	removed = append(removed, rm.walls...)
+	rimTools := make([]throughshell.RimTool, len(tc.tools))
+	for i, tool := range tc.tools {
+		rimTools[i] = throughshell.RimTool{W0: tool.w0, W1: tool.w1,
+			Loop0: tool.loop0, Loop1: tool.loop1, FrameEmbed: tool.frameEmb}
+	}
 	gone := map[int]struct{}{}
 	inPlane := map[int]struct{}{}
 	var rims []brepFace
@@ -76,9 +80,15 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 			return brepPayload{}, err
 		}
 		r := rp.face
-		partner, err := tc.rimPartner(ctx, fi, rp, joined, dilated)
+		partner, reason, err := throughshell.NewRimPartner(ctx, throughshell.RimPartnerInput{
+			FaceIndex: fi, Wall: rp.wall, Holes: r.region.Holes, Embed: rp.e,
+			Caps: tc.caps, Joined: joined, Tools: rimTools, Dilated: dilated,
+		})
 		if err != nil {
 			return brepPayload{}, err
+		}
+		if reason != "" {
+			return brepPayload{}, throughRimError(r, reason)
 		}
 		var qOuters []LoopRecord
 		var bands []ProfileRecord
@@ -117,9 +127,9 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 				if !rp.wall {
 					holeF = inF.Holes[qh]
 				}
-				hi, err := partner(hole, holeF)
-				if err != nil {
-					return brepPayload{}, err
+				hi, reason := partner(hole, holeF)
+				if reason != "" {
+					return brepPayload{}, throughRimError(r, reason)
 				}
 				if _, dup := partnered[hi]; dup {
 					return brepPayload{}, throughRimError(r, "a cavity hole partners no hole of the removed face, or two")
@@ -135,9 +145,12 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 		if len(partnered) != len(r.region.Holes) {
 			return brepPayload{}, throughRimError(r, "a hole of the removed face has no cavity hole to partner")
 		}
-		regions, err := throughRimRegions(ctx, budget, r, r.region.Outer, qOuters)
+		regions, reason, err := throughshell.RimRegions(ctx, budget, r.region.Outer, qOuters)
 		if err != nil {
-			return brepPayload{}, err
+			return brepPayload{}, shellCancelCause(err)
+		}
+		if reason != "" {
+			return brepPayload{}, throughRimError(r, reason)
 		}
 		delta := cavity.sectionDelta()
 		if rp.wall {
@@ -201,122 +214,6 @@ func (tc throughCut) rimPlane(bp brepPayload, fi int) (throughRimPlane, error) {
 	face := brepFace{frame: wall.Frame, region: &wall.Region, outward: true,
 		sweep: tc.caps.Frame.N(), z0: z, z1: z, role: f.role}
 	return throughRimPlane{face: face, e: wall.Embed, axis: wall.Axis, level: wall.Level, wall: true}, nil
-}
-
-// rimPartner returns the hole partnering of removed face fi: given a cavity
-// face's hole in R's frame (and, at a cap, in the prism frame F), the index
-// of the hole of R it partners, or SG7. At a cap the cavity hole must equal
-// the eroded section's hole of some index (S-1's rule: offsetProfile keeps
-// loop order, and the joined record is what class B states), and R's hole of
-// that section index partners it. At a pierced wall the cavity hole must
-// equal the section of the tool through one of R's holes dilated by t, as the
-// tool's own cut states it: the joined dilated section carried into R's frame
-// and reversed, compared as throughshell.LoopsSame reads two loops. A wall
-// along k holds no hole, so any cavity hole there is SG7.
-func (tc throughCut) rimPartner(ctx context.Context, fi int, rp throughRimPlane, joined ProfileRecord, dilated []ProfileRecord) (func(inR, inF LoopRecord) (int, error), error) {
-	r := rp.face
-	miss := func(what string) (int, error) { return -1, throughRimError(r, what) }
-	if !rp.wall {
-		// The section hole index of each of R's region holes.
-		holes := make([]int, len(r.region.Holes))
-		for hi := range holes {
-			holes[hi] = hi
-			if fi == tc.caps.Bottom {
-				holes[hi] = tc.caps.BottomLoop[1+hi] - 1
-			}
-		}
-		return func(_, inF LoopRecord) (int, error) {
-			si := slices.IndexFunc(joined.Holes, func(want LoopRecord) bool { return brepgeom.LoopsEqual(want, inF) })
-			if si < 0 {
-				return miss("a cavity face in its plane holds a loop that is neither its outer loop nor a hole of the eroded section")
-			}
-			hi := slices.Index(holes, si)
-			if hi < 0 {
-				return miss("a hole of the eroded section partners no hole of the removed face")
-			}
-			return hi, nil
-		}, nil
-	}
-	type want struct {
-		loop LoopRecord
-		hi   int
-	}
-	var wants []want
-	for i, tool := range tc.tools {
-		var hi int
-		switch fi {
-		case tool.w0:
-			hi = tool.loop0 - 1
-		case tool.w1:
-			hi = tool.loop1 - 1
-		default:
-			continue
-		}
-		section, _, err := brepJoinProfile(dilated[i])
-		if err != nil {
-			return nil, err
-		}
-		inR, ok := brepgeom.NewPrismMap(tool.frameEmb, rp.e).Loop(section.Outer)
-		if !ok {
-			return nil, throughRimError(r, "a dilated tool's section does not map into its frame")
-		}
-		loop, err := offset2d.ReverseLoopRecordContext(ctx, inR)
-		if err != nil {
-			return nil, err
-		}
-		wants = append(wants, want{loop: loop, hi: hi})
-	}
-	return func(inR, _ LoopRecord) (int, error) {
-		for _, w := range wants {
-			if throughshell.LoopsSame(w.loop, inR) {
-				return w.hi, nil
-			}
-		}
-		return miss("a cavity face in its plane holds a loop that is neither its outer loop nor the dilated section of a tool through it")
-	}, nil
-}
-
-// throughRimRegions classifies the loops left by the cavity trace. The
-// geometry and exact cancellation are computed in internal/brepgeom; the
-// signed-area budget and SG7 refusal belong to the shell operation.
-func throughRimRegions(ctx context.Context, budget *proofbound.WorkBudget, r brepFace,
-	outer LoopRecord, cavity []LoopRecord) ([]ProfileRecord, error) {
-	trace, err := brepgeom.TraceRim(ctx, outer, cavity)
-	if err != nil {
-		if reason, ok := err.(brepgeom.RimTraceError); ok {
-			return nil, throughRimError(r, reason.Error())
-		}
-		return nil, err
-	}
-	if !trace.Cancelled {
-		return []ProfileRecord{{Outer: trace.Loops[0], Holes: trace.Loops[1:]}}, nil
-	}
-	var outs, inner []LoopRecord
-	for _, rec := range trace.Loops {
-		area, err := loopSignedAreaBudget(budget, rec)
-		if err != nil {
-			return nil, shellCancelCause(err)
-		}
-		switch {
-		case area > 0:
-			outs = append(outs, rec)
-		case area < 0:
-			inner = append(inner, rec)
-		default:
-			return nil, throughRimError(r, "a loop left by the cavity's trace encloses no area")
-		}
-	}
-	switch {
-	case len(inner) == 0:
-		out := make([]ProfileRecord, len(outs))
-		for i, o := range outs {
-			out[i] = ProfileRecord{Outer: o}
-		}
-		return out, nil
-	case len(outs) == 1:
-		return []ProfileRecord{{Outer: outs[0], Holes: inner}}, nil
-	}
-	return nil, throughRimError(r, "the loops left by the cavity's trace are not one outer loop with holes")
 }
 
 // throughRimError is SG7, naming the removed face.
