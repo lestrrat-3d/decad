@@ -11,7 +11,7 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `internal/stackedrecord/` | Derives and audits slab interfaces, wall columns, and exposed patch rings. See stacked-prism §2.2–§3. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
-| `internal/compositesweep/` | Composite Sweep span limits and combined bounded measurements. See sweep §9. |
+| `internal/compositesweep/` | Composite Sweep limits, bounded measurements and separation audit. See sweep §7, §9. |
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons, body reference formulas, and reading diagnostics. See verification §2-§3. |
 | `internal/verifyoption/` | Verify options. See verification §2. |

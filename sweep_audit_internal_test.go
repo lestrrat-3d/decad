@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 
@@ -68,17 +69,17 @@ func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
 }
 
 func TestSweepAuditBoxesRequireStrictBoundedSeparation(t *testing.T) {
-	box := func(lower, upper, bound float64) Box {
-		return Box{
+	box := func(lower, upper, bound float64) compositesweep.AuditBox {
+		return compositesweep.AuditBox{
 			Min:   r3.Vec{X: lower},
 			Max:   r3.Vec{X: upper},
-			Bound: units.Millimeters(bound),
+			Bound: units.Millimeters(bound).Base(),
 		}
 	}
-	require.True(t, sweepAuditBoxesStrictlySeparated(box(0, 1, 0), box(2, 3, 0)))
-	require.False(t, sweepAuditBoxesStrictlySeparated(box(0, 1, 0), box(1, 2, 0)))
-	require.False(t, sweepAuditBoxesStrictlySeparated(box(0, 1, 0.25), box(1.25, 2, 0)))
-	require.True(t, sweepAuditBoxesStrictlySeparated(box(0, 1, 0.125), box(1.5, 2, 0.125)))
+	require.True(t, compositesweep.BoxesStrictlySeparated(box(0, 1, 0), box(2, 3, 0)))
+	require.False(t, compositesweep.BoxesStrictlySeparated(box(0, 1, 0), box(1, 2, 0)))
+	require.False(t, compositesweep.BoxesStrictlySeparated(box(0, 1, 0.25), box(1.25, 2, 0)))
+	require.True(t, compositesweep.BoxesStrictlySeparated(box(0, 1, 0.125), box(1.5, 2, 0.125)))
 }
 
 func TestSweepAuditEndpointSupportStopsAtHalfTurn(t *testing.T) {
