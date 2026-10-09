@@ -20,6 +20,7 @@ const (
 	AmbiguousFeature
 	PointTooCoarse
 	PayloadUnsupported
+	NoNormalProof
 )
 
 // ScalarReading encloses a length in millimetres.
