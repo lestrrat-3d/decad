@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"sort"
 
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/spherepath"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -34,63 +36,6 @@ func (r *orientedSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.D
 		return r.pa.Delta, r.pb.Delta
 	}
 	return r.pb.Delta, r.pa.Delta
-}
-
-func (r *orientedSphereSweepRun) sourceCorridor() bool {
-	sphereDelta, boxDelta := r.deltas()
-	for _, f := range []*big.Rat{new(big.Rat), big.NewRat(1, 1)} {
-		sphere, okSphere := translatedSphere(r.sphere, sphereDelta, f)
-		box, okBox := translatedOrientedBox(r.box, boxDelta, f)
-		if !okSphere || !okBox {
-			return false
-		}
-		axis, side, outward, _, distance2, ok := orientedSphereFace(sphere, box)
-		if !ok || axis != r.axis || side != r.side || !sameDyV3(outward, r.outward) ||
-			distance2 == nil {
-			return false
-		}
-		// The opposite support stays beyond the ball throughout the affine path.
-		face := box.corner[0]
-		if side == 1 {
-			face = proofarith.DvAdd(face, box.edge[axis])
-		}
-		d := proofarith.DvDot(proofarith.DvSub(sphere.center, face), outward)
-		thickness := proofarith.DvDot(box.edge[axis], outward)
-		if side == 0 {
-			thickness = proofarith.DyNeg(thickness)
-		}
-		opposite := proofarith.DyAdd(d, thickness)
-		if proofarith.DyCmp(proofarith.DyMul(opposite, opposite), proofarith.DyMul(proofarith.DyMul(sphere.radius, sphere.radius),
-			proofarith.DvDot(outward, outward))) <= 0 {
-			return false
-		}
-	}
-	face := r.box.corner[0]
-	if r.side == 1 {
-		face = proofarith.DvAdd(face, r.box.edge[r.axis])
-	}
-	r.start = proofarith.DvDot(proofarith.DvSub(r.sphere.center, face), r.outward)
-	r.slope = proofarith.DvDot(proofarith.DvSub(sphereDelta, boxDelta), r.outward)
-	return r.start.Sign() > 0
-}
-
-func sameDyV3(a, b proofarith.DyV3) bool {
-	for k := range 3 {
-		if proofarith.DyCmp(a[k], b[k]) != 0 {
-			return false
-		}
-	}
-	return true
-}
-
-func (r *orientedSphereSweepRun) signedAt(f *big.Rat) int {
-	d := new(big.Rat).Add(r.start.Rat(), new(big.Rat).Mul(r.slope.Rat(), f))
-	if d.Sign() <= 0 {
-		return -1
-	}
-	radius2 := proofarith.DyMul(r.sphere.radius, r.sphere.radius).Rat()
-	return new(big.Rat).Mul(d, d).Cmp(new(big.Rat).Mul(radius2,
-		proofarith.DvDot(r.outward, r.outward).Rat()))
 }
 
 func (r *orientedSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
@@ -172,18 +117,12 @@ func (r *orientedSphereSweepRun) poseDeviation(f *big.Rat, poseA, poseB r3.Trans
 		sphereDelta, boxDelta = r.pa.Delta, r.pb.Delta
 	}
 	observedSphere, okSphere := translatedReplaySphere(r.sphere, sphereFrom, spherePose)
-	observedBox, okBox := translatedReplayOrientedBox(r.box, boxFrom, boxPose)
+	observedBox, okBox := spherepath.TranslateObservedBox(r.box.pairBox(), boxFrom, boxPose)
 	if !okSphere || !okBox {
 		return new(big.Rat).SetInt64(1 << 30)
 	}
-	deviation := orientedBoxPoseDeviation(r.box, observedBox, boxDelta, f)
-	for k := range 3 {
-		expected := new(big.Rat).Add(r.sphere.center[k].Rat(),
-			new(big.Rat).Mul(sphereDelta[k].Rat(), f))
-		diff := new(big.Rat).Sub(observedSphere.center[k].Rat(), expected)
-		deviation.Add(deviation, diff.Abs(diff))
-	}
-	return deviation
+	return spherepath.OrientedSpherePoseDeviation(r.box.pairBox(), observedBox,
+		boxDelta, r.sphere.center, observedSphere.center, sphereDelta, f)
 }
 
 func (r *orientedSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
@@ -196,48 +135,13 @@ func (r *orientedSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) 
 	return r.report
 }
 
-func (r *orientedSphereSweepRun) bracket(resolution *big.Rat) (*big.Rat, *big.Rat, bool) {
-	grid := big.NewInt(1)
-	for range 61 {
-		width := new(big.Rat).Quo(r.pa.Duration, new(big.Rat).SetInt(grid))
-		if new(big.Rat).Mul(width, big.NewRat(4, 1)).Cmp(resolution) <= 0 {
-			leftIndex, rightIndex := big.NewInt(0), new(big.Int).Set(grid)
-			for new(big.Int).Sub(rightIndex, leftIndex).Cmp(big.NewInt(1)) > 0 {
-				middle := new(big.Int).Add(leftIndex, rightIndex)
-				middle.Rsh(middle, 1)
-				f := new(big.Rat).SetFrac(middle, grid)
-				if r.signedAt(f) > 0 {
-					leftIndex = middle
-				} else {
-					rightIndex = middle
-				}
-			}
-			leftIndex.Sub(leftIndex, big.NewInt(1))
-			rightIndex.Add(rightIndex, big.NewInt(2))
-			left := new(big.Rat).SetFrac(leftIndex, grid)
-			right := new(big.Rat).SetFrac(rightIndex, grid)
-			if right.Cmp(big.NewRat(1, 1)) > 0 {
-				right = big.NewRat(1, 1)
-			}
-			endSpan := new(big.Rat).Mul(new(big.Rat).Sub(big.NewRat(1, 1), left), r.pa.Duration)
-			if endSpan.Cmp(resolution) <= 0 && r.signedAt(big.NewRat(1, 1)) <= 0 {
-				right = big.NewRat(1, 1)
-			}
-			span := new(big.Rat).Mul(new(big.Rat).Sub(right, left), r.pa.Duration)
-			return left, right, left.Sign() > 0 && span.Cmp(resolution) <= 0 &&
-				r.signedAt(left) > 0 && r.signedAt(right) <= 0
-		}
-		grid.Lsh(grid, 1)
-	}
-	return nil, nil, false
-}
-
 func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
-	if !orthogonalSourceBox(r.box) {
+	if !pairbox.OrthogonalSourceBox(r.box.pairBox()) {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
-	axis, side, outward, _, _, ok := orientedSphereFace(r.sphere, r.box)
+	axis, side, outward, _, _, ok := pairbox.OrientedSphereFace(
+		r.sphere.center, r.sphere.radius, r.box.pairBox())
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
@@ -261,7 +165,11 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 			return r.report, nil
 		}
 	}
-	if !r.sourceCorridor() {
+	sphereDelta, boxDelta := r.deltas()
+	r.start, r.slope, ok = spherepath.OrientedFaceCorridor(
+		r.sphere.center, r.sphere.radius, r.box.pairBox(), sphereDelta, boxDelta,
+		r.axis, r.side, r.outward)
+	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
 	r.report.replay = &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
@@ -286,7 +194,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		r.report.replay.snapshot(r.report)
 		return r.report, nil
 	}
-	if r.signedAt(one) > 0 {
+	if spherepath.OrientedFaceSign(r.start, r.slope, r.sphere.radius, r.outward, one) > 0 {
 		last, sampleErr := r.sample(ctx, one)
 		if errors.Is(sampleErr, errSweepPoseBudget) {
 			return r.undecided(zero, one, SweepPoseBudget), nil
@@ -301,7 +209,8 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		r.report.replay.snapshot(r.report)
 		return r.report, nil
 	}
-	leftF, rightF, ok := r.bracket(resolution)
+	leftF, rightF, ok := spherepath.OrientedFaceBracket(
+		r.start, r.slope, r.sphere.radius, r.outward, r.pa.Duration, resolution)
 	if !ok {
 		return r.undecided(zero, one, SweepTimeFloor), nil
 	}
@@ -333,40 +242,4 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		return r.report.Samples[i].At.Fraction.Base() < r.report.Samples[j].At.Fraction.Base()
 	})
 	return r.report, nil
-}
-
-func translatedReplayOrientedBox(box orientedSourceBox, from, at r3.Transform) (orientedSourceBox, bool) {
-	if !at.IsValid() || at.Basis() != from.Basis() {
-		return orientedSourceBox{}, false
-	}
-	a, b := from.Translation(), at.Translation()
-	before, after := [3]float64{a.X, a.Y, a.Z}, [3]float64{b.X, b.Y, b.Z}
-	for k := range 3 {
-		if !finiteMeasurementValues(before[k], after[k]) {
-			return orientedSourceBox{}, false
-		}
-		move := proofarith.DySubScalar(proofarith.MustDyOf(after[k]), proofarith.MustDyOf(before[k]))
-		for i := range box.corner {
-			box.corner[i][k] = proofarith.DyAdd(box.corner[i][k], move)
-		}
-	}
-	return box, true
-}
-
-func orientedBoxPoseDeviation(start, observed orientedSourceBox, delta [3]proofarith.Dyadic,
-	f *big.Rat) *big.Rat {
-	maximum := new(big.Rat)
-	for i := range start.corner {
-		sum := new(big.Rat)
-		for k := range 3 {
-			expected := new(big.Rat).Add(start.corner[i][k].Rat(),
-				new(big.Rat).Mul(delta[k].Rat(), f))
-			difference := new(big.Rat).Sub(observed.corner[i][k].Rat(), expected)
-			sum.Add(sum, difference.Abs(difference))
-		}
-		if sum.Cmp(maximum) > 0 {
-			maximum = sum
-		}
-	}
-	return maximum
 }

@@ -360,32 +360,28 @@ func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 		spherePose, boxPose = poseA, poseB
 	}
 	sphere, okSphere := translatedReplaySphere(*p.orientedSphere, spherePath.From, spherePose)
-	box, okBox := translatedReplayOrientedBox(*p.orientedSphereBox, boxPath.From, boxPose)
+	box, okBox := spherepath.TranslateObservedBox(p.orientedSphereBox.pairBox(), boxPath.From, boxPose)
 	if !okSphere || !okBox {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotated sphere replay is not affine", ErrUnsupported)
 	}
-	deviation := orientedBoxPoseDeviation(*p.orientedSphereBox, box, boxPath.Delta, f)
-	for k := range 3 {
-		expected := new(big.Rat).Add(p.orientedSphere.center[k].Rat(),
-			new(big.Rat).Mul(spherePath.Delta[k].Rat(), f))
-		difference := new(big.Rat).Sub(sphere.center[k].Rat(), expected)
-		deviation.Add(deviation, difference.Abs(difference))
-	}
+	deviation := spherepath.OrientedSpherePoseDeviation(p.orientedSphereBox.pairBox(), box,
+		boxPath.Delta, p.orientedSphere.center, sphere.center, spherePath.Delta, f)
 	resolution, ok := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere pose exceeds point resolution", ErrUnsupported)
 	}
-	axis, side, outward, _, observed2, faceOK := orientedSphereFace(sphere, box)
+	axis, side, outward, _, observed2, faceOK := pairbox.OrientedSphereFace(
+		sphere.center, sphere.radius, box)
 	if !faceOK || axis != p.sphereAxis || side != p.sphereSide || observed2 == nil {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere leaves the face corridor", ErrUnsupported)
 	}
-	startOutward := orientedDual(*p.orientedSphereBox, p.sphereAxis)
+	startOutward := pairbox.OrientedDual(p.orientedSphereBox.pairBox(), p.sphereAxis)
 	if p.sphereSide == 0 {
 		for k := range 3 {
 			startOutward[k] = proofarith.DyNeg(startOutward[k])
 		}
 	}
-	if !sameDyV3(outward, startOutward) {
+	if !proofarith.DvEqual(outward, startOutward) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotated sphere face normal changed", ErrUnsupported)
 	}
 	ideal := new(big.Rat).Add(p.sphereGap.Rat(), new(big.Rat).Mul(p.sphereSlope.Rat(), f))

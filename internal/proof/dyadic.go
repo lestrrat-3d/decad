@@ -681,6 +681,16 @@ func DvIsZero(a DyV3) bool {
 	return a[0].IsZero() && a[1].IsZero() && a[2].IsZero()
 }
 
+// DvEqual compares exact vector components.
+func DvEqual(a, b DyV3) bool {
+	for axis := range 3 {
+		if DyCmp(a[axis], b[axis]) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // DySqrtSeed is ratSqrtSeed over a Dyadic: a float64 near sqrt(d), used only to
 // START the directed walks below, never to decide them. It carries the same
 // even-exponent trick its rational twin does — a Dyadic already holds its
