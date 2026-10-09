@@ -72,10 +72,10 @@ func (b brepLoopBand) matSign(f brepFace) float64 {
 
 // sideLevel is the band's side level in F's frame, F's level plus
 // matSign·ds, beside its displacement: F's own level displacement plus the
-// setback's conversion and the float sum's rounding (capBandLevelDelta).
+// setback's conversion and the float sum's rounding (capband.BandLevelDelta).
 func (b brepLoopBand) sideLevel(f brepFace) (float64, float64) {
 	m := b.matSign(f)
-	return f.z0 + m*b.setback.ds, proofbound.AbsSumUpper(f.z0Delta, capBandLevelDelta(f.z0, m, b.setback))
+	return f.z0 + m*b.setback.ds, proofbound.AbsSumUpper(f.z0Delta, capband.BandLevelDelta(f.z0, m, b.setback.ds, b.setback.dsDelta))
 }
 
 // view is the band read as a one-loop cap blend in F's own frame: its
