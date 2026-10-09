@@ -32,10 +32,10 @@ func cupWall(budget *proofbound.WorkBudget, cp cupView) (wallOutcome, error) {
 	return wallOutcome{reading: wall.Reading, bound: wall.Bound, ok: wall.OK}, err
 }
 
-func testPrismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (reportvocab.ScalarSurvey, error) {
+func testPrismWall(budget *proofbound.WorkBudget, pp prismPayload) (reportvocab.ScalarSurvey, error) {
 	return wallsurvey.PrismWall(budget, pp.profile,
 		survey2d.PrismHeight{Z0: pp.z0, Z1: pp.z1, Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta},
-		pp.sectionDelta, alpha)
+		pp.sectionDelta, 15*math.Pi/180)
 }
 
 // This file is a deliberate internal-test exception (like
@@ -578,7 +578,7 @@ func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 		},
 		z0: 0, z1: 10,
 	}
-	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 	require.NoError(t, err)
 	require.False(t, out.OK, `undecided, never a silent pass`)
 }
@@ -1186,7 +1186,7 @@ func freeformWallSection() ProfileRecord {
 func TestPrismWallFreeformSectionReadsUndecided(t *testing.T) {
 	t.Parallel()
 	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
-	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 	require.NoError(t, err, `a free-form section must not error out of Verify`)
 	require.False(t, out.OK, `undecided, never a silent pass`)
 	require.Equal(t, surveyUndecided, out.Reason)
@@ -1201,7 +1201,7 @@ func TestPrismWallFreeformSectionPropagatesCancellation(t *testing.T) {
 	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err := testPrismWall(proofbound.NewWorkBudget(ctx), pp, 15*math.Pi/180)
+	_, err := testPrismWall(proofbound.NewWorkBudget(ctx), pp)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -1267,7 +1267,7 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 				profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}},
 				z0:      0, z1: 10,
 			}
-			out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
+			out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 			require.Error(t, err, `a section the survey never read is a failure, never an undecided reading`)
 			if tc.is != nil {
 				require.ErrorIs(t, err, tc.is)
@@ -1309,7 +1309,7 @@ func TestPrismWallAnalyticSectionRegression(t *testing.T) {
 		}}},
 		z0: 0, z1: 10,
 	}
-	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 	require.NoError(t, err)
 	require.True(t, out.OK)
 	require.NotNil(t, out.Reading)
