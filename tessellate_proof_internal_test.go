@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -209,7 +210,7 @@ func TestPrismVolSymDiffBracketsTheCylindersOwnSegmentDeficit(t *testing.T) {
 
 	// It is a genuinely tighter proof than the bound × held area substitution
 	// docs/tessellation-design.md §11 forbids.
-	require.Less(t, mesh.volSymDiff, mesh.bound*meshAreaUpper(mesh.vertices, mesh.triangles))
+	require.Less(t, mesh.volSymDiff, mesh.bound*facetproof.MeshAreaUpper(mesh.vertices, mesh.triangles))
 
 	// A box chords nothing and displaces nothing, so its mesh IS its body.
 	box := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
@@ -248,7 +249,7 @@ func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
 	// wall each omit their own circular segments over their own sweep height.
 	outerDeficit := (10.0) * (math.Pi*8*8 - 0.0)
 	require.Less(t, mesh.volSymDiff, outerDeficit, `the bound is a segment deficit, not the whole cylinder`)
-	require.Less(t, mesh.volSymDiff, mesh.bound*meshAreaUpper(mesh.vertices, mesh.triangles))
+	require.Less(t, mesh.volSymDiff, mesh.bound*facetproof.MeshAreaUpper(mesh.vertices, mesh.triangles))
 }
 
 func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {

@@ -328,7 +328,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			return nil, err
 		}
 	}
-	storeMax, err := requireDerivableStore(store)
+	storeMax, err := tessellation.StoreMax(store)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +344,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	// section band over its height, each planar face's level displacement over
 	// its area, and every computed coordinate's swept volume. Absolute sums
 	// throughout: an occupied-volume bound admits no cancellation.
-	areaUpper := meshFaceAreaUpper(&mesh, store)
+	areaUpper := tessellation.FaceAreaUpper(mesh.vertices, mesh.triangles, mesh.source, store)
 	var terms []float64
 	for fi, f := range bp.faces {
 		face, err := faceOf(fi)
@@ -367,7 +367,8 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			proofbound.ProductUpper(height, walls[fi].segmentArea),
 			proofbound.ProductUpper(moved, proofbound.SectionDisplacementArea(f.delta, 1, proofbound.AbsSumUpper(w.Length, w.LengthBound))))
 	}
-	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, store))
+	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
+		tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, store))
 	if len(bands) > 0 {
 		// A band the cap-loop chamfer's occupied-volume proof does not admit
 		// leaves the mesh export-only (docs/tessellation-reach-design.md §7),
@@ -384,7 +385,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		if err != nil {
 			return nil, err
 		}
-		if storeMax, err = requireDerivableStore(motion); err != nil {
+		if storeMax, err = tessellation.StoreMax(motion); err != nil {
 			return nil, err
 		}
 		terms = append(terms, brepBandChordVolume(bands))

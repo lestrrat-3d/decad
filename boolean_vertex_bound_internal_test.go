@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -261,7 +262,7 @@ func TestBooleanVertexBoundsComposePerPair(t *testing.T) {
 
 	today := proofbound.AbsSumUpper(proofbound.UpRound((f.ma.bound+f.mb.bound)/f.sinMin), maxWeld)
 	require.LessOrEqual(t, f.result.meshBound, today)
-	require.Equal(t, facetBoundMax(f.result.tris, f.result.vertexBound), f.result.meshBound)
+	require.Equal(t, facetproof.FacetBoundMax(f.result.tris, f.result.vertexBound), f.result.meshBound)
 	t.Logf("meshBound %.3g, global composition %.3g, operand deltas %.3g / %.3g", f.result.meshBound, today, f.ma.bound, f.mb.bound)
 }
 

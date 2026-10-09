@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -41,7 +42,7 @@ func TestFacetedAreaBoundCompositionRoundsOutward(t *testing.T) {
 
 	meshBound := 0.25
 	areaSlack := proofbound.SumSlop(12, short)
-	areaBound := proofbound.AbsSumUpper(facetedAreaGeom(meshBound, perimeter, math.Inf(1)), areaSlack)
+	areaBound := proofbound.AbsSumUpper(facetproof.FacetedAreaGeom(meshBound, perimeter, math.Inf(1)), areaSlack)
 	required := new(big.Rat).Mul(new(big.Rat).SetFloat64(meshBound), exactPerimeter)
 	required.Add(required, new(big.Rat).SetFloat64(areaSlack))
 	oldBound := proofbound.UpRound(meshBound*oldPerimeter + areaSlack)
@@ -54,16 +55,16 @@ func TestFacetedAreaBoundCompositionRoundsOutward(t *testing.T) {
 	exactBodyPerimeter := new(big.Rat).Add(exactPerimeter, new(big.Rat).SetFloat64(short))
 	bodyRequired := new(big.Rat).Mul(new(big.Rat).SetFloat64(meshBound), exactBodyPerimeter)
 	bodyRequired.Add(bodyRequired, new(big.Rat).SetFloat64(areaSlack))
-	bodyBound := proofbound.AbsSumUpper(facetedAreaGeom(meshBound, bodyPerimeter, math.Inf(1)), areaSlack)
+	bodyBound := proofbound.AbsSumUpper(facetproof.FacetedAreaGeom(meshBound, bodyPerimeter, math.Inf(1)), areaSlack)
 	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(bodyBound).Cmp(bodyRequired), 0)
 
 	// The exact zero remains exact, and every finite term stays finite.
-	require.Zero(t, facetedAreaGeom(0, 0, math.Inf(1)))
+	require.Zero(t, facetproof.FacetedAreaGeom(0, 0, math.Inf(1)))
 	require.Zero(t, proofbound.UpRound(math.SmallestNonzeroFloat64*math.SmallestNonzeroFloat64),
 		"the former final rounding cannot recover a positive product that underflows")
-	require.Positive(t, facetedAreaGeom(math.SmallestNonzeroFloat64, math.SmallestNonzeroFloat64, math.Inf(1)))
+	require.Positive(t, facetproof.FacetedAreaGeom(math.SmallestNonzeroFloat64, math.SmallestNonzeroFloat64, math.Inf(1)))
 	// The per-facet sum caps the perimeter term when it is the smaller.
-	require.Equal(t, 0.5, facetedAreaGeom(meshBound, perimeter, 0.5))
+	require.Equal(t, 0.5, facetproof.FacetedAreaGeom(meshBound, perimeter, 0.5))
 	require.False(t, math.IsInf(areaBound, 0))
 }
 
@@ -267,7 +268,7 @@ func TestFacetedExtremeErrorCoversAnInnerVertexsReach(t *testing.T) {
 	require.Equal(t, 1, exact[4][0].Cmp(big.NewRat(1, 1)), `the true point stands past the held +X face`)
 
 	lo, hi := r3.NewVec(0, 0, 0), r3.NewVec(1, 1, 1)
-	e, err := facetedExtremeError(proofbound.NewWorkBudget(t.Context()), verts, beta, reach, lo, hi)
+	e, err := facetproof.FacetedExtremeError(proofbound.NewWorkBudget(t.Context()), verts, beta, reach, lo, hi)
 	require.NoError(t, err)
 	for _, p := range exact {
 		for axis := range 3 {

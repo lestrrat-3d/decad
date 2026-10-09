@@ -668,7 +668,7 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 			proofbound.AbsSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.z1, hi)),
 		)
 	}
-	storeMax, err := requireDerivableStore(vertexStore)
+	storeMax, err := tessellation.StoreMax(vertexStore)
 	if err != nil {
 		return nil, err
 	}
@@ -736,7 +736,8 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 	// Every coordinate the build itself computed can move each facet's own area
 	// (docs/tessellation-design.md §5's per-triangle allowance), so the slack
 	// carries one such term per facet beside the analytic ones above.
-	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
+	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
+		tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, vertexStore))
 
 	if sheet {
 		// A sheet encloses no region, so there is no occupied volume to
@@ -756,7 +757,7 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 	// computed coordinate sweeps volume at the rate of the surface it moved.
 	// Absolute sums throughout — an occupied-volume bound admits no cancellation.
 	height := math.Abs(pp.z1 - pp.z0)
-	areaUpper := meshFaceAreaUpper(&mesh, vertexStore)
+	areaUpper := tessellation.FaceAreaUpper(mesh.vertices, mesh.triangles, mesh.source, vertexStore)
 	terms := []float64{
 		proofbound.ProductUpper(height, segmentArea),
 		proofbound.ProductUpper(proofbound.SectionDisplacementArea(pp.sectionDelta, walks, perimeterUpper), height),
@@ -834,15 +835,6 @@ func liftTessellationError(err error) error {
 	return fmt.Errorf(`%w: %s`, ErrDegenerate, audit.Detail)
 }
 
-// requireDerivableStore folds the per-vertex store displacements into the
-// payload-wide maximum, refusing a mesh whose own construction it cannot state
-// (docs/tessellation-design.md §12: a non-finite proof is a refusal, never an
-// infinite bound). stationbound.ChordStationBound's +Inf for an underivable
-// enclosure lands here.
-func requireDerivableStore(store []float64) (float64, error) {
-	return tessellation.StoreMax(store)
-}
-
 // composeFaceBounds publishes docs/tessellation-design.md §2's sourceBound for
 // every face the mesh names, as §3's sum of that face's own trim, store, section
 // and axial displacements, and lifts Mesh.bound to their maximum. Every source
@@ -856,22 +848,6 @@ func composeFaceBounds(m *Mesh, trim, axial map[*Face]float64, store []float64, 
 		m.setFaceBound(f, bound)
 	}
 	return nil
-}
-
-// meshStoreAreaAllow sums docs/tessellation-design.md §5's per-triangle area
-// allowance over the mesh, each facet charged the largest store displacement its
-// own three vertices carry.
-func meshStoreAreaAllow(m *Mesh, store []float64) float64 {
-	return tessellation.StoreAreaAllow(m.vertices, m.triangles, store)
-}
-
-// meshFaceAreaUpper bounds each source face's own true patch area from the
-// facets held for it: their held area plus the per-facet allowance their
-// computed coordinates can move it by. It is the yardstick a level's axial
-// displacement is charged against — moving a planar patch's level by delta
-// displaces at most delta times that patch's own area.
-func meshFaceAreaUpper(m *Mesh, store []float64) map[*Face]float64 {
-	return tessellation.FaceAreaUpper(m.vertices, m.triangles, m.source, store)
 }
 
 // publishSymDiff sums an analytic payload's occupied-volume terms into the
@@ -1044,7 +1020,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		}
 	}
 	mesh.vertices = verts
-	storeMax, err := requireDerivableStore(vertexStore)
+	storeMax, err := tessellation.StoreMax(vertexStore)
 	if err != nil {
 		return nil, err
 	}
@@ -1130,7 +1106,8 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		// occupied-volume proof has not started, so neither is published.
 		return &mesh, nil
 	}
-	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
+	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
+		tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, vertexStore))
 	// The displaced region's own area moves by its displacement area once in
 	// its cap and once in the rims it bounds, and its walls' length by the
 	// displacement length over their height — evalPrism's composition for a
@@ -1145,7 +1122,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	// chorded-section deficit over its own sweep height, the displaced region's
 	// section displacement over its height, each planar level's displacement
 	// over the patch it caps, and the computed coordinates' swept volume.
-	areaUpper := meshFaceAreaUpper(&mesh, vertexStore)
+	areaUpper := tessellation.FaceAreaUpper(mesh.vertices, mesh.triangles, mesh.source, vertexStore)
 	rimArea := 0.0
 	for i := range oLoops {
 		rim, err := faceOfRole(fmt.Sprintf("rim(%d)", i))

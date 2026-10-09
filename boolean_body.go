@@ -134,11 +134,6 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	return buildFacetedBody(ctx, d, ref, next)
 }
 
-// meshAreaUpper keeps root callers on the shared facet area proof.
-func meshAreaUpper(verts []r3.Vec, tris [][3]int) float64 {
-	return facetproof.MeshAreaUpper(verts, tris)
-}
-
 // facetedFacePerimeterUpper includes each edge's length error and rounds each
 // addition outward before the perimeter enters an area bound.
 func facetedFacePerimeterUpper(f *Face, budget *proofbound.WorkBudget) (float64, error) {
@@ -154,23 +149,6 @@ func facetedFacePerimeterUpper(f *Face, budget *proofbound.WorkBudget) (float64,
 	return perimeter, nil
 }
 
-// facetedAreaGeom keeps root callers on the shared area allowance.
-func facetedAreaGeom(delta, perimeterUpper, facetAllow float64) float64 {
-	return facetproof.FacetedAreaGeom(delta, perimeterUpper, facetAllow)
-}
-
-// facetedExtremeError reads the shared per-coordinate bound.
-func facetedExtremeError(budget *proofbound.WorkBudget, verts []r3.Vec, beta, reach []float64, lo, hi r3.Vec) (float64, error) {
-	return facetproof.FacetedExtremeError(budget, verts, beta, reach, lo, hi)
-}
-
-// facetedMeshAudit is the shared geometry-only shell certificate.
-type facetedMeshAudit = facetproof.MeshAudit
-
-func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*facetedMeshAudit, error) {
-	return facetproof.AuditFacetedMesh(ctx, verts, tris)
-}
-
 // buildFacetedBody assembles the Faceted body from the payload: exact
 // component/void analysis, per-source-face topology, and measurements with
 // the composed proven bounds.
@@ -181,7 +159,7 @@ func buildFacetedBody(ctx context.Context, d *Document, ref producerID, pp facet
 // buildFacetedBodyWithProof reuses a proof only for the evaluator's unchanged
 // result mesh. Placement calls buildFacetedBody and proves its moved mesh anew.
 func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID, pp facetedPayload,
-	audit *facetedMeshAudit, volume Measurement, volRat *big.Rat) (*Body, error) {
+	audit *facetproof.MeshAudit, volume Measurement, volRat *big.Rat) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -195,7 +173,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	}
 	pp.diameter = diameter
 	if audit == nil {
-		audit, err = auditFacetedMesh(ctx, verts, tris)
+		audit, err = facetproof.AuditFacetedMesh(ctx, verts, tris)
 		if err != nil {
 			return nil, err
 		}
@@ -320,7 +298,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			if err != nil {
 				return nil, err
 			}
-			geom := facetedAreaGeom(faceDelta[f], loopLen, faceFacetArea[f])
+			geom := facetproof.FacetedAreaGeom(faceDelta[f], loopLen, faceFacetArea[f])
 			bodyGeom = proofbound.AbsSumUpper(bodyGeom, geom)
 			f.areaBound = proofbound.AbsSumUpper(geom, pp.areaSlack, proofbound.SumSlop(facetsOf[f], f.area), faceTermSlop[f])
 		}
@@ -426,12 +404,12 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	}
 	// Min and Max are POSITIONS, and Bound is the error bound on them: a 3D
 	// radius, not a per-axis extent (core §5.2). Each of the six extremes is
-	// off by at most facetedExtremeError's per-coordinate figure, which reads
+	// off by at most facetproof.FacetedExtremeError's per-coordinate figure, which reads
 	// each vertex's own facet bound; the corner can be off on every axis at
 	// once, so the radius is √3 of the largest (internal/proofbound/bounds.go,
 	// proofbound.Radius3D).
 	vertexFacetDelta := facetproof.VertexFacetDeltas(len(verts), tris, facetDelta)
-	extremeErr, err := facetedExtremeError(budget, verts, pp.vertexBound, vertexFacetDelta, lo, hi)
+	extremeErr, err := facetproof.FacetedExtremeError(budget, verts, pp.vertexBound, vertexFacetDelta, lo, hi)
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +424,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	faceOf, err := facetFaceIndices(ctx, body.Faces(), facetFace)
+	faceOf, err := facetproof.FaceIndices(ctx, body.Faces(), facetFace)
 	if err != nil {
 		return nil, err
 	}
@@ -456,16 +434,6 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	return body, nil
-}
-
-// facetFaceIndices maps each facet to its face's index in the built body's
-// Faces() order — the lookup Tessellate reads. Every facetFace entry is a face
-// this build attached to the body's own topology, so on a consistent build the
-// lookup cannot miss. A miss is an invariant failure (docs/interference-design.md
-// §7.1), returned as ErrBooleanFailed rather than silently attributing the facet
-// to face 0.
-func facetFaceIndices(ctx context.Context, faces, facetFace []*Face) ([]int, error) {
-	return facetproof.FaceIndices(ctx, faces, facetFace)
 }
 
 // meshVolumeMeasurement integrates one stitched, oriented, closed mesh in

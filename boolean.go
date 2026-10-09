@@ -191,7 +191,7 @@ type booleanEvaluation struct {
 	payload   facetedPayload
 	volume    Measurement
 	volumeRat *big.Rat
-	audit     *facetedMeshAudit
+	audit     *facetproof.MeshAudit
 }
 
 // performBoolean gates the operands, runs the read-only geometry evaluator,
@@ -679,7 +679,7 @@ func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b 
 		tris:        stitched.Tris,
 		src:         stitched.Src,
 		groups:      groups,
-		meshBound:   facetBoundMax(stitched.Tris, stitched.VertexBound),
+		meshBound:   facetproof.FacetBoundMax(stitched.Tris, stitched.VertexBound),
 		volSymDiff:  volSymDiff,
 		areaSlack:   areaSlack,
 		dPair:       dPair,
@@ -688,7 +688,7 @@ func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b 
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	audit, err := auditFacetedMesh(ctx, payload.verts, payload.tris)
+	audit, err := facetproof.AuditFacetedMesh(ctx, payload.verts, payload.tris)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -709,12 +709,6 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 ) {
 	return proofbound.AbsSumUpper(symA, symB, roundVol),
 		proofbound.AbsSumUpper(slackA, slackB, dropArea)
-}
-
-// facetBoundMax is a held mesh's largest facet bound δ(t), the largest of
-// each facet's three corners' β (docs/faceted-vertex-bounds-design.md §4.1).
-func facetBoundMax(tris [][3]int, beta []float64) float64 {
-	return facetproof.FacetBoundMax(tris, beta)
 }
 
 // sourceIDs maps a tessellation's per-facet source faces to the global

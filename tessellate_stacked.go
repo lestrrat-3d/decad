@@ -94,7 +94,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			faceAxial[face] = math.Max(first.z0Delta, last.z1Delta)
 		}
 	}
-	storeMax, err := requireDerivableStore(vertexStore)
+	storeMax, err := tessellation.StoreMax(vertexStore)
 	if err != nil {
 		return nil, err
 	}

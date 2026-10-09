@@ -301,11 +301,11 @@ per planar patch):
   exactly two planar patches, one at each end); when `sectionDelta > 0`, one
   `sectionDisplacementArea` term per planar patch over that patch's own loops
   and one `sectionDisplacementLength · height` term per column; then
-  `meshStoreAreaAllow`.
+  `tessellation.StoreAreaAllow`.
 - Occupied volume (`publishSymDiff`): `Σ_k h_k · E_k`, with `E_k` the summed
   circular-segment area of the columns slab `k` carries; `Σ_k h_k ·
   sectionDisplacementArea(sectionDelta, walks_k, perimeter_k)`; each planar
-  patch's level displacement times `meshFaceAreaUpper` of that patch; and
+  patch's level displacement times `tessellation.FaceAreaUpper` of that patch; and
   `sweptVolumeAllow` over the store maximum. The body is the disjoint union of
   its slab prisms and the mesh solid is the disjoint union of the chorded slab
   prisms over the same intervals, so the symmetric difference is at most the
