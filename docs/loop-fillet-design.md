@@ -66,15 +66,16 @@ yields one patch or one edge:
 | LF | Piece of `ℓ` | Patch (face) | Trimmed by |
 |---|---|---|---|
 | **LF1** | a straight walk of length `ℓᵢ` | `Cylinder{Origin: the wall's line offset r into F's material, at sideZ; Axis: the walk direction; Radius: r}`, the quarter from the contact line on `F` (the contour segment, at `L_F`) to the contact line on the wall (`ℓᵢ` at `sideZ`) | its two end curves (LF4–LF6) |
-| **LF2** | a circular walk, radius `R`, centre `C`, material inside the circle | `Torus{Center: C at sideZ; Axis: F's normal; Major: R − r; Minor: r}`, the quarter of the tube from its top (radius `R − r` at `L_F`) to its outer equator (radius `R` at `sideZ`). `R − r < r` is a spindle torus whose outer quarter is the patch and never meets its axis | LF5/LF6 ends, or none on a whole turn |
+| **LF2** | a circular walk, radius `R > r`, centre `C`, material inside the circle | `Torus{Center: C at sideZ; Axis: F's normal; Major: R − r; Minor: r}`, the quarter of the tube from its top (radius `R − r` at `L_F`) to its outer equator (radius `R` at `sideZ`). `R − r < r` is a spindle torus whose outer quarter is the patch and never meets its axis | LF5/LF6 ends, or none on a whole turn |
 | **LF3** | a circular walk, material outside the circle (a hole rim) | `Torus{Center: C; Axis: F's normal; Major: R + r; Minor: r}`, the quarter from the top (radius `R + r` at `L_F`) to the inner equator (radius `R` at `sideZ`) | the same |
 | **LF4** | a convex corner where two straight walks meet at interior angle `θ` (material side) | no patch: the two cylinders meet along their intersection | the edge is a planar quarter ellipse in the corner's bisector plane, `Ellipse3{Center: the ball centre at the corner, c = corner + (r / sin(θ/2))·b̂ at sideZ; Axis: the bisector plane's normal; Major: b̂; SemiMajor: r / sin(θ/2); SemiMinor: r}`, from the corner vertex at `sideZ` to the contour corner at `L_F`; `b̂` is the in-plane bisector into the material |
 | **LF5** | a G1 join (a line tangent to an arc, or two tangent arcs), route L's dead-zone rule | no patch: the two pipes share a meridian | `Arc3`, the quarter circle of radius `r` in the plane through the join normal to `ℓ`, from the join vertex at `sideZ` to the contour foot `v + r·n̂` at `L_F` |
 | **LF6** | a reflex corner of `F`'s region with turn `ψ` (a hole or pocket mouth's corner, a square boss root's corner) | `Torus{Center: the corner at sideZ; Axis: F's normal; Major: r; Minor: r}`, the horn torus whose tube runs from the connector arc of radius `r` at `L_F` to the apex on its own axis at `sideZ`, over azimuth `ψ`; both joins to the neighbouring patches are G1 | two LF5 `Arc3` meridians, at the connector arc's two ends `pA`, `pB` |
 | **LF7** | a whole circle | LF2 or LF3 over `2π`; two `Circle3` edges and no seam | — |
 | **LF8** | a convex corner where a straight walk meets a circular one, or two circular walks meet, not tangent | refused, SF1 | — |
+| **LF9** | inward open arc with both recorded endpoints exactly at `r` and straight G1 neighbours | sphere from side arc to cap pole, bounded by two LF5 meridians (`docs/vertex-blend-design.md` §1) | three arcs |
 
-The sphere does not appear. Reach §8.2 states a trimmed `Sphere` at a
+The sphere does not appear at a sharp convex corner. Reach §8.2 states a trimmed `Sphere` at a
 zero-length miter; this document replaces that row (§9). At a convex corner
 of one loop, the ball touching `F` and wall `A` reaches the centre `c` where
 it also touches wall `B`, and from `c` it rolls along `B`. The ball never
@@ -90,9 +91,8 @@ walls. Below that arc the body would keep its full corner square at
 `r²(1 − π/4)` would be exposed at the side level. No CAD kernel produces that
 surface for two blended edges meeting at an unblended third: Fusion's fillet
 of a box's top four edges shows the two blends meeting along a curved seam
-and no third face. The sphere octant is the vertex blend of THREE
-blended edges (SB5's class, all twelve edges of a box), which is not a loop
-of one face and stays refused.
+and no third face. The sphere octant appears after the lateral edge is
+filleted too; route V builds it through LF9 (`docs/vertex-blend-design.md`).
 
 At height `h` the offset corner of two lines lies on the bisector at distance
 `t(h)/sin(θ/2)` from the corner, so the miter curve is
@@ -135,7 +135,7 @@ there carried.
 |---|---|---|
 | **RF1** | `brepPayload` | brep-modify §6 stages 2a–2b, then route L (modify-general §4.4 stage 2c); the fillet arm replaces SL3 |
 | **RF2** | `stackedPrismPayload` | the same through `brepOfStacked` (SB2 first) |
-| **RF3** | `prismPayload` whose selection holds a cap edge | `fillet.go`: where `matchCornerBudget` finds no lateral corner for a selected edge, the call takes `brepOfPrism(pp)`, holds SB1 on it, and runs route L with the fillet arm; the result is a brep body (BF1). A selection mixing lateral edges with cap edges is SL1, as for a chamfer; single straight cap edges, route E's class on a brep, stay base S1; every-lateral selections keep the prism path and B1's roles |
+| **RF3** | `prismPayload` whose selection holds a cap edge | `fillet.go`: where `matchCornerBudget` finds no lateral corner for a selected edge, the call takes `brepOfPrism(pp)` and dispatches route E, L or V by the selection (`docs/vertex-blend-design.md` §2). The result is a brep body; every-lateral selections keep the prism path and B1's roles |
 | **RF4** | `revolvePayload` cap edge | SX5 unchanged: the cap's adjacent faces are revolve surfaces, not faces swept along the cap normal (LB3 fails), and the blend of a planar loop whose walls are revolved surfaces is a pipe about a general planar curve that no level set of an offset family states |
 | **RF5** | `capBlendPayload`, draft, sweep, loft, faceted | SX10, modify S3, SX9 unchanged |
 
@@ -342,9 +342,9 @@ Modify §1's test picks every sentinel.
 | **SF1** | a convex corner of the loop where a straight walk meets a circular one, or two circular walks meet, not tangent (LF8): a plate with a semicircular bite, a D-shaped boss rim | yes; its miter is a space curve no `Curve` names and its strip integrals are not polynomial | `ErrUnsupported`, naming the corner |
 | **SF2** | `Face.NormalAt` at an LF6 apex vertex, which lies on the horn torus's own axis | the point exists; the surface normal there does not | `ErrDegenerate` (the survey samples interior points only) |
 
-Everything else is an existing row: SL1 (a partial loop, with SX4's text; a
-loop mixed with lateral edges), SL2 (LB3/LB4/LB6), SB1 (`delta ≠ 0`), SX6
-(`R − r ≤ 0` on an LF2 wall, a dropped carrier), SX7 (band reach, two bands
+Everything else is an existing row: SL1 (a partial loop, with SX4's text),
+SL2 (LB3/LB4/LB6), SB1 (`delta ≠ 0`), SX6
+(`R − r < 0` on an LF2 wall, a dropped carrier), SX7 (band reach, two bands
 on one wall), SX12/SX14 (the contour at `r`), SX13 (`R ∓ r == R` or
 `L_F ∓ r == L_F`), SX5 (revolve), SX9/SX10, S3. SL3 is retired: a fillet of
 complete loops of planar faces builds here or refuses with a row above.
@@ -356,7 +356,7 @@ modify §4's stage 1 and reach SX10:
 |---|---|
 | 2a. record | RB dispatch; SB2; SB1; RF3's `brepOfPrism` |
 | 2b. route P | brep-modify §6 unchanged |
-| 2c. entry | single straight edges → route E; otherwise LB1, LB2 (SL1) |
+| 2c. entry | single straight edges → route E; complete loops with independent straight edges → route V; otherwise LB1, LB2 (SL1) |
 | 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
 | 4. existence | SX6, SX13 per band as the contour at `r` is built; SF1 per corner |
 | 5. audit | per band SX14, SX7, SX12 on the contour; per (pl) face S8, S6, S7, S9; per `F` S8, S7, S9 |
@@ -366,7 +366,7 @@ modify §4's stage 1 and reach SX10:
 
 | BF | Call | Payload | Topology | Roles |
 |---|---|---|---|---|
-| **BF1** | route L fillet, any RF1–RF3 receiver | `brepPayload` with `loopBands` of kind `"fillet"`, `stack` nil | the rewritten record's faces plus one LF1–LF3 patch per walk and one LF6 patch per reflex corner; every edge on exactly two faces | `face(k)` / `wall(k)`; each patch `filletLoop(f,l,p)` |
+| **BF1** | route L or V fillet, any RF1–RF3 receiver | `brepPayload` with `loopBands` of kind `"fillet"`, `stack` nil | the rewritten record's faces plus one LF1–LF3 or LF9 patch per walk and one LF6 patch per reflex corner; every edge on exactly two faces | `face(k)` / `wall(k)`; each patch `filletLoop(f,l,p)` |
 
 | DF | Consumer | BF1 |
 |---|---|---|
@@ -482,8 +482,8 @@ term, which the test records.
 
 Refusals: a plate with a semicircular bite on its outer loop, top loop →
 SF1 naming the two non-tangent corners; a partial loop → SL1 (SX4's text);
-P8's top loop at `r = 3` → SX6; the P2 mouth at `r = 5` → SX7; P1's top loop
-with one vertical edge → SL1; a partial revolve's cap loop → SX5; a stacked
+P8's top loop at `r = 4` → SX6; the P2 mouth at `r = 5` → SX7;
+a partial revolve's cap loop → SX5; a stacked
 receiver whose section carries a displacement → SB1. Every refusal leaves the
 receiver live. A full revolve's circles are meridian junctions, which the
 revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
@@ -494,8 +494,8 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
   §2 states the derivation: the rolling ball never rests at the corner, and
   the octant would expose a shelf. Reach §8.2's miter row ("zero-length
   miter → trimmed `Sphere`") and modify-general §6's first two rows and SL3
-  are rewritten in PR F-1 to say so; the sphere stays the three-edge vertex
-  blend's (SB5).
+  are rewritten in PR F-1 to say so; an LF9 sphere needs the third edge's
+  fillet (`docs/vertex-blend-design.md`).
 - **A new `Ellipse3` curve variant, rather than a `Line3`, `NURBSCurve` or
   `FacetedCurve` stand-in.** The miter is an exact conic; a `Line3` tag would
   be a first-order lie (sagitta up to `0.2·r`), a `NURBSCurve` would hold an
@@ -539,7 +539,8 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
 ## 10. Do not do this
 
 - **Put a sphere octant at a convex corner.** §2: a shelf of area
-  `r²(1 − π/4)` at the side level. The sphere is SB5's vertex blend.
+  `r²(1 − π/4)` at the side level. An LF9 sphere needs the third edge's
+  fillet (`docs/vertex-blend-design.md`).
 - **Tag the miter edge `Line3` with a length bound, as the chamfer's ruling
   is.** The chamfer's ruling departs from its conic locus at second order;
   the fillet's miter departs from a chord at first order.
@@ -587,7 +588,7 @@ Increment table — what still refuses after each PR:
 |---|---|
 | F-0 (landed) | everything Table SB and SL3 refuse today |
 | F-1 (landed) | every consumer of a fillet-banded body but mass properties, `Bounds`, `Verify`'s structural audit and gate, placement and later modify ops (F-2); SF1; SB5; SX5; SX4 |
-| F-2 (landed) | SF1; SB5 (three-edge vertex blends); SX5 (revolve cap edges); SX4 (partial loops); clearance model (DF6, `Suspect`) |
+| F-2 (landed) | SF1; SB5 (single edges sharing a vertex outside route V); SX5 (revolve cap edges); SX4 (partial loops); clearance model (DF6, `Suspect`) |
 | F-3 (landed) | SF1; SB5; SX5; SX4; DF6; variable-radius fillets (no entry point) |
 
 ## 12. Hand-off

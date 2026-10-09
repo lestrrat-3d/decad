@@ -1645,5 +1645,6 @@
 2	0.10	TestBrepLoopChamferPublicRoundedPlateExports
 2	0.05	TestBrepLoopFilletPublicPlateTopLoop
 2	0.05	TestBrepLoopFilletPublicBoxCaps
+2	0.05	TestVertexBlendPublicBoxAllEdges
 2	0.05	TestBrepLoopFilletPublicRevolveCapRefuses
 2	0.05	TestBrepLoopFilletPublicSTEP

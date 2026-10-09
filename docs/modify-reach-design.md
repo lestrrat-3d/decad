@@ -100,7 +100,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 
 | RX | Receiver | Fillet / Chamfer | Shell |
 |---|---|---|---|
-| **RX1** | `prismPayload` | base lateral junctions; OR every geometric edge of one or more complete cap loops. Never both classes in one call | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR, for a hole-free section, `WithNoOpenings` |
+| **RX1** | `prismPayload` | base lateral junctions; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (`docs/vertex-blend-design.md`) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR, for a hole-free section, `WithNoOpenings` |
 | **RX2** | `revolvePayload` | off-axis swept meridian junctions only: a full-turn latitude `Circle3` or partial-turn junction `Arc3` | full turn: one proper connected run of generated side faces, or `WithNoOpenings`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
 | **RX3** | `stackedPrismPayload` | through its face view, `docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
@@ -136,9 +136,9 @@ more specific SX row replaces that base refusal.
 | **SX1** | `WithNoOpenings` with a non-nil selector, repeated contradictory option, or malformed option payload | no single intent | `ErrDegenerate` |
 | **SX2** | tangent continuation is branch-ambiguous or the analytic oracle cannot decide G1 continuity | evaluator cannot know which chain caller named | `ErrUnsupported` |
 | **SX3** | asymmetric reference is nil, invalid, or does not identify exactly one adjacent face per expanded edge | invalid selector / cardinality | existing selector error; otherwise `ErrCardinality` |
-| **SX4** | blend selection mixes lateral/revolve junctions with prism cap edges, selects only part of a cap loop, or gives one cap loop mixed asymmetric face assignments | body exists; endpoint/setback transition not built | `ErrUnsupported` |
+| **SX4** | a partial prism cap loop, a mixed lateral/cap `Chamfer`, a mixed revolve/cap selection, or one cap loop with mixed asymmetric face assignments; route V admits complete cap loops with independent straight edges for `Fillet` | body exists; endpoint/setback transition not built | `ErrUnsupported` |
 | **SX5** | selected revolve edge is not a swept meridian junction | body exists; cap-edge/general rolling blend not built | `ErrUnsupported` |
-| **SX6** | cap-loop offset loses a carrier, reaches an empty circular offset, or has no regular radius-`r` envelope | no regular requested blend | `ErrDegenerate` |
+| **SX6** | cap-loop offset loses a carrier, reaches an empty circular offset, or has no regular radius-`r` envelope; LF9's exact-radius inward arc with straight G1 neighbours is the fillet exception (`docs/vertex-blend-design.md`) | no regular requested blend | `ErrDegenerate` |
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
 | **SX8** | shell side/no-opening extension is used on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap; revolve meridian is holed or meets the axis along more than one walk; a revolve wall's offset reaches the axis | body exists outside extension | `ErrUnsupported` |
 | **SX9** | any modify op on `facetedPayload` | body exists; analytic carrier + stable topology absent | `ErrUnsupported` |
@@ -168,7 +168,7 @@ the surface exists but this evaluator cannot trim it.
 
 SX13's RADIAL half sits with SX7/SX12 in stage 6 and after SX6 for the same
 reason, on the same offset radius: SX6 is the offset that reaches the centre and
-leaves nothing (the existence question), while SX13 is the offset that leaves a
+leaves nothing outside LF9's sphere case, while SX13 is the offset that leaves a
 circle this evaluator cannot tell from the one it started with. It is decided as
 each band patch's carrier is constructed — not from `d` alone, since the same `d`
 is perfectly representable against a smaller wall in the same section.
@@ -450,6 +450,7 @@ LF) on a prism's cap loop (its RF3) and on a brep's planar-face loop:
 |---|---|
 | line | `Cylinder`, radius `r` |
 | circle/arc | `Torus`, major = path radius, minor = `r` |
+| one centre point after an exact-radius inward arc collapses (LF9) | `Sphere`, radius `r`, with a cap pole |
 | a reflex corner's connector arc | horn `Torus`, major = minor = `r`, about the corner |
 | a line–line miter | no patch: the two cylinders meet along an `Ellipse3` |
 | a line–circle or circle–circle miter, not tangent | refused (loop-fillet SF1) |
@@ -458,7 +459,7 @@ The rolling ball never rests at a miter point, so no sphere is swept there:
 the two tubes meet along the ellipse in the corner's bisector plane, and a
 sphere octant would leave a flat shelf of area `r²(1 − π/4)` at the side
 level (loop-fillet §2). The sphere is the vertex blend of three blended
-edges (brep-modify SB5).
+edges (`docs/vertex-blend-design.md` §1).
 
 Trim each patch between exact contact traces on cap and side carriers. Replace
 the selected cap loop with its cap contact trace. Trim each adjacent side face
@@ -467,7 +468,7 @@ joins as topology edges.
 
 Regularity gates:
 
-- every material-side carrier offset exists: SX6;
+- every material-side carrier offset exists, except LF9's admitted point: SX6;
 - every circular center path has positive regular tube reach over its trim;
 - offset loops preserve orientation, simplicity, and nesting;
 - non-adjacent center paths stay strictly farther than `2r`;

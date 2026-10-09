@@ -483,6 +483,9 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 		Whole: lm.whole, Chamfered: lm.chamfered, D: cbp.loopOffset(li), Chord: chord,
 		Setback: capBlendProofSetback(cbp.loopSetback(li)), FootDelta: cbp.loopBandDelta(li),
 	}, budget, func(w survey2d.SideWalk, d float64) (float64, error) {
+		if cbp.fillet && filletSphereWalk(w, d) {
+			return 0, nil
+		}
 		// A subset draft's kept wall keeps its own radius (walkAmounts).
 		if cbp.draft {
 			return capband.WallRadius(w, walkAmounts(cbp.draftKept, li, []survey2d.SideWalk{w}, d)[0], shellTol)
@@ -642,6 +645,9 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 				return fmt.Errorf(`%w: the payload states no contour displacement for the chamfer band on loop %d`, ErrDegenerate, lm.li)
 			}
 			delta = math.Max(delta, d)
+			if cbp.fillet {
+				ringPts, ringV = compactCapBlendRing(ringPts, ringV)
+			}
 		}
 		base := len(pts)
 		pts = append(pts, ringPts...)
@@ -685,6 +691,26 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 	}
 	bump(face, proofbound.AbsSumUpper(trim, delta, axial))
 	return nil
+}
+
+// compactCapBlendRing omits zero-length contour edges where a fillet's
+// inward circular offset has collapsed to its centre. The band's samples
+// retain their full count so its strips still match the side wall.
+func compactCapBlendRing(pts []Point2, vertices []int) ([]Point2, []int) {
+	compactPts := make([]Point2, 0, len(pts))
+	compactVertices := make([]int, 0, len(vertices))
+	for i, p := range pts {
+		if len(compactPts) != 0 && compactPts[len(compactPts)-1] == p {
+			continue
+		}
+		compactPts = append(compactPts, p)
+		compactVertices = append(compactVertices, vertices[i])
+	}
+	if len(compactPts) > 1 && compactPts[0] == compactPts[len(compactPts)-1] {
+		compactPts = compactPts[:len(compactPts)-1]
+		compactVertices = compactVertices[:len(compactVertices)-1]
+	}
+	return compactPts, compactVertices
 }
 
 // capBlendRingSagitta reads the side or cap ring's numeric proof.

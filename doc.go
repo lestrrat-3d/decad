@@ -141,15 +141,16 @@
 //	Fillet/Chamfer  complete loop(s) of planar faces of a brep
 //	  or stacked boolean result                               builds
 //	Fillet        complete prism cap loop(s), as a brep       builds
-//	  Fillet of single straight cap edges (the vertex blend)  ErrUnsupported
+//	  Fillet of single straight prism cap edges              builds
+//	  Fillet of cap loops with independent straight edges    builds
 //	  loop fillet at a convex line-arc or arc-arc corner,
 //	    not tangent (SF1)                                     ErrUnsupported
 //	  mesh, STEP, mesh boolean and surveys of a loop-filleted
 //	    body                                                  builds
-//	  brep loop selection partial, mixed with lone edges
-//	    or sharing an edge; a face beside the loop curved,
+//	  brep loop selection partial or sharing an edge;
+//	    a face beside the loop curved,
 //	    oblique, split, or on both sides of its face          ErrUnsupported
-//	  partial or lateral-mixed cap-loop selection             ErrUnsupported
+//	  partial cap-loop or mixed cap-loop chamfer               ErrUnsupported
 //	  cap-loop setback the radius or sweep cannot name        ErrUnsupported
 //	  cap-loop corner whose offset cannot be enclosed         ErrUnsupported
 //	  revolve cap edge or edge on the axis                    ErrUnsupported

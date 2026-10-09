@@ -1239,6 +1239,15 @@
 3	0.05	TestBrepLoopFilletBlindPortMouth
 3	0.05	TestBrepLoopFilletLBracket
 3	0.05	TestBrepLoopFilletRoundedPlate
+3	0.05	TestBrepLoopFilletSphereAtEqualRadius
+3	0.05	TestVertexBlendBoxAllEdges
+3	0.05	TestVertexBlendBoxTopAndVerticalEdges
+3	0.05	TestVertexBlendSinglePrismCapEdge
+3	0.05	TestVertexBlendPocketFloor
+3	0.05	TestVertexBlendBoxPartialCornerSet
+3	0.05	TestVertexBlendTrapezoidRefusal
+3	0.05	TestFilletSphereWalkRequiresExactRecordedRadius
+3	0.05	TestVertexBlendCrossDrilledBar
 3	0.05	TestBrepLoopFilletBoundFixture
 3	0.05	TestBrepLoopFilletRefusals
 3	0.05	TestBrepLoopFilletConsumers
