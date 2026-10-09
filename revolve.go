@@ -445,7 +445,7 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 // revolve_axis.go's axis resolution and revolve_build.go/revolve_extent.go's
 // per-kind wall construction and extent readings unchanged — the same
 // evaluator Revolve runs, over an open rather than a closed walk — and reads
-// its recorded walk through RecordChain (seam.go) rather than RecordProfile.
+// its recorded walk through recordChain (seam.go) rather than recordProfile.
 
 // chainRevolvePayload is RevolveChain's own record of a shell body: the
 // recorded open walk SET, the plane frame, the oriented plane-local axis, the

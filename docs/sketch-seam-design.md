@@ -205,9 +205,9 @@ upstream question about the arrangement, not an API question here.
 
 ## 2. The recording IR
 
-A feature converts the region it sweeps into decad's own `ProfileRecord` and
-`PlaneRecord` values before evaluation. A live profile is unsuitable as the
-evaluator's structural input:
+A feature converts the region it sweeps into internal `momentinput.Profile` and
+`sectionrecord.PlaneRecord` values before evaluation. A live profile is
+unsuitable as the evaluator's structural input:
 
 - A `*sketch.Profile` is a pointer into a live, mutable `*sketch.Sketch` — a
   *handle*. Its `Entities` and its
@@ -220,7 +220,8 @@ evaluator's structural input:
 - `r3.Frame`'s fields are unexported, so `PlaneRecord` carries the coordinates
   the evaluator needs explicitly.
 
-So decad **converts, it does not reference**:
+So decad **converts, it does not reference**. The following shapes are defined
+in `internal/momentinput` (`Profile`) and `internal/sectionrecord` (the other types):
 
 ```go
 // PlaneRecord is the sketch plane, as three vectors: it survives encoding, which
@@ -235,9 +236,9 @@ type PlaneRecord struct {
 // carve-out in the plane's own (u, v).
 type Point2 struct{ U, V float64 }
 
-// ProfileRecord is the region a Step extrudes or revolves: one outer loop and its
+// Profile is the region a Step extrudes or revolves: one outer loop and its
 // holes, structural and plane-local. Not a sample, not a pointer, not a sketch.
-type ProfileRecord struct {
+type Profile struct {
     Outer LoopRecord
     Holes []LoopRecord
 }
@@ -441,9 +442,9 @@ today: a circle cut by a rectangle edge records, and an ellipse cut by anything
 `ErrUnrecordableProfile`, because `sketch` could not certify its range.
 
 Conversion is mechanical, and it happens once, in the feature call.
-`RecordProfile` first rejects every nil boundary entity and every boundary
-entity absent from `s.Entities()`. It then calls `s.Profiles()` and accepts only
-when every exported field of `p` exactly matches one fresh current profile,
+`momentinput.RecordProfileWithArea` first rejects every nil boundary entity and
+every boundary entity absent from `s.Entities()`. It then calls `s.Profiles()`
+and accepts `p` only when every exported field exactly matches one fresh profile,
 including entity identities, boundary order/ranges, polylines, holes, area and
 validity. It records from that fresh match, never from caller-mutable `p`.
 No match is `ErrInvalidProfile`; a boundary entity another sketch owns is
@@ -474,7 +475,7 @@ structural record. On a fragment the flag
 already rejects — `TExact == false` — the `Polyline` is not read at all; on a
 whole edge the entity's own data is the record and the `Polyline` is never read
 either. No interior point of a `Polyline` is ever read, and no `Polyline`
-content ever enters a `ProfileRecord`.
+content ever enters a `momentinput.Profile`.
 
 `CurveSegment` is one of the closed variant sets decad owns. Every value a
 segment carries is structural geometry: a `units.Value` field for a radius,
@@ -483,8 +484,8 @@ parameters such as ranges, knots, weights, and `Rho` (core §5.2).
 
 ### 2.1 Record admission
 
-`RecordProfile` admits a live profile only after consuming these `sketch`
-answers:
+`momentinput.RecordProfileWithArea` admits a live profile only after consuming
+these `sketch` answers:
 
 - every boundary entity is non-nil and owned by the profile's source sketch;
 - all exported snapshot fields exactly match one fresh current profile, whose
@@ -512,7 +513,7 @@ record. The evaluator reads the record, not the original sketch.
 value:
 
 ```go
-// ChainRecord is ProfileRecord's OPEN counterpart: one directed walk whose
+// ChainRecord is momentinput.Profile's OPEN counterpart: one directed walk whose
 // first segment's walk start and last segment's walk end are FREE. It carries
 // no Holes and no walk-level winding, because an open walk bounds no region
 // and so has no inside.
@@ -520,10 +521,11 @@ type ChainRecord struct {
     Segments []CurveSegment
 }
 
-func RecordChain(s *sketch.Sketch, ch *sketch.Chain) (ChainRecord, PlaneRecord, error)
+// In package sketchrecord:
+func RecordChain(s *sketch.Sketch, ch *sketch.Chain) (sectionrecord.ChainRecord, sectionrecord.PlaneRecord, error)
 ```
 
-Two things separate it from `ProfileRecord`, and nothing else does.
+Two things separate it from `momentinput.Profile`, and nothing else does.
 
 **It is not a `LoopRecord`.** A `LoopRecord` states that its last segment's
 walk closes onto its first, and every consumer reads one as a closed region's

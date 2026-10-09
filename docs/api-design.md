@@ -713,7 +713,8 @@ body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: 
 in `(u, v)` — so the profile alone does not place the region in space: the plane
 is the sketch's. `s.Plane()` is the construction plane the sketch is drawn on,
 and `s.Plane().Frame()` is the orthonormal `r3.Frame` that lifts the plane-local
-profile into world space. A `Step` records that frame as a `PlaneRecord` —
+profile into world space. A `Step` records that frame as an internal
+`sectionrecord.PlaneRecord` —
 origin, u, v — because an `r3.Frame` does not survive encoding (§6.2), and the
 frame is what the profile normal — the sense `Direction.Along` means for a
 linear extent (§8.1) — is read from.
@@ -822,7 +823,8 @@ boundary entity is `ErrForeignProfile`, a stale one is `ErrStaleProfile`, and a
 snapshot that does not match a fresh `s.Profiles()` result is
 `ErrInvalidProfile` (§7/§12). decad
 reads the plane through `s.Plane()` and its frame through `s.Plane().Frame()`, and
-records the plane and profile as `PlaneRecord` and `ProfileRecord` values before
+records the plane and profile as internal `sectionrecord.PlaneRecord` and
+`momentinput.Profile` values before
 building the feature, so later evaluation does not retain live sketch state.
 
 Booleans are **explicit** — not folded into every feature with an ambient,

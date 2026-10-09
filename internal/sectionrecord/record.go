@@ -41,7 +41,7 @@ type LoopRecord struct {
 	Segments []CurveSegment
 }
 
-// ChainRecord is ProfileRecord's OPEN counterpart: one directed walk whose
+// ChainRecord is momentinput.Profile's OPEN counterpart: one directed walk whose
 // first segment's walk start and last segment's walk end are FREE — they
 // meet nothing, and nothing closes onto them. It carries no Holes and no
 // walk-level winding, because an open walk bounds no region and so has no
