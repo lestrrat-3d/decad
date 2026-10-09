@@ -99,7 +99,7 @@ func TestChordStationBoundRefusesWhatItCannotEnclose(t *testing.T) {
 	}
 }
 
-func TestStoreMaxRefusesAnUnstatedDisplacement(t *testing.T) {
+func TestRequireDerivableStoreRefusesAnUnstatedDisplacement(t *testing.T) {
 	t.Parallel()
 	worst, err := tessellation.StoreMax([]float64{0, 3e-14, 1e-15})
 	require.NoError(t, err)
