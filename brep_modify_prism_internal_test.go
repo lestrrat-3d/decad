@@ -331,3 +331,37 @@ func TestBrepModifyRoutePMapsTheStartCapsHoles(t *testing.T) {
 	}
 	require.Equal(t, 1, cones)
 }
+
+// TestBrepModifySplitsThePrismReading pins the two halves recognisePrism is
+// built from (docs/modify-general-design.md PR 0): readPrismCaps reads P1, P3
+// and P4 alone, and classifyPrismWalls P2 and P5. On the hand-built cross-
+// drilled box the caps along y are the two xz faces with the hole as their
+// one inner loop, and the walls classify; along z the caps read although the
+// hole's wall is no wall of that prism, which only the second half sees.
+func TestBrepModifySplitsThePrismReading(t *testing.T) {
+	t.Parallel()
+	bp := internalCrossDrilledBrep(t)
+	embeds, err := brepEmbeds(bp.faces)
+	require.NoError(t, err)
+
+	caps, ok := readPrismCaps(bp, embeds, 1)
+	require.True(t, ok)
+	require.Equal(t, [2]int{4, 5}, [2]int{caps.bottom, caps.top})
+	require.Equal(t, [2]float64{0, 20}, [2]float64{caps.zlo, caps.zhi})
+	require.Len(t, caps.section.Outer.Segments, 4)
+	require.Len(t, caps.section.Holes, 1)
+	require.Equal(t, []int{0, 1}, caps.bottomLoop)
+	walls, ok, err := classifyPrismWalls(t.Context(), bp, embeds, 1, caps)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Len(t, walls.walls, 1, `the hole's wall`)
+	require.Len(t, walls.rects, 4)
+
+	capsZ, ok := readPrismCaps(bp, embeds, 2)
+	require.True(t, ok)
+	require.Equal(t, [2]float64{0, 20}, [2]float64{capsZ.zlo, capsZ.zhi})
+	require.Empty(t, capsZ.section.Holes)
+	_, ok, err = classifyPrismWalls(t.Context(), bp, embeds, 2, capsZ)
+	require.NoError(t, err)
+	require.False(t, ok)
+}

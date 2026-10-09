@@ -68,9 +68,9 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 	case req.shell && refusal != nil:
 		return brepRoute{}, fmt.Errorf(`%w; this body reads as a prism along a reference axis, and no such prism takes the removed faces as its caps (brep-modify SB3)`, refusal)
 	case req.shell:
-		return brepRoute{}, fmt.Errorf(`%w: this evaluator shells a brep or stacked receiver only where it reads as a prism along a reference axis, and this one reads as none; the three-dimensional offset it needs puts a cylinder along every reflex straight edge, which this record does not hold (brep-modify SB10)`, ErrUnsupported)
+		return brepRoute{}, brepShellThroughCut()
 	case req.blend == nil:
-		return brepRoute{}, fmt.Errorf(`%w: this evaluator %s a brep or stacked receiver through route P or route E only (modify-reach SX16)`, ErrUnsupported, req.op)
+		return brepRoute{}, brepLoopChamfer(req)
 	default:
 		body, err := brepBlendEdges(ctx, b.doc, bp, req)
 		if err != nil {
@@ -78,6 +78,21 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 		}
 		return brepRoute{body: body}, nil
 	}
+}
+
+// brepShellThroughCut is route S's arm (docs/modify-general-design.md §3): the
+// shell of a brep or stacked receiver that reads as no prism whose caps are
+// the removed faces. It builds nothing yet and returns brep-modify SB10's
+// refusal.
+func brepShellThroughCut() error {
+	return fmt.Errorf(`%w: this evaluator shells a brep or stacked receiver only where it reads as a prism along a reference axis, and this one reads as none; the three-dimensional offset it needs puts a cylinder along every reflex straight edge, which this record does not hold (brep-modify SB10)`, ErrUnsupported)
+}
+
+// brepLoopChamfer is route L's arm (docs/modify-general-design.md §4): a
+// Chamfer of a brep or stacked receiver with no blend to build. It builds
+// nothing yet and returns modify-reach SX16's refusal.
+func brepLoopChamfer(req brepModifyRequest) error {
+	return fmt.Errorf(`%w: this evaluator %s a brep or stacked receiver through route P or route E only (modify-reach SX16)`, ErrUnsupported, req.op)
 }
 
 // commitModifyResult commits a modify op's result in place of its receiver,

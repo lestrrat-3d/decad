@@ -49,19 +49,34 @@ type classBPair struct {
 // d is the reference axis Y sweeps along.
 func (cp classBPair) d() int { return cp.axis[2] }
 
-// tryClassB attempts op over the pair. ok=false (err nil) is a silent miss:
-// the caller takes the mesh path unchanged. A non-nil err is a refusal past
-// the point of no return (prism-boolean §3.4) or a cancellation. Cut takes X
-// as the target and Y as the tool; Union and Intersect, being symmetric, also
-// try the operands the other way round, so a brep body or a stacked prism
-// enters in either position.
+// tryClassB attempts op over the pair of bodies. ok=false (err nil) is a
+// silent miss: the caller takes the mesh path unchanged. It is
+// classBOfPayloads over the operands' payloads, placed as the first operand
+// is.
 func tryClassB(ctx context.Context, op meshbool.OperationKind, a, b *Body) (featurePayload, bool, error) {
-	pairs := [][2]*Body{{a, b}}
+	// A body this evaluator did not build has no payload and no class.
+	if a.payload == nil || b.payload == nil {
+		return nil, false, nil
+	}
+	return classBOfPayloads(ctx, op, a.payload, b.payload, a.payload.transform())
+}
+
+// classBOfPayloads is class B's entry over two payloads and the one placement
+// both are stated under (docs/modify-general-design.md §3.3 step 4). It
+// builds no Body and touches no document, so a caller that needs a boolean's
+// record alone (a private cut) reaches it without one. ok=false (err nil) is
+// a silent miss. A non-nil err is a refusal past the point of no return
+// (prism-boolean §3.4) or a cancellation. Cut takes a as the target and b as
+// the tool; Union and Intersect, being symmetric, also try the operands the
+// other way round, so a brep payload or a stacked prism enters in either
+// position. A payload whose transform is not placement is a silent miss.
+func classBOfPayloads(ctx context.Context, op meshbool.OperationKind, a, b featurePayload, placement r3.Transform) (featurePayload, bool, error) {
+	pairs := [][2]featurePayload{{a, b}}
 	if op != meshbool.OpCut {
-		pairs = append(pairs, [2]*Body{b, a})
+		pairs = append(pairs, [2]featurePayload{b, a})
 	}
 	for _, pair := range pairs {
-		cp, ok, err := admitClassBPair(ctx, pair[0], pair[1])
+		cp, ok, err := admitClassBPair(ctx, pair[0], pair[1], placement)
 		if err != nil {
 			return nil, false, err
 		}
@@ -77,7 +92,7 @@ func tryClassB(ctx context.Context, op meshbool.OperationKind, a, b *Body) (feat
 		}
 		// A Cut of a prism outside the through reach takes the crossing
 		// reach (classb_crossing.go).
-		x, isPrism := pair[0].payload.(prismPayload)
+		x, isPrism := pair[0].(prismPayload)
 		if op != meshbool.OpCut || !isPrism {
 			continue
 		}
@@ -92,8 +107,8 @@ func tryClassB(ctx context.Context, op meshbool.OperationKind, a, b *Body) (feat
 // classBFaceView is X's face view, or ok=false where X has none this
 // increment reads: a prism (not a surface result), a stacked prism whose
 // slabs keep one outer loop and one region, or a brep body.
-func classBFaceView(ctx context.Context, b *Body) (brepPayload, bool, error) {
-	switch p := b.payload.(type) {
+func classBFaceView(ctx context.Context, payload featurePayload) (brepPayload, bool, error) {
+	switch p := payload.(type) {
 	case prismPayload:
 		if p.surfaceResult {
 			return brepPayload{}, false, nil
@@ -128,13 +143,13 @@ func classBFaceView(ctx context.Context, b *Body) (brepPayload, bool, error) {
 // the brep record itself needs: one shared placement, and Y's axes carried
 // bit for bit as signed reference axes at the reference origin (§4.1). Every
 // miss is silent.
-func admitClassBPair(ctx context.Context, xBody, yBody *Body) (classBPair, bool, error) {
+func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, placement r3.Transform) (classBPair, bool, error) {
 	// B1: X exposes a face view; Y is a prism.
-	y, okY := yBody.payload.(prismPayload)
+	y, okY := yPayload.(prismPayload)
 	if !okY || y.surfaceResult {
 		return classBPair{}, false, nil
 	}
-	x, ok, err := classBFaceView(ctx, xBody)
+	x, ok, err := classBFaceView(ctx, xPayload)
 	if err != nil || !ok {
 		return classBPair{}, false, err
 	}
@@ -145,7 +160,7 @@ func admitClassBPair(ctx context.Context, xBody, yBody *Body) (classBPair, bool,
 	if x.sectionDelta() != 0 || y.sectionDelta != 0 {
 		return classBPair{}, false, nil
 	}
-	if x.xform != y.xform {
+	if x.xform != placement || y.xform != placement {
 		return classBPair{}, false, nil
 	}
 	embeds, err := brepEmbeds(x.faces)
@@ -195,7 +210,7 @@ func admitClassBPair(ctx context.Context, xBody, yBody *Body) (classBPair, bool,
 	// B3 for a prism or a stacked X: the sweeps are perpendicular. A
 	// co-directional pair is class A's. A brep body has no single sweep, and
 	// takes Y along any reference axis.
-	if _, isBrep := xBody.payload.(brepPayload); !isBrep && cp.axis[2] == 2 {
+	if _, isBrep := xPayload.(brepPayload); !isBrep && cp.axis[2] == 2 {
 		return classBPair{}, false, nil
 	}
 	g, err := r3.NewFrame(ref.Origin(), yAxes[0], yAxes[1])

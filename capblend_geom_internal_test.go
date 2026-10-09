@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
 
@@ -227,4 +228,74 @@ func TestCapMiterLocusUpperReadsTheStatedAxialRise(t *testing.T) {
 		checked++
 	}
 	require.Equal(t, 2, checked, `a quarter disk has two line-circle miters`)
+}
+
+// TestBuildCapBandTakesSuppliedCapCoedges pins the hook of
+// docs/modify-general-design.md §4.2 step 5: handed the cap-level coedges a
+// first build minted, buildCapBand mints none of its own. The L section's end
+// loop has six line walls, five miter corners and one reflex corner, so the
+// supplied boundary holds both wall edges and a connector arc. The result
+// carries the supplied edges themselves and reads, patch for patch and bit
+// for bit, as the minted band did. A boundary of the wrong length, one with a
+// reversed coedge, and one whose edges do not meet the band's vertices are
+// each refused.
+//
+// Shown to fail: with buildCapBand ignoring suppliedCap the pointer
+// comparison fails on every coedge; with the vertex join check deleted the
+// swapped boundary builds.
+func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
+	t.Parallel()
+	body, cbp := chamferedSectionBody(t, func(s *sketch.Sketch) {
+		pts := []*sketch.Point{
+			s.CreatePoint(0, 0), s.CreatePoint(40, 0), s.CreatePoint(40, 20),
+			s.CreatePoint(20, 20), s.CreatePoint(20, 40), s.CreatePoint(0, 40),
+		}
+		for i := range pts {
+			s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+		}
+		s.Fix(pts[0])
+	}, 3)
+	loop := cbp.loops()[0]
+	setback := cbp.setbackAt(-1)
+	pp := cbp.prismLike(cbp.z0, cbp.z1-setback.ds)
+	pp.z1Delta = proofbound.AbsSumUpper(cbp.z1Delta, setback.dsDelta)
+	ref := body.origin.producer
+	work := freeform.NewFreeformWork()
+	// The supplied boundary hangs off the vertices the slant edges start
+	// from, which the first build mints beside the side coedges it reads.
+	_, _, topCo, _, err := buildLoopSidesAs(t.Context(), &Body{doc: body.doc}, ref, pp, 0, false, loop, work, nil, levelToken{}, levelToken{}, false) //nolint:dogsled // only the top coedges are read
+	require.NoError(t, err)
+	again, err := buildCapBand(t.Context(), &Body{doc: body.doc}, ref, cbp, 0, loop, cbp.z1, -1, topCo, nil, work)
+	require.NoError(t, err)
+	require.Len(t, again.capCo, 7, "six walls and the reflex corner's arc")
+	supplied, err := buildCapBand(t.Context(), &Body{doc: body.doc}, ref, cbp, 0, loop, cbp.z1, -1, topCo, again.capCo, work)
+	require.NoError(t, err)
+
+	require.Len(t, supplied.capCo, len(again.capCo))
+	for i, co := range supplied.capCo {
+		require.Same(t, again.capCo[i].edge, co.edge, "coedge %d is the supplied edge", i)
+		require.True(t, co.forward)
+	}
+	require.Equal(t, again.geom, supplied.geom)
+	require.Equal(t, again.delta, supplied.delta)
+	require.Len(t, supplied.patches, len(again.patches))
+	for i, f := range supplied.patches {
+		require.Equal(t, again.patches[i].area, f.area, "patch %d", i)
+		require.Equal(t, again.patches[i].areaBound, f.areaBound, "patch %d", i)
+		require.Equal(t, again.patches[i].normalBound, f.normalBound, "patch %d", i)
+	}
+
+	short := again.capCo[:len(again.capCo)-1]
+	_, err = buildCapBand(t.Context(), &Body{doc: body.doc}, ref, cbp, 0, loop, cbp.z1, -1, topCo, short, work)
+	require.ErrorContains(t, err, "supplied cap boundary")
+
+	backward := append([]coedge(nil), again.capCo...)
+	backward[0].forward = false
+	_, err = buildCapBand(t.Context(), &Body{doc: body.doc}, ref, cbp, 0, loop, cbp.z1, -1, topCo, backward, work)
+	require.ErrorContains(t, err, "supplied cap boundary")
+
+	swapped := append([]coedge(nil), again.capCo...)
+	swapped[0], swapped[2] = swapped[2], swapped[0]
+	_, err = buildCapBand(t.Context(), &Body{doc: body.doc}, ref, cbp, 0, loop, cbp.z1, -1, topCo, swapped, work)
+	require.Error(t, err)
 }

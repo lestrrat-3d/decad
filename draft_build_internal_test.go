@@ -94,7 +94,7 @@ func TestDraftConeWallsReadNoChordLocusTerm(t *testing.T) {
 	loop := cbp.loops()[0]
 	near, err := draftNearRim(t.Context(), cbp.prismLike(0, 0), 0, loop, nearZ, nearDelta, work)
 	require.NoError(t, err)
-	band, err := buildCapBand(t.Context(), &Body{doc: b.doc}, b.origin.producer, cbp, 0, loop, farZ, matSign, near, work)
+	band, err := buildCapBand(t.Context(), &Body{doc: b.doc}, b.origin.producer, cbp, 0, loop, farZ, matSign, near, nil, work)
 	require.NoError(t, err)
 	cones := 0
 	for _, g := range band.geom {

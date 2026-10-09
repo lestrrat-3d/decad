@@ -230,7 +230,7 @@ func TestClassBCutExactOffsetPlane(t *testing.T) {
 				s.CreateCircle(c, 3)
 			})
 			x := box.payload.(prismPayload)
-			_, admitted, err := admitClassBPair(t.Context(), box, drill)
+			_, admitted, err := admitClassBPair(t.Context(), box.payload, drill.payload, box.payload.transform())
 			require.NoError(t, err)
 			require.Equal(t, tc.brep, admitted)
 			if !tc.brep {
@@ -337,4 +337,52 @@ func TestClassBCutGateMissesTakeMeshPath(t *testing.T) {
 			requireMeshPathResult(t, result)
 		})
 	}
+}
+
+// TestClassBOfPayloadsBuildsWithoutBodies pins the body-free entry of
+// docs/modify-general-design.md §3.3 step 4: over the two payloads and their
+// shared placement it returns the record tryClassB returns for the bodies, a
+// seven-face brep of volume 16000 − 180π with the hole's wall a circle of
+// radius 3. A placement that is not the operands' own is a silent miss, and so
+// is a payload-free body in tryClassB.
+//
+// Shown to fail: with admitClassBPair comparing the operands' transforms to
+// each other alone, the foreign placement admits the pair.
+func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	drill := internalDrillAlongY(t, doc, 20, 10, 3)
+	placement := box.payload.transform()
+
+	direct, ok, err := classBOfPayloads(t.Context(), meshbool.OpCut, box.payload, drill.payload, placement)
+	require.NoError(t, err)
+	require.True(t, ok)
+	viaBodies, ok, err := tryClassB(t.Context(), meshbool.OpCut, box, drill)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, viaBodies, direct)
+
+	bp, ok := direct.(brepPayload)
+	require.True(t, ok)
+	require.Len(t, bp.faces, 7)
+	circles := 0
+	for _, f := range bp.faces {
+		if c, ok := f.wall.(CircleSeg); ok {
+			circles++
+			require.Equal(t, units.Millimeters(3), c.Radius)
+		}
+	}
+	require.Equal(t, 1, circles)
+	require.Len(t, doc.Bodies(), 2, `the private entry commits nothing`)
+
+	shift, err := r3.Translation(r3.NewVec(1, 0, 0))
+	require.NoError(t, err)
+	_, ok, err = classBOfPayloads(t.Context(), meshbool.OpCut, box.payload, drill.payload, shift)
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	_, ok, err = tryClassB(t.Context(), meshbool.OpCut, &Body{}, drill)
+	require.NoError(t, err)
+	require.False(t, ok)
 }

@@ -134,7 +134,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		// separate onStart/onEnd branch.
 		var startBand, endBand capBandResult
 		if onStart {
-			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.z0, +1, bottomCo, work)
+			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.z0, +1, bottomCo, nil, work)
 			if err != nil {
 				return nil, err
 			}
@@ -168,7 +168,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
 		}
 		if onEnd {
-			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.z1, -1, topCo, work)
+			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.z1, -1, topCo, nil, work)
 			if err != nil {
 				return nil, err
 			}

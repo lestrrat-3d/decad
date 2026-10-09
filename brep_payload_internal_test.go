@@ -690,3 +690,38 @@ func TestBrepCoordinateEnvelopeReadsArcsTightly(t *testing.T) {
 	require.LessOrEqual(t, worst, topo.coordUpper)
 	require.InDelta(t, 15+5*math.Sqrt2, topo.coordUpper, 1e-12)
 }
+
+// TestBrepFaceReversedFlipsTheOutwardSide pins the cavity rule of
+// docs/modify-general-design.md §3.3 step 5 on the cross-drilled box: a
+// planar face flips outward and keeps its region, levels and frame; the hole's
+// swept wall walks its circle the other way over the same levels, and a swept
+// face exchanges its start-line and end-line splits. Reversing twice restores
+// the face.
+func TestBrepFaceReversedFlipsTheOutwardSide(t *testing.T) {
+	t.Parallel()
+	bp := internalCrossDrilledBrep(t)
+
+	top := bp.faces[1]
+	flipped := top.reversed()
+	require.Equal(t, !top.outward, flipped.outward)
+	require.Same(t, top.region, flipped.region)
+	require.Equal(t, top.frame, flipped.frame)
+	require.Equal(t, [2]float64{top.z0, top.z1}, [2]float64{flipped.z0, flipped.z1})
+	require.Equal(t, top, flipped.reversed())
+
+	wall := bp.faces[6]
+	wall.side0 = []brepSplit{{Z: -15}}
+	wall.side1 = []brepSplit{{Z: -10}, {Z: -5}}
+	back := wall.reversed()
+	circle, ok := back.wall.(CircleSeg)
+	require.True(t, ok)
+	want := wall.wall.(CircleSeg)
+	require.Equal(t, want.Center, circle.Center)
+	require.Equal(t, want.Radius, circle.Radius)
+	require.Equal(t, !want.CCW, circle.CCW)
+	require.Equal(t, [2]float64{want.TEnd, want.TStart}, [2]float64{circle.TStart, circle.TEnd})
+	require.Equal(t, wall.side1, back.side0)
+	require.Equal(t, wall.side0, back.side1)
+	require.Equal(t, [2]float64{wall.z0, wall.z1}, [2]float64{back.z0, back.z1})
+	require.Equal(t, wall, back.reversed())
+}

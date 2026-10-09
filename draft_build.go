@@ -344,7 +344,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		if err != nil {
 			return nil, err
 		}
-		band, err := buildCapBand(ctx, body, ref, cbp, li, loop, farZ, matSign, nearCo, work)
+		band, err := buildCapBand(ctx, body, ref, cbp, li, loop, farZ, matSign, nearCo, nil, work)
 		if err != nil {
 			return nil, fmt.Errorf(`the tapered extrude's walls: %w`, err)
 		}

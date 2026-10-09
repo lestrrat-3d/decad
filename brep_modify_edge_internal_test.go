@@ -624,3 +624,26 @@ func TestAuditTrimmedWall(t *testing.T) {
 	require.ErrorIs(t, auditTrimmedWall(w, 10, 10), ErrUnsupported)
 	require.ErrorIs(t, auditTrimmedWall(w, 25, 0), ErrUnsupported)
 }
+
+// TestReverseSegmentWalksACircleTheOtherWay pins docs/modify-general-design.md
+// §3.3 step 5's rule for a whole circle: the same centre and radius, the CCW
+// sense flipped and the range swapped, so reversing twice is the identity. A
+// line and an arc keep their ends and swap their range as before.
+func TestReverseSegmentWalksACircleTheOtherWay(t *testing.T) {
+	t.Parallel()
+	circle := CircleSeg{Center: Point2{U: 1, V: 2}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
+	got, ok := reverseSegment(circle).(CircleSeg)
+	require.True(t, ok)
+	require.Equal(t, circle.Center, got.Center)
+	require.Equal(t, circle.Radius, got.Radius)
+	require.False(t, got.CCW)
+	require.Equal(t, [2]float64{1, 0}, [2]float64{got.TStart, got.TEnd})
+	require.Equal(t, circle, reverseSegment(got))
+
+	line := LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 5, V: 0}, TStart: 0, TEnd: 1}
+	gotLine, ok := reverseSegment(line).(LineSeg)
+	require.True(t, ok)
+	require.Equal(t, [2]float64{1, 0}, [2]float64{gotLine.TStart, gotLine.TEnd})
+	require.Equal(t, line.Start, gotLine.Start)
+	require.Equal(t, line.End, gotLine.End)
+}
