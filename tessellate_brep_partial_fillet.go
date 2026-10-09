@@ -35,7 +35,7 @@ type partialBandColumn struct {
 	capBound  proofbound.WalkEndBound
 }
 
-func chordPartialFilletBand(ctx context.Context, bp brepPayload, b brepLoopBand, f brepFace,
+func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 	cbp capBlendPayload, chord float64) (brepBandChord, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
@@ -46,18 +46,18 @@ func chordPartialFilletBand(ctx context.Context, bp brepPayload, b brepLoopBand,
 	if len(side.walks) != len(b.selected) {
 		return brepBandChord{}, fmt.Errorf(`%w: a partial fillet band's side walks disagree with its selection`, ErrUnsupported)
 	}
-	cap := f.regionLoop(b.loop)
+	contour := f.regionLoop(b.loop)
 	partial := &partialBandMesh{arcCols: map[int][]int{}}
 	walkCols := make([][2]int, len(b.selected))
 	for i, on := range b.selected {
 		if !on {
 			continue
 		}
-		if b.capWalk[i] < 0 || b.capWalk[i] >= len(cap.Segments) {
+		if b.capWalk[i] < 0 || b.capWalk[i] >= len(contour.Segments) {
 			return brepBandChord{}, fmt.Errorf(`%w: a partial fillet band's selected cap segment is missing`, ErrUnsupported)
 		}
 		s := side.walks[i]
-		c, err := boundarywalk.WalkOf(cap.Segments[b.capWalk[i]], work)
+		c, err := boundarywalk.WalkOf(contour.Segments[b.capWalk[i]], work)
 		if err != nil {
 			return brepBandChord{}, err
 		}
@@ -81,10 +81,10 @@ func chordPartialFilletBand(ctx context.Context, bp brepPayload, b brepLoopBand,
 		if b.capArc[k] < 0 {
 			continue
 		}
-		if b.capArc[k] >= len(cap.Segments) || !b.selected[k] {
+		if b.capArc[k] >= len(contour.Segments) || !b.selected[k] {
 			return brepBandChord{}, fmt.Errorf(`%w: a partial fillet band's reflex connector is missing`, ErrUnsupported)
 		}
-		seg := cap.Segments[b.capArc[k]]
+		seg := contour.Segments[b.capArc[k]]
 		arc, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return brepBandChord{}, err
@@ -109,7 +109,7 @@ func chordPartialFilletBand(ctx context.Context, bp brepPayload, b brepLoopBand,
 		}
 		cols = append(cols, walkCols[k][0])
 		partial.arcCols[b.capArc[k]] = cols
-		for j := 0; j < len(cols)-1; j++ {
+		for j := range len(cols) - 1 {
 			partial.cells = append(partial.cells, filletCell{c0: cols[j], c1: cols[j+1], patch: len(partial.patchSag)})
 		}
 		partial.patchSag = append(partial.patchSag, sag)
@@ -165,13 +165,13 @@ func (bc *brepBandChord) placePartialRings(e brepEmbed,
 		fr.dev[k] = make([]float64, N)
 		for c := range N {
 			col := bc.partial.columns[c]
-			s, cap := col.side, col.cap
-			u, ru, okU := interpolate(s.U, cap.U, fraction, fRat)
-			v, rv, okV := interpolate(s.V, cap.V, fraction, fRat)
+			s, capPoint := col.side, col.cap
+			u, ru, okU := interpolate(s.U, capPoint.U, fraction, fRat)
+			v, rv, okV := interpolate(s.V, capPoint.V, fraction, fRat)
 			if !okU || !okV {
 				return fmt.Errorf(`%w: a partial fillet ring's position is not finite`, ErrNotFinite)
 			}
-			span := proofbound.AbsSumUpper(math.Abs(cap.U-s.U), math.Abs(cap.V-s.V))
+			span := proofbound.AbsSumUpper(math.Abs(capPoint.U-s.U), math.Abs(capPoint.V-s.V))
 			dev := proofbound.AbsSumUpper(ru, rv, proofbound.ProductUpper(errF, span), errZ)
 			fr.dev[k][c] = dev
 			fr.ringV[k][c] = addVertex(e.Canon(u, v, z), proofbound.WalkEndBound{U: dev, V: dev})

@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 
@@ -178,9 +179,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			if err != nil {
 				return nil, err
 			}
-			for ui, poly := range polys {
-				terminalPoly[ui] = poly
-			}
+			maps.Copy(terminalPoly, polys)
 			continue
 		}
 		bandsOf[bands[bi].band.face] = append(bandsOf[bands[bi].band.face], bi)

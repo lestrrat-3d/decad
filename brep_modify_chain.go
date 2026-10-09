@@ -330,7 +330,7 @@ func partialFilletContour(budget *proofbound.WorkBudget, walks []survey2d.SideWa
 // At a hole mouth the selected cap walks move away from the hole, whereas a
 // standalone route E corner would trim the end wall toward the hole. The
 // terminal arc must use the cap foot shared with the open band's cylinder.
-func (r *brepLoopRead) partialTerminalBlend(sel brepLoopSel, orig, cap loopRecord, capWalk []int,
+func (r *brepLoopRead) partialTerminalBlend(sel brepLoopSel, orig, contour loopRecord, capWalk []int,
 	eb *brepEdgeBlend, k int, sideLevelRef float64) error {
 	v := eb.v[k]
 	seg := -1
@@ -341,7 +341,7 @@ func (r *brepLoopRead) partialTerminalBlend(sel brepLoopSel, orig, cap loopRecor
 			break
 		}
 	}
-	if seg < 0 || seg >= len(orig.Segments) || seg >= len(capWalk) || capWalk[seg] >= len(cap.Segments) {
+	if seg < 0 || seg >= len(orig.Segments) || seg >= len(capWalk) || capWalk[seg] >= len(contour.Segments) {
 		return r.refuse("SL2", `a terminal has no selected cap segment`)
 	}
 	work := freeform.NewFreeformWork()
@@ -349,13 +349,13 @@ func (r *brepLoopRead) partialTerminalBlend(sel brepLoopSel, orig, cap loopRecor
 	if err != nil {
 		return err
 	}
-	cw, err := boundarywalk.WalkOf(cap.Segments[capWalk[seg]], work)
+	cw, err := boundarywalk.WalkOf(contour.Segments[capWalk[seg]], work)
 	if err != nil {
 		return err
 	}
 	f := r.bp.faces[sel.face]
 	eF := r.topo.embeds[sel.face]
-	capRef := [3]float64{}
+	var capRef [3]float64
 	switch {
 	case eF.Canon(ow.StartU, ow.StartV, f.z0) == v:
 		capRef = eF.Canon(cw.StartU, cw.StartV, f.z0)

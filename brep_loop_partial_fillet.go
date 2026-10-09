@@ -36,7 +36,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		return nil, brepBandMass{}, err
 	}
 	n := len(fr.walks)
-	cap, side := make([]*Edge, n), make([]*Edge, n)
+	capEdges, side := make([]*Edge, n), make([]*Edge, n)
 	si := 0
 	for i, on := range b.selected {
 		if !on {
@@ -45,8 +45,8 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		if si >= len(open.side[bi]) {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet band lacks a selected contour edge`, ErrUnsupported)
 		}
-		cap[i], side[i] = open.capBySeg[bi][b.capWalk[i]], open.side[bi][si].edge
-		if cap[i] == nil {
+		capEdges[i], side[i] = open.capBySeg[bi][b.capWalk[i]], open.side[bi][si].edge
+		if capEdges[i] == nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet band lacks a selected cap edge`, ErrUnsupported)
 		}
 		si++
@@ -80,9 +80,9 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		}
 		var capV, sideV *Vertex
 		if b.selected[k] {
-			capV, sideV = cap[k].start, side[k].start
+			capV, sideV = capEdges[k].start, side[k].start
 		} else {
-			capV, sideV = cap[prev].end, side[prev].end
+			capV, sideV = capEdges[prev].end, side[prev].end
 		}
 		if b.selected[prev] != b.selected[k] {
 			for _, terminal := range open.terminal[bi] {
@@ -104,7 +104,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		}
 		if fr.loop.Corners[k] == filletband.Reflex {
 			arc := open.capBySeg[bi][b.capArc[k]]
-			if arc == nil || arc.start != cap[prev].end || arc.end != cap[k].start {
+			if arc == nil || arc.start != capEdges[prev].end || arc.end != capEdges[k].start {
 				return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet's reflex connector does not meet its walks`, ErrUnsupported)
 			}
 			j := fr.joins[k]
@@ -114,7 +114,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			lead[k] = meridian(j.pB, vertex, w, arc.end, side[k].start)
 			continue
 		}
-		if cap[k].start != cap[prev].end {
+		if capEdges[k].start != capEdges[prev].end {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet's selected cap walks do not meet`, ErrUnsupported)
 		}
 		if fr.loop.Corners[k] != filletband.Miter {
@@ -178,7 +178,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		if start == nil || end == nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet patch has an open corner`, ErrUnsupported)
 		}
-		capE, sideE := cap[i], side[i]
+		capE, sideE := capEdges[i], side[i]
 		if !edgeConnects(start, capE.start, sideE.start) || !edgeConnects(end, capE.end, sideE.end) {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet patch does not close on its contours`, ErrUnsupported)
 		}

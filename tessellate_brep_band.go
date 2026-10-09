@@ -81,7 +81,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 		f := bp.faces[b.face]
 		cbp := b.tessView(f, bp.xform)
 		if b.selected != nil {
-			bc, err := chordPartialFilletBand(ctx, bp, b, f, cbp, chord)
+			bc, err := chordPartialFilletBand(ctx, b, f, cbp, chord)
 			if err != nil {
 				return nil, nil, err
 			}
