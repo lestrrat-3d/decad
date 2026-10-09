@@ -48,29 +48,32 @@ func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]
 	return offsetJoinsBudget(budget, walks, 1, d)
 }
 
-// offsetJoins is capOffsetJoins read under cbp's corner rule. A draft view
-// (docs/draft-design.md §2) checks each circular wall's band radius exactly as
-// capOffsetJoins does and then resolves every corner by the sharp rule: a
+// offsetJoins is capOffsetJoins read under cbp's corner rule for loop li. A
+// draft view (docs/draft-design.md §2) checks the band radius of each circular
+// wall it moves exactly as capOffsetJoins does and then resolves every corner
+// by the sharp rule, each walk at its own amount (walkAmounts, §10.2): a
 // reflex corner is mitered, a corner at a circular walk must be a G1 join
-// (SD4), and two moved lines that do not meet are a cusp (SD15).
-func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]cornerJoin, error) {
+// between two walks moved alike (SD4), and two moved lines that do not meet
+// are a cusp (SD15).
+func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, li int, cl cornerLoop, d float64) ([]cornerJoin, error) {
 	if !cbp.draft {
 		return capOffsetJoins(budget, cl, d)
 	}
 	if len(cl.walks) == 0 {
 		return nil, fmt.Errorf(`%w: a draft loop holds no walks`, ErrDegenerate)
 	}
-	for _, w := range cl.walks {
+	amounts := cbp.walkAmounts(li, cl.walks, d)
+	for i, w := range cl.walks {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
 		if w.IsCircular() {
-			if _, err := capband.BandRadius(w, d, shellTol); err != nil {
+			if _, err := capband.WallRadius(w, amounts[i], shellTol); err != nil {
 				return nil, wrapDraftOffsetError(err)
 			}
 		}
 	}
-	return sharpOffsetJoinsBudget(budget, cl.walks, d)
+	return sharpOffsetJoinsBudget(budget, cl.walks, amounts)
 }
 
 // capWallFoot returns the offset segment's own (start, end) feet for wall i,
@@ -158,6 +161,17 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	setback := cbp.setbackAt(matSign)
 	dc, dcDelta, ds := setback.dc, setback.dcDelta, setback.ds
 	sideZ := capZ + matSign*ds
+	// amounts is each walk's own in-plane offset: dc for every walk of a
+	// chamfer, and zero for a wall a subset draft keeps (docs/draft-design.md
+	// §10.2). A kept wall's offset is exactly zero, so its span carries no
+	// width (amountDelta).
+	amounts := cbp.walkAmounts(li, walks, dc)
+	amountDelta := func(a float64) float64 {
+		if a == 0 {
+			return 0
+		}
+		return dcDelta
+	}
 	pl := cbp.prismLike(0, 0)
 
 	capName := capNameOf(matSign)
@@ -217,15 +231,16 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// A single closed circle has no corner: one Cone patch, full turn.
 	if n == 1 && walks[0].Closed {
 		w := walks[0]
-		capRadius, err := capband.BandRadius(w, dc, shellTol)
+		a := amounts[0]
+		capRadius, err := capband.WallRadius(w, a, shellTol)
 		if err != nil {
 			return capBandResult{}, err
 		}
-		delta, err := capband.WholeCircleDisplacement(w, dc, dcDelta, shellTol)
+		delta, err := capband.WallCircleDisplacement(w, a, amountDelta(a), shellTol)
 		if err != nil {
 			return capBandResult{}, err
 		}
-		exactRadius, ok := capband.OffsetRadiusSpan(w, dc, dcDelta)
+		exactRadius, ok := capband.OffsetRadiusSpan(w, a, amountDelta(a))
 		if !ok {
 			return capBandResult{}, capband.ErrContourUnbounded
 		}
@@ -293,7 +308,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}, delta: delta}, nil
 	}
 
-	joins, err := cbp.offsetJoins(budget, cl, dc)
+	joins, err := cbp.offsetJoins(budget, li, cl, dc)
 	if err != nil {
 		return capBandResult{}, err
 	}
@@ -305,7 +320,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// are told a different story about it — and neither the zero bound a
 	// recorded coordinate earns nor an infinite one that bounds nothing is
 	// published for a coordinate this solve computed.
-	delta, err := capband.ContourDisplacement(walks, capContourJoins(joins), dc, dcDelta, shellTol)
+	var delta float64
+	if cbp.draft {
+		delta, err = capband.AmountsContourDisplacement(walks, capContourJoins(joins), amounts, dcDelta, shellTol)
+	} else {
+		delta, err = capband.ContourDisplacement(walks, capContourJoins(joins), dc, dcDelta, shellTol)
+	}
 	if err != nil {
 		return capBandResult{}, err
 	}
@@ -545,11 +565,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		capThAllow := 0.0
 		radialShift := 0.0
 		if w.IsCircular() {
-			r, err := capband.BandRadius(w, dc, shellTol)
+			r, err := capband.WallRadius(w, amounts[i], shellTol)
 			if err != nil {
 				return capBandResult{}, err
 			}
-			radius, ok := capband.OffsetRadiusSpan(w, dc, dcDelta)
+			radius, ok := capband.OffsetRadiusSpan(w, amounts[i], amountDelta(amounts[i]))
 			if !ok {
 				return capBandResult{}, capband.ErrContourUnbounded
 			}

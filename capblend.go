@@ -94,6 +94,10 @@ type capBlendPayload struct {
 	// edges take the prism's convexity (docs/draft-design.md §2, §6). A
 	// cap-loop chamfer never sets it.
 	draft bool
+	// draftKept is a draft view's draftPayload.kept: the recorded segments of
+	// the walls a subset draft leaves in place, which every per-walk reading
+	// of the band offsets by zero (walkAmounts). Empty moves every wall.
+	draftKept map[draftWall]struct{}
 }
 
 // capSetback is one chamfered cap's two setbacks (docs/modify-reach-design.md
@@ -147,6 +151,13 @@ func (cbp capBlendPayload) loopBandDelta(li int) float64 {
 		}
 	}
 	return delta
+}
+
+// walkAmounts is the in-plane offset of each coalesced walk of loop li when
+// the band's setback is d: d for every walk of a chamfer or a draft of every
+// wall, and zero for a walk a subset draft keeps (draftKept).
+func (cbp capBlendPayload) walkAmounts(li int, walks []survey2d.SideWalk, d float64) []float64 {
+	return walkAmounts(cbp.draftKept, li, walks, d)
 }
 
 // loopOffset is loop li's own in-plane offset, its loopSetback's dc.
@@ -350,12 +361,12 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		// The cap contour is the band's cap-level directrix and the chamfered
 		// cap face's own boundary — the same offset loop the build emits, and
 		// the same displacement the band's own vertices and edges carry.
-		contour, err := cbp.contourOf(ctx, loop, cbp.loopOffset(li))
+		contour, err := cbp.contourOf(ctx, li, loop, cbp.loopOffset(li))
 		if err != nil {
 			return 0, 0, 0, err
 		}
 		setback := cbp.loopSetback(li)
-		delta, err := cbp.loopContourDelta(ctx, loop, setback.dc, setback.dcDelta)
+		delta, err := cbp.loopContourDelta(ctx, li, loop, setback.dc, setback.dcDelta)
 		if err != nil {
 			return 0, 0, 0, err
 		}

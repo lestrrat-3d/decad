@@ -7,8 +7,10 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -36,6 +38,10 @@ type draftPayload struct {
 	// conversion's rounding: the stated angle lies within taperDelta of it.
 	taper, taperDelta float64
 	xform             r3.Transform
+	// kept names the recorded segments of the walls a subset draft leaves
+	// vertical (docs/draft-design.md §10.2), keyed by loop and segment; empty
+	// for a tapered extrude or a draft of every wall, which moves them all.
+	kept map[draftWall]struct{}
 
 	// d is the held offset amount h·tan α and dDelta the reach of every amount
 	// the stated sweep and taper denote from it (draftOffset).
@@ -56,6 +62,28 @@ type draftPayload struct {
 	bandDelta map[capBandKey]float64
 }
 
+// draftWall names one recorded segment of a draft's near section: its loop
+// (0 the outer loop, i+1 hole i, the index side(i, j) roles carry) and its
+// index in that loop.
+type draftWall struct{ loop, seg int }
+
+// walkAmounts is the offset amount of each coalesced walk of loop li: t for a
+// walk the draft moves and zero for one it keeps (kept). A walk is kept when
+// its first recorded segment is; draftSectionWalks refuses a walk whose
+// segments disagree before any amount is read.
+func walkAmounts(kept map[draftWall]struct{}, li int, walks []survey2d.SideWalk, t float64) []float64 {
+	out := offset2d.UniformAmounts(len(walks), t)
+	if len(kept) == 0 {
+		return out
+	}
+	for i, w := range walks {
+		if _, ok := kept[draftWall{loop: li, seg: w.Segs[0]}]; ok {
+			out[i] = 0
+		}
+	}
+	return out
+}
+
 // transform is the accumulated rigid placement.
 func (dp draftPayload) transform() r3.Transform { return dp.xform }
 
@@ -71,8 +99,9 @@ func (dp draftPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // loop chamfered on the far cap, with the cap setback dc = d across the cap
 // and the side setback ds = h down the whole sweep, so the band's side level
 // is the sketch plane and no straight slab remains. The view's draft flag
-// selects the sharp corner rule and the prism's roles and convexity
-// (docs/draft-design.md §1, §7).
+// selects the sharp corner rule and the prism's roles and convexity, and its
+// draftKept the walls a subset draft leaves in place (docs/draft-design.md §1,
+// §7, §10.2).
 func (dp draftPayload) band() capBlendPayload {
 	setback := capSetback{dc: dp.d, dcDelta: dp.dDelta, ds: dp.z1 - dp.z0}
 	every := map[int]bool{}
@@ -88,6 +117,7 @@ func (dp draftPayload) band() capBlendPayload {
 		draft:     true,
 		patches:   dp.patches,
 		bandDelta: dp.bandDelta,
+		draftKept: dp.kept,
 	}
 	if dp.nearStart {
 		cbp.end, cbp.endLoops = setback, every

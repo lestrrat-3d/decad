@@ -25,3 +25,13 @@ func BandRadius(w survey2d.SideWalk, d, tol float64) (float64, error) {
 	}
 	return r, nil
 }
+
+// WallRadius is BandRadius for a wall a draft offsets by d or, at d == 0,
+// leaves in place (docs/draft-design.md §10.2): the kept wall's far radius is
+// its own, with no taper for float64 to round away.
+func WallRadius(w survey2d.SideWalk, d, tol float64) (float64, error) {
+	if d == 0 {
+		return w.Radius, nil
+	}
+	return BandRadius(w, d, tol)
+}

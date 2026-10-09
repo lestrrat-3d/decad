@@ -83,7 +83,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	// mechanism's own contribution — not masked by ordinary O(1)-scale
 	// arithmetic rounding elsewhere in the band — decides the bound.
 	const delta = 1e-6
-	mu, mv, _, err := capBandMoment(t.Context(), loop, cbp, []capPatchGeom{g}, capZ, -1, delta, capBandClosure{}, work)
+	mu, mv, _, err := capBandMoment(t.Context(), 0, loop, cbp, []capPatchGeom{g}, capZ, -1, delta, capBandClosure{}, work)
 	require.NoError(t, err)
 
 	// The SAME area terms capBandMoment itself composes into areaUpper,
@@ -199,7 +199,7 @@ func capBandCircle(t *testing.T, r, d, capZ float64) proofbound.BoundedScalar {
 		SweepCCW: true, WholeTurn: true,
 		SideZ: capZ - d, CapZ: capZ,
 	}
-	v, err := capBandVolume(t.Context(), loop, cbp, []capPatchGeom{g}, capZ, -1, 0, capBandClosure{}, freeform.NewFreeformWork())
+	v, err := capBandVolume(t.Context(), 0, loop, cbp, []capPatchGeom{g}, capZ, -1, 0, capBandClosure{}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	return v
 }
@@ -233,16 +233,16 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 			withoutDelta.z0Delta = 0
 			withoutDelta.z1Delta = 0
 
-			volumeWith, err := capBandVolume(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
+			volumeWith, err := capBandVolume(t.Context(), 0, loop, tc.payload, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
 			require.NoError(t, err)
-			volumeWithout, err := capBandVolume(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
+			volumeWithout, err := capBandVolume(t.Context(), 0, loop, withoutDelta, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			require.Greater(t, volumeWith.Bound, volumeWithout.Bound,
 				`the cap disk's inherited axial displacement must reach the band volume bound`)
 
-			_, _, momentWith, err := capBandMoment(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
+			_, _, momentWith, err := capBandMoment(t.Context(), 0, loop, tc.payload, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
 			require.NoError(t, err)
-			_, _, momentWithout, err := capBandMoment(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
+			_, _, momentWithout, err := capBandMoment(t.Context(), 0, loop, withoutDelta, geom, capZ, tc.matSign, 0, capBandClosure{}, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			require.Greater(t, momentWith.Bound, momentWithout.Bound,
 				`the cap disk's inherited axial displacement must reach the band first-moment bound`)
@@ -286,18 +286,18 @@ func TestCapBandMassBoundsChargeTheSideLevelMove(t *testing.T) {
 	charge := levelDelta * 1
 
 	work := freeform.NewFreeformWork()
-	volExact, err := capBandVolume(t.Context(), loop, exact, geom, capZ, -1, 0, capBandClosure{}, work)
+	volExact, err := capBandVolume(t.Context(), 0, loop, exact, geom, capZ, -1, 0, capBandClosure{}, work)
 	require.NoError(t, err)
-	volLoose, err := capBandVolume(t.Context(), loop, loose, geom, capZ, -1, 0, capBandClosure{}, work)
+	volLoose, err := capBandVolume(t.Context(), 0, loop, loose, geom, capZ, -1, 0, capBandClosure{}, work)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, volLoose.Bound-volExact.Bound, charge*(1-1e-9),
 		`the volume bound must grow by the side level's move, %v, not %v`, charge, volLoose.Bound-volExact.Bound)
 	require.LessOrEqual(t, volLoose.Bound-volExact.Bound, charge*(1+1e-6),
 		`the volume bound must charge the side level's move once, %v, not %v`, charge, volLoose.Bound-volExact.Bound)
 
-	muExact, _, _, err := capBandMoment(t.Context(), loop, exact, geom, capZ, -1, 0, capBandClosure{}, work)
+	muExact, _, _, err := capBandMoment(t.Context(), 0, loop, exact, geom, capZ, -1, 0, capBandClosure{}, work)
 	require.NoError(t, err)
-	muLoose, _, _, err := capBandMoment(t.Context(), loop, loose, geom, capZ, -1, 0, capBandClosure{}, work)
+	muLoose, _, _, err := capBandMoment(t.Context(), 0, loop, loose, geom, capZ, -1, 0, capBandClosure{}, work)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, muLoose.Bound-muExact.Bound, charge*(u0+1)*(1-1e-9),
 		`the u-moment bound must grow by the moved volume times the coordinate bound, not %v`, muLoose.Bound-muExact.Bound)

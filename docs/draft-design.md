@@ -151,7 +151,7 @@ file is written.
 |---|---|---|---|
 | **RD1** | `Extrude` with nonzero `WithTaper` | a profile of `LineSeg`, `ArcSeg` and `CircleSeg` walks in which every corner at a circular walk is a G1 join; a `Distance` extent, `Along` or `Against`; `|α| < 90°`; no `WithSurfaceResult` | a `draftPayload` solid (Table BD) |
 | **RD2** | `Body.Draft` | a live `prismPayload` receiver (an extrude, a filleted or chamfered body, a tube, or any of these `Placed`) whose section carries no displacement; a `NeutralFace` naming one cap of the receiver; a selection resolving to exactly the receiver's complete wall set; `0 < |α| < 90°` | a `draftPayload` solid over the receiver's section, the receiver retired |
-| **RD3** | `Body.Draft`, PR 5 | as RD2 with a selection naming a **subset** of the walls, where every corner between a selected and an unselected wall is a line–line corner | a `draftPayload` whose far section moves the selected walls only (§10.2) |
+| **RD3** | `Body.Draft` | as RD2 with a selection naming a **subset** of the walls, where every corner between a selected and an unselected wall is a line–line corner | a `draftPayload` whose far section moves the selected walls only (§10.2) |
 
 Everything else is Table SD.
 
@@ -165,7 +165,7 @@ any evaluator?) and the sentinel that follows from it.
 | **SD1** | a taper that is not an angle, or not representable in radians | — | `ErrUnitKind` / `ErrNotFinite`, as for a straight prism |
 | **SD2** | `|α| ≥ 90°`, or an angle whose certified cosine enclosure (`RadSinCosInterval`) reaches zero | no — a wall at a right angle to the axis sweeps nothing | `ErrDegenerate` |
 | **SD3** | a free-form walk in the section | yes | `ErrUnsupported` — the offset of a Bézier span is not a recorded kind; §12 names the chorded alternative and rejects it |
-| **SD4** | a corner where a circular walk meets its neighbour that the held-tangent rule classifies as a miter (not G1) | yes | `ErrUnsupported` — the junction is a conic; the ruled stand-in of modify-reach §8.3 is not scheduled here (§14) |
+| **SD4** | a corner where a circular walk meets its neighbour that the held-tangent rule classifies as a miter (not G1), or, in a subset draft, a G1 corner at a circular walk whose two walks move by different amounts (§10.2) | yes | `ErrUnsupported` — the junction is a conic; the ruled stand-in of modify-reach §8.3 is not scheduled here (§14) |
 | **SD5** | a circular walk whose far radius collapses: `offset2d.OffsetRadius` reports `ok == false` (`R ≤ d` for a round with the material inside under a positive taper; a hole wall under a negative one) | yes — the cone's apex lies inside the sweep and the body past it has another topology | `ErrUnsupported` (modify S11a) |
 | **SD6** | a far outer loop whose signed area has changed sign (modify S8), whose every walk the offset consumes (`offset2d.ErrLoopConsumed`) under a positive taper, or a far hole the audit decides lies outside the far outer loop (modify S9's decided row) | no — the taper consumed the region | `ErrDegenerate` |
 | **SD7** | a far walk `offset2d.WalkConsumed` reports consumed — a line whose two miters have crossed — where some walk of its loop survives, or a hole every walk of which is consumed | yes | `ErrUnsupported` (modify S11a) |
@@ -182,7 +182,7 @@ any evaluator?) and the sentinel that follows from it.
 | **SD18** | `Draft` with a zero angle | it exists and is the receiver (modify S13) | `ErrDegenerate` |
 | **SD19** | a neutral selector resolving to zero or several faces; a curved neutral face; a `Faceted` neutral face | — | `ErrCardinality` (Expected "exactly 1"); `ErrDegenerate`; `ErrUnsupported` — `MirrorFace`'s own three rules |
 | **SD20** | a `NeutralFrame`, or a `NeutralFace` that is not a cap of the receiver | yes | `ErrUnsupported` (staged, §14) |
-| **SD21** | a selection that is not exactly the receiver's complete wall set (PR 5 narrows this to RD3's rule); an empty selection | yes | `ErrUnsupported` (staged); `ErrNoMatch`/`ErrCardinality` as core §9 |
+| **SD21** | a selected face that is no wall of the receiver, or a selection that splits the recorded segments of one coalesced walk; an empty selection | yes | `ErrUnsupported`; `ErrNoMatch`/`ErrCardinality` as core §9 |
 | **SD22** | a selected face parallel to the neutral plane — the other cap — or the neutral face itself | no — a face with no trace on the neutral plane has no line to tilt about | `ErrDegenerate` |
 | **SD23** | `Draft` of a receiver that is not a `prismPayload`, or whose section carries a displacement (`requireExactSection`), or that is itself a draft body | yes | `ErrUnsupported` (modify S3; a second draft is SX10's composition rule) |
 
@@ -467,9 +467,9 @@ signature.
 1. The neutral face resolves through `SelectFaces(neutral.Body)` under the
    implicit exactly-one rule (SD19). It must be `capStart` or `capEnd` of the
    receiver (SD20).
-2. `sel` resolves against the receiver. The resolved set must be exactly the
-   set of faces carrying a `side(i, j)` role (SD21), and must not contain a
-   cap (SD22).
+2. `sel` resolves against the receiver. The resolved set must not contain a
+   cap (SD22), and every face of it must carry a `side(i, j)` role (SD21). The
+   complete set of such faces is RD2; any other set is RD3 (§10.2).
 3. The sweep direction `e` runs from the neutral cap toward the other cap.
    With the neutral cap at `z0`, `e` is the frame normal and the far end is
    `z1`; with the neutral cap at `z1`, `e` is its negation and the far end is
@@ -485,14 +485,14 @@ A `NeutralFace` whose `Body` is not the receiver passes SD19's cardinality and
 kind rules on that body's face and is then SD20, so a curved neutral face is
 `ErrDegenerate` wherever it lies. `Walls(b)` is a face predicate over the
 `side(i, j)` roles of `b`'s own producer (`selectorquery.WallsKind`), and the
-complete wall set SD21 tests is the receiver's faces carrying such a role,
-fillet and chamfer rounds included.
+complete wall set is the receiver's faces carrying such a role, fillet and
+chamfer rounds included.
 
 The body `Draft` builds equals the body `Extrude` would build from the same
 sketch with `WithTaper(angle)` and a `Distance` extent toward the far end,
 bit for bit when the receiver is unplaced. §11 asserts it.
 
-### 10.2 The subset case (RD3, PR 5)
+### 10.2 The subset case (RD3)
 
 A selection naming some walls moves only their carriers. The far section is
 `offset2d.BuildSharpLoop` with a per-walk amount, `d` for a selected walk and
@@ -506,6 +506,42 @@ wall builds as the prism's `Plane` or `Cylinder`, and the lateral edge between
 a tilted wall and a vertical one is their exact intersection line. Every
 reading of §8 is unchanged: a patch with a zero amount is a Plane or Cylinder
 patch whose far directrix is its near one translated.
+
+The payload records the unselected walls as `draftPayload.kept`, the
+`(loop, segment)` pairs read from their `side(i, j)` roles, nil when every
+wall is selected; a placement re-runs §7 over the same set (DD12). Decided
+details, each the reading the rule above implies:
+
+- **Kept amounts carry no span.** A kept wall's amount is exactly zero, so its
+  carrier enters the corner and contour proofs (`capcontour.AmountsDisplacement`,
+  `capband.AmountsContourDisplacement`) as a point interval, while a moved
+  walk keeps `d`'s span (§8.1). A kept circular wall's far radius is its own
+  (`capband.WallRadius`), not `BandRadius`'s offset.
+- **A corner between two kept walls stays put.** Its far point is the recorded
+  corner itself, never a re-solved intersection of the two unmoved carriers;
+  the contour proof still encloses the carriers' exact intersection and charges
+  the gap. SD13 reads only corners and radii a moved walk touches.
+- **The profile class is RD1's.** A non-G1 corner at a circular walk is SD4
+  even when both of its walks are kept: the rule above admits a mixed corner
+  only between lines and narrows nothing else.
+- **Unequal amounts inside the G1 dead zone.** Two nearly collinear lines with
+  different amounts take the miter, as the rule says; where their moved
+  carriers do not meet the corner is SD15.
+- **A walk is one wall.** The amounts are per coalesced walk. A selection that
+  names some recorded segments of one walk and not others names no single wall
+  to tilt and is SD21; a face built from one walk carries every segment's role,
+  so a face selection never splits one.
+- **Gate order.** The selection is read at stage 2 (SD22, SD21); the mixed
+  corners are read with SD4 at stage 3, at a unit amount per moved walk.
+- **The mesh (DD1).** The band tessellator reads each walk's own setback
+  where it read the one setback: a kept circular wall's cap radius, its
+  band patch's radius rounding, and its cap samples' motion against the
+  recorded circle with no span. Nothing else in §9.1's proof changes, since a
+  mixed line–line miter is still a corner locus affine in the amount.
+- **The undercut survey (DD7).** A kept wall's patch is parallel to the
+  sweep, so its normal component along a pull along `±e` is zero within its
+  bound and the survey leaves it undecided; a moved wall reads as in a full
+  draft.
 
 ## 11. Required tests
 
@@ -553,13 +589,27 @@ and `Shell` refuse it by name (DD14), and `MirroredCopy` builds it (DD12).
 | D2 other cap | the neutral face `CapEnd`: the far cap is `capStart`, at `z0`; volume as F1 |
 | D3 negative | `−5°` widens: volume as F5 |
 | D4 retire | the receiver is retired; the result is live; the document holds one body |
-| D5 refusals | SD17, SD18, SD19 (zero faces, two faces, a cylindrical neutral face), SD20 (`NeutralFrame`; a wall as the neutral face), SD21 (one wall of four), SD22 (the other cap selected), SD23 (a revolve; a drafted body drafted again) |
+| D5 refusals | SD17, SD18, SD19 (zero faces, two faces, a cylindrical neutral face), SD20 (`NeutralFrame`; a wall as the neutral face), SD21 (an empty selection), SD22 (the other cap selected), SD23 (a revolve; a drafted body drafted again) |
 
 **PR 2 fixtures**: F1–F7 tessellated at three tolerances, each mesh closed,
 embedded, with `Mesh.Bound` covering the sagitta and the volume proof's
 symmetric difference; `Union` of F1 with a straight prism through it; STEP of
 F1 analytic (`analytic decad solid`) and of F2 faceted; `MassProperties` of
 F1 against the closed form.
+
+**PR 5 fixtures** (`apitest/draft_subset_test.go`): F1's box with its `+u`
+wall drafted alone, `Volume = h·a(a − d/2)`, its area, centroid, far corners
+and the kept walls' horizontal normals, and the same body placed; F4's L with
+its notch wall `u = 10` drafted alone, `Volume = h(300 − 5d)`, the far reflex
+corner `(10 − d, 10, h)`; F7's hole drafted alone, `Volume = πh(R² − r² − rd −
+d²/3)`, the outer wall a `Cylinder` of radius `R`; F10's 2 mm square with one
+wall drafted, each moved far corner within its bound; `Verify` on the subset
+bodies (DD5, DD6); SD4 for one straight wall of F3's slot; the mixed-amount
+corner rows in `internal/offset2d/sharp_test.go`; the box and ring subsets
+meshed at three tolerances, closed, volume-proven within `volSymDiff` of their
+closed forms (`tessellate_draft_internal_test.go`), and each mesh `Bound` no
+larger than its tapered extrude's; the one-wall box under DD7, its drafted
+wall listed along `−e` and cleared along `+e`, its kept walls undecided.
 
 **PR 4 fixtures** (`apitest/draft_verify_test.go`): F1 under
 `WithPullDirection(+e)` reads every wall clear and `Coverage` complete; under
@@ -584,6 +634,10 @@ undecided.
 | the mesh proof's vertex motion (`SweptVolumeAllow`) | omitted | F1, F4, F5 and F6: a zero `volSymDiff` against the far corners' rounding |
 | DD7's dispatch arm (`draftUndercuts`) | removed from `runSurveys` | every PR 4 fixture: the survey reads the draft body as an unsupported payload |
 | the wall reading's allowance (`capPatchNormalRange`'s third result) | zeroed in `capPatchUndercuts` | the tangent pull: the wall reads the sign of its own rounding and no `DiagUndecidedUndercut` is reported |
+| a moved walk's span at a mixed corner | `capcontour.AmountsDisplacement` reads every span as its point amount | the subset F10: each moved far corner `1.06e-16` outside its bound |
+| the mixed-amount refusal | `offset2d.SharpCornerJoin` reads a mixed circular corner as an equal one | the slot's SD4 fixture refuses as SD13 instead |
+| a kept wall's setback in the mesh | the chord pass's cap radius, or the cap motion, reads the draft's `d` | the hole-alone mesh: `volSymDiff` above its ceiling |
+| a kept wall's setback in the band's radius rounding | read against the draft's `d` | the hole-alone mesh `Bound` above F7's |
 
 ## 12. Do not do this
 
@@ -663,7 +717,7 @@ every new root file. This document ships with PR 1.
 | **2** | tessellation and the mesh volume proof (DD1), which opens DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `tessellate_draft.go`, `tessellate.go` (dispatch), `tessellate_capblend.go` and `capblend_admit.go` (§9.1's three differences), `draft_payload.go`/`draft_build.go` (`patches`, `bandDelta`), `boolean.go` (the admission arm), `mass_properties.go` (the mesh path needs no arm), `motion_bound.go`, `apitest/draft_mesh_test.go`, `tessellate_draft_internal_test.go` | the PR 2 fixtures | 1 |
 | **3** | `Body.Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `docs/api-design.md` §8/§12, `apitest/draft_test.go`, `draft_internal_test.go`, `examples/decad_draft_example_test.go` | D1–D5 | 1 |
 | **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `capblend_survey.go` (`capPatchUndercuts`, the patch loop both surveys run), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
-| **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `draft.go`, `draft_build.go`, tests | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
+| **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `internal/capcontour/displacement.go`, `internal/capband/`, `draft.go`, `draft_build.go`, `draft_payload.go`, `capblend*.go` (the band view's per-walk amounts), `tessellate_capblend.go` and `internal/tessellation/` (the mesh's per-walk setbacks), `apitest/draft_subset_test.go` | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
 
 PRs 2 and 3 run in parallel after PR 1; PR 4 follows 2; PR 5 follows 3.
 PRs 1, 2 and 4 are proof specifications (bounds, closure terms, the mesh
@@ -678,8 +732,8 @@ draft body, `Draft`'s included:
 | 1 | landed | every draft body's tessellation, boolean, export, mass and interference reading (DD1's dependants); `Body.Draft` (no entry point); surveys `Suspect`; SD3, SD4, SD11, SD12 |
 | 2 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21; booleans, interference and mass of a body the band admission refuses (§9.1) |
 | 3 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21 |
-| 4 | landed | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20, SD21 |
-| 5 | planned | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
+| 4 | landed | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20 |
+| 5 | landed | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
 
 The unscheduled reach, in the order a later design should take it: the
 drafted shell (DD14, the molded cup), the two-sided extents and the interior

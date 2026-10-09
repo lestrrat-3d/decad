@@ -44,11 +44,12 @@ func loopContourDelta(ctx context.Context, loop LoopRecord, d, dDelta float64) (
 	return capband.ContourDisplacement(cl.walks, capContourJoins(joins), d, dDelta, shellTol)
 }
 
-// loopContourDelta is the package function of the same name read under cbp's
-// corner rule: a draft view's contour is the sharp offset (cbp.offsetJoins),
-// so its displacement is enclosed over the sharp joins, never over the
-// reflex-corner arcs a chamfer's contour holds.
-func (cbp capBlendPayload) loopContourDelta(ctx context.Context, loop LoopRecord, d, dDelta float64) (float64, error) {
+// loopContourDelta is the package function of the same name read under
+// cbp's corner rule for loop li: a draft view's contour is the sharp offset
+// (cbp.offsetJoins), each walk at its own amount (walkAmounts), so its
+// displacement is enclosed over the sharp joins, never over the reflex-corner
+// arcs a chamfer's contour holds.
+func (cbp capBlendPayload) loopContourDelta(ctx context.Context, li int, loop LoopRecord, d, dDelta float64) (float64, error) {
 	if !cbp.draft {
 		return loopContourDelta(ctx, loop, d, dDelta)
 	}
@@ -58,14 +59,19 @@ func (cbp capBlendPayload) loopContourDelta(ctx context.Context, loop LoopRecord
 	if err != nil {
 		return 0, err
 	}
+	amounts := cbp.walkAmounts(li, cl.walks, d)
 	if len(cl.walks) == 1 && cl.walks[0].Closed {
-		return capband.WholeCircleDisplacement(cl.walks[0], d, dDelta, shellTol)
+		a, aDelta := amounts[0], dDelta
+		if a == 0 {
+			aDelta = 0
+		}
+		return capband.WallCircleDisplacement(cl.walks[0], a, aDelta, shellTol)
 	}
-	joins, err := cbp.offsetJoins(budget, cl, d)
+	joins, err := cbp.offsetJoins(budget, li, cl, d)
 	if err != nil {
 		return 0, err
 	}
-	return capband.ContourDisplacement(cl.walks, capContourJoins(joins), d, dDelta, shellTol)
+	return capband.AmountsContourDisplacement(cl.walks, capContourJoins(joins), amounts, dDelta, shellTol)
 }
 
 // capBandClosure is the neutral proof of the slivers between integrated

@@ -75,10 +75,13 @@ var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 // the neutral plane, retiring the receiver (docs/draft-design.md §10). A
 // positive angle narrows the body with distance from the neutral plane and a
 // negative one widens it; the angle is a signed [units.Angle] outside
-// [ErrNegativeMagnitude] (core §12). sel must resolve to exactly the receiver's
-// complete wall set, which Faces(Walls(b)) names; this evaluator drafts every
-// wall of a prism at once, about one of its caps, and builds the body a
-// tapered [Document.Extrude] of the same section and sweep builds.
+// [ErrNegativeMagnitude] (core §12). sel names the walls to lean, about one
+// of the receiver's caps. Faces(Walls(b)) names every wall, and the result is
+// the body a tapered [Document.Extrude] of the same section and sweep builds.
+// A subset leans only the walls it names: each moved wall's far trace is its
+// own moved line or circle, a kept wall stays vertical, and a corner between a
+// moved and a kept line is the intersection of the two
+// (docs/draft-design.md §10.2).
 //
 // The receiver is a live straight prism: an extrude, a filleted or chamfered
 // extrude, a tube, or any of these placed, whose recorded section is the
@@ -94,10 +97,15 @@ var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 //     a curved neutral face [ErrDegenerate];
 //   - a receiver that is not a prism, a section carrying a displacement, an
 //     already drafted body, a [NeutralFrame], a neutral face that is not a cap
-//     of the receiver, and a selection that is not the complete wall set are
-//     each [ErrUnsupported];
-//   - a selected cap is [ErrDegenerate], as is an empty selection's
-//     [ErrNoMatch] reported by the selector.
+//     of the receiver, and a selected face that is no wall of the receiver
+//     are each [ErrUnsupported];
+//   - a selected cap is [ErrDegenerate], and an empty selection is the
+//     selector's [ErrNoMatch];
+//   - a subset that moves one of two walls meeting at a circular corner (a
+//     G1 join of a line and an arc, or of two arcs) is [ErrUnsupported]: the
+//     moved wall and the kept one no longer meet tangentially, and their
+//     corner moves along a conic. A whole circle is one wall and moves or
+//     stays whole.
 //
 // The far section's own gates (draft SD5 to SD16) are those of a tapered
 // extrude. ctx, sel and neutral MUST NOT be nil; a nil one is [ErrDegenerate].
@@ -171,7 +179,8 @@ func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralPlane
 	if err != nil {
 		return nil, err
 	}
-	if err := requireCompleteWallSet(b, producer, faces); err != nil {
+	kept, err := draftKeptWalls(b, producer, faces)
+	if err != nil {
 		return nil, err
 	}
 
@@ -188,6 +197,7 @@ func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralPlane
 		taper:      alpha,
 		taperDelta: alphaDelta,
 		xform:      pp.xform,
+		kept:       kept,
 	})
 	if err != nil {
 		return nil, err
@@ -292,32 +302,39 @@ func (f *Face) hasRole(producer producerID, role string) bool {
 	return slices.Contains(f.origins, FeatureRef{producer: producer, Role: role})
 }
 
-// requireCompleteWallSet is SD22 then SD21: a selected cap has no trace on the
-// neutral plane to tilt about (ErrDegenerate), and a selection other than the
-// receiver's complete wall set is staged (ErrUnsupported).
-func requireCompleteWallSet(b *Body, producer producerID, selected []*Face) error {
+// draftKeptWalls is SD22 then SD21 (docs/draft-design.md §10.2): a selected
+// cap has no trace on the neutral plane to tilt about (ErrDegenerate), and a
+// selected face that is no wall of the receiver names nothing to tilt
+// (ErrUnsupported). It returns the recorded segments of every wall the
+// selection leaves out, read from their side(i, j) roles under producer,
+// empty when the selection is the receiver's complete wall set. Whether a
+// subset's corners admit the draft is stage 3's question (SD4).
+func draftKeptWalls(b *Body, producer producerID, selected []*Face) (map[draftWall]struct{}, error) {
 	for _, f := range selected {
 		if f.hasRole(producer, roleCapStart) || f.hasRole(producer, roleCapEnd) {
-			return fmt.Errorf(`%w: the selection contains a cap of the receiver, which has no trace on the neutral plane to tilt about (draft SD22)`, ErrDegenerate)
+			return nil, fmt.Errorf(`%w: the selection contains a cap of the receiver, which has no trace on the neutral plane to tilt about (draft SD22)`, ErrDegenerate)
 		}
 	}
-	var walls []*Face
+	for _, f := range selected {
+		if !f.isWallOf(producer) {
+			return nil, fmt.Errorf(`%w: the selection contains a face that is no wall of the receiver (it carries no side(i, j) role of the receiver's own), so it names no wall to tilt (draft SD21)`, ErrUnsupported)
+		}
+	}
+	kept := map[draftWall]struct{}{}
 	for _, f := range b.Faces() {
-		if f.isWallOf(producer) {
-			walls = append(walls, f)
+		if !f.isWallOf(producer) || slices.Contains(selected, f) {
+			continue
 		}
-	}
-	if len(selected) == len(walls) {
-		all := true
-		for _, w := range walls {
-			if !slices.Contains(selected, w) {
-				all = false
-				break
+		for _, o := range f.origins {
+			if o.producer != producer {
+				continue
 			}
-		}
-		if all {
-			return nil
+			var li, j int
+			if n, err := fmt.Sscanf(o.Role, "side(%d,%d)", &li, &j); err != nil || n != 2 || o.Role != fmt.Sprintf("side(%d,%d)", li, j) {
+				continue
+			}
+			kept[draftWall{loop: li, seg: j}] = struct{}{}
 		}
 	}
-	return fmt.Errorf(`%w: this evaluator drafts the receiver's complete wall set (%d faces, Faces(Walls(b))); the selection names %d (draft SD21)`, ErrUnsupported, len(walls), len(selected))
+	return kept, nil
 }

@@ -13,7 +13,7 @@ import (
 // cap-loop band of docs/modify-reach-design.md §8.3 with no straight slab
 // (draftPayload.band), so it is meshed by the cap-loop chamfer tessellator
 // over that same view (tessellate_capblend.go, docs/tessellation-reach-design.md
-// §7) with three differences, each stated where it applies:
+// §7) with four differences, each stated where it applies:
 //
 //   - there is no trimmed side wall, and the band's side ring is the near
 //     cap's rim, written once (draftNearRing) and read by both the near cap
@@ -22,7 +22,11 @@ import (
 //     apex patch, because every reflex line-line corner is a miter
 //     (capBlendPayload.offsetJoins);
 //   - the slice-wise chord term integrates over the whole sweep height with
-//     both ends' displacements (draftBandHeightUpper).
+//     both ends' displacements (draftBandHeightUpper);
+//   - a subset draft's kept wall reads a zero setback (walkAmounts,
+//     docs/draft-design.md §10.2) in the cap radius, the band's radius
+//     rounding and the cap samples' motion, where a chamfer reads its one
+//     setback.
 //
 // The occupied-volume proof is §7's admission and its two legs, unchanged: a
 // sharp offset's corner loci are affine in the amount (docs/draft-design.md

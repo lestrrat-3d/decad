@@ -451,7 +451,7 @@ func TestCapBandCoordUpperCoversTheCornerLoci(t *testing.T) {
 	const matSign = -1.0
 	setback := cbp.setbackAt(matSign)
 	require.Equal(t, d, setback.dc)
-	capBoundary, err := cbp.contourOf(t.Context(), loop, setback.dc)
+	capBoundary, err := cbp.contourOf(t.Context(), 0, loop, setback.dc)
 	require.NoError(t, err)
 	delta, ok := cbp.bandDelta[capBandKey{loop: 1, start: false}]
 	require.True(t, ok, `the hole's end-cap band records its contour displacement`)

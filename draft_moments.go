@@ -41,12 +41,12 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		}
 		band := bands[li]
 
-		v, err := capBandVolume(ctx, loop, cbp, band.geom, farZ, matSign, band.delta, band.closure, work)
+		v, err := capBandVolume(ctx, li, loop, cbp, band.geom, farZ, matSign, band.delta, band.closure, work)
 		if err != nil {
 			return err
 		}
 		volume = proofbound.BoundedAdd(volume, signed(v))
-		bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, farZ, matSign, band.delta, band.closure, work)
+		bmu, bmv, bmz, err := capBandMoment(ctx, li, loop, cbp, band.geom, farZ, matSign, band.delta, band.closure, work)
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 			return err
 		}
 		nearArea = proofbound.BoundedAdd(nearArea, signed(near))
-		boundary, err := cbp.contourOf(ctx, loop, dp.d)
+		boundary, err := cbp.contourOf(ctx, li, loop, dp.d)
 		if err != nil {
 			return err
 		}

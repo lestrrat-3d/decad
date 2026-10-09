@@ -27,21 +27,33 @@ func TestDraftReceiverClasses(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
-// TestCompleteWallSetReadsRoles pins the wall-set test: a face counts as a
-// wall by its own producer's side(i, j) role, never by another producer's.
-func TestCompleteWallSetReadsRoles(t *testing.T) {
+// TestDraftKeptWallsReadsRoles pins the selection's reading: a face counts as
+// a wall by its own producer's side(i, j) role, never by another producer's;
+// the complete wall set keeps nothing; a subset keeps every recorded segment
+// of the walls it leaves out; a selected cap is SD22 and a selected face that
+// is no wall is SD21.
+func TestDraftKeptWallsReadsRoles(t *testing.T) {
 	t.Parallel()
-	wall := func(p producerID, role string) *Face {
-		return &Face{origins: []FeatureRef{{producer: p, Role: role}}}
-	}
-	own, foreign := wall(7, "side(0,1)"), wall(8, "side(0,1)")
-	capStart := wall(7, roleCapStart)
+	face := func(origins ...FeatureRef) *Face { return &Face{origins: origins} }
+	own := face(FeatureRef{producer: 7, Role: "side(0,1)"})
+	coalesced := face(FeatureRef{producer: 7, Role: "side(1,2)"}, FeatureRef{producer: 7, Role: "side(1,3)"})
+	foreign := face(FeatureRef{producer: 8, Role: "side(0,1)"})
+	capStart := face(FeatureRef{producer: 7, Role: roleCapStart})
 	require.True(t, own.isWallOf(7))
 	require.False(t, foreign.isWallOf(7))
 	require.False(t, capStart.isWallOf(7))
 
-	b := &Body{lumps: []*Lump{{shells: []*Shell{{faces: []*Face{own, capStart}}}}}}
-	require.NoError(t, requireCompleteWallSet(b, 7, []*Face{own}))
-	require.ErrorIs(t, requireCompleteWallSet(b, 7, nil), ErrUnsupported)
-	require.ErrorIs(t, requireCompleteWallSet(b, 7, []*Face{own, capStart}), ErrDegenerate)
+	b := &Body{lumps: []*Lump{{shells: []*Shell{{faces: []*Face{own, coalesced, capStart}}}}}}
+	kept, err := draftKeptWalls(b, 7, []*Face{own, coalesced})
+	require.NoError(t, err)
+	require.Empty(t, kept)
+
+	kept, err = draftKeptWalls(b, 7, []*Face{own})
+	require.NoError(t, err)
+	require.Equal(t, map[draftWall]struct{}{{loop: 1, seg: 2}: {}, {loop: 1, seg: 3}: {}}, kept)
+
+	_, err = draftKeptWalls(b, 7, []*Face{own, capStart})
+	require.ErrorIs(t, err, ErrDegenerate)
+	_, err = draftKeptWalls(b, 7, []*Face{foreign})
+	require.ErrorIs(t, err, ErrUnsupported)
 }

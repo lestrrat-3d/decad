@@ -187,7 +187,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			bandDeltas[capBandKey{loop: li, start: true}] = band.delta
 			startCo = band.capCo
 			startBand = band
-			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta, band.closure, work)
+			v, err := capBandVolume(ctx, li, loop, cbp, band.geom, cbp.z0, +1, band.delta, band.closure, work)
 			if err != nil {
 				return nil, err
 			}
@@ -196,7 +196,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 				pa, pb := capband.AreaOf(g)
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
-			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta, band.closure, work)
+			bmu, bmv, bmz, err := capBandMoment(ctx, li, loop, cbp, band.geom, cbp.z0, +1, band.delta, band.closure, work)
 			if err != nil {
 				return nil, err
 			}
@@ -214,7 +214,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			bandDeltas[capBandKey{loop: li, start: false}] = band.delta
 			endCo = band.capCo
 			endBand = band
-			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta, band.closure, work)
+			v, err := capBandVolume(ctx, li, loop, cbp, band.geom, cbp.z1, -1, band.delta, band.closure, work)
 			if err != nil {
 				return nil, err
 			}
@@ -223,7 +223,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 				pa, pb := capband.AreaOf(g)
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
-			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta, band.closure, work)
+			bmu, bmv, bmz, err := capBandMoment(ctx, li, loop, cbp, band.geom, cbp.z1, -1, band.delta, band.closure, work)
 			if err != nil {
 				return nil, err
 			}
@@ -393,11 +393,12 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 	return LoopRecord{Segments: segs}, nil
 }
 
-// contourOf is capLoopBoundary read under cbp's corner rule: a draft view's
-// far section is the loop's sharp offset (offset2d.BuildSharpLoop), every
-// corner mitered, where a chamfer's cap contour closes a reflex corner with an
-// arc.
-func (cbp capBlendPayload) contourOf(ctx context.Context, loop LoopRecord, d float64) (LoopRecord, error) {
+// contourOf is capLoopBoundary read under cbp's corner rule for loop li: a
+// draft view's far section is the loop's sharp offset
+// (offset2d.BuildSharpLoop), every corner mitered and each walk moved its own
+// amount (walkAmounts), where a chamfer's cap contour closes a reflex corner
+// with an arc.
+func (cbp capBlendPayload) contourOf(ctx context.Context, li int, loop LoopRecord, d float64) (LoopRecord, error) {
 	if !cbp.draft {
 		return capLoopBoundary(ctx, loop, d)
 	}
@@ -406,7 +407,7 @@ func (cbp capBlendPayload) contourOf(ctx context.Context, loop LoopRecord, d flo
 	if err != nil {
 		return LoopRecord{}, err
 	}
-	segs, _, err := offset2d.BuildSharpLoop(budget, cl.walks, 1, d, shellTol)
+	segs, _, err := offset2d.BuildSharpLoop(budget, cl.walks, cbp.walkAmounts(li, cl.walks, d), shellTol)
 	if err != nil {
 		return LoopRecord{}, wrapDraftOffsetError(err)
 	}
@@ -449,7 +450,7 @@ func (cbp capBlendPayload) contourOf(ctx context.Context, loop LoopRecord, d flo
 // via internal/proofbound/bounds.go's proofbound.SweptVolumeAllow(delta, areaUpper): charging it inside
 // capArea's own bound, or inside each patchRawFlux term, would count the SAME
 // displaced coordinates twice, since patchRawFlux already reads them.
-func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure, work *freeform.FreeformWork) (proofbound.BoundedScalar, error) {
+func capBandVolume(ctx context.Context, li int, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure, work *freeform.FreeformWork) (proofbound.BoundedScalar, error) {
 	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)
 	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
@@ -479,7 +480,7 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}
-	capBoundary, err := cbp.contourOf(ctx, loop, setback.dc)
+	capBoundary, err := cbp.contourOf(ctx, li, loop, setback.dc)
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}

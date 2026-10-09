@@ -263,11 +263,11 @@ func TestDraftRefusals(t *testing.T) {
 			_, err := box.Draft(t.Context(), walls(box), capNeutral(other, decad.CapStart), deg5)
 			return err
 		}, decad.ErrUnsupported},
-		{"SD21 one wall of four", func() error {
-			_, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
+		{"SD21 empty selection", func() error {
+			_, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(0, 0, 1))),
 				capNeutral(box, decad.CapStart), deg5)
 			return err
-		}, decad.ErrUnsupported},
+		}, decad.ErrNoMatch},
 		{"SD22 the other cap selected", func() error {
 			_, err := box.Draft(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))),
 				capNeutral(box, decad.CapStart), deg5)

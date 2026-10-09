@@ -112,7 +112,9 @@ func CapBlendRingSegmentArea(lm CapBlendLoopProof, contour bool, d float64) floa
 
 // CapBlendMotionInput names the exact side-window station of each cap sample.
 // D is the loop's in-plane setback and DDelta the rounding its unit
-// conversion committed, zero for a setback stated in millimetres.
+// conversion committed, zero for a setback stated in millimetres. Amounts,
+// when non-nil, is each walk's own setback in place of D: a subset draft's
+// kept wall reads zero (docs/draft-design.md §10.2), exactly, with no DDelta.
 type CapBlendMotionInput struct {
 	CapBlendLoopProof
 	Loop         int
@@ -121,6 +123,7 @@ type CapBlendMotionInput struct {
 	CapWallStart []int
 	Whole        bool
 	D, DDelta    float64
+	Amounts      []float64
 	BandDelta    [2]float64
 	HasBandDelta [2]bool
 }
@@ -138,13 +141,23 @@ func CapBlendCapMotion(budget *proofbound.WorkBudget, in CapBlendMotionInput,
 		return capMotion, nil
 	}
 	n := len(in.Walks)
-	offset := func(w survey2d.SideWalk) *big.Rat { return capcontour.CapWallRadiusOffset(w, in.D) }
-	// A circular wall's sample is bounded against the offset circle at D. The
-	// denoted circle sits within DDelta of it radially, so a setback whose
-	// unit conversion rounded charges that on top.
-	circular := func(b proofbound.WalkEndBound) float64 {
+	if in.Amounts != nil && len(in.Amounts) != n {
+		return nil, fmt.Errorf(`%w: %d setbacks for the %d walks of loop %d`, decaderr.ErrDegenerate, len(in.Amounts), n, in.Loop)
+	}
+	amount := func(i int) float64 {
+		if in.Amounts != nil {
+			return in.Amounts[i]
+		}
+		return in.D
+	}
+	offset := func(i int) *big.Rat { return capcontour.CapWallRadiusOffset(in.Walks[i], amount(i)) }
+	// A circular wall's sample is bounded against the offset circle at its
+	// setback. The denoted circle sits within DDelta of it radially, so a
+	// setback whose unit conversion rounded charges that on top; a kept wall's
+	// zero setback is exact.
+	circular := func(i int, b proofbound.WalkEndBound) float64 {
 		allow := proofbound.WalkEndBoundAllow(b)
-		if in.DDelta > 0 {
+		if in.DDelta > 0 && amount(i) != 0 {
 			allow = proofbound.AbsSumUpper(allow, in.DDelta)
 		}
 		return allow
@@ -152,13 +165,13 @@ func CapBlendCapMotion(budget *proofbound.WorkBudget, in CapBlendMotionInput,
 	if in.Whole {
 		w := in.Walks[0]
 		seg := in.Segments[w.Segs[0]]
-		off := offset(w)
+		off := offset(0)
 		for k := range in.Count[0] {
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
 			p := in.CapPts[k]
-			capMotion[k] = circular(stationBound(seg, k, in.Count[0], off, p.U, p.V))
+			capMotion[k] = circular(0, stationBound(seg, k, in.Count[0], off, p.U, p.V))
 		}
 		return capMotion, nil
 	}
@@ -193,17 +206,17 @@ func CapBlendCapMotion(budget *proofbound.WorkBudget, in CapBlendMotionInput,
 			prevIdx := (i + n - 1) % n
 			prevSeg := in.Segments[prev.Segs[0]]
 			cnt := in.Count[prevIdx]
-			capMotion[base] = circular(stationBound(prevSeg, cnt, cnt, offset(prev), p.U, p.V))
+			capMotion[base] = circular(prevIdx, stationBound(prevSeg, cnt, cnt, offset(prevIdx), p.U, p.V))
 			continue
 		}
 		seg := in.Segments[w.Segs[0]]
-		off := offset(w)
+		off := offset(i)
 		for k := range in.Count[i] {
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
 			p := in.CapPts[base+k]
-			capMotion[base+k] = circular(stationBound(seg, k, in.Count[i], off, p.U, p.V))
+			capMotion[base+k] = circular(i, stationBound(seg, k, in.Count[i], off, p.U, p.V))
 		}
 	}
 	return capMotion, nil

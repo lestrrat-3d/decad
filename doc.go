@@ -93,10 +93,11 @@
 //	  Tessellate/export/boolean/mass of a draft body          builds
 //	  boolean/mass of one with an inexact G1 join or a
 //	    trimmed segment (draft §9.1)                          ErrUnsupported
-//	Body.Draft    prism receiver, its complete wall set,
-//	  about one of its caps (draft design PR 3)               builds
-//	  wall subset, NeutralFrame, non-cap neutral face,
-//	    receiver other than a straight prism                  ErrUnsupported
+//	Body.Draft    prism receiver, its complete wall set or a
+//	  subset, about one of its caps (draft design PR 3, 5)    builds
+//	  subset moving one of two walls at a circular corner,
+//	    NeutralFrame, non-cap neutral face, receiver other
+//	    than a straight prism                                 ErrUnsupported
 //	Sweep         zero-twist LineTo / ArcThrough paths         builds
 //	  composite path without exact transported frames or
 //	    certified span separation                             ErrUnsupported
@@ -208,9 +209,10 @@
 // and WithTaper drafts an extrude's walls by a signed angle, a positive one
 // narrowing the body away from the sketch plane (docs/draft-design.md); a
 // taper the support map does not list is [ErrUnsupported], returned before
-// the document changes. Body.Draft leans an existing prism's walls the same
-// way about one of its caps. WithSweepTwist names
-// a sweep's distributed twist, with nonzero twist staged as [ErrUnsupported].
+// the document changes. Body.Draft leans an existing prism's walls, all of
+// them or a selected subset, the same way about one of its caps.
+// WithSweepTwist names a sweep's distributed twist, with nonzero twist
+// staged as [ErrUnsupported].
 // WithLoftAlignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated

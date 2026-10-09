@@ -24,12 +24,41 @@ type Join struct {
 // walk's held radius by its RadiusBound: an ArcSeg walk holds the math.Hypot
 // of Start − Center, not the radius the record denotes.
 func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (float64, bool) {
-	span, ok := OffsetSpan(d, dDelta)
-	if !ok {
+	amounts := make([]float64, len(walks))
+	for i := range amounts {
+		amounts[i] = d
+	}
+	return displacementOver(walks, joins, amounts, dDelta, false)
+}
+
+// AmountsDisplacement is Displacement for a contour whose walk i moves by its
+// own amount amounts[i] (docs/draft-design.md §10.2): a nonzero amount is read
+// over its span within dDelta, as Displacement reads d, and a zero amount is
+// a wall the construction leaves in place, read at exactly zero.
+func AmountsDisplacement(walks []survey2d.SideWalk, joins []Join, amounts []float64, dDelta float64) (float64, bool) {
+	if len(amounts) != len(walks) {
 		return 0, false
 	}
+	return displacementOver(walks, joins, amounts, dDelta, true)
+}
+
+// displacementOver is Displacement's proof with walk i offset by amounts[i]
+// over its span within dDelta; keepZero reads a zero amount as exactly zero.
+func displacementOver(walks []survey2d.SideWalk, joins []Join, amounts []float64, dDelta float64, keepZero bool) (float64, bool) {
+	spans := make([]proofbound.RatInterval, len(walks))
+	for i, a := range amounts {
+		width := dDelta
+		if keepZero && a == 0 {
+			width = 0
+		}
+		span, ok := OffsetSpan(a, width)
+		if !ok {
+			return 0, false
+		}
+		spans[i] = span
+	}
 	delta := 0.0
-	for _, w := range walks {
+	for i, w := range walks {
 		if !w.IsCircular() {
 			continue
 		}
@@ -37,8 +66,8 @@ func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (f
 		if w.Th1 < w.Th0 {
 			inside = -1
 		}
-		held := w.Radius - inside*d
-		exact, ok := OffsetCircleRadius(w, span)
+		held := w.Radius - inside*amounts[i]
+		exact, ok := OffsetCircleRadius(w, spans[i])
 		if !ok {
 			return 0, false
 		}
@@ -49,10 +78,11 @@ func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (f
 		if n == 0 {
 			break
 		}
-		prev, cur := walks[(i+n-1)%n], walks[i]
+		p := (i + n - 1) % n
+		prev, cur := walks[p], walks[i]
 		if j.Arc || j.G1 {
-			a, okA := joinFoot(prev, true, span)
-			b, okB := joinFoot(cur, false, span)
+			a, okA := joinFoot(prev, true, spans[p])
+			b, okB := joinFoot(cur, false, spans[i])
 			if !okA || !okB {
 				return 0, false
 			}
@@ -64,8 +94,8 @@ func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (f
 			delta = math.Max(delta, Union(a, b).Reach(j.M.U, j.M.V))
 			continue
 		}
-		ca, okA := CarrierOver(prev, span)
-		cb, okB := CarrierOver(cur, span)
+		ca, okA := CarrierOver(prev, spans[p])
+		cb, okB := CarrierOver(cur, spans[i])
 		if !okA || !okB {
 			return 0, false
 		}

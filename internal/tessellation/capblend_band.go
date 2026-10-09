@@ -24,6 +24,9 @@ type CapBlendBandInput struct {
 	SideSag, CapSag, CapRadius  []float64
 	ArcSag, LocusGap            []float64
 	D, Delta, LevelDelta, Axial float64
+	// Amounts, when non-nil, is each walk's own in-plane setback in place of
+	// D: a subset draft's kept wall reads zero (docs/draft-design.md §10.2).
+	Amounts []float64
 }
 
 // CapBlendBandPatch is the numeric part of the built patch with one role.
@@ -51,6 +54,9 @@ func EmitCapBlendBand[F comparable](budget *proofbound.WorkBudget, mesh CapBlend
 	in CapBlendBandInput, patch func(int) (F, CapBlendBandPatch, error),
 ) error {
 	n := len(in.Walks)
+	if in.Amounts != nil && len(in.Amounts) != n {
+		return fmt.Errorf(`%w: %d setbacks for the %d walks of loop %d`, decaderr.ErrDegenerate, len(in.Amounts), n, in.Loop)
+	}
 	apexIdx := map[int]int{}
 	next := 0
 	for i := range n {
@@ -146,7 +152,11 @@ func EmitCapBlendBand[F comparable](budget *proofbound.WorkBudget, mesh CapBlend
 			if w.Th1 < w.Th0 {
 				inside = -1
 			}
-			radiusRound = proofarith.AddRoundError(w.Radius, -inside*in.D, in.CapRadius[i])
+			d := in.D
+			if in.Amounts != nil {
+				d = in.Amounts[i]
+			}
+			radiusRound = proofarith.AddRoundError(w.Radius, -inside*d, in.CapRadius[i])
 		}
 		patchDelta := proofbound.AbsSumUpper(twist, sagitta,
 			proofbound.ProductUpper(g.CapRadius, g.Skew), locus, radiusRound)
