@@ -1008,7 +1008,7 @@ derivation because that helper supplies the stronger bound directly.
   rounded OUTWARD**, so what it publishes over-states the true displacement
   in the direction its consumer needs. No term is read off a held float the
   record's own enclosure did not produce — in particular the achieved
-  sagitta `tessellate.go`'s `chordCount` returns is `chordSagitta`'s proven
+  sagitta `internal/tessellation`'s `ChordCount` returns is `ChordSagitta`'s proven
   bound (`docs/tessellation-design.md` §3) over a held `math.Hypot` radius
   and a held `math.Atan2` sweep, with no enclosure of either behind it.
   Rounding that bound outward over-states the sagitta of those two held

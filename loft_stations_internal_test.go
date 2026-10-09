@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -333,7 +334,7 @@ func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
 // the derivation." The count in question is the SEED the joint walk-up starts
 // from (docs/loft-design.md §5.1). The hand derivation below independently
 // re-implements chordCount's own conservative walk-up — s(n) =
-// r*sweep^2/(8*n^2) <= tol, tessellate.go's chordSagitta formula, never the
+// r*sweep^2/(8*n^2) <= tol, internal/tessellation's ChordSagitta formula, never the
 // exact 2r*sin^2(dtheta/4) PR 1's calibration measured — so it is checking
 // chordCount's own algorithm against an independent transcription of it, not
 // merely echoing chordCount's return value back at itself.
@@ -356,7 +357,7 @@ func TestLoftCircularCellStationsHandDerivedStationCount(t *testing.T) {
 	}
 
 	w := boundarywalk.CircularWalk(0, 0, wedgeRadius, 0, wedgeSweep, wedgeRadius, wedgeSweep)
-	m, achieved, err := chordCount(w, target, chordWalkMin(w))
+	m, achieved, err := tessellation.ChordCount(w, target, tessellation.ChordWalkMin(w))
 	require.NoError(t, err)
 	require.LessOrEqual(t, achieved, target)
 	require.Equal(t, handN, m, "chordCount's own walk-up must match this test's own independent transcription of the same conservative bound")
@@ -375,7 +376,7 @@ func TestLoftCircularCellStationsHandDerivedStationCount(t *testing.T) {
 }
 
 // handChordSagittaConservative is TestLoftCircularCellStationsHandDerivedStationCount's
-// own transcription of chordSagitta's proven bound (tessellate.go), written
+// own transcription of ChordSagitta's proven bound (internal/tessellation), written
 // independently (ordinary math.Pow rather than chordSagitta's own
 // single-operation outward-rounding chain) so the two are a genuine
 // cross-check rather than one call site echoing the other's arithmetic.
@@ -415,9 +416,9 @@ func TestLoftCircularCellStationsJointWalkUpSharesOneCount(t *testing.T) {
 	seg0, w0 := arcFixture(t, 5, 0, math.Pi/2, 0, 1) // radius 5, 90 degrees
 	seg1, w1 := arcFixture(t, 2, 0, math.Pi/6, 0, 1) // radius 2, 30 degrees
 
-	m0, _, err := chordCount(w0, target, chordWalkMin(w0))
+	m0, _, err := tessellation.ChordCount(w0, target, tessellation.ChordWalkMin(w0))
 	require.NoError(t, err)
-	m1, _, err := chordCount(w1, target, chordWalkMin(w1))
+	m1, _, err := tessellation.ChordCount(w1, target, tessellation.ChordWalkMin(w1))
 	require.NoError(t, err)
 	require.NotEqual(t, m0, m1, "the fixture must seed different station counts on its two sides for this test to exercise the shared-count rule")
 	seed := max(m0, m1)
@@ -476,7 +477,7 @@ func TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed(t *testing.T) {
 	// The target IS the held reading at m: chordCount is exactly satisfied
 	// there and seeds the walk at m, which is what makes the certified
 	// reading's own verdict at m the only thing that can move the count.
-	seed, ach, err := chordCount(w, held, chordWalkMin(w))
+	seed, ach, err := tessellation.ChordCount(w, held, tessellation.ChordWalkMin(w))
 	require.NoError(t, err)
 	require.Equal(t, m, seed, "the held chooser must be exactly satisfied at the fixture's own count")
 	require.LessOrEqual(t, ach, held)
@@ -535,7 +536,7 @@ func TestLoftCircularCellStationsPublishesTheCertifiedReading(t *testing.T) {
 	require.Equal(t, requireStationDelta(t, w, w, seg, seg, m), stationUpper)
 	require.Greater(t, stationUpper, 0.0,
 		"the trimmed stations of this fixture carry a real displacement, so the cell publishes a positive station term beside the certified sagitta")
-	require.NotEqual(t, chordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), m), sagittaUpper,
+	require.NotEqual(t, tessellation.ChordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), m), sagittaUpper,
 		"the held chooser's own float and the certified enclosure are different readings; the arm publishes the certified one")
 }
 
@@ -561,7 +562,7 @@ func shortfallArc(t *testing.T, m int) (arcSeg, survey2d.SegmentWalk, float64, f
 			base := 3.0 + 0.05*float64(step)
 			seg, w := arcFixture(t, 5, base, sweep, 0.3, 0.9)
 			scanned++
-			held := chordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), m)
+			held := tessellation.ChordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), m)
 			lower := certifiedSagittaLower(t, seg, m)
 			if lower > held {
 				t.Logf("shortfall row after %d scanned: base=%v sweep=%v held=%.17g certifiedLower=%.17g (relative shortfall %.5g)",
@@ -680,9 +681,9 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 			seg1, w1 := arcFixture(t, row.r1, 0, row.sweep1, 0, 1)
 
 			if row.wantSharedOnly {
-				m0, _, err := chordCount(w0, row.target, chordWalkMin(w0))
+				m0, _, err := tessellation.ChordCount(w0, row.target, tessellation.ChordWalkMin(w0))
 				require.NoError(t, err)
-				m1, _, err := chordCount(w1, row.target, chordWalkMin(w1))
+				m1, _, err := tessellation.ChordCount(w1, row.target, tessellation.ChordWalkMin(w1))
 				require.NoError(t, err)
 				require.NotEqual(t, m0, m1, "this row must need different station counts on its two sides")
 			}

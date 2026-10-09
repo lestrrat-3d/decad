@@ -198,7 +198,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 					return nil, err
 				}
 				bump(face, proofbound.AbsSumUpper(lm.sideSag[i], axial))
-				mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, walkWallSlack(w.SegmentWalk, lm.count[i], height))
+				mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, tessellation.WalkWallSlack(w.SegmentWalk, lm.count[i], height))
 				for k := range lm.count[i] {
 					g0 := lm.sideStart[i] + k
 					g1 := lm.sideStart[i] + k + 1

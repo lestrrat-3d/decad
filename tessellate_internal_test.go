@@ -208,7 +208,7 @@ func TestChordSagittaNeverUnderstatesTheHighPrecisionReference(t *testing.T) {
 	}
 
 	for _, rw := range rows {
-		got := chordSagitta(rw.radius, rw.sweep, rw.n)
+		got := tessellation.ChordSagitta(rw.radius, rw.sweep, rw.n)
 		want := bigSagittaReference(rw.radius, rw.sweep, rw.n, prec)
 		gotBig := new(big.Float).SetPrec(prec).SetFloat64(got)
 		diff := new(big.Float).SetPrec(prec).Sub(gotBig, want)
@@ -242,7 +242,7 @@ func TestChordSagittaCoarsestClosedWalkStaysProven(t *testing.T) {
 	const prec = 300
 	const radius, sweep, n = 7.0, 2 * math.Pi, 3
 
-	got := chordSagitta(radius, sweep, n)
+	got := tessellation.ChordSagitta(radius, sweep, n)
 	require.GreaterOrEqualf(t, got, radius/2,
 		"chordSagitta(radius=%g, sweep=%g, n=%d) = %.20g must be at or above the EXACT true sagitta radius/2 = %g",
 		radius, sweep, n, got, radius/2)
@@ -284,7 +284,7 @@ func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
 	}
 	for _, row := range rows {
 		w := survey2d.SegmentWalk{Radius: row.radius, Th0: 0, Th1: sweep, Closed: true}
-		atCap := chordSagitta(row.radius, sweep, freeform.MaxChordsPerWalk)
+		atCap := tessellation.ChordSagitta(row.radius, sweep, freeform.MaxChordsPerWalk)
 
 		// The window has real width: the true sagitta at the cap sits
 		// strictly below the proven bound the walk-up must satisfy.
@@ -297,13 +297,13 @@ func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
 			"radius=%g: the sampled tolerance %.20g must sit below the proven bound %.20g", row.radius, row.inside, atCap)
 
 		// The proven bound itself is chordable, at exactly the cap count.
-		n, s, err := chordCount(w, atCap, chordWalkMin(w))
+		n, s, err := tessellation.ChordCount(w, atCap, tessellation.ChordWalkMin(w))
 		require.NoErrorf(t, err, "radius=%g: the proven sagitta at the cap must itself be admissible", row.radius)
 		require.Equalf(t, freeform.MaxChordsPerWalk, n, "radius=%g: that tolerance must spend the whole cap", row.radius)
 		require.Equalf(t, atCap, s, "radius=%g: the returned sagitta is the proven bound itself", row.radius)
 
 		for _, tol := range []float64{math.Nextafter(atCap, 0), row.inside, trueAtCap} {
-			_, _, err := chordCount(w, tol, chordWalkMin(w))
+			_, _, err := tessellation.ChordCount(w, tol, tessellation.ChordWalkMin(w))
 			require.ErrorIsf(t, err, freeform.ErrTooManyChords,
 				"radius=%g: tol=%.20g lies in the window and must refuse", row.radius, tol)
 			require.ErrorIsf(t, err, ErrUnsupported,
@@ -322,10 +322,10 @@ func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
 // refusal.
 func TestChordSagittaRefusesRatherThanUnderstatesOnBrokenClaims(t *testing.T) {
 	t.Parallel()
-	require.True(t, math.IsInf(chordSagitta(5, -1, 8), 1), "negative sweep must refuse, not understate")
-	require.True(t, math.IsInf(chordSagitta(5, 1, -3), 1), "non-positive n must refuse, not understate")
-	require.True(t, math.IsInf(chordSagitta(5, 1, 0), 1), "n=0 must refuse, not understate")
-	require.Zero(t, chordSagitta(-5, 1, 8), "a negative radius has a genuine 0 upper bound and needs no refusal")
+	require.True(t, math.IsInf(tessellation.ChordSagitta(5, -1, 8), 1), "negative sweep must refuse, not understate")
+	require.True(t, math.IsInf(tessellation.ChordSagitta(5, 1, -3), 1), "non-positive n must refuse, not understate")
+	require.True(t, math.IsInf(tessellation.ChordSagitta(5, 1, 0), 1), "n=0 must refuse, not understate")
+	require.Zero(t, tessellation.ChordSagitta(-5, 1, 8), "a negative radius has a genuine 0 upper bound and needs no refusal")
 }
 
 // TestChordSagittaNeverUnderflowsToZero pins the bound against a POSITIVE
@@ -356,7 +356,7 @@ func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
 			exact.Quo(exact, new(big.Rat).Mul(new(big.Rat).SetInt64(8), new(big.Rat).Mul(nRat, nRat)))
 			require.Equal(t, 1, exact.Sign(), "the fixture must carry a genuinely positive exact sagitta")
 
-			got := chordSagitta(row.radius, row.sweep, row.n)
+			got := tessellation.ChordSagitta(row.radius, row.sweep, row.n)
 			require.Positive(t, got, "a positive radius, sweep and n must never publish a zero sagitta")
 			require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got).Cmp(exact), 0,
 				"chordSagitta(radius=%g, sweep=%g, n=%d) = %.20g must stay at or above the exact bound %s",

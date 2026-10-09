@@ -230,7 +230,7 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // curve may.
 //
 // Two things follow from the chording sagitta being PROVEN rather than tight
-// (docs/tessellation-design.md §3 derives it; chordSagitta implements it).
+// (docs/tessellation-design.md §3 derives it; tessellation.ChordSagitta implements it).
 // First, the chording component of [Mesh.Bound] sits above the deviation the
 // chords take by the factor (x/sin x)² at x = a chord's own quarter angle —
 // at most π²/9, about 9.66% high, at the coarsest chording a closed walk
@@ -1169,21 +1169,6 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	return &mesh, nil
 }
 
-// walkAreaSlack keeps root callers on the shared area proof.
-func walkAreaSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
-	return tessellation.WalkAreaSlack(w, n, h)
-}
-
-// walkWallSlack keeps root callers on the shared wall-area proof.
-func walkWallSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
-	return tessellation.WalkWallSlack(w, n, h)
-}
-
-// walkSegmentArea keeps root callers on the shared segment-area proof.
-func walkSegmentArea(w survey2d.SegmentWalk, n int) float64 {
-	return tessellation.WalkSegmentArea(w, n)
-}
-
 // facetedBoundError is tessellateFaceted's refusal of a chord tolerance
 // finer than the bound the faceted body holds (docs/tessellation-design.md
 // §7). Only a Tessellate caller, who chose the tolerance, reaches it: the
@@ -1241,32 +1226,10 @@ func (m *Mesh) addTriangle(tri [3]int, src *Face) {
 	m.source = append(m.source, src)
 }
 
-// chordWalkMin keeps the root callers on the shared walk minimum.
-func chordWalkMin(w survey2d.SegmentWalk) int { return tessellation.ChordWalkMin(w) }
-
-// chordCount keeps the root callers on the shared chording proof.
-func chordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, error) {
-	return tessellation.ChordCount(w, tol, nMin)
-}
-
-// chordSagitta keeps root tessellation callers on the shared proven bound.
-func chordSagitta(radius, sweep float64, n int) float64 {
-	return tessellation.ChordSagitta(radius, sweep, n)
-}
-
-// sectionPoints maps root plane coordinates to the shared section proof.
-func sectionPoints(pts []Point2) []tessellation.SectionPoint {
-	out := make([]tessellation.SectionPoint, len(pts))
-	for i, p := range pts {
-		out[i] = tessellation.SectionPoint{U: p.U, V: p.V}
-	}
-	return out
-}
-
 // requireLoopClearance maps the first cross-loop clearance failure to the
 // caller's typed tessellation refusal.
 func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, loopSag []float64) error {
-	failure, failed, err := tessellation.SectionLoopClearance(ctx, sectionPoints(pts), loopIdx, loopSag)
+	failure, failed, err := tessellation.SectionLoopClearance(ctx, pts, loopIdx, loopSag)
 	if err != nil || !failed {
 		return err
 	}
@@ -1284,7 +1247,7 @@ func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, lo
 // requireWalkClearance maps the first within-loop clearance failure to the
 // indexed refusal that deterministic meridian refinement reads.
 func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sag [][]float64) error {
-	failure, failed, err := tessellation.SectionWalkClearance(ctx, sectionPoints(pts), loopIdx, sag)
+	failure, failed, err := tessellation.SectionWalkClearance(ctx, pts, loopIdx, sag)
 	if err != nil || !failed {
 		return err
 	}
