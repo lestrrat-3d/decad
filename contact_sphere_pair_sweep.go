@@ -3,13 +3,11 @@ package decad
 import (
 	"context"
 	"errors"
-	"math"
 	"math/big"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/spherepath"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -152,92 +150,42 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 		ideal.Manifold, ideal.Reason = nil, ContactPayloadUnsupported
 		return
 	}
-	deviation := new(big.Rat)
-	for _, moving := range []struct {
-		start, observed sourceSphereContactProof
-		delta           [3]proofarith.Dyadic
-	}{{r.sphereA, observedA, r.pa.Delta}, {r.sphereB, observedB, r.pb.Delta}} {
-		for i := range 3 {
-			center := new(big.Rat).Add(moving.start.center[i].Rat(),
-				new(big.Rat).Mul(moving.delta[i].Rat(), f))
-			diff := new(big.Rat).Sub(moving.observed.center[i].Rat(), center)
-			deviation.Add(deviation, diff.Abs(diff))
-		}
-	}
-	idealA, okA := translatedSphere(r.sphereA, r.pa.Delta, f)
-	idealB, okB := translatedSphere(r.sphereB, r.pb.Delta, f)
-	if !okA || !okB {
-		ideal.Manifold, ideal.Reason = nil, ContactPayloadUnsupported
-		return
-	}
-	minimumDistance := math.Inf(1)
-	for _, pair := range [][2]sourceSphereContactProof{{idealA, idealB}, {observedA, observedB}} {
-		squared := proofarith.DyZero()
-		for i := range 3 {
-			delta := proofarith.DySubScalar(pair[1].center[i], pair[0].center[i])
-			squared = proofarith.DyAdd(squared, proofarith.DyMul(delta, delta))
-		}
-		minimumDistance = math.Min(minimumDistance, proofarith.DySqrtDown(squared))
-	}
-	if minimumDistance <= 0 || !finiteMeasurementValues(minimumDistance) {
-		ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
-		return
-	}
-	// Unit-vector normalization changes by at most twice the center-line
-	// displacement divided by the shorter center-line length.
-	normalMotion := 0.0
-	if deviation.Sign() > 0 {
-		normalMotion = proofbound.ProvenUpRound(2 * proofbound.RatFloatUp(deviation) / minimumDistance)
-	}
-	observedNormal := actual.Normal.Value
-	idealNormal := want.Normal.Value
-	if actual.Normal.Bound.Base() == 0 && want.Normal.Bound.Base() == 0 &&
-		observedNormal == idealNormal && spherepath.CardinalNormal(observedNormal) {
-		normalMotion = 0
-	}
-	normalDifference := math.Hypot(observedNormal.X-idealNormal.X,
-		math.Hypot(observedNormal.Y-idealNormal.Y, observedNormal.Z-idealNormal.Z))
-	if !finiteMeasurementValues(normalMotion, normalDifference) ||
-		normalDifference > proofbound.ProvenUpRound(actual.Normal.Bound.Base()+want.Normal.Bound.Base()+normalMotion) {
-		ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
-		return
-	}
-	if normalMotion > 0 {
-		actual.Normal.Bound = units.Scalar(proofbound.ProvenUpRound(actual.Normal.Bound.Base() + normalMotion))
-		actual.Normal.Exactness = exactnessFromBound(actual.Normal.Bound.Base())
-		actual.NormalAngle = units.Radians(proofbound.ProvenUpRound(actual.NormalAngle.Base() + 4*normalMotion))
-	}
-	if actual.Normal.Bound.Base() > r.req.NormalResolution.Base() ||
-		actual.NormalAngle.Base() > r.req.NormalResolution.Base() {
-		ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
-		return
-	}
 	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if !ok {
 		ideal.Manifold, ideal.Reason = nil, ContactPointTooCoarse
 		return
 	}
-	for _, witness := range []struct {
-		point  *VecMeasurement
-		radius proofarith.Dyadic
-	}{{&actual.OnA, r.sphereA.radius}, {&actual.OnB, r.sphereB.radius}} {
-		bound := new(big.Rat).Add(proofarith.FloatRat(witness.point.Bound.Base()), deviation)
-		if normalMotion > 0 {
-			bound.Add(bound, proofarith.FloatRat(proofbound.ProvenUpRound(proofbound.RatFloatUp(witness.radius.Rat())*normalMotion)))
+	bounds, status := spherepath.TransferPairBounds(spherepath.PairTransferInput{
+		Motion: r.pairMotion(), ObservedA: observedA.center, ObservedB: observedB.center, Fraction: f,
+		IdealNormal: want.Normal.Value, ObservedNormal: actual.Normal.Value,
+		IdealNormalBound: want.Normal.Bound.Base(), ObservedNormalBound: actual.Normal.Bound.Base(),
+		ObservedNormalAngle: actual.NormalAngle.Base(),
+		WitnessBounds:       [2]float64{actual.OnA.Bound.Base(), actual.OnB.Bound.Base()},
+		SeparationBound:     actual.Separation.Bound.Base(),
+		NormalResolution:    r.req.NormalResolution.Base(), PointResolution: resolution,
+	})
+	if status != spherepath.PairTransferOK {
+		ideal.Manifold = nil
+		switch status {
+		case spherepath.PairTransferPayloadUnsupported:
+			ideal.Reason = ContactPayloadUnsupported
+		case spherepath.PairTransferPointTooCoarse:
+			ideal.Reason = ContactPointTooCoarse
+		default:
+			ideal.Reason = ContactNoNormalProof
 		}
-		if bound.Cmp(resolution) > 0 {
-			ideal.Manifold, ideal.Reason = nil, ContactPointTooCoarse
-			return
-		}
-		witness.point.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
-		witness.point.Exactness = exactnessFromBound(witness.point.Bound.Base())
+		return
 	}
-	sepBound := new(big.Rat).Add(proofarith.FloatRat(actual.Separation.Bound.Base()), deviation)
-	if normalMotion > 0 {
-		sepBound.Add(sepBound, proofarith.FloatRat(proofbound.ProvenUpRound(
-			proofbound.RatFloatUp(proofarith.DyAdd(r.sphereA.radius, r.sphereB.radius).Rat())*normalMotion)))
+	if bounds.NormalChanged {
+		actual.Normal.Bound = units.Scalar(bounds.NormalBound)
+		actual.Normal.Exactness = exactnessFromBound(bounds.NormalBound)
+		actual.NormalAngle = units.Radians(bounds.NormalAngle)
 	}
-	actual.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(sepBound))
+	for i, witness := range []*VecMeasurement{&actual.OnA, &actual.OnB} {
+		witness.Bound = units.Millimeters(bounds.WitnessBounds[i])
+		witness.Exactness = exactnessFromBound(bounds.WitnessBounds[i])
+	}
+	actual.Separation.Bound = units.Millimeters(bounds.SeparationBound)
 	actual.Separation.Exactness = exactnessFromBound(actual.Separation.Bound.Base())
 	ideal.Manifold = &ContactManifold{Points: []ContactPoint{actual}}
 	ideal.Reason = ContactNoReason
