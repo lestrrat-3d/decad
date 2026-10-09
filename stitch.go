@@ -6,10 +6,9 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/massmoment"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/r3"
@@ -547,7 +546,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				return eb, nil
 			}
 		}
-		curve, err := transformCurve(old.curve, xform)
+		curve, err := surfacegeom.TransformCurve(old.curve, xform)
 		if err != nil {
 			return nil, err
 		}
@@ -569,7 +568,8 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			// above — is a sound representative for the other's identity too.
 			denot: old.denot.Compose(xform),
 		}
-		ne.curveBound, ne.curveBounded = placedCurveBound(old, curve, xform)
+		ne.curveBound, ne.curveBounded = surfacegeom.PlacedCurveBound(
+			old.curve, old.curveBound, old.curveBounded, curve, xform)
 		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
 		buildByOld[old] = eb
 		if isWelded {
@@ -584,7 +584,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, err
 		}
-		surface, err := transformSurface(f.surface, xform)
+		surface, err := surfacegeom.TransformSurface(f.surface, xform)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -629,140 +629,6 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		newFaces[i] = nf
 	}
 	return newFaces, classOf, welded, nil
-}
-
-// transformSurface transforms every exported vector a Surface variant
-// carries under a rigid motion, without re-deriving the surface from any
-// record: Stitch's payload holds already-built geometry, so a placement
-// transforms that geometry's own descriptive vectors directly (r3.Transform's
-// Apply for a position, ApplyDir for a direction — CLAUDE.md's rule against
-// hand-rolled coordinate math). NURBSSurface and Faceted are opaque markers
-// carrying no exported geometry of their own and pass through unchanged.
-func transformSurface(s Surface, xf r3.Transform) (Surface, error) {
-	switch v := s.(type) {
-	case Plane:
-		origin := xf.Apply(v.Frame.Origin())
-		u := xf.ApplyDir(v.Frame.U())
-		vv := xf.ApplyDir(v.Frame.V())
-		f, err := r3.NewFrame(origin, u, vv)
-		if err != nil {
-			return nil, fmt.Errorf(`%w: a placed stitch face's plane is degenerate: %s`, ErrUnsupported, err)
-		}
-		return Plane{Frame: f}, nil
-	case Cylinder:
-		return Cylinder{Origin: xf.Apply(v.Origin), Axis: xf.ApplyDir(v.Axis), Radius: v.Radius}, nil
-	case Cone:
-		return Cone{Origin: xf.Apply(v.Origin), Axis: xf.ApplyDir(v.Axis), Radius: v.Radius, HalfAngle: v.HalfAngle}, nil
-	case Sphere:
-		return Sphere{Center: xf.Apply(v.Center), Radius: v.Radius}, nil
-	case Torus:
-		return Torus{Center: xf.Apply(v.Center), Axis: xf.ApplyDir(v.Axis), Major: v.Major, Minor: v.Minor}, nil
-	case NURBSSurface:
-		return v, nil
-	case Faceted:
-		return v, nil
-	default:
-		return nil, fmt.Errorf(`%w: Stitch cannot transform surface kind %T`, ErrUnsupported, s)
-	}
-}
-
-// transformCurve is transformSurface's one-dimensional analog for Curve.
-func transformCurve(c Curve, xf r3.Transform) (Curve, error) {
-	switch v := c.(type) {
-	case Line3:
-		return Line3{}, nil
-	case Circle3:
-		return Circle3{Center: xf.Apply(v.Center), Axis: xf.ApplyDir(v.Axis), Radius: v.Radius}, nil
-	case Arc3:
-		return Arc3{Center: xf.Apply(v.Center), Axis: xf.ApplyDir(v.Axis), Radius: v.Radius}, nil
-	case NURBSCurve:
-		return v, nil
-	case FacetedCurve:
-		return v, nil
-	default:
-		return nil, fmt.Errorf(`%w: Stitch cannot transform curve kind %T`, ErrUnsupported, c)
-	}
-}
-
-// placedCurveBound carries old's curveBound through xform onto curve, the
-// held circle transformCurve placed: centre c′ = xform.Apply(c), axis
-// a′ = xform.ApplyDir(a), the same radius ρ. With B the placement's held
-// basis read exactly and e its orthonormality defect, a denoted point within
-// κ of the old held circle at c + ρ·w (w a unit vector normal to a) maps to
-// within (1 + e)·κ of B·(c + ρ·w) + t, and that point lies within
-// |B·c + t − c′| + 2ρ·|B·w·â′| + ρ·e of the new held circle, where
-// |B·w·a′| ≤ (1 + e)·|a′ − B·a| + e·|a|, since |B·w·B·a| = |wᵀ(BᵀB − I)·a|.
-// The identity placement returns old's bound unchanged; an old edge with no
-// bound, a curve that is not circular, or a bound not below half the radius
-// answers false.
-func placedCurveBound(old *Edge, curve Curve, xform r3.Transform) (float64, bool) {
-	if !old.curveBounded {
-		return 0, false
-	}
-	if xform == r3.Identity() {
-		return old.curveBound, true
-	}
-	var oldCenter, oldAxis, newCenter, newAxis r3.Vec
-	var radius float64
-	switch c := old.curve.(type) {
-	case Circle3:
-		oldCenter, oldAxis, radius = c.Center, c.Axis, c.Radius.Base()
-	case Arc3:
-		oldCenter, oldAxis, radius = c.Center, c.Axis, c.Radius.Base()
-	default:
-		return 0, false
-	}
-	switch c := curve.(type) {
-	case Circle3:
-		newCenter, newAxis = c.Center, c.Axis
-	case Arc3:
-		newCenter, newAxis = c.Center, c.Axis
-	default:
-		return 0, false
-	}
-	basis, err := massmoment.PlacementRotation(xform)
-	if err != nil {
-		return 0, false
-	}
-	charge, err := massmoment.MapChargeOf(basis)
-	if err != nil {
-		return 0, false
-	}
-	b := xform.Basis()
-	for _, v := range [...]r3.Vec{oldCenter, oldAxis, newCenter, newAxis, b.EX, b.EY, b.EZ, xform.Translation()} {
-		if !proofbound.FiniteVec(v) {
-			return 0, false
-		}
-	}
-	centerGap := proofbound.ExactRigidRound(b, xform.Translation(), proofarith.DyVec(oldCenter), newCenter)
-	ex, ey, ez := proofarith.DyVec(b.EX), proofarith.DyVec(b.EY), proofarith.DyVec(b.EZ)
-	a := proofarith.DyVec(oldAxis)
-	var ba proofarith.DyV3
-	for i := range 3 {
-		ba[i] = proofarith.DyAdd(proofarith.DyAdd(proofarith.DyMul(ex[i], a[0]), proofarith.DyMul(ey[i], a[1])), proofarith.DyMul(ez[i], a[2]))
-	}
-	na := proofarith.DyVec(newAxis)
-	diff := proofarith.DvSub(na, ba)
-	newLow := proofarith.DySqrtDown(proofarith.DvDot(na, na))
-	if !(newLow > 0) {
-		return 0, false
-	}
-	onePlus := proofbound.AbsSumUpper(1, charge.Stretch)
-	tilt := proofbound.AbsSumUpper(
-		proofbound.ProductUpper(onePlus, proofarith.DySqrtUp(proofarith.DvDot(diff, diff))),
-		proofbound.ProductUpper(charge.Stretch, proofarith.DySqrtUp(proofarith.DvDot(a, a))),
-	)
-	tilt = proofbound.UpRound(tilt / newLow)
-	bound := proofbound.AbsSumUpper(
-		proofbound.ProductUpper(onePlus, old.curveBound),
-		centerGap,
-		proofbound.ProductUpper(2, proofbound.ProductUpper(radius, tilt)),
-		proofbound.ProductUpper(radius, charge.Stretch),
-	)
-	if proofbound.IsNonFinite(bound) || !(proofbound.ProductUpper(2, bound) < radius) {
-		return 0, false
-	}
-	return bound, true
 }
 
 // coedgeDirectionFor returns f's own forward flag for its use of e, and

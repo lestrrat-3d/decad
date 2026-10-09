@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -45,9 +46,9 @@ import (
 //     TestRevolveBoxChargesTheBasisRounding went red;
 //   - buildPatchFace's fitted-frame charge: the tilted and the rotated body
 //     patch went red;
-//   - patchPolygonAreaBound in buildPatchFace: the thin body patch's fitted
+//   - patchchain.PolygonAreaBound in buildPatchFace: the thin body patch's fitted
 //     face missed in every variant, by up to 870× its bound;
-//   - patchCurvedAreaCharge in buildPatchFace: the thin slot body patch's
+//   - patchchain.CurvedAreaCharge in buildPatchFace: the thin slot body patch's
 //     fitted face missed by 74× its bound on the tilted plane, and its
 //     straight-edge leg alone by 12×. Its circular legs (the curve bound,
 //     the lifted circle's gap, the end matching) were each deleted without
@@ -833,14 +834,14 @@ func TestCurveBoundsCoverMappedReference(t *testing.T) {
 					require.Len(t, be, len(re))
 					circles := 0
 					for i := range re {
-						c0, a0, r0, ok := circleOf(re[i].curve)
+						c0, a0, r0, ok := surfacegeom.CircleOf(re[i].curve)
 						if !ok {
 							continue
 						}
 						circles++
 						require.True(t, re[i].curveBounded, "reference edge %d carries no curve bound", i)
 						require.True(t, be[i].curveBounded, "edge %d carries no curve bound", i)
-						c1, a1, r1, ok := circleOf(be[i].curve)
+						c1, a1, r1, ok := surfacegeom.CircleOf(be[i].curve)
 						require.True(t, ok)
 						an := fdVecOf(a0).unit()
 						e1 := fdVecOf(r3.NewVec(1, 0, 0)).cross(an)

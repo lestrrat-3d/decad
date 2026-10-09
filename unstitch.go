@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -14,7 +15,7 @@ import (
 
 // This file is Unstitch of docs/surface-design.md §6.5: the inverse of
 // stitch.go's Stitch, splitting a body back into one single-face sheet body
-// per face. It reuses stitch.go's transformSurface/transformCurve/proofbound.FiniteVec
+// per face. It reuses internal/surfacegeom's placement transforms and proofbound.FiniteVec
 // machinery unchanged — a placed unstitched face is transformed the same way
 // a placed stitched one is — and adds the one new mechanism §6.5 calls for: a
 // payload that re-evaluates ONE held face of an already-built B-rep under a
@@ -202,7 +203,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 //
 // Every field this copies is read straight off srcFace/its edges/vertices
 // verbatim except the surface, curve and vertex position (transformed by
-// xform through stitch.go's transformSurface/transformCurve), the
+// xform through internal/surfacegeom's placement transforms), the
 // vertex bound / edge lengthBound (widened by delta under a non-identity
 // placement, exactly as rebuildStitchTopology widens them), the CURVE
 // half of the shared-denotation certificate (restated under xform by
@@ -259,7 +260,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if ne, ok := newEdgeByOld[old]; ok {
 			return ne, nil
 		}
-		curve, err := transformCurve(old.curve, xform)
+		curve, err := surfacegeom.TransformCurve(old.curve, xform)
 		if err != nil {
 			return nil, err
 		}
@@ -285,12 +286,13 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			lengthUnbounded: old.lengthUnbounded,
 			denot:           old.denot.Compose(xform),
 		}
-		ne.curveBound, ne.curveBounded = placedCurveBound(old, curve, xform)
+		ne.curveBound, ne.curveBounded = surfacegeom.PlacedCurveBound(
+			old.curve, old.curveBound, old.curveBounded, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}
 
-	surface, err := transformSurface(srcFace.surface, xform)
+	surface, err := surfacegeom.TransformSurface(srcFace.surface, xform)
 	if err != nil {
 		return nil, err
 	}

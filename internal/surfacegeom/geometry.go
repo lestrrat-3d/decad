@@ -178,3 +178,14 @@ func (Circle3) curve()      {}
 func (Arc3) curve()         {}
 func (NURBSCurve) curve()   {}
 func (FacetedCurve) curve() {}
+
+// CircleOf reads a circular curve's held center, axis and radius.
+func CircleOf(c Curve) (r3.Vec, r3.Vec, float64, bool) {
+	switch v := c.(type) {
+	case Circle3:
+		return v.Center, v.Axis, v.Radius.Base(), true
+	case Arc3:
+		return v.Center, v.Axis, v.Radius.Base(), true
+	}
+	return r3.Vec{}, r3.Vec{}, 0, false
+}

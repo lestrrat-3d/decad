@@ -657,8 +657,8 @@ can hand `Body.Patch` — that disagreement is `ErrDegenerate` (R18).
 engine integrates the chain re-expressed into the fitted frame by float
 `ToLocal`, so its own bound covers that recorded loop and nothing about how
 far the loop sits from the rim. A rim of lines bounds its area directly
-against the polygon its own vertices denote (`patchPolygonAreaBound`). A rim
-with a circular edge is bounded edge by edge (`patchCurvedAreaCharge`): both
+against the polygon its own vertices denote (`patchchain.PolygonAreaBound`). A rim
+with a circular edge is bounded edge by edge (`patchchain.CurvedAreaCharge`): both
 it and the lifted recorded loop are closed planar curves, so with a
 continuous correspondence keeping them within κ of each other their areas
 differ by at most Σ κ·(1.5·len_lifted + 0.5·len_denoted). A line's κ is its
@@ -681,7 +681,7 @@ carried through the screw motion at the cap's turn and the exact denoted
 map, its centre, its two in-plane axes and its radius as exact leaves. A
 coil's rim vertices carry their station bound `β`, so `Body.Patch` refuses
 a coil sheet's rim at R6 before it reads the curve bound.
-Every copier carries the bound through its placement (`placedCurveBound`).
+Every copier carries the bound through its placement (`surfacegeom.PlacedCurveBound`).
 A circular rim edge whose bound cannot be proven — a cap copy at an end with
 no denotation, or a bound not below half the radius — leaves the face with
 no proven area, and `Body.Patch` refuses with `ErrUnsupported` (R46). At an
