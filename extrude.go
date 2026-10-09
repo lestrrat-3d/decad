@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/featureoption"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -38,16 +39,7 @@ import (
 // A nonzero taper leaves this file for draft_build.go's extrudeDraft.
 
 // ExtrudeOption configures Extrude.
-type ExtrudeOption interface {
-	option.Interface
-	extrudeOption()
-}
-
-type extrudeOption struct{ option.Interface }
-
-func (extrudeOption) extrudeOption() {}
-
-type identTaper struct{}
+type ExtrudeOption = featureoption.ExtrudeOption
 
 // WithTaper sets the extrude taper: a SIGNED displacement angle — which way
 // the wall leans. A positive taper leans every wall into the material as it
@@ -57,7 +49,7 @@ type identTaper struct{}
 // every other extent, and WithSurfaceResult, is [ErrUnsupported], returned
 // before commit. A zero taper builds the straight prism.
 func WithTaper(a units.Value) ExtrudeOption {
-	return extrudeOption{option.New(identTaper{}, a)}
+	return featureoption.WithTaper(a)
 }
 
 // Extrude sweeps a profile of s along the sketch plane's normal per the
@@ -109,32 +101,11 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 		return nil, err
 	}
 
-	taper := units.Degrees(0)
-	surfaceResult := false
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		switch o.Ident().(type) {
-		case identTaper:
-			v, ok := option.Get[units.Value](o)
-			if !ok {
-				return nil, fmt.Errorf(`%w: WithTaper carries no angle`, ErrDegenerate)
-			}
-			taper = v
-		case identSurfaceResult:
-			// A repeated WithSurfaceResult() is idempotent, matching
-			// WithTaper's last-wins tolerance rather than Loft's
-			// repeat-is-ErrDegenerate rule.
-			surfaceResult = true
-		}
+	cfg, err := featureoption.DecodeExtrude(opts)
+	if err != nil {
+		return nil, err
 	}
-	if taper.Kind() != units.Angle {
-		return nil, fmt.Errorf(`%w: a taper must be an angle, got %s`, ErrUnitKind, taper.Kind())
-	}
-	if _, err := taper.In(units.Radian); err != nil {
-		return nil, fmt.Errorf(`%w: the taper is not representable: %s`, ErrNotFinite, err)
-	}
+	taper, surfaceResult := cfg.Taper, cfg.SurfaceResult
 	var alpha, alphaDelta float64
 	if taper.Mag() != 0 {
 		if alpha, alphaDelta, err = draftAngle(taper); err != nil {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -18,23 +18,14 @@ import (
 )
 
 // This file is docs/loft-design.md PR 1b: the public entry point over PR 1a's
-// evaluator (loft_build.go). It owns the LoftOption surface, WithLoftAlignment,
-// gates S9-S11 and S4's arity half (§2/§4), and the atomic record->evaluate->
-// commit tail (§10). Every other gate — S1-S8 and S13's coordinate-range
+// evaluator (loft_build.go). It owns the LoftOption surface, gates S9-S10,
+// and the atomic record->evaluate->commit tail (§10). internal/featureoption
+// owns S11 and S4's arity half. The other gates — S1-S8 and S13's coordinate-range
 // gate — is loftmesh.ValidateLoftRecords', assembleLoft's and loftmesh.LoftCrossingAuditStructured's, run
 // inside evalLoft in §4's stated order.
 
 // LoftOption configures Loft.
-type LoftOption interface {
-	option.Interface
-	loftOption()
-}
-
-type loftOption struct{ option.Interface }
-
-func (loftOption) loftOption() {}
-
-type identLoftAlignment struct{}
+type LoftOption = featureoption.LoftOption
 
 // WithLoftAlignment records, per loop, which recorded segment index of the
 // SECOND profile pairs with segment index 0 of the FIRST profile's
@@ -47,9 +38,7 @@ type identLoftAlignment struct{}
 // correspondences, so a repeat is [ErrDegenerate] rather than last-wins
 // (Table S row S4).
 func WithLoftAlignment(offsets ...int) LoftOption {
-	out := make([]int, len(offsets))
-	copy(out, offsets)
-	return loftOption{option.New(identLoftAlignment{}, out)}
+	return featureoption.WithLoftAlignment(offsets...)
 }
 
 // Loft builds a solid ruled between two profiles recorded on distinct
@@ -111,55 +100,11 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	// (docs/loft-design.md §4, amended). decad owns the option vocabulary, so
 	// a foreign concrete type — including one that embeds LoftOption to
 	// promote the sealed marker — is rejected before its Ident() ever runs.
-	var alignment []int
-	haveAlignment := false
-	surfaceResult := false
-	for _, raw := range opts {
-		if raw == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		// Checked before the loftOption assertion below: a surfaceResultOption
-		// is not a loftOption, so falling through to that assertion would
-		// answer ErrDegenerate rather than setting the flag
-		// (docs/surface-design.md §4). A repeated WithSurfaceResult() is
-		// idempotent (surface.go's own doc comment) — deliberately unlike
-		// WithLoftAlignment's own repeat-is-ErrDegenerate rule below: an
-		// alignment payload names one of several possible correspondences, so
-		// two occurrences name two candidates with no way to prefer one, while
-		// a surface result is a single yes/no flag with nothing to disagree
-		// about on a repeat, the same tolerance WithTaper's own last-wins rule
-		// gives Extrude (extrude.go).
-		if _, ok := raw.(surfaceResultOption); ok {
-			surfaceResult = true
-			continue
-		}
-		o, ok := raw.(loftOption)
-		if !ok {
-			return nil, fmt.Errorf(`%w: the loft option is not a decad loft option (%T)`, ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identLoftAlignment:
-			if haveAlignment {
-				return nil, fmt.Errorf(`%w: WithLoftAlignment was passed more than once; two alignment payloads name two different correspondences`, ErrDegenerate)
-			}
-			v, ok := option.Get[[]int](o)
-			if !ok {
-				return nil, fmt.Errorf(`%w: WithLoftAlignment carries no offsets`, ErrDegenerate)
-			}
-			// option.Get is a plain type assertion: it hands back the
-			// option's own stored slice header, not a copy. A caller that
-			// retains the LoftOption value and mutates that slice through
-			// option.Get (or Option[[]int].Value()) later would otherwise
-			// reach into this step's recorded Alignment and loftPayload's
-			// alignment (docs/loft-design.md §10) after the fact — clone
-			// here, at ingress, so no caller-owned slice survives into
-			// either.
-			alignment = slices.Clone(v)
-			haveAlignment = true
-		default:
-			return nil, fmt.Errorf(`%w: unknown loft option identifier %T`, ErrDegenerate, ident)
-		}
+	cfg, err := featureoption.DecodeLoft(opts)
+	if err != nil {
+		return nil, err
 	}
+	alignment, surfaceResult := cfg.Alignment, cfg.SurfaceResult
 
 	// S9: both profiles through the unmodified seam gates, in argument order.
 	profile0, plane0, area0, err := recordProfile(s0, p0)

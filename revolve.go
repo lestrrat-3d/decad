@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
@@ -115,10 +116,7 @@ func normalizeAxis(a Axis) (Axis, error) {
 // face and returns a CLOSED sheet with no free edge — §2.1's closed-sheet
 // rule, not a refusal (Table W). A repeated WithSurfaceResult() is
 // idempotent, never an error.
-type RevolveOption interface {
-	option.Interface
-	revolveOption()
-}
+type RevolveOption = featureoption.RevolveOption
 
 // Revolve sweeps a profile of s about axis per the angular extent a, and
 // registers the new body. p MUST be a profile of s (ErrForeignProfile) and a
@@ -161,7 +159,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 		// flags a single-case switch, and a second RevolveOption is when this
 		// grows one. A repeated WithSurfaceResult() is idempotent, the same
 		// tolerance Extrude gives its own repeat (extrude.go).
-		if _, ok := o.Ident().(identSurfaceResult); ok {
+		if featureoption.IsSurfaceResult(o) {
 			surfaceResult = true
 		}
 	}

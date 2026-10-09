@@ -3,16 +3,15 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
+	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is docs/sweep-design.md §16's mitred polyline sweep: the two
@@ -22,16 +21,12 @@ import (
 // §16.3's exact sections; sweep_mitre_build.go adapts them to Table BM's
 // topology and §16.6's four readings.
 
-type identMitredJoins struct{}
-
-type identSectionScale struct{}
-
 // WithMitredJoins admits a LineTo-only path whose internal joins are corners:
 // the two spans meeting at a join are each cut on one join plane and share the
 // section polygon on it (docs/sweep-design.md §16). The profile must be made
 // of straight lines only. Passing it twice is ErrDegenerate.
 func WithMitredJoins() SweepOption {
-	return sweepOption{option.New(identMitredJoins{}, struct{}{})}
+	return featureoption.WithMitredJoins()
 }
 
 // WithSectionScale states one dimensionless factor per path segment, in path
@@ -41,41 +36,7 @@ func WithMitredJoins() SweepOption {
 // the count must equal the path's segment count. On a path of two or more
 // spans it requires [WithMitredJoins] (docs/sweep-design.md §16.2).
 func WithSectionScale(factors ...units.Value) SweepOption {
-	return sweepOption{option.New(identSectionScale{}, append([]units.Value(nil), factors...))}
-}
-
-// sweepConfig is what Sweep's options resolve to.
-type sweepConfig struct {
-	surfaceResult bool
-	mitred        bool
-	scaled        bool
-	// factors is WithSectionScale's validated factors as base-unit floats,
-	// one per path segment; nil when no scale was passed.
-	factors []float64
-}
-
-// validateSectionScale is Table SM row SM3 over one WithSectionScale payload:
-// kind, finiteness and sign per factor in order, then the count against the
-// path's own segment count.
-func validateSectionScale(raw []units.Value, segments int) ([]float64, error) {
-	out := make([]float64, len(raw))
-	for k, f := range raw {
-		if f.Kind() != units.Dimensionless {
-			return nil, fmt.Errorf(`%w: section scale factor %d must be dimensionless, got %s`, ErrUnitKind, k, f.Kind())
-		}
-		v := f.Base()
-		if math.IsNaN(v) || math.IsInf(v, 0) {
-			return nil, fmt.Errorf(`%w: section scale factor %d is not finite`, ErrNotFinite, k)
-		}
-		if v <= 0 {
-			return nil, fmt.Errorf(`%w: section scale factor %d must be positive, got %g`, ErrDegenerate, k, v)
-		}
-		out[k] = v
-	}
-	if len(out) != segments {
-		return nil, fmt.Errorf(`%w: WithSectionScale states %d factors for a path of %d segments`, ErrDegenerate, len(out), segments)
-	}
-	return out, nil
+	return featureoption.WithSectionScale(factors...)
 }
 
 // mitredSweepLoops adapts SM2's whole-line profile gate to its record.
@@ -91,14 +52,14 @@ func mitredSweepPreflight(loopIdx [][]int, spans int) error {
 // sweepMitred runs Table SM's gates in §5's order and builds the body. The
 // options were validated by the caller (SM3, SM9's surface-result arm), and
 // the profile is already authenticated.
-func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane planeRecord, path *Path, cfg sweepConfig) (*Body, error) {
+func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane planeRecord, path *Path, cfg featureoption.SweepConfig) (*Body, error) {
 	segments := path.Segments()
 	for k, segment := range segments {
 		if _, ok := segment.(LineTo); !ok {
 			return nil, fmt.Errorf(`%w: a mitred or scaled sweep follows LineTo segments only; path segment %d is %T`, ErrUnsupported, k, segment)
 		}
 	}
-	if cfg.scaled && !cfg.mitred && len(segments) > 1 {
+	if cfg.Scaled && !cfg.Mitred && len(segments) > 1 {
 		return nil, fmt.Errorf(`%w: WithSectionScale on a path of %d spans requires WithMitredJoins`, ErrUnsupported, len(segments))
 	}
 	if err := validateSweepPathStart(path, plane); err != nil {
@@ -114,7 +75,7 @@ func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane 
 	if err := mitredSweepPreflight(loopIdx, len(segments)); err != nil {
 		return nil, err
 	}
-	factors := cfg.factors
+	factors := cfg.Factors
 	if factors == nil {
 		factors = make([]float64, len(segments))
 		for k := range factors {

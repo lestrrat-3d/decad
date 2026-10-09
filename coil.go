@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/coil"
+	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -14,7 +15,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is docs/helix-design.md's entry point: the CoilOption surface,
@@ -47,22 +47,13 @@ const maxCoilFacets = 1 << 20
 // CoilOption configures Coil. Sealed: WithLeftHand is the one option.
 // WithSurfaceResult does not implement it, so a coil is always a solid
 // (Table CS row CS11).
-type CoilOption interface {
-	option.Interface
-	coilOption()
-}
-
-type coilOption struct{ option.Interface }
-
-func (coilOption) coilOption() {}
-
-type identLeftHand struct{}
+type CoilOption = featureoption.CoilOption
 
 // WithLeftHand turns the section left-handed about the axis direction while
 // it advances along it. The default is right-handed. Passing it twice is
 // ErrDegenerate.
 func WithLeftHand() CoilOption {
-	return coilOption{option.New(identLeftHand{}, struct{}{})}
+	return featureoption.WithLeftHand()
 }
 
 // coilPayload is the evaluator's record of a coil (docs/helix-design.md):
@@ -154,24 +145,9 @@ func (d *Document) Coil(ctx context.Context, s *sketch.Sketch, p *sketch.Profile
 	if err != nil {
 		return nil, err
 	}
-	leftHand := false
-	for _, raw := range opts {
-		if raw == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		o, ok := raw.(coilOption)
-		if !ok {
-			return nil, fmt.Errorf(`%w: the coil option is not a decad coil option (%T)`, ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identLeftHand:
-			if leftHand {
-				return nil, fmt.Errorf(`%w: WithLeftHand was passed more than once`, ErrDegenerate)
-			}
-			leftHand = true
-		default:
-			return nil, fmt.Errorf(`%w: unknown coil option identifier %T`, ErrDegenerate, ident)
-		}
+	leftHand, err := featureoption.DecodeCoil(opts)
+	if err != nil {
+		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

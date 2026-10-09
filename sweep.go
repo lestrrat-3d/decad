@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/capcontour"
+	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -42,22 +43,13 @@ import (
 // closing face at all) stays reachable through Revolve alone.
 
 // SweepOption configures Sweep.
-type SweepOption interface {
-	option.Interface
-	sweepOption()
-}
-
-type sweepOption struct{ option.Interface }
-
-func (sweepOption) sweepOption() {}
-
-type identSweepTwist struct{}
+type SweepOption = featureoption.SweepOption
 
 // WithSweepTwist is a placeholder for a future distributed twist implementation.
 // The current evaluator accepts only zero twist; a nonzero angle is
 // ErrUnsupported and leaves the document unchanged.
 func WithSweepTwist(angle units.Value) SweepOption {
-	return sweepOption{option.New(identSweepTwist{}, angle)}
+	return featureoption.WithSweepTwist(angle)
 }
 
 // Sweep moves p along path, registers the resulting solid, and returns
@@ -81,11 +73,11 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 		return nil, err
 	}
 
-	cfg, err := validateSweepOptions(opts, len(path.segments))
+	cfg, err := featureoption.DecodeSweep(opts, len(path.segments))
 	if err != nil {
 		return nil, err
 	}
-	surfaceResult := cfg.surfaceResult
+	surfaceResult := cfg.SurfaceResult
 
 	profile, plane, profileArea, err := recordProfile(s, p)
 	if err != nil {
@@ -106,7 +98,7 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
 	}
-	if cfg.mitred || cfg.scaled {
+	if cfg.Mitred || cfg.Scaled {
 		// docs/sweep-design.md §16: either option selects the mitred
 		// polyline builder, whose Table SM gates replace S6 and S10.
 		body, err := sweepMitred(ctx, d, profile, plane, path, cfg)
@@ -173,86 +165,6 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	}
 	d.commit(body)
 	return body, nil
-}
-
-// validateSweepOptions resolves opts into a sweepConfig: the WithSweepTwist
-// gate, the WithSurfaceResult flag, and docs/sweep-design.md §16's two
-// options. A surfaceResultOption is not a sweepOption, so it is matched and
-// consumed before the sweepOption assertion below runs — falling through to
-// that assertion would wrongly answer ErrDegenerate instead of setting the
-// flag (docs/surface-design.md §4). A repeated WithSurfaceResult() is
-// idempotent (surface.go's own doc comment), unlike every sweepOption's
-// repeat-is-ErrDegenerate rule below. segments is the path's segment count,
-// which WithSectionScale's factor count must match (Table SM row SM3).
-func validateSweepOptions(opts []SweepOption, segments int) (sweepConfig, error) {
-	var cfg sweepConfig
-	haveTwist := false
-	var twist sweepOption
-	var scale []units.Value
-	for _, raw := range opts {
-		if raw == nil {
-			return sweepConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		if _, ok := raw.(surfaceResultOption); ok {
-			cfg.surfaceResult = true
-			continue
-		}
-		o, ok := raw.(sweepOption)
-		if !ok {
-			return sweepConfig{}, fmt.Errorf(`%w: the sweep option is not a decad sweep option (%T)`, ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identSweepTwist:
-			if haveTwist {
-				return sweepConfig{}, fmt.Errorf(`%w: WithSweepTwist was passed more than once`, ErrDegenerate)
-			}
-			twist = o
-			haveTwist = true
-		case identMitredJoins:
-			if cfg.mitred {
-				return sweepConfig{}, fmt.Errorf(`%w: WithMitredJoins was passed more than once`, ErrDegenerate)
-			}
-			cfg.mitred = true
-		case identSectionScale:
-			if cfg.scaled {
-				return sweepConfig{}, fmt.Errorf(`%w: WithSectionScale was passed more than once`, ErrDegenerate)
-			}
-			factors, ok := option.Get[[]units.Value](o)
-			if !ok {
-				return sweepConfig{}, fmt.Errorf(`%w: WithSectionScale carries no factors`, ErrDegenerate)
-			}
-			scale = factors
-			cfg.scaled = true
-		default:
-			return sweepConfig{}, fmt.Errorf(`%w: unknown sweep option identifier %T`, ErrDegenerate, ident)
-		}
-	}
-	if cfg.scaled {
-		factors, err := validateSectionScale(scale, segments)
-		if err != nil {
-			return sweepConfig{}, err
-		}
-		cfg.factors = factors
-	}
-	if haveTwist {
-		angle, ok := option.Get[units.Value](twist)
-		if !ok {
-			return sweepConfig{}, fmt.Errorf(`%w: WithSweepTwist carries no angle`, ErrDegenerate)
-		}
-		if angle.Kind() != units.Angle {
-			return sweepConfig{}, fmt.Errorf(`%w: sweep twist must be an angle, got %s`, ErrUnitKind, angle.Kind())
-		}
-		if _, err := angle.In(units.Radian); err != nil {
-			return sweepConfig{}, fmt.Errorf(`%w: the sweep twist is not representable: %s`, ErrNotFinite, err)
-		}
-		if angle.Mag() != 0 {
-			return sweepConfig{}, fmt.Errorf(`%w: nonzero sweep twist is not implemented`, ErrUnsupported)
-		}
-	}
-	if cfg.surfaceResult && (cfg.mitred || cfg.scaled) {
-		return sweepConfig{}, fmt.Errorf(`%w: a mitred or scaled sweep builds a solid only; WithSurfaceResult is not implemented for it (docs/sweep-design.md Table SM row SM9)`, ErrUnsupported)
-	}
-	return cfg, nil
 }
 
 // validateSweepPathStart is Table S row S5: the path starts in the profile
