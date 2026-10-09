@@ -452,37 +452,13 @@ func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]c
 // reads its section through it, and a revolve its meridian
 // (revolve_blend.go): the corner rewrite is the same 2D construction for both.
 func profileCornerLoopsBudget(budget *proofbound.WorkBudget, profile profileRecord) ([]cornerLoop, error) {
-	if err := survey2d.WallBudgetErr(budget); err != nil {
+	walks, err := boundarywalk.ModifyLoopsBudget(budget, boundarywalk.Profile(profile))
+	if err != nil {
 		return nil, err
 	}
-	// One free-form counter for this whole record walk: no moments preflight ran
-	// on the section this reads, so the ceiling starts here and covers every
-	// segment of every loop below.
-	work := freeform.NewFreeformWork()
-	var out []cornerLoop
-	for _, loop := range append([]loopRecord{profile.Outer}, profile.Holes...) {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		raw := make([]survey2d.SideWalk, len(loop.Segments))
-		for i, seg := range loop.Segments {
-			if err := survey2d.WallBudgetStep(budget); err != nil {
-				return nil, err
-			}
-			w, err := boundarywalk.WalkOf(seg, work)
-			if err != nil {
-				return nil, err
-			}
-			if err := boundarywalk.RequireAnalyticWalk(w, "a modify corner rewrite"); err != nil {
-				return nil, err
-			}
-			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
-		}
-		walks, err := boundarywalk.CoalesceWalksBudget(raw, budget)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, cornerLoop{walks: walks})
+	out := make([]cornerLoop, len(walks))
+	for i, loop := range walks {
+		out[i] = cornerLoop{walks: loop}
 	}
 	return out, nil
 }

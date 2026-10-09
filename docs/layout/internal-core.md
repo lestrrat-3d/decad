@@ -26,10 +26,11 @@ The rules for rows live in `docs/layout.md`.
 | `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact and nesting checks. See modify §5. |
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
-| `internal/boundarywalk/` | Bounded walks, coalescing and analytic survey loops over recorded segments. |
+| `internal/boundarywalk/` | Bounded walks, coalescing, and analytic survey and modify loops over recorded segments. |
 | `internal/classbgeom/` | Class-B boolean geometry. See general-boolean §3 B, §5. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, measurements, extents, face surveys and topology. See general-boolean §4–§5. |
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
+| `internal/prismshell/` | Prism side-opening wall, cavity and cap sections and their section audit. See shell-opening §3–§5. |
 | `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap and section charges, and extent readings. See evaluator §6. |
 | `internal/revolveshell/` | Effective-meridian survey, removed-run checks, and shell wall sections and displacement. See modify-reach §9.3. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |

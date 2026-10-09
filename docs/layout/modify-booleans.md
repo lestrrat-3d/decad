@@ -19,7 +19,7 @@ The rules for rows live in `docs/layout.md`.
 | `shell_offset.go` | Adapts Shell section offsets and proofs; audits the record. See modify §7–§9. |
 | `shell_cup.go` | `cupPayload`, its stacked record and view. See modify-reach §9.1. |
 | `shell_revolve.go` | `Body.Shell` of a revolve. See modify-reach §9.3. |
-| `shell_opening.go` | Prism side opening: classify removed faces and assemble the audited regions. See shell-opening §3–§5. |
+| `shell_opening.go` | Prism side opening: classify removed faces and dispatch the audited region build. See shell-opening §3–§5. |
 | `shell_opening_brep.go` | Records a prism side opening as a prism or a stacked brep. See shell-opening §4. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
 | `brep_shell.go` | Route S: shell of a through-cut brep. See modify-general §3. |

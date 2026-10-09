@@ -17,8 +17,12 @@ var ErrFreeformSection = fmt.Errorf(`%w: the wall survey does not support a free
 // SurveyLoops resolves a recorded profile into coalesced walks, matching the
 // prism evaluator's side-face decomposition.
 func SurveyLoops(budget *proofbound.WorkBudget, profile Profile) ([][]survey2d.SideWalk, error) {
-	// One counter spans every loop because surveys read a built body's section
-	// without a preflight counter to carry into this resolution.
+	return resolveLoops(budget, profile, "the wall survey", true)
+}
+
+func resolveLoops(budget *proofbound.WorkBudget, profile Profile, what string, survey bool) ([][]survey2d.SideWalk, error) {
+	// One counter spans every loop; the section has no preflight counter to
+	// carry into this resolution.
 	work := freeform.NewFreeformWork()
 	var out [][]survey2d.SideWalk
 	for _, loop := range append([]sectionrecord.LoopRecord{profile.Outer}, profile.Holes...) {
@@ -34,10 +38,13 @@ func SurveyLoops(budget *proofbound.WorkBudget, profile Profile) ([][]survey2d.S
 			if err != nil {
 				return nil, err
 			}
-			if err := RequireAnalyticWalk(w, "the wall survey"); err != nil {
-				// This one refusal has the survey's own sentinel; other errors retain
-				// the identity returned by WalkOf.
-				return nil, ErrFreeformSection
+			if err := RequireAnalyticWalk(w, what); err != nil {
+				if survey {
+					// This one refusal has the survey's own sentinel; other errors retain
+					// the identity returned by WalkOf.
+					return nil, ErrFreeformSection
+				}
+				return nil, err
 			}
 			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 		}
@@ -56,4 +63,14 @@ func SurveyLoopsBudget(budget *proofbound.WorkBudget, profile Profile) ([][]surv
 		return nil, err
 	}
 	return SurveyLoops(budget, profile)
+}
+
+// ModifyLoopsBudget resolves a section into the coalesced walks used by
+// corner rewrites. Its free-form refusal names the rewrite rather than a wall
+// survey, preserving the modify gate's diagnostic.
+func ModifyLoopsBudget(budget *proofbound.WorkBudget, profile Profile) ([][]survey2d.SideWalk, error) {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
+		return nil, err
+	}
+	return resolveLoops(budget, profile, "a modify corner rewrite", false)
 }

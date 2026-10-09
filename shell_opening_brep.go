@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedbrep"
@@ -27,16 +28,16 @@ import (
 // placement, carrying the offset's section displacement and, where a rim on
 // a removed arc names its cut at a float parameter, three times that cut's
 // gap on top (§4.4).
-func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp prismPayload, sec sideOpeningSection) (*Body, error) {
-	delta := sec.delta
-	if sec.cutGap > 0 {
-		delta = proofbound.AbsSumUpper(delta, proofbound.ProductUpper(3, sec.cutGap))
+func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp prismPayload, sec prismshell.Section) (*Body, error) {
+	delta := sec.Delta
+	if sec.CutGap > 0 {
+		delta = proofbound.AbsSumUpper(delta, proofbound.ProductUpper(3, sec.CutGap))
 		if proofbound.IsNonFinite(delta) {
 			return nil, offset2d.ErrUnbounded
 		}
 	}
 	return evalPrismContext(ctx, d, ref, prismPayload{
-		profile:      sec.wall,
+		profile:      sec.Wall,
 		frame:        pp.frame,
 		z0:           pp.z0,
 		z1:           pp.z1,
@@ -65,7 +66,7 @@ func shellLevel(from, delta, by, tDelta float64) stackedbrep.Level {
 // carrier splits where the rim face meets the floor strip. Every face carries
 // the larger of the offset's displacement and the engine's largest
 // canonical-vertex allowance (§4.4). An engine miss is SO5, ErrUnsupported.
-func sideOpeningBrep(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload, sec sideOpeningSection, removedStart, removedEnd bool, s, tmm, tDelta float64) (brepPayload, error) {
+func sideOpeningBrep(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload, sec prismshell.Section, removedStart, removedEnd bool, s, tmm, tDelta float64) (brepPayload, error) {
 	bottom := stackedbrep.Level{Held: pp.z0, Delta: pp.z0Delta}
 	top := stackedbrep.Level{Held: pp.z1, Delta: pp.z1Delta}
 	var levels []stackedbrep.Level
@@ -76,28 +77,28 @@ func sideOpeningBrep(ctx context.Context, budget *proofbound.WorkBudget, pp pris
 		levels = append(levels, bottom)
 		if !removedStart {
 			levels = append(levels, shellLevel(pp.z0, pp.z0Delta, tmm, tDelta))
-			regions = append(regions, sec.caps)
+			regions = append(regions, sec.Caps)
 			wallAt = 1
 		}
-		regions = append(regions, sec.wall)
+		regions = append(regions, sec.Wall)
 		if !removedEnd {
 			levels = append(levels, shellLevel(pp.z1, pp.z1Delta, -tmm, tDelta))
-			regions = append(regions, sec.caps)
+			regions = append(regions, sec.Caps)
 		}
 		levels = append(levels, top)
 	} else {
 		// Outward the kept caps' slabs extend t beyond each end.
 		if !removedStart {
 			levels = append(levels, shellLevel(pp.z0, pp.z0Delta, -tmm, tDelta))
-			regions = append(regions, sec.caps)
+			regions = append(regions, sec.Caps)
 			wallAt = 1
 		}
 		levels = append(levels, bottom)
-		regions = append(regions, sec.wall)
+		regions = append(regions, sec.Wall)
 		levels = append(levels, top)
 		if !removedEnd {
 			levels = append(levels, shellLevel(pp.z1, pp.z1Delta, tmm, tDelta))
-			regions = append(regions, sec.caps)
+			regions = append(regions, sec.Caps)
 		}
 	}
 	for i := 1; i < len(levels); i++ {
@@ -114,7 +115,7 @@ func sideOpeningBrep(ctx context.Context, budget *proofbound.WorkBudget, pp pris
 
 // sideOpeningRecord runs the engine over the slabs between consecutive
 // levels, regions[k] being slab k's one region and wallAt the wall slab.
-func sideOpeningRecord(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload, sec sideOpeningSection, levels []stackedbrep.Level, regions []profileRecord, wallAt int) (brepPayload, error) {
+func sideOpeningRecord(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload, sec prismshell.Section, levels []stackedbrep.Level, regions []profileRecord, wallAt int) (brepPayload, error) {
 	n := len(regions)
 	held := make([]float64, len(levels))
 	for i, l := range levels {
@@ -143,7 +144,7 @@ func sideOpeningRecord(ctx context.Context, budget *proofbound.WorkBudget, pp pr
 		if iface.level <= 0 || iface.level >= n {
 			continue
 		}
-		loop, err := geom.LoopOf(brepgeom.Profile{Outer: sec.cavity.Outer, Holes: sec.cavity.Holes}, budget)
+		loop, err := geom.LoopOf(brepgeom.Profile{Outer: sec.Cavity.Outer, Holes: sec.Cavity.Holes}, budget)
 		if err != nil {
 			return brepPayload{}, err
 		}
@@ -151,11 +152,11 @@ func sideOpeningRecord(ctx context.Context, budget *proofbound.WorkBudget, pp pr
 			return brepPayload{}, err
 		}
 	}
-	for _, v := range sec.corners {
+	for _, v := range sec.Corners {
 		geom.Event(v, wallAt)
 		geom.Event(v, wallAt+1)
 	}
 	geom.RecordJunctions(n)
-	delta := math.Max(sec.delta, geom.Allow())
+	delta := math.Max(sec.Delta, geom.Allow())
 	return stackedBrepRecord(ctx, budget, geom, levels, pp.frame, pp.xform, delta)
 }
