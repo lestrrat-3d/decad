@@ -153,7 +153,7 @@
 2	0.02	TestCapPatchNormalRangeChargesAFlatPatchsDepartureOnce
 2	0.27	TestChordLoopRefusesMismatchedResolvedWalks
 2	0.01	TestCircularStationChainJunctionsMeetOnOneCoordinate
-2	0.01	TestCompleteWallSetReadsRoles
+2	0.01	TestDraftKeptWallsReadsRoles
 2	0.01	TestDisplacedCupCentroidMoment
 2	0.01	TestDraftReceiverClasses
 2	0.02	TestEvalPrismContinuesCallerFreeformWork
@@ -1186,6 +1186,7 @@
 5	0.07	TestChordLocusRegionVolumeCoversTheDip
 5	0.01	TestPrismLiftFactorBoundsTheHeldMap
 2	0.30	TestDraftMeshVolumeProofCoversTheClosedForm
+2	0.10	TestDraftSubsetMeshVolumeProofCoversTheClosedForm
 2	0.01	TestDraftMeshSharesTheNearRing
 2	0.05	TestDraftMoverRecordRadiusEnclosesTheBody
 0	3.81	TestCoilSlotSpring

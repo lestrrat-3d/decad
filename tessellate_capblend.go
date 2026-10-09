@@ -396,6 +396,7 @@ func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *c
 		Loop:              lm.li, Segments: lm.loop.Segments,
 		CapPts: lm.capPts, CapWallStart: lm.capWallStart,
 		Whole: lm.whole, D: cbp.loopOffset(lm.li), DDelta: cbp.loopSetback(lm.li).dcDelta,
+		Amounts: cbp.walkAmounts(lm.li, lm.walks, cbp.loopOffset(lm.li)),
 	}
 	in.BandDelta[0], in.HasBandDelta[0] = cbp.bandDelta[capBandKey{loop: lm.li, start: true}]
 	in.BandDelta[1], in.HasBandDelta[1] = cbp.bandDelta[capBandKey{loop: lm.li, start: false}]
@@ -471,7 +472,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 	}
 
 	if lm.chamfered && !lm.whole {
-		lm.joins, err = cbp.offsetJoins(budget, cl, cbp.loopOffset(li))
+		lm.joins, err = cbp.offsetJoins(budget, li, cl, cbp.loopOffset(li))
 		if err != nil {
 			return capBlendLoopMesh{}, err
 		}
@@ -482,6 +483,10 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 		Whole: lm.whole, Chamfered: lm.chamfered, D: cbp.loopOffset(li), Chord: chord,
 		Setback: capBlendProofSetback(cbp.loopSetback(li)), FootDelta: cbp.loopBandDelta(li),
 	}, budget, func(w survey2d.SideWalk, d float64) (float64, error) {
+		// A subset draft's kept wall keeps its own radius (walkAmounts).
+		if cbp.draft {
+			return capband.WallRadius(w, walkAmounts(cbp.draftKept, li, []survey2d.SideWalk{w}, d)[0], shellTol)
+		}
 		return capband.BandRadius(w, d, shellTol)
 	}, capband.WallSweep)
 	if err != nil {
@@ -582,6 +587,7 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 			SideSag: lm.sideSag, CapSag: lm.capSag, CapRadius: lm.capRadius,
 			ArcSag: lm.arcSag, LocusGap: lm.locusGap,
 			D: setback.dc, Delta: delta, LevelDelta: levelDelta, Axial: axial,
+			Amounts: cbp.walkAmounts(lm.li, lm.walks, setback.dc),
 		}, patchFace)
 }
 

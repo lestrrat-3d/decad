@@ -84,7 +84,7 @@ import (
 // widened by the largest patch radial gap (docs/modify-reach-design.md §8.4).
 // coordUpper is formed whenever either term charges, not only when delta is
 // positive.
-func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure, work *freeform.FreeformWork) (mu, mv, mz proofbound.BoundedScalar, err error) {
+func capBandMoment(ctx context.Context, li int, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure, work *freeform.FreeformWork) (mu, mv, mz proofbound.BoundedScalar, err error) {
 	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)
 	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
@@ -102,7 +102,7 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	if err != nil {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
-	capBoundary, err := cbp.contourOf(ctx, loop, setback.dc)
+	capBoundary, err := cbp.contourOf(ctx, li, loop, setback.dc)
 	if err != nil {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}

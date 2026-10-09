@@ -288,3 +288,99 @@ func TestDraftMoverRecordRadiusEnclosesTheBody(t *testing.T) {
 		})
 	}
 }
+
+// draftMeshSubset extrudes the sketch region with the given hole count h mm,
+// untapered, and drafts the walls pick selects by deg degrees about its start
+// cap (docs/draft-design.md §10.2).
+func draftMeshSubset(t *testing.T, holes int, draw func(*sketch.Sketch), h, deg float64, pick func(*Face) bool) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	draw(s)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	for _, p := range s.Profiles() {
+		if len(p.Holes) != holes {
+			continue
+		}
+		b, err := New().Extrude(s, p, Distance{D: units.Millimeters(h)})
+		require.NoError(t, err)
+		var q *FaceQuery
+		for _, f := range b.Faces() {
+			if !f.isWallOf(b.origin.producer) || !pick(f) {
+				continue
+			}
+			for _, o := range f.origins {
+				if q == nil {
+					q = Faces(FaceCreatedBy(o))
+					continue
+				}
+				q.Or(FaceCreatedBy(o))
+			}
+		}
+		require.NotNil(t, q)
+		got, err := b.Draft(t.Context(), q, NeutralFace{Body: b, Face: Faces(FaceCreatedBy(CapStart(b)))}, units.Degrees(deg))
+		require.NoError(t, err)
+		return got
+	}
+	require.FailNow(t, "the sketch holds no region with the requested hole count")
+	return nil
+}
+
+// TestDraftSubsetMeshVolumeProofCoversTheClosedForm is the subset draft's
+// mesh (docs/draft-design.md §10.2 over Table DD row DD1): F1's box with its
+// +u wall drafted alone, h·a(a − d/2); F4's L with its notch wall u = 10
+// drafted alone, h(300 − 5d); and F7's hole drafted alone,
+// πh(R² − r² − rd − d²/3). Each meshes closed at three tolerances, its proof
+// admitted, and the held mesh's exact volume lies within volSymDiff of the
+// closed form, which stays below a relative ceiling.
+//
+// Shown to fail first: with the chord pass reading every circular wall's far
+// radius at the draft's d (the tessellator's draft arm of the radius
+// callback removed), the kept outer wall of F7's ring meshed as a cone and the
+// hole-alone body's volSymDiff grew to 6.5e3 mm³ past its 2.5e2 ceiling; with
+// the cap motion's per-walk setbacks dropped, it grew to 6.8e3 mm³.
+func TestDraftSubsetMeshVolumeProofCoversTheClosedForm(t *testing.T) {
+	t.Parallel()
+	d := dmMul(dmf(10), draftMeshTan(5))
+	square := draftMeshPolygon([2]float64{-10, -10}, [2]float64{10, -10}, [2]float64{10, 10}, [2]float64{-10, 10})
+	ell := draftMeshPolygon([2]float64{0, 0}, [2]float64{20, 0}, [2]float64{20, 10},
+		[2]float64{10, 10}, [2]float64{10, 20}, [2]float64{0, 20})
+	hasRole := func(role string) func(*Face) bool {
+		return func(f *Face) bool {
+			for _, o := range f.origins {
+				if o.Role == role {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	fixtures := []draftMeshFixture{
+		{"one wall", func(t *testing.T) *Body { return draftMeshSubset(t, 0, square, 10, 5, hasRole("side(0,1)")) },
+			dmMul(dmf(10), dmf(20), dmAdd(dmf(20), dmQuo(dmNeg(d), dmf(2))))},
+		{"notch wall", func(t *testing.T) *Body { return draftMeshSubset(t, 0, ell, 10, 5, hasRole("side(0,3)")) },
+			dmMul(dmf(10), dmAdd(dmf(300), dmMul(dmf(-5), d)))},
+		{"hole alone", func(t *testing.T) *Body {
+			return draftMeshSubset(t, 1, draftMeshCircles(10, 4), 10, 5, hasRole("side(1,0)"))
+		}, dmMul(draftMeshPi, dmf(10), dmAdd(dmf(84), dmMul(dmf(-4), d), dmQuo(dmNeg(dmMul(d, d)), dmf(3))))},
+	}
+	for _, fx := range fixtures {
+		t.Run(fx.name, func(t *testing.T) {
+			t.Parallel()
+			b := fx.build(t)
+			for _, tol := range []float64{0.25, 0.05, 0.01} {
+				mesh, err := b.Tessellate(t.Context(), units.Millimeters(tol))
+				require.NoError(t, err, "tol %g", tol)
+				require.NoError(t, tessellation.RequireClosedMesh(mesh.triangles))
+				require.True(t, mesh.symDiffOK, "tol %g", tol)
+				got := new(big.Float).SetPrec(draftMeshPrec).SetRat(internalMeshVolumeRat(mesh))
+				gap, _ := new(big.Float).Abs(dmAdd(got, dmNeg(fx.volume))).Float64()
+				want, _ := fx.volume.Float64()
+				require.LessOrEqualf(t, gap, mesh.volSymDiff, "tol %g: the mesh volume sits %g from the closed form %v, outside volSymDiff %g", tol, gap, want, mesh.volSymDiff)
+				require.LessOrEqualf(t, mesh.volSymDiff, 0.1*want, "tol %g: volSymDiff %g is no proof of a %v mm³ body", tol, mesh.volSymDiff, want)
+			}
+		})
+	}
+}

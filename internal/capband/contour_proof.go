@@ -41,6 +41,42 @@ func ContourDisplacement(walks []survey2d.SideWalk, joins []capcontour.Join, d, 
 	return delta, nil
 }
 
+// AmountsContourDisplacement is ContourDisplacement for a band whose walk i
+// moves by its own amount amounts[i] (docs/draft-design.md §10.2): a nonzero
+// amount is read over its span within dDelta, and a zero amount is a wall the
+// band leaves in place (WallRadius), read at exactly zero.
+func AmountsContourDisplacement(walks []survey2d.SideWalk, joins []capcontour.Join, amounts []float64, dDelta, tol float64) (float64, error) {
+	if len(amounts) != len(walks) {
+		return 0, ErrContourUnbounded
+	}
+	for i, w := range walks {
+		if w.IsCircular() {
+			if _, err := WallRadius(w, amounts[i], tol); err != nil {
+				return 0, err
+			}
+		}
+	}
+	delta, ok := capcontour.AmountsDisplacement(walks, joins, amounts, dDelta)
+	if !ok {
+		return 0, ErrContourUnbounded
+	}
+	return delta, nil
+}
+
+// WallCircleDisplacement is WholeCircleDisplacement for a full circle a draft
+// offsets by d or, at d == 0, leaves in place: the kept circle's contour is
+// its own recorded circle, read with no span.
+func WallCircleDisplacement(w survey2d.SideWalk, d, dDelta, tol float64) (float64, error) {
+	if d != 0 {
+		return WholeCircleDisplacement(w, d, dDelta, tol)
+	}
+	radius, ok := OffsetRadiusSpan(w, 0, 0)
+	if !ok {
+		return 0, ErrContourUnbounded
+	}
+	return proofbound.IntervalFloatError(radius, w.Radius), nil
+}
+
 // WholeCircleDisplacement bounds the cap contour of a cornerless full circle.
 func WholeCircleDisplacement(w survey2d.SideWalk, d, dDelta, tol float64) (float64, error) {
 	held, err := BandRadius(w, d, tol)
