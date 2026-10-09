@@ -162,54 +162,16 @@ func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chain
 			`%w: Extend does not admit an operand carrying its own section displacement`, ErrUnsupported)
 	}
 	view := rcv.prism()
-	if view.reflected() || tl.reflected() {
-		return chainPayload{}, prismPayload{}, fmt.Errorf(`%w: Extend does not admit a reflected operand`, ErrUnsupported)
-	}
-	rcvAnalytic, err := prismProfileIsAnalytic(budget, view.profile)
-	if err != nil {
+	if err := prismcells.AdmitSurfacePair(budget, prismcells.SurfaceExtend,
+		surfacePrismOperand(view), surfacePrismOperand(tl)); err != nil {
 		return chainPayload{}, prismPayload{}, err
-	}
-	tlAnalytic, err := prismProfileIsAnalytic(budget, tl.profile)
-	if err != nil {
-		return chainPayload{}, prismPayload{}, err
-	}
-	if !rcvAnalytic || !tlAnalytic {
-		return chainPayload{}, prismPayload{}, fmt.Errorf(`%w: Extend admits only line, circle and arc segments`, ErrUnsupported)
-	}
-	// S4 uses the exact stored-float equality and literal zero of Trim.
-	worldNormalRcv := view.xform.ApplyDir(view.frame.N())
-	worldNormalTool := tl.xform.ApplyDir(tl.frame.N())
-	if worldNormalRcv != worldNormalTool {
-		return chainPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the receiver and tool do not sweep along the same generator, exactly`, ErrUnsupported)
-	}
-	worldOriginRcv := view.xform.Apply(view.frame.Origin())
-	worldOriginTool := tl.xform.Apply(tl.frame.Origin())
-	if worldOriginTool.Sub(worldOriginRcv).Dot(worldNormalRcv) != 0.0 {
-		return chainPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the receiver and tool do not sweep along the same generator, exactly`, ErrUnsupported)
-	}
-	if !prismCutZIntervalSpans(view, tl) {
-		return chainPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the tool does not span the receiver over the sweep parameter`, ErrUnsupported)
-	}
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(view), prismPlacementOf(tl))
-	if err != nil {
-		return chainPayload{}, prismPayload{}, err
-	}
-	if !reexpress.Identity {
-		return chainPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
-	}
-	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)
-	if err != nil {
-		return chainPayload{}, prismPayload{}, err
-	}
-	if !tlWhole {
-		return chainPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: every segment the tool consumes must span its entity's own natural domain`, ErrUnsupported)
 	}
 	return rcv, tl, nil
+}
+
+// Adapt a root payload to the neutral surface gate's input.
+func surfacePrismOperand(p prismPayload) prismcells.SurfaceOperand {
+	return prismcells.SurfaceOperand{Profile: p.profile, Placement: prismPlacementOf(p)}
 }
 
 // The recorded carrier helpers live in prismcells; these adapters serve root callers.
@@ -513,79 +475,9 @@ func admitTrimPair(budget *proofbound.WorkBudget, receiver, tool *Body) (rcv, tl
 			`%w: Trim's tool section is an open walk, which bounds no region to keep a side of`, ErrUnsupported)
 	}
 
-	// S2: neither operand's accumulated placement is a reflection.
-	if rcv.reflected() || tl.reflected() {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: Trim does not admit a reflected operand`, ErrUnsupported)
-	}
-
-	// S3: every segment of both operands' records is a LineSeg, CircleSeg or
-	// ArcSeg — the whole-scene TExact gate blinds on a free-form one.
-	rcvAnalytic, err := prismProfileIsAnalytic(budget, rcv.profile)
-	if err != nil {
+	if err := prismcells.AdmitSurfacePair(budget, prismcells.SurfaceTrim,
+		surfacePrismOperand(rcv), surfacePrismOperand(tl)); err != nil {
 		return prismPayload{}, prismPayload{}, err
-	}
-	tlAnalytic, err := prismProfileIsAnalytic(budget, tl.profile)
-	if err != nil {
-		return prismPayload{}, prismPayload{}, err
-	}
-	if !rcvAnalytic || !tlAnalytic {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: Trim admits only line, circle and arc segments; a free-form segment blinds sketch's whole-scene TExact gate`, ErrUnsupported)
-	}
-
-	// S4: the generators are the same, exactly — prism G3's test unchanged,
-	// Go == on the stored r3.Vec floats and a dot product against the
-	// literal zero (docs/prism-boolean-design.md §3.1).
-	worldNormalRcv := rcv.xform.ApplyDir(rcv.frame.N())
-	worldNormalTool := tl.xform.ApplyDir(tl.frame.N())
-	if worldNormalRcv != worldNormalTool {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the receiver and tool do not sweep along the same generator, exactly`, ErrUnsupported)
-	}
-	worldOriginRcv := rcv.xform.Apply(rcv.frame.Origin())
-	worldOriginTool := tl.xform.Apply(tl.frame.Origin())
-	if worldOriginTool.Sub(worldOriginRcv).Dot(worldNormalRcv) != 0.0 {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the receiver and tool do not sweep along the same generator, exactly`, ErrUnsupported)
-	}
-
-	// S5: for Trim, the tool's section is one closed hole-free loop.
-	if len(tl.profile.Holes) != 0 {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: Trim's tool section carries a hole, whose interior this evaluator cannot yet distinguish as a side`, ErrUnsupported)
-	}
-
-	// S6: the tool spans the receiver over the sweep parameter — the
-	// identical relation Cut's own G5 states (prism_boolean_nesting.go).
-	if !prismCutZIntervalSpans(rcv, tl) {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the tool does not span the receiver over the sweep parameter`, ErrUnsupported)
-	}
-
-	// S7's remaining two clauses: the re-expression is the identity in the
-	// stored floats, and every segment either operand's own record consumes
-	// spans its entity's natural domain. The section-displacement clause was
-	// already checked above, generically over either payload shape.
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcv), prismPlacementOf(tl))
-	if err != nil {
-		return prismPayload{}, prismPayload{}, err
-	}
-	if !reexpress.Identity {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
-	}
-	rcvWhole, err := trimProfileFullyWhole(budget, rcv.profile)
-	if err != nil {
-		return prismPayload{}, prismPayload{}, err
-	}
-	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)
-	if err != nil {
-		return prismPayload{}, prismPayload{}, err
-	}
-	if !rcvWhole || !tlWhole {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: every segment the receiver or tool consumes must span its entity's own natural domain`, ErrUnsupported)
 	}
 
 	return rcv, tl, nil
@@ -792,57 +684,9 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 		return prismPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: Split does not admit an operand carrying its own section displacement`, ErrUnsupported)
 	}
-	if rcv.reflected() || tl.reflected() {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(`%w: Split does not admit a reflected operand`, ErrUnsupported)
-	}
-	rcvAnalytic, err := prismProfileIsAnalytic(budget, rcv.profile)
-	if err != nil {
+	if err := prismcells.AdmitSurfacePair(budget, prismcells.SurfaceSplit,
+		surfacePrismOperand(rcv), surfacePrismOperand(tl)); err != nil {
 		return prismPayload{}, prismPayload{}, err
-	}
-	tlAnalytic, err := prismProfileIsAnalytic(budget, tl.profile)
-	if err != nil {
-		return prismPayload{}, prismPayload{}, err
-	}
-	if !rcvAnalytic || !tlAnalytic {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: Split admits only line, circle and arc segments`, ErrUnsupported)
-	}
-	// S4 is the same exact stored-float comparison as Trim and prism G3.
-	worldNormalRcv := rcv.xform.ApplyDir(rcv.frame.N())
-	worldNormalTool := tl.xform.ApplyDir(tl.frame.N())
-	if worldNormalRcv != worldNormalTool {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the target and tool do not sweep along the same generator, exactly`, ErrUnsupported)
-	}
-	worldOriginRcv := rcv.xform.Apply(rcv.frame.Origin())
-	worldOriginTool := tl.xform.Apply(tl.frame.Origin())
-	if worldOriginTool.Sub(worldOriginRcv).Dot(worldNormalRcv) != 0.0 {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the target and tool do not sweep along the same generator, exactly`, ErrUnsupported)
-	}
-	if !prismCutZIntervalSpans(rcv, tl) {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the tool does not span the target over the sweep parameter`, ErrUnsupported)
-	}
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcv), prismPlacementOf(tl))
-	if err != nil {
-		return prismPayload{}, prismPayload{}, err
-	}
-	if !reexpress.Identity {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: the target and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
-	}
-	rcvWhole, err := trimProfileFullyWhole(budget, rcv.profile)
-	if err != nil {
-		return prismPayload{}, prismPayload{}, err
-	}
-	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)
-	if err != nil {
-		return prismPayload{}, prismPayload{}, err
-	}
-	if !rcvWhole || !tlWhole {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: every segment the target or tool consumes must span its entity's own natural domain`, ErrUnsupported)
 	}
 	return rcv, tl, nil
 }
@@ -994,11 +838,11 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	}
 
 	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
-	rcvAnalytic, err := prismProfileIsAnalytic(budget, rcv.profile)
+	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcv.profile)
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
-	tlAnalytic, err := prismProfileIsAnalytic(budget, tl.profile)
+	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.profile)
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
@@ -1227,11 +1071,11 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	}
 
 	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
-	rcvAnalytic, err := prismProfileIsAnalytic(budget, rcvRev.profile)
+	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcvRev.profile)
 	if err != nil {
 		return pass(err)
 	}
-	tlAnalytic, err := prismProfileIsAnalytic(budget, tl.profile)
+	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.profile)
 	if err != nil {
 		return pass(err)
 	}

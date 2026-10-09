@@ -73,6 +73,17 @@ func ShiftedInterval(pa, pb Operand) (*big.Rat, *big.Rat, bool) {
 	return b0.Add(b0, shift), b1.Add(b1, shift), true
 }
 
+// CutZIntervalSpans compares the shifted tool interval against both target
+// endpoints exactly. A cap meeting the target endpoint is a valid span.
+func CutZIntervalSpans(target, tool Operand) bool {
+	t0, t1 := proofarith.FloatRat(target.Z0), proofarith.FloatRat(target.Z1)
+	z0, z1, ok := ShiftedInterval(target, tool)
+	if t0 == nil || t1 == nil || !ok {
+		return false
+	}
+	return z0.Cmp(t0) <= 0 && z1.Cmp(t1) >= 0
+}
+
 // UnionZIntervalMatches compares the exact shifted B interval to A's.
 func UnionZIntervalMatches(pa, pb Operand) bool {
 	a0, a1 := proofarith.FloatRat(pa.Z0), proofarith.FloatRat(pa.Z1)

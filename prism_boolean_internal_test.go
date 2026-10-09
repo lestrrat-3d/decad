@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -265,7 +266,7 @@ func TestPrismBooleanGateG5RequiresMatchingZInterval(t *testing.T) {
 // TestPrismBooleanGateG5ShiftIsExactRational covers G5's comparisons over
 // G3's shared-axis arm (§3.1): B's interval is lifted onto A's axis by the
 // exact rational shift, never by a float sum. Shown to fail: with
-// prismCutZIntervalSpans comparing the float sums tool.z0+shift and
+// CutZIntervalSpans comparing the float sums tool.z0+shift and
 // tool.z1+shift instead of the big.Rat lift, "a hair short refused" went red
 // (the float sum 15.6 + 0.4 rounds onto 16).
 func TestPrismBooleanGateG5ShiftIsExactRational(t *testing.T) {
@@ -287,7 +288,7 @@ func TestPrismBooleanGateG5ShiftIsExactRational(t *testing.T) {
 	t.Run("meeting caps admitted", func(t *testing.T) {
 		target := payload(frame, 0, 16)
 		tool := payload(offsetBy(t, -16), 0, 32)
-		require.True(t, prismCutZIntervalSpans(target, tool))
+		require.True(t, prismplacement.CutZIntervalSpans(prismPlacementOf(target), prismPlacementOf(tool)))
 	})
 
 	t.Run("a hair short refused", func(t *testing.T) {
@@ -297,7 +298,7 @@ func TestPrismBooleanGateG5ShiftIsExactRational(t *testing.T) {
 		require.Equal(t, 16.0, z1+shift, "premise: the float sum rounds onto the target's cap")
 		require.Negative(t, new(big.Rat).Add(proofarith.FloatRat(z1), proofarith.FloatRat(shift)).Cmp(big.NewRat(16, 1)),
 			"premise: the exact sum falls short of the target's cap")
-		require.False(t, prismCutZIntervalSpans(target, tool))
+		require.False(t, prismplacement.CutZIntervalSpans(prismPlacementOf(target), prismPlacementOf(tool)))
 	})
 
 	t.Run("union matches the shifted interval exactly", func(t *testing.T) {

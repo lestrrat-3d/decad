@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -168,7 +169,8 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 	if err != nil || !ok {
 		return stackedPrismPayload{}, false, err
 	}
-	if len(tool.profile.Holes) != 0 || !prismCutZIntervalSpans(outer, tool) {
+	if len(tool.profile.Holes) != 0 ||
+		!prismplacement.CutZIntervalSpans(prismPlacementOf(outer), prismPlacementOf(tool)) {
 		return stackedPrismPayload{}, false, nil
 	}
 	trimmed, err := prismProfileHasTrimmedCircularSource(budget, tool.profile)

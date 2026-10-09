@@ -141,7 +141,7 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 		if len(pb.profile.Holes) != 0 { // G6: the TOOL must be hole-free; the target's own holes carry through
 			return prismPayload{}, false, nil
 		}
-		if !prismCutZIntervalSpans(pa, pb) { // G5, §3.2's Cut row: the tool spans the target
+		if !prismplacement.CutZIntervalSpans(prismPlacementOf(pa), prismPlacementOf(pb)) { // G5, §3.2's Cut row
 			return prismPayload{}, false, nil
 		}
 	default:
@@ -313,11 +313,11 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, a, b *Body) (pa, pb pri
 	if !aok || !bok {
 		return prismPayload{}, prismPayload{}, false, nil
 	}
-	aAnalytic, err := prismProfileIsAnalytic(budget, pa.profile)
+	aAnalytic, err := prismcells.ProfileAnalytic(budget, pa.profile)
 	if err != nil {
 		return prismPayload{}, prismPayload{}, false, err
 	}
-	bAnalytic, err := prismProfileIsAnalytic(budget, pb.profile)
+	bAnalytic, err := prismcells.ProfileAnalytic(budget, pb.profile)
 	if err != nil {
 		return prismPayload{}, prismPayload{}, false, err
 	}
@@ -342,26 +342,6 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, a, b *Body) (pa, pb pri
 func admitPrismPair(a, b *Body) (pa, pb prismPayload, ok bool) {
 	pa, pb, ok, _ = admitPrismPairBudget(proofbound.NewWorkBudget(context.Background()), a, b)
 	return pa, pb, ok
-}
-
-// prismProfileIsAnalytic reports G4: every segment of every loop is a
-// LineSeg, CircleSeg or ArcSeg. A single free-form segment blinds sketch's
-// whole-scene TExact gate (§3.1's own reasoning), so the class excludes the
-// kind entirely rather than admitting "the free-form parts don't touch."
-func prismProfileIsAnalytic(budget *proofbound.WorkBudget, p ProfileRecord) (bool, error) {
-	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
-		for _, seg := range loop.Segments {
-			if err := budget.Step(); err != nil {
-				return false, err
-			}
-			switch seg.(type) {
-			case LineSeg, CircleSeg, ArcSeg:
-			default:
-				return false, nil
-			}
-		}
-	}
-	return true, nil
 }
 
 // prismMaxArrangementSegments bounds the private sketch arrangement before
