@@ -133,8 +133,7 @@ func SectionJoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk
 
 // WalkSegment records a trimmed line or concentric arc in the walk's sense.
 func WalkSegment(w survey2d.SideWalk, s, t float64, start, end Point, tol float64) (sectionrecord.CurveSegment, error) {
-	a := sectionrecord.Point2{U: start.U, V: start.V}
-	b := sectionrecord.Point2{U: end.U, V: end.V}
+	a, b := start, end
 	if !w.IsCircular() {
 		return sectionrecord.LineSeg{Start: a, End: b, TStart: 0, TEnd: 1}, nil
 	}

@@ -87,11 +87,10 @@ func OffsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 		return OpenChainOffset{}, err
 	}
 
-	pt := func(p Point) Point2 { return Point2{U: p.U, V: p.V} }
 	arcAt := func(j Join) CurveSegment {
 		// The connector winds CCW outward (s < 0) and CW inward (s > 0), as in
 		// BuildLoop.
-		return ArcSegment(Point2{U: j.VertU, V: j.VertV}, pt(j.PA), pt(j.PB), s < 0)
+		return ArcSegment(Point2{U: j.VertU, V: j.VertV}, j.PA, j.PB, s < 0)
 	}
 	var segs []CurveSegment
 	if joins[0].Arc {
@@ -102,22 +101,22 @@ func OffsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 			return OpenChainOffset{}, err
 		}
 		head, tail := joins[i], joins[i+1]
-		from, to := pt(head.M), pt(tail.M)
+		from, to := head.M, tail.M
 		if head.Arc {
-			from = pt(head.PB)
+			from = head.PB
 		}
 		if tail.Arc {
-			to = pt(tail.PA)
+			to = tail.PA
 		}
 		// A walk at an opening end may run past its own end to the rim cut;
 		// at an axis end or an interior corner OpenWalkConsumed reads as
 		// WalkConsumed does.
 		openStart := i == 0 && !start.Mirror
 		openEnd := i == m-1 && !end.Mirror
-		if OpenWalkConsumed(w, Point(from), Point(to), openStart, openEnd, tol) {
+		if OpenWalkConsumed(w, from, to, openStart, openEnd, tol) {
 			return OpenChainOffset{}, ErrDrop
 		}
-		seg, err := WalkSegment(w, s, t, Point(from), Point(to), tol)
+		seg, err := WalkSegment(w, s, t, from, to, tol)
 		if err != nil {
 			return OpenChainOffset{}, err
 		}
@@ -130,14 +129,14 @@ func OffsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 		return ChainEnd{Mirror: e.Mirror, Removed: e.Removed, Join: j}
 	}
 	out := OpenChainOffset{
-		Segs: segs, QStart: pt(joins[0].M), QEnd: pt(joins[m].M),
+		Segs: segs, QStart: joins[0].M, QEnd: joins[m].M,
 		Ends: [2]ChainEnd{chainEndOf(start, joins[0]), chainEndOf(end, joins[m])},
 	}
 	if joins[0].Arc {
-		out.QStart = pt(joins[0].PA)
+		out.QStart = joins[0].PA
 	}
 	if joins[m].Arc {
-		out.QEnd = pt(joins[m].PB)
+		out.QEnd = joins[m].PB
 	}
 	return out, nil
 }
