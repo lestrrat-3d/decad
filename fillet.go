@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
@@ -19,7 +20,6 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the fillet of docs/modify-design.md: Body.Fillet rounds the
@@ -48,10 +48,7 @@ import (
 
 // FilletOption configures Fillet. WithTangentChain is the one option a
 // fillet takes (docs/modify-reach-design.md §2).
-type FilletOption interface {
-	option.Interface
-	filletOption()
-}
+type FilletOption = modifyoption.FilletOption
 
 // filletTol is the closed-form degeneracy tolerance for the section rewrite:
 // two directions parallel within it are a smooth or cusped corner (S4), and an
@@ -143,7 +140,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	if err := refuseSheetOperand(b, "Fillet"); err != nil {
 		return nil, err
 	}
-	o, err := decodeFilletOptions(opts)
+	o, err := modifyoption.DecodeFillet(opts)
 	if err != nil {
 		return nil, err
 	}

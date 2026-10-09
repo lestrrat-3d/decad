@@ -73,7 +73,7 @@ The option constructors copy their selector inputs at the call boundary. The
 selectors resolve against the receiver during evaluation; resolved faces and
 topology indices are never retained.
 
-Each call decodes its options into a private record (`modify_options.go`):
+Each call decodes its options into a private record (`internal/modifyoption/`):
 `filletOpts{TangentChain}`, `chamferOpts{TangentChain, Asymmetric}` and
 `shellOpts{Sense, NoOpenings}`. A shell with openings states a removed-face
 query and a thickness; a shell with no openings states no selector, a

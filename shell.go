@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the shell of docs/modify-design.md §8: Body.Shell removes the
@@ -37,47 +37,26 @@ import (
 // docs/shell-opening-design.md's (shell_opening.go).
 
 // ShellOption configures Shell, including its wall sense.
-type ShellOption interface {
-	option.Interface
-	shellOption()
-}
-
-type shellOption struct{ option.Interface }
-
-func (shellOption) shellOption() {}
+type ShellOption = modifyoption.ShellOption
 
 // ShellSense is the wall sense of a shell (docs/modify-design.md §8): the
 // thickness is a magnitude and carries no sign (core §8.1), so which way the
 // wall grows is enumerated, not signed.
-type ShellSense int
+type ShellSense = modifyoption.ShellSense
 
 const (
 	// Inward grows the wall into the original solid; the outer skin does not
 	// move. It is the default — what "shell this box" means everywhere.
-	Inward ShellSense = iota
+	Inward ShellSense = modifyoption.Inward
 	// Outward grows the wall off the original solid; the original solid becomes
 	// the cavity.
-	Outward
+	Outward = modifyoption.Outward
 )
-
-// String renders the sense for diagnostics.
-func (s ShellSense) String() string {
-	switch s {
-	case Inward:
-		return "Inward"
-	case Outward:
-		return "Outward"
-	default:
-		return fmt.Sprintf("ShellSense(%d)", int(s))
-	}
-}
-
-type identShellSense struct{}
 
 // WithShellSense sets the wall sense (Inward or Outward). Without it the sense
 // is Inward (docs/modify-design.md §8).
 func WithShellSense(s ShellSense) ShellOption {
-	return shellOption{option.New(identShellSense{}, s)}
+	return modifyoption.WithShellSense(s)
 }
 
 // Shell removes the selected cap faces of a straight prism and lines the rest
@@ -168,7 +147,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if err := refuseSheetOperand(b, "Shell"); err != nil {
 		return nil, err
 	}
-	o, err := decodeShellOptions(opts)
+	o, err := modifyoption.DecodeShell(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +159,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	// SX1 (docs/modify-reach-design.md §2): WithNoOpenings keeps every face,
 	// so a selector naming faces to remove beside it names no single intent.
 	if o.NoOpenings && !nilSel {
-		return nil, errOptionConflict(`WithNoOpenings keeps every face, and a non-nil selector names faces to remove`)
+		return nil, modifyoption.ErrOptionConflict(`WithNoOpenings keeps every face, and a non-nil selector names faces to remove`)
 	}
 	tmm, tDelta, err := extent.MagnitudeInBounded(t, units.Length, units.Millimeter, "the shell thickness")
 	if err != nil {
