@@ -59,15 +59,6 @@ func (cp classBPair) xLocalOfY(u, v, z float64) [3]float64 {
 	return out
 }
 
-// yLocalOfX is xLocalOfY's inverse.
-func (cp classBPair) yLocalOfX(x [3]float64) [3]float64 {
-	var out [3]float64
-	for i := range out {
-		out[i] = cp.sign[i]*x[cp.axis[i]] + 0
-	}
-	return out
-}
-
 // tryClassB attempts op over the pair. ok=false (err nil) is a silent miss:
 // the caller takes the mesh path unchanged. A non-nil err is a refusal past
 // the point of no return (prism-boolean §3.4) or a cancellation. Cut takes X
@@ -480,106 +471,6 @@ func classBAcross(f brepFace, e brepEmbed, d int) (classBSlab, bool) {
 	}, d)
 }
 
-// classBSlabFace is one slab face rebuilt in g: its region before Y's
-// section is cut from it, its level along g's normal, the level's
-// displacement, the face's own section displacement, its outward flag
-// against g's normal, and the sweep of the wall it restates (zero for a
-// cap; general-boolean §4.2).
-type classBSlabFace struct {
-	region     ProfileRecord
-	level      float64
-	levelDelta float64
-	delta      float64
-	outward    bool
-	sweep      r3.Vec
-}
-
-// classBSlabInG restates a slab face in g. A straight wall becomes the
-// rectangle it sweeps, whose outer edges lie on its own sweep's ends and so
-// move with those levels' displacements, and records that sweep; a planar
-// face keeps its own sweep. A planar face's region maps through the signed
-// permutation between its frame and g; where that map reverses the plane's
-// orientation, the loops are walked back (rewindLoop), as a reflected record
-// is.
-func classBSlabInG(budget *proofbound.WorkBudget, cp classBPair, s classBSlab) (classBSlabFace, error) {
-	f := cp.x.faces[s.Face]
-	e := cp.embeds[s.Face]
-	toG := func(u, v, z float64) [3]float64 { return cp.yLocalOfX(e.Canon(u, v, z)) }
-	out := classBSlabFace{
-		level:      cp.sign[2]*s.Level + 0,
-		levelDelta: s.LevelDelta,
-		outward:    float64(s.Outward)*cp.sign[2] > 0,
-		sweep:      f.sweep,
-	}
-	if !f.planar() {
-		out.sweep = f.frame.N()
-		line, ok := f.wall.(LineSeg)
-		if !ok {
-			return classBSlabFace{}, fmt.Errorf(`%w: a slab wall of the through-nesting reach is not a line`, ErrDegenerate)
-		}
-		var corners []Point2
-		for _, c := range [][3]float64{
-			{line.Start.U, line.Start.V, f.z0}, {line.End.U, line.End.V, f.z0},
-			{line.End.U, line.End.V, f.z1}, {line.Start.U, line.Start.V, f.z1},
-		} {
-			p := toG(c[0], c[1], c[2])
-			corners = append(corners, Point2{U: p[0], V: p[1]})
-		}
-		out.region = ProfileRecord{Outer: classBRectLoop(corners)}
-		out.delta = max(f.z0Delta, f.z1Delta)
-		return out, nil
-	}
-	origin, pu, pv := toG(0, 0, f.z0), toG(1, 0, f.z0), toG(0, 1, f.z0)
-	det := (pu[0]-origin[0])*(pv[1]-origin[1]) - (pu[1]-origin[1])*(pv[0]-origin[0])
-	mapPoint := func(p Point2) (Point2, error) { //nolint:unparam // rewindLoop's point map may fail; this exact one never does
-		q := toG(p.U, p.V, f.z0)
-		return Point2{U: q[0], V: q[1]}, nil
-	}
-	mapLoop := func(loop LoopRecord) (LoopRecord, error) {
-		if det < 0 {
-			rewound, _, err := prismcells.RewindLoop(budget, loop, mapPoint)
-			return rewound, err
-		}
-		segs := make([]CurveSegment, len(loop.Segments))
-		for i, seg := range loop.Segments {
-			if err := budget.Step(); err != nil {
-				return LoopRecord{}, err
-			}
-			switch sg := seg.(type) {
-			case LineSeg:
-				sg.Start, _ = mapPoint(sg.Start)
-				sg.End, _ = mapPoint(sg.End)
-				segs[i] = sg
-			case ArcSeg:
-				sg.Center, _ = mapPoint(sg.Center)
-				sg.Start, _ = mapPoint(sg.Start)
-				sg.End, _ = mapPoint(sg.End)
-				segs[i] = sg
-			case CircleSeg:
-				sg.Center, _ = mapPoint(sg.Center)
-				segs[i] = sg
-			default:
-				return LoopRecord{}, fmt.Errorf(`%w: a %T segment has no class-B face map`, ErrUnsupported, seg)
-			}
-		}
-		return LoopRecord{Segments: segs}, nil
-	}
-	outer, err := mapLoop(f.region.Outer)
-	if err != nil {
-		return classBSlabFace{}, err
-	}
-	out.region = ProfileRecord{Outer: outer}
-	for _, hole := range f.region.Holes {
-		mapped, err := mapLoop(hole)
-		if err != nil {
-			return classBSlabFace{}, err
-		}
-		out.region.Holes = append(out.region.Holes, mapped)
-	}
-	out.delta = f.delta
-	return out, nil
-}
-
 // buildClassB assembles op's result (§4) over the reach, in g. Each slab face
 // becomes a planar face in g carrying Y's section as a new hole, its region
 // the perpendicular-face scene's answer (§5): prism-boolean's clean-nesting
@@ -599,20 +490,25 @@ func classBSlabInG(budget *proofbound.WorkBudget, cp classBPair, s classBSlab) (
 //   - Intersect is Y's section swept over the inside interval: a prism.
 func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, reach classBThrough) (featurePayload, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	slabs := make([]classBSlabFace, len(reach.slabs))
+	slabs := make([]classbgeom.SlabFace, len(reach.slabs))
 	for i, s := range reach.slabs {
-		face, err := classBSlabInG(budget, cp, s)
+		f := cp.x.faces[s.Face]
+		face, err := classbgeom.RestateSlabFace(budget, classbgeom.SlabFaceInput{
+			Region: f.region, Wall: f.wall, Z0: f.z0, Z1: f.z1,
+			Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Delta: f.delta,
+			Sweep: f.sweep, Normal: f.frame.N(),
+		}, cp.embeds[s.Face], cp.axis, cp.sign, s)
 		if err != nil {
 			return nil, false, err
 		}
-		region, matched, err := classBPerpendicularRegion(ctx, cp, face.region)
+		region, matched, err := classBPerpendicularRegion(ctx, cp, face.Region)
 		if err != nil || !matched {
 			return nil, false, err
 		}
-		face.region = region
+		face.Region = region
 		slabs[i] = face
 	}
-	if len(slabs) == 2 && slabs[1].level < slabs[0].level {
+	if len(slabs) == 2 && slabs[1].Level < slabs[0].Level {
 		slabs[0], slabs[1] = slabs[1], slabs[0]
 	}
 	// The interval of [a, b] inside X, each end with its displacement.
@@ -622,14 +518,14 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 	var outside [][2]end
 	switch {
 	case len(slabs) == 2:
-		inside = [2]end{{slabs[0].level, slabs[0].levelDelta}, {slabs[1].level, slabs[1].levelDelta}}
+		inside = [2]end{{slabs[0].Level, slabs[0].LevelDelta}, {slabs[1].Level, slabs[1].LevelDelta}}
 		outside = [][2]end{{a, inside[0]}, {inside[1], b}}
-	case slabs[0].outward:
+	case slabs[0].Outward:
 		// Outward +N: the material lies below the face.
-		inside = [2]end{a, {slabs[0].level, slabs[0].levelDelta}}
+		inside = [2]end{a, {slabs[0].Level, slabs[0].LevelDelta}}
 		outside = [][2]end{{inside[1], b}}
 	default:
-		inside = [2]end{{slabs[0].level, slabs[0].levelDelta}, b}
+		inside = [2]end{{slabs[0].Level, slabs[0].LevelDelta}, b}
 		outside = [][2]end{{a, inside[0]}}
 	}
 	if op == meshbool.OpIntersect {
@@ -649,9 +545,9 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 		out.faces = append(out.faces, f)
 	}
 	for _, s := range slabs {
-		region := s.region
-		out.faces = append(out.faces, brepFace{frame: cp.g, region: &region, outward: s.outward, sweep: s.sweep,
-			z0: s.level, z1: s.level, z0Delta: s.levelDelta, z1Delta: s.levelDelta, delta: s.delta})
+		region := s.Region
+		out.faces = append(out.faces, brepFace{frame: cp.g, region: &region, outward: s.Outward, sweep: s.Sweep,
+			z0: s.Level, z1: s.Level, z0Delta: s.LevelDelta, z1Delta: s.LevelDelta, delta: s.Delta})
 	}
 	walls := func(loop LoopRecord, lo, hi end) {
 		for _, seg := range loop.Segments {
@@ -674,7 +570,7 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 		walls(hole, inside[0], inside[1])
 		if len(slabs) == 1 {
 			// The floor faces back up the hole: outward toward the open end.
-			if slabs[0].outward {
+			if slabs[0].Outward {
 				addCap(inside[0], true)
 			} else {
 				addCap(inside[1], false)
@@ -684,10 +580,10 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 		for _, part := range outside {
 			walls(section.Outer, part[0], part[1])
 		}
-		if len(slabs) == 2 || !slabs[0].outward {
+		if len(slabs) == 2 || !slabs[0].Outward {
 			addCap(a, false)
 		}
-		if len(slabs) == 2 || slabs[0].outward {
+		if len(slabs) == 2 || slabs[0].Outward {
 			addCap(b, true)
 		}
 	default:
@@ -695,24 +591,6 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 	}
 	out.assignRoles()
 	return out, true, nil
-}
-
-// classBRectLoop is the counter-clockwise loop through four corners given in
-// either winding.
-func classBRectLoop(c []Point2) LoopRecord {
-	area := 0.0
-	for i := range c {
-		j := (i + 1) % len(c)
-		area += c[i].U*c[j].V - c[j].U*c[i].V
-	}
-	if area < 0 {
-		c[1], c[3] = c[3], c[1]
-	}
-	var loop LoopRecord
-	for i := range c {
-		loop.Segments = append(loop.Segments, LineSeg{Start: c[i], End: c[(i+1)%len(c)], TStart: 0, TEnd: 1})
-	}
-	return loop
 }
 
 // classBPerpendicularRegion is the perpendicular-face scene (§5) of one slab
