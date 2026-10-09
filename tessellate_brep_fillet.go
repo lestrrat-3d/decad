@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -71,7 +72,7 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 		return err
 	}
 	if len(bc.curved) > 0 {
-		rIv, err := filletRadius(bc.band.setback)
+		rIv, err := filletband.RadiusInterval(bc.band.setback.dc, bc.band.setback.dcDelta)
 		if err != nil {
 			return err
 		}
