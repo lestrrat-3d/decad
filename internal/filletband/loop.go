@@ -47,6 +47,8 @@ const (
 	Tangent
 	// Reflex is LF6: a reflex corner of F's region.
 	Reflex
+	// CurvedMiter is LF8: a sharp convex corner involving a circular walk.
+	CurvedMiter
 )
 
 // Loop is ℓ as the band reads it: its walks, and Corners[k] the class of the

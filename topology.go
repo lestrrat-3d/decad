@@ -111,6 +111,9 @@ type Arc3 = surfacegeom.Arc3
 // Ellipse3 is an elliptical arc edge's geometry.
 type Ellipse3 = surfacegeom.Ellipse3
 
+// FilletMiter3 is the intersection edge of two analytic fillet patches.
+type FilletMiter3 = surfacegeom.FilletMiter3
+
 // NURBSCurve is a free-form edge's geometry.
 type NURBSCurve = surfacegeom.NURBSCurve
 

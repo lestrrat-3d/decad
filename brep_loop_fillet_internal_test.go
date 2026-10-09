@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -1064,45 +1063,156 @@ func TestBrepLoopFilletBoundFixture(t *testing.T) {
 	requireCentroidPi(t, placed.centroid, mBody, v, [3]*big.Rat{q(1000000, 1), q(1000000, 1), q(1000000, 1)})
 }
 
+// internalSemicircularBite builds a plate whose top loop has two sharp
+// line-arc corners.
+func internalSemicircularBite(t *testing.T) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	var pts []*sketch.Point
+	for _, c := range [][2]float64{{0, 0}, {40, 0}, {40, 20}, {25, 20}, {15, 20}, {0, 20}} {
+		p := s.CreatePoint(c[0], c[1])
+		s.Fix(p)
+		pts = append(pts, p)
+	}
+	centre := s.CreatePoint(20, 20)
+	s.Fix(centre)
+	s.CreateLine(pts[0], pts[1])
+	s.CreateLine(pts[1], pts[2])
+	s.CreateLine(pts[2], pts[3])
+	s.CreateArc(centre, pts[4], pts[3])
+	s.CreateLine(pts[4], pts[5])
+	s.CreateLine(pts[5], pts[0])
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
+	t.Parallel()
+	body := internalSemicircularBite(t)
+	top := planarBodyFace(t, body, routeEZ, r3.NewVec(0, 0, 10))
+	out, _ := filletSelection(t, body, loopQuery(top.Loops()[0]), 1, 1)
+	// At offset t the inset section is a rectangle less the circular bite.
+	// Integrate the strip against the quarter-circle height derivative. This
+	// reference uses the actual offset section, not the filletband formulas.
+	const steps = 16384
+	removed := 0.0
+	for i := range steps {
+		phi := (float64(i) + 0.5) * math.Pi / (2 * steps)
+		offset := 1 - math.Cos(phi)
+		a := 5 + offset
+		bite := math.Pi*a*a/2 - offset*math.Sqrt(a*a-offset*offset) - a*a*math.Asin(offset/a)
+		inset := (40-2*offset)*(20-2*offset) - bite
+		strip := 800 - 25*math.Pi/2 - inset
+		removed += strip * math.Cos(phi) * math.Pi / (2 * steps)
+	}
+	wantVolume := 10*(800-25*math.Pi/2) - removed
+	require.LessOrEqual(t, math.Abs(out.volume.Value.Base()-wantVolume), out.volume.Bound.Base()+1e-5)
+	require.Less(t, out.volume.Bound.Base(), 0.01*wantVolume)
+	box, err := out.Bounds()
+	require.NoError(t, err)
+	require.LessOrEqual(t, box.Min.X-box.Bound.Base(), 0.0)
+	require.GreaterOrEqual(t, box.Max.X+box.Bound.Base(), 40.0)
+	require.LessOrEqual(t, box.Min.Y-box.Bound.Base(), 0.0)
+	require.GreaterOrEqual(t, box.Max.Y+box.Bound.Base(), 20.0)
+	report, err := out.doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(out)
+	require.NoError(t, err)
+	require.Equal(t, ValidityValid, reading.Validity.Outcome)
+	require.NotEqual(t, Unsound, reading.Status)
+	patches := requireFilletPatches(t, out, 5, 1)
+	straightArea, curvedArea := 0.0, 0.0
+	for i := range steps {
+		phi := (float64(i) + 0.5) * math.Pi / (2 * steps)
+		offset := 1 - math.Cos(phi)
+		foot := math.Sqrt(25 + 10*offset)
+		straightArea += (20 - offset - foot) * math.Pi / (2 * steps)
+		angle := math.Atan2(offset, foot)
+		curvedArea += (5 + offset) * (math.Pi - 2*angle) * math.Pi / (2 * steps)
+	}
+	straightCount, curvedCount := 0, 0
+	for _, patch := range patches {
+		switch surf := patch.Surface().(type) {
+		case Cylinder:
+			if math.Abs(surf.Axis.X) < 0.9 || math.Abs(surf.Origin.Y-20) > 2 {
+				continue
+			}
+			require.LessOrEqual(t, math.Abs(patch.area-straightArea), patch.areaBound+1e-5)
+			straightCount++
+		case Torus:
+			require.LessOrEqual(t, math.Abs(patch.area-curvedArea), patch.areaBound+1e-5)
+			curvedCount++
+		}
+	}
+	require.Equal(t, 2, straightCount)
+	require.Equal(t, 1, curvedCount)
+	var seams []*Edge
+	for _, edge := range out.Edges() {
+		if _, ok := edge.Curve().(FilletMiter3); ok {
+			seams = append(seams, edge)
+		}
+	}
+	require.Len(t, seams, 2)
+	wantLength := 0.0
+	for i := range steps {
+		phi := (float64(i) + 0.5) * math.Pi / (2 * steps)
+		offset := 1 - math.Cos(phi)
+		wantLength += math.Sqrt(1+25*math.Sin(phi)*math.Sin(phi)/(25+10*offset)) * math.Pi / (2 * steps)
+	}
+	for _, edge := range seams {
+		require.Greater(t, edge.length, 1.0)
+		require.Greater(t, edge.lengthBound, 0.0)
+		require.LessOrEqual(t, math.Abs(edge.length-wantLength), edge.lengthBound+1e-6)
+		require.InDelta(t, 9, edge.end.position.Z, 1e-8)
+		require.InDelta(t, 10, edge.start.position.Z, 1e-8)
+	}
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+	incidence := make([]uint8, len(mesh.vertices))
+	for ti, tri := range mesh.triangles {
+		var bit uint8
+		switch mesh.source[ti].Surface().(type) {
+		case Cylinder:
+			bit = 1
+		case Torus:
+			bit = 2
+		}
+		if bit == 0 {
+			continue
+		}
+		for _, vi := range tri {
+			incidence[vi] |= bit
+		}
+	}
+	checked := 0
+	for vi, mask := range incidence {
+		p := mesh.vertices[vi]
+		if mask != 3 || p.Z <= 9+1e-8 || p.Z >= 10-1e-8 || p.Y >= 20-1e-8 {
+			continue
+		}
+		offset := 20 - p.Y
+		require.InDelta(t, math.Sqrt(25+10*offset), math.Abs(p.X-20), 1e-8)
+		checked++
+	}
+	require.Positive(t, checked)
+}
+
 // TestBrepLoopFilletRefusals pins Table SF and the rows the fillet arm keeps
 // (§6, §8). Each refusal names its row and leaves the receiver live and the
-// document's body set unchanged: a plate with a semicircular bite in its
-// outer loop is SF1 at the bite's two non-tangent corners; part of P2's mouth
-// is SL1; P1's top loop with one vertical edge, which is one segment of its
+// document's body set unchanged: part of P2's mouth is SL1;
+// P1's top loop with one vertical edge, which is one segment of its
 // y = 0 wall's loop, is SL1; P8's top loop at r = 3
 // at r = 4 is SX6 (ErrDegenerate), the corner arcs' offsets crossing; P2's mouth at
 // r = 5 is SX7, the band reaching the pocket's floor; and a stacked receiver
-// whose section carries a displacement is SB1. Shown to fail with
-// filletCornerClass's left-turn arm admitting a circular walk: the bite then
-// reached Table CF's miter rate, which refused with no SF1 row.
+// whose section carries a displacement is SB1.
 func TestBrepLoopFilletRefusals(t *testing.T) {
 	t.Parallel()
-	bite := func(t *testing.T) *Body {
-		// The 40×20 plate whose y = 20 edge dips into a semicircle of radius 5
-		// about (20, 20), extruded 10: the arc meets the edge at right angles.
-		w := sketch.NewWorld()
-		s, err := w.CreateSketch(w.XY())
-		require.NoError(t, err)
-		var pts []*sketch.Point
-		for _, c := range [][2]float64{{0, 0}, {40, 0}, {40, 20}, {25, 20}, {15, 20}, {0, 20}} {
-			p := s.CreatePoint(c[0], c[1])
-			s.Fix(p)
-			pts = append(pts, p)
-		}
-		centre := s.CreatePoint(20, 20)
-		s.Fix(centre)
-		s.CreateLine(pts[0], pts[1])
-		s.CreateLine(pts[1], pts[2])
-		s.CreateLine(pts[2], pts[3])
-		s.CreateArc(centre, pts[4], pts[3])
-		s.CreateLine(pts[4], pts[5])
-		s.CreateLine(pts[5], pts[0])
-		_, err = s.Solve(t.Context())
-		require.NoError(t, err)
-		body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
-		require.NoError(t, err)
-		return body
-	}
 	pocket := func(t *testing.T) *Body {
 		_, body := internalRouteEPocket(t)
 		return body
@@ -1135,7 +1245,6 @@ func TestBrepLoopFilletRefusals(t *testing.T) {
 		is   error
 		want []string
 	}{
-		{"a semicircular bite", bite, topLoop(10), 1, ErrUnsupported, []string{"loop-fillet SF1", "(25, 20)"}},
 		{"a contour that crosses", func(t *testing.T) *Body { return internalRoundedPlate(t) }, topLoop(20), 4, ErrDegenerate,
 			[]string{"no regular cap contour"}},
 		{"a band reaching the floor", pocket, mouth, 5, ErrUnsupported, []string{"modify-reach SX7", "the fillet band"}},
@@ -1144,30 +1253,6 @@ func TestBrepLoopFilletRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			body := tc.body(t)
-			if tc.name == "a semicircular bite" {
-				pp, ok := body.payload.(prismPayload)
-				require.True(t, ok)
-				walk, walkErr := oneLoopCornerLoop(proofbound.NewWorkBudget(t.Context()), pp.profile.Outer,
-					freeform.NewFreeformWork())
-				require.NoError(t, walkErr)
-				found := false
-				for k, cur := range walk.walks {
-					if cur.StartU != 25 || cur.StartV != 20 {
-						continue
-					}
-					prev := walk.walks[(k+len(walk.walks)-1)%len(walk.walks)]
-					point, pointOK := filletband.CurvedMiterPoint(prev, cur, 1, 0.5, 25, 20)
-					require.True(t, pointOK)
-					u, _ := point[0].Lo.Float64()
-					v, _ := point[1].Lo.Float64()
-					require.InDelta(t, 20+math.Sqrt(30), u, 1e-8)
-					require.InDelta(t, 19.5, v, 1e-8)
-					_, lengthOK := filletband.CurvedMiterLength(prev, cur, 1)
-					require.True(t, lengthOK)
-					found = true
-				}
-				require.True(t, found)
-			}
 			before := body.doc.Bodies()
 			_, err := body.Fillet(t.Context(), edgesQuery(tc.sel(t, body)), units.Millimeters(tc.r))
 			require.ErrorIs(t, err, tc.is)

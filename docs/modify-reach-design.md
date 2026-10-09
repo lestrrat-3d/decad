@@ -453,7 +453,7 @@ LF) on a prism's cap loop (its RF3) and on a brep's planar-face loop:
 | one centre point after an exact-radius inward arc collapses (LF9) | `Sphere`, radius `r`, with a cap pole |
 | a reflex corner's connector arc | horn `Torus`, major = minor = `r`, about the corner |
 | a line–line miter | no patch: the two cylinders meet along an `Ellipse3` |
-| a line–circle or circle–circle miter, not tangent | refused (loop-fillet SF1) |
+| a regular line–circle or circle–circle miter, not tangent | `FilletMiter3` joins the two pipes; corner allowances bound mass, area and mesh deviation |
 
 The rolling ball never rests at a miter point, so no sphere is swept there:
 the two tubes meet along the ellipse in the corner's bisector plane, and a

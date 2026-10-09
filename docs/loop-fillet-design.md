@@ -72,7 +72,7 @@ yields one patch or one edge:
 | **LF5** | a G1 join (a line tangent to an arc, or two tangent arcs), route L's dead-zone rule | no patch: the two pipes share a meridian | `Arc3`, the quarter circle of radius `r` in the plane through the join normal to `ℓ`, from the join vertex at `sideZ` to the contour foot `v + r·n̂` at `L_F` |
 | **LF6** | a reflex corner of `F`'s region with turn `ψ` (a hole or pocket mouth's corner, a square boss root's corner) | `Torus{Center: the corner at sideZ; Axis: F's normal; Major: r; Minor: r}`, the horn torus whose tube runs from the connector arc of radius `r` at `L_F` to the apex on its own axis at `sideZ`, over azimuth `ψ`; both joins to the neighbouring patches are G1 | two LF5 `Arc3` meridians, at the connector arc's two ends `pA`, `pB` |
 | **LF7** | a whole circle | LF2 or LF3 over `2π`; two `Circle3` edges and no seam | — |
-| **LF8** | a convex corner where a straight walk meets a circular one, or two circular walks meet, not tangent | refused, SF1 | — |
+| **LF8** | a sharp convex corner involving a circular walk | no patch: the two analytic pipes meet along their intersection | `FilletMiter3` follows the proven offset-foot locus from the side vertex to the cap foot; SF1 refuses a fold or an unbounded locus |
 | **LF9** | inward open arc with both recorded endpoints exactly at `r` and straight G1 neighbours | sphere from side arc to cap pole, bounded by two LF5 meridians (`docs/vertex-blend-design.md` §1) | three arcs |
 
 The sphere does not appear at a sharp convex corner. Reach §8.2 states a trimmed `Sphere` at a
@@ -100,10 +100,12 @@ At height `h` the offset corner of two lines lies on the bisector at distance
 `((u − r/sin(θ/2))·sin(θ/2))² + h² = r²` in bisector coordinates `(u, h)`:
 the ellipse of LF4, which is also the section of either cylinder by the
 bisector plane. A line–circle or circle–circle convex corner's foot locus is
-a conic in the plane (reach §8.3), and lifted by `t(h)` it is a space curve
-no `Curve` variant names and whose length and strip integrals (§5) are not
-polynomial in `t`; SF1 refuses it rather than publish a `Line3` or `Arc3`
-stand-in a first-order distance away.
+a conic in the plane (reach §8.3), and lifted by `t(h)` it is a space curve.
+`FilletMiter3` names that edge without replacing it with a chord or a NURBS.
+LF8 admits a regular offset locus. Its mass and patch area readings widen
+the polynomial strip result by certified corner allowances, and its mesh
+places each seam station on the offset intersection. The allowances may
+make the default verification tolerance report `Suspect`.
 
 `Ellipse3` is a new sealed `Curve` variant (api §4 extension, shipped in
 PR F-0): `type Ellipse3 struct { Center, Axis, Major r3.Vec; SemiMajor,
@@ -206,15 +208,15 @@ measures `h` that way.
 ### 5.1 Table CF — the strip coefficients
 
 Let `S(t)` be the strip between `ℓ` and `ℓ` offset `t` into `F`'s material,
-`0 ≤ t ≤ r`, in `F`'s plane-local `(u, v)`. For every admitted corner class
-its area and first moment are polynomials in `t`:
+`0 ≤ t ≤ r`, in `F`'s plane-local `(u, v)`. With LF4–LF7 corners, its area
+and first moment are polynomials in `t`:
 
 ```text
 A(t) = a₁·t + a₂·t²
 M(t) = ∫_{S(t)} (u, v) dA = m₁·t + m₂·t² + m₃·t³      (m₁, m₂, m₃ ∈ ℝ²)
 ```
 
-because every admitted corner's foot locus is affine in `t` (a line–line
+because each of those corners' foot loci is affine in `t` (a line–line
 miter moves along the bisector at rate `1/sin(θ/2)`, a G1 foot along the
 shared normal, a reflex foot along each wall's own normal; reach §8.3). The
 coefficients sum over the loop's pieces. A straight walk from `P` to `Q`
@@ -235,6 +237,13 @@ leaving walk's, `E_V` likewise.
 | **CF3** | circular walk, material outside | `β·R` | `+β/2` | `β·R·C + R²·E` | `+(β/2)·C + R·E` | `E/3` |
 | **CF4** | reflex corner (LF6) | 0 | `ψ/2` | 0 | `(ψ/2)·V` | `E_V/3` |
 | **CF5** | LF4 corner, LF5 join | 0 | 0 (its share is in `κ`) | 0 | 0 | 0 |
+
+At an LF8 corner, these coefficients describe the untrimmed walk pieces.
+The true strip differs only near the shared corner. A proven disk contains
+that difference at every offset: the miter foot's speed bounds its travel,
+and a circular connector either stays on a certified short arc or uses its
+entire offset circle as a fallback. `CurvedMiterMassAllowance` widens the
+strip's volume and moments by that disk's integrals.
 
 Derivations. CF1: `M = ∫₀^t [P·Λ(w) + τ·((ℓᵢ − κ₁w)² − κ₀²w²)/2 + ν·w·Λ(w)] dw`
 with `Λ(w) = ℓᵢ − (κ₀+κ₁)w`; the kite two walls overlap in at an LF4 corner
@@ -305,9 +314,9 @@ over `F.delta`, the walls trimmed) and the patches. Each patch publishes its
 own area with the bound of its coefficients' enclosure.
 
 Exactness: `π` appears in every `J_k` and every patch area, so a loop
-fillet's volume, area and centroid are never `Exact`; their bounds are the
-enclosures' reach, a few ulps on an axis-aligned loop at a millimetre
-radius. `F.delta` does not enter the volume or the first moment: the strip
+fillet's volume, area and centroid are never `Exact`. LF8 corner allowances
+can be much wider than rounding bounds and can exceed Verify's default
+tolerance. `F.delta` does not enter the volume or the first moment: the strip
 model reads the receiver's recorded loop, which the fillet denotes, and the
 rewritten faces enter only through `Body.Area()` and the per-face readings.
 
@@ -331,7 +340,9 @@ outward normal:
   `φ`.
 
 Every stationary point is isolated (a sinusoid has one per quarter), so no
-`ErrUnsupported` arises here. `ThroughAll`/`ToFace` read the same extents.
+`ErrUnsupported` arises for the baseline patches here. LF8 widens the
+maximum by the changed corner disk and uses existing boundary vertices as
+lower witnesses. `ThroughAll`/`ToFace` read the same extents.
 
 ## 6. Table SF — refusals and gate order
 
@@ -339,7 +350,7 @@ Modify §1's test picks every sentinel.
 
 | SF | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SF1** | a convex corner of the loop where a straight walk meets a circular one, or two circular walks meet, not tangent (LF8): a plate with a semicircular bite, a D-shaped boss rim | yes; its miter is a space curve no `Curve` names and its strip integrals are not polynomial | `ErrUnsupported`, naming the corner |
+| **SF1** | a corner whose exact turn disagrees with the offset contour's join, or an LF8 corner whose offset locus folds or cannot be bounded | no regular miter can be proved | `ErrUnsupported`, naming the corner |
 | **SF2** | `Face.NormalAt` at an LF6 apex vertex, which lies on the horn torus's own axis | the point exists; the surface normal there does not | `ErrDegenerate` (the survey samples interior points only) |
 
 Everything else is an existing row: SL1 (a partial loop outside the
@@ -390,21 +401,22 @@ A fillet band is meshed as `n_φ` strips between `n_φ + 1` rings. Ring `0` is
 the side contour (the trimmed wall's rim at `sideZ`, shared), ring `n_φ` the
 cap contour (`F`'s new loop, shared with `F`'s triangulation). Ring `k` is
 the loop offset by `t_k = r·(1 − cos φ_k)` at height `h_k = r·sin φ_k` from
-`sideZ` toward `F`, `φ_k = k·(π/2)/n_φ`, and its vertices are the AFFINE
-interpolation of the side ring's and cap ring's vertices at matched
-azimuths:
+`sideZ` toward `F`, `φ_k = k·(π/2)/n_φ`. Ordinary ring vertices interpolate
+affinely between the side and cap rings at matched azimuths:
 
 ```text
 ring_k[j] = side[j] + (t_k / r)·(cap[j] − side[j])   in (u, v), at z = sideZ − m·h_k
 ```
 
-This is exact for every admitted piece: a line's offset is affine in `t`, a
+This is exact outside LF8 corners: a line's offset is affine in `t`, a
 circle's foot moves along its radius, a line–line miter corner moves along
 the bisector, a G1 foot along the shared normal, and a reflex connector's
 ring is the arc of radius `t_k` about the apex (`side[j]` is the apex for
 every `j` of the connector). So every ring vertex lies on the denoted
 surface within `F.delta·t_k/r ≤ F.delta` plus the interpolation's rounding,
-which the vertex store carries.
+which the vertex store carries. At LF8, each seam station uses the proven
+offset-foot intersection at `t_k`; its chord gap is bounded by the seam's
+global speed and the meridian step.
 
 Counts: one count per walk shared by the trimmed wall, every ring and `F`'s
 contour (`chordCapBlendLoop`, with `n(w) = max(chordCount(w),
@@ -481,9 +493,7 @@ term unexercised. The volume's own bound
 is the enclosures' reach alone and cannot be made to fail by deleting one
 term, which the test records.
 
-Refusals: a plate with a semicircular bite on its outer loop, top loop →
-SF1 naming the two non-tangent corners; a partial loop outside the
-selected-chain route → SL1;
+Refusals: a partial loop outside the selected-chain route → SL1;
 P8's top loop at `r = 4` → SX6; the P2 mouth at `r = 5` → SX7;
 a partial revolve's cap loop → SX5; a stacked
 receiver whose section carries a displacement → SB1. Every refusal leaves the
@@ -503,18 +513,18 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
   be a first-order lie (sagitta up to `0.2·r`), a `NURBSCurve` would hold an
   irrational weight, and a `FacetedCurve` says the body holds chords where it
   holds a cylinder. api §4 is extended in F-0.
-- **Refuse non-tangent convex corners at circular walks (SF1).** No surveyed
-  part has one; the miter is a non-planar space curve and the strip integrals
-  lose their polynomial form. A later increment can enclose both.
+- **Admit a regular non-tangent convex corner at a circular walk (LF8).**
+  `FilletMiter3` names its pipe intersection. Certified corner allowances
+  enclose the difference from the polynomial strip and patch area formulas.
 - **Measure through the receiver's restored faces plus the strip integral,
   not through patch flux.** §5.3: no new surface integral, no `π`-phase
   Fourier sums, no chord-versus-locus term, and no `F.delta` in the volume.
 - **A prism receiver's loop fillet returns a brep body.** RF3: one band
   record, one reader set; its roles are BF1's, not B1's or BX3's. A caller
   reading `capStart` after a cap-loop fillet reads `face(k)` instead.
-- **Rings interpolate affinely between the side and cap rings.** §7.1: every
-  admitted piece's offset is affine in `t`, so no per-ring offset solve and
-  one displacement per band.
+- **Curved miter rings follow the offset intersection.** Other rings
+  interpolate affinely between the side and cap contours; LF8 seam stations
+  solve the actual offset locus at each meridian angle.
 - **STEP stays faceted until `step` ships `TOROIDAL_SURFACE` and `ELLIPSE`.**
   DF10, §12.
 - **Restored faces keep the rewritten record's displacements.**
@@ -554,17 +564,17 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
 - **Compute `V_body` from the rewritten record's faces plus a closed band
   region.** The restored record plus `σ·V_strip` is the same number with no
   displacement charge and no disk bookkeeping.
-- **Solve each tessellation ring's offset contour separately.** §7.1's
-  affine interpolation is exact for every admitted piece and carries one
-  displacement.
-- **Admit a line–circle convex corner by chording its miter.** SF1; a chord
-  chain is a `FacetedCurve`, and the strip area is not a polynomial.
+- **Solve each tessellation ring's entire offset contour separately.**
+  §7.1's affine interpolation still handles ordinary corners; LF8 solves
+  only the curved miter's offset intersection.
+- **Tag a line–circle miter as a chord.** The pipe intersection is a space
+  curve; `FilletMiter3` keeps its analytic identity and carries a chord bound
+  only when tessellated.
 - **Read `F.delta` into the volume bound.** The strip model reads the
   recorded loop; `F.delta` belongs to `F`'s own area and the cap-level
   vertices.
-- **Decide SF1 by comparing float tangents.** `capband.JoinIsG1` is exact
-  rational arithmetic; a float-parallel pair that is not exactly tangent is
-  SF1, as `OccupiedVolumeAdmission` already rules.
+- **Decide a tangent join by comparing float tangents.**
+  `capband.JoinIsG1` uses exact rational arithmetic on the recorded segments.
 
 ## 11. PR split
 
