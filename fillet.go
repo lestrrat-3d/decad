@@ -115,7 +115,9 @@ const filletTol = sectionaudit.Tolerance
 // cannot trim SL2, and an offset miter that folds or cannot be bounded is
 // SF1 (both ErrUnsupported).
 // A prism's complete cap loops take the same arm through its face view and
-// return a brep body (RF3). Any other
+// return a brep body (RF3). A single cap edge on a strictly convex straight
+// prism uses a bounded faceted cutter when that edge or its terminal walls
+// are oblique; the cutter and receiver commit atomically. Any other
 // receiver that is neither a prism nor a revolve is S3 (ErrUnsupported).
 //
 // A loop-filleted body publishes its volume, centroid, area, box and
@@ -249,6 +251,11 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 			// RF3 (docs/loop-fillet-design.md §3): a cap edge sends the
 			// prism through its brep face view. Route E, L or V then reads the
 			// whole selection (docs/vertex-blend-design.md §2).
+			if original, ok := b.payload.(prismPayload); ok {
+				if out, recognized, err := tryObliqueCapEdgeFillet(ctx, b, original, edges, rmm, rDelta); recognized {
+					return out, err
+				}
+			}
 			body, err := prismCapLoopFillet(ctx, d, pp, loopCall)
 			if err != nil {
 				return nil, err

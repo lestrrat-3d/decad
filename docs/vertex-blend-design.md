@@ -66,6 +66,17 @@ The selected wall ends at the band's side level. The unselected wall keeps
 its original reach and replaces its corner with that terminal arc. A chain
 with only one walk is route E's existing single-edge case.
 
+A single cap edge of a strictly convex, straight-sided prism has a second
+path when the edge or either terminal wall is oblique. A quarter-cylinder
+cutter extends beyond both cap and side planes, then the mesh boolean trims
+it against the prism's actual walls. This keeps the curved terminal cut on
+an oblique wall without restating that wall as an axis plane. The result is
+`Faceted`, with the boolean's mesh and measurement bounds. The admission
+requires one selected edge, no holes or recorded displacement, more than
+four radii of cap height and clearance from other section vertices, and
+terminal wall directions whose trim travels less than four radii along the
+selected edge. A failed contact proof leaves the receiver live.
+
 Two selected straight edges can meet on a swept wall whose loop is absent
 from the initial planar-face record. Route E restates that wall as a planar
 rectangle before route L looks for a partial loop. The partial-loop band then
@@ -129,6 +140,7 @@ loop-fillet terms.
 |---|---|
 | loops sharing an edge after the partition | SL1, `ErrUnsupported` |
 | selected straight edges sharing a vertex with no common planar-face loop after straight-wall restatement | SL1 or SB5, `ErrUnsupported` |
+| a single oblique prism cap edge outside the convex cutter admission, or a cutter whose boolean contact cannot be proved | route E's refusal or the boolean's `ErrUnsupported` |
 | an LF9 candidate with a circular neighbour or a non-G1 join | SF1, `ErrUnsupported` |
 | held radius `r` but either recorded endpoint has a different exact distance to the centre | `ErrUnsupported` |
 | recorded inward arc radius slightly above `r` but its residual is within `shellTol` | `ErrUnsupported`, naming the unequal radii |
@@ -152,6 +164,8 @@ radius-one circle. The record does not define exact spheres there.
 | same box, top loop and 4 vertical edges | 4 spheres; volume `15264 + 544π/3` |
 | same box, top loop and 2 vertical edges | 2 spheres and 2 ellipse seams |
 | same box, one straight top edge | route E brep; volume `15840 + 40π` |
+| trapezoid prism, one oblique top edge | faceted quarter-cylinder cut; volume bounds enclose `32400 − 53(1 − π/4)` |
+| trapezoid prism, horizontal top edge beside oblique walls | faceted quarter-cylinder cut; volume bounds enclose `32400 − 44(1 − π/4) − (28/45)(5/3 − π/2)` |
 | 40×40×10 plate with 20×10×5 pocket, floor loop and 4 vertical edges, `r=1.5` | 4 spheres; volume `15153 - 297π/8` |
 | cross-drilled 40×20×20 bar, all 12 straight edges, `r=2` | 8 spheres; volume `14848 + 308π/3` |
 | rounded plate P8, top loop over radius-3 side arcs, `r=3` | 4 spheres; volume `14416 + 207π`; tessellates |

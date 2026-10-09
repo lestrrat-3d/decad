@@ -1246,6 +1246,9 @@
 3	0.05	TestVertexBlendPocketFloor
 3	0.05	TestVertexBlendBoxPartialCornerSet
 3	0.05	TestVertexBlendTrapezoidRefusal
+3	0.05	TestVertexBlendObliqueTopEdge
+3	0.05	TestVertexBlendObliqueBottomEdge
+3	0.05	TestVertexBlendEdgeBesideObliqueWalls
 3	0.05	TestVertexBlendCrossFaceTwoEdgeCorner
 3	0.05	TestVertexBlendCrossFaceBrepCorner
 3	0.05	TestVertexBlendThreeEdgesAtOneBoxVertex

@@ -142,6 +142,8 @@
 //	  or stacked boolean result                               builds
 //	Fillet        complete prism cap loop(s), as a brep       builds
 //	  Fillet of single straight prism cap edges              builds
+//	  Fillet of one convex prism cap edge beside an oblique
+//	    wall or along an oblique line, as a faceted body       builds
 //	  Fillet of cap loops with independent straight edges    builds
 //	  loop fillet at a regular convex line-arc or arc-arc
 //	    corner, not tangent (LF8)                              builds
