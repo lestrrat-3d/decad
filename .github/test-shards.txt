@@ -1198,3 +1198,4 @@
 3	1.67	TestCoilFullTurnArcClosesLikeACircle
 4	6.56	TestCoilRimCurveBoundHoldsTheDenotedCircle
 1	0.74	TestCoilUnstitchCarriesTheRimCurveBound
+2	0.02	TestPrismMoverRecordRadiusReadsArcsTightly
