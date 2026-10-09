@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -37,24 +36,7 @@ import (
 // takes the mesh path with no error, as prism-boolean §4.4 states for an
 // unresolved topology.
 
-type ubCarrier = stackedbrep.Carrier
 type ubLoop = stackedbrep.Loop
-type ubWallKey = brepgeom.StackedWallKey
-type ubSeg3 = brepgeom.StackedWallSegment
-
-const (
-	ubPlane = stackedbrep.PlaneCarrier
-	ubLine  = stackedbrep.LineCarrier
-)
-
-// ubPieceKey names one swept piece of a curved or oblique wall by its
-// carrier, its two vertices and its sense.
-type ubPieceKey struct {
-	c        ubCarrier
-	from, to Point2
-	ccw      bool
-	closed   bool
-}
 
 // ubRef names one operand record: a region of one operand's slab.
 type ubRef struct {
@@ -472,27 +454,27 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 // every slab loop and horizontal face and recorded its junctions. A topology
 // the engine does not cover is brepgeom.ErrStackedWallMiss.
 func stackedBrepRecord(ctx context.Context, budget *proofbound.WorkBudget, geom *stackedbrep.Engine, levels []stackedUnionLevel, ref r3.Frame, xform r3.Transform, delta float64) (brepPayload, error) {
+	faceLevels := make([]stackedbrep.Level, len(levels))
+	for i, level := range levels {
+		faceLevels[i] = stackedbrep.Level{Held: level.held, Delta: level.delta}
+	}
+	faces, err := geom.AssembleFaces(faceLevels, ref, delta)
+	if err != nil {
+		return brepPayload{}, err
+	}
 	out := brepPayload{xform: xform}
-	for _, f := range geom.Faces {
-		faceRegion, err := geom.FaceRecord(f)
-		if err != nil {
-			return brepPayload{}, err
+	for _, f := range faces {
+		var region *ProfileRecord
+		if f.Region != nil {
+			p := ProfileRecord{Outer: f.Region.Outer, Holes: f.Region.Holes}
+			region = &p
 		}
-		region := ProfileRecord{Outer: faceRegion.Outer, Holes: faceRegion.Holes}
-		l := levels[f.Level]
-		out.faces = append(out.faces, brepFace{frame: ref, region: &region, outward: f.Outward,
-			z0: l.held, z1: l.held, z0Delta: l.delta, z1Delta: l.delta, delta: delta})
+		out.faces = append(out.faces, brepFace{
+			frame: f.Frame, region: region, outward: f.Outward, sweep: f.Sweep, wall: f.Wall,
+			z0: f.Z0, z1: f.Z1, z0Delta: f.Z0Delta, z1Delta: f.Z1Delta,
+			side0: f.Side0, side1: f.Side1, delta: f.Delta,
+		})
 	}
-	swept, err := stackedBrepSweptFaces(geom, levels, ref, delta)
-	if err != nil {
-		return brepPayload{}, err
-	}
-	out.faces = append(out.faces, swept...)
-	walls, err := stackedBrepWallFaces(geom, levels, ref, delta)
-	if err != nil {
-		return brepPayload{}, err
-	}
-	out.faces = append(out.faces, walls...)
 	// Modify §5's audit per planar face record (general-boolean §5):
 	// simplicity, orientation and nesting. It refuses; it admits nothing.
 	for _, f := range out.faces {
@@ -507,159 +489,6 @@ func stackedBrepRecord(ctx context.Context, budget *proofbound.WorkBudget, geom 
 	// The record must close by counting (§4.2).
 	if _, err := brepTopologyContext(ctx, out); err != nil {
 		return brepPayload{}, err
-	}
-	return out, nil
-}
-
-// stackedBrepSweptFaces builds every curved and oblique wall piece: each
-// slab's unit split at its vertices, the identical piece in consecutive slabs
-// joined into one face, with a vertex at the level between on either end
-// recorded as a split of that side line.
-func stackedBrepSweptFaces(geom *stackedbrep.Engine, levels []stackedUnionLevel, ref r3.Frame, delta float64) ([]brepFace, error) {
-	type run struct {
-		seg      CurveSegment
-		from, to Point2
-		closed   bool
-		k0, k1   int
-		splits   [2][]brepSplit
-	}
-	var runs []*run
-	byKey := map[ubPieceKey]*run{}
-	for k, loops := range geom.SlabLoops {
-		for _, loop := range loops {
-			for _, u := range loop.Units {
-				if u.Carrier.Kind == ubPlane {
-					continue
-				}
-				segs, err := geom.UnitSegments(u, loop.Closed, k)
-				if err != nil {
-					return nil, err
-				}
-				for _, seg := range segs {
-					w, err := boundarywalk.WalkOf(seg, nil)
-					if err != nil {
-						return nil, err
-					}
-					from, to := Point2{U: w.StartU + 0, V: w.StartV + 0}, Point2{U: w.EndU + 0, V: w.EndV + 0}
-					key := ubPieceKey{c: u.Carrier, from: from, to: to, ccw: u.CCW, closed: w.Closed}
-					if r, ok := byKey[key]; ok && r.k1 == k-1 {
-						// A vertex of the body at the level between, on either
-						// end, splits that side line there (§4.1).
-						if !w.Closed {
-							for side, p := range [2]Point2{from, to} {
-								if geom.HasEvent(p, k) {
-									r.splits[side] = append(r.splits[side], brepSplit{Z: levels[k].held, ZDelta: levels[k].delta})
-								}
-							}
-						}
-						r.k1 = k
-						continue
-					}
-					r := &run{seg: seg, from: from, to: to, closed: w.Closed, k0: k, k1: k}
-					runs = append(runs, r)
-					byKey[key] = r
-				}
-			}
-		}
-	}
-	out := make([]brepFace, 0, len(runs))
-	for _, r := range runs {
-		lo, hi := levels[r.k0], levels[r.k1+1]
-		out = append(out, brepFace{frame: ref, wall: r.seg, z0: lo.held, z1: hi.held,
-			z0Delta: lo.delta, z1Delta: hi.delta, side0: r.splits[0], side1: r.splits[1], delta: delta})
-	}
-	return out, nil
-}
-
-// stackedBrepWallFaces builds the planar faces of every axis-aligned carrier
-// plane and material side, each recording the stack axis as its sweep: every
-// slab's segment on it sweeps a rectangle whose edges are split at the body's
-// vertices, the edges two rectangles share cancel, and the rest chain into
-// the plane's loops. Counter-clockwise loops are one face each, and one
-// counter-clockwise loop with clockwise ones is one face with holes
-// (brepgeom.StackedWallRegions).
-func stackedBrepWallFaces(geom *stackedbrep.Engine, levels []stackedUnionLevel, ref r3.Frame, delta float64) ([]brepFace, error) {
-	pieces := map[ubWallKey]map[ubSeg3]struct{}{}
-	var order []ubWallKey
-	add := func(key ubWallKey, from, to [3]float64) error {
-		set, ok := pieces[key]
-		if !ok {
-			set = map[ubSeg3]struct{}{}
-			pieces[key] = set
-			order = append(order, key)
-		}
-		if _, dup := set[ubSeg3{From: from, To: to}]; dup {
-			return errUBMiss
-		}
-		if _, rev := set[ubSeg3{From: to, To: from}]; rev {
-			delete(set, ubSeg3{From: to, To: from})
-			return nil
-		}
-		set[ubSeg3{From: from, To: to}] = struct{}{}
-		return nil
-	}
-	for k, loops := range geom.SlabLoops {
-		z0, z1 := levels[k].held, levels[k+1].held
-		for _, loop := range loops {
-			for _, u := range loop.Units {
-				if u.Carrier.Kind != ubPlane {
-					continue
-				}
-				key := ubWallKey{Axis: u.Carrier.Axis, Level: u.Carrier.Level}
-				if u.Carrier.Axis == 0 {
-					key.Sign = 1
-					if u.To.V < u.From.V {
-						key.Sign = -1
-					}
-				} else {
-					key.Sign = -1
-					if u.To.U < u.From.U {
-						key.Sign = 1
-					}
-				}
-				at := func(p Point2, z float64) [3]float64 { return [3]float64{p.U + 0, p.V + 0, z} }
-				bottom := append([]Point2{u.From}, geom.CutsOnLine(u, k)...)
-				bottom = append(bottom, u.To)
-				for i := 0; i+1 < len(bottom); i++ {
-					if err := add(key, at(bottom[i], z0), at(bottom[i+1], z0)); err != nil {
-						return nil, err
-					}
-				}
-				if err := add(key, at(u.To, z0), at(u.To, z1)); err != nil {
-					return nil, err
-				}
-				top := append([]Point2{u.From}, geom.CutsOnLine(u, k+1)...)
-				top = append(top, u.To)
-				for i := len(top) - 1; i > 0; i-- {
-					if err := add(key, at(top[i], z1), at(top[i-1], z1)); err != nil {
-						return nil, err
-					}
-				}
-				if err := add(key, at(u.From, z1), at(u.From, z0)); err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-	var out []brepFace
-	for _, key := range order {
-		frame, embed, err := brepgeom.StackedWallFrame(ref, key)
-		if err != nil {
-			return nil, err
-		}
-		loops, err := brepgeom.ChainStackedWall(pieces[key], geom.LevelAt, geom.Events)
-		if err != nil {
-			return nil, err
-		}
-		regions, level, err := brepgeom.StackedWallRegions(embed, loops)
-		if err != nil {
-			return nil, err
-		}
-		for _, wallRegion := range regions {
-			region := ProfileRecord{Outer: wallRegion.Outer, Holes: wallRegion.Holes}
-			out = append(out, brepFace{frame: frame, region: &region, outward: true,
-				sweep: ref.N(), z0: level, z1: level, delta: delta})
-		}
 	}
 	return out, nil
 }
