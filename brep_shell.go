@@ -12,7 +12,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
@@ -45,14 +44,14 @@ type brepShellCall struct {
 }
 
 // throughFace is what Table TC reads one record face as.
-type throughFace int
+type throughFace = brepgeom.ThroughFace
 
 const (
-	throughCap      throughFace = iota // TC1: A's bottom or top
-	throughWall                        // TC2(a): a wall of A along k
-	throughHoleWall                    // TC2(a) claiming a segment of a hole of S
-	throughPierced                     // TC2(b): a planar wall of A across j ≠ k
-	throughTool                        // TC2(c): a wall of a through tool
+	throughCap      = brepgeom.ThroughCap      // TC1: A's bottom or top
+	throughWall     = brepgeom.ThroughWall     // TC2(a): a wall of A along k
+	throughHoleWall = brepgeom.ThroughHoleWall // TC2(a) claiming a segment of a hole of S
+	throughPierced  = brepgeom.ThroughPierced  // TC2(b): a planar wall of A across j ≠ k
+	throughTool     = brepgeom.ThroughTool     // TC2(c): a wall of a through tool
 )
 
 // throughCut is one Table TC reading of a record along reference axis k: the
@@ -101,7 +100,7 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 	// face's level is known.
 	var walls brepPrismWalls
 	work := freeform.NewFreeformWork()
-	holeKeys, err := throughHoleKeys(caps.section, work)
+	holeKeys, err := brepgeom.HoleWalkKeys(caps.section, work)
 	if err != nil {
 		return throughCut{}, "the section's hole walls have no walk", false, nil //nolint:nilerr // an unwalkable section is no reading
 	}
@@ -144,7 +143,8 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 			key := level{j: e.Axis[2], level: brepLevel(f, e)}
 			pierced[key] = append(pierced[key], fi)
 		default:
-			if !throughToolWallShape(f) {
+			if len(f.side0) != 0 || len(f.side1) != 0 || f.z0Delta != 0 || f.z1Delta != 0 ||
+				!classbgeom.NaturalRecord([]LoopRecord{{Segments: []CurveSegment{f.wall}}}) {
 				return throughCut{}, throughFaceReason(bp, fi, "is a swept face across the axis that is no unsplit, undisplaced tool wall over its natural range"), false, nil
 			}
 			tc.kinds[fi] = throughTool
@@ -171,11 +171,34 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 	}
 
 	// TC4 and TC5: the tools, read through the record's own pairing.
-	tools, reason, err := readThroughTools(ctx, bp, embeds, tc.kinds)
+	topo, err := brepTopologyContext(ctx, bp)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return throughCut{}, "", false, ctxErr
+		}
+		return throughCut{}, "the record does not pair its edges", false, nil
+	}
+	faces := make([]brepgeom.ThroughToolFace, len(bp.faces))
+	for i, f := range bp.faces {
+		faces[i] = brepgeom.ThroughToolFace{
+			Region: f.region, Z0: f.z0, Z1: f.z1, Outward: f.outward, Role: f.role,
+		}
+	}
+	reads, reason, err := brepgeom.ReadThroughTools(ctx,
+		&brepgeom.Topology{Uses: topo.uses, Edges: topo.edges, EdgeOf: topo.edgeOf, FaceUses: topo.faceUses},
+		faces, embeds, tc.kinds, bp.faces[0].frame)
 	if err != nil || reason != "" {
 		return throughCut{}, reason, false, err
 	}
-	tc.tools = tools
+	for _, read := range reads {
+		tc.tools = append(tc.tools, throughToolRead{
+			j: read.Axis, w0: read.LowerFace, w1: read.UpperFace,
+			loop0: read.LowerLoop, loop1: read.UpperLoop,
+			lo: read.Lo, hi: read.Hi, walls: read.Walls, frameEmb: read.FrameEmbed,
+			prism: prismPayload{profile: ProfileRecord{Outer: read.Outer},
+				frame: read.Frame, z0: read.Lo, z1: read.Hi, xform: bp.xform},
+		})
+	}
 	return tc, "", true, nil
 }
 
@@ -197,175 +220,6 @@ func throughCapsReason(bp brepPayload, embeds []brepEmbed, k int) string {
 // throughFaceReason names face fi of the record by its role.
 func throughFaceReason(bp brepPayload, fi int, what string) string {
 	return fmt.Sprintf("%s %s", bp.faces[fi].role, what)
-}
-
-// throughHoleKeys is every hole segment of the section, keyed as P5 keys a
-// wall.
-func throughHoleKeys(section ProfileRecord, work *freeform.FreeformWork) (map[brepgeom.WalkKey]struct{}, error) {
-	keys := map[brepgeom.WalkKey]struct{}{}
-	for _, hole := range section.Holes {
-		for _, seg := range hole.Segments {
-			w, err := boundarywalk.WalkOf(seg, work)
-			if err != nil {
-				return nil, err
-			}
-			keys[brepgeom.WalkKeyOf(w)] = struct{}{}
-		}
-	}
-	return keys, nil
-}
-
-// throughToolWallShape is TC2(c)'s and TC6's reading of one swept face's own
-// record: a line, an arc or a whole circle over its natural range, no side
-// splits, and neither level displaced.
-func throughToolWallShape(f brepFace) bool {
-	if len(f.side0) != 0 || len(f.side1) != 0 || f.z0Delta != 0 || f.z1Delta != 0 {
-		return false
-	}
-	return classbgeom.NaturalRecord([]LoopRecord{{Segments: []CurveSegment{f.wall}}})
-}
-
-// readThroughTools is TC4 and TC5: every tool wall's two rims pair, in the
-// record's topology, with one hole-loop segment of a pierced wall each; a
-// tool is one hole loop H of the pierced wall at the lower level whose every
-// segment pairs with a tool wall whose other rim pairs with one hole loop H'
-// of one pierced wall at the upper level, H' re-expressed into the lower
-// wall's frame equals H, and every hole loop and tool wall belongs to exactly
-// one tool. It returns the reason the reading fails, or "".
-func readThroughTools(ctx context.Context, bp brepPayload, embeds []brepEmbed, kinds []throughFace) ([]throughToolRead, string, error) {
-	topo, err := brepTopologyContext(ctx, bp)
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, "", ctxErr
-		}
-		return nil, "the record does not pair its edges", nil
-	}
-	type holeRef struct{ face, loop int }
-	type rimPair struct {
-		lower, upper holeRef
-		lowerSeg     int
-	}
-	partner := func(ui int) brepUse {
-		pair := topo.edges[topo.edgeOf[ui]]
-		if pair[0] == ui {
-			return topo.uses[pair[1]]
-		}
-		return topo.uses[pair[0]]
-	}
-	// Each tool wall's rims, read as the hole-loop segments they pair with.
-	rims := map[int]rimPair{}
-	for fi, kind := range kinds {
-		if kind != throughTool {
-			continue
-		}
-		f, e := bp.faces[fi], embeds[fi]
-		var lower, upper []brepUse
-		for _, ui := range topo.faceUses[fi] {
-			u := topo.uses[ui]
-			if !brepIsRim(u.Part) {
-				continue
-			}
-			o := partner(ui)
-			if o.Part != brepLoopSeg || o.Loop == 0 || kinds[o.Face] != throughPierced {
-				return nil, throughFaceReason(bp, fi, "is a swept face across the axis whose rim is no hole segment of a pierced wall"), nil
-			}
-			atZ0 := u.Part == brepRim0
-			if (e.Sign[2] > 0) == atZ0 {
-				lower = append(lower, o)
-			} else {
-				upper = append(upper, o)
-			}
-		}
-		if len(lower) != 1 || len(upper) != 1 || f.z0 == f.z1 {
-			return nil, throughFaceReason(bp, fi, "is a swept face across the axis that is not one tool wall between two pierced walls"), nil
-		}
-		rims[fi] = rimPair{
-			lower:    holeRef{face: lower[0].Face, loop: lower[0].Loop},
-			upper:    holeRef{face: upper[0].Face, loop: upper[0].Loop},
-			lowerSeg: lower[0].Seg,
-		}
-	}
-	// Group tool walls by the lower hole loop they leave from.
-	byLower := map[holeRef][]int{}
-	var order []holeRef
-	for fi := range kinds {
-		r, ok := rims[fi]
-		if !ok {
-			continue
-		}
-		if _, seen := byLower[r.lower]; !seen {
-			order = append(order, r.lower)
-		}
-		byLower[r.lower] = append(byLower[r.lower], fi)
-	}
-	usedHoles := map[holeRef]struct{}{}
-	ref := bp.faces[0].frame
-	var tools []throughToolRead
-	for _, lower := range order {
-		if err := ctx.Err(); err != nil {
-			return nil, "", err
-		}
-		walls := byLower[lower]
-		upper := rims[walls[0]].upper
-		w0, w1 := bp.faces[lower.face], bp.faces[upper.face]
-		e0, e1 := embeds[lower.face], embeds[upper.face]
-		hole := w0.region.Holes[lower.loop-1]
-		hole1 := w1.region.Holes[upper.loop-1]
-		segs := map[int]struct{}{}
-		for _, fi := range walls {
-			if rims[fi].upper != upper {
-				return nil, throughFaceReason(bp, fi, "is a tool wall that leaves one hole loop for another tool's"), nil
-			}
-			segs[rims[fi].lowerSeg] = struct{}{}
-		}
-		if len(segs) != len(hole.Segments) || len(walls) != len(hole.Segments) || len(hole1.Segments) != len(hole.Segments) {
-			return nil, throughFaceReason(bp, lower.face, "holds a hole loop whose segments do not each lead to one tool wall"), nil
-		}
-		mapped, ok := brepgeom.NewPrismMap(e1, e0).Loop(hole1)
-		if !ok || !brepgeom.LoopsEqual(hole, mapped) {
-			return nil, throughFaceReason(bp, upper.face, "holds a hole loop that is not the loop the tool leaves from"), nil
-		}
-		if brepOutwardSign(w0, e0) > 0 || brepOutwardSign(w1, e1) < 0 {
-			return nil, throughFaceReason(bp, lower.face, "is a pierced wall that the tool does not pass through into the material"), nil
-		}
-		for _, h := range []holeRef{lower, upper} {
-			if _, dup := usedHoles[h]; dup {
-				return nil, throughFaceReason(bp, h.face, "holds a hole loop two tools claim"), nil
-			}
-			usedHoles[h] = struct{}{}
-		}
-		j := e0.Axis[2]
-		frame, eJ, err := brepgeom.AxisFrame(ref, j)
-		if err != nil {
-			return nil, throughFaceReason(bp, lower.face, "is a pierced wall along an axis with no exact frame"), nil //nolint:nilerr // no exact frame is no reading
-		}
-		section, ok := brepgeom.NewPrismMap(e0, eJ).Loop(hole)
-		if !ok {
-			return nil, throughFaceReason(bp, lower.face, "holds a hole loop that does not map into the tool's frame"), nil
-		}
-		outer, err := offset2d.ReverseLoopRecordContext(ctx, section)
-		if err != nil {
-			return nil, "", err
-		}
-		lo, hi := brepLevel(w0, e0), brepLevel(w1, e1)
-		tools = append(tools, throughToolRead{
-			j: j, w0: lower.face, w1: upper.face, loop0: lower.loop, loop1: upper.loop,
-			lo: lo, hi: hi, walls: walls, frameEmb: eJ,
-			prism: prismPayload{profile: ProfileRecord{Outer: outer}, frame: frame, z0: lo, z1: hi, xform: bp.xform},
-		})
-	}
-	// TC5: every hole loop of every pierced wall belongs to one tool.
-	for fi, kind := range kinds {
-		if kind != throughPierced {
-			continue
-		}
-		for li := range bp.faces[fi].region.Holes {
-			if _, ok := usedHoles[holeRef{face: fi, loop: li + 1}]; !ok {
-				return nil, throughFaceReason(bp, fi, "holds a hole loop no through tool passes"), nil
-			}
-		}
-	}
-	return tools, "", nil
 }
 
 // throughRemoval is §3.2's reading of the removed faces against the
