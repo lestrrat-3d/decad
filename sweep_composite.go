@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegroup"
 )
 
 // compositeSpanPart is one closed single-span reduction before its internal
@@ -379,99 +380,32 @@ func auditVertexLinks(
 	budget *proofbound.WorkBudget,
 	uses map[*Edge][]compositeCoedgeUse,
 ) error {
-	type vertexLink struct {
-		faces     map[*Face]struct{}
-		degree    map[*Face]int
-		neighbors map[*Face]map[*Face]struct{}
-	}
-	links := make(map[*Vertex]*vertexLink)
-	linkFor := func(vertex *Vertex) *vertexLink {
-		link := links[vertex]
-		if link == nil {
-			link = &vertexLink{
-				faces:     make(map[*Face]struct{}),
-				degree:    make(map[*Face]int),
-				neighbors: make(map[*Face]map[*Face]struct{}),
-			}
-			links[vertex] = link
-		}
-		return link
-	}
+	edges := make(map[*Edge]surfacegroup.LinkEdge[*Face, *Vertex], len(uses))
 	for edge, edgeUses := range uses {
-		if edge.start == nil || edge.end == nil || len(edgeUses) < 1 || len(edgeUses) > 2 {
-			return fmt.Errorf(`%w: a composite sweep edge has incomplete endpoint topology`, ErrUnsupported)
+		faces := make([]*Face, len(edgeUses))
+		for i, use := range edgeUses {
+			faces[i] = use.face
 		}
-		for _, vertex := range []*Vertex{edge.start, edge.end} {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			link := linkFor(vertex)
-			for _, use := range edgeUses {
-				link.faces[use.face] = struct{}{}
-			}
-			if len(edgeUses) != 2 {
-				continue
-			}
-			a, b := edgeUses[0].face, edgeUses[1].face
-			link.degree[a]++
-			link.degree[b]++
-			if link.neighbors[a] == nil {
-				link.neighbors[a] = make(map[*Face]struct{})
-			}
-			if link.neighbors[b] == nil {
-				link.neighbors[b] = make(map[*Face]struct{})
-			}
-			link.neighbors[a][b] = struct{}{}
-			link.neighbors[b][a] = struct{}{}
+		edges[edge] = surfacegroup.LinkEdge[*Face, *Vertex]{
+			Start: edge.start, End: edge.end, Faces: faces, EndpointsValid: edge.start != nil && edge.end != nil,
 		}
 	}
-	for _, link := range links {
-		if err := budget.Step(); err != nil {
-			return err
-		}
-		ends := 0
-		for face := range link.faces {
-			switch d := link.degree[face]; {
-			case d == 1:
-				ends++
-			case d == 2:
-			case d == 0 && len(link.faces) == 1:
-				// A whole Circle3 rim uses its one vertex TWICE
-				// (docs/surface-design.md §5.2): a hole wall's own full-circle
-				// free rim closes back on itself there with no OTHER face ever
-				// sharing that vertex, so this face has no two-face edge to
-				// link it to anything — a lone node, trivially its own single
-				// connected component, is exactly what a self-closing free
-				// boundary through one point looks like.
-			default:
-				return fmt.Errorf(`%w: a composite sweep vertex link face has degree outside one or two`, ErrUnsupported)
-			}
-		}
-		if len(link.faces) > 1 && ends != 0 && ends != 2 {
-			return fmt.Errorf(`%w: a composite sweep vertex link is neither a cycle nor a path`, ErrUnsupported)
-		}
-		var seed *Face
-		for face := range link.faces {
-			seed = face
-			break
-		}
-		seen := map[*Face]struct{}{seed: {}}
-		stack := []*Face{seed}
-		for len(stack) != 0 {
-			last := len(stack) - 1
-			face := stack[last]
-			stack = stack[:last]
-			for neighbor := range link.neighbors[face] {
-				if _, ok := seen[neighbor]; ok {
-					continue
-				}
-				seen[neighbor] = struct{}{}
-				stack = append(stack, neighbor)
-			}
-		}
-		if len(seen) != len(link.faces) {
-			return fmt.Errorf(`%w: a composite sweep vertex link has more than one connected component`, ErrUnsupported)
-		}
+	violation, err := surfacegroup.AuditVertexLinks(budget, edges)
+	if err != nil {
+		return err
 	}
-	return nil
+	switch violation {
+	case surfacegroup.LinkValid:
+		return nil
+	case surfacegroup.LinkIncompleteEdge:
+		return fmt.Errorf(`%w: a composite sweep edge has incomplete endpoint topology`, ErrUnsupported)
+	case surfacegroup.LinkDegree:
+		return fmt.Errorf(`%w: a composite sweep vertex link face has degree outside one or two`, ErrUnsupported)
+	case surfacegroup.LinkShape:
+		return fmt.Errorf(`%w: a composite sweep vertex link is neither a cycle nor a path`, ErrUnsupported)
+	case surfacegroup.LinkDisconnected:
+		return fmt.Errorf(`%w: a composite sweep vertex link has more than one connected component`, ErrUnsupported)
+	default:
+		return fmt.Errorf(`%w: an unknown composite sweep vertex link state`, ErrUnsupported)
+	}
 }
