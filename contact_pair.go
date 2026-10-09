@@ -466,6 +466,8 @@ func sourceBoxReason(reason pair.Reason) ContactReason {
 		return ContactPointTooCoarse
 	case pair.PayloadUnsupported:
 		return ContactPayloadUnsupported
+	case pair.NoNormalProof:
+		return ContactNoNormalProof
 	default:
 		return ContactNoReason
 	}

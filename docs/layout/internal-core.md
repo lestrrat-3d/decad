@@ -13,6 +13,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/measurement/` | Bounded reading types. See API §5.3, §6. |
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact box paths, contact, oriented, sphere-box and cylinder-box proofs, patches, clips and witnesses. |
+| `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/sweeppath/` | Pair paths, validation, rounded poses, and motion travel bounds. |
 | `internal/planarsnapshot/` | Exact prism and held-mesh snapshots for planar contact. See multibody §9.1. |
