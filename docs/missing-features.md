@@ -131,3 +131,18 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Joints, deformation, fracture in `dynamics` | Not in the program | `docs/multibody-dynamics-design.md` §1 |
 | Contact manifold for two non-convex bodies touching on more than one face | Relation only, `ContactNonConvex` | `docs/multibody-dynamics-design.md` §1 |
 | Sleeping or deactivation | Not in the program | `docs/multibody-dynamics-design.md` §1 |
+
+## Also consider
+
+Features common CAD tools ship that decad lacks and no design doc plans or rejects. Writing a design doc for one
+moves its row to the matching section above, with that doc as owner.
+
+| Gap | Today |
+|---|---|
+| Direct edits: move, offset, delete or replace a face of a solid, press-pull | No entry point exists; `Body.Offset` refuses every solid (`offset.go`, `docs/surface-design.md` R37) |
+| Scaling a body, uniform or per axis | No entry point exists; `Placed`/`PlacedCopy` take a rigid motion only (`document.go`) |
+| Saving a `Document` to a file or loading one back | No entry point exists; a model is rebuilt by rerunning the Go program that built it |
+| Text profiles from a font, for engraved or embossed lettering | No entry point exists |
+| 2D drawings: projected views, silhouette and hidden lines, DXF output | No entry point exists |
+| PMI or GD&T, as data or in STEP AP242 | No entry point exists; `export.STEP` writes AP214 geometry only |
+| IGES, glTF or Parasolid export | `export` writes STL, OBJ, 3MF and STEP only (`docs/api-design.md` §11) |
