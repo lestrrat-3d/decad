@@ -1231,6 +1231,16 @@
 3	0.03	TestBrepLoopChamferContourBound
 3	0.05	TestBrepLoopChamferRefusals
 3	0.08	TestBrepLoopChamferConsumers
+3	0.05	TestBrepLoopFilletCrossDrilled
+3	0.05	TestBrepLoopFilletPocket
+3	0.05	TestBrepLoopFilletRoundBoss
+3	0.05	TestBrepLoopFilletFourHolePrism
+3	0.05	TestBrepLoopFilletBlindPortMouth
+3	0.05	TestBrepLoopFilletLBracket
+3	0.05	TestBrepLoopFilletRoundedPlate
+3	0.05	TestBrepLoopFilletBoundFixture
+3	0.05	TestBrepLoopFilletRefusals
+3	0.05	TestBrepLoopFilletConsumers
 3	0.10	TestTessellateBrepBands
 3	0.10	TestTessellateBrepBandsShareOneCount
 3	0.10	TestTessellateBrepBandsPlaced

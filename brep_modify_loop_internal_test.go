@@ -512,8 +512,8 @@ func TestBrepLoopChamferContourBound(t *testing.T) {
 // face's loop; S1's top loop with its y = 0 wall's outer loop is SL1, the two
 // loops sharing an edge; P8's y = 0 wall's outer loop is SL2, the top face
 // beside it continuing past the loop's vertex on a fillet arc; the Pocket's
-// mouth at d = 5 is SX7, the band reaching the pocket's floor; a fillet of the
-// mouth is SL3; WithAsymmetricChamfer on it is SX16; and P8's top loop at
+// mouth at d = 5 is SX7, the band reaching the pocket's floor;
+// WithAsymmetricChamfer on it is SX16; and P8's top loop at
 // d = 3 is SX6 (ErrDegenerate), the fillet arcs' offsets reaching their
 // centres. Shown to fail with each gate deleted in turn: admitLoops' sharing
 // arm (S1's wall loop then read SL2 at its swept x wall), classifyLoop's (pl)
@@ -548,13 +548,13 @@ func TestBrepLoopChamferRefusals(t *testing.T) {
 		want   []string
 	}{
 		{"part of a loop", pocket, func(t *testing.T, b *Body) []*Edge { return mouth(t, b)[:3] }, 1.5, false, false,
-			[]string{"modify-general SL1", "covers only part of a loop"}},
+			[]string{rowSL1, "covers only part of a loop"}},
 		{"a loop with a lateral edge", pocket, func(t *testing.T, b *Body) []*Edge {
 			edges := planarBodyFace(t, b, routeEZ, r3.NewVec(0, 0, 10)).Loops()[0].Edges()
 			lateral, err := edgeAt(routeEZ, r3.Vec{}).SelectEdges(b)
 			require.NoError(t, err)
 			return append(edges, lateral...)
-		}, 1.5, false, false, []string{"modify-general SL1", "lies on no loop of a planar face"}},
+		}, 1.5, false, false, []string{rowSL1, "lies on no loop of a planar face"}},
 		{"two loops sharing an edge", s1, func(t *testing.T, b *Body) []*Edge {
 			edges := planarBodyFace(t, b, routeEZ, r3.NewVec(0, 0, 20)).Loops()[0].Edges()
 			wall := planarBodyFace(t, b, r3.NewVec(0, -1, 0), r3.Vec{}).Loops()[0].Edges()
@@ -564,12 +564,11 @@ func TestBrepLoopChamferRefusals(t *testing.T) {
 				}
 			}
 			return edges
-		}, 1, false, false, []string{"modify-general SL1", "which share it"}},
+		}, 1, false, false, []string{rowSL1, "which share it"}},
 		{"a neighbour continuing on an arc", plate, func(t *testing.T, b *Body) []*Edge {
 			return planarBodyFace(t, b, r3.NewVec(0, -1, 0), r3.Vec{}).Loops()[0].Edges()
 		}, 1, false, false, []string{"modify-general SL2", "not a straight line along the face's normal"}},
 		{"a band reaching the floor", pocket, mouth, 5, false, false, []string{"modify-reach SX7", "reaches or passes the far end"}},
-		{"a fillet of a loop", pocket, mouth, 1, true, false, []string{"modify-general SL3", "vertex-blend problem"}},
 		{"an asymmetric chamfer", pocket, mouth, 1, false, true, []string{"modify-reach SX16"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

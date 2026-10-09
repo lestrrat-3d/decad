@@ -240,7 +240,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 			return err
 		},
 		sel: sel, edges: edges, blend: &blend,
-		loop: &capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}})
+		loop: &capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}, loopKind: brepBandChamfer})
 	if err != nil {
 		return nil, err
 	}

@@ -41,8 +41,7 @@ type brepLoopBand struct {
 }
 
 // brepBandKind is a loop band's surface family: a chamfer's ruled patches or a
-// fillet's pipe patches (docs/loop-fillet-design.md). Route L builds only
-// chamfer bands so far.
+// fillet's pipe patches (docs/loop-fillet-design.md).
 type brepBandKind string
 
 const (
@@ -89,10 +88,11 @@ func (b brepLoopBand) view(f brepFace, xform r3.Transform) capBlendPayload {
 	return cbp
 }
 
-// patchRole is the role of the band's patch p: chamferLoop(f,l,p) for the
-// band's face f and loop l (modify-general BG2).
+// patchRole is the role of the band's patch p: chamferLoop(f,l,p) for a
+// chamfer band's face f and loop l (modify-general BG2), filletLoop(f,l,p) for
+// a fillet band's (docs/loop-fillet-design.md BF1).
 func (b brepLoopBand) patchRole(p int) string {
-	return fmt.Sprintf("chamferLoop(%d,%d,%d)", b.face, b.loop, p)
+	return fmt.Sprintf("%sLoop(%d,%d,%d)", b.kind, b.face, b.loop, p)
 }
 
 // validate refuses a band no route L build records: one naming no planar face
@@ -100,15 +100,15 @@ func (b brepLoopBand) patchRole(p int) string {
 // finite d, or an empty loop.
 func (b brepLoopBand) validate(bp brepPayload, bi int) error {
 	refuse := func(why string) error {
-		return fmt.Errorf(`%w: chamfer band %d of a brep record %s`, ErrUnsupported, bi, why)
+		return fmt.Errorf(`%w: loop band %d of a brep record %s`, ErrUnsupported, bi, why)
 	}
 	switch {
 	case b.face < 0 || b.face >= len(bp.faces) || !bp.faces[b.face].planar():
 		return refuse(`names no planar face of the record`)
 	case b.loop < 0 || b.loop > len(bp.faces[b.face].region.Holes):
 		return refuse(`names no loop of its face`)
-	case b.kind != brepBandChamfer:
-		return refuse(`is no chamfer band, the only kind route L builds`)
+	case b.kind != brepBandChamfer && b.kind != brepBandFillet:
+		return refuse(`is neither a chamfer nor a fillet band, the two kinds route L builds`)
 	case b.sigma != 1 && b.sigma != -1:
 		return refuse(`states no side of its face`)
 	case !(b.setback.dc > 0) || b.setback.dc != b.setback.ds || math.IsInf(b.setback.dc, 1):
@@ -339,7 +339,7 @@ type brepBandsBuilt struct {
 // reference is the true normal negated and every patch is turned over. Each
 // patch carries chamferLoop(f,l,p) for the band's face f, loop l and its own
 // index p in the band. The band's mass terms are read as brepBandMassOf
-// states.
+// states. A fillet band is attachFilletBand's, and its geom entry is nil.
 func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp brepPayload, open brepOpenSet) (brepBandsBuilt, error) {
 	out := brepBandsBuilt{mass: zeroBrepBandMass()}
 	if len(bp.loopBands) == 0 {
@@ -352,6 +352,16 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 	work := freeform.NewFreeformWork()
 	for bi, b := range bp.loopBands {
 		f := bp.faces[b.face]
+		if b.kind == brepBandFillet {
+			patches, mass, err := attachFilletBand(ctx, body, ref, bp, bi, open, embeds[b.face], work)
+			if err != nil {
+				return brepBandsBuilt{}, err
+			}
+			out.patches = append(out.patches, patches...)
+			out.geom = append(out.geom, nil)
+			out.mass.add(mass)
+			continue
+		}
 		cbp := b.view(f, bp.xform)
 		band, err := buildCapBand(ctx, body, ref, cbp, 0, b.orig, f.z0, b.matSign(f), open.side[bi], open.cap[bi], work)
 		if err != nil {

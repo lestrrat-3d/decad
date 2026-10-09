@@ -56,7 +56,8 @@ type brepBandChord struct {
 // brepChordBands chords every band of the record and imposes each wall walk's
 // count on the face beside it. The result maps a swept face's index to the
 // samples its wall must take. A wall two bands reach must take one count from
-// both, or the body refuses.
+// both, or the body refuses. A fillet band refuses: its rings are
+// docs/loop-fillet-design.md's PR F-2.
 func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, chord float64) ([]brepBandChord, map[int]tessellation.ChordSamples[*Face], error) {
 	if len(bp.loopBands) == 0 {
 		return nil, nil, nil
@@ -72,6 +73,9 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 	for bi, b := range bp.loopBands {
 		if err := b.validate(bp, bi); err != nil {
 			return nil, nil, err
+		}
+		if b.kind == brepBandFillet {
+			return nil, nil, errFilletBandStaged("its mesh")
 		}
 		f := bp.faces[b.face]
 		cbp := b.tessView(f, bp.xform)

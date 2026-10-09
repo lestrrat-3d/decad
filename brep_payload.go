@@ -82,17 +82,19 @@ type brepSplit = brepgeom.Split
 // brepPayload is the evaluator's record of an analytically trimmed body. Every
 // face frame is stated in the payload's unplaced coordinates and xform places
 // the whole body, as every payload does. stack is nil for every record but
-// an A1 result's. loopBands holds a route L chamfer's bands
-// (docs/modify-general-design.md §4.2 step 5): each band's patches are faces
-// of the body and no face of the record, and the body build attaches them
-// (brep_loop_band.go). It is nil for every record route L did not build.
+// an A1 result's. loopBands holds a route L chamfer's or fillet's bands
+// (docs/modify-general-design.md §4.2 step 5, docs/loop-fillet-design.md §4):
+// each band's patches are faces of the body and no face of the record, and
+// the body build attaches them (brep_loop_band.go, brep_loop_fillet.go). It
+// is nil for every record route L did not build.
 type brepPayload struct {
 	faces     []brepFace
 	xform     r3.Transform
 	stack     *brepStack
 	loopBands []brepLoopBand
 	// loopPatches is each band's patch geometry, beside its role
-	// chamferLoop(f,l,p), in band order. The body build fills it
+	// chamferLoop(f,l,p), in band order, nil for a fillet band, whose
+	// readers land with docs/loop-fillet-design.md's PR F-2. The body build fills it
 	// (attachBrepLoopBands); a record handed to the build carries none, and
 	// the tessellator and the surveys read it from the payload the build
 	// left on the body, as capBlendPayload.patches is read.
