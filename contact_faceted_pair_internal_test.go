@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
+	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -18,10 +19,10 @@ import (
 // placePlanarSnapshotRebuilt is placePlanarSnapshot before the snapshot
 // carried its topology: every pose maps each vertex through
 // proof.DvTransform and runs the whole planar.CheckPlanarSolid audit.
-func placePlanarSnapshotRebuilt(snapshot *planarSnapshotEntry, pose r3.Transform) (planar.PlanarSolid, bool) {
-	solid := planar.PlanarSolid{Verts: make([]proofarith.DyV3, len(snapshot.solid.Verts)),
-		Tris: slices.Clip(snapshot.solid.Tris), Faces: slices.Clip(snapshot.solid.Faces)}
-	for i, v := range snapshot.solid.Verts {
+func placePlanarSnapshotRebuilt(snapshot *planarsnapshot.SnapshotEntry, pose r3.Transform) (planar.PlanarSolid, bool) {
+	solid := planar.PlanarSolid{Verts: make([]proofarith.DyV3, len(snapshot.Solid.Verts)),
+		Tris: slices.Clip(snapshot.Solid.Tris), Faces: slices.Clip(snapshot.Solid.Faces)}
+	for i, v := range snapshot.Solid.Verts {
 		solid.Verts[i] = proofarith.DvTransform(pose, v)
 	}
 	audited, err := planar.CheckPlanarSolid(&solid, noSweepPoll)
@@ -106,8 +107,8 @@ func TestPlacePlanarSnapshotMatchesFullAudit(t *testing.T) {
 	for name, body := range bodies {
 		snapshot, err := planarSnapshotOf(t.Context(), budget, body, 0)
 		require.NoError(t, err, name)
-		require.True(t, snapshot.ok, "%s: premise: an admitted snapshot", name)
-		require.NotNil(t, snapshot.topology, name)
+		require.True(t, snapshot.OK, "%s: premise: an admitted snapshot", name)
+		require.NotNil(t, snapshot.Topology, name)
 		var other planar.PlanarSolid
 		for trial := range 60 {
 			pose := r3.Identity()

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/r3"
@@ -672,8 +673,8 @@ type Body struct {
 	// the held chord when the snapshot depends on it
 	// (contact_faceted_pair.go); like the tessellation cache neither changes
 	// the body's logical geometry.
-	planarConvexity atomic.Pointer[planarConvexityEntry]
-	planarSnapshot  atomic.Pointer[planarSnapshotEntry]
+	planarConvexity atomic.Pointer[planarsnapshot.ConvexityEntry]
+	planarSnapshot  atomic.Pointer[planarsnapshot.SnapshotEntry]
 	// pairReports keeps the recent ContactPair reports this body is the
 	// first operand of (internal/reportvocab/contact_memo.go); it changes no outcome either.
 	pairReports pairReportMemo

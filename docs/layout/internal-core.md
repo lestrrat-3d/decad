@@ -16,7 +16,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/sweeppath/` | Pair paths, validation, rounded poses, and motion travel bounds. |
-| `internal/planarsnapshot/` | Exact prism and held-mesh snapshots for planar contact. See multibody §9.1. |
+| `internal/planarsnapshot/` | Planar contact snapshots, cached records and pose gates. See multibody §9.1–§9.2. |
 | `internal/placedruling/` | Placed cylinder staging, support and relation proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits and proofs. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
