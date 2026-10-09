@@ -193,7 +193,8 @@ func (r PrismRect) matches(s survey2d.SegmentWalk) bool {
 		return false
 	}
 	from, to := sectionrecord.Point2{U: s.StartU, V: s.StartV}, sectionrecord.Point2{U: s.EndU, V: s.EndV}
-	if !((from == r.p && to == r.q) || (from == r.q && to == r.p)) {
+	sameEnds := (from == r.p && to == r.q) || (from == r.q && to == r.p)
+	if !sameEnds {
 		return false
 	}
 	du, dv := to.U-from.U, to.V-from.V
