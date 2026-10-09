@@ -418,7 +418,7 @@ func brepBandMassOf(ctx context.Context, b brepLoopBand, f brepFace, e brepEmbed
 		return brepBandMass{}, err
 	}
 	enclose := func(s proofbound.BoundedScalar) (proofbound.RatInterval, error) {
-		return brepEnclosure(s.Value, s.Bound, nil)
+		return brepgeom.Enclosure(s.Value, s.Bound, nil)
 	}
 	capArea, err := enclose(in.CapArea)
 	if err != nil {

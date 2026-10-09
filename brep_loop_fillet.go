@@ -313,7 +313,7 @@ func filletRadius(s capSetback) (proofbound.RatInterval, error) {
 // heldOf is an enclosure's held float beside the bound that reaches every
 // value of it.
 func heldOf(iv proofbound.RatInterval) (float64, float64) {
-	held := brepHeld(iv)
+	held := brepgeom.Held(iv)
 	return held, proofbound.IntervalFloatError(iv, held)
 }
 
