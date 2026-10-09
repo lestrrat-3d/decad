@@ -90,7 +90,9 @@
 //	    Distance extent (draft design PR 1)                   builds
 //	  WithTaper   free-form wall, non-G1 circular corner,
 //	    other extents, WithSurfaceResult                      ErrUnsupported
-//	  Tessellate/boolean/export/mass of a draft body          ErrUnsupported
+//	  Tessellate/export/boolean/mass of a draft body          builds
+//	  boolean/mass of one with an inexact G1 join or a
+//	    trimmed segment (draft §9.1)                          ErrUnsupported
 //	Body.Draft    prism receiver, its complete wall set,
 //	  about one of its caps (draft design PR 3)               builds
 //	  wall subset, NeutralFrame, non-cap neutral face,

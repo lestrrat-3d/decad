@@ -1185,3 +1185,6 @@
 5	0.04	TestChordLocusSliverCubeCoversTheSlivers
 5	0.07	TestChordLocusRegionVolumeCoversTheDip
 5	0.01	TestPrismLiftFactorBoundsTheHeldMap
+2	0.30	TestDraftMeshVolumeProofCoversTheClosedForm
+2	0.01	TestDraftMeshSharesTheNearRing
+2	0.05	TestDraftMoverRecordRadiusEnclosesTheBody

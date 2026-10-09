@@ -754,7 +754,8 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 // requireVolumeProvingPayload refuses an operand whose payload class publishes
 // no occupied-volume proof on its mesh, before that mesh is built.
 //
-// It is operandSymDiff's question asked one step earlier. A cap-loop chamfer
+// It is operandSymDiff's question asked one step earlier. A cap-loop chamfer,
+// and a draft body through the same band (draftOccupiedVolumeAdmission),
 // narrows rather than refuses outright: both arms read the SAME predicate,
 // capBlendOccupiedVolumeAdmission (capblend_admit.go) — this one before the
 // mesh is built, and tessellateCapBlend through symDiffOK after it — so a
@@ -794,6 +795,15 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 		switch pl := b.payload.(type) {
 		case capBlendPayload:
 			refusal, aErr := capBlendOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
+			if aErr != nil {
+				return aErr
+			}
+			if refusal == nil {
+				return nil
+			}
+			err = refusal
+		case draftPayload:
+			refusal, aErr := draftOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
 			if aErr != nil {
 				return aErr
 			}

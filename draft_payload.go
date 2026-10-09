@@ -45,6 +45,15 @@ type draftPayload struct {
 	// loops carries (capband.ContourDisplacement).
 	far      ProfileRecord
 	farDelta float64
+	// patches is every wall patch's side(i, j) role beside the plane-local
+	// geometry buildCapBand built it from, in loop order then walk order, and
+	// bandDelta each loop's own far contour displacement keyed as the band view
+	// keys it. Both are filled once by the build and handed to the band view
+	// (band), so the tessellator (tessellate_draft.go) charges the same patch
+	// geometry and contour displacement every reading of the body charged.
+	// Both are plane-local and placement-invariant.
+	patches   []capPatch
+	bandDelta map[capBandKey]float64
 }
 
 // transform is the accumulated rigid placement.
@@ -75,8 +84,10 @@ func (dp draftPayload) band() capBlendPayload {
 		frame:   dp.frame,
 		z0:      dp.z0, z1: dp.z1,
 		z0Delta: dp.z0Delta, z1Delta: dp.z1Delta,
-		xform: dp.xform,
-		draft: true,
+		xform:     dp.xform,
+		draft:     true,
+		patches:   dp.patches,
+		bandDelta: dp.bandDelta,
 	}
 	if dp.nearStart {
 		cbp.end, cbp.endLoops = setback, every

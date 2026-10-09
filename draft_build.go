@@ -298,6 +298,8 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	nearLoops := make([]*Loop, len(loops))
 	farLoops := make([]*Loop, len(loops))
 	bands := make([]capBandResult, len(loops))
+	dp.patches = nil
+	dp.bandDelta = make(map[capBandKey]float64, len(loops))
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -315,6 +317,13 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		farLoops[li] = &Loop{coedges: band.capCo, outer: li == 0}
 		bands[li] = band
 		dp.farDelta = math.Max(dp.farDelta, band.delta)
+		dp.bandDelta[capBandKey{loop: li, start: !dp.nearStart}] = band.delta
+		if len(band.patches) != len(band.geom) {
+			return nil, fmt.Errorf(`%w: the tapered extrude's wall band on loop %d built %d walls over %d patch geometries`, ErrDegenerate, li, len(band.patches), len(band.geom))
+		}
+		for p, f := range band.patches {
+			dp.patches = append(dp.patches, capPatch{role: f.origins[0].Role, geom: band.geom[p]})
+		}
 	}
 
 	startLoops, endLoops := farLoops, nearLoops

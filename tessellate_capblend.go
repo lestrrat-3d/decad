@@ -181,29 +181,33 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	}
 
 	// Trimmed side walls: the prism's own cells between the loop's two rings.
-	for li := range lms {
-		lm := &lms[li]
-		axial := math.Max(lm.zLo.Bound, lm.zHi.Bound)
-		height := math.Abs(lm.zHi.Value - lm.zLo.Value)
-		n := len(lm.walks)
-		for i, w := range lm.walks {
-			if err := budget.Step(); err != nil {
-				return nil, err
-			}
-			face, err := faceOfRole(fmt.Sprintf("side(%d,%d)", lm.li, w.Segs[0]))
-			if err != nil {
-				return nil, err
-			}
-			bump(face, proofbound.AbsSumUpper(lm.sideSag[i], axial))
-			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, walkWallSlack(w.SegmentWalk, lm.count[i], height))
-			for k := range lm.count[i] {
-				g0 := lm.sideStart[i] + k
-				g1 := lm.sideStart[i] + k + 1
-				if k == lm.count[i]-1 {
-					g1 = lm.sideStart[(i+1)%n]
+	// A draft view has none: its band runs the whole sweep, and its one side
+	// ring is the near cap's rim (draftNearRing).
+	if !cbp.draft {
+		for li := range lms {
+			lm := &lms[li]
+			axial := math.Max(lm.zLo.Bound, lm.zHi.Bound)
+			height := math.Abs(lm.zHi.Value - lm.zLo.Value)
+			n := len(lm.walks)
+			for i, w := range lm.walks {
+				if err := budget.Step(); err != nil {
+					return nil, err
 				}
-				mesh.addTriangle([3]int{lm.sideLo[g0], lm.sideLo[g1], lm.sideHi[g1]}, face)
-				mesh.addTriangle([3]int{lm.sideLo[g0], lm.sideHi[g1], lm.sideHi[g0]}, face)
+				face, err := faceOfRole(fmt.Sprintf("side(%d,%d)", lm.li, w.Segs[0]))
+				if err != nil {
+					return nil, err
+				}
+				bump(face, proofbound.AbsSumUpper(lm.sideSag[i], axial))
+				mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, walkWallSlack(w.SegmentWalk, lm.count[i], height))
+				for k := range lm.count[i] {
+					g0 := lm.sideStart[i] + k
+					g1 := lm.sideStart[i] + k + 1
+					if k == lm.count[i]-1 {
+						g1 = lm.sideStart[(i+1)%n]
+					}
+					mesh.addTriangle([3]int{lm.sideLo[g0], lm.sideLo[g1], lm.sideHi[g1]}, face)
+					mesh.addTriangle([3]int{lm.sideLo[g0], lm.sideHi[g1], lm.sideHi[g0]}, face)
+				}
 			}
 		}
 	}
@@ -243,24 +247,24 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	}
 
 	if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
-		return nil, fmt.Errorf(`%w: this cap-loop chamfer's cells do not close into a watertight boundary`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: this %s's cells do not close into a watertight boundary`, ErrUnsupported, cbp.noun())
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
 		return nil, err
 	}
-	if err := requireCapBlendFacetAreas(&mesh); err != nil {
+	if err := requireCapBlendFacetAreas(&mesh, cbp.noun()); err != nil {
 		return nil, err
 	}
 	if tessellation.OrientationSign(mesh.vertices, mesh.triangles, pl.point(0, 0, cbp.z0)) <= 0 {
-		return nil, fmt.Errorf(`%w: this cap-loop chamfer's assembled cells do not enclose a positive volume`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: this %s's assembled cells do not enclose a positive volume`, ErrUnsupported, cbp.noun())
 	}
 
-	if err := composeCapBlendBounds(&mesh, faceExtra, store); err != nil {
+	if err := composeCapBlendBounds(&mesh, faceExtra, store, cbp.noun()); err != nil {
 		return nil, err
 	}
 	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, store))
 	if proofbound.IsNonFinite(mesh.areaSlack) {
-		return nil, fmt.Errorf(`%w: this cap-loop chamfer mesh states no finite area slack`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: this %s mesh states no finite area slack`, ErrUnsupported, cbp.noun())
 	}
 	if !proveVolume {
 		// The level withholds every volume proof (tessellateContext's
@@ -321,22 +325,12 @@ func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl pri
 	endLevel := cbp.capBandLevel(cbp.z1, -1)
 	for li := range lms {
 		lm := &lms[li]
-		lm.sideLo = make([]int, len(lm.sidePts))
-		lm.sideHi = make([]int, len(lm.sidePts))
-		for j, p := range lm.sidePts {
-			if err := budget.Step(); err != nil {
-				return nil, nil, err
-			}
-			plane := proofbound.WalkEndBoundAllow(lm.sideBound[j])
-			var round float64
-			lm.sideLo[j], round = addVertex(p, lm.zLo.Value, plane)
-			if proveVolume {
-				motion = append(motion, proofbound.AbsSumUpper(plane, round, lm.zLo.Bound))
-			}
-			lm.sideHi[j], round = addVertex(p, lm.zHi.Value, plane)
-			if proveVolume {
-				motion = append(motion, proofbound.AbsSumUpper(plane, round, lm.zHi.Bound))
-			}
+		sideRing := capBlendSideRing
+		if cbp.draft {
+			sideRing = draftNearRing
+		}
+		if err := sideRing(budget, lm, addVertex, &motion, proveVolume); err != nil {
+			return nil, nil, err
 		}
 		if len(lm.capPts) == 0 {
 			continue
@@ -366,6 +360,35 @@ func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl pri
 	return store, motion, nil
 }
 
+// capBlendVertexWriter places one plane-local point at level z beside its
+// plane-local bound and returns the new vertex with the lift's rounding
+// (capBlendVertices' addVertex).
+type capBlendVertexWriter func(p Point2, z, plane float64) (int, float64)
+
+// capBlendSideRing writes one loop's side ring twice, at zLo and at zHi, the
+// two rims of its trimmed side wall, and appends each vertex's motion when the
+// volume proof is built.
+func capBlendSideRing(budget *proofbound.WorkBudget, lm *capBlendLoopMesh, addVertex capBlendVertexWriter, motion *[]float64, proveVolume bool) error {
+	lm.sideLo = make([]int, len(lm.sidePts))
+	lm.sideHi = make([]int, len(lm.sidePts))
+	for j, p := range lm.sidePts {
+		if err := budget.Step(); err != nil {
+			return err
+		}
+		plane := proofbound.WalkEndBoundAllow(lm.sideBound[j])
+		var round float64
+		lm.sideLo[j], round = addVertex(p, lm.zLo.Value, plane)
+		if proveVolume {
+			*motion = append(*motion, proofbound.AbsSumUpper(plane, round, lm.zLo.Bound))
+		}
+		lm.sideHi[j], round = addVertex(p, lm.zHi.Value, plane)
+		if proveVolume {
+			*motion = append(*motion, proofbound.AbsSumUpper(plane, round, lm.zHi.Bound))
+		}
+	}
+	return nil
+}
+
 // capBlendCapMotion reads the loop's numeric record through internal/tessellation.
 func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *capBlendLoopMesh) error {
 	in := tessellation.CapBlendMotionInput{
@@ -390,10 +413,15 @@ func capBlendChordVolume(cbp capBlendPayload, lms []capBlendLoopMesh) float64 {
 	for i := range lms {
 		loops[i] = lms[i].proof()
 	}
-	return tessellation.CapBlendChordVolume([2]float64{
+	height := [2]float64{
 		proofbound.AbsSumUpper(cbp.start.ds, cbp.start.dsDelta),
 		proofbound.AbsSumUpper(cbp.end.ds, cbp.end.dsDelta),
-	}, loops)
+	}
+	if cbp.draft {
+		h := draftBandHeightUpper(cbp)
+		height = [2]float64{h, h}
+	}
+	return tessellation.CapBlendChordVolume(height, loops)
 }
 
 // chordCapBlendLoop resolves ONE loop's walks the way buildCapBand does and
@@ -435,9 +463,15 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 	if lm.onEnd {
 		lm.zHi = proofbound.BoundedSub(lm.zHi, proofbound.MeasuredScalar(cbp.end.ds, cbp.end.dsDelta))
 	}
+	if cbp.draft {
+		// A draft band's side level is the near cap itself, and no trimmed
+		// wall separates two side rings.
+		lm.zLo = draftNearLevel(cbp)
+		lm.zHi = lm.zLo
+	}
 
 	if lm.chamfered && !lm.whole {
-		lm.joins, err = capOffsetJoins(budget, cl, cbp.loopOffset(li))
+		lm.joins, err = cbp.offsetJoins(budget, cl, cbp.loopOffset(li))
 		if err != nil {
 			return capBlendLoopMesh{}, err
 		}
@@ -521,6 +555,11 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 	capName := capNameOf(matSign)
 	patchFace := func(p int) (*Face, tessellation.CapBlendBandPatch, error) {
 		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, lm.li, p)
+		if cbp.draft {
+			// A draft band has no apex patch, so patch p is walk p, and its
+			// face carries the prism's own wall role (draftPayload.patches).
+			role = prismWallRole(lm.li, lm.walks[p].Segs[0])
+		}
 		f, err := faceOfRole(role)
 		if err != nil {
 			return nil, tessellation.CapBlendBandPatch{}, err
@@ -653,7 +692,7 @@ func capBlendRingSegmentArea(lm *capBlendLoopMesh, contour bool, d float64) floa
 // face is present by construction — the walk is over mesh.source itself — and a
 // face whose composed displacement is not finite refuses rather than publishing
 // an infinite bound.
-func composeCapBlendBounds(m *Mesh, extra map[*Face]float64, store []float64) error {
+func composeCapBlendBounds(m *Mesh, extra map[*Face]float64, store []float64, noun string) error {
 	faceStore := map[*Face]float64{}
 	for i, f := range m.source {
 		for _, v := range m.triangles[i] {
@@ -663,7 +702,7 @@ func composeCapBlendBounds(m *Mesh, extra map[*Face]float64, store []float64) er
 	for f, s := range faceStore {
 		bound := proofbound.UpRound(extra[f] + s)
 		if proofbound.IsNonFinite(bound) {
-			return fmt.Errorf(`%w: a cap-loop chamfer face's composed displacement is not finite, so this mesh can state no bound for it`, ErrUnsupported)
+			return fmt.Errorf(`%w: a %s face's composed displacement is not finite, so this mesh can state no bound for it`, ErrUnsupported, noun)
 		}
 		m.setFaceBound(f, bound)
 	}
@@ -674,11 +713,11 @@ func composeCapBlendBounds(m *Mesh, extra map[*Face]float64, store []float64) er
 // (docs/tessellation-design.md §12). The test is the exact rational squared
 // cross product, so a sliver is judged by what its own coordinates say rather
 // than by a tolerance.
-func requireCapBlendFacetAreas(m *Mesh) error {
+func requireCapBlendFacetAreas(m *Mesh, noun string) error {
 	for i, tri := range m.triangles {
 		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
 		if tessellation.CapBlendTwiceAreaSq(a, b, c).Sign() <= 0 {
-			return fmt.Errorf(`%w: facet %d of this cap-loop chamfer mesh has zero area`, ErrUnsupported, i)
+			return fmt.Errorf(`%w: facet %d of this %s mesh has zero area`, ErrUnsupported, i, noun)
 		}
 	}
 	return nil

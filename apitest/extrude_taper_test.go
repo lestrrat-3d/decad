@@ -830,11 +830,10 @@ func TestTaperRefusals(t *testing.T) {
 	})
 }
 
-// TestTaperDownstreamRefusals pins what PR 1 leaves refused on a draft body
+// TestTaperDownstreamRefusals pins what stays refused on a draft body
 // (docs/draft-design.md Table DD): the modify ops refuse it by name (DD14),
-// and tessellation, with every reading built on it, refuses through its
-// default (DD1), each leaving the body live. Placement and mirroring build
-// (DD12).
+// each leaving the body live. Placement and mirroring build (DD12);
+// tessellation and the readings on it are draft_mesh_test.go's.
 func TestTaperDownstreamRefusals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -850,8 +849,6 @@ func TestTaperDownstreamRefusals(t *testing.T) {
 	_, err = b.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(b))), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "draft body")
-	_, err = b.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{b}, doc.Bodies())
 
 	vol, err := b.Volume()

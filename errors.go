@@ -133,7 +133,8 @@ var ErrNotFinite = decaderr.ErrNotFinite
 // but unclassifiable contact or analytic prism-arrangement refusal in a
 // [BooleanError] carrying [BooleanUnsupportedContact], but an operand no
 // boolean may consume (a cap-loop chamfer body whose band has a mitered
-// circular wall or a reflex corner, so its mesh carries no proof of the volume
+// circular wall or a reflex corner, or a tapered extrude with an inexact G1
+// join, so its mesh carries no proof of the volume
 // it and the body it stands for differ by, or a held-mesh operand whose
 // facets where the pair meets are coarser than the pair tolerance) is a
 // capability limit of that operand, refused before any facet is cut — it

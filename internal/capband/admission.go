@@ -26,8 +26,10 @@ import (
 
 // OccupiedVolumeAdmission decides whether docs/tessellation-reach-design.md §7's
 // slice-wise occupied-volume proof covers every band of these loops. refusal is the
-// staging ErrUnsupported naming the loop and corner it fails on (nil when
-// admitted); err is an infrastructure error (budget, record) and never a refusal.
+// staging ErrUnsupported naming the body (noun: "cap-loop chamfer", or
+// "tapered extrude" for a draft body's wall band), the loop and the corner it
+// fails on (nil when admitted); err is an infrastructure error (budget,
+// record) and never a refusal.
 //
 // Every loop's walks are checked, because every loop's side wall is chorded and
 // enters the proof's trimmed term through the same chord-polygon argument; the
@@ -35,6 +37,7 @@ import (
 // only a band has an offset foot whose locus the proof must follow.
 func OccupiedVolumeAdmission(
 	budget *proofbound.WorkBudget,
+	noun string,
 	loops []sectionrecord.LoopRecord,
 	startLoops, endLoops map[int]bool,
 	resolve func(int, sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error),
@@ -50,7 +53,7 @@ func OccupiedVolumeAdmission(
 				// Unreachable today: Chamfer refuses a free-form wall before a
 				// payload exists. The arm keeps the predicate's own contract
 				// true for any payload that reaches it.
-				return admissionRefusal(li, i, `a wall that is neither straight nor circular`), nil
+				return admissionRefusal(noun, li, i, `a wall that is neither straight nor circular`), nil
 			}
 		}
 		if n == 1 && walks[0].Closed {
@@ -68,7 +71,7 @@ func OccupiedVolumeAdmission(
 					return nil, err
 				}
 				if why := SegmentRefusal(seg); why != "" {
-					return admissionRefusal(li, i, why), nil
+					return admissionRefusal(noun, li, i, why), nil
 				}
 			}
 		}
@@ -85,7 +88,7 @@ func OccupiedVolumeAdmission(
 			}
 			prev, cur := walks[(i+n-1)%n], walks[i]
 			if arcs[i] {
-				return admissionRefusal(li, i, `a reflex corner, whose apex fan's stations no recorded window states`), nil
+				return admissionRefusal(noun, li, i, `a reflex corner, whose apex fan's stations no recorded window states`), nil
 			}
 			if prev.IsLine() && cur.IsLine() {
 				// A line-line miter: the foot is the intersection of two offset
@@ -101,7 +104,7 @@ func OccupiedVolumeAdmission(
 				return nil, err
 			}
 			if !JoinIsG1(prevSeg, curSeg) {
-				return admissionRefusal(li, i, `a corner this evaluator cannot prove a line-line miter or an exactly tangent join`), nil
+				return admissionRefusal(noun, li, i, `a corner this evaluator cannot prove a line-line miter or an exactly tangent join`), nil
 			}
 		}
 	}
@@ -112,8 +115,8 @@ func OccupiedVolumeAdmission(
 // not cover surfaces, naming the loop and the walk (corner) it fails on. Its
 // text carries "no proof of the volume", the phrase Verify's diagnostic and
 // every caller matching on the cause read.
-func admissionRefusal(li, corner int, why string) error {
-	return fmt.Errorf(`%w: loop %d of this cap-loop chamfer has %s at walk %d, so its mesh carries no proof of the volume it and the body it stands for differ by, and no boolean may compose it`, decaderr.ErrUnsupported, li, why, corner)
+func admissionRefusal(noun string, li, corner int, why string) error {
+	return fmt.Errorf(`%w: loop %d of this %s has %s at walk %d, so its mesh carries no proof of the volume it and the body it stands for differ by, and no boolean may compose it`, decaderr.ErrUnsupported, li, noun, why, corner)
 }
 
 // SegmentRefusal states why one recorded segment of a cornered loop
