@@ -847,7 +847,7 @@ func requireShellSound(t *testing.T, result *Body, a, b *big.Rat) {
 //
 // Each result is one lump, every edge bounds two faces, Verify reads it Sound
 // and its mesh's occupied-volume proof covers the figure. Shown to fail with
-// throughSweptTrace reporting no trace (the U-channel kept the cavity's face
+// throughshell.SweptTrace reporting no trace (the U-channel kept the cavity's face
 // on the removed carrier beside a rim holding no hole, and the cavity closed
 // into a second lump), with throughRimRegions cancelling no piece (the
 // touching rims read as R's loop holding a hole that meets it, and S7 refused
@@ -1157,7 +1157,11 @@ func TestBrepShellThroughCutDisplacedWallGap(t *testing.T) {
 			sum = add(sum, mul(ri(2), sub(mul(ex, hc), mul(pi, mul(rr, rr))))) // cavity y walls less the dilated hole
 			return add(sum, mul(mul(ri(2), pi), mul(rr, ey)))                  // dilated hole
 		}
-		denotedHi := sub(ratMax(area(proofbound.PiLower), area(proofbound.PiUpper)), lossLo)
+		areaHi := area(proofbound.PiLower)
+		if upper := area(proofbound.PiUpper); upper.Cmp(areaHi) > 0 {
+			areaHi = upper
+		}
+		denotedHi := sub(areaHi, lossLo)
 		held, bound := rat(result.area.Value.Base()), rat(result.area.Bound.Base())
 		require.LessOrEqual(t, sub(held, bound).Cmp(denotedHi), 0,
 			"%s ± %s lies above the denoted area, at most %s", result.area.Value, result.area.Bound, denotedHi.FloatString(12))

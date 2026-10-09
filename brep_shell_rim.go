@@ -3,12 +3,12 @@ package decad
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/throughshell"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -91,7 +91,7 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 				if !rp.wall || eQ.Axis[2] != tc.k {
 					continue
 				}
-				outer, ok := throughSweptTrace(q, eQ, rp, tc.k)
+				outer, ok := throughshell.SweptTrace(q.wall, q.z0, q.z1, eQ, rp.e, rp.axis, rp.level, tc.k)
 				if !ok {
 					continue
 				}
@@ -193,77 +193,14 @@ func (tc throughCut) rimPlane(bp brepPayload, fi int) (throughRimPlane, error) {
 	if f.planar() {
 		return throughRimPlane{face: f, e: e, axis: e.Axis[2], level: brepLevel(f, e), wall: tc.kinds[fi] == throughPierced}, nil
 	}
-	from, to, ok := brepgeom.NaturalLine(f.wall)
-	if !ok {
-		return throughRimPlane{}, throughRimError(f, "its wall is no straight line over its natural range")
+	wall, reason := throughshell.RestateWall(f.wall, e, bp.faces[0].frame, tc.k, tc.caps.zlo, tc.caps.zhi)
+	if reason != "" {
+		return throughRimPlane{}, throughRimError(f, reason)
 	}
-	a, b := e.Canon(from.U, from.V, 0), e.Canon(to.U, to.V, 0)
-	j := -1
-	for i := range 3 {
-		if i != tc.k && a[i] == b[i] {
-			j = i
-		}
-	}
-	if j < 0 {
-		return throughRimPlane{}, throughRimError(f, "its wall lies along no section axis")
-	}
-	sign := 1.0
-	if normal := e.Canon(to.V-from.V, from.U-to.U, 0); normal[j] < 0 {
-		sign = -1
-	}
-	frame, eR, err := brepgeom.PlanarFrame(bp.faces[0].frame, j, sign)
-	if err != nil {
-		return throughRimPlane{}, throughRimError(f, "its plane has no exact frame")
-	}
-	level := a[j]
-	region := ProfileRecord{Outer: throughRimRect(eR, a, b, tc.k, tc.caps.zlo, tc.caps.zhi)}
-	z := sign*level + 0
-	face := brepFace{frame: frame, region: &region, outward: true, sweep: tc.caps.frame.N(), z0: z, z1: z, role: f.role}
-	return throughRimPlane{face: face, e: eR, axis: j, level: level, wall: true}, nil
-}
-
-// throughSweptTrace is the rectangle a straight cavity wall along k sweeps,
-// as a counter-clockwise loop in R's frame, when the wall lies on R's
-// carrier: both its ends at R's level along R's axis. It reports false for
-// any other cavity wall.
-func throughSweptTrace(q brepFace, eQ brepEmbed, rp throughRimPlane, k int) (LoopRecord, bool) {
-	from, to, ok := brepgeom.NaturalLine(q.wall)
-	if !ok {
-		return LoopRecord{}, false
-	}
-	a, b := eQ.Canon(from.U, from.V, 0), eQ.Canon(to.U, to.V, 0)
-	if a[rp.axis] != rp.level || b[rp.axis] != rp.level {
-		return LoopRecord{}, false
-	}
-	l0, l1 := eQ.Sign[2]*q.z0+0, eQ.Sign[2]*q.z1+0
-	return throughRimRect(rp.e, a, b, k, min(l0, l1), max(l0, l1)), true
-}
-
-// throughRimRect is the rectangle the segment from a to b (reference
-// coordinates; their coordinates along k are ignored) sweeps over [lo, hi]
-// along k, as a counter-clockwise loop of natural-range LineSegs in the frame
-// with embed e.
-func throughRimRect(e brepEmbed, a, b [3]float64, k int, lo, hi float64) LoopRecord {
-	corners := [4][3]float64{a, b, b, a}
-	corners[0][k], corners[1][k], corners[2][k], corners[3][k] = lo, lo, hi, hi
-	pts := make([]Point2, 4)
-	for i, c := range corners {
-		l := e.Local(c)
-		pts[i] = Point2{U: l[0], V: l[1]}
-	}
-	area := 0.0
-	for i := range pts {
-		j := (i + 1) % len(pts)
-		area += pts[i].U*pts[j].V - pts[j].U*pts[i].V
-	}
-	if area < 0 {
-		slices.Reverse(pts)
-	}
-	segs := make([]CurveSegment, len(pts))
-	for i := range pts {
-		segs[i] = LineSeg{Start: pts[i], End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1}
-	}
-	return LoopRecord{Segments: segs}
+	z := wall.Embed.Sign[2]*wall.Level + 0
+	face := brepFace{frame: wall.Frame, region: &wall.Region, outward: true,
+		sweep: tc.caps.frame.N(), z0: z, z1: z, role: f.role}
+	return throughRimPlane{face: face, e: wall.Embed, axis: wall.Axis, level: wall.Level, wall: true}, nil
 }
 
 // rimPartner returns the hole partnering of removed face fi: given a cavity
@@ -274,7 +211,8 @@ func throughRimRect(e brepEmbed, a, b [3]float64, k int, lo, hi float64) LoopRec
 // that section index partners it. At a pierced wall the cavity hole must
 // equal the section of the tool through one of R's holes dilated by t, as the
 // tool's own cut states it: the joined dilated section carried into R's frame
-// and reversed, compared as throughLoopsSame reads two loops. A wall along k holds no hole, so any cavity hole there is SG7.
+// and reversed, compared as throughshell.LoopsSame reads two loops. A wall
+// along k holds no hole, so any cavity hole there is SG7.
 func (tc throughCut) rimPartner(ctx context.Context, fi int, rp throughRimPlane, joined ProfileRecord, dilated []ProfileRecord) (func(inR, inF LoopRecord) (int, error), error) {
 	r := rp.face
 	miss := func(what string) (int, error) { return -1, throughRimError(r, what) }
@@ -330,46 +268,12 @@ func (tc throughCut) rimPartner(ctx context.Context, fi int, rp throughRimPlane,
 	}
 	return func(inR, _ LoopRecord) (int, error) {
 		for _, w := range wants {
-			if throughLoopsSame(w.loop, inR) {
+			if throughshell.LoopsSame(w.loop, inR) {
 				return w.hi, nil
 			}
 		}
 		return miss("a cavity face in its plane holds a loop that is neither its outer loop nor the dilated section of a tool through it")
 	}, nil
-}
-
-// throughLoopsSame is brepLoopsEqual with one widening: two natural-range
-// LineSegs that walk the same two ends in the same order are the same piece,
-// whichever way each states its range. A reversed loop writes a line
-// {End, Start, 0 → 1} where the class-B cut writes {Start, End, 1 → 0}; both
-// denote one directed segment bit for bit. Every other segment compares as
-// recorded.
-func throughLoopsSame(a, b LoopRecord) bool {
-	n := len(a.Segments)
-	if n != len(b.Segments) || n == 0 {
-		return false
-	}
-	same := func(x, y CurveSegment) bool {
-		xf, xt, xok := brepgeom.NaturalLine(x)
-		yf, yt, yok := brepgeom.NaturalLine(y)
-		if xok && yok {
-			return xf == yf && xt == yt
-		}
-		return reflect.DeepEqual(x, y)
-	}
-	for r := range n {
-		ok := true
-		for i := range n {
-			if !same(a.Segments[i], b.Segments[(i+r)%n]) {
-				ok = false
-				break
-			}
-		}
-		if ok {
-			return true
-		}
-	}
-	return false
 }
 
 // throughRimRegions classifies the loops left by the cavity trace. The
