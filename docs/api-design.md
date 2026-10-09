@@ -276,12 +276,16 @@ already has.
 ```go
 type Document struct{ /* ... */ }
 
-func New(opts ...DocumentOption) *Document
+func New() *Document
 
 func (d *Document) Bodies() []*Body            // live bodies
 func (d *Document) Remove(b *Body) error        // retire a live body by hand
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
 ```
+
+`New` takes no options. Document configuration gains an option only when a
+modeling or inspection operation needs one; an empty option tier changes no
+document behavior.
 
 `Body` is **immutable**; every operation returns a new one, and the input body is
 retired from the document.
