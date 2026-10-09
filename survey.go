@@ -1,17 +1,16 @@
 package decad
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -97,118 +96,6 @@ type radiusOutcome struct {
 	bound   float64  // millimetres; meaningful only when reading != nil
 	ok      bool
 	reason  surveyReason
-}
-
-// revolveLoops resolves the loops into axis coordinates (the U fields carry
-// z, the V fields ρ), mirroring buildRevolveLoop.
-func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2d.SideWalk, error) {
-	loops, _, err := revolveLoopsPlane(budget, rp)
-	return loops, err
-}
-
-// revolveLoopsPlane is revolveLoops with each loop's PLANE-local walks kept
-// beside it, indexed by recorded segment (SideWalk.Segs): the recorded
-// geometry the axis coordinates were re-expressed from, which a proof about
-// how far a reading sits from the record needs (revolveWalks.Plane's own
-// reason).
-func revolveLoopsPlane(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2d.SideWalk, [][]survey2d.SegmentWalk, error) {
-	// One free-form counter for the whole record, as boundarywalk.SurveyLoops opens.
-	work := freeform.NewFreeformWork()
-	var out [][]survey2d.SideWalk
-	var planes [][]survey2d.SegmentWalk
-	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
-	for _, loop := range loops {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, nil, err
-		}
-		raw := make([]survey2d.SideWalk, len(loop.Segments))
-		plane := make([]survey2d.SegmentWalk, len(loop.Segments))
-		for i, seg := range loop.Segments {
-			if err := survey2d.WallBudgetStep(budget); err != nil {
-				return nil, nil, err
-			}
-			w, err := boundarywalk.WalkOf(seg, work)
-			if err != nil {
-				return nil, nil, err
-			}
-			if err := boundarywalk.RequireAnalyticWalk(w, "the survey boundary walk"); err != nil {
-				return nil, nil, err
-			}
-			plane[i] = w
-			raw[i] = survey2d.SideWalk{SegmentWalk: rp.ax.walk(w), Segs: []int{i}}
-		}
-		walks, err := boundarywalk.CoalesceWalksBudget(raw, budget)
-		if err != nil {
-			return nil, nil, err
-		}
-		out = append(out, walks)
-		planes = append(planes, plane)
-	}
-	return out, planes, nil
-}
-
-// prismWall is the spanning-ball reading of a prism: the profile's spanning
-// disks lift to balls when their diameter fits the height, the parallel caps
-// span whenever a disk of half the height fits the section, and a profile
-// corner within the allowance pinches to zero.
-func prismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (wallOutcome, error) {
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return wallOutcome{}, err
-	}
-	if pp.sectionDelta != 0 {
-		// A spanning ball fitted to the RECORDED section is not a proof about a
-		// section that section is only within the payload's own displacement of
-		// (docs/prism-boolean-design.md §7), and the reading carries no bound to
-		// widen. Undecided, which reads Suspect — never a silent pass.
-		return wallOutcome{}, nil
-	}
-	loops, err := boundarywalk.SurveyLoops(budget, boundarywalk.Profile(pp.profile))
-	if err != nil {
-		if errors.Is(err, boundarywalk.ErrFreeformSection) {
-			// A free-form boundary segment (docs/spline-design.md §8.1) is an
-			// undecided wall reading, not a failed survey: Suspect, never a
-			// silent pass and never a hard error out of Verify. This ONE
-			// refusal is the whole of the reading's tolerance for a section it
-			// cannot decompose — a degenerate segment, a radius that is not a
-			// length, and a free-form span the evaluator's own work or range
-			// ceiling refuses are failures, and reach the caller as themselves.
-			//
-			// A review read this nil return as swallowing a cancellation that
-			// arrives after the poll above, so that the caller never learns of
-			// it. The caller does learn: runSurveys is prismWall's only
-			// production call site, and it polls survey2d.WallBudgetErr again on the
-			// next unconditional line after the diagnostics, with no return
-			// between; that budget's errFn is the Verify context's own Err,
-			// which Verify then propagates. Checked in an isolated copy with a
-			// context that returns nil for the first polls and then
-			// context.Canceled: prismWall alone returns (undecided, nil), and
-			// runSurveys on the same context returns context.Canceled.
-			return wallOutcome{}, nil
-		}
-		return wallOutcome{}, err
-	}
-	height := survey2d.PrismHeight{Z0: pp.z0, Z1: pp.z1, Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta}
-	reading, err := survey2d.PrismWallReading(budget, loops, height, alpha)
-	return wallOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.Ok}, err
-}
-
-// revolveWall resolves the meridian walks and maps their bounded wall reading.
-func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64) (wallOutcome, error) {
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return wallOutcome{}, err
-	}
-	if rp.sectionDelta != 0 {
-		// prismWall's own reading over the meridian: a wall read off the
-		// recorded meridian proves nothing about the one it only sits within
-		// sectionDelta of. Undecided, which reads Suspect.
-		return wallOutcome{}, nil
-	}
-	loops, err := revolveLoops(budget, rp)
-	if err != nil {
-		return wallOutcome{}, err
-	}
-	reading, err := revolvesurvey.WallReading(budget, loops, rp.ax, rp.full, rp.phi0, rp.phi1, rp.angularDelta(), alpha)
-	return wallOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.Ok}, err
 }
 
 // facesByRole indexes a body's faces by their own-step feature role.
@@ -313,7 +200,7 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	c0 := rp.xform.ApplyDir(bas.E0).Dot(p)
 	c1 := rp.xform.ApplyDir(bas.E1).Dot(p)
 	roles := facesByRole(b)
-	loops, err := revolveLoops(nil, rp)
+	loops, err := wallsurvey.RevolveLoops(nil, rp.profile, rp.ax.numeric())
 	if err != nil {
 		return undercutOutcome{}
 	}
@@ -386,7 +273,7 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 		// recorded meridian, with no bound for its displacement.
 		return radiusOutcome{}, false
 	}
-	loops, err := revolveLoops(nil, rp)
+	loops, err := wallsurvey.RevolveLoops(nil, rp.profile, rp.ax.numeric())
 	if err != nil {
 		return radiusOutcome{}, false
 	}
@@ -605,9 +492,18 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		var err error
 		switch pl := b.payload.(type) {
 		case prismPayload:
-			out, err = prismWall(budget, pl, cfg.AllowRad)
+			reading, readErr := wallsurvey.PrismWall(budget, pl.profile,
+				survey2d.PrismHeight{Z0: pl.z0, Z1: pl.z1, Z0Delta: pl.z0Delta, Z1Delta: pl.z1Delta},
+				pl.sectionDelta, cfg.AllowRad)
+			out, err = wallOutcome{reading: reading.Reading, bound: reading.Bound,
+				ok: reading.OK, reason: reading.Reason}, readErr
 		case revolvePayload:
-			out, err = revolveWall(budget, pl, cfg.AllowRad)
+			reading, readErr := wallsurvey.RevolveWall(budget, wallsurvey.RevolveRecord{
+				Profile: pl.profile, Axis: pl.ax.numeric(), SectionDelta: pl.sectionDelta,
+				Full: pl.full, Phi0: pl.phi0, Phi1: pl.phi1, AngularDelta: pl.angularDelta(),
+			}, cfg.AllowRad)
+			out, err = wallOutcome{reading: reading.Reading, bound: reading.Bound,
+				ok: reading.OK, reason: reading.Reason}, readErr
 		case cupPayload:
 			wall, wallErr := cupwall.Evaluate(budget, cupWallInput(pl.view()), cfg.AllowRad, cupWallOperations)
 			out, err = wallOutcome{reading: wall.Reading, bound: wall.Bound, ok: wall.OK}, wallErr

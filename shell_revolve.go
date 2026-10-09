@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -201,7 +202,7 @@ func revolveShellInradius(budget *proofbound.WorkBudget, rp revolvePayload, onAx
 	if !onAxis {
 		return shellsurvey.SectionInradius(budget, boundarywalk.Profile(rp.profile), tmm, tDelta, shellTol)
 	}
-	loops, err := revolveLoops(budget, rp)
+	loops, err := wallsurvey.RevolveLoops(budget, rp.profile, rp.ax.numeric())
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return 0, false, err

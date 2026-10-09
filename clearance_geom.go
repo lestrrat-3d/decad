@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
@@ -478,7 +479,7 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 // input. ok is false for a meridian this kernel cannot decompose, which
 // leaves the body with no model.
 func revolveCarrierInput(budget *proofbound.WorkBudget, rp revolvePayload) (clearance.RevolveCarrierInput, bool, error) {
-	loops, planes, err := revolveLoopsPlane(budget, rp)
+	loops, planes, err := wallsurvey.RevolveLoopsPlane(budget, rp.profile, rp.ax.numeric())
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return clearance.RevolveCarrierInput{}, false, err
