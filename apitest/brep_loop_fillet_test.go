@@ -1,12 +1,14 @@
 package apitest_test
 
 import (
+	"bytes"
 	"math"
 	"math/big"
 	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -15,7 +17,7 @@ import (
 // These fixtures pin route L's fillet arm of docs/loop-fillet-design.md
 // through the public API: Body.Fillet of a complete loop of a planar face
 // builds a brep body whose pipe patches are faces of the body, measured by
-// the strip model (§5.3), while the readers its PR F-2 lands still refuse.
+// the strip model (§5.3), and tessellate, export and take part in booleans.
 
 // filletLoopPatches lists the faces carrying a filletLoop(f,l,p) role.
 func filletLoopPatches(body *decad.Body) []*decad.Face {
@@ -52,7 +54,7 @@ func requireMeasurementHoldsPi(t *testing.T, m decad.Measurement, a, b *big.Rat)
 // and 1.5. Table CF's a₁ = 160, a₂ = −4 give the volume
 // 15000 − 160·J₁ + 4·J₂ = 29325/2 + 333π/4, Approximate since π enters it;
 // every ellipse's published length encloses the quarter-ellipse arc; and the
-// mesh refuses, naming PR F-2.
+// mesh closes over every face and encloses the volume.
 func TestBrepLoopFilletPublicPlateTopLoop(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -98,9 +100,16 @@ func TestBrepLoopFilletPublicPlateTopLoop(t *testing.T) {
 	}
 	require.Equal(t, 4, ellipses)
 
-	_, err = got.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "loop-fillet PR F-2")
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+
+	// A fillet-banded body exports to STEP (faceted or analytic: which is
+	// export's own concern, loop-fillet DF10).
+	var step bytes.Buffer
+	require.NoError(t, export.STEP(t.Context(), &step, got, units.Millimeters(0.1),
+		export.WithSTEPName("fillet"), export.WithSTEPAuthor("test"), export.WithSTEPOrganization("test")))
+	require.Contains(t, step.String(), "ISO-10303-21")
 }
 
 // TestBrepLoopFilletPublicBoxCaps fillets both cap loops of the 100×60×20

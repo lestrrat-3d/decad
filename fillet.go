@@ -115,9 +115,10 @@ const filletTol = sectionaudit.Tolerance
 // receiver that is neither a prism nor a revolve is S3 (ErrUnsupported).
 //
 // A loop-filleted body publishes its volume, centroid, area, box and
-// through-all extent, and passes Verify; its mesh, its STEP export, its use as
-// a mesh boolean operand and its undercut and concave-radius surveys wait on
-// docs/loop-fillet-design.md's PR F-2 and refuse or stage until then.
+// through-all extent, and passes Verify; it meshes with an occupied-volume
+// proof, exports to STEP, takes part in a mesh boolean, is surveyed for
+// undercuts and concave radii, and is placed, mirrored and patterned like any
+// brep body (docs/loop-fillet-design.md Table DF).
 func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)

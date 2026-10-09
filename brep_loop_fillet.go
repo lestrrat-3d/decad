@@ -564,11 +564,58 @@ func (bp brepPayload) hasFilletBand() bool {
 	return false
 }
 
-// errFilletBandStaged is the refusal every consumer of a fillet-banded body
-// docs/loop-fillet-design.md's PR F-2 lands returns until then: its mesh, its
-// surveys and the mesh boolean operand (Table DF's DF4, DF5, DF7, DF8).
-func errFilletBandStaged(reader string) error {
-	return fmt.Errorf(`%w: this evaluator does not yet read a body carrying a route L fillet band through %s; its pipe patches' rings and proof terms are loop-fillet PR F-2`, ErrUnsupported, reader)
+// brepFilletUndercuts folds DF7's reading of band's pipe patches into the
+// running faces list and undecided flag (loop-fillet Table DF's DF7). Patch
+// p of the band is read through the closed-form range of cos φ·A + sin φ·B(θ)
+// of its outward normal along the pull: A from F's frame normal, B from the
+// inward normal of F's region at the patch's walk (survey2d.InwardRange) or
+// through the turn of a reflex corner (survey2d.CornerRange), decided by the
+// three-valued rule every undercut reading uses. The patch tags are the built
+// surfaces (their stamped departure is zero), so no allowance beyond that
+// arithmetic arises. It reports false, a total refusal, when a patch's face is
+// missing or a range cannot be enclosed.
+func brepFilletUndercuts(budget *proofbound.WorkBudget, roles map[string]*Face, bp brepPayload, band brepLoopBand, pull r3.Vec,
+	faces *[]*Face, undecided *bool, work *freeform.FreeformWork) bool {
+	f := bp.faces[band.face]
+	view := f.view(bp.xform)
+	m, ok := survey2d.NewPlacedFrameMap(view.frame, view.xform)
+	if !ok {
+		return false
+	}
+	fr, err := filletLoopOf(budget, band.orig, band.setback.dc, f.role, work)
+	if err != nil {
+		return false
+	}
+	sign := int64(-1)
+	if f.outward {
+		sign = 1
+	}
+	sigma := int64(band.sigma)
+	n := len(fr.walks)
+	p := 0
+	patch := func(rng survey2d.PullBracket, ok bool) bool {
+		if !ok {
+			return false
+		}
+		face := roles[band.patchRole(p)]
+		p++
+		if face == nil {
+			return false
+		}
+		verdict, ok := survey2d.PatchPullVerdict(m, pull, sign, rng)
+		return listVerdict(faces, undecided, face, verdict, ok)
+	}
+	for i, w := range fr.walks {
+		if !patch(survey2d.InwardRange(w, m, pull, sigma)) {
+			return false
+		}
+		if ni := (i + 1) % n; !fr.loop.WholeTurn() && fr.loop.Corners[ni] == filletband.Reflex {
+			if !patch(survey2d.CornerRange(w, fr.walks[ni], m, pull, sigma)) {
+				return false
+			}
+		}
+	}
+	return p == len(fr.pieces)
 }
 
 // walkTangent is a straight side walk's unit direction in its plane's (u, v).

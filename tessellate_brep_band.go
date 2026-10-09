@@ -51,13 +51,16 @@ type brepBandChord struct {
 	// sideV and capV are the mesh vertices of the side ring at the side level
 	// and of the cap contour ring at F's level.
 	sideV, capV []int
+	// fillet holds a fillet band's interior rings (tessellate_brep_fillet.go),
+	// nil for a chamfer band.
+	fillet *filletRings
 }
 
 // brepChordBands chords every band of the record and imposes each wall walk's
 // count on the face beside it. The result maps a swept face's index to the
 // samples its wall must take. A wall two bands reach must take one count from
-// both, or the body refuses. A fillet band refuses: its rings are
-// docs/loop-fillet-design.md's PR F-2.
+// both, or the body refuses. A fillet band adds its interior ring count
+// (docs/loop-fillet-design.md §7.1).
 func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, chord float64) ([]brepBandChord, map[int]tessellation.ChordSamples[*Face], error) {
 	if len(bp.loopBands) == 0 {
 		return nil, nil, nil
@@ -73,9 +76,6 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 	for bi, b := range bp.loopBands {
 		if err := b.validate(bp, bi); err != nil {
 			return nil, nil, err
-		}
-		if b.kind == brepBandFillet {
-			return nil, nil, errFilletBandStaged("its mesh")
 		}
 		f := bp.faces[b.face]
 		cbp := b.tessView(f, bp.xform)
@@ -108,6 +108,9 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 				continue
 			}
 			imposed[u.Face] = samples
+		}
+		if b.kind == brepBandFillet {
+			bc.fillet = &filletRings{n: filletRingCount(b.setback.axialUpper(), chord)}
 		}
 		bands[bi] = bc
 	}
@@ -207,6 +210,18 @@ func (bc *brepBandChord) place(e brepEmbed, addVertex func([3]float64, proofboun
 // patches face the other way (attachBrepLoopBands), so its windings turn over.
 func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[string]capPatchGeom,
 	faceOfRole func(string) (*Face, error), bump func(*Face, float64)) error {
+	if bc.fillet != nil {
+		first := len(m.triangles)
+		if err := bc.emitFillet(m, faceOfRole, bump); err != nil {
+			return err
+		}
+		if bc.band.sigma > 0 {
+			for i := first; i < len(m.triangles); i++ {
+				m.triangles[i][1], m.triangles[i][2] = m.triangles[i][2], m.triangles[i][1]
+			}
+		}
+		return nil
+	}
 	lm := &bc.lm
 	if bc.start {
 		lm.sideLo, lm.capLoV = bc.sideV, bc.capV
@@ -241,8 +256,21 @@ func brepBandMotion(ctx context.Context, bands []brepBandChord, store, round []f
 		if err := capBlendCapMotion(budget, bc.cbp, &bc.lm); err != nil {
 			return nil, err
 		}
+		if bc.fillet != nil {
+			bc.fillet.arcMotion(&bc.lm, bc.face.delta, bc.band.setback.dcDelta)
+		}
 		for j, vi := range bc.capV {
 			motion[vi] = proofbound.AbsSumUpper(bc.lm.capMotion[j], round[vi], bc.face.z0Delta)
+		}
+		if fr := bc.fillet; fr != nil {
+			// An interior ring vertex lies within its own interpolation error
+			// of the point between its two ends' ideal positions.
+			for k := 1; k < fr.n; k++ {
+				for c, vi := range fr.ringV[k] {
+					ends := math.Max(motion[fr.ringV[0][c]], motion[fr.ringV[fr.n][c]])
+					motion[vi] = proofbound.AbsSumUpper(ends, fr.dev[k][c], round[vi])
+				}
+			}
 		}
 	}
 	return motion, nil
@@ -255,6 +283,9 @@ func brepBandChordVolume(bands []brepBandChord) float64 {
 	total := 0.0
 	for bi := range bands {
 		bc := &bands[bi]
+		if bc.fillet != nil {
+			continue
+		}
 		loop := bc.lm.proof()
 		loop.ZLo, loop.ZHi = proofbound.MeasuredScalar(0, 0), proofbound.MeasuredScalar(0, 0)
 		height := [2]float64{}
