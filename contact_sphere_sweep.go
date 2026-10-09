@@ -3,10 +3,10 @@ package decad
 import (
 	"context"
 	"errors"
-	"math"
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -201,13 +201,9 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 		return
 	}
 	sphereDelta, boxDelta := r.deltas()
-	deviation := boxPoseDeviation(r.box, observedBox, boxDelta, f)
-	for i := range 3 {
-		move := new(big.Rat).Mul(sphereDelta[i].Rat(), f)
-		center := new(big.Rat).Add(r.sphere.center[i].Rat(), move)
-		diff := new(big.Rat).Sub(observedSphere.center[i].Rat(), center)
-		deviation.Add(deviation, diff.Abs(diff))
-	}
+	deviation := spherepath.AxisSpherePoseDeviation(
+		box.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, observedSphere.center,
+		r.box.axisBox(), observedBox.axisBox(), sphereDelta, boxDelta, f)
 	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if !ok {
 		ideal.Manifold = nil
@@ -259,76 +255,14 @@ func (r *sourceSphereSweepRun) sortSamples() {
 	})
 }
 
-// faceCorridor proves that the complete sphere projection remains strictly
-// inside the same two box face intervals throughout the affine path.
-func (r *sourceSphereSweepRun) faceCorridor(axis int) bool {
-	sphereDelta, boxDelta := r.deltas()
-	for i := range 3 {
-		if i == axis {
-			continue
-		}
-		for _, f := range []*big.Rat{new(big.Rat), big.NewRat(1, 1)} {
-			sphere, okSphere := translatedSphere(r.sphere, sphereDelta, f)
-			box, okBox := translatedContactBox(r.box, boxDelta, f)
-			if !okSphere || !okBox ||
-				proofarith.DyCmp(proofarith.DySubScalar(sphere.center[i], sphere.radius), box.lo[i]) <= 0 ||
-				proofarith.DyCmp(proofarith.DyAdd(sphere.center[i], sphere.radius), box.hi[i]) >= 0 {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func (r *sourceSphereSweepRun) contactAxis() (int, int, proofarith.Dyadic, proofarith.Dyadic, bool) {
-	sphereDelta, boxDelta := r.deltas()
-	for i := range 3 {
-		if proofarith.DyCmp(r.sphere.center[i], r.box.hi[i]) > 0 {
-			gap := proofarith.DySubScalar(proofarith.DySubScalar(r.sphere.center[i], r.box.hi[i]), r.sphere.radius)
-			if gap.Sign() < 0 {
-				return 0, 0, proofarith.Dyadic{}, proofarith.Dyadic{}, false
-			}
-			slope := proofarith.DySubScalar(sphereDelta[i], boxDelta[i])
-			return i, 1, gap, slope, r.faceCorridor(i)
-		}
-		if proofarith.DyCmp(r.sphere.center[i], r.box.lo[i]) < 0 {
-			gap := proofarith.DySubScalar(proofarith.DySubScalar(r.box.lo[i], r.sphere.center[i]), r.sphere.radius)
-			if gap.Sign() < 0 {
-				return 0, 0, proofarith.Dyadic{}, proofarith.Dyadic{}, false
-			}
-			slope := proofarith.DySubScalar(boxDelta[i], sphereDelta[i])
-			return i, -1, gap, slope, r.faceCorridor(i)
-		}
-	}
-	return 0, 0, proofarith.Dyadic{}, proofarith.Dyadic{}, false
-}
-
 func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
 	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 1 {
 		return nil
 	}
-	// The exact point's coordinates move affinely. One outward ULP at the
-	// largest endpoint coordinate encloses every intermediate conversion.
-	maximum := new(big.Rat)
 	sphereDelta, boxDelta := r.deltas()
-	for i := range 3 {
-		for _, v := range []proofarith.Dyadic{r.sphere.center[i],
-			proofarith.DyAdd(r.sphere.center[i], sphereDelta[i]),
-			proofarith.DyAdd(r.sphere.center[i], r.sphere.radius),
-			proofarith.DySubScalar(r.sphere.center[i], r.sphere.radius),
-			proofarith.DyAdd(proofarith.DyAdd(r.sphere.center[i], sphereDelta[i]), r.sphere.radius),
-			proofarith.DySubScalar(proofarith.DyAdd(r.sphere.center[i], sphereDelta[i]), r.sphere.radius),
-			r.box.lo[i], r.box.hi[i],
-			proofarith.DyAdd(r.box.lo[i], boxDelta[i]), proofarith.DyAdd(r.box.hi[i], boxDelta[i])} {
-			abs := new(big.Rat).Abs(v.Rat())
-			if abs.Cmp(maximum) > 0 {
-				maximum = abs
-			}
-		}
-	}
-	maxFloat := proofbound.RatFloatUp(maximum)
-	if !finiteMeasurementValues(maxFloat) ||
-		proofbound.Radius3D(math.Nextafter(maxFloat, math.Inf(1))-maxFloat) > r.req.PointResolution.Base() {
+	if !spherepath.AxisTrackPointsWithin(
+		box.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, r.box.axisBox(),
+		sphereDelta, boxDelta, r.req.PointResolution.Base()) {
 		return nil
 	}
 	point := first.Ideal.Manifold.Points[0]
@@ -370,7 +304,10 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 			return r.report, nil
 		}
 	}
-	axis, side, gap, slope, ok := r.contactAxis()
+	sphereDelta, boxDelta := r.deltas()
+	axis, side, gap, slope, ok := spherepath.AxisFaceCorridor(
+		box.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, r.box.axisBox(),
+		sphereDelta, boxDelta)
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
