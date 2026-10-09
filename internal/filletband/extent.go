@@ -5,7 +5,9 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // Extreme encloses the largest value of g·p over every patch of the band, p a
@@ -180,4 +182,75 @@ func windowMax(p Piece, g [3]*big.Rat) (Interval, error) {
 	dlo := proofbound.IntervalAdd(proofbound.IntervalMul(gv[0], ulo[0]), proofbound.IntervalMul(gv[1], ulo[1]))
 	dhi := proofbound.IntervalAdd(proofbound.IntervalMul(gv[0], uhi[0]), proofbound.IntervalMul(gv[1], uhi[1]))
 	return hullMax([]Interval{dlo, dhi}), nil
+}
+
+// WidenCurvedMiterExtent includes corner portions that the straight-rate
+// patch extrema omit. Their positions remain in proven corner disks, while
+// their heights stay between the side and cap levels.
+func WidenCurvedMiterExtent(walks []survey2d.SideWalk, corners []Corner, radius float64,
+	r, side Interval, m float64, g [3]*big.Rat, old Interval) (Interval, error) {
+	hasCurved := false
+	for _, class := range corners {
+		hasCurved = hasCurved || class == CurvedMiter
+	}
+	if !hasCurved {
+		return old, nil
+	}
+	capLevel := proofbound.IntervalAdd(side, proofbound.IntervalScale(r, big.NewRat(int64(-m), 1)))
+	zAbs := new(big.Rat)
+	for _, v := range []*big.Rat{side.Lo, side.Hi, capLevel.Lo, capLevel.Hi} {
+		if a := new(big.Rat).Abs(v); a.Cmp(zAbs) > 0 {
+			zAbs = a
+		}
+	}
+	planarNorm, ok := proofbound.SqrtInterval(proofbound.PointInterval(new(big.Rat).Add(
+		new(big.Rat).Mul(g[0], g[0]), new(big.Rat).Mul(g[1], g[1]))))
+	if !ok {
+		return Interval{}, fmt.Errorf(`%w: a curved fillet extent has no planar direction bound`, decaderr.ErrUnsupported)
+	}
+	upper := old.Hi
+	var lower *big.Rat
+	consider := func(u, v, z Interval) {
+		anchor := proofbound.IntervalAdd(proofbound.IntervalAdd(
+			proofbound.IntervalMul(proofbound.PointInterval(g[0]), u),
+			proofbound.IntervalMul(proofbound.PointInterval(g[1]), v)),
+			proofbound.IntervalMul(proofbound.PointInterval(g[2]), z))
+		if lower == nil || anchor.Lo.Cmp(lower) > 0 {
+			lower = anchor.Lo
+		}
+	}
+	for _, w := range walks {
+		endError := proofarith.FloatRat(proofbound.WalkEndBoundAllow(w.StartBound))
+		u := proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(w.StartU)), endError)
+		v := proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(w.StartV)), endError)
+		consider(u, v, side)
+	}
+	for k, class := range corners {
+		if class != CurvedMiter {
+			continue
+		}
+		cur := walks[k]
+		prev := walks[(k+len(walks)-1)%len(walks)]
+		reach, ok := CurvedMiterReachUpper(prev, cur, r)
+		if !ok {
+			return Interval{}, fmt.Errorf(`%w: a curved fillet extent has no corner reach bound`, decaderr.ErrUnsupported)
+		}
+		reachRat := proofarith.FloatRat(reach)
+		corner := new(big.Rat).Add(new(big.Rat).Mul(g[0], proofarith.FloatRat(cur.StartU)),
+			new(big.Rat).Mul(g[1], proofarith.FloatRat(cur.StartV)))
+		candidate := new(big.Rat).Add(corner, new(big.Rat).Mul(planarNorm.Hi, reachRat))
+		candidate.Add(candidate, new(big.Rat).Mul(new(big.Rat).Abs(g[2]), zAbs))
+		if candidate.Cmp(upper) > 0 {
+			upper = candidate
+		}
+		foot, ok := CurvedMiterPoint(prev, cur, radius, radius, cur.StartU, cur.StartV)
+		if !ok {
+			return Interval{}, fmt.Errorf(`%w: a curved fillet extent has no cap endpoint`, decaderr.ErrUnsupported)
+		}
+		consider(foot[0], foot[1], capLevel)
+	}
+	if lower == nil {
+		return old, nil
+	}
+	return proofbound.Interval(lower, upper), nil
 }

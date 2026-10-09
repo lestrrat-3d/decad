@@ -8,10 +8,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
-	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -52,40 +50,17 @@ func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, rol
 	if err != nil {
 		return filletLoopRead{}, err
 	}
-	out := filletLoopRead{walks: cl.walks}
-	for _, w := range cl.walks {
-		out.loop.Walks = append(out.loop.Walks, filletband.Walk{
-			Circular: w.IsCircular(), Closed: w.Closed, CCW: w.Th1 > w.Th0,
-			Start:  filletband.Point{U: w.StartU, V: w.StartV},
-			End:    filletband.Point{U: w.EndU, V: w.EndV},
-			Center: filletband.Point{U: w.CU, V: w.CV}, Radius: w.Radius,
-		})
-	}
-	n := len(cl.walks)
-	if !out.loop.WholeTurn() {
-		if out.joins, err = filletband.OffsetJoins(budget, cl.walks, r, 0, shellTol); err != nil {
-			return filletLoopRead{}, err
-		}
-		for k := range n {
-			if err := survey2d.WallBudgetStep(budget); err != nil {
-				return filletLoopRead{}, err
-			}
-			class, err := filletband.CornerClass(loop, cl.walks, out.loop.Walks, out.joins, k)
-			if err != nil {
-				return filletLoopRead{}, err
-			}
-			if class == 0 {
-				return filletLoopRead{}, fmt.Errorf(`%w: a fillet of a complete loop of brep face %s has no supported join at corner (%s, %s) between recorded segments %d and %d (loop-fillet SF1)`,
-					ErrUnsupported, role, renderCoord(cl.walks[k].StartU), renderCoord(cl.walks[k].StartV),
-					cl.walks[(k+n-1)%n].Segs[len(cl.walks[(k+n-1)%n].Segs)-1], cl.walks[k].Segs[0])
-			}
-			out.loop.Corners = append(out.loop.Corners, class)
-		}
-	}
-	if out.pieces, err = out.loop.Pieces(); err != nil {
+	read, joins, pieces, bad, err := filletband.ReadLoop(budget, loop, cl.walks, r, shellTol)
+	if err != nil {
 		return filletLoopRead{}, err
 	}
-	return out, nil
+	if bad >= 0 {
+		n := len(cl.walks)
+		return filletLoopRead{}, fmt.Errorf(`%w: a fillet of a complete loop of brep face %s has no supported join at corner (%s, %s) between recorded segments %d and %d (loop-fillet SF1)`,
+			ErrUnsupported, role, renderCoord(cl.walks[bad].StartU), renderCoord(cl.walks[bad].StartV),
+			cl.walks[(bad+n-1)%n].Segs[len(cl.walks[(bad+n-1)%n].Segs)-1], cl.walks[bad].Segs[0])
+	}
+	return filletLoopRead{loop: read, walks: cl.walks, joins: joins, pieces: pieces}, nil
 }
 
 // filletContourDelta bounds the contour that remains after a sphere pole
@@ -100,28 +75,7 @@ func filletContourDelta(ctx context.Context, loop loopRecord, r, rDelta float64)
 	if len(cl.walks) == 1 && cl.walks[0].Closed {
 		return loopContourDelta(ctx, loop, r, rDelta)
 	}
-	joins, err := filletband.OffsetJoins(budget, cl.walks, r, rDelta, shellTol)
-	if err != nil {
-		return 0, err
-	}
-	var kept []survey2d.SideWalk
-	var keptJoins []cornerJoin
-	n := len(cl.walks)
-	for i, w := range cl.walks {
-		if filletband.SphereWalk(w, r) {
-			continue
-		}
-		j := joins[i]
-		prev := cl.walks[(i+n-1)%n]
-		if filletband.SphereWalk(prev, r) {
-			j = cornerJoin{M: Point2{U: prev.CU, V: prev.CV}, VertU: prev.CU, VertV: prev.CV}
-		}
-		kept, keptJoins = append(kept, w), append(keptJoins, j)
-	}
-	if len(kept) < 2 {
-		return 0, offset2d.ErrDrop
-	}
-	return capband.ContourDisplacement(kept, capContourJoins(keptJoins), r, rDelta, shellTol)
+	return filletband.ContourDelta(budget, cl.walks, r, rDelta, shellTol)
 }
 
 // suppliedFilletCapWalls pairs the contour's edges with the original walks.
@@ -666,7 +620,7 @@ func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	hiIv, err = widenCurvedMiterExtent(fr, b.setback.dc, rIv, sideIv, m, gp, hiIv)
+	hiIv, err = filletband.WidenCurvedMiterExtent(fr.walks, fr.loop.Corners, b.setback.dc, rIv, sideIv, m, gp, hiIv)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -674,7 +628,7 @@ func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	loIv, err = widenCurvedMiterExtent(fr, b.setback.dc, rIv, sideIv, m, gn, loIv)
+	loIv, err = filletband.WidenCurvedMiterExtent(fr.walks, fr.loop.Corners, b.setback.dc, rIv, sideIv, m, gn, loIv)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -696,79 +650,6 @@ func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.
 	bound := proofbound.AbsSumUpper(math.Max(loErr, hiErr), placeAllow, sideDelta,
 		math.Max(proofbound.ExactSumRound(loEnd, base, lo), proofbound.ExactSumRound(hiEnd, base, hi)))
 	return loEnd, hiEnd, bound, nil
-}
-
-// widenCurvedMiterExtent includes the changed corner portions that the
-// straight-rate patch extrema omit. Their planar positions stay in a proven
-// disk around the corner, while their heights remain between side and cap.
-// The actual seam's side endpoint gives a lower bound on the band's maximum.
-func widenCurvedMiterExtent(fr filletLoopRead, radius float64, r, side proofbound.RatInterval, m float64,
-	g [3]*big.Rat, old proofbound.RatInterval) (proofbound.RatInterval, error) {
-	hasCurved := false
-	for _, class := range fr.loop.Corners {
-		hasCurved = hasCurved || class == filletband.CurvedMiter
-	}
-	if !hasCurved {
-		return old, nil
-	}
-	capLevel := proofbound.IntervalAdd(side, proofbound.IntervalScale(r, big.NewRat(int64(-m), 1)))
-	zAbs := new(big.Rat)
-	for _, v := range []*big.Rat{side.Lo, side.Hi, capLevel.Lo, capLevel.Hi} {
-		if a := new(big.Rat).Abs(v); a.Cmp(zAbs) > 0 {
-			zAbs = a
-		}
-	}
-	planarNorm, ok := proofbound.SqrtInterval(proofbound.PointInterval(new(big.Rat).Add(
-		new(big.Rat).Mul(g[0], g[0]), new(big.Rat).Mul(g[1], g[1]))))
-	if !ok {
-		return proofbound.RatInterval{}, fmt.Errorf(`%w: a curved fillet extent has no planar direction bound`, ErrUnsupported)
-	}
-	upper := old.Hi
-	var lower *big.Rat
-	consider := func(u, v, z proofbound.RatInterval) {
-		anchor := proofbound.IntervalAdd(proofbound.IntervalAdd(
-			proofbound.IntervalMul(proofbound.PointInterval(g[0]), u),
-			proofbound.IntervalMul(proofbound.PointInterval(g[1]), v)),
-			proofbound.IntervalMul(proofbound.PointInterval(g[2]), z))
-		if lower == nil || anchor.Lo.Cmp(lower) > 0 {
-			lower = anchor.Lo
-		}
-	}
-	for _, w := range fr.walks {
-		endError := proofarith.FloatRat(proofbound.WalkEndBoundAllow(w.StartBound))
-		u := proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(w.StartU)), endError)
-		v := proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(w.StartV)), endError)
-		consider(u, v, side)
-	}
-	for k, class := range fr.loop.Corners {
-		if class != filletband.CurvedMiter {
-			continue
-		}
-		cur := fr.walks[k]
-		prev := fr.walks[(k+len(fr.walks)-1)%len(fr.walks)]
-		reach, ok := filletband.CurvedMiterReachUpper(prev, cur, r)
-		if !ok {
-			return proofbound.RatInterval{}, fmt.Errorf(`%w: a curved fillet extent has no corner reach bound`, ErrUnsupported)
-		}
-		reachRat := proofarith.FloatRat(reach)
-		corner := new(big.Rat).Add(new(big.Rat).Mul(g[0], proofarith.FloatRat(cur.StartU)),
-			new(big.Rat).Mul(g[1], proofarith.FloatRat(cur.StartV)))
-		candidate := new(big.Rat).Add(corner, new(big.Rat).Mul(planarNorm.Hi, reachRat))
-		candidate.Add(candidate, new(big.Rat).Mul(new(big.Rat).Abs(g[2]), zAbs))
-		if candidate.Cmp(upper) > 0 {
-			upper = candidate
-		}
-		foot, ok := filletband.CurvedMiterPoint(prev, cur, radius, radius,
-			cur.StartU, cur.StartV)
-		if !ok {
-			return proofbound.RatInterval{}, fmt.Errorf(`%w: a curved fillet extent has no cap endpoint`, ErrUnsupported)
-		}
-		consider(foot[0], foot[1], capLevel)
-	}
-	if lower == nil {
-		return old, nil
-	}
-	return proofbound.Interval(lower, upper), nil
 }
 
 // hasFilletBand reports whether the record carries a fillet band.
