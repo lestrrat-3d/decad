@@ -96,7 +96,7 @@ func sweptBoxOf(b *Body, p affinePairPath) (SweptBox, bool) {
 	if !ok {
 		return SweptBox{}, false
 	}
-	bounds, ok := sweeppath.SweepBounds(corners, p, exactContactTransform,
+	bounds, ok := sweeppath.SweepBounds(corners, p, proofarith.DvTransform,
 		func(from r3.Transform, center r3.Vec, axis motionbound.RatVec) (*big.Rat, bool) {
 			return rotationalSweepRadius(b, from, center, axis)
 		})

@@ -17,12 +17,12 @@ import (
 
 // placePlanarSnapshotRebuilt is placePlanarSnapshot before the snapshot
 // carried its topology: every pose maps each vertex through
-// exactContactTransform and runs the whole planar.CheckPlanarSolid audit.
+// proof.DvTransform and runs the whole planar.CheckPlanarSolid audit.
 func placePlanarSnapshotRebuilt(snapshot *planarSnapshotEntry, pose r3.Transform) (planar.PlanarSolid, bool) {
 	solid := planar.PlanarSolid{Verts: make([]proofarith.DyV3, len(snapshot.solid.Verts)),
 		Tris: slices.Clip(snapshot.solid.Tris), Faces: slices.Clip(snapshot.solid.Faces)}
 	for i, v := range snapshot.solid.Verts {
-		solid.Verts[i] = exactContactTransform(pose, v)
+		solid.Verts[i] = proofarith.DvTransform(pose, v)
 	}
 	audited, err := planar.CheckPlanarSolid(&solid, noSweepPoll)
 	if err != nil || !audited {
@@ -59,7 +59,7 @@ func requireDyV3Equal(t *testing.T, want, got proofarith.DyV3, msg string, args 
 }
 
 // TestExactContactMapMatchesTransform holds exactContactMap, which lifts a
-// pose once for many points, to exactContactTransform on random poses and
+// pose once for many points, to proof.DvTransform on random poses and
 // points: zero, integer, fine and large coordinates.
 //
 // Leg shown to fail: apply adding ey·p[0], every non-axis pose differs.
@@ -80,7 +80,7 @@ func TestExactContactMapMatchesTransform(t *testing.T) {
 		place := newExactContactMap(pose)
 		for range 8 {
 			p := proofarith.DyVec(r3.Vec{X: coordinate(), Y: coordinate(), Z: coordinate()})
-			requireDyV3Equal(t, exactContactTransform(pose, p), place.apply(p), "pose %v point %v", pose, p)
+			requireDyV3Equal(t, proofarith.DvTransform(pose, p), place.apply(p), "pose %v point %v", pose, p)
 		}
 	}
 }

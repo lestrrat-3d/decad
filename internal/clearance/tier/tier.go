@@ -162,10 +162,10 @@ func (k *Kernel) PlaneCylinderRuling(plane, cyl *clearance.CFace,
 	if !k.tangentAzimuthAdmitted(cyl, plane.N.Scale(-1)) {
 		return nil
 	}
-	base := proofarith.DvSub(anchor, dyScaleVec(n, radius))
+	base := proofarith.DvSub(anchor, proofarith.DvScale(n, radius))
 	ends := [2]proofarith.DyV3{
-		proofarith.DvAdd(base, dyScaleVec(axis, lo)),
-		proofarith.DvAdd(base, dyScaleVec(axis, hi)),
+		proofarith.DvAdd(base, proofarith.DvScale(axis, lo)),
+		proofarith.DvAdd(base, proofarith.DvScale(axis, hi)),
 	}
 	if !k.rulingInsidePlaneTrim(plane, ends) {
 		return nil
@@ -213,7 +213,7 @@ func (k *Kernel) CylinderPairRuling(ca, cb *clearance.CFace, aExtent, bExtent Ex
 	}
 	delta := proofarith.DvSub(anchorB, anchorA)
 	along := proofarith.DvDot(delta, axisA)
-	perp := proofarith.DvSub(delta, dyScaleVec(axisA, along))
+	perp := proofarith.DvSub(delta, proofarith.DvScale(axisA, along))
 	normal, ok := clearance.AxisOfLength(perp, proofarith.DyAdd(rA, rB))
 	if !ok {
 		return nil
@@ -242,10 +242,10 @@ func (k *Kernel) CylinderPairRuling(ca, cb *clearance.CFace, aExtent, bExtent Ex
 	if !okAHi || !okBLo || proofarith.DyCmp(aHiDy, offset) > 0 || proofarith.DyCmp(bLoDy, offset) < 0 {
 		return nil
 	}
-	base := proofarith.DvAdd(anchorA, dyScaleVec(normal, rA))
+	base := proofarith.DvAdd(anchorA, proofarith.DvScale(normal, rA))
 	ends := [2]proofarith.DyV3{
-		proofarith.DvAdd(base, dyScaleVec(axisA, lo)),
-		proofarith.DvAdd(base, dyScaleVec(axisA, hi)),
+		proofarith.DvAdd(base, proofarith.DvScale(axisA, lo)),
+		proofarith.DvAdd(base, proofarith.DvScale(axisA, hi)),
 	}
 	return &clearance.RulingContact{FaceA: ca, FaceB: cb, Normal: normal, Offset: offset, Ends: clearance.OrderedRulingEnds(ends)}
 }
@@ -280,10 +280,6 @@ func (k *Kernel) rulingInsidePlaneTrim(plane *clearance.CFace, ends [2]proofarit
 		}
 	}
 	return true
-}
-
-func dyScaleVec(v proofarith.DyV3, s proofarith.Dyadic) proofarith.DyV3 {
-	return proofarith.DyV3{proofarith.DyMul(v[0], s), proofarith.DyMul(v[1], s), proofarith.DyMul(v[2], s)}
 }
 
 func dyMax(a, b proofarith.Dyadic) proofarith.Dyadic {

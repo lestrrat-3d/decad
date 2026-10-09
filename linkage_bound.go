@@ -297,12 +297,12 @@ func bodySymmetryAxis(b *Body) (point, dir motionbound.RatVec, ok bool) {
 			return motionbound.RatVec{}, motionbound.RatVec{}, false
 		}
 		anchor := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()), proofarith.DvAdd(
-			dyScaleVec(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.aU)),
-			dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.aV))))
-		w := proofarith.DvAdd(dyScaleVec(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.dU)),
-			dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.dV)))
-		far := exactContactTransform(rp.xform, proofarith.DvAdd(anchor, w))
-		anchor = exactContactTransform(rp.xform, anchor)
+			proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.aU)),
+			proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.aV))))
+		w := proofarith.DvAdd(proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.dU)),
+			proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.dV)))
+		far := proofarith.DvTransform(rp.xform, proofarith.DvAdd(anchor, w))
+		anchor = proofarith.DvTransform(rp.xform, anchor)
 		var d motionbound.RatVec
 		for i := range 3 {
 			d[i] = new(big.Rat).Sub(far[i].Rat(), anchor[i].Rat())

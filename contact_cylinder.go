@@ -77,22 +77,9 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 	if planes != 2 || walls != 1 || endFaces[0] == nil || endFaces[1] == nil {
 		return sourceCylinderContactProof{}, false
 	}
-	center := proofarith.DvAdd(proofarith.DyVec(pp.frame.Origin()), proofarith.DvAdd(
-		dyScaleVec(proofarith.DyVec(pp.frame.U()), proofarith.MustDyOf(circle.Center.U)),
-		dyScaleVec(proofarith.DyVec(pp.frame.V()), proofarith.MustDyOf(circle.Center.V))))
-	low := proofarith.DvAdd(center, dyScaleVec(proofarith.DyVec(pp.frame.N()), proofarith.MustDyOf(pp.z0)))
-	high := proofarith.DvAdd(center, dyScaleVec(proofarith.DyVec(pp.frame.N()), proofarith.MustDyOf(pp.z1)))
-	low = exactContactTransform(pose, exactContactTransform(pp.xform, low))
-	high = exactContactTransform(pose, exactContactTransform(pp.xform, high))
-	radius := proofarith.MustDyOf(circle.Radius.Base())
-	var box sourceBoxContactProof
-	for i := range 3 {
-		box.lo[i], box.hi[i] = dyMin(low[i], high[i]), dyMax(low[i], high[i])
-		if i != axis {
-			box.lo[i] = proofarith.DySubScalar(box.lo[i], radius)
-			box.hi[i] = proofarith.DyAdd(box.hi[i], radius)
-		}
-	}
+	numeric := pairbox.SourcePrismCylinderBox(pp.frame, pp.xform, pose, circle.Center,
+		pp.z0, pp.z1, circle.Radius.Base(), axis)
+	box := sourceBoxContactProof{lo: numeric.Lo, hi: numeric.Hi}
 	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces, wall: wallFace}, true
 }
 
@@ -116,45 +103,17 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 	if !finiteMeasurementValues(rp.ax.aU, rp.ax.aV) {
 		return sourceCylinderContactProof{}, false
 	}
-	var zlo, zhi, rhoLo, rhoHi proofarith.Dyadic
-	for i, seg := range rp.profile.Outer.Segments {
-		line, ok := seg.(lineSeg)
-		if !ok || !finiteMeasurementValues(line.Start.U, line.Start.V) {
-			return sourceCylinderContactProof{}, false
-		}
-		du := proofarith.DySubScalar(proofarith.MustDyOf(line.Start.U), proofarith.MustDyOf(rp.ax.aU))
-		dv := proofarith.DySubScalar(proofarith.MustDyOf(line.Start.V), proofarith.MustDyOf(rp.ax.aV))
-		z := proofarith.DyAdd(proofarith.DyMul(du, proofarith.MustDyOf(rp.ax.dU)), proofarith.DyMul(dv, proofarith.MustDyOf(rp.ax.dV)))
-		rho := proofarith.DySubScalar(proofarith.DyMul(dv, proofarith.MustDyOf(rp.ax.dU)), proofarith.DyMul(du, proofarith.MustDyOf(rp.ax.dV)))
-		if i == 0 {
-			zlo, zhi, rhoLo, rhoHi = z, z, rho, rho
-		} else {
-			zlo, zhi = dyMin(zlo, z), dyMax(zhi, z)
-			rhoLo, rhoHi = dyMin(rhoLo, rho), dyMax(rhoHi, rho)
-		}
-	}
-	if !rhoLo.IsZero() || rhoHi.Sign() <= 0 || proofarith.DyCmp(zlo, zhi) >= 0 {
-		return sourceCylinderContactProof{}, false
-	}
-	anchor := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()), proofarith.DvAdd(
-		dyScaleVec(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.aU)),
-		dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.aV))))
-	w := proofarith.DvAdd(dyScaleVec(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.dU)),
-		dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.dV)))
-	low := exactContactTransform(pose, exactContactTransform(rp.xform, proofarith.DvAdd(anchor, dyScaleVec(w, zlo))))
-	high := exactContactTransform(pose, exactContactTransform(rp.xform, proofarith.DvAdd(anchor, dyScaleVec(w, zhi))))
 	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(rp.xform.ApplyDir(rp.basis().W)))
 	if !ok {
 		return sourceCylinderContactProof{}, false
 	}
-	var box sourceBoxContactProof
-	for i := range 3 {
-		box.lo[i], box.hi[i] = dyMin(low[i], high[i]), dyMax(low[i], high[i])
-		if i != axis {
-			box.lo[i] = proofarith.DySubScalar(box.lo[i], rhoHi)
-			box.hi[i] = proofarith.DyAdd(box.hi[i], rhoHi)
-		}
+	numeric, ok := pairbox.SourceRevolvedCylinderBox(rp.frame, rp.xform, pose,
+		Point2{U: rp.ax.aU, V: rp.ax.aV}, Point2{U: rp.ax.dU, V: rp.ax.dV},
+		rp.profile.Outer.Segments, axis)
+	if !ok {
+		return sourceCylinderContactProof{}, false
 	}
+	box := sourceBoxContactProof{lo: numeric.Lo, hi: numeric.Hi}
 	faces := b.Faces()
 	if len(faces) != 3 || len(b.Edges()) != 2 {
 		return sourceCylinderContactProof{}, false

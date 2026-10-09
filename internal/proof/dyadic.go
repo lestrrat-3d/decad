@@ -645,6 +645,19 @@ func DvAdd(a, b DyV3) DyV3 {
 	return DyV3{DyAdd(a0, b0), DyAdd(a1, b1), DyAdd(a2, b2)}
 }
 
+// DvScale multiplies every vector component by an exact scalar.
+func DvScale(v DyV3, s Dyadic) DyV3 {
+	return DyV3{DyMul(v[0], s), DyMul(v[1], s), DyMul(v[2], s)}
+}
+
+// DvTransform applies a held rigid transform in exact dyadic arithmetic.
+// The caller has already established that the transform's components are finite.
+func DvTransform(t r3.Transform, p DyV3) DyV3 {
+	b := t.Basis()
+	return DvAdd(DyVec(t.Translation()), DvAdd(DvScale(DyVec(b.EX), p[0]),
+		DvAdd(DvScale(DyVec(b.EY), p[1]), DvScale(DyVec(b.EZ), p[2]))))
+}
+
 // DvCross returns a × b exactly.
 func DvCross(a, b DyV3) DyV3 {
 	return DyV3{

@@ -82,7 +82,7 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 		if !proofbound.FiniteVec(v) {
 			return boundedFacetedExtent{}, false, nil
 		}
-		placed := exactContactTransform(pose, proofarith.DyVec(v))
+		placed := proofarith.DvTransform(pose, proofarith.DyVec(v))
 		for axis := range 3 {
 			if i == 0 || proofarith.DyCmp(placed[axis], proof.box.lo[axis]) < 0 {
 				proof.box.lo[axis] = placed[axis]
