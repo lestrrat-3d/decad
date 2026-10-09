@@ -122,7 +122,7 @@ cylinder, cone, or torus may use an equivalent closed-form primitive integral
 only when it represents that payload's exact denotation, including its cuts,
 holes, and placement.
 
-The implemented general revolve path (`mass_properties_revolve.go`) keeps the
+The implemented general revolve path (`internal/massmoment/revolve_properties.go`) keeps the
 third-order sum as rational intervals about the plane origin, every segment
 kind in the boundary form `∮u^(p+1)·v^q dv/(p+1)`. It re-expresses the plane
 moments in the exact axis frame and multiplies them by the sweep's own

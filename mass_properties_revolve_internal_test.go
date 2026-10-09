@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -10,7 +11,7 @@ import (
 )
 
 // TestRevolveMassPropertiesRefusesUnchargedTerms checks each reject-only gate
-// of revolveMassProperties on an otherwise admitted quarter revolve: every
+// of massmoment.RevolveProperties on an otherwise admitted quarter revolve: every
 // payload field whose effect the mass path does not charge must refuse with
 // ErrUnsupported rather than publish a tensor missing that term.
 func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
@@ -28,7 +29,7 @@ func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
 	base, ok := body.payload.(revolvePayload)
 	require.True(t, ok)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
-	_, err = revolveMassProperties(t.Context(), body, base, density)
+	_, err = massmoment.RevolveProperties(t.Context(), massRevolveRecord(base), body.centroid, density)
 	require.NoError(t, err, `the unmodified payload is admitted`)
 
 	for name, edit := range map[string]func(*revolvePayload){
@@ -42,7 +43,7 @@ func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			rp := base
 			edit(&rp)
-			got, err := revolveMassProperties(t.Context(), body, rp, density)
+			got, err := massmoment.RevolveProperties(t.Context(), massRevolveRecord(rp), body.centroid, density)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.Equal(t, MassProperties{}, got)
 		})

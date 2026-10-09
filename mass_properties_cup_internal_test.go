@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,9 @@ func TestCupMassChargesDisplacement(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	rho := 1.0 / 1024
-	got, err := cupMassProperties(t.Context(), &Body{}, cp, units.KilogramsPerCubicMillimeter(rho))
+	outer, cavity := massCupRecords(cp)
+	got, err := massmoment.CupProperties(t.Context(), outer, cavity, VecMeasurement{},
+		units.KilogramsPerCubicMillimeter(rho))
 	require.NoError(t, err)
 
 	whole := new(big.Rat).SetFloat64(delta)

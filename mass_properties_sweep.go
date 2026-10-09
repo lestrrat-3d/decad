@@ -36,9 +36,9 @@ func sweepMassProperties(ctx context.Context, b *Body, sp sweepPayload, density 
 	case len(sp.spans) != 0:
 		return compositeSweepMassProperties(ctx, b, sp, density)
 	case sp.arc:
-		return revolveMassProperties(ctx, b, sp.revolve, density)
+		return massmoment.RevolveProperties(ctx, massRevolveRecord(sp.revolve), b.centroid, density)
 	default:
-		return rotatedPrismMassProperties(ctx, sp.prism, b.centroid, density)
+		return massmoment.GeneralPrismProperties(ctx, massPrismRecord(sp.prism), b.centroid, density)
 	}
 }
 
@@ -93,7 +93,7 @@ func compositeSweepMassProperties(ctx context.Context, b *Body, sp sweepPayload,
 func sweepSpanMoments(ctx context.Context, span sweepSpanPayload) (massmoment.Moments, [3][3]*big.Rat, [3]*big.Rat, error) {
 	if span.arc {
 		rp := span.revolve
-		local, err := revolveVolumeMoments(ctx, rp)
+		local, err := massmoment.RevolveProfileMoments(ctx, massRevolveRecord(rp))
 		if err != nil {
 			return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 		}

@@ -18,8 +18,8 @@ import (
 // scale, which only the analytic path meets: a mesh fallback reading would
 // fail it.
 //
-// Legs shown to fail (each deleted in mass_properties_cup.go or
-// mass_properties_revolve.go, the fixture watched go red, then restored):
+// Legs shown to fail (each deleted in internal/massmoment, the fixture
+// watched go red, then restored):
 //   - The cavity's re-anchoring onto the outer mid level: with it dropped,
 //     both fixtures miss a diagonal component.
 //   - The placement's orthonormality-defect widening: with it zeroed, the

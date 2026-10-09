@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,7 @@ import (
 // tensor through P Pᵀ/V: each leg has to cover its own moment order. Every box the
 // record can denote within those displacements must lie inside the readings.
 //
-// Legs shown to fail (each deleted in mass_properties_rotated.go, the fixture
+// Legs shown to fail (each deleted in internal/massmoment, the fixture
 // watched go red, then restored):
 //   - E zeroed entirely: the mass of every grown or shrunk box escapes.
 //   - The V leg alone (E on volume): the mass escapes.
@@ -49,7 +50,8 @@ func TestRotatedPrismMassChargesDisplacement(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	rho := 1.0 / 1024
-	got, err := rotatedPrismMassProperties(t.Context(), pp, VecMeasurement{}, units.KilogramsPerCubicMillimeter(rho))
+	got, err := massmoment.GeneralPrismProperties(t.Context(), massPrismRecord(pp), VecMeasurement{},
+		units.KilogramsPerCubicMillimeter(rho))
 	require.NoError(t, err)
 
 	// A denoted section moves each boundary point by at most delta: here by
@@ -113,9 +115,9 @@ func TestRotatedPrismMassMatchesCardinalPath(t *testing.T) {
 		frame:   frame, z0: 0, z1: 10, xform: turn,
 	}
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
-	general, err := rotatedPrismMassProperties(t.Context(), pp, VecMeasurement{}, density)
+	general, err := massmoment.GeneralPrismProperties(t.Context(), massPrismRecord(pp), VecMeasurement{}, density)
 	require.NoError(t, err)
-	cardinal, err := prismMassProperties(t.Context(), &Body{}, pp, density)
+	cardinal, err := massmoment.CardinalPrismProperties(t.Context(), massPrismRecord(pp), VecMeasurement{}, density)
 	require.NoError(t, err)
 	require.Equal(t, cardinal, general)
 }

@@ -20,7 +20,7 @@ import (
 // non-dyadic length is the denoted level of the inch extrusion, which is the
 // point of that fixture.
 //
-// Legs shown to fail (each deleted in mass_properties_rotated.go, the fixture
+// Legs shown to fail (each deleted in internal/massmoment, the fixture
 // watched go red, then restored):
 //   - The affine image: on the rigid path (ρ·V and the polar factor's Q I Qᵀ
 //     widened by the defect) TestMassPropertiesRotatedBox and

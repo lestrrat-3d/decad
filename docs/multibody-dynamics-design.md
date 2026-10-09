@@ -1017,7 +1017,7 @@ payload's mass takes. Each item carries the computed test of dynamic-mass §6 fo
 
 ### 8.1 Prism with a non-cardinal frame or placement basis
 
-Analytic, in `mass_properties_rotated.go`: frame-local `V, P, Q` about `(0, 0, zm)`, `zm` the recorded mid
+Analytic, in `internal/massmoment/prism_properties.go`: frame-local `V, P, Q` about `(0, 0, zm)`, `zm` the recorded mid
 level, from `momentSecondOrder` section moments. `M`, the product of the placement and frame bases read
 as exact rationals, is the map the prism's volume, areas and vertices denote through
 (`docs/evaluator-design.md` §5.1), and it is orthonormal only to rounding. The reading is that map's exact
@@ -1074,7 +1074,7 @@ payloads and curved stitched solids publish no occupied-volume proof and return 
 
 ### 8.6 General revolve, full or partial, any admitted section
 
-Analytic, in `mass_properties_revolve.go`. `moments.go`'s `momentThirdOrder` adds `∫u³`, `∫u²v`, `∫uv²`,
+Analytic, in `internal/massmoment/revolve_properties.go`. `moments.go`'s `momentThirdOrder` adds `∫u³`, `∫u²v`, `∫uv²`,
 `∫v³` as rational intervals about the plane origin, every segment kind in the one boundary form
 `∮u^(p+1)·v^q dv/(p+1)`: lines there, arcs and circles in `moments_circular.go` through the trig-power
 reduction `circularMonomials`, Tier A spans in `spline_moments.go`. The plane moments are re-expressed as
@@ -1106,7 +1106,7 @@ sweep to 8.5.
 
 ### 8.8 Cup
 
-Analytic, in `mass_properties_cup.go`. Outer prism minus cavity prism (both 8.1/8.2), subtracted at the
+Analytic, in `internal/massmoment/cup_properties.go`. Outer prism minus cavity prism (both 8.1/8.2), subtracted at the
 `V, P, Q` level with each contribution's own outward interval (dynamic-mass §2, §3), the cavity re-anchored
 exactly onto the outer prism's mid level first. `cupPayload` holds both sections and the three levels with
 their deltas; each level delta is charged on its prism, and the offset section's displacement
@@ -2432,7 +2432,7 @@ lines below do not repeat it.
 ### PR 7 (Phase 1) — rotated and displaced prism mass
 
 - Delivers §8.1 and §8.2.
-- Files: `mass_properties.go`, new `mass_properties_rotated.go`.
+- Files: `mass_properties.go`, `internal/massmoment/prism_properties.go`.
 - Test (`apitest`): `apitest/mass_properties_rotated_test.go`: a box rotated `30°` about `(1,1,1)` encloses
   `R I Rᵀ` in every component; the orthonormality-defect leg is shown to fail.
 - Depends on: nothing.
@@ -2782,7 +2782,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 16 (Phase 3) — third-order section moments and the general revolve
 
 - Delivers §8.6.
-- Files: `moments.go`, `moments_circular.go`, `spline_moments.go`, new `mass_properties_revolve.go`.
+- Files: `moments.go`, `moments_circular.go`, `spline_moments.go`, `internal/massmoment/revolve_properties.go`.
 - Test (`apitest`): `apitest/mass_properties_revolve_test.go`: a quarter revolve of an off-axis rectangle encloses
   the independently integrated `r³`, `r²z` and `rz²` terms in its mixed components, and an off-axis
   triangle makes the `r²z` products nonzero; a full torus against the closed form; a rotated placement
@@ -2792,7 +2792,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 17 (Phase 3) — sweep and cup mass
 
 - Delivers §8.7 and §8.8.
-- Files: new `mass_properties_sweep.go`, `mass_properties_cup.go`.
+- Files: `mass_properties_sweep.go`, `internal/massmoment/cup_properties.go`.
 - Test (root): a composite sweep against the sum of its spans; the cup against outer minus cavity.
 - Depends on: PRs 7, 16.
 

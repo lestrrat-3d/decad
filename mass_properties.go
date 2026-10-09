@@ -72,7 +72,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return massmoment.SourceCylinder(ctx, cylinder.axis, cylinder.box.lo, cylinder.box.hi, b.centroid, density)
 	}
 	if revolve, ok := b.payload.(revolvePayload); ok {
-		result, err := revolveMassProperties(ctx, b, revolve, density)
+		result, err := massmoment.RevolveProperties(ctx, massRevolveRecord(revolve), b.centroid, density)
 		if err == nil || !errors.Is(err, ErrUnsupported) || ctx.Err() != nil {
 			return result, err
 		}
@@ -88,7 +88,8 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	if cup, ok := b.payload.(cupPayload); ok {
-		result, err := cupMassProperties(ctx, b, cup.view(), density)
+		outer, cavity := massCupRecords(cup.view())
+		result, err := massmoment.CupProperties(ctx, outer, cavity, b.centroid, density)
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	pp, ok := b.payload.(prismPayload)
@@ -105,48 +106,47 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
 		!cardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
 		!cardinalBasis(basis.EX, basis.EY, basis.EZ) {
-		return rotatedPrismMassProperties(ctx, pp, b.centroid, density)
+		return massmoment.GeneralPrismProperties(ctx, massPrismRecord(pp), b.centroid, density)
 	}
 	if !rectangularProfile(pp.profile) {
-		return prismMassProperties(ctx, b, pp, density)
+		return massmoment.CardinalPrismProperties(ctx, massPrismRecord(pp), b.centroid, density)
 	}
 
 	// The recorded rectangle and levels are the source solid. Translation does
 	// not change its centroidal inertia, and a signed-permutation basis only
 	// reorders its three dimensions. Work in exact dyadics until division by 12.
-	mass, readings, err := massmoment.CardinalBoxMoments(ctx, pp.profile.Outer.Segments, pp.z0, pp.z1,
-		pp.frame, pp.xform, density)
-	if err != nil {
-		return MassProperties{}, err
+	return massmoment.CardinalBoxProperties(ctx, massPrismRecord(pp), b.centroid, density)
+}
+
+// massPrismRecord presents a root prism payload to the mass integrator.
+func massPrismRecord(pp prismPayload) massmoment.PrismRecord {
+	return massmoment.PrismRecord{
+		Profile: pp.profile, Frame: pp.frame, Transform: pp.xform,
+		Z0: pp.z0, Z1: pp.z1, SectionDelta: pp.sectionDelta,
+		Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
 	}
-	result := MassProperties{Center: b.centroid}
-	result.Mass, err = massmoment.Reading(mass, units.Kilogram)
-	if err != nil {
-		return MassProperties{}, err
+}
+
+// massCupRecords reads the two prism records whose difference forms a cup.
+func massCupRecords(cp cupView) (massmoment.PrismRecord, massmoment.PrismRecord) {
+	outer := cp.outerPrism()
+	outer.profile = cp.outer
+	cavity := cp.cavityPrism()
+	cavity.profile = cp.cavity
+	return massPrismRecord(outer), massPrismRecord(cavity)
+}
+
+// massRevolveRecord presents a root revolve payload to the mass integrator.
+func massRevolveRecord(rp revolvePayload) massmoment.RevolveRecord {
+	return massmoment.RevolveRecord{
+		Profile: rp.profile, Frame: rp.frame, Transform: rp.xform,
+		Den: rp.den, Phi0: rp.phi0, Phi1: rp.phi1,
+		AU: rp.ax.aU, AV: rp.ax.aV, DU: rp.ax.dU, DV: rp.ax.dV,
+		AUBound: rp.ax.aUBound, AVBound: rp.ax.aVBound,
+		DUBound: rp.ax.dUBound, DVBound: rp.ax.dVBound,
+		SectionDelta: rp.sectionDelta, RadialAdmitAllow: rp.ax.radialAdmitAllow,
+		AxisSnap: rp.ax.snap != (regionSnapAllow{}),
 	}
-	if result.Mass.Bound.Mag() >= result.Mass.Value.Mag() {
-		return MassProperties{}, fmt.Errorf("%w: mass interval does not prove positive mass", ErrUnsupported)
-	}
-	diagonal := [3]*Measurement{&result.Inertia.XX, &result.Inertia.YY, &result.Inertia.ZZ}
-	for i, exact := range readings {
-		*diagonal[i], err = massmoment.Reading(exact, units.KilogramSquareMillimeter)
-		if err != nil {
-			return MassProperties{}, err
-		}
-		if diagonal[i].Bound.Mag() >= diagonal[i].Value.Mag() {
-			return MassProperties{}, fmt.Errorf("%w: inertia interval does not prove positive definiteness", ErrUnsupported)
-		}
-	}
-	zero := Measurement{
-		Value:     units.KilogramSquareMillimeters(0),
-		Bound:     units.KilogramSquareMillimeters(0),
-		Exactness: Exact,
-	}
-	result.Inertia.XY, result.Inertia.XZ, result.Inertia.YZ = zero, zero, zero
-	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
-	}
-	return result, nil
 }
 
 // analyticOrMeshMassProperties keeps an analytic arm's result unless that arm
@@ -157,44 +157,4 @@ func analyticOrMeshMassProperties(ctx context.Context, b *Body, density units.Va
 		return result, err
 	}
 	return verifiedMeshMassProperties(ctx, b, density)
-}
-
-// prismMassProperties integrates the evaluator's admitted section moments,
-// then its recorded axial interval. Every interval is rational, including the
-// enclosure of a curved section's published moments. It takes exact
-// signed-permutation axes and undisplaced records only, so mapping the local
-// tensor to world axes reorders and negates entries without new rounding;
-// every other prism takes rotatedPrismMassProperties.
-func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density units.Value) (MassProperties, error) {
-	section, err := massmoment.PrismSectionMoments(ctx, pp.profile)
-	if err != nil {
-		return MassProperties{}, err
-	}
-	massIv, world, err := massmoment.CardinalPrismInertia(section, pp.z0, pp.z1, pp.frame, pp.xform, density)
-	if err != nil {
-		return MassProperties{}, err
-	}
-	result := MassProperties{Center: b.centroid}
-	result.Mass, err = massmoment.IntervalReading(massIv, units.Kilogram)
-	if err != nil {
-		return MassProperties{}, err
-	}
-	entries := []struct {
-		iv      proofbound.RatInterval
-		reading *Measurement
-	}{
-		{world[0][0], &result.Inertia.XX}, {world[1][1], &result.Inertia.YY},
-		{world[2][2], &result.Inertia.ZZ}, {world[0][1], &result.Inertia.XY},
-		{world[0][2], &result.Inertia.XZ}, {world[1][2], &result.Inertia.YZ},
-	}
-	for _, entry := range entries {
-		*entry.reading, err = massmoment.IntervalReading(entry.iv, units.KilogramSquareMillimeter)
-		if err != nil {
-			return MassProperties{}, err
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
-	}
-	return result, nil
 }

@@ -40,7 +40,7 @@ import (
 //   - in evalBrepContext: the rotated drilled block went red;
 //   - chargePlacement in evalUnstitchFaceContext and the copy charge in
 //     copyPatchFacesUnder: the rotated unstitch and body patch went red;
-//   - massmoment.AffineInertia in revolveMassProperties, replaced by the
+//   - massmoment.AffineInertia in massmoment.RevolveProperties, replaced by the
 //     rigid path: TestRevolveMassCoversFrameDefect went red;
 //   - the basis term of revolveaxis.FrameRoundAllow:
 //     TestRevolveBoxChargesTheBasisRounding went red;
