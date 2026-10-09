@@ -362,6 +362,18 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // (prism_build.go's buildWallGeometry, shared with the profile-fed prism
 // build) — the same evaluator, over an open rather than a closed walk.
 
+// ChainExtrudeOption configures ExtrudeChain. It is its own sealed tier
+// rather than [ExtrudeOption]: WithSurfaceResult() does not implement it, so
+// the compiler refuses that option outright rather than accepting it as a
+// no-op — a chain-fed sweep always returns a sheet, so there is no "build a
+// solid instead" state for the option to toggle (docs/surface-design.md
+// §13.2). This placeholder tier has no member yet; it reserves the call for
+// a later chain-only option.
+type ChainExtrudeOption interface {
+	option.Interface
+	chainExtrudeOption()
+}
+
 // chainPayload is ExtrudeChain's own record of a ribbon body: the recorded
 // walk SET, the plane frame it lifts through, the signed sweep interval, and
 // the accumulated rigid placement — chainPayload is to ExtrudeChain what
@@ -446,10 +458,16 @@ func (pp chainPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // Tier C free-form segment is ErrUnsupported, exactly as Extrude's own
 // profile-fed wall refuses it. A failed evaluation leaves the document
 // untouched.
-func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent) (*Body, error) {
+func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
+	for _, o := range opts {
+		if o == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+	}
+
 	chain, plane, err := recordChain(s, ch)
 	if err != nil {
 		return nil, err

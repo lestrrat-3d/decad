@@ -276,7 +276,7 @@ already has.
 ```go
 type Document struct{ /* ... */ }
 
-func New() *Document
+func New(opts ...DocumentOption) *Document
 
 func (d *Document) Bodies() []*Body            // live bodies
 func (d *Document) Remove(b *Body) error        // retire a live body by hand
@@ -807,7 +807,7 @@ makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the four chain-fed forms that
 sweep an open curve (§13 there). `docs/draft-design.md` owns `WithTaper`'s
 build and `Body.Draft`, the face draft of an existing prism, with its
-`NeutralFace` plane and the `Walls(b)` selector.
+`NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
@@ -1058,12 +1058,14 @@ func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error)
 func WithThickenSide(side ThickenSide) ThickenOption
 
-// The chain-fed forms sweep OPEN sketch curves and always return BodySheet.
-// They take no options, so WithSurfaceResult() cannot be passed to them.
-func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent) (*Body, error)
-func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent) (*Body, error)
-func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path) (*Body, error)
-func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain) (*Body, error)
+// The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a
+// BodySheet, so WithSurfaceResult() is not among their options: ChainExtrudeOption,
+// ChainRevolveOption, ChainSweepOption and ChainLoftOption are their own sealed
+// tiers, which SurfaceResultOption implements none of.
+func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
+func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
+func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error)
+func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
 ```
 
 `ThickenSide` is `ThickenPositive` (default), `ThickenNegative` or

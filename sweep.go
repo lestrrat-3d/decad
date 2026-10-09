@@ -433,6 +433,20 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // rather than a resolved Extent. The arc reduction and every composite path
 // stay ErrUnsupported (Table SC rows SC7 and SC9, docs/surface-design.md R34).
 
+// ChainSweepOption configures SweepChain. It is its own sealed tier rather
+// than [SweepOption]: WithSurfaceResult() does not implement it, so the
+// compiler refuses that option outright rather than accepting it as a no-op —
+// a chain-fed sweep always returns a sheet, so there is no "build a solid
+// instead" state for the option to toggle (docs/surface-design.md §13.2,
+// docs/sweep-design.md §15.3). WithSweepTwist is not a member either: a
+// nonzero twist is Table S row S11 for a profile-fed sweep, and a chain
+// inherits that staging rather than a second spelling of it. This placeholder
+// tier has no member yet; it reserves the call for a later chain-only option.
+type ChainSweepOption interface {
+	option.Interface
+	chainSweepOption()
+}
+
 // chainSweepPayload is SweepChain's own record of a ribbon body: the chain
 // ribbon payload the reduction built, beside the Path that stated its height.
 // It stays DISTINCT from chainPayload for the reason sweepPayload stays
@@ -471,7 +485,7 @@ func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref produce
 // sheet — Kind() == BodySheet — one wall per recorded segment with no cap and
 // no closing face, so WithSurfaceResult() does not compile against this call.
 // A failed evaluation leaves the document unchanged.
-func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path) (*Body, error) {
+func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a sweep`, ErrDegenerate)
 	}
@@ -480,6 +494,11 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 	}
 	if s == nil || ch == nil || path == nil {
 		return nil, fmt.Errorf(`%w: SweepChain requires a non-nil sketch, chain, and path`, ErrDegenerate)
+	}
+	for _, o := range opts {
+		if o == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

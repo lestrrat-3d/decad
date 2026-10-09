@@ -248,6 +248,12 @@ func TestDraftRefusals(t *testing.T) {
 				decad.NeutralFace{Body: cyl, Face: decad.Faces(decad.Cylindrical())}, deg5)
 			return err
 		}, decad.ErrDegenerate},
+		{"SD20 NeutralFrame", func() error {
+			f, err := r3.NewFrame(r3.NewVec(0, 0, 5), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+			require.NoError(t, err)
+			_, err = box.Draft(t.Context(), walls(box), decad.NeutralFrame{Frame: f}, deg5)
+			return err
+		}, decad.ErrUnsupported},
 		{"SD20 wall as neutral face", func() error {
 			_, err := box.Draft(t.Context(), walls(box),
 				decad.NeutralFace{Body: box, Face: decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))}, deg5)
@@ -271,8 +277,8 @@ func TestDraftRefusals(t *testing.T) {
 			_, err := rev.Draft(t.Context(), decad.Faces(), capNeutral(box, decad.CapStart), deg5)
 			return err
 		}, decad.ErrUnsupported},
-		{"empty neutral face", func() error {
-			_, err := box.Draft(t.Context(), walls(box), decad.NeutralFace{}, deg5)
+		{"nil neutral", func() error {
+			_, err := box.Draft(t.Context(), walls(box), nil, deg5)
 			return err
 		}, decad.ErrDegenerate},
 		{"nil selector", func() error {

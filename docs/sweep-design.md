@@ -646,15 +646,24 @@ reading may not be.
 
 ```go
 func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch,
-    ch *sketch.Chain, path *Path) (*Body, error)
+    ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error)
+
+// ChainSweepOption configures SweepChain. It is its own sealed tier.
+type ChainSweepOption interface { /* sealed */ }
 ```
 
-**`SweepChain` takes no options.** A chain sweep is always a sheet — an open
-walk encloses no region, so there is no cap to omit and no solid to ask for.
-The compiler therefore refuses `WithSurfaceResult()`. It also refuses
-`WithSweepTwist`: a nonzero twist is S11 for a profile-fed sweep, and a chain
-inherits that staging rather than a second spelling of it. Accepting either
-option as a no-op would give it two meanings.
+**`ChainSweepOption` is a sealed tier of its own rather than `SweepOption`**,
+for the reason `docs/surface-design.md` §13.2 states for `ChainExtrudeOption`
+and `ChainRevolveOption`: `WithSurfaceResult()` must not compile against a
+chain-fed call. A chain sweep is always a sheet — an open walk encloses no
+region, so there is no cap to omit and no solid to ask for — and accepting the
+option as a no-op would give one option two meanings. `WithSweepTwist` is not a
+member either: a nonzero twist is S11 for a profile-fed sweep, and a chain
+inherits that staging rather than a second spelling of it. The tier carries no
+member in this increment; it exists so a later chain-only option has one to
+land on. The rejected alternative is the `SweepOption` tier the staged
+signature first landed with, which type-checks `WithSurfaceResult()` against a
+call that can never honour it.
 
 The call takes `ctx` because `Document.Sweep` does, and takes the sketch beside
 the chain because a chain's geometry is plane-local and the plane is the
@@ -710,7 +719,7 @@ a chain sweep adds that neither sibling has is §15.2's path height bound.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **C1** | `Document.SweepChain` over a one-span `LineTo` path: Table SC rows SC1 through SC4, SC6 and SC7, the chain prism reduction, and the four readings §15.5 states for it | the arc reduction, every composite path, D2 through D8 |
+| **C1** | `Document.SweepChain` over a one-span `LineTo` path: the sealed `ChainSweepOption` tier, Table SC rows SC1 through SC4, SC6 and SC7, the chain prism reduction, and the four readings §15.5 states for it | the arc reduction, every composite path, D2 through D8 |
 | **C2** | the one-span `ArcThrough` reduction with the chain shell's own axis gates (SC8) | every composite path |
 | **C3** | §15.1's composite join over a tangent line/arc path: the wall-face rim lists, the sew, the separation certificate over chain spans, and the assembled boundary audit | D2 through D8 for a chain sweep |
 

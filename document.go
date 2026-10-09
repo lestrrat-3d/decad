@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-go/option/v3"
 )
 
 // Document is the mutable root of a model: it owns the live body set and the
@@ -31,8 +32,15 @@ type Document struct {
 	nextCurve curveID
 }
 
+// DocumentOption is a placeholder option tier for New. No options exist yet;
+// it reserves the constructor signature for future options.
+type DocumentOption interface {
+	option.Interface
+	documentOption()
+}
+
 // New returns an empty document.
-func New() *Document {
+func New(_ ...DocumentOption) *Document {
 	return &Document{}
 }
 
