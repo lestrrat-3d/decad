@@ -133,7 +133,7 @@ type capBandResult struct {
 	delta   float64
 	// closure is the band's capBandClosure: the area of the slivers between its
 	// patches' integrated boundaries and the surface those patches meet, which
-	// capBandVolume and capBandMoment charge beside the patch integrals.
+	// capband.BandVolume and capband.BandMoment charge beside the patch integrals.
 	closure capBandClosure
 }
 
@@ -196,7 +196,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// levelDelta is the side level's conversion and float-sum rounding: sideZ
 	// is a float sum, so the band's side directrix sits that far from the level
 	// it denotes, and every edge with an endpoint there carries it beside the
-	// contour's own displacement. It is the same term capBandVolume charges for
+	// contour's own displacement. It is the same term capband.BandVolume charges for
 	// the identical level, and it rides onto every patch's own capPatchGeom,
 	// where patchAreaOf charges it against the patch's area
 	// (capblend_moments.go).
@@ -1177,7 +1177,7 @@ func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, ref
 // capZ + matSign·ds, sits from the level the stated side setback denotes: the
 // setback's own conversion rounding plus the sum's rounding. The band
 // readings that place the side directrix read it (buildCapBand's edges and
-// patch areas), and so do capBandVolume and capBandMoment, which charge the
+// patch areas), and so do capband.BandVolume and capband.BandMoment, which charge the
 // band's own change when its side level moves.
 func capBandLevelDelta(capZ, matSign float64, setback capSetback) float64 {
 	sideZ := capZ + matSign*setback.ds

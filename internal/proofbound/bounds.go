@@ -2443,7 +2443,7 @@ func ChordLocusVolumeAllow(denotedLo, denotedHi, fluxBuilt, builtBound, cornerFl
 // T and B here both run between the same two held levels, H apart. The held
 // side level's own displacement from the denoted one moves the whole body,
 // slab and band together, and the decad package charges it once per band
-// (capblend_moments.go's capBandLevelVolume), so no term here reads it.
+// (internal/capband/band_mass.go's LevelVolume), so no term here reads it.
 //
 // radiusUpper must bound both radii, windowUpper the middle window's width,
 // heightUpper |H|, skewStart, skewEnd the two corner skews and

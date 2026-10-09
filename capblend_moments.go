@@ -6,7 +6,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -14,51 +13,8 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is evalCapBlendContext — the build orchestration — plus the
-// bounded mass-property integrals of docs/modify-reach-design.md §8.4: area,
-// signed volume and centroid, closed form per patch, with a proven bound and
-// Exact reserved for a proven-zero one. It never uses quadrature to claim
-// Exact.
-//
-// Volume is computed by the divergence theorem, per loop, per cap, entirely
-// in the payload's own PLANE-LOCAL (u, v, z) coordinates (a rigid transform
-// preserves volume, so this is exact to reproduce in world space): the whole
-// body's volume is the sum, over every loop (holes negative, exactly as the
-// straight-prism reduction already sums signed loop areas), of that loop's
-// own straight-slab contribution (area times its own straight height) plus
-// its chamfer band contribution(s). Each band is closed off with two flat
-// artificial disks — the offset loop's own enclosed region at the cap level,
-// the original loop's own enclosed region at the side level — so the whole
-// band is a genuinely closed sub-solid and its volume is the
-// divergence-theorem flux sum over its patches and the two disks, taken
-// relative to the plane-local origin (valid because the WHOLE band, patches
-// plus its two disks, is a closed surface, and a closed surface's flux
-// integral is reference-point independent). A flat Plane patch's flux is the
-// tetrahedron identity, a polynomial in the payload's own floats, taken
-// EXACTLY over big.Rat and rounded once at the end; a Cone patch's is a
-// closed-form polynomial-plus-trig expression evaluated over exact rationals
-// with every sine and cosine enclosed (conePatchFluxInterval), held at the
-// enclosure's midpoint and never claimed Exact.
-//
-// The volume bound is composed term by term, and the reason is the band's own
-// shape. Every one of these flux terms is a DIFFERENCE that cancels: the two
-// closing disks each carry the whole prism's flux and differ by the band's,
-// smaller by the ratio of the sweep height to the setback; a ruled-cone
-// integral cancels likewise. A rounding budget scaled by the sum they
-// cancelled to under-counts by exactly that ratio, so no bound here is ever
-// read off a summed result — each is charged against the absolute terms the
-// step acted on, and proofbound.BoundedAdd/proofbound.BoundedMul then sum bounds while the values
-// cancel. The Plane arm escapes that composition entirely rather than manage
-// it: an exact rational has nothing to cancel, and its committed rounding is
-// measured (rationalFloatError), not budgeted. The Cone arm escapes it the
-// same way: its closed form is an exact-rational interval whose trig factors
-// are certified enclosures, so its bound is the interval's reach from the held
-// midpoint, boxed by the held numbers' own allowances (capband.HeldAllow).
-// The whole-turn arm holds its float closed form under the reach of an
-// enclosure of the true full-period flux. Only the non-finite fallback, which
-// has no rational to carry, still rests on math.Sincos; there the magnitude
-// envelope internal/proofbound/bounded.go's proofbound.AnalyticRoundBound doc reserves for a
-// libm result stands, never that helper's roundoff budget alone.
+// This file assembles the cap-blend body and adapts its mass readings to
+// internal/capband. See docs/modify-reach-design.md §8.4.
 
 // evalCapBlendContext builds the analytic cap-blend body from the payload
 // (BX3): the trimmed prism side walls (buildLoopSidesAs, unmodified) plus,
@@ -82,7 +38,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	// moments (docs/modify-reach-design.md §8.4's fourth reading): the SAME
 	// per-loop sign this loop already applies to slabVolume/bandVolume, over
 	// the SAME two-part decomposition (a signed slab term via
-	// loopEnclosedMomentsContext, a band term via capBandMoment).
+	// loopEnclosedMomentsContext, a band term via capband.BandMoment).
 	var muTotal, mvTotal, mzTotal proofbound.BoundedScalar
 	// Appended in build order — loop index, then the chamfered cap, then each
 	// band's own patch index — which IS Table BX row BX3's deterministic patch
@@ -117,7 +73,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		// and float sum both round. The rounding is an ulp of
 		// the SWEEP, but it multiplies the whole section area below, so it
 		// reaches the volume at the scale of the band itself and is charged here
-		// — the same term capBandVolume charges for the identical level it reads
+		// — the same term capband.BandVolume charges for the identical level it reads
 		// as sideZ.
 		zLo, zHi := proofbound.MeasuredScalar(cbp.z0, cbp.z0Delta), proofbound.MeasuredScalar(cbp.z1, cbp.z1Delta)
 		if onStart {
@@ -187,7 +143,11 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			bandDeltas[capBandKey{loop: li, start: true}] = band.delta
 			startCo = band.capCo
 			startBand = band
-			v, err := capBandVolume(ctx, li, loop, cbp, band.geom, cbp.z0, +1, band.delta, band.closure, work)
+			mass, err := readBandMass(ctx, li, loop, cbp, band.geom, cbp.z0, +1, band.delta, band.closure)
+			if err != nil {
+				return nil, err
+			}
+			v, err := capband.BandVolume(mass, work)
 			if err != nil {
 				return nil, err
 			}
@@ -196,7 +156,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 				pa, pb := capband.AreaOf(g)
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
-			bmu, bmv, bmz, err := capBandMoment(ctx, li, loop, cbp, band.geom, cbp.z0, +1, band.delta, band.closure, work)
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			bmu, bmv, bmz, err := capband.BandMoment(mass, work)
 			if err != nil {
 				return nil, err
 			}
@@ -214,7 +177,11 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			bandDeltas[capBandKey{loop: li, start: false}] = band.delta
 			endCo = band.capCo
 			endBand = band
-			v, err := capBandVolume(ctx, li, loop, cbp, band.geom, cbp.z1, -1, band.delta, band.closure, work)
+			mass, err := readBandMass(ctx, li, loop, cbp, band.geom, cbp.z1, -1, band.delta, band.closure)
+			if err != nil {
+				return nil, err
+			}
+			v, err := capband.BandVolume(mass, work)
 			if err != nil {
 				return nil, err
 			}
@@ -223,7 +190,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 				pa, pb := capband.AreaOf(g)
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
-			bmu, bmv, bmz, err := capBandMoment(ctx, li, loop, cbp, band.geom, cbp.z1, -1, band.delta, band.closure, work)
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			bmu, bmv, bmz, err := capband.BandMoment(mass, work)
 			if err != nil {
 				return nil, err
 			}
@@ -337,7 +307,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	cz := proofbound.BoundedQuotient(mzTotal.Value, mzTotal.Bound, volume.Value, volume.Bound)
 	centroidValue := pl.point(cu.Value, cv.Value, cz.Value)
 	formulaBound := prismPointBound(pl, cu, cv, cz)
-	geometryBound := capBlendCentroidGeometryBound(centroidValue, bounds)
+	geometryBound := capband.CentroidGeometryBound(centroidValue, bounds)
 	centroidBound := math.Min(formulaBound, geometryBound)
 	body.centroid = VecMeasurement{
 		Value:     centroidValue,
@@ -414,63 +384,18 @@ func (cbp capBlendPayload) contourOf(ctx context.Context, li int, loop LoopRecor
 	return LoopRecord{Segments: segs}, nil
 }
 
-// capBandVolume is one loop's chamfer-band volume contribution (positive,
-// the material remaining in the band — the caller's "slab" term already
-// covers the straight portion), by the divergence theorem over the band's
-// own closed boundary: the two flat disks (the loop's own enclosed area at
-// capZ and at sideZ) plus the patches (buildCapBand's geom).
-//
-// It returns the contribution WITH its own bound, and that is the whole of
-// why the bound is sound. The two disk terms are each of magnitude
-// |capZ|·|area| — the whole prism's flux — while their sum is the band's,
-// smaller by a factor of the sweep height over the setback (H/d). A budget
-// scaled by the SUM is scaled by a quantity these terms cancelled away, so
-// every mechanism below is charged against the term it acts on, before the
-// cancellation:
-//
-//   - each disk's own area bound (loopEnclosedAreaContext's, which for a
-//     circular contour is a certified bracket and for a polygonal one is the
-//     exact rational's rounding) multiplied by the level it sits at;
-//   - the rounding of sideZ itself, which multiplies a whole disk area;
-//   - each float multiplication and addition, whose committed error
-//     proofbound.BoundedMul/proofbound.BoundedAdd take EXACTLY over big.Rat rather than estimate;
-//   - each patch's own flux bound (patchRawFlux), including a Cone patch's
-//     trig terms, which a certified enclosure bounds (a magnitude envelope
-//     only where no enclosure lifts) and proofbound.AnalyticRoundBound never speaks for.
-//
-// proofbound.BoundedAdd sums bounds, so no step of this composition is ever rescaled by
-// a result the step's own operands cancelled down to.
-//
-// None of those terms speaks for the cap contour's own displacement (delta,
-// capblend_contour.go): capArea and every patchRawFlux term above read the
-// contour's coordinates as exact inputs, but the contour is a COMPUTED offset
-// that sits within delta of the one it denotes. That is one displacement
-// acting on the whole surface the band closes on — this loop's patches AND
-// the cap disk they meet — so it is composed ONCE here, after the flux sum,
-// via internal/proofbound/bounds.go's proofbound.SweptVolumeAllow(delta, areaUpper): charging it inside
-// capArea's own bound, or inside each patchRawFlux term, would count the SAME
-// displaced coordinates twice, since patchRawFlux already reads them.
-func capBandVolume(ctx context.Context, li int, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure, work *freeform.FreeformWork) (proofbound.BoundedScalar, error) {
+// readBandMass adapts the payload and built band to the recorded readings both
+// mass integrals consume. The root package owns the offset contour and the
+// authenticated loop areas; internal/capband owns their flux composition.
+func readBandMass(ctx context.Context, li int, loop LoopRecord, cbp capBlendPayload,
+	geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure) (capband.BandMassInput, error) {
 	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)
-	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
-	sideZ := sideZB.Value
-	// sideZ is the held side level every patch flux reads too, so the disks
-	// and patches close one band exactly at the held levels. The side level's
-	// own move from the denoted one, its setback conversion and float-sum
-	// rounding, is the band's, not the disk's alone: capBandLevelVolume
-	// charges it once below, over the larger section area. The side disk
-	// keeps only the cap level's inherited axial displacement, which the side
-	// level carries because it is derived from that computed cap.
-	// The two closing disks are loopEnclosedAreaContext's ABSOLUTE areas, so
-	// the sub-solid they close off is the region the loop encloses read as
-	// POSITIVELY oriented — counter-clockwise — whichever way the loop was
-	// actually recorded. Every patch, in contrast, is built from the loop's
-	// OWN walk, so a clockwise loop (a hole) hands the band patches facing
-	// into it. orient rotates them back onto the disks' own orientation.
+	sideZB := proofbound.BoundedAdd(capZB,
+		proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
 	signedArea, err := loopSignedAreaBudget(proofbound.NewWorkBudget(ctx), loop)
 	if err != nil {
-		return proofbound.BoundedScalar{}, err
+		return capband.BandMassInput{}, err
 	}
 	orient := 1.0
 	if signedArea < 0 {
@@ -478,85 +403,22 @@ func capBandVolume(ctx context.Context, li int, loop LoopRecord, cbp capBlendPay
 	}
 	sideArea, err := loopEnclosedAreaContext(ctx, loop)
 	if err != nil {
-		return proofbound.BoundedScalar{}, err
+		return capband.BandMassInput{}, err
 	}
 	capBoundary, err := cbp.contourOf(ctx, li, loop, setback.dc)
 	if err != nil {
-		return proofbound.BoundedScalar{}, err
+		return capband.BandMassInput{}, err
 	}
 	capArea, err := loopEnclosedAreaContext(ctx, capBoundary)
 	if err != nil {
-		return proofbound.BoundedScalar{}, err
+		return capband.BandMassInput{}, err
 	}
-	// Outward normal signs (docs/modify-reach-design.md §8.4): the disk at
-	// capZ faces -matSign*Z, the disk at sideZ faces +matSign*Z, both away
-	// from the band's own material. A flat disk's raw flux (P.N over the
-	// disk) is its constant Z coordinate times its signed normal times its
-	// area — no triangulation needed.
-	// The two sign factors are +1 or -1, so applying them is exact, and both
-	// disks carry the cap level's inherited axial displacement.
-	fluxTotal := proofbound.BoundedAdd(
-		proofbound.BoundedMul(proofbound.MeasuredScalar(capZB.Value*(-matSign), capZB.Bound), capArea),
-		proofbound.BoundedMul(proofbound.MeasuredScalar(sideZ*matSign, capZB.Bound), sideArea),
-	)
-	// patchRawFlux's own v0..v3 (or triangle-fan) vertex order is FIXED —
-	// side-level vertices first, cap-level second — regardless of which cap
-	// the band sits on. That fixed order is "CCW as seen from outside" for
-	// one Z ordering of (sideZ, capZ) and its mirror for the other, exactly
-	// the same start/end asymmetry capblend_geom.go's fixPatchOrientation
-	// corrects for the SURFACE normal — so the flux sign needs the same
-	// -matSign correction here, confirmed empirically
-	// (TestCapBlendStartCapVolumeMatchesEndCap). -matSign speaks for the
-	// AXIAL half and orient for the IN-PLANE half; patchRawFlux itself has
-	// already put each patch in its own walk's sense.
-	patchAreaTotal := proofbound.BoundedScalar{}
-	for _, g := range geom {
-		f := capband.RawFlux(g)
-		fluxTotal = proofbound.BoundedAdd(fluxTotal, proofbound.MeasuredScalar(-matSign*orient*f.Value, f.Bound))
-		pa, pb := capband.AreaOf(g)
-		patchAreaTotal = proofbound.BoundedAdd(patchAreaTotal, proofbound.MeasuredScalar(pa, pb))
-	}
-	// The patch integrals and the two disks meet one another only to within
-	// the band's own closure slivers (capBandClosure), whose flux is charged
-	// here, before the division, beside the terms it sits with.
-	if !closure.Zero() {
-		pointUpper, err := capBandPointUpper(loop, capBoundary, delta, closure, sideZB, capZB, work)
-		if err != nil {
-			return proofbound.BoundedScalar{}, err
-		}
-		fluxTotal.Bound = proofbound.AbsSumUpper(fluxTotal.Bound, closure.FluxAllow(pointUpper,
-			proofbound.AbsSumUpper(sideZB.Value, sideZB.Bound), proofbound.AbsSumUpper(capZB.Value, capZB.Bound)))
-	}
-	result := proofbound.BoundedQuotient(fluxTotal.Value, fluxTotal.Bound, 3, 0)
-	// areaUpper is the surface the contour's own displacement acted on: this
-	// band's patches plus the cap disk they close on (capArea) — the same two
-	// terms patchRawFlux and the disk flux above both read displaced
-	// coordinates from.
-	areaUpper := proofbound.AbsSumUpper(patchAreaTotal.Value, patchAreaTotal.Bound, capArea.Value, capArea.Bound)
-	result.Bound = proofbound.AbsSumUpper(result.Bound, proofbound.SweptVolumeAllow(delta, areaUpper))
-	result.Bound = proofbound.AbsSumUpper(result.Bound, capBandLevelVolume(cbp, capZ, matSign, sideArea, capArea))
-	return result, nil
-}
-
-// capBandLevelVolume bounds the volume of the region between the body the
-// band builds and the one it denotes that comes from the side level: the held
-// side level sits capBandLevelDelta from the denoted one, and every patch's
-// flux reads the held level. The straight slab and the band meet at that same
-// held level, so on each vertical line through the section the body's column
-// differs from the denoted one only at the end where the line leaves the band
-// toward the cap, at the height where the line's point leaves the offset
-// section. With the cap level fixed that height moves by at most the
-// displacement. Offset sections nest, so the lines that leave the band at all
-// pass through the larger of the side loop's and the cap contour's areas, and
-// the region's volume is at most that area times the displacement. The slab's
-// own level bound and the side disk's charge the same displacement again.
-func capBandLevelVolume(cbp capBlendPayload, capZ, matSign float64, sideArea, capArea proofbound.BoundedScalar) float64 {
-	levelDelta := capBandLevelDelta(capZ, matSign, cbp.setbackAt(matSign))
-	if levelDelta <= 0 {
-		return 0
-	}
-	areaMax := math.Max(proofbound.AbsSumUpper(sideArea.Value, sideArea.Bound), proofbound.AbsSumUpper(capArea.Value, capArea.Bound))
-	return proofbound.ProductUpper(areaMax, levelDelta)
+	return capband.BandMassInput{
+		Loop: loop, CapBoundary: capBoundary, Patches: geom,
+		CapLevel: capZB, SideLevel: sideZB, SideArea: sideArea, CapArea: capArea,
+		MaterialSign: matSign, Orientation: orient, Delta: delta,
+		LevelDelta: capBandLevelDelta(capZ, matSign, setback), Closure: closure,
+	}, nil
 }
 
 // capBlendBoundsContext is the placed body's axis-aligned bounding box, read
@@ -598,23 +460,4 @@ func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freef
 		Exactness: exactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
-}
-
-// capBandPointUpper is an upper bound on |P| = |(u, v, z)| over every point a
-// band and its closure slivers hold: the original loop's and the built cap
-// boundary's own |u| + |v| envelopes (the latter widened by the contour's
-// displacement delta), plus the larger of the two levels' magnitudes, plus the
-// closure's own largest gap.
-func capBandPointUpper(loop, capBoundary LoopRecord, delta float64, closure capBandClosure, sideZB, capZB proofbound.BoundedScalar, work *freeform.FreeformWork) (float64, error) {
-	coordUpper, err := momentinput.CoordinateUpper(ProfileRecord{Outer: loop}, work, nil)
-	if err != nil {
-		return 0, err
-	}
-	capCoordUpper, err := momentinput.CoordinateUpper(ProfileRecord{Outer: capBoundary}, work, nil)
-	if err != nil {
-		return 0, err
-	}
-	planeUpper := math.Max(coordUpper, proofbound.AbsSumUpper(capCoordUpper, delta))
-	zUpper := math.Max(proofbound.AbsSumUpper(sideZB.Value, sideZB.Bound), proofbound.AbsSumUpper(capZB.Value, capZB.Bound))
-	return proofbound.AbsSumUpper(planeUpper, zUpper, closure.Reach), nil
 }

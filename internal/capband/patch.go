@@ -86,7 +86,7 @@ type Patch struct {
 	// LevelDelta is the SIDE level's conversion and float-sum rounding: SideZ
 	// is the single float sum CapZ + matSign*ds, so this patch's whole side
 	// directrix sits that far from the level it denotes — the same term
-	// capSlantEdge charges into a slant edge's length and capBandVolume charges
+	// capSlantEdge charges into a slant edge's length and BandVolume charges
 	// for the identical level.
 	// patchAreaOf reads it as the axial half of its own displacement
 	// allowance (internal/proofbound/bounds.go's proofbound.BandLevelAreaAllow), beside ContourAllow's

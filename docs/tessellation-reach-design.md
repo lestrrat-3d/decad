@@ -645,7 +645,7 @@ symDiffOK  = true
 
 A non-finite term refuses (tess §12). The cap-blend path runs no facet-contact audit
 (`payloadAuditsFacetContact`), so `boundaryOK` is true at every level and `operandSymDiff` reads the proof
-at `VerifyAll`. The payload's own `Volume()` bound is a different composition (`capBandVolume`) and is not
+at `VerifyAll`. The payload's own `Volume()` bound is a different composition (`capband.BandVolume`) and is not
 read here.
 
 **What is not admitted, and why.** A circular wall meeting a genuine (non-G1) miter has its cap window

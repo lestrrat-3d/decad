@@ -173,8 +173,7 @@ the rules leave to the byte budget.
 | `capblend.go` | Complete-cap-loop chamfer: `capBlendPayload`, selection classification, build gates. See modify-reach §8.3/§4. |
 | `capblend_geom.go` | `buildCapBand`: band patches and cap edges, also a draft's walls. See modify-reach §8.3. |
 | `capblend_contour.go` | Adapts built corner and edge records to `internal/capband/` contour and closure proofs. |
-| `capblend_centroid.go` | Cap-blend first moments and bounds. See modify-reach §8.4. |
-| `capblend_moments.go` | `evalCapBlendContext`: the cap-blend body and its area/volume. See modify-reach §8.4. |
+| `capblend_moments.go` | Builds the cap-blend body and adapts its mass readings to `internal/capband/`. See modify-reach §8.4. |
 | `capblend_survey.go` | Cap-blend undercut and minimum-radius surveys. See modify-reach Table DX (DX7/DX8). |
 | `capblend_normal.go` | Reads band-patch tags for DX7's normal model. |
 | `capblend_departure.go` | Reads band-patch tags and built edges for departure bounds. |
@@ -327,7 +326,7 @@ the rules leave to the byte budget.
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, joins, sharp loops and displacement proofs. See modify §6–§9, shell-opening §3–§5, draft §2. |
-| `internal/capband/` | Cap-band contour, patch, coordinate, locus and mass proofs. See modify-reach §8.3–§8.4. |
+| `internal/capband/` | Cap-band contour, patch, locus, volume, first-moment and centroid bounds. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |
 | `internal/shellsurvey/` | Shell inradius, work budget and contained-disk witness. See modify §8. |
