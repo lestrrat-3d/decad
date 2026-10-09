@@ -324,6 +324,9 @@ func TestTaperTwoSidedBuild(t *testing.T) {
 			require.True(t, mesh.VolumeVerified())
 			wantMesh, _ := want.Float64()
 			require.InDelta(t, wantMesh, meshVolume(mesh), 1e-6)
+			mass, err := body.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(1.0/1024))
+			require.NoError(t, err)
+			requireMeasurementCovers(t, "two-sided mass", mass.Mass, bfQuo(want, bf(1024)), 1e-6)
 		})
 	}
 }
