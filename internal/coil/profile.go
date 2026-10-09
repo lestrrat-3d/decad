@@ -46,8 +46,8 @@ type Chord struct {
 
 // Segment is one recorded segment of a coil profile: its normalized record,
 // its loop and position in the loop, the station its walk starts at, and the
-// chords it is cut into (one for a line). Closed marks a whole circle, a
-// loop on its own; Reversed marks a walk against the curve's natural sense.
+// chords it is cut into (one for a line). Closed marks a whole circle, or a
+// whole-turn arc whose End is its Start, a loop on its own; Reversed marks a walk against the curve's natural sense.
 type Segment struct {
 	Record        sectionrecord.CurveSegment
 	Loop, Index   int
@@ -147,6 +147,10 @@ func Loops(outer sectionrecord.LoopRecord, holes []sectionrecord.LoopRecord, cho
 				if err := out.addArc(&seg, s, chordsPerTurn, ends, i, j); err != nil {
 					return Profile{}, err
 				}
+				// An arc that ends where it starts, alone in its loop, sweeps
+				// a whole turn and closes on its own Start: it bounds its wall
+				// as a whole circle does, with no junction of its own.
+				seg.Closed = n == 1 && s.Start == s.End
 			case sectionrecord.CircleSeg:
 				if n != 1 {
 					return Profile{}, fmt.Errorf(`%w: coil profile loop %d holds a whole circle beside other segments`, decaderr.ErrUnsupported, i)
