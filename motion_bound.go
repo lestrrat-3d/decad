@@ -39,24 +39,9 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 		zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.axialDelta())
 		return motionbound.LinearRecordRadius(pl.frame, coordUpper, zUpper)
 	case draftPayload:
-		// Every point of a draft body lies on the near section, the far
-		// section, or a straight ruling or cone generator between matching
-		// points of the two, so each plane coordinate is bounded by the larger
-		// of the two sections' bounds, the far one widened by its contour
-		// displacement (docs/draft-design.md Table DD row DD17). Each section
-		// is read segment by segment (motionbound.DraftSectionCoordinateUpper), not from
-		// the walks' L1 envelopes.
-		nearUpper, err := motionbound.DraftSectionCoordinateUpper(pl.profile)
-		if err != nil {
-			return math.Inf(1)
-		}
-		farUpper, err := motionbound.DraftSectionCoordinateUpper(pl.far)
-		if err != nil {
-			return math.Inf(1)
-		}
-		coordUpper := math.Max(nearUpper, proofbound.AbsSumUpper(farUpper, pl.farDelta))
-		zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.axialDelta())
-		return motionbound.LinearRecordRadius(pl.frame, coordUpper, zUpper)
+		return draftMoverRecordRadius(pl)
+	case twoSidedDraftPayload:
+		return math.Max(draftMoverRecordRadius(pl.negative), draftMoverRecordRadius(pl.positive))
 	case revolvePayload:
 		coordUpper, err := momentinput.CoordinateUpper(pl.profile, freeform.NewFreeformWork(), nil)
 		if err != nil {
@@ -67,4 +52,20 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 	default:
 		return math.Inf(1)
 	}
+}
+
+// Every draft point lies on an end section or a ruling between them. Bound
+// both section coordinate envelopes, then include the far contour's gap.
+func draftMoverRecordRadius(pl draftPayload) float64 {
+	nearUpper, err := motionbound.DraftSectionCoordinateUpper(pl.profile)
+	if err != nil {
+		return math.Inf(1)
+	}
+	farUpper, err := motionbound.DraftSectionCoordinateUpper(pl.far)
+	if err != nil {
+		return math.Inf(1)
+	}
+	coordUpper := math.Max(nearUpper, proofbound.AbsSumUpper(farUpper, pl.farDelta))
+	zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.axialDelta())
+	return motionbound.LinearRecordRadius(pl.frame, coordUpper, zUpper)
 }

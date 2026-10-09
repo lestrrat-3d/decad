@@ -1,8 +1,10 @@
 package apitest_test
 
 import (
+	"fmt"
 	"math"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -265,6 +267,145 @@ func TestTaperToFaceOffsetBound(t *testing.T) {
 }
 
 const taperCeiling = 1e-9
+
+// TestTaperTwoSidedBuild measures the two drafted halves against the sketch
+// section. Their shared section must remain a wall join, not an internal cap.
+func TestTaperTwoSidedBuild(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name         string
+		extent       decad.Extent
+		below, above float64
+	}{
+		{"symmetric", decad.Symmetric{D: units.Millimeters(10), FullLength: true}, 5, 5},
+		{"two distances", decad.TwoSided{
+			One: decad.DistanceSide{D: units.Millimeters(6)},
+			Two: decad.DistanceSide{D: units.Millimeters(4)},
+		}, 4, 6},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
+			doc := decad.New()
+			body, err := doc.Extrude(s, p, tc.extent, decad.WithTaper(units.Degrees(5)))
+			require.NoError(t, err)
+			requireManifold(t, body)
+			require.Len(t, body.Faces(), 10)
+			for _, face := range body.Faces() {
+				role := face.Origins()[0].Role
+				if !strings.HasPrefix(role, "side(") {
+					continue
+				}
+				point := face.Loops()[0].Edges()[0].Start().Position().Value
+				normal, err := face.NormalAt(point)
+				require.NoError(t, err)
+				if strings.HasPrefix(role, "side(0,") {
+					require.Less(t, normal.Value.Z, 0.0)
+				} else {
+					require.Greater(t, normal.Value.Z, 0.0)
+				}
+			}
+
+			volume, err := body.Volume()
+			require.NoError(t, err)
+			want := bf(0)
+			for _, h := range []float64{tc.below, tc.above} {
+				d := bfMul(bf(h), taperTan(5))
+				part := bfMul(bf(h), bfAdd(
+					bfSub(bfMul(bf(boxSide), bf(boxSide)), bfMul(bf(2*boxSide), d)),
+					bfQuo(bfMul(bf(4), d, d), bf(3)),
+				))
+				want = bfAdd(want, part)
+			}
+			requireMeasurementCovers(t, "two-sided volume", volume, want, taperCeiling)
+			mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			requireWatertight(t, mesh)
+			require.True(t, mesh.VolumeVerified())
+			wantMesh, _ := want.Float64()
+			require.InDelta(t, wantMesh, meshVolume(mesh), 1e-6)
+		})
+	}
+}
+
+func TestTaperTwoSidedCurvedMesh(t *testing.T) {
+	t.Parallel()
+	for _, degrees := range []float64{3, -3} {
+		t.Run(fmt.Sprint(degrees), func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSlot(0, 0))
+			body, err := doc.Extrude(s, p, decad.TwoSided{
+				One: decad.DistanceSide{D: units.Millimeters(6)},
+				Two: decad.DistanceSide{D: units.Millimeters(4)},
+			}, decad.WithTaper(units.Degrees(degrees)))
+			require.NoError(t, err)
+			requireManifold(t, body)
+			mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
+			require.NoError(t, err)
+			requireWatertight(t, mesh)
+			require.True(t, mesh.VolumeVerified())
+
+			placed, err := body.Placed(t.Context(), generalMotion(t, 37, 3.25))
+			require.NoError(t, err)
+			requireManifold(t, placed)
+			placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.05))
+			require.NoError(t, err)
+			requireWatertight(t, placedMesh)
+			require.True(t, placedMesh.VolumeVerified())
+		})
+	}
+}
+
+func TestTaperTwoSidedCut(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
+	drafted, err := doc.Extrude(s, p, decad.TwoSided{
+		One: decad.DistanceSide{D: units.Millimeters(6)},
+		Two: decad.DistanceSide{D: units.Millimeters(4)},
+	}, decad.WithTaper(units.Degrees(5)))
+	require.NoError(t, err)
+	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
+	cut, err := decad.Cut(t.Context(), drafted, post)
+	require.NoError(t, err)
+	want := bfSub(bfAdd(
+		taperBoxVolume(4, bfMul(bf(4), taperTan(5))),
+		taperBoxVolume(6, bfMul(bf(6), taperTan(5))),
+	), bf(160))
+	requireVolumeCovers(t, "two-sided cut", cut, want, 1e-9)
+	requireBodyWatertight(t, cut)
+}
+
+func TestTaperTwoSidedToFaces(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	stopBody := func(z float64) *decad.Body {
+		s, p := taperSketch(t, r3.NewVec(0, 0, z), 0, drawSquare(0, 60))
+		body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		require.NoError(t, err)
+		return body
+	}
+	top, bottom := stopBody(6), stopBody(-9)
+	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
+	body, err := doc.Extrude(s, p, decad.TwoSided{
+		One: decad.ToFace{Body: top, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(top)))},
+		Two: decad.ToFace{Body: bottom, Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(bottom)))},
+	}, decad.WithTaper(units.Degrees(5)))
+	require.NoError(t, err)
+	requireManifold(t, body)
+	want := bfAdd(
+		taperBoxVolume(4, bfMul(bf(4), taperTan(5))),
+		taperBoxVolume(6, bfMul(bf(6), taperTan(5))),
+	)
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	requireMeasurementCovers(t, "two-sided stops", volume, want, taperCeiling)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.True(t, mesh.VolumeVerified())
+}
 
 // bfRat converts a 256-bit value to the exact rational it holds.
 func bfRat(x *big.Float) *big.Rat {
@@ -889,13 +1030,6 @@ func TestTaperRefusals(t *testing.T) {
 		// decided nesting row reads the region consumed.
 		{"F7 ring closed", 1, drawRing(10, 4), decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(18))}, decad.ErrDegenerate},
-		{"SD11 symmetric", 0, drawSquare(0, 20), decad.Symmetric{D: units.Millimeters(10)},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(5))}, decad.ErrUnsupported},
-		{"SD11 two sided", 0, drawSquare(0, 20), decad.TwoSided{
-			One: decad.DistanceSide{D: units.Millimeters(6)},
-			Two: decad.DistanceSide{D: units.Millimeters(4)},
-		},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(5))}, decad.ErrUnsupported},
 		{"SD12 surface result", 0, drawSquare(0, 20), decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(5)), decad.WithSurfaceResult()}, decad.ErrUnsupported},
 		{"SD13 amount rounds away", 0, drawSquare(0, 20), decad.Distance{D: units.Millimeters(1), Dir: decad.Along},

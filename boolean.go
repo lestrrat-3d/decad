@@ -820,6 +820,20 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 				return nil
 			}
 			err = refusal
+		case twoSidedDraftPayload:
+			for _, half := range []draftPayload{pl.negative, pl.positive} {
+				refusal, aErr := draftOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), half)
+				if aErr != nil {
+					return aErr
+				}
+				if refusal != nil {
+					err = refusal
+					break
+				}
+			}
+			if err == nil {
+				return nil
+			}
 		case stitchPayload:
 			if pl.tris != nil {
 				zeroBound, zErr := stitchZeroVertexBound(proofbound.NewWorkBudget(ctx), b)

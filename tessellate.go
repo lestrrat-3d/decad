@@ -461,6 +461,9 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if dp, ok := b.payload.(draftPayload); ok {
 		return tessellateDraft(ctx, b, dp, chord, verify)
 	}
+	if dp, ok := b.payload.(twoSidedDraftPayload); ok {
+		return tessellateTwoSidedDraft(ctx, b, dp, chord, verify)
+	}
 	if sp, ok := b.payload.(stitchPayload); ok {
 		if sp.tris == nil {
 			return tessellateStitchCurved(ctx, b, sp, chord, verify)

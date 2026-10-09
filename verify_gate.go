@@ -193,6 +193,17 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	if payload, ok := body.payload.(draftPayload); ok {
 		return draftGateDiameter(ctx, body, payload)
 	}
+	if payload, ok := body.payload.(twoSidedDraftPayload); ok {
+		negative, okNeg, err := draftGateDiameter(ctx, body, payload.negative)
+		if err != nil {
+			return 0, false, err
+		}
+		positive, okPos, err := draftGateDiameter(ctx, body, payload.positive)
+		if err != nil {
+			return 0, false, err
+		}
+		return math.Max(negative, positive), okNeg || okPos, nil
+	}
 	if _, ok := body.payload.(chainLoftPayload); ok {
 		return chainVertexGateDiameter(ctx, body, 0)
 	}

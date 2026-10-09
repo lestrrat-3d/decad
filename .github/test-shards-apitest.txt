@@ -1631,6 +1631,10 @@
 5	0.05	TestTaperSlot
 5	0.03	TestTaperStopExtents
 5	0.02	TestTaperToFaceOffsetBound
+5	0.02	TestTaperTwoSidedBuild
+5	0.10	TestTaperTwoSidedCurvedMesh
+5	0.20	TestTaperTwoSidedCut
+5	0.05	TestTaperTwoSidedToFaces
 5	0.15	TestTaperVerify
 5	0.01	TestWallsSelector
 5	1.00	TestDraftMesh
