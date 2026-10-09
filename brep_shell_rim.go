@@ -372,102 +372,23 @@ func throughLoopsSame(a, b LoopRecord) bool {
 	return false
 }
 
-// throughRimPiece is one directed piece of a rim's boundary in R's frame:
-// its record and walked ends, whether it is a LineSeg along a frame axis over
-// its natural range, whether it was cancelled, the loop it comes from (0 R's
-// outer loop, 1 + i cavity loop i reversed) and its index there. A curved
-// piece's ends are its line neighbours' where it has them (fromKnown,
-// toKnown).
-type throughRimPiece struct {
-	seg                CurveSegment
-	from, to           Point2
-	fromKnown, toKnown bool
-	line, gone         bool
-	src, seqIndex      int
-}
-
-// throughRimRegions is R's region less the cavity faces in its plane, whose
-// outer loops cavity holds in R's frame. Where no cavity loop shares a
-// boundary piece with R's outer loop, the rim is §3.3 step 5's record: R's
-// outer loop holding each cavity loop reversed. Otherwise every axis-aligned
-// line of one loop is split at each line end of another lying strictly
-// inside it, each piece of R's outer loop cancels the cavity piece walking
-// the same two ends the other way, and the rest chain into loops: a piece
-// continues along its own loop where its successor survives, and otherwise
-// into the one surviving piece of any loop starting at its end whose own
-// predecessor was cancelled. A line split where nothing cancelled keeps the
-// split vertex, which the closure count refuses where no neighbouring face
-// shares it. One counter-clockwise loop with clockwise ones is one region with
-// holes; counter-clockwise loops alone are one region each. Any other result —
-// an end with no or several continuations, a loop with no area, two outer
-// loops beside a hole — is SG7. Nothing is admitted on a residual: every
-// split point is a recorded vertex lying exactly on the line it splits.
-func throughRimRegions(ctx context.Context, budget *proofbound.WorkBudget, r brepFace, outer LoopRecord, cavity []LoopRecord) ([]ProfileRecord, error) {
-	holes := make([]LoopRecord, len(cavity))
-	for i, q := range cavity {
-		var err error
-		if holes[i], err = offset2d.ReverseLoopRecordContext(ctx, q); err != nil {
-			return nil, err
-		}
-	}
-	loops := append([]LoopRecord{outer}, holes...)
-	seqs := make([][]*throughRimPiece, len(loops))
-	for li, loop := range loops {
-		for _, seg := range loop.Segments {
-			p := &throughRimPiece{seg: seg, src: li}
-			if from, to, ok := brepgeom.NaturalLine(seg); ok && (from.U == to.U) != (from.V == to.V) {
-				p.from, p.to, p.line, p.fromKnown, p.toKnown = from, to, true, true, true
-			}
-			seqs[li] = append(seqs[li], p)
-		}
-	}
-	for li := range seqs {
-		var split []*throughRimPiece
-		for _, p := range seqs[li] {
-			split = append(split, p.splitAt(seqs, li)...)
-		}
-		seqs[li] = split
-	}
-	cancelled := 0
-	for _, p := range seqs[0] {
-		for _, other := range seqs[1:] {
-			if i := slices.IndexFunc(other, func(q *throughRimPiece) bool {
-				return p.line && q.line && !q.gone && q.from == p.to && q.to == p.from
-			}); i >= 0 {
-				p.gone, other[i].gone = true, true
-				cancelled++
-				break
-			}
-		}
-	}
-	if cancelled == 0 {
-		return []ProfileRecord{{Outer: outer, Holes: holes}}, nil
-	}
-	for _, seq := range seqs {
-		n := len(seq)
-		for i, p := range seq {
-			p.seqIndex = i
-			if p.line {
-				continue
-			}
-			if prev := seq[(i+n-1)%n]; prev.line {
-				p.from, p.fromKnown = prev.to, true
-			}
-			if next := seq[(i+1)%n]; next.line {
-				p.to, p.toKnown = next.from, true
-			}
-		}
-	}
-	chained, err := throughRimChain(seqs)
+// throughRimRegions classifies the loops left by the cavity trace. The
+// geometry and exact cancellation are computed in internal/brepgeom; the
+// signed-area budget and SG7 refusal belong to the shell operation.
+func throughRimRegions(ctx context.Context, budget *proofbound.WorkBudget, r brepFace,
+	outer LoopRecord, cavity []LoopRecord) ([]ProfileRecord, error) {
+	trace, err := brepgeom.TraceRim(ctx, outer, cavity)
 	if err != nil {
-		return nil, throughRimError(r, err.Error())
+		if reason, ok := err.(brepgeom.RimTraceError); ok {
+			return nil, throughRimError(r, reason.Error())
+		}
+		return nil, err
+	}
+	if !trace.Cancelled {
+		return []ProfileRecord{{Outer: trace.Loops[0], Holes: trace.Loops[1:]}}, nil
 	}
 	var outs, inner []LoopRecord
-	for _, loop := range chained {
-		var rec LoopRecord
-		for _, p := range loop {
-			rec.Segments = append(rec.Segments, p.seg)
-		}
+	for _, rec := range trace.Loops {
 		area, err := loopSignedAreaBudget(budget, rec)
 		if err != nil {
 			return nil, shellCancelCause(err)
@@ -492,124 +413,6 @@ func throughRimRegions(ctx context.Context, budget *proofbound.WorkBudget, r bre
 		return []ProfileRecord{{Outer: outs[0], Holes: inner}}, nil
 	}
 	return nil, throughRimError(r, "the loops left by the cavity's trace are not one outer loop with holes")
-}
-
-// splitAt splits a line piece of loop li at every line end of another loop
-// lying strictly inside it on its carrier, compared exactly, in walk order.
-func (p *throughRimPiece) splitAt(seqs [][]*throughRimPiece, li int) []*throughRimPiece {
-	if !p.line {
-		return []*throughRimPiece{p}
-	}
-	along := 0 // the coordinate the line runs along: 0 for U, 1 for V
-	if p.from.U == p.to.U {
-		along = 1
-	}
-	coord := func(c Point2) (float64, float64) {
-		if along == 0 {
-			return c.U, c.V
-		}
-		return c.V, c.U
-	}
-	a, level := coord(p.from)
-	b, _ := coord(p.to)
-	lo, hi := min(a, b), max(a, b)
-	var cuts []float64
-	for lj, other := range seqs {
-		if lj == li {
-			continue
-		}
-		for _, q := range other {
-			if !q.line {
-				continue
-			}
-			for _, c := range []Point2{q.from, q.to} {
-				x, y := coord(c)
-				if y == level && lo < x && x < hi && !slices.Contains(cuts, x) {
-					cuts = append(cuts, x)
-				}
-			}
-		}
-	}
-	if len(cuts) == 0 {
-		return []*throughRimPiece{p}
-	}
-	slices.Sort(cuts)
-	if a > b {
-		slices.Reverse(cuts)
-	}
-	point := func(x float64) Point2 {
-		if along == 0 {
-			return Point2{U: x, V: level}
-		}
-		return Point2{U: level, V: x}
-	}
-	out := make([]*throughRimPiece, 0, len(cuts)+1)
-	from := p.from
-	for _, x := range append(cuts, b) {
-		to := point(x)
-		if x == b {
-			to = p.to
-		}
-		out = append(out, &throughRimPiece{seg: LineSeg{Start: from, End: to, TStart: 0, TEnd: 1},
-			from: from, to: to, fromKnown: true, toKnown: true, line: true, src: p.src})
-		from = to
-	}
-	return out
-}
-
-// throughRimChain chains the surviving pieces into loops, starting from R's
-// outer loop in walk order.
-func throughRimChain(seqs [][]*throughRimPiece) ([][]*throughRimPiece, error) {
-	next := func(p *throughRimPiece) (*throughRimPiece, error) {
-		seq := seqs[p.src]
-		if s := seq[(p.seqIndex+1)%len(seq)]; !s.gone {
-			return s, nil
-		}
-		var found *throughRimPiece
-		for _, other := range seqs {
-			for _, q := range other {
-				prev := other[(q.seqIndex+len(other)-1)%len(other)]
-				if q.gone || !prev.gone || !q.fromKnown || q.from != p.to {
-					continue
-				}
-				if found != nil {
-					return nil, fmt.Errorf("two pieces continue the cavity's trace from one vertex")
-				}
-				found = q
-			}
-		}
-		if found == nil {
-			return nil, fmt.Errorf("a piece left by the cavity's trace has no continuation")
-		}
-		return found, nil
-	}
-	visited := map[*throughRimPiece]struct{}{}
-	var loops [][]*throughRimPiece
-	for _, seq := range seqs {
-		for _, start := range seq {
-			if _, seen := visited[start]; start.gone || seen {
-				continue
-			}
-			var loop []*throughRimPiece
-			for p := start; ; {
-				if _, seen := visited[p]; seen {
-					return nil, fmt.Errorf("the cavity's trace leaves a loop that does not close")
-				}
-				visited[p] = struct{}{}
-				loop = append(loop, p)
-				q, err := next(p)
-				if err != nil {
-					return nil, err
-				}
-				if q == start {
-					break
-				}
-				p = q
-			}
-			loops = append(loops, loop)
-		}
-	}
-	return loops, nil
 }
 
 // throughRimError is SG7, naming the removed face.
