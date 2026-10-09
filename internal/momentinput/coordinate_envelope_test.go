@@ -85,3 +85,31 @@ func TestRegionEnvelopeReadsArcsTightly(t *testing.T) {
 		require.InDelta(t, tc.closed, ig.CoordUpper, 1e-12, "anchor %g", tc.anchor)
 	}
 }
+
+// TestRegionEnvelopeTranslateAddsTheAnchor pins Translate's fold of the
+// anchor into the region envelope: an arc of radius 5 about (1015, 0),
+// integrated about an anchor at its centre, holds the envelope 5√2 about the
+// anchor; translated back to the origin it must cover that plus |anchor|₁,
+// which a dense sample of |u| + |v| over the arc reaches.
+//
+// Shown to fail first: folding the anchor in with math.Max stored 1015,
+// below the arc's 1015 + 5√2.
+func TestRegionEnvelopeTranslateAddsTheAnchor(t *testing.T) {
+	t.Parallel()
+	const cu = 1015.0
+	anchor := sectionrecord.Point2{U: cu}
+	arc := ArcSeg{Center: anchor, Start: sectionrecord.Point2{U: cu, V: -5}, End: sectionrecord.Point2{U: cu, V: 5}, TStart: 0, TEnd: 1}
+	var ig Integrals
+	require.NoError(t, ig.add(arc, Plan{}, anchor, freeform.MomentFirstOrder))
+	local := ig.CoordUpper
+	require.InDelta(t, 5*math.Sqrt2, local, 1e-12)
+	got := translateMomentIntegrals(ig, anchor, freeform.MomentFirstOrder).CoordUpper
+	worst := 0.0
+	for i := range 4096 {
+		th := -math.Pi/2 + math.Pi*float64(i)/4095
+		worst = math.Max(worst, math.Abs(cu+5*math.Cos(th))+math.Abs(5*math.Sin(th)))
+	}
+	require.LessOrEqual(t, worst, got, "the translated envelope sits below a point of the arc")
+	require.GreaterOrEqual(t, got, local+cu, "the translated envelope drops the anchor's own L1 size")
+	require.InDelta(t, cu+5*math.Sqrt2, got, 1e-9)
+}

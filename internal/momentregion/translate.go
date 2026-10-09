@@ -1,8 +1,6 @@
 package momentregion
 
 import (
-	"math"
-
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentline"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -10,7 +8,13 @@ import (
 )
 
 // Translate restores the recorded profile origin after anchor-local integration.
+//
+// Every contribution's coordinate envelope was stated about the anchor, so a
+// point p of the region has |p|₁ ≤ |p − anchor|₁ + |anchor|₁: the stored
+// envelope becomes their sum, folded in before any order returns, so an
+// area-only integration's envelope is about the origin too.
 func (s State) Translate(anchor sectionrecord.Point2, order freeform.MomentIntegralOrder) {
+	*s.CoordUpper = proofbound.AbsSumUpper(*s.CoordUpper, anchor.U, anchor.V)
 	if !*s.ExactDead {
 		*s.Exact = momentline.TranslateExactMoments(*s.Exact, momentline.Point{U: anchor.U, V: anchor.V}, order)
 	}
@@ -56,5 +60,4 @@ func (s State) Translate(anchor sectionrecord.Point2, order freeform.MomentInteg
 	mv = proofbound.BoundedAdd(mv, proofbound.BoundedMul(proofbound.ExactScalar(anchor.V), area))
 	*s.Fields[1].Value, *s.Fields[1].Bound = mu.Value, mu.Bound
 	*s.Fields[2].Value, *s.Fields[2].Bound = mv.Value, mv.Bound
-	*s.CoordUpper = math.Max(*s.CoordUpper, proofbound.AbsSumUpper(anchor.U, anchor.V))
 }
