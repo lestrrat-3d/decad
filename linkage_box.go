@@ -441,74 +441,20 @@ func (b *boxRun) subdivide() error {
 	for _, k := range b.axes {
 		root.hi[k] = big.NewRat(1, 1)
 	}
-	if err := b.evaluate(root); err != nil {
+	schedule := linkagebound.CellSubdivision[*boxCell]{
+		Budget:           b.budget,
+		Evaluated:        func() int { return len(b.evaluated) },
+		Evaluate:         b.evaluate,
+		Split:            b.split,
+		Depth:            func(c *boxCell) int { return c.depth },
+		VerdictAxis:      b.splitAxis,
+		NextReadingSplit: b.nextReadingSplit,
+	}
+	if err := schedule.Run(root); err != nil {
 		return err
 	}
-	b.leaves = []*boxCell{root}
-	for {
-		if err := b.splitForVerdict(); err != nil {
-			return err
-		}
-		if b.exhausted {
-			break
-		}
-		n, axis := b.nextReadingSplit()
-		if n < 0 {
-			break
-		}
-		if len(b.evaluated)+2 > b.budget {
-			b.exhausted = true
-			b.unsplit++
-			break
-		}
-		lower, upper, err := b.split(b.leaves[n], axis)
-		if err != nil {
-			return err
-		}
-		b.leaves = slices.Insert(slices.Delete(b.leaves, n, n+1), n, lower, upper)
-	}
+	b.leaves, b.exhausted, b.unsplit = schedule.Leaves, schedule.Exhausted, schedule.Unsplit
 	return b.run.ctx.Err()
-}
-
-// splitForVerdict is §14.4 step 5: level by level from the shallowest
-// splittable cell, each splittable cell of the level in cell order replaced in
-// place by its two halves, lower half first, until no cell is splittable or
-// the budget stops the split.
-func (b *boxRun) splitForVerdict() error {
-	for {
-		level := -1
-		for _, c := range b.leaves {
-			if b.splitAxis(c) >= 0 && (level < 0 || c.depth < level) {
-				level = c.depth
-			}
-		}
-		if level < 0 {
-			return nil
-		}
-		next := make([]*boxCell, 0, len(b.leaves))
-		for _, c := range b.leaves {
-			axis := b.splitAxis(c)
-			if c.depth != level || axis < 0 {
-				next = append(next, c)
-				continue
-			}
-			if b.exhausted || len(b.evaluated)+2 > b.budget {
-				b.exhausted = true
-				b.unsplit++
-				next = append(next, c)
-				continue
-			}
-			lower, upper, err := b.split(c, axis)
-			if err != nil {
-				return err
-			}
-			next = append(next, lower, upper)
-		}
-		b.leaves = next
-		if b.exhausted {
-			return nil
-		}
-	}
 }
 
 // nextReadingSplit is §14.4 step 6: the leaf to split for the readings and
@@ -519,22 +465,22 @@ func (b *boxRun) splitForVerdict() error {
 // by that bound nor disproven by some centre, along an axis wider than the
 // verdict floor. The axis is the one with the largest share of the defect of
 // the bound the pair that attained it holds (readingAxis).
-func (b *boxRun) nextReadingSplit() (int, int) {
+func (b *boxRun) nextReadingSplit(leaves []*boxCell) (int, int) {
 	r := b.run
 	allClear, smallest := true, -1
-	for n, c := range b.leaves {
+	for n, c := range leaves {
 		if c.outcome != CellClear {
 			allClear = false
 			continue
 		}
-		if c.clearance != nil && (smallest < 0 || c.clearance.Value.Base() < b.leaves[smallest].clearance.Value.Base()) {
+		if c.clearance != nil && (smallest < 0 || c.clearance.Value.Base() < leaves[smallest].clearance.Value.Base()) {
 			smallest = n
 		}
 	}
-	if smallest < 0 || b.leaves[smallest].low == nil {
+	if smallest < 0 || leaves[smallest].low == nil {
 		return -1, -1
 	}
-	c := b.leaves[smallest]
+	c := leaves[smallest]
 	if allClear {
 		if axis := b.readingAxis(c, b.wideForReading); axis >= 0 {
 			if reading, _ := r.pathClearance(b.upperPoses(), c.clearance, "whole-box"); reading != nil && reading.Tolerance.State != ToleranceSatisfied {
