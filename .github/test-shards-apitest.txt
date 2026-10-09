@@ -1369,6 +1369,7 @@
 5	0.01	TestDraftPlacedAndFilleted
 5	0.01	TestDraftRefusals
 5	0.01	TestDraftRetires
+5	0.01	TestDraftSymmetricReceiver
 5	0.38	TestExportBytesAreIdenticalAcrossVerificationLevels
 5	0.78	TestExportWritesABodyTheProvenPathRefuses
 5	0.05	TestExtrudeFitSplineProfileBuilds
