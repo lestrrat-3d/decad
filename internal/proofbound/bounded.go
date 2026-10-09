@@ -237,8 +237,8 @@ func Radius2D(x, y float64) float64 {
 // rationals or the shared fixed-point grid, so no libm accuracy is assumed
 // either), the caller takes math.Min of the two, which can only shrink the
 // published bound. The cap-chamfer Cone patch's brackets
-// (capblend_moments.go's conePatchFluxInterval for its volume flux,
-// capblend_centroid.go's phaseSumInterval for its first moments) REPLACE the
+// (internal/capband's conePatchFluxInterval for its volume flux and
+// phaseSumInterval for its first moments) REPLACE the
 // envelope wherever they build, since each encloses the whole closed form
 // over exact rationals with radSinCosInterval's certified trig factors. The
 // envelope stands only in the flux's non-finite fallback; the moments'

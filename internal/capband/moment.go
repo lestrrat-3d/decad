@@ -161,7 +161,7 @@ type PhaseTerm struct {
 // P_a×P_b flux integrand across randomized configurations, and — the
 // stronger check — against this package's own shipped, independently-tested
 // analytic volume formula on the ask's own cylinder r10 h8 chamfer 0.5mm
-// fixture, where the assembled centroid (this file's capBandMoment plus the
+// fixture, where the assembled centroid (band_mass.go's BandMoment plus the
 // slab term) reproduces the closed-form frustum-plus-slab centroid
 // 3.9881863539 to float64 precision.
 func coneMomentTermsX(R0, R1, H, cU, dS, dC *big.Rat) []PhaseTerm {

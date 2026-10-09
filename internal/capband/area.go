@@ -23,7 +23,7 @@ import (
 // ulps of the term's OWN value and a band patch's cross product cancels
 // before that value is reached. proofbound.CrossProductUpper carries the envelope those
 // products actually reach, so the charge tracks the terms rather than what
-// they cancelled to — the same correction capBandVolume makes for the flux.
+// they cancelled to — the same correction BandVolume makes for the flux.
 //
 // Neither arm's arithmetic bound speaks for the cap-level directrix's own
 // contour displacement (capblend_contour.go): both read g's coordinates as

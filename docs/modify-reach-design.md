@@ -626,7 +626,7 @@ from the denoted one, and that move is the body's, not the patch's: the
 slab and the band meet at the held level, so the body changes only where a
 vertical line leaves the band toward the cap, by at most the larger of the
 side loop's and the cap contour's areas times the move
-(`capBandLevelVolume`), which the band's volume and first-moment bounds
+(`capband.LevelVolume`), which the band's volume and first-moment bounds
 charge. The band volume charges it there alone: its side disk carries only
 the cap level's inherited displacement. The skew the
 region term reads is the larger of the patch's two proven corner
@@ -1148,7 +1148,7 @@ separate term with its own helper. `sideZ` is the single float sum
 `capZ + matSign*ds`, so the whole side directrix translates rigidly by that
 sum's own rounding (`levelDelta`) rather than moving point by point the way a
 solved contour does. Every reading built on that level charges it: a slant
-edge's own length, the band volume and first moment (`capBandLevelVolume`:
+edge's own length, the band volume and first moment (`capband.LevelVolume`:
 the body moves only where a vertical line leaves the band toward the cap,
 over at most the larger of the side loop's and cap contour's areas), and
 each BAND PATCH's own area, which
@@ -1844,6 +1844,6 @@ the cap contour's displacement. `capBlendPayload` separately preserves its
 receiver's per-end axial displacement and the selected-end setback rounding.
 `capblend_contour.go` also states each circular patch's held allowances
 (`capWallHeldAllow`, `capApexHeldAllow`). `internal/capband/closure.go` bounds
-each band's closure slivers (`capBandClosure`), which `capblend_moments.go`
-and `capblend_centroid.go` charge beside the patch integrals (§8.4's held
+each band's closure slivers (`capBandClosure`), which
+`internal/capband/band_mass.go` charges beside the patch integrals (§8.4's held
 numbers paragraph).

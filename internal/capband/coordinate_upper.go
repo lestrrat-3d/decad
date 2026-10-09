@@ -33,6 +33,25 @@ func CoordUpper(loop, capBoundary sectionrecord.LoopRecord, delta float64,
 	return math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(capZB.Value), capZB.Bound)), nil
 }
 
+// PointUpper bounds |P| = |(u, v, z)| over a band and its closure slivers.
+// It reads the original and cap loops' L1 envelopes, widens the latter by
+// contour displacement, then includes both levels and the closure's reach.
+func PointUpper(loop, capBoundary sectionrecord.LoopRecord, delta float64, closure Closure,
+	sideZB, capZB proofbound.BoundedScalar, work *freeform.FreeformWork) (float64, error) {
+	coordUpper, err := momentinput.CoordinateUpper(momentinput.Profile{Outer: loop}, work, nil)
+	if err != nil {
+		return 0, err
+	}
+	capCoordUpper, err := momentinput.CoordinateUpper(momentinput.Profile{Outer: capBoundary}, work, nil)
+	if err != nil {
+		return 0, err
+	}
+	planeUpper := math.Max(coordUpper, proofbound.AbsSumUpper(capCoordUpper, delta))
+	zUpper := math.Max(proofbound.AbsSumUpper(sideZB.Value, sideZB.Bound),
+		proofbound.AbsSumUpper(capZB.Value, capZB.Bound))
+	return proofbound.AbsSumUpper(planeUpper, zUpper, closure.Reach), nil
+}
+
 // loopLocalCoordinateUpper bounds max(|u|, |v|) over every point of a loop.
 // For each segment it takes the smaller of the walk's L1 envelope
 // (momentinput.WalkCoordinateUpper, which dominates max(|u|, |v|) and is the

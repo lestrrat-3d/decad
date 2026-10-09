@@ -224,7 +224,7 @@ func vecL1(v r3.Vec) float64 {
 // never a placed cap frame, and every walk kind states one — a free-form
 // span's own convex-hull envelope (freeform.FreeformControlExtent) included — so the
 // analytic-only refusal CoordinateUpper carries for its OTHER callers
-// (capblend_centroid.go, revolve.go) would refuse a centroid this build must
+// (internal/capband/coordinate_upper.go, revolve.go) would refuse a centroid this build must
 // publish for a section this same build just proved buildable.
 //
 // walks is the profile's pre-resolved segment walks, or nil; same contract as

@@ -14,7 +14,7 @@ import (
 // closed sub-solid per loop — the near disk, the far disk and the wall band
 // between them — signed positive for the outer loop and negative for each
 // hole, so every reading is the cap-loop band's own closed form
-// (capblend_moments.go, capblend_centroid.go) summed over the loops with no
+// (internal/capband/band_mass.go) summed over the loops with no
 // straight slab. Each composes its bounds exactly as modify-reach §8.4
 // states: the far contour's displacement once per band after the flux sum
 // (proofbound.SweptVolumeAllow, proofbound.SweptMomentAllow), each patch's
@@ -41,12 +41,19 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		}
 		band := bands[li]
 
-		v, err := capBandVolume(ctx, li, loop, cbp, band.geom, farZ, matSign, band.delta, band.closure, work)
+		mass, err := readBandMass(ctx, li, loop, cbp, band.geom, farZ, matSign, band.delta, band.closure)
+		if err != nil {
+			return err
+		}
+		v, err := capband.BandVolume(mass, work)
 		if err != nil {
 			return err
 		}
 		volume = proofbound.BoundedAdd(volume, signed(v))
-		bmu, bmv, bmz, err := capBandMoment(ctx, li, loop, cbp, band.geom, farZ, matSign, band.delta, band.closure, work)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		bmu, bmv, bmz, err := capband.BandMoment(mass, work)
 		if err != nil {
 			return err
 		}
@@ -104,7 +111,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 	cv := proofbound.BoundedQuotient(mv.Value, mv.Bound, volume.Value, volume.Bound)
 	cz := proofbound.BoundedQuotient(mz.Value, mz.Bound, volume.Value, volume.Bound)
 	centroid := pl.point(cu.Value, cv.Value, cz.Value)
-	centroidBound := math.Min(prismPointBound(pl, cu, cv, cz), capBlendCentroidGeometryBound(centroid, bounds))
+	centroidBound := math.Min(prismPointBound(pl, cu, cv, cz), capband.CentroidGeometryBound(centroid, bounds))
 	body.centroid = VecMeasurement{
 		Value:     centroid,
 		Exactness: exactnessOf(centroidBound),

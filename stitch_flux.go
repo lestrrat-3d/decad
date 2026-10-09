@@ -423,7 +423,7 @@ func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (pro
 // own total — reversing every face and recomputing once, the curved
 // analogue of stitch.go's acc.vol6.Sign() < 0 step — divides by three, and
 // charges the placement allowance (proofbound.SweptVolumeAllow/proofbound.SweptMomentAllow) on
-// the same terms capBandVolume already does for a placed curved solid: a
+// the same terms capband.BandVolume does for a placed curved solid: a
 // placed curved stitched solid is Approximate on both readings, per
 // docs/surface-design.md §6.4's placed-body paragraph.
 func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta float64) (Measurement, VecMeasurement, error) {
