@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -71,7 +72,7 @@ func TestOffsetPrismUnrepresentableOffset(t *testing.T) {
 
 // TestOffsetPrismIntervalCertificationRefusesThePinch pins the whole-interval
 // certification on this path: the two walls of §17.2's 4 mm neck meet at
-// tau = 2, and thickenAxisIntervalClear refuses every erosion that reaches
+// tau = 2, and thickenaxis.AxisIntervalClear refuses every erosion that reaches
 // that contact while admitting every one that stops short of it.
 //
 // On the axis-parallel class this build admits, the certification is a BACKSTOP
@@ -88,10 +89,10 @@ func TestOffsetPrismIntervalCertificationRefusesThePinch(t *testing.T) {
 	loops, err := prismCornerLoopsBudget(budget, pp)
 	require.NoError(t, err)
 	require.Len(t, loops, 1)
-	dirs, err := thickenAxisDirections(loops[0], budget)
+	dirs, err := thickenaxis.AxisDirections(loops[0].walks, budget)
 	require.NoError(t, err)
 
-	err = thickenAxisIntervalClear(t.Context(), loops[0], dirs, +1, 2.5, budget, nil)
+	err = thickenaxis.AxisIntervalClear(t.Context(), loops[0].walks, dirs, +1, 2.5, budget, nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "offset interval"), err.Error())
 
@@ -104,7 +105,7 @@ func TestOffsetPrismIntervalCertificationRefusesThePinch(t *testing.T) {
 	// A 1.5 mm erosion stops short of the contact: the certification admits it
 	// and the section builds, so the refusal above is the pinch's doing and not
 	// the shape's.
-	require.NoError(t, thickenAxisIntervalClear(t.Context(), loops[0], dirs, +1, 1.5, budget, nil))
+	require.NoError(t, thickenaxis.AxisIntervalClear(t.Context(), loops[0].walks, dirs, +1, 1.5, budget, nil))
 	result, err = offsetPrism(t.Context(), doc, pp, OffsetNegative, 1.5, 0)
 	require.NoError(t, err)
 	require.NotNil(t, result)

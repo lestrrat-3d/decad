@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 
 	"github.com/stretchr/testify/require"
 )
@@ -30,14 +31,14 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 	budget := proofbound.NewWorkBudget(t.Context())
 	loops, err := prismCornerLoopsBudget(budget, pp)
 	require.NoError(t, err)
-	dirs, err := thickenAxisDirections(loops[0], budget)
+	dirs, err := thickenaxis.AxisDirections(loops[0].walks, budget)
 	require.NoError(t, err)
 	generated, err := offsetProfile(budget, pp.profile, +1, 1)
 	require.NoError(t, err)
 	first, ok := generated.Outer.Segments[0].(lineSeg)
 	require.True(t, ok)
 	require.Equal(t, base, first.Start.U)
-	err = thickenCertifyAxisOffset(loops[0], dirs, generated.Outer, +1, 1, budget)
+	err = thickenaxis.CertifyAxisOffset(loops[0].walks, dirs, generated.Outer, +1, 1, budget)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
 
@@ -87,7 +88,7 @@ func TestThickenRibbonUnrepresentableOffset(t *testing.T) {
 		lineSeg{Start: Point2{U: base, V: 0}, End: Point2{U: base, V: 40}, TStart: 0, TEnd: 1},
 	}}
 	budget := proofbound.NewWorkBudget(t.Context())
-	_, err := thickenRibbon(t.Context(), chain, ThickenPositive, 1, budget, freeform.NewFreeformWork(), nil)
+	_, err := thickenaxis.RibbonProfile(t.Context(), chain, 1, 0, 1, budget, freeform.NewFreeformWork(), nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
 }
@@ -118,7 +119,7 @@ func TestThickenRibbonWalkClassRefusals(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			budget := proofbound.NewWorkBudget(t.Context())
-			_, err := thickenRibbon(t.Context(), tc.chain, ThickenPositive, 1, budget, freeform.NewFreeformWork(), nil)
+			_, err := thickenaxis.RibbonProfile(t.Context(), tc.chain, 1, 0, 1, budget, freeform.NewFreeformWork(), nil)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.True(t, strings.Contains(err.Error(), tc.want), err.Error())
 		})
