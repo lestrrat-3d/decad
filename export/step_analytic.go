@@ -88,22 +88,14 @@ func supportsAnalyticPlanarLoop(loop *decad.Loop) bool {
 	return len(coedges) >= 3 || (len(coedges) == 2 && arcs > 0)
 }
 
-// axisRounding bounds the rounding a frame lift leaves in a unit axis: a loop
-// fillet's meridian arc about a wall built from a rotated frame carries an
-// Axis a few ulps off the cylinder's own (-2.2e-16 in one component). It
-// separates one construction's rounding from a different axis, which differs
-// at the scale of the geometry; a larger cross product only rejects.
-const axisRounding = 1e-12
-
-// axesAlign reports whether two unit axes are parallel or antiparallel to
-// within axisRounding.
+// axesAlign reports whether two unit axes are equal or exact negations.
 func axesAlign(a, b r3.Vec) bool {
-	return a.Cross(b).Len() <= axisRounding
+	return a == b || a == b.Scale(-1)
 }
 
 // supportsAnalyticPartialWall admits a cylinder face bounded by one loop of
 // at least four edges, each an Arc3 about the cylinder's own axis (its Axis
-// parallel to the cylinder's within axisRounding), an Ellipse3 or a Line3
+// equal to the cylinder's or its negation, exactly), an Ellipse3 or a Line3
 // along the axis (an exactly zero cross product with it), with lines and at
 // least one arc or ellipse present: the wall a prism sweeps from an arc,
 // whose side lines may be split into several edges where neighbouring faces

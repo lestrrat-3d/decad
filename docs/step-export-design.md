@@ -34,8 +34,7 @@ according to the writer path.
   edges, or two when one is an arc). A cylindrical wall is either full —
   exactly two one-circle boundary loops whose start vertices align along its
   axis — or partial: one loop of at least four edges, each an `Arc3` about
-  the cylinder's axis (its `Axis` that axis or its negation, within 1e-12 of
-  parallel, the rounding a frame lift leaves) or an `Ellipse3`, or a `Line3`
+  the cylinder's axis (its `Axis` that axis or its negation, exactly) or an `Ellipse3`, or a `Line3`
   along it (an exactly zero cross product), with lines and arcs or ellipses
   both present, since a side line split by a neighbouring face's vertex is
   several `Line3`s. A loop fillet's straight-walk patch is such a wall, closed

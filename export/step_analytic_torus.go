@@ -99,17 +99,15 @@ func torusSeam(torus decad.Torus, loops []*decad.Loop) (axis, reference r3.Vec, 
 }
 
 // torusArcIsParallel reports whether an arc runs about the torus's own axis
-// (its Axis the torus's or its negation, within axisRounding): a parallel of
-// the torus.
+// (its Axis the torus's or its negation, exactly): a parallel of the torus.
 func torusArcIsParallel(arc decad.Arc3, torus decad.Torus) bool {
 	return axesAlign(arc.Axis, torus.Axis)
 }
 
 // torusArcIsMeridian reports whether an arc's plane contains the torus axis
-// (its Axis perpendicular to the torus's within axisRounding): a meridian of
-// the tube.
+// (its Axis exactly perpendicular to the torus's): a meridian of the tube.
 func torusArcIsMeridian(arc decad.Arc3, torus decad.Torus) bool {
-	return math.Abs(arc.Axis.Dot(torus.Axis)) <= axisRounding
+	return arc.Axis.Dot(torus.Axis) == 0
 }
 
 // supportsAnalyticTorusPatch admits one loop of at least four Arc3 edges,
