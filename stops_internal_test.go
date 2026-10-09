@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/r3"
@@ -110,8 +111,8 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	})
 }
 
-// TestRejectAxisCrossingRefusesUnprobableCurve pins the split at the heart of
-// this task: rejectAxisCrossing keeps its Line3 shortcut — a straight edge
+// TestRejectAxisCrossingRefusesUnprobableCurve checks that the angular stop
+// audit keeps its Line3 shortcut — a straight edge
 // between two agreeing vertices never leaves the half-plane they agree on —
 // but any OTHER curve kind now refuses rather than reading its own silence as
 // "no crossing." A NURBSCurve rim (a free-form prism's own side-face
@@ -130,7 +131,7 @@ func TestRejectAxisCrossingRefusesUnprobableCurve(t *testing.T) {
 	m := st.r0
 
 	t.Run("Line3 stays permitted", func(t *testing.T) {
-		require.NoError(t, st.rejectAxisCrossing(&Edge{curve: Line3{}}, m))
+		require.NoError(t, extent.RejectAxisCrossing(st.stopGeometry(), angularStopEdge(&Edge{curve: Line3{}}), m))
 	})
 	for _, tc := range []struct {
 		name  string
@@ -140,7 +141,7 @@ func TestRejectAxisCrossingRefusesUnprobableCurve(t *testing.T) {
 		{name: "FacetedCurve", curve: FacetedCurve{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := st.rejectAxisCrossing(&Edge{curve: tc.curve}, m)
+			err := extent.RejectAxisCrossing(st.stopGeometry(), angularStopEdge(&Edge{curve: tc.curve}), m)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.ErrorContains(t, err, tc.name, "the refusal names the curve type it cannot probe")
 		})

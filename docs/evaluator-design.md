@@ -561,8 +561,9 @@ no bound. The clearance kernel reads them through `newCEdge`, and its revolve
 carriers read the same walk values, so the displacement it charges for the
 carriers (`clearance.RevolveCarrierResult`'s `AxisGap`,
 `docs/clearance-design.md` §2) is the one those edges share; they add only
-the float evaluation of the centre. STEP export, `stops.go`'s boundary
-probes and `stitch_flux.go`'s circle rims read the held curves as they stand.
+the float evaluation of the centre. STEP export,
+`internal/extent/angular_stop.go`'s boundary probes and `stitch_flux.go`'s
+circle rims read the held curves as they stand.
 A wall's `Face.NormalAt` bound is proven against the surface its record
 DENOTES, never against its `Surface` tag. The tag is a float re-expression:
 its origin and centre are placed from the walk's (z, ρ), a centre within the

@@ -1,14 +1,11 @@
 package decad
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"math"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
-	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -246,18 +243,9 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 // is ErrDegenerate: the sweep has no stop at all.
 func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, float64, []producerID, error) {
 	dir := frame.N().Scale(travel)
-	base := frame.Origin().Dot(dir)
-	type stopAt struct {
-		far   float64
-		hi    float64
-		delta float64
-		ref   producerID
-	}
-	var stops []stopAt
+	stops := extent.NewThroughStops[producerID](frame.Origin(), dir, travel)
 	for _, b := range d.liveBodies() {
-		// A sheet encloses no material, so it cannot stop a sweep; skip it
-		// rather than refuse, or a document holding one sheet could never use
-		// ThroughAll at all (docs/surface-design.md §11 Table X).
+		// A sheet encloses no material to stop a sweep.
 		if b.Kind() == BodySheet {
 			continue
 		}
@@ -269,69 +257,11 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 		if err != nil {
 			return 0, 0, nil, err
 		}
-		// Two mechanisms move this far side along this direction: the extent
-		// reading's own bracket and the payload's stop-face displacement. They
-		// displace the same coordinate, so they sum — and a zero term is left
-		// out rather than rounded, so an all-analytic body keeps the exact
-		// endpoint it has always published.
-		delta := bound
-		if axial := payloadAxialDelta(b); axial != 0 {
-			delta = axial
-			if bound != 0 {
-				delta = proofbound.AbsSumUpper(bound, axial)
-			}
-		}
-		far := hi - base
-		tol := extent.RelativeStopTolerance(math.Max(math.Abs(hi), math.Abs(base)))
-		switch {
-		case freeform.DownRound(far-delta) > tol:
-			// Material beyond the plane whatever the displacement hides.
-		case proofbound.UpRound(far+delta) <= tol:
-			// No material beyond the plane, whatever it hides.
-			continue
-		default:
-			// The displacement straddles the plane, and a non-finite one
-			// decides neither test above, so both land here.
-			return 0, 0, nil, fmt.Errorf(`%w: a through-all sweep cannot decide whether a body is in its path: its far side sits %v mm beyond the sketch plane, known only to a displacement of %v mm`, ErrUnsupported, far, delta)
-		}
-		stops = append(stops, stopAt{far: far, hi: hi, delta: delta, ref: b.originProducer()})
-	}
-	if len(stops) == 0 {
-		return 0, 0, nil, fmt.Errorf(`%w: a through-all sweep found no live body in its path`, ErrDegenerate)
-	}
-	// Stop order along the sweep: the sweep passes the nearest far side
-	// first. A tie keeps the live-body order, so the record is
-	// deterministic.
-	slices.SortStableFunc(stops, func(a, b stopAt) int { return cmp.Compare(a.far, b.far) })
-	refs := make([]producerID, len(stops))
-	for i, s := range stops {
-		refs[i] = s.ref
-	}
-	// The sweep still stops at the FARTHEST held far side, preserving the stop
-	// order and endpoint the feature records. Its bound must nevertheless cover
-	// every candidate's far-end interval: a lower held far side can be farther
-	// in the denoted geometry. Refuse only when that competing interval cannot
-	// be represented as a finite bound.
-	last := stops[len(stops)-1]
-	farDelta := last.delta
-	for _, candidate := range stops {
-		if proofbound.IsNonFinite(candidate.far) || proofbound.IsNonFinite(candidate.delta) {
-			return 0, 0, nil, fmt.Errorf(`%w: a through-all far-end uncertainty is not finite`, ErrUnsupported)
-		}
-		upper := candidate.far
-		if candidate.delta != 0 {
-			upper = proofbound.UpRound(candidate.far + candidate.delta)
-		}
-		if proofbound.IsNonFinite(upper) {
-			return 0, 0, nil, fmt.Errorf(`%w: a through-all far-end uncertainty cannot be represented`, ErrUnsupported)
-		}
-		if upper > last.far {
-			farDelta = math.Max(farDelta, proofbound.UpRound(upper-last.far))
+		if err := stops.Add(hi, bound, payloadAxialDelta(b), b.originProducer()); err != nil {
+			return 0, 0, nil, err
 		}
 	}
-	stop := travel * last.far
-	delta := proofbound.AbsSumUpper(extent.ThroughStopRound(frame.Origin(), dir, last.hi, travel, stop), farDelta)
-	return stop, delta, refs, nil
+	return stops.Finish()
 }
 
 // dedupRefs deduplicates recorded stop refs preserving first occurrence
@@ -440,172 +370,38 @@ func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, w
 	}
 }
 
-// errStopFaceBothSides names two stops at once, which is no stop at all.
-var errStopFaceBothSides = fmt.Errorf(`%w: the stop face spans both sides of the revolve axis`, ErrDegenerate)
-
-// faceHalfPlane locates the one half-plane of the axis the stop face's
-// material occupies, as its angle about the axis in [0, 2π), measured
-// right-handed about the caller's axis direction from the region's own
-// half-plane. The face plane contains the axis (checked by the caller), so
-// every point sits at one of two opposite angles; the face is usable only
-// when its boundary reaches exactly one of them — vertices on both sides,
-// or a circular edge dipping across the axis between its vertices, put
-// material in both half-planes (ErrDegenerate), and a face with no material
-// off the axis names no half-plane at all. Vertices decide the angle first;
-// the circular edges are then audited against it, exactly.
+// faceHalfPlane maps source edges to the geometry the stop evaluator reads.
 func (st angularStops) faceHalfPlane(face *Face) (float64, error) {
 	edges := face.Edges()
-	phi := math.NaN()
-	for _, e := range edges {
-		for _, p := range boundaryProbes(e) {
-			x := p.Sub(st.a3)
-			u, w := x.Dot(st.r0), x.Dot(st.e1)
-			if math.Hypot(u, w) <= extent.RelativeStopTolerance(x.Len()) {
-				continue
-			}
-			a := math.Atan2(w, u)
-			if a < 0 {
-				a += 2 * math.Pi
-			}
-			if math.IsNaN(phi) {
-				phi = a
-				continue
-			}
-			diff := math.Abs(a - phi)
-			if diff > math.Pi {
-				diff = 2*math.Pi - diff
-			}
-			if diff > angTol {
-				return 0, errStopFaceBothSides
-			}
-		}
+	boundary := make([]extent.AngularEdge, len(edges))
+	for i, edge := range edges {
+		boundary[i] = angularStopEdge(edge)
 	}
-	if math.IsNaN(phi) {
-		return 0, fmt.Errorf(`%w: the stop face has no material off the revolve axis`, ErrDegenerate)
-	}
-	// The half-plane direction the probes agreed on; a circular edge may
-	// still dip across the axis between its probes.
-	m := st.r0.Scale(math.Cos(phi)).Add(st.e1.Scale(math.Sin(phi)))
-	for _, e := range edges {
-		if err := st.rejectAxisCrossing(e, m); err != nil {
-			return 0, err
-		}
-	}
-	return phi, nil
+	return extent.FaceHalfPlane(st.stopGeometry(), boundary)
 }
 
-// boundaryProbes are the closed-form points that witness which half-plane an
-// edge's material sits in: its vertices, plus — for a circular edge, whose
-// off-axis material may sit entirely between on-axis vertices (a half-disk
-// cap) — the arc's parametric midpoint, or the whole circle's seam antipode.
-// Every probe is an exact point OF the edge; nothing is sampled.
-func boundaryProbes(e *Edge) []r3.Vec {
-	var probes []r3.Vec
-	for _, v := range []*Vertex{e.start, e.end} {
-		if v != nil {
-			probes = append(probes, v.position)
-		}
-	}
-	switch c := e.Curve().(type) {
-	case Circle3:
-		if e.start != nil {
-			probes = append(probes, c.Center.Scale(2).Sub(e.start.position))
-		}
-	case Arc3:
-		if e.start == nil || e.end == nil {
-			break
-		}
-		n, ok := c.Axis.Normalize()
-		if !ok {
-			break
-		}
-		r, err := c.Radius.In(units.Millimeter)
-		if err != nil {
-			break
-		}
-		u0, ok := e.start.position.Sub(c.Center).Normalize()
-		if !ok {
-			break
-		}
-		v0 := n.Cross(u0)
-		x := e.end.position.Sub(c.Center)
-		sweep := math.Atan2(x.Dot(v0), x.Dot(u0))
-		if sweep < 0 {
-			sweep += 2 * math.Pi
-		}
-		sin, cos := math.Sincos(sweep / 2)
-		probes = append(probes, c.Center.Add(u0.Scale(cos*r)).Add(v0.Scale(sin*r)))
-	}
-	return probes
+func (st angularStops) stopGeometry() extent.AngularStop {
+	return extent.AngularStop{A3: st.a3, R0: st.r0, E1: st.e1}
 }
 
-// rejectAxisCrossing rejects a boundary edge that reaches across the revolve
-// axis into the opposite half-plane: the face would name two stops at once.
-// m is the half-plane direction the face's vertices agreed on. A circular
-// edge's crossing is decided in closed form — the edge's circle lies in the
-// face plane (which contains the axis), so it crosses exactly when its
-// deepest point against m — the circle point at −m from the center, when the
-// walk actually passes it — sits strictly across the axis. A Line3 edge
-// between agreeing vertices stays between them, so it needs no such probe. No
-// other curve kind has one: a NURBSCurve or FacetedCurve rim can bulge across
-// the axis between two agreeing vertices with nothing here to witness it, and
-// the falsify-never-bless rule (repo CLAUDE.md) forbids reading that silence
-// as "no crossing." Closed-form or refuse: never sampling.
-func (st angularStops) rejectAxisCrossing(e *Edge, m r3.Vec) error {
-	var center r3.Vec
-	var radius units.Value
-	var axis r3.Vec
-	closed := false
-	switch c := e.Curve().(type) {
-	case Circle3:
-		center, radius, axis, closed = c.Center, c.Radius, c.Axis, true
-	case Arc3:
-		center, radius, axis = c.Center, c.Radius, c.Axis
+func angularStopEdge(e *Edge) extent.AngularEdge {
+	curve := e.Curve()
+	record := extent.AngularEdge{CurveType: fmt.Sprintf("%T", curve)}
+	if e.start != nil {
+		record.Start = &e.start.position
+	}
+	if e.end != nil {
+		record.End = &e.end.position
+	}
+	switch c := curve.(type) {
 	case Line3:
-		// A linear edge between agreeing vertices stays between them.
-		return nil
-	default:
-		return fmt.Errorf(`%w: the angular stop audit has no closed-form axis-crossing probe for a %T boundary edge`, ErrUnsupported, c)
+		record.Kind = extent.AngularEdgeLine
+	case Circle3:
+		record.Kind, record.Center, record.Axis, record.Radius =
+			extent.AngularEdgeCircle, c.Center, c.Axis, c.Radius
+	case Arc3:
+		record.Kind, record.Center, record.Axis, record.Radius =
+			extent.AngularEdgeArc, c.Center, c.Axis, c.Radius
 	}
-	r, err := radius.In(units.Millimeter)
-	if err != nil {
-		return fmt.Errorf(`%w: a stop face edge's radius is not representable: %s`, ErrNotFinite, err)
-	}
-	depth := center.Sub(st.a3).Dot(m) - r
-	if depth >= -extent.RelativeStopTolerance(r) {
-		// Even the circle's deepest point stays in the face's half-plane
-		// (or on the axis).
-		return nil
-	}
-	if closed {
-		// A whole circle always reaches its deepest point.
-		return errStopFaceBothSides
-	}
-	// An arc reaches its deepest point only when −m lies within its walked
-	// range (CCW from start to end about the arc's own axis).
-	n, ok := axis.Normalize()
-	if !ok {
-		return fmt.Errorf(`%w: a stop face arc edge has no axis`, ErrDegenerate)
-	}
-	if e.start == nil || e.end == nil {
-		return errStopFaceBothSides
-	}
-	u0, ok := e.start.position.Sub(center).Normalize()
-	if !ok {
-		return errStopFaceBothSides
-	}
-	v0 := n.Cross(u0)
-	ang := func(x r3.Vec) float64 {
-		a := math.Atan2(x.Dot(v0), x.Dot(u0))
-		if a < 0 {
-			a += 2 * math.Pi
-		}
-		return a
-	}
-	sweep := ang(e.end.position.Sub(center))
-	deepest := ang(m.Scale(-1))
-	if deepest <= sweep+angTol {
-		return errStopFaceBothSides
-	}
-	return nil
+	return record
 }
