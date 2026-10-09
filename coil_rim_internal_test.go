@@ -208,7 +208,7 @@ func TestCoilRimCurveBoundHoldsTheDenotedCircle(t *testing.T) {
 					if !seg.IsArc() {
 						continue
 					}
-					cu, cv := coilCentre(seg)
+					cu, cv := coilshell.Centre(seg)
 					fu, _ := cu.Float64()
 					fv, _ := cv.Float64()
 					rr := new(big.Float).SetPrec(512)

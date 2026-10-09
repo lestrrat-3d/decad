@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -352,7 +353,7 @@ func TestCoilArcFacetBoundHoldsTheSurface(t *testing.T) {
 				if !seg.IsArc() {
 					return pv.U + l*(pw.U-pv.U), pv.V + l*(pw.V-pv.V)
 				}
-				cu, cv := coilCentre(seg)
+				cu, cv := coilshell.Centre(seg)
 				fu, _ := cu.Float64()
 				fv, _ := cv.Float64()
 				r, _ := seg.Radius.Lo.Float64()
