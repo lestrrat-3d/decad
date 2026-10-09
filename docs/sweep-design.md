@@ -122,6 +122,11 @@ func (p *Path) Segments() []PathSegment
 
 type SweepOption interface { /* sealed */ }
 
+// WithSweepTwist is a placeholder for future distributed twist about the
+// transported tangent. Nonzero twist will be distributed by path arc length.
+// Zero is the default and the only value accepted now.
+func WithSweepTwist(angle units.Value) SweepOption
+
 // WithSurfaceResult omits the two section caps and publishes a sheet body
 // instead of a solid (docs/surface-design.md §4). Unlike every other sealed
 // SweepOption, a repeated WithSurfaceResult() is idempotent rather than S12's
@@ -163,7 +168,10 @@ share one recorded coordinate. Its circle, plane, sense, and swept angle are
 derived exactly from decad-owned spatial input, with bounded publication into
 binary64.
 
-Sweep uses zero twist. No option requests distributed twist in the current API.
+`WithSweepTwist` is accepted at most once. Its angle is a signed displacement,
+not a magnitude: a negative value reverses the twist sense. A wrong kind is
+`ErrUnitKind`; a non-finite value is `ErrNotFinite`. The first implementation
+accepts zero and returns `ErrUnsupported` for a nonzero value.
 
 Both profiles pass through the unchanged sketch seam. `p` MUST be a current,
 unaltered, valid profile of `s`. The seam's own sentinel wins before any path
@@ -275,6 +283,7 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S8** | an arc span's rotation axis crosses the transported profile interior, or boundary contact fails Revolve's exact axis-incidence rule | `ErrDegenerate` | yes; the mapped boundary folds or pinches |
 | **S9** | remote patches contact, or neighbours contact beyond their shared boundary | proved contact: `ErrDegenerate`; undecided budget: `ErrUnsupported` | contact is permanent; budget is not |
 | **S10** | profile kind is unsupported by one of the path-span builders | `ErrUnsupported` | follows spline reach |
+| **S11** | nonzero `WithSweepTwist` before the faceted-twist increment | `ErrUnsupported` | no |
 | **S12** | option repeated, or a foreign type embeds the sealed marker | `ErrDegenerate` | yes; `WithSurfaceResult()` is exempt — a repeat is idempotent (docs/surface-design.md §4.1) |
 | **S13** | a computed frame, vertex, measurement, or proof bound is non-finite | `ErrUnsupported` | no; numeric ceiling |
 | **S14** | fixed facet, station, exact-predicate, or work budget is exhausted | `ErrUnsupported` | no; resource ceiling |
@@ -642,8 +651,10 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch,
 
 **`SweepChain` takes no options.** A chain sweep is always a sheet — an open
 walk encloses no region, so there is no cap to omit and no solid to ask for.
-The compiler therefore refuses `WithSurfaceResult()`. Distributed twist is
-outside the current API for both profile and chain sweeps.
+The compiler therefore refuses `WithSurfaceResult()`. It also refuses
+`WithSweepTwist`: a nonzero twist is S11 for a profile-fed sweep, and a chain
+inherits that staging rather than a second spelling of it. Accepting either
+option as a no-op would give it two meanings.
 
 The call takes `ctx` because `Document.Sweep` does, and takes the sketch beside
 the chain because a chain's geometry is plane-local and the plane is the
@@ -740,11 +751,10 @@ The build admits:
 - zero twist, and a solid result.
 
 It refuses, with Table SM's rows, an `ArcThrough` segment, a curved or
-free-form profile segment, `WithSurfaceResult()`, and a closed path. Distributed
-twist is outside the current API. A curved profile segment's image under a
-span's wall lines is a conic section, which no admitted surface variant holds
-exactly; an arc span has no join plane this construction can state. Neither is
-permanent.
+free-form profile segment, `WithSurfaceResult()`, a nonzero twist and a closed
+path. A curved profile segment's image under a span's wall lines is a conic
+section, which no admitted surface variant holds exactly; an arc span has no
+join plane this construction can state. Neither is permanent.
 
 ### 16.2 The options
 
@@ -872,7 +882,7 @@ running SM8 in place of §7's separation audit.
 | **SM6** | a span that does not leave its start plane or reach its end plane forward; a wall line parallel to its end plane, meeting it at or behind its start, or at or past the span's apex | `ErrDegenerate` |
 | **SM7** | a wall quad whose exact area is zero, or a section with two coincident vertices | `ErrDegenerate` |
 | **SM8** | the crossing audit proves two non-adjacent faces cross; its budget runs out first | `ErrDegenerate`; `ErrUnsupported` (S9's split) |
-| **SM9** | `WithSurfaceResult()` or a closed path, with either option | `ErrUnsupported` |
+| **SM9** | `WithSurfaceResult()`, a nonzero `WithSweepTwist`, or a closed path, with either option | `ErrUnsupported` |
 | **SM10** | `F·(F−1)/2` over Table BM's `F` exceeds `maxFacetPairTestsPerCall`, or the span count exceeds §11's span cap | `ErrUnsupported` (S14) |
 
 SM2's trimmed-line arm keeps every section vertex a recorded point: a cut
