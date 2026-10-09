@@ -69,7 +69,7 @@ The rules for rows live in `docs/layout.md`.
 | `path.go` | The immutable spatial `Path` and its sealed segment vocabulary. See sweep §2–§3. |
 | `extent.go` | Public extent aliases and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |
-| `selection_error.go` | `SelectionError` and the shared `*Query.String()` rendering. See `docs/api-design.md` §9. |
+| `selection_error.go` | Selector error aliases and root query rendering adapters. See API §9. |
 
 ### Mass properties and free-form curves
 
