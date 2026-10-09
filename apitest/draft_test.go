@@ -320,3 +320,53 @@ func cylinderBody(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	return b
 }
+
+// TestDraftSymmetricReceiver drafts a Symmetric-extruded prism, whose sweep
+// runs from z0 = -h/2 to z1 = h/2, about each cap in turn. The body is F1's
+// frustum shifted to the receiver's levels: volume h(a² - 2ad + 4d²/3), area
+// a² + (a - 2d)² + 4(a - d)√(h² + d²), and the far corners at ±(a/2 - d) on
+// the far cap's level. Shown to fail first: with Draft's nearStart inverted, the far corners sat
+// 0.87 mm from their closed-form points and the vertex check went red.
+func TestDraftSymmetricReceiver(t *testing.T) {
+	t.Parallel()
+	const deg = 5.0
+	for _, neutralStart := range []bool{true, false} {
+		doc := decad.New()
+		s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
+		box, err := doc.Extrude(s, p, decad.Symmetric{D: units.Millimeters(boxHeight / 2)})
+		require.NoError(t, err)
+		bounds, err := box.Bounds()
+		require.NoError(t, err)
+		h := bounds.Max.Z - bounds.Min.Z
+		require.Equal(t, boxHeight, h)
+		require.Equal(t, -boxHeight/2, bounds.Min.Z)
+
+		role, farZ := decad.CapEnd, -boxHeight/2
+		if neutralStart {
+			role, farZ = decad.CapStart, boxHeight/2
+		}
+		got, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box)), capNeutral(box, role), units.Degrees(deg))
+		require.NoError(t, err)
+		requireManifold(t, got)
+
+		d := bfMul(bf(h), taperTan(deg))
+		vol, err := got.Volume()
+		require.NoError(t, err)
+		requireMeasurementCovers(t, "volume", vol, boxVolume(d), taperCeiling)
+
+		A, H := bf(boxSide), bf(h)
+		top := bfSub(A, bfMul(bf(2), d))
+		slant := bfSqrt(bfAdd(bfMul(H, H), bfMul(d, d)))
+		area := bfAdd(bfAdd(bfMul(A, A), bfMul(top, top)), bfMul(bf(4), bfSub(A, d), slant))
+		ar, err := got.Area()
+		require.NoError(t, err)
+		requireMeasurementCovers(t, "area", ar, area, taperCeiling)
+
+		half := bfSub(bf(boxSide/2), d)
+		for _, su := range []float64{-1, 1} {
+			for _, sv := range []float64{-1, 1} {
+				requireVertexAt(t, got, liftExact(xyFrame(t), r3.Identity(), bfMul(bf(su), half), bfMul(bf(sv), half), bf(farZ)))
+			}
+		}
+	}
+}
