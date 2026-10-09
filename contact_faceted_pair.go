@@ -613,8 +613,8 @@ func (p *planarBandPair) liftedBand(budget *proofbound.WorkBudget, report *Conta
 	if upper.Cmp(band.Rat()) > 0 || !hostA && !hostB {
 		return false, nil
 	}
-	lifted, err := planarLiftedSet(budget, p.a, p.b, result, planarSupportPlanes(p.a, p.b, hostA, hostB), band,
-		false)
+	lifted, err := planar.PlanarSupportSets(p.a, p.b, result,
+		planar.SupportPlanes(p.a, p.b, hostA, hostB), band, false, budget.Step)
 	if err != nil || len(lifted) == 0 {
 		return false, err
 	}
@@ -659,7 +659,8 @@ func (p *planarBandPair) overlapManifold(ctx context.Context, budget *proofbound
 		report.Reason = ContactNonConvex
 		return nil
 	}
-	points, planes, reason, err := planarOverlapPatch(budget, p.a, p.b, result, convexA, convexB, p.deltaA, p.deltaB)
+	points, planes, reason, err := planar.OverlapPatch(p.a, p.b, result, convexA, convexB,
+		p.deltaA, p.deltaB, budget.Step)
 	if err != nil {
 		return err
 	}
@@ -674,7 +675,8 @@ func (p *planarBandPair) overlapManifold(ctx context.Context, budget *proofbound
 		report.Reason = contactReason
 		return err
 	}
-	lifted, err := planarLiftedSet(budget, p.a, p.b, result, planes, p.liftedWidth(report.Request), true)
+	lifted, err := planar.PlanarSupportSets(p.a, p.b, result, planes,
+		p.liftedWidth(report.Request), true, budget.Step)
 	if err != nil {
 		return err
 	}
@@ -759,7 +761,7 @@ func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *
 		if exact == 1 {
 			feature = point.B
 		}
-		normal, ok := planarFaceNormal(solids[exact], feature)
+		normal, ok := planar.FaceNormal(solids[exact], feature)
 		if !ok || !proofarith.DvIsZero(proofarith.DvCross(normal, point.Normal)) {
 			return nil, ContactNoNormalProof, nil
 		}
@@ -798,20 +800,4 @@ func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *
 		point.Separation.Bound, point.Separation.Exactness = units.Millimeters(widened), exactnessFromBound(widened)
 	}
 	return manifold, ContactNoReason, nil
-}
-
-// planarFaceNormal is the exact outward normal of the one face a facet
-// feature names, read off the first triangle that face owns.
-func planarFaceNormal(solid *planar.PlanarSolid, feature planar.PatchFeature) (proofarith.DyV3, bool) {
-	if feature.Kind != planar.FeatureFacet || len(feature.Faces) != 1 || len(solid.Faces) != len(solid.Tris) {
-		return proofarith.DyV3{}, false
-	}
-	for t, tri := range solid.Tris {
-		if solid.Faces[t] != feature.Faces[0] {
-			continue
-		}
-		a := solid.Verts[tri[0]]
-		return proofarith.DvCross(proofarith.DvSub(solid.Verts[tri[1]], a), proofarith.DvSub(solid.Verts[tri[2]], a)), true
-	}
-	return proofarith.DyV3{}, false
 }

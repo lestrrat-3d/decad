@@ -9,6 +9,43 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
+// SupportPlanes lists admitted host faces, the B body's faces first and then
+// A's, each in face order.
+func SupportPlanes(a, b *PlanarSolid, hostA, hostB bool) []SupportPlane {
+	var planes []SupportPlane
+	for _, host := range []struct {
+		isA, admitted bool
+		solid         *PlanarSolid
+	}{{false, hostB, b}, {true, hostA, a}} {
+		if !host.admitted {
+			continue
+		}
+		faces := slices.Clone(host.solid.Faces)
+		slices.Sort(faces)
+		for _, face := range slices.Compact(faces) {
+			planes = append(planes, SupportPlane{HostIsA: host.isA, Face: face})
+		}
+	}
+	return planes
+}
+
+// FaceNormal is the exact outward normal of the one face a facet feature
+// names, read from the first triangle that face owns.
+func FaceNormal(solid *PlanarSolid, feature PatchFeature) (proofarith.DyV3, bool) {
+	if feature.Kind != FeatureFacet || len(feature.Faces) != 1 || len(solid.Faces) != len(solid.Tris) {
+		return proofarith.DyV3{}, false
+	}
+	for t, tri := range solid.Tris {
+		if solid.Faces[t] != feature.Faces[0] {
+			continue
+		}
+		a := solid.Verts[tri[0]]
+		return proofarith.DvCross(proofarith.DvSub(solid.Verts[tri[1]], a),
+			proofarith.DvSub(solid.Verts[tri[2]], a)), true
+	}
+	return proofarith.DyV3{}, false
+}
+
 // VertexFaceIDs lists the distinct face ids of the triangles holding vertex v.
 func VertexFaceIDs(solid *PlanarSolid, v int) []int {
 	var ids []int

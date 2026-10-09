@@ -8,6 +8,35 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
+// OverlapPatch selects the shallow penetration patch or a face-local patch
+// grown by each body's held displacement. It returns its support plane when
+// the patch has one.
+func OverlapPatch(a, b *PlanarSolid, result PlanarResult, convexA, convexB bool,
+	growA, growB proof.Dyadic, poll func() error) ([]PatchPoint, []SupportPlane, pair.Reason, error) {
+	var points []PatchPoint
+	var plane *SupportPlane
+	if convexA && convexB {
+		var err error
+		points, plane, err = PlanarPenetrationSupport(a, b, poll)
+		if err != nil {
+			return nil, nil, pair.NoReason, err
+		}
+	}
+	if points == nil {
+		// §9.6: a convex body poking through one face of any planar body.
+		local, err := PlanarFacePenetrationGrown(a, b, result.Crossings, convexA, convexB,
+			growA, growB, poll)
+		if err != nil || local.Points == nil {
+			return nil, nil, local.Reason, err
+		}
+		points, plane = local.Points, &local.Supports[0]
+	}
+	if plane == nil {
+		return points, nil, pair.NoReason, nil
+	}
+	return points, []SupportPlane{*plane}, pair.NoReason, nil
+}
+
 // PlanarPenetrationManifold is the shallow-penetration patch of two convex
 // solids (§9.3): over every face normal and edge cross product, the directed
 // translation that moves B clear of A must have one strictly smallest length,
