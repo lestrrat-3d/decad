@@ -222,29 +222,29 @@ func TestCellDepartureUpper(t *testing.T) {
 	require.False(t, ok, "a segment touching the axis states no departure")
 }
 
-func TestLoopsRefusesNonLines(t *testing.T) {
+func TestLoopsReadsLinePolygons(t *testing.T) {
 	square := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 		sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 2}, End: sectionrecord.Point2{U: 3}, TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 3}, End: sectionrecord.Point2{U: 3, V: 1}, TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 2, V: 1}, End: sectionrecord.Point2{U: 3, V: 1}, TStart: 1, TEnd: 0},
 		sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 2, V: 1}, End: sectionrecord.Point2{U: 2}, TStart: 0, TEnd: 1},
 	}}
-	pts, loops, err := coil.Loops(square, nil)
+	prof, err := coil.Loops(square, nil, 16)
 	require.NoError(t, err)
-	require.Len(t, pts, 4)
-	require.Equal(t, [][]int{{0, 1, 2, 3}}, loops)
-	require.Equal(t, sectionrecord.Point2{U: 3, V: 1}, pts[2])
+	require.Len(t, prof.Pts, 4)
+	require.Equal(t, [][]int{{0, 1, 2, 3}}, prof.LoopIdx)
+	require.Equal(t, sectionrecord.Point2{U: 3, V: 1}, prof.Pts[2])
 
 	trimmed := square
 	trimmed.Segments = append([]sectionrecord.CurveSegment(nil), square.Segments...)
 	trimmed.Segments[0] = sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 2}, End: sectionrecord.Point2{U: 3}, TStart: 0, TEnd: 0.5}
-	_, _, err = coil.Loops(trimmed, nil)
+	_, err = coil.Loops(trimmed, nil, 16)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 
-	arc := square
-	arc.Segments = append([]sectionrecord.CurveSegment(nil), square.Segments...)
-	arc.Segments[1] = sectionrecord.ArcSeg{Center: sectionrecord.Point2{U: 3, V: 0.5}, Start: sectionrecord.Point2{U: 3}, End: sectionrecord.Point2{U: 3, V: 1}, TStart: 0, TEnd: 1}
-	_, _, err = coil.Loops(arc, nil)
+	gap := square
+	gap.Segments = append([]sectionrecord.CurveSegment(nil), square.Segments...)
+	gap.Segments[1] = sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 3}, End: sectionrecord.Point2{U: 3, V: 0.9}, TStart: 0, TEnd: 1}
+	_, err = coil.Loops(gap, nil, 16)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
 
@@ -308,7 +308,7 @@ func TestCellProofDensityEnclosesTheSampledGap(t *testing.T) {
 		{"near the axis", 0.5, 0, 3, 0},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			proof, ok := coil.CellProofUpper(pt(c.rv), pt(c.zv), pt(c.rw), pt(c.zw), pitch, dt)
+			proof, ok := coil.CellProofUpper(pt(c.rv), pt(c.zv), pt(c.rw), pt(c.zw), coil.Chord{}, pitch, dt)
 			require.True(t, ok)
 			require.LessOrEqual(t, densityGapSampled(c.rv, c.zv, c.rw, c.zw), proof.Density)
 			matched := math.Hypot(c.rw-c.rv, c.zw-c.zv) * 2 * math.Max(c.rv, c.rw) * h * h

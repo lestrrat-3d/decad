@@ -555,16 +555,21 @@ func TestCoilRefusals(t *testing.T) {
 		exact := new(big.Float).SetPrec(512).Mul(bigPi(), big.NewFloat(1.5*2.5*1.5))
 		requireEnclosesBig(t, vol.Value.Base(), vol.Bound.Base(), exact, "three-quarter turn")
 	})
-	t.Run("CS7 a circular segment", func(t *testing.T) {
+	t.Run("CS7 a free-form segment", func(t *testing.T) {
 		w := sketch.NewWorld()
 		s, err := w.CreateSketch(w.XY())
 		require.NoError(t, err)
-		center := s.CreatePoint(5, 0)
-		s.Fix(center)
-		s.CreateCircle(center, 1)
+		var control []*sketch.Point
+		for _, c := range [][2]float64{{4, -1}, {6, -1}, {6, 1}, {4, 1}} {
+			pt := s.CreatePoint(c[0], c[1])
+			s.Fix(pt)
+			control = append(control, pt)
+		}
+		_, err = s.CreateClosedSpline(control...)
+		require.NoError(t, err)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		refuse(t, ErrUnsupported, "line profile segments only", s, s.Profiles()[0], coilAxisV, units.Millimeters(3), units.Scalar(2))
+		refuse(t, ErrUnsupported, "line, arc and circle profile segments only", s, s.Profiles()[0], coilAxisV, units.Millimeters(3), units.Scalar(2))
 	})
 	t.Run("CS8 past the facet ceiling", func(t *testing.T) {
 		s, p := vertexBoundPolygonSketchAt(t, 24, 1, 10)

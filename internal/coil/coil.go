@@ -1,7 +1,8 @@
 // Package coil holds the pure arithmetic of docs/helix-design.md: the
-// station fractions and their trig, a profile vertex's axis coordinates, the
-// region's axis-frame moments, the four readings' closed forms and the cell
-// departure terms. Every closed form reads exact rationals or rational
+// station fractions and their trig, the profile's station chain, a profile
+// station's axis coordinates, the region's axis-frame moments, the four
+// readings' closed forms, the arc wall's area bracket and the cell departure
+// terms. Every closed form reads exact rationals or rational
 // intervals and returns an enclosure; Held, Mul and Add carry a station
 // point's float evaluation beside a proven bound on its distance from that
 // enclosure.
@@ -143,6 +144,34 @@ func RegionMoments(rho, zeta []Iv, loops [][]int, area *big.Rat, side int) Momen
 		Q:    proofbound.IntervalScale(q, new(big.Rat).Quo(s, big.NewRat(6, 1))),
 		I:    proofbound.IntervalScale(i, new(big.Rat).Quo(s, big.NewRat(12, 1))),
 		M:    proofbound.IntervalScale(m, new(big.Rat).Quo(s, big.NewRat(24, 1))),
+	}
+}
+
+// PlaneMoments are a region's plane-origin integrals, each enclosed:
+// ∫dA, ∫u dA, ∫v dA, ∫u² dA, ∫uv dA and ∫v² dA.
+type PlaneMoments struct {
+	Area, Mu, Mv, Muu, Muv, Mvv Iv
+}
+
+// Moments re-references plane-origin integrals into the axis frame: with
+// x = u − aU and y = v − aV, ρ = (p, q)·(x, y) for e_r = (p, q) and
+// ζ = (dU, dV)·(x, y), so Q, I and M are linear in the anchor-relative
+// first and second moments. A region bounded by arcs reads its integrals
+// here; a polygon reads RegionMoments' exact sums instead.
+func (a Axis) Moments(pm PlaneMoments) Moments {
+	mul, add, sub := proofbound.IntervalMul, proofbound.IntervalAdd, proofbound.IntervalSub
+	two := big.NewRat(2, 1)
+	x := sub(pm.Mu, mul(a.AU, pm.Area))
+	y := sub(pm.Mv, mul(a.AV, pm.Area))
+	xx := add(sub(pm.Muu, proofbound.IntervalScale(mul(a.AU, pm.Mu), two)), mul(proofbound.IntervalSquare(a.AU), pm.Area))
+	xy := add(sub(sub(pm.Muv, mul(a.AU, pm.Mv)), mul(a.AV, pm.Mu)), mul(mul(a.AU, a.AV), pm.Area))
+	yy := add(sub(pm.Mvv, proofbound.IntervalScale(mul(a.AV, pm.Mv), two)), mul(proofbound.IntervalSquare(a.AV), pm.Area))
+	p, q := a.Radial()
+	return Moments{
+		Area: pm.Area,
+		Q:    add(mul(p, x), mul(q, y)),
+		I:    add(add(mul(proofbound.IntervalSquare(p), xx), proofbound.IntervalScale(mul(mul(p, q), xy), two)), mul(proofbound.IntervalSquare(q), yy)),
+		M:    add(add(mul(mul(p, a.DU), xx), mul(add(mul(p, a.DV), mul(q, a.DU)), xy)), mul(mul(q, a.DV), yy)),
 	}
 }
 
@@ -394,11 +423,12 @@ func CellDepartureUpper(rhoV, rhoW Iv, pitch, dt *big.Rat) (*big.Rat, bool) {
 // cell of one segment shares them: they depend on the segment's radii and
 // run and on the station step alone.
 type CellProof struct {
-	// Ruling bounds the segment's length L, the rulings' length.
+	// Ruling bounds the chord's length L, the rulings' length, and for an
+	// arc chord the arc piece's length too.
 	Ruling float64
-	// Helix bounds the arc length of one station step at the segment's
-	// outer radius, 2h·sqrt(ρ_max² + k²); every chord of the cell and the
-	// true cell's s-derivative are at most this long.
+	// Helix bounds the arc length of one station step at the cell's outer
+	// radius, 2h·sqrt(ρ_max² + k²); every chord of the cell and the true
+	// cell's s-derivative are at most this long.
 	Helix float64
 	// Swept bounds the volume the homotopy from the triangles on the cell's
 	// true corners to the true cell under §5.4's shifted correspondence
@@ -413,14 +443,15 @@ type CellProof struct {
 	Density float64
 }
 
-// CellProofUpper evaluates CellProof for one cell of segment v → w over a
-// station step of dt turns. ok is false when a radius is not proven
-// positive or the segment has no proven length.
+// CellProofUpper evaluates CellProof for one cell of profile chord v → w
+// over a station step of dt turns. chord carries an arc chord's Sag and Arc
+// bounds; both are nil on a line. ok is false when a radius is not proven
+// positive or the chord has no proven length.
 //
-// Density reads both densities in closed form. In the frame at the cell's
-// mid angle the bilinear patch on the true corners is B = (ρ(λ)·c(s),
-// ζ(λ) + k·θ(s)) with c(s) = (cos h, (2s − 1)·sin h) the unit circle's chord,
-// and the true cell S = (ρ(λ)·e(θ(s)), ζ(λ) + k·θ(s)), so
+// On a line, Density reads both densities in closed form. In the frame at
+// the cell's mid angle the bilinear patch on the true corners is
+// B = (ρ(λ)·c(s), ζ(λ) + k·θ(s)) with c(s) = (cos h, (2s − 1)·sin h) the unit
+// circle's chord, and the true cell S = (ρ(λ)·e(θ(s)), ζ(λ) + k·θ(s)), so
 //
 //	J_S² = 4h²·(Δζ²ρ² + k²Δρ² + Δρ²ρ²)
 //	J_B² = 4sin²h·(Δρ(2s − 1)hk − Δζρ)² + 4h²k²Δρ²cos²h + 4ρ²Δρ²sin²h·cos²h
@@ -441,11 +472,33 @@ type CellProof struct {
 // |∂_s H| ≤ Helix·(1 + q); |∂_λ ε| ≤ 2h·q·(1 + |Δρ|/(4ρ_min)), so
 // |∂_λ H| ≤ Ruling + Helix·q·(1 + |Δρ|/(4ρ_min)). The triangles' own
 // derivatives are a ruling and a chord, inside both.
-func CellProofUpper(rhoV, zetaV, rhoW, zetaW Iv, pitch, dt *big.Rat) (CellProof, bool) {
+//
+// An arc chord's true cell is the screw sweep of the arc piece A(φ(λ)), not
+// of the chord through its two ends, and it is reached from the chord's cell
+// at matched (λ, θ): Φ is a rigid motion of the axis plane at each θ, so the
+// two lie Sag apart, and the shifted correspondence moves the arc's point
+// with the chord's. Every leg is then charged for the arc: the departure adds
+// Sag; the radii reach Sag past the chord's ends, so Helix reads
+// 2h·sqrt((ρ_max + Sag)² + k²); Ruling reads the larger of the chord and the
+// arc piece. Both cells' densities are 2h·|(L·ρ, k·a)|, with L the length of
+// ∂λ in the axis plane and a its radial part, so they differ by at most
+// 2h·(|L_arc·ρ_arc − L·ρ| + k·|a_arc − a|). The first is at most
+// (Arc − L)·(ρ_max + Sag) + L·Sag. The second averages over λ to at most
+// k·r·Δφ²/3 = (8/3)·k·Sag, since ∂λ of the arc differs from the chord, the
+// mean of ∂λ over the piece, by at most r·Δφ²·(λ² + (1 − λ)²)/2.
+func CellProofUpper(rhoV, zetaV, rhoW, zetaW Iv, chord Chord, pitch, dt *big.Rat) (CellProof, bool) {
 	dep, ok := CellDepartureUpper(rhoV, rhoW, pitch, dt)
 	if !ok {
 		return CellProof{}, false
 	}
+	sag, arc := new(big.Rat), new(big.Rat)
+	if chord.Sag != nil {
+		sag.Set(chord.Sag)
+	}
+	if chord.Arc != nil {
+		arc.Set(chord.Arc)
+	}
+	dep.Add(dep, sag)
 	rhoMin := rhoV.Lo
 	if rhoW.Lo.Cmp(rhoMin) < 0 {
 		rhoMin = rhoW.Lo
@@ -462,13 +515,18 @@ func CellProofUpper(rhoV, zetaV, rhoW, zetaW Iv, pitch, dt *big.Rat) (CellProof,
 	}
 	h := new(big.Rat).Mul(proofbound.PiUpper, dt)
 	k := new(big.Rat).Quo(pitch, new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiLower))
-	rate, ok := proofbound.SqrtInterval(Point(new(big.Rat).Add(new(big.Rat).Mul(rhoMax, rhoMax), new(big.Rat).Mul(k, k))))
+	reach := new(big.Rat).Add(rhoMax, sag)
+	rate, ok := proofbound.SqrtInterval(Point(new(big.Rat).Add(new(big.Rat).Mul(reach, reach), new(big.Rat).Mul(k, k))))
 	if !ok {
 		return CellProof{}, false
 	}
 	one := big.NewRat(1, 1)
 	helix := new(big.Rat).Mul(big.NewRat(2, 1), h)
 	helix.Mul(helix, rate.Hi)
+	ruling := l.Hi
+	if arc.Cmp(ruling) > 0 {
+		ruling = arc
+	}
 
 	// q = c·|Δρ|/ρ_min with c = min(1, ρ_min/|Δρ|), CellDepartureUpper's own c.
 	drAbs := proofbound.IntervalAbsUpper(dr)
@@ -482,7 +540,7 @@ func CellProofUpper(rhoV, zetaV, rhoW, zetaW Iv, pitch, dt *big.Rat) (CellProof,
 	alongL.Add(alongL, one)
 	alongL.Mul(alongL, q)
 	alongL.Mul(alongL, helix)
-	alongL.Add(alongL, l.Hi)
+	alongL.Add(alongL, ruling)
 	swept := new(big.Rat).Mul(dep, alongL)
 	swept.Mul(swept, alongS)
 
@@ -491,8 +549,20 @@ func CellProofUpper(rhoV, zetaV, rhoW, zetaW Iv, pitch, dt *big.Rat) (CellProof,
 	}
 	density := densityGapUpper(h, new(big.Rat).Mul(proofbound.PiLower, dt), k, rhoMin, rhoMax, drAbs,
 		proofbound.IntervalAbsUpper(dz), l.Lo)
+	if sag.Sign() > 0 {
+		// 2h·[(Arc − L)·(ρ_max + Sag) + L·Sag + (8/3)·k·Sag]
+		run := new(big.Rat).Sub(arc, l.Lo)
+		if run.Sign() < 0 {
+			run.SetInt64(0)
+		}
+		extra := new(big.Rat).Mul(run, reach)
+		extra.Add(extra, new(big.Rat).Mul(l.Hi, sag))
+		extra.Add(extra, new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(8, 3), k), sag))
+		extra.Mul(extra, new(big.Rat).Mul(big.NewRat(2, 1), h))
+		density.Add(density, extra)
+	}
 	return CellProof{
-		Ruling:  proofbound.RatFloatUp(l.Hi),
+		Ruling:  proofbound.RatFloatUp(ruling),
 		Helix:   proofbound.RatFloatUp(helix),
 		Swept:   proofbound.RatFloatUp(swept),
 		Density: proofbound.RatFloatUp(density),
