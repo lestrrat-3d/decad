@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -75,7 +73,7 @@ func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 	}
 	for _, w := range partial.walks {
 		i := w.index
-		partial.cells = append(partial.cells, filletCell{c0: w.cols[0], c1: w.cols[1], patch: len(partial.patchSag)})
+		partial.cells = append(partial.cells, filletCell{C0: w.cols[0], C1: w.cols[1], Patch: len(partial.patchSag)})
 		partial.patchSag = append(partial.patchSag, 0)
 		k := (i + 1) % len(b.selected)
 		if b.capArc[k] < 0 {
@@ -110,14 +108,14 @@ func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 		cols = append(cols, walkCols[k][0])
 		partial.arcCols[b.capArc[k]] = cols
 		for j := range len(cols) - 1 {
-			partial.cells = append(partial.cells, filletCell{c0: cols[j], c1: cols[j+1], patch: len(partial.patchSag)})
+			partial.cells = append(partial.cells, filletCell{C0: cols[j], C1: cols[j+1], Patch: len(partial.patchSag)})
 		}
 		partial.patchSag = append(partial.patchSag, sag)
 	}
 	sideZ, sideDelta := b.sideLevel(f)
 	return brepBandChord{band: b, face: f, cbp: cbp, start: b.matSign(f) > 0,
 		sideZ: sideZ, sideDelta: sideDelta,
-		fillet: &filletRings{n: filletRingCount(b.setback.axialUpper(), chord)}, partial: partial}, nil
+		fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), chord)}, partial: partial}, nil
 }
 
 func (bc *brepBandChord) placePartial(e brepEmbed, addVertex func([3]float64, proofbound.WalkEndBound) int) {
@@ -135,46 +133,27 @@ func (bc *brepBandChord) placePartialRings(e brepEmbed,
 	fr.ringV = make([][]int, n+1)
 	fr.dev = make([][]float64, n+1)
 	fr.ringV[0], fr.ringV[n] = bc.sideV, bc.capV
-	r, rd := bc.band.setback.dc, bc.band.setback.dcDelta
-	rz0, rzd := proofarith.FloatRat(bc.face.z0), proofarith.FloatRat(bc.face.z0Delta)
-	rr, rrd := proofarith.FloatRat(r), proofarith.FloatRat(rd)
-	if rz0 == nil || rzd == nil || rr == nil || rrd == nil {
-		return fmt.Errorf(`%w: a partial fillet band's radius or level is not finite`, ErrNotFinite)
+	side, capPoints := make([]Point2, N), make([]Point2, N)
+	for c, col := range bc.partial.columns {
+		side[c], capPoints[c] = col.side, col.cap
 	}
-	rIv := proofbound.IntervalWiden(proofbound.PointInterval(rr), rrd)
-	one := proofbound.PointInterval(big.NewRat(1, 1))
-	m := bc.band.matSign(bc.face)
+	points, err := tessellation.FilletRingGeometry(tessellation.FilletRingInput{
+		Side: side, Cap: capPoints, Radius: bc.band.setback.dc,
+		RadiusDelta: bc.band.setback.dcDelta, CapLevel: bc.face.z0,
+		CapLevelDelta: bc.face.z0Delta, SideLevel: bc.sideZ,
+		MaterialSign: bc.band.matSign(bc.face), Count: n,
+		Noun: "a partial fillet band", RingNoun: "a partial fillet",
+	})
+	if err != nil {
+		return err
+	}
 	for k := 1; k < n; k++ {
-		phi := float64(k) * (math.Pi / 2) / float64(n)
-		sinIv, cosIv, ok := proofbound.RadSinCosInterval(proofarith.FloatRat(phi))
-		if !ok {
-			return fmt.Errorf(`%w: a partial fillet ring's angle has no sine enclosure`, ErrUnsupported)
-		}
-		fraction := 1 - math.Cos(phi)
-		fRat := proofarith.FloatRat(fraction)
-		errF := proofbound.IntervalFloatError(proofbound.IntervalSub(one, cosIv), fraction)
-		z := bc.sideZ - m*r*math.Sin(phi)
-		zIv := proofbound.IntervalWiden(proofbound.IntervalAdd(proofbound.PointInterval(rz0),
-			proofbound.IntervalScale(proofbound.IntervalMul(rIv, proofbound.IntervalSub(one, sinIv)),
-				big.NewRat(int64(m), 1))), rzd)
-		errZ := proofbound.IntervalFloatError(zIv, z)
-		if fRat == nil || proofbound.IsNonFinite(errF) || proofbound.IsNonFinite(errZ) {
-			return fmt.Errorf(`%w: a partial fillet ring's position is not finite`, ErrNotFinite)
-		}
 		fr.ringV[k] = make([]int, N)
 		fr.dev[k] = make([]float64, N)
-		for c := range N {
-			col := bc.partial.columns[c]
-			s, capPoint := col.side, col.cap
-			u, ru, okU := interpolate(s.U, capPoint.U, fraction, fRat)
-			v, rv, okV := interpolate(s.V, capPoint.V, fraction, fRat)
-			if !okU || !okV {
-				return fmt.Errorf(`%w: a partial fillet ring's position is not finite`, ErrNotFinite)
-			}
-			span := proofbound.AbsSumUpper(math.Abs(capPoint.U-s.U), math.Abs(capPoint.V-s.V))
-			dev := proofbound.AbsSumUpper(ru, rv, proofbound.ProductUpper(errF, span), errZ)
-			fr.dev[k][c] = dev
-			fr.ringV[k][c] = addVertex(e.Canon(u, v, z), proofbound.WalkEndBound{U: dev, V: dev})
+		for c, point := range points[k] {
+			fr.dev[k][c] = point.Delta
+			fr.ringV[k][c] = addVertex(e.Canon(point.Point.U, point.Point.V, point.Z),
+				proofbound.WalkEndBound{U: point.Delta, V: point.Delta})
 		}
 	}
 	return nil
@@ -270,12 +249,12 @@ func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Fa
 			}
 		}
 		for _, cell := range bc.partial.cells {
-			if cell.patch != p {
+			if cell.Patch != p {
 				continue
 			}
 			for k := range fr.n {
-				a, b := fr.ringV[k][cell.c0], fr.ringV[k][cell.c1]
-				A, B := fr.ringV[k+1][cell.c0], fr.ringV[k+1][cell.c1]
+				a, b := fr.ringV[k][cell.C0], fr.ringV[k][cell.C1]
+				A, B := fr.ringV[k+1][cell.C0], fr.ringV[k+1][cell.C1]
 				if bc.start {
 					tri(A, B, b)
 					tri(A, b, a)
