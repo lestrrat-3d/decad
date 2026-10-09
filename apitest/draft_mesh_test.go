@@ -380,3 +380,48 @@ func TestDraftMeshOfBodyDraft(t *testing.T) {
 	want, _ := boxVolume(bfMul(bf(boxHeight), taperTan(5))).Float64()
 	require.InDelta(t, want, meshVolume(mesh), 1e-9)
 }
+
+// nearTangentSlot draws F3's slot with its right semicircle's centre moved
+// 2⁻⁴⁰ mm along u. Its two ends stay equidistant from that centre, so the arc
+// still passes through both, but its tangent at each end turns about
+// 2⁻⁴⁰/5 off the line it meets: tangent by the build's held-tangent rule, a
+// sliver corner over the rationals.
+func nearTangentSlot(s *sketch.Sketch) {
+	shift := math.Ldexp(1, -40)
+	pt := func(u, v float64) *sketch.Point {
+		p := s.CreatePoint(u, v)
+		s.Fix(p)
+		return p
+	}
+	a, b, c, d := pt(-15, -5), pt(15, -5), pt(15, 5), pt(-15, 5)
+	s.CreateLine(a, b)
+	s.CreateArc(pt(15+shift, 0), b, c)
+	s.CreateLine(c, d)
+	s.CreateArc(pt(-15, 0), d, a)
+}
+
+// TestDraftNearTangentJoinRefusesBooleans pins docs/draft-design.md §9.1's
+// refusal on a join the build reads as tangent and the record does not make
+// exactly tangent: the body builds and its mesh exports, but the mesh carries
+// no volume proof, and a boolean refuses it naming the corner's point and the
+// two recorded segments that meet there.
+func TestDraftNearTangentJoinRefusesBooleans(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, nearTangentSlot)
+	b := taperExtrude(t, doc, s, p, 8, 3, decad.Along)
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.False(t, mesh.VolumeVerified())
+	var stl strings.Builder
+	require.NoError(t, export.STL(t.Context(), &stl, b, units.Millimeters(0.1)))
+
+	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
+	_, err = decad.Union(t.Context(), b, post)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "no proof of the volume")
+	require.ErrorContains(t, err, "tapered extrude")
+	require.ErrorContains(t, err, "exactly tangent join")
+	require.Regexp(t, `the corner \(15, (-5|5)\) between recorded segments \d+ and \d+`, err.Error())
+}

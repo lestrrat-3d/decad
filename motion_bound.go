@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 
@@ -46,14 +48,15 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 		// Every point of a draft body lies on the near section, the far
 		// section, or a straight ruling or cone generator between matching
 		// points of the two, so each plane coordinate is bounded by the larger
-		// of the two records' envelopes, the far one widened by its contour
-		// displacement (docs/draft-design.md Table DD row DD17).
-		work := freeform.NewFreeformWork()
-		nearUpper, err := momentinput.CoordinateEnvelope(pl.profile, work, nil)
+		// of the two sections' bounds, the far one widened by its contour
+		// displacement (docs/draft-design.md Table DD row DD17). Each section
+		// is read segment by segment (draftSectionCoordinateUpper), not from
+		// the walks' L1 envelopes.
+		nearUpper, err := draftSectionCoordinateUpper(pl.profile)
 		if err != nil {
 			return math.Inf(1)
 		}
-		farUpper, err := momentinput.CoordinateEnvelope(pl.far, work, nil)
+		farUpper, err := draftSectionCoordinateUpper(pl.far)
 		if err != nil {
 			return math.Inf(1)
 		}
@@ -86,4 +89,32 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 	default:
 		return math.Inf(1)
 	}
+}
+
+// draftSectionCoordinateUpper bounds max(|u|, |v|) over every point of a
+// recorded section, segment by segment: a line by its recorded ends and an
+// arc by its recorded extent (capband.SegmentCoordinateUpper, the reading
+// capband.CoordUpper takes), a circle by its centre's larger coordinate plus
+// its radius with the radius's own bound, and anything else by its walk's
+// envelope, whichever is smallest.
+func draftSectionCoordinateUpper(profile ProfileRecord) (float64, error) {
+	work := freeform.NewFreeformWork()
+	upper := 0.0
+	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
+		for _, seg := range loop.Segments {
+			w, err := boundarywalk.WalkOf(seg, work)
+			if err != nil {
+				return 0, err
+			}
+			segUpper := w.CoordUpper
+			if local, ok := capband.SegmentCoordinateUpper(seg); ok {
+				segUpper = math.Min(segUpper, local)
+			}
+			if w.IsCircular() && !proofbound.IsNonFinite(w.RadiusBound) {
+				segUpper = math.Min(segUpper, proofbound.AbsSumUpper(math.Max(math.Abs(w.CU), math.Abs(w.CV)), w.Radius, w.RadiusBound))
+			}
+			upper = math.Max(upper, segUpper)
+		}
+	}
+	return upper, nil
 }
