@@ -22,7 +22,7 @@ APIs are design-only.**
 | Before writing | Read |
 |---|---|
 | Any file, to find what owns what | `docs/layout.md` — one row per root `.go` file and design doc |
-| Any public type | `docs/api-design.md`, and every companion design listed in `docs/layout.md` |
+| Any public type | `docs/api-design.md`, and every companion design listed in `docs/layout/` |
 | Collision geometry or rigid-body dynamics | `docs/collision-dynamics-design.md`, `docs/multibody-dynamics-design.md` |
 | Linkages and joints | `docs/linkage-check-design.md` |
 | Evaluator, topology or feature code | `docs/evaluator-design.md` |
@@ -121,7 +121,7 @@ APIs are design-only.**
   `// Output:` blocks. NEVER README-only snippets.
 - Docs state **current state only** — no changelogs, no "was X, now Y".
 - Design docs live in `docs/<topic>-design.md`, and every one of them carries a
-  row in `docs/layout.md`, as does every non-test `.go` file in the root.
+  row in `docs/layout/`, as does every non-test `.go` file in the root.
 
 ## Verification
 

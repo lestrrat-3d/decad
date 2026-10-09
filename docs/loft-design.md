@@ -2325,7 +2325,7 @@ The following sites point to this design:
 - **`docs/api-design.md` §8** lists `Loft` in the feature vocabulary and
   delegates its correspondence and staged reach here.
 - **`docs/api-design.md` §13** does not list Loft as a non-goal.
-- **`docs/layout.md`'s Layout table** lists this document.
+- **`docs/layout/design-docs.md`'s Layout table** lists this document.
 - **`docs/surface-design.md` §1.2, §13.5, Table R and Table D** name §16 as
   the owner of `LoftChain`'s pairing rule, and its §15 carries §16.7's test
   rows.

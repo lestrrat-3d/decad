@@ -2157,7 +2157,7 @@ reverses a decision already taken.
 | `docs/api-design.md` §2.1 | the admitted-class sentence names the shared-generator predicate and both owning documents, in place of the one class it named before |
 | `docs/api-design.md` §8 | the v1 feature vocabulary gains `Body.Trim`, `Body.Extend` and `Document.Split`, with `TrimSide`; the signatures land beside the existing surface block (`docs/surface-intersection-design.md` §8) |
 | `docs/prism-boolean-design.md` §3.4 | states that the same three displacement causes REFUSE rather than reroute wherever no mesh path exists, which is every sheet-involving pair (`docs/surface-intersection-design.md` §2.1 S7, §5) |
-| `docs/layout.md` | a row for this document and one for `docs/surface-intersection-design.md`, and one per `.go` file each increment adds; the chain increment adds no file, so `record.go`'s and `seam.go`'s own rows name the chain instead |
+| `docs/layout/` | a row for this document and one for `docs/surface-intersection-design.md`, and one per `.go` file each increment adds; the chain increment adds no file, so `record.go`'s and `seam.go`'s own rows name the chain instead |
 | `CLAUDE.md` | a "Read before you write" row pointing here for sheet-body, surface-feature, patch and stitch code, and one pointing at `docs/surface-intersection-design.md` for trim, extend and split code |
 
 ## 13. The open sketch chain — a ribbon and an uncapped shell
