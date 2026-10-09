@@ -15,11 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file checks, as geometry, the one claim fullExtendSegment's own comment
+// This file checks, as geometry, the claim FullExtendSegment's comment
 // derives: the scene entity buildPrismScene creates from the full-domain
 // recreation carries the RECEIVER'S OWN parameterisation, so a cut parameter
 // sketch reports on that entity indexes the receiver's record directly and
-// resolveExtend stores it without a map.
+// ResolveSurfaceExtend stores it without a map.
 //
 // It is an internal fixture because two of the three admitted kinds cannot be
 // driven through Body.Extend at all today. Only a CircleSeg is affected in
@@ -99,11 +99,11 @@ func scenePointAt(t *testing.T, e sketch.Entity, param float64) (float64, float6
 	}
 }
 
-// extendSceneCarrier runs fullExtendSegment and buildPrismScene exactly as
-// resolveExtend does, and returns the one receiver-side entity the scene holds.
+// extendSceneCarrier runs FullExtendSegment and buildPrismScene as
+// ResolveSurfaceExtend does, and returns the one receiver-side entity the scene holds.
 func extendSceneCarrier(t *testing.T, seg CurveSegment) sketch.Entity {
 	t.Helper()
-	full, err := fullExtendSegment(seg)
+	full, err := prismcells.FullExtendSegment(seg)
 	require.NoError(t, err)
 	view := prismPayload{profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{full}}}}
 	tool := prismPayload{profile: extendTestSquare()}
@@ -175,14 +175,14 @@ func TestExtendSetBoundWidensOnlyTheNamedEnd(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			t0, t1, err := trimSegmentParamRange(tc.seg)
+			t0, t1, err := prismcells.SegmentParamRange(tc.seg)
 			require.NoError(t, err)
 			kept := t0
 			if tc.atStart {
 				kept = t1
 			}
-			widened := extendSetBound(tc.seg, tc.atStart, tc.bound)
-			w0, w1, err := trimSegmentParamRange(widened)
+			widened := prismcells.ExtendSetBound(tc.seg, tc.atStart, tc.bound)
+			w0, w1, err := prismcells.SegmentParamRange(widened)
 			require.NoError(t, err)
 			if tc.atStart {
 				require.Equal(t, tc.bound, w0)
