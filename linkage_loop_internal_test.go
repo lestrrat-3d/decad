@@ -387,7 +387,7 @@ func TestLoopSceneFrameTilted(t *testing.T) {
 					require.Zero(t, linkagebound.Dot(plane.u, plane.v).Sign(), `u ⟂ v`)
 					n := lp.normal
 					if mirror {
-						n = ratNeg(n)
+				n = linkagebound.NegVec(n)
 					}
 					uv := linkagebound.Cross(plane.u, plane.v)
 					require.True(t, linkagebound.ZeroVec(linkagebound.Cross(uv, n)), `u × v ∥ n`)

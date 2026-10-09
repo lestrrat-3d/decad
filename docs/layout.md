@@ -339,8 +339,9 @@ the rules leave to the byte budget.
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
 | `internal/sweepmemo/` | Sweep replay coverage and memo tables. See contact-sweep §6–§7. |
 | `internal/spherepath/` | Sphere path gaps and brackets. See contact-sweep §4–§5. |
-| `internal/linkagebound/` | Link reach, layers, spans, projections and loops. See linkage §5, §15. |
-| `internal/linkagebound/loopchain/` | Sketch enclosure chains and zero-pose checks. See linkage §15. |
+| `internal/linkagebound/` | Link bounds and projections. See linkage §5, §15. |
+| `internal/loopscene/` | Closed-loop sketch scenes. See linkage §15.2. |
+| `internal/linkagebound/loopchain/` | Sketch loop enclosures. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
 | `internal/freeform/` | Free-form curve proofs. |
 | `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding, audits. See evaluator §9. |
