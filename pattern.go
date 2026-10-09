@@ -447,8 +447,8 @@ func (b *Body) Patterned(ctx context.Context, spec PatternSpec) (*Body, error) {
 
 // patternGroup is §6.1's rules 1 and 2 on the frame-keeping arm. For a prism
 // or a prism group it moves every region into every instance (§6.2) and asks
-// provePrismRegionsDisjoint, sketch's structural read of every outer, whether
-// they are pairwise disjoint; proven, the group is the one-slab stacked prism
+// prismcells.ProveGroupDisjoint whether sketch's structural read proves the
+// outers pairwise disjoint; proven, the group is the one-slab stacked prism
 // over all of them (ok), and not proven is a silent miss to rule 3. A
 // multi-slab stack proven disjoint the same way, over its one outer loop, is
 // rule 2's ErrUnsupported. A union-built stack, whose outer changes between
@@ -504,7 +504,7 @@ func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePaylo
 			delta = math.Max(delta, charge)
 		}
 	}
-	disjoint, walk, err := provePrismRegionsDisjoint(ctx, budget, all)
+	disjoint, walk, err := prismcells.ProveGroupDisjoint(ctx, budget, all)
 	if err != nil || !disjoint {
 		return stackedPrismPayload{}, false, err
 	}
