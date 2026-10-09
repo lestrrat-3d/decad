@@ -90,11 +90,11 @@ func TestPatternedGroupDisplacement(t *testing.T) {
 // does not prove them disjoint, so Patterned reaches Union.
 func TestPatternedOverlapIsNotProvenDisjoint(t *testing.T) {
 	t.Parallel()
-	a := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 15, V: 0}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 15, V: 0}, End: Point2{U: 15, V: 5}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 15, V: 5}, End: Point2{U: 0, V: 5}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 0, V: 5}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	a := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 15, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 15, V: 0}, End: Point2{U: 15, V: 5}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 15, V: 5}, End: Point2{U: 0, V: 5}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 0, V: 5}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	rp, err := resolvePattern(LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 2})
 	require.NoError(t, err)
@@ -106,7 +106,7 @@ func TestPatternedOverlapIsNotProvenDisjoint(t *testing.T) {
 	b, charge, err := moveRegion(budget, a, mv)
 	require.NoError(t, err)
 	require.Zero(t, charge)
-	disjoint, _, err := prismcells.ProveGroupDisjoint(t.Context(), budget, []ProfileRecord{a, b})
+	disjoint, _, err := prismcells.ProveGroupDisjoint(t.Context(), budget, []profileRecord{a, b})
 	require.NoError(t, err)
 	require.False(t, disjoint)
 }

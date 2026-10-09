@@ -58,7 +58,7 @@ import (
 // selection named.
 type capBlendLoopMesh struct {
 	li    int
-	loop  LoopRecord
+	loop  loopRecord
 	walks []survey2d.SideWalk
 	// joins is the per-corner offset join capOffsetJoins resolves, nil for an
 	// unchamfered loop and for the one cornerless closed circle (whole).
@@ -436,7 +436,7 @@ func capBlendChordVolume(cbp capBlendPayload, lms []capBlendLoopMesh) float64 {
 // two independently sampled polylines. A straight wall needs one sample; a
 // reflex corner's connector arc is a directrix of its own and chords with its
 // own count.
-func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp capBlendPayload, li int, loop LoopRecord, chord float64, work *freeform.FreeformWork) (capBlendLoopMesh, error) {
+func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp capBlendPayload, li int, loop loopRecord, chord float64, work *freeform.FreeformWork) (capBlendLoopMesh, error) {
 	if err := ctx.Err(); err != nil {
 		return capBlendLoopMesh{}, err
 	}

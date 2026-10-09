@@ -54,9 +54,9 @@ func denseSpanExtreme(t *testing.T, spans []freeform.BezierSpan, gu, gv float64,
 // splineProfile wraps a single cubic SplineSeg as an (open) one-segment
 // profile — boundaryExtremesBoundedContext reads segment geometry alone and
 // needs no closed loop.
-func splineProfile(control []Point2) ProfileRecord {
-	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		SplineSeg{Control: control, TStart: 0, TEnd: 1},
+func splineProfile(control []Point2) profileRecord {
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		splineSeg{Control: control, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -82,7 +82,7 @@ func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
 	require.Positive(t, bound, "an extreme held by an irrational interior root carries the bracket's own width")
 	require.Less(t, lo, hi)
 
-	spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
+	spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	_, denseHi := denseSpanExtreme(t, spans, 0, 1, 20_000)
 	require.LessOrEqual(t, denseHi, hi+bound, "the enclosure's upper end must not fall below a dense sample")
@@ -182,7 +182,7 @@ func TestSpanExtremeEnclosureCollapsedSpanIsExact(t *testing.T) {
 // fold must still enclose a dense-sample reference over the WHOLE walk.
 func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 	t.Parallel()
-	seg := NURBSSeg{
+	seg := nurbsSeg{
 		Degree: 2,
 		Control: []Point2{
 			{U: 0, V: 0}, {U: 1, V: 1}, {U: 2, V: 0}, {U: 2, V: 0}, {U: 2, V: 0},
@@ -204,7 +204,7 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 	require.Zero(t, collapsed[1].U.Cmp(collapsed[2].U))
 	require.Zero(t, collapsed[1].V.Cmp(collapsed[2].V))
 
-	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
+	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{seg}}}
 	gu, gv := 1.0, 2.0
 	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, gu, gv, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
@@ -275,8 +275,8 @@ func TestSpanExtremeEnclosureNonFiniteDirectionRefuses(t *testing.T) {
 // before the segment scan even starts.
 func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
 	t.Parallel()
-	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
+	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	for _, tc := range []struct {
 		name   string
@@ -395,11 +395,11 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 
-	analytic := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	analytic := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	pp := prismPayload{profile: analytic, frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
 	box, err := prismBoundsContext(t.Context(), pp, freeform.NewFreeformWork(), nil)
@@ -496,8 +496,8 @@ func TestFreeformExtremeFloatsRefusesUnrepresentableEnclosures(t *testing.T) {
 // 12. Cancellation: a cancelled context returns ctx.Err() from the scan.
 func TestBoundaryExtremesBoundedContextCancellation(t *testing.T) {
 	t.Parallel()
-	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
+	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

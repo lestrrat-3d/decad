@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -114,7 +115,7 @@ func TestProfileRecordChargesCutJunction(t *testing.T) {
 		}
 		require.GreaterOrEqual(t, cut, 2, `each cap holds a line fragment and a circle fragment`)
 
-		record, _, err := decad.RecordProfile(s, profile)
+		record, _, err := momentinput.RecordProfile(s, profile)
 		require.NoError(t, err)
 		area, err := record.Area()
 		require.NoError(t, err)
@@ -174,7 +175,7 @@ func TestProfileRecordClosesExactLineJunction(t *testing.T) {
 	}
 	require.Equal(t, 1, cut, `only the long side is cut, at the base corner`)
 
-	record, _, err := decad.RecordProfile(s, profiles[0])
+	record, _, err := momentinput.RecordProfile(s, profiles[0])
 	require.NoError(t, err)
 	area, err := record.Area()
 	require.NoError(t, err)

@@ -24,7 +24,7 @@ type sweepTransportFrame = sweeptransport.Frame
 func transportSweepFramesContext(
 	ctx context.Context,
 	path *Path,
-	plane PlaneRecord,
+	plane planeRecord,
 ) ([]sweepTransportFrame, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

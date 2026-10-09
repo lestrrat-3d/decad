@@ -7,13 +7,15 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/decadtest"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
-func extendLeftRibbon(t *testing.T, doc *decad.Document) (*decad.Body, decad.LineSeg) {
+func extendLeftRibbon(t *testing.T, doc *decad.Document) (*decad.Body, sectionrecord.LineSeg) {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -30,10 +32,10 @@ func extendLeftRibbon(t *testing.T, doc *decad.Document) (*decad.Body, decad.Lin
 		if len(chain.Edges) != 1 || chain.Edges[0].Entity != line || chain.Edges[0].TStart != 0 {
 			continue
 		}
-		record, _, err := decad.RecordChain(s, chain)
+		record, _, err := sketchrecord.RecordChain(s, chain)
 		require.NoError(t, err)
 		require.Len(t, record.Segments, 1)
-		seg, ok := record.Segments[0].(decad.LineSeg)
+		seg, ok := record.Segments[0].(sectionrecord.LineSeg)
 		require.True(t, ok)
 		require.Equal(t, 0.0, seg.TStart)
 		require.InDelta(t, 0.4, seg.TEnd, 1e-12)
@@ -42,7 +44,7 @@ func extendLeftRibbon(t *testing.T, doc *decad.Document) (*decad.Body, decad.Lin
 		return body, seg
 	}
 	t.Fatal("sketch published no left fragment of the source line")
-	return nil, decad.LineSeg{}
+	return nil, sectionrecord.LineSeg{}
 }
 
 // extendReversedRibbon is extendLeftRibbon's mirror in ONE respect that
@@ -54,7 +56,7 @@ func extendLeftRibbon(t *testing.T, doc *decad.Document) (*decad.Body, decad.Lin
 // recorded TStart. v = 0.1 is deliberate: an untouched bound at a coordinate
 // whose float bits are not trivially zero is what makes a byte-identity
 // assertion carry content.
-func extendReversedRibbon(t *testing.T, doc *decad.Document) (*decad.Body, decad.LineSeg) {
+func extendReversedRibbon(t *testing.T, doc *decad.Document) (*decad.Body, sectionrecord.LineSeg) {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -71,10 +73,10 @@ func extendReversedRibbon(t *testing.T, doc *decad.Document) (*decad.Body, decad
 		if len(chain.Edges) != 1 || chain.Edges[0].Entity != line || !chain.Edges[0].Reversed {
 			continue
 		}
-		record, _, err := decad.RecordChain(s, chain)
+		record, _, err := sketchrecord.RecordChain(s, chain)
 		require.NoError(t, err)
 		require.Len(t, record.Segments, 1)
-		seg, ok := record.Segments[0].(decad.LineSeg)
+		seg, ok := record.Segments[0].(sectionrecord.LineSeg)
 		require.True(t, ok)
 		if seg.TEnd != 0 {
 			continue // the other reversed fragment, anchored at the line's far end
@@ -88,7 +90,7 @@ func extendReversedRibbon(t *testing.T, doc *decad.Document) (*decad.Body, decad
 		return body, seg
 	}
 	t.Fatal("sketch published no reversed fragment of the source line")
-	return nil, decad.LineSeg{}
+	return nil, sectionrecord.LineSeg{}
 }
 
 // TestSurfaceExtendReversedFragmentToNearestCut is T178's reading over a
@@ -193,7 +195,7 @@ func extendFreeSweepEdges(t *testing.T, b *decad.Body, x float64) ([]*decad.Edge
 	return edges, at
 }
 
-func extendArcRibbon(t *testing.T, doc *decad.Document) (*decad.Body, decad.ArcSeg) {
+func extendArcRibbon(t *testing.T, doc *decad.Document) (*decad.Body, sectionrecord.ArcSeg) {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -216,10 +218,10 @@ func extendArcRibbon(t *testing.T, doc *decad.Document) (*decad.Body, decad.ArcS
 		if len(chain.Edges) != 1 || chain.Edges[0].Entity != arc {
 			continue
 		}
-		record, _, err := decad.RecordChain(s, chain)
+		record, _, err := sketchrecord.RecordChain(s, chain)
 		require.NoError(t, err)
 		require.Len(t, record.Segments, 1)
-		seg, ok := record.Segments[0].(decad.ArcSeg)
+		seg, ok := record.Segments[0].(sectionrecord.ArcSeg)
 		require.True(t, ok)
 		if seg.TEnd != 0 {
 			continue // the (60, 80) to (-100, 0) fragment
@@ -233,7 +235,7 @@ func extendArcRibbon(t *testing.T, doc *decad.Document) (*decad.Body, decad.ArcS
 		return body, seg
 	}
 	t.Fatal("sketch published no arc fragment anchored at the arc's own start")
-	return nil, decad.ArcSeg{}
+	return nil, sectionrecord.ArcSeg{}
 }
 
 // TestSurfaceExtendArcReceiverToNearestCut covers fullExtendSegment's and

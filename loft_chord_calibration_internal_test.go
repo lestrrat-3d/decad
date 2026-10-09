@@ -299,11 +299,11 @@ func TestLoftChordCalibrationTrueOutlineIsTheChordedTwin(t *testing.T) {
 	// endpoint away from the origin — and fails the test outright on a straight
 	// segment that touches the origin at neither end, which is exactly the lens
 	// closure this fixture must not have.
-	radialFeet := func(t *testing.T, rec ProfileRecord) [][2]float64 {
+	radialFeet := func(t *testing.T, rec profileRecord) [][2]float64 {
 		t.Helper()
 		var feet [][2]float64
 		for _, seg := range rec.Outer.Segments {
-			line, ok := seg.(LineSeg)
+			line, ok := seg.(lineSeg)
 			if !ok {
 				continue
 			}
@@ -322,13 +322,13 @@ func TestLoftChordCalibrationTrueOutlineIsTheChordedTwin(t *testing.T) {
 	t.Run("A10a: the arc outline is the chorded circle wedge's twin", func(t *testing.T) {
 		w, base, _ := wedgePlanes(t)
 		s, p := wedgeArcSketch(t, w, base)
-		rec, _, err := RecordProfile(s, p)
+		rec, _, _, err := recordProfile(s, p)
 		require.NoError(t, err)
 		require.Len(t, rec.Outer.Segments, 3, "two radial lines plus the arc")
 
 		curved := 0
 		for _, seg := range rec.Outer.Segments {
-			if _, ok := seg.(ArcSeg); ok {
+			if _, ok := seg.(arcSeg); ok {
 				curved++
 			}
 		}
@@ -341,13 +341,13 @@ func TestLoftChordCalibrationTrueOutlineIsTheChordedTwin(t *testing.T) {
 	t.Run("A10b: the spline outline is the chorded spline wedge's twin", func(t *testing.T) {
 		w, base, _ := wedgePlanes(t)
 		s, p := wedgeSplineSketch(t, w, base)
-		rec, _, err := RecordProfile(s, p)
+		rec, _, _, err := recordProfile(s, p)
 		require.NoError(t, err)
 		require.Len(t, rec.Outer.Segments, 3, "two radial lines plus the fit spline")
 
 		curved := 0
 		for _, seg := range rec.Outer.Segments {
-			if _, ok := seg.(FitSplineSeg); ok {
+			if _, ok := seg.(fitSplineSeg); ok {
 				curved++
 			}
 		}
@@ -1032,9 +1032,9 @@ func wedgePinStations(t *testing.T) int {
 // walk, the certified sagitta off the record — so the pin is measured on the
 // pair a real build hands it, never on a hand-built walk with no record behind
 // it.
-func wedgeArcRecord(t *testing.T) (ArcSeg, survey2d.SegmentWalk) {
+func wedgeArcRecord(t *testing.T) (arcSeg, survey2d.SegmentWalk) {
 	t.Helper()
-	seg := ArcSeg{Center: pt(0, 0), Start: pt(wedgeRadius, 0), End: pt(0, wedgeRadius), TStart: 0, TEnd: 1}
+	seg := arcSeg{Center: pt(0, 0), Start: pt(wedgeRadius, 0), End: pt(0, wedgeRadius), TStart: 0, TEnd: 1}
 	w, err := boundarywalk.WalkOf(seg, nil)
 	require.NoError(t, err)
 	require.Equal(t, wedgeRadius, w.Radius, "the recorded arc must resolve to the fixture's own radius")

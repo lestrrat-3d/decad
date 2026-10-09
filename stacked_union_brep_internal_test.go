@@ -203,7 +203,7 @@ func TestStackedUnionBrepCrossingBoss(t *testing.T) {
 		if !f.planar() {
 			swept++
 			require.Equal(t, [2]float64{10, 25}, [2]float64{f.z0, f.z1})
-			_, isArc := f.wall.(ArcSeg)
+			_, isArc := f.wall.(arcSeg)
 			require.True(t, isArc, "each cylinder piece is an arc between the two crossings")
 		}
 		require.Positive(t, f.delta, "every face carries the crossings' cut displacement")

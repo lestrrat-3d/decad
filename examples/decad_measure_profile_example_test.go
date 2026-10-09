@@ -8,12 +8,9 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// RecordProfile is the sketch seam: it converts a solved, closed profile into
-// structural records — the region in decad's own plane-local types, and the
-// sketch plane as three vectors. sketch has already
-// proven the region closes; decad records the entities' own defining data and
-// rejects anything it cannot record exactly.
-func Example_decad_recordProfile() {
+// MeasureProfile gives bounded 2D readings from a current sketch profile.
+// It rejects boundaries that decad cannot record exactly.
+func Example_decad_measureProfile() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -39,20 +36,29 @@ func Example_decad_recordProfile() {
 		}
 	}
 
-	rec, plane, err := decad.RecordProfile(s, prof)
+	measured, err := decad.MeasureProfile(s, prof)
 	if err != nil {
-		fmt.Printf("failed to record profile: %s\n", err)
+		fmt.Printf("failed to measure profile: %s\n", err)
+		return
+	}
+	area, err := measured.Area()
+	if err != nil {
+		fmt.Printf("failed to measure area: %s\n", err)
+		return
+	}
+	frame, err := s.Plane().Frame()
+	if err != nil {
+		fmt.Printf("failed to read plane: %s\n", err)
 		return
 	}
 
-	fmt.Printf("outer segments: %d\n", len(rec.Outer.Segments))
-	fmt.Printf("holes: %d\n", len(rec.Holes))
-	hole := rec.Holes[0].Segments[0].(decad.CircleSeg)
-	fmt.Printf("hole: circle r=%s ccw=%v\n", hole.Radius, hole.CCW)
-	fmt.Printf("plane normal: %v\n", plane.U.Cross(plane.V))
+	fmt.Printf("outer segments: %d\n", len(prof.Outer))
+	fmt.Printf("holes: %d\n", len(prof.Holes))
+	fmt.Printf("area: %s\n", area.Exactness)
+	fmt.Printf("plane normal: %v\n", frame.U().Cross(frame.V()))
 	// Output:
 	// outer segments: 4
 	// holes: 1
-	// hole: circle r=10 mm ccw=false
+	// area: Approximate
 	// plane normal: {0 0 1}
 }

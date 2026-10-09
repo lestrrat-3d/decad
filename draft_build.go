@@ -47,7 +47,7 @@ func draftAngle(taper units.Value) (float64, float64, error) {
 // alphaDelta of the stated angle, past SD1 and SD2): the stage-2 gates SD11
 // and SD12 on the extent and the option, then the build. Every gate runs
 // before the document changes.
-func (d *Document) extrudeDraft(profile ProfileRecord, frame r3.Frame, e Extent, alpha, alphaDelta float64, surfaceResult bool) (*Body, error) {
+func (d *Document) extrudeDraft(profile profileRecord, frame r3.Frame, e Extent, alpha, alphaDelta float64, surfaceResult bool) (*Body, error) {
 	if _, ok := e.(Distance); !ok {
 		return nil, fmt.Errorf(`%w: this evaluator tapers a Distance extent only; a Symmetric, TwoSided, ThroughAll or ToFace extent with a nonzero taper needs a two-sided draft record or a stop-face level (draft SD11)`, ErrUnsupported)
 	}
@@ -126,8 +126,8 @@ func evalDraftContext(ctx context.Context, doc *Document, ref producerID, dp dra
 // (walkAmounts), and a walk whose recorded segments are part kept and part
 // moved names no one wall to tilt. The classification does not depend on the
 // amount's size, so stage 4 reads the same corners at d.
-func draftSectionWalks(budget *proofbound.WorkBudget, profile ProfileRecord, kept map[draftWall]struct{}, work *freeform.FreeformWork) ([][]survey2d.SideWalk, error) {
-	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
+func draftSectionWalks(budget *proofbound.WorkBudget, profile profileRecord, kept map[draftWall]struct{}, work *freeform.FreeformWork) ([][]survey2d.SideWalk, error) {
+	loops := append([]loopRecord{profile.Outer}, profile.Holes...)
 	out := make([][]survey2d.SideWalk, len(loops))
 	for li, loop := range loops {
 		raw := make([]survey2d.SideWalk, len(loop.Segments))
@@ -195,19 +195,19 @@ func requireWholeKeptWalks(kept map[draftWall]struct{}, li int, walks []survey2d
 // its near corner, or a moved far radius bit-identical to its near radius names
 // a far section float64 cannot tell from the near one. A corner between two
 // kept walls stays where it is by construction.
-func draftFarSection(budget *proofbound.WorkBudget, walks [][]survey2d.SideWalk, kept map[draftWall]struct{}, t float64) (ProfileRecord, error) {
+func draftFarSection(budget *proofbound.WorkBudget, walks [][]survey2d.SideWalk, kept map[draftWall]struct{}, t float64) (profileRecord, error) {
 	if t == 0 {
-		return ProfileRecord{}, errDraftAmountRoundsAway(t)
+		return profileRecord{}, errDraftAmountRoundsAway(t)
 	}
-	loops := make([]LoopRecord, len(walks))
+	loops := make([]loopRecord, len(walks))
 	for li, ws := range walks {
 		amounts := walkAmounts(kept, li, ws, t)
 		segs, joins, err := offset2d.BuildSharpLoop(budget, ws, amounts, shellTol)
 		if errors.Is(err, offset2d.ErrLoopConsumed) && li == 0 && t > 0 {
-			return ProfileRecord{}, fmt.Errorf(`%w: the taper offsets every wall of the outer loop past its neighbours before the far end, so the region is consumed and no solid reaches that far; a smaller taper or a shorter sweep states a body (draft SD6)`, ErrDegenerate)
+			return profileRecord{}, fmt.Errorf(`%w: the taper offsets every wall of the outer loop past its neighbours before the far end, so the region is consumed and no solid reaches that far; a smaller taper or a shorter sweep states a body (draft SD6)`, ErrDegenerate)
 		}
 		if err != nil {
-			return ProfileRecord{}, wrapDraftOffsetError(offset2d.InLoop(err, li))
+			return profileRecord{}, wrapDraftOffsetError(offset2d.InLoop(err, li))
 		}
 		n := len(ws)
 		for i, j := range joins {
@@ -215,7 +215,7 @@ func draftFarSection(budget *proofbound.WorkBudget, walks [][]survey2d.SideWalk,
 				continue
 			}
 			if j.M.U == j.VertU && j.M.V == j.VertV {
-				return ProfileRecord{}, errDraftAmountRoundsAway(t)
+				return profileRecord{}, errDraftAmountRoundsAway(t)
 			}
 		}
 		for i, w := range ws {
@@ -223,12 +223,12 @@ func draftFarSection(budget *proofbound.WorkBudget, walks [][]survey2d.SideWalk,
 				continue
 			}
 			if rr, ok := offset2d.OffsetRadius(w, 1, amounts[i], shellTol); ok && rr == w.Radius {
-				return ProfileRecord{}, errDraftAmountRoundsAway(t)
+				return profileRecord{}, errDraftAmountRoundsAway(t)
 			}
 		}
-		loops[li] = LoopRecord{Segments: segs}
+		loops[li] = loopRecord{Segments: segs}
 	}
-	return ProfileRecord{Outer: loops[0], Holes: loops[1:]}, nil
+	return profileRecord{Outer: loops[0], Holes: loops[1:]}, nil
 }
 
 // errDraftAmountRoundsAway is SD13: the requested body exists, a real if tiny
@@ -245,7 +245,7 @@ func errDraftAmountRoundsAway(t float64) error {
 // section that builds at d and fails at the span's top leaves this evaluator
 // unable to decide whether the stated draft builds: ErrUnsupported, with the
 // audit's own error folded in with %v so the refusal answers to one sentinel.
-func auditDraftSpan(budget *proofbound.WorkBudget, profile ProfileRecord, walks [][]survey2d.SideWalk, kept map[draftWall]struct{}, d, dDelta float64) error {
+func auditDraftSpan(budget *proofbound.WorkBudget, profile profileRecord, walks [][]survey2d.SideWalk, kept map[draftWall]struct{}, d, dDelta float64) error {
 	if !(dDelta > 0) {
 		return nil
 	}
@@ -414,7 +414,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 // carries its junction bound, the level's own displacement and its frame lift
 // rounding; each edge the walk's own length and convexity. buildCapBand reads
 // these as the band's side directrix, so wall i's near edge is coedge i.
-func draftNearRim(ctx context.Context, pl prismPayload, li int, loop LoopRecord, z, zDelta float64, work *freeform.FreeformWork) ([]coedge, error) {
+func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord, z, zDelta float64, work *freeform.FreeformWork) ([]coedge, error) {
 	if len(loop.Segments) == 0 {
 		return nil, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}

@@ -242,12 +242,12 @@ func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measur
 // wedgeLoopSamples samples the recorded outer loop in walk order: a LineSeg
 // contributes its walk start, a free-form segment its own perSpan samples per
 // span at uniform native parameter (denseWalkSamples).
-func wedgeLoopSamples(t *testing.T, p ProfileRecord, perSpan int) []Point2 {
+func wedgeLoopSamples(t *testing.T, p profileRecord, perSpan int) []Point2 {
 	t.Helper()
 	var loop []Point2
 	for _, seg := range p.Outer.Segments {
 		switch seg := seg.(type) {
-		case LineSeg:
+		case lineSeg:
 			start := seg.Start
 			if seg.TStart > seg.TEnd {
 				start = seg.End
@@ -292,7 +292,7 @@ func sampledTangentEnergy(t *testing.T, loop []Point2, lo, hi Point2) float64 {
 
 // wedgeDenseArea is a translate's surface area, 2·(cap area) + height·
 // (perimeter), over the recorded loop sampled densely (wedgeLoopSamples).
-func wedgeDenseArea(t *testing.T, p ProfileRecord, height float64) float64 {
+func wedgeDenseArea(t *testing.T, p profileRecord, height float64) float64 {
 	t.Helper()
 	loop := wedgeLoopSamples(t, p, 1<<14)
 	shoelace, perimeter := 0.0, 0.0
@@ -320,12 +320,12 @@ func wedgeDenseArea(t *testing.T, p ProfileRecord, height float64) float64 {
 func TestLoftFreeformReversedRangeBuildsTheSameStations(t *testing.T) {
 	t.Parallel()
 	control := []Point2{pt(4, 0), pt(4.5, 2), pt(2, 3.5), pt(-0.5, 2), pt(0, 0)}
-	forward := SplineSeg{Control: control, TStart: 0, TEnd: 1}
-	reversed := SplineSeg{Control: slices.Clone(control), TStart: 1, TEnd: 0}
+	forward := splineSeg{Control: control, TStart: 0, TEnd: 1}
+	reversed := splineSeg{Control: slices.Clone(control), TStart: 1, TEnd: 0}
 	slices.Reverse(reversed.Control)
-	loopOf := func(spline CurveSegment) ProfileRecord {
-		return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-			LineSeg{Start: pt(0, 0), End: pt(4, 0), TStart: 0, TEnd: 1},
+	loopOf := func(spline curveSegment) profileRecord {
+		return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+			lineSeg{Start: pt(0, 0), End: pt(4, 0), TStart: 0, TEnd: 1},
 			spline,
 		}}}
 	}
@@ -492,9 +492,9 @@ func TestLoftFreeformSpanCountMismatchRefusesS17(t *testing.T) {
 	require.ErrorContains(t, err, s17)
 	require.Empty(t, doc.Bodies(), "a refused loft leaves the document unchanged")
 
-	rec0, pl0, err := RecordProfile(s0, p0)
+	rec0, pl0, _, err := recordProfile(s0, p0)
 	require.NoError(t, err)
-	rec1, pl1, err := RecordProfile(s1, p1)
+	rec1, pl1, _, err := recordProfile(s1, p1)
 	require.NoError(t, err)
 	err = validateLoftRecordsErr(rec0, rec1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -506,13 +506,13 @@ func TestLoftFreeformSpanCountMismatchRefusesS17(t *testing.T) {
 // different free-form types. None of them reaches S17's span comparison.
 func TestLoftFreeformMixedPairsRefuseS3(t *testing.T) {
 	t.Parallel()
-	fit := FitSplineSeg{Fit: []Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}, TStart: 0, TEnd: 1}
-	spline := SplineSeg{Control: []Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}, TStart: 0, TEnd: 1}
-	arc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
-	line := LineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
+	fit := fitSplineSeg{Fit: []Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}, TStart: 0, TEnd: 1}
+	spline := splineSeg{Control: []Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}, TStart: 0, TEnd: 1}
+	arc := arcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
+	line := lineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
 	for _, row := range []struct {
 		name   string
-		s0, s1 CurveSegment
+		s0, s1 curveSegment
 	}{
 		{"arc against fit spline", arc, fit},
 		{"line against fit spline", line, fit},
@@ -520,8 +520,8 @@ func TestLoftFreeformMixedPairsRefuseS3(t *testing.T) {
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			t.Parallel()
-			p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(row.s0)}
-			p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(row.s1)}
+			p0 := profileRecord{Outer: squareLoopWithFirstSegment(row.s0)}
+			p1 := profileRecord{Outer: squareLoopWithFirstSegment(row.s1)}
 			pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 			err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 			require.ErrorIs(t, err, ErrUnsupported)
@@ -542,12 +542,12 @@ func TestLoftFreeformMixedPairsRefuseS3(t *testing.T) {
 // instead of the share, the pair chords and no refusal comes back.
 func TestLoftFreeformPairPastItsShareRefusesS15(t *testing.T) {
 	t.Parallel()
-	fit := FitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
-	segs := []CurveSegment{LineSeg{Start: pt(0, 0), End: pt(0, -1), TStart: 0, TEnd: 1}, fit}
+	fit := fitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
+	segs := []curveSegment{lineSeg{Start: pt(0, 0), End: pt(0, -1), TStart: 0, TEnd: 1}, fit}
 	for len(segs) < loftmesh.StationCapCeiling {
-		segs = append(segs, LineSeg{Start: pt(4, 0), End: pt(0, 0), TStart: 0, TEnd: 1})
+		segs = append(segs, lineSeg{Start: pt(4, 0), End: pt(0, 0), TStart: 0, TEnd: 1})
 	}
-	p := ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	p := profileRecord{Outer: loopRecord{Segments: segs}}
 	walks := resolveLoftLoopWalks(t, p)
 	_, _, _, _, err := loftmesh.PairRecords(p, p, []int{0}, walks, walks, 1, freeform.NewFreeformWork(), freeform.NewFreeformWork()) //nolint:dogsled // only the refusal is under test.
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -721,7 +721,7 @@ func fitSplineWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane, n 
 // perSpan evenly spaced local parameters per converted Bézier span, the span's
 // own end excluded. Sample i of one side and sample i of another side with the
 // same span count sit at the same span-native parameter.
-func denseWalkSamples(t *testing.T, seg CurveSegment, perSpan int) []Point2 {
+func denseWalkSamples(t *testing.T, seg curveSegment, perSpan int) []Point2 {
 	t.Helper()
 	w, err := boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)

@@ -38,7 +38,7 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 	}
 	var umin, umax, vmin, vmax float64
 	for i, segment := range pp.profile.Outer.Segments {
-		line, ok := segment.(LineSeg)
+		line, ok := segment.(lineSeg)
 		if !ok {
 			return orientedSourceBox{}, false
 		}

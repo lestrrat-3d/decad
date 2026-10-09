@@ -51,7 +51,7 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 	switch p := b.payload.(type) {
 	case prismPayload:
 		return stackedUnionOperand{proxy: p, slabs: []prismSlab{{
-			regions: []ProfileRecord{p.profile},
+			regions: []profileRecord{p.profile},
 			z0:      p.z0, z1: p.z1, z0Delta: p.z0Delta, z1Delta: p.z1Delta,
 		}}}, true
 	case stackedPrismPayload:
@@ -64,7 +64,7 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 		}
 		first, last := p.stack.slabs[0], p.stack.slabs[len(p.stack.slabs)-1]
 		return stackedUnionOperand{proxy: prismPayload{
-			profile: ProfileRecord{Outer: first.regions[0].Outer},
+			profile: profileRecord{Outer: first.regions[0].Outer},
 			frame:   p.faces[0].frame, xform: p.xform, sectionDelta: p.stack.delta,
 			z0: first.z0, z0Delta: first.z0Delta, z1: last.z1, z1Delta: last.z1Delta,
 		}, slabs: p.stack.slabs, brep: true}, true
@@ -76,7 +76,7 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 // view is the prismPayload a private scene reads for one of this operand's
 // regions: the region, the operand's frame and placement, and its section
 // displacement for prism-boolean §3.4's crossing charge.
-func (o stackedUnionOperand) view(region ProfileRecord) prismPayload {
+func (o stackedUnionOperand) view(region profileRecord) prismPayload {
 	v := o.proxy
 	v.profile = region
 	return v
@@ -232,7 +232,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 	}
 
 	st := &stackedUnionState{budget: budget, va: va, vb: vb, reexpress: reexpress,
-		bRecorded: map[int]ProfileRecord{}, scenes: map[[2]stackedUnionRegionRef]*stackedNesting{}}
+		bRecorded: map[int]profileRecord{}, scenes: map[[2]stackedUnionRegionRef]*stackedNesting{}}
 	sp := stackedPrismPayload{frame: va.proxy.frame, xform: va.proxy.xform}
 	zero := new(big.Rat)
 	var reach [][2]int
@@ -254,7 +254,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 		if err != nil || !ok {
 			return nil, false, err
 		}
-		sp.slabs = append(sp.slabs, prismSlab{regions: []ProfileRecord{region},
+		sp.slabs = append(sp.slabs, prismSlab{regions: []profileRecord{region},
 			z0: lo.held, z1: hi.held, z0Delta: lo.delta, z1Delta: hi.delta})
 	}
 	for k := 0; k+1 < len(sp.slabs); k++ {
@@ -310,7 +310,7 @@ type stackedUnionState struct {
 	budget        *proofbound.WorkBudget
 	va, vb        stackedUnionOperand
 	reexpress     *prismReexpression
-	bRecorded     map[int]ProfileRecord
+	bRecorded     map[int]profileRecord
 	scenes        map[[2]stackedUnionRegionRef]*stackedNesting
 	walkA, walkB  float64
 	walkInterface float64
@@ -366,10 +366,10 @@ func (st *stackedUnionState) scene(ctx context.Context, x, y stackedUnionRegionR
 
 // slabRegion is one result slab's region from the operand slabs ia and ib
 // (-1 when that operand does not reach it).
-func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (ProfileRecord, bool, error) {
+func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (profileRecord, bool, error) {
 	switch {
 	case ia < 0 && ib < 0:
-		return ProfileRecord{}, false, nil
+		return profileRecord{}, false, nil
 	case ib < 0:
 		return st.va.slabs[ia].regions[0], true, nil
 	case ia < 0:
@@ -379,7 +379,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 	if st.reexpress.Identity {
 		same, err := loopRecordsEqual(st.budget, ra.Outer, rb.Outer)
 		if err != nil {
-			return ProfileRecord{}, false, err
+			return profileRecord{}, false, err
 		}
 		if same {
 			return ra, true, nil
@@ -388,7 +388,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 	pa, pb := st.va.view(ra), st.vb.view(rb)
 	m, err := st.scene(ctx, stackedUnionRegionRef{slab: ia}, stackedUnionRegionRef{isB: true, slab: ib})
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	switch m.nest {
 	case stackedNestBInA:
@@ -401,26 +401,26 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 	// (docs/general-boolean-design.md §3 A6). No cell at all is a scene
 	// prismCellProfiles could not restate: the mesh path.
 	if len(m.profiles) == 0 {
-		return ProfileRecord{}, false, nil
+		return profileRecord{}, false, nil
 	}
 	if ok, err := m.charge(st.budget, pa, pb, st.reexpress); err != nil || !ok {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	// Select-all is the union only without an enclosed void (§4.2): a void
 	// is unresolved, never an error, so the pair takes the mesh path.
 	voidFree, err := prismcells.CellsHaveNoVoid(st.budget, m.tags, m.profiles)
 	if err != nil || !voidFree {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	if ok, err := m.sceneDelta.SharedSpansBounded(st.budget, m.profiles); err != nil || !ok {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	merged, cutDelta, resolved, err := mergePrismCells(st.budget, m.profiles, "union")
 	if fallBack, err := prismcells.AmplifiedFallback(m.sceneDelta.Amplified, err); fallBack || err != nil || !resolved {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	if fallBack, err := prismcells.AmplifiedFallback(m.sceneDelta.Amplified, auditPrismMergeSection(st.budget, pa, merged)); fallBack || err != nil {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	st.cutDelta = max(st.cutDelta, cutDelta)
 	st.crossing = max(st.crossing, m.sceneDelta.Crossing)
@@ -433,7 +433,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 // one cell sketch returns, so every coordinate is a sketch-recorded edge and
 // the re-expression's rounding rides in reexpress.Delta. The record is kept
 // per B slab so every result slab that reads it holds one record.
-func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (ProfileRecord, bool, error) {
+func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (profileRecord, bool, error) {
 	region := st.vb.slabs[ib].regions[0]
 	if st.reexpress.Identity {
 		return region, true, nil
@@ -442,33 +442,33 @@ func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (ProfileRecord
 		return recorded, true, nil
 	}
 	pb := st.vb.view(region)
-	empty := st.va.view(ProfileRecord{})
+	empty := st.va.view(profileRecord{})
 	if err := st.withinCap(empty, pb); err != nil {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	s, tags, sceneDelta, err := buildPrismScene(st.budget, empty, pb, st.reexpress)
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	st.walkB = max(st.walkB, sceneDelta.B)
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	bOuter, err := prismcells.LoopEntitySet(st.budget, tags, true, -1)
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	match, resolved, err := prismcells.FindLoopMatch(st.budget, profiles, bOuter, nil)
 	if err != nil || !resolved {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	if !match.Valid {
-		return ProfileRecord{}, false, prismcells.InvalidRegionError("union")
+		return profileRecord{}, false, prismcells.InvalidRegionError("union")
 	}
 	recorded, err := prismRecordArrangedProfileContext(ctx, match)
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	st.bRecorded[ib] = recorded
 	return recorded, true, nil
@@ -480,7 +480,7 @@ func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (ProfileRecord
 // the wider side alone holds the exposed record, the wider region with the
 // narrower outer reversed as its hole. Any other outcome, a split boundary
 // included, is unresolved and falls back to the mesh path.
-func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper ProfileRecord) (prismSlabInterface, bool, error) {
+func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper profileRecord) (prismSlabInterface, bool, error) {
 	same, err := loopRecordsEqual(st.budget, lower.Outer, upper.Outer)
 	if err != nil {
 		return prismSlabInterface{}, false, err
@@ -492,7 +492,7 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper Profi
 		if err != nil {
 			return prismSlabInterface{}, false, err
 		}
-		return prismSlabInterface{lowerExposed: none, upperExposed: append([]ProfileRecord{}, none...)}, true, nil
+		return prismSlabInterface{lowerExposed: none, upperExposed: append([]profileRecord{}, none...)}, true, nil
 	}
 	m, err := stackedUnionInterfaceMatch(ctx, st.budget, st.va.proxy, lower, upper)
 	if err != nil {
@@ -520,7 +520,7 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper Profi
 
 // stackedUnionInterfaceMatch arranges two adjacent result regions, both
 // already in the result's frame, with the identity re-expression.
-func stackedUnionInterfaceMatch(ctx context.Context, budget *proofbound.WorkBudget, base prismPayload, lower, upper ProfileRecord) (stackedNesting, error) {
+func stackedUnionInterfaceMatch(ctx context.Context, budget *proofbound.WorkBudget, base prismPayload, lower, upper profileRecord) (stackedNesting, error) {
 	pl, pu := base, base
 	pl.profile, pu.profile = lower, upper
 	if err := stackedSceneWithinCap(budget, pl, pu); err != nil {

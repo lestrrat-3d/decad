@@ -34,7 +34,7 @@ import (
 // displacement; a wall's rim, whose region states the cavity's levels and the
 // receiver's cap levels as in-plane coordinates, carries the largest of that
 // and every cavity level's displacement.
-func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepPayload, tc throughCut, cavity brepPayload, eroded ProfileRecord, dilated []ProfileRecord, rm throughRemoval) (brepPayload, error) {
+func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepPayload, tc throughCut, cavity brepPayload, eroded profileRecord, dilated []profileRecord, rm throughRemoval) (brepPayload, error) {
 	frames := make([]r3.Frame, 0, 1+len(cavity.faces))
 	frames = append(frames, bp.faces[0].frame)
 	for _, f := range cavity.faces {
@@ -90,8 +90,8 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 		if reason != "" {
 			return brepPayload{}, throughRimError(r, reason)
 		}
-		var qOuters []LoopRecord
-		var bands []ProfileRecord
+		var qOuters []loopRecord
+		var bands []profileRecord
 		partnered := map[int]struct{}{}
 		// Each cavity face in R's plane: a planar face across R's axis at its
 		// level, or at a wall, a straight cavity wall along k on R's carrier.
@@ -123,7 +123,7 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 			}
 			qOuters = append(qOuters, inR.Outer)
 			for qh, hole := range inR.Holes {
-				var holeF LoopRecord
+				var holeF loopRecord
 				if !rp.wall {
 					holeF = inF.Holes[qh]
 				}
@@ -139,7 +139,7 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 				if err != nil {
 					return brepPayload{}, err
 				}
-				bands = append(bands, ProfileRecord{Outer: band, Holes: []LoopRecord{r.region.Holes[hi]}})
+				bands = append(bands, profileRecord{Outer: band, Holes: []loopRecord{r.region.Holes[hi]}})
 			}
 		}
 		if len(partnered) != len(r.region.Holes) {
@@ -225,8 +225,8 @@ func throughRimError(r brepFace, what string) error {
 // outer loop walks counter-clockwise and every hole clockwise, each with a
 // non-zero area), then S7 (no crossing or contact) and S9 (nesting) through
 // the shared audit.
-func auditThroughRim(budget *proofbound.WorkBudget, region ProfileRecord) error {
-	for li, loop := range append([]LoopRecord{region.Outer}, region.Holes...) {
+func auditThroughRim(budget *proofbound.WorkBudget, region profileRecord) error {
+	for li, loop := range append([]loopRecord{region.Outer}, region.Holes...) {
 		area, err := loopSignedAreaBudget(budget, loop)
 		if err != nil {
 			return shellCancelCause(err)

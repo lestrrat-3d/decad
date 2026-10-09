@@ -166,34 +166,34 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 // free here, exactly as it is for the clean-nesting match. cutDelta is the
 // maximum §7 cut-parameter charge over the cell's own edges, zero when every
 // edge is whole.
-func recordPrismOverlapCell(budget *proofbound.WorkBudget, edges []sketch.BoundaryEdge) (ProfileRecord, float64, error) {
-	segs := make([]CurveSegment, len(edges))
+func recordPrismOverlapCell(budget *proofbound.WorkBudget, edges []sketch.BoundaryEdge) (profileRecord, float64, error) {
+	segs := make([]curveSegment, len(edges))
 	joins := make([]loopJoin, len(edges))
 	cutDelta := 0.0
 	for i, e := range edges {
 		if err := budget.Step(); err != nil {
-			return ProfileRecord{}, 0, err
+			return profileRecord{}, 0, err
 		}
 		seg, err := recordEdge(e)
 		if err != nil {
-			return ProfileRecord{}, 0, err
+			return profileRecord{}, 0, err
 		}
 		segs[i] = seg
 		join, err := edgeJoin(e, seg)
 		if err != nil {
-			return ProfileRecord{}, 0, err
+			return profileRecord{}, 0, err
 		}
 		joins[i] = join
 		delta, err := prismcells.CutDelta(e, seg)
 		if err != nil {
-			return ProfileRecord{}, 0, err
+			return profileRecord{}, 0, err
 		}
 		cutDelta = math.Max(cutDelta, delta)
 	}
 	// RB9 (§9): the seam's own junction falsifier, run on this cell's own
 	// recorded coordinates.
 	if err := falsifyLoopJoins("overlap cell", joins); err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, cutDelta, nil
+	return profileRecord{Outer: loopRecord{Segments: segs}}, cutDelta, nil
 }

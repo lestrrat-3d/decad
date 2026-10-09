@@ -412,10 +412,10 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 	pw, err := momentinput.ResolveProfileWalks(involuteFitProfile(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
-	other := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 1}, End: Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 1, V: 1}, End: Point2{}, TStart: 0, TEnd: 1},
+	other := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 1}, End: Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 1, V: 1}, End: Point2{}, TStart: 0, TEnd: 1},
 	}}}
 	face := &Face{}
 	_, err = tessellation.ChordLoop(t.Context(), other.Outer, 0.2, 5, freeform.NewFreeformWork(), pw, 0,

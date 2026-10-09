@@ -263,7 +263,7 @@ as it does for a caller-drawn profile.
 **`Split`'s pieces are `s.Profiles()`'s own results, taken verbatim.** The
 private scene is owned by this call, and each selected cell comes from that
 scene's single arrangement. The seam records those cells directly, applying
-the same `TExact`, range and loop-closure checks as public `RecordProfile`.
+the same `TExact`, range and loop-closure checks as the profile recording path.
 Public `RecordProfile` still re-arranges a caller's sketch to authenticate a
 profile snapshot, because callers can change its exported fields.
 

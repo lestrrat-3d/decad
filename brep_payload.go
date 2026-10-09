@@ -53,10 +53,10 @@ import (
 // chamfer(k) for its index k, so a placement re-mints it with the record.
 type brepFace struct {
 	frame            r3.Frame
-	region           *ProfileRecord
+	region           *profileRecord
 	outward          bool
 	sweep            r3.Vec
-	wall             CurveSegment
+	wall             curveSegment
 	z0, z1           float64
 	z0Delta, z1Delta float64
 	side0, side1     []brepSplit
@@ -132,7 +132,7 @@ func (f brepFace) view(xform r3.Transform) prismPayload {
 	if f.planar() {
 		pp.profile = *f.region
 	} else {
-		pp.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{f.wall}}}
+		pp.profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{f.wall}}}
 	}
 	return pp
 }
@@ -193,7 +193,7 @@ func brepOfPrism(pp prismPayload) (brepPayload, error) {
 		pp.sectionDelta = proofbound.AbsSumUpper(pp.sectionDelta, allow)
 	}
 	bp := brepPayload{xform: pp.xform}
-	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
+	for _, loop := range append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...) {
 		for _, seg := range loop.Segments {
 			bp.faces = append(bp.faces, brepFace{
 				frame: pp.frame, wall: seg, z0: pp.z0, z1: pp.z1,
@@ -253,7 +253,7 @@ func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, er
 			})
 		}
 	}
-	addPlanar := func(region ProfileRecord, z, zDelta float64, outward bool) {
+	addPlanar := func(region profileRecord, z, zDelta float64, outward bool) {
 		bp.faces = append(bp.faces, brepFace{frame: sp.frame, region: &region, outward: outward,
 			z0: z, z1: z, z0Delta: zDelta, z1Delta: zDelta, delta: sp.sectionDelta})
 	}
@@ -274,9 +274,9 @@ func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, er
 }
 
 // brepJoinProfile adapts a region to brepgeom.JoinProfile.
-func brepJoinProfile(p ProfileRecord) (ProfileRecord, float64, error) {
+func brepJoinProfile(p profileRecord) (profileRecord, float64, error) {
 	joined, allow, err := brepgeom.JoinProfile(brepgeom.Profile{Outer: p.Outer, Holes: p.Holes})
-	return ProfileRecord{Outer: joined.Outer, Holes: joined.Holes}, allow, err
+	return profileRecord{Outer: joined.Outer, Holes: joined.Holes}, allow, err
 }
 
 // brepJoinStacked joins every region and exposed record of a
@@ -284,7 +284,7 @@ func brepJoinProfile(p ProfileRecord) (ProfileRecord, float64, error) {
 // join alike, so the columns stackedColumns derives are unchanged.
 func brepJoinStacked(sp stackedPrismPayload) (stackedPrismPayload, error) {
 	allow := 0.0
-	join := func(p ProfileRecord) (ProfileRecord, error) {
+	join := func(p profileRecord) (profileRecord, error) {
 		out, a, err := brepJoinProfile(p)
 		allow = math.Max(allow, a)
 		return out, err
@@ -293,7 +293,7 @@ func brepJoinStacked(sp stackedPrismPayload) (stackedPrismPayload, error) {
 	out.slabs = make([]prismSlab, len(sp.slabs))
 	for k, slab := range sp.slabs {
 		out.slabs[k] = slab
-		out.slabs[k].regions = make([]ProfileRecord, len(slab.regions))
+		out.slabs[k].regions = make([]profileRecord, len(slab.regions))
 		for r, region := range slab.regions {
 			joined, err := join(region)
 			if err != nil {
@@ -430,7 +430,7 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 	}
 	faces := make([]brepgeom.FaceWalks, len(bp.faces))
 	work := freeform.NewFreeformWork()
-	walk := func(seg CurveSegment) (survey2d.SegmentWalk, error) {
+	walk := func(seg curveSegment) (survey2d.SegmentWalk, error) {
 		w, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return survey2d.SegmentWalk{}, err
@@ -456,9 +456,9 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 				}
 				face.Sweep = axis
 			}
-			loops := append([]LoopRecord{f.region.Outer}, f.region.Holes...)
+			loops := append([]loopRecord{f.region.Outer}, f.region.Holes...)
 			face.Planar = make([][]survey2d.SegmentWalk, len(loops))
-			face.PlanarSegs = make([][]CurveSegment, len(loops))
+			face.PlanarSegs = make([][]curveSegment, len(loops))
 			for li, loop := range loops {
 				face.PlanarSegs[li] = loop.Segments
 				for _, seg := range loop.Segments {

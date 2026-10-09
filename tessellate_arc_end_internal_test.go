@@ -61,7 +61,7 @@ func arcEndPie(t *testing.T, doc *Document) *Body {
 
 // arcDenotedEnd is the point arc denotes at t = 1, at 256 bits: Center plus
 // Start's radius along End's direction from Center.
-func arcDenotedEnd(arc ArcSeg) (*big.Float, *big.Float) {
+func arcDenotedEnd(arc arcSeg) (*big.Float, *big.Float) {
 	const prec = 256
 	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
 	hypot := func(p Point2) *big.Float {
@@ -81,7 +81,7 @@ func arcDenotedEnd(arc ArcSeg) (*big.Float, *big.Float) {
 
 // requireReachesArcEnd asserts that bound reaches arc's denoted t = 1 end from
 // the held point (u, v) in each component, and returns the larger gap.
-func requireReachesArcEnd(t *testing.T, arc ArcSeg, u, v float64, bound proofbound.WalkEndBound) float64 {
+func requireReachesArcEnd(t *testing.T, arc arcSeg, u, v float64, bound proofbound.WalkEndBound) float64 {
 	t.Helper()
 	du, dv := arcDenotedEnd(arc)
 	gapU, _ := du.Sub(du, big.NewFloat(u)).Abs(du).Float64()
@@ -92,11 +92,11 @@ func requireReachesArcEnd(t *testing.T, arc ArcSeg, u, v float64, bound proofbou
 }
 
 // onlyArc returns the one arc of segs.
-func onlyArc(t *testing.T, segs []CurveSegment) ArcSeg {
+func onlyArc(t *testing.T, segs []curveSegment) arcSeg {
 	t.Helper()
-	var arcs []ArcSeg
+	var arcs []arcSeg
 	for _, seg := range segs {
-		if arc, ok := seg.(ArcSeg); ok {
+		if arc, ok := seg.(arcSeg); ok {
 			arcs = append(arcs, arc)
 		}
 	}
@@ -187,7 +187,7 @@ func TestBrepChordWallReachesArcNaturalEnd(t *testing.T) {
 	require.NoError(t, err)
 	checked := 0
 	for fi, f := range bp.faces {
-		arc, ok := f.wall.(ArcSeg)
+		arc, ok := f.wall.(arcSeg)
 		if f.planar() || !ok {
 			continue
 		}

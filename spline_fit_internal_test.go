@@ -55,7 +55,7 @@ func monomialFromBezierCubic(b0, b1, b2, b3 *big.Rat) [4]float64 {
 func TestFitSplineBezierMatchesSpansToAFewULPs(t *testing.T) {
 	t.Parallel()
 	fit := []Point2{{U: 0, V: 0}, {U: 4, V: 3}, {U: 9, V: -1}, {U: 12, V: 2}, {U: 15, V: 0}}
-	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
+	seg := fitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 
 	spans, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.NoError(t, err)
@@ -98,7 +98,7 @@ func TestFitSplineEndpointsAreFitZeroAndActiveLast(t *testing.T) {
 		{U: 0, V: 0}, {U: 10, V: 0}, {U: 10, V: 10},
 		{U: 10 + 3e-13, V: 10}, // collapses into the point before it
 	}
-	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
+	seg := fitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 
 	spans, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.NoError(t, err)
@@ -144,7 +144,7 @@ func TestFitInterpolantChargeRefusesBeforeSolving(t *testing.T) {
 	for i := range fit {
 		fit[i] = Point2{U: float64(i), V: float64(i % 7)}
 	}
-	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
+	seg := fitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 
 	var err error
 	start := time.Now()
@@ -180,7 +180,7 @@ func TestFitInterpolantCostIsLinear(t *testing.T) {
 // input coordinate here is finite (Table R row R16).
 func TestFitInterpolantNonFiniteMapsToR16(t *testing.T) {
 	t.Parallel()
-	seg := FitSplineSeg{
+	seg := fitSplineSeg{
 		Fit:    []Point2{{U: -1e308, V: 0}, {U: 1e308, V: 1}},
 		TStart: 0, TEnd: 1,
 	}
@@ -196,7 +196,7 @@ func TestFitInterpolantNonFiniteMapsToR16(t *testing.T) {
 // record.go's own >= 2 floor.
 func TestFitSplineTooFewPointsRefuses(t *testing.T) {
 	t.Parallel()
-	seg := FitSplineSeg{Fit: []Point2{{U: 1}}, TStart: 0, TEnd: 1}
+	seg := fitSplineSeg{Fit: []Point2{{U: 1}}, TStart: 0, TEnd: 1}
 	_, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrDegenerate)
@@ -209,7 +209,7 @@ func TestFitSplineTooFewPointsRefuses(t *testing.T) {
 // returns the empty chain rather than erroring on its own.
 func TestFitSplineAllCoincidentReturnsNoSpans(t *testing.T) {
 	t.Parallel()
-	seg := FitSplineSeg{
+	seg := fitSplineSeg{
 		Fit:    []Point2{{U: 3, V: 4}, {U: 3, V: 4}, {U: 3, V: 4}},
 		TStart: 0, TEnd: 1,
 	}
@@ -223,7 +223,7 @@ func TestFitSplineAllCoincidentReturnsNoSpans(t *testing.T) {
 // range (spline design §2) — never the interpolant conversion's own reason.
 func TestFitSplineTrimmedRangeRefusesAtFullDomainGate(t *testing.T) {
 	t.Parallel()
-	seg := FitSplineSeg{
+	seg := fitSplineSeg{
 		Fit:    []Point2{{U: 0}, {U: 1, V: 1}, {U: 2}},
 		TStart: 0.25, TEnd: 0.75,
 	}

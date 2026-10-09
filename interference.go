@@ -87,7 +87,7 @@ func cupViewsEqual(budget *proofbound.WorkBudget, pa, pb cupView) (bool, error) 
 
 // profileRecordsEqual reports exact structural equality of two recorded
 // profiles, stepping the budget once per segment compared.
-func profileRecordsEqual(budget *proofbound.WorkBudget, a, b ProfileRecord) (bool, error) {
+func profileRecordsEqual(budget *proofbound.WorkBudget, a, b profileRecord) (bool, error) {
 	if err := survey2d.WallBudgetStep(budget); err != nil {
 		return false, err
 	}
@@ -110,7 +110,7 @@ func profileRecordsEqual(budget *proofbound.WorkBudget, a, b ProfileRecord) (boo
 // loopRecordsEqual compares one loop segment by segment. The nil-versus-empty
 // slice check keeps this exactly as strict as a whole-record DeepEqual, which
 // holds a nil slice unequal to an empty one.
-func loopRecordsEqual(budget *proofbound.WorkBudget, a, b LoopRecord) (bool, error) {
+func loopRecordsEqual(budget *proofbound.WorkBudget, a, b loopRecord) (bool, error) {
 	if len(a.Segments) != len(b.Segments) || (a.Segments == nil) != (b.Segments == nil) {
 		return false, nil
 	}

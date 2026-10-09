@@ -56,8 +56,8 @@ func twistedArcWedgePayload(t *testing.T) loftPayload {
 	t.Helper()
 	const u0, v0 = 5.0, 1.0 / 1024
 	const u1, v1 = 2.5, 0.5 / 1024
-	p0 := ProfileRecord{Outer: arcWedgeLoopEqualRadii(u0, v0)}
-	p1 := ProfileRecord{Outer: arcWedgeLoopEqualRadii(u1, v1)}
+	p0 := profileRecord{Outer: arcWedgeLoopEqualRadii(u0, v0)}
+	p1 := profileRecord{Outer: arcWedgeLoopEqualRadii(u1, v1)}
 	return loftPayloadFor(t, p0, p1, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1))
 }
 

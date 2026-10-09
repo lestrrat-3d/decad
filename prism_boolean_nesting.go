@@ -37,7 +37,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 	if err != nil || !ok {
 		return prismPayload{}, false, err
 	}
-	for _, profile := range []ProfileRecord{pa.profile, pb.profile} {
+	for _, profile := range []profileRecord{pa.profile, pb.profile} {
 		trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, profile.Outer, profile.Holes)
 		if err != nil {
 			return prismPayload{}, false, err
@@ -333,9 +333,9 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 // this second pass over it stays bounded too. The returned PlaneRecord is not
 // read here — the caller keeps operand A's own frame/xform (§4.1) — so only
 // the ProfileRecord and error are surfaced.
-func prismRecordProfileContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, error) {
-	return prismProfileRecordContext(ctx, func() (ProfileRecord, error) {
-		profile, _, err := RecordProfile(s, p)
+func prismRecordProfileContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (profileRecord, error) {
+	return prismProfileRecordContext(ctx, func() (profileRecord, error) {
+		profile, _, _, err := recordProfile(s, p)
 		return profile, err
 	})
 }
@@ -343,18 +343,18 @@ func prismRecordProfileContext(ctx context.Context, s *sketch.Sketch, p *sketch.
 // prismRecordArrangedProfileContext is for a profile returned by the private
 // scene's first Profiles call. The caller owns that scene and selects from its
 // returned slice, so no second authentication arrangement is needed.
-func prismRecordArrangedProfileContext(ctx context.Context, p *sketch.Profile) (ProfileRecord, error) {
-	return prismProfileRecordContext(ctx, func() (ProfileRecord, error) {
+func prismRecordArrangedProfileContext(ctx context.Context, p *sketch.Profile) (profileRecord, error) {
+	return prismProfileRecordContext(ctx, func() (profileRecord, error) {
 		return recordArrangedProfile(p)
 	})
 }
 
-func prismProfileRecordContext(ctx context.Context, record func() (ProfileRecord, error)) (ProfileRecord, error) {
+func prismProfileRecordContext(ctx context.Context, record func() (profileRecord, error)) (profileRecord, error) {
 	if err := ctx.Err(); err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
 	type prismRecordResult struct {
-		profile ProfileRecord
+		profile profileRecord
 		err     error
 	}
 	done := make(chan prismRecordResult)
@@ -367,6 +367,6 @@ func prismProfileRecordContext(ctx context.Context, record func() (ProfileRecord
 		return result.profile, result.err
 	case <-ctx.Done():
 		<-done
-		return ProfileRecord{}, ctx.Err()
+		return profileRecord{}, ctx.Err()
 	}
 }

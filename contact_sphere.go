@@ -60,14 +60,14 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 		rp.ax.dUBound != 0 || rp.ax.dVBound != 0 {
 		return sourceSphereContactProof{}, false
 	}
-	var arc ArcSeg
-	var line LineSeg
+	var arc arcSeg
+	var line lineSeg
 	arcSeen, lineSeen := false, false
 	for _, segment := range rp.profile.Outer.Segments {
 		switch s := segment.(type) {
-		case ArcSeg:
+		case arcSeg:
 			arc, arcSeen = s, true
-		case LineSeg:
+		case lineSeg:
 			line, lineSeen = s, true
 		default:
 			return sourceSphereContactProof{}, false

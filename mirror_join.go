@@ -204,12 +204,12 @@ func selectAtLeastOneFace(body *Body, sel FaceSelector, what string) ([]*Face, e
 // joinRegion is one recorded region under the join: its loops (outer first)
 // and, per loop, the segment indices that are selected walls.
 type joinRegion struct {
-	loops []LoopRecord
+	loops []loopRecord
 	sel   []map[int]struct{}
 }
 
-func newJoinRegion(p ProfileRecord) joinRegion {
-	loops := append([]LoopRecord{p.Outer}, p.Holes...)
+func newJoinRegion(p profileRecord) joinRegion {
+	loops := append([]loopRecord{p.Outer}, p.Holes...)
 	sel := make([]map[int]struct{}, len(loops))
 	for i := range sel {
 		sel[i] = map[int]struct{}{}
@@ -222,7 +222,7 @@ func newJoinRegion(p ProfileRecord) joinRegion {
 // the assembled record, with δ_mirror as its section displacement.
 func joinPrismPayload(budget *proofbound.WorkBudget, pp prismPayload, walls []joinWall) (prismPayload, error) {
 	region := newJoinRegion(pp.profile)
-	segs := make([]LineSeg, 0, len(walls))
+	segs := make([]lineSeg, 0, len(walls))
 	for _, w := range walls {
 		seg, err := joinWallSegment(region.loops, w)
 		if err != nil {
@@ -274,7 +274,7 @@ func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp s
 		}
 		regions[k] = newJoinRegion(slab.regions[0])
 	}
-	segs := make([]LineSeg, 0, len(walls))
+	segs := make([]lineSeg, 0, len(walls))
 	for _, w := range walls {
 		if w.slab < 0 || w.slab >= len(regions) {
 			return stackedPrismPayload{}, fmt.Errorf(`%w: a selected wall names slab %d, which the receiver does not have`, ErrDegenerate, w.slab)
@@ -317,7 +317,7 @@ func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp s
 			return stackedPrismPayload{}, err
 		}
 		out.slabs[k] = sp.slabs[k]
-		out.slabs[k].regions = []ProfileRecord{joined}
+		out.slabs[k].regions = []profileRecord{joined}
 		out.sectionDelta = math.Max(out.sectionDelta, delta)
 	}
 	interfaces, err := stackedInterfaces(ctx, out.slabs, sp.interfaces)
@@ -334,17 +334,17 @@ var errJoinDisplaced = fmt.Errorf(`%w: the receiver's section carries a displace
 
 // joinWallSegment is J2's record half: the selected wall's segment, which
 // must be a line. A curved wall names no mirror plane.
-func joinWallSegment(loops []LoopRecord, w joinWall) (LineSeg, error) {
+func joinWallSegment(loops []loopRecord, w joinWall) (lineSeg, error) {
 	if w.loop < 0 || w.loop >= len(loops) || w.seg < 0 || w.seg >= len(loops[w.loop].Segments) {
-		return LineSeg{}, fmt.Errorf(`%w: a selected wall names segment (%d, %d), which the receiver's record does not have`, ErrDegenerate, w.loop, w.seg)
+		return lineSeg{}, fmt.Errorf(`%w: a selected wall names segment (%d, %d), which the receiver's record does not have`, ErrDegenerate, w.loop, w.seg)
 	}
 	seg, err := normalizeSegment(loops[w.loop].Segments[w.seg])
 	if err != nil {
-		return LineSeg{}, err
+		return lineSeg{}, err
 	}
-	line, ok := seg.(LineSeg)
+	line, ok := seg.(lineSeg)
 	if !ok {
-		return LineSeg{}, fmt.Errorf(`%w: selected wall (%d, %d) is a %T, and a curved wall names no mirror plane`, ErrDegenerate, w.loop, w.seg, seg)
+		return lineSeg{}, fmt.Errorf(`%w: selected wall (%d, %d) is a %T, and a curved wall names no mirror plane`, ErrDegenerate, w.loop, w.seg, seg)
 	}
 	return line, nil
 }
@@ -352,7 +352,7 @@ func joinWallSegment(loops []LoopRecord, w joinWall) (LineSeg, error) {
 // mirrorLine adapts root callers to the record admission and splice.
 type mirrorLine struct{ line mirrorjoin.Line }
 
-func admitMirrorLine(walls []LineSeg) (mirrorLine, error) {
+func admitMirrorLine(walls []lineSeg) (mirrorLine, error) {
 	line, err := mirrorjoin.AdmitLine(walls)
 	return mirrorLine{line: line}, err
 }
@@ -365,24 +365,24 @@ func (l mirrorLine) admitRegions(budget *proofbound.WorkBudget, regions []joinRe
 	return l.line.AdmitRegions(budget, records)
 }
 
-func (l mirrorLine) mirrorReversedRun(budget *proofbound.WorkBudget, run []CurveSegment) ([]CurveSegment, float64, error) {
+func (l mirrorLine) mirrorReversedRun(budget *proofbound.WorkBudget, run []curveSegment) ([]curveSegment, float64, error) {
 	return l.line.ReverseRun(budget, run)
 }
 
-func segmentJoinEnds(seg CurveSegment, work *freeform.FreeformWork) (mirrorjoin.Ends, error) {
+func segmentJoinEnds(seg curveSegment, work *freeform.FreeformWork) (mirrorjoin.Ends, error) {
 	return mirrorjoin.SegmentEnds(seg, work)
 }
 
 // assemble adapts §5.2's record splice and runs §5.3's section audit.
-func (l mirrorLine) assemble(budget *proofbound.WorkBudget, region joinRegion) (ProfileRecord, float64, error) {
+func (l mirrorLine) assemble(budget *proofbound.WorkBudget, region joinRegion) (profileRecord, float64, error) {
 	work := freeform.NewFreeformWork()
 	spliced, err := l.line.Splice(budget, mirrorjoin.Region{Loops: region.loops, Sel: region.sel})
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
-	out := ProfileRecord{Outer: spliced.Outer, Holes: spliced.Holes}
+	out := profileRecord{Outer: spliced.Outer, Holes: spliced.Holes}
 	if err := auditJoinedSection(budget, out, work); err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
 	return out, spliced.Delta, nil
 }
@@ -394,8 +394,8 @@ func (l mirrorLine) assemble(budget *proofbound.WorkBudget, region joinRegion) (
 // refuses a crossing or contact of non-adjacent segments within the
 // diameter-anchored floor (RB4); S9 proves every hole inside the outer and
 // outside every other hole (RB5/RB6). Every check only refuses.
-func auditJoinedSection(budget *proofbound.WorkBudget, p ProfileRecord, work *freeform.FreeformWork) error {
-	loops := append([]LoopRecord{p.Outer}, p.Holes...)
+func auditJoinedSection(budget *proofbound.WorkBudget, p profileRecord, work *freeform.FreeformWork) error {
+	loops := append([]loopRecord{p.Outer}, p.Holes...)
 	for li, loop := range loops {
 		joins := make([]loopJoin, len(loop.Segments))
 		for si, seg := range loop.Segments {

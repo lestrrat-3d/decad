@@ -44,7 +44,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	}
 	var umin, umax, vmin, vmax float64
 	for i, seg := range pp.profile.Outer.Segments {
-		line, ok := seg.(LineSeg)
+		line, ok := seg.(lineSeg)
 		if !ok {
 			return sourceBoxContactProof{}, false
 		}

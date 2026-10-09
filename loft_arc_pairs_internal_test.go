@@ -448,14 +448,14 @@ func TestLoftArcWedgeReadingsApproximateWithPositiveBounds(t *testing.T) {
 // INTERIOR, computed station instead, so the box only contains it when
 // Bounds.Bound is wide enough to reach past the chord polygon's own
 // (strictly smaller) x-extreme.
-func arcWedgeLoopStraddling(radius, halfSweep float64) LoopRecord {
+func arcWedgeLoopStraddling(radius, halfSweep float64) loopRecord {
 	origin := pt(0, 0)
 	start := pt(radius*math.Cos(-halfSweep), radius*math.Sin(-halfSweep))
 	end := pt(radius*math.Cos(halfSweep), radius*math.Sin(halfSweep))
-	return LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: origin, End: start, TStart: 0, TEnd: 1},
-		ArcSeg{Center: origin, Start: start, End: end, TStart: 0, TEnd: 1},
-		LineSeg{Start: end, End: origin, TStart: 0, TEnd: 1},
+	return loopRecord{Segments: []curveSegment{
+		lineSeg{Start: origin, End: start, TStart: 0, TEnd: 1},
+		arcSeg{Center: origin, Start: start, End: end, TStart: 0, TEnd: 1},
+		lineSeg{Start: end, End: origin, TStart: 0, TEnd: 1},
 	}}
 }
 
@@ -469,7 +469,7 @@ func TestLoftArcWedgeBoxSoundness(t *testing.T) {
 	t.Parallel()
 	const radius = 5.0
 	const halfSweep = math.Pi / 6 // 30 degrees either side of angle 0: 60 degrees total
-	p := ProfileRecord{Outer: arcWedgeLoopStraddling(radius, halfSweep)}
+	p := profileRecord{Outer: arcWedgeLoopStraddling(radius, halfSweep)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
 	pl := loftPayload{
 		profile0: p, profile1: p,
@@ -516,10 +516,10 @@ func TestLoftArcWedgeBoxSoundness(t *testing.T) {
 // never the same recorded segment type.
 func TestLoftArcToFitSplineStillRefusesS3(t *testing.T) {
 	t.Parallel()
-	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ArcSeg{
+	p0 := profileRecord{Outer: squareLoopWithFirstSegment(arcSeg{
 		Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1,
 	})}
-	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(FitSplineSeg{
+	p1 := profileRecord{Outer: squareLoopWithFirstSegment(fitSplineSeg{
 		Fit:    []Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)},
 		TStart: 0, TEnd: 1,
 	})}
@@ -538,10 +538,10 @@ func TestLoftArcToFitSplineStillRefusesS3(t *testing.T) {
 // sentinel against ErrUnsupported, the opposite existence claim S3 carries.
 func TestLoftCircleSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 	t.Parallel()
-	ccw := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
-	cw := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: false, TStart: 1, TEnd: 0}
-	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccw)}
-	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(cw)}
+	ccw := circleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
+	cw := circleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: false, TStart: 1, TEnd: 0}
+	p0 := profileRecord{Outer: squareLoopWithFirstSegment(ccw)}
+	p1 := profileRecord{Outer: squareLoopWithFirstSegment(cw)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.Error(t, err)
@@ -562,10 +562,10 @@ func TestLoftCircleSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 // ArcSeg (loftSameKindGate).
 func TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 	t.Parallel()
-	ccwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
-	cwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 1, TEnd: 0}
-	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
-	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(cwArc)}
+	ccwArc := arcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
+	cwArc := arcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 1, TEnd: 0}
+	p0 := profileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
+	p1 := profileRecord{Outer: squareLoopWithFirstSegment(cwArc)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.Error(t, err)
@@ -591,10 +591,10 @@ func TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 // to close; at the record level it needs no full turn.
 func TestLoftArcSegAgainstCircleSegRefusesS3(t *testing.T) {
 	t.Parallel()
-	ccwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
-	ccwCircle := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
-	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
-	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwCircle)}
+	ccwArc := arcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
+	ccwCircle := circleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
+	p0 := profileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
+	p1 := profileRecord{Outer: squareLoopWithFirstSegment(ccwCircle)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -633,14 +633,14 @@ func TestLoftArcSegAgainstCircleSegRefusesS3(t *testing.T) {
 //
 // The half-sweep is atan(v/u), so a small v against a fixed u gives the tiny
 // total sweep the m = 1 case needs.
-func arcWedgeLoopEqualRadii(u, v float64) LoopRecord {
+func arcWedgeLoopEqualRadii(u, v float64) loopRecord {
 	origin := pt(0, 0)
 	start := pt(u, -v)
 	end := pt(u, v)
-	return LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: origin, End: start, TStart: 0, TEnd: 1},
-		ArcSeg{Center: origin, Start: start, End: end, TStart: 0, TEnd: 1},
-		LineSeg{Start: end, End: origin, TStart: 0, TEnd: 1},
+	return loopRecord{Segments: []curveSegment{
+		lineSeg{Start: origin, End: start, TStart: 0, TEnd: 1},
+		arcSeg{Center: origin, Start: start, End: end, TStart: 0, TEnd: 1},
+		lineSeg{Start: end, End: origin, TStart: 0, TEnd: 1},
 	}}
 }
 
@@ -648,7 +648,7 @@ func arcWedgeLoopEqualRadii(u, v float64) LoopRecord {
 // rationals, straight off the coordinates the record holds. The tests below
 // decide the arc-end radial residual from these and never from a float
 // comparison, which would make the assertion architecture-dependent.
-func arcSquaredRadii(arc ArcSeg) (*big.Rat, *big.Rat) {
+func arcSquaredRadii(arc arcSeg) (*big.Rat, *big.Rat) {
 	dx0 := exactCoordinateDelta(arc.Start.U, arc.Center.U)
 	dy0 := exactCoordinateDelta(arc.Start.V, arc.Center.V)
 	dx1 := exactCoordinateDelta(arc.End.U, arc.Center.U)
@@ -675,13 +675,13 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 	// enough that a single chord's sagitta is far under any target.
 	const u, v = 5.0, 1.0 / 1024
 	loop := arcWedgeLoopEqualRadii(u, v)
-	arc, ok := loop.Segments[1].(ArcSeg)
+	arc, ok := loop.Segments[1].(arcSeg)
 	require.True(t, ok)
 	r0, r1 := arcSquaredRadii(arc)
 	require.Zero(t, r0.Cmp(r1), "the fixture's two arc radii must be EXACTLY equal for its zero delta to be earned from the record")
 	require.Zero(t, loftmesh.ArcNaturalEndRadialUpper(arc), "equal recorded radii must charge no arc-end radial residual at all")
 
-	p := ProfileRecord{Outer: loop}
+	p := profileRecord{Outer: loop}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
 	pl := loftPayload{
 		profile0: p, profile1: p,
@@ -735,11 +735,11 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 	const drift = 1.0 / (1 << 40) // 2^-40, exactly representable at u = 5
 
 	loop := arcWedgeLoopEqualRadii(u, v)
-	arc, ok := loop.Segments[1].(ArcSeg)
+	arc, ok := loop.Segments[1].(arcSeg)
 	require.True(t, ok)
 	arc.End = pt(u+drift, v)
 	loop.Segments[1] = arc
-	loop.Segments[2] = LineSeg{Start: arc.End, End: pt(0, 0), TStart: 0, TEnd: 1}
+	loop.Segments[2] = lineSeg{Start: arc.End, End: pt(0, 0), TStart: 0, TEnd: 1}
 
 	// The record's two radii differ, proven over exact rationals.
 	r0, r1 := arcSquaredRadii(arc)
@@ -755,7 +755,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 	require.GreaterOrEqual(t, proofarith.FloatRat(charged).Cmp(want), 0,
 		"the charged arc-end radial residual must dominate the record's own proven radial gap")
 
-	p := ProfileRecord{Outer: loop}
+	p := profileRecord{Outer: loop}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
 	pl := loftPayload{
 		profile0: p, profile1: p,

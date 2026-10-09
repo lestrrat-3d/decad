@@ -34,7 +34,7 @@ import (
 // patch reuse capFrame, prismPayload.point and prismBoundsContext, each of
 // which is correct at zero height.
 type patchPayload struct {
-	profile ProfileRecord
+	profile profileRecord
 	frame   r3.Frame
 	xform   r3.Transform
 	walks   *momentinput.ProfileWalks
@@ -153,7 +153,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		pw = resolved
 	}
 
-	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
+	loops := append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	var faceLoops []*Loop
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
@@ -235,7 +235,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 // same convention buildLoopSides derives it by. resolved is pp.profile's
 // pre-resolved segment walks, or nil to resolve each segment through walkOf
 // as before (internal/momentinput/profile_walks.go).
-func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks) ([]coedge, error) {
+func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks) ([]coedge, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

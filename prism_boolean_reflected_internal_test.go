@@ -61,7 +61,7 @@ func TestPrismBooleanGateG2AdmitsAReflectedOperand(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthLineLoop()},
+		profile: profileRecord{Outer: synthLineLoop()},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	reflected := pp
@@ -97,20 +97,20 @@ func TestPrismBooleanGateG2AdmitsAReflectedOperand(t *testing.T) {
 // dropping the narrowed line's charge returned zero.
 func TestPrismReexpressionRewound(t *testing.T) {
 	t.Parallel()
-	narrowed := LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 20, V: 0}, TStart: 0, TEnd: 0.5}
-	profile := ProfileRecord{
-		Outer: LoopRecord{Segments: []CurveSegment{
+	narrowed := lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 20, V: 0}, TStart: 0, TEnd: 0.5}
+	profile := profileRecord{
+		Outer: loopRecord{Segments: []curveSegment{
 			narrowed, // walks (0,0) → (10,0)
-			LineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 5}, TStart: 0, TEnd: 1},
-			ArcSeg{Center: Point2{U: 5, V: 5}, Start: Point2{U: 10, V: 5}, End: Point2{U: 0, V: 5}, TStart: 0, TEnd: 1},
-			LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 5}, TStart: 1, TEnd: 0}, // walks (0,5) → (0,0)
+			lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 5}, TStart: 0, TEnd: 1},
+			arcSeg{Center: Point2{U: 5, V: 5}, Start: Point2{U: 10, V: 5}, End: Point2{U: 0, V: 5}, TStart: 0, TEnd: 1},
+			lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 5}, TStart: 1, TEnd: 0}, // walks (0,5) → (0,0)
 		}},
-		Holes: []LoopRecord{{Segments: []CurveSegment{
-			CircleSeg{Center: Point2{U: 5, V: 4}, Radius: units.Millimeters(1), CCW: false, TStart: 1, TEnd: 0},
+		Holes: []loopRecord{{Segments: []curveSegment{
+			circleSeg{Center: Point2{U: 5, V: 4}, Radius: units.Millimeters(1), CCW: false, TStart: 1, TEnd: 0},
 		}}},
 	}
 	frame := canonicalPrismFrame(t)
-	pa := prismPayload{profile: ProfileRecord{Outer: synthRectLoop(-20, -20, 20, 20)}, frame: frame, z0: 0, z1: 10, xform: r3.Identity()}
+	pa := prismPayload{profile: profileRecord{Outer: synthRectLoop(-20, -20, 20, 20)}, frame: frame, z0: 0, z1: 10, xform: r3.Identity()}
 	pb := prismPayload{profile: profile, frame: frame, z0: 0, z1: 10, xform: prismMirrorAcrossX(t, 0)}
 	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestPrismReexpressionRewound(t *testing.T) {
 	// Every segment walks, and a loop of several segments closes walk to walk
 	// exactly. A lone circle closes by its own kind; its walk ends are cos/sin
 	// readings and are not compared.
-	for _, loop := range append([]LoopRecord{got.Outer}, got.Holes...) {
+	for _, loop := range append([]loopRecord{got.Outer}, got.Holes...) {
 		walks := make([]Point2, 0, 2*len(loop.Segments))
 		for _, seg := range loop.Segments {
 			w, err := boundarywalk.WalkOf(seg, nil)
@@ -155,14 +155,14 @@ func TestPrismReexpressionRewound(t *testing.T) {
 
 	m := func(u, v float64) Point2 { return Point2{U: -u, V: v} }
 	want := prismcells.SceneProfile{
-		Outer: LoopRecord{Segments: []CurveSegment{
-			LineSeg{Start: m(0, 5), End: m(0, 0), TStart: 1, TEnd: 0},
-			ArcSeg{Center: m(5, 5), Start: m(0, 5), End: m(10, 5), TStart: 0, TEnd: 1},
-			LineSeg{Start: m(10, 5), End: m(10, 0), TStart: 0, TEnd: 1},
-			LineSeg{Start: m(10, 0), End: m(0, 0), TStart: 0, TEnd: 1},
+		Outer: loopRecord{Segments: []curveSegment{
+			lineSeg{Start: m(0, 5), End: m(0, 0), TStart: 1, TEnd: 0},
+			arcSeg{Center: m(5, 5), Start: m(0, 5), End: m(10, 5), TStart: 0, TEnd: 1},
+			lineSeg{Start: m(10, 5), End: m(10, 0), TStart: 0, TEnd: 1},
+			lineSeg{Start: m(10, 0), End: m(0, 0), TStart: 0, TEnd: 1},
 		}},
-		Holes: []LoopRecord{{Segments: []CurveSegment{
-			CircleSeg{Center: m(5, 4), Radius: units.Millimeters(1), CCW: false, TStart: 1, TEnd: 0},
+		Holes: []loopRecord{{Segments: []curveSegment{
+			circleSeg{Center: m(5, 4), Radius: units.Millimeters(1), CCW: false, TStart: 1, TEnd: 0},
 		}}},
 	}
 	require.Equal(t, want, got)
@@ -178,8 +178,8 @@ func TestPrismReexpressionRewound(t *testing.T) {
 func TestPrismReflectedSceneClassifiesTheRewoundWinding(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
-	pa := prismPayload{profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)}, frame: frame, z0: 0, z1: 10, xform: r3.Identity()}
-	pb := prismPayload{profile: ProfileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}, frame: frame, z0: 0, z1: 10, xform: prismMirrorAcrossX(t, 0)}
+	pa := prismPayload{profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)}, frame: frame, z0: 0, z1: 10, xform: r3.Identity()}
+	pb := prismPayload{profile: profileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}, frame: frame, z0: 0, z1: 10, xform: prismMirrorAcrossX(t, 0)}
 	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
 	require.True(t, re.Reflected)

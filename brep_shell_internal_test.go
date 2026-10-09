@@ -244,9 +244,9 @@ func shellWallLevels(bp brepPayload, r float64) [][2]float64 {
 	for _, f := range bp.faces {
 		var radius float64
 		switch w := f.wall.(type) {
-		case CircleSeg:
+		case circleSeg:
 			radius = w.Radius.Base()
-		case ArcSeg:
+		case arcSeg:
 			radius = math.Hypot(w.Start.U-w.Center.U, w.Start.V-w.Center.V)
 		default:
 			continue
@@ -288,7 +288,7 @@ func TestBrepShellThroughCutReadsP1(t *testing.T) {
 	require.Len(t, tool.walls, 1)
 	require.Equal(t, throughTool, tc.kinds[tool.walls[0]])
 	require.Len(t, tool.prism.profile.Outer.Segments, 1)
-	circle, ok := tool.prism.profile.Outer.Segments[0].(CircleSeg)
+	circle, ok := tool.prism.profile.Outer.Segments[0].(circleSeg)
 	require.True(t, ok)
 	require.True(t, circle.CCW, "the tool's section is an outer loop")
 	require.Equal(t, 3.0, circle.Radius.Base())
@@ -447,9 +447,9 @@ func TestBrepShellThroughCutBands(t *testing.T) {
 		rim, band := bp.faces[len(bp.faces)-2], bp.faces[len(bp.faces)-1]
 		require.Len(t, rim.region.Holes, 1)
 		require.Len(t, band.region.Holes, 1)
-		outer, ok := band.region.Outer.Segments[0].(CircleSeg)
+		outer, ok := band.region.Outer.Segments[0].(circleSeg)
 		require.True(t, ok)
-		hole, ok := band.region.Holes[0].Segments[0].(CircleSeg)
+		hole, ok := band.region.Holes[0].Segments[0].(circleSeg)
 		require.True(t, ok)
 		require.Equal(t, [2]float64{4, 2}, [2]float64{outer.Radius.Base(), hole.Radius.Base()})
 		require.True(t, outer.CCW)
@@ -748,7 +748,7 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 	budget := proofbound.NewWorkBudget(t.Context())
 	eroded, err := offsetProfile(budget, tc.caps.Section, 1, 2)
 	require.NoError(t, err)
-	dilated := make([]ProfileRecord, len(tc.tools))
+	dilated := make([]profileRecord, len(tc.tools))
 	for i, tool := range tc.tools {
 		dilated[i], err = offsetProfile(budget, tool.prism.profile, -1, 2)
 		require.NoError(t, err)
@@ -759,7 +759,7 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 	_, err = throughCutRims(t.Context(), budget, bp, tc, cavity, eroded, dilated, topOnly)
 	require.NoError(t, err, "the undoctored cavity assembles")
 
-	doctor := func(edit func(*ProfileRecord)) brepPayload {
+	doctor := func(edit func(*profileRecord)) brepPayload {
 		out := cavity
 		out.faces = slices.Clone(cavity.faces)
 		for i, f := range out.faces {
@@ -772,12 +772,12 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 		}
 		return out
 	}
-	_, err = throughCutRims(t.Context(), budget, bp, tc, doctor(func(r *ProfileRecord) { r.Holes = nil }), eroded, dilated, topOnly)
+	_, err = throughCutRims(t.Context(), budget, bp, tc, doctor(func(r *profileRecord) { r.Holes = nil }), eroded, dilated, topOnly)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "has no cavity hole to partner")
 	require.ErrorContains(t, err, "modify-general SG7")
-	_, err = throughCutRims(t.Context(), budget, bp, tc, doctor(func(r *ProfileRecord) {
-		r.Holes = append(r.Holes, LoopRecord{Segments: []CurveSegment{CircleSeg{Center: Point2{U: 30, V: 10}, Radius: units.Millimeters(1), TEnd: 1}}})
+	_, err = throughCutRims(t.Context(), budget, bp, tc, doctor(func(r *profileRecord) {
+		r.Holes = append(r.Holes, loopRecord{Segments: []curveSegment{circleSeg{Center: Point2{U: 30, V: 10}, Radius: units.Millimeters(1), TEnd: 1}}})
 	}), eroded, dilated, topOnly)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "neither its outer loop nor a hole of the eroded section")
@@ -785,7 +785,7 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 
 // shellLoopCorners lists, in reference coordinates, the walked start of
 // every line of one loop of record face fi.
-func shellLoopCorners(t *testing.T, bp brepPayload, fi int, loop LoopRecord) [][3]float64 {
+func shellLoopCorners(t *testing.T, bp brepPayload, fi int, loop loopRecord) [][3]float64 {
 	t.Helper()
 	embeds, err := brepEmbeds(bp.faces)
 	require.NoError(t, err)
@@ -887,10 +887,10 @@ func TestBrepShellThroughCutWallRun(t *testing.T) {
 		require.Empty(t, wall.region.Holes)
 		require.ElementsMatch(t, [][3]float64{{0, 0, 0}, {40, 0, 0}, {40, 0, 20}, {38, 0, 20}, {38, 0, 2}, {2, 0, 2}, {2, 0, 20}, {0, 0, 20}},
 			shellLoopCorners(t, bp, n-2, wall.region.Outer))
-		outer, ok := band.region.Outer.Segments[0].(CircleSeg)
+		outer, ok := band.region.Outer.Segments[0].(circleSeg)
 		require.True(t, ok)
 		require.Len(t, band.region.Holes, 1)
-		hole, ok := band.region.Holes[0].Segments[0].(CircleSeg)
+		hole, ok := band.region.Holes[0].Segments[0].(circleSeg)
 		require.True(t, ok)
 		require.Equal(t, [2]float64{5, 3}, [2]float64{outer.Radius.Base(), hole.Radius.Base()})
 		requireShellSound(t, result, a, b)
@@ -1021,7 +1021,7 @@ func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 	call := brepShellCall{t: units.Millimeters(2), tmm: 2, tDelta: 1e-9}
 	sec, err := tc.openingThroughSection(budget, bp, rm, call)
 	require.NoError(t, err)
-	dilated := make([]ProfileRecord, len(tc.tools))
+	dilated := make([]profileRecord, len(tc.tools))
 	for i, tool := range tc.tools {
 		dilated[i], err = offsetProfile(budget, tool.prism.profile, -1, 2)
 		require.NoError(t, err)

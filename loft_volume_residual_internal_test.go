@@ -64,28 +64,28 @@ func loftMassAtTarget(t *testing.T, pl loftPayload, target float64) loftMassBuil
 // semicircle and a radius-5 arc, every recorded point exact and both arcs of
 // exactly equal end radii, so the arcs' chord departures differ from one
 // another and an untrimmed one-chord build publishes delta == 0.
-func twoRadiusOvalProfile() ProfileRecord {
-	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: pt(-4, -3), End: pt(4, -3), TStart: 0, TEnd: 1},
-		ArcSeg{Center: pt(4, 0), Start: pt(4, -3), End: pt(4, 3), TStart: 0, TEnd: 1},
-		LineSeg{Start: pt(4, 3), End: pt(-4, 3), TStart: 0, TEnd: 1},
-		ArcSeg{Center: pt(0, 0), Start: pt(-4, 3), End: pt(-4, -3), TStart: 0, TEnd: 1},
+func twoRadiusOvalProfile() profileRecord {
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: pt(-4, -3), End: pt(4, -3), TStart: 0, TEnd: 1},
+		arcSeg{Center: pt(4, 0), Start: pt(4, -3), End: pt(4, 3), TStart: 0, TEnd: 1},
+		lineSeg{Start: pt(4, 3), End: pt(-4, 3), TStart: 0, TEnd: 1},
+		arcSeg{Center: pt(0, 0), Start: pt(-4, 3), End: pt(-4, -3), TStart: 0, TEnd: 1},
 	}}}
 }
 
 // quarterRingProfile is a radius-5 circle as four quarter arcs starting at the
 // exact on-circle point (5·c, 5·s): (c, s) = (1, 0) gives the axis points, and
 // (3/5, 4/5) the same circle turned by atan(4/3), its points still exact.
-func quarterRingProfile(c, s float64) ProfileRecord {
+func quarterRingProfile(c, s float64) profileRecord {
 	corners := []Point2{pt(5*c, 5*s), pt(-5*s, 5*c), pt(-5*c, -5*s), pt(5*s, -5*c)}
-	segs := make([]CurveSegment, 4)
+	segs := make([]curveSegment, 4)
 	for i := range corners {
-		segs[i] = ArcSeg{Center: pt(0, 0), Start: corners[i], End: corners[(i+1)%4], TStart: 0, TEnd: 1}
+		segs[i] = arcSeg{Center: pt(0, 0), Start: corners[i], End: corners[(i+1)%4], TStart: 0, TEnd: 1}
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	return profileRecord{Outer: loopRecord{Segments: segs}}
 }
 
-func loftPayloadOnPlanes(t *testing.T, p0, p1 ProfileRecord, pl0, pl1 PlaneRecord) loftPayload {
+func loftPayloadOnPlanes(t *testing.T, p0, p1 profileRecord, pl0, pl1 planeRecord) loftPayload {
 	t.Helper()
 	return loftPayload{
 		profile0: p0, profile1: p1, plane0: pl0, plane1: pl1,
@@ -249,7 +249,7 @@ func TestLoftVolumeBoundEnclosesRefinedRing(t *testing.T) {
 	bottom := quarterRingProfile(1, 0)
 	for _, tc := range []struct {
 		name string
-		top  ProfileRecord
+		top  profileRecord
 		k    *big.Rat
 	}{
 		{"untwisted", quarterRingProfile(1, 0), big.NewRat(250, 1)},
@@ -354,12 +354,12 @@ func TestLoftPlacedVolumeNeedsTheVertexSweep(t *testing.T) {
 	t.Parallel()
 	r := math.Ldexp(1, -24)
 	h := math.Ldexp(1, -10)
-	slab := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: pt(0, 0), End: pt(10, 0), TStart: 0, TEnd: 1},
-		LineSeg{Start: pt(10, 0), End: pt(10, 10-r), TStart: 0, TEnd: 1},
-		ArcSeg{Center: pt(10-r, 10-r), Start: pt(10, 10-r), End: pt(10-r, 10), TStart: 0, TEnd: 1},
-		LineSeg{Start: pt(10-r, 10), End: pt(0, 10), TStart: 0, TEnd: 1},
-		LineSeg{Start: pt(0, 10), End: pt(0, 0), TStart: 0, TEnd: 1},
+	slab := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: pt(0, 0), End: pt(10, 0), TStart: 0, TEnd: 1},
+		lineSeg{Start: pt(10, 0), End: pt(10, 10-r), TStart: 0, TEnd: 1},
+		arcSeg{Center: pt(10-r, 10-r), Start: pt(10, 10-r), End: pt(10-r, 10), TStart: 0, TEnd: 1},
+		lineSeg{Start: pt(10-r, 10), End: pt(0, 10), TStart: 0, TEnd: 1},
+		lineSeg{Start: pt(0, 10), End: pt(0, 0), TStart: 0, TEnd: 1},
 	}}}
 	pl := loftPayloadOnPlanes(t, slab, slab, planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, h)))
 	pl.xform = testPlacement(t)

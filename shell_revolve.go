@@ -131,7 +131,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 		}
 	}
 
-	var wall ProfileRecord
+	var wall profileRecord
 	var delta float64
 	switch {
 	case sides > 0:
@@ -249,17 +249,17 @@ func revolveShellInradius(budget *proofbound.WorkBudget, rp revolvePayload, onAx
 // {Q, P} outward, the inner loop walked as a hole. The offset runs the prism
 // shell's S11a construction and §5 audit (S8, S11b, S9) unchanged, and so does
 // its displacement: the prism cup's offsetSectionDelta over the same loop.
-func revolveShellOffAxisWall(budget *proofbound.WorkBudget, profile ProfileRecord, s, tmm, tDelta float64) (ProfileRecord, float64, error) {
+func revolveShellOffAxisWall(budget *proofbound.WorkBudget, profile profileRecord, s, tmm, tDelta float64) (profileRecord, float64, error) {
 	offset, err := offsetProfile(budget, profile, s, tmm)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
 	if err := auditOffsetSectionBudget(budget, profile, offset); err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
 	delta, err := offsetSectionDelta(budget, profile, s, tmm, tDelta)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
 	outer, inner := profile.Outer, offset.Outer
 	if s < 0 {
@@ -267,9 +267,9 @@ func revolveShellOffAxisWall(budget *proofbound.WorkBudget, profile ProfileRecor
 	}
 	hole, err := offset2d.ReverseLoopRecordBudget(budget, inner)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
-	return ProfileRecord{Outer: outer, Holes: []LoopRecord{hole}}, delta, nil
+	return profileRecord{Outer: outer, Holes: []loopRecord{hole}}, delta, nil
 }
 
 // revolveShellAxisWall is the wall region of a meridian with one on-axis walk
@@ -287,7 +287,7 @@ func revolveShellOffAxisWall(budget *proofbound.WorkBudget, profile ProfileRecor
 // four axis points in one order (E, qE, qB, B inward; qE, E, B, qB outward),
 // and an offset whose ends land out of that order has crossed its own mirror
 // image on the axis (S11b).
-func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walks []survey2d.SideWalk, axisAt int, s, tmm, tDelta float64) (ProfileRecord, float64, error) {
+func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walks []survey2d.SideWalk, axisAt int, s, tmm, tDelta float64) (profileRecord, float64, error) {
 	n := len(walks)
 	axisWalk := walks[axisAt]
 	chain := make([]survey2d.SideWalk, 0, n-1)
@@ -295,7 +295,7 @@ func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 		chain = append(chain, walks[(axisAt+k)%n])
 	}
 	segs := rp.profile.Outer.Segments
-	var kept []CurveSegment
+	var kept []curveSegment
 	for _, w := range chain {
 		for _, si := range w.Segs {
 			kept = append(kept, segs[si])
@@ -305,7 +305,7 @@ func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 	off, err := offset2d.OffsetOpenChain(budget, chain, revolveAxisCurve(rp.ax),
 		offset2d.OpenEnd{Mirror: true}, offset2d.OpenEnd{Mirror: true}, s, tmm, shellTol)
 	if err != nil {
-		return ProfileRecord{}, 0, offset2d.InLoop(err, 0)
+		return profileRecord{}, 0, offset2d.InLoop(err, 0)
 	}
 	offChain, qB, qE, ends := off.Segs, off.QStart, off.QEnd, off.Ends
 	pE := Point2{U: axisWalk.StartU, V: axisWalk.StartV}
@@ -321,42 +321,42 @@ func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 		ordered = along(qE, pE) && along(pB, qB)
 	}
 	if !ordered {
-		return ProfileRecord{}, 0, fmt.Errorf(`%w: the offset meridian's ends do not land in order on its axis walk, so the offset crosses its own mirror image on the axis; a trimmed-offset kernel is not available (modify S11b)`, ErrUnsupported)
+		return profileRecord{}, 0, fmt.Errorf(`%w: the offset meridian's ends do not land in order on its axis walk, so the offset crosses its own mirror image on the axis; a trimmed-offset kernel is not available (modify S11b)`, ErrUnsupported)
 	}
 
 	// The cut-back offset closes along the axis and faces the §5 audit as a
 	// section of its own: S8, then S11b (a crossing or contact, its closing axis
 	// segment included), then S9.
-	cavity := append(append([]CurveSegment(nil), offChain...), LineSeg{Start: qE, End: qB, TStart: 0, TEnd: 1})
-	if err := auditOffsetSectionBudget(budget, rp.profile, ProfileRecord{Outer: LoopRecord{Segments: cavity}}); err != nil {
-		return ProfileRecord{}, 0, err
+	cavity := append(append([]curveSegment(nil), offChain...), lineSeg{Start: qE, End: qB, TStart: 0, TEnd: 1})
+	if err := auditOffsetSectionBudget(budget, rp.profile, profileRecord{Outer: loopRecord{Segments: cavity}}); err != nil {
+		return profileRecord{}, 0, err
 	}
 	delta, err := openChainSectionDelta(budget, chain, rp.ax, ends, s, tmm, tDelta)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
 
-	var loop []CurveSegment
+	var loop []curveSegment
 	if s > 0 {
-		back, err := offset2d.ReverseLoopRecordBudget(budget, LoopRecord{Segments: offChain})
+		back, err := offset2d.ReverseLoopRecordBudget(budget, loopRecord{Segments: offChain})
 		if err != nil {
-			return ProfileRecord{}, 0, err
+			return profileRecord{}, 0, err
 		}
 		loop = append(loop, kept...)
-		loop = append(loop, LineSeg{Start: pE, End: qE, TStart: 0, TEnd: 1})
+		loop = append(loop, lineSeg{Start: pE, End: qE, TStart: 0, TEnd: 1})
 		loop = append(loop, back.Segments...)
-		loop = append(loop, LineSeg{Start: qB, End: pB, TStart: 0, TEnd: 1})
+		loop = append(loop, lineSeg{Start: qB, End: pB, TStart: 0, TEnd: 1})
 	} else {
-		back, err := offset2d.ReverseLoopRecordBudget(budget, LoopRecord{Segments: kept})
+		back, err := offset2d.ReverseLoopRecordBudget(budget, loopRecord{Segments: kept})
 		if err != nil {
-			return ProfileRecord{}, 0, err
+			return profileRecord{}, 0, err
 		}
 		loop = append(loop, offChain...)
-		loop = append(loop, LineSeg{Start: qE, End: pE, TStart: 0, TEnd: 1})
+		loop = append(loop, lineSeg{Start: qE, End: pE, TStart: 0, TEnd: 1})
 		loop = append(loop, back.Segments...)
-		loop = append(loop, LineSeg{Start: pB, End: qB, TStart: 0, TEnd: 1})
+		loop = append(loop, lineSeg{Start: pB, End: qB, TStart: 0, TEnd: 1})
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: loop}}, delta, nil
+	return profileRecord{Outer: loopRecord{Segments: loop}}, delta, nil
 }
 
 // revolveAxisCurve is the revolve axis as the held line the offset's mirror
@@ -488,7 +488,7 @@ func revolveRemovedWalks(walks []survey2d.SideWalk, axisAt int, segs map[int]str
 // it returns the wall's section displacement (openChainSectionDelta), which
 // charges every float cut: the interior miters, the axis joins and each
 // opening's rim cut.
-func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walks []survey2d.SideWalk, axisAt int, removed map[int]struct{}, s, tmm, tDelta float64) (ProfileRecord, float64, error) {
+func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walks []survey2d.SideWalk, axisAt int, removed map[int]struct{}, s, tmm, tDelta float64) (profileRecord, float64, error) {
 	n := len(walks)
 	// K runs from the first kept walk after the removed run (and after the
 	// axis walk) to the last kept walk before it.
@@ -504,7 +504,7 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 		}
 	}
 	if begin < 0 {
-		return ProfileRecord{}, 0, fmt.Errorf(`%w: the side opening leaves no kept chain`, ErrDegenerate)
+		return profileRecord{}, 0, fmt.Errorf(`%w: the side opening leaves no kept chain`, ErrDegenerate)
 	}
 	var chain []survey2d.SideWalk
 	for k := range n {
@@ -524,7 +524,7 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 		end = offset2d.OpenEnd{Removed: walks[after]}
 	}
 	segs := rp.profile.Outer.Segments
-	var kept []CurveSegment
+	var kept []curveSegment
 	for _, w := range chain {
 		for _, si := range w.Segs {
 			kept = append(kept, segs[si])
@@ -532,7 +532,7 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 	}
 	off, err := offset2d.OffsetOpenChain(budget, chain, revolveAxisCurve(rp.ax), start, end, s, tmm, shellTol)
 	if err != nil {
-		return ProfileRecord{}, 0, offset2d.InLoop(err, 0)
+		return profileRecord{}, 0, offset2d.InLoop(err, 0)
 	}
 	qS, qE := off.QStart, off.QEnd
 	kS := Point2{U: first.StartU, V: first.StartV}
@@ -559,41 +559,41 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 			ordered = along(qE, pE)
 		}
 		if !ordered {
-			return ProfileRecord{}, 0, fmt.Errorf(`%w: the offset meridian's end does not land on its axis walk, so the offset crosses its own mirror image on the axis; a trimmed-offset kernel is not available (modify S11b)`, ErrUnsupported)
+			return profileRecord{}, 0, fmt.Errorf(`%w: the offset meridian's end does not land on its axis walk, so the offset crosses its own mirror image on the axis; a trimmed-offset kernel is not available (modify S11b)`, ErrUnsupported)
 		}
 	}
 	// closing returns the segment joining K to K' at one end: the axis line
 	// at an axis end, the rim at an opening end. fromK says it runs from K's
 	// endpoint to the offset's.
-	closing := func(e offset2d.OpenEnd, w survey2d.SideWalk, atEnd bool, j offset2d.Join, k, q Point2, fromK bool) (CurveSegment, error) {
+	closing := func(e offset2d.OpenEnd, w survey2d.SideWalk, atEnd bool, j offset2d.Join, k, q Point2, fromK bool) (curveSegment, error) {
 		if e.Mirror {
 			if fromK {
-				return LineSeg{Start: k, End: q, TStart: 0, TEnd: 1}, nil
+				return lineSeg{Start: k, End: q, TStart: 0, TEnd: 1}, nil
 			}
-			return LineSeg{Start: q, End: k, TStart: 0, TEnd: 1}, nil
+			return lineSeg{Start: q, End: k, TStart: 0, TEnd: 1}, nil
 		}
 		return offset2d.RimSegment(w, e.Removed, atEnd, s, j, fromK)
 	}
 	inward := s > 0
 	atK, err := closing(end, last, true, off.Ends[1].Join, kE, qE, inward)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
 	atStart, err := closing(start, first, false, off.Ends[0].Join, kS, qS, !inward)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
-	loop, err := offset2d.OpenChainWallLoop(budget, kept, off.Segs, []CurveSegment{atK}, []CurveSegment{atStart}, inward)
+	loop, err := offset2d.OpenChainWallLoop(budget, kept, off.Segs, []curveSegment{atK}, []curveSegment{atStart}, inward)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
-	wall := ProfileRecord{Outer: loop}
+	wall := profileRecord{Outer: loop}
 	if err := auditOffsetSectionBudget(budget, rp.profile, wall); err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
 	delta, err := openChainSectionDelta(budget, chain, rp.ax, off.Ends, s, tmm, tDelta)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
 	return wall, delta, nil
 }

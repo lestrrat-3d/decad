@@ -189,7 +189,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 // answer, so a caller that needs the record's area (Loft's chord target,
 // docs/loft-gear-bounds-design.md §5) reads it here instead of integrating
 // the record a second time.
-func falsifyRecordedArea(profile ProfileRecord, sketchArea float64, work *freeform.FreeformWork) (float64, error) {
+func falsifyRecordedArea(profile profileRecord, sketchArea float64, work *freeform.FreeformWork) (float64, error) {
 	ig, err := profile.EvaluatorIntegrals(freeform.MomentAreaOrder, work)
 	if err != nil {
 		return 0, err
@@ -382,7 +382,7 @@ type ChainExtrudeOption interface {
 // §3.4 is what first builds more than one, one lump per surviving walk, and
 // sets sectionDelta beside them.
 type chainPayload struct {
-	chains  []ChainRecord
+	chains  []chainRecord
 	frame   r3.Frame
 	z0, z1  float64
 	z0Delta float64
@@ -418,9 +418,9 @@ func (pp chainPayload) z1Scalar() proofbound.BoundedScalar {
 // its holes — extentBoundedAlong reads every one the same way, caring only
 // about the segments, never about winding or closure.
 func (pp chainPayload) prism() prismPayload {
-	profile := ProfileRecord{Outer: LoopRecord(pp.chains[0])}
+	profile := profileRecord{Outer: loopRecord(pp.chains[0])}
 	for _, c := range pp.chains[1:] {
-		profile.Holes = append(profile.Holes, LoopRecord(c))
+		profile.Holes = append(profile.Holes, loopRecord(c))
 	}
 	return prismPayload{
 		profile: profile,
@@ -494,7 +494,7 @@ func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, op
 	work := freeform.NewFreeformWork()
 	ref := d.nextProducerID()
 	body, err := evalChainExtrudeContext(context.Background(), d, ref, chainPayload{
-		chains:  []ChainRecord{chain},
+		chains:  []chainRecord{chain},
 		frame:   frame,
 		z0:      sweep.z0,
 		z1:      sweep.z1,
@@ -607,7 +607,7 @@ type chainWalkCapture struct {
 // chainBoundsWalks reads the exact pre-widening walks buildChainSides already
 // resolved. The cache is local to this build; its per-segment measured charges
 // are replayed by momentinput.ResolveOrRead at each bounds read.
-func chainBoundsWalks(profile ProfileRecord, captures []chainWalkCapture) *momentinput.ProfileWalks {
+func chainBoundsWalks(profile profileRecord, captures []chainWalkCapture) *momentinput.ProfileWalks {
 	reads := make([][]momentinput.WalkReadCharge, len(captures))
 	walks := &momentinput.ProfileWalks{Profile: profile, ReadCharges: reads}
 	for i, capture := range captures {
@@ -634,7 +634,7 @@ func chainBoundsWalks(profile ProfileRecord, captures []chainWalkCapture) *momen
 // (docs/surface-design.md §13.4). It returns the faces and the walk's own
 // total wall area, folded through proofbound.BoundedAdd rather than summed as raw
 // floats.
-func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPayload, chainIdx int, chain ChainRecord, work *freeform.FreeformWork, capture *chainWalkCapture) ([]*Face, proofbound.BoundedScalar, error) {
+func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPayload, chainIdx int, chain chainRecord, work *freeform.FreeformWork, capture *chainWalkCapture) ([]*Face, proofbound.BoundedScalar, error) {
 	prismView := pp.prism()
 	// Every coordinate this walk's segments read sits within pp's own section
 	// displacement of the section it denotes, so each segment's own length

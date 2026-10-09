@@ -533,11 +533,11 @@ func TestSortAlongEdgeOrdersByExactParameter(t *testing.T) {
 
 func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	segs := make([]CurveSegment, 300)
+	segs := make([]curveSegment, 300)
 	for i := range segs {
-		segs[i] = LineSeg{Start: Point2{U: float64(i)}, End: Point2{U: float64(i + 1)}, TEnd: 1}
+		segs[i] = lineSeg{Start: Point2{U: float64(i)}, End: Point2{U: float64(i + 1)}, TEnd: 1}
 	}
-	profile := ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	profile := profileRecord{Outer: loopRecord{Segments: segs}}
 	a := &Body{payload: prismPayload{profile: profile, z1: 1}}
 	b := &Body{payload: prismPayload{profile: profile, z1: 1}}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "loopRecordsEqual"}
@@ -586,11 +586,11 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 		th := 2 * math.Pi * float64(i%sides) / sides
 		return Point2{U: 100 * math.Cos(th), V: 100 * math.Sin(th)}
 	}
-	segs := make([]CurveSegment, sides)
+	segs := make([]curveSegment, sides)
 	for i := range segs {
-		segs[i] = LineSeg{Start: corner(i), End: corner(i + 1), TEnd: 1}
+		segs[i] = lineSeg{Start: corner(i), End: corner(i + 1), TEnd: 1}
 	}
-	pp.profile = ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	pp.profile = profileRecord{Outer: loopRecord{Segments: segs}}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SurveyLoops"}
 
 	_, _, err := newBodyGeomBudget(proofbound.NewWorkBudget(ctx), &Body{
@@ -613,7 +613,7 @@ func TestAddRevolveFacesCancellationReachesRevolveLoops(t *testing.T) {
 		ErrFn: func() error { return nil },
 	}
 	_, err := (&bodyGeom{}).addRevolveFaces(budget, revolvePayload{
-		profile: ProfileRecord{Outer: LoopRecord{}},
+		profile: profileRecord{Outer: loopRecord{}},
 		ax:      axisFrame{dU: 1},
 	})
 	require.ErrorIs(t, err, context.Canceled)
@@ -624,16 +624,16 @@ func TestAddRevolveFacesPreservesMeridianErrorMapping(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name string
-		seg  CurveSegment
+		seg  curveSegment
 		want error
 	}{
 		{
 			name: "unsupported curve",
-			seg:  EllipseSeg{},
+			seg:  ellipseSeg{},
 		},
 		{
 			name: "malformed circle",
-			seg: CircleSeg{
+			seg: circleSeg{
 				Radius: units.Millimeters(1),
 				TStart: 0,
 				TEnd:   1,
@@ -643,7 +643,7 @@ func TestAddRevolveFacesPreservesMeridianErrorMapping(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ok, err := (&bodyGeom{}).addRevolveFaces(proofbound.NewWorkBudget(t.Context()), revolvePayload{
-				profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}},
+				profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{tc.seg}}},
 				ax:      axisFrame{dU: 1},
 			})
 			require.False(t, ok)

@@ -50,25 +50,25 @@ func canonicalPrismFrame(t *testing.T) r3.Frame {
 // synthLineLoop is placeholder single-segment geometry for a gate test that
 // never reaches resolution (admitPrismPair reads only segment KIND, never
 // shape) — every caller uses the same coordinates.
-func synthLineLoop() LoopRecord {
-	return LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1},
+func synthLineLoop() loopRecord {
+	return loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1},
 	}}
 }
 
 // synthRectLoop is a proper closed, CCW rectangular loop — the shape G5/G6's
 // full tryPrismBoolean tests need, since (unlike admitPrismPair's own gates)
 // resolution actually arranges the operands' geometry through sketch.
-func synthRectLoop(u0, v0, u1, v1 float64) LoopRecord {
-	return LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v0}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: u1, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: u1, V: v1}, End: Point2{U: u0, V: v1}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: u0, V: v1}, End: Point2{U: u0, V: v0}, TStart: 0, TEnd: 1},
+func synthRectLoop(u0, v0, u1, v1 float64) loopRecord {
+	return loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: u1, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: u1, V: v1}, End: Point2{U: u0, V: v1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: u0, V: v1}, End: Point2{U: u0, V: v0}, TStart: 0, TEnd: 1},
 	}}
 }
 
-func synthDenseRectLoop(segmentsPerSide int) LoopRecord {
+func synthDenseRectLoop(segmentsPerSide int) loopRecord {
 	point := func(i int) Point2 {
 		switch {
 		case i <= segmentsPerSide:
@@ -82,18 +82,18 @@ func synthDenseRectLoop(segmentsPerSide int) LoopRecord {
 		}
 	}
 	count := 4 * segmentsPerSide
-	segs := make([]CurveSegment, count)
+	segs := make([]curveSegment, count)
 	for i := range count {
-		segs[i] = LineSeg{Start: point(i), End: point(i + 1), TStart: 0, TEnd: 1}
+		segs[i] = lineSeg{Start: point(i), End: point(i + 1), TStart: 0, TEnd: 1}
 	}
-	return LoopRecord{Segments: segs}
+	return loopRecord{Segments: segs}
 }
 
 func TestPrismBooleanGateG1RequiresBothOperandsPrismPayload(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthLineLoop()},
+		profile: profileRecord{Outer: synthLineLoop()},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{payload: pp}
@@ -115,7 +115,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthLineLoop()},
+		profile: profileRecord{Outer: synthLineLoop()},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{payload: pp}
@@ -211,12 +211,12 @@ func TestPrismBooleanGateG4RefusesNonAnalyticSegment(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	linePP := prismPayload{
-		profile: ProfileRecord{Outer: synthLineLoop()},
+		profile: profileRecord{Outer: synthLineLoop()},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	ellipsePP := linePP
-	ellipsePP.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		EllipseSeg{Center: Point2{U: 20, V: 0}, Rx: units.Millimeters(4), Ry: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1},
+	ellipsePP.profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		ellipseSeg{Center: Point2{U: 20, V: 0}, Rx: units.Millimeters(4), Ry: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1},
 	}}}
 
 	a := &Body{payload: linePP}
@@ -226,8 +226,8 @@ func TestPrismBooleanGateG4RefusesNonAnalyticSegment(t *testing.T) {
 
 	// A line/circle/arc-only pair still clears G1-G4 (isolates G4).
 	otherLinePP := linePP
-	otherLinePP.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		CircleSeg{Center: Point2{U: 5, V: 5}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1},
+	otherLinePP.profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		circleSeg{Center: Point2{U: 5, V: 5}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1},
 	}}}
 	c := &Body{payload: otherLinePP}
 	_, _, ok = admitPrismPair(a, c)
@@ -238,7 +238,7 @@ func TestPrismBooleanGateG5RequiresMatchingZInterval(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
-		profile: ProfileRecord{Outer: synthLineLoop()},
+		profile: profileRecord{Outer: synthLineLoop()},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 
@@ -282,7 +282,7 @@ func TestPrismBooleanGateG5ShiftIsExactRational(t *testing.T) {
 	}
 	payload := func(f r3.Frame, z0, z1 float64) prismPayload {
 		return prismPayload{
-			profile: ProfileRecord{Outer: synthLineLoop()},
+			profile: profileRecord{Outer: synthLineLoop()},
 			frame:   f, z0: z0, z1: z1, xform: r3.Identity(),
 		}
 	}
@@ -331,11 +331,11 @@ func TestPrismIntersectShiftedEndpointChargesItsRounding(t *testing.T) {
 	offset, err := r3.NewFrame(r3.Vec{Z: 0.1}, frame.U(), frame.V())
 	require.NoError(t, err)
 	a := &Body{payload: prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+		profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
 		frame:   frame, z0: 0, z1: 1, xform: r3.Identity(),
 	}}
 	b := &Body{payload: prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(3, 3, 7, 7)},
+		profile: profileRecord{Outer: synthRectLoop(3, 3, 7, 7)},
 		frame:   offset, z0: 0, z1: 0.3, xform: r3.Identity(),
 	}}
 
@@ -374,15 +374,15 @@ func TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	holeFree := prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+		profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	overlapping := holeFree
-	overlapping.profile = ProfileRecord{Outer: synthRectLoop(5, 5, 15, 15)}
+	overlapping.profile = profileRecord{Outer: synthRectLoop(5, 5, 15, 15)}
 	holed := holeFree
-	holed.profile = ProfileRecord{
+	holed.profile = profileRecord{
 		Outer: synthRectLoop(5, 5, 15, 15),
-		Holes: []LoopRecord{synthRectLoop(8, 8, 9, 9)},
+		Holes: []loopRecord{synthRectLoop(8, 8, 9, 9)},
 	}
 
 	a := &Body{payload: holeFree}
@@ -409,7 +409,7 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+		profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	const theta = 0.01
@@ -424,7 +424,7 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	// The lower long edge crosses A's upper edge at theta, so this fixture
 	// reaches the trim-amplification path without relying on a degenerate
 	// contact classification.
-	pb.profile = ProfileRecord{Outer: synthRectLoop(-5, 9.9, 15, 11.9)}
+	pb.profile = profileRecord{Outer: synthRectLoop(-5, 9.9, 15, 11.9)}
 	pb.xform = rotation
 	_, _, admitted := admitPrismPair(&Body{payload: pa}, &Body{payload: pb})
 	require.True(t, admitted, "the fixture must clear G1-G4 before the split guard runs")
@@ -541,14 +541,14 @@ func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	inner := prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(2, 2, 8, 8)},
+		profile: profileRecord{Outer: synthRectLoop(2, 2, 8, 8)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	const shift = 1e8
 	translation, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
 	containing := prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)},
+		profile: profileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)},
 		frame:   frame, z0: 0, z1: 10, xform: translation,
 	}
 	first, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: inner}, &Body{payload: containing})
@@ -557,11 +557,11 @@ func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 	require.Positive(t, first.sectionDelta, "the nonidentity first union must carry its re-expression displacement")
 
 	shallow := prismPayload{
-		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-			LineSeg{Start: Point2{U: -5, V: 9.9}, End: Point2{U: 15, V: 10.1}, TStart: 0, TEnd: 1},
-			LineSeg{Start: Point2{U: 15, V: 10.1}, End: Point2{U: 15, V: 12.1}, TStart: 0, TEnd: 1},
-			LineSeg{Start: Point2{U: 15, V: 12.1}, End: Point2{U: -5, V: 11.9}, TStart: 0, TEnd: 1},
-			LineSeg{Start: Point2{U: -5, V: 11.9}, End: Point2{U: -5, V: 9.9}, TStart: 0, TEnd: 1},
+		profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+			lineSeg{Start: Point2{U: -5, V: 9.9}, End: Point2{U: 15, V: 10.1}, TStart: 0, TEnd: 1},
+			lineSeg{Start: Point2{U: 15, V: 10.1}, End: Point2{U: 15, V: 12.1}, TStart: 0, TEnd: 1},
+			lineSeg{Start: Point2{U: 15, V: 12.1}, End: Point2{U: -5, V: 11.9}, TStart: 0, TEnd: 1},
+			lineSeg{Start: Point2{U: -5, V: 11.9}, End: Point2{U: -5, V: 9.9}, TStart: 0, TEnd: 1},
 		}}},
 		frame: first.frame, z0: first.z0, z1: first.z1, xform: first.xform,
 	}
@@ -595,7 +595,7 @@ func TestTryPrismBooleanSingleOpenSegmentIsUnresolvedForCutAndIntersect(t *testi
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthLineLoop()},
+		profile: profileRecord{Outer: synthLineLoop()},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{payload: pp}
@@ -612,7 +612,7 @@ func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthDenseRectLoop(prismcells.MaxArrangementSegments/8 + 1)},
+		profile: profileRecord{Outer: synthDenseRectLoop(prismcells.MaxArrangementSegments/8 + 1)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{payload: pp}
@@ -627,7 +627,7 @@ func TestPrismUnionPreservesEndDisplacements(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+		profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
 		frame:   frame,
 		z0:      0,
 		z1:      10,
@@ -636,7 +636,7 @@ func TestPrismUnionPreservesEndDisplacements(t *testing.T) {
 		xform:   r3.Identity(),
 	}
 	pb := pa
-	pb.profile = ProfileRecord{Outer: synthRectLoop(5, 5, 15, 15)}
+	pb.profile = profileRecord{Outer: synthRectLoop(5, 5, 15, 15)}
 	pb.z0Delta = 0.5
 	pb.z1Delta = 0.25
 
@@ -688,13 +688,13 @@ func TestPrismProfilesContextWaitsForArrangementAfterCancellation(t *testing.T) 
 // It reads the recorded coordinates directly (segs[i].End == segs[i+1].Start,
 // wrap included), the same comparison loopJoinPointsAgree makes for a
 // same-source pair.
-func requireMergedLoopSegmentsJoin(t *testing.T, segs []CurveSegment) {
+func requireMergedLoopSegmentsJoin(t *testing.T, segs []curveSegment) {
 	t.Helper()
 	n := len(segs)
 	for i := range n {
 		j := (i + 1) % n
-		li, oki := segs[i].(LineSeg)
-		lj, okj := segs[j].(LineSeg)
+		li, oki := segs[i].(lineSeg)
+		lj, okj := segs[j].(lineSeg)
 		if !oki || !okj || li.TStart != 0 || li.TEnd != 1 || lj.TStart != 0 || lj.TEnd != 1 {
 			continue
 		}
@@ -708,12 +708,12 @@ func requireMergedLoopSegmentsJoin(t *testing.T, segs []CurveSegment) {
 // arrangement still accepts the shape as one region on its proximity
 // threshold (docs/sketch-seam-design.md), so the defect survives all the way
 // to resolvePrismUnion's own recorded chain.
-func synthGapRectLoop(u0, v0, u1, v1, gap float64) LoopRecord {
-	return LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v0}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: u1 + gap, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: u1, V: v1}, End: Point2{U: u0, V: v1}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: u0, V: v1}, End: Point2{U: u0, V: v0}, TStart: 0, TEnd: 1},
+func synthGapRectLoop(u0, v0, u1, v1, gap float64) loopRecord {
+	return loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: u1 + gap, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: u1, V: v1}, End: Point2{U: u0, V: v1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: u0, V: v1}, End: Point2{U: u0, V: v0}, TStart: 0, TEnd: 1},
 	}}
 }
 
@@ -745,11 +745,11 @@ func TestPrismUnionMergedLoopJunctionsClose(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	const gap = 1e-9
 	pa := prismPayload{
-		profile: ProfileRecord{Outer: synthGapRectLoop(0, 0, 10, 10, gap)},
+		profile: profileRecord{Outer: synthGapRectLoop(0, 0, 10, 10, gap)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	pb := prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(2, 2, 4, 4)},
+		profile: profileRecord{Outer: synthRectLoop(2, 2, 4, 4)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{payload: pa}
@@ -765,7 +765,7 @@ func TestPrismUnionMergedLoopJunctionsClose(t *testing.T) {
 	// landing order: a pair with no authored defect resolves, and its merged
 	// loop DOES join bit-exactly at every whole junction.
 	clean := pa
-	clean.profile = ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)}
+	clean.profile = profileRecord{Outer: synthRectLoop(0, 0, 10, 10)}
 	res, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: clean}, b)
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -874,10 +874,10 @@ func prismSplitLeftCellBody(t *testing.T, doc *Document) *Body {
 // any other parameter must fail here, naming the fixture, rather than at
 // whichever consumer first walks that parameter to a corner its neighbour
 // does not share.
-func prismRequireSplitWallRange(t *testing.T, p ProfileRecord) {
+func prismRequireSplitWallRange(t *testing.T, p profileRecord) {
 	t.Helper()
 	for _, seg := range p.Outer.Segments {
-		ls, ok := seg.(LineSeg)
+		ls, ok := seg.(lineSeg)
 		if !ok || ls.Start != (Point2{U: 5, V: -2}) || ls.End != (Point2{U: 5, V: 14}) {
 			continue
 		}
@@ -920,11 +920,11 @@ func prismRatOf(t *testing.T, f float64) *big.Rat {
 // accumulates, with no rounding at all. Every fixture below is a plain
 // rectangle or a footprint difference of rectangles, so the outer loop alone
 // is always line-only.
-func prismExactLineOnlyArea(t *testing.T, p ProfileRecord) *big.Rat {
+func prismExactLineOnlyArea(t *testing.T, p profileRecord) *big.Rat {
 	t.Helper()
 	total := new(big.Rat)
 	for _, seg := range p.Outer.Segments {
-		ls, ok := seg.(LineSeg)
+		ls, ok := seg.(lineSeg)
 		require.True(t, ok, "fixture must be line-only: %T", seg)
 		u0 := ratLerp(ls.Start.U, ls.End.U, ls.TStart)
 		v0 := ratLerp(ls.Start.V, ls.End.V, ls.TStart)
@@ -957,10 +957,10 @@ func prismExactResidual(t *testing.T, reported float64, truth *big.Rat) float64 
 // (the full rectangle's [1,11] bottom line, Start=(1,0), End=(11,0)) and
 // returns its recorded TEnd — the fraction §7's δ_walk charges a walked
 // endpoint against.
-func prismBottomWallTEnd(t *testing.T, p ProfileRecord) float64 {
+func prismBottomWallTEnd(t *testing.T, p profileRecord) float64 {
 	t.Helper()
 	for _, seg := range p.Outer.Segments {
-		ls, ok := seg.(LineSeg)
+		ls, ok := seg.(lineSeg)
 		if !ok {
 			continue
 		}
@@ -986,7 +986,7 @@ func TestPrismSplitLeftCellFixtureWalksHostIndependently(t *testing.T) {
 	doc := New()
 	p := prismSplitLeftCellBody(t, doc).payload.(prismPayload).profile
 	for i, seg := range p.Outer.Segments {
-		ls, ok := seg.(LineSeg)
+		ls, ok := seg.(lineSeg)
 		require.Truef(t, ok, "the fixture is line-only: segment %d is a %T", i, seg)
 		for _, at := range []float64{ls.TStart, ls.TEnd} {
 			require.Equalf(t, prismLerpSplit(ls.Start, ls.End, at), prismLerpFused(ls.Start, ls.End, at),
@@ -1196,23 +1196,23 @@ func TestPrismBooleanWholeSourceSegmentsChargeNothing(t *testing.T) {
 // TestPrismCircularWalkChargeImpliesRefusal pins.
 func TestWalkChargeOf(t *testing.T) {
 	t.Parallel()
-	line := LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}}
-	arc := ArcSeg{
+	line := lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}}
+	arc := arcSeg{
 		Center: Point2{U: 0, V: 0},
 		Start:  Point2{U: 5, V: 0},
 		End:    Point2{U: 0, V: 5},
 	}
-	circle := CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(5), CCW: true}
+	circle := circleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(5), CCW: true}
 
 	for _, tc := range []struct {
 		name string
-		seg  CurveSegment
+		seg  curveSegment
 	}{
-		{"whole LineSeg", func() CurveSegment { s := line; s.TStart, s.TEnd = 0, 1; return s }()},
-		{"whole reversed LineSeg", func() CurveSegment { s := line; s.TStart, s.TEnd = 1, 0; return s }()},
-		{"whole ArcSeg", func() CurveSegment { s := arc; s.TStart, s.TEnd = 0, 1; return s }()},
-		{"whole reversed ArcSeg", func() CurveSegment { s := arc; s.TStart, s.TEnd = 1, 0; return s }()},
-		{"whole CircleSeg", func() CurveSegment { s := circle; s.TStart, s.TEnd = 0, 1; return s }()},
+		{"whole LineSeg", func() curveSegment { s := line; s.TStart, s.TEnd = 0, 1; return s }()},
+		{"whole reversed LineSeg", func() curveSegment { s := line; s.TStart, s.TEnd = 1, 0; return s }()},
+		{"whole ArcSeg", func() curveSegment { s := arc; s.TStart, s.TEnd = 0, 1; return s }()},
+		{"whole reversed ArcSeg", func() curveSegment { s := arc; s.TStart, s.TEnd = 1, 0; return s }()},
+		{"whole CircleSeg", func() curveSegment { s := circle; s.TStart, s.TEnd = 0, 1; return s }()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w, err := boundarywalk.WalkOf(tc.seg, nil)
@@ -1225,15 +1225,15 @@ func TestWalkChargeOf(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		seg  CurveSegment
+		seg  curveSegment
 	}{
-		{"trimmed LineSeg", func() CurveSegment { s := line; s.TStart, s.TEnd = 0, 0.4; return s }()},
-		{"trimmed ArcSeg", func() CurveSegment { s := arc; s.TStart, s.TEnd = 0, 0.4; return s }()},
-		{"trimmed CircleSeg", func() CurveSegment { s := circle; s.TStart, s.TEnd = 0, 0.4; return s }()},
+		{"trimmed LineSeg", func() curveSegment { s := line; s.TStart, s.TEnd = 0, 0.4; return s }()},
+		{"trimmed ArcSeg", func() curveSegment { s := arc; s.TStart, s.TEnd = 0, 0.4; return s }()},
+		{"trimmed CircleSeg", func() curveSegment { s := circle; s.TStart, s.TEnd = 0, 0.4; return s }()},
 		// One ulp short of the natural bound: the walk's own closed-ness
 		// tolerance calls this circle closed, and the charge must still be
 		// positive — wholeness is the recorded range, never that tolerance.
-		{"CircleSeg one ulp short of whole", func() CurveSegment {
+		{"CircleSeg one ulp short of whole", func() curveSegment {
 			s := circle
 			s.TStart, s.TEnd = 0, math.Nextafter(1, 0)
 			return s
@@ -1250,7 +1250,7 @@ func TestWalkChargeOf(t *testing.T) {
 	}
 
 	t.Run("non-finite coordinate answers +Inf", func(t *testing.T) {
-		bad := LineSeg{Start: Point2{U: math.NaN(), V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 0.4}
+		bad := lineSeg{Start: Point2{U: math.NaN(), V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 0.4}
 		w, err := boundarywalk.WalkOf(bad, nil)
 		require.NoError(t, err)
 		got, err := prismcells.WalkChargeOf(bad, w)
@@ -1269,18 +1269,18 @@ func TestWalkChargeOf(t *testing.T) {
 // answers cannot drift apart into a silently under-charged bound.
 func TestPrismCircularWalkChargeImpliesRefusal(t *testing.T) {
 	t.Parallel()
-	arc := ArcSeg{
+	arc := arcSeg{
 		Center: Point2{U: 0, V: 0},
 		Start:  Point2{U: 5, V: 0},
 		End:    Point2{U: 0, V: 5},
 	}
-	circle := CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(5), CCW: true}
-	withRange := func(seg CurveSegment, tStart, tEnd float64) CurveSegment {
+	circle := circleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(5), CCW: true}
+	withRange := func(seg curveSegment, tStart, tEnd float64) curveSegment {
 		switch s := seg.(type) {
-		case ArcSeg:
+		case arcSeg:
 			s.TStart, s.TEnd = tStart, tEnd
 			return s
-		case CircleSeg:
+		case circleSeg:
 			// A CircleSeg's CCW flag must agree with its range order
 			// (validateSegmentRange), so a reversed range is a CW circle.
 			s.TStart, s.TEnd, s.CCW = tStart, tEnd, tStart < tEnd
@@ -1292,7 +1292,7 @@ func TestPrismCircularWalkChargeImpliesRefusal(t *testing.T) {
 
 	for _, base := range []struct {
 		kind string
-		seg  CurveSegment
+		seg  curveSegment
 	}{{"ArcSeg", arc}, {"CircleSeg", circle}} {
 		for _, rng := range []struct {
 			name         string
@@ -1311,7 +1311,7 @@ func TestPrismCircularWalkChargeImpliesRefusal(t *testing.T) {
 				charge, err := prismcells.WalkChargeOf(seg, w)
 				require.NoError(t, err)
 
-				profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
+				profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{seg}}}
 				refused, err := prismcells.ProfileHasTrimmedCircularSource(
 					proofbound.NewWorkBudget(t.Context()), profile.Outer, profile.Holes)
 				require.NoError(t, err)
@@ -1335,7 +1335,7 @@ func TestPrismCircularWalkChargeImpliesRefusal(t *testing.T) {
 // coordinate, squared and summed. Nothing here rounds, so a charge compared
 // against it is compared against the true error and not against a second float
 // estimate of it.
-func prismWalkEndpointResidualSq(t *testing.T, s LineSeg, walkedU, walkedV, at float64) *big.Rat {
+func prismWalkEndpointResidualSq(t *testing.T, s lineSeg, walkedU, walkedV, at float64) *big.Rat {
 	t.Helper()
 	exactU := ratLerp(s.Start.U, s.End.U, at)
 	exactV := ratLerp(s.Start.V, s.End.V, at)
@@ -1431,7 +1431,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		seg  LineSeg
+		seg  lineSeg
 		// endpointOnlyUnderCharges says the walked-endpoint envelope alone
 		// (survey2d.SegmentWalk.coordUpper, which is what the answer must NOT be
 		// charged at) fails to contain this row's own residual.
@@ -1439,7 +1439,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 	}{
 		{
 			name: "cancelling carrier reaching a million kilometres",
-			seg: LineSeg{
+			seg: lineSeg{
 				Start:  Point2{U: 1e12, V: 0},
 				End:    Point2{U: oneUlpDown(-1e12), V: 0},
 				TStart: nearHalf,
@@ -1452,7 +1452,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 			// 0.4 mm fragment centred on the sketch origin already escapes a
 			// charge read off the fragment's own magnitude.
 			name: "200 mm carrier, 0.4 mm fragment on the origin",
-			seg: LineSeg{
+			seg: lineSeg{
 				Start:  Point2{U: -100, V: 0},
 				End:    Point2{U: oneUlpDown(100), V: 0},
 				TStart: 0.499,
@@ -1462,7 +1462,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 		},
 		{
 			name: "200 mm carrier, 0.02 mm fragment on the origin",
-			seg: LineSeg{
+			seg: lineSeg{
 				Start:  Point2{U: -100, V: 0},
 				End:    Point2{U: oneUlpDown(100), V: 0},
 				TStart: 0.49995,
@@ -1472,7 +1472,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 		},
 		{
 			name: "diagonal cancelling carrier moves both coordinates",
-			seg: LineSeg{
+			seg: lineSeg{
 				Start:  Point2{U: -1e6, V: -1e6},
 				End:    Point2{U: oneUlpDown(1e6), V: oneUlpDown(1e6)},
 				TStart: 0.4999999999,
@@ -1486,7 +1486,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 			// It must still be covered, and its premise must NOT hold — the
 			// answer may not have become a blanket inflation of every row.
 			name: "ordinary fragment of a 1..11 carrier",
-			seg: LineSeg{
+			seg: lineSeg{
 				Start:  Point2{U: 1, V: 0},
 				End:    Point2{U: 11, V: 0},
 				TStart: 0,
@@ -1568,21 +1568,21 @@ func TestPrismBooleanTrimmedCircularSourceFallsBack(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	trimmedArc := prismPayload{
-		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-			ArcSeg{
+		profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+			arcSeg{
 				Center: Point2{U: 5, V: 5},
 				Start:  Point2{U: 8, V: 5},
 				End:    Point2{U: 5, V: 8},
 				TStart: 0, TEnd: 0.4,
 			},
-			LineSeg{Start: Point2{U: 5, V: 8}, End: Point2{U: 2, V: 8}, TStart: 0, TEnd: 1},
-			LineSeg{Start: Point2{U: 2, V: 8}, End: Point2{U: 2, V: 2}, TStart: 0, TEnd: 1},
-			LineSeg{Start: Point2{U: 2, V: 2}, End: Point2{U: 8, V: 5}, TStart: 0, TEnd: 1},
+			lineSeg{Start: Point2{U: 5, V: 8}, End: Point2{U: 2, V: 8}, TStart: 0, TEnd: 1},
+			lineSeg{Start: Point2{U: 2, V: 8}, End: Point2{U: 2, V: 2}, TStart: 0, TEnd: 1},
+			lineSeg{Start: Point2{U: 2, V: 2}, End: Point2{U: 8, V: 5}, TStart: 0, TEnd: 1},
 		}}},
 		frame: frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	whole := prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 20, 20)},
+		profile: profileRecord{Outer: synthRectLoop(0, 0, 20, 20)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 
@@ -1601,16 +1601,16 @@ func TestPrismBooleanTrimmedCircularSourceFallsBack(t *testing.T) {
 // same, so the refusal must fire for it.
 func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T) {
 	t.Parallel()
-	circle := func(tStart, tEnd float64) CircleSeg {
-		return CircleSeg{
+	circle := func(tStart, tEnd float64) circleSeg {
+		return circleSeg{
 			Center: Point2{U: 5, V: 5},
 			Radius: units.Millimeters(10),
 			CCW:    tStart < tEnd,
 			TStart: tStart, TEnd: tEnd,
 		}
 	}
-	arc := func(tStart, tEnd float64) ArcSeg {
-		return ArcSeg{
+	arc := func(tStart, tEnd float64) arcSeg {
+		return arcSeg{
 			Center: Point2{U: 5, V: 5},
 			Start:  Point2{U: 8, V: 5},
 			End:    Point2{U: 5, V: 8},
@@ -1621,7 +1621,7 @@ func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T)
 	// The two near-whole circles below are the whole point of this test: both
 	// are ranges the walk's own tolerance reads as a closed turn, so a refusal
 	// that consulted the walk would let them through.
-	for _, seg := range []CircleSeg{circle(0, math.Nextafter(1, 0)), circle(math.Nextafter(0, 1), 1)} {
+	for _, seg := range []circleSeg{circle(0, math.Nextafter(1, 0)), circle(math.Nextafter(0, 1), 1)} {
 		w, err := boundarywalk.WalkOf(seg, nil)
 		require.NoError(t, err)
 		require.True(t, w.Closed,
@@ -1630,7 +1630,7 @@ func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T)
 
 	for _, tc := range []struct {
 		name    string
-		seg     CurveSegment
+		seg     curveSegment
 		trimmed bool
 	}{
 		{"whole CircleSeg", circle(0, 1), false},
@@ -1641,12 +1641,12 @@ func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T)
 		{"whole ArcSeg", arc(0, 1), false},
 		{"whole reversed ArcSeg", arc(1, 0), false},
 		{"trimmed ArcSeg", arc(0, 0.4), true},
-		{"trimmed LineSeg carries no circular carrier", LineSeg{
+		{"trimmed LineSeg carries no circular carrier", lineSeg{
 			Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 0.4,
 		}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}}
+			profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{tc.seg}}}
 			got, err := prismcells.ProfileHasTrimmedCircularSource(
 				proofbound.NewWorkBudget(t.Context()), profile.Outer, profile.Holes)
 			require.NoError(t, err)
@@ -1665,7 +1665,7 @@ func TestPrismBooleanNearWholeCircleSourceFallsBack(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	circleOperand := func(tEnd float64) prismPayload {
 		return prismPayload{
-			profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{CircleSeg{
+			profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{circleSeg{
 				Center: Point2{U: 10, V: 10},
 				Radius: units.Millimeters(4),
 				CCW:    true,
@@ -1675,7 +1675,7 @@ func TestPrismBooleanNearWholeCircleSourceFallsBack(t *testing.T) {
 		}
 	}
 	box := prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 20, 20)},
+		profile: profileRecord{Outer: synthRectLoop(0, 0, 20, 20)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 
@@ -1881,11 +1881,11 @@ func TestPrismOverlapVolumeDeclinesExactlyTangentPair(t *testing.T) {
 	doc := New()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+		profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	pb := pa
-	pb.profile = ProfileRecord{Outer: synthRectLoop(10, 0, 20, 10)}
+	pb.profile = profileRecord{Outer: synthRectLoop(10, 0, 20, 10)}
 	a := &Body{doc: doc, payload: pa}
 	b := &Body{doc: doc, payload: pb}
 
@@ -1906,7 +1906,7 @@ func TestPrismOverlapVolumeArrangementCapRefuses(t *testing.T) {
 	doc := New()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthDenseRectLoop(prismcells.MaxArrangementSegments/8 + 1)},
+		profile: profileRecord{Outer: synthDenseRectLoop(prismcells.MaxArrangementSegments/8 + 1)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{doc: doc, payload: pp}
@@ -1965,7 +1965,7 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 	doc := New()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+		profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 
@@ -1973,7 +1973,7 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 		shifted, err := r3.Translation(r3.Vec{Z: 3})
 		require.NoError(t, err)
 		pb := pa
-		pb.profile = ProfileRecord{Outer: synthRectLoop(5, 5, 15, 15)}
+		pb.profile = profileRecord{Outer: synthRectLoop(5, 5, 15, 15)}
 		pb.xform = shifted
 		a := &Body{doc: doc, payload: pa}
 		b := &Body{doc: doc, payload: pb}
@@ -1988,7 +1988,7 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 		// docs/general-boolean-design.md's A6 charges the square crossings it
 		// can move instead of rerouting the pair.
 		pb := pa
-		pb.profile = ProfileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}
+		pb.profile = profileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}
 		pb.xform = prismMirrorAcrossX(t, 0)
 		a := &Body{doc: doc, payload: pa}
 		b := &Body{doc: doc, payload: pb}
@@ -2000,8 +2000,8 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 
 	t.Run("free-form segment", func(t *testing.T) {
 		pb := pa
-		pb.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-			EllipseSeg{Center: Point2{U: 20, V: 0}, Rx: units.Millimeters(4), Ry: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1},
+		pb.profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{
+			ellipseSeg{Center: Point2{U: 20, V: 0}, Rx: units.Millimeters(4), Ry: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1},
 		}}}
 		a := &Body{doc: doc, payload: pa}
 		b := &Body{doc: doc, payload: pb}

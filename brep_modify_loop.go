@@ -456,7 +456,7 @@ func (r *brepLoopRead) naturalFaceLoops(fi int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for li, loop := range append([]LoopRecord{f.region.Outer}, f.region.Holes...) {
+	for li, loop := range append([]loopRecord{f.region.Outer}, f.region.Holes...) {
 		for _, seg := range loop.Segments {
 			if !naturalRange(seg) {
 				return fmt.Sprintf(`brep face %s holds a segment over a narrowed range`, f.role), nil
@@ -677,7 +677,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 	// Stage 4: the contours exist (SX6), and the setback survives float64 at
 	// each side level (SX13's axial half) and each circular wall's radius
 	// (its radial half).
-	mixed := make(map[int]ProfileRecord, len(faceOrder))
+	mixed := make(map[int]profileRecord, len(faceOrder))
 	views := make(map[int]capBlendPayload, len(faceOrder))
 	for _, fi := range faceOrder {
 		cbp := r.loopFaceView(fi, sels)

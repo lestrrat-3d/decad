@@ -30,38 +30,38 @@ import (
 
 func pt(u, v float64) Point2 { return Point2{U: u, V: v} }
 
-func squareLoop(cx, cy, half float64, ccw bool) LoopRecord {
+func squareLoop(cx, cy, half float64, ccw bool) loopRecord {
 	corners := []Point2{
 		pt(cx-half, cy-half), pt(cx+half, cy-half), pt(cx+half, cy+half), pt(cx-half, cy+half),
 	}
 	if !ccw {
 		corners = []Point2{corners[0], corners[3], corners[2], corners[1]}
 	}
-	segs := make([]CurveSegment, 4)
+	segs := make([]curveSegment, 4)
 	for i := range corners {
-		segs[i] = LineSeg{Start: corners[i], End: corners[(i+1)%4], TStart: 0, TEnd: 1}
+		segs[i] = lineSeg{Start: corners[i], End: corners[(i+1)%4], TStart: 0, TEnd: 1}
 	}
-	return LoopRecord{Segments: segs}
+	return loopRecord{Segments: segs}
 }
 
-func triangleLoop() LoopRecord {
+func triangleLoop() loopRecord {
 	corners := []Point2{pt(0, 0), pt(1, 0), pt(0.5, 1)}
-	segs := make([]CurveSegment, 3)
+	segs := make([]curveSegment, 3)
 	for i := range corners {
-		segs[i] = LineSeg{Start: corners[i], End: corners[(i+1)%3], TStart: 0, TEnd: 1}
+		segs[i] = lineSeg{Start: corners[i], End: corners[(i+1)%3], TStart: 0, TEnd: 1}
 	}
-	return LoopRecord{Segments: segs}
+	return loopRecord{Segments: segs}
 }
 
-func unitSquareProfile() ProfileRecord {
-	return ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true)}
+func unitSquareProfile() profileRecord {
+	return profileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true)}
 }
 
-func planeAt(origin r3.Vec) PlaneRecord {
-	return PlaneRecord{Origin: origin, U: r3.NewVec(1, 0, 0), V: r3.NewVec(0, 1, 0)}
+func planeAt(origin r3.Vec) planeRecord {
+	return planeRecord{Origin: origin, U: r3.NewVec(1, 0, 0), V: r3.NewVec(0, 1, 0)}
 }
 
-func mustFrame(t *testing.T, pr PlaneRecord) r3.Frame {
+func mustFrame(t *testing.T, pr planeRecord) r3.Frame {
 	t.Helper()
 	f, err := r3.NewFrame(pr.Origin, pr.U, pr.V)
 	require.NoError(t, err)
@@ -328,9 +328,9 @@ func TestEvalLoftJunctionConvexity(t *testing.T) {
 // prism's already are (topology.go's Edge.IsConvex doc).
 func TestEvalLoftHoleRimIsConcave(t *testing.T) {
 	t.Parallel()
-	p := ProfileRecord{
+	p := profileRecord{
 		Outer: squareLoop(0.5, 0.5, 0.5, true),
-		Holes: []LoopRecord{squareLoop(0.5, 0.5, 0.2, false)},
+		Holes: []loopRecord{squareLoop(0.5, 0.5, 0.2, false)},
 	}
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
@@ -379,9 +379,9 @@ func TestEvalLoftHoleRimIsConcave(t *testing.T) {
 // resolveLoftLoopWalks resolves every loop of p (Outer, then Holes in order)
 // into its own per-segment walk slice, on a fresh freeform.FreeformWork per loop — the
 // shape loftmesh.ValidateLoftRecords returns and loftmesh.PairRecords consumes.
-func resolveLoftLoopWalks(t *testing.T, p ProfileRecord) [][]survey2d.SegmentWalk {
+func resolveLoftLoopWalks(t *testing.T, p profileRecord) [][]survey2d.SegmentWalk {
 	t.Helper()
-	loops := append([]LoopRecord{p.Outer}, p.Holes...)
+	loops := append([]loopRecord{p.Outer}, p.Holes...)
 	walks := make([][]survey2d.SegmentWalk, len(loops))
 	for i, loop := range loops {
 		work := freeform.NewFreeformWork()
@@ -433,9 +433,9 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 	smallHole := squareLoop(0.2, 0.2, 0.05, false)
 	largeHole := squareLoop(0.8, 0.8, 0.15, false)
 
-	p0 := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{smallHole, largeHole}}
+	p0 := profileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []loopRecord{smallHole, largeHole}}
 	// p1 records the identical two hole loops but in SWAPPED slice order.
-	p1 := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{largeHole, smallHole}}
+	p1 := profileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []loopRecord{largeHole, smallHole}}
 
 	offsets := []int{0, 0, 0}
 	pairs, _, _, _, err := loftmesh.PairRecords(p0, p1, offsets, resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), 0, nil, nil) //nolint:dogsled // sectionDelta/sectionMatchedDelta/stationRound discarded; only the correspondence is under test.
@@ -444,7 +444,7 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 	require.Len(t, pairs, 3) // outer + 2 holes
 	// Hole loop 1 (index 1+0): p0's own small hole (v) pairs with p1's
 	// Holes[0], the LARGE hole (w) — pure positional pairing.
-	require.Equal(t, smallHole.Segments[0].(LineSeg).Start.U, pairs[1].V[0].U)
+	require.Equal(t, smallHole.Segments[0].(lineSeg).Start.U, pairs[1].V[0].U)
 	require.InDelta(t, 0.65, pairs[1].W[0].U, 1e-9, "p1's Holes[0] is the large hole, centered at 0.8 with half-width 0.15")
 }
 
@@ -461,7 +461,7 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 // station generator charges the same counters.
 func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	t.Parallel()
-	fit := FitSplineSeg{
+	fit := fitSplineSeg{
 		Fit:    []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)},
 		TStart: 0, TEnd: 1,
 	}
@@ -489,7 +489,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	err = validateLoftRecordsErr(
-		ProfileRecord{Outer: squareLoopWithFirstSegment(fit)}, unitSquareProfile(),
+		profileRecord{Outer: squareLoopWithFirstSegment(fit)}, unitSquareProfile(),
 		pl0, pl1, nil, work0, work1)
 	require.ErrorIs(t, err, ErrUnsupported, "S3: a FitSplineSeg is not a LineSeg")
 	require.Equal(t, single.Spent, work0.Spent,
@@ -499,11 +499,11 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	// loftmesh.PairRecords, handed those already-resolved walks, resolves no walk
 	// again: everything it spends is the free-form station generator's own
 	// work, which the same generator run on a fresh counter reproduces.
-	loop := LoopRecord{Segments: make([]CurveSegment, k)}
+	loop := loopRecord{Segments: make([]curveSegment, k)}
 	for i := range loop.Segments {
 		loop.Segments[i] = fit
 	}
-	profile := ProfileRecord{Outer: loop}
+	profile := profileRecord{Outer: loop}
 	walks0 := [][]survey2d.SegmentWalk{walks}
 	// A coarse target keeps four pairs' station work inside the one shared
 	// counter's R7 ceiling; the charge comparison does not depend on it.
@@ -534,7 +534,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 	t.Parallel()
 	p0 := unitSquareProfile()                               // corners (0,0), (1,0), (1,1), (0,1)
-	p1 := ProfileRecord{Outer: squareLoop(10, 20, 2, true)} // corners (8,18), (12,18), (12,22), (8,22)
+	p1 := profileRecord{Outer: squareLoop(10, 20, 2, true)} // corners (8,18), (12,18), (12,22), (8,22)
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 
 	offsets, walks0, walks1, _, err := loftmesh.ValidateLoftRecords(p0, p1, pl0, pl1, []int{1}, loftRecordAreas(t, p0, p1), freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -577,16 +577,16 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 // against — would let that later walkOf error surface first instead.
 func TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile(t *testing.T) {
 	t.Parallel()
-	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ArcSeg{
+	p0 := profileRecord{Outer: squareLoopWithFirstSegment(arcSeg{
 		Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1,
 	})}
 
 	base := squareLoop(0.5, 0.5, 0.5, true)
-	segs := append([]CurveSegment{}, base.Segments...)
+	segs := append([]curveSegment{}, base.Segments...)
 	// CCW true with TStart > TEnd contradicts the range order — walkOf's own
 	// CircleSeg arm refuses it with ErrDegenerate, never reached here.
-	segs[2] = CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 1, TEnd: 0}
-	p1 := ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	segs[2] = circleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 1, TEnd: 0}
+	p1 := profileRecord{Outer: loopRecord{Segments: segs}}
 
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -605,14 +605,14 @@ func TestEvalLoftCollinearSplitKeepsTwoFacesPerCell(t *testing.T) {
 	// Outer loop: the unit square's bottom side (0,0)->(1,0) split into two
 	// collinear segments at u=0.5, followed by the square's other three
 	// sides — 5 segments total, still forming the same square boundary.
-	loop := LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: pt(0, 0), End: pt(0.5, 0), TStart: 0, TEnd: 1},
-		LineSeg{Start: pt(0.5, 0), End: pt(1, 0), TStart: 0, TEnd: 1},
-		LineSeg{Start: pt(1, 0), End: pt(1, 1), TStart: 0, TEnd: 1},
-		LineSeg{Start: pt(1, 1), End: pt(0, 1), TStart: 0, TEnd: 1},
-		LineSeg{Start: pt(0, 1), End: pt(0, 0), TStart: 0, TEnd: 1},
+	loop := loopRecord{Segments: []curveSegment{
+		lineSeg{Start: pt(0, 0), End: pt(0.5, 0), TStart: 0, TEnd: 1},
+		lineSeg{Start: pt(0.5, 0), End: pt(1, 0), TStart: 0, TEnd: 1},
+		lineSeg{Start: pt(1, 0), End: pt(1, 1), TStart: 0, TEnd: 1},
+		lineSeg{Start: pt(1, 1), End: pt(0, 1), TStart: 0, TEnd: 1},
+		lineSeg{Start: pt(0, 1), End: pt(0, 0), TStart: 0, TEnd: 1},
 	}}
-	p := ProfileRecord{Outer: loop}
+	p := profileRecord{Outer: loop}
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
@@ -786,7 +786,7 @@ func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
 		{half: 1e-4, height: 1e-4, dx: 1e12},
 	} {
 		t.Run(fmt.Sprintf("half=%g/dx=%g", tc.half, tc.dx), func(t *testing.T) {
-			p := ProfileRecord{Outer: squareLoop(0, 0, tc.half, true)}
+			p := profileRecord{Outer: squareLoop(0, 0, tc.half, true)}
 			pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, tc.height))
 			pl := loftPayload{
 				profile0: p, profile1: p,
@@ -837,7 +837,7 @@ func TestEvalLoftCancellation(t *testing.T) {
 // It hands the gate the records' own areas the way Loft does
 // (loftRecordAreasOrZero), so a gate that reads the chord target reads the
 // same one a real build would.
-func validateLoftRecordsErr(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeform.FreeformWork) error {
+func validateLoftRecordsErr(p0, p1 profileRecord, pl0, pl1 planeRecord, alignment []int, work0, work1 *freeform.FreeformWork) error {
 	_, _, _, _, err := loftmesh.ValidateLoftRecords(p0, p1, pl0, pl1, alignment, loftRecordAreasOrZero(p0, p1), work0, work1) //nolint:dogsled // only the error matters here.
 	return err
 }
@@ -845,7 +845,7 @@ func validateLoftRecordsErr(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignmen
 // loftRecordAreas is the pair of exact region integrals Loft reads off
 // falsifyRecordedArea and stores on the payload (loftPayload.recordArea), for
 // a test that builds a payload or calls loftmesh.ValidateLoftRecords directly.
-func loftRecordAreas(t testing.TB, p0, p1 ProfileRecord) [2]float64 {
+func loftRecordAreas(t testing.TB, p0, p1 profileRecord) [2]float64 {
 	t.Helper()
 	ig0, err := p0.EvaluatorIntegrals(freeform.MomentAreaOrder, nil)
 	require.NoError(t, err)
@@ -857,7 +857,7 @@ func loftRecordAreas(t testing.TB, p0, p1 ProfileRecord) [2]float64 {
 // loftRecordAreasOrZero is loftRecordAreas for the gate tests, whose records
 // are often ones the integrator itself refuses: a record it cannot integrate
 // gets a zero area, which only a chorded build ever reads.
-func loftRecordAreasOrZero(p0, p1 ProfileRecord) [2]float64 {
+func loftRecordAreasOrZero(p0, p1 profileRecord) [2]float64 {
 	var out [2]float64
 	if ig, err := p0.EvaluatorIntegrals(freeform.MomentAreaOrder, nil); err == nil {
 		out[0] = ig.Area
@@ -871,7 +871,7 @@ func loftRecordAreasOrZero(p0, p1 ProfileRecord) [2]float64 {
 // loftTestChordTarget is the chord target a real build of p0 and p1 chords
 // at: loftmesh.ChordTarget over the records' own areas and loftmesh.PerimeterUpper of
 // the resolved walks.
-func loftTestChordTarget(t testing.TB, p0, p1 ProfileRecord, walks0, walks1 [][]survey2d.SegmentWalk) float64 {
+func loftTestChordTarget(t testing.TB, p0, p1 profileRecord, walks0, walks1 [][]survey2d.SegmentWalk) float64 {
 	t.Helper()
 	areas := loftRecordAreas(t, p0, p1)
 	target, err := loftmesh.ChordTarget(areas[0], loftmesh.PerimeterUpper(p0, walks0), areas[1], loftmesh.PerimeterUpper(p1, walks1))
@@ -881,7 +881,7 @@ func loftTestChordTarget(t testing.TB, p0, p1 ProfileRecord, walks0, walks1 [][]
 
 func TestValidateLoftRecordsHoleCountMismatch(t *testing.T) {
 	t.Parallel()
-	p0 := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{squareLoop(0.5, 0.5, 0.1, false)}}
+	p0 := profileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []loopRecord{squareLoop(0.5, 0.5, 0.1, false)}}
 	p1 := unitSquareProfile()
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -891,22 +891,22 @@ func TestValidateLoftRecordsHoleCountMismatch(t *testing.T) {
 func TestValidateLoftRecordsSegmentCountMismatch(t *testing.T) {
 	t.Parallel()
 	p0 := unitSquareProfile()
-	p1 := ProfileRecord{Outer: triangleLoop()}
+	p1 := profileRecord{Outer: triangleLoop()}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S2: segment-count mismatch")
 }
 
-func squareLoopWithFirstSegment(seg CurveSegment) LoopRecord {
+func squareLoopWithFirstSegment(seg curveSegment) loopRecord {
 	base := squareLoop(0.5, 0.5, 0.5, true)
-	segs := append([]CurveSegment{seg}, base.Segments[1:]...)
-	return LoopRecord{Segments: segs}
+	segs := append([]curveSegment{seg}, base.Segments[1:]...)
+	return loopRecord{Segments: segs}
 }
 
 func TestValidateLoftRecordsCurvedPairIsUnsupported(t *testing.T) {
 	t.Parallel()
 	p0 := unitSquareProfile()
-	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(ArcSeg{
+	p1 := profileRecord{Outer: squareLoopWithFirstSegment(arcSeg{
 		Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1,
 	})}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
@@ -922,11 +922,11 @@ func TestValidateLoftRecordsCurvedPairIsUnsupported(t *testing.T) {
 // later makes of the resulting station chain.
 func TestValidateLoftRecordsSameKindCircularPairIsAdmitted(t *testing.T) {
 	t.Parallel()
-	circle := func() CurveSegment {
-		return CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
+	circle := func() curveSegment {
+		return circleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
 	}
-	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(circle())}
-	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(circle())}
+	p0 := profileRecord{Outer: squareLoopWithFirstSegment(circle())}
+	p1 := profileRecord{Outer: squareLoopWithFirstSegment(circle())}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err, "S3: a same-kind CircleSeg pair at matching positions is admitted")
@@ -952,7 +952,7 @@ func TestValidateLoftRecordsCoincidentPlanes(t *testing.T) {
 	err := validateLoftRecordsErr(p, p, pl0, pl0, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S5: identical planes")
 
-	rotated := PlaneRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(0, 1, 0), V: r3.NewVec(-1, 0, 0)}
+	rotated := planeRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(0, 1, 0), V: r3.NewVec(-1, 0, 0)}
 	err = validateLoftRecordsErr(p, p, pl0, rotated, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S5: the same geometric plane under a rotated U/V basis")
 }
@@ -978,8 +978,8 @@ func TestValidateLoftRecordsDistinctPlanesPass(t *testing.T) {
 func TestEvalLoftCollapsedTriangleIsDegenerate(t *testing.T) {
 	t.Parallel()
 	p := unitSquareProfile()
-	pl0 := PlaneRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(1, 0, 0), V: r3.NewVec(0, 1, 0)}
-	pl1 := PlaneRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(0, 1, 0), V: r3.NewVec(0, 0, 1)}
+	pl0 := planeRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(1, 0, 0), V: r3.NewVec(0, 1, 0)}
+	pl1 := planeRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(0, 1, 0), V: r3.NewVec(0, 0, 1)}
 	pl := loftPayload{
 		profile0: p, profile1: p,
 		recordArea: loftRecordAreasOrZero(p, p),
@@ -1001,7 +1001,7 @@ func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
 	t.Parallel()
 	p := unitSquareProfile()
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
-	pl1 := PlaneRecord{Origin: r3.NewVec(1, 0, 1), U: r3.NewVec(-1, 0, 0), V: r3.NewVec(0, 1, 0)}
+	pl1 := planeRecord{Origin: r3.NewVec(1, 0, 1), U: r3.NewVec(-1, 0, 0), V: r3.NewVec(0, 1, 0)}
 	pl := loftPayload{
 		profile0: p, profile1: p,
 		recordArea: loftRecordAreasOrZero(p, p),
@@ -1016,17 +1016,17 @@ func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
 
 // manyGonLoop builds a regular n-gon loop centered at (cx, cy) with the
 // given radius, CCW.
-func manyGonLoop(cx, cy, radius float64, n int) LoopRecord {
+func manyGonLoop(cx, cy, radius float64, n int) loopRecord {
 	pts := make([]Point2, n)
 	for i := range n {
 		theta := 2 * math.Pi * float64(i) / float64(n)
 		pts[i] = pt(cx+radius*math.Cos(theta), cy+radius*math.Sin(theta))
 	}
-	segs := make([]CurveSegment, n)
+	segs := make([]curveSegment, n)
 	for i := range pts {
-		segs[i] = LineSeg{Start: pts[i], End: pts[(i+1)%n], TStart: 0, TEnd: 1}
+		segs[i] = lineSeg{Start: pts[i], End: pts[(i+1)%n], TStart: 0, TEnd: 1}
 	}
-	return LoopRecord{Segments: segs}
+	return loopRecord{Segments: segs}
 }
 
 // TestEvalLoftAuditCountsCandidatesNotPairs is S8's measure, wired end to
@@ -1042,7 +1042,7 @@ func TestEvalLoftAuditCountsCandidatesNotPairs(t *testing.T) {
 	t.Parallel()
 	const n = 1200
 	const radius = 10.0
-	p := ProfileRecord{Outer: manyGonLoop(0, 0, radius, n)}
+	p := profileRecord{Outer: manyGonLoop(0, 0, radius, n)}
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
@@ -1256,13 +1256,13 @@ func TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg(t *testing.T) {
 // (TStart 0, TEnd 1) so the loop closes on ordinary recorded corners, and
 // the closing segment's End is the walked point's own float64 value so the
 // loop is a clean triangle.
-func trimmedLineTriangleProfile() ProfileRecord {
-	segs := []CurveSegment{
-		LineSeg{Start: pt(0, 0), End: pt(10, 3), TStart: 0.1, TEnd: 1},
-		LineSeg{Start: pt(10, 3), End: pt(5, 7), TStart: 0, TEnd: 1},
-		LineSeg{Start: pt(5, 7), End: pt(1, 0.30000000000000004), TStart: 0, TEnd: 1},
+func trimmedLineTriangleProfile() profileRecord {
+	segs := []curveSegment{
+		lineSeg{Start: pt(0, 0), End: pt(10, 3), TStart: 0.1, TEnd: 1},
+		lineSeg{Start: pt(10, 3), End: pt(5, 7), TStart: 0, TEnd: 1},
+		lineSeg{Start: pt(5, 7), End: pt(1, 0.30000000000000004), TStart: 0, TEnd: 1},
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	return profileRecord{Outer: loopRecord{Segments: segs}}
 }
 
 // TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg is the counterpart
@@ -1357,17 +1357,17 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 // these are the fixtures that exercise capPolygonAreaRat's multi-loop arm at
 // all: on a single-loop profile the loop over loopIdx runs exactly once and
 // hole netting is never reached.
-func holeSquareProfile() ProfileRecord {
-	return ProfileRecord{
+func holeSquareProfile() profileRecord {
+	return profileRecord{
 		Outer: squareLoop(0.5, 0.5, 0.5, true),
-		Holes: []LoopRecord{squareLoop(0.5, 0.5, 0.2, false)},
+		Holes: []loopRecord{squareLoop(0.5, 0.5, 0.2, false)},
 	}
 }
 
-func twoHoleSquareProfile() ProfileRecord {
-	return ProfileRecord{
+func twoHoleSquareProfile() profileRecord {
+	return profileRecord{
 		Outer: squareLoop(0.5, 0.5, 0.5, true),
-		Holes: []LoopRecord{
+		Holes: []loopRecord{
 			squareLoop(0.3, 0.3, 0.1, false),
 			squareLoop(0.7, 0.7, 0.1, false),
 		},
@@ -1376,7 +1376,7 @@ func twoHoleSquareProfile() ProfileRecord {
 
 // loftPayloadFor is the general unplaced-payload builder the cap-area table
 // uses: two profiles on two standard-basis planes at the given world origins.
-func loftPayloadFor(t *testing.T, p0, p1 ProfileRecord, o0, o1 r3.Vec) loftPayload {
+func loftPayloadFor(t *testing.T, p0, p1 profileRecord, o0, o1 r3.Vec) loftPayload {
 	t.Helper()
 	pl0, pl1 := planeAt(o0), planeAt(o1)
 	return loftPayload{
@@ -1457,7 +1457,7 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 		{
 			name: "frustum, unit square to quarter square",
 			build: func(t *testing.T) loftPayload {
-				small := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.25, true)}
+				small := profileRecord{Outer: squareLoop(0.5, 0.5, 0.25, true)}
 				return loftPayloadFor(t, unitSquareProfile(), small, zero, up)
 			},
 		},
@@ -1473,7 +1473,7 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 		{
 			name: "triangle",
 			build: func(t *testing.T) loftPayload {
-				tri := ProfileRecord{Outer: triangleLoop()}
+				tri := profileRecord{Outer: triangleLoop()}
 				return loftPayloadFor(t, tri, tri, zero, up)
 			},
 		},

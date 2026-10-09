@@ -151,7 +151,7 @@ func TestWalkSegmentAreaIsTheCircularSegmentClosedForm(t *testing.T) {
 	// r²/2 · (θ − n·sin(θ/n)), which is what the caps lose and the
 	// occupied-volume term multiplies by the sweep height.
 	const r = 3.0
-	seg := ArcSeg{
+	seg := arcSeg{
 		Start:  Point2{U: r, V: 0},
 		End:    Point2{U: 0, V: r},
 		Center: Point2{U: 0, V: 0},
@@ -430,7 +430,7 @@ func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
 
 	var spans []freeform.BezierSpan
 	for _, seg := range pp.profile.Outer.Segments {
-		if _, isFree := seg.(FitSplineSeg); !isFree {
+		if _, isFree := seg.(fitSplineSeg); !isFree {
 			continue
 		}
 		var err error

@@ -405,7 +405,7 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 
 // brepCarrierWalk walks one brep wall for the clearance model. ok is false
 // for a wall this kernel cannot carry, which leaves the body with no model.
-func brepCarrierWalk(seg CurveSegment) (survey2d.SegmentWalk, bool) {
+func brepCarrierWalk(seg curveSegment) (survey2d.SegmentWalk, bool) {
 	w, err := boundarywalk.WalkOf(seg, nil)
 	if err != nil {
 		return survey2d.SegmentWalk{}, false

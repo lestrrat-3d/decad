@@ -68,8 +68,8 @@ import (
 // and cupPlan charges it to the offset region's columns of the stacked build
 // (docs/modify-design.md §9, §10).
 type cupView struct {
-	outer          ProfileRecord
-	cavity         ProfileRecord
+	outer          profileRecord
+	cavity         profileRecord
 	frame          r3.Frame
 	zOpen          float64
 	zOuter         float64
@@ -174,7 +174,7 @@ func (cp cupView) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 // opens the cup at the top (z1); a removed start opens it at the bottom (z0),
 // its mirror. Inward, O is the original section P and C the erosion Q; outward,
 // O is the dilation Q and C the original P.
-func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t, tDelta, offsetDelta float64, removedEnd bool) cupView {
+func cupPayloadFor(pp prismPayload, offset profileRecord, s, t, tDelta, offsetDelta float64, removedEnd bool) cupView {
 	z0, z1 := pp.z0, pp.z1
 	o, c := pp.profile, offset
 	if s < 0 {
@@ -320,9 +320,9 @@ func (cp cupView) payload(ctx context.Context) (cupPayload, error) {
 	if err != nil {
 		return cupPayload{}, err
 	}
-	floor := prismSlab{regions: []ProfileRecord{cp.outer}}
+	floor := prismSlab{regions: []profileRecord{cp.outer}}
 	wall := prismSlab{regions: bands}
-	exposed := []ProfileRecord{cp.cavity}
+	exposed := []profileRecord{cp.cavity}
 	out := cupPayload{
 		stack:          stackedPrismPayload{frame: cp.frame, xform: cp.xform},
 		thickness:      cp.thickness,
@@ -477,7 +477,7 @@ func renameCavityRoles(ctx context.Context, faces []*Face, ref producerID) error
 // difference of the two loops it spans, and both are strictly nested (the audit
 // proved the cavity simple and inside the outer region), so the absolute
 // difference is the band's analytic area, with both source bounds carried.
-func loopEnclosedAreaContext(ctx context.Context, l LoopRecord) (proofbound.BoundedScalar, error) {
+func loopEnclosedAreaContext(ctx context.Context, l loopRecord) (proofbound.BoundedScalar, error) {
 	ig, err := loopRegionIntegralsContext(ctx, l)
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
@@ -489,7 +489,7 @@ func loopEnclosedAreaContext(ctx context.Context, l LoopRecord) (proofbound.Boun
 // loop's own segments about the plane origin — the shared walk
 // loopEnclosedAreaContext and loopEnclosedMomentsContext both read, so the
 // two never disagree about which boundary they integrated.
-func loopRegionIntegralsContext(ctx context.Context, l LoopRecord) (regionIntegrals, error) {
+func loopRegionIntegralsContext(ctx context.Context, l loopRecord) (regionIntegrals, error) {
 	var ig regionIntegrals
 	for _, seg := range l.Segments {
 		if err := ctx.Err(); err != nil {
@@ -520,7 +520,7 @@ func loopRegionIntegralsContext(ctx context.Context, l LoopRecord) (regionIntegr
 // The caller (evalCapBlendContext) applies its own per-loop sign
 // (outer/hole, by loop index) on top of this canonicalized triple, exactly as
 // it already does to loopEnclosedAreaContext's |area| for the slab volume.
-func loopEnclosedMomentsContext(ctx context.Context, l LoopRecord) (area, mu, mv proofbound.BoundedScalar, err error) {
+func loopEnclosedMomentsContext(ctx context.Context, l loopRecord) (area, mu, mv proofbound.BoundedScalar, err error) {
 	ig, err := loopRegionIntegralsContext(ctx, l)
 	if err != nil {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err

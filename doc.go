@@ -220,9 +220,8 @@
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
 //	  a chorded free-form wall past the fixed work budget     ErrUnsupported
 //
-// Options: among the MODEL-CONSTRUCTION verbs, New and Revolve expose option
-// groups that carry nothing today (they exist so options can be added without
-// a signature change). WithTangentChain expands a Fillet's or Chamfer's edges
+// Options: Revolve accepts WithSurfaceResult for a sheet result.
+// WithTangentChain expands a Fillet's or Chamfer's edges
 // across proven tangent continuations, WithAsymmetricChamfer gives a Chamfer
 // two setbacks, WithShellSense picks a shell's wall sense, WithNoOpenings asks
 // for a closed shell (built for a full revolve and a hole-free prism,

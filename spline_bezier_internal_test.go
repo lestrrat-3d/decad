@@ -117,7 +117,7 @@ func TestSplineBezierMatchesGeomEvaluator(t *testing.T) {
 		coords[i] = [2]float64{point.U, point.V}
 	}
 
-	spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+	spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	require.Len(t, spans, len(control)-3, "a clamped cubic over n controls has n-3 spans")
 
@@ -227,7 +227,7 @@ func TestSplineBezierSpansUseSketchFloatKnots(t *testing.T) {
 				knots[i] = polynomial.MustRatOf(knot)
 			}
 
-			spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+			spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 			require.NoError(t, err)
 			require.Len(t, spans, controls-3)
 
@@ -260,7 +260,7 @@ func TestClosedSplineBezierMatchesGeomEvaluator(t *testing.T) {
 	}
 
 	spans, err := splinebezier.ClosedSplineBezierSpans(
-		ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
+		closedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
 		&freeform.FreeformWork{},
 	)
 	require.NoError(t, err)
@@ -289,7 +289,7 @@ func TestNURBSBezierMatchesGeomEvaluator(t *testing.T) {
 	weights := []float64{1, 1, 1, 1, 1}
 	curve := geom.NewNURBS(3, coords, knots, weights)
 
-	spans, err := splinebezier.NURBSBezierSpans(NURBSSeg{
+	spans, err := splinebezier.NURBSBezierSpans(nurbsSeg{
 		Degree:  3,
 		Control: control,
 		Knots:   knots,
@@ -313,12 +313,12 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name    string
-		segment CurveSegment
+		segment curveSegment
 		message string
 	}{
 		{
 			name: "trimmed fit spline",
-			segment: FitSplineSeg{
+			segment: fitSplineSeg{
 				Fit:    []Point2{{}, {U: 1, V: 1}, {U: 2}},
 				TStart: 0.25, TEnd: 0.75,
 			},
@@ -326,7 +326,7 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 		},
 		{
 			name: "elliptical arc",
-			segment: EllipticalArcSeg{
+			segment: ellipticalArcSeg{
 				Center: Point2{}, Start: Point2{U: 1}, End: Point2{V: 1},
 				TStart: 0, TEnd: 1,
 			},
@@ -339,7 +339,7 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 		},
 		{
 			name: "trimmed spline",
-			segment: SplineSeg{
+			segment: splineSeg{
 				Control: []Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}},
 				TStart:  0.25, TEnd: 0.75,
 			},
@@ -355,9 +355,9 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 	}
 }
 
-func rationalNURBSFixture() NURBSSeg {
+func rationalNURBSFixture() nurbsSeg {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	return NURBSSeg{
+	return nurbsSeg{
 		Degree:  3,
 		Control: control,
 		Knots:   []float64{0, 0, 0, 0, 1, 1, 1, 1},
@@ -418,7 +418,7 @@ const maxDegreeOneNURBSControls = 262143
 // degreeOneNURBSWithTrailingNaN carries its non-finite element as far from the
 // start as a record can: the LAST interior knot, so the whole control array and
 // almost the whole knot vector are walked before the content scan can refuse it.
-func degreeOneNURBSWithTrailingNaN(controls int) NURBSSeg {
+func degreeOneNURBSWithTrailingNaN(controls int) nurbsSeg {
 	seg := wellFormedDegreeOneNURBS(controls)
 	seg.Knots[len(seg.Knots)-3] = math.NaN()
 	return seg
@@ -427,7 +427,7 @@ func degreeOneNURBSWithTrailingNaN(controls int) NURBSSeg {
 // wellFormedDegreeOneNURBS is the same record with every element valid and every
 // weight equal, so it clears the content scan and the tier test and is refused
 // only by the conversion charge — the path on which every preflight pass runs.
-func wellFormedDegreeOneNURBS(controls int) NURBSSeg {
+func wellFormedDegreeOneNURBS(controls int) nurbsSeg {
 	control := make([]Point2, controls)
 	weights := make([]float64, controls)
 	for i := range control {
@@ -441,7 +441,7 @@ func wellFormedDegreeOneNURBS(controls int) NURBSSeg {
 		knots = append(knots, float64(j)/float64(interior+1))
 	}
 	knots = append(knots, 1, 1)
-	return NURBSSeg{Degree: 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	return nurbsSeg{Degree: 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 }
 
 // The size-derived lift charge must be levied BEFORE the per-element content
@@ -565,54 +565,54 @@ func TestReconstructionChordsRestateSketchSampling(t *testing.T) {
 
 	for _, tc := range []struct {
 		name    string
-		segment CurveSegment
+		segment curveSegment
 		want    uint64
 	}{
-		{name: "line", segment: LineSeg{Start: point(0, 0), End: point(1, 0)}, want: 1},
+		{name: "line", segment: lineSeg{Start: point(0, 0), End: point(1, 0)}, want: 1},
 		{
 			name:    "circle",
-			segment: CircleSeg{Center: point(0, 0), Radius: units.Millimeters(1), CCW: true},
+			segment: circleSeg{Center: point(0, 0), Radius: units.Millimeters(1), CCW: true},
 			want:    256,
 		},
 		{
 			name:    "quarter arc",
-			segment: ArcSeg{Center: point(0, 0), Start: point(1, 0), End: point(0, 1)},
+			segment: arcSeg{Center: point(0, 0), Start: point(1, 0), End: point(0, 1)},
 			want:    64,
 		},
 		{
 			name:    "half arc",
-			segment: ArcSeg{Center: point(0, 0), Start: point(1, 0), End: point(-1, 0)},
+			segment: arcSeg{Center: point(0, 0), Start: point(1, 0), End: point(-1, 0)},
 			want:    128,
 		},
 		{
 			name:    "three-control closed spline floors at 64",
-			segment: ClosedSplineSeg{Control: controls(3), CCW: true},
+			segment: closedSplineSeg{Control: controls(3), CCW: true},
 			want:    64,
 		},
 		{
 			name:    "large closed spline is 16 per control",
-			segment: ClosedSplineSeg{Control: controls(100), CCW: true},
+			segment: closedSplineSeg{Control: controls(100), CCW: true},
 			want:    1600,
 		},
 		{
 			name:    "open spline is 16 per span",
-			segment: SplineSeg{Control: controls(100)},
+			segment: splineSeg{Control: controls(100)},
 			want:    16 * 97,
 		},
 		{
 			name:    "four-control open spline floors at 64",
-			segment: SplineSeg{Control: controls(4)},
+			segment: splineSeg{Control: controls(4)},
 			want:    64,
 		},
 		{
 			name: "NURBS is 16 per control",
-			segment: NURBSSeg{
+			segment: nurbsSeg{
 				Degree: 1, Control: controls(100),
 				Knots: make([]float64, 102), Weights: make([]float64, 100),
 			},
 			want: 1600,
 		},
-		{name: "fit spline is 16 per fit point", segment: FitSplineSeg{Fit: controls(100)}, want: 1600},
+		{name: "fit spline is 16 per fit point", segment: fitSplineSeg{Fit: controls(100)}, want: 1600},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, momentinput.ReconstructionChords(tc.segment))
@@ -627,22 +627,22 @@ func TestReconstructionChordsRestateSketchSampling(t *testing.T) {
 func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 4, V: 0}, {U: 2, V: 3}}
-	one := ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+	one := closedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
 
-	single := momentinput.ReconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one}}})
+	single := momentinput.ReconstructionOf(profileRecord{Outer: loopRecord{Segments: []curveSegment{one}}})
 	require.Equal(t, uint64(64), single.Chords)
 	require.Equal(t, uint64(64*64), single.Arrangement)
 
-	pair := momentinput.ReconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one, one}}})
+	pair := momentinput.ReconstructionOf(profileRecord{Outer: loopRecord{Segments: []curveSegment{one, one}}})
 	require.Equal(t, uint64(128), pair.Chords, "the chord total is the whole record's")
 	require.Equal(t, uint64(128*128), pair.Arrangement)
 	require.Greater(t, pair.Arrangement, 2*single.Arrangement,
 		"a sum of per-source squares drops every cross-source pair")
 
 	// A hole's chords are in the same arrangement as the outer loop's.
-	withHole := momentinput.ReconstructionOf(ProfileRecord{
-		Outer: LoopRecord{Segments: []CurveSegment{one}},
-		Holes: []LoopRecord{{Segments: []CurveSegment{one}}},
+	withHole := momentinput.ReconstructionOf(profileRecord{
+		Outer: loopRecord{Segments: []curveSegment{one}},
+		Holes: []loopRecord{{Segments: []curveSegment{one}}},
 	})
 	require.Equal(t, pair, withHole)
 
@@ -651,7 +651,7 @@ func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 	// charge each candidate profile then levies for itself.
 	work := &freeform.FreeformWork{}
 	arrangement, err := momentinput.ChargeReconstruction(
-		ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one}}},
+		profileRecord{Outer: loopRecord{Segments: []curveSegment{one}}},
 		work,
 	)
 	require.NoError(t, err)
@@ -665,20 +665,20 @@ func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 // center and radius, so the reconstruction charge must add its chords once.
 func TestReconstructionChargeInternsSharedAnalyticEntity(t *testing.T) {
 	t.Parallel()
-	first := CircleSeg{
+	first := circleSeg{
 		Center: Point2{U: 4, V: 5}, Radius: units.Millimeters(2), CCW: true,
 		TStart: 0, TEnd: 0.5,
 	}
 	second := first
 	second.TStart, second.TEnd = 0.5, 1
 
-	single := momentinput.ReconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first}}})
-	shared := momentinput.ReconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first, second}}})
+	single := momentinput.ReconstructionOf(profileRecord{Outer: loopRecord{Segments: []curveSegment{first}}})
+	shared := momentinput.ReconstructionOf(profileRecord{Outer: loopRecord{Segments: []curveSegment{first, second}}})
 	require.Equal(t, single.Chords, shared.Chords, "two fragments naming one circle are charged once")
 
 	distinct := second
 	distinct.Center = Point2{U: 9, V: 5}
-	twoEntities := momentinput.ReconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first, distinct}}})
+	twoEntities := momentinput.ReconstructionOf(profileRecord{Outer: loopRecord{Segments: []curveSegment{first, distinct}}})
 	require.Equal(t, 2*single.Chords, twoEntities.Chords, "two distinct circles each contribute their chords")
 }
 
@@ -839,7 +839,7 @@ func TestUnchargedKnotProbesRefuse(t *testing.T) {
 		knots = append(knots, float64(j)/float64(interior+1))
 	}
 	knots = append(knots, 1, 1)
-	seg := NURBSSeg{Degree: 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	seg := nurbsSeg{Degree: 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
 
 	start := time.Now()
@@ -885,7 +885,7 @@ func TestWideSpanIntegrationRefusesBeforeExpanding(t *testing.T) {
 	for range degree + 1 {
 		knots = append(knots, 1)
 	}
-	seg := NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	seg := nurbsSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
 
 	spans, _, err := splinebezier.FreeformBezierSpans(seg, &freeform.FreeformWork{})

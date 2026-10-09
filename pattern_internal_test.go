@@ -113,7 +113,7 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 			} else {
 				require.Positive(t, pp.sectionDelta, "60° turns read certified trig")
 			}
-			circle, ok := pp.profile.Outer.Segments[0].(CircleSeg)
+			circle, ok := pp.profile.Outer.Segments[0].(circleSeg)
 			require.True(t, ok)
 			du := new(big.Float).SetPrec(512).Sub(f(circle.Center.U), wants[i][0])
 			dv := new(big.Float).SetPrec(512).Sub(f(circle.Center.V), wants[i][1])

@@ -251,8 +251,8 @@ type ChainLoftOption interface {
 // orientation step, so a consumer dispatching on loftPayload would read three
 // facts about it that are not true.
 type chainLoftPayload struct {
-	chain0, chain1 ChainRecord
-	plane0, plane1 PlaneRecord
+	chain0, chain1 chainRecord
+	plane0, plane1 planeRecord
 	frame0, frame1 r3.Frame
 	xform          r3.Transform
 }

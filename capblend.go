@@ -58,7 +58,7 @@ import (
 // it labels, so a result's roles are minted from the result's own record,
 // never inherited).
 type capBlendPayload struct {
-	profile    ProfileRecord
+	profile    profileRecord
 	frame      r3.Frame
 	z0, z1     float64
 	z0Delta    float64
@@ -349,7 +349,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		// (extrude.go's circularExtremeInterval) — and it displaces the reading
 		// IN PLANE, so it composes with the axial terms above rather than
 		// replacing either.
-		l, h, planeAllow, err := boundaryExtremesBoundedContext(ctx, ProfileRecord{Outer: loop}, gu, gv, work, nil)
+		l, h, planeAllow, err := boundaryExtremesBoundedContext(ctx, profileRecord{Outer: loop}, gu, gv, work, nil)
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -373,7 +373,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		if err != nil {
 			return 0, 0, 0, err
 		}
-		cl, ch, contourPlaneAllow, err := boundaryExtremesBoundedContext(ctx, ProfileRecord{Outer: contour}, gu, gv, work, nil)
+		cl, ch, contourPlaneAllow, err := boundaryExtremesBoundedContext(ctx, profileRecord{Outer: contour}, gu, gv, work, nil)
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -442,8 +442,8 @@ func requireNotDraftReceiver(payload featurePayload, op string) error {
 
 // capLoops returns the receiver's loops as append(Outer, Holes...), the same
 // index space Table BX's roles and the prism's own side(i,j) roles use.
-func (cbp capBlendPayload) loops() []LoopRecord {
-	return append([]LoopRecord{cbp.profile.Outer}, cbp.profile.Holes...)
+func (cbp capBlendPayload) loops() []loopRecord {
+	return append([]loopRecord{cbp.profile.Outer}, cbp.profile.Holes...)
 }
 
 // classifyChamferSelection is RX1's second class plus SX4 (Table SX):
@@ -545,7 +545,7 @@ func classifyChamferSelection(ctx context.Context, pp prismPayload, caps prismCa
 // caps' own setbacks (§8.3.1); a cap with no selected loop reads neither.
 func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismPayload, start, end capSetback, startLoops, endLoops map[int]bool) (*Body, error) {
 	height := pp.z1 - pp.z0
-	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
+	loops := append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	cbp := capBlendPayload{
 		profile:    pp.profile,
 		frame:      pp.frame,
@@ -742,7 +742,7 @@ func requireCapBlendLevelsSeparate(cbp capBlendPayload) error {
 // body: it is ErrUnsupported whichever sentinel the audit itself raised, and
 // the audit's own error is folded in with %v so the refusal answers to one
 // sentinel only.
-func auditCapBlendSetbackSpan(budget *proofbound.WorkBudget, profile ProfileRecord, cbp capBlendPayload) error {
+func auditCapBlendSetbackSpan(budget *proofbound.WorkBudget, profile profileRecord, cbp capBlendPayload) error {
 	top, ok := cbp.setbackSpanTop()
 	if !ok {
 		return nil
@@ -801,38 +801,38 @@ func anyLoopSelected(loops map[int]bool) bool {
 // startLoops/endLoops — a loop chamfered on either or both caps takes one
 // in-plane offset, loopOffset's dc) into the material, leaving every other
 // loop unchanged. It reuses offset2d.BuildLoop's per-feature offset unmodified.
-func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (ProfileRecord, error) {
+func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (profileRecord, error) {
 	profile := cbp.profile
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
-	orig := append([]LoopRecord{profile.Outer}, profile.Holes...)
-	out := make([]LoopRecord, len(orig))
+	orig := append([]loopRecord{profile.Outer}, profile.Holes...)
+	out := make([]loopRecord, len(orig))
 	for li := range orig {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return ProfileRecord{}, err
+			return profileRecord{}, err
 		}
 		if !cbp.startLoops[li] && !cbp.endLoops[li] {
 			out[li] = cloneLoopRecord(orig[li])
 			continue
 		}
-		var segs []CurveSegment
+		var segs []curveSegment
 		if cbp.fillet && (len(loops[li].walks) != 1 || !loops[li].walks[0].Closed) {
 			joins, joinErr := filletOffsetJoins(budget, loops[li], cbp.loopOffset(li), cbp.loopSetback(li).dcDelta)
 			if joinErr != nil {
-				return ProfileRecord{}, offset2d.InLoop(joinErr, li)
+				return profileRecord{}, offset2d.InLoop(joinErr, li)
 			}
 			segs, err = filletOffsetLoop(budget, loops[li].walks, joins, cbp.loopOffset(li))
 		} else {
 			segs, err = offset2d.BuildLoop(budget, loops[li].walks, 1, cbp.loopOffset(li), shellTol)
 		}
 		if err != nil {
-			return ProfileRecord{}, offset2d.InLoop(err, li)
+			return profileRecord{}, offset2d.InLoop(err, li)
 		}
-		out[li] = LoopRecord{Segments: segs}
+		out[li] = loopRecord{Segments: segs}
 	}
-	return ProfileRecord{Outer: out[0], Holes: out[1:]}, nil
+	return profileRecord{Outer: out[0], Holes: out[1:]}, nil
 }
 
 // wrapCapBlendDropError re-sentinels the shared offset's own drop refusal as

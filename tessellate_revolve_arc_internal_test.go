@@ -294,7 +294,7 @@ func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
 	// the station's stored pair can be checked against the recorded circle by
 	// hand.
 	lift := revolvemesh.RevolveLift{DU: 1}
-	seg := CircleSeg{Center: Point2{U: 0, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
+	seg := circleSeg{Center: Point2{U: 0, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
 
 	station, gap, err := revolvesampling.ArcStation(lift, seg, 1, 4)
 	require.NoError(t, err)
@@ -314,7 +314,7 @@ func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
 
 	// A circle centred ON the axis has a station at ρ = 0 only where the
 	// generator crosses it, which sweeps no manifold solid.
-	onAxis := CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
+	onAxis := circleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
 	_, _, err = revolvesampling.ArcStation(lift, onAxis, 2, 4)
 	require.ErrorIs(t, err, ErrDegenerate)
 }

@@ -23,7 +23,7 @@ func internalSideSegments(t *testing.T, pp prismPayload, alongU bool, at float64
 	t.Helper()
 	out := map[int]struct{}{}
 	for i, seg := range pp.profile.Outer.Segments {
-		l, ok := seg.(LineSeg)
+		l, ok := seg.(lineSeg)
 		require.True(t, ok)
 		if alongU && l.Start.V == at && l.End.V == at || !alongU && l.Start.U == at && l.End.U == at {
 			out[i] = struct{}{}
@@ -34,14 +34,14 @@ func internalSideSegments(t *testing.T, pp prismPayload, alongU bool, at float64
 }
 
 // internalLoopPoints lists a line loop's start points in walk order.
-func internalLoopPoints(t *testing.T, loop LoopRecord) []Point2 {
+func internalLoopPoints(t *testing.T, loop loopRecord) []Point2 {
 	t.Helper()
 	out := make([]Point2, len(loop.Segments))
 	for i, seg := range loop.Segments {
-		l, ok := seg.(LineSeg)
+		l, ok := seg.(lineSeg)
 		require.True(t, ok, "segment %d is %T", i, seg)
 		out[i] = l.Start
-		require.Equal(t, l.End, loop.Segments[(i+1)%len(loop.Segments)].(LineSeg).Start, "the loop closes at segment %d", i)
+		require.Equal(t, l.End, loop.Segments[(i+1)%len(loop.Segments)].(lineSeg).Start, "the loop closes at segment %d", i)
 	}
 	return out
 }
@@ -163,13 +163,13 @@ func TestSideOpeningBrepChargesInexactThickness(t *testing.T) {
 // not tile: a wall section one unit short of P less C is SO5.
 func TestRequireAreaIdentityRefuses(t *testing.T) {
 	t.Parallel()
-	rect := func(u0, v0, u1, v1 float64) ProfileRecord {
+	rect := func(u0, v0, u1, v1 float64) profileRecord {
 		p := []Point2{{U: u0, V: v0}, {U: u1, V: v0}, {U: u1, V: v1}, {U: u0, V: v1}}
-		var loop LoopRecord
+		var loop loopRecord
 		for i := range p {
-			loop.Segments = append(loop.Segments, LineSeg{Start: p[i], End: p[(i+1)%4], TStart: 0, TEnd: 1})
+			loop.Segments = append(loop.Segments, lineSeg{Start: p[i], End: p[(i+1)%4], TStart: 0, TEnd: 1})
 		}
-		return ProfileRecord{Outer: loop}
+		return profileRecord{Outer: loop}
 	}
 	require.NoError(t, offset2d.RequireAreaIdentity(rect(0, 0, 4, 2), rect(0, 0, 4, 1), rect(0, 1, 4, 2)))
 	err := offset2d.RequireAreaIdentity(rect(0, 0, 4, 2), rect(0, 0, 3, 1), rect(0, 1, 4, 2))
@@ -183,7 +183,7 @@ func internalSideSegmentsOn(t *testing.T, pp prismPayload, a, b Point2) map[int]
 	t.Helper()
 	out := map[int]struct{}{}
 	for i, seg := range pp.profile.Outer.Segments {
-		l, ok := seg.(LineSeg)
+		l, ok := seg.(lineSeg)
 		require.True(t, ok)
 		if l.Start == a && l.End == b {
 			out[i] = struct{}{}
@@ -334,9 +334,9 @@ func internalDSectionPrism(t *testing.T) (prismPayload, int, int) {
 	arc, chord := -1, -1
 	for i, seg := range pp.profile.Outer.Segments {
 		switch seg.(type) {
-		case ArcSeg:
+		case arcSeg:
 			arc = i
-		case LineSeg:
+		case lineSeg:
 			chord = i
 		}
 	}
@@ -345,7 +345,7 @@ func internalDSectionPrism(t *testing.T) (prismPayload, int, int) {
 }
 
 // internalWalkedPoints lists a loop's walked start points in walk order.
-func internalWalkedPoints(t *testing.T, loop LoopRecord) []Point2 {
+func internalWalkedPoints(t *testing.T, loop loopRecord) []Point2 {
 	t.Helper()
 	out := make([]Point2, len(loop.Segments))
 	for i, seg := range loop.Segments {
@@ -360,11 +360,11 @@ func internalWalkedPoints(t *testing.T, loop LoopRecord) []Point2 {
 // be a parameter range of the receiver's own arc record — its Center, Start
 // and End verbatim, or Start and End swapped (the arc's complement) — so the
 // record build keys each on the arc's circle (§4.2).
-func internalArcPieces(t *testing.T, own ArcSeg, sec sideOpeningSection) {
+func internalArcPieces(t *testing.T, own arcSeg, sec sideOpeningSection) {
 	t.Helper()
-	for _, region := range []ProfileRecord{sec.wall, sec.cavity, sec.caps} {
+	for _, region := range []profileRecord{sec.wall, sec.cavity, sec.caps} {
 		for _, seg := range region.Outer.Segments {
-			a, ok := seg.(ArcSeg)
+			a, ok := seg.(arcSeg)
 			if !ok {
 				continue
 			}
@@ -378,7 +378,7 @@ func internalArcPieces(t *testing.T, own ArcSeg, sec sideOpeningSection) {
 // internalCutWithin requires the point the arc segment seg denotes at the
 // parameter t — enclosed over rational intervals — to lie within e of the
 // exact cut, component by component: u exactly, and v = sign·√v2.
-func internalCutWithin(t *testing.T, seg CurveSegment, tCut float64, u *big.Rat, sign int, v2 int64, e float64) {
+func internalCutWithin(t *testing.T, seg curveSegment, tCut float64, u *big.Rat, sign int, v2 int64, e float64) {
 	t.Helper()
 	uIv, vIv, ok := circularbounds.EndpointInterval(circularbounds.RecordSegment(seg), proofarith.FloatRat(tCut))
 	require.True(t, ok)
@@ -414,18 +414,18 @@ func TestSideOpeningRegionsDSection(t *testing.T) {
 	t.Parallel()
 	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
 	pp, arc, chord := internalDSectionPrism(t)
-	own := pp.profile.Outer.Segments[arc].(ArcSeg)
+	own := pp.profile.Outer.Segments[arc].(arcSeg)
 	regions := func(t *testing.T, removed, keptCaps int, tmm float64) (sideOpeningSection, error) {
 		t.Helper()
 		budget := proofbound.NewWorkBudget(t.Context())
 		return sideOpeningRegions(budget, pp, map[int]struct{}{removed: {}}, keptCaps, 1, units.Millimeters(tmm), tmm, 0)
 	}
 	// rims are W's two rims: vB → qB at index 1, qA → vA at index 3.
-	rims := func(t *testing.T, sec sideOpeningSection) (ArcSeg, ArcSeg) {
+	rims := func(t *testing.T, sec sideOpeningSection) (arcSeg, arcSeg) {
 		t.Helper()
 		require.Len(t, sec.wall.Outer.Segments, 4)
-		b, okB := sec.wall.Outer.Segments[1].(ArcSeg)
-		a, okA := sec.wall.Outer.Segments[3].(ArcSeg)
+		b, okB := sec.wall.Outer.Segments[1].(arcSeg)
+		a, okA := sec.wall.Outer.Segments[3].(arcSeg)
 		require.True(t, okB && okA, "the rims are pieces of the removed arc")
 		return b, a
 	}
@@ -443,7 +443,7 @@ func TestSideOpeningRegionsDSection(t *testing.T) {
 		t.Parallel()
 		sec, err := regions(t, arc, 2, 3)
 		require.NoError(t, err)
-		require.Equal(t, LineSeg{Start: pt(3, 4), End: pt(3, -4), TStart: 0, TEnd: 1}, sec.cavity.Outer.Segments[0], "C opens with x = 3")
+		require.Equal(t, lineSeg{Start: pt(3, 4), End: pt(3, -4), TStart: 0, TEnd: 1}, sec.cavity.Outer.Segments[0], "C opens with x = 3")
 		require.Equal(t, []Point2{pt(0, 5), pt(0, -5)}, internalWalkedPoints(t, sec.wall.Outer)[:2])
 		internalArcPieces(t, own, sec)
 		b, a := rims(t, sec)
@@ -510,7 +510,7 @@ func TestSideOpeningRegionsArcArcCut(t *testing.T) {
 	pp := body.payload.(prismPayload)
 	removed := map[int]struct{}{}
 	for i, seg := range pp.profile.Outer.Segments {
-		if a, ok := seg.(ArcSeg); ok && a.Center == (Point2{}) {
+		if a, ok := seg.(arcSeg); ok && a.Center == (Point2{}) {
 			continue
 		}
 		removed[i] = struct{}{}
@@ -559,7 +559,7 @@ func internalArcSectionPrism(t *testing.T, build func(s *sketch.Sketch)) (prismP
 	pp := body.payload.(prismPayload)
 	removed := map[int]struct{}{}
 	for i, seg := range pp.profile.Outer.Segments {
-		if a, ok := seg.(ArcSeg); ok && a.Center == (Point2{}) {
+		if a, ok := seg.(arcSeg); ok && a.Center == (Point2{}) {
 			continue
 		}
 		removed[i] = struct{}{}
@@ -617,7 +617,7 @@ func TestSideOpeningRegionsArcExtension(t *testing.T) {
 	// starts and ends.
 	offsetArc := func(t *testing.T, sec sideOpeningSection) (Point2, Point2) {
 		t.Helper()
-		arc, ok := sec.caps.Outer.Segments[0].(ArcSeg)
+		arc, ok := sec.caps.Outer.Segments[0].(arcSeg)
 		require.True(t, ok, "O opens with the offset arc")
 		require.Equal(t, Point2{}, arc.Center)
 		from, to, ok := offset2d.WalkedEnds(arc)

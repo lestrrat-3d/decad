@@ -100,7 +100,7 @@ type revolvePlan struct {
 	rp        revolvePayload
 	basis     revolvemesh.RevolveBasis
 	ideal     revolvemesh.RevolveBasis3Iv
-	loops     []LoopRecord
+	loops     []loopRecord
 	resolved  []revolveWalks
 	junctions [][]revolvemesh.RevMeridian
 	faceOf    func(string) (*Face, error)
@@ -206,7 +206,7 @@ func (p *revolvePlan) refine(r revolveRefine) error {
 type revolveResolution struct {
 	basis       revolvemesh.RevolveBasis
 	ideal       revolvemesh.RevolveBasis3Iv
-	loops       []LoopRecord
+	loops       []loopRecord
 	resolved    []revolveWalks
 	junctions   [][]revolvemesh.RevMeridian
 	rhoMax      float64
@@ -228,7 +228,7 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution,
 	// One resolution of every loop, shared with the builder (revolveaxis.ResolveLoop),
 	// so the mesh is read off the walks the body was built from.
 	work := freeform.NewFreeformWork()
-	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
+	loops := append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	resolved := make([]revolveWalks, len(loops))
 	junctions := make([][]revolvemesh.RevMeridian, len(loops))
 	junctionGap := 0.0

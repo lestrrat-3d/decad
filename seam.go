@@ -1,8 +1,6 @@
 package decad
 
 import (
-	"fmt"
-
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
@@ -20,8 +18,8 @@ type MeasuredProfile struct {
 }
 
 // MeasureProfile authenticates a current profile from s and records its
-// boundary for 2D measurement. It returns the same admission errors as
-// RecordProfile. Neither s nor p may be nil.
+// boundary for 2D measurement. It returns the feature calls' profile admission
+// errors. Neither s nor p may be nil.
 func MeasureProfile(s *sketch.Sketch, p *sketch.Profile) (MeasuredProfile, error) {
 	record, _, _, err := recordProfile(s, p)
 	if err != nil {
@@ -42,13 +40,11 @@ func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
 	return p.record.SecondMoments()
 }
 
-// RecordProfile converts a sketch profile into the structural records a
-// the evaluator carries: the region as a [ProfileRecord] — the entity's own
+// recordProfile converts a sketch profile into the structural records
+// the evaluator carries: the region as a profile record — the entity's own
 // defining data per boundary edge, plus the recorded range — and the sketch
-// plane, read through s.Plane().Frame(), as the [PlaneRecord] that lifts the
-// plane-local region into world space. The feature calls run exactly this
-// conversion; it is exported so a consumer can record — and therefore vet — a
-// profile without a Document.
+// plane, read through s.Plane().Frame(), as the plane record that lifts the
+// plane-local region into world space. The feature calls run this conversion.
 //
 // Admission consumes only a fresh snapshot authenticated against sketch's own
 // answers (docs/api-design.md §7): p must name s (Profile.Sketch, else
@@ -76,51 +72,30 @@ func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
 // record's own endpoint, so it remains an exact check. Ends merely driven
 // together by a coincidence constraint remain a whole-to-whole exact check:
 // the solver converges to within its residual, not to the same coordinate.
-func RecordProfile(s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, PlaneRecord, error) {
-	profile, plane, _, err := recordProfile(s, p)
-	return profile, plane, err
-}
-
-// recordProfile returns the authenticated profile's area with its structural
-// record so feature callers never read a caller-mutable field after admission.
-func recordProfile(s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, PlaneRecord, float64, error) {
-	trusted, err := sketchrecord.AdmitProfile(s, p)
-	if err != nil {
-		return ProfileRecord{}, PlaneRecord{}, 0, err
-	}
-
-	frame, err := s.Plane().Frame()
-	if err != nil {
-		return ProfileRecord{}, PlaneRecord{}, 0, fmt.Errorf(`decad: failed to resolve the sketch plane: %w`, err)
-	}
-	plane := PlaneRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()}
-
-	record, err := recordArrangedProfile(trusted)
-	if err != nil {
-		return ProfileRecord{}, PlaneRecord{}, 0, err
-	}
-	return record, plane, trusted.Area, nil
+// The return value includes authenticated area so feature callers never read
+// a caller-mutable field after admission.
+func recordProfile(s *sketch.Sketch, p *sketch.Profile) (profileRecord, planeRecord, float64, error) {
+	return momentinput.RecordProfileWithArea(s, p)
 }
 
 // recordArrangedProfile records a profile from a fresh sketch arrangement.
 // Callers that skip sketchrecord.AuthenticateProfile must own the sketch and
 // pass a profile returned by that same arrangement. The record walk checks
 // each fragment's TExact claim, range, and loop closure.
-func recordArrangedProfile(p *sketch.Profile) (ProfileRecord, error) {
+func recordArrangedProfile(p *sketch.Profile) (profileRecord, error) {
 	outer, holes, err := sketchrecord.RecordProfileLoops(p)
 	if err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
-	return ProfileRecord{Outer: outer, Holes: holes}, nil
+	return profileRecord{Outer: outer, Holes: holes}, nil
 }
 
-// RecordChain converts a sketch chain — Profile's open counterpart — into the
-// structural records the evaluator carries: the open walk as a [ChainRecord]
-// and the sketch plane as a [PlaneRecord], read through s.Plane().Frame().
-// ExtrudeChain and RevolveChain run exactly this conversion; it is exported so
-// a consumer can record — and therefore vet — a chain without a Document.
+// recordChain converts a sketch chain — Profile's open counterpart — into the
+// structural records the evaluator carries: the open walk as a chain record
+// and the sketch plane as a plane record, read through s.Plane().Frame().
+// ExtrudeChain and RevolveChain run this conversion.
 //
-// Every gate RecordProfile runs, RecordChain runs unchanged
+// Every profile admission gate also applies to chains
 // (docs/sketch-seam-design.md §2.2, docs/surface-design.md §13.3): ch must
 // name s (Chain.Sketch, else [ErrForeignProfile]), be current (Chain.IsStale,
 // else [ErrStaleProfile]), and its exported fields — Entities, Edges, Length,
@@ -140,11 +115,7 @@ func recordArrangedProfile(p *sketch.Profile) (ProfileRecord, error) {
 // is never recorded or read as a measurement: it is exact only for a *Line,
 // *Arc or *Circle fragment and a sampling-convergent underestimate otherwise,
 // with no bound stated for the gap (docs/surface-design.md §13.3).
-func RecordChain(s *sketch.Sketch, ch *sketch.Chain) (ChainRecord, PlaneRecord, error) {
-	return recordChain(s, ch)
-}
-
-func recordChain(s *sketch.Sketch, ch *sketch.Chain) (ChainRecord, PlaneRecord, error) {
+func recordChain(s *sketch.Sketch, ch *sketch.Chain) (chainRecord, planeRecord, error) {
 	return sketchrecord.RecordChain(s, ch)
 }
 
@@ -159,9 +130,9 @@ func sameChainSnapshot(a, b *sketch.Chain) bool {
 
 type loopJoin = sketchrecord.LoopJoin
 
-func recordEdge(edge sketch.BoundaryEdge) (CurveSegment, error) { return sketchrecord.RecordEdge(edge) }
+func recordEdge(edge sketch.BoundaryEdge) (curveSegment, error) { return sketchrecord.RecordEdge(edge) }
 
-func edgeJoin(edge sketch.BoundaryEdge, segment CurveSegment) (loopJoin, error) {
+func edgeJoin(edge sketch.BoundaryEdge, segment curveSegment) (loopJoin, error) {
 	return sketchrecord.EdgeJoin(edge, segment)
 }
 

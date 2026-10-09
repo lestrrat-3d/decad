@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -215,10 +217,10 @@ func extendRevolveRibbon(t *testing.T, doc *decad.Document, a decad.AngularExten
 		if len(chain.Edges) != 1 || chain.Edges[0].Entity != line {
 			continue
 		}
-		record, _, err := decad.RecordChain(s, chain)
+		record, _, err := sketchrecord.RecordChain(s, chain)
 		require.NoError(t, err)
 		require.Len(t, record.Segments, 1)
-		seg, ok := record.Segments[0].(decad.LineSeg)
+		seg, ok := record.Segments[0].(sectionrecord.LineSeg)
 		require.True(t, ok)
 		if seg.TStart != 0 {
 			continue // the upper fragment, anchored at the line's far end

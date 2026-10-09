@@ -442,7 +442,7 @@ func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]c
 // coalesced corner walk in the section's own plane-local coordinates. A prism
 // reads its section through it, and a revolve its meridian
 // (revolve_blend.go): the corner rewrite is the same 2D construction for both.
-func profileCornerLoopsBudget(budget *proofbound.WorkBudget, profile ProfileRecord) ([]cornerLoop, error) {
+func profileCornerLoopsBudget(budget *proofbound.WorkBudget, profile profileRecord) ([]cornerLoop, error) {
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return nil, err
 	}
@@ -451,7 +451,7 @@ func profileCornerLoopsBudget(budget *proofbound.WorkBudget, profile ProfileReco
 	// segment of every loop below.
 	work := freeform.NewFreeformWork()
 	var out []cornerLoop
-	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
+	for _, loop := range append([]loopRecord{profile.Outer}, profile.Holes...) {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
@@ -531,18 +531,18 @@ func computeFillet(loop cornerLoop, ci int, r float64) (*cornerBlend, error) {
 // rewriteProfile applies every corner's blend to the section, returning the new
 // ProfileRecord and, per loop, the segment indices that are blend connectors
 // (their faces carry the second fillet(i,j) / chamfer(i,j) role, Table B).
-func rewriteProfile(orig ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (ProfileRecord, []map[int]struct{}) {
+func rewriteProfile(orig profileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (profileRecord, []map[int]struct{}) {
 	profile, blendSegs, _ := rewriteProfileBudget(nil, orig, loops, blendAt)
 	return profile, blendSegs
 }
 
-func rewriteProfileBudget(budget *proofbound.WorkBudget, orig ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (ProfileRecord, []map[int]struct{}, error) {
-	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
-	newLoops := make([]LoopRecord, len(origLoops))
+func rewriteProfileBudget(budget *proofbound.WorkBudget, orig profileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (profileRecord, []map[int]struct{}, error) {
+	origLoops := append([]loopRecord{orig.Outer}, orig.Holes...)
+	newLoops := make([]loopRecord, len(origLoops))
 	blendSegs := make([]map[int]struct{}, len(origLoops))
 	for li := range origLoops {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return ProfileRecord{}, nil, err
+			return profileRecord{}, nil, err
 		}
 		blendSegs[li] = map[int]struct{}{}
 		if len(blendAt[li]) == 0 {
@@ -551,24 +551,24 @@ func rewriteProfileBudget(budget *proofbound.WorkBudget, orig ProfileRecord, loo
 		}
 		segs, connectors, err := rewriteLoop(budget, loops[li], blendAt[li])
 		if err != nil {
-			return ProfileRecord{}, nil, err
+			return profileRecord{}, nil, err
 		}
-		newLoops[li] = LoopRecord{Segments: segs}
+		newLoops[li] = loopRecord{Segments: segs}
 		blendSegs[li] = connectors
 	}
 	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return ProfileRecord{}, nil, err
+		return profileRecord{}, nil, err
 	}
-	return ProfileRecord{Outer: newLoops[0], Holes: newLoops[1:]}, blendSegs, nil
+	return profileRecord{Outer: newLoops[0], Holes: newLoops[1:]}, blendSegs, nil
 }
 
 // rewriteLoop applies the section blend to one coalesced loop.
-func rewriteLoop(budget *proofbound.WorkBudget, loop cornerLoop, blends map[int]*cornerBlend) ([]CurveSegment, map[int]struct{}, error) {
+func rewriteLoop(budget *proofbound.WorkBudget, loop cornerLoop, blends map[int]*cornerBlend) ([]curveSegment, map[int]struct{}, error) {
 	return offset2d.RewriteLoop(budget, loop.walks, blends)
 }
 
 // walkSegment re-emits a coalesced walk trimmed to its two endpoints.
-func walkSegment(w survey2d.SideWalk, sU, sV, eU, eV float64) CurveSegment {
+func walkSegment(w survey2d.SideWalk, sU, sV, eU, eV float64) curveSegment {
 	return offset2d.OriginalSegment(w, sU, sV, eU, eV)
 }
 

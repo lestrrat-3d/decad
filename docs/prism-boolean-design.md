@@ -413,7 +413,7 @@ any admitted hole reproduce that operand's original loops. A structural match �
 geometric — is a pure data comparison against decad's own tag map. **When a
 unique such profile exists, it is not assembled at all: it is one of
 `s.Profiles()`'s own results, and is authenticated by handing it directly to
-the existing public `RecordProfile(s, profile)` — the full seam (§5) applies
+the internal profile recording path — the full seam (§5) applies
 unmodified, no new authentication code.**
 This reproduction is **byte-identical to the matched operand's own pre-cut
 record — same `Point2` floats — only where every one of that operand's own

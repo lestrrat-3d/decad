@@ -45,7 +45,7 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 	for i, point := range control {
 		coords[i] = [2]float64{point.U, point.V}
 	}
-	spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+	spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 
 	reference := denseSplineLength(t, coords)
@@ -238,7 +238,7 @@ func TestFreeformArcLengthRelativeWidthVariesWithTheSpan(t *testing.T) {
 		"the preflight admits 32 controls; a change here moves what this evaluator can bracket at all")
 
 	cubic := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: cubic, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+	spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: cubic, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
 	require.NoError(t, err)
@@ -313,7 +313,7 @@ func denseBezierLength(control []Point2, samples int) float64 {
 func TestFreeformArcLengthReportsPositiveBound(t *testing.T) {
 	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+	spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 
 	value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
@@ -345,7 +345,7 @@ func TestFreeformCoincidentControlNetRefused(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			seg := SplineSeg{Control: tc.control, TStart: 0, TEnd: 1}
+			seg := splineSeg{Control: tc.control, TStart: 0, TEnd: 1}
 
 			spans, err := splinebezier.SplineBezierSpans(seg, &freeform.FreeformWork{})
 			require.NoError(t, err, "the record itself converts")
@@ -443,7 +443,7 @@ func TestFreeformArcLengthBracketsAtExtremeScale(t *testing.T) {
 			for i, c := range coords {
 				control[i] = Point2{U: c[0], V: c[1]}
 			}
-			spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+			spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 			require.NoError(t, err)
 
 			value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
@@ -472,7 +472,7 @@ func TestFreeformArcLengthNearDuplicateControlPair(t *testing.T) {
 			for i, c := range coords {
 				control[i] = Point2{U: c[0], V: c[1]}
 			}
-			spans, err := splinebezier.SplineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+			spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 			require.NoError(t, err)
 
 			value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
@@ -492,7 +492,7 @@ func TestFreeformArcLengthNearDuplicateControlPair(t *testing.T) {
 func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 	t.Parallel()
 	const m = math.MaxFloat64
-	seg := SplineSeg{
+	seg := splineSeg{
 		Control: []Point2{{U: -m, V: -m}, {U: -m, V: m}, {U: m, V: -m}, {U: m, V: m}},
 		TStart:  0,
 		TEnd:    1,
@@ -518,7 +518,7 @@ func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
 	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	walk, err := boundarywalk.WalkOf(SplineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
+	walk, err := boundarywalk.WalkOf(splineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err, "a Tier A segment resolves into a walk")
 	require.Equal(t, survey2d.WalkFreeform, walk.Kind)
 	require.False(t, walk.IsLine(), "a free-form walk is not a line")
@@ -578,7 +578,7 @@ func TestWideSpanBracketRefusesBeforeSubdividing(t *testing.T) {
 // oneSpanNURBS is a valid non-rational clamped NURBS of the given degree over
 // degree+1 control points: no interior knot, so it converts to exactly one
 // Bézier span and the conversion pass itself charges almost nothing.
-func oneSpanNURBS(degree int) NURBSSeg {
+func oneSpanNURBS(degree int) nurbsSeg {
 	control := make([]Point2, degree+1)
 	for i := range control {
 		control[i] = Point2{U: float64(i), V: float64(i % 7)}
@@ -588,7 +588,7 @@ func oneSpanNURBS(degree int) NURBSSeg {
 
 // equalWeightNURBS clamps the given control net into a single-span, equal-weight
 // NURBSSeg: degree len-1, no interior knot.
-func equalWeightNURBS(control []Point2) NURBSSeg {
+func equalWeightNURBS(control []Point2) nurbsSeg {
 	n := len(control)
 	weights := make([]float64, n)
 	knots := make([]float64, 0, 2*n)
@@ -601,7 +601,7 @@ func equalWeightNURBS(control []Point2) NURBSSeg {
 	for range n {
 		knots = append(knots, 1)
 	}
-	return NURBSSeg{Degree: n - 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	return nurbsSeg{Degree: n - 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 }
 
 // The exact-rational R7 counter belongs to the RECORD across every phase of one
@@ -621,7 +621,7 @@ func equalWeightNURBS(control []Point2) NURBSSeg {
 // reading meaningless rather than making it fail loudly.
 func TestWalkSpendsTheRecordsRemainingCeiling(t *testing.T) {
 	seg := ringSplineSeg(120)
-	record := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
+	record := profileRecord{Outer: loopRecord{Segments: []curveSegment{seg}}}
 
 	pre, err := validateMomentFields(record)
 	require.NoError(t, err, "the preflight admits this record")
@@ -653,7 +653,7 @@ func TestWalkSpendsTheRecordsRemainingCeiling(t *testing.T) {
 // which is exactly what leaves the ceiling unable to bound a whole record.
 func TestWalkChargesTheCounterItIsGiven(t *testing.T) {
 	t.Parallel()
-	seg := SplineSeg{
+	seg := splineSeg{
 		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}},
 		TStart:  0,
 		TEnd:    1,
@@ -675,7 +675,7 @@ func TestWalkChargesTheCounterItIsGiven(t *testing.T) {
 // rather than quietly open one — the silent mint is the defect this rule closes.
 func TestFreeformWalkWithoutCounterRefuses(t *testing.T) {
 	t.Parallel()
-	seg := SplineSeg{
+	seg := splineSeg{
 		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}},
 		TStart:  0,
 		TEnd:    1,
@@ -685,7 +685,7 @@ func TestFreeformWalkWithoutCounterRefuses(t *testing.T) {
 	require.Contains(t, err.Error(), "work counter")
 
 	// An analytic walk charges nothing, so it is unaffected.
-	_, err = boundarywalk.WalkOf(LineSeg{Start: Point2{}, End: Point2{U: 1, V: 1}, TEnd: 1}, nil)
+	_, err = boundarywalk.WalkOf(lineSeg{Start: Point2{}, End: Point2{U: 1, V: 1}, TEnd: 1}, nil)
 	require.NoError(t, err)
 }
 
@@ -710,20 +710,20 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name string
-		seg  CurveSegment
+		seg  curveSegment
 	}{
-		{name: "cubic", seg: SplineSeg{
+		{name: "cubic", seg: splineSeg{
 			Control: []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}},
 			TStart:  0, TEnd: 1,
 		}},
-		{name: "spline with inserted knots", seg: SplineSeg{
+		{name: "spline with inserted knots", seg: splineSeg{
 			Control: []Point2{
 				{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2},
 			},
 			TStart: 0, TEnd: 1,
 		}},
 		{name: "ring spline", seg: ringSplineSeg(9)},
-		{name: "closed spline", seg: ClosedSplineSeg{
+		{name: "closed spline", seg: closedSplineSeg{
 			Control: []Point2{{U: 0, V: 0}, {U: 4, V: 0}, {U: 4, V: 3}, {U: 0, V: 3}},
 			CCW:     true, TStart: 0, TEnd: 1,
 		}},
@@ -904,11 +904,11 @@ func referenceSplit(span freeform.BezierSpan) (freeform.BezierSpan, freeform.Bez
 // ringSplineSeg is a cubic spline whose control points ride a circle. Its
 // conversion is the widest single Tier A segment the record preflight admits at
 // 45 controls, which is what makes the remaining ceiling small enough to observe.
-func ringSplineSeg(controls int) SplineSeg {
+func ringSplineSeg(controls int) splineSeg {
 	control := make([]Point2, controls)
 	for i := range control {
 		a := 2 * math.Pi * float64(i) / float64(controls)
 		control[i] = Point2{U: 10 * math.Cos(a), V: 10 * math.Sin(a)}
 	}
-	return SplineSeg{Control: control, TStart: 0, TEnd: 1}
+	return splineSeg{Control: control, TStart: 0, TEnd: 1}
 }

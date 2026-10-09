@@ -51,12 +51,12 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 
 	for _, tc := range []struct {
 		name    string
-		segment CurveSegment
+		segment curveSegment
 	}{
-		{"line", LineSeg{Start: Point2{U: 2, V: 1}, End: Point2{U: 5, V: 4}, TEnd: 1}},
-		{"whole circle", CircleSeg{Center: Point2{U: 4, V: 3}, Radius: units.Millimeters(2), CCW: true, TEnd: 1}},
-		{"circle fragment", CircleSeg{Center: Point2{U: 4, V: 3}, Radius: units.Millimeters(2), CCW: true, TStart: 0.125, TEnd: 0.625}},
-		{"arc", ArcSeg{Center: Point2{U: 4, V: 3}, Start: Point2{U: 5, V: 3}, End: Point2{U: 4, V: 4}, TEnd: 1}},
+		{"line", lineSeg{Start: Point2{U: 2, V: 1}, End: Point2{U: 5, V: 4}, TEnd: 1}},
+		{"whole circle", circleSeg{Center: Point2{U: 4, V: 3}, Radius: units.Millimeters(2), CCW: true, TEnd: 1}},
+		{"circle fragment", circleSeg{Center: Point2{U: 4, V: 3}, Radius: units.Millimeters(2), CCW: true, TStart: 0.125, TEnd: 0.625}},
+		{"arc", arcSeg{Center: Point2{U: 4, V: 3}, Start: Point2{U: 5, V: 3}, End: Point2{U: 4, V: 4}, TEnd: 1}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var first, full regionIntegrals
@@ -95,11 +95,11 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 	})
 
 	t.Run("offset rectangle through evaluator", func(t *testing.T) {
-		record := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-			LineSeg{Start: Point2{U: 100.25, V: -50.5}, End: Point2{U: 120.25, V: -50.5}, TEnd: 1},
-			LineSeg{Start: Point2{U: 120.25, V: -50.5}, End: Point2{U: 120.25, V: -45.5}, TEnd: 1},
-			LineSeg{Start: Point2{U: 120.25, V: -45.5}, End: Point2{U: 100.25, V: -45.5}, TEnd: 1},
-			LineSeg{Start: Point2{U: 100.25, V: -45.5}, End: Point2{U: 100.25, V: -50.5}, TEnd: 1},
+		record := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+			lineSeg{Start: Point2{U: 100.25, V: -50.5}, End: Point2{U: 120.25, V: -50.5}, TEnd: 1},
+			lineSeg{Start: Point2{U: 120.25, V: -50.5}, End: Point2{U: 120.25, V: -45.5}, TEnd: 1},
+			lineSeg{Start: Point2{U: 120.25, V: -45.5}, End: Point2{U: 100.25, V: -45.5}, TEnd: 1},
+			lineSeg{Start: Point2{U: 100.25, V: -45.5}, End: Point2{U: 100.25, V: -50.5}, TEnd: 1},
 		}}}
 		first, err := record.EvaluatorIntegralsUncheckedContext(t.Context(), freeform.MomentFirstOrder, freeform.NewFreeformWork())
 		require.NoError(t, err)
@@ -121,7 +121,7 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 	})
 
 	t.Run("area with overflowing higher moments", func(t *testing.T) {
-		seg := LineSeg{Start: Point2{}, End: Point2{U: 1e120, V: 1e120}, TEnd: 1}
+		seg := lineSeg{Start: Point2{}, End: Point2{U: 1e120, V: 1e120}, TEnd: 1}
 		var area regionIntegrals
 		require.NoError(t, area.AddFor(seg, freeformPlan{}, Point2{}, freeform.MomentAreaOrder))
 		require.True(t, area.IsFinite(freeform.MomentAreaOrder))
@@ -204,12 +204,12 @@ func TestPositiveAreaGateConsultsExactRational(t *testing.T) {
 
 func TestMomentValidationCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	segments := make([]CurveSegment, proofbound.WorkPollInterval+64)
+	segments := make([]curveSegment, proofbound.WorkPollInterval+64)
 	for i := range segments {
 		start := Point2{U: float64(i), V: 0}
-		segments[i] = LineSeg{Start: start, End: Point2{U: start.U + 1, V: math.Sin(float64(i))}, TEnd: 1}
+		segments[i] = lineSeg{Start: start, End: Point2{U: start.U + 1, V: math.Sin(float64(i))}, TEnd: 1}
 	}
-	record := ProfileRecord{Outer: LoopRecord{Segments: segments}}
+	record := profileRecord{Outer: loopRecord{Segments: segments}}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "ValidateFieldsWithPoll"}
 
 	_, err := record.IntegralsBudget(proofbound.NewWorkBudget(ctx))
@@ -639,10 +639,10 @@ func BenchmarkTurnSinCosInterval(b *testing.B) {
 // separates the third-order sum from its values.
 func TestThirdOrderMomentsOfASector(t *testing.T) {
 	t.Parallel()
-	record := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{}, End: Point2{U: 4, V: 3}, TEnd: 1},
-		ArcSeg{Center: Point2{}, Start: Point2{U: 4, V: 3}, End: Point2{U: 0, V: 5}, TEnd: 1},
-		LineSeg{Start: Point2{U: 0, V: 5}, End: Point2{}, TEnd: 1},
+	record := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{}, End: Point2{U: 4, V: 3}, TEnd: 1},
+		arcSeg{Center: Point2{}, Start: Point2{U: 4, V: 3}, End: Point2{U: 0, V: 5}, TEnd: 1},
+		lineSeg{Start: Point2{U: 0, V: 5}, End: Point2{}, TEnd: 1},
 	}}}
 	ig, err := record.EvaluatorIntegralsContext(t.Context(), freeform.MomentThirdOrder, freeform.NewFreeformWork())
 	require.NoError(t, err)

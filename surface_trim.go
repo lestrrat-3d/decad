@@ -66,9 +66,9 @@ func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body,
 	if err != nil {
 		return nil, err
 	}
-	chains := make([]ChainRecord, len(rcv.chains))
+	chains := make([]chainRecord, len(rcv.chains))
 	for i, chain := range rcv.chains {
-		chains[i] = ChainRecord{Segments: append([]CurveSegment(nil), chain.Segments...)}
+		chains[i] = chainRecord{Segments: append([]curveSegment(nil), chain.Segments...)}
 	}
 	cutDelta := 0.0
 	for _, edge := range selected {
@@ -393,11 +393,11 @@ func admitTrimPair(budget *proofbound.WorkBudget, receiver, tool *Body) (rcv, tl
 }
 
 // The trim record's cut charges are shared with revolve callers.
-func trimProfileFullyWhole(budget *proofbound.WorkBudget, p ProfileRecord) (bool, error) {
+func trimProfileFullyWhole(budget *proofbound.WorkBudget, p profileRecord) (bool, error) {
 	return prismcells.TrimProfileFullyWhole(budget, p.Outer, p.Holes)
 }
 
-func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (proofbound.WalkEndBound, proofbound.WalkEndBound, error) {
+func trimRevolveSegmentCharges(seg curveSegment, delta float64) (proofbound.WalkEndBound, proofbound.WalkEndBound, error) {
 	return prismcells.TrimRevolveSegmentCharges(seg, delta)
 }
 
@@ -419,9 +419,9 @@ func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (proofbound.Walk
 // gates it on pp.sectionDelta != 0, which no construction but this design's
 // Trim ever sets, so an ordinary ribbon keeps resolving through walkOf with
 // no augmentation.
-func trimBoundsWalks(profile ProfileRecord, work *freeform.FreeformWork) (*momentinput.ProfileWalks, error) {
+func trimBoundsWalks(profile profileRecord, work *freeform.FreeformWork) (*momentinput.ProfileWalks, error) {
 	before, beforeRecon := boundarywalk.WorkSpent(work)
-	outer, holes, err := prismcells.TrimBoundsWalks(profile.Outer, profile.Holes, func(seg CurveSegment) (survey2d.SegmentWalk, error) {
+	outer, holes, err := prismcells.TrimBoundsWalks(profile.Outer, profile.Holes, func(seg curveSegment) (survey2d.SegmentWalk, error) {
 		return boundarywalk.WalkOf(seg, work)
 	})
 	if err != nil {
@@ -740,7 +740,7 @@ func revolveAxisIdentical(a, b axisFrame) bool {
 // arm does not place.
 func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, error) {
 	work := freeform.NewFreeformWork()
-	for _, loop := range append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...) {
+	for _, loop := range append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...) {
 		resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the trim axis-clearance gate",
 			rp.chargedWalk, rp.ax.snapTol)
 		if err != nil {
@@ -789,9 +789,9 @@ func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil {
 		return nil, err
 	}
-	chains := make([]ChainRecord, len(rcv.chains))
+	chains := make([]chainRecord, len(rcv.chains))
 	for i, chain := range rcv.chains {
-		chains[i] = ChainRecord{Segments: append([]CurveSegment(nil), chain.Segments...)}
+		chains[i] = chainRecord{Segments: append([]curveSegment(nil), chain.Segments...)}
 	}
 	cutDelta := 0.0
 	for _, edge := range selected {

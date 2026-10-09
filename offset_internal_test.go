@@ -33,14 +33,14 @@ func TestOffsetPrismUnrepresentableOffset(t *testing.T) {
 	base := math.Ldexp(1, 53)
 	points := []Point2{{U: base, V: 0}, {U: base + 100, V: 0},
 		{U: base + 100, V: 60}, {U: base, V: 60}}
-	segments := make([]CurveSegment, len(points))
+	segments := make([]curveSegment, len(points))
 	for i := range points {
-		segments[i] = LineSeg{Start: points[i], End: points[(i+1)%len(points)], TStart: 0, TEnd: 1}
+		segments[i] = lineSeg{Start: points[i], End: points[(i+1)%len(points)], TStart: 0, TEnd: 1}
 	}
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: LoopRecord{Segments: segments}},
+		profile: profileRecord{Outer: loopRecord{Segments: segments}},
 		frame:   frame, xform: r3.Identity(),
 		z0: 0, z1: 10, surfaceResult: true,
 	}
@@ -48,7 +48,7 @@ func TestOffsetPrismUnrepresentableOffset(t *testing.T) {
 	budget := proofbound.NewWorkBudget(t.Context())
 	generated, offErr := offsetProfile(budget, pp.profile, +1, 1)
 	require.NoError(t, offErr)
-	first, ok := generated.Outer.Segments[0].(LineSeg)
+	first, ok := generated.Outer.Segments[0].(lineSeg)
 	require.True(t, ok)
 	require.Equal(t, base, first.Start.U,
 		`the generated coordinate rounds back onto the source's, a whole millimetre from the offset it denotes`)
@@ -152,17 +152,17 @@ func offsetNeckPayload(t *testing.T) prismPayload {
 		{0, 0}, {10, 0}, {10, 8}, {20, 8}, {20, 0}, {30, 0},
 		{30, 20}, {20, 20}, {20, 12}, {10, 12}, {10, 20}, {0, 20},
 	}
-	segments := make([]CurveSegment, len(pts))
+	segments := make([]curveSegment, len(pts))
 	for i := range pts {
 		next := pts[(i+1)%len(pts)]
-		segments[i] = LineSeg{
+		segments[i] = lineSeg{
 			Start:  Point2{U: pts[i][0], V: pts[i][1]},
 			End:    Point2{U: next[0], V: next[1]},
 			TStart: 0, TEnd: 1,
 		}
 	}
 	return prismPayload{
-		profile: ProfileRecord{Outer: LoopRecord{Segments: segments}},
+		profile: profileRecord{Outer: loopRecord{Segments: segments}},
 		frame:   frame, xform: r3.Identity(),
 		z0: 0, z1: 10, surfaceResult: true,
 	}

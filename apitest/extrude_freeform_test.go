@@ -8,6 +8,8 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/export"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/sketch/geom"
@@ -63,7 +65,7 @@ func freeformWallFace(t *testing.T, body *decad.Body) *decad.Face {
 func TestExtrudeFreeformAreaIsRegionPlusPerimeter(t *testing.T) {
 	t.Parallel()
 	s, p := fitSplineArchSketch(t)
-	record, _, err := decad.RecordProfile(s, p)
+	record, _, err := momentinput.RecordProfile(s, p)
 	require.NoError(t, err)
 	regionArea, err := record.Area()
 	require.NoError(t, err)
@@ -104,7 +106,7 @@ func TestExtrudeFreeformAreaIsRegionPlusPerimeter(t *testing.T) {
 func TestExtrudeFreeformTopology(t *testing.T) {
 	t.Parallel()
 	s, p := fitSplineArchSketch(t)
-	record, _, err := decad.RecordProfile(s, p)
+	record, _, err := momentinput.RecordProfile(s, p)
 	require.NoError(t, err)
 	require.Len(t, record.Outer.Segments, 2, "the fit spline plus its closing chord")
 
@@ -563,8 +565,8 @@ func TestExtrudeFreeformCollapsedControlNetRefusesR14(t *testing.T) {
 	require.Empty(t, s.Profiles(), "a collapsed closed spline authenticates to zero live profiles")
 
 	same2 := decad.Point2{U: 3, V: 3}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.ClosedSplineSeg{Control: []decad.Point2{same2, same2, same2}, CCW: true, TStart: 0, TEnd: 1},
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.ClosedSplineSeg{Control: []decad.Point2{same2, same2, same2}, CCW: true, TStart: 0, TEnd: 1},
 	}}}
 	_, err = record.Area()
 	require.Error(t, err)

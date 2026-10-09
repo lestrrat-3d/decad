@@ -99,7 +99,7 @@ func capWallFoot(joins []cornerJoin, i, n int) (Point2, Point2) {
 // oneLoopCornerLoop decomposes a single recorded loop into its coalesced
 // corner walk, the same decomposition prismCornerLoopsBudget applies to
 // every loop of a section.
-func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop LoopRecord, work *freeform.FreeformWork) (cornerLoop, error) {
+func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop loopRecord, work *freeform.FreeformWork) (cornerLoop, error) {
 	raw := make([]survey2d.SideWalk, len(loop.Segments))
 	for i, seg := range loop.Segments {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
@@ -156,7 +156,7 @@ type capPatchGeom = capband.Patch
 // into that corner, all forward, whose vertices the band's slant edges then
 // start from. Nil mints them here, as a prism's cap blend does. A supplied
 // boundary whose shape or joined vertices are not the band's is an error.
-func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendPayload, li int, loop LoopRecord, capZ float64, matSign float64, sideCo []coedge, suppliedCap []coedge, work *freeform.FreeformWork) (capBandResult, error) {
+func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendPayload, li int, loop loopRecord, capZ float64, matSign float64, sideCo []coedge, suppliedCap []coedge, work *freeform.FreeformWork) (capBandResult, error) {
 	if err := ctx.Err(); err != nil {
 		return capBandResult{}, err
 	}

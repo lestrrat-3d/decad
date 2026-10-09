@@ -26,7 +26,7 @@ import (
 // span, and the far section Q = P offset sharply by d with the displacement
 // its built contour carries (docs/draft-design.md §2, §8.1).
 type draftPayload struct {
-	profile ProfileRecord
+	profile profileRecord
 	frame   r3.Frame
 	z0, z1  float64
 	z0Delta float64
@@ -49,7 +49,7 @@ type draftPayload struct {
 	// far is the far section Q as built, one loop per loop of profile in the
 	// same order, and farDelta the largest contour displacement any of its
 	// loops carries (capband.ContourDisplacement).
-	far      ProfileRecord
+	far      profileRecord
 	farDelta float64
 	// patches is every wall patch's side(i, j) role beside the plane-local
 	// geometry buildCapBand built it from, in loop order then walk order, and

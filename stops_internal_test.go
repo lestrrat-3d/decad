@@ -73,7 +73,7 @@ func TestResolveThroughAllDecidesInPathOutsideDisplacement(t *testing.T) {
 func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
-	profile := ProfileRecord{Outer: synthRectLoop(0, 0, 1, 1)}
+	profile := profileRecord{Outer: synthRectLoop(0, 0, 1, 1)}
 	stopBody := func(ref producerID, z1, z1Delta float64) *Body {
 		return &Body{
 			origin: FeatureRef{producer: ref},
@@ -231,7 +231,7 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	doc := &Document{}
 	host, err := evalPrism(doc, 1, prismPayload{
-		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 1, 1)},
+		profile: profileRecord{Outer: synthRectLoop(0, 0, 1, 1)},
 		frame:   frame,
 		z0:      10,
 		z1:      20,

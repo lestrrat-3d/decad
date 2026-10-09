@@ -15,32 +15,32 @@ import (
 // The structural match already proved that every target loop survives whole.
 // Keep those records verbatim so a wall shared across slabs stays one column;
 // take only the new tool hole from the authenticated arranged profile.
-func canonicalizeStackedCutProfile(budget *proofbound.WorkBudget, target ProfileRecord, match *sketch.Profile,
-	tags map[sketch.Entity]prismcells.Origin, candidate ProfileRecord) (ProfileRecord, error) {
+func canonicalizeStackedCutProfile(budget *proofbound.WorkBudget, target profileRecord, match *sketch.Profile,
+	tags map[sketch.Entity]prismcells.Origin, candidate profileRecord) (profileRecord, error) {
 	if len(match.Holes) != len(candidate.Holes) || len(candidate.Holes) != len(target.Holes)+1 {
-		return ProfileRecord{}, fmt.Errorf(`%w: the cut profile has an unexpected hole count`, ErrUnsupported)
+		return profileRecord{}, fmt.Errorf(`%w: the cut profile has an unexpected hole count`, ErrUnsupported)
 	}
 	toolEntities, err := prismcells.LoopEntitySet(budget, tags, true, -1)
 	if err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
 	toolIndex := -1
 	for j, hole := range match.Holes {
 		isTool, err := prismcells.LoopMatchesOrigin(budget, hole, toolEntities)
 		if err != nil {
-			return ProfileRecord{}, err
+			return profileRecord{}, err
 		}
 		if isTool {
 			if toolIndex >= 0 {
-				return ProfileRecord{}, fmt.Errorf(`%w: more than one result hole matches the tool`, ErrUnsupported)
+				return profileRecord{}, fmt.Errorf(`%w: more than one result hole matches the tool`, ErrUnsupported)
 			}
 			toolIndex = j
 		}
 	}
 	if toolIndex < 0 {
-		return ProfileRecord{}, fmt.Errorf(`%w: no result hole matches the tool`, ErrUnsupported)
+		return profileRecord{}, fmt.Errorf(`%w: no result hole matches the tool`, ErrUnsupported)
 	}
-	result := ProfileRecord{Outer: target.Outer, Holes: append([]LoopRecord(nil), target.Holes...)}
+	result := profileRecord{Outer: target.Outer, Holes: append([]loopRecord(nil), target.Holes...)}
 	result.Holes = append(result.Holes, candidate.Holes[toolIndex])
 	return result, nil
 }
@@ -59,7 +59,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	if len(tool.profile.Holes) != 0 {
 		return stackedPrismPayload{}, false, nil
 	}
-	for _, profile := range []ProfileRecord{target.profile, tool.profile} {
+	for _, profile := range []profileRecord{target.profile, tool.profile} {
 		trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, profile.Outer, profile.Holes)
 		if err != nil {
 			return stackedPrismPayload{}, false, err
@@ -126,14 +126,14 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 		sectionDelta: max(proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.A),
 			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.B, reexpress.Delta))}
 	if openAtTop {
-		sp.slabs[0] = prismSlab{regions: []ProfileRecord{target.profile},
+		sp.slabs[0] = prismSlab{regions: []profileRecord{target.profile},
 			z0: target.z0, z1: innerHeld, z0Delta: target.z0Delta, z1Delta: innerDelta}
-		sp.slabs[1] = prismSlab{regions: []ProfileRecord{cutRegion},
+		sp.slabs[1] = prismSlab{regions: []profileRecord{cutRegion},
 			z0: innerHeld, z1: target.z1, z0Delta: innerDelta, z1Delta: target.z1Delta}
 	} else {
-		sp.slabs[0] = prismSlab{regions: []ProfileRecord{cutRegion},
+		sp.slabs[0] = prismSlab{regions: []profileRecord{cutRegion},
 			z0: target.z0, z1: innerHeld, z0Delta: target.z0Delta, z1Delta: innerDelta}
-		sp.slabs[1] = prismSlab{regions: []ProfileRecord{target.profile},
+		sp.slabs[1] = prismSlab{regions: []profileRecord{target.profile},
 			z0: innerHeld, z1: target.z1, z0Delta: innerDelta, z1Delta: target.z1Delta}
 	}
 	lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(sp.slabs[0].regions[0], sp.slabs[1].regions[0])
@@ -221,7 +221,7 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 		if err != nil {
 			return stackedPrismPayload{}, false, err
 		}
-		result.slabs[k].regions = []ProfileRecord{profile}
+		result.slabs[k].regions = []profileRecord{profile}
 		result.sectionDelta = max(result.sectionDelta,
 			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.A),
 			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.B, reexpress.Delta))

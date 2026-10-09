@@ -33,26 +33,26 @@ import (
 // sense (docs/modify-design.md §7). A dropped feature is S11a (offset2d.ErrDrop);
 // a non-closing miter is S11 (offset2d.ErrTopology), naming the loop and the
 // corner (offset2d.CornerTopologyError). Both are ErrUnsupported.
-func offsetProfile(budget *proofbound.WorkBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
+func offsetProfile(budget *proofbound.WorkBudget, profile profileRecord, s, t float64) (profileRecord, error) {
 	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
-	out := make([]LoopRecord, len(loops))
+	out := make([]loopRecord, len(loops))
 	for i, loop := range loops {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return ProfileRecord{}, err
+			return profileRecord{}, err
 		}
 		segs, err := offset2d.BuildLoop(budget, loop.walks, s, t, shellTol)
 		if err != nil {
-			return ProfileRecord{}, offset2d.InLoop(err, i)
+			return profileRecord{}, offset2d.InLoop(err, i)
 		}
-		out[i] = LoopRecord{Segments: segs}
+		out[i] = loopRecord{Segments: segs}
 	}
-	return ProfileRecord{Outer: out[0], Holes: out[1:]}, nil
+	return profileRecord{Outer: out[0], Holes: out[1:]}, nil
 }
 
 // offsetJoinsBudget resolves every corner join of one coalesced loop of two or
@@ -97,7 +97,7 @@ type cornerJoin struct {
 // offset loops — S11b, ErrUnsupported), then S9 (nesting). A shell mints no
 // cutback, so the empty fillet map makes the S6 trim test a no-op — the one test
 // that cannot fire on an offset (§8).
-func auditOffsetSectionBudget(budget *proofbound.WorkBudget, orig, offset ProfileRecord) error {
+func auditOffsetSectionBudget(budget *proofbound.WorkBudget, orig, offset profileRecord) error {
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: offset})
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func auditOffsetSectionBudget(budget *proofbound.WorkBudget, orig, offset Profil
 // the offset the shell DENOTES — P ⊖ t* inward, P ⊕ t* outward — where t* is
 // the caller's thickness in exact millimetres, anywhere within tDelta of the
 // held t (magnitudeInBounded's conversion bound).
-func offsetSectionDelta(budget *proofbound.WorkBudget, profile ProfileRecord, s, t, tDelta float64) (float64, error) {
+func offsetSectionDelta(budget *proofbound.WorkBudget, profile profileRecord, s, t, tDelta float64) (float64, error) {
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return 0, err
 	}

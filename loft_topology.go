@@ -84,7 +84,7 @@ type loftAssembly struct {
 // (a10-plan.md Part 3 PR 6): the proven rounding every COMPUTED circular
 // station commits, composed into delta beside the placement's own
 // proofbound.RigidRoundAllow term.
-func assembleLoft(ctx context.Context, pairs []loftmesh.LoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
+func assembleLoft(ctx context.Context, pairs []loftmesh.LoopPair, f0, f1 r3.Frame, plane0 planeRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
 	triangulate := func(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, error) {
 		tris, err := triangulation.Triangulate(ctx, pts, loops)
 		return tris, triangulation.WrapLoftError(err)

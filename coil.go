@@ -76,7 +76,7 @@ func WithLeftHand() CoilOption {
 // station rounding; tris is the globally oriented held triangle set, walls
 // first, then capStart and capEnd.
 type coilPayload struct {
-	profile  ProfileRecord
+	profile  profileRecord
 	frame    r3.Frame
 	line     axisLine2
 	side     int
@@ -277,7 +277,7 @@ func coilMagnitude(v units.Value, kind units.Kind, unit units.Unit, what string)
 // strictly positive. With one turn or more it requires the axial extent's
 // upper bound below the pitch (CP5). Both are reject-only readings off the
 // profile's own record; neither admits a profile the proof does not cover.
-func coilSide(ctx context.Context, profile ProfileRecord, line axisLine2, pitch, turns float64, work *freeform.FreeformWork) (int, error) {
+func coilSide(ctx context.Context, profile profileRecord, line axisLine2, pitch, turns float64, work *freeform.FreeformWork) (int, error) {
 	nU, nV := -line.dV, line.dU
 	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work, nil)
 	if err != nil {

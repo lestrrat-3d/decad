@@ -26,7 +26,7 @@ func requireSameFloatBits(t *testing.T, want, got float64, msgAndArgs ...any) {
 // big.Rat before the dyadic rewrite, kept verbatim so the rewrite is pinned to
 // the values it replaced rather than to a model of them.
 
-func ratLineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
+func ratLineWalkTangentBound(seg lineSeg, heldU, heldV float64) float64 {
 	u0 := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
 	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
 	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
@@ -40,14 +40,14 @@ func ratLineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
 	)
 }
 
-func ratLineWalkEndBound(seg LineSeg, t, heldU, heldV float64) proofbound.WalkEndBound {
+func ratLineWalkEndBound(seg lineSeg, t, heldU, heldV float64) proofbound.WalkEndBound {
 	return proofbound.WalkEndBound{
 		U: proofarith.RationalFloatError(ratLerp(seg.Start.U, seg.End.U, t), heldU),
 		V: proofarith.RationalFloatError(ratLerp(seg.Start.V, seg.End.V, t), heldV),
 	}
 }
 
-func ratLineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
+func ratLineWalkBounds(seg lineSeg, held float64) (float64, float64, float64) {
 	u0 := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
 	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
 	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
@@ -129,7 +129,7 @@ func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 		}
 	}
 	for i := range 40000 {
-		seg := LineSeg{
+		seg := lineSeg{
 			Start: Point2{U: coord(), V: coord()}, End: Point2{U: coord(), V: coord()},
 			TStart: param(), TEnd: param(),
 		}
@@ -161,7 +161,7 @@ func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 // read out of circularWalkEnclosures, kept verbatim as the oracle below: the
 // radius bound from arcWalkRadiusBound's own bracket, and the length bound
 // from a second, separate circularLengthInterval.
-func ratArcWalk(seg ArcSeg) survey2d.SegmentWalk {
+func ratArcWalk(seg arcSeg) survey2d.SegmentWalk {
 	radius := math.Hypot(seg.Start.U-seg.Center.U, seg.Start.V-seg.Center.V)
 	a0 := math.Atan2(seg.Start.V-seg.Center.V, seg.Start.U-seg.Center.U)
 	a1 := math.Atan2(seg.End.V-seg.Center.V, seg.End.U-seg.Center.U)
@@ -201,7 +201,7 @@ func ratArcWalk(seg ArcSeg) survey2d.SegmentWalk {
 func TestArcWalkRadiusBoundMatchesEnclosureBracket(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(11, 13))
-	check := func(t *testing.T, seg ArcSeg) {
+	check := func(t *testing.T, seg arcSeg) {
 		t.Helper()
 		got, err := boundarywalk.WalkOf(seg, nil)
 		require.NoError(t, err, "%+v", seg)
@@ -230,10 +230,10 @@ func TestArcWalkRadiusBoundMatchesEnclosureBracket(t *testing.T) {
 		if rng.IntN(2) == 0 {
 			t0, t1 = rng.Float64()/2, 0.5+rng.Float64()/2
 		}
-		check(t, ArcSeg{Center: c, Start: start, End: end, TStart: t0, TEnd: t1})
+		check(t, arcSeg{Center: c, Start: start, End: end, TStart: t0, TEnd: t1})
 	}
 
-	overflow := ArcSeg{
+	overflow := arcSeg{
 		Center: Point2{U: -1e308, V: 0},
 		Start:  Point2{U: 1e308, V: 0},
 		End:    Point2{U: -1e308, V: 1e308},

@@ -31,8 +31,8 @@ func evalArcSweepContext(
 	ctx context.Context,
 	d *Document,
 	ref producerID,
-	profile ProfileRecord,
-	plane PlaneRecord,
+	profile profileRecord,
+	plane planeRecord,
 	frame r3.Frame,
 	path *Path,
 	pathRecord pathSegmentRecord,
@@ -101,7 +101,7 @@ func evalArcSweepContext(
 	return body, nil
 }
 
-func deriveSweepArc(pathRecord pathSegmentRecord, plane PlaneRecord) (sweepArcGeometry, error) {
+func deriveSweepArc(pathRecord pathSegmentRecord, plane planeRecord) (sweepArcGeometry, error) {
 	start := pathRecord.start
 	normal := proofarith.DvCross(proofarith.DyVec(plane.U), proofarith.DyVec(plane.V))
 	relStart := proofarith.DvSub(proofarith.DyVec(start), proofarith.DyVec(plane.Origin))
@@ -147,7 +147,7 @@ func recordSweepArc(start, through, end r3.Vec) (sweepArcRecord, error) {
 	return sweeparc.RecordArc(start, through, end)
 }
 
-func sweepArcAxisLine(center, axis sweepRatVec, plane PlaneRecord) (axisLine2, error) {
+func sweepArcAxisLine(center, axis sweepRatVec, plane planeRecord) (axisLine2, error) {
 	line, err := sweeparc.AxisLine(center, axis, plane.Origin, plane.U, plane.V)
 	if err != nil {
 		return axisLine2{}, err

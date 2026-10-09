@@ -79,7 +79,7 @@ func validateSectionScale(raw []units.Value, segments int) ([]float64, error) {
 }
 
 // mitredSweepLoops adapts SM2's whole-line profile gate to its record.
-func mitredSweepLoops(profile ProfileRecord) ([]Point2, [][]int, error) {
+func mitredSweepLoops(profile profileRecord) ([]Point2, [][]int, error) {
 	return sweepmitre.Loops(profile.Outer, profile.Holes)
 }
 
@@ -91,7 +91,7 @@ func mitredSweepPreflight(loopIdx [][]int, spans int) error {
 // sweepMitred runs Table SM's gates in §5's order and builds the body. The
 // options were validated by the caller (SM3, SM9's surface-result arm), and
 // the profile is already authenticated.
-func sweepMitred(ctx context.Context, d *Document, profile ProfileRecord, plane PlaneRecord, path *Path, cfg sweepConfig) (*Body, error) {
+func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane planeRecord, path *Path, cfg sweepConfig) (*Body, error) {
 	segments := path.Segments()
 	for k, segment := range segments {
 		if _, ok := segment.(LineTo); !ok {
@@ -142,8 +142,8 @@ func sweepMitred(ctx context.Context, d *Document, profile ProfileRecord, plane 
 // held triangle set, walls first in (span, loop, segment) order, then capStart
 // and capEnd; triFace names each triangle's face as an index into faceRoles.
 type mitredSweepPayload struct {
-	profile ProfileRecord
-	plane   PlaneRecord
+	profile profileRecord
+	plane   planeRecord
 	path    *Path
 	factors []float64
 	xform   r3.Transform

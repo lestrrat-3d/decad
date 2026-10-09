@@ -464,11 +464,11 @@ func TestCapBandCoordUpperCoversTheCornerLoci(t *testing.T) {
 	capRadius, capLineU, capLineV := 0.0, math.Inf(1), math.Inf(1)
 	for _, seg := range capBoundary.Segments {
 		switch sg := seg.(type) {
-		case ArcSeg:
+		case arcSeg:
 			// The reflex corner at the centre adds a connector arc of radius
 			// d; the offset wall is the larger arc.
 			capRadius = math.Max(capRadius, math.Hypot(sg.Start.U-sg.Center.U, sg.Start.V-sg.Center.V))
-		case LineSeg:
+		case lineSeg:
 			if sg.Start.U == sg.End.U {
 				capLineU = math.Min(capLineU, sg.Start.U)
 			}
@@ -589,7 +589,7 @@ func TestSegmentCoordinateUpperCoversTheArc(t *testing.T) {
 		// End is pinned off the circle on purpose: the arc ends at radius r
 		// in its direction.
 		endScale := 0.5 + rng.Float64()
-		seg := ArcSeg{
+		seg := arcSeg{
 			Center: Point2{U: cu, V: cv},
 			Start:  Point2{U: cu + r*math.Cos(a0), V: cv + r*math.Sin(a0)},
 			End:    Point2{U: cu + endScale*r*math.Cos(a1), V: cv + endScale*r*math.Sin(a1)},
@@ -623,11 +623,11 @@ func TestSegmentCoordinateUpperCoversTheArc(t *testing.T) {
 			`centre (%v, %v) r=%v sweep from %v by %v: the envelope %v must sit at the arc's largest coordinate %v`, cu, cv, r, th0, span, got, want)
 	}
 
-	line := LineSeg{Start: Point2{U: -3, V: 1}, End: Point2{U: 2, V: -5}, TStart: 0, TEnd: 1}
+	line := lineSeg{Start: Point2{U: -3, V: 1}, End: Point2{U: 2, V: -5}, TStart: 0, TEnd: 1}
 	got, ok := capband.SegmentCoordinateUpper(line)
 	require.True(t, ok)
 	require.Equal(t, 5.0, got)
-	_, ok = capband.SegmentCoordinateUpper(LineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: -1, TEnd: 1})
+	_, ok = capband.SegmentCoordinateUpper(lineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: -1, TEnd: 1})
 	require.False(t, ok, `a range past the entity's own reads the walk's envelope instead`)
 }
 

@@ -258,7 +258,7 @@ func validateSweepOptions(opts []SweepOption, segments int) (sweepConfig, error)
 // validateSweepPathStart is Table S row S5: the path starts in the profile
 // plane and its first tangent follows the plane's positive normal. It reads
 // no internal join.
-func validateSweepPathStart(path *Path, plane PlaneRecord) error {
+func validateSweepPathStart(path *Path, plane planeRecord) error {
 	normal := sweepRatFromDyadic(proofarith.DvCross(proofarith.DyVec(plane.U), proofarith.DyVec(plane.V)))
 	relStart := sweepRatSub(sweepRatVecOf(path.Start()), sweepRatVecOf(plane.Origin))
 	if sweepRatDot(relStart, normal).Sign() != 0 {
@@ -271,7 +271,7 @@ func validateSweepPathStart(path *Path, plane PlaneRecord) error {
 	return nil
 }
 
-func validateSweepPathGeometry(path *Path, plane PlaneRecord) error {
+func validateSweepPathGeometry(path *Path, plane planeRecord) error {
 	if err := validateSweepPathStart(path, plane); err != nil {
 		return err
 	}
@@ -325,8 +325,8 @@ func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, er
 	return height, bound, nil
 }
 
-func validateAnalyticSweepProfile(profile ProfileRecord) error {
-	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
+func validateAnalyticSweepProfile(profile profileRecord) error {
+	loops := append([]loopRecord{profile.Outer}, profile.Holes...)
 	for _, loop := range loops {
 		if err := validateAnalyticSweepSegments(loop.Segments, "profile"); err != nil {
 			return err
@@ -339,14 +339,14 @@ func validateAnalyticSweepProfile(profile ProfileRecord) error {
 // shared by the profile-fed gate above and SweepChain's own chain gate
 // (docs/sweep-design.md Table SC row SC6). kind names the walk in the refusal
 // so a caller reading it knows which argument to repair.
-func validateAnalyticSweepSegments(segments []CurveSegment, kind string) error {
+func validateAnalyticSweepSegments(segments []curveSegment, kind string) error {
 	for _, raw := range segments {
 		segment, err := normalizeSegment(raw)
 		if err != nil {
 			return err
 		}
 		switch segment.(type) {
-		case LineSeg, CircleSeg, ArcSeg:
+		case lineSeg, circleSeg, arcSeg:
 		default:
 			return fmt.Errorf(`%w: Sweep supports line, circle, and arc %s segments only`, ErrUnsupported, kind)
 		}
@@ -556,7 +556,7 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 	// composed length bound lands — the term §15.2 names as the one thing a
 	// chain sweep carries that the same walk's ExtrudeChain reading may not.
 	reduction := chainPayload{
-		chains:  []ChainRecord{chain},
+		chains:  []chainRecord{chain},
 		frame:   frame,
 		z0:      0,
 		z1:      height,

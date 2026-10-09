@@ -35,14 +35,14 @@ import (
 // gates read, with the first region as its profile.
 type prismGroupOperand struct {
 	proxy   prismPayload
-	regions []ProfileRecord
+	regions []profileRecord
 	group   bool
 }
 
 func prismGroupOperandOf(b *Body) (prismGroupOperand, bool) {
 	switch p := b.payload.(type) {
 	case prismPayload:
-		return prismGroupOperand{proxy: p, regions: []ProfileRecord{p.profile}}, true
+		return prismGroupOperand{proxy: p, regions: []profileRecord{p.profile}}, true
 	case stackedPrismPayload:
 		if !p.isGroup() {
 			return prismGroupOperand{}, false
@@ -90,7 +90,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if err := budget.Err(); err != nil {
 		return prismPayload{}, false, err
 	}
-	targetOp := prismGroupOperand{proxy: target, regions: []ProfileRecord{target.profile}}
+	targetOp := prismGroupOperand{proxy: target, regions: []profileRecord{target.profile}}
 	if ok, err := admitPrismGroupPair(budget, targetOp, tool, false, true); err != nil || !ok {
 		return prismPayload{}, false, err
 	}
@@ -189,9 +189,9 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, sce
 	// §7's incoming terms with A6's crossing charge.
 	inA, inB := scene.Delta.Incoming(oa.proxy.sectionDelta, ob.proxy.sectionDelta, scene.ReexpressionDelta)
 	inputDelta := max(inA, inB, scene.Delta.Crossing)
-	regions := make([]ProfileRecord, len(loops))
+	regions := make([]profileRecord, len(loops))
 	for i, loop := range loops {
-		regions[i] = ProfileRecord{Outer: loop}
+		regions[i] = profileRecord{Outer: loop}
 		// Point of no return (§3.4): §6's audit on each assembled loop.
 		if err := auditPrismMergeSection(budget, oa.proxy, regions[i]); err != nil {
 			return nil, false, err

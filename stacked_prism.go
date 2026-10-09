@@ -18,14 +18,14 @@ import (
 // A slab is one constant section over an axial interval. Its one region is
 // kept in a slice so the record can later admit disjoint sections per slab.
 type prismSlab struct {
-	regions          []ProfileRecord
+	regions          []profileRecord
 	z0, z1           float64
 	z0Delta, z1Delta float64
 }
 
 type prismSlabInterface struct {
-	lowerExposed []ProfileRecord
-	upperExposed []ProfileRecord
+	lowerExposed []profileRecord
+	upperExposed []profileRecord
 }
 
 type stackedPrismPayload struct {
@@ -54,7 +54,7 @@ func (sp stackedPrismPayload) axialDelta() float64 {
 func (sp stackedPrismPayload) outerPrism() prismPayload {
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
 	return prismPayload{
-		profile: ProfileRecord{Outer: first.regions[0].Outer},
+		profile: profileRecord{Outer: first.regions[0].Outer},
 		frame:   sp.frame, xform: sp.xform, sectionDelta: sp.sectionDelta,
 		z0: first.z0, z0Delta: first.z0Delta,
 		z1: last.z1, z1Delta: last.z1Delta,
@@ -78,7 +78,7 @@ func (sp stackedPrismPayload) outerRuns() ([]prismPayload, error) {
 		slab := sp.slabs[0]
 		for _, region := range slab.regions {
 			run := base
-			run.profile = ProfileRecord{Outer: region.Outer}
+			run.profile = profileRecord{Outer: region.Outer}
 			runs = append(runs, run)
 		}
 		return runs, nil
@@ -96,7 +96,7 @@ func (sp stackedPrismPayload) outerRuns() ([]prismPayload, error) {
 			}
 		}
 		run := base
-		run.profile = ProfileRecord{Outer: slab.regions[0].Outer}
+		run.profile = profileRecord{Outer: slab.regions[0].Outer}
 		run.z0, run.z0Delta = slab.z0, slab.z0Delta
 		run.z1, run.z1Delta = slab.z1, slab.z1Delta
 		runs = append(runs, run)
@@ -215,7 +215,7 @@ type stackedPatchLoop struct {
 type stackedPatch struct {
 	role   string
 	floor  bool
-	record ProfileRecord
+	record profileRecord
 	loops  []stackedPatchLoop
 }
 
@@ -285,7 +285,7 @@ func stackedPatchArea(ctx context.Context, sectionDelta float64, colDelta []floa
 }
 
 type stackedColumn struct {
-	loop       LoopRecord
+	loop       loopRecord
 	start, end int
 	region     int
 	loopIndex  int

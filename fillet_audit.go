@@ -71,9 +71,9 @@ func renderAuditCoordinates(err error) error {
 // shared by every modify op (Fillet, Chamfer): its only op-specific input is the
 // per-corner cutback the S6 self-consuming-trim test sums, carried by the shared
 // cornerBlend, so the audit itself forks nothing.
-func auditRewriteBudget(budget *proofbound.WorkBudget, orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
-	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
-	newLoops := append([]LoopRecord{rewritten.Outer}, rewritten.Holes...)
+func auditRewriteBudget(budget *proofbound.WorkBudget, orig, rewritten profileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
+	origLoops := append([]loopRecord{orig.Outer}, orig.Holes...)
+	newLoops := append([]loopRecord{rewritten.Outer}, rewritten.Holes...)
 
 	// S6, computed up front so S8 can consult it: a walk whose two ends' cutbacks
 	// reach or pass its far end is consumed by its own corners (§6, Table S). This
@@ -213,11 +213,11 @@ func errCutbackOverrun(loop, walk int, cl cornerLoop) error {
 
 // buildSegEntries resolves every loop's recorded segments into boundary walks
 // tagged by the loop and position they came from (for adjacency).
-func buildSegEntries(loops []LoopRecord) ([]segEntry, error) {
+func buildSegEntries(loops []loopRecord) ([]segEntry, error) {
 	return buildSegEntriesBudget(nil, loops)
 }
 
-func buildSegEntriesBudget(budget *proofbound.WorkBudget, loops []LoopRecord) ([]segEntry, error) {
+func buildSegEntriesBudget(budget *proofbound.WorkBudget, loops []loopRecord) ([]segEntry, error) {
 	// One free-form counter for the whole audited section: the loops handed here
 	// are one record, and no preflight has run on them.
 	work := freeform.NewFreeformWork()
@@ -259,7 +259,7 @@ func auditEntries(segs []segEntry) []sectionaudit.Entry {
 	return entries
 }
 
-func loopSignedAreaBudget(budget *proofbound.WorkBudget, loop LoopRecord) (float64, error) {
+func loopSignedAreaBudget(budget *proofbound.WorkBudget, loop loopRecord) (float64, error) {
 	return sectionaudit.LoopSignedArea(budget, loop)
 }
 

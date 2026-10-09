@@ -808,7 +808,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	}
 
 	budget := proofbound.NewWorkBudget(ctx)
-	segEntries, err := buildSegEntriesBudget(budget, []LoopRecord{{Segments: segs}})
+	segEntries, err := buildSegEntriesBudget(budget, []loopRecord{{Segments: segs}})
 	if err != nil {
 		return nil, patchRemapCrossingError(err)
 	}
@@ -841,9 +841,9 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 // single-loop, no-hole record — reused rather than a bespoke shoelace sum,
 // so a patch face's Area answers on the identical Exactness/Bound terms
 // docs/surface-design.md §5.1 already states for a sketch-recorded patch.
-func patchChainIntegrals(ctx context.Context, segs []CurveSegment) (regionIntegrals, error) {
+func patchChainIntegrals(ctx context.Context, segs []curveSegment) (regionIntegrals, error) {
 	work := freeform.NewFreeformWork()
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
+	return profileRecord{Outer: loopRecord{Segments: segs}}.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
 }
 
 // patchRemapCrossingError maps fillet_audit.go's own [ErrUnsupported] boundary
@@ -888,7 +888,7 @@ func patchChainLevelNormal(fitted, tokenNormal r3.Vec) (r3.Vec, error) {
 
 // patchChainFrameAndSegments adapts placed edges to plane-local records.
 // internal/patchchain owns the curved edge sense rule.
-func patchChainFrameAndSegments(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge, origin, normal r3.Vec) (r3.Frame, []CurveSegment, error) {
+func patchChainFrameAndSegments(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge, origin, normal r3.Vec) (r3.Frame, []curveSegment, error) {
 	frame, err := planeFrameFromNormal(origin, normal)
 	if err != nil {
 		return r3.Frame{}, nil, err

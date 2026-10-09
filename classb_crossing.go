@@ -40,7 +40,7 @@ type cbGeom struct {
 	axis   int
 	level  float64
 	center [3]float64
-	seg    CurveSegment
+	seg    curveSegment
 }
 
 // cbFrame is one of the result's face frames: frame's local axis i lands on
@@ -59,7 +59,7 @@ type cbFace struct {
 	frame    cbFrame
 	level    float64
 	outward  bool
-	region   ProfileRecord
+	region   profileRecord
 	carriers [][]cbCarrier
 	delta    float64
 }
@@ -163,7 +163,7 @@ func (b *cbBuild) geom(c cbCarrier) cbGeom {
 	}
 	seg := op.profile.Outer.Segments[c.idx]
 	switch s := seg.(type) {
-	case LineSeg:
+	case lineSeg:
 		if s.Start.U == s.End.U {
 			return cbGeom{axis: frame.axis[0], level: frame.sign[0]*s.Start.U + 0}
 		}
@@ -286,7 +286,7 @@ func (b *cbBuild) run(ctx context.Context) (brepPayload, error) {
 		}
 	}
 	pieces, err := classbgeom.CylinderPieces(pieceFaces, [2]classbgeom.CrossingFrame{frames[0], frames[1]},
-		[2][]CurveSegment{b.x.profile.Outer.Segments, b.cp.y.profile.Outer.Segments},
+		[2][]curveSegment{b.x.profile.Outer.Segments, b.cp.y.profile.Outer.Segments},
 		func(c cbCarrier) (int, int, bool, int) {
 			g := b.geom(c)
 			return c.op, c.idx, g.cyl, g.axis
@@ -334,8 +334,8 @@ type cbChord = classbgeom.CrossingChord[cbCarrier]
 // crossing sub-case. Each returned region becomes one face; an empty one
 // drops the face.
 func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level float64, outward bool, own []cbSeg, other [][]cbSeg, cut bool) error {
-	toLoop := func(segs []cbSeg) LoopRecord {
-		var l LoopRecord
+	toLoop := func(segs []cbSeg) loopRecord {
+		var l loopRecord
 		for _, s := range segs {
 			l.Segments = append(l.Segments, s.Seg)
 		}
@@ -345,8 +345,8 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 	for _, o := range other {
 		inputs = append(inputs, o...)
 	}
-	add := func(region ProfileRecord) error {
-		carriers, ok := classbgeom.CarriersOf(append([]LoopRecord{region.Outer}, region.Holes...), inputs)
+	add := func(region profileRecord) error {
+		carriers, ok := classbgeom.CarriersOf(append([]loopRecord{region.Outer}, region.Holes...), inputs)
 		if !ok {
 			return errCBMiss
 		}
@@ -354,14 +354,14 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 			region: region, carriers: carriers})
 		return nil
 	}
-	a := ProfileRecord{Outer: toLoop(own)}
+	a := profileRecord{Outer: toLoop(own)}
 	if len(other) == 0 {
 		if cut {
 			return add(a)
 		}
 		return nil
 	}
-	tool := ProfileRecord{Outer: toLoop(other[0])}
+	tool := profileRecord{Outer: toLoop(other[0])}
 	target := prismPayload{profile: a, frame: frame.frame, xform: b.x.xform, z0: 0, z1: 1}
 	toolP := prismPayload{profile: tool, frame: frame.frame, xform: b.x.xform, z0: 0, z1: 1}
 	if _, within, err := prismcells.RegionsWithinWorkCap(b.budget, target.profile, toolP.profile); err != nil || !within {
@@ -427,7 +427,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 			// A hole in a crossing result has no outer to own it here.
 			return errCBMiss
 		}
-		if err := add(ProfileRecord{Outer: loop}); err != nil {
+		if err := add(profileRecord{Outer: loop}); err != nil {
 			return err
 		}
 	}
@@ -435,7 +435,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 }
 
 // loopSignedAreaCB is a loop's signed area, counter-clockwise positive.
-func loopSignedAreaCB(loop LoopRecord) (float64, error) {
+func loopSignedAreaCB(loop loopRecord) (float64, error) {
 	var ig regionIntegrals
 	for _, seg := range loop.Segments {
 		if err := ig.AddFor(seg, freeformPlan{}, Point2{}, freeform.MomentAreaOrder); err != nil {
