@@ -2,6 +2,7 @@ package filletband
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -9,6 +10,52 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
+
+// ExtentsOf encloses both ends of a band's projection in its face frame.
+// Direction coefficients are the held projections of the world direction
+// onto that frame; their placement error is charged by the caller.
+func ExtentsOf(pieces []Piece, walks []survey2d.SideWalk, corners []Corner,
+	materialSign, heldRadius float64, radius, side Interval, coeff [3]float64) (Interval, Interval, error) {
+	var positive, negative [3]*big.Rat
+	for i, c := range coeff {
+		q := proofarith.FloatRat(c)
+		if q == nil {
+			return Interval{}, Interval{}, fmt.Errorf(`%w: a fillet band's extent direction is not finite`, decaderr.ErrNotFinite)
+		}
+		positive[i], negative[i] = q, new(big.Rat).Neg(q)
+	}
+	hi, err := Extreme(pieces, radius, side, int64(materialSign), positive)
+	if err != nil {
+		return Interval{}, Interval{}, err
+	}
+	hi, err = WidenCurvedMiterExtent(walks, corners, heldRadius, radius, side, materialSign, positive, hi)
+	if err != nil {
+		return Interval{}, Interval{}, err
+	}
+	lo, err := Extreme(pieces, radius, side, int64(materialSign), negative)
+	if err != nil {
+		return Interval{}, Interval{}, err
+	}
+	lo, err = WidenCurvedMiterExtent(walks, corners, heldRadius, radius, side, materialSign, negative, lo)
+	if err != nil {
+		return Interval{}, Interval{}, err
+	}
+	return proofbound.IntervalNeg(lo), hi, nil
+}
+
+// WalkCoordUpper bounds the planar coordinates of the band's walk and its
+// axial setback for the caller's frame placement allowance.
+func WalkCoordUpper(walks []survey2d.SideWalk, axialUpper float64) float64 {
+	upper := 0.0
+	for _, w := range walks {
+		upper = math.Max(upper, proofbound.AbsSumUpper(math.Abs(w.StartU), math.Abs(w.StartV)))
+		upper = math.Max(upper, proofbound.AbsSumUpper(math.Abs(w.EndU), math.Abs(w.EndV)))
+		if w.IsCircular() {
+			upper = math.Max(upper, proofbound.AbsSumUpper(math.Abs(w.CU), math.Abs(w.CV), 2*w.Radius))
+		}
+	}
+	return proofbound.AbsSumUpper(upper, 4*axialUpper)
+}
 
 // Extreme encloses the largest value of g·p over every patch of the band, p a
 // point of the patch in F's frame and g = (gu, gv, gz) an exact direction in

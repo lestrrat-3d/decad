@@ -117,16 +117,6 @@ func suppliedFilletCapWalls(co []coedge, walks []survey2d.SideWalk, joins []corn
 	return out, nil
 }
 
-// filletRadius encloses every radius the band's setback denotes: the held
-// radius widened by its conversion bound.
-func filletRadius(s capSetback) (proofbound.RatInterval, error) {
-	r, d := proofarith.FloatRat(s.dc), proofarith.FloatRat(s.dcDelta)
-	if r == nil || d == nil {
-		return proofbound.RatInterval{}, fmt.Errorf(`%w: a fillet radius is not finite`, ErrNotFinite)
-	}
-	return proofbound.IntervalWiden(proofbound.PointInterval(r), d), nil
-}
-
 // heldOf is an enclosure's held float beside the bound that reaches every
 // value of it.
 func heldOf(iv proofbound.RatInterval) (float64, float64) {
@@ -164,7 +154,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 	m := b.matSign(f)
 	sideZ, _ := b.sideLevel(f)
 	r := b.setback.dc
-	rIv, err := filletRadius(b.setback)
+	rIv, err := filletband.RadiusInterval(b.setback.dc, b.setback.dcDelta)
 	if err != nil {
 		return nil, brepBandMass{}, err
 	}
@@ -405,68 +395,16 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 	if len(patches) != len(fr.pieces) {
 		return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d built %d patches for %d pieces`, ErrUnsupported, bi, len(patches), len(fr.pieces))
 	}
-	mass, err := filletStripMass(b, f, e, fr.pieces, rIv)
+	terms, err := filletband.MassOf(filletband.BandMassInput{
+		Pieces: fr.pieces, Walks: fr.walks, Corners: fr.loop.Corners,
+		Radius: rIv, Level: f.z0, LevelDelta: f.z0Delta,
+		MaterialSign: m, Sigma: b.sigma, Embed: e,
+	})
 	if err != nil {
 		return nil, brepBandMass{}, err
 	}
-	if err := widenCurvedMiterMass(&mass, f, e, fr, rIv); err != nil {
-		return nil, brepBandMass{}, err
-	}
-	mass.area = area
+	mass := brepBandMass{vol3: terms.Volume3, moments: terms.Moments, area: area}
 	return patches, mass, nil
-}
-
-// widenCurvedMiterMass charges the corner regions the polynomial walk pieces
-// do not integrate. Each difference is inside a proven disk around its corner;
-// its sign may be either way, so every affected divergence term is widened.
-func widenCurvedMiterMass(mass *brepBandMass, f brepFace, e brepEmbed, fr filletLoopRead, r proofbound.RatInterval) error {
-	level, delta := proofarith.FloatRat(f.z0), proofarith.FloatRat(f.z0Delta)
-	if level == nil || delta == nil {
-		return fmt.Errorf(`%w: a curved fillet's cap level is not finite`, ErrNotFinite)
-	}
-	zReach := new(big.Rat).Add(new(big.Rat).Abs(level), delta)
-	zReach.Add(zReach, r.Hi)
-	for k, class := range fr.loop.Corners {
-		if class != filletband.CurvedMiter {
-			continue
-		}
-		prev := fr.walks[(k+len(fr.walks)-1)%len(fr.walks)]
-		volume, mu, mv, ok := filletband.CurvedMiterMassAllowance(prev, fr.walks[k], r)
-		if !ok {
-			return fmt.Errorf(`%w: a curved fillet's strip has no mass allowance`, ErrUnsupported)
-		}
-		mass.vol3 = proofbound.IntervalWiden(mass.vol3, new(big.Rat).Mul(volume, big.NewRat(3, 1)))
-		mass.moments[e.Axis[0]] = proofbound.IntervalWiden(mass.moments[e.Axis[0]], mu)
-		mass.moments[e.Axis[1]] = proofbound.IntervalWiden(mass.moments[e.Axis[1]], mv)
-		mass.moments[e.Axis[2]] = proofbound.IntervalWiden(mass.moments[e.Axis[2]], new(big.Rat).Mul(volume, zReach))
-	}
-	return nil
-}
-
-// filletStripMass is one fillet band's share of the body's divergence sums in
-// the reference frame (loop-fillet §5.3): 3·σ·V_strip, and σ·M_strip along
-// each reference axis F's frame lands on. The side level is F's recorded
-// level plus m·r, widened by F's own level displacement.
-func filletStripMass(b brepLoopBand, f brepFace, e brepEmbed, pieces []filletband.Piece, rIv proofbound.RatInterval) (brepBandMass, error) {
-	m := b.matSign(f)
-	h, err := filletband.HeightsOf(rIv)
-	if err != nil {
-		return brepBandMass{}, err
-	}
-	level, levelDelta := proofarith.FloatRat(f.z0), proofarith.FloatRat(f.z0Delta)
-	if level == nil || levelDelta == nil {
-		return brepBandMass{}, fmt.Errorf(`%w: a fillet band's face level is not finite`, ErrNotFinite)
-	}
-	sideIv := proofbound.IntervalWiden(proofbound.IntervalAdd(proofbound.PointInterval(level),
-		proofbound.IntervalScale(rIv, big.NewRat(int64(m), 1))), levelDelta)
-	strip := filletband.StripOf(filletband.SumCoefficients(pieces), h, sideIv, int64(m))
-	sigma := big.NewRat(int64(b.sigma), 1)
-	out := zeroBrepBandMass()
-	out.vol3 = proofbound.IntervalScale(strip.Volume, new(big.Rat).Mul(sigma, big.NewRat(3, 1)))
-	for i := range 3 {
-		out.moments[e.Axis[i]] = proofbound.IntervalScale(strip.Moment[i], new(big.Rat).Mul(sigma, big.NewRat(int64(e.Sign[i]), 1)))
-	}
-	return out, nil
 }
 
 // filletRestored is the record with every fillet band undone, the faces
@@ -542,7 +480,7 @@ func (bp brepPayload) filletRestored(topo *brepTopology) ([]brepFace, error) {
 				a.z1 = eA.Sign[2]*levelRef + 0
 			case brepLoopSeg:
 				a.region = cloneRegion(u.Face)
-				if err := restoreSideSegment(a, eA, u.Loop, u.Seg, n, sideRef, levelRef); err != nil {
+				if err := brepgeom.RestoreSideSegment(a.region, a.z0, eA, u.Loop, u.Seg, n, sideRef, levelRef); err != nil {
 					return nil, fmt.Errorf("fillet band %d: %w", bi, err)
 				}
 			default:
@@ -553,36 +491,6 @@ func (bp brepPayload) filletRestored(topo *brepTopology) ([]brepFace, error) {
 	return out, nil
 }
 
-// restoreSideSegment moves a (pl) face's segment seg of loop li, which the
-// band moved to sideRef along reference axis n, back to levelRef, with the
-// ends of its two neighbouring lines that meet it. All three are lines: the
-// segment lies in two planes, and Table LB's LB3 admitted the neighbours.
-func restoreSideSegment(a *brepFace, e brepEmbed, li, seg, n int, sideRef, levelRef float64) error {
-	loop := a.region.Outer
-	if li > 0 {
-		loop = a.region.Holes[li-1]
-	}
-	count := len(loop.Segments)
-	move := func(p Point2) Point2 {
-		c := e.Canon(p.U, p.V, a.z0)
-		if c[n] != sideRef {
-			return p
-		}
-		c[n] = levelRef
-		l := e.Local(c)
-		return Point2{U: l[0], V: l[1]}
-	}
-	for _, k := range [3]int{(seg + count - 1) % count, seg, (seg + 1) % count} {
-		line, ok := loop.Segments[k].(lineSeg)
-		if !ok {
-			return fmt.Errorf(`%w: a face beside a fillet band holds a curved segment where the band trimmed it`, ErrUnsupported)
-		}
-		line.Start, line.End = move(line.Start), move(line.End)
-		loop.Segments[k] = line
-	}
-	return nil
-}
-
 // filletBandExtent is fillet band b's extent along world direction g
 // (loop-fillet §5.4): filletband.Extreme read in F's own frame along g and
 // along −g, lifted through F's frame and the placement as a prism face's
@@ -591,7 +499,7 @@ func restoreSideSegment(a *brepFace, e brepEmbed, li, seg, n int, sideRef, level
 // endpoint sum's rounding.
 func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.Transform, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
 	pl := f.view(xform)
-	rIv, err := filletRadius(b.setback)
+	rIv, err := filletband.RadiusInterval(b.setback.dc, b.setback.dcDelta)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -608,40 +516,12 @@ func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.
 	sideIv := proofbound.IntervalAdd(proofbound.PointInterval(level), proofbound.IntervalScale(rIv, big.NewRat(int64(m), 1)))
 	base := pl.xform.Apply(pl.frame.Origin()).Dot(g)
 	coeff := [3]float64{pl.dir(1, 0, 0).Dot(g), pl.dir(0, 1, 0).Dot(g), pl.dir(0, 0, 1).Dot(g)}
-	var gp, gn [3]*big.Rat
-	for i, c := range coeff {
-		q := proofarith.FloatRat(c)
-		if q == nil {
-			return 0, 0, 0, fmt.Errorf(`%w: a fillet band's extent direction is not finite`, ErrNotFinite)
-		}
-		gp[i], gn[i] = q, new(big.Rat).Neg(q)
-	}
-	hiIv, err := filletband.Extreme(fr.pieces, rIv, sideIv, int64(m), gp)
+	loIv, hiIv, err := filletband.ExtentsOf(fr.pieces, fr.walks, fr.loop.Corners,
+		m, b.setback.dc, rIv, sideIv, coeff)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	hiIv, err = filletband.WidenCurvedMiterExtent(fr.walks, fr.loop.Corners, b.setback.dc, rIv, sideIv, m, gp, hiIv)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	loIv, err := filletband.Extreme(fr.pieces, rIv, sideIv, int64(m), gn)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	loIv, err = filletband.WidenCurvedMiterExtent(fr.walks, fr.loop.Corners, b.setback.dc, rIv, sideIv, m, gn, loIv)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	loIv = proofbound.IntervalNeg(loIv)
-	coordUpper := 0.0
-	for _, w := range fr.walks {
-		coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(w.StartU), math.Abs(w.StartV)))
-		coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(w.EndU), math.Abs(w.EndV)))
-		if w.IsCircular() {
-			coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(w.CU), math.Abs(w.CV), 2*w.Radius))
-		}
-	}
-	coordUpper = proofbound.AbsSumUpper(coordUpper, 4*b.setback.axialUpper())
+	coordUpper := filletband.WalkCoordUpper(fr.walks, b.setback.axialUpper())
 	zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(f.z0), math.Abs(sideZ)), sideDelta)
 	placeAllow := prismPlacementCoeffAllow(pl, g, base, coeff[0], coeff[1], coeff[2], coordUpper, zUpper)
 	lo, loErr := heldOf(loIv)

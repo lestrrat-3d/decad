@@ -20,7 +20,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	f := bp.faces[b.face]
 	pl := f.view(bp.xform)
 	r := b.setback.dc
-	rIv, err := filletRadius(b.setback)
+	rIv, err := filletband.RadiusInterval(b.setback.dc, b.setback.dcDelta)
 	if err != nil {
 		return nil, brepBandMass{}, err
 	}
@@ -253,11 +253,14 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	if p != len(pieces) {
 		return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet has unmatched strip pieces`, ErrUnsupported)
 	}
-	mass, err := filletStripMass(b, f, e, pieces, rIv)
+	terms, err := filletband.MassOf(filletband.BandMassInput{
+		Pieces: pieces, Radius: rIv, Level: f.z0, LevelDelta: f.z0Delta,
+		MaterialSign: b.matSign(f), Sigma: b.sigma, Embed: e,
+	})
 	if err != nil {
 		return nil, brepBandMass{}, err
 	}
-	mass.area = area
+	mass := brepBandMass{vol3: terms.Volume3, moments: terms.Moments, area: area}
 	return patches, mass, nil
 }
 
