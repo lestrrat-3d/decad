@@ -20,22 +20,25 @@ import (
 // and the op's own refusal otherwise. sel, edges and blend are a Fillet's or
 // Chamfer's selector, its resolved edges and its per-corner construction
 // (computeFillet or computeChamfer, bound to the op's magnitude), which route
-// E (§5) reads; a Shell leaves them nil.
+// E (§5) reads; a Shell leaves them nil. shellCall is a Shell's removed faces,
+// sense and thickness, which route S (brep_shell.go) reads.
 type brepModifyRequest struct {
-	op     string
-	shell  bool
-	admits func(pp prismPayload, caps prismCaps) error
-	sel    EdgeSelector
-	edges  []*Edge
-	blend  *revolveBlendOp
+	op        string
+	shell     bool
+	admits    func(pp prismPayload, caps prismCaps) error
+	sel       EdgeSelector
+	edges     []*Edge
+	blend     *revolveBlendOp
+	shellCall brepShellCall
 }
 
 // brepRoute is what the brep route hands back to the op. It is empty for a
 // receiver the brep route does not take, and the op continues on its own
 // path. Route P sets prism, the recognised prism (never stored; the op's
 // receiver for the rest of the call), and caps, its two cap faces on the
-// receiver body: the op continues on its prism path with them. Route E sets
-// body, the result it built, which the op commits (commitModifyResult).
+// receiver body: the op continues on its prism path with them. Route E and
+// route S set body, the result they built, which the op commits
+// (commitModifyResult).
 type brepRoute struct {
 	prism *prismPayload
 	caps  prismCaps
@@ -48,9 +51,9 @@ type brepRoute struct {
 // stacked receiver's face view (SB2), then the whole-record displacement
 // rule (SB1) — and then route P (§4): the first reference axis along which
 // the record reads as a prism the op's classification admits. When none
-// admits, a Shell refuses with SB3 (some axis reads as a prism; the prism
-// path's own S2) or SB10 (none does), and a Fillet or Chamfer takes route E
-// (§5), which builds the result or refuses with a Table SB row.
+// admits, a Shell takes route S (docs/modify-general-design.md §3), which
+// builds the result or refuses, and a Fillet or Chamfer takes route E (§5),
+// which builds the result or refuses with a Table SB row.
 func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (brepRoute, error) {
 	bp, ok, err := brepModifyRecord(ctx, b.payload, req.op)
 	if err != nil || !ok {
@@ -65,10 +68,12 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 		return brepRoute{}, err
 	case route.prism != nil:
 		return route, nil
-	case req.shell && refusal != nil:
-		return brepRoute{}, fmt.Errorf(`%w; this body reads as a prism along a reference axis, and no such prism takes the removed faces as its caps (brep-modify SB3)`, refusal)
 	case req.shell:
-		return brepRoute{}, brepShellThroughCut()
+		body, err := brepShellThroughCut(ctx, b, bp, req, refusal)
+		if err != nil {
+			return brepRoute{}, err
+		}
+		return brepRoute{body: body}, nil
 	case req.blend == nil:
 		return brepRoute{}, brepLoopChamfer(req)
 	default:
@@ -82,10 +87,12 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 
 // brepShellThroughCut is route S's arm (docs/modify-general-design.md §3): the
 // shell of a brep or stacked receiver that reads as no prism whose caps are
-// the removed faces. It builds nothing yet and returns brep-modify SB10's
-// refusal.
-func brepShellThroughCut() error {
-	return fmt.Errorf(`%w: this evaluator shells a brep or stacked receiver only where it reads as a prism along a reference axis, and this one reads as none; the three-dimensional offset it needs puts a cylinder along every reflex straight edge, which this record does not hold (brep-modify SB10)`, ErrUnsupported)
+// the removed faces. refusal is route P's classification refusal where some
+// axis read as a prism (brep-modify SB3), and nil where none did (SB10);
+// shellThroughCut names it when the record reads as no through-cut record
+// either (SG3).
+func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepModifyRequest, refusal error) (*Body, error) {
+	return shellThroughCut(ctx, b, bp, req.shellCall, refusal)
 }
 
 // brepLoopChamfer is route L's arm (docs/modify-general-design.md §4): a

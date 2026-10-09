@@ -80,7 +80,9 @@ facetedPayload             → SX9, unchanged
 ```
 
 The brep route: SB1; then route P for every reference axis in order; then
-route E (Fillet/Chamfer) or SB10 (Shell). Route P is tried first because its
+route E (Fillet/Chamfer) or route S (Shell; `docs/modify-general-design.md`
+§3), whose refusal leads with SB3 or SB10 where the record reads as no
+through-cut record either. Route P is tried first because its
 result is a `prismPayload`, which every consumer and every further modify op
 already takes. The two routes never build the same edge differently: a lateral
 edge of the recognised prism and the same edge under route E are the same
@@ -90,7 +92,7 @@ cylinder or plane; route P merely records the body as the prism it is.
 
 | RB | Receiver | `Fillet` / `Chamfer` | `Shell` |
 |---|---|---|---|
-| **RB1** | `brepPayload`, `sectionDelta() == 0` | route P, else route E (Table EB) | route P only; else SB10 |
+| **RB1** | `brepPayload`, `sectionDelta() == 0` | route P, else route E (Table EB) | route P, else route S (modify-general §3) |
 | **RB2** | `stackedPrismPayload` whose `brepOfStacked` succeeds (one region per slab, not a group) | as RB1 over the face view | as RB1 |
 | **RB3** | `brepPayload` or stacked receiver with a section displacement | SB1 | SB1 |
 | **RB4** | `facetedPayload` | reach SX9 (permanent) | reach SX9 |
@@ -157,8 +159,11 @@ so its route P names no cap face: a selection on its caps classifies as no
 cap edge, and its removed faces as no caps.
 
 When some axis reads as a prism but none admits the selection, a Fillet or
-Chamfer falls to route E; a Shell refuses with the prism path's own S2. When no
-axis reads as a prism, a Shell is SB10.
+Chamfer falls to route E, and a Shell to route S (modify-general §3), which
+refuses with the prism path's own S2 (SB3) where the record reads as no
+through-cut record either. When no axis reads as a prism, a Shell takes
+route S, which refuses with SB10 where the record reads as no through-cut
+record.
 
 `matchCornerBudget` compares the selected edge's vertex positions with
 `pp.point(...)` within `1e-6`; the recognised prism lifts through `F` and
@@ -341,14 +346,14 @@ Modify §1's test picks every sentinel: a body that does not exist is
 |---|---|---|---|
 | **SB1** | a brep or stacked receiver with `sectionDelta() != 0` | yes; its rewrite has no proven displacement | `ErrUnsupported`, naming the displacement as `requireExactSection` does |
 | **SB2** | a stacked receiver `brepOfStacked` refuses (a prism group, several regions in one slab; a stack enclosing a cavity, a closed shell) | yes | that call's `ErrUnsupported` |
-| **SB3** | route P reads a prism along some axis, a Shell's removed faces are not its caps, and no other axis admits them | yes | modify S2 |
+| **SB3** | route P reads a prism along some axis, a Shell's removed faces are not its caps, no other axis admits them, and route S reads no through-cut record along any axis (modify-general Table TC) | yes | modify S2, with SG3's reason |
 | **SB4** | a selected edge that is not a straight line along a reference axis: a hole rim or boss root (`Circle3`/`Arc3`), an oblique line | yes; a cone or torus band on a brep face is not a face kind this record holds | `ErrUnsupported` |
 | **SB5** | two selected edges sharing a vertex | yes; the vertex blend | `ErrUnsupported` |
 | **SB6** | an edge vertex with other than three incident edges, or an edge that is one piece of a split side line | yes | `ErrUnsupported` |
 | **SB7** | the third face at an edge vertex is not, and cannot be restated as, a plane across the edge's axis: a cylinder, a plane along the axis, an oblique, split or level-displaced straight wall, a blend face of an earlier call | yes; the edge ends on a blend or a curved face | `ErrUnsupported` |
 | **SB8** | an adjacent face outside EB4/EB5: a rim-adjacent wall that is oblique, split or level-displaced, a (pl) face whose neighbours at `e` are not straight and across the axis, a narrowed range, consecutive segments on one carrier | yes | `ErrUnsupported` |
 | **SB9** | the two end faces' blends disagree in reference coordinates | — (a falsifier) | `ErrUnsupported` |
-| **SB10** | Shell of a brep that reads as a prism along no axis | yes; the three-dimensional offset puts a cylinder along every reflex straight edge, a torus around a reflex circle and a sphere at a reflex vertex, none of which this record holds | `ErrUnsupported` |
+| **SB10** | Shell of a brep that reads as a prism along no axis and as no through-cut record (modify-general Table TC) | yes; the three-dimensional offset puts a sphere at a reflex vertex, a torus around a reflex circle and an elliptical edge where two reflex edges meet, none of which this record holds | `ErrUnsupported`, with SG3's reason |
 
 Base S4, S5, S6, S7, S8, S9 keep modify §4's meanings per end face and per
 trimmed wall. Reach SX16 is replaced: a brep receiver either builds here or
@@ -359,8 +364,8 @@ Gate order for a brep receiver, after modify §4's stage 1 and reach SX10:
 | Stage | Gates |
 |---|---|
 | 2a. record | RB dispatch; SB2; SB1 |
-| 2b. route P | P1–P5 per axis; the prism path's own stage 2 onward where an axis admits; SB3 for a shell with a prism read and no admitting axis |
-| 2c. route E entry | SB10 (Shell); EB1/SB4 per edge; EB7/SB5 over the set |
+| 2b. route P | P1–P5 per axis; the prism path's own stage 2 onward where an axis admits; a shell with no admitting axis takes route S at 2c, and SB3 where a prism read and route S reads none |
+| 2c. route E entry | route S (Shell; modify-general §3.4); EB1/SB4 per edge; EB7/SB5 over the set |
 | 3. edge topology | EB2/SB6; the restatement passes (§5.2): EB3/SB7, then EB4/SB8; EB5/SB8; EB6 |
 | 4. construction | per edge: S4, S5 in `G0`; the recomputation in `G1`, SB9 |
 | 5. audit | per planar face: S8, S6, S7, S9; per trimmed wall: S6 |
@@ -520,7 +525,8 @@ Refusals:
 - **Offset a brep face by face for Shell.** The three-dimensional erosion moves
   each face's trace by the dihedral at its edge, not by `t` in its own plane,
   and fills reflex edges with cylinders and tori; a per-face 2D offset is a
-  different, wrong solid. SB10 refuses until that design exists.
+  different, wrong solid. Route S (modify-general §3) builds the erosion of a
+  through-cut record; SB10 refuses the rest.
 - **Let a selector's `Exactly(n)` count change under restatement.** Selection
   is resolved against the receiver before any face is restated.
 
@@ -533,8 +539,8 @@ Refusals:
   (S1) and ships, if at all, as a later change to that document.
 - **Route P before route E**: yes; a `prismPayload` result reaches more
   consumers and further modify ops.
-- **Shell of a non-prism brep**: staged (SB10), with the three-dimensional
-  offset named as the construction a later design owns.
+- **Shell of a non-prism brep**: route S of `docs/modify-general-design.md`
+  for a prism cut by through tools; SB10 for the rest.
 - **Hand-offs**: none. No capability is needed from `sketch`, `r3` or `units`.
 
 ## 12. PR split
