@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
@@ -126,7 +127,7 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 type throughRemoval = throughshell.Removal
 
 // removedFaces maps the selected live faces to record indices before SG4 and
-// SG5 read them. The connected-run check remains with sideOpeningRegions.
+// SG5 read them. The connected-run check remains with prismshell.SideOpeningRegions.
 func (tc throughCut) removedFaces(b *Body, bp brepPayload, removed []*Face) (throughRemoval, error) {
 	index := map[*Face]int{}
 	if _, ok := b.payload.(brepPayload); ok {
@@ -279,7 +280,7 @@ func (tc throughCut) erodeThroughSection(budget *proofbound.WorkBudget, rm throu
 // second row): A ⊖ t's section is the side opening's cavity section C over
 // the kept chain, cut at each end by the rim rule of
 // docs/shell-opening-design.md Table RO, built and audited by
-// sideOpeningRegions in that document's gate order (SO6, SO3's height half,
+// prismshell.SideOpeningRegions in that document's gate order (SO6, SO3's height half,
 // S11a and SO1, SO2, SO4 per end, modify §5's audit of W and C, the exact area
 // identity), whose refusals keep their codes. No section limit runs: the
 // cavity opens through the removed walls (shell-opening §5). The displacement
@@ -289,18 +290,22 @@ func (tc throughCut) erodeThroughSection(budget *proofbound.WorkBudget, rm throu
 // piece of a removed face, which route S does not state: SG5.
 func (tc throughCut) openingThroughSection(budget *proofbound.WorkBudget, bp brepPayload, rm throughRemoval, call brepShellCall) (throughSection, error) {
 	pp := prismPayload{profile: tc.caps.Section, frame: tc.caps.Frame, xform: bp.xform, z0: tc.caps.Zlo, z1: tc.caps.Zhi}
-	sec, err := sideOpeningRegions(budget, pp, rm.Sides, rm.KeptCaps(), 1, call.t, call.tmm, call.tDelta)
+	sec, err := prismshell.SideOpeningRegions(budget, prismshell.SideOpeningInput{
+		Profile: pp.profile, Height: pp.z1 - pp.z0, Sides: rm.Sides,
+		KeptCaps: rm.KeptCaps(), Sense: 1, Thickness: call.t, HeldThickness: call.tmm,
+		ThicknessDelta: call.tDelta, Tolerance: shellTol,
+	}, auditOffsetSectionBudget)
 	if err != nil {
 		return throughSection{}, shellCancelCause(err)
 	}
-	if len(sec.corners) > 0 {
+	if len(sec.Corners) > 0 {
 		return throughSection{}, fmt.Errorf(`%w: the removed wall run meets a kept wall at a reflex corner, where the rim runs back along the removed wall's carrier into the material, a face this evaluator does not state for a through-cut record (modify-general SG5)`, ErrUnsupported)
 	}
-	delta := sec.delta
-	if sec.cutGap > 0 {
-		delta = proofbound.AbsSumUpper(delta, proofbound.ProductUpper(3, sec.cutGap))
+	delta := sec.Delta
+	if sec.CutGap > 0 {
+		delta = proofbound.AbsSumUpper(delta, proofbound.ProductUpper(3, sec.CutGap))
 	}
-	return throughSection{eroded: sec.cavity, delta: delta}, nil
+	return throughSection{eroded: sec.Cavity, delta: delta}, nil
 }
 
 // readThroughCutAnyAxis reads Table TC along reference axes 0, 1, 2 in order
