@@ -22,7 +22,8 @@ import (
 // route P does not take, which of route E (docs/brep-modify-design.md §5) and
 // route L reads the selection: route E takes single straight edges along
 // reference axes, no two sharing a vertex. Route V takes a Fillet of those
-// edges with complete loops, and route L reads the remaining selections.
+// edges with complete loops, and route L reads the remaining selections,
+// including a selected chain on a swept wall restated as a planar face.
 // Table LB admits the loops (admitLoops, classifyLoop); the record is
 // rewritten (rewriteLoopFaces): each loop's face takes the loop's cap contour,
 // each face beside the loop is trimmed to the band's side level, and the band
@@ -66,8 +67,9 @@ type brepLoopBeside struct {
 // brepLoopRoute is the brep route of a Fillet or Chamfer that route P does not
 // take (modify-general §4.4's stage 2c, loop-fillet §6). Independent straight
 // edges take route E. A Fillet of independent straight edges and complete
-// planar loops takes route V, which runs E then L. Other selections take L
-// or its SL1 refusal.
+// planar loops takes route V, which runs E then L. Shared straight edges on
+// a swept wall restate that wall before route L's partial-loop construction.
+// Other selections take L or its SL1 refusal.
 func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepModifyRequest) (*Body, error) {
 	r, err := newBrepLoopRead(ctx, bp, call)
 	if err != nil {
@@ -103,6 +105,24 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		}
 		if sel, selected, ok := r.partialSelectedLoop(); ok {
 			return brepFilletPartialLoop(ctx, d, bp, call, sel, selected)
+		}
+		// A pair of edges can share a swept wall without sharing a planar
+		// loop in the input record. Route E's preparation restates that wall;
+		// the same partial-loop builder can then close their common corner.
+		if selectedStraightEdgesShareVertex(call.edges) {
+			er, blends, err := prepareBrepEdgeBlends(ctx, bp, call, true)
+			if err == nil {
+				next, err := newBrepLoopRead(ctx, er.bp, call)
+				if err != nil {
+					return nil, err
+				}
+				if err := next.matchEdges(); err != nil {
+					return nil, err
+				}
+				if sel, selected, ok := next.partialSelectedLoop(); ok {
+					return next.buildPartialFillet(ctx, d, sel, selected, blends)
+				}
+			}
 		}
 	}
 	return r.buildLoops(ctx, d)
