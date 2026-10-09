@@ -30,7 +30,7 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 	if !ok || !signedAxisTransform(rp.xform) || !pose.IsValid() || pose.IsReflection() {
 		return sourceSphereContactProof{}, false
 	}
-	center := exactContactTransform(rp.xform, proof.center)
+	center := proofarith.DvTransform(rp.xform, proof.center)
 	if !signedAxisTransform(pose) {
 		// A read rotation cannot move a ball centered at the query origin.
 		// Other centers need an exact rotation of their offset before admission.
@@ -42,7 +42,7 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 		proof.center = proofarith.DyVec(pose.Translation())
 		return proof, true
 	}
-	proof.center = exactContactTransform(pose, center)
+	proof.center = proofarith.DvTransform(pose, center)
 	return proof, true
 }
 
@@ -96,8 +96,8 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 		return sourceSphereContactProof{}, false
 	}
 	local := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()),
-		proofarith.DvAdd(dyScaleVec(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(arc.Center.U)),
-			dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(arc.Center.V))))
+		proofarith.DvAdd(proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(arc.Center.U)),
+			proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(arc.Center.V))))
 	return sourceSphereContactProof{
 		center: local,
 		radius: radius, face: faces[0],

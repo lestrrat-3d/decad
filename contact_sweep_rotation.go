@@ -214,7 +214,7 @@ func (p rotationalSweepPath) replayDeviation(pose r3.Transform, f *big.Rat) (*bi
 }
 
 // transferCharge is the §10.4 transfer charge ‖R_r − R_i‖_F·δ of one rounded
-// pose: R_r is the pose's float basis, the linear part exactContactTransform
+// pose: R_r is the pose's float basis, the linear part proof.DvTransform
 // stages a point through, and R_i the ideal rotation's interval enclosure at
 // the pose's fraction (idealAt). A true point is x + e with |e| <= δ in the
 // body's frame, so its rounded image differs from its ideal one by the held

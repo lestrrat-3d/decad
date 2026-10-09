@@ -504,7 +504,7 @@ func (p *rollingTrackProof) manifoldAt(f *big.Rat, req ContactRequest) (*Contact
 		Exactness: exactnessFromBound(p.depthUp)}
 	points := make([]ContactPoint, 0, len(p.ends))
 	for _, end := range p.ends {
-		center := ratOfDyV3(exactContactTransform(poses[p.m], end))
+		center := ratOfDyV3(proofarith.DvTransform(poses[p.m], end))
 		var rim, foot [3]*big.Rat
 		for k := range 3 {
 			rim[k] = new(big.Rat).Sub(center[k], new(big.Rat).Mul(p.radius, n[k]))
@@ -552,7 +552,7 @@ func (r *SweepReport) certifiedRollingPosesAtFraction(f *big.Rat) (r3.Transform,
 	limit := new(big.Rat).Add(p.depth, deviation)
 	q := vertsS[p.origin]
 	for _, end := range p.ends {
-		height := proofarith.DvDot(p.normal, proofarith.DvSub(exactContactTransform(poses[p.m], end), q)).Rat()
+		height := proofarith.DvDot(p.normal, proofarith.DvSub(proofarith.DvTransform(poses[p.m], end), q)).Rat()
 		height.Sub(height, p.radius)
 		if height.Abs(height).Cmp(limit) > 0 {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rolling replay pose leaves the certified band", ErrUnsupported)

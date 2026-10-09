@@ -305,7 +305,7 @@ func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
 	basis := pose.Basis()
 	c.columns = [3]proofarith.DyV3{proofarith.DyVec(basis.EX), proofarith.DyVec(basis.EY), proofarith.DyVec(basis.EZ)}
 	for i := range c.source {
-		c.centers[i] = exactContactTransform(pose, c.source[i])
+		c.centers[i] = proofarith.DvTransform(pose, c.source[i])
 	}
 	one := proofarith.DyInt(1)
 	for i := range 3 {
@@ -520,7 +520,7 @@ func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane
 	}
 	var rims [2]proofarith.DyV3
 	for i, center := range c.centers {
-		rims[i] = proofarith.DvSub(center, dyScaleVec(plane.normal, c.radius))
+		rims[i] = proofarith.DvSub(center, proofarith.DvScale(plane.normal, c.radius))
 	}
 	if ordered := clearance.OrderedRulingEnds(rims); !sameDyV3(ordered[0], rims[0]) {
 		rims = ordered

@@ -61,9 +61,9 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 	for index := range box.corner {
 		point := origin
 		for axis := range 3 {
-			point = proofarith.DvAdd(point, dyScaleVec(frame[axis], values[axis][(index>>axis)&1]))
+			point = proofarith.DvAdd(point, proofarith.DvScale(frame[axis], values[axis][(index>>axis)&1]))
 		}
-		box.corner[index] = exactContactTransform(pose, exactContactTransform(pp.xform, point))
+		box.corner[index] = proofarith.DvTransform(pose, proofarith.DvTransform(pp.xform, point))
 	}
 	box.edge = [3]proofarith.DyV3{proofarith.DvSub(box.corner[1], box.corner[0]),
 		proofarith.DvSub(box.corner[2], box.corner[0]), proofarith.DvSub(box.corner[4], box.corner[0])}
@@ -76,8 +76,8 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 	// pose. Match them in the body's cardinal placed frame, before rotation.
 	placedEdge := [3]proofarith.DyV3{}
 	for axis := range 3 {
-		placedEdge[axis] = exactContactTransform(pp.xform,
-			dyScaleVec(frame[axis], proofarith.DySubScalar(values[axis][1], values[axis][0])))
+		placedEdge[axis] = proofarith.DvTransform(pp.xform,
+			proofarith.DvScale(frame[axis], proofarith.DySubScalar(values[axis][1], values[axis][0])))
 		placedEdge[axis] = proofarith.DvSub(placedEdge[axis], proofarith.DyVec(pp.xform.Translation()))
 	}
 	faces := body.Faces()

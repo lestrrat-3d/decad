@@ -210,7 +210,7 @@ func rotationalSweepRadiusPerCorner(body *Body, from r3.Transform, center r3.Vec
 	}
 	best := new(big.Rat)
 	for _, corner := range corners {
-		mapped := exactContactTransform(from, corner)
+		mapped := proofarith.DvTransform(from, corner)
 		delta := proofarith.DvSub(mapped, pivot)
 		cross := [3]*big.Rat{
 			new(big.Rat).Sub(new(big.Rat).Mul(delta[1].Rat(), axis[2]),

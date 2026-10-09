@@ -58,37 +58,12 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	if !finiteMeasurementValues(umin, umax, vmin, vmax) || pp.z0 >= pp.z1 {
 		return sourceBoxContactProof{}, false
 	}
-	u := [2]proofarith.Dyadic{proofarith.MustDyOf(umin), proofarith.MustDyOf(umax)}
-	v := [2]proofarith.Dyadic{proofarith.MustDyOf(vmin), proofarith.MustDyOf(vmax)}
-	z := [2]proofarith.Dyadic{proofarith.MustDyOf(pp.z0), proofarith.MustDyOf(pp.z1)}
-	origin := proofarith.DyVec(pp.frame.Origin())
-	fu, fv, fn := proofarith.DyVec(pp.frame.U()), proofarith.DyVec(pp.frame.V()), proofarith.DyVec(pp.frame.N())
-	var box sourceBoxContactProof
-	first := true
-	for iu := range u {
-		for iv := range v {
-			for iz := range z {
-				p := proofarith.DvAdd(origin, proofarith.DvAdd(dyScaleVec(fu, u[iu]),
-					proofarith.DvAdd(dyScaleVec(fv, v[iv]), dyScaleVec(fn, z[iz]))))
-				p = exactContactTransform(pp.xform, p)
-				p = exactContactTransform(pose, p)
-				for axis := range 3 {
-					if first || proofarith.DyCmp(p[axis], box.lo[axis]) < 0 {
-						box.lo[axis] = p[axis]
-					}
-					if first || proofarith.DyCmp(p[axis], box.hi[axis]) > 0 {
-						box.hi[axis] = p[axis]
-					}
-				}
-				first = false
-			}
-		}
+	numeric, ok := box.SourceAxisBox(pp.frame, pp.xform, pose,
+		[2]float64{umin, umax}, [2]float64{vmin, vmax}, [2]float64{pp.z0, pp.z1})
+	if !ok {
+		return sourceBoxContactProof{}, false
 	}
-	for i := range 3 {
-		if proofarith.DyCmp(box.lo[i], box.hi[i]) >= 0 {
-			return sourceBoxContactProof{}, false
-		}
-	}
+	box := sourceBoxContactProof{lo: numeric.Lo, hi: numeric.Hi}
 	faces := b.Faces()
 	if len(faces) != 6 {
 		return sourceBoxContactProof{}, false
@@ -117,19 +92,9 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	return box, true
 }
 
-func dyScaleVec(v proofarith.DyV3, s proofarith.Dyadic) proofarith.DyV3 {
-	return proofarith.DyV3{proofarith.DyMul(v[0], s), proofarith.DyMul(v[1], s), proofarith.DyMul(v[2], s)}
-}
-
-func exactContactTransform(t r3.Transform, p proofarith.DyV3) proofarith.DyV3 {
-	b := t.Basis()
-	return proofarith.DvAdd(proofarith.DyVec(t.Translation()), proofarith.DvAdd(dyScaleVec(proofarith.DyVec(b.EX), p[0]),
-		proofarith.DvAdd(dyScaleVec(proofarith.DyVec(b.EY), p[1]), dyScaleVec(proofarith.DyVec(b.EZ), p[2]))))
-}
-
-// exactContactMap is exactContactTransform with the transform's translation
+// exactContactMap is proof.DvTransform with the transform's translation
 // and basis lifted once, for a caller mapping many points through one pose.
-// apply returns exactly what exactContactTransform returns.
+// apply returns exactly what proof.DvTransform returns.
 type exactContactMap struct {
 	translation, ex, ey, ez proofarith.DyV3
 }
@@ -141,8 +106,8 @@ func newExactContactMap(t r3.Transform) exactContactMap {
 }
 
 func (m exactContactMap) apply(p proofarith.DyV3) proofarith.DyV3 {
-	return proofarith.DvAdd(m.translation, proofarith.DvAdd(dyScaleVec(m.ex, p[0]),
-		proofarith.DvAdd(dyScaleVec(m.ey, p[1]), dyScaleVec(m.ez, p[2]))))
+	return proofarith.DvAdd(m.translation, proofarith.DvAdd(proofarith.DvScale(m.ex, p[0]),
+		proofarith.DvAdd(proofarith.DvScale(m.ey, p[1]), proofarith.DvScale(m.ez, p[2]))))
 }
 
 func signedAxisTransform(t r3.Transform) bool {

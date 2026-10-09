@@ -234,7 +234,7 @@ func preparePlanarSweepPath(body *Body, path affinePairPath, solid *planar.Plana
 	prepared.sourcePoints = solid.Verts
 	prepared.startPoints = make([]proofarith.DyV3, len(solid.Verts))
 	for i, v := range solid.Verts {
-		prepared.startPoints[i] = exactContactTransform(path.From, v)
+		prepared.startPoints[i] = proofarith.DvTransform(path.From, v)
 	}
 	return prepared, true
 }

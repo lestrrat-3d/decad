@@ -151,7 +151,7 @@ func pointDeviationRational(p rotationalSweepPath, pose r3.Transform, f *big.Rat
 	ideal := idealAtRational(p, f)
 	maxSquared := new(big.Rat)
 	for _, source := range p.sourcePoints {
-		actual := exactContactTransform(pose, source)
+		actual := proofarith.DvTransform(pose, source)
 		point := motionbound.PointVec(motionbound.RatVec{source[0].Rat(), source[1].Rat(), source[2].Rat()})
 		idealPoint := motionbound.IvVecAdd(motionbound.IvVecAdd(ideal.Rot.Apply(motionbound.IvVecSub(point, ideal.Pivot)), ideal.Pivot), ideal.Shift)
 		observed := motionbound.PointVec(motionbound.RatVec{actual[0].Rat(), actual[1].Rat(), actual[2].Rat()})
@@ -272,7 +272,7 @@ func TestPointDeviationMatchesRationalForm(t *testing.T) {
 				require.True(t, ok, name)
 				require.Len(t, points, len(path.sourcePoints), name)
 				for i, source := range path.sourcePoints {
-					require.Equal(t, exactContactTransform(at, source), points[i], name)
+					require.Equal(t, proofarith.DvTransform(at, source), points[i], name)
 				}
 				require.Equal(t, pointDeviationRational(path, at, f), bound, "%s at %v", name, f)
 				// The transfer charge over a held displacement δ = 2⁻¹².
@@ -329,7 +329,7 @@ func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
 	ideal sweepIdealPose) ([]proofarith.DyV3, *big.Rat) {
 	actual := make([]proofarith.DyV3, len(p.sourcePoints))
 	for i, source := range p.sourcePoints {
-		actual[i] = exactContactTransform(pose, source)
+		actual[i] = proofarith.DvTransform(pose, source)
 	}
 	coordinates := make([]*big.Rat, 0, 6*len(p.sourcePoints))
 	for i, source := range p.sourcePoints {
