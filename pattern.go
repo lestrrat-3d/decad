@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/patternrecord"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -187,7 +188,7 @@ func patternFrameOf(payload featurePayload) (r3.Frame, r3.Transform, []profileRe
 	case stackedPrismPayload:
 		regions := make([]profileRecord, 0, len(p.slabs))
 		for _, slab := range p.slabs {
-			regions = append(regions, slab.regions...)
+			regions = append(regions, slab.Regions...)
 		}
 		return p.frame, p.xform, regions, true
 	default:
@@ -264,17 +265,17 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 		p.walks = nil
 		return evalPrismContext(ctx, d, ref, p, freeform.NewFreeformWork())
 	case stackedPrismPayload:
-		slabs := make([]prismSlab, len(p.slabs))
+		slabs := make([]stackedrecord.Slab, len(p.slabs))
 		delta := 0.0
 		for k, slab := range p.slabs {
 			slabs[k] = slab
-			slabs[k].regions = make([]profileRecord, len(slab.regions))
-			for r, region := range slab.regions {
+			slabs[k].Regions = make([]profileRecord, len(slab.Regions))
+			for r, region := range slab.Regions {
 				moved, charge, err := moveRegion(budget, region, mv)
 				if err != nil {
 					return nil, err
 				}
-				slabs[k].regions[r] = moved
+				slabs[k].Regions[r] = moved
 				delta = math.Max(delta, charge)
 			}
 		}
@@ -288,7 +289,7 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 				return rp.placedInstance(ctx, d, ref, payload, i)
 			}
 		}
-		interfaces, err := stackedInterfaces(ctx, slabs, p.interfaces)
+		interfaces, err := stackedrecord.Derive(ctx, slabs, p.interfaces)
 		if err != nil {
 			return nil, err
 		}
@@ -381,17 +382,17 @@ func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePaylo
 	budget := proofbound.NewWorkBudget(ctx)
 	frame, xform, _, _ := patternFrameOf(payload)
 	var regions []profileRecord
-	var slab prismSlab
+	var slab stackedrecord.Slab
 	var sectionDelta float64
 	multiSlab := false
 	switch p := payload.(type) {
 	case prismPayload:
 		regions = []profileRecord{p.profile}
-		slab = prismSlab{z0: p.z0, z1: p.z1, z0Delta: p.z0Delta, z1Delta: p.z1Delta}
+		slab = stackedrecord.Slab{Z0: p.z0, Z1: p.z1, Z0Delta: p.z0Delta, Z1Delta: p.z1Delta}
 		sectionDelta = p.sectionDelta
 	case stackedPrismPayload:
 		if p.isGroup() {
-			regions = p.slabs[0].regions
+			regions = p.slabs[0].Regions
 			slab = p.slabs[0]
 			sectionDelta = p.sectionDelta
 			break
@@ -400,7 +401,7 @@ func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePaylo
 		if len(runs) != 1 {
 			return stackedPrismPayload{}, false, nil
 		}
-		regions = []profileRecord{{Outer: p.slabs[0].regions[0].Outer}}
+		regions = []profileRecord{{Outer: p.slabs[0].Regions[0].Outer}}
 		multiSlab = true
 	default:
 		return stackedPrismPayload{}, false, nil
@@ -428,9 +429,9 @@ func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePaylo
 	if multiSlab {
 		return stackedPrismPayload{}, false, fmt.Errorf(`%w: the pattern's instances are disjoint stacked prisms, and no payload holds several lumps of a multi-slab stack; use PatternCopies to keep them as separate bodies`, ErrUnsupported)
 	}
-	slab.regions = all
+	slab.Regions = all
 	return stackedPrismPayload{
-		slabs: []prismSlab{slab},
+		slabs: []stackedrecord.Slab{slab},
 		frame: frame, xform: xform,
 		sectionDelta: math.Max(patternrecord.WithDelta(sectionDelta, delta), walk),
 	}, true, nil

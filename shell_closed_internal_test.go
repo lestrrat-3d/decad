@@ -26,8 +26,8 @@ func TestShellClosedPrismLevelsCarryThicknessConversion(t *testing.T) {
 	require.NoError(t, err)
 	sp := closed.payload.(stackedPrismPayload)
 	require.Len(t, sp.slabs, 3)
-	require.Positive(t, sp.slabs[0].z1Delta, `z0 + t carries the conversion`)
-	require.Positive(t, sp.slabs[2].z0Delta, `z1 − t carries the conversion`)
+	require.Positive(t, sp.slabs[0].Z1Delta, `z0 + t carries the conversion`)
+	require.Positive(t, sp.slabs[2].Z0Delta, `z1 − t carries the conversion`)
 
 	th := big.NewRat(254, 100)
 	two := big.NewRat(2, 1)

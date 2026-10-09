@@ -41,10 +41,10 @@ func internalPocket(t *testing.T) (*Document, *Body) {
 }
 
 func cloneStackedForAudit(sp stackedPrismPayload) stackedPrismPayload {
-	sp.slabs = append([]prismSlab(nil), sp.slabs...)
-	sp.interfaces = append([]prismSlabInterface(nil), sp.interfaces...)
+	sp.slabs = append([]stackedrecord.Slab(nil), sp.slabs...)
+	sp.interfaces = append([]stackedrecord.Interface(nil), sp.interfaces...)
 	for i := range sp.slabs {
-		sp.slabs[i].regions = append([]profileRecord(nil), sp.slabs[i].regions...)
+		sp.slabs[i].Regions = append([]profileRecord(nil), sp.slabs[i].Regions...)
 	}
 	return sp
 }
@@ -52,7 +52,7 @@ func cloneStackedForAudit(sp stackedPrismPayload) stackedPrismPayload {
 func TestStackedPayloadAuditRejectsBrokenRecords(t *testing.T) {
 	doc, pocket := internalPocket(t)
 	base := pocket.payload.(stackedPrismPayload)
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(base)))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: base.slabs, Interfaces: base.interfaces}))
 	other := internalBoxBody(t, doc, 1, 1, 2, 2, 10)
 	otherHole, err := offset2d.ReverseLoopRecordContext(t.Context(), other.payload.(prismPayload).profile.Outer)
 	require.NoError(t, err)
@@ -63,25 +63,25 @@ func TestStackedPayloadAuditRejectsBrokenRecords(t *testing.T) {
 	}{
 		{"one slab", func(sp *stackedPrismPayload) { sp.slabs = sp.slabs[:1]; sp.interfaces = nil }, ErrUnsupported},
 		{"two regions", func(sp *stackedPrismPayload) {
-			sp.slabs[0].regions = append(sp.slabs[0].regions, sp.slabs[0].regions[0])
+			sp.slabs[0].Regions = append(sp.slabs[0].Regions, sp.slabs[0].Regions[0])
 		}, ErrUnsupported},
-		{"empty interval", func(sp *stackedPrismPayload) { sp.slabs[0].z1 = sp.slabs[0].z0 }, ErrDegenerate},
-		{"separated levels", func(sp *stackedPrismPayload) { sp.slabs[0].z1 = 5 }, ErrDegenerate},
+		{"empty interval", func(sp *stackedPrismPayload) { sp.slabs[0].Z1 = sp.slabs[0].Z0 }, ErrDegenerate},
+		{"separated levels", func(sp *stackedPrismPayload) { sp.slabs[0].Z1 = 5 }, ErrDegenerate},
 		{"different outer", func(sp *stackedPrismPayload) {
-			sp.slabs[1].regions[0].Outer = sp.slabs[1].regions[0].Holes[0]
+			sp.slabs[1].Regions[0].Outer = sp.slabs[1].Regions[0].Holes[0]
 		}, ErrUnsupported},
 		{"opposed holes", func(sp *stackedPrismPayload) {
-			sp.slabs[0].regions[0].Holes = []loopRecord{otherHole}
+			sp.slabs[0].Regions[0].Holes = []loopRecord{otherHole}
 		}, ErrUnsupported},
 		{"wrong exposed patch", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].lowerExposed = nil
+			sp.interfaces[0].LowerExposed = nil
 		}, ErrDegenerate},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sp := cloneStackedForAudit(base)
 			tc.change(&sp)
-			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)), tc.want)
+			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}), tc.want)
 		})
 	}
 }
@@ -96,10 +96,10 @@ func TestBlindStackedLevelChargesExactOffsetSum(t *testing.T) {
 	sp := pocket.payload.(stackedPrismPayload)
 	inner := new(big.Rat).Add(proofarith.FloatRat(0.1), proofarith.FloatRat(0.3))
 	held, _ := inner.Float64()
-	require.Equal(t, held, sp.slabs[0].z1)
-	require.Positive(t, sp.slabs[0].z1Delta)
-	require.Equal(t, proofarith.RationalFloatError(inner, held), sp.slabs[0].z1Delta)
-	require.Equal(t, sp.slabs[0].z1Delta, sp.slabs[1].z0Delta)
+	require.Equal(t, held, sp.slabs[0].Z1)
+	require.Positive(t, sp.slabs[0].Z1Delta)
+	require.Equal(t, proofarith.RationalFloatError(inner, held), sp.slabs[0].Z1Delta)
+	require.Equal(t, sp.slabs[0].Z1Delta, sp.slabs[1].Z0Delta)
 }
 
 func TestBlindStackedLevelCarriesToolConversion(t *testing.T) {
@@ -112,7 +112,7 @@ func TestBlindStackedLevelCarriesToolConversion(t *testing.T) {
 	pocket, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
 	sp := pocket.payload.(stackedPrismPayload)
-	require.GreaterOrEqual(t, sp.slabs[0].z1Delta, toolDelta)
+	require.GreaterOrEqual(t, sp.slabs[0].Z1Delta, toolDelta)
 	volume, err := pocket.Volume()
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, volume.Bound.Base(), 16*toolDelta)
@@ -134,7 +134,7 @@ func TestBlindStackedPlacedToolChargesSectionDisplacement(t *testing.T) {
 	volume, err := pocket.Volume()
 	require.NoError(t, err)
 	require.Equal(t, Approximate, volume.Exactness)
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}))
 }
 
 func TestBlindStackedAdmissionLeavesOtherCutsToMesh(t *testing.T) {
@@ -194,14 +194,14 @@ func holedCupRecord(t *testing.T) cupPayload {
 func TestCupStackedRecord(t *testing.T) {
 	cp := holedCupRecord(t)
 	require.Len(t, cp.stack.slabs, 2)
-	require.Len(t, cp.stack.slabs[0].regions, 1)
-	require.Len(t, cp.stack.slabs[1].regions, 2, `1 + k wall bands`)
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(cp.stack)))
-	derived, err := stackedInterfaces(t.Context(), cp.stack.slabs, cp.stack.interfaces)
+	require.Len(t, cp.stack.slabs[0].Regions, 1)
+	require.Len(t, cp.stack.slabs[1].Regions, 2, `1 + k wall bands`)
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: cp.stack.slabs, Interfaces: cp.stack.interfaces}))
+	derived, err := stackedrecord.Derive(t.Context(), cp.stack.slabs, cp.stack.interfaces)
 	require.NoError(t, err)
 	rederived := cp.stack
 	rederived.interfaces = derived
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(rederived)), `the derived spelling passes the same audit`)
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: rederived.slabs, Interfaces: rederived.interfaces}), `the derived spelling passes the same audit`)
 
 	d := New()
 	body, err := evalCupContext(t.Context(), d, d.nextProducerID(), cp)
@@ -220,8 +220,8 @@ func TestCupStackedRecord(t *testing.T) {
 	require.Equal(t, 0.0, view.zOuter)
 	require.Equal(t, 5.0, view.zCav)
 	require.Equal(t, 20.0, view.zOpen)
-	require.Equal(t, cp.stack.slabs[0].regions[0], view.outer)
-	require.Equal(t, cp.stack.interfaces[0].lowerExposed[0], view.cavity)
+	require.Equal(t, cp.stack.slabs[0].Regions[0], view.outer)
+	require.Equal(t, cp.stack.interfaces[0].LowerExposed[0], view.cavity)
 }
 
 func TestStackedLiningAuditRejectsBrokenRecords(t *testing.T) {
@@ -234,33 +234,33 @@ func TestStackedLiningAuditRejectsBrokenRecords(t *testing.T) {
 		want   error
 	}{
 		{"extra narrow region", func(sp *stackedPrismPayload) {
-			sp.slabs[1].regions = append(sp.slabs[1].regions, sp.slabs[1].regions[1])
+			sp.slabs[1].Regions = append(sp.slabs[1].Regions, sp.slabs[1].Regions[1])
 		}, ErrUnsupported},
 		{"narrow outer differs", func(sp *stackedPrismPayload) {
-			sp.slabs[1].regions[0].Outer = rectangleRecord(1, 1, 99, 59).Outer
+			sp.slabs[1].Regions[0].Outer = rectangleRecord(1, 1, 99, 59).Outer
 		}, ErrUnsupported},
 		{"lining misses its wide hole", func(sp *stackedPrismPayload) {
-			sp.slabs[1].regions[1].Holes = []loopRecord{other}
+			sp.slabs[1].Regions[1].Holes = []loopRecord{other}
 		}, ErrUnsupported},
 		{"both sides several regions", func(sp *stackedPrismPayload) {
-			sp.slabs[0].regions = append(sp.slabs[0].regions, sp.slabs[0].regions[0])
+			sp.slabs[0].Regions = append(sp.slabs[0].Regions, sp.slabs[0].Regions[0])
 		}, ErrUnsupported},
 		{"exposed patch misses a hole", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].lowerExposed = []profileRecord{{Outer: sp.interfaces[0].lowerExposed[0].Outer}}
+			sp.interfaces[0].LowerExposed = []profileRecord{{Outer: sp.interfaces[0].LowerExposed[0].Outer}}
 		}, ErrDegenerate},
 		{"exposed patch on the narrow side", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].upperExposed = sp.interfaces[0].lowerExposed
-			sp.interfaces[0].lowerExposed = nil
+			sp.interfaces[0].UpperExposed = sp.interfaces[0].LowerExposed
+			sp.interfaces[0].LowerExposed = nil
 		}, ErrDegenerate},
 		{"exposed hole is not the lining's outer", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].lowerExposed = []profileRecord{{Outer: sp.interfaces[0].lowerExposed[0].Outer, Holes: []loopRecord{other}}}
+			sp.interfaces[0].LowerExposed = []profileRecord{{Outer: sp.interfaces[0].LowerExposed[0].Outer, Holes: []loopRecord{other}}}
 		}, ErrDegenerate},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sp := cloneStackedForAudit(base)
 			tc.change(&sp)
-			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)), tc.want)
+			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}), tc.want)
 		})
 	}
 }

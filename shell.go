@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -427,7 +428,7 @@ func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp 
 		return nil, err
 	}
 	return evalStackedContext(ctx, d, ref, stackedPrismPayload{
-		slabs: []prismSlab{{regions: bands, z0: pp.z0, z1: pp.z1, z0Delta: pp.z0Delta, z1Delta: pp.z1Delta}},
+		slabs: []stackedrecord.Slab{{Regions: bands, Z0: pp.z0, Z1: pp.z1, Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta}},
 		frame: pp.frame, xform: pp.xform, sectionDelta: offsetDelta,
 	})
 }
@@ -531,22 +532,22 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 	}
 	lo, loDelta := step(pp.z0, pp.z0Delta, s*tmm)
 	hi, hiDelta := step(pp.z1, pp.z1Delta, -s*tmm)
-	caps := prismSlab{regions: []profileRecord{outer}}
-	first, middle, last := caps, prismSlab{regions: bands}, caps
+	caps := stackedrecord.Slab{Regions: []profileRecord{outer}}
+	first, middle, last := caps, stackedrecord.Slab{Regions: bands}, caps
 	if s > 0 {
-		first.z0, first.z0Delta, first.z1, first.z1Delta = pp.z0, pp.z0Delta, lo, loDelta
-		middle.z0, middle.z0Delta, middle.z1, middle.z1Delta = lo, loDelta, hi, hiDelta
-		last.z0, last.z0Delta, last.z1, last.z1Delta = hi, hiDelta, pp.z1, pp.z1Delta
+		first.Z0, first.Z0Delta, first.Z1, first.Z1Delta = pp.z0, pp.z0Delta, lo, loDelta
+		middle.Z0, middle.Z0Delta, middle.Z1, middle.Z1Delta = lo, loDelta, hi, hiDelta
+		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = hi, hiDelta, pp.z1, pp.z1Delta
 	} else {
-		first.z0, first.z0Delta, first.z1, first.z1Delta = lo, loDelta, pp.z0, pp.z0Delta
-		middle.z0, middle.z0Delta, middle.z1, middle.z1Delta = pp.z0, pp.z0Delta, pp.z1, pp.z1Delta
-		last.z0, last.z0Delta, last.z1, last.z1Delta = pp.z1, pp.z1Delta, hi, hiDelta
+		first.Z0, first.Z0Delta, first.Z1, first.Z1Delta = lo, loDelta, pp.z0, pp.z0Delta
+		middle.Z0, middle.Z0Delta, middle.Z1, middle.Z1Delta = pp.z0, pp.z0Delta, pp.z1, pp.z1Delta
+		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = pp.z1, pp.z1Delta, hi, hiDelta
 	}
 	exposed := []profileRecord{cavity}
 	ref := d.nextProducerID()
 	body, err := evalStackedContext(ctx, d, ref, stackedPrismPayload{
-		slabs:        []prismSlab{first, middle, last},
-		interfaces:   []prismSlabInterface{{lowerExposed: exposed}, {upperExposed: exposed}},
+		slabs:        []stackedrecord.Slab{first, middle, last},
+		interfaces:   []stackedrecord.Interface{{LowerExposed: exposed}, {UpperExposed: exposed}},
 		frame:        pp.frame,
 		xform:        pp.xform,
 		sectionDelta: offsetDelta,

@@ -1209,8 +1209,9 @@ answer, never the whole bound.
 
 General prism shells are a finite axial stack of exact line/arc regions. One
 axial slab may contain several disconnected regions. `docs/stacked-prism-design.md`
-owns the payload: its record (`prismSlab`, `prismSlabInterface`,
-`stackedPrismPayload`), its invariants, its body build, its measurements, its
+owns the payload: its internal `stackedrecord.Slab` and
+`stackedrecord.Interface` records, the root `stackedPrismPayload`, its
+invariants, its body build, its measurements, its
 tessellation and what every consumer does with it. The analytic blind `Cut`
 builds it over slabs of one region each and interfaces whose exposed material
 is each exclusive hole's own interior. The rules below are the shell cases

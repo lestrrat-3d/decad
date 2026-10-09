@@ -183,8 +183,8 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	stack := &brepStack{delta: delta}
 	for k, regions := range b.slabs {
 		lo, hi := b.levels[k], b.levels[k+1]
-		stack.slabs = append(stack.slabs, prismSlab{regions: regions,
-			z0: lo.Held, z1: hi.Held, z0Delta: lo.Delta, z1Delta: hi.Delta})
+		stack.slabs = append(stack.slabs, stackedrecord.Slab{Regions: regions,
+			Z0: lo.Held, Z1: hi.Held, Z0Delta: lo.Delta, Z1Delta: hi.Delta})
 	}
 	out.stack = stack
 	return out, nil
@@ -199,7 +199,7 @@ func (b *ubBuild) refs(isB bool, slab int) []ubRef {
 	if isB {
 		op = b.st.vb
 	}
-	out := make([]ubRef, len(op.slabs[slab].regions))
+	out := make([]ubRef, len(op.slabs[slab].Regions))
 	for r := range out {
 		out[r] = ubRef{isB: isB, slab: slab, region: r}
 	}
@@ -208,9 +208,9 @@ func (b *ubBuild) refs(isB bool, slab int) []ubRef {
 
 func (b *ubBuild) record(ref ubRef) profileRecord {
 	if ref.isB {
-		return b.st.vb.slabs[ref.slab].regions[ref.region]
+		return b.st.vb.slabs[ref.slab].Regions[ref.region]
 	}
-	return b.st.va.slabs[ref.slab].regions[ref.region]
+	return b.st.va.slabs[ref.slab].Regions[ref.region]
 }
 
 // scene arranges a set of records once and keeps the arrangement. A scene

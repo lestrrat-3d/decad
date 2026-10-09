@@ -266,14 +266,14 @@ func (cp cupPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 // floorSlab is the index of the slab holding the outer region: the first
 // when the cup opens at the top, the second when it opens at the bottom.
 func (cp cupPayload) floorSlab() int {
-	if len(cp.stack.slabs[0].regions) == 1 && len(cp.stack.slabs[1].regions) == 1 {
+	if len(cp.stack.slabs[0].Regions) == 1 && len(cp.stack.slabs[1].Regions) == 1 {
 		// A hole-free cup: the floor is the slab whose region has no hole.
-		if len(cp.stack.slabs[0].regions[0].Holes) == 0 {
+		if len(cp.stack.slabs[0].Regions[0].Holes) == 0 {
 			return 0
 		}
 		return 1
 	}
-	if len(cp.stack.slabs[0].regions) == 1 {
+	if len(cp.stack.slabs[0].Regions) == 1 {
 		return 0
 	}
 	return 1
@@ -288,7 +288,7 @@ func (cp cupPayload) view() cupView {
 	floor, wall := cp.stack.slabs[f], cp.stack.slabs[1-f]
 	boundary := cp.stack.interfaces[0]
 	v := cupView{
-		outer:          floor.regions[0],
+		outer:          floor.Regions[0],
 		frame:          cp.stack.frame,
 		thickness:      cp.thickness,
 		thicknessDelta: cp.thicknessDelta,
@@ -297,15 +297,15 @@ func (cp cupPayload) view() cupView {
 		xform:          cp.stack.xform,
 	}
 	if f == 0 {
-		v.cavity = boundary.lowerExposed[0]
-		v.zOuter, v.zOuterDelta = floor.z0, floor.z0Delta
-		v.zCav, v.zCavDelta = floor.z1, floor.z1Delta
-		v.zOpen, v.zOpenDelta = wall.z1, wall.z1Delta
+		v.cavity = boundary.LowerExposed[0]
+		v.zOuter, v.zOuterDelta = floor.Z0, floor.Z0Delta
+		v.zCav, v.zCavDelta = floor.Z1, floor.Z1Delta
+		v.zOpen, v.zOpenDelta = wall.Z1, wall.Z1Delta
 	} else {
-		v.cavity = boundary.upperExposed[0]
-		v.zOuter, v.zOuterDelta = floor.z1, floor.z1Delta
-		v.zCav, v.zCavDelta = floor.z0, floor.z0Delta
-		v.zOpen, v.zOpenDelta = wall.z0, wall.z0Delta
+		v.cavity = boundary.UpperExposed[0]
+		v.zOuter, v.zOuterDelta = floor.Z1, floor.Z1Delta
+		v.zCav, v.zCavDelta = floor.Z0, floor.Z0Delta
+		v.zOpen, v.zOpenDelta = wall.Z0, wall.Z0Delta
 	}
 	return v
 }
@@ -321,8 +321,8 @@ func (cp cupView) payload(ctx context.Context) (cupPayload, error) {
 	if err != nil {
 		return cupPayload{}, err
 	}
-	floor := prismSlab{regions: []profileRecord{cp.outer}}
-	wall := prismSlab{regions: bands}
+	floor := stackedrecord.Slab{Regions: []profileRecord{cp.outer}}
+	wall := stackedrecord.Slab{Regions: bands}
 	exposed := []profileRecord{cp.cavity}
 	out := cupPayload{
 		stack:          stackedPrismPayload{frame: cp.frame, xform: cp.xform},
@@ -332,15 +332,15 @@ func (cp cupView) payload(ctx context.Context) (cupPayload, error) {
 		sense:          cp.sense,
 	}
 	if cp.zOpen > cp.zOuter { // open at the top
-		floor.z0, floor.z0Delta, floor.z1, floor.z1Delta = cp.zOuter, cp.zOuterDelta, cp.zCav, cp.zCavDelta
-		wall.z0, wall.z0Delta, wall.z1, wall.z1Delta = cp.zCav, cp.zCavDelta, cp.zOpen, cp.zOpenDelta
-		out.stack.slabs = []prismSlab{floor, wall}
-		out.stack.interfaces = []prismSlabInterface{{lowerExposed: exposed}}
+		floor.Z0, floor.Z0Delta, floor.Z1, floor.Z1Delta = cp.zOuter, cp.zOuterDelta, cp.zCav, cp.zCavDelta
+		wall.Z0, wall.Z0Delta, wall.Z1, wall.Z1Delta = cp.zCav, cp.zCavDelta, cp.zOpen, cp.zOpenDelta
+		out.stack.slabs = []stackedrecord.Slab{floor, wall}
+		out.stack.interfaces = []stackedrecord.Interface{{LowerExposed: exposed}}
 	} else {
-		wall.z0, wall.z0Delta, wall.z1, wall.z1Delta = cp.zOpen, cp.zOpenDelta, cp.zCav, cp.zCavDelta
-		floor.z0, floor.z0Delta, floor.z1, floor.z1Delta = cp.zCav, cp.zCavDelta, cp.zOuter, cp.zOuterDelta
-		out.stack.slabs = []prismSlab{wall, floor}
-		out.stack.interfaces = []prismSlabInterface{{upperExposed: exposed}}
+		wall.Z0, wall.Z0Delta, wall.Z1, wall.Z1Delta = cp.zOpen, cp.zOpenDelta, cp.zCav, cp.zCavDelta
+		floor.Z0, floor.Z0Delta, floor.Z1, floor.Z1Delta = cp.zCav, cp.zCavDelta, cp.zOuter, cp.zOuterDelta
+		out.stack.slabs = []stackedrecord.Slab{wall, floor}
+		out.stack.interfaces = []stackedrecord.Interface{{UpperExposed: exposed}}
 	}
 	return out, nil
 }

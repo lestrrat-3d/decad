@@ -21,7 +21,7 @@ import (
 )
 
 func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, chord float64, verify Verification) (*Mesh, error) {
-	if err := stackedrecord.Falsify(ctx, stackedRecordOf(sp)); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
 		return nil, err
 	}
 	columns, bySlab, err := stackedColumns(sp)
@@ -68,7 +68,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			return nil, err
 		}
 		first, last := sp.slabs[col.Start], sp.slabs[col.End]
-		cl, err := tessellation.ChordLoop(ctx, col.Loop, budget, last.z1-first.z0, work, nil, col.LoopIndex,
+		cl, err := tessellation.ChordLoop(ctx, col.Loop, budget, last.Z1-first.Z0, work, nil, col.LoopIndex,
 			func(w survey2d.SideWalk) (*Face, error) {
 				return faceOfRole(fmt.Sprintf("slab(%d).region(%d).side(%d,%d)",
 					col.Start, col.Region, col.LoopIndex, w.Segs[0]))
@@ -83,15 +83,15 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		r.Top = make([]int, len(cl.Samples))
 		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.WallSlack, cl.CapSlack, cl.CapSlack)
 		for j, p := range cl.Samples {
-			r.Bottom[j] = addVertex(p, first.z0, cl.BoundOf[j])
-			r.Top[j] = addVertex(p, last.z1, cl.BoundOf[j])
+			r.Bottom[j] = addVertex(p, first.Z0, cl.BoundOf[j])
+			r.Top[j] = addVertex(p, last.Z1, cl.BoundOf[j])
 		}
 		for j, face := range cl.FaceOf {
 			next := (j + 1) % len(cl.Samples)
 			mesh.addTriangle([3]int{r.Bottom[j], r.Bottom[next], r.Top[next]}, face)
 			mesh.addTriangle([3]int{r.Bottom[j], r.Top[next], r.Top[j]}, face)
 			faceTrim[face] = math.Max(faceTrim[face], cl.SagOf[j])
-			faceAxial[face] = math.Max(first.z0Delta, last.z1Delta)
+			faceAxial[face] = math.Max(first.Z0Delta, last.Z1Delta)
 		}
 	}
 	storeMax, err := tessellation.StoreMax(vertexStore)
@@ -148,8 +148,8 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		top     bool
 		reverse bool
 		axial   float64
-	}{{0, roleCapStart, false, true, first.z0Delta}, {len(sp.slabs) - 1, roleCapEnd, true, false, last.z1Delta}} {
-		for r := range sp.slabs[end.slab].regions {
+	}{{0, roleCapStart, false, true, first.Z0Delta}, {len(sp.slabs) - 1, roleCapEnd, true, false, last.Z1Delta}} {
+		for r := range sp.slabs[end.slab].Regions {
 			face, err := stackedCapFace(b, sp, faceOfRole, end.role, end.slab, r)
 			if err != nil {
 				return nil, err
@@ -169,7 +169,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			if err != nil {
 				return nil, err
 			}
-			if err := emitPatch(face, patch.Loops, !patch.Floor, sp.slabs[k].z1Delta); err != nil {
+			if err := emitPatch(face, patch.Loops, !patch.Floor, sp.slabs[k].Z1Delta); err != nil {
 				return nil, err
 			}
 		}
@@ -190,12 +190,12 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	}
 	columnHeights := make([]float64, len(columns))
 	for i, column := range columns {
-		columnHeights[i] = sp.slabs[column.End].z1 - sp.slabs[column.Start].z0
+		columnHeights[i] = sp.slabs[column.End].Z1 - sp.slabs[column.Start].Z0
 	}
 	slabHeights := make([]float64, len(sp.slabs))
 	slabColumns := make([][]int, len(bySlab))
 	for k, slab := range sp.slabs {
-		slabHeights[k] = slab.z1 - slab.z0
+		slabHeights[k] = slab.Z1 - slab.Z0
 		slabColumns[k] = make([]int, len(bySlab[k]))
 		for i, entry := range bySlab[k] {
 			slabColumns[k][i] = entry.Column

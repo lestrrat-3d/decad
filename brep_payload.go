@@ -72,7 +72,7 @@ type brepFace struct {
 // operand's slabs (stackedUnionOperandOf); no consumer reads it, and a
 // placement leaves it unchanged, since it moves xform alone.
 type brepStack struct {
-	slabs []prismSlab
+	slabs []stackedrecord.Slab
 	delta float64
 }
 
@@ -221,9 +221,9 @@ func brepOfPrism(pp prismPayload) (brepPayload, error) {
 // enclosing a cavity (a closed shell, stackedEnclosesCavity).
 func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, error) {
 	if sp.isGroup() {
-		return brepPayload{}, fmt.Errorf(`%w: a prism group of %d disjoint regions has no face view`, ErrUnsupported, len(sp.slabs[0].regions))
+		return brepPayload{}, fmt.Errorf(`%w: a prism group of %d disjoint regions has no face view`, ErrUnsupported, len(sp.slabs[0].Regions))
 	}
-	if err := stackedrecord.Falsify(ctx, stackedRecordOf(sp)); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
 		return brepPayload{}, err
 	}
 	cavity, err := stackedEnclosesCavity(sp)
@@ -248,8 +248,8 @@ func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, er
 		first, last := sp.slabs[col.Start], sp.slabs[col.End]
 		for _, seg := range col.Loop.Segments {
 			bp.faces = append(bp.faces, brepFace{
-				frame: sp.frame, wall: seg, z0: first.z0, z1: last.z1,
-				z0Delta: first.z0Delta, z1Delta: last.z1Delta, delta: sp.sectionDelta,
+				frame: sp.frame, wall: seg, z0: first.Z0, z1: last.Z1,
+				z0Delta: first.Z0Delta, z1Delta: last.Z1Delta, delta: sp.sectionDelta,
 			})
 		}
 	}
@@ -258,14 +258,14 @@ func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, er
 			z0: z, z1: z, z0Delta: zDelta, z1Delta: zDelta, delta: sp.sectionDelta})
 	}
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
-	addPlanar(first.regions[0], first.z0, first.z0Delta, false)
-	addPlanar(last.regions[0], last.z1, last.z1Delta, true)
+	addPlanar(first.Regions[0], first.Z0, first.Z0Delta, false)
+	addPlanar(last.Regions[0], last.Z1, last.Z1Delta, true)
 	for k, boundary := range sp.interfaces {
-		z, zDelta := sp.slabs[k].z1, sp.slabs[k].z1Delta
-		for _, region := range boundary.lowerExposed {
+		z, zDelta := sp.slabs[k].Z1, sp.slabs[k].Z1Delta
+		for _, region := range boundary.LowerExposed {
 			addPlanar(region, z, zDelta, true)
 		}
-		for _, region := range boundary.upperExposed {
+		for _, region := range boundary.UpperExposed {
 			addPlanar(region, z, zDelta, false)
 		}
 	}
@@ -290,33 +290,33 @@ func brepJoinStacked(sp stackedPrismPayload) (stackedPrismPayload, error) {
 		return out, err
 	}
 	out := sp
-	out.slabs = make([]prismSlab, len(sp.slabs))
+	out.slabs = make([]stackedrecord.Slab, len(sp.slabs))
 	for k, slab := range sp.slabs {
 		out.slabs[k] = slab
-		out.slabs[k].regions = make([]profileRecord, len(slab.regions))
-		for r, region := range slab.regions {
+		out.slabs[k].Regions = make([]profileRecord, len(slab.Regions))
+		for r, region := range slab.Regions {
 			joined, err := join(region)
 			if err != nil {
 				return stackedPrismPayload{}, err
 			}
-			out.slabs[k].regions[r] = joined
+			out.slabs[k].Regions[r] = joined
 		}
 	}
-	out.interfaces = make([]prismSlabInterface, len(sp.interfaces))
+	out.interfaces = make([]stackedrecord.Interface, len(sp.interfaces))
 	for k, boundary := range sp.interfaces {
-		for _, region := range boundary.lowerExposed {
+		for _, region := range boundary.LowerExposed {
 			joined, err := join(region)
 			if err != nil {
 				return stackedPrismPayload{}, err
 			}
-			out.interfaces[k].lowerExposed = append(out.interfaces[k].lowerExposed, joined)
+			out.interfaces[k].LowerExposed = append(out.interfaces[k].LowerExposed, joined)
 		}
-		for _, region := range boundary.upperExposed {
+		for _, region := range boundary.UpperExposed {
 			joined, err := join(region)
 			if err != nil {
 				return stackedPrismPayload{}, err
 			}
-			out.interfaces[k].upperExposed = append(out.interfaces[k].upperExposed, joined)
+			out.interfaces[k].UpperExposed = append(out.interfaces[k].UpperExposed, joined)
 		}
 	}
 	if allow > 0 {

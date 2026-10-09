@@ -44,26 +44,13 @@ different heights.
 
 ### 2.1 Record
 
-```go
-type prismSlab struct {
-    regions          []profileRecord // one region, or several under §2.2's group and lining readings
-    z0, z1           float64         // evaluator coordinates on the frame's normal
-    z0Delta, z1Delta float64         // each level's proven axial displacement
-}
-
-type prismSlabInterface struct {
-    lowerExposed []profileRecord // material below the plane only: a floor, outward +N
-    upperExposed []profileRecord // material above the plane only: a ceiling, outward -N
-}
-
-type stackedPrismPayload struct {
-    slabs        []prismSlab
-    interfaces   []prismSlabInterface // exactly len(slabs)-1; interfaces[i] lies between slabs[i] and slabs[i+1]
-    frame        r3.Frame
-    xform        r3.Transform
-    sectionDelta float64
-}
-```
+`internal/stackedrecord` owns `Slab` and `Interface`. A slab records its regions,
+its axial interval `Z0`–`Z1`, and the two levels' displacement bounds. An
+interface records `LowerExposed` and `UpperExposed`, the material exposed on
+one side of its plane. A slab holds one region, or several under §2.2's group
+and lining readings. The root payload holds `[]stackedrecord.Slab` and
+`[]stackedrecord.Interface` beside its frame, placement and section bound.
+There is exactly one interface between each pair of adjacent slabs.
 
 Material is the union of every slab's regions swept over that slab's interval.
 The payload is evaluator-private, re-evaluates under `Body.Placed` through the

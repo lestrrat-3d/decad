@@ -62,12 +62,12 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 		sp := internalStackedUnion(t, plate, boss)
 		require.Len(t, sp.slabs, 2)
 		require.Equal(t, [4]float64{0, 10, 10, 25},
-			[4]float64{sp.slabs[0].z0, sp.slabs[0].z1, sp.slabs[1].z0, sp.slabs[1].z1})
+			[4]float64{sp.slabs[0].Z0, sp.slabs[0].Z1, sp.slabs[1].Z0, sp.slabs[1].Z1})
 		require.Zero(t, sp.sectionDelta)
 		require.Len(t, sp.interfaces, 1)
-		require.Empty(t, sp.interfaces[0].upperExposed)
-		require.Len(t, sp.interfaces[0].lowerExposed, 1)
-		floor := sp.interfaces[0].lowerExposed[0]
+		require.Empty(t, sp.interfaces[0].UpperExposed)
+		require.Len(t, sp.interfaces[0].LowerExposed, 1)
+		floor := sp.interfaces[0].LowerExposed[0]
 		plateOuter := plate.payload.(prismPayload).profile.Outer
 		same, err := loopRecordsEqual(nil, floor.Outer, plateOuter)
 		require.NoError(t, err)
@@ -81,11 +81,11 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 		sp := internalStackedUnion(t, plate, boss)
 		require.Len(t, sp.slabs, 3)
 		plateProfile := plate.payload.(prismPayload).profile
-		require.Equal(t, plateProfile, sp.slabs[1].regions[0],
+		require.Equal(t, plateProfile, sp.slabs[1].Regions[0],
 			"the slab both operands reach takes the containing plate's record verbatim")
-		require.Empty(t, sp.interfaces[0].lowerExposed)
-		require.Empty(t, sp.interfaces[0].upperExposed)
-		require.Len(t, sp.interfaces[1].lowerExposed, 1)
+		require.Empty(t, sp.interfaces[0].LowerExposed)
+		require.Empty(t, sp.interfaces[0].UpperExposed)
+		require.Len(t, sp.interfaces[1].LowerExposed, 1)
 		require.Zero(t, sp.sectionDelta)
 	})
 }
@@ -174,15 +174,15 @@ func TestStackedUnionLevelChargesExactOffsetSum(t *testing.T) {
 	require.Positive(t, charge, "the fixture's top level must not be a float")
 	found := false
 	for k := 0; k+1 < len(sp.slabs); k++ {
-		if sp.slabs[k].z1 != held {
+		if sp.slabs[k].Z1 != held {
 			continue
 		}
 		found = true
-		require.Equal(t, charge, sp.slabs[k].z1Delta)
-		require.Equal(t, charge, sp.slabs[k+1].z0Delta)
+		require.Equal(t, charge, sp.slabs[k].Z1Delta)
+		require.Equal(t, charge, sp.slabs[k+1].Z0Delta)
 	}
 	require.True(t, found, "the boss's top level splits the plate")
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}))
 }
 
 // A boss moved in its plane re-expresses into the plate's frame, so the
@@ -209,7 +209,7 @@ func TestStackedUnionPlacedBossChargesSectionDisplacement(t *testing.T) {
 func TestStackedUnionPayloadAuditRejectsBrokenInterfaces(t *testing.T) {
 	plate, boss := internalBossOnPlate(t, 0, 10, 15)
 	base := internalStackedUnion(t, plate, boss)
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(base)))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: base.slabs, Interfaces: base.interfaces}))
 	bossOuter := boss.payload.(prismPayload).profile.Outer
 	cases := []struct {
 		name   string
@@ -217,26 +217,26 @@ func TestStackedUnionPayloadAuditRejectsBrokenInterfaces(t *testing.T) {
 		want   error
 	}{
 		{"exposure on the wrong side", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].upperExposed, sp.interfaces[0].lowerExposed = sp.interfaces[0].lowerExposed, nil
+			sp.interfaces[0].UpperExposed, sp.interfaces[0].LowerExposed = sp.interfaces[0].LowerExposed, nil
 		}, ErrDegenerate},
 		{"exposure on both sides", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].upperExposed = sp.interfaces[0].lowerExposed
+			sp.interfaces[0].UpperExposed = sp.interfaces[0].LowerExposed
 		}, ErrDegenerate},
 		{"no exposure", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].lowerExposed = nil
+			sp.interfaces[0].LowerExposed = nil
 		}, ErrDegenerate},
 		{"exposure without its hole", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].lowerExposed = []profileRecord{{Outer: sp.slabs[0].regions[0].Outer}}
+			sp.interfaces[0].LowerExposed = []profileRecord{{Outer: sp.slabs[0].Regions[0].Outer}}
 		}, ErrDegenerate},
 		{"holed region under a changed outer", func(sp *stackedPrismPayload) {
-			sp.slabs[1].regions[0].Holes = []loopRecord{bossOuter}
+			sp.slabs[1].Regions[0].Holes = []loopRecord{bossOuter}
 		}, ErrUnsupported},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sp := cloneStackedForAudit(base)
 			tc.change(&sp)
-			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)), tc.want)
+			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}), tc.want)
 		})
 	}
 }
