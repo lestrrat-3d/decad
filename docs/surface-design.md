@@ -2147,7 +2147,7 @@ reverses a decision already taken.
 | `docs/clearance-design.md` §3 | states that a sheet-against-solid pair settles a proven positive lower bound with ONE witness cast, never the two-directional nesting relation a solid pair needs, and why (§9.3) |
 | `docs/api-design.md` §6.2 | `Clearance`'s doc comment states the one consequence: for a sheet-solid pair the row states the distance to the solid's boundary without asserting which side the sheet is on; a solid-solid row's meaning is unchanged |
 | `docs/tessellation-design.md` §1 | the Geometry row and the mandatory closed-mesh audit become kind-conditional (§10) |
-| `docs/api-design.md` §7 | the seam gains the open chain: `RecordChain` beside `RecordProfile`, under the identical foreign, stale, snapshot-match and `TExact` gates (§13.3) |
+| `docs/api-design.md` §7 | the internal seam records an open chain through `sketchrecord.RecordChain` beside `momentinput.RecordProfile`, under the foreign, stale, snapshot-match and `TExact` gates (§13.3) |
 | `docs/api-design.md` §8 | the v1 feature vocabulary gains `ExtrudeChain`, `RevolveChain`, `SweepChain` and `LoftChain`; the four signatures land beside the existing surface block |
 | `docs/api-design.md` §12 | `ErrForeignProfile`, `ErrStaleProfile`, `ErrInvalidProfile` and `ErrUnrecordableProfile` each state that their cause is a profile OR an open chain (§7 there, §13.3 here) |
 | `docs/sketch-seam-design.md` §2 | the recording IR gains `ChainRecord` and `RecordChain`, over the same ten `CurveSegment` variants; §2.1's admission list gains the chain's own interior-junction reading (§13.3) |
@@ -2254,7 +2254,7 @@ omit the closing faces here, state nothing there.
 decad records a chain before building it, exactly as it records a profile:
 
 ```go
-// ChainRecord is ProfileRecord's open counterpart: one directed OPEN walk,
+// ChainRecord is momentinput.Profile's open counterpart: one directed OPEN walk,
 // structural and plane-local, over the same sealed CurveSegment variants. The
 // first segment's walk start and the last segment's walk end are FREE — they
 // meet nothing, and nothing closes onto them.
@@ -2262,20 +2262,22 @@ type ChainRecord struct {
     Segments []CurveSegment
 }
 
-// RecordChain is RecordProfile's sibling: it admits, authenticates and records
-// an open chain under the identical gates, and returns the structural values.
-func RecordChain(s *sketch.Sketch, ch *sketch.Chain) (ChainRecord, PlaneRecord, error)
+// RecordChain is momentinput.RecordProfile's sibling: it admits, authenticates
+// and records an open chain under the identical gates, returning structural values.
+// In package sketchrecord:
+func RecordChain(s *sketch.Sketch, ch *sketch.Chain) (sectionrecord.ChainRecord, sectionrecord.PlaneRecord, error)
 ```
 
-**What it shares with `ProfileRecord` is everything the seam already owns.** The
+**What it shares with `momentinput.Profile` is everything the seam already owns.** The
 ten sealed `CurveSegment` variants record a chain edge exactly as they record a
 region boundary edge — the entity's own defining fields verbatim, plus `sketch`'s
 normalized range, with `Reversed` baked in as the order of that range
 (`docs/sketch-seam-design.md` §2). The `PlaneRecord` beside it is the same value,
-read through `s.Plane().Frame()`. Every admission gate is the same gate, run by
-the same code: `record.go` owns the type beside `ProfileRecord`, and `seam.go`
-owns `RecordChain` beside `RecordProfile`, because a file of its own would copy
-the variant set and the gates both.
+read through `s.Plane().Frame()`. The chain and profile admission gates live in
+`internal/sketchrecord`. `internal/sectionrecord/record.go` defines `ChainRecord`,
+`internal/sketchrecord/assembly.go` records chains, and
+`internal/momentinput/from_sketch.go` records profiles. The private wrappers in
+`seam.go` call those recorders.
 
 **What it cannot share is `LoopRecord`.** A `LoopRecord` states that its last
 segment's walk closes onto its first, and every consumer downstream reads one as
@@ -2725,7 +2727,7 @@ The row-9 curved-mesh obligations are:
 | T99 | a 100×60×20 mm box `Chamfer`ed 5 mm on its complete end-cap loop, then `Placed` under T96's own motion (`TestVertexPlacedCapBlendBoundEnclosesDisplacement`) | the four cap-level corners sit inside their own published bounds, and at least one reads `Approximate` over a strictly positive bound. A 5 mm chamfer sets each corner back exactly 5 mm along both adjacent edges, so the cap-level corners are the plane-local (5, 5), (95, 5), (95, 55) and (5, 55) at z = 20 by construction and the truth needs no offset-solve reproduction. Shown-to-fail: deleting the lift term `capblend_geom.go`'s `capVertexAt` charges in `buildCapBand` turns the assertions red |
 | T100 | the same prism, revolve and cap-blend shapes built axis-aligned and unplaced (`TestVertexAxisAlignedUnplacedBoundStaysZero`) | every vertex of all three bodies reads `Exact` with a `Bound` of exactly zero: the charge the four rows above pin must not widen the common, exact-arithmetic case. Shown-to-fail: replacing the exact per-vertex lift measurement with a magnitude charge, nonzero whenever a coordinate is, in `prismPayload.liftedVertex` turns the prism and cap-blend assertions red, and in `revolvePayload.sweptVertex` the revolve one |
 | T110 | `semicircleSketch`'s half-disc (radius 5, centred at u=5) revolved a full turn about its own diameter, `Body.Centroid` (`TestRevolveSemicircleFullTurnCentroidBoundTightens`) | the published bound is a tiny fraction of the body's own 10 mm diameter (never a literal, since `circularSecondMomentInterval`'s bound is architecture-dependent) and still encloses the true (5, 0, 0) centroid — `moments_circular.go`'s new `circularSecondMomentInterval` replaces the old bound of exactly 460.625 mm, wide enough to admit any centroid inside the body. Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` reproduces the old 460.625 mm envelope and turns the tightness assertion red |
-| T111 | `ProfileRecord.SecondMoments()` on `semicircleSketch`'s own profile record (`TestSecondMomentsSemicircleBoundTightens`) | each of `UU`/`UV`/`VV`'s bound is a tiny fraction of its own value, never hundreds of times it (`UV`'s bound was 38385.42 mm⁴ against a 416.67 mm⁴ value before this fix). Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` reproduces the old three magnitudes and turns every tightness assertion red |
+| T111 | `MeasuredProfile.SecondMoments()` on `semicircleSketch`'s own profile record (`TestSecondMomentsSemicircleBoundTightens`) | each of `UU`/`UV`/`VV`'s bound is a tiny fraction of its own value, never hundreds of times it (`UV`'s bound was 38385.42 mm⁴ against a 416.67 mm⁴ value before this fix). Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` reproduces the old three magnitudes and turns every tightness assertion red |
 | T112 | an all-straight-line profile's `SecondMoments` (`TestSecondMomentsRectangle`, unchanged by this fix — a `LineSeg`-only region never reaches `addCircular`) | `Exact` with a zero bound on all three components, exactly as before: the fix touches only the circular-segment arm, never the exact-rational line path |
 | T113 | the 5 mm-radius ball (`semicircleSketch` revolved a full turn), `Body.Volume` (`TestRevolveSemicircleVolumeBoundUnaffected`) | the bound stays a tiny fraction of the volume, unmoved by this fix: `Volume` is Pappus's first theorem over the region's first moments alone (`axisMoments`'s `q`), which `circularSecondMomentInterval` never touches. Verified by hand: disabling `circularSecondMomentInterval` (forcing `ok == false`) leaves this reading's value and bound bit-for-bit unchanged while T110/T111's tightness assertions go red |
 | T114 | `semicircleSketch`'s half-disc revolved a quarter turn (90°) about its own diameter, `Body.Centroid` (`TestRevolveSemicirclePartialSweepCentroidBoundTightens`) | the published bound is a tiny fraction of the body's own diameter and still encloses the centroid the half-disc's own analytic `q`/`mzr`/`mrr` (independently derived: `q = ⅔r³`, `mzr = ⅔r⁴`, `mrr = πr⁴/8`) predict through the same partial-sweep formula `TestRevolvePartialCentroidBoundTightens` uses — replacing the old 638.75 mm envelope, the quarter-turn case the investigation measured as the worse of the two. Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` reproduces the old 638.75 mm envelope and turns the tightness assertion red |
@@ -3212,7 +3214,7 @@ T158's fixture.
 ### 16.6 The chain ribbon
 
 **An open walk has no interior to erode, so a ribbon needs no open-walk
-offset.** §16.1 names `offsetProfile`'s closed-`ProfileRecord` contract as what
+offset.** §16.1 names `offsetProfile`'s closed `momentinput.Profile` contract as what
 a ribbon lacks, and the reduction that lands is to stop asking for an offset at
 all: what a thickened ribbon sweeps is ONE closed section, assembled in closed
 form from pieces the same corner rule already decides. The section is the

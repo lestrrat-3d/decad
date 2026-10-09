@@ -356,8 +356,8 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // This section is ExtrudeChain of docs/surface-design.md §13: the open sketch
 // chain's own sweep into a ribbon. It reuses resolveLinearExtent unchanged —
 // the extent vocabulary and the frame it resolves against are identical to
-// Extrude's — and reads its recorded walk through RecordChain (seam.go)
-// rather than RecordProfile. It builds a chain of any segment count and kind
+// Extrude's — and reads its recorded walk through recordChain (seam.go)
+// rather than recordProfile. It builds a chain of any segment count and kind
 // Table G's per-kind construction admits, through buildChainSides
 // (prism_build.go's buildWallGeometry, shared with the profile-fed prism
 // build) — the same evaluator, over an open rather than a closed walk.
