@@ -264,7 +264,7 @@ func shellWallLevels(bp brepPayload, r float64) [][2]float64 {
 // box along z, with the two y walls pierced by one tool along y whose one
 // wall is the cylinder, and the x walls as walls of the prism; along x and y
 // it reads as no through-cut record (along y the x walls are swept along z,
-// which TC2 does not take). Shown to fail with readThroughTools' lower-rim
+// which TC2 does not take). Shown to fail with brepgeom.ReadThroughTools' lower-rim
 // test inverted (the tool then read from y = 20 down to y = 0, and the
 // reading refused its pierced walls' sense).
 func TestBrepShellThroughCutReadsP1(t *testing.T) {
