@@ -13,7 +13,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // selectedStraightEdgesShareVertex gates the restatement retry to straight
@@ -231,7 +230,8 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 		}
 		sphere[i] = true
 	}
-	segs, joins, capWalk, capArc, err := partialFilletContour(r.budget, cl.walks, selected, sphere, amounts)
+	segs, joins, capWalk, capArc, err := offset2d.PartialFilletContour(
+		r.budget, cl.walks, selected, sphere, amounts, shellTol)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}
@@ -253,7 +253,8 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 			M:  Point2{U: j.M.U, V: j.M.V},
 			PA: Point2{U: j.PA.U, V: j.PA.V}, PB: Point2{U: j.PB.U, V: j.PB.V}}
 	}
-	delta, err := partialFilletContourDelta(cl.walks, readings, amounts, sphere, r.call.loop.dcDelta)
+	delta, err := capband.PartialFilletContourDelta(
+		cl.walks, readings, amounts, sphere, r.call.loop.dcDelta, shellTol)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}
@@ -360,114 +361,6 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 		loopBands: append(slices.Clone(r.bp.loopBands), band)}
 	out.assignRoles()
 	return out, nil
-}
-
-// partialFilletContour offsets selected walks by r and keeps the other walks
-// fixed. Two selected walks retain the ordinary fillet's reflex connector;
-// a selected-to-unselected join uses the sharp carrier intersection.
-func partialFilletContour(budget *proofbound.WorkBudget, walks []survey2d.SideWalk,
-	selected, sphere []bool, amounts []float64) ([]curveSegment, []offset2d.Join, []int, []int, error) {
-	n := len(walks)
-	joins := make([]offset2d.Join, n)
-	for k := range n {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, nil, nil, nil, err
-		}
-		prev := (k + n - 1) % n
-		var j offset2d.Join
-		var err error
-		if selected[prev] && selected[k] {
-			j, err = offset2d.CornerJoin(walks[prev], walks[k], 1, amounts[k], shellTol)
-		} else {
-			j, err = offset2d.SharpCornerJoin(walks[prev], walks[k], amounts[prev], amounts[k], shellTol)
-		}
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		joins[k] = j
-	}
-	for i, on := range sphere {
-		if !on {
-			continue
-		}
-		pole := offset2d.Point{U: walks[i].CU, V: walks[i].CV}
-		next := (i + 1) % n
-		joins[i].M, joins[next].M = pole, pole
-	}
-	capWalk, capArc := make([]int, n), make([]int, n)
-	for i := range capArc {
-		capWalk[i] = -1
-		capArc[i] = -1
-	}
-	var segs []curveSegment
-	for i, w := range walks {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, nil, nil, nil, err
-		}
-		start, end := joins[i].M, joins[(i+1)%n].M
-		if joins[i].Arc {
-			start = joins[i].PB
-		}
-		if joins[(i+1)%n].Arc {
-			end = joins[(i+1)%n].PA
-		}
-		if sphere[i] {
-			pole := offset2d.Point{U: w.CU, V: w.CV}
-			if start != pole || end != pole {
-				return nil, nil, nil, nil, fmt.Errorf(`%w: a selected sphere walk does not end at its pole`, ErrUnsupported)
-			}
-			continue
-		}
-		if offset2d.WalkConsumed(w, start, end, shellTol) {
-			return nil, nil, nil, nil, offset2d.ErrDrop
-		}
-		seg, err := offset2d.WalkSegment(w, 1, amounts[i], start, end, shellTol)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		capWalk[i] = len(segs)
-		segs = append(segs, seg)
-		k := (i + 1) % n
-		if joins[k].Arc {
-			j := joins[k]
-			capArc[k] = len(segs)
-			segs = append(segs, offset2d.ArcSegment(Point2{U: j.VertU, V: j.VertV},
-				Point2{U: j.PA.U, V: j.PA.V}, Point2{U: j.PB.U, V: j.PB.V}, false))
-		}
-	}
-	return segs, joins, capWalk, capArc, nil
-}
-
-// partialFilletContourDelta omits an exact sphere walk from the offset proof.
-// Its two straight neighbours meet at the recorded pole, as in a complete
-// loop fillet, while every unselected walk keeps its zero offset.
-func partialFilletContourDelta(walks []survey2d.SideWalk, joins []capcontour.Join,
-	amounts []float64, sphere []bool, radiusDelta float64) (float64, error) {
-	if !slices.Contains(sphere, true) {
-		return capband.AmountsContourDisplacement(walks, joins, amounts, radiusDelta, shellTol)
-	}
-	n := len(walks)
-	keptWalks := make([]survey2d.SideWalk, 0, n)
-	keptJoins := make([]capcontour.Join, 0, n)
-	keptAmounts := make([]float64, 0, n)
-	for i, w := range walks {
-		if sphere[i] {
-			continue
-		}
-		j := joins[i]
-		prev := (i + n - 1) % n
-		if sphere[prev] {
-			pole := Point2{U: walks[prev].CU, V: walks[prev].CV}
-			j = capcontour.Join{M: pole, VU: pole.U, VV: pole.V}
-		}
-		keptWalks = append(keptWalks, w)
-		keptJoins = append(keptJoins, j)
-		keptAmounts = append(keptAmounts, amounts[i])
-	}
-	if len(keptWalks) < 2 {
-		return 0, offset2d.ErrDrop
-	}
-	return capband.AmountsContourDisplacement(keptWalks, keptJoins, keptAmounts, radiusDelta, shellTol)
 }
 
 // partialTerminalBlend pins a chain end to the cap contour's actual foot.
