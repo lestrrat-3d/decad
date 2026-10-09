@@ -120,9 +120,9 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 				return throughCut{}, throughFaceReason(bp, fi, "is a wall along the axis that does not span the prism between its caps"), false, nil
 			}
 			tc.kinds[fi] = throughWall
-			if seg, ok := newBrepPlaneMap(e, caps.eF).segment(f.wall); ok {
+			if seg, ok := brepgeom.NewPrismMap(e, caps.eF).Segment(f.wall); ok {
 				if w, err := boundarywalk.WalkOf(seg, work); err == nil {
-					if _, hole := holeKeys[brepWalkKeyOf(w)]; hole {
+					if _, hole := holeKeys[brepgeom.WalkKeyOf(w)]; hole {
 						tc.kinds[fi] = throughHoleWall
 					}
 				}
@@ -148,7 +148,7 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 	}
 
 	// TC3: the walls and the pierced walls' outer rectangles claim S once.
-	if !walls.claim(caps.section, work) {
+	if !brepgeom.PrismWallsClaim(walls.walls, walls.rects, caps.section, work) {
 		return throughCut{}, "the walls of the prism do not claim each segment of its section exactly once", false, nil
 	}
 	tc.zloDelta, tc.zhiDelta = walls.zloDelta, walls.zhiDelta
@@ -196,15 +196,15 @@ func throughFaceReason(bp brepPayload, fi int, what string) string {
 
 // throughHoleKeys is every hole segment of the section, keyed as P5 keys a
 // wall.
-func throughHoleKeys(section ProfileRecord, work *freeform.FreeformWork) (map[brepWalkKey]struct{}, error) {
-	keys := map[brepWalkKey]struct{}{}
+func throughHoleKeys(section ProfileRecord, work *freeform.FreeformWork) (map[brepgeom.WalkKey]struct{}, error) {
+	keys := map[brepgeom.WalkKey]struct{}{}
 	for _, hole := range section.Holes {
 		for _, seg := range hole.Segments {
 			w, err := boundarywalk.WalkOf(seg, work)
 			if err != nil {
 				return nil, err
 			}
-			keys[brepWalkKeyOf(w)] = struct{}{}
+			keys[brepgeom.WalkKeyOf(w)] = struct{}{}
 		}
 	}
 	return keys, nil
@@ -316,8 +316,8 @@ func readThroughTools(ctx context.Context, bp brepPayload, embeds []brepEmbed, k
 		if len(segs) != len(hole.Segments) || len(walls) != len(hole.Segments) || len(hole1.Segments) != len(hole.Segments) {
 			return nil, throughFaceReason(bp, lower.face, "holds a hole loop whose segments do not each lead to one tool wall"), nil
 		}
-		mapped, ok := newBrepPlaneMap(e1, e0).loop(hole1)
-		if !ok || !brepLoopsEqual(hole, mapped) {
+		mapped, ok := brepgeom.NewPrismMap(e1, e0).Loop(hole1)
+		if !ok || !brepgeom.LoopsEqual(hole, mapped) {
 			return nil, throughFaceReason(bp, upper.face, "holds a hole loop that is not the loop the tool leaves from"), nil
 		}
 		if brepOutwardSign(w0, e0) > 0 || brepOutwardSign(w1, e1) < 0 {
@@ -334,7 +334,7 @@ func readThroughTools(ctx context.Context, bp brepPayload, embeds []brepEmbed, k
 		if err != nil {
 			return nil, throughFaceReason(bp, lower.face, "is a pierced wall along an axis with no exact frame"), nil //nolint:nilerr // no exact frame is no reading
 		}
-		section, ok := newBrepPlaneMap(e0, eJ).loop(hole)
+		section, ok := brepgeom.NewPrismMap(e0, eJ).Loop(hole)
 		if !ok {
 			return nil, throughFaceReason(bp, lower.face, "holds a hole loop that does not map into the tool's frame"), nil
 		}
@@ -784,11 +784,11 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 				continue
 			}
 			inPlane[ci] = struct{}{}
-			inR, ok := newBrepPlaneMap(eQ, eR).region(*q.region)
+			inR, ok := brepgeom.NewPrismMap(eQ, eR).Region(*q.region)
 			if !ok {
 				return brepPayload{}, throughRimError(r, "a cavity face in its plane does not map into its frame")
 			}
-			inF, ok := newBrepPlaneMap(eQ, tc.caps.eF).region(*q.region)
+			inF, ok := brepgeom.NewPrismMap(eQ, tc.caps.eF).Region(*q.region)
 			if !ok {
 				return brepPayload{}, throughRimError(r, "a cavity face in its plane does not map into the prism's frame")
 			}
@@ -800,7 +800,7 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 			for qh, hole := range inF.Holes {
 				si := -1
 				for i, want := range joined.Holes {
-					if brepLoopsEqual(want, hole) {
+					if brepgeom.LoopsEqual(want, hole) {
 						si = i
 						break
 					}
