@@ -62,8 +62,8 @@ func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport,
 	case pair.Overlapping:
 		var reason pair.Reason
 		var err error
-		points, planes, reason, err = planarOverlapPatch(budget, a, b, result, convexA, convexB,
-			proofarith.DyZero(), proofarith.DyZero())
+		points, planes, reason, err = planar.OverlapPatch(a, b, result, convexA, convexB,
+			proofarith.DyZero(), proofarith.DyZero(), budget.Step)
 		if err != nil {
 			return err
 		}
@@ -87,7 +87,7 @@ func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport,
 		return nil
 	}
 	if band.Sign() > 0 {
-		lifted, err := planarLiftedSet(budget, a, b, result, planes, band, overlap)
+		lifted, err := planar.PlanarSupportSets(a, b, result, planes, band, overlap, budget.Step)
 		if err != nil {
 			return err
 		}
@@ -102,72 +102,6 @@ func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport,
 	}
 	report.Manifold, report.Reason = manifold, ContactNoReason
 	return nil
-}
-
-// planarOverlapPatch is the shallow-penetration patch of an Overlapping pair:
-// §9.3's patch when both bodies are convex, and when that publishes nothing,
-// §9.6's face-local patch of a convex body poking through one face of the
-// other, each body tried as M read grown by its own displacement (growA,
-// growB; zero for an exact body). It returns the points and the support plane
-// whose lifted set a positive band appends, or nil points with the kernel's
-// reason, NoReason when it names none.
-func planarOverlapPatch(budget *proofbound.WorkBudget, a, b *planar.PlanarSolid, result planar.PlanarResult,
-	convexA, convexB bool, growA, growB proofarith.Dyadic) ([]planar.PatchPoint, []planar.SupportPlane, pair.Reason, error) {
-	var points []planar.PatchPoint
-	var plane *planar.SupportPlane
-	if convexA && convexB {
-		var err error
-		points, plane, err = planar.PlanarPenetrationSupport(a, b, budget.Step)
-		if err != nil {
-			return nil, nil, pair.NoReason, err
-		}
-	}
-	if points == nil {
-		// §9.6: a convex body poking through one face of any planar body.
-		local, err := planar.PlanarFacePenetrationGrown(a, b, result.Crossings, convexA, convexB,
-			growA, growB, budget.Step)
-		if err != nil || local.Points == nil {
-			return nil, nil, local.Reason, err
-		}
-		points, plane = local.Points, &local.Supports[0]
-	}
-	if plane == nil {
-		return points, nil, pair.NoReason, nil
-	}
-	return points, []planar.SupportPlane{*plane}, pair.NoReason, nil
-}
-
-// planarLiftedSet gathers the lifted points of each support plane in order.
-// Every guest is read, convex or not (docs/multibody-dynamics-design.md
-// §10.5): every point of the guest is a convex combination of its vertices,
-// so a point within the band over the plane has a vertex within it, and each
-// lifted point's claims (an exact vertex, its exact foot inside the host
-// face, its exact height) hold for any guest.
-// result is ClassifyPlanar's result for a and b, whose derived data the
-// kernel reuses.
-func planarLiftedSet(budget *proofbound.WorkBudget, a, b *planar.PlanarSolid, result planar.PlanarResult,
-	planes []planar.SupportPlane, band proofarith.Dyadic, overlap bool) ([]planar.PatchPoint, error) {
-	return planar.PlanarSupportSets(a, b, result, planes, band, overlap, budget.Step)
-}
-
-// planarSupportPlanes lists every face of the admitted hosts as a support
-// plane, the B body's faces first, then A's, each in face order.
-func planarSupportPlanes(a, b *planar.PlanarSolid, hostA, hostB bool) []planar.SupportPlane {
-	var planes []planar.SupportPlane
-	for _, host := range []struct {
-		isA, admitted bool
-		solid         *planar.PlanarSolid
-	}{{false, hostB, b}, {true, hostA, a}} {
-		if !host.admitted {
-			continue
-		}
-		faces := slices.Clone(host.solid.Faces)
-		slices.Sort(faces)
-		for _, face := range slices.Compact(faces) {
-			planes = append(planes, planar.SupportPlane{HostIsA: host.isA, Face: face})
-		}
-	}
-	return planes
 }
 
 // planarSupportBand publishes an exact separated pair apart by at most the
@@ -185,7 +119,8 @@ func planarSupportBand(budget *proofbound.WorkBudget, report *ContactReport, a, 
 	if upper.Cmp(band.Rat()) > 0 {
 		return nil
 	}
-	lifted, err := planarLiftedSet(budget, a, b, result, planarSupportPlanes(a, b, true, true), band, false)
+	lifted, err := planar.PlanarSupportSets(a, b, result, planar.SupportPlanes(a, b, true, true),
+		band, false, budget.Step)
 	if err != nil || len(lifted) == 0 {
 		return err
 	}

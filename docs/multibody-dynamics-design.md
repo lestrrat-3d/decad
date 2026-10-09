@@ -1753,7 +1753,7 @@ neither holds the whole tray behind it. The sweep reads only a support plane of 
 separation below, whatever the support set holds. Convexity of `M` is not needed anywhere in the set: every
 point of `M` is a convex combination of `M`'s vertices, so a point of `M` within the band over the plane has
 a vertex of `M` within the band, and each lifted point's claims (an exact vertex of `M`, its exact foot
-inside the host face, its exact height) hold for any `M`; `planarLiftedSet` reads every guest. The §2 cup
+inside the host face, its exact height) hold for any `M`; `PlanarSupportSets` reads every guest. The §2 cup
 is non-convex and rests on its lifted set. A non-convex guest at a `Touching` relation, which §9.3 withholds
 with `ContactNonConvex`, publishes a manifold when every zero-distance feature pair §9.1 recorded lies on one
 support plane of `S`, every `M` vertex on or in front of it and each contact's foot inside the host face:
@@ -2920,7 +2920,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Depends on: PRs 14d, 18, 20b.
 - Shipped. `planarBandPair.liftedBand` publishes the lifted set and `overlapManifold` the deep overlap's
   patch, both charged by `chargedManifold`; `pair.PlanarFacePenetrationGrown` reads §9.6's conditions 3
-  and 4 over M grown by its δ. `planarLiftedSet` reads every guest, as PR 20d states. The §9.6 path needs
+  and 4 over M grown by its δ. `PlanarSupportSets` reads every guest, as PR 20d states. The §9.6 path needs
   M's §9.2 certificate, which the `2.1 mm` block's held mesh does not carry (a rounded foot leaves a vertex
   an ulp in front of a facet plane), so that block sunk in the floor reads `Overlapping` with
   `ContactNonConvex` and the overlap fixtures use a `2.3 mm` block, whose held mesh is certified; §2's scene
@@ -2941,7 +2941,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 ### PR 20d (Phase 3) — the support set of a non-convex guest
 
-- Delivers §10.5's hull rule: `planarLiftedSet` reads every guest, and a `Touching` non-convex guest whose
+- Delivers §10.5's hull rule: `PlanarSupportSets` reads every guest, and a `Touching` non-convex guest whose
   §9.1 contacts all lie on one support plane publishes that plane's contact set then its lifted set.
 - Files: `contact_faceted_manifold.go`, `internal/pair/planar/planar_manifold.go`.
 - Test (`apitest`): `apitest/contact_faceted_manifold_test.go` gains, in both orders over the §2 tray: the §2 cup on the
