@@ -386,7 +386,7 @@ nothing else.
 | **DD4** | STEP | the analytic writer when every face is a `Plane` — a drafted polygon writes `ADVANCED_FACE`s over tilted planes with `Line3` loops, which `supportsAnalyticSTEP` admits today; any `Cone` sends the whole body to the faceted writer, as `docs/missing-features.md`'s STEP row states for cones | 2 |
 | **DD5** | `Verify` validity | built by construction after the §5 audit, as a prism is; `Built` and `Solid` read true | 1 |
 | **DD6** | `Verify` tolerance reference | `bodyGateDiameter` gains an arm (`draftGateDiameter`): the lower-bound diameter over wall stations on the near section at the near level and on the recorded far section at the far level, each charged its gap plus the level displacement and `farDelta`, falling back to the held vertices with their bounds (verification §3). Without it every draft body would read `DiagToleranceReferenceUnavailable`, since its bounds are never zero | 1 |
-| **DD7** | `Verify` undercut survey (`WithPullDirection`) | decided: each wall patch's normal component along the pull is read through `Face.NormalAt` and enclosed by `capPatchNormalRange` (DX7's reading, `capblend_survey.go`), each cap by `CapNormalDecision`, and `DecidePull` lists, clears or leaves undecided per modify-reach §8.3's rule. A wall drafted at `α > 0` against a pull along `e` reads `sin α > 0` and clears. Until PR 4, `Suspect` with `DiagUnsupportedSurveyPayload` | 4 |
+| **DD7** | `Verify` undercut survey (`WithPullDirection`) | decided (`draft_survey.go`): each wall patch's normal component along the pull is read through `Face.NormalAt` and enclosed by `capPatchNormalRange` (DX7's reading; `capPatchUndercuts` in `capblend_survey.go`, which the cap-blend survey runs over its own patches), each cap by `CapNormalDecision`, and `DecidePull` lists, clears or leaves undecided per modify-reach §8.3's rule. A wall drafted at `α > 0` against a pull along `e` reads `sin α > 0` and clears. A pull in a wall's own tangent plane leaves that wall undecided: its reading carries the taper's enclosure, so its sign is not proven | 4 |
 | **DD8** | `Verify` wall and concave-radius surveys | `Suspect` with `DiagUnsupportedSurveyPayload` (staged). The reduction a later PR takes: the thinnest wall between two drafted skins is the far section's 2D reading scaled by `cos α`, and the smallest concave radius of a hole wall is its radius at the narrower end; neither is scheduled here | — |
 | **DD9** | `Verify` clearance (`WithClearances`) | `Suspect` (`pairUndecided`): `newBodyGeomBudget` has no carrier model for the class. A later PR adds the Plane/Cone carriers; not scheduled | — |
 | **DD10** | `Verify` interference | box-disjoint proofs from the body's `Bounds`; the read-only mesh intersection over DD1's mesh | 2 |
@@ -561,10 +561,13 @@ symmetric difference; `Union` of F1 with a straight prism through it; STEP of
 F1 analytic (`analytic decad solid`) and of F2 faceted; `MassProperties` of
 F1 against the closed form.
 
-**PR 4 fixtures**: F1 under `WithPullDirection(+e)` reads every wall clear
-and `Coverage` complete; under `WithPullDirection(−e)` every wall is listed
-with `DiagUndercut`; F5 the reverse; F3's `Cone` walls decided, not
-undecided; F7's hole wall clear along `+e`.
+**PR 4 fixtures** (`apitest/draft_verify_test.go`): F1 under
+`WithPullDirection(+e)` reads every wall clear and `Coverage` complete; under
+`WithPullDirection(−e)` every wall is listed with `DiagUndercut`; F5 the
+reverse; F3's `Cone` walls decided, not undecided; F7's hole wall clear along
+`+e`, and a wider ring swept `Against` clear along its own `e`; F9's placed F1 and D1's `Draft` result read as F1 does along their own
+sweep; a pull perpendicular to one wall's published normal leaves that wall
+undecided.
 
 **Fail-first legs**, each named in the test that owns it:
 
@@ -579,6 +582,8 @@ undecided; F7's hole wall clear along `+e`.
 | DD6's diameter arm | omitted | every F fixture under `Verify` (`DiagToleranceReferenceUnavailable`) |
 | the mesh proof's chord term (`draftBandHeightUpper`) | zeroed | F2, F3 and F7: each mesh volume sits tens of mm³ outside a `volSymDiff` near `1e-11` |
 | the mesh proof's vertex motion (`SweptVolumeAllow`) | omitted | F1, F4, F5 and F6: a zero `volSymDiff` against the far corners' rounding |
+| DD7's dispatch arm (`draftUndercuts`) | removed from `runSurveys` | every PR 4 fixture: the survey reads the draft body as an unsupported payload |
+| the wall reading's allowance (`capPatchNormalRange`'s third result) | zeroed in `capPatchUndercuts` | the tangent pull: the wall reads the sign of its own rounding and no `DiagUndecidedUndercut` is reported |
 
 ## 12. Do not do this
 
@@ -657,7 +662,7 @@ every new root file. This document ships with PR 1.
 | **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `transform`/`placed`; `draft_build.go` (§7); `draft_moments.go` (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class; `Tessellate` refuses the class through its default | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `draft_payload.go`, `draft_build.go`, `draft_moments.go`, `extrude.go`, `capblend*.go` (the band's `draft` view), `verify_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `draft_build_internal_test.go`, `internal/offset2d/sharp_test.go`, `examples/decad_extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
 | **2** | tessellation and the mesh volume proof (DD1), which opens DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `tessellate_draft.go`, `tessellate.go` (dispatch), `tessellate_capblend.go` and `capblend_admit.go` (§9.1's three differences), `draft_payload.go`/`draft_build.go` (`patches`, `bandDelta`), `boolean.go` (the admission arm), `mass_properties.go` (the mesh path needs no arm), `motion_bound.go`, `apitest/draft_mesh_test.go`, `tessellate_draft_internal_test.go` | the PR 2 fixtures | 1 |
 | **3** | `Body.Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `docs/api-design.md` §8/§12, `apitest/draft_test.go`, `draft_internal_test.go`, `examples/decad_draft_example_test.go` | D1–D5 | 1 |
-| **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
+| **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `capblend_survey.go` (`capPatchUndercuts`, the patch loop both surveys run), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
 | **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `draft.go`, `draft_build.go`, tests | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
 
 PRs 2 and 3 run in parallel after PR 1; PR 4 follows 2; PR 5 follows 3.
@@ -673,7 +678,7 @@ draft body, `Draft`'s included:
 | 1 | landed | every draft body's tessellation, boolean, export, mass and interference reading (DD1's dependants); `Body.Draft` (no entry point); surveys `Suspect`; SD3, SD4, SD11, SD12 |
 | 2 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21; booleans, interference and mass of a body the band admission refuses (§9.1) |
 | 3 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21 |
-| 4 | planned | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20, SD21 |
+| 4 | landed | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20, SD21 |
 | 5 | planned | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
 
 The unscheduled reach, in the order a later design should take it: the

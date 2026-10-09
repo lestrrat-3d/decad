@@ -120,6 +120,7 @@ the rules leave to the byte budget.
 | `draft_payload.go` | `draftPayload`, its band view and offset span. See draft §6, §8.1. |
 | `draft_build.go` | Tapered extrude gates and assembly. See draft §5, §7. |
 | `draft_moments.go` | Draft body measurements. See draft §8. |
+| `draft_survey.go` | Draft body undercut survey. See draft DD7. |
 | `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, span payloads. See sweep design. |
 | `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
 | `sweep_composite.go` | Composite Sweep join topology, boundary audit, surface-result caps. See sweep PR 4. |

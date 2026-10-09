@@ -124,19 +124,35 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		}
 	}
 
-	// The new patches: read each one's OWN built Face.NormalAt, walked in the
-	// payload's own deterministic patch order (Table BX row BX3), so the faces
-	// this survey reports — public output through
-	// Report.Bodies[i].Undercut.Faces — come back in the same sequence on
-	// every call.
-	for _, patch := range cbp.patches {
+	if !capPatchUndercuts(roles, pl, cbp.patches, p, &faces, &undecided) {
+		return undercutOutcome{}
+	}
+	if undecided && len(faces) == 0 {
+		// Keep an entirely undecided result distinct from a proven all-clear.
+		faces = nil
+	}
+	return undercutOutcome{faces: faces, ok: true, undecided: undecided}
+}
+
+// capPatchUndercuts folds DX7's reading of every band patch into the running
+// faces list and undecided flag, as listVerdict does for a receiver face. p is
+// the unit pull. It reports false, a total refusal, when a patch's face is
+// missing or its normal range cannot be enclosed. capBlendUndercuts and
+// draftUndercuts (draft_survey.go) share it, so a draft wall and a chamfer
+// patch are read by one rule.
+func capPatchUndercuts(roles map[string]*Face, pl prismPayload, patches []capPatch, p r3.Vec, faces *[]*Face, undecided *bool) bool {
+	// Read each patch's OWN built Face.NormalAt, walked in the payload's own
+	// deterministic patch order (Table BX row BX3), so the faces this survey
+	// reports — public output through Report.Bodies[i].Undercut.Faces — come
+	// back in the same sequence on every call.
+	for _, patch := range patches {
 		f := roles[patch.role]
 		if f == nil {
-			return undercutOutcome{}
+			return false
 		}
 		mn, mx, reading, ok := capPatchNormalRange(f, pl, patch.geom, p)
 		if !ok {
-			return undercutOutcome{}
+			return false
 		}
 		// reading already arrives complete: capPatchNormalRange's circular arm
 		// composes the patch's own departure from the surface it publishes
@@ -151,7 +167,7 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 			// every reading it was assembled from is exact, so the range above
 			// is exact and decides the patch outright.
 			if survey2d.OpposesPull(mn, mx) {
-				faces = append(faces, f)
+				*faces = append(*faces, f)
 			}
 			continue
 		}
@@ -168,16 +184,12 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		// patch's own allowance rather than the receiver faces' proven zero.
 		switch survey2d.DecidePull(mn, mx, allow) {
 		case survey2d.PullOpposes:
-			faces = append(faces, f)
+			*faces = append(*faces, f)
 		case survey2d.PullUndecided:
-			undecided = true
+			*undecided = true
 		}
 	}
-	if undecided && len(faces) == 0 {
-		// Keep an entirely undecided result distinct from a proven all-clear.
-		faces = nil
-	}
-	return undercutOutcome{faces: faces, ok: true, undecided: undecided}
+	return true
 }
 
 // capPatchNormalRange samples the published face and passes its exact normal

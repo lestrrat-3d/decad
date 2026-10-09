@@ -32,10 +32,11 @@ import (
 // a prism's inscribed balls are its profile's inscribed disks with the height
 // as the vertical fit, and a solid of revolution's are the disks of its
 // meridian section (mirrored across the axis for a full turn, wedge-bounded
-// by the caps for a partial one). A prism, cup and cap-blend body's undercut
-// survey reads each face's normal-component range enclosed over the rationals
-// and decides it three-valued — clear, opposing, or undecided
-// (survey_undercut.go) — rather than taking a float range at face value;
+// by the caps for a partial one). A prism, cup, cap-blend and draft body's
+// undercut survey reads each face's normal-component range enclosed over the
+// rationals and decides it three-valued — clear, opposing, or undecided
+// (survey_undercut.go, draft_survey.go) — rather than taking a float range at
+// face value;
 // revolveUndercuts is not yet converted to it, a deliberate scope line rather
 // than an oversight. A body this file cannot decide — a payload no shipped
 // feature builds — leaves every asked question undecided, which reads
@@ -46,7 +47,8 @@ import (
 // the known faceted-payload capability gap, and surveyPayloadStaged records
 // every other explicit unsupported-payload dispatch — the deliberate
 // cap-blend wall limit (DX9) and any payload class the wall, undercut, or
-// concave-radius type switch does not name at all (today, a loft) — before
+// concave-radius type switch does not name at all (today, a loft, and a draft
+// body's wall and concave-radius surveys, draft DD8) — before
 // runSurveys maps either into DiagUnsupportedSurveyPayload rather than a
 // generic undecided result (proposal §16).
 type surveyReason = reportvocab.SurveyReason
@@ -619,8 +621,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		default:
-			// Any payload class this switch does not name — a loft today —
-			// has no implemented wall survey either.
+			// Any payload class this switch does not name — a loft or a draft
+			// body today (draft DD8) — has no implemented wall survey either.
 			out.reason = surveyPayloadStaged
 		}
 		if err != nil {
@@ -649,6 +651,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			out = cupUndercuts(b, pl.view(), *cfg.Pull)
 		case capBlendPayload:
 			out = capBlendUndercuts(b, pl, *cfg.Pull)
+		case draftPayload:
+			out = draftUndercuts(b, pl, *cfg.Pull)
 		case brepPayload:
 			out = brepUndercuts(b, pl, *cfg.Pull)
 		case facetedPayload:
