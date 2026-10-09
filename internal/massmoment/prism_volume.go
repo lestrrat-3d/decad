@@ -63,7 +63,7 @@ func PrismVolumeMoments(ctx context.Context, section [6]proofbound.RatInterval, 
 func PrismOccupiedError(area proofbound.RatInterval, h *big.Rat, sectionDelta, z0Delta, z1Delta float64,
 	count int, perimeter, coordUpper float64) (*big.Rat, *big.Rat, error) {
 	displaced := proofbound.SectionDisplacementArea(sectionDelta, count, perimeter)
-	if !nonNegativeFinite(displaced) || !nonNegativeFinite(coordUpper) {
+	if !NonNegativeFinite(displaced) || !NonNegativeFinite(coordUpper) {
 		return nil, nil, fmt.Errorf("%w: prism displacement has no finite occupied-volume bound", decaderr.ErrUnsupported)
 	}
 	d0, d1, delta := proofarith.FloatRat(z0Delta), proofarith.FloatRat(z1Delta), proofarith.FloatRat(sectionDelta)

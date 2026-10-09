@@ -91,7 +91,7 @@ func (m *tetraMoments) moments() (*big.Rat, [3]*big.Rat, [3][3]*big.Rat) {
 // HeldMeshIntervals integrates an audited triangle set about anchor and
 // widens its moments by the occupied-volume difference and spatial extents.
 func HeldMeshIntervals(ctx context.Context, bounds MeshBounds, anchor r3.Vec, verts []r3.Vec, tris [][3]int, volSymDiff float64) (MeshIntervals, error) {
-	if len(verts) == 0 || len(tris) == 0 || !proofbound.FiniteVec(anchor) || !nonNegativeFinite(volSymDiff) {
+	if len(verts) == 0 || len(tris) == 0 || !proofbound.FiniteVec(anchor) || !NonNegativeFinite(volSymDiff) {
 		return MeshIntervals{}, fmt.Errorf("%w: mesh mass has no finite occupied-volume certificate", decaderr.ErrUnsupported)
 	}
 	// The binary64 vertex coordinates are exact rational inputs; only the
@@ -198,7 +198,8 @@ func meshMassExtent(box MeshBounds, anchor r3.Vec, maxMesh [3]*big.Rat) ([3]*big
 	return extent, nil
 }
 
-func nonNegativeFinite(value float64) bool {
+// NonNegativeFinite reports whether a nonnegative displacement is finite.
+func NonNegativeFinite(value float64) bool {
 	return !proofbound.IsNonFinite(value) && value >= 0
 }
 

@@ -63,13 +63,13 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
-		return sourceSphereMassProperties(ctx, b, sphere, density)
+		return massmoment.SourceSphere(ctx, sphere.radius, b.centroid, density)
 	}
 	if cylinder, ok := sourceRevolvedCylinderAtPose(b, r3.Identity()); ok {
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
-		return sourceRevolvedCylinderMassProperties(ctx, b, cylinder, density)
+		return massmoment.SourceCylinder(ctx, cylinder.axis, cylinder.box.lo, cylinder.box.hi, b.centroid, density)
 	}
 	if revolve, ok := b.payload.(revolvePayload); ok {
 		result, err := revolveMassProperties(ctx, b, revolve, density)

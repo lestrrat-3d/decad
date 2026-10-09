@@ -31,11 +31,11 @@ func cupMassProperties(ctx context.Context, b *Body, cp cupView, density units.V
 	// The offset region's prism already carries the cup's offsetDelta as its
 	// sectionDelta (outerPrism, cavityPrism): the recorded offset section is
 	// within it of the offset the denoted thickness names.
-	outerMid, err := prismMidLevel(outer)
+	outerMid, err := massmoment.PrismMidLevel(outer.z0, outer.z1)
 	if err != nil {
 		return MassProperties{}, err
 	}
-	cavityMid, err := prismMidLevel(cavity)
+	cavityMid, err := massmoment.PrismMidLevel(cavity.z0, cavity.z1)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -50,7 +50,7 @@ func cupMassProperties(ctx context.Context, b *Body, cp cupView, density units.V
 	// Both are frame-local about their own (0, 0, zm). A cavity coordinate
 	// about the outer mid level is its own plus (0, 0, zm_cavity − zm_outer).
 	void = massmoment.Shift(void, [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat).Sub(cavityMid, outerMid)})
-	rotation, err := prismRotation(outer)
+	rotation, err := massmoment.PrismRotation(outer.frame, outer.xform)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -58,5 +58,5 @@ func cupMassProperties(ctx context.Context, b *Body, cp cupView, density units.V
 	if err != nil {
 		return MassProperties{}, err
 	}
-	return publishMassProperties(ctx, b.centroid, massIv, world)
+	return massmoment.Publish(ctx, b.centroid, massIv, world)
 }

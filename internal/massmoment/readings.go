@@ -64,6 +64,59 @@ func Reading(exact *big.Rat, unit units.Unit) (measurement.Measurement, error) {
 		Exactness: readingExactness(bound)}, nil
 }
 
+// Publish rounds a mass interval and world inertia intervals to readings and
+// proves that every tensor within the published bounds is positive definite.
+func Publish(ctx context.Context, center measurement.VecMeasurement,
+	massIv proofbound.RatInterval, world [3][3]proofbound.RatInterval) (MassProperties, error) {
+	if err := ctx.Err(); err != nil {
+		return MassProperties{}, err
+	}
+	var err error
+	result := MassProperties{Center: center}
+	result.Mass, err = IntervalReading(massIv, units.Kilogram)
+	if err != nil {
+		return MassProperties{}, err
+	}
+	if result.Mass.Bound.Base() >= result.Mass.Value.Base() {
+		return MassProperties{}, fmt.Errorf("%w: mass reading is not positive", decaderr.ErrUnsupported)
+	}
+	entries := []struct {
+		iv      proofbound.RatInterval
+		reading *measurement.Measurement
+	}{
+		{world[0][0], &result.Inertia.XX}, {world[1][1], &result.Inertia.YY},
+		{world[2][2], &result.Inertia.ZZ}, {world[0][1], &result.Inertia.XY},
+		{world[0][2], &result.Inertia.XZ}, {world[1][2], &result.Inertia.YZ},
+	}
+	for _, entry := range entries {
+		*entry.reading, err = IntervalReading(entry.iv, units.KilogramSquareMillimeter)
+		if err != nil {
+			return MassProperties{}, err
+		}
+	}
+	if !PositiveDefinite(publishedTensor(result.Inertia)) {
+		return MassProperties{}, fmt.Errorf("%w: inertia interval does not prove positive definiteness", decaderr.ErrUnsupported)
+	}
+	if err := ctx.Err(); err != nil {
+		return MassProperties{}, err
+	}
+	return result, nil
+}
+
+// publishedTensor encloses exactly the six public inertia readings.
+func publishedTensor(reading InertiaReading) [3][3]proofbound.RatInterval {
+	entry := func(m measurement.Measurement) proofbound.RatInterval {
+		return proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(m.Value.Base())),
+			proofarith.FloatRat(m.Bound.Base()))
+	}
+	xy, xz, yz := entry(reading.XY), entry(reading.XZ), entry(reading.YZ)
+	return [3][3]proofbound.RatInterval{
+		{entry(reading.XX), xy, xz},
+		{xy, entry(reading.YY), yz},
+		{xz, yz, entry(reading.ZZ)},
+	}
+}
+
 // HeldMeshMassProperties integrates an audited outward triangle set and
 // widens its moments by the certified occupied-volume difference.
 func HeldMeshMassProperties(ctx context.Context, bounds measurement.Box, anchor r3.Vec,

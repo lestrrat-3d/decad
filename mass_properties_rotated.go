@@ -48,7 +48,7 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	if err != nil {
 		return MassProperties{}, err
 	}
-	basis, err := prismRotation(pp)
+	basis, err := massmoment.PrismRotation(pp.frame, pp.xform)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -56,14 +56,15 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	if err != nil {
 		return MassProperties{}, err
 	}
-	return publishMassProperties(ctx, center, massIv, world)
+	return massmoment.Publish(ctx, center, massIv, world)
 }
 
 // prismVolumeMoments integrates pp's admitted section moments over its axial
 // interval in the frame-local coordinates q = (u, v, z - zm), zm the recorded
 // mid level, and charges any recorded displacement as E, R·E and R²·E.
 func prismVolumeMoments(ctx context.Context, pp prismPayload) (massmoment.Moments, error) {
-	if !nonNegativeFinite(pp.sectionDelta) || !nonNegativeFinite(pp.z0Delta) || !nonNegativeFinite(pp.z1Delta) {
+	if !massmoment.NonNegativeFinite(pp.sectionDelta) || !massmoment.NonNegativeFinite(pp.z0Delta) ||
+		!massmoment.NonNegativeFinite(pp.z1Delta) {
 		return massmoment.Moments{}, fmt.Errorf("%w: prism displacement has no finite bound", ErrUnsupported)
 	}
 	section, err := prismSectionMoments(ctx, pp)
@@ -75,12 +76,6 @@ func prismVolumeMoments(ctx context.Context, pp prismPayload) (massmoment.Moment
 		func(area proofbound.RatInterval, h *big.Rat) (*big.Rat, *big.Rat, error) {
 			return prismOccupiedVolumeError(ctx, pp, area, h)
 		})
-}
-
-// prismMidLevel is zm = (z0 + z1)/2, the anchor level of prismVolumeMoments,
-// as an exact rational.
-func prismMidLevel(pp prismPayload) (*big.Rat, error) {
-	return massmoment.PrismMidLevel(pp.z0, pp.z1)
 }
 
 // prismSectionMoments reads the section's area, first and second moments as
@@ -147,15 +142,4 @@ func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbo
 	}
 	return massmoment.PrismOccupiedError(area, h, pp.sectionDelta, pp.z0Delta, pp.z1Delta,
 		count, perimeter, coordUpper)
-}
-
-// prismRotation is the exact rational matrix taking frame-local (u, v, n)
-// directions to world directions: the placement basis times the frame axes,
-// both read from the held floats. Column k is the image of local axis k.
-func prismRotation(pp prismPayload) ([3][3]*big.Rat, error) {
-	return massmoment.PrismRotation(pp.frame, pp.xform)
-}
-
-func nonNegativeFinite(value float64) bool {
-	return !proofbound.IsNonFinite(value) && value >= 0
 }
