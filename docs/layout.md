@@ -241,7 +241,7 @@ the rules leave to the byte budget.
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing resolution. See prism-boolean §4.2. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`'s interference path. See its doc comment. |
 | `brep_payload.go` / `brep_measure.go` | BRep face views, topology and readings. See general-boolean §4. |
-| `classb.go` | Class-B admission adapters. See general-boolean §3 B. |
+| `classb.go` | Class-B admission and result adapters. See general-boolean §3 B. |
 | `classb_crossing.go` | Class-B scene and BRep adapters. See general-boolean §5, §10. |
 | `surface_trim.go` / `surface_split_revolve.go` | `Trim`/`Extend`/`Split` gates and adapters, then `Split`'s revolve arm. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
