@@ -20,16 +20,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-type stackedRing struct {
-	samples        []Point2
-	bottom, top    []int
-	faces          []*Face
-	sag            float64
-	segmentArea    float64
-	walks          int
-	perimeterUpper float64
-}
-
 func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, chord float64, verify Verification) (*Mesh, error) {
 	if err := stackedrecord.Falsify(ctx, stackedRecordOf(sp)); err != nil {
 		return nil, err
@@ -72,7 +62,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			exactPrismPointRound(base, p.U, p.V, z, v)))
 		return len(mesh.vertices) - 1
 	}
-	rings := make([]stackedRing, len(columns))
+	rings := make([]tessellation.StackedRing[*Face], len(columns))
 	for ci, col := range columns {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -87,19 +77,19 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			return nil, err
 		}
 		r := &rings[ci]
-		r.samples, r.faces, r.sag = cl.Samples, cl.FaceOf, cl.MaxSag
-		r.segmentArea, r.walks, r.perimeterUpper = cl.SegmentArea, cl.Walks, cl.PerimeterUpper
-		r.bottom = make([]int, len(cl.Samples))
-		r.top = make([]int, len(cl.Samples))
+		r.Samples, r.Faces, r.Sag = cl.Samples, cl.FaceOf, cl.MaxSag
+		r.SegmentArea, r.Walks, r.PerimeterUpper = cl.SegmentArea, cl.Walks, cl.PerimeterUpper
+		r.Bottom = make([]int, len(cl.Samples))
+		r.Top = make([]int, len(cl.Samples))
 		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.WallSlack, cl.CapSlack, cl.CapSlack)
 		for j, p := range cl.Samples {
-			r.bottom[j] = addVertex(p, first.z0, cl.BoundOf[j])
-			r.top[j] = addVertex(p, last.z1, cl.BoundOf[j])
+			r.Bottom[j] = addVertex(p, first.z0, cl.BoundOf[j])
+			r.Top[j] = addVertex(p, last.z1, cl.BoundOf[j])
 		}
 		for j, face := range cl.FaceOf {
 			next := (j + 1) % len(cl.Samples)
-			mesh.addTriangle([3]int{r.bottom[j], r.bottom[next], r.top[next]}, face)
-			mesh.addTriangle([3]int{r.bottom[j], r.top[next], r.top[j]}, face)
+			mesh.addTriangle([3]int{r.Bottom[j], r.Bottom[next], r.Top[next]}, face)
+			mesh.addTriangle([3]int{r.Bottom[j], r.Top[next], r.Top[j]}, face)
 			faceTrim[face] = math.Max(faceTrim[face], cl.SagOf[j])
 			faceAxial[face] = math.Max(first.z0Delta, last.z1Delta)
 		}
@@ -109,21 +99,11 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		return nil, err
 	}
 	for _, slabColumns := range bySlab {
-		var points []Point2
-		var indices [][]int
-		var sags []float64
-		for _, e := range slabColumns {
-			r := rings[e.column]
-			start := len(points)
-			points = append(points, r.samples...)
-			idx := make([]int, len(r.samples))
-			for i := range idx {
-				idx[i] = start + i
-			}
-			indices = append(indices, idx)
-			sags = append(sags, r.sag)
+		columnsInSlab := make([]int, len(slabColumns))
+		for i, entry := range slabColumns {
+			columnsInSlab[i] = entry.column
 		}
-		if err := requireLoopClearance(ctx, points, indices, sags); err != nil {
+		if err := tessellation.StackedSlabClearance(ctx, rings, columnsInSlab, requireLoopClearance); err != nil {
 			return nil, err
 		}
 	}
@@ -132,50 +112,22 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	// its holes CW, so a ring whose column winding differs from the role it
 	// plays in the patch is read reversed; a -N patch flips its triangles.
 	emitPatch := func(face *Face, loops []stackedPatchLoop, reverseFace bool, axial float64) error {
-		var points []Point2
-		var vertices []int
-		var indexLoops [][]int
-		var sags []float64
-		for _, pl := range loops {
-			r := rings[pl.column]
-			start := len(points)
-			points = append(points, r.samples...)
-			if pl.top {
-				vertices = append(vertices, r.top...)
-			} else {
-				vertices = append(vertices, r.bottom...)
-			}
-			idx := make([]int, len(r.samples))
-			for i := range idx {
-				idx[i] = start + i
-			}
-			if (columns[pl.column].loopIndex == 0) != pl.outer {
-				for a, z := 0, len(idx)-1; a < z; a, z = a+1, z-1 {
-					idx[a], idx[z] = idx[z], idx[a]
-				}
-			}
-			indexLoops = append(indexLoops, idx)
-			sags = append(sags, r.sag)
-			faceTrim[face] = math.Max(faceTrim[face], r.sag)
-		}
-		if len(loops) > 1 {
-			// A union patch joins rings from two slabs, which no per-slab
-			// clearance proof has compared.
-			if err := requireLoopClearance(ctx, points, indexLoops, sags); err != nil {
-				return err
+		patchLoops := make([]tessellation.StackedPatchLoop, len(loops))
+		for i, loop := range loops {
+			patchLoops[i] = tessellation.StackedPatchLoop{
+				Column: loop.column, Top: loop.top, Outer: loop.outer,
+				ColumnOuter: columns[loop.column].loopIndex == 0,
 			}
 		}
-		tris, err := triangulation.Triangulate(ctx, points, indexLoops)
+		patch, err := tessellation.StackedPatchTriangles(ctx, rings, patchLoops, reverseFace,
+			requireLoopClearance, triangulation.Triangulate)
 		if err != nil {
 			return err
 		}
-		for _, tri := range tris {
-			a, bb, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
-			if reverseFace {
-				bb, c = c, bb
-			}
-			mesh.addTriangle([3]int{a, bb, c}, face)
+		for _, tri := range patch.Triangles {
+			mesh.addTriangle(tri, face)
 		}
+		faceTrim[face] = math.Max(faceTrim[face], patch.Sag)
 		faceAxial[face] = axial
 		return nil
 	}
@@ -236,48 +188,29 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	if verify < VerifyAll {
 		return &mesh, nil
 	}
-	var allWalks int
-	var allPerimeter float64
-	for ci, col := range columns {
-		r := rings[ci]
-		allWalks += r.walks
-		allPerimeter = proofbound.AbsSumUpper(allPerimeter, r.perimeterUpper)
-		if sp.sectionDelta > 0 {
-			height := sp.slabs[col.end].z1 - sp.slabs[col.start].z0
-			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
-				proofbound.ProductUpper(proofbound.SectionDisplacementLength(sp.sectionDelta, r.walks), height))
-		}
+	columnHeights := make([]float64, len(columns))
+	for i, column := range columns {
+		columnHeights[i] = sp.slabs[column.end].z1 - sp.slabs[column.start].z0
 	}
-	for _, face := range b.Faces() {
-		if _, ok := face.surface.(Plane); ok && sp.sectionDelta > 0 {
-			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
-				proofbound.SectionDisplacementArea(sp.sectionDelta, allWalks, allPerimeter))
-		}
-	}
-	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
-	areaUpper := meshFaceAreaUpper(&mesh, vertexStore)
-	terms := make([]float64, 0, len(columns)*len(sp.slabs)+len(faceAxial)+2)
+	slabHeights := make([]float64, len(sp.slabs))
+	slabColumns := make([][]int, len(bySlab))
 	for k, slab := range sp.slabs {
-		var segments, perimeter float64
-		walks := 0
-		for _, e := range bySlab[k] {
-			r := rings[e.column]
-			segments = proofbound.AbsSumUpper(segments, r.segmentArea)
-			perimeter = proofbound.AbsSumUpper(perimeter, r.perimeterUpper)
-			walks += r.walks
-		}
-		height := slab.z1 - slab.z0
-		terms = append(terms, proofbound.ProductUpper(height, segments),
-			proofbound.ProductUpper(height, proofbound.SectionDisplacementArea(sp.sectionDelta, walks, perimeter)))
-	}
-	for face, axial := range faceAxial {
-		if _, ok := face.surface.(Plane); ok {
-			terms = append(terms, proofbound.ProductUpper(axial, areaUpper[face]))
+		slabHeights[k] = slab.z1 - slab.z0
+		slabColumns[k] = make([]int, len(bySlab[k]))
+		for i, entry := range bySlab[k] {
+			slabColumns[k][i] = entry.column
 		}
 	}
-	terms = append(terms, proofbound.SweptVolumeAllow(storeMax,
-		proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)))
-	if err := publishSymDiff(&mesh, terms); err != nil {
+	proof := tessellation.ProveStacked(tessellation.StackedProofInput[*Face]{
+		Rings: rings, ColumnHeights: columnHeights, SlabHeights: slabHeights,
+		SlabColumns: slabColumns, SectionDelta: sp.sectionDelta,
+		Faces: b.Faces(), Source: mesh.source, FaceAxial: faceAxial,
+		IsPlanar: func(face *Face) bool { _, ok := face.surface.(Plane); return ok },
+		Vertices: mesh.vertices, Triangles: mesh.triangles,
+		Store: vertexStore, StoreMax: storeMax, AreaSlack: mesh.areaSlack,
+	})
+	mesh.areaSlack = proof.AreaSlack
+	if err := publishSymDiff(&mesh, proof.Terms); err != nil {
 		return nil, err
 	}
 	return &mesh, nil
