@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
+	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -102,134 +104,62 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	}, true
 }
 
-// classifySourceSphereBox uses squared rational distance to the complete box.
-// Its face witness is published only when one box support is active and the
-// sphere's projected disk stays inside the other two face intervals.
+// classifySourceSphereBox binds the neutral complete-ball result to the
+// source faces and public contact report.
 func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactProof,
-	box sourceBoxContactProof, sphereFirst bool) {
-	var nearest proofarith.DyV3
-	distance2 := proofarith.DyZero()
-	outsideAxis, outsideSide, outsideCount := 0, 0, 0
-	for i := range 3 {
-		nearest[i] = dyMax(box.lo[i], dyMin(sphere.center[i], box.hi[i]))
-		d := proofarith.DySubScalar(sphere.center[i], nearest[i])
-		distance2 = proofarith.DyAdd(distance2, proofarith.DyMul(d, d))
-		if d.Sign() != 0 {
-			outsideAxis, outsideCount = i, outsideCount+1
-			if d.Sign() > 0 {
-				outsideSide = 1
-			}
-		}
-	}
-	r2 := proofarith.DyMul(sphere.radius, sphere.radius)
-	switch proofarith.DyCmp(distance2, r2) {
-	case 1:
-		lo := proofbound.RatFloatDown(new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtDown(distance2)), sphere.radius.Rat()))
-		hi := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtUp(distance2)), sphere.radius.Rat()))
-		if !finiteMeasurementValues(lo, hi) || lo <= 0 || hi < lo {
-			report.Reason = ContactNoGapProof
-			return
-		}
-		value := lo + (hi-lo)/2
-		left := new(big.Rat).Sub(proofarith.FloatRat(value), proofarith.FloatRat(lo))
-		right := new(big.Rat).Sub(proofarith.FloatRat(hi), proofarith.FloatRat(value))
-		if right.Cmp(left) > 0 {
-			left = right
-		}
-		bound := proofbound.RatFloatUp(left)
-		if !finiteMeasurementValues(value, bound) ||
-			new(big.Rat).Sub(proofarith.FloatRat(value), proofarith.FloatRat(bound)).Sign() <= 0 {
-			report.Reason = ContactNoGapProof
-			return
-		}
-		gap := Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
-			Exactness: exactnessOf(bound)}
-		report.Relation, report.Gap = ContactSeparated, &gap
-		return
-	case 0:
+	boxProof sourceBoxContactProof, sphereFirst bool) {
+	result := box.ClassifyAxisSphere(
+		box.AxisSphere{Center: sphere.center, Radius: sphere.radius},
+		boxProof.axisBox(), report.Request.PointResolution.Base(),
+	)
+	switch result.Relation {
+	case pair.Separated:
+		report.Relation = ContactSeparated
+	case pair.Touching:
 		report.Relation = ContactTouching
-		gap := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
-		report.Gap = &gap
-	default:
+	case pair.Overlapping:
 		report.Relation = ContactOverlapping
 	}
-	if outsideCount != 1 {
-		report.Reason = ContactAmbiguousFeature
+	report.Reason = sourceBoxReason(result.Reason)
+	if result.Gap != nil {
+		gap := sourceBoxScalar(*result.Gap)
+		report.Gap = &gap
+	}
+	if result.Witness == nil {
 		return
 	}
-	axis := outsideAxis
-	for i := range 3 {
-		if i == axis {
-			continue
-		}
-		if proofarith.DyCmp(proofarith.DySubScalar(sphere.center[i], sphere.radius), box.lo[i]) <= 0 ||
-			proofarith.DyCmp(proofarith.DyAdd(sphere.center[i], sphere.radius), box.hi[i]) >= 0 {
-			report.Reason = ContactAmbiguousFeature
-			return
-		}
-	}
-	if report.Relation == ContactOverlapping {
-		opposite := box.lo[axis]
-		if outsideSide == 0 {
-			opposite = box.hi[axis]
-		}
-		if proofarith.DyCmp(proofarith.DyAbs(proofarith.DySubScalar(sphere.center[axis], opposite)), sphere.radius) <= 0 {
-			report.Reason = ContactAmbiguousFeature
-			return
-		}
-	}
-	face := box.faces[axis][outsideSide]
+	witness := result.Witness
+	face := boxProof.faces[witness.Face.Axis][witness.Face.Side]
 	if face == nil {
 		report.Reason = ContactNoNormalProof
 		return
 	}
-	// The box-to-sphere direction is the outward support normal of the box.
-	normal := r3.Vec{}
-	sign := -1.0
-	if outsideSide == 1 {
-		sign = 1
-	}
+	sign := witness.NormalSign
 	if sphereFirst {
 		sign = -sign
 	}
-	switch axis {
+	normal := r3.Vec{}
+	switch witness.NormalAxis {
 	case 0:
-		normal.X = sign
+		normal.X = float64(sign)
 	case 1:
-		normal.Y = sign
+		normal.Y = float64(sign)
 	case 2:
-		normal.Z = sign
+		normal.Z = float64(sign)
 	}
-	witnessSphere := sphere.center
-	witnessSphere[axis] = proofarith.DySubScalar(sphere.center[axis],
-		proofarith.DyMul(proofarith.MustDyOf(signIfBoxSide(outsideSide)), sphere.radius))
-	witnessBox := nearest
-	var pA, pB proofarith.DyV3
-	var featureA, featureB ContactFeature
+	onSphere := sourceBoxPointMeasurement(witness.SpherePoint)
+	onBox := sourceBoxPointMeasurement(witness.BoxPoint)
+	featureSphere, featureBox := ContactFeature{Face: sphere.face}, ContactFeature{Face: face}
+	onA, onB := onBox, onSphere
+	featureA, featureB := featureBox, featureSphere
 	if sphereFirst {
-		pA, pB = witnessSphere, witnessBox
-		featureA, featureB = ContactFeature{Face: sphere.face}, ContactFeature{Face: face}
-	} else {
-		pA, pB = witnessBox, witnessSphere
-		featureA, featureB = ContactFeature{Face: face}, ContactFeature{Face: sphere.face}
-	}
-	onA, okA := sourceBoxPoint(pA)
-	onB, okB := sourceBoxPoint(pB)
-	if !okA || !okB || onA.Bound.Base() > report.Request.PointResolution.Base() ||
-		onB.Bound.Base() > report.Request.PointResolution.Base() {
-		report.Reason = ContactPointTooCoarse
-		return
-	}
-	distance := proofarith.DyAbs(proofarith.DySubScalar(sphere.center[axis], nearest[axis]))
-	sep, ok := sourceBoxSignedReading(proofarith.DySubScalar(distance, sphere.radius))
-	if !ok {
-		report.Reason = ContactPointTooCoarse
-		return
+		onA, onB = onSphere, onBox
+		featureA, featureB = featureSphere, featureBox
 	}
 	report.Manifold = &ContactManifold{Points: []ContactPoint{{
 		OnA: onA, OnB: onB, Normal: VecMeasurement{
 			Value: normal, Bound: units.Scalar(0), Exactness: Exact},
-		NormalAngle: units.Radians(0), Separation: sep,
+		NormalAngle: units.Radians(0), Separation: sourceBoxScalar(witness.Separation),
 		FaceA: featureA.Face, FaceB: featureB.Face, FeatureA: featureA, FeatureB: featureB,
 	}}}
 }
