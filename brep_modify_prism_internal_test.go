@@ -136,10 +136,16 @@ func TestBrepModifyRoutePChamfersS1HoleRim(t *testing.T) {
 // TestBrepModifyRoutePShellsS1 pins BB3: removing S1's y = 20 face shells
 // the recognised prism into a cup open at y = 20, and removing its x = 0
 // face, a side wall of every prism it reads as, falls past route P to route
-// S, which reads S1 as the box along z and refuses a removed wall
-// (docs/modify-general-design.md SG5). The cup is 20·(800 − 9π) less the
-// cavity 18·(576 − 25π). Shown to fail with brepPrismRead.caps swapping the
-// start and end caps (the cup opened at y = 0, its +y faces all at y = 20).
+// S, which reads S1 as the box along z and opens that wall
+// (docs/modify-general-design.md §3.2). The cup is 20·(800 − 9π) less the
+// cavity 18·(576 − 25π). The opened box is 16000 − 180π less the cavity
+// [0, 38] × [2, 18] over z ∈ [2, 18] less the hole dilated to radius 5 over
+// y ∈ [2, 18], 608·16 − 400π: 6272 + 220π, and the rim at x = 0 faces −x.
+// Shown to fail with
+// brepPrismRead.caps swapping the start and end caps (the cup opened at
+// y = 0, its +y faces all at y = 20) and with the rim of a removed wall along
+// z stated in the frame facing into the material (the rim then faced +x; the
+// volume does not see it, since a face at x = 0 adds no flux).
 func TestBrepModifyRoutePShellsS1(t *testing.T) {
 	t.Parallel()
 	y := r3.NewVec(0, 1, 0)
@@ -165,10 +171,12 @@ func TestBrepModifyRoutePShellsS1(t *testing.T) {
 	})
 	t.Run("side wall", func(t *testing.T) {
 		t.Parallel()
-		doc, s1 := internalCrossDrilled(t)
-		before := doc.Bodies()
-		_, err := s1.Shell(t.Context(), Faces(Facing(r3.NewVec(-1, 0, 0))).Exactly(1), units.Millimeters(2))
-		requireRefusesUnchanged(t, s1, before, err, "a wall of the prism", "modify-general SG5")
+		_, s1 := internalCrossDrilled(t)
+		result, bp := requireThroughShell(t, s1, Faces(Facing(r3.NewVec(-1, 0, 0))).Exactly(1), units.Millimeters(2),
+			big.NewRat(6272, 1), big.NewRat(220, 1))
+		require.Len(t, bp.faces, 13)
+		// The rim at x = 0 faces out of the material, as the wall did.
+		shellFaceAt(t, result, r3.NewVec(-1, 0, 0), 0)
 	})
 }
 
@@ -195,7 +203,7 @@ func TestBrepModifyRoutePChamfersB1SquareHole(t *testing.T) {
 // for bit. P5 refuses a hand-built S1 whose hole wall is walked against its
 // material, and one whose z = 0 face faces into the material. Shown to fail
 // with brepgeom.WalkKeyOf ignoring the circular sense (the reversed wall then
-// read), with brepgeom.PrismRect.matches ignoring the normal (the inward-facing
+// read), with brepgeom.PrismRect.Matches ignoring the normal (the inward-facing
 // rectangle then read), and with the two rectangle readers ignoring their
 // levels' displacements (each displaced case then read).
 func TestBrepModifyRecognisesThePrism(t *testing.T) {

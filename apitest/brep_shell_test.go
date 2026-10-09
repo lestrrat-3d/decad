@@ -52,18 +52,19 @@ func crossDrilledBar(t *testing.T) (*decad.Document, *decad.Body) {
 // receiver's hole and the cavity's dilated hole), volume 5632 + 220π inside
 // its published bound, Verify reads it Sound, and STEP writes it through
 // the analytic arm, one ADVANCED_FACE per face. The receiver is retired.
-// Removing an x wall instead refuses with SG5 and leaves the receiver live.
-// Shown to fail with Shell ignoring the route's body (the call then read the
-// generic "straight prism" refusal).
+// Removing both x walls instead, no connected run of walls, refuses with
+// shell-opening SO6 and leaves the receiver live. Shown to fail with Shell
+// ignoring the route's body (the call then read the generic "straight prism"
+// refusal).
 func TestBrepShellRemovesTheTop(t *testing.T) {
 	t.Parallel()
 	up := r3.NewVec(0, 0, 1)
 
 	doc, bar := crossDrilledBar(t)
 	before := doc.Bodies()
-	_, err := bar.Shell(t.Context(), decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))).Exactly(1), units.Millimeters(2))
+	_, err := bar.Shell(t.Context(), decad.Faces(decad.NormalTo(r3.NewVec(1, 0, 0))).Exactly(2), units.Millimeters(2))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "modify-general SG5")
+	require.ErrorContains(t, err, "shell-opening SO6")
 	require.Equal(t, before, doc.Bodies())
 
 	shelled, err := bar.Shell(t.Context(), decad.Faces(decad.Facing(up)).Exactly(1), units.Millimeters(2))
@@ -78,12 +79,20 @@ func TestBrepShellRemovesTheTop(t *testing.T) {
 	}
 	require.Equal(t, 2, cylinders)
 
-	// 5632 + 220π, with π enclosed by its two neighbouring floats.
+	requireShellVolumeSoundAnalytic(t, doc, shelled, 5632, 220, 13)
+}
+
+// requireShellVolumeSoundAnalytic requires the shelled body's published
+// volume to cover a + b·π, with π enclosed by its two neighbouring floats,
+// Verify to read it Sound, and STEP to write it through the analytic arm:
+// one ADVANCED_FACE per face, two of them cylinders.
+func requireShellVolumeSoundAnalytic(t *testing.T, doc *decad.Document, shelled *decad.Body, a, b int64, faces int) {
+	t.Helper()
 	vol, err := shelled.Volume()
 	require.NoError(t, err)
 	piLo, piHi := math.Nextafter(math.Pi, 0), math.Nextafter(math.Pi, 4)
-	lo := new(big.Rat).Add(big.NewRat(5632, 1), new(big.Rat).Mul(big.NewRat(220, 1), new(big.Rat).SetFloat64(piLo)))
-	hi := new(big.Rat).Add(big.NewRat(5632, 1), new(big.Rat).Mul(big.NewRat(220, 1), new(big.Rat).SetFloat64(piHi)))
+	lo := new(big.Rat).Add(big.NewRat(a, 1), new(big.Rat).Mul(big.NewRat(b, 1), new(big.Rat).SetFloat64(piLo)))
+	hi := new(big.Rat).Add(big.NewRat(a, 1), new(big.Rat).Mul(big.NewRat(b, 1), new(big.Rat).SetFloat64(piHi)))
 	held := new(big.Rat).SetFloat64(vol.Value.Base())
 	bound := new(big.Rat).SetFloat64(vol.Bound.Base())
 	require.LessOrEqual(t, new(big.Rat).Sub(held, bound).Cmp(lo), 0)
@@ -99,6 +108,26 @@ func TestBrepShellRemovesTheTop(t *testing.T) {
 	require.NoError(t, export.STEP(t.Context(), &buf, shelled, units.Millimeters(0.1),
 		export.WithSTEPName("shell"), export.WithSTEPAuthor("apitest"), export.WithSTEPOrganization("decad")))
 	text := buf.String()
-	require.Equal(t, 13, strings.Count(text, "=ADVANCED_FACE("))
+	require.Equal(t, faces, strings.Count(text, "=ADVANCED_FACE("))
 	require.Equal(t, 2, strings.Count(text, "=CYLINDRICAL_SURFACE("))
+}
+
+// TestBrepShellRemovesAWallAndTheTop pins route S with a removed wall run
+// through the public API on P1: removing the y = 0 wall and the top at 2 mm
+// opens the box along two faces that share an edge. The cavity section is
+// [2, 38] × [0, 18] over z ∈ [2, 20], less the hole dilated to radius 5 over
+// y ∈ [0, 18], so the volume is 16000 − 180π − (648·18 − 450π) = 4336 + 270π.
+// The result holds 13 faces, Verify reads it Sound, and STEP writes it
+// through the analytic arm. Shown to fail with the removed wall refused as
+// before route S took wall runs (SG5).
+func TestBrepShellRemovesAWallAndTheTop(t *testing.T) {
+	t.Parallel()
+	doc, bar := crossDrilledBar(t)
+	sel := decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))).Or(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(2)
+	shelled, err := bar.Shell(t.Context(), sel, units.Millimeters(2))
+	require.NoError(t, err)
+	require.Len(t, doc.Bodies(), 1)
+	require.Len(t, shelled.Faces(), 13)
+	require.Len(t, shelled.Lumps(), 1)
+	requireShellVolumeSoundAnalytic(t, doc, shelled, 4336, 270, 13)
 }

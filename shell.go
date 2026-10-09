@@ -134,13 +134,18 @@ func WithShellSense(s ShellSense) ShellOption {
 // along a reference axis is shelled as that prism
 // (docs/brep-modify-design.md route P) when the removed faces are its caps.
 // A brep that reads as a prism along one reference axis cut by through tools
-// along others is shelled inward with one or both of that prism's caps
+// along others is shelled inward with one or both of that prism's caps, one
+// connected run of its straight side walls along section axes, or both
 // removed (docs/modify-general-design.md route S): the cavity is the eroded
-// prism cut by each tool dilated by t, and the result is a brep holding the
-// receiver's kept faces, the cavity's faces and one rim per removed cap. On
-// such a record an outward shell (SG1), a removed tool or hole wall (SG4) or
-// side wall (SG5), and dilated tools that meet, reach a cap of the cavity or
-// the material past the walls they pierce (SG6) are ErrUnsupported. A brep or
+// prism — with a wall run, the side opening's cavity section
+// (docs/shell-opening-design.md) — cut by each tool dilated by t, and the
+// result is a brep holding the receiver's kept faces, the cavity's faces and
+// the rim at each removed face. On such a record an outward shell (SG1), a
+// removed tool or hole wall (SG4), a removed curved wall or a wall run ending
+// at a reflex corner (SG5), and dilated tools that meet, reach a cap of the
+// cavity or the material past the walls they pierce (SG6) are
+// ErrUnsupported, and a wall run refuses as a prism side opening does
+// (SO1–SO6, with their sentinels). A brep or
 // stacked result that reads as neither is ErrUnsupported: SB3, the prism's own
 // S2, where it reads as a prism, and SB10 where it does not, each naming the
 // first face route S does not take (SG3).

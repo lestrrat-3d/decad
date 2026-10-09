@@ -440,7 +440,8 @@ Route P:
   states.
 - S1, shell removing the `y = 20` face, `t = 2`: a cup, volume within its
   bound of `5632 + 270π` (`20·(800 − 9π) − 18·(576 − 25π)`); removing the
-  `x = 0` face instead → S2.
+  `x = 0` face instead falls past route P to route S, which opens that wall
+  (`docs/modify-general-design.md` §3.2): `6272 + 220π`.
 - B1, chamfer the square hole's four edges along `y`, `d = 2`: concave (the
   hole loop's corners fill), `Exact` `14000 + 4·2·20 = 14160`; the hole's
   four lateral edges share no vertex, and S6 admits `2 + 2 < 10` on each wall.
