@@ -3005,7 +3005,7 @@ func ExactSumRound(held float64, terms ...float64) float64 {
 // placement agree exactly — and the assignment is no less an error for being
 // deliberate. Charging it leaves the snap's own behaviour untouched while every
 // reading that folds the snapped coordinate into a published measurement
-// (survey.go's revolveMinRadius) stops claiming an exactness the assignment
+// (radiussurvey.Revolve) stops claiming an exactness the assignment
 // took away.
 //
 // It answers the caller's own bound unchanged for a discarded magnitude of

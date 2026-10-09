@@ -1379,7 +1379,7 @@ subject and are not repeated here.
 §12 already rules on four of the remaining consumers, and this section adds
 only the call site each of its rows lands at. What the consumer does at
 `δ > 0` is that row's to state, and is deliberately not restated here:
-`survey.go`'s `prismWall` and `prismMinRadius` are §12's "Surveys
+`wallsurvey.PrismWall` and `radiussurvey.Prism` are §12's "Surveys
 (wall/undercut/min-radius)" row, `prism_extent.go`'s `extentAlong` is its
 "`ThroughAll` / `ThroughAllSide`" row, `clearance_geom.go`'s
 `addPrismFaces` is its "Clearance kernel" row, and `verify.go`'s

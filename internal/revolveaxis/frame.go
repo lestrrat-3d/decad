@@ -92,7 +92,7 @@ func (ax Frame) PlaneDirection(wg, k float64) (float64, float64) {
 // rounds. The ρ (V) component's OWN proven bound is stated separately, in
 // startVBound/endVBound/cVBound, through ToAxisRhoBound: a reading that folds
 // the re-expressed ρ into a published measurement (survey.go's
-// revolveMinRadius) takes it rather than treating startV/endV/cV as an exact
+// radiussurvey.Revolve) takes it rather than treating startV/endV/cV as an exact
 // leaf the way contact classification does.
 //
 // The SNAP is charged into that same bound, through internal/proofbound/bounds.go's

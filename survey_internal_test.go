@@ -1091,7 +1091,7 @@ func TestArcWalkRadiusBoundStaysUnderTheKernelSlack(t *testing.T) {
 }
 
 // TestRevolveMinRadiusNumeratorIsIntervalMinimum pins the numerator the
-// non-circular arm of revolveMinRadius hands its quotient: the enclosure of
+// non-circular arm of radiussurvey.Revolve hands its quotient: the enclosure of
 // the NEARER wall end's radial coordinate, which is the interval minimum of
 // the two ends and never the interval of whichever HELD value compared
 // smaller. The two ends carry independent proven bounds (axisFrame.walk's
