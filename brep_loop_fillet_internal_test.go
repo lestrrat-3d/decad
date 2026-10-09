@@ -720,6 +720,44 @@ func TestVertexBlendTrapezoidRefusal(t *testing.T) {
 	require.NoError(t, doc.requireLive(body))
 }
 
+func TestVertexBlendCrossFaceTwoEdgeCorner(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	body := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
+	sel := Edges(ParallelTo(routeEX), EndpointAt(r3.NewVec(0, 0, 20))).
+		Or(ParallelTo(routeEZ), EndpointAt(r3.NewVec(0, 0, 20))).Exactly(2)
+	out, err := body.Fillet(t.Context(), sel, units.Millimeters(2))
+	require.NoError(t, err)
+	requireClosedTopology(t, out)
+	requireVolumePi(t, out, pp(q(47320, 3), q(56, 1), q(0, 1)))
+	requireFilletPatches(t, out, 2, 0)
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Triangles())
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(out)
+	require.NoError(t, err)
+	require.Equal(t, Sound, reading.Status)
+}
+
+func TestVertexBlendCrossFaceBrepCorner(t *testing.T) {
+	t.Parallel()
+	doc, body := internalCrossDrilled(t)
+	sel := Edges(ParallelTo(routeEX), EndpointAt(r3.NewVec(0, 0, 20))).
+		Or(ParallelTo(routeEZ), EndpointAt(r3.NewVec(0, 0, 20))).Exactly(2)
+	out, err := body.Fillet(t.Context(), sel, units.Millimeters(2))
+	require.NoError(t, err)
+	requireClosedTopology(t, out)
+	requireVolumePi(t, out, pp(q(47320, 3), q(-124, 1), q(0, 1)))
+	requireFilletPatches(t, out, 2, 0)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(out)
+	require.NoError(t, err)
+	require.Equal(t, Sound, reading.Status)
+}
+
 func TestFilletSphereWalkRequiresExactRecordedRadius(t *testing.T) {
 	t.Parallel()
 	w := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{

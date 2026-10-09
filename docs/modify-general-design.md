@@ -81,7 +81,7 @@ Ranked by the parts each refusal blocks:
 | Rank | Refusal | Blocks | What the body needs |
 |---|---|---|---|
 | 1 | SB10 / SB3: shell of a brep that reads as no prism, or whose removed face is no cap of the prism it reads as | P1, P2, P3, P6, P6c, P7, P8 | the erosion of the receiver: planes and cylinders along reference axes for a through-cut body (§3); spheres, tori or elliptical edges for a blind pocket or a union |
-| 2 | SL1: edges sharing a vertex outside complete loops | P1 | route V builds fillets when independent single edges and complete loops partition the selection; chamfers still refuse (`docs/vertex-blend-design.md`) |
+| 2 | SL1: edges sharing a vertex outside complete loops | P1 | route V builds complete loops with independent edges; a partial fillet builds edges on one planar loop after straight-wall restatement (`docs/vertex-blend-design.md`) |
 | 3 | a loop fillet: the curved-edge and cornered-loop fillets this survey found refused | P1, P2, P3, P4, P7 | `docs/loop-fillet-design.md`'s pipe band, which builds them |
 | 4 | SB7: an edge ending on a curved face or a blend | P8 | the complete-loop fillet, which builds P8's top loop |
 | 5 | a faceted receiver | P5, P6b, P9 | an analytic boolean: `docs/stacked-prism-design.md` §7 stage 2, a cup as a boolean operand, cylinder × cylinder; reach SX9 stays permanent |
@@ -460,7 +460,7 @@ reach SX10, SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
 
 For a `Fillet`, route V also partitions complete loops and independent
 straight edges before LB1/LB2. A selected straight-edge chain on part of
-one planar-face loop takes the partial fillet route
+one planar-face loop, including a swept wall restated as a plane, takes the partial fillet route
 (`docs/vertex-blend-design.md` §2).
 | 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
 | 4. existence | SX6, SX13 per band as the contour is built |
@@ -497,7 +497,7 @@ below reads the bands where the plain brep reader would miss them:
 
 | Request | Code | Why not here |
 |---|---|---|
-| chamfers of edges sharing a vertex outside one loop, or fillets whose single edges share a vertex outside route V's complete loops | SB5 / SL1 | the mixed chamfer's corner plane has no reference-axis normal; route V admits the fillet cases in `docs/vertex-blend-design.md` |
+| chamfers of edges sharing a vertex outside one loop, or fillets whose selected edges share no planar loop after straight-wall restatement | SB5 / SL1 | the mixed chamfer's corner plane has no reference-axis normal; route V and the partial fillet admit the cases in `docs/vertex-blend-design.md` |
 | an edge ending on a blend or a curved face (P8) | SB7 | its honest form is the complete-loop fillet, `docs/loop-fillet-design.md` |
 | shell of a blind pocket or port, a stacked union, a keyway (P2, P3, P6c) | SG3 | spheres at the pocket's floor corners, a torus around a round boss's root, elliptical edges where two reflex edges meet at a square boss's corner |
 | an outward or closed shell of a brep | SG1 / SG2 | §3.2 |

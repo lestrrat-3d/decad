@@ -15,6 +15,23 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
+// selectedStraightEdgesShareVertex gates the restatement retry to straight
+// edge selections whose topology has a common corner.
+func selectedStraightEdgesShareVertex(edges []*Edge) bool {
+	for i, edge := range edges {
+		if _, ok := edge.curve.(Line3); !ok {
+			return false
+		}
+		for _, earlier := range edges[:i] {
+			if edge.start == earlier.start || edge.start == earlier.end ||
+				edge.end == earlier.start || edge.end == earlier.end {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // partialSelectedLoop finds one planar loop that contains every selected edge
 // as a proper subset. Route E has already taken independent straight edges,
 // so a successful reading contains at least one shared vertex.
@@ -76,6 +93,11 @@ func brepFilletPartialLoop(ctx context.Context, d *Document, bp brepPayload, cal
 	if !ok || !slices.Equal(selected, again) {
 		return nil, r.refuse("SL1", `restating the straight walls changed the selected partial loop`)
 	}
+	return r.buildPartialFillet(ctx, d, sel, selected, blends)
+}
+
+func (r *brepLoopRead) buildPartialFillet(ctx context.Context, d *Document, sel brepLoopSel,
+	selected []bool, blends []*brepEdgeBlend) (*Body, error) {
 	out, err := r.rewritePartialFillet(sel, selected, blends)
 	if err != nil {
 		return nil, err
@@ -86,7 +108,7 @@ func brepFilletPartialLoop(ctx context.Context, d *Document, bp brepPayload, cal
 			return nil, ctxErr
 		}
 		return nil, fmt.Errorf(`%w; the partial-loop fillet's rewritten brep record; selector %s matched [%s]`,
-			err, call.sel, selectedEdgesContext(call.edges))
+			err, r.call.sel, selectedEdgesContext(r.call.edges))
 	}
 	if body.volume.Value.Base() <= 0 {
 		return nil, fmt.Errorf(`%w: the partial-loop fillet encloses no volume`, ErrDegenerate)

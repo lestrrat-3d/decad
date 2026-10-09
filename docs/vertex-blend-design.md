@@ -66,6 +66,12 @@ The selected wall ends at the band's side level. The unselected wall keeps
 its original reach and replaces its corner with that terminal arc. A chain
 with only one walk is route E's existing single-edge case.
 
+Two selected straight edges can meet on a swept wall whose loop is absent
+from the initial planar-face record. Route E restates that wall as a planar
+rectangle before route L looks for a partial loop. The partial-loop band then
+closes the shared corner on the restated face. The two-edge corner of a box
+at one top and one vertical edge uses this path.
+
 The band record keeps the original complete loop, a selected-walk mask,
 and the cap-contour segment for each selected walk and reflex connector.
 Only selected cap and side edges and reflex connector arcs are open in the
@@ -112,7 +118,7 @@ loop-fillet terms.
 | Input | Result |
 |---|---|
 | loops sharing an edge after the partition | SL1, `ErrUnsupported` |
-| selected straight edges sharing a vertex outside one selected planar-face loop | SL1 or SB5, `ErrUnsupported` |
+| selected straight edges sharing a vertex with no common planar-face loop after straight-wall restatement | SL1 or SB5, `ErrUnsupported` |
 | an LF9 candidate with a circular neighbour or a non-G1 join | SF1, `ErrUnsupported` |
 | held radius `r` but either recorded endpoint has a different exact distance to the centre | `ErrUnsupported` |
 | recorded inward arc radius slightly above `r` but its residual is within `shellTol` | `ErrUnsupported`, naming the unequal radii |

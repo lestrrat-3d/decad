@@ -1246,6 +1246,8 @@
 3	0.05	TestVertexBlendPocketFloor
 3	0.05	TestVertexBlendBoxPartialCornerSet
 3	0.05	TestVertexBlendTrapezoidRefusal
+3	0.05	TestVertexBlendCrossFaceTwoEdgeCorner
+3	0.05	TestVertexBlendCrossFaceBrepCorner
 3	0.05	TestFilletSphereWalkRequiresExactRecordedRadius
 3	0.05	TestVertexBlendCrossDrilledBar
 3	0.05	TestBrepLoopFilletBoundFixture
