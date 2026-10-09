@@ -419,7 +419,7 @@ func readBandMass(ctx context.Context, li int, loop loopRecord, cbp capBlendPayl
 		Loop: loop, CapBoundary: capBoundary, Patches: geom,
 		CapLevel: capZB, SideLevel: sideZB, SideArea: sideArea, CapArea: capArea,
 		MaterialSign: matSign, Orientation: orient, Delta: delta,
-		LevelDelta: capBandLevelDelta(capZ, matSign, setback), Closure: closure,
+		LevelDelta: capband.BandLevelDelta(capZ, matSign, setback.ds, setback.dsDelta), Closure: closure,
 	}, nil
 }
 

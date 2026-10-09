@@ -305,7 +305,7 @@ func TestCapBandMassBoundsChargeTheSideLevelMove(t *testing.T) {
 	}
 	exact := capBlendPayload{end: capSetback{dc: d, ds: d}}
 	loose := capBlendPayload{end: capSetback{dc: d, ds: d, dsDelta: dsDelta}}
-	levelDelta := capBandLevelDelta(capZ, -1, loose.end)
+	levelDelta := capband.BandLevelDelta(capZ, -1, loose.end.ds, loose.end.dsDelta)
 	require.GreaterOrEqual(t, levelDelta, dsDelta)
 	// The side loop's area, 1, is the larger section.
 	charge := levelDelta * 1

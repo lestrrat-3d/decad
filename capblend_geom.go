@@ -212,7 +212,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// the identical level, and it rides onto every patch's own capPatchGeom,
 	// where patchAreaOf charges it against the patch's area
 	// (capblend_moments.go).
-	levelDelta := capBandLevelDelta(capZ, matSign, setback)
+	levelDelta := capband.BandLevelDelta(capZ, matSign, setback.ds, setback.dsDelta)
 	// capDelta is the inherited displacement of the cap level itself. The cap
 	// contour moves only in the cap plane, so its delta does not cover this
 	// independent axial term.
@@ -318,7 +318,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// the way round, so both corner skews are the seams' one angle.
 		sideSeam := Point2{U: w.StartU, V: w.StartV}
 		capSeam := Point2{U: w.CU + capRadius, V: w.CV}
-		if err := setCapPatchSkews(&geom, sideSeam, sideSeam, capSeam, capSeam); err != nil {
+		if err := capband.SetPatchSkews(&geom, sideSeam, sideSeam, capSeam, capSeam); err != nil {
 			return capBandResult{}, err
 		}
 		// A cornerless band has no corner to pair its two directrices at, so
@@ -471,7 +471,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// enclose within their own bounds.
 		if span, ok := capcontour.OffsetSpan(dc, dcDelta); ok {
 			center, axis, _, _ := surfacegeom.CircleOf(arcByCorner[i].curve)
-			cornerDelta := math.Min(capCornerGap(j.VertU, j.VertV, prev.EndU, prev.EndV, prev.EndBound), capCornerGap(j.VertU, j.VertV, cur.StartU, cur.StartV, cur.StartBound))
+			cornerDelta := math.Min(capband.CornerGap(j.VertU, j.VertV, prev.EndU, prev.EndV, prev.EndBound), capband.CornerGap(j.VertU, j.VertV, cur.StartU, cur.StartV, cur.StartBound))
 			arcByCorner[i].curveBound, arcByCorner[i].curveBounded = pl.circleCurveBound(j.VertU, j.VertV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
 		}
 	}
@@ -761,15 +761,15 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				cap0, cap1 = cap1, cap0
 			}
 			g.CapA, g.CapB = cap0, cap1
-			if err := setCapPatchSkews(&g, side0, side1, cap0, cap1); err != nil {
+			if err := capband.SetPatchSkews(&g, side0, side1, cap0, cap1); err != nil {
 				return capBandResult{}, err
 			}
-			cornerFlux, err := capPatchCornerFlux(budget, walks, joins, i, setback)
+			cornerFlux, err := capband.PatchCornerFlux(budget, walks, joins, i, setback.axialUpper(), setback.dc, setback.dcDelta)
 			if err != nil {
 				return capBandResult{}, err
 			}
 			g.CornerFlux = cornerFlux
-			if err := setCapPatchLocusSpans(budget, &g, walks, joins, i, setback, swapped); err != nil {
+			if err := capband.SetPatchLocusSpans(budget, &g, walks, joins, i, setback.dc, setback.dcDelta, swapped); err != nil {
 				return capBandResult{}, err
 			}
 		} else {
@@ -850,103 +850,6 @@ func suppliedCapWalls(co []coedge, joins []cornerJoin, n int) (suppliedCapEdges,
 	}
 	return out, nil
 }
-
-// setCapPatchSkews stamps a circular wall patch's two corner skews: the proven
-// angle between the side directrix's end side0 (side1) and the cap
-// directrix's end cap0 (cap1) at the patch's th0 (th1) corner, on the branch
-// the held windows name (capband.CornerSkewUpper). patchAreaOf's Cone arm
-// reads them for the ruled patch's own distance from the frustum sector it
-// publishes. A corner whose skew cannot be enclosed below a quarter turn is
-// ErrUnsupported: the requested band exists, and only this evaluator cannot
-// bound its area.
-func setCapPatchSkews(g *capPatchGeom, side0, side1, cap0, cap1 Point2) error {
-	c0, c1 := capband.WindowOnBranch(g.CapTh0, g.CapTh1, g.Th0)
-	s0, ok0 := capband.CornerSkewUpper(g.CU, g.CV, side0, cap0, c0-g.Th0)
-	s1, ok1 := capband.CornerSkewUpper(g.CU, g.CV, side1, cap1, c1-g.Th1)
-	if !ok0 || !ok1 {
-		return errCapPatchSkewUnbounded
-	}
-	g.SkewStart, g.SkewEnd = s0, s1
-	return nil
-}
-
-// setCapPatchLocusSpans stores circular wall i's two corner-foot loci as
-// angle spans (capband.CornerLocusSpans), the start corner's on Locus0 and
-// the end corner's on Locus1, or the other way round where the patch's
-// window was swapped to run Th0 < Th1. A reflex foot and a G1 join run along
-// the wall's own radial (capband.StraightLocusSpans). The spans map offset to
-// height through the setback dc, so a setback with conversion rounding, whose
-// true dc is known only to within dcDelta, stores none, and neither does a
-// corner whose sliver was not bounded or whose feet were not enclosed: the
-// chord-versus-locus term then reads the wide and narrow sectors alone.
-func setCapPatchLocusSpans(budget *proofbound.WorkBudget, g *capPatchGeom, walks []survey2d.SideWalk, joins []cornerJoin, i int, setback capSetback, swapped bool) error {
-	if setback.dcDelta != 0 || !(g.CornerFlux < math.Inf(1)) {
-		return nil
-	}
-	n := len(walks)
-	w := walks[i]
-	spansAt := func(k int, sideU, sideV float64) ([]capband.LocusSpan, error) {
-		j := joins[k]
-		if j.Arc || j.G1 {
-			return capband.StraightLocusSpans(setback.dc), nil
-		}
-		spans, ok, err := capband.CornerLocusSpans(budget, walks[(k+n-1)%n], walks[k], w.CU, w.CV, sideU, sideV, j.VertU, j.VertV, setback.dc)
-		if err != nil || !ok {
-			return nil, err
-		}
-		return spans, nil
-	}
-	start, err := spansAt(i, w.StartU, w.StartV)
-	if err != nil {
-		return err
-	}
-	end, err := spansAt((i+1)%n, w.EndU, w.EndV)
-	if err != nil {
-		return err
-	}
-	if start == nil || end == nil {
-		return nil
-	}
-	if swapped {
-		start, end = end, start
-	}
-	g.Locus0, g.Locus1, g.LocusSetback = start, end, setback.dc
-	return nil
-}
-
-// capPatchCornerFlux sums the corner-sliver flux of circular wall i's two
-// corners, i at its start and i+1 at its end, into the bound its chord-locus
-// term charges (capband.MiterLocusSliverFlux, docs/modify-reach-design.md
-// §8.3). A reflex corner and a G1 join have a straight corner locus and add
-// nothing. A corner whose sliver cannot be bounded makes the sum +Inf, so the
-// band's volume publishes an unbounded bound rather than an understated one.
-func capPatchCornerFlux(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, joins []cornerJoin, i int, setback capSetback) (float64, error) {
-	n := len(walks)
-	w := walks[i]
-	total := 0.0
-	for _, k := range [2]int{i, (i + 1) % n} {
-		j := joins[k]
-		if j.Arc || j.G1 {
-			continue
-		}
-		prev, cur := walks[(k+n-1)%n], walks[k]
-		flux, ok, err := capband.MiterLocusSliverFlux(budget, prev, cur, w.CU, w.CV, j.VertU, j.VertV,
-			setback.axialUpper(), setback.dc, setback.dcDelta)
-		if err != nil {
-			return 0, err
-		}
-		if !ok {
-			return math.Inf(1), nil
-		}
-		total = proofbound.AbsSumUpper(total, flux)
-	}
-	return total, nil
-}
-
-// errCapPatchSkewUnbounded is the refusal for a circular band patch whose
-// side and cap directrices turn a quarter turn or more apart at a corner,
-// where patchAreaOf's proven area bound does not hold.
-var errCapPatchSkewUnbounded = fmt.Errorf(`%w: a cap-loop chamfer's circular band patch turns its cap contour a quarter turn or more from its side wall at a corner, and this evaluator proves no area bound for that ruled patch`, ErrUnsupported)
 
 // setPatchReadings gives a constructed chamfer patch the two readings its OWN
 // geometry already states: the area and bound patchAreaOf gives
@@ -1178,7 +1081,7 @@ func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) Surface {
 // capPatchWindowSkew is one patch's own widest corner skew: a proven upper
 // bound on the angle about the centre between the side directrix's end and
 // the cap directrix's end at either corner (docs/modify-reach-design.md §8.3),
-// the larger of the two skews setCapPatchSkews stamps from
+// the larger of the two skews capband.SetPatchSkews stamps from
 // capband.CornerSkewUpper. It is never read off a difference of two float
 // Atan2 angles, which can fall below the exact angle. It is zero for a reflex
 // corner's apex patch, for a join whose two ends lie on one ray from the
@@ -1260,31 +1163,4 @@ func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, ref
 		f.reversed = !f.reversed
 	}
 	return nil
-}
-
-// capBandLevelDelta is how far a band's held side level, the float sum
-// capZ + matSign·ds, sits from the level the stated side setback denotes: the
-// setback's own conversion rounding plus the sum's rounding. The band
-// readings that place the side directrix read it (buildCapBand's edges and
-// patch areas), and so do capband.BandVolume and capband.BandMoment, which charge the
-// band's own change when its side level moves.
-func capBandLevelDelta(capZ, matSign float64, setback capSetback) float64 {
-	sideZ := capZ + matSign*setback.ds
-	return proofbound.AbsSumUpper(setback.dsDelta, proofarith.AddRoundError(capZ, matSign*setback.ds, sideZ))
-}
-
-// capCornerGap bounds how far the held corner (vU, vV) sits from the corner a
-// walk end at (u, v), within its own bound, denotes: that bound plus the exact
-// distance between the two held points.
-func capCornerGap(vU, vV, u, v float64, bound proofbound.WalkEndBound) float64 {
-	a, okA := proofarith.DyOf(vU)
-	b, okB := proofarith.DyOf(vV)
-	c, okC := proofarith.DyOf(u)
-	d, okD := proofarith.DyOf(v)
-	if !okA || !okB || !okC || !okD {
-		return math.Inf(1)
-	}
-	x, y := proofarith.DySubScalar(a, c), proofarith.DySubScalar(b, d)
-	gap := proofarith.DySqrtUp(proofarith.DyAdd(proofarith.DyMul(x, x), proofarith.DyMul(y, y)))
-	return proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(bound), gap)
 }
