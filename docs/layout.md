@@ -134,7 +134,7 @@ the rules leave to the byte budget.
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
 | `prism_payload.go` | `prismPayload` and coordinate adapters. See evaluator §5. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces. See evaluator §5. |
-| `prism_extent.go` | Prism extent readings, reach and box. See evaluator §5. |
+| `prism_extent.go` | Adapts prism extents and box readings. See evaluator §5. |
 | `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
@@ -318,7 +318,7 @@ the rules leave to the byte budget.
 | `internal/tolerance/` | Relative tolerance comparisons, body reference formulas, and reading diagnostics. See verification §2-§3. |
 | `internal/verifyoption/` | Verify options. See verification §2. |
 | `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
-| `internal/prismextent/` | Prism extremes and bounds. See evaluator §5. |
+| `internal/prismextent/` | Prism extremes, bounds and extent readings. See evaluator §5. |
 | `internal/prismplacement/` | Exact prism axis shifts and relative placement. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |
 | `internal/prismcells/` | Prism scene mapping, cells, surface cuts, charges and trim walks. See prism-boolean §4. |
