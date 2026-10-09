@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stationbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/units"
@@ -98,13 +99,13 @@ func TestChordStationBoundRefusesWhatItCannotEnclose(t *testing.T) {
 	}
 }
 
-func TestRequireDerivableStoreRefusesAnUnstatedDisplacement(t *testing.T) {
+func TestStoreMaxRefusesAnUnstatedDisplacement(t *testing.T) {
 	t.Parallel()
-	worst, err := requireDerivableStore([]float64{0, 3e-14, 1e-15})
+	worst, err := tessellation.StoreMax([]float64{0, 3e-14, 1e-15})
 	require.NoError(t, err)
 	require.Equal(t, 3e-14, worst)
 
-	_, err = requireDerivableStore([]float64{0, math.Inf(1)})
+	_, err = tessellation.StoreMax([]float64{0, math.Inf(1)})
 	require.ErrorIs(t, err, ErrUnsupported,
 		`a sample whose own record states no enclosure refuses rather than publishing an infinite bound`)
 }

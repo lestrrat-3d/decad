@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -63,12 +64,12 @@ func facetAreaGap(held float64, verts []r3.Vec, tris [][3]int) *big.Float {
 //
 // Every face's bound, and the body's, is checked against the exact area of
 // the facets it speaks for. The sliver cap is also handed alone to
-// meshAreaUpper and tessellation.FaceAreaUpper, the other two sums of float
+// facetproof.MeshAreaUpper and tessellation.FaceAreaUpper, the other two sums of float
 // facet areas.
 //
 // Shown to fail first: dropping faceTermSlop from the per-face bound in
 // boolean_body.go turns the sliver face red; dropping termSlop from
-// facetproof.MeshAreaUpper turns the meshAreaUpper assertion red; dropping
+// facetproof.MeshAreaUpper turns its assertion red; dropping
 // FacetAreaTermSlop from tessellation.FaceAreaUpper turns that assertion red.
 // The body-level assertion stays green without the body's own termSlop here:
 // the box's large faces carry a summation charge far above one sliver's error.
@@ -112,8 +113,8 @@ func TestFacetedAreaBoundsCoverSliverFacet(t *testing.T) {
 
 	only := [][3]int{sliverTri}
 	exact := exactFacetAreaSum(fp.verts, only)
-	require.GreaterOrEqual(t, new(big.Float).SetFloat64(meshAreaUpper(fp.verts, only)).Cmp(exact), 0,
-		`meshAreaUpper bounds the sliver's exact area from above`)
+	require.GreaterOrEqual(t, new(big.Float).SetFloat64(facetproof.MeshAreaUpper(fp.verts, only)).Cmp(exact), 0,
+		`facetproof.MeshAreaUpper bounds the sliver's exact area from above`)
 	upper := tessellation.FaceAreaUpper(fp.verts, only, []int{0}, make([]float64, len(fp.verts)))
 	require.GreaterOrEqual(t, new(big.Float).SetFloat64(upper[0]).Cmp(exact), 0,
 		`tessellation.FaceAreaUpper bounds the sliver's exact area from above`)

@@ -167,7 +167,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if err != nil {
 		return nil, err
 	}
-	if _, err := requireDerivableStore(store); err != nil {
+	if _, err := tessellation.StoreMax(store); err != nil {
 		return nil, err
 	}
 
@@ -262,7 +262,8 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if err := composeCapBlendBounds(&mesh, faceExtra, store, cbp.noun()); err != nil {
 		return nil, err
 	}
-	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, store))
+	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
+		tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, store))
 	if proofbound.IsNonFinite(mesh.areaSlack) {
 		return nil, fmt.Errorf(`%w: this %s mesh states no finite area slack`, ErrUnsupported, cbp.noun())
 	}
@@ -287,7 +288,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	// polyhedron B1 differs from the body by its chord polygons' circular
 	// segments, slice by slice, and the held mesh differs from B1 by its
 	// vertices' motion alone, since the two share one triangle index set.
-	motionMax, err := requireDerivableStore(motion)
+	motionMax, err := tessellation.StoreMax(motion)
 	if err != nil {
 		return nil, err
 	}

@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
 // This file is docs/surface-design.md §13.4's chain-fed tessellation
@@ -104,7 +105,7 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 		return nil, err
 	}
 
-	mesh.areaSlack = meshStoreAreaAllow(&mesh, vertexStore)
+	mesh.areaSlack = tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, vertexStore)
 	if pp.sectionDelta > 0 {
 		walks := 0
 		for _, chain := range pp.chains {

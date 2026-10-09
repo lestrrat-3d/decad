@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
@@ -34,7 +35,8 @@ func (c *internalBooleanBuildCancelContext) Err() error {
 	for {
 		frame, more := frames.Next()
 		inBuild = inBuild || strings.HasSuffix(frame.Function, ".buildFacetedBodyWithProof")
-		inTarget = inTarget || strings.HasSuffix(frame.Function, "."+c.target)
+		inTarget = inTarget || strings.HasSuffix(frame.Function, "."+c.target) ||
+			strings.Contains(frame.Function, "."+c.target+"[")
 		if !more {
 			break
 		}
@@ -48,7 +50,7 @@ func (c *internalBooleanBuildCancelContext) Err() error {
 
 func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 	t.Parallel()
-	for _, target := range []string{"PointsContext", "facetFaceIndices"} {
+	for _, target := range []string{"PointsContext", "FaceIndices"} {
 		t.Run(target, func(t *testing.T) {
 			doc := New()
 			a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
@@ -1097,7 +1099,7 @@ func BenchmarkTriTriClassifyCircularPairs(b *testing.B) {
 func TestFacetFaceIndicesMapsConsistentFaces(t *testing.T) {
 	t.Parallel()
 	f0, f1 := &Face{}, &Face{}
-	got, err := facetFaceIndices(t.Context(), []*Face{f0, f1}, []*Face{f1, f0, f1})
+	got, err := facetproof.FaceIndices(t.Context(), []*Face{f0, f1}, []*Face{f1, f0, f1})
 	require.NoError(t, err)
 	require.Equal(t, []int{1, 0, 1}, got,
 		`each facet must map to its face's index in the built body's Faces() order`)
@@ -1107,7 +1109,7 @@ func TestFacetFaceIndicesRejectsUnmappedFacet(t *testing.T) {
 	t.Parallel()
 	f0, f1 := &Face{}, &Face{}
 	orphan := &Face{} // a face absent from the built body's Faces()
-	_, err := facetFaceIndices(t.Context(), []*Face{f0, f1}, []*Face{f0, orphan})
+	_, err := facetproof.FaceIndices(t.Context(), []*Face{f0, f1}, []*Face{f0, orphan})
 	// Without the miss guard, a Go map lookup yields the zero value 0 and the
 	// facet is silently attributed to face 0; the guard turns that invariant
 	// break into an error instead.
@@ -1246,7 +1248,7 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 
 	// The forbidden product, for comparison: strictly larger than the proof the
 	// operand actually carries.
-	substituted := mb.bound * meshAreaUpper(mb.vertices, mb.triangles)
+	substituted := mb.bound * facetproof.MeshAreaUpper(mb.vertices, mb.triangles)
 	require.Greater(t, substituted, symB)
 
 	eval, err := evaluateBoolean(t.Context(), meshbool.OpUnion, plate, pin)

@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 
@@ -159,7 +160,7 @@ func meshMassPropertiesAt(ctx context.Context, b *Body, tol float64, density uni
 // unless contactAudited, exact facet-crossing audits on a held triangle set
 // before its tetrahedra are integrated (docs/dynamic-mass-design.md §2.2).
 func auditMassMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, contactAudited bool) error {
-	if _, err := auditFacetedMesh(ctx, verts, tris); err != nil {
+	if _, err := facetproof.AuditFacetedMesh(ctx, verts, tris); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
