@@ -29,6 +29,14 @@ func recordOne(t *testing.T, s *sketch.Sketch, pick func(*sketch.Profile) bool) 
 	return momentinput.Profile{}
 }
 
+func secondMoments(record momentinput.Profile) (decad.SecondMoments, error) {
+	uu, uv, vv, err := record.SecondMomentReadings()
+	if err != nil {
+		return decad.SecondMoments{}, err
+	}
+	return decad.SecondMoments{UU: uu, UV: uv, VV: vv}, nil
+}
+
 func momentLine(u0, v0, u1, v1 float64) sectionrecord.CurveSegment {
 	return sectionrecord.LineSeg{
 		Start: decad.Point2{U: u0, V: v0},
@@ -69,7 +77,7 @@ func requireProfileMomentError(t *testing.T, record momentinput.Profile, target 
 	require.ErrorIs(t, err, target)
 	_, err = record.Centroid()
 	require.ErrorIs(t, err, target)
-	_, err = record.SecondMoments()
+	_, err = secondMoments(record)
 	require.ErrorIs(t, err, target)
 }
 
@@ -570,7 +578,7 @@ func TestCircleSegMomentRadiusErrorsUseDecadSentinels(t *testing.T) {
 		{
 			name: "second moments",
 			call: func(rec momentinput.Profile) error {
-				_, err := rec.SecondMoments()
+				_, err := secondMoments(rec)
 				return err
 			},
 		},
@@ -816,7 +824,7 @@ func TestRegionMomentsAcceptThinAnnulus(t *testing.T) {
 	require.InDelta(t, math.Pi*(outerRadius*outerRadius-holeRadius*holeRadius), got, 1e-12)
 	_, err = record.Centroid()
 	require.NoError(t, err)
-	_, err = record.SecondMoments()
+	_, err = secondMoments(record)
 	require.NoError(t, err)
 }
 
@@ -837,7 +845,7 @@ func TestRegionMomentsAcceptSeparatedWholeCircleHoles(t *testing.T) {
 	require.InDelta(t, 92*math.Pi, got, 1e-12)
 	_, err = record.Centroid()
 	require.NoError(t, err)
-	_, err = record.SecondMoments()
+	_, err = secondMoments(record)
 	require.NoError(t, err)
 }
 
@@ -857,7 +865,7 @@ func TestRegionMomentsRequestedOrderControlsOverflow(t *testing.T) {
 	require.True(t, area.Value.Equal(units.SquareMillimeters(math.Pi), 1e-12))
 	_, err = record.Centroid()
 	require.NoError(t, err)
-	_, err = record.SecondMoments()
+	_, err = secondMoments(record)
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 }
 
@@ -906,7 +914,7 @@ func TestOverflowingSecondMomentKeepsExactArea(t *testing.T) {
 	require.NoError(t, err)
 	requireSingleRounding(t, exact, value, bound)
 
-	_, err = record.SecondMoments()
+	_, err = secondMoments(record)
 	require.ErrorIs(t, err, decad.ErrNotFinite,
 		"the second moment has no float64 image and is still refused, not published")
 }
@@ -929,7 +937,7 @@ func TestSecondMomentsRectangle(t *testing.T) {
 	require.InDelta(t, 20, centroid.Value.X, 1e-12)
 	require.InDelta(t, 15, centroid.Value.Y, 1e-12)
 
-	moments, err := record.SecondMoments()
+	moments, err := secondMoments(record)
 	require.NoError(t, err)
 	measuredMoments, err := measured.SecondMoments()
 	require.NoError(t, err)
@@ -961,7 +969,7 @@ func TestSecondMomentsOffsetCircle(t *testing.T) {
 	s.CreateCircle(center, 7)
 	record := recordOne(t, s, func(*sketch.Profile) bool { return true })
 
-	moments, err := record.SecondMoments()
+	moments, err := secondMoments(record)
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, moments.UU.Exactness)
 	require.Equal(t, decad.Approximate, moments.UV.Exactness)
@@ -999,7 +1007,7 @@ func TestSecondMomentsSemicircleBoundTightens(t *testing.T) {
 	s, _ := semicircleSketch(t)
 	record := recordOne(t, s, func(*sketch.Profile) bool { return true })
 
-	moments, err := record.SecondMoments()
+	moments, err := secondMoments(record)
 	require.NoError(t, err)
 	checkTight := func(name string, m decad.Measurement) {
 		t.Helper()
@@ -1040,7 +1048,7 @@ func TestLineRationalRoundingIsBounded(t *testing.T) {
 		centroid.Bound.Base(),
 	)
 
-	moments, err := rec.SecondMoments()
+	moments, err := secondMoments(rec)
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, moments.UU.Exactness)
 	got, err := moments.UU.Value.In(units.QuarticMillimeter)
@@ -1100,7 +1108,7 @@ func TestArcSegExactQuarterDisk(t *testing.T) {
 	)
 	requireBoundContainsBig(t, gotArea, area.Bound.Base(), wantArea)
 
-	moments, err := record.SecondMoments()
+	moments, err := secondMoments(record)
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, centroid.Exactness)
 	require.Positive(t, centroid.Bound.Base())
@@ -1206,7 +1214,7 @@ func TestRegionSecondMomentsBoundContainArcEndpointDriftGreenIntegral(t *testing
 	record, center, start, end := driftedArcWedge()
 	requireArcRadiiDiffer(t, center, start, end)
 
-	moments, err := record.SecondMoments()
+	moments, err := secondMoments(record)
 	require.NoError(t, err)
 	muu, muv, mvv := preciseGreenArcSecondMoments(t, center, start, end)
 	for _, tc := range []struct {
@@ -1278,7 +1286,7 @@ func TestRegionMomentsArcPinToleranceFollowsCoordinateScale(t *testing.T) {
 	centroid, err := record.Centroid()
 	require.NoError(t, err)
 	require.LessOrEqual(t, centroid.Bound.Base(), 1e-9)
-	_, err = record.SecondMoments()
+	_, err = secondMoments(record)
 	require.NoError(t, err)
 
 	// The moved End still closes the loop, but the record no longer matches
