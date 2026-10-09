@@ -89,6 +89,8 @@ type ContactManifold = reportvocab.ContactManifold[*Face, *Edge, *Vertex]
 // ContactReport is a read-only pair result at the two caller-supplied poses.
 type ContactReport = reportvocab.ContactReport[*Body, *Face, *Edge, *Vertex, ContactRelation, ContactReason]
 
+type pairReportMemo = reportvocab.PairReportMemo[*Body, *Face, *Edge, *Vertex, ContactRelation, ContactReason]
+
 // ContactPair proves the relation of two live solids at poses applied after
 // their recorded placements. Bodies and the document are not changed.
 // Source rectangular prisms have face manifolds at signed-axis poses and
@@ -176,16 +178,16 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	key := newPairReportKey(b, poseA, poseB, req)
-	if report, ok := a.pairReports.load(key); ok {
+	key := reportvocab.NewPairReportKey(b, poseA, poseB, req)
+	if report, ok := a.pairReports.Load(key); ok {
 		return report, nil
 	}
 	report, err := classifyContactPair(ctx, a, b, poseA, poseB, req)
 	if err != nil {
 		return nil, err
 	}
-	a.pairReports.store(key, report)
-	return cloneContactReport(report), nil
+	a.pairReports.Store(key, report)
+	return reportvocab.CloneContactReport(report), nil
 }
 
 // classifyContactPair is ContactPair's proof for validated, distinct, live

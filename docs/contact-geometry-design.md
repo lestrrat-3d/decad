@@ -662,7 +662,7 @@ canceled work never enters a cache. The report holds copies of result slices
 and values. It may point only to original bodies and their original source
 features, never transient ones. `ContactPair` is safe for concurrent reads
 under the existing `Document.Verify` concurrency rule. Each body keeps the
-last 1024 reports it was the first operand of (`contact_pair_memo.go`),
+last 1024 reports it was the first operand of (`internal/reportvocab/contact_memo.go`),
 keyed exactly on the second body, the bits of both poses and the request;
 a body is immutable, so a repeat reads the stored report and changes no
 outcome. Only a completed query is stored, never an error or a
