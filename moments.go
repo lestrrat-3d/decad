@@ -26,8 +26,15 @@ import (
 // interval arithmetic the certified terms are proven in, and
 // moments_circular.go the circular segment's own enclosures.
 
-// SecondMoments is a region's bounded second moments of area.
-type SecondMoments = momentinput.SecondMoments
+// SecondMoments is a region's bounded second moments of area about the plane
+// origin. Each reading has Kind SecondMomentOfArea (mm⁴). Re-reference them to
+// another axis with the region's Area and Centroid.
+type SecondMoments struct {
+	// UU is ∫u² dA, VV is ∫v² dA, and UV is ∫uv dA.
+	UU Measurement
+	UV Measurement
+	VV Measurement
+}
 
 // regionIntegrals is the section accumulator shared by root evaluators.
 type regionIntegrals = momentinput.Integrals

@@ -75,6 +75,6 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `moments.go` / `moments_validate.go` | Moment aliases and adapters. See evaluator §4. |
+| `moments.go` / `moments_validate.go` | Public second moments and moment adapters. See evaluator §4. |
 | `mass_properties.go` | Mass dispatch and payload adapters. See `docs/dynamic-mass-design.md` §2–§3. |
 | `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See dynamic-mass. |

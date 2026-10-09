@@ -62,9 +62,9 @@ func TestFitSplineTwoPointIsExactlyALineSegment(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, lineCentroid, fitCentroid)
 
-	fitMoments, err := fitRecord.SecondMoments()
+	fitMoments, err := secondMoments(fitRecord)
 	require.NoError(t, err)
-	lineMoments, err := lineRecord.SecondMoments()
+	lineMoments, err := secondMoments(lineRecord)
 	require.NoError(t, err)
 	require.Equal(t, lineMoments, fitMoments)
 }
