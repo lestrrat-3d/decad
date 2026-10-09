@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/extent"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -37,7 +37,9 @@ import (
 //
 // Fillet rounds lateral edges — line/line, line/arc and arc/arc corners,
 // convex and concave — with B1's roles and atomic commit (modify §13). A
-// cap-edge selector is S1 (ErrUnsupported, the vertex blend §6). A revolve
+// selection of complete cap loops is route L's fillet arm over the prism's
+// face view (docs/loop-fillet-design.md RF3); single straight cap edges are
+// S1 (ErrUnsupported, the vertex blend §6). A revolve
 // receiver takes the same corner rewrite on its meridian (revolve_blend.go,
 // docs/modify-reach-design.md §7), and a brep or stacked boolean result takes
 // routes P and E of docs/brep-modify-design.md (brep_modify.go); any other
@@ -97,14 +99,25 @@ const filletTol = sectionaudit.Tolerance
 // end face is a curved face or an earlier blend, a straight wall the route
 // needs as a plane that is oblique, split or carries a displaced level, end
 // faces whose arcs disagree, and a body whose faces carry a section
-// displacement (SB1) are ErrUnsupported (Table SB). A selection of complete
-// loops of such a body's planar faces, one of them with a corner, is the
-// vertex-blend problem and ErrUnsupported (docs/modify-general-design.md
-// SL3). So is a selection of a prism's cap edges that form complete loops, one
-// of them with a corner
-// (docs/loop-fillet-design.md RF3); any other cap-edge selection is S1. Any
-// other receiver that is neither a prism nor a revolve is S3
-// (ErrUnsupported).
+// displacement (SB1) are ErrUnsupported (Table SB). Any other selection of
+// such a body's edges is route L's (docs/modify-general-design.md §4): complete
+// loops of planar faces are filleted as a pipe band at radius r
+// (docs/loop-fillet-design.md) — a quarter cylinder along each line, a torus
+// around each arc and at each reflex corner, two cylinders meeting along an
+// Ellipse3 at each convex corner — the walls beside each loop trimmed to its
+// side level and the face holding it to its offset contour; the result is a
+// brep body whose patches carry filletLoop(f,l,p). A partial loop, loops
+// mixed with single edges or sharing an edge are SL1, a neighbour route L
+// cannot trim SL2, and a convex corner where a straight walk meets a circular
+// one, or two circular walks meet, not tangent, is SF1 (all ErrUnsupported).
+// A prism's complete cap loops take the same arm through its face view and
+// return a brep body (RF3); single straight cap edges are S1. Any other
+// receiver that is neither a prism nor a revolve is S3 (ErrUnsupported).
+//
+// A loop-filleted body publishes its volume, centroid, area, box and
+// through-all extent, and passes Verify; its mesh, its STEP export, its use as
+// a mesh boolean operand and its undercut and concave-radius surveys wait on
+// docs/loop-fillet-design.md's PR F-2 and refuse or stage until then.
 func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)
@@ -127,7 +140,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	if err != nil {
 		return nil, err
 	}
-	rmm, err := sectionrecord.MagnitudeIn(r, units.Length, units.Millimeter, "the fillet radius")
+	rmm, rDelta, err := extent.MagnitudeInBounded(r, units.Length, units.Millimeter, "the fillet radius")
 	if err != nil {
 		return nil, err
 	}
@@ -174,11 +187,16 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
-	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{
+	// A loop's fillet radius is both of route L's setbacks
+	// (docs/loop-fillet-design.md §4).
+	loopCall := brepModifyRequest{
 		op:     "fillets",
 		admits: func(pp prismPayload, _ prismCaps) error { return requireLateralEdges(ctx, pp, edges) },
 		sel:    sel, edges: edges, blend: &blend,
-	})
+		loop:     &capSetback{dc: rmm, dcDelta: rDelta, ds: rmm, dsDelta: rDelta},
+		loopKind: brepBandFillet,
+	}
+	route, err := modifyBrepReceiver(ctx, b, loopCall)
 	if err != nil {
 		return nil, err
 	}
@@ -223,13 +241,16 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 			return nil, err
 		}
 		if !found {
-			// RF3 (docs/loop-fillet-design.md §3): complete cornered cap loops
-			// reach route L's fillet arm, whose refusal is SL3's; any other
-			// cap-edge selection is S1.
-			if err := prismCapFilletRefusal(ctx, pp, brepModifyRequest{
-				op: "fillets", sel: sel, edges: edges, blend: &blend,
-			}); err != nil {
+			// RF3 (docs/loop-fillet-design.md §3): a selection that is no single
+			// straight edges reaches route L's fillet arm over the prism's face
+			// view, which builds its complete loops as a brep body or refuses
+			// with Table SL's rows; single straight edges are S1.
+			body, err := prismCapLoopFillet(ctx, d, pp, loopCall)
+			if err != nil {
 				return nil, err
+			}
+			if body != nil {
+				return commitModifyResult(ctx, b, body)
 			}
 			return nil, fmt.Errorf(`%w: a fillet of a cap edge is the vertex-blend problem, not yet supported; selector %s, %s`,
 				ErrUnsupported, sel, selectedEdgeContext(ei, e))

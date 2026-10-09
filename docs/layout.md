@@ -36,7 +36,7 @@ the rules leave to the byte budget.
 | `docs/modify-reach-design.md` | Modify reach: tangent chains, asymmetric chamfers, cap-loop blends, shell reach and staging. |
 | `docs/brep-modify-design.md` | Modify ops on brep and stacked receivers; Tables RB/EB/SB/BB/DB. |
 | `docs/modify-general-design.md` | Shell of a through-cut brep (S), complete-loop chamfers (L); Tables TC/SG/LB/SL. |
-| `docs/loop-fillet-design.md` | Route L's fillet arm: pipe bands on a planar face's loop; Tables LF/RF/SF/BF/DF/CF. |
+| `docs/loop-fillet-design.md` | Route L's fillet arm: pipe bands on a planar face's loop. |
 | `docs/shell-opening-design.md` | Shell side openings on a prism and a revolve: rim rule, brep record, Tables RO/SO/BO/DO. |
 | `docs/draft-design.md` | `WithTaper` and `Body.Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
@@ -170,6 +170,7 @@ the rules leave to the byte budget.
 | `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |
 | `brep_modify_edge.go` | Route E: Table EB, restatement, blends, trims and closure. See brep-modify §5. |
 | `brep_modify_loop.go` / `brep_loop_band.go` | Route L: record rewrite, bands and mass. See modify-general §4. |
+| `brep_loop_fillet.go` | Route L's fillet arm. See loop-fillet. |
 
 ### Cap-loop chamfer
 
@@ -334,6 +335,7 @@ the rules leave to the byte budget.
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, proofs. See modify §6–§9, shell-opening §3–§5, draft §2. |
 | `internal/capband/` | Cap-band contour, patch, locus, volume, first-moment and centroid bounds. See modify-reach §8.3–§8.4. |
+| `internal/filletband/` | Loop-fillet closed forms. See loop-fillet §5. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |
 | `internal/shellsurvey/` | Shell inradius, work budget and contained-disk witness. See modify §8. |

@@ -845,8 +845,7 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 	})
 
 	t.Run(`cap edge`, func(t *testing.T) {
-		// Fillet has no cap-loop reach (docs/modify-reach-design.md §8.2 is a
-		// separate PR): every cap edge is still the base vertex-blend refusal.
+		// Single straight cap edges are the base vertex-blend refusal (S1).
 		capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)))
 		_, box := filletBox(t)
 		_, err := box.Fillet(t.Context(), capEdges, units.Millimeters(5))
@@ -854,12 +853,16 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 		requireReasonLeads(t, err, `a fillet of a cap edge is the vertex-blend problem`)
 
 		// Both complete cap loops of the box reach route L's fillet arm
-		// (docs/loop-fillet-design.md RF3), whose refusal is modify-general SL3.
+		// (docs/loop-fillet-design.md RF3), which builds them; mixed with the
+		// four lateral edges they are no set of complete loops, and route L
+		// refuses them with modify-general SL1, its reason leading.
 		_, box = filletBox(t)
-		_, err = box.Fillet(t.Context(), bothCapLoops(), units.Millimeters(5))
+		mixed := bothCapLoops()
+		mixed.Or(decad.ParallelTo(r3.NewVec(0, 0, 1)))
+		_, err = box.Fillet(t.Context(), mixed, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		requireReasonLeads(t, err, `a fillet of a complete loop is the vertex-blend problem`)
-		require.ErrorContains(t, err, `modify-general SL3`)
+		requireReasonLeads(t, err, `lies on no loop of a planar face`)
+		require.ErrorContains(t, err, `modify-general SL1`)
 		require.Equal(t, []*decad.Body{box}, box.Document().Bodies(), `the refusal leaves the receiver live`)
 
 		// Chamfer's cap-loop reach (§8.3, RX1) reclassifies this selection: it

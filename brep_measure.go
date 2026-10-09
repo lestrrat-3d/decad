@@ -174,6 +174,25 @@ func (topo *brepTopology) region(ctx context.Context, bp brepPayload, fi int) (b
 	return r, nil
 }
 
+// brepRestoredRegion integrates a planar face the measurement reads restored
+// (brepPayload.filletRestored), walking its region afresh.
+func brepRestoredRegion(ctx context.Context, f brepFace) (brepRegion, error) {
+	work := freeform.NewFreeformWork()
+	var walks [][]survey2d.SegmentWalk
+	for _, loop := range append([]LoopRecord{f.region.Outer}, f.region.Holes...) {
+		var ws []survey2d.SegmentWalk
+		for _, seg := range loop.Segments {
+			w, err := boundarywalk.WalkOf(seg, work)
+			if err != nil {
+				return brepRegion{}, err
+			}
+			ws = append(ws, w)
+		}
+		walks = append(walks, ws)
+	}
+	return brepRegionOf(ctx, f, walks)
+}
+
 // measureBrepContext publishes the body's volume, area, centroid and box.
 //
 // In reference coordinates a planar face at level z with outward sign s
@@ -194,34 +213,53 @@ func (topo *brepTopology) region(ctx context.Context, bp brepPayload, fi int) (b
 // record face, and its side contour, a rim or segment of the faces beside it,
 // so a linear functional over a patch is extremized on those two directrices,
 // which the record's faces already hold within their own displacements.
+//
+// A fillet band's patches are never integrated (docs/loop-fillet-design.md
+// §5.3): bands carries its strip terms σ·V_strip and σ·M_strip, and the
+// volume and moment sums read every face the band rewrote restored to the
+// receiver's (filletRestored), whose difference from the rewritten faces is
+// exactly the strip terms the patches' flux would add. Area still reads the
+// rewritten faces, and the box adds each fillet band's own extents
+// (brepBoundsContext).
 func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology, body *Body, bands brepBandMass) error {
 	vol3 := bands.vol3
 	moments := bands.moments
 	area := bands.area
 	displaced := 0.0
 	envelope := topo.coordUpper
+	restored, err := bp.filletRestored(topo)
+	if err != nil {
+		return err
+	}
 	for fi, f := range bp.faces {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		e := topo.embeds[fi]
-		z0, z1 := proofarith.FloatRat(f.z0), proofarith.FloatRat(f.z1)
+		rf := restored[fi]
+		z0, z1 := proofarith.FloatRat(rf.z0), proofarith.FloatRat(rf.z1)
 		if f.planar() {
 			region, err := topo.region(ctx, bp, fi)
 			if err != nil {
 				return err
 			}
+			volRegion := region
+			if rf.region != f.region {
+				if volRegion, err = brepRestoredRegion(ctx, rf); err != nil {
+					return err
+				}
+			}
 			s := big.NewRat(-1, 1)
 			if f.outward {
 				s = big.NewRat(1, 1)
 			}
-			vol3 = proofbound.IntervalAdd(vol3, proofbound.IntervalScale(region.area, proofbound.RatMul(s, z0)))
+			vol3 = proofbound.IntervalAdd(vol3, proofbound.IntervalScale(volRegion.area, proofbound.RatMul(s, z0)))
 			k := e.Axis[2]
 			half := proofbound.RatMul(big.NewRat(1, 2), s, big.NewRat(int64(e.Sign[2]), 1), z0, z0)
-			moments[k] = proofbound.IntervalAdd(moments[k], proofbound.IntervalScale(region.area, half))
+			moments[k] = proofbound.IntervalAdd(moments[k], proofbound.IntervalScale(volRegion.area, half))
 			area = proofbound.BoundedAdd(area, region.published)
 			displaced = proofbound.AbsSumUpper(displaced,
-				proofbound.ProductUpper(f.z0Delta, proofbound.AbsSumUpper(region.upper, region.displacement)))
+				proofbound.ProductUpper(f.z0Delta, proofbound.AbsSumUpper(volRegion.upper, volRegion.displacement)))
 			continue
 		}
 		w := topo.walls[fi]
@@ -236,7 +274,7 @@ func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology,
 			moments[e.Axis[i]] = proofbound.IntervalAdd(moments[e.Axis[i]], proofbound.IntervalScale(mom, scale))
 		}
 		area = proofbound.BoundedAdd(area, brepWallArea(f, w))
-		heightUpper := proofbound.AbsSumUpper(proofbound.UpRound(f.z1-f.z0), f.z0Delta, f.z1Delta)
+		heightUpper := proofbound.AbsSumUpper(proofbound.UpRound(rf.z1-rf.z0), f.z0Delta, f.z1Delta)
 		band := proofbound.SectionDisplacementArea(f.delta, 1, proofbound.AbsSumUpper(w.Length, w.LengthBound))
 		displaced = proofbound.AbsSumUpper(displaced, proofbound.ProductUpper(heightUpper, band))
 	}
@@ -285,7 +323,9 @@ func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology,
 
 // brepBoundsContext is the union of every face's own box (§4.3): each face's
 // prism view read along the three world axes, composed with the largest
-// section and level displacement as prismBoundsContext composes a prism's.
+// section and level displacement as prismBoundsContext composes a prism's. A
+// fillet band's patches bulge past their directrices along an oblique axis,
+// so each adds its own extents (filletBandExtent).
 func brepBoundsContext(ctx context.Context, bp brepPayload) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	minC := [3]float64{math.Inf(1), math.Inf(1), math.Inf(1)}
@@ -299,6 +339,22 @@ func brepBoundsContext(ctx context.Context, bp brepPayload) (Box, error) {
 				return Box{}, err
 			}
 			lo, hi, bound, err := pp.extentBoundedAlong(ctx, axis, work, nil)
+			if err != nil {
+				return Box{}, err
+			}
+			minC[i], maxC[i] = math.Min(minC[i], lo), math.Max(maxC[i], hi)
+			extremeBound = math.Max(extremeBound, bound)
+		}
+	}
+	for _, b := range bp.loopBands {
+		if b.kind != brepBandFillet {
+			continue
+		}
+		for i, axis := range axes {
+			if err := ctx.Err(); err != nil {
+				return Box{}, err
+			}
+			lo, hi, bound, err := filletBandExtent(ctx, b, bp.faces[b.face], bp.xform, axis, work)
 			if err != nil {
 				return Box{}, err
 			}
@@ -329,9 +385,10 @@ func brepBoundsContext(ctx context.Context, bp brepPayload) (Box, error) {
 }
 
 // extentAlong is the through-all stop's reading (stops.go): the union of every
-// face's own extent along g beside the largest of their bounds. Like a prism's,
-// it refuses a record carrying a section displacement, which moves a
-// coordinate the interval is stated over.
+// face's own extent along g, and every fillet band's (filletBandExtent,
+// docs/loop-fillet-design.md §5.4), beside the largest of their bounds. Like
+// a prism's, it refuses a record carrying a section displacement, which moves
+// a coordinate the interval is stated over.
 func (bp brepPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 	if bp.sectionDelta() != 0 {
 		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a brep body with a proven section displacement`, ErrUnsupported)
@@ -340,6 +397,16 @@ func (bp brepPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 	work := freeform.NewFreeformWork()
 	for _, f := range bp.faces {
 		l, h, b, err := f.view(bp.xform).extentBoundedAlong(context.Background(), g, work, nil)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		lo, hi, bound = math.Min(lo, l), math.Max(hi, h), math.Max(bound, b)
+	}
+	for _, band := range bp.loopBands {
+		if band.kind != brepBandFillet {
+			continue
+		}
+		l, h, b, err := filletBandExtent(context.Background(), band, bp.faces[band.face], bp.xform, g, work)
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -356,13 +423,19 @@ func (bp brepPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 // uses (survey2d.CapNormalDecision, survey2d.WallNormalDecision) over each
 // face's own placed frame, so a straddling face sets undecided without
 // discarding a face already proven to oppose. Every outward normal maps
-// through the placement's linear part, which a reflection maps correctly.
+// through the placement's linear part, which a reflection maps correctly. A
+// body carrying a fillet band is staged until docs/loop-fillet-design.md's
+// PR F-2 reads its pipe patches (Table DF's DF7).
 // The reading is a normal-direction membership, unaffected by a face's
 // displacements, as a prism's is (docs/prism-boolean-design.md §12).
 func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
 	p, ok := pull.Normalize()
 	if !ok {
 		return undercutOutcome{}
+	}
+	if bp.hasFilletBand() {
+		// Table DF's DF7 lands with docs/loop-fillet-design.md's PR F-2.
+		return undercutOutcome{reason: surveyPayloadStaged}
 	}
 	roles := facesByRole(b)
 	faces := []*Face{}
@@ -431,8 +504,13 @@ func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
 // and an apex Cone shrinks to zero only at a boundary vertex. That holds only
 // for a patch the build proves is the Cone it publishes, so a band whose
 // patch carries a skew or a non-zero stamped departure leaves the survey
-// undecided (modify-general Table DG's DG8).
+// undecided (modify-general Table DG's DG8). A body carrying a fillet band is
+// staged until docs/loop-fillet-design.md's PR F-2 (Table DF's DF8).
 func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
+	if bp.hasFilletBand() {
+		// Table DF's DF8 lands with docs/loop-fillet-design.md's PR F-2.
+		return radiusOutcome{reason: surveyPayloadStaged}, false
+	}
 	if bp.sectionDelta() != 0 {
 		return radiusOutcome{}, false
 	}

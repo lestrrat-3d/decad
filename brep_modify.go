@@ -24,8 +24,10 @@ import (
 // (computeFillet or computeChamfer, bound to the op's magnitude), which route
 // E (§5) reads; a Shell leaves them nil. shellCall is a Shell's removed faces,
 // sense and thickness, which route S (brep_shell.go) reads. loop is a
-// Chamfer's setbacks, which route L bands each complete loop with
-// (docs/modify-general-design.md §4); a Fillet and a Shell leave it nil.
+// Chamfer's setbacks, or a Fillet's radius stated as both setbacks, which
+// route L bands each complete loop with (docs/modify-general-design.md §4,
+// docs/loop-fillet-design.md §4), and loopKind the band's kind; a Shell
+// leaves them unset.
 type brepModifyRequest struct {
 	op        string
 	shell     bool
@@ -35,6 +37,7 @@ type brepModifyRequest struct {
 	blend     *revolveBlendOp
 	shellCall brepShellCall
 	loop      *capSetback
+	loopKind  brepBandKind
 }
 
 // brepRoute is what the brep route hands back to the op. It is empty for a

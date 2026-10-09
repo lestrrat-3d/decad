@@ -443,18 +443,22 @@ For radius `r`, intersect two offset carriers:
 - adjacent side carrier offset `r` into material.
 
 Their intersection in the offset cap plane is the rolling-ball center path.
-Each center-path piece is analytic:
+`docs/loop-fillet-design.md` builds this band as route L's fillet arm (Table
+LF) on a prism's cap loop (its RF3) and on a brep's planar-face loop:
 
 | Center path | Blend patch |
 |---|---|
 | line | `Cylinder`, radius `r` |
 | circle/arc | `Torus`, major = path radius, minor = `r` |
-| zero-length miter between non-tangent pieces | trimmed `Sphere`, radius `r` |
+| a reflex corner's connector arc | horn `Torus`, major = minor = `r`, about the corner |
+| a line–line miter | no patch: the two cylinders meet along an `Ellipse3` |
+| a line–circle or circle–circle miter, not tangent | refused (loop-fillet SF1) |
 
-An offset connector arc at a reflex section corner is a circular center-path
-piece and therefore a torus patch. A miter point carries the spherical
-normal-cone patch joining its neighboring tubes. This is the cap-edge vertex
-blend; no guessed setback surface is used.
+The rolling ball never rests at a miter point, so no sphere is swept there:
+the two tubes meet along the ellipse in the corner's bisector plane, and a
+sphere octant would leave a flat shelf of area `r²(1 − π/4)` at the side
+level (loop-fillet §2). The sphere is the vertex blend of three blended
+edges (brep-modify SB5).
 
 Trim each patch between exact contact traces on cap and side carriers. Replace
 the selected cap loop with its cap contact trace. Trim each adjacent side face
@@ -466,8 +470,7 @@ Regularity gates:
 - every material-side carrier offset exists: SX6;
 - every circular center path has positive regular tube reach over its trim;
 - offset loops preserve orientation, simplicity, and nesting;
-- non-adjacent center paths stay strictly farther than `2r` unless their
-  adjacency owns the shared spherical patch;
+- non-adjacent center paths stay strictly farther than `2r`;
 - every center path stays strictly farther than `r` from every unselected
   boundary carrier it does not belong to;
 - blend bands from opposite caps do not meet.

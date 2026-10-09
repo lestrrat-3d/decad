@@ -59,7 +59,7 @@ func (c prismCaps) sectionLoop(start bool, li int) int {
 func brepPrismRoute(ctx context.Context, b *Body, bp brepPayload, req brepModifyRequest) (brepRoute, error, error) {
 	if len(bp.loopBands) > 0 {
 		if req.shell {
-			return brepRoute{}, nil, fmt.Errorf(`%w: this evaluator shells no brep body carrying route L chamfer bands; their patches are oblique planes and cones no through-cut record holds (modify-general SG3)`, ErrUnsupported)
+			return brepRoute{}, nil, fmt.Errorf(`%w: this evaluator shells no brep body carrying route L loop bands; their patches are oblique planes, cones, cylinders and tori no through-cut record holds (modify-general SG3)`, ErrUnsupported)
 		}
 		return brepRoute{}, nil, nil
 	}

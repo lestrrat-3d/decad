@@ -463,14 +463,14 @@ func internalSplitWallS1(t *testing.T) *Body {
 }
 
 // TestBrepModifyEdgeRefusals pins Table SB's route E rows on receivers the
-// public booleans build, and on internalSplitWallS1; the Pocket's four floor
-// edges are one complete loop, whose fillet route L refuses as
-// docs/modify-general-design.md SL3 before route E reads it. Each refusal is
+// public booleans build, and on internalSplitWallS1; a Fillet of S1's twelve
+// convex edges is no set of complete loops and refuses with route L's SL1
+// before route E reads it (docs/loop-fillet-design.md §6), and a hole rim or a
+// pocket floor loop is a complete loop route L's fillet arm builds
+// (brep_loop_fillet_internal_test.go). Each refusal is
 // ErrUnsupported naming its row, and leaves the receiver live and the
 // document's body set unchanged. Shown to fail with each named gate deleted:
-// SB4's Circle3 arm (the rim then read SB4's generic text, naming no hole
-// rim), SB5's shared-vertex test (the twelve edges then read the rewrite's
-// later SB5, a corner claimed twice, without naming the vertex), the SB7 arm
+// the SB7 arm
 // naming a blend face (the chained edge then read
 // the chamfer face as an oblique wall), the SB9 foot comparison (the boss's
 // front edge then failed to pair at closure), the planar faces' audit (the
@@ -488,10 +488,6 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 		_, body := internalCrossDrilled(t)
 		return body
 	}
-	pocket := func(t *testing.T) *Body {
-		_, body := internalRouteEPocket(t)
-		return body
-	}
 	boss := func(t *testing.T) *Body {
 		_, body := internalCornerBoss(t)
 		return body
@@ -505,9 +501,7 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 		size    float64
 		want    []string
 	}{
-		{"hole rim", s1, false, Edges(Circular()).Exactly(2), 1, []string{"brep-modify SB4", "hole rim"}},
-		{"twelve box edges", s1, false, Edges(Convex()).Exactly(12), 1, []string{"brep-modify SB5", "shares the vertex"}},
-		{"four floor edges", pocket, false, nil, 1, []string{"modify-general SL3", "vertex-blend problem"}},
+		{"twelve box edges", s1, false, Edges(Convex()).Exactly(12), 1, []string{rowSL1, "which share it"}},
 		{"edge ending on a split wall", split, true, edgeAt(routeEX, r3.Vec{}), 1,
 			[]string{"brep-modify SB7", "does not read as a plane", "side line is split"}},
 		{"rim on a split wall", split, false, edgeAt(r3.NewVec(0, 1, 0), r3.Vec{}), 1,
@@ -523,9 +517,6 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 			body := tc.body(t)
 			before := body.doc.Bodies()
 			sel := tc.sel
-			if sel == nil {
-				sel = pocketFloorEdges(t, body, r3.Vec{}, 4)
-			}
 			var err error
 			if tc.chamfer {
 				_, err = body.Chamfer(t.Context(), sel, units.Millimeters(tc.size))

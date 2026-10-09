@@ -1,9 +1,8 @@
 # Loop Fillet Design
 
-`Body.Fillet` of a complete loop of a planar face: a prism's cap loop (base
-S1, "the vertex-blend problem"), a brep or stacked result's planar-face loop
-(modify-general SL3; brep-modify SB4 for a hole rim or boss root, SB7 for a
-top edge ending on a fillet cylinder). Companion to
+`Body.Fillet` of a complete loop of a planar face: a prism's cap loop, a
+brep or stacked result's planar-face loop, a hole rim or boss root, and the
+honest form of a top edge ending on a fillet cylinder (brep-modify SB7). Companion to
 `docs/modify-general-design.md` ("modify-general §N"), whose route L this
 document extends with a fillet arm, and to `docs/modify-reach-design.md`
 ("reach §N"), whose §8.2 corner rule it replaces. `docs/modify-design.md`
@@ -136,7 +135,7 @@ there carried.
 |---|---|---|
 | **RF1** | `brepPayload` | brep-modify §6 stages 2a–2b, then route L (modify-general §4.4 stage 2c); the fillet arm replaces SL3 |
 | **RF2** | `stackedPrismPayload` | the same through `brepOfStacked` (SB2 first) |
-| **RF3** | `prismPayload` whose selection holds a cap edge (today base S1) | `fillet.go`: where `matchCornerBudget` finds no lateral corner for a selected edge, the call takes `brepOfPrism(pp)` and runs `brepLoopRoute` with the fillet arm; the result is a brep body (BF1). A selection mixing lateral edges with cap edges is SL1 with SX4's text, as for a chamfer; every-lateral selections keep the prism path and B1's roles |
+| **RF3** | `prismPayload` whose selection holds a cap edge | `fillet.go`: where `matchCornerBudget` finds no lateral corner for a selected edge, the call takes `brepOfPrism(pp)`, holds SB1 on it, and runs route L with the fillet arm; the result is a brep body (BF1). A selection mixing lateral edges with cap edges is SL1, as for a chamfer; single straight cap edges, route E's class on a brep, stay base S1; every-lateral selections keep the prism path and B1's roles |
 | **RF4** | `revolvePayload` cap edge | SX5 unchanged: the cap's adjacent faces are revolve surfaces, not faces swept along the cap normal (LB3 fails), and the blend of a planar loop whose walls are revolved surfaces is a pipe about a general planar curve that no level set of an offset family states |
 | **RF5** | `capBlendPayload`, draft, sweep, loft, faceted | SX10, modify S3, SX9 unchanged |
 
@@ -171,7 +170,7 @@ rDelta, dsDelta: rDelta}`), sense `σ` from LB6:
    does. No face record holds a cylinder with an in-plane axis, a torus or an
    ellipse (modify-general §8).
 4. **Build.** After `evalBrepContext` has built the record's faces and edges,
-   `buildFilletBand` (new, `brep_loop_fillet.go`) runs in `F`'s frame over
+   `attachFilletBand` (`brep_loop_fillet.go`) runs in `F`'s frame over
    `brepLoopBand.view`, with the cap contour's coedges supplied as route L
    supplies them and the side contour's coedges the trimmed walls' rims at
    `sideZ`. Per walk `i` it mints the LF1–LF3 patch face whose loop is: the
@@ -281,7 +280,7 @@ M_body   = M_receiver + σ·M_strip
 `V_receiver` and `M_receiver` are general-boolean §4.3's face terms over the
 record RESTORED: `F` read over its region with `orig` in the contour's place,
 each face beside the loop read over its untrimmed level `L_F` instead of
-`sideZ` (`brepLoopBand.restored(face)`, a view), every other face as it is.
+`sideZ` (`brepPayload.filletRestored`, a view), every other face as it is.
 `measureBrepContext` therefore sums the restored faces, which carry no
 contour displacement (SB1 holds `delta = 0` on the receiver), then adds
 `σ·V_strip` and `σ·M_strip` per fillet band. The patches' own flux is never
@@ -361,7 +360,7 @@ modify §4's stage 1 and reach SX10:
 | 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
 | 4. existence | SX6, SX13 per band as the contour at `r` is built; SF1 per corner |
 | 5. audit | per band SX14, SX7, SX12 on the contour; per (pl) face S8, S6, S7, S9; per `F` S8, S7, S9 |
-| 6. build | the record's closure; `buildFilletBand` per band |
+| 6. build | the record's closure; `attachFilletBand` per band |
 
 ## 7. Tables BF and DF — results and downstream
 
@@ -440,10 +439,10 @@ API; a bound is asserted as a relation, never a literal.
 | **P1** 40×20×20, Ø6 along y | top loop, `r = 2` | 120 | −4 | −1 | `16000 − 180π − (1280/3 − 104π) = 46720/3 − 76π`; four `Cylinder` patches, four `Ellipse3` edges with `SemiMajor 2√2`, `SemiMinor 2`, centres `(2, 2, 18)` and its images; both x walls (sw) and both y walls (pl) trimmed to `z = 18` |
 | | top and bottom loops, one call | 2 × above | | | `45440/3 + 28π` |
 | | hole rim, `r = 1` (one y wall's hole loop, R = 3) | `6π` | `+π` | −1 | `16000 − 180π − ((23/3)π − 2π²) = 16000 − (563/3)π + 2π²`; one whole-turn `Torus{Axis: ŷ, Major: 4, Minor: 1}`, two `Circle3` edges: radius 4 on the wall face, radius 3 inside the hole at `y = 1` |
-| **P2** 40×40×10, blind 20×10 pocket 5 deep (stacked) | pocket mouth, `r = 1.5` | 60 | `+π` (four LF6) | −1 | `14000 − (135 − 225π/8 − 27π²/16) = 13865 + 225π/8 + 27π²/16`; four `Cylinder` and four horn `Torus{Major: 1.5, Minor: 1.5}` patches, eight `Arc3` meridians, every pocket wall's level `z = 8.5` |
-| | plate top loop, `r = 1.5` | 160 | −4 | −1 | `14000 − (337.5 − 333π/4) = 13662.5 + 333π/4` |
-| | both in one call | | | | `13527.5 + 891π/8 + 27π²/16`; S7 passes (the contours sit 7 mm apart) |
-| | pocket floor loop, `r = 1.5` (a fill) | 60 | −4 | +1 | `14000 + 112.5 − 27π`; `sideZ = 6.5`; four concave cylinders meeting along `Ellipse3` edges whose `IsConvex` is false; DF8 reads `1.5` exactly |
+| **P2** 40×40×10, blind 20×10 pocket 5 deep (stacked) | pocket mouth, `r = 1.5` | 60 | `+π` (four LF6) | −1 | `15000 − (135 − 225π/8 − 27π²/16) = 14865 + 225π/8 + 27π²/16`; four `Cylinder` and four horn `Torus{Major: 1.5, Minor: 1.5}` patches, eight `Arc3` meridians, every pocket wall's level `z = 8.5` |
+| | plate top loop, `r = 1.5` | 160 | −4 | −1 | `15000 − (337.5 − 333π/4) = 14662.5 + 333π/4` |
+| | both in one call | | | | `14527.5 + 891π/8 + 27π²/16`; S7 passes (the contours sit 7 mm apart) |
+| | pocket floor loop, `r = 1.5` (a fill) | 60 | −4 | +1 | `15000 + 112.5 − 27π`; `sideZ = 6.5`; four concave cylinders meeting along `Ellipse3` edges whose `IsConvex` is false; DF8 reads `1.5` exactly |
 | **P3** 40×40×10 ∪ Ø10 boss 15 tall (A1) | boss root, `r = 1` (a fill) | `10π` | `+π` | +1 | `16000 + 375π + (35/3)π − 3π² = 16000 + (1160/3)π − 3π²`; Pappus check `2π[5(1 − π/4) + (5/3 − π/2)/2]`; `Torus{Center: (20,20,10), Major: 6, Minor: 1}`, cap circle radius 6 on the plate, side circle radius 5 at `z = 11` |
 | | boss rim, `r = 1` | `10π` | `−π` | −1 | `16000 + 375π − ((25/3)π − 2π²) = 16000 + (1100/3)π + 2π²`; `Torus{Major: 4, Minor: 1}`, the boss top shrunk to radius 4 |
 | | both | | | | `16000 + (1135/3)π − π²` |
@@ -455,27 +454,30 @@ API; a bound is asserted as a relation, never a literal.
 | **P8** 40×20×20, four vertical edges filleted `r = 3`, Ø6 along y | top loop, `r = 2` | `96 + 6π` | `−π` (four LF2 at `β = π/2`) | −1 | `15280 − (384 − (256/3)π − 2π²) = 14896 + (256/3)π + 2π²`; four `Cylinder` and four `Torus{Major: 1, Minor: 2}` (spindle) patches joined by eight `Arc3` quarter meridians, no ellipse |
 
 Bound fixture, shown to fail first: the trapezoid `(0, 0)`, `(100, 0)`,
-`(72, 45)`, `(28, 45)` extruded 10 with a blind pocket (a stacked receiver,
-route L's own fixture), top loop filleted `r = 1`. Its slanted sides have
+`(72, 45)`, `(28, 45)` extruded 10 with a blind 20×20 pocket 5 deep (a
+stacked receiver of 30400, route L's own fixture), top loop filleted `r = 1`. Its slanted sides have
 length 53 and `cos θ = 28/53`, `sin θ = 45/53` at the base corners, so
 `κ = cot(θ/2) = 9/5` there and `tan(θ/2) = 5/9` at the top corners:
 `a₁ = 250`, `a₂ = −212/45`, and the volume `V_receiver − (250(1 − π/4) −
 (212/45)(5/3 − π/2))` is an exact rational-`π` closed form the test
 encloses. Legs recorded in the test: (1) every cap-level vertex's bound
 encloses its exact rational contour corner, and deleting the `F.delta`
-charge turns the two `(28, 45)`-side corners red (route L's mechanism);
-(2) the centroid of the body placed `10⁶` mm along x encloses the placed
-exact centroid, and deleting the frame-lift rounding term of the centroid
-turns it red (reach §8.4's placed-plate mechanism). The volume's own bound
+charge turns all four corners red (route L's mechanism); (2) the centroid of
+the body placed `10⁶` mm along every axis encloses the placed exact centroid,
+and deleting the frame-lift rounding term of the centroid turns it red
+(reach §8.4's placed-plate mechanism). The centroid's x is exactly 50, which
+lifts to `10⁶ + 50` with no rounding, so a placement along x alone leaves the
+term unexercised. The volume's own bound
 is the enclosures' reach alone and cannot be made to fail by deleting one
 term, which the test records.
 
 Refusals: a plate with a semicircular bite on its outer loop, top loop →
 SF1 naming the two non-tangent corners; a partial loop → SL1 (SX4's text);
 P8's top loop at `r = 3` → SX6; the P2 mouth at `r = 5` → SX7; P1's top loop
-with one vertical edge → SL1; a cap edge of a partial revolve → SX5; a
-revolve's full-turn cap circle → SX5; a prism whose section carries a
-displacement → SB1. Every refusal leaves the receiver live.
+with one vertical edge → SL1; a partial revolve's cap loop → SX5; a stacked
+receiver whose section carries a displacement → SB1. Every refusal leaves the
+receiver live. A full revolve's circles are meridian junctions, which the
+revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
 
 ## 9. Decided questions
 
@@ -504,6 +506,22 @@ displacement → SB1. Every refusal leaves the receiver live.
   one displacement per band.
 - **STEP stays faceted until `step` ships `TOROIDAL_SURFACE` and `ELLIPSE`.**
   DF10, §12.
+- **Restored faces keep the rewritten record's displacements.**
+  `measureBrepContext` reads each face a fillet band rewrote restored to the
+  receiver's level and region (`filletRestored`), but with the level and
+  section displacements the rewritten record states, which are never less
+  than the receiver's: sound, and zero for every fixture of §8.
+- **SF1 also refuses a corner whose exact class disagrees with the
+  contour's join.** The class is the exact turn of the recorded walks; a
+  right turn the cap contour does not close with a connector arc, or a left
+  or tangent turn it reads otherwise, is no corner of Table LF.
+- **`Bounds` reads the band's extents too.** §5.4's extents are added to the
+  box as to the through-all extent, since a patch bulges past its
+  directrices along an oblique world axis under a placement.
+- **The surveys stage rather than refuse.** A survey reports a reason, not an
+  error, so the undercut and concave-radius surveys of a fillet-banded body
+  read the staged-payload reason until F-2; the mesh, STEP and the mesh
+  boolean operand refuse with `ErrUnsupported` naming F-2.
 - **Hand-offs: `step` only.** No 2D answer beyond route L's own offset is
   asked; `sketch`, `r3` and `units` need nothing.
 
@@ -545,7 +563,7 @@ functions' doc comments, a `docs/layout.md` row per new root file, and
 | PR | Model | Lands | Files and functions | Proves | After |
 |---|---|---|---|---|---|
 | **F-0** | Sonnet, file-by-file | `Ellipse3` (api §4; `surfacegeom/geometry.go`, `placement.go`, `topology.go` alias, `selectedEdgeContext`, `brepEdgeMatches` default); `brepLoopBand.kind`; `brepLoopRoute`'s fillet arm as a stub keeping SL3's refusal; `fillet.go`'s cap-edge arm calling `brepOfPrism` into the stub | `internal/surfacegeom/`, `topology.go`, `fillet.go`, `brep_loop_band.go`, `brep_modify_loop.go`, `docs/api-design.md` | every existing fillet, chamfer, brep-modify and route L fixture bit for bit; an `Ellipse3` placed and mirrored | — |
-| **F-1** | Opus, proof spec | the fillet arm: LF classification (SF1), `buildFilletBand` (LF1–LF7 faces, `Ellipse3`/`Arc3`/`Circle3` edges, shared vertices, roles), `internal/filletband/` (Table CF coefficients with interval enclosures, `J_k`/`H_k`, patch areas, extents), `measureBrepContext`'s restored-face sum plus `σ·V_strip`/`σ·M_strip`, `extentAlong`; tessellation, surveys and the boolean operand refuse a fillet-banded body (`ErrUnsupported`, naming F-2); reach §8.2, modify-general §6/SL3, brep-modify SB4/SB5/SB7 text, `missing-features.md`, `doc.go` | `brep_loop_fillet.go` (new), `brep_loop_band.go`, `brep_measure.go`, `brep_payload.go`, `brep_modify_loop.go`, `fillet.go`, `internal/filletband/` (new), `brep_loop_fillet_internal_test.go`, `apitest/brep_loop_fillet_test.go` | §8's volumes, areas, centroids, topology and roles; the bound fixture's two legs; every refusal | F-0 |
+| **F-1** | Opus, proof spec | the fillet arm: LF classification (SF1), `attachFilletBand` (LF1–LF7 faces, `Ellipse3`/`Arc3`/`Circle3` edges, shared vertices, roles), `internal/filletband/` (Table CF coefficients with interval enclosures, `J_k`/`H_k`, patch areas, extents), `measureBrepContext`'s restored-face sum plus `σ·V_strip`/`σ·M_strip`, `extentAlong`; tessellation, surveys and the boolean operand refuse a fillet-banded body (`ErrUnsupported`, naming F-2); reach §8.2, modify-general §6/SL3, brep-modify SB4/SB5/SB7 text, `missing-features.md`, `doc.go` | `brep_loop_fillet.go` (new), `brep_loop_band.go`, `brep_measure.go`, `brep_payload.go`, `brep_modify_loop.go`, `fillet.go`, `internal/filletband/` (new), `brep_loop_fillet_internal_test.go`, `apitest/brep_loop_fillet_test.go` | §8's volumes, areas, centroids, topology and roles; the bound fixture's two legs; every refusal | F-0 |
 | **F-2** | Sonnet, file-by-file, copying `tessellate_brep_band.go` with §7.1 as its term table | DF4 rings and the proof terms, DF5 admission, DF7/DF8 surveys, DF12 re-attachment tests, DF10 faceted export confirmed | `tessellate_brep_band.go`, `tessellate_brep.go`, `boolean.go`, `brep_measure.go` (surveys), `survey.go`, tests | every §8 fixture's mesh closed and within its published bound; P2's floor loop reads `1.5` in the concave-radius survey; P3's root is listed by the undercut survey under a pull along `−z`; a `Cut` by a box over P1's filleted corner builds through the mesh path | F-1 |
 | **F-3** | Sonnet, file-by-file | analytic STEP: `TOROIDAL_SURFACE` faces bounded by `Circle3`/`Arc3` edges, `ELLIPSE` edges on partial cylinders, `supportsAnalyticSTEP` arms | `export/step_analytic.go`, `export/step_test.go` | P3's root and rim and P8's top loop export analytic STEP; P1's top loop exports analytic STEP with four `ELLIPSE` edges | F-1, and the `step` module release of §12 |
 
@@ -556,8 +574,8 @@ Increment table — what still refuses after each PR:
 
 | After | Still refused |
 |---|---|
-| F-0 | everything Table SB and SL3 refuse today |
-| F-1 | every consumer of a fillet-banded body but mass properties, `Bounds`, `Verify`'s structural audit and gate, placement and later modify ops (F-2); analytic STEP (F-3); SF1; SB5; SX5; SX4 |
+| F-0 (landed) | everything Table SB and SL3 refuse today |
+| F-1 (landed) | every consumer of a fillet-banded body but mass properties, `Bounds`, `Verify`'s structural audit and gate, placement and later modify ops (F-2); analytic STEP (F-3); SF1; SB5; SX5; SX4 |
 | F-2 | analytic STEP (F-3); SF1; SB5 (three-edge vertex blends); SX5 (revolve cap edges); SX4 (partial loops); clearance model (DF6, `Suspect`) |
 | F-3 | SF1; SB5; SX5; SX4; DF6; variable-radius fillets (no entry point) |
 

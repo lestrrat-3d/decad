@@ -15,18 +15,17 @@ import (
 )
 
 // This file is route L of docs/modify-general-design.md ("modify-general §N"
-// below): a Chamfer of one or more complete loops of planar faces of a brep or
-// stacked receiver (§4). It also decides, for a Fillet or Chamfer that route P
-// does not take, which of route E (docs/brep-modify-design.md §5) and route L
-// reads the selection: route E takes single straight edges along reference
-// axes, no two sharing a vertex, and route L every other selection. Table LB
-// admits the loops (admitLoops, classifyLoop); the record is rewritten
-// (rewriteLoopFaces): each loop's face takes the loop's cap contour, each face
-// beside the loop is trimmed to the band's side level, and the band is
-// recorded on the result (brepLoopBand) and attached at body build
-// (brep_loop_band.go). A Fillet whose selection is complete loops refuses
-// (SL3, the fillet arm of docs/loop-fillet-design.md until its band is built);
-// any other Fillet selection takes route E and its refusals.
+// below): a Chamfer or Fillet of one or more complete loops of planar faces of
+// a brep or stacked receiver (§4; docs/loop-fillet-design.md, "loop-fillet
+// §N", for the fillet arm). It also decides, for a Fillet or Chamfer that
+// route P does not take, which of route E (docs/brep-modify-design.md §5) and
+// route L reads the selection: route E takes single straight edges along
+// reference axes, no two sharing a vertex, and route L every other selection.
+// Table LB admits the loops (admitLoops, classifyLoop); the record is
+// rewritten (rewriteLoopFaces): each loop's face takes the loop's cap contour,
+// each face beside the loop is trimmed to the band's side level, and the band
+// is recorded on the result (brepLoopBand) and attached at body build
+// (brep_loop_band.go, and brep_loop_fillet.go for a fillet band).
 
 // brepLoopRead holds one route L call's readings of the receiver: its record,
 // topology, each planar loop segment's use, and the record edge each selected
@@ -63,13 +62,11 @@ type brepLoopBeside struct {
 }
 
 // brepLoopRoute is the brep route of a Fillet or Chamfer that route P does not
-// take (modify-general §4.4's stage 2c). A selection of single straight edges
-// along reference axes, no two sharing a vertex, is route E's
+// take (modify-general §4.4's stage 2c, loop-fillet §6). A selection of single
+// straight edges along reference axes, no two sharing a vertex, is route E's
 // (brepBlendEdges). Otherwise route L reads it as complete loops of planar
-// faces (LB1, LB2): a Chamfer builds them, or refuses SL1 when the selection is
-// no such loops. A Fillet of complete loops one of which has a corner refuses
-// SL3; any other Fillet selection, a hole rim or boss root circle among them
-// (modify-general §6), takes route E, whose own Table SB rows refuse it.
+// faces (LB1, LB2) and builds them (buildLoops), or refuses SL1 when the
+// selection is no such loops.
 func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepModifyRequest) (*Body, error) {
 	r, err := newBrepLoopRead(ctx, bp, call)
 	if err != nil {
@@ -81,16 +78,18 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 	if r.singleStraightEdges() {
 		return brepBlendEdges(ctx, d, bp, call)
 	}
-	loops, err := r.admitLoops()
+	return r.buildLoops(ctx, d)
+}
+
+// buildLoops is route L over the matched selection: Table LB admits the
+// loops, the record is rewritten with one band of the call's kind per loop,
+// and the rewritten record is built.
+func (r *brepLoopRead) buildLoops(ctx context.Context, d *Document) (*Body, error) {
+	call := r.call
 	if call.loop == nil {
-		if err == nil && r.anyCornered(loops) {
-			return nil, r.filletLoops()
-		}
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, ctxErr
-		}
-		return brepBlendEdges(ctx, d, bp, call)
+		return nil, fmt.Errorf(`%w: route L reads a %s request with no setback`, ErrUnsupported, call.op)
 	}
+	loops, err := r.admitLoops()
 	if err != nil {
 		return nil, err
 	}
@@ -103,12 +102,12 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
-		return nil, fmt.Errorf(`%w; the chamfer's rewritten brep record (modify-general §4.2 step 6); selector %s matched [%s]`,
-			err, call.sel, selectedEdgesContext(call.edges))
+		return nil, fmt.Errorf(`%w; the %s's rewritten brep record (modify-general §4.2 step 6); selector %s matched [%s]`,
+			err, call.loopKind, call.sel, selectedEdgesContext(call.edges))
 	}
 	if body.volume.Value.Base() <= 0 {
-		return nil, fmt.Errorf(`%w: the chamfer's rewritten brep record encloses no volume (modify-general §4.2 step 6); selector %s matched [%s]`,
-			ErrDegenerate, call.sel, selectedEdgesContext(call.edges))
+		return nil, fmt.Errorf(`%w: the %s's rewritten brep record encloses no volume (modify-general §4.2 step 6); selector %s matched [%s]`,
+			ErrDegenerate, call.loopKind, call.sel, selectedEdgesContext(call.edges))
 	}
 	return body, nil
 }
@@ -130,48 +129,32 @@ func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest
 	return r, nil
 }
 
-// filletLoops is route L's fillet arm (docs/loop-fillet-design.md §4) for the
-// admitted loops, one or more of which has a corner. The pipe band is not yet
-// built, so it refuses SL3 and always returns an error.
-func (r *brepLoopRead) filletLoops() error {
-	return fmt.Errorf(`%w: a fillet of a complete loop is the vertex-blend problem, not yet supported: its band is a cylinder along each line, a torus around each arc and a sphere at each corner, none of them a face this record holds (modify-general SL3); selector %s matched [%s]`,
-		ErrUnsupported, r.call.sel, selectedEdgesContext(r.call.edges))
-}
-
-// prismCapFilletRefusal is RF3 (docs/loop-fillet-design.md §3) for a Fillet of
-// a prism receiver whose selection holds an edge that is no lateral edge: the
-// prism is read through its face view and route L's fillet arm is asked about
-// the selection. It returns the arm's refusal when the selection is complete
-// loops of planar faces one of which has a corner, and nil for every other
-// selection, which the prism path refuses as its S1.
-func prismCapFilletRefusal(ctx context.Context, pp prismPayload, call brepModifyRequest) error {
+// prismCapLoopFillet is RF3 (loop-fillet §3) for a Fillet of a prism receiver
+// whose selection holds an edge that is no lateral edge: the prism is read
+// through its face view (brepOfPrism), SB1 holds on it, and route L builds
+// the selection's complete loops with the fillet arm, returning a brep body
+// (BF1) or route L's refusal. A selection of single straight edges, which
+// route E would read on a brep, returns a nil body and a nil error: the
+// prism path refuses it as its S1.
+func prismCapLoopFillet(ctx context.Context, d *Document, pp prismPayload, call brepModifyRequest) (*Body, error) {
 	bp, err := brepOfPrism(pp)
 	if err != nil {
-		return ctx.Err()
+		return nil, err
+	}
+	if err := requireExactBrepSection(bp, call.op); err != nil {
+		return nil, err
 	}
 	r, err := newBrepLoopRead(ctx, bp, call)
 	if err != nil {
-		return ctx.Err()
+		return nil, err
 	}
 	if err := r.matchEdges(); err != nil {
-		return err
+		return nil, err
 	}
-	loops, err := r.admitLoops()
-	if err != nil || !r.anyCornered(loops) {
-		return ctx.Err()
+	if r.singleStraightEdges() {
+		return nil, nil //nolint:nilnil // no loop selection: the caller's S1 follows
 	}
-	return r.filletLoops()
-}
-
-// anyCornered reports whether one of the loops holds two or more segments,
-// so that its fillet meets a corner: a loop of one whole circle has none.
-func (r *brepLoopRead) anyCornered(loops []brepLoopSel) bool {
-	for _, sel := range loops {
-		if len(r.topo.planar[sel.face][sel.loop]) > 1 {
-			return true
-		}
-	}
-	return false
+	return r.buildLoops(ctx, d)
 }
 
 // refuse is one route L refusal naming its row and the selection.
@@ -325,7 +308,7 @@ func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
 		}
 		switch {
 		case len(loopsOf[i]) == 0:
-			return nil, r.refuse("SL1", fmt.Sprintf(`%s lies on no loop of a planar face, so it belongs to no complete loop; a chamfer of loops mixed with single edges needs a corner patch in no reference frame`, selectedEdgeContext(i, r.call.edges[i])))
+			return nil, r.refuse("SL1", fmt.Sprintf(`%s lies on no loop of a planar face, so it belongs to no complete loop; a %s of loops mixed with single edges needs a corner patch in no reference frame`, selectedEdgeContext(i, r.call.edges[i]), r.call.loopKind))
 		case len(covering) == 0:
 			return nil, r.refuse("SL1", fmt.Sprintf(`the selection covers only part of a loop of brep face %s; every geometric edge of a complete loop must be selected`, r.bp.faces[loopsOf[i][0].face].role))
 		case len(covering) > 1:
@@ -508,8 +491,8 @@ func (r *brepLoopRead) requireBandReach(sels []brepLoopSel) error {
 				}
 				reach[key] += d
 				if reach[key] >= height {
-					return fmt.Errorf(`%w: the chamfer band on brep face %s's loop reaches or passes the far end of brep face %s beside it (%g mm of %g mm); a merging kernel is not available (modify-reach SX7); selector %s matched [%s]`,
-						ErrUnsupported, f.role, a.role, reach[key], height, r.call.sel, selectedEdgesContext(r.call.edges))
+					return fmt.Errorf(`%w: the %s band on brep face %s's loop reaches or passes the far end of brep face %s beside it (%g mm of %g mm); a merging kernel is not available (modify-reach SX7); selector %s matched [%s]`,
+						ErrUnsupported, r.call.loopKind, f.role, a.role, reach[key], height, r.call.sel, selectedEdgesContext(r.call.edges))
 				}
 			}
 		}
@@ -546,7 +529,8 @@ func (r *brepLoopRead) loopFaceView(fi int, sels []brepLoopSel) capBlendPayload 
 // rewriteLoopFaces is modify-general §4.2 steps 1 to 5 over every touched
 // loop, after Table LB's topology gates (stage 3: LB3, LB4, LB6, then LB5). Per
 // face F holding touched loops, stage 4 builds each cap contour (SX6) and
-// decides SX13's axial and radial halves; stage 5 runs SX14, then F's
+// decides SX13's axial and radial halves, and a fillet's corners take Table
+// LF's classes (loop-fillet SF1); stage 5 runs SX14, then F's
 // rewritten region faces modify §5's audit (S8, S7 — the contour against F's
 // other loops, read as SX7/SX12 — and S9) at the setback and at the top of its
 // conversion span. Each (sw) face's level at F moves to the side level, and
@@ -604,6 +588,14 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		if err != nil {
 			return brepPayload{}, r.wrapFace(sel.face, err)
 		}
+		// SF1 (loop-fillet §6): every corner of a fillet's loop takes a class of
+		// Table LF.
+		if r.call.loopKind == brepBandFillet {
+			f := r.bp.faces[sel.face]
+			if _, err := filletLoopOf(r.budget, f.regionLoop(sel.loop), setback.dc, f.role, work); err != nil {
+				return brepPayload{}, r.wrapFace(sel.face, err)
+			}
+		}
 	}
 
 	// Stage 5: SX14 at every miter corner beside a circular wall, then each
@@ -632,7 +624,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		f := r.bp.faces[sel.face]
 		eF := r.topo.embeds[sel.face]
 		n := eF.Axis[2]
-		band := brepLoopBand{face: sel.face, loop: sel.loop, orig: cloneLoopRecord(f.regionLoop(sel.loop)), setback: setback, sigma: sel.sigma, kind: brepBandChamfer}
+		band := brepLoopBand{face: sel.face, loop: sel.loop, orig: cloneLoopRecord(f.regionLoop(sel.loop)), setback: setback, sigma: sel.sigma, kind: r.call.loopKind}
 		delta, err := loopContourDelta(ctx, band.orig, setback.dc, setback.dcDelta)
 		if err != nil {
 			return brepPayload{}, r.wrapFace(sel.face, err)

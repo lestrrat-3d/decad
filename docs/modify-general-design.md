@@ -33,27 +33,27 @@ part makes on them. Every cell was read off the live code with the probe under
 |---|---|---|---|
 | **P1** cross-drilled bar: 40×20×20 box, Ø6 hole along y | brep (class B) | fillet the 4 edges along y | builds (route P) |
 | | | fillet one edge along z | builds (route E) |
-| | | fillet every straight edge | SB5 |
+| | | fillet every straight edge | SL1 |
 | | | chamfer every straight edge | SL1 |
 | | | chamfer the 8 along x and z, the top and bottom loops | builds (route L) |
-| | | fillet the top and bottom loops | SL3 |
+| | | fillet the top and bottom loops | builds (route L fillet arm) |
 | | | chamfer a hole rim, or both | builds (route P cap loop) |
-| | | fillet a hole rim | SB4 |
+| | | fillet a hole rim | builds (route L fillet arm) |
 | | | shell removing one y wall, or both | builds (route P cup, tube) |
 | | | shell removing the top face, or both caps | builds (route S) |
 | | | shell removing one x wall, or one y wall with the top or both caps | builds (route S, a wall run) |
 | **P2** pocketed plate: 40×40×10, blind 20×10 pocket 5 deep | stacked | fillet the pocket's 4 vertical edges | builds (route E) |
-| | | fillet the 4 floor edges, or the 4 mouth edges | SL3 |
+| | | fillet the 4 floor edges, or the 4 mouth edges | builds (route L fillet arm) |
 | | | chamfer the 4 mouth edges, or the plate's top loop | builds (route L) |
 | | | fillet the plate's 4 vertical edges | builds (route E) |
 | | | shell removing the top or the bottom | SG3 |
-| **P3** round boss on a plate: 40×40×10 ∪ Ø10 boss 15 tall | stacked (A1) | fillet the boss root circle | SB4 |
-| | | fillet the boss top rim | SB4 |
+| **P3** round boss on a plate: 40×40×10 ∪ Ø10 boss 15 tall | stacked (A1) | fillet the boss root circle | builds (route L fillet arm) |
+| | | fillet the boss top rim | builds (route L fillet arm) |
 | | | chamfer the boss top rim, or the boss root | builds (route L) |
 | | | fillet the plate's vertical edges | builds (route E) |
 | | | shell removing the bottom | SG3 |
 | **P4** drilled plate: 60×40×8 with four Ø5 holes in the sketch | prism | chamfer the hole mouths, the top loop, or both | builds (cap loop) |
-| | | fillet the hole mouths, or the top loop | S1 (vertex blend) |
+| | | fillet the hole mouths, or the top loop | builds (route L fillet arm, RF3) |
 | | | fillet the vertical edges; shell removing the top | builds |
 | **P5** counterbored hole: Ø6 through, Ø10 counterbore 3 deep | faceted | any request | no analytic edge or face to name; the boolean took the mesh path (stacked §7 stage 2 is not landed) |
 | **P6** enclosure: 60×40×30 box, 20×10 port through both x walls | brep (class B) | chamfer the port mouth's 4 edges | builds (route P cap loop) |
@@ -66,7 +66,7 @@ part makes on them. Every cell was read off the live code with the probe under
 | | | shell removing the top | SG3 (the port floor) |
 | **P6b** enclosure shelled first, port cut after | faceted | any request | the cup is no analytic boolean operand; the cut took the mesh path |
 | **P7** L bracket: L section 40×40, 8 thick, 30 tall, Ø6 hole along x through the upright leg | brep (class B) | fillet the inner corner edge, or the leg's two outer edges | builds (route E) |
-| | | fillet the hole rims | SB4 |
+| | | fillet the hole rims | builds (route L fillet arm) |
 | | | chamfer a hole rim, or the top cap's loop (6 edges) | builds (route L) |
 | | | shell removing the top | builds (route S) |
 | | | shell removing the `y = 8` wall | SG5 (its end at the reflex corner) |
@@ -81,15 +81,16 @@ Ranked by the parts each refusal blocks:
 | Rank | Refusal | Blocks | What the body needs |
 |---|---|---|---|
 | 1 | SB10 / SB3: shell of a brep that reads as no prism, or whose removed face is no cap of the prism it reads as | P1, P2, P3, P6, P6c, P7, P8 | the erosion of the receiver: planes and cylinders along reference axes for a through-cut body (§3); spheres, tori or elliptical edges for a blind pocket or a union |
-| 2 | SB5, SL1 and SL3, and S1 on a prism: edges sharing a vertex outside complete loops, a loop's fillet | P1, P2, P4 | a fillet of a loop needs tori and spheres (§6) |
-| 3 | SB4: a fillet of a curved edge of a brep or stacked record | P1, P3, P7 | a fillet needs a torus (§6) |
-| 4 | SB7: an edge ending on a curved face or a blend | P8 | the complete-loop fillet (§6) |
+| 2 | SL1: edges sharing a vertex outside complete loops | P1 | a corner patch in no reference frame, or the three-edge vertex blend (§6) |
+| 3 | a loop fillet: the curved-edge and cornered-loop fillets this survey found refused | P1, P2, P3, P4, P7 | `docs/loop-fillet-design.md`'s pipe band, which builds them |
+| 4 | SB7: an edge ending on a curved face or a blend | P8 | the complete-loop fillet, which builds P8's top loop |
 | 5 | a faceted receiver | P5, P6b, P9 | an analytic boolean: `docs/stacked-prism-design.md` §7 stage 2, a cup as a boolean operand, cylinder × cylinder; reach SX9 stays permanent |
 
-Routes S and L below clear every brep and stacked row of ranks 1–3 whose
+Routes S and L below clear every brep and stacked row of ranks 1–2 whose
 body is planes and cylinders along reference axes, meeting in lines, circles
-and arcs. Rank 4, every loop fillet, and ranks 1–3's spheres, tori and
-elliptical edges stay refused with the codes of §6.
+and arcs; route L's fillet arm (`docs/loop-fillet-design.md`) clears ranks 3
+and 4. Ranks 1–2's spheres, tori and elliptical edges stay refused with the
+codes of §6.
 
 ## 2. The two increments
 
@@ -332,12 +333,12 @@ axis before it refuses.
 
 ### 4.1 Table LB — the admitted selection
 
-Route L runs for `Chamfer` on a brep or stacked receiver when route P takes no
-axis and the selection is not route E's single straight edges — every edge
-a straight line along a reference axis (EB1), no two sharing a vertex (EB7) —
-and for a `Fillet` only to refuse a selection of complete loops one of which
-has two or more segments (SL3); any other `Fillet` selection, a hole rim's
-or boss root's circle among them, goes on to route E. A record carrying
+Route L runs for `Chamfer` and `Fillet` on a brep or stacked receiver when
+route P takes no axis and the selection is not route E's single straight
+edges — every edge a straight line along a reference axis (EB1), no two
+sharing a vertex (EB7). A `Fillet` builds its loops with the fillet arm of
+`docs/loop-fillet-design.md`, whose band is a pipe where this section's is
+ruled; Table LB, the record rewrite and SL1, SL2 hold for both. A record carrying
 route L bands reads as no prism, so route P takes no axis of it. Each selected edge is matched to one
 loop segment of one planar face of the record by lifting the segment's ends
 (a circle: its centre and radius) through the reference frame and placement
@@ -444,7 +445,7 @@ volume and lifts through the reference frame.
 |---|---|---|---|
 | **SL1** | a selection that is not whole loops of planar faces: a partial loop, loops mixed with single edges (route E's class, including a lateral edge meeting a loop at a vertex), two loops sharing an edge | yes; the corner where a band meets a lateral blend is a plane in no reference frame, and a partial loop's free end needs the setback transition reach SX4 refuses | `ErrUnsupported` (reach SX4's text for a partial loop) |
 | **SL2** | an adjacent face outside LB3/LB4/LB6: a curved or oblique neighbour, a split side line, a neighbour whose own loop continues past the vertex on a curve, walls on both sides of `F` | yes | `ErrUnsupported` |
-| **SL3** | a `Fillet` of complete loops one of which has a corner, on a brep or stacked receiver or (base S1) on a prism; a loop of one whole circle goes on to route E's SB4 | yes; the band is a cylinder, a torus and spheres (reach §8.2), none a face this record holds; §6 | `ErrUnsupported` ("the vertex-blend problem", unchanged text) |
+| **SL3** | retired: a `Fillet` of complete loops builds through `docs/loop-fillet-design.md`'s fillet arm or refuses with that document's Table SF | — | — |
 | **SL4** | `WithAsymmetricChamfer` on a brep or stacked receiver | yes | reach SX16, unchanged |
 
 Reach SX6, SX7, SX12, SX13, SX14 and SX15 keep their meanings per band, and
@@ -491,10 +492,8 @@ below reads the bands where the plain brep reader would miss them:
 
 | Request | Code | Why not here |
 |---|---|---|
-| fillet of a complete loop: a hole mouth, a plate's top loop, a pocket mouth (P2, P4) | S1 / SL3 | reach §8.2's band is cylinders along the lines, tori around the arcs and spheres at the miters; the brep record holds no torus or sphere, and the prism cap-loop fillet (reach §14 PR E's staged column) is not implemented either. The construction to port exists on paper; its proofs — torus and sphere patch integrals with enclosed trigonometric terms, a spherical normal polygon per miter — are reach §8.4's unwritten half |
-| fillet of a boss root or hole rim on a brep (P1, P3, P7) | SB4 | the same torus |
 | fillets or chamfers of edges sharing a vertex that are not one loop of one face: all twelve edges of a box, a lateral edge meeting a cap loop (P1, P6c) | SB5 / SL1 | the corner patch is a sphere (fillet) or a plane whose normal is no reference axis (chamfer); the record holds neither |
-| an edge ending on a blend or a curved face (P8) | SB7 | its honest form is the complete-loop fillet above |
+| an edge ending on a blend or a curved face (P8) | SB7 | its honest form is the complete-loop fillet, `docs/loop-fillet-design.md` |
 | shell of a blind pocket or port, a stacked union, a keyway (P2, P3, P6c) | SG3 | spheres at the pocket's floor corners, a torus around a round boss's root, elliptical edges where two reflex edges meet at a square boss's corner |
 | an outward or closed shell of a brep | SG1 / SG2 | §3.2 |
 | shell removing a curved wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |
@@ -561,8 +560,9 @@ below reads the bands where the plain brep reader would miss them:
   where `NormalAt` cannot answer.
 - **Patch a corner where a band meets a lateral blend with a triangle.** Its
   plane is in no reference frame; SL1.
-- **Admit a loop fillet with a cylinder-only band and a mitred corner.** The
-  corner is a sphere; SL3 until the record holds one.
+- **Admit a loop fillet with a cylinder-only band and a sphere at each
+  mitred corner.** The two cylinders meet along an ellipse and no sphere is
+  swept there (`docs/loop-fillet-design.md` §2).
 
 ## 9. Required tests
 
@@ -690,8 +690,8 @@ Route L (L-1):
   share an edge → SL1; P8's y = 0 wall's outer loop, whose top neighbour
   continues on a fillet arc → SL2; P8's top loop chamfered at `d = 3` → SX6
   (the fillet arcs' offsets vanish); the pocket mouth at `d = 5` → SX7 (the
-  band reaches the floor); a loop on a face with `delta > 0` → SB1; a fillet
-  of a loop with a corner → SL3; `WithAsymmetricChamfer` → SX16.
+  band reaches the floor); a loop on a face with `delta > 0` → SB1;
+  `WithAsymmetricChamfer` → SX16.
 
 Route L (L-2):
 
