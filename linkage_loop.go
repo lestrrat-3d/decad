@@ -503,7 +503,6 @@ type loopDrive struct {
 // loopScene is the private sketch scene of one loop under one drive, on one
 // side of the plane (docs/linkage-check-design.md §15.2).
 type loopScene struct {
-	plane      loopPlane
 	sk         *sketch.Sketch
 	driver     sketch.Dimension
 	driven     []sketch.Dimension // per dependent: an angle, the primary slide's horizontal distance, or an anchored slide's distance
@@ -625,40 +624,6 @@ func (ld *loopDrive) sceneSide(side int, slide bool) (mirror, halfTurn bool) {
 		sign = -1
 	}
 	return sign*ld.axisSense < 0, false
-}
-
-// loopPlane is the loop's plane on one side (docs/linkage-check-design.md
-// §15.2): the exact orthonormal axes u* = u/|u| and v* = v/|v|, with u and v
-// exact rational directions and u* × v* the side's normal, and the float
-// frame r3 builds along them, which seeds the scene's points.
-type loopPlane struct {
-	frame      r3.Frame
-	u, v       motionbound.RatVec
-	uLen, vLen proofbound.RatInterval // enclosures of |u| and |v|
-}
-
-// sceneFrame reads the loop's held slide and constructs its exact plane.
-func (lp *LinkageLoop) sceneFrame(mirror, halfTurn bool) (loopPlane, error) {
-	var slideDir *r3.Vec
-	if lp.slide != nil {
-		j, _ := lp.slide.joint.(PrismaticJoint)
-		slideDir = &j.Dir
-	}
-	pl, err := linkagebound.SceneFrame(lp.normal, lp.coord, slideDir, mirror, halfTurn)
-	if err != nil {
-		return loopPlane{}, err
-	}
-	return loopPlane{frame: pl.Frame, u: pl.U, v: pl.V, uLen: pl.ULen, vLen: pl.VLen}, nil
-}
-
-// coords encloses p's exact coordinates in the loop plane.
-func (pl loopPlane) coords(p r3.Vec) (proofbound.RatInterval, proofbound.RatInterval) {
-	return pl.coordsRat(ratVecExact(p))
-}
-
-// coordsRat is coords of an exact point.
-func (pl loopPlane) coordsRat(pr motionbound.RatVec) (proofbound.RatInterval, proofbound.RatInterval) {
-	return linkagebound.PlaneCoordinates(pr, pl.u, pl.v, pl.uLen, pl.vLen)
 }
 
 // buildScene builds the loop's private scene for the drive on one side
@@ -808,8 +773,6 @@ func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, flip s
 		return nil, err
 	}
 	sc := &loopScene{
-		plane: loopPlane{frame: built.Plane.Frame, u: built.Plane.U, v: built.Plane.V,
-			uLen: built.Plane.ULen, vLen: built.Plane.VLen},
 		sk: built.Sketch, driver: built.Driver, driven: built.Driven,
 		angular: built.Angular, anchored: built.Anchored, signs: built.Signs,
 		opts: built.Options, offset: built.Offset,

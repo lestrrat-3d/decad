@@ -269,6 +269,19 @@ func requireFalsifierPins(t *testing.T, build func(t *testing.T) (*Linkage, *Lin
 	}
 }
 
+func loopScenePlaneForTest(lp *LinkageLoop, mirror, halfTurn bool) (linkagebound.ScenePlane, error) {
+	var slideDir *r3.Vec
+	if lp.slide != nil {
+		j, _ := lp.slide.joint.(PrismaticJoint)
+		slideDir = &j.Dir
+	}
+	return linkagebound.SceneFrame(lp.normal, lp.coord, slideDir, mirror, halfTurn)
+}
+
+func loopPlaneCoordinatesForTest(plane linkagebound.ScenePlane, pin r3.Vec) (proofbound.RatInterval, proofbound.RatInterval) {
+	return linkagebound.PlaneCoordinates(linkagebound.ExactVec(pin), plane.U, plane.V, plane.ULen, plane.VLen)
+}
+
 // TestLoopSceneFrame: for each of the six closure axis senses and both scene
 // sides, the scene's float frame has U and V equal to unit coordinate axes
 // bit for bit, U × V is the closure axis, flipped on the mirrored side, and a
@@ -295,10 +308,10 @@ func TestLoopSceneFrame(t *testing.T) {
 	}
 	// requireExact asserts the plane's exact enclosure of the pin is the one
 	// float the frame placed it at.
-	requireExact := func(t *testing.T, plane loopPlane) {
+	requireExact := func(t *testing.T, plane linkagebound.ScenePlane) {
 		t.Helper()
-		local := plane.frame.ToLocal(pin)
-		x, y := plane.coords(pin)
+		local := plane.Frame.ToLocal(pin)
+		x, y := loopPlaneCoordinatesForTest(plane, pin)
 		for _, c := range []struct {
 			iv proofbound.RatInterval
 			f  float64
@@ -324,11 +337,11 @@ func TestLoopSceneFrame(t *testing.T) {
 					normal = -sense
 				}
 				lp := &LinkageLoop{normal: ratVecExact(unitAxis(axis, sense)), coord: axis}
-				plane, err := lp.sceneFrame(mirror, false)
+				plane, err := loopScenePlaneForTest(lp, mirror, false)
 				require.NoError(t, err)
-				requireUnitAxes(t, plane.frame)
-				require.Equal(t, unitAxis(axis, normal), plane.frame.U().Cross(plane.frame.V()))
-				local := plane.frame.ToLocal(pin)
+				requireUnitAxes(t, plane.Frame)
+				require.Equal(t, unitAxis(axis, normal), plane.Frame.U().Cross(plane.Frame.V()))
+				local := plane.Frame.ToLocal(pin)
 				iu, iv := (axis+1)%3, (axis+2)%3
 				require.Equal(t, coords[iu], local.X)
 				wantV := coords[iv]
@@ -343,18 +356,18 @@ func TestLoopSceneFrame(t *testing.T) {
 						for _, halfTurn := range []bool{false, true} {
 							slide := &Link{joint: PrismaticJoint{Dir: unitAxis(slideAxis, dir)}}
 							lp := &LinkageLoop{normal: ratVecExact(unitAxis(axis, sense)), coord: axis, slide: slide}
-							plane, err := lp.sceneFrame(mirror, halfTurn)
+							plane, err := loopScenePlaneForTest(lp, mirror, halfTurn)
 							require.NoError(t, err)
-							requireUnitAxes(t, plane.frame)
-							require.Equal(t, unitAxis(axis, normal), plane.frame.U().Cross(plane.frame.V()))
+							requireUnitAxes(t, plane.Frame)
+							require.Equal(t, unitAxis(axis, normal), plane.Frame.U().Cross(plane.Frame.V()))
 							wantU := unitAxis(slideAxis, dir)
 							if halfTurn {
 								wantU = wantU.Scale(-1)
 							}
-							require.Equal(t, wantU, plane.frame.U())
-							local := plane.frame.ToLocal(pin)
-							require.Equal(t, along(pin, plane.frame.U()), local.X)
-							require.Equal(t, along(pin, plane.frame.V()), local.Y)
+							require.Equal(t, wantU, plane.Frame.U())
+							local := plane.Frame.ToLocal(pin)
+							require.Equal(t, along(pin, plane.Frame.U()), local.X)
+							require.Equal(t, along(pin, plane.Frame.V()), local.Y)
 							requireExact(t, plane)
 						}
 					}
@@ -382,14 +395,14 @@ func TestLoopSceneFrameTilted(t *testing.T) {
 			for _, mirror := range []bool{false, true} {
 				for _, halfTurn := range []bool{false, true} {
 					lp := &LinkageLoop{normal: ratVecExact(axis), coord: -1, slide: slide}
-					plane, err := lp.sceneFrame(mirror, halfTurn)
+					plane, err := loopScenePlaneForTest(lp, mirror, halfTurn)
 					require.NoError(t, err)
-					require.Zero(t, linkagebound.Dot(plane.u, plane.v).Sign(), `u ⟂ v`)
+					require.Zero(t, linkagebound.Dot(plane.U, plane.V).Sign(), `u ⟂ v`)
 					n := lp.normal
 					if mirror {
 						n = linkagebound.NegVec(n)
 					}
-					uv := linkagebound.Cross(plane.u, plane.v)
+					uv := linkagebound.Cross(plane.U, plane.V)
 					require.True(t, linkagebound.ZeroVec(linkagebound.Cross(uv, n)), `u × v ∥ n`)
 					require.Positive(t, linkagebound.Dot(uv, n).Sign(), `u × v along the side's normal`)
 					if slide != nil {
@@ -398,10 +411,10 @@ func TestLoopSceneFrameTilted(t *testing.T) {
 						if halfTurn {
 							want = -1
 						}
-						require.True(t, linkagebound.ZeroVec(linkagebound.Cross(plane.u, ratVecExact(j.Dir))))
-						require.Equal(t, want, linkagebound.Dot(plane.u, ratVecExact(j.Dir)).Sign())
+						require.True(t, linkagebound.ZeroVec(linkagebound.Cross(plane.U, ratVecExact(j.Dir))))
+						require.Equal(t, want, linkagebound.Dot(plane.U, ratVecExact(j.Dir)).Sign())
 					}
-					x, y := plane.coords(pin)
+					x, y := loopPlaneCoordinatesForTest(plane, pin)
 					sq := func(iv proofbound.RatInterval) (*big.Rat, *big.Rat) {
 						lo, hi := new(big.Rat).Mul(iv.Lo, iv.Lo), new(big.Rat).Mul(iv.Hi, iv.Hi)
 						if lo.Cmp(hi) > 0 {
@@ -417,7 +430,7 @@ func TestLoopSceneFrameTilted(t *testing.T) {
 					exact := lp.planeSq(pin, r3.Vec{})
 					require.LessOrEqual(t, new(big.Rat).Add(xlo, ylo).Cmp(exact), 0)
 					require.GreaterOrEqual(t, new(big.Rat).Add(xhi, yhi).Cmp(exact), 0)
-					local := plane.frame.ToLocal(pin)
+					local := plane.Frame.ToLocal(pin)
 					for _, c := range []struct {
 						iv proofbound.RatInterval
 						f  float64
