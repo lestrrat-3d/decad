@@ -112,7 +112,7 @@ func TestBrepConcaveRadiusReadsConcaveWalls(t *testing.T) {
 	t.Run("convex arc", func(t *testing.T) {
 		doc := New()
 		body := internalBrepBody(t, internalHalfDiscPrism(t, doc))
-		out, ok := brepMinRadius(body.payload.(brepPayload))
+		out, ok := brepMinRadius(body, body.payload.(brepPayload))
 		require.True(t, ok)
 		require.True(t, out.ok)
 		require.Nil(t, out.reading, "no wall curves away from the material")
@@ -120,7 +120,7 @@ func TestBrepConcaveRadiusReadsConcaveWalls(t *testing.T) {
 	t.Run("displaced", func(t *testing.T) {
 		bp := internalCrossDrilledBrep(t)
 		bp.faces[6].delta = 1e-12
-		_, ok := brepMinRadius(bp)
+		_, ok := brepMinRadius(nil, bp)
 		require.False(t, ok)
 	})
 }

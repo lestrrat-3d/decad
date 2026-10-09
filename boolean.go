@@ -802,6 +802,21 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 				return nil
 			}
 			err = refusal
+		case brepPayload:
+			// A route L body's mesh proves its occupied volume only for bands
+			// the cap-loop chamfer's rule admits (modify-general Table DG's
+			// DG4); a plain brep's proof is unconditional.
+			if len(pl.loopBands) == 0 {
+				return nil
+			}
+			refusal, aErr := brepBandsOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
+			if aErr != nil {
+				return aErr
+			}
+			if refusal == nil {
+				return nil
+			}
+			err = refusal
 		case draftPayload:
 			refusal, aErr := draftOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
 			if aErr != nil {

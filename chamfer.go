@@ -129,10 +129,12 @@ type ChamferOption interface {
 // (a hole mouth, a plate's top loop) and filling the concave corner where
 // they rise off it (a boss root). The result is a brep body whose volume,
 // area, centroid and box answer, which Verify, placement and a further modify
-// op read; its tessellation, STEP export, use as a boolean operand and its
-// undercut and concave-radius surveys are ErrUnsupported or staged until
-// modify-general PR L-2, and a clearance pair its boxes do not decide reads
-// Suspect. A selection that is part of a loop, mixes loops with lone edges or
+// op read; it tessellates, exports to STEP (analytic where every patch is a
+// plane, faceted where a cone is), and its undercut and concave-radius
+// surveys read the patches. It is a boolean operand where each band is a whole
+// turn, line-line miters or exact tangent joins; a band with a cone at a
+// reflex corner is export-only and ErrUnsupported as an operand. A clearance
+// pair its boxes do not decide reads Suspect. A selection that is part of a loop, mixes loops with lone edges or
 // holds two loops sharing an edge is SL1, a face beside a loop that is curved,
 // oblique, split or on both sides of the loop's face is SL2, and a band
 // reaching a far face end is SX7 (each ErrUnsupported); a setback that

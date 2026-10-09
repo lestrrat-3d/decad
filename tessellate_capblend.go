@@ -217,12 +217,12 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	for li := range lms {
 		lm := &lms[li]
 		if lm.onStart {
-			if err := emitCapBand(budget, &mesh, cbp, lm, true, faceOfRole, geomOfRole, bump); err != nil {
+			if err := emitCapBand(budget, &mesh, cbp, lm, true, faceOfRole, geomOfRole, bump, nil); err != nil {
 				return nil, err
 			}
 		}
 		if lm.onEnd {
-			if err := emitCapBand(budget, &mesh, cbp, lm, false, faceOfRole, geomOfRole, bump); err != nil {
+			if err := emitCapBand(budget, &mesh, cbp, lm, false, faceOfRole, geomOfRole, bump, nil); err != nil {
 				return nil, err
 			}
 		}
@@ -540,8 +540,10 @@ func capBlendProofSetback(s capSetback) tessellation.CapBlendSetback {
 	}
 }
 
-// emitCapBand maps built patch roles to the numeric band emitter.
-func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm *capBlendLoopMesh, start bool, faceOfRole func(string) (*Face, error), geomOfRole map[string]capPatchGeom, bump func(*Face, float64)) error {
+// emitCapBand maps built patch roles to the numeric band emitter. roleOf, when
+// non-nil, names patch p's role in place of chamferCap(cap,loop,p): a route L
+// band's patches carry chamferLoop(f,l,p) (modify-general BG2).
+func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm *capBlendLoopMesh, start bool, faceOfRole func(string) (*Face, error), geomOfRole map[string]capPatchGeom, bump func(*Face, float64), roleOf func(int) string) error {
 	matSign := 1.0
 	capZ := cbp.z0
 	sideV, capV := lm.sideLo, lm.capLoV
@@ -564,6 +566,9 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 			// A draft band has no apex patch, so patch p is walk p, and its
 			// face carries the prism's own wall role (draftPayload.patches).
 			role = prismWallRole(lm.li, lm.walks[p].Segs[0])
+		}
+		if roleOf != nil {
+			role = roleOf(p)
 		}
 		f, err := faceOfRole(role)
 		if err != nil {

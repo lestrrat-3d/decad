@@ -501,6 +501,12 @@ chamfered loop and the original loop otherwise (the `mixed` profile of `mixedOff
 
 ### Chording — one count per wall walk, shared three ways
 
+A route L band on a brep body (`docs/modify-general-design.md` Table DG's
+DG3) is chorded by the same loop chording over the receiver's loop in its
+face's frame. The brep tessellator hands the wall beside each walk the
+band's side-ring points as its own samples, so the three share one count and
+one set of vertices.
+
 For each loop, resolve its walks as `chordLoop` does. For a circular walk `w` chamfered on cap `c`:
 
 ```text

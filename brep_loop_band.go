@@ -77,6 +77,12 @@ func (b brepLoopBand) view(f brepFace, xform r3.Transform) capBlendPayload {
 	return cbp
 }
 
+// patchRole is the role of the band's patch p: chamferLoop(f,l,p) for the
+// band's face f and loop l (modify-general BG2).
+func (b brepLoopBand) patchRole(p int) string {
+	return fmt.Sprintf("chamferLoop(%d,%d,%d)", b.face, b.loop, p)
+}
+
 // validate refuses a band no route L build records: one naming no planar face
 // or no loop of it, a sigma other than ±1, setbacks that are not one positive
 // finite d, or an empty loop.
@@ -304,7 +310,9 @@ func (m *brepBandMass) add(o brepBandMass) {
 // band order and each band's own patch order, and their mass sums.
 type brepBandsBuilt struct {
 	patches []*Face
-	mass    brepBandMass
+	// geom is each band's patch roles beside their geometry, in band order.
+	geom [][]capPatch
+	mass brepBandMass
 }
 
 // attachBrepLoopBands attaches every band of the record to the body
@@ -335,13 +343,17 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 		if err != nil {
 			return brepBandsBuilt{}, err
 		}
+		geom := make([]capPatch, len(band.patches))
 		for p, patch := range band.patches {
-			patch.origins = []FeatureRef{{producer: ref, Role: fmt.Sprintf("chamferLoop(%d,%d,%d)", b.face, b.loop, p)}}
+			role := b.patchRole(p)
+			patch.origins = []FeatureRef{{producer: ref, Role: role}}
 			if b.sigma > 0 {
 				patch.reversed = !patch.reversed
 			}
+			geom[p] = capPatch{role: role, geom: band.geom[p]}
 		}
 		out.patches = append(out.patches, band.patches...)
+		out.geom = append(out.geom, geom)
 		mass, err := brepBandMassOf(ctx, b, f, embeds[b.face], cbp, band, work)
 		if err != nil {
 			return brepBandsBuilt{}, err
@@ -434,4 +446,23 @@ func brepBandMassOf(ctx context.Context, b brepLoopBand, f brepFace, e brepEmbed
 		out.area = proofbound.BoundedAdd(out.area, proofbound.MeasuredScalar(pa, pb))
 	}
 	return out, nil
+}
+
+// brepBandsOccupiedVolumeAdmission is capBlendOccupiedVolumeAdmission's
+// question for every band of a route L body (modify-general Table DG's DG3 and
+// DG4): each band is admitted as the cap-loop chamfer admits its own loop, as
+// a whole turn, or a loop whose every corner is a line-line miter or an
+// exactly tangent join. refusal is the first band's reason, nil when every
+// band is admitted; err is a budget or context error.
+func brepBandsOccupiedVolumeAdmission(budget *proofbound.WorkBudget, bp brepPayload) (error, error) {
+	for bi, b := range bp.loopBands {
+		if err := b.validate(bp, bi); err != nil {
+			return nil, err
+		}
+		refusal, err := capBlendOccupiedVolumeAdmission(budget, b.tessView(bp.faces[b.face], bp.xform))
+		if err != nil || refusal != nil {
+			return refusal, err
+		}
+	}
+	return nil, nil //nolint:nilnil // no band refuses and no budget ran out
 }

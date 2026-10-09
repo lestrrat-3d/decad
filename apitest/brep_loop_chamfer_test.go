@@ -1,7 +1,7 @@
 package apitest_test
 
 import (
-	"io"
+	"bytes"
 	"math"
 	"math/big"
 	"strings"
@@ -18,7 +18,7 @@ import (
 // These fixtures pin route L of docs/modify-general-design.md (§4, §9)
 // through the public API: Body.Chamfer of a complete loop of a planar face
 // of a stacked or brep boolean result builds a brep body whose band patches
-// are faces of the body, and the consumers PR L-1 does not yet read refuse.
+// are faces of the body, and the mesh, STEP and boolean consumers read them.
 
 // loopEdgeQuery selects exactly the edges of loop l: each line by its two
 // ends and direction, each arc or circle by its ends among circular edges.
@@ -80,9 +80,10 @@ func chamferLoopPatches(body *decad.Body) []*decad.Face {
 // loop, the 40×40 outer loop of its top face, by 1.5: the plate is a stacked
 // receiver, so the chamfer takes route L and builds a closed brep of the
 // receiver's 11 faces and four planar patches. Every coordinate is a float,
-// so the volume 15000 − (80d² − 4d³/3) is Exact. Tessellate, STEP export and
-// a boolean with the result each refuse naming PR L-2, and the receiver is
-// retired.
+// so the volume 15000 − (80d² − 4d³/3) is Exact. The body tessellates to a
+// closed mesh whose facets are the same volume, STEP writes it through the
+// analytic arm (planes alone, one ADVANCED_FACE per face), and a Cut by a box
+// over its corner composes the mesh. The receiver is retired.
 func TestBrepLoopChamferPublicPlateTopLoop(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -106,16 +107,25 @@ func TestBrepLoopChamferPublicPlateTopLoop(t *testing.T) {
 	require.Equal(t, decad.Exact, volume.Exactness)
 	require.Equal(t, 14824.5, volumeMM(t, volume))
 
-	_, err = got.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "modify-general L-2")
-	err = export.STEP(t.Context(), io.Discard, got, units.Millimeters(0.1),
-		export.WithSTEPName("plate"), export.WithSTEPAuthor("apitest"), export.WithSTEPOrganization("decad"))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "modify-general L-2")
-	_, err = decad.Cut(t.Context(), got, boxBody(t, doc, 35, 35, 45, 45, 20))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "modify-general L-2")
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.InDelta(t, 14824.5, meshVolume(mesh), 1e-9)
+
+	var buf bytes.Buffer
+	require.NoError(t, export.STEP(t.Context(), &buf, got, units.Millimeters(0.1),
+		export.WithSTEPName("plate"), export.WithSTEPAuthor("apitest"), export.WithSTEPOrganization("decad")))
+	text := buf.String()
+	require.Contains(t, text, "analytic decad solid")
+	require.Equal(t, 15, strings.Count(text, "=ADVANCED_FACE("), "one analytic face per face of the body")
+
+	// The corner box removes 250 − (25d − (5³ − (5 − d)³)/3) = 239.875 of the
+	// chamfered corner's volume.
+	cut, err := decad.Cut(t.Context(), got, boxBodyAtZ(t, doc, 35, 35, 45, 45, -5, 30))
+	require.NoError(t, err)
+	remaining, err := cut.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 14584.625, volumeMM(t, remaining), remaining.Bound.Base()+1e-9)
 }
 
 // TestBrepLoopChamferPublicBossRoot chamfers a round boss's root by 1: the
@@ -167,4 +177,122 @@ func TestBrepLoopChamferPublicBossRoot(t *testing.T) {
 	bound := new(big.Rat).SetFloat64(volume.Bound.Base())
 	require.LessOrEqual(t, new(big.Rat).Sub(held, bound).Cmp(at(piLo)), 0)
 	require.GreaterOrEqual(t, new(big.Rat).Add(held, bound).Cmp(at(piHi)), 0)
+}
+
+// roundedDrilledPlate is docs/modify-general-design.md §1's P8 through the
+// public API: the 40×20×20 box with its four vertical edges filleted r = 3,
+// then cut by a Ø6 hole along y through (20, ·, 10).
+func roundedDrilledPlate(t *testing.T) *decad.Body {
+	t.Helper()
+	doc := decad.New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 40, 20)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	rounded, err := box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3))
+	require.NoError(t, err)
+
+	plane, err := w.CreateOffsetPlane(w.XZ(), -10)
+	require.NoError(t, err)
+	ds, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	c := ds.CreatePoint(20, 10)
+	ds.Fix(c)
+	ds.CreateCircle(c, 3)
+	_, err = ds.Solve(t.Context())
+	require.NoError(t, err)
+	drill, err := doc.Extrude(ds, ds.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
+	require.NoError(t, err)
+	out, err := decad.Cut(t.Context(), rounded, drill)
+	require.NoError(t, err)
+	return out
+}
+
+// TestBrepLoopChamferPublicRoundedPlateExports chamfers P8's top loop by 1 (four
+// Plane and four Cone patches at G1 joins, 15232 − 8π/3) and its hole rim by 1
+// (one Cone, 15280 − 10π/3). Each body tessellates to a closed mesh whose
+// volume lies within the chord times the curved faces' area of the closed form, Verify reads it Sound, and STEP writes it faceted, a cone sending the
+// whole body to the faceted writer: one ADVANCED_FACE per mesh triangle.
+func TestBrepLoopChamferPublicRoundedPlateExports(t *testing.T) {
+	t.Parallel()
+	up := r3.NewVec(0, 0, 1)
+	for _, tc := range []struct {
+		name   string
+		face   func(t *testing.T, body *decad.Body) *decad.Face
+		loop   int
+		cones  int
+		planes int
+		a, b   *big.Rat
+	}{
+		{"top loop", func(t *testing.T, body *decad.Body) *decad.Face {
+			return planeFacing(t, body, up, r3.NewVec(0, 0, 20))
+		}, 0, 4, 4, big.NewRat(15232, 1), big.NewRat(-8, 3)},
+		{"hole rim", func(t *testing.T, body *decad.Body) *decad.Face {
+			return planeFacing(t, body, r3.NewVec(0, -1, 0), r3.Vec{})
+		}, 1, 1, 0, big.NewRat(15280, 1), big.NewRat(-10, 3)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			plate := roundedDrilledPlate(t)
+			doc := plate.Document()
+			got, err := plate.Chamfer(t.Context(), loopEdgeQuery(tc.face(t, plate).Loops()[tc.loop]), units.Millimeters(1))
+			require.NoError(t, err)
+			requireEveryEdgeOnTwoFaces(t, got)
+			planes, cones := 0, 0
+			for _, f := range chamferLoopPatches(got) {
+				switch f.Surface().(type) {
+				case decad.Plane:
+					planes++
+				case decad.Cone:
+					cones++
+				}
+			}
+			require.Equal(t, [2]int{tc.planes, tc.cones}, [2]int{planes, cones})
+
+			rep, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			br, err := rep.ForBody(got)
+			require.NoError(t, err)
+			require.Equal(t, decad.Sound, br.Status)
+
+			mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			piLo, _ := new(big.Rat).SetString("3.14159265358979323846")
+			piHi, _ := new(big.Rat).SetString("3.14159265358979323847")
+			at := func(pi *big.Rat) *big.Rat { return new(big.Rat).Add(tc.a, new(big.Rat).Mul(tc.b, pi)) }
+			lo, hi := at(piLo), at(piHi)
+			if lo.Cmp(hi) > 0 {
+				lo, hi = hi, lo
+			}
+			// A chord polygon lies within its sagitta of the surface it chords,
+			// so the mesh differs from the body by at most the chord times the
+			// area of the body's curved faces.
+			curved := 0.0
+			for _, f := range got.Faces() {
+				switch f.Surface().(type) {
+				case decad.Cone, decad.Cylinder:
+					area, err := f.Area()
+					require.NoError(t, err)
+					curved += area.Value.Base()
+				}
+			}
+			held := new(big.Rat).SetFloat64(meshVolume(mesh))
+			slack := new(big.Rat).SetFloat64(0.05 * curved)
+			require.LessOrEqual(t, new(big.Rat).Sub(held, slack).Cmp(lo), 0)
+			require.GreaterOrEqual(t, new(big.Rat).Add(held, slack).Cmp(hi), 0)
+
+			var buf bytes.Buffer
+			require.NoError(t, export.STEP(t.Context(), &buf, got, units.Millimeters(0.05),
+				export.WithSTEPName("plate"), export.WithSTEPAuthor("apitest"), export.WithSTEPOrganization("decad")))
+			text := buf.String()
+			require.Contains(t, text, "faceted decad solid")
+			require.Equal(t, len(mesh.Triangles()), strings.Count(text, "=ADVANCED_FACE("))
+		})
+	}
 }
