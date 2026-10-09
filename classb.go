@@ -3,13 +3,11 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -37,6 +35,8 @@ import (
 type classBPair struct {
 	x      brepPayload
 	embeds []brepEmbed
+	faces  []classbgeom.FaceRecord
+	tool   classbgeom.ToolRecord
 	ref    r3.Frame
 	y      prismPayload // re-expressed: frame g, coordinates shifted exactly
 	g      r3.Frame
@@ -48,16 +48,6 @@ type classBPair struct {
 
 // d is the reference axis Y sweeps along.
 func (cp classBPair) d() int { return cp.axis[2] }
-
-// xLocalOfY places a point of Y's re-expressed section at Y level z in
-// reference coordinates; the map is a signed permutation, so it is exact.
-func (cp classBPair) xLocalOfY(u, v, z float64) [3]float64 {
-	var out [3]float64
-	for i, c := range [3]float64{u, v, z} {
-		out[cp.axis[i]] = cp.sign[i]*c + 0
-	}
-	return out
-}
 
 // tryClassB attempts op over the pair. ok=false (err nil) is a silent miss:
 // the caller takes the mesh path unchanged. A non-nil err is a refusal past
@@ -78,12 +68,12 @@ func tryClassB(ctx context.Context, op meshbool.OperationKind, a, b *Body) (feat
 		if !ok {
 			continue
 		}
-		reach, ok, err := classBThroughReach(ctx, cp)
+		slabs, ok, err := classbgeom.ThroughReach(ctx, cp.faces, cp.tool)
 		if err != nil {
 			return nil, false, err
 		}
 		if ok {
-			return buildClassB(ctx, op, cp, reach)
+			return buildClassB(ctx, op, cp, slabs)
 		}
 		// A Cut of a prism outside the through reach takes the crossing
 		// reach (classb_crossing.go).
@@ -175,6 +165,14 @@ func admitClassBPair(ctx context.Context, xBody, yBody *Body) (classBPair, bool,
 		}
 	}
 	cp := classBPair{x: x, embeds: embeds, ref: ref}
+	cp.faces = make([]classbgeom.FaceRecord, len(x.faces))
+	for i, f := range x.faces {
+		cp.faces[i] = classbgeom.FaceRecord{
+			Region: f.region, Wall: f.wall, Z0: f.z0, Z1: f.z1,
+			Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Outward: f.outward,
+			Axis: embeds[i].Axis, Sign: embeds[i].Sign,
+		}
+	}
 	used := [3]bool{}
 	for i, b := range yAxes {
 		found := false
@@ -210,13 +208,8 @@ func admitClassBPair(ctx context.Context, xBody, yBody *Body) (classBPair, bool,
 	cp.g = g
 	// B2: lines, circles and arcs only, each over its natural range, so every
 	// recorded point is the point the record states.
-	if !classBNaturalRecord(y.profile) {
+	if !classbgeom.NaturalPair(cp.faces, y.profile) {
 		return classBPair{}, false, nil
-	}
-	for _, f := range x.faces {
-		if !classBNaturalRecord(classBFaceRecord(f)) {
-			return classBPair{}, false, nil
-		}
 	}
 	// G6: the tool is hole-free.
 	if len(y.profile.Holes) != 0 {
@@ -227,39 +220,24 @@ func admitClassBPair(ctx context.Context, xBody, yBody *Body) (classBPair, bool,
 		return classBPair{}, false, nil
 	}
 	cp.y = shifted
+	cp.tool = classbgeom.ToolRecord{
+		Profile: shifted.profile, Z0: shifted.z0, Z1: shifted.z1,
+		Z0Delta: shifted.z0Delta, Z1Delta: shifted.z1Delta, Axis: cp.axis, Sign: cp.sign,
+	}
 	// B6: every line runs along a reference axis. Under B4 that is parallel
 	// or perpendicular to the other operand's normal.
-	if !classBAxisAligned(cp.y.profile) {
+	if !classbgeom.AxisAlignedPair(cp.faces, cp.tool.Profile) {
 		return classBPair{}, false, nil
 	}
-	for _, f := range x.faces {
-		if !classBAxisAligned(classBFaceRecord(f)) {
-			return classBPair{}, false, nil
-		}
-	}
-	ok, err = classBCurvedApart(ctx, cp)
+	ok, err = classbgeom.CurvedApart(ctx, cp.faces, cp.tool)
 	if err != nil || !ok {
 		return classBPair{}, false, err
 	}
-	ok, err = classBNoCoplanarFaces(ctx, cp)
+	ok, err = classbgeom.NoCoplanarFaces(ctx, cp.faces, cp.tool)
 	if err != nil || !ok {
 		return classBPair{}, false, err
 	}
 	return cp, true, nil
-}
-
-// classBFaceRecord is one face's segments as a record: a planar face's
-// region, or a swept face's one wall as a single-segment loop.
-func classBFaceRecord(f brepFace) ProfileRecord {
-	if f.planar() {
-		return *f.region
-	}
-	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{f.wall}}}
-}
-
-// classBNaturalRecord adapts a root profile to the internal record gate.
-func classBNaturalRecord(p ProfileRecord) bool {
-	return classbgeom.NaturalRecord(append([]LoopRecord{p.Outer}, p.Holes...))
 }
 
 // classBShiftedTool re-expresses Y's record into g, Y's axes at the reference
@@ -279,198 +257,6 @@ func classBShiftedTool(ref r3.Frame, y prismPayload, g r3.Frame) (prismPayload, 
 	return out, ok
 }
 
-// classBAxisAligned adapts a root profile to the internal record gate.
-func classBAxisAligned(p ProfileRecord) bool {
-	return classbgeom.AxisAligned(append([]LoopRecord{p.Outer}, p.Holes...))
-}
-
-type classBBox = classbgeom.Box2
-type box3 = classbgeom.Box3
-
-func classBSegmentBox(seg CurveSegment) (classBBox, error) { return classbgeom.SegmentBox(seg) }
-func classBPlace(b classBBox, zlo, zhi *big.Rat, axis [3]int, sign [3]float64) box3 {
-	return classbgeom.Place(b, zlo, zhi, axis, sign)
-}
-func classBUnion(a, b classBBox) classBBox { return classbgeom.Union(a, b) }
-
-// classBFaceBox is one face of X as a reference box, widened by its level
-// displacements: a planar face by its outer loop's segments at its level, a
-// swept face by its wall over its interval.
-func classBFaceBox(f brepFace, e brepEmbed) (box3, error) {
-	segs := []CurveSegment{f.wall}
-	if f.planar() {
-		segs = f.region.Outer.Segments
-	}
-	return classbgeom.FaceBox(segs, f.z0, f.z1, f.z0Delta, f.z1Delta, e.Axis, e.Sign)
-}
-
-// classBCurvedApart is B7: every curved wall of X and every curved wall of Y
-// have outward boxes separated along some axis by an exact comparison.
-func classBCurvedApart(ctx context.Context, cp classBPair) (bool, error) {
-	var xs []box3
-	for fi, f := range cp.x.faces {
-		if err := ctx.Err(); err != nil {
-			return false, err
-		}
-		if f.planar() {
-			continue
-		}
-		if _, line := f.wall.(LineSeg); line {
-			continue
-		}
-		b, err := classBFaceBox(f, cp.embeds[fi])
-		if err != nil {
-			return false, err
-		}
-		xs = append(xs, b)
-	}
-	var ys []box3
-	rat := proofarith.FloatRat
-	lz, hz := rat(min(cp.y.z0, cp.y.z1)), rat(max(cp.y.z0, cp.y.z1))
-	for _, seg := range cp.y.profile.Outer.Segments {
-		if _, line := seg.(LineSeg); line {
-			continue
-		}
-		b, err := classBSegmentBox(seg)
-		if err != nil {
-			return false, err
-		}
-		ys = append(ys, classBPlace(b, lz, hz, cp.axis, cp.sign))
-	}
-	for _, a := range xs {
-		for _, b := range ys {
-			if !a.Apart(b) {
-				return false, nil
-			}
-		}
-	}
-	return true, nil
-}
-
-type classBPlane = classbgeom.Plane
-
-// classBRecordPlanes lists the planes of one record's straight walls: a line
-// runs along one in-plane axis, so its plane holds the other in-plane
-// coordinate fixed. axis and sign place the record's local axes on the
-// reference's.
-func classBRecordPlanes(p ProfileRecord, axis [3]int, sign [3]float64) []classBPlane {
-	return classbgeom.RecordPlanes(append([]LoopRecord{p.Outer}, p.Holes...), axis, sign)
-}
-
-// classBNoCoplanarFaces is B8: no planar face or straight wall of X lies in
-// the plane of one of Y's caps or straight walls, compared exactly.
-func classBNoCoplanarFaces(ctx context.Context, cp classBPair) (bool, error) {
-	var xs []classBPlane
-	for fi, f := range cp.x.faces {
-		e := cp.embeds[fi]
-		if f.planar() {
-			xs = append(xs, classBPlane{Axis: e.Axis[2], Level: proofarith.FloatRat(e.Sign[2]*f.z0 + 0)})
-			continue
-		}
-		xs = append(xs, classBRecordPlanes(classBFaceRecord(f), e.Axis, e.Sign)...)
-	}
-	ys := classBRecordPlanes(cp.y.profile, cp.axis, cp.sign)
-	for _, z := range []float64{cp.y.z0, cp.y.z1} {
-		ys = append(ys, classBPlane{Axis: cp.axis[2], Level: proofarith.FloatRat(cp.sign[2]*z + 0)})
-	}
-	for _, a := range xs {
-		if err := ctx.Err(); err != nil {
-			return false, err
-		}
-		for _, b := range ys {
-			if a.Axis == b.Axis && a.Level.Cmp(b.Level) == 0 {
-				return false, nil
-			}
-		}
-	}
-	return true, nil
-}
-
-// classBSlab is one face of X across d that Y's tube meets: the face's index,
-// its level along d in reference coordinates and that level's displacement,
-// and the side its outward normal points to along d (+1 or −1).
-type classBSlab = classbgeom.Slab
-
-// classBThrough is the reach of an admitted pair: one slab (rooted) or two,
-// ordered by level (through).
-type classBThrough struct {
-	slabs []classBSlab
-}
-
-// classBThroughReach decides, by exact comparisons of recorded coordinates,
-// whether the pair is in the through-nesting reach. T is Y's tube: its
-// section's outward box swept over its interval, in reference coordinates.
-//
-//   - The faces of X whose widened boxes are not strictly apart from T are
-//     one or two, and each is across d: a planar face whose normal lies on d,
-//     or a straight wall running at constant d.
-//   - Each lies strictly inside Y's interval along d, with both level
-//     displacements as margin.
-//   - Two faces bound X's material between them: the lower one's outward
-//     normal points −d and the upper one's +d.
-//
-// No other face of X meets T, so inside T the only boundary of X is those
-// faces' patches over Y's section, which §5's perpendicular-face scene proves
-// lie inside each face's region (buildClassB). X over T is then the slab
-// between the two faces, or, with one, the part of T on its material side.
-// A pair outside it misses.
-func classBThroughReach(ctx context.Context, cp classBPair) (classBThrough, bool, error) {
-	rat := proofarith.FloatRat
-	d := cp.d()
-	var section classBBox
-	for i, seg := range cp.y.profile.Outer.Segments {
-		b, err := classBSegmentBox(seg)
-		if err != nil {
-			return classBThrough{}, false, err
-		}
-		if i == 0 {
-			section = b
-			continue
-		}
-		section = classBUnion(section, b)
-	}
-	tube := classBPlace(section, rat(min(cp.y.z0, cp.y.z1)), rat(max(cp.y.z0, cp.y.z1)), cp.axis, cp.sign)
-	var slabs []classBSlab
-	for fi, f := range cp.x.faces {
-		if err := ctx.Err(); err != nil {
-			return classBThrough{}, false, err
-		}
-		e := cp.embeds[fi]
-		b, err := classBFaceBox(f, e)
-		if err != nil {
-			return classBThrough{}, false, err
-		}
-		if b.Apart(tube) {
-			continue
-		}
-		slab, ok := classBAcross(f, e, d)
-		if !ok {
-			return classBThrough{}, false, nil
-		}
-		slab.Face = fi
-		slabs = append(slabs, slab)
-	}
-	if len(slabs) == 0 || len(slabs) > 2 {
-		return classBThrough{}, false, nil
-	}
-	// Y's interval along d in reference coordinates, its level displacements
-	// as inward margins.
-	lowY := cp.xLocalOfY(0, 0, cp.y.z0)[d]
-	highY := cp.xLocalOfY(0, 0, cp.y.z1)[d]
-	if !classbgeom.QualifySlabs(slabs, lowY, highY, cp.y.z0Delta, cp.y.z1Delta) {
-		return classBThrough{}, false, nil
-	}
-	return classBThrough{slabs: slabs}, true, nil
-}
-
-// classBAcross adapts one face to the internal through-reach classifier.
-func classBAcross(f brepFace, e brepEmbed, d int) (classBSlab, bool) {
-	return classbgeom.Across(classbgeom.AcrossFace{
-		Planar: f.planar(), Wall: f.wall, Z0: f.z0, Z0Delta: f.z0Delta,
-		Outward: f.outward, Axis: e.Axis, Sign: e.Sign,
-	}, d)
-}
-
 // buildClassB assembles op's result (§4) over the reach, in g. Each slab face
 // becomes a planar face in g carrying Y's section as a new hole, its region
 // the perpendicular-face scene's answer (§5): prism-boolean's clean-nesting
@@ -488,10 +274,10 @@ func classBAcross(f brepFace, e brepEmbed, d int) (classBSlab, bool) {
 //   - Union keeps X's other faces, the slab faces, and Y's walls with Y's caps
 //     over the parts of [a, b] outside X.
 //   - Intersect is Y's section swept over the inside interval: a prism.
-func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, reach classBThrough) (featurePayload, bool, error) {
+func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, reach []classbgeom.Slab) (featurePayload, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	slabs := make([]classbgeom.SlabFace, len(reach.slabs))
-	for i, s := range reach.slabs {
+	slabs := make([]classbgeom.SlabFace, len(reach))
+	for i, s := range reach {
 		f := cp.x.faces[s.Face]
 		face, err := classbgeom.RestateSlabFace(budget, classbgeom.SlabFaceInput{
 			Region: f.region, Wall: f.wall, Z0: f.z0, Z1: f.z1,
@@ -534,7 +320,7 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 	}
 	// Point of no return (prism-boolean §3.4).
 	drop := map[int]struct{}{}
-	for _, s := range reach.slabs {
+	for _, s := range reach {
 		drop[s.Face] = struct{}{}
 	}
 	out := brepPayload{xform: cp.x.xform}

@@ -1,11 +1,63 @@
 package classbgeom
 
 import (
+	"context"
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
+
+// ThroughReach finds one or two target faces crossing the tool's section tube.
+// Each face must lie across the tool sweep and strictly inside its interval.
+func ThroughReach(ctx context.Context, faces []FaceRecord, tool ToolRecord) ([]Slab, bool, error) {
+	rat := proofarith.FloatRat
+	d := tool.Axis[2]
+	var section Box2
+	for i, seg := range tool.Profile.Outer.Segments {
+		b, err := SegmentBox(seg)
+		if err != nil {
+			return nil, false, err
+		}
+		if i == 0 {
+			section = b
+			continue
+		}
+		section = Union(section, b)
+	}
+	tube := Place(section, rat(min(tool.Z0, tool.Z1)), rat(max(tool.Z0, tool.Z1)), tool.Axis, tool.Sign)
+	var slabs []Slab
+	for fi, f := range faces {
+		if err := ctx.Err(); err != nil {
+			return nil, false, err
+		}
+		b, err := f.box()
+		if err != nil {
+			return nil, false, err
+		}
+		if b.Apart(tube) {
+			continue
+		}
+		slab, ok := Across(AcrossFace{
+			Planar: f.Region != nil, Wall: f.Wall, Z0: f.Z0, Z0Delta: f.Z0Delta,
+			Outward: f.Outward, Axis: f.Axis, Sign: f.Sign,
+		}, d)
+		if !ok {
+			return nil, false, nil
+		}
+		slab.Face = fi
+		slabs = append(slabs, slab)
+	}
+	if len(slabs) == 0 || len(slabs) > 2 {
+		return nil, false, nil
+	}
+	lowY := tool.Sign[2]*tool.Z0 + 0
+	highY := tool.Sign[2]*tool.Z1 + 0
+	if !QualifySlabs(slabs, lowY, highY, tool.Z0Delta, tool.Z1Delta) {
+		return nil, false, nil
+	}
+	return slabs, true, nil
+}
 
 // Slab names a face across the tool's sweep axis and its exact level test.
 type Slab struct {
