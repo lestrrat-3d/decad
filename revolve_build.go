@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
@@ -86,7 +87,8 @@ type revolvePayload struct {
 	// docs/surface-intersection-design.md §7.1's fold into the axis-coordinate
 	// walk, the box through extentBoundedAlong's fifth mechanism, and the
 	// solid's region readings — the Pappus volume, the centroid and a cap's
-	// area — through §7.2's band (revolve_section.go). A revolve a caller draws
+	// area — through §7.2's band (internal/revolveaxis/section_charge.go).
+	// A revolve a caller draws
 	// directly leaves it zero and every reading takes the path it takes today,
 	// bit for bit.
 	sectionDelta float64
@@ -96,7 +98,7 @@ type revolvePayload struct {
 	// that the segment-wise pairing above holds. The per-walk readings then
 	// charge every end, every vertex and every wall's denoted normal (§7.2); a
 	// cut construction leaves it false and charges its own cut ends through
-	// trimRevolveSegmentCharges.
+	// prismcells.TrimRevolveSegmentCharges.
 	sectionWhole bool
 	// radialProof belongs to this exact profile and resolved axis. A path
 	// replacing either must clear it; placement alone preserves both.
@@ -169,6 +171,27 @@ func (rp revolvePayload) axisBound() revolvemesh.AxisBound {
 type sweptPoint struct {
 	u, v  float64
 	bound proofbound.WalkEndBound
+}
+
+// denotedPoint widens a recorded point to the meridian it denotes.
+func (rp revolvePayload) denotedPoint(p sweptPoint) sweptPoint {
+	charge := revolveaxis.SectionWholeCharges(rp.sectionWhole, rp.sectionDelta)
+	p.bound = revolveaxis.DenotedBound(p.bound, charge)
+	return p
+}
+
+// chargedWalk re-expresses a segment in axis coordinates and charges either
+// the whole displaced section or the endpoints cut by a trim.
+func (rp revolvePayload) chargedWalk(seg curveSegment, w survey2d.SegmentWalk) (survey2d.SegmentWalk, error) {
+	if c := revolveaxis.SectionWholeCharges(rp.sectionWhole, rp.sectionDelta); c.U != 0 {
+		walk := rp.ax.walkCharged(w, c, c)
+		return revolveaxis.ChargeWholeWalk(walk, rp.sectionDelta, rp.ax.dU, rp.ax.dV), nil
+	}
+	startCharge, endCharge, err := prismcells.TrimRevolveSegmentCharges(seg, rp.sectionDelta)
+	if err != nil {
+		return survey2d.SegmentWalk{}, err
+	}
+	return rp.ax.walkCharged(w, startCharge, endCharge), nil
 }
 
 // walkStart and walkEnd read a PLANE-local walk's (revolveWalks.Plane) two
@@ -397,7 +420,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// their integrand's envelope over it. The snap's charges above are about the
 	// recorded region against the snapped one and compose beside this one. Zero
 	// for every payload no construction displaced, and folded nowhere then.
-	section, err := revolveSectionChargeOf(rp, work)
+	section, err := revolveaxis.ChargeOf(rp.profile, rp.ax.numeric(), rp.sectionDelta, work)
 	if err != nil {
 		return nil, err
 	}
@@ -846,7 +869,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		for j, si := range w.Segs {
 			segs[j] = loop.Segments[si]
 		}
-		faceArea := frame.AreaOf(proofbound.BoundedMul(rp.wallMoment(w.SegmentWalk, kinds[i], segs), sweep))
+		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
+			w.SegmentWalk, kinds[i], segs, rp.ax.numeric(), rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
@@ -1400,7 +1424,8 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		for oi, si := range w.Segs {
 			segs[oi] = rp.profile.Outer.Segments[si]
 		}
-		faceArea := frame.AreaOf(proofbound.BoundedMul(rp.wallMoment(w.SegmentWalk, kinds[i], segs), sweep))
+		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
+			w.SegmentWalk, kinds[i], segs, rp.ax.numeric(), rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
 			surface:   surf,
 			origins:   origins,

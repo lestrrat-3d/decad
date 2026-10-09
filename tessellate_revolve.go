@@ -107,11 +107,11 @@ type revolvePlan struct {
 	coordMax    float64
 	chord       float64
 	// section is the payload's own section-displacement charge
-	// (revolveSectionChargeOf): the mesh is chorded from the RECORDED meridian,
+	// (revolveaxis.ChargeOf): the mesh is chorded from the RECORDED meridian,
 	// so every face bound, the area slack and the occupied-volume bound carry
 	// the distance from it to the meridian the record denotes. Zero for every
 	// payload no construction displaced.
-	section revolveSectionCharge
+	section revolveaxis.SectionCharge
 	// verify is how much of docs/tessellation-design.md §1's proof this build
 	// runs: below VerifyBoundary the facet-contact audit is skipped and §3's
 	// pair-test ceiling is charged nothing, and below VerifyAll the per-cell
@@ -182,7 +182,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 	if err != nil {
 		return nil, err
 	}
-	section, err := revolveSectionChargeOf(rp, freeform.NewFreeformWork())
+	section, err := revolveaxis.ChargeOf(rp.profile, rp.ax.numeric(), rp.sectionDelta, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
