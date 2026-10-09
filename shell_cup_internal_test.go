@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -110,7 +111,7 @@ func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b proofboun
 //     diameter exceeds the smallest denoted cup's.
 //   - The interference guard (interference.go): two equal displaced records
 //     read as one set.
-//   - cupMinRadius's offset term: the cavity radius misses.
+	//   - radiussurvey.Cup's offset term: the cavity radius misses.
 //   - tessellateCup's face, area-slack and occupied-volume terms: the cavity
 //     wall's face bound, the mesh area and the mesh volume each miss.
 //
@@ -348,11 +349,10 @@ func TestDisplacedCupMinRadius(t *testing.T) {
 	require.NoError(t, err)
 	cp := displacedCup(t, Inward)
 	cp.outer, cp.cavity, cp.thickness = outer, cavity, 1
-	out, ok := cupMinRadius(cp)
-	require.True(t, ok)
-	require.True(t, out.ok)
-	require.NotNil(t, out.reading)
-	reading := Measurement{Value: units.Millimeters(*out.reading), Bound: units.Millimeters(out.bound)}
+	out := radiussurvey.Cup(cp.outer, cp.cavity, cp.offsetDelta)
+	require.True(t, out.OK)
+	require.NotNil(t, out.Reading)
+	reading := Measurement{Value: units.Millimeters(*out.Reading), Bound: units.Millimeters(out.Bound)}
 	d := new(big.Rat).SetFloat64(cupOffsetDelta)
 	requireRatCovered(t, reading, new(big.Rat).Sub(big.NewRat(1, 1), d))
 	requireRatCovered(t, reading, new(big.Rat).Add(big.NewRat(1, 1), d))

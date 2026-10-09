@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -268,25 +269,25 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 //
 //   - a Plane patch has zero curvature in both principal directions (flat),
 //     so it contributes no radius at all, exactly as a straight prism wall
-//     never does (prismMinRadius only ever reads circular walks);
+//     never does (radiussurvey.Prism only ever reads circular walks);
 //   - a regular Cone patch's ruling direction is a straight line (zero
 //     curvature there too); its azimuthal principal radius is
 //     R(z)/cos(halfAngle) >= R(z), so its tightest point (at the SIDE
 //     boundary, R = the original wall's own radius) is never smaller than
 //     that same wall's own unchanged radius — and SX7's band-reach gate
 //     (buildCapBlend) guarantees a chamfered loop always keeps a strictly
-//     positive unchanged run of that same wall, which prismMinRadius reads
+//     positive unchanged run of that same wall, which radiussurvey.Prism reads
 //     directly off the untouched RECEIVER profile;
 //   - an apex-cone patch's radius shrinks to exactly zero only at its own
 //     boundary VERTEX (the untouched original corner point) — a sharp
 //     corner/edge feature, which this survey's own convention already
 //     excludes everywhere else ("the survey reads faces' principal radii,
-//     not edges", shell_cup.go's cupMinRadius) — so reporting it here would
+//     not edges", radiussurvey.Cup) — so reporting it here would
 //     single out a reflex corner's un-rounded tip for a reading the SAME
 //     corner, unchamfered, never received either.
 //
 // So for a band of those patches the correct answer is exactly "no new
-// concave principal radius" and the whole survey reduces to prismMinRadius on
+// concave principal radius" and the whole survey reduces to radiussurvey.Prism on
 // the receiver's own untouched profile.
 func capBlendMinRadius(b *Body, cbp capBlendPayload) (radiusOutcome, bool) {
 	roles := facesByRole(b)
@@ -299,5 +300,6 @@ func capBlendMinRadius(b *Body, cbp capBlendPayload) (radiusOutcome, bool) {
 			return radiusOutcome{}, false
 		}
 	}
-	return prismMinRadius(prismPayload{profile: cbp.profile})
+	reading := radiussurvey.Prism(cbp.profile, 0)
+	return radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 }

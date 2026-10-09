@@ -87,7 +87,7 @@ type SegmentWalk struct {
 	// leaves them at their zero value, meaningless there. axisFrame.toAxis
 	// itself states no such bound (its own doc comment), so a caller
 	// composing a reading from startV/endV/cV — the revolve minimum-radius
-	// meridian survey (survey.go's revolveMinRadius) — reads these instead of
+	// meridian survey (radiussurvey.Revolve) — reads these instead of
 	// the coordinate as an exact leaf; revolvemass.AxisMoments folds the
 	// SAME axis-direction/anchor uncertainty into the region's moments through
 	// bounded arithmetic instead, and does not read these fields.

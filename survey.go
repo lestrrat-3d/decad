@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
 
@@ -219,67 +220,6 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	return undercutOutcome{faces: faces, ok: true}
 }
 
-// radiusOutcomeOf is the concave-radius arms' wrapper over the same reduction:
-// no candidate is the proven all-convex answer, an unresolvable interval is an
-// undecided survey, and anything else is the aggregate's own reading.
-func radiusOutcomeOf(ra survey2d.ExtremeAggregate) (radiusOutcome, bool) {
-	if ra.Empty() && !ra.Unbounded {
-		return radiusOutcome{ok: true}, true
-	}
-	mid, bound, ok := ra.Resolve()
-	if !ok {
-		return radiusOutcome{}, false
-	}
-	return radiusOutcome{reading: &mid, bound: bound, ok: true}, true
-}
-
-// prismMinRadius is the tightest concave radius over a prism's faces: only
-// a side swept from an arc walked against the section's orientation — a
-// hole wall, a notch — curves away from the material, and its radius is the
-// walk's own. Every such walk is a candidate the §9.2 survey2d.ExtremeAggregate reduces; the
-// reading is that aggregate's interval, never one walk's own figures.
-func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
-	if pp.sectionDelta != 0 {
-		// The reading is a radius READ OFF the recorded section, and a payload
-		// carrying a section displacement (docs/prism-boolean-design.md §7)
-		// denotes a section its own record is only within that displacement of.
-		// The survey answers a measurement with no bound of its own, so it leaves
-		// the question undecided rather than publishing a radius for the wrong
-		// section.
-		return radiusOutcome{}, false
-	}
-	loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(pp.profile))
-	if err != nil {
-		return radiusOutcome{}, false
-	}
-	agg := survey2d.MinAggregate()
-	for _, loop := range loops {
-		for _, w := range loop {
-			if w.IsCircular() && w.Th1 < w.Th0 {
-				// Each concave arc enters under its OWN proven radius bound
-				// (extrude.go's arcWalkRadiusBound), and the aggregate — not
-				// this loop — decides what the reading says.
-				agg.Take(w.Radius, w.RadiusBound)
-			}
-		}
-	}
-	return radiusOutcomeOf(agg)
-}
-
-// revolveMinRadius resolves the meridian walks for their bounded curvature reading.
-func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
-	if rp.sectionDelta != 0 {
-		// prismMinRadius' own reading over the meridian: a radius read off the
-		// recorded meridian, with no bound for its displacement.
-		return radiusOutcome{}, false
-	}
-	loops, err := wallsurvey.RevolveLoops(nil, rp.profile, rp.ax.numeric())
-	if err != nil {
-		return radiusOutcome{}, false
-	}
-	return radiusOutcomeOf(revolvesurvey.RadiusAggregate(loops, rp.ax))
-}
-
 // cupWalks resolves one cup region loop into its coalesced walks — the same
 // decomposition evalCup's wall build uses.
 func cupWalks(loop LoopRecord) ([]survey2d.SideWalk, error) {
@@ -401,39 +341,6 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 		faces = nil
 	}
 	return undercutOutcome{faces: faces, ok: true, undecided: undecided}
-}
-
-// cupMinRadius is the tightest concave radius over a cup's faces (D3): the same
-// walk the prism runs, over every loop of the outer region O and every loop of
-// the cavity region C read reversed. A wall that curves away from the material
-// — the cavity's reversed outer (a pocket wall), every hole of O (a tunnel) —
-// contributes its concave radius; a wall that curves toward it — the outer
-// region's own convex rounds, a post's outer cylinder (the reversed cavity
-// hole) — is not a concave feature and rightly does not appear. Each loop is
-// placed with the same walk sense evalCup builds it in, so prismMinRadius reads
-// concavity off the walk direction, exactly as on a prism. The sharp concave
-// edge where a wall meets the floor carries no radius — the survey reads faces'
-// principal radii, not edges. The offset region's arcs are recorded within the
-// cup's offsetDelta of the arcs it denotes: each shares its centre with the
-// denoted arc and its start sits within that displacement of the denoted
-// circle, so every recorded radius is within offsetDelta of its denoted one
-// and the reading's bound takes it.
-func cupMinRadius(cp cupView) (radiusOutcome, bool) {
-	profile := ProfileRecord{Outer: cp.outer.Outer}
-	profile.Holes = append(profile.Holes, cp.outer.Holes...)
-	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
-	for _, loop := range cLoops {
-		crev, err := offset2d.ReverseLoopRecord(loop)
-		if err != nil {
-			return radiusOutcome{}, false
-		}
-		profile.Holes = append(profile.Holes, crev)
-	}
-	out, ok := prismMinRadius(prismPayload{profile: profile})
-	if ok && out.ok && out.reading != nil && cp.offsetDelta > 0 {
-		out.bound = proofbound.AbsSumUpper(out.bound, cp.offsetDelta)
-	}
-	return out, ok
 }
 
 // surveyResults is runSurveys' return record: the raw private outcome for
@@ -573,11 +480,15 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		ok := false
 		switch pl := b.payload.(type) {
 		case prismPayload:
-			out, ok = prismMinRadius(pl)
+			reading := radiussurvey.Prism(pl.profile, pl.sectionDelta)
+			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case revolvePayload:
-			out, ok = revolveMinRadius(pl)
+			reading := radiussurvey.Revolve(pl.profile, pl.ax.numeric(), pl.sectionDelta)
+			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case cupPayload:
-			out, ok = cupMinRadius(pl.view())
+			view := pl.view()
+			reading := radiussurvey.Cup(view.outer, view.cavity, view.offsetDelta)
+			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case capBlendPayload:
 			out, ok = capBlendMinRadius(b, pl)
 		case brepPayload:

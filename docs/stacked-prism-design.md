@@ -331,7 +331,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | `Verify` structural audit | every edge bounds two faces by construction (§3) |
 | `Verify` tolerance gate | `gateWitnessPrisms` reads every outer run's prism over its own interval, whose wall stations are all points of the body, and shrinks their maximum by `sectionDelta + axialDelta` plus the widest station gap (`docs/verification-design.md` §3) |
 | `Verify` wall survey | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (modify-reach Table DX, DX9); a pocket floor is a wall the 2D spanning-disk proof does not read |
-| `Verify` undercut and minimum-radius surveys | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (stage 3 lifts both: DX7's exact per-face normals over the columns and planar patches, DX8's `prismMinRadius` over the outer loop plus every column's hole loop) |
+| `Verify` undercut and minimum-radius surveys | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (stage 3 lifts both: DX7's exact per-face normals over the columns and planar patches, DX8's `radiussurvey.Prism` over the outer loop plus every column's hole loop) |
 | `Verify` clearance | `newBodyGeomBudget` has no arm, so a pair the boxes do not separate reads `Suspect`; a box-disjoint pair is proven (stage 3 adds the exposed-face model, DX6) |
 | `Verify` interference | `analyticBodiesEqual` answers undecided; the read-only mesh intersection reads §5's proof |
 | `Fillet` / `Chamfer` / `Shell` | through the brep face view (modify-reach RX3); a prism group and a stack enclosing a cavity have none (brep-modify SB2) |

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -494,9 +495,9 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 // a circle or an arc walked clockwise in its own frame, with the material on
 // its left, curves away from the material — a hole's wall, a groove — and
 // its radius is the walk's own, entering the §9.2 aggregate under its own
-// proven radius bound, as prismMinRadius takes a prism side's. Planar faces
+// proven radius bound, as radiussurvey.Prism takes a prism side's. Planar faces
 // carry no radius. A record carrying any section displacement leaves the
-// question undecided, as prismMinRadius does: the radius is read off the
+// question undecided, as radiussurvey.Prism does: the radius is read off the
 // recorded wall, which the face only denotes within that displacement.
 //
 // A route L body's band patches add no radius the record's walls do not
@@ -545,5 +546,6 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 			agg.Take(w.Radius, w.RadiusBound)
 		}
 	}
-	return radiusOutcomeOf(agg)
+	reading := radiussurvey.Resolve(agg)
+	return radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 }
