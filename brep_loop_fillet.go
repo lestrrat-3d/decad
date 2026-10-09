@@ -219,10 +219,20 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			}
 			return torus(w.CU, w.CV, major)
 		}
-		tu, tv := w.EndU-w.StartU, w.EndV-w.StartV
-		l := math.Hypot(tu, tv)
-		tu, tv = tu/l, tv/l
+		tu, tv := walkTangent(w)
 		return Cylinder{Origin: pl.point(w.StartU-r*tv, w.StartV+r*tu, sideZ), Axis: pl.dir(tu, tv, 0), Radius: units.Millimeters(r)}
+	}
+
+	// straightWalk is the first of a, b (when given) that is a straight walk,
+	// or nil.
+	straightWalk := func(a survey2d.SideWalk, b *survey2d.SideWalk) *survey2d.SideWalk {
+		if !a.IsCircular() {
+			return &a
+		}
+		if b != nil && !b.IsCircular() {
+			return b
+		}
+		return nil
 	}
 
 	if fr.loop.WholeTurn() {
@@ -246,11 +256,26 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		// meridian is the quarter circle of radius r about the ball centre
 		// under the contour foot, from that foot at F's level down to the side
 		// vertex.
-		meridian := func(foot Point2, v survey2d.SideWalk, capV, sideV *Vertex) *Edge {
+		//
+		// Its axis is the straight neighbour's own walk direction, the very
+		// value that wall's cylinder carries as its Axis, up to sign, so a
+		// consumer comparing the two compares equal values: the cross product
+		// of the foot's normal with up is perpendicular to the walk only to
+		// rounding. A meridian with no straight wall beside it (two circular
+		// walks) keeps that cross product.
+		meridian := func(foot Point2, v survey2d.SideWalk, straight *survey2d.SideWalk, capV, sideV *Vertex) *Edge {
 			nu, nv := foot.U-v.StartU, foot.V-v.StartV
 			l := math.Hypot(nu, nv)
 			normal := pl.dir(nu/l, nv/l, 0)
 			axis, _ := normal.Cross(up).Normalize()
+			if straight != nil {
+				tu, tv := walkTangent(*straight)
+				tangent := pl.dir(tu, tv, 0)
+				if axis.Dot(tangent) < 0 {
+					tangent = tangent.Scale(-1)
+				}
+				axis = tangent
+			}
 			return &Edge{curve: Arc3{Center: pl.point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)},
 				start: capV, end: sideV, convex: convex, length: meridianLen, lengthBound: meridianBound}
 		}
@@ -266,10 +291,11 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 					return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's LF6 corner %d has no connector arc`, ErrUnsupported, bi, k)
 				}
 				arc.convex = convex
-				trail[k] = meridian(j.pA, w, arc.start, sideV)
-				lead[k] = meridian(j.pB, w, arc.end, sideV)
+				trail[k] = meridian(j.pA, w, straightWalk(w, nil), arc.start, sideV)
+				lead[k] = meridian(j.pB, w, straightWalk(w, nil), arc.end, sideV)
 			case filletband.Tangent:
-				lead[k] = meridian(j.m, w, supplied.wall[k].start, sideV)
+				prev := fr.walks[(k+n-1)%n]
+				lead[k] = meridian(j.m, w, straightWalk(prev, &w), supplied.wall[k].start, sideV)
 				trail[k] = lead[k]
 			default:
 				kappa, err := filletband.Kappa(fr.loop.Walks[(k+n-1)%n], fr.loop.Walks[k])
@@ -543,4 +569,11 @@ func (bp brepPayload) hasFilletBand() bool {
 // surveys and the mesh boolean operand (Table DF's DF4, DF5, DF7, DF8).
 func errFilletBandStaged(reader string) error {
 	return fmt.Errorf(`%w: this evaluator does not yet read a body carrying a route L fillet band through %s; its pipe patches' rings and proof terms are loop-fillet PR F-2`, ErrUnsupported, reader)
+}
+
+// walkTangent is a straight side walk's unit direction in its plane's (u, v).
+func walkTangent(w survey2d.SideWalk) (float64, float64) {
+	tu, tv := w.EndU-w.StartU, w.EndV-w.StartV
+	l := math.Hypot(tu, tv)
+	return tu / l, tv / l
 }

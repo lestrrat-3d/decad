@@ -61,8 +61,8 @@ func WithSTEPOrganization(organization string) STEPOption {
 // NewSTEPFile builds an AP214 file from one boundary-verified solid.
 // tol is Body.Tessellate's chord tolerance. The caller supplies the mandatory
 // header fields, including a timestamp; AP214's schema replaces Header.Schemas.
-// Supported plane and full-cylinder boundaries retain analytic faces, lines,
-// and circles. Other boundaries use one planar ADVANCED_FACE per mesh triangle.
+// Supported plane, cylinder and torus boundaries retain analytic faces, lines,
+// circles and ellipses. Other boundaries use one planar ADVANCED_FACE per mesh triangle.
 // Sheets and bodies with multiple shells are refused. ctx and body must not be nil.
 func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header step.Header) (step.File, error) {
 	if ctx == nil {
@@ -98,6 +98,15 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 	if err != nil {
 		return step.File{}, err
 	}
+	return assembleSTEPFile(ctx, body, header, analytic, vertices, triangles)
+}
+
+// assembleSTEPFile writes the product structure and the shell of one admitted
+// solid: its analytic faces when analytic, else one planar face per triangle
+// of the verified mesh (vertices, triangles).
+func assembleSTEPFile(
+	ctx context.Context, body *decad.Body, header step.Header, analytic bool, vertices []r3.Vec, triangles [][3]int,
+) (step.File, error) {
 	productDescription := "faceted decad solid"
 	if analytic {
 		productDescription = "analytic decad solid"
@@ -118,6 +127,7 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 	shape := b.add(ap214.ProductDefinitionShape(0, "shape", "", definition))
 
 	var faces []step.Reference
+	var err error
 	if analytic {
 		faces, err = b.addAnalyticFaces(ctx, body)
 		if err != nil {

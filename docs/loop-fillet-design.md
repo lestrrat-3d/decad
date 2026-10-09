@@ -379,7 +379,7 @@ modify §4's stage 1 and reach SX10:
 | **DF7** | undercut survey | per patch through `Face.NormalAt`: the normal of an LF1 patch sweeps the quarter from `n̂_F` to the wall's outward normal, an LF2/LF3 patch the quarter at every azimuth of its window, an LF6 patch the quarter at every azimuth of `ψ` short of the apex; the component range along the pull is the closed-form range of `A·cos φ + B·sin φ` over the window, read with reach DX7's three-valued rule and its arithmetic allowance alone, since the stamped departure is zero |
 | **DF8** | concave-radius survey | a band with `σ = +1` (a fill) contributes `r` exactly, the tag's `Minor`/`Radius`, which a placement leaves unchanged; a band with `σ = −1` is convex in its tube direction and contributes nothing; an LF6 patch's other principal radius is `ρ/sin φ`, which vanishes at the apex where the receiver's own sharp reflex edge already reads as `brepMinRadius` reads it today (a sharp corner enters no aggregate), so it adds nothing. `brepMinRadius` drops its `capPatchWindowSkew`/`normalBound` refusal for fillet bands, keeps it for chamfer bands |
 | **DF9** | wall survey | staged `Suspect`, as for every brep |
-| **DF10** | STEP | the faceted writer: `supportsAnalyticSTEP` has no `Torus` arm and `supportsAnalyticPartialWall` rejects an `Ellipse3` edge, so a banded body falls to the faceted writer with no code change. Analytic `TOROIDAL_SURFACE` faces and `ELLIPSE` edges need the `step` module's entities (§12 hand-off); PR F-3 |
+| **DF10** | STEP | analytic: `supportsAnalyticSTEP` takes a whole-turn torus (LF7), a four-arc torus patch (LF2/LF3) and a straight-walk cylinder patch closed by `Ellipse3` edges (`docs/step-export-design.md`). A horn torus patch (LF6, a three-edge loop closing on the axis) keeps the faceted writer. `Body.Tessellate`, the shared admission check, still refuses a banded body until F-2, so `export.STEP` reaches the writer only after F-2 |
 | **DF11** | a later `Fillet`/`Chamfer`/`Shell` | DG11: Tables RB/EB/SB/TC/LB over the rewritten record; a patch's edge is in no record and matches nothing (SL1); a trimmed wall's rim at `sideZ` ends on a patch, so route E's SB7 refuses an edge there; a record carrying bands reads as no prism (route P and Table TC refuse); a second loop fillet or chamfer on another loop appends to `loopBands`, provided the first left `delta = 0` |
 | **DF12** | `Placed`, `Mirrored`, `PatternCopies` | re-lifts every face frame; `loopBands` re-attach on re-evaluation; a reflection flips `outward` and the ellipse's `Axis` sense with every winding (general-boolean A4) |
 
@@ -565,7 +565,7 @@ functions' doc comments, a `docs/layout/` row per new root file, and
 | **F-0** | Sonnet, file-by-file | `Ellipse3` (api §4; `surfacegeom/geometry.go`, `placement.go`, `topology.go` alias, `selectedEdgeContext`, `brepEdgeMatches` default); `brepLoopBand.kind`; `brepLoopRoute`'s fillet arm as a stub keeping SL3's refusal; `fillet.go`'s cap-edge arm calling `brepOfPrism` into the stub | `internal/surfacegeom/`, `topology.go`, `fillet.go`, `brep_loop_band.go`, `brep_modify_loop.go`, `docs/api-design.md` | every existing fillet, chamfer, brep-modify and route L fixture bit for bit; an `Ellipse3` placed and mirrored | — |
 | **F-1** | Opus, proof spec | the fillet arm: LF classification (SF1), `attachFilletBand` (LF1–LF7 faces, `Ellipse3`/`Arc3`/`Circle3` edges, shared vertices, roles), `internal/filletband/` (Table CF coefficients with interval enclosures, `J_k`/`H_k`, patch areas, extents), `measureBrepContext`'s restored-face sum plus `σ·V_strip`/`σ·M_strip`, `extentAlong`; tessellation, surveys and the boolean operand refuse a fillet-banded body (`ErrUnsupported`, naming F-2); reach §8.2, modify-general §6/SL3, brep-modify SB4/SB5/SB7 text, `missing-features.md`, `doc.go` | `brep_loop_fillet.go` (new), `brep_loop_band.go`, `brep_measure.go`, `brep_payload.go`, `brep_modify_loop.go`, `fillet.go`, `internal/filletband/` (new), `brep_loop_fillet_internal_test.go`, `apitest/brep_loop_fillet_test.go` | §8's volumes, areas, centroids, topology and roles; the bound fixture's two legs; every refusal | F-0 |
 | **F-2** | Sonnet, file-by-file, copying `tessellate_brep_band.go` with §7.1 as its term table | DF4 rings and the proof terms, DF5 admission, DF7/DF8 surveys, DF12 re-attachment tests, DF10 faceted export confirmed | `tessellate_brep_band.go`, `tessellate_brep.go`, `boolean.go`, `brep_measure.go` (surveys), `survey.go`, tests | every §8 fixture's mesh closed and within its published bound; P2's floor loop reads `1.5` in the concave-radius survey; P3's root is listed by the undercut survey under a pull along `−z`; a `Cut` by a box over P1's filleted corner builds through the mesh path | F-1 |
-| **F-3** | Sonnet, file-by-file | analytic STEP: `TOROIDAL_SURFACE` faces bounded by `Circle3`/`Arc3` edges, `ELLIPSE` edges on partial cylinders, `supportsAnalyticSTEP` arms | `export/step_analytic.go`, `export/step_test.go` | P3's root and rim and P8's top loop export analytic STEP; P1's top loop exports analytic STEP with four `ELLIPSE` edges | F-1, and the `step` module release of §12 |
+| **F-3** (landed) | Sonnet, file-by-file | analytic STEP: `TOROIDAL_SURFACE` faces bounded by `Circle3`/`Arc3` edges, `ELLIPSE` edges on partial cylinders, `supportsAnalyticSTEP` arms | `export/step_analytic.go`, `export/step_analytic_torus.go`, `export/step_analytic_band_internal_test.go` | P3's root and rim and P8's top loop export analytic STEP; P1's top loop exports analytic STEP with four `ELLIPSE` edges | F-1, and the `step` module release of §12 |
 
 F-2 and F-3 run in parallel after F-1: they share no file. F-0 runs alone;
 F-1 runs alone.
@@ -575,9 +575,9 @@ Increment table — what still refuses after each PR:
 | After | Still refused |
 |---|---|
 | F-0 (landed) | everything Table SB and SL3 refuse today |
-| F-1 (landed) | every consumer of a fillet-banded body but mass properties, `Bounds`, `Verify`'s structural audit and gate, placement and later modify ops (F-2); analytic STEP (F-3); SF1; SB5; SX5; SX4 |
-| F-2 | analytic STEP (F-3); SF1; SB5 (three-edge vertex blends); SX5 (revolve cap edges); SX4 (partial loops); clearance model (DF6, `Suspect`) |
-| F-3 | SF1; SB5; SX5; SX4; DF6; variable-radius fillets (no entry point) |
+| F-1 (landed) | every consumer of a fillet-banded body but mass properties, `Bounds`, `Verify`'s structural audit and gate, placement and later modify ops (F-2); SF1; SB5; SX5; SX4 |
+| F-2 | SF1; SB5 (three-edge vertex blends); SX5 (revolve cap edges); SX4 (partial loops); clearance model (DF6, `Suspect`) |
+| F-3 (landed) | SF1; SB5; SX5; SX4; DF6; variable-radius fillets (no entry point) |
 
 ## 12. Hand-off
 
@@ -587,4 +587,4 @@ file `../step/.tmp/decad-handoff-loop-fillet.md` asks for
 `ap214.ToroidalSurface(id, name, position, majorRadius, minorRadius)`,
 `ap214.SphericalSurface(id, name, position, radius)` and
 `ap214.Ellipse(id, name, position, semiAxis1, semiAxis2)`, with the AP214
-attribute order and the decad faces that will use them. PR F-3 waits on it.
+attribute order and the decad faces that use them. PR F-3 consumes it.

@@ -28,21 +28,37 @@ according to the writer path.
 - Admit one valid `BodySolid` with one non-void shell. Refuse sheets, multiple
   shells, and disconnected facet sets. Multiple shells need separate solids or
   void relationships, which this adapter cannot safely infer.
-- Use analytic AP214 faces when every body face is a `Plane` or a `Cylinder`
-  and every edge is a `Line3`, an `Arc3` or a full `Circle3`. A plane's loops
+- Use analytic AP214 faces when every body face is a `Plane`, a `Cylinder` or a
+  `Torus` and every edge is a `Line3`, an `Arc3`, an `Ellipse3` or a full `Circle3`. A plane's loops
   are one full circle each, or chains of lines and arcs (at least three
   edges, or two when one is an arc). A cylindrical wall is either full —
   exactly two one-circle boundary loops whose start vertices align along its
   axis — or partial: one loop of at least four edges, each an `Arc3` about
-  the cylinder's axis (its `Axis` that axis or its negation, exactly) or a
-  `Line3` along it (an exactly zero cross product), with both kinds present,
-  since a side line split by a neighbouring face's vertex is several
-  `Line3`s. Emit one `ADVANCED_FACE`
+  the cylinder's axis (its `Axis` that axis or its negation, exactly) or an `Ellipse3`, or a `Line3`
+  along it (an exactly zero cross product), with lines and arcs or ellipses
+  both present, since a side line split by a neighbouring face's vertex is
+  several `Line3`s. A loop fillet's straight-walk patch is such a wall, closed
+  by quarter-meridian arcs or by mitre ellipses. Emit one `ADVANCED_FACE`
   per body face. Share `VERTEX_POINT`s and `EDGE_CURVE`s by body topology
   identity. An `Arc3` edge is a `CIRCLE` placed about its own `Axis`, with the
   reference direction to its start vertex, trimmed by its two vertices; it
   sweeps counter-clockwise about that axis from start to end, so its
   `EDGE_CURVE` keeps the circle's sense.
+  An `Ellipse3` edge is an `ELLIPSE` placed at its `Center` about its `Axis`
+  with `Major` as the reference direction and `SemiMajor`, `SemiMinor` as the
+  semi-axes; it sweeps counter-clockwise from start to end, as the `EDGE_CURVE`
+  states. A torus is a `TOROIDAL_SURFACE` at its `Center` about its `Axis`
+  with its major and minor radii (a minor above the major, a spindle torus,
+  is written as is). A whole-turn torus has exactly two one-circle loops whose
+  start vertices lie on one azimuth (an exactly zero cross product); it
+  receives one synthetic seam, the tube circle through both start vertices,
+  used twice in opposite directions. A torus patch has one loop of at least
+  four `Arc3` edges, each about the torus axis (a parallel) or in a plane
+  holding it (a meridian), both kinds present. Its sense follows its outward
+  normal against the torus's own, which points away from the tube's centre
+  circle, and its loop is reversed when its signed area in the (azimuth, tube
+  angle) plane disagrees with that sense. A horn torus patch is a three-edge
+  loop and keeps the faceted writer.
   A full cylindrical wall receives one synthetic straight seam edge, used
   twice in opposite directions in its STEP loop. This seam changes STEP
   topology, not the body's geometry. Plane faces use their source outer and
