@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"slices"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -270,18 +269,10 @@ type planarDepartureProof struct {
 // f, which no fraction of a proven departure does.
 func (p *planarDepartureProof) lowerGap(f *big.Rat) *big.Rat {
 	t := new(big.Rat).Mul(f, p.support.duration)
-	var least *big.Rat
-	for i, height := range p.support.heights {
-		value := proofbound.RatAdd(height, proofbound.RatMul(p.support.rates[i], t))
-		value.Sub(value, proofbound.RatMul(p.curvature[i], t, t))
-		if least == nil || value.Cmp(least) < 0 {
-			least = value
-		}
-	}
+	least := planarsweep.DepartureHeight(p.support.heights, p.support.rates, p.curvature, t, p.support.nHigh)
 	if least.Sign() <= 0 {
 		return least
 	}
-	least.Quo(least, p.support.nHigh)
 	clearance, open, err := p.support.column(f, noSweepPoll)
 	if err != nil || !open {
 		return nil
@@ -438,7 +429,10 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 			if _, open, err := support.column(f, budget.Step); err != nil || !open {
 				return false, err
 			}
-			return face.contains(support, f, new(big.Rat).Add(depthAt(t, k), support.pathM.delta.Rat()), budget.Step)
+			spans := support.pathM.cornerSpan(new(big.Rat), f)
+			depth := new(big.Rat).Add(depthAt(t, k), support.pathM.delta.Rat())
+			return planarsweep.FaceContains(&face.SupportFace, spans, support.pathS.path.Delta,
+				support.contact, support.lifted, f, depth, budget.Step)
 		}
 		end, ok, err := r.gridHorizon(holds)
 		if err != nil {
@@ -557,35 +551,6 @@ func planarSupportFace(s *planarSupport) (planarFace, bool) {
 	return planarFace{face}, ok
 }
 
-// contains reports whether, through fraction f, the foot of every contact
-// vertex on the moving plane stays inside the face. The foot lies within
-// depth of the vertex, so the vertex's ideal path box over [0, f], less S's
-// own translation and grown by depth on every axis, encloses it in S's start
-// frame. That box, projected along the dropped axis, holds the projected foot,
-// and the projection is a bijection on the plane: a projected box that meets
-// no bounding edge and has a corner in a face triangle lies inside the face.
-func (face *planarFace) contains(s *planarSupport, f, depth *big.Rat, poll func() error) (bool, error) {
-	spans := s.pathM.cornerSpan(new(big.Rat), f)
-	i, j := (face.Drop+1)%3, (face.Drop+2)%3
-	for _, index := range slices.Concat(s.contact, s.lifted) {
-		if err := poll(); err != nil {
-			return false, err
-		}
-		var lo, hi [2]*big.Rat
-		for slot, axis := range [2]int{i, j} {
-			shift := new(big.Rat).Mul(s.pathS.path.Delta[axis].Rat(), f)
-			shiftLo, shiftHi := proofbound.RatMin(shift, new(big.Rat)), proofbound.RatMax(shift, new(big.Rat))
-			span := spans.Span(index, axis)
-			lo[slot] = proofbound.RatAdd(span.Lo, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(depth))
-			hi[slot] = proofbound.RatAdd(span.Hi, new(big.Rat).Neg(shiftLo), depth)
-		}
-		if !face.HoldsBox(lo, hi) {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 // planarManifoldAt publishes the track's manifold at an exact fraction. Each
 // contact vertex is staged through the rounded pose, exactly as ContactPair
 // stages it, and published with its foot on S's rounded plane. The rounded
@@ -687,12 +652,9 @@ func (p *planarTrackProof) replayHeights(f *big.Rat) (*big.Rat, bool) {
 		return nil, false
 	}
 	deviation := new(big.Rat).Add(eta[0], eta[1])
-	floor := new(big.Rat).Neg(proofbound.RatMul(new(big.Rat).Add(p.heldDepth, deviation), p.nHigh))
-	q := verts[p.s][p.origin]
-	for _, v := range verts[p.m] {
-		if proofarith.DvDot(p.normal, proofarith.DvSub(v, q)).Rat().Cmp(floor) < 0 {
-			return nil, false
-		}
+	if !planarsweep.ReplayHeights(verts[p.m], verts[p.s][p.origin], p.normal,
+		p.heldDepth, deviation, p.nHigh) {
+		return nil, false
 	}
 	return deviation, true
 }
