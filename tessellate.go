@@ -444,6 +444,10 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateStacked(ctx, b, sp, chord, verify)
 	}
 	if bp, ok := b.payload.(brepPayload); ok {
+		if len(bp.loopBands) > 0 {
+			// docs/modify-general-design.md Table DG's DG3 lands in PR L-2.
+			return nil, fmt.Errorf(`%w: this evaluator does not yet tessellate a brep body carrying route L chamfer bands (modify-general L-2)`, ErrUnsupported)
+		}
 		return tessellateBrep(ctx, b, bp, chord, verify)
 	}
 	if lp, ok := b.payload.(loftPayload); ok {

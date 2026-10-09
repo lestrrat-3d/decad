@@ -215,8 +215,12 @@ func (r *brepEdgeRoute) render(c [3]float64) string {
 	return renderVec(r.bp.refView().point(c[0], c[1], c[2]))
 }
 
-// partner is the other use of use ui's edge.
+// partner is the other use of use ui's edge, -1 when ui is a route L band's
+// boundary, which pairs with no face of the record.
 func (r *brepEdgeRoute) partner(ui int) int {
+	if r.topo.edgeOf[ui] < 0 {
+		return -1
+	}
 	pair := r.topo.edges[r.topo.edgeOf[ui]]
 	if pair[0] == ui {
 		return pair[1]
@@ -586,8 +590,12 @@ func (r *brepEdgeRoute) locateCorners(eb *brepEdgeBlend) error {
 		var faceOf [2]int
 		for w, wi := range [2]int{(ci + n - 1) % n, ci} {
 			ui := r.loopUse[[3]int{end.face, li, walks[wi].Segs[0]}]
-			mate := r.topo.uses[r.partner(ui)]
 			faceOf[w] = -1
+			mateUse := r.partner(ui)
+			if mateUse < 0 {
+				continue
+			}
+			mate := r.topo.uses[mateUse]
 			for j := range 2 {
 				if mate.Face == eb.adj[j] && r.traces(eb, j, mate) {
 					faceOf[w] = j
@@ -828,7 +836,10 @@ func (r *brepEdgeRoute) rewrite(blends []*brepEdgeBlend) (brepPayload, error) {
 		}
 		faces[fi].wall = walkSegment(survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, sU, sV, eU, eV)
 	}
-	out := brepPayload{faces: append(faces, blendFaces...), xform: r.bp.xform}
+	// A receiver's route L bands keep their faces and loops: route E rewrites
+	// faces in place and appends its blend faces after them, and a selected
+	// edge ending on a band's boundary meets too few record edges (SB6).
+	out := brepPayload{faces: append(faces, blendFaces...), xform: r.bp.xform, loopBands: r.bp.loopBands}
 	out.assignRoles()
 	return out, nil
 }

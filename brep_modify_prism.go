@@ -53,8 +53,21 @@ func (c prismCaps) sectionLoop(start bool, li int) int {
 // prism reading (§4.1) the op's own classification admits is taken. The
 // returned route carries that prism and its caps. When no axis admits, the
 // route is empty and refusal is the first axis's classification refusal, or
-// nil when no axis reads as a prism at all. err is a context error only.
+// nil when no axis reads as a prism at all. err is a context error, or the
+// refusal of a Shell of a record carrying route L chamfer bands.
+//
+// A record carrying route L bands (docs/modify-general-design.md §4) reads as
+// no prism: a prism reading would read its faces alone and drop the band
+// patches the body also holds, so a Fillet or Chamfer goes on to route E or
+// route L over the record. A Shell of it refuses, since its erosion meets the
+// band patches, which no through-cut record holds (modify-general SG3).
 func brepPrismRoute(ctx context.Context, b *Body, bp brepPayload, req brepModifyRequest) (brepRoute, error, error) {
+	if len(bp.loopBands) > 0 {
+		if req.shell {
+			return brepRoute{}, nil, fmt.Errorf(`%w: this evaluator shells no brep body carrying route L chamfer bands; their patches are oblique planes and cones no through-cut record holds (modify-general SG3)`, ErrUnsupported)
+		}
+		return brepRoute{}, nil, nil
+	}
 	embeds, err := brepEmbeds(bp.faces)
 	if err != nil {
 		// A record the build took has embeds; one that has none reads as no

@@ -35,8 +35,9 @@ import (
 // chord exists between any two distinct feet, so the fillet's no-blend-centre
 // refusal has no chamfer case (Table B, B1). A revolve receiver takes the same chord on its meridian
 // (revolve_blend.go, docs/modify-reach-design.md §7), and a brep or stacked
-// boolean result takes routes P and E of docs/brep-modify-design.md
-// (brep_modify.go); any other non-prism receiver is S3 (ErrUnsupported).
+// boolean result takes routes P and E of docs/brep-modify-design.md and route
+// L of docs/modify-general-design.md (brep_modify.go); any other non-prism
+// receiver is S3 (ErrUnsupported).
 //
 // Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
 // which the fillet does not: a selection covering every geometric edge of one
@@ -119,6 +120,23 @@ type ChamferOption interface {
 // or carries a displaced level, end faces whose chords disagree, and a body
 // whose faces carry a section displacement (SB1) are ErrUnsupported (Table
 // SB).
+//
+// A selection of one or more complete loops of planar faces of such a body
+// takes route L (docs/modify-general-design.md §4): each loop's face takes
+// the loop offset d into its material, every face beside the loop is trimmed
+// d along the face's normal, and a band of Plane and Cone patches joins the
+// two, removing a wedge where the walls beside the loop descend into the body
+// (a hole mouth, a plate's top loop) and filling the concave corner where
+// they rise off it (a boss root). The result is a brep body whose volume,
+// area, centroid and box answer, which Verify, placement and a further modify
+// op read; its tessellation, STEP export, use as a boolean operand and its
+// undercut and concave-radius surveys are ErrUnsupported or staged until
+// modify-general PR L-2, and a clearance pair its boxes do not decide reads
+// Suspect. A selection that is part of a loop, mixes loops with lone edges or
+// holds two loops sharing an edge is SL1, a face beside a loop that is curved,
+// oblique, split or on both sides of the loop's face is SL2, and a band
+// reaching a far face end is SX7 (each ErrUnsupported); a setback that
+// empties a loop's offset is SX6 (ErrDegenerate).
 func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a chamfer`, ErrDegenerate)
@@ -219,7 +237,8 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 			_, _, _, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
 			return err
 		},
-		sel: sel, edges: edges, blend: &blend})
+		sel: sel, edges: edges, blend: &blend,
+		loop: &capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}})
 	if err != nil {
 		return nil, err
 	}

@@ -97,8 +97,11 @@ const filletTol = sectionaudit.Tolerance
 // end face is a curved face or an earlier blend, a straight wall the route
 // needs as a plane that is oblique, split or carries a displaced level, end
 // faces whose arcs disagree, and a body whose faces carry a section
-// displacement (SB1) are ErrUnsupported (Table SB). Any other receiver that
-// is neither a prism nor a revolve is S3 (ErrUnsupported).
+// displacement (SB1) are ErrUnsupported (Table SB). A selection of complete
+// loops of such a body's planar faces, one of them with a corner, is the
+// vertex-blend problem and ErrUnsupported (docs/modify-general-design.md
+// SL3). Any other receiver that is neither a prism nor a revolve is S3
+// (ErrUnsupported).
 func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)

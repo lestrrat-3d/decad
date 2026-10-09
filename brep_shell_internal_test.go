@@ -85,13 +85,13 @@ func internalAlongXHole(t *testing.T, doc *Document, at, depth, y, z, r float64)
 // internalLBracket is §1's P7: the L section (0, 0), (40, 0), (40, 8),
 // (8, 8), (8, 40), (0, 40) over z ∈ [0, 30], with a Ø6 hole along x through
 // the leg x ∈ [0, 8] at (y, z) = (24, 15).
-func internalLBracket(t *testing.T) (*Document, *Body) {
+func internalLBracket(t *testing.T) *Body {
 	t.Helper()
 	doc := New()
 	l := internalPolygonPrism(t, doc, [][2]float64{{0, 0}, {40, 0}, {40, 8}, {8, 8}, {8, 40}, {0, 40}}, 30)
 	out, err := Cut(t.Context(), l, internalAlongXHole(t, doc, 4, 5, 24, 15, 3))
 	require.NoError(t, err)
-	return doc, out
+	return out
 }
 
 // internalRoundedPlate is §1's P8: the 40×20×20 box with its four vertical
@@ -397,7 +397,7 @@ func TestBrepShellThroughCutP6(t *testing.T) {
 // the hole instead of dilating it, and the volume missed).
 func TestBrepShellThroughCutP7(t *testing.T) {
 	t.Parallel()
-	_, p7 := internalLBracket(t)
+	p7 := internalLBracket(t)
 	result, bp := requireThroughShell(t, p7, Faces(Facing(shellUp)).Exactly(1), units.Millimeters(2),
 		big.NewRat(9552, 1), big.NewRat(56, 1))
 	require.Len(t, shellCylinders(result, 2, shellUp), 1)

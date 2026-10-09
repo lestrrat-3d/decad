@@ -80,9 +80,12 @@ facetedPayload             → SX9, unchanged
 ```
 
 The brep route: SB1; then route P for every reference axis in order; then
-route E (Fillet/Chamfer) or route S (Shell; `docs/modify-general-design.md`
-§3), whose refusal leads with SB3 or SB10 where the record reads as no
-through-cut record either. Route P is tried first because its
+route E or `docs/modify-general-design.md`'s route L (Fillet/Chamfer), or
+route S (Shell; modify-general §3), whose refusal leads with SB3 or SB10
+where the record reads as no through-cut record either. Route E takes single
+straight edges along reference axes, no two sharing a vertex; route L takes
+every other Fillet or Chamfer selection (modify-general §4.1). A record
+carrying route L chamfer bands reads as no prism. Route P is tried first because its
 result is a `prismPayload`, which every consumer and every further modify op
 already takes. The two routes never build the same edge differently: a lateral
 edge of the recognised prism and the same edge under route E are the same
@@ -347,8 +350,8 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | **SB1** | a brep or stacked receiver with `sectionDelta() != 0` | yes; its rewrite has no proven displacement | `ErrUnsupported`, naming the displacement as `requireExactSection` does |
 | **SB2** | a stacked receiver `brepOfStacked` refuses (a prism group, several regions in one slab; a stack enclosing a cavity, a closed shell) | yes | that call's `ErrUnsupported` |
 | **SB3** | route P reads a prism along some axis, a Shell's removed faces are not its caps, no other axis admits them, and route S reads no through-cut record along any axis (modify-general Table TC) | yes | modify S2, with SG3's reason |
-| **SB4** | a selected edge that is not a straight line along a reference axis: a hole rim or boss root (`Circle3`/`Arc3`), an oblique line | yes; a cone or torus band on a brep face is not a face kind this record holds | `ErrUnsupported` |
-| **SB5** | two selected edges sharing a vertex | yes; the vertex blend | `ErrUnsupported` |
+| **SB4** | a Fillet of an edge that is not a straight line along a reference axis — a hole rim or boss root (`Circle3`/`Arc3`), an oblique line — outside complete loops of planar faces that have corners; a Chamfer of such an edge takes route L (modify-general §4) | yes; a torus band on a brep face is not a face kind this record holds | `ErrUnsupported` |
+| **SB5** | a Fillet of two selected edges sharing a vertex that are no complete loops of planar faces; a Chamfer of edges sharing a vertex takes route L, which refuses with SL1 what is no complete loop | yes; the vertex blend | `ErrUnsupported` |
 | **SB6** | an edge vertex with other than three incident edges, or an edge that is one piece of a split side line | yes | `ErrUnsupported` |
 | **SB7** | the third face at an edge vertex is not, and cannot be restated as, a plane across the edge's axis: a cylinder, a plane along the axis, an oblique, split or level-displaced straight wall, a blend face of an earlier call | yes; the edge ends on a blend or a curved face | `ErrUnsupported` |
 | **SB8** | an adjacent face outside EB4/EB5: a rim-adjacent wall that is oblique, split or level-displaced, a (pl) face whose neighbours at `e` are not straight and across the axis, a narrowed range, consecutive segments on one carrier | yes | `ErrUnsupported` |
@@ -365,7 +368,7 @@ Gate order for a brep receiver, after modify §4's stage 1 and reach SX10:
 |---|---|
 | 2a. record | RB dispatch; SB2; SB1 |
 | 2b. route P | P1–P5 per axis; the prism path's own stage 2 onward where an axis admits; a shell with no admitting axis takes route S at 2c, and SB3 where a prism read and route S reads none |
-| 2c. route E entry | route S (Shell; modify-general §3.4); EB1/SB4 per edge; EB7/SB5 over the set |
+| 2c. route E entry | route S (Shell; modify-general §3.4); a selection other than single straight edges along axes, no two sharing a vertex, takes route L (modify-general §4.4), and a Fillet route L does not refuse returns here; EB1/SB4 per edge; EB7/SB5 over the set |
 | 3. edge topology | EB2/SB6; the restatement passes (§5.2): EB3/SB7, then EB4/SB8; EB5/SB8; EB6 |
 | 4. construction | per edge: S4, S5 in `G0`; the recomputation in `G1`, SB9 |
 | 5. audit | per planar face: S8, S6, S7, S9; per trimmed wall: S6 |
@@ -461,7 +464,8 @@ Route E:
 - Pocket, fillet the two floor edges along `x` (`y = 15`, `y = 25`, `z = 5`),
   `r = 1`, in one call: both pocket `y`-walls and both `x`-walls are restated,
   13 faces, volume within its bound of `15040 − 10π`; all four floor edges in
-  one call → SB5.
+  one call are the floor's complete loop → `docs/modify-general-design.md`
+  SL3.
 - Boss, chamfer the boss's inner vertical edge at `(10, −10)`, `d = 2`:
   `Exact` `17470`, 10 faces; the floor's reflex corner and the boss top's
   convex corner carry the one chord between `(10, −12)` and `(12, −10)`.

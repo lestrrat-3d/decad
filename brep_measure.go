@@ -186,11 +186,18 @@ func (topo *brepTopology) region(ctx context.Context, bp brepPayload, fi int) (b
 // for a prism: a swept face's section band times its height, and a planar
 // face's level displacement times its area, bound the volume the denoted body
 // can differ by; that volume times the coordinate envelope bounds each moment's.
-func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology, body *Body) error {
-	zero := proofbound.PointInterval(new(big.Rat))
-	vol3 := zero
-	moments := [3]proofbound.RatInterval{zero, zero, zero}
-	area := proofbound.BoundedScalar{}
+//
+// bands is what a route L record's band patches add to the same three sums
+// (docs/modify-general-design.md §4.3, brepBandMassOf): the record's faces
+// and the patches together are the body's whole boundary. The box needs no
+// band term: every patch is ruled between its cap contour, a loop of a
+// record face, and its side contour, a rim or segment of the faces beside it,
+// so a linear functional over a patch is extremized on those two directrices,
+// which the record's faces already hold within their own displacements.
+func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology, body *Body, bands brepBandMass) error {
+	vol3 := bands.vol3
+	moments := bands.moments
+	area := bands.area
 	displaced := 0.0
 	envelope := topo.coordUpper
 	for fi, f := range bp.faces {

@@ -33,18 +33,22 @@ part makes on them. Every cell was read off the live code with the probe under
 |---|---|---|---|
 | **P1** cross-drilled bar: 40×20×20 box, Ø6 hole along y | brep (class B) | fillet the 4 edges along y | builds (route P) |
 | | | fillet one edge along z | builds (route E) |
-| | | fillet or chamfer every straight edge, or the 8 along x and z | SB5 |
+| | | fillet every straight edge | SB5 |
+| | | chamfer every straight edge | SL1 |
+| | | chamfer the 8 along x and z, the top and bottom loops | builds (route L) |
+| | | fillet the top and bottom loops | SL3 |
 | | | chamfer a hole rim, or both | builds (route P cap loop) |
 | | | fillet a hole rim | SB4 |
 | | | shell removing one y wall, or both | builds (route P cup, tube) |
 | | | shell removing the top face, or both caps | builds (route S) |
 | **P2** pocketed plate: 40×40×10, blind 20×10 pocket 5 deep | stacked | fillet the pocket's 4 vertical edges | builds (route E) |
-| | | fillet the 4 floor edges, or the 4 mouth edges | SB5 |
-| | | chamfer the 4 mouth edges, or the plate's top loop | SB5 |
+| | | fillet the 4 floor edges, or the 4 mouth edges | SL3 |
+| | | chamfer the 4 mouth edges, or the plate's top loop | builds (route L) |
 | | | fillet the plate's 4 vertical edges | builds (route E) |
 | | | shell removing the top or the bottom | SG3 |
 | **P3** round boss on a plate: 40×40×10 ∪ Ø10 boss 15 tall | stacked (A1) | fillet the boss root circle | SB4 |
-| | | chamfer or fillet the boss top rim | SB4 |
+| | | fillet the boss top rim | SB4 |
+| | | chamfer the boss top rim, or the boss root | builds (route L) |
 | | | fillet the plate's vertical edges | builds (route E) |
 | | | shell removing the bottom | SG3 |
 | **P4** drilled plate: 60×40×8 with four Ø5 holes in the sketch | prism | chamfer the hole mouths, the top loop, or both | builds (cap loop) |
@@ -56,15 +60,14 @@ part makes on them. Every cell was read off the live code with the probe under
 | | | shell removing both x walls | builds (route P tube) |
 | | | shell removing the top face | builds (route S) |
 | **P6c** enclosure with a blind port into one x wall | brep (class B) | chamfer one port mouth edge | builds (route E) |
-| | | chamfer the port mouth's 4 edges | SB5 |
+| | | chamfer the port mouth's 4 edges | builds (route L) |
 | | | shell removing the top | SG3 (the port floor) |
 | **P6b** enclosure shelled first, port cut after | faceted | any request | the cup is no analytic boolean operand; the cut took the mesh path |
 | **P7** L bracket: L section 40×40, 8 thick, 30 tall, Ø6 hole along x through the upright leg | brep (class B) | fillet the inner corner edge, or the leg's two outer edges | builds (route E) |
-| | | fillet or chamfer the hole rims | SB4 |
-| | | chamfer the top cap's loop (6 edges) | SB5 |
+| | | fillet the hole rims | SB4 |
+| | | chamfer a hole rim, or the top cap's loop (6 edges) | builds (route L) |
 | | | shell removing the top | builds (route S) |
-| **P8** rounded plate drilled across: 40×20×20 box, 4 vertical edges filleted r = 3, then Ø6 hole along y | brep (class B) | chamfer a hole rim | SB4 |
-| | | chamfer the top cap's loop (4 lines, 4 arcs) | SB4 |
+| **P8** rounded plate drilled across: 40×20×20 box, 4 vertical edges filleted r = 3, then Ø6 hole along y | brep (class B) | chamfer a hole rim, or the top cap's loop (4 lines, 4 arcs) | builds (route L) |
 | | | fillet one top edge along x | SB7 (its end face is a fillet cylinder) |
 | | | shell removing the top | builds (route S) |
 | | | shell removing one y wall | SG5 |
@@ -75,8 +78,8 @@ Ranked by the parts each refusal blocks:
 | Rank | Refusal | Blocks | What the body needs |
 |---|---|---|---|
 | 1 | SB10 / SB3: shell of a brep that reads as no prism, or whose removed face is no cap of the prism it reads as | P1, P2, P3, P6, P6c, P7, P8 | the erosion of the receiver: planes and cylinders along reference axes for a through-cut body (§3); spheres, tori or elliptical edges for a blind pocket or a union |
-| 2 | SB5, and S1 on a prism: edges sharing a vertex, a cap edge's fillet | P1, P2, P4, P6c, P7 | a chamfer of a complete loop needs the cap-loop band on any planar face (§4); a fillet of a loop needs tori and spheres (§6) |
-| 3 | SB4: a curved edge of a brep or stacked record | P1, P3, P7, P8 | a cone band around a hole rim or boss root on a face the body reads as no prism's cap (§4); a fillet needs a torus (§6) |
+| 2 | SB5, SL1 and SL3, and S1 on a prism: edges sharing a vertex outside complete loops, a loop's fillet | P1, P2, P4 | a fillet of a loop needs tori and spheres (§6) |
+| 3 | SB4: a fillet of a curved edge of a brep or stacked record | P1, P3, P7 | a fillet needs a torus (§6) |
 | 4 | SB7: an edge ending on a curved face or a blend | P8 | the complete-loop fillet (§6) |
 | 5 | a faceted receiver | P5, P6b, P9 | an analytic boolean: `docs/stacked-prism-design.md` §7 stage 2, a cup as a boolean operand, cylinder × cylinder; reach SX9 stays permanent |
 
@@ -283,8 +286,12 @@ axis before it refuses.
 ### 4.1 Table LB — the admitted selection
 
 Route L runs for `Chamfer` on a brep or stacked receiver when route P takes no
-axis and route E's EB1 finds the selection is not single straight edges, and
-for a `Fillet` only to refuse (SL3). Each selected edge is matched to one
+axis and the selection is not route E's single straight edges — every edge
+a straight line along a reference axis (EB1), no two sharing a vertex (EB7) —
+and for a `Fillet` only to refuse a selection of complete loops one of which
+has two or more segments (SL3); any other `Fillet` selection, a hole rim's
+or boss root's circle among them, goes on to route E. A record carrying
+route L bands reads as no prism, so route P takes no axis of it. Each selected edge is matched to one
 loop segment of one planar face of the record by lifting the segment's ends
 (a circle: its centre and radius) through the reference frame and placement
 and comparing within `1e-6`, as route E's `admitEdge` does; the match
@@ -322,8 +329,9 @@ For each touched loop `ℓ` of face `F` with setback `d` (`dc = ds = d`;
    walls descend into the body and `+1` for one whose walls rise (LB6), its
    displacement `levelDelta` the float sum's rounding plus `dDelta`; SX13's
    axial half where `sideZ == L_F`.
-3. **Trims.** Each (sw) face's level at `F` becomes `sideZ` with
-   `levelDelta`. Each (pl) face's segment on `ℓ` moves to `sideZ` along `n`,
+3. **Trims.** Each (sw) face's level at `F` becomes `sideZ`, its level
+   displacement `F`'s plus `levelDelta`. Each (pl) face's segment on `ℓ`
+   moves to `sideZ` along `n`, its section displacement taking the same sum,
    its two neighbour lines shortened or lengthened to it, a connector-free
    blend at both corners whose cutback is `d` (route E's (pl) rule); the face
    runs modify §5's audit (S8, S6, S7, S9).
@@ -351,9 +359,11 @@ For each touched loop `ℓ` of face `F` with setback `d` (`dc = ds = d`;
    bounds exactly two faces over the whole body.
 
 The contour displacement (reach §8.4, `capband.ContourDisplacement`) is
-charged into `F.delta` and into every rim it trims, so every reading of `F`
-and of the bands carries it, and a later modify op on a body whose contour
-was a float solve refuses with SB1 — as it does for a cup. An axis-aligned
+charged into `F.delta`, so every reading of `F` and every cap-level vertex
+of the bands carries it, and a later modify op on a body whose contour was a
+float solve refuses with SB1 — as it does for a cup. The side contour is the
+receiver's own loop moved along `n`, so the faces beside it carry only the
+side level's displacement (step 3). An axis-aligned
 loop at a millimetre setback has an exact contour and keeps `delta = 0`, so a
 second loop on the same body chamfers in a later call.
 
@@ -365,12 +375,20 @@ rewritten record, then adds each band's terms through reach §8.4's readers
 origin, which is the reference origin every face frame shares bit for bit
 (`brepEmbeds`), each `Cone` patch's chord-versus-locus terms, the closure
 slivers (`capBandClosure`), and `capband.LevelVolume` for the side level's
-displacement. `F`'s area composes `sectionDisplacementArea` over the contour
+displacement. Those readers integrate the closed band region `B` — the
+patches closed by the cap contour's disk at `L_F` and `ℓ`'s disk at `sideZ`
+— so the patches' share is `B`'s flux and moments less the two disks', each
+disk exact against `B`'s outward normal, signed `+1` where `B` is material
+(an outer loop that descends, a hole that rises) and `−1` where it is void
+(a hole that descends, an outer loop that rises). `F`'s area composes `sectionDisplacementArea` over the contour
 displacement as a cap face does; each patch publishes its own bounded area.
 A body whose bands are all `Plane` patches at exact coordinates reports
 `Exact` where its true volume is a float; one holding a `Cone` is
-`Approximate`. `Bounds` adds each band's patch extrema with the contour
-displacement (reach DX5). The centroid divides the summed moments by the
+`Approximate`. `Bounds` reads the record's faces alone: each patch is ruled
+between its cap contour, a loop of `F`, and its side contour, a rim or
+segment of a face beside it, so a linear functional over the patch is
+extremized on those two directrices, which the record's faces hold within
+their own displacements. The centroid divides the summed moments by the
 volume and lifts through the reference frame.
 
 ### 4.4 Table SL — refusals
@@ -379,7 +397,7 @@ volume and lifts through the reference frame.
 |---|---|---|---|
 | **SL1** | a selection that is not whole loops of planar faces: a partial loop, loops mixed with single edges (route E's class, including a lateral edge meeting a loop at a vertex), two loops sharing an edge | yes; the corner where a band meets a lateral blend is a plane in no reference frame, and a partial loop's free end needs the setback transition reach SX4 refuses | `ErrUnsupported` (reach SX4's text for a partial loop) |
 | **SL2** | an adjacent face outside LB3/LB4/LB6: a curved or oblique neighbour, a split side line, a neighbour whose own loop continues past the vertex on a curve, walls on both sides of `F` | yes | `ErrUnsupported` |
-| **SL3** | a `Fillet` of a loop, on a brep or stacked receiver or (base S1) on a prism | yes; the band is a cylinder, a torus and spheres (reach §8.2), none a face this record holds; §6 | `ErrUnsupported` ("the vertex-blend problem", unchanged text) |
+| **SL3** | a `Fillet` of complete loops one of which has a corner, on a brep or stacked receiver or (base S1) on a prism; a loop of one whole circle goes on to route E's SB4 | yes; the band is a cylinder, a torus and spheres (reach §8.2), none a face this record holds; §6 | `ErrUnsupported` ("the vertex-blend problem", unchanged text) |
 | **SL4** | `WithAsymmetricChamfer` on a brep or stacked receiver | yes | reach SX16, unchanged |
 
 Reach SX6, SX7, SX12, SX13, SX14 and SX15 keep their meanings per band, and
@@ -390,7 +408,7 @@ reach SX10, SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
 
 | Stage | Gates |
 |---|---|
-| 2c. entry | route E's EB1 per edge: every edge a straight line along an axis → route E (brep-modify §6); otherwise route L: LB1, LB2 (SL1), SL4 |
+| 2c. entry | SL4; every edge a straight line along an axis (EB1) and no two sharing a vertex (EB7) → route E (brep-modify §6); otherwise route L: LB1, LB2 (SL1) |
 | 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
 | 4. existence | SX6, SX13 per band as the contour is built |
 | 5. audit | per band SX14, SX7, SX12 on the contour; per (pl) face S8, S6, S7, S9; per `F` S8, S7, S9 |
@@ -444,6 +462,11 @@ below reads the bands where the plain brep reader would miss them:
   field.** One reader path; it is zero for every axis-aligned loop at a
   millimetre setback, and a per-loop displacement can be added later without
   changing a published measurement.
+- **A reflex corner of `F`'s region takes the cap-loop chamfer's apex cone.**
+  Route L offsets `ℓ` by reach §8.3's construction, which closes every
+  reflex corner with an arc of radius `d` about the corner; a hole's corners
+  are reflex corners of the face around it, so a rectangular mouth's band
+  carries four apex cones, as a prism's rectangular hole loop's does.
 - **Route S PR 1 takes removed caps only.** A removed wall needs the
   shell-opening section with its own rim rule and refusals; it is one
   increment behind, not a change of design.
@@ -544,35 +567,41 @@ Route S (S-2):
 
 Route L (L-1):
 
-- P2, chamfer the pocket mouth, `d = 1.5`: `Exact` `15000 − 72`
-  (`30d² + 4d³/3`), four `Plane` patches, the top face's hole loop a 23×13
-  rectangle, each pocket wall's level at `z = 8.5`.
+- P2, chamfer the pocket mouth, `d = 1.5`: volume within its bound of
+  `15000 − 135/2 − 9π/8` (`30d² + πd³/3`), four `Plane` and four apex `Cone`
+  patches, the top face's hole loop four lines and four arcs of radius 1.5
+  about the mouth's corners, each pocket wall's level at `z = 8.5`.
 - P2, chamfer the plate's top loop, `d = 1.5`: `Exact` `15000 − 175.5`
   (`80d² − 4d³/3`), the plate's four walls trimmed through the (pl) rule.
 - P1, chamfer the top and bottom loops in one call, `d = 1.5`: volume within
   its bound of `15739 − 180π`; both y walls (pl) and both x walls (sw)
   trimmed.
 - P3, chamfer the boss top rim, `d = 1`: a `Cone`, volume within its bound of
-  `16000 + 1064π/3`; chamfer the boss root, `d = 1`: a `Cone` that fills,
+  `16000 + 1111π/3`; chamfer the boss root, `d = 1`: a `Cone` that fills,
   volume within its bound of `16000 + 1141π/3`, `Edge.IsConvex` false on the
   root's trimmed circle, the plate top's hole of radius 6.
-- P6c, chamfer the port mouth, `d = 1.5`: `Exact` `69400 − 72`.
+- P6c, chamfer the port mouth, `d = 1.5`: volume within its bound of
+  `69400 − 135/2 − 9π/8`, the mouth's corners carrying apex cones as P2's.
 - P7, chamfer the top loop, `d = 1`: an apex `Cone` at the reflex corner,
   volume within its bound of `17280 − 72π − (80 − (5 − π/4)/3)`.
 - P8, chamfer a hole rim, `d = 1`: volume within its bound of
   `15280 − 10π/3`; chamfer the top loop, `d = 1`: four `Plane` and four
   `Cone` patches at G1 joins, volume within its bound of `15232 − 8π/3`.
-- Bound fixture, shown to fail first: a brep whose top face's outer loop has
-  a 60° corner (a trapezoid cut by a cross hole), chamfered `d = 1`: every
-  cap-level vertex's bound encloses its exact rational distance to the
+- Bound fixture, shown to fail first: the trapezoid `(0, 0)`, `(100, 0)`,
+  `(72, 45)`, `(28, 45)` extruded 10, with a blind pocket (a stacked
+  receiver), whose top face's outer loop turns 58° at its base corners and
+  whose slanted sides run along `(28, 45)`, of length 53, chamfered `d = 1`:
+  every cap-level vertex's bound encloses its exact rational distance to the
   denoted contour corner; deleting the `F.delta` charge turns it red; the
-  test records the leg.
+  test records the leg. No float pair holds a 60° slope with a rational unit
+  normal.
 - Refusals: a partial loop → SL1 (SX4's text); the top loop with one vertical
-  edge → SL1; the top loop and the x = 40 wall's loop → SL1; P8's top loop
-  chamfered at `d = 3` → SX6 (the fillet arcs' offsets vanish); the pocket
-  mouth at `d = 5` → SX7 (the band reaches the floor); a loop on a face with
-  `delta > 0` → SB1; a fillet of any loop → SL3; `WithAsymmetricChamfer` →
-  SX16.
+  edge → SL1; P1's top loop and its planar y = 0 wall's outer loop, which
+  share an edge → SL1; P8's y = 0 wall's outer loop, whose top neighbour
+  continues on a fillet arc → SL2; P8's top loop chamfered at `d = 3` → SX6
+  (the fillet arcs' offsets vanish); the pocket mouth at `d = 5` → SX7 (the
+  band reaches the floor); a loop on a face with `delta > 0` → SB1; a fillet
+  of a loop with a corner → SL3; `WithAsymmetricChamfer` → SX16.
 
 Route L (L-2):
 
@@ -613,5 +642,5 @@ Increment table — what still refuses after each PR:
 | 0 | everything Table SB refuses today |
 | S-1 (landed) | a removed wall (SG5); every shell of §6; every route L loop |
 | S-2 | every shell of §6; every route L loop |
-| L-1 | every consumer of a route L body but mass properties, `Verify`'s structural audit and gate, placement and later modify ops (L-2); §6 |
+| L-1 (landed) | every consumer of a route L body but mass properties, `Verify`'s structural audit and gate, placement and later modify ops (L-2); §6 |
 | L-2 | §6 alone |
