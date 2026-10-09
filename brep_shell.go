@@ -8,12 +8,10 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/throughshell"
 	"github.com/lestrrat-3d/units"
 )
@@ -125,33 +123,10 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 	return tc, "", true, nil
 }
 
-// throughRemoval is §3.2's reading of the removed faces against the
-// recognised record: whether the bottom (A's start) and the top (A's end) go,
-// and the removed walls of A with the segments of S's outer loop they claim.
-type throughRemoval struct {
-	bottom, top bool
-	walls       []int
-	sides       map[int]struct{}
-}
+type throughRemoval = throughshell.Removal
 
-// keptCaps is the number of A's caps the shell keeps.
-func (rm throughRemoval) keptCaps() int {
-	n := 0
-	for _, removed := range []bool{rm.bottom, rm.top} {
-		if !removed {
-			n++
-		}
-	}
-	return n
-}
-
-// removedFaces is §3.2 over the recognised record (Table SG's SG4 and SG5):
-// every removed face must be one of A's two caps or a wall of A claiming a
-// segment of S's outer loop. A tool wall, or a wall lining a hole of S, is
-// SG4. A removed wall must be a straight wall along a section axis, since its
-// rim is a planar face (§3.3 step 5); any other is SG5. Whether the removed
-// walls form one proper connected run of whole walks is shell-opening SO6's
-// question, which sideOpeningRegions answers.
+// removedFaces maps the selected live faces to record indices before SG4 and
+// SG5 read them. The connected-run check remains with sideOpeningRegions.
 func (tc throughCut) removedFaces(b *Body, bp brepPayload, removed []*Face) (throughRemoval, error) {
 	index := map[*Face]int{}
 	if _, ok := b.payload.(brepPayload); ok {
@@ -162,76 +137,15 @@ func (tc throughCut) removedFaces(b *Body, bp brepPayload, removed []*Face) (thr
 			}
 		}
 	}
-	rm := throughRemoval{sides: map[int]struct{}{}}
-	work := freeform.NewFreeformWork()
-	for _, face := range removed {
+	indices := make([]int, len(removed))
+	for i, face := range removed {
 		fi, ok := index[face]
-		switch {
-		case !ok:
-			return throughRemoval{}, fmt.Errorf(`%w: this evaluator shells a through-cut record by removing its caps or a run of its walls, and a removed face names no face of its record (modify-general SG5)`, ErrUnsupported)
-		case fi == tc.caps.Bottom:
-			rm.bottom = true
-			continue
-		case fi == tc.caps.Top:
-			rm.top = true
-			continue
-		case tc.kinds[fi] == throughTool || tc.kinds[fi] == throughHoleWall:
-			return throughRemoval{}, throughHoleRemovedError(bp, fi)
-		}
-		si, ok := tc.claimedSide(bp, fi, work)
 		if !ok {
-			return throughRemoval{}, throughHoleRemovedError(bp, fi)
+			fi = -1
 		}
-		seg := tc.caps.Section.Outer.Segments[si]
-		if from, to, ok := brepgeom.NaturalLine(seg); !ok || (from.U == to.U) == (from.V == to.V) {
-			return throughRemoval{}, fmt.Errorf(`%w: this evaluator removes a wall of a through-cut record only where it is a straight wall along a section axis, whose rim is a planar face; %s is not (modify-general SG5)`, ErrUnsupported, bp.faces[fi].role)
-		}
-		rm.walls = append(rm.walls, fi)
-		rm.sides[si] = struct{}{}
+		indices[i] = fi
 	}
-	return rm, nil
-}
-
-// throughHoleRemovedError is SG4, naming the removed face.
-func throughHoleRemovedError(bp brepPayload, fi int) error {
-	return fmt.Errorf(`%w: this evaluator shells a through-cut record by removing its caps or a run of its walls, and %s is a wall of a through tool or of a hole of the section (modify-general SG4)`, ErrUnsupported, bp.faces[fi].role)
-}
-
-// claimedSide is the index of the segment of S's outer loop that wall face fi
-// claims (TC3), read as Table TC read it: a wall along k by its walk, a
-// pierced wall by its outer rectangle's trace. It reports false for a wall
-// claiming a segment of a hole of S.
-func (tc throughCut) claimedSide(bp brepPayload, fi int, work *freeform.FreeformWork) (int, bool) {
-	f, e := bp.faces[fi], tc.embeds[fi]
-	var match func(survey2d.SegmentWalk) bool
-	if f.planar() {
-		outer := *f.region
-		outer.Holes = nil
-		face := brepgeom.PrismRectFace{Region: &outer, Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Outward: f.outward}
-		rect, ok := brepgeom.PlanarPrismRect(face, e, tc.caps.Embed, tc.k, tc.caps.Zlo, tc.caps.Zhi)
-		if !ok {
-			return 0, false
-		}
-		match = rect.Matches
-	} else {
-		seg, ok := brepgeom.NewPrismMap(e, tc.caps.Embed).Segment(f.wall)
-		if !ok {
-			return 0, false
-		}
-		w, err := boundarywalk.WalkOf(seg, work)
-		if err != nil {
-			return 0, false
-		}
-		key := brepgeom.WalkKeyOf(w)
-		match = func(s survey2d.SegmentWalk) bool { return brepgeom.WalkKeyOf(s) == key }
-	}
-	for si, seg := range tc.caps.Section.Outer.Segments {
-		w, err := boundarywalk.WalkOf(seg, work)
-		if err == nil && match(w) {
-			return si, true
-		}
-	}
-	return 0, false
+	return throughshell.ReadRemoval(prismFaceRecords(bp), tc.embeds, tc.kinds, tc.caps, tc.k, indices)
 }
 
 // shellThroughCut is route S (modify-general §3.3) for a receiver route P
@@ -261,7 +175,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	// Stage 3: A ⊖ t's section (eroded, with its proven displacement for a
 	// removed wall run), then S11a on each tool as its dilation is built.
 	var sec throughSection
-	if len(rm.walls) == 0 {
+	if len(rm.Walls) == 0 {
 		sec, err = tc.erodeThroughSection(budget, rm, call)
 	} else {
 		sec, err = tc.openingThroughSection(budget, bp, rm, call)
@@ -279,7 +193,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 
 	// Stage 4: the offset audit on S ⊖ t (the side opening ran its own) and on
 	// each Tᵢ ⊕ t, then TC7.
-	if len(rm.walls) == 0 {
+	if len(rm.Walls) == 0 {
 		if err := auditOffsetSectionBudget(budget, tc.caps.Section, sec.eroded); err != nil {
 			return nil, shellCancelCause(err)
 		}
@@ -298,7 +212,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	// The offsets' proven displacements (modify §9): the cavity's faces and
 	// the rims carry the largest of them.
 	delta := sec.delta
-	if len(rm.walls) == 0 {
+	if len(rm.Walls) == 0 {
 		if delta, err = offsetSectionDelta(budget, tc.caps.Section, 1, call.tmm, call.tDelta); err != nil {
 			return nil, shellCancelCause(err)
 		}
@@ -351,7 +265,7 @@ func (tc throughCut) erodeThroughSection(budget *proofbound.WorkBudget, rm throu
 		return throughSection{}, err
 	}
 	h := tc.caps.Zhi - tc.caps.Zlo
-	if maxT := h - shellTol*math.Max(1, h); rm.keptCaps() > 0 && call.tmm >= maxT {
+	if maxT := h - shellTol*math.Max(1, h); rm.KeptCaps() > 0 && call.tmm >= maxT {
 		return throughSection{}, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the sweep height %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, call.t, units.Millimeters(max(maxT, 0)), units.Millimeters(h))
 	}
 	eroded, err := offsetProfile(budget, section, 1, call.tmm)
@@ -375,7 +289,7 @@ func (tc throughCut) erodeThroughSection(budget *proofbound.WorkBudget, rm throu
 // piece of a removed face, which route S does not state: SG5.
 func (tc throughCut) openingThroughSection(budget *proofbound.WorkBudget, bp brepPayload, rm throughRemoval, call brepShellCall) (throughSection, error) {
 	pp := prismPayload{profile: tc.caps.Section, frame: tc.caps.Frame, xform: bp.xform, z0: tc.caps.Zlo, z1: tc.caps.Zhi}
-	sec, err := sideOpeningRegions(budget, pp, rm.sides, rm.keptCaps(), 1, call.t, call.tmm, call.tDelta)
+	sec, err := sideOpeningRegions(budget, pp, rm.Sides, rm.KeptCaps(), 1, call.t, call.tmm, call.tDelta)
 	if err != nil {
 		return throughSection{}, shellCancelCause(err)
 	}
@@ -485,10 +399,10 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded ProfileR
 	}
 	z0, z0Delta := tc.caps.Zlo, max(tc.zloDelta, bp.faces[tc.caps.Bottom].z0Delta)
 	z1, z1Delta := tc.caps.Zhi, max(tc.zhiDelta, bp.faces[tc.caps.Top].z0Delta)
-	if !rm.bottom {
+	if !rm.Bottom {
 		z0, z0Delta = step(z0, z0Delta, call.tmm)
 	}
-	if !rm.top {
+	if !rm.Top {
 		z1, z1Delta = step(z1, z1Delta, -call.tmm)
 	}
 	charge := max(delta, z0Delta, z1Delta)
