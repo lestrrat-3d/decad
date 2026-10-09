@@ -83,6 +83,9 @@ func (bc *brepBandChord) filletMatch() ([]int, error) {
 
 // placeRings adds the band's interior ring vertices. It runs after place.
 func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proofbound.WalkEndBound) int) error {
+	if bc.partial != nil {
+		return bc.placePartialRings(e, addVertex)
+	}
 	match, err := bc.filletMatch()
 	if err != nil {
 		return err

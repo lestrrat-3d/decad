@@ -1250,6 +1250,7 @@
 3	0.05	TestVertexBlendCrossDrilledBar
 3	0.05	TestBrepLoopFilletBoundFixture
 3	0.05	TestBrepLoopFilletRefusals
+3	0.05	TestVertexBlendPocketMouthOpenChain
 3	0.05	TestBrepLoopFilletConsumers
 3	0.10	TestTessellateBrepBands
 3	0.10	TestTessellateBrepBandsShareOneCount

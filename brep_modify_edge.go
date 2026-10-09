@@ -94,94 +94,10 @@ func newBrepEdgeRoute(bp brepPayload, topo *brepTopology, call brepModifyRequest
 // audit of every rewritten face (S8, S6, S7, S9) and trimmed wall (S6); then
 // the closure.
 func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepModifyRequest) (*Body, error) {
-	topo, err := brepTopologyContext(ctx, bp)
+	r, blends, err := prepareBrepEdgeBlends(ctx, bp, call, false)
 	if err != nil {
 		return nil, err
 	}
-	r := newBrepEdgeRoute(bp, topo, call, proofbound.NewWorkBudget(ctx))
-
-	// Stage 2c: each edge is a straight line along one reference axis (EB1),
-	// and no two share a vertex (EB7).
-	blends := make([]*brepEdgeBlend, len(call.edges))
-	for ei, e := range call.edges {
-		eb, err := r.admitEdge(ei, e)
-		if err != nil {
-			return nil, err
-		}
-		blends[ei] = eb
-	}
-	vertexOf := map[[3]float64]*brepEdgeBlend{}
-	for _, eb := range blends {
-		for _, v := range eb.v {
-			if other, ok := vertexOf[v]; ok {
-				return nil, r.refuse(eb, "SB5", fmt.Sprintf(`it shares the vertex at (%s) with %s; a vertex blend is not supported`,
-					r.render(v), selectedEdgeContext(other.ordinal, other.edge)))
-			}
-			vertexOf[v] = eb
-		}
-	}
-
-	// Stage 3: the edge topology, gate by gate over every edge.
-	incident := r.incidence()
-	for _, eb := range blends {
-		if err := r.requireThreeEdges(eb, incident); err != nil {
-			return nil, err
-		}
-	}
-	// The restatement passes (§5.2) collect every wall the call needs as a
-	// plane, end faces first (SB7), then rim-adjacent walls (SB8); a wall one
-	// edge needs as an end face and another beside it is one plane for both.
-	restated := map[int]brepRestated{}
-	for _, eb := range blends {
-		if err := r.findEndFaces(eb, incident, restated); err != nil {
-			return nil, err
-		}
-	}
-	for _, eb := range blends {
-		if err := r.restateRims(eb, restated); err != nil {
-			return nil, err
-		}
-	}
-	if len(restated) > 0 {
-		if r, err = r.withRestated(ctx, restated); err != nil {
-			return nil, err
-		}
-		// The restated record keeps every face index and every edge, but
-		// numbers its uses afresh: each edge is matched again, keeping the
-		// end faces the first pass found.
-		for ei, eb := range blends {
-			again, err := r.admitEdge(eb.ordinal, eb.edge)
-			if err != nil {
-				return nil, err
-			}
-			again.end = eb.end
-			blends[ei] = again
-		}
-	}
-	for _, eb := range blends {
-		if err := r.classifySides(eb); err != nil {
-			return nil, err
-		}
-	}
-	for _, eb := range blends {
-		if err := r.requireNaturalFaces(eb); err != nil {
-			return nil, err
-		}
-	}
-	for _, eb := range blends {
-		if err := r.locateCorners(eb); err != nil {
-			return nil, err
-		}
-	}
-
-	// Stage 4: the construction's own gates per edge — S4 and S5 in G0, then
-	// the recomputation in G1 and SB9.
-	for _, eb := range blends {
-		if err := r.computeBlends(eb); err != nil {
-			return nil, err
-		}
-	}
-
 	out, err := r.rewrite(blends)
 	if err != nil {
 		return nil, err
@@ -202,6 +118,115 @@ func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepM
 			ErrDegenerate, call.blend.kind, call.sel, selectedEdgesContext(call.edges))
 	}
 	return body, nil
+}
+
+// prepareBrepEdgeBlends reads the route E edges and their corner blends
+// before any face is changed. A chain build may admit shared vertices here;
+// its patch construction then has to close every such corner itself.
+func prepareBrepEdgeBlends(ctx context.Context, bp brepPayload, call brepModifyRequest, shared bool) (*brepEdgeRoute, []*brepEdgeBlend, error) {
+	topo, err := brepTopologyContext(ctx, bp)
+	if err != nil {
+		return nil, nil, err
+	}
+	r := newBrepEdgeRoute(bp, topo, call, proofbound.NewWorkBudget(ctx))
+
+	// Stage 2c: each edge is a straight line along one reference axis (EB1),
+	// and no two share a vertex (EB7).
+	blends := make([]*brepEdgeBlend, len(call.edges))
+	for ei, e := range call.edges {
+		eb, err := r.admitEdge(ei, e)
+		if err != nil {
+			return nil, nil, err
+		}
+		blends[ei] = eb
+	}
+	if !shared {
+		vertexOf := map[[3]float64]*brepEdgeBlend{}
+		for _, eb := range blends {
+			for _, v := range eb.v {
+				if other, ok := vertexOf[v]; ok {
+					return nil, nil, r.refuse(eb, "SB5", fmt.Sprintf(`it shares the vertex at (%s) with %s; a vertex blend is not supported`,
+						r.render(v), selectedEdgeContext(other.ordinal, other.edge)))
+				}
+				vertexOf[v] = eb
+			}
+		}
+	}
+
+	// Stage 3: the edge topology, gate by gate over every edge.
+	incident := r.incidence()
+	for _, eb := range blends {
+		if err := r.requireThreeEdges(eb, incident); err != nil {
+			return nil, nil, err
+		}
+	}
+	// The restatement passes (§5.2) collect every wall the call needs as a
+	// plane, end faces first (SB7), then rim-adjacent walls (SB8); a wall one
+	// edge needs as an end face and another beside it is one plane for both.
+	restated := map[int]brepRestated{}
+	for _, eb := range blends {
+		if err := r.findEndFaces(eb, incident, restated); err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, eb := range blends {
+		if err := r.restateRims(eb, restated); err != nil {
+			return nil, nil, err
+		}
+	}
+	if len(restated) > 0 {
+		oldView := r.bp.refView()
+		if r, err = r.withRestated(ctx, restated); err != nil {
+			return nil, nil, err
+		}
+		// The restated record keeps every face index and every edge, but
+		// numbers its uses afresh. Restating face zero can also change the
+		// reference frame and reverse the edge's axis order, so preserve each
+		// end face by its physical vertex when matching the edge again.
+		newView := r.bp.refView()
+		for ei, eb := range blends {
+			again, err := r.admitEdge(eb.ordinal, eb.edge)
+			if err != nil {
+				return nil, nil, err
+			}
+			oldFirst := oldView.point(eb.v[0][0], eb.v[0][1], eb.v[0][2])
+			newFirst := newView.point(again.v[0][0], again.v[0][1], again.v[0][2])
+			newLast := newView.point(again.v[1][0], again.v[1][1], again.v[1][2])
+			switch {
+			case oldFirst.Sub(newFirst).Len() <= 1e-6:
+				again.end = eb.end
+			case oldFirst.Sub(newLast).Len() <= 1e-6:
+				again.end = [2]brepEdgeEnd{eb.end[1], eb.end[0]}
+			default:
+				return nil, nil, r.refuse(again, "SB8", `restating its walls moved an end vertex`)
+			}
+			blends[ei] = again
+		}
+	}
+	for _, eb := range blends {
+		if err := r.classifySides(eb); err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, eb := range blends {
+		if err := r.requireNaturalFaces(eb); err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, eb := range blends {
+		if err := r.locateCorners(eb); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// Stage 4: the construction's own gates per edge — S4 and S5 in G0, then
+	// the recomputation in G1 and SB9.
+	for _, eb := range blends {
+		if err := r.computeBlends(eb); err != nil {
+			return nil, nil, err
+		}
+	}
+	return r, blends, nil
 }
 
 // refuse is one Table SB refusal for one selected edge.

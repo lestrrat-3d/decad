@@ -443,7 +443,7 @@ volume and lifts through the reference frame.
 
 | SL | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SL1** | a partial loop, two loops sharing an edge after route V's partition, or loops mixed with single edges for a `Chamfer`; a `Fillet` with independent straight edges and complete loops takes route V | yes | `ErrUnsupported` (reach SX4's text for a partial loop) |
+| **SL1** | a partial loop outside one admissible straight-edge fillet chain, two loops sharing an edge after route V's partition, or loops mixed with single edges for a `Chamfer`; a selected chain on one planar-face loop takes the partial fillet route | yes | `ErrUnsupported` |
 | **SL2** | an adjacent face outside LB3/LB4/LB6: a curved or oblique neighbour, a split side line, a neighbour whose own loop continues past the vertex on a curve, walls on both sides of `F` | yes | `ErrUnsupported` |
 | **SL3** | retired: a `Fillet` of complete loops builds through `docs/loop-fillet-design.md`'s fillet arm or refuses with that document's Table SF | — | — |
 | **SL4** | `WithAsymmetricChamfer` on a brep or stacked receiver | yes | reach SX16, unchanged |
@@ -459,7 +459,9 @@ reach SX10, SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
 | 2c. entry | SL4; every edge a straight line along an axis (EB1) and no two sharing a vertex (EB7) → route E (brep-modify §6); otherwise route L: LB1, LB2 (SL1) |
 
 For a `Fillet`, route V also partitions complete loops and independent
-straight edges before LB1/LB2 (`docs/vertex-blend-design.md` §2).
+straight edges before LB1/LB2. A selected straight-edge chain on part of
+one planar-face loop takes the partial fillet route
+(`docs/vertex-blend-design.md` §2).
 | 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
 | 4. existence | SX6, SX13 per band as the contour is built |
 | 5. audit | per band SX14, SX7, SX12 on the contour; per (pl) face S8, S6, S7, S9; per `F` S8, S7, S9 |
@@ -688,7 +690,7 @@ Route L (L-1):
   denoted contour corner; deleting the `F.delta` charge turns it red; the
   test records the leg. No float pair holds a 60° slope with a rational unit
   normal.
-- Refusals: a partial loop → SL1 (SX4's text); a chamfer of the top loop with
+- Refusals: a partial loop outside the selected-chain fillet route → SL1; a chamfer of the top loop with
   one vertical edge → SL1; P1's top loop and its planar y = 0 wall's outer loop, which
   share an edge → SL1; P8's y = 0 wall's outer loop, whose top neighbour
   continues on a fillet arc → SL2; P8's top loop chamfered at `d = 3` → SX6

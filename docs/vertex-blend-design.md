@@ -55,7 +55,30 @@ with several possible complete loops, it first tries each reference axis as
 the straight-edge set; the remaining edges must form complete, non-sharing
 loops. Otherwise it assigns each edge covered by one complete loop to the
 loop set and checks the remaining straight edges for shared vertices.
-Two selected straight edges sharing a vertex remain refused.
+An open selection on one planar-face loop forms one or more maximal chains
+of selected walks. Each selected walk's cap offset is `r`; every unselected
+walk stays at offset zero. A corner between two selected convex straight
+walks uses LF4's miter and ellipse. A reflex corner between selected walks
+keeps the fillet connector arc and its horn-torus patch. A selected-to-
+unselected corner uses the sharp intersection of the moved and fixed
+carriers and ends the pipe on an arc in the unselected wall's plane.
+The selected wall ends at the band's side level. The unselected wall keeps
+its original reach and replaces its corner with that terminal arc. A chain
+with only one walk is route E's existing single-edge case.
+
+The band record keeps the original complete loop, a selected-walk mask,
+and the cap-contour segment for each selected walk and reflex connector.
+Only selected cap and side edges and reflex connector arcs are open in the
+face record. Its terminal arcs are also open and each pairs with one band
+patch. At a convex join between selected walks the ellipse pairs the two
+band patches. The cap face,
+trimmed walls and terminal walls remain ordinary brep faces. The partial
+band's measured strip sums only selected walks; a selected-to-unselected
+straight join uses the signed end rate `-cot(θ)` of the offset line against
+the unselected line. Its mesh shares the terminal arc's samples with the
+unselected planar wall and the cap and side samples with their faces. The
+terminal arc is pinned to the cap contour's endpoint, including at a hole
+mouth where the cap contour moves away from the hole.
 
 The straight-edge set runs through route E (`brepBlendEdges`). A prism is
 read through `brepOfPrism` first; a single straight prism cap edge also
@@ -88,8 +111,8 @@ loop-fillet terms.
 
 | Input | Result |
 |---|---|
-| a partial selected loop, or loops sharing an edge after the partition | SL1, `ErrUnsupported` |
-| selected straight edges sharing a vertex outside the selected loops | SL1 or SB5, `ErrUnsupported` |
+| loops sharing an edge after the partition | SL1, `ErrUnsupported` |
+| selected straight edges sharing a vertex outside one selected planar-face loop | SL1 or SB5, `ErrUnsupported` |
 | an LF9 candidate with a circular neighbour or a non-G1 join | SF1, `ErrUnsupported` |
 | held radius `r` but either recorded endpoint has a different exact distance to the centre | `ErrUnsupported` |
 | recorded inward arc radius slightly above `r` but its residual is within `shellTol` | `ErrUnsupported`, naming the unequal radii |
@@ -107,6 +130,9 @@ radius-one circle. The record does not define exact spheres there.
 | Receiver and selection | Expected result |
 |---|---|
 | 40×20×20 box, all 12 edges, `r=2` | 8 spheres; volume `14848 + 848π/3` |
+| same box, two adjacent top edges, `r=2` | one ellipse seam; volume `47320/3 + 56π` |
+| same box, three adjacent top edges, `r=2` | three cylinders, two ellipse seams, closed mesh |
+| pocket mouth, three of four edges, `r=1.5` | three cylinders, two horn tori, closed mesh |
 | same box, top loop and 4 vertical edges | 4 spheres; volume `15264 + 544π/3` |
 | same box, top loop and 2 vertical edges | 2 spheres and 2 ellipse seams |
 | same box, one straight top edge | route E brep; volume `15840 + 40π` |

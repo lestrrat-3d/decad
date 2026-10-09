@@ -165,12 +165,23 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	// beside a band took the band's own side-ring points, so the two name the
 	// same vertices.
 	bandsOf := map[int][]int{}
+	terminalPoly := map[int][]int{}
 	for bi := range bands {
 		bands[bi].place(topo.embeds[bands[bi].band.face], addVertex)
 		if bands[bi].fillet != nil {
 			if err := bands[bi].placeRings(topo.embeds[bands[bi].band.face], addVertex); err != nil {
 				return nil, err
 			}
+		}
+		if bands[bi].partial != nil {
+			polys, err := bands[bi].partialOpenPolys(topo, canon)
+			if err != nil {
+				return nil, err
+			}
+			for ui, poly := range polys {
+				terminalPoly[ui] = poly
+			}
+			continue
 		}
 		bandsOf[bands[bi].band.face] = append(bandsOf[bands[bi].band.face], bi)
 	}
@@ -228,7 +239,16 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 				if _, ok := ringLoop[u.Loop]; ok {
 					continue
 				}
-				poly = []int{addVertex(u.DirFrom, u.StartBound()), addVertex(u.DirTo, u.EndBound())}
+				poly = terminalPoly[ui]
+				if poly != nil {
+					sag := tessellation.ChordSagitta(u.Walk.Radius,
+						math.Abs(u.Walk.Th1-u.Walk.Th0), len(poly)-1)
+					trim = math.Max(trim, sag)
+					loopSag[u.Loop] = math.Max(loopSag[u.Loop], sag)
+					capSlack = proofbound.AbsSumUpper(capSlack, tessellation.WalkSegmentArea(u.Walk, len(poly)-1))
+				} else {
+					poly = []int{addVertex(u.DirFrom, u.StartBound()), addVertex(u.DirTo, u.EndBound())}
+				}
 			}
 			for _, vi := range poly[:len(poly)-1] {
 				local := e.Local(canon[vi])

@@ -83,6 +83,19 @@ func TestCoefficientsOfARectangle(t *testing.T) {
 	requirePoint(t, c.M3[1], rat(0, 1), "m₃v")
 }
 
+// Two adjacent top edges of the 40×20 box move inward by t while the other
+// two stay put. The removed planar strip is 800−(40−t)(20−t) = 60t−t².
+func TestSelectedCornerStripOfARectangle(t *testing.T) {
+	t.Parallel()
+	l := polygon(t, [][2]float64{{0, 0}, {40, 0}, {40, 20}, {0, 20}})
+	pieces, err := l.PiecesSelected([]bool{true, false, false, true})
+	require.NoError(t, err)
+	require.Len(t, pieces, 2)
+	c := filletband.SumCoefficients(pieces)
+	requirePoint(t, c.A1, rat(60, 1), "selected strip a₁")
+	requirePoint(t, c.A2, rat(-1, 1), "selected strip a₂")
+}
+
 // TestCoefficientsOfAPocketMouth checks CF1 with CF4 on P2's 20×10 mouth, a
 // hole walked clockwise whose four corners are reflex: a₁ = 60, a₂ = ψ/2
 // summed over four quarter turns = π, and by symmetry the first moment is

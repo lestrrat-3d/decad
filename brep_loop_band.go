@@ -38,7 +38,16 @@ type brepLoopBand struct {
 	setback    capSetback
 	sigma      float64
 	kind       brepBandKind
+	selected   []bool
+	capWalk    []int
+	capArc     []int
+	terminals  []brepBandTerminal
+	restore    map[int]brepFace
 }
+
+// brepBandTerminal names an open terminal arc on an ordinary planar face of
+// a partial fillet band. The arc pairs that face with one band patch.
+type brepBandTerminal struct{ face, loop, seg int }
 
 // brepBandKind is a loop band's surface family: a chamfer's ruled patches or a
 // fillet's pipe patches (docs/loop-fillet-design.md).
@@ -116,6 +125,17 @@ func (b brepLoopBand) validate(bp brepPayload, bi int) error {
 		return refuse(`states no one positive finite setback`)
 	case len(b.orig.Segments) == 0:
 		return refuse(`holds no loop`)
+	case b.selected != nil && len(b.selected) != len(b.orig.Segments):
+		return refuse(`has no selection for every original segment`)
+	case b.selected != nil && (len(b.capWalk) != len(b.selected) || len(b.capArc) != len(b.selected)):
+		return refuse(`has no cap contour map for every selected segment`)
+	}
+	for _, t := range b.terminals {
+		if t.face < 0 || t.face >= len(bp.faces) || !bp.faces[t.face].planar() ||
+			t.loop < 0 || t.loop > len(bp.faces[t.face].region.Holes) ||
+			t.seg < 0 || t.seg >= len(bp.faces[t.face].regionLoop(t.loop).Segments) {
+			return refuse(`names no terminal segment of a planar face`)
+		}
 	}
 	return nil
 }
@@ -156,14 +176,46 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 			return nil, err
 		}
 		f := bp.faces[b.face]
-		for _, seg := range f.regionLoop(b.loop).Segments {
-			if err := add(embeds[b.face], seg, f.z0); err != nil {
-				return nil, err
+		capSegs := f.regionLoop(b.loop).Segments
+		if b.selected == nil {
+			for _, seg := range capSegs {
+				if err := add(embeds[b.face], seg, f.z0); err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			for i, on := range b.selected {
+				if !on {
+					continue
+				}
+				if b.capWalk[i] < 0 || b.capWalk[i] >= len(capSegs) {
+					return nil, fmt.Errorf(`%w: a partial fillet band's cap walk is missing`, ErrUnsupported)
+				}
+				if err := add(embeds[b.face], capSegs[b.capWalk[i]], f.z0); err != nil {
+					return nil, err
+				}
+				if k := (i + 1) % len(b.selected); b.capArc[k] >= 0 {
+					if b.capArc[k] >= len(capSegs) {
+						return nil, fmt.Errorf(`%w: a partial fillet band's cap arc is missing`, ErrUnsupported)
+					}
+					if err := add(embeds[b.face], capSegs[b.capArc[k]], f.z0); err != nil {
+						return nil, err
+					}
+				}
 			}
 		}
 		sideZ, _ := b.sideLevel(f)
-		for _, seg := range b.orig.Segments {
+		for i, seg := range b.orig.Segments {
+			if b.selected != nil && !b.selected[i] {
+				continue
+			}
 			if err := add(embeds[b.face], seg, sideZ); err != nil {
+				return nil, err
+			}
+		}
+		for _, t := range b.terminals {
+			face := bp.faces[t.face]
+			if err := add(embeds[t.face], face.regionLoop(t.loop).Segments[t.seg], face.z0); err != nil {
 				return nil, err
 			}
 		}
@@ -179,6 +231,8 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 type brepOpenSet struct {
 	coedge    map[int]coedge
 	cap, side [][]coedge
+	capBySeg  []map[int]*Edge
+	terminal  []map[brepBandTerminal]*Edge
 }
 
 // brepOpenEdges builds every band boundary edge (modify-general §4.2 step 5):
@@ -193,7 +247,9 @@ type brepOpenSet struct {
 // placed; a whole circle's seam is placed here at its walk's start, which is
 // where buildCapBand reads the band's seam.
 func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, placeVertex func(c [3]float64, faceDelta, levelDelta, endAllow float64) *Vertex) (brepOpenSet, error) {
-	out := brepOpenSet{coedge: map[int]coedge{}, cap: make([][]coedge, len(bp.loopBands)), side: make([][]coedge, len(bp.loopBands))}
+	out := brepOpenSet{coedge: map[int]coedge{}, cap: make([][]coedge, len(bp.loopBands)),
+		side: make([][]coedge, len(bp.loopBands)), capBySeg: make([]map[int]*Edge, len(bp.loopBands)),
+		terminal: make([]map[brepBandTerminal]*Edge, len(bp.loopBands))}
 	if len(bp.loopBands) == 0 {
 		return out, nil
 	}
@@ -211,9 +267,24 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 		e := topo.embeds[b.face]
 		hole := b.loop != 0
 		capView := f.view(bp.xform)
+		capSelected := map[int]bool{}
+		if b.selected != nil {
+			out.capBySeg[bi] = map[int]*Edge{}
+			for i, on := range b.selected {
+				if on {
+					capSelected[b.capWalk[i]] = true
+					if arc := b.capArc[(i+1)%len(b.selected)]; arc >= 0 {
+						capSelected[arc] = true
+					}
+				}
+			}
+		}
 		for _, ui := range topo.faceUses[b.face] {
 			u := topo.uses[ui]
 			if u.Loop != b.loop {
+				continue
+			}
+			if b.selected != nil && !capSelected[u.Seg] {
 				continue
 			}
 			if topo.edgeOf[ui] >= 0 {
@@ -231,6 +302,9 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 			co := coedge{edge: edge, forward: true}
 			out.coedge[ui] = co
 			out.cap[bi] = append(out.cap[bi], co)
+			if b.selected != nil {
+				out.capBySeg[bi][u.Seg] = edge
+			}
 		}
 
 		sideZ, _ := b.sideLevel(f)
@@ -241,7 +315,10 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 		if len(cl.walks) != len(b.orig.Segments) {
 			return brepOpenSet{}, fmt.Errorf(`%w: chamfer band %d's loop holds two consecutive segments on one carrier`, ErrUnsupported, bi)
 		}
-		for _, w := range cl.walks {
+		for i, w := range cl.walks {
+			if b.selected != nil && !b.selected[i] {
+				continue
+			}
 			key, ccw := brepgeom.CurveKey(e, w.SegmentWalk, sideZ)
 			ui, ok := openAt[key]
 			if !ok {
@@ -271,6 +348,31 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 			}
 			out.coedge[ui] = coedge{edge: edge, forward: forward}
 			out.side[bi] = append(out.side[bi], coedge{edge: edge, forward: true})
+		}
+		if len(b.terminals) > 0 {
+			out.terminal[bi] = map[brepBandTerminal]*Edge{}
+		}
+		for _, t := range b.terminals {
+			ui := -1
+			for _, candidate := range topo.faceUses[t.face] {
+				u := topo.uses[candidate]
+				if u.Part == brepLoopSeg && u.Loop == t.loop && u.Seg == t.seg {
+					ui = candidate
+					break
+				}
+			}
+			if ui < 0 || topo.edgeOf[ui] >= 0 {
+				return brepOpenSet{}, fmt.Errorf(`%w: fillet band %d's terminal is not an open planar edge`, ErrUnsupported, bi)
+			}
+			u := topo.uses[ui]
+			start, end := placeVertex(u.DirFrom, 0, 0, 0), placeVertex(u.DirTo, 0, 0, 0)
+			view := bp.faces[t.face].view(bp.xform)
+			edge, err := brepBandEdge(view, u.Walk, t.loop != 0, start, end)
+			if err != nil {
+				return brepOpenSet{}, err
+			}
+			out.coedge[ui] = coedge{edge: edge, forward: true}
+			out.terminal[bi][t] = edge
 		}
 	}
 	if len(out.coedge) != len(topo.open) {
@@ -354,7 +456,14 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 	for bi, b := range bp.loopBands {
 		f := bp.faces[b.face]
 		if b.kind == brepBandFillet {
-			patches, mass, err := attachFilletBand(ctx, body, ref, bp, bi, open, embeds[b.face], work)
+			var patches []*Face
+			var mass brepBandMass
+			var err error
+			if b.selected != nil {
+				patches, mass, err = attachPartialFilletBand(ctx, body, ref, bp, bi, open, embeds[b.face], work)
+			} else {
+				patches, mass, err = attachFilletBand(ctx, body, ref, bp, bi, open, embeds[b.face], work)
+			}
 			if err != nil {
 				return brepBandsBuilt{}, err
 			}
