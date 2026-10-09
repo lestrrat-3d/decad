@@ -10,7 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `fillet.go` | Fillet entry and section rewrite adapter. See modify §6. |
-| `fillet_oblique_cap.go` | Single oblique prism cap-edge fillet through a bounded faceted cut. |
+| `fillet_oblique_cap.go` | Applies `internal/capedge/` admission and cutter to a single oblique prism cap-edge fillet. |
 | `chamfer.go` | `Body.Chamfer`; cap loops route to `capblend.go`. See modify §7. |
 | `modify_options.go` | Reach options, their records, SX1 and the asymmetric reference (SX3). See modify-reach §2, §6. |
 | `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |

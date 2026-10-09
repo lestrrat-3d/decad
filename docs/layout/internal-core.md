@@ -30,6 +30,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/classbgeom/` | Class-B boolean geometry. See general-boolean §3 B, §5. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, measurements, extents, face surveys and topology. See general-boolean §4–§5. |
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
+| `internal/capedge/` | Convex cap-edge cutter admission and quarter-cylinder profile. See vertex-blend §2. |
 | `internal/prismshell/` | Prism side-opening sections, slab levels and stack faces. See shell-opening §3–§5. |
 | `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap and section charges, and extent readings. See evaluator §6. |
 | `internal/revolveshell/` | Effective-meridian survey, removed-run checks, and shell wall sections and displacement. See modify-reach §9.3. |
