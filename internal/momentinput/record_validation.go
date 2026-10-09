@@ -7,9 +7,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 )
 
-// ValidateRecord checks fields and then asks sketch to authenticate the
+// validateRecord checks fields and then asks sketch to authenticate the
 // recorded region. Whole circles use their direct containment certificate.
-func ValidateRecord(record Profile) (FieldPreflight, error) {
+func validateRecord(record Profile) (FieldPreflight, error) {
 	work := freeform.NewFreeformWork()
 	if err := chargeKnownOverBudgetAnalyticReconstruction(record, work); err != nil {
 		return FieldPreflight{}, fmt.Errorf(`decad: profile record is invalid: %w`, err)

@@ -32,8 +32,8 @@ func StopLevelRound(faceOrigin, planeOrigin, n r3.Vec, travel, offset, held floa
 	return proofarith.RationalFloatError(proofbound.RatAdd(terms...), held)
 }
 
-// ThroughStopRound bounds the rounding in a through-all stop level.
-func ThroughStopRound(origin, dir r3.Vec, hi, travel, held float64) float64 {
+// throughStopRound bounds the rounding in a through-all stop level.
+func throughStopRound(origin, dir r3.Vec, hi, travel, held float64) float64 {
 	o := [3]float64{origin.X, origin.Y, origin.Z}
 	g := [3]float64{dir.X, dir.Y, dir.Z}
 	base := new(big.Rat)

@@ -29,14 +29,8 @@ type (
 
 var ErrUnrecordableProfile = decaderr.ErrUnrecordableProfile
 
-// These entry points let the root package reuse the record seam for both
-// public recording and its private boolean and surface operations.
-func RecordChainSegments(edges []sketch.BoundaryEdge) ([]CurveSegment, error) {
-	return recordChainSegments(edges)
-}
-func RecordLoop(name string, edges []sketch.BoundaryEdge) (LoopRecord, error) {
-	return recordLoop(name, edges)
-}
+// The root package uses these entry points for public recording and private
+// boolean and surface operations.
 func RecordEdge(edge sketch.BoundaryEdge) (CurveSegment, error) { return recordEdge(edge) }
 func EdgeJoin(edge sketch.BoundaryEdge, segment CurveSegment) (LoopJoin, error) {
 	return edgeJoin(edge, segment)

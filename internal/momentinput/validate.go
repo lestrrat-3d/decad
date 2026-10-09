@@ -43,14 +43,8 @@ var (
 	ErrUnsupported = decaderr.ErrUnsupported
 )
 
-func ScaleForValidation(profile Profile, anchor Point2) (Profile, error) {
-	return scaleMomentRecordForValidation(profile, anchor)
-}
 func ValidateFreeformSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, Plan, error) {
 	return validateFreeformMomentSegment(segment, work)
-}
-func ValidateWholeCircleRegion(profile Profile) (bool, error) {
-	return validateWholeCircleRegion(profile)
 }
 func scaleMomentRecordForValidation(record Profile, anchor Point2) (Profile, error) {
 	scale := 0.0

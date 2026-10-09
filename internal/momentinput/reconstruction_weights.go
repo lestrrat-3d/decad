@@ -2,10 +2,6 @@ package momentinput
 
 import "slices"
 
-func NormalizeReconstructionWeights(profile Profile) Profile {
-	return normalizeReconstructionWeights(profile)
-}
-
 // normalizeReconstructionWeights rewrites every all-equal NURBS weight vector
 // in a record to ones, for the sketch reconstruction only.
 //

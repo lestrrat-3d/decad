@@ -26,16 +26,6 @@ func ChargeReconstruction(profile Profile, work *freeform.FreeformWork) (uint64,
 	return chargeReconstruction(profile, work)
 }
 
-// RecordScene reconstructs the recorded entities in a sketch.
-func RecordScene(profile Profile) (*sketch.Sketch, bool) {
-	return momentRecordScene(profile)
-}
-
-// RecordsEqual compares the reconstructed profile with the recorded region.
-func RecordsEqual(a, b Profile) bool {
-	return momentRecordsEqual(a, b)
-}
-
 type momentEntityKey struct {
 	kind   uint8
 	first  Point2
