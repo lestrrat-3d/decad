@@ -7,7 +7,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/throughshell"
 	"github.com/lestrrat-3d/r3"
@@ -47,6 +46,7 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 		return brepPayload{}, err
 	}
 	cavEmbeds := embeds[1:]
+	cavFaces := prismFaceRecords(cavity)
 	joined, _, err := brepJoinProfile(eroded)
 	if err != nil {
 		return brepPayload{}, err
@@ -92,62 +92,21 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 		if reason != "" {
 			return brepPayload{}, throughRimError(r, reason)
 		}
-		var qOuters []loopRecord
-		var bands []profileRecord
-		partnered := map[int]struct{}{}
-		// Each cavity face in R's plane: a planar face across R's axis at its
-		// level, or at a wall, a straight cavity wall along k on R's carrier.
-		for ci, q := range cavity.faces {
-			eQ := cavEmbeds[ci]
-			if !q.planar() {
-				if !rp.wall || eQ.Axis[2] != tc.k {
-					continue
-				}
-				outer, ok := throughshell.SweptTrace(q.wall, q.z0, q.z1, eQ, rp.e, rp.axis, rp.level, tc.k)
-				if !ok {
-					continue
-				}
-				inPlane[ci] = struct{}{}
-				qOuters = append(qOuters, outer)
-				continue
-			}
-			if eQ.Axis[2] != rp.axis || brepLevel(q, eQ) != rp.level {
-				continue
-			}
+		trace, reason, err := throughshell.TraceRimFaces(ctx, throughshell.RimTraceInput{
+			Faces: cavFaces, Embeds: cavEmbeds, Holes: r.region.Holes,
+			Embed: rp.e, Axis: rp.axis, Level: rp.level, Wall: rp.wall,
+			SweepAxis: tc.k, CapsEmbed: tc.caps.Embed, Partner: partner,
+		})
+		if err != nil {
+			return brepPayload{}, err
+		}
+		if reason != "" {
+			return brepPayload{}, throughRimError(r, reason)
+		}
+		for _, ci := range trace.InPlane {
 			inPlane[ci] = struct{}{}
-			inR, ok := brepgeom.NewPrismMap(eQ, rp.e).Region(*q.region)
-			if !ok {
-				return brepPayload{}, throughRimError(r, "a cavity face in its plane does not map into its frame")
-			}
-			inF, ok := brepgeom.NewPrismMap(eQ, tc.caps.Embed).Region(*q.region)
-			if !ok && !rp.wall {
-				return brepPayload{}, throughRimError(r, "a cavity face in its plane does not map into the prism's frame")
-			}
-			qOuters = append(qOuters, inR.Outer)
-			for qh, hole := range inR.Holes {
-				var holeF loopRecord
-				if !rp.wall {
-					holeF = inF.Holes[qh]
-				}
-				hi, reason := partner(hole, holeF)
-				if reason != "" {
-					return brepPayload{}, throughRimError(r, reason)
-				}
-				if _, dup := partnered[hi]; dup {
-					return brepPayload{}, throughRimError(r, "a cavity hole partners no hole of the removed face, or two")
-				}
-				partnered[hi] = struct{}{}
-				band, err := offset2d.ReverseLoopRecordContext(ctx, hole)
-				if err != nil {
-					return brepPayload{}, err
-				}
-				bands = append(bands, profileRecord{Outer: band, Holes: []loopRecord{r.region.Holes[hi]}})
-			}
 		}
-		if len(partnered) != len(r.region.Holes) {
-			return brepPayload{}, throughRimError(r, "a hole of the removed face has no cavity hole to partner")
-		}
-		regions, reason, err := throughshell.RimRegions(ctx, budget, r.region.Outer, qOuters)
+		regions, reason, err := throughshell.RimRegions(ctx, budget, r.region.Outer, trace.Outers)
 		if err != nil {
 			return brepPayload{}, shellCancelCause(err)
 		}
@@ -158,7 +117,7 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 		if rp.wall {
 			delta = charge
 		}
-		for _, region := range append(regions, bands...) {
+		for _, region := range append(regions, trace.Bands...) {
 			if err := auditThroughRim(budget, region); err != nil {
 				return brepPayload{}, err
 			}
