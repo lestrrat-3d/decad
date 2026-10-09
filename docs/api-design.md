@@ -276,7 +276,7 @@ already has.
 ```go
 type Document struct{ /* ... */ }
 
-func New(opts ...DocumentOption) *Document
+func New() *Document
 
 func (d *Document) Bodies() []*Body            // live bodies
 func (d *Document) Remove(b *Body) error        // retire a live body by hand
