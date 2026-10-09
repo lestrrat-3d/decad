@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -393,7 +395,7 @@ func readBandMass(ctx context.Context, li int, loop loopRecord, cbp capBlendPayl
 	capZB := cbp.capBandLevel(capZ, matSign)
 	sideZB := proofbound.BoundedAdd(capZB,
 		proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
-	signedArea, err := loopSignedAreaBudget(proofbound.NewWorkBudget(ctx), loop)
+	signedArea, err := sectionaudit.LoopSignedArea(proofbound.NewWorkBudget(ctx), loop)
 	if err != nil {
 		return capband.BandMassInput{}, err
 	}

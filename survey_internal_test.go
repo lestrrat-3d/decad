@@ -731,7 +731,7 @@ func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, out.ok)
 
-	for _, target := range []string{"coalesceWalksBudget", "crossingAuditBudget", "reverseLoopRecordWithPoll", "loopRecordsEqual"} {
+	for _, target := range []string{"coalesceWalksBudget", "Crossing", "reverseLoopRecordWithPoll", "loopRecordsEqual"} {
 		t.Run(target, func(t *testing.T) {
 			budget, entered := newFrameWorkBudget(target)
 			_, err := cupWall(budget, cp)

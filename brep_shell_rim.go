@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -227,7 +229,7 @@ func throughRimError(r brepFace, what string) error {
 // the shared audit.
 func auditThroughRim(budget *proofbound.WorkBudget, region profileRecord) error {
 	for li, loop := range append([]loopRecord{region.Outer}, region.Holes...) {
-		area, err := loopSignedAreaBudget(budget, loop)
+		area, err := sectionaudit.LoopSignedArea(budget, loop)
 		if err != nil {
 			return shellCancelCause(err)
 		}

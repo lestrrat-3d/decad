@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/mirrorjoin"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -414,7 +416,7 @@ func auditJoinedSection(budget *proofbound.WorkBudget, p profileRecord, work *fr
 		}
 	}
 	for li, loop := range loops {
-		area, err := loopSignedAreaBudget(budget, loop)
+		area, err := sectionaudit.LoopSignedArea(budget, loop)
 		if err != nil {
 			return err
 		}
@@ -422,12 +424,12 @@ func auditJoinedSection(budget *proofbound.WorkBudget, p profileRecord, work *fr
 			return fmt.Errorf(`%w: the join's spliced loop %d winds the wrong way or encloses nothing`, ErrDegenerate, li)
 		}
 	}
-	segs, err := buildSegEntriesBudget(budget, loops)
+	segs, err := sectionaudit.EntriesOf(budget, loops)
 	if err != nil {
 		return err
 	}
-	if err := crossingAuditBudget(budget, segs); err != nil {
+	if err := sectionaudit.Crossing(budget, segs); err != nil {
 		return err
 	}
-	return nestingAuditBudget(budget, segs, len(loops))
+	return sectionaudit.Nesting(budget, segs, len(loops))
 }

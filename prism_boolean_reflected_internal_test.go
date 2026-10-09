@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -139,10 +141,10 @@ func TestPrismReexpressionRewound(t *testing.T) {
 		}
 	}
 
-	outerArea, err := loopSignedAreaBudget(budget, got.Outer)
+	outerArea, err := sectionaudit.LoopSignedArea(budget, got.Outer)
 	require.NoError(t, err)
 	require.InDelta(t, 50+math.Pi*12.5, outerArea, 1e-9, "the re-wound outer winds counter-clockwise")
-	holeArea, err := loopSignedAreaBudget(budget, got.Holes[0])
+	holeArea, err := sectionaudit.LoopSignedArea(budget, got.Holes[0])
 	require.NoError(t, err)
 	require.InDelta(t, -math.Pi, holeArea, 1e-9, "the re-wound hole winds clockwise")
 

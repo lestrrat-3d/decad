@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -824,7 +826,7 @@ func (r *brepEdgeRoute) rewrite(blends []*brepEdgeBlend) (brepPayload, error) {
 			continue
 		}
 		w := r.topo.walls[fi]
-		if err := auditTrimmedWall(w, edit.claimStart, edit.claimEnd); err != nil {
+		if err := sectionaudit.TrimmedWall(w, edit.claimStart, edit.claimEnd); err != nil {
 			return brepPayload{}, r.auditFailure(f, err)
 		}
 		sU, sV, eU, eV := w.StartU, w.StartV, w.EndU, w.EndV
