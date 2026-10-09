@@ -21,7 +21,7 @@ func TestChordStationBoundEnclosesACircleSegStation(t *testing.T) {
 	// enclosure comes from proofbound.TurnSinCosInterval and the held pair sits a couple of
 	// roundings from it.
 	const r = 5.0
-	seg := CircleSeg{
+	seg := circleSeg{
 		Center: Point2{U: 2, V: -3},
 		Radius: units.Millimeters(r),
 		CCW:    true,
@@ -49,7 +49,7 @@ func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 	// An arc states three pinned points and no angle at all, so its station goes
 	// through proofbound.Atan2Interval and proofbound.RadSinCosSpan. The enclosure is wider than a
 	// circle's, but it is finite and it is positive — never a silent zero.
-	seg := ArcSeg{
+	seg := arcSeg{
 		Center: Point2{U: 0, V: 0},
 		Start:  Point2{U: 3, V: 0},
 		End:    Point2{U: 0, V: 3},
@@ -73,12 +73,12 @@ func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 
 func TestChordStationBoundRefusesWhatItCannotEnclose(t *testing.T) {
 	t.Parallel()
-	circle := CircleSeg{Center: Point2{}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1}
-	line := LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1}
+	circle := circleSeg{Center: Point2{}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1}
+	line := lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1}
 
 	for _, row := range []struct {
 		name    string
-		seg     CurveSegment
+		seg     curveSegment
 		k, n    int
 		heldU   float64
 		heldV   float64

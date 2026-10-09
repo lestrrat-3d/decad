@@ -44,7 +44,7 @@ func cloneStackedForAudit(sp stackedPrismPayload) stackedPrismPayload {
 	sp.slabs = append([]prismSlab(nil), sp.slabs...)
 	sp.interfaces = append([]prismSlabInterface(nil), sp.interfaces...)
 	for i := range sp.slabs {
-		sp.slabs[i].regions = append([]ProfileRecord(nil), sp.slabs[i].regions...)
+		sp.slabs[i].regions = append([]profileRecord(nil), sp.slabs[i].regions...)
 	}
 	return sp
 }
@@ -71,7 +71,7 @@ func TestStackedPayloadAuditRejectsBrokenRecords(t *testing.T) {
 			sp.slabs[1].regions[0].Outer = sp.slabs[1].regions[0].Holes[0]
 		}, ErrUnsupported},
 		{"opposed holes", func(sp *stackedPrismPayload) {
-			sp.slabs[0].regions[0].Holes = []LoopRecord{otherHole}
+			sp.slabs[0].regions[0].Holes = []loopRecord{otherHole}
 		}, ErrUnsupported},
 		{"wrong exposed patch", func(sp *stackedPrismPayload) {
 			sp.interfaces[0].lowerExposed = nil
@@ -174,13 +174,13 @@ func holedCupRecord(t *testing.T) cupPayload {
 	t.Helper()
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	hole := func(u0, v0, u1, v1 float64) LoopRecord {
+	hole := func(u0, v0, u1, v1 float64) loopRecord {
 		l, err := offset2d.ReverseLoopRecordContext(t.Context(), rectangleRecord(u0, v0, u1, v1).Outer)
 		require.NoError(t, err)
 		return l
 	}
-	outer := ProfileRecord{Outer: rectangleRecord(0, 0, 100, 60).Outer, Holes: []LoopRecord{hole(40, 20, 60, 40)}}
-	cavity := ProfileRecord{Outer: rectangleRecord(5, 5, 95, 55).Outer, Holes: []LoopRecord{hole(35, 15, 65, 45)}}
+	outer := profileRecord{Outer: rectangleRecord(0, 0, 100, 60).Outer, Holes: []loopRecord{hole(40, 20, 60, 40)}}
+	cavity := profileRecord{Outer: rectangleRecord(5, 5, 95, 55).Outer, Holes: []loopRecord{hole(35, 15, 65, 45)}}
 	cp, err := cupView{outer: outer, cavity: cavity, frame: frame, zOuter: 0, zCav: 5, zOpen: 20,
 		thickness: 5, sense: Inward, xform: r3.Identity()}.payload(t.Context())
 	require.NoError(t, err)
@@ -240,20 +240,20 @@ func TestStackedLiningAuditRejectsBrokenRecords(t *testing.T) {
 			sp.slabs[1].regions[0].Outer = rectangleRecord(1, 1, 99, 59).Outer
 		}, ErrUnsupported},
 		{"lining misses its wide hole", func(sp *stackedPrismPayload) {
-			sp.slabs[1].regions[1].Holes = []LoopRecord{other}
+			sp.slabs[1].regions[1].Holes = []loopRecord{other}
 		}, ErrUnsupported},
 		{"both sides several regions", func(sp *stackedPrismPayload) {
 			sp.slabs[0].regions = append(sp.slabs[0].regions, sp.slabs[0].regions[0])
 		}, ErrUnsupported},
 		{"exposed patch misses a hole", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].lowerExposed = []ProfileRecord{{Outer: sp.interfaces[0].lowerExposed[0].Outer}}
+			sp.interfaces[0].lowerExposed = []profileRecord{{Outer: sp.interfaces[0].lowerExposed[0].Outer}}
 		}, ErrDegenerate},
 		{"exposed patch on the narrow side", func(sp *stackedPrismPayload) {
 			sp.interfaces[0].upperExposed = sp.interfaces[0].lowerExposed
 			sp.interfaces[0].lowerExposed = nil
 		}, ErrDegenerate},
 		{"exposed hole is not the lining's outer", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].lowerExposed = []ProfileRecord{{Outer: sp.interfaces[0].lowerExposed[0].Outer, Holes: []LoopRecord{other}}}
+			sp.interfaces[0].lowerExposed = []profileRecord{{Outer: sp.interfaces[0].lowerExposed[0].Outer, Holes: []loopRecord{other}}}
 		}, ErrDegenerate},
 	}
 	for _, tc := range cases {

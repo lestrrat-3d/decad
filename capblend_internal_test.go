@@ -30,7 +30,7 @@ func equalCapSetback(d, dDelta float64) capSetback {
 
 // These test adapters keep the mass fixtures' payload construction unchanged
 // while exercising the production root adapter and internal integrals.
-func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload,
+func capBandVolume(ctx context.Context, loop loopRecord, cbp capBlendPayload,
 	geom []capPatchGeom, capZ, matSign float64,
 	work *freeform.FreeformWork) (proofbound.BoundedScalar, error) {
 	in, err := readBandMass(ctx, 0, loop, cbp, geom, capZ, matSign, 0, capBandClosure{})
@@ -40,7 +40,7 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload,
 	return capband.BandVolume(in, work)
 }
 
-func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload,
+func capBandMoment(ctx context.Context, loop loopRecord, cbp capBlendPayload,
 	geom []capPatchGeom, capZ, matSign, delta float64,
 	work *freeform.FreeformWork) (
 	proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error,
@@ -79,15 +79,15 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload,
 func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	t.Parallel()
 	const rho, d, half = 0.01, 0.9, 0.5
-	loop := LoopRecord{Segments: []CurveSegment{
-		CircleSeg{Center: Point2{}, Radius: units.Millimeters(rho), CCW: false, TStart: 1, TEnd: 0},
+	loop := loopRecord{Segments: []curveSegment{
+		circleSeg{Center: Point2{}, Radius: units.Millimeters(rho), CCW: false, TStart: 1, TEnd: 0},
 	}}
 	work := freeform.NewFreeformWork()
 
 	capBoundary, err := capLoopBoundary(t.Context(), loop, d)
 	require.NoError(t, err)
 	require.Len(t, capBoundary.Segments, 1)
-	widened, ok := capBoundary.Segments[0].(CircleSeg)
+	widened, ok := capBoundary.Segments[0].(circleSeg)
 	require.True(t, ok, "a whole-circle hole offsets into a whole circle")
 	widenedRadius, err := widened.Radius.In(units.Millimeter)
 	require.NoError(t, err)
@@ -208,11 +208,11 @@ func TestFixPatchOrientation(t *testing.T) {
 // each of the two closing disks carries capZ times a whole section area.
 func capBandCircle(t *testing.T, r, d, capZ float64) proofbound.BoundedScalar {
 	t.Helper()
-	loop := LoopRecord{Segments: []CurveSegment{
-		CircleSeg{Center: Point2{}, Radius: units.Millimeters(r), CCW: true, TStart: 0, TEnd: 1},
+	loop := loopRecord{Segments: []curveSegment{
+		circleSeg{Center: Point2{}, Radius: units.Millimeters(r), CCW: true, TStart: 0, TEnd: 1},
 	}}
 	cbp := capBlendPayload{
-		profile:  ProfileRecord{Outer: loop},
+		profile:  profileRecord{Outer: loop},
 		z0:       0,
 		z1:       capZ,
 		end:      equalCapSetback(d, 0),
@@ -350,7 +350,7 @@ func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cbp := capBlendPayload{
-				profile:    ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+				profile:    profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
 				frame:      canonicalPrismFrame(t),
 				z0:         0,
 				z1:         10,

@@ -79,7 +79,7 @@ import (
 // a plain extrude, a modify rewrite, a boolean result — leaves it nil and
 // resolves as before. See docs/evaluator-design.md §8.
 type prismPayload struct {
-	profile       ProfileRecord
+	profile       profileRecord
 	frame         r3.Frame
 	z0, z1        float64
 	z0Delta       float64
@@ -229,7 +229,7 @@ func vecL1(v r3.Vec) float64 {
 //
 // walks is the profile's pre-resolved segment walks, or nil; same contract as
 // CoordinateEnvelope's own.
-func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, error) {
+func prismCentroidGeometryBound(pp prismPayload, profile profileRecord, held r3.Vec, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, error) {
 	coordUpper, err := momentinput.CoordinateEnvelope(profile, work, walks)
 	if err != nil {
 		return 0, err

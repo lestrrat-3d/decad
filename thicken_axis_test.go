@@ -19,12 +19,12 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 	base := math.Ldexp(1, 53)
 	points := []Point2{{U: base, V: 0}, {U: base + 100, V: 0},
 		{U: base + 100, V: 60}, {U: base, V: 60}}
-	segments := make([]CurveSegment, len(points))
+	segments := make([]curveSegment, len(points))
 	for i := range points {
-		segments[i] = LineSeg{Start: points[i], End: points[(i+1)%len(points)], TStart: 0, TEnd: 1}
+		segments[i] = lineSeg{Start: points[i], End: points[(i+1)%len(points)], TStart: 0, TEnd: 1}
 	}
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: LoopRecord{Segments: segments}},
+		profile: profileRecord{Outer: loopRecord{Segments: segments}},
 		z0:      0, z1: 10, surfaceResult: true,
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
@@ -34,7 +34,7 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 	require.NoError(t, err)
 	generated, err := offsetProfile(budget, pp.profile, +1, 1)
 	require.NoError(t, err)
-	first, ok := generated.Outer.Segments[0].(LineSeg)
+	first, ok := generated.Outer.Segments[0].(lineSeg)
 	require.True(t, ok)
 	require.Equal(t, base, first.Start.U)
 	err = thickenCertifyAxisOffset(loops[0], dirs, generated.Outer, +1, 1, budget)
@@ -83,8 +83,8 @@ func TestThickenRadialRefusesBoundedAxis(t *testing.T) {
 func TestThickenRibbonUnrepresentableOffset(t *testing.T) {
 	t.Parallel()
 	base := math.Ldexp(1, 53)
-	chain := ChainRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: base, V: 0}, End: Point2{U: base, V: 40}, TStart: 0, TEnd: 1},
+	chain := chainRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: base, V: 0}, End: Point2{U: base, V: 40}, TStart: 0, TEnd: 1},
 	}}
 	budget := proofbound.NewWorkBudget(t.Context())
 	_, err := thickenRibbon(t.Context(), chain, ThickenPositive, 1, budget, freeform.NewFreeformWork(), nil)
@@ -96,23 +96,23 @@ func TestThickenRibbonUnrepresentableOffset(t *testing.T) {
 // assembled, each on its own stated reason.
 func TestThickenRibbonWalkClassRefusals(t *testing.T) {
 	t.Parallel()
-	line := func(a, b Point2) CurveSegment {
-		return LineSeg{Start: a, End: b, TStart: 0, TEnd: 1}
+	line := func(a, b Point2) curveSegment {
+		return lineSeg{Start: a, End: b, TStart: 0, TEnd: 1}
 	}
 	for _, tc := range []struct {
 		name  string
-		chain ChainRecord
+		chain chainRecord
 		want  string
 	}{
-		{"not axis parallel", ChainRecord{Segments: []CurveSegment{
+		{"not axis parallel", chainRecord{Segments: []curveSegment{
 			line(Point2{U: 0, V: 0}, Point2{U: 10, V: 10}),
 		}}, "not axis-parallel"},
-		{"reverses on itself", ChainRecord{Segments: []CurveSegment{
+		{"reverses on itself", chainRecord{Segments: []curveSegment{
 			line(Point2{U: 0, V: 0}, Point2{U: 10, V: 0}),
 			line(Point2{U: 10, V: 0}, Point2{U: 0, V: 0}),
 		}}, "not a right angle"},
-		{"arc segment", ChainRecord{Segments: []CurveSegment{
-			ArcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 10, V: 0},
+		{"arc segment", chainRecord{Segments: []curveSegment{
+			arcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 10, V: 0},
 				End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
 		}}, "line-only axis-parallel segments"},
 	} {

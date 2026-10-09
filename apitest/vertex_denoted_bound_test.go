@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -94,28 +97,28 @@ func denotedLerp(a, b, t float64) *big.Float {
 // denotedEnds lists the points every recorded segment of a profile denotes
 // at its two recorded parameters. A record with a segment kind this file does not
 // evaluate fails the test rather than skipping the segment.
-func denotedEnds(t *testing.T, record *decad.ProfileRecord) []denotedPoint {
+func denotedEnds(t *testing.T, record *momentinput.Profile) []denotedPoint {
 	t.Helper()
-	var segs []decad.CurveSegment
-	for _, loop := range append([]decad.LoopRecord{record.Outer}, record.Holes...) {
+	var segs []sectionrecord.CurveSegment
+	for _, loop := range append([]sectionrecord.LoopRecord{record.Outer}, record.Holes...) {
 		segs = append(segs, loop.Segments...)
 	}
 	return denotedSegmentEnds(t, segs)
 }
 
 // denotedSegmentEnds is denotedEnds over a plain segment list.
-func denotedSegmentEnds(t *testing.T, segs []decad.CurveSegment) []denotedPoint {
+func denotedSegmentEnds(t *testing.T, segs []sectionrecord.CurveSegment) []denotedPoint {
 	t.Helper()
 	twoPi := new(big.Float).SetPrec(junctionPrec).Mul(junctionPi(), jf(2))
 	var out []denotedPoint
 	{
 		for _, seg := range segs {
 			switch s := seg.(type) {
-			case decad.LineSeg:
+			case sectionrecord.LineSeg:
 				for _, at := range []float64{s.TStart, s.TEnd} {
 					out = append(out, denotedPoint{denotedLerp(s.Start.U, s.End.U, at), denotedLerp(s.Start.V, s.End.V, at)})
 				}
-			case decad.CircleSeg:
+			case sectionrecord.CircleSeg:
 				r, err := s.Radius.In(units.Millimeter)
 				require.NoError(t, err)
 				for _, at := range []float64{s.TStart, s.TEnd} {
@@ -130,7 +133,7 @@ func denotedSegmentEnds(t *testing.T, segs []decad.CurveSegment) []denotedPoint 
 					v := new(big.Float).SetPrec(junctionPrec).Mul(sin, jf(r))
 					out = append(out, denotedPoint{u.Add(u, jf(s.Center.U)), v.Add(v, jf(s.Center.V))})
 				}
-			case decad.ArcSeg:
+			case sectionrecord.ArcSeg:
 				// An arc denotes the circle of Start's radius r: Start itself
 				// at t = 0, and the point at r along End's direction from the
 				// centre at t = 1. A cut parameter would need End's angle and
@@ -215,9 +218,9 @@ func requireVerticesReachDenoted(t *testing.T, body *decad.Body, ends []denotedP
 }
 
 // recordOf records one sketch profile.
-func recordOf(t *testing.T, s *sketch.Sketch, p *sketch.Profile) *decad.ProfileRecord {
+func recordOf(t *testing.T, s *sketch.Sketch, p *sketch.Profile) *momentinput.Profile {
 	t.Helper()
-	record, _, err := decad.RecordProfile(s, p)
+	record, _, err := momentinput.RecordProfile(s, p)
 	require.NoError(t, err)
 	return &record
 }
@@ -356,7 +359,7 @@ func TestExtrudeVertexReachesDenotedTrimmedSide(t *testing.T) {
 		s, profile := rectWithHoleSketch(t)
 		record := recordOf(t, s, profile)
 		require.Len(t, record.Holes, 1)
-		hole, ok := record.Holes[0].Segments[0].(decad.CircleSeg)
+		hole, ok := record.Holes[0].Segments[0].(sectionrecord.CircleSeg)
 		require.True(t, ok)
 		require.Equal(t, [2]float64{1, 0}, [2]float64{hole.TStart, hole.TEnd})
 		ends := denotedEnds(t, record)
@@ -463,7 +466,7 @@ func TestChainVertexReachesDenotedCutEnd(t *testing.T) {
 	}
 	doc := decad.New()
 	for _, ch := range chains {
-		record, _, err := decad.RecordChain(s, ch)
+		record, _, err := sketchrecord.RecordChain(s, ch)
 		require.NoError(t, err)
 		require.Len(t, record.Segments, 1)
 		ends := denotedSegmentEnds(t, record.Segments)

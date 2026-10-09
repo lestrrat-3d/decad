@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -36,7 +37,7 @@ func offRadiusEnd(v float64) float64 {
 
 // offRadiusSection draws a section through draw, extrudes it over [0, h] and
 // returns the body with the one arc its record holds.
-func offRadiusSection(t *testing.T, doc *decad.Document, h float64, draw func(*sketch.Sketch)) (*decad.Body, decad.ArcSeg) {
+func offRadiusSection(t *testing.T, doc *decad.Document, h float64, draw func(*sketch.Sketch)) (*decad.Body, sectionrecord.ArcSeg) {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -45,9 +46,9 @@ func offRadiusSection(t *testing.T, doc *decad.Document, h float64, draw func(*s
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 	record := recordOf(t, s, profiles[0])
-	var arcs []decad.ArcSeg
+	var arcs []sectionrecord.ArcSeg
 	for _, seg := range record.Outer.Segments {
-		if arc, ok := seg.(decad.ArcSeg); ok {
+		if arc, ok := seg.(sectionrecord.ArcSeg); ok {
 			arcs = append(arcs, arc)
 		}
 	}
@@ -92,7 +93,7 @@ func tombstoneSection(s *sketch.Sketch) {
 // drilledTombstone cuts the tombstone with a radius-2 drill along y through
 // (−30, ·, 5), clear of the arc's whole-circle box, so the pair builds class
 // B's through reach.
-func drilledTombstone(t *testing.T, doc *decad.Document) (*decad.Body, decad.ArcSeg) {
+func drilledTombstone(t *testing.T, doc *decad.Document) (*decad.Body, sectionrecord.ArcSeg) {
 	t.Helper()
 	tomb, arc := offRadiusSection(t, doc, 10, tombstoneSection)
 	w := sketch.NewWorld()
@@ -116,9 +117,9 @@ func drilledTombstone(t *testing.T, doc *decad.Document) (*decad.Body, decad.Arc
 // Start, a recorded coordinate both neighbours state, stays Exact when
 // startExact is set. It returns the largest distance from a vertex at End to
 // End's denoted point.
-func requireArcEndsReached(t *testing.T, body *decad.Body, arc decad.ArcSeg, startExact bool) float64 {
+func requireArcEndsReached(t *testing.T, body *decad.Body, arc sectionrecord.ArcSeg, startExact bool) float64 {
 	t.Helper()
-	ends := denotedSegmentEnds(t, []decad.CurveSegment{arc})
+	ends := denotedSegmentEnds(t, []sectionrecord.CurveSegment{arc})
 	require.Len(t, ends, 2)
 	worst := 0.0
 	for k, p := range ends {

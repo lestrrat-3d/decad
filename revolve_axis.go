@@ -168,7 +168,7 @@ func (ax axisFrame) IsAxis(w survey2d.SegmentWalk) bool {
 
 // resolveAxisSide scans the record, asks revolveaxis to decide its side, then
 // audits each walk for axis contact and charges any snapped endpoint.
-func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2, work *freeform.FreeformWork) (axisFrame, float64, error) {
+func resolveAxisSide(ctx context.Context, profile profileRecord, line axisLine2, work *freeform.FreeformWork) (axisFrame, float64, error) {
 	nU, nV := -line.dV, line.dU
 	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work, nil)
 	if err != nil {
@@ -221,9 +221,9 @@ type regionSnapAllow struct {
 
 // auditAxisContact keeps record walking at the root while revolveaxis checks
 // each resolved walk in the original order and charges its snap allowance.
-func (ax axisFrame) auditAxisContact(profile ProfileRecord, work *freeform.FreeformWork) (regionSnapAllow, error) {
-	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
-	snap, err := revolveaxis.AuditAxisContact(ax.numeric(), loops, func(seg CurveSegment) (survey2d.SegmentWalk, error) {
+func (ax axisFrame) auditAxisContact(profile profileRecord, work *freeform.FreeformWork) (regionSnapAllow, error) {
+	loops := append([]loopRecord{profile.Outer}, profile.Holes...)
+	snap, err := revolveaxis.AuditAxisContact(ax.numeric(), loops, func(seg curveSegment) (survey2d.SegmentWalk, error) {
 		w, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return survey2d.SegmentWalk{}, err

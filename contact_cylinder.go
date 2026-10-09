@@ -32,7 +32,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 		pp.z0 >= pp.z1 {
 		return sourceCylinderContactProof{}, false
 	}
-	circle, ok := pp.profile.Outer.Segments[0].(CircleSeg)
+	circle, ok := pp.profile.Outer.Segments[0].(circleSeg)
 	if !ok || !circle.CCW || circle.TStart != 0 || circle.TEnd != 1 ||
 		circle.Radius.Kind() != units.Length ||
 		!finiteMeasurementValues(circle.Center.U, circle.Center.V, circle.Radius.Base()) ||
@@ -117,7 +117,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 	}
 	var zlo, zhi, rhoLo, rhoHi proofarith.Dyadic
 	for i, seg := range rp.profile.Outer.Segments {
-		line, ok := seg.(LineSeg)
+		line, ok := seg.(lineSeg)
 		if !ok || !finiteMeasurementValues(line.Start.U, line.Start.V) {
 			return sourceCylinderContactProof{}, false
 		}

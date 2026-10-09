@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -282,15 +284,15 @@ func TestExtrudeCircularReadingsStayApproximate(t *testing.T) {
 // circle-circle overlap arrangement records a partial circle (seam.go's
 // recordEdge narrows CircleSeg's own TStart/TEnd rather than promoting it to
 // an ArcSeg).
-func quarterDiscRecord(r float64) decad.ProfileRecord {
-	return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.CircleSeg{
+func quarterDiscRecord(r float64) momentinput.Profile {
+	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.CircleSeg{
 			Center: decad.Point2{U: 0, V: 0},
 			Radius: units.Millimeters(r),
 			CCW:    true, TStart: 0, TEnd: 0.25,
 		},
-		decad.LineSeg{Start: decad.Point2{U: 0, V: r}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: r, V: 0}, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: decad.Point2{U: 0, V: r}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: r, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 }
 

@@ -144,21 +144,21 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbou
 // fallback, which includes a near-tangent crossing A6's charge cannot bound
 // and a merge failure on cuts that carry an amplified displacement. opName
 // feeds mergePrismCells's own RB1 message.
-func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool, opName string) (ProfileRecord, prismSceneDelta, float64, bool, error) {
+func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool, opName string) (profileRecord, prismSceneDelta, float64, bool, error) {
 	selected, sceneDelta, resolved, err := resolvePrismCrossingCells(ctx, budget, pa, pb, reexpress, keep)
 	if err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if !resolved {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
+		return profileRecord{}, prismSceneDelta{}, 0, false, nil
 	}
 
 	merged, cutDelta, mergedResolved, err := mergePrismCells(budget, selected, opName)
 	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if !mergedResolved {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
+		return profileRecord{}, prismSceneDelta{}, 0, false, nil
 	}
 	return merged, sceneDelta, cutDelta, true, nil
 }

@@ -6,12 +6,14 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
-func recordOne(t *testing.T, s *sketch.Sketch, pick func(*sketch.Profile) bool) decad.ProfileRecord {
+func recordOne(t *testing.T, s *sketch.Sketch, pick func(*sketch.Profile) bool) momentinput.Profile {
 	t.Helper()
 	_, err := s.Solve(t.Context())
 	require.NoError(t, err)
@@ -19,27 +21,27 @@ func recordOne(t *testing.T, s *sketch.Sketch, pick func(*sketch.Profile) bool) 
 		if !pick(profile) {
 			continue
 		}
-		record, _, err := decad.RecordProfile(s, profile)
+		record, _, err := momentinput.RecordProfile(s, profile)
 		require.NoError(t, err)
 		return record
 	}
 	t.Fatal(`no profile matched`)
-	return decad.ProfileRecord{}
+	return momentinput.Profile{}
 }
 
-func momentLine(u0, v0, u1, v1 float64) decad.CurveSegment {
-	return decad.LineSeg{
+func momentLine(u0, v0, u1, v1 float64) sectionrecord.CurveSegment {
+	return sectionrecord.LineSeg{
 		Start: decad.Point2{U: u0, V: v0},
 		End:   decad.Point2{U: u1, V: v1}, TStart: 0, TEnd: 1,
 	}
 }
 
-func momentSquare(u0, v0, u1, v1 float64, clockwise bool) decad.LoopRecord {
+func momentSquare(u0, v0, u1, v1 float64, clockwise bool) sectionrecord.LoopRecord {
 	points := [][2]float64{{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}}
 	if clockwise {
 		points = [][2]float64{{u0, v0}, {u0, v1}, {u1, v1}, {u1, v0}}
 	}
-	return decad.LoopRecord{Segments: []decad.CurveSegment{
+	return sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 		momentLine(points[0][0], points[0][1], points[1][0], points[1][1]),
 		momentLine(points[1][0], points[1][1], points[2][0], points[2][1]),
 		momentLine(points[2][0], points[2][1], points[3][0], points[3][1]),
@@ -47,8 +49,8 @@ func momentSquare(u0, v0, u1, v1 float64, clockwise bool) decad.LoopRecord {
 	}}
 }
 
-func momentWholeCircle(center decad.Point2, radius float64, counterclockwise bool) decad.LoopRecord {
-	segment := decad.CircleSeg{
+func momentWholeCircle(center decad.Point2, radius float64, counterclockwise bool) sectionrecord.LoopRecord {
+	segment := sectionrecord.CircleSeg{
 		Center: center,
 		Radius: units.Millimeters(radius),
 		CCW:    counterclockwise,
@@ -58,10 +60,10 @@ func momentWholeCircle(center decad.Point2, radius float64, counterclockwise boo
 	} else {
 		segment.TStart = 1
 	}
-	return decad.LoopRecord{Segments: []decad.CurveSegment{segment}}
+	return sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{segment}}
 }
 
-func requireProfileMomentError(t *testing.T, record decad.ProfileRecord, target error) {
+func requireProfileMomentError(t *testing.T, record momentinput.Profile, target error) {
 	t.Helper()
 	_, err := record.Area()
 	require.ErrorIs(t, err, target)
@@ -397,7 +399,7 @@ func preciseGreenArcSecondMoments(t *testing.T, center, start, end decad.Point2)
 // driftedArcWedge is the wedge record the arc-endpoint-drift tests share: an
 // arc about (5, −3) from angle 0 on the unit circle to End, one ulp of the
 // radius off that circle, closed by End→Center→Start.
-func driftedArcWedge() (decad.ProfileRecord, decad.Point2, decad.Point2, decad.Point2) {
+func driftedArcWedge() (momentinput.Profile, decad.Point2, decad.Point2, decad.Point2) {
 	center := decad.Point2{U: 5, V: -3}
 	start := decad.Point2{U: 6, V: -3}
 	driftedRadius := math.Nextafter(1, math.Inf(1))
@@ -405,10 +407,10 @@ func driftedArcWedge() (decad.ProfileRecord, decad.Point2, decad.Point2, decad.P
 		U: 5 + 0.6*driftedRadius,
 		V: -3 + 0.8*driftedRadius,
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.ArcSeg{Center: center, Start: start, End: end, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: end, End: center, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: center, End: start, TStart: 0, TEnd: 1},
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.ArcSeg{Center: center, Start: start, End: end, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: end, End: center, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: center, End: start, TStart: 0, TEnd: 1},
 	}}}
 	return record, center, start, end
 }
@@ -519,7 +521,7 @@ func TestRegionAreaMatchesSketchOnCertifiedFragments(t *testing.T) {
 		if !profile.Valid {
 			continue
 		}
-		record, _, err := decad.RecordProfile(s, profile)
+		record, _, err := momentinput.RecordProfile(s, profile)
 		require.NoError(t, err)
 		area, err := record.Area()
 		require.NoError(t, err)
@@ -542,32 +544,32 @@ func TestRegionMomentsRejectUnsupportedAndEmptyRecords(t *testing.T) {
 	record := recordOne(t, s, func(*sketch.Profile) bool { return true })
 	requireProfileMomentError(t, record, decad.ErrUnsupported)
 
-	requireProfileMomentError(t, decad.ProfileRecord{}, decad.ErrDegenerate)
+	requireProfileMomentError(t, momentinput.Profile{}, decad.ErrDegenerate)
 }
 
 func TestCircleSegMomentRadiusErrorsUseDecadSentinels(t *testing.T) {
 	t.Parallel()
 	calls := []struct {
 		name string
-		call func(decad.ProfileRecord) error
+		call func(momentinput.Profile) error
 	}{
 		{
 			name: "area",
-			call: func(rec decad.ProfileRecord) error {
+			call: func(rec momentinput.Profile) error {
 				_, err := rec.Area()
 				return err
 			},
 		},
 		{
 			name: "centroid",
-			call: func(rec decad.ProfileRecord) error {
+			call: func(rec momentinput.Profile) error {
 				_, err := rec.Centroid()
 				return err
 			},
 		},
 		{
 			name: "second moments",
-			call: func(rec decad.ProfileRecord) error {
+			call: func(rec momentinput.Profile) error {
 				_, err := rec.SecondMoments()
 				return err
 			},
@@ -606,25 +608,25 @@ func TestCircleSegMomentRadiusErrorsUseDecadSentinels(t *testing.T) {
 	}
 	forms := []struct {
 		name string
-		seg  func(units.Value) decad.CurveSegment
+		seg  func(units.Value) sectionrecord.CurveSegment
 	}{
 		{
 			name: "value",
-			seg: func(radius units.Value) decad.CurveSegment {
-				return decad.CircleSeg{Radius: radius, CCW: true, TEnd: 1}
+			seg: func(radius units.Value) sectionrecord.CurveSegment {
+				return sectionrecord.CircleSeg{Radius: radius, CCW: true, TEnd: 1}
 			},
 		},
 		{
 			name: "pointer",
-			seg: func(radius units.Value) decad.CurveSegment {
-				return &decad.CircleSeg{Radius: radius, CCW: true, TEnd: 1}
+			seg: func(radius units.Value) sectionrecord.CurveSegment {
+				return &sectionrecord.CircleSeg{Radius: radius, CCW: true, TEnd: 1}
 			},
 		},
 	}
 
 	for _, radius := range radii {
 		for _, form := range forms {
-			rec := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			rec := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 				form.seg(radius.radius),
 			}}}
 			for _, call := range calls {
@@ -641,17 +643,17 @@ func TestCircleSegMomentRadiusErrorsUseDecadSentinels(t *testing.T) {
 
 func TestRegionMomentsPointerVariants(t *testing.T) {
 	t.Parallel()
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		&decad.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 4}, TStart: 0, TEnd: 1},
-		&decad.LineSeg{Start: decad.Point2{U: 4}, End: decad.Point2{U: 4, V: 4}, TStart: 0, TEnd: 1},
-		&decad.LineSeg{Start: decad.Point2{U: 4, V: 4}, End: decad.Point2{V: 4}, TStart: 0, TEnd: 1},
-		&decad.LineSeg{Start: decad.Point2{V: 4}, End: decad.Point2{}, TStart: 0, TEnd: 1},
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		&sectionrecord.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 4}, TStart: 0, TEnd: 1},
+		&sectionrecord.LineSeg{Start: decad.Point2{U: 4}, End: decad.Point2{U: 4, V: 4}, TStart: 0, TEnd: 1},
+		&sectionrecord.LineSeg{Start: decad.Point2{U: 4, V: 4}, End: decad.Point2{V: 4}, TStart: 0, TEnd: 1},
+		&sectionrecord.LineSeg{Start: decad.Point2{V: 4}, End: decad.Point2{}, TStart: 0, TEnd: 1},
 	}}}
 	area, err := record.Area()
 	require.NoError(t, err)
 	require.True(t, area.Value.Equal(units.SquareMillimeters(16), 1e-12))
 
-	bad := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{(*decad.LineSeg)(nil)}}}
+	bad := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{(*sectionrecord.LineSeg)(nil)}}}
 	requireProfileMomentError(t, bad, decad.ErrDegenerate)
 	bad.Outer.Segments[0] = nil
 	requireProfileMomentError(t, bad, decad.ErrDegenerate)
@@ -661,55 +663,55 @@ func TestRegionMomentsRejectMalformedFields(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name   string
-		record decad.ProfileRecord
+		record momentinput.Profile
 		target error
 	}{
 		{
 			name: "OpenLoop",
-			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			record: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 				momentLine(0, 0, 1, 0), momentLine(1, 0, 1, 1),
 			}}},
 			target: decad.ErrDegenerate,
 		},
 		{
 			name: "NonFiniteCoordinate",
-			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			record: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 				momentLine(math.NaN(), 0, 1, 0),
 			}}},
 			target: decad.ErrNotFinite,
 		},
 		{
 			name: "NonFiniteRange",
-			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-				decad.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 1}, TEnd: math.Inf(1)},
+			record: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+				sectionrecord.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 1}, TEnd: math.Inf(1)},
 			}}},
 			target: decad.ErrNotFinite,
 		},
 		{
 			name: "WrongRadiusUnit",
-			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-				decad.CircleSeg{Radius: units.Degrees(1), CCW: true, TEnd: 1},
+			record: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+				sectionrecord.CircleSeg{Radius: units.Degrees(1), CCW: true, TEnd: 1},
 			}}},
 			target: decad.ErrUnitKind,
 		},
 		{
 			name: "NonFiniteRadius",
-			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-				decad.CircleSeg{Radius: units.Millimeters(math.Inf(1)), CCW: true, TEnd: 1},
+			record: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+				sectionrecord.CircleSeg{Radius: units.Millimeters(math.Inf(1)), CCW: true, TEnd: 1},
 			}}},
 			target: decad.ErrNotFinite,
 		},
 		{
 			name: "NegativeRadius",
-			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-				decad.CircleSeg{Radius: units.Millimeters(-1), CCW: true, TEnd: 1},
+			record: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+				sectionrecord.CircleSeg{Radius: units.Millimeters(-1), CCW: true, TEnd: 1},
 			}}},
 			target: decad.ErrNegativeMagnitude,
 		},
 		{
 			name: "InconsistentArcPins",
-			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-				decad.ArcSeg{
+			record: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+				sectionrecord.ArcSeg{
 					Center: decad.Point2{}, Start: decad.Point2{U: 1}, End: decad.Point2{V: 2}, TEnd: 1,
 				},
 				momentLine(0, 1, 1, 0),
@@ -718,8 +720,8 @@ func TestRegionMomentsRejectMalformedFields(t *testing.T) {
 		},
 		{
 			name: "NearlyFullCircle",
-			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-				decad.CircleSeg{
+			record: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+				sectionrecord.CircleSeg{
 					Radius: units.Millimeters(1), CCW: true, TEnd: math.Nextafter(1, 0),
 				},
 			}}},
@@ -737,32 +739,32 @@ func TestRegionMomentsRejectMalformedTopology(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name   string
-		record decad.ProfileRecord
+		record momentinput.Profile
 	}{
 		{
 			name: "CrossingOuter",
-			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			record: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 				momentLine(0, 0, 4, 4),
 				momentLine(4, 4, 0, 4),
 				momentLine(0, 4, 4, 0),
 				momentLine(4, 0, 0, 0),
 			}}},
 		},
-		{name: "WrongOuterWinding", record: decad.ProfileRecord{Outer: momentSquare(0, 0, 10, 10, true)}},
+		{name: "WrongOuterWinding", record: momentinput.Profile{Outer: momentSquare(0, 0, 10, 10, true)}},
 		{
 			name: "HoleOutsideOuter",
-			record: decad.ProfileRecord{
+			record: momentinput.Profile{
 				Outer: momentSquare(0, 0, 10, 10, false),
-				Holes: []decad.LoopRecord{
+				Holes: []sectionrecord.LoopRecord{
 					momentSquare(12, 2, 13, 3, true),
 				},
 			},
 		},
 		{
 			name: "OverlappingHoles",
-			record: decad.ProfileRecord{
+			record: momentinput.Profile{
 				Outer: momentSquare(0, 0, 10, 10, false),
-				Holes: []decad.LoopRecord{
+				Holes: []sectionrecord.LoopRecord{
 					momentSquare(2, 2, 6, 6, true),
 					momentSquare(4, 4, 8, 8, true),
 				},
@@ -770,18 +772,18 @@ func TestRegionMomentsRejectMalformedTopology(t *testing.T) {
 		},
 		{
 			name: "OuterHoleInternalTangency",
-			record: decad.ProfileRecord{
+			record: momentinput.Profile{
 				Outer: momentWholeCircle(decad.Point2{}, 10, true),
-				Holes: []decad.LoopRecord{
+				Holes: []sectionrecord.LoopRecord{
 					momentWholeCircle(decad.Point2{U: 5}, 5, false),
 				},
 			},
 		},
 		{
 			name: "HoleHoleExternalTangency",
-			record: decad.ProfileRecord{
+			record: momentinput.Profile{
 				Outer: momentWholeCircle(decad.Point2{}, 10, true),
-				Holes: []decad.LoopRecord{
+				Holes: []sectionrecord.LoopRecord{
 					momentWholeCircle(decad.Point2{U: -2}, 2, false),
 					momentWholeCircle(decad.Point2{U: 2}, 2, false),
 				},
@@ -800,9 +802,9 @@ func TestRegionMomentsAcceptThinAnnulus(t *testing.T) {
 	const outerRadius = 10.0
 	const gap = 1e-10
 	holeRadius := outerRadius - gap
-	record := decad.ProfileRecord{
+	record := momentinput.Profile{
 		Outer: momentWholeCircle(decad.Point2{}, outerRadius, true),
-		Holes: []decad.LoopRecord{
+		Holes: []sectionrecord.LoopRecord{
 			momentWholeCircle(decad.Point2{}, holeRadius, false),
 		},
 	}
@@ -820,9 +822,9 @@ func TestRegionMomentsAcceptThinAnnulus(t *testing.T) {
 
 func TestRegionMomentsAcceptSeparatedWholeCircleHoles(t *testing.T) {
 	t.Parallel()
-	record := decad.ProfileRecord{
+	record := momentinput.Profile{
 		Outer: momentWholeCircle(decad.Point2{}, 10, true),
-		Holes: []decad.LoopRecord{
+		Holes: []sectionrecord.LoopRecord{
 			momentWholeCircle(decad.Point2{U: -2.0000000001}, 2, false),
 			momentWholeCircle(decad.Point2{U: 2.0000000001}, 2, false),
 		},
@@ -841,8 +843,8 @@ func TestRegionMomentsAcceptSeparatedWholeCircleHoles(t *testing.T) {
 
 func TestRegionMomentsRequestedOrderControlsOverflow(t *testing.T) {
 	t.Parallel()
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.CircleSeg{
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.CircleSeg{
 			Center: decad.Point2{V: 1e200},
 			Radius: units.Millimeters(1),
 			CCW:    true,
@@ -878,12 +880,12 @@ func TestOverflowingSecondMomentKeepsExactArea(t *testing.T) {
 	// unconditional, so it is asserted where it is reachable at all.
 	const scale = 1e78
 	polygon := []decad.Point2{{}, {U: 0.1 * scale}, {U: 0.3 * scale, V: 0.2 * scale}, {U: 0.05 * scale, V: 0.1 * scale}, {V: 0.4 * scale}}
-	segments := make([]decad.CurveSegment, len(polygon))
+	segments := make([]sectionrecord.CurveSegment, len(polygon))
 	for i, corner := range polygon {
 		next := polygon[(i+1)%len(polygon)]
 		segments[i] = momentLine(corner.U, corner.V, next.U, next.V)
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 
 	// The falsifier: the polygon's own shoelace over exact rationals.
 	exact := new(big.Rat)
@@ -1016,10 +1018,10 @@ func TestSecondMomentsSemicircleBoundTightens(t *testing.T) {
 
 func TestLineRationalRoundingIsBounded(t *testing.T) {
 	t.Parallel()
-	rec := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	rec := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 
 	area, err := rec.Area()
@@ -1054,7 +1056,7 @@ func TestLineRationalRoundingIsBounded(t *testing.T) {
 func TestUnderflowingLineRegionAreaPublishesBoundedZero(t *testing.T) {
 	t.Parallel()
 	const side = 1e-163
-	record := decad.ProfileRecord{Outer: momentSquare(0, 0, side, side, false)}
+	record := momentinput.Profile{Outer: momentSquare(0, 0, side, side, false)}
 
 	area, err := record.Area()
 	require.NoError(t, err, "the exact rational area is side², which is strictly positive")
@@ -1146,7 +1148,7 @@ func TestRegionMomentsAcceptsGeneratedArcEndpointDrift(t *testing.T) {
 		if !profile.Valid {
 			continue
 		}
-		record, _, err := decad.RecordProfile(s, profile)
+		record, _, err := momentinput.RecordProfile(s, profile)
 		require.NoError(t, err)
 		_, err = record.Centroid()
 		require.NoError(t, err)
@@ -1164,10 +1166,10 @@ func TestRegionAreaBoundContainsArcEndpointDriftGreenIntegral(t *testing.T) {
 		U: 5 + 0.6*driftedRadius,
 		V: -3 + 0.8*driftedRadius,
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.ArcSeg{Center: center, Start: start, End: end, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: end, End: center, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: center, End: start, TStart: 0, TEnd: 1},
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.ArcSeg{Center: center, Start: start, End: end, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: end, End: center, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: center, End: start, TStart: 0, TEnd: 1},
 	}}}
 
 	area, err := record.Area()
@@ -1231,17 +1233,17 @@ func TestRegionSecondMomentsBoundContainArcEndpointDriftGreenIntegral(t *testing
 // grids and the pinned radii differ by ulps of the COORDINATE — the same
 // rounding a fillet's or an outward shell's corner arc carries. endU moves the
 // arc's End (and the following line's Start) along u.
-func filletCornerRecord(r, endU float64) (decad.ProfileRecord, decad.ArcSeg) {
+func filletCornerRecord(r, endU float64) (momentinput.Profile, sectionrecord.ArcSeg) {
 	oU := 48 - r
 	oV := -10 + r
-	arc := decad.ArcSeg{
+	arc := sectionrecord.ArcSeg{
 		Center: decad.Point2{U: oU, V: oV},
 		Start:  decad.Point2{U: oU, V: -10},
 		End:    decad.Point2{U: endU, V: oV},
 		TStart: 0,
 		TEnd:   1,
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 		arc,
 		momentLine(endU, oV, 48, 10),
 		momentLine(48, 10, -48, 10),

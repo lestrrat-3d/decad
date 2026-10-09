@@ -69,7 +69,7 @@ func sideOpeningBrep(ctx context.Context, budget *proofbound.WorkBudget, pp pris
 	bottom := stackedUnionLevel{held: pp.z0, delta: pp.z0Delta}
 	top := stackedUnionLevel{held: pp.z1, delta: pp.z1Delta}
 	var levels []stackedUnionLevel
-	var regions []ProfileRecord
+	var regions []profileRecord
 	wallAt := 0
 	if s > 0 {
 		// Inward the kept caps' slabs eat t of the sweep at each end.
@@ -114,7 +114,7 @@ func sideOpeningBrep(ctx context.Context, budget *proofbound.WorkBudget, pp pris
 
 // sideOpeningRecord runs the engine over the slabs between consecutive
 // levels, regions[k] being slab k's one region and wallAt the wall slab.
-func sideOpeningRecord(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload, sec sideOpeningSection, levels []stackedUnionLevel, regions []ProfileRecord, wallAt int) (brepPayload, error) {
+func sideOpeningRecord(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload, sec sideOpeningSection, levels []stackedUnionLevel, regions []profileRecord, wallAt int) (brepPayload, error) {
 	n := len(regions)
 	held := make([]float64, len(levels))
 	for i, l := range levels {

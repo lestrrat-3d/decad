@@ -75,13 +75,13 @@ func thickenAmount(tmm, tDelta float64, side ThickenSide) (float64, error) {
 // outer section and the inner one it strictly encloses. One of the two IS the
 // source section for a one-sided call; a centered call generates both.
 type thickenSection struct {
-	source       ProfileRecord
-	outer, inner ProfileRecord
+	source       profileRecord
+	outer, inner profileRecord
 }
 
 // generated names the offset section a one-sided call built, and sense the
 // erosion sign evalTubeContext reads it with.
-func (s thickenSection) generated(side ThickenSide) ProfileRecord {
+func (s thickenSection) generated(side ThickenSide) profileRecord {
 	if side == ThickenNegative {
 		return s.inner
 	}
@@ -98,22 +98,22 @@ func (s thickenSection) sense(side ThickenSide) float64 {
 // thickenAnnulus assembles the certified pair into one hole-free-outer,
 // one-hole section: the outer loop with the inner loop reversed into its hole
 // walk.
-func thickenAnnulus(ctx context.Context, sec thickenSection) (ProfileRecord, error) {
+func thickenAnnulus(ctx context.Context, sec thickenSection) (profileRecord, error) {
 	hole, err := offset2d.ReverseLoopRecordContext(ctx, sec.inner.Outer)
 	if err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
-	return ProfileRecord{Outer: sec.outer.Outer, Holes: []LoopRecord{hole}}, nil
+	return profileRecord{Outer: sec.outer.Outer, Holes: []loopRecord{hole}}, nil
 }
 
 // thickenSectionOf certifies both offsets of one recorded closed section: the
 // whole-circle arm where the section is a single CircleSeg, the axis-parallel
 // line arm otherwise. radial is the revolve arm's radial gate and nil for a
 // prism, whose walls never turn about an axis.
-func thickenSectionOf(ctx context.Context, profile ProfileRecord, side ThickenSide,
+func thickenSectionOf(ctx context.Context, profile profileRecord, side ThickenSide,
 	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenSection, error) {
 	if len(profile.Outer.Segments) == 1 {
-		if circle, ok := profile.Outer.Segments[0].(CircleSeg); ok {
+		if circle, ok := profile.Outer.Segments[0].(circleSeg); ok {
 			return thickenCircleSection(profile, circle, side, amount, budget, radial)
 		}
 	}
@@ -124,7 +124,7 @@ func thickenSectionOf(ctx context.Context, profile ProfileRecord, side ThickenSi
 // section. The two circles share a center and their radii were certified
 // exact, so their strict radius order proves separation for every offset
 // parameter from zero through the requested endpoint.
-func thickenCircleSection(profile ProfileRecord, circle CircleSeg, side ThickenSide,
+func thickenCircleSection(profile profileRecord, circle circleSeg, side ThickenSide,
 	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenSection, error) {
 	if !circle.CCW {
 		return thickenSection{}, fmt.Errorf(`%w: this circle does not have the required outer-loop winding`, ErrUnsupported)
@@ -168,22 +168,22 @@ func thickenCircleSection(profile ProfileRecord, circle CircleSeg, side ThickenS
 	return sec, nil
 }
 
-func prismCircleOffset(budget *proofbound.WorkBudget, source ProfileRecord, radius, sense, amount float64) (ProfileRecord, error) {
+func prismCircleOffset(budget *proofbound.WorkBudget, source profileRecord, radius, sense, amount float64) (profileRecord, error) {
 	offset, err := offsetProfile(budget, source, sense, amount)
 	if err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
 	if len(offset.Outer.Segments) != 1 {
-		return ProfileRecord{}, fmt.Errorf(`%w: the circle offset changed feature count`, ErrUnsupported)
+		return profileRecord{}, fmt.Errorf(`%w: the circle offset changed feature count`, ErrUnsupported)
 	}
-	generated, ok := offset.Outer.Segments[0].(CircleSeg)
-	sourceCircle, sourceOK := source.Outer.Segments[0].(CircleSeg)
+	generated, ok := offset.Outer.Segments[0].(circleSeg)
+	sourceCircle, sourceOK := source.Outer.Segments[0].(circleSeg)
 	if !ok || !sourceOK || generated.Center != sourceCircle.Center || generated.CCW != sourceCircle.CCW {
-		return ProfileRecord{}, fmt.Errorf(`%w: the circle offset changed feature kind`, ErrUnsupported)
+		return profileRecord{}, fmt.Errorf(`%w: the circle offset changed feature kind`, ErrUnsupported)
 	}
 	got, delta, err := extent.MagnitudeInBounded(generated.Radius, units.Length, units.Millimeter, "the generated circle radius")
 	if err != nil || delta != 0 {
-		return ProfileRecord{}, fmt.Errorf(`%w: the generated circle radius is not exact`, ErrUnsupported)
+		return profileRecord{}, fmt.Errorf(`%w: the generated circle radius is not exact`, ErrUnsupported)
 	}
 	want := new(big.Rat).Set(proofarith.FloatRat(radius))
 	if sense < 0 {
@@ -192,10 +192,10 @@ func prismCircleOffset(budget *proofbound.WorkBudget, source ProfileRecord, radi
 		want.Sub(want, proofarith.FloatRat(amount))
 	}
 	if want.Sign() <= 0 || proofarith.RationalFloatError(want, got) != 0 {
-		return ProfileRecord{}, fmt.Errorf(`%w: the circle offset is not exactly representable`, ErrUnsupported)
+		return profileRecord{}, fmt.Errorf(`%w: the circle offset is not exactly representable`, ErrUnsupported)
 	}
 	if err := thickenAuditRefusal(auditOffsetSectionBudget(budget, source, offset)); err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
 	return offset, nil
 }

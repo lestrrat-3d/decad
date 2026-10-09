@@ -34,7 +34,7 @@ import (
 // is the band's surface family (docs/loop-fillet-design.md §4 step 3).
 type brepLoopBand struct {
 	face, loop int
-	orig       LoopRecord
+	orig       loopRecord
 	setback    capSetback
 	sigma      float64
 	kind       brepBandKind
@@ -75,7 +75,7 @@ func (b brepLoopBand) sideLevel(f brepFace) (float64, float64) {
 // it exactly as they read a prism's cap band.
 func (b brepLoopBand) view(f brepFace, xform r3.Transform) capBlendPayload {
 	cbp := capBlendPayload{
-		profile: ProfileRecord{Outer: b.orig}, frame: f.frame, xform: xform,
+		profile: profileRecord{Outer: b.orig}, frame: f.frame, xform: xform,
 		z0: f.z0, z1: f.z0, z0Delta: f.z0Delta, z1Delta: f.z0Delta,
 		start: b.setback, end: b.setback,
 		startLoops: map[int]bool{}, endLoops: map[int]bool{},
@@ -122,7 +122,7 @@ func (b brepLoopBand) validate(bp brepPayload, bi int) error {
 
 // regionLoop is loop li of a planar face's region: 0 the outer loop, 1+i
 // hole i.
-func (f brepFace) regionLoop(li int) LoopRecord {
+func (f brepFace) regionLoop(li int) loopRecord {
 	if li == 0 {
 		return f.region.Outer
 	}
@@ -134,12 +134,12 @@ func (f brepFace) regionLoop(li int) LoopRecord {
 // F's loop at F's level, and its side contour, orig's segments at the side
 // level. walk is the topology's own segment walk, so each key is the one the
 // face beside it states. The set is empty for a record with no band.
-func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(CurveSegment) (survey2d.SegmentWalk, error)) (map[brepgeom.EdgeKey]struct{}, error) {
+func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (survey2d.SegmentWalk, error)) (map[brepgeom.EdgeKey]struct{}, error) {
 	open := map[brepgeom.EdgeKey]struct{}{}
 	if len(bp.loopBands) == 0 {
 		return open, nil
 	}
-	add := func(e brepEmbed, seg CurveSegment, z float64) error {
+	add := func(e brepEmbed, seg curveSegment, z float64) error {
 		w, err := walk(seg)
 		if err != nil {
 			return err

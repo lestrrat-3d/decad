@@ -40,13 +40,13 @@ const dipShaftRadius = 5.0
 // face), so the body's own SNAPPED topology is a plain cylinder of
 // dipShaftRadius and the stated length, while the recorded (UNSNAPPED)
 // region's own area/moment integrals still carry the dip.
-func dipShaftBandProfile(length, dip float64) ProfileRecord {
+func dipShaftBandProfile(length, dip float64) profileRecord {
 	const radius = dipShaftRadius
-	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: -dip}, End: Point2{U: length, V: -dip}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: length, V: -dip}, End: Point2{U: length, V: radius}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: length, V: radius}, End: Point2{U: 0, V: radius}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 0, V: radius}, End: Point2{U: 0, V: -dip}, TStart: 0, TEnd: 1},
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: -dip}, End: Point2{U: length, V: -dip}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: length, V: -dip}, End: Point2{U: length, V: radius}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: length, V: radius}, End: Point2{U: 0, V: radius}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 0, V: radius}, End: Point2{U: 0, V: -dip}, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -83,7 +83,7 @@ func quarterTurnDenotation() revolveangle.Sweep {
 // leaves the radial minimum unproven, isolated here from every OTHER source
 // of bound so the containment assertion below tests THIS charge and no
 // other.
-func buildDipShaftBodyCharged(t *testing.T, profile ProfileRecord, full bool, phi1, radialAdmitAllow, axialExtentUpper float64) *Body {
+func buildDipShaftBodyCharged(t *testing.T, profile profileRecord, full bool, phi1, radialAdmitAllow, axialExtentUpper float64) *Body {
 	t.Helper()
 	ax := axisFrame{dU: 1, dV: 0, radialAdmitAllow: radialAdmitAllow, axialExtentUpper: axialExtentUpper}
 	den := quarterTurnDenotation()
@@ -220,8 +220,8 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 	const aV = 1e10
 	const eps = 1e-7
 	line := axisLine2{dU: 0.8, dV: 0.6, aV: aV}
-	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
+	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
 	}}}
 	_, _, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.Error(t, err)

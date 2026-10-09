@@ -36,30 +36,30 @@ import (
 // extendTestSquare is the far-away tool operand the scene needs as its second
 // operand. Nothing here reads it; it exists so buildPrismScene builds a scene
 // at all.
-func extendTestSquare() ProfileRecord {
+func extendTestSquare() profileRecord {
 	pts := []Point2{{U: 1000, V: 1000}, {U: 1010, V: 1000}, {U: 1010, V: 1010}, {U: 1000, V: 1010}}
-	segs := make([]CurveSegment, len(pts))
+	segs := make([]curveSegment, len(pts))
 	for i := range pts {
-		segs[i] = LineSeg{Start: pts[i], End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1}
+		segs[i] = lineSeg{Start: pts[i], End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1}
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	return profileRecord{Outer: loopRecord{Segments: segs}}
 }
 
 // recordPointAt evaluates a recorded entity's OWN natural parameterisation at
 // t, from the record's defining fields alone and ignoring its recorded range —
 // the parameterisation walkOf reads (segment_walk.go) and the one a stored
 // TStart/TEnd indexes.
-func recordPointAt(t *testing.T, seg CurveSegment, param float64) (float64, float64) {
+func recordPointAt(t *testing.T, seg curveSegment, param float64) (float64, float64) {
 	t.Helper()
 	switch s := seg.(type) {
-	case LineSeg:
+	case lineSeg:
 		return s.Start.U + param*(s.End.U-s.Start.U), s.Start.V + param*(s.End.V-s.Start.V)
-	case CircleSeg:
+	case circleSeg:
 		r, err := s.Radius.In(units.Millimeter)
 		require.NoError(t, err)
 		ang := 2 * math.Pi * param
 		return s.Center.U + r*math.Cos(ang), s.Center.V + r*math.Sin(ang)
-	case ArcSeg:
+	case arcSeg:
 		r := math.Hypot(s.Start.U-s.Center.U, s.Start.V-s.Center.V)
 		a0 := math.Atan2(s.Start.V-s.Center.V, s.Start.U-s.Center.U)
 		a1 := math.Atan2(s.End.V-s.Center.V, s.End.U-s.Center.U)
@@ -101,11 +101,11 @@ func scenePointAt(t *testing.T, e sketch.Entity, param float64) (float64, float6
 
 // extendSceneCarrier runs FullExtendSegment and buildPrismScene as
 // ResolveSurfaceExtend does, and returns the one receiver-side entity the scene holds.
-func extendSceneCarrier(t *testing.T, seg CurveSegment) sketch.Entity {
+func extendSceneCarrier(t *testing.T, seg curveSegment) sketch.Entity {
 	t.Helper()
 	full, err := prismcells.FullExtendSegment(seg)
 	require.NoError(t, err)
-	view := prismPayload{profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{full}}}}
+	view := prismPayload{profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{full}}}}
 	tool := prismPayload{profile: extendTestSquare()}
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(view), prismPlacementOf(tool))
 	require.NoError(t, err)
@@ -132,14 +132,14 @@ func TestExtendFullDomainSceneSharesTheRecordParameterisation(t *testing.T) {
 	// Reversed fragment). Both must index the same scene entity identically.
 	for _, tc := range []struct {
 		name string
-		seg  CurveSegment
+		seg  curveSegment
 	}{
-		{"line forward", LineSeg{Start: Point2{U: 100, V: 0.1}, End: Point2{U: 0, V: 0.1}, TStart: 0, TEnd: 0.6}},
-		{"line reversed", LineSeg{Start: Point2{U: 100, V: 0.1}, End: Point2{U: 0, V: 0.1}, TStart: 0.6, TEnd: 0}},
-		{"circle ccw", CircleSeg{Center: Point2{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: true, TStart: 0.25, TEnd: 0.75}},
-		{"circle cw", CircleSeg{Center: Point2{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: false, TStart: 0.75, TEnd: 0.25}},
-		{"arc forward", ArcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 100, V: 0}, End: Point2{U: -100, V: 0}, TStart: 0, TEnd: 0.5}},
-		{"arc reversed", ArcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 100, V: 0}, End: Point2{U: -100, V: 0}, TStart: 0.5, TEnd: 0}},
+		{"line forward", lineSeg{Start: Point2{U: 100, V: 0.1}, End: Point2{U: 0, V: 0.1}, TStart: 0, TEnd: 0.6}},
+		{"line reversed", lineSeg{Start: Point2{U: 100, V: 0.1}, End: Point2{U: 0, V: 0.1}, TStart: 0.6, TEnd: 0}},
+		{"circle ccw", circleSeg{Center: Point2{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: true, TStart: 0.25, TEnd: 0.75}},
+		{"circle cw", circleSeg{Center: Point2{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: false, TStart: 0.75, TEnd: 0.25}},
+		{"arc forward", arcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 100, V: 0}, End: Point2{U: -100, V: 0}, TStart: 0, TEnd: 0.5}},
+		{"arc reversed", arcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 100, V: 0}, End: Point2{U: -100, V: 0}, TStart: 0.5, TEnd: 0}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -164,14 +164,14 @@ func TestExtendSetBoundWidensOnlyTheNamedEnd(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name    string
-		seg     CurveSegment
+		seg     curveSegment
 		atStart bool
 		bound   float64
 	}{
-		{"line reversed at start", LineSeg{Start: Point2{U: 100, V: 0.1}, End: Point2{U: 0, V: 0.1}, TStart: 0.6, TEnd: 0}, true, 0.7},
-		{"line forward at end", LineSeg{Start: Point2{U: 0, V: 0.1}, End: Point2{U: 100, V: 0.1}, TStart: 0, TEnd: 0.4}, false, 0.7},
-		{"circle at end", CircleSeg{Center: Point2{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: true, TStart: 0.25, TEnd: 0.75}, false, 0.875},
-		{"arc reversed at start", ArcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 100, V: 0}, End: Point2{U: -100, V: 0}, TStart: 0.5, TEnd: 0}, true, 0.75},
+		{"line reversed at start", lineSeg{Start: Point2{U: 100, V: 0.1}, End: Point2{U: 0, V: 0.1}, TStart: 0.6, TEnd: 0}, true, 0.7},
+		{"line forward at end", lineSeg{Start: Point2{U: 0, V: 0.1}, End: Point2{U: 100, V: 0.1}, TStart: 0, TEnd: 0.4}, false, 0.7},
+		{"circle at end", circleSeg{Center: Point2{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: true, TStart: 0.25, TEnd: 0.75}, false, 0.875},
+		{"arc reversed at start", arcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 100, V: 0}, End: Point2{U: -100, V: 0}, TStart: 0.5, TEnd: 0}, true, 0.75},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

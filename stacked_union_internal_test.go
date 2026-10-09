@@ -74,7 +74,7 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 		require.True(t, same, "the floor's outer is the plate's own outer record")
 		bossHole, err := offset2d.ReverseLoopRecordContext(t.Context(), boss.payload.(prismPayload).profile.Outer)
 		require.NoError(t, err)
-		require.Equal(t, []LoopRecord{bossHole}, floor.Holes, "the floor's one hole is the boss outline, reversed")
+		require.Equal(t, []loopRecord{bossHole}, floor.Holes, "the floor's one hole is the boss outline, reversed")
 	})
 	t.Run("rooted boss", func(t *testing.T) {
 		plate, boss := internalBossOnPlate(t, 0, 5, 20)
@@ -226,10 +226,10 @@ func TestStackedUnionPayloadAuditRejectsBrokenInterfaces(t *testing.T) {
 			sp.interfaces[0].lowerExposed = nil
 		}, ErrDegenerate},
 		{"exposure without its hole", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].lowerExposed = []ProfileRecord{{Outer: sp.slabs[0].regions[0].Outer}}
+			sp.interfaces[0].lowerExposed = []profileRecord{{Outer: sp.slabs[0].regions[0].Outer}}
 		}, ErrDegenerate},
 		{"holed region under a changed outer", func(sp *stackedPrismPayload) {
-			sp.slabs[1].regions[0].Holes = []LoopRecord{bossOuter}
+			sp.slabs[1].regions[0].Holes = []loopRecord{bossOuter}
 		}, ErrUnsupported},
 	}
 	for _, tc := range cases {

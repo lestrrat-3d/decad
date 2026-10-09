@@ -498,10 +498,10 @@ answers:
 - whole entities were recorded from their defining data.
 
 The original live `sketch.Profile`, `BoundaryEdge.TExact`, and source arrangement
-are absent from the records. `RecordProfile` is therefore the public admission
-path: it returns structural values only after the source profile and every
-recorded fragment pass the checks above. The evaluator then reads those values,
-not the original sketch.
+are absent from the records. The internal recording path returns structural
+values only after the source profile and every recorded fragment pass the
+checks above. `MeasureProfile` exposes bounded 2D readings from the admitted
+record. The evaluator reads the record, not the original sketch.
 
 ### 2.2 The open chain's record
 

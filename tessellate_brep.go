@@ -423,7 +423,7 @@ func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e br
 		sampled = *imposed
 	} else {
 		var err error
-		sampled, err = tessellation.SampleLoop[*Face]([]survey2d.SideWalk{walk}, []CurveSegment{f.wall}, chord,
+		sampled, err = tessellation.SampleLoop[*Face]([]survey2d.SideWalk{walk}, []curveSegment{f.wall}, chord,
 			f.z1-f.z0, work, proofbound.NewWorkBudget(ctx), func(survey2d.SideWalk) (*Face, error) { return face, nil },
 			stationbound.ChordStationBound)
 		if err != nil {

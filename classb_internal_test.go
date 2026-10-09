@@ -99,7 +99,7 @@ func TestClassBCutCrossDrilledBox(t *testing.T) {
 		if f.planar() {
 			continue
 		}
-		if _, ok := f.wall.(CircleSeg); ok {
+		if _, ok := f.wall.(circleSeg); ok {
 			require.Equal(t, [2]float64{-20, 0}, [2]float64{f.z0, f.z1}, `the drill's frame normal is −y`)
 		}
 	}
@@ -368,7 +368,7 @@ func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 	require.Len(t, bp.faces, 7)
 	circles := 0
 	for _, f := range bp.faces {
-		if c, ok := f.wall.(CircleSeg); ok {
+		if c, ok := f.wall.(circleSeg); ok {
 			circles++
 			require.Equal(t, units.Millimeters(3), c.Radius)
 		}

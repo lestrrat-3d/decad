@@ -246,16 +246,16 @@ func TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum(t *testing.T) {
 // degree-1 NURBS reproduces its own Control array exactly at every knot — no
 // smoothing arithmetic sits between a recorded coordinate and its span joint
 // — so this fixture's witness points are hand-verifiable, bit for bit.
-func freeformTriangleProfile() ProfileRecord {
-	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		NURBSSeg{
+func freeformTriangleProfile() profileRecord {
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		nurbsSeg{
 			Degree:  1,
 			Control: []Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}},
 			Weights: []float64{1, 1, 1},
 			Knots:   []float64{0, 0, 0.5, 1, 1},
 			TStart:  0, TEnd: 1,
 		},
-		LineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -275,11 +275,11 @@ func freeformTrianglePayload(t *testing.T, z0, z1 float64) prismPayload {
 // interpolates only its two endpoints; its interior sweeps well away from the
 // chord between them, so a witness set built from span endpoints alone
 // understates the section's true extent.
-func sCurveFreeformProfile() ProfileRecord {
+func sCurveFreeformProfile() profileRecord {
 	control := []Point2{{U: 0, V: 0}, {U: 0, V: 20}, {U: 10, V: -20}, {U: 10, V: 0}}
-	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		SplineSeg{Control: control, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		splineSeg{Control: control, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -292,7 +292,7 @@ func denseFreeformCapPoints(t *testing.T, pp prismPayload, samples int) []r3.Vec
 	t.Helper()
 	var pts []r3.Vec
 	work := freeform.NewFreeformWork()
-	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
+	for _, loop := range append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...) {
 		for _, seg := range loop.Segments {
 			w, err := boundarywalk.WalkOf(seg, work)
 			require.NoError(t, err)
@@ -383,8 +383,8 @@ func TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain(t *testing.T) {
 	t.Parallel()
 	build := func(fit []Point2) prismPayload {
 		return prismPayload{
-			profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-				FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+			profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+				fitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
 			}}},
 			frame: identityFrame(t), z0: 0, z1: 10, xform: r3.Identity(),
 		}
@@ -449,8 +449,8 @@ func TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload(t *testing.T) {
 // net has collapsed to a single point, R14 — must never publish a diameter.
 func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 	t.Parallel()
-	collapsed := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		SplineSeg{
+	collapsed := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		splineSeg{
 			Control: []Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}},
 			TStart:  0, TEnd: 1,
 		},
@@ -469,8 +469,8 @@ func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T) {
 	t.Parallel()
 	collapsedSpan := prismPayload{
-		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-			SplineSeg{
+		profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+			splineSeg{
 				Control: []Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}},
 				TStart:  0, TEnd: 1,
 			},
@@ -540,11 +540,11 @@ func TestBodyGateDiameterFreeformArmSkipsAnalyticPrism(t *testing.T) {
 // changes this reading.
 func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
 	t.Parallel()
-	analytic := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	analytic := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	pp := prismPayload{
 		profile: analytic, frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity(),
@@ -573,9 +573,9 @@ func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
 // is linear in the segment count, while the witness maximum it feeds is
 // quadratic in it (four witness points per segment), which is why the maximum
 // has to poll the caller's context on its own account.
-func freeformLargeProfile(lines int) ProfileRecord {
-	segs := []CurveSegment{
-		NURBSSeg{
+func freeformLargeProfile(lines int) profileRecord {
+	segs := []curveSegment{
+		nurbsSeg{
 			Degree:  1,
 			Control: []Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}},
 			Weights: []float64{1, 1, 1},
@@ -591,9 +591,9 @@ func freeformLargeProfile(lines int) ProfileRecord {
 		return Point2{U: 5 + 5*math.Cos(th), V: -5 * math.Sin(th)}
 	}
 	for i := range lines {
-		segs = append(segs, LineSeg{Start: at(i), End: at(i + 1), TStart: 0, TEnd: 1})
+		segs = append(segs, lineSeg{Start: at(i), End: at(i + 1), TStart: 0, TEnd: 1})
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	return profileRecord{Outer: loopRecord{Segments: segs}}
 }
 
 // cancelAfterPolls is a context whose cancellation lands at a CHOSEN poll: the
@@ -801,12 +801,12 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 // coordinates, u running [0, 10] and v running [vlo, vhi], closed by four
 // LineSeg segments. Every vertex sits at an exact recorded coordinate, so a
 // radial extreme taken against it carries a zero bound.
-func rectangleProfile(vlo, vhi float64) ProfileRecord {
-	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: vlo}, End: Point2{U: 10, V: vlo}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 10, V: vlo}, End: Point2{U: 10, V: vhi}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 10, V: vhi}, End: Point2{U: 0, V: vhi}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 0, V: vhi}, End: Point2{U: 0, V: vlo}, TStart: 0, TEnd: 1},
+func rectangleProfile(vlo, vhi float64) profileRecord {
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: vlo}, End: Point2{U: 10, V: vlo}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 10, V: vlo}, End: Point2{U: 10, V: vhi}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 10, V: vhi}, End: Point2{U: 0, V: vhi}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 0, V: vhi}, End: Point2{U: 0, V: vlo}, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -884,7 +884,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		require.False(t, ax.radialProof)
 		rp := revolvePayload{profile: profile, ax: ax, full: true}
 		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
-		chain := chainRevolvePayload{chains: []ChainRecord{{Segments: profile.Outer.Segments}}, ax: ax, full: true}
+		chain := chainRevolvePayload{chains: []chainRecord{{Segments: profile.Outer.Segments}}, ax: ax, full: true}
 		require.False(t, chain.revolve().radialProof)
 	})
 }
@@ -916,8 +916,8 @@ func TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift(t *testing.T) {
 	const aV = 1e10
 	const eps = 1e-7
 	ax := axisFrame{dU: 0.8, dV: 0.6, aU: 0, aV: aV}
-	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
+	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
 	}}}
 	rp := revolvePayload{profile: profile, ax: ax, full: true}
 	require.False(t, revolvePayloadProvesSimple(t.Context(), rp),
@@ -958,7 +958,7 @@ func arcChordDiameterSquare(t *testing.T, pp prismPayload) *big.Rat {
 	t.Helper()
 	var center *Point2
 	for _, seg := range pp.profile.Outer.Segments {
-		if arc, ok := seg.(ArcSeg); ok {
+		if arc, ok := seg.(arcSeg); ok {
 			center = &arc.Center
 		}
 	}
@@ -971,9 +971,9 @@ func arcChordDiameterSquare(t *testing.T, pp prismPayload) *big.Rat {
 	for _, seg := range pp.profile.Outer.Segments {
 		var ends []Point2
 		switch seg := seg.(type) {
-		case ArcSeg:
+		case arcSeg:
 			ends = []Point2{seg.Start, seg.End}
-		case LineSeg:
+		case lineSeg:
 			ends = []Point2{seg.Start, seg.End}
 		default:
 			t.Fatalf("unexpected segment %T", seg)

@@ -47,14 +47,14 @@ func cardinalBasis(u, v, n r3.Vec) bool {
 	return a != 0 && b != 0 && c != 0 && a != b && a != c && b != c
 }
 
-func rectangularProfile(profile ProfileRecord) bool {
+func rectangularProfile(profile profileRecord) bool {
 	if len(profile.Holes) != 0 || len(profile.Outer.Segments) != 4 {
 		return false
 	}
 	var corners [4]Point2
 	var ends [4]Point2
 	for i, segment := range profile.Outer.Segments {
-		line, ok := segment.(LineSeg)
+		line, ok := segment.(lineSeg)
 		if !ok {
 			return false
 		}

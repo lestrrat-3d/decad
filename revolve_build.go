@@ -68,7 +68,7 @@ import (
 // it false. sweep_arc.go and sweep_composite_measure.go also build a
 // revolvePayload literal and leave this field at its zero value.
 type revolvePayload struct {
-	profile       ProfileRecord
+	profile       profileRecord
 	frame         r3.Frame
 	ax            axisFrame
 	phi0, phi1    float64
@@ -174,11 +174,11 @@ type sweptPoint struct {
 // walkStart and walkEnd read a PLANE-local walk's (revolveWalks.Plane) two
 // ends, each bounded against the point its recorded segment seg denotes there
 // (boundarywalk.DenotedStartBound and DenotedEndBound).
-func walkStart(seg CurveSegment, w survey2d.SegmentWalk) sweptPoint {
+func walkStart(seg curveSegment, w survey2d.SegmentWalk) sweptPoint {
 	return sweptPoint{u: w.StartU, v: w.StartV, bound: boundarywalk.DenotedStartBound(seg, w)}
 }
 
-func walkEnd(seg CurveSegment, w survey2d.SegmentWalk) sweptPoint {
+func walkEnd(seg curveSegment, w survey2d.SegmentWalk) sweptPoint {
 	return sweptPoint{u: w.EndU, v: w.EndV, bound: boundarywalk.DenotedEndBound(seg, w)}
 }
 
@@ -419,7 +419,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	}
 
 	sideArea := proofbound.BoundedScalar{}
-	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
+	loops := append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	perLoop := make([]revLoopParts, len(loops))
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
@@ -652,7 +652,7 @@ type revolveWalks = revolveaxis.ResolvedWalks
 // buildRevolveLoop builds one loop's side faces with shared vertices and
 // edges, returning the faces, the two caps' coedges in walk order, and the
 // loop's side area.
-func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolvemesh.RevolveBasis, li int, loop LoopRecord, work *freeform.FreeformWork, frame massmoment.MapCharge) (revLoopParts, error) {
+func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolvemesh.RevolveBasis, li int, loop loopRecord, work *freeform.FreeformWork, frame massmoment.MapCharge) (revLoopParts, error) {
 	resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the revolve wall build", rp.chargedWalk, rp.ax.snapTol)
 	if err != nil {
 		return revLoopParts{}, err
@@ -842,7 +842,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		if err != nil {
 			return revLoopParts{}, err
 		}
-		segs := make([]CurveSegment, len(w.Segs))
+		segs := make([]curveSegment, len(w.Segs))
 		for j, si := range w.Segs {
 			segs[j] = loop.Segments[si]
 		}
@@ -1396,7 +1396,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		segs := make([]CurveSegment, len(w.Segs))
+		segs := make([]curveSegment, len(w.Segs))
 		for oi, si := range w.Segs {
 			segs[oi] = rp.profile.Outer.Segments[si]
 		}

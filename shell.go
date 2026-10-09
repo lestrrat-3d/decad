@@ -411,7 +411,7 @@ func shellCancelCause(err error) error {
 // receiver's section P and C its erosion; outward O is the dilation and C is
 // P. The §5 audit has proven C's loops simple and nested in O's, so the bands
 // are regular and pairwise disjoint (docs/modify-reach-design.md §9.2).
-func shellWallBands(ctx context.Context, outer, cavity ProfileRecord) ([]ProfileRecord, error) {
+func shellWallBands(ctx context.Context, outer, cavity profileRecord) ([]profileRecord, error) {
 	if len(outer.Holes) != len(cavity.Holes) {
 		return nil, fmt.Errorf(`%w: the shell's outer and cavity regions have different loop counts`, ErrDegenerate)
 	}
@@ -419,13 +419,13 @@ func shellWallBands(ctx context.Context, outer, cavity ProfileRecord) ([]Profile
 	if err != nil {
 		return nil, err
 	}
-	bands := []ProfileRecord{{Outer: outer.Outer, Holes: []LoopRecord{cavityOuter}}}
+	bands := []profileRecord{{Outer: outer.Outer, Holes: []loopRecord{cavityOuter}}}
 	for i, hole := range cavity.Holes {
 		post, err := offset2d.ReverseLoopRecordContext(ctx, hole)
 		if err != nil {
 			return nil, err
 		}
-		bands = append(bands, ProfileRecord{Outer: post, Holes: []LoopRecord{outer.Holes[i]}})
+		bands = append(bands, profileRecord{Outer: post, Holes: []loopRecord{outer.Holes[i]}})
 	}
 	return bands, nil
 }
@@ -438,7 +438,7 @@ func shellWallBands(ctx context.Context, outer, cavity ProfileRecord) ([]Profile
 // with the outer band first and the hole linings in ProfileRecord order. The
 // offset loops sit within offsetDelta of the offset the thickness denotes, so
 // the payload carries it as its section displacement.
-func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, offset ProfileRecord, s, offsetDelta float64) (*Body, error) {
+func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, offset profileRecord, s, offsetDelta float64) (*Body, error) {
 	outer, cavity := pp.profile, offset
 	if s < 0 {
 		outer, cavity = offset, pp.profile
@@ -552,7 +552,7 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 	}
 	lo, loDelta := step(pp.z0, pp.z0Delta, s*tmm)
 	hi, hiDelta := step(pp.z1, pp.z1Delta, -s*tmm)
-	caps := prismSlab{regions: []ProfileRecord{outer}}
+	caps := prismSlab{regions: []profileRecord{outer}}
 	first, middle, last := caps, prismSlab{regions: bands}, caps
 	if s > 0 {
 		first.z0, first.z0Delta, first.z1, first.z1Delta = pp.z0, pp.z0Delta, lo, loDelta
@@ -563,7 +563,7 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 		middle.z0, middle.z0Delta, middle.z1, middle.z1Delta = pp.z0, pp.z0Delta, pp.z1, pp.z1Delta
 		last.z0, last.z0Delta, last.z1, last.z1Delta = pp.z1, pp.z1Delta, hi, hiDelta
 	}
-	exposed := []ProfileRecord{cavity}
+	exposed := []profileRecord{cavity}
 	ref := d.nextProducerID()
 	body, err := evalStackedContext(ctx, d, ref, stackedPrismPayload{
 		slabs:        []prismSlab{first, middle, last},
@@ -640,11 +640,11 @@ func classifyRemovedCaps(caps prismCaps, removed []*Face) (bool, bool, error) {
 // Hole: reverse(P)} outward — so it IS a prismPayload, admitted as a receiver
 // (R1) and first-class downstream (§12). The inner loop is walked as a hole
 // (reversed sense), which is what makes its wall's material lie outside it.
-func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, offset ProfileRecord, s float64) (*Body, error) {
+func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, offset profileRecord, s float64) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	var outer, inner LoopRecord
+	var outer, inner loopRecord
 	if s > 0 { // inward: P is the outside, Q the cavity
 		outer = pp.profile.Outer
 		inner = offset.Outer
@@ -656,7 +656,7 @@ func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismP
 	if err != nil {
 		return nil, err
 	}
-	section := ProfileRecord{Outer: outer, Holes: []LoopRecord{holeLoop}}
+	section := profileRecord{Outer: outer, Holes: []loopRecord{holeLoop}}
 	// The annular section is a NEW record no preflight has seen, so the build
 	// opens its one counter here (docs/spline-design.md §5.2).
 	// A tube keeps the receiver's sweep, so each end keeps its own axial

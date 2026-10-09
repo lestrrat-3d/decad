@@ -173,7 +173,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 // ErrUnsupported. The receiver's axis already has the region on its
 // non-negative side, so a rewrite whose region the gate puts on the far side
 // has crossed the axis and is ErrDegenerate.
-func revolveBlendAxis(ctx context.Context, rp revolvePayload, profile ProfileRecord, work *freeform.FreeformWork) (axisFrame, error) {
+func revolveBlendAxis(ctx context.Context, rp revolvePayload, profile profileRecord, work *freeform.FreeformWork) (axisFrame, error) {
 	ax, side, err := resolveAxisSide(ctx, profile, axisLine2{
 		aU: rp.ax.aU, aV: rp.ax.aV, aUBound: rp.ax.aUBound, aVBound: rp.ax.aVBound,
 		dU: rp.ax.dU, dV: rp.ax.dV, dUBound: rp.ax.dUBound, dVBound: rp.ax.dVBound,
@@ -194,7 +194,7 @@ func revolveBlendAxis(ctx context.Context, rp revolvePayload, profile ProfileRec
 func revolveJunctionsOf(ctx context.Context, rp revolvePayload) ([][]revolveJunction, error) {
 	work := freeform.NewFreeformWork()
 	basis := rp.basis()
-	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
+	loops := append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	out := make([][]revolveJunction, len(loops))
 	for li, loop := range loops {
 		resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the revolve junction blend",

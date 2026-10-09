@@ -65,7 +65,7 @@ func lerp2(start, end Point2, t float64) (float64, float64) {
 	return momentregion.Lerp2(start, end, t)
 }
 
-func arcRadiusUpper(seg ArcSeg) float64 {
+func arcRadiusUpper(seg arcSeg) float64 {
 	// The exact coordinate differences can each be no larger than the sum of
 	// their input magnitudes, and hypot is no larger than the L1 norm.
 	return proofbound.AbsSumUpper(seg.Start.U, seg.Center.U, seg.Start.V, seg.Center.V)

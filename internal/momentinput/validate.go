@@ -25,7 +25,7 @@ type (
 	FitSplineSeg    = sectionrecord.FitSplineSeg
 )
 
-// Profile is the structural plane-local region exposed as decad.ProfileRecord.
+// Profile is a structural plane-local region used by the evaluator.
 type Profile struct {
 	Outer LoopRecord   `json:"outer"`
 	Holes []LoopRecord `json:"holes,omitempty"`

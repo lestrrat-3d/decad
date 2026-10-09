@@ -360,32 +360,32 @@ func prismPlacementOf(p prismPayload) prismplacement.Operand {
 // charge cannot bound or the merge then fails on: the caller falls back to
 // the mesh path with no error. A non-nil error — including ctx cancellation
 // surfacing through budget — is genuine and must propagate.
-func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, prismSceneDelta, float64, bool, error) {
+func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (profileRecord, prismSceneDelta, float64, bool, error) {
 	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if err := budget.Err(); err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	profiles, err := prismCellProfiles(ctx, budget, s)
 	if err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if err := budget.Err(); err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if err := budget.Step(); err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if len(profiles) == 0 {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
+		return profileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
 	}
 	// docs/general-boolean-design.md §3 A6: every crossing the arrangement
 	// cut is charged the input displacement it amplifies; a crossing too
 	// close to tangent for that charge sends the pair to the mesh path.
 	if ok, err := sceneDelta.ChargeCrossings(budget, tags, profiles, pa.sectionDelta, pb.sectionDelta, reexpress.Delta); err != nil || !ok {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 
 	// Union, hole-free operands (G6): select every returned cell, which is
@@ -396,31 +396,31 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 	// reuses over its OWN, narrower selected cell set.
 	voidFree, err := prismcells.CellsHaveNoVoid(budget, tags, profiles)
 	if err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if !voidFree {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
+		return profileRecord{}, prismSceneDelta{}, 0, false, nil
 	}
 	if ok, err := sceneDelta.SharedSpansBounded(budget, profiles); err != nil || !ok {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	merged, cutDelta, resolved, err := mergePrismCells(budget, profiles, "union")
 	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return profileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if !resolved {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: not a shape this increment covers
+		return profileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: not a shape this increment covers
 	}
 	return merged, sceneDelta, cutDelta, true, nil
 }
 
 // mergePrismCells preserves the root caller's profile result around the cell merge.
-func mergePrismCells(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) (ProfileRecord, float64, bool, error) {
+func mergePrismCells(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) (profileRecord, float64, bool, error) {
 	loop, cutDelta, resolved, err := prismcells.Merge(budget, selected, opName)
 	if err != nil || !resolved {
-		return ProfileRecord{}, 0, resolved, err
+		return profileRecord{}, 0, resolved, err
 	}
-	return ProfileRecord{Outer: loop}, cutDelta, true, nil
+	return profileRecord{Outer: loop}, cutDelta, true, nil
 }
 
 // prismCellProfiles is prismProfilesContext for a path that classifies and
@@ -462,7 +462,7 @@ func prismProfilesContext(ctx context.Context, profiles func() []*sketch.Profile
 // Union's own select-all path and the crossing sub-case for Cut/Intersect
 // alike; see this file's header comment for why Cut/Intersect's clean-nesting
 // match needs none.
-func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merged ProfileRecord) error {
+func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merged profileRecord) error {
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: merged})
 	if err != nil {
 		return err
@@ -471,7 +471,7 @@ func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merg
 	for i := range blendAt {
 		blendAt[i] = map[int]*cornerBlend{}
 	}
-	orig := ProfileRecord{Outer: pa.profile.Outer}
+	orig := profileRecord{Outer: pa.profile.Outer}
 	return auditRewriteBudget(budget, orig, merged, loops, blendAt)
 }
 
@@ -526,17 +526,17 @@ type prismSceneDelta = prismcells.SceneDelta
 // accumulated into the returned prismSceneDelta, the largest such charge over
 // each operand's own consumed segments (§7's δ_walk).
 func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
-	return buildPrismSceneRegions(budget, []ProfileRecord{pa.profile}, []ProfileRecord{pb.profile}, reexpress)
+	return buildPrismSceneRegions(budget, []profileRecord{pa.profile}, []profileRecord{pb.profile}, reexpress)
 }
 
 // buildPrismSceneRegions adapts root profile records and the composed
 // placement to prismcells' private scene builder.
-func buildPrismSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []ProfileRecord, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
+func buildPrismSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []profileRecord, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
 	s, tags, charge, err := prismcells.BuildSceneRegions(budget, sceneProfiles(regionsA), sceneProfiles(regionsB), reexpress)
 	return s, tags, prismSceneDelta{A: charge.A, B: charge.B}, err
 }
 
-func sceneProfiles(regions []ProfileRecord) []prismcells.SceneProfile {
+func sceneProfiles(regions []profileRecord) []prismcells.SceneProfile {
 	out := make([]prismcells.SceneProfile, len(regions))
 	for i, region := range regions {
 		out[i] = prismcells.SceneProfile{Outer: region.Outer, Holes: region.Holes}

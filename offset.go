@@ -221,9 +221,9 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 // generated values exactly, run the shared §5 audit, then prove the whole
 // offset interval 0 < τ ≤ d clear. It dispatches on the two admitted section
 // shapes exactly as thickenPrism does, and refuses every other one.
-func offsetPrismSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *proofbound.WorkBudget) (ProfileRecord, error) {
+func offsetPrismSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *proofbound.WorkBudget) (profileRecord, error) {
 	if len(pp.profile.Outer.Segments) == 1 {
-		if circle, ok := pp.profile.Outer.Segments[0].(CircleSeg); ok {
+		if circle, ok := pp.profile.Outer.Segments[0].(circleSeg); ok {
 			return offsetCircleSection(pp.profile, circle, sense, amount, budget)
 		}
 	}
@@ -242,17 +242,17 @@ func offsetPrismSection(ctx context.Context, pp prismPayload, sense int, amount 
 // endpoint radius proves every intermediate radius positive too: growing
 // (sense −1) increases it from r, and eroding (sense +1) reaches its minimum at
 // the endpoint prismCircleOffset already refused a non-positive value for.
-func offsetCircleSection(source ProfileRecord, circle CircleSeg, sense int, amount float64, budget *proofbound.WorkBudget) (ProfileRecord, error) {
+func offsetCircleSection(source profileRecord, circle circleSeg, sense int, amount float64, budget *proofbound.WorkBudget) (profileRecord, error) {
 	if !circle.CCW {
-		return ProfileRecord{}, fmt.Errorf(`%w: this circle does not have the required outer-loop winding`, ErrUnsupported)
+		return profileRecord{}, fmt.Errorf(`%w: this circle does not have the required outer-loop winding`, ErrUnsupported)
 	}
 	radius, rDelta, err := extent.MagnitudeInBounded(circle.Radius, units.Length, units.Millimeter, "the circle radius")
 	if err != nil || rDelta != 0 {
-		return ProfileRecord{}, fmt.Errorf(`%w: the circle radius is not exact in millimetres`, ErrUnsupported)
+		return profileRecord{}, fmt.Errorf(`%w: the circle radius is not exact in millimetres`, ErrUnsupported)
 	}
 	offset, err := prismCircleOffset(budget, source, radius, float64(sense), amount)
 	if err != nil {
-		return ProfileRecord{}, offsetSectionRefusal(err)
+		return profileRecord{}, offsetSectionRefusal(err)
 	}
 	return offset, nil
 }
@@ -267,42 +267,42 @@ func offsetCircleSection(source ProfileRecord, circle CircleSeg, sense int, amou
 // The interval proof is NOT optional on this shape and is never inferred from
 // the endpoint: an endpoint that looks simple cannot prove an earlier offset did
 // not pinch and change which boundary the construction denotes (§17.2).
-func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *proofbound.WorkBudget) (ProfileRecord, error) {
+func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *proofbound.WorkBudget) (profileRecord, error) {
 	for _, seg := range pp.profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
-			return ProfileRecord{}, err
+			return profileRecord{}, err
 		}
-		if _, ok := seg.(LineSeg); !ok {
-			return ProfileRecord{}, fmt.Errorf(`%w: the prism sheet requires line-only axis-parallel walks`, ErrUnsupported)
+		if _, ok := seg.(lineSeg); !ok {
+			return profileRecord{}, fmt.Errorf(`%w: the prism sheet requires line-only axis-parallel walks`, ErrUnsupported)
 		}
 	}
 	loops, err := prismCornerLoopsBudget(budget, pp)
 	if err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
 	if len(loops) != 1 {
-		return ProfileRecord{}, fmt.Errorf(`%w: the prism sheet requires one outer loop`, ErrUnsupported)
+		return profileRecord{}, fmt.Errorf(`%w: the prism sheet requires one outer loop`, ErrUnsupported)
 	}
 	loop := loops[0]
 	dirs, err := thickenAxisDirections(loop, budget)
 	if err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
 	offset, err := offsetProfile(budget, pp.profile, float64(sense), amount)
 	if err != nil {
-		return ProfileRecord{}, offsetSectionRefusal(err)
+		return profileRecord{}, offsetSectionRefusal(err)
 	}
 	if err := thickenCertifyAxisOffset(loop, dirs, offset.Outer, sense, amount, budget); err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
 	if err := offsetSectionRefusal(auditOffsetSectionBudget(budget, pp.profile, offset)); err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
 	// radial is nil: a prism sheet's walls sweep along a fixed normal and turn
 	// about no axis, so there is no radius for the scan to keep positive
 	// (thicken.go's thickenRadial is the revolve arm's gate alone).
 	if err := thickenAxisIntervalClear(ctx, loop, dirs, sense, amount, budget, nil); err != nil {
-		return ProfileRecord{}, err
+		return profileRecord{}, err
 	}
 	return offset, nil
 }

@@ -238,12 +238,12 @@ func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref p
 
 // patternFrame is the frame and placement a frame-keeping instance shares
 // with its receiver, and the regions it moves.
-func patternFrameOf(payload featurePayload) (r3.Frame, r3.Transform, []ProfileRecord, bool) {
+func patternFrameOf(payload featurePayload) (r3.Frame, r3.Transform, []profileRecord, bool) {
 	switch p := payload.(type) {
 	case prismPayload:
-		return p.frame, p.xform, []ProfileRecord{p.profile}, true
+		return p.frame, p.xform, []profileRecord{p.profile}, true
 	case stackedPrismPayload:
-		regions := make([]ProfileRecord, 0, len(p.slabs))
+		regions := make([]profileRecord, 0, len(p.slabs))
 		for _, slab := range p.slabs {
 			regions = append(regions, slab.regions...)
 		}
@@ -265,10 +265,10 @@ func (rp resolvedPattern) keepsFrame(budget *proofbound.WorkBudget, payload feat
 		return false, nil
 	}
 	for _, region := range regions {
-		for _, loop := range append([]LoopRecord{region.Outer}, region.Holes...) {
+		for _, loop := range append([]loopRecord{region.Outer}, region.Holes...) {
 			for _, seg := range loop.Segments {
 				switch seg.(type) {
-				case LineSeg, ArcSeg, CircleSeg:
+				case lineSeg, arcSeg, circleSeg:
 				default:
 					return false, nil
 				}
@@ -307,13 +307,13 @@ func (rp resolvedPattern) instanceMotion(frame r3.Frame, xform r3.Transform, i i
 	return rp.recordSpec().Motion(frame, xform, i)
 }
 
-func moveRegion(budget *proofbound.WorkBudget, region ProfileRecord, mv pointMotion) (ProfileRecord, float64, error) {
+func moveRegion(budget *proofbound.WorkBudget, region profileRecord, mv pointMotion) (profileRecord, float64, error) {
 	moved, delta, err := patternrecord.MoveRegion(budget,
 		patternrecord.Region{Outer: region.Outer, Holes: region.Holes}, mv)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return profileRecord{}, 0, err
 	}
-	return ProfileRecord{Outer: moved.Outer, Holes: moved.Holes}, delta, nil
+	return profileRecord{Outer: moved.Outer, Holes: moved.Holes}, delta, nil
 }
 
 func withPatternDelta(sectionDelta, delta float64) float64 {
@@ -345,7 +345,7 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 		delta := 0.0
 		for k, slab := range p.slabs {
 			slabs[k] = slab
-			slabs[k].regions = make([]ProfileRecord, len(slab.regions))
+			slabs[k].regions = make([]profileRecord, len(slab.regions))
 			for r, region := range slab.regions {
 				moved, charge, err := moveRegion(budget, region, mv)
 				if err != nil {
@@ -460,13 +460,13 @@ func (b *Body) Patterned(ctx context.Context, spec PatternSpec) (*Body, error) {
 func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePayload) (stackedPrismPayload, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	frame, xform, _, _ := patternFrameOf(payload)
-	var regions []ProfileRecord
+	var regions []profileRecord
 	var slab prismSlab
 	var sectionDelta float64
 	multiSlab := false
 	switch p := payload.(type) {
 	case prismPayload:
-		regions = []ProfileRecord{p.profile}
+		regions = []profileRecord{p.profile}
 		slab = prismSlab{z0: p.z0, z1: p.z1, z0Delta: p.z0Delta, z1Delta: p.z1Delta}
 		sectionDelta = p.sectionDelta
 	case stackedPrismPayload:
@@ -483,12 +483,12 @@ func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePaylo
 		if len(runs) != 1 {
 			return stackedPrismPayload{}, false, nil
 		}
-		regions = []ProfileRecord{{Outer: p.slabs[0].regions[0].Outer}}
+		regions = []profileRecord{{Outer: p.slabs[0].regions[0].Outer}}
 		multiSlab = true
 	default:
 		return stackedPrismPayload{}, false, nil
 	}
-	all := append([]ProfileRecord(nil), regions...)
+	all := append([]profileRecord(nil), regions...)
 	delta := 0.0
 	for i := 1; i < rp.count; i++ {
 		mv, err := rp.instanceMotion(frame, xform, i)

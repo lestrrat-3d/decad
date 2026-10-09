@@ -27,7 +27,7 @@ func capContourJoins(joins []cornerJoin) []capcontour.Join {
 // loopContourDelta re-derives one loop's contour displacement from its record
 // for readings that hold no built band. It uses the same walks and joins as
 // buildCapBand.
-func loopContourDelta(ctx context.Context, loop LoopRecord, d, dDelta float64) (float64, error) {
+func loopContourDelta(ctx context.Context, loop loopRecord, d, dDelta float64) (float64, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
 	cl, err := oneLoopCornerLoop(budget, loop, work)
@@ -49,7 +49,7 @@ func loopContourDelta(ctx context.Context, loop LoopRecord, d, dDelta float64) (
 // (cbp.offsetJoins), each walk at its own amount (walkAmounts), so its
 // displacement is enclosed over the sharp joins, never over the reflex-corner
 // arcs a chamfer's contour holds.
-func (cbp capBlendPayload) loopContourDelta(ctx context.Context, li int, loop LoopRecord, d, dDelta float64) (float64, error) {
+func (cbp capBlendPayload) loopContourDelta(ctx context.Context, li int, loop loopRecord, d, dDelta float64) (float64, error) {
 	if cbp.fillet {
 		return filletContourDelta(ctx, loop, d, dDelta)
 	}

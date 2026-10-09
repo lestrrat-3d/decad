@@ -263,7 +263,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 // present in ExtrudeChain's topology-vertex bounds for analytic segments.
 // It reads every source segment, including those later coalesced into one
 // wall, so the result also covers a coalesced line's last endpoint.
-func chainWalkEndpointAllow(ctx context.Context, chains []ChainRecord) (float64, bool, error) {
+func chainWalkEndpointAllow(ctx context.Context, chains []chainRecord) (float64, bool, error) {
 	work := freeform.NewFreeformWork()
 	allow := 0.0
 	for _, chain := range chains {
@@ -556,7 +556,7 @@ func draftGateDiameter(ctx context.Context, body *Body, dp draftPayload) (float6
 // displacement their stations carry: the levels' and farDelta.
 func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
 	nearZ, _, farZ, _ := dp.levels()
-	level := func(profile ProfileRecord, z float64) prismPayload {
+	level := func(profile profileRecord, z float64) prismPayload {
 		return prismPayload{profile: profile, frame: dp.frame, z0: z, z1: z, xform: dp.xform}
 	}
 	return []prismPayload{level(dp.profile, nearZ), level(dp.far, farZ)}, proofbound.AbsSumUpper(dp.axialDelta(), dp.farDelta)
@@ -686,7 +686,7 @@ func capBlendWitnessPrisms(pl capBlendPayload) []prismPayload {
 	out := make([]prismPayload, 0, len(loops))
 	for li, loop := range loops {
 		witness := pl.prismLike(pl.z0, pl.z1)
-		witness.profile = ProfileRecord{Outer: loop}
+		witness.profile = profileRecord{Outer: loop}
 		if pl.startLoops[li] {
 			witness.z0 = pl.z0 + pl.start.ds
 		}

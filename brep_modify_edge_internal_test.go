@@ -131,7 +131,7 @@ type arcEnds struct {
 	ends   [2]Point2
 }
 
-func arcEndsOf(s ArcSeg) arcEnds {
+func arcEndsOf(s arcSeg) arcEnds {
 	ends := [2]Point2{s.Start, s.End}
 	if ends[1].U < ends[0].U || (ends[1].U == ends[0].U && ends[1].V < ends[0].V) {
 		ends[0], ends[1] = ends[1], ends[0]
@@ -140,10 +140,10 @@ func arcEndsOf(s ArcSeg) arcEnds {
 }
 
 // loopArcs lists a loop's arcs.
-func loopArcs(loop LoopRecord) []arcEnds {
+func loopArcs(loop loopRecord) []arcEnds {
 	var out []arcEnds
 	for _, seg := range loop.Segments {
-		if s, ok := seg.(ArcSeg); ok {
+		if s, ok := seg.(arcSeg); ok {
 			out = append(out, arcEndsOf(s))
 		}
 	}
@@ -152,11 +152,11 @@ func loopArcs(loop LoopRecord) []arcEnds {
 
 // requireChord asserts a loop holds one LineSeg between a and b, in either
 // direction.
-func requireChord(t *testing.T, loop LoopRecord, a, b Point2) {
+func requireChord(t *testing.T, loop loopRecord, a, b Point2) {
 	t.Helper()
 	n := 0
 	for _, seg := range loop.Segments {
-		s, ok := seg.(LineSeg)
+		s, ok := seg.(lineSeg)
 		if ok && ((s.Start == a && s.End == b) || (s.Start == b && s.End == a)) {
 			n++
 		}
@@ -198,7 +198,7 @@ func TestBrepModifyEdgeFilletS1VerticalEdge(t *testing.T) {
 
 	yFace := planarFaceAt(t, bp, r3.NewVec(0, -1, 0), 0)
 	require.Contains(t, yFace.region.Outer.Segments,
-		CurveSegment(LineSeg{Start: Point2{U: 2, V: 20}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1}),
+		curveSegment(lineSeg{Start: Point2{U: 2, V: 20}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1}),
 		"the y = 0 face's x = 0 segment moves to x = 2")
 	want := arcEnds{center: Point2{U: 2, V: 2}, ends: [2]Point2{{U: 0, V: 2}, {U: 2, V: 0}}}
 	for _, z := range []float64{0, 20} {
@@ -206,7 +206,7 @@ func TestBrepModifyEdgeFilletS1VerticalEdge(t *testing.T) {
 	}
 	wall := bp.faces[7]
 	require.Equal(t, "fillet", wall.blend)
-	require.Equal(t, CurveSegment(ArcSeg{Center: Point2{U: 2, V: 2}, Start: Point2{U: 0, V: 2}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1}), wall.wall)
+	require.Equal(t, curveSegment(arcSeg{Center: Point2{U: 2, V: 2}, Start: Point2{U: 0, V: 2}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1}), wall.wall)
 	faces := blendFaces(out, "fillet")
 	require.Len(t, faces, 1)
 	requireRoles(t, out, faces, "wall(7)", "fillet(7)")
@@ -432,7 +432,7 @@ func internalSplitWallS1(t *testing.T) *Body {
 	bp.faces = slices.Clone(bp.faces)
 	wall, side := -1, -1
 	for fi, f := range bp.faces {
-		if l, ok := f.wall.(LineSeg); ok && l.Start == (Point2{U: 0, V: 20}) && l.End == (Point2{}) {
+		if l, ok := f.wall.(lineSeg); ok && l.Start == (Point2{U: 0, V: 20}) && l.End == (Point2{}) {
 			wall = fi
 		}
 		if f.planar() && f.frame.N() == r3.NewVec(0, -1, 0) && f.z0 == 0 {
@@ -444,18 +444,18 @@ func internalSplitWallS1(t *testing.T) *Body {
 	// The wall walks (0, 20) → (0, 0), so its side line at y = 0 is side1.
 	bp.faces[wall].side1 = []brepSplit{{Z: 10}}
 	region := *bp.faces[side].region
-	var segs []CurveSegment
+	var segs []curveSegment
 	for _, seg := range region.Outer.Segments {
-		if seg == CurveSegment(LineSeg{Start: Point2{U: 0, V: 20}, End: Point2{}, TStart: 0, TEnd: 1}) {
+		if seg == curveSegment(lineSeg{Start: Point2{U: 0, V: 20}, End: Point2{}, TStart: 0, TEnd: 1}) {
 			segs = append(segs,
-				LineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
-				LineSeg{Start: Point2{U: 0, V: 10}, End: Point2{}, TStart: 0, TEnd: 1})
+				lineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
+				lineSeg{Start: Point2{U: 0, V: 10}, End: Point2{}, TStart: 0, TEnd: 1})
 			continue
 		}
 		segs = append(segs, seg)
 	}
 	require.Len(t, segs, len(region.Outer.Segments)+1)
-	region.Outer = LoopRecord{Segments: segs}
+	region.Outer = loopRecord{Segments: segs}
 	bp.faces[side].region = &region
 	body := internalCommitBrep(t, doc, bp)
 	require.Equal(t, s1.volume, body.volume)
@@ -621,8 +621,8 @@ func TestAuditTrimmedWall(t *testing.T) {
 // line and an arc keep their ends and swap their range as before.
 func TestReverseSegmentWalksACircleTheOtherWay(t *testing.T) {
 	t.Parallel()
-	circle := CircleSeg{Center: Point2{U: 1, V: 2}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
-	got, ok := reverseSegment(circle).(CircleSeg)
+	circle := circleSeg{Center: Point2{U: 1, V: 2}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
+	got, ok := reverseSegment(circle).(circleSeg)
 	require.True(t, ok)
 	require.Equal(t, circle.Center, got.Center)
 	require.Equal(t, circle.Radius, got.Radius)
@@ -630,8 +630,8 @@ func TestReverseSegmentWalksACircleTheOtherWay(t *testing.T) {
 	require.Equal(t, [2]float64{1, 0}, [2]float64{got.TStart, got.TEnd})
 	require.Equal(t, circle, reverseSegment(got))
 
-	line := LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 5, V: 0}, TStart: 0, TEnd: 1}
-	gotLine, ok := reverseSegment(line).(LineSeg)
+	line := lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 5, V: 0}, TStart: 0, TEnd: 1}
+	gotLine, ok := reverseSegment(line).(lineSeg)
 	require.True(t, ok)
 	require.Equal(t, [2]float64{1, 0}, [2]float64{gotLine.TStart, gotLine.TEnd})
 	require.Equal(t, line.Start, gotLine.Start)

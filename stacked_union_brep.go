@@ -81,7 +81,7 @@ type ubBuild struct {
 	reach  [][2]int
 	scenes map[string]*ubScene
 	// slabs holds each result slab's regions.
-	slabs    [][]ProfileRecord
+	slabs    [][]profileRecord
 	geom     *stackedbrep.Engine
 	cutDelta float64
 	walk     float64
@@ -201,7 +201,7 @@ func (b *ubBuild) refs(isB bool, slab int) []ubRef {
 	return out
 }
 
-func (b *ubBuild) record(ref ubRef) ProfileRecord {
+func (b *ubBuild) record(ref ubRef) profileRecord {
 	if ref.isB {
 		return b.st.vb.slabs[ref.slab].regions[ref.region]
 	}
@@ -216,7 +216,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 	if sc, ok := b.scenes[key]; ok {
 		return sc, nil
 	}
-	var regionsA, regionsB []ProfileRecord
+	var regionsA, regionsB []profileRecord
 	for _, ref := range refsA {
 		regionsA = append(regionsA, b.record(ref))
 	}
@@ -224,7 +224,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 		regionsB = append(regionsB, b.record(ref))
 	}
 	segments, within, err := prismcells.RegionsWithinWorkCap(b.st.budget,
-		append(append([]ProfileRecord{}, regionsA...), regionsB...)...)
+		append(append([]profileRecord{}, regionsA...), regionsB...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func (b *ubBuild) charge(sc *ubScene) error {
 // where the other does not reach, else the select-all merge's loops over
 // every record reaching the slab (prism-boolean §4.2 with its enclosed-void
 // check, A5's several disjoint loops, §6's audit per loop).
-func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]ProfileRecord, error) {
+func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, error) {
 	refsA, refsB := b.refs(false, b.reach[k][0]), b.refs(true, b.reach[k][1])
 	var verbatim []ubRef
 	switch {
@@ -284,7 +284,7 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]ProfileRecord, erro
 		verbatim = refsA
 	}
 	if verbatim != nil {
-		out := make([]ProfileRecord, len(verbatim))
+		out := make([]profileRecord, len(verbatim))
 		for i, ref := range verbatim {
 			out[i] = b.record(ref)
 		}
@@ -318,7 +318,7 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]ProfileRecord, erro
 		return nil, errUBMiss
 	}
 	b.cutDelta = math.Max(b.cutDelta, cutDelta)
-	out := make([]ProfileRecord, len(loops))
+	out := make([]profileRecord, len(loops))
 	for i, loop := range loops {
 		area, err := loopSignedAreaCB(loop)
 		if err != nil {
@@ -329,7 +329,7 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]ProfileRecord, erro
 			// void check already refuses; nothing here owns one.
 			return nil, errUBMiss
 		}
-		out[i] = ProfileRecord{Outer: loop}
+		out[i] = profileRecord{Outer: loop}
 		if err := auditPrismMergeSection(b.st.budget, prismPayload{profile: out[i]}, out[i]); err != nil {
 			return nil, err
 		}
@@ -465,9 +465,9 @@ func stackedBrepRecord(ctx context.Context, budget *proofbound.WorkBudget, geom 
 	}
 	out := brepPayload{xform: xform}
 	for _, f := range faces {
-		var region *ProfileRecord
+		var region *profileRecord
 		if f.Region != nil {
-			p := ProfileRecord{Outer: f.Region.Outer, Holes: f.Region.Holes}
+			p := profileRecord{Outer: f.Region.Outer, Holes: f.Region.Holes}
 			region = &p
 		}
 		out.faces = append(out.faces, brepFace{

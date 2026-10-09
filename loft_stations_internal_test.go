@@ -41,9 +41,9 @@ import (
 // read off the record's own enclosures. A fixture that stated only a
 // hand-built walk could not exercise the arm at all, since no record stands
 // behind it.
-func arcFixture(t *testing.T, r, base, sweep, tStart, tEnd float64) (ArcSeg, survey2d.SegmentWalk) {
+func arcFixture(t *testing.T, r, base, sweep, tStart, tEnd float64) (arcSeg, survey2d.SegmentWalk) {
 	t.Helper()
-	seg := ArcSeg{
+	seg := arcSeg{
 		Center: pt(0, 0),
 		Start:  pt(r*math.Cos(base), r*math.Sin(base)),
 		End:    pt(r*math.Cos(base+sweep), r*math.Sin(base+sweep)),
@@ -61,9 +61,9 @@ func arcFixture(t *testing.T, r, base, sweep, tStart, tEnd float64) (ArcSeg, sur
 // states no angle at all. A real sketch authentication never produces it
 // (spline_fit.go's own dedup plays the analogous role for the free-form arm),
 // so S16's fixtures build it on the record directly.
-func degenerateArcFixture(t *testing.T) (ArcSeg, survey2d.SegmentWalk) {
+func degenerateArcFixture(t *testing.T) (arcSeg, survey2d.SegmentWalk) {
 	t.Helper()
-	seg := ArcSeg{Center: pt(0, 0), Start: pt(0, 0), End: pt(0, 0), TStart: 0, TEnd: 1}
+	seg := arcSeg{Center: pt(0, 0), Start: pt(0, 0), End: pt(0, 0), TStart: 0, TEnd: 1}
 	w, err := boundarywalk.WalkOf(seg, nil)
 	require.NoError(t, err)
 	return seg, w
@@ -88,7 +88,7 @@ func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 	t.Parallel()
 	w0 := survey2d.SegmentWalk{Kind: survey2d.WalkLine, StartU: 1, StartV: 2}
 	w1 := survey2d.SegmentWalk{Kind: survey2d.WalkLine, StartU: 3, StartV: 4}
-	stations0, stations1, sagitta, matchedDelta, stationRound, err := loftmesh.RecordCellStations(w0, w1, LineSeg{}, LineSeg{}, 123.0, nil, nil)
+	stations0, stations1, sagitta, matchedDelta, stationRound, err := loftmesh.RecordCellStations(w0, w1, lineSeg{}, lineSeg{}, 123.0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []Point2{{U: 1, V: 2}}, stations0)
 	require.Equal(t, []Point2{{U: 3, V: 4}}, stations1)
@@ -153,17 +153,17 @@ const (
 // construction rather than by one machine's rounding. That is what lets the
 // arm-level test separate charging the START bound from charging the end
 // bound, or from a max over both.
-func trimmedStartSegment() LineSeg {
-	return LineSeg{Start: pt(0, 1), End: pt(5, 1), TStart: 0.2, TEnd: 0.4}
+func trimmedStartSegment() lineSeg {
+	return lineSeg{Start: pt(0, 1), End: pt(5, 1), TStart: 0.2, TEnd: 0.4}
 }
 
 // trimmedStartSquareProfile is the fixture square with its bottom edge
 // replaced by trimmedStartSegment's fragment. The build's stationRound is
 // therefore that one segment's own reading and nothing else's.
-func trimmedStartSquareProfile() ProfileRecord {
+func trimmedStartSquareProfile() profileRecord {
 	loop := squareLoop(trimmedSquareCentre, trimmedSquareCentre, trimmedSquareHalf, true)
 	loop.Segments[0] = trimmedStartSegment()
-	return ProfileRecord{Outer: loop}
+	return profileRecord{Outer: loop}
 }
 
 // trimmedStartWalk resolves trimmedStartSegment's walk and proves the premises
@@ -433,7 +433,7 @@ func TestLoftCircularCellStationsJointWalkUpSharesOneCount(t *testing.T) {
 	// never inferred from how either side's own seed compared. This is the
 	// property the joint walk-up buys, and it is asserted against the same
 	// certified reading the arm itself publishes.
-	for i, seg := range []CurveSegment{seg0, seg1} {
+	for i, seg := range []curveSegment{seg0, seg1} {
 		s := loftmesh.CertifiedSagittaUpper(seg, m)
 		require.False(t, proofbound.IsNonFinite(s), "side %d's certified sagitta must be derivable at the settled count", i)
 		require.LessOrEqual(t, s, target, "side %d must meet the target at the settled m=%d", i, m)
@@ -453,7 +453,7 @@ func TestLoftCircularCellStationsJointWalkUpSharesOneCount(t *testing.T) {
 // assertion below: the larger of the two sides' own generated-station
 // displacements at count m, read from the SAME production generator the arm
 // itself reads it from.
-func requireStationDelta(t *testing.T, w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, m int) float64 {
+func requireStationDelta(t *testing.T, w0, w1 survey2d.SegmentWalk, seg0, seg1 curveSegment, m int) float64 {
 	t.Helper()
 	_, d0 := loftmesh.CircularStationChain(w0, seg0, m)
 	_, d1 := loftmesh.CircularStationChain(w1, seg1, m)
@@ -553,7 +553,7 @@ func TestLoftCircularCellStationsPublishesTheCertifiedReading(t *testing.T) {
 // fixture portable: WHICH rows cancel low depends on the host's rounding of
 // a0 + t*sweep, but that a sizeable share of them do is arithmetic, not
 // accuracy — the audit measured 200 of 800 rows over this family.
-func shortfallArc(t *testing.T, m int) (ArcSeg, survey2d.SegmentWalk, float64, float64) {
+func shortfallArc(t *testing.T, m int) (arcSeg, survey2d.SegmentWalk, float64, float64) {
 	t.Helper()
 	scanned := 0
 	for _, sweep := range []float64{1e-5, 3e-5, 1e-4, 3e-4, 1e-3} {
@@ -571,14 +571,14 @@ func shortfallArc(t *testing.T, m int) (ArcSeg, survey2d.SegmentWalk, float64, f
 		}
 	}
 	t.Fatalf("no row of the audit's own arc family understated the sagitta at m=%d over %d fixtures; the fixture family no longer exercises the cancellation this test exists for", m, scanned)
-	return ArcSeg{}, survey2d.SegmentWalk{}, 0, 0
+	return arcSeg{}, survey2d.SegmentWalk{}, 0, 0
 }
 
 // certifiedSagittaLower is loftmesh.CertifiedSagittaUpper's lower end, built here
 // out of the same enclosures so a test can state what the held value is
 // measured against. It belongs in the test rather than in the package: nothing
 // production publishes a lower bound on a displacement term.
-func certifiedSagittaLower(t *testing.T, seg CurveSegment, m int) float64 {
+func certifiedSagittaLower(t *testing.T, seg curveSegment, m int) float64 {
 	t.Helper()
 	radius, sweep, ok := circularWalkEnclosures(seg)
 	require.True(t, ok)
@@ -595,7 +595,7 @@ func certifiedSagittaLower(t *testing.T, seg CurveSegment, m int) float64 {
 // answers +Inf and the arm refuses rather than substituting a finite value.
 func TestLoftCertifiedSagittaRefusesAnUnderivableRecord(t *testing.T) {
 	t.Parallel()
-	seg := CircleSeg{Center: pt(0, 0), Radius: units.Radians(1), TStart: 0, TEnd: 1, CCW: true}
+	seg := circleSeg{Center: pt(0, 0), Radius: units.Radians(1), TStart: 0, TEnd: 1, CCW: true}
 	require.True(t, proofbound.IsNonFinite(loftmesh.CertifiedSagittaUpper(seg, 8)))
 
 	good, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
@@ -739,19 +739,19 @@ func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 // (docs/loft-gear-bounds-design.md §5), does not move with n. That is what lets
 // a fixture drive P and C alone and read the per-segment share
 // loftmesh.StationShare allocates from them.
-func quarterArcRingProfile(t *testing.T, n int) (ProfileRecord, [][]survey2d.SegmentWalk) {
+func quarterArcRingProfile(t *testing.T, n int) (profileRecord, [][]survey2d.SegmentWalk) {
 	t.Helper()
-	segs := make([]CurveSegment, n)
+	segs := make([]curveSegment, n)
 	for i := range n {
 		base := float64(i) * math.Pi / 2
-		segs[i] = ArcSeg{
+		segs[i] = arcSeg{
 			Center: pt(0, 0),
 			Start:  pt(5*math.Cos(base), 5*math.Sin(base)),
 			End:    pt(5*math.Cos(base+math.Pi/2), 5*math.Sin(base+math.Pi/2)),
 			TStart: 0, TEnd: 1,
 		}
 	}
-	p := ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	p := profileRecord{Outer: loopRecord{Segments: segs}}
 	return p, resolveLoftLoopWalks(t, p)
 }
 
@@ -767,7 +767,7 @@ func quarterArcRingProfile(t *testing.T, n int) (ProfileRecord, [][]survey2d.Seg
 // 4*8 + 4*1 - 4 = 32 triangles. A hole-free square gives 4*4 - 4 = 12.
 func TestLoftStationCapFitsTheAuditTriangleCeiling(t *testing.T) {
 	t.Parallel()
-	assembledTriangles := func(t *testing.T, p ProfileRecord) int {
+	assembledTriangles := func(t *testing.T, p profileRecord) int {
 		t.Helper()
 		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 		offsets, walks0, walks1, _, err := loftmesh.ValidateLoftRecords(p, p, pl0, pl1, nil, loftRecordAreas(t, p, p), freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -782,7 +782,7 @@ func TestLoftStationCapFitsTheAuditTriangleCeiling(t *testing.T) {
 	// F = 4*Σstations + 4H - 4, measured on the built triangle set.
 	require.Equal(t, 4*4-4, assembledTriangles(t, unitSquareProfile()),
 		"a hole-free 4-station loft must assemble 4*Σ - 4 triangles")
-	holed := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{squareLoop(0.5, 0.5, 0.2, false)}}
+	holed := profileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []loopRecord{squareLoop(0.5, 0.5, 0.2, false)}}
 	require.Equal(t, 4*8+4*1-4, assembledTriangles(t, holed),
 		"an 8-station one-hole loft must assemble 4*Σ + 4H - 4 triangles")
 
@@ -953,10 +953,10 @@ func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, target, "a build with no chorded pair never reads the chord target")
 
-	fit := FitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
-	free := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{fit, fit, fit}}}
+	fit := fitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
+	free := profileRecord{Outer: loopRecord{Segments: []curveSegment{fit, fit, fit}}}
 	freeWalks := resolveLoftLoopWalks(t, free)
-	_, c, ok := loftmesh.PairCounts([]LoopRecord{free.Outer}, make([]int, 1), freeWalks, freeWalks)
+	_, c, ok := loftmesh.PairCounts([]loopRecord{free.Outer}, make([]int, 1), freeWalks, freeWalks)
 	require.True(t, ok)
 	require.Equal(t, uint64(3), c, "a same-kind free-form pair is a chorded pair (§5.1)")
 	// The three-fit loop is a pairing fixture, not a closed region, so it has
@@ -1013,14 +1013,14 @@ func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 // produces one. A repeated point makes a zero-length LineSeg, which
 // docs/loft-design.md §4 names as a recordable input rather than a
 // hypothetical one (record.go's validateSegment checks finiteness alone).
-func lineStationLoopFixture(t *testing.T, starts []Point2) (ProfileRecord, [][]survey2d.SegmentWalk) {
+func lineStationLoopFixture(t *testing.T, starts []Point2) (profileRecord, [][]survey2d.SegmentWalk) {
 	t.Helper()
 	n := len(starts)
-	segs := make([]CurveSegment, n)
+	segs := make([]curveSegment, n)
 	for j := range n {
-		segs[j] = LineSeg{Start: starts[j], End: starts[(j+1)%n], TStart: 0, TEnd: 1}
+		segs[j] = lineSeg{Start: starts[j], End: starts[(j+1)%n], TStart: 0, TEnd: 1}
 	}
-	p := ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	p := profileRecord{Outer: loopRecord{Segments: segs}}
 	return p, resolveLoftLoopWalks(t, p)
 }
 
@@ -1086,12 +1086,12 @@ func TestLoftPairingsRefusesAOneSidedCellAtOneChordCell(t *testing.T) {
 	require.Len(t, stations0, 1, "the fixture must settle at one chord cell, or it tests a different class")
 	require.Len(t, stations1, 1)
 
-	line0 := LineSeg{Start: stations0[0], End: pt(0, 1), TStart: 0, TEnd: 1}
-	line1 := LineSeg{Start: pt(2, 0), End: pt(0, 1), TStart: 0, TEnd: 1}
+	line0 := lineSeg{Start: stations0[0], End: pt(0, 1), TStart: 0, TEnd: 1}
+	line1 := lineSeg{Start: pt(2, 0), End: pt(0, 1), TStart: 0, TEnd: 1}
 	require.NotEqual(t, stations1[0], line1.Start, "side 1's cell must NOT collapse, or the cell is S6's row and not this one")
 
-	p0 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{arc0, line0}}}
-	p1 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{arc1, line1}}}
+	p0 := profileRecord{Outer: loopRecord{Segments: []curveSegment{arc0, line0}}}
+	p1 := profileRecord{Outer: loopRecord{Segments: []curveSegment{arc1, line1}}}
 
 	_, _, _, _, err = loftmesh.PairRecords(p0, p1, make([]int, 1), resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), target, nil, nil) //nolint:dogsled // only the error matters here.
 	requireOneSidedCellRefusal(t, err, 0)
@@ -1228,7 +1228,7 @@ func TestCircularStationChainRefusesAnUnenclosableRecord(t *testing.T) {
 	t.Parallel()
 	_, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
 
-	_, delta := loftmesh.CircularStationChain(w, LineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}, 4)
+	_, delta := loftmesh.CircularStationChain(w, lineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}, 4)
 	require.True(t, math.IsInf(delta, 1), "a record with no circular parameter range states no station displacement")
 	require.True(t, math.IsInf(loftmesh.ChordCellDeltaUpper(1e-3, delta), 1), "an underivable half makes the whole chord bound underivable")
 }
@@ -1256,7 +1256,7 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 
 	require.NotEqual(t, sagA, sagB, "the two segment pairs must reach different sagittas for this test to distinguish max from sum")
 
-	p := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{segA, segB}}}
+	p := profileRecord{Outer: loopRecord{Segments: []curveSegment{segA, segB}}}
 	walks0 := [][]survey2d.SegmentWalk{{wA, wB}}
 	walks1 := [][]survey2d.SegmentWalk{{wA, wB}}
 
@@ -1463,9 +1463,9 @@ func TestLoftChordTargetReadsFeatureSize(t *testing.T) {
 		// The region under the parabola B(s) = (4(1-s), 8s(1-s)) closed by
 		// the chord from (0,0) to (4,0): its area is two thirds of the
 		// control triangle's, 16/3.
-		p := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-			LineSeg{Start: pt(0, 0), End: pt(4, 0), TStart: 0, TEnd: 1},
-			NURBSSeg{
+		p := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+			lineSeg{Start: pt(0, 0), End: pt(4, 0), TStart: 0, TEnd: 1},
+			nurbsSeg{
 				Degree:  2,
 				Control: []Point2{pt(4, 0), pt(2, 4), pt(0, 0)},
 				Knots:   []float64{0, 0, 0, 1, 1, 1},

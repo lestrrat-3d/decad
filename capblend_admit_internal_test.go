@@ -127,8 +127,8 @@ func TestCapBlendAdmissionRefusesAReflexCorner(t *testing.T) {
 // refuses — none of which a tolerance would see.
 func TestCapJoinIsG1IsExact(t *testing.T) {
 	t.Parallel()
-	line := LineSeg{Start: Point2{U: 0, V: -12}, End: Point2{U: 36, V: -12}, TStart: 0, TEnd: 1}
-	arc := ArcSeg{Center: Point2{U: 36, V: 0}, Start: Point2{U: 36, V: -12}, End: Point2{U: 48, V: 0}, TStart: 0, TEnd: 1}
+	line := lineSeg{Start: Point2{U: 0, V: -12}, End: Point2{U: 36, V: -12}, TStart: 0, TEnd: 1}
+	arc := arcSeg{Center: Point2{U: 36, V: 0}, Start: Point2{U: 36, V: -12}, End: Point2{U: 48, V: 0}, TStart: 0, TEnd: 1}
 	require.True(t, capJoinIsG1(line, arc), `the line leaves along the arc's own tangent`)
 	require.Empty(t, capBlendSegmentRefusal(arc))
 
@@ -146,7 +146,7 @@ func TestCapJoinIsG1IsExact(t *testing.T) {
 	})
 
 	t.Run("an antiparallel cusp", func(t *testing.T) {
-		back := LineSeg{Start: Point2{U: 72, V: -12}, End: Point2{U: 36, V: -12}, TStart: 0, TEnd: 1}
+		back := lineSeg{Start: Point2{U: 72, V: -12}, End: Point2{U: 36, V: -12}, TStart: 0, TEnd: 1}
 		require.False(t, capJoinIsG1(back, arc), `a cusp has a zero cross product and a negative dot product`)
 	})
 

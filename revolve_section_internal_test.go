@@ -57,24 +57,24 @@ func sectionSketchBody(t *testing.T, build func(*sketch.Sketch), extent AngularE
 // origin, shifts it by shift along u, the axis, and grows every whole
 // circle's radius by grow, and returns the largest coordinate magnitude it
 // scaled.
-func movedProfile(t *testing.T, p ProfileRecord, k, shift, grow float64) (ProfileRecord, float64) {
+func movedProfile(t *testing.T, p profileRecord, k, shift, grow float64) (profileRecord, float64) {
 	t.Helper()
 	most := 0.0
 	pt := func(q Point2) Point2 {
 		most = math.Max(most, math.Hypot(q.U, q.V))
 		return Point2{U: q.U*k + shift, V: q.V * k}
 	}
-	loop := func(l LoopRecord) LoopRecord {
-		out := LoopRecord{Segments: make([]CurveSegment, len(l.Segments))}
+	loop := func(l loopRecord) loopRecord {
+		out := loopRecord{Segments: make([]curveSegment, len(l.Segments))}
 		for i, seg := range l.Segments {
 			switch s := seg.(type) {
-			case LineSeg:
+			case lineSeg:
 				s.Start, s.End = pt(s.Start), pt(s.End)
 				out.Segments[i] = s
-			case ArcSeg:
+			case arcSeg:
 				s.Center, s.Start, s.End = pt(s.Center), pt(s.Start), pt(s.End)
 				out.Segments[i] = s
-			case CircleSeg:
+			case circleSeg:
 				r, err := s.Radius.In(units.Millimeter)
 				require.NoError(t, err)
 				most = math.Max(most, math.Hypot(s.Center.U, s.Center.V)+r)
@@ -87,7 +87,7 @@ func movedProfile(t *testing.T, p ProfileRecord, k, shift, grow float64) (Profil
 		}
 		return out
 	}
-	out := ProfileRecord{Outer: loop(p.Outer)}
+	out := profileRecord{Outer: loop(p.Outer)}
 	for _, h := range p.Holes {
 		out.Holes = append(out.Holes, loop(h))
 	}

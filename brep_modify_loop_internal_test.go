@@ -178,7 +178,7 @@ func chamferLoopOf(t *testing.T, body *Body, n, p r3.Vec, li int, d float64) (*B
 
 // sweptFaceLevels lists the [z0, z1] of every swept face of the record
 // whose wall is wall.
-func sweptFaceLevels(bp brepPayload, wall CurveSegment) [][2]float64 {
+func sweptFaceLevels(bp brepPayload, wall curveSegment) [][2]float64 {
 	var out [][2]float64
 	for _, f := range bp.faces {
 		if !f.planar() && f.wall == wall {
@@ -306,9 +306,9 @@ func TestBrepLoopChamferCrossDrilledBothLoops(t *testing.T) {
 	requirePatchKinds(t, out, 8, 0)
 	bp := out.payload.(brepPayload)
 	require.Len(t, bp.loopBands, 2)
-	for _, wall := range []CurveSegment{
-		LineSeg{Start: Point2{U: 40, V: 0}, End: Point2{U: 40, V: 20}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	for _, wall := range []curveSegment{
+		lineSeg{Start: Point2{U: 40, V: 0}, End: Point2{U: 40, V: 20}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	} {
 		require.Equal(t, [][2]float64{{1.5, 18.5}}, sweptFaceLevels(bp, wall), "x wall %v", wall)
 	}
@@ -360,12 +360,12 @@ func TestBrepLoopChamferBossRimAndRoot(t *testing.T) {
 
 	plateTop := planarFaceAt(t, bp, routeEZ, 10)
 	require.Len(t, plateTop.region.Holes, 1)
-	hole, ok := plateTop.region.Holes[0].Segments[0].(CircleSeg)
+	hole, ok := plateTop.region.Holes[0].Segments[0].(circleSeg)
 	require.True(t, ok)
 	require.Equal(t, 6.0, hole.Radius.Base())
-	var bossWall CurveSegment
+	var bossWall curveSegment
 	for _, f := range bp.faces {
-		if _, circle := f.wall.(CircleSeg); circle {
+		if _, circle := f.wall.(circleSeg); circle {
 			bossWall = f.wall
 		}
 	}

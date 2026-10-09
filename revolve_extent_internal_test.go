@@ -20,7 +20,7 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 	t.Parallel()
 	profiles := []struct {
 		name    string
-		profile ProfileRecord
+		profile profileRecord
 		full    bool
 		phi1    float64
 		den     revolveangle.Sweep
@@ -34,8 +34,8 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 		},
 		{
 			name: "circular quarter turn",
-			profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-				CircleSeg{Center: Point2{U: 2, V: 5}, Radius: units.Millimeters(2), CCW: true, TStart: 0, TEnd: 1},
+			profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+				circleSeg{Center: Point2{U: 2, V: 5}, Radius: units.Millimeters(2), CCW: true, TStart: 0, TEnd: 1},
 			}}},
 			phi1: math.Pi / 2,
 			den:  quarterTurnDenotation(),

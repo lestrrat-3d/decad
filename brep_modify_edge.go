@@ -364,7 +364,7 @@ func (r *brepEdgeRoute) restate(fi int, restated map[int]brepRestated) (brepRest
 	if err != nil {
 		return brepRestated{}, err
 	}
-	region := ProfileRecord{Outer: rec.Region.Outer}
+	region := profileRecord{Outer: rec.Region.Outer}
 	rs := brepRestated{embed: embed, face: brepFace{frame: rec.Frame, region: &region, outward: true,
 		sweep: f.frame.N(), z0: rec.Z0, z1: rec.Z1, z0Delta: rec.Z0Delta, z1Delta: rec.Z1Delta, delta: rec.Delta, role: rec.Role}}
 	restated[fi] = rs
@@ -492,14 +492,14 @@ func (r *brepEdgeRoute) classifySides(eb *brepEdgeBlend) error {
 
 // naturalRange reports whether a recorded segment is a line, arc or circle
 // over its whole natural range, 0→1 or 1→0.
-func naturalRange(seg CurveSegment) bool {
+func naturalRange(seg curveSegment) bool {
 	var t0, t1 float64
 	switch s := seg.(type) {
-	case LineSeg:
+	case lineSeg:
 		t0, t1 = s.TStart, s.TEnd
-	case ArcSeg:
+	case arcSeg:
 		t0, t1 = s.TStart, s.TEnd
-	case CircleSeg:
+	case circleSeg:
 		t0, t1 = s.TStart, s.TEnd
 	default:
 		return false
@@ -525,7 +525,7 @@ func (r *brepEdgeRoute) requireNaturalFaces(eb *brepEdgeBlend) error {
 		if err != nil {
 			return err
 		}
-		records := append([]LoopRecord{f.region.Outer}, f.region.Holes...)
+		records := append([]loopRecord{f.region.Outer}, f.region.Holes...)
 		for li, loop := range records {
 			for _, seg := range loop.Segments {
 				if !naturalRange(seg) {
@@ -672,8 +672,8 @@ func (r *brepEdgeRoute) computeBlends(eb *brepEdgeBlend) error {
 	if err != nil {
 		return r.refuse(eb, "SB9", err.Error())
 	}
-	c0, arc0 := eb.blend[0].Connector.(ArcSeg)
-	c1, arc1 := mapped.(ArcSeg)
+	c0, arc0 := eb.blend[0].Connector.(arcSeg)
+	c1, arc1 := mapped.(arcSeg)
 	if arc0 != arc1 || (arc0 && c0.Center != c1.Center) {
 		return r.refuse(eb, "SB9", `the blend's centre computed in the two end faces disagrees`)
 	}
@@ -890,16 +890,16 @@ func (r *brepEdgeRoute) blendFace(eb *brepEdgeBlend) brepFace {
 // reverseSegment walks a natural-range line, arc or circle the other way. A
 // line or arc is the same record over the reversed range. A circle flips its
 // CCW sense and swaps its range, so its centre and radius are unchanged.
-func reverseSegment(seg CurveSegment) CurveSegment {
+func reverseSegment(seg curveSegment) curveSegment {
 	switch s := seg.(type) {
-	case CircleSeg:
+	case circleSeg:
 		s.CCW = !s.CCW
 		s.TStart, s.TEnd = s.TEnd, s.TStart
 		return s
-	case LineSeg:
+	case lineSeg:
 		s.TStart, s.TEnd = s.TEnd, s.TStart
 		return s
-	case ArcSeg:
+	case arcSeg:
 		s.TStart, s.TEnd = s.TEnd, s.TStart
 		return s
 	default:

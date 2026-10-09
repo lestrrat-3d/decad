@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/lestrrat-3d/units"
@@ -32,7 +34,7 @@ func scaledClosedSplineControls() [][2]float64 {
 	return out
 }
 
-func recordClosedSplineFrom(t *testing.T, controls [][2]float64) decad.ProfileRecord {
+func recordClosedSplineFrom(t *testing.T, controls [][2]float64) momentinput.Profile {
 	t.Helper()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -49,10 +51,10 @@ func recordClosedSplineFrom(t *testing.T, controls [][2]float64) decad.ProfileRe
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
 
-	record, _, err := decad.RecordProfile(s, profiles[0])
+	record, _, err := momentinput.RecordProfile(s, profiles[0])
 	require.NoError(t, err)
 	require.Len(t, record.Outer.Segments, 1)
-	require.IsType(t, decad.ClosedSplineSeg{}, record.Outer.Segments[0])
+	require.IsType(t, sectionrecord.ClosedSplineSeg{}, record.Outer.Segments[0])
 	return record
 }
 
@@ -159,8 +161,8 @@ func requireSingleRounding(t *testing.T, exact *big.Rat, value, bound float64) {
 
 // nurbsEdge is one straight polygon side recorded as its own degree-1 NURBS
 // segment, so a polygon built from them is a MULTI-segment Tier A region.
-func nurbsEdge(a, b decad.Point2) decad.NURBSSeg {
-	return decad.NURBSSeg{
+func nurbsEdge(a, b decad.Point2) sectionrecord.NURBSSeg {
+	return sectionrecord.NURBSSeg{
 		Degree:  1,
 		Control: []decad.Point2{a, b},
 		Knots:   []float64{0, 0, 1, 1},
@@ -179,11 +181,11 @@ func nurbsEdge(a, b decad.Point2) decad.NURBSSeg {
 func TestMultiSegmentFreeformRegionRoundsOnce(t *testing.T) {
 	t.Parallel()
 	polygon := []decad.Point2{{}, {U: 0.1}, {U: 0.3, V: 0.2}, {U: 0.05, V: 0.1}, {V: 0.4}}
-	segments := make([]decad.CurveSegment, len(polygon))
+	segments := make([]sectionrecord.CurveSegment, len(polygon))
 	for i := range polygon {
 		segments[i] = nurbsEdge(polygon[i], polygon[(i+1)%len(polygon)])
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 
 	// The falsifier: the polygon's own shoelace over exact rationals.
 	exact := new(big.Rat)
@@ -231,8 +233,8 @@ func TestDenseNURBSRecordRefusesWithinBudget(t *testing.T) {
 	for range degree + 1 {
 		knots = append(knots, 1)
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1},
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1},
 	}}}
 
 	start := time.Now()
@@ -260,9 +262,9 @@ func TestDenseNURBSRecordRefusesWithinBudget(t *testing.T) {
 func TestBrokenNURBSKnotVectorRefuses(t *testing.T) {
 	t.Parallel()
 	third := 1.0 / 3
-	squareRecord := func(joint decad.Point2) decad.ProfileRecord {
-		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-			decad.NURBSSeg{
+	squareRecord := func(joint decad.Point2) momentinput.Profile {
+		return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+			sectionrecord.NURBSSeg{
 				Degree: 3,
 				Control: []decad.Point2{
 					{U: 0, V: 0}, {U: third, V: 0}, {U: 2 * third, V: 0}, {U: 1, V: 0},
@@ -329,7 +331,7 @@ func TestBrokenNURBSKnotVectorRefuses(t *testing.T) {
 // body exists.
 func TestOverClampedNURBSRefusesAsUnsupported(t *testing.T) {
 	t.Parallel()
-	segment := decad.NURBSSeg{
+	segment := sectionrecord.NURBSSeg{
 		Degree:  2,
 		Control: []decad.Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}},
 		Knots:   []float64{0, 0, 0, 0, 1, 1, 1},
@@ -337,9 +339,9 @@ func TestOverClampedNURBSRefusesAsUnsupported(t *testing.T) {
 		TStart:  0,
 		TEnd:    1,
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 		segment,
-		decad.LineSeg{Start: decad.Point2{U: 2}, End: decad.Point2{}, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: decad.Point2{U: 2}, End: decad.Point2{}, TStart: 0, TEnd: 1},
 	}}}
 
 	_, err := record.Area()
@@ -359,11 +361,11 @@ func TestOverClampedNURBSRefusesAsUnsupported(t *testing.T) {
 func TestFreeformAnchorSubtractsExactly(t *testing.T) {
 	t.Parallel()
 	corners := []decad.Point2{{U: 0.1, V: 0.1}, {U: 100.1, V: 0.1}, {U: 100.1, V: 1.1}, {U: 0.1, V: 1.1}}
-	segments := make([]decad.CurveSegment, len(corners))
+	segments := make([]sectionrecord.CurveSegment, len(corners))
 	for i := range corners {
 		segments[i] = nurbsEdge(corners[i], corners[(i+1)%len(corners)])
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 
 	// The falsifier: the shoelace over the RECORDED float coordinates, exactly.
 	exact := new(big.Rat)
@@ -419,8 +421,8 @@ func TestOverBudgetFreeformRefusesBeforeSketchSampling(t *testing.T) {
 	for range controls {
 		knots = append(knots, 1)
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1},
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1},
 	}}}
 
 	start := time.Now()
@@ -434,7 +436,7 @@ func TestOverBudgetFreeformRefusesBeforeSketchSampling(t *testing.T) {
 // recordSplineAndChord records the hump-and-chord region: an open cubic spline
 // closed by a straight line, recorded through sketch so the loop carries the
 // arrangement's own segment order and walk direction.
-func recordSplineAndChord(t *testing.T) decad.ProfileRecord {
+func recordSplineAndChord(t *testing.T) momentinput.Profile {
 	t.Helper()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -451,7 +453,7 @@ func recordSplineAndChord(t *testing.T) decad.ProfileRecord {
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
 
-	record, _, err := decad.RecordProfile(s, profiles[0])
+	record, _, err := momentinput.RecordProfile(s, profiles[0])
 	require.NoError(t, err)
 	return record
 }
@@ -460,7 +462,7 @@ func recordSplineAndChord(t *testing.T) decad.ProfileRecord {
 // FitSplineSeg instead of a SplineSeg: an open fit spline through three points
 // closed by a straight line, recorded through sketch so the loop carries the
 // arrangement's own segment order and walk direction.
-func recordFitSplineAndChord(t *testing.T) decad.ProfileRecord {
+func recordFitSplineAndChord(t *testing.T) momentinput.Profile {
 	t.Helper()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -476,7 +478,7 @@ func recordFitSplineAndChord(t *testing.T) decad.ProfileRecord {
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
 
-	record, _, err := decad.RecordProfile(s, profiles[0])
+	record, _, err := momentinput.RecordProfile(s, profiles[0])
 	require.NoError(t, err)
 	return record
 }
@@ -509,20 +511,20 @@ func TestOverBudgetConversionRefusesBeforeLifting(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		controls int
-		segment  func([]decad.Point2) decad.CurveSegment
+		segment  func([]decad.Point2) sectionrecord.CurveSegment
 	}{
 		{
 			name:     "spline",
 			controls: 200000,
-			segment: func(control []decad.Point2) decad.CurveSegment {
-				return decad.SplineSeg{Control: control, TStart: 0, TEnd: 1}
+			segment: func(control []decad.Point2) sectionrecord.CurveSegment {
+				return sectionrecord.SplineSeg{Control: control, TStart: 0, TEnd: 1}
 			},
 		},
 		{
 			name:     "closed spline",
 			controls: 300000,
-			segment: func(control []decad.Point2) decad.CurveSegment {
-				return decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+			segment: func(control []decad.Point2) sectionrecord.CurveSegment {
+				return sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
 			},
 		},
 	} {
@@ -531,7 +533,7 @@ func TestOverBudgetConversionRefusesBeforeLifting(t *testing.T) {
 			for i := range control {
 				control[i] = decad.Point2{U: float64(i), V: float64(i % 5)}
 			}
-			record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 				tc.segment(control),
 			}}}
 
@@ -597,16 +599,16 @@ func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
 // levied before sketch is asked anything.
 func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
 	t.Parallel()
-	segments := make([]decad.CurveSegment, 200)
+	segments := make([]sectionrecord.CurveSegment, 200)
 	for i := range segments {
 		control := make([]decad.Point2, 3)
 		for j := range control {
 			angle := 2 * math.Pi * float64(j) / 3
 			control[j] = decad.Point2{U: float64(i)*20 + 3*math.Cos(angle), V: 3 * math.Sin(angle)}
 		}
-		segments[i] = decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+		segments[i] = sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 
 	start := time.Now()
 	_, err := record.Area()
@@ -626,21 +628,21 @@ func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
 // arranging all of it.
 func TestAnalyticChordsAreCharged(t *testing.T) {
 	t.Parallel()
-	segments := make([]decad.CurveSegment, 0, 201)
+	segments := make([]sectionrecord.CurveSegment, 0, 201)
 	for i := range 200 {
 		center := decad.Point2{U: float64(i) * 10}
-		segments = append(segments, decad.ArcSeg{
+		segments = append(segments, sectionrecord.ArcSeg{
 			Center: center,
 			Start:  decad.Point2{U: center.U + 4, V: center.V},
 			End:    decad.Point2{U: center.U, V: center.V + 4},
 			TStart: 0, TEnd: 1,
 		})
 	}
-	segments = append(segments, decad.SplineSeg{
+	segments = append(segments, sectionrecord.SplineSeg{
 		Control: []decad.Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}},
 		TStart:  0, TEnd: 1,
 	})
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 
 	start := time.Now()
 	_, err := record.Area()
@@ -677,15 +679,15 @@ func TestPlanStorageFollowsConvertedSegments(t *testing.T) {
 
 	for _, tc := range []struct {
 		name    string
-		segment func(index int) decad.CurveSegment
+		segment func(index int) sectionrecord.CurveSegment
 	}{
 		{
 			// A record of minimal cubic splines: every segment converts, and
 			// the record's work ceiling refuses it partway through.
 			name: "free-form",
-			segment: func(index int) decad.CurveSegment {
+			segment: func(index int) sectionrecord.CurveSegment {
 				base := float64(index)
-				return decad.SplineSeg{
+				return sectionrecord.SplineSeg{
 					Control: []decad.Point2{
 						{U: base},
 						{U: base + 1, V: 1},
@@ -703,8 +705,8 @@ func TestPlanStorageFollowsConvertedSegments(t *testing.T) {
 			// segment is degenerate, so the refusal lands before any walk is
 			// integrated and the reading is the preflight's allocation alone.
 			name: "analytic",
-			segment: func(int) decad.CurveSegment {
-				return decad.LineSeg{TStart: 0, TEnd: 1}
+			segment: func(int) sectionrecord.CurveSegment {
+				return sectionrecord.LineSeg{TStart: 0, TEnd: 1}
 			},
 		},
 	} {
@@ -713,12 +715,12 @@ func TestPlanStorageFollowsConvertedSegments(t *testing.T) {
 			const small = 65536
 			const large = 262144
 
-			recordOf := func(segments int) decad.ProfileRecord {
-				out := make([]decad.CurveSegment, segments)
+			recordOf := func(segments int) momentinput.Profile {
+				out := make([]sectionrecord.CurveSegment, segments)
 				for i := range out {
 					out[i] = tc.segment(i)
 				}
-				return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: out}}
+				return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: out}}
 			}
 
 			measure := func(segments int) uint64 {
@@ -800,15 +802,15 @@ func TestOpenSplineAreaRoundsOverSketchKnots(t *testing.T) {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
-	record, _, err := decad.RecordProfile(s, profiles[0])
+	record, _, err := momentinput.RecordProfile(s, profiles[0])
 	require.NoError(t, err)
 	require.Len(t, record.Outer.Segments, 2)
 
 	// Six control points put n−3 at 3, which is one of the affected counts: 4, 5,
 	// 7 and 11 controls have a power-of-two span count and cannot see this.
-	spline, ok := record.Outer.Segments[0].(decad.SplineSeg)
+	spline, ok := record.Outer.Segments[0].(sectionrecord.SplineSeg)
 	if !ok {
-		spline, ok = record.Outer.Segments[1].(decad.SplineSeg)
+		spline, ok = record.Outer.Segments[1].(sectionrecord.SplineSeg)
 	}
 	require.True(t, ok, "the loop carries the recorded spline")
 	require.Len(t, spline.Control, 6)
@@ -842,12 +844,12 @@ func TestFreeformProfileRefusals(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name    string
-		segment decad.CurveSegment
+		segment sectionrecord.CurveSegment
 		message string
 	}{
 		{
 			name: "elliptical arc",
-			segment: decad.EllipticalArcSeg{
+			segment: sectionrecord.EllipticalArcSeg{
 				Center:   decad.Point2{},
 				Start:    decad.Point2{U: 2},
 				End:      decad.Point2{V: 1},
@@ -861,7 +863,7 @@ func TestFreeformProfileRefusals(t *testing.T) {
 		},
 		{
 			name: "conic",
-			segment: decad.ConicSeg{
+			segment: sectionrecord.ConicSeg{
 				Start: decad.Point2{}, Apex: decad.Point2{U: 1, V: 1}, End: decad.Point2{U: 2},
 				Rho: 0.4, TStart: 0, TEnd: 1,
 			},
@@ -869,8 +871,8 @@ func TestFreeformProfileRefusals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			record := decad.ProfileRecord{
-				Outer: decad.LoopRecord{Segments: []decad.CurveSegment{tc.segment}},
+			record := momentinput.Profile{
+				Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{tc.segment}},
 			}
 			_, err := record.Area()
 			require.Error(t, err)
@@ -883,18 +885,18 @@ func TestFreeformProfileRefusals(t *testing.T) {
 // closedSplineRecordOf is a caller-built ClosedSplineSeg record over a ring of
 // controls — the shape the record-level work counter is calibrated on, since a
 // closed spline converts to one Bézier span per control point.
-func closedSplineRecordOf(controls int) decad.ProfileRecord {
-	segments := []decad.CurveSegment{closedSplineSegmentOf(controls, 10)}
-	return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+func closedSplineRecordOf(controls int) momentinput.Profile {
+	segments := []sectionrecord.CurveSegment{closedSplineSegmentOf(controls, 10)}
+	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 }
 
-func closedSplineSegmentOf(controls int, radius float64) decad.ClosedSplineSeg {
+func closedSplineSegmentOf(controls int, radius float64) sectionrecord.ClosedSplineSeg {
 	control := make([]decad.Point2, controls)
 	for i := range control {
 		angle := 2 * math.Pi * float64(i) / float64(controls)
 		control[i] = decad.Point2{U: radius * math.Cos(angle), V: radius * math.Sin(angle)}
 	}
-	return decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+	return sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
 }
 
 // A caller can hand a degree-1 NURBS segment millions of control points and no
@@ -918,8 +920,8 @@ func TestMalformedNURBSRefusesBeforeScanningControls(t *testing.T) {
 	for i := range control {
 		control[i] = decad.Point2{U: float64(i), V: float64(i % 3)}
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.NURBSSeg{Degree: 1, Control: control, TStart: 0, TEnd: 1},
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.NURBSSeg{Degree: 1, Control: control, TStart: 0, TEnd: 1},
 	}}}
 
 	var err error
@@ -940,7 +942,7 @@ func TestMalformedNURBSRefusesBeforeScanningControls(t *testing.T) {
 func TestFreeformWorkBudgetBoundsTheWholeRecord(t *testing.T) {
 	t.Parallel()
 	const controls = 700
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 		closedSplineSegmentOf(controls, 10),
 		closedSplineSegmentOf(controls, 3),
 	}}}
@@ -987,26 +989,26 @@ func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
 	control := []decad.Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}}
 	for _, tc := range []struct {
 		name    string
-		segment decad.CurveSegment
+		segment sectionrecord.CurveSegment
 	}{
 		{
 			name:    "spline NaN start",
-			segment: decad.SplineSeg{Control: control, TStart: math.NaN(), TEnd: 1},
+			segment: sectionrecord.SplineSeg{Control: control, TStart: math.NaN(), TEnd: 1},
 		},
 		{
 			name:    "spline Inf end",
-			segment: decad.SplineSeg{Control: control, TStart: 0, TEnd: math.Inf(1)},
+			segment: sectionrecord.SplineSeg{Control: control, TStart: 0, TEnd: math.Inf(1)},
 		},
 		{
 			name: "closed spline NaN end",
-			segment: decad.ClosedSplineSeg{
+			segment: sectionrecord.ClosedSplineSeg{
 				Control: []decad.Point2{{}, {U: 4}, {U: 2, V: 3}}, CCW: true,
 				TStart: 0, TEnd: math.NaN(),
 			},
 		},
 		{
 			name: "NURBS NaN start",
-			segment: decad.NURBSSeg{
+			segment: sectionrecord.NURBSSeg{
 				Degree: 1, Control: []decad.Point2{{}, {U: 1}},
 				Knots: []float64{0, 0, 1, 1}, Weights: []float64{1, 1},
 				TStart: math.NaN(), TEnd: 1,
@@ -1014,11 +1016,11 @@ func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
 		},
 		{
 			name:    "line NaN start",
-			segment: decad.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 1}, TStart: math.NaN(), TEnd: 1},
+			segment: sectionrecord.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 1}, TStart: math.NaN(), TEnd: 1},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{tc.segment}}}
+			record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{tc.segment}}}
 			_, err := record.Area()
 			require.Error(t, err)
 			require.ErrorIs(t, err, decad.ErrNotFinite)
@@ -1041,11 +1043,11 @@ func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
 // skipping it.
 func TestFreeformRecordedRangeRefusals(t *testing.T) {
 	t.Parallel()
-	spline := func(tStart, tEnd float64) decad.ProfileRecord {
+	spline := func(tStart, tEnd float64) momentinput.Profile {
 		record := recordSplineAndChord(t)
 		segments := slices.Clone(record.Outer.Segments)
 		for i, segment := range segments {
-			seg, ok := segment.(decad.SplineSeg)
+			seg, ok := segment.(sectionrecord.SplineSeg)
 			if !ok {
 				continue
 			}
@@ -1057,30 +1059,30 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 			seg.TStart, seg.TEnd = tStart, tEnd
 			segments[i] = seg
 		}
-		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+		return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 	}
-	closedSpline := func(tStart, tEnd float64) decad.ProfileRecord {
+	closedSpline := func(tStart, tEnd float64) momentinput.Profile {
 		control := make([]decad.Point2, len(closedSplineControls))
 		for i, c := range closedSplineControls {
 			control[i] = decad.Point2{U: c[0], V: c[1]}
 		}
-		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-			decad.ClosedSplineSeg{Control: control, CCW: true, TStart: tStart, TEnd: tEnd},
+		return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+			sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: tStart, TEnd: tEnd},
 		}}}
 	}
-	nurbs := func(tStart, tEnd float64) decad.ProfileRecord {
+	nurbs := func(tStart, tEnd float64) momentinput.Profile {
 		square := []decad.Point2{{}, {U: 1}, {U: 1, V: 1}, {V: 1}}
-		segments := make([]decad.CurveSegment, len(square))
+		segments := make([]sectionrecord.CurveSegment, len(square))
 		for i := range square {
 			edge := nurbsEdge(square[i], square[(i+1)%len(square)])
 			edge.TStart, edge.TEnd = tStart, tEnd
 			segments[i] = edge
 		}
-		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+		return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 	}
-	single := func(build func(tStart, tEnd float64) decad.CurveSegment) func(float64, float64) decad.ProfileRecord {
-		return func(tStart, tEnd float64) decad.ProfileRecord {
-			return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+	single := func(build func(tStart, tEnd float64) sectionrecord.CurveSegment) func(float64, float64) momentinput.Profile {
+		return func(tStart, tEnd float64) momentinput.Profile {
+			return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 				build(tStart, tEnd),
 			}}}
 		}
@@ -1088,11 +1090,11 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 	// A lone open FitSplineSeg does not close on itself the way a closed spline
 	// or the NURBS square do, so — like spline above — it needs the arrangement's
 	// own record of a curve-plus-chord region, with only the range overwritten.
-	fitSpline := func(tStart, tEnd float64) decad.ProfileRecord {
+	fitSpline := func(tStart, tEnd float64) momentinput.Profile {
 		record := recordFitSplineAndChord(t)
 		segments := slices.Clone(record.Outer.Segments)
 		for i, segment := range segments {
-			seg, ok := segment.(decad.FitSplineSeg)
+			seg, ok := segment.(sectionrecord.FitSplineSeg)
 			if !ok {
 				continue
 			}
@@ -1102,23 +1104,23 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 			seg.TStart, seg.TEnd = tStart, tEnd
 			segments[i] = seg
 		}
-		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+		return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 	}
-	ellipticalArc := single(func(tStart, tEnd float64) decad.CurveSegment {
-		return decad.EllipticalArcSeg{
+	ellipticalArc := single(func(tStart, tEnd float64) sectionrecord.CurveSegment {
+		return sectionrecord.EllipticalArcSeg{
 			Center: decad.Point2{}, Start: decad.Point2{U: 2}, End: decad.Point2{V: 1},
 			Rx: units.Millimeters(2), Ry: units.Millimeters(1), Rotation: units.Radians(0),
 			TStart: tStart, TEnd: tEnd,
 		}
 	})
-	conic := single(func(tStart, tEnd float64) decad.CurveSegment {
-		return decad.ConicSeg{
+	conic := single(func(tStart, tEnd float64) sectionrecord.CurveSegment {
+		return sectionrecord.ConicSeg{
 			Start: decad.Point2{}, Apex: decad.Point2{U: 1, V: 1}, End: decad.Point2{U: 2},
 			Rho: 0.4, TStart: tStart, TEnd: tEnd,
 		}
 	})
-	ellipse := single(func(tStart, tEnd float64) decad.CurveSegment {
-		return decad.EllipseSeg{
+	ellipse := single(func(tStart, tEnd float64) sectionrecord.CurveSegment {
+		return sectionrecord.EllipseSeg{
 			Center: decad.Point2{}, Rx: units.Millimeters(2), Ry: units.Millimeters(1),
 			Rotation: units.Radians(0), CCW: true, TStart: tStart, TEnd: tEnd,
 		}
@@ -1126,7 +1128,7 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		of   func(tStart, tEnd float64) decad.ProfileRecord
+		of   func(tStart, tEnd float64) momentinput.Profile
 		// fullSentinel is nil where the kind measures over its full domain.
 		fullSentinel error
 		fullMessage  string
@@ -1154,7 +1156,7 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			measure := func(t *testing.T, record decad.ProfileRecord) error {
+			measure := func(t *testing.T, record momentinput.Profile) error {
 				t.Helper()
 				_, err := record.Area()
 				return err
@@ -1186,7 +1188,7 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 			})
 
 			t.Run("non-finite", func(t *testing.T) {
-				for _, record := range []decad.ProfileRecord{
+				for _, record := range []momentinput.Profile{
 					tc.of(math.NaN(), 1),
 					tc.of(0, math.Inf(1)),
 					tc.of(math.Inf(-1), math.NaN()),
@@ -1218,8 +1220,8 @@ func TestEqualWeightNURBSMeasuresAtEveryMagnitude(t *testing.T) {
 			for i := range weights {
 				weights[i] = weight
 			}
-			record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-				decad.NURBSSeg{
+			record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+				sectionrecord.NURBSSeg{
 					Degree:  1,
 					Control: square,
 					Knots:   []float64{0, 0, 0.25, 0.5, 0.75, 1, 1},
@@ -1256,8 +1258,8 @@ func TestUnderflowingSplineAreaPublishesBoundedZero(t *testing.T) {
 	for i, c := range controls {
 		control[i] = decad.Point2{U: c[0], V: c[1]}
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
 	}}}
 
 	area, err := record.Area()
@@ -1283,8 +1285,8 @@ func TestUnderflowingSplineCentroidDividesExactly(t *testing.T) {
 	for i, c := range closedSplineControls {
 		control[i] = decad.Point2{U: c[0] * scale, V: c[1] * scale}
 	}
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
 	}}}
 
 	area, err := record.Area()
@@ -1315,11 +1317,11 @@ func TestUnderflowingSplineCentroidDividesExactly(t *testing.T) {
 func TestFreeformCentroidRoundsOnce(t *testing.T) {
 	t.Parallel()
 	square := []decad.Point2{{}, {U: 1}, {U: 1, V: 1}, {V: 1}}
-	segments := make([]decad.CurveSegment, len(square))
+	segments := make([]sectionrecord.CurveSegment, len(square))
 	for i := range square {
 		segments[i] = nurbsEdge(square[i], square[(i+1)%len(square)])
 	}
-	exactCentroid, err := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}.Centroid()
+	exactCentroid, err := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}.Centroid()
 	require.NoError(t, err)
 	require.Equal(t, 0.5, exactCentroid.Value.X)
 	require.Equal(t, 0.5, exactCentroid.Value.Y)
@@ -1353,9 +1355,9 @@ func TestFreeformCentroidRoundsOnce(t *testing.T) {
 func TestDegenerateSplineRecordRefuses(t *testing.T) {
 	t.Parallel()
 	same := decad.Point2{U: 3, V: 3}
-	record := decad.ProfileRecord{
-		Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-			decad.ClosedSplineSeg{Control: []decad.Point2{same, same, same}, CCW: true, TStart: 0, TEnd: 1},
+	record := momentinput.Profile{
+		Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+			sectionrecord.ClosedSplineSeg{Control: []decad.Point2{same, same, same}, CCW: true, TStart: 0, TEnd: 1},
 		}},
 	}
 	_, err := record.Area()
@@ -1383,7 +1385,7 @@ func TestExtrudeClosedSplineProfileBuilds(t *testing.T) {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 
-	record, _, err := decad.RecordProfile(s, profiles[0])
+	record, _, err := momentinput.RecordProfile(s, profiles[0])
 	require.NoError(t, err)
 	area, err := record.Area()
 	require.NoError(t, err)
@@ -1476,12 +1478,12 @@ func TestExtrudeSplineProfileSpendsOneWorkCeiling(t *testing.T) {
 // Each arc sweeps exactly a quarter turn, so sketch chords it 64 times and the
 // record's chord total is 64n whatever the arcs enclose. Nothing in it is
 // free-form.
-func scallopedDiskRecord(n int) decad.ProfileRecord {
+func scallopedDiskRecord(n int) momentinput.Profile {
 	vertex := func(i int) decad.Point2 {
 		angle := 2 * math.Pi * float64(i) / float64(n)
 		return decad.Point2{U: 10 * math.Cos(angle), V: 10 * math.Sin(angle)}
 	}
-	segments := make([]decad.CurveSegment, n)
+	segments := make([]sectionrecord.CurveSegment, n)
 	for i := range segments {
 		start, end := vertex(i), vertex((i+1)%n)
 		middle := decad.Point2{U: (start.U + end.U) / 2, V: (start.V + end.V) / 2}
@@ -1489,7 +1491,7 @@ func scallopedDiskRecord(n int) decad.ProfileRecord {
 		// what makes the sweep from Start to End a quarter turn.
 		reach := math.Hypot(end.U-start.U, end.V-start.V) / 2
 		outward := math.Hypot(middle.U, middle.V)
-		segments[i] = decad.ArcSeg{
+		segments[i] = sectionrecord.ArcSeg{
 			Center: decad.Point2{
 				U: middle.U - reach*middle.U/outward,
 				V: middle.V - reach*middle.V/outward,
@@ -1500,7 +1502,7 @@ func scallopedDiskRecord(n int) decad.ProfileRecord {
 			TEnd:   1,
 		}
 	}
-	return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 }
 
 // scallopedDiskArea is the same shape's area in closed form: the regular n-gon
@@ -1532,11 +1534,11 @@ func TestSharedAnalyticEntityIsChargedOnce(t *testing.T) {
 		if !profile.Valid {
 			continue
 		}
-		record, _, err := decad.RecordProfile(s, profile)
+		record, _, err := momentinput.RecordProfile(s, profile)
 		require.NoError(t, err)
 		circles := 0
 		for _, segment := range record.Outer.Segments {
-			if _, ok := segment.(decad.CircleSeg); ok {
+			if _, ok := segment.(sectionrecord.CircleSeg); ok {
 				circles++
 			}
 		}
@@ -1556,7 +1558,7 @@ func TestSharedAnalyticEntityIsChargedOnce(t *testing.T) {
 // recordPlateWithCircularHoles records the one profile that contains every
 // circular hole. It uses the same solved sketch as callers do, so the regression
 // covers both RecordProfile and ProfileRecord.Area.
-func recordPlateWithCircularHoles(t *testing.T, holes int) (decad.ProfileRecord, float64) {
+func recordPlateWithCircularHoles(t *testing.T, holes int) (momentinput.Profile, float64) {
 	t.Helper()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -1574,14 +1576,14 @@ func recordPlateWithCircularHoles(t *testing.T, holes int) (decad.ProfileRecord,
 		if !profile.Valid {
 			continue
 		}
-		record, _, err := decad.RecordProfile(s, profile)
+		record, _, err := momentinput.RecordProfile(s, profile)
 		require.NoError(t, err)
 		if len(record.Holes) == holes {
 			return record, profile.Area
 		}
 	}
 	require.FailNowf(t, "profile", "no profile records all %d circular holes", holes)
-	return decad.ProfileRecord{}, 0
+	return momentinput.Profile{}, 0
 }
 
 // The reconstruction counter must admit ordinary analytic plates with several

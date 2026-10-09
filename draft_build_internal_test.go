@@ -74,7 +74,7 @@ func TestDraftPayloadRecordsTheFarSection(t *testing.T) {
 	require.Len(t, dp.far.Outer.Segments, 4)
 	require.Empty(t, dp.far.Holes)
 	for _, seg := range dp.far.Outer.Segments {
-		if arc, ok := seg.(ArcSeg); ok {
+		if arc, ok := seg.(arcSeg); ok {
 			require.InDelta(t, 5-dp.d, math.Hypot(arc.Start.U-arc.Center.U, arc.Start.V-arc.Center.V), 1e-12)
 		}
 	}

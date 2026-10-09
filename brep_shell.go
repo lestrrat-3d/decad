@@ -116,7 +116,7 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 			j: read.Axis, w0: read.LowerFace, w1: read.UpperFace,
 			loop0: read.LowerLoop, loop1: read.UpperLoop,
 			lo: read.Lo, hi: read.Hi, walls: read.Walls, frameEmb: read.FrameEmbed,
-			prism: prismPayload{profile: ProfileRecord{Outer: read.Outer},
+			prism: prismPayload{profile: profileRecord{Outer: read.Outer},
 				frame: read.Frame, z0: read.Lo, z1: read.Hi, xform: bp.xform},
 		})
 	}
@@ -183,7 +183,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	if err != nil {
 		return nil, err
 	}
-	dilated := make([]ProfileRecord, len(tc.tools))
+	dilated := make([]profileRecord, len(tc.tools))
 	for i, tool := range tc.tools {
 		dilated[i], err = offsetProfile(budget, tool.prism.profile, -1, call.tmm)
 		if err != nil {
@@ -247,7 +247,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 // throughSection is A ⊖ t's section: eroded, and for a removed wall run the
 // side opening's proven section displacement (shell-opening §4.4).
 type throughSection struct {
-	eroded ProfileRecord
+	eroded profileRecord
 	delta  float64
 }
 
@@ -362,7 +362,7 @@ func throughCapsCount(bp brepPayload, embeds []brepEmbed, k int) int {
 // strips along some axis, by exact rational comparison. The strips are
 // widened by the thickness's conversion bound and cover the dilated record's
 // own box. A box that is not separated is SG6. The test only refuses.
-func (tc throughCut) requireStripsClear(bp brepPayload, i int, dilated ProfileRecord, tmm, tDelta float64) error {
+func (tc throughCut) requireStripsClear(bp brepPayload, i int, dilated profileRecord, tmm, tDelta float64) error {
 	tool := tc.tools[i]
 	separated, err := throughshell.StripsClear(throughshell.StripInput{
 		Tool: tool.prism.profile, Dilated: dilated, Receiver: tc.caps.Section,
@@ -392,7 +392,7 @@ func (tc throughCut) requireStripsClear(bp brepPayload, i int, dilated ProfileRe
 // is told that charge: class B widens every box it compares by it, so a
 // recorded gap within it refuses, and it refuses its crossing reach while the
 // charge is positive, since that reach charges its crossings nothing for it.
-func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded ProfileRecord, dilated []ProfileRecord, rm throughRemoval, call brepShellCall, delta float64) (brepPayload, error) {
+func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded profileRecord, dilated []profileRecord, rm throughRemoval, call brepShellCall, delta float64) (brepPayload, error) {
 	step := func(from, d, by float64) (float64, float64) {
 		to := from + by
 		return to, proofbound.AbsSumUpper(d, call.tDelta, proofarith.AddRoundError(from, by, to))

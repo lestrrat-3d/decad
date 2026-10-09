@@ -118,7 +118,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 
 	perimeter := proofbound.BoundedScalar{}
 	walks := 0
-	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
+	loops := append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	for _, loop := range loops {
 		walks += len(loop.Segments)
 	}
@@ -338,7 +338,7 @@ func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
 // Exact only where every end meeting there is a recorded coordinate it holds
 // verbatim (topology.go's Vertex.Position contract). proofbound.WalkEndBoundAllow
 // carries the per-component bound into world space.
-func junctionVertexAt(segs []CurveSegment, prev, next survey2d.SideWalk) (float64, float64, float64) {
+func junctionVertexAt(segs []curveSegment, prev, next survey2d.SideWalk) (float64, float64, float64) {
 	u, v, bound := boundarywalk.JunctionVertex(
 		segs[prev.Segs[len(prev.Segs)-1]], prev.SegmentWalk, segs[next.Segs[0]], next.SegmentWalk)
 	return u, v, proofbound.WalkEndBoundAllow(bound)
@@ -525,7 +525,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 // straight-prism build, false from every other caller (shell_cup.go,
 // capblend_moments.go), which mint no curve identity for their own rim and
 // so keep every certificate check refusing by default.
-func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
+func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
 	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens)
 }
 
@@ -561,7 +561,7 @@ func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPay
 // what keeps two separate builds from ever sharing one (denotation.go).
 // False for every OTHER caller of this function, which mints no curve
 // identity for their own rim.
-func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
+func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
 	mintCurve := func() curveToken {
 		if !mintCurveTokens {
 			return curveToken{}

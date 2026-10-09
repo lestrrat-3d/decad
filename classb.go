@@ -279,11 +279,11 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, pla
 // nothing: a datum plane and its CreateOffsetPlane at a float distance meet
 // that, and a pair whose sums would round misses.
 func classBShiftedTool(ref r3.Frame, y prismPayload, g r3.Frame) (prismPayload, bool) {
-	loops := append([]LoopRecord{y.profile.Outer}, y.profile.Holes...)
+	loops := append([]loopRecord{y.profile.Outer}, y.profile.Holes...)
 	moved, z0, z1, ok := classbgeom.ShiftedRecord(ref, y.frame, g, loops, y.z0, y.z1)
 	out := y
 	out.frame = g
-	out.profile = ProfileRecord{Outer: moved[0], Holes: moved[1:]}
+	out.profile = profileRecord{Outer: moved[0], Holes: moved[1:]}
 	out.z0, out.z1 = z0, z1
 	out.walks = nil
 	return out, ok
@@ -367,7 +367,7 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 		out.faces = append(out.faces, brepFace{frame: cp.g, region: &region, outward: s.Outward, sweep: s.Sweep,
 			z0: s.Level, z1: s.Level, z0Delta: s.LevelDelta, z1Delta: s.LevelDelta, delta: s.Delta})
 	}
-	walls := func(loop LoopRecord, lo, hi end) {
+	walls := func(loop loopRecord, lo, hi end) {
 		for _, seg := range loop.Segments {
 			out.faces = append(out.faces, brepFace{frame: cp.g, wall: seg,
 				z0: lo.level, z1: hi.level, z0Delta: lo.delta, z1Delta: hi.delta})
@@ -415,29 +415,29 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 // face: its region and Y's section, both in g, resolved by prism-boolean's
 // clean-nesting Cut match and authenticated through RecordProfile. matched
 // is false when the scene returned no such match.
-func classBPerpendicularRegion(ctx context.Context, cp classBPair, region ProfileRecord) (ProfileRecord, bool, error) {
+func classBPerpendicularRegion(ctx context.Context, cp classBPair, region profileRecord) (profileRecord, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	target := prismPayload{profile: region, frame: cp.g, xform: cp.x.xform, z0: 0, z1: 1}
 	tool := prismPayload{profile: cp.y.profile, frame: cp.g, xform: cp.x.xform, z0: 0, z1: 1}
 	segments, within, err := prismcells.RegionsWithinWorkCap(budget, target.profile, tool.profile)
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	if !within {
-		return ProfileRecord{}, false, fmt.Errorf(`%w: the class-B face scene charges at least %d arranger segments against this evaluator's cap of %d`,
+		return profileRecord{}, false, fmt.Errorf(`%w: the class-B face scene charges at least %d arranger segments against this evaluator's cap of %d`,
 			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(tool))
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	s, match, sceneDelta, resolved, err := resolvePrismCut(ctx, budget, target, tool, reexpress)
 	if err != nil || !resolved || sceneDelta.A != 0 || sceneDelta.B != 0 {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	profile, err := prismRecordProfileContext(ctx, s, match)
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return profileRecord{}, false, err
 	}
 	return profile, true, nil
 }

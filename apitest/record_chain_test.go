@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -32,13 +33,13 @@ func TestRecordChainGates(t *testing.T) {
 	// Foreign: the chain's plane-local coordinates belong to its own sketch.
 	other, err := w.CreateSketch(w.XZ())
 	require.NoError(t, err)
-	_, _, err = decad.RecordChain(other, ch)
+	_, _, err = sketchrecord.RecordChain(other, ch)
 	require.ErrorIs(t, err, decad.ErrForeignProfile)
 
 	// Nil input is degenerate, not a panic.
-	_, _, err = decad.RecordChain(s, nil)
+	_, _, err = sketchrecord.RecordChain(s, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, _, err = decad.RecordChain(nil, ch)
+	_, _, err = sketchrecord.RecordChain(nil, ch)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
 	// Stale: move the geometry after the snapshot.
@@ -46,12 +47,12 @@ func TestRecordChainGates(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.True(t, ch.IsStale(), "the solve should have moved the sketch under the chain")
-	_, _, err = decad.RecordChain(s, ch)
+	_, _, err = sketchrecord.RecordChain(s, ch)
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 
 	// A fresh chain records again.
 	fresh := s.Chains()[0]
-	_, _, err = decad.RecordChain(s, fresh)
+	_, _, err = sketchrecord.RecordChain(s, fresh)
 	require.NoError(t, err)
 }
 
@@ -80,7 +81,7 @@ func TestRecordChainRejectsForeignBoundaryEntity(t *testing.T) {
 	require.NoError(t, err)
 
 	ch.Edges[0].Entity = foreign.Chains()[0].Entities[0]
-	_, _, err = decad.RecordChain(s, ch)
+	_, _, err = sketchrecord.RecordChain(s, ch)
 	require.ErrorIs(t, err, decad.ErrForeignProfile)
 }
 
@@ -102,7 +103,7 @@ func TestRecordChainRejectsTypedNilBoundaryEntity(t *testing.T) {
 	ch := s.Chains()[0]
 	ch.Edges[0].Entity = (*sketch.Line)(nil)
 
-	_, _, err = decad.RecordChain(s, ch)
+	_, _, err = sketchrecord.RecordChain(s, ch)
 	require.ErrorIs(t, err, decad.ErrForeignProfile)
 }
 
@@ -123,6 +124,6 @@ func TestRecordChainRejectsChangedSnapshot(t *testing.T) {
 	require.Len(t, chains, 2)
 	chains[0].Edges = chains[1].Edges
 
-	_, _, err = decad.RecordChain(s, chains[0])
+	_, _, err = sketchrecord.RecordChain(s, chains[0])
 	require.ErrorIs(t, err, decad.ErrInvalidProfile)
 }

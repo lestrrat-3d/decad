@@ -25,17 +25,17 @@ func internalBoxGroup(t *testing.T, doc *Document) (*Body, stackedPrismPayload) 
 
 func TestPrismGroupRegionsDisjointProof(t *testing.T) {
 	doc := New()
-	box := func(x0, y0, x1, y1 float64) ProfileRecord {
+	box := func(x0, y0, x1, y1 float64) profileRecord {
 		return internalBoxBody(t, doc, x0, y0, x1, y1, 1).payload.(prismPayload).profile
 	}
 	cases := []struct {
 		name    string
-		regions []ProfileRecord
+		regions []profileRecord
 		want    bool
 	}{
-		{"apart", []ProfileRecord{box(0, 0, 5, 5), box(10, 0, 15, 5)}, true},
-		{"crossing", []ProfileRecord{box(0, 0, 5, 5), box(3, 3, 8, 8)}, false},
-		{"nested", []ProfileRecord{box(0, 0, 10, 10), box(3, 3, 6, 6)}, false},
+		{"apart", []profileRecord{box(0, 0, 5, 5), box(10, 0, 15, 5)}, true},
+		{"crossing", []profileRecord{box(0, 0, 5, 5), box(3, 3, 8, 8)}, false},
+		{"nested", []profileRecord{box(0, 0, 10, 10), box(3, 3, 6, 6)}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -60,7 +60,7 @@ func TestPrismGroupPayloadAudit(t *testing.T) {
 			sp.interfaces = []prismSlabInterface{{}}
 		}, ErrUnsupported},
 		{"empty interval", func(sp *stackedPrismPayload) { sp.slabs[0].z1 = sp.slabs[0].z0 }, ErrDegenerate},
-		{"empty region", func(sp *stackedPrismPayload) { sp.slabs[0].regions[1] = ProfileRecord{} }, ErrDegenerate},
+		{"empty region", func(sp *stackedPrismPayload) { sp.slabs[0].regions[1] = profileRecord{} }, ErrDegenerate},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -176,7 +176,7 @@ func TestPrismGroupDisplacedToolChargesTheCrossing(t *testing.T) {
 		re, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(toolOp.proxy))
 		require.NoError(t, err)
 		require.False(t, re.Identity)
-		s, _, _, err := buildPrismSceneRegions(proofbound.NewWorkBudget(t.Context()), []ProfileRecord{target.profile}, toolOp.regions, re)
+		s, _, _, err := buildPrismSceneRegions(proofbound.NewWorkBudget(t.Context()), []profileRecord{target.profile}, toolOp.regions, re)
 		require.NoError(t, err)
 		split, err := prismcells.HasSplitBoundary(proofbound.NewWorkBudget(t.Context()), s.Profiles())
 		require.NoError(t, err)

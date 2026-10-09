@@ -26,13 +26,13 @@ import (
 // the record build reads beside them.
 type sideOpeningSection struct {
 	// wall is W, the wall section over the cavity's height.
-	wall ProfileRecord
+	wall profileRecord
 	// cavity is the region each kept cap's interface exposes: C inward (K'
 	// then R'), the receiver's section P outward.
-	cavity ProfileRecord
+	cavity profileRecord
 	// caps is the region of a kept cap's slab: P inward, O outward (K' then
 	// R').
-	caps ProfileRecord
+	caps profileRecord
 	// corners lists each end vertex v the record must mark a vertex at both
 	// cavity levels (§4.3): where the rim runs backward along the removed
 	// walk's carrier, v lies inside the cavity's walk there; where that
@@ -148,7 +148,7 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 		chain = append(chain, walks[(run[len(run)-1]+k)%n])
 	}
 	segs := pp.profile.Outer.Segments
-	var kept []CurveSegment
+	var kept []curveSegment
 	for _, w := range chain {
 		for _, si := range w.Segs {
 			kept = append(kept, segs[si])
@@ -205,7 +205,7 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
-	offRegion := ProfileRecord{Outer: LoopRecord{Segments: append(append([]CurveSegment(nil), off.Segs...), recut...)}}
+	offRegion := profileRecord{Outer: loopRecord{Segments: append(append([]curveSegment(nil), off.Segs...), recut...)}}
 	// P as the record states it: the receiver's own section, or, where an
 	// oblique or circular end walk takes a forward cut, K then R split at
 	// that cut.
@@ -215,16 +215,16 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 		if err != nil {
 			return sideOpeningSection{}, err
 		}
-		section = ProfileRecord{Outer: LoopRecord{Segments: append(append([]CurveSegment(nil), kept...), split...)}}
+		section = profileRecord{Outer: loopRecord{Segments: append(append([]curveSegment(nil), kept...), split...)}}
 	}
-	sec := sideOpeningSection{wall: ProfileRecord{Outer: wallLoop}, cavity: offRegion, caps: section}
+	sec := sideOpeningSection{wall: profileRecord{Outer: wallLoop}, cavity: offRegion, caps: section}
 	if !inward {
 		sec.cavity, sec.caps = section, offRegion
 	}
 
 	// §4.7 step 2: modify §5's audit of W and of the offset region (C inward,
 	// O outward); together they hold every pair of a new segment with another.
-	for _, region := range []ProfileRecord{sec.wall, offRegion} {
+	for _, region := range []profileRecord{sec.wall, offRegion} {
 		if err := auditOffsetSectionBudget(budget, pp.profile, region); err != nil {
 			return sideOpeningSection{}, err
 		}

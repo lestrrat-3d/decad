@@ -349,18 +349,18 @@ func capContourPerimeterUpper(capCo []coedge) float64 {
 // as a standalone
 // LoopRecord, used to compute a chamfered cap's per-loop enclosed area and
 // the band's closing disk at the cap level.
-func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecord, error) {
+func capLoopBoundary(ctx context.Context, loop loopRecord, d float64) (loopRecord, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
 	cl, err := oneLoopCornerLoop(budget, loop, work)
 	if err != nil {
-		return LoopRecord{}, err
+		return loopRecord{}, err
 	}
 	segs, err := offset2d.BuildLoop(budget, cl.walks, 1, d, shellTol)
 	if err != nil {
-		return LoopRecord{}, err
+		return loopRecord{}, err
 	}
-	return LoopRecord{Segments: segs}, nil
+	return loopRecord{Segments: segs}, nil
 }
 
 // contourOf is capLoopBoundary read under cbp's corner rule for loop li: a
@@ -368,26 +368,26 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 // (offset2d.BuildSharpLoop), every corner mitered and each walk moved its own
 // amount (walkAmounts), where a chamfer's cap contour closes a reflex corner
 // with an arc.
-func (cbp capBlendPayload) contourOf(ctx context.Context, li int, loop LoopRecord, d float64) (LoopRecord, error) {
+func (cbp capBlendPayload) contourOf(ctx context.Context, li int, loop loopRecord, d float64) (loopRecord, error) {
 	if !cbp.draft {
 		return capLoopBoundary(ctx, loop, d)
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
 	if err != nil {
-		return LoopRecord{}, err
+		return loopRecord{}, err
 	}
 	segs, _, err := offset2d.BuildSharpLoop(budget, cl.walks, cbp.walkAmounts(li, cl.walks, d), shellTol)
 	if err != nil {
-		return LoopRecord{}, wrapDraftOffsetError(err)
+		return loopRecord{}, wrapDraftOffsetError(err)
 	}
-	return LoopRecord{Segments: segs}, nil
+	return loopRecord{Segments: segs}, nil
 }
 
 // readBandMass adapts the payload and built band to the recorded readings both
 // mass integrals consume. The root package owns the offset contour and the
 // authenticated loop areas; internal/capband owns their flux composition.
-func readBandMass(ctx context.Context, li int, loop LoopRecord, cbp capBlendPayload,
+func readBandMass(ctx context.Context, li int, loop loopRecord, cbp capBlendPayload,
 	geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure) (capband.BandMassInput, error) {
 	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)

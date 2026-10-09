@@ -134,15 +134,15 @@ func TestOffsetSectionDeltaEnclosesDenotedOffset(t *testing.T) {
 				offset = cp.outer
 			}
 			var radii []*big.Rat
-			for _, loop := range append([]LoopRecord{offset.Outer}, offset.Holes...) {
+			for _, loop := range append([]loopRecord{offset.Outer}, offset.Holes...) {
 				for _, seg := range loop.Segments {
 					var ends []Point2
 					switch g := seg.(type) {
-					case LineSeg:
+					case lineSeg:
 						ends = []Point2{g.Start, g.End}
-					case ArcSeg:
+					case arcSeg:
 						ends = []Point2{g.Start, g.End}
-					case CircleSeg:
+					case circleSeg:
 						rr, err := g.Radius.In(units.Millimeter)
 						require.NoError(t, err)
 						radii = append(radii, r(rr))

@@ -547,12 +547,12 @@ A `switch` on `Surface` MUST carry a `default` — vN adds variants.
 The rest of the vocabulary the signatures above and below name. Shapes given here
 are load-bearing; the rest are deferred, not undecided.
 
-**Profile records and provenance.** `RecordProfile` converts a live sketch profile and plane into structural, plane-local `ProfileRecord` and `PlaneRecord` values. The evaluator uses those records internally for analytic construction and measurement. They are geometry snapshots, not a serialized model or replay format.
-
-`MeasureProfile` authenticates the same live sketch profile and returns a
+**Profile measurements and provenance.** `MeasureProfile` authenticates a live
+sketch profile and returns a
 `MeasuredProfile` snapshot. Its `Area`, `Centroid`, and `SecondMoments` methods
-give bounded plane-local 2D readings without exposing the evaluator's curve
-records. Callers obtain the sketch plane through `s.Plane().Frame()` when they
+give bounded plane-local 2D readings. The evaluator's curve records stay in
+`internal/`; they are geometry snapshots, not a serialized model or replay
+format. Callers obtain the sketch plane through `s.Plane().Frame()` when they
 need to place the centroid in world coordinates. Each method reports its own
 unsupported or degenerate input independently of the other readings.
 
@@ -769,7 +769,7 @@ handed over, and it never solves for one. What decad reads of a
 `BoundaryEdge`, why a residual test cannot be an admission gate, and the
 whole-edge rules are specified in `docs/sketch-seam-design.md`.
 
-**An OPEN sketch curve reaches the same seam, through `RecordChain`.** A
+**An OPEN sketch curve reaches the same internal recording path.** A
 `sketch.Chain` is `Profile`'s open counterpart — an ordered run of the same
 `BoundaryEdge` values, carrying the same `TStart`/`TEnd`/`TExact` trim contract
 and the same `Sketch()`/`Revision()`/`IsStale()` handles — so every rule above
@@ -1087,7 +1087,8 @@ consumes nothing.** All four build the part of their reach
 span and `LoftChain` rules a `LineSeg`-only correspondence between two
 exactly-parallel walks, and each refuses the rest at the call with
 `ErrUnsupported`. All four run §7's four gates over
-`RecordChain` and return the same four sentinels a profile earns, and there is
+the internal chain recording path and return the same four sentinels a profile
+earns, and there is
 no chain-fed `Document.Patch`: an open walk encloses no region to fill, and a
 walk whose ends met is a `sketch.Profile`.
 

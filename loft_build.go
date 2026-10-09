@@ -45,8 +45,8 @@ import (
 // rest the two caps' own triangulations — kept on the payload so a later
 // Tessellate (PR 2) restates it rather than rebuilding it.
 type loftPayload struct {
-	profile0, profile1 ProfileRecord
-	plane0, plane1     PlaneRecord
+	profile0, profile1 profileRecord
+	plane0, plane1     planeRecord
 	frame0, frame1     r3.Frame
 	alignment          []int
 	xform              r3.Transform

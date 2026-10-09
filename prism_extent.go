@@ -119,14 +119,14 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.Fre
 }
 
 // boundaryExtremesBoundedContext adapts recorded profile walks for prismextent.
-func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, float64, float64, error) {
+func boundaryExtremesBoundedContext(ctx context.Context, profile profileRecord, gu, gv float64, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, float64, float64, error) {
 	if err := freeform.RequireFiniteDirection(gu, gv); err != nil {
 		return 0, 0, 0, err
 	}
 	if walks != nil && !walks.Matches(profile) {
 		return 0, 0, 0, momentinput.ErrResolvedWalksMismatch
 	}
-	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
+	loops := append([]loopRecord{profile.Outer}, profile.Holes...)
 	counts := make([]int, len(loops))
 	for li, loop := range loops {
 		counts[li] = len(loop.Segments)

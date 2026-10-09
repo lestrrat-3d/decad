@@ -467,7 +467,7 @@ type ChainRevolveOption interface {
 // §3.4 is what first builds more than one, one lump per surviving walk, and
 // sets sectionDelta beside them.
 type chainRevolvePayload struct {
-	chains     []ChainRecord
+	chains     []chainRecord
 	frame      r3.Frame
 	ax         axisFrame
 	phi0, phi1 float64
@@ -496,9 +496,9 @@ type chainRevolvePayload struct {
 // this view feeds walks the segments and cares about neither winding nor
 // closure.
 func (rp chainRevolvePayload) revolve() revolvePayload {
-	profile := ProfileRecord{Outer: LoopRecord(rp.chains[0])}
+	profile := profileRecord{Outer: loopRecord(rp.chains[0])}
 	for _, c := range rp.chains[1:] {
-		profile.Holes = append(profile.Holes, LoopRecord(c))
+		profile.Holes = append(profile.Holes, loopRecord(c))
 	}
 	return revolvePayload{
 		profile: profile,
@@ -518,7 +518,7 @@ func (rp chainRevolvePayload) revolve() revolvePayload {
 // face role, so two walks' faces never collide on one role string.
 func (rp chainRevolvePayload) walkView(ci int) revolvePayload {
 	view := rp.revolve()
-	view.profile = ProfileRecord{Outer: LoopRecord(rp.chains[ci])}
+	view.profile = profileRecord{Outer: loopRecord(rp.chains[ci])}
 	return view
 }
 
@@ -599,7 +599,7 @@ func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a
 	// axis gates below, the chain wall build and the final bounds reading all
 	// spend from the same ceiling.
 	work := freeform.NewFreeformWork()
-	chainProfile := ProfileRecord{Outer: LoopRecord(chain)}
+	chainProfile := profileRecord{Outer: loopRecord(chain)}
 	ax, side, err := resolveAxisSide(context.Background(), chainProfile, line, work)
 	if err != nil {
 		return nil, err
@@ -615,7 +615,7 @@ func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a
 
 	ref := d.nextProducerID()
 	body, err := evalChainRevolveContext(context.Background(), d, ref, chainRevolvePayload{
-		chains: []ChainRecord{chain},
+		chains: []chainRecord{chain},
 		frame:  frame,
 		ax:     ax,
 		phi0:   phi0, phi1: phi1,

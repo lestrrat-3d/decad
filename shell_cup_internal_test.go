@@ -62,7 +62,7 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cp := cupPayloadFor(pp, ProfileRecord{}, tt.sense, thickness, thicknessDelta, 0, tt.removedEnd)
+			cp := cupPayloadFor(pp, profileRecord{}, tt.sense, thickness, thicknessDelta, 0, tt.removedEnd)
 			require.Equal(t, tt.openDelta, cp.openScalar().Bound)
 			require.Equal(t, tt.outerDelta, cp.outerScalar().Bound)
 			require.Equal(t, tt.cavDelta, cp.cavityScalar().Bound)

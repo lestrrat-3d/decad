@@ -232,15 +232,15 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 		require.Equal(t, r3.NewVec(0, 0, 1), r.pp.frame.U())
 		require.Equal(t, r3.NewVec(1, 0, 0), r.pp.frame.V())
 		require.Equal(t, r3.NewVec(0, 1, 0), r.pp.frame.N())
-		line := func(u0, v0, u1, v1 float64) CurveSegment {
-			return LineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1}
+		line := func(u0, v0, u1, v1 float64) curveSegment {
+			return lineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1}
 		}
-		want := ProfileRecord{
-			Outer: LoopRecord{Segments: []CurveSegment{
+		want := profileRecord{
+			Outer: loopRecord{Segments: []curveSegment{
 				line(0, 40, 0, 0), line(0, 0, 20, 0), line(20, 0, 20, 40), line(20, 40, 0, 40),
 			}},
-			Holes: []LoopRecord{{Segments: []CurveSegment{
-				CircleSeg{Center: Point2{U: 10, V: 20}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0},
+			Holes: []loopRecord{{Segments: []curveSegment{
+				circleSeg{Center: Point2{U: 10, V: 20}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0},
 			}}},
 		}
 		require.Equal(t, want, r.pp.profile)
@@ -256,7 +256,7 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 	t.Run("wall against its material", func(t *testing.T) {
 		t.Parallel()
 		bp := internalCrossDrilledBrep(t)
-		bp.faces[6].wall = CircleSeg{Center: Point2{U: 20, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
+		bp.faces[6].wall = circleSeg{Center: Point2{U: 20, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
 		_, ok := read(t, bp, 1)
 		require.False(t, ok)
 	})
@@ -296,14 +296,14 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 func internalTwoHoleBrep(t *testing.T) brepPayload {
 	t.Helper()
 	bp := internalCrossDrilledBrep(t)
-	hole := func(x float64) LoopRecord {
-		return LoopRecord{Segments: []CurveSegment{
-			CircleSeg{Center: Point2{U: x, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0},
+	hole := func(x float64) loopRecord {
+		return loopRecord{Segments: []curveSegment{
+			circleSeg{Center: Point2{U: x, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0},
 		}}
 	}
 	outer := bp.faces[4].region.Outer
-	bottom := ProfileRecord{Outer: outer, Holes: []LoopRecord{hole(30), hole(10)}}
-	top := ProfileRecord{Outer: outer, Holes: []LoopRecord{hole(10), hole(30)}}
+	bottom := profileRecord{Outer: outer, Holes: []loopRecord{hole(30), hole(10)}}
+	top := profileRecord{Outer: outer, Holes: []loopRecord{hole(10), hole(30)}}
 	bp.faces[4].region, bp.faces[5].region = &bottom, &top
 	wallB := bp.faces[6]
 	bp.faces[6].wall = hole(10).Segments[0]

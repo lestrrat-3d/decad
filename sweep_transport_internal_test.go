@@ -9,7 +9,7 @@ import (
 )
 
 func TestTransportSweepFramesAcrossOrthogonalBends(t *testing.T) {
-	plane := PlaneRecord{
+	plane := planeRecord{
 		Origin: r3.NewVec(0, 0, 0),
 		U:      r3.NewVec(1, 0, 0),
 		V:      r3.NewVec(0, 1, 0),
@@ -75,7 +75,7 @@ func TestTransportSweepFramesAcrossOrthogonalBends(t *testing.T) {
 }
 
 func TestTransportSweepFramesRejectsNonTangentJoin(t *testing.T) {
-	plane := PlaneRecord{
+	plane := planeRecord{
 		Origin: r3.NewVec(0, 0, 0),
 		U:      r3.NewVec(1, 0, 0),
 		V:      r3.NewVec(0, 1, 0),
@@ -93,7 +93,7 @@ func TestTransportSweepFramesRejectsNonTangentJoin(t *testing.T) {
 }
 
 func TestTransportSweepFramesRejectsReversedTangentJoin(t *testing.T) {
-	plane := PlaneRecord{
+	plane := planeRecord{
 		Origin: r3.NewVec(0, 0, 0),
 		U:      r3.NewVec(1, 0, 0),
 		V:      r3.NewVec(0, 1, 0),

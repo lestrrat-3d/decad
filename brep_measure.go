@@ -83,7 +83,7 @@ func brepEnclosure(value, bound float64, exact *big.Rat) (proofbound.RatInterval
 // contributions about its frame origin, in the per-segment forms moments.go
 // accumulates: g = ½∫(u dv − v du), mu = ½∫u² dv and mv = −½∫v² du. A line's
 // are exact rationals; a circular segment's carry its proven bounds.
-func brepSegmentIntegrals(seg CurveSegment) ([3]proofbound.RatInterval, error) {
+func brepSegmentIntegrals(seg curveSegment) ([3]proofbound.RatInterval, error) {
 	var ig regionIntegrals
 	if err := ig.AddFor(seg, freeformPlan{}, Point2{}, freeform.MomentFirstOrder); err != nil {
 		return [3]proofbound.RatInterval{}, err
@@ -180,7 +180,7 @@ func (topo *brepTopology) region(ctx context.Context, bp brepPayload, fi int) (b
 func brepRestoredRegion(ctx context.Context, f brepFace) (brepRegion, error) {
 	work := freeform.NewFreeformWork()
 	var walks [][]survey2d.SegmentWalk
-	for _, loop := range append([]LoopRecord{f.region.Outer}, f.region.Holes...) {
+	for _, loop := range append([]loopRecord{f.region.Outer}, f.region.Holes...) {
 		var ws []survey2d.SegmentWalk
 		for _, seg := range loop.Segments {
 			w, err := boundarywalk.WalkOf(seg, work)

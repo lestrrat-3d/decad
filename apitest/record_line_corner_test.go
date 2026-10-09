@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -87,7 +88,7 @@ func requireRatEncloses(t *testing.T, what string, value, bound float64, truth *
 
 // recordLongLines draws each line as given and records the sketch's one
 // region.
-func recordLongLines(t *testing.T, lines [][2][2]float64) decad.ProfileRecord {
+func recordLongLines(t *testing.T, lines [][2][2]float64) momentinput.Profile {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -104,14 +105,14 @@ func recordLongLines(t *testing.T, lines [][2][2]float64) decad.ProfileRecord {
 		cut++
 	}
 	require.Equal(t, len(lines), cut)
-	record, _, err := decad.RecordProfile(s, profiles[0])
+	record, _, err := momentinput.RecordProfile(s, profiles[0])
 	require.NoError(t, err)
 	return record
 }
 
 // requireCrossingPolygon holds a record's area and centroid to the exact
 // crossing polygon of its lines.
-func requireCrossingPolygon(t *testing.T, record decad.ProfileRecord, lines [][2][2]float64) decad.Measurement {
+func requireCrossingPolygon(t *testing.T, record momentinput.Profile, lines [][2][2]float64) decad.Measurement {
 	t.Helper()
 	wantArea, wantCentroid := crossingPolygon(t, lines)
 	area, err := record.Area()

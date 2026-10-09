@@ -222,11 +222,11 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 
 // cupWalks resolves one cup region loop into its coalesced walks — the same
 // decomposition evalCup's wall build uses.
-func cupWalks(loop LoopRecord) ([]survey2d.SideWalk, error) {
+func cupWalks(loop loopRecord) ([]survey2d.SideWalk, error) {
 	return cupWalksBudget(nil, loop)
 }
 
-func cupWalksBudget(budget *proofbound.WorkBudget, loop LoopRecord) ([]survey2d.SideWalk, error) {
+func cupWalksBudget(budget *proofbound.WorkBudget, loop loopRecord) ([]survey2d.SideWalk, error) {
 	loops, err := boundarywalk.SurveyLoopsBudget(budget, boundarywalk.Profile{Outer: loop})
 	if err != nil {
 		return nil, err
@@ -272,7 +272,7 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 
 	faces := []*Face{}
 	undecided := false
-	survey := func(loop LoopRecord, role string) bool {
+	survey := func(loop loopRecord, role string) bool {
 		walks, err := cupWalks(loop)
 		if err != nil {
 			return false
@@ -289,8 +289,8 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 		}
 		return true
 	}
-	oLoops := append([]LoopRecord{cp.outer.Outer}, cp.outer.Holes...)
-	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
+	oLoops := append([]loopRecord{cp.outer.Outer}, cp.outer.Holes...)
+	cLoops := append([]loopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
 	for i, loop := range oLoops {
 		if !survey(loop, fmt.Sprintf("side(%d,%%d)", i)) {
 			return undercutOutcome{}

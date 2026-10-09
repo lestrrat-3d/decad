@@ -71,7 +71,7 @@ func prismGatePoints(budget *proofbound.WorkBudget, prisms []prismPayload, displ
 // whose gap the proof cannot state. Cancellation through budget returns the
 // error.
 func prismStationWitnesses(budget *proofbound.WorkBudget, pp prismPayload, work *freeform.FreeformWork) ([]r3.Vec, float64, bool, error) {
-	stations, ok, err := diameter.SectionStations(budget, append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...), work)
+	stations, ok, err := diameter.SectionStations(budget, append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...), work)
 	if err != nil || !ok {
 		return nil, 0, false, err
 	}
@@ -107,7 +107,7 @@ func revolveGateDiameter(budget *proofbound.WorkBudget, rp revolvePayload) (floa
 func revolveGatePoints(budget *proofbound.WorkBudget, rp revolvePayload) (gatePoints, bool, error) {
 	return diameter.RevolveWitnesses(budget, diameter.RevolveWitnessInput{
 		Phi0: rp.phi0, Phi1: rp.phi1, Den0: rp.den.Phi0, Den1: rp.den.Phi1,
-		Loops: append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...),
+		Loops: append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...),
 		Lift:  rp.lift(), AxisBound: rp.axisBound(), Axis: rp.ax.numeric(),
 		Transform: rp.xform, SectionDelta: rp.sectionDelta,
 	})
@@ -216,7 +216,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 			continue
 		}
 		rim := cbp.prismLike(p.geom.CapZ, p.geom.CapZ)
-		rim.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{CircleSeg{
+		rim.profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{circleSeg{
 			Center: Point2{U: p.geom.CU, V: p.geom.CV}, Radius: units.Millimeters(p.geom.CapRadius),
 			CCW: true, TStart: 0, TEnd: 1,
 		}}}}
@@ -260,7 +260,7 @@ func capArcRim(cbp capBlendPayload, g capPatchGeom, contour float64) (prismPaylo
 		return prismPayload{}, 0, false
 	}
 	rim := cbp.prismLike(arc.Level, arc.Level)
-	rim.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{ArcSeg{
+	rim.profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{arcSeg{
 		Center: arc.Center, Start: arc.Start, End: arc.End, TStart: 0, TEnd: 1,
 	}}}}
 	return rim, arc.Allow, true

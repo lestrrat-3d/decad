@@ -77,8 +77,8 @@ func evalCompositeSweepContext(
 	ctx context.Context,
 	d *Document,
 	ref producerID,
-	profile ProfileRecord,
-	plane PlaneRecord,
+	profile profileRecord,
+	plane planeRecord,
 	frame r3.Frame,
 	path *Path,
 	work *freeform.FreeformWork,
@@ -122,7 +122,7 @@ func evalCompositeSweepContext(
 		if record.arc == nil {
 			payload.spans[i], err = compositeLineSweepSpan(profile, current, record)
 		} else {
-			spanPlane := PlaneRecord{Origin: current.Origin(), U: current.U(), V: current.V()}
+			spanPlane := planeRecord{Origin: current.Origin(), U: current.U(), V: current.V()}
 			payload.spans[i], err = compositeArcSweepSpan(ctx, profile, spanPlane, current, record, work)
 		}
 		if err != nil {
@@ -133,7 +133,7 @@ func evalCompositeSweepContext(
 }
 
 func compositeLineSweepSpan(
-	profile ProfileRecord,
+	profile profileRecord,
 	frame r3.Frame,
 	record pathSegmentRecord,
 ) (sweepSpanPayload, error) {
@@ -177,8 +177,8 @@ func compositeLineSweepSpan(
 
 func compositeArcSweepSpan(
 	ctx context.Context,
-	profile ProfileRecord,
-	plane PlaneRecord,
+	profile profileRecord,
+	plane planeRecord,
 	frame r3.Frame,
 	record pathSegmentRecord,
 	work *freeform.FreeformWork,

@@ -6,6 +6,8 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/decadtest"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -937,11 +939,11 @@ func TestExtrudeSketchArcRadiiRoundApart(t *testing.T) {
 				}
 			}
 			require.NotNil(t, profile, `the rounded rectangle has a valid profile`)
-			record, _, err := decad.RecordProfile(s, profile)
+			record, _, err := momentinput.RecordProfile(s, profile)
 			require.NoError(t, err)
 			arcs := 0
 			for _, seg := range record.Outer.Segments {
-				arc, ok := seg.(decad.ArcSeg)
+				arc, ok := seg.(sectionrecord.ArcSeg)
 				if !ok {
 					continue
 				}

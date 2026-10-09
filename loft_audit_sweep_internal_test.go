@@ -101,7 +101,7 @@ func unitSquareAuditFixture(t *testing.T) loftAuditFixture {
 
 func holedSquareAuditFixture(t *testing.T) loftAuditFixture {
 	t.Helper()
-	p := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{squareLoop(0.5, 0.5, 0.2, false)}}
+	p := profileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []loopRecord{squareLoop(0.5, 0.5, 0.2, false)}}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	return loftAuditFixtureOf(assembleLoftFixture(t, loftPayload{
 		profile0: p, profile1: p,
@@ -156,12 +156,12 @@ func loftAuditFixtures(t *testing.T) []struct {
 	twistedPayload := func() loftPayload {
 		p := unitSquareProfile()
 		pl0 := planeAt(r3.NewVec(0, 0, 0))
-		pl1 := PlaneRecord{Origin: r3.NewVec(1, 0, 1), U: r3.NewVec(-1, 0, 0), V: r3.NewVec(0, 1, 0)}
+		pl1 := planeRecord{Origin: r3.NewVec(1, 0, 1), U: r3.NewVec(-1, 0, 0), V: r3.NewVec(0, 1, 0)}
 		return loftPayload{profile0: p, profile1: p, plane0: pl0, plane1: pl1,
 			frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1), xform: r3.Identity()}
 	}
 
-	gon := ProfileRecord{Outer: manyGonLoop(0, 0, 10, 64)}
+	gon := profileRecord{Outer: manyGonLoop(0, 0, 10, 64)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	gonFixture := loftAuditFixtureOf(assembleLoftFixture(t, loftPayload{profile0: gon, profile1: gon,
 		plane0: pl0, plane1: pl1, frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1), xform: r3.Identity()}))
@@ -436,7 +436,7 @@ func TestLoftAuditEnumerationTracksCandidates(t *testing.T) {
 		require.Less(t, work.Scanned, 20*work.Candidates, "the enumeration's work tracks the candidates")
 	})
 	t.Run("3000-gon loft 100 tall", func(t *testing.T) {
-		p := ProfileRecord{Outer: manyGonLoop(0, 0, 1, 3000)}
+		p := profileRecord{Outer: manyGonLoop(0, 0, 1, 3000)}
 		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 100))
 		pl := loftPayload{profile0: p, profile1: p, plane0: pl0, plane1: pl1,
 			frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1), xform: r3.Identity()}

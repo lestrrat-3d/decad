@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -24,7 +26,7 @@ func TestRecordProfileRectangle(t *testing.T) {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 
-	rec, plane, err := decad.RecordProfile(s, profiles[0])
+	rec, plane, err := momentinput.RecordProfile(s, profiles[0])
 	require.NoError(t, err, `a clean rectangle should record`)
 
 	// The plane is the XY datum, recorded as vectors.
@@ -38,7 +40,7 @@ func TestRecordProfileRectangle(t *testing.T) {
 	require.Empty(t, rec.Holes)
 	corners := map[decad.Point2]int{}
 	for _, seg := range rec.Outer.Segments {
-		line, ok := seg.(decad.LineSeg)
+		line, ok := seg.(sectionrecord.LineSeg)
 		require.True(t, ok, `a rectangle boundary records as LineSegs, got %T`, seg)
 		// A whole edge spans the full domain; the walk may run it backwards,
 		// which the range order (not the fields) carries.
@@ -82,12 +84,12 @@ func TestRecordProfileCircleHole(t *testing.T) {
 	}
 	require.NotNil(t, prof, `the rectangle-with-hole region should exist`)
 
-	rec, _, err := decad.RecordProfile(s, prof)
+	rec, _, err := momentinput.RecordProfile(s, prof)
 	require.NoError(t, err)
 	require.Len(t, rec.Holes, 1)
 	require.Len(t, rec.Holes[0].Segments, 1, `a circle bounds a hole loop on its own`)
 
-	hole, ok := rec.Holes[0].Segments[0].(decad.CircleSeg)
+	hole, ok := rec.Holes[0].Segments[0].(sectionrecord.CircleSeg)
 	require.True(t, ok, `the hole should record as a CircleSeg, got %T`, rec.Holes[0].Segments[0])
 	require.Equal(t, decad.Point2{U: 50, V: 30}, hole.Center)
 	require.True(t, hole.Radius.Equal(units.Millimeters(10), 1e-9), `the hole radius should be the entity's own 10 mm, got %s`, hole.Radius)
@@ -122,11 +124,11 @@ func TestRecordProfileCertifiedFragments(t *testing.T) {
 		if !p.Valid {
 			continue
 		}
-		rec, _, err := decad.RecordProfile(s, p)
+		rec, _, err := momentinput.RecordProfile(s, p)
 		require.NoError(t, err, `every certified-cut region should record`)
-		for _, loop := range append([]decad.LoopRecord{rec.Outer}, rec.Holes...) {
+		for _, loop := range append([]sectionrecord.LoopRecord{rec.Outer}, rec.Holes...) {
 			for _, seg := range loop.Segments {
-				c, ok := seg.(decad.CircleSeg)
+				c, ok := seg.(sectionrecord.CircleSeg)
 				if !ok {
 					continue
 				}
@@ -171,7 +173,7 @@ func TestRecordProfileRejectsSampledCuts(t *testing.T) {
 		if !p.Valid {
 			continue
 		}
-		_, _, err := decad.RecordProfile(s, p)
+		_, _, err := momentinput.RecordProfile(s, p)
 		if err != nil {
 			require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 			rejected++
@@ -216,9 +218,9 @@ func TestRecordProfileRejectsWholeSketchTExactWithholding(t *testing.T) {
 			require.Equal(t, certifiedEdge.TStart, withheldEdge.TStart, `the gate must not change the start parameter`)
 			require.Equal(t, certifiedEdge.TEnd, withheldEdge.TEnd, `the gate must not change the end parameter`)
 		}
-		_, _, err := decad.RecordProfile(certifiedSketch, certifiedProfile)
+		_, _, err := momentinput.RecordProfile(certifiedSketch, certifiedProfile)
 		require.NoError(t, err, `the certified circle profile should record`)
-		_, _, err = decad.RecordProfile(withheldSketch, withheldProfile)
+		_, _, err = momentinput.RecordProfile(withheldSketch, withheldProfile)
 		require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 	}
 }
@@ -254,7 +256,7 @@ func TestRecordProfileReportsOuterEdgeIndex(t *testing.T) {
 	require.True(t, prof.Outer[1].Partial)
 	require.False(t, prof.Outer[1].TExact)
 
-	_, _, err = decad.RecordProfile(s, prof)
+	_, _, err = momentinput.RecordProfile(s, prof)
 	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 	require.ErrorContains(t, err, `outer edge 1`)
 }
@@ -290,7 +292,7 @@ func TestRecordProfileReportsHoleAndEdgeIndices(t *testing.T) {
 	require.True(t, prof.Holes[1][0].Partial)
 	require.False(t, prof.Holes[1][0].TExact)
 
-	_, _, err = decad.RecordProfile(s, prof)
+	_, _, err = momentinput.RecordProfile(s, prof)
 	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 	require.ErrorContains(t, err, `hole 1 edge 0`)
 }
@@ -309,13 +311,13 @@ func TestRecordProfileGates(t *testing.T) {
 	// Foreign: the profile's plane-local coordinates belong to its own sketch.
 	other, err := w.CreateSketch(w.XZ())
 	require.NoError(t, err)
-	_, _, err = decad.RecordProfile(other, prof)
+	_, _, err = momentinput.RecordProfile(other, prof)
 	require.ErrorIs(t, err, decad.ErrForeignProfile)
 
 	// Nil input is degenerate, not a panic.
-	_, _, err = decad.RecordProfile(s, nil)
+	_, _, err = momentinput.RecordProfile(s, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, _, err = decad.RecordProfile(nil, prof)
+	_, _, err = momentinput.RecordProfile(nil, prof)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
 	// Stale: move the geometry after the snapshot — the profile still holds
@@ -324,12 +326,12 @@ func TestRecordProfileGates(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.True(t, prof.IsStale(), `the solve should have moved the sketch under the profile`)
-	_, _, err = decad.RecordProfile(s, prof)
+	_, _, err = momentinput.RecordProfile(s, prof)
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 
 	// A fresh profile records again.
 	fresh := s.Profiles()[0]
-	_, _, err = decad.RecordProfile(s, fresh)
+	_, _, err = momentinput.RecordProfile(s, fresh)
 	require.NoError(t, err)
 }
 
@@ -390,7 +392,7 @@ func TestRecordProfileRejectsForeignHoleEntity(t *testing.T) {
 	require.NoError(t, err)
 	prof.Holes[0] = foreign.Profiles()[0].Outer
 
-	_, _, err = decad.RecordProfile(s, prof)
+	_, _, err = momentinput.RecordProfile(s, prof)
 	require.ErrorIs(t, err, decad.ErrForeignProfile)
 }
 
@@ -410,7 +412,7 @@ func TestRecordProfileRejectsChangedCurrentBoundary(t *testing.T) {
 	require.Len(t, profiles, 2)
 	profiles[0].Outer = profiles[1].Outer
 
-	_, _, err = decad.RecordProfile(s, profiles[0])
+	_, _, err = momentinput.RecordProfile(s, profiles[0])
 	require.ErrorIs(t, err, decad.ErrInvalidProfile)
 }
 
@@ -426,7 +428,7 @@ func TestRecordProfileRejectsTypedNilBoundaryEntity(t *testing.T) {
 	prof := s.Profiles()[0]
 	prof.Outer[0].Entity = (*sketch.Line)(nil)
 
-	_, _, err = decad.RecordProfile(s, prof)
+	_, _, err = momentinput.RecordProfile(s, prof)
 	require.ErrorIs(t, err, decad.ErrInvalidProfile)
 }
 
@@ -501,7 +503,7 @@ func TestRecordProfileRejectsUnclosedLoop(t *testing.T) {
 				require.False(t, e.Partial, `the near miss is snapped, so every edge is whole`)
 			}
 
-			_, _, err := decad.RecordProfile(s, p)
+			_, _, err := momentinput.RecordProfile(s, p)
 			require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 			require.Contains(t, err.Error(), `does not close`)
 
@@ -540,7 +542,7 @@ func TestRecordProfileRejectsUnclosedConstrainedLoop(t *testing.T) {
 
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	_, _, err = decad.RecordProfile(s, profiles[0])
+	_, _, err = momentinput.RecordProfile(s, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 }
 
@@ -560,7 +562,7 @@ func TestRecordProfileRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {
 	}
 	require.Equal(t, 1, partial)
 
-	_, _, err := decad.RecordProfile(s, profile)
+	_, _, err := momentinput.RecordProfile(s, profile)
 	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 	require.Contains(t, err.Error(), `does not close`)
 }
@@ -598,13 +600,13 @@ func TestRecordProfileRecordsReversedUncutPartialBound(t *testing.T) {
 	require.Equal(t, 1.0/3.0, fragment.TStart)
 	require.Equal(t, 1.0, fragment.TEnd)
 
-	record, _, err := decad.RecordProfile(s, profile)
+	record, _, err := momentinput.RecordProfile(s, profile)
 	require.NoError(t, err, `the uncut natural end is the reversed walk start`)
 
-	var recorded decad.LineSeg
+	var recorded sectionrecord.LineSeg
 	found := false
 	for _, segment := range record.Outer.Segments {
-		line, ok := segment.(decad.LineSeg)
+		line, ok := segment.(sectionrecord.LineSeg)
 		if ok && line.Start == (decad.Point2{U: 0, V: -5}) && line.End == (decad.Point2{U: 0, V: 10}) {
 			recorded = line
 			found = true
@@ -632,7 +634,7 @@ func TestRecordProfileRecordsSnapThresholdTrim(t *testing.T) {
 	}
 	require.Equal(t, 2, partial, `the two lines that miss should arrive trimmed`)
 
-	rec, _, err := decad.RecordProfile(s, p)
+	rec, _, err := momentinput.RecordProfile(s, p)
 	require.NoError(t, err, `a loop closed on sketch's own cut records`)
 	require.Len(t, rec.Outer.Segments, 3)
 
@@ -685,7 +687,7 @@ func TestRecordProfileRecordsMixedWholeAndCertifiedPartialJoin(t *testing.T) {
 	require.True(t, wholeArc)
 	require.True(t, partialLine)
 
-	record, _, err := decad.RecordProfile(s, profile)
+	record, _, err := momentinput.RecordProfile(s, profile)
 	require.NoError(t, err)
 	area, err := record.Area()
 	require.NoError(t, err, `the record should also pass reconstruction authentication`)
@@ -700,11 +702,11 @@ func TestProfileRecordAreaRejectsUnclosedLoop(t *testing.T) {
 	// moments validator: the reconstruction authenticates each candidate region
 	// through RecordProfile, which now refuses an open loop, so no candidate
 	// matches and the record is reported as bounding no closed region.
-	triangle := func(gap float64) decad.ProfileRecord {
-		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-			decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 10, V: 0}, TEnd: 1},
-			decad.LineSeg{Start: decad.Point2{U: 10, V: 0}, End: decad.Point2{U: 0, V: 10}, TEnd: 1},
-			decad.LineSeg{Start: decad.Point2{U: 0, V: 10 + gap}, End: decad.Point2{U: 0, V: 0}, TEnd: 1},
+	triangle := func(gap float64) momentinput.Profile {
+		return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+			sectionrecord.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 10, V: 0}, TEnd: 1},
+			sectionrecord.LineSeg{Start: decad.Point2{U: 10, V: 0}, End: decad.Point2{U: 0, V: 10}, TEnd: 1},
+			sectionrecord.LineSeg{Start: decad.Point2{U: 0, V: 10 + gap}, End: decad.Point2{U: 0, V: 0}, TEnd: 1},
 		}}}
 	}
 
@@ -722,11 +724,11 @@ func TestProfileRecordAreaRejectsUnclosedLoop(t *testing.T) {
 func TestProfileRecordAreaRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {
 	t.Parallel()
 	gap := math.Ldexp(1, -40)
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 10, V: 0}, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 10, V: 0}, End: decad.Point2{U: 10, V: 10}, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 10, V: 10}, End: decad.Point2{U: gap, V: 10}, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 10}, End: decad.Point2{U: 0, V: -5}, TEnd: 2.0 / 3.0},
+	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 10, V: 0}, TEnd: 1},
+		sectionrecord.LineSeg{Start: decad.Point2{U: 10, V: 0}, End: decad.Point2{U: 10, V: 10}, TEnd: 1},
+		sectionrecord.LineSeg{Start: decad.Point2{U: 10, V: 10}, End: decad.Point2{U: gap, V: 10}, TEnd: 1},
+		sectionrecord.LineSeg{Start: decad.Point2{U: 0, V: 10}, End: decad.Point2{U: 0, V: -5}, TEnd: 2.0 / 3.0},
 	}}}
 
 	_, err := record.Area()

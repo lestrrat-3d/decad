@@ -622,7 +622,7 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 	} else {
 		pw = nil
 	}
-	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
+	loops := append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -926,8 +926,8 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	// One free-form counter for the whole chorded record — the cup's outer region
 	// and its cavity are the two halves of one section (see chordLoop).
 	work := freeform.NewFreeformWork()
-	oLoops := append([]LoopRecord{cp.outer.Outer}, cp.outer.Holes...)
-	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
+	oLoops := append([]loopRecord{cp.outer.Outer}, cp.outer.Holes...)
+	cLoops := append([]loopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
 	if len(oLoops) != len(cLoops) {
 		return nil, fmt.Errorf(`%w: the cup's outer and cavity regions have different loop counts`, ErrDegenerate)
 	}
@@ -969,7 +969,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		walks   int
 		perim   float64
 	}
-	chordRing := func(loop LoopRecord, h, lo, hi, loDelta, hiDelta float64, role string, area *float64) (ring, error) {
+	chordRing := func(loop loopRecord, h, lo, hi, loDelta, hiDelta float64, role string, area *float64) (ring, error) {
 		// A cup chords the DERIVED region loops — an offset cavity, an outer
 		// contour — which no payload holds a resolution of, so each segment
 		// resolves through walkOf here as it always has.

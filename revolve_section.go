@@ -46,7 +46,7 @@ func revolveSectionChargeOf(rp revolvePayload, work *freeform.FreeformWork) (rev
 	}
 	perimeter := 0.0
 	segments := 0
-	for _, loop := range append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...) {
+	for _, loop := range append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...) {
 		for _, seg := range loop.Segments {
 			w, err := boundarywalk.WalkOf(seg, work)
 			if err != nil {
@@ -73,7 +73,7 @@ func (rp revolvePayload) denotedPoint(p sweptPoint) sweptPoint {
 // coordinates with the payload's section displacement folded in: a cut
 // construction's own cut ends (trimRevolveSegmentCharges), or every end and,
 // for an arc, its centre, radius and length where the whole section moved.
-func (rp revolvePayload) chargedWalk(seg CurveSegment, w survey2d.SegmentWalk) (survey2d.SegmentWalk, error) {
+func (rp revolvePayload) chargedWalk(seg curveSegment, w survey2d.SegmentWalk) (survey2d.SegmentWalk, error) {
 	if c := revolveaxis.SectionWholeCharges(rp.sectionWhole, rp.sectionDelta); c.U != 0 {
 		walk := rp.ax.walkCharged(w, c, c)
 		return revolveaxis.ChargeWholeWalk(walk, rp.sectionDelta, rp.ax.dU, rp.ax.dV), nil
@@ -87,7 +87,7 @@ func (rp revolvePayload) chargedWalk(seg CurveSegment, w survey2d.SegmentWalk) (
 
 // wallMoment is revolvemass.WallAxisMoment over one wall, carried to the denoted wall
 // where the whole section moved (revolveaxis.WallMomentAllow).
-func (rp revolvePayload) wallMoment(w survey2d.SegmentWalk, kind wallKind, segs []CurveSegment) proofbound.BoundedScalar {
+func (rp revolvePayload) wallMoment(w survey2d.SegmentWalk, kind wallKind, segs []curveSegment) proofbound.BoundedScalar {
 	m := revolvemass.WallAxisMoment(w, kind, segs, rp.ax.numeric())
 	if revolveaxis.SectionWholeCharges(rp.sectionWhole, rp.sectionDelta).U != 0 && w.IsCircular() && kind != wallAxis {
 		allow := revolveaxis.WallMomentAllow(true, rp.sectionDelta, w.LengthUpper, w.AxisRadiusUpper)

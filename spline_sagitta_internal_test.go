@@ -250,7 +250,7 @@ func quarterCircleFitSpans(t *testing.T) []freeform.BezierSpan {
 		theta := float64(k) * math.Pi / 8
 		fit[k] = Point2{U: radius * math.Cos(theta), V: radius * math.Sin(theta)}
 	}
-	spans, err := splinebezier.FitSplineBezierSpans(FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
+	spans, err := splinebezier.FitSplineBezierSpans(fitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.NotEmpty(t, spans)
 	return spans

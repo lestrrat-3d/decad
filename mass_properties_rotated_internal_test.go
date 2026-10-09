@@ -28,13 +28,13 @@ import (
 //     region off center would show. The leg stays because dynamic-mass §2.2
 //     charges every moment order and a denoted region need not be centered.
 
-func rectangleRecord(u0, v0, u1, v1 float64) ProfileRecord {
+func rectangleRecord(u0, v0, u1, v1 float64) profileRecord {
 	corners := []Point2{{U: u0, V: v0}, {U: u1, V: v0}, {U: u1, V: v1}, {U: u0, V: v1}}
-	segments := make([]CurveSegment, len(corners))
+	segments := make([]curveSegment, len(corners))
 	for i, corner := range corners {
-		segments[i] = LineSeg{Start: corner, End: corners[(i+1)%len(corners)], TEnd: 1}
+		segments[i] = lineSeg{Start: corner, End: corners[(i+1)%len(corners)], TEnd: 1}
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: segments}}
+	return profileRecord{Outer: loopRecord{Segments: segments}}
 }
 
 func TestRotatedPrismMassChargesDisplacement(t *testing.T) {
@@ -100,16 +100,16 @@ func TestRotatedPrismMassMatchesCardinalPath(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	triangle := []Point2{{U: 0, V: 0}, {U: 6, V: 0}, {U: 0, V: 8}}
-	segments := make([]CurveSegment, len(triangle))
+	segments := make([]curveSegment, len(triangle))
 	for i, corner := range triangle {
-		segments[i] = LineSeg{Start: corner, End: triangle[(i+1)%len(triangle)], TEnd: 1}
+		segments[i] = lineSeg{Start: corner, End: triangle[(i+1)%len(triangle)], TEnd: 1}
 	}
 	turn, err := r3.FromBasis(r3.Basis{
 		EX: r3.NewVec(0, 1, 0), EY: r3.NewVec(-1, 0, 0), EZ: r3.NewVec(0, 0, 1),
 	}, r3.NewVec(30, 0, 0))
 	require.NoError(t, err)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: LoopRecord{Segments: segments}},
+		profile: profileRecord{Outer: loopRecord{Segments: segments}},
 		frame:   frame, z0: 0, z1: 10, xform: turn,
 	}
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)

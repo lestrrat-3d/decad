@@ -263,9 +263,9 @@ func TestBrepLoopFilletCrossDrilled(t *testing.T) {
 			require.Equal(t, 2.0, e.SemiMinor.Base())
 		}
 		require.ElementsMatch(t, []r3.Vec{{X: 2, Y: 2, Z: 18}, {X: 38, Y: 2, Z: 18}, {X: 38, Y: 18, Z: 18}, {X: 2, Y: 18, Z: 18}}, centres)
-		for _, wall := range []CurveSegment{
-			LineSeg{Start: Point2{U: 40, V: 0}, End: Point2{U: 40, V: 20}, TStart: 0, TEnd: 1},
-			LineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		for _, wall := range []curveSegment{
+			lineSeg{Start: Point2{U: 40, V: 0}, End: Point2{U: 40, V: 20}, TStart: 0, TEnd: 1},
+			lineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 		} {
 			require.Equal(t, [][2]float64{{0, 18}}, sweptFaceLevels(bp, wall), "x wall %v", wall)
 		}
@@ -449,7 +449,7 @@ func TestBrepLoopFilletRoundBoss(t *testing.T) {
 		require.Equal(t, r3.NewVec(20, 20, 11), tor.Center)
 		require.Equal(t, 6.0, tor.Major.Base())
 		plateTop := planarFaceAt(t, bp, routeEZ, 10)
-		hole, ok := plateTop.region.Holes[0].Segments[0].(CircleSeg)
+		hole, ok := plateTop.region.Holes[0].Segments[0].(circleSeg)
 		require.True(t, ok)
 		require.Equal(t, 6.0, hole.Radius.Base())
 		requireBandEdgesConvex(t, out, false)

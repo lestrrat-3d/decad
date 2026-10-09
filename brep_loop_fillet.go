@@ -46,7 +46,7 @@ type filletLoopRead struct {
 // circular walk, a tangent join the record does not make exactly tangent, a
 // cusp — is SF1. A loop of one whole circle (LF7) has no corner. role names
 // F in the refusal.
-func filletLoopOf(budget *proofbound.WorkBudget, loop LoopRecord, r float64, role string, work *freeform.FreeformWork) (filletLoopRead, error) {
+func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, role string, work *freeform.FreeformWork) (filletLoopRead, error) {
 	cl, err := oneLoopCornerLoop(budget, loop, work)
 	if err != nil {
 		return filletLoopRead{}, err
@@ -166,8 +166,8 @@ func filletOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, r, rDelta f
 
 // filletOffsetLoop records the cap contour. A collapsed circular walk leaves
 // one vertex at its recorded centre and contributes no segment to the loop.
-func filletOffsetLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, joins []cornerJoin, r float64) ([]CurveSegment, error) {
-	var segs []CurveSegment
+func filletOffsetLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, joins []cornerJoin, r float64) ([]curveSegment, error) {
+	var segs []curveSegment
 	n := len(walks)
 	for i, w := range walks {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
@@ -198,7 +198,7 @@ func filletOffsetLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, 
 // filletContourDelta bounds the contour that remains after a sphere pole
 // consumes an inward arc. The surviving offset carriers meet at the recorded
 // centre, so the ordinary contour proof reads that centre as their miter.
-func filletContourDelta(ctx context.Context, loop LoopRecord, r, rDelta float64) (float64, error) {
+func filletContourDelta(ctx context.Context, loop loopRecord, r, rDelta float64) (float64, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
 	if err != nil {
@@ -271,7 +271,7 @@ func suppliedFilletCapWalls(co []coedge, walks []survey2d.SideWalk, joins []corn
 }
 
 // filletCornerClass is Table LF's class of corner k, or zero for SF1.
-func filletCornerClass(loop LoopRecord, walks []survey2d.SideWalk, fw []filletband.Walk, joins []cornerJoin, k int) (filletband.Corner, error) {
+func filletCornerClass(loop loopRecord, walks []survey2d.SideWalk, fw []filletband.Walk, joins []cornerJoin, k int) (filletband.Corner, error) {
 	n := len(walks)
 	prev, cur := walks[(k+n-1)%n], walks[k]
 	turn, err := filletband.Turn(fw[(k+n-1)%n], fw[k])
@@ -615,9 +615,9 @@ func (bp brepPayload) filletRestored(topo *brepTopology) ([]brepFace, error) {
 	for _, ui := range topo.open {
 		openAt[topo.uses[ui].Key] = ui
 	}
-	cloneRegion := func(fi int) *ProfileRecord {
+	cloneRegion := func(fi int) *profileRecord {
 		src := out[fi].region
-		region := ProfileRecord{Outer: cloneLoopRecord(src.Outer)}
+		region := profileRecord{Outer: cloneLoopRecord(src.Outer)}
 		for _, h := range src.Holes {
 			region.Holes = append(region.Holes, cloneLoopRecord(h))
 		}
@@ -692,7 +692,7 @@ func restoreSideSegment(a *brepFace, e brepEmbed, li, seg, n int, sideRef, level
 		return Point2{U: l[0], V: l[1]}
 	}
 	for _, k := range [3]int{(seg + count - 1) % count, seg, (seg + 1) % count} {
-		line, ok := loop.Segments[k].(LineSeg)
+		line, ok := loop.Segments[k].(lineSeg)
 		if !ok {
 			return fmt.Errorf(`%w: a face beside a fillet band holds a curved segment where the band trimmed it`, ErrUnsupported)
 		}

@@ -33,7 +33,7 @@ import (
 // own verdict on it (freeform.FreeformConvexityPositive); this test pins the BUILD.
 func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
 	t.Parallel()
-	seg := NURBSSeg{
+	seg := nurbsSeg{
 		Degree: 1,
 		Control: []Point2{
 			{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 0}, {U: 1, V: 0}, {U: 1, V: 1},
@@ -43,9 +43,9 @@ func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
 		TStart:  0,
 		TEnd:    1,
 	}
-	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		seg,
-		LineSeg{Start: Point2{U: 1, V: 1}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 1, V: 1}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -106,7 +106,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 		require.Equal(t, start.U+0.25*(end.U-start.U), uq)
 		require.Equal(t, start.V+0.25*(end.V-start.V), vq)
 
-		w, err := boundarywalk.WalkOf(LineSeg{Start: start, End: end, TStart: 0, TEnd: 1}, nil)
+		w, err := boundarywalk.WalkOf(lineSeg{Start: start, End: end, TStart: 0, TEnd: 1}, nil)
 		require.NoError(t, err)
 		require.Equal(t,
 			[4]float64{start.U, start.V, end.U, end.V},
@@ -114,7 +114,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 
 		// A reversed whole edge records TStart = 1, TEnd = 0 (seam.go), so the
 		// walk's own ends swap while each still states a recorded coordinate.
-		rev, err := boundarywalk.WalkOf(LineSeg{Start: start, End: end, TStart: 1, TEnd: 0}, nil)
+		rev, err := boundarywalk.WalkOf(lineSeg{Start: start, End: end, TStart: 1, TEnd: 0}, nil)
 		require.NoError(t, err)
 		require.Equal(t,
 			[4]float64{end.U, end.V, start.U, start.V},
@@ -124,7 +124,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 	t.Run("arc", func(t *testing.T) {
 		const cu, cv, r = 10.3, 9.7, 4.7
 		th0, th1 := 0.05, 0.75
-		seg := ArcSeg{
+		seg := arcSeg{
 			Center: Point2{U: cu, V: cv},
 			Start:  Point2{U: cu + r*math.Cos(th0), V: cv + r*math.Sin(th0)},
 			End:    Point2{U: cu + r*math.Cos(th1), V: cv + r*math.Sin(th1)},
@@ -144,7 +144,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 			[4]float64{seg.Start.U, seg.Start.V, seg.End.U, seg.End.V},
 			[4]float64{w.StartU, w.StartV, w.EndU, w.EndV})
 
-		rev, err := boundarywalk.WalkOf(ArcSeg{
+		rev, err := boundarywalk.WalkOf(arcSeg{
 			Center: seg.Center, Start: seg.Start, End: seg.End,
 			TStart: 1, TEnd: 0,
 		}, nil)
@@ -155,7 +155,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 
 		// A trimmed bound keeps the circular model's own value: the record
 		// states no coordinate there, and this seam never invents one.
-		part, err := boundarywalk.WalkOf(ArcSeg{
+		part, err := boundarywalk.WalkOf(arcSeg{
 			Center: seg.Center, Start: seg.Start, End: seg.End,
 			TStart: 0, TEnd: 0.5,
 		}, nil)
@@ -179,7 +179,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 				a0 := 0.05 + 0.71*float64(i)
 				for j := range 4 {
 					a1 := a0 + 0.13 + 0.79*float64(j)
-					fam := ArcSeg{
+					fam := arcSeg{
 						Center: Point2{U: c.cu, V: c.cv},
 						Start:  Point2{U: c.cu + c.r*math.Cos(a0), V: c.cv + c.r*math.Sin(a0)},
 						End:    Point2{U: c.cu + c.r*math.Cos(a1), V: c.cv + c.r*math.Sin(a1)},
@@ -229,8 +229,8 @@ func requireEnclosesTruth(t *testing.T, held, bound float64, truth *big.Rat, wha
 		what, held, gap.FloatString(22), bound)
 }
 
-func oneSegmentProfile(seg CurveSegment) ProfileRecord {
-	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
+func oneSegmentProfile(seg curveSegment) profileRecord {
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{seg}}}
 }
 
 // A walk endpoint the record does not state verbatim is a coordinate this
@@ -245,7 +245,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 	// The trimmed quarter of a quarter-circle arc: the walk sweeps θ ∈
 	// [π/8, 3π/8], so along (1, 0) both extremes ARE endpoints — the interior
 	// apex at θ = 0 is not swept and contributes nothing.
-	trimmedArc := ArcSeg{
+	trimmedArc := arcSeg{
 		Center: Point2{U: 0, V: 0},
 		Start:  Point2{U: 1, V: 0},
 		End:    Point2{U: 0, V: 1},
@@ -253,7 +253,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 	}
 	// The same two angles read off a circle instead, where no endpoint is ever
 	// pinned to a recorded coordinate: 2π·0.0625 = π/8 and 2π·0.1875 = 3π/8.
-	trimmedCircle := CircleSeg{
+	trimmedCircle := circleSeg{
 		Center: Point2{U: 0, V: 0},
 		Radius: units.Millimeters(1),
 		CCW:    true,
@@ -262,7 +262,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		seg  CurveSegment
+		seg  curveSegment
 	}{
 		{name: "arc", seg: trimmedArc},
 		{name: "circle", seg: trimmedCircle},
@@ -289,7 +289,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 	// rational one. 0.3·0.1 is not representable, so this endpoint is held short
 	// of what the record denotes.
 	t.Run("line", func(t *testing.T) {
-		seg := LineSeg{
+		seg := lineSeg{
 			Start:  Point2{U: 0, V: 0},
 			End:    Point2{U: 0.1, V: 0.1},
 			TStart: 0.3, TEnd: 1,
@@ -315,7 +315,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 	// whole scan. Folding its +Inf into the accumulators instead would publish
 	// an infinite box bound, or read as the empty region's own ErrDegenerate.
 	t.Run("underivable", func(t *testing.T) {
-		seg := LineSeg{
+		seg := lineSeg{
 			Start:  Point2{U: math.Inf(1), V: 0},
 			End:    Point2{U: 1, V: 1},
 			TStart: 0.5, TEnd: 1,
@@ -336,19 +336,19 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 // section's box stays Exact.
 func TestBoundaryExtremesKeepAProvenZero(t *testing.T) {
 	t.Parallel()
-	square := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 2, V: 0}, End: Point2{U: 2, V: 2}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 2, V: 2}, End: Point2{U: 0, V: 2}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 0, V: 2}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	square := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 2, V: 0}, End: Point2{U: 2, V: 2}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 2, V: 2}, End: Point2{U: 0, V: 2}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 0, V: 2}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
-	wholeArc := ArcSeg{
+	wholeArc := arcSeg{
 		Center: Point2{U: 0, V: 0},
 		Start:  Point2{U: 1, V: 0},
 		End:    Point2{U: 0, V: 1},
 		TStart: 0, TEnd: 1,
 	}
-	wholeCircle := CircleSeg{
+	wholeCircle := circleSeg{
 		Center: Point2{U: 0, V: 0},
 		Radius: units.Millimeters(1),
 		CCW:    true,
@@ -357,7 +357,7 @@ func TestBoundaryExtremesKeepAProvenZero(t *testing.T) {
 
 	for _, tc := range []struct {
 		name    string
-		profile ProfileRecord
+		profile profileRecord
 		lo, hi  float64
 	}{
 		{name: "all straight", profile: square, lo: 0, hi: 2},
@@ -419,11 +419,11 @@ func walkEndFromModel(w survey2d.SegmentWalk) Point2 {
 // uses to reproduce a real recorded record exactly, and it is what gives this
 // loop positive net area: the forward pairing (spline first, chord back)
 // winds the opposite way and evalPrismContext refuses it as ErrDegenerate.
-func involuteFitProfile() ProfileRecord {
+func involuteFitProfile() profileRecord {
 	fit := involuteFitPoints()
-	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: fit[0], End: fit[len(fit)-1], TStart: 0, TEnd: 1},
-		FitSplineSeg{Fit: fit, TStart: 1, TEnd: 0},
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: fit[0], End: fit[len(fit)-1], TStart: 0, TEnd: 1},
+		fitSplineSeg{Fit: fit, TStart: 1, TEnd: 0},
 	}}}
 }
 
@@ -525,11 +525,11 @@ func TestProfileWalksMismatchRefuses(t *testing.T) {
 	t.Parallel()
 	// A 4-segment square, deliberately a different outer segment count than
 	// involuteFitProfile's 2 (a LineSeg and a FitSplineSeg).
-	square := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 2, V: 0}, End: Point2{U: 2, V: 2}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 2, V: 2}, End: Point2{U: 0, V: 2}, TStart: 0, TEnd: 1},
-		LineSeg{Start: Point2{U: 0, V: 2}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	square := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 2, V: 0}, End: Point2{U: 2, V: 2}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 2, V: 2}, End: Point2{U: 0, V: 2}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{U: 0, V: 2}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	wrongWalks, err := momentinput.ResolveProfileWalks(square, freeform.NewFreeformWork())
 	require.NoError(t, err)
@@ -557,9 +557,9 @@ func TestProfileWalksMismatchRefuses(t *testing.T) {
 // built the same way is WHERE its line ends: same variant, same start, same
 // range, one differing coordinate. Two of them have identical shape — one
 // outer segment, no holes — so shape alone cannot tell them apart.
-func lineEndProfile(end Point2) ProfileRecord {
-	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		LineSeg{Start: Point2{U: 0, V: 0}, End: end, TStart: 0, TEnd: 1},
+func lineEndProfile(end Point2) profileRecord {
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: Point2{U: 0, V: 0}, End: end, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -621,11 +621,11 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 	})
 	t.Run("hole data", func(t *testing.T) {
 		withHole := near
-		withHole.Holes = []LoopRecord{lineEndProfile(Point2{U: 1, V: 1}).Outer}
+		withHole.Holes = []loopRecord{lineEndProfile(Point2{U: 1, V: 1}).Outer}
 		holed, err := momentinput.ResolveProfileWalks(withHole, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		other := near
-		other.Holes = []LoopRecord{lineEndProfile(Point2{U: 1, V: 3}).Outer}
+		other.Holes = []loopRecord{lineEndProfile(Point2{U: 1, V: 3}).Outer}
 		require.False(t, holed.Matches(other), "a hole loop's own segment data is compared too")
 		_, err = momentinput.CoordinateEnvelope(other, freeform.NewFreeformWork(), holed)
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
@@ -663,13 +663,13 @@ func TestProfileWalksReadBackMatchesFreshResolution(t *testing.T) {
 
 func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 	t.Parallel()
-	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-		SplineSeg{
+	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		splineSeg{
 			Control: []Point2{{U: 2}, {U: 2, V: 2}, {V: 2}, {}},
 			TStart:  0,
 			TEnd:    1,
 		},
-		LineSeg{Start: Point2{}, End: Point2{U: 2}, TStart: 0, TEnd: 1},
+		lineSeg{Start: Point2{}, End: Point2{U: 2}, TStart: 0, TEnd: 1},
 	}}}
 	work := freeform.NewFreeformWork()
 	_, err := profile.EvaluatorIntegrals(freeform.MomentAreaOrder, work)
@@ -928,7 +928,7 @@ func placementChain(t *testing.T, pp prismPayload, drop bool) (*Body, []*momenti
 func TestRepeatedPlacementAccumulatesNoError(t *testing.T) {
 	t.Parallel()
 	pp := involuteFitPrismPayload(t)
-	fit := pp.profile.Outer.Segments[1].(FitSplineSeg)
+	fit := pp.profile.Outer.Segments[1].(fitSplineSeg)
 	// Four curved spans exercise placement without repeating the 15-point
 	// work-budget reproducer used by the other involute tests.
 	fit.Fit = []Point2{fit.Fit[0], fit.Fit[4], fit.Fit[7], fit.Fit[10], fit.Fit[14]}
@@ -972,7 +972,7 @@ func TestChangedRecordRefusesPublishedWalks(t *testing.T) {
 	source := prismPayloadOf(t, built)
 
 	nudged := involuteFitProfile()
-	line, ok := nudged.Outer.Segments[0].(LineSeg)
+	line, ok := nudged.Outer.Segments[0].(lineSeg)
 	require.True(t, ok, "premise: this fixture's first segment is the closing line")
 	line.End.U = math.Nextafter(line.End.U, math.Inf(1))
 	nudged.Outer.Segments[0] = line
@@ -991,14 +991,14 @@ func TestChangedRecordRefusesPublishedWalks(t *testing.T) {
 
 	t.Run("a new hole", func(t *testing.T) {
 		holed := source
-		holed.profile.Holes = []LoopRecord{lineEndProfile(Point2{U: 1, V: 1}).Outer}
+		holed.profile.Holes = []loopRecord{lineEndProfile(Point2{U: 1, V: 1}).Outer}
 		require.False(t, source.walks.Reusable(holed.profile), "a record that gained a hole is a different record")
 	})
 
 	t.Run("a rescaled record", func(t *testing.T) {
-		scaled := ProfileRecord{Outer: LoopRecord{Segments: make([]CurveSegment, 0, 1)}}
+		scaled := profileRecord{Outer: loopRecord{Segments: make([]curveSegment, 0, 1)}}
 		scaled.Outer.Segments = append(scaled.Outer.Segments,
-			LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1})
+			lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1})
 		require.False(t, source.walks.Reusable(scaled),
 			"a record in different coordinates is a different record, whatever produced it")
 	})
