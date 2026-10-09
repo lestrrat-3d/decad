@@ -85,6 +85,6 @@ func (s *ThroughStops[T]) Finish() (float64, float64, []T, error) {
 		}
 	}
 	stop := s.travel * last.far
-	delta := proofbound.AbsSumUpper(ThroughStopRound(s.origin, s.dir, last.hi, s.travel, stop), farDelta)
+	delta := proofbound.AbsSumUpper(throughStopRound(s.origin, s.dir, last.hi, s.travel, stop), farDelta)
 	return stop, delta, refs, nil
 }

@@ -282,7 +282,7 @@ func (r Profile) IntegralsBudget(budget *proofbound.WorkBudget) (Integrals, erro
 }
 
 func (r Profile) integralsTo(order freeform.MomentIntegralOrder) (Integrals, error) {
-	pre, err := ValidateRecord(r)
+	pre, err := validateRecord(r)
 	if err != nil {
 		return Integrals{}, err
 	}
@@ -414,7 +414,7 @@ func translateMomentIntegrals(ig Integrals, anchor Point2, order freeform.Moment
 // would round an already representable value and report Exact with a zero bound
 // for it.
 // A free-form segment arrives with the chain the record-level preflight already
-// converted and charged by ValidateRecord, so this pass converts nothing and
+// converted and charged by validateRecord, so this pass converts nothing and
 // charges nothing.
 func (ig *Integrals) add(segment CurveSegment, plan Plan, anchor Point2, order freeform.MomentIntegralOrder) error {
 	return ig.state().AddSegment(segment, momentregion.Plan{Spans: plan.Spans, Reversed: plan.Reversed}, anchor, order)
