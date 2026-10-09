@@ -267,7 +267,7 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeform.FreeformWork) ([]freeform.Bez
 	// means reading all n weights, so it is inherently linear and no O(1) charge can
 	// follow it: a scan placed ahead of every charge is unbounded and uncancellable,
 	// which is precisely what freeform.FreeformWorkLimit exists to stop (the public
-	// ProfileRecord methods take no context). Levying the lift charge first bounds
+	// MeasuredProfile methods take no context). Levying the lift charge first bounds
 	// that scan under the same ceiling, under freeform.ChargeRationalLift's own invariant:
 	// every pass between that charge and the conversion charge below — the content
 	// checks, the tier test and freeform.FloatKnotDemand — is a single walk over one array

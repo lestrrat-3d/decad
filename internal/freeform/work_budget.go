@@ -14,7 +14,7 @@ import (
 // per segment reads a record of individually cheap curves as cheap however many
 // of them it holds, and a counter opened per pass lets a later pass run work an
 // earlier one already proved unaffordable. Either way the aggregate — which is
-// what actually runs — would be unbounded. Public ProfileRecord methods take no
+// what actually runs — would be unbounded. Public MeasuredProfile methods take no
 // context, so the limit is fixed rather than caller-set, exactly as shellInradiusWorkLimit is for the inward shell survey.
 // Reaching it is Table R row R7: ErrUnsupported, never a widened float path.
 //

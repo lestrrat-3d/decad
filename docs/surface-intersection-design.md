@@ -264,8 +264,9 @@ as it does for a caller-drawn profile.
 private scene is owned by this call, and each selected cell comes from that
 scene's single arrangement. The seam records those cells directly, applying
 the same `TExact`, range and loop-closure checks as the profile recording path.
-Public `RecordProfile` still re-arranges a caller's sketch to authenticate a
-profile snapshot, because callers can change its exported fields.
+The internal `momentinput.RecordProfileWithArea` still re-arranges a caller's
+sketch to authenticate a profile snapshot, because callers can change its
+exported fields.
 
 **`Extend`'s output is the receiver's own record with one range widened.** No
 assembly runs at all.

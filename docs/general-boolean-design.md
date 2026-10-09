@@ -559,7 +559,7 @@ with a hole each send the pair to the mesh path; a face that fails modify
 type brepFace struct {
     frame   r3.Frame       // the face's plane (planar) or the sweep frame of its wall (swept)
     // exactly one of:
-    region  *ProfileRecord // planar: one outer loop and holes in frame coordinates, material left of each walk
+    region  *profileRecord // planar: one outer loop and holes in frame coordinates, material left of each walk
     outward bool           // planar: true when the outward normal is frame.N()
     sweep   r3.Vec         // planar: the direction, along a reference axis, a restated straight wall sweeps; zero for a cap
     wall    CurveSegment   // swept: a LineSeg/CircleSeg/ArcSeg in frame coordinates, material on its left
