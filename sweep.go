@@ -51,21 +51,12 @@ type sweepOption struct{ option.Interface }
 
 func (sweepOption) sweepOption() {}
 
-type identSweepTwist struct{}
-
-// WithSweepTwist applies total signed rotation about the transported path
-// tangent. The current evaluator accepts only zero twist; a nonzero angle is
-// ErrUnsupported and leaves the document unchanged.
-func WithSweepTwist(angle units.Value) SweepOption {
-	return sweepOption{option.New(identSweepTwist{}, angle)}
-}
-
 // Sweep moves p along path, registers the resulting solid, and returns
 // it. The path must start in the profile plane and its initial tangent must be
 // exactly codirectional with the plane's positive normal. Composite paths also
 // require tangent joins, exactly representable transported frames, and a
-// certified absence of unintended span contact. Closed paths and nonzero twist
-// remain staged as ErrUnsupported. Every failure and cancellation leaves the
+// certified absence of unintended span contact. Closed paths remain staged
+// as ErrUnsupported. Every failure and cancellation leaves the
 // document unchanged.
 func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
 	if ctx == nil {
@@ -175,9 +166,9 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	return body, nil
 }
 
-// validateSweepOptions resolves opts into a sweepConfig: the WithSweepTwist
-// gate, the WithSurfaceResult flag, and docs/sweep-design.md §16's two
-// options. A surfaceResultOption is not a sweepOption, so it is matched and
+// validateSweepOptions resolves opts into a sweepConfig: the
+// WithSurfaceResult flag and docs/sweep-design.md §16's two options. A
+// surfaceResultOption is not a sweepOption, so it is matched and
 // consumed before the sweepOption assertion below runs — falling through to
 // that assertion would wrongly answer ErrDegenerate instead of setting the
 // flag (docs/surface-design.md §4). A repeated WithSurfaceResult() is
@@ -186,8 +177,6 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 // which WithSectionScale's factor count must match (Table SM row SM3).
 func validateSweepOptions(opts []SweepOption, segments int) (sweepConfig, error) {
 	var cfg sweepConfig
-	haveTwist := false
-	var twist sweepOption
 	var scale []units.Value
 	for _, raw := range opts {
 		if raw == nil {
@@ -202,12 +191,6 @@ func validateSweepOptions(opts []SweepOption, segments int) (sweepConfig, error)
 			return sweepConfig{}, fmt.Errorf(`%w: the sweep option is not a decad sweep option (%T)`, ErrDegenerate, raw)
 		}
 		switch ident := o.Ident().(type) {
-		case identSweepTwist:
-			if haveTwist {
-				return sweepConfig{}, fmt.Errorf(`%w: WithSweepTwist was passed more than once`, ErrDegenerate)
-			}
-			twist = o
-			haveTwist = true
 		case identMitredJoins:
 			if cfg.mitred {
 				return sweepConfig{}, fmt.Errorf(`%w: WithMitredJoins was passed more than once`, ErrDegenerate)
@@ -233,21 +216,6 @@ func validateSweepOptions(opts []SweepOption, segments int) (sweepConfig, error)
 			return sweepConfig{}, err
 		}
 		cfg.factors = factors
-	}
-	if haveTwist {
-		angle, ok := option.Get[units.Value](twist)
-		if !ok {
-			return sweepConfig{}, fmt.Errorf(`%w: WithSweepTwist carries no angle`, ErrDegenerate)
-		}
-		if angle.Kind() != units.Angle {
-			return sweepConfig{}, fmt.Errorf(`%w: sweep twist must be an angle, got %s`, ErrUnitKind, angle.Kind())
-		}
-		if _, err := angle.In(units.Radian); err != nil {
-			return sweepConfig{}, fmt.Errorf(`%w: the sweep twist is not representable: %s`, ErrNotFinite, err)
-		}
-		if angle.Mag() != 0 {
-			return sweepConfig{}, fmt.Errorf(`%w: nonzero sweep twist is not implemented`, ErrUnsupported)
-		}
 	}
 	if cfg.surfaceResult && (cfg.mitred || cfg.scaled) {
 		return sweepConfig{}, fmt.Errorf(`%w: a mitred or scaled sweep builds a solid only; WithSurfaceResult is not implemented for it (docs/sweep-design.md Table SM row SM9)`, ErrUnsupported)

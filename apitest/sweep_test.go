@@ -2,7 +2,6 @@ package apitest_test
 
 import (
 	"context"
-	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -28,7 +27,7 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile, path, decad.WithSweepTwist(units.Degrees(0)))
+	body, err := doc.Sweep(t.Context(), s, profile, path)
 	require.NoError(t, err)
 	extrudeDoc := decad.New()
 	extruded, err := extrudeDoc.Extrude(
@@ -248,31 +247,6 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 		{name: "empty path", sketch: s, profile: profile, path: emptyPath, want: decad.ErrDegenerate},
 		{name: "nil option", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{nilOption}, want: decad.ErrDegenerate},
 		{name: "foreign option", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{foreignSweepOption{}}, want: decad.ErrDegenerate},
-		{name: "wrong twist unit", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Millimeters(1))}, want: decad.ErrUnitKind},
-		{name: "non-finite twist", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Degrees(math.Inf(1)))}, want: decad.ErrNotFinite},
-		{name: "nonzero twist", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Degrees(1))}, want: decad.ErrUnsupported},
-		{
-			name:    "repeated twist",
-			sketch:  s,
-			profile: profile,
-			path:    validPath,
-			opts: []decad.SweepOption{
-				decad.WithSweepTwist(units.Degrees(0)),
-				decad.WithSweepTwist(units.Degrees(0)),
-			},
-			want: decad.ErrDegenerate,
-		},
-		{
-			name:    "repeated nonzero twist",
-			sketch:  s,
-			profile: profile,
-			path:    validPath,
-			opts: []decad.SweepOption{
-				decad.WithSweepTwist(units.Degrees(1)),
-				decad.WithSweepTwist(units.Degrees(2)),
-			},
-			want: decad.ErrDegenerate,
-		},
 		{name: "off-plane start", sketch: s, profile: profile, path: offPlane, want: decad.ErrDegenerate},
 		{name: "reversed tangent", sketch: s, profile: profile, path: reversed, want: decad.ErrDegenerate},
 		{name: "skew tangent", sketch: s, profile: profile, path: skew, want: decad.ErrDegenerate},
