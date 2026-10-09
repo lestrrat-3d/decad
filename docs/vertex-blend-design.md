@@ -72,8 +72,16 @@ rectangle before route L looks for a partial loop. The partial-loop band then
 closes the shared corner on the restated face. The two-edge corner of a box
 at one top and one vertical edge uses this path.
 
+Three selected edges at one box corner first fillet the edge across the top
+cap. The two shortened top edges and their new arc then form one selected
+partial loop. The arc's exact radius equals the requested radius, so its cap
+walk collapses to the arc centre. Route L builds a sphere patch between that
+pole and the arc at the band's side level. Only the far ends of the two top
+lines need terminal arcs; their ends beside the new arc meet the sphere.
+
 The band record keeps the original complete loop, a selected-walk mask,
 and the cap-contour segment for each selected walk and reflex connector.
+An exact-radius selected arc has no cap-contour segment and records `-1`.
 Only selected cap and side edges and reflex connector arcs are open in the
 face record. Its terminal arcs are also open and each pairs with one band
 patch. At a convex join between selected walks the ellipse pairs the two
@@ -106,6 +114,8 @@ matching sample counts. LF9's cap samples all lie at the pole, so the planar
 cap triangulator removes consecutive duplicate samples from its own ring.
 The band retains them to form the triangular sphere strips. The mesh still
 passes the vertex-link and facet-area audits.
+The partial-loop mesh uses the swept arc wall's chord count for the sphere
+side, so its samples meet that wall at the same vertices.
 
 `CapOffsetStationBound` bounds the ideal cap stations for the occupied
 volume proof. At an exactly collapsed radius, every station is exactly the

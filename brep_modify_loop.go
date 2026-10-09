@@ -82,6 +82,9 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		return brepBlendEdges(ctx, d, bp, call)
 	}
 	if call.loopKind == brepBandFillet {
+		if body, recognized, err := r.cornerTriad(ctx, d); recognized {
+			return body, err
+		}
 		loops, singles, mixed, err := r.splitVertexBlend()
 		if err != nil {
 			return nil, err
@@ -110,7 +113,7 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		// loop in the input record. Route E's preparation restates that wall;
 		// the same partial-loop builder can then close their common corner.
 		if selectedStraightEdgesShareVertex(call.edges) {
-			er, blends, err := prepareBrepEdgeBlends(ctx, bp, call, true)
+			er, blends, err := prepareBrepEdgeBlends(ctx, bp, call, true, nil)
 			if err == nil {
 				next, err := newBrepLoopRead(ctx, er.bp, call)
 				if err != nil {
@@ -120,12 +123,160 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 					return nil, err
 				}
 				if sel, selected, ok := next.partialSelectedLoop(); ok {
+					selectedAt := map[[3]float64]int{}
+					for _, eb := range blends {
+						for _, v := range eb.v {
+							selectedAt[v]++
+						}
+					}
+					for _, eb := range blends {
+						for k, v := range eb.v {
+							eb.terminal[k] = selectedAt[v] == 1
+						}
+					}
 					return next.buildPartialFillet(ctx, d, sel, selected, blends)
 				}
 			}
 		}
 	}
 	return r.buildLoops(ctx, d)
+}
+
+// cornerTriad rounds three edges at one vertex by rounding the edge across
+// a planar cap first. The cap's two shortened lines and the new tangent arc
+// then form one partial fillet chain with a sphere at that arc.
+func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, bool, error) {
+	if len(r.call.edges) != 3 {
+		return nil, false, nil
+	}
+	var corner *Vertex
+	for _, v := range [2]*Vertex{r.call.edges[0].start, r.call.edges[0].end} {
+		if v != nil && (r.call.edges[1].start == v || r.call.edges[1].end == v) &&
+			(r.call.edges[2].start == v || r.call.edges[2].end == v) {
+			corner = v
+			break
+		}
+	}
+	if corner == nil {
+		return nil, false, nil
+	}
+	for single := range 3 {
+		var others [2]int
+		j := 0
+		for i := range 3 {
+			if i != single {
+				others[j] = i
+				j++
+			}
+		}
+		capRead := *r
+		capRead.call.edges = []*Edge{r.call.edges[others[0]], r.call.edges[others[1]]}
+		capRead.matched = []int{r.matched[others[0]], r.matched[others[1]]}
+		capSel, selected, ok := capRead.partialSelectedLoop()
+		if !ok {
+			continue
+		}
+		singleCall := r.call
+		singleCall.edges = []*Edge{r.call.edges[single]}
+		singleRead := *r
+		singleRead.call, singleRead.matched = singleCall, []int{r.matched[single]}
+		if !singleRead.singleStraightEdges() {
+			continue
+		}
+		// Only a pair of neighbouring walks at the shared vertex can close
+		// against the arc made by the first blend.
+		adjacent := false
+		for i, on := range selected {
+			if on && selected[(i+1)%len(selected)] {
+				adjacent = true
+			}
+		}
+		if !adjacent {
+			continue
+		}
+		step, err := brepBlendEdges(ctx, d, r.bp, singleCall)
+		if err != nil {
+			return nil, true, err
+		}
+		bp, ok := step.payload.(brepPayload)
+		if !ok {
+			return nil, true, fmt.Errorf(`%w: the first corner blend produced no brep record`, ErrUnsupported)
+		}
+		var face *Face
+		for _, candidate := range step.Faces() {
+			for _, origin := range candidate.origins {
+				if origin.Role == bp.faces[capSel.face].role {
+					face = candidate
+				}
+			}
+		}
+		if face == nil || capSel.loop >= len(face.loops) {
+			return nil, true, fmt.Errorf(`%w: the rounded corner lost its cap face`, ErrUnsupported)
+		}
+		loopEdges := face.loops[capSel.loop].Edges()
+		var shortened [2]*Edge
+		var near [2]*Vertex
+		for j, originalIndex := range others {
+			original := r.call.edges[originalIndex]
+			far := original.start
+			if far == corner {
+				far = original.end
+			}
+			oldDir := original.end.position.Sub(original.start.position)
+			for _, edge := range loopEdges {
+				if _, ok := edge.curve.(Line3); !ok {
+					continue
+				}
+				other := edge.start
+				switch {
+				case edge.start.position.Sub(far.position).Len() <= 1e-6:
+					other = edge.end
+				case edge.end.position.Sub(far.position).Len() <= 1e-6:
+				default:
+					continue
+				}
+				newDir := edge.end.position.Sub(edge.start.position)
+				if oldDir.Cross(newDir).Len() > 1e-6*oldDir.Len()*newDir.Len() {
+					continue
+				}
+				shortened[j], near[j] = edge, other
+				break
+			}
+			if shortened[j] == nil {
+				return nil, true, fmt.Errorf(`%w: a corner cap edge has no shortened successor`, ErrUnsupported)
+			}
+		}
+		var arc *Edge
+		for _, edge := range loopEdges {
+			if _, ok := edge.curve.(Arc3); !ok {
+				continue
+			}
+			if (edge.start == near[0] && edge.end == near[1]) ||
+				(edge.start == near[1] && edge.end == near[0]) {
+				arc = edge
+				break
+			}
+		}
+		if arc == nil {
+			return nil, true, fmt.Errorf(`%w: the rounded corner has no joining cap arc`, ErrUnsupported)
+		}
+		nextCall := r.call
+		nextCall.edges = []*Edge{shortened[0], shortened[1], arc}
+		next, err := newBrepLoopRead(ctx, bp, nextCall)
+		if err != nil {
+			return nil, true, err
+		}
+		if err := next.matchEdges(); err != nil {
+			return nil, true, err
+		}
+		newCap, newSelected, ok := next.partialSelectedLoop()
+		if !ok || newCap.face != capSel.face || newCap.loop != capSel.loop {
+			return nil, true, next.refuse("SL1", `the rounded corner has no selected cap chain`)
+		}
+		body, err := brepFilletPartialLoop(ctx, d, bp, nextCall, newCap, newSelected)
+		return body, true, err
+	}
+	return nil, false, nil
 }
 
 // splitVertexBlend finds complete selected planar loops and the remaining

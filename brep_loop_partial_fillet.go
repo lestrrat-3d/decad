@@ -46,7 +46,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet band lacks a selected contour edge`, ErrUnsupported)
 		}
 		capEdges[i], side[i] = open.capBySeg[bi][b.capWalk[i]], open.side[bi][si].edge
-		if capEdges[i] == nil {
+		if b.capWalk[i] >= 0 && capEdges[i] == nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet band lacks a selected cap edge`, ErrUnsupported)
 		}
 		si++
@@ -58,6 +58,15 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	up := pl.dir(0, 0, -b.matSign(f))
 	sideZ, _ := b.sideLevel(f)
 	lead, trail := make([]*Edge, n), make([]*Edge, n)
+	capAt := func(k int) *Vertex {
+		if capEdges[k] != nil {
+			return capEdges[k].start
+		}
+		if capEdges[(k+n-1)%n] != nil {
+			return capEdges[(k+n-1)%n].end
+		}
+		return nil
+	}
 	meridianLen, meridianBound := heldOf(filletband.MeridianLength(rIv))
 	meridian := func(foot Point2, vertex Point2, w survey2d.SideWalk, capV, sideV *Vertex) *Edge {
 		nu, nv := foot.U-vertex.U, foot.V-vertex.V
@@ -80,9 +89,12 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		}
 		var capV, sideV *Vertex
 		if b.selected[k] {
-			capV, sideV = capEdges[k].start, side[k].start
+			capV, sideV = capAt(k), side[k].start
 		} else {
 			capV, sideV = capEdges[prev].end, side[prev].end
+		}
+		if capV == nil {
+			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet corner has no cap vertex`, ErrUnsupported)
 		}
 		if b.selected[prev] != b.selected[k] {
 			for _, terminal := range open.terminal[bi] {
@@ -114,7 +126,14 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			lead[k] = meridian(j.pB, vertex, w, arc.end, side[k].start)
 			continue
 		}
-		if capEdges[k].start != capEdges[prev].end {
+		if fr.loop.Corners[k] == filletband.Tangent {
+			j := fr.joins[k]
+			w := fr.walks[k]
+			trail[k] = meridian(j.m, Point2{U: w.StartU, V: w.StartV}, w, capV, sideV)
+			lead[k] = trail[k]
+			continue
+		}
+		if capEdges[k] == nil || capEdges[prev] == nil || capEdges[k].start != capEdges[prev].end {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet's selected cap walks do not meet`, ErrUnsupported)
 		}
 		if fr.loop.Corners[k] != filletband.Miter {
@@ -168,8 +187,8 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		if !on {
 			continue
 		}
-		if p >= len(pieces) || pieces[p].Kind != filletband.Cylinder || pieces[p].Walk != i {
-			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet has no cylinder piece for its selected walk`, ErrUnsupported)
+		if p >= len(pieces) || pieces[p].Walk != i {
+			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet has no piece for its selected walk`, ErrUnsupported)
 		}
 		piece := pieces[p]
 		w := fr.walks[i]
@@ -179,6 +198,25 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet patch has an open corner`, ErrUnsupported)
 		}
 		capE, sideE := capEdges[i], side[i]
+		if filletSphereWalk(w, r) {
+			pole := capAt(i)
+			if piece.Kind != filletband.InnerTorus || pole == nil || pole != capAt(next) ||
+				start.start != pole || end.start != pole || start.end != sideE.start || end.end != sideE.end {
+				return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet's sphere patch does not close`, ErrUnsupported)
+			}
+			surf := Sphere{Center: pl.point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
+			loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
+				{edge: end, forward: false}, {edge: start, forward: true}}, outer: true}
+			if err := newPatch(surf, loop, pole, piece); err != nil {
+				return nil, brepBandMass{}, err
+			}
+			sideE.convex = convex
+			p++
+			continue
+		}
+		if piece.Kind != filletband.Cylinder || capE == nil {
+			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet has no cylinder piece for its selected walk`, ErrUnsupported)
+		}
 		if !edgeConnects(start, capE.start, sideE.start) || !edgeConnects(end, capE.end, sideE.end) {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet patch does not close on its contours`, ErrUnsupported)
 		}
