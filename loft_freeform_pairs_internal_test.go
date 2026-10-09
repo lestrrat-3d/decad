@@ -236,7 +236,8 @@ func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measur
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
 	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
-	return mass.area(capPolygonAreaRat(a.pts0, a.loopIdx0), capPolygonAreaRat(a.pts1, a.loopIdx1)), pairs, a
+	return mass.area(loftmesh.CapPolygonAreaRat(a.pts0, a.loopIdx0),
+		loftmesh.CapPolygonAreaRat(a.pts1, a.loopIdx1)), pairs, a
 }
 
 // wedgeLoopSamples samples the recorded outer loop in walk order: a LineSeg

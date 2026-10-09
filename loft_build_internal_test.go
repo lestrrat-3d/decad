@@ -1235,7 +1235,7 @@ func TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg(t *testing.T) {
 	require.False(t, ig.ExactDead)
 	require.True(t, ig.Exact.Complete())
 
-	got := capPolygonAreaRat(a.pts0, a.loopIdx0)
+	got := loftmesh.CapPolygonAreaRat(a.pts0, a.loopIdx0)
 	require.Equalf(t, 0, ig.Exact.Area.Cmp(got),
 		"untrimmed LineSeg: shoelace %s must equal moments.go's own region rational %s exactly",
 		got.RatString(), ig.Exact.Area.RatString())
@@ -1295,7 +1295,7 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	}
 
 	a := assembleLoftFixture(t, pl)
-	polyRat := capPolygonAreaRat(a.pts0, a.loopIdx0)
+	polyRat := loftmesh.CapPolygonAreaRat(a.pts0, a.loopIdx0)
 
 	// The other rational this cap could have been read from: moments.go's
 	// own region-level integral of the record, independent of whatever
@@ -1499,8 +1499,8 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 			pl := tc.build(t)
 			a := assembleLoftFixture(t, pl)
 
-			got0 := capPolygonAreaRat(a.pts0, a.loopIdx0)
-			got1 := capPolygonAreaRat(a.pts1, a.loopIdx1)
+			got0 := loftmesh.CapPolygonAreaRat(a.pts0, a.loopIdx0)
+			got1 := loftmesh.CapPolygonAreaRat(a.pts1, a.loopIdx1)
 
 			ig0, err := pl.profile0.IntegralsTo(freeform.MomentAreaOrder)
 			require.NoError(t, err)

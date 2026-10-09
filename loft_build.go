@@ -310,8 +310,8 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 
-	cap0Rat := capPolygonAreaRat(a.pts0, a.loopIdx0)
-	cap1Rat := capPolygonAreaRat(a.pts1, a.loopIdx1)
+	cap0Rat := loftmesh.CapPolygonAreaRat(a.pts0, a.loopIdx0)
+	cap1Rat := loftmesh.CapPolygonAreaRat(a.pts1, a.loopIdx1)
 
 	// A surface result publishes a sheet, never a solid: solid false is what
 	// makes Volume() and Centroid() answer ErrNotSolid through their existing

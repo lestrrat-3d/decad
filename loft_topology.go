@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -139,51 +137,11 @@ func loftVertex(p r3.Vec, delta float64) *Vertex {
 	return &Vertex{position: p, bound: units.Millimeters(delta)}
 }
 
-// loftEdgeLength is the proven bound on a straight loft edge's held length:
-// the square root's own committed error against the exact squared length
-// (capcontour.StraightEdgeBound/proof.DySquaredDistance3), no
-// new mechanism for an edge whose build carries a zero delta. An edge at a
-// positive delta (§12 PR 2a — a placed build, or a COMPUTED station)
-// composes that with internal/proofbound/bounds.go's proofbound.ChainLengthBound(1, delta, held) — both
-// endpoints displaced by delta is exactly that helper's own one-chord case —
-// through proofbound.AbsSumUpper.
-func loftEdgeLength(a, b r3.Vec, delta float64) (float64, float64) {
-	held := a.Sub(b).Len()
-	sq, sqOK := proofarith.DySquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
-	bound := capcontour.StraightEdgeBound(held, sq, sqOK)
-	if delta > 0 {
-		bound = proofbound.AbsSumUpper(bound, proofbound.ChainLengthBound(1, delta, held))
-	}
-	return held, bound
-}
-
 // loftEdge builds one straight loft edge between two vertex-table indices,
 // with the given walked-boundary convexity.
 func loftEdge(vertexObjs []*Vertex, positions []r3.Vec, a, b int, convex bool, delta float64) *Edge {
-	held, bound := loftEdgeLength(positions[a], positions[b], delta)
+	held, bound := loftmesh.EdgeLength(positions[a], positions[b], delta)
 	return &Edge{curve: Line3{}, start: vertexObjs[a], end: vertexObjs[b], convex: convex, length: held, lengthBound: bound}
-}
-
-// junctionApex returns tri's one vertex index that is not in the shared pair
-// (a, b) — the OTHER incident triangle's own apex, §5's D.
-func junctionApex(tri [3]int, a, b int) int {
-	for _, v := range tri {
-		if v != a && v != b {
-			return v
-		}
-	}
-	return tri[0]
-}
-
-// junctionConvex decides a rung or diagonal edge's convexity: proofarith.OrientSign(A,
-// B, C, D) < 0, where (A, B, C) is primary's own outward-wound vertex order
-// and D is other's apex — design O3, pinned against the box fixture: a
-// standard box's vertical edge (a rung) is a genuine convex corner, and this
-// is the sign that reads it as one. A zero result is a decided non-convex
-// (flat) edge: docs/loft-design.md §5's rule for a flat rung or diagonal.
-func junctionConvex(verts []r3.Vec, primary, other [3]int, a, b int) bool {
-	apex := junctionApex(other, a, b)
-	return proofarith.OrientSign(verts[primary[0]], verts[primary[1]], verts[primary[2]], verts[apex]) < 0
 }
 
 // planeFromTriangle builds a face's Plane surface directly from one of its
@@ -314,9 +272,9 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 		for j := range n {
 			jn := (j + 1) % n
 			jp := (j - 1 + n) % n
-			rungConvex := junctionConvex(a.verts, lowerTri[i][jp], upperTri[i][j], vIdx[j], wIdx[j])
+			rungConvex := loftmesh.JunctionConvex(a.verts, lowerTri[i][jp], upperTri[i][j], vIdx[j], wIdx[j])
 			rungE[j] = loftEdge(vertexObjs, a.verts, vIdx[j], wIdx[j], rungConvex, a.delta)
-			diagConvex := junctionConvex(a.verts, lowerTri[i][j], upperTri[i][j], vIdx[j], wIdx[jn])
+			diagConvex := loftmesh.JunctionConvex(a.verts, lowerTri[i][j], upperTri[i][j], vIdx[j], wIdx[jn])
 			diagE[j] = loftEdge(vertexObjs, a.verts, vIdx[j], wIdx[jn], diagConvex, a.delta)
 		}
 
@@ -369,8 +327,8 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 	if a.delta > 0 {
 		capStartTris := a.tris[a.walls : a.walls+a.capStartCount]
 		capEndTris := a.tris[a.walls+a.capStartCount:]
-		capStartBound = proofbound.AbsSumUpper(capStartBound, capTriangleAreaAllow(a.verts, capStartTris, a.delta))
-		capEndBound = proofbound.AbsSumUpper(capEndBound, capTriangleAreaAllow(a.verts, capEndTris, a.delta))
+		capStartBound = proofbound.AbsSumUpper(capStartBound, loftmesh.CapTriangleAreaAllow(a.verts, capStartTris, a.delta))
+		capEndBound = proofbound.AbsSumUpper(capEndBound, loftmesh.CapTriangleAreaAllow(a.verts, capEndTris, a.delta))
 	}
 	capStart := &Face{
 		surface:       capStartSurf,
@@ -394,68 +352,4 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 	}
 
 	return capStart, capEnd, walls, nil
-}
-
-// capTriangleAreaAllow sums internal/proofbound/bounds.go's proofbound.PerturbedTriangleAreaAllow over one
-// cap's own triangulation triangles (docs/loft-design.md §12 PR 2a) — the
-// extra area a placement's delta can add to a cap's own exact rational area
-// (capPolygonAreaRat), summed the same way loft_moments.go's accumulator
-// sums it for the wall triangles.
-func capTriangleAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 {
-	total := 0.0
-	for _, t := range tris {
-		total = proofbound.UpRound(total + proofbound.PerturbedTriangleAreaAllow(verts[t[0]], verts[t[1]], verts[t[2]], delta))
-	}
-	return total
-}
-
-// capPolygonAreaRat returns the exact rational shoelace area of the cap
-// polygon this construction ACTUALLY assembled: pts in that plane's own
-// local (U, V) coordinates, walked per loop in loopIdx's own recorded walk
-// order — assembleLoft's own pts0/loopIdx0 or pts1/loopIdx1, the identical
-// arrays triangulation.Triangulate consumed to build that cap's own triangles.
-// Reading the SAME points the triangles came from, rather than
-// re-deriving the region's area from the record (moments.go), is what
-// keeps the published cap Area and the built cap triangles in lockstep by
-// construction: whatever assembleLoft walked into a triangle is exactly
-// what this sums. On an untrimmed LineSeg profile that walked point IS the
-// record's own endpoint, so this sum and moments.go's region-level integral
-// are the same rational. On a TRIMMED LineSeg profile they are not: the walk
-// lands on walkOf's float lerp2 endpoint while moments.go integrates the
-// exact rational ratLerp (moments.go's ratLerp/lerp2 doc comments), and the
-// cap reading follows the walked point, because that is the point the cap's
-// own triangles have.
-//
-// The outer loop walks CCW and each hole walks CW
-// (docs/sketch-seam-design.md), and a per-loop shoelace sum already nets a
-// hole's area out with no special-casing — the identical convention
-// moments.go's own Green's-theorem accumulator relies on (ProfileRecord.
-// Area's own doc comment: "a hole's clockwise walk subtracts without a
-// special case").
-//
-// Every coordinate is taken exactly as a math/big.Rat off its own float64
-// (polynomial.MustRatOf from internal/polynomial, with its take-the-floats-exactly
-// discipline) — no float arithmetic anywhere in this sum. polynomial.MustRatOf's
-// finiteness precondition is already proven here: every pts entry is one
-// of the SAME (U, V) pairs assembleLoft already lifted through its plane
-// frame and checked with proofbound.FiniteVec before this function is ever reached
-// (errLoftPointUnrepresentable, S13), so a non-finite U or V would have
-// refused the build already.
-//
-// pts/loopIdx carry no assumption about segment kind, so admitting a
-// curved same-kind pairing later needs no rework here: whatever stations
-// assembleLoft chords a curve into become more pts entries this same
-// shoelace sums unchanged.
-func capPolygonAreaRat(pts []Point2, loopIdx [][]int) *big.Rat {
-	sum := new(big.Rat)
-	for _, idx := range loopIdx {
-		n := len(idx)
-		for j := range n {
-			p, q := pts[idx[j]], pts[idx[(j+1)%n]]
-			term := new(big.Rat).Mul(polynomial.MustRatOf(p.U), polynomial.MustRatOf(q.V))
-			term.Sub(term, new(big.Rat).Mul(polynomial.MustRatOf(q.U), polynomial.MustRatOf(p.V)))
-			sum.Add(sum, term)
-		}
-	}
-	return sum.Quo(sum, big.NewRat(2, 1))
 }
