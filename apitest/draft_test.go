@@ -325,9 +325,8 @@ func cylinderBody(t *testing.T, doc *decad.Document) *decad.Body {
 // runs from z0 = -h/2 to z1 = h/2, about each cap in turn. The body is F1's
 // frustum shifted to the receiver's levels: volume h(a² - 2ad + 4d²/3), area
 // a² + (a - 2d)² + 4(a - d)√(h² + d²), and the far corners at ±(a/2 - d) on
-// the far cap's level. Shown to fail first: with Draft's near level taken as
-// the sketch plane (zero) instead of the neutral cap's own level, the far
-// corners sat h/2 off their closed-form level and the vertex check went red.
+// the far cap's level. Shown to fail first: with Draft's nearStart inverted, the far corners sat
+// 0.87 mm from their closed-form points and the vertex check went red.
 func TestDraftSymmetricReceiver(t *testing.T) {
 	t.Parallel()
 	const deg = 5.0
