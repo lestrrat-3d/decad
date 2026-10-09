@@ -11,25 +11,8 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// ContactRequest states the maximum position and normal error a manifold may
-// publish. SupportBand is a nonnegative Length; when positive, an exact planar
-// pair also publishes every vertex of the resting body that lies within it
-// above a support plane, and an exact planar pair apart by at most it is
-// ContactBand (docs/multibody-dynamics-design.md §10.5). The zero Value is a
-// zero band, which publishes the exact contact set alone.
-//
-// HeldChord is a nonnegative Length: the chord tolerance a solid with a curved
-// face and no exact contact family of its own (a general revolve, a curved
-// cap-loop chamfer, a cup or sweep over a curved section) is tessellated at
-// for its held mesh, whose Bound is then the displacement δ the pair charges
-// (§10.4). The zero Value admits no such body: it is left undecided rather
-// than chorded at a width the caller never stated.
-type ContactRequest struct {
-	PointResolution  units.Value
-	NormalResolution units.Value
-	SupportBand      units.Value
-	HeldChord        units.Value
-}
+// ContactRequest states the maximum position and normal error a manifold may publish.
+type ContactRequest = reportvocab.ContactRequest
 
 // validateSupportBand admits the zero Value or a finite nonnegative Length.
 func validateSupportBand(v units.Value) error {
@@ -94,43 +77,17 @@ const (
 	ContactNonConvex
 )
 
-// ContactFeature names an original topological feature. The first contact
-// stage publishes face features; later stages may use edge and vertex fields.
-type ContactFeature struct {
-	Face   *Face
-	Edge   *Edge
-	Vertex *Vertex
-}
+// ContactFeature names an original topological feature.
+type ContactFeature = reportvocab.ContactFeature[*Face, *Edge, *Vertex]
 
 // ContactPoint bounds two boundary witnesses and their A-to-B normal.
-// Separation is the signed B-minus-A distance along that normal.
-type ContactPoint struct {
-	OnA, OnB           VecMeasurement
-	Normal             VecMeasurement
-	NormalAngle        units.Value
-	Separation         Measurement
-	FaceA, FaceB       *Face
-	FeatureA, FeatureB ContactFeature
-}
+type ContactPoint = reportvocab.ContactPoint[*Face, *Edge, *Vertex]
 
-// ContactManifold is a deterministic reduction of the complete certified
-// contact patch. Its points are immutable once returned.
-type ContactManifold struct {
-	Points []ContactPoint
-}
+// ContactManifold is a deterministic reduction of the complete certified contact patch.
+type ContactManifold = reportvocab.ContactManifold[*Face, *Edge, *Vertex]
 
 // ContactReport is a read-only pair result at the two caller-supplied poses.
-type ContactReport struct {
-	A, B     *Body
-	PoseA    r3.Transform
-	PoseB    r3.Transform
-	Request  ContactRequest
-	Relation ContactRelation
-	Gap      *Measurement
-	Overlap  *Measurement
-	Manifold *ContactManifold
-	Reason   ContactReason
-}
+type ContactReport = reportvocab.ContactReport[*Body, *Face, *Edge, *Vertex, ContactRelation, ContactReason]
 
 // ContactPair proves the relation of two live solids at poses applied after
 // their recorded placements. Bodies and the document are not changed.

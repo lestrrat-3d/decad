@@ -1,5 +1,10 @@
 package reportvocab
 
+import (
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/units"
+)
+
 // ContactRelation is the proven relation of two complete occupied sets.
 type ContactRelation int
 
@@ -26,3 +31,63 @@ const (
 	SweepGrazingTouch
 	SweepPersistentBand
 )
+
+// SweepStartPolicy selects what to prove when the bodies initially touch.
+type SweepStartPolicy int
+
+const (
+	StopAtInitialContact SweepStartPolicy = iota
+	ContinueSeparatingTouch
+	ContinueCertifiedTouch
+)
+
+// SweepRequest bounds the time search and the contact geometry resolution.
+// RestSpeed is a nonnegative Velocity; the zero Value rests no vertex.
+type SweepRequest struct {
+	ContactRequest
+	TimeResolution     units.Value
+	MaxPoseEvaluations uint64
+	StartPolicy        SweepStartPolicy
+	RestSpeed          units.Value
+}
+
+// SweepCause explains why a continuous claim was not proved.
+type SweepCause int
+
+const (
+	SweepNoCause SweepCause = iota
+	SweepPoseRelation
+	SweepMissingBound
+	SweepTimeFloor
+	SweepFractionFloor
+	SweepPoseBudget
+	SweepContactUnsupported
+	SweepDepartureUnproved
+	SweepContactTrackUnproved
+	SweepEventUnrepresentable
+)
+
+// SweepInstant identifies a dyadic fraction of the requested duration.
+type SweepInstant struct {
+	Fraction units.Value
+	Elapsed  measurement.Measurement
+}
+
+// SweepInterval identifies an interval of the requested duration.
+type SweepInterval struct{ From, To SweepInstant }
+
+// SweepDeparture certifies positive separation after an initial touch.
+type SweepDeparture struct {
+	Until      SweepInstant
+	GapAtUntil measurement.Measurement
+}
+
+// SweepEvent reports the ideal path relation at one sampled instant.
+type SweepEvent[FaceT, EdgeT, VertexT comparable, RelationT, ReasonT any] struct {
+	At       SweepInstant
+	Relation RelationT
+	Gap      *measurement.Measurement
+	Overlap  *measurement.Measurement
+	Manifold *ContactManifold[FaceT, EdgeT, VertexT]
+	Reason   ReasonT
+}

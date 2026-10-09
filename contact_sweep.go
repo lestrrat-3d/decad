@@ -38,12 +38,12 @@ type QuantityVec = sweeppath.QuantityVec
 type RigidDriftSegment = sweeppath.RigidDriftSegment
 
 // SweepStartPolicy selects what to prove when the bodies initially touch.
-type SweepStartPolicy int
+type SweepStartPolicy = reportvocab.SweepStartPolicy
 
 const (
-	StopAtInitialContact SweepStartPolicy = iota
-	ContinueSeparatingTouch
-	ContinueCertifiedTouch
+	StopAtInitialContact    = reportvocab.StopAtInitialContact
+	ContinueSeparatingTouch = reportvocab.ContinueSeparatingTouch
+	ContinueCertifiedTouch  = reportvocab.ContinueCertifiedTouch
 )
 
 // SweepRequest bounds the time search and the contact geometry resolution.
@@ -54,13 +54,7 @@ const (
 // rises, on both sides of the plane, as it holds a contact vertex (§10.8), so
 // the track does not end where that vertex's lower height bound reaches the
 // plane. A departure rests nothing.
-type SweepRequest struct {
-	ContactRequest
-	TimeResolution     units.Value
-	MaxPoseEvaluations uint64
-	StartPolicy        SweepStartPolicy
-	RestSpeed          units.Value
-}
+type SweepRequest = reportvocab.SweepRequest
 
 // validateRestSpeed checks SweepRequest.RestSpeed as validateSupportBand
 // checks the band: the zero Value, or a finite, nonnegative Velocity.
@@ -105,35 +99,29 @@ const (
 )
 
 // SweepCause explains why a continuous claim was not proved.
-type SweepCause int
+type SweepCause = reportvocab.SweepCause
 
 const (
-	SweepNoCause SweepCause = iota
-	SweepPoseRelation
-	SweepMissingBound
-	SweepTimeFloor
-	SweepFractionFloor
-	SweepPoseBudget
-	SweepContactUnsupported
-	SweepDepartureUnproved
-	SweepContactTrackUnproved
-	SweepEventUnrepresentable
+	SweepNoCause              = reportvocab.SweepNoCause
+	SweepPoseRelation         = reportvocab.SweepPoseRelation
+	SweepMissingBound         = reportvocab.SweepMissingBound
+	SweepTimeFloor            = reportvocab.SweepTimeFloor
+	SweepFractionFloor        = reportvocab.SweepFractionFloor
+	SweepPoseBudget           = reportvocab.SweepPoseBudget
+	SweepContactUnsupported   = reportvocab.SweepContactUnsupported
+	SweepDepartureUnproved    = reportvocab.SweepDepartureUnproved
+	SweepContactTrackUnproved = reportvocab.SweepContactTrackUnproved
+	SweepEventUnrepresentable = reportvocab.SweepEventUnrepresentable
 )
 
 // SweepInstant identifies a dyadic fraction of the requested duration.
-type SweepInstant struct {
-	Fraction units.Value
-	Elapsed  Measurement
-}
+type SweepInstant = reportvocab.SweepInstant
 
 // SweepInterval identifies an interval of the requested duration.
-type SweepInterval struct{ From, To SweepInstant }
+type SweepInterval = reportvocab.SweepInterval
 
 // SweepDeparture certifies positive separation after an initial touch.
-type SweepDeparture struct {
-	Until      SweepInstant
-	GapAtUntil Measurement
-}
+type SweepDeparture = reportvocab.SweepDeparture
 
 // SweepContactTrack owns the exact source geometry and affine motion of a
 // certified touching prefix. Its source face pointers are the original faces.
@@ -315,14 +303,7 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 }
 
 // SweepEvent reports the ideal path relation at one sampled instant.
-type SweepEvent struct {
-	At       SweepInstant
-	Relation ContactRelation
-	Gap      *Measurement
-	Overlap  *Measurement
-	Manifold *ContactManifold
-	Reason   ContactReason
-}
+type SweepEvent = reportvocab.SweepEvent[*Face, *Edge, *Vertex, ContactRelation, ContactReason]
 
 // SweepSample keeps the query pose and the transferred pair finding.
 type SweepSample struct {
