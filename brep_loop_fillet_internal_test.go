@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -901,7 +902,8 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 			sphere[i] = filletband.SphereWalk(cl.walks[i], 2)
 		}
 	}
-	segs, joins, capWalk, _, err := partialFilletContour(r.budget, cl.walks, selected, sphere, amounts)
+	segs, joins, capWalk, _, err := offset2d.PartialFilletContour(
+		r.budget, cl.walks, selected, sphere, amounts, shellTol)
 	require.NoError(t, err)
 	require.Len(t, segs, 4)
 	for i, w := range cl.walks {
