@@ -190,7 +190,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		if err != nil || !ok {
 			return 0, false, err
 		}
-		d, ok, err := g.diameter(budget)
+		d, ok, err := g.Diameter(budget)
 		return d, ok && d > 0, err
 	}
 	if payload, ok := body.payload.(draftPayload); ok {
