@@ -146,28 +146,15 @@ func (ig Integrals) ExactCentroid() (measurement.VecMeasurement, bool) {
 	}, true
 }
 
-// SecondMoments is a recorded region's second moments of area about the
-// plane origin, in the plane's own (u, v): every field is a measurement.Measurement of
-// Kind SecondMomentOfArea (mm⁴), with the closed-form evaluation's proven
-// rounding bound. They are what a revolve's solid centroid is computed from
-// (docs/evaluator-design.md §4/§6); to re-reference them to another axis, use
-// the parallel-axis theorem with the region's Area and Centroid.
-type SecondMoments struct {
-	// UU is ∫u² dA, VV is ∫v² dA, UV is the mixed ∫uv dA.
-	UU measurement.Measurement
-	UV measurement.Measurement
-	VV measurement.Measurement
-}
-
-// SecondMoments returns the region's bounded second moments of area about the
+// SecondMomentReadings computes the region's bounded second moments about the
 // plane origin. The staging matches [Profile.Area]: a Tier A free-form
 // boundary is integrated exactly and rounded once, every other free-form kind
 // is [ErrUnsupported], and malformed or non-finite records are rejected before
 // a measurement is constructed.
-func (r Profile) SecondMoments() (SecondMoments, error) {
+func (r Profile) SecondMomentReadings() (measurement.Measurement, measurement.Measurement, measurement.Measurement, error) {
 	ig, err := r.integralsTo(freeform.MomentSecondOrder)
 	if err != nil {
-		return SecondMoments{}, err
+		return measurement.Measurement{}, measurement.Measurement{}, measurement.Measurement{}, err
 	}
 	measured := func(x, bound float64) measurement.Measurement {
 		return measurement.Measurement{
@@ -176,11 +163,7 @@ func (r Profile) SecondMoments() (SecondMoments, error) {
 			Bound:     units.QuarticMillimeters(bound),
 		}
 	}
-	return SecondMoments{
-		UU: measured(ig.Muu, ig.MuuBound),
-		UV: measured(ig.Muv, ig.MuvBound),
-		VV: measured(ig.Mvv, ig.MvvBound),
-	}, nil
+	return measured(ig.Muu, ig.MuuBound), measured(ig.Muv, ig.MuvBound), measured(ig.Mvv, ig.MvvBound), nil
 }
 
 // Integrals accumulates the boundary integrals of one region: the net

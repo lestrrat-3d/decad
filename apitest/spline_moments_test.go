@@ -105,7 +105,7 @@ func TestClosedSplineProfileMomentsRoundOnce(t *testing.T) {
 	require.InDelta(t, 2.1941383606912619, centroid.Value.Y, 1e-12)
 	require.Zero(t, centroid.Value.Z, "a plane-local centroid has no third coordinate")
 
-	moments, err := record.SecondMoments()
+	moments, err := secondMoments(record)
 	require.NoError(t, err)
 	for name, moment := range map[string]decad.Measurement{
 		"UU": moments.UU,
@@ -310,7 +310,7 @@ func TestBrokenNURBSKnotVectorRefuses(t *testing.T) {
 			for name, measure := range map[string]func() error{
 				"Area":          func() error { _, err := record.Area(); return err },
 				"Centroid":      func() error { _, err := record.Centroid(); return err },
-				"SecondMoments": func() error { _, err := record.SecondMoments(); return err },
+				"SecondMoments": func() error { _, err := secondMoments(record); return err },
 			} {
 				t.Run(name, func(t *testing.T) {
 					err := measure()

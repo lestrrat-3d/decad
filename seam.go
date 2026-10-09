@@ -37,7 +37,11 @@ func (p MeasuredProfile) Centroid() (VecMeasurement, error) { return p.record.Ce
 
 // SecondMoments measures area moments about the sketch plane's origin.
 func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
-	return p.record.SecondMoments()
+	uu, uv, vv, err := p.record.SecondMomentReadings()
+	if err != nil {
+		return SecondMoments{}, err
+	}
+	return SecondMoments{UU: uu, UV: uv, VV: vv}, nil
 }
 
 // recordProfile converts a sketch profile into the structural records
