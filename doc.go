@@ -175,9 +175,11 @@
 //	Fillet/Chamfer/Shell  brep or stacked boolean result that
 //	                      reads as a prism along an axis      builds
 //	Shell         brep read as a prism cut by through tools,
-//	              inward, one or both caps removed            builds
+//	              inward, caps or one run of straight walls
+//	              along section axes removed                  builds
 //	  a brep or stacked result that reads as neither          ErrUnsupported
-//	  outward; a removed wall; dilated tools that meet, reach
+//	  outward; a curved removed wall, or a wall run ending
+//	    at a reflex corner; dilated tools that meet, reach
 //	    a cap or the material past their walls                ErrUnsupported
 //	Loft          same-type segment pairs, distinct planes    builds
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported

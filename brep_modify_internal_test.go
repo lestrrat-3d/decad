@@ -60,8 +60,9 @@ func requireSB1Names(t *testing.T, body *Body) {
 // complete loops (brep_modify_edge_internal_test.go pins route E); a Chamfer
 // of them refuses with route L's SL1 for the same reason; a Shell falls to
 // route S (docs/modify-general-design.md §3), which refuses S1's every planar
-// face with SG5, since S1 reads as the box along z cut by the tool along y and
-// the selection removes its walls, and refuses the stacked pocket with SB10's
+// face with shell-opening SO6, since S1 reads as the box along z cut by the
+// tool along y and the selection removes every one of its walls, no proper
+// run, and refuses the stacked pocket with SB10's
 // and SG3's text, since it reads as neither a prism nor a through-cut record.
 // S1's convex edges include cap edges, which no prism reading takes. Every
 // refusal leaves the receiver live. Shown to fail with modifyBrepReceiver's
@@ -84,7 +85,7 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 	t.Run("brep", func(t *testing.T) {
 		t.Parallel()
 		_, s1 := internalCrossDrilled(t)
-		refuses(t, s1, "modify-general SG5")
+		refuses(t, s1, "shell-opening SO6")
 	})
 	t.Run("stacked pocket", func(t *testing.T) {
 		t.Parallel()

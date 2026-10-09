@@ -90,8 +90,8 @@ the rules leave to the byte budget.
 | `moments.go` / `moments_validate.go` | Moment aliases and adapters. See evaluator §4. |
 | `mass_properties.go` / `mass_properties_rotated.go` | Prism mass. See `docs/dynamic-mass-design.md` §2–§3. |
 | `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Sphere and cylinder mass. See dynamic-mass. |
-| `mass_properties_revolve.go` | Revolve mass. See `docs/multibody-dynamics-design.md` §8.6. |
-| `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See `docs/multibody-dynamics-design.md` §8. |
+| `mass_properties_revolve.go` | Revolve mass. See multibody §8.6. |
+| `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See multibody §8. |
 | `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See dynamic-mass. |
 | `moments_circular.go` | Adapts circle and arc records to `internal/circularbounds/`. |
 
@@ -166,6 +166,7 @@ the rules leave to the byte budget.
 | `shell_opening_brep.go` | Records a prism side opening as a prism or a stacked brep. See shell-opening §4. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
 | `brep_shell.go` | Route S: shell of a through-cut brep. See modify-general §3. |
+| `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |
 | `brep_modify_edge.go` | Route E: Table EB, restatement, blends, trims and closure. See brep-modify §5. |
 | `brep_modify_loop.go` / `brep_loop_band.go` | Route L: Table LB, record rewrite, band build and mass. See modify-general §4. |
 
@@ -197,9 +198,9 @@ the rules leave to the byte budget.
 | `clearance.go` | The pair kernel: `clearancePair` and `sheetSolidPair`. See clearance §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned box prisms and bounds their gap from exact box planes ahead of the kernel. |
 | `clearance_planar.go` | The exact planar pair arm for mitred, faceted and coil bodies: interference §3.2. |
-| `contact_pair.go` / `contact_pair_memo.go` | Pair gates, reports, and memo. See `docs/contact-geometry-design.md`. |
+| `contact_pair.go` / `contact_pair_memo.go` | Pair gates, reports, and memo. See contact-geometry. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See contact-geometry §4. |
-| `contact_faceted_pair.go` | Planar admission, convexity and the bands. See `docs/multibody-dynamics-design.md` §9–§10. |
+| `contact_faceted_pair.go` | Planar admission, convexity and the bands. See multibody §9–§10. |
 | `contact_faceted_manifold.go` / `contact_faceted_patch.go` | Planar manifold faces and witnesses. See multibody §9. |
 | `contact_faceted_support.go` | Exact faceted support-face proof and bounded strict separation. See contact-geometry §4. |
 | `contact_faceted_sweep.go` | Faceted floor sweeps: exact support face, or clearance by swept boxes. See contact-sweep. |
