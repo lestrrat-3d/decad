@@ -423,7 +423,7 @@ func (r *rollingPairSweep) track(first *SweepSample, support rulingPlane,
 	// ContactPair publishes the ruling; a rigid motion keeps that pairing.
 	ends := r.cylinder.source
 	starts := [2]proofarith.DyV3{M.startPoints[0], M.startPoints[1]}
-	if ordered := clearance.OrderedRulingEnds(starts); !sameDyV3(ordered[0], starts[0]) {
+	if ordered := clearance.OrderedRulingEnds(starts); !proofarith.DvEqual(ordered[0], starts[0]) {
 		ends = [2]proofarith.DyV3{ends[1], ends[0]}
 	}
 	proof := &rollingTrackProof{paths: r.paths, m: r.m, s: r.s, ends: ends, radius: r.cylinder.radius.Rat(),

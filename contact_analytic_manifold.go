@@ -522,7 +522,7 @@ func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane
 	for i, center := range c.centers {
 		rims[i] = proofarith.DvSub(center, proofarith.DvScale(plane.normal, c.radius))
 	}
-	if ordered := clearance.OrderedRulingEnds(rims); !sameDyV3(ordered[0], rims[0]) {
+	if ordered := clearance.OrderedRulingEnds(rims); !proofarith.DvEqual(ordered[0], rims[0]) {
 		rims = ordered
 	}
 	direction := plane.normal
