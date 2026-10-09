@@ -168,7 +168,7 @@ the rules leave to the byte budget.
 | `brep_shell.go` | Route S: shell of a through-cut brep. See modify-general §3. |
 | `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |
 | `brep_modify_edge.go` | Route E: Table EB, restatement, blends, trims and closure. See brep-modify §5. |
-| `brep_modify_loop.go` / `brep_loop_band.go` | Route L: Table LB, record rewrite, band build and mass. See modify-general §4. |
+| `brep_modify_loop.go` / `brep_loop_band.go` | Route L: record rewrite, bands and mass. See modify-general §4. |
 
 ### Cap-loop chamfer
 
@@ -258,6 +258,7 @@ the rules leave to the byte budget.
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, prism/cup mesh assembly and dispatch. See tessellation design. |
 | `tessellate_stacked.go` | Stacked-slab mesh and volume proof. See stacked-prism §5. |
 | `tessellate_brep.go` | Meshes a brep body and proves its occupied volume. See general-boolean §4.4. |
+| `tessellate_brep_band.go` | Route L bands in a brep mesh. See modify-general DG3. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1. |
 | `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |

@@ -463,8 +463,8 @@ below reads the bands where the plain brep reader would miss them:
 |---|---|---|---|
 | **DG1** | mass properties, `Bounds` | general-boolean §4.3 with the cavity and rim faces' `delta` | §4.3 |
 | **DG2** | `Verify` validity, tolerance gate | by construction; `brepGateDiameter` reads every vertex | the same; the bands' vertices are body vertices |
-| **DG3** | `Tessellate`, STL/OBJ/3MF | general-boolean §4.4 | §4.4 for the record's faces, with one count per band walk shared by the trimmed wall, the patch and the contour (`docs/tessellation-reach-design.md` §7's rule), imposed on the brep tessellator through a per-(face, loop, segment) count; `emitCapBand` writes each band's strip and its departure terms into the occupied-volume proof |
-| **DG4** | mesh boolean operand | class B over the face view where it admits, else the mesh path | the mesh path only; admitted under `capBlendOccupiedVolumeAdmission`'s rule per band (every corner a line–line miter, an exact G1 join or a whole turn), else `ErrUnsupported` |
+| **DG3** | `Tessellate`, STL/OBJ/3MF | general-boolean §4.4 | §4.4 for the record's faces, with one count per band walk shared by the trimmed wall, the patch and the contour (`docs/tessellation-reach-design.md` §7's rule). `chordCapBlendLoop` chords the band's loop in `F`'s frame, and the wall beside a (sw) walk takes the band's side-ring points as its samples, carried into its own frame exactly (`brepImposeWall`), so the wall's rim at the side level and the band's side ring are one set of vertices; a straight wall needs no count. `emitCapBand` writes each band's strip and its departure terms. A band that rises off its face (`σ = +1`) turns its windings over. At `VerifyAll` the occupied-volume proof adds the band's chord-polygon volume (`CapBlendChordVolume` over the band's height alone) and swaps the vertex-motion allowance for the cap-blend twin's per-vertex motion array; a band DG4's rule does not admit leaves the mesh export-only |
+| **DG4** | mesh boolean operand | class B over the face view where it admits, else the mesh path | the mesh path only; admitted under `capBlendOccupiedVolumeAdmission`'s rule per band (every corner a line–line miter, an exact G1 join or a whole turn), else `ErrUnsupported`; a hole or pocket mouth, whose corners are apex cones, is not admitted (`brepBandsOccupiedVolumeAdmission`, read by `requireVolumeProvingPayload`) |
 | **DG5** | `ThroughAll`/`ToFace` | the per-face extremes; refuses at `delta > 0` as a prism does | the same, plus each band's extrema under the contour displacement |
 | **DG6** | clearance | `addBrepFaces`; no model when any face carries `delta > 0` | no model: the pair reads `Suspect` unless its boxes decide it (reach DX6's staging) |
 | **DG7** | undercut survey | per face | per face, and per patch through `Face.NormalAt` with reach DX7's three-valued rule and allowance |
@@ -673,14 +673,23 @@ Route L (L-1):
 
 Route L (L-2):
 
-- The mesh of P2's mouth chamfer is closed and its occupied-volume proof
-  covers `14928`; P3's rim chamfer tessellates with one count on the cone's
-  two circles; P8's loop chamfer exports faceted STEP and P2's analytic;
-  `Verify` `Sound` on each; the undercut survey lists P3's rim cone under a
-  pull along `+z` and clears it along `−z`; the concave-radius survey reads
-  P2's mouth chamfer's absence of concave features and P3's root cone
-  undecided; a clearance pair against P2's result reads `Suspect` where its
-  boxes do not decide it.
+- Every L-1 fixture's mesh is closed over every face of the body. P2's top
+  loop (planes) meshes to exactly `15000 − 175.5` with a zero occupied-volume
+  bound, and a `Cut` by a box over its corner leaves `14584.625`. P3's rim and
+  root and P8's two chamfers are admitted: their mesh volumes lie within the
+  published bound of the closed forms. P2's mouth, P6c's port mouth and P7's
+  top loop hold apex cones at reflex corners, which DG4's rule does not admit:
+  their meshes are export-only, within the chord times the curved faces' area
+  of `15000 − 135/2 − 9π/8`, and a `Cut` over them refuses.
+- P3's rim chamfer tessellates with one count on the cone's two circles;
+  P8's loop chamfers export faceted STEP and P2's top loop analytic; `Verify`
+  `Sound` on each.
+- The undercut survey lists P3's rim cone, which faces up and out, under a
+  pull along `−z` and clears the body along `+z`. The concave-radius survey
+  decides P2's top loop (planes alone) as holding no concave feature, and
+  reads P2's mouth and P3's root undecided: their cones carry a non-zero
+  stamped departure. A clearance pair against P2's result reads `Suspect`
+  where its boxes do not decide it.
 
 ## 10. PR split
 
@@ -697,7 +706,7 @@ document ships with PR 0.
 | **S-1** | Opus, proof spec | route S with removed caps: Table TC, the gates, TC7, the private cuts, the rim assembly, SG1–SG7 | `brep_shell.go` (new: `readThroughCut`, `shellThroughCut`, `throughCutRims`), `brep_modify.go`, `shell.go` (doc comment), `brep_shell_internal_test.go`, `apitest/brep_shell_test.go` | §9's S-1 fixtures | 0 |
 | **S-2** | Opus, proof spec | route S with a removed wall run: `sideOpeningRegions`'s cavity section as `A ⊖ t`'s section, the rim at a pierced wall as bands, SG5 narrowed | `brep_shell.go`, `brep_shell_rim.go` (new: the rim assembly, `throughRimRegions`), `shell_opening.go`, tests | §9's S-2 fixtures | S-1 |
 | **L-1** | Opus, proof spec | route L: Table LB, the record rewrite and trims, `loopBands` on `brepPayload`, the band attached at build, measurements, SL1–SL4; tessellation, clearance, the surveys and STEP refuse a body with `loopBands` until L-2 (`ErrUnsupported`, naming L-2) | `brep_modify_loop.go` (new: `brepLoopRoute`, `admitLoops`, `rewriteLoopFaces`), `brep_loop_band.go` (new: the `buildCapBand` adapter and `readBandMass` sums), `brep_payload.go`, `brep_measure.go`, `chamfer.go` (doc comment), `brep_modify_loop_internal_test.go`, `apitest/brep_loop_chamfer_test.go` | §9's L-1 fixtures | 0 |
-| **L-2** | Sonnet, file-by-file: each consumer copies its cap-blend twin | DG3 (`tessellateBrep` with imposed counts and `emitCapBand`), DG4 (`capBlendOccupiedVolumeAdmission` per band in `boolean_mesh.go`), DG6 (`addBrepFaces` returns no model), DG7/DG8 (`brepUndercuts`, `brepMinRadius` reading the patch faces through `capblend_survey.go`'s readers), DG10 (the STEP writer's cone fallback), DG12 | `tessellate_brep.go`, `boolean_mesh.go`, `clearance_geom.go`, `brep_measure.go`, `survey.go`, `export/step.go`, tests | §9's L-2 fixtures | L-1 |
+| **L-2** | Sonnet, file-by-file: each consumer copies its cap-blend twin | DG3 (`tessellateBrep` with imposed samples and `emitCapBand`), DG4 (`capBlendOccupiedVolumeAdmission` per band in `requireVolumeProvingPayload`), DG6 (`addBrepFaces` returns no model), DG7/DG8 (`brepUndercuts`, `brepMinRadius` reading the patch faces through `capblend_survey.go`'s readers), DG10 (the STEP writer's cone fallback, which needed no change), DG12 | `tessellate_brep.go`, `tessellate_brep_band.go` (new), `tessellate_capblend.go`, `boolean.go`, `brep_loop_band.go`, `brep_measure.go`, `brep_payload.go`, `survey.go`, tests | §9's L-2 fixtures | L-1 |
 
 S-1 and L-1 run in parallel after PR 0: they add disjoint files and touch
 `brep_modify.go` only through the arms PR 0 placed. S-2 follows S-1; L-2
@@ -711,4 +720,4 @@ Increment table — what still refuses after each PR:
 | S-1 (landed) | a removed wall (SG5); every shell of §6; every route L loop |
 | S-2 (landed) | every shell of §6; every route L loop |
 | L-1 (landed) | every consumer of a route L body but mass properties, `Verify`'s structural audit and gate, placement and later modify ops (L-2); §6 |
-| L-2 | §6 alone |
+| L-2 (landed) | §6; a banded body's mesh boolean where a band holds an apex cone (DG4) |

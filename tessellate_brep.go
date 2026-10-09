@@ -73,6 +73,18 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		return face, nil
 	}
 
+	bands, imposed, err := brepChordBands(ctx, bp, topo, budget)
+	if err != nil {
+		return nil, err
+	}
+	faceOfRole := func(role string) (*Face, error) {
+		face := byRole[role]
+		if face == nil {
+			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, ErrDegenerate, role)
+		}
+		return face, nil
+	}
+
 	refView := bp.refView()
 	var mesh Mesh
 	var store, round []float64
@@ -109,17 +121,27 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		if err != nil {
 			return nil, err
 		}
-		wm, err := brepChordWall(ctx, f, topo.walls[fi], topo.embeds[fi], face, budget, work, addVertex)
+		var samples *tessellation.ChordSamples[*Face]
+		if s, ok := imposed[fi]; ok {
+			samples = &s
+		}
+		wm, err := brepChordWall(ctx, f, topo.walls[fi], topo.embeds[fi], face, budget, work, samples, addVertex)
 		if err != nil {
 			return nil, err
 		}
 		walls[fi] = wm
 		for _, ui := range topo.faceUses[fi] {
+			// A rim on a band's side contour is open: the band, not another
+			// face, meets it, and no edge holds its polyline.
 			switch u := topo.uses[ui]; u.Part {
 			case brepRim0:
-				edgePoly[topo.edgeOf[ui]] = wm.bottom
+				if ei := topo.edgeOf[ui]; ei >= 0 {
+					edgePoly[ei] = wm.bottom
+				}
 			case brepRim1:
-				edgePoly[topo.edgeOf[ui]] = wm.top
+				if ei := topo.edgeOf[ui]; ei >= 0 {
+					edgePoly[ei] = wm.top
+				}
 			case brepSide0, brepSide1:
 				// The piece's two vertices are the wall's own row ends at
 				// its levels, keyed by the same reference coordinates.
@@ -137,6 +159,15 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	}
 	if err := brepWallClearance(ctx, bp, topo, walls, canon); err != nil {
 		return nil, err
+	}
+
+	// A band's rings are placed once every wall has placed its samples: a wall
+	// beside a band took the band's own side-ring points, so the two name the
+	// same vertices.
+	bandsOf := map[int][]int{}
+	for bi := range bands {
+		bands[bi].place(topo.embeds[bands[bi].band.face], addVertex)
+		bandsOf[bands[bi].band.face] = append(bandsOf[bands[bi].band.face], bi)
 	}
 
 	// faceCapSlack is each planar face's own share of its curved edges'
@@ -159,23 +190,40 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		var pts []Point2
 		var meshIdx []int
 		trim, capSlack := 0.0, 0.0
+		ringLoop := map[int]int{}
+		for _, bi := range bandsOf[fi] {
+			ringLoop[bands[bi].band.loop] = bi
+		}
 		for _, ui := range topo.faceUses[fi] {
 			u := topo.uses[ui]
 			ei := topo.edgeOf[ui]
-			owner := topo.uses[topo.edges[ei][0]]
-			poly := edgePoly[ei]
-			if poly == nil {
-				poly = []int{addVertex(owner.DirFrom, owner.StartBound()), addVertex(owner.DirTo, owner.EndBound())}
-				edgePoly[ei] = poly
-			}
-			if !topo.forward(ui) {
-				poly = slices.Clone(poly)
-				slices.Reverse(poly)
-			}
-			if wm, ok := walls[owner.Face]; ok && brepIsRim(owner.Part) {
-				trim = math.Max(trim, wm.sag)
-				loopSag[u.Loop] = math.Max(loopSag[u.Loop], wm.sag)
-				capSlack = proofbound.AbsSumUpper(capSlack, wm.capSlack)
+			var poly []int
+			switch {
+			case ei >= 0:
+				owner := topo.uses[topo.edges[ei][0]]
+				poly = edgePoly[ei]
+				if poly == nil {
+					poly = []int{addVertex(owner.DirFrom, owner.StartBound()), addVertex(owner.DirTo, owner.EndBound())}
+					edgePoly[ei] = poly
+				}
+				if !topo.forward(ui) {
+					poly = slices.Clone(poly)
+					slices.Reverse(poly)
+				}
+				if wm, ok := walls[owner.Face]; ok && brepIsRim(owner.Part) {
+					trim = math.Max(trim, wm.sag)
+					loopSag[u.Loop] = math.Max(loopSag[u.Loop], wm.sag)
+					capSlack = proofbound.AbsSumUpper(capSlack, wm.capSlack)
+				}
+			default:
+				// An open use is a band's boundary. The band's cap contour
+				// on this face is its whole ring, placed below; a segment of
+				// a (pl) face on the band's side contour is a straight line
+				// between its two held ends.
+				if _, ok := ringLoop[u.Loop]; ok {
+					continue
+				}
+				poly = []int{addVertex(u.DirFrom, u.StartBound()), addVertex(u.DirTo, u.EndBound())}
 			}
 			for _, vi := range poly[:len(poly)-1] {
 				local := e.Local(canon[vi])
@@ -183,6 +231,19 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 				meshIdx = append(meshIdx, vi)
 				loops[u.Loop] = append(loops[u.Loop], len(pts)-1)
 			}
+		}
+		for _, bi := range bandsOf[fi] {
+			bc := &bands[bi]
+			proof := bc.lm.proof()
+			sag := tessellation.CapBlendRingSagitta(proof, true)
+			for j, p := range bc.lm.capPts {
+				pts = append(pts, p)
+				meshIdx = append(meshIdx, bc.capV[j])
+				loops[bc.band.loop] = append(loops[bc.band.loop], len(pts)-1)
+			}
+			trim = math.Max(trim, sag)
+			loopSag[bc.band.loop] = math.Max(loopSag[bc.band.loop], sag)
+			capSlack = proofbound.AbsSumUpper(capSlack, tessellation.CapBlendRingSegmentArea(proof, true, bc.band.setback.dc))
 		}
 		if err := requireLoopClearance(ctx, pts, loops, loopSag); err != nil {
 			return nil, err
@@ -203,6 +264,24 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		faceCapSlack[face] = capSlack
 		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, capSlack)
 	}
+	if len(bands) > 0 {
+		geomOf := func(bi int) map[string]capPatchGeom {
+			out := map[string]capPatchGeom{}
+			if bi < len(bp.loopPatches) {
+				for _, p := range bp.loopPatches[bi] {
+					out[p.role] = p.geom
+				}
+			}
+			return out
+		}
+		bump := func(f *Face, v float64) { faceTrim[f] = math.Max(faceTrim[f], v) }
+		wb := proofbound.NewWorkBudget(ctx)
+		for bi := range bands {
+			if err := bands[bi].emit(wb, &mesh, geomOf(bi), faceOfRole, bump); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if bp.xform.IsReflection() {
 		for i := range mesh.triangles {
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
@@ -210,6 +289,16 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	}
 	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.triangles)); err != nil {
 		return nil, err
+	}
+	if len(bands) > 0 {
+		// A band's strips and fans can collapse where its rings meet; the cap
+		// blend tessellator refuses the same two faults (tessellate_capblend.go).
+		if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
+			return nil, err
+		}
+		if err := requireCapBlendFacetAreas(&mesh, "chamfered brep"); err != nil {
+			return nil, err
+		}
 	}
 	storeMax, err := requireDerivableStore(store)
 	if err != nil {
@@ -251,6 +340,27 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			proofbound.ProductUpper(moved, proofbound.SectionDisplacementArea(f.delta, 1, proofbound.AbsSumUpper(w.Length, w.LengthBound))))
 	}
 	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, store))
+	if len(bands) > 0 {
+		// A band the cap-loop chamfer's occupied-volume proof does not admit
+		// leaves the mesh export-only (docs/tessellation-reach-design.md §7),
+		// and the mesh boolean refuses it with the same reason.
+		refusal, err := brepBandsOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), bp)
+		if err != nil {
+			return nil, err
+		}
+		if refusal != nil {
+			mesh.symDiffOK = false
+			return &mesh, nil //nolint:nilerr // refusal is the admission result; err was checked above
+		}
+		motion, err := brepBandMotion(ctx, bands, store, round)
+		if err != nil {
+			return nil, err
+		}
+		if storeMax, err = requireDerivableStore(motion); err != nil {
+			return nil, err
+		}
+		terms = append(terms, brepBandChordVolume(bands))
+	}
 	terms = append(terms, proofbound.SweptVolumeAllow(storeMax,
 		proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)))
 	if err := publishSymDiff(&mesh, terms); err != nil {
@@ -283,14 +393,22 @@ func brepPlanarDisplacement(f brepFace, walks [][]survey2d.SegmentWalk) float64 
 // point the wall's record denotes there (boundarywalk.DenotedStartBound and
 // DenotedEndBound), which adds an arc's radial residual at its natural t = 1
 // end; addVertex keeps the largest bound any use places at one vertex.
+// imposed, when non-nil, replaces the chording with the samples a route L band
+// states for this wall (brepImposeWall); the wall's own end is still appended.
 func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e brepEmbed, face *Face, chord float64,
-	work *freeform.FreeformWork, addVertex func([3]float64, proofbound.WalkEndBound) int) (brepWallMesh, error) {
+	work *freeform.FreeformWork, imposed *tessellation.ChordSamples[*Face], addVertex func([3]float64, proofbound.WalkEndBound) int) (brepWallMesh, error) {
 	walk := survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}
-	sampled, err := tessellation.SampleLoop[*Face]([]survey2d.SideWalk{walk}, []CurveSegment{f.wall}, chord,
-		f.z1-f.z0, work, proofbound.NewWorkBudget(ctx), func(survey2d.SideWalk) (*Face, error) { return face, nil },
-		stationbound.ChordStationBound)
-	if err != nil {
-		return brepWallMesh{}, err
+	var sampled tessellation.ChordSamples[*Face]
+	if imposed != nil {
+		sampled = *imposed
+	} else {
+		var err error
+		sampled, err = tessellation.SampleLoop[*Face]([]survey2d.SideWalk{walk}, []CurveSegment{f.wall}, chord,
+			f.z1-f.z0, work, proofbound.NewWorkBudget(ctx), func(survey2d.SideWalk) (*Face, error) { return face, nil },
+			stationbound.ChordStationBound)
+		if err != nil {
+			return brepWallMesh{}, err
+		}
 	}
 	samples, bounds := sampled.Samples, sampled.BoundOf
 	if !w.Closed {

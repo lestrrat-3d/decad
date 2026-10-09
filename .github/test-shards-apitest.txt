@@ -1642,3 +1642,4 @@
 5	0.05	TestDraftNearTangentJoinRefusesBooleans
 2	0.01	TestBrepLoopChamferPublicPlateTopLoop
 2	0.01	TestBrepLoopChamferPublicBossRoot
+2	0.10	TestBrepLoopChamferPublicRoundedPlateExports
