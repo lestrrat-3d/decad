@@ -114,55 +114,6 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 	return out, nil
 }
 
-// planarPlaneTried reports whether n through a names a plane already tried:
-// the same outward direction and the same offset.
-func planarPlaneTried(tried []planarSupport, n, a proofarith.DyV3) bool {
-	for _, p := range tried {
-		if proofarith.DvIsZero(proofarith.DvCross(n, p.normal)) &&
-			proofarith.DvDot(n, p.normal).Sign() > 0 &&
-			proofarith.DvDot(p.normal, proofarith.DvSub(a, p.origin)).Sign() == 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// planarSupportRuledOut is the root request adapter for the support-band check.
-func planarSupportRuledOut(boxesM []proofarith.FloatBox3, n, a proofarith.DyV3, req ContactRequest) bool {
-	return planarsweep.SupportRuledOut(boxesM, n, a, supportBandOf(req))
-}
-
-// planarSupportOf checks one plane: every M vertex on or in front of it, and
-// a nonempty support set (§10.5): at least one M vertex on it, or, under a
-// positive SupportBand, within the band above it, h² <= band²·n·n compared
-// exactly. A plane with an S vertex strictly in front of it is face-local
-// (§10.6): S must only translate, so the column test can read S's start
-// triangles less its translation, and the plane must be one flat face of S
-// (planarSupportFace). The column test itself depends on the horizon and runs
-// in the departure's and the band's grid searches.
-func planarSupportOf(S, M *rotationalSweepPath, n, a proofarith.DyV3, req ContactRequest,
-	poll func() error) (planarSupport, bool, error) {
-	read, ok, err := planarsweep.ReadSupportCandidate(planarSupportPathOf(S), planarSupportPathOf(M),
-		n, a, supportBandOf(req), poll)
-	if err != nil || !ok {
-		return planarSupport{}, false, err
-	}
-	support := planarSupport{
-		normal: n, origin: a, local: read.Local, pathS: S,
-		heights: read.Heights, contact: read.Contact, lifted: read.Lifted,
-		nLow: read.NormalLow, nHigh: read.NormalHigh,
-	}
-	return support, true, nil
-}
-
-func vertexSpins(p *rotationalSweepPath, motion planarMotion) ([]*big.Rat, bool) {
-	return planarsweep.VertexSpins(p.startPoints, motion)
-}
-
-func restedVertices(s *planarSupport, rest *big.Rat) map[int]struct{} {
-	return planarsweep.RestedVertices(s.lifted, s.rates, s.nLow, rest)
-}
-
 func (s *planarSupport) curvature(t *big.Rat) ([]*big.Rat, bool) {
 	return planarsweep.Curvature(s.motionM, s.motionS, s.spin, s.nHigh, t)
 }

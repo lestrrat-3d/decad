@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
+	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/r3"
@@ -104,6 +105,18 @@ func TestPlanarDepartureLowerGapIsBoundedByLateralClearance(t *testing.T) {
 	}
 }
 
+// planarPlaneTried compares a plane with those already read by the scan oracle.
+func planarPlaneTried(tried []planarSupport, n, a proofarith.DyV3) bool {
+	for _, p := range tried {
+		if proofarith.DvIsZero(proofarith.DvCross(n, p.normal)) &&
+			proofarith.DvDot(n, p.normal).Sign() > 0 &&
+			proofarith.DvDot(p.normal, proofarith.DvSub(a, p.origin)).Sign() == 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // planarSupportsScan is planarSupports as it read before the plane key and the
 // float pre-test: each plane compared against every plane tried so far, and
 // every new plane checked exactly. TestPlanarSupportsMatchScan holds the
@@ -117,7 +130,7 @@ func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSup
 		if !ok {
 			return nil, nil
 		}
-		spin, ok := vertexSpins(path, motion)
+		spin, ok := planarsweep.VertexSpins(path.startPoints, motion)
 		if !ok {
 			return nil, nil
 		}
@@ -148,12 +161,18 @@ func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSup
 				continue
 			}
 			tried = append(tried, planarSupport{normal: n, origin: a})
-			support, ok, err := planarSupportOf(S, M, n, a, r.req.ContactRequest, poll)
+			read, ok, err := planarsweep.ReadSupportCandidate(planarSupportPathOf(S),
+				planarSupportPathOf(M), n, a, supportBandOf(r.req.ContactRequest), poll)
 			if err != nil {
 				return nil, err
 			}
 			if !ok {
 				continue
+			}
+			support := planarSupport{
+				normal: n, origin: a, local: read.Local, pathS: S,
+				heights: read.Heights, contact: read.Contact, lifted: read.Lifted,
+				nLow: read.NormalLow, nHigh: read.NormalHigh,
 			}
 			support.m, support.s, support.tri = m, s, t
 			support.motionM, support.motionS = motions[m], motions[s]
@@ -169,7 +188,7 @@ func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSup
 				support.rates[i] = ratDot3(normal, rate)
 			}
 			support.spin = spinM
-			support.rested = restedVertices(&support, rest)
+			support.rested = planarsweep.RestedVertices(support.lifted, support.rates, support.nLow, rest)
 			out = append(out, support)
 		}
 	}
@@ -242,8 +261,8 @@ func supportFixture(rng *rand.Rand, shared []proofarith.DyV3, scale proofarith.D
 
 // TestPlanarSupportsMatchScan holds planarSupports to planarSupportsScan, the
 // form it shortens, on random lattice bodies under no band, a narrow band and
-// a wide one. It also holds planarSupportRuledOut to its one-way claim, that
-// a ruled-out plane is one planarSupportOf rejects, and checks that the
+// a wide one. It also holds SupportRuledOut to its one-way claim, that
+// a ruled-out plane is one ReadSupportCandidate rejects, and checks that the
 // pre-test rules out planes by both of its cases and that some planes reach
 // the exact test and pass.
 //
@@ -296,9 +315,10 @@ func TestPlanarSupportsMatchScan(t *testing.T) {
 				if proofarith.DvIsZero(n) {
 					continue
 				}
-				_, ok, err := planarSupportOf(S, M, n, origin, run.req.ContactRequest, poll)
+				_, ok, err := planarsweep.ReadSupportCandidate(planarSupportPathOf(S),
+					planarSupportPathOf(M), n, origin, supportBandOf(run.req.ContactRequest), poll)
 				require.NoError(t, err)
-				if !planarSupportRuledOut(boxes, n, origin, run.req.ContactRequest) {
+				if !planarsweep.SupportRuledOut(boxes, n, origin, supportBandOf(run.req.ContactRequest)) {
 					if ok {
 						accepted++
 					}
