@@ -141,7 +141,7 @@ func tessellateRevolve(ctx context.Context, b *Body, rp revolvePayload, chord fl
 		if attempt >= maxRevolveRefinements {
 			return nil, refine.err
 		}
-		if rerr := plan.Counts.Refine(plan.resolved, refine.retry); rerr != nil {
+		if rerr := plan.Refine(plan.resolved, refine.retry); rerr != nil {
 			return nil, refine.err
 		}
 	}
