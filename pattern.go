@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // This file is PatternCopies (docs/mirror-pattern-design.md §4.3, §6.2):
@@ -23,19 +24,53 @@ import (
 
 // PatternSpec is how a pattern lays out its instances: a [LinearPattern] or
 // a [CircularPattern]. The set is sealed.
-type PatternSpec = patternrecord.PatternSpec
+type PatternSpec interface{ patternSpec() }
 
 // LinearPattern places instance i at i·Step along Dir, i = 0..Count-1.
 // Instance 0 is the receiver itself. Dir is a direction (dimensionless,
 // non-zero, not normalised by the caller); Step is a length magnitude, and
 // its sense is Dir's.
-type LinearPattern = patternrecord.LinearPattern
+type LinearPattern struct {
+	Dir   r3.Vec
+	Step  units.Value
+	Count int
+}
 
 // CircularPattern places instance i rotated by i/Count of a turn, right-handed
 // about the axis through Center along Axis, i = 0..Count-1. The step angle is
 // denoted by Count, never by a float, so a quarter turn is exactly a quarter
 // turn. Center need not lie on the receiver's own sweep axis.
-type CircularPattern = patternrecord.CircularPattern
+type CircularPattern struct {
+	Center, Axis r3.Vec
+	Count        int
+}
+
+func (LinearPattern) patternSpec()   {}
+func (CircularPattern) patternSpec() {}
+
+func resolvePatternSpec(spec PatternSpec) (patternrecord.Spec, error) {
+	errNil := fmt.Errorf(`%w: a nil pattern spec names no pattern`, ErrDegenerate)
+	switch s := spec.(type) {
+	case *LinearPattern:
+		if s == nil {
+			return patternrecord.Spec{}, errNil
+		}
+		value := *s
+		return patternrecord.ResolveLinear(value.Dir, value.Step, value.Count)
+	case *CircularPattern:
+		if s == nil {
+			return patternrecord.Spec{}, errNil
+		}
+		value := *s
+		return patternrecord.ResolveCircular(value.Center, value.Axis, value.Count)
+	case LinearPattern:
+		return patternrecord.ResolveLinear(s.Dir, s.Step, s.Count)
+	case CircularPattern:
+		return patternrecord.ResolveCircular(s.Center, s.Axis, s.Count)
+	default:
+		return patternrecord.Spec{}, errNil
+	}
+}
 
 // PatternCopies returns Count−1 new live bodies, instances 1..Count−1 of
 // spec in order, and leaves the receiver live (docs/mirror-pattern-design.md
@@ -84,7 +119,7 @@ func (b *Body) patternReceiver(ctx context.Context, spec PatternSpec) (*Document
 	if err := d.requireLive(b); err != nil {
 		return nil, resolvedPattern{}, false, err
 	}
-	resolved, err := patternrecord.Resolve(spec)
+	resolved, err := resolvePatternSpec(spec)
 	if err != nil {
 		return nil, resolvedPattern{}, false, err
 	}
