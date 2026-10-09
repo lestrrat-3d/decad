@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -12,7 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Regression guard for the two agent docs CLAUDE.md and docs/layout.md (see
+// Regression guard for the agent docs CLAUDE.md, the docs/layout.md index and
+// the docs/layout/ part files (see
 // docs/layout.md's own "## Layout rows" section and
 // ~/.claude/docs/agent-instructions.md's "prefer mechanical doc/code checks
 // over exhortations"): each feature PR tends to append prose to a row's
@@ -21,11 +23,14 @@ import (
 // or a row stops parsing as a row at all. A mechanical comparison that can
 // FAIL beats a comment asking authors to "keep it short".
 //
-// The two files are measured under one scanner and two specs. docs/layout.md
-// holds the Layout table and is the only file whose "## Layout" heading is
-// admitted; CLAUDE.md declares its own non-Layout table and is refused a
-// Layout heading or table outright, since a second copy of the table is one
-// that nothing keeps in step with the first.
+// The files are measured under one scanner and one spec each. Each docs/layout/
+// part file holds Layout rows under its own "## Layout" heading and its own
+// byte budget, so a parallel PR that fills one part cannot break another.
+// CLAUDE.md declares its own non-Layout table, and both it and the
+// docs/layout.md index are refused a Layout heading or table outright, since
+// a copy of the table outside the parts is one that nothing keeps in step
+// with them. Coverage runs over the union of every part's rows, and a path
+// with rows in two parts is refused.
 //
 // The guard is only as strong as the parser's reach, so parseAgentDoc is a
 // TOTAL scanner: every line of the file passes through one classifier exactly
@@ -45,16 +50,20 @@ import (
 //     900 bytes. The byte budget is the backstop for that too.
 const (
 	claudeMDPath = "CLAUDE.md"
-	// layoutDocPath holds the Layout table CLAUDE.md's "Read before you
-	// write" table points at. It carries the package's whole file index,
-	// which is why it is a pre-read rather than text loaded into every
-	// conversation.
-	layoutDocPath = designDocDir + "/layout.md"
-	// claudeMDMaxBytes and layoutDocMaxBytes are the two whole-file
-	// budgets. Raising either is a policy change, not a bug fix — trim a
-	// Layout row, or move detail into the file the row names, instead.
-	claudeMDMaxBytes  = 8192
-	layoutDocMaxBytes = 30720
+	// layoutIndexPath is the short index CLAUDE.md's "Read before you
+	// write" table points at. It holds no Layout table: the package's file
+	// index lives in the part files under layoutPartDir, which is why it is
+	// a pre-read rather than text loaded into every conversation.
+	layoutIndexPath = designDocDir + "/layout.md"
+	layoutPartDir   = designDocDir + "/layout"
+	// claudeMDMaxBytes, layoutIndexMaxBytes and layoutPartMaxBytes are the
+	// whole-file budgets; every part file has its own layoutPartMaxBytes, so
+	// one full part never fails another. Raising any of them is a policy
+	// change, not a bug fix — trim a Layout row, move detail into the file
+	// the row names, or start a new part file, instead.
+	claudeMDMaxBytes    = 8192
+	layoutIndexMaxBytes = 4096
+	layoutPartMaxBytes  = 12288
 	// layoutCellMaxChars caps a Layout row's description (second) column.
 	// A row that needs more detail belongs in the file/doc it names, with
 	// this cell trimmed back to a short pointer.
@@ -153,10 +162,12 @@ type docSpec struct {
 	nonLayoutTables []tableDecl
 }
 
-// claudeMDSpec and layoutDocSpec are the two docs, and holdsLayout is what
-// separates them: exactly one file may carry the Layout table, so the other
-// is refused a Layout heading or table outright rather than being allowed a
-// second copy nothing keeps in step with the first.
+// claudeMDSpec, layoutIndexSpec and layoutPartSpecs are the guarded docs, and
+// holdsLayout is what separates them: only a part file may carry Layout rows,
+// so CLAUDE.md and the index are refused a Layout heading or table outright
+// rather than being allowed a copy nothing keeps in step with the parts.
+// A file under layoutPartDir that is not declared here is refused by the
+// "every part file is declared" check, so a new part cannot escape the guard.
 var (
 	claudeMDSpec = docSpec{
 		path:     claudeMDPath,
@@ -165,12 +176,30 @@ var (
 			{"| Before writing | Read |", "## Read before you write"},
 		},
 	}
-	layoutDocSpec = docSpec{
-		path:        layoutDocPath,
-		maxBytes:    layoutDocMaxBytes,
-		holdsLayout: true,
+	layoutIndexSpec = docSpec{
+		path:     layoutIndexPath,
+		maxBytes: layoutIndexMaxBytes,
+	}
+	layoutPartSpecs = []docSpec{
+		layoutPartSpec("design-docs.md"),
+		layoutPartSpec("features.md"),
+		layoutPartSpec("modify-booleans.md"),
+		layoutPartSpec("verification.md"),
+		layoutPartSpec("output-repository.md"),
+		layoutPartSpec("internal-core.md"),
+		layoutPartSpec("internal-checks.md"),
 	}
 )
+
+// layoutPartSpec is the spec of one docs/layout/ part file: it holds Layout
+// rows and weighs at most layoutPartMaxBytes.
+func layoutPartSpec(name string) docSpec {
+	return docSpec{
+		path:        layoutPartDir + "/" + name,
+		maxBytes:    layoutPartMaxBytes,
+		holdsLayout: true,
+	}
+}
 
 var (
 	// atxHeadingRe is CommonMark's ATX heading: up to three spaces of
@@ -208,7 +237,7 @@ const (
 // appear in no file in this repository.
 var fixtureSpec = docSpec{
 	path:        "invented-fixture.md",
-	maxBytes:    layoutDocMaxBytes,
+	maxBytes:    layoutPartMaxBytes,
 	holdsLayout: true,
 	nonLayoutTables: []tableDecl{
 		{"| Invented column | Another |", "## Invented declared table"},
@@ -371,8 +400,9 @@ func (spec docSpec) requireSeparator(lines []string, i int, header string) error
 // Section and table membership are DERIVED from that classification, under
 // five structural rules:
 //
-//  1. layoutHeading appears exactly once in the spec that holds the Layout
-//     table, spelled exactly, and never at all in the spec that does not. A
+//  1. layoutHeading appears exactly once in each spec that holds Layout rows
+//     (a docs/layout/ part file), spelled exactly, and never at all in a spec
+//     that does not (CLAUDE.md, the docs/layout.md index). A
 //     second copy — earlier, later, in the other file, or inside a code fence
 //     — would capture the parse and leave the rows it did not capture
 //     unmeasured. A line that READS as the Layout heading in any other
@@ -488,8 +518,8 @@ func parseAgentDoc(spec docSpec, content string) (*agentDocTables, error) {
 					path, at, layoutHeading, raw)
 			}
 			if !spec.holdsLayout {
-				return nil, fmt.Errorf("%s:%d: a %q heading in the file that does NOT hold the Layout table — %s owns it, and a second copy here is one nothing keeps in step with the first: %q",
-					path, at, layoutHeading, layoutDocPath, trimmed)
+				return nil, fmt.Errorf("%s:%d: a %q heading in the file that does NOT hold the Layout table — only the %s part files own it, and a copy here is one nothing keeps in step with them: %q",
+					path, at, layoutHeading, layoutPartDir, trimmed)
 			}
 			headings++
 			if headings > 1 {
@@ -627,21 +657,27 @@ func extractPaths(col1 string) []string {
 // Each failure names the row or file to fix, so its output doubles as the
 // trim worklist.
 //
-// Both specs are parsed and both are cell-capped and size-capped. The
-// coverage and path checks read the Layout rows, which only layoutDocSpec
-// yields — CLAUDE.md is refused a Layout table outright, so its parse
-// contributes its declared non-Layout cells alone.
+// Every spec is parsed, cell-capped and size-capped. The coverage and path
+// checks read the Layout rows, which only the layoutPartSpecs yield —
+// CLAUDE.md and the index are refused a Layout table outright, so their
+// parses contribute declared non-Layout cells alone. Coverage runs over the
+// UNION of every part's rows.
 func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 	t.Parallel()
 	var rows []layoutRow
+	specs := append([]docSpec{claudeMDSpec, layoutIndexSpec}, layoutPartSpecs...)
+	rowFiles := map[string][]layoutRow{}
 
-	for _, spec := range []docSpec{claudeMDSpec, layoutDocSpec} {
+	for _, spec := range specs {
 		data, err := os.ReadFile(spec.path)
 		require.NoErrorf(t, err, "could not read %s from the test's working directory (expected to be the repository root)", spec.path)
 
 		parsed, err := parseAgentDoc(spec, string(data))
 		require.NoErrorf(t, err, "%s did not parse", spec.path)
 		rows = append(rows, parsed.rows...)
+		if spec.holdsLayout {
+			rowFiles[spec.path] = parsed.rows
+		}
 
 		t.Run(spec.path+" file size budget", func(t *testing.T) {
 			require.LessOrEqualf(t, len(data), spec.maxBytes,
@@ -678,6 +714,18 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 		})
 	}
 
+	t.Run("every part file is declared", func(t *testing.T) {
+		declared := map[string]struct{}{}
+		for _, spec := range layoutPartSpecs {
+			declared[spec.path] = struct{}{}
+		}
+		require.NoError(t, undeclaredLayoutParts(layoutPartDir, declared))
+	})
+
+	t.Run("no path has rows in two parts", func(t *testing.T) {
+		require.NoError(t, duplicatedLayoutPaths(rowFiles))
+	})
+
 	t.Run("every root go file has a layout row", func(t *testing.T) {
 		covered := coveredPaths(rows, ".go")
 
@@ -687,7 +735,7 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 		for _, name := range names {
 			t.Run(name, func(t *testing.T) {
 				_, ok := covered[name]
-				require.Truef(t, ok, "%s has no row in %s's Layout table — add one describing its responsibility", name, layoutDocPath)
+				require.Truef(t, ok, "%s has no row in a %s part file's Layout table — add one describing its responsibility", name, layoutPartDir)
 			})
 		}
 	})
@@ -705,9 +753,76 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 			path := filepath.ToSlash(filepath.Join(designDocDir, name))
 			t.Run(path, func(t *testing.T) {
 				_, ok := covered[path]
-				require.Truef(t, ok, "%s has no row in %s's Layout table — add one describing what it owns", path, layoutDocPath)
+				require.Truef(t, ok, "%s has no row in a %s part file's Layout table — add one describing what it owns", path, layoutPartDir)
 			})
 		}
+	})
+}
+
+// undeclaredLayoutParts refuses every Markdown file under dir that is not in
+// declared. A part file the specs do not name is measured by nothing: it
+// would carry rows no budget, cell cap or path check reads, and coverage
+// would never count them. Declaring it in layoutPartSpecs is the edit that
+// brings it under the guard.
+func undeclaredLayoutParts(dir string, declared map[string]struct{}) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("could not list %s: %w", dir, err)
+	}
+	for _, entry := range entries {
+		path := filepath.ToSlash(filepath.Join(dir, entry.Name()))
+		if _, ok := declared[path]; !ok {
+			return fmt.Errorf("%s is not a declared Layout part file — add layoutPartSpec(%q) to layoutPartSpecs in this test so its rows are budgeted and checked", path, entry.Name())
+		}
+	}
+	return nil
+}
+
+// duplicatedLayoutPaths refuses a path that has Layout rows in two different
+// part files, since two rows for one file drift apart and the second is never
+// the one a reader finds. rowsByFile maps a part file to its parsed rows.
+func duplicatedLayoutPaths(rowsByFile map[string][]layoutRow) error {
+	owner := map[string]string{}
+	files := make([]string, 0, len(rowsByFile))
+	for file := range rowsByFile {
+		files = append(files, file)
+	}
+	sort.Strings(files)
+	for _, file := range files {
+		for _, row := range rowsByFile[file] {
+			for _, p := range row.paths {
+				if prev, ok := owner[p]; ok && prev != file {
+					return fmt.Errorf("%s:%d: %q already has a row in %s — a path belongs to exactly one part file", file, row.line, p, prev)
+				}
+				owner[p] = file
+			}
+		}
+	}
+	return nil
+}
+
+// TestLayoutPartGuardsRefuse pins the two cross-file guards on invented
+// input, since the real tree satisfies both and so cannot show them firing.
+func TestLayoutPartGuardsRefuse(t *testing.T) {
+	t.Parallel()
+	t.Run("undeclared part file", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "known.md"), nil, 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "invented.md"), nil, 0o600))
+		declared := map[string]struct{}{filepath.ToSlash(filepath.Join(dir, "known.md")): {}}
+		err := undeclaredLayoutParts(dir, declared)
+		require.ErrorContains(t, err, "invented.md is not a declared Layout part file")
+		declared[filepath.ToSlash(filepath.Join(dir, "invented.md"))] = struct{}{}
+		require.NoError(t, undeclaredLayoutParts(dir, declared))
+	})
+	t.Run("path with rows in two parts", func(t *testing.T) {
+		rows := map[string][]layoutRow{
+			"a.md": {{line: 3, paths: []string{"x.go"}}},
+			"b.md": {{line: 7, paths: []string{"y.go", "x.go"}}},
+		}
+		require.ErrorContains(t, duplicatedLayoutPaths(rows), `"x.go" already has a row in a.md`)
+		delete(rows, "b.md")
+		require.NoError(t, duplicatedLayoutPaths(rows))
 	})
 }
 

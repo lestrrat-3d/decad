@@ -719,7 +719,7 @@ Each PR ships code, tests and the documentation its lifted refusals touch:
 this document's increment table, `doc.go`'s support map,
 `docs/missing-features.md`'s Modify rows, `docs/brep-modify-design.md`'s
 Table SB text for SB3/SB4/SB5/SB10, the functions' doc comments, a
-`docs/layout.md` row per new root file, and `.github/test-shards.txt`. This
+`docs/layout/` row per new root file, and `.github/test-shards.txt`. This
 document ships with PR 0.
 
 | PR | Model | Lands | Files and functions | Proves | After |

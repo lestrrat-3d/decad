@@ -811,7 +811,7 @@ the bracket around the integral.
 | `internal/coil/` | station fractions and trig, the profile station chain (§5.3), the lift to axis coordinates, the segment area closed form, §11.1's arc bracket, the cell departure terms, §8.1 and §8.2's sums — every function pure over `big.Rat`/`RatInterval` inputs and unit-tested against hand values |
 | `internal/proofbound/log.go` | `LnInterval`, `AsinhInterval` (§7.1) |
 
-Every root file gets a `docs/layout.md` row in the PR that adds it; the
+Every root file gets a `docs/layout/` row in the PR that adds it; the
 design row lands with this document.
 
 ## 12. Do not do this
@@ -970,7 +970,7 @@ the behaviour:
 
 - `docs/api-design.md` §8 adds `Coil` and points here for its signature,
   axis and extent contract; §13's non-goals need no change;
-- `docs/layout.md` lists this document (with the design) and every file of
+- `docs/layout/` lists this document (with the design) and every file of
   §11.2 (with PR 1 and PR 2);
 - `docs/missing-features.md`: PR 1 narrows "Helical or free-form sweep
   path" to the free-form path alone, narrows "Hole, thread, rib, web,

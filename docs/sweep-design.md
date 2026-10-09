@@ -532,7 +532,7 @@ Landing this design makes these contract edits:
 - `docs/api-design.md` §8 adds `Sweep` and points here for its signature and
   path contract;
 - `docs/api-design.md` §13 removes Sweep from the non-goals list;
-- `docs/layout.md` lists this document;
+- `docs/layout/design-docs.md` lists this document;
 - `docs/evaluator-design.md` §11 points to this document's staged delivery;
 - the implementation increment that adds `sweepPayload` adds its row to
   tessellation and payload-verification tables in the same change;
@@ -1027,7 +1027,7 @@ deleted once and watched fail before it is trusted.
 
 - §1 names §16 as the owner of the corner mode and the scale, §2 lists the
   two options, Table S's row S6 points here, and §12 lists M1 and M2.
-- `docs/layout.md`'s row for this document names §16; the implementing PR
+- `docs/layout/design-docs.md` row for this document names §16; the implementing PR
   adds rows for the files that build the mitred sweep.
 - The implementing PR adds the payload's row to `docs/tessellation-design.md`
   §2's table and to `docs/payload-verification-design.md`, and changes

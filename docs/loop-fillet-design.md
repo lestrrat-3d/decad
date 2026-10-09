@@ -557,7 +557,7 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
 Each PR ships its code, tests and the documentation its lifted refusals
 touch: this document's increment table, `doc.go`'s support map,
 `docs/missing-features.md`'s Modify rows, the design-doc rows §9 names, the
-functions' doc comments, a `docs/layout.md` row per new root file, and
+functions' doc comments, a `docs/layout/` row per new root file, and
 `.github/test-shards.txt`. This document ships with F-0.
 
 | PR | Model | Lands | Files and functions | Proves | After |

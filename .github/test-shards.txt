@@ -94,6 +94,7 @@
 1	0.15	TestChainStationsHonorsItsTargetAndLoosensWithIt
 1	0.36	TestCornerSpanMatchesRationalForm
 1	0.01	TestCoverageTargetsRefusesAnEmptyEnumeration
+1	0.01	TestLayoutPartGuardsRefuse
 1	0.02	TestCupProofRecordCoversEveryPatchItHolds
 1	0.02	TestCupStackedRecord
 1	0.40	TestEvalLoftAuditCountsCandidatesNotPairs
