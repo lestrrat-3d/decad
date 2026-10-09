@@ -818,7 +818,7 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (Pro
 			continue
 		}
 		var segs []CurveSegment
-		if cbp.fillet && !(len(loops[li].walks) == 1 && loops[li].walks[0].Closed) {
+		if cbp.fillet && (len(loops[li].walks) != 1 || !loops[li].walks[0].Closed) {
 			joins, joinErr := filletOffsetJoins(budget, loops[li], cbp.loopOffset(li), cbp.loopSetback(li).dcDelta)
 			if joinErr != nil {
 				return ProfileRecord{}, offset2d.InLoop(joinErr, li)
