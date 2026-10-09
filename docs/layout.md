@@ -40,7 +40,7 @@ the rules leave to the byte budget.
 | `docs/draft-design.md` | `WithTaper` and `Body.Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
 | `docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
-| `docs/sweep-design.md` | `Path`/`Sweep` transport, refusals, topology, measurements, `SweepChain`, mitred sweeps (§16), and reach. |
+| `docs/sweep-design.md` | `Path`/`Sweep`, `SweepChain` and mitred sweeps (§16). |
 | `docs/helix-design.md` | `Document.Coil`: a profile screwed about an in-plane axis. |
 | `docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
@@ -330,7 +330,7 @@ the rules leave to the byte budget.
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
-| `internal/offset2d/` | Offset carriers, joins, sharp loops and displacement proofs. See modify §6–§9, shell-opening §3–§5, draft §2. |
+| `internal/offset2d/` | Offset carriers, proofs. See modify §6–§9, shell-opening §3–§5, draft §2. |
 | `internal/capband/` | Cap-band contour, patch, locus, volume, first-moment and centroid bounds. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |

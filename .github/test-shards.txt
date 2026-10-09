@@ -1234,3 +1234,4 @@
 3	0.10	TestTessellateBrepBandsPlaced
 3	0.10	TestBrepBandBooleanAdmission
 3	0.10	TestBrepBandSurveys
+3	0.01	TestBrepBandMotionCoversContourDisplacement
