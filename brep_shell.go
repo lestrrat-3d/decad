@@ -799,7 +799,10 @@ func ratMax(a, b *big.Rat) *big.Rat {
 // face of the cavity takes the displacement afterwards: delta, the largest
 // offset displacement, as its section displacement, and the largest of delta
 // and the cap levels' displacements on both levels. The largest bound covers
-// each face's own, so the charge is an upper bound for every face.
+// each face's own, so the charge is an upper bound for every face. Each cut
+// is told that charge: class B widens every box it compares by it, so a
+// recorded gap within it refuses, and it refuses its crossing reach while the
+// charge is positive, since that reach charges its crossings nothing for it.
 func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded ProfileRecord, dilated []ProfileRecord, rm throughRemoval, call brepShellCall, delta float64) (brepPayload, error) {
 	step := func(from, d, by float64) (float64, float64) {
 		to := from + by
@@ -813,13 +816,14 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded ProfileR
 	if !rm.top {
 		z1, z1Delta = step(z1, z1Delta, -call.tmm)
 	}
+	charge := max(delta, z0Delta, z1Delta)
 	var cut featurePayload = prismPayload{profile: eroded, frame: tc.caps.frame, z0: z0, z1: z1, xform: bp.xform}
 	for i, tool := range tc.tools {
 		lo, loDelta := step(tool.lo, 0, -call.tmm)
 		hi, hiDelta := step(tool.hi, 0, call.tmm)
 		tp := prismPayload{profile: dilated[i], frame: tool.prism.frame, xform: bp.xform,
 			z0: lo, z1: hi, z0Delta: loDelta, z1Delta: hiDelta}
-		out, ok, err := classBOfPayloads(ctx, meshbool.OpCut, cut, tp, bp.xform)
+		out, ok, err := classBOfPayloads(ctx, meshbool.OpCut, cut, tp, bp.xform, charge)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return brepPayload{}, ctxErr
@@ -846,7 +850,6 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded ProfileR
 			return brepPayload{}, err
 		}
 	}
-	charge := max(delta, z0Delta, z1Delta)
 	faces := make([]brepFace, len(cavity.faces))
 	for i, f := range cavity.faces {
 		f.delta = max(f.delta, delta)

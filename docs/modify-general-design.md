@@ -211,8 +211,20 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    cavity face then takes `δ`, the largest of the offsets' displacements
    above, as its section displacement, and the largest of `δ` and the cap
    levels' displacements on both its levels: an upper bound on each face's
-   own. Class B also needs every line exactly along a reference axis (B6),
-   so an eroded polygon whose float miters drift off the axis — any convex
+   own. That charge `c` is in no record the cuts read, so each cut takes it
+   as a parameter (`classBOfPayloads`'s `delta`; class B's own booleans pass
+   zero) under two rules. First, every face box of `A'` (and of the cavity
+   so far) and every tool box that B7 and the through reach compare grows by
+   `c` on every side, and each through-reach slab's level band by `c`: a
+   dilated tool recorded within `2c` of a cavity face meets it, and the cut
+   refuses (SG6) where the denoted tool may cross the denoted face. Second,
+   a positive `c` refuses the crossing reach (SG6): that reach computes its
+   crossings from the zero-displacement records, and the crossing-angle
+   charge (prism-boolean §3.4, A6) amplifies only a displacement the records
+   carry, so a cut crossing at a grazing angle would publish vertices the
+   flat `c` does not cover. A cut whose `c` is zero takes the crossing reach
+   as class B does. Class B also needs every line exactly along a reference
+   axis (B6), so an eroded polygon whose float miters drift off the axis — any convex
    corner at a thickness that is no exact float, such as 0.1 in — is SG6; a
    section whose corners are arcs erodes through G1 joins that keep each line
    on its axis.
@@ -278,9 +290,10 @@ cavity's cap there is `S ⊖ t` verbatim where no tool reaches the cap plane
 (general-boolean B.3: a tool along `j ≠ k` meets only faces across `j`), and
 its hole `i` is `(S ⊖ t).Holes[i]` as `offsetProfile` keeps loop order. A
 tool that does reach the cap plane splits or notches that cap through the
-crossing reach; step 5 then reads the pieces as they come and step 6 proves
-the rim's nesting, so a notched cavity cap builds where its loops still
-partner, and refuses honestly where they do not.
+crossing reach, which step 4 admits only where the cavity's charge is zero;
+step 5 then reads the pieces as they come and step 6 proves the rim's
+nesting, so a notched cavity cap builds where its loops still partner, and
+refuses honestly where they do not.
 
 ### 3.4 Table SG — refusals and gate order
 
@@ -293,7 +306,7 @@ Modify §1's test picks every sentinel.
 | **SG3** | the record is no through-cut record (Table TC): a stacked union, a blind pocket or port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion holds a sphere at each reflex vertex, a torus around each reflex circle, or an elliptical edge where two reflex edges meet | `ErrUnsupported`, naming the first face Table TC does not take |
 | **SG4** | a removed face that is a tool wall, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
 | **SG5** | a removed face that names no face of the record; a removed wall that is no straight wall along a section axis (a fillet cylinder: its rim is no planar face); a wall run whose end cuts backward along the removed carrier (a reflex corner: the rim lies inside the material). A set of walls that is no proper connected run is shell-opening SO6 | yes | `ErrUnsupported` |
-| **SG6** | a tool's dilation reaches material beyond its pierced wall (TC7), or a private class-B cut does not build a brep: two dilated tools within `2t`, a dilated tool reaching a cap of `A'`, an eroded miter off its axis | yes | `ErrUnsupported`, naming the tool |
+| **SG6** | a tool's dilation reaches material beyond its pierced wall (TC7), or a private class-B cut does not build a brep: two dilated tools within `2t`, a dilated tool reaching a cap of `A'`, an eroded miter off its axis, a dilated tool recorded within twice the cavity's charge of a cavity face, or a cut that takes the crossing reach while that charge is positive (§3.3 step 4) | yes | `ErrUnsupported`, naming the tool |
 | **SG7** | a rim's loops do not partner the cavity's trace, or do not chain into one outer loop with holes or outer loops alone (step 5) | — (a falsifier) | `ErrUnsupported` |
 
 Gate order for a brep or stacked `Shell`, after modify §4's stage 1 and
@@ -599,7 +612,16 @@ Route S (S-1):
   `WithNoOpenings` → SG2. A hole 1.5 mm under the top on a 2 mm shell builds
   through the crossing reach: the cavity's top splits in two, the rim holds
   both pieces, and the volume is `5632 + 220π − 16·(25·acos 0.9 − 4.5·√4.75)`.
-  Every refusal leaves the receiver live.
+  Two cuts refuse on the cavity's charge (§3.3 step 4's rules), SG6:
+  the 40×20×20 box drilled R = 3.1 along y through `(20, ·, 15.90004)`,
+  top removed at 1 mm, whose dilated hole notches the cap through the
+  crossing reach with a positive charge (built, its notch vertex on `y = 1`
+  misses its exact position by more than its bound); and the box
+  `[32.5, 50] × [16.5, 20] × [0, 30]` drilled R = 2.69 along y through
+  `(44.990000000000002, ·, 15)`, top removed at 1.16 mm, whose dilated hole
+  is recorded apart from the eroded wall `x = fl(50 − 1.16)` while the
+  denoted tube crosses `x = 50 − 1.16` (built, its area interval lies above
+  the denoted area). Every refusal leaves the receiver live.
 
 Route S (S-2):
 

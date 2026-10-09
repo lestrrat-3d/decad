@@ -68,6 +68,20 @@ func (a Box3) Apart(b Box3) bool {
 	return false
 }
 
+// Widened returns the box grown by w on every side of every axis. A zero w
+// returns the box itself.
+func (a Box3) Widened(w *big.Rat) Box3 {
+	if w.Sign() == 0 {
+		return a
+	}
+	var out Box3
+	for k := range 3 {
+		out.Lo[k] = new(big.Rat).Sub(a.Lo[k], w)
+		out.Hi[k] = new(big.Rat).Add(a.Hi[k], w)
+	}
+	return out
+}
+
 // Place lifts a plane box and level interval through a signed axis map.
 func Place(b Box2, zlo, zhi *big.Rat, axis [3]int, sign [3]float64) Box3 {
 	lo := [3]*big.Rat{b.Lo[0], b.Lo[1], zlo}

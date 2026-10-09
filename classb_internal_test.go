@@ -230,7 +230,7 @@ func TestClassBCutExactOffsetPlane(t *testing.T) {
 				s.CreateCircle(c, 3)
 			})
 			x := box.payload.(prismPayload)
-			_, admitted, err := admitClassBPair(t.Context(), box.payload, drill.payload, box.payload.transform())
+			_, admitted, err := admitClassBPair(t.Context(), box.payload, drill.payload, box.payload.transform(), 0)
 			require.NoError(t, err)
 			require.Equal(t, tc.brep, admitted)
 			if !tc.brep {
@@ -355,7 +355,7 @@ func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 	drill := internalDrillAlongY(t, doc, 20, 10, 3)
 	placement := box.payload.transform()
 
-	direct, ok, err := classBOfPayloads(t.Context(), meshbool.OpCut, box.payload, drill.payload, placement)
+	direct, ok, err := classBOfPayloads(t.Context(), meshbool.OpCut, box.payload, drill.payload, placement, 0)
 	require.NoError(t, err)
 	require.True(t, ok)
 	viaBodies, ok, err := tryClassB(t.Context(), meshbool.OpCut, box, drill)
@@ -378,7 +378,7 @@ func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
-	_, ok, err = classBOfPayloads(t.Context(), meshbool.OpCut, box.payload, drill.payload, shift)
+	_, ok, err = classBOfPayloads(t.Context(), meshbool.OpCut, box.payload, drill.payload, shift, 0)
 	require.NoError(t, err)
 	require.False(t, ok)
 
