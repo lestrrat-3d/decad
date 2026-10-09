@@ -119,7 +119,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 			imposed[u.Face] = samples
 		}
 		if b.kind == brepBandFillet {
-			bc.fillet = &filletRings{n: filletRingCount(b.setback.axialUpper(), chord)}
+			bc.fillet = &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), chord)}
 		}
 		bands[bi] = bc
 	}

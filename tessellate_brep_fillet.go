@@ -1,12 +1,11 @@
 package decad
 
 import (
-	"fmt"
 	"math"
-	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -37,48 +36,8 @@ type filletRings struct {
 	dev [][]float64
 	// patchEps is each patch face's deviation of its mesh from its surface.
 	patchEps map[*Face]float64
-}
-
-// filletRingCount is n_φ: the fewest strips whose quarter-circle chord
-// sagitta r·(1 − cos(Δφ/2)) stays within half the chord budget, at least 2.
-func filletRingCount(r, chord float64) int {
-	tol := chord / 2
-	if !(r > 0) || !(tol > 0) {
-		return 2
-	}
-	arg := 1 - tol/r
-	if arg < -1 {
-		arg = -1
-	}
-	n := int(math.Ceil((math.Pi / 2) / (2 * math.Acos(arg))))
-	return min(max(n, 2), 4096)
-}
-
-// filletMatch pairs each cap sample with its side sample, in the order
-// tessellation.SampleCapBlend emits the cap samples.
-func (bc *brepBandChord) filletMatch() ([]int, error) {
-	lm := &bc.lm
-	n := len(lm.walks)
-	var match []int
-	for i, w := range lm.walks {
-		nw := 1
-		if w.IsCircular() {
-			nw = lm.count[i]
-		}
-		for k := range nw {
-			match = append(match, lm.sideStart[i]+k)
-		}
-		ni := (i + 1) % n
-		if lm.joins != nil && lm.joins[ni].arc {
-			for range lm.arcCount[ni] {
-				match = append(match, lm.sideStart[ni])
-			}
-		}
-	}
-	if len(match) != len(lm.capPts) {
-		return nil, fmt.Errorf(`%w: fillet band's cap ring holds %d samples for %d matched side samples`, ErrUnsupported, len(lm.capPts), len(match))
-	}
-	return match, nil
+	cells    []filletCell
+	patches  int
 }
 
 // placeRings adds the band's interior ring vertices. It runs after place.
@@ -86,26 +45,34 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 	if bc.partial != nil {
 		return bc.placePartialRings(e, addVertex)
 	}
-	match, err := bc.filletMatch()
+	lm := &bc.lm
+	match, cells, patches, err := tessellation.FilletLoopLayout(tessellation.FilletLoopInput{
+		Walks: lm.walks, Joins: capBlendSampleJoins(lm.joins),
+		Count: lm.count, ArcCount: lm.arcCount, SideStart: lm.sideStart,
+		CapSamples: len(lm.capPts),
+	})
 	if err != nil {
 		return err
 	}
-	lm := &bc.lm
 	n := bc.fillet.n
-	r, rDelta := bc.band.setback.dc, bc.band.setback.dcDelta
-	m := bc.band.matSign(bc.face)
-	z0, z0Delta := bc.face.z0, bc.face.z0Delta
-	rz0, rzd, rr, rrd := proofarith.FloatRat(z0), proofarith.FloatRat(z0Delta), proofarith.FloatRat(r), proofarith.FloatRat(rDelta)
-	if rz0 == nil || rzd == nil || rr == nil || rrd == nil {
-		return fmt.Errorf(`%w: a fillet band's radius or level is not finite`, ErrNotFinite)
+	side := make([]Point2, len(match))
+	for c, index := range match {
+		side[c] = lm.sidePts[index]
 	}
-	rIv := proofbound.IntervalWiden(proofbound.PointInterval(rr), rrd)
-	one := proofbound.PointInterval(big.NewRat(1, 1))
-	mRat := big.NewRat(int64(m), 1)
-
+	points, err := tessellation.FilletRingGeometry(tessellation.FilletRingInput{
+		Side: side, Cap: lm.capPts, Radius: bc.band.setback.dc,
+		RadiusDelta: bc.band.setback.dcDelta, CapLevel: bc.face.z0,
+		CapLevelDelta: bc.face.z0Delta, SideLevel: bc.sideZ,
+		MaterialSign: bc.band.matSign(bc.face), Count: n,
+		Noun: "a fillet band", RingNoun: "a fillet",
+	})
+	if err != nil {
+		return err
+	}
 	N := len(lm.capPts)
 	fr := bc.fillet
 	fr.match = match
+	fr.cells, fr.patches = cells, patches
 	fr.ringV = make([][]int, n+1)
 	fr.dev = make([][]float64, n+1)
 	fr.ringV[0] = make([]int, N)
@@ -114,91 +81,18 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 	}
 	fr.ringV[n] = bc.capV
 	for k := 1; k < n; k++ {
-		phi := float64(k) * (math.Pi / 2) / float64(n)
-		rphi := proofarith.FloatRat(phi)
-		sinIv, cosIv, ok := proofbound.RadSinCosInterval(rphi)
-		if !ok {
-			return fmt.Errorf(`%w: a fillet ring's angle has no sine enclosure`, ErrUnsupported)
-		}
-		f := 1 - math.Cos(phi)
-		fRat := proofarith.FloatRat(f)
-		errF := proofbound.IntervalFloatError(proofbound.IntervalSub(one, cosIv), f)
-		h := r * math.Sin(phi)
-		z := bc.sideZ - m*h
-		zIv := proofbound.IntervalWiden(proofbound.IntervalAdd(proofbound.PointInterval(rz0),
-			proofbound.IntervalScale(proofbound.IntervalMul(rIv, proofbound.IntervalSub(one, sinIv)), mRat)), rzd)
-		errZ := proofbound.IntervalFloatError(zIv, z)
-		if fRat == nil || proofbound.IsNonFinite(errF) || proofbound.IsNonFinite(errZ) {
-			return fmt.Errorf(`%w: a fillet ring's position is not finite`, ErrNotFinite)
-		}
 		fr.ringV[k] = make([]int, N)
 		fr.dev[k] = make([]float64, N)
-		for c := range N {
-			s, cp := lm.sidePts[match[c]], lm.capPts[c]
-			u, ru, okU := interpolate(s.U, cp.U, f, fRat)
-			v, rv, okV := interpolate(s.V, cp.V, f, fRat)
-			if !okU || !okV {
-				return fmt.Errorf(`%w: a fillet ring's position is not finite`, ErrNotFinite)
-			}
-			span := proofbound.AbsSumUpper(math.Abs(cp.U-s.U), math.Abs(cp.V-s.V))
-			dev := proofbound.AbsSumUpper(ru, rv, proofbound.ProductUpper(errF, span), errZ)
-			fr.dev[k][c] = dev
-			fr.ringV[k][c] = addVertex(e.Canon(u, v, z), proofbound.WalkEndBound{U: dev, V: dev})
+		for c, point := range points[k] {
+			fr.dev[k][c] = point.Delta
+			fr.ringV[k][c] = addVertex(e.Canon(point.Point.U, point.Point.V, point.Z),
+				proofbound.WalkEndBound{U: point.Delta, V: point.Delta})
 		}
 	}
 	return nil
 }
 
-// interpolate is s + f·(c − s) in float64 beside the exact rounding error of
-// that evaluation against the rational value of the same formula. The error
-// is not usable where ok is false (an input is not finite).
-func interpolate(s, c, f float64, fRat *big.Rat) (float64, float64, bool) {
-	held := s + f*(c-s)
-	rs, rc := proofarith.FloatRat(s), proofarith.FloatRat(c)
-	rh := proofarith.FloatRat(held)
-	if rs == nil || rc == nil || rh == nil {
-		return 0, 0, false
-	}
-	exact := new(big.Rat).Add(rs, new(big.Rat).Mul(fRat, new(big.Rat).Sub(rc, rs)))
-	err := proofbound.RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(rh, exact)))
-	return held, err, true
-}
-
-// filletCell is one strip cell: cap samples c0 and c1 of patch p.
-type filletCell struct{ c0, c1, patch int }
-
-// filletCells lists the band's cells in patch order: walk i's patch, then the
-// patch of the reflex corner after it.
-func (bc *brepBandChord) filletCells() ([]filletCell, int, error) {
-	lm := &bc.lm
-	n := len(lm.walks)
-	N := len(lm.capPts)
-	var cells []filletCell
-	c, p := 0, 0
-	for i, w := range lm.walks {
-		nw := 1
-		if w.IsCircular() {
-			nw = lm.count[i]
-		}
-		for range nw {
-			cells = append(cells, filletCell{c, (c + 1) % N, p})
-			c++
-		}
-		p++
-		ni := (i + 1) % n
-		if lm.joins != nil && lm.joins[ni].arc {
-			for range lm.arcCount[ni] {
-				cells = append(cells, filletCell{c, (c + 1) % N, p})
-				c++
-			}
-			p++
-		}
-	}
-	if c != N {
-		return nil, 0, fmt.Errorf(`%w: fillet band cells cover %d of %d cap samples`, ErrUnsupported, c, N)
-	}
-	return cells, p, nil
-}
+type filletCell = tessellation.FilletCell
 
 // emitFillet writes the band's strips: for each cell and each of the n_φ
 // strips between consecutive rings, the quad's two triangles, one where the
@@ -208,10 +102,7 @@ func (bc *brepBandChord) filletCells() ([]filletCell, int, error) {
 func (bc *brepBandChord) emitFillet(m *Mesh, faceOfRole func(string) (*Face, error), bump func(*Face, float64)) error {
 	lm := &bc.lm
 	fr := bc.fillet
-	cells, patches, err := bc.filletCells()
-	if err != nil {
-		return err
-	}
+	cells, patches := fr.cells, fr.patches
 	cbp := bc.cbp
 	matSign, capZ := 1.0, cbp.z0
 	if !bc.start {
@@ -251,18 +142,18 @@ func (bc *brepBandChord) emitFillet(m *Mesh, faceOfRole func(string) (*Face, err
 	verts := func(k, c int) r3.Vec { return m.vertices[fr.ringV[k][c]] }
 	for _, cell := range cells {
 		for k := range fr.n {
-			a, b := fr.ringV[k][cell.c0], fr.ringV[k][cell.c1]
-			A, B := fr.ringV[k+1][cell.c0], fr.ringV[k+1][cell.c1]
+			a, b := fr.ringV[k][cell.C0], fr.ringV[k][cell.C1]
+			A, B := fr.ringV[k+1][cell.C0], fr.ringV[k+1][cell.C1]
 			if bc.start {
-				tri(A, B, b, cell.patch)
-				tri(A, b, a, cell.patch)
+				tri(A, B, b, cell.Patch)
+				tri(A, b, a, cell.Patch)
 			} else {
-				tri(a, b, B, cell.patch)
-				tri(a, B, A, cell.patch)
+				tri(a, b, B, cell.Patch)
+				tri(a, B, A, cell.Patch)
 			}
 			if a != b {
-				twist[cell.patch] = math.Max(twist[cell.patch],
-					proofbound.CellTwistOffsetUpper(verts(k, cell.c0), verts(k, cell.c1), verts(k+1, cell.c0), verts(k+1, cell.c1)))
+				twist[cell.Patch] = math.Max(twist[cell.Patch],
+					proofbound.CellTwistOffsetUpper(verts(k, cell.C0), verts(k, cell.C1), verts(k+1, cell.C0), verts(k+1, cell.C1)))
 			}
 		}
 	}
@@ -294,36 +185,7 @@ func (bc *brepBandChord) finishPatch(m *Mesh, face *Face, eps, delta, levelDelta
 	if first < 0 {
 		return
 	}
-	m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, meshAreaDeficit(m.vertices, m.triangles[first:last], face.area, face.areaBound))
-}
-
-// meshAreaDeficit bounds how far the held facets' total area lies from a
-// surface area trueArea ± trueBound: the facets' area is enclosed in exact
-// rational arithmetic over the held vertices and compared at the far ends.
-// A facet the enclosure cannot state answers +Inf.
-func meshAreaDeficit(verts []r3.Vec, tris [][3]int, trueArea, trueBound float64) float64 {
-	sum := proofbound.PointInterval(new(big.Rat))
-	for _, t := range tris {
-		a, okA := proofbound.IvVec3Of(verts[t[0]])
-		b, okB := proofbound.IvVec3Of(verts[t[1]])
-		c, okC := proofbound.IvVec3Of(verts[t[2]])
-		if !okA || !okB || !okC {
-			return math.Inf(1)
-		}
-		cross := proofbound.IvVec3Cross(proofbound.IvVec3Sub(b, a), proofbound.IvVec3Sub(c, a))
-		norm, ok := proofbound.IntervalSqrt(proofbound.IvVec3NormSq(cross))
-		if !ok {
-			return math.Inf(1)
-		}
-		sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(norm, big.NewRat(1, 2)))
-	}
-	ra, rb := proofarith.FloatRat(trueArea), proofarith.FloatRat(trueBound)
-	if ra == nil || rb == nil {
-		return math.Inf(1)
-	}
-	tLo, tHi := new(big.Rat).Sub(ra, rb), new(big.Rat).Add(ra, rb)
-	worst := proofbound.RatMax(proofbound.RatMax(new(big.Rat).Sub(sum.Hi, tLo), new(big.Rat).Sub(tHi, sum.Lo)), new(big.Rat))
-	return proofbound.RatFloatUp(worst)
+	m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, tessellation.FilletMeshAreaDeficit(m.vertices, m.triangles[first:last], face.area, face.areaBound))
 }
 
 // arcMotion fills in the motion of a reflex connector's cap samples, which the
