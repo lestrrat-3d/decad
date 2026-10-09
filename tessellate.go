@@ -271,6 +271,13 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // an operand; a band with a mitered circular wall or a reflex corner carries
 // no such proof, and that mesh serves export while the booleans refuse it.
 //
+// A tapered extrude (a draft body, docs/draft-design.md) meshes as that same
+// band with no straight slab: one ruled wall per section walk between the near
+// cap's rim and the far section, a sharp miter at every line-line corner,
+// convex or reflex, and both caps triangulated. Where every circular wall
+// meets its neighbours exactly tangent, it also proves the volume it and the
+// body differ by, so [Union], [Cut] and [Intersect] take it as an operand.
+//
 // A lofted body RESTATES the flat triangle set its construction already built
 // and audited: nothing is chorded here, so tol binds nothing on that path and
 // the returned Bound is the payload's own facet departure, which can sit either
@@ -421,7 +428,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 // tessellateBodyContext dispatches one body to its payload's own tessellator.
 // verify reaches only the paths that would otherwise COMPUTE a proof the level
 // withholds — prism (and the one-span straight sweep that reduced to one),
-// cup, revolve, cap-loop chamfer and the revolve-backed
+// cup, revolve, cap-loop chamfer, draft and the revolve-backed
 // curved stitch route.
 // A restatement path (faceted, loft, all-planar stitch) copies its proof terms
 // off the payload at no cost and publishes them unconditionally;
@@ -450,6 +457,9 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	}
 	if cbp, ok := b.payload.(capBlendPayload); ok {
 		return tessellateCapBlend(ctx, b, cbp, chord, verify)
+	}
+	if dp, ok := b.payload.(draftPayload); ok {
+		return tessellateDraft(ctx, b, dp, chord, verify)
 	}
 	if sp, ok := b.payload.(stitchPayload); ok {
 		if sp.tris == nil {
@@ -501,7 +511,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, stacked prism, brep, chain-fed prism, one-span straight sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, stitch, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, stacked prism, brep, chain-fed prism, one-span straight sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, b.payload)
 	}
 	return tessellatePrism(ctx, b, pp, prismWallRole, chord, verify)
 }

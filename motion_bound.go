@@ -42,6 +42,29 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 			proofbound.ProductUpper(vecL1(pl.frame.V()), coordUpper),
 			proofbound.ProductUpper(vecL1(pl.frame.N()), zUpper),
 		)
+	case draftPayload:
+		// Every point of a draft body lies on the near section, the far
+		// section, or a straight ruling or cone generator between matching
+		// points of the two, so each plane coordinate is bounded by the larger
+		// of the two records' envelopes, the far one widened by its contour
+		// displacement (docs/draft-design.md Table DD row DD17).
+		work := freeform.NewFreeformWork()
+		nearUpper, err := momentinput.CoordinateEnvelope(pl.profile, work, nil)
+		if err != nil {
+			return math.Inf(1)
+		}
+		farUpper, err := momentinput.CoordinateEnvelope(pl.far, work, nil)
+		if err != nil {
+			return math.Inf(1)
+		}
+		coordUpper := math.Max(nearUpper, proofbound.AbsSumUpper(farUpper, pl.farDelta))
+		zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.axialDelta())
+		return proofbound.AbsSumUpper(
+			vecL1(pl.frame.Origin()),
+			proofbound.ProductUpper(vecL1(pl.frame.U()), coordUpper),
+			proofbound.ProductUpper(vecL1(pl.frame.V()), coordUpper),
+			proofbound.ProductUpper(vecL1(pl.frame.N()), zUpper),
+		)
 	case revolvePayload:
 		coordUpper, err := momentinput.CoordinateUpper(pl.profile, freeform.NewFreeformWork(), nil)
 		if err != nil {

@@ -252,15 +252,16 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, prism/cup mesh assembly and dispatch. See tessellation design. |
-| `tessellate_stacked.go` | Meshes stacked slabs with shared chords and volume proof. See `docs/stacked-prism-design.md` §5. |
+| `tessellate_stacked.go` | Stacked-slab mesh and volume proof. See stacked-prism §5. |
 | `tessellate_brep.go` | Meshes a brep body and proves its occupied volume. See general-boolean §4.4. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1. |
 | `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
-| `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
+| `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |
 | `tessellate_coil.go` | A coil's held-shell mesh with its area and volume proofs. See helix §8. |
 | `tessellate_capblend.go` | The cap-loop chamfer mesh. See tessellation reach §7. |
+| `tessellate_draft.go` | A draft body's mesh through its band view. See draft §9.1. |
 | `export/` | STL, OBJ, 3MF and AP214 writers. See `docs/step-export-design.md`, `docs/3mf-export-design.md`. |
 
 ### Repository

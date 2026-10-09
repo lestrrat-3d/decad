@@ -152,6 +152,15 @@ func (cbp capBlendPayload) loopBandDelta(li int) float64 {
 // loopOffset is loop li's own in-plane offset, its loopSetback's dc.
 func (cbp capBlendPayload) loopOffset(li int) float64 { return cbp.loopSetback(li).dc }
 
+// noun names the body a refusal over this payload speaks of: the draft view's
+// tapered extrude, or the cap-loop chamfer.
+func (cbp capBlendPayload) noun() string {
+	if cbp.draft {
+		return "tapered extrude"
+	}
+	return "cap-loop chamfer"
+}
+
 // capBandKey names one chamfer band: the loop it belongs to (an index into
 // loops(), the same index space Table BX's roles use) and which cap it sits on.
 type capBandKey struct {

@@ -20,7 +20,6 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Section below |
 |---|---|
 | Fillet, chamfer and shell take a boolean result only where it reads as a prism, or (fillet, chamfer) at straight edges along an axis | Modify operations |
-| A draft body (a tapered extrude, or `Body.Draft`) has no mesh, export, boolean or mass reading | Feature operations |
 | No import of any file format | Data exchange |
 | Booleans outside the exact prism classes fall to a faceted mesh result, and refuse touching contact | Booleans |
 
@@ -29,7 +28,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Today | Owner |
 |---|---|---|
 | Draft angle on a two-sided, through-all or to-face extrude, a free-form wall, a circular corner that is not G1, or a surface result | `ErrUnsupported`, draft SD3/SD4/SD11/SD12 (`draft_build.go`) | `docs/draft-design.md` §14 |
-| Mesh, boolean, export, mass and interference readings of a draft body | `ErrUnsupported` through `Tessellate`'s default (`tessellate.go`); interference past a box-disjoint proof reads `Suspect` | `docs/draft-design.md` Table DD |
+| Boolean, mass and interference readings of a draft body whose circular wall joins a neighbour G1 but not exactly tangent, or whose section holds a trimmed segment | `ErrUnsupported`, "no proof of the volume" (`capblend_admit.go`); `Verify` reads the pair `Suspect`; the mesh exports | `docs/draft-design.md` §9.1 |
 | `Body.Draft` of a wall subset, about a `NeutralFrame` or a non-cap face, or of a receiver that is not a straight prism | `ErrUnsupported`, draft SD20/SD21/SD23 (`draft.go`) | `docs/draft-design.md` §14 |
 | Sweep twist | `WithSweepTwist` nonzero → `ErrUnsupported` (`sweep.go`) | `docs/sweep-design.md` |
 | Closed sweep path | `ErrUnsupported`, "closed sweep paths are not implemented" (`sweep.go`) | `docs/sweep-design.md` |

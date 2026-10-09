@@ -33,7 +33,7 @@ Question router (navigation, not authority):
 | What faces, edges and roles come out | §6 Table BD |
 | How the body is built | §7 |
 | How volume, area, centroid and bounds are computed and bounded | §8 |
-| What tessellation, export, `Verify`, booleans and modify ops do | §9 Table DD |
+| What tessellation, export, `Verify`, booleans and modify ops do | §9 Table DD, §9.1 |
 | Tests an implementer must write | §11 |
 | Rejected approaches | §12 |
 | Decided questions | §13 |
@@ -380,8 +380,8 @@ nothing else.
 
 | DD | Consumer | What it does with a `draftPayload` | PR |
 |---|---|---|---|
-| **DD1** | `Body.Tessellate` | chords both records once with the shared curve samples (tessellation §3), rules each wall between its two rims with the cap-band ring builder (`tessellate_capblend.go` over `internal/tessellation`'s rings), triangulates both caps; manifold by construction; the volume proof is the band admission of `docs/tessellation-reach-design.md` §7 with a zero slab. Until PR 2, `ErrUnsupported` through the dispatch's default | 2 |
-| **DD2** | `Union`/`Cut`/`Intersect` | the mesh path (evaluator §9) once DD1 lands; the analytic prism reduction's entry gate (`prism_boolean.go`) does not admit the class and takes the mesh path | 2 |
+| **DD1** | `Body.Tessellate` | chords both records once with the shared curve samples (tessellation §3), rules each wall between its two rims with the cap-band ring builder (`tessellate_capblend.go` over `internal/tessellation`'s rings), triangulates both caps; manifold by construction; the volume proof is the band admission of `docs/tessellation-reach-design.md` §7 with no slab (§9.1). A band the admission refuses meshes for export with no volume proof | 2 |
+| **DD2** | `Union`/`Cut`/`Intersect` | the mesh path (evaluator §9) over DD1's mesh, admitted by `requireVolumeProvingPayload` through the same band admission; the analytic prism reduction's entry gate (`prism_boolean.go`) does not admit the class and takes the mesh path | 2 |
 | **DD3** | STL / OBJ / 3MF | the mesh of DD1 | 2 |
 | **DD4** | STEP | the analytic writer when every face is a `Plane` — a drafted polygon writes `ADVANCED_FACE`s over tilted planes with `Line3` loops, which `supportsAnalyticSTEP` admits today; any `Cone` sends the whole body to the faceted writer, as `docs/missing-features.md`'s STEP row states for cones | 2 |
 | **DD5** | `Verify` validity | built by construction after the §5 audit, as a prism is; `Built` and `Solid` read true | 1 |
@@ -389,15 +389,42 @@ nothing else.
 | **DD7** | `Verify` undercut survey (`WithPullDirection`) | decided: each wall patch's normal component along the pull is read through `Face.NormalAt` and enclosed by `capPatchNormalRange` (DX7's reading, `capblend_survey.go`), each cap by `CapNormalDecision`, and `DecidePull` lists, clears or leaves undecided per modify-reach §8.3's rule. A wall drafted at `α > 0` against a pull along `e` reads `sin α > 0` and clears. Until PR 4, `Suspect` with `DiagUnsupportedSurveyPayload` | 4 |
 | **DD8** | `Verify` wall and concave-radius surveys | `Suspect` with `DiagUnsupportedSurveyPayload` (staged). The reduction a later PR takes: the thinnest wall between two drafted skins is the far section's 2D reading scaled by `cos α`, and the smallest concave radius of a hole wall is its radius at the narrower end; neither is scheduled here | — |
 | **DD9** | `Verify` clearance (`WithClearances`) | `Suspect` (`pairUndecided`): `newBodyGeomBudget` has no carrier model for the class. A later PR adds the Plane/Cone carriers; not scheduled | — |
-| **DD10** | `Verify` interference | box-disjoint proofs from the body's `Bounds`; the read-only mesh intersection once DD1 lands | 2 |
-| **DD11** | `MassProperties` and `dynamics` | the verified-mesh path (`verifiedMeshMassProperties`) once DD1 lands; `ErrUnsupported` before | 2 |
+| **DD10** | `Verify` interference | box-disjoint proofs from the body's `Bounds`; the read-only mesh intersection over DD1's mesh | 2 |
+| **DD11** | `MassProperties` and `dynamics` | the verified-mesh path (`verifiedMeshMassProperties`) over DD1's mesh; `ErrUnsupported` where the band admission refuses | 2 |
 | **DD12** | `Placed`, `Duplicate`, `PlacedCopy`, `Mirrored`, `MirroredCopy` | the payload implements `transform()` and `placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `WithJoin` refuses (it rewrites a prism's or stacked prism's section) | 1 |
-| **DD13** | `Patterned` | `placedInstance` and a boolean `Union` (the mesh path) once DD1 lands; the frame-keeping instance refuses | 2 |
+| **DD13** | `Patterned` | `placedInstance` and a boolean `Union` (the mesh path); the frame-keeping arm does not take the class | 2 |
 | **DD14** | `Fillet`, `Chamfer`, `Shell` | modify S3, `ErrUnsupported`; each refusal message names the draft body among the classes it does not take. A shell of a draft body — the molded cup — is the first reach a later design should take: its cavity is a draft body of the same angle over the section offset by `t / cos α`, floored `t` above the kept cap. Not scheduled here | — |
 | **DD15** | `Draft` of a draft body | SD23 | — |
 | **DD16** | `Thicken`, `Offset`, `Patch`, `Stitch`, `Trim`/`Extend`/`Split` | not reached: a draft body is a solid (SD12 refuses the sheet form) | — |
-| **DD17** | Motion and linkage bounds | `motion_bound.go`'s default reads an unbounded radius, so a draft body in a motion refuses as every unlisted class does; the payload's record radius arm is added with DD1 | 2 |
+| **DD17** | Motion and linkage bounds | `motion_bound.go`'s record radius arm: the larger of the two records' coordinate envelopes, the far one widened by `farDelta`, since every point lies on a ruling or generator between them | 2 |
 | **DD18** | Selectors | `Planar()`, `FaceCreatedBy`, `CapStart`/`CapEnd` and the new `Walls(b)` (§10) select as on a prism. `Facing(v)` and `NormalTo(v)` match a drafted `Plane` wall only for its own tilted normal, since both require parallelism; a caller naming a drafted wall by direction passes that normal, or selects by role | 1, 3 |
+
+### 9.1 The mesh
+
+`tessellate_draft.go` hands `draftPayload.band()` to the cap-loop chamfer
+tessellator with the payload's own wall geometry and far contour displacement
+(`patches`, `bandDelta`, filled by the build), so the mesh charges the numbers
+every reading of the body charged. Three things differ from a chamfer's mesh:
+
+- no trimmed side wall is emitted, and the near cap's rim is written once and
+  read by both the near cap and the walls (`draftNearRing`);
+- a wall patch carries `side(i, j)` and the band has no apex patch, since the
+  corners are read by the sharp rule (`capBlendPayload.offsetJoins`), which the
+  admission (`capBlendOccupiedVolumeAdmission`) reads too: a reflex line-line
+  corner is a miter, affine in the amount, and is admitted;
+- the slice-wise chord term integrates over the whole sweep, `|z1 − z0|` with
+  both ends' displacements (`draftBandHeightUpper`), not over a side setback.
+
+A wall face's bound charges the far level's displacement and the band's, as a
+chamfer patch's does, and no near-level term: the near end of a `Distance`
+extent is the sketch plane, exact (§8). An extent SD11 admits later that moves
+the near level must add it there, as it must to `δ_z`.
+
+The admission refuses what it refuses for a chamfer: a circular wall whose
+join is G1 by the held-tangent rule but not exactly tangent over the
+rationals, a trimmed segment, or an arc whose recorded end is off its circle.
+That mesh serves export, and every boolean, interference and mass reading
+refuses it with the loop and corner.
 
 ## 10. `Body.Draft`
 
@@ -516,8 +543,7 @@ miters cross), SD8 (a plate whose off-centre hole widens across the outer
 wall), SD11 (`Symmetric`, `ToFace`, `ThroughAll`), SD12, SD13 (an angle of
 `1e-14°` on a 1 mm sweep). SD15 is pinned in `internal/offset2d/sharp_test.go`
 (§5). Beside them, the draft body's downstream refusals: `Fillet`, `Chamfer`
-and `Shell` refuse it by name (DD14), `Tessellate` through its default (DD1),
-and `MirroredCopy` builds it (DD12).
+and `Shell` refuse it by name (DD14), and `MirroredCopy` builds it (DD12).
 
 **`Draft` fixtures** (`apitest/draft_test.go`, `draft_internal_test.go`):
 
@@ -551,6 +577,8 @@ undecided; F7's hole wall clear along `+e`.
 | the far cap's `sectionDisplacementArea` | omitted | F6's far cap area |
 | the wall normal's denoted term (`capband.DenotedNormalAllow`) | omitted | F8's slot at `v = 10⁶`: a straight wall publishes a `2.2e-16` bound `3.3e-12` from its denoted normal |
 | DD6's diameter arm | omitted | every F fixture under `Verify` (`DiagToleranceReferenceUnavailable`) |
+| the mesh proof's chord term (`draftBandHeightUpper`) | zeroed | F2, F3 and F7: each mesh volume sits tens of mm³ outside a `volSymDiff` near `1e-11` |
+| the mesh proof's vertex motion (`SweptVolumeAllow`) | omitted | F1, F4, F5 and F6: a zero `volSymDiff` against the far corners' rounding |
 
 ## 12. Do not do this
 
@@ -627,7 +655,7 @@ every new root file. This document ships with PR 1.
 | PR | Lands | Files and functions | Proves | After |
 |---|---|---|---|---|
 | **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `transform`/`placed`; `draft_build.go` (§7); `draft_moments.go` (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class; `Tessellate` refuses the class through its default | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `draft_payload.go`, `draft_build.go`, `draft_moments.go`, `extrude.go`, `capblend*.go` (the band's `draft` view), `verify_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `draft_build_internal_test.go`, `internal/offset2d/sharp_test.go`, `examples/decad_extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
-| **2** | tessellation and the mesh volume proof (DD1), which opens DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `tessellate_draft.go`, `tessellate.go` (dispatch), `mass_properties.go` (the mesh path needs no arm), `motion_bound.go`, `apitest/draft_mesh_test.go`, `tessellate_draft_internal_test.go` | the PR 2 fixtures | 1 |
+| **2** | tessellation and the mesh volume proof (DD1), which opens DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `tessellate_draft.go`, `tessellate.go` (dispatch), `tessellate_capblend.go` and `capblend_admit.go` (§9.1's three differences), `draft_payload.go`/`draft_build.go` (`patches`, `bandDelta`), `boolean.go` (the admission arm), `mass_properties.go` (the mesh path needs no arm), `motion_bound.go`, `apitest/draft_mesh_test.go`, `tessellate_draft_internal_test.go` | the PR 2 fixtures | 1 |
 | **3** | `Body.Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `docs/api-design.md` §8/§12, `apitest/draft_test.go`, `draft_internal_test.go`, `examples/decad_draft_example_test.go` | D1–D5 | 1 |
 | **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
 | **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `draft.go`, `draft_build.go`, tests | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
@@ -637,14 +665,13 @@ PRs 1, 2 and 4 are proof specifications (bounds, closure terms, the mesh
 proof and the normal model) and are implemented at the higher reasoning
 tier; PRs 3 and 5 are file-by-file plans over PR 1's builder.
 
-Increment table — what still refuses after each PR. PRs 2 and 3 land
-independently, so while PR 2 is planned every draft body, `Draft`'s included,
-keeps DD1's refusals:
+Increment table — what still refuses after each PR. PR 2's mesh serves every
+draft body, `Draft`'s included:
 
 | After | State | Still refused |
 |---|---|---|
 | 1 | landed | every draft body's tessellation, boolean, export, mass and interference reading (DD1's dependants); `Body.Draft` (no entry point); surveys `Suspect`; SD3, SD4, SD11, SD12 |
-| 2 | planned | `Body.Draft`; surveys `Suspect`; SD3, SD4, SD11, SD12 |
+| 2 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21; booleans, interference and mass of a body the band admission refuses (§9.1) |
 | 3 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21 |
 | 4 | planned | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20, SD21 |
 | 5 | planned | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |

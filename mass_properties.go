@@ -42,8 +42,8 @@ type InertiaReading struct {
 // certified occupied-volume bound. Every other solid, and a sweep or cup the
 // analytic arms refuse, is integrated over its VerifyAll mesh when that mesh
 // carries an occupied-volume proof, refining the mesh until the tensor
-// interval proves positive: lofts, exact stitched solids and curved payloads
-// the analytic arms refuse.
+// interval proves positive: lofts, tapered extrudes, exact stitched solids
+// and curved payloads the analytic arms refuse.
 // It returns ErrUnsupported for other solids rather than estimating their inertia.
 // The receiver and context must not be nil.
 func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassProperties, error) {

@@ -1614,3 +1614,11 @@
 5	0.05	TestTaperSlot
 5	0.15	TestTaperVerify
 5	0.01	TestWallsSelector
+5	1.00	TestDraftMesh
+5	0.20	TestDraftMeshExports
+5	0.20	TestDraftBooleanWithStraightPrism
+5	0.07	TestDraftOverlapIsMeasured
+5	0.10	TestDraftPatterned
+5	0.03	TestDraftMassProperties
+5	0.10	TestDraftMeshPlacedAndMirrored
+5	0.02	TestDraftMeshOfBodyDraft
