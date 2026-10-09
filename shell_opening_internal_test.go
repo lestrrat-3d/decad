@@ -19,11 +19,11 @@ import (
 
 // testSideOpeningRegions adapts prism fixtures to the record-only section input.
 func testSideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides map[int]struct{},
-	keptCaps int, sense float64, thickness units.Value, held, delta float64) (prismshell.Section, error) {
+	keptCaps int, sense float64, thickness units.Value, held float64) (prismshell.Section, error) {
 	return prismshell.SideOpeningRegions(budget, prismshell.SideOpeningInput{
 		Profile: pp.profile, Height: pp.z1 - pp.z0, Sides: sides,
 		KeptCaps: keptCaps, Sense: sense, Thickness: thickness, HeldThickness: held,
-		ThicknessDelta: delta, Tolerance: shellTol,
+		ThicknessDelta: 0, Tolerance: shellTol,
 	}, auditOffsetSectionBudget)
 }
 
@@ -72,7 +72,7 @@ func TestSideOpeningRegionsUChannel(t *testing.T) {
 		box := internalBoxBody(t, New(), 0, 0, 40, 20, 10)
 		pp := box.payload.(prismPayload)
 		budget := proofbound.NewWorkBudget(t.Context())
-		sec, err := testSideOpeningRegions(budget, pp, internalSideSegments(t, pp, false, 0), 2, 1, units.Millimeters(2), 2, 0)
+		sec, err := testSideOpeningRegions(budget, pp, internalSideSegments(t, pp, false, 0), 2, 1, units.Millimeters(2), 2)
 		require.NoError(t, err)
 		require.Equal(t, []Point2{
 			pt(0, 0), pt(40, 0), pt(40, 20), pt(0, 20), pt(0, 18),
@@ -95,7 +95,7 @@ func TestSideOpeningRegionsUChannel(t *testing.T) {
 			sides[k] = struct{}{}
 		}
 		budget := proofbound.NewWorkBudget(t.Context())
-		sec, err := testSideOpeningRegions(budget, pp, sides, 2, -1, units.Millimeters(2), 2, 0)
+		sec, err := testSideOpeningRegions(budget, pp, sides, 2, -1, units.Millimeters(2), 2)
 		require.NoError(t, err)
 		require.Equal(t, []Point2{pt(0, -2), pt(40, -2), pt(40, 0), pt(0, 0)}, internalLoopPoints(t, sec.Wall.Outer))
 		require.Equal(t, []Point2{pt(0, -2), pt(40, -2), pt(40, 20), pt(0, 20)}, internalLoopPoints(t, sec.Caps.Outer))
@@ -115,7 +115,7 @@ func TestSideOpeningRegionsLPrism(t *testing.T) {
 	l := internalPolyPrismBodyAtZ(t, New(), [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {10, 30}, {0, 30}}, 0, 10)
 	pp := l.payload.(prismPayload)
 	budget := proofbound.NewWorkBudget(t.Context())
-	sec, err := testSideOpeningRegions(budget, pp, internalSideSegments(t, pp, false, 10), 2, 1, units.Millimeters(2), 2, 0)
+	sec, err := testSideOpeningRegions(budget, pp, internalSideSegments(t, pp, false, 10), 2, 1, units.Millimeters(2), 2)
 	require.NoError(t, err)
 	require.Equal(t, []Point2{pt(10, 28), pt(2, 28), pt(2, 2), pt(28, 2), pt(28, 8), pt(10, 8)}, internalLoopPoints(t, sec.Cavity.Outer))
 	area, err := loopSignedAreaCB(sec.Cavity.Outer)
@@ -233,7 +233,7 @@ func TestSideOpeningRegionsOblique(t *testing.T) {
 		tri := internalPolyPrismBodyAtZ(t, New(), [][2]float64{{0, 0}, {12, 0}, {0, 9}}, 0, 10)
 		pp := tri.payload.(prismPayload)
 		budget := proofbound.NewWorkBudget(t.Context())
-		sec, err := testSideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, pt(12, 0), pt(0, 9)), 2, 1, units.Millimeters(3), 3, 0)
+		sec, err := testSideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, pt(12, 0), pt(0, 9)), 2, 1, units.Millimeters(3), 3)
 		require.NoError(t, err)
 		caps := internalLoopPoints(t, sec.Caps.Outer)
 		require.Len(t, caps, 5)
@@ -249,7 +249,7 @@ func TestSideOpeningRegionsOblique(t *testing.T) {
 		l := internalPolyPrismBodyAtZ(t, New(), [][2]float64{{0, 0}, {30, 0}, {30, 10}, {14, 10}, {10, 30}, {0, 30}}, 0, 10)
 		pp := l.payload.(prismPayload)
 		budget := proofbound.NewWorkBudget(t.Context())
-		sec, err := testSideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, pt(14, 10), pt(10, 30)), 2, 1, units.Millimeters(2), 2, 0)
+		sec, err := testSideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, pt(14, 10), pt(10, 30)), 2, 1, units.Millimeters(2), 2)
 		require.NoError(t, err)
 		cavity := internalLoopPoints(t, sec.Cavity.Outer)
 		require.Len(t, cavity, 7)
@@ -306,7 +306,7 @@ func TestSideOpeningCutReachCoversExactCut(t *testing.T) {
 			body := internalPolyPrismBodyAtZ(t, New(), f.pts, 0, 10)
 			pp := body.payload.(prismPayload)
 			budget := proofbound.NewWorkBudget(t.Context())
-			sec, err := testSideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, f.a, f.b), 2, 1, units.Millimeters(tmm), tmm, 0)
+			sec, err := testSideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, f.a, f.b), 2, 1, units.Millimeters(tmm), tmm)
 			require.NoError(t, err, "%s at t = %g", f.name, tmm)
 			want := f.cavity(proofarith.FloatRat(tmm))
 			held := internalLoopPoints(t, sec.Cavity.Outer)
@@ -429,7 +429,7 @@ func TestSideOpeningRegionsDSection(t *testing.T) {
 	regions := func(t *testing.T, removed, keptCaps int, tmm float64) (prismshell.Section, error) {
 		t.Helper()
 		budget := proofbound.NewWorkBudget(t.Context())
-		return testSideOpeningRegions(budget, pp, map[int]struct{}{removed: {}}, keptCaps, 1, units.Millimeters(tmm), tmm, 0)
+		return testSideOpeningRegions(budget, pp, map[int]struct{}{removed: {}}, keptCaps, 1, units.Millimeters(tmm), tmm)
 	}
 	// rims are W's two rims: vB → qB at index 1, qA → vA at index 3.
 	rims := func(t *testing.T, sec prismshell.Section) (arcSeg, arcSeg) {
@@ -529,7 +529,7 @@ func TestSideOpeningRegionsArcArcCut(t *testing.T) {
 	require.Len(t, removed, 4)
 	regions := func(t *testing.T, keptCaps int, tmm float64) prismshell.Section {
 		t.Helper()
-		sec, err := testSideOpeningRegions(proofbound.NewWorkBudget(t.Context()), pp, removed, keptCaps, 1, units.Millimeters(tmm), tmm, 0)
+		sec, err := testSideOpeningRegions(proofbound.NewWorkBudget(t.Context()), pp, removed, keptCaps, 1, units.Millimeters(tmm), tmm)
 		require.NoError(t, err)
 		return sec
 	}
@@ -620,7 +620,7 @@ func TestSideOpeningRegionsArcExtension(t *testing.T) {
 	t.Parallel()
 	regions := func(t *testing.T, pp prismPayload, removed map[int]struct{}, keptCaps int, tmm float64) prismshell.Section {
 		t.Helper()
-		sec, err := testSideOpeningRegions(proofbound.NewWorkBudget(t.Context()), pp, removed, keptCaps, -1, units.Millimeters(tmm), tmm, 0)
+		sec, err := testSideOpeningRegions(proofbound.NewWorkBudget(t.Context()), pp, removed, keptCaps, -1, units.Millimeters(tmm), tmm)
 		require.NoError(t, err)
 		return sec
 	}

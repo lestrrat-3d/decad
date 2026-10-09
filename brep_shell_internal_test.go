@@ -1019,7 +1019,7 @@ func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 
 	budget := proofbound.NewWorkBudget(t.Context())
 	call := brepShellCall{t: units.Millimeters(2), tmm: 2, tDelta: 1e-9}
-	sec, err := tc.openingThroughSection(budget, bp, rm, call)
+	sec, err := tc.openingThroughSection(budget, rm, call)
 	require.NoError(t, err)
 	dilated := make([]profileRecord, len(tc.tools))
 	for i, tool := range tc.tools {

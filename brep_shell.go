@@ -179,7 +179,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	if len(rm.Walls) == 0 {
 		sec, err = tc.erodeThroughSection(budget, rm, call)
 	} else {
-		sec, err = tc.openingThroughSection(budget, bp, rm, call)
+		sec, err = tc.openingThroughSection(budget, rm, call)
 	}
 	if err != nil {
 		return nil, err
@@ -288,10 +288,9 @@ func (tc throughCut) erodeThroughSection(budget *proofbound.WorkBudget, rm throu
 // charges a section that publishes C. A cut that runs back along the removed
 // walk's carrier (a reflex end) leaves a rim inside the material that is no
 // piece of a removed face, which route S does not state: SG5.
-func (tc throughCut) openingThroughSection(budget *proofbound.WorkBudget, bp brepPayload, rm throughRemoval, call brepShellCall) (throughSection, error) {
-	pp := prismPayload{profile: tc.caps.Section, frame: tc.caps.Frame, xform: bp.xform, z0: tc.caps.Zlo, z1: tc.caps.Zhi}
+func (tc throughCut) openingThroughSection(budget *proofbound.WorkBudget, rm throughRemoval, call brepShellCall) (throughSection, error) {
 	sec, err := prismshell.SideOpeningRegions(budget, prismshell.SideOpeningInput{
-		Profile: pp.profile, Height: pp.z1 - pp.z0, Sides: rm.Sides,
+		Profile: tc.caps.Section, Height: tc.caps.Zhi - tc.caps.Zlo, Sides: rm.Sides,
 		KeptCaps: rm.KeptCaps(), Sense: 1, Thickness: call.t, HeldThickness: call.tmm,
 		ThicknessDelta: call.tDelta, Tolerance: shellTol,
 	}, auditOffsetSectionBudget)
