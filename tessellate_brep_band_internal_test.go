@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -126,9 +127,9 @@ func bandFixtures() []bandFixture {
 // its band, P3's root and P8's hole rim, then took samples of its own and the
 // mesh stayed open), with a rising band's winding turn deleted (P3's root then
 // meshed inside out) and with brepBandChordVolume's height zeroed (P3's rim and
-// root then lay outside their proofs). The per-vertex motion array is not shown
-// to matter: swapped for the store, these fixtures stay covered, the bound
-// being far looser than the gap.
+// root then lay outside their proofs). The per-vertex motion array is pinned by
+// TestBrepBandMotionCoversContourDisplacement: these fixtures' bound is far
+// looser than the gap, so they stay covered with the store in its place.
 func TestTessellateBrepBands(t *testing.T) {
 	t.Parallel()
 	const chord = 0.05
@@ -340,5 +341,39 @@ func TestBrepBandSurveys(t *testing.T) {
 		}(),
 	} {
 		require.Equal(t, ScalarUndecided, radius(body))
+	}
+}
+
+// TestBrepBandMotionCoversContourDisplacement pins the per-vertex motion array
+// of the VerifyAll proof (brepBandMotion). The trapezoid pocket's top loop,
+// chamfered by 1, has cap-contour corners no float holds, so its top face
+// carries a contour displacement F.delta > 0 (modify-general §7). A cap
+// contour vertex's store is its station's gap from the held offset circle plus
+// its rounding, which is zero for a line-line miter foot; the foot's real
+// distance from the ideal polyhedron's vertex is the contour displacement. So
+// the store understates that motion by F.delta, and the motion array must
+// carry it. Shown to fail with brepBandMotion returning the store: every cap
+// vertex then reads zero, below F.delta.
+func TestBrepBandMotionCoversContourDisplacement(t *testing.T) {
+	t.Parallel()
+	body := internalTrapezoidPocket(t)
+	out, _ := chamferLoopOf(t, body, routeEZ, r3.NewVec(0, 0, 10), 0, 1)
+	bp := out.payload.(brepPayload)
+	delta := bp.faces[bp.loopBands[0].face].delta
+	require.Positive(t, delta)
+
+	topo, err := brepTopologyContext(t.Context(), bp)
+	require.NoError(t, err)
+	bands, _, err := brepChordBands(t.Context(), bp, topo, 0.05)
+	require.NoError(t, err)
+	n := 0
+	bands[0].place(topo.embeds[bands[0].band.face], func([3]float64, proofbound.WalkEndBound) int { n++; return n - 1 })
+	store, round := make([]float64, n), make([]float64, n)
+	motion, err := brepBandMotion(t.Context(), bands, store, round)
+	require.NoError(t, err)
+	require.NotEmpty(t, bands[0].capV)
+	for _, vi := range bands[0].capV {
+		require.GreaterOrEqual(t, motion[vi], delta, "cap vertex %d", vi)
+		require.Greater(t, motion[vi], store[vi])
 	}
 }
