@@ -230,20 +230,6 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 // walks do not — the positive side — and the exactly-parallel plane gate that
 // replaces it.
 
-// ChainLoftOption configures LoftChain. It is its own sealed tier rather than
-// [LoftOption]: WithSurfaceResult() does not implement it, so the compiler
-// refuses that option outright rather than accepting it as a no-op — a
-// chain-fed loft always returns a sheet, so there is no cap for the option to
-// omit (docs/surface-design.md §13.2, docs/loft-design.md §16.3).
-// WithLoftAlignment is not a member either: Table P's own P4 row forces a
-// chain pair's offset to 0, so the option would name a correspondence that
-// does not exist. No option is a member of this tier yet; it exists so a later
-// chain-only option has a tier to land on.
-type ChainLoftOption interface {
-	option.Interface
-	chainLoftOption()
-}
-
 // chainLoftPayload is LoftChain's own record of a ribbon body: the two
 // recorded open walks, the two planes and frames they lift through, and the
 // accumulated rigid placement. It stays DISTINCT from loftPayload because a
@@ -292,7 +278,7 @@ func (lp chainLoftPayload) placed(ctx context.Context, d *Document, ref producer
 // The result is always a sheet — Kind() == BodySheet — two flat triangles per
 // chord cell with no cap and no closing face, so WithSurfaceResult() does not
 // compile against this call. A failed call leaves the document untouched.
-func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error) {
+func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a loft`, ErrDegenerate)
 	}
@@ -301,11 +287,6 @@ func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.
 	}
 	if s0 == nil || c0 == nil || s1 == nil || c1 == nil {
 		return nil, fmt.Errorf(`%w: LoftChain requires two non-nil sketches and two non-nil chains`, ErrDegenerate)
-	}
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

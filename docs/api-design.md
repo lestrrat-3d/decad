@@ -1056,14 +1056,12 @@ func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error)
 func WithThickenSide(side ThickenSide) ThickenOption
 
-// The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a
-// BodySheet, so WithSurfaceResult() is not among their options: ChainExtrudeOption,
-// ChainRevolveOption, ChainSweepOption and ChainLoftOption are their own sealed
-// tiers, which SurfaceResultOption implements none of.
-func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
-func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
-func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error)
-func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
+// The chain-fed forms sweep OPEN sketch curves and always return BodySheet.
+// They take no options, so WithSurfaceResult() cannot be passed to them.
+func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent) (*Body, error)
+func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent) (*Body, error)
+func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path) (*Body, error)
+func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain) (*Body, error)
 ```
 
 `ThickenSide` is `ThickenPositive` (default), `ThickenNegative` or
