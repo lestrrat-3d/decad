@@ -81,13 +81,13 @@ func (c RevArcCell) RhoNodes() ([]proofbound.RatInterval, *big.Rat, bool) {
 	if !ok {
 		return nil, nil, false
 	}
-	sin, cos := ArcFixedFromRat(sinIv), ArcFixedFromRat(cosIv)
-	stepSin, stepCos := ArcFixedFromRat(stepSinIv), ArcFixedFromRat(stepCosIv)
+	sin, cos := arcFixedFromRat(sinIv), arcFixedFromRat(cosIv)
+	stepSin, stepCos := arcFixedFromRat(stepSinIv), arcFixedFromRat(stepCosIv)
 	for i := range nodes {
-		nodes[i] = proofbound.IntervalAdd(proofbound.PointInterval(c.CV), proofbound.IntervalScale(sin.Rat(), c.Radius))
+		nodes[i] = proofbound.IntervalAdd(proofbound.PointInterval(c.CV), proofbound.IntervalScale(sin.rat(), c.Radius))
 		if i+1 < len(nodes) {
-			nextSin := ArcFixedAdd(ArcFixedMul(sin, stepCos), ArcFixedMul(cos, stepSin))
-			cos = ArcFixedSub(ArcFixedMul(cos, stepCos), ArcFixedMul(sin, stepSin))
+			nextSin := arcFixedAdd(arcFixedMul(sin, stepCos), arcFixedMul(cos, stepSin))
+			cos = arcFixedSub(arcFixedMul(cos, stepCos), arcFixedMul(sin, stepSin))
 			sin = nextSin
 		}
 	}
@@ -99,28 +99,28 @@ func (c RevArcCell) RhoNodes() ([]proofbound.RatInterval, *big.Rat, bool) {
 	return nodes, bulge, true
 }
 
-// ArcFixedInterval holds a certified interval as integer multiples of the
+// arcFixedInterval holds a certified interval as integer multiples of the
 // package's 2^-proofbound.TrigFixedBits grid. The recurrence rounds each product outward,
 // keeping numerator and denominator sizes fixed across all 32 nodes.
-type ArcFixedInterval struct{ Lo, Hi *big.Int }
+type arcFixedInterval struct{ Lo, Hi *big.Int }
 
-func ArcFixedFromRat(a proofbound.RatInterval) ArcFixedInterval {
-	return ArcFixedInterval{proofbound.FixedFloor(a.Lo), proofbound.FixedCeil(a.Hi)}
+func arcFixedFromRat(a proofbound.RatInterval) arcFixedInterval {
+	return arcFixedInterval{proofbound.FixedFloor(a.Lo), proofbound.FixedCeil(a.Hi)}
 }
 
-func (a ArcFixedInterval) Rat() proofbound.RatInterval {
+func (a arcFixedInterval) rat() proofbound.RatInterval {
 	return proofbound.IntervalOwned(proofbound.FixedToRat(a.Lo), proofbound.FixedToRat(a.Hi))
 }
 
-func ArcFixedAdd(a, b ArcFixedInterval) ArcFixedInterval {
-	return ArcFixedInterval{new(big.Int).Add(a.Lo, b.Lo), new(big.Int).Add(a.Hi, b.Hi)}
+func arcFixedAdd(a, b arcFixedInterval) arcFixedInterval {
+	return arcFixedInterval{new(big.Int).Add(a.Lo, b.Lo), new(big.Int).Add(a.Hi, b.Hi)}
 }
 
-func ArcFixedSub(a, b ArcFixedInterval) ArcFixedInterval {
-	return ArcFixedInterval{new(big.Int).Sub(a.Lo, b.Hi), new(big.Int).Sub(a.Hi, b.Lo)}
+func arcFixedSub(a, b arcFixedInterval) arcFixedInterval {
+	return arcFixedInterval{new(big.Int).Sub(a.Lo, b.Hi), new(big.Int).Sub(a.Hi, b.Lo)}
 }
 
-func ArcFixedMul(a, b ArcFixedInterval) ArcFixedInterval {
+func arcFixedMul(a, b arcFixedInterval) arcFixedInterval {
 	products := [4]*big.Int{
 		new(big.Int).Mul(a.Lo, b.Lo), new(big.Int).Mul(a.Lo, b.Hi),
 		new(big.Int).Mul(a.Hi, b.Lo), new(big.Int).Mul(a.Hi, b.Hi),
@@ -138,7 +138,7 @@ func ArcFixedMul(a, b ArcFixedInterval) ArcFixedInterval {
 	// floor gives the outward ceiling for the upper endpoint.
 	lo = new(big.Int).Rsh(lo, proofbound.TrigFixedBits)
 	hi = new(big.Int).Neg(new(big.Int).Rsh(new(big.Int).Neg(hi), proofbound.TrigFixedBits))
-	return ArcFixedInterval{lo, hi}
+	return arcFixedInterval{lo, hi}
 }
 
 // RevolveArcIntegralSteps is the fixed certified-subdivision budget one

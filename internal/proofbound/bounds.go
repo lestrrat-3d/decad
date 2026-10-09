@@ -927,9 +927,9 @@ func CellTwistMoment(vLo, vHi, wLo, wHi, anchor r3.Vec) RatV3 {
 
 	var out RatV3
 	for axis := range out {
-		patch := BilinearPatchMomentIntegral(qLo, a, b, twist, axis)
-		held0 := TriangleMomentIntegral(qLo, qHi, qWHi, axis)
-		held1 := TriangleMomentIntegral(qLo, qWHi, qWLo, axis)
+		patch := bilinearPatchMomentIntegral(qLo, a, b, twist, axis)
+		held0 := triangleMomentIntegral(qLo, qHi, qWHi, axis)
+		held1 := triangleMomentIntegral(qLo, qWHi, qWLo, axis)
 		out[axis] = new(big.Rat).Sub(patch, held0)
 		out[axis].Sub(out[axis], held1)
 		out[axis].Mul(out[axis], big.NewRat(12, 1))
@@ -954,9 +954,9 @@ func CellTwistMomentFromVolume(vLo, vHi, wLo, wHi, anchor r3.Vec, signed *big.Ra
 	return out
 }
 
-type MomentPoly map[[2]int]*big.Rat
+type momentPoly map[[2]int]*big.Rat
 
-func MomentPolyAdd(p MomentPoly, degree [2]int, term *big.Rat) {
+func momentPolyAdd(p momentPoly, degree [2]int, term *big.Rat) {
 	if term.Sign() == 0 {
 		return
 	}
@@ -966,18 +966,18 @@ func MomentPolyAdd(p MomentPoly, degree [2]int, term *big.Rat) {
 	p[degree].Add(p[degree], term)
 }
 
-func MomentPolyMul(a, b MomentPoly) MomentPoly {
-	out := make(MomentPoly)
+func momentPolyMul(a, b momentPoly) momentPoly {
+	out := make(momentPoly)
 	for da, ca := range a {
 		for db, cb := range b {
-			MomentPolyAdd(out, [2]int{da[0] + db[0], da[1] + db[1]}, new(big.Rat).Mul(ca, cb))
+			momentPolyAdd(out, [2]int{da[0] + db[0], da[1] + db[1]}, new(big.Rat).Mul(ca, cb))
 		}
 	}
 	return out
 }
 
-func BilinearPatchMomentIntegral(q0, a, b, twist proofarith.DyV3, axis int) *big.Rat {
-	q := MomentPoly{
+func bilinearPatchMomentIntegral(q0, a, b, twist proofarith.DyV3, axis int) *big.Rat {
+	q := momentPoly{
 		{0, 0}: q0[axis].Rat(),
 		{1, 0}: a[axis].Rat(),
 		{0, 1}: b[axis].Rat(),
@@ -986,12 +986,12 @@ func BilinearPatchMomentIntegral(q0, a, b, twist proofarith.DyV3, axis int) *big
 	n0 := proofarith.DvCross(a, b)
 	ns := proofarith.DvCross(a, twist)
 	nr := proofarith.DvCross(twist, b)
-	n := MomentPoly{
+	n := momentPoly{
 		{0, 0}: n0[axis].Rat(),
 		{1, 0}: ns[axis].Rat(),
 		{0, 1}: nr[axis].Rat(),
 	}
-	integrand := MomentPolyMul(MomentPolyMul(q, q), n)
+	integrand := momentPolyMul(momentPolyMul(q, q), n)
 	out := new(big.Rat)
 	for degree, coefficient := range integrand {
 		den := int64((degree[0] + 1) * (degree[1] + 1))
@@ -1000,15 +1000,15 @@ func BilinearPatchMomentIntegral(q0, a, b, twist proofarith.DyV3, axis int) *big
 	return out
 }
 
-func TriangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
+func triangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
 	e1 := proofarith.DvSub(q1, q0)
 	e2 := proofarith.DvSub(q2, q0)
-	q := MomentPoly{
+	q := momentPoly{
 		{0, 0}: q0[axis].Rat(),
 		{1, 0}: e1[axis].Rat(),
 		{0, 1}: e2[axis].Rat(),
 	}
-	q2Poly := MomentPolyMul(q, q)
+	q2Poly := momentPolyMul(q, q)
 	n := proofarith.DvCross(e1, e2)[axis].Rat()
 	out := new(big.Rat)
 	for degree, coefficient := range q2Poly {

@@ -79,7 +79,7 @@ func WallChoose2(n uint64) (uint64, bool) {
 	return WallCheckedMul(a, b)
 }
 
-func WallChoose3(n uint64) (uint64, bool) {
+func wallChoose3(n uint64) (uint64, bool) {
 	if n < 3 {
 		return 0, true
 	}
@@ -140,7 +140,7 @@ func WallCandidateWork(elementCount, vertexCount int, wedge bool) (uint64, bool)
 			return 0, false
 		}
 	}
-	triples, ok := WallChoose3(q)
+	triples, ok := wallChoose3(q)
 	if !ok {
 		return 0, false
 	}
