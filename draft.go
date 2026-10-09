@@ -6,7 +6,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
+	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is Body.Draft (docs/draft-design.md §10): the face draft of an
@@ -28,6 +30,10 @@ func (f *Face) isWallOf(producer producerID) bool {
 	return false
 }
 
+// NeutralPlane is the plane a draft tilts faces about. The set is sealed
+// (docs/draft-design.md §10).
+type NeutralPlane interface{ neutralPlane() }
+
 // NeutralFace names a planar face of Body, selected and never pointed at
 // (core §9), under [MirrorFace]'s rules: Face resolves through
 // SelectFaces(Body) under the implicit exactly-one rule, so zero or several
@@ -42,6 +48,28 @@ type NeutralFace struct {
 	Body *Body
 	Face FaceSelector
 }
+
+// NeutralFrame is a placeholder for drafting about the plane through Frame's
+// origin spanned by its U and V axes. A draft about it is [ErrUnsupported]
+// until the increment that lifts draft SD20.
+type NeutralFrame struct {
+	Frame r3.Frame
+}
+
+// The sealed set.
+func (NeutralFace) neutralPlane()  {}
+func (NeutralFrame) neutralPlane() {}
+
+// DraftOption is a placeholder option tier for [Body.Draft]. It carries no
+// option today and reserves the signature for a later draft option.
+type DraftOption interface {
+	option.Interface
+	draftOption()
+}
+
+// errNilNeutralPlane rejects a nil plane, or a nil variant pointer: either
+// names no plane to tilt about.
+var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 
 // Draft returns a new body whose walls lean by angle from the sweep axis about
 // the neutral plane, retiring the receiver (docs/draft-design.md §10). A
@@ -68,7 +96,7 @@ type NeutralFace struct {
 //   - a neutral selector resolving to zero or several faces is [ErrCardinality],
 //     a curved neutral face [ErrDegenerate];
 //   - a receiver that is not a prism, a section carrying a displacement, an
-//     already drafted body, a neutral face that is not a cap
+//     already drafted body, a [NeutralFrame], a neutral face that is not a cap
 //     of the receiver, and a selected face that is no wall of the receiver
 //     are each [ErrUnsupported];
 //   - a selected cap is [ErrDegenerate], and an empty selection is the
@@ -80,16 +108,20 @@ type NeutralFace struct {
 //     stays whole.
 //
 // The far section's own gates (draft SD5 to SD16) are those of a tapered
-// extrude. ctx and sel MUST NOT be nil; neutral.Body and neutral.Face MUST NOT
-// be nil. An absent one is [ErrDegenerate].
+// extrude. ctx, sel and neutral MUST NOT be nil; a nil one is [ErrDegenerate].
 // Every measurement of the result is Approximate: the tangent of the angle is
 // only ever enclosed.
-func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralFace, angle units.Value) (*Body, error) {
+func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralPlane, angle units.Value, opts ...DraftOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a draft`, ErrDegenerate)
 	}
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
+	}
+	for _, o := range opts {
+		if o == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
 	}
 	d := b.doc
 
@@ -119,7 +151,7 @@ func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralFace,
 	if sel == nil {
 		return nil, errNilSelector
 	}
-	neutralFace, err := d.resolveNeutralFace(neutral)
+	neutralFace, isFrame, err := d.resolveNeutralPlane(neutral)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +163,9 @@ func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralFace,
 	pp, err := draftReceiver(b)
 	if err != nil {
 		return nil, err
+	}
+	if isFrame {
+		return nil, fmt.Errorf(`%w: this evaluator drafts about a cap of the receiver; a NeutralFrame is staged (draft SD20)`, ErrUnsupported)
 	}
 	if err := requireFlatAnalyticNeutral(neutralFace); err != nil {
 		return nil, err
@@ -176,6 +211,35 @@ func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralFace,
 	}
 	d.commit(body, b)
 	return body, nil
+}
+
+// resolveNeutralPlane returns the neutral face for a NeutralFace, resolved
+// against its body under the implicit exactly-one rule. A NeutralFrame
+// resolves to no face and reports isFrame, since its refusal belongs to stage
+// 2 (SD20). The variants seal with value receivers, so a pointer to either is
+// accepted and a nil pointer is rejected like a nil plane.
+func (d *Document) resolveNeutralPlane(neutral NeutralPlane) (*Face, bool, error) {
+	switch p := neutral.(type) {
+	case NeutralFrame:
+		return nil, true, nil
+	case *NeutralFrame:
+		if p == nil {
+			return nil, false, errNilNeutralPlane
+		}
+		return nil, true, nil
+	case NeutralFace:
+		face, err := d.resolveNeutralFace(p)
+		return face, false, err
+	case *NeutralFace:
+		if p == nil {
+			return nil, false, errNilNeutralPlane
+		}
+		face, err := d.resolveNeutralFace(*p)
+		return face, false, err
+	default:
+		// The interface is sealed, so the only value left is nil.
+		return nil, false, errNilNeutralPlane
+	}
 }
 
 func (d *Document) resolveNeutralFace(nf NeutralFace) (*Face, error) {

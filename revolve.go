@@ -447,6 +447,17 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 // evaluator Revolve runs, over an open rather than a closed walk — and reads
 // its recorded walk through recordChain (seam.go) rather than recordProfile.
 
+// ChainRevolveOption configures RevolveChain. It is its own sealed tier,
+// exactly as [ChainExtrudeOption] is (docs/surface-design.md §13.2):
+// WithSurfaceResult() does not implement it, so the compiler refuses that
+// option outright rather than accepting it as a no-op — a chain-fed revolve
+// always returns a sheet. This placeholder tier has no member yet; it reserves
+// the call for a later chain-only option.
+type ChainRevolveOption interface {
+	option.Interface
+	chainRevolveOption()
+}
+
 // chainRevolvePayload is RevolveChain's own record of a shell body: the
 // recorded open walk SET, the plane frame, the oriented plane-local axis, the
 // sweep interval, and the accumulated rigid placement — chainRevolvePayload
@@ -541,10 +552,16 @@ func (rp chainRevolvePayload) placed(ctx context.Context, d *Document, ref produ
 // of the chain is still OPEN: each off-axis free end sweeps one free circle,
 // so a chain with one pole has one free rim. A failed evaluation leaves the
 // document untouched.
-func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent) (*Body, error) {
+func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
+	for _, o := range opts {
+		if o == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+	}
+
 	chain, plane, err := recordChain(s, ch)
 	if err != nil {
 		return nil, err
