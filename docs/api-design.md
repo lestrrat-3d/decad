@@ -48,6 +48,12 @@ The caller's Go function is the feature tree. `Document` owns only the live body
 
 Bodies are immutable values owned by one document. Features retire consumed bodies and return new bodies; read-only measurements remain available on retired bodies. The evaluator may improve without adding a second public model representation or persistence language.
 
+Decad-owned types that callers name, construct, or inspect are defined in the
+root package. Internal packages receive the data they need at the root
+boundary; they do not own these public types behind root aliases. Types used
+only to implement the evaluator remain internal. Shared foundation types from
+`sketch`, `r3`, and `units` keep their own package ownership.
+
 ### 2.1 Why the boolean is the only place exactness dies
 
 Feature-generated faces are analytically exact **by construction, with no
