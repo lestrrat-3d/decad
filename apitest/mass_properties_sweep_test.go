@@ -19,8 +19,8 @@ import (
 // centroidal tensor formed. A placed fixture rotates that tensor by the
 // rigid rotation nearest the held placement basis.
 //
-// Legs shown to fail (each deleted in mass_properties_rotated.go or
-// mass_properties_revolve.go, the fixture watched go red, then restored):
+// Legs shown to fail (each deleted in internal/massmoment, the fixture
+// watched go red, then restored):
 //   - The placement's orthonormality-defect widening in rigidMassProperties:
 //     with it zeroed, TestMassPropertiesCompositeSweepPlaced misses a
 //     reference component.
