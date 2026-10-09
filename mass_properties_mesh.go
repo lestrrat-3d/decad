@@ -5,17 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/facetproof"
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -25,7 +19,7 @@ import (
 //
 //   - internal/massmoment integrates exact signed tetrahedra and widens their
 //     moments by E, R_i·E and R_i·R_j·E;
-//   - heldMeshMassProperties rounds those intervals into public readings;
+//   - internal/massmoment rounds those intervals into public readings;
 //   - verifiedMeshMassProperties, the VerifyAll tolerance ladder. It is the
 //     path every solid without an analytic arm takes: a loft or an exact
 //     stitched solid restates its own held triangles at any tolerance, so it
@@ -45,72 +39,6 @@ const (
 // interval does not prove positive. A finer mesh may prove it, so the ladder
 // continues on it and on nothing else.
 var errMassIntervalUnproved = massmoment.ErrMeshIntervalUnproved
-
-// heldMeshMassProperties integrates an already audited, outward triangle set
-// about anchor and widens the held V, each P_i and each Q_ij by E, R_i·E and
-// R_i·R_j·E (docs/dynamic-mass-design.md §2.2). E = volSymDiff bounds the
-// occupied volume between the triangle set and the denoted solid, and R_i
-// bounds |x_i - anchor_i| over both. bounds is the body's own bounded box,
-// which encloses the denoted solid. Interval division forms the center and
-// the centroidal tensor; a volume or tensor interval that does not prove
-// positive returns errMassIntervalUnproved.
-func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, verts []r3.Vec, tris [][3]int, volSymDiff float64, density units.Value) (MassProperties, error) {
-	intervals, err := massmoment.HeldMeshIntervals(ctx, massmoment.MeshBounds{
-		Min: bounds.Min, Max: bounds.Max, Bound: bounds.Bound,
-	}, anchor, verts, tris, volSymDiff)
-	if err != nil {
-		return MassProperties{}, err
-	}
-	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
-	result := MassProperties{}
-	result.Mass, err = massIntervalReading(proofbound.IntervalScale(intervals.Volume, rho), units.Kilogram)
-	if err != nil {
-		return MassProperties{}, err
-	}
-	var centerValue [3]float64
-	centerBound := 0.0
-	for i, enclosure := range intervals.Center {
-		centerValue[i], _ = intervalMid(enclosure).Float64()
-		if proofbound.IsNonFinite(centerValue[i]) {
-			return MassProperties{}, fmt.Errorf("%w: mesh mass center is nonfinite", ErrNotFinite)
-		}
-		centerBound = math.Max(centerBound, proofbound.IntervalFloatError(enclosure, centerValue[i]))
-	}
-	centerBound = proofbound.Radius3D(centerBound)
-	if proofbound.IsNonFinite(centerBound) {
-		return MassProperties{}, fmt.Errorf("%w: mesh mass center bound is nonfinite", ErrNotFinite)
-	}
-	result.Center = VecMeasurement{
-		Value: r3.Vec{X: centerValue[0], Y: centerValue[1], Z: centerValue[2]},
-		Bound: units.Millimeters(centerBound), Exactness: exactnessOf(centerBound),
-	}
-	components := [6]*Measurement{&result.Inertia.XX, &result.Inertia.YY, &result.Inertia.ZZ,
-		&result.Inertia.XY, &result.Inertia.XZ, &result.Inertia.YZ}
-	indices := [6][2]int{{0, 0}, {1, 1}, {2, 2}, {0, 1}, {0, 2}, {1, 2}}
-	for k, pair := range indices {
-		i, j := pair[0], pair[1]
-		term := proofbound.IntervalNeg(intervals.Central[i][j])
-		if i == j {
-			term = proofbound.IntervalSub(intervals.Trace, intervals.Central[i][j])
-		}
-		*components[k], err = massIntervalReading(proofbound.IntervalScale(term, rho), units.KilogramSquareMillimeter)
-		if err != nil {
-			return MassProperties{}, err
-		}
-	}
-	read := func(m Measurement) proofbound.BoundedScalar {
-		return proofbound.BoundedScalar{Value: m.Value.Base(), Bound: m.Bound.Base()}
-	}
-	if !massmoment.MeshReadingsPositive(read(result.Mass),
-		[3]proofbound.BoundedScalar{read(result.Inertia.XX), read(result.Inertia.YY), read(result.Inertia.ZZ)},
-		[3]proofbound.BoundedScalar{read(result.Inertia.XY), read(result.Inertia.XZ), read(result.Inertia.YZ)}) {
-		return MassProperties{}, errMassIntervalUnproved
-	}
-	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
-	}
-	return result, nil
-}
 
 // verifiedMeshMassProperties is docs/multibody-dynamics-design.md §8.5's
 // ladder for a solid with no analytic arm: tessellate at VerifyAll with
@@ -149,37 +77,9 @@ func meshMassPropertiesAt(ctx context.Context, b *Body, tol float64, density uni
 	if !mesh.BoundaryVerified() || !mesh.VolumeVerified() {
 		return MassProperties{}, fmt.Errorf("%w: the body's mesh carries no occupied-volume proof", ErrUnsupported)
 	}
-	if err := auditMassMesh(ctx, mesh.vertices, mesh.triangles, payloadAuditsFacetContact(b.payload)); err != nil {
+	if err := massmoment.AuditMesh(ctx, mesh.vertices, mesh.triangles, payloadAuditsFacetContact(b.payload)); err != nil {
 		return MassProperties{}, err
 	}
 	anchor := b.bounds.Min.Add(b.bounds.Max).Scale(.5)
-	return heldMeshMassProperties(ctx, b.bounds, anchor, mesh.vertices, mesh.triangles, mesh.volSymDiff, density)
-}
-
-// auditMassMesh reruns the shell closure and orientation, vertex-link and,
-// unless contactAudited, exact facet-crossing audits on a held triangle set
-// before its tetrahedra are integrated (docs/dynamic-mass-design.md §2.2).
-func auditMassMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, contactAudited bool) error {
-	if _, err := facetproof.AuditFacetedMesh(ctx, verts, tris); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return fmt.Errorf("%w: mesh mass shell audit failed: %v", ErrUnsupported, err)
-	}
-	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return fmt.Errorf("%w: mesh mass vertex-link audit failed: %v", ErrUnsupported, err)
-	}
-	if contactAudited {
-		return nil
-	}
-	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return fmt.Errorf("%w: mesh mass crossing audit failed: %v", ErrUnsupported, err)
-	}
-	return nil
+	return massmoment.HeldMeshMassProperties(ctx, b.bounds, anchor, mesh.vertices, mesh.triangles, mesh.volSymDiff, density)
 }

@@ -114,7 +114,7 @@ func publishMassProperties(ctx context.Context, center VecMeasurement, massIv pr
 	}
 	var err error
 	result := MassProperties{Center: center}
-	result.Mass, err = massIntervalReading(massIv, units.Kilogram)
+	result.Mass, err = massmoment.IntervalReading(massIv, units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -130,7 +130,7 @@ func publishMassProperties(ctx context.Context, center VecMeasurement, massIv pr
 		{world[0][2], &result.Inertia.XZ}, {world[1][2], &result.Inertia.YZ},
 	}
 	for _, entry := range entries {
-		*entry.reading, err = massIntervalReading(entry.iv, units.KilogramSquareMillimeter)
+		*entry.reading, err = massmoment.IntervalReading(entry.iv, units.KilogramSquareMillimeter)
 		if err != nil {
 			return MassProperties{}, err
 		}

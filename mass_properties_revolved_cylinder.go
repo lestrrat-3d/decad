@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -55,18 +56,18 @@ func sourceRevolvedCylinderMassProperties(ctx context.Context, b *Body,
 	}
 	result := MassProperties{Center: b.centroid}
 	var err error
-	result.Mass, err = massIntervalReading(massInterval, units.Kilogram)
+	result.Mass, err = massmoment.IntervalReading(massInterval, units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
 	if result.Mass.Bound.Base() >= result.Mass.Value.Base() {
 		return MassProperties{}, fmt.Errorf("%w: source cylinder mass reading is not positive", ErrUnsupported)
 	}
-	axialReading, err := massIntervalReading(axial, units.KilogramSquareMillimeter)
+	axialReading, err := massmoment.IntervalReading(axial, units.KilogramSquareMillimeter)
 	if err != nil {
 		return MassProperties{}, err
 	}
-	transverseReading, err := massIntervalReading(transverse, units.KilogramSquareMillimeter)
+	transverseReading, err := massmoment.IntervalReading(transverse, units.KilogramSquareMillimeter)
 	if err != nil {
 		return MassProperties{}, err
 	}
