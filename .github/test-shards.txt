@@ -1199,3 +1199,4 @@
 4	6.56	TestCoilRimCurveBoundHoldsTheDenotedCircle
 1	0.74	TestCoilUnstitchCarriesTheRimCurveBound
 2	0.02	TestPrismMoverRecordRadiusReadsArcsTightly
+2	0.02	TestBrepCoordinateEnvelopeReadsArcsTightly

@@ -57,3 +57,31 @@ func TestCoordinateEnvelopeReadsCircularWalksTightly(t *testing.T) {
 		})
 	}
 }
+
+// TestRegionEnvelopeReadsArcsTightly pins the region integrator's coordinate
+// envelope for a recorded arc (momentregion's circularL1Upper): F3's right
+// semicircle, radius 5 about (15, 0), read against the origin and against an
+// anchor at its centre, covers a dense sample of |u − a| + |v| and sits
+// within 1e-12 of the closed forms 15 + 5√2 and 5√2.
+//
+// Shown to fail first: read through the integrator's own |cu| + |cv| +
+// 2·radiusUpper, whose radiusUpper is the coordinates' L1 sizes, the two
+// envelopes were 85 and 10.
+func TestRegionEnvelopeReadsArcsTightly(t *testing.T) {
+	t.Parallel()
+	arc := ArcSeg{Center: sectionrecord.Point2{U: 15}, Start: sectionrecord.Point2{U: 15, V: -5}, End: sectionrecord.Point2{U: 15, V: 5}, TStart: 0, TEnd: 1}
+	for _, tc := range []struct {
+		anchor float64
+		closed float64
+	}{{0, 15 + 5*math.Sqrt2}, {15, 5 * math.Sqrt2}} {
+		var ig Integrals
+		require.NoError(t, ig.add(arc, Plan{}, sectionrecord.Point2{U: tc.anchor}, freeform.MomentFirstOrder))
+		worst := 0.0
+		for i := range 4096 {
+			th := -math.Pi/2 + math.Pi*float64(i)/4095
+			worst = math.Max(worst, math.Abs(15+5*math.Cos(th)-tc.anchor)+math.Abs(5*math.Sin(th)))
+		}
+		require.LessOrEqual(t, worst, ig.CoordUpper, "anchor %g", tc.anchor)
+		require.InDelta(t, tc.closed, ig.CoordUpper, 1e-12, "anchor %g", tc.anchor)
+	}
+}

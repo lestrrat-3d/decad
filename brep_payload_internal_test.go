@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -654,4 +655,38 @@ func TestBrepFaceViewJoinsACrossingBuiltPrism(t *testing.T) {
 	for _, f := range brep.payload.(brepPayload).faces {
 		require.GreaterOrEqual(t, f.delta, pp.sectionDelta, `every face keeps the record's own displacement`)
 	}
+}
+
+// TestBrepCoordinateEnvelopeReadsArcsTightly pins the brep topology's
+// coordinate envelope (brepgeom.Build through momentinput.WalkCoordinateUpper)
+// on the brep view of F3's slot, semicircles of radius 5 at u = ±15 swept
+// 10 mm: it covers a dense sample of |u| + |v| over both arcs and sits within
+// 1e-12 of 15 + 5√2.
+//
+// Shown to fail first: read through the walks' own CoordUpper, which charge
+// an ArcSeg its coordinates' L1 sizes as a radius, the envelope was 85.
+func TestBrepCoordinateEnvelopeReadsArcsTightly(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	slot, err := s.CreateSlot(-15, 0, 15, 0, 5)
+	require.NoError(t, err)
+	s.Fix(slot.C1)
+	s.Fix(slot.C2)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	prism, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	require.NoError(t, err)
+	bp, err := brepOfPrism(prism.payload.(prismPayload))
+	require.NoError(t, err)
+	topo, err := brepTopologyContext(t.Context(), bp)
+	require.NoError(t, err)
+	worst := 0.0
+	for i := range 4096 {
+		th := 2 * math.Pi * float64(i) / 4096
+		worst = math.Max(worst, 15+5*math.Abs(math.Cos(th))+5*math.Abs(math.Sin(th)))
+	}
+	require.LessOrEqual(t, worst, topo.coordUpper)
+	require.InDelta(t, 15+5*math.Sqrt2, topo.coordUpper, 1e-12)
 }
