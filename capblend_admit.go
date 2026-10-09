@@ -29,7 +29,7 @@ func capBlendOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp capBlend
 				}
 				arcs := make([]bool, len(joins))
 				for i := range joins {
-					arcs[i] = joins[i].arc
+					arcs[i] = joins[i].Arc
 				}
 				return arcs, nil
 			}, nil

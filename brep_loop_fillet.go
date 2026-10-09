@@ -63,14 +63,14 @@ func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, rol
 	}
 	n := len(cl.walks)
 	if !out.loop.WholeTurn() {
-		if out.joins, err = filletOffsetJoins(budget, cl, r, 0); err != nil {
+		if out.joins, err = filletband.OffsetJoins(budget, cl.walks, r, 0, shellTol); err != nil {
 			return filletLoopRead{}, err
 		}
 		for k := range n {
 			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return filletLoopRead{}, err
 			}
-			class, err := filletCornerClass(loop, cl.walks, out.loop.Walks, out.joins, k)
+			class, err := filletband.CornerClass(loop, cl.walks, out.loop.Walks, out.joins, k)
 			if err != nil {
 				return filletLoopRead{}, err
 			}
@@ -88,114 +88,6 @@ func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, rol
 	return out, nil
 }
 
-// filletSphereWalk requires both pinned arc endpoints to lie exactly on the
-// requested sphere. A rounded hypot equal to r is insufficient.
-func filletSphereWalk(w survey2d.SideWalk, r float64) bool {
-	if !w.IsCircular() || w.Closed || w.Th1 <= w.Th0 || w.Radius != r {
-		return false
-	}
-	cu, cv, rr := proofarith.FloatRat(w.CU), proofarith.FloatRat(w.CV), proofarith.FloatRat(r)
-	if cu == nil || cv == nil || rr == nil {
-		return false
-	}
-	r2 := new(big.Rat).Mul(rr, rr)
-	for _, p := range [2]Point2{{U: w.StartU, V: w.StartV}, {U: w.EndU, V: w.EndV}} {
-		u, v := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
-		if u == nil || v == nil {
-			return false
-		}
-		du, dv := new(big.Rat).Sub(u, cu), new(big.Rat).Sub(v, cv)
-		squared := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
-		if squared.Cmp(r2) != 0 {
-			return false
-		}
-	}
-	return true
-}
-
-// filletOffsetJoins reads an inward circular walk whose radius equals the
-// fillet radius as a pole. Its neighbours must be straight and exactly G1;
-// the ordinary offset's computed feet are replaced by the recorded centre.
-func filletOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, r, rDelta float64) ([]cornerJoin, error) {
-	walks := cl.walks
-	n := len(walks)
-	if n == 0 {
-		return nil, fmt.Errorf(`%w: a loop fillet holds no walks`, ErrDegenerate)
-	}
-	collapsed := make([]bool, n)
-	for i, w := range walks {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		if !w.IsCircular() {
-			continue
-		}
-		if filletSphereWalk(w, r) {
-			if rDelta != 0 || w.Closed {
-				return nil, fmt.Errorf(`%w: a circular fillet walk collapses over a radius span or a whole turn`, ErrUnsupported)
-			}
-			collapsed[i] = true
-			continue
-		}
-		if w.Th1 > w.Th0 && w.Radius == r {
-			return nil, fmt.Errorf(`%w: a three-edge sphere needs the arc's recorded endpoints to lie exactly at the fillet radius`, ErrUnsupported)
-		}
-		if w.Th1 > w.Th0 && w.Radius > r && w.Radius-r <= shellTol {
-			return nil, fmt.Errorf(`%w: a three-edge sphere needs the circular wall's recorded radius to equal the fillet radius; the held radii are %.17g and %.17g mm`, ErrUnsupported, w.Radius, r)
-		}
-		if _, err := capband.BandRadius(w, r, shellTol); err != nil {
-			return nil, err
-		}
-	}
-	joins, err := offsetJoinsBudget(budget, walks, 1, r)
-	if err != nil {
-		return nil, err
-	}
-	for i, on := range collapsed {
-		if !on {
-			continue
-		}
-		prev, next := (i+n-1)%n, (i+1)%n
-		if !walks[prev].IsLine() || !walks[next].IsLine() || !joins[i].g1 || !joins[next].g1 {
-			return nil, fmt.Errorf(`%w: a collapsed circular fillet walk needs two straight G1 neighbours (loop-fillet SF1)`, ErrUnsupported)
-		}
-		pole := Point2{U: walks[i].CU, V: walks[i].CV}
-		joins[i].m, joins[next].m = pole, pole
-	}
-	return joins, nil
-}
-
-// filletOffsetLoop records the cap contour. A collapsed circular walk leaves
-// one vertex at its recorded centre and contributes no segment to the loop.
-func filletOffsetLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, joins []cornerJoin, r float64) ([]curveSegment, error) {
-	var segs []curveSegment
-	n := len(walks)
-	for i, w := range walks {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		start, end := capWallFoot(joins, i, n)
-		if filletSphereWalk(w, r) {
-			continue
-		}
-		if offset2d.WalkConsumed(w, offset2d.Point{U: start.U, V: start.V},
-			offset2d.Point{U: end.U, V: end.V}, shellTol) {
-			return nil, offset2d.ErrDrop
-		}
-		seg, err := offset2d.WalkSegment(w, 1, r, offset2d.Point{U: start.U, V: start.V},
-			offset2d.Point{U: end.U, V: end.V}, shellTol)
-		if err != nil {
-			return nil, err
-		}
-		segs = append(segs, seg)
-		j := joins[(i+1)%n]
-		if j.arc {
-			segs = append(segs, offset2d.ArcSegment(Point2{U: j.vU, V: j.vV}, j.pA, j.pB, false))
-		}
-	}
-	return segs, nil
-}
-
 // filletContourDelta bounds the contour that remains after a sphere pole
 // consumes an inward arc. The surviving offset carriers meet at the recorded
 // centre, so the ordinary contour proof reads that centre as their miter.
@@ -208,7 +100,7 @@ func filletContourDelta(ctx context.Context, loop loopRecord, r, rDelta float64)
 	if len(cl.walks) == 1 && cl.walks[0].Closed {
 		return loopContourDelta(ctx, loop, r, rDelta)
 	}
-	joins, err := filletOffsetJoins(budget, cl, r, rDelta)
+	joins, err := filletband.OffsetJoins(budget, cl.walks, r, rDelta, shellTol)
 	if err != nil {
 		return 0, err
 	}
@@ -216,13 +108,13 @@ func filletContourDelta(ctx context.Context, loop loopRecord, r, rDelta float64)
 	var keptJoins []cornerJoin
 	n := len(cl.walks)
 	for i, w := range cl.walks {
-		if filletSphereWalk(w, r) {
+		if filletband.SphereWalk(w, r) {
 			continue
 		}
 		j := joins[i]
 		prev := cl.walks[(i+n-1)%n]
-		if filletSphereWalk(prev, r) {
-			j = cornerJoin{m: Point2{U: prev.CU, V: prev.CV}, vU: prev.CU, vV: prev.CV}
+		if filletband.SphereWalk(prev, r) {
+			j = cornerJoin{M: Point2{U: prev.CU, V: prev.CV}, VertU: prev.CU, VertV: prev.CV}
 		}
 		kept, keptJoins = append(kept, w), append(keptJoins, j)
 	}
@@ -248,7 +140,7 @@ func suppliedFilletCapWalls(co []coedge, walks []survey2d.SideWalk, joins []corn
 		return e, nil
 	}
 	for i, w := range walks {
-		if !filletSphereWalk(w, r) {
+		if !filletband.SphereWalk(w, r) {
 			e, err := take()
 			if err != nil {
 				return suppliedCapEdges{}, err
@@ -256,7 +148,7 @@ func suppliedFilletCapWalls(co []coedge, walks []survey2d.SideWalk, joins []corn
 			out.wall[i] = e
 		}
 		j := (i + 1) % n
-		if !joins[j].arc {
+		if !joins[j].Arc {
 			continue
 		}
 		e, err := take()
@@ -269,38 +161,6 @@ func suppliedFilletCapWalls(co []coedge, walks []survey2d.SideWalk, joins []corn
 		return suppliedCapEdges{}, fmt.Errorf(`%w: a fillet band's cap contour has extra edges`, ErrUnsupported)
 	}
 	return out, nil
-}
-
-// filletCornerClass is Table LF's class of corner k, or zero for SF1.
-func filletCornerClass(loop loopRecord, walks []survey2d.SideWalk, fw []filletband.Walk, joins []cornerJoin, k int) (filletband.Corner, error) {
-	n := len(walks)
-	prev, cur := walks[(k+n-1)%n], walks[k]
-	turn, err := filletband.Turn(fw[(k+n-1)%n], fw[k])
-	if err != nil {
-		return 0, err
-	}
-	j := joins[k]
-	switch {
-	case turn < 0 && j.arc:
-		return filletband.Reflex, nil
-	case turn > 0 && prev.IsLine() && cur.IsLine() && !j.arc && !j.g1:
-		return filletband.Miter, nil
-	case turn > 0 && (prev.IsCircular() || cur.IsCircular()) && !j.arc && !j.g1:
-		return filletband.CurvedMiter, nil
-	case turn == 0 && j.g1:
-		prevSeg, err := normalizeSegment(loop.Segments[prev.Segs[len(prev.Segs)-1]])
-		if err != nil {
-			return 0, err
-		}
-		curSeg, err := normalizeSegment(loop.Segments[cur.Segs[0]])
-		if err != nil {
-			return 0, err
-		}
-		if capband.JoinIsG1(prevSeg, curSeg) {
-			return filletband.Tangent, nil
-		}
-	}
-	return 0, nil
 }
 
 // filletRadius encloses every radius the band's setback denotes: the held
@@ -417,7 +277,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 	}
 	walkSurface := func(w survey2d.SideWalk) Surface {
 		if w.IsCircular() {
-			if filletSphereWalk(w, r) {
+			if filletband.SphereWalk(w, r) {
 				return Sphere{Center: pl.point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
 			}
 			major := w.Radius - r
@@ -504,11 +364,11 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 					return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's LF6 corner %d has no connector arc`, ErrUnsupported, bi, k)
 				}
 				arc.convex = convex
-				trail[k] = meridian(j.pA, w, straightWalk(w, nil), arc.start, sideV)
-				lead[k] = meridian(j.pB, w, straightWalk(w, nil), arc.end, sideV)
+				trail[k] = meridian(j.PA, w, straightWalk(w, nil), arc.start, sideV)
+				lead[k] = meridian(j.PB, w, straightWalk(w, nil), arc.end, sideV)
 			case filletband.Tangent:
 				prev := fr.walks[(k+n-1)%n]
-				lead[k] = meridian(j.m, w, straightWalk(prev, &w), capAt(k), sideV)
+				lead[k] = meridian(j.M, w, straightWalk(prev, &w), capAt(k), sideV)
 				trail[k] = lead[k]
 			case filletband.CurvedMiter:
 				prev := fr.walks[(k+n-1)%n]
@@ -531,12 +391,12 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 					return nil, brepBandMass{}, err
 				}
 				held, bound := heldOf(lenIv)
-				bu, bv := j.m.U-w.StartU, j.m.V-w.StartV
+				bu, bv := j.M.U-w.StartU, j.M.V-w.StartV
 				semi := math.Hypot(bu, bv)
 				major := pl.dir(bu/semi, bv/semi, 0)
 				axis, _ := major.Cross(up).Normalize()
 				lead[k] = &Edge{
-					curve: Ellipse3{Center: pl.point(j.m.U, j.m.V, sideZ), Axis: axis, Major: major,
+					curve: Ellipse3{Center: pl.point(j.M.U, j.M.V, sideZ), Axis: axis, Major: major,
 						SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
 					start: capAt(k), end: sideV, convex: convex, length: held, lengthBound: bound,
 				}

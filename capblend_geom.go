@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
@@ -58,7 +59,7 @@ func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]
 // are a cusp (SD15).
 func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, li int, cl cornerLoop, d float64) ([]cornerJoin, error) {
 	if cbp.fillet {
-		return filletOffsetJoins(budget, cl, d, cbp.loopSetback(li).dcDelta)
+		return filletband.OffsetJoins(budget, cl.walks, d, cbp.loopSetback(li).dcDelta, shellTol)
 	}
 	if !cbp.draft {
 		return capOffsetJoins(budget, cl, d)
@@ -84,14 +85,14 @@ func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, li int, cl
 // exactly as offset2d.BuildLoop's per-wall trim does.
 func capWallFoot(joins []cornerJoin, i, n int) (Point2, Point2) {
 	j0 := joins[i]
-	start := j0.m
-	if j0.arc {
-		start = j0.pB
+	start := j0.M
+	if j0.Arc {
+		start = j0.PB
 	}
 	j1 := joins[(i+1)%n]
-	end := j1.m
-	if j1.arc {
-		end = j1.pA
+	end := j1.M
+	if j1.Arc {
+		end = j1.PA
 	}
 	return start, end
 }
@@ -368,7 +369,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 
 	// Pass 1: every corner's connector edge(s), independent of wall build
 	// order (so a reflex corner at index 0 wraps around correctly). A miter
-	// corner (joins[i].m) has ONE edge shared by the wall before and the
+	// corner (joins[i].M) has ONE edge shared by the wall before and the
 	// wall after it: slantOut[i] == slantIn[i]. A reflex corner has TWO —
 	// slantIn[i] (from the offset foot pA, used by the PRECEDING wall's
 	// trailing edge) and slantOut[i] (from pB, used by the FOLLOWING wall's
@@ -397,14 +398,14 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		j := joins[i]
 		apex := sideVertexAt(i)
 		prev, cur := walks[(i+n-1)%n], walks[i]
-		if !j.arc {
+		if !j.Arc {
 			var capV *Vertex
 			if suppliedCap != nil {
 				capV = supplied.wall[i].start
 			} else {
-				capV = capVertexAt(j.m, capLevelDelta)
+				capV = capVertexAt(j.M, capLevelDelta)
 			}
-			e, held, err := capSlantEdge(budget, j.m, capV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, setback, j.g1)
+			e, held, err := capSlantEdge(budget, j.M, capV, apex, j.VertU, j.VertV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, setback, j.G1)
 			if err != nil {
 				return capBandResult{}, err
 			}
@@ -422,20 +423,20 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if suppliedCap != nil {
 			pAV, pBV = supplied.arc[i].start, supplied.arc[i].end
 		} else {
-			pAV = capVertexAt(j.pA, capLevelDelta)
-			pBV = capVertexAt(j.pB, capLevelDelta)
+			pAV = capVertexAt(j.PA, capLevelDelta)
+			pBV = capVertexAt(j.PB, capLevelDelta)
 		}
 		var errA, errB error
-		slantIn[i], slantInHeld[i], errA = capSlantEdge(budget, j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, capSetback{}, true)
+		slantIn[i], slantInHeld[i], errA = capSlantEdge(budget, j.PA, pAV, apex, j.VertU, j.VertV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, capSetback{}, true)
 		if errA != nil {
 			return capBandResult{}, errA
 		}
-		slantOut[i], slantOutHeld[i], errB = capSlantEdge(budget, j.pB, pBV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, capSetback{}, true)
+		slantOut[i], slantOutHeld[i], errB = capSlantEdge(budget, j.PB, pBV, apex, j.VertU, j.VertV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, capSetback{}, true)
 		if errB != nil {
 			return capBandResult{}, errB
 		}
-		th0 := math.Atan2(j.pA.V-j.vV, j.pA.U-j.vU)
-		th1 := math.Atan2(j.pB.V-j.vV, j.pB.U-j.vU)
+		th0 := math.Atan2(j.PA.V-j.VertV, j.PA.U-j.VertU)
+		th1 := math.Atan2(j.PB.V-j.VertV, j.PB.U-j.VertU)
 		// The inward offset's reflex connector walks CLOCKWISE from pA to pB
 		// (shell_offset.go's arcSegment with ccw = s < 0, and this band offsets
 		// with s = +1), so th1 is normalized BELOW th0 and the swept angle is
@@ -458,11 +459,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			continue
 		}
 		arcByCorner[i] = &Edge{
-			curve: Arc3{Center: liftCap(Point2{U: j.vU, V: j.vV}), Axis: pl.dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
+			curve: Arc3{Center: liftCap(Point2{U: j.VertU, V: j.VertV}), Axis: pl.dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
 			start: pAV, end: pBV,
 			convex: false,
 			length: arcLength, lengthBound: capcontour.CapApexArcBound(
-				capcontour.ApexJoin{VU: j.vU, VV: j.vV, PA: j.pA, PB: j.pB},
+				capcontour.ApexJoin{VU: j.VertU, VV: j.VertV, PA: j.PA, PB: j.PB},
 				dc, dcDelta, arcLength, wraps, delta),
 		}
 		// The connector denotes the arc of every setback in dc's span about
@@ -470,8 +471,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// enclose within their own bounds.
 		if span, ok := capcontour.OffsetSpan(dc, dcDelta); ok {
 			center, axis, _, _ := surfacegeom.CircleOf(arcByCorner[i].curve)
-			cornerDelta := math.Min(capCornerGap(j.vU, j.vV, prev.EndU, prev.EndV, prev.EndBound), capCornerGap(j.vU, j.vV, cur.StartU, cur.StartV, cur.StartBound))
-			arcByCorner[i].curveBound, arcByCorner[i].curveBounded = pl.circleCurveBound(j.vU, j.vV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
+			cornerDelta := math.Min(capCornerGap(j.VertU, j.VertV, prev.EndU, prev.EndV, prev.EndBound), capCornerGap(j.VertU, j.VertV, cur.StartU, cur.StartV, cur.StartBound))
+			arcByCorner[i].curveBound, arcByCorner[i].curveBounded = pl.circleCurveBound(j.VertU, j.VertV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
 		}
 	}
 
@@ -482,7 +483,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// Pass 2: the apex patches (Cone-with-corner-apex, one per reflex
 	// corner), independent of wall order.
 	for i := range n {
-		if !joins[i].arc {
+		if !joins[i].Arc {
 			continue
 		}
 		j := joins[i]
@@ -496,7 +497,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// and the survey's own role lookup alike — onto whichever face was
 		// built second.
 		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, len(patches))
-		surf := coneSurface(pl, j.vU, j.vV, 0, dc, sideZ, capZ)
+		surf := coneSurface(pl, j.VertU, j.VertV, 0, dc, sideZ, capZ)
 		// Walk order: arc (pAV -> pBV, cap level), slantOut forward
 		// (pBV -> apex), slantIn reversed (apex -> pAV) — a closed
 		// triangle-like boundary each coedge's end matching the next's start.
@@ -525,7 +526,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// normal and decides nothing at all. Verified empirically (never hand-trusted):
 		// fixPatchOrientation checks the actual built surface's own NormalAt
 		// against this reference and reverses only if they disagree.
-		if err := fixPatchOrientation(face, pl, pl.point(j.vU+dc*math.Cos(arcTh0[i]), j.vV+dc*math.Sin(arcTh0[i]), capZ), -math.Cos(arcTh0[i]), -math.Sin(arcTh0[i]), -matSign); err != nil {
+		if err := fixPatchOrientation(face, pl, pl.point(j.VertU+dc*math.Cos(arcTh0[i]), j.VertV+dc*math.Sin(arcTh0[i]), capZ), -math.Cos(arcTh0[i]), -math.Sin(arcTh0[i]), -matSign); err != nil {
 			return capBandResult{}, err
 		}
 		slantIn[i].faces = append(slantIn[i].faces, face)
@@ -538,7 +539,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// arc is walked CLOCKWISE (arcTh1 below arcTh0 by construction), and
 		// sweepCCW is what carries that fact to patchRawFlux.
 		gth0, gth1 := arcTh0[i], arcTh1[i]
-		foot0, foot1 := j.pA, j.pB
+		foot0, foot1 := j.PA, j.PB
 		if gth1 < gth0 {
 			gth0, gth1 = gth1, gth0
 			foot0, foot1 = foot1, foot0
@@ -561,16 +562,16 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// start/end are passed as (pB, pA) so the bracket's own end-minus-start
 		// convention reproduces atan2(pA)-atan2(pB), matching arcWraps[i]'s own
 		// unwrap direction (Pass 1's "for th1 > th0 { th1 -= 2*math.Pi }").
-		capThAllow := capcontour.CapSweepAllow(j.vU, j.vV, dc, j.pB, j.pA, arcTh0[i]-arcTh1[i], arcWraps[i], delta)
+		capThAllow := capcontour.CapSweepAllow(j.VertU, j.VertV, dc, j.PB, j.PA, arcTh0[i]-arcTh1[i], arcWraps[i], delta)
 		g := capPatchGeom{
 			Circular: true, SweepCCW: false,
-			CU: j.vU, CV: j.vV, SideRadius: 0, CapRadius: dc,
+			CU: j.VertU, CV: j.VertV, SideRadius: 0, CapRadius: dc,
 			Th0: gth0, Th1: gth1, CapTh0: gth0, CapTh1: gth1, SideZ: sideZ, CapZ: capZ,
 			ContourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant),
 			LevelDelta:   levelDelta,
 			CapThAllow:   capThAllow,
 		}
-		held, err := capband.ApexHeldAllow(j.vU, j.vV, dc, foot0, foot1, gth0, gth1)
+		held, err := capband.ApexHeldAllow(j.VertU, j.VertV, dc, foot0, foot1, gth0, gth1)
 		if err != nil {
 			return capBandResult{}, err
 		}
@@ -837,7 +838,7 @@ func suppliedCapWalls(co []coedge, joins []cornerJoin, n int) (suppliedCapEdges,
 			return suppliedCapEdges{}, err
 		}
 		out.wall[i] = e
-		if joins == nil || !joins[(i+1)%n].arc {
+		if joins == nil || !joins[(i+1)%n].Arc {
 			continue
 		}
 		if out.arc[(i+1)%n], err = take(); err != nil {
@@ -886,10 +887,10 @@ func setCapPatchLocusSpans(budget *proofbound.WorkBudget, g *capPatchGeom, walks
 	w := walks[i]
 	spansAt := func(k int, sideU, sideV float64) ([]capband.LocusSpan, error) {
 		j := joins[k]
-		if j.arc || j.g1 {
+		if j.Arc || j.G1 {
 			return capband.StraightLocusSpans(setback.dc), nil
 		}
-		spans, ok, err := capband.CornerLocusSpans(budget, walks[(k+n-1)%n], walks[k], w.CU, w.CV, sideU, sideV, j.vU, j.vV, setback.dc)
+		spans, ok, err := capband.CornerLocusSpans(budget, walks[(k+n-1)%n], walks[k], w.CU, w.CV, sideU, sideV, j.VertU, j.VertV, setback.dc)
 		if err != nil || !ok {
 			return nil, err
 		}
@@ -925,11 +926,11 @@ func capPatchCornerFlux(budget *proofbound.WorkBudget, walks []survey2d.SideWalk
 	total := 0.0
 	for _, k := range [2]int{i, (i + 1) % n} {
 		j := joins[k]
-		if j.arc || j.g1 {
+		if j.Arc || j.G1 {
 			continue
 		}
 		prev, cur := walks[(k+n-1)%n], walks[k]
-		flux, ok, err := capband.MiterLocusSliverFlux(budget, prev, cur, w.CU, w.CV, j.vU, j.vV,
+		flux, ok, err := capband.MiterLocusSliverFlux(budget, prev, cur, w.CU, w.CV, j.VertU, j.VertV,
 			setback.axialUpper(), setback.dc, setback.dcDelta)
 		if err != nil {
 			return 0, err

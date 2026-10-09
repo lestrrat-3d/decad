@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stationbound"
@@ -56,7 +57,7 @@ func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 		}
 		s := side.walks[i]
 		if b.capWalk[i] < 0 {
-			if !filletSphereWalk(s, b.setback.dc) {
+			if !filletband.SphereWalk(s, b.setback.dc) {
 				return brepBandChord{}, fmt.Errorf(`%w: a partial fillet band's selected cap segment is missing`, ErrUnsupported)
 			}
 			seg := b.orig.Segments[i]

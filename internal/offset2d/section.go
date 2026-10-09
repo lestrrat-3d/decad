@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
@@ -14,7 +15,7 @@ var (
 )
 
 // Point is a held point in the section plane.
-type Point struct{ U, V float64 }
+type Point = sectionrecord.Point2
 
 // Join is one corner's offset miter, G1 point, or connector arc.
 type Join struct {

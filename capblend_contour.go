@@ -17,8 +17,8 @@ func capContourJoins(joins []cornerJoin) []capcontour.Join {
 	readings := make([]capcontour.Join, len(joins))
 	for i, j := range joins {
 		readings[i] = capcontour.Join{
-			Arc: j.arc, G1: j.g1, VU: j.vU, VV: j.vV,
-			M: j.m, PA: j.pA, PB: j.pB,
+			Arc: j.Arc, G1: j.G1, VU: j.VertU, VV: j.VertV,
+			M: j.M, PA: j.PA, PB: j.PB,
 		}
 	}
 	return readings

@@ -122,14 +122,14 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			j := fr.joins[k]
 			w := fr.walks[k]
 			vertex := Point2{U: w.StartU, V: w.StartV}
-			trail[k] = meridian(j.pA, vertex, w, arc.start, side[k].start)
-			lead[k] = meridian(j.pB, vertex, w, arc.end, side[k].start)
+			trail[k] = meridian(j.PA, vertex, w, arc.start, side[k].start)
+			lead[k] = meridian(j.PB, vertex, w, arc.end, side[k].start)
 			continue
 		}
 		if fr.loop.Corners[k] == filletband.Tangent {
 			j := fr.joins[k]
 			w := fr.walks[k]
-			trail[k] = meridian(j.m, Point2{U: w.StartU, V: w.StartV}, w, capV, sideV)
+			trail[k] = meridian(j.M, Point2{U: w.StartU, V: w.StartV}, w, capV, sideV)
 			lead[k] = trail[k]
 			continue
 		}
@@ -150,11 +150,11 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			return nil, brepBandMass{}, err
 		}
 		held, bound := heldOf(lengthIv)
-		bu, bv := j.m.U-w.StartU, j.m.V-w.StartV
+		bu, bv := j.M.U-w.StartU, j.M.V-w.StartV
 		semi := math.Hypot(bu, bv)
 		major := pl.dir(bu/semi, bv/semi, 0)
 		axis, _ := major.Cross(up).Normalize()
-		lead[k] = &Edge{curve: Ellipse3{Center: pl.point(j.m.U, j.m.V, sideZ), Axis: axis,
+		lead[k] = &Edge{curve: Ellipse3{Center: pl.point(j.M.U, j.M.V, sideZ), Axis: axis,
 			Major: major, SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
 			start: capV, end: sideV, convex: convex, length: held, lengthBound: bound}
 		trail[k] = lead[k]
@@ -198,7 +198,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet patch has an open corner`, ErrUnsupported)
 		}
 		capE, sideE := capEdges[i], side[i]
-		if filletSphereWalk(w, r) {
+		if filletband.SphereWalk(w, r) {
 			pole := capAt(i)
 			if piece.Kind != filletband.InnerTorus || pole == nil || pole != capAt(next) ||
 				start.start != pole || end.start != pole || start.end != sideE.start || end.end != sideE.end {

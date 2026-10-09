@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -897,7 +898,7 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 	for i, on := range selected {
 		if on {
 			amounts[i] = 2
-			sphere[i] = filletSphereWalk(cl.walks[i], 2)
+			sphere[i] = filletband.SphereWalk(cl.walks[i], 2)
 		}
 	}
 	segs, joins, capWalk, _, err := partialFilletContour(r.budget, cl.walks, selected, sphere, amounts)
@@ -920,10 +921,10 @@ func TestFilletSphereWalkRequiresExactRecordedRadius(t *testing.T) {
 	w := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
 		Kind: survey2d.WalkCircular, Radius: 1, StartU: 1, EndV: 1, Th1: math.Pi / 2,
 	}}
-	require.True(t, filletSphereWalk(w, 1))
+	require.True(t, filletband.SphereWalk(w, 1))
 	w.EndU, w.EndV = 0.6, 0.8
 	require.Equal(t, 1.0, math.Hypot(w.EndU, w.EndV))
-	require.False(t, filletSphereWalk(w, 1))
+	require.False(t, filletband.SphereWalk(w, 1))
 }
 
 func TestVertexBlendCrossDrilledBar(t *testing.T) {

@@ -213,14 +213,14 @@ func TestCapMiterLocusUpperReadsTheStatedAxialRise(t *testing.T) {
 	checked := 0
 	for i, j := range joins {
 		prev, cur := cl.walks[(i+n-1)%n], cl.walks[i]
-		if j.arc || j.g1 || (!prev.IsCircular() && !cur.IsCircular()) {
+		if j.Arc || j.G1 || (!prev.IsCircular() && !cur.IsCircular()) {
 			continue
 		}
 		for _, axial := range []float64{1e-3, 0.3, 2, 50, 1e4} {
-			total, ok, err := capband.MiterLocusUpper(budget, prev, cur, j.vU, j.vV, axial, dc, 0)
+			total, ok, err := capband.MiterLocusUpper(budget, prev, cur, j.VertU, j.VertV, axial, dc, 0)
 			require.NoError(t, err)
 			require.True(t, ok)
-			chordSq := proofarith.RatSquaredDistance3(j.m.U, j.m.V, axial, j.vU, j.vV, 0)
+			chordSq := proofarith.RatSquaredDistance3(j.M.U, j.M.V, axial, j.VertU, j.VertV, 0)
 			rt := proofarith.FloatRat(total)
 			require.GreaterOrEqual(t, new(big.Rat).Mul(rt, rt).Cmp(chordSq), 0,
 				`corner %d, axial rise %v: the locus bound %v is below its own chord`, i, axial, total)
