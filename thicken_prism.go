@@ -2,7 +2,6 @@ package decad
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
@@ -194,19 +194,8 @@ func prismCircleOffset(budget *proofbound.WorkBudget, source profileRecord, radi
 	if want.Sign() <= 0 || proofarith.RationalFloatError(want, got) != 0 {
 		return profileRecord{}, fmt.Errorf(`%w: the circle offset is not exactly representable`, ErrUnsupported)
 	}
-	if err := thickenAuditRefusal(auditOffsetSectionBudget(budget, source, offset)); err != nil {
+	if err := thickenaxis.AuditRefusal(auditOffsetSectionBudget(budget, source, offset)); err != nil {
 		return profileRecord{}, err
 	}
 	return offset, nil
-}
-
-// The shared Shell audit can classify a flipped offset as ErrDegenerate.
-// Thicken's topology-changing offset is R26, always ErrUnsupported; a
-// cancelled call still returns its context error unchanged.
-func thickenAuditRefusal(err error) error {
-	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, ErrUnsupported) {
-		return err
-	}
-	return fmt.Errorf(`%w: the thicken offset audit refused: %v`, ErrUnsupported, err)
 }

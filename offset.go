@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -258,10 +259,10 @@ func offsetCircleSection(source profileRecord, circle circleSeg, sense int, amou
 }
 
 // offsetAxisSection offsets the axis-parallel line class. It reuses
-// thicken_axis.go's own three gates unchanged — thickenAxisDirections for the
-// class itself, thickenCertifyAxisOffset for the exact-generation gate over
+// internal/thickenaxis's three gates unchanged — AxisDirections for the
+// class itself, CertifyAxisOffset for the exact-generation gate over
 // every generated endpoint, corner centre and radius, and
-// thickenAxisIntervalClear for the whole-interval Sturm certification — with
+// AxisIntervalClear for the whole-interval Sturm certification — with
 // offsetProfile supplying the section and auditOffsetSectionBudget checking it.
 //
 // The interval proof is NOT optional on this shape and is never inferred from
@@ -284,7 +285,7 @@ func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount f
 		return profileRecord{}, fmt.Errorf(`%w: the prism sheet requires one outer loop`, ErrUnsupported)
 	}
 	loop := loops[0]
-	dirs, err := thickenAxisDirections(loop, budget)
+	dirs, err := thickenaxis.AxisDirections(loop.walks, budget)
 	if err != nil {
 		return profileRecord{}, err
 	}
@@ -292,7 +293,7 @@ func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount f
 	if err != nil {
 		return profileRecord{}, offsetSectionRefusal(err)
 	}
-	if err := thickenCertifyAxisOffset(loop, dirs, offset.Outer, sense, amount, budget); err != nil {
+	if err := thickenaxis.CertifyAxisOffset(loop.walks, dirs, offset.Outer, sense, amount, budget); err != nil {
 		return profileRecord{}, err
 	}
 	if err := offsetSectionRefusal(auditOffsetSectionBudget(budget, pp.profile, offset)); err != nil {
@@ -301,7 +302,7 @@ func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount f
 	// radial is nil: a prism sheet's walls sweep along a fixed normal and turn
 	// about no axis, so there is no radius for the scan to keep positive
 	// (thicken.go's thickenRadial is the revolve arm's gate alone).
-	if err := thickenAxisIntervalClear(ctx, loop, dirs, sense, amount, budget, nil); err != nil {
+	if err := thickenaxis.AxisIntervalClear(ctx, loop.walks, dirs, sense, amount, budget, nil); err != nil {
 		return profileRecord{}, err
 	}
 	return offset, nil

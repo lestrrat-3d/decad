@@ -211,6 +211,19 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
 }
 
+// thickenRibbonSteps maps the requested side to the right and left copies of
+// the recorded walk. A centered request offsets both copies.
+func thickenRibbonSteps(side ThickenSide) (int, int) {
+	switch side {
+	case ThickenNegative:
+		return 0, 1
+	case ThickenCentered:
+		return 1, 1
+	default:
+		return 1, 0
+	}
+}
+
 // thickenChainExtrude builds a solid from a ribbon: the open walk's own
 // thickened section swept through the ribbon's unchanged interval
 // (docs/surface-design.md §16.6).
@@ -232,7 +245,8 @@ func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side
 	// ONE free-form work counter for the record: the walk resolution below and
 	// the build that consumes its section both spend from it.
 	work := freeform.NewFreeformWork()
-	section, err := thickenRibbon(ctx, cp.chains[0], side, amount, budget, work, nil)
+	rightSteps, leftSteps := thickenRibbonSteps(side)
+	section, err := thickenaxis.RibbonProfile(ctx, cp.chains[0], rightSteps, leftSteps, amount, budget, work, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +286,8 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	// ONE free-form work counter for the record: the walk resolution, the axis
 	// re-resolution and the build that consumes the section all spend from it.
 	work := freeform.NewFreeformWork()
-	section, err := thickenRibbon(ctx, cp.chains[0], side, amount, budget, work, &radial)
+	rightSteps, leftSteps := thickenRibbonSteps(side)
+	section, err := thickenaxis.RibbonProfile(ctx, cp.chains[0], rightSteps, leftSteps, amount, budget, work, &radial)
 	if err != nil {
 		return nil, err
 	}
