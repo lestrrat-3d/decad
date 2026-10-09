@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/linkagebound/loopchain"
+	"github.com/lestrrat-3d/decad/internal/loopscene"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -394,16 +395,6 @@ func (lp *LinkageLoop) scaleFor(dir motionbound.RatVec) *big.Rat {
 	return new(big.Rat).SetFloat64(math.Ldexp(1, exp))
 }
 
-// ratStep is p + λ·dir, exactly.
-func ratStep(p, dir motionbound.RatVec, lambda *big.Rat) motionbound.RatVec {
-	var out motionbound.RatVec
-	for i := range 3 {
-		out[i] = new(big.Rat).Mul(lambda, dir[i])
-		out[i].Add(out[i], p[i])
-	}
-	return out
-}
-
 // anchorMeets reports whether slide k's anchor at κ meets its revolute
 // parent's pin in the plane.
 func (lp *LinkageLoop) anchorMeets(k *Link, kappa *big.Rat, ahead bool) bool {
@@ -670,17 +661,6 @@ func (pl loopPlane) coordsRat(pr motionbound.RatVec) (proofbound.RatInterval, pr
 	return linkagebound.PlaneCoordinates(pr, pl.u, pl.v, pl.uLen, pl.vLen)
 }
 
-// ratNeg is −w.
-func ratNeg(w motionbound.RatVec) motionbound.RatVec { return linkagebound.NegVec(w) }
-
-// ratVecFloat is the float vector nearest w.
-func ratVecFloat(w motionbound.RatVec) r3.Vec { return linkagebound.VecFloat(w) }
-
-// floatBox is the outward-rounded float interval around iv.
-func floatBox(iv proofbound.RatInterval) sketch.Interval {
-	return sketch.Interval{Lo: proofbound.RatFloatDown(iv.Lo), Hi: proofbound.RatFloatUp(iv.Hi)}
-}
-
 // buildScene builds the loop's private scene for the drive on one side
 // (docs/linkage-check-design.md §15.2): one point per loop pin at its exact
 // plane position, Common's pins fixed; a line and a distance per revolute
@@ -766,257 +746,76 @@ func (ld *loopDrive) probeOffset(ctx context.Context, spec *linkageSpec, mirror,
 // zero-pose reading offset.
 func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, flip sceneFlip, offset proofbound.RatInterval) (*loopScene, error) {
 	lp := ld.loop
-	plane, err := lp.sceneFrame(flip.mirror, flip.halfTurn)
-	if err != nil {
-		return nil, fmt.Errorf(`%w: a loop's plane frame: %w`, ErrNotFinite, err)
-	}
-	w := sketch.NewWorld()
-	sk, err := w.CreateSketch(w.XY())
-	if err != nil {
-		return nil, fmt.Errorf(`%w: a loop's scene: %w`, ErrUnsupported, err)
-	}
-	sc := &loopScene{plane: plane, sk: sk, offset: offset}
-	// fix grounds p at the exact plane position x × y: a fixed box around it
-	// where either coordinate is not one float, as on a tilted loop.
-	fix := func(p *sketch.Point, x, y proofbound.RatInterval) {
-		sk.Fix(p)
-		bx, by := floatBox(x), floatBox(y)
-		if bx.Lo != bx.Hi || by.Lo != by.Hi {
-			sc.opts = append(sc.opts, sketch.WithFixedBox(p, bx, by))
+	links := make(map[*Link]*loopscene.Link, len(lp.links)+1)
+	var linkOf func(*Link) *loopscene.Link
+	linkOf = func(k *Link) *loopscene.Link {
+		if k == nil {
+			return nil
 		}
-	}
-	points := make(map[r3.Vec]int) // each pin's index in sc.pins
-	pinAt := func(at r3.Vec) scenePin {
-		if n, ok := points[at]; ok {
-			return sc.pins[n]
+		if existing, ok := links[k]; ok {
+			return existing
 		}
-		local := plane.frame.ToLocal(at)
-		x, y := plane.coords(at)
-		pin := scenePin{p: sk.CreatePoint(local.X, local.Y), at: at, u: x, v: y}
-		points[at] = len(sc.pins)
-		sc.pins = append(sc.pins, pin)
-		return pin
-	}
-	point := func(at r3.Vec) *sketch.Point { return pinAt(at).p }
-	fixPin := func(at r3.Vec) {
-		pin := pinAt(at)
-		fix(pin.p, pin.u, pin.v)
-	}
-	fixed := func(at r3.Vec, du float64) *sketch.Point {
-		local := plane.frame.ToLocal(at)
-		x, y := plane.coords(at)
-		if du != 0 {
-			local.X += du
-			shift := proofarith.FloatRat(du)
-			x = proofbound.IntervalOwned(new(big.Rat).Add(x.Lo, shift), new(big.Rat).Add(x.Hi, shift))
+		out := &loopscene.Link{Index: k.index}
+		links[k] = out
+		out.Parent = linkOf(k.parent)
+		if k == lp.common {
+			return out
 		}
-		p := sk.CreatePoint(local.X, local.Y)
-		fix(p, x, y)
-		return p
-	}
-	// newPin is a free point of the scene at the exact zero-pose position at
-	// that no other feature shares — an anchored rail's points, a rider
-	// between two slides — listed for the falsifier like every pin.
-	newPin := func(at motionbound.RatVec) *sketch.Point {
-		f := ratVecFloat(at)
-		local := plane.frame.ToLocal(f)
-		x, y := plane.coordsRat(at)
-		pin := scenePin{p: sk.CreatePoint(local.X, local.Y), at: f, u: x, v: y}
-		sc.pins = append(sc.pins, pin)
-		return pin.p
-	}
-	fixedAt := func(at motionbound.RatVec) *sketch.Point {
-		local := plane.frame.ToLocal(ratVecFloat(at))
-		x, y := plane.coordsRat(at)
-		p := sk.CreatePoint(local.X, local.Y)
-		fix(p, x, y)
-		return p
-	}
-	lines := make(map[*Link]*sketch.Line)
-	var cons []sketch.Constraint
-	// hold keeps p and q at the exact plane distance between pa and pb, stated
-	// like a bar: its target the interval between the floats around the root.
-	hold := func(p, q *sketch.Point, pa, pb motionbound.RatVec) error {
-		sq := lp.planeSqRat(pa, pb)
-		down, up := proofbound.RatSqrtDown(sq), proofbound.RatSqrtUp(sq)
-		if proofbound.IsNonFinite(up) || !(down > 0) {
-			return fmt.Errorf(`%w: a loop rail's distance is not representable`, ErrNotFinite)
+		out.PinPos, out.NextPos, out.RiderPos = k.pin(), lp.linkNext(k), lp.riderAt(k)
+		out.Slide, out.Anchored, out.BesideRail = isSlide(k), lp.anchored(k), lp.besideRail(k)
+		if out.Anchored {
+			out.Anchor[0], out.Anchor[1] = lp.anchorAt(k, false), lp.anchorAt(k, true)
+			out.AnchorLength = lp.anchorLength(k)
 		}
-		dist := sketch.NewDistance(p, q, up)
-		cons = append(cons, dist)
-		sc.opts = append(sc.opts, sketch.WithTargetRange(dist, down, up))
-		return nil
+		if out.Slide {
+			out.Dir = slideDir(k)
+		}
+		return out
 	}
-	riders := make(map[*Link]*sketch.Point)
-	rider := func(k *Link) *sketch.Point {
-		if p, ok := riders[k]; ok {
-			return p
+	convert := func(src []*Link) []*loopscene.Link {
+		out := make([]*loopscene.Link, len(src))
+		for i, k := range src {
+			out[i] = linkOf(k)
 		}
-		p := point(lp.riderAt(k))
-		if lp.besideRail(k) {
-			p = newPin(ratVecExact(lp.riderAt(k)))
-		}
-		riders[k] = p
-		return p
+		return out
 	}
-	var commonLine *sketch.Line
-	var railStart, slider *sketch.Point
-	if lp.slide == nil {
-		pa, pb := lp.commonPins()
-		commonLine = sk.CreateLine(point(pa), point(pb))
-		fixPin(pa)
-		fixPin(pb)
-	} else {
-		// The primary slide's rail is the fixed line through its rider's
-		// zero-pose position along u; the rider rides it. The rail is the
-		// line Common's other pin, and the slide's children, measure their
-		// angles from.
-		pin := lp.riderAt(lp.slide)
-		slider = rider(lp.slide)
-		railStart = fixed(pin, 0)
-		commonLine = sk.CreateLine(railStart, fixed(pin, 1))
-		lines[lp.slide] = commonLine
-		cons = append(cons, sketch.NewPointOnLine(slider, commonLine))
-		other := lp.sideA
-		if len(lp.sideA) > 0 && lp.sideA[0] == lp.slide {
-			other = lp.sideB
-		}
-		switch {
-		case len(other) == 0:
-			fixPin(lp.closure.Center)
-		case !isSlide(other[0]):
-			fixPin(other[0].pin())
-		}
+	pa, pb := lp.commonPins()
+	view := &loopscene.Loop{
+		Links: convert(lp.links), SideA: convert(lp.sideA), SideB: convert(lp.sideB),
+		Common: linkOf(lp.common), Slide: linkOf(lp.slide),
+		CommonPins: [2]r3.Vec{pa, pb}, ClosureCenter: lp.closure.Center,
+		Normal: lp.normal, Coord: lp.coord, Reach: lp.reach,
+	}
+	if lp.slide != nil {
+		j, _ := lp.slide.joint.(PrismaticJoint)
+		view.PrimaryDir = &j.Dir
 	}
 	for _, bar := range lp.bars {
-		if bar.link == lp.common {
-			continue
-		}
-		own, next := point(bar.own), point(bar.next)
-		lines[bar.link] = sk.CreateLine(own, next)
-		dist := sketch.NewDistance(own, next, bar.up)
-		cons = append(cons, dist)
-		sc.opts = append(sc.opts, sketch.WithTargetRange(dist, bar.down, bar.up))
+		view.Bars = append(view.Bars, loopscene.Bar{
+			Link: linkOf(bar.link), Own: bar.own, Next: bar.next, Down: bar.down, Up: bar.up,
+		})
 	}
-	driverLink := spec.joints[ld.driver].link
-	anchors := make(map[*Link]*sketch.Point)
-	lineAt := make(map[*Link][2]motionbound.RatVec) // a rail-held link's line ends at the zero pose
+	joints := make([]loopscene.Joint, len(spec.joints))
 	for _, k := range lp.links {
-		if !lp.anchored(k) {
-			continue
-		}
-		p0 := ratVecExact(lp.riderAt(k))
-		at := lp.anchorAt(k, flip.ahead && k == driverLink)
-		var a *sketch.Point
-		var rail *sketch.Line
-		par := k.parent
-		switch {
-		case par == lp.common:
-			a = fixedAt(at)
-			rail = sk.CreateLine(a, fixedAt(p0))
-		case isSlide(par):
-			// The parent's rider X lies on this rail at P₀; a second point Z
-			// of the parent on its own rail, at the anchor's scale, fixes the
-			// parent's turn.
-			x := rider(par)
-			zAt := ratStep(p0, slideDir(par), lp.scaleFor(slideDir(par)))
-			z := newPin(zAt)
-			a = newPin(at)
-			cons = append(cons, sketch.NewPointOnLine(z, lines[par]))
-			if err := errors.Join(hold(x, z, p0, zAt), hold(x, a, p0, at), hold(z, a, zAt, at)); err != nil {
-				return nil, err
-			}
-			rail = sk.CreateLine(a, x)
-		default:
-			// The parent's frame is its pin O and a point C off the rail at
-			// the anchor's scale. The rail's two points, A and B = 2P₀ − A
-			// on the rider's other side, are each held to both, by
-			// triangles that stay well shaped wherever O lies.
-			o, oAt := point(par.pin()), ratVecExact(par.pin())
-			perp := linkagebound.Cross(lp.normal, slideDir(k))
-			cAt := ratStep(oAt, perp, lp.scaleFor(perp))
-			var bAt motionbound.RatVec
-			for i := range 3 {
-				bAt[i] = new(big.Rat).Sub(new(big.Rat).Add(p0[i], p0[i]), at[i])
-			}
-			c := newPin(cAt)
-			a = newPin(at)
-			b := newPin(bAt)
-			if err := errors.Join(hold(o, c, oAt, cAt), hold(o, a, oAt, at), hold(c, a, cAt, at), hold(o, b, oAt, bAt), hold(c, b, cAt, bAt)); err != nil {
-				return nil, err
-			}
-			rail = sk.CreateLine(a, b)
-			lines[par], lineAt[par] = rail, [2]motionbound.RatVec{at, bAt}
-		}
-		anchors[k] = a
-		lines[k] = rail
-		cons = append(cons, sketch.NewPointOnLine(rider(k), rail))
+		jt := spec.joints[k.index]
+		joints[k.index] = loopscene.Joint{Link: linkOf(k), Revolute: jt.revolute, Axis: jt.axis}
 	}
-	parentLine := func(k *Link) *sketch.Line {
-		if k.parent == lp.common {
-			return commonLine
-		}
-		return lines[k.parent]
+	built, err := loopscene.Build(ctx, loopscene.Input{
+		Loop: view, Joints: joints, Driver: ld.driver, Deps: ld.deps,
+		Mirror: flip.mirror, HalfTurn: flip.halfTurn, Ahead: flip.ahead, Offset: offset,
+	})
+	if err != nil {
+		return nil, err
 	}
-	n := lp.normal
-	if flip.mirror {
-		n = ratNeg(n)
+	sc := &loopScene{
+		plane: loopPlane{frame: built.Plane.Frame, u: built.Plane.U, v: built.Plane.V,
+			uLen: built.Plane.ULen, vLen: built.Plane.VLen},
+		sk: built.Sketch, driver: built.Driver, driven: built.Driven,
+		angular: built.Angular, anchored: built.Anchored, signs: built.Signs,
+		opts: built.Options, offset: built.Offset,
 	}
-	senseOf := func(k int) int {
-		if spec.joints[k].revolute {
-			return linkagebound.Dot(ratVecExact(spec.joints[k].axis), n).Sign()
-		}
-		if lp.anchored(spec.joints[k].link) {
-			return 1
-		}
-		return linkagebound.Dot(ratVecExact(spec.joints[k].axis), plane.u).Sign()
-	}
-	mid, _ := linkagebound.Midpoint(offset).Float64()
-	switch {
-	case driverLink == lp.slide:
-		sc.driver = sketch.NewHorizontalDistance(railStart, slider, 0)
-	case lp.anchored(driverLink):
-		sc.driver = sketch.NewDistance(anchors[driverLink], rider(driverLink), mid)
-	case driverLink.parent == lp.common && lp.besideRail(driverLink):
-		ends := lineAt[driverLink]
-		refLine := sk.CreateLine(fixedAt(ends[0]), fixedAt(ends[1]))
-		sc.driver = sketch.NewAngle(refLine, lines[driverLink], 0)
-	case driverLink.parent == lp.common:
-		next := lp.linkNext(driverLink)
-		refLine := sk.CreateLine(point(driverLink.pin()), fixed(next, 0))
-		sc.driver = sketch.NewAngle(refLine, lines[driverLink], 0)
-	default:
-		// Below Common the driver turns from its parent's line, offset r₀.
-		sc.driver = sketch.NewAngle(parentLine(driverLink), lines[driverLink], mid)
-	}
-	cons = append(cons, sc.driver)
-	for _, d := range ld.deps {
-		link := spec.joints[d].link
-		var dim sketch.Dimension
-		switch {
-		case link == lp.slide:
-			h := sketch.NewHorizontalDistance(railStart, slider, 0)
-			h.SetDriven(true)
-			dim = h
-		case lp.anchored(link):
-			r, _ := linkagebound.Midpoint(lp.anchorLength(link)).Float64()
-			dist := sketch.NewDistance(anchors[link], rider(link), r)
-			dist.SetDriven(true)
-			dim = dist
-		default:
-			a := sketch.NewAngle(parentLine(link), lines[link], 0)
-			a.SetDriven(true)
-			dim = a
-		}
-		sc.driven = append(sc.driven, dim)
-		sc.angular = append(sc.angular, !isSlide(link))
-		sc.anchored = append(sc.anchored, lp.anchored(link))
-		sc.signs = append(sc.signs, senseOf(d))
-		cons = append(cons, dim)
-	}
-	sk.AddConstraint(cons...)
-	if _, err := sk.Solve(ctx); err != nil {
-		return nil, fmt.Errorf(`%w: the loop's scene does not solve at the zero pose: %w`, ErrUnsupported, err)
+	for _, pin := range built.Pins {
+		sc.pins = append(sc.pins, scenePin{p: pin.P, at: pin.At, u: pin.U, v: pin.V})
 	}
 	return sc, nil
 }
