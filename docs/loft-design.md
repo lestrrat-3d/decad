@@ -855,11 +855,12 @@ Casteljau bisections and sagitta measurements are charged against
 `docs/spline-design.md` §5.2's `freeformWork` counter on each side's own
 record — the same counter `freeformBezierSpans` and the record's other
 free-form passes already spend, never a counter of the station generator's
-own. Before `validateLoftRecords` resolves a single walk it raises each
-counter's ceiling to `max(freeformWorkLimit, spent + 8192·stationCap(P))`,
-at most `2^20 + 2^26` (`docs/loft-gear-bounds-design.md` §7), with `P` read
-from the first record's segment counts; the raise covers the walks' own
-length brackets and the station walk. An exhausted counter refuses
+own. Public `Loft` raises each counter before its first area integral to
+`max(freeformWorkLimit, 8192·stationCap(P))`, with `P` read from the
+authenticated first record's segment counts. `validateLoftRecords` raises
+fresh counters on re-evaluation before resolving walks. The ceiling stays at
+most `2^20 + 2^26` (`docs/loft-gear-bounds-design.md` §7) and covers area
+integration, walk length brackets and station work. An exhausted counter refuses
 `ErrUnsupported` at spline design's own R7, decided the moment the charge
 would exceed that ceiling, never a silent fallback to an uncharged pass.
 Charging the two records' own
@@ -901,6 +902,19 @@ own.
 | **`areaExcess` station-shift leg** | an AREA: how far the ruled patch through one CHORDED wall cell's four HELD corners sits in AREA from the ruled patch through the four STATIONS those corners denote — the step the twist and ruled legs both stop short of, since each pins its patches at the corners it is handed — summed over chorded wall cells | `internal/proofbound/bounds.go`'s `cellStationShiftAreaAllow(vLo, vHi, wLo, wHi, arcLenUpper_A, arcLenUpper_B, matchedDelta, delta)` per chorded wall cell — the per-cell `arcLenUpper_k` row, the `matchedDelta` row read at THIS cell (`loft_build.go`'s `chordCellDeltaUpper`), and the `delta` row above | that helper's own doc comment: the difference between the two patches is BILINEAR in the cell's own parameters with the four corner displacements as its values, so each partial is at most `2·delta`, and the `\|e x v\| + \|u x f\| + \|e x f\|` expansion `perturbedTriangleAreaAllow` states for ONE TRIANGLE, taken one dimension up over the two patches, sizes the step at `2·delta·(∬\|X_r\| + ∬\|X_s\|) + 4·delta²`. The `s` integral is the two sides' own arc-length bounds averaged, and the `r` integral is the SAME `eB` convexity rung the ruled leg forms, widened by `2·matchedDelta` because the denoted rung joins two CURVE points rather than two chord ends. A triangle's own allowance bounds a DIFFERENT quantity of the same shape and order and is never spent for this step | outward at every step, in `absSumUpper` / `productUpper` / `divUpper`, over the same EXACTLY formed corner differences and norms the two rows above read | `+Inf` on a BROKEN caller claim — a non-finite corner, or a non-finite or negative operand. Its inputs carry the refusals, the ruled leg's own rule. It is exactly 0 where `delta` is 0, the build that holds the stations it denotes |
 | **facet departure** | a LENGTH: how far one point of a HELD facet sits from the true boundary surface that facet stands for | `absSumUpper(matchedDelta, maxTwistOffsetUpper)` — the two rows above, and no third mechanism | the triangle inequality over two independent departures: `matchedDelta` bounds the held chord's departure from the recorded curve at the SAME parameter, including the held vertices' `delta`, and `maxTwistOffsetUpper` bounds the held flat triangle pair's departure from the bilinear ruled patch through that chorded cell's corners. A set-distance `sectionDelta` cannot replace the parameter-matched term: it may be zero while a free-form curve point and the held chord point at the same parameter differ. On a `LineSeg`-only build `maxTwistOffsetUpper` is zero and `matchedDelta` reduces to `delta`, so an unplaced pairing whose stations are all PINNED publishes zero; another kind receives the same zero-bound standing whenever the two published values are zero. Every per-facet consumer reads this term (§9 D1, D2) and no consumer substitutes `sectionDelta` for `matchedDelta` | outward, in `absSumUpper` | inherits both rows' |
 | **`Bounds.Bound`** | a LENGTH: the radius by which the axis-aligned box the payload holds may fall short of the box the true recorded boundary occupies | `absSumUpper(delta, sectionDelta)` — the two published terms above, summed | §8's `Bounds` paragraph: the recorded boundary can exceed the held box both by a held vertex's own displacement and by the recorded curve's bulge outside the station polygon, and the two act on the same face of the box, so the shortfall is at most their sum. **This reading keeps `sectionDelta` where facet departure needs `matchedDelta`**, because an axis-aligned box asks only for SET containment: every curve point lies near some held chord point, with no same-parameter obligation. The held triangle pair and the bilinear ruled patch both lie in the convex hull of a cell's own four held corners, so a cell's twist moves no face of the box and `maxTwistOffsetUpper` has no term here | outward, in `absSumUpper` | inherits both rows'. `Bounds` is `Exact` only where that sum is exactly zero (§8) |
+
+At a segment junction, the next segment supplies the held station. The two
+incident records can denote different endpoint positions even when that station
+is pinned to the next segment. `PairRecords` bounds the held station against
+both denoted endpoints with `JunctionStartBound` and takes the maximum into
+`stationRound`. This gap enters `delta` once. A pinned endpoint guarantees zero
+only when both incident records denote that same point.
+
+For a certified fitted-spline root fillet (§17), `evalLoft` also adds
+`constructionDelta` to the pairing's `stationRound` before forming `delta`.
+This term bounds the entire held rewritten curve against its exact tangent
+fillet, not just a station. The base table above describes an unmodified
+loft; all consumers of the filleted payload read the widened `delta`.
 
 **`matchedDelta` is the PARAMETER-MATCHED displacement the chorded allowance
 requires, under the shared parametrization each construction arm defines.**
@@ -1741,6 +1755,10 @@ global evaluator increment.
 | 4b | `docs/loft-gear-bounds-design.md`'s five increments: the per-cell volume residual with its skirt leg and the per-cell cap tube (§8, §8.1), the centroid shift form (§8), the chord target read from the section's feature size with bisection on the matched departure (§5.1), the sweep-enumerated crossing audit with one proof per cap (§6), and the scaled ceilings — `stationCap(P)` (§5.1), the raised free-form work ceiling (§5.1) and the `1 << 28` reconstruction ceiling — under which full helical gear outlines up to 69 teeth build and verify `Sound`. **This row is landed.** | a profile past 11585 reconstruction chords (the same gear at 70 teeth); every item PR 4's row still lists |
 | 4c | Exact common subdivision admits different Bézier span counts for a same-kind Tier A free-form pair (§5.1) and retires S17. **This row is landed.** | N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
+
+The PR 4b row records its original resource gate. An authenticated public Loft
+now uses a private `1 << 32` reconstruction cap for each profile, while
+detached records retain `1 << 28` (`docs/loft-gear-bounds-design.md` §7).
 
 **The four measurements land with the operation, never after it.** A `Body`
 caches `Volume` / `Centroid` / `Area` / `Bounds` at build and its accessors
@@ -2588,10 +2606,11 @@ geometry, and each bound assertion is shown to fail before it is trusted.
 
 `Body.Fillet` accepts a solid loft whose two recorded profiles are identical,
 have no holes, use the same segment alignment, and occupy planes with the same
-in-plane axes and an axial translation. It accepts selected rung edges that
-coincide with recorded corners between `LineSeg` and/or `ArcSeg` carriers. A
-selected cap edge, spline station, twisted section or nonmatching profile
-returns `ErrUnsupported`. Selection and magnitude gates run before this route.
+in-plane axes and an axial translation. It accepts selected rung edges at
+`LineSeg`/`ArcSeg` analytic corners and at `FitSplineSeg`/`CircleSeg` root
+corners. A selected cap edge, spline station, twisted section or nonmatching
+profile returns `ErrUnsupported`. Selection and magnitude gates run before
+this route.
 
 The selected rung must match both lifted copies of one recorded corner. The
 match uses the same frame lift and placement as `loftmesh.Assemble`, with no
@@ -2599,25 +2618,41 @@ coordinate tolerance. If no corner or more than one corner matches, the call
 refuses. `offset2d.Fillet` computes each tangent connector. A setback that
 consumes either carrier refuses before a new record is evaluated.
 
-The rewrite inserts the connector after its incoming segment and trims only
-selected analytic carriers. Every other segment, including each `FitSplineSeg`,
-is copied from the original record. Both loft profiles receive the same
-rewritten section. The audit uses the analytic
-`sectionaudit.CrossingWithFloor` test, followed by the rewritten section's
-area-sign gate. For every new analytic piece
-and non-adjacent unchanged free-form segment, it requires separation between
-an enclosing arc/line box and the exact Bézier control-hull box by more than
-the section-scale contact floor. A pair whose boxes overlap refuses as
-`ErrUnsupported`; no sampled gap admits a build. The original profile's
-authentication covers pairs that the rewrite left unchanged. Adjacent
-free-form segments meet an analytic carrier that was only trimmed at its far
-end, so their original join is unchanged.
+The rewrite inserts each connector after its incoming segment and trims its
+two carriers. A fitted-spline root fillet keeps the original fitted control
+points and changes only its recorded trim parameter. Both loft profiles
+receive the same rewritten section. The numerical blend supplies a candidate;
+`loft_fit_root_cert.go` isolates one root of the exact rational tangent
+equation and proves its direction, positive speed and nearest-corner choice.
+The root brackets the ideal fit foot, connector center and circle foot.
+`loft_fit_arc_proof.go` bounds every held connector point against the ideal
+radius-r arc. `loft_fit_carrier_proof.go` bounds the retained fit and circle
+pieces against their ideal trims and checks the original circle fragment.
+Two cuts on one carrier must have ordered ideal contact intervals. A second
+native fillet call on an already certified fitted-spline loft refuses until
+the proof maps can be composed across rewrites.
+
+The section audit checks the recorded fit/connector pair with an exact
+support-circle polynomial and Sturm root counts. A root outside the certified
+short connector sweep cannot cross that arc. It checks the adjacent root
+circle and connector with outward circle-intersection boxes. For the ideal
+fit/connector pair, `loft_fit_ideal_audit.go` proves one strict second-
+derivative sign near the tangent root and excludes every other retained piece
+by a strict radial sign or angular separation. Nonadjacent changed pieces
+must have exact enclosing boxes separated by more than the section contact
+floor plus twice the construction departure. The analytic crossing audit and
+rewritten section area gate still run. Unresolved contacts return
+`ErrUnsupported`.
 
 The operation uses one work counter per rewritten profile from the audit
 through exact area integration and `evalLoft`. Each counter is raised once to
-§5.1's `StationWorkLimit` for the new segment count. `evalLoft` applies its
-normal pairing, crossing, measurement and displacement proofs before the
-receiver retires. Connector cells also carry `fillet(loop,segment)` beside
+§5.1's `StationWorkLimit` for the new segment count. `evalLoft` adds the
+maximum certified whole-curve construction departure to the station pairing
+departure before the volume, mesh and box proofs. It raises affected
+connector and carrier cell length bounds; affected carrier tangent energy
+uses the premise-free area branch. The pairing also charges each held station
+against both incident denoted endpoints. Connector cells carry
+`fillet(loop,segment)` beside
 their `side(loop,cell,half)` roles. Placement and duplication re-evaluate
 those roles from the stored connector indices. The result remains a loft:
 its wall faces are bounded planar triangles, and its mass readings retain
@@ -2630,7 +2665,9 @@ tangent-arc gear. A rectangular loft checks
 the one-corner volume against the circular-sector formula and checks that a
 placed copy still has fillet roles.
 An audit fixture moves a fit spline's control hull across a changed line and
-checks that the audit refuses the possible contact.
+checks that the audit refuses the possible contact. The full embedded 30-tooth
+and 60-tooth cases exercise the original trimmed fit flanks, native root
+fillets, optional bore and both outer-cap chamfers.
 
 ## 18. Coaxial bore and held outer-cap chamfer
 

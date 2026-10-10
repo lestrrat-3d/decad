@@ -131,6 +131,20 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	// they ride on the payload rather than being integrated again in evalLoft.
 	work0 := freeform.NewFreeformWork()
 	work1 := freeform.NewFreeformWork()
+	// The profile area falsifier spends the same record-wide counter as the
+	// later station walk. A many-flank profile can exhaust the default R7
+	// ceiling during that first integral, before ValidateLoftRecords raises it.
+	// Give both authenticated records their existing station-scaled ceiling
+	// here; the later gate keeps that ceiling and the already spent work.
+	p := uint64(len(profile0.Outer.Segments))
+	for _, hole := range profile0.Holes {
+		p += uint64(len(hole.Segments))
+	}
+	limit := loftmesh.StationWorkLimit(0, p)
+	work0.RaiseLimit(limit)
+	work1.RaiseLimit(limit)
+	work0.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
+	work1.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
 	recordArea0, err := falsifyRecordedArea(profile0, area0, work0)
 	if err != nil {
 		return nil, err
@@ -155,10 +169,11 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 		profile0: profile0, profile1: profile1,
 		plane0: plane0, plane1: plane1,
 		frame0: frame0, frame1: frame1,
-		alignment:     alignment,
-		xform:         r3.Identity(),
-		surfaceResult: surfaceResult,
-		recordArea:    [2]float64{recordArea0, recordArea1},
+		alignment:                   alignment,
+		xform:                       r3.Identity(),
+		authenticatedReconstruction: true,
+		surfaceResult:               surfaceResult,
+		recordArea:                  [2]float64{recordArea0, recordArea1},
 	}, proofbound.NewWorkBudget(ctx), work0, work1)
 	if err != nil {
 		return nil, err

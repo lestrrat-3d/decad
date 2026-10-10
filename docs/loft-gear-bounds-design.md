@@ -446,11 +446,23 @@ Every ceiling keeps a hard constant and gains a shape that scales with the recor
 |---|---|---|---|---|
 | S15 station cap `loftmesh.StationCap` | 500 | `stationCap(P) = min(max(512, 64·P), 8192)` | 8192 stations, `F ≤ 8·8192 − 8` | the probe needs 124–132 stations per tooth (`P = 6`) and 952–1960 for the gears (`P = 48–240`); S15 reserves one cell per pair and charges each curve's actual extra cells against the shared remainder, so a bore circle may use more cells than a short flank; the hard ceiling keeps `NewLoftAuditData`'s exact lifts under ~70 MB |
 | S8 pair ceiling | `F·(F−1)/2 ≤ 8_000_000` | pairs the sweep scans on its axis ≤ `8_000_000`, and enumerated candidates ≤ `8_000_000` (§6); `F ≤ 8·8192 − 8` before any exact lift | unchanged | the scan count is at least the candidate count, so the counting pass refuses after at most `8_000_000` comparisons and the work before a refusal is `O(F log F + ceiling)`; the triangle ceiling bounds the exact lifts, which the station cap does not bound for a build with no chorded pair (`loftStationCapGate` returns early there) |
-| R7 `FreeformWorkLimit` for the loft's walks and station walk | `1 << 20` per record per operation | `FreeformWork.Limit`, raised by `validateLoftRecords` before it resolves a walk, with `P` read from the first record's segment counts, to `max(1 << 20, Spent + 8192 · stationCap(P))` | `1 << 20 + 8192 · 8192 = 2^26 + 2^20` | the walks' own arc-length brackets charge 1.05 M (z8), 2.63 M (z20) and 5.26 M (z40) units per record, past `1 << 20` before any cap gate runs, so the raise precedes them; walks and station walk together charge 5300–7000 units per station per record (`TestLoftStationWalkWorkPerStation`); the same counter stays the record's one counter for the operation, and a charge that saturates the cost arithmetic refuses under any ceiling |
-| reconstruction `ReconstructionWorkLimit` | `1 << 26` (chord ceiling 5792) | `1 << 28` (chord ceiling 11585) | `1 << 28` | the z40 record charges `2 · 6640²` = 88 M; sketch's arranger took 0.7 s for both records' admission at that size; `1 << 28` is ~3 s of the same work |
+| R7 `FreeformWorkLimit` for Loft's area, walks and stations | `1 << 20` per record per operation | Public `Loft` raises each record's counter before area integration to `max(1 << 20, 8192 · stationCap(P))`; re-evaluations raise fresh counters before walks. `P` comes from the first authenticated record. | `1 << 20 + 8192 · 8192 = 2^26 + 2^20` | The full embedded 60-tooth area's first integral exceeds the default ceiling before the walk gate. The same counter then pays for walks and stations; saturated single charges still refuse. |
+| reconstruction | `1 << 28`, 11585 chords | trusted Loft: `1 << 32`, 46340 chords; others unchanged | `1 << 32` | the 60-tooth gear charges 1.70 billion units per profile |
 
-The reconstruction ceiling is decad's model of sketch's quadratic arranger, so
-raising it is decad's decision; making the model obsolete is sketch's. The hand-off
+The certified fit-spline fillet and centered-bore Cut each resolve the section
+for their own contact or containment proof, then integrate its area and rebuild
+the loft on the same counter. They may use twice the ordinary station-scaled
+R7 allowance, at most `1 << 27`, after the original public Loft authenticated
+both profiles. Ordinary Loft, other Cut paths, and detached records keep their
+existing ceilings.
+
+The reconstruction ceiling is decad's model of sketch's quadratic arranger. A
+public Loft may raise only its private per-profile counters after both Sketch
+profiles pass the seam. Its certified fillet, bore and placement rewrites carry
+that provenance to their fresh counters. Standalone record validation and public
+moment methods retain the `1 << 28` ceiling. The larger cap still charges the
+global chord count before any actual reconstruction and refuses above its hard
+limit. The hand-off
 `../sketch/.tmp/decad-handoff-arrangement-chords.md` asks sketch for a sub-quadratic
 arrangement and for a chord count that scales with a curve's size rather than
 `16 · controls` with a floor of 64, with the gear as the reference case.
@@ -494,7 +506,7 @@ asserted as ratios against the tolerance.
 | `TestLoftGearToothVerifiesSound` | one tooth at z = 8, 20 and 40: `Sound`, every ratio below `1e-3`, station count below `stationCap(P)`, and `Volume`, `Centroid` and `Area` each enclosing a dense-sample reference (ruled patches over 512 samples per span or arc, the loft's own triangle pair over each `LineSeg`) | deleting the wall leg from `Volume` |
 | `TestLoftGearOutlineVerifiesSound` | full gears z = 8 (race shards), 20 and 40 (skipped under `testing.Short` and the race detector): the tooth test's assertions | restoring any one of the shipped ceilings; 32 stations per paired segment; deleting the wall leg from `Volume` |
 | `TestLoftStationCapScalesWithPairs` | `stationCap(P)` at `P` = 3, 6, 8, 9, 48, 120, 127, 128, 240, 10_000, and the shared extra-cell budget S15 reads from it | — |
-| `TestLoftStationWalkWorkPerStation` | on every gear case, the raise is `StationWorkLimit` over the counter's spend after the area falsifier, and the walks plus the station walk charge below 8192 per station | — |
+| `TestLoftStationWalkWorkPerStation` | on every gear case, the counter has `StationWorkLimit(0,P)` before the area falsifier, keeps it through the walk gate, and walks plus stations charge below 8192 per station | — |
 | `TestLoftStationWalkRefusesAtTheRaisedWorkLimit` | a tooth's station walk, left half its cost below the raised ceiling, runs past `1 << 20` and refuses R7 at the raised ceiling | removing the raise |
 | `TestFreeformWorkRaisedLimitBinds` | `RaiseLimit` never lowers the ceiling, charges run to the raised ceiling and refuse one unit past it, and a saturated charge refuses under any ceiling | removing `Step`'s saturation test |
 | `TestLoftAuditCandidateCeilingRefuses` | a build whose candidate count exceeds a lowered test ceiling refuses S8 before any exact test | — |

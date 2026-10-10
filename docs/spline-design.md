@@ -679,14 +679,19 @@ a record no arrangement ever reads. The free-form charge stays at the preflight,
 which no such certificate can be reached from, so it also covers an evaluator
 preflight that never runs the reconstruction at all.
 
-The exact-rational ceiling stands at 2^20 charged units. One operation raises
-it for its own two record counters: a loft, once its station cap gate has
-passed, raises each to `max(2^20, Spent + 8192 · stationCap(P))`, at most
-2^26 + 2^20 (`docs/loft-gear-bounds-design.md` §7). No other caller raises it,
+The exact-rational ceiling stands at 2^20 charged units. A loft raises its two
+record counters before its first area integral to the station-scaled limit, at
+most 2^26 + 2^20 (`docs/loft-gear-bounds-design.md` §7). Its certified fillet
+and centered bore rewrites may double that station-scaled limit for their
+additional section audit. Other callers retain the normal limit,
 and a single charge that saturates the cost arithmetic refuses under any
-ceiling. The reconstruction ceiling stands at 2^28 charged units, admitting
-11585 chords for validation's first two whole-scene arrangements; candidate
-authentications spend that same reconstruction counter. The larger reconstruction ceiling admits ordinary
+ceiling. The default reconstruction ceiling stands at 2^28 charged units,
+admitting 11585 chords for validation's first two whole-scene arrangements;
+candidate authentications spend that same reconstruction counter. An
+authenticated public Loft may raise its private counters to at most 2^32 after
+both Sketch profiles pass the seam. Certified loft rewrites retain that limit,
+while detached records and public moment methods keep 2^28. The larger default
+reconstruction ceiling admits ordinary
 analytic plates with several circular holes without widening the conversion and
 integration ceiling. The conversion charges beneath the exact-rational ceiling
 must still move ahead of the chains they precede, because a closed spline converts

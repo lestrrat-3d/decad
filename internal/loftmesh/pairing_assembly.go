@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -189,6 +190,26 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 			stationRound = math.Max(stationRound, round)
 		}
 		pairs[i] = pair
+	}
+	// Each segment omits its end station; the next segment's start is the
+	// held endpoint of its final cell. Charge that point against both curves
+	// meeting there, including the connector between distinct denoted ends.
+	for side, loops := range [2][]sectionrecord.LoopRecord{loops0, loops1} {
+		walks := walks0
+		if side == 1 {
+			walks = walks1
+		}
+		for li, loop := range loops {
+			for j, nextSeg := range loop.Segments {
+				prev := (j + len(loop.Segments) - 1) % len(loop.Segments)
+				bound := boundarywalk.JunctionStartBound(loop.Segments[prev], walks[li][prev], nextSeg, walks[li][j])
+				delta := WalkEndPlaneDelta(bound)
+				if math.IsNaN(delta) || math.IsInf(delta, 0) {
+					return nil, 0, 0, 0, ErrLoftStationDisplacementUnderivable
+				}
+				stationRound = math.Max(stationRound, delta)
+			}
+		}
 	}
 	// S16 runs after every loop's stations exist, so a free-form pair's S15
 	// and S14 refusals, decided as its stations are generated, come before

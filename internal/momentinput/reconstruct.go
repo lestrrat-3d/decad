@@ -270,13 +270,22 @@ func momentSegmentsEqual(a, b CurveSegment) bool {
 // (freeformEntityKey), which is a per-element pass and an allocation this charge
 // exists to precede, so free-form segments stay counted per fragment. That is
 // conservative in the safe direction: an over-count of the scene, never an
-// under-count of it.
+// under-count of it. The default limit stops counting after its chord ceiling;
+// an authenticated loft can use the larger private counter ceiling.
 func reconstructionOf(record Profile) freeform.FreeformReconstruction {
+	return reconstructionOfLimit(record, freeform.ReconstructionWorkLimit)
+}
+
+func reconstructionOfLimit(record Profile, limit uint64) freeform.FreeformReconstruction {
+	chordCeiling := freeform.ReconstructionChordCeiling
+	if limit > freeform.ReconstructionWorkLimit {
+		chordCeiling = freeform.LoftReconstructionChordCeiling
+	}
 	var chords uint64
 	var seen map[momentEntityKey]struct{}
 	for _, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
 		for _, segment := range loop.Segments {
-			if chords > freeform.ReconstructionChordCeiling {
+			if chords > chordCeiling {
 				break
 			}
 			if key, keyed := analyticEntityKey(segment); keyed {
@@ -299,7 +308,7 @@ func reconstructionOf(record Profile) freeform.FreeformReconstruction {
 // one its rescaled retry runs — and returns the per-arrangement charge the
 // candidate loop then levies for itself.
 func chargeReconstruction(record Profile, work *freeform.FreeformWork) (uint64, error) {
-	demand := reconstructionOf(record)
+	demand := reconstructionOfLimit(record, work.ReconstructionBudget())
 	if err := work.ReconstructionStep(freeform.ReconstructionCostMul(2, demand.Arrangement)); err != nil {
 		return 0, err
 	}

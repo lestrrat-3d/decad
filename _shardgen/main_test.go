@@ -176,8 +176,9 @@ func TestPackSpreadsZeroCostTests(t *testing.T) {
 	}
 	for shard := range shardCount {
 		count := len(assigned[0][shard]) + len(assigned[1][shard])
-		if count != 20 {
-			t.Fatalf("shard %d has %d zero-cost tests, want 20", shard, count)
+		want := (len(rootNames) + len(apiNames)) / shardCount
+		if count != want {
+			t.Fatalf("shard %d has %d zero-cost tests, want %d", shard, count, want)
 		}
 	}
 }

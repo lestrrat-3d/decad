@@ -325,6 +325,12 @@ func requireFitSplineTerminalJoins(segment CurveSegment, start, end Point2, reve
 	if !ok {
 		return nil
 	}
+	// A trimmed range need not reach the source curve's natural end. The
+	// recorded last fit point is a junction only while that end remains in
+	// the walk; the other end is checked by the loop's ordinary join audit.
+	if (!reversed && fit.TEnd != 1) || (reversed && fit.TStart != 1) {
+		return nil
+	}
 	// The walk's natural-end coordinate is the recorded chain's own LAST fit
 	// point; freeformEndpoints already swapped start/end into walk order for a
 	// reversed range, so the natural-end side is start there instead of end.

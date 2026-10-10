@@ -136,6 +136,22 @@ jobs:
             race: "-race"
             shard: "5"
             packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "6"
+            packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "7"
+            packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "8"
+            packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "9"
+            packages: ""
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -169,6 +185,12 @@ jobs:
       - name: Run race tests (Ubuntu shard)
         shell: bash
         run: |
+          timeout=10m
+          budget=300
+          case '${{ matrix.shard }}' in
+            0) timeout=45m; budget=2400 ;;
+            1|2) budget=420 ;;
+          esac
           run_shard() {
             local bin="$GITHUB_WORKSPACE/race-bin/$1" shards="$2" dir="$3"
             chmod +x "$bin"
@@ -188,21 +210,20 @@ jobs:
             ' "$shards" -)"
             tests="${tests%|}"
             test -n "$tests"
-            (cd "$dir" && "$bin" -test.timeout 10m -test.run "^(${tests})$")
+            (cd "$dir" && "$bin" -test.timeout "$timeout" -test.run "^(${tests})$")
           }
           start=$SECONDS
           run_shard decad.test .github/test-shards.txt .
           run_shard apitest.test .github/test-shards-apitest.txt apitest
           elapsed=$(( SECONDS - start ))
           echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
-          # A soft budget, far below the -timeout above. The suite runs its tests
-          # in parallel, so a balanced shard finishes in a small fraction of this;
-          # crossing it means the recorded costs have drifted, and it says so HERE
-          # rather than months later when a shard finally hits the ceiling and
-          # fails as if a test had hung. Re-measure and regenerate the assignment;
-          # _shardgen/main.go carries the command.
-          if [ "$elapsed" -gt 300 ]; then
-            echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the 300s budget; re-measure and regenerate .github/test-shards.txt and .github/test-shards-apitest.txt (see _shardgen/main.go)"
+          # Shard 0 reserves the measured 60-tooth gear test and has a 2400s
+          # budget below its 45m timeout. Shards 1 and 2 carry the other two
+          # costly gear tests and allow 420s; all other shards retain 300s.
+          # A budget failure reports test-cost drift before a timeout does.
+          # Re-measure and regenerate with the command in _shardgen/main.go.
+          if [ "$elapsed" -gt "$budget" ]; then
+            echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the ${budget}s budget; re-measure and regenerate .github/test-shards.txt and .github/test-shards-apitest.txt (see _shardgen/main.go)"
             exit 1
           fi
 

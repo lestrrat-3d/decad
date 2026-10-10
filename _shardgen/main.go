@@ -49,7 +49,7 @@ import (
 // shardCount is how many race shards the workflow declares. ci_workflow_test.go
 // asserts this equals the number of shard entries in the matrix, so the two
 // cannot drift apart silently.
-const shardCount = 6
+const shardCount = 10
 
 // These tests read the same costly sync.OnceValue table. Putting them in one
 // shard lets the test binary build that table once.
