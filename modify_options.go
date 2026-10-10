@@ -12,7 +12,69 @@ import (
 // validates and folds the options. The reference resolver uses root topology.
 
 // FilletChamferOption is accepted by both Fillet and Chamfer.
-type FilletChamferOption = modifyoption.FilletChamferOption
+type FilletChamferOption interface {
+	FilletOption
+	ChamferOption
+}
+
+type filletChamferOptionValue struct {
+	encoded modifyoption.FilletChamferOption
+}
+type chamferOptionValue struct{ encoded modifyoption.ChamferOption }
+type shellOptionValue struct{ encoded modifyoption.ShellOption }
+
+func (filletChamferOptionValue) filletOption()  {}
+func (filletChamferOptionValue) chamferOption() {}
+func (chamferOptionValue) chamferOption()       {}
+func (shellOptionValue) shellOption()           {}
+
+func decodeFilletOptions(opts []FilletOption) (modifyoption.FilletConfig, error) {
+	encoded := make([]modifyoption.FilletOption, len(opts))
+	for i, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		value, ok := opt.(filletChamferOptionValue)
+		if !ok {
+			return modifyoption.FilletConfig{}, fmt.Errorf(`%w: the fillet option is not a decad fillet option (%T)`, ErrDegenerate, opt)
+		}
+		encoded[i] = value.encoded
+	}
+	return modifyoption.DecodeFillet(encoded)
+}
+
+func decodeChamferOptions(opts []ChamferOption) (modifyoption.ChamferConfig[*FaceQuery], error) {
+	encoded := make([]modifyoption.ChamferOption, len(opts))
+	for i, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		switch value := opt.(type) {
+		case filletChamferOptionValue:
+			encoded[i] = value.encoded
+		case chamferOptionValue:
+			encoded[i] = value.encoded
+		default:
+			return modifyoption.ChamferConfig[*FaceQuery]{}, fmt.Errorf(`%w: the chamfer option is not a decad chamfer option (%T)`, ErrDegenerate, opt)
+		}
+	}
+	return modifyoption.DecodeChamfer[*FaceQuery](encoded)
+}
+
+func decodeShellOptions(opts []ShellOption) (modifyoption.ShellConfig, error) {
+	encoded := make([]modifyoption.ShellOption, len(opts))
+	for i, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		value, ok := opt.(shellOptionValue)
+		if !ok {
+			return modifyoption.ShellConfig{}, fmt.Errorf(`%w: the shell option is not a decad shell option (%T)`, ErrDegenerate, opt)
+		}
+		encoded[i] = value.encoded
+	}
+	return modifyoption.DecodeShell(encoded)
+}
 
 type asymmetricChamferOpts = modifyoption.Asymmetric[*FaceQuery]
 
@@ -26,7 +88,7 @@ type asymmetricChamferOpts = modifyoption.Asymmetric[*FaceQuery]
 // decide, is ErrUnsupported; the call never picks a branch or stops early.
 // Repeating the option is the same as passing it once.
 func WithTangentChain() FilletChamferOption {
-	return modifyoption.WithTangentChain()
+	return filletChamferOptionValue{encoded: modifyoption.WithTangentChain()}
 }
 
 // WithAsymmetricChamfer sets back the chamfer's positional distance across
@@ -56,7 +118,7 @@ func WithAsymmetricChamfer(reference FaceSelector, otherDistance units.Value) Ch
 	default:
 		a.Foreign = fmt.Sprintf(`%T`, reference)
 	}
-	return modifyoption.WithAsymmetricChamfer(a)
+	return chamferOptionValue{encoded: modifyoption.WithAsymmetricChamfer(a)}
 }
 
 // WithNoOpenings asks Shell to keep every face and build a closed hollow body
@@ -65,7 +127,7 @@ func WithAsymmetricChamfer(reference FaceSelector, otherDistance units.Value) Ch
 // ErrDegenerate. No receiver builds a closed shell yet: Shell returns
 // ErrUnsupported for every receiver it accepts the option on.
 func WithNoOpenings() ShellOption {
-	return modifyoption.WithNoOpenings()
+	return shellOptionValue{encoded: modifyoption.WithNoOpenings()}
 }
 
 // resolveAsymmetricReference is stage 3 of the reach gate order: it resolves
