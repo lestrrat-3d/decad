@@ -30,29 +30,16 @@ import (
 // a triangulation of the other, which is why capEnd reuses capStart's
 // triangulation index for index rather than triangulating a second time.
 
-// mitredSection is one loop-major section polygon: vertex v of loop i sits at
-// index loopIdx[i][j].
-type mitredSection []sweepRatVec
-
-// mitredConstruction is §16.3's exact record before placement: every section
-// polygon, the path points and the cap triangulation of P_0.
-type mitredConstruction struct {
-	sections []mitredSection
-	loopIdx  [][]int
-	capTris  [][3]int
-	anchor   sweepRatVec
-}
-
 // constructMitredSweep triangulates the recorded profile once, then adapts
 // its spans to §16.3's exact section construction.
-func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (mitredConstruction, error) {
+func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (sweepmitre.Construction, error) {
 	pts2, loopIdx, err := mitredSweepLoops(mp.profile)
 	if err != nil {
-		return mitredConstruction{}, err
+		return sweepmitre.Construction{}, err
 	}
 	capTris, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts2), loopIdx)
 	if err != nil {
-		return mitredConstruction{}, triangulation.WrapLoftError(err)
+		return sweepmitre.Construction{}, triangulation.WrapLoftError(err)
 	}
 	spans := make([]sweepmitre.Span, len(mp.path.records))
 	for k, record := range mp.path.records {
@@ -60,35 +47,10 @@ func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (mitredCon
 	}
 	built, err := sweepmitre.Construct(ctx, mp.plane, point2ToRecordSlice(pts2), loopIdx, spans, mp.factors)
 	if err != nil {
-		return mitredConstruction{}, err
+		return sweepmitre.Construction{}, err
 	}
-	sections := make([]mitredSection, len(built.Sections))
-	for k, section := range built.Sections {
-		sections[k] = mitredSection(section)
-	}
-	return mitredConstruction{sections: sections, loopIdx: loopIdx, capTris: capTris, anchor: built.Anchor}, nil
-}
-
-// mitredSpanLengthLower is λ_j of §16.3: the lower endpoint of the certified
-// enclosure of the span's length, independent of platform sqrt or FMA.
-func mitredSpanLengthLower(start, end r3.Vec) (*big.Rat, error) {
-	return sweepmitre.SpanLengthLower(start, end)
-}
-
-// mitredRequireWalls enforces SM7 over one span.
-func mitredRequireWalls(k int, loopIdx [][]int, from, to mitredSection) error {
-	return sweepmitre.RequireWalls(k, loopIdx, from, to)
-}
-
-// mitredPlace applies the accumulated placement to a rational point exactly.
-func mitredPlace(xform r3.Transform, p sweepRatVec) sweepRatVec {
-	return sweepmitre.Place(xform, p)
-}
-
-// mitredRound rounds one rational coordinate to its nearest float and
-// returns the exact gap.
-func mitredRound(r *big.Rat) (float64, *big.Rat, bool) {
-	return sweepmitre.Round(r)
+	built.LoopIdx, built.CapTris = loopIdx, capTris
+	return built, nil
 }
 
 // evalMitredSweep builds the body for one payload record: §16.3's exact
@@ -104,57 +66,20 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 		return nil, err
 	}
 
-	stride := len(c.sections[0])
-	exact := make([]sweepRatVec, 0, stride*len(c.sections))
-	var localExact []sweepRatVec
-	if mp.localVol6 == nil && mp.xform != r3.Identity() {
-		localExact = make([]sweepRatVec, 0, cap(exact))
+	placed, err := sweepmitre.PlaceAndRound(c, mp.xform, mp.localVol6 == nil && mp.xform != r3.Identity())
+	if err != nil {
+		return nil, err
 	}
-	for _, section := range c.sections {
-		for _, p := range section {
-			if localExact != nil {
-				localExact = append(localExact, p)
-			}
-			exact = append(exact, mitredPlace(mp.xform, p))
-		}
-	}
-	anchor := mitredPlace(mp.xform, c.anchor)
+	exact, localExact, anchor := placed.Exact, placed.LocalExact, placed.Anchor
+	verts, vertexBound, delta := placed.Rounded, placed.VertexBound, placed.Delta
 
-	// Rounding, once: every vertex to its nearest float per coordinate, with
-	// that vertex's own 3D gap read exactly from its largest coordinate gap and
-	// rounded up (docs/faceted-vertex-bounds-design.md §2.1), and delta the
-	// largest of them.
-	verts := make([]r3.Vec, len(exact))
-	vertexBound := make([]float64, len(exact))
-	delta := 0.0
-	for v, p := range exact {
-		var coords [3]float64
-		worst := new(big.Rat)
-		for axis := range 3 {
-			f, gap, ok := mitredRound(p[axis])
-			if !ok {
-				return nil, fmt.Errorf(`%w: a mitred sweep vertex runs past the representable float64 range`, ErrUnsupported)
-			}
-			coords[axis] = f
-			if gap.Cmp(worst) > 0 {
-				worst = gap
-			}
-		}
-		verts[v] = r3.NewVec(coords[0], coords[1], coords[2])
-		if worst.Sign() != 0 {
-			w, _ := worst.Float64()
-			vertexBound[v] = proofbound.Radius3D(proofbound.ProvenUpRound(w))
-			delta = max(delta, vertexBound[v])
-		}
-	}
-
-	a := assembleMitredSweep(c, stride)
+	a := sweepmitre.Assemble(c, roleCapStart, roleCapEnd)
 	localVol6, localMoments := mp.localVol6, mp.localMoments
 	if localVol6 == nil {
 		if localExact == nil {
 			localExact = exact
 		}
-		localVol6, localMoments = mitredVolumeMoments(localExact, a.tris, c.anchor)
+		localVol6, localMoments = mitredVolumeMoments(localExact, a.Tris, c.Anchor)
 	}
 	vol6, moments := sweepmitre.PlacedVolumeMoments(localVol6, localMoments, mp.xform)
 	switch vol6.Sign() {
@@ -162,28 +87,28 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 		return nil, fmt.Errorf(`%w: the mitred sweep encloses no volume`, ErrDegenerate)
 	case -1:
 		// §16.3's orientation rule: one exact sign for the whole shell.
-		a.reversed = true
-		for t, tri := range a.tris {
-			a.tris[t] = [3]int{tri[0], tri[2], tri[1]}
+		a.Reversed = true
+		for t, tri := range a.Tris {
+			a.Tris[t] = [3]int{tri[0], tri[2], tri[1]}
 		}
 		vol6.Neg(vol6)
 		for axis := range moments {
 			moments[axis].Neg(moments[axis])
 		}
 	}
-	for t, tri := range a.tris {
+	for t, tri := range a.Tris {
 		if loftmesh.TriangleCollapsed(verts, tri) {
-			return nil, fmt.Errorf(`%w: rounding the mitred sweep's vertices collapsed its triangle %d (%s)`, ErrUnsupported, t, a.roles[a.triFace[t]])
+			return nil, fmt.Errorf(`%w: rounding the mitred sweep's vertices collapsed its triangle %d (%s)`, ErrUnsupported, t, a.Roles[a.TriFace[t]])
 		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, a.tris); err != nil {
+	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, a.Tris); err != nil {
 		var contact *loftmesh.LoftContactError
 		if errors.As(err, &contact) {
 			return nil, fmt.Errorf(`%w: mitred sweep faces %s and %s %s`, ErrDegenerate,
-				a.roles[a.triFace[contact.I]], a.roles[a.triFace[contact.J]], contact.Reason)
+				a.Roles[a.TriFace[contact.I]], a.Roles[a.TriFace[contact.J]], contact.Reason)
 		}
 		return nil, err
 	}
@@ -191,7 +116,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 		return nil, err
 	}
 
-	areas, err := mitredTriangleAreas(ctx, exact, a.tris)
+	areas, err := mitredTriangleAreas(ctx, exact, a.Tris)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +153,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 		return nil, fmt.Errorf(`%w: the mitred sweep's area has no finite bound`, ErrUnsupported)
 	}
 
-	mp.exact, mp.verts, mp.tris, mp.triFace, mp.faceRoles, mp.delta = exact, verts, a.tris, a.triFace, a.roles, delta
+	mp.exact, mp.verts, mp.tris, mp.triFace, mp.faceRoles, mp.delta = exact, verts, a.Tris, a.TriFace, a.Roles, delta
 	mp.vertexBound = vertexBound
 	mp.localVol6, mp.localMoments = localVol6, localMoments
 	body.payload = mp
