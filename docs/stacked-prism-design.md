@@ -313,7 +313,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | Consumer | Behaviour |
 |---|---|
 | `Body.Placed` / `Duplicate` / `PlacedCopy` | re-evaluates the payload under the composed motion |
-| later `Cut` with a prism tool | A spanning tool builds when each slab proves a clean cut or no change inside a hole; other tools take the mesh path (§7). |
+| later `Cut` with a prism tool | A spanning tool or a blind tool ending inside a slab builds when each reached slab proves a clean cut or no change inside a hole; other tools take the mesh path (§7). |
 | `Union` with a stacked operand | `docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
 | `Cut` by a prism-group tool | `docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |
 | `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
@@ -348,11 +348,12 @@ Each admitted arm ships its implementation and tests together.
    when a private scene returns both the unchanged material cell and the
    annulus between the existing hole and the tool. A spanning cut on the other
    slabs then builds the same counterbore in the opposite construction order.
-3. **Blind cut on a stacked target (staged).** A tool ending inside a stacked
-   target must split the slab its end falls in and clean-nest in every slab it
-   reaches. An interface with unrelated exclusive holes on both sides needs a
-   private scene proving that the two hole sets occupy separate whole cells.
-   Until that proof and the slab split are built, the pair takes the mesh path.
+3. **Blind cut on a stacked target.** A tool ending strictly inside a slab
+   splits it and proves a clean cut or no change inside a hole in every slab
+   it reaches. The new interface and all earlier ones re-derive their exposed
+   patches; the record audit checks them before evaluation. A tool ending
+   exactly at an existing interface takes the mesh path. Admitting opposed
+   unrelated hole sets there needs a private scene proving their separation.
 4. **Surveys and clearance.** DX7, DX8, DX6 and `analyticBodiesEqual` for the
    stacked payload.
 
@@ -381,7 +382,10 @@ arm64.
 - A tool touching the target only at a cap (zero depth), a tool strictly inside
   both ends (an enclosed void), and a blind tool crossing the outer boundary
   each still take the mesh path with the mesh path's own result.
-- A blind tool on a stacked target takes the mesh path (stage 3 lifts it).
+- Two blind tools ending at different levels build a three-slab analytic
+  result from either face; the mesh and placement retain the volume proof.
+- A blind tool ending exactly at an existing interface takes the mesh path
+  until the opposed-hole proof in stage 3 is built.
 - Level displacement, incoming: a tool whose inner end is a converted magnitude
   (`units.Inches`) publishes a positive axial delta on that end, asserted first
   on the tool so the fixture cannot silently stop exercising it, and the
