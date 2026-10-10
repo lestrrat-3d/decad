@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -40,7 +41,7 @@ import (
 // station commits, composed into delta beside the placement's own
 // proofbound.RigidRoundAllow term.
 func assembleLoft(ctx context.Context, pairs []loftmesh.LoopPair, f0, f1 r3.Frame, plane0 planeRecord, xform r3.Transform, stationRound float64) (loftmesh.Assembly, error) {
-	triangulate := func(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, error) {
+	triangulate := func(ctx context.Context, pts []sectionrecord.Point2, loops [][]int) ([][3]int, error) {
 		tris, err := triangulation.Triangulate(ctx, pts, loops)
 		return tris, triangulation.WrapLoftError(err)
 	}

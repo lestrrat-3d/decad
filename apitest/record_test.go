@@ -13,6 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func recordPoints(points []decad.Point2) []sectionrecord.Point2 {
+	if points == nil {
+		return nil
+	}
+	out := make([]sectionrecord.Point2, len(points))
+	for i, point := range points {
+		out[i] = sectionrecord.Point2(point)
+	}
+	return out
+}
+
 func TestRecordProfileRectangle(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
@@ -91,7 +102,7 @@ func TestRecordProfileCircleHole(t *testing.T) {
 
 	hole, ok := rec.Holes[0].Segments[0].(sectionrecord.CircleSeg)
 	require.True(t, ok, `the hole should record as a CircleSeg, got %T`, rec.Holes[0].Segments[0])
-	require.Equal(t, decad.Point2{U: 50, V: 30}, hole.Center)
+	require.Equal(t, decad.Point2{U: 50, V: 30}, decad.Point2(hole.Center))
 	require.True(t, hole.Radius.Equal(units.Millimeters(10), 1e-9), `the hole radius should be the entity's own 10 mm, got %s`, hole.Radius)
 	// A hole is walked clockwise — against the circle's natural CCW — so the
 	// walk is baked in: CCW false, range order reversed.

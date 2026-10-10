@@ -106,7 +106,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		for i, entry := range slabColumns {
 			columnsInSlab[i] = entry.Column
 		}
-		if err := tessellation.StackedSlabClearance(ctx, rings, columnsInSlab, requireLoopClearance); err != nil {
+		if err := tessellation.StackedSlabClearance(ctx, rings, columnsInSlab, requireRecordLoopClearance); err != nil {
 			return nil, err
 		}
 	}
@@ -123,7 +123,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			}
 		}
 		patch, err := tessellation.StackedPatchTriangles(ctx, rings, patchLoops, reverseFace,
-			requireLoopClearance, triangulation.Triangulate)
+			requireRecordLoopClearance, triangulation.Triangulate)
 		if err != nil {
 			return err
 		}

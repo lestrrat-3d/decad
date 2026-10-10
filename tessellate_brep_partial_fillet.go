@@ -51,7 +51,7 @@ func (bc *brepBandChord) placePartialRings(e brepEmbed,
 		side[c], capPoints[c] = col.Side, col.Cap
 	}
 	points, err := tessellation.FilletRingGeometry(tessellation.FilletRingInput{
-		Side: side, Cap: capPoints, Radius: bc.band.setback.dc,
+		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(capPoints), Radius: bc.band.setback.dc,
 		RadiusDelta: bc.band.setback.dcDelta, CapLevel: bc.face.z0,
 		CapLevelDelta: bc.face.z0Delta, SideLevel: bc.sideZ,
 		MaterialSign: bc.band.matSign(bc.face), Count: n,

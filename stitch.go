@@ -854,7 +854,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 				reverseIntSlice(loopIdx[li])
 			}
 		}
-		tris2D, err := triangulation.Triangulate(ctx, pts, loopIdx)
+		tris2D, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts), loopIdx)
 		if err != nil {
 			return nil, nil, err
 		}

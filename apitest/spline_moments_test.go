@@ -164,7 +164,7 @@ func requireSingleRounding(t *testing.T, exact *big.Rat, value, bound float64) {
 func nurbsEdge(a, b decad.Point2) sectionrecord.NURBSSeg {
 	return sectionrecord.NURBSSeg{
 		Degree:  1,
-		Control: []decad.Point2{a, b},
+		Control: recordPoints([]decad.Point2{a, b}),
 		Knots:   []float64{0, 0, 1, 1},
 		Weights: []float64{1, 1},
 		TStart:  0,
@@ -234,7 +234,7 @@ func TestDenseNURBSRecordRefusesWithinBudget(t *testing.T) {
 		knots = append(knots, 1)
 	}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1},
+		sectionrecord.NURBSSeg{Degree: degree, Control: recordPoints(control), Knots: knots, Weights: weights, TStart: 0, TEnd: 1},
 	}}}
 
 	start := time.Now()
@@ -266,12 +266,12 @@ func TestBrokenNURBSKnotVectorRefuses(t *testing.T) {
 		return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 			sectionrecord.NURBSSeg{
 				Degree: 3,
-				Control: []decad.Point2{
+				Control: recordPoints([]decad.Point2{
 					{U: 0, V: 0}, {U: third, V: 0}, {U: 2 * third, V: 0}, {U: 1, V: 0},
 					joint, {U: 1, V: third}, {U: 1, V: 2 * third}, {U: 1, V: 1},
 					{U: 1, V: 1}, {U: 2 * third, V: 1}, {U: third, V: 1}, {U: 0, V: 1},
 					{U: 0, V: 1}, {U: 0, V: 2 * third}, {U: 0, V: third}, {U: 0, V: 0},
-				},
+				}),
 				Knots: []float64{
 					0, 0, 0, 0,
 					0.25, 0.25, 0.25, 0.25,
@@ -333,7 +333,7 @@ func TestOverClampedNURBSRefusesAsUnsupported(t *testing.T) {
 	t.Parallel()
 	segment := sectionrecord.NURBSSeg{
 		Degree:  2,
-		Control: []decad.Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}},
+		Control: recordPoints([]decad.Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}}),
 		Knots:   []float64{0, 0, 0, 0, 1, 1, 1},
 		Weights: []float64{1, 1, 1, 1},
 		TStart:  0,
@@ -422,7 +422,7 @@ func TestOverBudgetFreeformRefusesBeforeSketchSampling(t *testing.T) {
 		knots = append(knots, 1)
 	}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1},
+		sectionrecord.NURBSSeg{Degree: degree, Control: recordPoints(control), Knots: knots, Weights: weights, TStart: 0, TEnd: 1},
 	}}}
 
 	start := time.Now()
@@ -517,14 +517,14 @@ func TestOverBudgetConversionRefusesBeforeLifting(t *testing.T) {
 			name:     "spline",
 			controls: 200000,
 			segment: func(control []decad.Point2) sectionrecord.CurveSegment {
-				return sectionrecord.SplineSeg{Control: control, TStart: 0, TEnd: 1}
+				return sectionrecord.SplineSeg{Control: recordPoints(control), TStart: 0, TEnd: 1}
 			},
 		},
 		{
 			name:     "closed spline",
 			controls: 300000,
 			segment: func(control []decad.Point2) sectionrecord.CurveSegment {
-				return sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+				return sectionrecord.ClosedSplineSeg{Control: recordPoints(control), CCW: true, TStart: 0, TEnd: 1}
 			},
 		},
 	} {
@@ -606,7 +606,7 @@ func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
 			angle := 2 * math.Pi * float64(j) / 3
 			control[j] = decad.Point2{U: float64(i)*20 + 3*math.Cos(angle), V: 3 * math.Sin(angle)}
 		}
-		segments[i] = sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+		segments[i] = sectionrecord.ClosedSplineSeg{Control: recordPoints(control), CCW: true, TStart: 0, TEnd: 1}
 	}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 
@@ -639,7 +639,7 @@ func TestAnalyticChordsAreCharged(t *testing.T) {
 		})
 	}
 	segments = append(segments, sectionrecord.SplineSeg{
-		Control: []decad.Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}},
+		Control: recordPoints([]decad.Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}}),
 		TStart:  0, TEnd: 1,
 	})
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
@@ -688,12 +688,12 @@ func TestPlanStorageFollowsConvertedSegments(t *testing.T) {
 			segment: func(index int) sectionrecord.CurveSegment {
 				base := float64(index)
 				return sectionrecord.SplineSeg{
-					Control: []decad.Point2{
+					Control: recordPoints([]decad.Point2{
 						{U: base},
 						{U: base + 1, V: 1},
 						{U: base + 2, V: 1},
 						{U: base + 3},
-					},
+					}),
 					TStart: 0, TEnd: 1,
 				}
 			},
@@ -896,7 +896,7 @@ func closedSplineSegmentOf(controls int, radius float64) sectionrecord.ClosedSpl
 		angle := 2 * math.Pi * float64(i) / float64(controls)
 		control[i] = decad.Point2{U: radius * math.Cos(angle), V: radius * math.Sin(angle)}
 	}
-	return sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+	return sectionrecord.ClosedSplineSeg{Control: recordPoints(control), CCW: true, TStart: 0, TEnd: 1}
 }
 
 // A caller can hand a degree-1 NURBS segment millions of control points and no
@@ -921,7 +921,7 @@ func TestMalformedNURBSRefusesBeforeScanningControls(t *testing.T) {
 		control[i] = decad.Point2{U: float64(i), V: float64(i % 3)}
 	}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.NURBSSeg{Degree: 1, Control: control, TStart: 0, TEnd: 1},
+		sectionrecord.NURBSSeg{Degree: 1, Control: recordPoints(control), TStart: 0, TEnd: 1},
 	}}}
 
 	var err error
@@ -993,23 +993,23 @@ func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
 	}{
 		{
 			name:    "spline NaN start",
-			segment: sectionrecord.SplineSeg{Control: control, TStart: math.NaN(), TEnd: 1},
+			segment: sectionrecord.SplineSeg{Control: recordPoints(control), TStart: math.NaN(), TEnd: 1},
 		},
 		{
 			name:    "spline Inf end",
-			segment: sectionrecord.SplineSeg{Control: control, TStart: 0, TEnd: math.Inf(1)},
+			segment: sectionrecord.SplineSeg{Control: recordPoints(control), TStart: 0, TEnd: math.Inf(1)},
 		},
 		{
 			name: "closed spline NaN end",
 			segment: sectionrecord.ClosedSplineSeg{
-				Control: []decad.Point2{{}, {U: 4}, {U: 2, V: 3}}, CCW: true,
+				Control: recordPoints([]decad.Point2{{}, {U: 4}, {U: 2, V: 3}}), CCW: true,
 				TStart: 0, TEnd: math.NaN(),
 			},
 		},
 		{
 			name: "NURBS NaN start",
 			segment: sectionrecord.NURBSSeg{
-				Degree: 1, Control: []decad.Point2{{}, {U: 1}},
+				Degree: 1, Control: recordPoints([]decad.Point2{{}, {U: 1}}),
 				Knots: []float64{0, 0, 1, 1}, Weights: []float64{1, 1},
 				TStart: math.NaN(), TEnd: 1,
 			},
@@ -1067,7 +1067,7 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 			control[i] = decad.Point2{U: c[0], V: c[1]}
 		}
 		return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-			sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: tStart, TEnd: tEnd},
+			sectionrecord.ClosedSplineSeg{Control: recordPoints(control), CCW: true, TStart: tStart, TEnd: tEnd},
 		}}}
 	}
 	nurbs := func(tStart, tEnd float64) momentinput.Profile {
@@ -1223,7 +1223,7 @@ func TestEqualWeightNURBSMeasuresAtEveryMagnitude(t *testing.T) {
 			record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 				sectionrecord.NURBSSeg{
 					Degree:  1,
-					Control: square,
+					Control: recordPoints(square),
 					Knots:   []float64{0, 0, 0.25, 0.5, 0.75, 1, 1},
 					Weights: weights,
 					TStart:  0,
@@ -1259,7 +1259,7 @@ func TestUnderflowingSplineAreaPublishesBoundedZero(t *testing.T) {
 		control[i] = decad.Point2{U: c[0], V: c[1]}
 	}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
+		sectionrecord.ClosedSplineSeg{Control: recordPoints(control), CCW: true, TStart: 0, TEnd: 1},
 	}}}
 
 	area, err := record.Area()
@@ -1286,7 +1286,7 @@ func TestUnderflowingSplineCentroidDividesExactly(t *testing.T) {
 		control[i] = decad.Point2{U: c[0] * scale, V: c[1] * scale}
 	}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
+		sectionrecord.ClosedSplineSeg{Control: recordPoints(control), CCW: true, TStart: 0, TEnd: 1},
 	}}}
 
 	area, err := record.Area()
@@ -1357,7 +1357,7 @@ func TestDegenerateSplineRecordRefuses(t *testing.T) {
 	same := decad.Point2{U: 3, V: 3}
 	record := momentinput.Profile{
 		Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-			sectionrecord.ClosedSplineSeg{Control: []decad.Point2{same, same, same}, CCW: true, TStart: 0, TEnd: 1},
+			sectionrecord.ClosedSplineSeg{Control: recordPoints([]decad.Point2{same, same, same}), CCW: true, TStart: 0, TEnd: 1},
 		}},
 	}
 	_, err := record.Area()

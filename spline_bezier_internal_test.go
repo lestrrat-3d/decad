@@ -117,7 +117,7 @@ func TestSplineBezierMatchesGeomEvaluator(t *testing.T) {
 		coords[i] = [2]float64{point.U, point.V}
 	}
 
-	spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+	spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: point2ToRecordSlice(control), TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	require.Len(t, spans, len(control)-3, "a clamped cubic over n controls has n-3 spans")
 
@@ -227,7 +227,7 @@ func TestSplineBezierSpansUseSketchFloatKnots(t *testing.T) {
 				knots[i] = polynomial.MustRatOf(knot)
 			}
 
-			spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
+			spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: point2ToRecordSlice(control), TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 			require.NoError(t, err)
 			require.Len(t, spans, controls-3)
 
@@ -260,7 +260,7 @@ func TestClosedSplineBezierMatchesGeomEvaluator(t *testing.T) {
 	}
 
 	spans, err := splinebezier.ClosedSplineBezierSpans(
-		closedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
+		closedSplineSeg{Control: point2ToRecordSlice(control), CCW: true, TStart: 0, TEnd: 1},
 		&freeform.FreeformWork{},
 	)
 	require.NoError(t, err)
@@ -291,7 +291,7 @@ func TestNURBSBezierMatchesGeomEvaluator(t *testing.T) {
 
 	spans, err := splinebezier.NURBSBezierSpans(nurbsSeg{
 		Degree:  3,
-		Control: control,
+		Control: point2ToRecordSlice(control),
 		Knots:   knots,
 		Weights: weights,
 		TStart:  0,
@@ -319,7 +319,7 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 		{
 			name: "trimmed fit spline",
 			segment: fitSplineSeg{
-				Fit:    []Point2{{}, {U: 1, V: 1}, {U: 2}},
+				Fit:    point2ToRecordSlice([]Point2{{}, {U: 1, V: 1}, {U: 2}}),
 				TStart: 0.25, TEnd: 0.75,
 			},
 			message: "full domain",
@@ -340,7 +340,7 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 		{
 			name: "trimmed spline",
 			segment: splineSeg{
-				Control: []Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}},
+				Control: point2ToRecordSlice([]Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}}),
 				TStart:  0.25, TEnd: 0.75,
 			},
 			message: "full domain",
@@ -359,7 +359,7 @@ func rationalNURBSFixture() nurbsSeg {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
 	return nurbsSeg{
 		Degree:  3,
-		Control: control,
+		Control: point2ToRecordSlice(control),
 		Knots:   []float64{0, 0, 0, 0, 1, 1, 1, 1},
 		Weights: []float64{1, 2, 1, 1},
 		TStart:  0,
@@ -441,7 +441,7 @@ func wellFormedDegreeOneNURBS(controls int) nurbsSeg {
 		knots = append(knots, float64(j)/float64(interior+1))
 	}
 	knots = append(knots, 1, 1)
-	return nurbsSeg{Degree: 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	return nurbsSeg{Degree: 1, Control: point2ToRecordSlice(control), Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 }
 
 // The size-derived lift charge must be levied BEFORE the per-element content
@@ -586,33 +586,33 @@ func TestReconstructionChordsRestateSketchSampling(t *testing.T) {
 		},
 		{
 			name:    "three-control closed spline floors at 64",
-			segment: closedSplineSeg{Control: controls(3), CCW: true},
+			segment: closedSplineSeg{Control: point2ToRecordSlice(controls(3)), CCW: true},
 			want:    64,
 		},
 		{
 			name:    "large closed spline is 16 per control",
-			segment: closedSplineSeg{Control: controls(100), CCW: true},
+			segment: closedSplineSeg{Control: point2ToRecordSlice(controls(100)), CCW: true},
 			want:    1600,
 		},
 		{
 			name:    "open spline is 16 per span",
-			segment: splineSeg{Control: controls(100)},
+			segment: splineSeg{Control: point2ToRecordSlice(controls(100))},
 			want:    16 * 97,
 		},
 		{
 			name:    "four-control open spline floors at 64",
-			segment: splineSeg{Control: controls(4)},
+			segment: splineSeg{Control: point2ToRecordSlice(controls(4))},
 			want:    64,
 		},
 		{
 			name: "NURBS is 16 per control",
 			segment: nurbsSeg{
-				Degree: 1, Control: controls(100),
+				Degree: 1, Control: point2ToRecordSlice(controls(100)),
 				Knots: make([]float64, 102), Weights: make([]float64, 100),
 			},
 			want: 1600,
 		},
-		{name: "fit spline is 16 per fit point", segment: fitSplineSeg{Fit: controls(100)}, want: 1600},
+		{name: "fit spline is 16 per fit point", segment: fitSplineSeg{Fit: point2ToRecordSlice(controls(100))}, want: 1600},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, momentinput.ReconstructionChords(tc.segment))
@@ -627,7 +627,7 @@ func TestReconstructionChordsRestateSketchSampling(t *testing.T) {
 func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 4, V: 0}, {U: 2, V: 3}}
-	one := closedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+	one := closedSplineSeg{Control: point2ToRecordSlice(control), CCW: true, TStart: 0, TEnd: 1}
 
 	single := momentinput.ReconstructionOf(profileRecord{Outer: loopRecord{Segments: []curveSegment{one}}})
 	require.Equal(t, uint64(64), single.Chords)
@@ -777,7 +777,7 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 	t.Run("continuous", func(t *testing.T) {
 		// The two one-sided limits at every break are the same recorded point, so
 		// the four cubic pieces meet: one connected curve this slicer cannot cut.
-		ctrl, err := splinebezier.RatPointsOf(squareControls(Point2{U: 1, V: 0}))
+		ctrl, err := splinebezier.RatPointsOf(point2ToRecordSlice(squareControls(Point2{U: 1, V: 0})))
 		require.NoError(t, err)
 		knots := quarterKnots()
 		require.Len(t, knots, len(ctrl)+3+1)
@@ -791,7 +791,7 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 	t.Run("discontinuous", func(t *testing.T) {
 		// Move the first break's right-hand limit away from its left-hand one and
 		// the curve genuinely jumps there.
-		ctrl, err := splinebezier.RatPointsOf(squareControls(Point2{U: 1.5, V: 0}))
+		ctrl, err := splinebezier.RatPointsOf(point2ToRecordSlice(squareControls(Point2{U: 1.5, V: 0})))
 		require.NoError(t, err)
 
 		_, err = freeform.ClampedBezierSpans(3, ctrl, quarterKnots())
@@ -804,7 +804,7 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 		// A degree-2 vector clamped one repeat too far at the start: a single
 		// quadratic Bézier with one dead control point, continuous everywhere, but
 		// 3 control points do not stride into whole degree-2 spans.
-		ctrl, err := splinebezier.RatPointsOf([]Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}})
+		ctrl, err := splinebezier.RatPointsOf(point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}}))
 		require.NoError(t, err)
 		knots := []*big.Rat{
 			new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat),
@@ -839,7 +839,7 @@ func TestUnchargedKnotProbesRefuse(t *testing.T) {
 		knots = append(knots, float64(j)/float64(interior+1))
 	}
 	knots = append(knots, 1, 1)
-	seg := nurbsSeg{Degree: 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	seg := nurbsSeg{Degree: 1, Control: point2ToRecordSlice(control), Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
 
 	start := time.Now()
@@ -885,7 +885,7 @@ func TestWideSpanIntegrationRefusesBeforeExpanding(t *testing.T) {
 	for range degree + 1 {
 		knots = append(knots, 1)
 	}
-	seg := nurbsSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	seg := nurbsSeg{Degree: degree, Control: point2ToRecordSlice(control), Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
 
 	spans, _, err := splinebezier.FreeformBezierSpans(seg, &freeform.FreeformWork{})

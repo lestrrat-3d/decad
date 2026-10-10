@@ -100,7 +100,7 @@ func TestSideOpeningRegionsUChannel(t *testing.T) {
 		require.Equal(t, []Point2{pt(0, -2), pt(40, -2), pt(40, 0), pt(0, 0)}, internalLoopPoints(t, sec.Wall.Outer))
 		require.Equal(t, []Point2{pt(0, -2), pt(40, -2), pt(40, 20), pt(0, 20)}, internalLoopPoints(t, sec.Caps.Outer))
 		require.Equal(t, pp.profile, sec.Cavity)
-		require.ElementsMatch(t, []Point2{pt(0, 0), pt(40, 0)}, sec.Corners)
+		require.ElementsMatch(t, []Point2{pt(0, 0), pt(40, 0)}, point2FromRecordSlice(sec.Corners))
 		require.Zero(t, sec.Delta)
 	})
 }
@@ -121,7 +121,7 @@ func TestSideOpeningRegionsLPrism(t *testing.T) {
 	area, err := loopSignedAreaCB(sec.Cavity.Outer)
 	require.NoError(t, err)
 	require.Equal(t, 316.0, area)
-	require.Equal(t, []Point2{pt(10, 10)}, sec.Corners)
+	require.Equal(t, []Point2{pt(10, 10)}, point2FromRecordSlice(sec.Corners))
 	require.Zero(t, sec.Delta)
 }
 
@@ -242,7 +242,7 @@ func TestSideOpeningRegionsOblique(t *testing.T) {
 		internalNear(t, caps[4], rat(3, 1), rat(27, 4), sec.Delta)
 		cavity := internalLoopPoints(t, sec.Cavity.Outer)
 		require.Equal(t, []Point2{caps[4], pt(3, 3), caps[3]}, cavity)
-		require.ElementsMatch(t, []Point2{pt(12, 0), pt(0, 9)}, sec.Corners)
+		require.ElementsMatch(t, []Point2{pt(12, 0), pt(0, 9)}, point2FromRecordSlice(sec.Corners))
 	})
 	t.Run("slanted reflex end", func(t *testing.T) {
 		t.Parallel()
@@ -259,7 +259,7 @@ func TestSideOpeningRegionsOblique(t *testing.T) {
 		require.Equal(t, pt(14, 10), cavity[6], "R' turns at the corner it runs back through")
 		caps := internalLoopPoints(t, sec.Caps.Outer)
 		require.Equal(t, []Point2{pt(10, 30), pt(0, 30), pt(0, 0), pt(30, 0), pt(30, 10), pt(14, 10), cavity[0]}, caps)
-		require.ElementsMatch(t, []Point2{pt(14, 10), pt(10, 30)}, sec.Corners)
+		require.ElementsMatch(t, []Point2{pt(14, 10), pt(10, 30)}, point2FromRecordSlice(sec.Corners))
 	})
 }
 
@@ -460,7 +460,7 @@ func TestSideOpeningRegionsDSection(t *testing.T) {
 		b, a := rims(t, sec)
 		require.Equal(t, 0.0, b.TStart, "the rim at (0, −5) starts at the arc's own start")
 		require.Equal(t, 1.0, a.TEnd, "the rim at (0, 5) ends at the arc's own end")
-		require.ElementsMatch(t, []Point2{pt(0, -5), pt(0, 5)}, sec.Corners, "both end vertices on the removed arc are marked")
+		require.ElementsMatch(t, []Point2{pt(0, -5), pt(0, 5)}, point2FromRecordSlice(sec.Corners), "both end vertices on the removed arc are marked")
 		require.Zero(t, sec.Delta, "the exact cuts enclose to their held floats")
 		require.Positive(t, sec.CutGap, "the cut parameter is a float")
 		internalCutWithin(t, b, b.TEnd, big.NewRat(3, 1), -1, 16, sec.CutGap)
@@ -630,7 +630,7 @@ func TestSideOpeningRegionsArcExtension(t *testing.T) {
 		t.Helper()
 		arc, ok := sec.Caps.Outer.Segments[0].(arcSeg)
 		require.True(t, ok, "O opens with the offset arc")
-		require.Equal(t, Point2{}, arc.Center)
+		require.Equal(t, Point2{}, Point2(arc.Center))
 		from, to, ok := offset2d.WalkedEnds(arc)
 		require.True(t, ok)
 		return from, to

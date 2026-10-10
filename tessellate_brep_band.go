@@ -114,7 +114,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 				FaceEmbed: e, WallEmbed: topo.embeds[u.Face],
 				WallSegment: wallFace.wall, WallWalk: topo.walls[u.Face],
 				WalkIndex: i, SideLevel: sideZ, WallHeight: wallFace.z1 - wallFace.z0,
-				Counts: lm.count, SideStarts: lm.sideStart, SidePoints: lm.sidePts,
+				Counts: lm.count, SideStarts: lm.sideStart, SidePoints: point2ToRecordSlice(lm.sidePts),
 				SideBounds: lm.sideBound, SideSag: lm.sideSag,
 			})
 			if err != nil {

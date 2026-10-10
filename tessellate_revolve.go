@@ -252,10 +252,10 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// chord pair — across loops and WITHIN one loop — clear of the two sagitta
 	// tubes the analytic-to-chord homotopy moves inside.
 	sectionPts, sectionLoops, sectionSag := revolvesampling.SectionPoints(meridianSamples)
-	if err := requireLoopClearance(ctx, sectionPts, sectionLoops, revolveproof.LoopMaxSagitta(sectionSag)); err != nil {
+	if err := requireRecordLoopClearance(ctx, sectionPts, sectionLoops, revolveproof.LoopMaxSagitta(sectionSag)); err != nil {
 		return nil, revolveSectionRetry(loopMesh, err)
 	}
-	if err := requireWalkClearance(ctx, sectionPts, sectionLoops, sectionSag); err != nil {
+	if err := requireRecordWalkClearance(ctx, sectionPts, sectionLoops, sectionSag); err != nil {
 		return nil, revolveSectionRetry(loopMesh, err)
 	}
 

@@ -5,13 +5,38 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
-// Structural curve records stay in internal packages. These aliases keep the
+// Structural curve records stay in internal packages. Their aliases keep the
 // evaluator's local names short without adding them to decad's public API.
 
 type planeRecord = sectionrecord.PlaneRecord
 
 // Point2 is a plane-local coordinate in millimetres.
-type Point2 = sectionrecord.Point2
+type Point2 struct {
+	U float64 `json:"u"`
+	V float64 `json:"v"`
+}
+
+func point2FromRecordSlice(points []sectionrecord.Point2) []Point2 {
+	if points == nil {
+		return nil
+	}
+	out := make([]Point2, len(points))
+	for i, point := range points {
+		out[i] = point
+	}
+	return out
+}
+
+func point2ToRecordSlice(points []Point2) []sectionrecord.Point2 {
+	if points == nil {
+		return nil
+	}
+	out := make([]sectionrecord.Point2, len(points))
+	for i, point := range points {
+		out[i] = point
+	}
+	return out
+}
 
 type profileRecord = momentinput.Profile
 
