@@ -38,12 +38,12 @@ type QuantityVec = sweeppath.QuantityVec
 type RigidDriftSegment = sweeppath.RigidDriftSegment
 
 // SweepStartPolicy selects what to prove when the bodies initially touch.
-type SweepStartPolicy = reportvocab.SweepStartPolicy
+type SweepStartPolicy int
 
 const (
-	StopAtInitialContact    = reportvocab.StopAtInitialContact
-	ContinueSeparatingTouch = reportvocab.ContinueSeparatingTouch
-	ContinueCertifiedTouch  = reportvocab.ContinueCertifiedTouch
+	StopAtInitialContact SweepStartPolicy = iota
+	ContinueSeparatingTouch
+	ContinueCertifiedTouch
 )
 
 // SweepRequest bounds the time search and the contact geometry resolution.
@@ -54,7 +54,13 @@ const (
 // rises, on both sides of the plane, as it holds a contact vertex (§10.8), so
 // the track does not end where that vertex's lower height bound reaches the
 // plane. A departure rests nothing.
-type SweepRequest = reportvocab.SweepRequest
+type SweepRequest struct {
+	ContactRequest
+	TimeResolution     units.Value
+	MaxPoseEvaluations uint64
+	StartPolicy        SweepStartPolicy
+	RestSpeed          units.Value
+}
 
 // validateRestSpeed checks SweepRequest.RestSpeed as validateSupportBand
 // checks the band: the zero Value, or a finite, nonnegative Velocity.
@@ -99,19 +105,19 @@ const (
 )
 
 // SweepCause explains why a continuous claim was not proved.
-type SweepCause = reportvocab.SweepCause
+type SweepCause int
 
 const (
-	SweepNoCause              = reportvocab.SweepNoCause
-	SweepPoseRelation         = reportvocab.SweepPoseRelation
-	SweepMissingBound         = reportvocab.SweepMissingBound
-	SweepTimeFloor            = reportvocab.SweepTimeFloor
-	SweepFractionFloor        = reportvocab.SweepFractionFloor
-	SweepPoseBudget           = reportvocab.SweepPoseBudget
-	SweepContactUnsupported   = reportvocab.SweepContactUnsupported
-	SweepDepartureUnproved    = reportvocab.SweepDepartureUnproved
-	SweepContactTrackUnproved = reportvocab.SweepContactTrackUnproved
-	SweepEventUnrepresentable = reportvocab.SweepEventUnrepresentable
+	SweepNoCause SweepCause = iota
+	SweepPoseRelation
+	SweepMissingBound
+	SweepTimeFloor
+	SweepFractionFloor
+	SweepPoseBudget
+	SweepContactUnsupported
+	SweepDepartureUnproved
+	SweepContactTrackUnproved
+	SweepEventUnrepresentable
 )
 
 // SweepInstant identifies a dyadic fraction of the requested duration.
