@@ -1295,7 +1295,7 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 		Clearance:   scalarReadingPtrFromInternal(c.Clearance),
 		Assessment:  c.Assessment,
 		Diagnostics: diagnosticsFromInternal(c.Diagnostics),
-		Status:      c.Status,
+		Status:      Status(c.Status),
 	}
 	for _, mv := range r.movers {
 		report.Moving = append(report.Moving, mv.body)

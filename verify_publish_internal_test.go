@@ -630,7 +630,7 @@ func TestVerifyPublishToleranceReferenceUnavailable(t *testing.T) {
 	require.Nil(t, tr.Limit)
 	require.NotNil(t, diag)
 	require.Equal(t, DiagToleranceReferenceUnavailable, diag.Code)
-	require.Equal(t, Suspect, diag.Status)
+	require.Equal(t, Suspect, Status(diag.Status))
 	require.Equal(t, SurveyWall, diag.Survey)
 	require.Same(t, body, diag.Body)
 	require.Nil(t, diag.Required)

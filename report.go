@@ -1,6 +1,8 @@
 package decad
 
 import (
+	"fmt"
+
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/units"
 )
@@ -9,7 +11,27 @@ import (
 // The verdict rules are in docs/verification-design.md §1-§3.
 
 // Status is a verification verdict. See docs/verification-design.md §6.
-type Status = reportvocab.Status
+type Status int
+
+// String renders the verdict name.
+func (s Status) String() string {
+	switch s {
+	case Unverified:
+		return "Unverified"
+	case Sound:
+		return "Sound"
+	case Suspect:
+		return "Suspect"
+	case Violating:
+		return "Violating"
+	case Interfering:
+		return "Interfering"
+	case Unsound:
+		return "Unsound"
+	default:
+		return fmt.Sprintf("Status(%d)", int(s))
+	}
+}
 
 // ReadingKind names the bounded quantity carried by a diagnostic.
 type ReadingKind = reportvocab.ReadingKind
@@ -21,12 +43,15 @@ type SurveyKind = reportvocab.SurveyKind
 type DiagnosticCode = reportvocab.DiagnosticCode
 
 const (
-	Unverified                        = reportvocab.Unverified
-	Sound                             = reportvocab.Sound
-	Suspect                           = reportvocab.Suspect
-	Violating                         = reportvocab.Violating
-	Interfering                       = reportvocab.Interfering
-	Unsound                           = reportvocab.Unsound
+	Unverified Status = iota
+	Sound
+	Suspect
+	Violating
+	Interfering
+	Unsound
+)
+
+const (
 	ReadingNone                       = reportvocab.ReadingNone
 	ReadingArea                       = reportvocab.ReadingArea
 	ReadingBounds                     = reportvocab.ReadingBounds
@@ -101,7 +126,7 @@ type Clearance struct {
 
 func diagnosticFromInternal(in reportvocab.Diagnostic[*Body, JointCell]) Diagnostic {
 	out := Diagnostic{
-		Code: in.Code, Status: in.Status, Body: in.Body,
+		Code: in.Code, Status: Status(in.Status), Body: in.Body,
 		Survey: in.Survey, Reading: in.Reading,
 		Observed:    measurementPtrFromInternal(in.Observed),
 		ObservedVec: vecMeasurementPtrFromInternal(in.ObservedVec),
@@ -115,7 +140,7 @@ func diagnosticFromInternal(in reportvocab.Diagnostic[*Body, JointCell]) Diagnos
 }
 func diagnosticToInternal(in Diagnostic) reportvocab.Diagnostic[*Body, JointCell] {
 	out := reportvocab.Diagnostic[*Body, JointCell]{
-		Code: in.Code, Status: in.Status, Body: in.Body,
+		Code: in.Code, Status: reportvocab.Status(in.Status), Body: in.Body,
 		Survey: in.Survey, Reading: in.Reading,
 		Observed:    measurementPtrToInternal(in.Observed),
 		ObservedVec: vecMeasurementPtrToInternal(in.ObservedVec),
