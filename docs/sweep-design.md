@@ -437,7 +437,7 @@ withholds the reference and prevents a false `Sound` report.
 | **D5** | clearance | box separation may settle the partition, but `WithClearances` stays `Suspect` until a sweep boundary adapter lands |
 | **D6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload` until non-constant-section proofs land |
 | **D7** | `Placed`, `Duplicate`, `PlacedCopy` | re-evaluates the payload under the composed rigid motion and reruns the global audit; every displacement and measurement is recomputed |
-| **D8** | modify operations | `ErrUnsupported`; Table R in `docs/modify-design.md` has no `sweepPayload` receiver row |
+| **D8** | Fillet, Chamfer and Shell | `ErrUnsupported`; Table R in `docs/modify-design.md` has no `sweepPayload` receiver row. A one-span sweep sheet takes `Thicken` through its reduction (`docs/surface-design.md` §16.8) |
 
 The tessellator shares one profile station chain across adjacent path spans and
 one path station chain across adjacent profile patches. It never builds each

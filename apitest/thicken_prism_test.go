@@ -72,6 +72,85 @@ func TestThickenPrismRectangle(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
+func TestThickenStraightSweepSheetBuildsReplayableSolid(t *testing.T) {
+	t.Parallel()
+	s, profile := plateSketch(t)
+	doc := decad.New()
+	sheet, err := doc.Sweep(t.Context(), s, profile, sweepLinePath(t), decad.WithSurfaceResult())
+	require.NoError(t, err)
+	solid, err := sheet.Thicken(t.Context(), units.Millimeters(1),
+		decad.WithThickenSide(decad.ThickenNegative))
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySolid, solid.Kind())
+	decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(3160), decadtest.Exactly())
+	requireManifold(t, solid)
+	require.NotNil(t, faceByRole(t, solid, "side(0,0,0)"))
+	require.NotNil(t, faceByRole(t, solid, "side(0,1,0)"))
+	mesh, err := solid.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	for _, face := range mesh.SourceFaces() {
+		require.Contains(t, solid.Faces(), face)
+	}
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	bodyReport, err := report.ForBody(solid)
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, bodyReport.Status)
+	replay, err := solid.Duplicate(t.Context())
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, replay, units.CubicMillimeters(3160), decadtest.Exactly())
+	require.NotNil(t, faceByRole(t, replay, "side(0,1,0)"))
+	_, err = sheet.Thicken(t.Context(), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrRetiredBody)
+}
+
+func TestThickenStraightSweepSheetSidesMatchExtrude(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		side decad.ThickenSide
+	}{
+		{"positive", decad.ThickenPositive},
+		{"negative", decad.ThickenNegative},
+		{"centered", decad.ThickenCentered},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s, profile := plateSketch(t)
+			sweepSheet, err := decad.New().Sweep(t.Context(), s, profile, sweepLinePath(t),
+				decad.WithSurfaceResult())
+			require.NoError(t, err)
+			extrudeSheet, err := decad.New().Extrude(s, profile,
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+			require.NoError(t, err)
+			got, err := sweepSheet.Thicken(t.Context(), units.Millimeters(2), decad.WithThickenSide(tc.side))
+			require.NoError(t, err)
+			want, err := extrudeSheet.Thicken(t.Context(), units.Millimeters(2), decad.WithThickenSide(tc.side))
+			require.NoError(t, err)
+			gotVolume, err := got.Volume()
+			require.NoError(t, err)
+			wantVolume, err := want.Volume()
+			require.NoError(t, err)
+			require.Equal(t, wantVolume, gotVolume)
+			gotArea, err := got.Area()
+			require.NoError(t, err)
+			wantArea, err := want.Area()
+			require.NoError(t, err)
+			require.Equal(t, wantArea, gotArea)
+			gotMesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			wantMesh, err := want.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			require.Equal(t, wantMesh.Vertices(), gotMesh.Vertices())
+			require.Equal(t, wantMesh.Triangles(), gotMesh.Triangles())
+			require.Equal(t, wantMesh.Bound(), gotMesh.Bound())
+			require.True(t, gotMesh.VolumeVerified())
+		})
+	}
+}
+
 func TestThickenPrismRectangleRoundedSides(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -188,18 +267,21 @@ func TestThickenPrismUnrepresentablePublicOffset(t *testing.T) {
 	require.Len(t, doc.Bodies(), 1)
 }
 
-// TestThickenStagedFamiliesRefuse is T157: a sweep sheet and a loft sheet
-// carry no admitted Thicken generator, so each refuses at the call and each
-// stays live with its own readings.
+// TestThickenStagedFamiliesRefuse is T157: a composite sweep sheet needs an
+// offset-join proof, and a loft sheet has no constant section to offset.
 func TestThickenStagedFamiliesRefuse(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sweepSheet, err := doc.Sweep(t.Context(), s, p, sweepLinePath(t), decad.WithSurfaceResult())
+	path, err := decad.NewPath(r3.Vec{},
+		decad.LineTo{End: r3.NewVec(0, 0, 5)},
+		decad.LineTo{End: r3.NewVec(0, 0, 10)})
+	require.NoError(t, err)
+	sweepSheet, err := doc.Sweep(t.Context(), s, p, path, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	_, err = sweepSheet.Thicken(t.Context(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "no admitted Thicken generator")
+	require.Contains(t, err.Error(), "no admitted Thicken join proof")
 	require.Equal(t, decad.BodySheet, sweepSheet.Kind())
 
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)

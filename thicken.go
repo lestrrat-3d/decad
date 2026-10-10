@@ -43,8 +43,9 @@ func WithThickenSide(side ThickenSide) ThickenOption { return thickenSideOption{
 // builds a certified annular wall around a profile-fed prism sheet, spins a
 // certified meridian annulus through a profile-fed revolve sheet's own
 // interval, or sweeps a ribbon's own assembled section through the ribbon's
-// interval and spins a chain shell's own through the shell's. Other sheet
-// families are staged under docs/surface-design.md §16.8.
+// interval and spins a chain shell's own through the shell's. A one-span
+// sweep sheet uses its prism or revolve reduction and restores sweep roles.
+// Other sheet families are staged under docs/surface-design.md §16.8.
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a thicken`, ErrDegenerate)
@@ -88,6 +89,8 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 		result, err = thickenPrism(ctx, d, payload, side, tmm, tDelta)
 	case revolvePayload:
 		result, err = thickenRevolve(ctx, d, payload, side, tmm, tDelta)
+	case sweepPayload:
+		result, err = thickenSweep(ctx, d, payload, side, tmm, tDelta)
 	case chainPayload:
 		result, err = thickenChainExtrude(ctx, d, payload, side, tmm, tDelta)
 	case chainRevolvePayload:
@@ -106,6 +109,38 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 	}
 	d.commit(result, b)
 	return result, nil
+}
+
+// thickenSweep builds through a one-span sheet's analytic reduction, then
+// publishes the result as a Sweep. The reduced builder proves the offset and
+// solid; the finishing step restores the path's wall and cap roles.
+func thickenSweep(ctx context.Context, d *Document, sp sweepPayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
+	if !sp.surfaceResult || len(sp.spans) != 0 {
+		return nil, fmt.Errorf(`%w: this sweep sheet has no admitted Thicken join proof`, ErrUnsupported)
+	}
+	if sp.arc {
+		body, err := thickenRevolve(ctx, d, sp.revolve, side, tmm, tDelta)
+		if err != nil {
+			return nil, err
+		}
+		built, ok := body.payload.(revolvePayload)
+		if !ok {
+			return nil, fmt.Errorf(`%w: a thickened arc sweep has no revolve reduction`, ErrDegenerate)
+		}
+		sp.revolve = built
+		sp.prism.profile = built.profile
+		sp.prism.xform = built.xform
+		sp.surfaceResult = false
+		finishArcSweepBody(body, sp)
+		return body, nil
+	}
+	body, err := thickenPrism(ctx, d, sp.prism, side, tmm, tDelta)
+	if err != nil {
+		return nil, err
+	}
+	sp.surfaceResult = false
+	finishStraightSweepBody(body, sp)
+	return body, nil
 }
 
 func thickenPatch(ctx context.Context, d *Document, pp patchPayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
