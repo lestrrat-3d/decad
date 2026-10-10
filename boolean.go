@@ -65,7 +65,8 @@ import (
 // and before any facet is cut. A cap-loop chamfer whose
 // every band is a whole turn or joins only line-line miters and exactly tangent
 // corners — a filleted plate with drilled holes among them — is an ordinary
-// operand. A valid operand whose
+// operand. The matching axial loft's held-polygon cap band also has its own
+// occupied-volume proof for reflex corners (loft §18). A valid operand whose
 // boolean OUTPUT
 // cannot be chorded finely enough to tessellate surfaces the retryable
 // coarse-chording ErrDegenerate on that operand — a finer chord tolerance may
@@ -290,6 +291,11 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		}
 	}
 	if op == meshbool.OpCut {
+		if body, ok, err := tryLoftThroughBoreCut(ctx, d, ref, a, b); err != nil {
+			return nil, err
+		} else if ok {
+			return body, nil
+		}
 		if sp, ok, err := tryStackedThroughCut(ctx, a, b); err != nil {
 			if errors.Is(err, ErrUnsupported) {
 				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
@@ -767,6 +773,9 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 // audit — which the evaluator's own internal tolerance makes the most
 // expensive part of the call. Both this and operandSymDiff must name the same
 // payload classes, and each proof retires both arms of its own row together.
+// The matching axial loft's held-polygon cap band has a separate slab proof
+// for its reflex corners; tessellateCapBlend publishes that proof for this
+// marked payload, so it passes this precheck too (loft §18).
 //
 // A sheet operand refuses HERE too, ahead of the payload-class switch below:
 // docs/surface-design.md §10 states that a sheet mesh carries no
@@ -794,6 +803,11 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 	default:
 		switch pl := b.payload.(type) {
 		case capBlendPayload:
+			if pl.loftSource != nil {
+				// The loft-only cap band proves its occupied volume with
+				// a bounded reflex-corner slab in tessellateCapBlend.
+				return nil
+			}
 			refusal, aErr := capBlendOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
 			if aErr != nil {
 				return aErr

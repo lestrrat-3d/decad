@@ -309,6 +309,7 @@ const (
 	predKindEndpointAt    = selectorquery.EndpointAtKind
 	predKindLongerThan    = selectorquery.LongerThanKind
 	predKindCreatedBy     = selectorquery.CreatedByKind
+	predKindOuterLoopOf   = selectorquery.OuterLoopOfKind
 	predKindCircular      = selectorquery.CircularKind
 	predKindPlanar        = selectorquery.PlanarKind
 	predKindCylindrical   = selectorquery.CylindricalKind
@@ -357,6 +358,12 @@ func LongerThan(l units.Value) EdgePredicate {
 // resolve as ErrDegenerate.
 func CreatedBy(f FeatureRef) EdgePredicate {
 	return EdgePredicate{kind: predKindCreatedBy, ref: f}
+}
+
+// OuterLoopOf matches edges on the outer boundary loop of a face carrying f.
+// On a holed cap, it excludes every inner-loop rim edge, including a bore.
+func OuterLoopOf(f FeatureRef) EdgePredicate {
+	return EdgePredicate{kind: predKindOuterLoopOf, ref: f}
 }
 
 // Circular matches edges whose curve is a full circle or a circular arc.
@@ -483,6 +490,24 @@ func (e selectorEdge) SelectorHasOrigin(ref FeatureRef) bool {
 	for _, face := range e.faces {
 		if slices.Contains(face.origins, ref) {
 			return true
+		}
+	}
+	return false
+}
+func (e selectorEdge) SelectorOnOuterLoop(ref FeatureRef) bool {
+	for _, face := range e.faces {
+		if !slices.Contains(face.origins, ref) {
+			continue
+		}
+		for _, loop := range face.loops {
+			if !loop.outer {
+				continue
+			}
+			for _, ce := range loop.coedges {
+				if ce.edge == e.Edge {
+					return true
+				}
+			}
 		}
 	}
 	return false

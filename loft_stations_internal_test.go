@@ -739,8 +739,7 @@ func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 // times round one circle, so its area integral and its perimeter bound both
 // grow in proportion to n and the target, which reads their quotient
 // (docs/loft-gear-bounds-design.md §5), does not move with n. That is what lets
-// a fixture drive P and C alone and read the per-segment share
-// loftmesh.StationShare allocates from them.
+// a fixture drive P alone and read the total cap without moving the target.
 func quarterArcRingProfile(t *testing.T, n int) (profileRecord, [][]survey2d.SegmentWalk) {
 	t.Helper()
 	segs := make([]curveSegment, n)
@@ -807,7 +806,7 @@ func TestLoftStationCapFitsTheAuditTriangleCeiling(t *testing.T) {
 // design names: a three-segment record, one gear tooth (P = 6), the z = 8,
 // z = 20 and z = 40 gear outlines (P = 48, 120 and 240), both edges of the
 // floor and the hard ceiling, and a record far past it. It also reads the cap
-// back through the per-segment share, which is how S15 consumes it.
+// back through the shared extra-cell budget, which is how S15 consumes it.
 func TestLoftStationCapScalesWithPairs(t *testing.T) {
 	t.Parallel()
 	for _, row := range []struct {
@@ -827,18 +826,15 @@ func TestLoftStationCapScalesWithPairs(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("P=%d", row.p), func(t *testing.T) {
 			require.Equal(t, row.want, loftmesh.StationCap(row.p))
-			if row.p < uint64(row.want) {
-				require.Equal(t, 1+(row.want-int(row.p))/int(row.p), loftmesh.StationShare(row.p, row.p), //nolint:gosec // p is a small table constant.
-					"S15's share divides the cap left after every pair's first station")
-			}
+			require.Equal(t, max(0, row.want-int(row.p)), loftmesh.StationExtraBudget(row.p), //nolint:gosec // p is a small table constant.
+				"S15 reserves every pair's first station, then shares the remainder")
 		})
 	}
 }
 
-// TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling is Table S row
-// S15 (docs/loft-design.md §5.1): a same-kind circular pair whose settled
-// station count exceeds its own share of the station cap refuses with
-// freeform.ErrTooManyChords, and the refusal NAMES the segment whose share it exceeded.
+// TestLoftStationCapRefusesPastTheTotalBeforeTheAuditCeiling is Table S row
+// S15: a circular ring whose total settled count exceeds the station cap
+// refuses with freeform.ErrTooManyChords and names the first segment over it.
 //
 // It is also the fixture §13 requires for this row — one that fires BEFORE S8
 // on a construction that would otherwise reach the audit ceiling. That is
@@ -851,7 +847,7 @@ func TestLoftStationCapScalesWithPairs(t *testing.T) {
 // blames a "chord tolerance" for asking "more than 16384 chords on one curve",
 // and a loft has no such caller knob (§5.1: "The target is not a caller
 // option") — nor did any single curve here ask for 16384 of anything.
-func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
+func TestLoftStationCapRefusesPastTheTotalBeforeTheAuditCeiling(t *testing.T) {
 	t.Parallel()
 	const n = 400
 	p, walks := quarterArcRingProfile(t, n)
@@ -860,8 +856,7 @@ func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 	m, _, _, err := loftmesh.SettleRecordStationCount(walks[0][0], walks[0][0], p.Outer.Segments[0], p.Outer.Segments[0], target)
 	require.NoError(t, err)
 
-	mMax := loftmesh.StationShare(n, n)
-	require.Greater(t, m, mMax, "the fixture must settle past its own share, or it proves nothing")
+	require.Greater(t, n*m, loftmesh.StationCap(n), "the fixture must settle past the total cap")
 	require.Less(t, m, freeform.MaxChordsPerWalk, "the fixture must stay inside the per-walk ceiling, so only the CAP can refuse it")
 
 	// What this build would have assembled had the cap not fired: §7's
@@ -872,18 +867,18 @@ func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 	_, err = loftmesh.StationCapGate(p, p, loftRecordAreas(t, p, p), make([]int, 1), walks, walks)
 	require.ErrorIs(t, err, freeform.ErrTooManyChords, "S15 carries chordCount's own sentinel (spline design Table R row R8)")
 	require.ErrorIs(t, err, ErrUnsupported)
-	require.Contains(t, err.Error(), "loop 0 segment 0", "the refusal must name the segment whose share it exceeded")
+	require.Contains(t, err.Error(), "loop 0 segment", "the refusal must name the segment that exceeds the total cap")
 	require.Contains(t, err.Error(), fmt.Sprintf("%d chord cells", m))
 	require.NotContains(t, err.Error(), "chord tolerance", "a loft's chord target is not a caller-supplied tolerance")
 	require.NotContains(t, err.Error(), fmt.Sprintf("%d chords on one curve", freeform.MaxChordsPerWalk),
 		"the refusal must not report the per-walk ceiling it never reached")
 }
 
-// TestLoftStationCapAdmitsAPairInsideItsShare is S15's own boundary: the same
-// arcs, few enough that each one's settled count fits the share the cap
-// allocates it, are admitted. Without this the refusal above would prove only
+// TestLoftStationCapAdmitsATotalInsideTheCap is S15's own boundary: the same
+// arcs, few enough that their settled total fits the cap, are admitted.
+// Without this the refusal above would prove only
 // that the gate refuses everything.
-func TestLoftStationCapAdmitsAPairInsideItsShare(t *testing.T) {
+func TestLoftStationCapAdmitsATotalInsideTheCap(t *testing.T) {
 	t.Parallel()
 	const n = 4
 	p, walks := quarterArcRingProfile(t, n)
@@ -891,52 +886,66 @@ func TestLoftStationCapAdmitsAPairInsideItsShare(t *testing.T) {
 	target := loftTestChordTarget(t, p, p, walks, walks)
 	m, _, _, err := loftmesh.SettleRecordStationCount(walks[0][0], walks[0][0], p.Outer.Segments[0], p.Outer.Segments[0], target)
 	require.NoError(t, err)
-	require.LessOrEqual(t, m, loftmesh.StationShare(n, n), "the fixture must settle inside its own share")
+	require.LessOrEqual(t, n*m, loftmesh.StationCap(n), "the fixture must settle inside the total cap")
 
 	gateTarget, err := loftmesh.StationCapGate(p, p, loftRecordAreas(t, p, p), make([]int, 1), walks, walks)
 	require.NoError(t, err)
 	require.Equal(t, target, gateTarget, "the gate returns the target it decided S15 against")
 }
 
-// TestLoftStationShareAllocatesTheCap pins docs/loft-design.md §5.1's own
-// allocation arithmetic, including the two cases that paragraph carves out by
-// name.
-func TestLoftStationShareAllocatesTheCap(t *testing.T) {
+// TestLoftStationCapSharesUnusedCells admits a large outer circle when two
+// small holes need few cells. Equal per-pair shares would refuse the outer
+// circle although their actual total stays below the unchanged hard cap.
+func TestLoftStationCapSharesUnusedCells(t *testing.T) {
+	t.Parallel()
+	p := profileRecord{
+		Outer: loopRecord{Segments: []curveSegment{
+			circleSeg{Center: pt(0, 0), Radius: units.Millimeters(100), CCW: true, TStart: 0, TEnd: 1},
+		}},
+		Holes: []loopRecord{
+			{Segments: []curveSegment{circleSeg{Center: pt(-5, 0), Radius: units.Millimeters(1), TStart: 1, TEnd: 0}}},
+			{Segments: []curveSegment{circleSeg{Center: pt(5, 0), Radius: units.Millimeters(1), TStart: 1, TEnd: 0}}},
+		},
+	}
+	walks := resolveLoftLoopWalks(t, p)
+	areas := loftRecordAreas(t, p, p)
+	target := loftTestChordTarget(t, p, p, walks, walks)
+	total := 0
+	outer := 0
+	for i, loop := range append([]loopRecord{p.Outer}, p.Holes...) {
+		m, _, _, err := loftmesh.SettleRecordStationCount(walks[i][0], walks[i][0], loop.Segments[0], loop.Segments[0], target)
+		require.NoError(t, err)
+		total += m
+		if i == 0 {
+			outer = m
+		}
+	}
+	require.Greater(t, outer, 1+loftmesh.StationExtraBudget(3)/3)
+	require.LessOrEqual(t, total, loftmesh.StationCap(3))
+	gateTarget, err := loftmesh.StationCapGate(p, p, areas, []int{0, 0, 0}, walks, walks)
+	require.NoError(t, err)
+	require.Equal(t, target, gateTarget)
+}
+
+// TestLoftStationExtraBudgetReservesOneCellPerPair pins the shared S15
+// allocation, including the case where P itself reaches the hard ceiling.
+func TestLoftStationExtraBudgetReservesOneCellPerPair(t *testing.T) {
 	t.Parallel()
 	for _, row := range []struct {
-		name    string
-		p, c    uint64
-		want    int
-		comment string
+		name string
+		p    uint64
+		want int
 	}{
-		{name: "one circular pair alone", p: 1, c: 1, want: 1 + (512-1)/1},
-		{name: "four circular pairs", p: 4, c: 4, want: 1 + (512-4)/4},
-		{name: "circular pairs among line pairs", p: 100, c: 4, want: 1 + (6400-100)/4},
+		{name: "one pair", p: 1, want: 512 - 1},
+		{name: "four pairs", p: 4, want: 512 - 4},
+		{name: "many lines and few curves", p: 100, want: 6400 - 100},
 		{
-			name: "a record whose own P already reaches the cap clamps to one",
-			p:    loftmesh.StationCapCeiling, c: 1, want: 1,
-			comment: "such a record is past chording altogether and S8 is what refuses it",
-		},
-		{
-			name: "integer division only ever under-allocates",
-			p:    10, c: 7, want: 1 + (640-10)/7,
+			name: "P reaches the cap",
+			p:    loftmesh.StationCapCeiling, want: 0,
 		},
 	} {
 		t.Run(row.name, func(t *testing.T) {
-			mMax := loftmesh.StationShare(row.p, row.c)
-			require.Equal(t, row.want, mMax)
-
-			// §5.1's own sum: because C counts the circular pairs AMONG P, a
-			// circular pair's m stations SUBSUME the first-station
-			// entitlement P already grants it, so the build's total is
-			// (P - C)*1 + C*mMax — which can never pass the cap unless P
-			// alone already did.
-			require.LessOrEqual(t, row.c, row.p, "C counts the circular pairs among P, so it can never exceed it")
-			total := (row.p - row.c) + row.c*uint64(mMax) //nolint:gosec // mMax is a positive share bounded by the station cap.
-			if row.p <= uint64(loftmesh.StationCap(row.p)) {
-				require.LessOrEqual(t, total, uint64(loftmesh.StationCap(row.p)),
-					"no build every pair of which passes S15 may exceed the cap")
-			}
+			require.Equal(t, row.want, loftmesh.StationExtraBudget(row.p))
 		})
 	}
 }

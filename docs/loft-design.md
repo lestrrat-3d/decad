@@ -208,7 +208,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S12** | ANY build — placed (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's shift `epsV · R_c / clearance` (§8) has no positive `clearance` left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
 | **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf`, decided in whichever of the two arms the gate-order paragraph below assigns that term | yes — the body exists; this evaluator cannot publish a finite certified enclosure for that term on this build | `ErrUnsupported` | no — an enclosure or numeric-range ceiling, not a shape rule |
-| **S15** | a paired segment whose chord target (§5.1) is not met inside its share of the station cap `stationCap(P) = min(max(512, 64·P), 8192)` | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
+| **S15** | the paired segments' actual chord cells exceed the shared station cap `stationCap(P) = min(max(512, 64·P), 8192)` while meeting the chord target (§5.1) | yes — the ruled surface exists; this evaluator cannot chord it inside its ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
 | **S16** | a chord cell (§5.1) whose two stations coincide on exactly ONE of the two sections. A cell collapsing on BOTH sections, and a collapsed cap triangle, are S6's two arms rather than this row, so every collapse is covered exactly once | yes — a collapsed piece is a recordable curve piece whatever the provenance of the two stations that produced it, and a point-degenerate correspondence is a body a smarter kernel could still loft; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
 
 S17 was retired when §5.1 gained exact common subdivision for unequal Bézier span counts.
@@ -651,78 +651,42 @@ its `Σstations` is that segment count (§7) — and S8 is what refuses it,
 exactly as for an all-`LineSeg` build.
 
 **Allocating the cap.** `stationCap(P)` bounds `Σstations`, the total over
-every loop (§7), because the `F` above depends on that total and on nothing
-per-loop. It is allocated per paired segment, which gives each loop a share
-proportional to its own paired-segment count, and a share of the part
-chording can spend proportional to its own CHORDED-pair count — circular and
-same-kind Tier A free-form together, since a free-form pair chords exactly as
-a circular one does (below). With `P` the build's total paired-segment count
-and `C` the number of chorded pairs among them — circular or same-kind Tier A
-free-form, both fixed by Table P from the two records alone — every
-paired segment is entitled to its first station, which is a `LineSeg` pair's
-whole entitlement (`m = 1`, §7), and each chorded pair may take at most
+every loop (§7). Reserve one station for each of the `P` paired segments.
+Each chorded pair then consumes its *actual* extra cells from the same
+remainder, in record order:
 
 ```text
-mMax = 1 + max(0, (stationCap(P) - P) / C)      // integer division
+remaining = max(0, stationCap(P) - P)
+allowance(pair) = 1 + remaining
+remaining -= settledCells(pair) - 1
 ```
 
-stations. A chorded pair whose own settled `m` exceeds `mMax` is Table S
-row S15 (`ErrUnsupported`, `errTooManyChords` —
-spline R8, the
-identical sentinel `chordCount` itself already returns when its own walk-up
-would exceed `maxChordsPerWalk`), and the refusal names that segment, since
-the share it exceeded is that segment's own. A build with no chorded pair
-(`C = 0`) never consults the cap at all: its `Σstations` is `Σn_i` exactly
-(§7), the count the record itself states, so an all-`LineSeg` build's only
-resource refusal is S8.
+The settled count must not exceed its allowance. S15 names the pair that
+exhausted the remainder and carries `errTooManyChords` (spline R8). Line
+pairs consume only their reserved cell. A build with no chorded pair
+(`C = 0`) never consults the cap: its `Σstations = P` is the record's own
+count, and S8 is its only resource refusal. The allocation admits uneven
+curves whenever their total fits; a bore circle need not fit the same share
+as each shorter gear flank.
 
-**The per-pair share can never sum past the global cap.** Every pair `C`
-counts is AMONG `P`, so a chorded pair's `m` stations SUBSUME the
-first-station entitlement `P` already grants that segment rather than adding
-to it. For a record whose `P` is within the cap — the paragraph
-below carves out the one that is not — the build's total is therefore
+**The shared remainder cannot exceed the cap.** Each accepted chorded pair
+consumes only its settled `m - 1` extra cells, so when `P < stationCap(P)`,
+`Σstations = P + Σ(m - 1) ≤ stationCap(P)`. The arithmetic uses checked
+paired-segment counts and a remainder bounded by 8192. When `P` already
+reaches the cap, the remainder is zero and a chorded pair may settle at
+`m = 1`; S8 handles the base count, as it does for an all-line build.
 
-```text
-Σstations = (P - C)·1 + Σm  ≤  (P - C) + C·mMax
-          =  P + C·floor((stationCap(P) - P) / C)
-          ≤  stationCap(P)
-```
-
-because integer division only ever UNDER-allocates:
-`C·floor((stationCap(P) - P) / C) ≤ stationCap(P) - P`. So for such a
-record no build every one of whose pairs passes S15 can exceed
-`stationCap(P)`.
-
-**A record whose own `P` already reaches the cap.** The `max(0, …)` term
-clamps to zero there, so `mMax = 1` and a pair settling at `m = 1` passes
-S15 with `Σstations` already past the cap. Such a record is past chording
-altogether (above), and S8 is what refuses it, over §6's candidate count
-rather than over the cap. Nothing
-is left unchorded either: a pair settles at `m = 1` only when both sides'
-certified sagittae already meet the target at one cell. Refusing it at S15
-instead would refuse a mixed build while admitting an all-`LineSeg` build of
-the identical triangle count, which S15's own row states S15 is not.
-
-**Deciding S15 from the record.** `m` and `mMax` are each a function of the
-two `ProfileRecord`s alone — the two sides' certified enclosures (§5.2), the
-chord target above, `P` and `C` — so S15 is DECIDABLE from the two records,
-with no station built. A pair whose certified sagitta has no derivation
-refuses S14 beside it, since the process that settles `m` — the joint walk-up
-for a circular pair, the measure-then-bisect loop for a free-form pair
-(§5.1's free-form arm) — is what asks for it. **For a free-form pair that loop
-IS the station generator, so the evaluator runs it once rather than twice:**
-the walk takes the pair's `mMax` share as its own chord ceiling and refuses
-S15 the moment its proven lower bound on the chord count passes it, and it
-refuses S14 the moment a measured sagitta, speed bound or matched-departure
-bound is non-finite. Both refusals therefore come after every record-only
-gate above and before construction's first gate (S13), and S16 waits until
-every loop's stations exist, so the relative order §4 states for S14, S15
-and S16 holds. A second walk run only to learn `m` would charge the records'
-free-form work counters twice (§5.1's work-budget paragraph). Every product and sum
-in the `mMax` comparison and in §6's own candidate count is evaluated
-with checked arithmetic and refuses on overflow rather than wrapping, the
-identical preflight-before-allocation discipline §6 states for the pair-test
-ceiling itself.
+**Deciding S15.** `loftStationCapGate` settles circular counts from the two
+records before building stations and charges each against the shared
+remainder. A same-kind Tier A free-form pair settles its count during its
+dyadic station walk, so `PairRecords` charges all pairs in record order and
+passes the current allowance into that walk. Running a second walk only to
+learn its count would charge the records' free-form work counters twice.
+The generator refuses S15 when its proven lower bound on cells exceeds its
+allowance; a circular pair refuses when its settled count does. S14 still
+refuses a non-finite sagitta, speed or matched-departure bound, and S16 waits
+until every loop's stations exist. Every accepted chorded build has the same
+8,192-cell hard ceiling used by S8's triangle preflight.
 
 **A same-kind Tier A free-form pair walls the identical chord-chain
 topology above, over its own station rule.** Every construction fact stated
@@ -811,7 +775,7 @@ only the RULE that places its stations differs from the circular walk-up.
   correspondence rule: subdivision changes only its representation, not
   either curve or its parameter mapping. Both refined chains then have the
   same slot boundaries. Before subdivision, reject a common count above
-  the segment's station share as S15, with checked arithmetic. The record's
+  its current station allowance as S15, with checked arithmetic. The record's
   free-form work counter charges each split before it runs (spline R7).
 
 - **The shared station set is chorded at shared dyadic fractions of that
@@ -880,15 +844,10 @@ which has no radius at all, share the identical rule and the identical
 `loftChordFraction` constant: the target is a property of the two SECTIONS,
 not of either curve's own parameterisation.
 
-**The station cap applies unchanged, and a free-form pair's share of it is
-counted by the same allocation stated above.** A free-form pair that cannot
-meet the chord target inside its share of `stationCap(P)` is S15, `errTooManyChords`,
-the identical refusal a circular pair reaches under the same cap. The
-`mMax` allocation above already counts a same-kind Tier A free-form pair as
-one of `C`'s CHORDED pairs, exactly as it counts a circular one — `C`'s own
-definition names both kinds together — so a free-form pair's entitlement,
-its first station included, is the identical `mMax` share a circular pair of
-the same build gets, with no separate accounting of its own.
+**The station cap applies unchanged to free-form pairs.** Their dyadic walks
+consume actual settled cells from the same remainder as circular pairs.
+A free-form pair that cannot meet the chord target inside its current
+allowance refuses S15 with `errTooManyChords`.
 
 **The work budget charges both records' existing free-form work counters,
 and mints no fresh one.** The station generator's exact-rational de
@@ -1892,7 +1851,7 @@ against this budget.
 - **Pairing**: hole-count mismatch → S1; segment-count mismatch → S2;
   mixed-kind segment pair → S3; a same-kind Tier A free-form pair whose two
   Bézier span counts differ → exact common subdivision (§5.1), with S15
-  when its common slot count exceeds the station share; a same-kind Tier A free-form
+  when its common slot count exceeds the current station allowance; a same-kind Tier A free-form
   pair reaches S14 only when an actual certified term answers `+Inf`, never
   on its kind and never through S3; a same-kind `CircleSeg` pair
   whose two recorded `CCW` flags disagree → S7's `ErrDegenerate` from its
@@ -2292,7 +2251,7 @@ and reads `Sound` with `Volume` binding at about 14.3x
 
 **The station cap's value is resolved.** §5.1 states the rule the cap obeys
 and everything an implementation needs to decide S15 from the record — the
-per-segment share, the `mMax` comparison, and the checked arithmetic — and
+shared actual-cell accounting and checked arithmetic — and
 `stationCap(P)` itself is `loftmesh.StationCap` in
 `internal/loftmesh/record_stations.go`, whose own doc comment carries the
 derivation and is its ONE defining site. `docs/loft-gear-bounds-design.md` §7
@@ -2672,3 +2631,52 @@ the one-corner volume against the circular-sector formula and checks that a
 placed copy still has fillet roles.
 An audit fixture moves a fit spline's control hull across a changed line and
 checks that the audit refuses the possible contact.
+
+## 18. Coaxial bore and held outer-cap chamfer
+
+`Cut` keeps a solid matching axial loft as a `loftPayload` when a straight
+prism tool cuts one full circular through-bore. Both recorded sections must be
+identical and hole-free before the cut, share their in-plane axes, have zero
+alignment, and have no placement. The tool must share those axes and span both
+cap levels. `loft_cut.go` proves that the circle's containing square misses
+every outer carrier enclosure and junction, then uses exact winding of the
+carrier chords to prove the circle lies inside the authenticated outer loop.
+It inserts the same clockwise `CircleSeg` hole into both sections and runs the
+normal loft evaluator. A pair outside these gates uses the general boolean
+path; the global sketch reconstruction ceiling is unchanged.
+
+`OuterLoopOf(CapStart(body))` and `OuterLoopOf(CapEnd(body))` select only the
+held outer cap edges, excluding the circular bore rims. An equal-distance
+`Chamfer` of both complete outer loops accepts the same matching axial loft
+with exactly one full circular bore. It requires the held start and end cap
+polygons to have the same edge multiset, and refuses a partial loop, a bore
+edge, an asymmetric setback, placement, a different section, or alignment.
+The result is a `capBlendPayload` whose outer section is the loft's certified
+held cap polygon. Its bore remains the original full circle, so both bore
+rims stay sharp. The source record, including each 15-fit-point spline flank,
+is stored with the result for its displacement proof. The chamfer offsets
+the held polygon's edges; it does not denote a smooth-spline offset.
+
+The existing cap-band surface and area proofs apply to that polygonal band.
+`Volume`, `Area`, `Bounds`, `Centroid`, and tessellation also add the source
+loft's certified displacement, area, or occupied-volume allowance as
+appropriate. In particular, `source.VolSymDiff` bounds the difference between
+the original spline loft and its held polygon globally, including outside the
+cap slabs. It is extra allowance: the chamfer result's own denoted geometry
+is the held polygon band.
+
+At `VerifyAll`, the cap-band occupied-volume proof pairs every ordinary
+straight-wall and circular-bore station with the existing chord and finite
+vertex-motion proof (`docs/tessellation-reach-design.md` §7). The reflex
+connector's cap-level apex stations have no finite point pairing. The proof
+identifies their exact mesh vertex indices, requires every other motion to be
+finite, and charges two entire axial cap slabs instead. Each slab contains
+its complete reflex fan and its uncertain cap sliver. A cylinder containing
+the body's bounded box and all mesh vertices bounds each slab's cross section;
+its radius comes from a world-space sphere, so a rigid placement preserves
+the enclosure. Each slab height covers the setback and both inherited axial
+and tessellation displacements. The published symmetric-difference bound is
+the sum of the ordinary chord term, finite vertex sweep, both cylinder slabs,
+and `source.VolSymDiff`. An unenclosable term refuses `VerifyAll` rather than
+publishing a volume proof. The Boolean precheck admits this same narrow
+payload when its tessellation publishes that proof.

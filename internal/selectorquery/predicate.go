@@ -18,6 +18,7 @@ const (
 	EndpointAtKind    = "endpoint_at"
 	LongerThanKind    = "longer_than"
 	CreatedByKind     = "created_by"
+	OuterLoopOfKind   = "outer_loop_of"
 	CircularKind      = "circular"
 	PlanarKind        = "planar"
 	CylindricalKind   = "cylindrical"
@@ -49,6 +50,7 @@ type EdgeView[R comparable] interface {
 	SelectorEndpoints() (r3.Vec, r3.Vec)
 	SelectorLengthMM() float64
 	SelectorHasOrigin(R) bool
+	SelectorOnOuterLoop(R) bool
 	SelectorCircular() bool
 }
 
@@ -69,6 +71,8 @@ func (p EdgeClause[R]) Validate(validateRef func(R, string) error) error {
 		return nil
 	case CreatedByKind:
 		return validateRef(p.Ref, "created-by")
+	case OuterLoopOfKind:
+		return validateRef(p.Ref, "outer-loop-of")
 	case ParallelToKind:
 		return ValidateDirection(p.Direction, "parallel-to")
 	case EndpointAtKind:
@@ -128,6 +132,8 @@ func (p EdgeClause[R]) Matches(e EdgeView[R]) bool {
 		return err == nil && e.SelectorLengthMM() > mm
 	case CreatedByKind:
 		return e.SelectorHasOrigin(p.Ref)
+	case OuterLoopOfKind:
+		return e.SelectorOnOuterLoop(p.Ref)
 	case CircularKind:
 		return e.SelectorCircular()
 	default:
@@ -172,7 +178,7 @@ func (p EdgeClause[R]) Render(renderRef func(R) string) string {
 		return p.Kind + "(" + RenderVec(p.Point) + ")"
 	case LongerThanKind:
 		return p.Kind + "(" + p.Length.String() + ")"
-	case CreatedByKind:
+	case CreatedByKind, OuterLoopOfKind:
 		return p.Kind + "(" + renderRef(p.Ref) + ")"
 	default:
 		return "<invalid>"

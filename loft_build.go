@@ -303,11 +303,11 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 	for k, wall := range walls {
-		if len(pl.blendSegs) == 0 {
-			break
-		}
 		li, cell := a.Cell[k][0], a.Cell[k][1]
-		if li >= len(pl.blendSegs) || cell >= len(pairs[li].Segment) {
+		if li >= len(pl.blendSegs) {
+			continue // A through-bore adds an unblended hole wall.
+		}
+		if cell >= len(pairs[li].Segment) {
 			return nil, fmt.Errorf(`%w: a loft fillet lost its segment correspondence`, ErrUnsupported)
 		}
 		seg := pairs[li].Segment[cell]

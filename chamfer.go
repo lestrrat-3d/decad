@@ -241,6 +241,15 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if route.body != nil {
 		return commitModifyResult(ctx, b, route.body)
 	}
+	if lp, ok := b.payload.(loftPayload); ok {
+		body, recognized, err := tryLoftCapChamfer(ctx, b, lp, edges, dmm, dDelta, asym)
+		if recognized || err != nil {
+			if err != nil {
+				return nil, err
+			}
+			return commitModifyResult(ctx, b, body)
+		}
+	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1) OR — reach RX1's

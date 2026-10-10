@@ -48,10 +48,10 @@ func stationPoints(stations []LoftStation) []sectionrecord.Point2 {
 // The cap scales with P because a record's need for stations does: the
 // helical gear fixture of docs/loft-gear-bounds-design.md needs 124–132
 // stations for one tooth (P = 6) and 952–1960 for a full outline (P = 48–240).
-// S15 reads the cap through StationShare, which splits it evenly over the
-// chorded pairs, and a gear's flanks need far more cells than its arcs: the
-// z = 8 outline's flanks need 48 cells each. 64 stations per paired segment
-// gives them a share of 95; 32 would give 47 and refuse that outline. The
+// S15 charges each pair's actual settled cells against the shared cap, and a
+// gear's flanks need far more cells than its arcs: the z = 8 outline's flanks
+// need 48 cells each. 64 stations per paired segment leaves enough aggregate
+// room for the measured outlines. The
 // floor keeps a record of a few curves the room the docs/loft-design.md §14
 // reference wedges need.
 //
@@ -118,8 +118,7 @@ func StationWorkLimit(spent, p uint64) uint64 {
 // count, which is what makes one loop's shape the pair count for both.
 //
 // The accumulation is checked (proofbound.WallCheckedAdd, internal/proofbound/budget.go) and answers false on
-// overflow rather than wrapping, the discipline §5.1 states for every sum the
-// mMax comparison reads.
+// overflow rather than wrapping, the discipline §5.1 states for the cap.
 func PairCounts(loops0 []sectionrecord.LoopRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk) (uint64, uint64, bool) {
 	var p, c uint64
 	for i := range loops0 {
@@ -147,32 +146,16 @@ func IsChordedPair(w0, w1 survey2d.SegmentWalk) bool {
 	return w0.Kind == w1.Kind && (w0.Kind == survey2d.WalkCircular || w0.Kind == survey2d.WalkFreeform)
 }
 
-// StationShare allocates docs/loft-design.md §5.1's per-segment share of
-// the station cap:
-//
-//	mMax = 1 + max(0, (stationCap(P) - P) / C)      // integer division
-//
-// Every paired segment is entitled to its first station — a LineSeg pair's
-// whole entitlement (m = 1, §7) — and each of the C chorded pairs may take at
-// most mMax. Because C counts the chorded pairs AMONG P, a chorded pair's m
-// stations SUBSUME that first-station entitlement rather than adding to it, so
-// §5.1's own sum shows no build every pair of which passes S15 can exceed the
-// cap.
-//
-// The caller must not reach here with C == 0: §5.1 states a build with no
-// chorded pair never consults the cap at all, and dividing by C would be
-// undefined besides.
-//
-// A record whose own P already reaches the cap — P at or above
-// StationCapCeiling, since below it the cap is at least 64·P — clamps to
-// mMax = 1, which §5.1 carves
-// out deliberately: such a record is past chording altogether and S8 is what
-// refuses it, over the assembled triangle count §6's own preflight computes.
-// Refusing it here instead would refuse a mixed build while admitting an
-// all-LineSeg build of the identical triangle count.
-func StationShare(p, c uint64) int {
-	q := max(int64(0), (int64(StationCap(p))-int64(p))/int64(c)) //nolint:gosec // p and c are paired-segment counts proofbound.WallCheckedAdd already proved do not overflow, and a record large enough to pass int64 cannot be built from the process's memory limits.
-	return 1 + int(q)
+// StationExtraBudget is the number of cells left after reserving every pair's
+// first station. Circular counts consume it in StationCapGate; free-form
+// counts consume it as PairRecords builds their stations. If P already reaches
+// the cap, only one cell per pair is allowed and S8 handles the base count.
+func StationExtraBudget(p uint64) int {
+	cap := StationCap(p)
+	if p >= uint64(cap) {
+		return 0
+	}
+	return cap - int(p) //nolint:gosec // p < cap <= StationCapCeiling.
 }
 
 // RecordCellStations generates one paired LineSeg or circular loft segment's

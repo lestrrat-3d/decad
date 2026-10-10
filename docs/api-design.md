@@ -1365,6 +1365,7 @@ func ParallelTo(v r3.Vec) EdgePredicate
 func EndpointAt(p r3.Vec) EdgePredicate // either endpoint equals p in stored coordinates
 func LongerThan(l units.Value) EdgePredicate
 func CreatedBy(f FeatureRef) EdgePredicate   // provenance
+func OuterLoopOf(f FeatureRef) EdgePredicate // outer boundary of a face with this provenance
 func Circular() EdgePredicate
 func Free() EdgePredicate                    // exactly one adjacent face — a sheet's boundary
 
@@ -1378,6 +1379,11 @@ func FaceCreatedBy(f FeatureRef) FacePredicate // provenance, the face analog of
 `Convex()` and `Concave()` read `Edge.IsConvex` (§6.1): the walked-boundary
 convexity, not the material angle across the edge. A hole's rim edges are
 concave, so a fillet meant for them asks for `Concave()`.
+
+`OuterLoopOf(CapStart(body))` matches only edges on the start cap's outer
+boundary. It excludes hole loops by `Loop.IsOuter`, so a cap chamfer can
+leave a bore rim sharp. The predicate matches no edge when the referenced
+face has no outer loop or is absent from the receiver.
 
 `Free()` reads `Edge.IsFree` (§6.1) and composes with every other clause, so
 `Edges(Free()).Exactly(8)` asserts a surface extrude's rim count and
@@ -1605,6 +1611,7 @@ Each predicate renders by its codec kind token and payload:
 | `NormalTo(v)` / `Facing(v)` | `normal_to(<vec>)` / `facing(<vec>)` |
 | `LongerThan(l)` | `longer_than(<value>)` |
 | `CreatedBy(f)` / `FaceCreatedBy(f)` | `created_by(<ref>)` / `face_created_by(<ref>)` |
+| `OuterLoopOf(f)` | `outer_loop_of(<ref>)` |
 
 with these payload forms:
 
