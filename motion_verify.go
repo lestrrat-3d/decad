@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -1227,7 +1228,7 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 	if !ok {
 		return IntervalUndecided, nil
 	}
-	return IntervalClear, motionbound.LowerBoundMeasurement(lowest)
+	return IntervalClear, measurementPtrFromInternal(motionbound.LowerBoundMeasurement(lowest))
 }
 
 // collides reports whether some pair at the pose carries a proven collision.
@@ -1273,13 +1274,13 @@ func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) reportvoca
 	spanFacts := make([]reportvocab.MotionSpanFinding, len(spans))
 	for i, span := range spans {
 		spanFacts[i] = reportvocab.MotionSpanFinding{
-			Outcome: reportSpanOutcome(span.outcome), Clearance: span.clearance, Note: span.note,
+			Outcome: reportSpanOutcome(span.outcome), Clearance: measurementPtrToInternal(span.clearance), Note: span.note,
 		}
 	}
 	return reportvocab.ConcludeMotion(r.cfg.Minimum, against, poseFacts, spanFacts, r.cfg.MinimumMM,
-		func(lowest *Measurement) (*ScalarReading, *reportvocab.Diagnostic[*Body, JointCell]) {
-			reading, diag := r.pathClearance(poses, lowest, "whole-path")
-			return reading, diagnosticPtrToInternal(diag)
+		func(lowest *measurement.Measurement) (*reportvocab.ScalarReading, *reportvocab.Diagnostic[*Body, JointCell]) {
+			reading, diag := r.pathClearance(poses, measurementPtrFromInternal(lowest), "whole-path")
+			return scalarReadingPtrToInternal(reading), diagnosticPtrToInternal(diag)
 		})
 }
 
@@ -1291,7 +1292,7 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 		Against:     c.Against,
 		Intervals:   rootMotionIntervals(c.Intervals),
 		Collisions:  []Collision{},
-		Clearance:   c.Clearance,
+		Clearance:   scalarReadingPtrFromInternal(c.Clearance),
 		Assessment:  c.Assessment,
 		Diagnostics: diagnosticsFromInternal(c.Diagnostics),
 		Status:      c.Status,

@@ -15,7 +15,7 @@ The rules for rows live in `docs/layout.md`.
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
 | `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
 | `verify_gate_points.go` | Points a gate diameter reads, and the pair diameter. See verification §3. |
-| `verify_result.go` | Root-owned reports, requests, and survey results with remaining reading aliases. |
+| `verify_result.go` | Root-owned reports, requests, bounded readings, and survey results. |
 | `verify_publish.go` | Adapts private surveys to `internal/reportvocab` publication. See verification §1, §6. |
 | `clearance.go` | The pair kernel: `clearancePair` and `sheetSolidPair`. See clearance §1-§3/§6. |
 | `clearance_box.go` | Admits unplaced axis-aligned box pairs and maps the `internal/pair/box/` gap proof. |

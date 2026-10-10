@@ -53,9 +53,9 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 		Status:              in.Status,
 		Validity:            validityResultToInternal(in.Validity),
 		Topology:            in.Topology,
-		Area:                in.Area,
-		Bounds:              in.Bounds,
-		Region:              in.Region,
+		Area:                scalarReadingToInternal(in.Area),
+		Bounds:              boundsReadingToInternal(in.Bounds),
+		Region:              regionReadingsToInternal(in.Region),
 		Request:             encodedVerifyRequest(in.Request),
 		Surveys:             surveyPublication(in.Surveys),
 		WallTolerance:       in.WallTolerance,
@@ -66,7 +66,7 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 	})
 	wall := WallResult{
 		Request: in.Request.Wall, Outcome: published.Wall.Outcome,
-		Minimum: published.Wall.Minimum, Assessment: published.Wall.Assessment,
+		Minimum: scalarReadingPtrFromInternal(published.Wall.Minimum), Assessment: published.Wall.Assessment,
 		Diagnostics: diagnosticsFromInternal(published.Wall.Diagnostics),
 	}
 	undercut := UndercutResult{
@@ -76,8 +76,9 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 	}
 	return &BodyReport{
 		Body: published.Body, Status: published.Status, Validity: validityResultFromInternal(published.Validity),
-		Topology: published.Topology, Area: published.Area, Bounds: published.Bounds,
-		Region: published.Region, Wall: wall, Undercut: undercut,
+		Topology: published.Topology, Area: scalarReadingFromInternal(published.Area),
+		Bounds: boundsReadingFromInternal(published.Bounds),
+		Region: regionReadingsFromInternal(published.Region), Wall: wall, Undercut: undercut,
 		ConcaveRadius: concaveRadiusResultFromInternal(published.ConcaveRadius),
 		Diagnostics:   diagnosticsFromInternal(published.Diagnostics),
 	}

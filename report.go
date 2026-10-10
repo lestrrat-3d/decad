@@ -103,8 +103,10 @@ func diagnosticFromInternal(in reportvocab.Diagnostic[*Body, JointCell]) Diagnos
 	out := Diagnostic{
 		Code: in.Code, Status: in.Status, Body: in.Body,
 		Survey: in.Survey, Reading: in.Reading,
-		Observed: in.Observed, ObservedVec: in.ObservedVec, ObservedBox: in.ObservedBox,
-		Required: in.Required, At: in.At, Cell: in.Cell, Message: in.Message,
+		Observed:    measurementPtrFromInternal(in.Observed),
+		ObservedVec: vecMeasurementPtrFromInternal(in.ObservedVec),
+		ObservedBox: boxPtrFromInternal(in.ObservedBox),
+		Required:    in.Required, At: in.At, Cell: in.Cell, Message: in.Message,
 	}
 	if in.Pair != nil {
 		out.Pair = &DiagnosticPair{A: in.Pair.A, B: in.Pair.B}
@@ -115,8 +117,10 @@ func diagnosticToInternal(in Diagnostic) reportvocab.Diagnostic[*Body, JointCell
 	out := reportvocab.Diagnostic[*Body, JointCell]{
 		Code: in.Code, Status: in.Status, Body: in.Body,
 		Survey: in.Survey, Reading: in.Reading,
-		Observed: in.Observed, ObservedVec: in.ObservedVec, ObservedBox: in.ObservedBox,
-		Required: in.Required, At: in.At, Cell: in.Cell, Message: in.Message,
+		Observed:    measurementPtrToInternal(in.Observed),
+		ObservedVec: vecMeasurementPtrToInternal(in.ObservedVec),
+		ObservedBox: boxPtrToInternal(in.ObservedBox),
+		Required:    in.Required, At: in.At, Cell: in.Cell, Message: in.Message,
 	}
 	if in.Pair != nil {
 		out.Pair = &reportvocab.DiagnosticPair[*Body]{A: in.Pair.A, B: in.Pair.B}

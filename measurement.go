@@ -22,13 +22,89 @@ const (
 )
 
 // Measurement is a scalar value with its exactness and absolute error bound.
-type Measurement = measurement.Measurement
+type Measurement struct {
+	Value     units.Value
+	Exactness Exactness
+	Bound     units.Value
+}
 
 // VecMeasurement is a position or direction with its exactness and bound.
-type VecMeasurement = measurement.VecMeasurement
+type VecMeasurement struct {
+	Value     r3.Vec
+	Exactness Exactness
+	Bound     units.Value
+}
 
 // Box is an axis-aligned bound with its own exactness and error bound.
-type Box = measurement.Box
+type Box struct {
+	Min, Max  r3.Vec
+	Exactness Exactness
+	Bound     units.Value
+}
+
+func measurementFromInternal(m measurement.Measurement) Measurement {
+	return Measurement(m)
+}
+
+func measurementToInternal(m Measurement) measurement.Measurement {
+	return measurement.Measurement(m)
+}
+
+func measurementPtrFromInternal(m *measurement.Measurement) *Measurement {
+	if m == nil {
+		return nil
+	}
+	result := measurementFromInternal(*m)
+	return &result
+}
+
+func measurementPtrToInternal(m *Measurement) *measurement.Measurement {
+	if m == nil {
+		return nil
+	}
+	result := measurementToInternal(*m)
+	return &result
+}
+
+func vecMeasurementToInternal(m VecMeasurement) measurement.VecMeasurement {
+	return measurement.VecMeasurement(m)
+}
+
+func vecMeasurementPtrFromInternal(m *measurement.VecMeasurement) *VecMeasurement {
+	if m == nil {
+		return nil
+	}
+	result := VecMeasurement(*m)
+	return &result
+}
+
+func vecMeasurementPtrToInternal(m *VecMeasurement) *measurement.VecMeasurement {
+	if m == nil {
+		return nil
+	}
+	result := vecMeasurementToInternal(*m)
+	return &result
+}
+
+func boxPtrFromInternal(b *measurement.Box) *Box {
+	if b == nil {
+		return nil
+	}
+	result := Box(*b)
+	return &result
+}
+
+func boxToInternal(b Box) measurement.Box {
+	return measurement.Box(b)
+}
+
+func boxPtrToInternal(b *Box) *measurement.Box {
+	if b == nil {
+		return nil
+	}
+	result := measurement.Box(*b)
+	return &result
+}
 
 // validateAnalyticBodyMeasurements is evalPrismContext's last gate before a
 // prism commits: every one of the four checks below is finiteness only, so a

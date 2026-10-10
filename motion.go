@@ -246,7 +246,7 @@ func rootMotionIntervals(intervals []reportvocab.ConcludedMotionSpan) []MotionIn
 			From:      interval.From,
 			To:        interval.To,
 			Outcome:   rootIntervalOutcome(interval.Outcome),
-			Clearance: interval.Clearance,
+			Clearance: measurementPtrFromInternal(interval.Clearance),
 		}
 	}
 	return result

@@ -10,7 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
-| `internal/measurement/` | Bounded reading types. See API §5.3, §6. |
+| `internal/measurement/` | Private bounded reading carriers. Public types live in `measurement.go`. See API §5.3, §6. |
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact box paths, contact, oriented, sphere-box and cylinder-box proofs, patches, clips and witnesses. |
 | `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |

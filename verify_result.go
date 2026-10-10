@@ -74,13 +74,64 @@ type VerifyRequest struct {
 type ToleranceResult = reportvocab.ToleranceResult
 
 // ScalarReading combines a scalar measurement and tolerance verdict.
-type ScalarReading = reportvocab.ScalarReading
+type ScalarReading struct {
+	Measurement
+	Tolerance ToleranceResult
+}
 
 // VectorReading combines a vector measurement and tolerance verdict.
-type VectorReading = reportvocab.VectorReading
+type VectorReading struct {
+	VecMeasurement
+	Tolerance ToleranceResult
+}
 
 // BoundsReading combines a box measurement and tolerance verdict.
-type BoundsReading = reportvocab.BoundsReading
+type BoundsReading struct {
+	Box
+	Tolerance ToleranceResult
+}
+
+func scalarReadingFromInternal(in reportvocab.ScalarReading) ScalarReading {
+	return ScalarReading{Measurement: measurementFromInternal(in.Measurement), Tolerance: in.Tolerance}
+}
+
+func scalarReadingToInternal(in ScalarReading) reportvocab.ScalarReading {
+	return reportvocab.ScalarReading{Measurement: measurementToInternal(in.Measurement), Tolerance: in.Tolerance}
+}
+
+func scalarReadingPtrFromInternal(in *reportvocab.ScalarReading) *ScalarReading {
+	if in == nil {
+		return nil
+	}
+	out := scalarReadingFromInternal(*in)
+	return &out
+}
+
+func scalarReadingPtrToInternal(in *ScalarReading) *reportvocab.ScalarReading {
+	if in == nil {
+		return nil
+	}
+	out := scalarReadingToInternal(*in)
+	return &out
+}
+
+func vectorReadingFromInternal(in reportvocab.VectorReading) VectorReading {
+	return VectorReading{VecMeasurement: VecMeasurement(in.VecMeasurement), Tolerance: in.Tolerance}
+}
+
+func vectorReadingToInternal(in VectorReading) reportvocab.VectorReading {
+	return reportvocab.VectorReading{
+		VecMeasurement: vecMeasurementToInternal(in.VecMeasurement), Tolerance: in.Tolerance,
+	}
+}
+
+func boundsReadingFromInternal(in reportvocab.BoundsReading) BoundsReading {
+	return BoundsReading{Box: Box(in.Box), Tolerance: in.Tolerance}
+}
+
+func boundsReadingToInternal(in BoundsReading) reportvocab.BoundsReading {
+	return reportvocab.BoundsReading{Box: boxToInternal(in.Box), Tolerance: in.Tolerance}
+}
 
 // WallResult records one body's wall survey.
 type WallResult struct {
@@ -125,7 +176,8 @@ func validityResultToInternal(in ValidityResult) reportvocab.ValidityResult[*Bod
 
 func concaveRadiusResultFromInternal(in reportvocab.ConcaveRadiusResult[*Body, JointCell]) ConcaveRadiusResult {
 	return ConcaveRadiusResult{
-		Outcome: in.Outcome, Minimum: in.Minimum, Diagnostics: diagnosticsFromInternal(in.Diagnostics),
+		Outcome: in.Outcome, Minimum: scalarReadingPtrFromInternal(in.Minimum),
+		Diagnostics: diagnosticsFromInternal(in.Diagnostics),
 	}
 }
 
@@ -133,7 +185,28 @@ func concaveRadiusResultFromInternal(in reportvocab.ConcaveRadiusResult[*Body, J
 type HeldTopology = reportvocab.HeldTopology
 
 // RegionReadings groups a solid body's volume and centroid.
-type RegionReadings = reportvocab.RegionReadings
+type RegionReadings struct {
+	Volume   ScalarReading
+	Centroid VectorReading
+}
+
+func regionReadingsFromInternal(in *reportvocab.RegionReadings) *RegionReadings {
+	if in == nil {
+		return nil
+	}
+	return &RegionReadings{
+		Volume: scalarReadingFromInternal(in.Volume), Centroid: vectorReadingFromInternal(in.Centroid),
+	}
+}
+
+func regionReadingsToInternal(in *RegionReadings) *reportvocab.RegionReadings {
+	if in == nil {
+		return nil
+	}
+	return &reportvocab.RegionReadings{
+		Volume: scalarReadingToInternal(in.Volume), Centroid: vectorReadingToInternal(in.Centroid),
+	}
+}
 
 // BodyReport records one body's verification results.
 type BodyReport struct {

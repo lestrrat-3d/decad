@@ -63,7 +63,7 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `doc.go` | Package scope, support map and layering. |
 | `errors.go` | Sentinel errors (from `internal/decaderr/`) and `BooleanError`. See api §12, §8. |
-| `measurement.go` | Public reading aliases and analytic result gate. |
+| `measurement.go` | Public bounded reading types, internal adapters and analytic result gate. |
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
 | `record.go` | Root-owned `Point2`, structural record aliases, and slice adapters. See sketch-seam §2. |
 | `seam.go` | Sketch recording adapters and `MeasureProfile`. See sketch-seam §1–§2. |
