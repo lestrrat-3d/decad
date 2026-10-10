@@ -198,7 +198,7 @@ func rotationFormPaths(t *testing.T) map[string]rotationalSweepPath {
 
 	paths := map[string]rotationalSweepPath{}
 	sourceBox := func(name string, body *Body, segment PairPath) {
-		path, err := sweeppath.Validate(segment)
+		path, err := sweeppath.Validate(encodedPairPath(segment))
 		require.NoError(t, err, name)
 		prepared, ok := prepareRotationalSweepPath(body, path)
 		require.True(t, ok, name)
