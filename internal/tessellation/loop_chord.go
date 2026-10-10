@@ -22,6 +22,19 @@ func ChordLoop[F any](ctx context.Context, loop sectionrecord.LoopRecord, chord,
 	wallFace func(survey2d.SideWalk) (F, error),
 	stationBound func(sectionrecord.CurveSegment, int, int, float64, float64) proofbound.WalkEndBound,
 ) (ChordSamples[F], error) {
+	return ChordLoopWithCountFloor(ctx, loop, chord, height, work, resolved, roleLoop,
+		wallFace, stationBound, nil)
+}
+
+// ChordLoopWithCountFloor uses at least the caller's circular count for each
+// resolved walk. A composite sweep uses this to give every span the same
+// profile parameter stations after each reduction has chosen its own minimum.
+func ChordLoopWithCountFloor[F any](ctx context.Context, loop sectionrecord.LoopRecord, chord, height float64,
+	work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, roleLoop int,
+	wallFace func(survey2d.SideWalk) (F, error),
+	stationBound func(sectionrecord.CurveSegment, int, int, float64, float64) proofbound.WalkEndBound,
+	countFloor func(survey2d.SideWalk) int,
+) (ChordSamples[F], error) {
 	if len(loop.Segments) == 0 {
 		return ChordSamples[F]{}, fmt.Errorf(`%w: a recorded loop holds no segments`, decaderr.ErrDegenerate)
 	}
@@ -57,7 +70,8 @@ func ChordLoop[F any](ctx context.Context, loop sectionrecord.LoopRecord, chord,
 	if err != nil {
 		return ChordSamples[F]{}, err
 	}
-	sampled, err := SampleLoop(walks, loop.Segments, chord, height, work, budget, wallFace, stationBound)
+	sampled, err := SampleLoopWithCountFloor(walks, loop.Segments, chord, height, work, budget,
+		wallFace, stationBound, countFloor)
 	if err != nil {
 		return ChordSamples[F]{}, err
 	}

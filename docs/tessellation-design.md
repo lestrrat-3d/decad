@@ -304,11 +304,45 @@ analytic walk's do (`docs/tessellation-reach-design.md` §5).
 | `facetedPayload` | held polygons + inherited boundary certificate | the largest facet bound over that face's own facets, each the largest of its corners' per-vertex bounds, which the restatement publishes as the mesh's own record | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
 | `capBlendPayload` | `docs/tessellation-reach-design.md` §7 owns this row: one count per wall walk shared by the trimmed side wall, the band patch and the cap contour | that document's per-patch term table | max per-face source bound | that document's per-patch composition | that document's §7 slice-wise proof — the chord-polygon segment integral over the trimmed and band ranges plus `sweptVolumeAllow` over the per-vertex motion — with `symDiffOK == true` for a band whose every corner is a line-line miter or an exactly G1 join, or a whole turn; `symDiffOK == false` for every other band |
 | `stitchPayload` | the triangle set `Stitch`'s own build assembled and audited (`docs/surface-design.md` §6.4), all-planar only (`stitchAllTetrahedronEligible`), CLOSED or OPEN; attributed by the payload's own recorded per-triangle live face, never by role (§4) | the largest `Vertex.Bound()` over the vertices that face's own triangles touch; zero only when every one of them is | max per-face source bound | `perturbedTriangleAreaAllow` per triangle at that triangle's own largest vertex bound, summed through `absSumUpper`; zero wherever every vertex bound is zero | zero, `symDiffOK == true`, for a CLOSED body (`b.Kind() == BodySolid`) whose every vertex carries a proven bound of exactly zero (`stitchZeroVertexBound`, the same gate `docs/clearance-design.md` §2's stitch arm applies): every held vertex is then the true boundary vertex, every triangulated polygon is that face's own exact `Line3` boundary, and ear clipping tiles it exactly, so the held triangle set occupies exactly the denoted volume; `symDiffOK == false` for every other case (open, curved/mixed, placed, or certificate-welded) — the tetrahedron sum there proves only SIGNED volume, never the occupied-volume symmetric-difference bound this row requires before a boolean may consume it |
-| `sweepPayload` | a one-span straight sweep uses its `prismPayload` row; a one-span arc sweep uses its `revolvePayload` row, mapping wall and cap roles to the sweep's live faces (`docs/sweep-design.md` Table D row D2). Composite paths are `ErrUnsupported`; sheets publish no occupied-volume proof | the selected reduction's | the selected reduction's | the selected reduction's | the selected reduction's |
+| `sweepPayload` | one-span reduction or composite shared-station grid (below) | reduction bound plus join movement | max per-face | reduction slack plus join area movement | span `volSymDiff` plus join swept volume; sheets publish none |
 | `mitredSweepPayload` | the held triangles of `docs/sweep-design.md` Table BM, two per planar wall quad plus both caps, attributed by each triangle's recorded face; a tolerance below `delta` is `ErrUnsupported` (§7's rule) | the largest `vertexBound` over that face's own triangles, where each vertex's `vertexBound` is its own gap to its exact rational, rounded up (sweep §16.3); zero for a face whose every corner rounds exactly | `delta`, the largest `vertexBound` | `perturbedTriangleAreaAllow` at `delta` per triangle, summed through `absSumUpper` | `sweptVolumeAllow(delta, perturbedAreaUpper)`, `symDiffOK == true`, which admits it to the mesh boolean (sweep Table DM row DM3) |
 | `coilPayload` | the held triangles of `docs/helix-design.md` §5, walls attributed to their segment's `side(i, j)` face and caps to `capStart`/`capEnd`; a tolerance below `delta` is `ErrUnsupported` (§7's rule) | the largest `vertexBound` over that face's own triangles, each vertex's `vertexBound` its `β` (helix §5.4, the shifted correspondence's departure plus the cell's largest station rounding) | `delta`, the largest `β` | helix §8.1: per wall cell `cellTwistAreaProjectedAllow` on the held corners, the held-to-true-corner bilinear term at the largest station rounding, and the closed-form bilinear-to-true density term; `perturbedTriangleAreaAllow` at `delta` per cap triangle | helix §8.2: `sweptVolumeAllow` at the largest station rounding over `perturbedAreaUpper`, plus the wall homotopy's per-cell sweep under helix §5.4's shifted correspondence, `symDiffOK == true` |
 | `stitchPayload` (revolve-backed) | T10 copies a complete source revolve-sheet mesh; T11 also accepts §10.2's pointer-proven sibling weld, both mapping triangles to live faces | source mesh's per-face bound, including meridian/angular chording and construction/placement rounding (§8); zero extra stitch displacement | max mapped per-face bound | source mesh's non-cancelling area allowance at `VerifyAll` | no occupied-volume proof; `symDiffOK == false` for closed and open results |
 | `chainPayload` | read straight off each wall's own `Face` -> `Loop` -> `CoEdge` -> `Vertex`, an exact planar quad per `LineSeg` segment (`docs/surface-design.md` §13.4 Table G); a curved or free-form segment's `Cylinder`/`NURBSSurface` wall is `ErrUnsupported` (`tessellate_chain.go`) | the largest corner `Vertex.Bound()` over that wall's four corners, plus `sectionDelta`; zero for an unplaced, unwidened wall | max per-face source bound | the per-triangle perturbation each corner's own bound admits, plus `sectionDelta`'s wall-length term over the sweep height when nonzero | no occupied-volume proof, `symDiffOK == false`, permanently (`docs/surface-design.md` §10); a `chainSweepPayload`'s one-span straight reduction wraps this row unchanged (`sweep.go`'s `finishChainSweepBody`) |
+
+### Composite sweep shared grid
+
+A composite Sweep plans one chord count per recorded line or circular profile
+segment before it meshes any span. The count is the largest minimum its prism
+and Revolve reductions require at the requested tolerance. Both reductions
+recompute their sagitta, area and occupied-volume terms at the chosen count.
+They may use different angular counts along different arc path spans; each
+span uses one angular sequence across all its profile walks.
+
+The composite mesh maps each span's endpoint ring by the profile segment's
+station index. A join uses the preceding span's stored vertex. The next
+span's exact dyadic distance to it must fit within both spans' source bounds;
+that distance is then charged as coordinate movement to every affected
+source face, to per-triangle area slack and to the span mesh solid's swept
+volume. Internal cap triangles are omitted from the final boundary. Their
+two triangulations tile the same planar polygon because they use the same
+ordered station vertices. The final mesh uses only the outer two caps for a
+solid and no caps for a sheet.
+
+Each span runs its own positive-area and facet-contact audits. The combined
+mesh runs the closed-boundary or sheet-boundary audit, vertex-link audit,
+positive-area audit and cross-span facet-contact audit. The cross-span audit
+charges construction and placement coordinate movement, including join
+movement. Chording is covered by each span's own proof and by the analytic
+composite separation audit. For a solid, the occupied-volume symmetric
+difference is at most the nonnegative sum of each span's bound and its
+join-movement swept-volume allowance. No generic `Bound × Area` replacement
+is used. A sheet publishes no occupied-volume proof.
+
+The current adapter refuses Tier A free-form profile walks and meridian poles.
+It also refuses a span whose resolved walk order or station count differs from
+the shared plan, and a shared section whose coordinate gap exceeds the
+two-sided source bounds. All such refusals are `ErrUnsupported`.
 
 ### `loftPayload` exact restatement
 

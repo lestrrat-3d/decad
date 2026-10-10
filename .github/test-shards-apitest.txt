@@ -908,7 +908,13 @@
 2	0.03	TestSweepArcTessellatesAsItsRevolve
 2	0.03	TestSweepArcTessellationMapsReversedCaps
 2	0.08	TestSweepArcIsABooleanOperand
-2	0.00	TestSweepCompositeTessellationRefused
+2	0.00	TestSweepCompositeTessellatesSharedGrid
+2	0.00	TestSweepCompositePolygonHoleTessellates
+2	0.00	TestSweepCompositePlacedMesh
+2	0.00	TestSweepCompositeSheetMesh
+2	0.00	TestSweepCompositeMeshBoolean
+2	0.00	TestSweepCompositeCircularHoleTessellates
+2	0.00	TestSweepCompositeStraightCircularHoleMesh
 2	0.00	TestSweptBoxStrictlyDisjoint
 2	0.01	TestTangentChainNearTangentStops
 2	0.01	TestTangentChainOvalArcArc

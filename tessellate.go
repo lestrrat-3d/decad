@@ -43,6 +43,10 @@ type Mesh struct {
 	triangles [][3]int
 	source    []*Face
 	bound     float64 // millimetres
+	// coordBound is the largest stored-vertex displacement from construction
+	// and placement, excluding curve chording. Composite sweep contact proofs
+	// read it when they reuse prism and revolve span meshes.
+	coordBound float64
 	// faceBound is docs/tessellation-design.md §2's sourceBound(face): the
 	// two-sided displacement between the true trimmed face patch and the facets
 	// held for it, one entry for EVERY face appearing in source. bound is the
@@ -244,13 +248,15 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // this package cannot prove.
 //
 // Prism, revolve, cup, loft, cap-loop chamfer and boolean-built bodies
-// tessellate. So does a solid [Document.Sweep] along a one-span straight path:
-// it is the prism it reduced to, and its mesh is that prism's mesh, proofs and
-// all, with each wall triangle naming the sweep's own wall face. Every other
-// sweep — an arc path, a composite path, a surface result — is
-// [ErrUnsupported] (docs/sweep-design.md Table D row D2). A revolved body meshes its meridian section and one GLOBAL
-// angular sequence, so every generator face shares its whole latitude edge and
-// a full turn closes with no seam; its two coordinate stages — the construction that computes each sample
+// tessellate. A one-span [Document.Sweep] reuses its prism or Revolve mesh.
+// A composite Sweep with line and circular profile walks chooses shared
+// profile stations across its spans and maps each facet to the body's live
+// face. A solid composite mesh carries an occupied-volume proof; a sheet
+// mesh does not. Composite free-form profile walks and meridian poles are
+// [ErrUnsupported] (docs/sweep-design.md Table D row D2).
+// A revolved body meshes its meridian section and one GLOBAL angular sequence,
+// so every generator face shares its whole latitude edge and a full turn
+// closes with no seam; its two coordinate stages — the construction that computes each sample
 // and the placement that moves it — are reserved from tol before any chord is
 // chosen, and a tol they exhaust is [ErrUnsupported]. What tol then buys is
 // split between the meridian and the angles, so a CIRCULAR generator (a sphere
@@ -502,7 +508,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// One-span sweeps reuse the prism or revolve mesh of their exact
 		// analytic reduction. A sheet carries no occupied-volume proof.
 		if len(sp.spans) != 0 {
-			return nil, fmt.Errorf(`%w: tessellation of a composite sweep path is staged (docs/sweep-design.md Table D row D2)`, ErrUnsupported)
+			return tessellateCompositeSweep(ctx, b, sp, chord, verify)
 		}
 		if sp.arc {
 			return tessellateRevolveWithRoles(ctx, b, sp.revolve, chord, verify, sweepArcRole(sp.reverseArcCaps))
@@ -513,7 +519,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, stacked prism, brep, chain-fed prism, one-span sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, stacked prism, brep, chain-fed prism, sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, b.payload)
 	}
 	return tessellatePrism(ctx, b, pp, prismWallRole, chord, verify)
 }
@@ -550,6 +556,12 @@ func sweepArcRole(reverseCaps bool) func(string) string {
 // section walk's wall carries, which is the one thing a prism and the
 // one-span straight sweep that reduced to one name differently.
 func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole func(loop, seg int) string, chord float64, verify Verification) (*Mesh, error) {
+	return tessellatePrismWithCountFloor(ctx, b, pp, wallRole, chord, verify, nil)
+}
+
+func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload,
+	wallRole func(loop, seg int) string, chord float64, verify Verification,
+	countFloor func(loop, seg int) int) (*Mesh, error) {
 	// sheet is docs/surface-design.md §4.1's own flag, read once: a surface
 	// result omits both caps from its wall build (prism_build.go), and every
 	// arm below that would otherwise touch a cap face, a cap triangulation or
@@ -648,9 +660,13 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		cl, err := tessellation.ChordLoop(ctx, loop, budget, pp.z1-pp.z0, work, pw, li, func(w survey2d.SideWalk) (*Face, error) {
+		var floor func(survey2d.SideWalk) int
+		if countFloor != nil {
+			floor = func(w survey2d.SideWalk) int { return countFloor(li, w.Segs[0]) }
+		}
+		cl, err := tessellation.ChordLoopWithCountFloor(ctx, loop, budget, pp.z1-pp.z0, work, pw, li, func(w survey2d.SideWalk) (*Face, error) {
 			return faceOfRole(wallRole(li, w.Segs[0]))
-		}, stationbound.ChordStationBound)
+		}, stationbound.ChordStationBound, floor)
 		if err != nil {
 			return nil, err
 		}
@@ -693,6 +709,7 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 	if err != nil {
 		return nil, err
 	}
+	mesh.coordBound = storeMax
 
 	// Prove loop clearance before both caps reuse the wall rings' vertices.
 	if err := tessellation.PrismCaps(ctx, &topology, sheet, capStart, capEnd,

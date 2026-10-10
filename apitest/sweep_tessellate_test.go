@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -227,19 +228,182 @@ func TestSweepArcIsABooleanOperand(t *testing.T) {
 		sweepVolume.Value.Base()+boxVolume.Value.Base())
 }
 
-// TestSweepCompositeTessellationRefused keeps D2 staged for a composite path.
-// Deleting the span-count gate meshes its unused prism field instead.
-func TestSweepCompositeTessellationRefused(t *testing.T) {
+// TestSweepCompositeTessellatesSharedGrid covers a real arc-line-arc solid.
+// Each join point must use one mesh vertex across both adjacent spans.
+func TestSweepCompositeTessellatesSharedGrid(t *testing.T) {
 	t.Parallel()
-	s, profile := plateSketch(t)
-	path, err := decad.NewPath(
-		r3.Vec{},
+	s, profile, path, _, joins := orthogonalSweepFixture(t)
+	body, err := decad.New().Sweep(t.Context(), s, profile, path)
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Greater(t, meshVolume(mesh), 0.0)
+	unverified, err := body.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyNone))
+	require.NoError(t, err)
+	require.Equal(t, mesh.Vertices(), unverified.Vertices())
+	require.Equal(t, mesh.Triangles(), unverified.Triangles())
+	require.False(t, unverified.BoundaryVerified())
+	require.False(t, unverified.VolumeVerified())
+	require.Len(t, mesh.SourceFaces(), len(mesh.Triangles()))
+	live := map[*decad.Face]struct{}{}
+	for _, face := range body.Faces() {
+		live[face] = struct{}{}
+	}
+	for _, face := range mesh.SourceFaces() {
+		require.Contains(t, live, face)
+	}
+	for _, join := range joins {
+		for _, point := range join {
+			matches := 0
+			for _, vertex := range mesh.Vertices() {
+				if vertex.Sub(point).Len() < 1e-9 {
+					matches++
+				}
+			}
+			require.Equal(t, 1, matches, "join point %v must have one shared mesh vertex", point)
+		}
+	}
+}
+
+func TestSweepCompositePolygonHoleTessellates(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	outer := s.CreateRectangle(-1, -1, 1, 1)
+	s.Fix(outer.A)
+	s.CreateRectangle(-0.5, -0.5, 0.5, 0.5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var profile *sketch.Profile
+	for _, candidate := range s.Profiles() {
+		if candidate.Valid && len(candidate.Holes) == 1 {
+			profile = candidate
+			break
+		}
+	}
+	require.NotNil(t, profile)
+	body, err := decad.New().Sweep(t.Context(), s, profile, orthogonalSweepPath(t))
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+
+	outerSketch, outerProfile, outerPath, _, _ := orthogonalSweepFixture(t)
+	full, err := decad.New().Sweep(t.Context(), outerSketch, outerProfile, outerPath)
+	require.NoError(t, err)
+	holeVolume, err := body.Volume()
+	require.NoError(t, err)
+	fullVolume, err := full.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, fullVolume.Value.Base()*0.75, holeVolume.Value.Base(), 1e-8)
+	require.InDelta(t, holeVolume.Value.Base(), meshVolume(mesh), holeVolume.Value.Base()*0.01)
+}
+
+func TestSweepCompositePlacedMesh(t *testing.T) {
+	t.Parallel()
+	s, profile, path, _, _ := orthogonalSweepFixture(t)
+	base, err := decad.New().Sweep(t.Context(), s, profile, path)
+	require.NoError(t, err)
+	baseMesh, err := base.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	move, err := r3.Translation(r3.NewVec(0.1, 0.2, 0.3))
+	require.NoError(t, err)
+	placed, err := base.PlacedCopy(t.Context(), move)
+	require.NoError(t, err)
+	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Len(t, mesh.Triangles(), len(baseMesh.Triangles()))
+	require.InDelta(t, meshVolume(baseMesh), meshVolume(mesh), 1e-8)
+}
+
+func TestSweepCompositeSheetMesh(t *testing.T) {
+	t.Parallel()
+	s, profile, path, _, _ := orthogonalSweepFixture(t)
+	sheet, err := decad.New().Sweep(t.Context(), s, profile, path, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, sheet.Kind())
+	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.False(t, mesh.VolumeVerified())
+	require.Len(t, mesh.SourceFaces(), len(mesh.Triangles()))
+	live := map[*decad.Face]struct{}{}
+	for _, face := range sheet.Faces() {
+		live[face] = struct{}{}
+	}
+	for _, face := range mesh.SourceFaces() {
+		require.Contains(t, live, face)
+	}
+}
+
+func TestSweepCompositeMeshBoolean(t *testing.T) {
+	t.Parallel()
+	s, profile, path, _, _ := orthogonalSweepFixture(t)
+	doc := decad.New()
+	swept, err := doc.Sweep(t.Context(), s, profile, path)
+	require.NoError(t, err)
+	w := sketch.NewWorld()
+	bs, bp := meshPolygonSketch(t, w, w.XY(), [][2]float64{{0, 0}, {2, 0}, {2, 2}, {0, 2}})
+	box, err := doc.Extrude(bs, bp, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	require.NoError(t, err)
+	move, err := r3.Translation(r3.NewVec(10.25, 0.25, 4.5))
+	require.NoError(t, err)
+	box, err = box.Placed(t.Context(), move)
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), swept, box)
+	require.NoError(t, err)
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	// The line span has a 2 × 0.75 × 1.5 mm³ overlap with the box.
+	want := 40 + 20*math.Pi + 8 - 2.25
+	require.LessOrEqual(t, volume.Value.Base()-volume.Bound.Base(), want)
+	require.GreaterOrEqual(t, volume.Value.Base()+volume.Bound.Base(), want)
+}
+
+func TestSweepCompositeCircularHoleTessellates(t *testing.T) {
+	t.Parallel()
+	s, profile := orthogonalSweepProfileWithHole(t)
+	path := orthogonalSweepPath(t)
+	body, err := decad.New().Sweep(t.Context(), s, profile, path)
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, volume.Value.Base(), meshVolume(mesh), volume.Value.Base()*0.02)
+	sheet, err := decad.New().Sweep(t.Context(), s, profile, path, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	sheetMesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, sheetMesh.BoundaryVerified())
+	require.False(t, sheetMesh.VolumeVerified())
+}
+
+func TestSweepCompositeStraightCircularHoleMesh(t *testing.T) {
+	t.Parallel()
+	s, profile := orthogonalSweepProfileWithHole(t)
+	path, err := decad.NewPath(r3.Vec{},
 		decad.LineTo{End: r3.NewVec(0, 0, 5)},
-		decad.LineTo{End: r3.NewVec(0, 0, 10)},
-	)
+		decad.LineTo{End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
 	body, err := decad.New().Sweep(t.Context(), s, profile, path)
 	require.NoError(t, err)
-	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, (4-math.Pi/4)*10, volume.Value.Base(), 1e-8)
+	require.Greater(t, meshVolume(mesh), volume.Value.Base())
+	require.Less(t, meshVolume(mesh), 40.0)
 }

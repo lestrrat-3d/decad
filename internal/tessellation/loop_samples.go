@@ -52,6 +52,17 @@ func SampleLoop[F any](walks []survey2d.SideWalk, segments []sectionrecord.Curve
 	wallFace func(survey2d.SideWalk) (F, error),
 	stationBound func(sectionrecord.CurveSegment, int, int, float64, float64) proofbound.WalkEndBound,
 ) (ChordSamples[F], error) {
+	return SampleLoopWithCountFloor(walks, segments, chord, height, work, budget, wallFace, stationBound, nil)
+}
+
+// SampleLoopWithCountFloor raises circular station counts to a shared caller
+// floor while recomputing every sagitta and area term at the chosen count.
+func SampleLoopWithCountFloor[F any](walks []survey2d.SideWalk, segments []sectionrecord.CurveSegment,
+	chord, height float64, work *freeform.FreeformWork, budget *proofbound.WorkBudget,
+	wallFace func(survey2d.SideWalk) (F, error),
+	stationBound func(sectionrecord.CurveSegment, int, int, float64, float64) proofbound.WalkEndBound,
+	countFloor func(survey2d.SideWalk) int,
+) (ChordSamples[F], error) {
 	var samples []sectionrecord.Point2
 	var faceOf []F
 	var sagOf []float64
@@ -102,6 +113,15 @@ func SampleLoop[F any](walks []survey2d.SideWalk, segments []sectionrecord.Curve
 			n, sag, err := ChordCount(w.SegmentWalk, chord, ChordWalkMin(w.SegmentWalk))
 			if err != nil {
 				return ChordSamples[F]{}, err
+			}
+			if countFloor != nil {
+				if floor := countFloor(w); floor > n {
+					if floor > freeform.MaxChordsPerWalk {
+						return ChordSamples[F]{}, freeform.ErrTooManyChords
+					}
+					n = floor
+					sag = ChordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), n)
+				}
 			}
 			maxSag = math.Max(maxSag, sag)
 			wallSlack = proofbound.AbsSumUpper(wallSlack, proofbound.ProductUpper(WalkWallSlack(w.SegmentWalk, n, height), 1+1e-9))
