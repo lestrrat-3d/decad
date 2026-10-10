@@ -37,7 +37,12 @@ func loftSectionSegmentBox(seg curveSegment, w survey2d.SegmentWalk) (loftSectio
 				loftLineCoordinate(seg.Start.V, seg.End.V, seg.TEnd)),
 		}, nil
 	case arcSeg:
-		u, v, ok := circularbounds.ArcBox(circularbounds.RecordSegment(seg).(circularbounds.ArcSeg))
+		record := circularbounds.RecordSegment(seg)
+		arc, ok := record.(circularbounds.ArcSeg)
+		if !ok {
+			return loftSectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound an arc`, ErrUnsupported)
+		}
+		u, v, ok := circularbounds.ArcBox(arc)
 		if !ok {
 			return loftSectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound an arc`, ErrUnsupported)
 		}

@@ -58,10 +58,10 @@ func TestLoftFilletRectangleCorner(t *testing.T) {
 	require.Positive(t, filletRoles)
 	shift, err := r3.Translation(r3.NewVec(20, 0, 0))
 	require.NoError(t, err)
-	copy, err := rounded.PlacedCopy(t.Context(), shift)
+	placedCopy, err := rounded.PlacedCopy(t.Context(), shift)
 	require.NoError(t, err)
 	copyFilletRoles := 0
-	for _, face := range copy.Faces() {
+	for _, face := range placedCopy.Faces() {
 		for _, origin := range face.Origins() {
 			if strings.HasPrefix(origin.Role, "fillet(0,") {
 				copyFilletRoles++
