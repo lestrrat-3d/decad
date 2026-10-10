@@ -205,7 +205,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 		if err != nil {
 			return 0, 0, false
 		}
-		return capband.PullComponent(n, p, pLen)
+		return capband.PullComponent(vecMeasurementToInternal(n), p, pLen)
 	}
 	if !g.Circular {
 		v, allow, ok := sampleAt(pl.point(g.SideA.U, g.SideA.V, g.SideZ))

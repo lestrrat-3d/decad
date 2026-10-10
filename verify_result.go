@@ -116,7 +116,7 @@ func scalarReadingPtrToInternal(in *ScalarReading) *reportvocab.ScalarReading {
 }
 
 func vectorReadingFromInternal(in reportvocab.VectorReading) VectorReading {
-	return VectorReading{VecMeasurement: VecMeasurement(in.VecMeasurement), Tolerance: in.Tolerance}
+	return VectorReading{VecMeasurement: vecMeasurementFromInternal(in.VecMeasurement), Tolerance: in.Tolerance}
 }
 
 func vectorReadingToInternal(in VectorReading) reportvocab.VectorReading {
@@ -126,7 +126,7 @@ func vectorReadingToInternal(in VectorReading) reportvocab.VectorReading {
 }
 
 func boundsReadingFromInternal(in reportvocab.BoundsReading) BoundsReading {
-	return BoundsReading{Box: Box(in.Box), Tolerance: in.Tolerance}
+	return BoundsReading{Box: boxFromInternal(in.Box), Tolerance: in.Tolerance}
 }
 
 func boundsReadingToInternal(in BoundsReading) reportvocab.BoundsReading {

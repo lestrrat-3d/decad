@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
@@ -34,7 +35,13 @@ func secondMoments(record momentinput.Profile) (decad.SecondMoments, error) {
 	if err != nil {
 		return decad.SecondMoments{}, err
 	}
-	return decad.SecondMoments{UU: uu, UV: uv, VV: vv}, nil
+	return decad.SecondMoments{
+		UU: rootRecordMeasurement(uu), UV: rootRecordMeasurement(uv), VV: rootRecordMeasurement(vv),
+	}, nil
+}
+
+func rootRecordMeasurement(m measurement.Measurement) decad.Measurement {
+	return decad.Measurement{Value: m.Value, Exactness: decad.Exactness(m.Exactness), Bound: m.Bound}
 }
 
 func momentLine(u0, v0, u1, v1 float64) sectionrecord.CurveSegment {
@@ -445,13 +452,13 @@ func TestRegionAreaAndCentroidRectangle(t *testing.T) {
 
 	area, err := record.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, area.Exactness)
+	require.Equal(t, measurement.Exact, area.Exactness)
 	require.Zero(t, area.Bound.Mag())
 	require.True(t, area.Value.Equal(units.SquareMillimeters(6000), 1e-9))
 
 	centroid, err := record.Centroid()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, centroid.Exactness)
+	require.Equal(t, measurement.Exact, centroid.Exactness)
 	require.InDelta(t, 60, centroid.Value.X, 1e-9)
 	require.InDelta(t, 50, centroid.Value.Y, 1e-9)
 	require.Zero(t, centroid.Value.Z)
@@ -493,7 +500,7 @@ func TestRegionAreaWholeCircle(t *testing.T) {
 
 	area, err := record.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Equal(t, measurement.Approximate, area.Exactness)
 	require.Positive(t, area.Bound.Base())
 	got, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
@@ -506,7 +513,7 @@ func TestRegionAreaWholeCircle(t *testing.T) {
 
 	centroid, err := record.Centroid()
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, centroid.Exactness)
+	require.Equal(t, measurement.Approximate, centroid.Exactness)
 	require.Positive(t, centroid.Bound.Base())
 	require.InDelta(t, 5.0, centroid.Value.X, 1e-9)
 	require.InDelta(t, -3.0, centroid.Value.Y, 1e-9)
@@ -907,7 +914,7 @@ func TestOverflowingSecondMomentKeepsExactArea(t *testing.T) {
 
 	area, err := record.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, area.Exactness, "this area is not representable in float64")
+	require.Equal(t, measurement.Approximate, area.Exactness, "this area is not representable in float64")
 	value, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	bound, err := area.Bound.In(units.SquareMillimeter)
@@ -1034,12 +1041,12 @@ func TestLineRationalRoundingIsBounded(t *testing.T) {
 
 	area, err := rec.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, area.Exactness)
+	require.Equal(t, measurement.Exact, area.Exactness)
 	require.Zero(t, area.Bound.Base())
 
 	centroid, err := rec.Centroid()
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, centroid.Exactness)
+	require.Equal(t, measurement.Approximate, centroid.Exactness)
 	require.Positive(t, centroid.Bound.Base())
 	want := 1.0 / 3
 	require.LessOrEqual(
@@ -1071,7 +1078,7 @@ func TestUnderflowingLineRegionAreaPublishesBoundedZero(t *testing.T) {
 	value, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.Zero(t, value, "no float64 holds 1e-326")
-	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Equal(t, measurement.Approximate, area.Exactness)
 	require.Positive(t, area.Bound.Base(), "the bound is the rounding that produced the zero")
 }
 
@@ -1098,7 +1105,7 @@ func TestArcSegExactQuarterDisk(t *testing.T) {
 
 	centroid, err := record.Centroid()
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Equal(t, measurement.Approximate, area.Exactness)
 	require.Positive(t, area.Bound.Base())
 	require.InDelta(t, 4*radius/(3*math.Pi), centroid.Value.X, 1e-9)
 	require.InDelta(t, 4*radius/(3*math.Pi), centroid.Value.Y, 1e-9)
@@ -1110,7 +1117,7 @@ func TestArcSegExactQuarterDisk(t *testing.T) {
 
 	moments, err := secondMoments(record)
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, centroid.Exactness)
+	require.Equal(t, measurement.Approximate, centroid.Exactness)
 	require.Positive(t, centroid.Bound.Base())
 	wantCentroid := 4 * radius / (3 * math.Pi)
 	require.LessOrEqual(t, math.Hypot(centroid.Value.X-wantCentroid, centroid.Value.Y-wantCentroid), centroid.Bound.Base())

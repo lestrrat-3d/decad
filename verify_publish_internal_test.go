@@ -625,7 +625,7 @@ func TestVerifyPublishToleranceReferenceUnavailable(t *testing.T) {
 	m := Measurement{Value: units.Millimeters(5), Exactness: Approximate, Bound: units.Millimeters(0.001)}
 	body := rectangularPrism(t, 10, 10, 10)
 
-	tr, diag := tolerance.ScalarVerdict[*Body, JointCell](ReadingWall, SurveyWall, body, m, 1e-3, in.lengthReference)
+	tr, diag := tolerance.ScalarVerdict[*Body, JointCell](ReadingWall, SurveyWall, body, measurementToInternal(m), 1e-3, in.lengthReference)
 	require.Equal(t, ToleranceUndecided, tr.State)
 	require.Nil(t, tr.Limit)
 	require.NotNil(t, diag)

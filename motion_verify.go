@@ -355,7 +355,7 @@ func (r *motionRun) setup(moving []*Body) {
 	for i := range r.movers {
 		mv := &r.movers[i]
 		if r.spec.Kind != motionbound.MotionPrismatic {
-			mv.rho = motionbound.MoverAxisRadius(mv.body.bounds, r.spec.Frame)
+			mv.rho = motionbound.MoverAxisRadius(boxToInternal(mv.body.bounds), r.spec.Frame)
 		}
 		// The swept box covers every pose from where the path's box was read:
 		// for a Revolute or a Prismatic that is the mover at rest — the
@@ -366,7 +366,7 @@ func (r *motionRun) setup(moving []*Body) {
 			motionbound.MoverTravel(r.spec.Frame, mv.rho, zero, r.spec.FromP),
 			motionbound.MoverTravel(r.spec.Frame, mv.rho, zero, r.spec.ToP),
 		)
-		lo, hi, ok := motionbound.MoverSweptBox(mv.body.bounds, r.spec.Frame, travel)
+		lo, hi, ok := motionbound.MoverSweptBox(boxToInternal(mv.body.bounds), r.spec.Frame, travel)
 		swept[i] = motionSweptBox{lo: lo, hi: hi, ok: ok}
 	}
 	r.formPairs(swept)
@@ -454,7 +454,7 @@ func staticPair(mv motionMover, st motionStatic, swept motionSweptBox) motionPai
 		return pair
 	}
 	if swept.ok {
-		if lower, ok := motionbound.SweptBoxLower(swept.lo, swept.hi, st.body.bounds); ok {
+		if lower, ok := motionbound.SweptBoxLower(swept.lo, swept.hi, boxToInternal(st.body.bounds)); ok {
 			pair.excluded, pair.lower = true, lower
 			return pair
 		}
@@ -899,10 +899,11 @@ func (r *motionRun) settleConstant(i, k int) error {
 	if outcome != interferenceMeasured {
 		return nil
 	}
-	published, ok := motionbound.TransferredOverlap(volume, true, 0)
+	publishedInternal, ok := motionbound.TransferredOverlap(measurementToInternal(volume), true, 0)
 	if !ok {
 		return nil
 	}
+	published := measurementFromInternal(publishedInternal)
 	beyond, fails, err := r.collisionBeyond(mover, partner, mover, partner, published)
 	if err != nil {
 		return err
@@ -1023,7 +1024,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		r.poseDiag(mp, mp.stamp(diag))
 		return nil
 	}
-	published, ok := motionbound.TransferredOverlap(volume, outcome == interferenceMeasured, allowance)
+	publishedInternal, ok := motionbound.TransferredOverlap(measurementToInternal(volume), outcome == interferenceMeasured, allowance)
 	if !ok && declared {
 		return nil
 	}
@@ -1035,6 +1036,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		r.poseDiag(mp, mp.stamp(pairDiagNone(mover, partner, DiagUndecidedInterference, msg)))
 		return nil
 	}
+	published := measurementFromInternal(publishedInternal)
 	beyond, fails, err := r.collisionBeyond(a.body, target, mover, partner, published)
 	if err != nil {
 		return err

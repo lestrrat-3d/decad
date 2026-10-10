@@ -94,7 +94,7 @@ type bodyReadingDiagSet = tolerance.BodyDiagSet[*Body, JointCell]
 // edgeLength reads each held geometric chain directly even when public
 // Edge.Length must refuse a curved boolean rim.
 func bodyReadingDiagnostics(ctx context.Context, body *Body, readings bodyReadingSet, rel float64) (bodyReadingVerdicts, bodyReadingDiagSet, error) {
-	in := &bodyToleranceInputs{ctx: ctx, body: body, area: readings.Area}
+	in := &bodyToleranceInputs{ctx: ctx, body: body, area: measurementFromInternal(readings.Area)}
 	verdicts, diagSet := tolerance.BodyDiagnostics[*Body, JointCell](body, readings, rel,
 		tolerance.BodyReferences{
 			Area: in.areaReference, Volume: in.volumeReference,

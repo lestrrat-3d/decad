@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -129,7 +130,7 @@ func requireCrossingPolygon(t *testing.T, record momentinput.Profile, lines [][2
 	require.NoError(t, err)
 	requireRatEncloses(t, `centroid u`, centroid.Value.X, cb, wantCentroid.u)
 	requireRatEncloses(t, `centroid v`, centroid.Value.Y, cb, wantCentroid.v)
-	return area
+	return rootRecordMeasurement(area)
 }
 
 // longLinesThrough extends each side of a polygon to a line reaching far past
@@ -189,7 +190,7 @@ func TestProfileRecordClosesLongCutSquareExactly(t *testing.T) {
 	require.Equal(t, 100.0, value)
 	centroid, err := record.Centroid()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, centroid.Exactness)
+	require.Equal(t, measurement.Exact, centroid.Exactness)
 	require.Equal(t, 5.0, centroid.Value.X)
 	require.Equal(t, 5.0, centroid.Value.Y)
 }

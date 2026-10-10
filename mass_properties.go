@@ -36,10 +36,11 @@ func massPropertiesFromReadings(readings massmoment.MassReadings, err error) (Ma
 	}
 	tensor := readings.Tensor
 	return MassProperties{
-		Mass: readings.Mass, Center: readings.Center,
+		Mass: measurementFromInternal(readings.Mass), Center: vecMeasurementFromInternal(readings.Center),
 		Inertia: InertiaReading{
-			XX: tensor[0], YY: tensor[1], ZZ: tensor[2],
-			XY: tensor[3], XZ: tensor[4], YZ: tensor[5],
+			XX: measurementFromInternal(tensor[0]), YY: measurementFromInternal(tensor[1]),
+			ZZ: measurementFromInternal(tensor[2]), XY: measurementFromInternal(tensor[3]),
+			XZ: measurementFromInternal(tensor[4]), YZ: measurementFromInternal(tensor[5]),
 		},
 	}, nil
 }
@@ -86,18 +87,18 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
-		return massPropertiesFromReadings(massmoment.SourceSphere(ctx, sphere.radius, b.centroid, density))
+		return massPropertiesFromReadings(massmoment.SourceSphere(ctx, sphere.radius, vecMeasurementToInternal(b.centroid), density))
 	}
 	if cylinder, ok := sourceRevolvedCylinderAtPose(b, r3.Identity()); ok {
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
 		return massPropertiesFromReadings(massmoment.SourceCylinder(ctx, cylinder.axis, cylinder.box.lo, cylinder.box.hi,
-			b.centroid, density))
+			vecMeasurementToInternal(b.centroid), density))
 	}
 	if revolve, ok := b.payload.(revolvePayload); ok {
 		result, err := massPropertiesFromReadings(
-			massmoment.RevolveProperties(ctx, massRevolveRecord(revolve), b.centroid, density))
+			massmoment.RevolveProperties(ctx, massRevolveRecord(revolve), vecMeasurementToInternal(b.centroid), density))
 		if err == nil || !errors.Is(err, ErrUnsupported) || ctx.Err() != nil {
 			return result, err
 		}
@@ -109,12 +110,12 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return facetedMassProperties(ctx, b, faceted, density)
 	}
 	if sweep, ok := b.payload.(sweepPayload); ok {
-		result, err := massPropertiesFromReadings(massmoment.SweepProperties(ctx, massSweepRecord(sweep), b.centroid, density))
+		result, err := massPropertiesFromReadings(massmoment.SweepProperties(ctx, massSweepRecord(sweep), vecMeasurementToInternal(b.centroid), density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	if cup, ok := b.payload.(cupPayload); ok {
 		outer, cavity := massCupRecords(cup.view())
-		result, err := massPropertiesFromReadings(massmoment.CupProperties(ctx, outer, cavity, b.centroid, density))
+		result, err := massPropertiesFromReadings(massmoment.CupProperties(ctx, outer, cavity, vecMeasurementToInternal(b.centroid), density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	pp, ok := b.payload.(prismPayload)
@@ -131,16 +132,16 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
 		!pairbox.CardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
 		!pairbox.CardinalBasis(basis.EX, basis.EY, basis.EZ) {
-		return massPropertiesFromReadings(massmoment.GeneralPrismProperties(ctx, massPrismRecord(pp), b.centroid, density))
+		return massPropertiesFromReadings(massmoment.GeneralPrismProperties(ctx, massPrismRecord(pp), vecMeasurementToInternal(b.centroid), density))
 	}
 	if !pairbox.RectangularProfile(pp.profile) {
-		return massPropertiesFromReadings(massmoment.CardinalPrismProperties(ctx, massPrismRecord(pp), b.centroid, density))
+		return massPropertiesFromReadings(massmoment.CardinalPrismProperties(ctx, massPrismRecord(pp), vecMeasurementToInternal(b.centroid), density))
 	}
 
 	// The recorded rectangle and levels are the source solid. Translation does
 	// not change its centroidal inertia, and a signed-permutation basis only
 	// reorders its three dimensions. Work in exact dyadics until division by 12.
-	return massPropertiesFromReadings(massmoment.CardinalBoxProperties(ctx, massPrismRecord(pp), b.centroid, density))
+	return massPropertiesFromReadings(massmoment.CardinalBoxProperties(ctx, massPrismRecord(pp), vecMeasurementToInternal(b.centroid), density))
 }
 
 // massPrismRecord presents a root prism payload to the mass integrator.

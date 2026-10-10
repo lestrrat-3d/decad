@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
@@ -84,7 +85,7 @@ func TestClosedSplineProfileMomentsRoundOnce(t *testing.T) {
 	area, err := record.Area()
 	require.NoError(t, err)
 	require.Equal(t, units.Area, area.Value.Kind())
-	require.Equal(t, decad.Approximate, area.Exactness, "293/18 is not representable in float64")
+	require.Equal(t, measurement.Approximate, area.Exactness, "293/18 is not representable in float64")
 
 	value, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
@@ -128,7 +129,7 @@ func TestClosedSplineProfileAreaExactWhenRepresentable(t *testing.T) {
 
 	area, err := record.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, area.Exactness, "293/2 is representable in float64")
+	require.Equal(t, measurement.Exact, area.Exactness, "293/2 is representable in float64")
 	bound, err := area.Bound.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.Zero(t, bound, "an Exact measurement carries a zero bound")
@@ -203,7 +204,7 @@ func TestMultiSegmentFreeformRegionRoundsOnce(t *testing.T) {
 	require.NoError(t, err)
 	bound, err := area.Bound.In(units.SquareMillimeter)
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, area.Exactness, "this polygon's area is not representable")
+	require.Equal(t, measurement.Approximate, area.Exactness, "this polygon's area is not representable")
 	requireSingleRounding(t, exact, value, bound)
 }
 
@@ -385,7 +386,7 @@ func TestFreeformAnchorSubtractsExactly(t *testing.T) {
 	require.NoError(t, err)
 	bound, err := area.Bound.In(units.SquareMillimeter)
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, area.Exactness,
+	require.Equal(t, measurement.Approximate, area.Exactness,
 		"the recorded rectangle's area is not representable, so nothing may claim Exact")
 	require.Positive(t, bound)
 	requireSingleRounding(t, exact, value, bound)
@@ -817,7 +818,7 @@ func TestOpenSplineAreaRoundsOverSketchKnots(t *testing.T) {
 
 	area, err := record.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, area.Exactness,
+	require.Equal(t, measurement.Approximate, area.Exactness,
 		"the area over sketch's own float knots is not representable")
 
 	value, err := area.Value.In(units.SquareMillimeter)
@@ -1236,7 +1237,7 @@ func TestEqualWeightNURBSMeasuresAtEveryMagnitude(t *testing.T) {
 			value, err := area.Value.In(units.SquareMillimeter)
 			require.NoError(t, err)
 			require.Equal(t, 1.0, value, "the unit square's area does not depend on its weights")
-			require.Equal(t, decad.Exact, area.Exactness, "1 is representable")
+			require.Equal(t, measurement.Exact, area.Exactness, "1 is representable")
 		})
 	}
 }
@@ -1270,7 +1271,7 @@ func TestUnderflowingSplineAreaPublishesBoundedZero(t *testing.T) {
 	bound, err := area.Bound.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.Positive(t, bound, "the bound is the rounding that produced the zero")
-	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Equal(t, measurement.Approximate, area.Exactness)
 }
 
 // The same underflowing section still has a CENTROID, and the accumulator that
@@ -1325,14 +1326,14 @@ func TestFreeformCentroidRoundsOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0.5, exactCentroid.Value.X)
 	require.Equal(t, 0.5, exactCentroid.Value.Y)
-	require.Equal(t, decad.Exact, exactCentroid.Exactness, "(1/2, 1/2) is representable")
+	require.Equal(t, measurement.Exact, exactCentroid.Exactness, "(1/2, 1/2) is representable")
 	bound, err := exactCentroid.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Zero(t, bound)
 
 	approximate, err := recordClosedSplineFrom(t, closedSplineControls).Centroid()
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, approximate.Exactness)
+	require.Equal(t, measurement.Approximate, approximate.Exactness)
 	bound, err = approximate.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Positive(t, bound)

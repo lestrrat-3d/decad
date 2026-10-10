@@ -29,11 +29,17 @@ func MeasureProfile(s *sketch.Sketch, p *sketch.Profile) (MeasuredProfile, error
 }
 
 // Area measures the profile's plane-local area with a bound.
-func (p MeasuredProfile) Area() (Measurement, error) { return p.record.Area() }
+func (p MeasuredProfile) Area() (Measurement, error) {
+	m, err := p.record.Area()
+	return measurementFromInternal(m), err
+}
 
 // Centroid measures the profile's plane-local centroid with a bound.
 // The value is (u, v, 0); use the sketch plane's frame to place it in space.
-func (p MeasuredProfile) Centroid() (VecMeasurement, error) { return p.record.Centroid() }
+func (p MeasuredProfile) Centroid() (VecMeasurement, error) {
+	m, err := p.record.Centroid()
+	return vecMeasurementFromInternal(m), err
+}
 
 // SecondMoments measures area moments about the sketch plane's origin.
 func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
@@ -41,7 +47,10 @@ func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
 	if err != nil {
 		return SecondMoments{}, err
 	}
-	return SecondMoments{UU: uu, UV: uv, VV: vv}, nil
+	return SecondMoments{
+		UU: measurementFromInternal(uu), UV: measurementFromInternal(uv),
+		VV: measurementFromInternal(vv),
+	}, nil
 }
 
 // recordProfile converts a sketch profile into the structural records

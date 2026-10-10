@@ -29,7 +29,7 @@ func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
 	base, ok := body.payload.(revolvePayload)
 	require.True(t, ok)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
-	_, err = massmoment.RevolveProperties(t.Context(), massRevolveRecord(base), body.centroid, density)
+	_, err = massmoment.RevolveProperties(t.Context(), massRevolveRecord(base), vecMeasurementToInternal(body.centroid), density)
 	require.NoError(t, err, `the unmodified payload is admitted`)
 
 	for name, edit := range map[string]func(*revolvePayload){
@@ -44,7 +44,7 @@ func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
 			rp := base
 			edit(&rp)
 			got, err := massPropertiesFromReadings(
-				massmoment.RevolveProperties(t.Context(), massRevolveRecord(rp), body.centroid, density))
+				massmoment.RevolveProperties(t.Context(), massRevolveRecord(rp), vecMeasurementToInternal(body.centroid), density))
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.Equal(t, MassProperties{}, got)
 		})

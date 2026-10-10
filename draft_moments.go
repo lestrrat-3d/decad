@@ -111,7 +111,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 	cv := proofbound.BoundedQuotient(mv.Value, mv.Bound, volume.Value, volume.Bound)
 	cz := proofbound.BoundedQuotient(mz.Value, mz.Bound, volume.Value, volume.Bound)
 	centroid := pl.point(cu.Value, cv.Value, cz.Value)
-	centroidBound := math.Min(prismPointBound(pl, cu, cv, cz), capband.CentroidGeometryBound(centroid, bounds))
+	centroidBound := math.Min(prismPointBound(pl, cu, cv, cz), capband.CentroidGeometryBound(centroid, boxToInternal(bounds)))
 	body.centroid = VecMeasurement{
 		Value:     centroid,
 		Exactness: exactnessOf(centroidBound),

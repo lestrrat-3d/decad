@@ -82,5 +82,5 @@ func meshMassPropertiesAt(ctx context.Context, b *Body, tol float64, density uni
 	}
 	anchor := b.bounds.Min.Add(b.bounds.Max).Scale(.5)
 	return massPropertiesFromReadings(
-		massmoment.HeldMeshMassProperties(ctx, b.bounds, anchor, mesh.vertices, mesh.triangles, mesh.volSymDiff, density))
+		massmoment.HeldMeshMassProperties(ctx, boxToInternal(b.bounds), anchor, mesh.vertices, mesh.triangles, mesh.volSymDiff, density))
 }
