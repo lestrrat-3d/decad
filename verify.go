@@ -104,7 +104,19 @@ func resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
 }
 
 func effectiveVerifyRequest(cfg verifyConfig) VerifyRequest {
-	return verifyoption.EffectiveRequest(cfg)
+	encoded := verifyoption.EffectiveRequest(cfg)
+	req := VerifyRequest{
+		RelativeTolerance: encoded.RelativeTolerance,
+		ConcaveRadius:     encoded.ConcaveRadius,
+		Clearances:        encoded.Clearances,
+	}
+	if encoded.Wall != nil {
+		req.Wall = &WallRequest{Minimum: encoded.Wall.Minimum, DraftAllowance: encoded.Wall.DraftAllowance}
+	}
+	if encoded.Undercut != nil {
+		req.Undercut = &UndercutRequest{PullDirection: encoded.Undercut.PullDirection}
+	}
+	return req
 }
 
 // Verify is one non-mutating call over the live model: solidity and boundary
