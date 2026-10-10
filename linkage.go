@@ -7,7 +7,6 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -378,13 +377,40 @@ func (l *Linkage) PoseAt(d Drive, at units.Value) (LinkagePose, error) {
 }
 
 // LinkageReport is VerifyLinkage's drive report (docs/linkage-check-design.md §4).
-type LinkageReport = reportvocab.LinkageReport[*Body, *Linkage, *Link, Drive, LinkagePose, JointCell]
+type LinkageReport struct {
+	Request           MotionRequest
+	ReadingResolution units.Value
+	Linkage           *Linkage
+	Drive             Drive
+	Links             []*Link
+	JointContacts     []DiagnosticPair
+	Against           []*Body
+	Poses             []LinkagePoseResult
+	Intervals         []MotionInterval
+	Collisions        []LinkCollision
+	Clearance         *ScalarReading
+	Assessment        Assessment
+	Diagnostics       []Diagnostic
+	Status            Status
+}
+
+// Passed reports whether the report is Sound. It returns false for nil.
+func (r *LinkageReport) Passed() bool { return r != nil && r.Status == Sound }
 
 // LinkagePoseResult records one evaluated pose and its pair findings.
-type LinkagePoseResult = reportvocab.LinkagePoseResult[*Body, LinkagePose, JointCell]
+type LinkagePoseResult struct {
+	Pose          LinkagePose
+	Interferences []Interference
+	Clearances    []Clearance
+	Diagnostics   []Diagnostic
+}
 
 // LinkCollision is a proven overlap at one ideal linkage pose.
-type LinkCollision = reportvocab.LinkCollision[*Body]
+type LinkCollision struct {
+	At     units.Value
+	A, B   *Body
+	Volume Measurement
+}
 
 // linkageSpec is a linkage and a drive read into one joint per link.
 type linkageSpec struct {
