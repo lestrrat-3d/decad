@@ -117,8 +117,9 @@ func boxDistanceSquared(p, a, b, c ratVec) *big.Rat {
 }
 
 // MeshDistanceSquared returns the exact squared distance from p to the held
-// closed triangle set. All coordinates are finite float64 values interpreted
-// as exact dyadics. The caller must provide a verified embedded mesh.
+// triangle set, which may be a selected face patch. All coordinates are finite
+// float64 values interpreted as exact dyadics. The caller must provide a
+// verified embedded mesh or a subset of its triangles.
 func MeshDistanceSquared(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int) (*big.Rat, error) {
 	if len(tris) == 0 {
 		return nil, fmt.Errorf(`%w: point query mesh has no triangles`, decaderr.ErrUnsupported)
