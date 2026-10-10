@@ -38,12 +38,12 @@ type QuantityVec = sweeppath.QuantityVec
 type RigidDriftSegment = sweeppath.RigidDriftSegment
 
 // SweepStartPolicy selects what to prove when the bodies initially touch.
-type SweepStartPolicy = reportvocab.SweepStartPolicy
+type SweepStartPolicy int
 
 const (
-	StopAtInitialContact    = reportvocab.StopAtInitialContact
-	ContinueSeparatingTouch = reportvocab.ContinueSeparatingTouch
-	ContinueCertifiedTouch  = reportvocab.ContinueCertifiedTouch
+	StopAtInitialContact SweepStartPolicy = iota
+	ContinueSeparatingTouch
+	ContinueCertifiedTouch
 )
 
 // SweepRequest bounds the time search and the contact geometry resolution.

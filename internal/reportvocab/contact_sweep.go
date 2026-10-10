@@ -32,15 +32,6 @@ const (
 	SweepPersistentBand
 )
 
-// SweepStartPolicy selects what to prove when the bodies initially touch.
-type SweepStartPolicy int
-
-const (
-	StopAtInitialContact SweepStartPolicy = iota
-	ContinueSeparatingTouch
-	ContinueCertifiedTouch
-)
-
 // SweepCause explains why a continuous claim was not proved.
 type SweepCause int
 
