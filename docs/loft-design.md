@@ -1748,6 +1748,7 @@ correction, then spends the measure legs alone in its shift form; §8's
 | **D5** | `Wall` / `Undercut` / `ConcaveRadius` (verification §6, `internal/survey2d/wall_kernel.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | The corresponding requested survey reports the staged refusal (`DiagUnsupportedSurveyPayload`, its matching `Survey`, `Suspect`) until its loft implementation lands — a loft is a payload class `runSurveys`' three type switches do not name, so it falls to their `default` arm rather than a numerically undecided result. In increment 1, a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it; `docs/modify-reach-design.md` DX9 states the identical cap-blend reason: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
 | **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed (modify §1's standard; §4's gate-order paragraph owns where that audit sits); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives, and wherever the payload's `delta` is positive all four carry it. A **surface-result** sheet takes `docs/surface-design.md` §9.1's own validity audit instead: it reads `ValidityValid` whenever `sectionDelta` is exactly zero and the build holds no CHORDED cell, since §6's crossing audit already ran over the complete held triangle set — walls and both omitted caps together — before the body could be returned at all, and non-self-intersection of the walls alone follows from that. A positive `sectionDelta` leaves `ValidityUndecided`: the held chords are only within that displacement of the curved surface the body denotes, so the audit's proof does not transfer. A CHORDED build (§5.2's `maxTwistOffsetUpper` row) at zero `sectionDelta` — a degree-1 free-form pair — leaves it undecided too: each wall cell denotes a bilinear ruled patch, and the audit cleared the triangle pair instead |
 | **D7** | `Placed` / `Duplicate` / `PlacedCopy` | the payload | landed (§12 PR 2a): `Placed` retires the receiver; `Duplicate`/`PlacedCopy` leave it live. No geometry-specific payload case is needed (§7) — every reading composes the payload's own proven displacement `delta` (§5, §8). |
+| **D8** | `Body.Fillet` | matching axial solid loft sections | §17 rewrites selected analytic corners on both records, re-audits the section and rebuilds through `evalLoft`. The result carries the same loft measurements and tessellation proofs as D1/D6. |
 
 ## 10. Provenance and deterministic evaluation
 
@@ -2623,3 +2624,51 @@ a receiver row for a chain-fed payload.
 `docs/surface-design.md` §15 carries the rows themselves, as T190 onward, so
 every chain-fed obligation sits in one place. Each asserts on computed
 geometry, and each bound assertion is shown to fail before it is trusted.
+
+## 17. Fillet of a matching axial loft
+
+`Body.Fillet` accepts a solid loft whose two recorded profiles are identical,
+have no holes, use the same segment alignment, and occupy planes with the same
+in-plane axes and an axial translation. It accepts selected rung edges that
+coincide with recorded corners between `LineSeg` and/or `ArcSeg` carriers. A
+selected cap edge, spline station, twisted section or nonmatching profile
+returns `ErrUnsupported`. Selection and magnitude gates run before this route.
+
+The selected rung must match both lifted copies of one recorded corner. The
+match uses the same frame lift and placement as `loftmesh.Assemble`, with no
+coordinate tolerance. If no corner or more than one corner matches, the call
+refuses. `offset2d.Fillet` computes each tangent connector. A setback that
+consumes either carrier refuses before a new record is evaluated.
+
+The rewrite inserts the connector after its incoming segment and trims only
+selected analytic carriers. Every other segment, including each `FitSplineSeg`,
+is copied from the original record. Both loft profiles receive the same
+rewritten section. The audit uses the analytic
+`sectionaudit.CrossingWithFloor` test, followed by the rewritten section's
+area-sign gate. For every new analytic piece
+and non-adjacent unchanged free-form segment, it requires separation between
+an enclosing arc/line box and the exact Bézier control-hull box by more than
+the section-scale contact floor. A pair whose boxes overlap refuses as
+`ErrUnsupported`; no sampled gap admits a build. The original profile's
+authentication covers pairs that the rewrite left unchanged. Adjacent
+free-form segments meet an analytic carrier that was only trimmed at its far
+end, so their original join is unchanged.
+
+The operation uses one work counter per rewritten profile from the audit
+through exact area integration and `evalLoft`. Each counter is raised once to
+§5.1's `StationWorkLimit` for the new segment count. `evalLoft` applies its
+normal pairing, crossing, measurement and displacement proofs before the
+receiver retires. Connector cells also carry `fillet(loop,segment)` beside
+their `side(loop,cell,half)` roles. Placement and duplication re-evaluate
+those roles from the stored connector indices. The result remains a loft:
+its wall faces are bounded planar triangles, and its mass readings retain
+§8's loft bounds.
+
+The 17-tooth gear with 15 fit points per involute flank exercises all 34
+line/arc root corners in one call. The focused test checks the selected edges,
+solid result, connector roles and volume against an independently drawn
+tangent-arc gear. A rectangular loft checks
+the one-corner volume against the circular-sector formula and checks that a
+placed copy still has fillet roles.
+An audit fixture moves a fit spline's control hull across a changed line and
+checks that the audit refuses the possible contact.

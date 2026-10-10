@@ -50,6 +50,9 @@ type loftPayload struct {
 	frame0, frame1     r3.Frame
 	alignment          []int
 	xform              r3.Transform
+	// blendSegs names connector segments inserted by Body.Fillet. Every
+	// triangle of a connector's loft cell also carries fillet(loop,segment).
+	blendSegs []map[int]struct{}
 
 	// surfaceResult is WithSurfaceResult's own flag (docs/surface-design.md
 	// §4): true when the build must omit both section caps and publish a
@@ -298,6 +301,19 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	capStart, capEnd, walls, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
 	if err != nil {
 		return nil, err
+	}
+	for k, wall := range walls {
+		if len(pl.blendSegs) == 0 {
+			break
+		}
+		li, cell := a.Cell[k][0], a.Cell[k][1]
+		if li >= len(pl.blendSegs) || cell >= len(pairs[li].Segment) {
+			return nil, fmt.Errorf(`%w: a loft fillet lost its segment correspondence`, ErrUnsupported)
+		}
+		seg := pairs[li].Segment[cell]
+		if _, blend := pl.blendSegs[li][seg]; blend {
+			wall.origins = append(wall.origins, FeatureRef{producer: ref, Role: fmt.Sprintf("fillet(%d,%d)", li, seg)})
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

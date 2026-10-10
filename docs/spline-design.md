@@ -1226,7 +1226,10 @@ straddles the sketch plane in the travel sense. The wider refusal — ANY nonzer
 bracket bound — survives in `prismPayload.extentAlongWork` and its revolve twin,
 which serve the one consumer that has no bound to widen and falls back rather
 than fails: `clearance.go`'s separating-plane short-circuit. The §4.1
-analytic-corner slice's audit gate is not implemented yet (P10).
+analytic-corner slice's general prism/chamfer audit gate is not implemented yet
+(P10). The matching axial loft fillet of loft §17 uses a narrower audit: the
+original free-form walks stay unchanged, and each new analytic piece must be
+proven clear of their Bézier control hulls.
 
 ### 6.5 A wall edge's convexity — proven from the curvature numerator's Bernstein coefficients, or refused
 

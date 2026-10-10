@@ -56,8 +56,9 @@ type FilletOption interface{ filletOption() }
 // residual.
 const filletTol = sectionaudit.Tolerance
 
-// Fillet rounds the selected lateral edges of a straight prism with a tangent
-// arc of radius r, returning the new body and retiring the receiver
+// Fillet rounds selected section corners of a straight prism or a matching-
+// section axial loft with a tangent arc of radius r, returning the new body and
+// retiring the receiver
 // (docs/modify-design.md §6, core §8). sel is resolved against the live
 // receiver; a query matching nothing is loud (ErrNoMatch / ErrCardinality,
 // S16). r is a length magnitude, gated like every other (S15); a zero r is
@@ -81,6 +82,10 @@ const filletTol = sectionaudit.Tolerance
 // revolve is rebuilt over the receiver's own axis, sweep and placement. The
 // blend is a Torus, or a Sphere when its centre lies on the axis. Any other
 // revolve edge — a cap edge, an edge on the axis — is SX5 (ErrUnsupported).
+// An axial loft whose two section records match also accepts line/arc corners
+// on its hole-free section. It rewrites both records together and rebuilds the
+// loft. Unchanged free-form segments retain their recorded curves; a new
+// analytic piece must be proven clear of each non-adjacent free-form segment.
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is filleted as that prism
@@ -114,7 +119,7 @@ const filletTol = sectionaudit.Tolerance
 // return a brep body (RF3). A single cap edge on a strictly convex straight
 // prism uses a bounded faceted cutter when that edge or its terminal walls
 // are oblique; the cutter and receiver commit atomically. Any other
-// receiver that is neither a prism nor a revolve is S3 (ErrUnsupported).
+// receiver outside those routes and loft §17 is S3 (ErrUnsupported).
 //
 // A loop-filleted body publishes its volume, centroid, area, box and
 // through-all extent, and passes Verify; it meshes with an occupied-volume
@@ -212,6 +217,9 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	if rp, ok := b.payload.(revolvePayload); ok {
 		return b.blendRevolveJunctions(ctx, sel, edges, rp, blend)
 	}
+	if lp, ok := b.payload.(loftPayload); ok {
+		return b.filletStraightLoft(ctx, sel, edges, lp, rmm)
+	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1).
@@ -220,7 +228,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 		pp, ok = *route.prism, true
 	}
 	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism or a revolve only; selector %s matched [%s]`,
+		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism, a revolve, or a matching-section axial loft only; selector %s matched [%s]`,
 			ErrUnsupported, sel, selectedEdgesContext(edges))
 	}
 	if err := requireExactSection(pp, "fillets"); err != nil {

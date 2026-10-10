@@ -10,6 +10,8 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `fillet.go` | Fillet entry and section rewrite adapter. See modify §6. |
+| `loft_fillet.go` | Rewrites matching loft records at selected analytic corners. See loft §17. |
+| `loft_fillet_audit.go` | Proves new loft fillet pieces clear of untouched free-form spans. See loft §17. |
 | `cap_edge_cutter.go` | Applies `internal/capedge/` admission and cutters to one oblique prism cap-edge fillet or chamfer. |
 | `chamfer.go` | `Body.Chamfer`; cap loops route to `capblend.go`. See modify §7. |
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
