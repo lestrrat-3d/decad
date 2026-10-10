@@ -41,16 +41,6 @@ const (
 	ContinueCertifiedTouch
 )
 
-// SweepRequest bounds the time search and the contact geometry resolution.
-// RestSpeed is a nonnegative Velocity; the zero Value rests no vertex.
-type SweepRequest struct {
-	ContactRequest
-	TimeResolution     units.Value
-	MaxPoseEvaluations uint64
-	StartPolicy        SweepStartPolicy
-	RestSpeed          units.Value
-}
-
 // SweepCause explains why a continuous claim was not proved.
 type SweepCause int
 

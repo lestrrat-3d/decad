@@ -54,7 +54,13 @@ const (
 // rises, on both sides of the plane, as it holds a contact vertex (§10.8), so
 // the track does not end where that vertex's lower height bound reaches the
 // plane. A departure rests nothing.
-type SweepRequest = reportvocab.SweepRequest
+type SweepRequest struct {
+	ContactRequest
+	TimeResolution     units.Value
+	MaxPoseEvaluations uint64
+	StartPolicy        SweepStartPolicy
+	RestSpeed          units.Value
+}
 
 // validateRestSpeed checks SweepRequest.RestSpeed as validateSupportBand
 // checks the band: the zero Value, or a finite, nonnegative Velocity.
