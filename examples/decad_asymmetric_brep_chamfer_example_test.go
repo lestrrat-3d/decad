@@ -28,7 +28,7 @@ func Example_decad_asymmetric_brep_chamfer() {
 		}
 		rect := s.CreateRectangle(0, 0, width, 20)
 		s.Fix(rect.A)
-		if _, err := s.Solve(ctx); err != nil {
+		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
 		return doc.Extrude(s, s.Profiles()[0],
