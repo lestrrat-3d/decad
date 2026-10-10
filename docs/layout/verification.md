@@ -38,6 +38,7 @@ The rules for rows live in `docs/layout.md`.
 | `clearance_cells.go` | Pruned cell walk and face-pair adapter. See clearance §3–§5. |
 | `clearance_tiers.go` | Tier adapters and vertex budget. See clearance §3/§6. |
 | `clearance_geom.go` | `bodyGeom`: clearance faces, edges and nesting over `internal/clearance/`. See clearance §2–§3. |
+| `point_containment.go` | Public point location and verified-mesh dispatch. See point-containment design. |
 | `survey.go` | Adapts analytic wall, undercut and radius readers. See verification §6. |
 | `survey_undercut.go` | Folds three-valued undercut readings. |
 | `interference.go` | Pairwise overlap behind `Verify`. See interference §4-§8. |
