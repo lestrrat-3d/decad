@@ -34,13 +34,22 @@ func (s Status) String() string {
 }
 
 // ReadingKind names the bounded quantity carried by a diagnostic.
-type ReadingKind = reportvocab.ReadingKind
+type ReadingKind int
+
+// String renders the stable reading token.
+func (k ReadingKind) String() string { return reportvocab.ReadingKind(k).String() }
 
 // SurveyKind names the optional body survey a diagnostic concerns.
-type SurveyKind = reportvocab.SurveyKind
+type SurveyKind int
+
+// String renders the stable survey token.
+func (k SurveyKind) String() string { return reportvocab.SurveyKind(k).String() }
 
 // DiagnosticCode is a diagnostic's stable reason code.
-type DiagnosticCode = reportvocab.DiagnosticCode
+type DiagnosticCode int
+
+// String renders the stable diagnostic token.
+func (c DiagnosticCode) String() string { return reportvocab.DiagnosticCode(c).String() }
 
 const (
 	Unverified Status = iota
@@ -52,44 +61,50 @@ const (
 )
 
 const (
-	ReadingNone                       = reportvocab.ReadingNone
-	ReadingArea                       = reportvocab.ReadingArea
-	ReadingBounds                     = reportvocab.ReadingBounds
-	ReadingVolume                     = reportvocab.ReadingVolume
-	ReadingCentroid                   = reportvocab.ReadingCentroid
-	ReadingWall                       = reportvocab.ReadingWall
-	ReadingMinRadius                  = reportvocab.ReadingMinRadius
-	ReadingOverlapVolume              = reportvocab.ReadingOverlapVolume
-	ReadingGap                        = reportvocab.ReadingGap
-	SurveyNone                        = reportvocab.SurveyNone
-	SurveyWall                        = reportvocab.SurveyWall
-	SurveyUndercut                    = reportvocab.SurveyUndercut
-	SurveyConcaveRadius               = reportvocab.SurveyConcaveRadius
-	DiagMeasurementBeyondTolerance    = reportvocab.DiagMeasurementBeyondTolerance
-	DiagUndecidedValidity             = reportvocab.DiagUndecidedValidity
-	DiagInvalidBody                   = reportvocab.DiagInvalidBody
-	DiagWallTooThin                   = reportvocab.DiagWallTooThin
-	DiagUndercut                      = reportvocab.DiagUndercut
-	DiagUndecidedWall                 = reportvocab.DiagUndecidedWall
-	DiagUndecidedUndercut             = reportvocab.DiagUndecidedUndercut
-	DiagUndecidedMinRadius            = reportvocab.DiagUndecidedMinRadius
-	DiagInterference                  = reportvocab.DiagInterference
-	DiagUndecidedPair                 = reportvocab.DiagUndecidedPair
-	DiagUndecidedClearance            = reportvocab.DiagUndecidedClearance
-	DiagUndecidedInterference         = reportvocab.DiagUndecidedInterference
-	DiagUnsupportedPairPayload        = reportvocab.DiagUnsupportedPairPayload
-	DiagUnsupportedPairContact        = reportvocab.DiagUnsupportedPairContact
-	DiagUnsupportedPairPipeline       = reportvocab.DiagUnsupportedPairPipeline
-	DiagUnsupportedPairSheet          = reportvocab.DiagUnsupportedPairSheet
-	DiagSheetSolidCrossing            = reportvocab.DiagSheetSolidCrossing
-	DiagUnsupportedSurveyPayload      = reportvocab.DiagUnsupportedSurveyPayload
-	DiagSurveyPrerequisite            = reportvocab.DiagSurveyPrerequisite
-	DiagToleranceReferenceUnavailable = reportvocab.DiagToleranceReferenceUnavailable
-	DiagMotionCollision               = reportvocab.DiagMotionCollision
-	DiagMotionClearanceViolated       = reportvocab.DiagMotionClearanceViolated
-	DiagMotionUndecidedInterval       = reportvocab.DiagMotionUndecidedInterval
-	DiagMotionUndecidedClearance      = reportvocab.DiagMotionUndecidedClearance
-	DiagJointBoxBudgetExhausted       = reportvocab.DiagJointBoxBudgetExhausted
+	ReadingNone ReadingKind = iota
+	ReadingArea
+	ReadingBounds
+	ReadingVolume
+	ReadingCentroid
+	ReadingWall
+	ReadingMinRadius
+	ReadingOverlapVolume
+	ReadingGap
+)
+
+const (
+	SurveyNone SurveyKind = iota
+	SurveyWall
+	SurveyUndercut
+	SurveyConcaveRadius
+)
+
+const (
+	DiagMeasurementBeyondTolerance DiagnosticCode = iota
+	DiagUndecidedValidity
+	DiagInvalidBody
+	DiagWallTooThin
+	DiagUndercut
+	DiagUndecidedWall
+	DiagUndecidedUndercut
+	DiagUndecidedMinRadius
+	DiagInterference
+	DiagUndecidedPair
+	DiagUndecidedClearance
+	DiagUndecidedInterference
+	DiagUnsupportedPairPayload
+	DiagUnsupportedPairContact
+	DiagUnsupportedPairPipeline
+	DiagUnsupportedPairSheet
+	DiagSheetSolidCrossing
+	DiagUnsupportedSurveyPayload
+	DiagSurveyPrerequisite
+	DiagToleranceReferenceUnavailable
+	DiagMotionCollision
+	DiagMotionClearanceViolated
+	DiagMotionUndecidedInterval
+	DiagMotionUndecidedClearance
+	DiagJointBoxBudgetExhausted
 )
 
 // DiagnosticPair names two bodies in a pair finding.
@@ -126,8 +141,8 @@ type Clearance struct {
 
 func diagnosticFromInternal(in reportvocab.Diagnostic[*Body, JointCell]) Diagnostic {
 	out := Diagnostic{
-		Code: in.Code, Status: Status(in.Status), Body: in.Body,
-		Survey: in.Survey, Reading: in.Reading,
+		Code: DiagnosticCode(in.Code), Status: Status(in.Status), Body: in.Body,
+		Survey: SurveyKind(in.Survey), Reading: ReadingKind(in.Reading),
 		Observed:    measurementPtrFromInternal(in.Observed),
 		ObservedVec: vecMeasurementPtrFromInternal(in.ObservedVec),
 		ObservedBox: boxPtrFromInternal(in.ObservedBox),
@@ -140,8 +155,8 @@ func diagnosticFromInternal(in reportvocab.Diagnostic[*Body, JointCell]) Diagnos
 }
 func diagnosticToInternal(in Diagnostic) reportvocab.Diagnostic[*Body, JointCell] {
 	out := reportvocab.Diagnostic[*Body, JointCell]{
-		Code: in.Code, Status: reportvocab.Status(in.Status), Body: in.Body,
-		Survey: in.Survey, Reading: in.Reading,
+		Code: reportvocab.DiagnosticCode(in.Code), Status: reportvocab.Status(in.Status), Body: in.Body,
+		Survey: reportvocab.SurveyKind(in.Survey), Reading: reportvocab.ReadingKind(in.Reading),
 		Observed:    measurementPtrToInternal(in.Observed),
 		ObservedVec: vecMeasurementPtrToInternal(in.ObservedVec),
 		ObservedBox: boxPtrToInternal(in.ObservedBox),
