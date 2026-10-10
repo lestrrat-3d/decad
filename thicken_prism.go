@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -41,9 +40,10 @@ func thickenPrism(ctx context.Context, d *Document, pp prismPayload, side Thicke
 		return nil, err
 	}
 	if side != ThickenCentered {
-		return evalTubeContext(ctx, d, d.nextProducerID(), pp, sec.generated(side), sec.sense(side))
+		negative := side == ThickenNegative
+		return evalTubeContext(ctx, d, d.nextProducerID(), pp, sec.Generated(negative), sec.Sense(negative))
 	}
-	annulus, err := thickenAnnulus(ctx, sec)
+	annulus, err := sec.Annulus(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -71,47 +71,12 @@ func thickenAmount(tmm, tDelta float64, side ThickenSide) (float64, error) {
 	return half.Value, nil
 }
 
-// thickenSection is the certified offset pair one Thicken arm sweeps: the
-// outer section and the inner one it strictly encloses. One of the two IS the
-// source section for a one-sided call; a centered call generates both.
-type thickenSection struct {
-	source       profileRecord
-	outer, inner profileRecord
-}
-
-// generated names the offset section a one-sided call built, and sense the
-// erosion sign evalTubeContext reads it with.
-func (s thickenSection) generated(side ThickenSide) profileRecord {
-	if side == ThickenNegative {
-		return s.inner
-	}
-	return s.outer
-}
-
-func (s thickenSection) sense(side ThickenSide) float64 {
-	if side == ThickenNegative {
-		return +1
-	}
-	return -1
-}
-
-// thickenAnnulus assembles the certified pair into one hole-free-outer,
-// one-hole section: the outer loop with the inner loop reversed into its hole
-// walk.
-func thickenAnnulus(ctx context.Context, sec thickenSection) (profileRecord, error) {
-	hole, err := offset2d.ReverseLoopRecordContext(ctx, sec.inner.Outer)
-	if err != nil {
-		return profileRecord{}, err
-	}
-	return profileRecord{Outer: sec.outer.Outer, Holes: []loopRecord{hole}}, nil
-}
-
 // thickenSectionOf certifies both offsets of one recorded closed section: the
 // whole-circle arm where the section is a single CircleSeg, the axis-parallel
 // line arm otherwise. radial is the revolve arm's radial gate and nil for a
 // prism, whose walls never turn about an axis.
 func thickenSectionOf(ctx context.Context, profile profileRecord, side ThickenSide,
-	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenSection, error) {
+	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenaxis.SectionPair, error) {
 	if len(profile.Outer.Segments) == 1 {
 		if circle, ok := profile.Outer.Segments[0].(circleSeg); ok {
 			return thickenCircleSection(profile, circle, side, amount, budget, radial)
@@ -125,25 +90,25 @@ func thickenSectionOf(ctx context.Context, profile profileRecord, side ThickenSi
 // exact, so their strict radius order proves separation for every offset
 // parameter from zero through the requested endpoint.
 func thickenCircleSection(profile profileRecord, circle circleSeg, side ThickenSide,
-	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenSection, error) {
+	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenaxis.SectionPair, error) {
 	if !circle.CCW {
-		return thickenSection{}, fmt.Errorf(`%w: this circle does not have the required outer-loop winding`, ErrUnsupported)
+		return thickenaxis.SectionPair{}, fmt.Errorf(`%w: this circle does not have the required outer-loop winding`, ErrUnsupported)
 	}
 	radius, rDelta, err := extent.MagnitudeInBounded(circle.Radius, units.Length, units.Millimeter, "the circle radius")
 	if err != nil || rDelta != 0 {
-		return thickenSection{}, fmt.Errorf(`%w: the circle radius is not exact in millimetres`, ErrUnsupported)
+		return thickenaxis.SectionPair{}, fmt.Errorf(`%w: the circle radius is not exact in millimetres`, ErrUnsupported)
 	}
-	sec := thickenSection{source: profile, outer: profile, inner: profile}
+	sec := thickenaxis.NewSectionPair(profile)
 	if side != ThickenNegative {
-		sec.outer, err = prismCircleOffset(budget, profile, radius, -1, amount)
+		sec.Outer, err = prismCircleOffset(budget, profile, radius, -1, amount)
 		if err != nil {
-			return thickenSection{}, err
+			return thickenaxis.SectionPair{}, err
 		}
 	}
 	if side != ThickenPositive {
-		sec.inner, err = prismCircleOffset(budget, profile, radius, +1, amount)
+		sec.Inner, err = prismCircleOffset(budget, profile, radius, +1, amount)
 		if err != nil {
-			return thickenSection{}, err
+			return thickenaxis.SectionPair{}, err
 		}
 	}
 	outerRadius, innerRadius := radius, radius
@@ -154,7 +119,7 @@ func thickenCircleSection(profile profileRecord, circle circleSeg, side ThickenS
 		innerRadius -= amount
 	}
 	if outerRadius <= innerRadius || innerRadius <= 0 {
-		return thickenSection{}, fmt.Errorf(`%w: the circle offsets do not bound a wall`, ErrUnsupported)
+		return thickenaxis.SectionPair{}, fmt.Errorf(`%w: the circle offsets do not bound a wall`, ErrUnsupported)
 	}
 	if radial != nil {
 		// The whole swept family is the concentric circles of radius at most
@@ -162,7 +127,7 @@ func thickenCircleSection(profile profileRecord, circle circleSeg, side ThickenS
 		// reaches from the axis is the center's own less that outermost radius.
 		least := new(big.Rat).Sub(radial.Rho(proofarith.FloatRat(circle.Center.U), proofarith.FloatRat(circle.Center.V)), proofarith.FloatRat(outerRadius))
 		if err := radial.Require(least); err != nil {
-			return thickenSection{}, err
+			return thickenaxis.SectionPair{}, err
 		}
 	}
 	return sec, nil

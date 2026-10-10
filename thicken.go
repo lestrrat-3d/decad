@@ -186,7 +186,7 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	if err != nil {
 		return nil, err
 	}
-	annulus, err := thickenAnnulus(ctx, sec)
+	annulus, err := sec.Annulus(ctx)
 	if err != nil {
 		return nil, err
 	}
