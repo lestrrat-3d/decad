@@ -3,16 +3,11 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 
-	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -117,7 +112,7 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	if err := validateSweepPathGeometry(path, plane); err != nil {
 		return nil, err
 	}
-	if err := validateAnalyticSweepProfile(profile); err != nil {
+	if err := sweepinput.ValidateAnalyticProfile(profile); err != nil {
 		return nil, err
 	}
 
@@ -174,29 +169,18 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 // plane and its first tangent follows the plane's positive normal. It reads
 // no internal join.
 func validateSweepPathStart(path *Path, plane planeRecord) error {
-	normal := sweepRatFromDyadic(proofarith.DvCross(proofarith.DyVec(plane.U), proofarith.DyVec(plane.V)))
-	relStart := sweepRatSub(sweepRatVecOf(path.Start()), sweepRatVecOf(plane.Origin))
-	if sweepRatDot(relStart, normal).Sign() != 0 {
-		return fmt.Errorf(`%w: the sweep path must start in the profile plane`, ErrDegenerate)
-	}
-	tangent := path.records[0].tangentIn
-	if !sweepRatIsZero(sweepRatCross(tangent, normal)) || sweepRatDot(tangent, normal).Sign() <= 0 {
-		return fmt.Errorf(`%w: the sweep path's initial tangent must follow the profile plane's positive normal`, ErrDegenerate)
-	}
-	return nil
+	return sweepinput.ValidateStart(path.Start(), plane, path.records[0].tangentIn)
 }
 
 func validateSweepPathGeometry(path *Path, plane planeRecord) error {
 	if err := validateSweepPathStart(path, plane); err != nil {
 		return err
 	}
-	for i := 1; i < len(path.records); i++ {
-		previousOut, tangentIn := path.records[i-1].tangentOut, path.records[i].tangentIn
-		if !sweepRatIsZero(sweepRatCross(previousOut, tangentIn)) || sweepRatDot(previousOut, tangentIn).Sign() <= 0 {
-			return fmt.Errorf(`%w: sweep path join %d is not tangent; WithMitredJoins admits a corner on a LineTo-only path`, ErrUnsupported, i)
-		}
+	tangents := make([]sweepinput.Tangents, len(path.records))
+	for i, record := range path.records {
+		tangents[i] = sweepinput.Tangents{In: record.tangentIn, Out: record.tangentOut}
 	}
-	return nil
+	return sweepinput.ValidateJoins(tangents)
 }
 
 func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, error) {
@@ -209,64 +193,11 @@ func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, er
 	if len(segments) != 1 {
 		return 0, 0, fmt.Errorf(`%w: this evaluator sweeps one straight path span only`, ErrUnsupported)
 	}
-	line, ok := segments[0].(LineTo)
+	_, ok := segments[0].(LineTo)
 	if !ok {
 		return 0, 0, fmt.Errorf(`%w: the sweep path span is not straight`, ErrUnsupported)
 	}
-
-	tangent := proofarith.DvSub(proofarith.DyVec(line.End), proofarith.DyVec(start))
-
-	delta := line.End.Sub(start)
-	if !proofbound.FiniteVec(delta) {
-		return 0, 0, fmt.Errorf(`%w: the sweep line's derived displacement is outside the representable range`, ErrUnsupported)
-	}
-	height := delta.Len()
-	if math.IsInf(height, 0) || math.IsNaN(height) {
-		return 0, 0, fmt.Errorf(`%w: the sweep line's length is outside the representable range`, ErrUnsupported)
-	}
-	// The squared length is the recorded tangent's own exact dot product; both
-	// endpoints are finite (dyVec's precondition), so it always states one.
-	lengthBound := capcontour.StraightEdgeBound(height, proofarith.DvDot(tangent, tangent), true)
-	heldSweep := frame.N().Scale(height)
-	bound := proofbound.AbsSumUpper(
-		lengthBound,
-		proofarith.DyadicFloatError(tangent[0], heldSweep.X),
-		proofarith.DyadicFloatError(tangent[1], heldSweep.Y),
-		proofarith.DyadicFloatError(tangent[2], heldSweep.Z),
-	)
-	if math.IsInf(bound, 0) || math.IsNaN(bound) {
-		return 0, 0, fmt.Errorf(`%w: the sweep line's length has no finite error bound`, ErrUnsupported)
-	}
-	return height, bound, nil
-}
-
-func validateAnalyticSweepProfile(profile profileRecord) error {
-	loops := append([]loopRecord{profile.Outer}, profile.Holes...)
-	for _, loop := range loops {
-		if err := validateAnalyticSweepSegments(loop.Segments, "profile"); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// validateAnalyticSweepSegments is Table S row S10 over one recorded walk,
-// shared by the profile-fed gate above and SweepChain's own chain gate
-// (docs/sweep-design.md Table SC row SC6). kind names the walk in the refusal
-// so a caller reading it knows which argument to repair.
-func validateAnalyticSweepSegments(segments []curveSegment, kind string) error {
-	for _, raw := range segments {
-		segment, err := normalizeSegment(raw)
-		if err != nil {
-			return err
-		}
-		switch segment.(type) {
-		case lineSeg, circleSeg, arcSeg:
-		default:
-			return fmt.Errorf(`%w: Sweep supports line, circle, and arc %s segments only`, ErrUnsupported, kind)
-		}
-	}
-	return nil
+	return sweepinput.StraightSpan(start, end, frame.N())
 }
 
 func samePathPoint(a, b r3.Vec) bool {
@@ -436,7 +367,7 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 	if err := validateSweepPathGeometry(path, plane); err != nil {
 		return nil, err
 	}
-	if err := validateAnalyticSweepSegments(chain.Segments, "chain"); err != nil {
+	if err := sweepinput.ValidateAnalyticSegments(chain.Segments, "chain"); err != nil {
 		return nil, err
 	}
 	if samePathPoint(path.Start(), path.End()) {
