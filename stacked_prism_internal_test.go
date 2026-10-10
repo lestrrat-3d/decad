@@ -164,9 +164,16 @@ func TestBlindStackedAdmissionLeavesOtherCutsToMesh(t *testing.T) {
 	_, admitted, err := tryStackedThroughCut(t.Context(), pocket, blindAgain)
 	require.NoError(t, err)
 	require.False(t, admitted)
-	_, admitted, err = tryStackedBlindCut(t.Context(), pocket, blindAgain)
+	result, admitted, err := tryStackedBlindCut(t.Context(), pocket, blindAgain)
 	require.NoError(t, err)
-	require.False(t, admitted, "the tool ends exactly at an existing interface")
+	require.True(t, admitted, "two same-depth pockets share the existing interface")
+	require.NoError(t, stackedrecord.Falsify(t.Context(),
+		stackedrecord.Record{Slabs: result.slabs, Interfaces: result.interfaces}))
+	opposite := internalOffsetBox(t, pocket.doc, 1, 1, 2, 2, 0,
+		Distance{D: units.Millimeters(6), Dir: Along})
+	_, admitted, err = tryStackedBlindCut(t.Context(), pocket, opposite)
+	require.NoError(t, err)
+	require.False(t, admitted, "opposed hole sets need a separate spacing proof")
 }
 
 // holedCupRecord is a k = 1 cup's stacked record, hand-built from rectangles:

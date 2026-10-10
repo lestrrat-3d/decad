@@ -177,7 +177,9 @@ whose boundary crosses the target's, a tool strictly inside both ends (an
 enclosed void), and a tool touching the target only at a cap fall through to
 the mesh path. A blind tool on a stacked target splits the slab containing
 its inner end and uses a whole-loop scene for every reached slab. A tool
-ending exactly at an existing interface still takes the mesh path. `Intersect` with a
+ending at an exact existing interface reuses that level when the reached
+slabs' scenes prove a clean cut or no change and the interface audit accepts
+the resulting hole sets. `Intersect` with a
 stacked operand takes the mesh path over that payload's tessellation;
 `Union` with one follows `docs/general-boolean-design.md` §3 A1.
 
@@ -515,7 +517,7 @@ regardless of who authored the input curves it was cut from.
 | `Union` with unequal z-intervals | overlapping or touching: a `stackedPrismPayload` (`docs/general-boolean-design.md` §3 A1); disjoint: G5, mesh path |
 | `Cut` whose tool ends inside the target and whose boundary crosses the target's (a side notch) | mesh path; the walls below the floor would split at the crossing, which `docs/stacked-prism-design.md` §7 leaves unplanned |
 | `Cut` whose tool lies strictly inside both target ends (an enclosed void) | G5, mesh path; a void shell is not a stage this design admits |
-| `Cut` whose blind tool ends exactly at a stacked interface | the interface needs a separate proof for opposed hole sets; mesh path; `docs/stacked-prism-design.md` §7 stage 3 |
+| Interface-aligned blind `Cut` with displaced levels or opposed holes | Exact monotone levels build; these cases take the mesh path. Opposed holes need a separation scene (stacked §7 stage 3) |
 | `Cut` whose tool crosses an existing hole's boundary instead of enclosing it whole | no whole-loop match, mesh path; `docs/stacked-prism-design.md` §7 stage 2 |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
 | `Union` with a holed operand | G6, mesh path; §9 PR3 |
