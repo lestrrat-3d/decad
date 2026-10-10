@@ -463,7 +463,7 @@ func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
 		mesh, err := b.Tessellate(t.Context(), units.Millimeters(1), WithVerification(VerifyAll))
 		require.NoError(t, err)
 		require.Len(t, mesh.Triangles(), len(lp.tris))
-		require.Equal(t, lp.proof.facetDeparture, mesh.Bound().Base())
+		require.Equal(t, lp.proof.FacetDeparture, mesh.Bound().Base())
 		require.Positive(t, mesh.Bound().Base())
 		require.True(t, mesh.VolumeVerified())
 		meshVol := signedMeshVolume(mesh.Vertices(), mesh.Triangles())
@@ -620,7 +620,7 @@ func TestLoftDegreeOneTwistedPairPublishesTheRuledBody(t *testing.T) {
 		require.LessOrEqual(t, math.Abs(12+4*wall-area.Value.Base()), area.Bound.Base(),
 			"Area must enclose the ruled walls, not the held triangle pairs")
 
-		require.Positive(t, lp.proof.facetDeparture,
+		require.Positive(t, lp.proof.FacetDeparture,
 			"the held triangle pair stands for a twisted bilinear patch, so the mesh is not the boundary")
 	})
 
