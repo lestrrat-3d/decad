@@ -20,7 +20,10 @@ type Frame struct {
 	// across the axis; Snap bounds the committed endpoint displacement.
 	RadialAdmitAllow float64
 	// RadialProof is a strict zero-threshold result for this exact profile.
-	RadialProof      bool
+	RadialProof bool
+	// RadialLower is a proven positive clearance of the entire recorded
+	// boundary from this axis. Zero means no strict clearance was established.
+	RadialLower      float64
 	AxialExtentUpper float64
 	Snap             SnapAllow
 }

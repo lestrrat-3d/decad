@@ -220,6 +220,8 @@
 1	0.00	TestRevolveArcCellSlackWidensWithTheModelSlack
 1	0.01	TestRevolveBoxChargesTheBasisRounding
 1	0.00	TestRevolveBudgetReservesBothCoordinateStages
+1	0.00	TestRevolveFreeformDisplacedSectionRefuses
+1	1.05	TestRevolveFreeformPartialCapAreaSlack
 1	0.00	TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
 1	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
 1	0.00	TestSegFilterKeepsWhatTheExactPredicateAccepts

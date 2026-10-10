@@ -31,6 +31,21 @@ func CellSlack(b revolvemesh.RevolveBasis3Iv, angular revolvemesh.RevolveAngular
 	}
 	p00, p01 := corner(lo, 0), corner(lo, 1)
 	p10, p11 := corner(hi, 0), corner(hi, 1)
+	if lo.Freeform != nil {
+		if lo.OnAxis || hi.OnAxis {
+			return 0, errRevolveCellSlack
+		}
+		low, ok0 := revolvemesh.IvTwoTriangleArea(p00, p10, p11)
+		high, ok1 := revolvemesh.IvTwoTriangleArea(p00, p11, p01)
+		if !ok0 || !ok1 || angular.Step.Hi.Sign() <= 0 {
+			return 0, errRevolveCellSlack
+		}
+		trueUpper := proofbound.ProductUpper(
+			proofbound.ProductUpper(proofbound.RatFloatUp(angular.Step.Hi), lo.Freeform.ArcUpper),
+			lo.Freeform.RhoUpper)
+		heldUpper := proofbound.AbsSumUpper(proofbound.RatFloatUp(low.Hi), proofbound.RatFloatUp(high.Hi))
+		return proofbound.AbsSumUpper(trueUpper, heldUpper), nil
+	}
 	if lo.Arc != nil {
 		switch {
 		case lo.OnAxis:

@@ -1693,7 +1693,7 @@ every walk of the section is itself exactly rational (§3).
 | `ConcaveRadius` | proven interval under §6.3's speed floor, else `Suspect` | §6.2 curvature extremes; a measurement, never a verdict |
 | `Wall` | proven interval, else `Suspect` | §8.1 |
 | `Clearance` rows | `Suspect` until a free-form cell lands | box-disjoint pairs still read `Sound` |
-| `Revolve` | Tier A section; surfaces of revolution per §7 | lateral `Area` by Pappus over §6.1.1's radial first moment, `Volume` and cap areas from §5's exact rational; meshing waits on tessellation T2–T5 |
+| `Revolve` | Tier A free-form walks with proven axis clearance | NURBS wall, bounded `Area`, rational `Volume`, and `Tessellate(VerifyAll)` through §6.2.1's stations and tessellation §§8–11 |
 | `Fillet`/`Chamfer`/`Shell` | refused per R3–R5, except the §4.1 analytic-corner slice | §4.1, with the free-form audit and its R11 refusal in §6.4 |
 
 The sequencing that falls out: **chording an extruded free-form section rides the
@@ -1757,7 +1757,7 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P5** | extruded free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof for extruded free-form walls. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercut` and `ConcaveRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `Wall` answered, with its own convergence evidence |
-| **P8** | free-form surfaces of revolution, §6.1.1's radial first-moment bracket | `Revolve` builds for a Tier A section |
+| **P8** | free-form surfaces of revolution with a bounded radial first moment | `Revolve` builds for Tier A free-form walks with proven axis clearance; partial caps carry the free-form edge |
 | **P9** | Tier B formulas; Tier C certified quadrature | Tier B/C moment readings answer, and the builds Table C stages on them follow — R10 retires |
 | **P10** | the §4.1 analytic-corner modify slice over §6.4's free-form crossing and contact tests | fillet/chamfer on analytic corners of a mixed section |
 

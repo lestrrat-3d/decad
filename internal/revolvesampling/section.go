@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
@@ -102,12 +103,28 @@ func SectionPoints(samples [][]revolvemesh.RevMeridian) ([]sectionrecord.Point2,
 	return pts, loopIdx, loopSag
 }
 
-// CapSegmentArea sums the absolute circular-segment area between each partial
-// cap's arc and its chords. Holes cannot cancel an outer boundary's area slack.
-func CapSegmentArea(resolved []revolveaxis.ResolvedWalks, counts [][]int) float64 {
+// CapSegmentArea bounds the area between each partial cap's curved walks and
+// their chords. Circular walks use their segment areas. A free-form cell's
+// curve and chord both lie in the cell's proven sagitta tube, whose area is
+// bounded by SectionDisplacementArea. Holes cannot cancel the outer loop.
+func CapSegmentArea(resolved []revolveaxis.ResolvedWalks, counts [][]int,
+	chains [][]*freeform.FreeformChain) (float64, error) {
 	total := 0.0
 	for li, r := range resolved {
 		for k, w := range r.Walks {
+			if w.Kind == survey2d.WalkFreeform {
+				if len(chains) <= li || len(chains[li]) <= k || chains[li][k] == nil ||
+					len(chains[li][k].CellArcUpper) != counts[li][k] {
+					return 0, fmt.Errorf(`%w: a partial revolve cap lacks the free-form walk's certified chord chain`,
+						decaderr.ErrUnsupported)
+				}
+				chain := chains[li][k]
+				for _, arcUpper := range chain.CellArcUpper {
+					total = proofbound.AbsSumUpper(total,
+						proofbound.SectionDisplacementArea(chain.Sagitta, 1, arcUpper))
+				}
+				continue
+			}
 			if !w.IsCircular() {
 				continue
 			}
@@ -115,5 +132,5 @@ func CapSegmentArea(resolved []revolveaxis.ResolvedWalks, counts [][]int) float6
 				revolvemesh.ChordSegmentArea(w.Radius, math.Abs(w.Th1-w.Th0), counts[li][k]))
 		}
 	}
-	return total
+	return total, nil
 }

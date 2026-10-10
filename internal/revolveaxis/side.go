@@ -163,6 +163,10 @@ func ResolveSide(line Line2, readings SideExtremes) (SideResult, error) {
 		// and rounding path differ.
 		radialProof = side > 0
 	}
+	strictLower, _ := proofbound.BoundedEnds(near)
+	if strictLower <= 0 {
+		strictLower = 0
+	}
 
 	axialExtent := proofbound.BoundedSub(zhiB, zloB)
 	axialExtentUpper := proofbound.AbsSumUpper(axialExtent.Value, axialExtent.Bound)
@@ -173,7 +177,8 @@ func ResolveSide(line Line2, readings SideExtremes) (SideResult, error) {
 			AUBound: line.AUBound, AVBound: line.AVBound,
 			DU: side * line.DU, DV: side * line.DV,
 			DUBound: line.DUBound, DVBound: line.DVBound,
-			SnapTol: tol,
+			SnapTol:     tol,
+			RadialLower: strictLower,
 		},
 		RadialAdmitAllow: radialAdmitAllow,
 		RadialProof:      radialProof,

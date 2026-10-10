@@ -61,7 +61,8 @@ const (
 	// wallSphere is a circular walk whose center lies on the axis.
 	wallSphere = revolveaxis.WallSphere
 	// wallTorus is a circular walk whose center lies off the axis.
-	wallTorus = revolveaxis.WallTorus
+	wallTorus    = revolveaxis.WallTorus
+	wallFreeform = revolveaxis.WallFreeform
 )
 
 // resolveAxisSide scans the record, asks revolveaxis to decide its side, then

@@ -397,6 +397,7 @@
 3	0.16	TestFreeformPrismMinRadiusUndecided
 3	0.00	TestFreeformProfileRefusals
 3	0.05	TestFreeformRecordedRangeRefusals
+3	0.16	TestFreeformRevolveAxisContactRefuses
 3	0.00	TestJointBoxOptionSet
 3	0.00	TestLoftChainPlacedRibbonKeepsItsAreaAndChargesItsVertices
 3	0.01	TestLoftChainVerifyValidityAfterAudit
@@ -438,6 +439,8 @@
 3	0.00	TestRevolveChainFullTurnStaysOpen
 3	0.00	TestRevolveChainSnappedPoleEnclosesRadialWallArea
 3	0.01	TestRevolveChamferChordKinds
+3	1.17	TestRevolveFittedSplinePartial
+3	1.19	TestRevolveFittedSplineProfile
 3	0.02	TestRevolveFullTurnHoleIsVoidShell
 3	0.01	TestRevolvePartialSweepWithHole
 3	0.01	TestRevolveSemicircleVolumeBoundUnaffected
@@ -591,7 +594,6 @@
 4	0.19	TestFilletScaleInvariant
 4	0.01	TestFitSplineTwoPointIsExactlyALineSegment
 4	0.09	TestFreeformPrismCapLoopChamferRefuses
-4	0.16	TestFreeformPrismRevolveRefuses
 4	0.17	TestFreeformPrismUndercutsUndecided
 4	0.00	TestHeldChordValidation
 4	0.00	TestLineRationalRoundingIsBounded

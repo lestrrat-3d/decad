@@ -118,7 +118,7 @@ func extentCoordUpper(profile momentinput.Profile, work *freeform.FreeformWork,
 	if cached != nil {
 		return cached.CoordUpper, nil
 	}
-	return momentinput.CoordinateUpper(profile, work, nil)
+	return momentinput.CoordinateEnvelope(profile, work, nil)
 }
 
 func axisExtreme(ctx context.Context, in ExtentInput, wg, k float64, wantMax bool,

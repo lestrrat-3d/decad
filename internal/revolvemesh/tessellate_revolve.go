@@ -31,6 +31,13 @@ type RevMeridian struct {
 	Walk int
 	Sag  float64
 	Arc  *RevArcCell
+	// Freeform bounds the bowed generator cell that starts at this sample.
+	Freeform *RevFreeformCell
+}
+
+type RevFreeformCell struct {
+	ArcUpper float64
+	RhoUpper float64
 }
 
 // at is the mesh vertex this sample contributes at angular index l. A pole has

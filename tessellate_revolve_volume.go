@@ -3,6 +3,7 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 )
 
@@ -43,7 +44,25 @@ import (
 
 // revolveMeridianMoment reads the circular meridian displacement.
 func revolveMeridianMoment(p *revolvePlan) float64 {
-	return revolveproof.MeridianMoment(revolveWalkView(p.resolved), p.Meridian, p.Sweep, p.rp.full)
+	return proofbound.AbsSumUpper(revolveproof.MeridianMoment(revolveWalkView(p.resolved), p.Meridian, p.Sweep, p.rp.full),
+		revolveFreeformMeridianMoment(p))
+}
+
+func revolveFreeformMeridianMoment(p *revolvePlan) float64 {
+	total := 0.0
+	for li, loop := range p.Freeform {
+		for k, chain := range loop {
+			if chain == nil {
+				continue
+			}
+			rho := proofbound.AbsSumUpper(p.resolved[li].Walks[k].AxisRadiusUpper, chain.Sagitta)
+			for _, arc := range chain.CellArcUpper {
+				area := proofbound.SectionDisplacementArea(chain.Sagitta, 1, arc)
+				total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(area, rho))
+			}
+		}
+	}
+	return proofbound.ProductUpper(revolveSweepUpper(p), total)
 }
 
 // revolveSweepUpper reads the outward bound on the swept angle.
@@ -54,5 +73,5 @@ func revolveSweepUpper(p *revolvePlan) float64 {
 // revolveSymDiff reads the occupied-volume difference bound.
 func revolveSymDiff(m *Mesh, p *revolvePlan, angular *big.Rat, deltaC, deltaR float64) (float64, error) {
 	return revolveproof.SymDiff(m.vertices, m.triangles, revolveWalkView(p.resolved),
-		p.Meridian, p.Sweep, p.rp.full, angular, deltaC, deltaR)
+		p.Meridian, p.Sweep, p.rp.full, revolveFreeformMeridianMoment(p), angular, deltaC, deltaR)
 }

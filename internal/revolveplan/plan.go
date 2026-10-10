@@ -23,11 +23,12 @@ import (
 
 // ResolveInput carries the record fields needed before a chord count exists.
 type ResolveInput struct {
-	Lift      revolvemesh.RevolveLift
-	Loops     []sectionrecord.LoopRecord
-	Charge    revolveaxis.WalkCharge
-	SnapTol   float64
-	Transform r3.Transform
+	Lift        revolvemesh.RevolveLift
+	Loops       []sectionrecord.LoopRecord
+	Charge      revolveaxis.WalkCharge
+	SnapTol     float64
+	RadialLower float64
+	Transform   r3.Transform
 }
 
 // Resolution holds the recorded walks and count-independent coordinate bounds.
@@ -42,6 +43,7 @@ type Resolution struct {
 	SamplePrior float64
 	DeltaCPrior float64
 	DeltaRPrior float64
+	RadialLower float64
 }
 
 type walkView []revolveaxis.ResolvedWalks
@@ -65,7 +67,8 @@ func Resolve(ctx context.Context, input ResolveInput) (*Resolution, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		r, err := revolveaxis.ResolveLoop(ctx, loop, work, "revolve tessellation", input.Charge, input.SnapTol)
+		r, err := revolveaxis.ResolveLoopWithFreeform(ctx, loop, work, "revolve tessellation",
+			input.Charge, input.SnapTol, input.RadialLower)
 		if err != nil {
 			return nil, err
 		}
@@ -98,6 +101,7 @@ func Resolve(ctx context.Context, input ResolveInput) (*Resolution, error) {
 		Basis: basis, Ideal: ideal, Loops: input.Loops, Resolved: resolved, Junctions: junctions,
 		RhoMax: rhoMax, CoordMax: coordMax, SamplePrior: samplePrior,
 		DeltaCPrior: deltaCPrior, DeltaRPrior: deltaRPrior,
+		RadialLower: input.RadialLower,
 	}, nil
 }
 
@@ -106,6 +110,7 @@ func Resolve(ctx context.Context, input ResolveInput) (*Resolution, error) {
 type Counts struct {
 	Meridian      [][]int
 	Sagittas      [][]float64
+	Freeform      [][]*freeform.FreeformChain
 	Angular       int
 	MeridianDelta float64
 	AngularDelta  float64
@@ -144,8 +149,10 @@ func PlanCounts(input CountInput) (Counts, error) {
 	meridian := freeform.DownRound(available / 2)
 	counts := Counts{
 		Meridian: make([][]int, len(res.Resolved)), Sagittas: make([][]float64, len(res.Resolved)),
-		RhoMax: res.RhoMax,
+		Freeform: make([][]*freeform.FreeformChain, len(res.Resolved)),
+		RhoMax:   res.RhoMax,
 	}
+	freeformWork := freeform.NewFreeformWork()
 	if input.MeridianFloor != nil && len(input.MeridianFloor) != len(res.Resolved) {
 		return Counts{}, fmt.Errorf(`%w: the shared meridian count plan has a different loop count`, decaderr.ErrUnsupported)
 	}
@@ -155,8 +162,26 @@ func PlanCounts(input CountInput) (Counts, error) {
 		}
 		counts.Meridian[li] = make([]int, len(r.Walks))
 		counts.Sagittas[li] = make([]float64, len(r.Walks))
+		counts.Freeform[li] = make([]*freeform.FreeformChain, len(r.Walks))
 		for k, w := range r.Walks {
 			counts.Meridian[li][k] = 1
+			if w.Kind == survey2d.WalkFreeform {
+				if input.MeridianFloor != nil && input.MeridianFloor[li][k] > 1 {
+					return Counts{}, fmt.Errorf(`%w: a free-form meridian needs shared parameter stations`, decaderr.ErrUnsupported)
+				}
+				chain, err := freeform.ChainStations(w.Spans, meridian, freeformWork)
+				if err != nil {
+					return Counts{}, err
+				}
+				if chain.Sagitta >= res.RadialLower {
+					return Counts{}, fmt.Errorf(`%w: a free-form meridian's chord tube reaches the revolve axis`, decaderr.ErrUnsupported)
+				}
+				counts.Freeform[li][k] = &chain
+				counts.Meridian[li][k] = len(chain.Stations)
+				counts.Sagittas[li][k] = chain.Sagitta
+				counts.MeridianDelta = math.Max(counts.MeridianDelta, chain.Sagitta)
+				continue
+			}
 			if !w.IsCircular() {
 				if input.MeridianFloor != nil && input.MeridianFloor[li][k] > 1 {
 					return Counts{}, fmt.Errorf(`%w: a straight meridian cannot take extra chord stations`, decaderr.ErrUnsupported)

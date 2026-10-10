@@ -129,7 +129,9 @@ type RevolveOption interface {
 // interior: the region lies in one closed half-plane of the axis, and boundary
 // contact is allowed in exactly two forms — a segment endpoint on the axis, and
 // a whole line segment lying along it; anything else is ErrDegenerate
-// (docs/evaluator-design.md §6). The evaluator converts the profile and plane
+// (docs/evaluator-design.md §6). A fitted-spline or other Tier A free-form
+// boundary requires proven strict clearance from the axis; a free-form
+// contact is ErrUnsupported. The evaluator converts the profile and plane
 // to structural records; a failed evaluation leaves the document untouched.
 // WithSurfaceResult() omits the two caps a partial sweep closes with and
 // publishes a sheet instead of a solid; a full revolution already closes with

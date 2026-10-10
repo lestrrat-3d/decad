@@ -36,8 +36,8 @@ func AuditProfileAxisContact(ax Frame, profile momentinput.Profile, work *freefo
 		if err != nil {
 			return survey2d.SegmentWalk{}, err
 		}
-		if err := boundarywalk.RequireAnalyticWalk(w, "the revolve axis-contact audit"); err != nil {
-			return survey2d.SegmentWalk{}, err
+		if w.Kind == survey2d.WalkFreeform && ax.RadialLower <= 0 {
+			return survey2d.SegmentWalk{}, fmt.Errorf(`%w: a free-form revolve generator needs proven clearance from the axis`, decaderr.ErrUnsupported)
 		}
 		return w, nil
 	})
@@ -55,7 +55,18 @@ func ResolveLoop(ctx context.Context, loop sectionrecord.LoopRecord, work *freef
 	if len(loop.Segments) == 0 {
 		return ResolvedWalks{}, fmt.Errorf(`%w: a recorded loop holds no segments`, decaderr.ErrDegenerate)
 	}
-	return resolveRecordedWalks(ctx, loop.Segments, false, work, what, charge, snapTol)
+	return resolveRecordedWalks(ctx, loop.Segments, false, work, what, charge, snapTol, false)
+}
+
+// ResolveLoopWithFreeform admits a free-form generator only after the caller
+// proves every point of the profile strictly clear of the axis.
+func ResolveLoopWithFreeform(ctx context.Context, loop sectionrecord.LoopRecord, work *freeform.FreeformWork,
+	what string, charge WalkCharge, snapTol, radialLower float64,
+) (ResolvedWalks, error) {
+	if radialLower <= 0 {
+		return ResolveLoop(ctx, loop, work, what, charge, snapTol)
+	}
+	return resolveRecordedWalks(ctx, loop.Segments, false, work, what, charge, snapTol, true)
 }
 
 // ResolveChain resolves an open recorded chain without joining its last
@@ -66,11 +77,11 @@ func ResolveChain(ctx context.Context, chain sectionrecord.ChainRecord, work *fr
 	if len(chain.Segments) == 0 {
 		return ResolvedWalks{}, fmt.Errorf(`%w: a recorded chain holds no segments`, decaderr.ErrDegenerate)
 	}
-	return resolveRecordedWalks(ctx, chain.Segments, true, work, what, charge, snapTol)
+	return resolveRecordedWalks(ctx, chain.Segments, true, work, what, charge, snapTol, false)
 }
 
 func resolveRecordedWalks(ctx context.Context, segs []sectionrecord.CurveSegment, open bool,
-	work *freeform.FreeformWork, what string, charge WalkCharge, snapTol float64,
+	work *freeform.FreeformWork, what string, charge WalkCharge, snapTol float64, freeformClear bool,
 ) (ResolvedWalks, error) {
 	raw := make([]survey2d.SideWalk, len(segs))
 	plane := make([]survey2d.SegmentWalk, len(segs))
@@ -82,8 +93,8 @@ func resolveRecordedWalks(ctx context.Context, segs []sectionrecord.CurveSegment
 		if err != nil {
 			return ResolvedWalks{}, err
 		}
-		if err := boundarywalk.RequireAnalyticWalk(w, what); err != nil {
-			return ResolvedWalks{}, err
+		if w.Kind == survey2d.WalkFreeform && !freeformClear {
+			return ResolvedWalks{}, fmt.Errorf(`%w: %s does not support a free-form boundary segment`, decaderr.ErrUnsupported, what)
 		}
 		plane[i] = w
 		axisWalk, err := charge(seg, w)

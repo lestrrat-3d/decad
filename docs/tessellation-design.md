@@ -790,11 +790,20 @@ placement once after assembly. Both coordinate stages need separate proofs:
 An identity placement that performs no second coordinate operation may have
 `deltaR = 0`; it does not make `deltaC` zero.
 
-Compute `rhoMax` and `zAbsMax` exactly from the payload's line/arc walks:
-endpoints plus every circular cardinal point inside a walk's parameter
-interval. Both are global across outer and hole loops. Non-positive or
+Compute `rhoMax` and `zAbsMax` from the payload's line/arc walks using
+endpoints and circular cardinal points. A Tier A free-form walk uses its
+recorded Bézier control hull as a conservative coordinate envelope. Both
+are global across outer and hole loops. Non-positive or
 non-finite `rhoMax`, or non-finite `zAbsMax`, is an invariant failure; no
 revolved solid exists entirely on the axis.
+
+A free-form meridian is admitted only when the profile's bounded radial
+minimum is strictly positive. Its exact rational dyadic station chain comes
+from spline §6.2.1. The same stations define the wall, cap trim, section
+clearance audit and mesh proof. The chain's measured sagitta must stay below
+the proven radial minimum, so its chord tube cannot reach the axis. A
+free-form section carrying inherited section displacement is refused until
+its displaced wall area has a proof.
 
 Before choosing chord counts, compute an upward-rounded `coordMax` for every
 ideal unplaced analytic-boundary coordinate:
@@ -1051,7 +1060,7 @@ Jheld = length(dFheld/dt cross dFheld/du)
 Ecell >= integral_D abs(Jtrue - Jheld) d(t,u)
 ```
 
-Prove `Ecell` upward. Isolate every zero of `Jtrue - Jheld` with exact sign
+Prove `Ecell` upward. For line and circular generators, isolate every zero of `Jtrue - Jheld` with exact sign
 tests over the payload floats and certified enclosures for the required
 algebraic/transcendental values, then integrate each sign-fixed region in closed
 form; certified interval subdivision is allowed where sign isolation does not
@@ -1063,8 +1072,18 @@ integral, any corresponding subset retained by a later boolean is bounded by
 the whole cell's `Ecell`; rim movement from the new boolean trim remains a
 separate allowance.
 
+For a free-form cell strictly clear of the axis, bound the true patch area by
+`hPhi * arcLengthUpper * rhoUpper`, using the cell's proven arc-length upper
+bound and the walk's radial upper bound. Bound the held triangle areas from
+their exact coordinate intervals. The sum of these non-negative upper bounds
+encloses their absolute difference without assuming cancellation. It is
+conservative, especially for a small angular interval.
+
 For each partial cap, add the absolute circular-segment area between every
-meridian arc and its chords. Cap triangulation is exact for the chorded planar
+meridian arc and its chords. For each free-form cell, add the area of the
+sagitta tube around its curve and chord, bounded by
+`2 * sagitta * arcLengthUpper + pi * sagitta^2`. Add each term to both caps;
+hole and outer-loop terms cannot cancel. Cap triangulation is exact for the chorded planar
 region. Then charge both coordinate stages per triangle. If its two edge
 vectors before one movement stage are `a` and `b`, moving each vertex by at
 most `delta` changes its area by at most:
@@ -1091,8 +1110,9 @@ signed volume error may cancel while the symmetric difference does not.
 The revolve mesh MUST carry construction and placement homotopy proofs. Define:
 
 - `B0`: the analytic revolved body after exact rigid placement;
-- `BM`: the body obtained by replacing each circular meridian subarc with its
-  chord, then revolving that chorded section and placing it exactly;
+- `BM`: the body obtained by replacing each circular or free-form meridian
+  subwalk with its chords, then revolving that chorded section and placing it
+  exactly;
 - `BH`: the ideal-coordinate angularly chorded closed polyhedron after exact
   rigid placement;
 - `BC`: the exact rigid image of the stored unplaced closed polyhedron after
@@ -1106,8 +1126,8 @@ volume(B0 △ BR) <= volume(B0 △ BM) + volume(BM △ BH)
     + volume(BH △ BC) + volume(BC △ BR)
 ```
 
-The meridian term has a closed-form upper bound. For circular-segment sliver
-`S_c` between one meridian arc and chord:
+The meridian term has a closed-form upper bound for each circular-segment
+sliver `S_c` between one meridian arc and chord:
 
 ```text
 Mmeridian = sweepAngle * sum_c abs(integral_S_c rho dA)
@@ -1115,7 +1135,10 @@ Mmeridian = sweepAngle * sum_c abs(integral_S_c rho dA)
 
 `rho >= 0`; the first moment of a circular segment about the axis is closed
 form. Summing absolute local moments forbids cancellation across outer and hole
-loops.
+loops. For a free-form cell, its curve-to-chord sagitta and certified arc
+length bound enclose the planar sliver in a tube. Multiply that tube area by
+the cell's radial upper bound plus sagitta, then by the sweep-angle upper
+bound. Sum this non-negative term over every cell, outer loop and hole.
 
 The angular term is the remaining proof obligation. For each straight-
 generator cell, use the explicit homotopy from the rotated patch to its chord
@@ -1291,7 +1314,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T2** | revolve line generators: cylinder/cone/plane cells, smallest-count correction, global angular sequence, partial caps, full-turn cycles, poles/apexes, axis-incidence + vertex-link manifold audits, meridian nesting/homotopy audit, construction/placement rounding proofs, two-sided bound, cut-stable area slack, STL/OBJ | circular generators; the occupied-volume proof |
 | **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | the occupied-volume proof |
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
-| **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS REVOLVE generators. An extruded free-form prism's own chording is a DIFFERENT increment, riding the existing prism tessellation path (`docs/spline-design.md` §10 P5, Table C) rather than this row |
+| **T5** | deterministic local meridian refinement and global angular density improvements | tighter free-form Revolve chording; current Tier A uses §8's dyadic stations and §10–§11's conservative proofs |
 | **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (zero only when both published terms are zero under loft §5.2's conditions), and mesh-boolean admission | loft surveys and analytic pair clearance |
 | **T7** | `capBlendPayload` tessellation: `docs/tessellation-reach-design.md` §7 owns its cells, proof-record row and refusals; mesh-boolean admission for a band of line-line miters, exactly G1 joins and whole turns | mesh-boolean admission for a circular wall at a genuine miter or a reflex corner, until that document's §9 proof lands |
 | **T8** | `stitchPayload` exact restatement, all-planar case only, CLOSED or OPEN: source-face-preserving triangle copy attributed by the payload's own recorded per-triangle face, a proof record carrying the largest per-face vertex bound and its per-triangle area-slack term, the closed-mesh audit plus its own vertex-link safety net on a CLOSED body, and §1.2's manifold-with-boundary audit on an OPEN one; a zero occupied-volume proof and mesh-boolean admission for a CLOSED body whose every vertex bound is exactly zero | a curved or mixed stitched body's own mesh; mesh-boolean admission for a stitched body carrying any nonzero vertex bound, placed or certificate-welded |

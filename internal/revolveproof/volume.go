@@ -83,14 +83,14 @@ func SweepUpper(sweep float64, full bool) float64 {
 // another, which is why they compose through proofbound.AbsSumUpper rather than a signed
 // sum.
 func SymDiff(vertices []r3.Vec, triangles [][3]int, walks WalkLoops, counts [][]int,
-	sweep float64, full bool, angular *big.Rat, deltaC, deltaR float64) (float64, error) {
+	sweep float64, full bool, freeformMeridian float64, angular *big.Rat, deltaC, deltaR float64) (float64, error) {
 	if angular == nil || angular.Sign() < 0 {
 		return 0, revolvemesh.ErrRevolveAngularHomotopy
 	}
 	coord := proofbound.AbsSumUpper(deltaC, deltaR)
 	area := proofbound.PerturbedAreaUpper(vertices, triangles, coord)
 	sym := proofbound.AbsSumUpper(
-		MeridianMoment(walks, counts, sweep, full),
+		MeridianMoment(walks, counts, sweep, full), freeformMeridian,
 		proofbound.RatFloatUp(angular),
 		proofbound.SweptVolumeAllow(deltaC, area),
 		proofbound.SweptVolumeAllow(deltaR, area),

@@ -1,7 +1,10 @@
 package revolveaxis
 
 import (
+	"fmt"
+
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -22,6 +25,15 @@ func ChargeOf(profile momentinput.Profile, ax Frame, delta float64,
 	work *freeform.FreeformWork) (SectionCharge, error) {
 	if delta == 0 {
 		return SectionCharge{}, nil
+	}
+	for _, loop := range append([]sectionrecord.LoopRecord{profile.Outer}, profile.Holes...) {
+		for _, segment := range loop.Segments {
+			switch segment.(type) {
+			case sectionrecord.NURBSSeg, sectionrecord.FitSplineSeg:
+				return SectionCharge{}, fmt.Errorf(`%w: a displaced free-form revolve section has no wall-area proof`,
+					decaderr.ErrUnsupported)
+			}
+		}
 	}
 	coordUpper, err := momentinput.CoordinateUpper(profile, work, nil)
 	if err != nil {
