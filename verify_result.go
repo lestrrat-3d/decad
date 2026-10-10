@@ -1,6 +1,10 @@
 package decad
 
-import "github.com/lestrrat-3d/decad/internal/reportvocab"
+import (
+	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
+)
 
 // ScalarOutcome is a whole-body scalar survey's result.
 type ScalarOutcome = reportvocab.ScalarOutcome
@@ -84,7 +88,42 @@ type HeldTopology = reportvocab.HeldTopology
 type RegionReadings = reportvocab.RegionReadings
 
 // BodyReport records one body's verification results.
-type BodyReport = reportvocab.BodyReport[*Body, *Face, JointCell]
+type BodyReport struct {
+	Body          *Body
+	Status        Status
+	Validity      ValidityResult
+	Topology      HeldTopology
+	Area          ScalarReading
+	Bounds        BoundsReading
+	Region        *RegionReadings
+	Wall          WallResult
+	Undercut      UndercutResult
+	ConcaveRadius ConcaveRadiusResult
+	Diagnostics   []Diagnostic
+}
 
 // Report records one verification call's results.
-type Report = reportvocab.Report[*Body, *Face, JointCell]
+type Report struct {
+	Request       VerifyRequest
+	Bodies        []*BodyReport
+	Interferences []Interference
+	Clearances    []Clearance
+	Diagnostics   []Diagnostic
+	Status        Status
+}
+
+// Passed reports whether the whole report is Sound for its effective request.
+func (r *Report) Passed() bool { return r != nil && r.Status == Sound }
+
+// ForBody returns the report's existing body row by exact pointer identity.
+func (r *Report) ForBody(body *Body) (*BodyReport, error) {
+	if r == nil || body == nil {
+		return nil, fmt.Errorf("%w: a nil report or body names no lookup", ErrDegenerate)
+	}
+	for _, row := range r.Bodies {
+		if row.Body == body {
+			return row, nil
+		}
+	}
+	return nil, ErrBodyReportNotFound
+}
