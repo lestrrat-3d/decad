@@ -235,29 +235,37 @@ func resolvePrismCut(ctx context.Context, budget *proofbound.WorkBudget, target,
 // stacked result uses it to retain the target's already recorded whole loops
 // while taking only the new tool hole from RecordProfile's authenticated cell.
 func resolvePrismCutWithTags(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, map[sketch.Entity]prismcells.Origin, prismSceneDelta, bool, error) {
-	s, tags, sceneDelta, err := buildPrismScene(budget, target, tool, reexpress)
+	s, profiles, tags, sceneDelta, err := prismCutCells(ctx, budget, target, tool, reexpress)
 	if err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
-	if err := budget.Err(); err != nil {
-		return nil, nil, nil, prismSceneDelta{}, false, err
-	}
-	profiles, err := prismcells.ProfilesContext(ctx, s.Profiles)
-	if err != nil {
-		return nil, nil, nil, prismSceneDelta{}, false, err
-	}
-	if err := budget.Err(); err != nil {
-		return nil, nil, nil, prismSceneDelta{}, false, err
-	}
-	if len(profiles) == 0 {
-		return nil, nil, nil, prismSceneDelta{}, false, nil // §4.4: the scene holds no bounded cell at all
-	}
-
 	match, resolved, err := prismcells.MatchCut(budget, tags, profiles, len(target.profile.Holes))
 	if err != nil || !resolved {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	return s, match, tags, sceneDelta, true, nil
+}
+
+// prismCutCells keeps both the scene and sketch's arranged cells available to
+// the clean and enclosing whole-loop matches without arranging a pair twice.
+func prismCutCells(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload,
+	reexpress *prismReexpression) (*sketch.Sketch, []*sketch.Profile,
+	map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
+	s, tags, sceneDelta, err := buildPrismScene(budget, target, tool, reexpress)
+	if err != nil {
+		return nil, nil, nil, prismSceneDelta{}, err
+	}
+	if err := budget.Err(); err != nil {
+		return nil, nil, nil, prismSceneDelta{}, err
+	}
+	profiles, err := prismcells.ProfilesContext(ctx, s.Profiles)
+	if err != nil {
+		return nil, nil, nil, prismSceneDelta{}, err
+	}
+	if err := budget.Err(); err != nil {
+		return nil, nil, nil, prismSceneDelta{}, err
+	}
+	return s, profiles, tags, sceneDelta, nil
 }
 
 // resolvePrismIntersect is §4.2's clean-nesting match for Intersect(a, b):

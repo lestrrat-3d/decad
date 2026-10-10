@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// The structural match already proved that every target loop survives whole.
+// The structural match already proved that every retained target loop survives whole.
 // Keep those records verbatim so a wall shared across slabs stays one column;
 // take only the new tool hole from the authenticated arranged profile.
 func canonicalizeStackedCutProfile(budget *proofbound.WorkBudget, target profileRecord, match *sketch.Profile,
@@ -45,8 +45,9 @@ func canonicalizeStackedCutProfile(budget *proofbound.WorkBudget, target profile
 	return result, nil
 }
 
-// tryBlindStackedCut admits a cleanly nested blind tool against a prism. The
-// private sketch scene proves the two slab sections before they are recorded.
+// tryBlindStackedCut admits a cleanly nested blind tool against a prism,
+// including one that encloses existing holes. The private sketch scene proves
+// the two slab sections before they are recorded.
 func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
@@ -94,9 +95,24 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
-	scene, match, tags, sceneDelta, resolved, err := resolvePrismCutWithTags(ctx, budget, target, tool, reexpress)
-	if err != nil || !resolved {
+	scene, profiles, tags, sceneDelta, err := prismCutCells(ctx, budget, target, tool, reexpress)
+	if err != nil {
 		return stackedPrismPayload{}, false, err
+	}
+	match, resolved, err := prismcells.MatchCut(budget, tags, profiles, len(target.profile.Holes))
+	if err != nil {
+		return stackedPrismPayload{}, false, err
+	}
+	var enclosing prismcells.EnclosingCutMatch
+	if !resolved {
+		enclosing, resolved, err = prismcells.MatchEnclosingCut(budget, tags, profiles, len(target.profile.Holes))
+		if err != nil || !resolved {
+			return stackedPrismPayload{}, false, err
+		}
+		match = enclosing.Outside
+		if _, err := prismRecordProfileContext(ctx, scene, enclosing.Inside); err != nil {
+			return stackedPrismPayload{}, false, err
+		}
 	}
 	_, err = prismRecordProfileContext(ctx, scene, match)
 	if err != nil {
@@ -106,7 +122,14 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
-	cutRegion, err = canonicalizeStackedCutProfile(budget, target.profile, match, tags, cutRegion)
+	kept := target.profile
+	if len(enclosing.EnclosedHoles) != 0 {
+		kept.Holes = make([]loopRecord, 0, len(enclosing.OutsideHoles))
+		for _, i := range enclosing.OutsideHoles {
+			kept.Holes = append(kept.Holes, target.profile.Holes[i])
+		}
+	}
+	cutRegion, err = canonicalizeStackedCutProfile(budget, kept, match, tags, cutRegion)
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
@@ -136,21 +159,39 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 		sp.slabs[1] = stackedrecord.Slab{Regions: []profileRecord{target.profile},
 			Z0: innerHeld, Z1: target.z1, Z0Delta: innerDelta, Z1Delta: target.z1Delta}
 	}
-	lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(sp.slabs[0].Regions[0], sp.slabs[1].Regions[0])
-	lowerExposed, err := stackedrecord.Exposed(ctx, upperOnly)
-	if err != nil {
-		return stackedPrismPayload{}, false, err
+	if len(enclosing.EnclosedHoles) != 0 {
+		innerHoles := make([]loopRecord, 0, len(enclosing.EnclosedHoles))
+		for _, i := range enclosing.EnclosedHoles {
+			innerHoles = append(innerHoles, target.profile.Holes[i])
+		}
+		toolHole := cutRegion.Holes[len(cutRegion.Holes)-1]
+		exposed, err := stackedrecord.EnclosingExposed(ctx, toolHole, innerHoles)
+		if err != nil {
+			return stackedPrismPayload{}, false, err
+		}
+		if openAtTop {
+			sp.interfaces = []stackedrecord.Interface{{LowerExposed: exposed}}
+		} else {
+			sp.interfaces = []stackedrecord.Interface{{UpperExposed: exposed}}
+		}
+	} else {
+		lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(sp.slabs[0].Regions[0], sp.slabs[1].Regions[0])
+		lowerExposed, err := stackedrecord.Exposed(ctx, upperOnly)
+		if err != nil {
+			return stackedPrismPayload{}, false, err
+		}
+		upperExposed, err := stackedrecord.Exposed(ctx, lowerOnly)
+		if err != nil {
+			return stackedPrismPayload{}, false, err
+		}
+		sp.interfaces = []stackedrecord.Interface{{LowerExposed: lowerExposed, UpperExposed: upperExposed}}
 	}
-	upperExposed, err := stackedrecord.Exposed(ctx, lowerOnly)
-	if err != nil {
-		return stackedPrismPayload{}, false, err
-	}
-	sp.interfaces = []stackedrecord.Interface{{LowerExposed: lowerExposed, UpperExposed: upperExposed}}
 	return sp, true, nil
 }
 
-// tryStackedThroughCut applies one cleanly nested, spanning prism tool to
-// every slab. Each slab's private scene authenticates its own new region.
+// tryStackedThroughCut applies a spanning prism tool to every slab. Each
+// private scene proves either a new region or that the tool lies wholly in an
+// existing hole and leaves that slab unchanged.
 func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload, bool, error) {
 	sp, ok := a.payload.(stackedPrismPayload)
 	if !ok {
@@ -205,9 +246,20 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 				`%w: slab %d's analytic cut scene charges %d arranger segments against the cap of %d`,
 				ErrUnsupported, k, segments, prismcells.MaxArrangementSegments)
 		}
-		scene, match, tags, sceneDelta, resolved, err := resolvePrismCutWithTags(ctx, budget, target, tool, reexpress)
-		if err != nil || !resolved {
+		scene, profiles, tags, sceneDelta, err := prismCutCells(ctx, budget, target, tool, reexpress)
+		if err != nil {
 			return stackedPrismPayload{}, false, err
+		}
+		match, resolved, err := prismcells.MatchCut(budget, tags, profiles, len(target.profile.Holes))
+		if err != nil {
+			return stackedPrismPayload{}, false, err
+		}
+		if !resolved {
+			noOp, err := prismcells.MatchCutNoOp(budget, tags, profiles, len(target.profile.Holes))
+			if err != nil || !noOp {
+				return stackedPrismPayload{}, false, err
+			}
+			continue
 		}
 		_, err = prismRecordProfileContext(ctx, scene, match)
 		if err != nil {
@@ -226,22 +278,9 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.A),
 			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.B, reexpress.Delta))
 	}
-	for k := range result.interfaces {
-		lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(
-			result.slabs[k].Regions[0], result.slabs[k+1].Regions[0])
-		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
-			return stackedPrismPayload{}, false, fmt.Errorf(
-				`%w: slab interface %d has exclusive holes on both sides`, ErrUnsupported, k)
-		}
-		lowerExposed, err := stackedrecord.Exposed(ctx, upperOnly)
-		if err != nil {
-			return stackedPrismPayload{}, false, err
-		}
-		upperExposed, err := stackedrecord.Exposed(ctx, lowerOnly)
-		if err != nil {
-			return stackedPrismPayload{}, false, err
-		}
-		result.interfaces[k] = stackedrecord.Interface{LowerExposed: lowerExposed, UpperExposed: upperExposed}
+	result.interfaces, err = stackedrecord.Derive(ctx, result.slabs, sp.interfaces)
+	if err != nil {
+		return stackedPrismPayload{}, false, err
 	}
 	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: result.slabs, Interfaces: result.interfaces}); err != nil {
 		return stackedPrismPayload{}, false, err

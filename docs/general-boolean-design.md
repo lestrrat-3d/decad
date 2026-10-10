@@ -2,8 +2,8 @@
 
 The next reach of exact `Union`/`Cut`/`Intersect` past the co-directional
 prism pairs `docs/prism-boolean-design.md` admits: the co-directional shapes
-that still refuse (a boss on a plate, a counterbore, a mirrored half, a
-pattern of holes, a rotated tooth), and the first non-co-directional class —
+that still refuse (some touching bosses, a rotated tooth), and the first
+non-co-directional class —
 two prisms whose sweeps are exactly perpendicular and whose every contact is a
 line or a circle (a cross-drilled hole, a cross slot, a keyway). Companion to
 `docs/evaluator-design.md` §9 (the mesh path, unchanged and still the
@@ -21,7 +21,7 @@ Outside prism-boolean's admitted class a boolean tessellates both operands
 
 1. **A coplanar contact refuses.** Two operands sharing a plane with positive
    common area are `BooleanUnsupportedContact`. This is the dominant failure:
-   a boss standing on a face, a counterbore over a hole, a flange on a shaft,
+   a boss standing on a face, a flange on a shaft,
    a tooth placed by rotation, a mirrored half beside its source, a tool that
    is a multi-lump body — every one of them shares a cap or a wall with its
    partner.
@@ -56,8 +56,8 @@ stays the result of every pair outside §3, unchanged.
 | S3 | full revolve (cylinder along x) `Union` box crossing it | mesh | 13 `Faceted` faces, bound 0.21 mm³ |
 | S3b | the same revolve `Union` a coaxial disk sharing its end plane (flange) | mesh | `BooleanUnsupportedContact` |
 | S4a | plate `Cut` through hole, both on XY | analytic | 7 faces, bound 8e-13 mm³ |
-| S4b | then `Cut` Ø10 counterbore on the offset plane z = 7 over the hole | mesh | `BooleanUnsupportedContact` |
-| S4c/d | counterbore first (blind, analytic), then the through hole inside it | mesh | `BooleanUnsupportedContact` |
+| S4b | 20×20×10 plate with Ø4 through hole, then `Cut` Ø8 counterbore from z = 7 | analytic | 9 faces, volume 4000 − 76π mm³ within a 2.9e-13 mm³ bound |
+| S4c/d | the same counterbore first, then the Ø4 through hole inside it | analytic | the same 9 faces and bounded volume |
 | S5 | plate `Cut` by six `PlacedCopy`-translated cylinders | analytic | six results, bound 5e-10 mm³, `sectionDelta > 0`: `Fillet` refuses, wall `undecided` |
 | S5b | the six holes each drawn in a sketch | analytic | bound 2e-12 mm³, `Fillet` OK |
 | S6a | filleted box `Cut` by a cross cylinder | mesh | 11 `Faceted` faces, bound 1.71 mm³ |
@@ -94,7 +94,7 @@ admits takes it unchanged.
 | # | Shape | Clears | Result |
 |---|---|---|---|
 | A1 | `Union` with unequal sweep intervals: a boss standing on a plate, rooted inside it, a flange on a circle-prism shaft, a stack of blocks | B3, B4, S3b with the shaft drawn as a prism | `stackedPrismPayload`: a slab per distinct level, interface exposure by the clean-nesting match |
-| A2 | a blind tool over an existing hole, or a through tool inside a blind one (counterbore, counterbored through hole) | S4b, S4d | stacked §7 stage 2 owns it; this design adds no mechanism and lists it for priority |
+| A2 | a blind tool enclosing holes, or a through tool inside a blind hole | S4b, S4d | `stackedPrismPayload`: two scene cells prove the shoulder; a tool inside a hole leaves that slab unchanged (stacked §7 stage 2) |
 | A3 | two operands sharing a wall: coincident line carriers (box beside box, a mirrored half beside its source), and the coincident arcs and circles `sketch` already resolved | W1–W4, W6, M3, T2 | `prismPayload` through prism-boolean's own paths, every shared span read from `sketch`'s report (A3 below); a reflected half beside its source (M2) joins through the mirror join (mirror §5) |
 | A4 | a reflected operand, or two operands whose relative map is a reflection | M3, M4, M5, T1, T2 | prism-boolean's own paths over a reflected re-expression (§3.2) |
 | A5 | a multi-region operand or result: a prism-group tool (N holes in one arrangement), a `Union` of disjoint footprints | S5 (through mirror §6), S12, P2 | one-slab multi-region `stackedPrismPayload` (mirror §6.3) |

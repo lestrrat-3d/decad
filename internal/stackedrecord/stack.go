@@ -113,6 +113,28 @@ func Derive(ctx context.Context, slabs []Slab, prior []Interface) ([]Interface, 
 			continue
 		}
 		lowerOnly, upperOnly := ExclusiveHoles(lowerRegion, upperRegion)
+		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
+			if i >= len(prior) {
+				return nil, fmt.Errorf(`%w: enclosing interface %d has no prior exposed side`, decaderr.ErrDegenerate, i)
+			}
+			switch {
+			case len(upperOnly) == 1 && len(prior[i].LowerExposed) == 1 && len(prior[i].UpperExposed) == 0:
+				lower, err := EnclosingExposed(ctx, upperOnly[0], lowerOnly)
+				if err != nil {
+					return nil, err
+				}
+				out[i] = Interface{LowerExposed: lower}
+			case len(lowerOnly) == 1 && len(prior[i].UpperExposed) == 1 && len(prior[i].LowerExposed) == 0:
+				upper, err := EnclosingExposed(ctx, lowerOnly[0], upperOnly)
+				if err != nil {
+					return nil, err
+				}
+				out[i] = Interface{UpperExposed: upper}
+			default:
+				return nil, fmt.Errorf(`%w: enclosing interface %d has no unique exposed side`, decaderr.ErrUnsupported, i)
+			}
+			continue
+		}
 		lower, err := Exposed(ctx, upperOnly)
 		if err != nil {
 			return nil, err
@@ -193,10 +215,28 @@ func Falsify(ctx context.Context, sp Record) error {
 			continue
 		}
 		lowerOnly, upperOnly := ExclusiveHoles(prev.Regions[0], slab.Regions[0])
-		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
-			return fmt.Errorf(`%w: both sides of interface %d have exclusive holes`, decaderr.ErrUnsupported, i-1)
-		}
 		got := sp.Interfaces[i-1]
+		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
+			var valid bool
+			var err error
+			switch {
+			case len(upperOnly) == 1 && len(got.LowerExposed) == 1 && len(got.UpperExposed) == 0 &&
+				len(got.LowerExposed[0].Holes) == len(lowerOnly):
+				valid, err = enclosingExposedMatches(ctx, got.LowerExposed[0], upperOnly[0], lowerOnly)
+			case len(lowerOnly) == 1 && len(got.UpperExposed) == 1 && len(got.LowerExposed) == 0 &&
+				len(got.UpperExposed[0].Holes) == len(upperOnly):
+				valid, err = enclosingExposedMatches(ctx, got.UpperExposed[0], lowerOnly[0], upperOnly)
+			default:
+				return fmt.Errorf(`%w: both sides of interface %d have exclusive holes without one enclosing patch`, decaderr.ErrUnsupported, i-1)
+			}
+			if err != nil {
+				return err
+			}
+			if !valid {
+				return fmt.Errorf(`%w: enclosing interface %d does not record its exposed material`, decaderr.ErrDegenerate, i-1)
+			}
+			continue
+		}
 		lowerOK, err := exposedMatches(ctx, got.LowerExposed, upperOnly)
 		if err != nil {
 			return err
@@ -210,6 +250,23 @@ func Falsify(ctx context.Context, sp Record) error {
 		}
 	}
 	return nil
+}
+
+func enclosingExposedMatches(ctx context.Context, got momentinput.Profile,
+	outer sectionrecord.LoopRecord, inner []sectionrecord.LoopRecord) (bool, error) {
+	if len(got.Holes) != len(inner) {
+		return false, nil
+	}
+	ok, err := loopReversesRecord(ctx, got.Outer, outer)
+	if err != nil || !ok {
+		return false, err
+	}
+	for i, hole := range inner {
+		if !equalLoop(got.Holes[i], hole) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // exposedMatches is I7 for a monotone interface: got holds exactly one

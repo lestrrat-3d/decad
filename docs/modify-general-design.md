@@ -55,7 +55,7 @@ part makes on them. Every cell was read off the live code with the probe under
 | **P4** drilled plate: 60×40×8 with four Ø5 holes in the sketch | prism | chamfer the hole mouths, the top loop, or both | builds (cap loop) |
 | | | fillet the hole mouths, or the top loop | builds (route L fillet arm, RF3) |
 | | | fillet the vertical edges; shell removing the top | builds |
-| **P5** counterbored hole: Ø6 through, Ø10 counterbore 3 deep | faceted | any request | no analytic edge or face to name; the boolean took the mesh path (stacked §7 stage 2 is not landed) |
+| **P5** counterbored hole: Ø6 through, Ø10 counterbore 3 deep | stacked (A2) | shell removing the top | SG3 (the annular shoulder is a third planar face across the reference axis) |
 | **P6** enclosure: 60×40×30 box, 20×10 port through both x walls | brep (class B) | chamfer the port mouth's 4 edges | builds (route P cap loop) |
 | | | fillet the 4 vertical edges | builds (route E) |
 | | | shell removing both x walls | builds (route P tube) |
@@ -80,11 +80,11 @@ Ranked by the parts each refusal blocks:
 
 | Rank | Refusal | Blocks | What the body needs |
 |---|---|---|---|
-| 1 | SB10 / SB3: shell of a brep that reads as no prism, or whose removed face is no cap of the prism it reads as | P1, P2, P3, P6, P6c, P7, P8 | the erosion of the receiver: planes and cylinders along reference axes for a through-cut body (§3); spheres, tori or elliptical edges for a blind pocket or a union |
+| 1 | SB10 / SB3: shell of a nonprism brep or a noncap face | P1, P2, P3, P5, P6, P6c, P7, P8 | receiver erosion: planes and cylinders for a through cut (§3); spheres, tori or elliptical edges for a blind pocket or union |
 | 2 | SL1: edges sharing a vertex outside complete loops | P1 | route V builds complete loops with independent edges; a partial fillet builds edges on one planar loop after straight-wall restatement (`docs/vertex-blend-design.md`) |
 | 3 | a loop fillet: the curved-edge and cornered-loop fillets this survey found refused | P1, P2, P3, P4, P7 | `docs/loop-fillet-design.md`'s pipe band, which builds them |
 | 4 | SB7: an edge ending on a curved face or a blend | P8 | the complete-loop fillet, which builds P8's top loop |
-| 5 | a faceted receiver | P5, P6b, P9 | an analytic boolean: `docs/stacked-prism-design.md` §7 stage 2, a cup as a boolean operand, cylinder × cylinder; reach SX9 stays permanent |
+| 5 | a faceted receiver | P6b, P9 | an analytic boolean: a cup as a boolean operand, cylinder × cylinder; reach SX9 stays permanent |
 
 Routes S and L below clear every brep and stacked row of ranks 1–2 whose
 body is planes and cylinders along reference axes, meeting in lines, circles
