@@ -1973,9 +1973,19 @@ therefore has no mesh free edge, and an unfilled rim remains a mesh free edge.
 The sheet audit checks both cases. Each face bound includes its largest
 vertex bound and its `axialDelta`; the area proof charges those terms per
 triangle. `VerifyBoundary` and `VerifyAll` also check facet contact. A
-`Body.Patch` result with a curved face or edge, or a face with nonzero
-`normalBound`, refuses tessellation until it can share the source feature's
-chording. No `Body.Patch` sheet publishes an occupied-volume proof.
+`Body.Patch` result whose source is one complete circular surface extrusion
+also tessellates when it fills one or both whole-circle rims in the same call.
+The source prism mesh supplies one station grid for the cylindrical wall and
+the new planar fills. Each fill reuses its wall ring's vertex indices, and
+every triangle names a live face of the patched body. The source wall bound,
+circle sagitta under the source frame's stretch, source coordinate bound,
+axial displacement, and any later rigid placement give each face a two-sided
+bound. At `VerifyAll`, exact
+held-triangle area intervals are compared with each face's certified area.
+The sheet and facet-contact audits run on the completed mesh. A later
+`Body.Patch` call on that result, or another curved source outside this prism
+route, still refuses tessellation. No `Body.Patch` sheet publishes an
+occupied-volume proof.
 
 **A stitched `BodySolid` is a different case from every sheet above, and its
 own mesh follows §14 Table D row 5.** A
