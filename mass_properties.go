@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -128,11 +129,11 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	}
 	basis := pp.xform.Basis()
 	if pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		!cardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
-		!cardinalBasis(basis.EX, basis.EY, basis.EZ) {
+		!pairbox.CardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
+		!pairbox.CardinalBasis(basis.EX, basis.EY, basis.EZ) {
 		return massPropertiesFromReadings(massmoment.GeneralPrismProperties(ctx, massPrismRecord(pp), b.centroid, density))
 	}
-	if !rectangularProfile(pp.profile) {
+	if !pairbox.RectangularProfile(pp.profile) {
 		return massPropertiesFromReadings(massmoment.CardinalPrismProperties(ctx, massPrismRecord(pp), b.centroid, density))
 	}
 

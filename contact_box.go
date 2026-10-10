@@ -34,8 +34,8 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	pp, ok := b.payload.(prismPayload)
 	if !ok || !b.solid || b.kind != BodySolid || pp.surfaceResult ||
 		pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		!rectangularProfile(pp.profile) ||
-		!cardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
+		!box.RectangularProfile(pp.profile) ||
+		!box.CardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
 		!signedAxisTransform(pp.xform) || !signedAxisTransform(pose) {
 		return sourceBoxContactProof{}, false
 	}
@@ -115,7 +115,7 @@ func signedAxisTransform(t r3.Transform) bool {
 		return false
 	}
 	b := t.Basis()
-	return cardinalBasis(b.EX, b.EY, b.EZ)
+	return box.CardinalBasis(b.EX, b.EY, b.EZ)
 }
 
 // The root package maps neutral pair readings to public units and topology.
