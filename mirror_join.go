@@ -13,16 +13,12 @@ import (
 	"github.com/lestrrat-3d/decad/internal/mirrorjoin"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sketchrecord"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file adapts internal/mirrorjoin's record rewrite to prism and stacked
 // payloads, then runs the modify §5 audit on each assembled region.
 
-// identMirrorJoin is WithJoin's option identity.
-type identMirrorJoin struct{}
-
-type mirrorJoinOption struct{ option.Interface }
+type mirrorJoinOption struct{}
 
 func (mirrorJoinOption) mirrorOption() {}
 
@@ -41,7 +37,7 @@ func (mirrorJoinOption) mirrorOption() {}
 // ErrDegenerate for a selection that names no single mirror line — and is
 // never handed to Union instead. A repeated WithJoin() is idempotent.
 func WithJoin() MirrorOption {
-	return mirrorJoinOption{option.New(identMirrorJoin{}, struct{}{})}
+	return mirrorJoinOption{}
 }
 
 // joinWall is one selected wall of the receiver: the (loop, segment) its role
