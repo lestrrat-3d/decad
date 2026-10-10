@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -120,7 +121,7 @@ func evalCompositeSweepContext(
 		}
 		current := frames[i].Frame
 		var err error
-		if record.arc == nil {
+		if record.Arc == nil {
 			payload.spans[i], err = compositeLineSweepSpan(profile, current, record)
 		} else {
 			spanPlane := planeRecord{Origin: current.Origin(), U: current.U(), V: current.V()}
@@ -136,15 +137,15 @@ func evalCompositeSweepContext(
 func compositeLineSweepSpan(
 	profile profileRecord,
 	frame r3.Frame,
-	record pathSegmentRecord,
+	record sweepinput.PathRecord,
 ) (sweepSpanPayload, error) {
-	tangent := sweepRatSub(sweepRatVecOf(record.end), sweepRatVecOf(record.start))
+	tangent := sweepRatSub(sweepRatVecOf(record.End), sweepRatVecOf(record.Start))
 	normal := sweepRatVecOf(frame.N())
 	if !sweepRatIsZero(sweepRatCross(tangent, normal)) || sweepRatDot(tangent, normal).Sign() <= 0 {
 		return sweepSpanPayload{}, fmt.Errorf(`%w: a composite line does not follow its transported section normal`, ErrUnsupported)
 	}
 
-	delta := record.end.Sub(record.start)
+	delta := record.End.Sub(record.Start)
 	if !proofbound.FiniteVec(delta) {
 		return sweepSpanPayload{}, fmt.Errorf(`%w: the sweep line's displacement is outside the representable range`, ErrUnsupported)
 	}
@@ -153,8 +154,8 @@ func compositeLineSweepSpan(
 		return sweepSpanPayload{}, fmt.Errorf(`%w: the sweep line's length is outside the representable range`, ErrUnsupported)
 	}
 	heightSquared, heightSquaredOK := proofarith.DySquaredDistance3(
-		record.start.X, record.start.Y, record.start.Z,
-		record.end.X, record.end.Y, record.end.Z,
+		record.Start.X, record.Start.Y, record.Start.Z,
+		record.End.X, record.End.Y, record.End.Z,
 	)
 	heightBound := capcontour.StraightEdgeBound(height, heightSquared, heightSquaredOK)
 	heldSweep := frame.N().Scale(height)
@@ -181,11 +182,11 @@ func compositeArcSweepSpan(
 	profile profileRecord,
 	plane planeRecord,
 	frame r3.Frame,
-	record pathSegmentRecord,
+	record sweepinput.PathRecord,
 	work *freeform.FreeformWork,
 ) (sweepSpanPayload, error) {
-	geometry, err := sweeparc.Derive(record.start, record.arc,
-		record.arcPhi, record.arcAngle, plane)
+	geometry, err := sweeparc.Derive(record.Start, record.Arc,
+		record.ArcPhi, record.ArcAngle, plane)
 	if err != nil {
 		return sweepSpanPayload{}, err
 	}

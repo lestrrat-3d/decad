@@ -4,10 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolveangle"
-	"github.com/lestrrat-3d/decad/internal/sweeparc"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -38,17 +35,7 @@ type Path struct {
 	start    r3.Vec
 	end      r3.Vec
 	segments []PathSegment
-	records  []pathSegmentRecord
-}
-
-type pathSegmentRecord struct {
-	start      r3.Vec
-	end        r3.Vec
-	tangentIn  sweepRatVec
-	tangentOut sweepRatVec
-	arc        *sweepArcRecord
-	arcPhi     float64
-	arcAngle   revolveangle.Angle
+	records  []sweepinput.PathRecord
 }
 
 // NewPath records an ordered spatial path beginning at start. It requires at
@@ -62,67 +49,27 @@ func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error) {
 	}
 
 	owned := make([]PathSegment, len(segments))
-	records := make([]pathSegmentRecord, len(segments))
+	records := make([]sweepinput.PathRecord, len(segments))
 	current := start
 	for i, raw := range segments {
 		segment, err := ownPathSegment(raw)
 		if err != nil {
 			return nil, fmt.Errorf(`path segment %d: %w`, i, err)
 		}
-
+		var input sweepinput.Segment
 		switch segment := segment.(type) {
 		case LineTo:
-			if !proofbound.FiniteVec(segment.End) {
-				return nil, fmt.Errorf(`%w: path segment %d has a non-finite endpoint`, ErrNotFinite, i)
-			}
-			if segment.End == current {
-				return nil, fmt.Errorf(`%w: path segment %d is a zero-length line`, ErrDegenerate, i)
-			}
-			tangent := sweepRatSub(sweepRatVecOf(segment.End), sweepRatVecOf(current))
-			records[i] = pathSegmentRecord{
-				start: current, end: segment.End,
-				tangentIn: tangent, tangentOut: tangent,
-			}
-			current = segment.End
+			input = sweepinput.Segment{End: segment.End}
 		case ArcThrough:
-			if !proofbound.FiniteVec(segment.Through) || !proofbound.FiniteVec(segment.End) {
-				return nil, fmt.Errorf(`%w: path segment %d has a non-finite point`, ErrNotFinite, i)
-			}
-			if segment.Through == current || segment.End == current || segment.Through == segment.End {
-				return nil, fmt.Errorf(`%w: path segment %d repeats an arc point`, ErrDegenerate, i)
-			}
-			fromStart := proofarith.DvSub(proofarith.DyVec(segment.Through), proofarith.DyVec(current))
-			toEnd := proofarith.DvSub(proofarith.DyVec(segment.End), proofarith.DyVec(current))
-			if proofarith.DvIsZero(proofarith.DvCross(fromStart, toEnd)) {
-				return nil, fmt.Errorf(`%w: path segment %d has collinear arc points`, ErrDegenerate, i)
-			}
-			record, err := recordSweepArc(current, segment.Through, segment.End)
-			if err != nil {
-				return nil, fmt.Errorf(`path segment %d: %w`, i, err)
-			}
-			phi, angle, err := sweeparc.ArcAngle(record.RadiusStart, record.RadiusEnd, record.Axis)
-			if err != nil {
-				return nil, fmt.Errorf(`path segment %d: %w`, i, err)
-			}
-			for _, coordinate := range record.Center {
-				if _, _, ok := sweepRatHeld(coordinate); !ok {
-					return nil, fmt.Errorf(`%w: path segment %d has an unrepresentable circular carrier`, ErrUnsupported, i)
-				}
-			}
-			records[i] = pathSegmentRecord{
-				start: current, end: segment.End,
-				tangentIn:  sweepRatCross(record.Axis, record.RadiusStart),
-				tangentOut: sweepRatCross(record.Axis, record.RadiusEnd),
-				arc:        &record,
-				arcPhi:     phi,
-				arcAngle:   angle,
-			}
-			current = segment.End
+			input = sweepinput.Segment{End: segment.End, Through: segment.Through, Arc: true}
 		}
-
+		records[i], err = sweepinput.RecordSegment(current, input, i)
+		if err != nil {
+			return nil, err
+		}
+		current = records[i].End
 		owned[i] = segment
 	}
-
 	return &Path{start: start, end: current, segments: owned, records: records}, nil
 }
 

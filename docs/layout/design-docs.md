@@ -66,7 +66,7 @@ The rules for rows live in `docs/layout.md`.
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
 | `record.go` | Private aliases for structural records and public `Point2`. See sketch-seam §2. |
 | `seam.go` | Sketch recording adapters and `MeasureProfile`. See sketch-seam §1–§2. |
-| `path.go` | The immutable spatial `Path` and its sealed segment vocabulary. See sweep §2–§3. |
+| `path.go` | The immutable spatial `Path`, sealed segments and `internal/sweepinput/` record adapter. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |
 | `selection_error.go` | Public selector error types and query rendering adapters. See API §9. |

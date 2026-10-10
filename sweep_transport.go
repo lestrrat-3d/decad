@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/sweeptransport"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -54,8 +55,8 @@ func transportSweepFramesContext(
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if record.arc == nil {
-			current, err = sweeptransport.Line(current, record.start, record.end)
+		if record.Arc == nil {
+			current, err = sweeptransport.Line(current, record.Start, record.End)
 		} else {
 			current, err = transportSweepArc(current, record)
 		}
@@ -68,16 +69,16 @@ func transportSweepFramesContext(
 }
 
 // transportSweepArc resolves the recorded carrier before numeric transport.
-func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (sweepTransportFrame, error) {
-	if record.arc == nil {
+func transportSweepArc(current sweepTransportFrame, record sweepinput.PathRecord) (sweepTransportFrame, error) {
+	if record.Arc == nil {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span holds no circular carrier`, ErrDegenerate)
 	}
-	arc := *record.arc
+	arc := *record.Arc
 	axisExact, status := surfacenormal.UnitVec3(sweepRatIntervalVec(arc.Axis))
 	if status != surfacenormal.Proven {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span has no certified axis direction`, ErrUnsupported)
 	}
-	sin, cos, ok := record.arcAngle.SinCosFor(record.arcPhi)
+	sin, cos, ok := record.ArcAngle.SinCosFor(record.ArcPhi)
 	if !ok {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span has no certified sine and cosine`, ErrUnsupported)
 	}
@@ -85,7 +86,7 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 		CenterExact: sweepRatIntervalVec(arc.Center),
 		AxisExact:   axisExact,
 		Sin:         sin, Cos: cos,
-		Phi: record.arcPhi,
+		Phi: record.ArcPhi,
 	})
 }
 

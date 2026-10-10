@@ -169,7 +169,7 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 // plane and its first tangent follows the plane's positive normal. It reads
 // no internal join.
 func validateSweepPathStart(path *Path, plane planeRecord) error {
-	return sweepinput.ValidateStart(path.Start(), plane, path.records[0].tangentIn)
+	return sweepinput.ValidateStart(path.Start(), plane, path.records[0].TangentIn)
 }
 
 func validateSweepPathGeometry(path *Path, plane planeRecord) error {
@@ -178,7 +178,7 @@ func validateSweepPathGeometry(path *Path, plane planeRecord) error {
 	}
 	tangents := make([]sweepinput.Tangents, len(path.records))
 	for i, record := range path.records {
-		tangents[i] = sweepinput.Tangents{In: record.tangentIn, Out: record.tangentOut}
+		tangents[i] = sweepinput.Tangents{In: record.TangentIn, Out: record.TangentOut}
 	}
 	return sweepinput.ValidateJoins(tangents)
 }

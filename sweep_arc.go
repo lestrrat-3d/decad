@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -17,7 +18,6 @@ import (
 // beside rational enclosures of the exact values they publish.
 
 type sweepRatVec = sweeparc.RatVec
-type sweepArcRecord = sweeparc.Record
 
 func evalArcSweepContext(
 	ctx context.Context,
@@ -27,15 +27,15 @@ func evalArcSweepContext(
 	plane planeRecord,
 	frame r3.Frame,
 	path *Path,
-	pathRecord pathSegmentRecord,
+	pathRecord sweepinput.PathRecord,
 	work *freeform.FreeformWork,
 	surfaceResult bool,
 ) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	geometry, err := sweeparc.Derive(pathRecord.start, pathRecord.arc,
-		pathRecord.arcPhi, pathRecord.arcAngle, plane)
+	geometry, err := sweeparc.Derive(pathRecord.Start, pathRecord.Arc,
+		pathRecord.ArcPhi, pathRecord.ArcAngle, plane)
 	if err != nil {
 		return nil, err
 	}
@@ -92,14 +92,6 @@ func evalArcSweepContext(
 	}
 	finishArcSweepBody(body, payload)
 	return body, nil
-}
-
-func recordSweepArc(start, through, end r3.Vec) (sweepArcRecord, error) {
-	return sweeparc.RecordArc(start, through, end)
-}
-
-func sweepRatHeld(value *big.Rat) (float64, float64, bool) {
-	return sweeparc.Held(value)
 }
 
 func sweepRatVecOf(v r3.Vec) sweepRatVec { return sweeparc.VecOf(v) }
