@@ -165,15 +165,15 @@ payload gains the COMPOSED proof terms, regenerated on every `placed` (which re-
 raw `matchedDelta`:
 
 ```go
-// loftMeshProof is tess §2's loftPayload row, composed once by evalLoft.
-type loftMeshProof struct {
-    facetDeparture float64 // absSumUpper(matchedDelta, maxTwistOffsetUpper)
-    areaSlack      float64
-    volSymDiff     float64
+// loftmesh.MeshProof is tess §2's loftPayload row, composed once by evalLoft.
+type MeshProof struct {
+    FacetDeparture float64 // absSumUpper(matchedDelta, maxTwistOffsetUpper)
+    AreaSlack      float64
+    VolSymDiff     float64
 }
 ```
 
-`loftPayload` gains `capStartCount int`, `cell [][2]int`, `side []uint8`, `proof loftMeshProof`. All four are
+`loftPayload` gains `capStartCount int`, `cell [][2]int`, `side []uint8`, `proof loftmesh.MeshProof`. All four are
 copied from `loftAssembly` / composed at the end of `evalLoft`; `placed` already nils the triangle fields and
 re-evaluates, so nothing stored can disagree with the records.
 
@@ -201,7 +201,7 @@ maps the returned face numbers back to live faces and calls `setFaceBound`. `Res
    alias the mesh's). No chording, no retriangulation, no reflection flip: loft §5's whole-shell orientation
    step already made every triangle outward, and `placed` re-runs it, so tess §4's "reflected placement
    reverses once" rule is discharged by the payload. Assert the tetrahedron sum positive in the audit below.
-3. `faceBound[f] = proof.facetDeparture` for every face; `bound = facetDeparture`; `areaSlack` from `proof`.
+3. `faceBound[f] = proof.FacetDeparture` for every face; `bound = FacetDeparture`; `AreaSlack` from `proof`.
    A solid also publishes `volSymDiff` and `symDiffOK = true`.
 4. A solid runs `RequireClosedMesh` and the signed-volume audit. Either failing is `ErrUnsupported` (tess §12).
 
@@ -763,9 +763,9 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    `computeLoftChordedAllow`'s chorded-cell loop via `cellTwistAreaAllow`. **Tests:**
    `loft_moments_internal_test.go`: zero for a `LineSeg`-only build, positive for an `ArcSeg` pair with a
    twisted cell, exactly the per-cell sum.
-8. **Files:** `loft_build.go`. **What:** `loftMeshProof`; `loftPayload` gains `capStartCount`, `cell`, `side`,
+8. **Files:** `loft_build.go`, `internal/loftmesh/mass_proof.go`. **What:** `loftmesh.MeshProof`; `loftPayload` gains `capStartCount`, `cell`, `side`,
    `proof`; `evalLoft` composes §4's three terms after `mass.chorded` and stores them; rewrite the
-   `sectionDelta` doc comment paragraph §8 names. **Depends on:** 7. **Tests:** internal: `proof.facetDeparture
+   `sectionDelta` doc comment paragraph §8 names. **Depends on:** 7. **Tests:** internal: `proof.FacetDeparture
    == delta` for a placed `LineSeg`-only loft; `== 0` unplaced pinned; `> sectionDelta` for a chorded pair
    with twist.
 9. **Files:** `tessellate.go`, `loft_build.go`, `internal/loftmesh/loft.go`. **What:** `tessellateLoft` per §4; dispatch in

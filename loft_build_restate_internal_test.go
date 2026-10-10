@@ -5,13 +5,14 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
 // This file covers the record-level half of docs/tessellation-reach-design.md
-// §4: the loftMeshProof evalLoft composes, and the restatement tessellateLoft
+// §4: the loftmesh.MeshProof evalLoft composes, and the restatement tessellateLoft
 // publishes from it. The public half — mesh shape, boolean admission, export
 // determinism — stays in apitest/tessellate_loft_test.go.
 
@@ -34,7 +35,7 @@ func TestLoftSheetAuditRejectsCapInPlaceOfWall(t *testing.T) {
 }
 
 // loftProofOf reads the payload's own composed mesh proof off a built body.
-func loftProofOf(t *testing.T, body *Body) (loftPayload, loftMeshProof) {
+func loftProofOf(t *testing.T, body *Body) (loftPayload, loftmesh.MeshProof) {
 	t.Helper()
 	lp, ok := body.payload.(loftPayload)
 	require.True(t, ok, "a lofted body carries a loftPayload")
@@ -74,9 +75,9 @@ func TestLoftMeshProofComposition(t *testing.T) {
 		lp, proof := loftProofOf(t, body)
 		require.Zero(t, lp.delta, "the fixture must actually be the pinned, unplaced case")
 		require.Zero(t, lp.sectionDelta)
-		require.Zero(t, proof.facetDeparture, "every held facet IS the boundary this build denotes")
-		require.Zero(t, proof.areaSlack)
-		require.Zero(t, proof.volSymDiff)
+		require.Zero(t, proof.FacetDeparture, "every held facet IS the boundary this build denotes")
+		require.Zero(t, proof.AreaSlack)
+		require.Zero(t, proof.VolSymDiff)
 	})
 
 	t.Run("placed LineSeg-only reduces the facet departure to delta", func(t *testing.T) {
@@ -95,23 +96,23 @@ func TestLoftMeshProofComposition(t *testing.T) {
 		// The composition is proofbound.AbsSumUpper(loftmesh.ChordCellDeltaUpper(0, delta), 0),
 		// which is delta widened only by its own outward rounding. It must
 		// never read as the ZERO the build's chorded gate is left at.
-		require.Positive(t, proof.facetDeparture)
-		require.GreaterOrEqual(t, proof.facetDeparture, lp.delta)
-		require.InEpsilon(t, lp.delta, proof.facetDeparture, 1e-12,
+		require.Positive(t, proof.FacetDeparture)
+		require.GreaterOrEqual(t, proof.FacetDeparture, lp.delta)
+		require.InEpsilon(t, lp.delta, proof.FacetDeparture, 1e-12,
 			"a LineSeg-only build's facet departure is its own delta, up to the composition's outward rounding")
-		require.Positive(t, proof.areaSlack, "a displaced vertex moves the area of every facet it touches")
-		require.Positive(t, proof.volSymDiff, "and sweeps volume at the rate of the surface it moved")
+		require.Positive(t, proof.AreaSlack, "a displaced vertex moves the area of every facet it touches")
+		require.Positive(t, proof.VolSymDiff, "and sweeps volume at the rate of the surface it moved")
 	})
 
 	t.Run("chorded twisted pair exceeds the sagitta", func(t *testing.T) {
 		lp, proof := loftProofOf(t, evalLoftFixture(t, twistedArcWedgePayload(t)))
 		require.Positive(t, lp.sectionDelta, "a circular pairing chords its own curve")
-		require.Greater(t, proof.facetDeparture, lp.sectionDelta,
+		require.Greater(t, proof.FacetDeparture, lp.sectionDelta,
 			"the facet departure adds the wall's own twist to the parameter-matched chord departure, "+
 				"and a SET-distance sagitta can never stand in for either")
-		require.Greater(t, proof.facetDeparture, lp.delta)
-		require.Positive(t, proof.areaSlack)
-		require.Positive(t, proof.volSymDiff)
+		require.Greater(t, proof.FacetDeparture, lp.delta)
+		require.Positive(t, proof.AreaSlack)
+		require.Positive(t, proof.VolSymDiff)
 	})
 
 	t.Run("a chorded pair under a non-identity motion charges both halves", func(t *testing.T) {
@@ -128,9 +129,9 @@ func TestLoftMeshProofComposition(t *testing.T) {
 		// above the ulp scale, so the placement leg cannot hide inside the
 		// chorded one.
 		require.Positive(t, lp.delta)
-		require.Greater(t, proof.facetDeparture, flat.facetDeparture,
+		require.Greater(t, proof.FacetDeparture, flat.FacetDeparture,
 			"a placed build charges its held vertices' own displacement beside the chord departure")
-		require.Greater(t, proof.volSymDiff, flat.volSymDiff,
+		require.Greater(t, proof.VolSymDiff, flat.VolSymDiff,
 			"and sweeps volume the unplaced build does not")
 	})
 
@@ -145,8 +146,8 @@ func TestLoftMeshProofComposition(t *testing.T) {
 		require.Equal(t, r3.Identity(), lp.xform, "the fixture must reach its positive delta unplaced")
 		require.Positive(t, lp.delta, "a trimmed LineSeg start is a GENERATED station, never a pinned one")
 		require.Zero(t, lp.sectionDelta, "a LineSeg pairing still chords no curve")
-		require.GreaterOrEqual(t, proof.facetDeparture, lp.delta)
-		require.InEpsilon(t, lp.delta, proof.facetDeparture, 1e-12)
+		require.GreaterOrEqual(t, proof.FacetDeparture, lp.delta)
+		require.InEpsilon(t, lp.delta, proof.FacetDeparture, 1e-12)
 	})
 }
 
@@ -166,9 +167,9 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 	require.NotSame(t, &lp.verts[0], &mesh.vertices[0], "the held mesh must not alias the payload's own arrays")
 	require.NotSame(t, &lp.tris[0], &mesh.triangles[0])
 
-	require.Equal(t, proof.facetDeparture, mesh.bound)
-	require.Equal(t, proof.areaSlack, mesh.areaSlack)
-	require.Equal(t, proof.volSymDiff, mesh.volSymDiff)
+	require.Equal(t, proof.FacetDeparture, mesh.bound)
+	require.Equal(t, proof.AreaSlack, mesh.areaSlack)
+	require.Equal(t, proof.VolSymDiff, mesh.volSymDiff)
 	require.True(t, mesh.symDiffOK, "the payload's occupied-volume proof has landed, so the boolean may compose it")
 
 	// Every source face states its own bound, and each is the payload's own
@@ -181,7 +182,7 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 		seen[f] = struct{}{}
 		got, ok := mesh.sourceBound(f)
 		require.True(t, ok)
-		require.Equal(t, proof.facetDeparture, got)
+		require.Equal(t, proof.FacetDeparture, got)
 	}
 	require.Len(t, seen, len(body.Faces()), "every live face must own at least one facet")
 
@@ -228,10 +229,10 @@ func TestTessellateLoftRefusesAnUnrestatablePayload(t *testing.T) {
 	})
 
 	t.Run("a proof term the build could not state", func(t *testing.T) {
-		for name, mutate := range map[string]func(p *loftMeshProof){
-			"facet departure": func(p *loftMeshProof) { p.facetDeparture = math.Inf(1) },
-			"area slack":      func(p *loftMeshProof) { p.areaSlack = math.Inf(1) },
-			"volSymDiff":      func(p *loftMeshProof) { p.volSymDiff = math.NaN() },
+		for name, mutate := range map[string]func(p *loftmesh.MeshProof){
+			"facet departure": func(p *loftmesh.MeshProof) { p.FacetDeparture = math.Inf(1) },
+			"area slack":      func(p *loftmesh.MeshProof) { p.AreaSlack = math.Inf(1) },
+			"volSymDiff":      func(p *loftmesh.MeshProof) { p.VolSymDiff = math.NaN() },
 		} {
 			t.Run(name, func(t *testing.T) {
 				lp := base

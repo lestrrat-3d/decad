@@ -172,37 +172,7 @@ type loftPayload struct {
 	// proof is the mesh proof record docs/tessellation-design.md §2 states for
 	// this payload, composed by evalLoft from the same build the triangle set
 	// above came out of (docs/tessellation-reach-design.md §4).
-	proof loftMeshProof
-}
-
-// loftMeshProof is docs/tessellation-design.md §2's loftPayload row: the three
-// private proofs a Mesh restating this payload's triangle set publishes.
-// evalLoft composes it once, from the terms docs/loft-design.md §5.2 and §8
-// already derive for the SAME triangle set, and no consumer recomposes it.
-//
-// It is deliberately not any of the payload's other published displacements.
-// facetDeparture is §5.2's facet-departure row — proofbound.AbsSumUpper(matchedDelta,
-// maxTwistOffsetUpper) — and never Bounds.Bound's proofbound.AbsSumUpper(delta,
-// sectionDelta), which answers the different, SET-distance question §5.2's own
-// Bounds.Bound row states. A zero in any field is a published proof of
-// exactness, so each is composed from the terms' own values and never assumed
-// from a segment kind or from the build being unplaced.
-type loftMeshProof struct {
-	// facetDeparture bounds how far one point of a held facet sits from the
-	// true boundary surface that facet stands for: the mesh's own
-	// sourceBound(face) for every face, and its Bound.
-	facetDeparture float64
-	// areaSlack bounds how far the held triangle areas sit from the areas of
-	// the surfaces they stand for, without cancellation: the per-triangle
-	// perturbation sum, the wall's held-to-bilinear, ruled and station-shift
-	// legs, and the two caps' own capAreaAllow.
-	areaSlack float64
-	// volSymDiff bounds volume(TrueBody △ MeshSolid) — occupied volume, so no
-	// term of it may cancel another. It composes the vertex-displacement swept
-	// allowance with the FOUR-leg chorded boundary allowance, the twist leg
-	// included, because the mesh holds the UNCORRECTED triangles rather than
-	// Volume's twist-corrected value.
-	volSymDiff float64
+	proof loftmesh.MeshProof
 }
 
 // transform is the accumulated rigid placement.
@@ -237,7 +207,7 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, c
 	// from the re-lifted records, and a stale copy surviving the re-evaluation
 	// is exactly the disagreement the payload's own doc comment forbids.
 	next.capStartCount, next.cell, next.side = 0, nil, nil
-	next.proof = loftMeshProof{}
+	next.proof = loftmesh.MeshProof{}
 	return evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 }
 
@@ -407,24 +377,16 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 
 	pl.verts, pl.tris, pl.walls = a.Verts, a.Tris, a.Walls
 	pl.capStartCount, pl.cell, pl.side = a.CapStartCount, a.Cell, a.Side
-	pl.proof = loftMeshProofOf(a, mass, sectionMatchedDelta)
+	pl.proof = loftmesh.MeshProofOf(a, mass.MassAccumulator, sectionMatchedDelta)
 	pl.delta = a.Delta
 	// sectionDelta is loftmesh.PairRecords' own accumulated MAX over cells
 	// (loftPayload's own doc comment): zero for a LineSeg-only pairing,
 	// positive for a same-kind circular one, to the sagitta its station
 	// chording commits.
 	pl.sectionDelta = sectionDelta
-	pl.chorded = loftIsChorded(pairs, sectionDelta, sectionMatchedDelta)
+	pl.chorded = loftmesh.IsChorded(pairs, sectionDelta, sectionMatchedDelta)
 	body.payload = pl
 	return body, nil
-}
-
-// loftIsChorded reports whether a build holds a cell whose held triangle pair
-// is not the boundary it denotes: a positive section term, or any cell that is
-// not faceted (loftmesh.LoopPair.Faceted). A degree-1 free-form pair has a zero
-// departure on every cell and still stands for twisted bilinear patches.
-func loftIsChorded(pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64) bool {
-	return sectionDelta > 0 || sectionMatchedDelta > 0 || loftmesh.HasUnfacetedCell(pairs)
 }
 
 // buildLoftMass folds the assembled triangle set into the mass accumulator
@@ -452,7 +414,7 @@ func loftIsChorded(pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta 
 // LineSeg-only build, whose cells are all faceted.
 func buildLoftMass(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64) *loftMassAccumulator {
 	anchor := pl.xform.Apply(pl.plane0.Origin)
-	chorded := loftIsChorded(pairs, sectionDelta, sectionMatchedDelta)
+	chorded := loftmesh.IsChorded(pairs, sectionDelta, sectionMatchedDelta)
 	matchedDelta := 0.0
 	if chorded {
 		matchedDelta = loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.Delta)
@@ -465,63 +427,6 @@ func buildLoftMass(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPai
 		mass.Chorded = loftmesh.ComputeLoftChordedAllow(pairs, a.VIdx, a.WIdx, a.Verts, anchor, matchedDelta, a.Delta, a.Reversed)
 	}
 	return mass
-}
-
-// loftMeshProofOf composes docs/tessellation-design.md §2's loftPayload row
-// from the build evalLoft has just finished (docs/tessellation-reach-design.md
-// §4). Every input is a term docs/loft-design.md §5.2 or §8 already derives for
-// the SAME triangle set the payload keeps, so the mesh restating that set
-// publishes the payload's own proofs and states nothing new of its own.
-//
-// sectionMatchedDelta is loftmesh.PairRecords' own MAX-over-cells chord-to-curve
-// departure.
-//
-// The three terms and why each reads what it does:
-//
-//   - facetDeparture is §5.2's own facet-departure row, proofbound.AbsSumUpper of the
-//     parameter-matched chord departure and the wall's facet twist. Its first
-//     leg is composed UNCONDITIONALLY rather than through evalLoft's gated
-//     matchedDelta, because a LineSeg-only build reaches that gate's zero while
-//     its facets still sit delta from the boundary they stand for: §5.2's row
-//     states matchedDelta reduces to delta there, and a published 0 would be
-//     the claim that the mesh IS the true boundary. It is NOT Bounds.Bound's
-//     proofbound.AbsSumUpper(delta, sectionDelta), which answers a SET-distance question.
-//   - areaSlack sums the per-triangle perturbation allowance the accumulator
-//     already holds with the wall's held-to-bilinear leg, its ruled and
-//     station-shift legs, and the two caps' own capAreaAllow. The
-//     held-to-bilinear leg appears here and not in Area's own bound because
-//     Area.Value has been MOVED onto the bilinear patches by areaCorrection
-//     while the mesh keeps the uncorrected triangles.
-//   - volSymDiff composes docs/loft-gear-bounds-design.md §2's chain — the
-//     vertex sweep, the per-cell wall leg and the skirt — with the twist
-//     measure, for the same reason: Volume.Value applies the exact twist
-//     correction and the mesh does not, so the mesh's own first step is the
-//     held-to-bilinear twist sweep, and the three legs Volume spends would
-//     understate the occupied volume this triangle set differs by. The vertex
-//     sweep is required whenever delta > 0 (§2).
-//
-// Each sum rounds up at every step (docs/tessellation-design.md §2), so a term
-// this build could not state saturates rather than vanishing, and the caller
-// refuses on it instead of publishing it.
-func loftMeshProofOf(a loftmesh.Assembly, m *loftMassAccumulator, sectionMatchedDelta float64) loftMeshProof {
-	return loftMeshProof{
-		facetDeparture: proofbound.AbsSumUpper(
-			loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.Delta),
-			m.Chorded.MaxTwistOffsetUpper,
-		),
-		areaSlack: proofbound.AbsSumUpper(
-			m.PerturbAreaSum,
-			m.Chorded.TwistAreaAllow,
-			m.Chorded.AreaExcess,
-			m.Chorded.CapAreaExcess,
-		),
-		volSymDiff: proofbound.AbsSumUpper(
-			m.SweptVolumeAllow(a.Verts, a.Tris),
-			m.Chorded.WallLeg,
-			m.Chorded.TwistVolumeUpper,
-			m.Chorded.SkirtLeg,
-		),
-	}
 }
 
 // tessellateLoft restates a lofted body's held triangle set as a Mesh
@@ -560,9 +465,9 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload) (*Mesh, error)
 		WallCell: lp.cell, WallSide: lp.side,
 		Sheet:      sheet,
 		FaceOfRole: faceOfRole, StartCapRole: roleCapStart, EndCapRole: roleCapEnd,
-		FacetDepartureMM: lp.proof.facetDeparture,
-		AreaSlackMM2:     lp.proof.areaSlack,
-		VolumeSymDiffMM3: lp.proof.volSymDiff,
+		FacetDepartureMM: lp.proof.FacetDeparture,
+		AreaSlackMM2:     lp.proof.AreaSlack,
+		VolumeSymDiffMM3: lp.proof.VolSymDiff,
 	}
 	if sheet {
 		counts := freeChainCountsByFace(b)
