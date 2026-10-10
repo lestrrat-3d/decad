@@ -667,7 +667,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
-		surface, err := surfacegeom.TransformSurface(f.surface, xform)
+		transformed, err := surfacegeom.TransformSurface(internalSurface(f.surface), xform)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -676,7 +676,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
-			surface:       surface,
+			surface:       publicSurface(transformed),
 			origins:       append([]FeatureRef(nil), f.origins...),
 			area:          f.area,
 			areaBound:     place.AreaOf(proofbound.MeasuredScalar(f.area, f.areaBound)).Bound,
