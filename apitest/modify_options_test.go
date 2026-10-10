@@ -241,10 +241,11 @@ func TestTangentChainSlotCapLoop(t *testing.T) {
 	const h, d = slotHeight, 2.0
 	_, slot := slotBody(t, [2]float64{10, 5})
 
-	// Without the chain the one seed is a partial cap loop: SX4.
+	// Without the chain the single edge reaches route E, whose straight-wall
+	// admission refuses the slot's curved terminal wall (SB7).
 	_, err := slot.Chamfer(t.Context(), slotSeed(slot), units.Millimeters(d))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "only part of a cap loop")
+	require.ErrorContains(t, err, "brep-modify SB7")
 
 	// Exactly(1) holds on the seed; the line→arc→line→arc chain then expands
 	// it to the whole top loop, which builds the cap-loop chamfer.
