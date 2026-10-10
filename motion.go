@@ -5,6 +5,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -49,13 +50,34 @@ func WithMinClearance(minimum units.Value) MotionOption {
 type motionConfig = motionoption.Config
 
 // MotionReport is VerifyMotion's path report (docs/motion-check-design.md §4).
-type MotionReport = reportvocab.MotionReport[*Body, JointCell]
+type MotionReport struct {
+	Request     MotionRequest
+	Motion      Motion
+	Moving      []*Body
+	Against     []*Body
+	Poses       []PoseResult
+	Intervals   []MotionInterval
+	Collisions  []Collision
+	Clearance   *ScalarReading
+	Assessment  Assessment
+	Diagnostics []Diagnostic
+	Status      Status
+}
+
+// Passed reports whether the report is Sound. It returns false for nil.
+func (r *MotionReport) Passed() bool { return r != nil && r.Status == Sound }
 
 // MotionRequest records the effective settings of a VerifyMotion call.
 type MotionRequest = reportvocab.MotionRequest
 
 // PoseResult records one evaluated pose and its pair findings.
-type PoseResult = reportvocab.PoseResult[*Body, JointCell]
+type PoseResult struct {
+	At            units.Value
+	Pose          r3.Transform
+	Interferences []Interference
+	Clearances    []Clearance
+	Diagnostics   []Diagnostic
+}
 
 // MotionInterval records the certificate between adjacent poses.
 type MotionInterval = reportvocab.MotionInterval
@@ -71,4 +93,10 @@ const (
 )
 
 // Collision is a proven overlap at one ideal pose.
-type Collision = reportvocab.Collision[*Body]
+type Collision struct {
+	At     units.Value
+	Pose   r3.Transform
+	Moving *Body
+	Static *Body
+	Volume Measurement
+}
