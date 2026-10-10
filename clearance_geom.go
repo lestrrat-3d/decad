@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -479,7 +480,7 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 // input. ok is false for a meridian this kernel cannot decompose, which
 // leaves the body with no model.
 func revolveCarrierInput(budget *proofbound.WorkBudget, rp revolvePayload) (clearance.RevolveCarrierInput, bool, error) {
-	loops, planes, err := wallsurvey.RevolveLoopsPlane(budget, rp.profile, rp.ax.numeric())
+	loops, planes, err := wallsurvey.RevolveLoopsPlane(budget, rp.profile, rp.ax)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return clearance.RevolveCarrierInput{}, false, err
@@ -499,12 +500,12 @@ func revolveCarrierInput(budget *proofbound.WorkBudget, rp revolvePayload) (clea
 				return clearance.RevolveCarrierInput{}, false, err
 			}
 			wall := clearance.RevolveWall{
-				Walk: w, Kind: rp.ax.classify(w.SegmentWalk),
+				Walk: w, Kind: revolveaxis.Classify(w.SegmentWalk, rp.ax.SnapTol),
 				First: planes[li][w.Segs[0]], Last: planes[li][w.Segs[len(w.Segs)-1]],
 			}
 			for _, seg := range w.Segs[1:] {
 				rec := planes[li][seg]
-				at := rp.ax.walk(rec)
+				at := rp.ax.Walk(rec)
 				wall.Joints = append(wall.Joints, clearance.RevolveJoint{
 					Z: at.StartU, Rho: at.StartV,
 					Rec: revolvemesh.RecordedMeridian{U: rec.StartU, V: rec.StartV, UV: rec.StartBound},

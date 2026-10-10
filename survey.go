@@ -202,7 +202,7 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	c0 := rp.xform.ApplyDir(bas.E0).Dot(p)
 	c1 := rp.xform.ApplyDir(bas.E1).Dot(p)
 	roles := facesByRole(b)
-	loops, err := wallsurvey.RevolveLoops(nil, rp.profile, rp.ax.numeric())
+	loops, err := wallsurvey.RevolveLoops(nil, rp.profile, rp.ax)
 	if err != nil {
 		return undercutOutcome{}
 	}
@@ -407,7 +407,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 				ok: reading.OK, reason: reading.Reason}, readErr
 		case revolvePayload:
 			reading, readErr := wallsurvey.RevolveWall(budget, wallsurvey.RevolveRecord{
-				Profile: pl.profile, Axis: pl.ax.numeric(), SectionDelta: pl.sectionDelta,
+				Profile: pl.profile, Axis: pl.ax, SectionDelta: pl.sectionDelta,
 				Full: pl.full, Phi0: pl.phi0, Phi1: pl.phi1, AngularDelta: pl.angularDelta(),
 			}, cfg.AllowRad)
 			out, err = wallOutcome{reading: reading.Reading, bound: reading.Bound,
@@ -484,7 +484,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			reading := radiussurvey.Prism(pl.profile, pl.sectionDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case revolvePayload:
-			reading := radiussurvey.Revolve(pl.profile, pl.ax.numeric(), pl.sectionDelta)
+			reading := radiussurvey.Revolve(pl.profile, pl.ax, pl.sectionDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case cupPayload:
 			view := pl.view()

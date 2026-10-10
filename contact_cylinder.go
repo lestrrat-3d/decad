@@ -93,14 +93,14 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 		!pairbox.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
 		!signedAxisTransform(rp.xform) || !signedAxisTransform(pose) ||
 		!proofbound.FiniteVec(rp.frame.Origin()) ||
-		rp.ax.aUBound != 0 || rp.ax.aVBound != 0 ||
-		rp.ax.dUBound != 0 || rp.ax.dVBound != 0 {
+		rp.ax.AUBound != 0 || rp.ax.AVBound != 0 ||
+		rp.ax.DUBound != 0 || rp.ax.DVBound != 0 {
 		return sourceCylinderContactProof{}, false
 	}
-	if _, _, ok := clearance.SignedAxis(r3.Vec{X: rp.ax.dU, Y: rp.ax.dV}); !ok {
+	if _, _, ok := clearance.SignedAxis(r3.Vec{X: rp.ax.DU, Y: rp.ax.DV}); !ok {
 		return sourceCylinderContactProof{}, false
 	}
-	if !finiteMeasurementValues(rp.ax.aU, rp.ax.aV) {
+	if !finiteMeasurementValues(rp.ax.AU, rp.ax.AV) {
 		return sourceCylinderContactProof{}, false
 	}
 	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(rp.xform.ApplyDir(rp.basis().W)))
@@ -108,7 +108,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 		return sourceCylinderContactProof{}, false
 	}
 	numeric, ok := pairbox.SourceRevolvedCylinderBox(rp.frame, rp.xform, pose,
-		Point2{U: rp.ax.aU, V: rp.ax.aV}, Point2{U: rp.ax.dU, V: rp.ax.dV},
+		Point2{U: rp.ax.AU, V: rp.ax.AV}, Point2{U: rp.ax.DU, V: rp.ax.DV},
 		rp.profile.Outer.Segments, axis)
 	if !ok {
 		return sourceCylinderContactProof{}, false

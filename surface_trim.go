@@ -721,10 +721,10 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 // generator the two share, so two genuinely co-axial operands differ in them by
 // construction and comparing them would refuse every admissible pair.
 func revolveAxisIdentical(a, b axisFrame) bool {
-	return a.aU == b.aU && a.aV == b.aV &&
-		a.aUBound == b.aUBound && a.aVBound == b.aVBound &&
-		a.dU == b.dU && a.dV == b.dV &&
-		a.dUBound == b.dUBound && a.dVBound == b.dVBound
+	return a.AU == b.AU && a.AV == b.AV &&
+		a.AUBound == b.AUBound && a.AVBound == b.AVBound &&
+		a.DU == b.DU && a.DV == b.DV &&
+		a.DUBound == b.DUBound && a.DVBound == b.DVBound
 }
 
 // revolveMeridianClearOfAxis reads S4's clearance clause off the axis snap that
@@ -738,7 +738,7 @@ func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, e
 	work := freeform.NewFreeformWork()
 	for _, loop := range append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...) {
 		resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the trim axis-clearance gate",
-			rp.chargedWalk, rp.ax.snapTol)
+			rp.chargedWalk, rp.ax.SnapTol)
 		if err != nil {
 			return false, err
 		}
@@ -761,7 +761,7 @@ func revolveChainClearOfAxis(ctx context.Context, rp chainRevolvePayload) (bool,
 	for ci := range rp.chains {
 		view := rp.walkView(ci)
 		resolved, err := revolveaxis.ResolveChain(ctx, rp.chains[ci], work, "the revolve wall build",
-			view.chargedWalk, view.ax.snapTol)
+			view.chargedWalk, view.ax.SnapTol)
 		if err != nil {
 			return false, err
 		}

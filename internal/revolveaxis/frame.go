@@ -8,10 +8,21 @@ import (
 )
 
 // Frame holds the resolved axis coordinates and their proven rounding bounds.
+// Its profile charges are zero until ResolveSide and the axis-contact audit
+// attach the admitted radial uncertainty and any snapped-end displacement.
 type Frame struct {
 	AU, AV, AUBound, AVBound float64
 	DU, DV, DUBound, DVBound float64
 	SnapTol                  float64
+	// These charges belong to the profile and axis together. A frame built
+	// without a profile has zero charges and makes no radial proof claim.
+	// RadialAdmitAllow and AxialExtentUpper bound material possibly admitted
+	// across the axis; Snap bounds the committed endpoint displacement.
+	RadialAdmitAllow float64
+	// RadialProof is a strict zero-threshold result for this exact profile.
+	RadialProof      bool
+	AxialExtentUpper float64
+	Snap             SnapAllow
 }
 
 // IsAxis reports whether a resolved meridian walk sweeps no face.

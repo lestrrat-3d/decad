@@ -304,7 +304,7 @@ type angularStops struct {
 func (d *Document) angularStopCtx(frame r3.Frame, line revolveaxis.Line2, ax axisFrame) angularStops {
 	a3 := frame.ToWorldUV(line.AU, line.AV)
 	w := frame.U().Scale(line.DU).Add(frame.V().Scale(line.DV))
-	r0 := frame.U().Scale(-ax.dV).Add(frame.V().Scale(ax.dU))
+	r0 := frame.U().Scale(-ax.DV).Add(frame.V().Scale(ax.DU))
 	return angularStops{d: d, a3: a3, w: w, r0: r0, e1: w.Cross(r0)}
 }
 

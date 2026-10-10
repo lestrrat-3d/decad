@@ -614,7 +614,7 @@ func TestAddRevolveFacesCancellationReachesRevolveLoops(t *testing.T) {
 	}
 	_, err := (&bodyGeom{}).addRevolveFaces(budget, revolvePayload{
 		profile: profileRecord{Outer: loopRecord{}},
-		ax:      axisFrame{dU: 1},
+		ax:      axisFrame{DU: 1},
 	})
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 1, calls, `revolve carrier faces must pass the budget to meridian resolution`)
@@ -644,7 +644,7 @@ func TestAddRevolveFacesPreservesMeridianErrorMapping(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ok, err := (&bodyGeom{}).addRevolveFaces(proofbound.NewWorkBudget(t.Context()), revolvePayload{
 				profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{tc.seg}}},
-				ax:      axisFrame{dU: 1},
+				ax:      axisFrame{DU: 1},
 			})
 			require.False(t, ok)
 			if tc.want == nil {

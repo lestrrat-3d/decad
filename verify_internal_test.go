@@ -437,7 +437,7 @@ func TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload(t *testing.T) {
 	rp := revolvePayload{
 		profile: freeformTriangleProfile(),
 		frame:   identityFrame(t),
-		ax:      axisFrame{dU: 1},
+		ax:      axisFrame{DU: 1},
 		phi0:    0, phi1: 2 * math.Pi, full: true,
 		xform: r3.Identity(),
 	}
@@ -820,7 +820,7 @@ func rectangleProfile(vlo, vhi float64) profileRecord {
 // rectangle's v range IS the radial range this arm reads.
 func TestRevolvePayloadProvesSimple(t *testing.T) {
 	t.Parallel()
-	axis := axisFrame{dU: 1, dV: 0}
+	axis := axisFrame{DU: 1, DV: 0}
 
 	t.Run("full turn clear of the axis admits", func(t *testing.T) {
 		t.Parallel()
@@ -852,11 +852,11 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		ax, side, err := resolveAxisSide(t.Context(), profile, revolveaxis.Line2{DU: 1}, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.Equal(t, 1.0, side)
-		require.True(t, ax.radialProof)
+		require.True(t, ax.RadialProof)
 		rp := revolvePayload{
 			profile: profile, frame: axisAlignedFrame(t), ax: ax,
 			phi1: 2 * math.Pi, full: true, den: fullTurnDenotation(),
-			xform: r3.Identity(), surfaceResult: true, radialProof: ax.radialProof,
+			xform: r3.Identity(), surfaceResult: true, radialProof: ax.RadialProof,
 		}
 		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
 		motion, err := r3.Translation(r3.NewVec(1, 2, 3))
@@ -882,7 +882,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		ax, side, err := resolveAxisSide(t.Context(), profile, revolveaxis.Line2{DU: 1}, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.Equal(t, -1.0, side)
-		require.False(t, ax.radialProof)
+		require.False(t, ax.RadialProof)
 		rp := revolvePayload{profile: profile, ax: ax, full: true}
 		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
 		chain := chainRevolvePayload{chains: []chainRecord{{Segments: profile.Outer.Segments}}, ax: ax, full: true}
@@ -916,7 +916,7 @@ func TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift(t *testing.T) {
 	t.Parallel()
 	const aV = 1e10
 	const eps = 1e-7
-	ax := axisFrame{dU: 0.8, dV: 0.6, aU: 0, aV: aV}
+	ax := axisFrame{DU: 0.8, DV: 0.6, AU: 0, AV: aV}
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		lineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
 	}}}

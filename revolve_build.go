@@ -152,7 +152,7 @@ func (rp revolvePayload) placed(ctx context.Context, d *Document, ref producerID
 // lift is the record rp's sweep basis is built from: the plane frame and the
 // resolved axis in it.
 func (rp revolvePayload) lift() revolvemesh.RevolveLift {
-	return revolvemesh.RevolveLift{Frame: rp.frame, AU: rp.ax.aU, AV: rp.ax.aV, DU: rp.ax.dU, DV: rp.ax.dV}
+	return revolvemesh.RevolveLift{Frame: rp.frame, AU: rp.ax.AU, AV: rp.ax.AV, DU: rp.ax.DU, DV: rp.ax.DV}
 }
 
 // basis derives the sweep basis from the plane frame and the axis frame.
@@ -161,7 +161,7 @@ func (rp revolvePayload) basis() revolvemesh.RevolveBasis { return rp.lift().Bas
 // axisBound is the resolved axis's own proven anchor and direction
 // displacement, in the form the swept-vertex comparison reads it.
 func (rp revolvePayload) axisBound() revolvemesh.AxisBound {
-	return revolvemesh.AxisBound{AU: rp.ax.aUBound, AV: rp.ax.aVBound, DU: rp.ax.dUBound, DV: rp.ax.dVBound}
+	return revolvemesh.AxisBound{AU: rp.ax.AUBound, AV: rp.ax.AVBound, DU: rp.ax.DUBound, DV: rp.ax.DVBound}
 }
 
 // sweptPoint is the recorded plane-local point a swept vertex denotes, with
@@ -184,14 +184,14 @@ func (rp revolvePayload) denotedPoint(p sweptPoint) sweptPoint {
 // the whole displaced section or the endpoints cut by a trim.
 func (rp revolvePayload) chargedWalk(seg curveSegment, w survey2d.SegmentWalk) (survey2d.SegmentWalk, error) {
 	if c := revolveaxis.SectionWholeCharges(rp.sectionWhole, rp.sectionDelta); c.U != 0 {
-		walk := rp.ax.walkCharged(w, c, c)
-		return revolveaxis.ChargeWholeWalk(walk, rp.sectionDelta, rp.ax.dU, rp.ax.dV), nil
+		walk := rp.ax.WalkCharged(w, c, c)
+		return revolveaxis.ChargeWholeWalk(walk, rp.sectionDelta, rp.ax.DU, rp.ax.DV), nil
 	}
 	startCharge, endCharge, err := prismcells.TrimRevolveSegmentCharges(seg, rp.sectionDelta)
 	if err != nil {
 		return survey2d.SegmentWalk{}, err
 	}
-	return rp.ax.walkCharged(w, startCharge, endCharge), nil
+	return rp.ax.WalkCharged(w, startCharge, endCharge), nil
 }
 
 // walkStart and walkEnd read a PLANE-local walk's (revolveWalks.Plane) two
@@ -329,7 +329,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// since those are the coordinates their envelopes were proven in. Every one
 	// of the four is exactly zero for a profile whose on-axis endpoints already
 	// sit on the axis.
-	ig.AreaBound = proofbound.AbsSumUpper(ig.AreaBound, rp.ax.snap.area)
+	ig.AreaBound = proofbound.AbsSumUpper(ig.AreaBound, rp.ax.Snap.Area)
 	sweep := rp.sweep()
 	dphi := sweep.Value
 	if dphi <= 0 {
@@ -339,7 +339,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if err != nil {
 		return nil, err
 	}
-	q, mzr, mrr := revolvemass.AxisMoments(ig, rp.ax.numeric())
+	q, mzr, mrr := revolvemass.AxisMoments(ig, rp.ax)
 	// The snap's own share of each axis-frame moment, charged where the moment
 	// is read rather than back on the plane-local integrals it was composed
 	// from: ρ and z are what regionSnapAllow's envelopes were proven against,
@@ -347,9 +347,9 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// charging the volume's ∫ρ dA at a frame-origin envelope would inflate it by
 	// the whole axial offset. proofbound.BoundedMul and proofbound.BoundedDiv below then carry these
 	// into the volume and the centroid through the arithmetic they already run.
-	q.Bound = proofbound.AbsSumUpper(q.Bound, rp.ax.snap.first)
-	mzr.Bound = proofbound.AbsSumUpper(mzr.Bound, rp.ax.snap.mixed)
-	mrr.Bound = proofbound.AbsSumUpper(mrr.Bound, rp.ax.snap.second)
+	q.Bound = proofbound.AbsSumUpper(q.Bound, rp.ax.Snap.First)
+	mzr.Bound = proofbound.AbsSumUpper(mzr.Bound, rp.ax.Snap.Mixed)
+	mrr.Bound = proofbound.AbsSumUpper(mrr.Bound, rp.ax.Snap.Second)
 	if q.Value <= 0 {
 		return nil, fmt.Errorf(`%w: the region has no material off the revolve axis`, ErrDegenerate)
 	}
@@ -390,10 +390,10 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// cap face's LOOP is walked from the axis-snapped profile, while its
 		// area here is ig.Area, the Pappus engine's own integral over the
 		// UNSNAPPED recorded one. The two agree exactly wherever
-		// rp.ax.radialAdmitAllow is zero — every axis-aligned fixture — and
+		// rp.ax.RadialAdmitAllow is zero — every axis-aligned fixture — and
 		// otherwise this is what keeps the published cap area from claiming a
 		// tighter bound than the snap/unsnap mismatch can actually cost it.
-		capAdmitAllow := revolvemass.AdmitBandCharge(rp.ax.radialAdmitAllow, rp.ax.axialExtentUpper)
+		capAdmitAllow := revolvemass.AdmitBandCharge(rp.ax.RadialAdmitAllow, rp.ax.AxialExtentUpper)
 		capStart = &Face{
 			surface:     Plane{Frame: startFrame},
 			origins:     []FeatureRef{{producer: ref, Role: roleCapStart}},
@@ -420,7 +420,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// their integrand's envelope over it. The snap's charges above are about the
 	// recorded region against the snapped one and compose beside this one. Zero
 	// for every payload no construction displaced, and folded nowhere then.
-	section, err := revolveaxis.ChargeOf(rp.profile, rp.ax.numeric(), rp.sectionDelta, work)
+	section, err := revolveaxis.ChargeOf(rp.profile, rp.ax, rp.sectionDelta, work)
 	if err != nil {
 		return nil, err
 	}
@@ -542,7 +542,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	}
 	volume := proofbound.BoundedMul(q, sweep)
 	volume.Bound = proofbound.AbsSumUpper(volume.Bound,
-		revolvemass.AdmitVolumeCharge(rp.ax.radialAdmitAllow, rp.ax.axialExtentUpper))
+		revolvemass.AdmitVolumeCharge(rp.ax.RadialAdmitAllow, rp.ax.AxialExtentUpper))
 	// The Pappus volume is the plane-coordinate solid's; L scales it by
 	// exactly |det L| (frameCharge).
 	volume = frame.VolumeOf(volume)
@@ -562,11 +562,11 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		return nil, err
 	}
 	centroidValue, centroidBound := revolvemass.Centroid(revolvemass.CentroidInput{
-		Basis: b, Frame: rp.frame, Placement: rp.xform, Axis: rp.ax.numeric(),
+		Basis: b, Frame: rp.frame, Placement: rp.xform, Axis: rp.ax,
 		Full: rp.full, Phi0: rp.phi0, Phi1: rp.phi1, DenPhi0: rp.den.Phi0, DenPhi1: rp.den.Phi1,
 		Q: q, MZR: mzr, MRR: mrr, Sweep: sweep,
 		CoordUpper: coordUpper, SectionDelta: rp.sectionDelta,
-		RadialAdmit: rp.ax.radialAdmitAllow, AxialExtentUpper: rp.ax.axialExtentUpper,
+		RadialAdmit: rp.ax.RadialAdmitAllow, AxialExtentUpper: rp.ax.AxialExtentUpper,
 	})
 	body.centroid = VecMeasurement{
 		Value:     centroidValue,
@@ -676,7 +676,7 @@ type revolveWalks = revolveaxis.ResolvedWalks
 // edges, returning the faces, the two caps' coedges in walk order, and the
 // loop's side area.
 func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolvemesh.RevolveBasis, li int, loop loopRecord, work *freeform.FreeformWork, frame massmoment.MapCharge) (revLoopParts, error) {
-	resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the revolve wall build", rp.chargedWalk, rp.ax.snapTol)
+	resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the revolve wall build", rp.chargedWalk, rp.ax.SnapTol)
 	if err != nil {
 		return revLoopParts{}, err
 	}
@@ -870,7 +870,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			segs[j] = loop.Segments[si]
 		}
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
-			w.SegmentWalk, kinds[i], segs, rp.ax.numeric(), rp.sectionWhole, rp.sectionDelta), sweep))
+			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
@@ -1252,7 +1252,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 		// (docs/surface-intersection-design.md §3.4).
 		view := rp.walkView(ci)
 		resolved, err := revolveaxis.ResolveChain(ctx, rp.chains[ci], work, "the revolve wall build",
-			view.chargedWalk, view.ax.snapTol)
+			view.chargedWalk, view.ax.SnapTol)
 		if err != nil {
 			return nil, err
 		}
@@ -1425,7 +1425,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			segs[oi] = rp.profile.Outer.Segments[si]
 		}
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
-			w.SegmentWalk, kinds[i], segs, rp.ax.numeric(), rp.sectionWhole, rp.sectionDelta), sweep))
+			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
 			surface:   surf,
 			origins:   origins,

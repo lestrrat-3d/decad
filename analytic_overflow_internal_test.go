@@ -64,7 +64,7 @@ func TestEvalRevolveRejectsOverflowedMeasurements(t *testing.T) {
 		profile: profile,
 		frame:   overflowFrame(t),
 		ax: axisFrame{
-			dV: -1,
+			DV: -1,
 		},
 		phi1:  2 * math.Pi,
 		full:  true,
@@ -151,7 +151,7 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 	rp := revolvePayload{
 		profile: revolveProfile,
 		frame:   overflowFrame(t),
-		ax:      axisFrame{dU: 1},
+		ax:      axisFrame{DU: 1},
 		phi0:    0,
 		phi1:    2 * math.Pi,
 		full:    true,

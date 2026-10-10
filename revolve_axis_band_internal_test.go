@@ -86,7 +86,7 @@ func quarterTurnDenotation() revolveangle.Sweep {
 // other.
 func buildDipShaftBodyCharged(t *testing.T, profile profileRecord, full bool, phi1, radialAdmitAllow, axialExtentUpper float64) *Body {
 	t.Helper()
-	ax := axisFrame{dU: 1, dV: 0, radialAdmitAllow: radialAdmitAllow, axialExtentUpper: axialExtentUpper}
+	ax := axisFrame{DU: 1, DV: 0, RadialAdmitAllow: radialAdmitAllow, AxialExtentUpper: axialExtentUpper}
 	den := quarterTurnDenotation()
 	if full {
 		den = fullTurnDenotation()
@@ -185,9 +185,9 @@ func TestRevolveAxisBandAllowanceZeroForExactAxis(t *testing.T) {
 	ax, side, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, 1.0, side)
-	require.Zero(t, ax.radialAdmitAllow, "an exact axis proving the radial minimum non-negative charges nothing")
-	require.Zero(t, revolvemass.AdmitBandCharge(ax.radialAdmitAllow, ax.axialExtentUpper))
-	require.Zero(t, revolvemass.AdmitVolumeCharge(ax.radialAdmitAllow, ax.axialExtentUpper))
+	require.Zero(t, ax.RadialAdmitAllow, "an exact axis proving the radial minimum non-negative charges nothing")
+	require.Zero(t, revolvemass.AdmitBandCharge(ax.RadialAdmitAllow, ax.AxialExtentUpper))
+	require.Zero(t, revolvemass.AdmitVolumeCharge(ax.RadialAdmitAllow, ax.AxialExtentUpper))
 }
 
 // T93: a profile whose radial minimum is proven negative, with an exact
@@ -294,7 +294,7 @@ func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 
 	rp, ok := body.payload.(revolvePayload)
 	require.True(t, ok)
-	require.Positive(t, rp.ax.radialAdmitAllow,
+	require.Positive(t, rp.ax.RadialAdmitAllow,
 		"this fixture must actually exercise the charged (survStraddle) path, not the strict one")
 
 	vol, err := body.Volume()
@@ -327,7 +327,7 @@ func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 	// rounding term already swamps this real fixture's charge" means made
 	// concrete rather than assumed.
 	rpNoCharge := rp
-	rpNoCharge.ax.radialAdmitAllow = 0
+	rpNoCharge.ax.RadialAdmitAllow = 0
 	bodyNoCharge, err := evalRevolveContext(t.Context(), New(), producerID(0), rpNoCharge)
 	require.NoError(t, err)
 	volNoCharge, err := bodyNoCharge.Volume()

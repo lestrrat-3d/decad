@@ -75,7 +75,7 @@ func (rp revolvePayload) extentBoundedAlongProfile(
 func (rp revolvePayload) extentInput() revolveaxis.ExtentInput {
 	b := rp.basis()
 	return revolveaxis.ExtentInput{
-		Profile: rp.profile, Axis: rp.ax.numeric(), SectionDelta: rp.sectionDelta,
+		Profile: rp.profile, Axis: rp.ax, SectionDelta: rp.sectionDelta,
 		Phi0: rp.phi0, Phi1: rp.phi1, Full: rp.full, Denotation: rp.den,
 		Transform: rp.xform, Basis: b, Lift: rp.lift(),
 	}

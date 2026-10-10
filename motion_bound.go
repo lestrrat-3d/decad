@@ -48,7 +48,7 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 			return math.Inf(1)
 		}
 		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.sectionDelta)
-		return motionbound.RevolveRecordRadius(pl.frame, coordUpper, pl.ax.aU, pl.ax.aUBound, pl.ax.aV, pl.ax.aVBound)
+		return motionbound.RevolveRecordRadius(pl.frame, coordUpper, pl.ax.AU, pl.ax.AUBound, pl.ax.AV, pl.ax.AVBound)
 	default:
 		return math.Inf(1)
 	}

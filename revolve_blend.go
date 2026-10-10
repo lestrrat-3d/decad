@@ -148,7 +148,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 		full:        rp.full,
 		den:         rp.den,
 		xform:       rp.xform,
-		radialProof: ax.radialProof,
+		radialProof: ax.RadialProof,
 		blendSegs:   blendSegs,
 		blendKind:   op.kind,
 	}, work)
@@ -175,8 +175,8 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 // has crossed the axis and is ErrDegenerate.
 func revolveBlendAxis(ctx context.Context, rp revolvePayload, profile profileRecord, work *freeform.FreeformWork) (axisFrame, error) {
 	ax, side, err := resolveAxisSide(ctx, profile, revolveaxis.Line2{
-		AU: rp.ax.aU, AV: rp.ax.aV, AUBound: rp.ax.aUBound, AVBound: rp.ax.aVBound,
-		DU: rp.ax.dU, DV: rp.ax.dV, DUBound: rp.ax.dUBound, DVBound: rp.ax.dVBound,
+		AU: rp.ax.AU, AV: rp.ax.AV, AUBound: rp.ax.AUBound, AVBound: rp.ax.AVBound,
+		DU: rp.ax.DU, DV: rp.ax.DV, DUBound: rp.ax.DUBound, DVBound: rp.ax.DVBound,
 	}, work)
 	if err != nil {
 		return axisFrame{}, err
@@ -198,7 +198,7 @@ func revolveJunctionsOf(ctx context.Context, rp revolvePayload) ([][]revolveJunc
 	out := make([][]revolveJunction, len(loops))
 	for li, loop := range loops {
 		resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the revolve junction blend",
-			rp.chargedWalk, rp.ax.snapTol)
+			rp.chargedWalk, rp.ax.SnapTol)
 		if err != nil {
 			return nil, err
 		}

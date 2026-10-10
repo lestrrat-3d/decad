@@ -108,7 +108,7 @@ func revolveGatePoints(budget *proofbound.WorkBudget, rp revolvePayload) (gatePo
 	return diameter.RevolveWitnesses(budget, diameter.RevolveWitnessInput{
 		Phi0: rp.phi0, Phi1: rp.phi1, Den0: rp.den.Phi0, Den1: rp.den.Phi1,
 		Loops: append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...),
-		Lift:  rp.lift(), AxisBound: rp.axisBound(), Axis: rp.ax.numeric(),
+		Lift:  rp.lift(), AxisBound: rp.axisBound(), Axis: rp.ax,
 		Transform: rp.xform, SectionDelta: rp.sectionDelta,
 	})
 }

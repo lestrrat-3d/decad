@@ -201,11 +201,11 @@ func TestRevolveReadingsCoverFrameDefect(t *testing.T) {
 			// The sketch's V axis is exact: z = ±v and ρ = ∓u, so the square
 			// reads ∫|ρ| dA = 5/2, ∫z|ρ| dA / ∫|ρ| dA = ±1/2 and
 			// ∫ρ|ρ| dA = ∓19/3.
-			require.Zero(t, rp.ax.aU)
-			require.Zero(t, rp.ax.aV)
-			require.Zero(t, rp.ax.dU)
-			require.Equal(t, 1.0, math.Abs(rp.ax.dV))
-			dV := new(big.Rat).SetFloat64(rp.ax.dV)
+			require.Zero(t, rp.ax.AU)
+			require.Zero(t, rp.ax.AV)
+			require.Zero(t, rp.ax.DU)
+			require.Equal(t, 1.0, math.Abs(rp.ax.DV))
+			dV := new(big.Rat).SetFloat64(rp.ax.DV)
 			q := big.NewRat(5, 2)
 			rhoRho := new(big.Rat).Mul(big.NewRat(-19, 3), dV)
 			zero := new(big.Rat)

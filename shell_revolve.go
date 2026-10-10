@@ -90,7 +90,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	walks := loops[0].walks
 	axisAt := -1
 	for i, w := range walks {
-		if !rp.ax.IsAxis(rp.ax.walk(w.SegmentWalk)) {
+		if !rp.ax.IsAxis(rp.ax.Walk(w.SegmentWalk)) {
 			continue
 		}
 		if axisAt >= 0 {
@@ -115,7 +115,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	// no section limit applies: the open chain's own offset, its S11a drop
 	// gate and the §5 audit of its wall section decide it.
 	if s > 0 && sides == 0 {
-		inradius, enough, err := revolveshell.Inradius(budget, rp.profile, rp.ax.numeric(), axisAt >= 0, tmm, tDelta, shellTol)
+		inradius, enough, err := revolveshell.Inradius(budget, rp.profile, rp.ax, axisAt >= 0, tmm, tDelta, shellTol)
 		if err != nil {
 			return nil, err
 		}
@@ -128,12 +128,12 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	var delta float64
 	switch {
 	case sides > 0:
-		wall, delta, err = revolveshell.SideWall(budget, rp.profile, rp.ax.numeric(), walks, axisAt, removedWalks,
+		wall, delta, err = revolveshell.SideWall(budget, rp.profile, rp.ax, walks, axisAt, removedWalks,
 			s, tmm, tDelta, shellTol, auditOffsetSectionBudget)
 	case axisAt < 0:
 		wall, delta, err = revolveShellOffAxisWall(budget, rp.profile, s, tmm, tDelta)
 	default:
-		wall, delta, err = revolveshell.AxisWall(budget, rp.profile, rp.ax.numeric(), walks, axisAt,
+		wall, delta, err = revolveshell.AxisWall(budget, rp.profile, rp.ax, walks, axisAt,
 			s, tmm, tDelta, shellTol, auditOffsetSectionBudget)
 	}
 	if err != nil {
@@ -170,7 +170,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 		full:         rp.full,
 		den:          rp.den,
 		xform:        rp.xform,
-		radialProof:  ax.radialProof,
+		radialProof:  ax.RadialProof,
 		sectionDelta: delta,
 		sectionWhole: delta > 0,
 	}, work)

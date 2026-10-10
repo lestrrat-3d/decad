@@ -970,14 +970,14 @@ func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
 	if rp.radialProof {
 		return true
 	}
-	nU, nV := -rp.ax.dV, rp.ax.dU
+	nU, nV := -rp.ax.DV, rp.ax.DU
 	rawLo, _, rawBound, err := boundaryExtremesBoundedContext(ctx, rp.profile, nU, nV, freeform.NewFreeformWork(), nil)
 	if err != nil {
 		return false
 	}
 	offset := proofbound.BoundedAdd(
-		proofbound.BoundedMul(proofbound.MeasuredScalar(nU, rp.ax.dVBound), proofbound.MeasuredScalar(rp.ax.aU, rp.ax.aUBound)),
-		proofbound.BoundedMul(proofbound.MeasuredScalar(nV, rp.ax.dUBound), proofbound.MeasuredScalar(rp.ax.aV, rp.ax.aVBound)),
+		proofbound.BoundedMul(proofbound.MeasuredScalar(nU, rp.ax.DVBound), proofbound.MeasuredScalar(rp.ax.AU, rp.ax.AUBound)),
+		proofbound.BoundedMul(proofbound.MeasuredScalar(nV, rp.ax.DUBound), proofbound.MeasuredScalar(rp.ax.AV, rp.ax.AVBound)),
 	)
 	rlo := proofbound.BoundedSub(proofbound.MeasuredScalar(rawLo, rawBound), offset)
 	return proofbound.AdmitBelow(rlo, 0) == proofbound.SurvReject
