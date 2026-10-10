@@ -470,7 +470,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// the recorded corner, which both neighbouring walks' held ends
 		// enclose within their own bounds.
 		if span, ok := capcontour.OffsetSpan(dc, dcDelta); ok {
-			center, axis, _, _ := surfacegeom.CircleOf(arcByCorner[i].curve)
+			center, axis, _, _ := surfacegeom.CircleOf(internalCurve(arcByCorner[i].curve))
 			cornerDelta := math.Min(capband.CornerGap(j.VertU, j.VertV, prev.EndU, prev.EndV, prev.EndBound), capband.CornerGap(j.VertU, j.VertV, cur.StartU, cur.StartV, cur.StartBound))
 			arcByCorner[i].curveBound, arcByCorner[i].curveBounded = pl.circleCurveBound(j.VertU, j.VertV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
 		}
@@ -658,7 +658,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// The trimmed arc lies on the offset circle about the wall's
 			// recorded centre, every radius of which sits within radialShift
 			// of the held capRadius.
-			center, axis, _, _ := surfacegeom.CircleOf(capEdge.curve)
+			center, axis, _, _ := surfacegeom.CircleOf(internalCurve(capEdge.curve))
 			capEdge.curveBound, capEdge.curveBounded = pl.circleCurveBound(w.CU, w.CV, capZ, capDelta, 0, capRadius, radialShift, center, axis)
 		}
 

@@ -207,29 +207,106 @@ func internalSurface(s Surface) surfacegeom.Surface {
 	}
 }
 
-// Curve is the sealed edge-geometry set.
-type Curve = surfacegeom.Curve
+// Curve is the sealed edge-geometry set. A switch on it needs a default
+// because later versions may add variants.
+type Curve interface{ curve() }
 
 // Line3 is a straight edge between its vertices.
-type Line3 = surfacegeom.Line3
+type Line3 struct{}
 
-// Circle3 is a circular edge's geometry.
-type Circle3 = surfacegeom.Circle3
+// Circle3 is a circular edge. Center is in millimetres, Axis is a unit
+// normal to its plane, and Radius is the circle radius.
+type Circle3 struct {
+	Center r3.Vec
+	Axis   r3.Vec
+	Radius units.Value
+}
 
-// Arc3 is a circular arc edge's geometry.
-type Arc3 = surfacegeom.Arc3
+// Arc3 is swept counter-clockwise about Axis from the start vertex to the end.
+type Arc3 struct {
+	Center r3.Vec
+	Axis   r3.Vec
+	Radius units.Value
+}
 
-// Ellipse3 is an elliptical arc edge's geometry.
-type Ellipse3 = surfacegeom.Ellipse3
+// Ellipse3 is an elliptical arc edge. Major is the unit direction of its
+// semi-major axis in the plane normal to Axis.
+type Ellipse3 struct {
+	Center, Axis, Major  r3.Vec
+	SemiMajor, SemiMinor units.Value
+}
 
 // FilletMiter3 is the intersection edge of two analytic fillet patches.
-type FilletMiter3 = surfacegeom.FilletMiter3
+type FilletMiter3 struct{}
 
-// NURBSCurve is a free-form edge's geometry.
-type NURBSCurve = surfacegeom.NURBSCurve
+// NURBSCurve marks a free-form edge. Its control points remain private.
+type NURBSCurve struct{}
 
-// FacetedCurve is a polygonal edge's geometry.
-type FacetedCurve = surfacegeom.FacetedCurve
+// FacetedCurve is a polygonal edge. Bound encloses the displacement from its
+// held chord chain to the curve it represents.
+type FacetedCurve struct{ Bound units.Value }
+
+func (Line3) curve()        {}
+func (Circle3) curve()      {}
+func (Arc3) curve()         {}
+func (Ellipse3) curve()     {}
+func (FilletMiter3) curve() {}
+func (NURBSCurve) curve()   {}
+func (FacetedCurve) curve() {}
+
+func publicCurve(c surfacegeom.Curve) Curve {
+	if c == nil {
+		return nil
+	}
+	switch v := c.(type) {
+	case surfacegeom.Line3:
+		return Line3(v)
+	case surfacegeom.Circle3:
+		return Circle3(v)
+	case surfacegeom.Arc3:
+		return Arc3(v)
+	case surfacegeom.Ellipse3:
+		return Ellipse3(v)
+	case surfacegeom.FilletMiter3:
+		return FilletMiter3(v)
+	case surfacegeom.NURBSCurve:
+		return NURBSCurve(v)
+	case surfacegeom.FacetedCurve:
+		return FacetedCurve(v)
+	default:
+		return borrowedCurve{inner: c}
+	}
+}
+
+type borrowedCurve struct{ inner surfacegeom.Curve }
+
+func (borrowedCurve) curve() {}
+
+func internalCurve(c Curve) surfacegeom.Curve {
+	if c == nil {
+		return nil
+	}
+	switch v := c.(type) {
+	case Line3:
+		return surfacegeom.Line3(v)
+	case Circle3:
+		return surfacegeom.Circle3(v)
+	case Arc3:
+		return surfacegeom.Arc3(v)
+	case Ellipse3:
+		return surfacegeom.Ellipse3(v)
+	case FilletMiter3:
+		return surfacegeom.FilletMiter3(v)
+	case NURBSCurve:
+		return surfacegeom.NURBSCurve(v)
+	case FacetedCurve:
+		return surfacegeom.FacetedCurve(v)
+	case borrowedCurve:
+		return v.inner
+	default:
+		panic(fmt.Sprintf("unhandled public curve %T", c))
+	}
+}
 
 // Vertex is a topological point.
 type Vertex struct {

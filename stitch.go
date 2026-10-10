@@ -546,7 +546,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				return eb, nil
 			}
 		}
-		curve, err := surfacegeom.TransformCurve(old.curve, xform)
+		curve, err := surfacegeom.TransformCurve(internalCurve(old.curve), xform)
 		if err != nil {
 			return nil, err
 		}
@@ -555,7 +555,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
-			curve:           curve,
+			curve:           publicCurve(curve),
 			start:           vertexForClass(startClass),
 			end:             vertexForClass(endClass),
 			convex:          old.convex,
@@ -569,7 +569,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			denot: old.denot.Compose(xform),
 		}
 		ne.curveBound, ne.curveBounded = surfacegeom.PlacedCurveBound(
-			old.curve, old.curveBound, old.curveBounded, curve, xform)
+			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
 		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
 		buildByOld[old] = eb
 		if isWelded {

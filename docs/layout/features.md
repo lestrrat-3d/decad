@@ -9,7 +9,7 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `topology.go` | Topology types from `Body` to `Vertex`, public surface variants, and curve aliases. See evaluator §3. |
+| `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
 | `document.go` | `Document`: live body set, commit, `Remove`, liveness gates, placement and duplication. See evaluator §8. |
 | `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
 | `mirror_join.go` | `WithJoin` adapters and section audit. See mirror-pattern §5. |

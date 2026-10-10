@@ -21,7 +21,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/facetproof/` | Faceted shell audits and proofs. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching, query rendering, and residual counts. See API §9. |
-| `internal/surfacegeom/` | Private face and edge geometry carriers and placement transforms. Public surface variants live in `topology.go`. See API §6.1, surface §6. |
+| `internal/surfacegeom/` | Private face and edge geometry carriers and placement transforms. Public surface and curve variants live in `topology.go`. See API §6.1, surface §6. |
 | `internal/reportvocab/` | Contact and sweep enums; Verify reports, motion verification records and survey diagnostics. |
 | `internal/extent/` | Unit bounds and stop levels for extents. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation, segment record and area bounds. See surface §5.2. |

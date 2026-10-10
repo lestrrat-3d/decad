@@ -537,7 +537,7 @@ func stitchTaggedFace(f *Face) stitchflux.TaggedFace {
 	tagged := stitchflux.TaggedFace{Denoted: f.denoted, Surface: internalSurface(f.surface)}
 	for _, loop := range f.loops {
 		for _, ce := range loop.coedges {
-			tagged.Curves = append(tagged.Curves, ce.edge.curve)
+			tagged.Curves = append(tagged.Curves, internalCurve(ce.edge.curve))
 		}
 	}
 	return tagged

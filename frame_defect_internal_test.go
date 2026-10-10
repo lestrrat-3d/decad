@@ -834,14 +834,14 @@ func TestCurveBoundsCoverMappedReference(t *testing.T) {
 					require.Len(t, be, len(re))
 					circles := 0
 					for i := range re {
-						c0, a0, r0, ok := surfacegeom.CircleOf(re[i].curve)
+						c0, a0, r0, ok := surfacegeom.CircleOf(internalCurve(re[i].curve))
 						if !ok {
 							continue
 						}
 						circles++
 						require.True(t, re[i].curveBounded, "reference edge %d carries no curve bound", i)
 						require.True(t, be[i].curveBounded, "edge %d carries no curve bound", i)
-						c1, a1, r1, ok := surfacegeom.CircleOf(be[i].curve)
+						c1, a1, r1, ok := surfacegeom.CircleOf(internalCurve(be[i].curve))
 						require.True(t, ok)
 						an := fdVecOf(a0).unit()
 						e1 := fdVecOf(r3.NewVec(1, 0, 0)).cross(an)
