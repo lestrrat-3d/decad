@@ -1664,3 +1664,7 @@
 2	0.05	TestBrepLoopFilletPublicSTEP
 2	0.05	TestStackedOpposedInterfacePockets
 2	0.03	TestStackedOpposedRoundBoresAcceptLaterThroughHole
+0	2.49	TestPointLocationOnFacetedAndPlacedBodies
+1	0.06	TestPointLocationAcrossPocketsAndBores
+2	0.01	TestPointLocationOnAPlate
+3	0.00	TestPointLocationRejectsInvalidRequests
