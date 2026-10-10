@@ -434,7 +434,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 
 // tessellateBodyContext dispatches one body to its payload's own tessellator.
 // verify reaches only the paths that would otherwise COMPUTE a proof the level
-// withholds — prism, one-span sweep, cup, revolve, cap-loop chamfer, draft and the revolve-backed
+// withholds — prism, patch, one-span sweep, cup, revolve, cap-loop chamfer, draft and the revolve-backed
 // curved stitch route.
 // A restatement path (faceted, loft, all-planar stitch) copies its proof terms
 // off the payload at no cost and publishes them unconditionally;
@@ -457,6 +457,9 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// solid or its recorded wall range for a sheet, with no chording
 		// (internal/loftmesh.RestateLoft's own doc comment owns why).
 		return tessellateLoft(ctx, b, lp)
+	}
+	if pp, ok := b.payload.(patchPayload); ok {
+		return tessellatePatch(ctx, b, pp, chord, verify)
 	}
 	if rp, ok := b.payload.(revolvePayload); ok {
 		return tessellateRevolve(ctx, b, rp, chord, verify)
@@ -522,7 +525,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, stacked prism, brep, chain-fed prism, sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, patch, stacked prism, brep, chain-fed prism, sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, b.payload)
 	}
 	return tessellatePrism(ctx, b, pp, prismWallRole, chord, verify)
 }
