@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
 
 	"github.com/lestrrat-3d/r3"
@@ -23,7 +24,7 @@ import (
 // dipShaftBandProfile's own doc comment states which end carries the
 // deliberate dip.
 //
-// The axis is hand-built as an axisLine2 rather than resolved from a
+// The axis is hand-built as a revolveaxis.Line2 rather than resolved from a
 // SketchLine or ConstructionAxis: aVBound is set directly to the proven
 // anchor uncertainty a tilted or offset axis would carry, which lets each
 // fixture below land deliberately on one side of resolveAxisSide's own
@@ -180,7 +181,7 @@ func TestRevolveAxisBandPartialSweepAreaContainsEnclosedArea(t *testing.T) {
 func TestRevolveAxisBandAllowanceZeroForExactAxis(t *testing.T) {
 	t.Parallel()
 	profile := dipShaftBandProfile(100, 0)
-	line := axisLine2{dU: 1, dV: 0}
+	line := revolveaxis.Line2{DU: 1, DV: 0}
 	ax, side, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, 1.0, side)
@@ -198,7 +199,7 @@ func TestRevolveAxisBandAllowanceZeroForExactAxis(t *testing.T) {
 func TestRevolveAxisBandRefusesProvenNegativeRadialMinimumUnderExactAxis(t *testing.T) {
 	t.Parallel()
 	profile := dipShaftBandProfile(100, 1e-7)
-	line := axisLine2{dU: 1, dV: 0}
+	line := revolveaxis.Line2{DU: 1, DV: 0}
 	_, _, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate)
 }
@@ -219,7 +220,7 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 	t.Parallel()
 	const aV = 1e10
 	const eps = 1e-7
-	line := axisLine2{dU: 0.8, dV: 0.6, aV: aV}
+	line := revolveaxis.Line2{DU: 0.8, DV: 0.6, AV: aV}
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		lineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
 	}}}

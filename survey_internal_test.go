@@ -1114,10 +1114,10 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 	}, frame)
 	require.NoError(t, err)
 	ax := axisFrame{
-		aU: line.aU, aV: line.aV,
-		aUBound: line.aUBound, aVBound: line.aVBound,
-		dU: line.dU, dV: line.dV,
-		dUBound: line.dUBound, dVBound: line.dVBound,
+		aU: line.AU, aV: line.AV,
+		aUBound: line.AUBound, aVBound: line.AVBound,
+		dU: line.DU, dV: line.DV,
+		dUBound: line.DUBound, dVBound: line.DVBound,
 		snapTol: 1e-9,
 	}
 

@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -300,9 +301,9 @@ type angularStops struct {
 // angularStopCtx derives the stop context from the resolved plane frame, the
 // plane-local axis line (caller sense) and the oriented axis frame (region
 // on its non-negative side).
-func (d *Document) angularStopCtx(frame r3.Frame, line axisLine2, ax axisFrame) angularStops {
-	a3 := frame.ToWorldUV(line.aU, line.aV)
-	w := frame.U().Scale(line.dU).Add(frame.V().Scale(line.dV))
+func (d *Document) angularStopCtx(frame r3.Frame, line revolveaxis.Line2, ax axisFrame) angularStops {
+	a3 := frame.ToWorldUV(line.AU, line.AV)
+	w := frame.U().Scale(line.DU).Add(frame.V().Scale(line.DV))
 	r0 := frame.U().Scale(-ax.dV).Add(frame.V().Scale(ax.dU))
 	return angularStops{d: d, a3: a3, w: w, r0: r0, e1: w.Cross(r0)}
 }

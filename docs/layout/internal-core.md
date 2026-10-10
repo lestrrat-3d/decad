@@ -38,7 +38,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolveshell/` | Effective-meridian survey, removed-run checks, and shell wall sections and displacement. See modify-reach §9.3. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
-| `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
+| `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines, plane gates and angle bounds. See sweep §3. |
 | `internal/sweepmitre/` | Mitred profile gates, exact sections and measurements. See sweep §16. |
 | `internal/coil/` | Coil stations, axis coordinates, moments and closed forms. See helix §5, §7. |
 | `internal/coilshell/` | Builds the held coil shell and mesh proofs. See helix §5, §8. |

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -194,8 +195,8 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	// rather than inherited from the sheet's: every one of them is an integral
 	// over the region, and the region changed.
 	work := freeform.NewFreeformWork()
-	ax, axisSide, err := resolveAxisSide(ctx, annulus, axisLine2{
-		aU: rp.ax.aU, aV: rp.ax.aV, dU: rp.ax.dU, dV: rp.ax.dV,
+	ax, axisSide, err := resolveAxisSide(ctx, annulus, revolveaxis.Line2{
+		AU: rp.ax.aU, AV: rp.ax.aV, DU: rp.ax.dU, DV: rp.ax.dV,
 	}, work)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the thicken offset's revolve axis side is unresolved: %v`, ErrUnsupported, err)
@@ -295,8 +296,8 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	// snap allowances, radial admission charge and axial envelope are proven
 	// here rather than inherited from the shell's: every one of them is an
 	// integral over the region, and the shell had no region at all.
-	ax, axisSide, err := resolveAxisSide(ctx, section, axisLine2{
-		aU: cp.ax.aU, aV: cp.ax.aV, dU: cp.ax.dU, dV: cp.ax.dV,
+	ax, axisSide, err := resolveAxisSide(ctx, section, revolveaxis.Line2{
+		AU: cp.ax.aU, AV: cp.ax.aV, DU: cp.ax.dU, DV: cp.ax.dV,
 	}, work)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the thicken offset's revolve axis side is unresolved: %v`, ErrUnsupported, err)
