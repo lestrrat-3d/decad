@@ -41,7 +41,7 @@ func (e Exactness) String() string {
 // is the absolute error bound the evaluator proves, of the same Kind as
 // Value: the error bound on a volume is a volume. Bound is zero when the
 // measurement is Exact.
-type Measurement struct {
+type Measurement = struct {
 	Value     units.Value
 	Exactness Exactness
 	Bound     units.Value
@@ -57,7 +57,7 @@ type Measurement struct {
 // true vector is proven to lie in, so its Kind is Length for a position and
 // Dimensionless for a direction (the deviation of a unit vector from the true
 // unit vector). Bound is zero when the measurement is Exact.
-type VecMeasurement struct {
+type VecMeasurement = struct {
 	Value     r3.Vec
 	Exactness Exactness
 	Bound     units.Value
@@ -69,7 +69,7 @@ type VecMeasurement struct {
 // not tight, and says so. Min and Max are positions, lengths in millimetres
 // (docs/api-design.md §5.2); Bound is the absolute error bound on them, of
 // Kind Length, zero when the box is Exact.
-type Box struct {
+type Box = struct {
 	Min, Max  r3.Vec
 	Exactness Exactness
 	Bound     units.Value

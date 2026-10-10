@@ -523,11 +523,11 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	var wallReading, radiusReading *Measurement
 	if surveys.Wall.reading != nil {
 		m := reportvocab.LengthMeasurement(*surveys.Wall.reading, surveys.Wall.bound)
-		wallReading = &m
+		wallReading = measurementPtrFromInternal(&m)
 	}
 	if surveys.Radius.reading != nil {
 		m := reportvocab.LengthMeasurement(*surveys.Radius.reading, surveys.Radius.bound)
-		radiusReading = &m
+		radiusReading = measurementPtrFromInternal(&m)
 	}
 
 	var volPtr *Measurement
@@ -538,10 +538,10 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	readings := bodyReadingSet{
 		Area:     area,
 		Bounds:   bounds,
-		Volume:   volPtr,
-		Centroid: cenPtr,
-		Wall:     wallReading,
-		Radius:   radiusReading,
+		Volume:   measurementPtrToInternal(volPtr),
+		Centroid: vecMeasurementPtrToInternal(cenPtr),
+		Wall:     measurementPtrToInternal(wallReading),
+		Radius:   measurementPtrToInternal(radiusReading),
 	}
 	verdicts, diagSet, err := bodyReadingDiagnostics(ctx, b, readings, cfg.Rel)
 	if err != nil {
