@@ -638,7 +638,7 @@ func bodyPoints(b *Body, hull bool) (cornerReading, bool) {
 func publishLinkage(r *motionRun, l *Linkage, drive Drive, poses []*motionPose, spans []motionSpan) *LinkageReport {
 	c := r.conclude(poses, spans)
 	report := &LinkageReport{
-		Request:           rootMotionRequest(c.Request),
+		Request:           motionRequest(r.cfg),
 		ReadingResolution: readingResolution(r.cfg),
 		Linkage:           l,
 		Drive:             slices.Clone(drive),

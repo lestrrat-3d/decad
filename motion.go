@@ -118,15 +118,15 @@ func (o IntervalOutcome) String() string {
 	}
 }
 
-func rootMotionRequest(r reportvocab.MotionRequest) MotionRequest {
+func motionRequest(cfg motionConfig) MotionRequest {
 	return MotionRequest{
-		RelativeTolerance: r.RelativeTolerance,
-		Resolution:        r.Resolution,
-		MinClearance:      r.MinClearance,
+		RelativeTolerance: units.Scalar(cfg.Rel),
+		Resolution:        cfg.Resolution,
+		MinClearance:      cfg.Minimum,
 	}
 }
 
-func rootMotionIntervals(intervals []reportvocab.MotionInterval) []MotionInterval {
+func rootMotionIntervals(intervals []reportvocab.ConcludedMotionSpan) []MotionInterval {
 	if intervals == nil {
 		return nil
 	}
@@ -135,11 +135,41 @@ func rootMotionIntervals(intervals []reportvocab.MotionInterval) []MotionInterva
 		result[i] = MotionInterval{
 			From:      interval.From,
 			To:        interval.To,
-			Outcome:   IntervalOutcome(interval.Outcome),
+			Outcome:   rootIntervalOutcome(interval.Outcome),
 			Clearance: interval.Clearance,
 		}
 	}
 	return result
+}
+
+func rootIntervalOutcome(outcome reportvocab.MotionSpanOutcome) IntervalOutcome {
+	switch outcome {
+	case reportvocab.SpanNotEvaluated:
+		return IntervalNotEvaluated
+	case reportvocab.SpanClear:
+		return IntervalClear
+	case reportvocab.SpanColliding:
+		return IntervalColliding
+	case reportvocab.SpanUndecided:
+		return IntervalUndecided
+	default:
+		return IntervalOutcome(outcome)
+	}
+}
+
+func reportSpanOutcome(outcome IntervalOutcome) reportvocab.MotionSpanOutcome {
+	switch outcome {
+	case IntervalNotEvaluated:
+		return reportvocab.SpanNotEvaluated
+	case IntervalClear:
+		return reportvocab.SpanClear
+	case IntervalColliding:
+		return reportvocab.SpanColliding
+	case IntervalUndecided:
+		return reportvocab.SpanUndecided
+	default:
+		return reportvocab.MotionSpanOutcome(outcome)
+	}
 }
 
 // Collision is a proven overlap at one ideal pose.
