@@ -50,8 +50,11 @@ func FitCoords(points []Point2) [][2]float64   { return fitCoords(points) }
 // FitSpline.Eval walks — Points, not Fit — which is the right answer; nothing
 // here papers over the difference or adds a second threshold.
 func fitSplineBezierSpans(seg FitSplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
-	if err := freeform.RequireFullFreeformRange(seg.TStart, seg.TEnd, "fit spline segment"); err != nil {
+	if err := freeform.RequireFiniteFreeformRange(seg.TStart, seg.TEnd, "fit spline segment"); err != nil {
 		return nil, err
+	}
+	if seg.TStart < 0 || seg.TStart > 1 || seg.TEnd < 0 || seg.TEnd > 1 || seg.TStart == seg.TEnd {
+		return nil, fmt.Errorf(`%w: a fit spline segment needs a nonzero range inside [0, 1]`, ErrDegenerate)
 	}
 	// An O(1) size refusal ahead of any content read. record.go's own validation
 	// already floors Fit at 2 (validateSegmentPoints), so this is the guard for a
@@ -180,7 +183,48 @@ func fitSplineBezierSpans(seg FitSplineSeg, work *freeform.FreeformWork) ([]free
 			points[i+1],
 		}
 	}
-	return spans, nil
+	start, end := seg.TStart, seg.TEnd
+	if start > end {
+		start, end = end, start
+	}
+	if start == 0 && end == 1 {
+		return spans, nil
+	}
+	// The source parameter is normalized by sketch's final cumulative chord
+	// parameter. Intersect that exact rational interval with each original span,
+	// then apply de Casteljau restriction to its exact controls. The caller
+	// reverses the returned chain when the recorded range walks backwards.
+	lo := new(big.Rat).Mul(new(big.Rat).SetFloat64(start), params[k-1])
+	hi := new(big.Rat).Mul(new(big.Rat).SetFloat64(end), params[k-1])
+	trimmed := make([]freeform.BezierSpan, 0, len(spans))
+	for i, span := range spans {
+		pieceLo, pieceHi := params[i], params[i+1]
+		if lo.Cmp(pieceHi) >= 0 || hi.Cmp(pieceLo) <= 0 {
+			continue
+		}
+		if err := work.Step(freeform.CostMul(4, freeform.FreeformSpanCost(4))); err != nil {
+			return nil, err
+		}
+		a, b := big.NewRat(0, 1), big.NewRat(1, 1)
+		width := new(big.Rat).Sub(pieceHi, pieceLo)
+		if lo.Cmp(pieceLo) > 0 {
+			a.Quo(new(big.Rat).Sub(lo, pieceLo), width)
+		}
+		if hi.Cmp(pieceHi) < 0 {
+			b.Quo(new(big.Rat).Sub(hi, pieceLo), width)
+		}
+		us, vs := make([]*big.Rat, len(span)), make([]*big.Rat, len(span))
+		for j, p := range span {
+			us[j], vs[j] = p.U, p.V
+		}
+		us, vs = freeform.BernsteinRestrict(us, a, b), freeform.BernsteinRestrict(vs, a, b)
+		part := make(freeform.BezierSpan, len(span))
+		for j := range part {
+			part[j] = freeform.RatPoint{U: us[j], V: vs[j]}
+		}
+		trimmed = append(trimmed, part)
+	}
+	return trimmed, nil
 }
 
 // isFitSplineSeg reports whether seg converts through THIS file's §5.1.2

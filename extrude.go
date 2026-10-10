@@ -71,9 +71,9 @@ func WithTaper(a units.Value) ExtrudeOption {
 // the fixed budget. A chain whose curvature genuinely changes sign, or whose
 // certificate the fixed subdivision depth does not close, is [ErrUnsupported]
 // (Table R row R19), as is a profile past the budget (row R7). A free-form curve
-// must meet its neighbours at shared endpoints, never by crossing
-// (docs/spline-design.md §2.1) — join the endpoints in the sketch, or the
-// profile is rejected as ErrUnrecordableProfile before this ever runs. The
+// must meet its neighbours at shared endpoints unless sketch certifies a
+// fit-spline/circle trim (docs/spline-design.md §2.1). Other crossing
+// fragments are rejected as ErrUnrecordableProfile before this runs. The
 // evaluator converts the profile and plane to structural records; a failed
 // evaluation leaves the document untouched. WithSurfaceResult() omits the two
 // caps and publishes a sheet body instead of a solid (docs/surface-design.md §4).

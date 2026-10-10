@@ -36,12 +36,11 @@ a crossing. A `BoundaryEdge` carries `Entity`, `Partial`, `Reversed` and
   `Polyline` endpoints to machine precision, at both bounds.
 
 **`sketch` decides exactness in two stages, and the first is whole-sketch.**
-Exact bounds are published only when **every** entity the profile pass sees is
-a `*Line`, `*Circle` or `*Arc`; one `*Ellipse`, `*EllipticalArc`, `*Conic`,
-`*Spline`, `*ClosedSpline`, `*FitSpline` or `*NURBS` anywhere in the sketch
-makes every `BoundaryEdge` of every profile read `false` — whole edges and
-fragments alike, the lines, circles and arcs beside it included, however far
-apart they sit. Inside an all line/circle/arc sketch the second stage is the
+Exact bounds are published when **every** entity is a `*Line`, `*Circle` or
+`*Arc`, or when sketch's four-source fit-spline/circle certificate passes.
+Other free-form scenes make every `BoundaryEdge` read `false`, including
+analytic entities beside the free-form curve. Inside an all line/circle/arc
+sketch the second stage is the
 pair: a cut bound is exact where `sketch`'s closed-form kernel placed it, and
 that kernel places a cut for **any** crossing pair among the three. Among
 line/circle/arc sources a tangency is never a cut: the kernel
@@ -60,13 +59,11 @@ fragment it bounds. The whole-sketch gate separately withholds certification:
 it leaves profiles, areas and ranges unchanged, so it can yield `TExact ==
 false` on an analytic cut whose reported range was never sampled.
 
-**Evaluator consequence, and it is scope rather than a footnote:** no free-form
-fragment is ever recordable, so the evaluator only ever sees a free-form curve
-over its FULL domain. `docs/spline-design.md` §2 owns that scope and what the
-public doc comments must tell a caller whose spline crosses another curve. The
-whole-sketch gate reaches past the free-form curve itself: a sketch holding one
-records no fragment at all, whatever cut it, so two crossing rectangles beside
-an untouched spline record nothing.
+**Evaluator consequence:** a fit-spline fragment certified by the four-source
+case is recordable and retains its source fit points and range. Other free-form
+fragments are refused. `docs/spline-design.md` §2 owns the evaluator's range
+handling. A free-form source outside the certificate withholds exactness across
+the sketch, including separate analytic crossings.
 
 **No residual test on a fragment's endpoints could stand in for the flag, at any
 tolerance.** A `Polyline` is a **sample of the curve**: its vertices are

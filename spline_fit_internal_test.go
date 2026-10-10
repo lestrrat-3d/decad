@@ -218,17 +218,36 @@ func TestFitSplineAllCoincidentReturnsNoSpans(t *testing.T) {
 	require.Empty(t, spans)
 }
 
-// A trimmed fit-spline range refuses through freeform.RequireFullFreeformRange, the
-// same "full domain" cause every other Tier A kind reports for a trimmed
-// range (spline design §2) — never the interpolant conversion's own reason.
-func TestFitSplineTrimmedRangeRefusesAtFullDomainGate(t *testing.T) {
+// A certified fit-spline trim restricts the original cubic pieces. The
+// reconstructed endpoints and interior points stay on sketch's interpolant.
+func TestFitSplineTrimmedRangePreservesSource(t *testing.T) {
 	t.Parallel()
-	seg := fitSplineSeg{
-		Fit:    point2ToRecordSlice([]Point2{{U: 0}, {U: 1, V: 1}, {U: 2}}),
-		TStart: 0.25, TEnd: 0.75,
+	fit := []Point2{{U: 0}, {U: 1, V: 1}, {U: 2}}
+	for _, bounds := range [][2]float64{{0.25, 0.75}, {0.75, 0.25}} {
+		seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: bounds[0], TEnd: bounds[1]}
+		spans, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
+		require.NoError(t, err)
+		require.Len(t, spans, 2)
+		for i, span := range spans {
+			for _, sample := range []struct{ local, source float64 }{
+				{0, 0.25 + 0.25*float64(i)},
+				{0.5, 0.375 + 0.25*float64(i)},
+				{1, 0.5 + 0.25*float64(i)},
+			} {
+				u := sample.local
+				basis := [4]float64{(1 - u) * (1 - u) * (1 - u), 3 * u * (1 - u) * (1 - u), 3 * u * u * (1 - u), u * u * u}
+				var gotU, gotV float64
+				for j, p := range span {
+					vU, _ := p.U.Float64()
+					vV, _ := p.V.Float64()
+					gotU += basis[j] * vU
+					gotV += basis[j] * vV
+				}
+				wantU, wantV, err := geom.EvalFitSpline(splinebezier.FitCoords(seg.Fit), sample.source)
+				require.NoError(t, err)
+				require.InDelta(t, wantU, gotU, 1e-12)
+				require.InDelta(t, wantV, gotV, 1e-12)
+			}
+		}
 	}
-	_, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.Contains(t, err.Error(), "full domain")
 }

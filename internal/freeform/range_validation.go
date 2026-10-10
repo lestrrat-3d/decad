@@ -27,23 +27,21 @@ func RequireFiniteFreeformRange(tStart, tEnd float64, what string) error {
 }
 
 // RequireFullFreeformRange rejects a recorded free-form range that is not the
-// entity's full domain. spline design §2 proves none is recordable, so reaching
-// this is a caller-built or decoded record that bypassed the seam — refuse
-// rather than integrate a piece the conversion does not cover.
+// entity's full domain. Certified FitSplineSeg fragments use the separate
+// restriction path in splinebezier/fit.go; the kinds using this gate cannot
+// consume a trimmed range.
 //
 // It is the Tier A arms' own gate, and it stays there. Table R states R2
 // unconditionally and carries no row for a trimmed range reaching the evaluator,
 // so a kind refused for its own cause reports that cause whatever its range
-// says. A FitSplineSeg carries no such unconditional refusal — it is Tier A
-// for the moments path (Table F) — so it reaches this same gate instead of
-// skipping it. Finiteness is the separate refusal above, already decided for
-// every kind before this runs.
+// says. Finiteness is the separate refusal above, already decided for every
+// kind before this runs.
 func RequireFullFreeformRange(tStart, tEnd float64, what string) error {
 	if (tStart == 0 && tEnd == 1) || (tStart == 1 && tEnd == 0) {
 		return nil
 	}
 	return fmt.Errorf(
-		`%w: a %s must span its full domain; a trimmed free-form range is never recordable (range [%v, %v])`,
+		`%w: a %s must span its full domain; this trimmed range is unsupported (range [%v, %v])`,
 		decaderr.ErrUnsupported, what, tStart, tEnd,
 	)
 }
