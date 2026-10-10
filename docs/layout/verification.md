@@ -48,7 +48,7 @@ The rules for rows live in `docs/layout.md`.
 | `linkage_box.go` | `VerifyJointBox` and its public joint-space inputs and reports. See `docs/linkage-check-design.md`. |
 | `linkage_loop.go` | Closed loops and `Schedule`. See `docs/linkage-check-design.md` §15. |
 | `linkage_bound.go` | Linkage reach and projection adapters. See linkage §5.2, §5.8. |
-| `contact_sweep.go` | Sweeps, public report types, and tracks. |
+| `contact_sweep.go` | Sweeps, public report and time types, and tracks. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating and planar sweep adapters. See contact-sweep §4. |
 | `contact_sweep_memo.go` | Sweep memo adapter. See contact-sweep §7. |
 | `contact_sweep_band.go` / `contact_sweep_rolling.go` | Contact bands and rolling. See multibody §10. |
