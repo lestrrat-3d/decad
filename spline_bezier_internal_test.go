@@ -317,14 +317,6 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 		message string
 	}{
 		{
-			name: "trimmed fit spline",
-			segment: fitSplineSeg{
-				Fit:    point2ToRecordSlice([]Point2{{}, {U: 1, V: 1}, {U: 2}}),
-				TStart: 0.25, TEnd: 0.75,
-			},
-			message: "full domain",
-		},
-		{
 			name: "elliptical arc",
 			segment: ellipticalArcSeg{
 				Center: Point2{}, Start: Point2{U: 1}, End: Point2{V: 1},

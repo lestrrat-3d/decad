@@ -1030,8 +1030,7 @@ func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
 	}
 }
 
-// The recorded range's FINITENESS and its FULL-DOMAIN shape are two different
-// refusals, and each has to reach the same verdict on every free-form kind.
+// The recorded range's finiteness and supported shape are separate checks.
 //
 // A non-finite range is a non-finite INPUT, so core §12 gives it ErrNotFinite on
 // all seven kinds — reading it inside the Tier A arms alone reports it there and
@@ -1039,9 +1038,9 @@ func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
 // range is the opposite: Table R states R2 and the Tier B rows unconditionally
 // and carries no row for a trimmed range reaching the evaluator, so a kind
 // refused for its own cause keeps reporting that cause whatever its range says.
-// A FitSplineSeg carries no such unconditional refusal for the moments path —
-// it is Tier A (Table F) — so it reaches this same range check instead of
-// skipping it.
+// A FitSplineSeg accepts a certified trim, but manually shortening its range
+// while leaving the original closing chord produces a broken loop. That
+// record is degenerate because its new endpoint no longer meets the chord.
 func TestFreeformRecordedRangeRefusals(t *testing.T) {
 	t.Parallel()
 	spline := func(tStart, tEnd float64) momentinput.Profile {
@@ -1134,12 +1133,13 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 		fullSentinel error
 		fullMessage  string
 		// trimmedMessage names the cause that wins over the trimmed range.
-		trimmedMessage string
+		trimmedMessage  string
+		trimmedSentinel error
 	}{
 		{name: "spline", of: spline, trimmedMessage: "full domain"},
 		{name: "closed spline", of: closedSpline, trimmedMessage: "full domain"},
 		{name: "NURBS", of: nurbs, trimmedMessage: "full domain"},
-		{name: "fit spline", of: fitSpline, trimmedMessage: "full domain"},
+		{name: "fit spline", of: fitSpline, trimmedMessage: "own boundary", trimmedSentinel: decad.ErrDegenerate},
 		{
 			name: "elliptical arc", of: ellipticalArc,
 			fullSentinel: decad.ErrUnsupported, fullMessage: "pinned endpoints",
@@ -1182,7 +1182,11 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 
 			t.Run("trimmed", func(t *testing.T) {
 				err := measure(t, tc.of(0.25, 0.75))
-				require.ErrorIs(t, err, decad.ErrUnsupported)
+				sentinel := tc.trimmedSentinel
+				if sentinel == nil {
+					sentinel = decad.ErrUnsupported
+				}
+				require.ErrorIs(t, err, sentinel)
 				require.NotErrorIs(t, err, decad.ErrNotFinite)
 				require.Contains(t, err.Error(), tc.trimmedMessage,
 					"the kind's own cause wins over the trimmed range")
