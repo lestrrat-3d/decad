@@ -120,6 +120,9 @@ type CountInput struct {
 	SectionDelta float64
 	Phi0, Phi1   float64
 	Full         bool
+	// MeridianFloor shares profile stations with adjacent sweep spans.
+	// Nil keeps Revolve's ordinary minimum counts.
+	MeridianFloor [][]int
 }
 
 // PlanCounts reserves section and coordinate displacement, then chords each
@@ -143,17 +146,33 @@ func PlanCounts(input CountInput) (Counts, error) {
 		Meridian: make([][]int, len(res.Resolved)), Sagittas: make([][]float64, len(res.Resolved)),
 		RhoMax: res.RhoMax,
 	}
+	if input.MeridianFloor != nil && len(input.MeridianFloor) != len(res.Resolved) {
+		return Counts{}, fmt.Errorf(`%w: the shared meridian count plan has a different loop count`, decaderr.ErrUnsupported)
+	}
 	for li, r := range res.Resolved {
+		if input.MeridianFloor != nil && len(input.MeridianFloor[li]) != len(r.Walks) {
+			return Counts{}, fmt.Errorf(`%w: the shared meridian count plan has a different walk count`, decaderr.ErrUnsupported)
+		}
 		counts.Meridian[li] = make([]int, len(r.Walks))
 		counts.Sagittas[li] = make([]float64, len(r.Walks))
 		for k, w := range r.Walks {
 			counts.Meridian[li][k] = 1
 			if !w.IsCircular() {
+				if input.MeridianFloor != nil && input.MeridianFloor[li][k] > 1 {
+					return Counts{}, fmt.Errorf(`%w: a straight meridian cannot take extra chord stations`, decaderr.ErrUnsupported)
+				}
 				continue
 			}
 			n, sag, err := tessellation.ChordCount(w.SegmentWalk, meridian, revolvesampling.MeridianMin(w.SegmentWalk))
 			if err != nil {
 				return Counts{}, err
+			}
+			if input.MeridianFloor != nil && input.MeridianFloor[li][k] > n {
+				n = input.MeridianFloor[li][k]
+				if n > freeform.MaxChordsPerWalk {
+					return Counts{}, freeform.ErrTooManyChords
+				}
+				sag = tessellation.ChordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), n)
 			}
 			counts.Meridian[li][k], counts.Sagittas[li][k] = n, sag
 			counts.MeridianDelta = math.Max(counts.MeridianDelta, sag)

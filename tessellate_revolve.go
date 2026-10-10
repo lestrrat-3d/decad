@@ -130,7 +130,18 @@ func tessellateRevolve(ctx context.Context, b *Body, rp revolvePayload, chord fl
 // roles and may exchange its cap roles, while every geometric proof remains
 // the reduction's own.
 func tessellateRevolveWithRoles(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification, roleOf func(string) string) (*Mesh, error) {
-	plan, err := planRevolveWithRoles(ctx, b, rp, chord, verify, roleOf)
+	return tessellateRevolveWithCountFloor(ctx, b, rp, chord, verify, roleOf, nil)
+}
+
+func tessellateRevolveWithCountFloor(ctx context.Context, b *Body, rp revolvePayload,
+	chord float64, verify Verification, roleOf func(string) string, floor [][]int) (*Mesh, error) {
+	var plan *revolvePlan
+	var err error
+	if floor == nil {
+		plan, err = planRevolveWithRoles(ctx, b, rp, chord, verify, roleOf)
+	} else {
+		plan, err = planRevolveWithRoleCountFloor(ctx, b, rp, chord, verify, roleOf, floor)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +159,9 @@ func tessellateRevolveWithRoles(ctx context.Context, b *Body, rp revolvePayload,
 		// with nothing of the retry machinery in its chain.
 		if attempt >= maxRevolveRefinements {
 			return nil, refine.err
+		}
+		if floor != nil && refine.retry.Loop >= 0 {
+			return nil, fmt.Errorf(`%w: a shared sweep profile needs a higher common meridian count`, ErrUnsupported)
 		}
 		if rerr := plan.Refine(plan.resolved, refine.retry); rerr != nil {
 			return nil, refine.err
@@ -169,6 +183,11 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveplan.Resolu
 // against count-independent ceilings, the meridian takes half of what is left
 // and chords every circular walk, and the angular sequence takes the remainder.
 func planRevolveWithRoles(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification, roleOf func(string) string) (*revolvePlan, error) {
+	return planRevolveWithRoleCountFloor(ctx, b, rp, chord, verify, roleOf, nil)
+}
+
+func planRevolveWithRoleCountFloor(ctx context.Context, b *Body, rp revolvePayload,
+	chord float64, verify Verification, roleOf func(string) string, floor [][]int) (*revolvePlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -200,6 +219,7 @@ func planRevolveWithRoles(ctx context.Context, b *Body, rp revolvePayload, chord
 	counts, err := revolveplan.PlanCounts(revolveplan.CountInput{
 		Resolution: res, Chord: chord, SectionDelta: rp.sectionDelta,
 		Phi0: rp.phi0, Phi1: rp.phi1, Full: rp.full,
+		MeridianFloor: floor,
 	})
 	if err != nil {
 		return nil, err
@@ -294,6 +314,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	}
 	deltaR = math.Min(deltaR, proofbound.RigidRoundAllow(proofbound.AbsSumUpper(p.coordMax, deltaC), proofbound.VecMaxAbs(rp.xform.Translation())))
 	coord := proofbound.AbsSumUpper(deltaC, deltaR)
+	mesh.coordBound = coord
 
 	// Walls, cell by cell. Both rings off the axis give a planar quad on the
 	// fixed diagonal; exactly one on the axis gives a fan; both on the axis is

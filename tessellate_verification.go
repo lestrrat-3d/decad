@@ -139,7 +139,7 @@ func payloadAuditsFacetContact(p featurePayload) bool {
 		return true
 	}
 	if sp, ok := p.(sweepPayload); ok {
-		return sp.arc && len(sp.spans) == 0
+		return len(sp.spans) != 0 || sp.arc
 	}
 	sp, ok := p.(stitchPayload)
 	return ok && sp.tris == nil

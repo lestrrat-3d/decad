@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 )
 
 // Example_decad_sweep_spatial builds a square duct whose path turns first in
@@ -74,6 +75,11 @@ func Example_decad_sweep_spatial() {
 		fmt.Printf("failed to verify sweep: %s\n", err)
 		return
 	}
+	mesh, err := body.Tessellate(context.Background(), units.Millimeters(0.1))
+	if err != nil {
+		fmt.Printf("failed to tessellate sweep: %s\n", err)
+		return
+	}
 
 	fmt.Printf("solid: %v, spans: %d, faces: %d\n", body.IsSolid(), len(path.Segments()), len(body.Faces()))
 	fmt.Printf("volume: %.3f mm^3\n", volume.Value.Base())
@@ -81,6 +87,7 @@ func Example_decad_sweep_spatial() {
 	fmt.Printf("centroid: {%.3f %.3f %.3f}\n", centroid.Value.X, centroid.Value.Y, centroid.Value.Z)
 	fmt.Printf("bounds: %v .. %v\n", bounds.Min, bounds.Max)
 	fmt.Printf("verified: %v\n", report.Passed())
+	fmt.Printf("mesh triangles: %d, volume proof: %v\n", len(mesh.Triangles()), mesh.VolumeVerified())
 	// Output:
 	// solid: true, spans: 3, faces: 14
 	// volume: 102.832 mm^3
@@ -88,4 +95,5 @@ func Example_decad_sweep_spatial() {
 	// centroid: {10.000 0.542 4.458}
 	// bounds: {-1 -1 0} .. {21 5 6}
 	// verified: true
+	// mesh triangles: 92, volume proof: true
 }

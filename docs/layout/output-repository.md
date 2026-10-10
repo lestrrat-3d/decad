@@ -17,6 +17,7 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_brep_partial_fillet.go` | Adapts `internal/partialband/` layouts to selected cap-edge fillet meshes. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1. |
 | `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
+| `tessellate_sweep_composite.go` | Plans shared profile stations and assembles composite Sweep meshes. See sweep Table D. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |

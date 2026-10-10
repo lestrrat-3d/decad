@@ -1231,8 +1231,9 @@ cannot yet build returns `ErrUnsupported`.
 Sweep follows `docs/sweep-design.md` §12's count-free delivery plan. The current
 build reduces line spans to Extrude and circular spans to Revolve, then joins
 composite tangent paths when exact frame transport and the conservative contact
-audit close. Tessellation, free-form profiles, twist, clearance, and surveys
-remain staged exactly as its Table D states. An unlanded Sweep build returns
+audit close. One-span sweeps and admitted composite paths with line or circular
+profile walks tessellate and enter mesh booleans. Free-form profiles, twist,
+clearance, and surveys remain staged as Table D states. An unlanded Sweep build returns
 `ErrUnsupported`; an unlanded verification question reads `Suspect`.
 
 Coil follows `docs/helix-design.md` §11's count-free four-PR plan: PRs 1
