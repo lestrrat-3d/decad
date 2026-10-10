@@ -151,11 +151,11 @@ func IsChordedPair(w0, w1 survey2d.SegmentWalk) bool {
 // counts consume it as PairRecords builds their stations. If P already reaches
 // the cap, only one cell per pair is allowed and S8 handles the base count.
 func StationExtraBudget(p uint64) int {
-	cap := StationCap(p)
-	if p >= uint64(cap) {
+	limit := StationCap(p)
+	if p >= uint64(limit) {
 		return 0
 	}
-	return cap - int(p) //nolint:gosec // p < cap <= StationCapCeiling.
+	return limit - int(p) //nolint:gosec // p < limit <= StationCapCeiling.
 }
 
 // RecordCellStations generates one paired LineSeg or circular loft segment's

@@ -188,10 +188,10 @@ func TestOuterLoopOfKeepsBoreEdgesSharp(t *testing.T) {
 		require.NoError(t, err)
 		outer, err := decad.Edges(decad.OuterLoopOf(ref)).Exactly(4).SelectEdges(body)
 		require.NoError(t, err)
-		cap, err := decad.Faces(decad.FaceCreatedBy(ref)).Exactly(1).SelectFaces(body)
+		capFaces, err := decad.Faces(decad.FaceCreatedBy(ref)).Exactly(1).SelectFaces(body)
 		require.NoError(t, err)
 		var want []*decad.Edge
-		for _, loop := range cap[0].Loops() {
+		for _, loop := range capFaces[0].Loops() {
 			if loop.IsOuter() {
 				want = loop.Edges()
 			}
