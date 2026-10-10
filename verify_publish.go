@@ -2,6 +2,23 @@ package decad
 
 import "github.com/lestrrat-3d/decad/internal/reportvocab"
 
+func encodedVerifyRequest(req VerifyRequest) reportvocab.VerifyRequest {
+	encoded := reportvocab.VerifyRequest{
+		RelativeTolerance: req.RelativeTolerance,
+		ConcaveRadius:     req.ConcaveRadius,
+		Clearances:        req.Clearances,
+	}
+	if req.Wall != nil {
+		encoded.Wall = &reportvocab.WallRequest{
+			Minimum: req.Wall.Minimum, DraftAllowance: req.Wall.DraftAllowance,
+		}
+	}
+	if req.Undercut != nil {
+		encoded.Undercut = &reportvocab.UndercutRequest{PullDirection: req.Undercut.PullDirection}
+	}
+	return encoded
+}
+
 // bodyPublishInput carries the already decided body readings and raw surveys.
 type bodyPublishInput struct {
 	Body                *Body
@@ -39,7 +56,7 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 		Area:                in.Area,
 		Bounds:              in.Bounds,
 		Region:              in.Region,
-		Request:             in.Request,
+		Request:             encodedVerifyRequest(in.Request),
 		Surveys:             surveyPublication(in.Surveys),
 		WallTolerance:       in.WallTolerance,
 		WallToleranceDiag:   in.WallToleranceDiag,
@@ -47,10 +64,20 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 		RadiusToleranceDiag: in.RadiusToleranceDiag,
 		CoreDiagnostics:     in.CoreDiagnostics,
 	})
+	wall := WallResult{
+		Request: in.Request.Wall, Outcome: published.Wall.Outcome,
+		Minimum: published.Wall.Minimum, Assessment: published.Wall.Assessment,
+		Diagnostics: published.Wall.Diagnostics,
+	}
+	undercut := UndercutResult{
+		Request: in.Request.Undercut, Coverage: published.Undercut.Coverage,
+		Faces: published.Undercut.Faces, Assessment: published.Undercut.Assessment,
+		Diagnostics: published.Undercut.Diagnostics,
+	}
 	return &BodyReport{
 		Body: published.Body, Status: published.Status, Validity: published.Validity,
 		Topology: published.Topology, Area: published.Area, Bounds: published.Bounds,
-		Region: published.Region, Wall: published.Wall, Undercut: published.Undercut,
+		Region: published.Region, Wall: wall, Undercut: undercut,
 		ConcaveRadius: published.ConcaveRadius, Diagnostics: published.Diagnostics,
 	}
 }
@@ -113,8 +140,13 @@ func publishUndercutResult(body *Body, surveys surveyResults, req VerifyRequest,
 		(kind == BodySolid || kind == BodySheet) {
 		faces = body.Faces()
 	}
-	return reportvocab.PublishUndercut[*Body, *Face, JointCell](
+	published := reportvocab.PublishUndercut[*Body, *Face, JointCell](
 		body, kind == BodySolid, kind == BodySheet, faces,
-		surveyPublication(surveys).Undercut, surveys.UndercutDiagnostics, req, validity,
+		surveyPublication(surveys).Undercut, surveys.UndercutDiagnostics, encodedVerifyRequest(req), validity,
 	)
+	return UndercutResult{
+		Request: req.Undercut, Coverage: published.Coverage,
+		Faces: published.Faces, Assessment: published.Assessment,
+		Diagnostics: published.Diagnostics,
+	}
 }

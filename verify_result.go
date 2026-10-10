@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // ScalarOutcome is a whole-body scalar survey's result.
@@ -49,13 +51,24 @@ const (
 )
 
 // WallRequest records the effective wall-thickness settings.
-type WallRequest = reportvocab.WallRequest
+type WallRequest struct {
+	Minimum        units.Value
+	DraftAllowance units.Value
+}
 
 // UndercutRequest records the effective pull direction.
-type UndercutRequest = reportvocab.UndercutRequest
+type UndercutRequest struct {
+	PullDirection r3.Vec
+}
 
 // VerifyRequest records one verification call's effective settings.
-type VerifyRequest = reportvocab.VerifyRequest
+type VerifyRequest struct {
+	RelativeTolerance units.Value
+	Wall              *WallRequest
+	Undercut          *UndercutRequest
+	ConcaveRadius     bool
+	Clearances        bool
+}
 
 // ToleranceResult is one reading's tolerance verdict.
 type ToleranceResult = reportvocab.ToleranceResult
@@ -70,10 +83,22 @@ type VectorReading = reportvocab.VectorReading
 type BoundsReading = reportvocab.BoundsReading
 
 // WallResult records one body's wall survey.
-type WallResult = reportvocab.WallResult[*Body, JointCell]
+type WallResult struct {
+	Request     *WallRequest
+	Outcome     ScalarOutcome
+	Minimum     *ScalarReading
+	Assessment  Assessment
+	Diagnostics []Diagnostic
+}
 
 // UndercutResult records one body's undercut survey.
-type UndercutResult = reportvocab.UndercutResult[*Body, *Face, JointCell]
+type UndercutResult struct {
+	Request     *UndercutRequest
+	Coverage    Coverage
+	Faces       []*Face
+	Assessment  Assessment
+	Diagnostics []Diagnostic
+}
 
 // ConcaveRadiusResult records one body's concave-radius survey.
 type ConcaveRadiusResult = reportvocab.ConcaveRadiusResult[*Body, JointCell]
