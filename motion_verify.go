@@ -1267,10 +1267,10 @@ func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) reportvoca
 	spanFacts := make([]reportvocab.MotionSpanFinding, len(spans))
 	for i, span := range spans {
 		spanFacts[i] = reportvocab.MotionSpanFinding{
-			Outcome: span.outcome, Clearance: span.clearance, Note: span.note,
+			Outcome: reportvocab.IntervalOutcome(span.outcome), Clearance: span.clearance, Note: span.note,
 		}
 	}
-	request := MotionRequest{
+	request := reportvocab.MotionRequest{
 		RelativeTolerance: units.Scalar(r.cfg.Rel),
 		Resolution:        r.cfg.Resolution,
 		MinClearance:      r.cfg.Minimum,
@@ -1285,10 +1285,10 @@ func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) reportvoca
 func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionReport {
 	c := r.conclude(poses, spans)
 	report := &MotionReport{
-		Request:     c.Request,
+		Request:     rootMotionRequest(c.Request),
 		Motion:      r.spec.Motion,
 		Against:     c.Against,
-		Intervals:   c.Intervals,
+		Intervals:   rootMotionIntervals(c.Intervals),
 		Collisions:  []Collision{},
 		Clearance:   c.Clearance,
 		Assessment:  c.Assessment,
