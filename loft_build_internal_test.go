@@ -404,7 +404,7 @@ func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
 	walks := resolveLoftLoopWalks(t, p)
 	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(p, p, offsets, walks, walks, 0, nil, nil)
 	require.NoError(t, err)
-	require.Equal(t, pt(0, 0), pairs[0].W[0])
+	require.Equal(t, pt(0, 0), Point2(pairs[0].W[0]))
 	require.Zero(t, sectionDelta, "a LineSeg-only pairing carries no curve to depart from")
 	require.Zero(t, sectionMatchedDelta, "a LineSeg-only pairing carries no curve to depart from")
 	require.Zero(t, stationRound, "every segment of this square is UNTRIMMED, so every station is PINNED (docs/loft-design.md §5.2)")
@@ -420,8 +420,8 @@ func TestLoftPairingsAlignmentRotatesCorrespondence(t *testing.T) {
 	// loop0 segment 0 (V_0, at local (0,0)) now pairs with loop1 segment 1,
 	// whose own recorded start is local (1,0) — the far endpoint of rung R_0
 	// moves from W[0]=(0,0) to W[1]=(1,0).
-	require.Equal(t, pt(1, 0), pairs[0].W[0])
-	require.Equal(t, pt(0, 0), pairs[0].V[0])
+	require.Equal(t, pt(1, 0), Point2(pairs[0].W[0]))
+	require.Equal(t, pt(0, 0), Point2(pairs[0].V[0]))
 }
 
 // TestLoftPairingsTwoHolesPairByPosition proves P1: two holes recorded in
@@ -553,16 +553,16 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 	require.Len(t, pairs[0].W, n)
 	for j := range n {
 		k := (j + offsets[0]) % n
-		require.Equal(t, pt(walks0[0][j].StartU, walks0[0][j].StartV), pairs[0].V[j],
+		require.Equal(t, pt(walks0[0][j].StartU, walks0[0][j].StartV), Point2(pairs[0].V[j]),
 			"v[%d] is walks0[0][%d]'s own start point", j, j)
-		require.Equal(t, pt(walks1[0][k].StartU, walks1[0][k].StartV), pairs[0].W[j],
+		require.Equal(t, pt(walks1[0][k].StartU, walks1[0][k].StartV), Point2(pairs[0].W[j]),
 			"w[%d] is walks1[0][%d]'s own start point", j, k)
 	}
 	// The same claim as literal coordinates: v runs p0's own corners from
 	// (0,0), and w runs p1's corners rotated by the offset, so w[0] is p1's
 	// SECOND corner (12,18) — a coordinate p0's record does not contain.
-	require.Equal(t, pt(0, 0), pairs[0].V[0])
-	require.Equal(t, pt(12, 18), pairs[0].W[0])
+	require.Equal(t, pt(0, 0), Point2(pairs[0].V[0]))
+	require.Equal(t, pt(12, 18), Point2(pairs[0].W[0]))
 }
 
 // TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile pins

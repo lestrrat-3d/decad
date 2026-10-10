@@ -83,8 +83,8 @@ func extendReversedRibbon(t *testing.T, doc *decad.Document) (*decad.Body, secti
 		}
 		require.Greater(t, seg.TStart, seg.TEnd, "the recorded range runs against the line's authored direction")
 		require.InDelta(t, 0.6, seg.TStart, 1e-12)
-		require.Equal(t, decad.Point2{U: 100, V: 0.1}, seg.Start)
-		require.Equal(t, decad.Point2{U: 0, V: 0.1}, seg.End)
+		require.Equal(t, decad.Point2{U: 100, V: 0.1}, decad.Point2(seg.Start))
+		require.Equal(t, decad.Point2{U: 0, V: 0.1}, decad.Point2(seg.End))
 		body, err := doc.ExtrudeChain(s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
 		return body, seg
@@ -228,8 +228,8 @@ func extendArcRibbon(t *testing.T, doc *decad.Document) (*decad.Body, sectionrec
 		}
 		require.Greater(t, seg.TStart, seg.TEnd, "the recorded range runs against the arc's authored sense")
 		require.InDelta(t, extendArcCutT, seg.TStart, 1e-12)
-		require.Equal(t, decad.Point2{U: 100, V: 0}, seg.Start)
-		require.Equal(t, decad.Point2{U: -100, V: 0}, seg.End)
+		require.Equal(t, decad.Point2{U: 100, V: 0}, decad.Point2(seg.Start))
+		require.Equal(t, decad.Point2{U: -100, V: 0}, decad.Point2(seg.End))
 		body, err := doc.ExtrudeChain(s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
 		return body, seg

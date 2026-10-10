@@ -105,16 +105,16 @@ func TestFitSplineEndpointsAreFitZeroAndActiveLast(t *testing.T) {
 
 	start, end, err := splinebezier.FreeformEndpoints(spans, false)
 	require.NoError(t, err)
-	require.Equal(t, fit[0], start, "the chain's first control point is Fit[0] exactly")
-	require.NotEqual(t, fit[len(fit)-1], end,
+	require.Equal(t, fit[0], Point2(start), "the chain's first control point is Fit[0] exactly")
+	require.NotEqual(t, fit[len(fit)-1], Point2(end),
 		"the last two fit points coincide within 1e-12, so the active end is not the raw Fit[len-1]")
-	require.Equal(t, fit[2], end, "the active end is the FIRST of the collapsed run, Points[k-1]")
+	require.Equal(t, fit[2], Point2(end), "the active end is the FIRST of the collapsed run, Points[k-1]")
 
 	// Cross-checked against geom's own interpolant directly.
 	interp, err := geom.NewFitInterpolant(splinebezier.FitCoords(point2ToRecordSlice(fit)))
 	require.NoError(t, err)
 	last := interp.Points[len(interp.Points)-1]
-	require.Equal(t, Point2{U: last[0], V: last[1]}, end)
+	require.Equal(t, Point2{U: last[0], V: last[1]}, Point2(end))
 }
 
 // allocatedByFit reports how many bytes a call allocates in total — the only

@@ -92,8 +92,8 @@ func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 	w1 := survey2d.SegmentWalk{Kind: survey2d.WalkLine, StartU: 3, StartV: 4}
 	stations0, stations1, sagitta, matchedDelta, stationRound, err := loftmesh.RecordCellStations(w0, w1, lineSeg{}, lineSeg{}, 123.0, nil, nil)
 	require.NoError(t, err)
-	require.Equal(t, []Point2{{U: 1, V: 2}}, stations0)
-	require.Equal(t, []Point2{{U: 3, V: 4}}, stations1)
+	require.Equal(t, []Point2{{U: 1, V: 2}}, point2FromRecordSlice(stations0))
+	require.Equal(t, []Point2{{U: 3, V: 4}}, point2FromRecordSlice(stations1))
 	require.Zero(t, sagitta)
 	require.Equal(t, []float64{0}, matchedDelta, "a LineSeg cell's own chord IS the curve it denotes")
 	require.Zero(t, stationRound, "these two walks carry an UNTRIMMED start, whose own lineWalkEndBound is zero")
@@ -1002,7 +1002,7 @@ func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 	require.Len(t, stations1, len(stations0))
 	require.Zero(t, sagitta)
 	for _, p := range stations0 {
-		require.Equal(t, Point2{}, p, "every station of a zero-radius arc is its own centre")
+		require.Equal(t, Point2{}, Point2(p), "every station of a zero-radius arc is its own centre")
 	}
 }
 
@@ -1133,7 +1133,7 @@ func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 	require.Equal(t, proofbound.WalkEndBound{}, w.StartBound, "the pinned end carries a zero displacement reading")
 
 	stations, _ := loftmesh.CircularStationChain(w, seg, 8)
-	require.Equal(t, Point2{U: seg.Start.U, V: seg.Start.V}, stations[0],
+	require.Equal(t, Point2{U: seg.Start.U, V: seg.Start.V}, Point2(stations[0]),
 		"station 0 IS the recorded coordinate the walk pinned, never a recomputed cos/sin at th0")
 
 	// The recomputed point this chain must NOT use, measured: it differs from
@@ -1142,7 +1142,7 @@ func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 	// end's zero reading while sitting off the coordinate it names.
 	sin, cos := math.Sincos(w.Th0)
 	recomputedU, recomputedV := w.CU+w.Radius*cos, w.CV+w.Radius*sin
-	require.NotEqual(t, Point2{U: recomputedU, V: recomputedV}, stations[0],
+	require.NotEqual(t, Point2{U: recomputedU, V: recomputedV}, Point2(stations[0]),
 		"the fixture must be one where the two readings differ, or it proves nothing")
 	recomputedBound := boundarywalk.CircularWalkEndBound(seg, 0, recomputedU, recomputedV)
 	require.Positive(t, recomputedBound.U+recomputedBound.V,
@@ -1294,8 +1294,8 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 	require.Len(t, pairs[0].V, 4)
 	require.Len(t, pairs[0].W, 4)
 	for j := range 4 {
-		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, pairs[0].V[j])
-		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, pairs[0].W[j])
+		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, Point2(pairs[0].V[j]))
+		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, Point2(pairs[0].W[j]))
 	}
 	require.Zero(t, sectionDelta)
 	require.Zero(t, stationRound, "every station of this UNTRIMMED square is PINNED (docs/loft-design.md §5.2)")
