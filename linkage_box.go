@@ -31,10 +31,13 @@ import (
 // dependent joints, and this file charges them into the cell's certificate.
 
 // JointBox is a box of joint values (docs/linkage-check-design.md §14.1).
-type JointBox = reportvocab.JointBox[*Link]
+type JointBox []JointRange
 
 // JointRange is one link's range of joint values.
-type JointRange = reportvocab.JointRange[*Link]
+type JointRange struct {
+	Link     *Link
+	Min, Max units.Value
+}
 
 // defaultCellBudget is WithCellBudget's default (docs/linkage-check-design.md
 // §14.1).
@@ -51,7 +54,11 @@ func WithCellBudget(cells int) JointBoxOption {
 }
 
 // JointConfiguration records every link's joint value and world pose.
-type JointConfiguration = reportvocab.JointConfiguration
+type JointConfiguration struct {
+	Values []units.Value
+	Bounds []units.Value
+	Poses  []r3.Transform
+}
 
 // Configuration builds every link's world pose at the stated joint values,
 // one per link in Links() order (docs/linkage-check-design.md §14.1). It
@@ -99,34 +106,89 @@ func (l *Linkage) Configuration(values []units.Value) (JointConfiguration, error
 }
 
 // JointBoxReport records the cell subdivision and verdict.
-type JointBoxReport = reportvocab.JointBoxReport[*Body, *Linkage, *Link, JointBox, JointCell]
+type JointBoxReport struct {
+	Request           JointBoxRequest
+	ReadingResolution units.Value
+	Linkage           *Linkage
+	Box               JointBox
+	Links             []*Link
+	Against           []*Body
+	JointContacts     []DiagnosticPair
+	Cells             []JointCellResult
+	CellsEvaluated    int
+	Collisions        []JointBoxCollision
+	Clearance         *ScalarReading
+	Assessment        Assessment
+	Diagnostics       []Diagnostic
+	Status            Status
+}
+
+// Passed reports whether the report is Sound. It returns false for nil.
+func (r *JointBoxReport) Passed() bool { return r != nil && r.Status == Sound }
 
 // JointBoxRequest records the effective settings of a VerifyJointBox call.
-type JointBoxRequest = reportvocab.JointBoxRequest
+type JointBoxRequest struct {
+	RelativeTolerance units.Value
+	Resolution        units.Value
+	MinClearance      *units.Value
+	CellBudget        int
+}
 
 // JointCell records one closed cell of joint values.
-type JointCell = reportvocab.JointCell
+type JointCell struct {
+	Min, Max []units.Value
+}
 
 func cloneJointCell(c JointCell) JointCell {
 	return JointCell{Min: slices.Clone(c.Min), Max: slices.Clone(c.Max)}
 }
 
 // JointCellResult records one leaf cell and its centre's findings.
-type JointCellResult = reportvocab.JointCellResult[*Body, JointCell]
+type JointCellResult struct {
+	Cell          JointCell
+	Outcome       CellOutcome
+	Center        JointConfiguration
+	Interferences []Interference
+	Clearances    []Clearance
+	Diagnostics   []Diagnostic
+	Clearance     *Measurement
+}
 
 // CellOutcome states what a JointCellResult proves.
-type CellOutcome = reportvocab.CellOutcome
+type CellOutcome int
 
 const (
-	CellNotEvaluated = reportvocab.CellNotEvaluated
-	CellClear        = reportvocab.CellClear
-	CellBlocked      = reportvocab.CellBlocked
-	CellColliding    = reportvocab.CellColliding
-	CellUndecided    = reportvocab.CellUndecided
+	CellNotEvaluated CellOutcome = iota
+	CellClear
+	CellBlocked
+	CellColliding
+	CellUndecided
 )
 
+// String renders the stable lower-snake token, including unknown values.
+func (o CellOutcome) String() string {
+	switch o {
+	case CellNotEvaluated:
+		return "not_evaluated"
+	case CellClear:
+		return "clear"
+	case CellBlocked:
+		return "blocked"
+	case CellColliding:
+		return "colliding"
+	case CellUndecided:
+		return "undecided"
+	default:
+		return fmt.Sprintf("cell_outcome(%d)", int(o))
+	}
+}
+
 // JointBoxCollision is a proven overlap at one evaluated centre.
-type JointBoxCollision = reportvocab.JointBoxCollision[*Body]
+type JointBoxCollision struct {
+	Configuration JointConfiguration
+	A, B          *Body
+	Volume        Measurement
+}
 
 // VerifyJointBox checks whether every configuration in box is clear: whether
 // no link of l, at any joint values the box holds, meets a static body or a
