@@ -366,7 +366,7 @@ orientation differ.
 ### 4.2 Construction
 
 For each touched loop `ℓ` of face `F` with setback `d` (`dc = ds = d`;
-`WithAsymmetricChamfer` stays SX16, §7):
+`WithAsymmetricChamfer` stays SX16 on route L, §7):
 
 1. **The cap contour.** `ℓ` offset `d` into `F`'s material by reach §8.3's
    construction (`capLoopBoundary`): SX6 for a dropped carrier, SX13's radial
@@ -446,7 +446,7 @@ volume and lifts through the reference frame.
 | **SL1** | a partial loop outside one admissible straight-edge fillet chain, two loops sharing an edge after route V's partition, or loops mixed with single edges for a `Chamfer`; a selected chain on one planar-face loop takes the partial fillet route | yes | `ErrUnsupported` |
 | **SL2** | an adjacent face outside LB3/LB4/LB6: a curved or oblique neighbour, a split side line, a neighbour whose own loop continues past the vertex on a curve, walls on both sides of `F` | yes | `ErrUnsupported` |
 | **SL3** | retired: a `Fillet` of complete loops builds through `docs/loop-fillet-design.md`'s fillet arm or refuses with that document's Table SF | — | — |
-| **SL4** | `WithAsymmetricChamfer` on a brep or stacked receiver | yes | reach SX16, unchanged |
+| **SL4** | `WithAsymmetricChamfer` on route L, or on a stacked receiver | yes | reach SX16 |
 
 Reach SX6, SX7, SX12, SX13, SX14 and SX15 keep their meanings per band, and
 base S6/S7/S8/S9 per rewritten face.
@@ -456,7 +456,7 @@ reach SX10, SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
 
 | Stage | Gates |
 |---|---|
-| 2c. entry | SL4; every edge a straight line along an axis (EB1) and no two sharing a vertex (EB7) → route E (brep-modify §6); otherwise route L: LB1, LB2 (SL1) |
+| 2c. entry | independent straight edges → route E (brep-modify §6); otherwise SL4 for an asymmetric chamfer, or route L: LB1, LB2 (SL1) |
 
 For a `Fillet`, route V also partitions complete loops and independent
 straight edges before LB1/LB2. A selected straight-edge chain on part of

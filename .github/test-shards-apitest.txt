@@ -343,11 +343,14 @@
 2	0.01	TestAnalyticChordsAreCharged
 2	0.38	TestAnalyticPlateWithCircularHolesArea
 2	0.01	TestAsymmetricChamferFeet
+2	0.01	TestAsymmetricChamferOnBrepLoopRefused
+2	0.01	TestAsymmetricChamferOnBrepRestatedEndFaces
+2	0.01	TestAsymmetricChamferOnBrepStraightEdge
+2	0.01	TestAsymmetricChamferOnStackedRefused
 2	0.01	TestAsymmetricChamferOverrunEachSide
 2	0.01	TestAsymmetricChamferReferenceRefused
 2	0.01	TestAsymmetricChamferRepeatable
 2	0.01	TestAsymmetricChamferRevolveJunction
-2	0.01	TestAsymmetricChamferStagedReceivers
 2	0.00	TestBetweenPoseAt
 2	0.01	TestBlindPocketFilletsItsOuterEdges
 2	0.00	TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne
