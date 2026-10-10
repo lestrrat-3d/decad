@@ -1146,7 +1146,7 @@ func exactLoftVertexLifts(t *testing.T, pl loftPayload) [][3]*big.Rat {
 	require.NoError(t, err)
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
-	require.Equal(t, pl.verts, a.verts)
+	require.Equal(t, pl.verts, a.Verts)
 	lift := func(f r3.Frame, p Point2) [3]*big.Rat {
 		o, u, v := f.Origin(), f.U(), f.V()
 		pu, pv := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
@@ -1157,13 +1157,13 @@ func exactLoftVertexLifts(t *testing.T, pl loftPayload) [][3]*big.Rat {
 		}
 		return out
 	}
-	out := make([][3]*big.Rat, len(a.verts))
+	out := make([][3]*big.Rat, len(a.Verts))
 	for i, p := range pairs {
 		for j, q := range p.V {
-			out[a.vIdx[i][j]] = lift(pl.frame0, q)
+			out[a.VIdx[i][j]] = lift(pl.frame0, q)
 		}
 		for j, q := range p.W {
-			out[a.wIdx[i][j]] = lift(pl.frame1, q)
+			out[a.WIdx[i][j]] = lift(pl.frame1, q)
 		}
 	}
 	return out
@@ -1190,7 +1190,7 @@ func exactRatMeshVolume(verts [][3]*big.Rat, tris [][3]int) *big.Rat {
 // (loftmesh.ValidateLoftRecords, loftmesh.PairRecords, assembleLoft) and stops there, so a
 // test can inspect the assembled cap polygon (pts0/loopIdx0, pts1/loopIdx1)
 // directly rather than only the published body.
-func assembleLoftFixture(t *testing.T, pl loftPayload) loftAssembly {
+func assembleLoftFixture(t *testing.T, pl loftPayload) loftmesh.Assembly {
 	t.Helper()
 	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, loftRecordAreas(t, pl.profile0, pl.profile1), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
@@ -1235,7 +1235,7 @@ func TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg(t *testing.T) {
 	require.False(t, ig.ExactDead)
 	require.True(t, ig.Exact.Complete())
 
-	got := loftmesh.CapPolygonAreaRat(a.pts0, a.loopIdx0)
+	got := loftmesh.CapPolygonAreaRat(a.Pts0, a.LoopIdx0)
 	require.Equalf(t, 0, ig.Exact.Area.Cmp(got),
 		"untrimmed LineSeg: shoelace %s must equal moments.go's own region rational %s exactly",
 		got.RatString(), ig.Exact.Area.RatString())
@@ -1295,7 +1295,7 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	}
 
 	a := assembleLoftFixture(t, pl)
-	polyRat := loftmesh.CapPolygonAreaRat(a.pts0, a.loopIdx0)
+	polyRat := loftmesh.CapPolygonAreaRat(a.Pts0, a.LoopIdx0)
 
 	// The other rational this cap could have been read from: moments.go's
 	// own region-level integral of the record, independent of whatever
@@ -1323,12 +1323,12 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	// polyRat is EXACTLY the sum of the SAME triangulation's own triangle
 	// areas (the square-root-free 2D formula, so this comparison is exact
 	// rather than a proven-bound enclosure).
-	tris0, err := triangulation.Triangulate(t.Context(), a.pts0, a.loopIdx0)
+	tris0, err := triangulation.Triangulate(t.Context(), a.Pts0, a.LoopIdx0)
 	require.NoError(t, err)
 	require.NotEmpty(t, tris0)
 	triSum := new(big.Rat)
 	for _, tri := range tris0 {
-		triSum.Add(triSum, triangleAreaRat2D(a.pts0, tri))
+		triSum.Add(triSum, triangleAreaRat2D(a.Pts0, tri))
 	}
 	require.Equalf(t, 0, polyRat.Cmp(triSum),
 		"published cap area %s must equal the sum of its own triangulation's triangle areas %s exactly",
@@ -1499,8 +1499,8 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 			pl := tc.build(t)
 			a := assembleLoftFixture(t, pl)
 
-			got0 := loftmesh.CapPolygonAreaRat(a.pts0, a.loopIdx0)
-			got1 := loftmesh.CapPolygonAreaRat(a.pts1, a.loopIdx1)
+			got0 := loftmesh.CapPolygonAreaRat(a.Pts0, a.LoopIdx0)
+			got1 := loftmesh.CapPolygonAreaRat(a.Pts1, a.LoopIdx1)
 
 			ig0, err := pl.profile0.IntegralsTo(freeform.MomentAreaOrder)
 			require.NoError(t, err)
@@ -1518,9 +1518,9 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 				"capEnd: the assembled polygon's shoelace %s must equal moments.go's own hole-netted region rational %s exactly",
 				got1.RatString(), ig1.Exact.Area.RatString())
 
-			mass := newLoftMassAccumulator(pl.xform.Apply(pl.plane0.Origin), a.delta, 0, 0)
-			for k, tri := range a.tris {
-				mass.add(a.verts[tri[0]], a.verts[tri[1]], a.verts[tri[2]], k < a.walls)
+			mass := newLoftMassAccumulator(pl.xform.Apply(pl.plane0.Origin), a.Delta, 0, 0)
+			for k, tri := range a.Tris {
+				mass.add(a.Verts[tri[0]], a.Verts[tri[1]], a.Verts[tri[2]], k < a.Walls)
 			}
 			want := mass.area(ig0.Exact.Area, ig1.Exact.Area)
 			area := mass.area(got0, got1)

@@ -164,7 +164,7 @@ type loftPayload struct {
 	// triangle's {loop index i, cell index j} and side[k] its 0/1 half — so a
 	// consumer can name the side(i,j,k) role of every wall triangle without
 	// re-deriving the assembly's own split. All three are copied verbatim from
-	// loftAssembly, whose own doc comment owns the convention.
+	// loftmesh.Assembly, whose own doc comment owns the convention.
 	capStartCount int
 	cell          [][2]int
 	side          []uint8
@@ -303,15 +303,15 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 
-	if err := loftmesh.LoftCrossingAuditStructured(budget, a.verts, a.tris, a.walls, a.capStartCount, a.vIdx, a.wIdx); err != nil {
+	if err := loftmesh.LoftCrossingAuditStructured(budget, a.Verts, a.Tris, a.Walls, a.CapStartCount, a.VIdx, a.WIdx); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	cap0Rat := loftmesh.CapPolygonAreaRat(a.pts0, a.loopIdx0)
-	cap1Rat := loftmesh.CapPolygonAreaRat(a.pts1, a.loopIdx1)
+	cap0Rat := loftmesh.CapPolygonAreaRat(a.Pts0, a.LoopIdx0)
+	cap1Rat := loftmesh.CapPolygonAreaRat(a.Pts1, a.LoopIdx1)
 
 	// A surface result publishes a sheet, never a solid: solid false is what
 	// makes Volume() and Centroid() answer ErrNotSolid through their existing
@@ -357,8 +357,8 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	}
 
 	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
-	body.volume = mass.volume(a.verts, a.tris)
-	centroid, err := mass.centroid(a.verts, a.tris)
+	body.volume = mass.volume(a.Verts, a.Tris)
+	centroid, err := mass.centroid(a.Verts, a.Tris)
 	if err != nil {
 		return nil, err
 	}
@@ -405,10 +405,10 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 
-	pl.verts, pl.tris, pl.walls = a.verts, a.tris, a.walls
-	pl.capStartCount, pl.cell, pl.side = a.capStartCount, a.cell, a.side
+	pl.verts, pl.tris, pl.walls = a.Verts, a.Tris, a.Walls
+	pl.capStartCount, pl.cell, pl.side = a.CapStartCount, a.Cell, a.Side
 	pl.proof = loftMeshProofOf(a, mass, sectionMatchedDelta)
-	pl.delta = a.delta
+	pl.delta = a.Delta
 	// sectionDelta is loftmesh.PairRecords' own accumulated MAX over cells
 	// (loftPayload's own doc comment): zero for a LineSeg-only pairing,
 	// positive for a same-kind circular one, to the sagitta its station
@@ -435,7 +435,7 @@ func loftIsChorded(pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta 
 // docs/loft-design.md §5.2's matchedDelta row is composed here and nowhere
 // else: proofbound.AbsSumUpper of the build's own MAX-over-cells chord-to-curve
 // departure (loftmesh.PairRecords' sectionMatchedDelta) and the held vertex
-// displacement a.delta. The two halves are accumulated apart — a chord's
+// displacement a.Delta. The two halves are accumulated apart — a chord's
 // departure from the curve it chords, and a station's departure from the
 // point the record and the motion denote for it — and every chorded leg
 // charges their SUM, since the chord the build DREW joins two displaced
@@ -443,26 +443,26 @@ func loftIsChorded(pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta 
 // displacement uncharged (§5.2's matchedDelta paragraph). Left at exactly 0 on
 // a build with no chorded cell, which is what keeps a LineSeg-only pairing's
 // published measurements free of every chorded term: its held triangle pair IS
-// the boundary §5 gives it, and a.delta already reaches its measurements
+// the boundary §5 gives it, and a.Delta already reaches its measurements
 // through the accumulator's own delta-keyed legs.
 //
 // A build is chorded if any cell is not faceted, including a degree-1
 // free-form cell with zero departure. Its bilinear patch still needs the
 // exact correction and twist legs. The chorded terms remain zero for a
 // LineSeg-only build, whose cells are all faceted.
-func buildLoftMass(pl loftPayload, a loftAssembly, pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64) *loftMassAccumulator {
+func buildLoftMass(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64) *loftMassAccumulator {
 	anchor := pl.xform.Apply(pl.plane0.Origin)
 	chorded := loftIsChorded(pairs, sectionDelta, sectionMatchedDelta)
 	matchedDelta := 0.0
 	if chorded {
-		matchedDelta = loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.delta)
+		matchedDelta = loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.Delta)
 	}
-	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
-	for k, t := range a.tris {
-		mass.add(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls)
+	mass := newLoftMassAccumulator(anchor, a.Delta, sectionDelta, matchedDelta)
+	for k, t := range a.Tris {
+		mass.add(a.Verts[t[0]], a.Verts[t[1]], a.Verts[t[2]], k < a.Walls)
 	}
 	if chorded {
-		mass.Chorded = loftmesh.ComputeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, a.reversed)
+		mass.Chorded = loftmesh.ComputeLoftChordedAllow(pairs, a.VIdx, a.WIdx, a.Verts, anchor, matchedDelta, a.Delta, a.Reversed)
 	}
 	return mass
 }
@@ -503,10 +503,10 @@ func buildLoftMass(pl loftPayload, a loftAssembly, pairs []loftmesh.LoopPair, se
 // Each sum rounds up at every step (docs/tessellation-design.md §2), so a term
 // this build could not state saturates rather than vanishing, and the caller
 // refuses on it instead of publishing it.
-func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta float64) loftMeshProof {
+func loftMeshProofOf(a loftmesh.Assembly, m *loftMassAccumulator, sectionMatchedDelta float64) loftMeshProof {
 	return loftMeshProof{
 		facetDeparture: proofbound.AbsSumUpper(
-			loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.delta),
+			loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.Delta),
 			m.Chorded.MaxTwistOffsetUpper,
 		),
 		areaSlack: proofbound.AbsSumUpper(
@@ -516,7 +516,7 @@ func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta
 			m.Chorded.CapAreaExcess,
 		),
 		volSymDiff: proofbound.AbsSumUpper(
-			m.SweptVolumeAllow(a.verts, a.tris),
+			m.SweptVolumeAllow(a.Verts, a.Tris),
 			m.Chorded.WallLeg,
 			m.Chorded.TwistVolumeUpper,
 			m.Chorded.SkirtLeg,
