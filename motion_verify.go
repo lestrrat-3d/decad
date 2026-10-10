@@ -108,7 +108,11 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := motionoption.Resolve(opts, spec.Domain)
+	encodedOpts, err := decodeMotionOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := motionoption.Resolve(encodedOpts, spec.Domain)
 	if err != nil {
 		return nil, err
 	}

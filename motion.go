@@ -9,11 +9,12 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
+	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the motion vocabulary of docs/motion-check-design.md §2-§4:
-// public aliases for the sealed Motion set, VerifyMotion's options, and
-// root-owned MotionReport records. motion_verify.go runs the check, and
+// public aliases for the sealed Motion set, root-owned option types and
+// MotionReport records. motion_verify.go runs the check, and
 // internal/motionbound proves the bounds its interval certificate consumes.
 
 // Motion is the sealed set of one-parameter rigid motions. PoseAt returns
@@ -33,20 +34,52 @@ type Prismatic = motionbound.Prismatic
 type Between = motionbound.Between
 
 // JointBoxOption configures VerifyJointBox.
-type JointBoxOption = motionoption.JointBoxOption
+type JointBoxOption interface {
+	option.Interface
+	jointBoxOption()
+}
 
 // MotionOption configures VerifyMotion and VerifyLinkage.
-type MotionOption = motionoption.MotionOption
+type MotionOption interface {
+	JointBoxOption
+	motionOption()
+}
+
+type motionOptionValue struct{ motionoption.MotionOption }
+type jointBoxOptionValue struct{ motionoption.JointBoxOption }
+
+func (motionOptionValue) motionOption()     {}
+func (motionOptionValue) jointBoxOption()   {}
+func (jointBoxOptionValue) jointBoxOption() {}
 
 // WithMotionTolerance sets the relative tolerance for motion readings.
-func WithMotionTolerance(rel units.Value) MotionOption { return motionoption.WithMotionTolerance(rel) }
+func WithMotionTolerance(rel units.Value) MotionOption {
+	return motionOptionValue{motionoption.WithMotionTolerance(rel)}
+}
 
 // WithResolution sets the finest parameter step for verdicts and readings.
-func WithResolution(step units.Value) MotionOption { return motionoption.WithResolution(step) }
+func WithResolution(step units.Value) MotionOption {
+	return motionOptionValue{motionoption.WithResolution(step)}
+}
 
 // WithMinClearance sets the minimum gap over the path.
 func WithMinClearance(minimum units.Value) MotionOption {
-	return motionoption.WithMinClearance(minimum)
+	return motionOptionValue{motionoption.WithMinClearance(minimum)}
+}
+
+func decodeMotionOptions(opts []MotionOption) ([]motionoption.MotionOption, error) {
+	encoded := make([]motionoption.MotionOption, len(opts))
+	for i, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		value, ok := opt.(motionOptionValue)
+		if !ok {
+			return nil, fmt.Errorf(`%w: the motion option is not a decad motion option (%T)`, ErrDegenerate, opt)
+		}
+		encoded[i] = value.MotionOption
+	}
+	return encoded, nil
 }
 
 type motionConfig = motionoption.Config
