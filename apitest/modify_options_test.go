@@ -608,31 +608,63 @@ func TestAsymmetricChamferOnBrepRestatedEndFaces(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
-func TestAsymmetricChamferOnBrepLoopRefused(t *testing.T) {
+func TestAsymmetricChamferOnBrepLoop(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
-	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
-	w := sketch.NewWorld()
-	plane, err := w.CreateOffsetPlane(w.XY(), 10)
-	require.NoError(t, err)
-	s, err := w.CreateSketch(plane)
-	require.NoError(t, err)
-	center := s.CreatePoint(20, 20)
-	s.Fix(center)
-	s.CreateCircle(center, 5)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	boss, err := doc.Extrude(s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
-	require.NoError(t, err)
-	part, err := decad.Union(t.Context(), plate, boss)
-	require.NoError(t, err)
-	top := planeFacing(t, part, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
-	require.Len(t, top.Loops(), 2)
-	_, err = part.Chamfer(t.Context(), loopEdgeQuery(top.Loops()[1]), units.Millimeters(1.5),
-		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(top.Origins()[0])), units.Millimeters(2)))
+	for _, tc := range []struct {
+		name          string
+		sideRef       bool
+		piCoefficient float64
+	}{
+		{name: "cap reference", piCoefficient: 7.5},
+		{name: "side references", sideRef: true, piCoefficient: 7},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			part := roundedDrilledPlate(t)
+			doc := part.Document()
+			top := planeFacing(t, part, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 20))
+			loop := top.Loops()[0]
+			reference := decad.Faces(decad.FaceCreatedBy(top.Origins()[0]))
+			if tc.sideRef {
+				reference = nil
+				for _, edge := range loop.Edges() {
+					for _, face := range edge.Faces() {
+						if face == top {
+							continue
+						}
+						if reference == nil {
+							reference = decad.Faces(decad.FaceCreatedBy(face.Origins()[0]))
+						} else {
+							reference.Or(decad.FaceCreatedBy(face.Origins()[0]))
+						}
+					}
+				}
+			}
+			result, err := part.Chamfer(t.Context(), loopEdgeQuery(loop), units.Millimeters(1.5),
+				decad.WithAsymmetricChamfer(reference, units.Millimeters(2)))
+			require.NoError(t, err)
+			require.Equal(t, []*decad.Body{result}, doc.Bodies())
+			volume, err := result.Volume()
+			require.NoError(t, err)
+			// The 40 by 20 mm top loop has 3 mm corner arcs. Its chamfer
+			// removes ds * (perimeter * dc/2 - pi * dc^2/3) from 15280 mm^3.
+			require.InDelta(t, 15136-tc.piCoefficient*math.Pi,
+				volume.Value.Base(), volume.Bound.Base()+1e-8)
+			mesh, err := result.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			require.True(t, mesh.VolumeVerified())
+		})
+	}
+}
+
+func TestAsymmetricChamferOnBrepLoopSideOverrun(t *testing.T) {
+	t.Parallel()
+	part := roundedDrilledPlate(t)
+	doc := part.Document()
+	top := planeFacing(t, part, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 20))
+	_, err := part.Chamfer(t.Context(), loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5),
+		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(top.Origins()[0])), units.Millimeters(20)))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "SX16")
+	require.ErrorContains(t, err, "SX7")
 	require.Equal(t, []*decad.Body{part}, doc.Bodies())
 }
 

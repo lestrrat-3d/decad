@@ -136,7 +136,7 @@ more specific SX row replaces that base refusal.
 | **SX1** | `WithNoOpenings` with a non-nil selector, repeated contradictory option, or malformed option payload | no single intent | `ErrDegenerate` |
 | **SX2** | tangent continuation is branch-ambiguous or the analytic oracle cannot decide G1 continuity | evaluator cannot know which chain caller named | `ErrUnsupported` |
 | **SX3** | asymmetric reference is nil, invalid, or does not identify exactly one adjacent face per expanded edge | invalid selector / cardinality | existing selector error; otherwise `ErrCardinality` |
-| **SX4** | a partial prism cap loop, a mixed lateral/cap `Chamfer`, a mixed revolve/cap selection, or one cap loop with mixed asymmetric face assignments; route V admits complete cap loops with independent straight edges for `Fillet` | body exists; endpoint/setback transition not built | `ErrUnsupported` |
+| **SX4** | a partial prism cap loop, a mixed lateral/cap `Chamfer`, a mixed revolve/cap selection, or one prism or brep loop with mixed asymmetric face assignments; route V admits complete cap loops with independent straight edges for `Fillet` | body exists; endpoint/setback transition not built | `ErrUnsupported` |
 | **SX5** | selected revolve edge is not a swept meridian junction | body exists; cap-edge/general rolling blend not built | `ErrUnsupported` |
 | **SX6** | cap-loop offset loses a carrier, reaches an empty circular offset, or has no regular radius-`r` envelope; LF9's exact-radius inward arc with straight G1 neighbours is the fillet exception (`docs/vertex-blend-design.md`) | no regular requested blend | `ErrDegenerate` |
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
@@ -148,7 +148,7 @@ more specific SX row replaces that base refusal.
 | **SX13** | a cap-loop chamfer whose setback rounds away against the level it displaces: the cap contour's offset radius rounds back onto a circular wall's own radius (`R -/+ d == R`), or the band's side level rounds back onto its own cap level (`z1 - d == z1` on the end cap, `z0 + d == z0` on the start cap) | body exists; its taper is real but finer than float64 names at that radius or at that sweep level, so the band's patches cannot be told from a cylinder or from the cap plane | `ErrUnsupported` |
 | **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root. A G1 join (modify §7's dead-zone rule) intersects no carriers — its corner is the shared-normal foot, enclosed as a reflex corner's feet are — so SX14 never fires on one. Also a circular band patch whose corner skew between its side and cap directrices cannot be enclosed below a quarter turn (§8.4). Also a miter corner at a circular wall whose corner-foot locus cannot be bounded (`capband.MiterLocusUpper`): a tangent cusp, or a corner that turns past the G1 dead zone by less than the arc's own radius enclosure resolves | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement, or no area bound holds for the ruled patch at that skew | `ErrUnsupported` |
 | **SX15** | a cap-loop chamfer whose band patch's outward orientation cannot be certified: the patch's own `Face.NormalAt` refuses at the build's orientation sample point | body exists and its patches are real; the evaluator cannot evaluate its own orientation sample on this patch, so it cannot state which side of the patch is outward | `ErrUnsupported` |
-| **SX16** | a modify op on a `brepPayload`, or on a stacked receiver through its face view, outside `docs/brep-modify-design.md` Tables RB/EB | body exists; that document's Table SB names the row | `ErrUnsupported` |
+| **SX16** | a modify op on a `brepPayload`, or on a stacked receiver through its face view, outside `docs/brep-modify-design.md` Tables RB/EB and `docs/modify-general-design.md` Table LB | body exists; those documents' refusal tables name the row | `ErrUnsupported` |
 
 Gate order:
 
@@ -309,9 +309,10 @@ roles pick the walk that takes `d`: the arriving or the leaving walk of the
 coalesced corner walk. A reference face whose roles name segments of both
 walks, or of neither, is `ErrUnsupported`.
 `docs/brep-modify-design.md` §5 admits the option for independent straight
-edges of a `brepPayload` through route E. Route P and route L do not map the
-reference face to their construction, and a stacked receiver's face view does
-not retain its public face identities; those calls remain SX16.
+edges of a `brepPayload` through route E, and complete loops of planar brep
+faces through route L (`docs/modify-general-design.md` §4.2). Route P does not
+map the reference face to its construction, and a stacked receiver's face
+view does not retain its public face identities; those calls remain SX16.
 
 For a prism lateral edge or revolve junction, adjacent faces map to arriving
 and leaving walks of the section/meridian. Set each foot back by its assigned
@@ -1819,7 +1820,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; route P/L asymmetric chamfers and stacked receivers (SX16); all SX9/SX10 |
+| **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; asymmetric stacked receivers and brep selections outside routes E/L (SX16); all SX9/SX10 |
 | **B** (landed) | revolve junction rewrite + roles + surveys | cap loops; shell reach |
 | **C1** (landed) | multi-region `stackedPrismPayload` (the lining reading); cups recorded on it; base S12 lifted through BX8 | closed + side-opening prism shell; revolve side opening; cap loops |
 | **C2** (landed) | closed prism shell (BX5): the void-shell stack, its tessellation | side-opening prism shell (BX4, `docs/shell-opening-design.md`); revolve side opening; cap loops |
