@@ -145,10 +145,6 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 		Name  string
 		Build func(*testing.T, *mirrorScene) *decad.Body
 		Exact bool
-		// MeshStaged marks a payload whose source tessellation is itself
-		// staged (docs/sweep-design.md Table D row D2): the image must refuse
-		// the same way.
-		MeshStaged bool
 	}{
 		{Name: "prism", Exact: true, Build: func(t *testing.T, sc *mirrorScene) *decad.Body {
 			return sc.mirrorL(t)
@@ -169,7 +165,7 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 		{Name: "straight sweep", Build: func(t *testing.T, sc *mirrorScene) *decad.Body {
 			return partsBinSweep(t, sc.doc)
 		}},
-		{Name: "arc sweep", MeshStaged: true, Build: func(t *testing.T, sc *mirrorScene) *decad.Body {
+		{Name: "arc sweep", Build: func(t *testing.T, sc *mirrorScene) *decad.Body {
 			// A quarter turn about the x axis of the rectangle [0, 10]×[0, 6].
 			s, profile := meshPolygonSketch(t, sc.w, sc.w.XY(), [][2]float64{{0, 0}, {10, 0}, {10, 6}, {0, 6}})
 			body, err := sc.doc.Sweep(t.Context(), s, profile, sweepArcPath(t))
@@ -246,12 +242,6 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 			require.Equal(t, decad.Sound, imgReport.Status, "image diagnostics: %v", imgReport.Diagnostics)
 
 			mesh, err := img.Tessellate(t.Context(), units.Millimeters(.05))
-			if tc.MeshStaged {
-				_, srcErr := src.Tessellate(t.Context(), units.Millimeters(.05))
-				require.ErrorIs(t, srcErr, decad.ErrUnsupported)
-				require.ErrorIs(t, err, decad.ErrUnsupported)
-				return
-			}
 			require.NoError(t, err)
 			require.Greater(t, meshVolume(mesh), 0.0, "the mirrored mesh winds outward")
 		})

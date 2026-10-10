@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -427,8 +428,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 
 // tessellateBodyContext dispatches one body to its payload's own tessellator.
 // verify reaches only the paths that would otherwise COMPUTE a proof the level
-// withholds — prism (and the one-span straight sweep that reduced to one),
-// cup, revolve, cap-loop chamfer, draft and the revolve-backed
+// withholds — prism, one-span sweep, cup, revolve, cap-loop chamfer, draft and the revolve-backed
 // curved stitch route.
 // A restatement path (faceted, loft, all-planar stitch) copies its proof terms
 // off the payload at no cost and publishes them unconditionally;
@@ -499,14 +499,13 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateCoil(ctx, b, cp, chord, verify)
 	}
 	if sp, ok := b.payload.(sweepPayload); ok {
-		// docs/sweep-design.md Table D row D2's one exception: a one-span
-		// straight solid sweep builds through the identical evalPrismContext
-		// an Extrude does, over the prismPayload it carries unchanged
-		// (sweep.go's finishStraightSweepBody), so its mesh and every proof
-		// on it are that prism's. The arc reduction, every composite path
-		// and a surface result stay staged for the shared-span tessellator.
-		if len(sp.spans) != 0 || sp.arc || sp.surfaceResult {
-			return nil, fmt.Errorf(`%w: tessellation supports a sweep only as a one-span straight solid; the arc reduction, a composite path and a surface result are staged (docs/sweep-design.md Table D row D2)`, ErrUnsupported)
+		// One-span sweeps reuse the prism or revolve mesh of their exact
+		// analytic reduction. A sheet carries no occupied-volume proof.
+		if len(sp.spans) != 0 {
+			return nil, fmt.Errorf(`%w: tessellation of a composite sweep path is staged (docs/sweep-design.md Table D row D2)`, ErrUnsupported)
+		}
+		if sp.arc {
+			return tessellateRevolveWithRoles(ctx, b, sp.revolve, chord, verify, sweepArcRole(sp.reverseArcCaps))
 		}
 		return tessellatePrism(ctx, b, sp.prism, sweepWallRole, chord, verify)
 	}
@@ -514,7 +513,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, stacked prism, brep, chain-fed prism, one-span straight sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, stacked prism, brep, chain-fed prism, one-span sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, b.payload)
 	}
 	return tessellatePrism(ctx, b, pp, prismWallRole, chord, verify)
 }
@@ -527,6 +526,25 @@ func prismWallRole(loop, seg int) string { return fmt.Sprintf("side(%d,%d)", loo
 // reduction rewrote every side(i,j) to carry the path-span index ahead of
 // them (sweep.go's prefixSweepSpanZeroRole): side(0,i,j).
 func sweepWallRole(loop, seg int) string { return fmt.Sprintf("side(0,%d,%d)", loop, seg) }
+
+// sweepArcRole maps the revolve reduction's source roles to those minted by
+// finishArcSweepBody. A reversed axis exchanges only the two cap names.
+func sweepArcRole(reverseCaps bool) func(string) string {
+	return func(role string) string {
+		if suffix, ok := strings.CutPrefix(role, "side("); ok {
+			return "side(0," + suffix
+		}
+		if reverseCaps {
+			switch role {
+			case roleCapStart:
+				return roleCapEnd
+			case roleCapEnd:
+				return roleCapStart
+			}
+		}
+		return role
+	}
+}
 
 // tessellatePrism chords a prismPayload build. wallRole names the face each
 // section walk's wall carries, which is the one thing a prism and the

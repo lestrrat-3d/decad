@@ -866,7 +866,7 @@
 2	0.02	TestSurfaceSplitRevolveRolesAndSelectors
 2	0.00	TestSurfaceSweepLineIsASheet
 2	0.00	TestSurfaceSweepLineSheetVerifiesSound
-2	0.00	TestSurfaceSweepTessellationRefused
+2	0.01	TestSurfaceSweepOneSpanTessellates
 2	0.00	TestSurfaceTrimBoundsChargesAnExtremeWonByACut
 2	0.00	TestSurfaceTrimDegenerateWhenNothingSeparates
 2	0.00	TestSurfaceTrimKeepInsideKeepsTheCutStrips
@@ -905,7 +905,10 @@
 2	0.00	TestSweepPairSourceBoxSlideEdgeTransition
 2	0.01	TestSweepPairSourceSphereTouchContinuation
 2	0.04	TestSweepStraightIsABooleanOperand
-2	0.00	TestSweepTessellationStagesEveryOtherReduction
+2	0.03	TestSweepArcTessellatesAsItsRevolve
+2	0.03	TestSweepArcTessellationMapsReversedCaps
+2	0.08	TestSweepArcIsABooleanOperand
+2	0.00	TestSweepCompositeTessellationRefused
 2	0.00	TestSweptBoxStrictlyDisjoint
 2	0.01	TestTangentChainNearTangentStops
 2	0.01	TestTangentChainOvalArcArc

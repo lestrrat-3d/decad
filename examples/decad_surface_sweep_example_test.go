@@ -2,7 +2,6 @@ package examples_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad"
@@ -18,9 +17,8 @@ import (
 // takes, so the sheet's own construction proves it sound (docs/sweep-design.md
 // Table D row D1): Volume and Centroid answer ErrNotSolid for a sheet, proven
 // sound or not; Area and Bounds still answer, over the walls alone.
-// Tessellating a sweep sheet is staged for a later increment
-// (docs/sweep-design.md Table D row D2), for every Sweep body, solid or
-// sheet.
+// A one-span straight sweep sheet tessellates through its prism reduction
+// (docs/sweep-design.md Table D row D2).
 func Example_decad_surfaceSweep() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -69,7 +67,11 @@ func Example_decad_surfaceSweep() {
 		return
 	}
 
-	_, tessErr := sheet.Tessellate(context.Background(), units.Millimeters(0.1))
+	mesh, err := sheet.Tessellate(context.Background(), units.Millimeters(0.1))
+	if err != nil {
+		fmt.Printf("failed to tessellate: %s\n", err)
+		return
+	}
 
 	fmt.Printf("is sheet: %v\n", sheet.Kind() == decad.BodySheet)
 	fmt.Printf("faces: %d\n", len(sheet.Faces()))
@@ -77,7 +79,7 @@ func Example_decad_surfaceSweep() {
 	fmt.Printf("area: %s\n", area.Value)
 	fmt.Printf("volume error: %v\n", volErr)
 	fmt.Printf("verify status: %s\n", report.Status)
-	fmt.Printf("tessellate is unsupported: %v\n", errors.Is(tessErr, decad.ErrUnsupported))
+	fmt.Printf("mesh triangles: %d\n", len(mesh.Triangles()))
 	// Output:
 	// is sheet: true
 	// faces: 4
@@ -85,5 +87,5 @@ func Example_decad_surfaceSweep() {
 	// area: 3200 mm^2
 	// volume error: decad: body is not a solid
 	// verify status: Sound
-	// tessellate is unsupported: true
+	// mesh triangles: 8
 }
