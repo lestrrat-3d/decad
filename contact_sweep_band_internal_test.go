@@ -95,7 +95,7 @@ func TestPlanarDepartureLowerGapIsBoundedByLateralClearance(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 		require.Zero(t, until.Cmp(big.NewRat(1, 1)))
-		require.True(t, run.departure.support.local)
+		require.True(t, run.departure.support.Local)
 		// At the start of the sweep the height bound is the smaller term; at
 		// its end the clearance is.
 		early := big.NewRat(1, 1<<20)
@@ -108,9 +108,9 @@ func TestPlanarDepartureLowerGapIsBoundedByLateralClearance(t *testing.T) {
 // planarPlaneTried compares a plane with those already read by the scan oracle.
 func planarPlaneTried(tried []planarSupport, n, a proofarith.DyV3) bool {
 	for _, p := range tried {
-		if proofarith.DvIsZero(proofarith.DvCross(n, p.normal)) &&
-			proofarith.DvDot(n, p.normal).Sign() > 0 &&
-			proofarith.DvDot(p.normal, proofarith.DvSub(a, p.origin)).Sign() == 0 {
+		if proofarith.DvIsZero(proofarith.DvCross(n, p.Normal)) &&
+			proofarith.DvDot(n, p.Normal).Sign() > 0 &&
+			proofarith.DvDot(p.Normal, proofarith.DvSub(a, p.Origin)).Sign() == 0 {
 			return true
 		}
 	}
@@ -160,7 +160,7 @@ func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSup
 			if proofarith.DvIsZero(n) || planarPlaneTried(tried, n, a) {
 				continue
 			}
-			tried = append(tried, planarSupport{normal: n, origin: a})
+			tried = append(tried, planarSupport{SupportCandidate: planarsweep.SupportCandidate{Normal: n, Origin: a}})
 			read, ok, err := planarsweep.ReadSupportCandidate(planarSupportPathOf(S),
 				planarSupportPathOf(M), n, a, supportBandOf(r.req.ContactRequest), poll)
 			if err != nil {
@@ -169,26 +169,22 @@ func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSup
 			if !ok {
 				continue
 			}
-			support := planarSupport{
-				normal: n, origin: a, local: read.Local, pathS: S,
-				heights: read.Heights, contact: read.Contact, lifted: read.Lifted,
-				nLow: read.NormalLow, nHigh: read.NormalHigh,
-			}
-			support.m, support.s, support.tri = m, s, t
-			support.motionM, support.motionS = motions[m], motions[s]
+			support := planarSupport{SupportCandidate: read, pathS: S}
+			support.Guest, support.Owner, support.Triangle = m, s, t
+			support.GuestMotion, support.OwnerMotion = motions[m], motions[s]
 			support.pathM, support.pathS = M, S
-			support.duration = r.a.path.Duration
-			support.rates = make([]*big.Rat, len(M.startPoints))
-			relative := ratSub3(support.motionM.Velocity, support.motionS.Velocity)
+			support.Duration = r.a.path.Duration
+			support.Rates = make([]*big.Rat, len(M.startPoints))
+			relative := ratSub3(support.GuestMotion.Velocity, support.OwnerMotion.Velocity)
 			normal := ratOfDyV3(n)
 			for i, v := range M.startPoints {
 				p := ratOfDyV3(v)
-				rate := ratAdd3(relative, ratCross3(support.motionM.Omega, ratSub3(p, support.motionM.Center)))
-				rate = ratSub3(rate, ratCross3(support.motionS.Omega, ratSub3(p, support.motionS.Center)))
-				support.rates[i] = ratDot3(normal, rate)
+				rate := ratAdd3(relative, ratCross3(support.GuestMotion.Omega, ratSub3(p, support.GuestMotion.Center)))
+				rate = ratSub3(rate, ratCross3(support.OwnerMotion.Omega, ratSub3(p, support.OwnerMotion.Center)))
+				support.Rates[i] = ratDot3(normal, rate)
 			}
-			support.spin = spinM
-			support.rested = planarsweep.RestedVertices(support.lifted, support.rates, support.nLow, rest)
+			support.Spin = spinM
+			support.Rested = planarsweep.RestedVertices(support.Lifted, support.Rates, support.NormalLow, rest)
 			out = append(out, support)
 		}
 	}
