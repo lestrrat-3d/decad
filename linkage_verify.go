@@ -652,7 +652,7 @@ func publishLinkage(r *motionRun, l *Linkage, drive Drive, poses []*motionPose, 
 		Intervals:         rootMotionIntervals(c.Intervals),
 		Collisions:        []LinkCollision{},
 		Clearance:         scalarReadingPtrFromInternal(c.Clearance),
-		Assessment:        c.Assessment,
+		Assessment:        Assessment(c.Assessment),
 		Diagnostics:       diagnosticsFromInternal(c.Diagnostics),
 		Status:            Status(c.Status),
 	}

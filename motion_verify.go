@@ -1295,7 +1295,7 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 		Intervals:   rootMotionIntervals(c.Intervals),
 		Collisions:  []Collision{},
 		Clearance:   scalarReadingPtrFromInternal(c.Clearance),
-		Assessment:  c.Assessment,
+		Assessment:  Assessment(c.Assessment),
 		Diagnostics: diagnosticsFromInternal(c.Diagnostics),
 		Status:      Status(c.Status),
 	}
@@ -1339,13 +1339,13 @@ func (r *motionRun) pathClearance(poses []*motionPose, lowest *Measurement, scop
 	gap.Exactness = Approximate
 	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, r.cfg.Rel,
 		pairToleranceInputs{diameter: diam}.lengthReference)
-	reading := &ScalarReading{Measurement: gap, Tolerance: tolerance.Judge(pass, haveRef, r.cfg.Rel, ref, gap.Value)}
+	reading := &ScalarReading{Measurement: gap, Tolerance: toleranceResultFromInternal(tolerance.Judge(pass, haveRef, r.cfg.Rel, ref, gap.Value))}
 	if pass {
 		return reading, nil
 	}
 	obs := gap
 	diag := &Diagnostic{
-		Code:     DiagnosticCode(tolerance.DiagnosticCode(reading.Tolerance)),
+		Code:     DiagnosticCode(tolerance.DiagnosticCode(toleranceResultToInternal(reading.Tolerance))),
 		Status:   Suspect,
 		Reading:  ReadingGap,
 		Observed: &obs,

@@ -629,7 +629,7 @@ func TestVerifyPublishToleranceReferenceUnavailable(t *testing.T) {
 	tr, diag := tolerance.ScalarVerdict[*Body, JointCell](
 		reportvocab.ReadingKind(ReadingWall), reportvocab.SurveyKind(SurveyWall), body,
 		measurementToInternal(m), 1e-3, in.lengthReference)
-	require.Equal(t, ToleranceUndecided, tr.State)
+	require.Equal(t, ToleranceUndecided, ToleranceState(tr.State))
 	require.Nil(t, tr.Limit)
 	require.NotNil(t, diag)
 	require.Equal(t, DiagToleranceReferenceUnavailable, DiagnosticCode(diag.Code))

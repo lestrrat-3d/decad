@@ -52,31 +52,31 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 		Faces:               faces,
 		Status:              reportvocab.Status(in.Status),
 		Validity:            validityResultToInternal(in.Validity),
-		Topology:            in.Topology,
+		Topology:            heldTopologyToInternal(in.Topology),
 		Area:                scalarReadingToInternal(in.Area),
 		Bounds:              boundsReadingToInternal(in.Bounds),
 		Region:              regionReadingsToInternal(in.Region),
 		Request:             encodedVerifyRequest(in.Request),
 		Surveys:             surveyPublication(in.Surveys),
-		WallTolerance:       in.WallTolerance,
+		WallTolerance:       toleranceResultToInternal(in.WallTolerance),
 		WallToleranceDiag:   diagnosticPtrToInternal(in.WallToleranceDiag),
-		RadiusTolerance:     in.RadiusTolerance,
+		RadiusTolerance:     toleranceResultToInternal(in.RadiusTolerance),
 		RadiusToleranceDiag: diagnosticPtrToInternal(in.RadiusToleranceDiag),
 		CoreDiagnostics:     diagnosticsToInternal(in.CoreDiagnostics),
 	})
 	wall := WallResult{
-		Request: in.Request.Wall, Outcome: published.Wall.Outcome,
-		Minimum: scalarReadingPtrFromInternal(published.Wall.Minimum), Assessment: published.Wall.Assessment,
+		Request: in.Request.Wall, Outcome: ScalarOutcome(published.Wall.Outcome),
+		Minimum: scalarReadingPtrFromInternal(published.Wall.Minimum), Assessment: Assessment(published.Wall.Assessment),
 		Diagnostics: diagnosticsFromInternal(published.Wall.Diagnostics),
 	}
 	undercut := UndercutResult{
-		Request: in.Request.Undercut, Coverage: published.Undercut.Coverage,
-		Faces: published.Undercut.Faces, Assessment: published.Undercut.Assessment,
+		Request: in.Request.Undercut, Coverage: Coverage(published.Undercut.Coverage),
+		Faces: published.Undercut.Faces, Assessment: Assessment(published.Undercut.Assessment),
 		Diagnostics: diagnosticsFromInternal(published.Undercut.Diagnostics),
 	}
 	return &BodyReport{
 		Body: published.Body, Status: Status(published.Status), Validity: validityResultFromInternal(published.Validity),
-		Topology: published.Topology, Area: scalarReadingFromInternal(published.Area),
+		Topology: heldTopologyFromInternal(published.Topology), Area: scalarReadingFromInternal(published.Area),
 		Bounds: boundsReadingFromInternal(published.Bounds),
 		Region: regionReadingsFromInternal(published.Region), Wall: wall, Undercut: undercut,
 		ConcaveRadius: concaveRadiusResultFromInternal(published.ConcaveRadius),
@@ -144,11 +144,11 @@ func publishUndercutResult(body *Body, surveys surveyResults, req VerifyRequest,
 	}
 	published := reportvocab.PublishUndercut[*Body, *Face, JointCell](
 		body, kind == BodySolid, kind == BodySheet, faces,
-		surveyPublication(surveys).Undercut, diagnosticsToInternal(surveys.UndercutDiagnostics), encodedVerifyRequest(req), validity,
+		surveyPublication(surveys).Undercut, diagnosticsToInternal(surveys.UndercutDiagnostics), encodedVerifyRequest(req), reportvocab.ValidityOutcome(validity),
 	)
 	return UndercutResult{
-		Request: req.Undercut, Coverage: published.Coverage,
-		Faces: published.Faces, Assessment: published.Assessment,
+		Request: req.Undercut, Coverage: Coverage(published.Coverage),
+		Faces: published.Faces, Assessment: Assessment(published.Assessment),
 		Diagnostics: diagnosticsFromInternal(published.Diagnostics),
 	}
 }
