@@ -171,9 +171,26 @@ func TestBlindStackedAdmissionLeavesOtherCutsToMesh(t *testing.T) {
 		stackedrecord.Record{Slabs: result.slabs, Interfaces: result.interfaces}))
 	opposite := internalOffsetBox(t, pocket.doc, 1, 1, 2, 2, 0,
 		Distance{D: units.Millimeters(6), Dir: Along})
-	_, admitted, err = tryStackedBlindCut(t.Context(), pocket, opposite)
+	opposed, admitted, err := tryStackedBlindCut(t.Context(), pocket, opposite)
 	require.NoError(t, err)
-	require.False(t, admitted, "opposed hole sets need a separate spacing proof")
+	require.True(t, admitted, "separate opposed holes have a spacing proof")
+	require.Len(t, opposed.interfaces[0].LowerExposed, 1)
+	require.Len(t, opposed.interfaces[0].UpperExposed, 1)
+	for _, tc := range []struct {
+		name           string
+		x0, y0, x1, y1 float64
+	}{
+		{name: "touch", x0: 2, y0: 3, x1: 3, y1: 4},
+		{name: "overlap", x0: 2, y0: 3, x1: 4, y1: 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tool := internalOffsetBox(t, pocket.doc, tc.x0, tc.y0, tc.x1, tc.y1, 0,
+				Distance{D: units.Millimeters(6), Dir: Along})
+			_, admitted, err := tryStackedBlindCut(t.Context(), pocket, tool)
+			require.NoError(t, err)
+			require.False(t, admitted)
+		})
+	}
 }
 
 // holedCupRecord is a k = 1 cup's stacked record, hand-built from rectangles:

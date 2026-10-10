@@ -6,6 +6,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
@@ -20,6 +22,41 @@ func Exposed(ctx context.Context, holes []sectionrecord.LoopRecord) ([]momentinp
 		out = append(out, momentinput.Profile{Outer: reversed})
 	}
 	return out, nil
+}
+
+// SeparatedOpposed asks sketch for one valid, whole cell per exclusive hole
+// interior. A scene charge would leave their true separation unproved.
+func SeparatedOpposed(ctx context.Context, budget *proofbound.WorkBudget,
+	lowerOnly, upperOnly []sectionrecord.LoopRecord) (Interface, bool, error) {
+	if len(lowerOnly) == 0 || len(upperOnly) == 0 {
+		return Interface{}, false, nil
+	}
+	lower, err := Exposed(ctx, upperOnly)
+	if err != nil {
+		return Interface{}, false, err
+	}
+	upper, err := Exposed(ctx, lowerOnly)
+	if err != nil {
+		return Interface{}, false, err
+	}
+	regions := make([]momentinput.Profile, 0, len(lower)+len(upper))
+	regions = append(regions, lower...)
+	regions = append(regions, upper...)
+	separate, charge, err := prismcells.ProveGroupDisjoint(ctx, budget, regions)
+	if err != nil || !separate || charge != 0 {
+		return Interface{}, false, err
+	}
+	return Interface{LowerExposed: lower, UpperExposed: upper}, true, nil
+}
+
+// HasOpposed reports whether one interface exposes material on both sides.
+func HasOpposed(interfaces []Interface) bool {
+	for _, boundary := range interfaces {
+		if len(boundary.LowerExposed) != 0 && len(boundary.UpperExposed) != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // EnclosingExposed records the material between a new, enclosing hole and
@@ -44,7 +81,7 @@ func UnionExposed(ctx context.Context, wider, narrower momentinput.Profile) ([]m
 }
 
 // ExclusiveHoles returns the recorded holes present on only one side of a
-// slab interface. Admission has already proved their nesting.
+// slab interface. The caller proves nesting or separation before admission.
 func ExclusiveHoles(lower, upper momentinput.Profile) ([]sectionrecord.LoopRecord, []sectionrecord.LoopRecord) {
 	var lowerOnly, upperOnly []sectionrecord.LoopRecord
 	for _, hole := range lower.Holes {

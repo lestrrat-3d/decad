@@ -91,7 +91,8 @@ func InterfacePatches(sp Record, columns []Column, bySlab [][]SlabLoop, k int) (
 		return patches, nil
 	}
 	lowerOnly, upperOnly := ExclusiveHoles(lower, upper)
-	if len(lowerOnly) != 0 && len(upperOnly) != 0 {
+	if len(lowerOnly) != 0 && len(upperOnly) != 0 &&
+		(len(boundary.LowerExposed) == 0 || len(boundary.UpperExposed) == 0) {
 		return enclosingPatch(sp, columns, bySlab, k, lowerOnly, upperOnly)
 	}
 	for e, hole := range upperOnly {

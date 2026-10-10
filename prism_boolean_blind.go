@@ -338,7 +338,8 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 // cutStackedSlabs proves each affected section using its own sketch scene.
 // Inactive slabs retain their section, and prior names the exposed side of
 // any existing nonmonotone interface after an optional slab split. A
-// nonnegative monotoneAt refuses new opposed hole sets at that interface.
+// nonnegative monotoneAt admits new opposed holes only when their exact
+// sections prove separate at that interface.
 func cutStackedSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp stackedPrismPayload,
 	outer, tool prismPayload, reexpress *prismReexpression, active []bool,
 	prior []stackedrecord.Interface, monotoneAt int) (stackedPrismPayload, bool, error) {
@@ -405,13 +406,22 @@ func cutStackedSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp stac
 		lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(
 			result.slabs[monotoneAt].Regions[0], result.slabs[monotoneAt+1].Regions[0])
 		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
-			return stackedPrismPayload{}, false, nil
+			if result.sectionDelta != 0 {
+				return stackedPrismPayload{}, false, nil
+			}
+			_, separate, err := stackedrecord.SeparatedOpposed(ctx, budget, lowerOnly, upperOnly)
+			if err != nil || !separate {
+				return stackedPrismPayload{}, false, err
+			}
 		}
 	}
 	var err error
 	result.interfaces, err = stackedrecord.Derive(ctx, result.slabs, prior)
 	if err != nil {
 		return stackedPrismPayload{}, false, err
+	}
+	if !result.opposedSectionExact() {
+		return stackedPrismPayload{}, false, nil
 	}
 	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: result.slabs, Interfaces: result.interfaces}); err != nil {
 		return stackedPrismPayload{}, false, err

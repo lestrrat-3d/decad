@@ -1662,3 +1662,5 @@
 2	0.05	TestVertexBlendThreeEdgeOpenChain
 2	0.05	TestBrepLoopFilletPublicRevolveCapRefuses
 2	0.05	TestBrepLoopFilletPublicSTEP
+2	0.05	TestStackedOpposedInterfacePockets
+2	0.03	TestStackedOpposedRoundBoresAcceptLaterThroughHole

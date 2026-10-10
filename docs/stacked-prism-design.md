@@ -80,8 +80,8 @@ evaluator does not build — never repaired.
 | I3 | Each slab has `z0 < z1`. | `ErrDegenerate` |
 | I4 | Consecutive slabs meet: `slabs[i].z1 == slabs[i+1].z0` and `slabs[i].z1Delta == slabs[i+1].z0Delta`, both as stored floats. One plane, one displacement. | `ErrDegenerate` |
 | I5 | Consecutive slabs carry one outer loop record (`loopRecordsEqual`), or their interface meets the union reading below. A clean-nesting cut never touches the outer loop, and a mirror join rewrites every slab's outer the same way, so a cut-built stack's outer wall runs the whole height. | `ErrUnsupported` |
-| I6 | Hole sets are monotone, or one new hole replaces enclosed old holes through §7's two-cell sketch proof. | `ErrUnsupported` |
-| I7 | A monotone interface exposes each exclusive hole's interior; an enclosing interface exposes one patch with the new hole's reversed loop as outer and the enclosed old holes as holes. | `ErrDegenerate` |
+| I6 | Hole sets are monotone, one new hole replaces enclosed old holes through §7's two-cell sketch proof, or the exclusive holes on both sides are pairwise separate through the private scene below. | `ErrUnsupported` |
+| I7 | A monotone interface exposes each exclusive hole's interior; an enclosing interface exposes one patch with the new hole's reversed loop as outer and the enclosed old holes as holes; a separated opposed interface exposes every exclusive hole on its material side. | `ErrDegenerate` |
 
 For a monotone interface, every hole of either region equals a hole on the
 other side or occurs on that side alone. Only one side has exclusive holes.
@@ -93,7 +93,18 @@ For an enclosing interface, both sides have exclusive holes. One side has
 exactly one new hole, and the other has one or more old holes it encloses.
 The cut's two whole-loop sketch cells prove the nesting. The patch on the
 old-hole side reverses the new hole for its outer and carries the old holes
-inside it. Other opposed-hole interfaces remain `ErrUnsupported`.
+inside it. Opposed holes that neither nest nor separate remain `ErrUnsupported`.
+
+When both sides have exclusive holes that are pairwise separate, the interface
+holds both `LowerExposed` and `UpperExposed`. A private `sketch` scene over the
+interiors of every exclusive hole must return one valid whole cell per hole,
+with no arrangement charge. `stackedrecord.Derive` and `Falsify` run this proof;
+the reached slabs' cut scenes already prove each hole lies inside its section
+and clears holes on the same side. The lower side exposes each upper-only hole
+as a floor, and the upper side exposes each lower-only hole as a ceiling.
+Construction refuses this reading when the section has a nonzero displacement:
+the scene proves separation of the recorded loops, while that displacement
+could close their gap. A rigid placement re-evaluates the same local record.
 
 A mirror join (`docs/mirror-pattern-design.md` §5) builds a stacked payload by
 rewriting every slab's region with one splice. The splice is a function of the
@@ -285,6 +296,9 @@ per planar patch):
   hole. Its two rings come from two slabs, so `requireLoopClearance` runs over
   the patch's own rings before it is triangulated. Every planar patch indexes the already allocated ring
   vertices, so the mesh closes by construction and `internal/tessellation.RequireClosedMesh` proves it.
+  A separated opposed interface emits its floor and ceiling patches from
+  different column rings at the same level; the private scene proves those
+  planar patches do not overlap.
 - Face bounds: a wall's largest sagitta plus the larger of its column's two
   level displacements; a planar patch's largest bounding-loop sagitta plus its
   own level's displacement; `composeFaceBounds` adds every vertex's store term
@@ -313,7 +327,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | Consumer | Behaviour |
 |---|---|
 | `Body.Placed` / `Duplicate` / `PlacedCopy` | re-evaluates the payload under the composed motion |
-| later `Cut` with a prism tool | A spanning tool or a blind tool ending inside a slab builds when each reached slab proves a clean cut or no change inside a hole; other tools take the mesh path (§7). |
+| later `Cut` with a prism tool | A spanning tool or a blind tool ending inside a slab or exactly at an interface builds when each reached slab proves a clean cut or no change inside a hole; opposed interface holes require exact, separated sections (§7). |
 | `Union` with a stacked operand | `docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
 | `Cut` by a prism-group tool | `docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |
 | `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
@@ -354,9 +368,11 @@ Each admitted arm ships its implementation and tests together.
    patches; the record audit checks them before evaluation. A tool ending
    exactly at an existing interface uses that level when both the tool end and
    stored level have zero displacement, and the reached slabs' private scenes
-   plus the interface audit prove the new hole set is monotone. A tool that
-   leaves opposed unrelated hole sets at the interface takes the mesh path;
-   admitting those sets needs a private scene proving their separation.
+   plus the interface audit prove the new hole set is monotone. Opposed
+   exclusive holes also build when the private scene above proves their
+   separation without a charge and the section displacement is zero. A tool
+   whose opposed holes overlap, touch, or carry a section displacement takes
+   the mesh path.
 4. **Surveys and clearance.** DX7, DX8, DX6 and `analyticBodiesEqual` for the
    stacked payload.
 
@@ -389,8 +405,11 @@ arm64.
   result from either face; the mesh and placement retain the volume proof.
 - Two separate blind tools ending exactly at the same interface build an
   analytic stack when their reached slabs' scenes prove clean cuts and the
-  interface stays monotone. An opposite-side tool leaving unrelated holes
-  on both sides still takes the mesh path.
+  interface stays monotone. Separate pockets from opposite faces ending at
+  that interface build two distinct exposed faces when the private scene
+  proves their holes separate, with analytic volume, verified watertight mesh,
+  and placement. Touching or overlapping opposed pockets still take the mesh
+  path.
 - Level displacement, incoming: a tool whose inner end is a converted magnitude
   (`units.Inches`) publishes a positive axial delta on that end, asserted first
   on the tool so the fixture cannot silently stop exercising it, and the

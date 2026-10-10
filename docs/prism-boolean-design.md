@@ -153,7 +153,7 @@ of §4.5 on its existing admission gate.
 | `Cut(target, tool)` | `z0_tool' <= z0_target && z1_tool' >= z1_target` (tool spans target) | `[z0_target, z1_target]`, unchanged |
 | `Cut(target, tool)`, blind | `z0_target < z0_tool' < z1_target && z1_tool' >= z1_target` (a pocket from the top, floor at `z0_tool'`), or `z0_tool' <= z0_target && z0_target < z1_tool' < z1_target` (a pocket from the bottom, ceiling at `z1_tool'`) | a two-slab `stackedPrismPayload` (`docs/stacked-prism-design.md`): the target's own interval, split at the tool's inner end. Both inequalities are `big.Rat` comparisons over G5's shifted interval, and the inner end is that exact rational rounded to the nearest float once, carrying the tool's own axial displacement plus `rationalFloatError` of the rounding — the same charge `Intersect`'s shifted endpoint takes |
 | `Cut(target, tool)`, stacked target | the tool spans the whole stack: `z0_tool' <= z0_first && z1_tool' >= z1_last` | the same slabs; each is cut or proven unchanged because the tool lies inside a hole |
-| `Cut(target, tool)`, stacked target, blind | the tool opens at one outer cap and ends strictly inside one slab | that slab splits; each reached slab is cut or proven unchanged by its own scene |
+| `Cut(target, tool)`, stacked target, blind | the tool opens at one outer cap and ends inside a slab or exactly at an interface | an interior slab splits; each reached slab is cut or proven unchanged by its own scene; opposed holes at an interface require exact, separated sections |
 | `Intersect(a, b)` | `z0_a < z1_b' && z0_b' < z1_a` (intervals overlap) | `[max(z0_a, z0_b'), min(z1_a, z1_b')]` |
 
 `Union`'s equality is exact float equality — not a tolerance — matching G3's
@@ -517,7 +517,7 @@ regardless of who authored the input curves it was cut from.
 | `Union` with unequal z-intervals | overlapping or touching: a `stackedPrismPayload` (`docs/general-boolean-design.md` §3 A1); disjoint: G5, mesh path |
 | `Cut` whose tool ends inside the target and whose boundary crosses the target's (a side notch) | mesh path; the walls below the floor would split at the crossing, which `docs/stacked-prism-design.md` §7 leaves unplanned |
 | `Cut` whose tool lies strictly inside both target ends (an enclosed void) | G5, mesh path; a void shell is not a stage this design admits |
-| Interface-aligned blind `Cut` with displaced levels or opposed holes | Exact monotone levels build; these cases take the mesh path. Opposed holes need a separation scene (stacked §7 stage 3) |
+| Interface-aligned blind `Cut` with displaced levels, touching opposed holes, or section displacement | Exact monotone levels and proved separate opposed holes build; these cases take the mesh path (stacked §7 stage 3) |
 | `Cut` whose tool crosses an existing hole's boundary instead of enclosing it whole | no whole-loop match, mesh path; `docs/stacked-prism-design.md` §7 stage 2 |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
 | `Union` with a holed operand | G6, mesh path; §9 PR3 |

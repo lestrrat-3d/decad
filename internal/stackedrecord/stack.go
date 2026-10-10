@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
@@ -74,6 +75,7 @@ func equalLoop(a, b sectionrecord.LoopRecord) bool {
 // it.
 func Derive(ctx context.Context, slabs []Slab, prior []Interface) ([]Interface, error) {
 	out := make([]Interface, len(slabs)-1)
+	budget := proofbound.NewWorkBudget(ctx)
 	for i := range out {
 		if wideLower, lining := LiningSides(slabs[i], slabs[i+1]); lining {
 			narrow := slabs[i].Regions
@@ -114,6 +116,14 @@ func Derive(ctx context.Context, slabs []Slab, prior []Interface) ([]Interface, 
 		}
 		lowerOnly, upperOnly := ExclusiveHoles(lowerRegion, upperRegion)
 		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
+			opposed, separate, err := SeparatedOpposed(ctx, budget, lowerOnly, upperOnly)
+			if err != nil {
+				return nil, err
+			}
+			if separate {
+				out[i] = opposed
+				continue
+			}
 			if i >= len(prior) {
 				return nil, fmt.Errorf(`%w: enclosing interface %d has no prior exposed side`, decaderr.ErrDegenerate, i)
 			}
@@ -181,6 +191,7 @@ func Falsify(ctx context.Context, sp Record) error {
 	if len(sp.Slabs) < 2 || len(sp.Interfaces) != len(sp.Slabs)-1 {
 		return fmt.Errorf(`%w: a stacked prism needs two slabs and one interface between each pair`, decaderr.ErrUnsupported)
 	}
+	budget := proofbound.NewWorkBudget(ctx)
 	for i, slab := range sp.Slabs {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -217,6 +228,27 @@ func Falsify(ctx context.Context, sp Record) error {
 		lowerOnly, upperOnly := ExclusiveHoles(prev.Regions[0], slab.Regions[0])
 		got := sp.Interfaces[i-1]
 		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
+			if len(got.LowerExposed) != 0 && len(got.UpperExposed) != 0 {
+				lowerOK, err := exposedMatches(ctx, got.LowerExposed, upperOnly)
+				if err != nil {
+					return err
+				}
+				upperOK, err := exposedMatches(ctx, got.UpperExposed, lowerOnly)
+				if err != nil {
+					return err
+				}
+				if !lowerOK || !upperOK {
+					return fmt.Errorf(`%w: opposed interface %d does not record both exposed hole sets`, decaderr.ErrDegenerate, i-1)
+				}
+				_, separate, err := SeparatedOpposed(ctx, budget, lowerOnly, upperOnly)
+				if err != nil {
+					return err
+				}
+				if !separate {
+					return fmt.Errorf(`%w: opposed interface %d has no proof that its holes separate`, decaderr.ErrUnsupported, i-1)
+				}
+				continue
+			}
 			var valid bool
 			var err error
 			switch {
