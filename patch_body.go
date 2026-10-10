@@ -629,7 +629,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if ne, ok := newEdgeByOld[old]; ok {
 			return ne, nil
 		}
-		curve, err := surfacegeom.TransformCurve(old.curve, xform)
+		curve, err := surfacegeom.TransformCurve(internalCurve(old.curve), xform)
 		if err != nil {
 			return nil, err
 		}
@@ -647,7 +647,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		}
 		lengthBound = place.LengthBound(old.length, lengthBound)
 		ne := &Edge{
-			curve:           curve,
+			curve:           publicCurve(curve),
 			start:           start,
 			end:             end,
 			convex:          old.convex,
@@ -657,7 +657,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			denot:           old.denot.Compose(xform),
 		}
 		ne.curveBound, ne.curveBounded = surfacegeom.PlacedCurveBound(
-			old.curve, old.curveBound, old.curveBounded, curve, xform)
+			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}
@@ -788,7 +788,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	for i, oe := range ordered {
 		ne := edgeCopy[oe.old]
 		areaEdges[i] = patchchain.AreaEdge{
-			Curve: ne.curve, Forward: oe.forward,
+			Curve: internalCurve(ne.curve), Forward: oe.forward,
 			Start:  patchchain.AreaVertex{Position: ne.start.position, Bound: ne.start.bound.Base()},
 			End:    patchchain.AreaVertex{Position: ne.end.position, Bound: ne.end.bound.Base()},
 			Length: ne.length, LengthBound: ne.lengthBound, LengthUnbounded: ne.lengthUnbounded,

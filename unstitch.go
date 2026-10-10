@@ -260,7 +260,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if ne, ok := newEdgeByOld[old]; ok {
 			return ne, nil
 		}
-		curve, err := surfacegeom.TransformCurve(old.curve, xform)
+		curve, err := surfacegeom.TransformCurve(internalCurve(old.curve), xform)
 		if err != nil {
 			return nil, err
 		}
@@ -277,7 +277,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
-			curve:           curve,
+			curve:           publicCurve(curve),
 			start:           start,
 			end:             end,
 			convex:          old.convex,
@@ -287,7 +287,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			denot:           old.denot.Compose(xform),
 		}
 		ne.curveBound, ne.curveBounded = surfacegeom.PlacedCurveBound(
-			old.curve, old.curveBound, old.curveBounded, curve, xform)
+			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}
