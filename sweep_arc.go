@@ -9,7 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -104,8 +103,6 @@ func sweepRatHeld(value *big.Rat) (float64, float64, bool) {
 }
 
 func sweepRatVecOf(v r3.Vec) sweepRatVec { return sweeparc.VecOf(v) }
-
-func sweepRatFromDyadic(v proofarith.DyV3) sweepRatVec { return sweeparc.FromDyadic(v) }
 
 func sweepRatSub(a, b sweepRatVec) sweepRatVec { return sweeparc.Sub(a, b) }
 
