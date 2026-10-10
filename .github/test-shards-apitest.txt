@@ -20,6 +20,10 @@
 0	1059.82	TestLoftEmbeddedSixtyToothGearFeatures
 1	0.01	TestArcSegExactQuarterDisk
 1	0.01	TestBlindPocketPlacedAndVerified
+1	0.02	TestBodyPatchCircularPrismNestedFillMeshRefuses
+1	0.02	TestBodyPatchCircularPrismOneRimTessellates
+1	0.02	TestBodyPatchCircularPrismPlacementAndReflection
+1	0.02	TestBodyPatchCircularPrismSheetTessellates
 1	0.00	TestBodyPatchCoincidentFacesRefuseVerifiedMesh
 1	0.00	TestBodyPatchCurvedRimMeshRefusesWithoutSharedChording
 1	0.00	TestBodyPatchDoublesAFlatSheetWithANegatedNormal

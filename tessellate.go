@@ -483,7 +483,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateStitch(ctx, b, sp)
 	}
 	if pp, ok := b.payload.(bodyPatchPayload); ok {
-		return tessellateBodyPatch(ctx, b, pp, verify)
+		return tessellateBodyPatch(ctx, b, pp, chord, verify)
 	}
 	if cp, ok := b.payload.(chainPayload); ok {
 		// The chain-fed ribbon path takes no chord tolerance either, on the

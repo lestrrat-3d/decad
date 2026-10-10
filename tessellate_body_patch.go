@@ -11,11 +11,13 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// tessellateBodyPatch triangulates a Body.Patch result whose every face is a
-// Plane bounded only by Line3 edges. Each triangle uses the body's own shared
-// Vertex, so a newly filled rim has the same indices on both adjacent faces.
-// Curved faces need the source feature's chording and are refused here.
-func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, verify Verification) (*Mesh, error) {
+// tessellateBodyPatch reuses a circular source prism's station grid or
+// triangulates an all-planar Body.Patch result over its shared vertices.
+// Other curved sources need their own shared chording and are refused here.
+func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chord float64, verify Verification) (*Mesh, error) {
+	if prism, ok := bodyPatchCircularPrismSource(pp); ok {
+		return tessellateBodyPatchCircularPrism(ctx, b, pp, prism, chord, verify)
+	}
 	faces := b.Faces()
 	// curveBound applies only to Circle3 and Arc3. A Line3 follows its end
 	// vertices; the cap-band miter whose Line3 tag holds a curved locus has
