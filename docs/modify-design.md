@@ -144,7 +144,7 @@ a retired body is S17, by core §6's retire rule.
 
 | R | Receiver payload | `Fillet` / `Chamfer` | `Shell` |
 |---|---|---|---|
-| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds** for lateral edges here; reach RX1 adds complete cap loops, and route V adds single straight cap edges and mixed complete-loop fillets (`docs/vertex-blend-design.md`) | **builds** for cap removal here, the B4 multi-lump result through reach BX8; reach RX1 adds side/no-opening cases |
+| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds** for lateral edges here; reach RX1 adds complete cap loops; route E or the bounded cutter adds one straight cap edge for either blend; route V adds mixed complete-loop fillets (`docs/vertex-blend-design.md`) | **builds** for cap removal here, the B4 multi-lump result through reach BX8; reach RX1 adds side/no-opening cases |
 | **R2** | `cupPayload` — a one-cap shell (B5/B6), recorded as a two-slab `stackedPrismPayload` (reach §9.1) | S3 | S3 |
 | **R3** | `revolvePayload` | reach RX2 for swept meridian junctions; otherwise S3/SX5 | reach RX2; otherwise S2/SX8 |
 | **R4** | `facetedPayload` — a boolean output | reach SX9 | reach SX9 |
@@ -163,7 +163,7 @@ sentinel follows from it and from nothing else.
 
 | S | The call asked for | Does that body exist? | Sentinel |
 |---|---|---|---|
-| **S1** | in the base increment, a fillet or chamfer of an edge that is not a **lateral** edge; route V adds single straight prism cap edges and mixed complete-loop fillets (`docs/vertex-blend-design.md`) | yes | `ErrUnsupported` — remaining partial-loop endpoint transitions are not built |
+| **S1** | in the base increment, a fillet or chamfer of an edge that is not a **lateral** edge; route E or the bounded cutter adds one straight prism cap edge and route V adds mixed complete-loop fillets (`docs/vertex-blend-design.md`) | yes | `ErrUnsupported` — remaining partial-loop endpoint transitions are not built |
 | **S2** | in the base increment, a shell that removes a **side wall** — reach RX1 replaces this only for its one proper outer-loop run | yes | `ErrUnsupported` — general open-chain offset not built |
 | **S3** | a modify op on a receiver/target not admitted by Table R or reach Table RX | yes | `ErrUnsupported` |
 | **S4** | a blend or bevel of a corner whose two segments meet **smoothly** (tangent) or in a **cusp** (anti-tangent) | no — there is no corner to blend | `ErrDegenerate` |
@@ -474,7 +474,7 @@ option.
 The rewrite trims both walks back by `d` and joins the feet with a `LineSeg`.
 The gates are the fillet's, in §4's order: S15 for a magnitude that is not a
 valid length and S13 for a zero `d`; S1 for a cap edge **the corner rewrite is
-asked to take** — a partial cap chain, or a cap edge mixed with lateral ones,
+asked to take** — a partial cap chain of at least two edges, or a cap edge mixed with lateral ones,
 which reach RX1 renumbers SX4; S4 for a smooth or
 cusped corner; then the §5 audit — S8, S6 for a setback that reaches or passes
 the far end of a walk, S7, S9. A selection covering every geometric edge of one
@@ -847,9 +847,9 @@ do with; PR 1 builds on them and carries none of them.
 
 `docs/modify-reach-design.md` resolves the former reach questions:
 
-- cap-edge support requires a complete prism cap loop; line/circle center paths
+- cap-loop blends use complete prism cap loops; line/circle center paths
   produce cylinder/torus patches, and miter points produce trimmed sphere
-  patches;
+  patches; route E admits one straight cap edge;
 - patch/offset merging remains a deliberate `ErrUnsupported` limit;
 - topology-changing offsets remain a deliberate `ErrUnsupported` limit;
 - `stackedPrismPayload` owns multi-region axial slabs, holds the cup's record
@@ -866,7 +866,7 @@ do with; PR 1 builds on them and carries none of them.
 - `WithAsymmetricChamfer` carries a reference face + second distance;
 - `WithTangentChain` expands only through proven analytic G1 continuations;
 - revolve meridian junctions reuse the exact section rewrite;
-- variable-radius fillets, partial cap chains, mixed edge classes, and all
+- variable-radius fillets, unsupported partial cap chains, mixed edge classes, and all
   faceted receivers stay explicitly unsupported.
 
 The extension's PR order and required tests are reach §§13–14. No reach choice

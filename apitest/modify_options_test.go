@@ -241,10 +241,11 @@ func TestTangentChainSlotCapLoop(t *testing.T) {
 	const h, d = slotHeight, 2.0
 	_, slot := slotBody(t, [2]float64{10, 5})
 
-	// Without the chain the one seed is a partial cap loop: SX4.
+	// Without the chain the single edge reaches route E, whose straight-wall
+	// admission refuses the slot's curved terminal wall (SB7).
 	_, err := slot.Chamfer(t.Context(), slotSeed(slot), units.Millimeters(d))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "only part of a cap loop")
+	require.ErrorContains(t, err, "brep-modify SB7")
 
 	// Exactly(1) holds on the seed; the line→arc→line→arc chain then expands
 	// it to the whole top loop, which builds the cap-loop chamfer.
@@ -520,6 +521,88 @@ func TestAsymmetricChamferRevolveJunction(t *testing.T) {
 			rho = 5 + 1.0/3
 		}
 		decadtest.MeasuresVolume(t, out, units.CubicMillimeters(2*math.Pi*(shaftQ+1.5*rho)))
+	}
+}
+
+func TestAsymmetricChamferOnPrismCapEdge(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		normal   r3.Vec
+		capFoot  r3.Vec
+		sideFoot r3.Vec
+	}{
+		{name: "cap reference", normal: r3.NewVec(0, 0, 1),
+			capFoot: r3.NewVec(0, 2, 10), sideFoot: r3.NewVec(0, 0, 7)},
+		{name: "side reference", normal: r3.NewVec(0, -1, 0),
+			capFoot: r3.NewVec(0, 3, 10), sideFoot: r3.NewVec(0, 0, 8)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decad.New()
+			box := boxBody(t, doc, 0, 0, 40, 20, 10)
+			edge := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
+				decad.EndpointAt(r3.NewVec(0, 0, 10))).Exactly(1)
+			face := planeFacing(t, box, tc.normal, r3.NewVec(0, 0, 10))
+			result, err := box.Chamfer(t.Context(), edge, units.Millimeters(2),
+				decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(face.Origins()[0])), units.Millimeters(3)))
+			require.NoError(t, err)
+			require.Equal(t, []*decad.Body{result}, doc.Bodies())
+			volume, err := result.Volume()
+			require.NoError(t, err)
+			require.Equal(t, decad.Exact, volume.Exactness)
+			require.InDelta(t, 7880, volume.Value.Base(), 1e-8)
+			for _, want := range []r3.Vec{tc.capFoot, tc.sideFoot} {
+				found := false
+				for _, vertex := range result.Vertices() {
+					if vertex.Position().Value.Sub(want).Len() < 1e-9 {
+						found = true
+						break
+					}
+				}
+				require.True(t, found, "bevel foot %v is a result vertex", want)
+			}
+			mesh, err := result.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			require.True(t, mesh.VolumeVerified())
+		})
+	}
+}
+
+func TestAsymmetricChamferOnObliquePrismCapEdge(t *testing.T) {
+	t.Parallel()
+	for _, sideRef := range []bool{false, true} {
+		name := "cap reference"
+		if sideRef {
+			name = "side reference"
+		}
+		t.Run(name, func(t *testing.T) {
+			doc := decad.New()
+			part := chamferTrapezoid(t, doc)
+			edge := decad.Edges(decad.EndpointAt(r3.NewVec(100, 0, 10)),
+				decad.EndpointAt(r3.NewVec(72, 45, 10))).Exactly(1)
+			selected, err := edge.SelectEdges(part)
+			require.NoError(t, err)
+			top := planeFacing(t, part, r3.NewVec(0, 0, 1), r3.NewVec(100, 0, 10))
+			ref := top
+			if sideRef {
+				for _, face := range selected[0].Faces() {
+					if face != top {
+						ref = face
+					}
+				}
+				require.NotSame(t, top, ref)
+			}
+			result, err := part.Chamfer(t.Context(), edge, units.Millimeters(1),
+				decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(ref.Origins()[0])), units.Millimeters(1.5)))
+			require.NoError(t, err)
+			require.Equal(t, []*decad.Body{result}, doc.Bodies())
+			volume, err := result.Volume()
+			require.NoError(t, err)
+			require.LessOrEqual(t, math.Abs(volume.Value.Base()-(32400-53*0.75)), volume.Bound.Base()+1e-6)
+			mesh, err := result.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			require.True(t, mesh.VolumeVerified())
+		})
 	}
 }
 

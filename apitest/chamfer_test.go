@@ -185,6 +185,70 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 	require.Nil(t, rep.Bodies[0].ConcaveRadius.Minimum, `a planar chamfer bevel is not a concave radius`)
 }
 
+func TestChamferSingleStraightCapEdge(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := boxBody(t, doc, 0, 0, 40, 20, 10)
+	edge := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
+		decad.EndpointAt(r3.NewVec(0, 0, 10))).Exactly(1)
+	beveled, err := box.Chamfer(t.Context(), edge, units.Millimeters(2))
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{beveled}, doc.Bodies())
+	volume, err := beveled.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, volume.Exactness)
+	require.InDelta(t, 7920, volume.Value.Base(), 1e-8)
+	mesh, err := beveled.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.VolumeVerified())
+}
+
+func TestChamferSingleObliqueCapEdge(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		z    float64
+	}{{name: "top", z: 10}, {name: "bottom", z: 0}} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decad.New()
+			part := chamferTrapezoid(t, doc)
+			edge := decad.Edges(decad.EndpointAt(r3.NewVec(100, 0, tc.z)),
+				decad.EndpointAt(r3.NewVec(72, 45, tc.z))).Exactly(1)
+			result, err := part.Chamfer(t.Context(), edge, units.Millimeters(1))
+			require.NoError(t, err)
+			require.Equal(t, []*decad.Body{result}, doc.Bodies())
+			volume, err := result.Volume()
+			require.NoError(t, err)
+			// The slanted edge is 53 mm long. The wedge's section is 1/2 mm².
+			require.LessOrEqual(t, math.Abs(volume.Value.Base()-(32400-53.0/2)), volume.Bound.Base()+1e-6)
+			mesh, err := result.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			require.True(t, mesh.VolumeVerified())
+		})
+	}
+}
+
+func chamferTrapezoid(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	points := [][2]float64{{0, 0}, {100, 0}, {72, 45}, {28, 45}}
+	vertices := make([]*sketch.Point, len(points))
+	for i, p := range points {
+		vertices[i] = s.CreatePoint(p[0], p[1])
+		s.Fix(vertices[i])
+	}
+	for i := range vertices {
+		s.CreateLine(vertices[i], vertices[(i+1)%len(vertices)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	part, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	return part
+}
+
 func TestChamferConcaveEdgeAddsWedge(t *testing.T) {
 	t.Parallel()
 	// An L-shaped section has one reflex (concave) lateral edge; chamfering it

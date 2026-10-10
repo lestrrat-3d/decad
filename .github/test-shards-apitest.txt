@@ -6,14 +6,15 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0:   43.21s over 146 tests
-#   shard 1:   43.21s over 146 tests
+#   shard 0:   43.23s over 147 tests
+#   shard 1:   43.23s over 147 tests
 #   shard 2:   43.28s over 576 tests
-#   shard 3:   43.21s over 146 tests
+#   shard 3:   43.23s over 147 tests
 #   shard 4:   43.26s over 149 tests
-#   shard 5:   43.21s over 147 tests
+#   shard 5:   43.23s over 148 tests
 #
 0	0.01	TestArcSegExactQuarterDisk
+0	0.02	TestAsymmetricChamferOnObliquePrismCapEdge
 0	0.02	TestBlindCutThenTwoThroughHoles
 0	0.01	TestBodyPatchFillsASingleClosedCircularRim
 0	3.94	TestBooleanChainOfConesContinuesPastEachJoint
@@ -175,6 +176,7 @@
 0	0.01	TestVoidRevolveModifyOps
 0	0.01	TestWallHeightArmAggregatesAgainstTheSectionSpan
 0	0.01	TestWallSolidCylinder
+1	0.02	TestAsymmetricChamferOnPrismCapEdge
 1	0.01	TestBlindCutBuildsAnalyticPocket
 1	0.02	TestBlindRoundBoreTessellates
 1	2.55	TestBooleanAlgebraicIdentities
@@ -1044,6 +1046,7 @@
 3	0.01	TestCapBlendUnrepresentableRadialChangeRefused
 3	0.02	TestCapBlendWholeTurnUndercutRespectsNormalBound
 3	0.01	TestChamferLineArcCorner
+3	0.02	TestChamferSingleObliqueCapEdge
 3	0.28	TestClearanceOracleWellSeparatedSound
 3	0.08	TestClearanceParallelCircleRods
 3	1.25	TestClearancePolyBracketContainsTruth
@@ -1365,6 +1368,7 @@
 5	0.04	TestCapBlendUnmiteredPatchNormalCarriesNoWindowSkew
 5	0.01	TestCapHelpers
 5	0.02	TestChamferClearOfHoleBuilds
+5	0.02	TestChamferSingleStraightCapEdge
 5	0.01	TestClearanceBallCenteredInHole
 5	1.09	TestClearanceConeCoarseUndecided
 5	0.01	TestContactPairAnalyticPrismGap

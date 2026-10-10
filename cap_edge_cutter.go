@@ -20,14 +20,42 @@ import (
 // A false result leaves the ordinary analytic route in charge.
 func tryObliqueCapEdgeFillet(ctx context.Context, body *Body, pp prismPayload, edges []*Edge,
 	radius, radiusDelta float64) (*Body, bool, error) {
-	if len(edges) != 1 || radiusDelta != 0 || pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 {
+	return tryObliqueCapEdgeCut(ctx, body, pp, edges, radius, radiusDelta, capedge.QuarterCutter(radius))
+}
+
+// tryObliqueCapEdgeChamfer assigns setbacks before using the same bounded
+// boolean cutter route as a fillet. The caller has already identified one
+// selected straight edge of a prism cap.
+func tryObliqueCapEdgeChamfer(ctx context.Context, body *Body, pp prismPayload, edges []*Edge,
+	d, dDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
+	dc, ds, delta := d, d, dDelta
+	if asym != nil {
+		ref := asym.refs[edges[0]]
+		caps := prismCapsOf(body)
+		if ref == caps.start || ref == caps.end {
+			dc, ds = asym.d, asym.other
+		} else {
+			dc, ds = asym.other, asym.d
+		}
+		delta = max(asym.dDelta, asym.otherDelta)
+	}
+	reach := max(dc, ds)
+	return tryObliqueCapEdgeCut(ctx, body, pp, edges, reach, delta, capedge.ChamferCutter(dc, ds))
+}
+
+// tryObliqueCapEdgeCut trims a convex prism with a profile whose selected
+// edge wedge crosses both adjacent planes. A false result leaves route E in
+// charge of straight end walls and its own refusals.
+func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edges []*Edge,
+	reach, reachDelta float64, profile profileRecord) (*Body, bool, error) {
+	if len(edges) != 1 || reachDelta != 0 || pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 {
 		return nil, false, nil
 	}
 	if _, ok := edges[0].curve.(Line3); !ok || edges[0].start == nil || edges[0].end == nil {
 		return nil, false, nil
 	}
 	if len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) < 3 ||
-		pp.z1-pp.z0 <= 4*radius || !obliqueCapEdgeProfile(pp, edges[0], radius) {
+		pp.z1-pp.z0 <= 4*reach || !obliqueCapEdgeProfile(pp, edges[0], reach) {
 		return nil, false, nil
 	}
 	facing := edges[0].Faces()
@@ -58,11 +86,10 @@ func tryObliqueCapEdgeFillet(ctx context.Context, body *Body, pp prismPayload, e
 	if err != nil {
 		return nil, true, fmt.Errorf(`%w: the cap-edge cutter has no frame: %v`, ErrUnsupported, err)
 	}
-	span := proofbound.AbsSumUpper(edges[0].end.position.Sub(edges[0].start.position).Len(), 8*radius)
+	span := proofbound.AbsSumUpper(edges[0].end.position.Sub(edges[0].start.position).Len(), 8*reach)
 	if proofbound.IsNonFinite(span) {
 		return nil, true, fmt.Errorf(`%w: the cap-edge cutter has no finite sweep span`, ErrNotFinite)
 	}
-	profile := capedge.QuarterCutter(radius)
 	d := body.doc
 	ref := d.nextProducerID()
 	tool, err := evalPrismContext(ctx, d, ref, prismPayload{
