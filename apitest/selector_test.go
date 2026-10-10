@@ -180,6 +180,31 @@ func TestCapHelpers(t *testing.T) {
 	})
 }
 
+func TestOuterLoopOfKeepsBoreEdgesSharp(t *testing.T) {
+	t.Parallel()
+	body := holePlateBody(t)
+	for _, ref := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+		all, err := decad.Edges(decad.CreatedBy(ref)).Exactly(5).SelectEdges(body)
+		require.NoError(t, err)
+		outer, err := decad.Edges(decad.OuterLoopOf(ref)).Exactly(4).SelectEdges(body)
+		require.NoError(t, err)
+		capFaces, err := decad.Faces(decad.FaceCreatedBy(ref)).Exactly(1).SelectFaces(body)
+		require.NoError(t, err)
+		var want []*decad.Edge
+		for _, loop := range capFaces[0].Loops() {
+			if loop.IsOuter() {
+				want = loop.Edges()
+			}
+		}
+		require.ElementsMatch(t, want, outer)
+		require.Len(t, all, len(outer)+1, "the bore contributes one excluded cap edge")
+	}
+	outer, err := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).
+		Or(decad.OuterLoopOf(decad.CapEnd(body))).Exactly(8).SelectEdges(body)
+	require.NoError(t, err)
+	require.Len(t, outer, 8)
+}
+
 // A finite but extreme direction must not overflow or underflow the parallel
 // test that NormalTo and edge ParallelTo share. holePlateBody is a 100×60×8
 // plate whose every planar face normal and straight edge is axis-aligned, so a

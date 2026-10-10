@@ -150,6 +150,7 @@ a retired body is S17, by core §6's retire rule.
 | **R4** | `facetedPayload` — a boolean output | reach SX9 | reach SX9 |
 | **R5** | `capBlendPayload` | reach SX10 | reach SX10 |
 | **R6** | `brepPayload`, or `stackedPrismPayload` through its face view | `docs/brep-modify-design.md` Table RB | Table RB |
+| **R7** | `loftPayload` with matching, hole-free, axially translated sections | `Fillet` on recorded analytic corners (loft §17); `Chamfer` is S3 | S3 |
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
 (evaluator §5 emits no seam), so a cylinder has no edge the corner rewrite can

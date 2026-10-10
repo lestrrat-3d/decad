@@ -21,12 +21,9 @@ import (
 // bounded refuses through ErrLoftSagittaUnderivable. The station cap bounds
 // the work before any of it is done. See docs/loft-design.md §5.2.
 
-// StationCapGate decides docs/loft-design.md Table S row S15 from the two
-// RECORDS alone, at the phase §4's gate-order paragraph assigns it — among the
-// shape gates, beside S14's DERIVATION arm, with no station built and no
-// triangle assembled. §5.1's "Deciding S15 from the record" paragraph is what
-// makes that possible: m and mMax are each a function of the two records, so
-// the construction phase settles the identical m this gate reads.
+// StationCapGate decides the circular part of docs/loft-design.md Table S
+// row S15 from the two records, before any station or triangle is built.
+// A free-form pair is charged in PairRecords as its dyadic generator runs.
 //
 // It is the build's one reader of the chord target: it computes it from
 // recordArea and the resolved walks (ChordTarget) and returns it, so the
@@ -38,13 +35,13 @@ import (
 // 0 there, which no LineSeg cell reads. That early return is why an
 // all-LineSeg build pays nothing for this gate.
 //
-// Only a circular pair settles its count here. A same-kind free-form pair's
-// count is what its dyadic walk settles, so that walk carries the same share as
-// its own ceiling and refuses S15 as it runs (loftmesh.FreeformCellPoints),
-// with no second walk spent here to learn the count first.
+// Only circular pairs settle their counts here. Each consumes its actual
+// extra cells from the build-wide cap after one cell per pair is reserved.
+// A free-form pair's dyadic walk settles its count during PairRecords, where
+// it consumes the same shared remainder without a second walk.
 //
-// The refusal NAMES the segment whose own share was exceeded, since the share
-// is that segment's (StationCapError). A walk-up that cannot settle at all
+// The refusal names the segment that exhausts the remaining cells
+// (StationCapError). A walk-up that cannot settle at all
 // propagates its own refusal instead: ErrLoftSagittaUnderivable is S14's
 // DERIVATION arm, which §5.1 places beside this row precisely because the
 // walk-up that settles m is what asks for that term, and freeform.ErrTooManyChords bare
@@ -65,7 +62,7 @@ func StationCapGate(p0, p1 momentinput.Profile, recordArea [2]float64, offsets [
 	if err != nil {
 		return 0, err
 	}
-	mMax := StationShare(p, c)
+	remaining := StationExtraBudget(p)
 
 	for i := range loops0 {
 		n := len(loops0[i].Segments)
@@ -80,9 +77,10 @@ func StationCapGate(p0, p1 momentinput.Profile, recordArea [2]float64, offsets [
 			if err != nil {
 				return 0, err
 			}
-			if m > mMax {
-				return 0, &StationCapError{Loop: i, Seg: j, M: m, MMax: mMax}
+			if m-1 > remaining {
+				return 0, &StationCapError{Loop: i, Seg: j, M: m, MMax: 1 + remaining}
 			}
+			remaining -= m - 1
 		}
 	}
 	return target, nil

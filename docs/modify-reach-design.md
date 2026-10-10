@@ -107,6 +107,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 | **RX5** | `cupPayload`: a two-slab `stackedPrismPayload` record beside the shell morphology (§9.1) | base S3 | base S3 |
 | **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | SX9 | SX9 |
 | **RX7** | `brepPayload` (`docs/general-boolean-design.md` §4) | `docs/brep-modify-design.md` Table RB; outside it, SX16 | the same |
+| **RX8** | `loftPayload` | `Fillet` on analytic corners of matching axial sections (loft §17); equal-distance `Chamfer` on both complete held outer cap loops of a matching axial loft with one certified circular bore (loft §18); other chamfers are base S3 | base S3 |
 
 Definitions:
 

@@ -798,13 +798,13 @@ func revolvedRing(t *testing.T) *decad.Body {
 
 func TestFilletNonPrismReceiver(t *testing.T) {
 	t.Parallel()
-	// A boolean union is neither a prismPayload nor a revolvePayload, so a
+	// A boolean union is neither a prism, revolve nor loft payload, so a
 	// fillet of it is staged: S3. Its closed rims are FacetedCurve edges, which
 	// render closed from their shared vertex.
 	sel := decad.Edges()
 	_, err := booleanRimBody(t, decad.New()).Fillet(t.Context(), sel, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, `this evaluator fillets a straight prism or a revolve only`,
+	require.ErrorContains(t, err, `this evaluator fillets a straight prism, a revolve, or a matching-section axial loft only`,
 		`the refusal states its own reason`)
 	require.ErrorContains(t, err, `selector `+sel.String())
 	require.ErrorContains(t, err, `selected edge[0] closed through (10,0,0)`)
@@ -832,7 +832,7 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 	t.Run(`non-prism receiver`, func(t *testing.T) {
 		_, err := booleanRimBody(t, decad.New()).Fillet(t.Context(), decad.Edges(), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		requireReasonLeads(t, err, `this evaluator fillets a straight prism or a revolve only`)
+		requireReasonLeads(t, err, `this evaluator fillets a straight prism, a revolve, or a matching-section axial loft only`)
 
 		_, err = booleanRimBody(t, decad.New()).Chamfer(t.Context(), decad.Edges(), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)

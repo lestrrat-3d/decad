@@ -320,6 +320,11 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	if err := chargePrismMap(body, cbp.frame, cbp.xform); err != nil {
 		return nil, err
 	}
+	if cbp.loftSource != nil {
+		if err := widenLoftCapBandMeasurements(body, cbp.loftSource.proof); err != nil {
+			return nil, err
+		}
+	}
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}

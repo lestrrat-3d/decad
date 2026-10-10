@@ -16,12 +16,12 @@ import (
 )
 
 // StationCapError is docs/loft-design.md Table S row S15's refusal: a chorded
-// pair whose station count passes the per-segment share StationShare allocates
-// it. It names the segment because the share it passed is that segment's own
-// (§5.1). errors.Is answers for freeform.ErrTooManyChords, the sentinel §5.1
+// pair whose station count passes the cells remaining in the shared cap.
+// It names the pair that exhausted that remainder. errors.Is answers for
+// freeform.ErrTooManyChords, the sentinel §5.1
 // assigns this row, and through it for ErrUnsupported.
 //
-// AtLeast is set where the generator stopped at the share rather than settling
+// AtLeast is set where the generator stopped at its allowance rather than settling
 // a count: the free-form arm's dyadic walk refuses the moment its proven lower
 // bound on the chord count passes MMax, so M is that lower bound and the
 // finished chain would carry at least M cells.
@@ -37,7 +37,7 @@ func (e *StationCapError) Error() string {
 		needs = fmt.Sprintf("at least %d", e.M)
 	}
 	return fmt.Sprintf(
-		`%s: loop %d segment %d needs %s chord cells to meet the loft chord target, past the %d its share of the station cap allows`,
+		`%s: loop %d segment %d needs %s chord cells to meet the loft chord target, past the %d remaining station cap allows`,
 		decaderr.ErrUnsupported.Error(), e.Loop, e.Seg, needs, e.MMax,
 	)
 }
@@ -80,7 +80,7 @@ type FreeformCell struct {
 //
 // freeform.PairChainStations measures, accepts and bisects every cell on both
 // sides together, so the two sides hold one dyadic cell set. Its ceiling is
-// maxCells, the segment's own share of the station cap: passing it refuses
+// maxCells, the shared station cap's current remainder: passing it refuses
 // with a StationCapError whose M is the walk's proven lower bound (S15), and
 // the caller names the loop and segment. A cell whose measured sagitta is
 // non-finite refuses with ErrLoftSagittaUnderivable (S14) rather than bisecting
@@ -161,7 +161,7 @@ func FreeformCellPoints(w0, w1 survey2d.SegmentWalk, target float64, maxCells in
 }
 
 // commonSpanCount gives both span-uniform chains the same slot boundaries.
-// Check the station share before multiplying, so a large least common multiple
+// Check the current station allowance before multiplying, so a large least common multiple
 // cannot allocate a chain or overflow an int.
 func commonSpanCount(a, b, maxCells int) (int, bool) {
 	if a < 1 || b < 1 || maxCells < 1 {

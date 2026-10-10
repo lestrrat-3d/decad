@@ -514,7 +514,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	require.NoError(t, err)
 
 	stationWork := &freeform.FreeformWork{}
-	share := loftmesh.StationShare(k, k)
+	share := 1 + loftmesh.StationExtraBudget(k)
 	for _, w := range walks {
 		_, err := loftmesh.FreeformCellPoints(w, w, target, share, stationWork, stationWork)
 		require.NoError(t, err)
