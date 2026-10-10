@@ -436,8 +436,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		wallDiags := reportvocab.WallDiagnostics[*Body, JointCell](b, b.payload,
 			reportvocab.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason},
 			cfg.Wall.Tool, cfg.ToolMM)
-		results.WallDiagnostics = wallDiags
-		diags = append(diags, wallDiags...)
+		results.WallDiagnostics = diagnosticsFromInternal(wallDiags)
+		diags = append(diags, results.WallDiagnostics...)
 		if err := survey2d.WallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
 		}
@@ -468,8 +468,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		undercutDiags := reportvocab.UndercutDiagnostics[*Body, *Face, JointCell](b, b.payload,
 			reportvocab.UndercutSurvey[*Face]{Faces: out.faces, OK: out.ok,
 				Undecided: out.undecided, Reason: out.reason})
-		results.UndercutDiagnostics = undercutDiags
-		diags = append(diags, undercutDiags...)
+		results.UndercutDiagnostics = diagnosticsFromInternal(undercutDiags)
+		diags = append(diags, results.UndercutDiagnostics...)
 		if err := survey2d.WallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
 		}
@@ -502,8 +502,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		results.Radius = out
 		radiusDiags := reportvocab.RadiusDiagnostics[*Body, JointCell](b, b.payload,
 			reportvocab.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason}, ok)
-		results.RadiusDiagnostics = radiusDiags
-		diags = append(diags, radiusDiags...)
+		results.RadiusDiagnostics = diagnosticsFromInternal(radiusDiags)
+		diags = append(diags, results.RadiusDiagnostics...)
 		if err := survey2d.WallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
 		}

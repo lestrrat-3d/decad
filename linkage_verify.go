@@ -653,7 +653,7 @@ func publishLinkage(r *motionRun, l *Linkage, drive Drive, poses []*motionPose, 
 		Collisions:        []LinkCollision{},
 		Clearance:         c.Clearance,
 		Assessment:        c.Assessment,
-		Diagnostics:       c.Diagnostics,
+		Diagnostics:       diagnosticsFromInternal(c.Diagnostics),
 		Status:            c.Status,
 	}
 	for _, pose := range poses {

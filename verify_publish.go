@@ -51,7 +51,7 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 		Sheet:               kind == BodySheet,
 		Faces:               faces,
 		Status:              in.Status,
-		Validity:            in.Validity,
+		Validity:            validityResultToInternal(in.Validity),
 		Topology:            in.Topology,
 		Area:                in.Area,
 		Bounds:              in.Bounds,
@@ -59,26 +59,27 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 		Request:             encodedVerifyRequest(in.Request),
 		Surveys:             surveyPublication(in.Surveys),
 		WallTolerance:       in.WallTolerance,
-		WallToleranceDiag:   in.WallToleranceDiag,
+		WallToleranceDiag:   diagnosticPtrToInternal(in.WallToleranceDiag),
 		RadiusTolerance:     in.RadiusTolerance,
-		RadiusToleranceDiag: in.RadiusToleranceDiag,
-		CoreDiagnostics:     in.CoreDiagnostics,
+		RadiusToleranceDiag: diagnosticPtrToInternal(in.RadiusToleranceDiag),
+		CoreDiagnostics:     diagnosticsToInternal(in.CoreDiagnostics),
 	})
 	wall := WallResult{
 		Request: in.Request.Wall, Outcome: published.Wall.Outcome,
 		Minimum: published.Wall.Minimum, Assessment: published.Wall.Assessment,
-		Diagnostics: published.Wall.Diagnostics,
+		Diagnostics: diagnosticsFromInternal(published.Wall.Diagnostics),
 	}
 	undercut := UndercutResult{
 		Request: in.Request.Undercut, Coverage: published.Undercut.Coverage,
 		Faces: published.Undercut.Faces, Assessment: published.Undercut.Assessment,
-		Diagnostics: published.Undercut.Diagnostics,
+		Diagnostics: diagnosticsFromInternal(published.Undercut.Diagnostics),
 	}
 	return &BodyReport{
-		Body: published.Body, Status: published.Status, Validity: published.Validity,
+		Body: published.Body, Status: published.Status, Validity: validityResultFromInternal(published.Validity),
 		Topology: published.Topology, Area: published.Area, Bounds: published.Bounds,
 		Region: published.Region, Wall: wall, Undercut: undercut,
-		ConcaveRadius: published.ConcaveRadius, Diagnostics: published.Diagnostics,
+		ConcaveRadius: concaveRadiusResultFromInternal(published.ConcaveRadius),
+		Diagnostics:   diagnosticsFromInternal(published.Diagnostics),
 	}
 }
 
@@ -88,16 +89,16 @@ func surveyPublication(in surveyResults) reportvocab.SurveyPublication[*Body, *F
 		Wall: reportvocab.ScalarSurvey{
 			Reading: in.Wall.reading, Bound: in.Wall.bound, OK: in.Wall.ok, Reason: in.Wall.reason,
 		},
-		WallDiagnostics: in.WallDiagnostics,
+		WallDiagnostics: diagnosticsToInternal(in.WallDiagnostics),
 		Undercut: reportvocab.UndercutSurvey[*Face]{
 			Faces: in.Undercut.faces, OK: in.Undercut.ok,
 			Undecided: in.Undercut.undecided, Reason: in.Undercut.reason,
 		},
-		UndercutDiagnostics: in.UndercutDiagnostics,
+		UndercutDiagnostics: diagnosticsToInternal(in.UndercutDiagnostics),
 		Radius: reportvocab.ScalarSurvey{
 			Reading: in.Radius.reading, Bound: in.Radius.bound, OK: in.Radius.ok, Reason: in.Radius.reason,
 		},
-		RadiusDiagnostics: in.RadiusDiagnostics,
+		RadiusDiagnostics: diagnosticsToInternal(in.RadiusDiagnostics),
 	}
 }
 
@@ -121,14 +122,14 @@ type validityEvidence struct {
 
 // publishValidityResult adapts the body kind and sheet audit to the shared verdict.
 func publishValidityResult(body *Body, ev validityEvidence) ValidityResult {
-	return reportvocab.PublishValidity[*Body, JointCell](body, reportvocab.ValidityEvidence{
+	return validityResultFromInternal(reportvocab.PublishValidity[*Body, JointCell](body, reportvocab.ValidityEvidence{
 		Sheet:         ev.Kind == BodySheet,
 		SheetProven:   ev.Sheet == sheetAuditProven,
 		SheetViolated: ev.Sheet == sheetAuditViolated,
 		Clean:         ev.Clean,
 		Built:         ev.Built,
 		Solid:         ev.Solid,
-	})
+	}))
 }
 
 // publishUndercutResult is the in-package entry used by the sheet survey test.
@@ -142,11 +143,11 @@ func publishUndercutResult(body *Body, surveys surveyResults, req VerifyRequest,
 	}
 	published := reportvocab.PublishUndercut[*Body, *Face, JointCell](
 		body, kind == BodySolid, kind == BodySheet, faces,
-		surveyPublication(surveys).Undercut, surveys.UndercutDiagnostics, encodedVerifyRequest(req), validity,
+		surveyPublication(surveys).Undercut, diagnosticsToInternal(surveys.UndercutDiagnostics), encodedVerifyRequest(req), validity,
 	)
 	return UndercutResult{
 		Request: req.Undercut, Coverage: published.Coverage,
 		Faces: published.Faces, Assessment: published.Assessment,
-		Diagnostics: published.Diagnostics,
+		Diagnostics: diagnosticsFromInternal(published.Diagnostics),
 	}
 }

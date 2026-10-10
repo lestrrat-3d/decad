@@ -2,11 +2,11 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/units"
 )
 
-// This file exposes the verification vocabulary and report rows from
-// internal/reportvocab. The verdict rules are in docs/verification-design.md
-// §1-§3.
+// This file owns the public verification diagnostic and pair rows.
+// The verdict rules are in docs/verification-design.md §1-§3.
 
 // Status is a verification verdict. See docs/verification-design.md §6.
 type Status = reportvocab.Status
@@ -68,13 +68,96 @@ const (
 )
 
 // DiagnosticPair names two bodies in a pair finding.
-type DiagnosticPair = reportvocab.DiagnosticPair[*Body]
+type DiagnosticPair struct{ A, B *Body }
 
 // Diagnostic is a structured reason for a body or pair verdict.
-type Diagnostic = reportvocab.Diagnostic[*Body, JointCell]
+type Diagnostic struct {
+	Code        DiagnosticCode
+	Status      Status
+	Body        *Body
+	Pair        *DiagnosticPair
+	Survey      SurveyKind
+	Reading     ReadingKind
+	Observed    *Measurement
+	ObservedVec *VecMeasurement
+	ObservedBox *Box
+	Required    *units.Value
+	At          *units.Value
+	Cell        *JointCell
+	Message     string
+}
 
 // Interference is a proven overlap between two bodies.
-type Interference = reportvocab.Interference[*Body]
+type Interference struct {
+	A, B   *Body
+	Volume Measurement
+}
 
 // Clearance is a measured gap between two bodies.
-type Clearance = reportvocab.Clearance[*Body]
+type Clearance struct {
+	A, B *Body
+	Gap  Measurement
+}
+
+func diagnosticFromInternal(in reportvocab.Diagnostic[*Body, JointCell]) Diagnostic {
+	out := Diagnostic{
+		Code: in.Code, Status: in.Status, Body: in.Body,
+		Survey: in.Survey, Reading: in.Reading,
+		Observed: in.Observed, ObservedVec: in.ObservedVec, ObservedBox: in.ObservedBox,
+		Required: in.Required, At: in.At, Cell: in.Cell, Message: in.Message,
+	}
+	if in.Pair != nil {
+		out.Pair = &DiagnosticPair{A: in.Pair.A, B: in.Pair.B}
+	}
+	return out
+}
+func diagnosticToInternal(in Diagnostic) reportvocab.Diagnostic[*Body, JointCell] {
+	out := reportvocab.Diagnostic[*Body, JointCell]{
+		Code: in.Code, Status: in.Status, Body: in.Body,
+		Survey: in.Survey, Reading: in.Reading,
+		Observed: in.Observed, ObservedVec: in.ObservedVec, ObservedBox: in.ObservedBox,
+		Required: in.Required, At: in.At, Cell: in.Cell, Message: in.Message,
+	}
+	if in.Pair != nil {
+		out.Pair = &reportvocab.DiagnosticPair[*Body]{A: in.Pair.A, B: in.Pair.B}
+	}
+	return out
+}
+
+func diagnosticPtrToInternal(in *Diagnostic) *reportvocab.Diagnostic[*Body, JointCell] {
+	if in == nil {
+		return nil
+	}
+	out := diagnosticToInternal(*in)
+	return &out
+}
+
+func diagnosticPtrFromInternal(in *reportvocab.Diagnostic[*Body, JointCell]) *Diagnostic {
+	if in == nil {
+		return nil
+	}
+	out := diagnosticFromInternal(*in)
+	return &out
+}
+
+func diagnosticsFromInternal(in []reportvocab.Diagnostic[*Body, JointCell]) []Diagnostic {
+	if in == nil {
+		return nil
+	}
+	out := make([]Diagnostic, len(in))
+	for i := range in {
+		out[i] = diagnosticFromInternal(in[i])
+	}
+	return out
+}
+
+func diagnosticsToInternal(in []Diagnostic) []reportvocab.Diagnostic[*Body, JointCell] {
+	if in == nil {
+		return nil
+	}
+	out := make([]reportvocab.Diagnostic[*Body, JointCell], len(in))
+	for i := range in {
+		out[i] = diagnosticToInternal(in[i])
+	}
+	return out
+}
