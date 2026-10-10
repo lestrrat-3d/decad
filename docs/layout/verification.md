@@ -41,7 +41,7 @@ The rules for rows live in `docs/layout.md`.
 | `survey.go` | Adapts analytic wall, undercut and radius readers. See verification §6. |
 | `survey_undercut.go` | Folds three-valued undercut readings. |
 | `interference.go` | Pairwise overlap behind `Verify`. See interference §4-§8. |
-| `motion.go` / `motion_verify.go` | Motion aliases, options, and pose checks. See motion-check §2–§6. |
+| `motion.go` / `motion_verify.go` | Motion options, reports and pose checks. See motion-check §2–§6. |
 | `motion_bound.go` | Reads payload record radii for `internal/motionbound/`. |
 | `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See linkage design. |
 | `linkage_box.go` | `VerifyJointBox` and its public joint-space inputs and reports. See `docs/linkage-check-design.md`. |
