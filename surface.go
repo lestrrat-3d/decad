@@ -25,7 +25,12 @@ import (
 // SurfaceResultOption configures every feature WithSurfaceResult reaches
 // (docs/surface-design.md §3). A feature this evaluator cannot yet build as a
 // surface refuses it with [ErrUnsupported] (Table R row R1).
-type SurfaceResultOption = featureoption.SurfaceResultOption
+type SurfaceResultOption interface {
+	ExtrudeOption
+	RevolveOption
+	SweepOption
+	LoftOption
+}
 
 // WithSurfaceResult builds the feature's wall set and omits every face that
 // exists only to close the solid, publishing a sheet body — Kind() ==
@@ -33,7 +38,7 @@ type SurfaceResultOption = featureoption.SurfaceResultOption
 // payload of its own; its identity is the whole of the signal, and a repeated
 // WithSurfaceResult() is idempotent, never an error.
 func WithSurfaceResult() SurfaceResultOption {
-	return featureoption.WithSurfaceResult()
+	return surfaceResultOptionValue{featureoption.WithSurfaceResult()}
 }
 
 // refuseSheetOperand reports [ErrUnsupported] when b is live and a sheet

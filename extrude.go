@@ -39,7 +39,10 @@ import (
 // A nonzero taper leaves this file for draft_build.go's extrudeDraft.
 
 // ExtrudeOption configures Extrude.
-type ExtrudeOption = featureoption.ExtrudeOption
+type ExtrudeOption interface {
+	option.Interface
+	extrudeOption()
+}
 
 // WithTaper sets the extrude taper: a SIGNED displacement angle — which way
 // the wall leans. A positive taper leans every wall into the material as it
@@ -49,7 +52,7 @@ type ExtrudeOption = featureoption.ExtrudeOption
 // ThroughAll, Symmetric or TwoSided. WithSurfaceResult is [ErrUnsupported],
 // returned before commit. A zero taper builds the straight prism.
 func WithTaper(a units.Value) ExtrudeOption {
-	return featureoption.WithTaper(a)
+	return extrudeOptionValue{featureoption.WithTaper(a)}
 }
 
 // Extrude sweeps a profile of s along the sketch plane's normal per the
@@ -101,7 +104,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 		return nil, err
 	}
 
-	cfg, err := featureoption.DecodeExtrude(opts)
+	cfg, err := decodeExtrudeOptions(opts)
 	if err != nil {
 		return nil, err
 	}

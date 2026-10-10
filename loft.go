@@ -14,6 +14,7 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is docs/loft-design.md PR 1b: the public entry point over PR 1a's
@@ -24,7 +25,10 @@ import (
 // inside evalLoft in §4's stated order.
 
 // LoftOption configures Loft.
-type LoftOption = featureoption.LoftOption
+type LoftOption interface {
+	option.Interface
+	loftOption()
+}
 
 // WithLoftAlignment records, per loop, which recorded segment index of the
 // SECOND profile pairs with segment index 0 of the FIRST profile's
@@ -37,7 +41,7 @@ type LoftOption = featureoption.LoftOption
 // correspondences, so a repeat is [ErrDegenerate] rather than last-wins
 // (Table S row S4).
 func WithLoftAlignment(offsets ...int) LoftOption {
-	return featureoption.WithLoftAlignment(offsets...)
+	return loftOptionValue{featureoption.WithLoftAlignment(offsets...)}
 }
 
 // Loft builds a solid ruled between two profiles recorded on distinct
@@ -99,7 +103,7 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	// (docs/loft-design.md §4, amended). decad owns the option vocabulary, so
 	// a foreign concrete type — including one that embeds LoftOption to
 	// promote the sealed marker — is rejected before its Ident() ever runs.
-	cfg, err := featureoption.DecodeLoft(opts)
+	cfg, err := decodeLoftOptions(opts)
 	if err != nil {
 		return nil, err
 	}

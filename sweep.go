@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
+	"github.com/lestrrat-go/option/v3"
 )
 
 // This file routes a zero-twist line or circular-arc path through the existing
@@ -42,13 +43,16 @@ import (
 // closing face at all) stays reachable through Revolve alone.
 
 // SweepOption configures Sweep.
-type SweepOption = featureoption.SweepOption
+type SweepOption interface {
+	option.Interface
+	sweepOption()
+}
 
 // WithSweepTwist is a placeholder for a future distributed twist implementation.
 // The current evaluator accepts only zero twist; a nonzero angle is
 // ErrUnsupported and leaves the document unchanged.
 func WithSweepTwist(angle units.Value) SweepOption {
-	return featureoption.WithSweepTwist(angle)
+	return sweepOptionValue{featureoption.WithSweepTwist(angle)}
 }
 
 // Sweep moves p along path, registers the resulting solid, and returns
@@ -72,7 +76,7 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 		return nil, err
 	}
 
-	cfg, err := featureoption.DecodeSweep(opts, len(path.segments))
+	cfg, err := decodeSweepOptions(opts, len(path.segments))
 	if err != nil {
 		return nil, err
 	}
