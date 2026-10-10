@@ -778,7 +778,7 @@ draft body, `Draft`'s included:
 | 4 | landed | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20 |
 | 5 | landed | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
 | 6 | landed | DD8; SD3, SD4, two-sided SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); `NeutralFrame` and the interior neutral level |
-| 7 | active | DD8; SD3, SD4, SD12, SD20; two-sided undercut survey; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); `NeutralFrame` and the interior neutral level |
+| 7 | landed | DD8; SD3, SD4, SD12, SD20; two-sided undercut survey; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); `NeutralFrame` and the interior neutral level |
 
 The unscheduled reach, in the order a later design should take it: the
 drafted shell (DD14, the molded cup), the interior neutral level, the mitered circular
