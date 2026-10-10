@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -37,7 +38,7 @@ func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
 		_, endPlanar := span.endCap.surface.(Plane)
 		bounds := span.body.bounds
 		audit[i] = compositesweep.AuditSpan{
-			StartPlane:       startPlane,
+			StartPlane:       surfacegeom.Plane(startPlane),
 			StartPlanar:      startPlanar,
 			EndPlanar:        endPlanar,
 			EndpointSupports: sweepAuditEndpointSupports(span.body),

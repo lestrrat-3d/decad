@@ -44,20 +44,24 @@ type FeatureRef struct {
 	Role string
 }
 
-// Surface is the sealed face-geometry set.
-type Surface = surfacegeom.Surface
+// Surface is the sealed face-geometry set. A switch on it needs a default
+// because later versions may add variants.
+type Surface interface {
+	Kind() SurfaceKind
+	surface()
+}
 
 // SurfaceKind identifies a surface variant.
-type SurfaceKind = surfacegeom.SurfaceKind
+type SurfaceKind int
 
 const (
-	KindPlane    = surfacegeom.KindPlane
-	KindCylinder = surfacegeom.KindCylinder
-	KindCone     = surfacegeom.KindCone
-	KindSphere   = surfacegeom.KindSphere
-	KindTorus    = surfacegeom.KindTorus
-	KindNURBS    = surfacegeom.KindNURBS
-	KindFaceted  = surfacegeom.KindFaceted
+	KindPlane SurfaceKind = iota
+	KindCylinder
+	KindCone
+	KindSphere
+	KindTorus
+	KindNURBS
+	KindFaceted
 )
 
 // BodyKind states what a body IS: whether its boundary encloses a material
@@ -76,26 +80,132 @@ const (
 	BodySheet
 )
 
-// Plane is a planar face's geometry.
-type Plane = surfacegeom.Plane
+// Plane is a planar face's geometry in the frame's UV plane.
+type Plane struct{ Frame r3.Frame }
 
-// Cylinder is a right circular cylindrical face's geometry.
-type Cylinder = surfacegeom.Cylinder
+// Cylinder is a right circular cylinder. Origin lies on its axis, Axis is a
+// unit direction, and Radius is its radius.
+type Cylinder struct {
+	Origin r3.Vec
+	Axis   r3.Vec
+	Radius units.Value
+}
 
-// Cone is a right circular conical face's geometry.
-type Cone = surfacegeom.Cone
+// Cone is a right circular cone. Axis points toward growing radius, and
+// Radius is measured at Origin.
+type Cone struct {
+	Origin    r3.Vec
+	Axis      r3.Vec
+	Radius    units.Value
+	HalfAngle units.Value
+}
 
-// Sphere is a spherical face's geometry.
-type Sphere = surfacegeom.Sphere
+// Sphere is a spherical face with Center in millimetres.
+type Sphere struct {
+	Center r3.Vec
+	Radius units.Value
+}
 
-// Torus is a toroidal face's geometry.
-type Torus = surfacegeom.Torus
+// Torus is a toroidal face. Major measures from Center to the tube center;
+// Minor is the tube radius. A spindle torus may have Major below Minor.
+type Torus struct {
+	Center r3.Vec
+	Axis   r3.Vec
+	Major  units.Value
+	Minor  units.Value
+}
 
-// NURBSSurface is a free-form face's geometry.
-type NURBSSurface = surfacegeom.NURBSSurface
+// NURBSSurface marks a free-form face. Its control net remains private.
+type NURBSSurface struct{}
 
-// Faceted is a polygonal face's geometry.
-type Faceted = surfacegeom.Faceted
+// Faceted marks a polygonal face. Bound encloses the displacement from its
+// held polygons to the boundary patches they represent.
+type Faceted struct{ Bound units.Value }
+
+// Kind reports KindPlane.
+func (Plane) Kind() SurfaceKind { return KindPlane }
+
+// Kind reports KindCylinder.
+func (Cylinder) Kind() SurfaceKind { return KindCylinder }
+
+// Kind reports KindCone.
+func (Cone) Kind() SurfaceKind { return KindCone }
+
+// Kind reports KindSphere.
+func (Sphere) Kind() SurfaceKind { return KindSphere }
+
+// Kind reports KindTorus.
+func (Torus) Kind() SurfaceKind { return KindTorus }
+
+// Kind reports KindNURBS.
+func (NURBSSurface) Kind() SurfaceKind { return KindNURBS }
+
+// Kind reports KindFaceted.
+func (Faceted) Kind() SurfaceKind { return KindFaceted }
+
+func (Plane) surface()        {}
+func (Cylinder) surface()     {}
+func (Cone) surface()         {}
+func (Sphere) surface()       {}
+func (Torus) surface()        {}
+func (NURBSSurface) surface() {}
+func (Faceted) surface()      {}
+
+func publicSurface(s surfacegeom.Surface) Surface {
+	if s == nil {
+		return nil
+	}
+	switch v := s.(type) {
+	case surfacegeom.Plane:
+		return Plane(v)
+	case surfacegeom.Cylinder:
+		return Cylinder(v)
+	case surfacegeom.Cone:
+		return Cone(v)
+	case surfacegeom.Sphere:
+		return Sphere(v)
+	case surfacegeom.Torus:
+		return Torus(v)
+	case surfacegeom.NURBSSurface:
+		return NURBSSurface(v)
+	case surfacegeom.Faceted:
+		return Faceted(v)
+	default:
+		return borrowedSurface{inner: s}
+	}
+}
+
+// borrowedSurface keeps a future private variant inspectable through Kind.
+type borrowedSurface struct{ inner surfacegeom.Surface }
+
+func (s borrowedSurface) Kind() SurfaceKind { return SurfaceKind(s.inner.Kind()) }
+func (borrowedSurface) surface()            {}
+
+func internalSurface(s Surface) surfacegeom.Surface {
+	if s == nil {
+		return nil
+	}
+	switch v := s.(type) {
+	case Plane:
+		return surfacegeom.Plane(v)
+	case Cylinder:
+		return surfacegeom.Cylinder(v)
+	case Cone:
+		return surfacegeom.Cone(v)
+	case Sphere:
+		return surfacegeom.Sphere(v)
+	case Torus:
+		return surfacegeom.Torus(v)
+	case NURBSSurface:
+		return surfacegeom.NURBSSurface(v)
+	case Faceted:
+		return surfacegeom.Faceted(v)
+	case borrowedSurface:
+		return v.inner
+	default:
+		panic(fmt.Sprintf("unhandled public surface %T", s))
+	}
+}
 
 // Curve is the sealed edge-geometry set.
 type Curve = surfacegeom.Curve

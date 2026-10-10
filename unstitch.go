@@ -292,7 +292,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		return ne, nil
 	}
 
-	surface, err := surfacegeom.TransformSurface(srcFace.surface, xform)
+	transformed, err := surfacegeom.TransformSurface(internalSurface(srcFace.surface), xform)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 	}
 	nf := &Face{
-		surface:       surface,
+		surface:       publicSurface(transformed),
 		origins:       append([]FeatureRef(nil), srcFace.origins...),
 		area:          srcFace.area,
 		areaBound:     srcFace.areaBound,

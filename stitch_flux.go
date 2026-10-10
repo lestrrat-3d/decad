@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -407,7 +408,7 @@ func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
 }
 
 func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
-	apexBound, ok := stitchflux.ConeApexDeparture(f.denoted, cone)
+	apexBound, ok := stitchflux.ConeApexDeparture(f.denoted, surfacegeom.Cone(cone))
 	if !ok {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path cannot state how far this cone's apex sits from the apex its record denotes (docs/surface-design.md Table R row R8)`,
@@ -446,7 +447,7 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 
 	envelopes := make([]stitchflux.MassEnvelopeFace, 0, len(faces))
 	for _, f := range faces {
-		envelope := stitchflux.MassEnvelopeFace{Surface: f.surface, Area: f.area, AreaBound: f.areaBound}
+		envelope := stitchflux.MassEnvelopeFace{Surface: internalSurface(f.surface), Area: f.area, AreaBound: f.areaBound}
 		for i, loop := range f.loops {
 			for _, ce := range loop.coedges {
 				envelope.Vertices = append(envelope.Vertices, ce.Start().Position().Value)
@@ -533,7 +534,7 @@ func stitchFluxTagsDenoted(faces []*Face) bool {
 // stitchTaggedFace passes a face's surface and edge curves to the exact
 // denotation gate without giving the internal package topology ownership.
 func stitchTaggedFace(f *Face) stitchflux.TaggedFace {
-	tagged := stitchflux.TaggedFace{Denoted: f.denoted, Surface: f.surface}
+	tagged := stitchflux.TaggedFace{Denoted: f.denoted, Surface: internalSurface(f.surface)}
 	for _, loop := range f.loops {
 		for _, ce := range loop.coedges {
 			tagged.Curves = append(tagged.Curves, ce.edge.curve)

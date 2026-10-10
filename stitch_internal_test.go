@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -1310,7 +1311,7 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 	}
 	require.NotNil(t, face)
 	require.True(t, stitchflux.TagIsDenoted(stitchTaggedFace(face)))
-	exactBound, ok := stitchflux.ConeApexDeparture(face.denoted, cone)
+	exactBound, ok := stitchflux.ConeApexDeparture(face.denoted, surfacegeom.Cone(cone))
 	require.True(t, ok)
 	require.Zero(t, exactBound, "an apex the walk states exactly is charged nothing")
 
@@ -1320,7 +1321,7 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 
 	moved := cone
 	moved.Origin = cone.Origin.Add(r3.NewVec(1e-6, 0, 0))
-	movedBound, ok := stitchflux.ConeApexDeparture(face.denoted, moved)
+	movedBound, ok := stitchflux.ConeApexDeparture(face.denoted, surfacegeom.Cone(moved))
 	require.True(t, ok)
 	require.GreaterOrEqual(t, movedBound, 1e-6)
 	mFlux, mMx, _, _, err := coneFaceFluxAndMoment(face, moved, anchor, 1)

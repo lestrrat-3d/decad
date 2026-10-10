@@ -584,7 +584,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, err
 		}
-		surface, err := surfacegeom.TransformSurface(f.surface, xform)
+		transformed, err := surfacegeom.TransformSurface(internalSurface(f.surface), xform)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -593,7 +593,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
-			surface:       surface,
+			surface:       publicSurface(transformed),
 			origins:       append([]FeatureRef(nil), f.origins...),
 			area:          f.area,
 			areaBound:     f.areaBound,
