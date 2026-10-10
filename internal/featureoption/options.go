@@ -43,22 +43,14 @@ type SurfaceResultOption interface {
 	LoftOption
 }
 
-// CoilOption configures Coil.
-type CoilOption interface {
-	option.Interface
-	coilOption()
-}
-
 type extrudeOption struct{ option.Interface }
 type sweepOption struct{ option.Interface }
 type loftOption struct{ option.Interface }
-type coilOption struct{ option.Interface }
 type surfaceResultOption struct{ option.Interface }
 
 func (extrudeOption) extrudeOption()       {}
 func (sweepOption) sweepOption()           {}
 func (loftOption) loftOption()             {}
-func (coilOption) coilOption()             {}
 func (surfaceResultOption) extrudeOption() {}
 func (surfaceResultOption) revolveOption() {}
 func (surfaceResultOption) sweepOption()   {}
@@ -70,7 +62,6 @@ type identSweepTwist struct{}
 type identMitredJoins struct{}
 type identSectionScale struct{}
 type identLoftAlignment struct{}
-type identLeftHand struct{}
 
 // WithTaper records the signed extrusion taper angle.
 func WithTaper(a units.Value) ExtrudeOption {
@@ -102,11 +93,6 @@ func WithLoftAlignment(offsets ...int) LoftOption {
 	out := make([]int, len(offsets))
 	copy(out, offsets)
 	return loftOption{option.New(identLoftAlignment{}, out)}
-}
-
-// WithLeftHand reverses a coil's turn sense.
-func WithLeftHand() CoilOption {
-	return coilOption{option.New(identLeftHand{}, struct{}{})}
 }
 
 // IsSurfaceResult reports whether an option names the shared surface result.
@@ -286,28 +272,4 @@ func DecodeLoft(opts []LoftOption) (LoftConfig, error) {
 		}
 	}
 	return cfg, nil
-}
-
-// DecodeCoil checks the owned coil option and its at-most-once rule.
-func DecodeCoil(opts []CoilOption) (bool, error) {
-	leftHand := false
-	for _, raw := range opts {
-		if raw == nil {
-			return false, fmt.Errorf(`%w: a nil option names nothing to apply`, decaderr.ErrDegenerate)
-		}
-		o, ok := raw.(coilOption)
-		if !ok {
-			return false, fmt.Errorf(`%w: the coil option is not a decad coil option (%T)`, decaderr.ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identLeftHand:
-			if leftHand {
-				return false, fmt.Errorf(`%w: WithLeftHand was passed more than once`, decaderr.ErrDegenerate)
-			}
-			leftHand = true
-		default:
-			return false, fmt.Errorf(`%w: unknown coil option identifier %T`, decaderr.ErrDegenerate, ident)
-		}
-	}
-	return leftHand, nil
 }

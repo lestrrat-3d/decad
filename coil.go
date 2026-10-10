@@ -6,7 +6,6 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/coil"
-	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -47,13 +46,36 @@ const maxCoilFacets = 1 << 20
 // CoilOption configures Coil. Sealed: WithLeftHand is the one option.
 // WithSurfaceResult does not implement it, so a coil is always a solid
 // (Table CS row CS11).
-type CoilOption = featureoption.CoilOption
+type CoilOption interface {
+	coilOption()
+}
+
+type leftHandOption struct{}
+
+func (leftHandOption) coilOption() {}
 
 // WithLeftHand turns the section left-handed about the axis direction while
 // it advances along it. The default is right-handed. Passing it twice is
 // ErrDegenerate.
 func WithLeftHand() CoilOption {
-	return featureoption.WithLeftHand()
+	return leftHandOption{}
+}
+
+func decodeCoilOptions(opts []CoilOption) (bool, error) {
+	leftHand := false
+	for _, raw := range opts {
+		if raw == nil {
+			return false, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+		if _, ok := raw.(leftHandOption); !ok {
+			return false, fmt.Errorf(`%w: the coil option is not a decad coil option (%T)`, ErrDegenerate, raw)
+		}
+		if leftHand {
+			return false, fmt.Errorf(`%w: WithLeftHand was passed more than once`, ErrDegenerate)
+		}
+		leftHand = true
+	}
+	return leftHand, nil
 }
 
 // coilPayload is the evaluator's record of a coil (docs/helix-design.md):
@@ -145,7 +167,7 @@ func (d *Document) Coil(ctx context.Context, s *sketch.Sketch, p *sketch.Profile
 	if err != nil {
 		return nil, err
 	}
-	leftHand, err := featureoption.DecodeCoil(opts)
+	leftHand, err := decodeCoilOptions(opts)
 	if err != nil {
 		return nil, err
 	}
