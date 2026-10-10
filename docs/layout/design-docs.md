@@ -16,7 +16,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/evaluator-design.md` | Evaluator topology, payloads, mass properties, feature builds, and mesh booleans. |
 | `docs/tessellation-design.md` | Tessellation: curve samples, manifold proofs, source faces, certificates, boolean handoff. |
 | `docs/clearance-design.md` | Pair disjointness and bounded gap proofs. |
-| `docs/point-containment-design.md` | Public point classification and its mesh-to-body proof. |
+| `docs/point-containment-design.md` | Public point classification, distance, and mesh-to-body proofs. |
 | `docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
 | `docs/modify-design.md` | `Fillet`/`Chamfer`/`Shell` tables, section rewrite, exact offset, and build audit. |
 | `docs/spline-design.md` | Free-form kinds, exactness tiers, refusals, Tier A moments, work budget, proven brackets, and reach. |
