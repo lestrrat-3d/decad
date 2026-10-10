@@ -203,7 +203,7 @@ func TestMotionAxisRadiusReadsTheBox(t *testing.T) {
 	} {
 		spec, err := resolveMotion(Revolute{Center: tc.center, Axis: r3.NewVec(0, 0, 3), From: units.Degrees(0), To: units.Degrees(90)})
 		require.NoError(t, err)
-		rho := motionbound.MoverAxisRadius(arm.bounds, spec.Frame)
+		rho := motionbound.MoverAxisRadius(boxToInternal(arm.bounds), spec.Frame)
 		require.GreaterOrEqual(t, rho, tc.want)
 		require.InDelta(t, tc.want, rho, 1e-12)
 	}

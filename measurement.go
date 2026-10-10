@@ -12,14 +12,26 @@ import (
 )
 
 // Exactness reports whether a measured value is exact or bounded.
-type Exactness = measurement.Exactness
+type Exactness int
 
 const (
 	// Exact marks a proved exactly representable result.
-	Exact = measurement.Exact
+	Exact Exactness = iota
 	// Approximate marks a result with a proved absolute error bound.
-	Approximate = measurement.Approximate
+	Approximate
 )
+
+// String renders the exactness for diagnostics.
+func (e Exactness) String() string {
+	switch e {
+	case Exact:
+		return "Exact"
+	case Approximate:
+		return "Approximate"
+	default:
+		return fmt.Sprintf("Exactness(%d)", int(e))
+	}
+}
 
 // Measurement is a scalar value with its exactness and absolute error bound.
 type Measurement struct {
@@ -43,11 +55,11 @@ type Box struct {
 }
 
 func measurementFromInternal(m measurement.Measurement) Measurement {
-	return Measurement(m)
+	return Measurement{Value: m.Value, Exactness: Exactness(m.Exactness), Bound: m.Bound}
 }
 
 func measurementToInternal(m Measurement) measurement.Measurement {
-	return measurement.Measurement(m)
+	return measurement.Measurement{Value: m.Value, Exactness: measurement.Exactness(m.Exactness), Bound: m.Bound}
 }
 
 func measurementPtrFromInternal(m *measurement.Measurement) *Measurement {
@@ -67,14 +79,18 @@ func measurementPtrToInternal(m *Measurement) *measurement.Measurement {
 }
 
 func vecMeasurementToInternal(m VecMeasurement) measurement.VecMeasurement {
-	return measurement.VecMeasurement(m)
+	return measurement.VecMeasurement{Value: m.Value, Exactness: measurement.Exactness(m.Exactness), Bound: m.Bound}
+}
+
+func vecMeasurementFromInternal(m measurement.VecMeasurement) VecMeasurement {
+	return VecMeasurement{Value: m.Value, Exactness: Exactness(m.Exactness), Bound: m.Bound}
 }
 
 func vecMeasurementPtrFromInternal(m *measurement.VecMeasurement) *VecMeasurement {
 	if m == nil {
 		return nil
 	}
-	result := VecMeasurement(*m)
+	result := vecMeasurementFromInternal(*m)
 	return &result
 }
 
@@ -90,19 +106,23 @@ func boxPtrFromInternal(b *measurement.Box) *Box {
 	if b == nil {
 		return nil
 	}
-	result := Box(*b)
+	result := Box{Min: b.Min, Max: b.Max, Exactness: Exactness(b.Exactness), Bound: b.Bound}
 	return &result
 }
 
 func boxToInternal(b Box) measurement.Box {
-	return measurement.Box(b)
+	return measurement.Box{Min: b.Min, Max: b.Max, Exactness: measurement.Exactness(b.Exactness), Bound: b.Bound}
+}
+
+func boxFromInternal(b measurement.Box) Box {
+	return Box{Min: b.Min, Max: b.Max, Exactness: Exactness(b.Exactness), Bound: b.Bound}
 }
 
 func boxPtrToInternal(b *Box) *measurement.Box {
 	if b == nil {
 		return nil
 	}
-	result := measurement.Box(*b)
+	result := boxToInternal(*b)
 	return &result
 }
 

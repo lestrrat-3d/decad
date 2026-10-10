@@ -107,7 +107,7 @@ func (s reachSource) RestBox(i int) (motionbound.RatVec, motionbound.RatVec, boo
 	bodies := s.spec.joints[i].link.bodies
 	boxes := make([]measurement.Box, len(bodies))
 	for n, body := range bodies {
-		boxes[n] = body.bounds
+		boxes[n] = boxToInternal(body.bounds)
 	}
 	return linkagebound.RestBox(boxes)
 }
@@ -223,7 +223,7 @@ func linkStandings(spec *linkageSpec, bounds []linkBound) []linkStanding {
 
 // layerExtent reads a body's inflated rest box and delegates its exact a-extents.
 func layerExtent(b *Body, a motionbound.RatVec) (lo, hi *big.Rat, ok bool) {
-	boxLo, boxHi, ok := motionbound.BoxCornersExact(b.bounds, new(big.Rat))
+	boxLo, boxHi, ok := motionbound.BoxCornersExact(boxToInternal(b.bounds), new(big.Rat))
 	if !ok {
 		return nil, nil, false
 	}

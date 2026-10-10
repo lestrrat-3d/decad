@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
@@ -34,7 +35,13 @@ func secondMoments(record momentinput.Profile) (decad.SecondMoments, error) {
 	if err != nil {
 		return decad.SecondMoments{}, err
 	}
-	return decad.SecondMoments{UU: uu, UV: uv, VV: vv}, nil
+	return decad.SecondMoments{
+		UU: rootRecordMeasurement(uu), UV: rootRecordMeasurement(uv), VV: rootRecordMeasurement(vv),
+	}, nil
+}
+
+func rootRecordMeasurement(m measurement.Measurement) decad.Measurement {
+	return decad.Measurement{Value: m.Value, Exactness: decad.Exactness(m.Exactness), Bound: m.Bound}
 }
 
 func momentLine(u0, v0, u1, v1 float64) sectionrecord.CurveSegment {

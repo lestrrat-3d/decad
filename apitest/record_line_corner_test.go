@@ -129,7 +129,7 @@ func requireCrossingPolygon(t *testing.T, record momentinput.Profile, lines [][2
 	require.NoError(t, err)
 	requireRatEncloses(t, `centroid u`, centroid.Value.X, cb, wantCentroid.u)
 	requireRatEncloses(t, `centroid v`, centroid.Value.Y, cb, wantCentroid.v)
-	return area
+	return rootRecordMeasurement(area)
 }
 
 // longLinesThrough extends each side of a polygon to a line reaching far past

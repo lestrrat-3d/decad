@@ -453,7 +453,9 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	// DiagSurveyPrerequisite; publishBodyResult decides that from Validity
 	// alone, without a Surveys record.
 	if validity.Outcome == ValidityInvalid {
-		if _, _, err := bodyReadingDiagnostics(ctx, b, bodyReadingSet{Area: area, Bounds: bounds}, cfg.Rel); err != nil {
+		if _, _, err := bodyReadingDiagnostics(ctx, b, bodyReadingSet{
+			Area: measurementToInternal(area), Bounds: boxToInternal(bounds),
+		}, cfg.Rel); err != nil {
 			return nil, err
 		}
 		return publishBodyResult(bodyPublishInput{
@@ -536,8 +538,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		volPtr, cenPtr = &vol, &cen
 	}
 	readings := bodyReadingSet{
-		Area:     area,
-		Bounds:   bounds,
+		Area:     measurementToInternal(area),
+		Bounds:   boxToInternal(bounds),
 		Volume:   measurementPtrToInternal(volPtr),
 		Centroid: vecMeasurementPtrToInternal(cenPtr),
 		Wall:     measurementPtrToInternal(wallReading),
