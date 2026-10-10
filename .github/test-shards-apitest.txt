@@ -20,7 +20,12 @@
 0	1059.82	TestLoftEmbeddedSixtyToothGearFeatures
 1	0.01	TestArcSegExactQuarterDisk
 1	0.01	TestBlindPocketPlacedAndVerified
+1	0.00	TestBodyPatchCoincidentFacesRefuseVerifiedMesh
+1	0.00	TestBodyPatchCurvedRimMeshRefusesWithoutSharedChording
 1	0.00	TestBodyPatchDoublesAFlatSheetWithANegatedNormal
+1	0.00	TestBodyPatchPlanarCappedTubeTessellates
+1	0.00	TestBodyPatchPlanarHoleFillTessellates
+1	0.00	TestBodyPatchPlanarMeshPlacementAndVerification
 1	0.01	TestBooleanNilContextIsDegenerate
 1	0.01	TestCapBlendComputedStopMassBounds
 1	0.00	TestCapBlendPartialLoopSelectionRefused

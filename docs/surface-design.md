@@ -1955,6 +1955,19 @@ crossing and whole-shell orientation proofs; the open mesh does not run the
 signed-volume audit, whose sum depends on the anchor when caps are absent.
 The sheet mesh carries no occupied-volume proof.
 
+An all-planar `Body.Patch` result tessellates when every face has a zero-bound
+normal and only `Line3` edges. `tessellateBodyPatch` triangulates the live
+faces over one shared vertex table. Each new fill's triangles use the
+opposite direction from the source face's triangles along their shared rim;
+the whole set reverses under a later reflected placement. A filled open rim
+therefore has no mesh free edge, and an unfilled rim remains a mesh free edge.
+The sheet audit checks both cases. Each face bound includes its largest
+vertex bound and its `axialDelta`; the area proof charges those terms per
+triangle. `VerifyBoundary` and `VerifyAll` also check facet contact. A
+`Body.Patch` result with a curved face or edge, or a face with nonzero
+`normalBound`, refuses tessellation until it can share the source feature's
+chording. No `Body.Patch` sheet publishes an occupied-volume proof.
+
 **A stitched `BodySolid` is a different case from every sheet above, and its
 own mesh follows §14 Table D row 5.** A
 stitched solid is not a sheet — Table X's whole subject — so nothing above
