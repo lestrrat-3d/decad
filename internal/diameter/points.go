@@ -108,5 +108,5 @@ func LowerForDisplacement(d, displacement float64) (float64, bool) {
 }
 
 func usableMagnitude(v float64) bool {
-	return v >= 0 && !math.IsNaN(v) && !math.IsInf(v, 0)
+	return v >= 0 && v <= math.MaxFloat64
 }
