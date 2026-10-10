@@ -366,7 +366,7 @@
 2	1.15	TestFacetedReadingsReportEachVertexsOwnBound
 2	0.00	TestFilletSphereWalkRequiresExactRecordedRadius
 2	0.00	TestFitSplineAllCoincidentReturnsNoSpans
-2	0.00	TestFitSplineTrimmedRangeRefusesAtFullDomainGate
+2	0.00	TestFitSplineTrimmedRangePreservesSource
 2	5.20	TestFloatRatMatchesSetFloat64
 2	1.18	TestFreeformArcLengthBracketsAtExtremeScale
 2	0.00	TestFreeformBezierSpansRefusals

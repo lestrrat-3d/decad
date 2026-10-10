@@ -456,6 +456,7 @@
 2	0.00	TestLoftChainMultiCellRibbonFreeEdgesAndArea
 2	0.00	TestLoftContextCancellation
 2	0.00	TestLoftEmptyAlignmentPayload
+2	0.01	TestLoftEmbeddedFitFlanksKeepOriginalCurve
 2	1.02	TestLoftHelicalToothClearsDefaultTolerance
 2	0.23	TestLoftHugeCircleRefusesNonFiniteVolume
 2	0.00	TestLoftPlacedAccessorExactness

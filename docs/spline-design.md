@@ -43,32 +43,32 @@ Three tables are normative:
 | what stays refused forever | Table R §4 |
 | landing order | §10 |
 
-## 2. Scope — whole entities, joined end to end
+## 2. Scope — certified ranges
 
 The evaluator accepts a free-form segment whose recorded range spans the
-entity's FULL domain, in walk order. It accepts no other free-form range,
-because no other free-form range is recordable (§2.1).
+entity's full domain, in walk order. It also accepts a certified `FitSplineSeg`
+fragment from seam §1. Other free-form fragments are unrecordable (§2.1).
 
-A recorded free-form range is therefore always `[0, 1]` or `[1, 0]`. Every
-construction here may assume it, and MUST NOT carry a partial-domain path that
-cannot be reached — dead exactness machinery is worse than none, because a later
-reader trusts it.
+Other free-form recorded ranges are always `[0, 1]` or `[1, 0]`. The fit-spline
+conversion restricts the original cubic pieces to its certified range using
+exact rational de Casteljau splits; it does not refit the points.
 
-### 2.1 A trimmed free-form fragment is unrecordable
+### 2.1 An uncertified free-form fragment is unrecordable
 
-`geom.BoundaryEdge.TExact` is true for a CUT bound only when sketch's
-closed-form kernel placed it, and that kernel runs only when BOTH curves of the
-pair are a `Line`, `Circle` or `Arc`. Every contact involving a free-form curve
-is sampled — a line crossing a spline included, a line TANGENT to one included.
-So a free-form fragment always reports `TExact = false`, and seam §1 rejects it
-as `ErrUnrecordableProfile`.
+`geom.BoundaryEdge.TExact` is true for a cut bound when sketch certifies its
+parameter and the whole arrangement. Sketch certifies the narrow scene of two
+fit-spline flanks, their tip arc and a root circle using polynomial bounds;
+the two root-circle cuts then reach Decad as exact ranges. Other contacts
+involving a free-form curve are sampled and report `TExact = false`; seam §1
+rejects their fragments as `ErrUnrecordableProfile`.
 
 A WHOLE edge is bounded by the curve's own domain ends, not by a contact, so
 `recordEdge` never consults `TExact` for it (seam §1). A closed spline, and a
 chain of free-form curves joined at shared endpoints, record cleanly.
 
-**Public consequence, and it MUST be documented on `Extrude`/`Revolve`:** a
-free-form curve must meet other curves at shared endpoints, never by crossing.
+**Public consequence, and it MUST be documented on `Extrude`/`Revolve`:** outside
+the certified fit-spline/circle case, a free-form curve must meet other curves
+at shared endpoints, never by crossing.
 The error names a cause the caller cannot guess, so the doc comment states the
 remedy — join the endpoints in the sketch — beside the sentinel.
 
@@ -169,7 +169,7 @@ exactly → `ErrUnrecordableProfile`.
 
 | # | Condition | Sentinel | Permanent from decad's side |
 |---|---|---|---|
-| **R1** | free-form fragment (`TExact` false) | `ErrUnrecordableProfile` | yes, §2.1 |
+| **R1** | free-form fragment with `TExact` false | `ErrUnrecordableProfile` | yes, §2.1 |
 | **R2** | `EllipticalArcSeg` reaches a build or an integral | `ErrUnsupported` | yes, §2.2 |
 | **R3** | free-form walk in a section a `Shell` offsets | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
@@ -505,9 +505,11 @@ fit set collapses to one active point and zero spans, which reaches R14 with
 no special-case code: the identical shape the length bracket already refuses
 on its own terms.
 
-Every recorded free-form range is `[0, 1]` or `[1, 0]` (§2); a `FitSplineSeg`
-trimmed to any other range refuses through `requireFullFreeformRange`, the
-same "full domain" cause every other Tier A kind reports.
+`FitSplineSeg` accepts a certified subrange of `[0, 1]` and restricts each
+intersected cubic Bézier span with exact rational de Casteljau splits. The
+record's direction is applied after restriction. A range outside `[0, 1]` or
+with equal ends is `ErrDegenerate`; the other Tier A kinds still require the
+full domain.
 
 **R16.** `geom.NewFitInterpolant` returns `ErrNonFiniteFitInterpolant` when
 finite fit coordinates give a cumulative chord parameter or a span coefficient
@@ -1725,9 +1727,9 @@ first four increments.
    branch: the neighbour's pinned join point is elsewhere and the loop stays
    open. Exported parameters retire R2 only together with an exact endpoint
    representation that preserves the shared join.
-3. **Closed-form free-form intersection**, so a cut free-form fragment can report
-   `TExact = true`. Retires R1 and lifts §2's whole-entities-only scope, letting
-   free-form curves cross other curves in a sketch. Large upstream effort.
+3. **General free-form intersection certification**, so cuts outside sketch's
+   four-source fit-spline/circle case can report `TExact = true`. Retires the
+   remaining R1 cases. Large upstream effort.
 
 ## 10. Increments
 
