@@ -143,7 +143,7 @@ func MeridianSamples(lift revolvemesh.RevolveLift, loop sectionrecord.LoopRecord
 				return nil, 0, fmt.Errorf(`%w: a free-form revolve meridian has no certified station chain`, decaderr.ErrUnsupported)
 			}
 			chain := chains[k]
-			for i := 0; i < n; i++ {
+			for i := range n {
 				cell := i
 				if w.Reversed {
 					cell = n - 1 - i
