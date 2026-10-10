@@ -314,6 +314,21 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return body, nil
 		}
+		if sp, ok, err := tryStackedBlindCut(ctx, a, b); err != nil {
+			if errors.Is(err, ErrUnsupported) {
+				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
+			}
+			return nil, err
+		} else if ok {
+			body, err := evalStackedContext(ctx, d, ref, sp)
+			if err != nil {
+				return nil, err
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			return body, nil
+		}
 		if sp, ok, err := tryBlindStackedCut(ctx, a, b); err != nil {
 			if errors.Is(err, ErrUnsupported) {
 				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))

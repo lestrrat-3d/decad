@@ -189,6 +189,91 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	return sp, true, nil
 }
 
+// tryStackedBlindCut splits the slab containing a blind tool's inner end.
+// Every slab the tool reaches then needs its own whole-loop cut proof.
+func tryStackedBlindCut(ctx context.Context, a, b *Body) (stackedPrismPayload, bool, error) {
+	sp, ok := a.payload.(stackedPrismPayload)
+	if !ok || len(sp.outerRuns()) != 1 {
+		return stackedPrismPayload{}, false, nil
+	}
+	for _, slab := range sp.slabs {
+		if len(slab.Regions) != 1 {
+			return stackedPrismPayload{}, false, nil
+		}
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	outer := sp.outerPrism()
+	proxy := &Body{payload: outer}
+	_, tool, ok, err := admitPrismPairBudget(budget, proxy, b)
+	if err != nil || !ok {
+		return stackedPrismPayload{}, false, err
+	}
+	if len(tool.profile.Holes) != 0 {
+		return stackedPrismPayload{}, false, nil
+	}
+	trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, tool.profile.Outer, tool.profile.Holes)
+	if err != nil || trimmed {
+		return stackedPrismPayload{}, false, err
+	}
+	z0, z1, ok := prismplacement.ShiftedInterval(prismPlacementOf(outer), prismPlacementOf(tool))
+	if !ok {
+		return stackedPrismPayload{}, false, nil
+	}
+	first := proofarith.FloatRat(sp.slabs[0].Z0)
+	last := proofarith.FloatRat(sp.slabs[len(sp.slabs)-1].Z1)
+	if first == nil || last == nil {
+		return stackedPrismPayload{}, false, nil
+	}
+	openAtTop := z0.Cmp(first) > 0 && z0.Cmp(last) < 0 && z1.Cmp(last) >= 0
+	openAtBottom := z0.Cmp(first) <= 0 && z1.Cmp(first) > 0 && z1.Cmp(last) < 0
+	if !openAtTop && !openAtBottom {
+		return stackedPrismPayload{}, false, nil
+	}
+	inner, innerDelta := z0, tool.z0Delta
+	if openAtBottom {
+		inner, innerDelta = z1, tool.z1Delta
+	}
+	split := -1
+	for k, slab := range sp.slabs {
+		lower, upper := proofarith.FloatRat(slab.Z0), proofarith.FloatRat(slab.Z1)
+		if lower != nil && upper != nil && inner.Cmp(lower) > 0 && inner.Cmp(upper) < 0 {
+			split = k
+			break
+		}
+	}
+	if split < 0 {
+		return stackedPrismPayload{}, false, nil
+	}
+	innerHeld, _ := inner.Float64()
+	if innerHeld <= sp.slabs[split].Z0 || innerHeld >= sp.slabs[split].Z1 {
+		return stackedPrismPayload{}, false, nil
+	}
+	innerDelta = proofbound.AbsSumUpper(innerDelta, proofarith.RationalFloatError(inner, innerHeld))
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(outer), prismPlacementOf(tool))
+	if err != nil {
+		return stackedPrismPayload{}, false, err
+	}
+	lower, upper := sp.slabs[split], sp.slabs[split]
+	lower.Z1, lower.Z1Delta = innerHeld, innerDelta
+	upper.Z0, upper.Z0Delta = innerHeld, innerDelta
+	result := sp
+	result.slabs = make([]stackedrecord.Slab, len(sp.slabs)+1)
+	copy(result.slabs, sp.slabs[:split])
+	result.slabs[split], result.slabs[split+1] = lower, upper
+	copy(result.slabs[split+2:], sp.slabs[split+1:])
+	prior := make([]stackedrecord.Interface, len(result.slabs)-1)
+	copy(prior, sp.interfaces[:split])
+	copy(prior[split+1:], sp.interfaces[split:])
+	active := make([]bool, len(result.slabs))
+	for k := range active {
+		active[k] = k <= split
+		if openAtTop {
+			active[k] = k > split
+		}
+	}
+	return cutStackedSlabs(ctx, budget, result, outer, tool, reexpress, active, prior)
+}
+
 // tryStackedThroughCut applies a spanning prism tool to every slab. Each
 // private scene proves either a new region or that the tool lies wholly in an
 // existing hole and leaves that slab unchanged.
@@ -222,10 +307,26 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
+	active := make([]bool, len(sp.slabs))
+	for i := range active {
+		active[i] = true
+	}
+	return cutStackedSlabs(ctx, budget, sp, outer, tool, reexpress, active, sp.interfaces)
+}
+
+// cutStackedSlabs proves each affected section using its own sketch scene.
+// Inactive slabs retain their section, and prior names the exposed side of
+// any existing nonmonotone interface after an optional slab split.
+func cutStackedSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp stackedPrismPayload,
+	outer, tool prismPayload, reexpress *prismReexpression, active []bool,
+	prior []stackedrecord.Interface) (stackedPrismPayload, bool, error) {
 	result := sp
 	result.slabs = append([]stackedrecord.Slab(nil), sp.slabs...)
-	result.interfaces = make([]stackedrecord.Interface, len(sp.interfaces))
+	result.interfaces = make([]stackedrecord.Interface, len(prior))
 	for k, slab := range sp.slabs {
+		if !active[k] {
+			continue
+		}
 		if err := budget.Err(); err != nil {
 			return stackedPrismPayload{}, false, err
 		}
@@ -278,7 +379,8 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.A),
 			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.B, reexpress.Delta))
 	}
-	result.interfaces, err = stackedrecord.Derive(ctx, result.slabs, sp.interfaces)
+	var err error
+	result.interfaces, err = stackedrecord.Derive(ctx, result.slabs, prior)
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}

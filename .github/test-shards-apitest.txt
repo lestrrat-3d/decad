@@ -10,7 +10,7 @@
 #   shard 1:   43.21s over 146 tests
 #   shard 2:   43.28s over 576 tests
 #   shard 3:   43.21s over 146 tests
-#   shard 4:   43.21s over 147 tests
+#   shard 4:   43.26s over 149 tests
 #   shard 5:   43.21s over 147 tests
 #
 0	0.01	TestArcSegExactQuarterDisk
@@ -1269,6 +1269,8 @@
 4	0.08	TestShellCupWallThickness
 4	0.01	TestShellCupWallToolVerdict
 4	0.12	TestSplineAndChordProfileMoments
+4	0.02	TestStackedBlindCutPreservesCounterboreShoulder
+4	0.03	TestStackedBlindCutSplitsExistingSlab
 4	0.01	TestStitchBoxReachesAProvenClearanceGap
 4	2.19	TestStitchCurvedRevolveSurfaceKindsTessellate
 4	0.01	TestStitchCurvedVolumeBoundEncloses

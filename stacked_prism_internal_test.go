@@ -164,6 +164,9 @@ func TestBlindStackedAdmissionLeavesOtherCutsToMesh(t *testing.T) {
 	_, admitted, err := tryStackedThroughCut(t.Context(), pocket, blindAgain)
 	require.NoError(t, err)
 	require.False(t, admitted)
+	_, admitted, err = tryStackedBlindCut(t.Context(), pocket, blindAgain)
+	require.NoError(t, err)
+	require.False(t, admitted, "the tool ends exactly at an existing interface")
 }
 
 // holedCupRecord is a k = 1 cup's stacked record, hand-built from rectangles:
