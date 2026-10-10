@@ -94,9 +94,9 @@ func TestLoftFromPointKeepsFittedFarBoundary(t *testing.T) {
 	require.InDelta(t, wantVolume, volume.Value.Base(), volume.Bound.Base()+1e-5)
 	turn, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(30))
 	require.NoError(t, err)
-	copy, err := body.PlacedCopy(t.Context(), turn)
+	placed, err := body.PlacedCopy(t.Context(), turn)
 	require.NoError(t, err)
-	copyMesh, err := copy.Tessellate(t.Context(), units.Millimeters(0.01),
+	copyMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.01),
 		decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	require.True(t, copyMesh.BoundaryVerified())

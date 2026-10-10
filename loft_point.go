@@ -129,7 +129,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 		return nil, fmt.Errorf("%w: point loft chords %d and %d can meet their source curves",
 			ErrUnsupported, failure.ChordA, failure.ChordB)
 	}
-	cap, err := triangulation.Triangulate(ctx, pair.W, [][]int{idx})
+	capTriangles, err := triangulation.Triangulate(ctx, pair.W, [][]int{idx})
 	if err != nil {
 		return nil, triangulation.WrapLoftError(err)
 	}
@@ -146,8 +146,8 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 			return nil, errLoftPointUnrepresentable("far section vertex")
 		}
 	}
-	tris := make([][3]int, 0, len(pair.W)+len(cap))
-	src := make([]int, 0, len(pair.W)+len(cap))
+	tris := make([][3]int, 0, len(pair.W)+len(capTriangles))
+	src := make([]int, 0, len(pair.W)+len(capTriangles))
 	groups := make([]facetGroup, len(record.profile.Outer.Segments)+1)
 	for j, seg := range record.profile.Outer.Segments {
 		_, planar := seg.(lineSeg)
@@ -161,7 +161,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 		tris = append(tris, [3]int{0, jn + 1, j + 1})
 		src = append(src, pair.Segment[j])
 	}
-	for _, tri := range cap {
+	for _, tri := range capTriangles {
 		tris = append(tris, [3]int{tri[0] + 1, tri[1] + 1, tri[2] + 1})
 		src = append(src, capGroup)
 	}
