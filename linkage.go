@@ -13,7 +13,6 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the linkage vocabulary of docs/linkage-check-design.md §2 and
@@ -240,15 +239,12 @@ type JointLimits struct {
 
 // JointOption configures a joint built by Link.Revolute or Link.Prismatic.
 type JointOption interface {
-	option.Interface
 	jointOption()
 }
 
-type jointOption struct{ option.Interface }
+type jointOption struct{ limits JointLimits }
 
 func (jointOption) jointOption() {}
-
-type identJointLimits struct{}
 
 // WithJointLimits declares the joint's working range [minimum, maximum], in
 // the joint's Kind: an Angle for a revolute, a Length for a prismatic. A
@@ -257,7 +253,7 @@ type identJointLimits struct{}
 // pose then lies outside the working range, and only a drive that visits it is
 // refused.
 func WithJointLimits(minimum, maximum units.Value) JointOption {
-	return jointOption{option.New(identJointLimits{}, JointLimits{Min: minimum, Max: maximum})}
+	return jointOption{limits: JointLimits{Min: minimum, Max: maximum}}
 }
 
 // resolveJointOptions folds a joint's options; the last WithJointLimits wins.
@@ -267,10 +263,11 @@ func resolveJointOptions(opts []JointOption, kind units.Kind) (*JointLimits, err
 		if o == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		v, ok := option.Get[JointLimits](o)
+		owned, ok := o.(jointOption)
 		if !ok {
-			return nil, fmt.Errorf(`%w: a joint option carries no value`, ErrDegenerate)
+			return nil, fmt.Errorf(`%w: the joint option is not a decad joint option (%T)`, ErrDegenerate, o)
 		}
+		v := owned.limits
 		if err := motionbound.MotionKinds(kind, v.Min, v.Max); err != nil {
 			return nil, err
 		}
