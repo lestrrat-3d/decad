@@ -95,7 +95,7 @@ func TestMitredSweepJoinPlanesAndWallsAreExact(t *testing.T) {
 	_, mp := mitredTreeBranch(t)
 	points := []r3.Vec{mp.path.Start()}
 	for _, r := range mp.path.records {
-		points = append(points, r.end)
+		points = append(points, r.End)
 	}
 	n := len(points) - 1
 	stride := len(mp.exact) / (n + 1)

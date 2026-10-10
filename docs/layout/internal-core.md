@@ -39,7 +39,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines, plane gates and angle bounds. See sweep §3. |
-| `internal/sweepinput/` | Exact path and recorded section gates for Sweep. See sweep §3, §5, §15.4. |
+| `internal/sweepinput/` | Exact path records, tangent gates and recorded section gates for Sweep. See sweep §3, §5, §15.4. |
 | `internal/sweepmitre/` | Mitred profile gates, exact sections and measurements. See sweep §16. |
 | `internal/coil/` | Coil stations, axis coordinates, moments and closed forms. See helix §5, §7. |
 | `internal/coilshell/` | Builds the held coil shell and mesh proofs. See helix §5, §8. |
