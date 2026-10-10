@@ -50,23 +50,23 @@ func TestPrismGroupRegionsDisjointProof(t *testing.T) {
 func TestPrismGroupPayloadAudit(t *testing.T) {
 	doc := New()
 	_, base := internalBoxGroup(t, doc)
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(base)))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: base.slabs, Interfaces: base.interfaces}))
 	cases := []struct {
 		name   string
 		change func(*stackedPrismPayload)
 		want   error
 	}{
 		{"an interface", func(sp *stackedPrismPayload) {
-			sp.interfaces = []prismSlabInterface{{}}
+			sp.interfaces = []stackedrecord.Interface{{}}
 		}, ErrUnsupported},
-		{"empty interval", func(sp *stackedPrismPayload) { sp.slabs[0].z1 = sp.slabs[0].z0 }, ErrDegenerate},
-		{"empty region", func(sp *stackedPrismPayload) { sp.slabs[0].regions[1] = profileRecord{} }, ErrDegenerate},
+		{"empty interval", func(sp *stackedPrismPayload) { sp.slabs[0].Z1 = sp.slabs[0].Z0 }, ErrDegenerate},
+		{"empty region", func(sp *stackedPrismPayload) { sp.slabs[0].Regions[1] = profileRecord{} }, ErrDegenerate},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sp := cloneStackedForAudit(base)
 			tc.change(&sp)
-			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedRecordOf(sp)), tc.want)
+			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}), tc.want)
 		})
 	}
 }
@@ -88,7 +88,7 @@ func TestPrismGroupSixHoleCutIsUndisplaced(t *testing.T) {
 		require.NoError(t, err)
 	}
 	sp := group.payload.(stackedPrismPayload)
-	require.Len(t, sp.slabs[0].regions, 6)
+	require.Len(t, sp.slabs[0].Regions, 6)
 	require.Zero(t, sp.sectionDelta)
 	pp, ok, err := tryPrismGroupCut(t.Context(), plate, group)
 	require.NoError(t, err)

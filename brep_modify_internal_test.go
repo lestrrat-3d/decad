@@ -160,7 +160,7 @@ func TestBrepModifySB2RefusesAPrismGroup(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	group, sp := internalBoxGroup(t, doc)
-	require.Len(t, sp.slabs[0].regions, 2)
+	require.Len(t, sp.slabs[0].Regions, 2)
 	requireBrepModifyRefuses(t, group, "brep-modify SB2")
 	_, err := brepOfStacked(t.Context(), sp)
 	require.ErrorIs(t, err, ErrUnsupported)

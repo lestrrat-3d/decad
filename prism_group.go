@@ -48,10 +48,10 @@ func prismGroupOperandOf(b *Body) (prismGroupOperand, bool) {
 			return prismGroupOperand{}, false
 		}
 		slab := p.slabs[0]
-		proxy := prismPayload{profile: slab.regions[0], frame: p.frame, xform: p.xform,
-			z0: slab.z0, z1: slab.z1, z0Delta: slab.z0Delta, z1Delta: slab.z1Delta,
+		proxy := prismPayload{profile: slab.Regions[0], frame: p.frame, xform: p.xform,
+			z0: slab.Z0, z1: slab.Z1, z0Delta: slab.Z0Delta, z1Delta: slab.Z1Delta,
 			sectionDelta: p.sectionDelta}
-		return prismGroupOperand{proxy: proxy, regions: slab.regions, group: true}, true
+		return prismGroupOperand{proxy: proxy, regions: slab.Regions, group: true}, true
 	default:
 		return prismGroupOperand{}, false
 	}
@@ -208,12 +208,12 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, sce
 		return nil, false, err
 	}
 	sp := stackedPrismPayload{
-		slabs: []prismSlab{{regions: regions, z0: oa.proxy.z0, z1: oa.proxy.z1,
-			z0Delta: z0Delta, z1Delta: z1Delta}},
+		slabs: []stackedrecord.Slab{{Regions: regions, Z0: oa.proxy.z0, Z1: oa.proxy.z1,
+			Z0Delta: z0Delta, Z1Delta: z1Delta}},
 		frame: oa.proxy.frame, xform: oa.proxy.xform,
 		sectionDelta: proofbound.AbsSumUpper(max(inputDelta, disjointWalk), cutDelta),
 	}
-	if err := stackedrecord.Falsify(ctx, stackedRecordOf(sp)); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
 		return nil, false, err
 	}
 	return sp, true, nil

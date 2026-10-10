@@ -58,7 +58,7 @@ func TestPatternedGroupDisplacement(t *testing.T) {
 		tool, err := disc.Patterned(t.Context(), LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 6})
 		require.NoError(t, err)
 		sp := patternedGroup(t, tool)
-		require.Len(t, sp.slabs[0].regions, 6)
+		require.Len(t, sp.slabs[0].Regions, 6)
 		require.Zero(t, sp.sectionDelta)
 		got, err := Cut(t.Context(), plate, tool)
 		require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestPatternedSixPinsGroup(t *testing.T) {
 	group, err := pin.Patterned(t.Context(), CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 6})
 	require.NoError(t, err)
 	sp := patternedGroup(t, group)
-	require.Len(t, sp.slabs[0].regions, 6)
+	require.Len(t, sp.slabs[0].Regions, 6)
 	require.Positive(t, sp.sectionDelta)
 	twin := patternedPrism(t, New(), 20, 0, 0, 0, 2)
 	copies, err := twin.PatternCopies(t.Context(), CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 6})
@@ -131,7 +131,7 @@ func TestPatternedSixPinsGroup(t *testing.T) {
 	for i, c := range copies {
 		pp, ok := c.payload.(prismPayload)
 		require.True(t, ok)
-		require.Equal(t, pp.profile, sp.slabs[0].regions[i+1], "a copy and a group instance are the same record")
+		require.Equal(t, pp.profile, sp.slabs[0].Regions[i+1], "a copy and a group instance are the same record")
 		require.LessOrEqual(t, pp.sectionDelta, sp.sectionDelta)
 	}
 }

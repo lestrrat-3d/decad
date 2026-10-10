@@ -15,22 +15,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// A slab is one constant section over an axial interval. Its one region is
-// kept in a slice so the record can later admit disjoint sections per slab.
-type prismSlab struct {
-	regions          []profileRecord
-	z0, z1           float64
-	z0Delta, z1Delta float64
-}
-
-type prismSlabInterface struct {
-	lowerExposed []profileRecord
-	upperExposed []profileRecord
-}
-
 type stackedPrismPayload struct {
-	slabs        []prismSlab
-	interfaces   []prismSlabInterface
+	slabs        []stackedrecord.Slab
+	interfaces   []stackedrecord.Interface
 	frame        r3.Frame
 	xform        r3.Transform
 	sectionDelta float64
@@ -46,7 +33,7 @@ func (sp stackedPrismPayload) placed(ctx context.Context, d *Document, ref produ
 func (sp stackedPrismPayload) axialDelta() float64 {
 	var delta float64
 	for _, slab := range sp.slabs {
-		delta = max(delta, slab.z0Delta, slab.z1Delta)
+		delta = max(delta, slab.Z0Delta, slab.Z1Delta)
 	}
 	return delta
 }
@@ -54,10 +41,10 @@ func (sp stackedPrismPayload) axialDelta() float64 {
 func (sp stackedPrismPayload) outerPrism() prismPayload {
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
 	return prismPayload{
-		profile: profileRecord{Outer: first.regions[0].Outer},
+		profile: profileRecord{Outer: first.Regions[0].Outer},
 		frame:   sp.frame, xform: sp.xform, sectionDelta: sp.sectionDelta,
-		z0: first.z0, z0Delta: first.z0Delta,
-		z1: last.z1, z1Delta: last.z1Delta,
+		z0: first.Z0, z0Delta: first.Z0Delta,
+		z1: last.Z1, z1Delta: last.Z1Delta,
 	}
 }
 
@@ -71,7 +58,7 @@ func (sp stackedPrismPayload) outerPrism() prismPayload {
 // witnesses read.
 func (sp stackedPrismPayload) outerRuns() []prismPayload {
 	base := sp.outerPrism()
-	planned := stackedrecord.OuterRuns(stackedRecordOf(sp).Slabs)
+	planned := stackedrecord.OuterRuns(sp.slabs)
 	runs := make([]prismPayload, len(planned))
 	for i, slab := range planned {
 		run := base
@@ -133,45 +120,7 @@ func stackedBoundsContext(ctx context.Context, sp stackedPrismPayload, outerDelt
 // isGroup reports whether the payload is a prism group
 // (docs/mirror-pattern-design.md §6.3): one slab holding two or more regions.
 func (sp stackedPrismPayload) isGroup() bool {
-	return len(sp.slabs) == 1 && len(sp.slabs[0].regions) >= 2
-}
-
-// stackedRecordOf adapts the root payload's slab fields for the record audit.
-func stackedRecordOf(sp stackedPrismPayload) stackedrecord.Record {
-	out := stackedrecord.Record{
-		Slabs:      make([]stackedrecord.Slab, len(sp.slabs)),
-		Interfaces: make([]stackedrecord.Interface, len(sp.interfaces)),
-	}
-	for i, slab := range sp.slabs {
-		out.Slabs[i] = stackedSlabRecord(slab)
-	}
-	for i, face := range sp.interfaces {
-		out.Interfaces[i] = stackedrecord.Interface{
-			LowerExposed: face.lowerExposed, UpperExposed: face.upperExposed,
-		}
-	}
-	return out
-}
-
-func stackedSlabRecord(slab prismSlab) stackedrecord.Slab {
-	return stackedrecord.Slab{
-		Regions: slab.regions, Z0: slab.z0, Z1: slab.z1,
-		Z0Delta: slab.z0Delta, Z1Delta: slab.z1Delta,
-	}
-}
-
-// stackedInterfaces derives interface records and adapts them for the payload.
-func stackedInterfaces(ctx context.Context, slabs []prismSlab, prior []prismSlabInterface) ([]prismSlabInterface, error) {
-	record := stackedRecordOf(stackedPrismPayload{slabs: slabs, interfaces: prior})
-	derived, err := stackedrecord.Derive(ctx, record.Slabs, record.Interfaces)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]prismSlabInterface, len(derived))
-	for i, face := range derived {
-		out[i] = prismSlabInterface{lowerExposed: face.LowerExposed, upperExposed: face.UpperExposed}
-	}
-	return out, nil
+	return len(sp.slabs) == 1 && len(sp.slabs[0].Regions) >= 2
 }
 
 // stackedInterfacePatches passes the recorded columns to the shared patch plan.
@@ -180,7 +129,7 @@ func stackedInterfacePatches(sp stackedPrismPayload, columns []stackedColumn, by
 	for i, col := range columns {
 		plannedColumns[i] = col.Column
 	}
-	return stackedrecord.InterfacePatches(stackedRecordOf(sp), plannedColumns, bySlab, k)
+	return stackedrecord.InterfacePatches(stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}, plannedColumns, bySlab, k)
 }
 
 // stackedPatchArea is a patch record's area: its outer loop's enclosed area
@@ -224,7 +173,7 @@ type stackedColumn struct {
 
 // stackedColumns adapts recorded wall columns for the topology build.
 func stackedColumns(sp stackedPrismPayload) ([]stackedColumn, [][]stackedrecord.SlabLoop, error) {
-	planned, loops, err := stackedrecord.Columns(stackedRecordOf(sp))
+	planned, loops, err := stackedrecord.Columns(stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -360,7 +309,7 @@ type stackedPart struct {
 func stackedRegionPart(ctx context.Context, sp stackedPrismPayload, base prismPayload, columns []stackedColumn, colDelta []float64,
 	entries []stackedrecord.SlabLoop, k, r int, work *freeform.FreeformWork) (stackedPart, error) {
 	slab := sp.slabs[k]
-	region := slab.regions[r]
+	region := slab.Regions[r]
 	ig, err := region.EvaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
 	if err != nil {
 		return stackedPart{}, err
@@ -400,8 +349,8 @@ func stackedRegionPart(ctx context.Context, sp stackedPrismPayload, base prismPa
 	v := proofbound.BoundedQuotient(ig.Mv, ig.MvBound, ig.Area, ig.AreaBound)
 	u.Bound = proofbound.AbsSumUpper(u.Bound, sp.sectionDelta)
 	v.Bound = proofbound.AbsSumUpper(v.Bound, sp.sectionDelta)
-	mid := proofbound.BoundedDiv(proofbound.BoundedAdd(proofbound.MeasuredScalar(slab.z0, slab.z0Delta),
-		proofbound.MeasuredScalar(slab.z1, slab.z1Delta)), proofbound.ExactScalar(2))
+	mid := proofbound.BoundedDiv(proofbound.BoundedAdd(proofbound.MeasuredScalar(slab.Z0, slab.Z0Delta),
+		proofbound.MeasuredScalar(slab.Z1, slab.Z1Delta)), proofbound.ExactScalar(2))
 	part.centroid = base.point(u.Value, v.Value, mid.Value)
 	part.centroidBound = prismPointBound(base, u, v, mid)
 	return part, nil
@@ -410,7 +359,7 @@ func stackedRegionPart(ctx context.Context, sp stackedPrismPayload, base prismPa
 // evalStackedPlanContext builds a stacked body under plan's naming and column
 // displacements (§3, §4).
 func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp stackedPrismPayload, plan stackedPlan) (*Body, error) {
-	if err := stackedrecord.Falsify(ctx, stackedRecordOf(sp)); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
 		return nil, err
 	}
 	columns, bySlab, err := stackedColumns(sp)
@@ -432,8 +381,8 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		maxColDelta = max(maxColDelta, colDelta[ci])
 		first, last := sp.slabs[col.Start], sp.slabs[col.End]
 		pp := base
-		pp.z0, pp.z0Delta = first.z0, first.z0Delta
-		pp.z1, pp.z1Delta = last.z1, last.z1Delta
+		pp.z0, pp.z0Delta = first.Z0, first.Z0Delta
+		pp.z1, pp.z1Delta = last.Z1, last.Z1Delta
 		if colDelta[ci] > 0 {
 			pp.sectionDelta = proofbound.AbsSumUpper(sp.sectionDelta, colDelta[ci])
 		}
@@ -457,7 +406,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	// One part per (slab, region).
 	var parts []stackedPart
 	for k, slab := range sp.slabs {
-		for r := range slab.regions {
+		for r := range slab.Regions {
 			part, err := stackedRegionPart(ctx, sp, base, columns, colDelta, bySlab[k], k, r, work)
 			if err != nil {
 				return nil, err
@@ -487,7 +436,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 			z, d float64
 			flip bool
 			top  bool
-		}{{0, first.z0, first.z0Delta, true, false}, {len(sp.slabs) - 1, last.z1, last.z1Delta, false, true}} {
+		}{{0, first.Z0, first.Z0Delta, true, false}, {len(sp.slabs) - 1, last.Z1, last.Z1Delta, false, true}} {
 			if part.slab != end.slab {
 				continue
 			}
@@ -518,7 +467,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		anchors[f] = struct{}{}
 	}
 	for k := range sp.interfaces {
-		z, axial := sp.slabs[k].z1, sp.slabs[k].z1Delta
+		z, axial := sp.slabs[k].Z1, sp.slabs[k].Z1Delta
 		patches, err := stackedInterfacePatches(sp, columns, bySlab, k)
 		if err != nil {
 			return nil, err
@@ -556,7 +505,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	var moment [3]proofbound.BoundedScalar
 	for _, part := range parts {
 		slab := sp.slabs[part.slab]
-		height := proofbound.BoundedSub(proofbound.MeasuredScalar(slab.z1, slab.z1Delta), proofbound.MeasuredScalar(slab.z0, slab.z0Delta))
+		height := proofbound.BoundedSub(proofbound.MeasuredScalar(slab.Z1, slab.Z1Delta), proofbound.MeasuredScalar(slab.Z0, slab.Z0Delta))
 		mass := proofbound.BoundedMul(part.area, height)
 		volume = proofbound.BoundedAdd(volume, mass)
 		point := part.centroid
@@ -567,7 +516,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	}
 	for _, col := range columns {
 		a, b := sp.slabs[col.Start], sp.slabs[col.End]
-		height := proofbound.BoundedSub(proofbound.MeasuredScalar(b.z1, b.z1Delta), proofbound.MeasuredScalar(a.z0, a.z0Delta))
+		height := proofbound.BoundedSub(proofbound.MeasuredScalar(b.Z1, b.Z1Delta), proofbound.MeasuredScalar(a.Z0, a.Z0Delta))
 		area = proofbound.BoundedAdd(area, proofbound.BoundedMul(col.perimeter, height))
 	}
 	for _, face := range planar[capCount:] {

@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/mirrorjoin"
@@ -269,10 +270,10 @@ func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp s
 	}
 	regions := make([]joinRegion, len(sp.slabs))
 	for k, slab := range sp.slabs {
-		if len(slab.regions) != 1 {
+		if len(slab.Regions) != 1 {
 			return stackedPrismPayload{}, fmt.Errorf(`%w: slab %d has no single region`, ErrUnsupported, k)
 		}
-		regions[k] = newJoinRegion(slab.regions[0])
+		regions[k] = newJoinRegion(slab.Regions[0])
 	}
 	segs := make([]lineSeg, 0, len(walls))
 	for _, w := range walls {
@@ -310,17 +311,17 @@ func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp s
 		return stackedPrismPayload{}, errJoinDisplaced
 	}
 	out := sp
-	out.slabs = make([]prismSlab, len(sp.slabs))
+	out.slabs = make([]stackedrecord.Slab, len(sp.slabs))
 	for k, region := range regions {
 		joined, delta, err := line.assemble(budget, region)
 		if err != nil {
 			return stackedPrismPayload{}, err
 		}
 		out.slabs[k] = sp.slabs[k]
-		out.slabs[k].regions = []profileRecord{joined}
+		out.slabs[k].Regions = []profileRecord{joined}
 		out.sectionDelta = math.Max(out.sectionDelta, delta)
 	}
-	interfaces, err := stackedInterfaces(ctx, out.slabs, sp.interfaces)
+	interfaces, err := stackedrecord.Derive(ctx, out.slabs, sp.interfaces)
 	if err != nil {
 		return stackedPrismPayload{}, err
 	}
