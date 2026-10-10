@@ -583,10 +583,10 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		Request:             req,
 		Surveys:             surveys,
 		WallTolerance:       verdicts.Wall,
-		WallToleranceDiag:   diagSet.Wall,
+		WallToleranceDiag:   diagnosticPtrFromInternal(diagSet.Wall),
 		RadiusTolerance:     verdicts.Radius,
-		RadiusToleranceDiag: diagSet.Radius,
-		CoreDiagnostics:     diagSet.Core,
+		RadiusToleranceDiag: diagnosticPtrFromInternal(diagSet.Radius),
+		CoreDiagnostics:     diagnosticsFromInternal(diagSet.Core),
 	}), nil
 }
 

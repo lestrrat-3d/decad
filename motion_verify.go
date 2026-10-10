@@ -1267,7 +1267,7 @@ func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) reportvoca
 	for i, pose := range poses {
 		poseFacts[i] = reportvocab.MotionPoseFinding[*Body, JointCell]{
 			At: pose.result.At, Unbuildable: pose.unbuildable != nil,
-			Violated: pose.violated, Diagnostics: pose.findings,
+			Violated: pose.violated, Diagnostics: diagnosticsToInternal(pose.findings),
 		}
 	}
 	spanFacts := make([]reportvocab.MotionSpanFinding, len(spans))
@@ -1277,8 +1277,9 @@ func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) reportvoca
 		}
 	}
 	return reportvocab.ConcludeMotion(r.cfg.Minimum, against, poseFacts, spanFacts, r.cfg.MinimumMM,
-		func(lowest *Measurement) (*ScalarReading, *Diagnostic) {
-			return r.pathClearance(poses, lowest, "whole-path")
+		func(lowest *Measurement) (*ScalarReading, *reportvocab.Diagnostic[*Body, JointCell]) {
+			reading, diag := r.pathClearance(poses, lowest, "whole-path")
+			return reading, diagnosticPtrToInternal(diag)
 		})
 }
 
@@ -1292,7 +1293,7 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 		Collisions:  []Collision{},
 		Clearance:   c.Clearance,
 		Assessment:  c.Assessment,
-		Diagnostics: c.Diagnostics,
+		Diagnostics: diagnosticsFromInternal(c.Diagnostics),
 		Status:      c.Status,
 	}
 	for _, mv := range r.movers {

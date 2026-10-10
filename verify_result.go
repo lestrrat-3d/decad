@@ -101,10 +101,33 @@ type UndercutResult struct {
 }
 
 // ConcaveRadiusResult records one body's concave-radius survey.
-type ConcaveRadiusResult = reportvocab.ConcaveRadiusResult[*Body, JointCell]
+type ConcaveRadiusResult struct {
+	Outcome     ScalarOutcome
+	Minimum     *ScalarReading
+	Diagnostics []Diagnostic
+}
 
 // ValidityResult records one body's held-boundary verdict.
-type ValidityResult = reportvocab.ValidityResult[*Body, JointCell]
+type ValidityResult struct {
+	Outcome     ValidityOutcome
+	Diagnostics []Diagnostic
+}
+
+func validityResultFromInternal(in reportvocab.ValidityResult[*Body, JointCell]) ValidityResult {
+	return ValidityResult{Outcome: in.Outcome, Diagnostics: diagnosticsFromInternal(in.Diagnostics)}
+}
+
+func validityResultToInternal(in ValidityResult) reportvocab.ValidityResult[*Body, JointCell] {
+	return reportvocab.ValidityResult[*Body, JointCell]{
+		Outcome: in.Outcome, Diagnostics: diagnosticsToInternal(in.Diagnostics),
+	}
+}
+
+func concaveRadiusResultFromInternal(in reportvocab.ConcaveRadiusResult[*Body, JointCell]) ConcaveRadiusResult {
+	return ConcaveRadiusResult{
+		Outcome: in.Outcome, Minimum: in.Minimum, Diagnostics: diagnosticsFromInternal(in.Diagnostics),
+	}
+}
 
 // HeldTopology records a body's lump and void counts.
 type HeldTopology = reportvocab.HeldTopology
