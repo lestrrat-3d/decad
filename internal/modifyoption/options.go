@@ -52,25 +52,19 @@ type identAsymmetricChamfer struct{}
 type identNoOpenings struct{}
 type identShellSense struct{}
 
-// ShellSense selects the direction in which a shell wall grows.
-type ShellSense int
-
 const (
-	// Inward grows the wall into the original solid.
-	Inward ShellSense = iota
-	// Outward grows the wall off the original solid.
-	Outward
+	shellInward = iota
+	shellOutward
 )
 
-// String renders the sense for diagnostics.
-func (s ShellSense) String() string {
+func shellSenseName(s int) string {
 	switch s {
-	case Inward:
+	case shellInward:
 		return "Inward"
-	case Outward:
+	case shellOutward:
 		return "Outward"
 	default:
-		return fmt.Sprintf("ShellSense(%d)", int(s))
+		return fmt.Sprintf("ShellSense(%d)", s)
 	}
 }
 
@@ -99,8 +93,8 @@ func WithNoOpenings() ShellOption {
 	return shellOption{option.New(identNoOpenings{}, struct{}{})}
 }
 
-// WithShellSense selects the wall sense; Inward is the default.
-func WithShellSense(s ShellSense) ShellOption {
+// WithShellSense records the root package's wall sense as its numeric value.
+func WithShellSense(s int) ShellOption {
 	return shellOption{option.New(identShellSense{}, s)}
 }
 
@@ -117,7 +111,7 @@ type ChamferConfig[Q any] struct {
 
 // ShellConfig is the decoded Shell option set.
 type ShellConfig struct {
-	Sense      ShellSense
+	Sense      int
 	NoOpenings bool
 }
 
@@ -194,7 +188,7 @@ func DecodeChamfer[Q any](opts []ChamferOption) (ChamferConfig[Q], error) {
 
 // DecodeShell validates and folds Shell options, defaulting to Inward.
 func DecodeShell(opts []ShellOption) (ShellConfig, error) {
-	out := ShellConfig{Sense: Inward}
+	out := ShellConfig{Sense: shellInward}
 	sensed := false
 	for _, raw := range opts {
 		if raw == nil {
@@ -207,15 +201,16 @@ func DecodeShell(opts []ShellOption) (ShellConfig, error) {
 		}
 		switch ident := o.Ident().(type) {
 		case identShellSense:
-			v, ok := option.Get[ShellSense](o)
+			v, ok := option.Get[int](o)
 			if !ok {
 				return ShellConfig{}, fmt.Errorf(`%w: WithShellSense carries no sense`, decaderr.ErrDegenerate)
 			}
-			if v != Inward && v != Outward {
-				return ShellConfig{}, fmt.Errorf(`%w: unknown shell sense %d`, decaderr.ErrDegenerate, int(v))
+			if v != shellInward && v != shellOutward {
+				return ShellConfig{}, fmt.Errorf(`%w: unknown shell sense %d`, decaderr.ErrDegenerate, v)
 			}
 			if sensed && v != out.Sense {
-				return ShellConfig{}, ErrOptionConflict(`WithShellSense names both %s and %s`, out.Sense, v)
+				return ShellConfig{}, ErrOptionConflict(`WithShellSense names both %s and %s`,
+					shellSenseName(out.Sense), shellSenseName(v))
 			}
 			out.Sense, sensed = v, true
 		case identNoOpenings:

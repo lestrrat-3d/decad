@@ -42,21 +42,33 @@ type ShellOption = modifyoption.ShellOption
 // ShellSense is the wall sense of a shell (docs/modify-design.md §8): the
 // thickness is a magnitude and carries no sign (core §8.1), so which way the
 // wall grows is enumerated, not signed.
-type ShellSense = modifyoption.ShellSense
+type ShellSense int
 
 const (
 	// Inward grows the wall into the original solid; the outer skin does not
 	// move. It is the default — what "shell this box" means everywhere.
-	Inward ShellSense = modifyoption.Inward
+	Inward ShellSense = iota
 	// Outward grows the wall off the original solid; the original solid becomes
 	// the cavity.
-	Outward = modifyoption.Outward
+	Outward
 )
+
+// String renders the sense for diagnostics.
+func (s ShellSense) String() string {
+	switch s {
+	case Inward:
+		return "Inward"
+	case Outward:
+		return "Outward"
+	default:
+		return fmt.Sprintf("ShellSense(%d)", int(s))
+	}
+}
 
 // WithShellSense sets the wall sense (Inward or Outward). Without it the sense
 // is Inward (docs/modify-design.md §8).
 func WithShellSense(s ShellSense) ShellOption {
-	return modifyoption.WithShellSense(s)
+	return modifyoption.WithShellSense(int(s))
 }
 
 // Shell removes the selected cap faces of a straight prism and lines the rest
@@ -151,7 +163,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if err != nil {
 		return nil, err
 	}
-	sense := o.Sense
+	sense := ShellSense(o.Sense)
 	// decad owns the selector vocabulary, so only the built-in query can be
 	// resolved and recorded. A typed nil query reads as an untyped nil.
 	q, isQuery := sel.(*FaceQuery)
