@@ -29,6 +29,7 @@ func Example_decad_shell_stacked_boss() {
 		if _, err := s.Solve(ctx); err != nil {
 			return nil, err
 		}
+		//nolint:contextcheck // Extrude has no context parameter.
 		return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	}
 	plate, err := box(-10, -10, 10, 10, 0, 5)

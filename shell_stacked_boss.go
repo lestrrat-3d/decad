@@ -60,8 +60,11 @@ func recordedBossRect(p profileRecord) (bossRect, bool) {
 			return bossRect{}, false
 		}
 		pts[i] = line.Start
-		if i > 0 && p.Outer.Segments[i-1].(lineSeg).End != line.Start {
-			return bossRect{}, false
+		if i > 0 {
+			prev, ok := p.Outer.Segments[i-1].(lineSeg)
+			if !ok || prev.End != line.Start {
+				return bossRect{}, false
+			}
 		}
 		if i == 0 {
 			r = bossRect{line.Start.U, line.Start.V, line.Start.U, line.Start.V}
@@ -128,21 +131,21 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	}
 	// The source view has a single top cap. All its other faces keep their
 	// recorded geometry; the result gets new face(k)/wall(k) roles on rebuild.
-	cap := -1
+	topCapIdx := -1
 	for i, f := range view.faces {
 		if f.planar() && f.outward && f.z0 == b.Z1 {
-			if cap >= 0 {
+			if topCapIdx >= 0 {
 				return refuse("has more than one top cap")
 			}
-			cap = i
+			topCapIdx = i
 		}
 	}
-	if cap < 0 {
+	if topCapIdx < 0 {
 		return refuse("has no top cap")
 	}
 	result := brepPayload{xform: view.xform, faces: make([]brepFace, 0, len(view.faces)+15)}
-	result.faces = append(result.faces, view.faces[:cap]...)
-	result.faces = append(result.faces, view.faces[cap+1:]...)
+	result.faces = append(result.faces, view.faces[:topCapIdx]...)
+	result.faces = append(result.faces, view.faces[topCapIdx+1:]...)
 	addPlane := func(p profileRecord, z float64, outward bool) int {
 		result.faces = append(result.faces, brepFace{frame: sp.frame, region: &p, z0: z, z1: z, outward: outward})
 		return len(result.faces) - 1
