@@ -287,8 +287,9 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // docs/sweep-design.md §15.3). WithSweepTwist is not a member either: a
 // nonzero twist is Table S row S11 for a profile-fed sweep, and a chain
 // inherits that staging rather than a second spelling of it. This placeholder
-// tier has no member yet; it reserves the call for a later chain-only option.
+// tier has no concrete option yet; it reserves the call for a later chain-only option.
 type ChainSweepOption interface {
+	option.Interface
 	chainSweepOption()
 }
 

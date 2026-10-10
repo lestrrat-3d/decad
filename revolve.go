@@ -448,9 +448,10 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 // exactly as [ChainExtrudeOption] is (docs/surface-design.md §13.2):
 // WithSurfaceResult() does not implement it, so the compiler refuses that
 // option outright rather than accepting it as a no-op — a chain-fed revolve
-// always returns a sheet. This placeholder tier has no member yet; it reserves
+// always returns a sheet. This placeholder tier has no concrete option yet; it reserves
 // the call for a later chain-only option.
 type ChainRevolveOption interface {
+	option.Interface
 	chainRevolveOption()
 }
 

@@ -186,9 +186,10 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 // omit (docs/surface-design.md §13.2, docs/loft-design.md §16.3).
 // WithLoftAlignment is not a member either: Table P's own P4 row forces a
 // chain pair's offset to 0, so the option would name a correspondence that
-// does not exist. This placeholder tier has no member yet; it reserves the
+// does not exist. This placeholder tier has no concrete option yet; it reserves the
 // call for a later chain-only option.
 type ChainLoftOption interface {
+	option.Interface
 	chainLoftOption()
 }
 

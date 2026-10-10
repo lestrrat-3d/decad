@@ -289,6 +289,10 @@ func (d *Document) Remove(b *Body) error        // retire a live body by hand
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
 ```
 
+`DocumentOption` has no constructor yet. Its sealed method set includes
+`option.Interface` so a future document option can use the same option codec
+without redefining the tier.
+
 `Body` is **immutable**; every operation returns a new one, and the input body is
 retired from the document.
 

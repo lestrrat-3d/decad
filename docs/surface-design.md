@@ -348,8 +348,8 @@ func (b *Body) Offset(ctx context.Context, distance units.Value, opts ...OffsetO
 func WithOffsetSide(side OffsetSide) OffsetOption
 
 // A sheet from one open sketch curve. §13 owns all four.
-type ChainExtrudeOption interface{ chainExtrudeOption() }
-type ChainRevolveOption interface{ chainRevolveOption() }
+type ChainExtrudeOption interface{ option.Interface; chainExtrudeOption() }
+type ChainRevolveOption interface{ option.Interface; chainRevolveOption() }
 
 func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
 func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
@@ -2253,8 +2253,11 @@ option tiers, and `SurfaceResultOption` — `ExtrudeOption` + `RevolveOption` +
 `SweepOption` + `LoftOption` — implements neither, so the compiler refuses the
 option and Table R carries no row for it. The rejected alternative is accepting
 it as a no-op, which gives one option two meanings: omit the closing faces here,
-state nothing there. Neither tier has a member in this increment; both exist so
-a later chain-only option has a tier to land on.
+state nothing there. Neither tier has a concrete option in this increment; both exist so
+a later chain-only option has a tier to land on. The empty chain option tiers
+keep `option.Interface` in their method sets, including `ChainSweepOption` and
+`ChainLoftOption`. A later chain-only option can use the same codec contract
+without redefining its tier.
 
 ### 13.3 `ChainRecord` — the record, and its gates
 
