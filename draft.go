@@ -8,7 +8,6 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is Body.Draft (docs/draft-design.md §10): the face draft of an
@@ -63,7 +62,6 @@ func (NeutralFrame) neutralPlane() {}
 // DraftOption is a placeholder option tier for [Body.Draft]. It carries no
 // option today and reserves the signature for a later draft option.
 type DraftOption interface {
-	option.Interface
 	draftOption()
 }
 

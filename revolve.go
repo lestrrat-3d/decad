@@ -16,7 +16,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the revolve of docs/evaluator-design.md §6: the
@@ -452,7 +451,6 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 // always returns a sheet. This placeholder tier has no member yet; it reserves
 // the call for a later chain-only option.
 type ChainRevolveOption interface {
-	option.Interface
 	chainRevolveOption()
 }
 
