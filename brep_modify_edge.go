@@ -704,10 +704,52 @@ func footOf(end brepEdgeEnd, cb *cornerBlend, j int) (Point2, float64) {
 	return cb.FB, cb.CutbackB
 }
 
+func (r *brepEdgeRoute) refuseAsymmetricReference(eb *brepEdgeBlend, reason string) error {
+	return fmt.Errorf(`%w: %s (modify-reach SX16); selector %s, %s`, ErrUnsupported,
+		reason, r.call.sel, selectedEdgeContext(eb.ordinal, eb.edge))
+}
+
+// asymmetricReferenceSide maps the resolved public face to one of the two
+// record faces beside the edge. Restatement can change wall(i) to face(i),
+// but it keeps i, so the record index is the shared identity across it.
+func (r *brepEdgeRoute) asymmetricReferenceSide(eb *brepEdgeBlend) (int, error) {
+	ref := r.call.asym.refs[eb.edge]
+	if ref == nil {
+		return -1, r.refuseAsymmetricReference(eb, `the asymmetric reference has no face for this edge`)
+	}
+	selected := -1
+	for j, index := range eb.adj {
+		faceRole := fmt.Sprintf("face(%d)", index)
+		wallRole := fmt.Sprintf("wall(%d)", index)
+		for _, origin := range ref.origins {
+			if origin.producer != r.call.asym.body.origin.producer ||
+				(origin.Role != faceRole && origin.Role != wallRole) {
+				continue
+			}
+			if selected >= 0 && selected != j {
+				return -1, r.refuseAsymmetricReference(eb, `the asymmetric reference names both adjacent record faces`)
+			}
+			selected = j
+		}
+	}
+	if selected < 0 {
+		return -1, r.refuseAsymmetricReference(eb, `the asymmetric reference has no adjacent record face identity`)
+	}
+	return selected, nil
+}
+
 // computeBlends is brep-modify §5.3 steps 1 and 2: the corner blend in G0
 // (S4, S5), then the same blend recomputed in G1 (S4, S5), whose centre and
 // two feet, mapped into G0's frame, must equal G0's bit for bit (SB9).
 func (r *brepEdgeRoute) computeBlends(eb *brepEdgeBlend) error {
+	referenceSide := -1
+	if r.call.asym != nil {
+		var err error
+		referenceSide, err = r.asymmetricReferenceSide(eb)
+		if err != nil {
+			return err
+		}
+	}
 	for k := range eb.end {
 		if !eb.terminal[k] {
 			continue
@@ -720,7 +762,16 @@ func (r *brepEdgeRoute) computeBlends(eb *brepEdgeBlend) error {
 		if err != nil {
 			return err
 		}
-		cb, err := r.call.blend.corner(loops[end.loop], end.loop, end.corner, eb.edge)
+		var cb *cornerBlend
+		if referenceSide < 0 {
+			cb, err = r.call.blend.corner(loops[end.loop], end.loop, end.corner, eb.edge)
+		} else {
+			dA, dB := r.call.asym.other, r.call.asym.d
+			if end.arriving == referenceSide {
+				dA, dB = dB, dA
+			}
+			cb, err = computeChamfer(loops[end.loop], end.corner, dA, dB)
+		}
 		if err != nil {
 			return fmt.Errorf(`%w; selector %s, %s at brep face %s's corner (%s)`, err, r.call.sel,
 				selectedEdgeContext(eb.ordinal, eb.edge), r.bp.faces[end.face].role, r.render(eb.v[k]))

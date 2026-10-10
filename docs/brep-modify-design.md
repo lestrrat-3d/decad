@@ -90,12 +90,14 @@ result is a `prismPayload`, which every consumer and every further modify op
 already takes. The two routes never build the same edge differently: a lateral
 edge of the recognised prism and the same edge under route E are the same
 cylinder or plane; route P merely records the body as the prism it is.
+An asymmetric chamfer on a brep skips route P and reaches route E's
+reference-face mapping (§5.1); a selection outside route E remains SX16.
 
 ## 3. Table RB — receivers
 
 | RB | Receiver | `Fillet` / `Chamfer` | `Shell` |
 |---|---|---|---|
-| **RB1** | `brepPayload`, `sectionDelta() == 0` | route P, else route E (Table EB) | route P, else route S (modify-general §3) |
+| **RB1** | `brepPayload`, `sectionDelta() == 0` | route P, else route E (Table EB); an asymmetric chamfer skips P and admits E alone | route P, else route S (modify-general §3) |
 | **RB2** | `stackedPrismPayload` whose `brepOfStacked` succeeds (one region per slab, not a group) | as RB1 over the face view | as RB1 |
 | **RB3** | `brepPayload` or stacked receiver with a section displacement | SB1 | SB1 |
 | **RB4** | `facetedPayload` | reach SX9 (permanent) | reach SX9 |
@@ -209,6 +211,16 @@ the selected edge's vertices within `1e-6`, as `matchCornerBudget` does for a
 prism. The match identifies the edge and admits no geometry; a selected edge
 that matches no recorded edge, or several, is SB6.
 
+For an asymmetric chamfer, route P is skipped. Route E admits an independent
+straight edge of a `brepPayload` under the same EB rows. The option's resolved
+reference face identifies one of the edge's two public adjacent faces by its
+record index. Restatement may change `wall(i)` to `face(i)` but preserves `i`.
+EB6 then pairs each end-face walk with one adjacent record face. The walk
+paired with the reference face takes the positional distance; the other takes
+`otherDistance`. A missing or ambiguous public-to-record face index is SX16.
+Route L and a stacked receiver's face view keep SX16 because they do not
+retain this reference-face mapping.
+
 ### 5.2 Restatement of a straight wall as a planar face
 
 A swept face whose wall is a `LineSeg` is the rectangle it sweeps, and the
@@ -256,7 +268,7 @@ faces `G0`, `G1`:
    `prismCornerLoopsBudget` does for a section; the corner at `V0` is the walk
    junction whose point maps to `V0`'s reference coordinates (`brepCornerAt`,
    an exact comparison, replacing `matchCornerBudget`'s lifted-point match).
-   `computeFillet(loop, corner, r)` or `computeChamfer(loop, corner, d)` runs
+   `computeFillet(loop, corner, r)` or `computeChamfer(loop, corner, dA, dB)` runs
    unchanged: S4 for a smooth or cusped junction, S5 for a fillet whose offsets
    never meet, then the feet and connector. The blend is assigned to carriers,
    not to walk order: `fF1` is the foot on the walk that pairs with `F1`,
@@ -563,6 +575,7 @@ with PR 0.
 | **1** | route P: `recognisePrism` (P1–P5), `brepgeom.AxisFrame`, the re-expression into `F`, cap-face arguments on `classifyChamferSelection` and `classifyRemovedCaps`, SB3 | `brep_modify_prism.go`, `capblend.go`, `shell.go`, `internal/brepgeom/` | §9's five route P fixtures | 0 |
 | **2a** | route E without restatement: Table EB, `brepCornerAt`, the corner blend in both end faces and SB9, (sw)/(pl) trims, claims and the per-face audit, the blend face and `brepFace.blend`, `brepgeom.MapSegment`, assembly and closure | `brep_modify_edge.go`, `brep_payload.go`, `fillet_audit.go`, `internal/brepgeom/` | S1 `z`-edge fillet, B1 `z`-edge chamfer, Pocket vertical fillets, Boss chamfer, the chaining and SB4/SB5 refusals, the consumer and placement fixtures | 0 |
 | **2b** | restatement: `brepgeom.Restate`, `brepgeom.PlanarFrame`, the whole-call restatement set, EB3/EB4 over restated faces | `brep_modify_edge.go`, `internal/brepgeom/` | Pocket floor-edge fillets, S1 `x`-edge chamfer, SB8 on a split wall | 2a |
+| **2c** | route E's asymmetric reference-face mapping; bypass route P for this option and refuse route L | `brep_modify.go`, `brep_modify_edge.go`, `brep_modify_loop.go`, `chamfer.go` | public boolean body: both reference faces on a vertical edge, restated end faces on a horizontal edge, and route L refusal | 2b |
 
 PR 1 and PR 2a run in parallel: they share only PR 0's dispatch and add
 disjoint files. PR 2b follows 2a.
@@ -575,3 +588,4 @@ Increment table — what still refuses after each PR:
 | 1 (landed) | every non-prism brep; every route E edge |
 | 2a (landed) | edges whose end or rim-adjacent face is a swept straight wall (SB7/SB8 until 2b) |
 | 2b (landed) | Table SB alone |
+| 2c (landed) | asymmetric route P/L chamfers and stacked receivers (SX16) |

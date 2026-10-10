@@ -81,6 +81,9 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 	if r.singleStraightEdges() {
 		return brepBlendEdges(ctx, d, bp, call)
 	}
+	if call.asym != nil {
+		return nil, fmt.Errorf(`%w: an asymmetric chamfer on a brep requires independent straight edges admitted by route E (modify-reach SX16)`, ErrUnsupported)
+	}
 	if call.loopKind == brepBandFillet {
 		if body, recognized, err := r.cornerTriad(ctx, d); recognized {
 			return body, err

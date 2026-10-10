@@ -134,7 +134,8 @@
 //	  a tangent chain that branches or cannot be decided      ErrUnsupported
 //	Chamfer       WithAsymmetricChamfer, prism lateral edge,
 //	  revolve junction or complete prism cap loop(s)          builds
-//	  asymmetric brep or stacked chamfer                      ErrUnsupported
+//	  asymmetric brep independent straight-edge chamfer       builds
+//	  asymmetric brep loop or stacked chamfer                  ErrUnsupported
 //	Chamfer       complete prism cap loop(s)                  builds
 //	Fillet/Chamfer  brep or stacked boolean result, straight
 //	  edge along a reference axis                             builds

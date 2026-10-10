@@ -35,6 +35,7 @@ type brepModifyRequest struct {
 	sel       EdgeSelector
 	edges     []*Edge
 	blend     *revolveBlendOp
+	asym      *asymmetricChamfer
 	shellCall brepShellCall
 	loop      *capSetback
 	loopKind  brepBandKind
@@ -70,6 +71,15 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 	}
 	if err := requireExactBrepSection(bp, req.op); err != nil {
 		return brepRoute{}, err
+	}
+	if req.asym != nil {
+		// Route E maps each recorded adjacent face to one end-face walk.
+		// Route P and route L have no such reference-face mapping.
+		body, err := brepLoopRoute(ctx, b.doc, bp, req)
+		if err != nil {
+			return brepRoute{}, err
+		}
+		return brepRoute{body: body}, nil
 	}
 	route, refusal, err := brepPrismRoute(ctx, b, bp, req)
 	switch {

@@ -523,36 +523,129 @@ func TestAsymmetricChamferRevolveJunction(t *testing.T) {
 	}
 }
 
-func TestAsymmetricChamferStagedReceivers(t *testing.T) {
+func TestAsymmetricChamferOnBrepStraightEdge(t *testing.T) {
 	t.Parallel()
-	t.Run("Brep", func(t *testing.T) {
-		// A plate with a flush boss is a brep; its lateral edge at (40, 0)
-		// takes an equal chamfer through the brep routes, and docs/
-		// brep-modify-design.md states no asymmetric one: SX16.
-		w := sketch.NewWorld()
-		doc := decad.New()
-		block := func(x1, z, height float64) *decad.Body {
-			plane, err := w.CreateOffsetPlane(w.XY(), z)
+	for _, tc := range []struct {
+		name      string
+		normal    r3.Vec
+		frontFoot r3.Vec
+		sideFoot  r3.Vec
+	}{
+		{name: "front reference", normal: r3.NewVec(0, -1, 0),
+			frontFoot: r3.NewVec(38, 0, 0), sideFoot: r3.NewVec(40, 3, 0)},
+		{name: "side reference", normal: r3.NewVec(1, 0, 0),
+			frontFoot: r3.NewVec(37, 0, 0), sideFoot: r3.NewVec(40, 2, 0)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The plate and boss form one brep. Swapping the reference face
+			// swaps the feet of a 2 mm by 3 mm bevel at its far vertical edge.
+			w := sketch.NewWorld()
+			doc := decad.New()
+			block := func(x1, z, height float64) *decad.Body {
+				plane, err := w.CreateOffsetPlane(w.XY(), z)
+				require.NoError(t, err)
+				s, err := w.CreateSketch(plane)
+				require.NoError(t, err)
+				rect := s.CreateRectangle(0, 0, x1, 20)
+				s.Fix(rect.A)
+				_, err = s.Solve(t.Context())
+				require.NoError(t, err)
+				b, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+				require.NoError(t, err)
+				return b
+			}
+			part, err := decad.Union(t.Context(), block(40, 0, 10), block(10, 10, 10))
 			require.NoError(t, err)
-			s, err := w.CreateSketch(plane)
+			edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(40, 0, 0))).Exactly(1)
+			refFace := planeFacing(t, part, tc.normal, r3.NewVec(40, 0, 0))
+			reference := decad.Faces(decad.FaceCreatedBy(refFace.Origins()[0]))
+			beveled, err := part.Chamfer(t.Context(), edge, units.Millimeters(2),
+				decad.WithAsymmetricChamfer(reference, units.Millimeters(3)))
 			require.NoError(t, err)
-			rect := s.CreateRectangle(0, 0, x1, 20)
-			s.Fix(rect.A)
-			_, err = s.Solve(t.Context())
+			require.Equal(t, []*decad.Body{beveled}, doc.Bodies())
+			volume, err := beveled.Volume()
 			require.NoError(t, err)
-			b, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+			require.InDelta(t, 9970, volume.Value.Base(), 1e-8)
+			require.Equal(t, decad.Exact, volume.Exactness)
+			for _, want := range []r3.Vec{tc.frontFoot, tc.sideFoot} {
+				found := false
+				for _, vertex := range beveled.Vertices() {
+					if vertex.Position().Value.Sub(want).Len() < 1e-9 {
+						found = true
+						break
+					}
+				}
+				require.True(t, found, "bevel foot %v is a result vertex", want)
+			}
+			mesh, err := beveled.Tessellate(t.Context(), units.Millimeters(0.1))
 			require.NoError(t, err)
-			return b
-		}
-		part, err := decad.Union(t.Context(), block(40, 0, 10), block(10, 10, 10))
-		require.NoError(t, err)
-		edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(40, 0, 0))).Exactly(1)
-		_, err = part.Chamfer(t.Context(), edge, units.Millimeters(2),
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(3)))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "SX16")
-		require.Equal(t, []*decad.Body{part}, doc.Bodies())
-		_, err = part.Chamfer(t.Context(), edge, units.Millimeters(2))
-		require.NoError(t, err, `the same edge takes the equal chamfer`)
-	})
+			require.True(t, mesh.VolumeVerified())
+		})
+	}
+}
+
+func TestAsymmetricChamferOnBrepRestatedEndFaces(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := boxBodyAtZ(t, doc, 0, 0, 40, 20, 0, 10)
+	boss := boxBodyAtZ(t, doc, 0, 0, 10, 20, 10, 10)
+	part, err := decad.Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	// Both x-end faces are swept walls in the boolean record. Route E
+	// restates them as planes before assigning the bottom face's setback.
+	edge := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
+		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1)
+	bottom := planeFacing(t, part, r3.NewVec(0, 0, -1), r3.NewVec(0, 0, 0))
+	result, err := part.Chamfer(t.Context(), edge, units.Millimeters(2),
+		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(bottom.Origins()[0])), units.Millimeters(3)))
+	require.NoError(t, err)
+	volume, err := result.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, volume.Exactness)
+	require.InDelta(t, 9880, volume.Value.Base(), 1e-8)
+	mesh, err := result.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.VolumeVerified())
+}
+
+func TestAsymmetricChamferOnBrepLoopRefused(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.XY(), 10)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	center := s.CreatePoint(20, 20)
+	s.Fix(center)
+	s.CreateCircle(center, 5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	boss, err := doc.Extrude(s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
+	require.NoError(t, err)
+	part, err := decad.Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	top := planeFacing(t, part, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
+	require.Len(t, top.Loops(), 2)
+	_, err = part.Chamfer(t.Context(), loopEdgeQuery(top.Loops()[1]), units.Millimeters(1.5),
+		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(top.Origins()[0])), units.Millimeters(2)))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "SX16")
+	require.Equal(t, []*decad.Body{part}, doc.Bodies())
+}
+
+func TestAsymmetricChamferOnStackedRefused(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
+	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+	require.NoError(t, err)
+	top := planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
+	_, err = pocket.Chamfer(t.Context(), loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5),
+		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(top.Origins()[0])), units.Millimeters(2)))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "SX16")
+	require.Equal(t, []*decad.Body{pocket}, doc.Bodies())
 }

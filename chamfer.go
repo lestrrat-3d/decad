@@ -79,8 +79,9 @@ type ChamferOption interface{ chamferOption() }
 // across the cap and the other distance down the side walls, and a side wall
 // takes d down the side and the other distance across the cap. A reference
 // that names no adjacent face of a chamfered edge, or both, or a face beside
-// no chamfered edge, is ErrCardinality (SX3). An asymmetric chamfer of a brep
-// or stacked boolean result is ErrUnsupported (SX16).
+// no chamfered edge, is ErrCardinality (SX3). An asymmetric chamfer of an
+// independent straight brep edge takes route E; brep loops and stacked
+// receivers remain ErrUnsupported (SX16).
 //
 // A selection of CAP edges is the cap-loop chamfer of
 // docs/modify-reach-design.md §8.3: sel covering every geometric edge of one
@@ -207,12 +208,12 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if err := requireNotDraftReceiver(b.payload, "chamfers"); err != nil {
 		return nil, err
 	}
-	// SX16: docs/brep-modify-design.md states no asymmetric setback for either
-	// brep route, so the option is refused on every brep or stacked receiver.
+	// SX16: a stacked receiver's face view does not retain the public face
+	// identities needed to assign an asymmetric setback.
 	if asym != nil {
 		switch b.payload.(type) {
-		case brepPayload, stackedPrismPayload:
-			return nil, fmt.Errorf(`%w: this evaluator builds an asymmetric chamfer on a prism or a revolve only; a brep or stacked receiver takes the equal setback (modify-reach SX16)`, ErrUnsupported)
+		case stackedPrismPayload:
+			return nil, fmt.Errorf(`%w: this evaluator cannot map an asymmetric reference face through a stacked receiver's face view (modify-reach SX16)`, ErrUnsupported)
 		}
 	}
 	blend := revolveBlendOp{
@@ -235,7 +236,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 			_, _, _, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
 			return err
 		},
-		sel: sel, edges: edges, blend: &blend,
+		sel: sel, edges: edges, blend: &blend, asym: asym,
 		loop: &capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}, loopKind: brepBandChamfer})
 	if err != nil {
 		return nil, err
