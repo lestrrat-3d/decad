@@ -26,7 +26,7 @@ import (
 // section polygon on it (docs/sweep-design.md §16). The profile must be made
 // of straight lines only. Passing it twice is ErrDegenerate.
 func WithMitredJoins() SweepOption {
-	return featureoption.WithMitredJoins()
+	return sweepOptionValue{featureoption.WithMitredJoins()}
 }
 
 // WithSectionScale states one dimensionless factor per path segment, in path
@@ -36,7 +36,7 @@ func WithMitredJoins() SweepOption {
 // the count must equal the path's segment count. On a path of two or more
 // spans it requires [WithMitredJoins] (docs/sweep-design.md §16.2).
 func WithSectionScale(factors ...units.Value) SweepOption {
-	return featureoption.WithSectionScale(factors...)
+	return sweepOptionValue{featureoption.WithSectionScale(factors...)}
 }
 
 // mitredSweepLoops adapts SM2's whole-line profile gate to its record.

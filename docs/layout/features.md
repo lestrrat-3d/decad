@@ -15,6 +15,7 @@ The rules for rows live in `docs/layout.md`.
 | `mirror_join.go` | `WithJoin` adapters and section audit. See mirror-pattern §5. |
 | `pattern.go` | Public pattern specs, entry points and payload adapters. See mirror-pattern §4.3, §6. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, shell/lump and free-edge adapters over `internal/surfacegroup/`. See surface §2-§4, §7, §11. |
+| `feature_options.go` | Public feature option tiers and adapters to `internal/featureoption/`. See surface §4, sweep §2 and loft §2. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken`. See surface §16. |
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
