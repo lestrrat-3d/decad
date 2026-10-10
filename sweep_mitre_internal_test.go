@@ -371,31 +371,32 @@ func TestMitredSweepRequireWallsRefuses(t *testing.T) {
 	pt := func(x, y, z int64) sweepRatVec {
 		return sweepRatVec{big.NewRat(x, 1), big.NewRat(y, 1), big.NewRat(z, 1)}
 	}
-	from := mitredSection{pt(0, 0, 0), pt(1, 0, 0), pt(1, 1, 0), pt(0, 1, 0)}
+	from := []sweepRatVec{pt(0, 0, 0), pt(1, 0, 0), pt(1, 1, 0), pt(0, 1, 0)}
 	loops := [][]int{{0, 1, 2, 3}}
 
-	err := mitredRequireWalls(2, loops, from, from)
+	err := sweepmitre.RequireWalls(2, loops, from, from)
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.ErrorContains(t, err, "span 2, loop 0, segment 0: its wall quad has zero area")
 
-	to := mitredSection{pt(0, 0, 1), pt(1, 0, 1), pt(1, 0, 1), pt(0, 1, 1)}
-	err = mitredRequireWalls(0, loops, from, to)
+	to := []sweepRatVec{pt(0, 0, 1), pt(1, 0, 1), pt(1, 0, 1), pt(0, 1, 1)}
+	err = sweepmitre.RequireWalls(0, loops, from, to)
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.ErrorContains(t, err, "two coincident vertices")
 
-	require.NoError(t, mitredRequireWalls(0, loops, from, mitredSection{pt(0, 0, 1), pt(1, 0, 1), pt(1, 1, 1), pt(0, 1, 1)}))
+	require.NoError(t, sweepmitre.RequireWalls(0, loops, from,
+		[]sweepRatVec{pt(0, 0, 1), pt(1, 0, 1), pt(1, 1, 1), pt(0, 1, 1)}))
 }
 
 // TestMitredSweepSpanLengthLower pins λ to the largest float whose square
 // does not exceed the exact squared length.
 func TestMitredSweepSpanLengthLower(t *testing.T) {
 	t.Parallel()
-	lambda, err := mitredSpanLengthLower(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 8))
+	lambda, err := sweepmitre.SpanLengthLower(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 8))
 	require.NoError(t, err)
 	require.Equal(t, testLengthLower(big.NewRat(65, 1)), lambda)
 	require.Equal(t, -1, new(big.Rat).Mul(lambda, lambda).Cmp(big.NewRat(65, 1)))
 
-	lambda, err = mitredSpanLengthLower(r3.NewVec(0, 0, 0), r3.NewVec(3, 4, 0))
+	lambda, err = sweepmitre.SpanLengthLower(r3.NewVec(0, 0, 0), r3.NewVec(3, 4, 0))
 	require.NoError(t, err)
 	require.Equal(t, big.NewRat(5, 1), lambda)
 }
@@ -460,7 +461,7 @@ func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
 		for name, mp := range payloads {
 			c, err := constructMitredSweep(t.Context(), mp)
 			require.NoError(t, err, name)
-			anchor := mitredPlace(mp.xform, c.anchor)
+			anchor := sweepmitre.Place(mp.xform, c.Anchor)
 			requireMitredSumsMatch(t, mp.exact, mp.tris, anchor, name)
 		}
 	})
@@ -511,9 +512,9 @@ func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
 	for _, xform := range []r3.Transform{r3.Identity(), turn, reflection} {
 		placed := make([]sweepRatVec, len(local))
 		for i, p := range local {
-			placed[i] = mitredPlace(xform, p)
+			placed[i] = sweepmitre.Place(xform, p)
 		}
-		wantVol, wantMoments := mitredVolumeMoments(placed, tris, mitredPlace(xform, anchor))
+		wantVol, wantMoments := mitredVolumeMoments(placed, tris, sweepmitre.Place(xform, anchor))
 		gotVol, gotMoments := sweepmitre.PlacedVolumeMoments(vol6, moments, xform)
 		require.Zero(t, wantVol.Cmp(gotVol))
 		for axis := range 3 {

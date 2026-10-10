@@ -18,9 +18,11 @@ type Span struct {
 	Start, End r3.Vec
 }
 
-// Construction holds the exact section polygons and the first path point.
+// Construction holds the exact section polygons, profile topology, and first path point.
 type Construction struct {
 	Sections [][]sweeparc.RatVec
+	LoopIdx  [][]int
+	CapTris  [][3]int
 	Anchor   sweeparc.RatVec
 }
 
