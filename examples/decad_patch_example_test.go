@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 )
 
 // Document.Patch builds a single planar face directly from a recorded
@@ -45,16 +46,27 @@ func Example_decad_patch() {
 		return
 	}
 	_, err = patch.Volume()
+	mesh, meshErr := patch.Tessellate(context.Background(), units.Millimeters(0.1))
+	if meshErr != nil {
+		fmt.Printf("failed to tessellate: %s\n", meshErr)
+		return
+	}
 
 	fmt.Printf("is sheet: %v\n", patch.Kind() == decad.BodySheet)
 	fmt.Printf("faces: %d\n", len(patch.Faces()))
 	fmt.Printf("free edges: %d\n", len(free))
 	fmt.Printf("area: %s\n", area.Value)
 	fmt.Printf("volume error: %v\n", err)
+	fmt.Printf("mesh triangles: %d\n", len(mesh.Triangles()))
+	fmt.Printf("mesh boundary verified: %t\n", mesh.BoundaryVerified())
+	fmt.Printf("mesh volume verified: %t\n", mesh.VolumeVerified())
 	// Output:
 	// is sheet: true
 	// faces: 1
 	// free edges: 4
 	// area: 6000 mm^2
 	// volume error: decad: body is not a solid
+	// mesh triangles: 2
+	// mesh boundary verified: true
+	// mesh volume verified: false
 }

@@ -298,6 +298,7 @@ analytic walk's do (`docs/tessellation-reach-design.md` §5).
 | Payload | Geometry source | `sourceBound(face)` | `Bound` | `areaSlack` | `volSymDiff` |
 |---|---|---|---|---|---|
 | `prismPayload` | one chording per recorded section loop, shared by walls + caps | wall sagitta; each cap's maximum curved-trim sagitta; plus `sectionDelta`, per-end axial displacement, and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates and no section displacement | max per-face source bound | non-cancelling wall error + both cap circular-segment deficits + coordinate-movement allowance + section-displacement area (§5) | section symmetric-difference allowance × sweep height + coordinate swept allowance (§5) |
+| `patchPayload` | one chording per recorded outer or hole loop, shared by the sole planar face and its free rims | maximum trim sagitta across all loops plus the largest recorded-station, frame-lift and placement displacement at a triangle corner | the single face's source bound | one planar chord-segment deficit per curved walk plus each triangle's coordinate-movement allowance at `VerifyAll` | no occupied-volume proof; `symDiffOK == false` for a sheet |
 | `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | wall sagitta; each floor/rim patch's maximum curved-trim sagitta; plus `zDelta`, the offset displacement on every face the offset region bounds (its walls, its own cap, every rim), and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates and no offset displacement | max per-face source bound | non-cancelling per-wall/per-planar-patch error + coordinate-movement allowance + the offset region's displacement area on its cap and on the rims, and its displacement length over its height | outer-prism + cavity-prism allowances + offset displacement area × the offset region's height + coordinate swept allowance (§6) |
 | `loftPayload` | held wall triangles plus both cap ranges for a solid; only `tris[:walls]` for a sheet | the payload's facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (loft §5.2), zero only when both terms are zero | that facet departure | the payload's nonnegative per-triangle perturbation and wall area-gap terms; its cap allowances also remain on a sheet as conservative excess | solid: `sweptVolumeAllow` plus `wallLeg`, `skirtLeg` and `twistVolumeUpper` (loft §8.1), `symDiffOK == true`; sheet: no occupied-volume proof, `symDiffOK == false` |
 | `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus construction rounding `deltaC` and final-placement rounding `deltaR`; `deltaC + deltaR` for otherwise exact planar patches | max per-face source bound (§8) | integral of absolute local true-vs-held area-density error + cap deficits + construction/placement area allowances (§10) | meridian/angular + construction/placement homotopy allowances (§11) |
@@ -674,6 +675,29 @@ Straight-only prisms with exact held coordinates and no section displacement
 therefore have zero boundary bound, zero area slack, and zero analytic
 symmetric-difference allowance. Otherwise the relevant coordinate-construction,
 placement and section-displacement allowances remain.
+
+### 5.1 Planar Patch sheet
+
+`Document.Patch` uses its recorded profile as a single planar face. The mesh
+chords each outer and hole loop with §3's station bounds, proves the same
+cross-loop clearance as a prism cap, then triangulates that polygon with
+holes. Each planar triangle points to the patch's one live face. The
+triangulator's counter-clockwise winding follows the sketch-plane normal;
+a reflected placement reverses each triangle so winding follows the
+reflected face normal. §1.2's free-boundary and vertex-link audits and §9's
+positive-area check run at every verification level. The facet-contact audit
+runs at `VerifyBoundary` and above, so `BoundaryVerified()` is false at
+`VerifyNone` for this payload.
+
+The straight trim-to-chord homotopy and loop-clearance proof in §5 enclose
+both directions between the analytic planar region and its triangulation
+within the largest loop sagitta. Each lifted station also carries its own
+recorded-coordinate, frame-lift and placement rounding allowance. The
+single face's `sourceBound` is the upward-rounded sum of its largest
+sagitta and the largest allowance at a triangle corner. A straight,
+unplaced axis-aligned profile has zero bound. `VerifyAll` sums one cap
+segment-area allowance per curved walk and the per-triangle coordinate
+movement allowance. A Patch sheet has no occupied-volume proof.
 
 ## 6. Cup
 

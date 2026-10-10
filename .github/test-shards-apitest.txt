@@ -1387,6 +1387,10 @@
 8	0.00	TestOffsetPatchNegative
 8	0.01	TestParallelDirsExtremeDirections
 8	0.00	TestPatchIsAPlanarSheet
+8	0.01	TestPatchSheetPlacementBoundAndVerificationLevels
+8	0.00	TestPatchSheetReflectedMeshFollowsFaceNormal
+8	0.01	TestPatchSheetTessellates
+8	0.01	TestPatchSheetWithHoleTessellates
 8	0.04	TestPatternedCircularGroup
 8	0.09	TestPatternedFallsBackToUnion
 8	0.00	TestPlaced
