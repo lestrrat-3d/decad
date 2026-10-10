@@ -2647,13 +2647,13 @@ path; the global sketch reconstruction ceiling is unchanged.
 
 `OuterLoopOf(CapStart(body))` and `OuterLoopOf(CapEnd(body))` select only the
 held outer cap edges, excluding the circular bore rims. An equal-distance
-`Chamfer` of both complete outer loops accepts the same matching axial loft
-with exactly one full circular bore. It requires the held start and end cap
+`Chamfer` of both complete outer loops accepts a matching axial loft with
+zero holes or exactly one full circular bore. It requires the held start and end cap
 polygons to have the same edge multiset, and refuses a partial loop, a bore
 edge, an asymmetric setback, placement, a different section, or alignment.
 The result is a `capBlendPayload` whose outer section is the loft's certified
-held cap polygon. Its bore remains the original full circle, so both bore
-rims stay sharp. The source record, including each 15-fit-point spline flank,
+held cap polygon. When present, its bore remains the original full circle,
+so both bore rims stay sharp. The source record, including each 15-fit-point spline flank,
 is stored with the result for its displacement proof. The chamfer offsets
 the held polygon's edges; it does not denote a smooth-spline offset.
 
@@ -2666,7 +2666,7 @@ cap slabs. It is extra allowance: the chamfer result's own denoted geometry
 is the held polygon band.
 
 At `VerifyAll`, the cap-band occupied-volume proof pairs every ordinary
-straight-wall and circular-bore station with the existing chord and finite
+straight-wall and, when present, circular-bore station with the existing chord and finite
 vertex-motion proof (`docs/tessellation-reach-design.md` §7). The reflex
 connector's cap-level apex stations have no finite point pairing. The proof
 identifies their exact mesh vertex indices, requires every other motion to be
