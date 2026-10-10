@@ -200,6 +200,59 @@ func TestThickenRevolveAxisRefusals(t *testing.T) {
 	})
 }
 
+func TestThickenArcSweepSheetKeepsPathAndMesh(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(4, 0, 6, 2)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	path, err := decad.NewPath(r3.NewVec(5, 0, 0), decad.ArcThrough{
+		Through: r3.NewVec(4, 0, 3), End: r3.NewVec(0, 0, 5),
+	})
+	require.NoError(t, err)
+	doc := decad.New()
+	sheet, err := doc.Sweep(t.Context(), s, s.Profiles()[0], path, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	solid, err := sheet.Thicken(t.Context(), units.Millimeters(0.5),
+		decad.WithThickenSide(decad.ThickenNegative))
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySolid, solid.Kind())
+	volume, err := solid.Volume()
+	require.NoError(t, err)
+	requirePiLinearEnclosed(t, volume, 0, 7.5)
+	requireManifold(t, solid)
+	require.NotNil(t, faceByRole(t, solid, "side(0,0,0)"))
+	require.NotNil(t, faceByRole(t, solid, "side(0,1,0)"))
+	mesh, err := solid.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Contains(t, mesh.SourceFaces(), faceByRole(t, solid, "capStart"))
+	require.Contains(t, mesh.SourceFaces(), faceByRole(t, solid, "capEnd"))
+	for _, face := range mesh.SourceFaces() {
+		require.Contains(t, solid.Faces(), face)
+	}
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	bodyReport, err := report.ForBody(solid)
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, bodyReport.Status)
+	centroid, err := solid.Centroid()
+	require.NoError(t, err)
+	motion, err := r3.Translation(r3.NewVec(7, -3, 11))
+	require.NoError(t, err)
+	placed, err := solid.PlacedCopy(t.Context(), motion)
+	require.NoError(t, err)
+	copyVolume, err := placed.Volume()
+	require.NoError(t, err)
+	requirePiLinearEnclosed(t, copyVolume, 0, 7.5)
+	decadtest.MeasuresCentroid(t, placed, motion.Apply(centroid.Value))
+	require.NotNil(t, faceByRole(t, placed, "side(0,1,0)"))
+}
+
 // requirePiSquaredEnclosed asserts that got's own proven interval encloses
 // coeff * pi^2, bracketed over big.Rat rather than against a second float.
 func requirePiSquaredEnclosed(t *testing.T, got decad.Measurement, coeff float64) {

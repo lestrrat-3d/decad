@@ -1680,3 +1680,6 @@
 1	0.06	TestPointLocationAcrossPocketsAndBores
 2	0.01	TestPointLocationOnAPlate
 3	0.00	TestPointLocationRejectsInvalidRequests
+2	0.00	TestThickenStraightSweepSheetBuildsReplayableSolid
+2	0.00	TestThickenArcSweepSheetKeepsPathAndMesh
+2	0.00	TestThickenStraightSweepSheetSidesMatchExtrude
