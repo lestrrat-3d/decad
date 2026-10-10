@@ -132,39 +132,114 @@ func TestSweepStraightIsABooleanOperand(t *testing.T) {
 	require.Greater(t, got.Value.Base()+got.Bound.Base(), 4830.0)
 }
 
-// TestSweepTessellationStagesEveryOtherReduction keeps Table D row D2 staged
-// for every sweep the exception does not name: the arc reduction and a
-// composite path. TestSurfaceSweepTessellationRefused holds the surface
-// result.
-//
-// Legs shown to fail: with the sweep arm's arc condition deleted the arc
-// subtest goes red, and with its span-count condition deleted the two-span
-// subtest goes red (that sweep then meshes its unused prism field without an
-// error); with its surface-result condition deleted
-// TestSurfaceSweepTessellationRefused goes red.
-func TestSweepTessellationStagesEveryOtherReduction(t *testing.T) {
+func TestSweepArcTessellatesAsItsRevolve(t *testing.T) {
 	t.Parallel()
+	s, profile := plateSketch(t)
+	swept, err := decad.New().Sweep(t.Context(), s, profile, sweepArcPath(t))
+	require.NoError(t, err)
+	got, err := swept.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
 
-	t.Run("arc", func(t *testing.T) {
-		t.Parallel()
-		s, profile := plateSketch(t)
-		body, err := decad.New().Sweep(t.Context(), s, profile, sweepArcPath(t))
-		require.NoError(t, err)
-		_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
+	revolved, err := decad.New().Revolve(s, profile,
+		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 100, V: 0}},
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	want, err := revolved.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.Equal(t, want.Vertices(), got.Vertices())
+	require.Equal(t, want.Triangles(), got.Triangles())
+	require.Equal(t, want.Bound(), got.Bound())
+	require.True(t, got.BoundaryVerified())
+	require.True(t, got.VolumeVerified())
+	unverified, err := swept.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyNone))
+	require.NoError(t, err)
+	require.Equal(t, got.Vertices(), unverified.Vertices())
+	require.Equal(t, got.Triangles(), unverified.Triangles())
+	require.False(t, unverified.BoundaryVerified())
+	require.False(t, unverified.VolumeVerified())
+	live := map[*decad.Face]struct{}{}
+	for _, face := range swept.Faces() {
+		live[face] = struct{}{}
+	}
+	for _, face := range got.SourceFaces() {
+		require.Contains(t, live, face)
+	}
+	motion, err := r3.Translation(r3.NewVec(7, -3, 11))
+	require.NoError(t, err)
+	placedSweep, err := swept.Placed(t.Context(), motion)
+	require.NoError(t, err)
+	placedRevolve, err := revolved.Placed(t.Context(), motion)
+	require.NoError(t, err)
+	gotPlaced, err := placedSweep.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	wantPlaced, err := placedRevolve.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.Equal(t, wantPlaced.Vertices(), gotPlaced.Vertices())
+	require.Equal(t, wantPlaced.Triangles(), gotPlaced.Triangles())
+	require.Equal(t, wantPlaced.Bound(), gotPlaced.Bound())
+	require.True(t, gotPlaced.VolumeVerified())
+}
+
+func TestSweepArcTessellationMapsReversedCaps(t *testing.T) {
+	t.Parallel()
+	s, profile := plateSketch(t)
+	path, err := decad.NewPath(r3.NewVec(20, 110, 0), decad.ArcThrough{
+		Through: r3.NewVec(20, 106, 8), End: r3.NewVec(20, 100, 10),
 	})
-	t.Run("two spans", func(t *testing.T) {
-		t.Parallel()
-		s, profile := plateSketch(t)
-		path, err := decad.NewPath(
-			r3.Vec{},
-			decad.LineTo{End: r3.NewVec(0, 0, 5)},
-			decad.LineTo{End: r3.NewVec(0, 0, 10)},
-		)
-		require.NoError(t, err)
-		body, err := decad.New().Sweep(t.Context(), s, profile, path)
-		require.NoError(t, err)
-		_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NoError(t, err)
+	body, err := decad.New().Sweep(t.Context(), s, profile, path)
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Contains(t, mesh.SourceFaces(), faceByRole(t, body, "capStart"))
+	require.Contains(t, mesh.SourceFaces(), faceByRole(t, body, "capEnd"))
+}
+
+func TestSweepArcIsABooleanOperand(t *testing.T) {
+	t.Parallel()
+	s, profile := plateSketch(t)
+	doc := decad.New()
+	swept, err := doc.Sweep(t.Context(), s, profile, sweepArcPath(t))
+	require.NoError(t, err)
+	bw := sketch.NewWorld()
+	bs, bp := meshPolygonSketch(t, bw, bw.XY(), [][2]float64{
+		{20, 45}, {40, 45}, {40, 65}, {20, 65},
 	})
+	box, err := doc.Extrude(bs, bp, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	move, err := r3.Translation(r3.NewVec(0, 0, 20))
+	require.NoError(t, err)
+	box, err = box.Placed(t.Context(), move)
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), swept, box)
+	require.NoError(t, err)
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	sweepVolume, err := swept.Volume()
+	require.NoError(t, err)
+	boxVolume, err := box.Volume()
+	require.NoError(t, err)
+	require.Greater(t, volume.Value.Base()+volume.Bound.Base(), sweepVolume.Value.Base())
+	require.Less(t, volume.Value.Base()-volume.Bound.Base(),
+		sweepVolume.Value.Base()+boxVolume.Value.Base())
+}
+
+// TestSweepCompositeTessellationRefused keeps D2 staged for a composite path.
+// Deleting the span-count gate meshes its unused prism field instead.
+func TestSweepCompositeTessellationRefused(t *testing.T) {
+	t.Parallel()
+	s, profile := plateSketch(t)
+	path, err := decad.NewPath(
+		r3.Vec{},
+		decad.LineTo{End: r3.NewVec(0, 0, 5)},
+		decad.LineTo{End: r3.NewVec(0, 0, 10)},
+	)
+	require.NoError(t, err)
+	body, err := decad.New().Sweep(t.Context(), s, profile, path)
+	require.NoError(t, err)
+	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

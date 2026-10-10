@@ -431,9 +431,9 @@ withholds the reference and prevents a false `Sound` report.
 | D | Consumer | Status |
 |---|---|---|
 | **D1** | structural `Verify` + tolerance gate | lands with Sweep. For a solid, the construction and global audit prove validity and all four readings are judged. For a `WithSurfaceResult()` sheet, only the one-span straight reduction carries an equivalent construction proof (it IS a prismPayload build, docs/surface-design.md §9.1); the arc reduction and every composite sheet read `Suspect` — the arc build runs no crossing audit of its own, and the composite build's own boundary/vertex-link audit proves assembled topology, not geometric non-self-intersection |
-| **D2** | `Tessellate` / STL / OBJ | a one-span straight solid sweep (no spans, no arc, no surface result) tessellates as the prism it reduced to: its payload's `prism` is the `prismPayload` `evalPrismContext` built, so the prism path chords it and its mesh, `Bound` and every proof are that prism's, with each wall read under the span-prefixed role `side(0,i,j)` that `prefixSweepSpanZeroRole` minted (`tessellate.go`). The arc reduction, every composite path and every surface result stay staged until the shared-span tessellator publishes complete source, area, and boundary proofs |
-| **D3** | mesh booleans | the one-span straight solid sweep is an operand: its D2 mesh carries the prism's `volSymDiff` with `symDiffOK == true`. Every other sweep stays staged until D2 also publishes that proof for it |
-| **D4** | interference | bounds-disjoint pairs work immediately, and the one-span straight solid sweep reaches the mesh intersection D3 admits. Other pairs stay `Suspect` until D3 or a sweep analytic adapter lands |
+| **D2** | `Tessellate` / STL / OBJ | a one-span straight sweep tessellates through its prism reduction; a one-span arc sweep tessellates through its revolve reduction. The reduced tessellator supplies the mesh and every applicable proof, while the source-face lookup maps `side(i,j)` to the sweep's `side(0,i,j)` and exchanges cap roles when `reverseArcCaps` is set. A surface result carries no occupied-volume proof. Composite paths stay staged until the shared-span tessellator publishes complete source, area, and boundary proofs |
+| **D3** | mesh booleans | one-span straight and arc solid sweeps are operands: their D2 meshes carry the corresponding prism or revolve `volSymDiff` with `symDiffOK == true`. Composite sweeps stay staged until D2 publishes that proof for them |
+| **D4** | interference | bounds-disjoint pairs work immediately, and a one-span solid sweep reaches the mesh intersection D3 admits. Other pairs stay `Suspect` until D3 or a sweep analytic adapter lands |
 | **D5** | clearance | box separation may settle the partition, but `WithClearances` stays `Suspect` until a sweep boundary adapter lands |
 | **D6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload` until non-constant-section proofs land |
 | **D7** | `Placed`, `Duplicate`, `PlacedCopy` | re-evaluates the payload under the composed rigid motion and reruns the global audit; every displacement and measurement is recomputed |
@@ -470,7 +470,7 @@ candidate counts before any large allocation or audit.
 
 ## 12. Increments
 
-The current evaluator implements the first four increments, with composite
+The current evaluator implements the first four increments and 5a, with composite
 paths admitted when every transported frame is exact and the conservative §7
 separation audit closes. Other composite paths remain staged as
 `ErrUnsupported`.
@@ -481,7 +481,8 @@ separation audit closes. Other composite paths remain staged as
 | **2** | zero-twist one-span line reduction, topology and all four measurements | arc spans, composite paths, downstream beyond D1 |
 | **3** | zero-twist one-span arc reduction with Revolve's local gates | composite paths |
 | **4** | composite tangent line/arc transport, internal-section topology, global contact audit, D1 and D7 | D2–D6, nonzero twist |
-| **5** | shared-grid tessellation and complete proof record; D2 and D3 | analytic clearance and surveys |
+| **5a** | one-span arc sweep tessellation through its revolve reduction, one-span sheet tessellation through its existing prism or revolve reduction, and mesh-boolean admission for arc solids; D2 and D3 for those reductions. **This row is landed.** | composite paths |
+| **5b** | shared-grid tessellation and complete proof record for composite paths; D2 and D3 | analytic clearance and surveys |
 | **6** | Tier A free-form profile reach supported by each span builder | Tier B/C profile kinds follow spline staging |
 | **7** | nonzero distributed twist as a certified faceted sweep | closed paths, a corner mode or scale other than §16's |
 | **8** | sweep boundary adapter for clearance/interference | non-constant-section surveys |

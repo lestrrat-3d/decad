@@ -122,7 +122,15 @@ type revolvePlan struct {
 
 // tessellateRevolve meshes a revolved body (docs/tessellation-design.md §§8-10).
 func tessellateRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification) (*Mesh, error) {
-	plan, err := planRevolve(ctx, b, rp, chord, verify)
+	return tessellateRevolveWithRoles(ctx, b, rp, chord, verify, nil)
+}
+
+// tessellateRevolveWithRoles reads a reduced revolve's analytic roles through
+// the live body's role vocabulary. A one-span arc sweep prefixes its wall
+// roles and may exchange its cap roles, while every geometric proof remains
+// the reduction's own.
+func tessellateRevolveWithRoles(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification, roleOf func(string) string) (*Mesh, error) {
+	plan, err := planRevolveWithRoles(ctx, b, rp, chord, verify, roleOf)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +169,10 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveplan.Resolu
 // against count-independent ceilings, the meridian takes half of what is left
 // and chords every circular walk, and the angular sequence takes the remainder.
 func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification) (*revolvePlan, error) {
+	return planRevolveWithRoles(ctx, b, rp, chord, verify, nil)
+}
+
+func planRevolveWithRoles(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification, roleOf func(string) string) (*revolvePlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -171,6 +183,9 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 		}
 	}
 	faceOf := func(role string) (*Face, error) {
+		if roleOf != nil {
+			role = roleOf(role)
+		}
 		f, ok := byRole[role]
 		if !ok {
 			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, ErrDegenerate, role)

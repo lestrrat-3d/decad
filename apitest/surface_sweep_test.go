@@ -408,19 +408,36 @@ func requireSweepSheetWithFreeEdges(t *testing.T, b *decad.Body, n int) {
 	require.Len(t, free, n)
 }
 
-// TestSurfaceSweepTessellationRefused is docs/sweep-design.md's Table D row
-// D2: every Sweep body, sheet or solid, stages tessellation until the
-// shared-span tessellator lands — unlike a surface-extruded prism's, which
-// already tessellates.
-func TestSurfaceSweepTessellationRefused(t *testing.T) {
+// TestSurfaceSweepOneSpanTessellates reads the prism and revolve reductions
+// through the sweep's own live wall faces. A sheet has no occupied volume.
+func TestSurfaceSweepOneSpanTessellates(t *testing.T) {
 	t.Parallel()
-	s, p := plateSketch(t)
-	doc := decad.New()
-	sheet, err := doc.Sweep(t.Context(), s, p, sweepLinePath(t), decad.WithSurfaceResult())
-	require.NoError(t, err)
-
-	_, err = sheet.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	for _, tc := range []struct {
+		name string
+		path func(*testing.T) *decad.Path
+	}{
+		{"line", sweepLinePath},
+		{"arc", sweepArcPath},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s, p := plateSketch(t)
+			sheet, err := decad.New().Sweep(t.Context(), s, p, tc.path(t), decad.WithSurfaceResult())
+			require.NoError(t, err)
+			mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			require.NotEmpty(t, mesh.Triangles())
+			require.True(t, mesh.BoundaryVerified())
+			require.False(t, mesh.VolumeVerified())
+			live := map[*decad.Face]struct{}{}
+			for _, face := range sheet.Faces() {
+				live[face] = struct{}{}
+			}
+			for _, face := range mesh.SourceFaces() {
+				require.Contains(t, live, face)
+			}
+		})
+	}
 }
 
 // TestSurfaceSweepShellOpenAgreesWithFreeEdgeDerivation catches a builder that
