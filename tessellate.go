@@ -678,7 +678,7 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 
 	// Prove loop clearance before both caps reuse the wall rings' vertices.
 	if err := tessellation.PrismCaps(ctx, &topology, sheet, capStart, capEnd,
-		pp.z0Delta, pp.z1Delta, requireLoopClearance, triangulation.Triangulate); err != nil {
+		pp.z0Delta, pp.z1Delta, requireRecordLoopClearance, triangulation.Triangulate); err != nil {
 		return nil, err
 	}
 	mesh.triangles, mesh.source = topology.Triangles, topology.Sources
@@ -965,7 +965,8 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		// combined areaSlack used to carry before it split.
 		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.WallSlack, cl.CapSlack, cl.CapSlack)
 		*area = proofbound.AbsSumUpper(*area, cl.SegmentArea)
-		r := ring{samples: samples, faces: cl.FaceOf, sag: cl.MaxSag, walks: cl.Walks, perim: cl.PerimeterUpper}
+		r := ring{samples: point2FromRecordSlice(samples), faces: cl.FaceOf,
+			sag: cl.MaxSag, walks: cl.Walks, perim: cl.PerimeterUpper}
 		r.loV = make([]int, len(samples))
 		r.hiV = make([]int, len(samples))
 		// A wall spans both of its region's levels, so it cannot attribute its
@@ -1030,7 +1031,8 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 
 	// The cup topology shares every chorded ring across its wall, floor and rim.
 	toTopologyRing := func(r ring) tessellation.CupRing[*Face] {
-		return tessellation.CupRing[*Face]{Samples: r.samples, LoV: r.loV, HiV: r.hiV, Faces: r.faces, Sag: r.sag}
+		return tessellation.CupRing[*Face]{Samples: point2ToRecordSlice(r.samples),
+			LoV: r.loV, HiV: r.hiV, Faces: r.faces, Sag: r.sag}
 	}
 	oTopology := make([]tessellation.CupRing[*Face], len(oRings))
 	cTopology := make([]tessellation.CupRing[*Face], len(cRings))
@@ -1042,7 +1044,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	}
 	rimFace := func(i int) (*Face, error) { return faceOfRole(fmt.Sprintf("rim(%d)", i)) }
 	assembled, err := tessellation.AssembleCup(ctx, oTopology, cTopology, openIsMax, capStart, shellCap,
-		rimFace, requireLoopClearance, triangulation.Triangulate, faceTrim, faceAxial,
+		rimFace, requireRecordLoopClearance, triangulation.Triangulate, faceTrim, faceAxial,
 		cp.zOuterDelta, cp.zCavDelta, cp.zOpenDelta)
 	if err != nil {
 		return nil, err
@@ -1208,7 +1210,8 @@ func (m *Mesh) addTriangle(tri [3]int, src *Face) {
 
 // requireLoopClearance maps the first cross-loop clearance failure to the
 // caller's typed tessellation refusal.
-func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, loopSag []float64) error {
+func requireRecordLoopClearance(ctx context.Context, pts []sectionrecord.Point2,
+	loopIdx [][]int, loopSag []float64) error {
 	failure, failed, err := tessellation.SectionLoopClearance(ctx, pts, loopIdx, loopSag)
 	if err != nil || !failed {
 		return err
@@ -1224,9 +1227,14 @@ func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, lo
 	return tessellation.NewExpectedError(fmt.Errorf(`%w: %s`, ErrDegenerate, msg))
 }
 
+func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, loopSag []float64) error {
+	return requireRecordLoopClearance(ctx, point2ToRecordSlice(pts), loopIdx, loopSag)
+}
+
 // requireWalkClearance maps the first within-loop clearance failure to the
 // indexed refusal that deterministic meridian refinement reads.
-func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sag [][]float64) error {
+func requireRecordWalkClearance(ctx context.Context, pts []sectionrecord.Point2,
+	loopIdx [][]int, sag [][]float64) error {
 	failure, failed, err := tessellation.SectionWalkClearance(ctx, pts, loopIdx, sag)
 	if err != nil || !failed {
 		return err
@@ -1243,6 +1251,10 @@ func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sa
 		err:  tessellation.NewExpectedError(fmt.Errorf(`%w: %s`, ErrDegenerate, msg)),
 		loop: failure.Loop, a: failure.ChordA, b: failure.ChordB,
 	}
+}
+
+func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sag [][]float64) error {
+	return requireRecordWalkClearance(ctx, point2ToRecordSlice(pts), loopIdx, sag)
 }
 
 // sectionClearanceError names the two chords requireWalkClearance refused and

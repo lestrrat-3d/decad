@@ -422,7 +422,7 @@ func TestHoleOrderingCancellationIsBounded(t *testing.T) {
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "maxU"}
 
-	_, err := triangulation.Triangulate(ctx, pts, loops)
+	_, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts), loops)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
 		`hole ordering must poll inside the key scan, not only before the sort`)
@@ -449,7 +449,7 @@ func TestHoleOrderingKeepsRightToLeftBridging(t *testing.T) {
 		holeArea += 0.5 * 40 * math.Sin(2*math.Pi/40) * 4 // regular 40-gon, r = 2
 	}
 
-	tris, err := triangulation.Triangulate(t.Context(), pts, loops)
+	tris, err := triangulation.Triangulate(t.Context(), point2ToRecordSlice(pts), loops)
 	require.NoError(t, err)
 	require.NotEmpty(t, tris)
 	total := 0.0
@@ -666,7 +666,7 @@ func TestChordingRefusalsSplitFromOperandDegeneracy(t *testing.T) {
 		// A self-crossing chorded boundary: no corner is ever clippable.
 		pts := []Point2{{U: 0, V: 0}, {U: 10, V: 10}, {U: 10, V: 0}, {U: 0, V: 10}}
 
-		_, err := triangulation.EarClip(t.Context(), pts, []int{0, 1, 2, 3})
+		_, err := triangulation.EarClip(t.Context(), point2ToRecordSlice(pts), []int{0, 1, 2, 3})
 		require.ErrorIs(t, err, ErrDegenerate,
 			`public Tessellate must still see ErrDegenerate through Unwrap`)
 		var coarse *tessellation.ExpectedError
@@ -680,7 +680,7 @@ func TestChordingRefusalsSplitFromOperandDegeneracy(t *testing.T) {
 			{U: 50, V: 50}, {U: 52, V: 50}, {U: 51, V: 52},
 		}
 
-		_, err := triangulation.BridgeHole(t.Context(), pts, []int{0, 1, 2, 3}, []int{4, 5, 6})
+		_, err := triangulation.BridgeHole(t.Context(), point2ToRecordSlice(pts), []int{0, 1, 2, 3}, []int{4, 5, 6})
 		require.ErrorIs(t, err, ErrDegenerate)
 		var coarse *tessellation.ExpectedError
 		require.False(t, errors.As(err, &coarse),

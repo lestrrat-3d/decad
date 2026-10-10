@@ -566,7 +566,7 @@ func TestExtrudeFreeformCollapsedControlNetRefusesR14(t *testing.T) {
 
 	same2 := decad.Point2{U: 3, V: 3}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.ClosedSplineSeg{Control: []decad.Point2{same2, same2, same2}, CCW: true, TStart: 0, TEnd: 1},
+		sectionrecord.ClosedSplineSeg{Control: recordPoints([]decad.Point2{same2, same2, same2}), CCW: true, TStart: 0, TEnd: 1},
 	}}}
 	_, err = record.Area()
 	require.Error(t, err)

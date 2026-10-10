@@ -396,7 +396,7 @@ func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *c
 	in := tessellation.CapBlendMotionInput{
 		CapBlendLoopProof: lm.proof(),
 		Loop:              lm.li, Segments: lm.loop.Segments,
-		CapPts: lm.capPts, CapWallStart: lm.capWallStart,
+		CapPts: point2ToRecordSlice(lm.capPts), CapWallStart: lm.capWallStart,
 		Whole: lm.whole, D: cbp.loopOffset(lm.li), DDelta: cbp.loopSetback(lm.li).dcDelta,
 		Amounts: cbp.walkAmounts(lm.li, lm.walks, cbp.loopOffset(lm.li)),
 	}
@@ -519,8 +519,8 @@ func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm 
 	if err != nil {
 		return err
 	}
-	lm.sidePts, lm.sideBound, lm.sideStart = samples.SidePts, samples.SideBound, samples.SideStart
-	lm.capPts, lm.capBound = samples.CapPts, samples.CapBound
+	lm.sidePts, lm.sideBound, lm.sideStart = point2FromRecordSlice(samples.SidePts), samples.SideBound, samples.SideStart
+	lm.capPts, lm.capBound = point2FromRecordSlice(samples.CapPts), samples.CapBound
 	lm.capWallStart, lm.capArcStart = samples.CapWallStart, samples.CapArcStart
 	return nil
 }
@@ -676,7 +676,7 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 		}
 		m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, capBlendRingSegmentArea(lm, chamfered, cbp.loopOffset(lm.li)))
 	}
-	tris, err := triangulation.Triangulate(ctx, pts, loopIdx)
+	tris, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts), loopIdx)
 	if err != nil {
 		return err
 	}

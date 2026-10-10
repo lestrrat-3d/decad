@@ -320,7 +320,7 @@ func wedgeDenseArea(t *testing.T, p profileRecord, height float64) float64 {
 // reversed walk, the opposite-sense build no longer succeeds.
 func TestLoftFreeformReversedRangeBuildsTheSameStations(t *testing.T) {
 	t.Parallel()
-	control := []Point2{pt(4, 0), pt(4.5, 2), pt(2, 3.5), pt(-0.5, 2), pt(0, 0)}
+	control := point2ToRecordSlice([]Point2{pt(4, 0), pt(4.5, 2), pt(2, 3.5), pt(-0.5, 2), pt(0, 0)})
 	forward := splineSeg{Control: control, TStart: 0, TEnd: 1}
 	reversed := splineSeg{Control: slices.Clone(control), TStart: 1, TEnd: 0}
 	slices.Reverse(reversed.Control)
@@ -507,8 +507,8 @@ func TestLoftFreeformSpanCountMismatchRefusesS17(t *testing.T) {
 // different free-form types. None of them reaches S17's span comparison.
 func TestLoftFreeformMixedPairsRefuseS3(t *testing.T) {
 	t.Parallel()
-	fit := fitSplineSeg{Fit: []Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}, TStart: 0, TEnd: 1}
-	spline := splineSeg{Control: []Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}, TStart: 0, TEnd: 1}
+	fit := fitSplineSeg{Fit: point2ToRecordSlice([]Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}), TStart: 0, TEnd: 1}
+	spline := splineSeg{Control: point2ToRecordSlice([]Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}), TStart: 0, TEnd: 1}
 	arc := arcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
 	line := lineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
 	for _, row := range []struct {
@@ -543,7 +543,7 @@ func TestLoftFreeformMixedPairsRefuseS3(t *testing.T) {
 // instead of the share, the pair chords and no refusal comes back.
 func TestLoftFreeformPairPastItsShareRefusesS15(t *testing.T) {
 	t.Parallel()
-	fit := fitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
+	fit := fitSplineSeg{Fit: point2ToRecordSlice([]Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}), TStart: 0, TEnd: 1}
 	segs := []curveSegment{lineSeg{Start: pt(0, 0), End: pt(0, -1), TStart: 0, TEnd: 1}, fit}
 	for len(segs) < loftmesh.StationCapCeiling {
 		segs = append(segs, lineSeg{Start: pt(4, 0), End: pt(0, 0), TStart: 0, TEnd: 1})

@@ -56,7 +56,7 @@ func denseSpanExtreme(t *testing.T, spans []freeform.BezierSpan, gu, gv float64,
 // needs no closed loop.
 func splineProfile(control []Point2) profileRecord {
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		splineSeg{Control: control, TStart: 0, TEnd: 1},
+		splineSeg{Control: point2ToRecordSlice(control), TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -82,7 +82,7 @@ func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
 	require.Positive(t, bound, "an extreme held by an irrational interior root carries the bracket's own width")
 	require.Less(t, lo, hi)
 
-	spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
+	spans, err := splinebezier.SplineBezierSpans(splineSeg{Control: point2ToRecordSlice(control), TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	_, denseHi := denseSpanExtreme(t, spans, 0, 1, 20_000)
 	require.LessOrEqual(t, denseHi, hi+bound, "the enclosure's upper end must not fall below a dense sample")
@@ -184,9 +184,9 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 	t.Parallel()
 	seg := nurbsSeg{
 		Degree: 2,
-		Control: []Point2{
+		Control: point2ToRecordSlice([]Point2{
 			{U: 0, V: 0}, {U: 1, V: 1}, {U: 2, V: 0}, {U: 2, V: 0}, {U: 2, V: 0},
-		},
+		}),
 		Knots:   []float64{0, 0, 0, 0.5, 0.5, 1, 1, 1},
 		Weights: []float64{1, 1, 1, 1, 1},
 		TStart:  0, TEnd: 1,

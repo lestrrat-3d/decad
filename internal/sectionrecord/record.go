@@ -25,9 +25,10 @@ type PlaneRecord struct {
 	V      r3.Vec `json:"v"`
 }
 
-// Point2 is a plane-local coordinate, a length in millimetres — the
-// docs/api-design.md §5.2 carve-out in the plane's own (u, v).
-type Point2 struct {
+// Point2 carries the plane-local coordinates recorded by the evaluator.
+// The public named Point2 belongs to decad; this unnamed shape lets internal
+// records consume its coordinates without importing the root package.
+type Point2 = struct {
 	U float64 `json:"u"`
 	V float64 `json:"v"`
 }

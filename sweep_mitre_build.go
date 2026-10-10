@@ -50,7 +50,7 @@ func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (mitredCon
 	if err != nil {
 		return mitredConstruction{}, err
 	}
-	capTris, err := triangulation.Triangulate(ctx, pts2, loopIdx)
+	capTris, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts2), loopIdx)
 	if err != nil {
 		return mitredConstruction{}, triangulation.WrapLoftError(err)
 	}
@@ -58,7 +58,7 @@ func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (mitredCon
 	for k, record := range mp.path.records {
 		spans[k] = sweepmitre.Span{Start: record.start, End: record.end}
 	}
-	built, err := sweepmitre.Construct(ctx, mp.plane, pts2, loopIdx, spans, mp.factors)
+	built, err := sweepmitre.Construct(ctx, mp.plane, point2ToRecordSlice(pts2), loopIdx, spans, mp.factors)
 	if err != nil {
 		return mitredConstruction{}, err
 	}

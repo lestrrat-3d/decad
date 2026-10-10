@@ -13,6 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func recordPoints(points []decad.Point2) []sectionrecord.Point2 {
+	if points == nil {
+		return nil
+	}
+	out := make([]sectionrecord.Point2, len(points))
+	for i, point := range points {
+		out[i] = sectionrecord.Point2(point)
+	}
+	return out
+}
+
 func TestRecordProfileRectangle(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()

@@ -36,7 +36,7 @@ func TestFitSplineTwoPointIsExactlyALineSegment(t *testing.T) {
 	c := decad.Point2{U: 2, V: 3}
 
 	fitRecord := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.FitSplineSeg{Fit: []decad.Point2{a, b}, TStart: 0, TEnd: 1},
+		sectionrecord.FitSplineSeg{Fit: recordPoints([]decad.Point2{a, b}), TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: b, End: c, TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: c, End: a, TStart: 0, TEnd: 1},
 	}}}
@@ -88,7 +88,7 @@ func TestFitSplineCollinearPointsMeasureAsTheLine(t *testing.T) {
 			apex := decad.Point2{U: last.U / 2, V: 3}
 
 			fitRecord := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-				sectionrecord.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+				sectionrecord.FitSplineSeg{Fit: recordPoints(fit), TStart: 0, TEnd: 1},
 				sectionrecord.LineSeg{Start: last, End: apex, TStart: 0, TEnd: 1},
 				sectionrecord.LineSeg{Start: apex, End: fit[0], TStart: 0, TEnd: 1},
 			}}}
@@ -125,7 +125,7 @@ func TestFitSplineCurvedHandComputedArea(t *testing.T) {
 	t.Parallel()
 	fit := []decad.Point2{{U: 1, V: 0}, {U: 0, V: 1}, {U: -1, V: 0}}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+		sectionrecord.FitSplineSeg{Fit: recordPoints(fit), TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: decad.Point2{U: -1}, End: decad.Point2{U: 1}, TStart: 0, TEnd: 1},
 	}}}
 
@@ -281,7 +281,7 @@ func TestFitSplineInteriorDuplicateFitPointIsTransparent(t *testing.T) {
 
 	recordOf := func(fit []decad.Point2) momentinput.Profile {
 		return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-			sectionrecord.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+			sectionrecord.FitSplineSeg{Fit: recordPoints(fit), TStart: 0, TEnd: 1},
 			sectionrecord.LineSeg{Start: fit[len(fit)-1], End: fit[0], TStart: 0, TEnd: 1},
 		}}}
 	}
@@ -321,7 +321,7 @@ func TestFitSplineInteriorDuplicateFitPointIsTransparent(t *testing.T) {
 func TestFitSplineAreaRoundingRuleBothSides(t *testing.T) {
 	t.Parallel()
 	exactRecord := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.FitSplineSeg{Fit: []decad.Point2{{U: 0, V: 0}, {U: 4, V: 0}}, TStart: 0, TEnd: 1},
+		sectionrecord.FitSplineSeg{Fit: recordPoints([]decad.Point2{{U: 0, V: 0}, {U: 4, V: 0}}), TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: decad.Point2{U: 4}, End: decad.Point2{U: 2, V: 3}, TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: decad.Point2{U: 2, V: 3}, End: decad.Point2{}, TStart: 0, TEnd: 1},
 	}}}
@@ -334,7 +334,7 @@ func TestFitSplineAreaRoundingRuleBothSides(t *testing.T) {
 
 	approxRecord := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 		sectionrecord.FitSplineSeg{
-			Fit:    []decad.Point2{{U: 1, V: 0}, {U: 0, V: 1}, {U: -1, V: 0}},
+			Fit:    recordPoints([]decad.Point2{{U: 1, V: 0}, {U: 0, V: 1}, {U: -1, V: 0}}),
 			TStart: 0, TEnd: 1,
 		},
 		sectionrecord.LineSeg{Start: decad.Point2{U: -1}, End: decad.Point2{U: 1}, TStart: 0, TEnd: 1},
@@ -356,7 +356,7 @@ func TestFitSplineAllCoincidentFitPointsRefuses(t *testing.T) {
 	t.Parallel()
 	fit := []decad.Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+		sectionrecord.FitSplineSeg{Fit: recordPoints(fit), TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: decad.Point2{U: 5, V: 5}, End: decad.Point2{}, TStart: 0, TEnd: 1},
 	}}}
 	_, err := record.Area()
@@ -373,7 +373,7 @@ func TestFitSplineNonFiniteInterpolantIsUnsupported(t *testing.T) {
 	t.Parallel()
 	fit := []decad.Point2{{U: -1e308, V: 0}, {U: 1e308, V: 1}}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+		sectionrecord.FitSplineSeg{Fit: recordPoints(fit), TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: decad.Point2{U: 1e308, V: 1}, End: decad.Point2{U: -1e308, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	_, err := record.Area()
@@ -398,7 +398,7 @@ func TestFitSplineNonFiniteFitPointIsErrNotFinite(t *testing.T) {
 	closeLoop := func(fit []decad.Point2) momentinput.Profile {
 		last := fit[len(fit)-1]
 		return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-			sectionrecord.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+			sectionrecord.FitSplineSeg{Fit: recordPoints(fit), TStart: 0, TEnd: 1},
 			sectionrecord.LineSeg{Start: last, End: fit[0], TStart: 0, TEnd: 1},
 		}}}
 	}
@@ -484,7 +484,7 @@ func TestOverBudgetFitInterpolantRefusesBeforeSolving(t *testing.T) {
 		fit[i] = decad.Point2{U: float64(i), V: float64(i % 5)}
 	}
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+		sectionrecord.FitSplineSeg{Fit: recordPoints(fit), TStart: 0, TEnd: 1},
 	}}}
 
 	start := time.Now()
@@ -516,7 +516,7 @@ func TestFitSplineTerminalDedupRefusesUnclosedLoop(t *testing.T) {
 	p3 := decad.Point2{U: 10 + 3e-13, V: 10}
 
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.FitSplineSeg{Fit: []decad.Point2{p0, p1, p2, p3}, TStart: 0, TEnd: 1},
+		sectionrecord.FitSplineSeg{Fit: recordPoints([]decad.Point2{p0, p1, p2, p3}), TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: p3, End: p0, TStart: 0, TEnd: 1},
 	}}}
 
@@ -540,7 +540,7 @@ func TestFitSplineNonDegenerateTerminalStillCloses(t *testing.T) {
 	p3 := decad.Point2{U: 9, V: 10}
 
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.FitSplineSeg{Fit: []decad.Point2{p0, p1, p2, p3}, TStart: 0, TEnd: 1},
+		sectionrecord.FitSplineSeg{Fit: recordPoints([]decad.Point2{p0, p1, p2, p3}), TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: p3, End: p0, TStart: 0, TEnd: 1},
 	}}}
 
@@ -564,7 +564,7 @@ func TestFitSplineTerminalDedupRefusesUnclosedLoopReversed(t *testing.T) {
 
 	record := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 		sectionrecord.LineSeg{Start: p0, End: p3, TStart: 0, TEnd: 1},
-		sectionrecord.FitSplineSeg{Fit: []decad.Point2{p0, p1, p2, p3}, TStart: 1, TEnd: 0},
+		sectionrecord.FitSplineSeg{Fit: recordPoints([]decad.Point2{p0, p1, p2, p3}), TStart: 1, TEnd: 0},
 	}}}
 
 	_, err := record.Area()

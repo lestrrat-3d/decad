@@ -572,7 +572,7 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	const sectionDelta = 0.001      // stands in for the build's own max sagitta
 	const sectionMatchedDelta = 0.5 // stands in for its own max matchedDelta, deliberately far larger
 	pairs := []loftmesh.LoopPair{{
-		V: make([]Point2, 2), W: make([]Point2, 2),
+		V: point2ToRecordSlice(make([]Point2, 2)), W: point2ToRecordSlice(make([]Point2, 2)),
 		ArcUpperV: arcUpperV, ArcUpperW: arcUpperW,
 		MatchedDelta: []float64{sectionMatchedDelta, 0},
 		Faceted:      []bool{false, true},
@@ -656,7 +656,7 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 	const chordToCurve = 0.5 // the cell's own sagitta half of the matched row
 	const delta = 0.25       // the held stations' own displacement
 	pairs := []loftmesh.LoopPair{{
-		V: make([]Point2, 2), W: make([]Point2, 2),
+		V: point2ToRecordSlice(make([]Point2, 2)), W: point2ToRecordSlice(make([]Point2, 2)),
 		ArcUpperV:      []float64{1.01, 0},
 		ArcUpperW:      []float64{1.1, 0},
 		MatchedDelta:   []float64{chordToCurve, 0},
@@ -755,7 +755,7 @@ func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 	arcUpperW := []float64{1.1, 1.1}
 	pairsWith := func(matched []float64, faceted bool) []loftmesh.LoopPair {
 		return []loftmesh.LoopPair{{
-			V: make([]Point2, 2), W: make([]Point2, 2),
+			V: point2ToRecordSlice(make([]Point2, 2)), W: point2ToRecordSlice(make([]Point2, 2)),
 			ArcUpperV: arcUpperV, ArcUpperW: arcUpperW,
 			MatchedDelta:   matched,
 			Faceted:        []bool{faceted, faceted},

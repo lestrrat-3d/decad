@@ -35,9 +35,9 @@ func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
 	t.Parallel()
 	seg := nurbsSeg{
 		Degree: 1,
-		Control: []Point2{
+		Control: point2ToRecordSlice([]Point2{
 			{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 0}, {U: 1, V: 0}, {U: 1, V: 1},
-		},
+		}),
 		Knots:   []float64{0, 0, 1, 2, 3, 4, 4},
 		Weights: []float64{1, 1, 1, 1, 1},
 		TStart:  0,
@@ -423,7 +423,7 @@ func involuteFitProfile() profileRecord {
 	fit := involuteFitPoints()
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		lineSeg{Start: fit[0], End: fit[len(fit)-1], TStart: 0, TEnd: 1},
-		fitSplineSeg{Fit: fit, TStart: 1, TEnd: 0},
+		fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 1, TEnd: 0},
 	}}}
 }
 
@@ -665,7 +665,7 @@ func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 	t.Parallel()
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		splineSeg{
-			Control: []Point2{{U: 2}, {U: 2, V: 2}, {V: 2}, {}},
+			Control: point2ToRecordSlice([]Point2{{U: 2}, {U: 2, V: 2}, {V: 2}, {}}),
 			TStart:  0,
 			TEnd:    1,
 		},
@@ -931,7 +931,7 @@ func TestRepeatedPlacementAccumulatesNoError(t *testing.T) {
 	fit := pp.profile.Outer.Segments[1].(fitSplineSeg)
 	// Four curved spans exercise placement without repeating the 15-point
 	// work-budget reproducer used by the other involute tests.
-	fit.Fit = []Point2{fit.Fit[0], fit.Fit[4], fit.Fit[7], fit.Fit[10], fit.Fit[14]}
+	fit.Fit = point2ToRecordSlice([]Point2{fit.Fit[0], fit.Fit[4], fit.Fit[7], fit.Fit[10], fit.Fit[14]})
 	pp.profile.Outer.Segments[1] = fit
 	built, err := evalPrism(New(), 0, pp, freeform.NewFreeformWork())
 	require.NoError(t, err)

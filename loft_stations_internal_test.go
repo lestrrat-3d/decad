@@ -955,7 +955,7 @@ func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, target, "a build with no chorded pair never reads the chord target")
 
-	fit := fitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
+	fit := fitSplineSeg{Fit: point2ToRecordSlice([]Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}), TStart: 0, TEnd: 1}
 	free := profileRecord{Outer: loopRecord{Segments: []curveSegment{fit, fit, fit}}}
 	freeWalks := resolveLoftLoopWalks(t, free)
 	_, c, ok := loftmesh.PairCounts([]loopRecord{free.Outer}, make([]int, 1), freeWalks, freeWalks)
@@ -1165,7 +1165,7 @@ func TestCircularStationChainJunctionsMeetOnOneCoordinate(t *testing.T) {
 
 	firstChain, _ := loftmesh.CircularStationChain(wFirst, first, 6)
 	secondChain, _ := loftmesh.CircularStationChain(wSecond, second, 6)
-	stations := append(append([]Point2{}, firstChain...), secondChain...)
+	stations := append(append([]Point2{}, point2FromRecordSlice(firstChain)...), point2FromRecordSlice(secondChain)...)
 	require.Len(t, stations, 12, "neither segment contributes its own end point")
 	require.Equal(t, Point2{U: second.Start.U, V: second.Start.V}, stations[6],
 		"the junction station is the second segment's pinned start, which is the recorded coordinate")
@@ -1469,7 +1469,7 @@ func TestLoftChordTargetReadsFeatureSize(t *testing.T) {
 			lineSeg{Start: pt(0, 0), End: pt(4, 0), TStart: 0, TEnd: 1},
 			nurbsSeg{
 				Degree:  2,
-				Control: []Point2{pt(4, 0), pt(2, 4), pt(0, 0)},
+				Control: point2ToRecordSlice([]Point2{pt(4, 0), pt(2, 4), pt(0, 0)}),
 				Knots:   []float64{0, 0, 0, 1, 1, 1},
 				Weights: []float64{1, 1, 1},
 				TStart:  0, TEnd: 1,

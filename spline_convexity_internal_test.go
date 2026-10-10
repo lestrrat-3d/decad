@@ -204,7 +204,7 @@ func signsOf(coeffs []*big.Rat) []int {
 func unitWeightCubic(control []Point2) nurbsSeg {
 	return nurbsSeg{
 		Degree:  3,
-		Control: control,
+		Control: point2ToRecordSlice(control),
 		Knots:   []float64{0, 0, 0, 0, 1, 1, 1, 1},
 		Weights: []float64{1, 1, 1, 1},
 		TStart:  0,
@@ -305,10 +305,10 @@ func TestMixedCurvatureAtTheSubdivisionDepthCapRefusesR19(t *testing.T) {
 func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 	t.Parallel()
 	seg := splineSeg{
-		Control: []Point2{
+		Control: point2ToRecordSlice([]Point2{
 			{U: -1.0 / 8, V: 1.0 / 4}, {U: 1.0 / 8, V: -1.0 / 12},
 			{U: -1.0 / 8, V: -1.0 / 12}, {U: 1.0 / 8, V: 1.0 / 4},
-		},
+		}),
 		TStart: 0,
 		TEnd:   1,
 	}
@@ -404,7 +404,7 @@ func TestCollinearNetProvesTheZeroCurvatureNumerator(t *testing.T) {
 	t.Parallel()
 	seg := nurbsSeg{
 		Degree:  2,
-		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 2, V: 0}},
+		Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 2, V: 0}}),
 		Knots:   []float64{0, 0, 0, 1, 1, 1},
 		Weights: []float64{1, 1, 1},
 		TStart:  0,
@@ -438,7 +438,7 @@ func TestCollinearNetProvesTheZeroCurvatureNumerator(t *testing.T) {
 func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 	t.Parallel()
 	fit := []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 2, V: 1}, {U: 3, V: 0}}
-	seg := fitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
+	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
 
 	spans, err := splinebezier.FitSplineBezierSpans(seg, freeform.NewFreeformWork())
@@ -506,7 +506,7 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 func degreeOneNURBS(tStart, tEnd float64) nurbsSeg {
 	return nurbsSeg{
 		Degree:  1,
-		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}},
+		Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}}),
 		Knots:   []float64{0, 0, 1, 2, 2},
 		Weights: []float64{1, 1, 1},
 		TStart:  tStart,
@@ -581,7 +581,7 @@ func TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree(t *testing.T) {
 	t.Parallel()
 	seg := nurbsSeg{
 		Degree:  2,
-		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}},
+		Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}}),
 		Knots:   []float64{0, 0, 0, 1, 1, 1},
 		Weights: []float64{1, 1, 1},
 		TStart:  0,
@@ -626,9 +626,9 @@ func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
 	t.Parallel()
 	seg := nurbsSeg{
 		Degree: 1,
-		Control: []Point2{
+		Control: point2ToRecordSlice([]Point2{
 			{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 0}, {U: 1, V: 0}, {U: 1, V: 1},
-		},
+		}),
 		Knots:   []float64{0, 0, 1, 2, 3, 4, 4},
 		Weights: []float64{1, 1, 1, 1, 1},
 		TStart:  0,
@@ -801,7 +801,7 @@ func TestClosedChainAddsTheWrapJointAnOpenChainNeverReads(t *testing.T) {
 func degreeTwoConvexityFixture(t *testing.T) ([]freeform.BezierSpan, bool) {
 	seg := nurbsSeg{
 		Degree:  2,
-		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}},
+		Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}}),
 		Knots:   []float64{0, 0, 0, 1, 1, 1},
 		Weights: []float64{1, 1, 1},
 		TStart:  0,
@@ -913,7 +913,7 @@ func TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans(t *testing.T) {
 	// TStart > TEnd: the measured real record's own reversed=true, reproduced
 	// directly rather than guessed (apitest/spline_fit_test.go:551 builds a reversed
 	// FitSplineSeg the identical way).
-	seg := fitSplineSeg{Fit: fit, TStart: 1, TEnd: 0}
+	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 1, TEnd: 0}
 	require.NoError(t, validateSegment(seg))
 	require.True(t, splinebezier.IsFitSplineSeg(seg), "the predicate must recognise this record's own kind")
 
@@ -971,7 +971,7 @@ func TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans(t *testing.T) {
 func TestBoehmSplineJointsStayExactlyZeroOnTheSamePoints(t *testing.T) {
 	t.Parallel()
 	pts := involuteFitPoints()
-	seg := splineSeg{Control: pts, TStart: 0, TEnd: 1}
+	seg := splineSeg{Control: point2ToRecordSlice(pts), TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
 	require.False(t, splinebezier.IsFitSplineSeg(seg), "a SplineSeg is never the FitSplineSeg carve-out's subject")
 
@@ -1052,7 +1052,7 @@ func TestFitInterpolatedFlagNeverMasksASpanConflict(t *testing.T) {
 func TestFitSplineGenuineSpanConflictStillRefuses(t *testing.T) {
 	t.Parallel()
 	fit := []Point2{{U: 0, V: 0}, {U: 0, V: 8}, {U: 8, V: 8}, {U: 9, V: 8}, {U: 9, V: 9}}
-	seg := fitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
+	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
 
 	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
@@ -1109,7 +1109,7 @@ func TestFitSplineGenuineSpanConflictStillRefuses(t *testing.T) {
 func TestFitSplineVanishingSpeedStillRefusesRegularity(t *testing.T) {
 	t.Parallel()
 	fit := []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 0, V: 0}}
-	seg := fitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
+	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
 
 	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
@@ -1164,7 +1164,7 @@ func TestDegreeOneNURBSCornerIsNotFitInterpolatedAndStillFolds(t *testing.T) {
 func TestClosedFitSplineChainStillFoldsItsClosingJointByTheCrossProduct(t *testing.T) {
 	t.Parallel()
 	fit := []Point2{{U: 0, V: 0}, {U: -4, V: -4}, {U: -4, V: -3}, {U: 1, V: 1}, {U: 0, V: 0}}
-	seg := fitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
+	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg), "record.go admits Fit[0] == Fit[last]: no closure gate exists")
 
 	spans, err := splinebezier.FitSplineBezierSpans(seg, freeform.NewFreeformWork())

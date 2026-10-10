@@ -276,7 +276,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		if err := requireLoopClearance(ctx, pts, loops, loopSag); err != nil {
 			return nil, err
 		}
-		tris, err := triangulation.Triangulate(ctx, pts, loops)
+		tris, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts), loops)
 		if err != nil {
 			return nil, err
 		}

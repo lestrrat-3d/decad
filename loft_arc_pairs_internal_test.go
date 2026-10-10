@@ -293,7 +293,7 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 		}
 	}
 	pairs := []loftmesh.LoopPair{{
-		V: make([]Point2, n), W: make([]Point2, n),
+		V: point2ToRecordSlice(make([]Point2, n)), W: point2ToRecordSlice(make([]Point2, n)),
 		ArcUpperV: arcUpperV, ArcUpperW: arcUpperW, MatchedDelta: matchedDelta,
 		TangentEnergyV: energyV, TangentEnergyW: energyW, Faceted: make([]bool, n),
 	}}
@@ -522,7 +522,7 @@ func TestLoftArcToFitSplineStillRefusesS3(t *testing.T) {
 		Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1,
 	})}
 	p1 := profileRecord{Outer: squareLoopWithFirstSegment(fitSplineSeg{
-		Fit:    []Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)},
+		Fit:    point2ToRecordSlice([]Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}),
 		TStart: 0, TEnd: 1,
 	})}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))

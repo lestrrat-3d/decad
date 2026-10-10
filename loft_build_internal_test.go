@@ -463,7 +463,7 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	t.Parallel()
 	fit := fitSplineSeg{
-		Fit:    []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)},
+		Fit:    point2ToRecordSlice([]Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}),
 		TStart: 0, TEnd: 1,
 	}
 
@@ -1328,7 +1328,7 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	require.NotEmpty(t, tris0)
 	triSum := new(big.Rat)
 	for _, tri := range tris0 {
-		triSum.Add(triSum, triangleAreaRat2D(a.Pts0, tri))
+		triSum.Add(triSum, triangleAreaRat2D(point2FromRecordSlice(a.Pts0), tri))
 	}
 	require.Equalf(t, 0, polyRat.Cmp(triSum),
 		"published cap area %s must equal the sum of its own triangulation's triangle areas %s exactly",
@@ -1695,8 +1695,8 @@ func TestComputeLoftChordedAllowReversesSignedCorrections(t *testing.T) {
 		r3.NewVec(-0.5, 2, 6), r3.NewVec(3, 4, 7.5),
 	}
 	pairs := []loftmesh.LoopPair{{
-		V:              make([]Point2, 2),
-		W:              make([]Point2, 2),
+		V:              point2ToRecordSlice(make([]Point2, 2)),
+		W:              point2ToRecordSlice(make([]Point2, 2)),
 		ArcUpperV:      []float64{4, 0},
 		ArcUpperW:      []float64{4, 0},
 		MatchedDelta:   []float64{0.01, 0},

@@ -251,7 +251,7 @@ func freeformTriangleProfile() profileRecord {
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		nurbsSeg{
 			Degree:  1,
-			Control: []Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}},
+			Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}}),
 			Weights: []float64{1, 1, 1},
 			Knots:   []float64{0, 0, 0.5, 1, 1},
 			TStart:  0, TEnd: 1,
@@ -279,7 +279,7 @@ func freeformTrianglePayload(t *testing.T, z0, z1 float64) prismPayload {
 func sCurveFreeformProfile() profileRecord {
 	control := []Point2{{U: 0, V: 0}, {U: 0, V: 20}, {U: 10, V: -20}, {U: 10, V: 0}}
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		splineSeg{Control: control, TStart: 0, TEnd: 1},
+		splineSeg{Control: point2ToRecordSlice(control), TStart: 0, TEnd: 1},
 		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 }
@@ -385,7 +385,7 @@ func TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain(t *testing.T) {
 	build := func(fit []Point2) prismPayload {
 		return prismPayload{
 			profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
-				fitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+				fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1},
 			}}},
 			frame: identityFrame(t), z0: 0, z1: 10, xform: r3.Identity(),
 		}
@@ -452,7 +452,7 @@ func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 	t.Parallel()
 	collapsed := profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		splineSeg{
-			Control: []Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}},
+			Control: point2ToRecordSlice([]Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}),
 			TStart:  0, TEnd: 1,
 		},
 	}}}
@@ -472,7 +472,7 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 	collapsedSpan := prismPayload{
 		profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			splineSeg{
-				Control: []Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}},
+				Control: point2ToRecordSlice([]Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}),
 				TStart:  0, TEnd: 1,
 			},
 		}}},
@@ -578,7 +578,7 @@ func freeformLargeProfile(lines int) profileRecord {
 	segs := []curveSegment{
 		nurbsSeg{
 			Degree:  1,
-			Control: []Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}},
+			Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}}),
 			Weights: []float64{1, 1, 1},
 			Knots:   []float64{0, 0, 0.5, 1, 1},
 			TStart:  0, TEnd: 1,
@@ -960,7 +960,7 @@ func arcChordDiameterSquare(t *testing.T, pp prismPayload) *big.Rat {
 	var center *Point2
 	for _, seg := range pp.profile.Outer.Segments {
 		if arc, ok := seg.(arcSeg); ok {
-			center = &arc.Center
+			center = &Point2{U: arc.Center.U, V: arc.Center.V}
 		}
 	}
 	require.NotNil(t, center, `the fixture's section holds one arc`)

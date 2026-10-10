@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -331,7 +332,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	verts := make([]r3.Vec, 0, 2*len(v))
 	maxInputAbs := 0.0
 	for _, side := range []struct {
-		pts   []Point2
+		pts   []sectionrecord.Point2
 		frame r3.Frame
 		what  string
 	}{{v, lp.frame0, "first"}, {w, lp.frame1, "second"}} {

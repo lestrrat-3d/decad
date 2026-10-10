@@ -1170,7 +1170,7 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 func freeformWallSection() profileRecord {
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		fitSplineSeg{
-			Fit:    []Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}},
+			Fit:    point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}}),
 			TStart: 0, TEnd: 1,
 		},
 		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
@@ -1251,12 +1251,12 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 			// so the refusal is ErrUnsupported — the SAME sentinel the free-form
 			// staging limit wraps, on a free-form segment, and still not the
 			// undecided reading.
-			seg: splineSeg{Control: []Point2{
+			seg: splineSeg{Control: point2ToRecordSlice([]Point2{
 				{U: -math.MaxFloat64, V: -math.MaxFloat64},
 				{U: -math.MaxFloat64, V: math.MaxFloat64},
 				{U: math.MaxFloat64, V: -math.MaxFloat64},
 				{U: math.MaxFloat64, V: math.MaxFloat64},
-			}, TStart: 0, TEnd: 1},
+			}), TStart: 0, TEnd: 1},
 			name:    "a free-form span whose length runs past the float64 range",
 			is:      ErrUnsupported,
 			message: "representable float64 range",
