@@ -136,7 +136,8 @@
 //	  revolve junction or complete prism cap loop(s)          builds
 //	  asymmetric brep independent straight-edge chamfer       builds
 //	  asymmetric brep complete-loop chamfer                    builds
-//	  asymmetric stacked chamfer                               ErrUnsupported
+//	  asymmetric stacked independent straight-edge chamfer    builds
+//	  asymmetric stacked complete-loop chamfer                 builds
 //	Chamfer       complete prism cap loop(s)                  builds
 //	Fillet/Chamfer  brep or stacked boolean result, straight
 //	  edge along a reference axis                             builds

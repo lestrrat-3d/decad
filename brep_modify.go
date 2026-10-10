@@ -49,6 +49,12 @@ func (a *asymmetricChamfer) matchesRecordFace(ref *Face, index int) bool {
 	}
 	faceRole := fmt.Sprintf("face(%d)", index)
 	wallRole := fmt.Sprintf("wall(%d)", index)
+	if a.recordRoles != nil {
+		if index < 0 || index >= len(a.recordRoles) {
+			return false
+		}
+		faceRole, wallRole = a.recordRoles[index], a.recordRoles[index]
+	}
 	for _, origin := range ref.origins {
 		if origin.producer == a.body.origin.producer &&
 			(origin.Role == faceRole || origin.Role == wallRole) {
@@ -82,7 +88,7 @@ type brepRoute struct {
 // route L (docs/modify-general-design.md §4), as brepLoopRoute picks, which
 // builds the result or refuses with a Table SB or Table SL row.
 func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (brepRoute, error) {
-	bp, ok, err := brepModifyRecord(ctx, b.payload, req.op)
+	bp, sourceRoles, ok, err := brepModifyRecord(ctx, b.payload, req.op)
 	if err != nil || !ok {
 		return brepRoute{}, err
 	}
@@ -90,6 +96,7 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 		return brepRoute{}, err
 	}
 	if req.asym != nil {
+		req.asym.recordRoles = sourceRoles
 		// Routes E and L map public reference faces to their record faces.
 		// Route P has no reference-face mapping for this option.
 		body, err := brepLoopRoute(ctx, b.doc, bp, req)
@@ -149,21 +156,21 @@ func commitModifyResult(ctx context.Context, b, body *Body) (*Body, error) {
 // the brep route does not take. A stacked receiver with no face view (a
 // prism group, or a record its own audit refuses) is SB2: brepOfStacked's
 // error, naming the op.
-func brepModifyRecord(ctx context.Context, payload featurePayload, op string) (brepPayload, bool, error) {
+func brepModifyRecord(ctx context.Context, payload featurePayload, op string) (brepPayload, []string, bool, error) {
 	switch p := payload.(type) {
 	case brepPayload:
-		return p, true, nil
+		return p, nil, true, nil
 	case stackedPrismPayload:
-		bp, err := brepOfStacked(ctx, p)
+		bp, sourceRoles, err := brepOfStackedWithRoles(ctx, p)
 		if err == nil {
-			return bp, true, nil
+			return bp, sourceRoles, true, nil
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return brepPayload{}, true, ctxErr
+			return brepPayload{}, nil, true, ctxErr
 		}
-		return brepPayload{}, true, fmt.Errorf(`%w; this evaluator %s a stacked receiver through its face view only, and this one has none (brep-modify SB2)`, err, op)
+		return brepPayload{}, nil, true, fmt.Errorf(`%w; this evaluator %s a stacked receiver through its face view only, and this one has none (brep-modify SB2)`, err, op)
 	default:
-		return brepPayload{}, false, nil
+		return brepPayload{}, nil, false, nil
 	}
 }
 

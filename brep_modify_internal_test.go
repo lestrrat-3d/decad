@@ -43,7 +43,7 @@ func requireBrepModifyRefuses(t *testing.T, body *Body, want string) {
 // section displacement the record handed to the brep route carries.
 func requireSB1Names(t *testing.T, body *Body) {
 	t.Helper()
-	bp, ok, err := brepModifyRecord(t.Context(), body.payload, "fillets")
+	bp, _, ok, err := brepModifyRecord(t.Context(), body.payload, "fillets")
 	require.NoError(t, err)
 	require.True(t, ok)
 	delta := bp.sectionDelta()

@@ -347,7 +347,8 @@
 2	0.01	TestAsymmetricChamferOnBrepLoopSideOverrun
 2	0.01	TestAsymmetricChamferOnBrepRestatedEndFaces
 2	0.01	TestAsymmetricChamferOnBrepStraightEdge
-2	0.01	TestAsymmetricChamferOnStackedRefused
+2	0.01	TestAsymmetricChamferOnStackedEdge
+2	0.01	TestAsymmetricChamferOnStackedLoop
 2	0.01	TestAsymmetricChamferOverrunEachSide
 2	0.01	TestAsymmetricChamferReferenceRefused
 2	0.01	TestAsymmetricChamferRepeatable

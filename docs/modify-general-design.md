@@ -367,7 +367,8 @@ orientation differ.
 
 For each touched loop `ℓ` of face `F`, `dc` is its setback across `F` and
 `ds` is its setback along the faces beside `ℓ`. Without
-`WithAsymmetricChamfer`, `dc = ds = d`. With the option on a `brepPayload`,
+`WithAsymmetricChamfer`, `dc = ds = d`. With the option on a brep or stacked
+face view,
 every edge of a touched loop must consistently name either `F` or the face
 beside that edge as its reference. A reference to `F` sets `(dc, ds)` to
 `(d, otherDistance)`; a side reference swaps them. Mixed assignments on one
@@ -454,7 +455,7 @@ volume and lifts through the reference frame.
 | **SL1** | a partial loop outside one admissible straight-edge fillet chain, two loops sharing an edge after route V's partition, or loops mixed with single edges for a `Chamfer`; a selected chain on one planar-face loop takes the partial fillet route | yes | `ErrUnsupported` |
 | **SL2** | an adjacent face outside LB3/LB4/LB6: a curved or oblique neighbour, a split side line, a neighbour whose own loop continues past the vertex on a curve, walls on both sides of `F` | yes | `ErrUnsupported` |
 | **SL3** | retired: a `Fillet` of complete loops builds through `docs/loop-fillet-design.md`'s fillet arm or refuses with that document's Table SF | — | — |
-| **SL4** | `WithAsymmetricChamfer` on a stacked receiver, or a brep route L reference with no unambiguous record-face identity | yes | reach SX16 |
+| **SL4** | an asymmetric route L reference with no unambiguous record-face identity | yes | reach SX16 |
 
 Reach SX6, SX7, SX12, SX13, SX14 and SX15 keep their meanings per band, and
 base S6/S7/S8/S9 per rewritten face.
@@ -704,8 +705,9 @@ Route L (L-1):
   continues on a fillet arc → SL2; P8's top loop chamfered at `d = 3` → SX6
   (the fillet arcs' offsets vanish); the pocket mouth at `d = 5` → SX7 (the
   band reaches the floor); a loop on a face with `delta > 0` → SB1;
-  `WithAsymmetricChamfer` on a stacked receiver → SX16; P8's top loop with
-  cap and side references → the two distinct bounded volumes of §4.2.
+  P8's top loop with cap and side references → the two distinct bounded
+  volumes of §4.2; a blind-pocket stack's outer edge and top loop with
+  both reference choices → the three distinct analytic volumes of §4.2.
 
 Route L (L-2):
 

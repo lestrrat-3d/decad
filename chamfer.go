@@ -209,14 +209,6 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if err := requireNotDraftReceiver(b.payload, "chamfers"); err != nil {
 		return nil, err
 	}
-	// SX16: a stacked receiver's face view does not retain the public face
-	// identities needed to assign an asymmetric setback.
-	if asym != nil {
-		switch b.payload.(type) {
-		case stackedPrismPayload:
-			return nil, fmt.Errorf(`%w: this evaluator cannot map an asymmetric reference face through a stacked receiver's face view (modify-reach SX16)`, ErrUnsupported)
-		}
-	}
 	blend := revolveBlendOp{
 		kind: "chamfer",
 		corner: func(loop cornerLoop, li, ci int, e *Edge) (*cornerBlend, error) {

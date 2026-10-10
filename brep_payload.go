@@ -220,57 +220,68 @@ func brepOfPrism(pp prismPayload) (brepPayload, error) {
 // ErrUnsupported: the record states one region per cap. So is a stack
 // enclosing a cavity (a closed shell, stackedEnclosesCavity).
 func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, error) {
+	bp, _, err := brepOfStackedWithRoles(ctx, sp)
+	return bp, err
+}
+
+// brepOfStackedWithRoles also returns each record face's role on the source
+// stacked body. Chamfer uses the roles only while resolving a public face.
+func brepOfStackedWithRoles(ctx context.Context, sp stackedPrismPayload) (brepPayload, []string, error) {
 	if sp.isGroup() {
-		return brepPayload{}, fmt.Errorf(`%w: a prism group of %d disjoint regions has no face view`, ErrUnsupported, len(sp.slabs[0].Regions))
+		return brepPayload{}, nil, fmt.Errorf(`%w: a prism group of %d disjoint regions has no face view`, ErrUnsupported, len(sp.slabs[0].Regions))
 	}
 	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
-		return brepPayload{}, err
+		return brepPayload{}, nil, err
 	}
 	cavity, err := stackedEnclosesCavity(sp)
 	if err != nil {
-		return brepPayload{}, err
+		return brepPayload{}, nil, err
 	}
 	if cavity {
 		// A brep record's lumps are its connected face sets, so a cavity's
 		// faces would read as a second solid.
-		return brepPayload{}, fmt.Errorf(`%w: a stacked prism enclosing a cavity has no face view`, ErrUnsupported)
+		return brepPayload{}, nil, fmt.Errorf(`%w: a stacked prism enclosing a cavity has no face view`, ErrUnsupported)
 	}
 	sp, err = brepJoinStacked(sp)
 	if err != nil {
-		return brepPayload{}, err
+		return brepPayload{}, nil, err
 	}
 	columns, _, err := stackedColumns(sp)
 	if err != nil {
-		return brepPayload{}, err
+		return brepPayload{}, nil, err
 	}
 	bp := brepPayload{xform: sp.xform}
+	var sourceRoles []string
 	for _, col := range columns {
 		first, last := sp.slabs[col.Start], sp.slabs[col.End]
-		for _, seg := range col.Loop.Segments {
+		for segment, seg := range col.Loop.Segments {
 			bp.faces = append(bp.faces, brepFace{
 				frame: sp.frame, wall: seg, z0: first.Z0, z1: last.Z1,
 				z0Delta: first.Z0Delta, z1Delta: last.Z1Delta, delta: sp.sectionDelta,
 			})
+			sourceRoles = append(sourceRoles, fmt.Sprintf("slab(%d).region(%d).side(%d,%d)",
+				col.Start, col.Region, col.LoopIndex, segment))
 		}
 	}
-	addPlanar := func(region profileRecord, z, zDelta float64, outward bool) {
+	addPlanar := func(region profileRecord, z, zDelta float64, outward bool, sourceRole string) {
 		bp.faces = append(bp.faces, brepFace{frame: sp.frame, region: &region, outward: outward,
 			z0: z, z1: z, z0Delta: zDelta, z1Delta: zDelta, delta: sp.sectionDelta})
+		sourceRoles = append(sourceRoles, sourceRole)
 	}
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
-	addPlanar(first.Regions[0], first.Z0, first.Z0Delta, false)
-	addPlanar(last.Regions[0], last.Z1, last.Z1Delta, true)
+	addPlanar(first.Regions[0], first.Z0, first.Z0Delta, false, roleCapStart)
+	addPlanar(last.Regions[0], last.Z1, last.Z1Delta, true, roleCapEnd)
 	for k, boundary := range sp.interfaces {
 		z, zDelta := sp.slabs[k].Z1, sp.slabs[k].Z1Delta
-		for _, region := range boundary.LowerExposed {
-			addPlanar(region, z, zDelta, true)
+		for e, region := range boundary.LowerExposed {
+			addPlanar(region, z, zDelta, true, fmt.Sprintf("floor(%d,%d)", k, e))
 		}
-		for _, region := range boundary.UpperExposed {
-			addPlanar(region, z, zDelta, false)
+		for e, region := range boundary.UpperExposed {
+			addPlanar(region, z, zDelta, false, fmt.Sprintf("ceiling(%d,%d)", k, e))
 		}
 	}
 	bp.assignRoles()
-	return bp, nil
+	return bp, sourceRoles, nil
 }
 
 // brepJoinProfile adapts a region to brepgeom.JoinProfile.

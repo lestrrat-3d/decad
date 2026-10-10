@@ -186,6 +186,7 @@ func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge
 type asymmetricChamfer struct {
 	body               *Body
 	refs               map[*Edge]*Face
+	recordRoles        []string
 	d, other           float64
 	dDelta, otherDelta float64
 }
