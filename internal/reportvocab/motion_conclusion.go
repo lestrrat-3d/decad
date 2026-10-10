@@ -17,18 +17,34 @@ type MotionPoseFinding[BodyT comparable, CellT any] struct {
 	Diagnostics []Diagnostic[BodyT, CellT]
 }
 
+// MotionSpanOutcome is the internal verdict consumed while concluding a path.
+type MotionSpanOutcome uint8
+
+const (
+	SpanNotEvaluated MotionSpanOutcome = iota
+	SpanClear
+	SpanColliding
+	SpanUndecided
+)
+
 // MotionSpanFinding contains one adjacent pose interval's certificate.
 type MotionSpanFinding struct {
-	Outcome   IntervalOutcome
+	Outcome   MotionSpanOutcome
 	Clearance *measurement.Measurement
 	Note      string
 }
 
+// ConcludedMotionSpan is the interval data returned to the root publisher.
+type ConcludedMotionSpan struct {
+	From, To  units.Value
+	Outcome   MotionSpanOutcome
+	Clearance *measurement.Measurement
+}
+
 // MotionConclusion is the verdict shared by motion and linkage reports.
 type MotionConclusion[BodyT comparable, CellT any] struct {
-	Request     MotionRequest
 	Against     []BodyT
-	Intervals   []MotionInterval
+	Intervals   []ConcludedMotionSpan
 	Clearance   *ScalarReading
 	Assessment  Assessment
 	Diagnostics []Diagnostic[BodyT, CellT]
@@ -38,12 +54,11 @@ type MotionConclusion[BodyT comparable, CellT any] struct {
 // ConcludeMotion assembles interval findings before pose findings, merges
 // intervals around unbuildable interior poses, and reads a path clearance only
 // when every interval is certified clear. Poses must hold one more entry than spans.
-func ConcludeMotion[BodyT comparable, CellT any](request MotionRequest, against []BodyT,
+func ConcludeMotion[BodyT comparable, CellT any](minimumRequested *units.Value, against []BodyT,
 	poses []MotionPoseFinding[BodyT, CellT], spans []MotionSpanFinding, minimum *big.Rat,
 	pathClearance func(*measurement.Measurement) (*ScalarReading, *Diagnostic[BodyT, CellT]),
 ) MotionConclusion[BodyT, CellT] {
 	c := MotionConclusion[BodyT, CellT]{
-		Request:     request,
 		Against:     against,
 		Diagnostics: []Diagnostic[BodyT, CellT]{},
 	}
@@ -60,19 +75,19 @@ func ConcludeMotion[BodyT comparable, CellT any](request MotionRequest, against 
 		// undecided interval. The path's own endpoints remain in the report.
 		for poses[k+1].Unbuildable && k+2 < len(poses) {
 			k++
-			span = MotionSpanFinding{Outcome: IntervalUndecided, Note: firstMotionNote(span.Note, spans[k].Note)}
+			span = MotionSpanFinding{Outcome: SpanUndecided, Note: firstMotionNote(span.Note, spans[k].Note)}
 		}
 		b := poses[k+1]
-		interval := MotionInterval{From: a.At, To: b.At, Outcome: span.Outcome, Clearance: span.Clearance}
+		interval := ConcludedMotionSpan{From: a.At, To: b.At, Outcome: span.Outcome, Clearance: span.Clearance}
 		c.Intervals = append(c.Intervals, interval)
-		if span.Outcome != IntervalClear {
+		if span.Outcome != SpanClear {
 			allClear, met = false, false
 		}
 		if span.Clearance != nil && (lowest == nil || span.Clearance.Value.Base() < lowest.Value.Base()) {
 			lowest = span.Clearance
 		}
 		switch {
-		case span.Outcome == IntervalUndecided:
+		case span.Outcome == SpanUndecided:
 			msg := fmt.Sprintf("the motion from %s to %s is neither certified clear nor bounded by a proven collision", a.At, b.At)
 			if span.Note != "" {
 				msg += ": " + span.Note
@@ -85,7 +100,7 @@ func ConcludeMotion[BodyT comparable, CellT any](request MotionRequest, against 
 				Message: msg,
 				At:      &at,
 			})
-		case span.Outcome == IntervalClear && minimum != nil && span.Clearance != nil &&
+		case span.Outcome == SpanClear && minimum != nil && span.Clearance != nil &&
 			proofarith.FloatRat(span.Clearance.Value.Base()).Cmp(minimum) < 0:
 			met = false
 			if violated {
@@ -97,7 +112,7 @@ func ConcludeMotion[BodyT comparable, CellT any](request MotionRequest, against 
 				Status:   Suspect,
 				Reading:  ReadingGap,
 				Observed: &obs,
-				Required: request.MinClearance,
+				Required: minimumRequested,
 				Message:  fmt.Sprintf("the motion from %s to %s is certified clear, but its proven lower bound does not reach the required minimum", a.At, b.At),
 				At:       &at,
 			})
