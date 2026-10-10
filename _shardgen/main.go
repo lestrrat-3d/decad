@@ -10,18 +10,17 @@
 // This packs by MEASURED cost instead. Every test is named explicitly in the
 // output. Tests sharing the costly chordSweepTable fixture are packed as one
 // unit, so one test binary builds that table. The other tests are packed
-// individually, longest-first into whichever shard is currently lightest.
+// individually by the combined cost of both binaries on each shard.
 //
 // CI shards two test binaries, the root package's and apitest's, and each has
 // its own assignment file. Both files use the same shard numbers, and every
-// shard runner runs its shard of both binaries. Regenerate each file from its
-// own package's measurement:
+// shard runner runs its shard of both binaries. Measure both packages, then
+// regenerate both assignment files together:
 //
-//	GOMAXPROCS=4 go test -race -parallel 1 -timeout 40m -count=1 -json . > costs.jsonl
-//	go -C _shardgen run . -costs ../costs.jsonl -out ../.github/test-shards.txt
-//
-//	GOMAXPROCS=4 go test -race -parallel 1 -timeout 40m -count=1 -json ./apitest/ > costs-apitest.jsonl
-//	go -C _shardgen run . -costs ../costs-apitest.jsonl -pkg ../apitest -out ../.github/test-shards-apitest.txt
+//	GOMAXPROCS=4 go test -race -parallel 1 -timeout 40m -count=1 -json . > .tmp/costs-root.jsonl
+//	GOMAXPROCS=4 go test -race -parallel 1 -timeout 40m -count=1 -json ./apitest/ > .tmp/costs-apitest.jsonl
+//	go -C _shardgen run . -root-costs ../.tmp/costs-root.jsonl -apitest-costs ../.tmp/costs-apitest.jsonl \
+//		-root-out ../.github/test-shards.txt -apitest-out ../.github/test-shards-apitest.txt
 //
 // Both flags matter. GOMAXPROCS=4 matches the CI runner. -parallel 1 is what
 // makes the figures comparable: the suite runs its tests concurrently, and a
@@ -67,28 +66,43 @@ func main() {
 }
 
 func run() error {
-	costsPath := flag.String("costs", "", "go test -json output to read per-test elapsed times from")
-	outPath := flag.String("out", "", "shard assignment file to write")
-	pkgDir := flag.String("pkg", "..", "directory of the package whose tests are sharded")
+	rootCostsPath := flag.String("root-costs", "", "root package go test -json output")
+	apitestCostsPath := flag.String("apitest-costs", "", "apitest go test -json output")
+	rootOutPath := flag.String("root-out", "", "root package assignment file")
+	apitestOutPath := flag.String("apitest-out", "", "apitest assignment file")
 	flag.Parse()
-	if *costsPath == "" || *outPath == "" {
-		return fmt.Errorf("both -costs and -out are required")
+	if *rootCostsPath == "" || *apitestCostsPath == "" || *rootOutPath == "" || *apitestOutPath == "" {
+		return fmt.Errorf("root and apitest cost and output paths are required")
 	}
 
-	costs, err := readCosts(*costsPath)
+	rootCosts, err := readCosts(*rootCostsPath)
 	if err != nil {
 		return err
 	}
-	names, err := listTests(*pkgDir)
+	apitestCosts, err := readCosts(*apitestCostsPath)
 	if err != nil {
 		return err
 	}
-	if len(names) == 0 {
-		return fmt.Errorf("%s enumerates no tests", *pkgDir)
+	rootNames, err := listTests("..")
+	if err != nil {
+		return err
+	}
+	apitestNames, err := listTests("../apitest")
+	if err != nil {
+		return err
+	}
+	if len(rootNames) == 0 || len(apitestNames) == 0 {
+		return fmt.Errorf("both packages must enumerate tests")
 	}
 
-	assigned, totals := pack(names, costs)
-	return write(*outPath, *pkgDir, assigned, totals, costs)
+	assigned, totals, err := pack(rootNames, rootCosts, apitestNames, apitestCosts)
+	if err != nil {
+		return err
+	}
+	if err := write(*rootOutPath, "..", assigned[0], totals[0], rootCosts); err != nil {
+		return err
+	}
+	return write(*apitestOutPath, "../apitest", assigned[1], totals[1], apitestCosts)
 }
 
 // readCosts reads each top-level test's cost from `go test -json` output.
@@ -200,52 +214,113 @@ func listTests(dir string) ([]string, error) {
 	return names, nil
 }
 
-// pack fills the shards longest-first, each test or shared-fixture group going
-// to whichever shard is lightest so far. Ties break on the name so the output
-// is byte-stable: the same inputs must always produce the same file.
-func pack(names []string, costs map[string]float64) ([][]string, []float64) {
-	type unit struct {
-		names []string
-		cost  float64
-	}
+type testUnit struct {
+	pkg   int
+	names []string
+	cost  float64
+}
 
-	var grouped unit
-	var units []unit
+func testUnits(pkg int, names []string, costs map[string]float64) []testUnit {
+	var grouped testUnit
+	var units []testUnit
 	for _, name := range names {
-		if slices.Contains(chordSweepReaders, name) {
+		if pkg == 0 && slices.Contains(chordSweepReaders, name) {
+			grouped.pkg = pkg
 			grouped.names = append(grouped.names, name)
 			grouped.cost += costs[name]
 			continue
 		}
-		units = append(units, unit{names: []string{name}, cost: costs[name]})
+		units = append(units, testUnit{pkg: pkg, names: []string{name}, cost: costs[name]})
 	}
 	if len(grouped.names) != 0 {
 		slices.Sort(grouped.names)
 		units = append(units, grouped)
 	}
-	slices.SortFunc(units, func(a, b unit) int {
+	return units
+}
+
+// pack balances the cost of both binaries on each shard. A single test whose
+// cost exceeds half the equal-share target gets a shard with only one cheap
+// test from the other package. This leaves room for slower CI runners. Every
+// shard receives at least one test from each package because CI runs both
+// binaries on every shard. Name ties keep the output byte-stable.
+func pack(rootNames []string, rootCosts map[string]float64, apitestNames []string, apitestCosts map[string]float64) (
+	[2][][]string, [2][]float64, error,
+) {
+	units := append(testUnits(0, rootNames, rootCosts), testUnits(1, apitestNames, apitestCosts)...)
+	slices.SortFunc(units, func(a, b testUnit) int {
 		if c := cmp.Compare(b.cost, a.cost); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(a.pkg, b.pkg); c != 0 {
 			return c
 		}
 		return cmp.Compare(a.names[0], b.names[0])
 	})
-
-	assigned := make([][]string, shardCount)
-	totals := make([]float64, shardCount)
+	var total float64
 	for _, u := range units {
-		lightest := 0
-		for i := 1; i < shardCount; i++ {
-			if totals[i] < totals[lightest] {
-				lightest = i
+		total += u.cost
+	}
+	assigned := [2][][]string{make([][]string, shardCount), make([][]string, shardCount)}
+	totals := [2][]float64{make([]float64, shardCount), make([]float64, shardCount)}
+	assign := func(shard int, u testUnit) {
+		assigned[u.pkg][shard] = append(assigned[u.pkg][shard], u.names...)
+		totals[u.pkg][shard] += u.cost
+	}
+
+	firstRegularShard := 0
+	if len(units) != 0 && units[0].cost > total/(2*shardCount) {
+		assign(0, units[0])
+		units = units[1:]
+		firstRegularShard = 1
+	}
+
+	// Seed both binaries on every shard with their cheapest remaining tests.
+	// A reserved shard receives no further work after this step.
+	for shard := range shardCount {
+		for pkg := range 2 {
+			if len(assigned[pkg][shard]) != 0 {
+				continue
+			}
+			index := -1
+			for i := len(units) - 1; i >= 0; i-- {
+				if units[i].pkg == pkg {
+					index = i
+					break
+				}
+			}
+			if index < 0 {
+				return assigned, totals, fmt.Errorf("package %d has fewer than %d test groups", pkg, shardCount)
+			}
+			assign(shard, units[index])
+			units = slices.Delete(units, index, index+1)
+		}
+	}
+
+	for _, u := range units {
+		lightest := firstRegularShard
+		for shard := firstRegularShard + 1; shard < shardCount; shard++ {
+			// Rounded zero-second tests still consume runner overhead.
+			if u.cost == 0 {
+				count := len(assigned[0][shard]) + len(assigned[1][shard])
+				leastCount := len(assigned[0][lightest]) + len(assigned[1][lightest])
+				if count < leastCount {
+					lightest = shard
+				}
+				continue
+			}
+			if totals[0][shard]+totals[1][shard] < totals[0][lightest]+totals[1][lightest] {
+				lightest = shard
 			}
 		}
-		assigned[lightest] = append(assigned[lightest], u.names...)
-		totals[lightest] += u.cost
+		assign(lightest, u)
 	}
-	for i := range assigned {
-		slices.Sort(assigned[i])
+	for pkg := range 2 {
+		for shard := range shardCount {
+			slices.Sort(assigned[pkg][shard])
+		}
 	}
-	return assigned, totals
+	return assigned, totals, nil
 }
 
 // write records the assignment for the package in pkgDir. The header names the
