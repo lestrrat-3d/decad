@@ -16,25 +16,31 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// Scene contains the sketch handles and exact document values needed to
-// certify the zero pose and continue one loop's enclosure chain.
+// Scene contains the sketch handles and exact document values for one loop
+// under one drive, on one side of the plane. Zero certifies its starting pose;
+// the chain then continues from that enclosure.
 type Scene struct {
 	Sketch       *sketch.Sketch
 	Driver       sketch.Dimension
-	Driven       []sketch.Dimension
-	Angular      []bool
-	Anchored     []bool
-	Signs        []int
+	Driven       []sketch.Dimension // per dependent: angle or slide distance
+	Angular      []bool             // per dependent: read modulo a turn
+	Anchored     []bool             // per dependent: read from its anchor
+	Signs        []int              // per dependent: axis sense in the scene
 	Options      []sketch.EncloseOption
 	Pins         []Pin
-	ZeroReadings []sketch.Interval
-	Offset       proofbound.RatInterval
-	Side         int
-	DriverLink   int
-	SlideDriver  bool
+	ZeroReadings []sketch.Interval // per dependent: reading at the zero pose
+	// Offset is the driver's scene reading at the zero pose. Its target is
+	// Offset + |q| (docs/linkage-check-design.md §15.2).
+	Offset proofbound.RatInterval
+	// Side identifies the scene plane, DriverLink the driver's position in
+	// Linkage.Links(), and SlideDriver whether its value is a length.
+	Side        int
+	DriverLink  int
+	SlideDriver bool
 }
 
-// Pin pairs a scene point with its exact plane position in the document.
+// Pin pairs a scene point with its world position and an enclosure of its
+// exact plane position in the document.
 type Pin struct {
 	Point *sketch.Point
 	At    r3.Vec

@@ -154,7 +154,7 @@ func TestLoopCanonicalChain(t *testing.T) {
 // the two fixed pins are stated as boxes, which E0 reports as their own, and
 // the two free pins' enclosures sit inside E0's boxes.
 //
-// Leg seen to fail when deleted: the pin-in-box check in askZero — the moved
+// Leg seen to fail when deleted: the pin-in-box check in loopchain.Zero — the moved
 // record is then admitted, on either loop.
 func TestLoopZeroPoseFalsifier(t *testing.T) {
 	t.Parallel()
@@ -250,7 +250,7 @@ func requireFalsifier(t *testing.T, rocker func(t *testing.T) (*Linkage, *Link))
 // refuses each of its pins moved by 1e-6 mm.
 func requireFalsifierPins(t *testing.T, build func(t *testing.T) (*Linkage, *Link), to units.Value, pins int, which string) {
 	t.Helper()
-	scene := func(t *testing.T) *loopScene {
+	scene := func(t *testing.T) *loopchain.Scene {
 		l, link := build(t)
 		spec, err := l.resolveDrive(Drive{{Link: link, From: units.New(0, to.Unit()), To: to}})
 		require.NoError(t, err)
@@ -258,14 +258,16 @@ func requireFalsifierPins(t *testing.T, build func(t *testing.T) (*Linkage, *Lin
 		require.NoError(t, err)
 		return sc
 	}
-	require.NoError(t, scene(t).askZero(t.Context()))
+	_, _, err := loopchain.Zero(t.Context(), *scene(t), ErrUnsupported)
+	require.NoError(t, err)
 	for n := range pins {
 		sc := scene(t)
-		require.Len(t, sc.pins, pins, which)
-		pin := &sc.pins[n]
+		require.Len(t, sc.Pins, pins, which)
+		pin := &sc.Pins[n]
 		shift := big.NewRat(1, 1000000)
-		pin.v = proofbound.IntervalOwned(new(big.Rat).Add(pin.v.Lo, shift), new(big.Rat).Add(pin.v.Hi, shift))
-		require.ErrorIs(t, sc.askZero(t.Context()), ErrUnsupported)
+		pin.V = proofbound.IntervalOwned(new(big.Rat).Add(pin.V.Lo, shift), new(big.Rat).Add(pin.V.Hi, shift))
+		_, _, err := loopchain.Zero(t.Context(), *sc, ErrUnsupported)
+		require.ErrorIs(t, err, ErrUnsupported)
 	}
 }
 
