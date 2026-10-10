@@ -111,3 +111,29 @@ Verify a box at an interior point, a face point, an exterior face point and an
 exterior corner point. Verify a through bore at its center: the interval must
 contain the analytic bore radius. A point near an approximate wall may have
 a zero lower bound while its upper bound remains finite.
+
+## 5. Distance from a point to one trimmed face
+
+```go
+func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error)
+```
+
+The distance is to the selected face's trimmed patch, including its boundary.
+It may be positive for a point inside the owning solid. Solid and sheet faces,
+including faces of retired bodies, use the same query. A nil face, nil context,
+non-finite point, or invalid tolerance returns the matching input error.
+An owning body whose payload cannot tessellate returns its tessellation error.
+
+Tessellate the owning body at `VerifyBoundary`. Select only triangles whose
+`SourceFaces` entry is the selected face. A face with no source triangles
+returns `ErrUnsupported`; a missing source bound returns `ErrBooleanFailed`;
+a non-finite bound returns `ErrUnsupported`. Let `D²` be the exact minimum squared
+distance to those triangles and `B` the face's two-sided source bound. The
+true distance lies in `[max(0, sqrt(D²) − B), sqrt(D²) + B]`. Use directed
+square-root endpoints and `ratIntervalMeasurement` to return a finite
+`Measurement`. This query needs no occupied-volume proof or point-membership
+classification.
+
+Verify a box cap for points on the patch, inside the body, and beyond one
+corner. Verify a curved wall using its analytic radius and a surface-extruded
+sheet face.

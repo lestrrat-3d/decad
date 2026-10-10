@@ -420,6 +420,7 @@ func (f *Face) Surface() Surface   // sealed; see below
 func (f *Face) Loops() []*Loop     // Loop.IsOuter() distinguishes outer from holes
 func (f *Face) Edges() []*Edge
 func (f *Face) Area() (Measurement, error)
+func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error)
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) // a computed direction: a measurement
 func (f *Face) Origins() []FeatureRef // provenance: every feature role that created it — canonicalization
                                       // may merge coplanar faces, and a merged face carries ALL contributing
@@ -448,6 +449,11 @@ func (e *Edge) End() *Vertex
 func (e *Edge) Length() (Measurement, error)
 func (e *Edge) IsConvex() bool
 ```
+
+`Face.DistanceToPoint` measures the selected trimmed face patch, including
+its edges. A point inside the owning solid can have a positive face distance.
+It uses that face's verified mesh displacement bound; the point query design
+owns the interval and refusal rules.
 
 **What `len(Edge.Faces())` means is read per body kind.** On a `BodySolid`,
 one adjacent face is non-manifold, as the gloss above says. On a `BodySheet`,

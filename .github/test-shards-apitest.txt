@@ -9,7 +9,7 @@
 #   shard 0: 1059.82s over 1 tests
 #   shard 1:  175.64s over 104 tests
 #   shard 2:  165.64s over 197 tests
-#   shard 3:   38.93s over 198 tests
+#   shard 3:   38.96s over 201 tests
 #   shard 4:   39.94s over 196 tests
 #   shard 5:   80.90s over 199 tests
 #   shard 6:   90.77s over 195 tests
@@ -378,6 +378,9 @@
 3	0.00	TestExtrudeStatedLevelStaysExact
 3	0.01	TestExtrudeThroughAllCupStop
 3	0.01	TestExtrudeTrimmedCircleSegPrismBoundsTighten
+3	0.01	TestFaceDistanceFromBoxCap
+3	0.01	TestFaceDistanceFromCurvedWall
+3	0.01	TestFaceDistanceFromSheet
 3	0.02	TestFilletBoxAllConvexEdges
 3	0.00	TestFilletOverLargeRadiusFlippingLoopIsUnsupported
 3	0.01	TestFitSplineInteriorDuplicateFitPointIsTransparent
