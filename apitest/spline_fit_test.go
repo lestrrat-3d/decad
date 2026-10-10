@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
@@ -50,7 +51,7 @@ func TestFitSplineTwoPointIsExactlyALineSegment(t *testing.T) {
 	require.NoError(t, err)
 	lineArea, err := lineRecord.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, fitArea.Exactness, "6 mm2 is representable")
+	require.Equal(t, measurement.Exact, fitArea.Exactness, "6 mm2 is representable")
 	require.Equal(t, lineArea, fitArea, "a two-point fit spline is bit-for-bit the chord")
 	value, err := fitArea.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
@@ -212,7 +213,7 @@ func TestFitSplineCurvedHandComputedArea(t *testing.T) {
 	// h enters this construction is squared, so the WHOLE reduction is over
 	// exact rationals and the result must be Approximate with a tiny one-rounding
 	// bound (spline design §3), never a quadrature-sized one.
-	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Equal(t, measurement.Approximate, area.Exactness)
 	bound, err := area.Bound.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.Positive(t, bound)
@@ -327,7 +328,7 @@ func TestFitSplineAreaRoundingRuleBothSides(t *testing.T) {
 	}}}
 	exact, err := exactRecord.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, exact.Exactness, "6 mm2 is representable")
+	require.Equal(t, measurement.Exact, exact.Exactness, "6 mm2 is representable")
 	exactBound, err := exact.Bound.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.Zero(t, exactBound)
@@ -341,7 +342,7 @@ func TestFitSplineAreaRoundingRuleBothSides(t *testing.T) {
 	}}}
 	approx, err := approxRecord.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, approx.Exactness,
+	require.Equal(t, measurement.Approximate, approx.Exactness,
 		"this curved fixture's exact rational area is not representable in float64")
 	approxBound, err := approx.Bound.In(units.SquareMillimeter)
 	require.NoError(t, err)
@@ -546,7 +547,7 @@ func TestFitSplineNonDegenerateTerminalStillCloses(t *testing.T) {
 
 	area, err := record.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Equal(t, measurement.Approximate, area.Exactness)
 }
 
 // TestFitSplineTerminalDedupRefusesUnclosedLoopReversed pins the reversed

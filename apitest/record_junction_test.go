@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -123,7 +124,7 @@ func TestProfileRecordChargesCutJunction(t *testing.T) {
 		require.NoError(t, err)
 		bound, err := area.Bound.In(units.SquareMillimeter)
 		require.NoError(t, err)
-		require.Equal(t, decad.Approximate, area.Exactness)
+		require.Equal(t, measurement.Approximate, area.Exactness)
 		truth := near
 		if b, _ := beyond.Float64(); math.Abs(value-b) < 1 {
 			truth = beyond
@@ -184,7 +185,7 @@ func TestProfileRecordClosesExactLineJunction(t *testing.T) {
 	bound, err := area.Bound.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	requireJunctionEncloses(t, `square area`, value, bound, jf(100))
-	require.Equal(t, decad.Exact, area.Exactness, `an exact closing chord keeps a line-only region exact`)
+	require.Equal(t, measurement.Exact, area.Exactness, `an exact closing chord keeps a line-only region exact`)
 
 	centroid, err := record.Centroid()
 	require.NoError(t, err)

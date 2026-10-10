@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -316,7 +317,7 @@ func TestExtrudeTrimmedCircleSegPrismBoundsTighten(t *testing.T) {
 		"the area bound does not enclose the true error against pi*r^2/4")
 	require.LessOrEqual(t, area.Bound.Base(), 1e-9*area.Value.Base(),
 		"the area bound is not tight against its value")
-	require.Equal(t, decad.Approximate, area.Exactness, "pi*r^2/4 is never exactly representable")
+	require.Equal(t, measurement.Approximate, area.Exactness, "pi*r^2/4 is never exactly representable")
 
 	// The quarter disc's centroid sits at (4r/(3*pi), 4r/(3*pi)) — the
 	// standard quarter-circle centroid distance from each straight edge.
@@ -326,7 +327,7 @@ func TestExtrudeTrimmedCircleSegPrismBoundsTighten(t *testing.T) {
 	require.InDelta(t, wantCentroid, c.Value.X, 1e-9)
 	require.InDelta(t, wantCentroid, c.Value.Y, 1e-9)
 	require.LessOrEqual(t, c.Bound.Base(), 1e-6, "the centroid bound is not small")
-	require.Equal(t, decad.Approximate, c.Exactness)
+	require.Equal(t, measurement.Approximate, c.Exactness)
 }
 
 // TestExtrudeSquarePrismStaysExact is the regression guard: an axis-aligned

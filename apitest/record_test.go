@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -654,7 +655,7 @@ func TestRecordProfileRecordsSnapThresholdTrim(t *testing.T) {
 	value, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, 49.99995, value, 1e-7)
-	require.Equal(t, decad.Approximate, area.Exactness, `a trimmed section is bounded, never Exact`)
+	require.Equal(t, measurement.Approximate, area.Exactness, `a trimmed section is bounded, never Exact`)
 	bound, err := area.Bound.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.Positive(t, bound)
@@ -729,7 +730,7 @@ func TestProfileRecordAreaRejectsUnclosedLoop(t *testing.T) {
 	value, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.Equal(t, 50.0, value)
-	require.Equal(t, decad.Exact, area.Exactness)
+	require.Equal(t, measurement.Exact, area.Exactness)
 }
 
 func TestProfileRecordAreaRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {

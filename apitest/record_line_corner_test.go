@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -189,7 +190,7 @@ func TestProfileRecordClosesLongCutSquareExactly(t *testing.T) {
 	require.Equal(t, 100.0, value)
 	centroid, err := record.Centroid()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, centroid.Exactness)
+	require.Equal(t, measurement.Exact, centroid.Exactness)
 	require.Equal(t, 5.0, centroid.Value.X)
 	require.Equal(t, 5.0, centroid.Value.Y)
 }
