@@ -9,50 +9,50 @@ import (
 )
 
 func thickenAxisSection(ctx context.Context, profile profileRecord, side ThickenSide,
-	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenSection, error) {
+	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenaxis.SectionPair, error) {
 	for _, seg := range profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
-			return thickenSection{}, err
+			return thickenaxis.SectionPair{}, err
 		}
 		if _, ok := seg.(lineSeg); !ok {
-			return thickenSection{}, fmt.Errorf(`%w: the sheet requires line-only axis-parallel walks`, ErrUnsupported)
+			return thickenaxis.SectionPair{}, fmt.Errorf(`%w: the sheet requires line-only axis-parallel walks`, ErrUnsupported)
 		}
 	}
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
-		return thickenSection{}, err
+		return thickenaxis.SectionPair{}, err
 	}
 	if len(loops) != 1 {
-		return thickenSection{}, fmt.Errorf(`%w: the sheet requires one outer loop`, ErrUnsupported)
+		return thickenaxis.SectionPair{}, fmt.Errorf(`%w: the sheet requires one outer loop`, ErrUnsupported)
 	}
 	loop := loops[0]
 	dirs, err := thickenaxis.AxisDirections(loop.walks, budget)
 	if err != nil {
-		return thickenSection{}, err
+		return thickenaxis.SectionPair{}, err
 	}
-	sec := thickenSection{source: profile, outer: profile, inner: profile}
+	sec := thickenaxis.NewSectionPair(profile)
 	if side != ThickenNegative {
-		if sec.outer, err = thickenAxisOffset(budget, profile, loop, dirs, -1, amount); err != nil {
-			return thickenSection{}, err
+		if sec.Outer, err = thickenAxisOffset(budget, profile, loop, dirs, -1, amount); err != nil {
+			return thickenaxis.SectionPair{}, err
 		}
 	}
 	if side != ThickenPositive {
-		if sec.inner, err = thickenAxisOffset(budget, profile, loop, dirs, +1, amount); err != nil {
-			return thickenSection{}, err
+		if sec.Inner, err = thickenAxisOffset(budget, profile, loop, dirs, +1, amount); err != nil {
+			return thickenaxis.SectionPair{}, err
 		}
 	}
 	if side != ThickenNegative {
 		if err := thickenaxis.AxisIntervalClear(ctx, loop.walks, dirs, -1, amount, budget, radial); err != nil {
-			return thickenSection{}, err
+			return thickenaxis.SectionPair{}, err
 		}
 	}
 	if side != ThickenPositive {
 		if err := thickenaxis.AxisIntervalClear(ctx, loop.walks, dirs, +1, amount, budget, radial); err != nil {
-			return thickenSection{}, err
+			return thickenaxis.SectionPair{}, err
 		}
 	}
-	if err := thickenaxis.AuditSectionPair(ctx, budget, sec.outer, sec.inner); err != nil {
-		return thickenSection{}, err
+	if err := thickenaxis.AuditSectionPair(ctx, budget, sec.Outer, sec.Inner); err != nil {
+		return thickenaxis.SectionPair{}, err
 	}
 	return sec, nil
 }

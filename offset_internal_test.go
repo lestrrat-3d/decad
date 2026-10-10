@@ -120,7 +120,7 @@ func TestOffsetPrismIntervalCertificationRefusesThePinch(t *testing.T) {
 // needs that audit because its own payload DOES carry the pair.
 //
 // Shown to fail: assemble the result as an annulus instead — Outer the source
-// loop and the reversed offset as its hole, thickenAnnulus's own shape — and
+// loop and the reversed offset as its hole, SectionPair.Annulus's own shape — and
 // both assertions below go red, which is the only payload shape the dropped
 // audit would have a subject in.
 func TestOffsetPrismResultIsBoundedByTheOffsetLoopAlone(t *testing.T) {
