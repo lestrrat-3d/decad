@@ -56,6 +56,8 @@ type LoopPair struct {
 	ArcUpperV, ArcUpperW           []float64
 	MatchedDelta                   []float64
 	TangentEnergyV, TangentEnergyW []float64
+	// Segment maps each emitted wall cell to the paired source segment.
+	Segment []int
 	// Faceted is parallel to V/W, one entry per cell: true exactly for a
 	// LineSeg pair's cell, whose held triangle pair IS the boundary §5 gives
 	// it. Every other cell stands for a bilinear ruled patch, whether or not
@@ -144,6 +146,7 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 				pair.appendFreeform(cell)
 				for range cell.MatchedDelta {
 					pair.Faceted = append(pair.Faceted, false)
+					pair.Segment = append(pair.Segment, j)
 				}
 				sectionDelta = math.Max(sectionDelta, cell.Sagitta)
 				for _, d := range cell.MatchedDelta {
@@ -164,6 +167,7 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 			faceted := w0.IsLine() && w1.IsLine()
 			for range m {
 				pair.Faceted = append(pair.Faceted, faceted)
+				pair.Segment = append(pair.Segment, j)
 				pair.ArcUpperV = append(pair.ArcUpperV, cellArcV)
 				pair.ArcUpperW = append(pair.ArcUpperW, cellArcW)
 				pair.TangentEnergyV = append(pair.TangentEnergyV, cellEnergyV)

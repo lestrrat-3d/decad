@@ -33,6 +33,12 @@ func Crossing(budget *proofbound.WorkBudget, segs []Entry) error {
 	if err != nil {
 		return err
 	}
+	return CrossingWithFloor(budget, segs, touchFloor)
+}
+
+// CrossingWithFloor checks analytic entries against a section-scale contact
+// floor supplied by a caller that also bounds free-form segments.
+func CrossingWithFloor(budget *proofbound.WorkBudget, segs []Entry, touchFloor float64) error {
 	for i := range segs {
 		for j := i + 1; j < len(segs); j++ {
 			if err := survey2d.WallBudgetStep(budget); err != nil {

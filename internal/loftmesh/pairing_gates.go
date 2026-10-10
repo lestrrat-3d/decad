@@ -18,21 +18,21 @@ import (
 // from recordArea and the walks resolved here (StationCapGate), so the
 // station generators chord at the target the gate decided S15 against.
 //
-// Before it resolves a single walk it raises both records' free-form work
-// ceilings to StationWorkLimit over P, the first profile's segment
+// Before it resolves a single walk it raises each default-limit record's
+// free-form work ceiling to StationWorkLimit over P, the first profile's segment
 // count (docs/loft-gear-bounds-design.md §7). The raise covers the walks'
 // own length brackets as well as the station walk that follows: a full gear
 // outline's brackets alone pass the default ceiling (§7 measures them), and P
 // is read from the record, so it is known before the gates that check it.
-// Every charge before the raise met the default ceiling, and the counters
-// keep what they have spent.
+// A caller that already raised the ceiling for a loft's own profile rewrite
+// keeps that same ceiling and counter across audit, moments and evaluation.
 func ValidateLoftRecords(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.PlaneRecord, alignment []int, recordArea [2]float64, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, float64, error) {
 	p := uint64(len(p0.Outer.Segments))
 	for _, hole := range p0.Holes {
 		p += uint64(len(hole.Segments))
 	}
 	for _, work := range []*freeform.FreeformWork{work0, work1} {
-		if work != nil {
+		if work != nil && (work.Limit == 0 || work.Limit < StationWorkLimit(0, p)) {
 			work.RaiseLimit(StationWorkLimit(work.Spent, p))
 		}
 	}

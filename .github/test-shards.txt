@@ -1277,3 +1277,4 @@
 3	1.00	TestBrepFilletUndercutAgainstSamples
 3	0.01	TestBrepBandMotionCoversContourDisplacement
 3	0.01	TestSeparatedOpposedHoleScene
+5	0.01	TestLoftFilletAuditRefusesPossibleSplineContact

@@ -1683,3 +1683,5 @@
 2	0.00	TestThickenStraightSweepSheetBuildsReplayableSolid
 2	0.00	TestThickenArcSweepSheetKeepsPathAndMesh
 2	0.00	TestThickenStraightSweepSheetSidesMatchExtrude
+5	24.22	TestLoftFilletDefaultGearRoots
+3	0.03	TestLoftFilletRectangleCorner
