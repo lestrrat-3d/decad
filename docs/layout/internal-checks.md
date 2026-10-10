@@ -15,7 +15,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons, body reference formulas, and reading diagnostics. See verification §2-§3. |
 | `internal/verifyoption/` | Verify options. See verification §2. |
-| `internal/featureoption/` | Profile-fed feature option records and validation. See evaluator §5–§6, sweep §2/§16, loft §2, helix §4. |
+| `internal/featureoption/` | Profile-fed feature option records and validation. See evaluator §5–§6, sweep §2/§16, loft §2. |
 | `internal/modifyoption/` | Fillet, Chamfer and Shell option codecs. See modify-reach §2. |
 | `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
 | `internal/prismextent/` | Prism extremes, bounds and extent readings. See evaluator §5. |
