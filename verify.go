@@ -569,8 +569,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	var region *RegionReadings
 	if haveRegion {
 		region = &RegionReadings{
-			Volume:   ScalarReading{Measurement: vol, Tolerance: verdicts.Volume},
-			Centroid: VectorReading{VecMeasurement: cen, Tolerance: verdicts.Centroid},
+			Volume:   ScalarReading{Measurement: vol, Tolerance: toleranceResultFromInternal(verdicts.Volume)},
+			Centroid: VectorReading{VecMeasurement: cen, Tolerance: toleranceResultFromInternal(verdicts.Centroid)},
 		}
 	}
 
@@ -579,14 +579,14 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		Status:              status,
 		Validity:            validity,
 		Topology:            topology,
-		Area:                ScalarReading{Measurement: area, Tolerance: verdicts.Area},
-		Bounds:              BoundsReading{Box: bounds, Tolerance: verdicts.Bounds},
+		Area:                ScalarReading{Measurement: area, Tolerance: toleranceResultFromInternal(verdicts.Area)},
+		Bounds:              BoundsReading{Box: bounds, Tolerance: toleranceResultFromInternal(verdicts.Bounds)},
 		Region:              region,
 		Request:             req,
 		Surveys:             surveys,
-		WallTolerance:       verdicts.Wall,
+		WallTolerance:       toleranceResultFromInternal(verdicts.Wall),
 		WallToleranceDiag:   diagnosticPtrFromInternal(diagSet.Wall),
-		RadiusTolerance:     verdicts.Radius,
+		RadiusTolerance:     toleranceResultFromInternal(verdicts.Radius),
 		RadiusToleranceDiag: diagnosticPtrFromInternal(diagSet.Radius),
 		CoreDiagnostics:     diagnosticsFromInternal(diagSet.Core),
 	}), nil

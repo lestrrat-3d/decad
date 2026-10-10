@@ -9,45 +9,72 @@ import (
 )
 
 // ScalarOutcome is a whole-body scalar survey's result.
-type ScalarOutcome = reportvocab.ScalarOutcome
+type ScalarOutcome int
+
+// String renders the stable survey outcome token.
+func (o ScalarOutcome) String() string { return reportvocab.ScalarOutcome(o).String() }
 
 // Coverage is an undercut survey's face-membership result.
-type Coverage = reportvocab.Coverage
+type Coverage int
+
+// String renders the stable coverage token.
+func (c Coverage) String() string { return reportvocab.Coverage(c).String() }
 
 // Assessment is a verdict against a stated survey requirement.
-type Assessment = reportvocab.Assessment
+type Assessment int
+
+// String renders the stable assessment token.
+func (a Assessment) String() string { return reportvocab.Assessment(a).String() }
 
 // ToleranceState is a reading's verdict against the relative tolerance gate.
-type ToleranceState = reportvocab.ToleranceState
+type ToleranceState int
+
+// String renders the stable tolerance token.
+func (t ToleranceState) String() string { return reportvocab.ToleranceState(t).String() }
 
 // ValidityOutcome is a body's held-boundary validity verdict.
-type ValidityOutcome = reportvocab.ValidityOutcome
+type ValidityOutcome int
+
+// String renders the stable validity token.
+func (v ValidityOutcome) String() string { return reportvocab.ValidityOutcome(v).String() }
 
 const (
-	ScalarNotEvaluated     = reportvocab.ScalarNotEvaluated
-	ScalarNotRequested     = reportvocab.ScalarNotRequested
-	ScalarUnavailable      = reportvocab.ScalarUnavailable
-	ScalarUndecided        = reportvocab.ScalarUndecided
-	ScalarAbsent           = reportvocab.ScalarAbsent
-	ScalarMeasured         = reportvocab.ScalarMeasured
-	CoverageNotEvaluated   = reportvocab.CoverageNotEvaluated
-	CoverageNotRequested   = reportvocab.CoverageNotRequested
-	CoverageUnavailable    = reportvocab.CoverageUnavailable
-	CoverageUndecided      = reportvocab.CoverageUndecided
-	CoveragePartial        = reportvocab.CoveragePartial
-	CoverageComplete       = reportvocab.CoverageComplete
-	AssessmentNotEvaluated = reportvocab.AssessmentNotEvaluated
-	AssessmentMet          = reportvocab.AssessmentMet
-	AssessmentViolated     = reportvocab.AssessmentViolated
-	AssessmentUndecided    = reportvocab.AssessmentUndecided
-	ToleranceNotEvaluated  = reportvocab.ToleranceNotEvaluated
-	ToleranceSatisfied     = reportvocab.ToleranceSatisfied
-	ToleranceExceeded      = reportvocab.ToleranceExceeded
-	ToleranceUndecided     = reportvocab.ToleranceUndecided
-	ValidityNotEvaluated   = reportvocab.ValidityNotEvaluated
-	ValidityValid          = reportvocab.ValidityValid
-	ValidityInvalid        = reportvocab.ValidityInvalid
-	ValidityUndecided      = reportvocab.ValidityUndecided
+	ScalarNotEvaluated ScalarOutcome = iota
+	ScalarNotRequested
+	ScalarUnavailable
+	ScalarUndecided
+	ScalarAbsent
+	ScalarMeasured
+)
+
+const (
+	CoverageNotEvaluated Coverage = iota
+	CoverageNotRequested
+	CoverageUnavailable
+	CoverageUndecided
+	CoveragePartial
+	CoverageComplete
+)
+
+const (
+	AssessmentNotEvaluated Assessment = iota
+	AssessmentMet
+	AssessmentViolated
+	AssessmentUndecided
+)
+
+const (
+	ToleranceNotEvaluated ToleranceState = iota
+	ToleranceSatisfied
+	ToleranceExceeded
+	ToleranceUndecided
+)
+
+const (
+	ValidityNotEvaluated ValidityOutcome = iota
+	ValidityValid
+	ValidityInvalid
+	ValidityUndecided
 )
 
 // WallRequest records the effective wall-thickness settings.
@@ -71,7 +98,18 @@ type VerifyRequest struct {
 }
 
 // ToleranceResult is one reading's tolerance verdict.
-type ToleranceResult = reportvocab.ToleranceResult
+type ToleranceResult struct {
+	State ToleranceState
+	Limit *units.Value
+}
+
+func toleranceResultFromInternal(in reportvocab.ToleranceResult) ToleranceResult {
+	return ToleranceResult{State: ToleranceState(in.State), Limit: in.Limit}
+}
+
+func toleranceResultToInternal(in ToleranceResult) reportvocab.ToleranceResult {
+	return reportvocab.ToleranceResult{State: reportvocab.ToleranceState(in.State), Limit: in.Limit}
+}
 
 // ScalarReading combines a scalar measurement and tolerance verdict.
 type ScalarReading struct {
@@ -92,11 +130,11 @@ type BoundsReading struct {
 }
 
 func scalarReadingFromInternal(in reportvocab.ScalarReading) ScalarReading {
-	return ScalarReading{Measurement: measurementFromInternal(in.Measurement), Tolerance: in.Tolerance}
+	return ScalarReading{Measurement: measurementFromInternal(in.Measurement), Tolerance: toleranceResultFromInternal(in.Tolerance)}
 }
 
 func scalarReadingToInternal(in ScalarReading) reportvocab.ScalarReading {
-	return reportvocab.ScalarReading{Measurement: measurementToInternal(in.Measurement), Tolerance: in.Tolerance}
+	return reportvocab.ScalarReading{Measurement: measurementToInternal(in.Measurement), Tolerance: toleranceResultToInternal(in.Tolerance)}
 }
 
 func scalarReadingPtrFromInternal(in *reportvocab.ScalarReading) *ScalarReading {
@@ -116,21 +154,24 @@ func scalarReadingPtrToInternal(in *ScalarReading) *reportvocab.ScalarReading {
 }
 
 func vectorReadingFromInternal(in reportvocab.VectorReading) VectorReading {
-	return VectorReading{VecMeasurement: vecMeasurementFromInternal(in.VecMeasurement), Tolerance: in.Tolerance}
+	return VectorReading{
+		VecMeasurement: vecMeasurementFromInternal(in.VecMeasurement),
+		Tolerance:      toleranceResultFromInternal(in.Tolerance),
+	}
 }
 
 func vectorReadingToInternal(in VectorReading) reportvocab.VectorReading {
 	return reportvocab.VectorReading{
-		VecMeasurement: vecMeasurementToInternal(in.VecMeasurement), Tolerance: in.Tolerance,
+		VecMeasurement: vecMeasurementToInternal(in.VecMeasurement), Tolerance: toleranceResultToInternal(in.Tolerance),
 	}
 }
 
 func boundsReadingFromInternal(in reportvocab.BoundsReading) BoundsReading {
-	return BoundsReading{Box: boxFromInternal(in.Box), Tolerance: in.Tolerance}
+	return BoundsReading{Box: boxFromInternal(in.Box), Tolerance: toleranceResultFromInternal(in.Tolerance)}
 }
 
 func boundsReadingToInternal(in BoundsReading) reportvocab.BoundsReading {
-	return reportvocab.BoundsReading{Box: boxToInternal(in.Box), Tolerance: in.Tolerance}
+	return reportvocab.BoundsReading{Box: boxToInternal(in.Box), Tolerance: toleranceResultToInternal(in.Tolerance)}
 }
 
 // WallResult records one body's wall survey.
@@ -165,24 +206,35 @@ type ValidityResult struct {
 }
 
 func validityResultFromInternal(in reportvocab.ValidityResult[*Body, JointCell]) ValidityResult {
-	return ValidityResult{Outcome: in.Outcome, Diagnostics: diagnosticsFromInternal(in.Diagnostics)}
+	return ValidityResult{Outcome: ValidityOutcome(in.Outcome), Diagnostics: diagnosticsFromInternal(in.Diagnostics)}
 }
 
 func validityResultToInternal(in ValidityResult) reportvocab.ValidityResult[*Body, JointCell] {
 	return reportvocab.ValidityResult[*Body, JointCell]{
-		Outcome: in.Outcome, Diagnostics: diagnosticsToInternal(in.Diagnostics),
+		Outcome: reportvocab.ValidityOutcome(in.Outcome), Diagnostics: diagnosticsToInternal(in.Diagnostics),
 	}
 }
 
 func concaveRadiusResultFromInternal(in reportvocab.ConcaveRadiusResult[*Body, JointCell]) ConcaveRadiusResult {
 	return ConcaveRadiusResult{
-		Outcome: in.Outcome, Minimum: scalarReadingPtrFromInternal(in.Minimum),
+		Outcome: ScalarOutcome(in.Outcome), Minimum: scalarReadingPtrFromInternal(in.Minimum),
 		Diagnostics: diagnosticsFromInternal(in.Diagnostics),
 	}
 }
 
 // HeldTopology records a body's lump and void counts.
-type HeldTopology = reportvocab.HeldTopology
+type HeldTopology struct {
+	Lumps int
+	Voids int
+}
+
+func heldTopologyFromInternal(in reportvocab.HeldTopology) HeldTopology {
+	return HeldTopology{Lumps: in.Lumps, Voids: in.Voids}
+}
+
+func heldTopologyToInternal(in HeldTopology) reportvocab.HeldTopology {
+	return reportvocab.HeldTopology{Lumps: in.Lumps, Voids: in.Voids}
+}
 
 // RegionReadings groups a solid body's volume and centroid.
 type RegionReadings struct {
