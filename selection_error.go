@@ -1,26 +1,103 @@
 package decad
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/r3"
 )
 
 // SelectorKind names the entity a selector picks.
-type SelectorKind = selectorquery.SelectorKind
+type SelectorKind int
 
 const (
-	EdgeSelectorKind = selectorquery.EdgeSelectorKind
-	FaceSelectorKind = selectorquery.FaceSelectorKind
+	EdgeSelectorKind SelectorKind = iota
+	FaceSelectorKind
 )
 
+// String reports the selected entity in singular form.
+func (k SelectorKind) String() string {
+	switch k {
+	case EdgeSelectorKind:
+		return "edge"
+	case FaceSelectorKind:
+		return "face"
+	default:
+		return fmt.Sprintf("SelectorKind(%d)", int(k))
+	}
+}
+
 // PredicateResidual records the running count after one query clause.
-type PredicateResidual = selectorquery.Residual
+type PredicateResidual struct {
+	Branch    int
+	Predicate string
+	Remaining int
+}
 
 // SelectionError reports a failed edge or face query with the body's identity,
 // asserted count, and the clause counts that explain the failure.
-type SelectionError = selectorquery.SelectionError[*Body]
+type SelectionError struct {
+	Kind      SelectorKind
+	Query     string
+	Body      *Body
+	Expected  string
+	Actual    int
+	Residuals []PredicateResidual
+	branches  int
+	bodyRef   string
+	err       error
+}
+
+// Error renders the wrapped sentinel, query, counts, and emptied clauses.
+func (e *SelectionError) Error() string {
+	noun := "edges"
+	if e.Kind == FaceSelectorKind {
+		noun = "faces"
+	}
+	subject := e.Query
+	if e.bodyRef != "" {
+		subject += " on body " + e.bodyRef
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s: %s matched %d %s, expected %s", e.err, subject, e.Actual, noun, e.Expected)
+	for _, r := range e.emptiedClauses() {
+		if e.branches > 1 {
+			fmt.Fprintf(&b, "; the clause %s of branch %d matched none", r.Predicate, r.Branch)
+			continue
+		}
+		fmt.Fprintf(&b, "; the clause %s matched none", r.Predicate)
+	}
+	return b.String()
+}
+
+// Unwrap returns the sentinel used to classify the selection failure.
+func (e *SelectionError) Unwrap() error { return e.err }
+
+// emptiedClauses keeps the first zero-count clause of each branch.
+func (e *SelectionError) emptiedClauses() []PredicateResidual {
+	var out []PredicateResidual
+	for i, r := range e.Residuals {
+		if r.Remaining != 0 {
+			continue
+		}
+		if i > 0 && e.Residuals[i-1].Branch == r.Branch && e.Residuals[i-1].Remaining == 0 {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// newSelectionError records the details of one failed resolution.
+func newSelectionError(kind SelectorKind, query string, body *Body, expected string,
+	actual int, residuals []PredicateResidual, branches int, err error) *SelectionError {
+	return &SelectionError{
+		Kind: kind, Query: query, Body: body, Expected: expected, Actual: actual,
+		Residuals: residuals, branches: branches, bodyRef: renderBodyRef(body), err: err,
+	}
+}
 
 // expectedExactlyOne is the Expected an implicit exactly-one (ToFace,
 // ToFaceAngular, EdgeAxis) renders.
@@ -90,14 +167,14 @@ func renderRef(f FeatureRef) string {
 // reports, computing the per-clause residuals over the body's edges. Residuals
 // are computed only here, on the failing path.
 func (q *EdgeQuery) selectionError(body *Body, actual int, expected string, sentinel error) *SelectionError {
-	return selectorquery.NewSelectionError(EdgeSelectorKind, q.String(), body, renderBodyRef(body),
+	return newSelectionError(EdgeSelectorKind, q.String(), body,
 		expected, actual, q.residuals(body), len(q.branches), sentinel)
 }
 
 // selectionError builds the SelectionError a face query's failing resolution
 // reports, the face analog of EdgeQuery.selectionError.
 func (q *FaceQuery) selectionError(body *Body, actual int, expected string, sentinel error) *SelectionError {
-	return selectorquery.NewSelectionError(FaceSelectorKind, q.String(), body, renderBodyRef(body),
+	return newSelectionError(FaceSelectorKind, q.String(), body,
 		expected, actual, q.residuals(body), len(q.branches), sentinel)
 }
 
@@ -110,12 +187,24 @@ func renderBodyRef(body *Body) string {
 
 // residuals evaluates edge predicates cumulatively on the failing path.
 func (q *EdgeQuery) residuals(body *Body) []PredicateResidual {
-	return selectorquery.Residuals(body.Edges(), q.branches, EdgePredicate.matches, EdgePredicate.render)
+	return predicateResiduals(selectorquery.Residuals(body.Edges(), q.branches, EdgePredicate.matches, EdgePredicate.render))
 }
 
 // residuals evaluates face predicates cumulatively on the failing path.
 func (q *FaceQuery) residuals(body *Body) []PredicateResidual {
-	return selectorquery.Residuals(body.Faces(), q.branches, FacePredicate.matches, FacePredicate.render)
+	return predicateResiduals(selectorquery.Residuals(body.Faces(), q.branches, FacePredicate.matches, FacePredicate.render))
+}
+
+// predicateResiduals presents the internal counts in the public error type.
+func predicateResiduals(counts []selectorquery.Residual) []PredicateResidual {
+	if counts == nil {
+		return nil
+	}
+	out := make([]PredicateResidual, len(counts))
+	for i, count := range counts {
+		out[i] = PredicateResidual{Branch: count.Branch, Predicate: count.Predicate, Remaining: count.Remaining}
+	}
+	return out
 }
 
 // impliedOneFace builds the implicit exactly-one SelectionError a ToFace /
