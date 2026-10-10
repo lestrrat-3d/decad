@@ -144,9 +144,12 @@ across a plane the body's own record states.
 func (b *Body) Mirrored(ctx context.Context, plane MirrorPlane, opts ...MirrorOption) (*Body, error)
 func (b *Body) MirroredCopy(ctx context.Context, plane MirrorPlane) (*Body, error)
 
-type MirrorOption interface{ option.Interface; mirrorOption() }
+type MirrorOption interface{ mirrorOption() }
 func WithJoin() MirrorOption
 ```
+
+`MirrorOption` is sealed by its private marker. Callers select the join through
+`WithJoin`; the option's codec identity is not part of the modeling contract.
 
 `Mirrored` is `Placed` under `r3.Reflection(frame)`: it retires the receiver
 and registers the image. `MirroredCopy` is `PlacedCopy` under the same

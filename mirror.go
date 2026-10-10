@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // MirrorPlane is what a body may be mirrored across: a [MirrorFrame] the
@@ -46,7 +45,6 @@ func (MirrorFace) mirrorPlane()  {}
 
 // MirrorOption configures [Body.Mirrored]. [WithJoin] is the one option.
 type MirrorOption interface {
-	option.Interface
 	mirrorOption()
 }
 
@@ -78,7 +76,7 @@ func (b *Body) Mirrored(ctx context.Context, plane MirrorPlane, opts ...MirrorOp
 		}
 		// MirrorOption carries one variant, so this is an if rather than a
 		// single-case type switch.
-		if _, ok := o.Ident().(identMirrorJoin); ok {
+		if _, ok := o.(mirrorJoinOption); ok {
 			join = true
 		}
 	}
