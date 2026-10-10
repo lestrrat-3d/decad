@@ -2,7 +2,6 @@ package decad
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"strings"
 
@@ -17,12 +16,6 @@ import (
 // This file owns the one-arc Sweep reduction. ArcThrough's three recorded
 // points derive one exact rational circle. Its float axis and angle are held
 // beside rational enclosures of the exact values they publish.
-
-type sweepArcGeometry struct {
-	line axisLine2
-	phi  float64
-	den  revolveangle.Angle
-}
 
 type sweepRatVec = sweeparc.RatVec
 type sweepArcRecord = sweeparc.Record
@@ -42,17 +35,18 @@ func evalArcSweepContext(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	geometry, err := deriveSweepArc(pathRecord, plane)
+	geometry, err := sweeparc.Derive(pathRecord.start, pathRecord.arc,
+		pathRecord.arcPhi, pathRecord.arcAngle, plane)
 	if err != nil {
 		return nil, err
 	}
-	ax, side, err := resolveAxisSide(ctx, profile, geometry.line, work)
+	ax, side, err := resolveAxisSide(ctx, profile, geometry.Line, work)
 	if err != nil {
 		return nil, err
 	}
 
-	phi0, phi1 := 0.0, geometry.phi
-	den := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: geometry.den}
+	phi0, phi1 := 0.0, geometry.Phi
+	den := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: geometry.Angle}
 	reverseCaps := false
 	if side < 0 {
 		phi0, phi1 = -phi1, -phi0
@@ -101,63 +95,8 @@ func evalArcSweepContext(
 	return body, nil
 }
 
-func deriveSweepArc(pathRecord pathSegmentRecord, plane planeRecord) (sweepArcGeometry, error) {
-	start := pathRecord.start
-	normal := proofarith.DvCross(proofarith.DyVec(plane.U), proofarith.DyVec(plane.V))
-	relStart := proofarith.DvSub(proofarith.DyVec(start), proofarith.DyVec(plane.Origin))
-	if !proofarith.DvDot(relStart, normal).IsZero() {
-		return sweepArcGeometry{}, fmt.Errorf(`%w: the sweep path must start in the profile plane`, ErrDegenerate)
-	}
-
-	if pathRecord.arc == nil {
-		return sweepArcGeometry{}, fmt.Errorf(`%w: a sweep arc path record holds no circular carrier`, ErrDegenerate)
-	}
-	record := *pathRecord.arc
-	centerRat := record.Center
-	r0, rm, r1 := record.RadiusStart, record.RadiusMiddle, record.RadiusEnd
-	axisRat := record.Axis
-	tangent := sweepRatCross(axisRat, r0)
-	normalRat := sweepRatFromDyadic(normal)
-	if !sweepRatIsZero(sweepRatCross(tangent, normalRat)) || sweepRatDot(tangent, normalRat).Sign() <= 0 {
-		return sweepArcGeometry{}, fmt.Errorf(`%w: the sweep path's initial tangent must follow the profile plane's positive normal`, ErrDegenerate)
-	}
-	if sweepRatDot(sweepRatSub(centerRat, sweepRatVecOf(plane.Origin)), normalRat).Sign() != 0 {
-		return sweepArcGeometry{}, fmt.Errorf(`%w: the sweep arc's derived axis does not lie in the profile plane`, ErrDegenerate)
-	}
-
-	// The carrier was solved from all three points. This equality catches an
-	// arithmetic regression before a derived angle reaches the evaluator.
-	radiusSquared := sweepRatDot(r0, r0)
-	if sweepRatDot(rm, rm).Cmp(radiusSquared) != 0 || sweepRatDot(r1, r1).Cmp(radiusSquared) != 0 {
-		return sweepArcGeometry{}, fmt.Errorf(`%w: the sweep arc points do not share one exact carrier`, ErrUnsupported)
-	}
-	line, err := sweepArcAxisLine(centerRat, axisRat, plane)
-	if err != nil {
-		return sweepArcGeometry{}, err
-	}
-
-	return sweepArcGeometry{
-		line: line,
-		phi:  pathRecord.arcPhi,
-		den:  pathRecord.arcAngle,
-	}, nil
-}
-
 func recordSweepArc(start, through, end r3.Vec) (sweepArcRecord, error) {
 	return sweeparc.RecordArc(start, through, end)
-}
-
-func sweepArcAxisLine(center, axis sweepRatVec, plane planeRecord) (axisLine2, error) {
-	line, err := sweeparc.AxisLine(center, axis, plane.Origin, plane.U, plane.V)
-	if err != nil {
-		return axisLine2{}, err
-	}
-	return axisLine2{
-		aU: line.AU, aV: line.AV,
-		aUBound: line.AUBound, aVBound: line.AVBound,
-		dU: line.DU, dV: line.DV,
-		dUBound: line.DUBound, dVBound: line.DVBound,
-	}, nil
 }
 
 func sweepRatHeld(value *big.Rat) (float64, float64, bool) {

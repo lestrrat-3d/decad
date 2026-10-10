@@ -69,7 +69,7 @@ func WithLeftHand() CoilOption {
 type coilPayload struct {
 	profile  profileRecord
 	frame    r3.Frame
-	line     axisLine2
+	line     revolveaxis.Line2
 	side     int
 	pitch    float64
 	turns    float64
@@ -253,13 +253,13 @@ func coilMagnitude(v units.Value, kind units.Kind, unit units.Unit, what string)
 // strictly positive. With one turn or more it requires the axial extent's
 // upper bound below the pitch (CP5). Both are reject-only readings off the
 // profile's own record; neither admits a profile the proof does not cover.
-func coilSide(ctx context.Context, profile profileRecord, line axisLine2, pitch, turns float64, work *freeform.FreeformWork) (int, error) {
-	nU, nV := -line.dV, line.dU
+func coilSide(ctx context.Context, profile profileRecord, line revolveaxis.Line2, pitch, turns float64, work *freeform.FreeformWork) (int, error) {
+	nU, nV := -line.DV, line.DU
 	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work, nil)
 	if err != nil {
 		return 0, err
 	}
-	zlo, zhi, zBound, err := boundaryExtremesBoundedContext(ctx, profile, line.dU, line.dV, work, nil)
+	zlo, zhi, zBound, err := boundaryExtremesBoundedContext(ctx, profile, line.DU, line.DV, work, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -267,10 +267,7 @@ func coilSide(ctx context.Context, profile profileRecord, line axisLine2, pitch,
 	if err != nil {
 		return 0, err
 	}
-	resolved, err := revolveaxis.ResolveSide(revolveaxis.Line2{
-		AU: line.aU, AV: line.aV, AUBound: line.aUBound, AVBound: line.aVBound,
-		DU: line.dU, DV: line.dV, DUBound: line.dUBound, DVBound: line.dVBound,
-	}, revolveaxis.SideExtremes{
+	resolved, err := revolveaxis.ResolveSide(line, revolveaxis.SideExtremes{
 		RLo: rlo, RHi: rhi, RBound: rBound,
 		ZLo: zlo, ZHi: zhi, ZBound: zBound,
 		CoordUpper: coordUpper,

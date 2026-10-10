@@ -17,7 +17,7 @@ import (
 )
 
 // This file resolves a revolve's axis into the sketch plane and decides what
-// the profile may do around it: axisLine2, the 2D line the axis projects to;
+// the profile may do around it: revolveaxis.Line2, the 2D line the axis projects to;
 // axisFrame, the axis-local frame every later reading is taken in; and the
 // two gates that refuse a profile crossing or touching the axis where the
 // sweep would be degenerate.
@@ -28,17 +28,8 @@ import (
 // exactly refuses rather than being assigned the nearest one. See
 // docs/evaluator-design.md §6.
 
-// axisLine2 is a revolve axis resolved into the profile plane: a point on
-// the axis and its unit direction, plane-local (u, v).
-type axisLine2 struct {
-	aU, aV           float64
-	aUBound, aVBound float64
-	dU, dV           float64
-	dUBound, dVBound float64
-}
-
-// axisInPlane reads the public axis variant and adapts its resolved coordinates.
-func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
+// axisInPlane reads the public axis variant and resolves its coordinates.
+func axisInPlane(a Axis, frame r3.Frame) (revolveaxis.Line2, error) {
 	var input revolveaxis.AxisInput
 	switch value := a.(type) {
 	case SketchLine:
@@ -49,18 +40,9 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 	case ConstructionAxis:
 		input = revolveaxis.ConstructionAxis{Origin: value.Origin, Dir: value.Dir}
 	default:
-		return axisLine2{}, fmt.Errorf(`%w: axis %T is not supported by this evaluator`, ErrUnsupported, a)
+		return revolveaxis.Line2{}, fmt.Errorf(`%w: axis %T is not supported by this evaluator`, ErrUnsupported, a)
 	}
-	line, err := revolveaxis.AxisInPlane(input, frame)
-	if err != nil {
-		return axisLine2{}, err
-	}
-	return axisLine2{
-		aU: line.AU, aV: line.AV,
-		aUBound: line.AUBound, aVBound: line.AVBound,
-		dU: line.DU, dV: line.DV,
-		dUBound: line.DUBound, dVBound: line.DVBound,
-	}, nil
+	return revolveaxis.AxisInPlane(input, frame)
 }
 
 // axisFrame is the revolve axis as a proper plane-local frame with the
@@ -168,13 +150,13 @@ func (ax axisFrame) IsAxis(w survey2d.SegmentWalk) bool {
 
 // resolveAxisSide scans the record, asks revolveaxis to decide its side, then
 // audits each walk for axis contact and charges any snapped endpoint.
-func resolveAxisSide(ctx context.Context, profile profileRecord, line axisLine2, work *freeform.FreeformWork) (axisFrame, float64, error) {
-	nU, nV := -line.dV, line.dU
+func resolveAxisSide(ctx context.Context, profile profileRecord, line revolveaxis.Line2, work *freeform.FreeformWork) (axisFrame, float64, error) {
+	nU, nV := -line.DV, line.DU
 	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work, nil)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
-	zlo, zhi, zBound, err := boundaryExtremesBoundedContext(ctx, profile, line.dU, line.dV, work, nil)
+	zlo, zhi, zBound, err := boundaryExtremesBoundedContext(ctx, profile, line.DU, line.DV, work, nil)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
@@ -185,10 +167,7 @@ func resolveAxisSide(ctx context.Context, profile profileRecord, line axisLine2,
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
-	resolved, err := revolveaxis.ResolveSide(revolveaxis.Line2{
-		AU: line.aU, AV: line.aV, AUBound: line.aUBound, AVBound: line.aVBound,
-		DU: line.dU, DV: line.dV, DUBound: line.dUBound, DVBound: line.dVBound,
-	}, revolveaxis.SideExtremes{
+	resolved, err := revolveaxis.ResolveSide(line, revolveaxis.SideExtremes{
 		RLo: rlo, RHi: rhi, RBound: rBound,
 		ZLo: zlo, ZHi: zhi, ZBound: zBound,
 		CoordUpper: coordUpper,

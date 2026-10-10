@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/sweeparc"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -183,16 +184,17 @@ func compositeArcSweepSpan(
 	record pathSegmentRecord,
 	work *freeform.FreeformWork,
 ) (sweepSpanPayload, error) {
-	geometry, err := deriveSweepArc(record, plane)
+	geometry, err := sweeparc.Derive(record.start, record.arc,
+		record.arcPhi, record.arcAngle, plane)
 	if err != nil {
 		return sweepSpanPayload{}, err
 	}
-	ax, side, err := resolveAxisSide(ctx, profile, geometry.line, work)
+	ax, side, err := resolveAxisSide(ctx, profile, geometry.Line, work)
 	if err != nil {
 		return sweepSpanPayload{}, err
 	}
-	phi0, phi1 := 0.0, geometry.phi
-	den := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: geometry.den}
+	phi0, phi1 := 0.0, geometry.Phi
+	den := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: geometry.Angle}
 	reverseCaps := false
 	if side < 0 {
 		phi0, phi1 = -phi1, -phi0

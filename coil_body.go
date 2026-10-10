@@ -25,8 +25,8 @@ func coilRecordOfPayload(cp coilPayload) (coilshell.Record, error) {
 	return coilshell.Read(coilshell.Input{
 		Profile: cp.profile, Frame: cp.frame, Transform: cp.xform,
 		Axis: coilshell.AxisInput{
-			AU: cp.line.aU, AV: cp.line.aV, AUBound: cp.line.aUBound, AVBound: cp.line.aVBound,
-			DU: cp.line.dU, DV: cp.line.dV, DUBound: cp.line.dUBound, DVBound: cp.line.dVBound,
+			AU: cp.line.AU, AV: cp.line.AV, AUBound: cp.line.AUBound, AVBound: cp.line.AVBound,
+			DU: cp.line.DU, DV: cp.line.DV, DUBound: cp.line.DUBound, DVBound: cp.line.DVBound,
 			Side: cp.side,
 		},
 		Pitch: cp.pitch, Turns: cp.turns, LeftHand: cp.leftHand,
