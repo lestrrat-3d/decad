@@ -150,13 +150,19 @@ const (
 )
 
 // SweepInstant identifies a dyadic fraction of the requested duration.
-type SweepInstant = reportvocab.SweepInstant
+type SweepInstant struct {
+	Fraction units.Value
+	Elapsed  Measurement
+}
 
 // SweepInterval identifies an interval of the requested duration.
-type SweepInterval = reportvocab.SweepInterval
+type SweepInterval struct{ From, To SweepInstant }
 
 // SweepDeparture certifies positive separation after an initial touch.
-type SweepDeparture = reportvocab.SweepDeparture
+type SweepDeparture struct {
+	Until      SweepInstant
+	GapAtUntil Measurement
+}
 
 // SweepContactTrack owns the exact source geometry and affine motion of a
 // certified touching prefix. Its source face pointers are the original faces.
