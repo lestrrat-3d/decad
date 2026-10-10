@@ -120,10 +120,11 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 	sectionDelta := 0.0
 	sectionMatchedDelta := 0.0
 	stationRound := 0.0
-	shareMax, err := freeformShare(loops0, offsets, walks0, walks1)
-	if err != nil {
-		return nil, 0, 0, 0, err
+	p, chorded, ok := PairCounts(loops0, offsets, walks0, walks1)
+	if !ok {
+		return nil, 0, 0, 0, fmt.Errorf(`%w: this loft's paired-segment count overflows the station-cap arithmetic`, decaderr.ErrUnsupported)
 	}
+	remainingExtra := StationExtraBudget(p)
 	for i := range loops0 {
 		n := len(loops0[i].Segments)
 		off := offsets[i]
@@ -135,7 +136,7 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 			seg0 := loops0[i].Segments[j]
 			seg1 := loops1[i].Segments[k]
 			if w0.Kind == survey2d.WalkFreeform && w1.Kind == survey2d.WalkFreeform {
-				cell, err := FreeformCellPoints(w0, w1, target, shareMax, work0, work1)
+				cell, err := FreeformCellPoints(w0, w1, target, 1+remainingExtra, work0, work1)
 				if err != nil {
 					var capErr *StationCapError
 					if errors.As(err, &capErr) {
@@ -143,6 +144,7 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 					}
 					return nil, 0, 0, 0, err
 				}
+				remainingExtra -= len(cell.Stations0) - 1
 				pair.appendFreeform(cell)
 				for range cell.MatchedDelta {
 					pair.Faceted = append(pair.Faceted, false)
@@ -160,6 +162,10 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 				return nil, 0, 0, 0, err
 			}
 			m := len(stations0)
+			if chorded != 0 && m-1 > remainingExtra {
+				return nil, 0, 0, 0, &StationCapError{Loop: i, Seg: j, M: m, MMax: 1 + remainingExtra}
+			}
+			remainingExtra -= m - 1
 			cellArcV := PerCellArcUpper(seg0, w0, m)
 			cellArcW := PerCellArcUpper(seg1, w1, m)
 			cellEnergyV := PerCellTangentEnergy(seg0, w0, m)
@@ -209,31 +215,6 @@ func (p *LoopPair) appendFreeform(cell FreeformCell) {
 	p.MatchedDelta = append(p.MatchedDelta, cell.MatchedDelta...)
 	p.TangentEnergyV = append(p.TangentEnergyV, cell.Energy0...)
 	p.TangentEnergyW = append(p.TangentEnergyW, cell.Energy1...)
-}
-
-// freeformShare is the per-segment station share docs/loft-design.md §5.1
-// allocates a chorded pair, read for the free-form arm, whose dyadic walk
-// stops at it: the walk itself is what settles a free-form pair's count, so
-// S15 is decided as that walk runs rather than by a separate settle step.
-// A build with no free-form pair answers 0 and reads nothing.
-func freeformShare(loops0 []sectionrecord.LoopRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk) (int, error) {
-	found := false
-	for i := range loops0 {
-		n := len(loops0[i].Segments)
-		for j := range n {
-			if walks0[i][j].Kind == survey2d.WalkFreeform && walks1[i][(j+offsets[i])%n].Kind == survey2d.WalkFreeform {
-				found = true
-			}
-		}
-	}
-	if !found {
-		return 0, nil
-	}
-	p, c, ok := PairCounts(loops0, offsets, walks0, walks1)
-	if !ok {
-		return 0, fmt.Errorf(`%w: this loft's paired-segment count overflows the station-cap arithmetic`, decaderr.ErrUnsupported)
-	}
-	return StationShare(p, c), nil
 }
 
 // oneSidedCellGate is docs/loft-design.md Table S row S16, decided over one

@@ -662,6 +662,19 @@ and needs §9's per-cell certified integral. A reflex corner's apex fan has an i
 exact unit normals' azimuths, which no record states — rather than a recorded one, so its stations need an
 interval-window station enclosure this increment does not build. Both keep `symDiffOK == false`.
 
+The matching axial loft's one-bore, both-outer-cap chamfer is a narrow
+exception (§7's `loft_capband_proof.go`; `docs/loft-design.md` §18). Its band
+denotes the loft's certified held cap polygon, not the fit-spline offset.
+Every outer walk is straight, and the unchanged bore is one whole circle.
+For this payload, the proof locates the reflex connector's cap-level vertex
+indices and replaces their unbounded point motion with the full occupied
+volume of two enclosing cap slabs. The ordinary chord and finite vertex
+motion terms cover the rest of the polygon band. The source loft's global
+`VolSymDiff` is added for comparison with its original spline flanks. This
+payload publishes `symDiffOK` only when every term is finite, and the Boolean
+precheck admits the same payload. The general cap-band admission above still
+refuses reflex corners in other receivers.
+
 ### Refusals
 
 | Condition | Result |

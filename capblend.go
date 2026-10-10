@@ -102,6 +102,10 @@ type capBlendPayload struct {
 	// the walls a subset draft leaves in place, which every per-walk reading
 	// of the band offsets by zero (walkAmounts). Empty moves every wall.
 	draftKept map[draftWall]struct{}
+	// loftSource marks the cap band built over an axial loft's held outer
+	// station polygon. Its fit-spline allowances remain attached to the
+	// resulting body and mesh; the bore remains an exact circular hole.
+	loftSource *loftCapBandSource
 }
 
 // capSetback is one chamfered cap's two setbacks (docs/modify-reach-design.md
@@ -546,6 +550,11 @@ func classifyChamferSelection(ctx context.Context, pp prismPayload, caps prismCa
 // constructed, in capband.BandRadius. start and end are the two
 // caps' own setbacks (§8.3.1); a cap with no selected loop reads neither.
 func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismPayload, start, end capSetback, startLoops, endLoops map[int]bool) (*Body, error) {
+	return buildCapBlendWithLoftSource(ctx, doc, ref, pp, start, end, startLoops, endLoops, nil)
+}
+
+func buildCapBlendWithLoftSource(ctx context.Context, doc *Document, ref producerID, pp prismPayload,
+	start, end capSetback, startLoops, endLoops map[int]bool, source *loftCapBandSource) (*Body, error) {
 	height := pp.z1 - pp.z0
 	loops := append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	cbp := capBlendPayload{
@@ -560,6 +569,7 @@ func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismP
 		end:        end,
 		startLoops: startLoops,
 		endLoops:   endLoops,
+		loftSource: source,
 	}
 
 	// SX6 + SX7/SX12: build the "mixed" profile — every selected loop offset

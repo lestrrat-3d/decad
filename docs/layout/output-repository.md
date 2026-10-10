@@ -22,6 +22,7 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |
 | `tessellate_coil.go` | A coil's held-shell mesh with its area and volume proofs. See helix §8. |
 | `tessellate_capblend.go` | The cap-loop chamfer mesh. See tessellation reach §7. |
+| `loft_capband_proof.go` | Bounds a matching loft's reflex cap bands for occupied-volume proof. See loft §18. |
 | `tessellate_draft.go` | A draft body's mesh through its band view. See draft §9.1. |
 | `tessellate_draft_two_sided.go` | Sewn two-slab draft mesh. See draft §9.1. |
 | `export/` | STL, OBJ, 3MF and AP214 writers. See `docs/step-export-design.md`, `docs/3mf-export-design.md`. |

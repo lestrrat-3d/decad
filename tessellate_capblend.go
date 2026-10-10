@@ -265,12 +265,24 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	}
 	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
 		tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, store))
+	if cbp.loftSource != nil {
+		for face, bound := range mesh.faceBound {
+			mesh.setFaceBound(face, proofbound.AbsSumUpper(bound, cbp.loftSource.proof.FacetDeparture))
+		}
+		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cbp.loftSource.proof.AreaSlack)
+	}
 	if proofbound.IsNonFinite(mesh.areaSlack) {
 		return nil, fmt.Errorf(`%w: this %s mesh states no finite area slack`, ErrUnsupported, cbp.noun())
 	}
 	if !proveVolume {
 		// The level withholds every volume proof (tessellateContext's
 		// withholdProofs), so none is built.
+		return &mesh, nil
+	}
+	if cbp.loftSource != nil {
+		if err := proveLoftCapBandVolume(ctx, &mesh, b, cbp, lms, motion); err != nil {
+			return nil, err
+		}
 		return &mesh, nil
 	}
 	refusal, err := capBlendOccupiedVolumeAdmission(budget, cbp)
