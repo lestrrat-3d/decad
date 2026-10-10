@@ -18,7 +18,6 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -490,7 +489,7 @@ type loopDrive struct {
 	// scenes holds one scene per side of the plane: [0] where the driver's
 	// scene value is q, [1] where it is −q; nil for a side no sub-segment
 	// needs.
-	scenes [2]*loopScene
+	scenes [2]*loopchain.Scene
 	chain  *loopchain.Chain
 	reach  []*big.Rat // per dependent: a proven bound on |value| over the certified drive
 	hulls  []proofbound.RatInterval
@@ -498,53 +497,6 @@ type loopDrive struct {
 	// asked whole and sketch certified; a joint-box cell whose loop-axis range
 	// meets none of them is stuck (docs/linkage-check-design.md §16.4).
 	certified [][2]*big.Rat
-}
-
-// loopScene is the private sketch scene of one loop under one drive, on one
-// side of the plane (docs/linkage-check-design.md §15.2).
-type loopScene struct {
-	sk         *sketch.Sketch
-	driver     sketch.Dimension
-	driven     []sketch.Dimension // per dependent: an angle, the primary slide's horizontal distance, or an anchored slide's distance
-	angular    []bool             // per dependent: its reading is an angle, read modulo a turn
-	anchored   []bool             // per dependent: an anchored slide, its reading a distance from its anchor
-	signs      []int              // per dependent: its axis's sense against the scene's normal, the primary slide's against u, or +1
-	opts       []sketch.EncloseOption
-	pins       []scenePin
-	e0         loopchain.Ask
-	e0Readings []sketch.Interval // per dependent: its reading at the zero pose
-	// offset is the driver's scene reading at the zero pose: exactly 0 for a
-	// revolute driver whose parent is Common or the primary slide, the
-	// enclosure of r₀ a probe scene read for a revolute driver below Common,
-	// and κ·|Dir| for an anchored slide (docs/linkage-check-design.md §15.2).
-	// The driver's target is offset + |q|.
-	offset proofbound.RatInterval
-	// side is the side of the plane the scene reads (1 where the driver's
-	// value is −|q|), driverLink the driver's position in Linkage.Links(), and
-	// slideDriver reports a prismatic driver, whose value is a length. A
-	// proven fold is stated in the driver's own terms through them.
-	side        int
-	driverLink  int
-	slideDriver bool
-}
-
-// scenePin is one loop pin's sketch point, its world position, and the
-// enclosure of its exact plane position in the document: one exact value per
-// coordinate on a coordinate-axis loop.
-type scenePin struct {
-	p    *sketch.Point
-	at   r3.Vec
-	u, v proofbound.RatInterval
-}
-
-// boundScene passes the private sketch handles to the enclosure-chain proof.
-func (sc *loopScene) boundScene() loopchain.Scene {
-	return loopchain.Scene{
-		Sketch: sc.sk, Driver: sc.driver, Driven: sc.driven,
-		Angular: sc.angular, Anchored: sc.anchored, Signs: sc.signs,
-		Options: sc.opts, ZeroReadings: sc.e0Readings, Offset: sc.offset,
-		Side: sc.side, DriverLink: sc.driverLink, SlideDriver: sc.slideDriver,
-	}
 }
 
 type loopSpan = linkagebound.Span
@@ -639,7 +591,7 @@ func (ld *loopDrive) sceneSide(side int, slide bool) (mirror, halfTurn bool) {
 // distance from its anchor; and a driven reading per dependent: an angle
 // from its parent's line to its own, the primary slide's horizontal
 // distance, or an anchored slide's distance from its anchor.
-func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int) (*loopScene, error) {
+func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int) (*loopchain.Scene, error) {
 	lp := ld.loop
 	driverLink := spec.joints[ld.driver].link
 	mirror, halfTurn := ld.sceneSide(side, driverLink == lp.slide)
@@ -660,7 +612,7 @@ func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int
 	if err != nil {
 		return nil, err
 	}
-	sc.side, sc.driverLink, sc.slideDriver = side, driverLink.index, !spec.joints[ld.driver].revolute
+	sc.Side, sc.DriverLink, sc.SlideDriver = side, driverLink.index, !spec.joints[ld.driver].revolute
 	return sc, nil
 }
 
@@ -700,16 +652,17 @@ func (ld *loopDrive) probeOffset(ctx context.Context, spec *linkageSpec, mirror,
 	if err != nil {
 		return proofbound.RatInterval{}, err
 	}
-	if err := sc.askZero(ctx); err != nil {
+	_, readings, err := loopchain.Zero(ctx, *sc, ErrUnsupported)
+	if err != nil {
 		return proofbound.RatInterval{}, err
 	}
-	r := sc.e0Readings[j]
+	r := readings[j]
 	return proofbound.IntervalOwned(proofarith.FloatRat(r.Lo), proofarith.FloatRat(r.Hi)), nil
 }
 
 // buildSceneOn is buildScene on the side flip describes, the driver's
 // zero-pose reading offset.
-func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, flip sceneFlip, offset proofbound.RatInterval) (*loopScene, error) {
+func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, flip sceneFlip, offset proofbound.RatInterval) (*loopchain.Scene, error) {
 	lp := ld.loop
 	links := make(map[*Link]*loopscene.Link, len(lp.links)+1)
 	var linkOf func(*Link) *loopscene.Link
@@ -772,13 +725,13 @@ func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, flip s
 	if err != nil {
 		return nil, err
 	}
-	sc := &loopScene{
-		sk: built.Sketch, driver: built.Driver, driven: built.Driven,
-		angular: built.Angular, anchored: built.Anchored, signs: built.Signs,
-		opts: built.Options, offset: built.Offset,
+	sc := &loopchain.Scene{
+		Sketch: built.Sketch, Driver: built.Driver, Driven: built.Driven,
+		Angular: built.Angular, Anchored: built.Anchored, Signs: built.Signs,
+		Options: built.Options, Offset: built.Offset,
 	}
 	for _, pin := range built.Pins {
-		sc.pins = append(sc.pins, scenePin{p: pin.P, at: pin.At, u: pin.U, v: pin.V})
+		sc.Pins = append(sc.Pins, loopchain.Pin{Point: pin.P, At: pin.At, U: pin.U, V: pin.V})
 	}
 	return sc, nil
 }
@@ -799,28 +752,15 @@ func (s *linkageSpec) prepare(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			if err := sc.askZero(ctx); err != nil {
+			zero, readings, err := loopchain.Zero(ctx, *sc, ErrUnsupported)
+			if err != nil {
 				return err
 			}
+			sc.ZeroReadings = readings
 			ld.scenes[side] = sc
-			ld.chain.SetScene(side, sc.boundScene(), sc.e0)
+			ld.chain.SetScene(side, *sc, zero)
 		}
 	}
-	return nil
-}
-
-// askZero asks E0 and runs the zero-pose falsifier on it.
-func (sc *loopScene) askZero(ctx context.Context) error {
-	bound := sc.boundScene()
-	for _, pin := range sc.pins {
-		bound.Pins = append(bound.Pins, loopchain.Pin{Point: pin.p, At: pin.at, U: pin.u, V: pin.v})
-	}
-	ask, readings, err := loopchain.Zero(ctx, bound, ErrUnsupported)
-	if err != nil {
-		return err
-	}
-	sc.e0Readings = readings
-	sc.e0 = ask
 	return nil
 }
 
@@ -836,7 +776,7 @@ func (ld *loopDrive) sceneValue(side int, s *big.Rat) (float64, float64) {
 	if lo.Sign() < 0 {
 		lo = new(big.Rat)
 	}
-	off := ld.scenes[side].offset
+	off := ld.scenes[side].Offset
 	return proofbound.RatFloatDown(lo.Add(lo, off.Lo)), proofbound.RatFloatUp(hi.Add(hi, off.Hi))
 }
 
