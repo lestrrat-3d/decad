@@ -68,33 +68,15 @@ type FreeformCell struct {
 	Round                float64
 }
 
-// SpanCountGate is docs/loft-design.md Table S row S17 and Table P row P5's
-// span-count requirement: a same-kind Tier A free-form pair whose two sides
-// reduce to different Bézier span counts has no shared station coordinate
-// (§5.1), so it refuses with ErrUnsupported. It reads the two resolved walks'
-// own converted chains and nothing else, so it is decided from the two records
-// before a single station is built. Any pair that is not free-form on both
-// sides passes.
-func SpanCountGate(w0, w1 survey2d.SegmentWalk, loop, j, k int) error {
-	if w0.Kind != survey2d.WalkFreeform || w1.Kind != survey2d.WalkFreeform {
-		return nil
-	}
-	if len(w0.Spans) != len(w1.Spans) {
-		return fmt.Errorf(`%w: loop %d's paired free-form segments at segment %d/%d reduce to %d and %d Bézier spans; this evaluator chords a free-form pair only over an equal span count`,
-			decaderr.ErrUnsupported, loop, j, k, len(w0.Spans), len(w1.Spans))
-	}
-	return nil
-}
-
 // FreeformCellPoints chords one same-kind Tier A free-form pair
 // (docs/loft-design.md §5.1's free-form arm).
 //
 // Each side's converted chain is put in WALK order first: a forward side keeps
 // its natural spans, and a reversed side takes its spans last to first with
-// each span's control points reversed, which is natural span spanCount-1-q at
-// local parameter 1-u in slot q. The span chains are shared by every reader of
-// the walk, so the reversal builds new slices and never writes through them.
-// Slot 0 of each side is then that side's own recorded walk start.
+// each span's control points reversed. The chains are then divided into the
+// least common multiple of their span counts, with exact rational de Casteljau
+// splits. Slot 0 of each side is its own recorded walk start. Neither reversal
+// nor refinement writes through the recorded walk's control points.
 //
 // freeform.PairChainStations measures, accepts and bisects every cell on both
 // sides together, so the two sides hold one dyadic cell set. Its ceiling is
@@ -113,8 +95,21 @@ func SpanCountGate(w0, w1 survey2d.SegmentWalk, loop, j, k int) error {
 // segment, so its own walk end bound is charged here as well.
 func FreeformCellPoints(w0, w1 survey2d.SegmentWalk, target float64, maxCells int, work0, work1 *freeform.FreeformWork) (FreeformCell, error) {
 	spans0, spans1 := walkOrderSpans(w0), walkOrderSpans(w1)
-	if len(spans0) != len(spans1) {
-		return FreeformCell{}, fmt.Errorf(`%w: paired free-form segments reduce to %d and %d Bézier spans`, decaderr.ErrUnsupported, len(spans0), len(spans1))
+	if len(spans0) == 0 || len(spans1) == 0 {
+		return FreeformCell{}, fmt.Errorf(`%w: a paired free-form station chain needs a span on each side`, decaderr.ErrDegenerate)
+	}
+	common, ok := commonSpanCount(len(spans0), len(spans1), maxCells)
+	if !ok {
+		return FreeformCell{}, &StationCapError{M: maxCells + 1, MMax: maxCells, AtLeast: true}
+	}
+	var err error
+	spans0, err = freeform.RefineSpanChain(spans0, common/len(spans0), work0)
+	if err != nil {
+		return FreeformCell{}, err
+	}
+	spans1, err = freeform.RefineSpanChain(spans1, common/len(spans1), work1)
+	if err != nil {
+		return FreeformCell{}, err
 	}
 	chain, err := freeform.PairChainStations(spans0, spans1, target, freeform.PairChainLimits{
 		MaxChords:   maxCells,
@@ -163,6 +158,23 @@ func FreeformCellPoints(w0, w1 survey2d.SegmentWalk, target float64, maxCells in
 		return FreeformCell{}, ErrLoftStationDisplacementUnderivable
 	}
 	return out, nil
+}
+
+// commonSpanCount gives both span-uniform chains the same slot boundaries.
+// Check the station share before multiplying, so a large least common multiple
+// cannot allocate a chain or overflow an int.
+func commonSpanCount(a, b, maxCells int) (int, bool) {
+	if a < 1 || b < 1 || maxCells < 1 {
+		return 0, false
+	}
+	x, y := a, b
+	for y != 0 {
+		x, y = y, x%y
+	}
+	if a/x > maxCells/b {
+		return 0, false
+	}
+	return a / x * b, true
 }
 
 // roundedStation rounds one exact chain station into the Point2 the build

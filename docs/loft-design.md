@@ -58,11 +58,10 @@ stations placed at shared dyadic fractions of the span-index coordinate the
 two curves' own Bézier span decompositions define, rather than a circular
 walk (§5.1's free-form arm), and its departure from the two recorded curves
 publishes as the same section displacement (§5.2). Same-kind is necessary
-rather than sufficient for a circular pair: Table P row P5 carries one
-further requirement on two `CircleSeg`s, that they agree in walk sense; it
-carries a different further requirement on a same-kind Tier A free-form
-pair, that the two sides' Bézier span chains reduce to the same span count
-(Table S row S17). A full-circle loop's
+rather than sufficient for a circular pair: Table P row P5 also requires
+two `CircleSeg`s to agree in walk sense. A same-kind Tier A free-form pair
+uses the least common multiple of its span counts to give both chains one
+station coordinate (§5.1). A full-circle loop's
 correspondence has exactly one segment (`record.go`), so its alignment offset
 is confined to `[0, 1)` and forced to `0` (§3 S4): a rotated correspondence
 between two full-circle loops is not reachable by this construction.
@@ -75,13 +74,6 @@ between two full-circle loops is not reachable by this construction.
   need it either: a bevel gear is two 2-section lofts, not one 3-section
   loft. §12 defers this reach to PR 5; this design does not reserve a shape
   for it.
-- **A same-kind Tier A free-form pair whose two curves reduce to different
-  Bézier span counts.** An equal-span pair is ruled between chorded stations
-  placed at shared dyadic fractions of the span-index coordinate its two
-  Bézier span decompositions define (§5.1), and §12 PR 4 builds it. An
-  unequal pair has no shared station coordinate under that rule and refuses
-  as Table S row S17; §12's reach row names it.
-
 **Permanently out of scope, for reasons stated once:**
 
 - **Mixed-kind correspondence.** Two sides of different recorded kinds have
@@ -178,7 +170,7 @@ decad reads the two `ProfileRecord`s' own segment order, and nothing else.
 | **P2** | `len(p0.Holes)` MUST equal `len(p1.Holes)`. A mismatch has no positional pairing (Table S, S1) |
 | **P3** | For each paired loop, `len(loop0.Segments)` MUST equal `len(loop1.Segments)` — call it `n`. A mismatch has no one-to-one pairing (Table S, S2) |
 | **P4** | Within a paired loop, segment `j` of `loop0` (for `j` in `[0, n)`) pairs with segment `(j + offset) mod n` of `loop1`, where `offset` is that loop's entry in `WithLoftAlignment`'s `offsets` (default 0) |
-| **P5** | A paired segment's two sides MUST be same-kind: both `LineSeg`, both `ArcSeg`, both `CircleSeg`, or both the same Tier A free-form kind (`docs/spline-design.md` Table F). Any other pairing — mixed-kind, or same-kind at a kind this evaluator has no construction for — is `ErrUnsupported` (§1, Table S row S3). A same-kind `CircleSeg` pair MUST also agree in WALK SENSE: the two sides' recorded `CCW` flags MUST be equal, and a pair whose flags disagree is `ErrDegenerate` (Table S row S7's structural arm). A same-kind Tier A free-form pair MUST also agree in SPAN COUNT: the two sides' Bézier span chains (`docs/spline-design.md` §5.1) MUST reduce to the same number of spans, and a pair whose span counts differ is `ErrUnsupported` (Table S row S17). §4's gate-order paragraph owns where each of these gates sits and what its phase can already have read |
+| **P5** | A paired segment's two sides MUST be same-kind: both `LineSeg`, both `ArcSeg`, both `CircleSeg`, or both the same Tier A free-form kind (`docs/spline-design.md` Table F). Any other pairing — mixed-kind, or same-kind at a kind this evaluator has no construction for — is `ErrUnsupported` (§1, Table S row S3). A same-kind `CircleSeg` pair MUST also agree in WALK SENSE: the two sides' recorded `CCW` flags MUST be equal, and a pair whose flags disagree is `ErrDegenerate` (Table S row S7's structural arm). A same-kind Tier A free-form pair uses the least common multiple of its two Bézier span counts as its shared station slot count (§5.1). §4's gate-order paragraph owns where each of these gates sits and what its phase can already have read |
 | **P6** | Every loop's own walk direction is intrinsic to its own plane (outer CCW, holes CW, seam §2) and is never reinterpreted for the pairing: P4's ordinal rule pairs walk-position `j` to walk-position `j`, in each loop's own sense, regardless of how the two profiles' planes are posed relative to each other |
 
 **A wrong alignment choice is not a silent wrong body.** If the caller's
@@ -204,7 +196,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 |---|---|---|---|---|
 | **S1** | a hole-loop count mismatch (P2) | this evaluator has no positional pairing for it, though a smarter kernel could still loft a differing hole count by point-degenerate construction | `ErrUnsupported` | no — reach no increment in §12 claims |
 | **S2** | a paired loop's segment-count mismatch (P3) | same — a smarter kernel could subdivide to match; this evaluator's ordinal correspondence cannot | `ErrUnsupported` | no — reach no increment in §12 claims |
-| **S3** | a paired segment whose two sides are not same-kind (§1, P5), or a same-kind pair whose kind this evaluator has no construction for — after this document, a free-form kind that does not reduce to Tier A (`docs/spline-design.md` Table F). A same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5) is NOT this row's refusal: it is S7's `ErrDegenerate` under that row's STRUCTURAL arm, never its audit arm. A same-kind Tier A free-form pair whose two Bézier span counts differ (P5) is likewise NOT this row's refusal: it is S17's `ErrUnsupported`. §4's gate-order paragraph owns where each of the three sits | yes for a mixed-kind pairing — the ruled surface exists; this evaluator has no exact construction for it. A same-kind non-Tier-A free-form pairing never independently reaches this test: every build reads its section's moments (`docs/spline-design.md` Table C), so a Tier B or Tier C section refuses at spline design's own R10 and an `EllipticalArcSeg` section refuses at R2 before this gate has anything of its own left to decide | `ErrUnsupported`, this document's own sentinel for a mixed-kind pairing; `docs/spline-design.md`'s own R10 or R2 sentinel for a same-kind non-Tier-A pairing, never a fresh sentinel of this document's own | yes for mixed-kind, §1 — the correspondence's own two kinds forbid it structurally. For a same-kind non-Tier-A pairing this document makes no permanence claim of its own, since the refusal is `docs/spline-design.md`'s: permanent for an `EllipticalArcSeg` pairing (R2, §2.2), not permanent for a Tier B or Tier C pairing (R10, §8 — no longer standing once §10 P9 supplies that tier's moments) |
+| **S3** | a paired segment whose two sides are not same-kind (§1, P5), or a same-kind pair whose kind this evaluator has no construction for — after this document, a free-form kind that does not reduce to Tier A (`docs/spline-design.md` Table F). A same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5) is NOT this row's refusal: it is S7's `ErrDegenerate` under that row's STRUCTURAL arm, never its audit arm. §4's gate-order paragraph owns where both sit | yes for a mixed-kind pairing — the ruled surface exists; this evaluator has no exact construction for it. A same-kind non-Tier-A free-form pairing never independently reaches this test: every build reads its section's moments (`docs/spline-design.md` Table C), so a Tier B or Tier C section refuses at spline design's own R10 and an `EllipticalArcSeg` section refuses at R2 before this gate has anything of its own left to decide | `ErrUnsupported`, this document's own sentinel for a mixed-kind pairing; `docs/spline-design.md`'s own R10 or R2 sentinel for a same-kind non-Tier-A pairing, never a fresh sentinel of this document's own | yes for mixed-kind, §1 — the correspondence's own two kinds forbid it structurally. For a same-kind non-Tier-A pairing this document makes no permanence claim of its own, since the refusal is `docs/spline-design.md`'s: permanent for an `EllipticalArcSeg` pairing (R2, §2.2), not permanent for a Tier B or Tier C pairing (R10, §8 — no longer standing once §10 P9 supplies that tier's moments) |
 | **S4** | a `WithLoftAlignment` payload of the wrong length, an offset outside `[0, n)` for its loop, or the option passed more than once | no single intent (mirrors modify-reach SX1, which refuses a repeated contradictory option on the same ground) | `ErrDegenerate` | yes, §2 |
 | **S5** | `p0` and `p1` represent the same geometric plane, regardless of which in-plane origin or right-handed `U`/`V` basis each `PlaneRecord` uses | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
 | **S6** | a wall or cap triangle that collapses (coincident vertices, zero area) — every collapse S16's one-sided chord cell does not already claim, in either of two arms: the RECORDED arm, where EVERY vertex the collapse consumes is a station §5.2 PINS (an untrimmed `LineSeg` pair's own endpoints; the two pinned ends of an `ArcSeg` pair recorded at ZERO RADIUS on BOTH sides), or the COMPUTED arm, which takes every other collapse — one over GENERATED station vertices alone (§5.1's Table C) rounding to the same float64, one whose two stations DIFFER in provenance, and a cap triangle collapsing over either | the RECORDED arm: no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop. The COMPUTED arm: this evaluator cannot tell, and the row therefore never claims non-existence, since the record states no coordinate for a COMPUTED vertex to be decided from | `ErrDegenerate` (RECORDED arm) / `ErrUnsupported` (COMPUTED arm) | yes, §4, for the RECORDED arm; no for the COMPUTED arm — a precision ceiling on this evaluator's float64 vertex table, the same reading S13 gives |
@@ -218,7 +210,8 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf`, decided in whichever of the two arms the gate-order paragraph below assigns that term | yes — the body exists; this evaluator cannot publish a finite certified enclosure for that term on this build | `ErrUnsupported` | no — an enclosure or numeric-range ceiling, not a shape rule |
 | **S15** | a paired segment whose chord target (§5.1) is not met inside its share of the station cap `stationCap(P) = min(max(512, 64·P), 8192)` | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
 | **S16** | a chord cell (§5.1) whose two stations coincide on exactly ONE of the two sections. A cell collapsing on BOTH sections, and a collapsed cap triangle, are S6's two arms rather than this row, so every collapse is covered exactly once | yes — a collapsed piece is a recordable curve piece whatever the provenance of the two stations that produced it, and a point-degenerate correspondence is a body a smarter kernel could still loft; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
-| **S17** | a same-kind Tier A free-form pair whose two sides' Bézier span chains (`docs/spline-design.md` §5.1) reduce to different span counts (P5) | yes — the ruled surface exists; this evaluator's span-uniform station rule (§5.1) has no shared station coordinate to chord it over | `ErrUnsupported` | no — §12's reach row, which would retire this refusal by admitting an unequal span count |
+
+S17 was retired when §5.1 gained exact common subdivision for unequal Bézier span counts.
 
 **S13 is `ErrUnsupported`, never `ErrNotFinite`.** Core §12 scopes
 `ErrNotFinite` to a non-finite PARAMETER or a derived non-finite MEASUREMENT
@@ -291,10 +284,7 @@ in that same option loop since it needs no record, S9 seam authentication of
 both profiles — nothing downstream is safe to read before this), then the
 shape gates that need only the two authenticated records (S1 hole count, S2
 segment count, S4's PAYLOAD-SHAPE half — a wrong-length alignment or an offset
-outside `[0, n)` for its loop — S3 segment kind together with S17's span-count
-check immediately beside it (a same-kind Tier A free-form pair's two Bézier
-span chains, `docs/spline-design.md` §5.1: a count comparison over the same
-two records S3 already reads, decided before a single station is built),
+outside `[0, n)` for its loop — S3 segment kind,
 S7's STRUCTURAL arm immediately beside them (a same-kind `CircleSeg` pair
 whose two recorded `CCW` flags disagree, P5: one flag comparison over the
 same two records S3 already reads), S5 geometric-plane coincidence, and, for
@@ -366,7 +356,7 @@ S14 on those terms.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
 gate decided from the records rather than from the call — S1, S2, S3, S4's
-payload-shape half, S5, S6, S7, S8, S12, S13, S14, S15, S16, S17 — never a
+payload-shape half, S5, S6, S7, S8, S12, S13, S14, S15, S16 — never a
 reduced set of them.** The evaluator re-lifts both records under the
 composed motion and rebuilds from scratch
 (§7), so S6/S7/S8 are reachable from a placement too: the crossing audit
@@ -374,13 +364,10 @@ re-runs on the rounded vertex set every re-evaluation produces, and a
 placement whose rounding closes a gap during this build is refused exactly as
 a first build with the same geometry would be. S13 is judged on every build,
 placement or first, since it reads the coordinate the lift emits rather than
-the motion that produced it. S14, S15, S16 and S17 are likewise decided fresh
+the motion that produced it. S14, S15 and S16 are likewise decided fresh
 on every build: the station generator (§5.1) reruns from the two records on
 every re-evaluation, so a placement judges the identical station-derivation,
-station-cap, and collapsed-cell questions a first build does — and S17 with
-them, since a same-kind Tier A free-form pair's two Bézier span counts are a
-function of the two records alone and the span reduction reruns from the
-records on every re-evaluation, exactly as the station generator does.
+station-cap, and collapsed-cell questions a first build does.
 **S12 is judged on every build, because its condition is on
 the COMBINED proven volume allowance §8 composes and not on how the build was
 reached** — so a chorded build reaches it under `r3.Identity()` too. §5.2's
@@ -746,9 +733,10 @@ only the RULE that places its stations differs from the circular walk-up.
 - **The station coordinate is the normalized concatenation of the two
   chains' span-LOCAL parameters, read from the record alone.** Each side of
   a same-kind Tier A free-form pair reduces to its own chain of
-  `bezierSpan`s (`docs/spline-design.md` §5.1); P5 and S17 require the two
-  chains to reduce to the same span count, written `spanCount` here to keep
-  it distinct from this section's own chord-cell count `m` above. Slot `q`
+  `bezierSpan`s (`docs/spline-design.md` §5.1). Their counts may differ;
+  exact de Casteljau subdivision refines each original span into equal
+  local-parameter parts until both chains have `spanCount = lcm(n0, n1)`
+  slots, distinct from this section's chord-cell count `m` above. Slot `q`
   of `spanCount` (`q` in `[0, spanCount)`, a letter chosen to collide with
   none of §7's `side(i,j,k)` indices) takes one span by INDEX: that span's
   own local parameter `[0, 1]` — the parameter its de Casteljau bisection
@@ -816,15 +804,15 @@ only the RULE that places its stations differs from the circular walk-up.
   states its sense in the ORDER of its own recorded range and this rule
   reads that order directly.
 
-- **The span-count match (P5, S17) is what gives the pair a shared station
-  coordinate at all.** Two curves whose Bézier decompositions carry
-  different span counts have no shared fraction `q/spanCount` to chord
-  between: span `q/spanCount` on one side and the geometrically unrelated
-  interior of a different span on the other would be an invented
-  correspondence, the same ground §1 refuses a mixed-kind pairing on. A
-  same-kind Tier A free-form pair whose two span counts agree is what this
-  rule reads as one shared coordinate; a pair whose counts disagree refuses
-  at S17.
+- **Unequal span counts use a common subdivision.** For original counts
+  `n0` and `n1`, choose `spanCount = lcm(n0, n1)`. Divide every original
+  span on side `k` into `spanCount/nk` equal pieces by exact rational de
+  Casteljau splitting. The original span-index coordinate stays the
+  correspondence rule: subdivision changes only its representation, not
+  either curve or its parameter mapping. Both refined chains then have the
+  same slot boundaries. Before subdivision, reject a common count above
+  the segment's station share as S15, with checked arithmetic. The record's
+  free-form work counter charges each split before it runs (spline R7).
 
 - **The shared station set is chorded at shared dyadic fractions of that
   coordinate, one cell per slot to start.** Seed one chord cell per slot —
@@ -1791,7 +1779,8 @@ global evaluator increment.
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `spanSpeedUpper` length/speed bound, and `spanMatchedDeltaUpper` native-parameter bound plus `delta`, and the exact per-cell `SpanTangentEnergyUpper` energy (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row is landed.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 4b | `docs/loft-gear-bounds-design.md`'s five increments: the per-cell volume residual with its skirt leg and the per-cell cap tube (§8, §8.1), the centroid shift form (§8), the chord target read from the section's feature size with bisection on the matched departure (§5.1), the sweep-enumerated crossing audit with one proof per cap (§6), and the scaled ceilings — `stationCap(P)` (§5.1), the raised free-form work ceiling (§5.1) and the `1 << 28` reconstruction ceiling — under which full helical gear outlines up to 69 teeth build and verify `Sound`. **This row is landed.** | a profile past 11585 reconstruction chords (the same gear at 70 teeth); every item PR 4's row still lists |
-| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel, an unequal Bézier span count between a same-kind Tier A free-form pair's two sides (which would retire S17) | — |
+| 4c | Exact common subdivision admits different Bézier span counts for a same-kind Tier A free-form pair (§5.1) and retires S17. **This row is landed.** | N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
 caches `Volume` / `Centroid` / `Area` / `Bounds` at build and its accessors
@@ -1901,7 +1890,8 @@ against this budget.
 
 - **Pairing**: hole-count mismatch → S1; segment-count mismatch → S2;
   mixed-kind segment pair → S3; a same-kind Tier A free-form pair whose two
-  Bézier span counts differ → S17; an equal-span same-kind Tier A free-form
+  Bézier span counts differ → exact common subdivision (§5.1), with S15
+  when its common slot count exceeds the station share; a same-kind Tier A free-form
   pair reaches S14 only when an actual certified term answers `+Inf`, never
   on its kind and never through S3; a same-kind `CircleSeg` pair
   whose two recorded `CCW` flags disagree → S7's `ErrDegenerate` from its
@@ -2138,9 +2128,8 @@ against this budget.
   exactness only from the remaining published terms and rational-publication
   checks in §8, never from the fact that the pair used the chorded arm.
   Actual non-finite or underivable values still assert S14 and leave the
-  document unchanged. **Every build-and-measure assertion that
-  follows lands with §12 PR 4's free-form arm** (§8.1), and is stated here so
-  that increment carries it rather than writes it fresh. The A10b wedge —
+  document unchanged. The build-and-measure assertions below use §12 PR 4's
+  free-form arm (§8.1); the unequal-span fixture lands with PR 4c. The A10b wedge —
   two `LineSeg`s and one 5-point `FitSplineSeg` through a radius-5 quarter
   circle, on `z=0` and `z=10` — BUILDS, and `Verify` at the default tolerance
   returns `Sound` with the achieved margin asserted. Each of its cells
@@ -2172,10 +2161,11 @@ against this budget.
   recorded curves lifted through their planes — a box that did not widen
   fails it. Refusals, each asserted on the sentinel AND that the document
   is unchanged: a mixed-kind `LineSeg`/`FitSplineSeg` pair gives
-  S3, and specifically NOT S17; a same-kind `SplineSeg`/`FitSplineSeg` pair
+  S3; a same-kind `SplineSeg`/`FitSplineSeg` pair
   (same-family, different kind) gives S3 too; a same-kind pair with
-  different span counts gives S17; a `ConicSeg` pair recorded on identical
-  frames gives spline design's own R10, never a chorded fallback of any
+  different span counts builds through the common subdivision (§5.1);
+  a `ConicSeg` pair recorded on identical frames gives spline design's own
+  R10, never a chorded fallback of any
   kind; a record sized to exhaust `docs/spline-design.md`'s
   `freeformWorkLimit` gives R7. The audit proves a crossing (S7) on a
   deliberately over-twisted curved correspondence (e.g. a wrong
