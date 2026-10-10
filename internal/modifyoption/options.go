@@ -64,7 +64,7 @@ func shellSenseName(s int) string {
 	case shellOutward:
 		return "Outward"
 	default:
-		return fmt.Sprintf("ShellSense(%d)", int(s))
+		return fmt.Sprintf("ShellSense(%d)", s)
 	}
 }
 
@@ -206,7 +206,7 @@ func DecodeShell(opts []ShellOption) (ShellConfig, error) {
 				return ShellConfig{}, fmt.Errorf(`%w: WithShellSense carries no sense`, decaderr.ErrDegenerate)
 			}
 			if v != shellInward && v != shellOutward {
-				return ShellConfig{}, fmt.Errorf(`%w: unknown shell sense %d`, decaderr.ErrDegenerate, int(v))
+				return ShellConfig{}, fmt.Errorf(`%w: unknown shell sense %d`, decaderr.ErrDegenerate, v)
 			}
 			if sensed && v != out.Sense {
 				return ShellConfig{}, ErrOptionConflict(`WithShellSense names both %s and %s`,
