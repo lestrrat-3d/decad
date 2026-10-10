@@ -6,13 +6,19 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
 // ContactRequest states the maximum position and normal error a manifold may publish.
-type ContactRequest = reportvocab.ContactRequest
+// SupportBand and HeldChord are nonnegative lengths; zero disables their
+// respective approximate contact paths.
+type ContactRequest struct {
+	PointResolution  units.Value
+	NormalResolution units.Value
+	SupportBand      units.Value
+	HeldChord        units.Value
+}
 
 // validateSupportBand admits the zero Value or a finite nonnegative Length.
 func validateSupportBand(v units.Value) error {
@@ -46,10 +52,10 @@ func validateNonnegativeLength(v units.Value, name string) error {
 type ContactRelation int
 
 const (
-	ContactUndecided   ContactRelation = ContactRelation(reportvocab.ContactUndecided)
-	ContactSeparated   ContactRelation = ContactRelation(reportvocab.ContactSeparated)
-	ContactTouching    ContactRelation = ContactRelation(reportvocab.ContactTouching)
-	ContactOverlapping ContactRelation = ContactRelation(reportvocab.ContactOverlapping)
+	ContactUndecided ContactRelation = iota
+	ContactSeparated
+	ContactTouching
+	ContactOverlapping
 	// ContactBand is published for a body whose held boundary carries a
 	// positive displacement (docs/multibody-dynamics-design.md §10.4), or for
 	// an exact planar pair apart by at most the request's SupportBand
@@ -57,7 +63,7 @@ const (
 	// width Gap.Bound around Gap.Value, which is zero. A displaced pair's
 	// manifold Separation intervals carry the same band; an exact pair's
 	// manifold is its support set, each point at its exact height.
-	ContactBand ContactRelation = ContactRelation(reportvocab.ContactBand)
+	ContactBand
 )
 
 // ContactReason explains an undecided relation or an absent manifold.
@@ -78,18 +84,39 @@ const (
 )
 
 // ContactFeature names an original topological feature.
-type ContactFeature = reportvocab.ContactFeature[*Face, *Edge, *Vertex]
+type ContactFeature struct {
+	Face   *Face
+	Edge   *Edge
+	Vertex *Vertex
+}
 
 // ContactPoint bounds two boundary witnesses and their A-to-B normal.
-type ContactPoint = reportvocab.ContactPoint[*Face, *Edge, *Vertex]
+type ContactPoint struct {
+	OnA, OnB           VecMeasurement
+	Normal             VecMeasurement
+	NormalAngle        units.Value
+	Separation         Measurement
+	FaceA, FaceB       *Face
+	FeatureA, FeatureB ContactFeature
+}
 
 // ContactManifold is a deterministic reduction of the complete certified contact patch.
-type ContactManifold = reportvocab.ContactManifold[*Face, *Edge, *Vertex]
+type ContactManifold struct {
+	Points []ContactPoint
+}
 
 // ContactReport is a read-only pair result at the two caller-supplied poses.
-type ContactReport = reportvocab.ContactReport[*Body, *Face, *Edge, *Vertex, ContactRelation, ContactReason]
-
-type pairReportMemo = reportvocab.PairReportMemo[*Body, *Face, *Edge, *Vertex, ContactRelation, ContactReason]
+type ContactReport struct {
+	A, B     *Body
+	PoseA    r3.Transform
+	PoseB    r3.Transform
+	Request  ContactRequest
+	Relation ContactRelation
+	Gap      *Measurement
+	Overlap  *Measurement
+	Manifold *ContactManifold
+	Reason   ContactReason
+}
 
 // ContactPair proves the relation of two live solids at poses applied after
 // their recorded placements. Bodies and the document are not changed.
@@ -178,7 +205,7 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	key := reportvocab.NewPairReportKey(b, poseA, poseB, req)
+	key := newPairReportKey(b, poseA, poseB, req)
 	if report, ok := a.pairReports.Load(key); ok {
 		return report, nil
 	}
@@ -187,7 +214,7 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 		return nil, err
 	}
 	a.pairReports.Store(key, report)
-	return reportvocab.CloneContactReport(report), nil
+	return cloneContactReport(report), nil
 }
 
 // classifyContactPair is ContactPair's proof for validated, distinct, live

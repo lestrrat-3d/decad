@@ -338,7 +338,14 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 }
 
 // SweepEvent reports the ideal path relation at one sampled instant.
-type SweepEvent = reportvocab.SweepEvent[*Face, *Edge, *Vertex, ContactRelation, ContactReason]
+type SweepEvent struct {
+	At       SweepInstant
+	Relation ContactRelation
+	Gap      *Measurement
+	Overlap  *Measurement
+	Manifold *ContactManifold
+	Reason   ContactReason
+}
 
 // SweepSample keeps the query pose and the transferred pair finding.
 type SweepSample struct {
