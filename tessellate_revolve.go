@@ -164,14 +164,10 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveplan.Resolu
 	})
 }
 
-// planRevolve resolves the payload once and spends docs/tessellation-design.md
+// planRevolveWithRoles resolves the payload once and spends docs/tessellation-design.md
 // §8's tolerance split in its stated order: both coordinate stages are reserved
 // against count-independent ceilings, the meridian takes half of what is left
 // and chords every circular walk, and the angular sequence takes the remainder.
-func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification) (*revolvePlan, error) {
-	return planRevolveWithRoles(ctx, b, rp, chord, verify, nil)
-}
-
 func planRevolveWithRoles(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification, roleOf func(string) string) (*revolvePlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
