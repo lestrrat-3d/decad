@@ -272,6 +272,10 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 		assigned := shardAssignment(t, ".github/test-shards-apitest.txt")
 		require.Equal(t, "0", assigned["TestLoftEmbeddedSixtyToothGearFeatures"],
 			"the 60-tooth test needs shard 0's longer budget and timeout")
+		require.Equal(t, "1", assigned["TestLoftEmbeddedThirtyToothGearFeatures"],
+			"the 30-tooth test needs shard 1's 420s budget")
+		require.Equal(t, "2", assigned["TestLoftFilletDefaultGearRoots"],
+			"the default gear test needs shard 2's 420s budget")
 	})
 
 	t.Run("the chord sweep fixture runs together in internal/proofbound", func(t *testing.T) {

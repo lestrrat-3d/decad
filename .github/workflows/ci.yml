@@ -187,10 +187,10 @@ jobs:
         run: |
           timeout=10m
           budget=300
-          if [ '${{ matrix.shard }}' = 0 ]; then
-            timeout=45m
-            budget=2400
-          fi
+          case '${{ matrix.shard }}' in
+            0) timeout=45m; budget=2400 ;;
+            1|2) budget=420 ;;
+          esac
           run_shard() {
             local bin="$GITHUB_WORKSPACE/race-bin/$1" shards="$2" dir="$3"
             chmod +x "$bin"
@@ -218,8 +218,9 @@ jobs:
           elapsed=$(( SECONDS - start ))
           echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
           # Shard 0 reserves the measured 60-tooth gear test and has a 2400s
-          # budget below its 45m timeout. Other shards retain 300s/10m. A
-          # budget failure reports test-cost drift before a timeout does.
+          # budget below its 45m timeout. Shards 1 and 2 carry the other two
+          # costly gear tests and allow 420s; all other shards retain 300s.
+          # A budget failure reports test-cost drift before a timeout does.
           # Re-measure and regenerate with the command in _shardgen/main.go.
           if [ "$elapsed" -gt "$budget" ]; then
             echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the ${budget}s budget; re-measure and regenerate .github/test-shards.txt and .github/test-shards-apitest.txt (see _shardgen/main.go)"
