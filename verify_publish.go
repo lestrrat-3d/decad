@@ -28,7 +28,7 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 		(kind == BodySolid || kind == BodySheet) {
 		faces = in.Body.Faces()
 	}
-	return reportvocab.PublishBody(reportvocab.BodyPublication[*Body, *Face, JointCell]{
+	published := reportvocab.PublishBody(reportvocab.BodyPublication[*Body, *Face, JointCell]{
 		Body:                in.Body,
 		Solid:               kind == BodySolid,
 		Sheet:               kind == BodySheet,
@@ -47,6 +47,12 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 		RadiusToleranceDiag: in.RadiusToleranceDiag,
 		CoreDiagnostics:     in.CoreDiagnostics,
 	})
+	return &BodyReport{
+		Body: published.Body, Status: published.Status, Validity: published.Validity,
+		Topology: published.Topology, Area: published.Area, Bounds: published.Bounds,
+		Region: published.Region, Wall: published.Wall, Undercut: published.Undercut,
+		ConcaveRadius: published.ConcaveRadius, Diagnostics: published.Diagnostics,
+	}
 }
 
 // surveyPublication maps the private producer outcomes without changing their readings.
@@ -71,7 +77,10 @@ func surveyPublication(in surveyResults) reportvocab.SurveyPublication[*Body, *F
 // publishReport builds the document report from its already decided rows.
 func publishReport(req VerifyRequest, bodies []*BodyReport, interferences []Interference,
 	clearances []Clearance, diagnostics []Diagnostic, status Status) *Report {
-	return reportvocab.PublishReport(req, bodies, interferences, clearances, diagnostics, status)
+	return &Report{
+		Request: req, Bodies: bodies, Interferences: interferences,
+		Clearances: clearances, Diagnostics: diagnostics, Status: status,
+	}
 }
 
 // validityEvidence contains the solid or sheet audit facts for one body.
