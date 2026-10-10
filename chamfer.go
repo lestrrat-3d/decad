@@ -8,7 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -49,7 +48,7 @@ import (
 
 // ChamferOption configures Chamfer: WithTangentChain and
 // WithAsymmetricChamfer (docs/modify-reach-design.md §2).
-type ChamferOption = modifyoption.ChamferOption
+type ChamferOption interface{ chamferOption() }
 
 // Chamfer bevels the selected lateral edges of a straight prism with a straight
 // chord set back a distance d along each adjacent wall, returning the new body
@@ -154,7 +153,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if err := refuseSheetOperand(b, "Chamfer"); err != nil {
 		return nil, err
 	}
-	o, err := modifyoption.DecodeChamfer[*FaceQuery](opts)
+	o, err := decodeChamferOptions(opts)
 	if err != nil {
 		return nil, err
 	}

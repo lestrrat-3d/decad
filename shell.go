@@ -38,7 +38,7 @@ import (
 // docs/shell-opening-design.md's (shell_opening.go).
 
 // ShellOption configures Shell, including its wall sense.
-type ShellOption = modifyoption.ShellOption
+type ShellOption interface{ shellOption() }
 
 // ShellSense is the wall sense of a shell (docs/modify-design.md §8): the
 // thickness is a magnitude and carries no sign (core §8.1), so which way the
@@ -69,7 +69,7 @@ func (s ShellSense) String() string {
 // WithShellSense sets the wall sense (Inward or Outward). Without it the sense
 // is Inward (docs/modify-design.md §8).
 func WithShellSense(s ShellSense) ShellOption {
-	return modifyoption.WithShellSense(int(s))
+	return shellOptionValue{encoded: modifyoption.WithShellSense(int(s))}
 }
 
 // Shell removes the selected cap faces of a straight prism and lines the rest
@@ -160,7 +160,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if err := refuseSheetOperand(b, "Shell"); err != nil {
 		return nil, err
 	}
-	o, err := modifyoption.DecodeShell(opts)
+	o, err := decodeShellOptions(opts)
 	if err != nil {
 		return nil, err
 	}
