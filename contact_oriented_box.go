@@ -30,8 +30,8 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 	pp, ok := body.payload.(prismPayload)
 	if !ok || !body.solid || body.kind != BodySolid || pp.surfaceResult ||
 		pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		!rectangularProfile(pp.profile) ||
-		!cardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
+		!pairbox.RectangularProfile(pp.profile) ||
+		!pairbox.CardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
 		!signedAxisTransform(pp.xform) || !pose.IsValid() || !proofbound.FiniteVec(pose.Translation()) ||
 		!proofbound.FiniteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) {
 		return orientedSourceBox{}, false

@@ -27,7 +27,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 	if !ok || !b.solid || b.kind != BodySolid || pp.surfaceResult ||
 		pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
 		len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) != 1 ||
-		!cardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
+		!pairbox.CardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
 		!signedAxisTransform(pp.xform) || !signedAxisTransform(pose) ||
 		!proofbound.FiniteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) ||
 		pp.z0 >= pp.z1 {
@@ -89,8 +89,8 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
 	rp, ok := b.payload.(revolvePayload)
 	if !ok || !b.solid || b.kind != BodySolid || rp.surfaceResult || !rp.full ||
-		rp.sectionDelta != 0 || !rectangularProfile(rp.profile) ||
-		!cardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
+		rp.sectionDelta != 0 || !pairbox.RectangularProfile(rp.profile) ||
+		!pairbox.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
 		!signedAxisTransform(rp.xform) || !signedAxisTransform(pose) ||
 		!proofbound.FiniteVec(rp.frame.Origin()) ||
 		rp.ax.aUBound != 0 || rp.ax.aVBound != 0 ||

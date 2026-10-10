@@ -54,7 +54,7 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 		rp.sectionDelta != 0 || len(rp.profile.Holes) != 0 ||
 		len(rp.profile.Outer.Segments) != 2 ||
 		!proofbound.FiniteVec(rp.frame.Origin()) ||
-		!cardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
+		!box.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
 		rp.ax.dU != 1 || rp.ax.dV != 0 ||
 		rp.ax.aUBound != 0 || rp.ax.aVBound != 0 ||
 		rp.ax.dUBound != 0 || rp.ax.dVBound != 0 {
