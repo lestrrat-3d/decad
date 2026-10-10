@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"strings"
 
@@ -29,14 +28,6 @@ import (
 // mutated, no target-out parameter exists — each call retires its operands
 // from their document and registers the result, reached through the operands'
 // own owning document.
-
-// boolChordFactor derives the evaluator-internal chord tolerance from the
-// operand pair's diameter (§9: the booleans expose no tolerance parameter —
-// the tolerance's whole effect surfaces as the result's proven Bound). At
-// diameter × 2e-5 the §2 worked example — a Ø20×10 mm cylinder — carries a
-// volume bound several times inside the default 1e-3 relative gate, while the
-// chord counts stay far under the tessellator's cap.
-const boolChordFactor = 2e-5
 
 // Union returns the body enclosing the volume of a or b, retiring both
 // operands from their document (core §8). A nil operand or a body unioned with
@@ -1019,16 +1010,11 @@ func pairChordTolerance(ctx context.Context, a, b *Body) (float64, float64, erro
 	if err != nil {
 		return 0, 0, err
 	}
-	return pairChordFrom(ca, cb)
-}
-
-// chordOperand is one operand's share of pairChordTolerance: its bounds box
-// inflated by its proven bound, and the floor its own tessellation reserves
-// before it chords anything. Verify reads it once per body and combines it
-// for every pair (verifyMeshCache, verify_pairs.go).
-type chordOperand struct {
-	lo, hi r3.Vec
-	floor  float64
+	tol, diameter, ok := meshbool.PairChordFrom(ca, cb)
+	if !ok {
+		return 0, 0, fmt.Errorf(`%w: the operand pair has no extent to derive a chord tolerance from`, ErrDegenerate)
+	}
+	return tol, diameter, nil
 }
 
 // chordOperandOf reads b's share of pairChordTolerance.
@@ -1047,17 +1033,17 @@ type chordOperand struct {
 // Nothing is lost by the coarser chording: each mesh reports the sagitta it
 // actually took, and the reserved figure already dominates the bound it
 // publishes.
-func chordOperandOf(ctx context.Context, b *Body) (chordOperand, error) {
+func chordOperandOf(ctx context.Context, b *Body) (meshbool.ChordOperand, error) {
 	box, err := b.Bounds()
 	if err != nil {
-		return chordOperand{}, err
+		return meshbool.ChordOperand{}, err
 	}
 	inf := box.Bound.Base()
 	pad := r3.NewVec(inf, inf, inf)
-	return chordOperand{
-		lo: box.Min.Sub(pad),
-		hi: box.Max.Add(pad),
-		floor: max(
+	return meshbool.ChordOperand{
+		Lo: box.Min.Sub(pad),
+		Hi: box.Max.Add(pad),
+		Floor: max(
 			proofbound.ProductUpper(2, sectionDisplacementOf(b)),
 			proofbound.ProductUpper(2, coordDisplacementOf(ctx, b)),
 			heldPrimitiveFloorOf(b),
@@ -1082,28 +1068,6 @@ func heldPrimitiveFloorOf(b *Body) float64 {
 	default:
 		return 0
 	}
-}
-
-// pairChordFrom combines two operands' shares into the pair's chord tolerance
-// and diameter: the diameter of the union of the two inflated boxes times
-// boolChordFactor, raised past both operands' floors.
-func pairChordFrom(a, b chordOperand) (float64, float64, error) {
-	lo := r3.Vec{
-		X: math.Min(a.lo.X, b.lo.X),
-		Y: math.Min(a.lo.Y, b.lo.Y),
-		Z: math.Min(a.lo.Z, b.lo.Z),
-	}
-	hi := r3.Vec{
-		X: math.Max(a.hi.X, b.hi.X),
-		Y: math.Max(a.hi.Y, b.hi.Y),
-		Z: math.Max(a.hi.Z, b.hi.Z),
-	}
-	diag := hi.Sub(lo).Len()
-	if diag <= 0 || proofbound.IsNonFinite(diag) {
-		return 0, 0, fmt.Errorf(`%w: the operand pair has no extent to derive a chord tolerance from`, ErrDegenerate)
-	}
-	tol := math.Max(diag*boolChordFactor, math.Max(a.floor, b.floor))
-	return tol, diag, nil
 }
 
 // coordDisplacementOf is the count-INDEPENDENT coordinate reservation an

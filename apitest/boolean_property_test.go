@@ -571,7 +571,7 @@ func TestBooleanRefusalConcaveHoleSpuriousContact(t *testing.T) {
 		// while chording the concave wall into far fewer facets — the boolean and
 		// near-miss scans that dominate this test are quadratic in that count.
 		half, rHole, h = 20.0, 1.5, 10.0
-		// The evaluator-internal chord tolerance (boolean.go boolChordFactor,
+		// The evaluator-internal chord tolerance (meshbool.ChordFactor,
 		// documented 2e-5) times the pair's bounding-box diagonal. Both operands
 		// live inside the plate's own x,y ∈ [−20, 20] and the shared z ∈ [−5, 15],
 		// so the diagonal is a fixed √(40² + 40² + 20²) = 60 for every case.
