@@ -41,6 +41,23 @@ type brepModifyRequest struct {
 	loopKind  brepBandKind
 }
 
+// matchesRecordFace keeps a resolved public reference face tied to its
+// receiver's record face across restatement, which preserves the face index.
+func (a *asymmetricChamfer) matchesRecordFace(ref *Face, index int) bool {
+	if ref == nil {
+		return false
+	}
+	faceRole := fmt.Sprintf("face(%d)", index)
+	wallRole := fmt.Sprintf("wall(%d)", index)
+	for _, origin := range ref.origins {
+		if origin.producer == a.body.origin.producer &&
+			(origin.Role == faceRole || origin.Role == wallRole) {
+			return true
+		}
+	}
+	return false
+}
+
 // brepRoute is what the brep route hands back to the op. It is empty for a
 // receiver the brep route does not take, and the op continues on its own
 // path. Route P sets prism, the recognised prism (never stored; the op's
@@ -73,8 +90,8 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 		return brepRoute{}, err
 	}
 	if req.asym != nil {
-		// Route E maps each recorded adjacent face to one end-face walk.
-		// Route P and route L have no such reference-face mapping.
+		// Routes E and L map public reference faces to their record faces.
+		// Route P has no reference-face mapping for this option.
 		body, err := brepLoopRoute(ctx, b.doc, bp, req)
 		if err != nil {
 			return brepRoute{}, err

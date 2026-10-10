@@ -343,7 +343,8 @@
 2	0.01	TestAnalyticChordsAreCharged
 2	0.38	TestAnalyticPlateWithCircularHolesArea
 2	0.01	TestAsymmetricChamferFeet
-2	0.01	TestAsymmetricChamferOnBrepLoopRefused
+2	0.08	TestAsymmetricChamferOnBrepLoop
+2	0.01	TestAsymmetricChamferOnBrepLoopSideOverrun
 2	0.01	TestAsymmetricChamferOnBrepRestatedEndFaces
 2	0.01	TestAsymmetricChamferOnBrepStraightEdge
 2	0.01	TestAsymmetricChamferOnStackedRefused

@@ -365,23 +365,31 @@ orientation differ.
 
 ### 4.2 Construction
 
-For each touched loop `ℓ` of face `F` with setback `d` (`dc = ds = d`;
-`WithAsymmetricChamfer` stays SX16 on route L, §7):
+For each touched loop `ℓ` of face `F`, `dc` is its setback across `F` and
+`ds` is its setback along the faces beside `ℓ`. Without
+`WithAsymmetricChamfer`, `dc = ds = d`. With the option on a `brepPayload`,
+every edge of a touched loop must consistently name either `F` or the face
+beside that edge as its reference. A reference to `F` sets `(dc, ds)` to
+`(d, otherDistance)`; a side reference swaps them. Mixed assignments on one
+loop are SX4. The public one-reference-face-per-edge gate catches this first
+as SX3 when a query names both `F` and a side face. Touched loops on the same
+face and material side must agree on their pair, because they share one
+cap-blend view. Then:
 
-1. **The cap contour.** `ℓ` offset `d` into `F`'s material by reach §8.3's
+1. **The cap contour.** `ℓ` offset `dc` into `F`'s material by reach §8.3's
    construction (`capLoopBoundary`): SX6 for a dropped carrier, SX13's radial
    half per circular wall, SX14 per corner. `F`'s region is rewritten with the
-   contour in `ℓ`'s place, and the second offset at the top of `d`'s
+   contour in `ℓ`'s place, and the second offset at the top of `dc`'s
    conversion span runs as `auditCapBlendSetbackSpan` does.
-2. **The side level.** `sideZ = L_F + σ·d` with `σ = −1` for a loop whose
+2. **The side level.** `sideZ = L_F + σ·ds` with `σ = −1` for a loop whose
    walls descend into the body and `+1` for one whose walls rise (LB6), its
-   displacement `levelDelta` the float sum's rounding plus `dDelta`; SX13's
+   displacement `levelDelta` the float sum's rounding plus `dsDelta`; SX13's
    axial half where `sideZ == L_F`.
 3. **Trims.** Each (sw) face's level at `F` becomes `sideZ`, its level
    displacement `F`'s plus `levelDelta`. Each (pl) face's segment on `ℓ`
    moves to `sideZ` along `n`, its section displacement taking the same sum,
    its two neighbour lines shortened or lengthened to it, a connector-free
-   blend at both corners whose cutback is `d` (route E's (pl) rule); the face
+   blend at both corners whose cutback is `ds` (route E's (pl) rule); the face
    runs modify §5's audit (S8, S6, S7, S9).
 4. **The face audit.** `F`'s rewritten region runs modify §5's audit (S8,
    S7 — the contour against `F`'s other loops, SX7's text — and S9).
@@ -446,7 +454,7 @@ volume and lifts through the reference frame.
 | **SL1** | a partial loop outside one admissible straight-edge fillet chain, two loops sharing an edge after route V's partition, or loops mixed with single edges for a `Chamfer`; a selected chain on one planar-face loop takes the partial fillet route | yes | `ErrUnsupported` |
 | **SL2** | an adjacent face outside LB3/LB4/LB6: a curved or oblique neighbour, a split side line, a neighbour whose own loop continues past the vertex on a curve, walls on both sides of `F` | yes | `ErrUnsupported` |
 | **SL3** | retired: a `Fillet` of complete loops builds through `docs/loop-fillet-design.md`'s fillet arm or refuses with that document's Table SF | — | — |
-| **SL4** | `WithAsymmetricChamfer` on route L, or on a stacked receiver | yes | reach SX16 |
+| **SL4** | `WithAsymmetricChamfer` on a stacked receiver, or a brep route L reference with no unambiguous record-face identity | yes | reach SX16 |
 
 Reach SX6, SX7, SX12, SX13, SX14 and SX15 keep their meanings per band, and
 base S6/S7/S8/S9 per rewritten face.
@@ -456,7 +464,7 @@ reach SX10, SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
 
 | Stage | Gates |
 |---|---|
-| 2c. entry | independent straight edges → route E (brep-modify §6); otherwise SL4 for an asymmetric chamfer, or route L: LB1, LB2 (SL1) |
+| 2c. entry | independent straight edges → route E (brep-modify §6); complete planar-face loops → route L: LB1, LB2; an asymmetric selection outside both routes is SX16 |
 
 For a `Fillet`, route V also partitions complete loops and independent
 straight edges before LB1/LB2. A selected straight-edge chain on part of
@@ -530,9 +538,9 @@ below reads the bands where the plain brep reader would miss them:
   `sketch` scene would return the cut vertices as `Partial` fragments decad
   can only reject (shell-opening §4.6).
 - **`Outward` and `WithNoOpenings` refuse.** §3.2; neither has a record.
-- **Asymmetric route L chamfers stay SX16.** Reach §8.3.1's two-distance band
-  is one more parameter pair through the same construction and can follow
-  without a design change; it is not in these PRs.
+- **Asymmetric route L chamfers use the existing two-distance band.** The
+  reference face chooses `dc` and `ds` consistently per loop. A stacked
+  receiver's face view still lacks the required public face identity (SL4).
 - **Hand-offs: none.** No capability is needed from `sketch`, `r3` or
   `units`.
 
@@ -696,7 +704,8 @@ Route L (L-1):
   continues on a fillet arc → SL2; P8's top loop chamfered at `d = 3` → SX6
   (the fillet arcs' offsets vanish); the pocket mouth at `d = 5` → SX7 (the
   band reaches the floor); a loop on a face with `delta > 0` → SB1;
-  `WithAsymmetricChamfer` → SX16.
+  `WithAsymmetricChamfer` on a stacked receiver → SX16; P8's top loop with
+  cap and side references → the two distinct bounded volumes of §4.2.
 
 Route L (L-2):
 

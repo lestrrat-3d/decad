@@ -27,8 +27,8 @@ import (
 // of the planar face F that holds the loop, and loop the index of the cap
 // contour in F's region (0 the outer loop, 1+i hole i). orig is the loop as
 // the receiver recorded it, in F's frame: the band's side directrix is orig
-// moved along F's normal to the side level. setback is the band's two
-// setbacks, dc = ds = d (modify-general §7). sigma is −1 when the walls beside
+// moved along F's normal to the side level. setback holds its contour and
+// side distances (modify-general §4.2). sigma is −1 when the walls beside
 // the loop descend into the body, so the band removes a wedge, and +1 when
 // they rise off F, so the band fills the concave corner (Table LB, LB6). kind
 // is the band's surface family (docs/loop-fillet-design.md §4 step 3).
@@ -106,8 +106,8 @@ func (b brepLoopBand) patchRole(p int) string {
 }
 
 // validate refuses a band no route L build records: one naming no planar face
-// or no loop of it, a sigma other than ±1, setbacks that are not one positive
-// finite d, or an empty loop.
+// or no loop of it, a sigma other than ±1, non-positive or non-finite
+// setbacks, unequal fillet setbacks, or an empty loop.
 func (b brepLoopBand) validate(bp brepPayload, bi int) error {
 	refuse := func(why string) error {
 		return fmt.Errorf(`%w: loop band %d of a brep record %s`, ErrUnsupported, bi, why)
@@ -121,8 +121,10 @@ func (b brepLoopBand) validate(bp brepPayload, bi int) error {
 		return refuse(`is neither a chamfer nor a fillet band, the two kinds route L builds`)
 	case b.sigma != 1 && b.sigma != -1:
 		return refuse(`states no side of its face`)
-	case !(b.setback.dc > 0) || b.setback.dc != b.setback.ds || math.IsInf(b.setback.dc, 1):
-		return refuse(`states no one positive finite setback`)
+	case !(b.setback.dc > 0) || !(b.setback.ds > 0) ||
+		math.IsInf(b.setback.dc, 1) || math.IsInf(b.setback.ds, 1) ||
+		(b.kind == brepBandFillet && b.setback.dc != b.setback.ds):
+		return refuse(`states no positive finite setbacks for its band kind`)
 	case len(b.orig.Segments) == 0:
 		return refuse(`holds no loop`)
 	case b.selected != nil && len(b.selected) != len(b.orig.Segments):

@@ -80,8 +80,9 @@ type ChamferOption interface{ chamferOption() }
 // takes d down the side and the other distance across the cap. A reference
 // that names no adjacent face of a chamfered edge, or both, or a face beside
 // no chamfered edge, is ErrCardinality (SX3). An asymmetric chamfer of an
-// independent straight brep edge takes route E; brep loops and stacked
-// receivers remain ErrUnsupported (SX16).
+// independent straight brep edge takes route E, and a complete loop of a
+// planar brep face takes route L. Stacked receivers remain ErrUnsupported
+// (SX16).
 //
 // A selection of CAP edges is the cap-loop chamfer of
 // docs/modify-reach-design.md §8.3: sel covering every geometric edge of one
@@ -120,8 +121,8 @@ type ChamferOption interface{ chamferOption() }
 //
 // A selection of one or more complete loops of planar faces of such a body
 // takes route L (docs/modify-general-design.md §4): each loop's face takes
-// the loop offset d into its material, every face beside the loop is trimmed
-// d along the face's normal, and a band of Plane and Cone patches joins the
+// the loop offset dc into its material, every face beside the loop is trimmed
+// ds along the face's normal, and a band of Plane and Cone patches joins the
 // two, removing a wedge where the walls beside the loop descend into the body
 // (a hole mouth, a plate's top loop) and filling the concave corner where
 // they rise off it (a boss root). The result is a brep body whose volume,

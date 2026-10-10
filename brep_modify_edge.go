@@ -719,18 +719,13 @@ func (r *brepEdgeRoute) asymmetricReferenceSide(eb *brepEdgeBlend) (int, error) 
 	}
 	selected := -1
 	for j, index := range eb.adj {
-		faceRole := fmt.Sprintf("face(%d)", index)
-		wallRole := fmt.Sprintf("wall(%d)", index)
-		for _, origin := range ref.origins {
-			if origin.producer != r.call.asym.body.origin.producer ||
-				(origin.Role != faceRole && origin.Role != wallRole) {
-				continue
-			}
-			if selected >= 0 && selected != j {
-				return -1, r.refuseAsymmetricReference(eb, `the asymmetric reference names both adjacent record faces`)
-			}
-			selected = j
+		if !r.call.asym.matchesRecordFace(ref, index) {
+			continue
 		}
+		if selected >= 0 && selected != j {
+			return -1, r.refuseAsymmetricReference(eb, `the asymmetric reference names both adjacent record faces`)
+		}
+		selected = j
 	}
 	if selected < 0 {
 		return -1, r.refuseAsymmetricReference(eb, `the asymmetric reference has no adjacent record face identity`)

@@ -50,6 +50,7 @@ type brepLoopSel struct {
 	face, loop int
 	beside     []brepLoopBeside
 	sigma      float64
+	setback    capSetback
 }
 
 // brepLoopBeside is the face beside one loop segment (LB3): use is that
@@ -82,7 +83,11 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		return brepBlendEdges(ctx, d, bp, call)
 	}
 	if call.asym != nil {
-		return nil, fmt.Errorf(`%w: an asymmetric chamfer on a brep requires independent straight edges admitted by route E (modify-reach SX16)`, ErrUnsupported)
+		loops, err := r.admitLoops()
+		if err != nil {
+			return nil, fmt.Errorf(`%w: an asymmetric chamfer on a brep requires independent straight edges or complete planar-face loops (modify-reach SX16): %v`, ErrUnsupported, err)
+		}
+		return r.buildSelectedLoops(ctx, d, loops)
 	}
 	if call.loopKind == brepBandFillet {
 		if body, recognized, err := r.cornerTriad(ctx, d); recognized {
@@ -762,12 +767,81 @@ func brepLineAlong(u brepUse, n int, level float64) (float64, bool) {
 	}
 }
 
-// requireBandReach is LB5 (reach SX7): the band reaches d along every face
+func (r *brepLoopRead) refuseAsymmetricLoop(row, reason string) error {
+	return fmt.Errorf(`%w: %s (modify-reach %s); selector %s matched [%s]`, ErrUnsupported,
+		reason, row, r.call.sel, selectedEdgesContext(r.call.edges))
+}
+
+// assignLoopSetbacks maps the public reference face of each selected edge to
+// its loop face or its neighbouring record face. Each loop and each material
+// side of one face must use one cap/side pair for the shared cap-blend view.
+func (r *brepLoopRead) assignLoopSetbacks(sels []brepLoopSel) error {
+	for i := range sels {
+		sels[i].setback = *r.call.loop
+	}
+	if r.call.asym == nil {
+		return nil
+	}
+	selected := make(map[int]*Edge, len(r.matched))
+	for i, ei := range r.matched {
+		selected[ei] = r.call.edges[i]
+	}
+	seen := map[[2]int]capSetback{}
+	for i := range sels {
+		sel := &sels[i]
+		assignment := -1
+		for segment, beside := range sel.beside {
+			ui := r.loopUse[[3]int{sel.face, sel.loop, segment}]
+			edge := selected[r.topo.edgeOf[ui]]
+			ref := r.call.asym.refs[edge]
+			capFace := r.call.asym.matchesRecordFace(ref, sel.face)
+			sideFace := r.call.asym.matchesRecordFace(ref, r.topo.uses[beside.use].Face)
+			if capFace == sideFace {
+				return r.refuseAsymmetricLoop("SX16", fmt.Sprintf(`the reference for brep face %s's loop segment %d has no single adjacent record-face identity`,
+					r.bp.faces[sel.face].role, segment))
+			}
+			choice := 0
+			if sideFace {
+				choice = 1
+			}
+			if assignment >= 0 && assignment != choice {
+				return r.refuseAsymmetricLoop("SX4", fmt.Sprintf(`brep face %s's loop mixes cap and side reference assignments`,
+					r.bp.faces[sel.face].role))
+			}
+			assignment = choice
+		}
+		if assignment < 0 {
+			return r.refuseAsymmetricLoop("SX16", fmt.Sprintf(`brep face %s's loop has no edges to assign a reference face`,
+				r.bp.faces[sel.face].role))
+		}
+		if assignment == 0 {
+			sel.setback = capSetback{dc: r.call.asym.d, dcDelta: r.call.asym.dDelta,
+				ds: r.call.asym.other, dsDelta: r.call.asym.otherDelta}
+		} else {
+			sel.setback = capSetback{dc: r.call.asym.other, dcDelta: r.call.asym.otherDelta,
+				ds: r.call.asym.d, dsDelta: r.call.asym.dDelta}
+		}
+		f := r.bp.faces[sel.face]
+		band := brepLoopBand{sigma: sel.sigma}
+		side := 0
+		if band.matSign(f) > 0 {
+			side = 1
+		}
+		key := [2]int{sel.face, side}
+		if old, ok := seen[key]; ok && old != sel.setback {
+			return r.refuseAsymmetricLoop("SX4", fmt.Sprintf(`brep face %s's loops on one material side use different cap and side setbacks`,
+				f.role))
+		}
+		seen[key] = sel.setback
+	}
+	return nil
+}
+
+// requireBandReach is LB5 (reach SX7): the band reaches ds along every face
 // beside its loop and must stop short of that face's far end. The reach is
 // summed per face end: a (sw) face trimmed from both ends, or a (pl) face's
 // neighbouring line claimed from both, must keep a part of its own.
 func (r *brepLoopRead) requireBandReach(sels []brepLoopSel) error {
-	d := r.call.loop.ds
 	type piece struct{ face, use int }
 	reach := map[piece]float64{}
 	for _, sel := range sels {
@@ -782,7 +856,7 @@ func (r *brepLoopRead) requireBandReach(sels []brepLoopSel) error {
 				if b.planar {
 					key.use = b.nb[k]
 				}
-				reach[key] += d
+				reach[key] += sel.setback.ds
 				if reach[key] >= height {
 					return fmt.Errorf(`%w: the %s band on brep face %s's loop reaches or passes the far end of brep face %s beside it (%g mm of %g mm); a merging kernel is not available (modify-reach SX7); selector %s matched [%s]`,
 						ErrUnsupported, r.call.loopKind, f.role, a.role, reach[key], height, r.call.sel, selectedEdgesContext(r.call.edges))
@@ -810,11 +884,13 @@ func (r *brepLoopRead) loopFaceView(fi int, sels []brepLoopSel) capBlendPayload 
 		if sel.face != fi {
 			continue
 		}
-		band := brepLoopBand{sigma: sel.sigma, setback: *r.call.loop}
+		band := brepLoopBand{sigma: sel.sigma, setback: sel.setback}
 		if band.matSign(f) > 0 {
 			cbp.startLoops[sel.loop] = true
+			cbp.start = sel.setback
 		} else {
 			cbp.endLoops[sel.loop] = true
+			cbp.end = sel.setback
 		}
 	}
 	return cbp
@@ -840,10 +916,12 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 			return brepPayload{}, err
 		}
 	}
+	if err := r.assignLoopSetbacks(sels); err != nil {
+		return brepPayload{}, err
+	}
 	if err := r.requireBandReach(sels); err != nil {
 		return brepPayload{}, err
 	}
-	setback := *r.call.loop
 	var faceOrder []int
 	for _, sel := range sels {
 		if !slices.Contains(faceOrder, sel.face) {
@@ -870,6 +948,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 	}
 	work := freeform.NewFreeformWork()
 	for _, sel := range sels {
+		setback := sel.setback
 		cl, err := oneLoopCornerLoop(r.budget, r.bp.faces[sel.face].regionLoop(sel.loop), work)
 		if err != nil {
 			return brepPayload{}, err
@@ -915,6 +994,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 	trims := map[int][]map[int]*cornerBlend{}
 	bands := slices.Clone(r.bp.loopBands)
 	for _, sel := range sels {
+		setback := sel.setback
 		f := r.bp.faces[sel.face]
 		eF := r.topo.embeds[sel.face]
 		n := eF.Axis[2]
