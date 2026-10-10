@@ -160,8 +160,8 @@ func trimmedStartSegment() lineSeg {
 }
 
 // trimmedStartSquareProfile is the fixture square with its bottom edge
-// replaced by trimmedStartSegment's fragment. The build's stationRound is
-// therefore that one segment's own reading and nothing else's.
+// replaced by trimmedStartSegment's fragment. The outgoing junction charges
+// its denoted end against the next segment's held start.
 func trimmedStartSquareProfile() profileRecord {
 	loop := squareLoop(trimmedSquareCentre, trimmedSquareCentre, trimmedSquareHalf, true)
 	loop.Segments[0] = trimmedStartSegment()
@@ -260,10 +260,10 @@ func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
 
 // TestEvalLoftTrimmedLineSegPublishesStationDisplacement is the end-to-end
 // half, and the fixture docs/loft-design.md §5.2 requires beside the pinned
-// LineSeg-only one: an UNPLACED LineSeg-only loft holding one TRIMMED station
-// must publish a Bounds.Bound equal to that station's own lineWalkEndBound
-// reading, carried through delta — never the Exact zero a kind-granted pin
-// would give it.
+// LineSeg-only one: an UNPLACED LineSeg-only loft with a TRIMMED segment must
+// publish a Bounds.Bound that covers the larger certified outgoing-junction
+// gap, carried through delta — never the Exact zero a kind-granted pin would
+// give it.
 //
 // The body here is the pinned fixture's own unit box translated to (1,1) —
 // trimmedStartSegment's doc comment states why the square sits there — so the
@@ -271,26 +271,28 @@ func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
 // reading is the untrimmed loop's own and only the published bound and
 // Exactness move.
 //
-// No float bound is pinned as a literal. The expected bound is recomposed
-// in-test through the same proofbound.AbsSumUpper chain the evaluator itself uses —
-// delta = proofbound.AbsSumUpper(stationRound, placeAllow) with placeAllow exactly zero
-// under r3.Identity(), then Bounds.Bound = proofbound.AbsSumUpper(delta, sectionDelta)
-// with sectionDelta exactly zero on a LineSeg-only build (§5.2). That the
-// displacement is nonzero at all is trimmedStartWalk's own exact-rational
-// proof and holds on every target; the assertions here read the value it
-// publishes.
+// No float bound is pinned as a literal. The fixture's exact-rational proof
+// shows its outgoing end has twice the start's displacement, while its next
+// segment starts at the held square corner. The expected junction bound comes
+// from that end's independently certified walk reading. The unplaced body has
+// zero placement and section departures, so only the usual outward additions
+// carry it to Bounds.Bound (§5.2).
 func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
 	t.Parallel()
 	p := trimmedStartSquareProfile()
-	stationRound := loftmesh.WalkEndPlaneDelta(trimmedStartWalk(t).StartBound)
+	walk := trimmedStartWalk(t)
+	startRound := loftmesh.WalkEndPlaneDelta(walk.StartBound)
+	junctionRound := loftmesh.WalkEndPlaneDelta(walk.EndBound)
+	require.Greater(t, junctionRound, startRound,
+		"the denoted outgoing end must dominate the cell's own start displacement")
 
 	pl := loftPayloadFor(t, p, p, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1))
 	body := evalLoftFixture(t, pl)
 
 	// The unplaced LineSeg-only composition: placeAllow and sectionDelta are
-	// both exactly zero, so the whole published bound is the trimmed station's
-	// own displacement carried through proofbound.AbsSumUpper's outward rounding.
-	wantBound := proofbound.AbsSumUpper(proofbound.AbsSumUpper(stationRound, 0), 0)
+	// both exactly zero, so the published bound carries the larger outgoing
+	// junction displacement through proofbound.AbsSumUpper's outward rounding.
+	wantBound := proofbound.AbsSumUpper(proofbound.AbsSumUpper(junctionRound, 0), 0)
 
 	box, err := body.Bounds()
 	require.NoError(t, err)
@@ -299,7 +301,7 @@ func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
 	require.Equal(t, r3.NewVec(hi, hi, 1), box.Max, "the trimmed fragment denotes the same unit square")
 	gotBound, err := box.Bound.In(units.Millimeter)
 	require.NoError(t, err)
-	require.Equal(t, wantBound, gotBound, "Bounds.Bound must carry the trimmed station's own displacement")
+	require.Equal(t, wantBound, gotBound, "Bounds.Bound must carry the trimmed outgoing junction")
 	require.Positive(t, gotBound, "an Exact zero here would be a bound smaller than the true displacement")
 	require.Equal(t, Approximate, box.Exactness,
 		"a build holding a COMPUTED station states a bound, never an Exact zero")
