@@ -105,19 +105,19 @@ const (
 )
 
 // SweepCause explains why a continuous claim was not proved.
-type SweepCause = reportvocab.SweepCause
+type SweepCause int
 
 const (
-	SweepNoCause              = reportvocab.SweepNoCause
-	SweepPoseRelation         = reportvocab.SweepPoseRelation
-	SweepMissingBound         = reportvocab.SweepMissingBound
-	SweepTimeFloor            = reportvocab.SweepTimeFloor
-	SweepFractionFloor        = reportvocab.SweepFractionFloor
-	SweepPoseBudget           = reportvocab.SweepPoseBudget
-	SweepContactUnsupported   = reportvocab.SweepContactUnsupported
-	SweepDepartureUnproved    = reportvocab.SweepDepartureUnproved
-	SweepContactTrackUnproved = reportvocab.SweepContactTrackUnproved
-	SweepEventUnrepresentable = reportvocab.SweepEventUnrepresentable
+	SweepNoCause SweepCause = iota
+	SweepPoseRelation
+	SweepMissingBound
+	SweepTimeFloor
+	SweepFractionFloor
+	SweepPoseBudget
+	SweepContactUnsupported
+	SweepDepartureUnproved
+	SweepContactTrackUnproved
+	SweepEventUnrepresentable
 )
 
 // SweepInstant identifies a dyadic fraction of the requested duration.
