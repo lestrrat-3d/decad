@@ -50,7 +50,7 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 		Solid:               kind == BodySolid,
 		Sheet:               kind == BodySheet,
 		Faces:               faces,
-		Status:              in.Status,
+		Status:              reportvocab.Status(in.Status),
 		Validity:            validityResultToInternal(in.Validity),
 		Topology:            in.Topology,
 		Area:                scalarReadingToInternal(in.Area),
@@ -75,7 +75,7 @@ func publishBodyResult(in bodyPublishInput) *BodyReport {
 		Diagnostics: diagnosticsFromInternal(published.Undercut.Diagnostics),
 	}
 	return &BodyReport{
-		Body: published.Body, Status: published.Status, Validity: validityResultFromInternal(published.Validity),
+		Body: published.Body, Status: Status(published.Status), Validity: validityResultFromInternal(published.Validity),
 		Topology: published.Topology, Area: scalarReadingFromInternal(published.Area),
 		Bounds: boundsReadingFromInternal(published.Bounds),
 		Region: regionReadingsFromInternal(published.Region), Wall: wall, Undercut: undercut,

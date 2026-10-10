@@ -11,7 +11,7 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `verify.go` | Public verification option tiers and `Document.Verify` orchestration. See verification §1–§3. |
 | `verify_pairs.go` | `Verify`'s pair proofs and job list. See interference §2. |
-| `report.go` | Public diagnostic and pair result types with private report adapters. |
+| `report.go` | Public verdict, diagnostic and pair result types with private report adapters. |
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
 | `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
 | `verify_gate_points.go` | Points a gate diameter reads, and the pair diameter. See verification §3. |

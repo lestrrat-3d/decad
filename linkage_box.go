@@ -1258,7 +1258,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 			}
 		}
 	}
-	report.Status = reportvocab.WorstStatus(diagnosticsToInternal(report.Diagnostics))
+	report.Status = Status(reportvocab.WorstStatus(diagnosticsToInternal(report.Diagnostics)))
 	return report
 }
 
