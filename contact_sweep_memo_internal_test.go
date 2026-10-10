@@ -351,8 +351,8 @@ func TestSweepRunMemoChangesNoReport(t *testing.T) {
 	}
 	floor := internalOffsetBox(t, box.body.doc, -200, -200, 200, 200, low-.05-10,
 		Distance{D: units.Millimeters(10), Dir: Along})
-	still, err := sweeppath.Validate(PoseSegment{From: r3.Identity(), To: r3.Identity(),
-		Duration: units.Seconds(1.0 / 256)})
+	still, err := sweeppath.Validate(encodedPairPath(PoseSegment{From: r3.Identity(), To: r3.Identity(),
+		Duration: units.Seconds(1.0 / 256)}))
 	require.NoError(t, err)
 	floorPath, ok := prepareRotationalSweepPath(floor, still)
 	require.True(t, ok)

@@ -41,7 +41,7 @@ func (d *Document) SweptBox(ctx context.Context, b *Body, path PairPath) (SweptB
 	if err := d.requireLive(b); err != nil {
 		return SweptBox{}, err
 	}
-	p, err := sweeppath.Validate(path)
+	p, err := sweeppath.Validate(encodedPairPath(path))
 	if err != nil {
 		return SweptBox{}, err
 	}

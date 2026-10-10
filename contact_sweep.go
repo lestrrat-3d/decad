@@ -26,16 +26,45 @@ var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 // source boxes, rotating source-box or centered-sphere rigid drifts, and any
 // path of two exact planar solids can receive continuous certificates; other
 // valid paths report an undecided sweep.
-type PairPath = sweeppath.PairPath
+type PairPath interface{ pairPath() }
 
 // PoseSegment joins two placements relative to the body's current placement.
-type PoseSegment = sweeppath.PoseSegment
+type PoseSegment struct {
+	From, To r3.Transform
+	Duration units.Value
+}
+
+func (PoseSegment) pairPath() {}
 
 // QuantityVec carries three components of one physical kind.
-type QuantityVec = sweeppath.QuantityVec
+type QuantityVec struct{ X, Y, Z units.Value }
 
 // RigidDriftSegment moves a center linearly while its orientation rotates.
-type RigidDriftSegment = sweeppath.RigidDriftSegment
+type RigidDriftSegment struct {
+	From            r3.Transform
+	Center          r3.Vec
+	LinearVelocity  QuantityVec
+	AngularVelocity QuantityVec
+	Duration        units.Value
+}
+
+func (RigidDriftSegment) pairPath() {}
+
+func encodedPairPath(path PairPath) sweeppath.PairPath {
+	switch p := path.(type) {
+	case PoseSegment:
+		return sweeppath.PoseSegment(p)
+	case RigidDriftSegment:
+		return sweeppath.RigidDriftSegment{
+			From: p.From, Center: p.Center,
+			LinearVelocity:  sweeppath.QuantityVec(p.LinearVelocity),
+			AngularVelocity: sweeppath.QuantityVec(p.AngularVelocity),
+			Duration:        p.Duration,
+		}
+	default:
+		return nil
+	}
+}
 
 // SweepStartPolicy selects what to prove when the bodies initially touch.
 type SweepStartPolicy int
@@ -402,11 +431,11 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	if a == b {
 		return nil, fmt.Errorf("%w: a pair must name distinct bodies", ErrDegenerate)
 	}
-	pa, err := sweeppath.Validate(pathA)
+	pa, err := sweeppath.Validate(encodedPairPath(pathA))
 	if err != nil {
 		return nil, err
 	}
-	pb, err := sweeppath.Validate(pathB)
+	pb, err := sweeppath.Validate(encodedPairPath(pathB))
 	if err != nil {
 		return nil, err
 	}
