@@ -16,7 +16,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file routes a zero-twist line or circular-arc path through the existing
@@ -355,7 +354,6 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // inherits that staging rather than a second spelling of it. This placeholder
 // tier has no member yet; it reserves the call for a later chain-only option.
 type ChainSweepOption interface {
-	option.Interface
 	chainSweepOption()
 }
 

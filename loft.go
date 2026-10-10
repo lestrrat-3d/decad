@@ -14,7 +14,6 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is docs/loft-design.md PR 1b: the public entry point over PR 1a's
@@ -185,7 +184,6 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 // does not exist. This placeholder tier has no member yet; it reserves the
 // call for a later chain-only option.
 type ChainLoftOption interface {
-	option.Interface
 	chainLoftOption()
 }
 
