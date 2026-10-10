@@ -1023,7 +1023,7 @@
 5	0.05	TestLoftFreeformMixedPairsRefuseS3
 5	0.11	TestLoftFreeformPairPastItsShareRefusesS15
 5	0.40	TestLoftFreeformReversedRangeBuildsTheSameStations
-5	0.10	TestLoftFreeformSpanCountMismatchRefusesS17
+5	0.10	TestLoftFreeformUnequalSpanCounts
 5	1.50	TestLoftFreeformTwistedClosedSplineBracketsDenseReference
 5	0.80	TestLoftFreeformWedgePlacedAndTessellated
 5	0.01	TestLoftStationCapAdmitsAPairInsideItsShare

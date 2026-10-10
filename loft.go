@@ -59,8 +59,8 @@ func WithLoftAlignment(offsets ...int) LoftOption {
 // weights, or FitSplineSeg). An ArcSeg paired against a CircleSeg, or a
 // SplineSeg against a FitSplineSeg, is a mixed-kind pairing like any other,
 // and a mixed-kind pairing is [ErrUnsupported] (§1, P5, S3). A free-form pair
-// whose two curves convert to different Bézier span counts is
-// [ErrUnsupported] too (S17). A circular or free-form pair's walls are chorded
+// whose two curves convert to different Bézier span counts uses exact common
+// subdivision (§5.1). A circular or free-form pair's walls are chorded
 // (§5.1), which carries three refusals of its own, each [ErrUnsupported]: a
 // pair the fixed station cap cannot chord to its chord target (S15), a build
 // whose certified sagitta or station displacement has no derivation from the

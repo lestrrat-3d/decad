@@ -19,7 +19,7 @@ import (
 // This file holds docs/loft-design.md §12 PR 4's acceptance tests: a
 // same-kind Tier A free-form pair builds through §5.1's free-form arm, its
 // readings enclose closed-form or densely sampled references, and the
-// refusals beside it (S3, S17) keep their sentinels. wedgePlanes,
+// mixed-kind refusal beside it (S3) keeps its sentinel. wedgePlanes,
 // wedgeSplineSketch and wedgeHeight are loft_chord_calibration_internal_test.go's
 // own A10b fixtures.
 
@@ -472,39 +472,31 @@ func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
 	}
 }
 
-// TestLoftFreeformSpanCountMismatchRefusesS17 pairs two fit-spline wedges
-// whose curves pass through five and six points, so their converted chains
-// hold four and five Bézier spans. That pair has no shared station coordinate
-// and refuses as S17, with ErrUnsupported, before any body is committed. The
-// record-only gates alone reach the refusal, which pins it among the shape
-// gates rather than in station generation (docs/loft-design.md §4).
-//
-// Shown to fail first: with SpanCountGate's refusal ignored, the record-only
-// gates pass and the refusal comes from station generation instead.
-func TestLoftFreeformSpanCountMismatchRefusesS17(t *testing.T) {
+// TestLoftFreeformUnequalSpanCounts pairs real fit-spline sketches whose
+// converted chains hold four and five Bézier spans.
+func TestLoftFreeformUnequalSpanCounts(t *testing.T) {
 	t.Parallel()
-	const s17 = "reduce to 4 and 5 Bézier spans; this evaluator chords a free-form pair only over an equal span count"
 	w, base, top := wedgePlanes(t)
 	s0, p0 := fitSplineWedgeSketch(t, w, base, 5)
 	s1, p1 := fitSplineWedgeSketch(t, w, top, 6)
 	doc := New()
-	_, err := doc.Loft(t.Context(), s0, p0, s1, p1)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.ErrorContains(t, err, s17)
-	require.Empty(t, doc.Bodies(), "a refused loft leaves the document unchanged")
-
-	rec0, pl0, _, err := recordProfile(s0, p0)
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
-	rec1, pl1, _, err := recordProfile(s1, p1)
+	vol, err := body.Volume()
 	require.NoError(t, err)
-	err = validateLoftRecordsErr(rec0, rec1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.ErrorContains(t, err, s17)
+	require.Positive(t, vol.Value.Base())
+	require.Positive(t, vol.Bound.Base())
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, Sound, report.Status, "diagnostics: %+v", report.Diagnostics)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(1), WithVerification(VerifyAll))
+	require.NoError(t, err)
+	require.NotEmpty(t, mesh.Vertices)
 }
 
 // TestLoftFreeformMixedPairsRefuseS3 keeps S3 for every pairing that is not
 // the same recorded type: a free-form side against an arc or a line, and two
-// different free-form types. None of them reaches S17's span comparison.
+// different free-form types.
 func TestLoftFreeformMixedPairsRefuseS3(t *testing.T) {
 	t.Parallel()
 	fit := fitSplineSeg{Fit: point2ToRecordSlice([]Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}), TStart: 0, TEnd: 1}

@@ -48,7 +48,7 @@ func ValidateLoftRecords(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 }
 
 // ValidateRecordWalks applies docs/loft-design.md Table S rows S1, S2, S4, S3,
-// S17, S7's STRUCTURAL arm and S5, in §4's stated gate order, from the two
+// S7's STRUCTURAL arm and S5, in §4's stated gate order, from the two
 // authenticated records alone — no triangle is built. It returns the
 // normalized per-loop alignment
 // offsets (a nil alignment becomes every offset 0, §2) alongside every
@@ -75,11 +75,8 @@ func ValidateLoftRecords(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 // TYPES, the enumeration docs/loft-design.md §1 and Table P row P5 spell —
 // both LineSeg, both ArcSeg, both CircleSeg, or both the same Tier A
 // free-form type — never merely because one side is a LineSeg. A mixed-kind
-// pair refuses with SameKindGate's sentinel. S17 sits immediately beside it
-// (SpanCountGate): a same-kind free-form pair whose two converted chains hold
-// different span counts refuses before any station is built. Testing only
-// after BOTH sides are resolved is unavoidable once the admitted set has more
-// than one type, and it does not relax PRECEDENCE: the first (i, j) whose
+// pair refuses with SameKindGate's sentinel. Testing after BOTH sides are
+// resolved preserves PRECEDENCE: the first (i, j) whose
 // pair fails is still the first refusal reported, in walk order.
 func ValidateRecordWalks(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.PlaneRecord, alignment []int, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, error) {
 	if len(p0.Holes) != len(p1.Holes) {
@@ -133,9 +130,6 @@ func ValidateRecordWalks(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 			}
 
 			if err := SameKindGate(loops0[i].Segments[j], loops1[i].Segments[k], i, j, k); err != nil {
-				return nil, nil, nil, err
-			}
-			if err := SpanCountGate(w0, w1, i, j, k); err != nil {
 				return nil, nil, nil, err
 			}
 			walks0[i][j] = w0

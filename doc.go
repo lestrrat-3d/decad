@@ -196,7 +196,7 @@
 //	Loft          same-type segment pairs, distinct planes    builds
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
 //	  a pair not the same line, arc, circle or Tier A type    ErrUnsupported
-//	  a free-form pair of unequal Bézier span counts          ErrUnsupported
+//	  a free-form pair of unequal Bézier span counts          builds
 //	  a chorded pair past its share of the station cap
 //	    (64 per paired segment, 512 to 8192 in all)           ErrUnsupported
 //	  free-form work or sketch reconstruction past its budget

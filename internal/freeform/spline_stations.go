@@ -14,11 +14,9 @@ import (
 // paired segment, and the one place DyadicSpanSagittaUpper's bound is turned into an
 // actual chord chain rather than a single span's own reading.
 //
-// Span-count match is the CALLER's gate, not this function's — a10-plan.md
-// Part 3 PR 9's own Table S row S17 owns the caller-facing refusal — but it is
-// asserted here defensively too, because a mismatched pair has no shared
-// parameter domain for the cell scheme below to walk: ErrUnsupported, never a
-// panic on an out-of-range index.
+// Equal span counts are this generator's input contract. A loft first
+// refines unequal chains to a common count (docs/loft-design.md §5.1).
+// This function checks the contract defensively before indexing both chains.
 //
 // THE STATION SET IS SHARED BY CONSTRUCTION, stated here as the reason the two
 // returned lists always carry the same length rather than as an assumption
