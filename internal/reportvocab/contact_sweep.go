@@ -46,13 +46,3 @@ type SweepDeparture struct {
 	Until      SweepInstant
 	GapAtUntil measurement.Measurement
 }
-
-// SweepEvent reports the ideal path relation at one sampled instant.
-type SweepEvent[FaceT, EdgeT, VertexT comparable, RelationT, ReasonT any] struct {
-	At       SweepInstant
-	Relation RelationT
-	Gap      *measurement.Measurement
-	Overlap  *measurement.Measurement
-	Manifold *ContactManifold[FaceT, EdgeT, VertexT]
-	Reason   ReasonT
-}

@@ -5,7 +5,6 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -79,16 +78,16 @@ func TestPairReportKeyIsBitExact(t *testing.T) {
 	minus, err := r3.Translation(r3.Vec{X: 1, Y: math.Copysign(0, -1)})
 	require.NoError(t, err)
 	require.True(t, plus == minus, "premise: == cannot tell the poses apart")
-	require.Equal(t, reportvocab.NewPairReportKey[*Body](nil, plus, plus, req),
-		reportvocab.NewPairReportKey[*Body](nil, plus, plus, req))
-	require.NotEqual(t, reportvocab.NewPairReportKey[*Body](nil, plus, plus, req),
-		reportvocab.NewPairReportKey[*Body](nil, plus, minus, req))
-	require.NotEqual(t, reportvocab.NewPairReportKey[*Body](nil, plus, plus, req),
-		reportvocab.NewPairReportKey[*Body](nil, minus, plus, req))
+	require.Equal(t, newPairReportKey(nil, plus, plus, req),
+		newPairReportKey(nil, plus, plus, req))
+	require.NotEqual(t, newPairReportKey(nil, plus, plus, req),
+		newPairReportKey(nil, plus, minus, req))
+	require.NotEqual(t, newPairReportKey(nil, plus, plus, req),
+		newPairReportKey(nil, minus, plus, req))
 	zeroLength := req
 	zeroLength.SupportBand = units.Millimeters(0)
-	require.NotEqual(t, reportvocab.NewPairReportKey[*Body](nil, plus, plus, req),
-		reportvocab.NewPairReportKey[*Body](nil, plus, plus, zeroLength))
+	require.NotEqual(t, newPairReportKey(nil, plus, plus, req),
+		newPairReportKey(nil, plus, plus, zeroLength))
 }
 
 // TestPairReportMemoEvictsOldest fills a memo past its bound: it keeps
@@ -97,20 +96,20 @@ func TestPairReportKeyIsBitExact(t *testing.T) {
 func TestPairReportMemoEvictsOldest(t *testing.T) {
 	t.Parallel()
 	req := ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Degrees(1)}
-	keyAt := func(i int) reportvocab.PairReportKey[*Body] {
+	keyAt := func(i int) pairReportKey {
 		pose, err := r3.Translation(r3.Vec{X: float64(i)})
 		require.NoError(t, err)
-		return reportvocab.NewPairReportKey[*Body](nil, r3.Identity(), pose, req)
+		return newPairReportKey(nil, r3.Identity(), pose, req)
 	}
 	var memo pairReportMemo
-	for i := range reportvocab.PairReportMemoCap + 3 {
+	for i := range pairReportMemoCap + 3 {
 		memo.Store(keyAt(i), &ContactReport{Relation: ContactSeparated, Reason: ContactReason(i)})
 	}
 	for i := range 3 {
 		_, ok := memo.Load(keyAt(i))
 		require.False(t, ok, "entry %d is among the oldest", i)
 	}
-	for _, i := range []int{3, reportvocab.PairReportMemoCap, reportvocab.PairReportMemoCap + 2} {
+	for _, i := range []int{3, pairReportMemoCap, pairReportMemoCap + 2} {
 		report, ok := memo.Load(keyAt(i))
 		require.True(t, ok, "entry %d", i)
 		require.Equal(t, ContactReason(i), report.Reason)
