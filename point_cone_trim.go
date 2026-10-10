@@ -45,13 +45,13 @@ func pointConeFacetGroup(cone *pointConeLimit, flip bool) facetGroup {
 	if flip {
 		// A straight revolve wall's denotation stores its oriented meridian
 		// runs. Its Allow method reads that orientation directly.
-		copy := *denoted
-		copy.Runs = append([][2]proofbound.RatInterval(nil), denoted.Runs...)
-		for i := range copy.Runs {
-			copy.Runs[i][0] = proofbound.IntervalNeg(copy.Runs[i][0])
-			copy.Runs[i][1] = proofbound.IntervalNeg(copy.Runs[i][1])
+		denotedCopy := *denoted
+		denotedCopy.Runs = append([][2]proofbound.RatInterval(nil), denoted.Runs...)
+		for i := range denotedCopy.Runs {
+			denotedCopy.Runs[i][0] = proofbound.IntervalNeg(denotedCopy.Runs[i][0])
+			denotedCopy.Runs[i][1] = proofbound.IntervalNeg(denotedCopy.Runs[i][1])
 		}
-		denoted = &copy
+		denoted = &denotedCopy
 	}
 	return facetGroup{origins: cone.origins, surface: cone.surface,
 		denoted: denoted, reversed: cone.reversed != flip}
@@ -104,7 +104,10 @@ func exactPointCone(b *Body) (*pointConeLimit, bool) {
 		return nil, false
 	}
 	for _, segment := range rp.profile.Outer.Segments {
-		line := segment.(lineSeg)
+		line, ok := segment.(lineSeg)
+		if !ok {
+			return nil, false
+		}
 		for _, pt := range [...]Point2{line.Start, line.End} {
 			if pt.V == 0 && pt.U != apex && pt.U != far || pt.V > 0 &&
 				(pt.U != far || pt.V != radius) {
@@ -278,7 +281,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		upperNodeRound = max(upperNodeRound, upperSamples[i].pointError)
 		upperQError = max(upperQError, upperSamples[i].qError)
 	}
-	upperCapBound, _, upperLip, err := pointConeCapBound(far, caps, upper)
+	upperCapBound, upperLip, err := pointConeCapBound(far, caps, upper)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +290,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 			proofbound.ProductUpper(upperLip, upperLip))))
 	lowerCapBound, lowerLip, lowerNodeRound := 0.0, 0.0, 0.0
 	if lower != nil {
-		lowerCapBound, _, lowerLip, err = pointConeCapBound(far, caps, lower)
+		lowerCapBound, lowerLip, err = pointConeCapBound(far, caps, lower)
 		if err != nil {
 			return nil, err
 		}
@@ -344,7 +347,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		lowerGroup = len(groups)
 		groups = append(groups, pointConeFacetGroup(lower, true))
 	}
-	for i := 0; i < farGroup; i++ {
+	for i := range farGroup {
 		groups[i].surface = NURBSSurface{}
 	}
 	tris := make([][3]int, 0, 2*len(allCaps)+2*len(allSides))
@@ -451,7 +454,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 		maxNodeRound = max(maxNodeRound, sample.pointError)
 		maxQError = max(maxQError, sample.qError)
 	}
-	capBound, _, lip, err := pointConeCapBound(far, caps, cone)
+	capBound, lip, err := pointConeCapBound(far, caps, cone)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +480,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	capGroup := len(groups) - 1
 	coneGroup := len(groups)
 	groups = append(groups, pointConeFacetGroup(cone, true))
-	for i := 0; i < capGroup; i++ {
+	for i := range capGroup {
 		groups[i].surface = NURBSSurface{}
 	}
 	tris := make([][3]int, 0, len(caps)*2+len(sides)*2)
@@ -590,7 +593,7 @@ func pointConeSubdivide(ctx context.Context, base facetedPayload, rounds int) (
 		}
 		t := [3]int{tri[0] - 1, tri[1] - 1, tri[2] - 1}
 		caps = append(caps, t)
-		for j := 0; j < 3; j++ {
+		for j := range 3 {
 			u, v := t[j], t[(j+1)%3]
 			if group, ok := boundaryGroups[orderedPointConeEdge(u, v)]; ok {
 				sides = append(sides, pointConeSide{u, v, group})
@@ -829,19 +832,18 @@ func pointConeCapArea(far []r3.Vec, caps [][3]int) float64 {
 }
 
 func pointConeCapBound(far []r3.Vec, caps [][3]int,
-	cone *pointConeLimit) (float64, float64, float64, error) {
-	capBound, alphaBound, lip := 0.0, 0.0, 0.0
+	cone *pointConeLimit) (float64, float64, error) {
+	capBound, lip := 0.0, 0.0
 	for _, tri := range caps {
-		cellBound, cellAlpha, cellLip, err := pointConeTriangleBound(
+		cellBound, _, cellLip, err := pointConeTriangleBound(
 			[3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]}, cone)
 		if err != nil {
-			return 0, 0, 0, err
+			return 0, 0, err
 		}
 		capBound = max(capBound, cellBound)
-		alphaBound = max(alphaBound, cellAlpha)
 		lip = max(lip, cellLip)
 	}
-	return capBound, alphaBound, lip, nil
+	return capBound, lip, nil
 }
 
 func pointConeTriangleBound(tri [3]r3.Vec,
