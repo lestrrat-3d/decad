@@ -12,8 +12,8 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// VerifyOption configures Verify.
-type VerifyOption interface {
+// Token is an encoded verification option consumed by Resolve.
+type Token interface {
 	option.Interface
 	verifyOption()
 }
@@ -22,8 +22,8 @@ type verifyOption struct{ option.Interface }
 
 func (verifyOption) verifyOption() {}
 
-// WallOption parameterizes WithMinWallThickness.
-type WallOption interface {
+// WallToken is an encoded parameter of WithMinWallThickness.
+type WallToken interface {
 	option.Interface
 	wallOption()
 }
@@ -54,7 +54,7 @@ type WallSpec struct {
 // Dimensionless; the default is units.Scalar(1e-3) — three significant
 // figures. Exact answers carry a zero proven bound and pass at any
 // tolerance.
-func WithTolerance(rel units.Value) VerifyOption {
+func WithTolerance(rel units.Value) Token {
 	return verifyOption{option.New(identTolerance{}, rel)}
 }
 
@@ -64,7 +64,7 @@ func WithTolerance(rel units.Value) VerifyOption {
 // inscribed balls — material between skins opposing within the draft
 // allowance — and minimum enters only where the interval rule decides the
 // reading against it (verification §6). A wall proven thinner is Violating.
-func WithMinWallThickness(minimum units.Value, opts ...WallOption) VerifyOption {
+func WithMinWallThickness(minimum units.Value, opts ...WallToken) Token {
 	spec := WallSpec{Tool: minimum, Allowance: units.Degrees(15)}
 	for _, o := range opts {
 		if o == nil {
@@ -86,7 +86,7 @@ func WithMinWallThickness(minimum units.Value, opts ...WallOption) VerifyOption 
 // WithDraftAllowance sets how much draft opposition tolerates — where the
 // wall ends and the edge begins (verification §2). An angle in [0°, 90°);
 // the default is units.Degrees(15).
-func WithDraftAllowance(a units.Value) WallOption {
+func WithDraftAllowance(a units.Value) WallToken {
 	return wallOption{option.New(identDraftAllowance{}, a)}
 }
 
@@ -100,7 +100,7 @@ func WithDraftAllowance(a units.Value) WallOption {
 // wall's positive side in place of a solid's outward normal
 // (docs/surface-design.md §2.3, §9.1); every other sheet family reads
 // CoverageUnavailable.
-func WithPullDirection(v r3.Vec) VerifyOption {
+func WithPullDirection(v r3.Vec) Token {
 	return verifyOption{option.New(identPullDirection{}, v)}
 }
 
@@ -110,7 +110,7 @@ func WithPullDirection(v r3.Vec) VerifyOption {
 // and curvature are exact facts, so the survey answers outright: the
 // tightest concave principal radius over every face, or nil — the proven
 // determination that no concave feature exists.
-func WithConcaveRadius() VerifyOption {
+func WithConcaveRadius() Token {
 	return verifyOption{option.New(identConcaveRadius{}, true)}
 }
 
@@ -120,7 +120,7 @@ func WithConcaveRadius() VerifyOption {
 // Each proven-disjoint pair gets a row whose Gap the clearance kernel proves
 // (docs/clearance-design.md); a gap the kernel cannot prove yields no row
 // and reads Suspect — asked and unanswered, never a fabricated number.
-func WithClearances() VerifyOption {
+func WithClearances() Token {
 	return verifyOption{option.New(identClearances{}, true)}
 }
 
@@ -139,7 +139,7 @@ type Config struct {
 // Resolve folds and validates the options. Every parameter
 // error is returned from Verify — never deferred into the report
 // (verification §2, core §10).
-func Resolve(opts []VerifyOption) (Config, error) {
+func Resolve(opts []Token) (Config, error) {
 	cfg := Config{Rel: 1e-3}
 	for _, o := range opts {
 		if o == nil {

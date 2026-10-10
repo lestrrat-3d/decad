@@ -34,36 +34,73 @@ import (
 // proof of the reference diameter that gate is anchored on.
 
 // VerifyOption configures Verify.
-type VerifyOption = verifyoption.VerifyOption
+type VerifyOption interface {
+	verifyOption()
+}
 
 // WallOption parameterizes WithMinWallThickness.
-type WallOption = verifyoption.WallOption
+type WallOption interface {
+	wallOption()
+}
+
+type verifyOptionValue struct{ encoded verifyoption.Token }
+type wallOptionValue struct{ encoded verifyoption.WallToken }
+
+func (verifyOptionValue) verifyOption() {}
+func (wallOptionValue) wallOption()     {}
 
 type wallSpec = verifyoption.WallSpec
 type verifyConfig = verifyoption.Config
 
 // WithTolerance sets the relative tolerance gate of verification §2.
-func WithTolerance(rel units.Value) VerifyOption { return verifyoption.WithTolerance(rel) }
+func WithTolerance(rel units.Value) VerifyOption {
+	return verifyOptionValue{verifyoption.WithTolerance(rel)}
+}
 
 // WithMinWallThickness asks whether a wall is thinner than minimum.
 func WithMinWallThickness(minimum units.Value, opts ...WallOption) VerifyOption {
-	return verifyoption.WithMinWallThickness(minimum, opts...)
+	encoded := make([]verifyoption.WallToken, len(opts))
+	for i, opt := range opts {
+		if value, ok := opt.(wallOptionValue); ok {
+			encoded[i] = value.encoded
+		}
+	}
+	return verifyOptionValue{verifyoption.WithMinWallThickness(minimum, encoded...)}
 }
 
 // WithDraftAllowance sets the angle separating walls from edges.
-func WithDraftAllowance(a units.Value) WallOption { return verifyoption.WithDraftAllowance(a) }
+func WithDraftAllowance(a units.Value) WallOption {
+	return wallOptionValue{verifyoption.WithDraftAllowance(a)}
+}
 
 // WithPullDirection asks for undercuts against the stated direction.
-func WithPullDirection(v r3.Vec) VerifyOption { return verifyoption.WithPullDirection(v) }
+func WithPullDirection(v r3.Vec) VerifyOption {
+	return verifyOptionValue{verifyoption.WithPullDirection(v)}
+}
 
 // WithConcaveRadius asks for the tightest concave radius.
-func WithConcaveRadius() VerifyOption { return verifyoption.WithConcaveRadius() }
+func WithConcaveRadius() VerifyOption {
+	return verifyOptionValue{verifyoption.WithConcaveRadius()}
+}
 
 // WithClearances asks for minimum gaps between disjoint pairs.
-func WithClearances() VerifyOption { return verifyoption.WithClearances() }
+func WithClearances() VerifyOption {
+	return verifyOptionValue{verifyoption.WithClearances()}
+}
 
 func resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
-	return verifyoption.Resolve(opts)
+	encoded := make([]verifyoption.Token, len(opts))
+	for i, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		value, ok := opt.(verifyOptionValue)
+		if !ok {
+			return verifyConfig{}, fmt.Errorf("%w: the verification option is not a decad option (%T)", ErrDegenerate, opt)
+		}
+		encoded[i] = value.encoded
+	}
+	return verifyoption.Resolve(encoded)
 }
 
 func effectiveVerifyRequest(cfg verifyConfig) VerifyRequest {

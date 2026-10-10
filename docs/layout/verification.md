@@ -9,7 +9,7 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `verify.go` | `Document.Verify` orchestration. See verification §1–§3. |
+| `verify.go` | Public verification option tiers and `Document.Verify` orchestration. See verification §1–§3. |
 | `verify_pairs.go` | `Verify`'s pair proofs and job list. See interference §2. |
 | `report.go` | Public report aliases. |
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
