@@ -6,6 +6,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/units"
 )
@@ -265,19 +266,19 @@ type verifyMeshEntry struct {
 // polled once per job.
 func newVerifyMeshCache(ctx context.Context, jobs []verifyPairJob) (*verifyMeshCache, error) {
 	cache := &verifyMeshCache{entries: map[*Body]*verifyMeshEntry{}}
-	shares := map[*Body]chordOperand{}
+	shares := map[*Body]meshbool.ChordOperand{}
 	unreadable := map[*Body]struct{}{}
-	share := func(b *Body) (chordOperand, bool) {
+	share := func(b *Body) (meshbool.ChordOperand, bool) {
 		if s, ok := shares[b]; ok {
 			return s, true
 		}
 		if _, ok := unreadable[b]; ok {
-			return chordOperand{}, false
+			return meshbool.ChordOperand{}, false
 		}
 		s, err := chordOperandOf(ctx, b)
 		if err != nil {
 			unreadable[b] = struct{}{}
-			return chordOperand{}, false
+			return meshbool.ChordOperand{}, false
 		}
 		shares[b] = s
 		return s, true
@@ -297,8 +298,8 @@ func newVerifyMeshCache(ctx context.Context, jobs []verifyPairJob) (*verifyMeshC
 		if !ok {
 			continue
 		}
-		tol, _, err := pairChordFrom(sa, sb)
-		if err != nil {
+		tol, _, ok := meshbool.PairChordFrom(sa, sb)
+		if !ok {
 			continue
 		}
 		for _, b := range [2]*Body{job.a, job.b} {

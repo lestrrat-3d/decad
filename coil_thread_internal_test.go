@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -169,9 +170,9 @@ func TestCoilThreadPartnerKeepsItsBounds(t *testing.T) {
 	tol, dPair, err := pairChordTolerance(t.Context(), cylinder, tool)
 	require.NoError(t, err)
 	require.Equal(t, delta, tol, "the pair tolerance rises to the coil's δ")
-	require.Less(t, dPair*boolChordFactor, tol)
+	require.Less(t, dPair*meshbool.ChordFactor, tol)
 
-	fine, err := cylinder.Tessellate(t.Context(), units.Millimeters(dPair*boolChordFactor))
+	fine, err := cylinder.Tessellate(t.Context(), units.Millimeters(dPair*meshbool.ChordFactor))
 	require.NoError(t, err)
 	mesh, err := cylinder.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)

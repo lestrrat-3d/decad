@@ -24,7 +24,7 @@ import (
 // asserts which gate the pair misses and that the mesh path's own result is
 // unchanged, and neither depends on the section's curve kinds. The choice is a
 // cost one. The mesh path tessellates both operands at a chord tolerance
-// derived from the pair's own diameter (boolean.go's boolChordFactor), so a
+// derived from the pair's own diameter (meshbool.ChordFactor), so a
 // circular loop's facet count is scale-invariant at a few hundred segments,
 // and the facet-pair classification that follows is quadratic in exactly that
 // count; a rectangular loop costs four segments at any size. Curved operands

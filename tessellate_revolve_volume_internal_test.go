@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
@@ -301,7 +302,7 @@ func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, tol, reserve,
 		`a tolerance under the revolve's own coordinate reservation leaves it no chord budget`)
-	require.Greater(t, tol, dPair*boolChordFactor,
+	require.Greater(t, tol, dPair*meshbool.ChordFactor,
 		`the reservation, not the pair diameter, is what set this tolerance`)
 
 	// The raised tolerance is one the revolve can actually be meshed at, which
@@ -310,7 +311,7 @@ func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.symDiffOK)
 
-	_, err = tessellateContext(t.Context(), placed, units.Millimeters(dPair*boolChordFactor), VerifyAll)
+	_, err = tessellateContext(t.Context(), placed, units.Millimeters(dPair*meshbool.ChordFactor), VerifyAll)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
