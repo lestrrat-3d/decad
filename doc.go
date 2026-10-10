@@ -87,9 +87,9 @@
 //	    its spans and joints (spline design §6.5, R19)        ErrUnsupported
 //	  free-form work past the fixed budget (R7)               ErrUnsupported
 //	  WithTaper   line/circle/arc walls, G1 circular joins,
-//	    one-sided Distance/ToFace/ThroughAll extent             builds
+//	    Distance/ToFace/ThroughAll/Symmetric/TwoSided extent    builds
 //	  WithTaper   free-form wall, non-G1 circular corner,
-//	    Symmetric/TwoSided extent, WithSurfaceResult            ErrUnsupported
+//	    WithSurfaceResult                                       ErrUnsupported
 //	  Tessellate/export/boolean/mass of a draft body          builds
 //	  boolean/mass of one with an inexact G1 join or a
 //	    trimmed segment (draft §9.1)                          ErrUnsupported

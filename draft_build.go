@@ -44,16 +44,15 @@ func draftAngle(taper units.Value) (float64, float64, error) {
 }
 
 // extrudeDraft is Extrude's path for a nonzero taper alpha (radians, within
-// alphaDelta of the stated angle, past SD1 and SD2): the stage-2 gates SD11
-// and SD12 on the extent and the option, then the build. A one-sided stop
-// resolves its far level and axial bound before the same single-slab build.
+// alphaDelta of the stated angle, past SD1 and SD2): the SD12 surface-result
+// gate, extent resolution, then one or two draft slabs. A one-sided stop
+// resolves its far level and axial bound before the single-slab build.
 // Every gate runs before the document changes.
 func (d *Document) extrudeDraft(profile profileRecord, frame r3.Frame, e Extent, alpha, alphaDelta float64, surfaceResult bool) (*Body, error) {
 	switch e.(type) {
-	case Distance, ThroughAll, ToFace:
-		// Each resolves to one nonzero end while the sketch plane stays at zero.
+	case Distance, ThroughAll, ToFace, Symmetric, TwoSided:
 	default:
-		return nil, fmt.Errorf(`%w: a tapered Symmetric or TwoSided extent needs a two-slab draft record (draft SD11)`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a tapered extrude does not support extent %T`, ErrUnsupported, e)
 	}
 	if surfaceResult {
 		return nil, fmt.Errorf(`%w: this evaluator builds a tapered extrude as a solid only; omit WithSurfaceResult or the taper (draft SD12)`, ErrUnsupported)
@@ -63,7 +62,7 @@ func (d *Document) extrudeDraft(profile profileRecord, frame r3.Frame, e Extent,
 		return nil, err
 	}
 	ref := d.nextProducerID()
-	body, err := evalDraftContext(context.Background(), d, ref, draftPayload{
+	base := draftPayload{
 		profile:    profile,
 		frame:      frame,
 		z0:         sweep.z0,
@@ -74,7 +73,18 @@ func (d *Document) extrudeDraft(profile profileRecord, frame r3.Frame, e Extent,
 		taper:      alpha,
 		taperDelta: alphaDelta,
 		xform:      r3.Identity(),
-	})
+	}
+	var body *Body
+	if sweep.z0 < 0 && sweep.z1 > 0 {
+		negative, positive := base, base
+		negative.z1, negative.z1Delta, negative.nearStart = 0, 0, false
+		positive.z0, positive.z0Delta, positive.nearStart = 0, 0, true
+		body, err = evalTwoSidedDraftContext(context.Background(), d, ref, twoSidedDraftPayload{
+			negative: negative, positive: positive,
+		})
+	} else {
+		body, err = evalDraftContext(context.Background(), d, ref, base)
+	}
 	if err != nil {
 		return nil, err
 	}

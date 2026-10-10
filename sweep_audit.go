@@ -59,6 +59,8 @@ func (span sweepAuditSpan) AuditExtent(
 		return payload.extentBoundedAlong(ctx, direction, work, payload.walks)
 	case revolvePayload:
 		return payload.extentBoundedAlong(ctx, direction, work)
+	case draftPayload:
+		return payload.band().extentBoundedAlong(ctx, direction, work)
 	default:
 		return 0, 0, 0, fmt.Errorf(`%w: a composite sweep span has no analytic extent certificate`, ErrUnsupported)
 	}
@@ -72,6 +74,9 @@ func (span sweepAuditSpan) AuditExtent(
 func sweepAuditEndpointSupports(body *Body) bool {
 	switch payload := body.payload.(type) {
 	case prismPayload:
+		return true
+	case draftPayload:
+		// Each draft slab stays between its two axial cap planes.
 		return true
 	case revolvePayload:
 		if payload.full {

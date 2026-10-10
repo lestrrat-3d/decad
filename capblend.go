@@ -435,7 +435,8 @@ func requireNotCapBlendReceiver(payload featurePayload, op string) error {
 // extrude as its receiver yet. It runs beside requireNotCapBlendReceiver, so
 // the refusal names the draft body rather than the generic class.
 func requireNotDraftReceiver(payload featurePayload, op string) error {
-	if _, ok := payload.(draftPayload); ok {
+	switch payload.(type) {
+	case draftPayload, twoSidedDraftPayload:
 		return fmt.Errorf(`%w: this evaluator %s a straight prism, a revolve or their modify results, never a draft body (a tapered extrude) (modify S3)`, ErrUnsupported, op)
 	}
 	return nil

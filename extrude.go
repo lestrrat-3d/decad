@@ -45,10 +45,9 @@ type ExtrudeOption = featureoption.ExtrudeOption
 // the wall leans. A positive taper leans every wall into the material as it
 // leaves the sketch plane, so the body narrows toward the far end; a negative
 // one widens it (docs/draft-design.md §2). An angle at or past a right angle
-// is [ErrDegenerate]. A nonzero taper builds over a one-sided Distance,
-// ToFace, or ThroughAll extent. Symmetric, TwoSided, and WithSurfaceResult
-// are [ErrUnsupported], returned before commit. A zero taper builds the
-// straight prism.
+// is [ErrDegenerate]. A nonzero taper builds over Distance, ToFace,
+// ThroughAll, Symmetric or TwoSided. WithSurfaceResult is [ErrUnsupported],
+// returned before commit. A zero taper builds the straight prism.
 func WithTaper(a units.Value) ExtrudeOption {
 	return featureoption.WithTaper(a)
 }

@@ -2,8 +2,9 @@
 
 How decad builds a drafted body: a tapered extrude (`Extrude` with a nonzero
 `WithTaper`) and a face draft of an existing prism (`Body.Draft`). Both
-produce one payload class, the `draftPayload`, whose walls lean at a stated
-angle to the sweep axis so that a molded part releases along that axis.
+produce a `draftPayload` for one-sided extents or a `twoSidedDraftPayload`
+for extents that cross the sketch plane. Their walls lean at a stated angle
+to the sweep axis so that a molded part releases along that axis.
 
 Companion to `docs/api-design.md` ("core §N"), `docs/evaluator-design.md`
 §5 (the prism this body generalises), `docs/modify-design.md` §5 and §8 (the
@@ -70,6 +71,12 @@ P(z) = P offset by t(z) = z · tan α,   inward for t > 0, outward for t < 0
 
 and the body is `{ p + z·e : z ∈ [0, h], p ∈ P(z) }`. The far section is
 `Q = P(h)`, offset by `d = h · tan α`.
+
+For a two-sided extent, each side starts at the same sketch section `P` and
+uses its own travel direction away from the sketch plane. The negative slab
+occupies `[z0, 0]`; the positive slab occupies `[0, z1]`. Each far section
+uses that side's distance in `d = h · tan α`. Their common section is one
+sewn rim, not an internal cap.
 
 **The sign.** A positive `α` narrows the body with distance from the sketch
 plane: every wall's carrier moves `t(z)` into the material. A negative `α`
@@ -149,7 +156,7 @@ file is written.
 
 | RD | Entry point | Admits | Result |
 |---|---|---|---|
-| **RD1** | `Extrude` with nonzero `WithTaper` | a profile of `LineSeg`, `ArcSeg` and `CircleSeg` walks in which every corner at a circular walk is a G1 join; a one-sided `Distance`, `ToFace` or `ThroughAll` extent; `|α| < 90°`; no `WithSurfaceResult` | a `draftPayload` solid (Table BD) |
+| **RD1** | `Extrude` with nonzero `WithTaper` | analytic walks with G1 circular joins; `Distance`, `ToFace`, `ThroughAll`, `Symmetric` or `TwoSided`; `|α| < 90°`; no `WithSurfaceResult` | a one- or two-slab draft solid (Table BD) |
 | **RD2** | `Body.Draft` | a live `prismPayload` receiver (an extrude, a filleted or chamfered body, a tube, or any of these `Placed`) whose section carries no displacement; a `NeutralFace` naming one cap of the receiver; a selection resolving to exactly the receiver's complete wall set; `0 < |α| < 90°` | a `draftPayload` solid over the receiver's section, the receiver retired |
 | **RD3** | `Body.Draft` | as RD2 with a selection naming a **subset** of the walls, where every corner between a selected and an unselected wall is a line–line corner | a `draftPayload` whose far section moves the selected walls only (§10.2) |
 
@@ -172,7 +179,7 @@ any evaluator?) and the sentinel that follows from it.
 | **SD8** | far loops that cross or make boundary contact at modify §5's scale-anchored floor (S7/S11b) — two walls closing on each other, a widened hole reaching the outer loop | yes | `ErrUnsupported` |
 | **SD9** | far loops whose nesting the containment classifier cannot decide (modify S9) | undecidable here | `ErrUnsupported` |
 | **SD10** | a far section that passes every audit at the held `d` and fails at the top of `d`'s span (§8.1; modify-reach §8.3.1's second audit) | undecidable here | `ErrUnsupported` |
-| **SD11** | a nonzero taper with `Symmetric`, `TwoSided`, or a side form: the sketch plane lies inside the sweep and each side needs its own offset direction | yes | `ErrUnsupported` (staged, §14) |
+| **SD11** | retired for `Symmetric` and `TwoSided`; each side now has its own draft slab | — | — |
 | **SD12** | a nonzero taper with `WithSurfaceResult` | yes | `ErrUnsupported` (staged, §14) |
 | **SD13** | a `d` that rounds to zero, a far vertex bit-identical to its near vertex, or a far radius bit-identical to its near radius (`capband.BandRadius`) | yes — float64 cannot name the far section at this scale | `ErrUnsupported` (modify-reach SX13) |
 | **SD14** | a far corner whose displacement enclosure cannot be built (`offset2d.ErrUnbounded`) | yes | `ErrUnsupported` (SX14) |
@@ -201,7 +208,7 @@ one constructed section the existence question is asked first (modify §4).
 | Stage | Gates, in order |
 |---|---|
 | 1 — the pre-gates | `Extrude`: the seam gates of core §7, then SD1, SD2 (the seam gates run first, as they do for SD1 on a straight prism). `Draft`: SD1, SD2, SD17, SD18, SD19's cardinality |
-| 2 — the receiver and its inputs | `Draft`: SD23, SD20's `NeutralFrame` refusal, SD19's kind rules, SD20's cap test, SD22, SD21. `Extrude`: the extent's own validation (unchanged), SD11, SD12 |
+| 2 — the receiver and its inputs | `Draft`: SD23, SD20's `NeutralFrame` refusal, SD19's kind rules, SD20's cap test, SD22, SD21. `Extrude`: the extent's own validation (unchanged), SD12 |
 | 3 — the section's kinds | SD3; then per corner SD4 and SD15 |
 | 4 — the far section is built | the span of `d` (§8.1); SD5, SD7 and SD6's consumed outer loop as the walks are offset, then SD13 |
 | 5 — the audit | SD6, then SD8, then SD9, over the far section at `d` |
@@ -218,6 +225,7 @@ document unchanged (evaluator §8).
 | **BD1** | `Extrude` + taper | `draftPayload`: the near record `P`, the far record `Q` with its displacement, the frame, `[z0, z1]` with the end displacements, `α` with the span of `d`, the placement | 1 | `capStart` over the section at `z0`, `capEnd` over the section at `z1` (the prism's convention: `Along` puts `P` at `z0`, `Against` puts `P` at `z1`); one wall per walk of `P` with role `side(i, j)`: `Plane` for a line, `Cone` for a circular walk, a seamless `Cone` for a whole circle | cap rims `Line3`/`Arc3`/`Circle3` from each record; lateral edges `Line3`, convex by the walk's turn exactly as a prism's (evaluator §3) |
 | **BD2** | `Draft` (RD2) | the same payload over the receiver's record, under the receiver's placement | 1 | as BD1, every role minted under the result's own producer (modify §11: a result's roles are its own) | as BD1 |
 | **BD3** | `Draft` (RD3) | the same payload; `Q` moves the selected walls only | 1 | as BD2; an unselected wall keeps its vertical `Plane`/`Cylinder` | as BD1 |
+| **BD4** | two-sided `Extrude` + taper | `twoSidedDraftPayload` with a negative and positive `draftPayload` | 1 | outer `capStart` and `capEnd`; walls `side(0,i,j)` below and `side(1,i,j)` above the sketch plane | one shared middle rim; the two slabs have no published middle cap |
 
 A full-circle loop builds one `Cone` with two `Circle3` rims and no seam edge,
 as a cylinder does today. Adjacent `Plane` walls whose two recorded segments
@@ -281,6 +289,15 @@ rims the prism's convexity, and flip the axial half of the orientation
 reference for a negative taper. The near rim is `draftNearRim`'s: the bottom
 rim `buildLoopSidesAs` builds for a prism's wall, at the sketch plane.
 
+For a crossing extent, `draft_two_sided.go` builds the negative and positive
+slabs independently with steps 1–9. It checks that their held sketch rims
+match vertex for vertex, then removes both middle caps and reuses the same
+rim edges and vertices. The negative slab's published face loops are reversed
+so the two wall faces use each sewn edge in opposite directions. The
+composite sweep boundary and adjacent-span audits check the resulting shell.
+The two slab volumes and first moments add; the body area sums its published
+faces, and its bounds enclose both slabs.
+
 `Body.Draft` reaches step 1 with the receiver's record and placement after its
 own gates (§10), and builds the identical body `Extrude` would build from the
 same section and sweep.
@@ -335,8 +352,8 @@ stop level's bound. The near edge is therefore the recorded section itself.
 The far displacement stays in `δ_z` even though it would cancel
 for a chamfer, whose two levels both follow one held cap level: here
 `h = z1 − z0` is read from the held far level, so that displacement moves the
-height the taper is measured over. An extent that SD11 admits later and that
-moves the near level must add the near displacement to `δ_z`.
+height the taper is measured over. Each two-sided slab also puts its near
+level at the exact sketch plane; its far level carries its own displacement.
 
 **Exactness.** A draft measurement is `Exact` only where every term of it is
 exactly representable. The tangent of the taper is a certified enclosure of
@@ -378,7 +395,7 @@ nothing else.
 
 ## 9. Table DD — downstream
 
-| DD | Consumer | What it does with a `draftPayload` | PR |
+| DD | Consumer | What it does with a draft body | PR |
 |---|---|---|---|
 | **DD1** | `Body.Tessellate` | chords both records once with the shared curve samples (tessellation §3), rules each wall between its two rims with the cap-band ring builder (`tessellate_capblend.go` over `internal/tessellation`'s rings), triangulates both caps; manifold by construction; the volume proof is the band admission of `docs/tessellation-reach-design.md` §7 with no slab (§9.1). A band the admission refuses meshes for export with no volume proof | 2 |
 | **DD2** | `Union`/`Cut`/`Intersect` | the mesh path (evaluator §9) over DD1's mesh, admitted by `requireVolumeProvingPayload` through the same band admission; the analytic prism reduction's entry gate (`prism_boolean.go`) does not admit the class and takes the mesh path | 2 |
@@ -399,6 +416,11 @@ nothing else.
 | **DD17** | Motion and linkage bounds | `motion_bound.go` reads near and widened far section bounds. `internal/motionbound/record_radius.go` reads each segment's carrier and walk. | 2 |
 | **DD18** | Selectors | `Planar()`, `FaceCreatedBy`, `CapStart`/`CapEnd` and the new `Walls(b)` (§10) select as on a prism. `Facing(v)` and `NormalTo(v)` match a drafted `Plane` wall only for its own tilted normal, since both require parallelism; a caller naming a drafted wall by direction passes that normal, or selects by role | 1, 3 |
 
+The two-sided payload composes DD1–DD6, DD10–DD13 and DD17 from its two
+slabs. Its undercut survey is still `Suspect`: DD7's current face-role lookup
+handles one slab only. Wall and concave-radius surveys remain staged for both
+payloads (DD8).
+
 ### 9.1 The mesh
 
 `tessellate_draft.go` hands `draftPayload.band()` to the cap-loop chamfer
@@ -417,8 +439,14 @@ every reading of the body charged. Three things differ from a chamfer's mesh:
 
 A wall face's bound charges the far level's displacement and the band's, as a
 chamfer patch's does, and no near-level term: the near end of every admitted
-one-sided extent is the sketch plane, exact (§8). An extent SD11 admits later
-that moves the near level must add it there, as it must to `δ_z`.
+one-sided extent is the sketch plane, exact (§8). Each slab of a two-sided
+extent has the same exact near level and its own bounded far level.
+
+`tessellate_draft_two_sided.go` meshes both slabs through that same
+tessellator, drops the two middle caps, and identifies vertices with equal
+held coordinates. The closed-mesh audit refuses a mismatch in the two middle
+rings. The outer facets retain their source faces and displacement bounds;
+area slack and occupied-volume difference bounds add over the two slabs.
 
 The admission refuses what it refuses for a chamfer: a circular wall whose
 join is G1 by the held-tangent rule but not exactly tangent over the
@@ -589,7 +617,7 @@ the red run's failing assertion in the test's comment, and restores the leg.
 right angles), SD5 (F2 with `α` such that `d ≥ R`), SD6 (F1 with `d ≥ a/2`,
 and F7 with `d` closing the ring), SD7 (a thin rectangle whose short walls'
 miters cross), SD8 (a plate whose off-centre hole widens across the outer
-wall), SD11 (`Symmetric`, `TwoSided`), SD12, SD13 (an angle of
+wall), SD12, SD13 (an angle of
 `1e-14°` on a 1 mm sweep). SD15 is pinned in `internal/offset2d/sharp_test.go`
 (§5). Beside them, the draft body's downstream refusals: `Fillet`, `Chamfer`
 and `Shell` refuse it by name (DD14), and `MirroredCopy` builds it (DD12).
@@ -707,8 +735,8 @@ undecided.
 - **Free-form walks**: refused (SD3); the chorded alternative is a loft and
   is rejected (§12).
 - **Exactness**: every draft measurement is `Approximate` (§8).
-- **Extents**: one-sided `Distance`, `ToFace` and `ThroughAll`; the two-sided
-  families need a two-slab draft record and are deferred (SD11, §14).
+- **Extents**: `Distance`, `ToFace`, `ThroughAll`, `Symmetric` and `TwoSided`.
+  A crossing extent uses two slabs with one sewn sketch rim (§7, §14).
 - **Neutral plane**: a cap of the receiver, through a `NeutralFace`; a
   `NeutralFrame` and an interior neutral level are deferred (SD20, §14).
 - **Selection vocabulary**: `Walls(b)` added as a `FacePredicate` beside
@@ -732,6 +760,7 @@ every new root file. This document ships with PR 1.
 | **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `capblend_survey.go` (`capPatchUndercuts`, the patch loop both surveys run), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
 | **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `internal/capcontour/displacement.go`, `internal/capband/`, `draft.go`, `draft_build.go`, `draft_payload.go`, `capblend*.go` (the band view's per-walk amounts), `tessellate_capblend.go` and `internal/tessellation/` (the mesh's per-walk setbacks), `apitest/draft_subset_test.go` | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
 | **6** | RD1 with a one-sided `ToFace` or `ThroughAll`: resolve the stop through `resolveLinearExtent`, then build the existing single-slab draft with the stop's axial bound | `draft_build.go`, `apitest/extrude_taper_test.go` | the far-cap vertex and volume match the selected stop level within their bounds | 5 |
+| **7** | RD1 with `Symmetric` or `TwoSided`: build and sew the two slabs, combine bounded readings and meshes | `draft_two_sided.go`, `tessellate_draft_two_sided.go`, `draft_build.go`, `sweep_audit.go` | public volume, manifold, curved mesh and placement cases | 6 |
 
 PRs 2 and 3 run in parallel after PR 1; PR 4 follows 2; PR 5 follows 3.
 PRs 1, 2 and 4 are proof specifications (bounds, closure terms, the mesh
@@ -749,9 +778,9 @@ draft body, `Draft`'s included:
 | 4 | landed | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20 |
 | 5 | landed | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
 | 6 | landed | DD8; SD3, SD4, two-sided SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); `NeutralFrame` and the interior neutral level |
+| 7 | landed | DD8; SD3, SD4, SD12, SD20; two-sided undercut survey; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); `NeutralFrame` and the interior neutral level |
 
 The unscheduled reach, in the order a later design should take it: the
-drafted shell (DD14, the molded cup), the two-sided extents and the interior
-neutral level (one two-slab draft record serves both), the mitered circular
+drafted shell (DD14, the molded cup), the interior neutral level, the mitered circular
 corner as modify-reach §8.3's ruled stand-in, the wall and concave-radius
 surveys (DD8), and the clearance carriers (DD9).
