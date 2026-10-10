@@ -197,6 +197,9 @@ func (q *FaceQuery) residuals(body *Body) []PredicateResidual {
 
 // predicateResiduals presents the internal counts in the public error type.
 func predicateResiduals(counts []selectorquery.Residual) []PredicateResidual {
+	if counts == nil {
+		return nil
+	}
 	out := make([]PredicateResidual, len(counts))
 	for i, count := range counts {
 		out[i] = PredicateResidual{Branch: count.Branch, Predicate: count.Predicate, Remaining: count.Remaining}
