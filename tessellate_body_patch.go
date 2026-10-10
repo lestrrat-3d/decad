@@ -17,6 +17,9 @@ import (
 // Curved faces need the source feature's chording and are refused here.
 func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, verify Verification) (*Mesh, error) {
 	faces := b.Faces()
+	// curveBound applies only to Circle3 and Arc3. A Line3 follows its end
+	// vertices; the cap-band miter whose Line3 tag holds a curved locus has
+	// a ruled face with nonzero normalBound, so this gate rejects that case.
 	if !stitchAllTetrahedronEligible(faces) {
 		for _, f := range faces {
 			if _, ok := f.surface.(Plane); !ok {
