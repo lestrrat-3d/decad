@@ -1270,6 +1270,7 @@
 4	0.01	TestShellCupWallToolVerdict
 4	0.12	TestSplineAndChordProfileMoments
 4	0.02	TestStackedBlindCutPreservesCounterboreShoulder
+4	0.02	TestStackedBlindCutReusesExactInterface
 4	0.03	TestStackedBlindCutSplitsExistingSlab
 4	0.01	TestStitchBoxReachesAProvenClearanceGap
 4	2.19	TestStitchCurvedRevolveSurfaceKindsTessellate

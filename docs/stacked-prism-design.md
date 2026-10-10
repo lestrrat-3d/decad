@@ -352,8 +352,11 @@ Each admitted arm ships its implementation and tests together.
    splits it and proves a clean cut or no change inside a hole in every slab
    it reaches. The new interface and all earlier ones re-derive their exposed
    patches; the record audit checks them before evaluation. A tool ending
-   exactly at an existing interface takes the mesh path. Admitting opposed
-   unrelated hole sets there needs a private scene proving their separation.
+   exactly at an existing interface uses that level when both the tool end and
+   stored level have zero displacement, and the reached slabs' private scenes
+   plus the interface audit prove the new hole set is monotone. A tool that
+   leaves opposed unrelated hole sets at the interface takes the mesh path;
+   admitting those sets needs a private scene proving their separation.
 4. **Surveys and clearance.** DX7, DX8, DX6 and `analyticBodiesEqual` for the
    stacked payload.
 
@@ -384,8 +387,10 @@ arm64.
   each still take the mesh path with the mesh path's own result.
 - Two blind tools ending at different levels build a three-slab analytic
   result from either face; the mesh and placement retain the volume proof.
-- A blind tool ending exactly at an existing interface takes the mesh path
-  until the opposed-hole proof in stage 3 is built.
+- Two separate blind tools ending exactly at the same interface build an
+  analytic stack when their reached slabs' scenes prove clean cuts and the
+  interface stays monotone. An opposite-side tool leaving unrelated holes
+  on both sides still takes the mesh path.
 - Level displacement, incoming: a tool whose inner end is a converted magnitude
   (`units.Inches`) publishes a positive axial delta on that end, asserted first
   on the tool so the fixture cannot silently stop exercising it, and the
