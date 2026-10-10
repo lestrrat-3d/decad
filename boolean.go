@@ -224,6 +224,11 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 // commits only the last result. a and b MUST belong to one document.
 func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID) (*Body, error) {
 	d := a.doc
+	if body, ok, err := tryPointConeBoolean(ctx, op, d, ref, a, b); err != nil {
+		return nil, err
+	} else if ok {
+		return body, nil
+	}
 	// Table X (docs/surface-design.md §11): a sheet operand in either position
 	// is a plain ErrUnsupported, never a BooleanError — without this a sheet
 	// falls through to tryPrismBoolean below, which type-asserts prismPayload

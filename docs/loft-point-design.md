@@ -36,3 +36,44 @@ It accepts placement through the faceted payload. A chord tolerance below its
 held mesh bound is `ErrUnsupported`; the caller may use a larger tolerance.
 This first point-section form has no holes, section alignment or surface
 result option.
+
+## Coaxial finite cone trims
+
+`Cut` and `Intersect` retain the point loft's authenticated fan when the
+tool is an unplaced, full Revolve of a triangular straight meridian. The
+tool axis is world X, its apex is at positive X, and its finite far cap is
+at negative X. Every source fan vertex minus the source mesh bound must
+lie strictly ahead of that far cap. A tool outside this class takes the
+ordinary mesh Boolean path.
+
+The cone is recorded as `g(p)=x+k·hypot(y,z)` and `alpha(p)=a/g(p)`,
+with exact-rational apex `a` and slope `k` read from the meridian. A
+`Cut` retains rays after the cone crossing; an `Intersect` retains rays
+before it. The outside result requires a far-cap vertex with
+`g(p)/a−1` strictly larger than its arithmetic error and the source
+mesh displacement. This is the nonempty witness for a thin outside piece
+even when its volume interval includes zero. Chained cuts and
+intersections rebuild from the same source fan. Two limits of either kind
+must be strictly ordered over the whole far cap; a lower Cut limit must
+precede an upper Intersect limit. Other orders take the mesh path.
+
+Each far-cap triangle is subdivided before its cone image is chorded.
+Its coordinate box proves `rho>=rhoMin>0` and `g>=gMin>0`; its longest
+edge is `h` and its greatest source reach is `R`. On that cell,
+`||grad g||<=1+k` and `||H g||<=k/rhoMin`, so
+`||H alpha||<=2a(1+k)^2/gMin^3 + ak/(rhoMin·gMin^2)`.
+The interpolation allowance for `alpha` is `h²/2` times that bound.
+The cone-image allowance adds `R` times the alpha allowance and
+`a(1+k)h²/gMin²` for the product `p·alpha`. The largest cell
+allowance, exact-to-float crossing errors, the source fan bound, and
+subdivision/contact rounding form the published mesh displacement.
+
+The cap-area volume term multiplies interpolation displacement by the
+source cap area and the cone image-area factor
+`max(1,L²)`, where `L=a/gMin+R·a(1+k)/gMin²` bounds the crossing
+map's stretch on each cell. The source fan's occupied-volume allowance
+and the final vertex sweep are added. Retained flank patches carry
+`NURBSSurface` tags; the cut or intersection boundary carries the
+source `Cone` tag, origins, orientation and denoted-normal certificate.
+Placement moves the cone tag and denotation, and drops the radial-chain
+record.

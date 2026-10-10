@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -32,6 +33,13 @@ import (
 // rebuild (Placed) reproduces the same origins.
 type facetGroup struct {
 	origins []FeatureRef
+	// surface is set only by a structural trim that retains the source
+	// surface's authenticated record. Ordinary mesh booleans leave it nil.
+	surface Surface
+	denoted *surfacenormal.Revolved
+	// reversed records a retained analytic surface whose natural normal
+	// points into the result, as on the cone exposed by a Cut.
+	reversed bool
 	// planar records whether the source analytic face is a plane: the rim
 	// between two planar sources is a straight line, whose chord length is
 	// exact; any curved source makes the rim's true length unboundable
@@ -47,6 +55,7 @@ type facetedPayload struct {
 	// pointSection retains the authenticated Sketch source of a point loft.
 	// Boolean results have nil here; placement keeps the source record.
 	pointSection *pointSectionRecord
+	pointCone    *pointConeTrimRecord
 	verts        []r3.Vec
 	// vertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
 	// §2, §4.1), composed by the boolean that built the payload (§3) and
@@ -121,6 +130,21 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next := fp
 	next.xform = composed
 	next.lowerSupport = nil
+	next.pointCone = nil
+	next.groups = append([]facetGroup(nil), fp.groups...)
+	for i := range next.groups {
+		// A later structural trim requires the unplaced source. Its retained
+		// public surface identity still moves with this faceted restatement.
+		if cone, ok := next.groups[i].surface.(Cone); ok {
+			cone.Origin = delta.Apply(cone.Origin)
+			cone.Axis = delta.ApplyDir(cone.Axis)
+			next.groups[i].surface = cone
+		}
+		if next.groups[i].denoted != nil {
+			denoted := next.groups[i].denoted.Transformed(delta)
+			next.groups[i].denoted = &denoted
+		}
+	}
 	if !facetproof.TranslationOnly(delta) || !facetproof.TranslationOnly(composed) {
 		next.exactSourceVerts, next.exactSourceTris = nil, nil
 	} else if len(fp.exactSourceVerts) == 0 && fp.meshBound == 0 && fp.volSymDiff == 0 &&
@@ -228,6 +252,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 
 	faceIdx := map[int]*Face{}
 	facePlanar := map[*Face]bool{}
+	faceGroup := map[*Face]int{}
 	facetFace := make([]*Face, len(tris))
 	compFaces := make([][]*Face, len(members))
 	// faceTermSlop is each face's summed per-facet evaluation charge
@@ -248,9 +273,12 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 				origins:    append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
 				body:       body,
 				heldPlanar: pp.groups[pp.src[i]].planar,
+				denoted:    pp.groups[pp.src[i]].denoted,
+				reversed:   pp.groups[pp.src[i]].reversed,
 			}
 			faceIdx[patch[i]] = f
 			facePlanar[f] = pp.groups[pp.src[i]].planar
+			faceGroup[f] = pp.src[i]
 			compFaces[comp[i]] = append(compFaces[comp[i]], f)
 		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
@@ -266,7 +294,12 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	for f, delta := range faceDelta {
-		f.surface = Faceted{Bound: units.Millimeters(delta)}
+		group := pp.groups[faceGroup[f]]
+		if group.surface != nil {
+			f.surface = group.surface
+		} else {
+			f.surface = Faceted{Bound: units.Millimeters(delta)}
+		}
 	}
 
 	if err := buildFacetedTopology(ctx, verts, tris, facetFace, facePlanar, pp.vertexBound); err != nil {
