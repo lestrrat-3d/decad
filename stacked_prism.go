@@ -25,6 +25,10 @@ type stackedPrismPayload struct {
 
 func (sp stackedPrismPayload) transform() r3.Transform { return sp.xform }
 
+func (sp stackedPrismPayload) opposedSectionExact() bool {
+	return sp.sectionDelta == 0 || !stackedrecord.HasOpposed(sp.interfaces)
+}
+
 func (sp stackedPrismPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	sp.xform = composed
 	return evalStackedContext(ctx, d, ref, sp)
@@ -359,6 +363,9 @@ func stackedRegionPart(ctx context.Context, sp stackedPrismPayload, base prismPa
 // evalStackedPlanContext builds a stacked body under plan's naming and column
 // displacements (§3, §4).
 func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp stackedPrismPayload, plan stackedPlan) (*Body, error) {
+	if !sp.opposedSectionExact() {
+		return nil, fmt.Errorf(`%w: opposed holes at a stacked interface carry section displacement`, ErrUnsupported)
+	}
 	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
 		return nil, err
 	}

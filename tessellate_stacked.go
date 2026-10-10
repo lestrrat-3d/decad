@@ -21,6 +21,9 @@ import (
 )
 
 func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, chord float64, verify Verification) (*Mesh, error) {
+	if !sp.opposedSectionExact() {
+		return nil, fmt.Errorf(`%w: opposed holes at a stacked interface carry section displacement`, ErrUnsupported)
+	}
 	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
 		return nil, err
 	}
