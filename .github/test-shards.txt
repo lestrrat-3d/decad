@@ -13,7 +13,7 @@
 #   shard 2:   35.60s over 64 tests
 #   shard 3:   35.60s over 647 tests
 #   shard 4:   35.60s over 63 tests
-#   shard 5:   35.12s over 62 tests
+#   shard 5:   35.16s over 64 tests
 #
 0	1.44	TestAtanSmallIntervalContainsExactSeries
 0	0.01	TestBlindStackedAdmissionLeavesOtherCutsToMesh
@@ -996,6 +996,8 @@
 5	0.90	TestClassBCutGateMissesTakeMeshPath
 5	0.02	TestClosedFitSplineChainStillFoldsItsClosingJointByTheCrossProduct
 5	0.03	TestContactPairBoundedFacetedFloorStrictClear
+5	0.02	TestCounterboreArrangementPreservesWholeLoops
+5	0.02	TestCounterboreReverseArrangementProvesEmptyCut
 5	0.00	TestDependentSpan
 5	0.01	TestDisplacedCupMesh
 5	0.02	TestFacetedAxisSupportProvesRealUnionFloorFace

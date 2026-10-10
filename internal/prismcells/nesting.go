@@ -42,6 +42,213 @@ func MatchCut(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 	return match, true, nil
 }
 
+// EnclosingCutMatch is the pair of sketch cells proving that a cut tool
+// encloses some existing target holes. Outside is the target material beyond
+// the tool; Inside is the material between the tool and those holes.
+type EnclosingCutMatch struct {
+	Outside, Inside *sketch.Profile
+	OutsideHoles    []int
+	EnclosedHoles   []int
+}
+
+// MatchEnclosingCut reads whole loops from the arrangement. It never infers
+// nesting from coordinates: the outside cell must hold the tool as a hole, and
+// the inside cell must hold exactly the target holes absent from that cell.
+func MatchEnclosingCut(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile, targetHoleCount int) (EnclosingCutMatch, bool, error) {
+	targetOuter, err := LoopEntitySet(budget, tags, false, -1)
+	if err != nil {
+		return EnclosingCutMatch{}, false, err
+	}
+	toolOuter, err := LoopEntitySet(budget, tags, true, -1)
+	if err != nil {
+		return EnclosingCutMatch{}, false, err
+	}
+	targetHoles := make([]map[sketch.Entity]struct{}, targetHoleCount)
+	for i := range targetHoles {
+		targetHoles[i], err = LoopEntitySet(budget, tags, false, i)
+		if err != nil {
+			return EnclosingCutMatch{}, false, err
+		}
+	}
+	var result EnclosingCutMatch
+	var outsideSet []bool
+	for _, p := range profiles {
+		if err := budget.Step(); err != nil {
+			return EnclosingCutMatch{}, false, err
+		}
+		outer, err := LoopMatchesOrigin(budget, p.Outer, targetOuter)
+		if err != nil {
+			return EnclosingCutMatch{}, false, err
+		}
+		if !outer {
+			continue
+		}
+		set, tool, matched, err := matchCutCellHoles(budget, p.Holes, targetHoles, toolOuter, true)
+		if err != nil {
+			return EnclosingCutMatch{}, false, err
+		}
+		if !matched || !tool || allMatched(set) {
+			continue
+		}
+		if result.Outside != nil {
+			return EnclosingCutMatch{}, false, nil
+		}
+		if !p.Valid {
+			return EnclosingCutMatch{}, false, InvalidRegionError("cut")
+		}
+		result.Outside, outsideSet = p, set
+	}
+	if result.Outside == nil {
+		return EnclosingCutMatch{}, false, nil
+	}
+	for _, p := range profiles {
+		if err := budget.Step(); err != nil {
+			return EnclosingCutMatch{}, false, err
+		}
+		outer, err := LoopMatchesOrigin(budget, p.Outer, toolOuter)
+		if err != nil {
+			return EnclosingCutMatch{}, false, err
+		}
+		if !outer {
+			continue
+		}
+		set, _, matched, err := matchCutCellHoles(budget, p.Holes, targetHoles, nil, false)
+		if err != nil {
+			return EnclosingCutMatch{}, false, err
+		}
+		if !matched || !complements(outsideSet, set) {
+			continue
+		}
+		if result.Inside != nil {
+			return EnclosingCutMatch{}, false, nil
+		}
+		if !p.Valid {
+			return EnclosingCutMatch{}, false, InvalidRegionError("cut")
+		}
+		result.Inside = p
+	}
+	if result.Inside == nil {
+		return EnclosingCutMatch{}, false, nil
+	}
+	for i, outside := range outsideSet {
+		if outside {
+			result.OutsideHoles = append(result.OutsideHoles, i)
+		} else {
+			result.EnclosedHoles = append(result.EnclosedHoles, i)
+		}
+	}
+	return result, true, nil
+}
+
+func matchCutCellHoles(budget *proofbound.WorkBudget, holes [][]sketch.BoundaryEdge,
+	target []map[sketch.Entity]struct{}, tool map[sketch.Entity]struct{}, allowTool bool) ([]bool, bool, bool, error) {
+	seen := make([]bool, len(target))
+	toolSeen := false
+	for _, hole := range holes {
+		if err := budget.Step(); err != nil {
+			return nil, false, false, err
+		}
+		if allowTool && !toolSeen {
+			isTool, err := LoopMatchesOrigin(budget, hole, tool)
+			if err != nil {
+				return nil, false, false, err
+			}
+			if isTool {
+				toolSeen = true
+				continue
+			}
+		}
+		found := false
+		for i, want := range target {
+			if seen[i] {
+				continue
+			}
+			match, err := LoopMatchesOrigin(budget, hole, want)
+			if err != nil {
+				return nil, false, false, err
+			}
+			if match {
+				seen[i], found = true, true
+				break
+			}
+		}
+		if !found {
+			return nil, false, false, nil
+		}
+	}
+	return seen, toolSeen, true, nil
+}
+
+func allMatched(found []bool) bool {
+	for _, yes := range found {
+		if !yes {
+			return false
+		}
+	}
+	return true
+}
+
+func complements(a, b []bool) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] == b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// MatchCutNoOp proves that a tool lies wholly inside one existing target
+// hole. The target material cell is unchanged, while sketch reports the
+// annulus between that hole and the tool as a separate valid cell.
+func MatchCutNoOp(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile, targetHoleCount int) (bool, error) {
+	if targetHoleCount == 0 {
+		return false, nil
+	}
+	targetOuter, err := LoopEntitySet(budget, tags, false, -1)
+	if err != nil {
+		return false, err
+	}
+	toolOuter, err := LoopEntitySet(budget, tags, true, -1)
+	if err != nil {
+		return false, err
+	}
+	targetHoles := make([]map[sketch.Entity]struct{}, targetHoleCount)
+	for i := range targetHoles {
+		targetHoles[i], err = LoopEntitySet(budget, tags, false, i)
+		if err != nil {
+			return false, err
+		}
+	}
+	material, found, err := FindLoopMatch(budget, profiles, targetOuter, targetHoles)
+	if err != nil || !found {
+		return false, err
+	}
+	if !material.Valid {
+		return false, InvalidRegionError("cut")
+	}
+	annuli := 0
+	for _, hole := range targetHoles {
+		annulus, found, err := FindLoopMatch(budget, profiles, hole,
+			[]map[sketch.Entity]struct{}{toolOuter})
+		if err != nil {
+			return false, err
+		}
+		if !found {
+			continue
+		}
+		if !annulus.Valid {
+			return false, InvalidRegionError("cut")
+		}
+		annuli++
+	}
+	return annuli == 1, nil
+}
+
 // MatchIntersect proves clean nesting in one direction and finds the nested
 // operand's own result cell. Both cells must be valid.
 func MatchIntersect(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile, bHoleCount int) (*sketch.Profile, bool, bool, error) {

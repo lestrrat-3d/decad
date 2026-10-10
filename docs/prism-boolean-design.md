@@ -152,7 +152,7 @@ of §4.5 on its existing admission gate.
 | `Union(a, b)`, stacked | the intervals differ and overlap or touch: `z0_b' <= z1_a && z0_a <= z1_b'` | a `stackedPrismPayload` with one slab per pair of adjacent distinct levels; `docs/general-boolean-design.md` §3 A1 |
 | `Cut(target, tool)` | `z0_tool' <= z0_target && z1_tool' >= z1_target` (tool spans target) | `[z0_target, z1_target]`, unchanged |
 | `Cut(target, tool)`, blind | `z0_target < z0_tool' < z1_target && z1_tool' >= z1_target` (a pocket from the top, floor at `z0_tool'`), or `z0_tool' <= z0_target && z0_target < z1_tool' < z1_target` (a pocket from the bottom, ceiling at `z1_tool'`) | a two-slab `stackedPrismPayload` (`docs/stacked-prism-design.md`): the target's own interval, split at the tool's inner end. Both inequalities are `big.Rat` comparisons over G5's shifted interval, and the inner end is that exact rational rounded to the nearest float once, carrying the tool's own axial displacement plus `rationalFloatError` of the rounding — the same charge `Intersect`'s shifted endpoint takes |
-| `Cut(target, tool)`, stacked target | the target is a `stackedPrismPayload` and the tool spans its whole interval: `z0_tool' <= z0_first && z1_tool' >= z1_last` | the target's own slabs, each region cut by the tool |
+| `Cut(target, tool)`, stacked target | the tool spans the whole stack: `z0_tool' <= z0_first && z1_tool' >= z1_last` | the same slabs; each is cut or proven unchanged because the tool lies inside a hole |
 | `Intersect(a, b)` | `z0_a < z1_b' && z0_b' < z1_a` (intervals overlap) | `[max(z0_a, z0_b'), min(z1_a, z1_b')]` |
 
 `Union`'s equality is exact float equality — not a tolerance — matching G3's
@@ -166,18 +166,17 @@ plane 0.1 mm below a target and a tool 0.3 mm tall put B's cap at the exact
 rational `fl(0.1) + fl(0.3)`, which is no float; G5 compares it as it is, and
 only `Intersect`'s result rounds it, charged (§7).
 
-The two blind `Cut` rows admit only the clean-nesting sub-case of §4.2: the
-tool's boundary must leave the target's loops untouched in every slab it
-reaches, and `resolvePrismCut`'s structural match is what proves it. The
-matched profile is the target's section with the tool as one more hole; the
-slab the tool does not reach takes that same record with the tool's hole
-removed, so both slabs' loops are one record and the result's walls run the
-whole height (`docs/stacked-prism-design.md` §2.3). A blind tool whose boundary
-crosses the target's, a tool strictly inside both ends (an enclosed void), a
-tool touching the target only at a cap, and a tool ending inside a stacked
-target all fall through to the mesh path. `Intersect` with a stacked operand
-takes the mesh path over that payload's own tessellation; `Union` with one is
-`docs/general-boolean-design.md` §3 A1's stacked union.
+The two blind `Cut` rows require whole-loop scene matches. `resolvePrismCut`
+proves a tool disjoint from the target's existing holes. An enclosing tool
+uses two cells: the target's outer with the tool and any outside holes, then
+the tool's outer with precisely the holes it encloses. The cut slab keeps
+only the outside holes plus the tool. The other slab keeps the original
+section; stacked §2.3 shares walls where their loops equal. A blind tool
+whose boundary crosses the target's, a tool strictly inside both ends (an
+enclosed void), a tool touching the target only at a cap, and a tool ending
+inside a stacked target fall through to the mesh path. `Intersect` with a
+stacked operand takes the mesh path over that payload's tessellation;
+`Union` with one follows `docs/general-boolean-design.md` §3 A1.
 
 Disjoint intervals (for `Union` and for `Intersect`) are **staged, not
 refused**: they fall through the gate to the unchanged mesh path.
@@ -513,8 +512,8 @@ regardless of who authored the input curves it was cut from.
 | `Union` with unequal z-intervals | overlapping or touching: a `stackedPrismPayload` (`docs/general-boolean-design.md` §3 A1); disjoint: G5, mesh path |
 | `Cut` whose tool ends inside the target and whose boundary crosses the target's (a side notch) | mesh path; the walls below the floor would split at the crossing, which `docs/stacked-prism-design.md` §7 leaves unplanned |
 | `Cut` whose tool lies strictly inside both target ends (an enclosed void) | G5, mesh path; a void shell is not a stage this design admits |
-| `Cut` whose tool ends inside a stacked target (a second blind hole) | G5, mesh path; `docs/stacked-prism-design.md` §7 stage 2 |
-| `Cut` whose tool encloses one of the target's holes (a counterbore over a through hole) | unresolved by the clean-nesting match, mesh path; `docs/stacked-prism-design.md` §7 stage 2 |
+| `Cut` whose tool ends inside a stacked target (a second blind hole) | G5, mesh path; `docs/stacked-prism-design.md` §7 stage 3 |
+| `Cut` whose tool crosses an existing hole's boundary instead of enclosing it whole | no whole-loop match, mesh path; `docs/stacked-prism-design.md` §7 stage 2 |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
 | `Union` with a holed operand | G6, mesh path; §9 PR3 |
 | A split arranged boundary with a nonzero source displacement, a nonzero walk charge, or a nonidentity re-expression — any one of the three alone | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |

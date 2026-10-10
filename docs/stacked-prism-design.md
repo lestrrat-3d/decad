@@ -80,15 +80,20 @@ evaluator does not build — never repaired.
 | I3 | Each slab has `z0 < z1`. | `ErrDegenerate` |
 | I4 | Consecutive slabs meet: `slabs[i].z1 == slabs[i+1].z0` and `slabs[i].z1Delta == slabs[i+1].z0Delta`, both as stored floats. One plane, one displacement. | `ErrDegenerate` |
 | I5 | Consecutive slabs carry one outer loop record (`loopRecordsEqual`), or their interface meets the union reading below. A clean-nesting cut never touches the outer loop, and a mirror join rewrites every slab's outer the same way, so a cut-built stack's outer wall runs the whole height. | `ErrUnsupported` |
-| I6 | Each interface is **monotone**: every hole of the lower region either equals (`loopRecordsEqual`) a hole of the upper region or is lower-only; every hole of the upper region either equals a hole of the lower region or is upper-only; and lower-only and upper-only holes do not both exist at one interface. | `ErrUnsupported` |
-| I7 | `interfaces[i].lowerExposed` holds exactly one hole-free record per upper-only hole, in order, whose outer is that hole reversed, and `upperExposed` one per lower-only hole, the same way. Reversal rebuilds each segment from its walk, so the audit accepts either spelling of "reversed": the record's outer equals `reverse(hole)`, which is what a cut writes, or `reverse(outer)` equals the hole, which is what a shell writes, keeping the offset loop it built the hole from. | `ErrDegenerate` |
+| I6 | Hole sets are monotone, or one new hole replaces enclosed old holes through §7's two-cell sketch proof. | `ErrUnsupported` |
+| I7 | A monotone interface exposes each exclusive hole's interior; an enclosing interface exposes one patch with the new hole's reversed loop as outer and the enclosed old holes as holes. | `ErrDegenerate` |
 
-I6 is what lets the interface be recorded without a planar boolean. The material
-on both sides of the plane is the narrower region; the exposed material is each
-exclusive hole's own interior, which `reverse(hole)` states as a region with
-material inside. An interface where both sides have exclusive holes needs the
-two hole sets proven disjoint before the exposed regions can be stated, and
-nothing in this evaluator proves that yet (§7, stage 2).
+For a monotone interface, every hole of either region equals a hole on the
+other side or occurs on that side alone. Only one side has exclusive holes.
+Each exposed patch reverses one exclusive hole into an outer loop with no
+holes. Reversal rebuilds segments from their walks; the audit accepts either
+`outer == reverse(hole)` or `reverse(outer) == hole` for a shell offset loop.
+
+For an enclosing interface, both sides have exclusive holes. One side has
+exactly one new hole, and the other has one or more old holes it encloses.
+The cut's two whole-loop sketch cells prove the nesting. The patch on the
+old-hole side reverses the new hole for its outer and carries the old holes
+inside it. Other opposed-hole interfaces remain `ErrUnsupported`.
 
 A mirror join (`docs/mirror-pattern-design.md` §5) builds a stacked payload by
 rewriting every slab's region with one splice. The splice is a function of the
@@ -308,7 +313,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | Consumer | Behaviour |
 |---|---|
 | `Body.Placed` / `Duplicate` / `PlacedCopy` | re-evaluates the payload under the composed motion |
-| later `Cut` with a prism tool | prism-boolean §3.2's stacked-target row: a tool spanning the whole stack and clean-nesting in every slab's region builds a stacked result (stage 1); a tool ending inside the stack, one touching any slab's boundary, or any tool on a union-built stack takes the mesh path |
+| later `Cut` with a prism tool | A spanning tool builds when each slab proves a clean cut or no change inside a hole; other tools take the mesh path (§7). |
 | `Union` with a stacked operand | `docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
 | `Cut` by a prism-group tool | `docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |
 | `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
@@ -318,16 +323,15 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | `Verify` structural audit | every edge bounds two faces by construction (§3) |
 | `Verify` tolerance gate | `gateWitnessPrisms` reads every outer run's prism over its own interval, whose wall stations are all points of the body, and shrinks their maximum by `sectionDelta + axialDelta` plus the widest station gap (`docs/verification-design.md` §3) |
 | `Verify` wall survey | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (modify-reach Table DX, DX9); a pocket floor is a wall the 2D spanning-disk proof does not read |
-| `Verify` undercut and minimum-radius surveys | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (stage 3 lifts both: DX7's exact per-face normals over the columns and planar patches, DX8's `radiussurvey.Prism` over the outer loop plus every column's hole loop) |
-| `Verify` clearance | `newBodyGeomBudget` has no arm, so a pair the boxes do not separate reads `Suspect`; a box-disjoint pair is proven (stage 3 adds the exposed-face model, DX6) |
+| `Verify` undercut and minimum-radius surveys | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (stage 4 adds DX7 face normals and DX8 `radiussurvey.Prism` over each loop) |
+| `Verify` clearance | `newBodyGeomBudget` has no arm, so a pair the boxes do not separate reads `Suspect`; a box-disjoint pair is proven (stage 4 adds the exposed-face model, DX6) |
 | `Verify` interference | `analyticBodiesEqual` answers undecided; the read-only mesh intersection reads §5's proof |
 | `Fillet` / `Chamfer` / `Shell` | through the brep face view (modify-reach RX3); a prism group and a stack enclosing a cavity have none (brep-modify SB2) |
 | `Thicken` / `Offset` / `Patch` / `Stitch` | not reachable: the body is a solid |
 
 ## 7. Stages
 
-Each stage ships its implementation and tests together; no stage is a design
-change alone.
+Each admitted arm ships its implementation and tests together.
 
 1. **Blind cut and through cuts on the result.** The payload, `evalStacked`,
    `tessellateStacked` with its occupied-volume proof, prism-boolean §3.2's two
@@ -336,19 +340,20 @@ change alone.
    stagings in §6, and an executable example. The gallery's landing clip cuts
    one blind hole per frame and renders the body, so the tessellator ships in
    the same stage as the cut that produces the payload.
-2. **Blind cut on a stacked target, and the enclosing tool.** A tool ending
-   inside a stacked target splits the slab its end falls in (or lands on an
-   existing interface plane) and must clean-nest in every slab it reaches. An
-   interface whose two sides would both hold exclusive holes is admitted only
-   when a private scene of the two hole loops arranges them into two separate
-   whole cells, neither carrying the other as a hole — sketch's own answer, read
-   structurally — and otherwise falls back. A tool whose section encloses one or
-   more of the target's holes (a counterbore over a through hole) resolves
-   through a second structural match: the target's cell keeps the holes outside
-   the tool plus the tool, and one further cell reproduces the tool's outer with
-   the enclosed holes as its own, so the exposed floor is `{Outer:
-   reverse(tool), Holes: enclosed holes}` and I7 generalizes to carry them.
-3. **Surveys and clearance.** DX7, DX8, DX6 and `analyticBodiesEqual` for the
+2. **Enclosing counterbore.** A blind tool around existing holes builds when
+   sketch returns the target's outside cell with the tool as one hole and a
+   second cell inside the tool with precisely the enclosed holes. The exposed
+   floor or ceiling is `{Outer: reverse(tool), Holes: enclosed holes}`. A
+   spanning tool inside a pre-existing blind hole leaves that slab unchanged
+   when a private scene returns both the unchanged material cell and the
+   annulus between the existing hole and the tool. A spanning cut on the other
+   slabs then builds the same counterbore in the opposite construction order.
+3. **Blind cut on a stacked target (staged).** A tool ending inside a stacked
+   target must split the slab its end falls in and clean-nest in every slab it
+   reaches. An interface with unrelated exclusive holes on both sides needs a
+   private scene proving that the two hole sets occupy separate whole cells.
+   Until that proof and the slab split are built, the pair takes the mesh path.
+4. **Surveys and clearance.** DX7, DX8, DX6 and `analyticBodiesEqual` for the
    stacked payload.
 
 Not planned here: a blind tool crossing the target's boundary (a side notch),
@@ -376,7 +381,7 @@ arm64.
 - A tool touching the target only at a cap (zero depth), a tool strictly inside
   both ends (an enclosed void), and a blind tool crossing the outer boundary
   each still take the mesh path with the mesh path's own result.
-- A blind tool on a stacked target takes the mesh path (stage 2 lifts it).
+- A blind tool on a stacked target takes the mesh path (stage 3 lifts it).
 - Level displacement, incoming: a tool whose inner end is a converted magnitude
   (`units.Inches`) publishes a positive axial delta on that end, asserted first
   on the tool so the fixture cannot silently stop exercising it, and the

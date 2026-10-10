@@ -22,6 +22,18 @@ func Exposed(ctx context.Context, holes []sectionrecord.LoopRecord) ([]momentinp
 	return out, nil
 }
 
+// EnclosingExposed records the material between a new, enclosing hole and
+// the earlier holes it contains. The cut's sketch cells prove that nesting.
+func EnclosingExposed(ctx context.Context, outer sectionrecord.LoopRecord,
+	inner []sectionrecord.LoopRecord) ([]momentinput.Profile, error) {
+	reversed, err := offset2d.ReverseLoopRecordContext(ctx, outer)
+	if err != nil {
+		return nil, err
+	}
+	holes := append([]sectionrecord.LoopRecord(nil), inner...)
+	return []momentinput.Profile{{Outer: reversed, Holes: holes}}, nil
+}
+
 // UnionExposed records a wider region with the narrower outer as a reversed hole.
 func UnionExposed(ctx context.Context, wider, narrower momentinput.Profile) ([]momentinput.Profile, error) {
 	hole, err := offset2d.ReverseLoopRecordContext(ctx, narrower.Outer)

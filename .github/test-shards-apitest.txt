@@ -8,7 +8,7 @@
 # Shard totals at the last measurement:
 #   shard 0:   43.21s over 146 tests
 #   shard 1:   43.21s over 146 tests
-#   shard 2:   43.21s over 574 tests
+#   shard 2:   43.28s over 576 tests
 #   shard 3:   43.21s over 146 tests
 #   shard 4:   43.21s over 147 tests
 #   shard 5:   43.21s over 147 tests
@@ -456,6 +456,8 @@
 2	0.01	TestContactPairSupportSetGap
 2	0.00	TestContactPairSupportSetPastRim
 2	0.00	TestContextOperationsRejectNilBeforeOperands
+2	0.05	TestCounterboreCutBuildsAnalyticShoulderInEitherOrder
+2	0.02	TestCounterboreCutKeepsAnOutsideThroughHole
 2	0.75	TestCurvedRimLengthRefuses
 2	0.02	TestCutBlindTrenchSplitsCapIntoTwoFaces
 2	0.69	TestCutDrillsHole

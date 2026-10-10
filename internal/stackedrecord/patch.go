@@ -91,6 +91,9 @@ func InterfacePatches(sp Record, columns []Column, bySlab [][]SlabLoop, k int) (
 		return patches, nil
 	}
 	lowerOnly, upperOnly := ExclusiveHoles(lower, upper)
+	if len(lowerOnly) != 0 && len(upperOnly) != 0 {
+		return enclosingPatch(sp, columns, bySlab, k, lowerOnly, upperOnly)
+	}
 	for e, hole := range upperOnly {
 		ci, err := holeColumn(columns, holeColumns(bySlab[k+1]), hole, k+1, true)
 		if err != nil {
@@ -108,6 +111,40 @@ func InterfacePatches(sp Record, columns []Column, bySlab [][]SlabLoop, k int) (
 			Record: boundary.UpperExposed[e], Loops: []PatchLoop{{Column: ci, Top: true, Outer: true}}})
 	}
 	return patches, nil
+}
+
+// enclosingPatch pairs an annular shoulder with the wall rings on both sides
+// of the interface. The outer ring belongs to the newly enlarged hole.
+func enclosingPatch(sp Record, columns []Column, bySlab [][]SlabLoop, k int,
+	lowerOnly, upperOnly []sectionrecord.LoopRecord) ([]Patch, error) {
+	boundary := sp.Interfaces[k]
+	newHole, enclosed := upperOnly, lowerOnly
+	newSlab, oldSlab, floor := k+1, k, true
+	exposed, role := boundary.LowerExposed, fmt.Sprintf("floor(%d,0)", k)
+	if len(boundary.UpperExposed) != 0 {
+		newHole, enclosed = lowerOnly, upperOnly
+		newSlab, oldSlab, floor = k, k+1, false
+		exposed, role = boundary.UpperExposed, fmt.Sprintf("ceiling(%d,0)", k)
+	}
+	if len(newHole) != 1 || len(exposed) != 1 {
+		return nil, fmt.Errorf(`%w: enclosing interface %d has no single exposed patch`, decaderr.ErrDegenerate, k)
+	}
+	newStarts := floor
+	outer, err := holeColumn(columns, holeColumns(bySlab[newSlab]), newHole[0], newSlab, newStarts)
+	if err != nil {
+		return nil, err
+	}
+	patch := Patch{Role: role, Floor: floor, Record: exposed[0],
+		Loops: []PatchLoop{{Column: outer, Top: !floor, Outer: true}}}
+	for _, hole := range enclosed {
+		oldStarts := !floor
+		inner, err := holeColumn(columns, holeColumns(bySlab[oldSlab]), hole, oldSlab, oldStarts)
+		if err != nil {
+			return nil, err
+		}
+		patch.Loops = append(patch.Loops, PatchLoop{Column: inner, Top: floor})
+	}
+	return []Patch{patch}, nil
 }
 
 func holeColumns(entries []SlabLoop) []int {
