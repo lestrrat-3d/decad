@@ -33,5 +33,6 @@ func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, dens
 		return MassProperties{}, err
 	}
 	// Anchor at a held corner before summing tetrahedra.
-	return massmoment.HeldMeshMassProperties(ctx, b.bounds, pp.verts[0], pp.verts, pp.tris, pp.volSymDiff, density)
+	return massPropertiesFromReadings(
+		massmoment.HeldMeshMassProperties(ctx, b.bounds, pp.verts[0], pp.verts, pp.tris, pp.volSymDiff, density))
 }

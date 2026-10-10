@@ -38,7 +38,7 @@ type SweepRecord struct {
 // SweepProperties integrates the recorded one-span or composite sweep and
 // publishes its centroidal mass and inertia readings.
 func SweepProperties(ctx context.Context, p SweepRecord, center measurement.VecMeasurement,
-	density units.Value) (MassProperties, error) {
+	density units.Value) (MassReadings, error) {
 	if len(p.Spans) != 0 {
 		return compositeSweepProperties(ctx, p.Spans, center, density)
 	}
@@ -51,20 +51,20 @@ func SweepProperties(ctx context.Context, p SweepRecord, center measurement.VecM
 // compositeSweepProperties sums every span's moments about the first span's
 // local origin, then publishes them through their shared placement.
 func compositeSweepProperties(ctx context.Context, spans []SweepSpanRecord,
-	center measurement.VecMeasurement, density units.Value) (MassProperties, error) {
+	center measurement.VecMeasurement, density units.Value) (MassReadings, error) {
 	placement := spans[0].placement()
 	var total Moments
 	var anchor [3]*big.Rat
 	for i, span := range spans {
 		if err := ctx.Err(); err != nil {
-			return MassProperties{}, err
+			return MassReadings{}, err
 		}
 		if span.placement() != placement {
-			return MassProperties{}, fmt.Errorf("%w: composite sweep spans do not share one placement", decaderr.ErrUnsupported)
+			return MassReadings{}, fmt.Errorf("%w: composite sweep spans do not share one placement", decaderr.ErrUnsupported)
 		}
 		local, frame, origin, err := sweepSpanMoments(ctx, span)
 		if err != nil {
-			return MassProperties{}, fmt.Errorf("sweep path span %d: %w", i, err)
+			return MassReadings{}, fmt.Errorf("sweep path span %d: %w", i, err)
 		}
 		if i == 0 {
 			anchor = origin
@@ -82,11 +82,11 @@ func compositeSweepProperties(ctx context.Context, spans []SweepSpanRecord,
 	}
 	rotation, err := PlacementRotation(placement)
 	if err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	world, massIv, err := AffineInertia(total, rotation, density)
 	if err != nil {
-		return MassProperties{}, err
+		return MassReadings{}, err
 	}
 	return Publish(ctx, center, massIv, world)
 }
