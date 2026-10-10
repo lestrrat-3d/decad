@@ -59,27 +59,10 @@ func planarSupportPathOf(p *rotationalSweepPath) planarsweep.SupportPath {
 	}
 }
 
-// planarSupport is one support plane of the touching pair. Paths index the
-// sweep's two bodies: m touches the plane, s owns it.
+// planarSupport adds the root sweep paths to an exact internal support plane.
 type planarSupport struct {
-	m, s     int
-	normal   proofarith.DyV3  // exact outward normal of S there, not unit length
-	origin   proofarith.DyV3  // a start vertex of S on the plane
-	tri      int              // the S triangle the plane was read from
-	heights  []*big.Rat       // n·(p − origin) for every M start vertex, all >= 0
-	rates    []*big.Rat       // exact n·(dp/du − dq/du) at u = 0 for every M vertex
-	contact  []int            // the M vertices with zero height, ascending
-	lifted   []int            // the M vertices with a positive height within the support band (§10.5), ascending
-	rested   map[int]struct{} // the lifted vertices closing no faster than the request's RestSpeed (§10.8)
-	spin     []*big.Rat       // upper bound on |ω_M|·|ω_M×(p − c_M)| for every M vertex (§10.8)
-	local    bool             // S has a vertex strictly in front of the plane: a face-local plane (§10.6)
-	nLow     *big.Rat         // lower bound on |n|
-	nHigh    *big.Rat         // upper bound on |n|
-	motionM  planarMotion
-	motionS  planarMotion
-	pathS    *rotationalSweepPath
-	pathM    *rotationalSweepPath
-	duration *big.Rat
+	planarsweep.SupportCandidate
+	pathS, pathM *rotationalSweepPath
 }
 
 // planarSupports lists every support plane of the initial touch, in a fixed
@@ -103,23 +86,11 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 	var out []planarSupport
 	for _, c := range candidates {
 		out = append(out, planarSupport{
-			m: c.Guest, s: c.Owner, tri: c.Triangle,
-			normal: c.Normal, origin: c.Origin, local: c.Local,
-			heights: c.Heights, rates: c.Rates, contact: c.Contact, lifted: c.Lifted,
-			rested: c.Rested, spin: c.Spin, nLow: c.NormalLow, nHigh: c.NormalHigh,
-			motionM: c.GuestMotion, motionS: c.OwnerMotion,
-			pathM: paths[c.Guest], pathS: paths[c.Owner], duration: c.Duration,
+			SupportCandidate: c,
+			pathM:            paths[c.Guest], pathS: paths[c.Owner],
 		})
 	}
 	return out, nil
-}
-
-func (s *planarSupport) curvature(t *big.Rat) ([]*big.Rat, bool) {
-	return planarsweep.Curvature(s.motionM, s.motionS, s.spin, s.nHigh, t)
-}
-
-func (s *planarSupport) clearAt(t *big.Rat, k []*big.Rat, rest bool) bool {
-	return planarsweep.ClearAt(s.heights, s.rates, s.contact, s.rested, t, k, rest)
 }
 
 // column is §10.6's column test through fraction f. The box spans every M
@@ -130,7 +101,7 @@ func (s *planarSupport) clearAt(t *big.Rat, k []*big.Rat, rest bool) bool {
 // plane with nothing of S in front of it (m = +∞). The box grows with f, so
 // the test and m(f) are monotone.
 func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, error) {
-	if !s.local {
+	if !s.Local {
 		return nil, true, nil
 	}
 	spans := s.pathM.cornerSpan(new(big.Rat), f)
@@ -142,11 +113,7 @@ func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, e
 		hi[axis] = new(big.Rat).Sub(hi[axis], proofbound.RatMin(shift, new(big.Rat)))
 	}
 	solid := planar.PlanarSolid{Verts: s.pathS.startPoints, Tris: s.pathS.solid.Tris}
-	return planar.PlanarColumnClear(&solid, s.normal, s.origin, lo, hi, poll)
-}
-
-func (s *planarSupport) depthAt(t *big.Rat, k []*big.Rat, rate *big.Rat) *big.Rat {
-	return planarsweep.DepthAt(s.heights, s.rates, s.contact, s.lifted, s.rested, t, k, rate)
+	return planar.PlanarColumnClear(&solid, s.Normal, s.Origin, lo, hi, poll)
 }
 
 // gridHorizon returns the largest fraction m/2^depth in (0, 1] at which holds
@@ -172,8 +139,8 @@ type planarDepartureProof struct {
 // in front of it at least m(f). It returns nil when the column test fails at
 // f, which no fraction of a proven departure does.
 func (p *planarDepartureProof) lowerGap(f *big.Rat) *big.Rat {
-	t := new(big.Rat).Mul(f, p.support.duration)
-	least := planarsweep.DepartureHeight(p.support.heights, p.support.rates, p.curvature, t, p.support.nHigh)
+	t := new(big.Rat).Mul(f, p.support.Duration)
+	least := planarsweep.DepartureHeight(p.support.Heights, p.support.Rates, p.curvature, t, p.support.NormalHigh)
 	if least.Sign() <= 0 {
 		return least
 	}
@@ -199,8 +166,8 @@ func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big
 	for i := range supports {
 		support := &supports[i]
 		positive := true
-		for _, index := range support.contact {
-			if support.rates[index].Sign() <= 0 {
+		for _, index := range support.Contact {
+			if support.Rates[index].Sign() <= 0 {
 				positive = false
 				break
 			}
@@ -212,17 +179,17 @@ func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			t := new(big.Rat).Mul(f, support.duration)
-			k, ok := support.curvature(t)
+			t := new(big.Rat).Mul(f, support.Duration)
+			k, ok := support.Curvature(t)
 			if !ok {
 				return false, nil
 			}
-			for _, index := range support.contact {
-				if new(big.Rat).Sub(support.rates[index], proofbound.RatMul(k[index], t)).Sign() <= 0 {
+			for _, index := range support.Contact {
+				if new(big.Rat).Sub(support.Rates[index], proofbound.RatMul(k[index], t)).Sign() <= 0 {
 					return false, nil
 				}
 			}
-			if !support.clearAt(t, k, false) {
+			if !support.ClearAt(t, k, false) {
 				return false, nil
 			}
 			_, open, err := support.column(f, budget.Step)
@@ -235,7 +202,7 @@ func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big
 		if !ok {
 			continue
 		}
-		k, _ := support.curvature(new(big.Rat).Mul(until, support.duration))
+		k, _ := support.Curvature(new(big.Rat).Mul(until, support.Duration))
 		r.departure = &planarDepartureProof{support: *support, curvature: k, until: until}
 		return until, true, nil
 	}
@@ -272,13 +239,13 @@ type planarTrackProof struct {
 // and f lies inside the track, whose clearance and face containment hold
 // through its end and so through f.
 func (p *planarTrackProof) depthThrough(f *big.Rat) (*big.Rat, bool) {
-	t := new(big.Rat).Mul(f, p.support.duration)
-	k, ok := p.support.curvature(t)
+	t := new(big.Rat).Mul(f, p.support.Duration)
+	k, ok := p.support.Curvature(t)
 	if !ok {
 		return nil, false
 	}
-	depth := p.support.depthAt(t, k, p.rate)
-	depth.Quo(depth, p.support.nLow)
+	depth := p.support.DepthAt(t, k, p.rate)
+	depth.Quo(depth, p.support.NormalLow)
 	return depth.Add(depth, p.widening), true
 }
 
@@ -302,7 +269,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 	}
 	for i := range supports {
 		support := &supports[i]
-		if support.motionS.Rotating || support.pathS.path.Drift != nil || support.pathS.delta.Sign() != 0 {
+		if support.OwnerMotion.Rotating || support.pathS.path.Drift != nil || support.pathS.delta.Sign() != 0 {
 			continue
 		}
 		face, ok := planarSupportFace(support)
@@ -310,22 +277,22 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 			continue
 		}
 		rate := new(big.Rat)
-		for _, index := range support.contact {
-			if magnitude := new(big.Rat).Abs(support.rates[index]); magnitude.Cmp(rate) > 0 {
+		for _, index := range support.Contact {
+			if magnitude := new(big.Rat).Abs(support.Rates[index]); magnitude.Cmp(rate) > 0 {
 				rate = magnitude
 			}
 		}
 		depthAt := func(t *big.Rat, k []*big.Rat) *big.Rat {
-			depth := support.depthAt(t, k, rate)
-			return depth.Quo(depth, support.nLow)
+			depth := support.DepthAt(t, k, rate)
+			return depth.Quo(depth, support.NormalLow)
 		}
 		holds := func(f *big.Rat) (bool, error) {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			t := new(big.Rat).Mul(f, support.duration)
-			k, ok := support.curvature(t)
-			if !ok || !support.clearAt(t, k, true) {
+			t := new(big.Rat).Mul(f, support.Duration)
+			k, ok := support.Curvature(t)
+			if !ok || !support.ClearAt(t, k, true) {
 				return false, nil
 			}
 			// §10.6: material of S in front of the plane meets no part of M,
@@ -336,7 +303,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 			spans := support.pathM.cornerSpan(new(big.Rat), f)
 			depth := new(big.Rat).Add(depthAt(t, k), support.pathM.delta.Rat())
 			return planarsweep.FaceContains(&face.SupportFace, spans, support.pathS.path.Delta,
-				support.contact, support.lifted, f, depth, budget.Step)
+				support.Contact, support.Lifted, f, depth, budget.Step)
 		}
 		end, ok, err := r.gridHorizon(holds)
 		if err != nil {
@@ -345,8 +312,8 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 		if !ok {
 			continue
 		}
-		t := new(big.Rat).Mul(end, support.duration)
-		k, _ := support.curvature(t)
+		t := new(big.Rat).Mul(end, support.Duration)
+		k, _ := support.Curvature(t)
 		track, ok, err := r.planarTrack(support, face, end, depthAt(t, k), rate)
 		if err != nil {
 			return nil, false, err
@@ -368,10 +335,10 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	if err != nil {
 		return nil, false, err
 	}
-	if solids[support.s].Faces == nil || solids[support.m].Faces == nil {
+	if solids[support.Owner].Faces == nil || solids[support.Guest].Faces == nil {
 		return nil, false, nil
 	}
-	featureS, ok := features.feature(support.s, planar.PatchFeature{Kind: planar.FeatureFacet,
+	featureS, ok := features.feature(support.Owner, planar.PatchFeature{Kind: planar.FeatureFacet,
 		Faces: []int{face.ID}})
 	if !ok {
 		return nil, false, nil
@@ -384,21 +351,21 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	// The contact set comes first and the lifted set after it (§10.5), each
 	// in the body's feature order.
 	var entries []entry
-	for _, set := range [2][]int{support.contact, support.lifted} {
+	for _, set := range [2][]int{support.Contact, support.Lifted} {
 		from := len(entries)
 		for _, index := range set {
-			feature, ok := features.feature(support.m, planar.PatchFeature{Kind: planar.FeatureVertex,
-				Faces: planar.VertexFaceIDs(solids[support.m], index)})
+			feature, ok := features.feature(support.Guest, planar.PatchFeature{Kind: planar.FeatureVertex,
+				Faces: planar.VertexFaceIDs(solids[support.Guest], index)})
 			if !ok {
 				return nil, false, nil
 			}
-			entries = append(entries, entry{index: index, feature: feature, key: features.order(support.m, feature)})
+			entries = append(entries, entry{index: index, feature: feature, key: features.order(support.Guest, feature)})
 		}
 		part := entries[from:]
 		sort.SliceStable(part, func(i, j int) bool { return compareKey(part[i].key, part[j].key) < 0 })
 	}
-	direction := support.normal
-	if support.m == 0 {
+	direction := support.Normal
+	if support.Guest == 0 {
 		direction = proofarith.DyV3{proofarith.DyNeg(direction[0]), proofarith.DyNeg(direction[1]),
 			proofarith.DyNeg(direction[2])}
 	}
@@ -408,10 +375,10 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	}
 	widening := proofbound.RatMul(big.NewRat(2, 1), proofarith.DyAdd(r.a.delta, r.b.delta).Rat())
 	depth := new(big.Rat).Add(heldDepth, widening)
-	proof := &planarTrackProof{paths: [2]rotationalSweepPath{r.a, r.b}, m: support.m, s: support.s,
-		featureS: featureS, normal: support.normal, origin: r.solidTriVertex(support),
+	proof := &planarTrackProof{paths: [2]rotationalSweepPath{r.a, r.b}, m: support.Guest, s: support.Owner,
+		featureS: featureS, normal: support.Normal, origin: r.solidTriVertex(support),
 		direction: normal, angle: angle, heldDepth: heldDepth, depth: depth, depthUp: proofbound.RatFloatUp(depth),
-		deltaM: support.pathM.delta.Rat(), nHigh: support.nHigh, support: *support, rate: rate, widening: widening}
+		deltaM: support.pathM.delta.Rat(), nHigh: support.NormalHigh, support: *support, rate: rate, widening: widening}
 	if !finiteMeasurementValues(proof.depthUp) {
 		return nil, false, nil
 	}
@@ -433,7 +400,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	if _, refused := track.ManifoldAt(units.Scalar(0)); refused != nil {
 		return nil, false, nil //nolint:nilerr // a refused manifold withholds the track, it is no failure
 	}
-	track.features[support.m], track.features[support.s] = proof.featureM[0], featureS
+	track.features[support.Guest], track.features[support.Owner] = proof.featureM[0], featureS
 	track.pointCount = len(proof.contact)
 	return track, true, nil
 }
@@ -441,17 +408,17 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 // solidTriVertex names the S vertex the support plane was read through.
 func (r *rotationalPairSweep) solidTriVertex(support *planarSupport) int {
 	solid := r.a.solid
-	if support.s == 1 {
+	if support.Owner == 1 {
 		solid = r.b.solid
 	}
-	return solid.Tris[support.tri][0]
+	return solid.Tris[support.Triangle][0]
 }
 
 // planarFace carries the exact planar face selected by the sweep.
 type planarFace struct{ planar.SupportFace }
 
 func planarSupportFace(s *planarSupport) (planarFace, bool) {
-	face, ok := planar.BuildSupportFace(s.pathS.solid, s.pathS.startPoints, s.normal, s.origin)
+	face, ok := planar.BuildSupportFace(s.pathS.solid, s.pathS.startPoints, s.Normal, s.Origin)
 	return planarFace{face}, ok
 }
 

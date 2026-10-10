@@ -30,6 +30,21 @@ type SupportCandidate struct {
 	Duration                 *big.Rat
 }
 
+// Curvature bounds every guest vertex's height curvature through t.
+func (s SupportCandidate) Curvature(t *big.Rat) ([]*big.Rat, bool) {
+	return Curvature(s.GuestMotion, s.OwnerMotion, s.Spin, s.NormalHigh, t)
+}
+
+// ClearAt checks the support's positive-height condition through t.
+func (s SupportCandidate) ClearAt(t *big.Rat, k []*big.Rat, rest bool) bool {
+	return ClearAt(s.Heights, s.Rates, s.Contact, s.Rested, t, k, rest)
+}
+
+// DepthAt bounds contact and rested-vertex height through t.
+func (s SupportCandidate) DepthAt(t *big.Rat, k []*big.Rat, rate *big.Rat) *big.Rat {
+	return DepthAt(s.Heights, s.Rates, s.Contact, s.Lifted, s.Rested, t, k, rate)
+}
+
 // ReadSupportCandidate checks the guest and the owner's face for one plane.
 func ReadSupportCandidate(owner, guest SupportPath, n, a proofarith.DyV3,
 	band proofarith.Dyadic, poll func() error) (SupportCandidate, bool, error) {

@@ -39,7 +39,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
 | `internal/motionbound/` | Motion variants, exact parameters, poses, box bounds, pair certificates, record radii, overlap transfer and sweeps. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |
-| `internal/planarsweep/` | Plane selection, motion, vertex rates, depth and rolling bounds. |
+| `internal/planarsweep/` | Support-plane records, motion, vertex rates, depth and rolling bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
 | `internal/sweepmemo/` | Sweep replay coverage and memo tables. See contact-sweep §6–§7. |
 | `internal/spherepath/` | Sphere path gaps, face corridors, point transfer, track bounds, brackets and pair replay. See contact-sweep §4–§6. |
