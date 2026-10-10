@@ -43,6 +43,7 @@
 1	0.00	TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload
 1	0.00	TestBodyGateDiameterFreeformArmSkipsAnalyticPrism
 1	0.00	TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism
+1	0.00	TestBodyPatchMeshChargesTheFilledCapsAxialBound
 1	0.00	TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain
 1	0.00	TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver
 1	0.00	TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch
