@@ -744,15 +744,19 @@ linear extent (§8.1) — is read from.
 **`p` MUST be an unaltered current profile of `s`, and decad records only a
 fresh sketch-authenticated match.** `Profile.Sketch()` MUST be `s`.
 Every boundary entity MUST be non-nil and present in `s.Entities()`; a foreign
-boundary entity is `ErrForeignProfile` (§12). decad then calls `s.Profiles()`
-and requires every exported field of `p` to exactly match one fresh current
-profile, including entity identities, boundary order/ranges, polylines, holes,
-area and validity. It records the fresh match, never caller-mutable `p`. No
-match is `ErrInvalidProfile` (§12).
+boundary entity is `ErrForeignProfile` (§12). For an ordinary profile, decad
+then calls `s.Profiles()` and requires every exported field of `p` to exactly
+match one fresh current profile, including entity identities, boundary
+order/ranges, polylines, holes, area and validity. For a profile returned by
+`s.UnionProfiles(indices...)`, decad reads its private selected indices through
+`UnionRegionIndices()`, recomputes `s.UnionProfiles(indices...)`, and requires
+those indices and every exported field to match. It records the fresh match,
+never caller-mutable `p`. No match is `ErrInvalidProfile` (§12).
 
-A `*sketch.Profile` is freshly allocated by every `Profiles()` call, so pointer
-membership cannot authenticate it. Exact snapshot matching preserves the
-profile value while obtaining a trusted copy. `Profile.Sketch()` still proves
+A `*sketch.Profile` is freshly allocated by every `Profiles()` or
+`UnionProfiles()` call, so pointer membership cannot authenticate it. Exact
+snapshot matching preserves the profile value while obtaining a trusted copy.
+`Profile.Sketch()` still proves
 the source sketch; a different source is `ErrForeignProfile`. Either foreign
 case could otherwise lift another sketch's plane-local coordinates through
 `s`'s frame and silently place the wrong solid.
@@ -765,7 +769,8 @@ it would silently build the wrong part. `sketch` answers this too:
 every input `Profiles()` reads, compared for equality only — at the moment the
 profile was built, and `Profile.IsStale()` reports whether the sketch has
 changed since. A feature handed a stale profile is `ErrStaleProfile` (§12); the
-caller rebuilds with `s.Profiles()` and passes a current one.
+caller rebuilds with `s.Profiles()` or `s.UnionProfiles()` and passes a current
+one.
 
 `doc.Extrude` REJECTS a `sketch.Profile` whose `Valid` is false — a
 self-intersecting or degenerate region is never silently swept. This early

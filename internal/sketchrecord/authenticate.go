@@ -18,7 +18,7 @@ func AdmitProfile(s *sketch.Sketch, p *sketch.Profile) (*sketch.Profile, error) 
 		return nil, fmt.Errorf(`%w: the profile was built from a different sketch, so its plane-local coordinates are another plane's`, decaderr.ErrForeignProfile)
 	}
 	if p.IsStale() {
-		return nil, fmt.Errorf(`%w: the sketch has changed since this profile was built; rebuild with Sketch.Profiles`, decaderr.ErrStaleProfile)
+		return nil, fmt.Errorf(`%w: the sketch has changed since this profile was built; rebuild with Sketch.Profiles or Sketch.UnionProfiles`, decaderr.ErrStaleProfile)
 	}
 	if !p.Valid {
 		return nil, fmt.Errorf(`%w: a self-intersecting or degenerate region is never silently swept`, decaderr.ErrInvalidProfile)
@@ -42,6 +42,15 @@ func AuthenticateProfile(s *sketch.Sketch, p *sketch.Profile) (*sketch.Profile, 
 		if err := authenticateBoundaryLoop(owned, hole); err != nil {
 			return nil, err
 		}
+	}
+	// A union's private member indices identify its source regions. Rebuild from
+	// Sketch and compare the entire snapshot; the caller's boundary is not input.
+	if members := p.UnionRegionIndices(); len(members) != 0 {
+		trusted, err := s.UnionProfiles(members...)
+		if err != nil || trusted == nil || !sameProfileSnapshot(p, trusted) {
+			return nil, fmt.Errorf(`%w: the union profile no longer matches the sketch's current selected regions; rebuild with Sketch.UnionProfiles`, decaderr.ErrInvalidProfile)
+		}
+		return trusted, nil
 	}
 
 	var trusted *sketch.Profile
@@ -106,6 +115,7 @@ func isNilSketchEntity(ent sketch.Entity) bool {
 func sameProfileSnapshot(a, b *sketch.Profile) bool {
 	if a.Sketch() != b.Sketch() || a.Revision() != b.Revision() ||
 		a.Area != b.Area || a.Valid != b.Valid || a.SelfIntersecting != b.SelfIntersecting ||
+		!slices.Equal(a.UnionRegionIndices(), b.UnionRegionIndices()) ||
 		(a.Entities == nil) != (b.Entities == nil) || !slices.Equal(a.Entities, b.Entities) ||
 		(a.Holes == nil) != (b.Holes == nil) || !sameBoundaryLoop(a.Outer, b.Outer) ||
 		len(a.Holes) != len(b.Holes) {

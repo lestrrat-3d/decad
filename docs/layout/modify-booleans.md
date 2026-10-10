@@ -10,8 +10,15 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `fillet.go` | Fillet entry and section rewrite adapter. See modify §6. |
-| `loft_fillet.go` | Rewrites matching loft records at selected analytic corners. See loft §17. |
-| `loft_fillet_audit.go` | Proves new loft fillet pieces clear of untouched free-form spans. See loft §17. |
+| `loft_fillet.go` | Rewrites matching loft records at selected analytic and fitted-spline root corners. See loft §17. |
+| `loft_fillet_audit.go` | Audits rewritten loft sections and nonadjacent clearance. See loft §17. |
+| `loft_fit_fillet.go` | Finds a numerical fit/circle root-fillet candidate. See loft §17. |
+| `loft_fit_root_cert.go` | Certifies the ideal fit/circle tangent contact. See loft §17. |
+| `loft_fit_arc_proof.go` | Bounds held connectors against the ideal fillet. See loft §17. |
+| `loft_fit_carrier_proof.go` | Bounds trimmed carriers against ideal trims. See loft §17. |
+| `loft_fit_contact_audit.go` | Excludes recorded fit/connector contacts. See loft §17. |
+| `loft_fit_circle_audit.go` | Excludes recorded circle/connector contacts. See loft §17. |
+| `loft_fit_ideal_audit.go` | Excludes ideal fit/connector contacts. See loft §17. |
 | `loft_chamfer.go` | Builds both outer cap bands on a matching axial loft's held polygon. See loft §18. |
 | `cap_edge_cutter.go` | Applies `internal/capedge/` admission and cutters to one oblique prism cap-edge fillet or chamfer. |
 | `chamfer.go` | `Body.Chamfer`; cap loops route to `capblend.go`. See modify §7. |

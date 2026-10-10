@@ -6,7 +6,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -59,10 +58,11 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 	profile.Holes = []loopRecord{{Segments: []curveSegment{hole}}}
 	budget := proofbound.NewWorkBudget(ctx)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	limit := loftmesh.StationWorkLimit(0, uint64(len(profile.Outer.Segments)+1))
+	pl.raiseReconstructionLimit(work0, work1)
+	limit := pl.rewriteWorkLimit(uint64(len(profile.Outer.Segments) + 1))
 	work0.RaiseLimit(limit)
 	work1.RaiseLimit(limit)
-	contained, err := certifyLoftCircleHole(budget, pl.profile0.Outer, hole, work0)
+	contained, err := certifyLoftCircleHole(budget, pl.profile0.Outer, hole, pl.constructionDelta, work0)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, false, ctx.Err()
@@ -95,12 +95,14 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 // circle's containing square. Each curve can then be deformed to its chord
 // without crossing the circle. Exact winding of those chords decides whether
 // the circle center lies inside the already authenticated outer loop.
-func certifyLoftCircleHole(budget *proofbound.WorkBudget, outer loopRecord, hole circleSeg,
+func certifyLoftCircleHole(budget *proofbound.WorkBudget, outer loopRecord, hole circleSeg, constructionDelta float64,
 	work *freeform.FreeformWork) (bool, error) {
 	radius, err := hole.Radius.In(units.Millimeter)
-	if err != nil || radius <= 0 || len(outer.Segments) < 3 {
+	if err != nil || radius <= 0 || len(outer.Segments) < 3 ||
+		constructionDelta < 0 || proofbound.IsNonFinite(constructionDelta) {
 		return false, err
 	}
+	gap := new(big.Rat).SetFloat64(constructionDelta)
 	cu, cv := new(big.Rat).SetFloat64(hole.Center.U), new(big.Rat).SetFloat64(hole.Center.V)
 	r := new(big.Rat).SetFloat64(radius)
 	if cu == nil || cv == nil || r == nil {
@@ -133,7 +135,7 @@ func certifyLoftCircleHole(budget *proofbound.WorkBudget, outer loopRecord, hole
 		box.u.Hi = proofbound.RatMax(proofbound.RatMax(box.u.Hi, starts[i].u), ends[i].u)
 		box.v.Lo = proofbound.RatMin(proofbound.RatMin(box.v.Lo, starts[i].v), ends[i].v)
 		box.v.Hi = proofbound.RatMax(proofbound.RatMax(box.v.Hi, starts[i].v), ends[i].v)
-		if !loftBoxSeparated(box, square, new(big.Rat)) {
+		if !loftBoxSeparated(box, square, gap) {
 			return false, nil
 		}
 	}
@@ -147,7 +149,7 @@ func certifyLoftCircleHole(budget *proofbound.WorkBudget, outer loopRecord, hole
 			u: loftPointInterval(ends[i].u, starts[next].u),
 			v: loftPointInterval(ends[i].v, starts[next].v),
 		}
-		if !loftBoxSeparated(gap, square, new(big.Rat)) {
+		if !loftBoxSeparated(gap, square, new(big.Rat).SetFloat64(constructionDelta)) {
 			return false, nil
 		}
 		// The segment chord and the short junction connector are both inside

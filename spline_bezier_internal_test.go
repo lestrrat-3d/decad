@@ -652,6 +652,44 @@ func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 	require.Zero(t, work.Spent, "the reconstruction charge leaves exact-rational work available")
 }
 
+func TestReconstructionChargeSixtyToothOutline(t *testing.T) {
+	t.Parallel()
+	segments := make([]curveSegment, 0, 240)
+	for flank := range 120 {
+		fit := make([]Point2, 15)
+		for point := range fit {
+			fit[point] = Point2{U: float64(flank), V: float64(point)}
+		}
+		segments = append(segments, fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1})
+	}
+	for tip := range 60 {
+		center := Point2{U: float64(tip * 3), V: 0}
+		segments = append(segments, arcSeg{
+			Center: center,
+			Start:  Point2{U: center.U + 1, V: 0},
+			End:    Point2{U: center.U + math.Cos(0.01), V: math.Sin(0.01)},
+		})
+	}
+	for root := range 60 {
+		segments = append(segments, circleSeg{
+			Center: Point2{}, Radius: units.Millimeters(1), CCW: true,
+			TStart: float64(root) / 60, TEnd: float64(root+1) / 60,
+		})
+	}
+	record := profileRecord{Outer: loopRecord{Segments: segments}}
+	defaultWork := freeform.NewFreeformWork()
+	_, err := momentinput.ChargeReconstruction(record, defaultWork)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Equal(t, freeform.ReconstructionWorkLimit, defaultWork.ReconstructionSpent)
+
+	loftWork := freeform.NewFreeformWork()
+	loftWork.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
+	arrangement, err := momentinput.ChargeReconstruction(record, loftWork)
+	require.NoError(t, err)
+	require.Equal(t, uint64(29176*29176), arrangement)
+	require.Equal(t, 2*arrangement, loftWork.ReconstructionSpent)
+}
+
 // A circle that a crossing split into two recorded fragments still produces one
 // entity in the scene. Its fragment ranges differ, but each names the same
 // center and radius, so the reconstruction charge must add its chords once.

@@ -20,12 +20,10 @@ import (
 //
 // Before it resolves a single walk it raises each default-limit record's
 // free-form work ceiling to StationWorkLimit over P, the first profile's segment
-// count (docs/loft-gear-bounds-design.md §7). The raise covers the walks'
-// own length brackets as well as the station walk that follows: a full gear
-// outline's brackets alone pass the default ceiling (§7 measures them), and P
-// is read from the record, so it is known before the gates that check it.
-// A caller that already raised the ceiling for a loft's own profile rewrite
-// keeps that same ceiling and counter across audit, moments and evaluation.
+// count (docs/loft-gear-bounds-design.md §7). Public Loft already raised its
+// counters before area integration; this gate preserves them. Placement and
+// other re-evaluations arrive with fresh counters and raise here. The raise
+// covers the walks' length brackets and the station walk that follows.
 func ValidateLoftRecords(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.PlaneRecord, alignment []int, recordArea [2]float64, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, float64, error) {
 	p := uint64(len(p0.Outer.Segments))
 	for _, hole := range p0.Holes {

@@ -1310,6 +1310,20 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 	require.Zero(t, stationRound, "every station of this UNTRIMMED square is PINNED (docs/loft-design.md §5.2)")
 }
 
+func TestLoftPairingsChargeDistinctJunctionEnds(t *testing.T) {
+	t.Parallel()
+	p := unitSquareProfile()
+	first := p.Outer.Segments[0].(lineSeg)
+	first.End.U += 1e-4
+	p.Outer.Segments[0] = first
+	walks := resolveLoftLoopWalks(t, p)
+	_, sectionDelta, _, stationRound, err := loftmesh.PairRecords(p, p, []int{0}, walks, walks, 0, nil, nil)
+	require.NoError(t, err)
+	require.Zero(t, sectionDelta, "a junction gap does not change the line cells' sagitta")
+	require.GreaterOrEqual(t, stationRound, 1e-4,
+		"the next segment's held start must also cover the previous segment's denoted end")
+}
+
 // --- loftmesh.ChordTarget ---
 
 // featureSizeGear is a spur-gear section for the chord-target tests: involute

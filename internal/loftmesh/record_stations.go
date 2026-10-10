@@ -89,8 +89,9 @@ const (
 // TestLoftStationWalkWorkPerStation keeps that average below this constant.
 const StationWorkUnits = 8192
 
-// StationWorkLimit is the free-form work ceiling a loft raises each record's
-// counter to before it resolves the records' walks
+// StationWorkLimit is the free-form work ceiling a public Loft raises each
+// record's counter to before its first area integral. Re-evaluation paths
+// raise it before they resolve the records' walks
 // (docs/loft-gear-bounds-design.md §7):
 //
 //	max(freeform.FreeformWorkLimit, spent + StationWorkUnits·stationCap(P))

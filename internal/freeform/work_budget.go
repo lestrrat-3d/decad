@@ -19,21 +19,28 @@ import (
 // Reaching it is Table R row R7: ErrUnsupported, never a widened float path.
 //
 // It is the DEFAULT ceiling. One operation raises it for its own record
-// counters (FreeformWork.Limit): a loft raises it, once its station cap gate
-// has passed, by a fixed charge per station its cap admits
-// (docs/loft-gear-bounds-design.md §7). No other caller raises it.
+// counters (FreeformWork.Limit): a loft raises it from the authenticated
+// record's segment count, by a fixed charge per station its cap admits,
+// before that loft's first area integral. Certified loft fillet and centered
+// bore rewrites may double the station-scaled allowance for their additional
+// section audit. Other callers keep the default or ordinary loft ceiling
+// (docs/loft-gear-bounds-design.md §7).
 const FreeformWorkLimit uint64 = 1 << 20
 
-// ReconstructionWorkLimit is the separate fixed ceiling on one record's sketch
+// ReconstructionWorkLimit is the default ceiling on one record's sketch
 // topology reconstruction. Its cost is a record-wide quadratic in the chord
 // total, not exact-rational conversion or integration work, so it must not
-// consume the much smaller ceiling that bounds those passes. The public moment
-// methods take no context, so this counter is still fixed and record-wide.
+// consume the much smaller ceiling that bounds those passes. Public moment
+// methods and detached records keep this fixed, record-wide ceiling.
 //
 // It is decad's model of sketch's quadratic arranger: 1 << 28 admits a record
 // of ReconstructionChordCeiling chords, which a forty-tooth gear outline's
 // 6640 chords fit under (docs/loft-gear-bounds-design.md §7).
 const ReconstructionWorkLimit uint64 = 1 << 28
+
+// LoftReconstructionWorkLimit is the largest reconstruction charge an
+// authenticated loft record may carry. Detached records retain the default.
+const LoftReconstructionWorkLimit uint64 = 1 << 32
 
 // FreeformCostCeiling is where the conservative cost arithmetic below
 // saturates. Any estimate that reaches it is already over budget on its own —
@@ -41,11 +48,11 @@ const ReconstructionWorkLimit uint64 = 1 << 28
 // helpers never need to represent a larger number and can never wrap.
 const FreeformCostCeiling = FreeformWorkLimit + 1
 
-// ReconstructionCostCeiling is the corresponding saturation point for the
-// sketch reconstruction charge. It is independent of FreeformCostCeiling so
-// an ordinary analytic arrangement can use its own budget without widening the
-// exact-rational conversion and integration budget.
-const ReconstructionCostCeiling = ReconstructionWorkLimit + 1
+// ReconstructionCostCeiling is the hard saturation point for the sketch
+// reconstruction charge. Individual counters still enforce their default or
+// trusted-loft limit. It is independent of FreeformCostCeiling so analytic
+// arrangements do not widen exact-rational conversion and integration work.
+const ReconstructionCostCeiling = LoftReconstructionWorkLimit + 1
 
 // CostAdd and CostMul are the saturating arithmetic every preflight estimate is
 // built from. A preflight is charged BEFORE the work it pays for is allocated,
@@ -99,6 +106,31 @@ type FreeformWork struct {
 	Spent               uint64
 	ReconstructionSpent uint64
 	Limit               uint64
+	ReconstructionLimit uint64
+}
+
+// ReconstructionBudget returns this counter's ceiling. A zero value keeps the
+// detached-record ceiling, including counters created as struct literals.
+func (w *FreeformWork) ReconstructionBudget() uint64 {
+	if w == nil || w.ReconstructionLimit == 0 {
+		return ReconstructionWorkLimit
+	}
+	return w.ReconstructionLimit
+}
+
+// RaiseReconstructionLimit increases this counter's ceiling within the hard
+// loft cap. Only callers holding an authenticated or certified loft payload
+// may use the larger ceiling.
+func (w *FreeformWork) RaiseReconstructionLimit(limit uint64) {
+	if w == nil {
+		return
+	}
+	if limit > LoftReconstructionWorkLimit {
+		limit = LoftReconstructionWorkLimit
+	}
+	if limit > w.ReconstructionBudget() {
+		w.ReconstructionLimit = limit
+	}
 }
 
 // NewFreeformWork opens ONE record's work state. Minting is deliberately
@@ -153,11 +185,12 @@ func (w *FreeformWork) ReconstructionStep(n uint64) error {
 	if w == nil {
 		return nil
 	}
-	if n > ReconstructionWorkLimit-w.ReconstructionSpent {
-		w.ReconstructionSpent = ReconstructionWorkLimit
+	limit := w.ReconstructionBudget()
+	if n >= ReconstructionCostCeiling || n > limit-w.ReconstructionSpent {
+		w.ReconstructionSpent = limit
 		return fmt.Errorf(
 			`%w: sketch reconstruction needs more than the fixed work budget of %d`,
-			decaderr.ErrUnsupported, ReconstructionWorkLimit,
+			decaderr.ErrUnsupported, limit,
 		)
 	}
 	w.ReconstructionSpent += n
@@ -260,12 +293,15 @@ type FreeformReconstruction struct {
 	Arrangement uint64
 }
 
-// ReconstructionChordCeiling is the largest chord total chargeReconstruction
-// can admit for validation's first two whole-scene arrangements. One unit more
-// exceeds ReconstructionWorkLimit, so the record refuses however the rest of it
-// reads, and reconstructionOf stops counting there: 2·11585² is at most
-// 1 << 28 and 2·11586² is above it.
+// ReconstructionChordCeiling is the default largest chord total
+// chargeReconstruction can admit for validation's first two whole-scene
+// arrangements. One unit more exceeds ReconstructionWorkLimit: 2·11585² is at
+// most 1 << 28 and 2·11586² is above it.
 const ReconstructionChordCeiling uint64 = 11585
+
+// LoftReconstructionChordCeiling is the corresponding two-arrangement ceiling
+// under LoftReconstructionWorkLimit.
+const LoftReconstructionChordCeiling uint64 = 46340
 
 // FreeformChords is the per-control sample count with sketch's own floor. The
 // floor is what makes a record of many three-control splines expensive: each one

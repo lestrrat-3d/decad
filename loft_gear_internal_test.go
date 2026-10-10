@@ -381,10 +381,9 @@ func TestLoftGearOutlineVerifiesSound(t *testing.T) {
 }
 
 // TestLoftStationWalkWorkPerStation runs Loft's own prefix on each gear
-// fixture with the two records' counters in hand. It asserts the raise
-// loftmesh.ValidateLoftRecords applies before it resolves a walk,
-// loftmesh.StationWorkLimit over the counter's spend after the area
-// falsifier, and that the walk resolution and the station walk together stay
+// fixture with the two records' counters in hand. It asserts that Loft raises
+// each counter before the area falsifier and retains that ceiling through
+// loftmesh.ValidateLoftRecords, then that walks and station work together stay
 // below loftmesh.StationWorkUnits per station on every case, which is what
 // sizes the raise (docs/loft-gear-bounds-design.md §7).
 func TestLoftStationWalkWorkPerStation(t *testing.T) {
@@ -399,6 +398,15 @@ func TestLoftStationWalkWorkPerStation(t *testing.T) {
 			profile1, plane1, area1, err := recordProfile(s1, sp1)
 			require.NoError(t, err)
 			work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
+			p := uint64(len(profile0.Outer.Segments))
+			for _, hole := range profile0.Holes {
+				p += uint64(len(hole.Segments))
+			}
+			limit := loftmesh.StationWorkLimit(0, p)
+			work0.RaiseLimit(limit)
+			work1.RaiseLimit(limit)
+			require.Equal(t, limit, work0.WorkLimit())
+			require.Equal(t, limit, work1.WorkLimit())
 			a0, err := falsifyRecordedArea(profile0, area0, work0)
 			require.NoError(t, err)
 			a1, err := falsifyRecordedArea(profile1, area1, work1)
@@ -408,10 +416,9 @@ func TestLoftStationWalkWorkPerStation(t *testing.T) {
 
 			offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(profile0, profile1, plane0, plane1, nil, [2]float64{a0, a1}, work0, work1)
 			require.NoError(t, err)
-			p := uint64(len(profile0.Outer.Segments))
 			for i, w := range works {
-				require.Equal(t, loftmesh.StationWorkLimit(before[i], p), w.WorkLimit(),
-					"loftmesh.ValidateLoftRecords raises record %d's ceiling to StationWorkLimit over its spend", i)
+				require.Equal(t, limit, w.WorkLimit(),
+					"loftmesh.ValidateLoftRecords keeps record %d's ceiling after the area falsifier", i)
 				require.Greater(t, w.WorkLimit(), freeform.FreeformWorkLimit)
 			}
 

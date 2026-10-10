@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -50,9 +51,24 @@ type loftPayload struct {
 	frame0, frame1     r3.Frame
 	alignment          []int
 	xform              r3.Transform
+	// authenticatedReconstruction is set only after the public Loft seam has
+	// admitted both Sketch profiles. Certified fillet and bore rewrites retain
+	// that provenance when they re-evaluate their private loft records.
+	authenticatedReconstruction bool
 	// blendSegs names connector segments inserted by Body.Fillet. Every
 	// triangle of a connector's loft cell also carries fillet(loop,segment).
 	blendSegs []map[int]struct{}
+	// A fitted-spline fillet records float trim parameters and a float arc.
+	// These fields enclose the ideal radius-r tangent rewrite certified at
+	// construction. The first is the maximum matched plane displacement over
+	// all rewritten carriers and connector arcs. The second bounds each ideal
+	// connector's complete arc length, keyed by the outer-loop segment index.
+	constructionDelta    float64
+	constructionArcUpper map[int]float64
+	// A trimmed carrier can gain length when its ideal tangent parameter
+	// replaces the recorded float trim. Each value bounds that increase for
+	// every cell of the named outer-loop segment.
+	constructionLengthExtra map[int]float64
 
 	// surfaceResult is WithSurfaceResult's own flag (docs/surface-design.md
 	// §4): true when the build must omit both section caps and publish a
@@ -178,6 +194,26 @@ type loftPayload struct {
 	proof loftmesh.MeshProof
 }
 
+func (pl loftPayload) raiseReconstructionLimit(work ...*freeform.FreeformWork) {
+	if !pl.authenticatedReconstruction {
+		return
+	}
+	for _, counter := range work {
+		counter.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
+	}
+}
+
+// rewriteWorkLimit is private to the certified fillet and centered-bore
+// rewrites. Their extra section proof precedes the ordinary area and station
+// work on the same counter. An untrusted payload keeps the ordinary ceiling.
+func (pl loftPayload) rewriteWorkLimit(p uint64) uint64 {
+	limit := loftmesh.StationWorkLimit(0, p)
+	if pl.authenticatedReconstruction {
+		limit *= 2
+	}
+	return limit
+}
+
 // transform is the accumulated rigid placement.
 func (pl loftPayload) transform() r3.Transform { return pl.xform }
 
@@ -260,6 +296,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	pl.raiseReconstructionLimit(work0, work1)
 
 	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
 	if err != nil {
@@ -269,6 +306,74 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	if err != nil {
 		return nil, err
+	}
+	if pl.constructionDelta > 0 {
+		if proofbound.IsNonFinite(pl.constructionDelta) {
+			return nil, fmt.Errorf(`%w: the loft fillet construction displacement is not finite`, ErrUnsupported)
+		}
+		stationRound = proofbound.AbsSumUpper(stationRound, pl.constructionDelta)
+		if proofbound.IsNonFinite(stationRound) {
+			return nil, fmt.Errorf(`%w: the loft fillet station displacement is not finite`, ErrUnsupported)
+		}
+	}
+	if len(pl.constructionArcUpper) != 0 {
+		if len(pairs) == 0 {
+			return nil, fmt.Errorf(`%w: the loft fillet has no outer loop`, ErrUnsupported)
+		}
+		counts := make(map[int]int, len(pl.constructionArcUpper))
+		for _, segment := range pairs[0].Segment {
+			if _, exists := pl.constructionArcUpper[segment]; exists {
+				counts[segment]++
+			}
+		}
+		for segment := range pl.constructionArcUpper {
+			if counts[segment] == 0 {
+				return nil, fmt.Errorf(`%w: the loft fillet arc-length key has no cell`, ErrUnsupported)
+			}
+		}
+		for cell, segment := range pairs[0].Segment {
+			idealLength, exists := pl.constructionArcUpper[segment]
+			if !exists {
+				continue
+			}
+			if counts[segment] == 0 || idealLength <= 0 || proofbound.IsNonFinite(idealLength) {
+				return nil, fmt.Errorf(`%w: the loft fillet arc-length bound is invalid`, ErrUnsupported)
+			}
+			perCell := proofbound.UpRound(idealLength / float64(counts[segment]))
+			pairs[0].ArcUpperV[cell] = max(pairs[0].ArcUpperV[cell], perCell)
+			pairs[0].ArcUpperW[cell] = max(pairs[0].ArcUpperW[cell], perCell)
+			energy := proofbound.UniformSpeedTangentEnergyUpper(perCell, 0)
+			pairs[0].TangentEnergyV[cell] = max(pairs[0].TangentEnergyV[cell], energy)
+			pairs[0].TangentEnergyW[cell] = max(pairs[0].TangentEnergyW[cell], energy)
+		}
+	}
+	if len(pl.constructionLengthExtra) != 0 {
+		if len(pairs) == 0 {
+			return nil, fmt.Errorf(`%w: the loft fillet has no outer loop`, ErrUnsupported)
+		}
+		seen := make(map[int]bool, len(pl.constructionLengthExtra))
+		for cell, segment := range pairs[0].Segment {
+			extra, exists := pl.constructionLengthExtra[segment]
+			if !exists {
+				continue
+			}
+			if extra < 0 || proofbound.IsNonFinite(extra) {
+				return nil, fmt.Errorf(`%w: the loft fillet carrier-length bound is invalid`, ErrUnsupported)
+			}
+			seen[segment] = true
+			pairs[0].ArcUpperV[cell] = proofbound.AbsSumUpper(pairs[0].ArcUpperV[cell], extra)
+			pairs[0].ArcUpperW[cell] = proofbound.AbsSumUpper(pairs[0].ArcUpperW[cell], extra)
+			// The ideal carrier uses a slightly different normalized trim. Its
+			// tangent energy is not the recorded carrier's energy, so use the
+			// premise-free area leg until an exact ideal energy is derived.
+			pairs[0].TangentEnergyV[cell] = math.Inf(1)
+			pairs[0].TangentEnergyW[cell] = math.Inf(1)
+		}
+		for segment := range pl.constructionLengthExtra {
+			if !seen[segment] {
+				return nil, fmt.Errorf(`%w: the loft fillet carrier-length key has no cell`, ErrUnsupported)
+			}
+		}
 	}
 
 	a, err := assembleLoft(ctx, pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)

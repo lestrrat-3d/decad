@@ -28,11 +28,11 @@ func TestLoftFilletAuditRefusesPossibleSplineContact(t *testing.T) {
 		{name: "contact", midV: -0.2, refuse: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := auditLoftFilletProfile(proofbound.NewWorkBudget(context.Background()),
-				loftMixedAuditProfile(tc.midV), map[int]bool{0: true}, freeform.NewFreeformWork())
+			err := auditLoftFilletProfile(context.Background(), proofbound.NewWorkBudget(context.Background()),
+				loftMixedAuditProfile(tc.midV), map[int]bool{0: true}, 0, freeform.NewFreeformWork())
 			if tc.refuse {
 				require.ErrorIs(t, err, ErrUnsupported)
-				require.ErrorContains(t, err, "may contact free-form segment")
+				require.ErrorContains(t, err, "may contact segment")
 			} else {
 				require.NoError(t, err)
 			}

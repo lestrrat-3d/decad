@@ -37,7 +37,7 @@ a crossing. A `BoundaryEdge` carries `Entity`, `Partial`, `Reversed` and
 
 **`sketch` decides exactness in two stages, and the first is whole-sketch.**
 Exact bounds are published when **every** entity is a `*Line`, `*Circle` or
-`*Arc`, or when sketch's four-source fit-spline/circle certificate passes.
+`*Arc`, or when sketch's fit-spline/root-circle scene certificate passes.
 Other free-form scenes make every `BoundaryEdge` read `false`, including
 analytic entities beside the free-form curve. Inside an all line/circle/arc
 sketch the second stage is the
@@ -59,8 +59,9 @@ fragment it bounds. The whole-sketch gate separately withholds certification:
 it leaves profiles, areas and ranges unchanged, so it can yield `TExact ==
 false` on an analytic cut whose reported range was never sampled.
 
-**Evaluator consequence:** a fit-spline fragment certified by the four-source
-case is recordable and retains its source fit points and range. Other free-form
+**Evaluator consequence:** a fit-spline fragment certified by the
+fit-spline/root-circle scene is recordable and retains its source fit points
+and range. Other free-form
 fragments are refused. `docs/spline-design.md` §2 owns the evaluator's range
 handling. A free-form source outside the certificate withholds exactness across
 the sketch, including separate analytic crossings.
@@ -185,17 +186,19 @@ still a whole-to-whole exact check, so it is rejected rather than measured as
 though it closed.
 
 **What records reaches exactly as far as `sketch`'s exact kernel does, and no further.**
-For fragments, that is a line, circle or arc fragment in a sketch holding
+For fragments, that includes a line, circle or arc fragment in a sketch holding
 nothing but lines, circles and arcs, each of its bounding cuts placed by the
 closed-form crossing kernel and — where that cut is curve against curve —
-certified by the arrangement, plus whole edges of every recordable kind,
-which record from entity data with no cut to certify. Tangencies add nothing
-to that set: among lines, circles and arcs a tangency splits nothing (above),
+certified by the arrangement. It also includes fit-spline and root-circle
+fragments from a certified fit-spline/root-circle scene, plus whole edges of
+every recordable kind, which record from entity data with no cut to certify.
+Tangencies add nothing to that set: among lines, circles and arcs a tangency
+splits nothing (above),
 so no fragment is ever bounded at one — a tangent entity arrives whole, or in
-fragments whose every bound is a crossing. Every fragment in a sketch that also
-holds an ellipse, elliptical arc, conic, spline, closed spline, fit spline or
-NURBS carries `TExact == false` and is `ErrUnrecordableProfile`, whatever pair
-cut it; so does a fragment bounded by an uncertified curve-against-curve cut.
+fragments whose every bound is a crossing. Every fragment in an uncertified
+free-form scene carries `TExact == false` and is `ErrUnrecordableProfile`,
+whatever pair cut it; so does a fragment bounded by an uncertified
+curve-against-curve cut.
 That is not decad declining to record it; `sketch` withheld certification, and
 decad records no fragment on an uncertified range. Widening that set is an
 upstream question about the arrangement, not an API question here.
@@ -431,21 +434,24 @@ records `sketch`'s normalized `t` itself — `geom.BoundaryEdge`'s published
 contract — so the range is handed over, never converted; nothing is solved
 for, no point is evaluated from a parameter, and no point is ever inverted to
 one (core §7). Under `sketch`'s exact kernel the fragments that carry `TExact == true`
-are those of a line, a circle or an arc in a sketch holding nothing else, cut
-where the closed-form kernel placed the bound and — curve against curve — the
-arrangement certified it (§1), so those are the rows the true column reaches
-today: a circle cut by a rectangle edge records, and an ellipse cut by anything
-— including the line fragments that crossing leaves on the rectangle — is
-`ErrUnrecordableProfile`, because `sketch` could not certify its range.
+include a line, circle or arc in a sketch holding nothing else, cut where the
+closed-form kernel placed the bound and — curve against curve — the arrangement
+certified it (§1). Certified fit-spline/root-circle scenes also publish exact
+fit-spline and circle fragments. A circle cut by a rectangle edge records; an
+ellipse cut by anything is `ErrUnrecordableProfile` because `sketch` could not
+certify its range.
 
 Conversion is mechanical, and it happens once, in the feature call.
 `momentinput.RecordProfileWithArea` first rejects every nil boundary entity and
-every boundary entity absent from `s.Entities()`. It then calls `s.Profiles()`
-and accepts `p` only when every exported field exactly matches one fresh profile,
-including entity identities, boundary order/ranges, polylines, holes, area and
-validity. It records from that fresh match, never from caller-mutable `p`.
-No match is `ErrInvalidProfile`; a boundary entity another sketch owns is
-`ErrForeignProfile`.
+every boundary entity absent from `s.Entities()`. It calls `s.Profiles()` for an
+ordinary profile. A profile returned by `s.UnionProfiles(indices...)` carries
+private selected region indices. Decad reads those indices through
+`UnionRegionIndices()` and recomputes `s.UnionProfiles(indices...)`. It accepts
+`p` only when every exported field and the selected indices exactly match the
+fresh profile, including entity identities, boundary order/ranges, polylines,
+holes, area and validity. It records from that fresh match, never from
+caller-mutable `p`. No match is `ErrInvalidProfile`; a boundary entity another
+sketch owns is `ErrForeignProfile`.
 
 decad walks the authenticated profile's `Outer` and each loop of `Holes` and
 reads each `BoundaryEdge`'s source `Entity` for its defining fields. `Partial`
@@ -485,8 +491,8 @@ parameters such as ranges, knots, weights, and `Rho` (core §5.2).
 these `sketch` answers:
 
 - every boundary entity is non-nil and owned by the profile's source sketch;
-- all exported snapshot fields exactly match one fresh current profile, whose
-  values are used for recording;
+- all exported snapshot fields and any union member indices exactly match a
+  fresh current profile, whose values are used for recording;
 - source `Profile.Valid` said the region was valid;
 - every partial boundary fragment had `TExact == true`;
 - the reject-only range falsifier found no contradiction;

@@ -54,3 +54,22 @@ func TestFreeformWorkRaisedLimitBinds(t *testing.T) {
 		require.ErrorIs(t, err, decaderr.ErrUnsupported, "a saturated estimate refuses under any ceiling")
 	}
 }
+
+func TestReconstructionLimitKeepsDetachedDefault(t *testing.T) {
+	t.Parallel()
+	defaultWork := freeform.NewFreeformWork()
+	require.Equal(t, freeform.ReconstructionWorkLimit, defaultWork.ReconstructionBudget())
+	require.ErrorIs(t, defaultWork.ReconstructionStep(freeform.ReconstructionWorkLimit+1), decaderr.ErrUnsupported)
+	require.Equal(t, freeform.ReconstructionWorkLimit, defaultWork.ReconstructionSpent)
+
+	loftWork := freeform.NewFreeformWork()
+	loftWork.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
+	require.Equal(t, freeform.LoftReconstructionWorkLimit, loftWork.ReconstructionBudget())
+	require.NoError(t, loftWork.ReconstructionStep(freeform.ReconstructionWorkLimit+1))
+	require.ErrorIs(t, loftWork.ReconstructionStep(freeform.ReconstructionCostCeiling), decaderr.ErrUnsupported)
+	require.Equal(t, freeform.LoftReconstructionWorkLimit, loftWork.ReconstructionSpent)
+
+	clamped := freeform.NewFreeformWork()
+	clamped.RaiseReconstructionLimit(^uint64(0))
+	require.Equal(t, freeform.LoftReconstructionWorkLimit, clamped.ReconstructionBudget())
+}

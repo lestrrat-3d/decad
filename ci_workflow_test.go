@@ -268,6 +268,12 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 			"%s names these tests, which no longer exist: regenerate it (see _shardgen/main.go)", ciShardFilePath)
 	})
 
+	t.Run("the long gear test stays on its reserved shard", func(t *testing.T) {
+		assigned := shardAssignment(t, ".github/test-shards-apitest.txt")
+		require.Equal(t, "0", assigned["TestLoftEmbeddedSixtyToothGearFeatures"],
+			"the 60-tooth test needs shard 0's longer budget and timeout")
+	})
+
 	t.Run("the chord sweep fixture runs together in internal/proofbound", func(t *testing.T) {
 		const path = "internal/proofbound/chord_bounds_test.go"
 		source, err := os.ReadFile(path)
