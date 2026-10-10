@@ -39,12 +39,15 @@ type facetGroup struct {
 	planar bool
 }
 
-// facetedPayload is the evaluator's own record of a boolean-built body: the
+// facetedPayload is the evaluator's own record of a mesh-built body: the
 // held mesh, its per-facet source grouping, and the proven error terms the
 // measurements compose from. It is what Placed re-evaluates under a composed
 // motion (docs/evaluator-design.md §8).
 type facetedPayload struct {
-	verts []r3.Vec
+	// pointSection retains the authenticated Sketch source of a point loft.
+	// Boolean results have nil here; placement keeps the source record.
+	pointSection *pointSectionRecord
+	verts        []r3.Vec
 	// vertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
 	// §2, §4.1), composed by the boolean that built the payload (§3) and
 	// carried through every placement. The boolean always writes it; a nil

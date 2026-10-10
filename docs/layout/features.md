@@ -56,6 +56,7 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_denotation.go` | Payload sweep bounds over `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |
 | `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
 | `loft.go` | Loft entry points and chain ribbon assembly. See loft §2/§4/§10/§16. |
+| `loft_point.go` | Point-section Loft entry, apex fan and proof. See loft-point design. |
 | `loft_build.go` | Loft payload, evaluation, placement and tessellation adapter. See loft §5, §8, §12. |
 | `loft_topology.go` | Adapts loft assembly and builds `Body` topology. See loft §5.1, §7. |
 | `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |

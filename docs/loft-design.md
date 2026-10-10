@@ -97,6 +97,10 @@ through §15 states about correspondence, construction, the crossing audit and
 the published terms is what that section consumes; what it replaces is the
 closed section alone.
 
+`Document.LoftFromPoint` is a separate solid operation over one exact apex and
+one authenticated profile. `docs/loft-point-design.md` owns its fan topology
+and proof; it does not change this section-pair correspondence.
+
 ## 2. Public signature and options
 
 ```go

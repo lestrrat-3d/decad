@@ -825,13 +825,15 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, Sweep, Coil,
+Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, LoftFromPoint, Sweep, Coil,
 Patch, Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve —
 **ExtrudeChain, RevolveChain, SweepChain, LoftChain** — which take a
 `*sketch.Chain` where their siblings take a `*sketch.Profile` and always build a
 sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
-rule, and its increment-1 scope. `docs/sweep-design.md` owns `Sweep`'s
+rule, and its increment-1 scope. `docs/loft-point-design.md` owns the separate
+`Document.LoftFromPoint(ctx, apex, sketch, profile)` solid construction from
+an exact world point to one recorded Sketch profile. `docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.
 `docs/helix-design.md` owns `Coil`'s signature, its axis and its extent in
 turns.
@@ -848,6 +850,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
 func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error)
 func (d *Document) Coil(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
+func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
 ```
 
 Each takes the **sketch** as well as the profile, because a `sketch.Profile`'s
