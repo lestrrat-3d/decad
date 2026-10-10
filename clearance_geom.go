@@ -353,7 +353,7 @@ func prismCarrierFrame(pp prismPayload) clearance.PrismCarrierFrame {
 func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (bool, error) {
 	// A record carrying route L chamfer bands has no model: its faces omit
 	// the band patches (docs/modify-general-design.md Table DG's DG6, PR L-2).
-	if bp.sectionDelta() != 0 || len(bp.loopBands) > 0 {
+	if bp.sectionDelta() != 0 || len(bp.loopBands) > 0 || bp.bossShell != nil {
 		return false, nil
 	}
 	pointTerm, tiltTerm := 0.0, 0.0

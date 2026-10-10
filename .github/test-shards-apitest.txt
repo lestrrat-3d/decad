@@ -9,7 +9,7 @@
 #   shard 0: 1059.82s over 1 tests
 #   shard 1:  175.64s over 104 tests
 #   shard 2:  165.64s over 197 tests
-#   shard 3:   39.03s over 204 tests
+#   shard 3:   39.03s over 207 tests
 #   shard 4:   39.94s over 196 tests
 #   shard 5:   80.90s over 199 tests
 #   shard 6:   90.77s over 195 tests
@@ -449,12 +449,15 @@
 3	0.00	TestSelectorKindString
 3	0.01	TestSelectorResolutionIsDeterministic
 3	0.00	TestSheetSheetPairStaysUndecided
+3	0.00	TestShellCenteredStackedBoss
 3	0.05	TestShellClosedPrismGatesAndConsumers
 3	0.02	TestShellCupDownstream
 3	0.01	TestShellCupFloorCarriesThicknessConversion
 3	0.09	TestShellCupTwoHolesThroughStack
 3	0.01	TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged
+3	0.00	TestShellOffsetRectangularBoss
 3	0.00	TestShellSideOpeningObliqueRefusals
+3	0.00	TestShellStackedBossClearanceRefusal
 3	0.03	TestShellTubeInwardBox
 3	0.08	TestStackedBlindCutPreservesCounterboreShoulder
 3	0.01	TestStitchAnnularSolidMatchesTheRevolveEngine

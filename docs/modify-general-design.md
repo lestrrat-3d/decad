@@ -142,13 +142,46 @@ reference frame, embeds and `brepTopology` are brep-modify §4.1's.
 | TC5 | Every hole loop of every (b) face belongs to exactly one tool, and every (c) face to exactly one tool. |
 | TC6 | Every face has `delta = 0` (SB1) and every (c) face's two levels carry zero displacement; a (b) face whose level carries a displacement reads as no rectangle, as route P's P2(b) reader refuses it. |
 
-A stacked union (a boss on a plate) fails TC1: three planar faces across
-`k`. A blind pocket fails TC2: its floor is a third planar face across `k`,
+A stacked union outside the rectangular-boss case below fails TC1: three
+planar faces across `k`. A blind pocket fails TC2: its floor is a third
+planar face across `k`,
 and its walls' levels are no wall's. A keyway, a boss crossing a plate's
 outline, a hole breaking out of a face, a split side line and an oblique
 wall fail TC2 or TC6. Each is SG3, which names the first face the table does
 not take along the first axis whose caps TC1 reads, else the third planar
 face across the first axis holding more than two, else axis 0's reason.
+
+### 3.1a Exact rectangular-boss shell
+
+Before route S's through-cut reading, `shellStackedBoss` admits one nested,
+hole-free pair of axis-aligned rectangular slabs in the same frame. Both
+sections and all levels must have zero displacement. The lower slab is the
+plate, the upper slab is the boss, and the one removed face must be the boss
+top. Inward thickness `t` must leave a positive floor, a positive lower
+cavity wall, an upper cavity at least `2t` narrower in both directions, and
+positive clearance between the boss and the plate's eroded outline. All new
+offset coordinates must be exactly representable. Other stacks continue to
+route S and keep SG3.
+
+The result keeps the source's exterior faces except the boss top. Its cavity
+has a plate inset over `[z0+t, z1-t]`, a horizontal ledge at `z1-t`, and a
+boss inset over `[z1, z2]`. Four quarter-cylinder patches join the ledge's
+boss-sized inner ring to the upper cavity walls. Adjacent patches meet on
+four `Ellipse3` seams. The lower and upper rings each bound one ordinary
+record face and one patch. The body build mints fresh `face(k)` and `wall(k)`
+roles; each patch has a `filletLoop` role. No planar cap is inserted at the
+transition.
+
+For boss width `w`, depth `d` and thickness `t`, the transition's void volume
+is `wdt - 2(w+d)t² + (w+d)πt²/2 + (20/3 - 2π)t³`. The shell volume subtracts
+that transition, the plate-inset void below it and the boss-inset void above it from the two
+source slabs. Rational interval arithmetic encloses `π`, volume and centroid.
+The established fillet band's cylinder, ellipse and mesh-ring builders close
+the patches. `Tessellate(VerifyAll)` charges the band's chorded volume,
+surface departure and vertex motion before publishing its occupied-volume
+bound. A later modify operation refuses this payload; class B and clearance
+face views refuse it because they omit its patch faces. Mesh booleans use its
+verified tessellation.
 
 ### 3.2 Removed faces and the sense
 
@@ -304,7 +337,7 @@ Modify §1's test picks every sentinel.
 |---|---|---|---|
 | **SG1** | `WithShellSense(Outward)` on a brep or stacked receiver | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
 | **SG2** | `WithNoOpenings` on a brep or stacked receiver | yes; a brep record holds no void shell | `ErrUnsupported` (replaces SX16's text for this call) |
-| **SG3** | the record is no through-cut record (Table TC): a stacked union, a blind pocket or port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion holds a sphere at each reflex vertex, a torus around each reflex circle, or an elliptical edge where two reflex edges meet | `ErrUnsupported`, naming the first face Table TC does not take |
+| **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a: a blind pocket or port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion holds a sphere at each reflex vertex, a torus around each reflex circle, or an elliptical edge where two reflex edges meet | `ErrUnsupported`, naming the first face Table TC does not take |
 | **SG4** | a removed face that is a tool wall, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
 | **SG5** | a removed face that names no face of the record; a removed wall that is no straight wall along a section axis (a fillet cylinder: its rim is no planar face); a wall run whose end cuts backward along the removed carrier (a reflex corner: the rim lies inside the material). A set of walls that is no proper connected run is shell-opening SO6 | yes | `ErrUnsupported` |
 | **SG6** | a tool's dilation reaches material beyond its pierced wall (TC7), or a private class-B cut does not build a brep: two dilated tools within `2t`, a dilated tool reaching a cap of `A'`, an eroded miter off its axis, a dilated tool recorded within twice the cavity's charge of a cavity face, or a cut that takes the crossing reach while that charge is positive (§3.3 step 4) | yes | `ErrUnsupported`, naming the tool |
@@ -482,6 +515,7 @@ one planar-face loop, including a swept wall restated as a plane, takes the part
 |---|---|---|---|---|
 | **BG1** | route S shell | `brepPayload`, `stack` nil | the receiver's kept faces, the cavity's faces reversed, one rim per removed face; every edge on exactly two faces | `face(k)` / `wall(k)` by result index; no `capStart`/`capEnd` |
 | **BG2** | route L chamfer | `brepPayload` with `loopBands`, `stack` nil | the rewritten record's faces plus the band patches | `face(k)` / `wall(k)`; each patch `chamferLoop(f,l,p)` for face `f`, loop `l`, patch `p` in its band's own order |
+| **BG3** | rectangular-boss shell (§3.1a) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus four cylinder patches and four ellipse seams | `face(k)` / `wall(k)`; the patches carry `filletLoop` roles |
 
 A BG1 result is an ordinary brep: general-boolean §4.5 reads it unchanged.
 A BG2 result is a brep whose body carries extra faces, and each consumer
@@ -502,13 +536,15 @@ below reads the bands where the plain brep reader would miss them:
 | **DG11** | a later `Fillet`/`Chamfer`/`Shell` | Tables RB/EB/SB/TC/LB over the record; RB1 needs `delta = 0`, so a shell whose offsets are exact floats takes route E or L again, and one whose offsets rounded is SB1 | the same over the rewritten record; an edge of a band patch is not in the record and matches nothing (route E's SB6, route L's SL1) |
 | **DG12** | `Placed`, `Mirrored`, `PatternCopies` | re-lifts every face frame | the same; `loopBands` are re-attached by the re-evaluation, as `capBlendPayload.placed` re-derives its bands |
 
+BG3's consumer rules are stated in §3.1a.
+
 ## 6. What stays refused, and why
 
 | Request | Code | Why not here |
 |---|---|---|
 | chamfers of edges sharing a vertex outside one loop, or fillets whose selected edges share no planar loop after straight-wall restatement | SB5 / SL1 | the mixed chamfer's corner plane has no reference-axis normal; route V and the partial fillet admit the cases in `docs/vertex-blend-design.md` |
 | an edge ending on a blend or a curved face (P8) | SB7 | its honest form is the complete-loop fillet, `docs/loop-fillet-design.md` |
-| shell of a blind pocket or port, a stacked union, a keyway (P2, P3, P6c) | SG3 | spheres at the pocket's floor corners, a torus around a round boss's root, elliptical edges where two reflex edges meet at a square boss's corner |
+| shell of a blind pocket or port, a stacked union outside §3.1a, a keyway (P2, P3, P6c) | SG3 | spheres at the pocket's floor corners, a torus around a round boss's root, elliptical edges where two reflex edges meet at a square boss's corner |
 | an outward or closed shell of a brep | SG1 / SG2 | §3.2 |
 | shell removing a curved wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |
 | any op on a faceted result (P5, P6b, P9) | reach SX9 | permanent (reach §11); the boolean is the owner |

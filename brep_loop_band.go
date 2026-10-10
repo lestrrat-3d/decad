@@ -158,7 +158,7 @@ func (f brepFace) regionLoop(li int) loopRecord {
 // face beside it states. The set is empty for a record with no band.
 func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (survey2d.SegmentWalk, error)) (map[brepgeom.EdgeKey]struct{}, error) {
 	open := map[brepgeom.EdgeKey]struct{}{}
-	if len(bp.loopBands) == 0 {
+	if len(bp.loopBands) == 0 && bp.bossShell == nil {
 		return open, nil
 	}
 	add := func(e brepEmbed, seg curveSegment, z float64) error {
@@ -224,6 +224,20 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 			}
 		}
 	}
+	if bp.bossShell != nil {
+		band := bp.bossShell
+		e := embeds[band.ledgeFace]
+		for _, ring := range []struct {
+			rect bossRect
+			z    float64
+		}{{band.boss, band.lowerZ}, {band.upper, band.interfaceZ}} {
+			for _, seg := range ring.rect.profile().Outer.Segments {
+				if err := add(e, seg, ring.z); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 	return open, nil
 }
 
@@ -251,10 +265,14 @@ type brepOpenSet struct {
 // placed; a whole circle's seam is placed here at its walk's start, which is
 // where buildCapBand reads the band's seam.
 func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, placeVertex func(c [3]float64, faceDelta, levelDelta, endAllow float64) *Vertex) (brepOpenSet, error) {
-	out := brepOpenSet{coedge: map[int]coedge{}, cap: make([][]coedge, len(bp.loopBands)),
-		side: make([][]coedge, len(bp.loopBands)), capBySeg: make([]map[int]*Edge, len(bp.loopBands)),
-		terminal: make([]map[brepBandTerminal]*Edge, len(bp.loopBands))}
-	if len(bp.loopBands) == 0 {
+	n := len(bp.loopBands)
+	if bp.bossShell != nil {
+		n++
+	}
+	out := brepOpenSet{coedge: map[int]coedge{}, cap: make([][]coedge, n),
+		side: make([][]coedge, n), capBySeg: make([]map[int]*Edge, n),
+		terminal: make([]map[brepBandTerminal]*Edge, n)}
+	if n == 0 {
 		return out, nil
 	}
 	openAt := map[brepgeom.EdgeKey]int{}
@@ -379,6 +397,11 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 			}
 			out.coedge[ui] = coedge{edge: edge, forward: true}
 			out.terminal[bi][t] = edge
+		}
+	}
+	if bp.bossShell != nil {
+		if err := bossShellOpenEdges(ctx, bp, topo, openAt, placeVertex, &out, len(bp.loopBands)); err != nil {
+			return brepOpenSet{}, err
 		}
 	}
 	if len(out.coedge) != len(topo.open) {

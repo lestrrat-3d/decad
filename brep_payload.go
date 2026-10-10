@@ -92,6 +92,7 @@ type brepPayload struct {
 	xform     r3.Transform
 	stack     *brepStack
 	loopBands []brepLoopBand
+	bossShell *bossShellBand
 	// loopPatches is each band's patch geometry, beside its role
 	// chamferLoop(f,l,p), in band order, nil for a fillet band, whose
 	// patches the readers take from the band record and the body's faces
@@ -646,8 +647,20 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	if err != nil {
 		return nil, err
 	}
+	if bp.bossShell != nil {
+		patches, err := attachBossShellBand(ctx, body, ref, bp, open)
+		if err != nil {
+			return nil, err
+		}
+		bands.patches = append(bands.patches, patches...)
+	}
 	body.lumps = sheetLumps(append(faces, bands.patches...))
-	if err := measureBrepContext(ctx, bp, topo, body, bands.mass); err != nil {
+	if bp.bossShell != nil {
+		err = measureBossShell(ctx, bp, body)
+	} else {
+		err = measureBrepContext(ctx, bp, topo, body, bands.mass)
+	}
+	if err != nil {
 		return nil, err
 	}
 	// Every face frame is a signed permutation of the first (brepEmbeds), so
