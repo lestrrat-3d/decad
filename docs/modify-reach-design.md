@@ -31,7 +31,7 @@ or to a finite set of named analytic patches:
 
 The extension does **not** add a general B-rep kernel:
 
-- no partial cap-edge chain with a free endpoint;
+- no multi-edge partial cap-loop `Chamfer` with free endpoints;
 - no mixed lateral-edge + cap-edge blend in one call;
 - no variable-radius fillet;
 - no topology-changing offset;
@@ -100,7 +100,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 
 | RX | Receiver | Fillet / Chamfer | Shell |
 |---|---|---|---|
-| **RX1** | `prismPayload` | base lateral junctions; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (`docs/vertex-blend-design.md`) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR, for a hole-free section, `WithNoOpenings` |
+| **RX1** | `prismPayload` | base lateral junctions; one straight cap edge through route E or the bounded cutter; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (`docs/vertex-blend-design.md`) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR, for a hole-free section, `WithNoOpenings` |
 | **RX2** | `revolvePayload` | off-axis swept meridian junctions only: a full-turn latitude `Circle3` or partial-turn junction `Arc3` | full turn: one proper connected run of generated side faces, or `WithNoOpenings`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
 | **RX3** | `stackedPrismPayload` | through its face view, `docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
@@ -136,7 +136,7 @@ more specific SX row replaces that base refusal.
 | **SX1** | `WithNoOpenings` with a non-nil selector, repeated contradictory option, or malformed option payload | no single intent | `ErrDegenerate` |
 | **SX2** | tangent continuation is branch-ambiguous or the analytic oracle cannot decide G1 continuity | evaluator cannot know which chain caller named | `ErrUnsupported` |
 | **SX3** | asymmetric reference is nil, invalid, or does not identify exactly one adjacent face per expanded edge | invalid selector / cardinality | existing selector error; otherwise `ErrCardinality` |
-| **SX4** | a partial prism cap loop, a mixed lateral/cap `Chamfer`, a mixed revolve/cap selection, or one prism or brep loop with mixed asymmetric face assignments; route V admits complete cap loops with independent straight edges for `Fillet` | body exists; endpoint/setback transition not built | `ErrUnsupported` |
+| **SX4** | a partial prism cap-loop `Chamfer` of at least two edges, a mixed lateral/cap `Chamfer`, a mixed revolve/cap selection, or one prism or brep loop with mixed asymmetric face assignments; route E admits one straight cap edge and route V admits complete cap loops with independent straight edges for `Fillet` | body exists; endpoint/setback transition not built | `ErrUnsupported` |
 | **SX5** | selected revolve edge is not a swept meridian junction | body exists; cap-edge/general rolling blend not built | `ErrUnsupported` |
 | **SX6** | cap-loop offset loses a carrier, reaches an empty circular offset, or has no regular radius-`r` envelope; LF9's exact-radius inward arc with straight G1 neighbours is the fillet exception (`docs/vertex-blend-design.md`) | no regular requested blend | `ErrDegenerate` |
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
@@ -1687,7 +1687,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - whole circle rim fillet has no seam vertex patch;
 - polygon loop produces cylinders + spherical miter patches;
 - reflex line/arc loop produces torus/cone vertex patch;
-- partial loop and mixed cap/lateral selection → SX4;
+- partial cap-loop `Chamfer` of at least two edges and mixed cap/lateral selection → SX4;
 - mixed cap/side asymmetric assignment on one loop → SX4;
 - a two-distance chamfer of a box's cap loop and of a circular rim matches the
   closed-form volume (`ds·(LW − (L+W)·dc + 4/3·dc²)` and the frustum
@@ -1828,7 +1828,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **C3** (landed) | revolve shell side opening, full and partial turn, right-angle rims (§9.3.2) | a slanted rim; cap loops |
 | **C4** (landed) | the side opening of `docs/shell-opening-design.md` §12, six PRs: the rim rule and the revolve's slanted rim (PR 1, landed), the rectilinear prism side opening as a `brepPayload` (PR 2, landed), circular walks (PR 3, landed), oblique walks (PR 4, landed), arc–arc corners and oblique arc joins (PR 5, landed), a kept arc extended past its end (PR 6, landed) | per that document's increment table; cap loops |
 | **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | a side opening, full or partial turn (C3 lands it); cap loops |
-| **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
+| **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; multi-edge partial cap-loop chamfers; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, and
 tests together. A PR may leave a DX question staged only where

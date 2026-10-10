@@ -440,17 +440,19 @@ func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest
 	return r, nil
 }
 
-// prismCapLoopFillet is RF3 (loop-fillet §3) for a Fillet of a prism receiver
-// whose selection holds an edge that is no lateral edge: the prism is read
-// through its face view (brepOfPrism), SB1 holds on it, and route E, L or V
-// builds the selection as a brep body or returns its specific refusal.
-func prismCapLoopFillet(ctx context.Context, d *Document, pp prismPayload, call brepModifyRequest) (*Body, error) {
-	bp, err := brepOfPrism(pp)
+// prismFaceViewBlend reads a prism through its brep face view for a Fillet
+// of cap edges (RF3) or a Chamfer of one straight cap edge. Route E, L or V
+// builds the selection or returns its specific refusal.
+func prismFaceViewBlend(ctx context.Context, d *Document, pp prismPayload, call brepModifyRequest) (*Body, error) {
+	bp, sourceRoles, err := brepOfPrismWithRoles(pp)
 	if err != nil {
 		return nil, err
 	}
 	if err := requireExactBrepSection(bp, call.op); err != nil {
 		return nil, err
+	}
+	if call.asym != nil {
+		call.asym.recordRoles = sourceRoles
 	}
 	return brepLoopRoute(ctx, d, bp, call)
 }

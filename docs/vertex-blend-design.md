@@ -77,6 +77,14 @@ four radii of cap height and clearance from other section vertices, and
 terminal wall directions whose trim travels less than four radii along the
 selected edge. A failed contact proof leaves the receiver live.
 
+A single-edge chamfer under the same convexity and clearance gates cuts a
+straight wedge instead. Its cutter has a diagonal from the cap setback foot
+to the side setback foot and extends beyond both adjacent faces. An
+asymmetric reference face assigns those two distances before construction.
+The mesh boolean trims the wedge at oblique terminal walls and publishes its
+faceted result with a volume bound. A contact refusal leaves the receiver
+live.
+
 Two selected straight edges can meet on a swept wall whose loop is absent
 from the initial planar-face record. Route E restates that wall as a planar
 rectangle before route L looks for a partial loop. The partial-loop band then
@@ -107,10 +115,13 @@ mouth where the cap contour moves away from the hole.
 
 The straight-edge set runs through route E (`brepBlendEdges`). A prism is
 read through `brepOfPrism` first; a single straight prism cap edge also
-uses route E. Route E keeps face and loop indices. A new route L reading
+uses route E for a chamfer. Its two end-face corners take straight chords,
+the cap and side faces end at the chords' feet, and a planar bevel closes
+them. Route E keeps face and loop indices. A new route L reading
 uses those indices on the rewritten brep, including arcs route E added to
 the loops. Route L records its loop bands and builds one brep result. The
-public `Fillet` call commits only that final result.
+public `Fillet` call commits only that final result. A single-edge
+`Chamfer` commits route E's result.
 
 `filletOffsetJoins` admits LF9 and names the pole. The fillet-specific
 offset builder omits its zero-length arc. `attachFilletBand` creates a
@@ -165,6 +176,10 @@ radius-one circle. The record does not define exact spheres there.
 | same box, top loop and 2 vertical edges | 2 spheres and 2 ellipse seams |
 | same box, one straight top edge | route E brep; volume `15840 + 40π` |
 | trapezoid prism, one oblique top edge | faceted quarter-cylinder cut; volume bounds enclose `32400 − 53(1 − π/4)` |
+| 40×20×10 box, one straight top edge, `d=2` | route E brep; volume `7920` |
+| same box, one top edge, cap/side setbacks `2` and `3` | route E brep; volume `7880` |
+| trapezoid prism, one oblique top or bottom edge, `d=1` | faceted wedge cut; volume bounds enclose `32400 − 53/2` |
+| same trapezoid, one oblique top edge, cap/side setbacks `1` and `1.5` | faceted wedge cut; volume bounds enclose `32400 − 53·0.75` |
 | trapezoid prism, horizontal top edge beside oblique walls | faceted quarter-cylinder cut; volume bounds enclose `32400 − 44(1 − π/4) − (28/45)(5/3 − π/2)` |
 | 40×40×10 plate with 20×10×5 pocket, floor loop and 4 vertical edges, `r=1.5` | 4 spheres; volume `15153 - 297π/8` |
 | cross-drilled 40×20×20 bar, all 12 straight edges, `r=2` | 8 spheres; volume `14848 + 308π/3` |

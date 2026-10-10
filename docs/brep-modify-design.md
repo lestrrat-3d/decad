@@ -72,7 +72,7 @@ S14, S16) and reach SX10 for a `capBlendPayload`. Where the ops today cast to
 
 ```
 receiver payload           → record handed to the brep route
-prismPayload               → (unchanged: the prism path)
+prismPayload               → prism path, or route E face view for one straight cap edge
 brepPayload                → itself
 stackedPrismPayload        → brepOfStacked(sp); its refusal is SB2
 cupPayload, revolve, loft… → unchanged (S3, RX2, …)
@@ -562,9 +562,9 @@ Refusals:
 
 - **Faceted receivers**: never. Reach §11's reasoning stands; the mesh is one
   evaluator's decomposition, not a carrier.
-- **A prism receiver's straight cap edge through its face view**: not in this
-  design. `brepOfPrism` makes it one call away; it would change modify Table S
-  (S1) and ships, if at all, as a later change to that document.
+- **A prism receiver's straight cap edge through its face view**: route E
+  takes a single selected edge for Fillet or Chamfer when Table EB admits it.
+  Modify Table S (S1) keeps other partial cap selections staged.
 - **Route P before route E**: yes; a `prismPayload` result reaches more
   consumers and further modify ops.
 - **Shell of a non-prism brep**: route S of `docs/modify-general-design.md`

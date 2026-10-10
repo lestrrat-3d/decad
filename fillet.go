@@ -252,7 +252,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 					return out, err
 				}
 			}
-			body, err := prismCapLoopFillet(ctx, d, pp, loopCall)
+			body, err := prismFaceViewBlend(ctx, d, pp, loopCall)
 			if err != nil {
 				return nil, err
 			}

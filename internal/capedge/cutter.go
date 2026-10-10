@@ -101,3 +101,21 @@ func QuarterCutter(r float64) momentinput.Profile {
 		sectionrecord.LineSeg{Start: p1, End: p0, TStart: 0, TEnd: 1},
 	}}}
 }
+
+// ChamferCutter is the wedge above the diagonal between the two setback
+// feet. Its outer sides cross the cap and side planes so a boolean can trim
+// the cutter against oblique terminal walls.
+func ChamferCutter(capSetback, sideSetback float64) momentinput.Profile {
+	reach := 4 * math.Max(capSetback, sideSetback)
+	p0 := sectionrecord.Point2{U: -capSetback, V: 0}
+	p1 := sectionrecord.Point2{U: -capSetback, V: reach}
+	p2 := sectionrecord.Point2{U: reach, V: reach}
+	p3 := sectionrecord.Point2{U: reach, V: -sideSetback}
+	p4 := sectionrecord.Point2{U: 0, V: -sideSetback}
+	points := []sectionrecord.Point2{p0, p4, p3, p2, p1}
+	segments := make([]sectionrecord.CurveSegment, len(points))
+	for i := range points {
+		segments[i] = sectionrecord.LineSeg{Start: points[i], End: points[(i+1)%len(points)], TStart: 0, TEnd: 1}
+	}
+	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
+}

@@ -43,8 +43,10 @@ import (
 // or more COMPLETE prism cap loops builds a cap-loop chamfer through
 // capblend.go instead of this file's corner rewrite, at an equal setback or,
 // under WithAsymmetricChamfer, at the two setbacks each cap's reference face
-// picks (§8.3.1). A cap-edge selection that is not one or more complete loops,
-// or one mixing cap edges with lateral ones, is SX4 (ErrUnsupported).
+// picks (§8.3.1). A single straight cap edge takes route E through the
+// prism's face view or the bounded cutter when its terminal walls are
+// oblique. Other partial cap selections and mixed cap/lateral selections
+// are SX4 (ErrUnsupported).
 
 // ChamferOption configures Chamfer: WithTangentChain and
 // WithAsymmetricChamfer (docs/modify-reach-design.md §2).
@@ -81,16 +83,17 @@ type ChamferOption interface{ chamferOption() }
 // that names no adjacent face of a chamfered edge, or both, or a face beside
 // no chamfered edge, is ErrCardinality (SX3). An asymmetric chamfer of an
 // independent straight brep edge takes route E, and a complete loop of a
-// planar brep face takes route L. Stacked receivers remain ErrUnsupported
-// (SX16).
+// planar brep face takes route L. Stacked receivers use those same routes
+// through their face view; selections outside them remain SX16.
 //
-// A selection of CAP edges is the cap-loop chamfer of
-// docs/modify-reach-design.md §8.3: sel covering every geometric edge of one
-// or more complete prism cap loops bevels each of those loops with a band of
-// analytic patches, and the result is a cap-blend body whose volume, area,
-// bounds, undercut and minimum-radius readings all answer. A cap-edge
-// selection that is not one or more complete loops, and one that mixes cap
-// edges with lateral ones, are both SX4 (ErrUnsupported). A setback across the
+// A selection covering one straight prism cap edge uses route E or the
+// bounded cutter for an admitted oblique edge. A selection
+// covering every geometric edge of one or more complete prism cap loops uses
+// docs/modify-reach-design.md §8.3's cap-loop chamfer. It bevels each loop
+// with a band of analytic patches, and the result is a cap-blend body whose
+// volume, area, bounds, undercut and minimum-radius readings all answer.
+// Other partial cap selections and mixed cap/lateral selections are SX4
+// (ErrUnsupported). A setback across the
 // cap that empties the cap contour is SX6 (ErrDegenerate), and bands whose
 // setbacks down the side reach the far end of the sweep are SX7
 // (ErrUnsupported). A chamfer whose setback is so small beside the geometry it
@@ -224,13 +227,14 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
-	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{op: "chamfers",
+	loopCall := brepModifyRequest{op: "chamfers",
 		admits: func(pp prismPayload, caps prismCaps) error {
 			_, _, _, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
 			return err
 		},
 		sel: sel, edges: edges, blend: &blend, asym: asym,
-		loop: &capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}, loopKind: brepBandChamfer})
+		loop: &capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}, loopKind: brepBandChamfer}
+	route, err := modifyBrepReceiver(ctx, b, loopCall)
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +262,20 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	}
 	if err := requireExactSection(pp, "chamfers"); err != nil {
 		return nil, err
+	}
+	// A single straight cap edge takes the bounded cutter or route E's corner
+	// rewrite in the prism's face view. Complete loops keep the cap-band route.
+	if straightPrismCapEdge(caps, edges) {
+		if original, ok := b.payload.(prismPayload); ok {
+			if out, recognized, err := tryObliqueCapEdgeChamfer(ctx, b, original, edges, dmm, dDelta, asym); recognized {
+				return out, err
+			}
+		}
+		body, err := prismFaceViewBlend(ctx, doc, pp, loopCall)
+		if err != nil {
+			return nil, err
+		}
+		return commitModifyResult(ctx, b, body)
 	}
 
 	startLoops, endLoops, lateral, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
@@ -306,7 +324,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 			return nil, err
 		}
 		if !found {
-			return nil, fmt.Errorf(`%w: a chamfer of a cap edge is the vertex-blend problem, not yet supported; selector %s, %s`,
+			return nil, fmt.Errorf(`%w: this cap-edge chamfer selection is unsupported; selector %s, %s`,
 				ErrUnsupported, sel, selectedEdgeContext(ei, e))
 		}
 		matched = append(matched, newMatchedCorner(ei, e, li, ci, loops[li]))
@@ -376,6 +394,21 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	}
 	doc.commit(body, b)
 	return body, nil
+}
+
+func straightPrismCapEdge(caps prismCaps, edges []*Edge) bool {
+	if len(edges) != 1 {
+		return false
+	}
+	if _, straight := edges[0].Curve().(Line3); !straight {
+		return false
+	}
+	for _, face := range edges[0].Faces() {
+		if face == caps.start || face == caps.end {
+			return true
+		}
+	}
+	return false
 }
 
 // computeChamfer builds one section corner blend.

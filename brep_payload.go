@@ -181,24 +181,33 @@ func (bp brepPayload) assignRoles() {
 // segment, then the start and end caps. It is built on demand and never stored
 // for a prism. A surface result has no closed face view and is ErrUnsupported.
 func brepOfPrism(pp prismPayload) (brepPayload, error) {
+	bp, _, err := brepOfPrismWithRoles(pp)
+	return bp, err
+}
+
+// brepOfPrismWithRoles also maps record faces to the source prism's public
+// roles, so an asymmetric chamfer can resolve its reference face.
+func brepOfPrismWithRoles(pp prismPayload) (brepPayload, []string, error) {
 	if pp.surfaceResult {
-		return brepPayload{}, fmt.Errorf(`%w: a surface-result prism has no closed face view`, ErrUnsupported)
+		return brepPayload{}, nil, fmt.Errorf(`%w: a surface-result prism has no closed face view`, ErrUnsupported)
 	}
 	profile, allow, err := brepJoinProfile(pp.profile)
 	if err != nil {
-		return brepPayload{}, err
+		return brepPayload{}, nil, err
 	}
 	pp.profile = profile
 	if allow > 0 {
 		pp.sectionDelta = proofbound.AbsSumUpper(pp.sectionDelta, allow)
 	}
 	bp := brepPayload{xform: pp.xform}
-	for _, loop := range append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...) {
-		for _, seg := range loop.Segments {
+	var sourceRoles []string
+	for li, loop := range append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...) {
+		for si, seg := range loop.Segments {
 			bp.faces = append(bp.faces, brepFace{
 				frame: pp.frame, wall: seg, z0: pp.z0, z1: pp.z1,
 				z0Delta: pp.z0Delta, z1Delta: pp.z1Delta, delta: pp.sectionDelta,
 			})
+			sourceRoles = append(sourceRoles, fmt.Sprintf("side(%d,%d)", li, si))
 		}
 	}
 	region := pp.profile
@@ -208,8 +217,9 @@ func brepOfPrism(pp prismPayload) (brepPayload, error) {
 		brepFace{frame: pp.frame, region: &region, outward: true, z0: pp.z1, z1: pp.z1,
 			z0Delta: pp.z1Delta, z1Delta: pp.z1Delta, delta: pp.sectionDelta},
 	)
+	sourceRoles = append(sourceRoles, roleCapStart, roleCapEnd)
 	bp.assignRoles()
-	return bp, nil
+	return bp, sourceRoles, nil
 }
 
 // brepOfStacked is a stacked prism's face view (§4.1): one swept face per
