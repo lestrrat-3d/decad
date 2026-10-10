@@ -1090,6 +1090,8 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 	// A lone open FitSplineSeg does not close on itself the way a closed spline
 	// or the NURBS square do, so — like spline above — it needs the arrangement's
 	// own record of a curve-plus-chord region, with only the range overwritten.
+	// Trimming the fit away from its natural end leaves this original chord
+	// behind, so the resulting region is open at that junction.
 	fitSpline := func(tStart, tEnd float64) momentinput.Profile {
 		record := recordFitSplineAndChord(t)
 		segments := slices.Clone(record.Outer.Segments)
@@ -1139,7 +1141,7 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 		{name: "spline", of: spline, trimmedMessage: "full domain"},
 		{name: "closed spline", of: closedSpline, trimmedMessage: "full domain"},
 		{name: "NURBS", of: nurbs, trimmedMessage: "full domain"},
-		{name: "fit spline", of: fitSpline, trimmedMessage: "own boundary", trimmedSentinel: decad.ErrDegenerate},
+		{name: "fit spline", of: fitSpline, trimmedMessage: "stated closed region", trimmedSentinel: decad.ErrDegenerate},
 		{
 			name: "elliptical arc", of: ellipticalArc,
 			fullSentinel: decad.ErrUnsupported, fullMessage: "pinned endpoints",
