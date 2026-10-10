@@ -360,11 +360,11 @@ func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 		spherePose, boxPose = poseA, poseB
 	}
 	sphere, okSphere := translatedReplaySphere(*p.orientedSphere, spherePath.From, spherePose)
-	box, okBox := spherepath.TranslateObservedBox(p.orientedSphereBox.pairBox(), boxPath.From, boxPose)
+	box, okBox := spherepath.TranslateObservedBox(p.orientedSphereBox.OrientedBox, boxPath.From, boxPose)
 	if !okSphere || !okBox {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotated sphere replay is not affine", ErrUnsupported)
 	}
-	deviation := spherepath.OrientedSpherePoseDeviation(p.orientedSphereBox.pairBox(), box,
+	deviation := spherepath.OrientedSpherePoseDeviation(p.orientedSphereBox.OrientedBox, box,
 		boxPath.Delta, p.orientedSphere.center, sphere.center, spherePath.Delta, f)
 	resolution, ok := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
@@ -375,7 +375,7 @@ func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 	if !faceOK || axis != p.sphereAxis || side != p.sphereSide || observed2 == nil {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere leaves the face corridor", ErrUnsupported)
 	}
-	startOutward := pairbox.OrientedDual(p.orientedSphereBox.pairBox(), p.sphereAxis)
+	startOutward := pairbox.OrientedDual(p.orientedSphereBox.OrientedBox, p.sphereAxis)
 	if p.sphereSide == 0 {
 		for k := range 3 {
 			startOutward[k] = proofarith.DyNeg(startOutward[k])

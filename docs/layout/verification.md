@@ -27,7 +27,7 @@ The rules for rows live in `docs/layout.md`.
 | `contact_faceted_manifold.go` / `contact_faceted_patch.go` | Planar manifold faces and witnesses. See multibody §9. |
 | `contact_faceted_support.go` | Exact faceted support-face proof and bounded strict separation. See contact-geometry §4. |
 | `contact_faceted_sweep.go` | Faceted floor sweeps: exact support face, or clearance by swept boxes. See contact-sweep. |
-| `contact_oriented_box.go` | Rotated boxes. See contact-geometry §4. |
+| `contact_oriented_box.go` | Source face identity and report adapters over `internal/pair/box/` geometry. See contact-geometry §4. |
 | `contact_oriented_patch.go` | Publishes oblique box patches from `internal/pair/box/` geometry. See contact geometry §4. |
 | `contact_clipped_patch.go` | Publishes horizontal box patches from exact polygon clips. See contact geometry §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box contact and sweep. See contact-sweep §4–§5. |

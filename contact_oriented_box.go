@@ -1,85 +1,36 @@
 package decad
 
 import (
-	"math"
-
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// orientedSourceBox is the exact parallelotope obtained by applying the read
-// placement and pose entries to a source-certified rectangular prism.
+// orientedSourceBox pairs the internal exact parallelotope with its source
+// face identities, which belong to the public body.
 type orientedSourceBox struct {
-	corner [8]proofarith.DyV3
-	edge   [3]proofarith.DyV3
-	faces  [3][2]*Face
-}
-
-func (box orientedSourceBox) pairBox() pairbox.OrientedBox {
-	return pairbox.OrientedBox{Corner: box.corner, Edge: box.edge}
+	pairbox.OrientedBox
+	faces [3][2]*Face
 }
 
 func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, bool) {
 	pp, ok := body.payload.(prismPayload)
 	if !ok || !body.solid || body.kind != BodySolid || pp.surfaceResult ||
 		pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		!pairbox.RectangularProfile(pp.profile) ||
-		!pairbox.CardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
-		!signedAxisTransform(pp.xform) || !pose.IsValid() || !proofbound.FiniteVec(pose.Translation()) ||
-		!proofbound.FiniteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) {
+		!signedAxisTransform(pp.xform) {
 		return orientedSourceBox{}, false
 	}
-	var umin, umax, vmin, vmax float64
-	for i, segment := range pp.profile.Outer.Segments {
-		line, ok := segment.(lineSeg)
-		if !ok {
-			return orientedSourceBox{}, false
-		}
-		point := line.Start
-		if i == 0 {
-			umin, umax, vmin, vmax = point.U, point.U, point.V, point.V
-		}
-		umin, umax = math.Min(umin, point.U), math.Max(umax, point.U)
-		vmin, vmax = math.Min(vmin, point.V), math.Max(vmax, point.V)
-	}
-	if !finiteMeasurementValues(umin, umax, vmin, vmax) ||
-		umin >= umax || vmin >= vmax || pp.z0 >= pp.z1 {
+	geometry, placedEdge, ok := pairbox.SourceOrientedBox(pp.profile, pp.frame, pp.z0, pp.z1, pp.xform, pose)
+	if !ok {
 		return orientedSourceBox{}, false
 	}
-	values := [3][2]proofarith.Dyadic{{proofarith.MustDyOf(umin), proofarith.MustDyOf(umax)},
-		{proofarith.MustDyOf(vmin), proofarith.MustDyOf(vmax)}, {proofarith.MustDyOf(pp.z0), proofarith.MustDyOf(pp.z1)}}
-	frame := [3]proofarith.DyV3{proofarith.DyVec(pp.frame.U()), proofarith.DyVec(pp.frame.V()), proofarith.DyVec(pp.frame.N())}
-	origin := proofarith.DyVec(pp.frame.Origin())
-	var box orientedSourceBox
-	for index := range box.corner {
-		point := origin
-		for axis := range 3 {
-			point = proofarith.DvAdd(point, proofarith.DvScale(frame[axis], values[axis][(index>>axis)&1]))
-		}
-		box.corner[index] = proofarith.DvTransform(pose, proofarith.DvTransform(pp.xform, point))
-	}
-	box.edge = [3]proofarith.DyV3{proofarith.DvSub(box.corner[1], box.corner[0]),
-		proofarith.DvSub(box.corner[2], box.corner[0]), proofarith.DvSub(box.corner[4], box.corner[0])}
-	for axis := range 3 {
-		if proofarith.DvIsZero(box.edge[axis]) {
-			return orientedSourceBox{}, false
-		}
-	}
+	box := orientedSourceBox{OrientedBox: geometry}
 	// The original planar faces retain their source identities after the read
 	// pose. Match them in the body's cardinal placed frame, before rotation.
-	placedEdge := [3]proofarith.DyV3{}
-	for axis := range 3 {
-		placedEdge[axis] = proofarith.DvTransform(pp.xform,
-			proofarith.DvScale(frame[axis], proofarith.DySubScalar(values[axis][1], values[axis][0])))
-		placedEdge[axis] = proofarith.DvSub(placedEdge[axis], proofarith.DyVec(pp.xform.Translation()))
-	}
 	faces := body.Faces()
 	if len(faces) != 6 {
 		return orientedSourceBox{}, false
@@ -122,7 +73,7 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 
 // orientedBoxRelation keeps the contact report's relation type at the root.
 func orientedBoxRelation(a, b orientedSourceBox) (ContactRelation, proofarith.Dyadic, proofarith.Dyadic) {
-	relation, gap, normSquared := pairbox.OrientedBoxRelation(a.pairBox(), b.pairBox())
+	relation, gap, normSquared := pairbox.OrientedBoxRelation(a.OrientedBox, b.OrientedBox)
 	switch relation {
 	case pair.Separated:
 		return ContactSeparated, gap, normSquared
@@ -204,7 +155,7 @@ func publishHorizontalPatchOrder(report *ContactReport, base sourceBoxContactPro
 	if !ok {
 		return false
 	}
-	patch, ok := pairbox.ContainedHorizontalPatch(base.axisBox(), rotated.pairBox(), pairRelationOf(report.Relation))
+	patch, ok := pairbox.ContainedHorizontalPatch(base.axisBox(), rotated.OrientedBox, pairRelationOf(report.Relation))
 	if !ok {
 		return false
 	}
@@ -257,7 +208,7 @@ func publishOrientedAxisPatch(report *ContactReport, a, b *orientedSourceBox) {
 	best := proofarith.DyZero()
 	_, alignedA := sourceBoxAtPose(report.A, report.PoseA)
 	_, alignedB := sourceBoxAtPose(report.B, report.PoseB)
-	for _, candidate := range pairbox.AxisFaceWitnesses(a.pairBox(), b.pairBox(), pairRelationOf(report.Relation)) {
+	for _, candidate := range pairbox.AxisFaceWitnesses(a.OrientedBox, b.OrientedBox, pairRelationOf(report.Relation)) {
 		// A horizontal patch against a signed-axis box needs the complete
 		// contained four-point proof above; one interior point cannot replace it.
 		if candidate.Axis == 2 && (alignedA || alignedB) {
@@ -326,7 +277,7 @@ func orientedSourceFace(body *Body, pose r3.Transform, axis, side int) *Face {
 
 // orientedBoxGap publishes the neutral gap enclosure as a public reading.
 func orientedBoxGap(a, b orientedSourceBox, gap, normSquared proofarith.Dyadic) (Measurement, bool) {
-	reading, ok := pairbox.OrientedBoxGap(a.pairBox(), b.pairBox(), gap, normSquared)
+	reading, ok := pairbox.OrientedBoxGap(a.OrientedBox, b.OrientedBox, gap, normSquared)
 	if !ok {
 		return Measurement{}, false
 	}

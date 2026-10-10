@@ -32,8 +32,8 @@ func publishClippedHorizontalPatch(report *ContactReport, a, b orientedSourceBox
 func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool) {
 	var aligned sourceBoxContactProof
 	var used [3]bool
-	for sourceAxis := range box.edge {
-		e0, e1, e2 := box.edge[sourceAxis][0], box.edge[sourceAxis][1], box.edge[sourceAxis][2]
+	for sourceAxis := range box.Edge {
+		e0, e1, e2 := box.Edge[sourceAxis][0], box.Edge[sourceAxis][1], box.Edge[sourceAxis][2]
 		signs := [3]int{e0.Sign(), e1.Sign(), e2.Sign()}
 		worldAxis := -1
 		for axis, sign := range signs {
@@ -57,9 +57,9 @@ func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool)
 		}
 	}
 	for axis := range 3 {
-		lo, hi := box.corner[0][axis], box.corner[0][axis]
-		for k := 1; k < len(box.corner); k++ {
-			v := box.corner[k][axis]
+		lo, hi := box.Corner[0][axis], box.Corner[0][axis]
+		for k := 1; k < len(box.Corner); k++ {
+			v := box.Corner[k][axis]
 			if proofarith.DyCmp(v, lo) < 0 {
 				lo = v
 			}
@@ -78,7 +78,7 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 		return false
 	}
 	vertical := -1
-	for axis, edge := range rotated.edge {
+	for axis, edge := range rotated.Edge {
 		if edge[0].Sign() == 0 && edge[1].Sign() == 0 && edge[2].Sign() != 0 {
 			if vertical >= 0 {
 				return false
@@ -89,7 +89,7 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 	if vertical < 0 {
 		return false
 	}
-	minZ, maxZ := pairbox.OrientedProjection(rotated.pairBox(),
+	minZ, maxZ := pairbox.OrientedProjection(rotated.OrientedBox,
 		proofarith.DyV3{proofarith.DyZero(), proofarith.DyZero(), proofarith.MustDyOf(1)})
 	var faceZ proofarith.Dyadic
 	baseSide := 0
@@ -104,7 +104,7 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 	}
 	start := 0
 	rotatedSide := 0
-	if proofarith.DyCmp(rotated.corner[0][2], faceZ) != 0 {
+	if proofarith.DyCmp(rotated.Corner[0][2], faceZ) != 0 {
 		start = 1 << vertical
 		rotatedSide = 1
 	}
@@ -112,7 +112,7 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 	indices := [4]int{start, start | (1 << i), start | (1 << i) | (1 << j), start | (1 << j)}
 	polygon := make([][2]*big.Rat, 0, 4)
 	for _, index := range indices {
-		corner := rotated.corner[index]
+		corner := rotated.Corner[index]
 		if proofarith.DyCmp(corner[2], faceZ) != 0 {
 			return false
 		}

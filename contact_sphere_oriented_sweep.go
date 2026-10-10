@@ -117,11 +117,11 @@ func (r *orientedSphereSweepRun) poseDeviation(f *big.Rat, poseA, poseB r3.Trans
 		sphereDelta, boxDelta = r.pa.Delta, r.pb.Delta
 	}
 	observedSphere, okSphere := translatedReplaySphere(r.sphere, sphereFrom, spherePose)
-	observedBox, okBox := spherepath.TranslateObservedBox(r.box.pairBox(), boxFrom, boxPose)
+	observedBox, okBox := spherepath.TranslateObservedBox(r.box.OrientedBox, boxFrom, boxPose)
 	if !okSphere || !okBox {
 		return new(big.Rat).SetInt64(1 << 30)
 	}
-	return spherepath.OrientedSpherePoseDeviation(r.box.pairBox(), observedBox,
+	return spherepath.OrientedSpherePoseDeviation(r.box.OrientedBox, observedBox,
 		boxDelta, r.sphere.center, observedSphere.center, sphereDelta, f)
 }
 
@@ -137,11 +137,11 @@ func (r *orientedSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) 
 
 func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
-	if !pairbox.OrthogonalSourceBox(r.box.pairBox()) {
+	if !pairbox.OrthogonalSourceBox(r.box.OrientedBox) {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
 	axis, side, outward, _, _, ok := pairbox.OrientedSphereFace(
-		r.sphere.center, r.sphere.radius, r.box.pairBox())
+		r.sphere.center, r.sphere.radius, r.box.OrientedBox)
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
@@ -167,7 +167,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 	}
 	sphereDelta, boxDelta := r.deltas()
 	r.start, r.slope, ok = spherepath.OrientedFaceCorridor(
-		r.sphere.center, r.sphere.radius, r.box.pairBox(), sphereDelta, boxDelta,
+		r.sphere.center, r.sphere.radius, r.box.OrientedBox, sphereDelta, boxDelta,
 		r.axis, r.side, r.outward)
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil

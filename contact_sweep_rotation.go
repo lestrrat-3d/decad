@@ -45,7 +45,7 @@ type rotationalSweepPath struct {
 
 func (p rotationalSweepPath) departurePath() sweepdeparture.Path {
 	return sweepdeparture.Path{
-		Box: p.startBox.pairBox(), Delta: p.path.Delta,
+		Box: p.startBox.OrientedBox, Delta: p.path.Delta,
 		Axis: p.frame.Axis, Center: p.frame.Center, Velocity: p.velocity,
 		Duration: p.path.Duration, OmegaUpper: p.omegaHigh,
 		Drift: p.path.Drift != nil, Screw: p.path.Screw != nil,
@@ -66,8 +66,8 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 		return rotationalSweepPath{}, false
 	}
 	prepared.startBox, prepared.sourceBox = startBox, sourceBox
-	prepared.startPoints = append([]proofarith.DyV3(nil), startBox.corner[:]...)
-	prepared.sourcePoints = append([]proofarith.DyV3(nil), sourceBox.corner[:]...)
+	prepared.startPoints = append([]proofarith.DyV3(nil), startBox.Corner[:]...)
+	prepared.sourcePoints = append([]proofarith.DyV3(nil), sourceBox.Corner[:]...)
 	return prepared, true
 }
 
@@ -174,11 +174,11 @@ func (p rotationalSweepPath) roundedAt(pose r3.Transform, f *big.Rat) (orientedS
 		return orientedSourceBox{}, 0, false
 	}
 	var box orientedSourceBox
-	copy(box.corner[:], points)
+	copy(box.Corner[:], points)
 	box.faces = p.startBox.faces
-	box.edge = [3]proofarith.DyV3{proofarith.DvSub(box.corner[1], box.corner[0]),
-		proofarith.DvSub(box.corner[2], box.corner[0]), proofarith.DvSub(box.corner[4], box.corner[0])}
-	for _, edge := range box.edge {
+	box.Edge = [3]proofarith.DyV3{proofarith.DvSub(box.Corner[1], box.Corner[0]),
+		proofarith.DvSub(box.Corner[2], box.Corner[0]), proofarith.DvSub(box.Corner[4], box.Corner[0])}
+	for _, edge := range box.Edge {
 		if proofarith.DvIsZero(edge) {
 			return orientedSourceBox{}, 0, false
 		}
@@ -434,7 +434,7 @@ func (r *rotationalPairSweep) orientedIdealEvent(f *big.Rat, at SweepInstant,
 				event.Relation, event.Gap, event.Reason = ContactSeparated, gap, ContactNoReason
 			}
 		case ContactOverlapping:
-			if pairbox.OrientedInteriorWitness(boxA.pairBox(), boxB.pairBox(),
+			if pairbox.OrientedInteriorWitness(boxA.OrientedBox, boxB.OrientedBox,
 				proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)) {
 				event.Relation, event.Reason = ContactOverlapping, contact.Reason
 			}
@@ -812,8 +812,8 @@ func translatedOrientedBox(box orientedSourceBox, delta [3]proofarith.Dyadic, fr
 		if !ok {
 			return orientedSourceBox{}, false
 		}
-		for corner := range box.corner {
-			box.corner[corner][axis] = proofarith.DyAdd(box.corner[corner][axis], step)
+		for corner := range box.Corner {
+			box.Corner[corner][axis] = proofarith.DyAdd(box.Corner[corner][axis], step)
 		}
 	}
 	return box, true
@@ -878,7 +878,7 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 		first.Ideal.Manifold.Points[0].Normal.Value,
 		func(i int) (pairbox.OrientedBox, bool) {
 			box, ok := sourceOrientedBoxAtPose(paths[i].body, paths[i].path.From)
-			return box.pairBox(), ok
+			return box.OrientedBox, ok
 		},
 	)
 }
@@ -919,7 +919,7 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 	if side == 0 {
 		sideA, sideB = 0, 1
 	}
-	boxA, boxB := r.a.startBox.pairBox(), r.b.startBox.pairBox()
+	boxA, boxB := r.a.startBox.OrientedBox, r.b.startBox.OrientedBox
 	var faceA, faceB pairbox.OrientedFace
 	if !pairbox.OrientedAxisFace(&boxA, axis, sideA, &faceA) ||
 		!pairbox.OrientedAxisFace(&boxB, axis, sideB, &faceB) ||
@@ -1092,10 +1092,10 @@ func (r *rotationalPairSweep) obliqueAffineIntervalClear(from, to *big.Rat) bool
 	if !okA || !okB || !okC || !okD {
 		return false
 	}
-	pa0, pb0, pa1, pb1 := a0.pairBox(), b0.pairBox(), a1.pairBox(), b1.pairBox()
+	pa0, pb0, pa1, pb1 := a0.OrientedBox, b0.OrientedBox, a1.OrientedBox, b1.OrientedBox
 	for axis := range 3 {
 		i, j := (axis+1)%3, (axis+2)%3
-		normal := proofarith.DvCross(r.a.startBox.edge[i], r.a.startBox.edge[j])
+		normal := proofarith.DvCross(r.a.startBox.Edge[i], r.a.startBox.Edge[j])
 		if proofarith.DvIsZero(normal) {
 			continue
 		}
