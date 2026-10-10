@@ -5,6 +5,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -625,13 +626,15 @@ func TestVerifyPublishToleranceReferenceUnavailable(t *testing.T) {
 	m := Measurement{Value: units.Millimeters(5), Exactness: Approximate, Bound: units.Millimeters(0.001)}
 	body := rectangularPrism(t, 10, 10, 10)
 
-	tr, diag := tolerance.ScalarVerdict[*Body, JointCell](ReadingWall, SurveyWall, body, measurementToInternal(m), 1e-3, in.lengthReference)
+	tr, diag := tolerance.ScalarVerdict[*Body, JointCell](
+		reportvocab.ReadingKind(ReadingWall), reportvocab.SurveyKind(SurveyWall), body,
+		measurementToInternal(m), 1e-3, in.lengthReference)
 	require.Equal(t, ToleranceUndecided, tr.State)
 	require.Nil(t, tr.Limit)
 	require.NotNil(t, diag)
-	require.Equal(t, DiagToleranceReferenceUnavailable, diag.Code)
+	require.Equal(t, DiagToleranceReferenceUnavailable, DiagnosticCode(diag.Code))
 	require.Equal(t, Suspect, Status(diag.Status))
-	require.Equal(t, SurveyWall, diag.Survey)
+	require.Equal(t, SurveyWall, SurveyKind(diag.Survey))
 	require.Same(t, body, diag.Body)
 	require.Nil(t, diag.Required)
 }

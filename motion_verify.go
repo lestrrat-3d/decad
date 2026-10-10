@@ -1345,7 +1345,7 @@ func (r *motionRun) pathClearance(poses []*motionPose, lowest *Measurement, scop
 	}
 	obs := gap
 	diag := &Diagnostic{
-		Code:     tolerance.DiagnosticCode(reading.Tolerance),
+		Code:     DiagnosticCode(tolerance.DiagnosticCode(reading.Tolerance)),
 		Status:   Suspect,
 		Reading:  ReadingGap,
 		Observed: &obs,
