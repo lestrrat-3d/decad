@@ -9,7 +9,7 @@
 #   shard 0: 1059.82s over 1 tests
 #   shard 1:  175.64s over 104 tests
 #   shard 2:  165.64s over 197 tests
-#   shard 3:   38.89s over 195 tests
+#   shard 3:   38.93s over 198 tests
 #   shard 4:   39.94s over 196 tests
 #   shard 5:   80.90s over 199 tests
 #   shard 6:   90.77s over 195 tests
@@ -403,6 +403,9 @@
 3	0.01	TestPatternCopiesCircular
 3	0.01	TestPlacementContextCancelsAnalyticRebuilds
 3	0.02	TestPlacementContextPollsAnalyticRebuildHelpers
+3	0.01	TestPointDistanceFromBore
+3	0.01	TestPointDistanceFromBox
+3	0.02	TestPointDistanceWithoutVolumeProof
 3	0.00	TestPointLocationRejectsInvalidRequests
 3	0.04	TestPrismBooleanSharedWallBoxes
 3	0.01	TestPrismCutCancellationLeavesDocumentUnchanged

@@ -351,6 +351,7 @@ func (b *Body) Volume() (Measurement, error)   // error when not a solid — nev
 func (b *Body) Area() (Measurement, error)
 func (b *Body) Centroid() (VecMeasurement, error)
 func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (PointLocation, error)
+func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error)
 
 func (b *Body) Origin() FeatureRef  // which feature created this body
 ```
@@ -359,6 +360,12 @@ func (b *Body) Origin() FeatureRef  // which feature created this body
 `PointUndecided`. It uses the body's verified mesh and returns only classifications
 proved for the body, including retired bodies. `docs/point-containment-design.md`
 owns its proof and refusal rules.
+
+`DistanceToPoint` measures the minimum distance from `p` to the solid, so a
+point inside or on its boundary has distance zero. Its `Measurement` encloses
+the true distance using the verified mesh and its boundary bound. When
+`LocatePoint` cannot prove membership, its lower bound is zero. The point
+query design owns its proof and refusal rules.
 
 A bounding box is a measurement, so it carries the same trust metadata every other
 measurement does — a v1 box around a curved body produced by a boolean is bounded

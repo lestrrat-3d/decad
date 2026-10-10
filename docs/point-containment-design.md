@@ -1,4 +1,4 @@
-# Point containment design
+# Point containment and distance design
 
 `Body.LocatePoint` classifies one world-coordinate point against a solid body.
 The query reads a verified mesh and its occupied-volume proof; it does not
@@ -78,3 +78,36 @@ outside. No nearest-face selection or local normal decides membership.
 - A rotated body answers in world coordinates. A sheet returns `ErrNotSolid`.
 - A canceled context, invalid point and invalid tolerance return their stated
   errors without changing the document.
+
+## 4. Distance from a point to a solid
+
+```go
+func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error)
+```
+
+The distance is zero for a point in the material or on its boundary. For a
+point outside, it is the minimum distance to the body's boundary. The query
+accepts the same body, point, tolerance and context inputs as `LocatePoint`,
+including a retired solid. It returns the same input errors and the
+`Tessellate(VerifyAll)` error when meshing fails. A returned mesh without a
+verified boundary is `ErrUnsupported`.
+
+Let `D²` be `MeshDistanceSquared`'s exact minimum over every held triangle.
+`RatSqrtDown(D²)` and `RatSqrtUp(D²)` enclose the held boundary distance. Let
+`B` be the verified mesh's two-sided boundary bound. The Hausdorff distance
+inequality puts the true boundary distance in
+`[max(0, sqrt(D²) − B), sqrt(D²) + B]`. The query computes these interval
+ends over exact rationals from the directed square-root floats and `B`.
+
+When §2 proves the point outside, that interval encloses the distance to the
+solid. When §2 proves inside or on the boundary, return exact zero. When the
+occupied-volume proof is missing or membership is undecided, use
+`[0, sqrt(D²) + B]`: zero covers an interior point, and the upper end covers
+an exterior one. Round the interval's midpoint once, then round its farther
+endpoint distance outward for `Measurement.Bound`. A non-finite value or bound
+is `ErrUnsupported`; no unbounded `Measurement` is returned.
+
+Verify a box at an interior point, a face point, an exterior face point and an
+exterior corner point. Verify a through bore at its center: the interval must
+contain the analytic bore radius. A point near an approximate wall may have
+a zero lower bound while its upper bound remains finite.

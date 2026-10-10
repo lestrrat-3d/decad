@@ -26,6 +26,19 @@ const (
 // boundary and occupied-volume bounds exclude a different answer.
 func Locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 	boundaryBound, symDiffBound float64) (Location, error) {
+	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, nil)
+}
+
+// LocateWithDistance reuses an exact held-mesh distance already computed for
+// the same point and triangles. The caller must pass MeshDistanceSquared's
+// result, or nil to compute it here.
+func LocateWithDistance(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
+	boundaryBound, symDiffBound float64, distanceSquared *big.Rat) (Location, error) {
+	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, distanceSquared)
+}
+
+func locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
+	boundaryBound, symDiffBound float64, distanceSquared *big.Rat) (Location, error) {
 	if len(tris) == 0 || math.IsNaN(boundaryBound) || math.IsInf(boundaryBound, 0) ||
 		math.IsNaN(symDiffBound) || math.IsInf(symDiffBound, 0) ||
 		boundaryBound < 0 || symDiffBound < 0 {
@@ -46,9 +59,11 @@ func Locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 		}
 		return Undecided, nil
 	}
-	distanceSquared, err := MeshDistanceSquared(ctx, p, verts, tris)
-	if err != nil {
-		return Undecided, err
+	if distanceSquared == nil {
+		distanceSquared, err = MeshDistanceSquared(ctx, p, verts, tris)
+		if err != nil {
+			return Undecided, err
+		}
 	}
 	if distanceSquared.Sign() == 0 {
 		if boundaryBound == 0 {

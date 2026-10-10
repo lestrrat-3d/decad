@@ -438,18 +438,3 @@ func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane
 	report.Manifold = &ContactManifold{Points: points}
 	report.Reason = ContactNoReason
 }
-
-// ratIntervalMeasurement publishes an exact interval [lo, hi] as its nearest
-// midpoint float and an outward bound covering both ends.
-func ratIntervalMeasurement(lo, hi *big.Rat) (Measurement, bool) {
-	mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
-	value := sweeppath.RatFloatNearest(mid)
-	held := proofarith.FloatRat(value)
-	spread := proofbound.RatMax(new(big.Rat).Abs(new(big.Rat).Sub(lo, held)), new(big.Rat).Abs(new(big.Rat).Sub(hi, held)))
-	bound := proofbound.RatFloatUp(spread)
-	if !finiteMeasurementValues(value, bound) {
-		return Measurement{}, false
-	}
-	return Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
-		Exactness: exactnessFromBound(bound)}, true
-}

@@ -111,7 +111,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Today | Owner |
 |---|---|---|
 | Point containment near an approximate boundary or on a body without a verified occupied-volume mesh | `Body.LocatePoint` returns `PointUndecided` or the mesh's `ErrUnsupported`; certified interior, exterior and exact-boundary points build | `docs/point-containment-design.md` |
-| Distance or closest point from a point to a body or face | No entry point exists; body-pair gaps come only from `Verify` `WithClearances` | `docs/clearance-design.md` |
+| Closest point from a point to a body or face, and distance from a point to one face | `Body.DistanceToPoint` gives a certified distance to a solid; no nearest-point or single-face query exists | `docs/point-containment-design.md` §4, `docs/clearance-design.md` |
 | Planar cross-section of a body | No entry point exists | none |
 | Surveys (undercut, wall, concave radius) of bodies other than prisms, revolves, cups, cap blends and one-sided draft bodies; the wall and concave-radius surveys of a draft body | `Verify` reports `Suspect`; a draft body's with `DiagUnsupportedSurveyPayload` | `docs/verification-design.md`, `docs/draft-design.md` DD8 |
 | Wall survey of a sphere's revolve, solid or hollow (its meridian arcs meet the axis at both ends) | `Verify` reports `Suspect` (`DiagUndecidedWall`) | `docs/verification-design.md` |
