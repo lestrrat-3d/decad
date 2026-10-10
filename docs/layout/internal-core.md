@@ -43,7 +43,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/coil/` | Coil stations, axis coordinates, moments and closed forms. See helix §5, §7. |
 | `internal/coilshell/` | Builds the held coil shell and mesh proofs. See helix §5, §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
-| `internal/momentinput/` | Profile records, moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
+| `internal/momentinput/` | Profile records, exact record comparison, moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Recorded-loop and band chording, mesh topology, bounds and audits. See tessellation-design. |

@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/mirrorjoin"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 )
@@ -286,7 +287,7 @@ func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp s
 		wallLoop := regions[w.slab].loops[w.loop]
 		for _, region := range regions {
 			for li, loop := range region.loops {
-				equal, err := loopRecordsEqual(budget, wallLoop, loop)
+				equal, err := momentinput.ExactLoopEqual(budget, wallLoop, loop)
 				if err != nil {
 					return stackedPrismPayload{}, err
 				}

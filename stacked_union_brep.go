@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedbrep"
@@ -365,7 +366,7 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 				have.below, have.above = have.below || below, have.above || !below
 				return nil
 			}
-			equal, err := loopRecordsEqual(b.st.budget, b.record(have.ref).Outer, b.record(ref).Outer)
+			equal, err := momentinput.ExactLoopEqual(b.st.budget, b.record(have.ref).Outer, b.record(ref).Outer)
 			if err != nil {
 				return err
 			}
