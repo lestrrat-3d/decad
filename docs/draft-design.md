@@ -500,7 +500,8 @@ and leaves the document unchanged on any error, including `ctx.Err()`.
 `ErrNegativeMagnitude`); a positive angle narrows the body with distance from
 the neutral plane. `DraftOption` is a sealed option tier with no option in
 this design; it exists so a later increment can add one without changing the
-signature.
+signature. It includes `option.Interface` in its method set for that later
+option.
 
 ### 10.1 Resolution (RD2)
 
