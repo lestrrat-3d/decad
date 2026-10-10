@@ -26,52 +26,9 @@ import (
 // displacement, never by publishing a ruled patch nothing constructed. See
 // docs/loft-design.md §5.1 and §7.
 
-// loftAssembly is the built triangle set plus the index bookkeeping the
-// topology needs.
-type loftAssembly struct {
-	// verts is the shared vertex table; tris is the complete, globally
-	// oriented triangle set. tris[:walls] are the wall triangles (Table B's
-	// side(i,j,k)); tris[walls:walls+capStartCount] are capStart's own
-	// triangles; the rest are capEnd's.
-	verts         []r3.Vec
-	tris          [][3]int
-	walls         int
-	capStartCount int
-	// reversed records whether §5's whole-shell orientation step flipped
-	// every triangle's winding. buildLoftTopology fixes each face's directed
-	// boundary from the LOCAL (pre-flip) index convention, so it must reverse
-	// every walk it emits by exactly this flag or publish loops that run the
-	// material on the wrong side of their own face normal.
-	reversed bool
-	// cell/side parallel tris[:walls]: cell[k] is {loop index i, cell index
-	// j}, side[k] is 0 for lower_j and 1 for upper_j.
-	cell [][2]int
-	side []uint8
-	// vIdx/wIdx are, per loop, the vertex-table index of V[i][j] and W[i][j].
-	vIdx, wIdx [][]int
-	// pts0/pts1 and loopIdx0/loopIdx1 are the plane-local (U, V) points and
-	// per-loop index arrays this construction ACTUALLY triangulated each cap
-	// from (§5's cap seeding) — the same arrays capPolygonAreaRat sums, so
-	// the published cap area can never disagree with the built cap
-	// triangles (docs/loft-design.md §8).
-	pts0, pts1         []Point2
-	loopIdx0, loopIdx1 [][]int
-	// delta is the proven displacement every held vertex carries from the
-	// exact placed image of the recorded sections (docs/loft-design.md §5,
-	// §12 PR 2a) — proofbound.AbsSumUpper(stationRound, placeAllow): zero exactly when
-	// xform is r3.Identity() AND every station publishes a zero stationRound
-	// (a10-plan.md Part 3 PR 6), never zero merely because the body is
-	// unplaced, since a curved pair with interior COMPUTED stations commits
-	// its own rounding whether or not the body is later placed. Being a
-	// recorded endpoint is not that condition: an untrimmed ArcSeg's t == 1
-	// end is recorded verbatim and still carries the arc-end radial residual
-	// (loftmesh.ArcNaturalEndRadialUpper).
-	delta float64
-}
-
 // assembleLoft lifts every recorded point once, emits the 2*sum(n_i) wall
 // triangles in Table B's order and winding, triangulates both caps through
-// triangulate.go's existing polygon-with-holes triangulator with capStart's
+// internal/triangulation's polygon-with-holes triangulator with capStart's
 // triples reversed and capEnd's retained (§5's cap seeding), and orients the
 // complete shell once from the signed tetrahedron sum anchored at the placed
 // p0 origin (§5's whole-shell rule). It also owns Table S row S13: every
@@ -82,22 +39,13 @@ type loftAssembly struct {
 // (a10-plan.md Part 3 PR 6): the proven rounding every COMPUTED circular
 // station commits, composed into delta beside the placement's own
 // proofbound.RigidRoundAllow term.
-func assembleLoft(ctx context.Context, pairs []loftmesh.LoopPair, f0, f1 r3.Frame, plane0 planeRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
+func assembleLoft(ctx context.Context, pairs []loftmesh.LoopPair, f0, f1 r3.Frame, plane0 planeRecord, xform r3.Transform, stationRound float64) (loftmesh.Assembly, error) {
 	triangulate := func(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, error) {
 		tris, err := triangulation.Triangulate(ctx, pts, loops)
 		return tris, triangulation.WrapLoftError(err)
 	}
-	a, err := loftmesh.Assemble(ctx, pairs, f0, f1, plane0, xform, stationRound,
+	return loftmesh.Assemble(ctx, pairs, f0, f1, plane0, xform, stationRound,
 		triangulate, errLoftPointUnrepresentable)
-	if err != nil {
-		return loftAssembly{}, err
-	}
-	return loftAssembly{
-		verts: a.Verts, tris: a.Tris, walls: a.Walls, capStartCount: a.CapStartCount,
-		reversed: a.Reversed, cell: a.Cell, side: a.Side, vIdx: a.VIdx, wIdx: a.WIdx,
-		pts0: a.Pts0, pts1: a.Pts1, loopIdx0: a.LoopIdx0, loopIdx1: a.LoopIdx1,
-		delta: a.Delta,
-	}, nil
 }
 
 // errLoftPointUnrepresentable is docs/loft-design.md Table S row S13: a
@@ -228,25 +176,25 @@ func loftLoopCoedges(co []coedge, reversed bool) []coedge {
 // whole-shell reversal into the directed boundary each face publishes. A walk
 // emitted without it agrees with its face's Plane on one axial spelling of a
 // section pair and opposes it on the mirror.
-func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAssembly, cap0Rat, cap1Rat *big.Rat) (*Face, *Face, []*Face, error) {
-	vertexObjs := make([]*Vertex, len(a.verts))
-	for i, p := range a.verts {
-		vertexObjs[i] = loftVertex(p, a.delta)
+func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftmesh.Assembly, cap0Rat, cap1Rat *big.Rat) (*Face, *Face, []*Face, error) {
+	vertexObjs := make([]*Vertex, len(a.Verts))
+	for i, p := range a.Verts {
+		vertexObjs[i] = loftVertex(p, a.Delta)
 	}
 
-	loopCount := len(a.vIdx)
+	loopCount := len(a.VIdx)
 	lowerTri := make([][][3]int, loopCount)
 	upperTri := make([][][3]int, loopCount)
-	for i := range a.vIdx {
-		lowerTri[i] = make([][3]int, len(a.vIdx[i]))
-		upperTri[i] = make([][3]int, len(a.vIdx[i]))
+	for i := range a.VIdx {
+		lowerTri[i] = make([][3]int, len(a.VIdx[i]))
+		upperTri[i] = make([][3]int, len(a.VIdx[i]))
 	}
-	for k := range a.walls {
-		i, j := a.cell[k][0], a.cell[k][1]
-		if a.side[k] == 0 {
-			lowerTri[i][j] = a.tris[k]
+	for k := range a.Walls {
+		i, j := a.Cell[k][0], a.Cell[k][1]
+		if a.Side[k] == 0 {
+			lowerTri[i][j] = a.Tris[k]
 		} else {
-			upperTri[i][j] = a.tris[k]
+			upperTri[i][j] = a.Tris[k]
 		}
 	}
 
@@ -256,9 +204,9 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, err
 		}
-		n := len(a.vIdx[i])
+		n := len(a.VIdx[i])
 		isOuter := i == 0
-		vIdx, wIdx := a.vIdx[i], a.wIdx[i]
+		vIdx, wIdx := a.VIdx[i], a.WIdx[i]
 
 		rimBottom := make([]*Edge, n)
 		rimTop := make([]*Edge, n)
@@ -266,16 +214,16 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 		rungE := make([]*Edge, n)
 		for j := range n {
 			jn := (j + 1) % n
-			rimBottom[j] = loftEdge(vertexObjs, a.verts, vIdx[j], vIdx[jn], isOuter, a.delta)
-			rimTop[j] = loftEdge(vertexObjs, a.verts, wIdx[j], wIdx[jn], isOuter, a.delta)
+			rimBottom[j] = loftEdge(vertexObjs, a.Verts, vIdx[j], vIdx[jn], isOuter, a.Delta)
+			rimTop[j] = loftEdge(vertexObjs, a.Verts, wIdx[j], wIdx[jn], isOuter, a.Delta)
 		}
 		for j := range n {
 			jn := (j + 1) % n
 			jp := (j - 1 + n) % n
-			rungConvex := loftmesh.JunctionConvex(a.verts, lowerTri[i][jp], upperTri[i][j], vIdx[j], wIdx[j])
-			rungE[j] = loftEdge(vertexObjs, a.verts, vIdx[j], wIdx[j], rungConvex, a.delta)
-			diagConvex := loftmesh.JunctionConvex(a.verts, lowerTri[i][j], upperTri[i][j], vIdx[j], wIdx[jn])
-			diagE[j] = loftEdge(vertexObjs, a.verts, vIdx[j], wIdx[jn], diagConvex, a.delta)
+			rungConvex := loftmesh.JunctionConvex(a.Verts, lowerTri[i][jp], upperTri[i][j], vIdx[j], wIdx[j])
+			rungE[j] = loftEdge(vertexObjs, a.Verts, vIdx[j], wIdx[j], rungConvex, a.Delta)
+			diagConvex := loftmesh.JunctionConvex(a.Verts, lowerTri[i][j], upperTri[i][j], vIdx[j], wIdx[jn])
+			diagE[j] = loftEdge(vertexObjs, a.Verts, vIdx[j], wIdx[jn], diagConvex, a.Delta)
 		}
 
 		capStartCo := make([]coedge, n)
@@ -283,7 +231,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 		for j := range n {
 			jn := (j + 1) % n
 
-			lowerFace, err := buildLoftWallFace(body, ref, a.verts, lowerTri[i][j], i, j, 0, a.delta)
+			lowerFace, err := buildLoftWallFace(body, ref, a.Verts, lowerTri[i][j], i, j, 0, a.Delta)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -291,10 +239,10 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 				{edge: rimBottom[j], forward: true},
 				{edge: rungE[jn], forward: true},
 				{edge: diagE[j], forward: false},
-			}, a.reversed)}}
+			}, a.Reversed)}}
 			walls = append(walls, lowerFace)
 
-			upperFace, err := buildLoftWallFace(body, ref, a.verts, upperTri[i][j], i, j, 1, a.delta)
+			upperFace, err := buildLoftWallFace(body, ref, a.Verts, upperTri[i][j], i, j, 1, a.Delta)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -302,21 +250,21 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 				{edge: diagE[j], forward: true},
 				{edge: rimTop[j], forward: false},
 				{edge: rungE[j], forward: false},
-			}, a.reversed)}}
+			}, a.Reversed)}}
 			walls = append(walls, upperFace)
 
 			capStartCo[n-1-j] = coedge{edge: rimBottom[j], forward: false}
 			capEndCo[j] = coedge{edge: rimTop[j], forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{outer: isOuter, coedges: loftLoopCoedges(capStartCo, a.reversed)})
-		capEndLoops = append(capEndLoops, &Loop{outer: isOuter, coedges: loftLoopCoedges(capEndCo, a.reversed)})
+		capStartLoops = append(capStartLoops, &Loop{outer: isOuter, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
+		capEndLoops = append(capEndLoops, &Loop{outer: isOuter, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
 	}
 
-	capStartSurf, err := planeFromTriangle(a.verts, a.tris[a.walls])
+	capStartSurf, err := planeFromTriangle(a.Verts, a.Tris[a.Walls])
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	capEndSurf, err := planeFromTriangle(a.verts, a.tris[a.walls+a.capStartCount])
+	capEndSurf, err := planeFromTriangle(a.Verts, a.Tris[a.Walls+a.CapStartCount])
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -324,11 +272,11 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 	cap1Val, _ := cap1Rat.Float64()
 	capStartBound := proofarith.RationalFloatError(cap0Rat, cap0Val)
 	capEndBound := proofarith.RationalFloatError(cap1Rat, cap1Val)
-	if a.delta > 0 {
-		capStartTris := a.tris[a.walls : a.walls+a.capStartCount]
-		capEndTris := a.tris[a.walls+a.capStartCount:]
-		capStartBound = proofbound.AbsSumUpper(capStartBound, loftmesh.CapTriangleAreaAllow(a.verts, capStartTris, a.delta))
-		capEndBound = proofbound.AbsSumUpper(capEndBound, loftmesh.CapTriangleAreaAllow(a.verts, capEndTris, a.delta))
+	if a.Delta > 0 {
+		capStartTris := a.Tris[a.Walls : a.Walls+a.CapStartCount]
+		capEndTris := a.Tris[a.Walls+a.CapStartCount:]
+		capStartBound = proofbound.AbsSumUpper(capStartBound, loftmesh.CapTriangleAreaAllow(a.Verts, capStartTris, a.Delta))
+		capEndBound = proofbound.AbsSumUpper(capEndBound, loftmesh.CapTriangleAreaAllow(a.Verts, capEndTris, a.Delta))
 	}
 	capStart := &Face{
 		surface:       capStartSurf,
@@ -337,7 +285,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 		body:          body,
 		area:          cap0Val,
 		areaBound:     capStartBound,
-		axialDelta:    a.delta,
+		axialDelta:    a.Delta,
 		hasAxialDelta: true,
 	}
 	capEnd := &Face{
@@ -347,7 +295,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 		body:          body,
 		area:          cap1Val,
 		areaBound:     capEndBound,
-		axialDelta:    a.delta,
+		axialDelta:    a.Delta,
 		hasAxialDelta: true,
 	}
 

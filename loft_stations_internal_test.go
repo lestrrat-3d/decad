@@ -778,7 +778,7 @@ func TestLoftStationCapFitsTheAuditTriangleCeiling(t *testing.T) {
 		require.NoError(t, err)
 		a, err := assembleLoft(t.Context(), pairs, mustFrame(t, pl0), mustFrame(t, pl1), pl0, r3.Identity(), stationRound)
 		require.NoError(t, err)
-		return len(a.tris)
+		return len(a.Tris)
 	}
 
 	// F = 4*Σstations + 4H - 4, measured on the built triangle set.

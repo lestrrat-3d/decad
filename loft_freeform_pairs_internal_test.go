@@ -169,14 +169,14 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 				continue
 			}
 			jn := (j + 1) % n
-			vLo, vHi := a.verts[a.vIdx[i][j]], a.verts[a.vIdx[i][jn]]
-			wLo, wHi := a.verts[a.wIdx[i][j]], a.verts[a.wIdx[i][jn]]
+			vLo, vHi := a.Verts[a.VIdx[i][j]], a.Verts[a.VIdx[i][jn]]
+			wLo, wHi := a.Verts[a.WIdx[i][j]], a.Verts[a.WIdx[i][jn]]
 			require.Equal(t, vHi.Sub(vLo), wHi.Sub(wLo), "cell %d/%d must be untwisted for the closed form", i, j)
 			require.Equal(t, r3.NewVec(0, 0, wedgeHeight), wLo.Sub(vLo))
 			measured := sampledTangentEnergy(t, samples, p.V[j], p.V[jn])
 			require.InEpsilon(t, measured, p.TangentEnergyV[j], 1e-3, "cell %d: side 0's energy", j)
 			require.InEpsilon(t, measured, p.TangentEnergyW[j], 1e-3, "cell %d: side 1's energy", j)
-			md := loftmesh.ChordCellDeltaUpper(p.MatchedDelta[j], a.delta)
+			md := loftmesh.ChordCellDeltaUpper(p.MatchedDelta[j], a.Delta)
 			c := vHi.Sub(vLo).Len()
 			energyRuled := untwistedRuledLeg(c, wedgeHeight, md, p.ArcUpperV[j], p.ArcUpperW[j], measured, measured)
 			infRuled := untwistedRuledLeg(c, wedgeHeight, md, p.ArcUpperV[j], p.ArcUpperW[j], math.Inf(1), math.Inf(1))
@@ -218,7 +218,7 @@ func untwistedRuledLeg(c, h, md, arcA, arcB, energyA, energyB float64) float64 {
 // loftWedgeAreaRebuild replays evalLoft's own steps from the records to the
 // Area reading. With dropEnergy set, every cell's tangent energy is +Inf, the
 // reading a build with no energy proof publishes.
-func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measurement, []loftmesh.LoopPair, loftAssembly) {
+func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measurement, []loftmesh.LoopPair, loftmesh.Assembly) {
 	t.Helper()
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, loftRecordAreas(t, pl.profile0, pl.profile1), work0, work1)
@@ -236,8 +236,8 @@ func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measur
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
 	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
-	return mass.area(loftmesh.CapPolygonAreaRat(a.pts0, a.loopIdx0),
-		loftmesh.CapPolygonAreaRat(a.pts1, a.loopIdx1)), pairs, a
+	return mass.area(loftmesh.CapPolygonAreaRat(a.Pts0, a.LoopIdx0),
+		loftmesh.CapPolygonAreaRat(a.Pts1, a.LoopIdx1)), pairs, a
 }
 
 // wedgeLoopSamples samples the recorded outer loop in walk order: a LineSeg

@@ -716,12 +716,12 @@ func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 func chordedWedgeTriangles(t testing.TB, pts [][2]float64) ([]r3.Vec, [][3]int) {
 	t.Helper()
 	a := chordedWedgeAssembly(t, pts)
-	return a.verts, a.tris
+	return a.Verts, a.Tris
 }
 
 // chordedWedgeAssembly is chordedWedgeTriangles' whole assembly, with the
 // wall/cap split and loops the structured audit reads.
-func chordedWedgeAssembly(t testing.TB, pts [][2]float64) loftAssembly {
+func chordedWedgeAssembly(t testing.TB, pts [][2]float64) loftmesh.Assembly {
 	t.Helper()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := chordedWedgeProfile(t, w, base, pts)

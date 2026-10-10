@@ -23,7 +23,7 @@ import (
 // loftMassBuild is one build's accumulator and the inputs it was folded from.
 type loftMassBuild struct {
 	mass                *loftMassAccumulator
-	a                   loftAssembly
+	a                   loftmesh.Assembly
 	pairs               []loftmesh.LoopPair
 	sectionDelta        float64
 	sectionMatchedDelta float64
@@ -34,7 +34,7 @@ func (b loftMassBuild) matchedDelta() float64 {
 	if b.sectionDelta <= 0 && b.sectionMatchedDelta <= 0 {
 		return 0
 	}
-	return loftmesh.ChordCellDeltaUpper(b.sectionMatchedDelta, b.a.delta)
+	return loftmesh.ChordCellDeltaUpper(b.sectionMatchedDelta, b.a.Delta)
 }
 
 // stationsPerLoop is the number of wall cells on the outer loop.
@@ -174,13 +174,13 @@ func TestLoftVolumeResidualIsPerCellWallLegPlusSkirt(t *testing.T) {
 			m, a := b.mass, b.a
 			require.Positive(t, b.sectionDelta, "both arcs are chorded")
 			if tc.zeroDelta {
-				require.Zero(t, a.delta, "every station is a pinned exact end")
+				require.Zero(t, a.Delta, "every station is a pinned exact end")
 			} else {
-				require.Positive(t, a.delta)
+				require.Positive(t, a.Delta)
 			}
 			if tc.target == 0 {
 				body := evalLoftFixture(t, tc.pl)
-				require.Equal(t, body.volume, m.volume(a.verts, a.tris), "the helper reads the build evalLoft publishes")
+				require.Equal(t, body.volume, m.volume(a.Verts, a.Tris), "the helper reads the build evalLoft publishes")
 			}
 
 			// The per-cell wall leg and the every-cell seam perimeter, in the
@@ -190,8 +190,8 @@ func TestLoftVolumeResidualIsPerCellWallLegPlusSkirt(t *testing.T) {
 				n := len(p.V)
 				for j := range n {
 					jn := (j + 1) % n
-					vLo, vHi := a.verts[a.vIdx[i][j]], a.verts[a.vIdx[i][jn]]
-					wLo, wHi := a.verts[a.wIdx[i][j]], a.verts[a.wIdx[i][jn]]
+					vLo, vHi := a.Verts[a.VIdx[i][j]], a.Verts[a.VIdx[i][jn]]
+					wLo, wHi := a.Verts[a.WIdx[i][j]], a.Verts[a.WIdx[i][jn]]
 					perimeter = proofbound.AbsSumUpper(perimeter,
 						math.Max(p.ArcUpperV[j], proofbound.CellSpanUpper(vLo, vHi)),
 						math.Max(p.ArcUpperW[j], proofbound.CellSpanUpper(wLo, wHi)),
@@ -199,14 +199,14 @@ func TestLoftVolumeResidualIsPerCellWallLegPlusSkirt(t *testing.T) {
 					if p.Faceted[j] && p.MatchedDelta[j] <= 0 {
 						continue
 					}
-					cellMatched := loftmesh.ChordCellDeltaUpper(p.MatchedDelta[j], a.delta)
+					cellMatched := loftmesh.ChordCellDeltaUpper(p.MatchedDelta[j], a.Delta)
 					cellWall := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, p.ArcUpperV[j], p.ArcUpperW[j], cellMatched)
 					wallLeg = proofbound.AbsSumUpper(wallLeg, proofbound.ProductUpper(cellMatched, cellWall))
 				}
 			}
 			skirt := 0.0
-			if a.delta > 0 {
-				skirt = proofbound.ProductUpper(proofbound.ProductUpper(b.matchedDelta(), a.delta), perimeter)
+			if a.Delta > 0 {
+				skirt = proofbound.ProductUpper(proofbound.ProductUpper(b.matchedDelta(), a.Delta), perimeter)
 			}
 			require.Equal(t, wallLeg, m.Chorded.WallLeg)
 			require.Equal(t, skirt, m.Chorded.SkirtLeg)
@@ -221,12 +221,12 @@ func TestLoftVolumeResidualIsPerCellWallLegPlusSkirt(t *testing.T) {
 			vol := heldRulingVolume(m)
 			value, _ := vol.Float64()
 			allow := 0.0
-			if a.delta > 0 {
-				allow = proofbound.SweptVolumeAllow(a.delta, proofbound.PerturbedAreaUpper(a.verts, a.tris, a.delta))
+			if a.Delta > 0 {
+				allow = proofbound.SweptVolumeAllow(a.Delta, proofbound.PerturbedAreaUpper(a.Verts, a.Tris, a.Delta))
 			}
 			allow = proofbound.AbsSumUpper(allow, wallLeg, skirt)
 			want := proofbound.AbsSumUpper(proofarith.RationalFloatError(vol, value), allow)
-			got := m.volume(a.verts, a.tris)
+			got := m.volume(a.Verts, a.Tris)
 			require.Equal(t, value, got.Value.Base())
 			require.Equal(t, math.Float64bits(want), math.Float64bits(got.Bound.Base()),
 				"Volume.Bound is rounding + sweptLeg + wallLeg + skirtLeg (want %g, got %g)", want, got.Bound.Base())
@@ -266,7 +266,7 @@ func TestLoftVolumeBoundEnclosesRefinedRing(t *testing.T) {
 				b := loftMassAtTarget(t, pl, target)
 				perArc := b.stationsPerLoop() / 4
 				seen[perArc] = struct{}{}
-				got := b.mass.volume(b.a.verts, b.a.tris)
+				got := b.mass.volume(b.a.Verts, b.a.Tris)
 				requireEnclosesRat(t, got.Value.Base(), got.Bound.Base(), lo, hi, tc.name)
 				t.Logf("%s m=%d: value=%.12g bound=%.4g", tc.name, perArc, got.Value.Base(), got.Bound.Base())
 			}
@@ -314,7 +314,7 @@ func TestLoftAreaCapTubeIsPerCell(t *testing.T) {
 					walks++
 					perimV = proofbound.AbsSumUpper(perimV, p.ArcUpperV[j])
 					perimW = proofbound.AbsSumUpper(perimW, p.ArcUpperW[j])
-					cellMatched := loftmesh.ChordCellDeltaUpper(p.MatchedDelta[j], b.a.delta)
+					cellMatched := loftmesh.ChordCellDeltaUpper(p.MatchedDelta[j], b.a.Delta)
 					joint := proofbound.ProductUpper(piUp, proofbound.ProductUpper(cellMatched, cellMatched))
 					twice := proofbound.ProductUpper(2, cellMatched)
 					tube = proofbound.AbsSumUpper(tube,
@@ -367,10 +367,10 @@ func TestLoftPlacedVolumeNeedsTheVertexSweep(t *testing.T) {
 	b := loftMassAtTarget(t, pl, 0)
 	m := b.mass
 	require.Positive(t, b.sectionDelta, "the corner arc is chorded")
-	require.Positive(t, b.a.delta, "the placement rounds the held vertices")
+	require.Positive(t, b.a.Delta, "the placement rounds the held vertices")
 	body := evalLoftFixture(t, pl)
 	got := body.volume
-	require.Equal(t, got, m.volume(b.a.verts, b.a.tris))
+	require.Equal(t, got, m.volume(b.a.Verts, b.a.Tris))
 
 	// V = h·(100 − r²·(1 − π/4)), enclosed through π's bracket.
 	rr := new(big.Rat).Mul(proofarith.FloatRat(r), proofarith.FloatRat(r))

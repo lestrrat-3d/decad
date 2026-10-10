@@ -163,7 +163,7 @@ func lobeTrueBoundary(bulgeOffset, twist float64, perArc int) []r3.Vec {
 	return out
 }
 
-func loftCentroidRebuild(t *testing.T, pl loftPayload) (*loftMassAccumulator, loftAssembly, float64) {
+func loftCentroidRebuild(t *testing.T, pl loftPayload) (*loftMassAccumulator, loftmesh.Assembly, float64) {
 	t.Helper()
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
@@ -174,7 +174,7 @@ func loftCentroidRebuild(t *testing.T, pl loftPayload) (*loftMassAccumulator, lo
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
 	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
-	matchedDelta := loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.delta)
+	matchedDelta := loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.Delta)
 	return mass, a, matchedDelta
 }
 
@@ -187,26 +187,26 @@ func loftCentroidRebuild(t *testing.T, pl loftPayload) (*loftMassAccumulator, lo
 // form. It omits the coordinate
 // rounding, so it is a LOWER bound on what that form published, which makes
 // "the shift form is smaller" the stronger claim.
-func retiredAnchorCentroidBound(t *testing.T, mass *loftMassAccumulator, a loftAssembly, anchor r3.Vec, matchedDelta float64, centroid r3.Vec) float64 {
+func retiredAnchorCentroidBound(t *testing.T, mass *loftMassAccumulator, a loftmesh.Assembly, anchor r3.Vec, matchedDelta float64, centroid r3.Vec) float64 {
 	t.Helper()
 	coordUpper := 0.0
-	for _, tri := range a.tris {
+	for _, tri := range a.Tris {
 		for _, idx := range tri {
-			d := a.verts[idx].Sub(anchor)
+			d := a.Verts[idx].Sub(anchor)
 			coordUpper = max(coordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
 		}
 	}
 	epsV, epsM := 0.0, 0.0
-	if a.delta > 0 {
-		areaUpper := proofbound.PerturbedAreaUpper(a.verts, a.tris, a.delta)
-		epsV = proofbound.SweptVolumeAllow(a.delta, areaUpper)
-		epsM = proofbound.SweptMomentAllow(a.delta, areaUpper, coordUpper+a.delta)
+	if a.Delta > 0 {
+		areaUpper := proofbound.PerturbedAreaUpper(a.Verts, a.Tris, a.Delta)
+		epsV = proofbound.SweptVolumeAllow(a.Delta, areaUpper)
+		epsM = proofbound.SweptMomentAllow(a.Delta, areaUpper, coordUpper+a.Delta)
 	}
 	c := mass.Chorded
 	epsV = proofbound.AbsSumUpper(epsV, c.WallLeg, c.SkirtLeg)
 	epsM = proofbound.AbsSumUpper(epsM, proofbound.ChordedBoundaryMomentResidualAllow(
 		matchedDelta, c.WallAreaUpper, 0, 0, c.MaxTwistOffsetUpper, coordUpper))
-	vol := mass.volume(a.verts, a.tris)
+	vol := mass.volume(a.Verts, a.Tris)
 	clearance := math.Nextafter(math.Abs(vol.Value.Base())-epsV, math.Inf(-1))
 	require.Positive(t, clearance, "the retired form must have had a clearance to compare against")
 	perCoord := 0.0
@@ -276,11 +276,11 @@ func TestLoftCentroidShiftFormEnclosesTwoArcLobe(t *testing.T) {
 			require.LessOrEqual(t, gap, cen.Bound.Base(), "the exact centroid must lie inside the published bound")
 
 			mass, a, matchedDelta := loftCentroidRebuild(t, lp)
-			rebuilt, err := mass.centroid(a.verts, a.tris)
+			rebuilt, err := mass.centroid(a.Verts, a.Tris)
 			require.NoError(t, err)
 			require.Equal(t, cen, rebuilt, "the rebuild must reproduce the published centroid")
 
-			radius := mass.CentroidRadius(a.verts, a.tris, cen.Value, 0)
+			radius := mass.CentroidRadius(a.Verts, a.Tris, cen.Value, 0)
 			farthest := 0.0
 			for _, p := range boundary {
 				farthest = math.Max(farthest, p.Sub(cen.Value).Len())
@@ -428,11 +428,11 @@ func TestLoftCentroidToothBoundReadsToothSize(t *testing.T) {
 
 			lp := body.payload.(loftPayload)
 			mass, a, matchedDelta := loftCentroidRebuild(t, lp)
-			radius := mass.CentroidRadius(a.verts, a.tris, cen.Value, 0)
+			radius := mass.CentroidRadius(a.Verts, a.Tris, cen.Value, 0)
 			retired := retiredAnchorCentroidBound(t, mass, a, lp.xform.Apply(lp.plane0.Origin), matchedDelta, cen.Value)
 			retiredRatio, _ := loftCentroidRatio(t, body, retired)
 			anchorReach := 0.0
-			for _, v := range a.verts {
+			for _, v := range a.Verts {
 				anchorReach = math.Max(anchorReach, v.Sub(lp.xform.Apply(lp.plane0.Origin)).Len())
 			}
 			t.Logf("R_c %.4g, tooth diameter %.4g, anchor reach %.4g; ratio %.4g, retired anchor form ratio %.4g",

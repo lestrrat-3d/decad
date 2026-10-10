@@ -13,7 +13,14 @@ import (
 
 // Assembly is the held vertex and triangle set plus the indices consumed by
 // the root topology builder. Tris begins with wall triangles, then the first
-// cap and the second cap in that order.
+// cap and the second cap in that order. Cell and Side parallel the wall
+// triangles: Cell[k] names the loop and wall cell, while Side[k] selects its
+// lower or upper triangle. VIdx and WIdx index the paired section stations.
+// Pts0, Pts1, LoopIdx0 and LoopIdx1 are the cap polygons that were actually
+// triangulated, so the published cap areas read the same points as the mesh.
+// Reversed records the whole-shell winding flip; the root topology builder
+// applies it to every face walk. Delta bounds each held vertex's displacement
+// from the exact placed image of the recorded section.
 type Assembly struct {
 	Verts              []r3.Vec
 	Tris               [][3]int

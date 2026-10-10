@@ -56,12 +56,12 @@ type loftAuditFixture struct {
 	structure loftmesh.LoftAuditStructure
 }
 
-func loftAuditFixtureOf(a loftAssembly) loftAuditFixture {
+func loftAuditFixtureOf(a loftmesh.Assembly) loftAuditFixture {
 	return loftAuditFixture{
-		verts: slices.Clone(a.verts),
-		tris:  slices.Clone(a.tris),
+		verts: slices.Clone(a.Verts),
+		tris:  slices.Clone(a.Tris),
 		structure: loftmesh.LoftAuditStructure{
-			Walls: a.walls, CapStartCount: a.capStartCount, Loops0: a.vIdx, Loops1: a.wIdx,
+			Walls: a.Walls, CapStartCount: a.CapStartCount, Loops0: a.VIdx, Loops1: a.WIdx,
 		},
 	}
 }
@@ -201,9 +201,9 @@ func TestLoftSweepEnumeratesEveryTouchingPair(t *testing.T) {
 	}
 	var fixtures []fixture
 	gear := loftGearAssembly(t, loftGearZ(8), 1)
-	fixtures = append(fixtures, fixture{"gear tooth z=8", gear.verts, gear.tris})
+	fixtures = append(fixtures, fixture{"gear tooth z=8", gear.Verts, gear.Tris})
 	wedge := chordedWedgeAssembly(t, wedgeSplinePoints(wedgeFitSpline(t), 24))
-	fixtures = append(fixtures, fixture{"chorded wedge", wedge.verts, wedge.tris})
+	fixtures = append(fixtures, fixture{"chorded wedge", wedge.Verts, wedge.Tris})
 	for _, row := range []struct {
 		name string
 		make func() ([]r3.Vec, [][3]int)

@@ -128,7 +128,7 @@ func loftGearSketches(t *testing.T, g loftGear, count int) (*sketch.Sketch, *ske
 
 // loftGearAssembly runs evalLoft's prefix up to assembleLoft over count teeth
 // of g and returns the assembled triangle set with its structure.
-func loftGearAssembly(t *testing.T, g loftGear, count int) loftAssembly {
+func loftGearAssembly(t *testing.T, g loftGear, count int) loftmesh.Assembly {
 	t.Helper()
 	s0, p0, s1, p1 := loftGearSketches(t, g, count)
 	profile0, plane0, _, err := recordProfile(s0, p0)
