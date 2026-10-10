@@ -292,16 +292,16 @@ func bodySymmetryAxis(b *Body) (point, dir motionbound.RatVec, ok bool) {
 	if rp, isRevolve := b.payload.(revolvePayload); isRevolve {
 		if !b.solid || b.kind != BodySolid || rp.surfaceResult || !rp.full || rp.sectionDelta != 0 ||
 			!pairbox.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) || !signedAxisTransform(rp.xform) ||
-			!proofbound.FiniteVec(rp.frame.Origin()) || !finiteMeasurementValues(rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV) ||
-			rp.ax.aUBound != 0 || rp.ax.aVBound != 0 || rp.ax.dUBound != 0 || rp.ax.dVBound != 0 ||
-			(rp.ax.dU == 0 && rp.ax.dV == 0) {
+			!proofbound.FiniteVec(rp.frame.Origin()) || !finiteMeasurementValues(rp.ax.AU, rp.ax.AV, rp.ax.DU, rp.ax.DV) ||
+			rp.ax.AUBound != 0 || rp.ax.AVBound != 0 || rp.ax.DUBound != 0 || rp.ax.DVBound != 0 ||
+			(rp.ax.DU == 0 && rp.ax.DV == 0) {
 			return motionbound.RatVec{}, motionbound.RatVec{}, false
 		}
 		anchor := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()), proofarith.DvAdd(
-			proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.aU)),
-			proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.aV))))
-		w := proofarith.DvAdd(proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.dU)),
-			proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.dV)))
+			proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.AU)),
+			proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.AV))))
+		w := proofarith.DvAdd(proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.DU)),
+			proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.DV)))
 		far := proofarith.DvTransform(rp.xform, proofarith.DvAdd(anchor, w))
 		anchor = proofarith.DvTransform(rp.xform, anchor)
 		var d motionbound.RatVec

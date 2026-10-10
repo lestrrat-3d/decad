@@ -108,7 +108,7 @@ func displacedRevolve(t *testing.T, ref *Body, shift, grow float64) (*Body, floa
 	moved, most := movedProfile(t, rp.profile, k, shift, grow)
 	ax, err := revolveBlendAxis(t.Context(), rp, moved, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	rp.profile, rp.ax, rp.radialProof = moved, ax, ax.radialProof
+	rp.profile, rp.ax, rp.radialProof = moved, ax, ax.RadialProof
 	rp.sectionDelta = 2 * (revolveSectionScale*most + math.Abs(shift))
 	if shift != 0 {
 		rp.sectionDelta = 2 * math.Abs(shift)

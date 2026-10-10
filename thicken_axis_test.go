@@ -61,11 +61,11 @@ func TestThickenRadialRefusesBoundedAxis(t *testing.T) {
 		ax   axisFrame
 		want string
 	}{
-		{"bounded anchor", axisFrame{dU: 0, dV: 1, aUBound: math.Ldexp(1, -40)},
+		{"bounded anchor", axisFrame{DU: 0, DV: 1, AUBound: math.Ldexp(1, -40)},
 			"not stated exactly in the sketch plane"},
-		{"bounded direction", axisFrame{dU: 0, dV: 1, dVBound: math.Ldexp(1, -40)},
+		{"bounded direction", axisFrame{DU: 0, DV: 1, DVBound: math.Ldexp(1, -40)},
 			"not stated exactly in the sketch plane"},
-		{"off a plane axis", axisFrame{dU: 0.6, dV: 0.8},
+		{"off a plane axis", axisFrame{DU: 0.6, DV: 0.8},
 			"not parallel to a recorded plane axis"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

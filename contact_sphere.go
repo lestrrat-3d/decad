@@ -55,9 +55,9 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 		len(rp.profile.Outer.Segments) != 2 ||
 		!proofbound.FiniteVec(rp.frame.Origin()) ||
 		!box.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
-		rp.ax.dU != 1 || rp.ax.dV != 0 ||
-		rp.ax.aUBound != 0 || rp.ax.aVBound != 0 ||
-		rp.ax.dUBound != 0 || rp.ax.dVBound != 0 {
+		rp.ax.DU != 1 || rp.ax.DV != 0 ||
+		rp.ax.AUBound != 0 || rp.ax.AVBound != 0 ||
+		rp.ax.DUBound != 0 || rp.ax.DVBound != 0 {
 		return sourceSphereContactProof{}, false
 	}
 	var arc arcSeg
@@ -76,7 +76,7 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	sameEnds := line.Start == arc.Start && line.End == arc.End ||
 		line.Start == arc.End && line.End == arc.Start
 	if !arcSeen || !lineSeen || arc.TStart != 0 || arc.TEnd != 1 ||
-		line.TStart != 0 || line.TEnd != 1 || arc.Center.V != rp.ax.aV ||
+		line.TStart != 0 || line.TEnd != 1 || arc.Center.V != rp.ax.AV ||
 		arc.Start.V != arc.Center.V || arc.End.V != arc.Center.V ||
 		arc.Start.U <= arc.Center.U || arc.End.U >= arc.Center.U ||
 		!sameEnds ||

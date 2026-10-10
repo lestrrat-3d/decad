@@ -47,7 +47,7 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 			rp := revolvePayload{
 				profile: test.profile,
 				frame:   axisAlignedFrame(t),
-				ax:      axisFrame{dU: 1},
+				ax:      axisFrame{DU: 1},
 				phi1:    test.phi1,
 				full:    test.full,
 				den:     test.den,

@@ -166,11 +166,11 @@ func massRevolveRecord(rp revolvePayload) massmoment.RevolveRecord {
 	return massmoment.RevolveRecord{
 		Profile: rp.profile, Frame: rp.frame, Transform: rp.xform,
 		Den: rp.den, Phi0: rp.phi0, Phi1: rp.phi1,
-		AU: rp.ax.aU, AV: rp.ax.aV, DU: rp.ax.dU, DV: rp.ax.dV,
-		AUBound: rp.ax.aUBound, AVBound: rp.ax.aVBound,
-		DUBound: rp.ax.dUBound, DVBound: rp.ax.dVBound,
-		SectionDelta: rp.sectionDelta, RadialAdmitAllow: rp.ax.radialAdmitAllow,
-		AxisSnap: rp.ax.snap != (regionSnapAllow{}),
+		AU: rp.ax.AU, AV: rp.ax.AV, DU: rp.ax.DU, DV: rp.ax.DV,
+		AUBound: rp.ax.AUBound, AVBound: rp.ax.AVBound,
+		DUBound: rp.ax.DUBound, DVBound: rp.ax.DVBound,
+		SectionDelta: rp.sectionDelta, RadialAdmitAllow: rp.ax.RadialAdmitAllow,
+		AxisSnap: rp.ax.Snap != (regionSnapAllow{}),
 	}
 }
 

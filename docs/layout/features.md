@@ -50,7 +50,7 @@ The rules for rows live in `docs/layout.md`.
 | `prism_extent.go` | Adapts prism extents and box readings. See evaluator §5. |
 | `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
-| `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
+| `revolve_axis.go` | Adapts the public axis and bounded profile scan to `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_build.go` | Builds a revolve's solid or sheet body and its measurements. See evaluator §6. |
 | `revolve_extent.go` | Adapts revolve extent and box readings to `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_denotation.go` | Payload sweep bounds over `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |

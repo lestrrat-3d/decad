@@ -149,14 +149,14 @@ func thickenRadialOf(ax axisFrame) (thickenRadial, error) {
 	// exact positive-radius claim. The direction is read first because it is
 	// what a caller can act on: a tilted axis also arrives with a rounded
 	// direction bound, and naming the tilt says which input to change.
-	along := (ax.dU == 0 && (ax.dV == 1 || ax.dV == -1)) || (ax.dV == 0 && (ax.dU == 1 || ax.dU == -1))
+	along := (ax.DU == 0 && (ax.DV == 1 || ax.DV == -1)) || (ax.DV == 0 && (ax.DU == 1 || ax.DU == -1))
 	if !along {
 		return thickenRadial{}, fmt.Errorf(`%w: the revolve axis is not parallel to a recorded plane axis`, ErrUnsupported)
 	}
-	if ax.aUBound != 0 || ax.aVBound != 0 || ax.dUBound != 0 || ax.dVBound != 0 {
+	if ax.AUBound != 0 || ax.AVBound != 0 || ax.DUBound != 0 || ax.DVBound != 0 {
 		return thickenRadial{}, fmt.Errorf(`%w: the revolve axis is not stated exactly in the sketch plane`, ErrUnsupported)
 	}
-	aU, aV, dU, dV := proofarith.FloatRat(ax.aU), proofarith.FloatRat(ax.aV), proofarith.FloatRat(ax.dU), proofarith.FloatRat(ax.dV)
+	aU, aV, dU, dV := proofarith.FloatRat(ax.AU), proofarith.FloatRat(ax.AV), proofarith.FloatRat(ax.DU), proofarith.FloatRat(ax.DV)
 	if aU == nil || aV == nil || dU == nil || dV == nil {
 		return thickenRadial{}, fmt.Errorf(`%w: the revolve axis has a non-finite plane-local coordinate`, ErrUnsupported)
 	}
@@ -196,7 +196,7 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	// over the region, and the region changed.
 	work := freeform.NewFreeformWork()
 	ax, axisSide, err := resolveAxisSide(ctx, annulus, revolveaxis.Line2{
-		AU: rp.ax.aU, AV: rp.ax.aV, DU: rp.ax.dU, DV: rp.ax.dV,
+		AU: rp.ax.AU, AV: rp.ax.AV, DU: rp.ax.DU, DV: rp.ax.DV,
 	}, work)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the thicken offset's revolve axis side is unresolved: %v`, ErrUnsupported, err)
@@ -297,7 +297,7 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	// here rather than inherited from the shell's: every one of them is an
 	// integral over the region, and the shell had no region at all.
 	ax, axisSide, err := resolveAxisSide(ctx, section, revolveaxis.Line2{
-		AU: cp.ax.aU, AV: cp.ax.aV, DU: cp.ax.dU, DV: cp.ax.dV,
+		AU: cp.ax.AU, AV: cp.ax.AV, DU: cp.ax.DU, DV: cp.ax.DV,
 	}, work)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the thicken offset's revolve axis side is unresolved: %v`, ErrUnsupported, err)

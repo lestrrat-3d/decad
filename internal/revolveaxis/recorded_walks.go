@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
@@ -25,6 +26,22 @@ type ResolvedWalks struct {
 }
 
 type WalkCharge func(sectionrecord.CurveSegment, survey2d.SegmentWalk) (survey2d.SegmentWalk, error)
+
+// AuditProfileAxisContact checks every recorded walk in input order and
+// charges any endpoint snapped onto the revolve axis.
+func AuditProfileAxisContact(ax Frame, profile momentinput.Profile, work *freeform.FreeformWork) (SnapAllow, error) {
+	loops := append([]sectionrecord.LoopRecord{profile.Outer}, profile.Holes...)
+	return AuditAxisContact(ax, loops, func(seg sectionrecord.CurveSegment) (survey2d.SegmentWalk, error) {
+		w, err := boundarywalk.WalkOf(seg, work)
+		if err != nil {
+			return survey2d.SegmentWalk{}, err
+		}
+		if err := boundarywalk.RequireAnalyticWalk(w, "the revolve axis-contact audit"); err != nil {
+			return survey2d.SegmentWalk{}, err
+		}
+		return w, nil
+	})
+}
 
 // ResolveLoop resolves a closed recorded loop for both the revolve body and
 // its tessellation. charge folds the payload's section displacement into each

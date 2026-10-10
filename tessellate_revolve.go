@@ -152,7 +152,7 @@ func tessellateRevolve(ctx context.Context, b *Body, rp revolvePayload, chord fl
 func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveplan.Resolution, error) {
 	return revolveplan.Resolve(ctx, revolveplan.ResolveInput{
 		Lift: rp.lift(), Loops: append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...),
-		Charge: rp.chargedWalk, SnapTol: rp.ax.snapTol, Transform: rp.xform,
+		Charge: rp.chargedWalk, SnapTol: rp.ax.SnapTol, Transform: rp.xform,
 	})
 }
 
@@ -182,7 +182,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 	if err != nil {
 		return nil, err
 	}
-	section, err := revolveaxis.ChargeOf(rp.profile, rp.ax.numeric(), rp.sectionDelta, freeform.NewFreeformWork())
+	section, err := revolveaxis.ChargeOf(rp.profile, rp.ax, rp.sectionDelta, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}

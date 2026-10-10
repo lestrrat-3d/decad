@@ -626,7 +626,7 @@ func TestRevolveBoxChargesTheBasisRounding(t *testing.T) {
 		c1 := rp.xform.ApplyDir(basis.E1).Dot(g)
 		coordUpper, err := momentinput.CoordinateUpper(rp.profile, freeform.NewFreeformWork(), nil)
 		require.NoError(t, err)
-		allow := revolveaxis.FrameRoundAllow(rp.ax.numeric(), rp.sectionDelta, rp.xform, g, basis,
+		allow := revolveaxis.FrameRoundAllow(rp.ax, rp.sectionDelta, rp.xform, g, basis,
 			rp.lift().BasisRound(basis), rp.xform.Apply(basis.A3).Dot(g), rp.xform.ApplyDir(basis.W).Dot(g),
 			rp.xform.ApplyDir(basis.E0).Dot(g), c1, coordUpper)
 		// E1's coefficient multiplies ρ ≤ 3, so its gap moves the extreme by

@@ -263,7 +263,7 @@ func TestRevolveJunctionReachesArcNaturalEnd(t *testing.T) {
 	require.True(t, ok, `got %T`, body.payload)
 	arc := onlyArc(t, rp.profile.Outer.Segments)
 	r, err := revolveaxis.ResolveLoop(t.Context(), rp.profile.Outer, freeform.NewFreeformWork(), "test",
-		rp.chargedWalk, rp.ax.snapTol)
+		rp.chargedWalk, rp.ax.SnapTol)
 	require.NoError(t, err)
 	js, _, err := revolvesampling.MeridianJunctions(rp.lift(), r)
 	require.NoError(t, err)

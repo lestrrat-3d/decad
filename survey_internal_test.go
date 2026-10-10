@@ -708,7 +708,7 @@ func TestRevolveLoopsCancellationIsBounded(t *testing.T) {
 	t.Parallel()
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "RevolveLoops"}
 	_, err := wallsurvey.RevolveLoops(proofbound.NewWorkBudget(ctx),
-		manySegmentProfile(proofbound.WorkPollInterval+64), axisFrame{dU: 1}.numeric())
+		manySegmentProfile(proofbound.WorkPollInterval+64), axisFrame{DU: 1})
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered, `profile segment resolution must poll inside RevolveLoops`)
 }
@@ -1114,11 +1114,11 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 	}, frame)
 	require.NoError(t, err)
 	ax := axisFrame{
-		aU: line.AU, aV: line.AV,
-		aUBound: line.AUBound, aVBound: line.AVBound,
-		dU: line.DU, dV: line.DV,
-		dUBound: line.DUBound, dVBound: line.DVBound,
-		snapTol: 1e-9,
+		AU: line.AU, AV: line.AV,
+		AUBound: line.AUBound, AVBound: line.AVBound,
+		DU: line.DU, DV: line.DV,
+		DUBound: line.DUBound, DVBound: line.DVBound,
+		SnapTol: 1e-9,
 	}
 
 	// 0.49999999999999994 is the float64 immediately below 0.5.
@@ -1131,7 +1131,7 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 		TEnd:   1,
 	}, nil)
 	require.NoError(t, err)
-	aw := ax.walk(w)
+	aw := ax.Walk(w)
 	require.Equal(t, aw.StartV, aw.EndV, `the two ends must hold the SAME radial coordinate for the tie to bite`)
 	require.Equal(t, 0.0, aw.StartVBound)
 	require.Greater(t, aw.EndVBound, 0.0)
@@ -1144,8 +1144,8 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 		require.NotNil(t, r.SetFloat64(x), `float64 %v must be finite to convert exactly`, x)
 		return r
 	}
-	truth := new(big.Rat).Sub(toRat(nearV), toRat(ax.aV))
-	require.Equal(t, -1, truth.Cmp(new(big.Rat).Sub(toRat(0.5), toRat(ax.aV))),
+	truth := new(big.Rat).Sub(toRat(nearV), toRat(ax.AV))
+	require.Equal(t, -1, truth.Cmp(new(big.Rat).Sub(toRat(0.5), toRat(ax.AV))),
 		`the end the held comparison discards must be the truly nearer one`)
 
 	encloses := func(q proofbound.BoundedScalar) bool {
