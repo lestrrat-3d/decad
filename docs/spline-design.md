@@ -889,6 +889,12 @@ de Casteljau pairs, so cost grows with depth and degree TOGETHER; a charge
 counting leaves alone admits a single high-degree span whose splits run for
 hours. Over budget is R7.
 
+**Cache a fixed-depth bracket only after its existing charge.**
+`FreeformArcLength` levies `FreeformBracketCost` before `SpanLengthBracket` reads
+the cache. Key every exact rational control coordinate, and return the stored
+two-sided bracket unchanged. A cache hit therefore consumes the same work
+budget and reports the same interval; bound the cache across documents.
+
 Consumers: a prism's side-face `Area` (`length × height`), `Edge.Length()`, and
 the setback R5 refuses. A revolve's lateral area is NOT one of them — length
 alone cannot determine it, and §6.1.1 supplies what it needs.
