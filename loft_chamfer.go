@@ -27,12 +27,17 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	d, dDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
 	if asym != nil || pl.surfaceResult || pl.xform != r3.Identity() ||
 		!sectionrecord.IdenticalRecord(pl.profile0, pl.profile1) ||
-		len(pl.profile0.Holes) != 1 || len(pl.profile0.Holes[0].Segments) != 1 ||
+		len(pl.profile0.Holes) > 1 ||
 		pl.frame0.U() != pl.frame1.U() || pl.frame0.V() != pl.frame1.V() {
 		return nil, false, nil
 	}
-	if _, ok := pl.profile0.Holes[0].Segments[0].(circleSeg); !ok {
-		return nil, false, nil
+	if len(pl.profile0.Holes) == 1 {
+		if len(pl.profile0.Holes[0].Segments) != 1 {
+			return nil, false, nil
+		}
+		if _, ok := pl.profile0.Holes[0].Segments[0].(circleSeg); !ok {
+			return nil, false, nil
+		}
 	}
 	for _, offset := range pl.alignment {
 		if offset != 0 {

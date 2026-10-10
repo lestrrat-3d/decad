@@ -13,7 +13,7 @@ import (
 
 // This notched polygon has two reflex corners. It exercises the loft-only
 // cap-band proof that contains their whole fan in a cap-height slab.
-func notchedHoledLoft(t *testing.T) *Body {
+func notchedLoft(t *testing.T, withBore bool) *Body {
 	t.Helper()
 	corners := []Point2{
 		pt(-5, -5), pt(5, -5), pt(5, 5), pt(1, 5),
@@ -26,11 +26,11 @@ func notchedHoledLoft(t *testing.T) *Body {
 	segs[0] = fitSplineSeg{Fit: point2ToRecordSlice([]Point2{
 		pt(-5, -5), pt(-2, -5.1), pt(2, -5.1), pt(5, -5),
 	}), TStart: 0, TEnd: 1}
-	profile := profileRecord{
-		Outer: loopRecord{Segments: segs},
-		Holes: []loopRecord{{Segments: []curveSegment{
+	profile := profileRecord{Outer: loopRecord{Segments: segs}}
+	if withBore {
+		profile.Holes = []loopRecord{{Segments: []curveSegment{
 			circleSeg{Center: pt(0, 0), Radius: units.Millimeters(1), CCW: false, TStart: 1, TEnd: 0},
-		}}},
+		}}}
 	}
 	p0, p1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 5))
 	pl := loftPayload{
@@ -67,7 +67,7 @@ func TestLoftCapBandMotionRequiresReflexVertexIndices(t *testing.T) {
 }
 
 func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
-	body := notchedHoledLoft(t)
+	body := notchedLoft(t, true)
 	source := body.payload.(loftPayload)
 	selector := Edges(OuterLoopOf(CapStart(body))).Or(OuterLoopOf(CapEnd(body)))
 	edges, err := selector.SelectEdges(body)
@@ -105,4 +105,44 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, placedMesh.BoundaryVerified())
 	require.True(t, placedMesh.VolumeVerified())
+}
+
+func TestLoftCapBandNoBoreChamfersBothOuterLoops(t *testing.T) {
+	body := notchedLoft(t, false)
+	body.doc.commit(body)
+	before, err := body.Volume()
+	require.NoError(t, err)
+	selector := Edges(OuterLoopOf(CapStart(body))).Or(OuterLoopOf(CapEnd(body)))
+	out, err := body.Chamfer(t.Context(), selector, units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, out.IsSolid())
+	require.Len(t, out.Shells(), 1)
+	band := out.payload.(capBlendPayload)
+	require.True(t, band.startLoops[0])
+	require.True(t, band.endLoops[0])
+	require.Empty(t, band.profile.Holes)
+	require.IsType(t, fitSplineSeg{}, band.loftSource.profile.Outer.Segments[0])
+	for _, cap := range [][2]FeatureRef{{CapStart(body), CapStart(out)}, {CapEnd(body), CapEnd(out)}} {
+		original, err := Faces(FaceCreatedBy(cap[0])).Exactly(1).SelectFaces(body)
+		require.NoError(t, err)
+		faces, err := Faces(FaceCreatedBy(cap[1])).Exactly(1).SelectFaces(out)
+		require.NoError(t, err)
+		require.Len(t, faces[0].Loops(), 1)
+		originalArea, err := original[0].Area()
+		require.NoError(t, err)
+		chamferedArea, err := faces[0].Area()
+		require.NoError(t, err)
+		require.Less(t, chamferedArea.Value.Base()+chamferedArea.Bound.Base(),
+			originalArea.Value.Base()-originalArea.Bound.Base())
+	}
+	after, err := out.Volume()
+	require.NoError(t, err)
+	require.Less(t, after.Value.Base()+after.Bound.Base(), before.Value.Base()-before.Bound.Base())
+	require.GreaterOrEqual(t, after.Bound.Base(), body.payload.(loftPayload).proof.VolSymDiff)
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Greater(t, mesh.volSymDiff, body.payload.(loftPayload).proof.VolSymDiff)
+	require.NoError(t, requireVolumeProvingPayload(t.Context(), out, 0))
 }

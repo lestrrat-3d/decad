@@ -10,8 +10,8 @@ import (
 )
 
 // proveLoftCapBandVolume covers the narrow loft cap band: straight held outer
-// walls, one unmodified circular bore, and the complete outer loop chamfered
-// on both caps. Outside the two cap-height slabs, the ordinary cap-blend
+// walls, zero or one unmodified circular bore, and the complete outer loop
+// chamfered on both caps. Outside the two cap-height slabs, the ordinary cap-blend
 // chord and vertex-motion proof applies. The reflex apex fans live wholly in
 // those slabs. Their unknown exact angular windows cannot escape the cylinder
 // containing both the analytic body and its held mesh, so the whole cylinder
@@ -20,10 +20,12 @@ import (
 // sample without charging the slab that contains it.
 func proveLoftCapBandVolume(ctx context.Context, mesh *Mesh, body *Body,
 	cbp capBlendPayload, lms []capBlendLoopMesh, motion []float64) error {
-	if len(lms) != 2 || !cbp.startLoops[0] || !cbp.endLoops[0] ||
-		len(cbp.startLoops) != 1 || len(cbp.endLoops) != 1 || !lms[1].whole ||
-		len(lms[1].walks) != 1 || !lms[1].walks[0].IsCircular() {
-		return fmt.Errorf("%w: loft cap-band volume proof requires two complete outer bands and one circular bore", ErrUnsupported)
+	if len(lms) < 1 || len(lms) > 2 || !cbp.startLoops[0] || !cbp.endLoops[0] ||
+		len(cbp.startLoops) != 1 || len(cbp.endLoops) != 1 {
+		return fmt.Errorf("%w: loft cap-band volume proof requires both complete outer bands and at most one bore", ErrUnsupported)
+	}
+	if len(lms) == 2 && (!lms[1].whole || len(lms[1].walks) != 1 || !lms[1].walks[0].IsCircular()) {
+		return fmt.Errorf("%w: loft cap-band volume proof requires an unchanged circular bore", ErrUnsupported)
 	}
 	for _, walk := range lms[0].walks {
 		if !walk.IsLine() {

@@ -11,7 +11,7 @@
 #   shard 2:  117.18s over 256 tests
 #   shard 3:  111.34s over 246 tests
 #   shard 4:  122.72s over 258 tests
-#   shard 5:   94.68s over 250 tests
+#   shard 5:   94.68s over 251 tests
 #
 0	0.00	TestXPTKeyDistinguishesCoordinates
 1	0.00	Example_decad_quickstart
@@ -1135,6 +1135,7 @@
 5	0.01	TestLinkageProjectionSegmentTerm
 5	0.00	TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit
 5	0.43	TestLoftAreaCapTubeIsPerCell
+5	0.00	TestLoftCapBandNoBoreChamfersBothOuterLoops
 5	4.03	TestLoftCapProofAgreesWithReference
 5	0.00	TestLoftCertifiedSagittaRefusesAnUnderivableRecord
 5	0.56	TestLoftChordCalibrationPinsFraction
