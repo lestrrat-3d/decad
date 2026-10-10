@@ -473,7 +473,9 @@ func linkageRunOf(t *testing.T, doc *Document, l *Linkage, drive Drive, opts ...
 	require.True(t, ok)
 	bounds, ok := readLinkBounds(spec, frames)
 	require.True(t, ok)
-	cfg, err := motionoption.Resolve(opts, motionbound.FractionDomain())
+	encoded, err := decodeMotionOptions(opts)
+	require.NoError(t, err)
+	cfg, err := motionoption.Resolve(encoded, motionbound.FractionDomain())
 	require.NoError(t, err)
 	return newLinkageRun(t.Context(), doc, spec, frames, bounds, cfg)
 }

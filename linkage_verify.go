@@ -77,7 +77,11 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 	if !ok {
 		return nil, linkageBoundsError()
 	}
-	cfg, err := motionoption.Resolve(opts, motionbound.FractionDomain())
+	encodedOpts, err := decodeMotionOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := motionoption.Resolve(encodedOpts, motionbound.FractionDomain())
 	if err != nil {
 		return nil, err
 	}

@@ -50,7 +50,7 @@ const defaultCellBudget = 16384
 // evaluates the whole box's centre alone; cells < 1 is ErrDegenerate. It is a
 // JointBoxOption only, so VerifyMotion and VerifyLinkage do not accept it.
 func WithCellBudget(cells int) JointBoxOption {
-	return motionoption.WithCellBudget(cells)
+	return jointBoxOptionValue{motionoption.WithCellBudget(cells)}
 }
 
 // JointConfiguration records every link's joint value and world pose.
@@ -388,7 +388,7 @@ func resolveJointBoxOptions(opts []JointBoxOption) (motionConfig, int, error) {
 		if o == nil {
 			return motionConfig{}, 0, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		if _, ok := o.Ident().(motionoption.IdentCellBudget); ok {
+		if _, ok := o.(jointBoxOptionValue); ok {
 			cells, ok := option.Get[int](o)
 			if !ok {
 				return motionConfig{}, 0, fmt.Errorf(`%w: a joint-box option carries no value`, ErrDegenerate)
@@ -405,7 +405,11 @@ func resolveJointBoxOptions(opts []JointBoxOption) (motionConfig, int, error) {
 		}
 		motion = append(motion, mo)
 	}
-	cfg, err := motionoption.Resolve(motion, motionbound.FractionDomain())
+	encodedMotion, err := decodeMotionOptions(motion)
+	if err != nil {
+		return motionConfig{}, 0, err
+	}
+	cfg, err := motionoption.Resolve(encodedMotion, motionbound.FractionDomain())
 	if err != nil {
 		return motionConfig{}, 0, err
 	}

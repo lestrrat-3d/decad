@@ -515,7 +515,9 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 	swingReported, ok := motionbound.ExactMotionParam(swingCfg.Resolution)
 	require.True(t, ok)
 	require.Zero(t, swingReported.Turn.Cmp(swingCfg.ResolutionP.Turn))
-	_, err = motionoption.Resolve([]MotionOption{WithResolution(swingCfg.Resolution)}, swingSpec.Domain)
+	encoded, err := decodeMotionOptions([]MotionOption{WithResolution(swingCfg.Resolution)})
+	require.NoError(t, err)
+	_, err = motionoption.Resolve(encoded, swingSpec.Domain)
 	require.NoError(t, err)
 
 	// The nominal 1/1024 step can round to a positive degree magnitude that
