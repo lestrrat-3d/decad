@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -69,7 +70,7 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 		require.Len(t, sp.interfaces[0].LowerExposed, 1)
 		floor := sp.interfaces[0].LowerExposed[0]
 		plateOuter := plate.payload.(prismPayload).profile.Outer
-		same, err := loopRecordsEqual(nil, floor.Outer, plateOuter)
+		same, err := momentinput.ExactLoopEqual(nil, floor.Outer, plateOuter)
 		require.NoError(t, err)
 		require.True(t, same, "the floor's outer is the plate's own outer record")
 		bossHole, err := offset2d.ReverseLoopRecordContext(t.Context(), boss.payload.(prismPayload).profile.Outer)

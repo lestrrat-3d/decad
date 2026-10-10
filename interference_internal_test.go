@@ -540,7 +540,7 @@ func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
 	profile := profileRecord{Outer: loopRecord{Segments: segs}}
 	a := &Body{payload: prismPayload{profile: profile, z1: 1}}
 	b := &Body{payload: prismPayload{profile: profile, z1: 1}}
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "loopRecordsEqual"}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "ExactLoopEqual"}
 
 	_, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
 	require.ErrorIs(t, err, context.Canceled)

@@ -3,12 +3,9 @@ package decad
 import (
 	"context"
 	"math"
-	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 )
@@ -41,7 +38,7 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 			// being equal says nothing about the two sets. Undecided.
 			return false, nil
 		}
-		return profileRecordsEqual(budget, pa.profile, pb.profile)
+		return momentinput.ExactProfileEqual(budget, pa.profile, pb.profile)
 	case cupPayload:
 		other, ok := b.payload.(cupPayload)
 		if !ok {
@@ -59,7 +56,7 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 			// only while each record is the set it denotes.
 			return false, nil
 		}
-		return profileRecordsEqual(budget, pa.profile, pb.profile)
+		return momentinput.ExactProfileEqual(budget, pa.profile, pb.profile)
 	default:
 		return false, nil
 	}
@@ -78,51 +75,11 @@ func cupViewsEqual(budget *proofbound.WorkBudget, pa, pb cupView) (bool, error) 
 		// equal records say nothing about the two sets. Undecided.
 		return false, nil
 	}
-	same, err := profileRecordsEqual(budget, pa.outer, pb.outer)
+	same, err := momentinput.ExactProfileEqual(budget, pa.outer, pb.outer)
 	if err != nil || !same {
 		return false, err
 	}
-	return profileRecordsEqual(budget, pa.cavity, pb.cavity)
-}
-
-// profileRecordsEqual reports exact structural equality of two recorded
-// profiles, stepping the budget once per segment compared.
-func profileRecordsEqual(budget *proofbound.WorkBudget, a, b profileRecord) (bool, error) {
-	if err := survey2d.WallBudgetStep(budget); err != nil {
-		return false, err
-	}
-	if len(a.Holes) != len(b.Holes) || (a.Holes == nil) != (b.Holes == nil) {
-		return false, nil
-	}
-	same, err := loopRecordsEqual(budget, a.Outer, b.Outer)
-	if err != nil || !same {
-		return false, err
-	}
-	for i := range a.Holes {
-		same, err := loopRecordsEqual(budget, a.Holes[i], b.Holes[i])
-		if err != nil || !same {
-			return false, err
-		}
-	}
-	return true, nil
-}
-
-// loopRecordsEqual compares one loop segment by segment. The nil-versus-empty
-// slice check keeps this exactly as strict as a whole-record DeepEqual, which
-// holds a nil slice unequal to an empty one.
-func loopRecordsEqual(budget *proofbound.WorkBudget, a, b loopRecord) (bool, error) {
-	if len(a.Segments) != len(b.Segments) || (a.Segments == nil) != (b.Segments == nil) {
-		return false, nil
-	}
-	for i := range a.Segments {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return false, err
-		}
-		if !reflect.DeepEqual(a.Segments[i], b.Segments[i]) {
-			return false, nil
-		}
-	}
-	return true, nil
+	return momentinput.ExactProfileEqual(budget, pa.cavity, pb.cavity)
 }
 
 // interferenceOutcome distinguishes why the overlap volume could not be

@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -236,7 +237,7 @@ func cupWalksBudget(budget *proofbound.WorkBudget, loop loopRecord) ([]survey2d.
 
 var cupWallOperations = cupwall.Operations{
 	Offset:  offsetProfile,
-	Equal:   profileRecordsEqual,
+	Equal:   momentinput.ExactProfileEqual,
 	Audit:   auditOffsetSectionBudget,
 	Reverse: offset2d.ReverseLoopRecordBudget,
 }

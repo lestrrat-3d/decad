@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -293,7 +294,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (profil
 	}
 	ra, rb := st.va.slabs[ia].Regions[0], st.vb.slabs[ib].Regions[0]
 	if st.reexpress.Identity {
-		same, err := loopRecordsEqual(st.budget, ra.Outer, rb.Outer)
+		same, err := momentinput.ExactLoopEqual(st.budget, ra.Outer, rb.Outer)
 		if err != nil {
 			return profileRecord{}, false, err
 		}
@@ -397,7 +398,7 @@ func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (profileRecord
 // narrower outer reversed as its hole. Any other outcome, a split boundary
 // included, is unresolved and falls back to the mesh path.
 func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper profileRecord) (stackedrecord.Interface, bool, error) {
-	same, err := loopRecordsEqual(st.budget, lower.Outer, upper.Outer)
+	same, err := momentinput.ExactLoopEqual(st.budget, lower.Outer, upper.Outer)
 	if err != nil {
 		return stackedrecord.Interface{}, false, err
 	}
