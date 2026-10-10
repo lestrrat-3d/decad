@@ -32,8 +32,8 @@ func CircleBox(seg CircleSeg) (proofbound.RatInterval, proofbound.RatInterval, b
 	s1, c1 := proofbound.TurnSinCosInterval(t1)
 	sin := proofbound.Interval(proofbound.RatMin(s0.Lo, s1.Lo), proofbound.RatMax(s0.Hi, s1.Hi))
 	cos := proofbound.Interval(proofbound.RatMin(c0.Lo, c1.Lo), proofbound.RatMax(c0.Hi, c1.Hi))
-	for quarter := int64(0); quarter <= 4; quarter++ {
-		t := big.NewRat(quarter, 4)
+	for quarter := range 5 {
+		t := big.NewRat(int64(quarter), 4)
 		if t.Cmp(t0) < 0 || t.Cmp(t1) > 0 {
 			continue
 		}

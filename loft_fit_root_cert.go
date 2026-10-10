@@ -162,7 +162,7 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 	allowedLo, allowedHi = local(allowedLo, span), local(allowedHi, span)
 	step := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 42))
 	var lo, hi *big.Rat
-	for i := 0; i < 42; i++ {
+	for range 42 {
 		if err := ctx.Err(); err != nil {
 			return loftFitRootCertificate{}, err
 		}
@@ -186,7 +186,7 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 	}
 	// Exact bisection tightens the ideal root's rational bracket. A derivative
 	// hull of one strict sign then proves there is exactly one P-root inside.
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		if err := ctx.Err(); err != nil {
 			return loftFitRootCertificate{}, err
 		}
@@ -200,7 +200,7 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 		if mv.Sign() == lv.Sign() {
 			lo, lv = mid, mv
 		} else {
-			hi, hv = mid, mv
+			hi = mid
 		}
 	}
 	derivative := loftFitPolynomialHull(span.dpBern, lo, hi)

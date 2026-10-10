@@ -285,7 +285,7 @@ func reconstructionOfLimit(record Profile, limit uint64) freeform.FreeformRecons
 	var seen map[momentEntityKey]struct{}
 	for _, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
 		for _, segment := range loop.Segments {
-			if chords > uint64(chordCeiling) {
+			if chords > chordCeiling {
 				break
 			}
 			if key, keyed := analyticEntityKey(segment); keyed {

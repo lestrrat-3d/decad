@@ -228,7 +228,8 @@ func embeddedGearBore(t *testing.T, doc *decad.Document, body *decad.Body, c emb
 	require.Len(t, bored.Lumps(), 1)
 	after, err := bored.Volume()
 	require.NoError(t, err)
-	want := math.Pi * math.Pow(c.bore/2, 2) * thickness
+	radius := c.bore / 2
+	want := math.Pi * radius * radius * thickness
 	require.InDelta(t, want, before.Value.Base()-after.Value.Base(),
 		before.Bound.Base()+after.Bound.Base()+0.02)
 	return bored

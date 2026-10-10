@@ -113,29 +113,43 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	if fitArrives {
 		otherFit = fit.TStart
 	}
-	trial := func(u float64) (float64, sectionrecord.Point2, sectionrecord.Point2, float64, float64, bool) {
+	type trialResult struct {
+		residual float64
+		foot     sectionrecord.Point2
+		center   sectionrecord.Point2
+		tangentU float64
+		tangentV float64
+		valid    bool
+	}
+	trial := func(u float64) trialResult {
 		t := fitCorner + u*(otherFit-fitCorner)
 		x, y := interp.Eval(t)
 		du, dv := interp.EvalDeriv(t)
 		du, dv = travel*du, travel*dv
 		d := math.Hypot(du, dv)
 		if !finiteLoftFitValue(t, x, y, du, dv, d) || d == 0 {
-			return 0, sectionrecord.Point2{}, sectionrecord.Point2{}, 0, 0, false
+			return trialResult{}
 		}
 		ox := x - offsetSign*radius*dv/d
 		oy := y + offsetSign*radius*du/d
 		q := math.Hypot(ox-circleWalk.CU, oy-circleWalk.CV)
 		if !finiteLoftFitValue(ox, oy, q) || q == 0 {
-			return 0, sectionrecord.Point2{}, sectionrecord.Point2{}, 0, 0, false
+			return trialResult{}
 		}
-		return q - offsetRadius, sectionrecord.Point2{U: x, V: y}, sectionrecord.Point2{U: ox, V: oy}, du / d, dv / d, true
+		return trialResult{
+			residual: q - offsetRadius,
+			foot:     sectionrecord.Point2{U: x, V: y},
+			center:   sectionrecord.Point2{U: ox, V: oy},
+			tangentU: du / d, tangentV: dv / d, valid: true,
+		}
 	}
 
 	// Logarithmic stations find cutbacks close to the corner. Uniform stations
 	// then inspect the rest of the recorded fragment for a competing crossing.
 	previousU, previousF := 0.0, 0.0
-	previousF, _, _, _, _, ok = trial(0)
-	if !ok {
+	initial := trial(0)
+	previousF = initial.residual
+	if !initial.valid {
 		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle offset cannot be evaluated at its corner`, ErrUnsupported)
 	}
 	if previousF == 0 {
@@ -143,10 +157,11 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	}
 	rootLo, rootHi, roots := 0.0, 0.0, 0
 	inspect := func(u float64) bool {
-		f, _, _, _, _, valid := trial(u)
-		if !valid {
+		result := trial(u)
+		if !result.valid {
 			return false
 		}
+		f := result.residual
 		if f == 0 && previousF != 0 {
 			rootLo, rootHi, roots = u, u, roots+1
 		} else if f != 0 && previousF != 0 && math.Signbit(f) != math.Signbit(previousF) {
@@ -168,16 +183,17 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	if roots != 1 || rootLo > rootHi {
 		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle offset has %d observed contact roots`, ErrUnsupported, roots)
 	}
-	loF, _, _, _, _, _ := trial(rootLo)
-	for i := 0; i < 54; i++ {
+	loF := trial(rootLo).residual
+	for range 54 {
 		mid := rootLo + (rootHi-rootLo)/2
 		if mid == rootLo || mid == rootHi {
 			break
 		}
-		f, _, _, _, _, valid := trial(mid)
-		if !valid {
+		result := trial(mid)
+		if !result.valid {
 			return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle contact cannot be refined`, ErrUnsupported)
 		}
+		f := result.residual
 		if f == 0 {
 			rootLo, rootHi = mid, mid
 			break
@@ -190,9 +206,10 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	}
 	u := rootLo + (rootHi-rootLo)/2
 	fitT := fitCorner + u*(otherFit-fitCorner)
-	residual, fitFoot, center, ftx, fty, valid := trial(u)
-	if !valid || !betweenLoftFitRange(fitT, fit.TStart, fit.TEnd) ||
-		math.Abs(residual) > 1e-8*math.Max(1, radius) ||
+	result := trial(u)
+	fitFoot, center := result.foot, result.center
+	if !result.valid || !betweenLoftFitRange(fitT, fit.TStart, fit.TEnd) ||
+		math.Abs(result.residual) > 1e-8*math.Max(1, radius) ||
 		math.Hypot(center.U-seedArc.Center.U, center.V-seedArc.Center.V) > 8*radius {
 		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle contact is outside its interior or seed branch`, ErrUnsupported)
 	}
@@ -220,7 +237,7 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 		return x / d, y / d
 	}
 	atFitU, atFitV := arcTangent(fitFoot)
-	if atFitU*ftx+atFitV*fty < 1-1e-6 {
+	if atFitU*result.tangentU+atFitV*result.tangentV < 1-1e-6 {
 		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle arc misses the fit tangent`, ErrUnsupported)
 	}
 	circleSign := math.Copysign(1, circle.TEnd-circle.TStart)

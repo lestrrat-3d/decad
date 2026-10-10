@@ -78,7 +78,7 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 		matched := -1
 		for i := range segments {
 			prev := (i + n - 1) % n
-			if !(analytic[prev] && analytic[i]) && !loftFitCirclePair(segments[prev], segments[i]) {
+			if (!analytic[prev] || !analytic[i]) && !loftFitCirclePair(segments[prev], segments[i]) {
 				continue
 			}
 			w := walks[i]

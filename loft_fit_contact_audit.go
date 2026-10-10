@@ -154,13 +154,3 @@ func loftBernsteinNoInteriorZero(controls []*big.Rat, allowStart, allowEnd bool,
 	return loftBernsteinNoInteriorZero(left, allowStart, false, depth+1) &&
 		loftBernsteinNoInteriorZero(right, false, allowEnd, depth+1)
 }
-
-// loftFitContactGap returns the largest exact-rational positional gap from
-// a certified ideal fit foot to a held two-dimensional point.
-func loftFitContactGap(u, v proofbound.RatInterval, heldU, heldV float64) float64 {
-	hu, hv := proofbound.PointInterval(new(big.Rat).SetFloat64(heldU)),
-		proofbound.PointInterval(new(big.Rat).SetFloat64(heldV))
-	du, dv := proofbound.IntervalAbsUpper(proofbound.IntervalSub(u, hu)),
-		proofbound.IntervalAbsUpper(proofbound.IntervalSub(v, hv))
-	return proofbound.RatSqrtUp(new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv)))
-}
