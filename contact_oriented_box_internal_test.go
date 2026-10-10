@@ -19,11 +19,11 @@ import (
 
 func orientedVertexFaceFootRational(vertex proofarith.DyV3, box orientedSourceBox, axis, side int) ([3]*big.Rat, *big.Rat) {
 	i, j := (axis+1)%3, (axis+2)%3
-	face := box.corner[0]
+	face := box.Corner[0]
 	if side == 1 {
-		face = proofarith.DvAdd(face, box.edge[axis])
+		face = proofarith.DvAdd(face, box.Edge[axis])
 	}
-	a, b := box.edge[i], box.edge[j]
+	a, b := box.Edge[i], box.Edge[j]
 	normal := proofarith.DvCross(a, b)
 	normSquared := proofarith.DvDot(normal, normal).Rat()
 	if normSquared.Sign() == 0 {
@@ -83,9 +83,9 @@ func TestOrientedVertexFaceFootMatchesRationalForm(t *testing.T) {
 	inside, outside := 0, 0
 	for _, target := range boxes {
 		for _, from := range boxes {
-			vertices := pairbox.OrientedWitnessSamples(from.pairBox())
+			vertices := pairbox.OrientedWitnessSamples(from.OrientedBox)
 			for _, offset := range []float64{0, 3.25, -7.5} {
-				for _, sample := range pairbox.OrientedWitnessSamples(from.pairBox())[:8] {
+				for _, sample := range pairbox.OrientedWitnessSamples(from.OrientedBox)[:8] {
 					shifted := proofarith.DvAdd(sample, proofarith.DyVec(r3.Vec{X: offset, Y: offset / 2, Z: -offset}))
 					vertices = append(vertices, shifted)
 				}
@@ -94,10 +94,10 @@ func TestOrientedVertexFaceFootMatchesRationalForm(t *testing.T) {
 				for axis := range 3 {
 					for side := range 2 {
 						wantFoot, wantDistance := orientedVertexFaceFootRational(vertex, target, axis, side)
-						gotFoot, gotDistance := pairbox.OrientedVertexFaceFoot(vertex, target.pairBox(), axis, side)
+						gotFoot, gotDistance := pairbox.OrientedVertexFaceFoot(vertex, target.OrientedBox, axis, side)
 						require.Equal(t, wantDistance == nil, gotDistance == nil)
 						require.Equal(t, wantDistance == nil,
-							pairbox.OrientedVertexFaceDistanceSquared(vertex, target.pairBox(), axis, side) == nil)
+							pairbox.OrientedVertexFaceDistanceSquared(vertex, target.OrientedBox, axis, side) == nil)
 						if wantDistance == nil {
 							outside++
 							continue
@@ -105,7 +105,7 @@ func TestOrientedVertexFaceFootMatchesRationalForm(t *testing.T) {
 						inside++
 						require.Zero(t, wantDistance.Cmp(gotDistance))
 						require.Zero(t, wantDistance.Cmp(pairbox.OrientedVertexFaceDistanceSquared(
-							vertex, target.pairBox(), axis, side)))
+							vertex, target.OrientedBox, axis, side)))
 						for k := range 3 {
 							require.Zero(t, wantFoot[k].Cmp(gotFoot[k]))
 						}

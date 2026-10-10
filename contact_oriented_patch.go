@@ -12,7 +12,7 @@ import (
 // edge directions. Their complete contact set is a rectangle in A's exact
 // dual basis, even when the read rotation's dyadic entries are slightly skew.
 func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
-	geometry, failure := pairbox.OrientedFacePatch(a.pairBox(), b.pairBox())
+	geometry, failure := pairbox.OrientedFacePatch(a.OrientedBox, b.OrientedBox)
 	switch failure {
 	case pairbox.OrientedPatchNoNormal:
 		report.Reason = ContactNoNormalProof
@@ -34,7 +34,7 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 	}
 	points := make([]ContactPoint, 0, 4)
 	for _, corner := range [][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
-		point := geometry.Point(a.pairBox(), corner)
+		point := geometry.Point(a.OrientedBox, corner)
 		witness, valid := orientedBoxPoint(point)
 		if !valid || witness.Bound.Base() > report.Request.PointResolution.Base() {
 			report.Reason = ContactPointTooCoarse

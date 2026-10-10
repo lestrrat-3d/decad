@@ -345,7 +345,7 @@ func TestSweepRunMemoChangesNoReport(t *testing.T) {
 	t.Parallel()
 	box := rotationFormPaths(t)["box drift"]
 	low := math.Inf(1)
-	for _, corner := range box.startBox.corner {
+	for _, corner := range box.startBox.Corner {
 		z, _ := corner[2].Float64()
 		low = min(low, z)
 	}

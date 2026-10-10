@@ -11,7 +11,7 @@ import (
 func classifySourceSphereOrientedBox(report *ContactReport, sphere sourceSphereContactProof,
 	box orientedSourceBox, sphereFirst bool) {
 	result := pairbox.ClassifyOrientedSphere(
-		pairbox.AxisSphere{Center: sphere.center, Radius: sphere.radius}, box.pairBox(), sphereFirst,
+		pairbox.AxisSphere{Center: sphere.center, Radius: sphere.radius}, box.OrientedBox, sphereFirst,
 		report.Request.PointResolution.Base(), report.Request.NormalResolution.Base(),
 	)
 	switch result.Relation {
