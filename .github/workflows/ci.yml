@@ -144,6 +144,14 @@ jobs:
             race: "-race"
             shard: "7"
             packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "8"
+            packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "9"
+            packages: ""
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
