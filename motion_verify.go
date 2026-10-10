@@ -104,7 +104,7 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	if err := d.resolveMovers(moving); err != nil {
 		return nil, err
 	}
-	spec, err := motionbound.ResolveMotion(m)
+	spec, err := resolveMotion(m)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,9 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	if err != nil {
 		return nil, err
 	}
-	return run.publish(poses, spans), nil
+	report := run.publish(poses, spans)
+	report.Motion = m
+	return report, nil
 }
 
 // motionRun is one call's working state, for VerifyMotion and VerifyLinkage
@@ -1285,7 +1287,6 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 	c := r.conclude(poses, spans)
 	report := &MotionReport{
 		Request:     motionRequest(r.cfg),
-		Motion:      r.spec.Motion,
 		Against:     c.Against,
 		Intervals:   rootMotionIntervals(c.Intervals),
 		Collisions:  []Collision{},

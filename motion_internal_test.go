@@ -21,7 +21,7 @@ import (
 // can drive a single pose through the production path.
 func motionRunFor(t *testing.T, doc *Document, moving []*Body, m Motion) *motionRun {
 	t.Helper()
-	spec, err := motionbound.ResolveMotion(m)
+	spec, err := resolveMotion(m)
 	require.NoError(t, err)
 	run := &motionRun{ctx: t.Context(), d: doc, spec: spec, cfg: motionConfig{Rel: 1e-3}, cache: &bodyGeomCache{}}
 	run.setup(moving)
@@ -104,7 +104,7 @@ func TestMotionPoseDeviationIsZeroForAnExactPose(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			spec, err := motionbound.ResolveMotion(tc.m)
+			spec, err := resolveMotion(tc.m)
 			require.NoError(t, err)
 			pose, err := tc.m.PoseAt(tc.at)
 			require.NoError(t, err)
@@ -201,7 +201,7 @@ func TestMotionAxisRadiusReadsTheBox(t *testing.T) {
 		{r3.Vec{}, 50},
 		{r3.NewVec(0, -14, 0), math.Sqrt(48*48 + 28*28)},
 	} {
-		spec, err := motionbound.ResolveMotion(Revolute{Center: tc.center, Axis: r3.NewVec(0, 0, 3), From: units.Degrees(0), To: units.Degrees(90)})
+		spec, err := resolveMotion(Revolute{Center: tc.center, Axis: r3.NewVec(0, 0, 3), From: units.Degrees(0), To: units.Degrees(90)})
 		require.NoError(t, err)
 		rho := motionbound.MoverAxisRadius(arm.bounds, spec.Frame)
 		require.GreaterOrEqual(t, rho, tc.want)
@@ -484,7 +484,7 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 		From: units.Millimeters(0),
 		To:   units.Millimeters(math.SmallestNonzeroFloat64),
 	}
-	spec, err := motionbound.ResolveMotion(motion)
+	spec, err := resolveMotion(motion)
 	require.NoError(t, err)
 	cfg, err := motionoption.Resolve(nil, spec.Domain)
 	require.NoError(t, err)
@@ -507,7 +507,7 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 		From: units.Degrees(0),
 		To:   units.Degrees(math.SmallestNonzeroFloat64),
 	}
-	swingSpec, err := motionbound.ResolveMotion(swing)
+	swingSpec, err := resolveMotion(swing)
 	require.NoError(t, err)
 	swingCfg, err := motionoption.Resolve(nil, swingSpec.Domain)
 	require.NoError(t, err)
@@ -523,7 +523,7 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 	// The nominal 1/1024 step can round to a positive degree magnitude that
 	// still converts to zero radians. It must trigger the same fallback.
 	swing.To = units.Degrees(1024 * math.SmallestNonzeroFloat64)
-	swingSpec, err = motionbound.ResolveMotion(swing)
+	swingSpec, err = resolveMotion(swing)
 	require.NoError(t, err)
 	swingCfg, err = motionoption.Resolve(nil, swingSpec.Domain)
 	require.NoError(t, err)
@@ -624,7 +624,7 @@ func TestMotionBetweenFrameReachesTo(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			spec, err := motionbound.ResolveMotion(tc.m)
+			spec, err := resolveMotion(tc.m)
 			require.NoError(t, err)
 			end := spec.Frame.At(spec.ToP)
 			tol := 1e-9 * (1 + tc.m.To.Translation().Len())

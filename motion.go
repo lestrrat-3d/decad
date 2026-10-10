@@ -13,25 +13,102 @@ import (
 )
 
 // This file is the motion vocabulary of docs/motion-check-design.md §2-§4:
-// public aliases for the sealed Motion set, root-owned option types and
+// the sealed Motion set, root-owned option types and
 // MotionReport records. motion_verify.go runs the check, and
 // internal/motionbound proves the bounds its interval certificate consumes.
 
 // Motion is the sealed set of one-parameter rigid motions. PoseAt returns
 // the rigid transform at a typed parameter value.
-type Motion = motionbound.Motion
+type Motion interface {
+	PoseAt(at units.Value) (r3.Transform, error)
+	motion()
+}
 
 // Revolute rotates a moving set about the axis through Center. From and To
 // are signed angles.
-type Revolute = motionbound.Revolute
+type Revolute struct {
+	Center r3.Vec
+	Axis   r3.Vec
+	From   units.Value
+	To     units.Value
+}
+
+func (Revolute) motion() {}
+
+// PoseAt returns the rigid pose at the stated angle.
+func (m Revolute) PoseAt(at units.Value) (r3.Transform, error) {
+	return motionbound.Revolute(m).PoseAt(at)
+}
 
 // Prismatic translates a moving set along Dir. From and To are signed
 // lengths.
-type Prismatic = motionbound.Prismatic
+type Prismatic struct {
+	Dir  r3.Vec
+	From units.Value
+	To   units.Value
+}
+
+func (Prismatic) motion() {}
+
+// PoseAt returns the rigid pose at the stated displacement.
+func (m Prismatic) PoseAt(at units.Value) (r3.Transform, error) {
+	return motionbound.Prismatic(m).PoseAt(at)
+}
 
 // Between joins From and To along the shorter rigid screw path. Its
 // parameter is a dimensionless fraction.
-type Between = motionbound.Between
+type Between struct {
+	From r3.Transform
+	To   r3.Transform
+}
+
+func (Between) motion() {}
+
+// PoseAt returns the rigid pose at the stated path fraction.
+func (m Between) PoseAt(at units.Value) (r3.Transform, error) {
+	return motionbound.Between(m).PoseAt(at)
+}
+
+func encodedMotion(m Motion) (motionbound.Motion, error) {
+	switch value := m.(type) {
+	case Revolute:
+		return motionbound.Revolute(value), nil
+	case *Revolute:
+		if value == nil {
+			return (*motionbound.Revolute)(nil), nil
+		}
+		encoded := motionbound.Revolute(*value)
+		return &encoded, nil
+	case Prismatic:
+		return motionbound.Prismatic(value), nil
+	case *Prismatic:
+		if value == nil {
+			return (*motionbound.Prismatic)(nil), nil
+		}
+		encoded := motionbound.Prismatic(*value)
+		return &encoded, nil
+	case Between:
+		return motionbound.Between(value), nil
+	case *Between:
+		if value == nil {
+			return (*motionbound.Between)(nil), nil
+		}
+		encoded := motionbound.Between(*value)
+		return &encoded, nil
+	case nil:
+		return nil, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
+	default:
+		return nil, fmt.Errorf(`%w: a motion of type %T is not one this evaluator checks`, ErrUnsupported, m)
+	}
+}
+
+func resolveMotion(m Motion) (motionbound.Spec, error) {
+	encoded, err := encodedMotion(m)
+	if err != nil {
+		return motionbound.Spec{}, err
+	}
+	return motionbound.ResolveMotion(encoded)
+}
 
 // JointBoxOption configures VerifyJointBox.
 type JointBoxOption interface {
