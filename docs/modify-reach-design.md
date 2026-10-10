@@ -309,10 +309,11 @@ roles pick the walk that takes `d`: the arriving or the leaving walk of the
 coalesced corner walk. A reference face whose roles name segments of both
 walks, or of neither, is `ErrUnsupported`.
 `docs/brep-modify-design.md` §5 admits the option for independent straight
-edges of a `brepPayload` through route E, and complete loops of planar brep
-faces through route L (`docs/modify-general-design.md` §4.2). Route P does not
-map the reference face to its construction, and a stacked receiver's face
-view does not retain its public face identities; those calls remain SX16.
+edges of a `brepPayload` or stacked face view through route E, and complete
+loops of planar faces through route L (`docs/modify-general-design.md` §4.2).
+The stacked face view carries the public source-face role for each record
+index. Route P does not map a reference face to its construction, so an
+asymmetric chamfer skips it. Selections outside routes E and L remain SX16.
 
 For a prism lateral edge or revolve junction, adjacent faces map to arriving
 and leaving walks of the section/meridian. Set each foot back by its assigned
@@ -1820,7 +1821,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; asymmetric stacked receivers and brep selections outside routes E/L (SX16); all SX9/SX10 |
+| **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; brep and stacked asymmetric selections outside routes E/L (SX16); all SX9/SX10 |
 | **B** (landed) | revolve junction rewrite + roles + surveys | cap loops; shell reach |
 | **C1** (landed) | multi-region `stackedPrismPayload` (the lining reading); cups recorded on it; base S12 lifted through BX8 | closed + side-opening prism shell; revolve side opening; cap loops |
 | **C2** (landed) | closed prism shell (BX5): the void-shell stack, its tessellation | side-opening prism shell (BX4, `docs/shell-opening-design.md`); revolve side opening; cap loops |

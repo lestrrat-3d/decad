@@ -668,16 +668,71 @@ func TestAsymmetricChamferOnBrepLoopSideOverrun(t *testing.T) {
 	require.Equal(t, []*decad.Body{part}, doc.Bodies())
 }
 
-func TestAsymmetricChamferOnStackedRefused(t *testing.T) {
+func TestAsymmetricChamferOnStackedLoop(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		sideRef bool
+		volume  float64
+	}{
+		{name: "cap reference", volume: 14766},
+		{name: "side references", sideRef: true, volume: 14768},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decad.New()
+			plate := boxBody(t, doc, 0, 0, 40, 40, 10)
+			pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+			require.NoError(t, err)
+			top := planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
+			loop := top.Loops()[0]
+			reference := decad.Faces(decad.FaceCreatedBy(top.Origins()[0]))
+			if tc.sideRef {
+				reference = nil
+				for _, edge := range loop.Edges() {
+					for _, face := range edge.Faces() {
+						if face == top {
+							continue
+						}
+						if reference == nil {
+							reference = decad.Faces(decad.FaceCreatedBy(face.Origins()[0]))
+						} else {
+							reference.Or(decad.FaceCreatedBy(face.Origins()[0]))
+						}
+					}
+				}
+			}
+			result, err := pocket.Chamfer(t.Context(), loopEdgeQuery(loop), units.Millimeters(1.5),
+				decad.WithAsymmetricChamfer(reference, units.Millimeters(2)))
+			require.NoError(t, err)
+			require.Equal(t, []*decad.Body{result}, doc.Bodies())
+			volume, err := result.Volume()
+			require.NoError(t, err)
+			// The 40 mm square's top rim removes a triangular corner band.
+			require.InDelta(t, tc.volume, volume.Value.Base(), volume.Bound.Base()+1e-8)
+			mesh, err := result.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			require.True(t, mesh.VolumeVerified())
+		})
+	}
+}
+
+func TestAsymmetricChamferOnStackedEdge(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
 	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
 	require.NoError(t, err)
-	top := planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
-	_, err = pocket.Chamfer(t.Context(), loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5),
-		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(top.Origins()[0])), units.Millimeters(2)))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "SX16")
-	require.Equal(t, []*decad.Body{pocket}, doc.Bodies())
+	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
+		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1)
+	front := planeFacing(t, pocket, r3.NewVec(0, -1, 0), r3.NewVec(0, 0, 0))
+	result, err := pocket.Chamfer(t.Context(), edge, units.Millimeters(1),
+		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(front.Origins()[0])), units.Millimeters(2)))
+	require.NoError(t, err)
+	volume, err := result.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, volume.Exactness)
+	require.InDelta(t, 14990, volume.Value.Base(), 1e-8)
+	mesh, err := result.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.VolumeVerified())
 }

@@ -544,17 +544,16 @@ func TestBrepLoopChamferRefusals(t *testing.T) {
 		sel    func(*testing.T, *Body) []*Edge
 		size   float64
 		fillet bool
-		asym   bool
 		want   []string
 	}{
-		{"part of a loop", pocket, func(t *testing.T, b *Body) []*Edge { return mouth(t, b)[:3] }, 1.5, false, false,
+		{"part of a loop", pocket, func(t *testing.T, b *Body) []*Edge { return mouth(t, b)[:3] }, 1.5, false,
 			[]string{rowSL1, "covers only part of a loop"}},
 		{"a loop with a lateral edge", pocket, func(t *testing.T, b *Body) []*Edge {
 			edges := planarBodyFace(t, b, routeEZ, r3.NewVec(0, 0, 10)).Loops()[0].Edges()
 			lateral, err := edgeAt(routeEZ, r3.Vec{}).SelectEdges(b)
 			require.NoError(t, err)
 			return append(edges, lateral...)
-		}, 1.5, false, false, []string{rowSL1, "lies on no loop of a planar face"}},
+		}, 1.5, false, []string{rowSL1, "lies on no loop of a planar face"}},
 		{"two loops sharing an edge", s1, func(t *testing.T, b *Body) []*Edge {
 			edges := planarBodyFace(t, b, routeEZ, r3.NewVec(0, 0, 20)).Loops()[0].Edges()
 			wall := planarBodyFace(t, b, r3.NewVec(0, -1, 0), r3.Vec{}).Loops()[0].Edges()
@@ -564,12 +563,11 @@ func TestBrepLoopChamferRefusals(t *testing.T) {
 				}
 			}
 			return edges
-		}, 1, false, false, []string{rowSL1, "which share it"}},
+		}, 1, false, []string{rowSL1, "which share it"}},
 		{"a neighbour continuing on an arc", plate, func(t *testing.T, b *Body) []*Edge {
 			return planarBodyFace(t, b, r3.NewVec(0, -1, 0), r3.Vec{}).Loops()[0].Edges()
-		}, 1, false, false, []string{"modify-general SL2", "not a straight line along the face's normal"}},
-		{"a band reaching the floor", pocket, mouth, 5, false, false, []string{"modify-reach SX7", "reaches or passes the far end"}},
-		{"an asymmetric chamfer", pocket, mouth, 1, false, true, []string{"modify-reach SX16"}},
+		}, 1, false, []string{"modify-general SL2", "not a straight line along the face's normal"}},
+		{"a band reaching the floor", pocket, mouth, 5, false, []string{"modify-reach SX7", "reaches or passes the far end"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -580,10 +578,6 @@ func TestBrepLoopChamferRefusals(t *testing.T) {
 			switch {
 			case tc.fillet:
 				_, err = body.Fillet(t.Context(), sel, units.Millimeters(tc.size))
-			case tc.asym:
-				top := planarBodyFace(t, body, routeEZ, r3.NewVec(0, 0, 10))
-				ref := Faces(FaceCreatedBy(top.Origins()[0])).Exactly(1)
-				_, err = body.Chamfer(t.Context(), sel, units.Millimeters(tc.size), WithAsymmetricChamfer(ref, units.Millimeters(2)))
 			default:
 				_, err = body.Chamfer(t.Context(), sel, units.Millimeters(tc.size))
 			}

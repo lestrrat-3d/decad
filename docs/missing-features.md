@@ -59,7 +59,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Fillet of a prism cap edge outside the convex straight-section cutter admission whose end faces route E cannot restate as planes | `ErrUnsupported` (brep-modify SB7); admitted oblique cap edges build as bounded faceted results | `docs/vertex-blend-design.md` §2 |
 | Chamfer of a partial cap loop, or cap and lateral edges together | `ErrUnsupported` (SX4) | `docs/modify-reach-design.md` Table SX |
 | Cap-loop chamfer at a corner where a circular wall meets a neighbour tangentially but runs back against it (a tangent cusp), or turns past the G1 tolerance too slightly to enclose | `ErrUnsupported` (SX14) (`capblend.go`) | `docs/modify-reach-design.md` Table SX |
-| Asymmetric stacked chamfer or brep selection outside routes E/L | `ErrUnsupported` (SX16); E takes straight edges, L takes full planar loops | `docs/modify-reach-design.md` §6, `docs/modify-general-design.md` §4 |
+| Asymmetric brep or stacked chamfer selection outside routes E/L | `ErrUnsupported` (SX16); E takes straight edges, L takes full planar loops | `docs/modify-reach-design.md` §6, `docs/modify-general-design.md` §4 |
 | Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`tangent_chain.go`) | `docs/modify-reach-design.md` §5 |
 | Closed shell (`WithNoOpenings`) of any receiver but a full revolve or a hole-free straight prism | `ErrUnsupported` (SX8/SX9; modify-general SG2 for a brep or stacked receiver) (`shell.go`) | `docs/modify-reach-design.md` §9, §14 |
 | Modify of a prism whose section carries a displacement bound | `ErrUnsupported` via `requireExactSection` | `docs/modify-design.md` |

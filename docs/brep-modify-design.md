@@ -100,7 +100,7 @@ remains SX16.
 | RB | Receiver | `Fillet` / `Chamfer` | `Shell` |
 |---|---|---|---|
 | **RB1** | `brepPayload`, `sectionDelta() == 0` | route P, else route E (Table EB) or route L (modify-general §4); an asymmetric chamfer skips P | route P, else route S (modify-general §3) |
-| **RB2** | `stackedPrismPayload` whose `brepOfStacked` succeeds (one region per slab, not a group) | as RB1 over the face view | as RB1 |
+| **RB2** | `stackedPrismPayload` whose `brepOfStacked` succeeds (one region per slab, not a group) | as RB1 over the face view; asymmetric references use the source-face role at each record index | as RB1 |
 | **RB3** | `brepPayload` or stacked receiver with a section displacement | SB1 | SB1 |
 | **RB4** | `facetedPayload` | reach SX9 (permanent) | reach SX9 |
 
@@ -214,15 +214,21 @@ prism. The match identifies the edge and admits no geometry; a selected edge
 that matches no recorded edge, or several, is SB6.
 
 For an asymmetric chamfer, route P is skipped. Route E admits an independent
-straight edge of a `brepPayload` under the same EB rows. The option's resolved
-reference face identifies one of the edge's two public adjacent faces by its
-record index. Restatement may change `wall(i)` to `face(i)` but preserves `i`.
+straight edge of a `brepPayload` or stacked face view under the same EB rows.
+The option's resolved reference face identifies one of the edge's two public
+adjacent faces by its record index. A brep result names that face `face(i)` or
+`wall(i)`; restatement preserves `i`. A stacked face view carries one source
+role per record face: `slab(start).region(region).side(loop,segment)` for a
+wall column, `capStart` or `capEnd` for a cap, and `floor(k,e)` or
+`ceiling(k,e)` for an exposed interface. `brepJoinStacked` changes only
+segment endpoints, so it keeps column and segment indices. A missing or
+ambiguous source role is SX16.
 EB6 then pairs each end-face walk with one adjacent record face. The walk
 paired with the reference face takes the positional distance; the other takes
 `otherDistance`. A missing or ambiguous public-to-record face index is SX16.
 Route L maps complete-loop references to its cap face or each neighbouring
-record face (`docs/modify-general-design.md` §4.2). A stacked receiver's face
-view keeps SX16 because it does not retain this public-face mapping.
+record face (`docs/modify-general-design.md` §4.2), using the same source-role
+mapping for a stacked receiver.
 
 ### 5.2 Restatement of a straight wall as a planar face
 
@@ -580,6 +586,7 @@ with PR 0.
 | **2b** | restatement: `brepgeom.Restate`, `brepgeom.PlanarFrame`, the whole-call restatement set, EB3/EB4 over restated faces | `brep_modify_edge.go`, `internal/brepgeom/` | Pocket floor-edge fillets, S1 `x`-edge chamfer, SB8 on a split wall | 2a |
 | **2c** | route E's asymmetric reference-face mapping; bypass route P for this option and refuse route L | `brep_modify.go`, `brep_modify_edge.go`, `brep_modify_loop.go`, `chamfer.go` | public boolean body: both reference faces on a vertical edge, restated end faces on a horizontal edge, and route L refusal | 2b |
 | **2d** | route L's asymmetric cap/side assignment and two-distance band | `brep_modify_loop.go`, `brep_loop_band.go` | public rounded, cross-drilled plate: both reference choices, analytic volume, verified mesh | 2c |
+| **2e** | preserve stacked source-face roles in its brep view for asymmetric route E/L references | `brep_payload.go`, `brep_modify.go`, `chamfer.go` | public blind-pocket plate: outer edge and both top-loop reference choices, analytic volumes, verified meshes | 2d |
 
 PR 1 and PR 2a run in parallel: they share only PR 0's dispatch and add
 disjoint files. PR 2b follows 2a.
@@ -594,3 +601,4 @@ Increment table — what still refuses after each PR:
 | 2b (landed) | Table SB alone |
 | 2c (landed) | asymmetric route P/L chamfers and stacked receivers (SX16) |
 | 2d (landed) | asymmetric stacked receivers and brep selections outside routes E/L (SX16) |
+| 2e | brep or stacked asymmetric selections outside routes E/L (SX16) |
