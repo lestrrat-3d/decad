@@ -44,7 +44,7 @@ The rules for rows live in `docs/layout.md`.
 | `motion.go` / `motion_verify.go` | Motion aliases, options, and pose checks. See motion-check §2–§6. |
 | `motion_bound.go` | Reads payload record radii for `internal/motionbound/`. |
 | `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See linkage design. |
-| `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
+| `linkage_box.go` | `VerifyJointBox` and its public joint-space inputs and reports. See `docs/linkage-check-design.md`. |
 | `linkage_loop.go` | Closed loops and `Schedule`. See `docs/linkage-check-design.md` §15. |
 | `linkage_bound.go` | Linkage reach and projection adapters. See linkage §5.2, §5.8. |
 | `contact_sweep.go` | Sweeps, report aliases, and tracks. |
