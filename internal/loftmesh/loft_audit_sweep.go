@@ -109,7 +109,7 @@ func LoftCrossingAuditBevelBore(budget *proofbound.WorkBudget, verts []r3.Vec,
 	maxTriangles := maxPatternTriangles + 4*stations
 	const maxBoreScans = 128_000_000
 	_, err := loftCrossingAuditLimited(budget, verts, tris, nil,
-		loftGenericShortcuts, maxBoreScans, maxTriangles)
+		loftGenericShortcuts, maxBoreScans, maxTriangles, false)
 	return err
 }
 
