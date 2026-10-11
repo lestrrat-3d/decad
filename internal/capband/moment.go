@@ -338,7 +338,12 @@ func phaseSumInterval(terms []PhaseTerm, thS0, thS1, thC0, thC1 *big.Rat, phases
 				phases[key] = enclosure
 			}
 		}
-		total = proofbound.IntervalAdd(total, proofbound.IntervalAdd(proofbound.IntervalScale(enclosure[0], t.ac), proofbound.IntervalScale(enclosure[1], t.as)))
+		if t.ac.Sign() != 0 {
+			total = proofbound.IntervalAdd(total, proofbound.IntervalScale(enclosure[0], t.ac))
+		}
+		if t.as.Sign() != 0 {
+			total = proofbound.IntervalAdd(total, proofbound.IntervalScale(enclosure[1], t.as))
+		}
 	}
 	return total, true
 }
@@ -430,9 +435,14 @@ func conePatchMoment(g Patch) (mu, mv, mz proofbound.BoundedScalar) {
 		for _, t := range wide {
 			enclosure := phases[[2]int{t.k, t.m}]
 			allow := g.Held.phaseAllow(t.k, t.m)
-			total = proofbound.IntervalAdd(total, proofbound.IntervalAdd(
-				proofbound.IntervalMul(widenBy(enclosure[0], allow), t.ac),
-				proofbound.IntervalMul(widenBy(enclosure[1], allow), t.as)))
+			if t.ac.Lo.Sign() != 0 || t.ac.Hi.Sign() != 0 {
+				total = proofbound.IntervalAdd(total,
+					proofbound.IntervalMul(widenBy(enclosure[0], allow), t.ac))
+			}
+			if t.as.Lo.Sign() != 0 || t.as.Hi.Sign() != 0 {
+				total = proofbound.IntervalAdd(total,
+					proofbound.IntervalMul(widenBy(enclosure[1], allow), t.as))
+			}
 		}
 		return proofbound.MeasuredScalar(held, proofbound.IntervalFloatError(total, held))
 	}
