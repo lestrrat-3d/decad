@@ -138,6 +138,10 @@ func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepM
 		if matched || err != nil {
 			return body, err
 		}
+		body, matched, err = shellBlindPocket(ctx, b, sp, bp, req.shellCall)
+		if matched || err != nil {
+			return body, err
+		}
 	}
 	return shellThroughCut(ctx, b, bp, req.shellCall, refusal)
 }
@@ -165,8 +169,8 @@ func commitModifyResult(ctx context.Context, b, body *Body) (*Body, error) {
 func brepModifyRecord(ctx context.Context, payload featurePayload, op string) (brepPayload, []string, bool, error) {
 	switch p := payload.(type) {
 	case brepPayload:
-		if p.bossShell != nil {
-			return brepPayload{}, nil, true, fmt.Errorf(`%w: this evaluator does not modify the rounded cavity of a stacked boss shell`, ErrUnsupported)
+		if p.bossShell != nil || p.pocketShell != nil {
+			return brepPayload{}, nil, true, fmt.Errorf(`%w: this evaluator does not modify a stacked shell's rounded cavity`, ErrUnsupported)
 		}
 		return p, nil, true, nil
 	case stackedPrismPayload:

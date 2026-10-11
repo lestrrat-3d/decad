@@ -158,7 +158,7 @@ func (f brepFace) regionLoop(li int) loopRecord {
 // face beside it states. The set is empty for a record with no band.
 func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (survey2d.SegmentWalk, error)) (map[brepgeom.EdgeKey]struct{}, error) {
 	open := map[brepgeom.EdgeKey]struct{}{}
-	if len(bp.loopBands) == 0 && bp.bossShell == nil {
+	if len(bp.loopBands) == 0 && bp.bossShell == nil && bp.pocketShell == nil {
 		return open, nil
 	}
 	add := func(e brepEmbed, seg curveSegment, z float64) error {
@@ -238,6 +238,20 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 			}
 		}
 	}
+	if bp.pocketShell != nil {
+		band := bp.pocketShell
+		e := embeds[band.floorFace]
+		for _, ring := range []struct {
+			loop loopRecord
+			z    float64
+		}{{band.rounded.Outer, band.floorZ}, {band.pocket.profile().Outer, band.lowerZ}} {
+			for _, seg := range ring.loop.Segments {
+				if err := add(e, seg, ring.z); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 	return open, nil
 }
 
@@ -267,6 +281,9 @@ type brepOpenSet struct {
 func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, placeVertex func(c [3]float64, faceDelta, levelDelta, endAllow float64) *Vertex) (brepOpenSet, error) {
 	n := len(bp.loopBands)
 	if bp.bossShell != nil {
+		n++
+	}
+	if bp.pocketShell != nil {
 		n++
 	}
 	out := brepOpenSet{coedge: map[int]coedge{}, cap: make([][]coedge, n),
@@ -401,6 +418,11 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 	}
 	if bp.bossShell != nil {
 		if err := bossShellOpenEdges(ctx, bp, topo, openAt, placeVertex, &out, len(bp.loopBands)); err != nil {
+			return brepOpenSet{}, err
+		}
+	}
+	if bp.pocketShell != nil {
+		if err := pocketShellOpenEdges(ctx, bp, topo, openAt, placeVertex, &out, len(bp.loopBands)); err != nil {
 			return brepOpenSet{}, err
 		}
 	}

@@ -512,6 +512,8 @@
 3	0.01	TestWallKernelPublishesDiameterBounds
 3	0.00	TestXHPArithmeticKeepsBorrowedOperands
 4	0.03	TestAbsLinearIntegralMatchesTheClosedForm
+4	0.00	TestBlindPocketFloorBandHasFourSphereOctants
+4	0.00	TestBlindPocketShellMeshVolumeProof
 4	0.01	TestBlindStackedPlacedToolChargesSectionDisplacement
 4	0.48	TestBodyGateDiameterFreeformArmCancelsDuringWitnessMaximum
 4	0.01	TestBrepFaceViewOfCircularPrismCoversItsMeasurements
