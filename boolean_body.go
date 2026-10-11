@@ -65,6 +65,7 @@ type facetGroup struct {
 // motion (docs/evaluator-design.md §8).
 type facetedPayload struct {
 	loftCylinderJoin *loftCylinderJoinRecord
+	loftCylinderBore *loftCylinderBoreRecord
 	// contactAudited records a whole-mesh exact contact audit at construction.
 	// PlaceMesh preserves it by checking every rounded facet after placement.
 	contactAudited bool
@@ -176,6 +177,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.pointPlaneSourceEligible = false
 	next.bevelJoin = nil
 	next.loftCylinderJoin = nil
+	next.loftCylinderBore = nil
 	next.bevelTooth = nil
 	if fp.pointCone != nil && fp.xform == r3.Identity() {
 		next.bevelTooth = &bevelToothPlacement{source: fp.pointCone, motion: composed}
