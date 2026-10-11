@@ -116,15 +116,21 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		fit := trim.source.profile.Outer.Segments[group].(fitSplineSeg)
+		fit, ok := trim.source.profile.Outer.Segments[group].(fitSplineSeg)
+		if !ok {
+			return nil, false, nil
+		}
 		work := freeform.NewFreeformWork()
 		work.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
 		spans, err := splinebezier.FitSplineBezierSpans(fit, work)
-		if err != nil || len(spans) != 14 {
+		if err != nil {
+			return nil, false, err
+		}
+		if len(spans) != 14 {
 			return nil, false, nil
 		}
 		proof.flank[side] = spans[0]
-		for band := 0; band < 8; band++ {
+		for band := range 8 {
 			if err := ctx.Err(); err != nil {
 				return nil, false, err
 			}
@@ -208,17 +214,17 @@ func spiralOriginalCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
 	return spiralCapPlaneAvoidsRootCircle(trim.maps[8], corners, m, b, heelX)
 }
 
-func spiralCapPlaneAvoidsRootCircle(cap loftFaceMap, corners [4][2]*big.Rat,
+func spiralCapPlaneAvoidsRootCircle(capMap loftFaceMap, corners [4][2]*big.Rat,
 	m, b, circleX *big.Rat) bool {
-	p0 := cap.at(corners[0][0], corners[0][1])
-	p1 := cap.at(corners[1][0], corners[1][1])
-	p2 := cap.at(corners[2][0], corners[2][1])
+	p0 := capMap.at(corners[0][0], corners[0][1])
+	p1 := capMap.at(corners[1][0], corners[1][1])
+	p2 := capMap.at(corners[2][0], corners[2][1])
 	normal := lfVCross(lfVSub(p1, p0), lfVSub(p2, p0))
 	if normal[0].Sign() == 0 && normal[1].Sign() == 0 && normal[2].Sign() == 0 {
 		return false
 	}
 	d := lfVDot(normal, p0)
-	if lfVDot(normal, cap.at(corners[3][0], corners[3][1])).Cmp(d) != 0 {
+	if lfVDot(normal, capMap.at(corners[3][0], corners[3][1])).Cmp(d) != 0 {
 		return false
 	}
 	radius := lfAdd(lfMul(m, circleX), b)
@@ -339,7 +345,7 @@ func spiralOtherSides(ctx context.Context, trim *loftFacesTrimRecord, m, b *big.
 		return false
 	}
 	var seen [6]int
-	for band := 0; band < 8; band++ {
+	for band := range 8 {
 		lo, hi := trim.bounds[band], trim.bounds[band+1]
 		if len(lo.sourceDeparture) != n || len(hi.sourceDeparture) != n ||
 			len(lo.projectiveDeparture) != n || len(hi.projectiveDeparture) != n {
@@ -657,7 +663,7 @@ func spiralIsolateRoot(coeff []*big.Rat) spiralRootCrossing {
 
 func spiralIsolateRootN(coeff []*big.Rat, steps int) spiralRootCrossing {
 	lo, hi := lfZero(), lfOne()
-	for i := 0; i < steps; i++ {
+	for range steps {
 		mid := lfMul(lfAdd(lo, hi), big.NewRat(1, 2))
 		if spiralBernValue(coeff, mid).Sign() < 0 {
 			lo = mid
@@ -674,7 +680,7 @@ func spiralBernSplit(a []*big.Rat, at *big.Rat) ([]*big.Rat, []*big.Rat) {
 	work := append([]*big.Rat(nil), a...)
 	for level := 0; level <= n; level++ {
 		left[level], right[n-level] = work[0], work[n-level]
-		for i := 0; i < n-level; i++ {
+		for i := range n - level {
 			work[i] = lfAdd(lfMul(lfSub(lfOne(), at), work[i]), lfMul(at, work[i+1]))
 		}
 	}
@@ -712,7 +718,7 @@ func spiralBandXRange(first, second loftFaceMap, span freeform.BezierSpan,
 func spiralIsolateJunction(ctx context.Context, maps []loftFaceMap, span freeform.BezierSpan,
 	m, b *big.Rat, caps [9]spiralRootCrossing, targetX *big.Rat) (spiralJunction, bool) {
 	band := -1
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		left, right := spiralCapXRange(maps[i], span, caps[i]),
 			spiralCapXRange(maps[i+1], span, caps[i+1])
 		if left.hi.Cmp(targetX) < 0 && right.lo.Cmp(targetX) > 0 {
@@ -727,7 +733,7 @@ func spiralIsolateJunction(ctx context.Context, maps []loftFaceMap, span freefor
 	}
 	q := spiralRootPolynomial(maps[band], maps[band+1], span, m, b)
 	tLo, tHi := lfZero(), lfOne()
-	for step := 0; step < 48; step++ {
+	for step := range 48 {
 		if step%8 == 0 && ctx.Err() != nil {
 			return spiralJunction{}, false
 		}
@@ -810,7 +816,7 @@ func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
 	if !spiralJunctionRootBracket(q, sLo, sHi, low.tLo, high.tHi) {
 		return empty, false, ctx.Err()
 	}
-	for step := 0; step < 64; step++ {
+	for step := range 64 {
 		if step%8 == 0 && ctx.Err() != nil {
 			return empty, false, ctx.Err()
 		}

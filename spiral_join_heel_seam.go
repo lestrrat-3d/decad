@@ -150,14 +150,14 @@ func spiralHeelSourceBox(arc arcSeg) (*big.Rat, *big.Rat, [4]*big.Rat, bool) {
 	return radius, errorBound, box, true
 }
 
-func spiralHeelCapEightOutside(cap loftFaceMap, coneC *big.Rat) bool {
-	n0 := lfVAdd(lfVScale(cap.constant, cap.g0), cap.q0)
-	nu := lfVAdd(lfVScale(cap.constant, cap.gu), cap.qu)
-	nv := lfVAdd(lfVScale(cap.constant, cap.gv), cap.qv)
+func spiralHeelCapEightOutside(capMap loftFaceMap, coneC *big.Rat) bool {
+	n0 := lfVAdd(lfVScale(capMap.constant, capMap.g0), capMap.q0)
+	nu := lfVAdd(lfVScale(capMap.constant, capMap.gu), capMap.qu)
+	nv := lfVAdd(lfVScale(capMap.constant, capMap.gv), capMap.qv)
 	coneVec := func(n loftFaceRatVec, g *big.Rat) loftFaceRatVec {
 		return loftFaceRatVec{lfSub(lfMul(coneC, g), n[0]), n[1], n[2]}
 	}
-	a, u, v := coneVec(n0, cap.g0), coneVec(nu, cap.gu), coneVec(nv, cap.gv)
+	a, u, v := coneVec(n0, capMap.g0), coneVec(nu, capMap.gu), coneVec(nv, capMap.gv)
 	dot := func(x, y loftFaceRatVec) *big.Rat {
 		return lfSub(lfAdd(lfMul(x[1], y[1]), lfMul(x[2], y[2])), lfMul(x[0], y[0]))
 	}
@@ -336,7 +336,7 @@ func spiralHeelEndpointBox(ctx context.Context, first, second loftFaceMap,
 	if q(lo).Sign() >= 0 || q(hi).Sign() <= 0 {
 		return empty, false, nil
 	}
-	for i := 0; i < 70; i++ {
+	for i := range 70 {
 		if i%8 == 0 {
 			if err := ctx.Err(); err != nil {
 				return empty, false, err

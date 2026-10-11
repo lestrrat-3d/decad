@@ -20,7 +20,7 @@ func TestSpiralCapPlaneMustMissTheWholeRootCircle(t *testing.T) {
 	box := [4]*big.Rat{big.NewRat(-1, 1), big.NewRat(1, 1),
 		big.NewRat(-1, 1), big.NewRat(1, 1)}
 	corners := lfBoxCorners(box)
-	cap := loftFaceMap{
+	capMap := loftFaceMap{
 		constant: loftFaceRatVec{lfZero(), lfZero(), lfZero()},
 		q0:       loftFaceRatVec{lfZero(), big.NewRat(1, 1), lfZero()},
 		qu:       loftFaceRatVec{lfOne(), lfZero(), lfZero()},
@@ -28,16 +28,16 @@ func TestSpiralCapPlaneMustMissTheWholeRootCircle(t *testing.T) {
 		g0:       lfOne(), gu: lfZero(), gv: lfZero(),
 	}
 	m, b, x := lfZero(), lfOne(), lfZero()
-	require.False(t, spiralCapPlaneAvoidsRootCircle(cap, corners, m, b, x),
+	require.False(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"a tangent cap can meet the circle")
-	cap.q0[1] = lfAdd(cap.q0[1], big.NewRat(1, 1<<50))
-	require.True(t, spiralCapPlaneAvoidsRootCircle(cap, corners, m, b, x),
+	capMap.q0[1] = lfAdd(capMap.q0[1], big.NewRat(1, 1<<50))
+	require.True(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"an exact sub-femtometre gap still separates the full cap")
-	cap.q0[1] = lfZero()
-	require.False(t, spiralCapPlaneAvoidsRootCircle(cap, corners, m, b, x),
+	capMap.q0[1] = lfZero()
+	require.False(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"a cap crossing the circle must refuse")
-	cap.qu = loftFaceRatVec{lfZero(), lfZero(), lfZero()}
-	require.False(t, spiralCapPlaneAvoidsRootCircle(cap, corners, m, b, x),
+	capMap.qu = loftFaceRatVec{lfZero(), lfZero(), lfZero()}
+	require.False(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"a collapsed cap has no supporting plane")
 }
 

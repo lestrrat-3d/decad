@@ -329,10 +329,6 @@ func matchBevelBlankSection(b *Body, requireZeroOrigin bool) (*bevelBlankSource,
 
 // A straight meridian and a cone generator differ linearly in station, so
 // the endpoint maximum bounds every point between them without sampling.
-func bevelMeridianResidual(point Point2, slope float64) float64 {
-	return bevelMeridianResidualAt(point, slope, 0)
-}
-
 func bevelMeridianResidualAt(point Point2, slope, originX float64) float64 {
 	r := new(big.Rat).Sub(proofarith.FloatRat(point.V),
 		new(big.Rat).Mul(proofarith.FloatRat(slope),

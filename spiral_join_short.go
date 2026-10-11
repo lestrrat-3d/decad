@@ -60,7 +60,7 @@ func spiralShortCapTBracket(q [3][]*big.Rat) (loftFaceInterval, bool) {
 		return loftFaceInterval{}, false
 	}
 	lo, hi := big.NewRat(15, 16), lfOne()
-	for step := 0; step < 64; step++ {
+	for range 64 {
 		mid := lfMul(lfAdd(lo, hi), big.NewRat(1, 2))
 		coeff := spiralRootAtBandT(q, mid)
 		negative, positive := true, true
@@ -140,7 +140,7 @@ func spiralShortCubicBox(ctx context.Context, first, second loftFaceMap,
 		sLo, sHi = clip.sLo, lfOne()
 	}
 	width := lfDiv(lfSub(sHi, sLo), big.NewRat(16, 1))
-	for cell := 0; cell < 16; cell++ {
+	for cell := range 16 {
 		if cell%4 == 0 {
 			if err := ctx.Err(); err != nil {
 				return result, false, err
@@ -192,7 +192,7 @@ func spiralShortCapSpan(source *pointSectionRecord, groups []int,
 	a := source.sourceStation[index]
 	z := source.sourceStation[(index+1)%len(groups)]
 	line, ok := source.profile.Outer.Segments[group].(lineSeg)
-	if !ok || !(a == line.Start && z == line.End || a == line.End && z == line.Start) {
+	if !ok || a != line.Start && z != line.Start || a != line.End && z != line.End {
 		return nil, false
 	}
 	return freeform.BezierSpan{{U: lfF(a.U), V: lfF(a.V)},
@@ -311,7 +311,7 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 		return out, false, nil
 	}
 	groups := [...]int{0, 2, 3, 5}
-	for end := 0; end < 2; end++ {
+	for end := range 2 {
 		if err := ctx.Err(); err != nil {
 			return out, false, err
 		}
@@ -347,7 +347,10 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 				work.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
 				var err error
 				spans, err = splinebezier.FitSplineBezierSpans(fit, work)
-				if err != nil || len(spans) == 0 || len(spans) > 64 ||
+				if err != nil {
+					return out, false, err
+				}
+				if len(spans) == 0 || len(spans) > 64 ||
 					len(spans[0]) != len(proof.flank[index]) {
 					return out, false, nil
 				}

@@ -125,7 +125,7 @@ func spiralToeRootCells(ctx context.Context, trim *loftFacesTrimRecord,
 		for index, mapped := range [...]loftFaceMap{trim.maps[1], trim.maps[2]} {
 			first := mapped.at(lfF(a.U), lfF(a.V))
 			second := mapped.at(lfF(z.U), lfF(z.V))
-			for axis := 0; axis < 3; axis++ {
+			for axis := range 3 {
 				minimum, maximum := first[axis], second[axis]
 				if minimum.Cmp(maximum) > 0 {
 					minimum, maximum = maximum, minimum
@@ -135,7 +135,7 @@ func spiralToeRootCells(ctx context.Context, trim *loftFacesTrimRecord,
 			}
 		}
 		var point, delta [3]loftFaceInterval
-		for axis := 0; axis < 3; axis++ {
+		for axis := range 3 {
 			point[axis] = lfIntervalHull(caps[0][axis], caps[1][axis])
 			delta[axis] = lfIntervalSub(caps[1][axis], caps[0][axis])
 		}
@@ -173,7 +173,7 @@ func spiralToeEndpointBox(ctx context.Context, first, second loftFaceMap,
 	if q(lo).Sign() >= 0 || q(hi).Sign() <= 0 {
 		return empty, false, nil
 	}
-	for i := 0; i < 70; i++ {
+	for i := range 70 {
 		if i%8 == 0 {
 			if err := ctx.Err(); err != nil {
 				return empty, false, err

@@ -62,7 +62,7 @@ func spiralShortHeldBound(ctx context.Context, proof *spiralFirstJoinSource,
 	}
 	limit := lfMul(lfF(minBound), lfF(minBound))
 	var largest *big.Rat
-	for direction := 0; direction < 2; direction++ {
+	for direction := range 2 {
 		from, to := source, mesh
 		if direction == 1 {
 			from, to = mesh, source
