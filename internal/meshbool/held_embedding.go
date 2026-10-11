@@ -165,8 +165,6 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	if err := e.budget.Err(); err != nil {
 		return false, err
 	}
-	originalBudget := e.budget
-	e.budget = embeddingWorkerBudget(ctx, workers)
 	queryFacet := make([]bool, len(e.h.Tris))
 	for _, i := range query {
 		queryFacet[i] = true
@@ -174,6 +172,9 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	clean := make([]bool, workers)
 	errors := make([]error, workers)
 	locals := make([]*heldEmbedding, workers)
+	e.pollErr = ctx.Err
+	e.pollInterval = proofbound.WorkPollInterval / workers
+	e.pollRemaining = e.pollInterval
 	locals[0] = e
 	for worker := 1; worker < workers; worker++ {
 		locals[worker] = e.readOnlyScanCopy(ctx, workers)
@@ -189,7 +190,7 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 		}()
 	}
 	group.Wait()
-	e.budget = originalBudget
+	e.pollErr = nil
 	if err := e.budget.Err(); err != nil {
 		return false, err
 	}
@@ -209,15 +210,21 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool) (bool, error)
 		if _, _, n := e.facet(i); zeroXpt(n) {
 			return false, nil
 		}
+		box := e.triBox(i)
 		candidates, err := e.candidates(i)
 		if err != nil {
 			return false, err
 		}
 		for _, j := range candidates {
-			if err := e.budget.Step(); err != nil {
+			if err := e.scanStep(); err != nil {
 				return false, err
 			}
 			if j == i || j < i && queryFacet[j] {
+				continue
+			}
+			// Grid cells and wide-facet registration include disjoint boxes.
+			// This is pairEmbedded's exact reject-only first gate.
+			if !BoxesOverlap(box, e.triBox(j)) {
 				continue
 			}
 			if !e.pairEmbedded(i, j) {
@@ -228,26 +235,27 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool) (bool, error)
 	return true, nil
 }
 
-func embeddingWorkerBudget(ctx context.Context, workers int) *proofbound.WorkBudget {
-	work := 0
-	interval := proofbound.WorkPollInterval / workers
-	return &proofbound.WorkBudget{
-		StepFn: func() error {
-			work++
-			if work%interval == 0 {
-				return ctx.Err()
-			}
-			return nil
-		},
-		ErrFn: ctx.Err,
+// scanStep preserves the parallel scan's per-worker polling interval without
+// an indirect callback for every candidate in its innermost loop.
+func (e *heldEmbedding) scanStep() error {
+	if e.pollErr == nil {
+		return e.budget.Step()
 	}
+	e.pollRemaining--
+	if e.pollRemaining != 0 {
+		return nil
+	}
+	e.pollRemaining = e.pollInterval
+	return e.pollErr()
 }
 
 // readOnlyScanCopy shares the immutable grid and incident-facet lists, while
 // each worker writes only its own predicate caches.
 func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *heldEmbedding {
 	local := *e
-	local.budget = embeddingWorkerBudget(ctx, workers)
+	local.pollErr = ctx.Err
+	local.pollInterval = proofbound.WorkPollInterval / workers
+	local.pollRemaining = local.pollInterval
 	local.xv = make([]proof.Xpt, len(e.xv))
 	local.xvOK = make([]bool, len(e.xvOK))
 	local.norm = make([]proof.Xpt, len(e.norm))
@@ -263,8 +271,10 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 	local.stamp = make([]int, len(e.stamp))
 	local.stampID = 0
 	local.cands = nil
-	local.box = make([][2]r3.Vec, len(e.box))
-	local.boxOK = make([]bool, len(e.boxOK))
+	// buildGrid filled every box before the read-only first scan. Repair
+	// starts only after all workers have joined, so sharing is safe here.
+	local.box = e.box
+	local.boxOK = e.boxOK
 	local.pairs = nil
 	return &local
 }
@@ -272,8 +282,13 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 type heldEmbedding struct {
 	h      HeldRounding
 	budget *proofbound.WorkBudget
-	inc    [][]int
-	taken  map[r3.Vec]int
+	// pollErr is set only during the read-only parallel first scan. Each
+	// worker has its own countdown; later repair uses budget again.
+	pollErr       func() error
+	pollInterval  int
+	pollRemaining int
+	inc           [][]int
+	taken         map[r3.Vec]int
 
 	// Exact lifts of the held float vertices and facets, invalidated when a
 	// vertex moves.
@@ -936,8 +951,12 @@ func (e *heldEmbedding) buildGrid() error {
 
 	lo := r3.NewVec(math.Inf(1), math.Inf(1), math.Inf(1))
 	hi := r3.NewVec(math.Inf(-1), math.Inf(-1), math.Inf(-1))
-	for _, t := range e.h.Tris {
+	for i, t := range e.h.Tris {
 		b := TriBox(e.h.Verts, t)
+		if e.memoOn {
+			e.box[i] = b
+			e.boxOK[i] = true
+		}
 		lo = r3.NewVec(math.Min(lo.X, b[0].X), math.Min(lo.Y, b[0].Y), math.Min(lo.Z, b[0].Z))
 		hi = r3.NewVec(math.Max(hi.X, b[1].X), math.Max(hi.Y, b[1].Y), math.Max(hi.Z, b[1].Z))
 	}
@@ -966,11 +985,11 @@ func (e *heldEmbedding) buildGrid() error {
 	}
 	e.origin, e.cell, e.dims = lo, cell, dims
 	e.cells = make([][]int32, dims[0]*dims[1]*dims[2])
-	for i, t := range e.h.Tris {
+	for i := range e.h.Tris {
 		if err := e.budget.Step(); err != nil {
 			return err
 		}
-		c0, c1 := e.cellRange(TriBox(e.h.Verts, t))
+		c0, c1 := e.cellRange(e.triBox(i))
 		span := (c1[0] - c0[0] + 1) * (c1[1] - c0[1] + 1) * (c1[2] - c0[2] + 1)
 		if span > heldGridCellSpan {
 			e.wide = append(e.wide, int32(i))
@@ -1020,7 +1039,7 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 	for x := c0[0]; x <= c1[0]; x++ {
 		for y := c0[1]; y <= c1[1]; y++ {
 			for z := c0[2]; z <= c1[2]; z++ {
-				if err := e.budget.Step(); err != nil {
+				if err := e.scanStep(); err != nil {
 					return nil, err
 				}
 				for _, j := range e.cells[(x*e.dims[1]+y)*e.dims[2]+z] {
