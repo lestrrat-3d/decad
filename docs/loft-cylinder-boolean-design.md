@@ -84,8 +84,9 @@ The root connector also supports a local bound for a later cap-band cutter.
 At an exact height below both admitted top collars, its two held triangles
 form the radial-monotone chain through their common diagonal. The source
 connector begins inside the blank and ends outside it, so it crosses the
-exact cylinder. Its matched Loft facet departure is `δ`; every source
-crossing corresponds to a held point whose radius lies in `[R−δ,R+δ]`.
+exact cylinder. The supplied `δ` covers the matched Loft facet departure.
+Every source crossing corresponds to a held point whose radius lies in
+`[R−δ,R+δ]`.
 `loftCylinderConnectorContactBound` brackets that held strip with exact
 rational signs. It requires an exact cutter contact segment on one piece of
 the chain at the same height. The exact contact is split at held radius

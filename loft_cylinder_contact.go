@@ -17,8 +17,8 @@ import (
 // the held connector's horizontal slice.
 //
 // At this height, the source connector starts inside the exact blank and ends
-// outside it. Its source wall is matched to the held triangle pair within
-// sourceBound. Every source circle crossing therefore maps to a held point
+// outside it. sourceBound covers the matched source-to-held facet departure.
+// Every source circle crossing therefore maps to a held point
 // with radius in [R-sourceBound,R+sourceBound]. The radial-monotone held slice
 // makes that set one bounded strip. The maximum distance from either contact
 // endpoint to the strip, plus sourceBound, covers the entire contact segment
@@ -31,7 +31,7 @@ func loftCylinderConnectorContactBound(lp loftPayload, root, connectorCell int,
 	if level == nil || radius <= 0 || proofbound.IsNonFinite(radius) ||
 		sourceBound < 0 || proofbound.IsNonFinite(sourceBound) ||
 		!lp.authenticatedReconstruction || lp.sourceIdentity == nil || lp.surfaceResult ||
-		sourceBound != lp.proof.FacetDeparture || !loftCylinderAxialPlacement(lp.xform) {
+		sourceBound < lp.proof.FacetDeparture || !loftCylinderAxialPlacement(lp.xform) {
 		return refuse("connector contact has no matched Loft source bound")
 	}
 	n := len(lp.verts) / 2
