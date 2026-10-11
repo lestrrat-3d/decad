@@ -20,9 +20,11 @@ type pointPlaneSimilarityRecord struct {
 }
 
 type pointPlaneSimilarityStep struct {
-	motion r3.Transform
-	anchor r3.Vec
-	factor float64 // zero means a rigid step
+	motion          r3.Transform
+	anchor          r3.Vec
+	factor          float64 // zero means a rigid step
+	meshBound       float64
+	capDisplacement float64
 }
 
 // ScaledAt returns the positive uniform image of an authenticated point-loft
@@ -55,9 +57,12 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 		return nil, err
 	}
 	fp, ok := b.payload.(facetedPayload)
-	if !ok || fp.pointPlane == nil || fp.pointPlane.base.pointSection == nil ||
+	if !ok || fp.pointPlane == nil || fp.pointPlane.base.pointSection == nil || !fp.xform.IsValid() ||
 		len(fp.verts) == 0 || len(fp.vertexBound) != len(fp.verts) {
 		return nil, fmt.Errorf("%w: this body has no certified point-loft Split slab to scale", ErrUnsupported)
+	}
+	if fp.pointSimilarity != nil && fp.pointSimilarity.slice != fp.pointPlane {
+		return nil, fmt.Errorf("%w: the slab similarity source does not match its Split source", ErrUnsupported)
 	}
 	for _, group := range fp.groups {
 		if group.denoted != nil {
@@ -79,7 +84,9 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 	next.volSymDiff, next.areaSlack = mesh.VolSymDiff, mesh.AreaSlack
 	next.dPair = proofbound.ProductUpper(fp.dPair, s)
 	next.xform = r3.Identity()
-	next.pointPlane = nil // Source is retained separately; a scaled slab cannot be re-split.
+	next.pointPlaneSourceEligible = false
+	next.pointPlaneCapDisplacement = proofbound.AbsSumUpper(
+		proofbound.ProductUpper(fp.pointPlaneCapDisplacement, s), mesh.Round)
 	next.pointSection, next.pointCone = nil, nil
 	next.exactSourceVerts, next.exactSourceTris = nil, nil
 	next.lowerSupport = nil
@@ -103,11 +110,26 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 				return nil, fmt.Errorf("%w: a scaled cap frame is not representable: %s", ErrUnsupported, frameErr)
 			}
 			group.surface = Plane{Frame: frame}
+			// NewFrame may round the held axes again. The exact similar plane
+			// keeps its old normal; two unit normals differ by at most 2.
+			group.normalBound = 2
 		}
 	}
-	if proofbound.IsNonFinite(next.dPair) {
-		return nil, fmt.Errorf("%w: the scaled diameter proof is not finite", ErrUnsupported)
+	if proofbound.IsNonFinite(next.dPair) || proofbound.IsNonFinite(next.pointPlaneCapDisplacement) {
+		return nil, fmt.Errorf("%w: the scaled source proof is not finite", ErrUnsupported)
 	}
+	record := pointPlaneSimilarityRecord{slice: fp.pointPlane}
+	if fp.pointSimilarity == nil {
+		if fp.xform != r3.Identity() {
+			record.steps = append(record.steps, pointPlaneSimilarityStep{motion: fp.xform,
+				meshBound: fp.meshBound, capDisplacement: fp.pointPlaneCapDisplacement})
+		}
+	} else {
+		record.steps = append(record.steps, fp.pointSimilarity.steps...)
+	}
+	record.steps = append(record.steps, pointPlaneSimilarityStep{anchor: anchor, factor: s,
+		meshBound: next.meshBound, capDisplacement: next.pointPlaneCapDisplacement})
+	next.pointSimilarity = &record
 	ref := d.nextProducerID()
 	scaled, err := buildFacetedBody(ctx, d, ref, next)
 	if err != nil {

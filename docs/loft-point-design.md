@@ -111,6 +111,29 @@ source gap plus the new rounding and embedding bound. A separate original
 source marker prevents any placed copy, including one moved back to its
 original pose, from becoming a structural Split source again.
 
+## Anchored uniform scale of a Split slab
+
+`Body.ScaledAt(ctx, anchor, factor)` accepts a complete authenticated Split
+slab with a finite, positive dimensionless factor. The anchor is a world
+point in millimetres. It maps each held vertex by `anchor + factor*(p-anchor)`;
+an exact rational image of the stored floats encloses the rounding of that
+evaluation. The mesh embedding audit may adjust a rounded vertex within its
+float box or refuse the image. Each source vertex bound grows by the factor
+plus that vertex's image rounding. The occupied-volume gap grows by the cube
+of the factor plus the rounded boundary's swept volume. Area slack grows by
+the square of the factor plus the rounded facets' area allowance.
+
+The result keeps the original `pointPlaneSliceRecord`, including the source
+Sketch revision, far station order and rational lower/upper ray-plane maps.
+A separate record appends the accumulated rigid placement, each positive
+scale with its anchor, and later rigid placements in order. Cap origins and
+the original cap-role selectors stay on their faces. Scaling the cap-contour
+displacement and both cap-centroid bounds lets
+`ExtremeFacesByCentroid` reselect the ends after the scale. The result clears
+the original-source marker, so `Split` cannot re-enter the structural arm.
+Rebuilding a cap `Plane` frame may round its normal again; `NormalAt` reports
+the conservative two-unit direction bound used for placed planar tags.
+
 ## Coaxial finite cone trims
 
 `Cut` and `Intersect` retain the point loft's authenticated fan when the

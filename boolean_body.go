@@ -72,6 +72,8 @@ type facetedPayload struct {
 	pointSection *pointSectionRecord
 	pointCone    *pointConeTrimRecord
 	pointPlane   *pointPlaneSliceRecord
+	// pointSimilarity records ordered images of the immutable Split source.
+	pointSimilarity *pointPlaneSimilarityRecord
 	// pointPlaneCapDisplacement bounds the true source cap contour against
 	// each held cap ring, including every placed-basis stretch and rounding.
 	pointPlaneCapDisplacement float64
@@ -206,27 +208,40 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 		next.exactSourceVerts = append([]r3.Vec(nil), fp.verts...)
 		next.exactSourceTris = append([][3]int(nil), fp.tris...)
 	}
-	placed, err := facetproof.PlaceMesh(ctx, budget, fp.verts, fp.tris, fp.vertexBound, fp.volSymDiff, delta)
+	linear, err := massmoment.PlacementRotation(delta)
+	if err != nil {
+		return nil, err
+	}
+	charge, err := massmoment.MapChargeOf(linear)
+	if err != nil {
+		return nil, err
+	}
+	next.dPair = proofbound.ProductUpper(fp.dPair, proofbound.AbsSumUpper(1, charge.Stretch))
+	if proofbound.IsNonFinite(next.dPair) {
+		return nil, fmt.Errorf("%w: the placed pair diameter has no finite proof", ErrUnsupported)
+	}
+	placed, err := facetproof.PlaceMesh(ctx, budget, fp.verts, fp.tris, fp.vertexBound,
+		fp.volSymDiff, fp.areaSlack, charge.Stretch, charge.Volume, delta)
 	if err != nil {
 		return nil, err
 	}
 	next.verts, next.tris = placed.Verts, placed.Tris
 	next.vertexBound, next.meshBound, next.volSymDiff = placed.VertexBound, placed.MeshBound, placed.VolSymDiff
+	next.areaSlack = placed.AreaSlack
 	if fp.pointPlane != nil {
-		linear, err := massmoment.PlacementRotation(delta)
-		if err != nil {
-			return nil, err
-		}
-		charge, err := massmoment.MapChargeOf(linear)
-		if err != nil {
-			return nil, err
-		}
 		// PlaceMesh's MeshBound includes the held-coordinate rounding and any
 		// embedding correction, but does not stretch the previous source gap.
 		// Add both terms; the possible double charge is conservative.
 		next.pointPlaneCapDisplacement = proofbound.AbsSumUpper(
 			proofbound.ProductUpper(fp.pointPlaneCapDisplacement,
 				proofbound.AbsSumUpper(1, charge.Stretch)), placed.MeshBound)
+	}
+	if fp.pointSimilarity != nil {
+		record := *fp.pointSimilarity
+		record.steps = append(append([]pointPlaneSimilarityStep(nil), record.steps...),
+			pointPlaneSimilarityStep{motion: delta, meshBound: next.meshBound,
+				capDisplacement: next.pointPlaneCapDisplacement})
+		next.pointSimilarity = &record
 	}
 	return buildFacetedBody(ctx, d, ref, next)
 }

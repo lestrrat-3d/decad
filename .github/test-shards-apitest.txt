@@ -653,6 +653,7 @@
 4	0.01	TestPointLoftParallelSheetFarCapFollowsApexSide
 4	0.67	TestPointLoftParallelSheetRefusesShortToolAtomically
 4	4.84	TestPointLoftParallelSheetReversedLineKeepsOutwardCapNormals
+4	1.10	TestPointLoftSplitAnchoredScalePreservesCapsAndVolume
 4	0.01	TestPrismCutCleanNestingKeepsAToolArcEndTheAnglesMiss
 4	0.00	TestPrismCutCrossingBoxesResolvesAnalytically
 4	0.03	TestPrismCutIntersectNonCoplanarPairStillTakesMeshPath

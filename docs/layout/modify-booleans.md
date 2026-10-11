@@ -74,6 +74,7 @@ The rules for rows live in `docs/layout.md`.
 | `classb_crossing.go` | Class-B scene and BRep adapters. See general-boolean §5, §10. |
 | `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |
 | `point_plane_split.go` | Splits a point loft by a planar chain sheet. See loft-point design. |
+| `point_plane_scale.go` | Scales a certified Split slab about an anchor and carries its source map. See loft-point design. |
 | `point_cap_centroid.go` | Certifies far and planar Split cap centroids and maps them through rigid placement. See loft-point design. |
 | `point_cap_extremes.go` | Bounds side-face centroid projections and selects the extreme Split cap faces. See loft-point design. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
