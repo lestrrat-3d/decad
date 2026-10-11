@@ -17,6 +17,17 @@ import (
 
 const bevelBoreSideRole = "side(0,0)"
 
+func bevelBorePatternKind(placed int) (toeClipped, ok bool) {
+	switch placed {
+	case 7, 15:
+		return false, true
+	case 11:
+		return true, true
+	default:
+		return false, false
+	}
+}
+
 // tryBevelPostJoinBoreCut cuts a coaxial, spanning circle from a complete
 // structural join. The source record identifies the blank cap fans and toe
 // flank, so their local cut can be rebuilt without remeshing every tooth.
@@ -26,8 +37,12 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, nil
 	}
 	joined, ok := target.payload.(facetedPayload)
+	expectToeClipped, patternOK := false, false
+	if ok && joined.bevelJoin != nil {
+		expectToeClipped, patternOK = bevelBorePatternKind(len(joined.bevelJoin.placed))
+	}
 	if !ok || joined.bevelJoin == nil || joined.bevelJoin.capRing == nil ||
-		(len(joined.bevelJoin.placed) != 7 && len(joined.bevelJoin.placed) != 11) ||
+		!patternOK ||
 		joined.xform != r3.Identity() ||
 		!joined.contactAudited {
 		return nil, false, nil
@@ -72,8 +87,7 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, nil
 	}
 	toeClipped := radius > blank.toeOuter.V
-	if radius == blank.toeOuter.V ||
-		(toeClipped != (len(joined.bevelJoin.placed) == 11)) {
+	if radius == blank.toeOuter.V || toeClipped != expectToeClipped {
 		return nil, false, nil
 	}
 	var wall *Face
@@ -289,11 +303,19 @@ func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 	}
 	// The annular strips and inward wall add four net triangles per station
 	// after the old axis fans are removed.
-	const maxPatternAuditTriangles = 44_480 + 22_000*6
+	teeth := len(joined.bevelJoin.placed) + 1
+	maxPatternAuditTriangles := 44_480 + 22_000*(teeth-2)
+	maxAuditScans := uint64(128_000_000)
+	if teeth == 16 {
+		// CombineJoin's one-pass cap refinement adds at most three children
+		// per source cell on each of two caps per tooth.
+		maxPatternAuditTriangles += 6 * bevelCombineCapCellLimit * teeth
+		maxAuditScans = uint64(25_000_000 * teeth)
+	}
 	maxAuditTriangles := maxPatternAuditTriangles + 4*n
 	if err := loftmesh.LoftCrossingAuditBounded(
 		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
-		maxAuditTriangles, 128_000_000); err != nil {
+		maxAuditTriangles, maxAuditScans); err != nil {
 		return nil, err
 	}
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(

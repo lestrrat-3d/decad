@@ -387,6 +387,25 @@ module-4 straight pair and their `VerifyAll` checks live in
 together. Decad's focused tests cover cap conformity, root station order,
 and complete source-solid separation.
 
+The sixteen-tooth driving member's default centered bore has radius 8 mm,
+inside the recorded toe outer radius. A post-`CombineJoin` Cut with fifteen
+placed teeth uses the annular-cap rewrite above. It requires the complete
+source record, both cap rings, the finite six-line blank meridian and a
+spanning axis-X circle. Each non-cap facet must clear the bore after the
+joined boundary and new circle bounds are charged. The two original cap
+fans must each cover every angular sector exactly once. The rewrite removes
+those fans and connects two annular strips to an inward cylindrical wall.
+It checks directed edges, vertex links and exact nonadjacent triangle
+contacts before returning the body.
+
+The adaptive sixteen-tooth Join ceiling plus four triangles per ring station
+bounds the bore audit. The real driving member has 1,408 stations and
+742,144 triangles, below its 1,318,112-triangle ceiling. Its audit scanned
+309,823,933 pairs under the 400-million limit of 25 million per tooth.
+The existing cylinder-shell volume charge spans the exact blank caps. The
+real source passes `Tessellate(0.1 mm, VerifyAll)` with a 0.092906 mm
+boundary bound and a 788.859944 mm³ occupied-volume allowance.
+
 ## Bore through the straight pinion's narrow toe
 
 The module-4, twelve-tooth pinion's source blank has a toe outer radius of
