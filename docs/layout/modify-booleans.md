@@ -61,6 +61,9 @@ The rules for rows live in `docs/layout.md`.
 | `bevel_join_pattern.go` | Rebuilds three to eight separate point-loft teeth on one bevel blank root ring. See loft-point design. |
 | `bevel_join_bore.go` | Cuts a certified centered through-bore from the complete eight-tooth bevel join. See loft-point design. |
 | `loft_cut.go` | Preserves a matching axial loft through a certified coaxial circle-bore Cut. See loft §18. |
+| `loft_cylinder_union.go` | Joins a source Loft tooth pattern to a coaxial cylinder with certified seam and volume bounds. See loft-cylinder-boolean design. |
+| `loft_cylinder_cap.go` | Audits the joined cap outline and its exact triangle tiling. See loft-cylinder-boolean design. |
+| `loft_cylinder_seam.go` | Certifies the faceted connector's radial crossing at every height. See loft-cylinder-boolean design. |
 | `prism_boolean.go` | Analytic booleans of co-directional prisms. See `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Clean-nesting scene adapters. See prism-boolean §4.2. |
 | `prism_boolean_blind.go` | Blind and spanning Cuts via the whole-loop match. See `docs/prism-boolean-design.md` §3.2. |

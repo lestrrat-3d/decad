@@ -45,7 +45,12 @@ import (
 // accumulator integrated — tris[:walls] the wall triangles (side(i,j,k)), the
 // rest the two caps' own triangulations — kept on the payload so a later
 // Tessellate (PR 2) restates it rather than rebuilding it.
+type loftSourceIdentity struct{ origin producerID }
+
 type loftPayload struct {
+	// sourceIdentity is shared only by the original Loft and its own placed
+	// copies. It lets a structural consumer require one authenticated source.
+	sourceIdentity *loftSourceIdentity
 	profile0, profile1 profileRecord
 	plane0, plane1     planeRecord
 	frame0, frame1     r3.Frame
@@ -187,6 +192,11 @@ type loftPayload struct {
 	capStartCount int
 	cell          [][2]int
 	side          []uint8
+	// segment names the authenticated source segment of each wall cell.
+	// It stays parallel to the section stations and is retained for structural
+	// consumers that must omit a source wall without inferring its identity
+	// from its sampled coordinates.
+	segment [][]int
 
 	// proof is the mesh proof record docs/tessellation-design.md §2 states for
 	// this payload, composed by evalLoft from the same build the triangle set
@@ -245,7 +255,7 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, c
 	// beside the triangle set they speak for: evalLoft rewrites all of them
 	// from the re-lifted records, and a stale copy surviving the re-evaluation
 	// is exactly the disagreement the payload's own doc comment forbids.
-	next.capStartCount, next.cell, next.side = 0, nil, nil
+	next.capStartCount, next.cell, next.side, next.segment = 0, nil, nil, nil
 	next.proof = loftmesh.MeshProof{}
 	return evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 }
@@ -497,7 +507,14 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	}
 
 	pl.verts, pl.tris, pl.walls = a.Verts, a.Tris, a.Walls
+	if pl.sourceIdentity == nil {
+		pl.sourceIdentity = &loftSourceIdentity{origin: ref}
+	}
 	pl.capStartCount, pl.cell, pl.side = a.CapStartCount, a.Cell, a.Side
+	pl.segment = make([][]int, len(pairs))
+	for i := range pairs {
+		pl.segment[i] = append([]int(nil), pairs[i].Segment...)
+	}
 	pl.proof = loftmesh.MeshProofOf(a, mass.MassAccumulator, sectionMatchedDelta)
 	pl.delta = a.Delta
 	// sectionDelta is loftmesh.PairRecords' own accumulated MAX over cells
