@@ -37,6 +37,7 @@ APIs are design-only.**
 | `Trim`, `Extend` or `Split` code | `docs/surface-intersection-design.md` |
 | Anything the surrounding `.go` file documents | its doc comments |
 | Answering what is missing, or closing/adding a refusal | `docs/missing-features.md` |
+| Tests and CI shards | `docs/testing.md` |
 
 ## Hard rules
 
@@ -124,12 +125,6 @@ APIs are design-only.**
   row in `docs/layout/`, as does every non-test `.go` file in the root.
 
 ## Verification
-
-- **ALWAYS update `.github/test-shards.txt` or
-  `.github/test-shards-apitest.txt` after adding, renaming, or removing a
-  test, fuzz target, or example.**
-- **ALWAYS run `go test . ./apitest/ -run '^TestCI'` before pushing any
-  test-name change.**
 
 ```
 go test ./...      # must pass

@@ -205,6 +205,26 @@ func TestOuterLoopOfKeepsBoreEdgesSharp(t *testing.T) {
 	require.Len(t, outer, 8)
 }
 
+func TestOuterCapChamferKeepsBoreCircular(t *testing.T) {
+	t.Parallel()
+	body := holePlateBody(t)
+	selection := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).
+		Or(decad.OuterLoopOf(decad.CapEnd(body))).Exactly(8)
+	chamfered, err := body.Chamfer(t.Context(), selection, units.Millimeters(0.5))
+	require.NoError(t, err)
+	require.True(t, chamfered.IsSolid())
+	for _, cap := range []decad.FeatureRef{decad.CapStart(chamfered), decad.CapEnd(chamfered)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(cap)).Exactly(1).SelectFaces(chamfered)
+		require.NoError(t, err)
+		require.Len(t, faces[0].Loops(), 2)
+		inner := faces[0].Loops()[1]
+		require.Len(t, inner.Edges(), 1)
+		circle, ok := inner.Edges()[0].Curve().(decad.Circle3)
+		require.True(t, ok)
+		require.InDelta(t, 10, circle.Radius.Base(), 1e-10)
+	}
+}
+
 // A finite but extreme direction must not overflow or underflow the parallel
 // test that NormalTo and edge ParallelTo share. holePlateBody is a 100×60×8
 // plate whose every planar face normal and straight edge is axis-aligned, so a

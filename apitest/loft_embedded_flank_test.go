@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -68,7 +69,15 @@ func TestLoftEmbeddedFitFlanksKeepOriginalCurve(t *testing.T) {
 			}
 			if flanks == 2 {
 				require.True(t, profile.Valid)
-				return s, profile
+				indices := make([]int, len(s.Profiles()))
+				for i := range indices {
+					indices[i] = i
+				}
+				merged, err := s.UnionProfiles(indices...)
+				require.NoError(t, err)
+				require.True(t, merged.Valid)
+				require.Len(t, merged.Outer, 4)
+				return s, merged
 			}
 		}
 		t.Fatal("no valid tooth profile with two trimmed flanks")
@@ -84,4 +93,9 @@ func TestLoftEmbeddedFitFlanksKeepOriginalCurve(t *testing.T) {
 	volume, err := body.Volume()
 	require.NoError(t, err)
 	require.Greater(t, volume.Value.Base(), 0.0)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
 }
