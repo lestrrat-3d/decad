@@ -61,6 +61,12 @@ matching directed edges and exact area. `LoftCrossingAudit` checks the entire
 constructed shell before the payload records `contactAudited=true`. The
 faceted-body audit then checks manifold closure and orientation.
 
+After those audits, each cap group receives the joined body's own `capStart`
+or `capEnd` role and the original blank's exact axial `Plane` surface. The
+other groups stay `Faceted`. Public `Planar` and `NormalTo(z)` select the two
+caps, and `OuterLoopOf(CapStart(result))` and `OuterLoopOf(CapEnd(result))`
+select their exterior rims.
+
 ## Boundary and occupied-volume bounds
 
 Away from the root band, the retained tooth walls have the Loft source
@@ -111,6 +117,12 @@ An exact planar check proves the inner ring is simple, counterclockwise, and
 contains the axis. Each audited cap disk becomes an annulus with that ring
 as its hole. The new inward wall keeps the tool's cylinder face provenance.
 The final mesh passes orientation, vertex-link, and exact crossing audits.
+An exact cap audit also checks that each cap group's triangles have the
+area of its outer polygon less its inner polygon, and that their directed
+edges pair internally and match both recorded boundary loops. The result
+gets new `capStart` and `capEnd` roles and the blank's axial `Plane` tags
+only after this audit. Each cap has an inner bore loop; `OuterLoopOf` excludes
+its edges.
 
 Cutting the same exact cylinder from the true and held joined solids cannot
 increase their occupied-volume difference. The polygonal bore differs from

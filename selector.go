@@ -416,11 +416,12 @@ func FaceCreatedBy(f FeatureRef) FacePredicate {
 // FaceCreatedBy(CapStart(b)) selects that cap without a "capStart" string
 // literal a typo could break. It reads b.Origin().producer (§6) and pairs it with
 // the fixed role. The role exists only where the feature mints it — an extrude, a
-// partial revolve, a shell that built a tube, or a Placed/PlacedCopy/Duplicate
+// partial revolve, a shell that built a tube, an authenticated axial
+// Loft/cylinder join or its centered bore Cut, or a Placed/PlacedCopy/Duplicate
 // of one; on any other body the ref is still well-formed and simply matches
-// nothing (an ordinary ErrNoMatch at resolve). To name a cap a boolean's
-// operand contributed, use FaceCreatedBy(CapStart(originalBody)) against the
-// upstream body, never CapStart of the boolean result.
+// nothing (an ordinary ErrNoMatch at resolve). An ordinary mesh boolean
+// preserves only its operands' cap origins, so name those with
+// FaceCreatedBy(CapStart(originalBody)).
 func CapStart(b *Body) FeatureRef {
 	return FeatureRef{producer: b.Origin().producer, Role: roleCapStart}
 }

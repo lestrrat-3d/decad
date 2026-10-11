@@ -1069,7 +1069,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   and the measured displacement of every vertex the check moved joins the
   motion's own rounding allowance. So every `Faceted` body is embedded when it
   is created, which is what its tessellation's `BoundaryVerified()` reports.
-- **Output**: faces are `Faceted`, one per CONNECTED PATCH of a current operand
+- **Ordinary mesh output**: faces are `Faceted`, one per CONNECTED PATCH of a current operand
   face. Each patch keeps that face's origins, so provenance (`FaceCreatedBy`)
   and face-level selection survive the boolean — but the operand face is not the
   face. A boolean can cut one operand face into pieces that no longer touch (a blind
@@ -1094,6 +1094,9 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   that allowance) — `Approximate`, except the §2
   Exact-volume case: an all-planar pair whose contacts round exactly leaves the
   exact volume integral with a genuinely zero bound.
+  A structural Loft/cylinder `Union` and its centered bore `Cut` instead tag
+  their audited planar cap patches `Plane` and mint result cap roles; their
+  other patches use the held facet groups.
 - **The rim is NOT bounded by δ_t.** A vertex an operand's tessellation
   contributed lies on that operand's surface; a vertex the BOOLEAN creates does
   not lie on either. It is the crossing of two chord PLANES, and the true
