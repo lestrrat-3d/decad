@@ -14,7 +14,7 @@ import (
 
 // This file is the crossing audit's pair loop (docs/loft-design.md §6): S6,
 // the S8 ceiling over the candidates the loop will test, and S7 over them.
-// sweepCandidates enumerates those candidates by sweep-and-prune, and
+// sweepCandidates enumerates those candidates from the selected box scan, and
 // loft_cap_proof.go's CapFamilyProof removes each cap's pairs from them.
 
 // LoftAuditStructure is the loft's own split of its triangle set:
@@ -243,10 +243,11 @@ func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 	// before a single pair test runs and before any candidate list is built.
 	// The enumeration's counting pass is itself held to the ceiling: it counts
 	// its own work — the sweep's comparisons of two boxes that overlap on the
-	// sweep axis, or the grid's registrations and in-cell comparisons
+	// sweep axis, the grid's registrations and in-cell comparisons, or the
+	// tree's node visits and leaf comparisons
 	// (newPairScan picks whichever is less) — a number at least the candidate
 	// count, and refuses the moment that passes the ceiling, so the work
-	// before an S8 refusal is O(F log F + ceiling).
+	// before an S8 refusal is O(F log² F + ceiling).
 	var order pairScan
 	var count uint64
 	var starts []int

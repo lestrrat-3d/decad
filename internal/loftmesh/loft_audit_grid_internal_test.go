@@ -135,11 +135,10 @@ func TestGridScanEnumeratesEveryOverlappingPairOnce(t *testing.T) {
 	}
 }
 
-// TestPairScanPicksTheCheaperEnumeration pins newPairScan's choice on the
-// two shapes it was built for: a tall tube and a helical strip both overlap
-// on every axis a sweep could take, so the sweep scans nearly every pair;
-// the grid's work is a small share of that and is the one handed back.
-func TestPairScanPicksTheCheaperEnumeration(t *testing.T) {
+// TestGridScanPrunesLongOverlappingShapes checks the grid's own reduction on
+// the two shapes for which it was introduced. The selector also considers a
+// tree, so the tree test checks the final choice separately.
+func TestGridScanPrunesLongOverlappingShapes(t *testing.T) {
 	t.Parallel()
 	for _, fx := range gridFixtures() {
 		if fx.name != "tall tube" && fx.name != "helical strip" {
@@ -154,8 +153,6 @@ func TestPairScanPicksTheCheaperEnumeration(t *testing.T) {
 			g, ok := newGridScan(fx.boxes, members, math.MaxUint64)
 			require.True(t, ok)
 			require.Less(t, g.work*3, sweep.work())
-			_, isGrid := newPairScan(fx.boxes, members, math.MaxUint64).(gridScan)
-			require.True(t, isGrid)
 			t.Logf("%s: sweep scans %d pairs, the grid works %d", fx.name, sweep.work(), g.work)
 		})
 	}

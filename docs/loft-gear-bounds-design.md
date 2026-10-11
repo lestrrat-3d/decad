@@ -406,17 +406,17 @@ the refused pair is the reference path's.
 
 **S8 counts candidates.** The ceiling `maxFacetPairTestsPerCall` stays `8_000_000`
 and is compared against the number of enumerated candidates the pairwise pass will
-test (wall-wall, plus any cap family that fell back), counted in a first sweep pass
+test (wall-wall, plus any cap family that fell back), counted in a first box-scan pass
 before the second pass tests them; the `F·(F − 1)/2` preflight goes. The counting
-pass steps the budget once per pair it compares on the sweep axis and refuses once
-that scan count passes the same ceiling, so a tall shape whose boxes all overlap on
-the sweep axis refuses after `O(F log F + ceiling)` work. `F` itself is refused past
+pass steps the budget once per scan unit and refuses once that count passes the
+same ceiling. The sweep, grid and tree scans (§6) bound work before refusal by
+`O(F log² F + ceiling)`. `F` itself is refused past
 `8·8192 − 8` before any exact lift (§7). The budget still steps once per tested pair.
 
 **Entry points.** `LoftCrossingAuditStructured(budget, verts, tris, walls,
 capStartCount, loops0, loops1)` is the loft's; the generic
 `LoftCrossingAudit(budget, verts, tris)` keeps every other caller
-(`sweep_mitre_build.go`) on the sweep enumeration with pairwise testing of every
+(`sweep_mitre_build.go`) on the selected box enumeration with pairwise testing of every
 candidate. `LoftAuditShortcuts` gains `Sweep` and `CapProof` fields; the zero value
 stays the reference path — every pair of every triangle through the exact
 classification — that every test compares verdicts against.
@@ -445,7 +445,7 @@ Every ceiling keeps a hard constant and gains a shape that scales with the recor
 | Ceiling | Today | Becomes | Hard ceiling | Why this shape |
 |---|---|---|---|---|
 | S15 station cap `loftmesh.StationCap` | 500 | `stationCap(P) = min(max(512, 64·P), 8192)` | 8192 stations, `F ≤ 8·8192 − 8` | the probe needs 124–132 stations per tooth (`P = 6`) and 952–1960 for the gears (`P = 48–240`); S15 reserves one cell per pair and charges each curve's actual extra cells against the shared remainder, so a bore circle may use more cells than a short flank; the hard ceiling keeps `NewLoftAuditData`'s exact lifts under ~70 MB |
-| S8 pair ceiling | `F·(F−1)/2 ≤ 8_000_000` | pairs the sweep scans on its axis ≤ `8_000_000`, and enumerated candidates ≤ `8_000_000` (§6); `F ≤ 8·8192 − 8` before any exact lift | unchanged | the scan count is at least the candidate count, so the counting pass refuses after at most `8_000_000` comparisons and the work before a refusal is `O(F log F + ceiling)`; the triangle ceiling bounds the exact lifts, which the station cap does not bound for a build with no chorded pair (`loftStationCapGate` returns early there) |
+| S8 pair ceiling | `F·(F−1)/2 ≤ 8_000_000` | the smallest sweep, grid or tree scan count ≤ `8_000_000`, and enumerated candidates ≤ `8_000_000` (§6); `F ≤ 8·8192 − 8` before any exact lift | unchanged | the scan count is at least the candidate count, so the counting pass refuses after at most `8_000_000` scan units and the work before a refusal is `O(F log² F + ceiling)`; the triangle ceiling bounds the exact lifts, which the station cap does not bound for a build with no chorded pair (`loftStationCapGate` returns early there) |
 | R7 `FreeformWorkLimit` for Loft's area, walks and stations | `1 << 20` per record per operation | Public `Loft` raises each record's counter before area integration to `max(1 << 20, 8192 · stationCap(P))`; re-evaluations raise fresh counters before walks. `P` comes from the first authenticated record. | `1 << 20 + 8192 · 8192 = 2^26 + 2^20` | The full embedded 60-tooth area's first integral exceeds the default ceiling before the walk gate. The same counter then pays for walks and stations; saturated single charges still refuse. |
 | reconstruction | `1 << 28`, 11585 chords | trusted Loft: `1 << 32`, 46340 chords; others unchanged | `1 << 32` | the 60-tooth gear charges 1.70 billion units per profile |
 
