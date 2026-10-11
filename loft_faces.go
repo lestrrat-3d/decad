@@ -50,12 +50,25 @@ func (d *Document) LoftFaces(ctx context.Context, sections ...*Face) (*Body, err
 	if err != nil {
 		return nil, err
 	}
+	capBounds := make([]loftFaceCapBounds, len(selected))
+	for i, section := range selected {
+		capBounds[i], err = lfCapBounds(ctx, embedding.maps[i], section, source)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if volFloor(heldRat, mesh.volSymDiff) <= 0 {
 		return nil, fmt.Errorf("%w: face-fed loft occupied-volume proof exceeds the held volume", ErrUnsupported)
 	}
+	if len(selected[0].slice.base.src) < len(source.sourceStation) {
+		return nil, fmt.Errorf("%w: loft source cell roles are incomplete", ErrUnsupported)
+	}
 	mesh.loftFacesPrimitive = true
 	mesh.loftFacesCap = &loftFacesCapRecord{source: source,
-		final: embedding.maps[len(embedding.maps)-1], group: len(mesh.groups) - 1}
+		maps:         append([]loftFaceMap(nil), embedding.maps...),
+		bounds:       capBounds,
+		stationGroup: append([]int(nil), selected[0].slice.base.src[:len(source.sourceStation)]...),
+		final:        embedding.maps[len(embedding.maps)-1], group: len(mesh.groups) - 1}
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, mesh, audit, Measurement{}, nil)
 	if err != nil {
 		return nil, err

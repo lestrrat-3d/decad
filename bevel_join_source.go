@@ -179,6 +179,17 @@ func pointSourceCurrent(record *pointSectionRecord) bool {
 }
 
 func exactBevelBlank(b *Body) (*bevelBlankSource, bool) {
+	return matchBevelBlankSection(b, true)
+}
+
+// A curved tooth reads the recorded finite meridian directly. Revolve may
+// report its public root Cone with a rounded axial origin, so this matcher
+// charges that difference without changing the straight-join admission rule.
+func exactSpiralBlank(b *Body) (*bevelBlankSource, bool) {
+	return matchBevelBlankSection(b, false)
+}
+
+func matchBevelBlankSection(b *Body, requireZeroOrigin bool) (*bevelBlankSource, bool) {
 	rp, ok := b.payload.(revolvePayload)
 	if !ok || !rp.full || rp.surfaceResult || rp.sectionDelta != 0 ||
 		rp.xform != r3.Identity() || len(rp.profile.Holes) != 0 ||
@@ -292,7 +303,10 @@ func exactBevelBlank(b *Body) (*bevelBlankSource, bool) {
 			continue
 		}
 		cone, coneOK := face.Surface().(Cone)
-		if !coneOK || cone.Origin != (r3.Vec{}) || cone.Axis != (r3.Vec{X: 1}) {
+		if !coneOK || cone.Axis != (r3.Vec{X: 1}) ||
+			cone.Origin.Y != 0 || cone.Origin.Z != 0 ||
+			(requireZeroOrigin && cone.Origin.X != 0) ||
+			!proofbound.FiniteVec(cone.Origin) {
 			return nil, false
 		}
 		radius, radiusErr := cone.Radius.In(units.Millimeter)
@@ -306,8 +320,8 @@ func exactBevelBlank(b *Body) (*bevelBlankSource, bool) {
 			return nil, false
 		}
 		result.rootFace, result.rootCone = face, cone
-		result.coneGap = max(bevelMeridianResidual(result.toeRoot, slope),
-			bevelMeridianResidual(result.ded, slope))
+		result.coneGap = max(bevelMeridianResidualAt(result.toeRoot, slope, cone.Origin.X),
+			bevelMeridianResidualAt(result.ded, slope, cone.Origin.X))
 		return result, !proofbound.IsNonFinite(result.coneGap)
 	}
 	return nil, false
@@ -315,9 +329,10 @@ func exactBevelBlank(b *Body) (*bevelBlankSource, bool) {
 
 // A straight meridian and a cone generator differ linearly in station, so
 // the endpoint maximum bounds every point between them without sampling.
-func bevelMeridianResidual(point Point2, slope float64) float64 {
+func bevelMeridianResidualAt(point Point2, slope, originX float64) float64 {
 	r := new(big.Rat).Sub(proofarith.FloatRat(point.V),
-		new(big.Rat).Mul(proofarith.FloatRat(slope), proofarith.FloatRat(point.U)))
+		new(big.Rat).Mul(proofarith.FloatRat(slope),
+			new(big.Rat).Sub(proofarith.FloatRat(point.U), proofarith.FloatRat(originX))))
 	if r.Sign() < 0 {
 		r.Neg(r)
 	}

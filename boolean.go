@@ -653,6 +653,18 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
+	mb, spiralJoin, err := spiralPrepareFirstUnion(ctx, op, a, b, mb, srcB)
+	if err != nil {
+		return booleanEvaluation{}, err
+	}
+	if spiralJoin != nil {
+		allowed, ok := spiralFirstUnionPairs(a, b, spiralJoin, faceID)
+		if !ok {
+			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
+				fmt.Errorf("%w: first spiral join source faces", ErrUnsupported))
+		}
+		spiralJoin.allowed = allowed
+	}
 
 	bmA, err := prepBoolMeshContext(ctx, ma, srcA)
 	if err != nil {
@@ -677,6 +689,12 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	if restatingB {
 		bmB.Gate = tolMM
 	}
+	if spiralJoin != nil {
+		// The temporary curved cap carries its actual moved-facet departure.
+		// Complete source-pair and output-curve gates below scope this one
+		// allowance to the authenticated first tooth join.
+		bmB.Gate = max(bmB.Gate, mb.bound)
+	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -684,12 +702,28 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	// the gate and the mesh pass both walk; it is dropped when the call
 	// returns (boolean_mesh.go, meshbool.ContactMemo).
 	memo := meshbool.NewContactMemo(bmA, bmB)
-	if err := refuseUndecidableProximityWithConeCap(ctx, ma, mb, bmA, bmB, memo, capFace, coneFace); err != nil {
+	var spiralPairs map[[2]*Face]spiralNearPairKind
+	if spiralJoin != nil {
+		spiralPairs = spiralJoin.roles
+	}
+	if err := refuseUndecidableProximityWithConeCap(ctx, ma, mb, bmA, bmB, memo,
+		capFace, coneFace, spiralPairs); err != nil {
 		err = booleanOperandStaging(op, err)
 		if errors.Is(err, ErrUnsupported) {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedContact, err)
 		}
 		return booleanEvaluation{}, err
+	}
+	if spiralJoin != nil {
+		ok, err := spiralScopeWidenedContacts(ctx, bmA, bmB, memo,
+			spiralJoin.allowed, tolMM)
+		if err != nil {
+			return booleanEvaluation{}, err
+		}
+		if !ok {
+			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
+				fmt.Errorf("%w: first spiral join contact faces", ErrUnsupported))
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
@@ -750,6 +784,17 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		symA, symB, roundVol,
 		ma.areaSlack, mb.areaSlack, stitched.DropArea,
 	)
+	if spiralJoin != nil {
+		allowance, ok, err := spiralJoinAreaAllowance(ctx, a, b, stitched)
+		if err != nil {
+			return booleanEvaluation{}, err
+		}
+		if !ok {
+			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
+				fmt.Errorf("%w: first spiral join area bound", ErrUnsupported))
+		}
+		areaSlack = proofbound.AbsSumUpper(areaSlack, allowance)
+	}
 	payload := facetedPayload{
 		verts:       stitched.Verts,
 		vertexBound: stitched.VertexBound,
@@ -768,6 +813,25 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	audit, err := facetproof.AuditFacetedMesh(ctx, payload.verts, payload.tris)
 	if err != nil {
 		return booleanEvaluation{}, err
+	}
+	if spiralJoin != nil {
+		ok, err := spiralScopeOutputSwitches(ctx, stitched,
+			len(a.Faces()), spiralJoin.allowed)
+		if err != nil {
+			return booleanEvaluation{}, err
+		}
+		if !ok {
+			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
+				fmt.Errorf("%w: first spiral join output faces", ErrUnsupported))
+		}
+		ok, err = spiralValidateFirstUnion(ctx, a, b, bmA, stitched, spiralJoin)
+		if err != nil {
+			return booleanEvaluation{}, err
+		}
+		if !ok {
+			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
+				fmt.Errorf("%w: first spiral join boundary proof", ErrUnsupported))
+		}
 	}
 	volume, volumeRat, err := meshVolumeMeasurement(ctx, audit.XVerts, payload.tris, payload.volSymDiff)
 	if err != nil {
@@ -989,7 +1053,15 @@ func operandSymDiff(m *Mesh) (float64, error) {
 // tolerance of each other. That is the accepted price; the alternative is a
 // verdict decided by chord placement.
 func refuseUndecidableProximityWithConeCap(ctx context.Context, ma, mb *Mesh,
-	bmA, bmB *meshbool.BoolMesh, memo *meshbool.ContactMemo, capFace, coneFace *Face) error {
+	bmA, bmB *meshbool.BoolMesh, memo *meshbool.ContactMemo, capFace, coneFace *Face,
+	spiralPairs ...map[[2]*Face]spiralNearPairKind) error {
+	if len(spiralPairs) > 1 {
+		return fmt.Errorf("%w: duplicate source-pair certificates", ErrBooleanFailed)
+	}
+	var admitted map[[2]*Face]spiralNearPairKind
+	if len(spiralPairs) == 1 {
+		admitted = spiralPairs[0]
+	}
 	// One counter spans the grouping and the pair scan it feeds: the grouping
 	// walks every facet and every new source face's edges, which is work the
 	// §7.2 interval covers just as the pair scan is.
@@ -1013,6 +1085,15 @@ func refuseUndecidableProximityWithConeCap(ctx context.Context, ma, mb *Mesh,
 				}
 				continue
 			}
+			role := admitted[[2]*Face{ga.source, gb.source}]
+			if role == spiralNearPairSeparated {
+				// A true source separation cannot admit a held contact, even
+				// when the held penetration is deeper than the near threshold.
+				if err := disjointConeCapFacets(ctx, bmA, bmB, ga.facets, gb.facets, memo); err != nil {
+					return err
+				}
+				continue
+			}
 			slack := ga.delta + gb.delta
 			if slack <= 0 {
 				// Both faces are held exactly (a planar face with straight
@@ -1030,6 +1111,12 @@ func refuseUndecidableProximityWithConeCap(ctx context.Context, ma, mb *Mesh,
 				return err
 			}
 			if near {
+				// A curved first-join crossing can pass this ambiguity only
+				// when its result will audit the matching complete edge chain.
+				switch role {
+				case spiralNearPairCrossing:
+					continue
+				}
 				return fmt.Errorf(`%w: the operands' held facets come within the chord tolerance without provably interpenetrating deeper than it, so whether their true surfaces touch or cross is decided by where the chords fall — this evaluator refuses the question rather than answer it wrong`, ErrUnsupported)
 			}
 		}

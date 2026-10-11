@@ -112,4 +112,70 @@ the ordinary pair chord. It retries only a first-operand staging refusal.
 The local chain-depth gate still checks the held bound at every other contact.
 The same mesh Boolean still checks all other face pairs, contacts, rims,
 occupied-volume bounds, and the final mesh. Placement drops the record.
-The Intersect result has no record and cannot continue the special chain.
+When the original LoftFaces result carries nine exact maps and their source
+cell bounds, a successful toe Cut and heel Intersect retain an immutable
+source record on the unplaced faceted result. The record identifies the two
+surviving tool-cap face groups. A later source-specific Union rechecks the
+original Sketch revision, map denominators, cone order, and both cap groups.
+Every other Intersect result has no continuation record. Placement drops it.
+
+For the first curved tooth joined to its blank, the retained source maps prove
+one transverse blank-root crossing on each fitted flank through all eight
+bands. The other profile edges stay strictly on one side of the root, and the
+crossings advance from toe to heel. The complete original toe cap lies before
+its tool/root circle in X. The complete original heel cap lies in an exact
+plane that misses its entire tool/root circle. These whole-cap checks rule out
+contacts through an end-cap interior. A caller may also request an exact box
+around either moving flank/root crossing over a narrow X interval; the local
+rim proof uses that box to decide which source surface remains exposed.
+For the first band, the source proof also encloses each complete flank/root
+seam from the finite toe root ring through cap two. It divides the moving
+branch into exact time slabs and encloses each slab and the matching X strip
+of an authenticated held switch chain. An exact maximum box distance below
+the chain's smallest curve bound covers both boundary directions. The cap-two
+source endpoint has a separate box for the held chain's final X tail. The
+caller must first prove that the held chain is complete, strictly ordered in
+X, and belongs to the matching blank-root and fitted-flank face pair.
+
+The first-join proximity check binds each exceptional face pair to its live
+source origin. The finite blank toe and heel outer meridians lie strictly
+outside the toe Cut cone and inside the heel Intersect cone, respectively;
+the opposite tool also stays on the retained side over each complete cap.
+The blank root lies beyond the toe tool's root intersection and before the
+heel tool's root intersection. These exact affine signs keep the certified
+source crossings on the trimmed tooth. The near-pair table admits the six
+flank contacts, two toe connector contacts, and one toe root-arc contact only
+after their separate source crossing certificates pass. Five other near
+pairs have strict source separation: each matching blank/tool cap pair, the
+blank toe cap against the heel tool cap, and the finite blank root against
+both tool caps. Their held facets must also be disjoint. Every unlisted
+near pair keeps the ordinary refusal.
+
+The root arc also crosses each finite blank end cap. The toe and heel source
+certificates bound the crossing of the authenticated Sketch arc with the
+blank cap's exact straight meridian. They check all source station cells,
+bound the recorded arc's departure from a rational circle, and prove one
+transverse crossing through the relevant LoftFaces band. Exact polynomial
+signs bound the crossing's X coordinate and angular slope; isolated endpoint
+boxes include the source construction error. A later Union may use those
+bounds only while the original unplaced source record remains current.
+
+The same source record can certify four short contact curves at each finite
+blank end cap: two fitted flanks and two straight connectors. Each source
+cell has one transverse cap crossing. The fitted flanks meet the finite cap
+start once because that meridian equals the already certified root meridian
+there; later fitted spans stay outside the root and cannot meet the cap.
+Exact rational boxes enclose each clipped crossing for a later held-edge
+comparison. A missing source segment, multiple clip, or unbounded box
+refuses this source-specific certificate.
+
+For the held comparison, divide each authenticated source crossing into
+sixteen parameter cells. Each cell has a nonempty finite source arc. The one
+cell that contains a fitted flank's isolated cap-start clip may enclose a
+small excluded part, but its larger box is still safe. Divide each held
+switch edge into four exact straight parts. Every source cell box must be
+within the published bound of at least one held part, and every held part
+box must be within that bound of at least one source cell. Compare the most
+distant corners of each paired box with exact rationals and round the final
+distance upward. These two checks cover both complete curves and their
+endpoints without assuming that source X or angle is monotone.

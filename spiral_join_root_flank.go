@@ -1,0 +1,257 @@
+package decad
+
+import (
+	"context"
+	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
+)
+
+// spiralBandOneRootBox contains the complete true blank-root/fitted-flank
+// seam from the finite toe root ring through the second LoftFaces cap. The
+// first endpoint is isolated on the authenticated root branch. The second is
+// its certified crossing on cap 2, so neither endpoint is inferred from a
+// held mesh vertex.
+func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
+	side int) ([3]loftFaceInterval, bool, error) {
+	var empty [3]loftFaceInterval
+	if ctx == nil || proof == nil || side < 0 || side >= len(proof.flank) ||
+		proof.blank == nil || len(proof.tooth.maps) != 9 {
+		return empty, false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return empty, false, err
+	}
+	toeRoot := lfF(proof.blank.toeRoot.U)
+	cap2 := spiralCapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
+	if cap2.lo == nil || cap2.hi == nil || toeRoot.Cmp(cap2.lo) >= 0 ||
+		cap2.hi.Cmp(lfF(proof.blank.ded.U)) >= 0 {
+		return empty, false, nil
+	}
+	low, ok := spiralIsolateJunction(ctx, proof.tooth.maps, proof.flank[side],
+		proof.rootM, proof.rootB, proof.crossings[side], toeRoot)
+	if !ok || low.band != 1 || low.tHi.Cmp(lfOne()) >= 0 {
+		return empty, false, ctx.Err()
+	}
+	q := spiralRootPolynomial(proof.tooth.maps[1], proof.tooth.maps[2],
+		proof.flank[side], proof.rootM, proof.rootB)
+	sLo, sHi := lfZero(), lfOne()
+	if !spiralJunctionRootBracket(q, sLo, sHi, low.tLo, lfOne()) {
+		return empty, false, ctx.Err()
+	}
+	for step := range 64 {
+		if step%8 == 0 {
+			if err := ctx.Err(); err != nil {
+				return empty, false, err
+			}
+		}
+		mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
+		if spiralRootTSign(q, mid, low.tLo, lfOne(), -1) {
+			sLo = mid
+			continue
+		}
+		if spiralRootTSign(q, mid, low.tLo, lfOne(), 1) {
+			sHi = mid
+			continue
+		}
+		break
+	}
+	box, ok := spiralJunctionBox(proof.tooth.maps[1], proof.tooth.maps[2],
+		proof.flank[side], sLo, sHi, low.tLo, lfOne())
+	if err := ctx.Err(); err != nil {
+		return empty, false, err
+	}
+	if !ok || box[0].lo.Cmp(toeRoot) > 0 || box[0].hi.Cmp(cap2.hi) < 0 {
+		return empty, false, nil
+	}
+	// J>0 in the source certificate orders X along this single branch.
+	box[0] = loftFaceInterval{lo: toeRoot, hi: cap2.hi}
+	return box, true, nil
+}
+
+// spiralRootFlankWholeBound checks every point of the true first-band seam
+// against the complete held switched path, and conversely. The caller must
+// first authenticate that held is the one complete blank-root/fitted-flank
+// path and minBound is no larger than every published curve bound on it.
+// Strict held X order and source J>0 let each exact time slab use the same
+// X interval on both curves. An endpoint box covers the held tail after the
+// source seam reaches cap 2.
+func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource,
+	side int, held []r3.Vec, minBound float64) (float64, bool, error) {
+	if ctx == nil || proof == nil || side < 0 || side >= len(proof.flank) ||
+		len(held) < 2 || len(held) > 4097 || proofbound.IsNonFinite(minBound) || minBound <= 0 {
+		return 0, false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	_, ok, err := spiralBandOneRootBox(ctx, proof, side)
+	if err != nil || !ok {
+		return 0, false, err
+	}
+	if held[0].X > held[len(held)-1].X {
+		reversed := make([]r3.Vec, len(held))
+		for i, p := range held {
+			reversed[len(held)-1-i] = p
+		}
+		held = reversed
+	}
+	for i, p := range held {
+		if !proofbound.FiniteVec(p) || i > 0 && lfF(held[i-1].X).Cmp(lfF(p.X)) >= 0 {
+			return 0, false, nil
+		}
+	}
+	toeRoot := lfF(proof.blank.toeRoot.U)
+	cap2 := spiralCapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
+	if lfF(held[0].X).Cmp(toeRoot) != 0 || lfF(held[len(held)-1].X).Cmp(cap2.hi) < 0 {
+		return 0, false, nil
+	}
+	start := proof.junctions[side][0]
+	if start.band != 1 || start.tLo.Sign() < 0 || start.tLo.Cmp(lfOne()) >= 0 {
+		return 0, false, nil
+	}
+	first, second := proof.tooth.maps[1], proof.tooth.maps[2]
+	span := proof.flank[side]
+	q := spiralRootPolynomial(first, second, span, proof.rootM, proof.rootB)
+	width := lfSub(lfOne(), start.tLo)
+	const slabs = 16
+	var largest float64
+	for slab := range slabs {
+		if err := ctx.Err(); err != nil {
+			return 0, false, err
+		}
+		a := lfAdd(start.tLo, lfMul(width, big.NewRat(int64(slab), slabs)))
+		z := lfAdd(start.tLo, lfMul(width, big.NewRat(int64(slab+1), slabs)))
+		if !spiralJunctionRootBracket(q, lfZero(), lfOne(), a, z) {
+			return 0, false, nil
+		}
+		rootA := spiralIsolateRootN(spiralRootAtBandT(q, a), 64)
+		rootZ := spiralIsolateRootN(spiralRootAtBandT(q, z), 64)
+		xA := spiralBandXRange(first, second, span, rootA, a)
+		xZ := spiralBandXRange(first, second, span, rootZ, z)
+		if xA.hi.Cmp(xZ.lo) >= 0 {
+			return 0, false, nil
+		}
+		xLo, xHi := xA.lo, xZ.hi
+		if slab == 0 {
+			xLo = toeRoot
+		}
+		if slab == slabs-1 {
+			xHi = cap2.hi
+		}
+		if xLo.Cmp(xHi) >= 0 {
+			return 0, false, nil
+		}
+		sLo, sHi := lfZero(), lfOne()
+		for step := range 64 {
+			if step%8 == 0 {
+				if err := ctx.Err(); err != nil {
+					return 0, false, err
+				}
+			}
+			mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
+			if spiralRootTSign(q, mid, a, z, -1) {
+				sLo = mid
+				continue
+			}
+			if spiralRootTSign(q, mid, a, z, 1) {
+				sHi = mid
+				continue
+			}
+			break
+		}
+		trueBox, yes := spiralJunctionBox(first, second, span, sLo, sHi, a, z)
+		if !yes || trueBox[0].lo.Cmp(xLo) > 0 || trueBox[0].hi.Cmp(xHi) < 0 {
+			return 0, false, nil
+		}
+		trueBox[0] = loftFaceInterval{lo: xLo, hi: xHi}
+		heldBox, yes := spiralHeldXStrip(held, xLo, xHi)
+		if !yes {
+			return 0, false, nil
+		}
+		bound, yes := spiralRootFlankBoxesBound(trueBox, heldBox, minBound)
+		if !yes {
+			return bound, false, nil
+		}
+		largest = max(largest, bound)
+	}
+	endpoint, ok := spiralJunctionBox(second, second, span,
+		proof.crossings[side][2].lo, proof.crossings[side][2].hi, lfZero(), lfZero())
+	if !ok || endpoint[0].lo.Cmp(cap2.lo) > 0 || endpoint[0].hi.Cmp(cap2.hi) < 0 {
+		return 0, false, nil
+	}
+	tail, ok := spiralHeldXStrip(held, cap2.lo, lfF(held[len(held)-1].X))
+	if !ok {
+		return 0, false, nil
+	}
+	bound, ok := spiralRootFlankBoxesBound(endpoint, tail, minBound)
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	if !ok {
+		return bound, false, nil
+	}
+	return max(largest, bound), true, nil
+}
+
+// spiralHeldXStrip encloses every straight held edge portion in a closed X
+// interval. The caller already checked that all path vertices strictly
+// increase in X, so exact endpoint interpolation covers the full strip.
+func spiralHeldXStrip(held []r3.Vec, xLo, xHi *big.Rat) ([3]loftFaceInterval, bool) {
+	var box [3]loftFaceInterval
+	if xLo == nil || xHi == nil || xLo.Cmp(xHi) > 0 {
+		return box, false
+	}
+	seen := false
+	for i := 1; i < len(held); i++ {
+		a, z := held[i-1], held[i]
+		ax, zx := lfF(a.X), lfF(z.X)
+		lo, hi := xLo, xHi
+		if lo.Cmp(ax) < 0 {
+			lo = ax
+		}
+		if hi.Cmp(zx) > 0 {
+			hi = zx
+		}
+		if lo.Cmp(hi) > 0 {
+			continue
+		}
+		for _, x := range []*big.Rat{lo, hi} {
+			t := lfDiv(lfSub(x, ax), lfSub(zx, ax))
+			coordinates := [3]*big.Rat{x,
+				lfAdd(lfF(a.Y), lfMul(t, lfSub(lfF(z.Y), lfF(a.Y)))),
+				lfAdd(lfF(a.Z), lfMul(t, lfSub(lfF(z.Z), lfF(a.Z))))}
+			for axis, coordinate := range coordinates {
+				if !seen || coordinate.Cmp(box[axis].lo) < 0 {
+					box[axis].lo = coordinate
+				}
+				if !seen || coordinate.Cmp(box[axis].hi) > 0 {
+					box[axis].hi = coordinate
+				}
+			}
+			seen = true
+		}
+	}
+	return box, seen
+}
+
+func spiralRootFlankBoxesBound(trueBox, heldBox [3]loftFaceInterval,
+	minBound float64) (float64, bool) {
+	squared := new(big.Rat)
+	for axis := range trueBox {
+		a, b := trueBox[axis], heldBox[axis]
+		if a.lo == nil || a.hi == nil || b.lo == nil || b.hi == nil ||
+			a.lo.Cmp(a.hi) > 0 || b.lo.Cmp(b.hi) > 0 {
+			return 0, false
+		}
+		lo := lfAbs(lfSub(a.lo, b.hi))
+		hi := lfAbs(lfSub(a.hi, b.lo))
+		if hi.Cmp(lo) > 0 {
+			lo = hi
+		}
+		squared = lfAdd(squared, lfMul(lo, lo))
+	}
+	bound := proofbound.RatSqrtUp(squared)
+	return bound, !proofbound.IsNonFinite(bound) && bound < minBound
+}
