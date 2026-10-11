@@ -790,7 +790,7 @@ func (e *heldEmbedding) planeSign(f, p int) int {
 		return s
 	}
 	_, x, n := e.facet(f)
-	return proof.XdotSign(n, proof.Xsub(e.lift(p), x[0]))
+	return proof.XdotDiffSign(n, e.lift(p), x[0])
 }
 
 // facetFailures returns the facets j that facet i meets improperly, and

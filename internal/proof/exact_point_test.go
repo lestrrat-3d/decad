@@ -7,8 +7,40 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
+
+func TestXdotDiffSignMatchesExactSubtraction(t *testing.T) {
+	t.Parallel()
+	points := []r3.Vec{
+		{},
+		{X: 1, Y: -2, Z: 3},
+		{X: 0.5, Y: 1, Z: -4},
+		{X: math.Ldexp(1, -120), Y: 1, Z: 0},
+		{X: -math.Ldexp(1, -70), Y: 1, Z: 0},
+	}
+	normals := []r3.Vec{{X: 1}, {X: 1, Y: 1, Z: -1}, {X: math.Ldexp(1, 80), Y: -1}}
+	for _, nv := range normals {
+		n := proof.XptOf(nv)
+		for _, pv := range points {
+			p := proof.XptOf(pv)
+			for _, qv := range points {
+				q := proof.XptOf(qv)
+				for _, factor := range []int64{1, 3} {
+					scaled := proof.Xpt{
+						X: new(big.Int).Mul(q.X, big.NewInt(factor)),
+						Y: new(big.Int).Mul(q.Y, big.NewInt(factor)),
+						Z: new(big.Int).Mul(q.Z, big.NewInt(factor)),
+						W: new(big.Int).Mul(q.W, big.NewInt(factor)),
+					}
+					want := proof.XdotSign(n, proof.Xsub(p, scaled))
+					require.Equal(t, want, proof.XdotDiffSign(n, p, scaled), "n=%v p=%v q=%v factor=%d", nv, pv, qv, factor)
+				}
+			}
+		}
+	}
+}
 
 func TestXhpVecKeepsRationalFloatRounding(t *testing.T) {
 	t.Parallel()

@@ -51,7 +51,7 @@ func OrientSignPrepared(a, b, c, d r3.Vec, xa, xd, n Xpt) int {
 	if sign, certain := OrientSignFloat(a, b, c, d); certain {
 		return sign
 	}
-	return XdotSign(n, Xsub(xd, xa))
+	return XdotDiffSign(n, xd, xa)
 }
 
 // OrientSignFloat gives the same adaptive float decision to both plane-side
