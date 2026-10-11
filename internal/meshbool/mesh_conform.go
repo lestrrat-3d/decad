@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -147,6 +148,7 @@ type ConformScan struct {
 	Verts  []proof.Xpt
 	Approx []r3.Vec
 	Grid   map[[3]int][]int
+	cells  [][3]int
 	Lo     r3.Vec
 	Cell   float64
 	Slack  float64
@@ -196,6 +198,18 @@ func NewConformScan(budget *proofbound.WorkBudget, verts []proof.Xpt) (*ConformS
 		c := s.CellOf(approx[i].X, approx[i].Y, approx[i].Z)
 		s.Grid[c] = append(s.Grid[c], i)
 	}
+	for c := range s.Grid {
+		s.cells = append(s.cells, c)
+	}
+	sort.Slice(s.cells, func(i, j int) bool {
+		a, b := s.cells[i], s.cells[j]
+		for axis := range 3 {
+			if a[axis] != b[axis] {
+				return a[axis] < b[axis]
+			}
+		}
+		return false
+	})
 	return s, nil
 }
 
@@ -227,25 +241,53 @@ func (s *ConformScan) EdgeInteriorHits(budget *proofbound.WorkBudget, a, b int, 
 	var hits []int
 	cLo := s.CellOf(math.Min(pa.X, pb.X)-s.Slack, math.Min(pa.Y, pb.Y)-s.Slack, math.Min(pa.Z, pb.Z)-s.Slack)
 	cHi := s.CellOf(math.Max(pa.X, pb.X)+s.Slack, math.Max(pa.Y, pb.Y)+s.Slack, math.Max(pa.Z, pb.Z)+s.Slack)
+	visit := func(c [3]int) error {
+		for _, vi := range s.Grid[c] {
+			if err := budget.Step(); err != nil {
+				return err
+			}
+			if vi == tri[0] || vi == tri[1] || vi == tri[2] {
+				continue
+			}
+			if filter.TooFar(s.Approx[vi]) {
+				continue
+			}
+			if OnSegmentInterior3(s.Verts[a], s.Verts[b], s.Verts[vi]) {
+				hits = append(hits, vi)
+			}
+		}
+		return nil
+	}
+	volume := 1.0
+	for axis := range 3 {
+		volume *= float64(cHi[axis]) - float64(cLo[axis]) + 1
+	}
+	if volume > 2*float64(len(s.cells)) {
+		// Scan occupied cells in the same coordinate order as the box walk.
+		// This avoids probing a large number of empty grid cells.
+		for _, c := range s.cells {
+			if err := budget.Step(); err != nil {
+				return nil, err
+			}
+			if c[0] < cLo[0] || c[0] > cHi[0] ||
+				c[1] < cLo[1] || c[1] > cHi[1] ||
+				c[2] < cLo[2] || c[2] > cHi[2] {
+				continue
+			}
+			if err := visit(c); err != nil {
+				return nil, err
+			}
+		}
+		return hits, nil
+	}
 	for cx := cLo[0]; cx <= cHi[0]; cx++ {
 		for cy := cLo[1]; cy <= cHi[1]; cy++ {
 			for cz := cLo[2]; cz <= cHi[2]; cz++ {
 				if err := budget.Step(); err != nil {
 					return nil, err
 				}
-				for _, vi := range s.Grid[[3]int{cx, cy, cz}] {
-					if err := budget.Step(); err != nil {
-						return nil, err
-					}
-					if vi == tri[0] || vi == tri[1] || vi == tri[2] {
-						continue
-					}
-					if filter.TooFar(s.Approx[vi]) {
-						continue
-					}
-					if OnSegmentInterior3(s.Verts[a], s.Verts[b], s.Verts[vi]) {
-						hits = append(hits, vi)
-					}
+				if err := visit([3]int{cx, cy, cz}); err != nil {
+					return nil, err
 				}
 			}
 		}
