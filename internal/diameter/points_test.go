@@ -40,6 +40,15 @@ func TestPointsKeepsExhaustiveWitness(t *testing.T) {
 		longCoil[i] = r3.NewVec(3*math.Cos(angle), 3*math.Sin(angle), 7.5*float64(i)/float64(len(longCoil)-1))
 	}
 	check("parallel coil", longCoil)
+	clustered := make([]r3.Vec, 768)
+	for i := range clustered {
+		clustered[i] = r3.NewVec(
+			float64(i/256*100)+float64(i%17)/10,
+			float64(i%23)/10,
+			float64(i%29)/10,
+		)
+	}
+	check("parallel clustered witnesses", clustered)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, _, err := diameter.PointsContext(ctx, longCoil)

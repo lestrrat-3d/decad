@@ -34,6 +34,38 @@ type pairMaximum struct {
 	i, j     int
 }
 
+const pointBlockSize = 64
+
+type pointBlock struct {
+	min, max r3.Vec
+}
+
+func pointBlocks(points []r3.Vec) []pointBlock {
+	blocks := make([]pointBlock, (len(points)+pointBlockSize-1)/pointBlockSize)
+	for block := range blocks {
+		start := block * pointBlockSize
+		end := min(start+pointBlockSize, len(points))
+		lo, hi := points[start], points[start]
+		for _, point := range points[start+1 : end] {
+			lo.X = math.Min(lo.X, point.X)
+			lo.Y = math.Min(lo.Y, point.Y)
+			lo.Z = math.Min(lo.Z, point.Z)
+			hi.X = math.Max(hi.X, point.X)
+			hi.Y = math.Max(hi.Y, point.Y)
+			hi.Z = math.Max(hi.Z, point.Z)
+		}
+		blocks[block] = pointBlock{min: lo, max: hi}
+	}
+	return blocks
+}
+
+func pointBlockDistanceUpperSq(point r3.Vec, block pointBlock) float64 {
+	dx := math.Max(math.Abs(point.X-block.min.X), math.Abs(point.X-block.max.X))
+	dy := math.Max(math.Abs(point.Y-block.min.Y), math.Abs(point.Y-block.max.Y))
+	dz := math.Max(math.Abs(point.Z-block.min.Z), math.Abs(point.Z-block.max.Z))
+	return dx*dx + dy*dy + dz*dz
+}
+
 // parallelScanSafe keeps the sequential refusal order for non-finite or very
 // large coordinates. Bounded coordinates also keep every pair norm finite.
 func parallelScanSafe(points []r3.Vec) bool {
@@ -47,6 +79,7 @@ func parallelScanSafe(points []r3.Vec) bool {
 
 func pointsContextParallel(ctx context.Context, points []r3.Vec) (float64, bool, error) {
 	workers := min(runtime.GOMAXPROCS(0), 4)
+	blocks := pointBlocks(points)
 	maxima := make([]pairMaximum, workers)
 	var group sync.WaitGroup
 	group.Add(workers)
@@ -57,23 +90,36 @@ func pointsContextParallel(ctx context.Context, points []r3.Vec) (float64, bool,
 			skipSq := 0.0
 			work := 0
 			for i := worker; i < len(points); i += workers {
-				for j := i + 1; j < len(points); j++ {
-					work++
-					if work%proofbound.WorkPollInterval == 0 && ctx.Err() != nil {
-						return
-					}
-					delta := points[i].Sub(points[j])
-					if skipSq > 0 && delta.X*delta.X+delta.Y*delta.Y+delta.Z*delta.Z < skipSq {
+				for j := i + 1; j < len(points); {
+					block := j / pointBlockSize
+					end := min((block+1)*pointBlockSize, len(points))
+					// The 0.9 margin also covers float rounding in the box bound.
+					if skipSq > 0 && pointBlockDistanceUpperSq(points[i], blocks[block]) < skipSq {
+						work += end - j
+						if ctx.Err() != nil {
+							return
+						}
+						j = end
 						continue
 					}
-					distance := delta.Len()
-					if distance > best.distance {
-						best = pairMaximum{distance: distance, i: i, j: j}
-						if distance > 1e-100 && distance < 1e100 {
-							limit := distance * 0.9
-							skipSq = limit * limit
-						} else {
-							skipSq = 0
+					for ; j < end; j++ {
+						work++
+						if work%proofbound.WorkPollInterval == 0 && ctx.Err() != nil {
+							return
+						}
+						delta := points[i].Sub(points[j])
+						if skipSq > 0 && delta.X*delta.X+delta.Y*delta.Y+delta.Z*delta.Z < skipSq {
+							continue
+						}
+						distance := delta.Len()
+						if distance > best.distance {
+							best = pairMaximum{distance: distance, i: i, j: j}
+							if distance > 1e-100 && distance < 1e100 {
+								limit := distance * 0.9
+								skipSq = limit * limit
+							} else {
+								skipSq = 0
+							}
 						}
 					}
 				}
