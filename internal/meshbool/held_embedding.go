@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"runtime"
 	"slices"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
@@ -100,8 +102,14 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 	// neighbours; a move puts the facets around the moved vertex back in.
 	check := query
 	moved := map[int]struct{}{}
-	for range heldEmbeddingSweeps {
-		offenders, failing, err := e.offenders(check)
+	for sweep := range heldEmbeddingSweeps {
+		var offenders, failing []int
+		var err error
+		if sweep == 0 && memo && len(check) >= 4096 && runtime.GOMAXPROCS(0) > 1 {
+			offenders, failing, err = e.parallelOffenders(ctx, check)
+		} else {
+			offenders, failing, err = e.offenders(check)
+		}
 		if err != nil {
 			return 0, err
 		}
@@ -144,6 +152,104 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 		return 0, fmt.Errorf(`%w: the result's float rounding folds its held mesh through itself, and no float within an ulp of the exact vertices clears it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
 	}
 	return len(moved), nil
+}
+
+type embeddingScan struct {
+	offenders []int
+	failing   []int
+	err       error
+}
+
+// parallelOffenders checks the first, unchanged mesh through independent
+// predicate caches. Each worker polls after at most 256/workers operations;
+// their combined unchecked work stays below one polling interval.
+func (e *heldEmbedding) parallelOffenders(ctx context.Context, query []int) ([]int, []int, error) {
+	workers := min(runtime.GOMAXPROCS(0), 4)
+	if err := e.budget.Err(); err != nil {
+		return nil, nil, err
+	}
+	originalBudget := e.budget
+	e.budget = embeddingWorkerBudget(ctx, workers)
+	results := make([]embeddingScan, workers)
+	locals := make([]*heldEmbedding, workers)
+	locals[0] = e
+	for worker := 1; worker < workers; worker++ {
+		start, end := len(query)*worker/workers, len(query)*(worker+1)/workers
+		locals[worker] = e.readOnlyScanCopy(ctx, workers, end-start)
+	}
+	var group sync.WaitGroup
+	group.Add(workers)
+	for worker := range workers {
+		start, end := len(query)*worker/workers, len(query)*(worker+1)/workers
+		local := locals[worker]
+		go func() {
+			defer group.Done()
+			results[worker].offenders, results[worker].failing, results[worker].err = local.offenders(query[start:end])
+		}()
+	}
+	group.Wait()
+	e.budget = originalBudget
+	if err := e.budget.Err(); err != nil {
+		return nil, nil, err
+	}
+	seen := map[int]struct{}{}
+	var failing []int
+	for _, result := range results {
+		if result.err != nil {
+			return nil, nil, result.err
+		}
+		failing = append(failing, result.failing...)
+		for _, v := range result.offenders {
+			seen[v] = struct{}{}
+		}
+	}
+	offenders := make([]int, 0, len(seen))
+	for v := range seen {
+		offenders = append(offenders, v)
+	}
+	slices.Sort(offenders)
+	return offenders, failing, nil
+}
+
+func embeddingWorkerBudget(ctx context.Context, workers int) *proofbound.WorkBudget {
+	work := 0
+	interval := proofbound.WorkPollInterval / workers
+	return &proofbound.WorkBudget{
+		StepFn: func() error {
+			work++
+			if work%interval == 0 {
+				return ctx.Err()
+			}
+			return nil
+		},
+		ErrFn: ctx.Err,
+	}
+}
+
+// readOnlyScanCopy shares the immutable grid and incident-facet lists, while
+// each worker writes only its own predicate caches.
+func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers, queryCount int) *heldEmbedding {
+	local := *e
+	local.budget = embeddingWorkerBudget(ctx, workers)
+	local.xv = make([]proof.Xpt, len(e.xv))
+	local.xvOK = make([]bool, len(e.xvOK))
+	local.norm = make([]proof.Xpt, len(e.norm))
+	local.normOK = make([]bool, len(e.normOK))
+	local.plane = make([]int, len(e.plane))
+	for i := range local.plane {
+		local.plane[i] = -1
+	}
+	local.planes = map[string]int{}
+	local.fnorm = make([]r3.Vec, len(e.fnorm))
+	local.cone = make([][3][2]r3.Vec, len(e.cone))
+	local.coneOK = make([][3]bool, len(e.coneOK))
+	local.stamp = make([]int, len(e.stamp))
+	local.stampID = 0
+	local.cands = nil
+	local.box = make([][2]r3.Vec, len(e.box))
+	local.boxOK = make([]bool, len(e.boxOK))
+	local.pairs = make(map[uint64]heldPair, 8*queryCount)
+	return &local
 }
 
 type heldEmbedding struct {

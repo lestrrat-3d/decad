@@ -52,6 +52,21 @@ func TestEnforceHeldEmbeddingRefusesTheUnion14Fold(t *testing.T) {
 	t.Parallel()
 	_, err := meshbool.EnforceHeldEmbedding(t.Context(), union14Fold())
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	h := union14Fold()
+	for i := range 4093 {
+		x := 100 + 10*float64(i)
+		base := len(h.Verts)
+		verts := [3]r3.Vec{{X: x, Y: 0, Z: 0}, {X: x + 1, Y: 0, Z: 0}, {X: x, Y: 1, Z: 0}}
+		for _, v := range verts {
+			h.Verts = append(h.Verts, v)
+			h.Exact = append(h.Exact, proof.XptOf(v))
+			h.Moved = append(h.Moved, true)
+			h.Movable = append(h.Movable, false)
+		}
+		h.Tris = append(h.Tris, [3]int{base, base + 1, base + 2})
+	}
+	_, err = meshbool.EnforceHeldEmbedding(t.Context(), h)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
 
 func union14Fold() meshbool.HeldRounding {
