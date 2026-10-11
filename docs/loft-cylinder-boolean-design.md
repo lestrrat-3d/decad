@@ -298,10 +298,12 @@ inside the seam annulus's inner radius. The cap audit proves each recorded
 outline is one disk containing the axis. Placement clears the record, so a
 later Boolean cannot rebuild from unplaced operands.
 It also stores the private proxy teeth and each axial bridge distance. A
-later Union rebuilds proofs from the original teeth. Bore and cap Chamfer
-return `ErrUnsupported` for a positive bridge: their fixed-height source
-circle and cap-occupancy proofs do not yet cover `z` versus `z/s` or the
-original top cap at `s·height`.
+later Union rebuilds proofs from the original teeth. A centered through-bore
+copies both tooth lists and the bridge distances into its own source record.
+Cap Chamfer and its split-ring source reader return `ErrUnsupported` for a
+positive bridge, before they use fixed-height source-circle or cap-occupancy
+claims that do not cover `z` versus `z/s` or the original top cap at
+`s·height`.
 
 ## Centered through-bore Cut
 
@@ -319,12 +321,21 @@ An exact planar check proves the inner ring is simple, counterclockwise, and
 contains the axis. Each audited cap disk becomes an annulus with that ring
 as its hole. The new inward wall keeps the tool's cylinder face provenance.
 The final mesh passes orientation, vertex-link, and exact crossing audits.
+This specialized bore uses the structural join's 16-million scan ceiling;
+other `LoftCrossingAudit` callers keep their generic eight-million ceiling.
+The exact pair classifications and triangle ceiling are unchanged. The real
+17-tooth, 1 mm centered bore audited 10,408 triangles, 11,281,630 box scans,
+and 3,555,085 overlapping candidate pairs in a diagnostic run.
 An exact cap audit also checks that each cap group's triangles have the
 area of its outer polygon less its inner polygon, and that their directed
 edges pair internally and match both recorded boundary loops. The result
 gets new `capStart` and `capEnd` roles and the blank's axial `Plane` tags
 only after this audit. Each cap has an inner bore loop; `OuterLoopOf` excludes
 its edges.
+If the joined source carried an axial bridge, the bored top cap keeps
+`capEnd` but uses a bounded `Faceted` surface. Its held triangles lie at
+the blank's top plane while an original tooth ends below it. The bottom
+annulus keeps its exact `Plane` tag.
 
 Cutting the same exact cylinder from the true and held joined solids cannot
 increase their occupied-volume difference. The polygonal bore differs from
@@ -333,8 +344,12 @@ adds the whole shell volume, `4π·radius·boreBound·height`, to the join's
 occupied-volume bound. The result carries the larger of the join and bore
 boundary bounds. It replaces the join source record with the certified outer
 and inner cap loops, their facet groups, the bore-wall group, the original
-blank and tooth sources, and the unchanged seam and collar bounds. Placement
-clears this post-bore record.
+blank and tooth sources, the private proof teeth and bridge distances, and
+the unchanged seam and collar bounds. The strict bore-to-blank and bore-to-side
+clearances place its exact cylinder inside the common blank of both the
+original and proxy unions. Thus the unchanged outer boundary keeps the joined
+bound, while the new bore wall and inner annular rims use `boreBound`.
+Placement clears this post-bore record.
 
 The bore record also retains the upward `boreBound` used in Cut's wall proof.
 That value bounds the two-way, same-height correspondence between the exact

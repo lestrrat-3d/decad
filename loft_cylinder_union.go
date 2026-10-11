@@ -38,8 +38,8 @@ type loftCylinderJoinRecord struct {
 const loftCylinderBlankSideRole = "side(0,0)"
 
 // The structural join has at most 32 separately certified Loft teeth. Its
-// final crossing audit may scan twice the generic mesh ceiling, while the
-// triangle ceiling and every exact pair classification stay unchanged.
+// final crossing audit and the matched centered bore may scan twice the
+// generic mesh ceiling; exact pair classifications remain unchanged.
 const loftCylinderAuditMaxScans = 16_000_000
 
 type loftCylinderTooth struct {
@@ -943,17 +943,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		[2]float64{pp.z0, pp.z1}, ref); err != nil {
 		return nil, err
 	}
-	// The true exterior top of a bridged tooth lies below the held cap.
-	// Keep its cap role, but do not claim that the whole source cap is the
-	// blank's exact Plane. buildFacetedBody supplies the charged facet bound.
-	for _, shift := range axialBridge {
-		if shift > 0 {
-			top := &fp.groups[fp.loftCylinderJoin.capGroups[1]]
-			top.surface = nil
-			top.planar = false
-			break
-		}
-	}
+	loftCylinderTagBridgedTop(&fp, fp.loftCylinderJoin.capGroups[1], axialBridge)
 	return buildFacetedBody(ctx, d, ref, fp)
 }
 

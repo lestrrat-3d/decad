@@ -73,7 +73,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Centered bore and outer-cap Chamfer of a Loft/cylinder join with a one-ulp axial tooth placement bridge | `ErrUnsupported` until fixed-height source-circle and cap-occupancy proofs cover the original tooth levels (`loft_cylinder_bore.go`, `loft_cylinder_chamfer.go`) | `docs/loft-cylinder-boolean-design.md` "Source record for a later bore" |
+| Outer-cap Chamfer of a joined or centered-bored Loft/cylinder body with a one-ulp axial tooth placement bridge | `ErrUnsupported` until fixed-height source-circle and cap-occupancy proofs cover the original tooth levels (`loft_cylinder_chamfer.go`, `loft_cylinder_ring_occupancy.go`) | `docs/loft-cylinder-boolean-design.md` "Source record for a later bore" |
 | Exact result outside the admitted prism and point-loft/cone classes | Pair takes the mesh boolean → `Faceted` faces with a volume bound | `docs/general-boolean-design.md` §3, `docs/loft-point-design.md` "Coaxial finite cone trims" |
 | Blind cuts with displaced levels, opposed-hole contact, or other crossing holes | Mesh path, possibly coplanar refusal. A7 builds one exact rectangular crossing | `docs/stacked-prism-design.md` §7; `docs/general-boolean-design.md` §3 A7 |
 | Touching, coplanar or face-on-face contact on the mesh path | `BooleanError` code `BooleanUnsupportedContact` | `docs/general-boolean-design.md` §2, `docs/interference-design.md` |
