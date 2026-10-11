@@ -12,22 +12,29 @@ func IntervalQuo(a, b RatInterval) (RatInterval, bool) {
 	if b.Lo.Sign() <= 0 && b.Hi.Sign() >= 0 {
 		return RatInterval{}, false
 	}
-	corners := [4]*big.Rat{
-		new(big.Rat).Quo(a.Lo, b.Lo),
-		new(big.Rat).Quo(a.Lo, b.Hi),
-		new(big.Rat).Quo(a.Hi, b.Lo),
-		new(big.Rat).Quo(a.Hi, b.Hi),
-	}
-	lo, hi := corners[0], corners[0]
-	for _, c := range corners[1:] {
-		if c.Cmp(lo) < 0 {
-			lo = c
+	// Division is monotone in each endpoint once the signs are known. Pick
+	// the two extreme corners directly instead of dividing all four pairs.
+	var loNum, loDen, hiNum, hiDen *big.Rat
+	if b.Lo.Sign() > 0 {
+		switch {
+		case a.Lo.Sign() >= 0:
+			loNum, loDen, hiNum, hiDen = a.Lo, b.Hi, a.Hi, b.Lo
+		case a.Hi.Sign() <= 0:
+			loNum, loDen, hiNum, hiDen = a.Lo, b.Lo, a.Hi, b.Hi
+		default:
+			loNum, loDen, hiNum, hiDen = a.Lo, b.Lo, a.Hi, b.Lo
 		}
-		if c.Cmp(hi) > 0 {
-			hi = c
+	} else {
+		switch {
+		case a.Lo.Sign() >= 0:
+			loNum, loDen, hiNum, hiDen = a.Hi, b.Hi, a.Lo, b.Lo
+		case a.Hi.Sign() <= 0:
+			loNum, loDen, hiNum, hiDen = a.Hi, b.Lo, a.Lo, b.Hi
+		default:
+			loNum, loDen, hiNum, hiDen = a.Hi, b.Hi, a.Lo, b.Hi
 		}
 	}
-	return Interval(lo, hi), true
+	return IntervalOwned(new(big.Rat).Quo(loNum, loDen), new(big.Rat).Quo(hiNum, hiDen)), true
 }
 
 // IntervalSquare is x² over an interval. It is not IntervalMul(a, a): the
