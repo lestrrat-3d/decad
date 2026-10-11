@@ -1,0 +1,90 @@
+package apitest_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+func pointSlabCap(t *testing.T, slab *decad.Body, role decad.FeatureRef) *decad.Face {
+	t.Helper()
+	faces, err := decad.Faces(decad.FaceCreatedBy(role)).SelectFaces(slab)
+	require.NoError(t, err)
+	require.Len(t, faces, 1)
+	return faces[0]
+}
+
+func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
+	doc := decad.New()
+	tooth, _ := bevelReferenceTooth(t, doc)
+	span := pointBevelRootSpan()
+	inner := tooth
+	kept := make([]*decad.Body, 0, 8)
+	for k := 1; k <= 8; k++ {
+		sheet := pointBevelSliceSheet(t, doc, span*float64(k)/6, 30)
+		parts, err := doc.Split(t.Context(), inner, sheet)
+		require.NoError(t, err)
+		require.Len(t, parts, 2)
+		inner = parts[0]
+		kept = append(kept, parts[1])
+	}
+	sections := make([]*decad.Face, 0, 9)
+	sections = append(sections, pointSlabCap(t, kept[7], decad.CapStart(kept[7])))
+	for i := len(kept) - 1; i >= 0; i-- {
+		sections = append(sections, pointSlabCap(t, kept[i], decad.CapEnd(kept[i])))
+	}
+	before := doc.Bodies()
+	_, err := doc.LoftFaces(t.Context(), sections[:8]...)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Equal(t, before, doc.Bodies())
+	duplicate := append([]*decad.Face(nil), sections...)
+	duplicate[2] = duplicate[1]
+	_, err = doc.LoftFaces(t.Context(), duplicate...)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, before, doc.Bodies())
+	reordered := append([]*decad.Face(nil), sections...)
+	reordered[3], reordered[4] = reordered[4], reordered[3]
+	_, err = doc.LoftFaces(t.Context(), reordered...)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, before, doc.Bodies())
+	start := pointSlabCap(t, kept[0], decad.CapStart(kept[0]))
+	var side *decad.Face
+	for _, face := range kept[0].Faces() {
+		if face != sections[len(sections)-1] && face != start {
+			side = face
+			break
+		}
+	}
+	require.NotNil(t, side)
+	withSide := append([]*decad.Face(nil), sections...)
+	withSide[len(withSide)-1] = side
+	_, err = doc.LoftFaces(t.Context(), withSide...)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, before, doc.Bodies())
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err = doc.LoftFaces(canceled, sections...)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, before, doc.Bodies())
+
+	loft, err := doc.LoftFaces(t.Context(), sections...)
+	require.NoError(t, err)
+	mesh, err := loft.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	volume, err := loft.Volume()
+	require.NoError(t, err)
+	sum, allowance := 0.0, volume.Bound.Base()
+	for _, slab := range kept {
+		reading, err := slab.Volume()
+		require.NoError(t, err)
+		sum += reading.Value.Base()
+		allowance += reading.Bound.Base()
+	}
+	require.InDelta(t, sum, volume.Value.Base(), allowance)
+}

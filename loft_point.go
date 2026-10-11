@@ -21,10 +21,15 @@ import (
 // faceted boundary of a point-section loft. The far section is never replaced
 // by a fitted or scaled profile.
 type pointSectionRecord struct {
-	apex    r3.Vec
-	profile profileRecord
-	plane   planeRecord
-	source  *pointSectionSource
+	apex            r3.Vec
+	profile         profileRecord
+	plane           planeRecord
+	source          *pointSectionSource
+	sourceBox       [4]float64 // U min/max, V min/max; contains the true region and station polygon
+	sourceAreaDelta float64    // area of the symmetric difference between source region and station polygon
+	sourceStation   []Point2   // original local station coordinates, in source loop order
+	sourceArcUpper  []float64  // per-cell source curve speed in world millimetres
+	sourceMatched   []float64  // per-cell parameter-matched source departure in world millimetres
 }
 
 // pointSectionSource names the live Sketch entities authenticated when the
@@ -204,6 +209,27 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 	sectionGap := proofbound.AbsSumUpper(sectionDelta, stationRound, matchedDelta)
 	basisU := proofbound.DvLenUpper(proofbound.HeldDelta(record.plane.U, r3.Vec{}))
 	basisV := proofbound.DvLenUpper(proofbound.HeldDelta(record.plane.V, r3.Vec{}))
+	basisUpper := proofbound.AbsSumUpper(basisU, basisV)
+	record.sourceArcUpper = make([]float64, len(pair.ArcUpperW))
+	record.sourceMatched = make([]float64, len(pair.MatchedDelta))
+	record.sourceStation = make([]Point2, len(pair.W))
+	for j := range pair.ArcUpperW {
+		record.sourceStation[j] = Point2{U: pair.W[j].U, V: pair.W[j].V}
+		record.sourceArcUpper[j] = proofbound.ProductUpper(pair.ArcUpperW[j], basisUpper)
+		record.sourceMatched[j] = proofbound.ProductUpper(
+			proofbound.AbsSumUpper(pair.MatchedDelta[j], stationRound, sectionDelta), basisUpper)
+	}
+	record.sourceBox = [4]float64{math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)}
+	for _, pt := range pair.W {
+		record.sourceBox[0] = min(record.sourceBox[0], pt.U)
+		record.sourceBox[1] = max(record.sourceBox[1], pt.U)
+		record.sourceBox[2] = min(record.sourceBox[2], pt.V)
+		record.sourceBox[3] = max(record.sourceBox[3], pt.V)
+	}
+	for _, i := range []int{0, 2} {
+		record.sourceBox[i] = math.Nextafter(record.sourceBox[i]-sectionGap, math.Inf(-1))
+		record.sourceBox[i+1] = math.Nextafter(record.sourceBox[i+1]+sectionGap, math.Inf(1))
+	}
 	liftGap := loftmesh.FrameLiftRoundAllow(frame, maxLocal)
 	meshBound := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(sectionGap, proofbound.AbsSumUpper(basisU, basisV)), liftGap)
@@ -216,6 +242,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 	}
 	perimeter := loftmesh.PerimeterUpper(record.profile, walks)
 	sectionArea := proofbound.SectionDisplacementArea(sectionGap, len(pair.W), perimeter)
+	record.sourceAreaDelta = sectionArea
 	jacobian := proofbound.CrossProductUpper(record.plane.U, record.plane.V)
 	capArea := proofbound.ProductUpper(sectionArea, jacobian)
 	height := proofbound.DvLenUpper(proofbound.HeldDelta(record.apex, record.plane.Origin))

@@ -236,11 +236,13 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 			proofbound.ProductUpper(fp.pointPlaneCapDisplacement,
 				proofbound.AbsSumUpper(1, charge.Stretch)), placed.MeshBound)
 	}
-	if fp.pointSimilarity != nil {
-		record := *fp.pointSimilarity
-		record.steps = append(append([]pointPlaneSimilarityStep(nil), record.steps...),
-			pointPlaneSimilarityStep{motion: delta, meshBound: next.meshBound,
-				capDisplacement: next.pointPlaneCapDisplacement})
+	if fp.pointPlane != nil {
+		record := pointPlaneSimilarityRecord{slice: fp.pointPlane}
+		if fp.pointSimilarity != nil {
+			record.steps = append(record.steps, fp.pointSimilarity.steps...)
+		}
+		record.steps = append(record.steps, pointPlaneSimilarityStep{motion: delta,
+			meshBound: next.meshBound, capDisplacement: next.pointPlaneCapDisplacement})
 		next.pointSimilarity = &record
 	}
 	return buildFacetedBody(ctx, d, ref, next)
