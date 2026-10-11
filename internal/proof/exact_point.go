@@ -1,6 +1,7 @@
 package proof
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/r3"
@@ -146,11 +147,57 @@ func XhpDotNum(a, b Xhp) *big.Int {
 
 // XhpVec rounds p to the nearest float64 coordinates.
 func XhpVec(p Xhp) r3.Vec {
-	var r big.Rat
-	fx, _ := r.SetFrac(p.X, p.W).Float64()
-	fy, _ := r.SetFrac(p.Y, p.W).Float64()
-	fz, _ := r.SetFrac(p.Z, p.W).Float64()
-	return r3.Vec{X: fx, Y: fy, Z: fz}
+	return r3.Vec{
+		X: xhpFractionFloat64(p.X, p.W),
+		Y: xhpFractionFloat64(p.Y, p.W),
+		Z: xhpFractionFloat64(p.Z, p.W),
+	}
+}
+
+// xhpFractionFloat64 rounds an integer quotient directly, avoiding the full
+// GCD that big.Rat.SetFrac performs before its Float64 conversion.
+func xhpFractionFloat64(num, den *big.Int) float64 {
+	if num.Sign() == 0 {
+		return 0
+	}
+	var a, b, quotient, remainder big.Int
+	a.Abs(num)
+	b.Set(den)
+	exp := a.BitLen() - b.BitLen()
+	if shift := 54 - exp; shift > 0 {
+		a.Lsh(&a, uint(shift))
+	} else if shift < 0 {
+		b.Lsh(&b, uint(-shift))
+	}
+	quotient.QuoRem(&a, &b, &remainder)
+	mantissa := quotient.Uint64()
+	haveRem := remainder.Sign() != 0
+	if mantissa>>54 == 1 {
+		if mantissa&1 != 0 {
+			haveRem = true
+		}
+		mantissa >>= 1
+		exp++
+	}
+	if -1074 <= exp && exp <= -1022 {
+		shift := uint(-1022 - (exp - 1))
+		haveRem = haveRem || mantissa&(1<<shift-1) != 0
+		mantissa >>= shift
+		exp = -1021
+	}
+	if mantissa&1 != 0 && (haveRem || mantissa&2 != 0) {
+		mantissa++
+		if mantissa >= 1<<54 {
+			mantissa >>= 1
+			exp++
+		}
+	}
+	mantissa >>= 1
+	value := math.Ldexp(float64(mantissa), exp-53)
+	if num.Sign() < 0 {
+		return -value
+	}
+	return value
 }
 
 // XhpStripTwosOwned takes ownership of p and divides all four integers by
