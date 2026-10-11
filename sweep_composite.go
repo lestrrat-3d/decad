@@ -73,6 +73,31 @@ func assembleCompositeSweepBody(
 	parts []compositeSpanPart,
 	surfaceResult bool,
 ) (*Body, error) {
+	return assembleCompositeSweepBodyWithAudit(ctx, d, ref, parts, surfaceResult, auditCompositeSweep)
+}
+
+// assembleCompositeSweepBodyWithAudit shares the topological sewing with
+// span classes that prove separation by a different geometric certificate.
+func assembleCompositeSweepBodyWithAudit(
+	ctx context.Context,
+	d *Document,
+	ref producerID,
+	parts []compositeSpanPart,
+	surfaceResult bool,
+	auditSpans func(context.Context, []sweepAuditSpan) error,
+) (*Body, error) {
+	return assembleCompositeSweepBodyWithJoin(ctx, d, ref, parts, surfaceResult, auditSpans, sewCompositeSweepJoin)
+}
+
+func assembleCompositeSweepBodyWithJoin(
+	ctx context.Context,
+	d *Document,
+	ref producerID,
+	parts []compositeSpanPart,
+	surfaceResult bool,
+	auditSpans func(context.Context, []sweepAuditSpan) error,
+	joinSpans func(context.Context, *Face, *Face, *Body, map[*Edge]struct{}) error,
+) (*Body, error) {
 	if len(parts) < 2 {
 		return nil, fmt.Errorf(`%w: a composite sweep requires at least two spans`, ErrDegenerate)
 	}
@@ -83,13 +108,13 @@ func assembleCompositeSweepBody(
 	for i, part := range parts {
 		audit[i] = sweepAuditSpan(part)
 	}
-	if err := auditCompositeSweep(ctx, audit); err != nil {
+	if err := auditSpans(ctx, audit); err != nil {
 		return nil, err
 	}
 
 	sewnEdges := make(map[*Edge]struct{})
 	for join := 0; join+1 < len(parts); join++ {
-		if err := sewCompositeSweepJoin(
+		if err := joinSpans(
 			ctx,
 			parts[join].endCap,
 			parts[join+1].startCap,

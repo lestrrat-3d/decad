@@ -1,7 +1,8 @@
 # Payload Verification Design
 
 How `Verify` answers every question for `cupPayload`, `loftPayload`,
-`sweepPayload`, `twistedSweepPayload`, `mitredSweepPayload`, `coilPayload`,
+`sweepPayload`, `twistedSweepPayload`, `compositeTwistedSweepPayload`,
+`mitredSweepPayload`, `coilPayload`,
 and `facetedPayload`.
 Companion to:
 
@@ -27,6 +28,7 @@ case into nil, an empty list, or `Sound`.
 | `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `sweepPayload` | exact construction audit | bounds-disjoint shortcut; all other pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `twistedSweepPayload` | bounded construction and held-shell audit (§17 of `docs/sweep-design.md`) | bounds-disjoint shortcut; overlapping pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
+| `compositeTwistedSweepPayload` | bounded construction, sewn topology and held-facet contact audit (§17.2 of `docs/sweep-design.md`) | bounds-disjoint shortcut; overlapping pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `mitredSweepPayload` | exact construction audit | bounds-disjoint shortcut; the exact planar arm (§7) against a prism, a stitched solid, a faceted result or another mitred sweep; overlap volume through the mesh-boolean path | `Unavailable` | `Unavailable` | `Unavailable` |
 | `coilPayload` | exact construction proof (`docs/helix-design.md` CP5) and the build's held-shell audit | bounds-disjoint shortcut; `WithClearances` against a prism or a stitched solid reads the exact planar arm (`docs/helix-design.md` CD5), and stays `Suspect` against every other payload; overlap volume through the mesh-boolean path, for a partner whose pair tolerance the coil's facets meet | `Unavailable` | `Unavailable` | `Unavailable` |
 | `facetedPayload` | bounded boundary proof (§6) | the exact planar arm (§7) against the same partners | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
@@ -67,6 +69,12 @@ Four payload classes require different treatment:
   area and boundary departure carry rational interval bounds. The held mesh
   carries the horizontal-section occupied-volume proof composed with Loft's
   vertex-rounding proof. Pair and survey answers remain staged.
+
+- `compositeTwistedSweepPayload` retains the true curved-path polygon separately
+  from its nine held Loft cells. The exact Sketch profile and path prove
+  section separation; the held-facet audit proves the sewn mesh embedded.
+  Its occupied-volume proof sums local boundary homotopies and Loft placement
+  bounds. Surveys remain staged.
 
 - `mitredSweepPayload` is `docs/sweep-design.md` §16's planar solid: exact
   rational vertices rounded once to the held table, every held vertex within

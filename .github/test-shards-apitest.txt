@@ -709,6 +709,8 @@
 4	0.02	TestSweepPairRotatingSourceSpheresImpact
 4	0.03	TestSweepSpatialPathTurnsThroughOrthogonalPlanes
 4	0.04	TestSweepStraightIsABooleanOperand
+4	0.00	TestSweepTwistCompositeCardinalArc
+4	0.00	TestSweepTwistCompositeCardinalArcAdmission
 4	0.00	TestSweepTwistNegativeAngleAndAdmission
 4	0.00	TestSweepTwistStraightPolygon
 4	0.01	TestTangentChainUndecidedRefused

@@ -550,6 +550,7 @@
 4	4.70	TestCoilThreadPartnerKeepsItsBounds
 4	11.80	TestCoilThreadRunsOutOfTheEnd
 4	1.67	TestCoilTiltedAxisAgrees
+4	0.00	TestCompositeTwistOccupiedVolumeProof
 4	0.01	TestContactPairFacetedFloorRefusesMultipleSupportFaces
 4	0.03	TestContactPairFacetedFloorRefusesUnprovedPatches
 4	0.04	TestEnumeratePrunedRodsMatchTheFullWalk

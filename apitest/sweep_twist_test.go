@@ -131,3 +131,121 @@ func TestSweepTwistNegativeAngleAndAdmission(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 }
+
+// This uses Sketch's solved profile and Decad's recorded line and arc. The
+// curved span must retain one live wall face per input edge, while its held
+// mesh has the extra angular stations needed for a useful volume proof.
+func TestSweepTwistCompositeCardinalArc(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-0.1, -0.1, 0.1, 0.1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	path, err := decad.NewPath(r3.Vec{},
+		decad.LineTo{End: r3.NewVec(0, 0, 1)},
+		decad.ArcThrough{Through: r3.NewVec(2, 0, 5), End: r3.NewVec(5, 0, 6)})
+	require.NoError(t, err)
+	body, err := decad.New().Sweep(t.Context(), s, s.Profiles()[0], path,
+		decad.WithSweepTwist(units.Degrees(5)))
+	require.NoError(t, err)
+	require.Len(t, body.Faces(), 10)
+	roles := map[string]*decad.Face{}
+	for _, face := range body.Faces() {
+		require.Len(t, face.Origins(), 1)
+		role := face.Origins()[0].Role
+		require.NotContains(t, roles, role)
+		roles[role] = face
+	}
+	for span := range 2 {
+		for edge := range 4 {
+			require.Contains(t, roles, fmt.Sprintf("side(%d,0,%d)", span, edge))
+		}
+	}
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-0.3541592653589793),
+		volume.Bound.Base()+1e-15)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.Len(t, mesh.Triangles(), 76)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.InDelta(t, 0.35100079890664354, meshVolume(mesh), 1e-12)
+	for _, face := range mesh.SourceFaces() {
+		require.Contains(t, roles, face.Origins()[0].Role)
+		require.Same(t, roles[face.Origins()[0].Role], face)
+	}
+	_, err = body.Tessellate(t.Context(), units.Millimeters(0.01),
+		decad.WithVerification(decad.VerifyAll))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	move, err := r3.Translation(r3.NewVec(7, -3, 11))
+	require.NoError(t, err)
+	placed, err := body.Placed(t.Context(), move)
+	require.NoError(t, err)
+	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.5),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, placedMesh.BoundaryVerified())
+	require.True(t, placedMesh.VolumeVerified())
+	mirrorFrame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	mirror, err := r3.Reflection(mirrorFrame)
+	require.NoError(t, err)
+	reflected, err := placed.PlacedCopy(t.Context(), mirror)
+	require.NoError(t, err)
+	reflectedMesh, err := reflected.Tessellate(t.Context(), units.Millimeters(0.5),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, reflectedMesh.BoundaryVerified())
+	require.True(t, reflectedMesh.VolumeVerified())
+}
+
+func TestSweepTwistCompositeCardinalArcAdmission(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-0.1, -0.1, 0.1, 0.1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	path, err := decad.NewPath(r3.Vec{},
+		decad.LineTo{End: r3.NewVec(0, 0, 1)},
+		decad.ArcThrough{Through: r3.NewVec(2, 0, 5), End: r3.NewVec(5, 0, 6)})
+	require.NoError(t, err)
+	doc := decad.New()
+	negative, err := doc.Sweep(t.Context(), s, s.Profiles()[0], path,
+		decad.WithSweepTwist(units.Degrees(-5)))
+	require.NoError(t, err)
+	mesh, err := negative.Tessellate(t.Context(), units.Millimeters(0.5),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.VolumeVerified())
+	before := doc.Bodies()
+	_, err = doc.Sweep(t.Context(), s, s.Profiles()[0], path,
+		decad.WithSweepTwist(units.Degrees(70)))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, before, doc.Bodies())
+	wideWorld := sketch.NewWorld()
+	wideSketch, err := wideWorld.CreateSketch(wideWorld.XY())
+	require.NoError(t, err)
+	wide := wideSketch.CreateRectangle(-1, -1, 1, 1)
+	wideSketch.Fix(wide.A)
+	_, err = wideSketch.Solve(t.Context())
+	require.NoError(t, err)
+	_, err = doc.Sweep(t.Context(), wideSketch, wideSketch.Profiles()[0], path,
+		decad.WithSweepTwist(units.Degrees(5)))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, before, doc.Bodies())
+	largeArc, err := decad.NewPath(r3.Vec{},
+		decad.LineTo{End: r3.NewVec(0, 0, 1)},
+		decad.ArcThrough{Through: r3.NewVec(40, 0, 81), End: r3.NewVec(100, 0, 101)})
+	require.NoError(t, err)
+	_, err = doc.Sweep(t.Context(), s, s.Profiles()[0], largeArc,
+		decad.WithSweepTwist(units.Degrees(5)))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "boundary tube exceeds")
+	require.Equal(t, before, doc.Bodies())
+}

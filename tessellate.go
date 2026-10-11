@@ -475,6 +475,14 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		mesh.symDiffOK = true
 		return mesh, nil
 	}
+	if tp, ok := b.payload.(compositeTwistedSweepPayload); ok {
+		if chord < tp.delta {
+			return nil, fmt.Errorf(`%w: the composite twist's held boundary is %g mm from its true wall; %g mm is finer`,
+				ErrUnsupported, tp.delta, chord)
+		}
+		mesh := *tp.mesh
+		return &mesh, nil
+	}
 	if pp, ok := b.payload.(patchPayload); ok {
 		return tessellatePatch(ctx, b, pp, chord, verify)
 	}

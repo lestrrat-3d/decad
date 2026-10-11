@@ -151,6 +151,14 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
+	if payload, ok := body.payload.(compositeTwistedSweepPayload); ok {
+		d, ok, err := diameter.PointsContext(ctx, payload.mesh.vertices)
+		if err != nil || !ok {
+			return d, ok, err
+		}
+		d, ok = diameter.LowerForDisplacement(d, payload.delta)
+		return d, ok, nil
+	}
 	if payload, ok := body.payload.(mitredSweepPayload); ok {
 		// A mitred sweep's boundary is a polyhedron over its held vertex
 		// table, each vertex within delta of the exact one, so the loft arm's
