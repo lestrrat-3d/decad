@@ -809,13 +809,11 @@ func TestTumbleSceneSubset(t *testing.T) {
 // sagitta at HeldChord, so both land and rest through §10.4's lifted band.
 // The _gallery module renders the same scene.
 //
-// The whole scene's 1024 steps take about 5.6 s on an amd64 workstation
-// without the race detector and about 33 s with it, nearly all of it in the
-// bottle: its three impact steps dominate, and each resting step reads its
-// 49 lifted base vertices through the band cache. TestPartsBinScene runs the
-// whole scene in every test run, and the _gallery module runs it again
-// (TestPartsBinTimeline there, and TestPartsBinClip, which also renders its
-// first frame). The bottle's drop onto the same tray at the same residuals is
+// TestPartsBinDropProofs advances each dropped body through landing and rest.
+// TestPartsBinRollingProofs checks the cylinder's contact track. Both use 24
+// steps of the real world and timeline. The _gallery module advances the
+// complete scene for 1024 steps and checks its timeline and rendered clip.
+// The bottle's drop onto the same tray at the same residuals is also
 // TestDisplacedBottleRestsOnTray's fixture.
 
 // partsBinScene is a parts-bin world: the tray as its one fixed body and the
@@ -870,8 +868,8 @@ var partsBinReleases = []partsBinRelease{
 	{name: "bottle", build: bottleBody, at: r3.Vec{Y: 45, Z: 8}},
 }
 
-// partsBinSteps is the scene's 4 s in steps of 1/256 s.
-const partsBinSteps = 1024
+// partsBinProofSteps includes the drops' impact, bounce, and seven resting steps.
+const partsBinProofSteps = 24
 
 // partsBinCup is §2's cup: a 24×16×16 mm box shelled 2 mm through its top,
 // a non-convex exact cupPayload.
@@ -1222,14 +1220,22 @@ func requirePartsBinRolls(t *testing.T, scene partsBinScene, report *dynamics.St
 	}
 }
 
-// TestPartsBinScene runs the whole scene for its 4 s and asserts §2's Phase 3
-// exit criteria; see the comment at the top of this section for its cost.
-func TestPartsBinScene(t *testing.T) {
+// TestPartsBinDropProofs checks each released body's landing and rest through
+// the real tray, world, timeline, contact, and conservation proofs.
+func TestPartsBinDropProofs(t *testing.T) {
 	t.Parallel()
-	names := make([]string, len(partsBinReleases))
-	for i, release := range partsBinReleases {
-		names[i] = release.name
+	for _, release := range partsBinReleases {
+		t.Run(release.name, func(t *testing.T) {
+			scene := newPartsBin(t, false, release.name)
+			requirePartsBinExit(t, scene, partsBinTimeline(t, scene, partsBinProofSteps), partsBinProofSteps)
+		})
 	}
-	scene := newPartsBin(t, true, names...)
-	requirePartsBinExit(t, scene, partsBinTimeline(t, scene, partsBinSteps), partsBinSteps)
+}
+
+// TestPartsBinRollingProofs checks the cylinder's track and conservation on
+// every step through the real tray, world, and timeline.
+func TestPartsBinRollingProofs(t *testing.T) {
+	t.Parallel()
+	scene := newPartsBin(t, true)
+	requirePartsBinExit(t, scene, partsBinTimeline(t, scene, partsBinProofSteps), partsBinProofSteps)
 }

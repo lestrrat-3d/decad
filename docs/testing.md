@@ -17,7 +17,8 @@ examples, or changing CI shards.
 
 ## Shard manifests
 
-- ALWAYS update `.github/test-shards.txt` or `.github/test-shards-apitest.txt`
-  after adding, renaming or removing a test, fuzz target or example.
+- ALWAYS update `.github/test-shards.txt` after adding, renaming or removing a
+  root-package test, fuzz target or example. Update
+  `.github/test-shards-apitest.txt` for `apitest/` tests.
 - ALWAYS run `go test . ./apitest/ -run '^TestCI'` before pushing any
   test-name change.

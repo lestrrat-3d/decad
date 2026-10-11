@@ -452,10 +452,10 @@ func TestTumbleClip(t *testing.T) {
 
 // These tests run the parts-bin exit scene of
 // docs/multibody-dynamics-design.md §2 through the real producers and the
-// real viewer (§11.3), as the tumble tests above run theirs. dynamics'
-// scene_test.go asserts every exit criterion inside the decad module on the
-// whole scene; these check its end, its events, its
-// rests and rolls, its clip and its first frame.
+// real viewer (§11.3), as the tumble tests above run theirs. The focused
+// dynamics/scene_test.go tests assert each body's landing and the cylinder's
+// rolling proofs. These tests check the complete scene's end, events, rests,
+// rolls, clip, and first frame.
 
 func partsBin(t *testing.T) (*dynamicsScene, *dynamics.Timeline) {
 	t.Helper()
