@@ -62,3 +62,21 @@ func TestSpiralToolCapMustStayOnCertifiedSideOfBlankMeridian(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, big.NewRat(8, 1), gap)
 }
+
+func TestSpiralFiniteConeSideRequiresWholeGeneratorAndFiniteTool(t *testing.T) {
+	cone := &pointConeLimit{apex: big.NewRat(10, 1), far: big.NewRat(-1, 1),
+		slope: big.NewRat(1, 1)}
+	first, last := Point2{U: 2, V: 9}, Point2{U: 3, V: 8}
+	require.True(t, spiralFiniteConeSide(cone, first, last, 1))
+	last.V = 6
+	require.False(t, spiralFiniteConeSide(cone, first, last, 1),
+		"opposite endpoint signs cannot certify a complete face")
+	last.V = 8
+	cone.far = big.NewRat(0, 1)
+	require.False(t, spiralFiniteConeSide(cone, first, last, 1),
+		"the admitted tool must have a finite far plane before the source face")
+	cone.far = big.NewRat(-1, 1)
+	last.U = 10
+	require.False(t, spiralFiniteConeSide(cone, first, last, 1),
+		"the admitted generator must end before the cone apex")
+}

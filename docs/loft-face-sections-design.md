@@ -129,6 +129,20 @@ contacts through an end-cap interior. A caller may also request an exact box
 around either moving flank/root crossing over a narrow X interval; the local
 rim proof uses that box to decide which source surface remains exposed.
 
+The first-join proximity check binds each exceptional face pair to its live
+source origin. The finite blank toe and heel outer meridians lie strictly
+outside the toe Cut cone and inside the heel Intersect cone, respectively;
+the opposite tool also stays on the retained side over each complete cap.
+The blank root lies beyond the toe tool's root intersection and before the
+heel tool's root intersection. These exact affine signs keep the certified
+source crossings on the trimmed tooth. The near-pair table admits the six
+flank contacts, two toe connector contacts, and one toe root-arc contact only
+after their separate source crossing certificates pass. Four other near
+pairs have strict source separation: each matching blank/tool cap pair, the
+blank toe cap against the heel tool cap, and the finite blank root against
+the toe tool cap. Their held facets must also be disjoint. Every unlisted
+near pair keeps the ordinary refusal.
+
 The root arc also crosses each finite blank end cap. The toe and heel source
 certificates bound the crossing of the authenticated Sketch arc with the
 blank cap's exact straight meridian. They check all source station cells,
