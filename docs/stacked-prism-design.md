@@ -373,6 +373,10 @@ Each admitted arm ships its implementation and tests together.
    separation without a charge and the section displacement is zero. A tool
    whose opposed holes overlap, touch, or carry a section displacement takes
    the mesh path.
+
+   A blind rectangle crossing one existing rectangular through hole on a
+   prism target uses general-boolean §3 A7's BRep path. Its partial floor
+   cannot be represented by this payload's whole column rings.
 4. **Surveys and clearance.** DX7, DX8, DX6 and `analyticBodiesEqual` for the
    stacked payload.
 

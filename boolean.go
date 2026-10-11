@@ -336,6 +336,11 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return body, nil
 		}
+		if bp, ok, err := tryCrossingBlindCut(ctx, a, b); err != nil {
+			return nil, err
+		} else if ok {
+			return analyticBooleanBody(ctx, d, ref, bp)
+		}
 		if sp, ok, err := tryBlindStackedCut(ctx, a, b); err != nil {
 			if errors.Is(err, ErrUnsupported) {
 				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))

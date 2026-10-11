@@ -10,7 +10,7 @@
 #   shard 1:  175.72s over 113 tests
 #   shard 2:  177.82s over 204 tests
 #   shard 3:   43.63s over 218 tests
-#   shard 4:   40.23s over 205 tests
+#   shard 4:   40.25s over 206 tests
 #   shard 5:  191.68s over 200 tests
 #   shard 6:   90.77s over 195 tests
 #   shard 7:   92.78s over 200 tests
@@ -589,6 +589,7 @@
 4	0.01	TestContactPairRevolvedCylinderRefusesUnprovedDiskCorridor
 4	0.00	TestContactPairSupportSetPastRim
 4	0.01	TestContactPairSupportSetTray
+4	0.02	TestCrossingBlindPocketOnThroughHole
 4	0.69	TestCutDrillsHole
 4	0.06	TestDisplacedPenetrationWallMargin
 4	0.02	TestDocumentRemoveLeavesDerivedBodiesUnaffected

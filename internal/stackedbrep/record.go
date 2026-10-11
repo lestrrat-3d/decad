@@ -341,12 +341,20 @@ func (b *Engine) HasEvent(p Point2, level int) bool {
 
 // addFace keeps one horizontal face and marks its vertices at its level.
 func (b *Engine) AddFace(loop Loop, level int, outward bool) error {
-	b.Faces = append(b.Faces, Face{Loop: loop, Level: level, Outward: outward})
-	if loop.Closed {
-		return nil
-	}
-	for _, u := range loop.Units {
-		b.Event(u.From, level)
+	return b.AddFaceRegion(loop, nil, level, outward)
+}
+
+// AddFaceRegion records a planar region whose inner rings share the outer
+// ring's face. Every ring contributes vertex events to the adjacent walls.
+func (b *Engine) AddFaceRegion(outer Loop, holes []Loop, level int, outward bool) error {
+	b.Faces = append(b.Faces, Face{Loop: outer, Holes: holes, Level: level, Outward: outward})
+	for _, loop := range append([]Loop{outer}, holes...) {
+		if loop.Closed {
+			continue
+		}
+		for _, u := range loop.Units {
+			b.Event(u.From, level)
+		}
 	}
 	return nil
 }
@@ -543,13 +551,28 @@ func (b *Engine) UnitSegments(u Unit, closed bool, level int) ([]CurveSegment, e
 
 // faceRecord writes one horizontal face's region.
 func (b *Engine) FaceRecord(f Face) (brepgeom.Profile, error) {
-	var loop LoopRecord
-	for _, u := range f.Loop.Units {
-		segs, err := b.UnitSegments(u, f.Loop.Closed, f.Level)
+	write := func(source Loop) (LoopRecord, error) {
+		var loop LoopRecord
+		for _, u := range source.Units {
+			segs, err := b.UnitSegments(u, source.Closed, f.Level)
+			if err != nil {
+				return LoopRecord{}, err
+			}
+			loop.Segments = append(loop.Segments, segs...)
+		}
+		return loop, nil
+	}
+	outer, err := write(f.Loop)
+	if err != nil {
+		return brepgeom.Profile{}, err
+	}
+	region := brepgeom.Profile{Outer: outer}
+	for _, hole := range f.Holes {
+		ring, err := write(hole)
 		if err != nil {
 			return brepgeom.Profile{}, err
 		}
-		loop.Segments = append(loop.Segments, segs...)
+		region.Holes = append(region.Holes, ring)
 	}
-	return brepgeom.Profile{Outer: loop}, nil
+	return region, nil
 }

@@ -102,6 +102,7 @@ admits takes it unchanged.
 | A4 | a reflected operand, or two operands whose relative map is a reflection | M3, M4, M5, T1, T2 | prism-boolean's own paths over a reflected re-expression (§3.2) |
 | A5 | a multi-region operand or result: a prism-group tool (N holes in one arrangement), a `Union` of disjoint footprints | S5 (through mirror §6), S12, P2 | one-slab multi-region `stackedPrismPayload` (mirror §6.3) |
 | A6 | a split boundary under a non-identity re-expression, a prior section displacement or a walk charge | S9 (45° in plane), rotated and translated overlaps; not P1 (A6 below) | `prismPayload` carrying a certified crossing-sensitivity charge |
+| A7 | one rectangular blind pocket crossing one rectangular through hole | a pocket that partly overlaps a through opening | `brepPayload` with split hole walls and a partial floor |
 
 #### A1 — stacked union
 
@@ -454,6 +455,35 @@ no charge for the two true walls parting: the pair falls back to the mesh
 path. A chain of teeth also stops at the
 second tooth on prism-boolean §4.1's trimmed-circular refusal, since the
 first union trims the hub circle.
+
+#### A7 — rectangular blind pocket across a through hole
+
+`prism_boolean_crossing_blind.go` admits `Cut(target, tool)` when `target` is a
+prism with exactly one through hole, `tool` is a hole-free prism, and every
+section loop is four axis-aligned lines. The target and tool have zero
+section and level displacement. Their relative section map is the identity;
+the tool starts strictly inside the target and ends exactly at its far cap,
+as exact rational level comparisons state. The tool's first level and both
+target levels have zero displacement. Other pairs continue to the ordinary
+boolean dispatch.
+
+The target's original section is the lower slab. For the reached slab, a
+private Sketch scene requires `TExact` on every partial edge and classifies
+every cell, including cells with a hole, by each source region's recorded edge
+orientation. It retains cells inside the
+target and outside the tool. `prismcells.MergeLoops` must return exactly one
+counter-clockwise outer and one clockwise hole; the normal section audit
+checks the merged record. The scene's shared-span bound, crossing charge and
+cut-parameter displacement enter the same gates and bounds as A1's brep
+build. A scene that cannot classify or close this shape misses.
+
+The A1 `stackedbrep.Engine` records the two slab regions and the interface
+cells. Its horizontal cap face can carry a hole, and its existing wall
+assembly splits a partially shared hole wall at the floor. The generic BRep
+face and topology checks run before publication; `Tessellate(VerifyAll)`
+checks the occupied volume. A pocket crossing the body's outer boundary, a
+second source hole, a displaced section or level, a rotated footprint, and later Cuts of
+the result remain outside this bounded path.
 
 ### Class B — perpendicular prism pairs with planar contacts
 
