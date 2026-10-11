@@ -101,6 +101,15 @@ tests. It returns only if the two XY boxes preserve positive angular order
 and remain in the certified half-plane. A caller may subdivide an interval
 that refuses, but it must bound its own subdivision work.
 
+`ContainsTriangleSector` takes an exact triangle and an axial interval that
+contains all three vertices. It uses the crossing boxes for that entire
+interval. Each projected vertex must lie strictly counterclockwise of every
+possible first crossing and strictly clockwise of every possible second
+crossing, using exact cross-product lower bounds. Those two fixed halfplanes
+are convex, so the whole triangle lies in the angular sector. A failed
+strict inequality refuses the triangle. This gate checks only its angle;
+radial tooth occupancy and source-wall clearance need separate checks.
+
 This certificate applies only at open heights above the start cap and below
 the recorded `safeTop`. A cap cutter must separately prove its top-collar,
 cap-plane, bore-wall, and full far-band surface claims. Circle occupancy by

@@ -442,3 +442,37 @@ func (r loftCylinderSourceCircle) CrossingBox(zLo, zHi *big.Rat) ([2]loftCylinde
 	}
 	return boxes, nil
 }
+
+// ContainsTriangleSector proves that every projected point of an exact
+// triangle lies strictly between both source connector/circle crossings at
+// every height in [zLo,zHi]. The entire triangle must lie in that axial
+// interval. The result concerns angle only: it does not prove radial tooth
+// occupancy or clearance from another source wall. Endpoints on z0 or
+// safeTop are limiting coordinates; cap planes and the top collar are outside
+// the occupancy claim.
+func (r loftCylinderSourceCircle) ContainsTriangleSector(zLo, zHi *big.Rat,
+	tri [3]proofarith.Xpt) bool {
+	boxes, err := r.CrossingBox(zLo, zHi)
+	if err != nil {
+		return false
+	}
+	for _, p := range tri {
+		if p.X == nil || p.Y == nil || p.Z == nil || p.W == nil || p.W.Sign() <= 0 {
+			return false
+		}
+		z := new(big.Rat).SetFrac(p.Z, p.W)
+		if z.Cmp(zLo) < 0 || z.Cmp(zHi) > 0 {
+			return false
+		}
+		xy := loftCylinderXY{
+			x: new(big.Rat).SetFrac(p.X, p.W),
+			y: new(big.Rat).SetFrac(p.Y, p.W),
+		}
+		point := loftCylinderSourceBoxOf(xy)
+		if loftCylinderSourceCrossLower(boxes[0], point).Sign() <= 0 ||
+			loftCylinderSourceCrossLower(point, boxes[1]).Sign() <= 0 {
+			return false
+		}
+	}
+	return true
+}
