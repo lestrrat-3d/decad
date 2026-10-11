@@ -81,6 +81,9 @@ type facetedPayload struct {
 	// freshly built Split slab. Rigid copies retain pointPlane for queries,
 	// but even a round-trip copy cannot become a new structural Split source.
 	pointPlaneSourceEligible bool
+	// loftFacesPrimitive identifies one certified LoftFaces held mesh. Rigid
+	// placement preserves this source; a Boolean result starts a new chain.
+	loftFacesPrimitive bool
 	// bevelJoin identifies the immutable blank and first trimmed tooth used
 	// to rebuild a second disjoint tooth on the same root ring.
 	bevelJoin *bevelJoinRecord

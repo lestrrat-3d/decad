@@ -74,6 +74,14 @@ allowance also covers the fitted end caps; a held-vertex sweep closes the
 remaining occupied-volume proof. The final
 allowance must be finite and below the positive held-volume floor.
 
+The successful result is one certified held primitive for mesh booleans.
+Its proven `meshBound` raises the pair's internal chord tolerance when
+necessary; the analytic partner then chords at that raised tolerance and
+publishes its own bounds. Rigid placement keeps this classification and
+charges its new mesh bound. A Boolean result does not keep it: later pairs
+must pass the local chain-depth gate on the facets they touch. The hidden
+contact, rim, embedding, and occupied-volume gates still run for every pair.
+
 The same per-cell displacement plus twist offset bounds the denoted wall
 against its held mesh for `Tessellate(VerifyAll)`. Area bounds cover the
 true ruled wall, both fitted end caps, and held arithmetic. A requested
