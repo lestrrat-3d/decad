@@ -6,8 +6,8 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0:  415.54s over 2 tests
-#   shard 1:    0.96s over 114 tests
+#   shard 0:    0.01s over 1 test
+#   shard 1:    0.95s over 113 tests
 #   shard 2:   37.08s over 204 tests
 #   shard 3:   82.95s over 226 tests
 #   shard 4:   82.99s over 212 tests
@@ -16,11 +16,9 @@
 #   shard 7:   92.78s over 200 tests
 #   shard 8:  101.99s over 200 tests
 #   shard 9:  118.05s over 202 tests
-#   shard 10: 171.59s over 1 test
+#   shard 10:   0.01s over 1 test
 #
 0	0.01	TestLoftEmbeddedFitFlanksKeepOriginalCurve
-0	415.53	TestBevelTwoToothJoinReusesOneRootRing
-1	0.01	TestArcSegExactQuarterDisk
 1	0.01	TestBlindPocketPlacedAndVerified
 1	0.02	TestBodyPatchCircularPrismNestedFillMeshRefuses
 1	0.02	TestBodyPatchCircularPrismOneRimTessellates
@@ -1774,4 +1772,4 @@
 9	0.14	TestVertexFrameOriginBoundEnclosesLift
 9	0.01	TestWallNarrowConeTaperZero
 9	0.04	TestWallReadingBoundIsOnTheSpanningDiameter
-10	171.59	TestBevelOneToothJoinPreservesSourceFacesAndVerifiedSolid
+10	0.01	TestArcSegExactQuarterDisk

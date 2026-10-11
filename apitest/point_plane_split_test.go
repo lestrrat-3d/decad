@@ -56,7 +56,7 @@ func TestPointLoftParallelSheetReversedLineKeepsOutwardCapNormals(t *testing.T) 
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "forward", true: "reverse"}[reverse], func(t *testing.T) {
 			doc := decad.New()
-			tooth, _ := bevelReferenceTooth(t, doc)
+			tooth := bevelReferenceTooth(t, doc)
 			span := pointBevelRootSpan()
 			first := pointBevelSliceSheetDirected(t, doc, span/6, 30, reverse)
 			pieces, err := doc.Split(t.Context(), tooth, first)
@@ -281,7 +281,7 @@ func pointBevelRootSpan() float64 {
 
 func TestPointLoftParallelSheetEightSlices(t *testing.T) {
 	doc := decad.New()
-	tooth, _ := bevelReferenceTooth(t, doc)
+	tooth := bevelReferenceTooth(t, doc)
 	original, err := tooth.Volume()
 	require.NoError(t, err)
 	var sourceSides []*decad.Face
@@ -340,7 +340,7 @@ func TestPointLoftParallelSheetEightSlices(t *testing.T) {
 
 func TestPointLoftParallelSheetRefusesShortToolAtomically(t *testing.T) {
 	doc := decad.New()
-	tooth, _ := bevelReferenceTooth(t, doc)
+	tooth := bevelReferenceTooth(t, doc)
 	sheet := pointBevelSliceSheet(t, doc, pointBevelRootSpan()/6, 0.1)
 	before := doc.Bodies()
 	pieces, err := doc.Split(t.Context(), tooth, sheet)
