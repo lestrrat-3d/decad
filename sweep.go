@@ -46,9 +46,10 @@ type SweepOption interface {
 }
 
 // WithSweepTwist rotates the profile about the path tangent as it travels.
-// A nonzero angle currently requires one positive-Z straight path, an origin
-// XY sketch, and a strictly convex whole-line profile centred on the axis.
-// Other nonzero-twist cases return ErrUnsupported without changing the document.
+// A nonzero angle requires an origin XY sketch and a strictly convex whole-line
+// profile centred on the axis. Section 17 admits a positive-Z straight path
+// and a bounded line followed by a cardinal XZ quarter arc. Other cases
+// return ErrUnsupported without changing the document.
 func WithSweepTwist(angle units.Value) SweepOption {
 	return sweepOptionValue{featureoption.WithSweepTwist(angle)}
 }

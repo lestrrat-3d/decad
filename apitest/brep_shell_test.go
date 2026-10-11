@@ -91,6 +91,9 @@ func requireShellVolumeSoundAnalytic(t *testing.T, doc *decad.Document, shelled 
 	vol, err := shelled.Volume()
 	require.NoError(t, err)
 	piLo, piHi := math.Nextafter(math.Pi, 0), math.Nextafter(math.Pi, 4)
+	if b < 0 {
+		piLo, piHi = piHi, piLo
+	}
 	lo := new(big.Rat).Add(big.NewRat(a, 1), new(big.Rat).Mul(big.NewRat(b, 1), new(big.Rat).SetFloat64(piLo)))
 	hi := new(big.Rat).Add(big.NewRat(a, 1), new(big.Rat).Mul(big.NewRat(b, 1), new(big.Rat).SetFloat64(piHi)))
 	held := new(big.Rat).SetFloat64(vol.Value.Base())
@@ -110,6 +113,44 @@ func requireShellVolumeSoundAnalytic(t *testing.T, doc *decad.Document, shelled 
 	text := buf.String()
 	require.Equal(t, faces, strings.Count(text, "=ADVANCED_FACE("))
 	require.Equal(t, 2, strings.Count(text, "=CYLINDRICAL_SURFACE("))
+}
+
+// The cylinder wall of a single cross hole can be the removed face. The
+// original circular mouths remain at the two exterior y walls; the new
+// cavity meets them after one millimetre of cylindrical rim on each side.
+func TestBrepShellRemovesRoundThroughWall(t *testing.T) {
+	t.Parallel()
+	doc, bar := crossDrilledBar(t)
+	shelled, err := bar.Shell(t.Context(), decad.Faces(decad.Cylindrical()).Exactly(1), units.Millimeters(1))
+	require.NoError(t, err)
+	require.Len(t, doc.Bodies(), 1)
+	require.Len(t, shelled.Faces(), 14)
+	require.Len(t, shelled.Lumps(), 1)
+	cylinders := 0
+	var rimLevels []float64
+	for _, face := range shelled.Faces() {
+		cylinder, ok := face.Surface().(decad.Cylinder)
+		if !ok {
+			continue
+		}
+		cylinders++
+		require.Equal(t, 3.0, cylinder.Radius.Base())
+		for _, loop := range face.Loops() {
+			for _, edge := range loop.Edges() {
+				circle, ok := edge.Curve().(decad.Circle3)
+				require.True(t, ok)
+				rimLevels = append(rimLevels, circle.Center.Y)
+			}
+		}
+	}
+	require.Equal(t, 2, cylinders)
+	require.ElementsMatch(t, []float64{0, 1, 19, 20}, rimLevels)
+	requireShellVolumeSoundAnalytic(t, doc, shelled, 3688, -18, 14)
+	mesh, err := shelled.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Less(t, mesh.Bound().Base(), 0.1)
 }
 
 // TestBrepShellRemovesAWallAndTheTop pins route S with a removed wall run

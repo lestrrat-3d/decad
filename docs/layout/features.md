@@ -36,6 +36,7 @@ The rules for rows live in `docs/layout.md`.
 | `draft_survey.go` | Draft body undercut survey. See draft DD7. |
 | `sweep.go` | `Document.Sweep`/`SweepChain`, path admission adapters and span payloads. See sweep design. |
 | `sweep_twist.go` | One-span polygon twist admission, true-shape readings and held-shell proof. See sweep §17. |
+| `sweep_twist_composite.go` | Bounded line-and-quarter-arc twist, Loft cell sewing, live wall faces and local mesh proof. See sweep §17.2. |
 | `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
 | `sweep_composite.go` | Composite Sweep join topology, boundary adapter over `internal/surfacegroup/`, surface-result caps. See sweep PR 4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and body measurement adapters. See `docs/sweep-design.md` PR 4. |

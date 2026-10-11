@@ -9,8 +9,8 @@
 #   shard 0: 1059.82s over 1 tests
 #   shard 1:  175.72s over 113 tests
 #   shard 2:  177.82s over 204 tests
-#   shard 3:   43.55s over 214 tests
-#   shard 4:   40.23s over 203 tests
+#   shard 3:   43.57s over 215 tests
+#   shard 4:   40.23s over 205 tests
 #   shard 5:  191.68s over 200 tests
 #   shard 6:   90.77s over 195 tests
 #   shard 7:   92.78s over 200 tests
@@ -345,6 +345,7 @@
 3	1.05	TestBooleanChainsWithinHeldBound
 3	6.51	TestBooleanCutWasherThroughDiscKeepsStandingPost
 3	1.53	TestBooleanRefusalConcaveHoleSpuriousContact
+3	0.02	TestBrepShellRemovesRoundThroughWall
 3	0.21	TestCapBlendApexPatchAreaBoundIsTight
 3	0.04	TestCapBlendAsymmetricCircularRim
 3	0.48	TestCapBlendAsymmetricMiterRulingEnclosesItsLocus
@@ -708,6 +709,8 @@
 4	0.02	TestSweepPairRotatingSourceSpheresImpact
 4	0.03	TestSweepSpatialPathTurnsThroughOrthogonalPlanes
 4	0.04	TestSweepStraightIsABooleanOperand
+4	0.00	TestSweepTwistCompositeCardinalArc
+4	0.00	TestSweepTwistCompositeCardinalArcAdmission
 4	0.00	TestSweepTwistNegativeAngleAndAdmission
 4	0.00	TestSweepTwistStraightPolygon
 4	0.01	TestTangentChainUndecidedRefused

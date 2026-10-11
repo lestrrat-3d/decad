@@ -616,7 +616,8 @@ func TestBrepShellThroughCutDisplacedOffset(t *testing.T) {
 //   - a blind port (P6c) is SG3 naming its floor, and a stacked boss (P3)
 //     is SG3 naming the third planar face across
 //     z, with SB10's text, since none reads as a prism either;
-//   - P1's cylinder removed is SG4; P8's fillet cylinder, a curved wall whose
+//   - P1's cylinder removed at a thickness that reaches its port is SG4;
+//     P8's fillet cylinder, a curved wall whose
 //     rim is no planar face, is SG5, and so is P7's y = 8 wall, whose end at
 //     the L's reflex corner cuts back along its carrier into the material;
 //   - a removed wall run keeps the side opening's own codes: P8's y = 0 wall
@@ -676,7 +677,7 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 	t.Run("SG4 and SG5", func(t *testing.T) {
 		t.Parallel()
 		_, s1 := internalCrossDrilled(t)
-		refuses(t, s1, Faces(Cylindrical()).Exactly(1), mm2, nil, "modify-general SG4")
+		refuses(t, s1, Faces(Cylindrical()).Exactly(1), units.Millimeters(8), nil, "modify-general SG4")
 		refuses(t, s1, Faces(NormalTo(shellX)).Exactly(2), mm2, nil, "shell-opening SO6")
 		p8 := internalRoundedPlate(t)
 		refuses(t, p8, Faces(Facing(shellY.Scale(-1))).Exactly(1), mm2, nil, "shell-opening SO1")

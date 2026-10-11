@@ -104,6 +104,7 @@
 //	  closed path                                             ErrUnsupported
 //	  WithSweepTwist: centred convex whole-line profile,
 //	    origin XY plane, one positive-Z line, angle <= 1 rad  builds
+//	    or line then cardinal XZ quarter arc, narrow profile builds
 //	  other nonzero twist                                     ErrUnsupported
 //	  WithMitredJoins / WithSectionScale over a LineTo path
 //	    and a whole-line profile                              builds
@@ -246,7 +247,7 @@
 // the document changes. Body.Draft leans an existing prism's walls, all of
 // them or a selected subset, the same way about one of its caps.
 // WithSweepTwist names a sweep's distributed twist. Its admitted straight
-// polygon case is described in docs/sweep-design.md §17.
+// and cardinal curved polygon cases are described in docs/sweep-design.md §17.
 // WithLoftAlignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated

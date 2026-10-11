@@ -10,7 +10,7 @@
 #   shard 1:    1.22s over 230 tests
 #   shard 2:   10.20s over 135 tests
 #   shard 3:  136.92s over 135 tests
-#   shard 4:  182.61s over 137 tests
+#   shard 4:  182.61s over 138 tests
 #   shard 5:   48.16s over 128 tests
 #   shard 6:   85.03s over 133 tests
 #   shard 7:   83.02s over 128 tests
@@ -550,6 +550,7 @@
 4	4.70	TestCoilThreadPartnerKeepsItsBounds
 4	11.80	TestCoilThreadRunsOutOfTheEnd
 4	1.67	TestCoilTiltedAxisAgrees
+4	0.00	TestCompositeTwistOccupiedVolumeProof
 4	0.01	TestContactPairFacetedFloorRefusesMultipleSupportFaces
 4	0.03	TestContactPairFacetedFloorRefusesUnprovedPatches
 4	0.04	TestEnumeratePrunedRodsMatchTheFullWalk

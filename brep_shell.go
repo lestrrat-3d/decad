@@ -21,15 +21,17 @@ import (
 // below): the shell of a brep or stacked receiver that reads as a prism A
 // along a reference axis k cut by through tools T₁…Tₙ along other axes
 // (Table TC, §3.1), with one or both of A's caps, one run of A's walls, or
-// both removed (§3.2). The shell is the erosion
+// both removed (§3.2), or with one circular tool wall removed (§3.1d).
+// For cap and outer-wall removals, the shell is the erosion
 // (A \ ⋃Tᵢ) ⊖ t = (A ⊖ t) \ ⋃(Tᵢ ⊕ t): A ⊖ t is the eroded section — S ⊖ t,
 // or with a removed wall run the side opening's cavity section C
 // (shell_opening.go) — swept over the cup's interval, each Tᵢ ⊕ t the tool's
 // dilated section swept t past both walls it pierces, and the difference is
 // class B's own Cut (classBOfPayloads), run privately. The result record is
 // the receiver's kept faces, the cavity's faces reversed, and the rim at each
-// removed face (§3.3, brep_shell_rim.go). Every test below either compares
-// recorded floats exactly or refuses; none admits on a residual.
+// removed face (§3.3, brep_shell_rim.go). The circular tool-wall route
+// builds exact stacked sections (brep_shell_curved.go). Every test below
+// either compares recorded floats exactly or refuses; none admits on a residual.
 
 // brepShellCall is what Shell hands route S beside the brep request: the
 // faces to remove, the wall sense, and the thickness as given, in
@@ -163,6 +165,9 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	tc, err := readThroughCutAnyAxis(ctx, bp, refusal)
 	if err != nil {
 		return nil, err
+	}
+	if out, matched, err := shellThroughRoundPort(ctx, b, bp, tc, call); matched || err != nil {
+		return out, err
 	}
 	rm, err := tc.removedFaces(b, bp, call.removed)
 	if err != nil {

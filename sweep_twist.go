@@ -41,6 +41,7 @@ func (p twistedSweepPayload) placed(ctx context.Context, d *Document, ref produc
 type twistPolygon struct {
 	points         []Point2
 	area           *big.Rat
+	perimeterLower float64
 	perimeterUpper float64
 	maxRadiusL1    float64
 	maxEdgeL1      float64
@@ -68,7 +69,7 @@ func twistPolygonOf(profile profileRecord) (twistPolygon, error) {
 		points[i] = line.Start
 	}
 	area2, momentX6, momentY6 := new(big.Rat), new(big.Rat), new(big.Rat)
-	perimeter := new(big.Rat)
+	perimeter, perimeterLow := new(big.Rat), new(big.Rat)
 	maxRadius, maxEdge := new(big.Rat), new(big.Rat)
 	sign := 0
 	for i, p := range points {
@@ -91,6 +92,7 @@ func twistPolygonOf(profile profileRecord) (twistPolygon, error) {
 			return twistPolygon{}, fmt.Errorf(`%w: the twisted profile perimeter has no bound`, ErrUnsupported)
 		}
 		perimeter.Add(perimeter, length.Hi)
+		perimeterLow.Add(perimeterLow, length.Lo)
 		radiusL1 := new(big.Rat).Add(new(big.Rat).Abs(px), new(big.Rat).Abs(py))
 		if radiusL1.Cmp(maxRadius) > 0 {
 			maxRadius = radiusL1
@@ -105,6 +107,7 @@ func twistPolygonOf(profile profileRecord) (twistPolygon, error) {
 	}
 	return twistPolygon{
 		points: points, area: new(big.Rat).Quo(new(big.Rat).Abs(area2), big.NewRat(2, 1)),
+		perimeterLower: proofbound.RatFloatDown(perimeterLow),
 		perimeterUpper: proofbound.RatFloatUp(perimeter),
 		maxRadiusL1:    proofbound.RatFloatUp(maxRadius),
 		maxEdgeL1:      proofbound.RatFloatUp(maxEdge),
@@ -254,6 +257,9 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	plane planeRecord, path *Path, angle units.Value, recordArea float64, xform r3.Transform) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if len(path.records) == 2 {
+		return evalCompositeTwistedSweep(ctx, d, ref, profile, plane, path, angle, recordArea, xform)
 	}
 	if len(path.records) != 1 || len(path.segments) != 1 ||
 		plane.Origin != (r3.Vec{}) || plane.U != r3.NewVec(1, 0, 0) || plane.V != r3.NewVec(0, 1, 0) ||
