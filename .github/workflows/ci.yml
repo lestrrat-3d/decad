@@ -222,8 +222,8 @@ jobs:
           elapsed=$(( SECONDS - start ))
           echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
           # Shard 0 reserves the measured 60-tooth gear test. Shard 10 holds
-          # the three-tooth race slice of the bevel pattern; normal CI runs
-          # all eight teeth. Both have 2400s budgets below their
+          # the one-tooth mass regression and three-tooth bevel race slice;
+          # normal CI runs all eight teeth. Both have 2400s budgets below their
           # 45m timeouts. Shards 1 and 2 carry the other costly gear tests
           # and allow 420s; all other shards retain 300s.
           # A budget failure reports test-cost drift before a timeout does.

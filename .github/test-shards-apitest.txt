@@ -10,13 +10,13 @@
 #   shard 1:  175.72s over 113 tests
 #   shard 2:  177.82s over 204 tests
 #   shard 3:   43.63s over 218 tests
-#   shard 4:  211.84s over 207 tests
+#   shard 4:   40.25s over 206 tests
 #   shard 5:   80.90s over 199 tests
 #   shard 6:   90.77s over 195 tests
 #   shard 7:   92.78s over 200 tests
 #   shard 8:  101.99s over 200 tests
 #   shard 9:  118.05s over 202 tests
-#   shard 10: 542.97s over 1 test
+#   shard 10: 714.56s over 2 tests
 #
 0	415.53	TestBevelTwoToothJoinReusesOneRootRing
 0	1059.82	TestLoftEmbeddedSixtyToothGearFeatures
@@ -566,7 +566,6 @@
 4	0.04	TestArcFragmentSplitHemispheresAreTight
 4	0.05	TestAsymmetricChamferOnBrepLoopSideOverrun
 4	0.03	TestAsymmetricChamferOnStackedLoop
-4	171.59	TestBevelOneToothJoinPreservesSourceFacesAndVerifiedSolid
 4	0.01	TestBlindCutFromBottomFace
 4	0.00	TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne
 4	0.00	TestBox
@@ -1766,4 +1765,5 @@
 9	0.14	TestVertexFrameOriginBoundEnclosesLift
 9	0.01	TestWallNarrowConeTaperZero
 9	0.04	TestWallReadingBoundIsOnTheSpanningDiameter
+10	171.59	TestBevelOneToothJoinPreservesSourceFacesAndVerifiedSolid
 10	542.97	TestBevelPatternReusesOneRootRing
