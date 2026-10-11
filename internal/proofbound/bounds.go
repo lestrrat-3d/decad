@@ -954,23 +954,20 @@ func CellTwistMomentFromVolume(vLo, vHi, wLo, wHi, anchor r3.Vec, signed *big.Ra
 	return out
 }
 
-type momentPoly map[[2]int]*big.Rat
+type momentPoly map[[2]int]proofarith.Dyadic
 
-func momentPolyAdd(p momentPoly, degree [2]int, term *big.Rat) {
+func momentPolyAdd(p momentPoly, degree [2]int, term proofarith.Dyadic) {
 	if term.Sign() == 0 {
 		return
 	}
-	if p[degree] == nil {
-		p[degree] = new(big.Rat)
-	}
-	p[degree].Add(p[degree], term)
+	p[degree] = proofarith.DyAdd(p[degree], term)
 }
 
 func momentPolyMul(a, b momentPoly) momentPoly {
 	out := make(momentPoly)
 	for da, ca := range a {
 		for db, cb := range b {
-			momentPolyAdd(out, [2]int{da[0] + db[0], da[1] + db[1]}, new(big.Rat).Mul(ca, cb))
+			momentPolyAdd(out, [2]int{da[0] + db[0], da[1] + db[1]}, proofarith.DyMul(ca, cb))
 		}
 	}
 	return out
@@ -978,24 +975,24 @@ func momentPolyMul(a, b momentPoly) momentPoly {
 
 func bilinearPatchMomentIntegral(q0, a, b, twist proofarith.DyV3, axis int) *big.Rat {
 	q := momentPoly{
-		{0, 0}: q0[axis].Rat(),
-		{1, 0}: a[axis].Rat(),
-		{0, 1}: b[axis].Rat(),
-		{1, 1}: twist[axis].Rat(),
+		{0, 0}: q0[axis],
+		{1, 0}: a[axis],
+		{0, 1}: b[axis],
+		{1, 1}: twist[axis],
 	}
 	n0 := proofarith.DvCross(a, b)
 	ns := proofarith.DvCross(a, twist)
 	nr := proofarith.DvCross(twist, b)
 	n := momentPoly{
-		{0, 0}: n0[axis].Rat(),
-		{1, 0}: ns[axis].Rat(),
-		{0, 1}: nr[axis].Rat(),
+		{0, 0}: n0[axis],
+		{1, 0}: ns[axis],
+		{0, 1}: nr[axis],
 	}
 	integrand := momentPolyMul(momentPolyMul(q, q), n)
 	out := new(big.Rat)
 	for degree, coefficient := range integrand {
 		den := int64((degree[0] + 1) * (degree[1] + 1))
-		out.Add(out, new(big.Rat).Quo(coefficient, big.NewRat(den, 1)))
+		out.Add(out, new(big.Rat).Quo(coefficient.Rat(), big.NewRat(den, 1)))
 	}
 	return out
 }
@@ -1004,12 +1001,12 @@ func triangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
 	e1 := proofarith.DvSub(q1, q0)
 	e2 := proofarith.DvSub(q2, q0)
 	q := momentPoly{
-		{0, 0}: q0[axis].Rat(),
-		{1, 0}: e1[axis].Rat(),
-		{0, 1}: e2[axis].Rat(),
+		{0, 0}: q0[axis],
+		{1, 0}: e1[axis],
+		{0, 1}: e2[axis],
 	}
 	q2Poly := momentPolyMul(q, q)
-	n := proofarith.DvCross(e1, e2)[axis].Rat()
+	n := proofarith.DvCross(e1, e2)[axis]
 	out := new(big.Rat)
 	for degree, coefficient := range q2Poly {
 		// Integral over s>=0, r>=0, s+r<=1 of s^i*r^j is
@@ -1025,7 +1022,7 @@ func triangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
 		for i := 2; i <= degree[0]+degree[1]+2; i++ {
 			den *= int64(i)
 		}
-		term := new(big.Rat).Mul(coefficient, n)
+		term := proofarith.DyMul(coefficient, n).Rat()
 		term.Mul(term, big.NewRat(num, den))
 		out.Add(out, term)
 	}
