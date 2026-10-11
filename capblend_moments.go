@@ -145,7 +145,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			bandDeltas[capBandKey{loop: li, start: true}] = band.delta
 			startCo = band.capCo
 			startBand = band
-			mass, err := readBandMass(ctx, li, loop, cbp, band.geom, cbp.z0, +1, band.delta, band.closure)
+			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.geom, cbp.z0, +1,
+				band.delta, band.closure, &loopArea)
 			if err != nil {
 				return nil, err
 			}
@@ -179,7 +180,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			bandDeltas[capBandKey{loop: li, start: false}] = band.delta
 			endCo = band.capCo
 			endBand = band
-			mass, err := readBandMass(ctx, li, loop, cbp, band.geom, cbp.z1, -1, band.delta, band.closure)
+			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.geom, cbp.z1, -1,
+				band.delta, band.closure, &loopArea)
 			if err != nil {
 				return nil, err
 			}
@@ -396,6 +398,14 @@ func (cbp capBlendPayload) contourOf(ctx context.Context, li int, loop loopRecor
 // authenticated loop areas; internal/capband owns their flux composition.
 func readBandMass(ctx context.Context, li int, loop loopRecord, cbp capBlendPayload,
 	geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure) (capband.BandMassInput, error) {
+	return readBandMassWithSideArea(ctx, li, loop, cbp, geom, capZ, matSign, delta, closure, nil)
+}
+
+// readBandMassWithSideArea reuses the area already computed with a loop's slab
+// moments. Other callers pass nil and read the area from the loop as before.
+func readBandMassWithSideArea(ctx context.Context, li int, loop loopRecord, cbp capBlendPayload,
+	geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure,
+	knownSideArea *proofbound.BoundedScalar) (capband.BandMassInput, error) {
 	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)
 	sideZB := proofbound.BoundedAdd(capZB,
@@ -408,9 +418,17 @@ func readBandMass(ctx context.Context, li int, loop loopRecord, cbp capBlendPayl
 	if signedArea < 0 {
 		orient = -1
 	}
-	sideArea, err := loopEnclosedAreaContext(ctx, loop)
-	if err != nil {
-		return capband.BandMassInput{}, err
+	var sideArea proofbound.BoundedScalar
+	if knownSideArea != nil {
+		if err := ctx.Err(); err != nil {
+			return capband.BandMassInput{}, err
+		}
+		sideArea = *knownSideArea
+	} else {
+		sideArea, err = loopEnclosedAreaContext(ctx, loop)
+		if err != nil {
+			return capband.BandMassInput{}, err
+		}
 	}
 	capBoundary, err := cbp.contourOf(ctx, li, loop, setback.dc)
 	if err != nil {
