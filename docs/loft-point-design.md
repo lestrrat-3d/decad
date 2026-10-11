@@ -310,10 +310,9 @@ source fan and cap map, including the exact stretch and determinant of each
 held placement basis. The shared result's swept-boundary allowance is charged
 once. Every source face retains its Cone or NURBSSurface tag. The real 8/8
 producer passes eight sequential Unions and `Tessellate(0.1 mm, VerifyAll)`.
-The permanent public regression runs all eight sectors without the race
-detector, including the 180° seam. Under the race detector it runs three
-sectors through the same continuation and exact audit: a full eight-sector
-race run did not finish within its 2,400-second CI shard budget.
+`decad-gallery/models/bevelgear/join_test.go` checks the complete eight-tooth
+build. Decad checks cap-owned root stations across the 180° seam and circular
+sector separation in `bevel_join_pattern_test.go`.
 The final body retains the immutable blank and all eight certified tooth
 sources and both complete cap rings. A post-pattern Cut admits a single
 centered, axis-X, full-circle Sketch prism that spans both blank caps.
@@ -333,5 +332,7 @@ The original joined body's occupied-volume allowance remains valid when
 the exact cylinder is removed from both the true and held solids. The
 circle-to-polygon radial shell adds the bore's own occupied-volume allowance
 over the blank's exact cap-to-cap span. The area allowance also covers both
-removed cap discs and the new cylindrical wall. The real 8/8 producer passes
-the centered 1 mm Cut and `Tessellate(0.1 mm, VerifyAll)`.
+removed cap discs and the new cylindrical wall.
+`decad-gallery/models/bevelgear/bore_test.go` checks the complete eight-tooth
+body with a through-bore. Decad checks cap-fan sector pairing and bore
+clearance decisions in `bevel_join_bore_test.go`.
