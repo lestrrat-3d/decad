@@ -29,10 +29,18 @@ type loftFitRootCertificate struct {
 type loftFitRootSpan struct {
 	start, end *big.Rat
 	curve      freeform.BezierSpan
-	p, dp      polynomial.RatPoly
+	pInt       polynomial.IntPoly
+	dp         polynomial.RatPoly
 	a, b, l    polynomial.RatPoly
 	pBern      []*big.Rat
 	dpBern     []*big.Rat
+}
+
+// signAt reads the exact polynomial sign after one positive-denominator
+// rescaling, avoiding repeated rational normalization during root search.
+func (s loftFitRootSpan) signAt(x *big.Rat) int {
+	var acc, dpow, tmp big.Int
+	return polynomial.IpSign(s.pInt, x.Num(), x.Denom(), &acc, &dpow, &tmp)
 }
 
 // certifyLoftFitCircleRoot proves that one ideal contact root is bracketed
@@ -138,7 +146,7 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 		}
 		dp := polynomial.RpDeriv(p)
 		return loftFitRootSpan{start: params[i], end: params[i+1], curve: spans[i],
-			p: p, dp: dp, a: a, b: b, l: l,
+			pInt: polynomial.ClearDenoms(p), dp: dp, a: a, b: b, l: l,
 			pBern:  freeform.RpToBernstein(p, degree),
 			dpBern: freeform.RpToBernstein(dp, degree-1)}, nil
 	}
@@ -171,8 +179,8 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 		if lo.Cmp(allowedLo) <= 0 || hi.Cmp(allowedHi) >= 0 {
 			break
 		}
-		lv, hv := polynomial.RpEval(span.p, lo), polynomial.RpEval(span.p, hi)
-		if lv.Sign() != 0 && hv.Sign() != 0 && lv.Sign() != hv.Sign() {
+		lv, hv := span.signAt(lo), span.signAt(hi)
+		if lv != 0 && hv != 0 && lv != hv {
 			break
 		}
 		step.Mul(step, big.NewRat(2, 1))
@@ -180,8 +188,8 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 	if lo == nil || lo.Cmp(allowedLo) <= 0 || hi.Cmp(allowedHi) >= 0 {
 		return refuse("the ideal tangent root has no interior exact-sign bracket")
 	}
-	lv, hv := polynomial.RpEval(span.p, lo), polynomial.RpEval(span.p, hi)
-	if lv.Sign() == 0 || hv.Sign() == 0 || lv.Sign() == hv.Sign() {
+	lv, hv := span.signAt(lo), span.signAt(hi)
+	if lv == 0 || hv == 0 || lv == hv {
 		return refuse("the ideal tangent root has no opposite exact endpoint signs")
 	}
 	// Exact bisection tightens the ideal root's rational bracket. A derivative
@@ -191,13 +199,13 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 			return loftFitRootCertificate{}, err
 		}
 		mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
-		mv := polynomial.RpEval(span.p, mid)
-		if mv.Sign() == 0 {
+		mv := span.signAt(mid)
+		if mv == 0 {
 			// The exact rational root still receives a nonzero bracket, so
 			// interval restrictions and the nearer-root audit keep one shape.
 			break
 		}
-		if mv.Sign() == lv.Sign() {
+		if mv == lv {
 			lo, lv = mid, mv
 		} else {
 			hi = mid
@@ -352,8 +360,8 @@ func loftFitExcludePolynomialRoots(ctx context.Context, span loftFitRootSpan,
 	}
 	derivative := loftFitPolynomialHull(span.dpBern, lo, hi)
 	if derivative.Lo.Sign() > 0 || derivative.Hi.Sign() < 0 {
-		if polynomial.RpEval(span.p, lo).Sign() == polynomial.RpEval(span.p, hi).Sign() &&
-			polynomial.RpEval(span.p, lo).Sign() != 0 {
+		loSign, hiSign := span.signAt(lo), span.signAt(hi)
+		if loSign == hiSign && loSign != 0 {
 			return true
 		}
 	}
