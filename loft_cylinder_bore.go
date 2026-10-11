@@ -93,6 +93,11 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 	if wall == nil {
 		return nil, false, nil
 	}
+	for _, shift := range record.axialBridge {
+		if shift > 0 {
+			return nil, true, fmt.Errorf("%w: centered bore of an axially bridged Loft/cylinder join lacks a source proof", ErrUnsupported)
+		}
+	}
 	body, err := buildLoftCylinderBore(ctx, d, ref, joined, radius, wall)
 	return body, true, err
 }

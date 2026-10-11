@@ -19,12 +19,15 @@ import (
 // A cylinder joined to a matching axial Loft keeps the original operands.
 // Subsequent placements of that same Loft rebuild the common cylinder ring.
 type loftCylinderJoinRecord struct {
-	blank         *Body
-	teeth         []*Body
-	capOutlines   [2][]int
-	capGroups     [2]int
-	minSideRadius float64
-	radius        float64
+	blank *Body
+	// teeth are the exact Union operands. proofTeeth are private, axially
+	// normalized witnesses whose mesh proofs include axialBridge.
+	teeth, proofTeeth []*Body
+	axialBridge       []float64
+	capOutlines       [2][]int
+	capGroups         [2]int
+	minSideRadius     float64
+	radius            float64
 	// These upward bounds enclose the replaced root seam around radius.
 	// Retained tooth exterior walls still read their Loft source bounds.
 	// The symmetric collar covers source-root exceptions near either cap.
@@ -34,8 +37,15 @@ type loftCylinderJoinRecord struct {
 
 const loftCylinderBlankSideRole = "side(0,0)"
 
+// The structural join has at most 32 separately certified Loft teeth. Its
+// final crossing audit may scan twice the generic mesh ceiling, while the
+// triangle ceiling and every exact pair classification stay unchanged.
+const loftCylinderAuditMaxScans = 16_000_000
+
 type loftCylinderTooth struct {
 	body      *Body
+	original  *Body
+	bridge    float64
 	loft      loftPayload
 	rootStart int
 	bottom    [2]float64
@@ -113,7 +123,16 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 			lp.frame1.Origin() != (r3.Vec{Z: pp.z1}) {
 			return nil, false, nil
 		}
-		if !loftCylinderAxialPlacement(lp.xform) {
+		proofTooth, bridge, admitted, err := loftCylinderProofTooth(ctx, d, tooth, pp.z0, pp.z1)
+		if err != nil {
+			return nil, true, err
+		}
+		if !admitted {
+			return nil, false, nil
+		}
+		tooth = proofTooth
+		lp, ok = tooth.payload.(loftPayload)
+		if !ok || !loftCylinderAxialPlacement(lp.xform) {
 			return nil, false, nil
 		}
 		n := len(lp.verts) / 2
@@ -140,7 +159,10 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 		if !m.BoundaryVerified() || !m.VolumeVerified() {
 			return nil, false, nil
 		}
-		parts[i] = loftCylinderTooth{body: tooth, loft: lp, rootStart: root, mesh: m}
+		parts[i] = loftCylinderTooth{
+			body: tooth, original: teeth[i], bridge: bridge,
+			loft: lp, rootStart: root, mesh: m,
+		}
 		for cap := range 2 {
 			offset := cap * n
 			p0, p1 := lp.verts[offset], lp.verts[offset+root]
@@ -835,7 +857,8 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	if err := bevelOrientMesh(mesh); err != nil {
 		return nil, err
 	}
-	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris); err != nil {
+	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
+		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
 		return nil, err
 	}
 	for cap, outline := range outlines {
@@ -899,14 +922,19 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	toothBodies := make([]*Body, len(parts))
+	proofBodies := make([]*Body, len(parts))
+	axialBridge := make([]float64, len(parts))
 	for i := range parts {
-		toothBodies[i] = parts[i].body
+		toothBodies[i] = parts[i].original
+		proofBodies[i] = parts[i].body
+		axialBridge[i] = parts[i].bridge
 	}
 	fp := facetedPayload{verts: mesh.verts, tris: mesh.tris, src: mesh.src,
 		groups: mesh.groups, vertexBound: vertexBound, contactAudited: true,
 		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
 		xform: r3.Identity(), loftCylinderJoin: &loftCylinderJoinRecord{
-			blank: blank, teeth: toothBodies, capOutlines: outlines,
+			blank: blank, teeth: toothBodies, proofTeeth: proofBodies,
+			axialBridge: axialBridge, capOutlines: outlines,
 			capGroups:     [2]int{blankGroups[1], blankGroups[2]},
 			minSideRadius: minSideRadius, radius: radius, z0: pp.z0, z1: pp.z1,
 			innerInset: innerInset, outerExcess: outerExcess, rootCollar: rootCollar,
@@ -914,6 +942,17 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	if err := loftCylinderTagCaps(&fp, blank, fp.loftCylinderJoin.capGroups,
 		[2]float64{pp.z0, pp.z1}, ref); err != nil {
 		return nil, err
+	}
+	// The true exterior top of a bridged tooth lies below the held cap.
+	// Keep its cap role, but do not claim that the whole source cap is the
+	// blank's exact Plane. buildFacetedBody supplies the charged facet bound.
+	for _, shift := range axialBridge {
+		if shift > 0 {
+			top := &fp.groups[fp.loftCylinderJoin.capGroups[1]]
+			top.surface = nil
+			top.planar = false
+			break
+		}
 	}
 	return buildFacetedBody(ctx, d, ref, fp)
 }
