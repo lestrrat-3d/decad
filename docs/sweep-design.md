@@ -283,7 +283,7 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S8** | an arc span's rotation axis crosses the transported profile interior, or boundary contact fails Revolve's exact axis-incidence rule | `ErrDegenerate` | yes; the mapped boundary folds or pinches |
 | **S9** | remote patches contact, or neighbours contact beyond their shared boundary | proved contact: `ErrDegenerate`; undecided budget: `ErrUnsupported` | contact is permanent; budget is not |
 | **S10** | profile kind is unsupported by one of the path-span builders | `ErrUnsupported` | follows spline reach |
-| **S11** | nonzero `WithSweepTwist` outside §17's bounded straight-polygon case | `ErrUnsupported` | no |
+| **S11** | nonzero `WithSweepTwist` outside §17's bounded polygon cases | `ErrUnsupported` | no |
 | **S12** | option repeated, or a foreign type embeds the sealed marker | `ErrDegenerate` | yes; `WithSurfaceResult()` is exempt — a repeat is idempotent (docs/surface-design.md §4.1) |
 | **S13** | a computed frame, vertex, measurement, or proof bound is non-finite | `ErrUnsupported` | no; numeric ceiling |
 | **S14** | fixed facet, station, exact-predicate, or work budget is exhausted | `ErrUnsupported` | no; resource ceiling |
@@ -1066,7 +1066,9 @@ deleted once and watched fail before it is trusted.
 - `docs/api-design.md` needs no edit: `Sweep`'s signature is unchanged and §8
   already names this document as the owner of its options and reach.
 
-## 17. Bounded straight polygon twist
+## 17. Bounded polygon twist
+
+### 17.1 One straight span
 
 `WithSweepTwist` admits one whole, strictly convex polygon with 3–256 straight
 edges and no holes, drawn on the origin XY sketch plane. Its exact shoelace
@@ -1114,3 +1116,70 @@ profile edge, all live source Faces, placement replay, and `VerifyAll` at
 0.5 mm. A thin placed case checks that axial coordinate rounding is included
 in the occupied-volume allowance. A negative-angle case and each S11 refusal
 complete the focused gates.
+
+### 17.2 A line and a cardinal quarter arc
+
+The same centred, strictly convex polygon may follow a positive-Z line of
+height `h`, then a cardinal quarter arc in the XZ plane. The arc has centre
+`(R,0,h)`, radius `R`, starts at `(0,0,h)` with positive-Z tangent, and ends
+at `(R,0,h+R)` with positive-X tangent. The exact recorded circle and angle
+must prove those facts. The admitted profile has `R > 8r`, where `r` is its
+outward-rounded maximum vertex L1 radius. The absolute denoted twist remains
+at most one radian. Other curved paths remain S11 refusals.
+
+Twist is distributed by arclength. If `L = h + pi*R/2`, the join angle is
+`theta*h/L`; at arc angle `phi`, the section angle is
+`theta*(h+R*phi)/L`. The true arc section has centre
+`(R*(1-cos(phi)),0,h+R*sin(phi))`. Its local radial axis is
+`(cos(phi),0,-sin(phi))`, and its other axis is positive Y before the section
+twist. Because every profile point has radial coordinate less than `r<R`,
+the arc's distinct sections occupy distinct polar angles. Their Z coordinate
+is strictly above `h` after the join, so they meet the straight span only
+at the shared section.
+
+The exact profile centroid is on the path axis. Integrating the arc's
+Jacobian `1-a/R` over each section therefore gives true volume `A*L`, where
+`A` is the exact profile area. The centroid's centreline moment is enclosed
+with rational pi bounds. Its section correction is at most `r²/R`.
+The straight wall uses §17.1's area integral at the join angle. The arc wall
+lies between `P*(R-r)*pi/2` and
+`P*((R+r)+r*abs(theta)*R/L)*pi/2`, with outward perimeter bounds.
+Both endpoint cap areas are included once.
+
+One Loft holds the line, and eight Lofts hold equal-angle arc cells. Each
+cell's section frame is enclosed by rational sine and cosine intervals; a
+stored station carries its measured origin and frame error. The Lofts use
+those same station frames on both sides of every join. Their cap rims are
+sewn by exact station coordinates, since Loft's start and end cap walks have
+opposite coedge order. Each pair of wall triangles becomes one quad; the
+eight arc quads for each profile edge merge into one live `Faceted` Face
+with `side(1,0,j)` provenance. The line retains `side(0,0,j)`. Internal
+section edges are absent within the arc, and the line-to-arc section edge
+remains. The held mesh keeps all triangles and removes only internal caps.
+
+For one arc cell of angle width `dphi` and twist increment `dbeta`, the
+true wall's departure from the ideal Loft triangles is enclosed by a
+centreline interpolation term `R*dphi²/8`, a section rotation term
+`r*(dphi+abs(dbeta))²/8`, a triangle diagonal term
+`e*(dphi+abs(dbeta))/4` for maximum profile edge length `e`, and the
+endpoint station errors. Its stored facet bound adds Loft's own placement
+and vertex rounding. A tolerance finer than the resulting maximum returns
+`ErrUnsupported`.
+
+The occupied-volume proof uses a pointwise homotopy from each true curved
+wall patch to its corresponding ideal Loft triangle. The wall's swept
+volume is at most its maximum departure times the product of proven bounds
+on its profile-edge and path-parameter derivatives. Both cap homotopies
+are charged by their perturbed triangle areas. The eight nonnegative cell
+allowances add to §17.1's line allowance and each Loft's own
+ideal-to-held allowance. The build also audits exact held-facet contact
+across cells, watertight edges, vertex links and positive orientation.
+It refuses a total allowance as large as the true body volume; the
+`VerifyAll` certificate cannot permit the entire body to disappear.
+
+The public Sketch acceptance uses a solved 0.2 mm square, a 1 mm line,
+an R=5 mm quarter arc and a 5° twist. Its true volume is about
+0.3541592654 mm³; the 76-triangle held mesh encloses about
+0.3510007989 mm³. The published local occupied-volume allowance is
+about 0.256 mm³ and covers the observed 0.00316 mm³ signed gap. It checks
+ten live Faces, source roles, placement replay, and `VerifyAll`.
