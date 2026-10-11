@@ -981,6 +981,15 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   error only when its inherited boundary certificate proves that its true patch
   equals the held polygons (`docs/tessellation-design.md` §2/§7, payload
   verification §5).
+- **A strict held-triangle gap uses exact distance when projection gaps are too
+  small.** `meshbool.DisjointTriDistanceAbove` first proves the two closed
+  triangles disjoint with exact separating axes, including in-plane axes for
+  coplanar pairs. It then compares the exact squared distances of all
+  vertex-to-face and edge-to-edge candidates with the squared, exact dyadic
+  input bound. It returns false for touching, intersecting, degenerate, or
+  too-close triangles. A caller still supplies a certified source-surface
+  departure bound; distance between held triangles alone does not establish
+  clearance between their source surfaces.
 - **An operand facet that collapsed is refused, never skipped.** A rigid
   placement's own rounding can flatten a facet of an already-faceted body to
   zero area. Such a facet has no plane and no interior, so every contact
