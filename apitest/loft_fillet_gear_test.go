@@ -90,15 +90,19 @@ func gearRootBlend(unit gearPoint, root, radius, sign float64) (gearPoint, gearP
 	return center, onRoot, onLine
 }
 
-func gearProfile(t *testing.T, world *sketch.World, plane *sketch.Plane, preRounded bool) (*sketch.Sketch, *sketch.Profile, []gearPoint) {
+// curvedRootProfile keeps two separated spline-to-circle junctions, so the
+// fillet and the independently rounded profile exercise the same carriers.
+func curvedRootProfile(t *testing.T, world *sketch.World, plane *sketch.Plane,
+	preRounded bool) (*sketch.Sketch, *sketch.Profile, []gearPoint) {
 	t.Helper()
-	const teeth, samples = 17, 15
+	const lobes, virtualTeeth, samples = 2, 24, 5
 	const pressure = 20 * math.Pi / 180
-	pitch, root, tip := float64(teeth)/2, (float64(teeth)-2.5)/2, (float64(teeth)+2)/2
+	pitch, root, tip := float64(virtualTeeth)/2,
+		(float64(virtualTeeth)-2.5)/2, (float64(virtualTeeth)+2)/2
 	base := pitch * math.Cos(pressure)
-	blendRadius := 0.9 * root * (math.Pi/teeth - 2*(math.Tan(pressure)-pressure)) / 2
+	blendRadius := 0.9 * root * (math.Pi/virtualTeeth - 2*(math.Tan(pressure)-pressure)) / 2
 	atPitch := gearInvolute(base, pitch)
-	rotation := math.Pi/(2*teeth) - math.Atan2(-atPitch.y, atPitch.x)
+	rotation := math.Pi/(2*virtualTeeth) - math.Atan2(-atPitch.y, atPitch.x)
 	s, err := world.CreateSketch(plane)
 	require.NoError(t, err)
 	center := s.CreatePoint(0, 0)
@@ -110,8 +114,8 @@ func gearProfile(t *testing.T, world *sketch.World, plane *sketch.Plane, preRoun
 	}
 	var firstRoot, previousRoot *sketch.Point
 	var roots []gearPoint
-	for tooth := range teeth {
-		angle := float64(tooth) * 2 * math.Pi / teeth
+	for tooth := range lobes {
+		angle := float64(tooth) * 2 * math.Pi / lobes
 		left := make([]*sketch.Point, samples)
 		right := make([]*sketch.Point, samples)
 		var leftStart, rightStart gearPoint
@@ -175,18 +179,18 @@ func gearProfile(t *testing.T, world *sketch.World, plane *sketch.Plane, preRoun
 	return s, s.Profiles()[0], roots
 }
 
-func TestLoftFilletDefaultGearRoots(t *testing.T) {
-	const teeth = 17
-	const root = (teeth - 2.5) / 2.0
+func TestLoftFilletCurvedRootJunctions(t *testing.T) {
+	const lobes, virtualTeeth = 2, 24
+	const root = (virtualTeeth - 2.5) / 2.0
 	const pressure = 20 * math.Pi / 180
-	radius := 0.9 * root * (math.Pi/teeth - 2*(math.Tan(pressure)-pressure)) / 2
+	radius := 0.9 * root * (math.Pi/virtualTeeth - 2*(math.Tan(pressure)-pressure)) / 2
 	world := sketch.NewWorld()
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 10), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	upper, err := world.CreatePlaneFromFrame(frame)
 	require.NoError(t, err)
-	s0, p0, rootPoints := gearProfile(t, world, world.XY(), false)
-	s1, p1, _ := gearProfile(t, world, upper, false)
+	s0, p0, rootPoints := curvedRootProfile(t, world, world.XY(), false)
+	s1, p1, _ := curvedRootProfile(t, world, upper, false)
 	body, err := decad.New().Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
 	before, err := body.Volume()
@@ -204,7 +208,7 @@ func TestLoftFilletDefaultGearRoots(t *testing.T) {
 			}
 		}
 	}
-	require.Equal(t, 2*teeth, len(roots))
+	require.Equal(t, 2*lobes, len(roots))
 	_, err = body.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(roots[0])).Exactly(1), units.Millimeters(100))
 	require.Error(t, err)
@@ -212,7 +216,7 @@ func TestLoftFilletDefaultGearRoots(t *testing.T) {
 	for _, edge := range axial {
 		point := edge.Start().Position().Value
 		r := math.Hypot(point.X, point.Y)
-		if r > 8.1 && r < 9.3 {
+		if r > root+0.2 && r < (virtualTeeth+2)/2.0-0.1 {
 			splineStation = point
 			break
 		}
@@ -225,7 +229,7 @@ func TestLoftFilletDefaultGearRoots(t *testing.T) {
 	for _, point := range roots[1:] {
 		query.Or(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(point))
 	}
-	rounded, err := body.Fillet(t.Context(), query.Exactly(2*teeth), units.Millimeters(radius))
+	rounded, err := body.Fillet(t.Context(), query.Exactly(2*lobes), units.Millimeters(radius))
 	require.NoError(t, err)
 	require.True(t, rounded.IsSolid())
 	after, err := rounded.Volume()
@@ -234,8 +238,8 @@ func TestLoftFilletDefaultGearRoots(t *testing.T) {
 	referenceWorld := sketch.NewWorld()
 	referenceUpper, err := referenceWorld.CreatePlaneFromFrame(frame)
 	require.NoError(t, err)
-	referenceSketch0, referenceProfile0, _ := gearProfile(t, referenceWorld, referenceWorld.XY(), true)
-	referenceSketch1, referenceProfile1, _ := gearProfile(t, referenceWorld, referenceUpper, true)
+	referenceSketch0, referenceProfile0, _ := curvedRootProfile(t, referenceWorld, referenceWorld.XY(), true)
+	referenceSketch1, referenceProfile1, _ := curvedRootProfile(t, referenceWorld, referenceUpper, true)
 	reference, err := decad.New().Loft(t.Context(), referenceSketch0, referenceProfile0,
 		referenceSketch1, referenceProfile1)
 	require.NoError(t, err)
@@ -252,7 +256,7 @@ func TestLoftFilletDefaultGearRoots(t *testing.T) {
 			}
 		}
 	}
-	require.Equal(t, 2*teeth, len(roles))
+	require.Equal(t, 2*lobes, len(roles))
 	remaining, err := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).SelectEdges(rounded)
 	require.NoError(t, err)
 	for _, edge := range remaining {
