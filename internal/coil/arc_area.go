@@ -96,6 +96,20 @@ func arcArea(ctx context.Context, seg Segment, axis Axis, pitch, turns *big.Rat,
 	}
 	two := big.NewRat(2, 1)
 	half := big.NewRat(1, 2)
+	third := big.NewRat(1, 3)
+	eighth := big.NewRat(1, 8)
+	mul := proofbound.IntervalMul
+	add := proofbound.IntervalAdd
+	// These intervals depend on the segment, not on a station. Each worker
+	// reads them without mutation while evaluating its assigned pieces.
+	a0Sq, a1Sq := proofbound.IntervalSquare(a0), proofbound.IntervalSquare(a1)
+	a2Sq, a3Sq := proofbound.IntervalSquare(a2), proofbound.IntervalSquare(a3)
+	a0a1, a0a2, a0a3 := mul(a0, a1), mul(a0, a2), mul(a0, a3)
+	a1a2, a1a3, a2a3 := mul(a1, a2), mul(a1, a3), mul(a2, a3)
+	a0Delta, a0SqDelta := mul(a0, delta), mul(a0Sq, delta)
+	deltaHalf := proofbound.IntervalScale(delta, half)
+	deltaEighth := proofbound.IntervalScale(delta, eighth)
+	deltaThreeEighths := proofbound.IntervalScale(delta, big.NewRat(3, 8))
 	workers := 1
 	if pieces >= 128 {
 		workers = min(orderedwork.Workers(ctx, min(runtime.GOMAXPROCS(0), 4)), 4)
@@ -132,25 +146,23 @@ func arcArea(ctx context.Context, seg Segment, axis Axis, pitch, turns *big.Rat,
 				return proofbound.IntervalMul(proofbound.IntervalMul(x.a, x.b),
 					proofbound.IntervalSub(proofbound.IntervalSquare(x.a), proofbound.IntervalSquare(x.b)))
 			})
-			third := big.NewRat(1, 3)
-			eighth := big.NewRat(1, 8)
 			iA := proofbound.IntervalNeg(bb)
-			iA2 := proofbound.IntervalSub(proofbound.IntervalScale(delta, half), proofbound.IntervalScale(abd, half))
-			iB2 := proofbound.IntervalAdd(proofbound.IntervalScale(delta, half), proofbound.IntervalScale(abd, half))
-			iA3 := proofbound.IntervalAdd(iA, proofbound.IntervalScale(b3, third))
-			iAB2 := proofbound.IntervalNeg(proofbound.IntervalScale(b3, third))
-			threeEighths := proofbound.IntervalScale(delta, big.NewRat(3, 8))
-			iA4 := proofbound.IntervalSub(proofbound.IntervalSub(threeEighths, proofbound.IntervalScale(abd, half)), proofbound.IntervalScale(ab4, eighth))
-			iB4 := proofbound.IntervalSub(proofbound.IntervalAdd(threeEighths, proofbound.IntervalScale(abd, half)), proofbound.IntervalScale(ab4, eighth))
-			iA2B2 := proofbound.IntervalAdd(proofbound.IntervalScale(delta, eighth), proofbound.IntervalScale(ab4, eighth))
+			abdHalf := proofbound.IntervalScale(abd, half)
+			b3Third := proofbound.IntervalScale(b3, third)
+			ab4Eighth := proofbound.IntervalScale(ab4, eighth)
+			iA2 := proofbound.IntervalSub(deltaHalf, abdHalf)
+			iB2 := proofbound.IntervalAdd(deltaHalf, abdHalf)
+			iA3 := proofbound.IntervalAdd(iA, b3Third)
+			iAB2 := proofbound.IntervalNeg(b3Third)
+			iA4 := proofbound.IntervalSub(proofbound.IntervalSub(deltaThreeEighths, abdHalf), ab4Eighth)
+			iB4 := proofbound.IntervalSub(proofbound.IntervalAdd(deltaThreeEighths, abdHalf), ab4Eighth)
+			iA2B2 := proofbound.IntervalAdd(deltaEighth, ab4Eighth)
 
-			mul := proofbound.IntervalMul
-			add := proofbound.IntervalAdd
-			ih := add(add(mul(a0, delta), mul(a1, iA)), add(mul(a2, iA2), mul(a3, iB2)))
-			ih2 := add(mul(proofbound.IntervalSquare(a0), delta), mul(proofbound.IntervalSquare(a1), iA2))
-			ih2 = add(ih2, add(mul(proofbound.IntervalSquare(a2), iA4), mul(proofbound.IntervalSquare(a3), iB4)))
-			cross := add(add(mul(mul(a0, a1), iA), mul(mul(a0, a2), iA2)), add(mul(mul(a0, a3), iB2), mul(mul(a1, a2), iA3)))
-			cross = add(cross, add(mul(mul(a1, a3), iAB2), mul(mul(a2, a3), iA2B2)))
+			ih := add(add(a0Delta, mul(a1, iA)), add(mul(a2, iA2), mul(a3, iB2)))
+			ih2 := add(a0SqDelta, mul(a1Sq, iA2))
+			ih2 = add(ih2, add(mul(a2Sq, iA4), mul(a3Sq, iB4)))
+			cross := add(add(mul(a0a1, iA), mul(a0a2, iA2)), add(mul(a0a3, iB2), mul(a1a2, iA3)))
+			cross = add(cross, add(mul(a1a3, iAB2), mul(a2a3, iA2B2)))
 			ih2 = add(ih2, proofbound.IntervalScale(cross, two))
 
 			// T = Δ·g + (∫h − Δ·g²)/(2g) − (∫h² − 2g²·∫h + g⁴·Δ)/(8g³)
