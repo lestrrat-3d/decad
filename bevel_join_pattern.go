@@ -65,7 +65,7 @@ func tryBevelPatternUnion(ctx context.Context, op meshbool.OperationKind,
 	if !ok {
 		return nil, false, nil
 	}
-	body, err := buildBevelPatternJoin(ctx, d, ref, blankBody, blank, record, boundary, teeth)
+	body, err := buildBevelPatternJoin(ctx, d, ref, blankBody, blank, record, boundary, teeth, false)
 	return body, true, err
 }
 
@@ -207,8 +207,11 @@ func bevelPatternRingAngles(plans []bevelTwoPlan, ringStart float64) ([]float64,
 
 func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 	blankBody *Body, blank *bevelBlankSource, record *pointConeTrimRecord,
-	boundary *bevelToothBoundary, teeth []facetedPayload) (*Body, error) {
-	const ringStart = -math.Pi / 8
+	boundary *bevelToothBoundary, teeth []facetedPayload, adaptive bool) (*Body, error) {
+	ringStart := -math.Pi / 8
+	if adaptive {
+		ringStart = -math.Pi / float64(len(teeth))
+	}
 	motions := make([]r3.Transform, len(teeth))
 	charges := make([]massmoment.MapCharge, len(teeth))
 	plans := make([]bevelTwoPlan, len(teeth))
@@ -226,7 +229,7 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 			}
 		}
 		plan, err := makeBevelTwoPlan(ctx, blank, record, boundary,
-			motions[i], charges[i], ringStart)
+			motions[i], charges[i], ringStart, adaptive)
 		if err != nil {
 			return nil, err
 		}
@@ -300,14 +303,16 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 		}
 		p.lip = proofbound.AbsSumUpper(1, upperLip, lowerLip)
 		p.capArea = pointConeCapArea(far, p.caps)
+		stretch := proofbound.AbsSumUpper(1, charges[i].Stretch)
 		localBound = max(localBound, proofbound.AbsSumUpper(p.snap, p.nodeRound,
-			proofbound.ProductUpper(p.farRound, p.lip),
+			proofbound.ProductUpper(proofbound.ProductUpper(p.farRound, stretch), p.lip),
 			proofbound.ProductUpper(proofbound.AbsSumUpper(
 				bevelPatternMeshBound(record.base.meshBound, charges[i]),
 				p.crossingBound, p.placedRound), p.lip),
-			max(p.upperBound, p.lowerBound), blank.coneGap, p.toolGap))
+			proofbound.ProductUpper(max(p.upperBound, p.lowerBound), stretch),
+			blank.coneGap, p.toolGap))
 		localRound = max(localRound, proofbound.AbsSumUpper(p.snap, p.nodeRound,
-			proofbound.ProductUpper(p.farRound, p.lip),
+			proofbound.ProductUpper(proofbound.ProductUpper(p.farRound, stretch), p.lip),
 			proofbound.ProductUpper(proofbound.AbsSumUpper(p.crossingBound,
 				p.placedRound), p.lip), blank.coneGap, p.toolGap))
 		capFactor := max(1, proofbound.ProductUpper(upperLip, upperLip),
@@ -349,13 +354,22 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, err
 	}
-	if len(teeth) < 3 || len(teeth) > 8 {
-		return nil, fmt.Errorf("%w: patterned bevel audit requires three to eight teeth", ErrUnsupported)
-	}
-	// The 44,480-triangle two-tooth baseline grows by at most 22,000
-	// triangles per sector; its measured source adds 21,216.
 	maxAuditTriangles := 44_480 + 22_000*(len(teeth)-2)
 	maxAuditScans := uint64(12_000_000 * len(teeth))
+	if adaptive {
+		// Each authenticated cap has at most 10,000 source cells. One
+		// red-green pass adds at most three children per source cell,
+		// with two caps per tooth. Add that to the finite three-round
+		// pattern ceiling; the final mesh must fit this bound before
+		// the exact audit allocates its triangle lifts.
+		maxAuditTriangles += 6 * bevelCombineCapCellLimit * len(teeth)
+		// The real twelve-tooth source scanned 230,484,398 pairs.
+		// A bounded 25 million per tooth allows its measured work while
+		// rejecting patterns whose audit grows unexpectedly.
+		maxAuditScans = uint64(25_000_000 * len(teeth))
+	} else if len(teeth) < 3 || len(teeth) > 8 {
+		return nil, fmt.Errorf("%w: patterned bevel audit requires three to eight teeth", ErrUnsupported)
+	}
 	if err := loftmesh.LoftCrossingAuditBounded(
 		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
 		maxAuditTriangles, maxAuditScans); err != nil {

@@ -904,13 +904,17 @@ func CombineJoin(ctx context.Context, target *Body, tools ...*Body) (*Body, erro
 ```
 
 `CombineJoin` consumes one target and at least two distinct tools in one
-operation. Its bounded spiral-bevel case accepts an exact finite revolve blank
-and separate rigid copies of one authenticated, cone-trimmed nine-section tooth.
-The tool sectors must be proven disjoint. The evaluator cuts the blank and all
-tools in one mesh Boolean, certifies each root and cap contact against its
-original tooth source, and commits one body only after the complete output
-passes the boundary, volume and topology audits. Other input classes return
-`ErrUnsupported`. A failed call leaves every operand live.
+operation. Its bounded straight-bevel case accepts a finite revolve blank and
+three to twelve separate copies of one authenticated, cone-trimmed point-loft
+tooth. It rebuilds their caps against one blank ring and checks the resulting
+solid's boundary, volume and topology. Its bounded spiral-bevel case accepts
+an exact finite revolve blank and separate rigid copies of one authenticated,
+cone-trimmed nine-section tooth. The tool sectors must be proven disjoint. The
+evaluator cuts the blank and all spiral tools in one mesh Boolean, certifies
+each root and cap contact against its original tooth source, and commits one
+body only after the complete output passes the boundary, volume and topology
+audits. Other input classes return `ErrUnsupported`. A failed call leaves
+every operand live.
 
 No `*Document` appears in those signatures, and none is needed: a `*Body` carries
 its owning document (§6), so each call retires its operands and registers its

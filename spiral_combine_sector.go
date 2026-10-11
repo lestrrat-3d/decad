@@ -168,8 +168,8 @@ func spiralToolSectorsSeparate(ctx context.Context, tools []*Body, moves []r3.Tr
 			if proofbound.IsNonFinite(norm) || norm <= 0 {
 				return false
 			}
-			loI, hiI, okI := spiralToolProjection(tools[i], ny, nz, norm)
-			loJ, hiJ, okJ := spiralToolProjection(tools[j], ny, nz, norm)
+			loI, hiI, okI := facetedToolProjection(tools[i], ny, nz, norm)
+			loJ, hiJ, okJ := facetedToolProjection(tools[j], ny, nz, norm)
 			if !okI || !okJ {
 				return false
 			}
@@ -534,7 +534,7 @@ func spiralSlabProjection(p facetedPayload, facets []int, slabLo, slabHi float64
 	return lo, hi
 }
 
-func spiralToolProjection(body *Body, ny, nz *big.Rat, norm float64) (*big.Rat, *big.Rat, bool) {
+func facetedToolProjection(body *Body, ny, nz *big.Rat, norm float64) (*big.Rat, *big.Rat, bool) {
 	p, ok := body.payload.(facetedPayload)
 	if !ok || len(p.verts) == 0 || proofbound.IsNonFinite(p.meshBound) || p.meshBound < 0 {
 		return nil, nil, false
@@ -552,6 +552,10 @@ func spiralToolProjection(body *Body, ny, nz *big.Rat, norm float64) (*big.Rat, 
 			hi = value
 		}
 	}
-	charge := lfF(proofbound.ProductUpper(norm, p.meshBound))
+	chargeBound := proofbound.ProductUpper(norm, p.meshBound)
+	if proofbound.IsNonFinite(chargeBound) {
+		return nil, nil, false
+	}
+	charge := lfF(chargeBound)
 	return lfSub(lo, charge), lfAdd(hi, charge), true
 }
