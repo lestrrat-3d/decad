@@ -132,10 +132,11 @@ func WithShellSense(s ShellSense) ShellOption {
 // prism — with a wall run, the side opening's cavity section
 // (docs/shell-opening-design.md) — cut by each tool dilated by t, and the
 // result is a brep holding the receiver's kept faces, the cavity's faces and
-// the rim at each removed face. On such a record an outward shell (SG1), a
-// removed tool or hole wall (SG4), a removed curved wall or a wall run ending
-// at a reflex corner (SG5), and dilated tools that meet, reach a cap of the
-// cavity or the material past the walls they pierce (SG6) are
+// the rim at each removed face. One whole-circle tool wall through a rectangular
+// box builds a three-section shell (modify-general §3.1d). On other records,
+// an outward shell (SG1), a removed tool or hole wall (SG4), a removed curved
+// outer wall or a wall run ending at a reflex corner (SG5), and dilated tools
+// that meet, reach a cap of the cavity or the material past the walls they pierce (SG6) are
 // ErrUnsupported, and a wall run refuses as a prism side opening does
 // (SO1–SO6, with their sentinels). A brep or
 // stacked result that reads as neither is ErrUnsupported: SB3, the prism's own

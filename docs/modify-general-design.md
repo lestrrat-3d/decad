@@ -245,6 +245,33 @@ existing whole-circle fillet-band and face-chord volume proofs. Later modify,
 class B, and clearance face views keep §3.1a's staging; a mesh boolean uses
 the verified mesh.
 
+### 3.1d Exact circular through-wall opening
+
+Before route S classifies removed faces, a seven-face through-cut record may
+remove its one cylindrical tool wall. Admit only one exact whole-circle tool
+through an axis-aligned rectangular box, with no other holes or curved outer
+walls. The cylinder must be the sole removed face. Require inward sense,
+exact source sections and levels, exact thickness conversion, and exactly
+represented inset rectangle and axial levels. The original circle must lie
+strictly inside the rectangle inset by `t`; both axial end layers and the
+middle layer must have positive height. Other tool-wall removals remain SG4.
+
+The result is three stacked sections along the tool axis. Each end layer has
+the original rectangle and the original circular hole, over thickness `t`.
+The middle layer has the original rectangle and its inset rectangle as a
+hole. At each interface, one planar patch occupies the inset rectangle less
+the original circle. The two cylindrical end-layer walls are the rims of the
+removed source cylinder. Both exterior hole mouths keep their original
+radius. The strict circle-in-inset-rectangle comparison proves each interface
+ring has no crossing or contact. `stackedrecord.Falsify` checks the loop and
+level identities; stacked mass and `Tessellate(VerifyAll)` carry the analytic
+area, volume, boundary, and occupied-volume proofs.
+
+For box section area `A`, inset area `A'`, through length `h`, source hole
+radius `r`, and thickness `t`, the shell volume is
+`2t(A−πr²) + (h−2t)(A−A')`. For the 40×20×20 reference bar with a
+radius-3 hole and `t=1`, this is `3688−18π` mm³.
+
 ### 3.2 Removed faces and the sense
 
 The removed faces are read against the recognised record:
@@ -253,7 +280,7 @@ The removed faces are read against the recognised record:
 |---|---|---|
 | a cap of `A` (TC1's bottom or top), one or both | S-1 | `A ⊖ t` keeps a removed cap's level and moves a kept one by `t`: modify §9's cup interval `[zlo + t·kept₀, zhi − t·kept₁]` |
 | a wall of `A` (an (a) or (b) face), one proper connected run of whole walls of `S`'s outer loop, with or without either cap | S-2 | `A ⊖ t`'s section is `docs/shell-opening-design.md` §3's cavity section `C` over the kept chain, with that document's rim rule at each end (`sideOpeningRegions`); its SO1–SO6 refusals keep their codes, a set of walls that is no proper connected run among them (SO6). No section limit runs (shell-opening §5). Each removed wall must be a straight wall along a section axis, whose rim is a planar face, and neither end of the run may cut backward along the removed carrier (a reflex end, whose rim lies inside the material): SG5 |
-| a tool wall, a tool's floor, a face of a hole of `S` | — | SG4 |
+| a tool wall outside §3.1d, a tool's floor, a face of a hole of `S` | — | SG4 |
 | two removed faces sharing an edge, other than the runs above | — | SG5 |
 
 Only `Inward` builds. The dilation `(A \ T) ⊕ t` does not distribute over the
@@ -400,7 +427,7 @@ Modify §1's test picks every sentinel.
 | **SG1** | `WithShellSense(Outward)` on a brep or stacked receiver | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
 | **SG2** | `WithNoOpenings` on a brep or stacked receiver | yes; a brep record holds no void shell | `ErrUnsupported` (replaces SX16's text for this call) |
 | **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a–§3.1c: a blind port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion may hold surfaces beyond the admitted cases | `ErrUnsupported`, naming the first face Table TC does not take |
-| **SG4** | a removed face that is a tool wall, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
+| **SG4** | a removed face that is a tool wall outside §3.1d, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
 | **SG5** | a removed face that names no face of the record; a removed wall that is no straight wall along a section axis (a fillet cylinder: its rim is no planar face); a wall run whose end cuts backward along the removed carrier (a reflex corner: the rim lies inside the material). A set of walls that is no proper connected run is shell-opening SO6 | yes | `ErrUnsupported` |
 | **SG6** | a tool's dilation reaches material beyond its pierced wall (TC7), or a private class-B cut does not build a brep: two dilated tools within `2t`, a dilated tool reaching a cap of `A'`, an eroded miter off its axis, a dilated tool recorded within twice the cavity's charge of a cavity face, or a cut that takes the crossing reach while that charge is positive (§3.3 step 4) | yes | `ErrUnsupported`, naming the tool |
 | **SG7** | a rim's loops do not partner the cavity's trace, or do not chain into one outer loop with holes or outer loops alone (step 5) | — (a falsifier) | `ErrUnsupported` |
@@ -412,7 +439,7 @@ reach SX10:
 |---|---|
 | 2a. record | RB dispatch; SB2; SB1 |
 | 2b. route P | brep-modify §4.2 unchanged: an axis whose prism takes the removed faces as caps builds the prism's own cup or tube |
-| 2c. route S entry | SG1; SG2; Table TC (SG3); the removed faces against the record (SG4, SG5's face and straight-wall tests) |
+| 2c. route S entry | SG1; SG2; Table TC (SG3); §3.1d's exact circular-wall case; the remaining removed faces against the record (SG4, SG5's face and straight-wall tests) |
 | 3. existence | caps alone: S18; S10 (section and height limits); S11a on `S`. A wall run: `sideOpeningRegions` in shell-opening §5's stages 2–5 (SO6, SO3's height half, S11a and SO1, SO2, SO4 per end, S8, S11b and S9 on `W` and `C`, the area identity), then SG5's reflex-end test. Then S11a on each tool |
 | 4. offset audit | S8, S11b, S9 on `S ⊖ t` (caps alone) and on each `Tᵢ ⊕ t`; TC7 (SG6) |
 | 5. cavity | the private cuts (SG6) |
@@ -609,7 +636,7 @@ BG3's and BG4's consumer rules are stated in §3.1a and §3.1c.
 | an edge ending on a blend or a curved face (P8) | SB7 | its honest form is the complete-loop fillet, `docs/loop-fillet-design.md` |
 | shell of a blind pocket outside §3.1b, a blind port, a stacked union outside §3.1a or §3.1c, or a keyway (P2, P3, P6c) | SG3 | the remaining cases need a shape-specific exact transition and occupied-volume proof |
 | an outward or closed shell of a brep | SG1 / SG2 | §3.2 |
-| shell removing a curved wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |
+| shell removing a curved outer wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved outer wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |
 | any op on a faceted result (P5, P6b, P9) | reach SX9 | permanent (reach §11); the boolean is the owner |
 
 ## 7. Decided questions
@@ -682,6 +709,12 @@ BG3's and BG4's consumer rules are stated in §3.1a and §3.1c.
 Every test asserts computed geometry against a closed form, bounds as
 relations, through the public booleans. Fixtures are §1's parts.
 
+Route S (§3.1d): P1 with its radius-3 cylinder removed at `t=1` has 14
+analytic faces, two radius-3 cylinder rims at `y=[0,1]` and `[19,20]`,
+volume within its bound of `3688−18π`, `Verify` `Sound`, and a
+`Tessellate(VerifyAll)` boundary and occupied-volume proof. A thickness that
+puts the port outside the inset rectangle refuses SG4 without retiring P1.
+
 Route S (S-1):
 
 - P1, shell removing the top, `t = 2`: a brep of 13 faces (the receiver's 6
@@ -718,7 +751,7 @@ Route S (S-1):
   rational closed form, unplaced and placed `10⁶` mm along x; its own
   rounding bound exceeds `δ`'s charge, so it does not see the leg.
 - Refusals: P2 outside §3.1b and P6c → SG3 naming the pocket floor; P3 → SG3 naming the
-  third planar face across z; a removed hole wall → SG4; a removed wall → SG5
+  third planar face across z; a removed hole wall outside §3.1d → SG4; a removed wall → SG5
   (until S-2); P1 with a second Ø6 hole along y 7 mm from the first → SG6
   (the dilated holes meet); P1 at 0.1 in → SG6; a U section with a 1 mm
   slot, drilled through one arm → SG6 through TC7; `Outward` → SG1;
