@@ -3,7 +3,12 @@ package loftmesh
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"slices"
+	"sort"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -88,7 +93,7 @@ func LoftCrossingAuditBevelPatternJoin(budget *proofbound.WorkBudget, verts []r3
 	maxTriangles := 44_480 + 22_000*(toothCount-2)
 	maxScans := uint64(12_000_000 * toothCount)
 	_, err := loftCrossingAuditLimited(budget, verts, tris, nil,
-		loftGenericShortcuts, maxScans, maxTriangles)
+		loftGenericShortcuts, maxScans, maxTriangles, true)
 	return err
 }
 
@@ -105,7 +110,7 @@ func LoftCrossingAuditBevelBore(budget *proofbound.WorkBudget, verts []r3.Vec,
 	maxTriangles := maxPatternTriangles + 4*stations
 	const maxBoreScans = 128_000_000
 	_, err := loftCrossingAuditLimited(budget, verts, tris, nil,
-		loftGenericShortcuts, maxBoreScans, maxTriangles)
+		loftGenericShortcuts, maxBoreScans, maxTriangles, false)
 	return err
 }
 
@@ -212,12 +217,12 @@ func errLoftAuditTriangles(f int) error {
 // the audit returns the original failure, which is still S7.
 func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int, structure *LoftAuditStructure,
 	shortcuts LoftAuditShortcuts, ceiling uint64) (LoftAuditWork, error) {
-	return loftCrossingAuditLimited(budget, verts, tris, structure, shortcuts, ceiling, MaxLoftAuditTriangles)
+	return loftCrossingAuditLimited(budget, verts, tris, structure, shortcuts, ceiling, MaxLoftAuditTriangles, false)
 }
 
 func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
 	structure *LoftAuditStructure, shortcuts LoftAuditShortcuts, ceiling uint64,
-	triangleLimit int) (LoftAuditWork, error) {
+	triangleLimit int, parallelPairs bool) (LoftAuditWork, error) {
 	var work LoftAuditWork
 	if err := budget.Err(); err != nil {
 		return work, err
@@ -384,7 +389,11 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 		var cands loftCandidates
 		cands, err = sweepCandidates(budget, order, starts, count, keepEveryPair)
 		if err == nil {
-			err = cands.each(testPair)
+			if parallelPairs && len(cands.js) >= 100_000 && runtime.GOMAXPROCS(0) > 1 {
+				failI, failJ, err = parallelLoftPairs(budget, tris, boxes, data, shortcuts, cands, &work)
+			} else {
+				err = cands.each(testPair)
+			}
 		}
 	} else {
 		err = eachMemberPair(members, testPair)
@@ -411,6 +420,121 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 	// before Document.commit. Loft's own commit-edge check belongs to
 	// Loft.
 	return work, budget.Err()
+}
+
+// parallelLoftPairs classifies the pattern join's large, immutable candidate
+// list concurrently. The shared budget and work counts are replayed in the
+// original pair order, so the first refusal and all completed-call counts
+// agree with the serial audit. Only the caller touches the budget closures.
+func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]r3.Vec,
+	data *LoftAuditData, shortcuts LoftAuditShortcuts, cands loftCandidates,
+	work *LoftAuditWork) (int, int, error) {
+	const (
+		pairSkipped uint8 = iota + 1
+		pairClassified
+		pairEdgeCertified
+		pairVertexCertified
+	)
+	workers := min(runtime.GOMAXPROCS(0), 4)
+	results := make([]uint8, len(cands.js))
+	type failure struct {
+		index int
+		err   error
+	}
+	failures := make([]failure, workers)
+	var stopped atomic.Bool
+	var group sync.WaitGroup
+	group.Add(workers)
+	for worker := range workers {
+		start := len(cands.js) * worker / workers
+		end := len(cands.js) * (worker + 1) / workers
+		failures[worker].index = end
+		go func() {
+			defer group.Done()
+			i := sort.Search(len(cands.starts)-1, func(row int) bool {
+				return cands.starts[row+1] > start
+			})
+			for k := start; k < end; k++ {
+				if k%proofbound.WorkPollInterval == 0 && stopped.Load() {
+					return
+				}
+				for k >= cands.starts[i+1] {
+					i++
+				}
+				j := int(cands.js[k])
+				_, shared := tessellation.SharedVertexIndices(tris[i], tris[j])
+				if shortcuts.BroadPhase && shared == 0 {
+					if !meshbool.BoxesOverlap(boxes[i], boxes[j]) ||
+						LoftPlaneSeparated(data.Corners[i], data.Corners[j]) {
+						results[k] = pairSkipped
+						continue
+					}
+				}
+				outcome, err := AuditLoftPairData(data, tris, i, j, shortcuts)
+				switch outcome {
+				case LoftPairEdgeCertificate:
+					results[k] = pairEdgeCertified
+				case LoftPairVertexCertificate:
+					results[k] = pairVertexCertified
+				default:
+					results[k] = pairClassified
+				}
+				if err != nil {
+					failures[worker] = failure{index: k, err: err}
+					return
+				}
+			}
+		}()
+	}
+	done := make(chan struct{})
+	go func() {
+		group.Wait()
+		close(done)
+	}()
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for running := true; running; {
+		select {
+		case <-done:
+			running = false
+		case <-ticker.C:
+			if err := budget.Err(); err != nil {
+				stopped.Store(true)
+				<-done
+				return -1, -1, err
+			}
+		}
+	}
+	first := len(cands.js)
+	var firstErr error
+	for _, f := range failures {
+		if f.err != nil && f.index < first {
+			first, firstErr = f.index, f.err
+		}
+	}
+	i := 0
+	for k := 0; k < len(cands.js) && k <= first; k++ {
+		for k >= cands.starts[i+1] {
+			i++
+		}
+		if err := budget.Step(); err != nil {
+			return -1, -1, err
+		}
+		switch results[k] {
+		case pairSkipped:
+			work.Skips++
+		case pairEdgeCertified:
+			work.EdgeCerts++
+		case pairVertexCertified:
+			work.VertexCerts++
+		default:
+			work.Classifications++
+		}
+		if k == first {
+			return i, int(cands.js[k]), firstErr
+		}
+	}
+	return -1, -1, nil
 }
 
 // loftAuditLookback tests every decided pair that precedes the failing pair
