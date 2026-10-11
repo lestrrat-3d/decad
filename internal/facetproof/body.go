@@ -196,13 +196,29 @@ func FirstMoments(budget *proofbound.WorkBudget, xverts []proof.Xpt, tris [][3]i
 			return [3]*big.Rat{}, err
 		}
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
-		det := proof.XdotRat(a, proof.Xcross(b, c))
-		ax, ay, az := proof.XhpRat(proof.Xhp(a))
-		bx, by, bz := proof.XhpRat(proof.Xhp(b))
-		cx, cy, cz := proof.XhpRat(proof.Xhp(c))
-		moments[0].Add(moments[0], new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(ax, bx), cx)))
-		moments[1].Add(moments[1], new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(ay, by), cy)))
-		moments[2].Add(moments[2], new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(az, bz), cz)))
+		cross := proof.Xcross(b, c)
+		detNum := proof.XdotNum(a, cross)
+		if detNum.Sign() == 0 {
+			continue
+		}
+		// det uses a.W*cross.W; each coordinate sum uses a.W*b.W*c.W.
+		// Multiply integer numerators before normalizing one rational per axis.
+		bc := new(big.Int).Mul(b.W, c.W)
+		ac := new(big.Int).Mul(a.W, c.W)
+		ab := new(big.Int).Mul(a.W, b.W)
+		den := new(big.Int).Mul(a.W, cross.W)
+		den.Mul(den, new(big.Int).Mul(a.W, bc))
+		add := func(dst *big.Rat, ax, bx, cx *big.Int) {
+			var sum, term, numerator big.Int
+			sum.Mul(ax, bc)
+			sum.Add(&sum, term.Mul(bx, ac))
+			sum.Add(&sum, term.Mul(cx, ab))
+			numerator.Mul(detNum, &sum)
+			dst.Add(dst, new(big.Rat).SetFrac(&numerator, den))
+		}
+		add(moments[0], a.X, b.X, c.X)
+		add(moments[1], a.Y, b.Y, c.Y)
+		add(moments[2], a.Z, b.Z, c.Z)
 	}
 	return moments, nil
 }
