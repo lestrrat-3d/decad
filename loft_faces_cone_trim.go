@@ -15,18 +15,84 @@ import (
 // The original LoftFaces proof authenticates this map over source.sourceBox.
 // A later Boolean may use it only after proving that its far cap survived.
 type loftFacesCapRecord struct {
-	source *pointSectionRecord
-	final  loftFaceMap
-	group  int
+	source       *pointSectionRecord
+	maps         []loftFaceMap
+	bounds       []loftFaceCapBounds
+	stationGroup []int
+	final        loftFaceMap
+	group        int
 }
 
 // This record is issued to one unplaced Cut of the original LoftFaces mesh.
 // Placement drops it, and the following Intersect does not copy it.
 type loftFacesToeRecord struct {
-	base    facetedPayload
-	cap     *loftFacesCapRecord
-	capFace *Face
-	toe     *pointConeLimit
+	base       facetedPayload
+	cap        *loftFacesCapRecord
+	capFace    *Face
+	toeCapFace *Face
+	toe        *pointConeLimit
+}
+
+// loftFacesTrimRecord retains the authenticated source of one unplaced
+// LoftFaces tooth after its original toe Cut and heel Intersect.
+// The Boolean result remains faceted; this record only admits later
+// source-specific proofs after those source identities are checked again.
+type loftFacesTrimRecord struct {
+	base                      facetedPayload
+	source                    *pointSectionRecord
+	maps                      []loftFaceMap
+	bounds                    []loftFaceCapBounds
+	stationGroup              []int
+	toe, heel                 *pointConeLimit
+	toeCapGroup, heelCapGroup int
+}
+
+func uniqueConeFace(body *Body) (*Face, bool) {
+	var coneFace *Face
+	for _, face := range body.Faces() {
+		if _, ok := face.Surface().(Cone); !ok {
+			continue
+		}
+		if coneFace != nil {
+			return nil, false
+		}
+		coneFace = face
+	}
+	return coneFace, coneFace != nil
+}
+
+func indexOfFace(faces []*Face, want *Face) int {
+	for i, face := range faces {
+		if face == want {
+			return i
+		}
+	}
+	return -1
+}
+
+// A source group can split into multiple result patches. The cap proof uses
+// one connected cap only, so retain the record only for one surviving face.
+func uniqueResultSourceFace(body *Body, source int) *Face {
+	p, ok := body.payload.(facetedPayload)
+	if !ok || source < 0 || len(p.faceOf) != len(p.src) {
+		return nil
+	}
+	faces := body.Faces()
+	var result *Face
+	for i, group := range p.src {
+		if group != source {
+			continue
+		}
+		faceIndex := p.faceOf[i]
+		if faceIndex < 0 || faceIndex >= len(faces) {
+			return nil
+		}
+		if result != nil && result != faces[faceIndex] {
+			return nil
+		}
+		result = faces[faceIndex]
+	}
+	return result
 }
 
 var errLoftCapChanged = errors.New("loft cap changed during cut")
@@ -60,7 +126,16 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 	if !ok {
 		return fmt.Errorf("%w: the loft cut has no faceted proof payload", ErrUnsupported)
 	}
-	p.loftFacesToe = &loftFacesToeRecord{base: base, cap: base.loftFacesCap, capFace: capFace, toe: cone}
+	coneFace, ok := uniqueConeFace(tool)
+	if !ok {
+		return nil
+	}
+	toeCapFace := uniqueResultSourceFace(result, len(source.Faces())+indexOfFace(tool.Faces(), coneFace))
+	if toeCapFace == nil {
+		return nil
+	}
+	p.loftFacesToe = &loftFacesToeRecord{base: base, cap: base.loftFacesCap,
+		capFace: capFace, toeCapFace: toeCapFace, toe: cone}
 	result.payload = p
 	return nil
 }
@@ -228,22 +303,19 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	if !certifiedLoftCapCone(p.loftFacesToe.cap.source, p.loftFacesToe.cap.final, cone, loftCapOutsideHeelCone) {
 		return nil, false, nil
 	}
-	var coneFace *Face
-	for _, face := range tool.Faces() {
-		if _, ok := face.Surface().(Cone); ok {
-			if coneFace != nil {
-				return nil, false, nil
-			}
-			coneFace = face
-		}
-	}
-	if coneFace == nil {
+	coneFace, ok := uniqueConeFace(tool)
+	if !ok {
 		return nil, false, nil
 	}
 	capSource := slices.Index(target.Faces(), p.loftFacesToe.capFace)
 	if capSource < 0 {
 		return nil, false, nil
 	}
+	toeCapSource := indexOfFace(target.Faces(), p.loftFacesToe.toeCapFace)
+	if toeCapSource < 0 {
+		return nil, false, nil
+	}
+	heelCapSource := len(target.Faces()) + indexOfFace(tool.Faces(), coneFace)
 	// A larger chord may be needed when the toe Cut's local rim bound is
 	// coarse. Retry only its staging refusal; every other gate keeps its
 	// verdict. Each attempt proves its own tessellation and result bounds.
@@ -270,6 +342,22 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, eval.payload, eval.audit, eval.volume, eval.volumeRat)
 	if err != nil {
 		return nil, true, asBooleanError(op, err)
+	}
+	if len(p.loftFacesToe.cap.maps) == 9 {
+		result := body.payload.(facetedPayload)
+		if uniqueResultSourceFace(body, toeCapSource) == nil ||
+			uniqueResultSourceFace(body, heelCapSource) == nil {
+			return body, true, nil
+		}
+		result.loftFacesTrim = &loftFacesTrimRecord{
+			base: p.loftFacesToe.base, source: p.loftFacesToe.cap.source,
+			maps:         append([]loftFaceMap(nil), p.loftFacesToe.cap.maps...),
+			bounds:       append([]loftFaceCapBounds(nil), p.loftFacesToe.cap.bounds...),
+			stationGroup: append([]int(nil), p.loftFacesToe.cap.stationGroup...),
+			toe:          p.loftFacesToe.toe, heel: cone,
+			toeCapGroup: toeCapSource, heelCapGroup: heelCapSource,
+		}
+		body.payload = result
 	}
 	return body, true, nil
 }

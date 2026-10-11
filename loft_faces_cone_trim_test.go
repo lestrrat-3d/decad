@@ -72,6 +72,7 @@ func TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement(t *testing.T) {
 	p := drilled.payload.(facetedPayload)
 	p.loftFacesCap = &loftFacesCapRecord{}
 	p.loftFacesToe = &loftFacesToeRecord{}
+	p.loftFacesTrim = &loftFacesTrimRecord{}
 	drilled.payload = p
 	move, err := r3.Translation(r3.NewVec(1, 2, 3))
 	require.NoError(t, err)
@@ -84,4 +85,5 @@ func TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement(t *testing.T) {
 	final := roundTrip.payload.(facetedPayload)
 	require.Nil(t, final.loftFacesCap)
 	require.Nil(t, final.loftFacesToe)
+	require.Nil(t, final.loftFacesTrim)
 }

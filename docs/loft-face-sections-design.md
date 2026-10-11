@@ -112,4 +112,9 @@ the ordinary pair chord. It retries only a first-operand staging refusal.
 The local chain-depth gate still checks the held bound at every other contact.
 The same mesh Boolean still checks all other face pairs, contacts, rims,
 occupied-volume bounds, and the final mesh. Placement drops the record.
-The Intersect result has no record and cannot continue the special chain.
+When the original LoftFaces result carries nine exact maps and their source
+cell bounds, a successful toe Cut and heel Intersect retain an immutable
+source record on the unplaced faceted result. The record identifies the two
+surviving tool-cap face groups. A later source-specific Union rechecks the
+original Sketch revision, map denominators, cone order, and both cap groups.
+Every other Intersect result has no continuation record. Placement drops it.
