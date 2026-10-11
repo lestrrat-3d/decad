@@ -31,7 +31,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 	if err := budget.Err(); err != nil {
 		return prismPayload{}, false, err
 	}
-	pa, pb, ok, err := admitPrismPairBudget(budget, a, b)
+	pa, pb, ok, err := admitPrismPairBudget(budget, meshbool.OpIntersect, a, b)
 	if err != nil || !ok {
 		return prismPayload{}, false, err
 	}

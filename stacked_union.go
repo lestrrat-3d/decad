@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
@@ -99,7 +100,8 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 	}
 	// G1-G4 on the outer prisms; G4, G6 and the trimmed-circular refusal on
 	// every region, since a stacked operand's proxy names its first slab only.
-	if _, _, ok, err := admitPrismPairBudget(budget, &Body{payload: va.proxy}, &Body{payload: vb.proxy}); err != nil || !ok {
+	if _, _, ok, err := admitPrismPairBudget(budget, meshbool.OpUnion,
+		&Body{payload: va.proxy}, &Body{payload: vb.proxy}); err != nil || !ok {
 		return nil, false, err
 	}
 	// A brep operand, or a slab holding several regions, is the brep build's

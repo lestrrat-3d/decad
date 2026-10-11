@@ -99,7 +99,7 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	if err := budget.Err(); err != nil {
 		return prismPayload{}, false, err
 	}
-	pa, pb, ok, err := admitPrismPairBudget(budget, a, b) // G1-G4
+	pa, pb, ok, err := admitPrismPairBudget(budget, op, a, b) // G1-G4
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -195,7 +195,7 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 	if err := budget.Err(); err != nil {
 		return nil, prismPayload{}, prismPayload{}, nil, false, err
 	}
-	pa, pb, ok, err = admitPrismPairBudget(budget, a, b) // G1-G4
+	pa, pb, ok, err = admitPrismPairBudget(budget, meshbool.OpIntersect, a, b) // G1-G4
 	if err != nil {
 		return nil, prismPayload{}, prismPayload{}, nil, false, err
 	}
@@ -305,7 +305,7 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 // not admission" for what follows, but MISSING one is never a refusal). The
 // G4 scan shares the operation budget because a large rejected profile must
 // remain cancelable too.
-func admitPrismPairBudget(budget *proofbound.WorkBudget, a, b *Body) (pa, pb prismPayload, ok bool, err error) {
+func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKind, a, b *Body) (pa, pb prismPayload, ok bool, err error) {
 	pa, aok := a.payload.(prismPayload) // G1
 	pb, bok := b.payload.(prismPayload)
 	if !aok || !bok {
@@ -327,7 +327,11 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, a, b *Body) (pa, pb pri
 	if worldNormalA != worldNormalB { // G3: co-directional, bit-identical
 		return prismPayload{}, prismPayload{}, false, nil
 	}
-	if !prismplacement.SharedAxisOf(prismPlacementOf(pa), prismPlacementOf(pb)).OK { // G3
+	shared := prismplacement.SharedAxisOf(prismPlacementOf(pa), prismPlacementOf(pb))
+	if shared.OK && pa.xform != pb.xform && !placedAxisProfileAdmitted(op, pa, pb) {
+		return prismPayload{}, prismPayload{}, false, nil
+	}
+	if !shared.OK { // G3
 		worldOriginA := pa.xform.Apply(pa.frame.Origin())
 		worldOriginB := pb.xform.Apply(pb.frame.Origin())
 		if worldOriginB.Sub(worldOriginA).Dot(worldNormalA) != 0.0 { // G3's coplanar arm, unchanged
@@ -338,7 +342,7 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, a, b *Body) (pa, pb pri
 }
 
 func admitPrismPair(a, b *Body) (pa, pb prismPayload, ok bool) {
-	pa, pb, ok, _ = admitPrismPairBudget(proofbound.NewWorkBudget(context.Background()), a, b)
+	pa, pb, ok, _ = admitPrismPairBudget(proofbound.NewWorkBudget(context.Background()), meshbool.OpUnion, a, b)
 	return pa, pb, ok
 }
 

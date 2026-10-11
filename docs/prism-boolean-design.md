@@ -156,6 +156,14 @@ these arms:
   the exact linear image of the stored frame normal. The exact rational
   shift `s` satisfies `X_B(originB) − X_A(originA) = s·(R·N)`. This admits
   `PlacedCopy` along the common sweep axis without re-expressing either profile.
+  This new arm additionally requires zero section and axial displacement
+  and two hole-free, full-line, axis-aligned rectangular profiles. `Union`
+  and `Intersect` require identical rectangle bounds; `Cut` requires the
+  tool rectangle to lie strictly inside the target rectangle. These are
+  sufficient profile certificates; every other placed-axis pair falls back
+  to the existing mesh path. The earlier shared-frame-axis arm keeps its
+  existing profile admission. `Verify`'s read-only Intersect twin consumes
+  the same new certificate and applies its existing positive-volume gate.
 
 For both axis arms, B's denoted prism has A's exact section coordinates and
 only its sweep interval moves by `s` (G5). The placed-axis arm does not rely

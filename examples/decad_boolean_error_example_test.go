@@ -20,15 +20,15 @@ import (
 // so errors.Is(err, decad.ErrUnsupported) holds for an unclassifiable contact
 // and errors.Is(err, decad.ErrBooleanFailed) for an empty result.
 func Example_decad_boolean_error() {
-	// Two 10 mm cubes stacked face on face in one document: a valid model whose
-	// coplanar contact the evaluator cannot classify from the tessellated chords.
+	// Two 10 mm cubes meet at offset caps in one document: a valid model whose
+	// partial coplanar contact the mesh evaluator cannot classify.
 	doc := decad.New()
 	lower, err := boolErrCube(doc, r3.Vec{})
 	if err != nil {
 		fmt.Printf("failed to build lower cube: %s\n", err)
 		return
 	}
-	upper, err := boolErrCube(doc, r3.Vec{Z: 10})
+	upper, err := boolErrCube(doc, r3.Vec{X: 0.5, Z: 10})
 	if err != nil {
 		fmt.Printf("failed to build upper cube: %s\n", err)
 		return

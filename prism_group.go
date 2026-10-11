@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -59,8 +60,10 @@ func prismGroupOperandOf(b *Body) (prismGroupOperand, bool) {
 
 // admitPrismGroupPair is G1-G4 on the two proxies, then G4, G6 (when
 // holeFree) and the trimmed-circular refusal on every region of both.
-func admitPrismGroupPair(budget *proofbound.WorkBudget, oa, ob prismGroupOperand, holeFreeA, holeFreeB bool) (bool, error) {
-	if _, _, ok, err := admitPrismPairBudget(budget, &Body{payload: oa.proxy}, &Body{payload: ob.proxy}); err != nil || !ok {
+func admitPrismGroupPair(budget *proofbound.WorkBudget, op meshbool.OperationKind,
+	oa, ob prismGroupOperand, holeFreeA, holeFreeB bool) (bool, error) {
+	if _, _, ok, err := admitPrismPairBudget(budget, op,
+		&Body{payload: oa.proxy}, &Body{payload: ob.proxy}); err != nil || !ok {
 		return false, err
 	}
 	for _, op := range []struct {
@@ -91,7 +94,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 		return prismPayload{}, false, err
 	}
 	targetOp := prismGroupOperand{proxy: target, regions: []profileRecord{target.profile}}
-	if ok, err := admitPrismGroupPair(budget, targetOp, tool, false, true); err != nil || !ok {
+	if ok, err := admitPrismGroupPair(budget, meshbool.OpCut, targetOp, tool, false, true); err != nil || !ok {
 		return prismPayload{}, false, err
 	}
 	if !prismplacement.CutZIntervalSpans(prismPlacementOf(target), prismPlacementOf(tool.proxy)) { // G5
@@ -159,7 +162,7 @@ func tryPrismGroupUnion(ctx context.Context, a, b *Body) (featurePayload, bool, 
 	if err := budget.Err(); err != nil {
 		return nil, false, err
 	}
-	if ok, err := admitPrismGroupPair(budget, oa, ob, true, true); err != nil || !ok {
+	if ok, err := admitPrismGroupPair(budget, meshbool.OpUnion, oa, ob, true, true); err != nil || !ok {
 		return nil, false, err
 	}
 	if !prismplacement.UnionZIntervalMatches(prismPlacementOf(oa.proxy), prismPlacementOf(ob.proxy)) { // G5

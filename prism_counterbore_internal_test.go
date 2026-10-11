@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
@@ -19,7 +20,7 @@ func TestCounterboreArrangementPreservesWholeLoops(t *testing.T) {
 	tool := internalCircleBody(t, doc, 0, 4, 7, Distance{D: units.Millimeters(3), Dir: Along})
 
 	budget := proofbound.NewWorkBudget(t.Context())
-	target, cutter, admitted, err := admitPrismPairBudget(budget, drilled, tool)
+	target, cutter, admitted, err := admitPrismPairBudget(budget, meshbool.OpCut, drilled, tool)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(cutter))
@@ -65,7 +66,7 @@ func TestCounterboreReverseArrangementProvesEmptyCut(t *testing.T) {
 	tool := internalCircleBody(t, doc, 0, 2, 0, Distance{D: units.Millimeters(10), Dir: Along})
 	budget := proofbound.NewWorkBudget(t.Context())
 	proxy := &Body{payload: sp.outerPrism()}
-	target, cutter, admitted, err := admitPrismPairBudget(budget, proxy, tool)
+	target, cutter, admitted, err := admitPrismPairBudget(budget, meshbool.OpCut, proxy, tool)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	target.profile = sp.slabs[1].Regions[0]

@@ -391,7 +391,7 @@
 3	0.02	TestClearanceFarOriginTiltedPlanePairContainsTruth
 3	0.03	TestClearanceFrameOriginGapEnclosesExactGap
 3	1.60	TestClearanceOracleOverlapNeverSound
-3	0.01	TestClearanceSubTolOverlapNotCertified
+3	0.01	TestClearanceSubTolAxialOverlapMeasured
 3	0.04	TestContactPairPlanarManifoldPlateHole
 3	0.01	TestContactPairPlanarManifoldSlopedNormal
 3	0.02	TestContactPairRepeatReturnsEqualPrivateReport
