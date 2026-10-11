@@ -739,8 +739,10 @@ terms, and set
 
 ## 7. Faceted restatement
 
-A `facetedPayload` has lost analytic identity. `Tessellate` therefore restates
-its held vertices and polygons; it NEVER fits or refines them.
+A `facetedPayload` restates its held vertices and polygons; it NEVER fits or
+refines them. Ordinary mesh booleans have lost analytic identity. A producer
+with a proved source surface, such as the three-section smooth loft, may keep
+that identity in its face groups and attach a boundary certificate.
 
 - First populate every face's `sourceBound` from the complete inherited
   certificate, using global `Delta` for each missing or incompletely composed

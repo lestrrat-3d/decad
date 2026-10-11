@@ -200,6 +200,10 @@
 2	1.02	TestLoftHelicalToothClearsDefaultTolerance
 2	0.01	TestLoftPlacedRotationSoundness
 2	0.00	TestLoftPlacedS13OverflowingCoordinate
+2	0.03	TestLoftSectionsInterpolatesThreeSketchesWithCertifiedMesh
+2	0.01	TestLoftSectionsPlacedCapsRemainPlanar
+2	0.01	TestLoftSectionsRefusesUnprovenScaleAndSpacing
+2	0.01	TestLoftSectionsRequiresThreeSections
 2	0.03	TestLoftTessellatePlacedLoftUsesThePositiveBoundPath
 2	0.02	TestMalformedNURBSRefusesBeforeScanningControls
 2	0.01	TestMassPropertiesCompositeSweepTurnedFrame

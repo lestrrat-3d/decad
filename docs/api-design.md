@@ -831,13 +831,15 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, LoftFromPoint, Sweep, Coil,
+Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
 Patch, Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve —
 **ExtrudeChain, RevolveChain, SweepChain, LoftChain** — which take a
 `*sketch.Chain` where their siblings take a `*sketch.Profile` and always build a
 sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
-rule, and its increment-1 scope. `docs/loft-point-design.md` owns the separate
+rule, and its increment-1 scope. `docs/loft-sections-design.md` owns the
+separate exact positive homothetic three-section `Document.LoftSections`.
+`docs/loft-point-design.md` owns the separate
 `Document.LoftFromPoint(ctx, apex, sketch, profile)` solid construction from
 an exact world point to one recorded Sketch profile. `docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.
@@ -858,6 +860,10 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 func (d *Document) Coil(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
 func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
 ```
+
+`LoftSections(ctx, sections ...LoftSection)` carries each `Sketch` and
+`Profile` together. It admits exactly the three-section class in
+`docs/loft-sections-design.md`.
 
 Each takes the **sketch** as well as the profile, because a `sketch.Profile`'s
 geometry is plane-local and the plane is the sketch's (§7). `p` MUST be a
