@@ -7,11 +7,11 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:  415.54s over 2 tests
-#   shard 1:  116.48s over 115 tests
+#   shard 1:    0.96s over 114 tests
 #   shard 2:  177.82s over 204 tests
-#   shard 3:   55.86s over 225 tests
-#   shard 4:   53.23s over 210 tests
-#   shard 5:   90.87s over 200 tests
+#   shard 3:   82.95s over 226 tests
+#   shard 4:   82.99s over 212 tests
+#   shard 5:  120.11s over 201 tests
 #   shard 6:   90.77s over 195 tests
 #   shard 7:   92.78s over 200 tests
 #   shard 8:  101.99s over 200 tests
@@ -33,7 +33,6 @@
 1	0.00	TestBodyPatchPlanarHoleFillTessellates
 1	0.00	TestBodyPatchPlanarMeshPlacementAndVerification
 1	0.01	TestBooleanNilContextIsDegenerate
-1	115.52	TestBrepRoundedEdgeFilletPublicQuarterRadii
 1	0.01	TestCapBlendComputedStopMassBounds
 1	0.00	TestCapBlendPartialLoopSelectionRefused
 1	0.01	TestCapBlendSideLevelCarriesSetbackRounding
@@ -357,6 +356,7 @@
 3	0.02	TestBrepPartialChamferBlindPocket
 3	0.02	TestBrepPartialChamferCrossDrilledBar
 3	0.02	TestBrepPartialChamferMirroredCrossDrilledBar
+3	27.09	TestBrepRoundedEdgeFilletQuarterRadius
 3	6.00	TestBrepRoundedEdgeFilletPublicAdmission
 3	6.00	TestBrepRoundedEdgeFilletPublicP8
 3	0.02	TestBrepShellRemovesRoundThroughWall
@@ -573,6 +573,7 @@
 4	0.00	TestBox
 4	0.01	TestBrepLoopFilletPublicRevolveCapRefuses
 4	0.21	TestBrepLoopFilletPublicSTEP
+4	28.66	TestBrepRoundedEdgeFilletHalfRadius
 4	1.06	TestCIShardsCoverEveryAPITest
 4	0.02	TestCapBlendAsymmetricCapsPickApart
 4	0.07	TestCapBlendBooleanChargesTheMiterDisplacement
@@ -780,6 +781,7 @@
 5	0.00	TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall
 5	0.01	TestBodyPatchReproducesThroughPlacement
 5	0.08	TestBrepShellRemovesAWallAndTheTop
+5	29.24	TestBrepRoundedEdgeFilletThreeQuarterRadius
 5	0.00	TestBrokenNURBSKnotVectorRefuses
 5	0.04	TestCapBlendAsymmetricHoleRim
 5	0.02	TestCapBlendBandReachRefusalKeepsSX6Degenerate
