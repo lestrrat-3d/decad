@@ -297,14 +297,16 @@ returns the same vertices at any tolerance at or above its floor, so the mesh
 is the one the boolean needs and the request never refuses.
 
 **A held primitive raises the pair's tolerance.** An operand built as one
-fixed held mesh — a coil or a mitred sweep, whose `delta` is a proven bound
-of that one construction rather than a figure a chain grows — raises the
+fixed held mesh — a coil or a mitred sweep with proven `delta`, or one
+certified `LoftFaces` result with proven `meshBound` — raises the
 pair's chord tolerance itself to that bound, as a displaced prism section
 already raises it past twice its displacement (`pairChordFrom`, through
 `heldPrimitiveFloorOf` beside `sectionDisplacementOf`). Every facet such an
-operand touches the partner with then holds `δ(t) ≤ delta ≤ tol`, so the gate
+operand touches the partner with then holds `δ(t) ≤ heldBound ≤ tol`, so the gate
 below admits it. A boolean result's `meshBound` does not raise the pair
 tolerance: it is the figure a chain grows, and the gate exists to refuse it.
+Rigid placement of `LoftFaces` keeps the primitive classification while
+charging its new bound; a Boolean result clears it.
 The partner pays for the raise: a chorded analytic partner is meshed at the
 raised `tol`, so its mesh may be coarser than the pair's size alone would
 ask, and the result's rims and area and volume bounds compose from that

@@ -78,6 +78,7 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
+	require.Greater(t, mesh.Bound().Base(), 0.01)
 	volume, err := loft.Volume()
 	require.NoError(t, err)
 	sum, allowance := 0.0, volume.Bound.Base()
@@ -88,4 +89,15 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 		allowance += reading.Bound.Base()
 	}
 	require.InDelta(t, sum, volume.Value.Base(), allowance)
+	_, toeApex := bevelReferenceSection()
+	cut, err := decad.Cut(t.Context(), loft, pointConeTool(t, doc, toeApex))
+	require.NoError(t, err)
+	cutVolume, err := cut.Volume()
+	require.NoError(t, err)
+	require.Less(t, cutVolume.Value.Base(), volume.Value.Base())
+	cutMesh, err := cut.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, cutMesh.BoundaryVerified())
+	require.True(t, cutMesh.VolumeVerified())
 }

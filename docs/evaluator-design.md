@@ -860,7 +860,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   a documented default derived from the pair's own diameter, raised past either
   operand's own section displacement, which no mesh of that operand can go
   below (`docs/prism-boolean-design.md` §7, tessellation §5), and past a coil's
-  or a mitred sweep's held `delta`, which coarsens the partner's mesh but
+  or a mitred sweep's held `delta`, or a certified `LoftFaces` result's held
+  `meshBound`, which coarsens the partner's mesh but
   leaves its published bounds proven (`docs/faceted-vertex-bounds-design.md`
   §5). An operand that
   restates a held mesh (a boolean result or a mitred sweep) is asked at that
