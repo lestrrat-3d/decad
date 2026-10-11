@@ -12,9 +12,9 @@ import (
 
 // This file is the crossing audit's second way to enumerate box-overlapping
 // pairs (docs/loft-design.md §6): a uniform grid over the member boxes.
-// newPairScan counts, before either runs, the work the sweep and the grid
-// would each do, and hands the audit the cheaper one. Both report exactly
-// the box-overlapping pairs, each once, so the candidate set, its
+// newPairScan counts, before any runs, the sweep, grid and tree work and
+// hands the audit the cheapest one. All report exactly the box-overlapping
+// pairs, each once, so the candidate set, its
 // lexicographic test order and every verdict are the same whichever runs.
 
 // pairScan enumerates every pair of member triangles whose boxes overlap on
@@ -25,22 +25,21 @@ type pairScan interface {
 	visit(budget *proofbound.WorkBudget, limit uint64, fn func(i, j int)) (uint64, bool, error)
 }
 
-// newPairScan returns the sweep (sweepOrder) or the grid (gridScan),
-// whichever does less work over these members: the sweep compares every pair
-// that overlaps on its sweep axis, and the grid registers every box in each
-// cell it meets and compares every pair sharing a cell. Both counts are
-// exact and taken before either enumerates a pair. The grid is built only
-// when its registrations fit under limit and under the sweep's own count, so
-// building it never costs more than the work it replaces. A tie keeps the
-// sweep.
+// newPairScan returns the lowest-work scan. The tree checks descendant boxes
+// before leaf pairs; the grid registers boxes in cells; the sweep compares
+// boxes overlapping on one axis. A tie keeps the earlier scan.
 func newPairScan(boxes [][2]r3.Vec, members []int, limit uint64) pairScan {
 	sweep := newSweepOrder(boxes, members)
-	sweepWork := sweep.work()
-	grid, ok := newGridScan(boxes, members, min(sweepWork, limit))
-	if !ok || grid.work >= sweepWork {
-		return sweep
+	best, bestWork := pairScan(sweep), sweep.work()
+	tree := newTreeScan(boxes, members)
+	if treeWork, ok := tree.workBound(min(bestWork, limit)); ok && treeWork < bestWork {
+		best, bestWork = tree, treeWork
 	}
-	return grid
+	grid, ok := newGridScan(boxes, members, min(bestWork, limit))
+	if ok && grid.work < bestWork {
+		best = grid
+	}
+	return best
 }
 
 // work is the number of pairs visit compares when it runs to completion: for
