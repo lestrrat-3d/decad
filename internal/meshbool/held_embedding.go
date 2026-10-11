@@ -268,6 +268,7 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 	local.fnorm = make([]r3.Vec, len(e.fnorm))
 	local.cone = make([][3][2]r3.Vec, len(e.cone))
 	local.coneOK = make([][3]bool, len(e.coneOK))
+	local.sideSigns = make(map[[2]int]int)
 	local.stamp = make([]int, len(e.stamp))
 	local.stampID = 0
 	local.cands = nil
@@ -303,11 +304,14 @@ type heldEmbedding struct {
 	fnorm  []r3.Vec
 	// cone caches, per facet and corner, a box around the unit directions
 	// the facet leaves that corner in (coneBox).
-	cone    [][3][2]r3.Vec
-	coneOK  [][3]bool
-	stamp   []int
-	stampID int
-	cands   []int
+	cone   [][3][2]r3.Vec
+	coneOK [][3]bool
+	// sideSigns exists only in read-only scan copies, where facet planes and
+	// vertices cannot move. Repair keeps this nil and recomputes after moves.
+	sideSigns map[[2]int]int
+	stamp     []int
+	stampID   int
+	cands     []int
 
 	// memoOn enables the two caches below. box is each facet's float box
 	// (TriBox), invalidated when a vertex moves. pairs replays pairEmbedded
@@ -783,12 +787,25 @@ func (e *heldEmbedding) orient2(a, b, c, u, v int) int {
 // planeSign is the exact side of held vertex p against facet f's plane: the
 // float filter first, then f's cached exact normal.
 func (e *heldEmbedding) planeSign(f, p int) int {
+	key := [2]int{f, p}
+	if e.sideSigns != nil {
+		if sign, ok := e.sideSigns[key]; ok {
+			return sign
+		}
+	}
 	t, v := e.h.Tris[f], e.h.Verts
 	if s, certain := proof.OrientSignFloat(v[t[0]], v[t[1]], v[t[2]], v[p]); certain {
+		if e.sideSigns != nil {
+			e.sideSigns[key] = s
+		}
 		return s
 	}
 	_, x, n := e.facet(f)
-	return proof.XdotDiffSign(n, e.lift(p), x[0])
+	sign := proof.XdotDiffSign(n, e.lift(p), x[0])
+	if e.sideSigns != nil {
+		e.sideSigns[key] = sign
+	}
+	return sign
 }
 
 // facetFailures returns the facets j that facet i meets improperly, and
