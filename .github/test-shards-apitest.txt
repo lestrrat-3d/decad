@@ -11,7 +11,7 @@
 #   shard 2:  177.82s over 204 tests
 #   shard 3:   43.63s over 218 tests
 #   shard 4:   53.23s over 210 tests
-#   shard 5:   80.90s over 199 tests
+#   shard 5:   90.87s over 200 tests
 #   shard 6:   90.77s over 195 tests
 #   shard 7:   92.78s over 200 tests
 #   shard 8:  101.99s over 200 tests
@@ -842,6 +842,7 @@
 5	0.00	TestImplicitExactlyOneEdgeAxis
 5	0.00	TestLinkageConfiguration
 5	0.00	TestLoftChainRefusesANonParallelOrNegativePlanePair
+5	9.97	TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder
 5	0.00	TestLoftFrustumVolumeMatchesClosedForm
 5	0.01	TestLoftPlacedNearMaxFloatSectionRefusesUnsupported
 5	0.00	TestLoftSeamGates

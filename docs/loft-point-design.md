@@ -13,6 +13,8 @@ crossings, then orients the complete shell by its signed volume. Wall faces
 carry `side(0,j)` roles for the original segment `j`; the cap carries
 `capEnd`. The body records the original profile and plane beside the
 held mesh, so placement and later consumers can identify the source curve.
+It also retains certified source station bounds, per-cell arc-speed uppers
+and parameter-matched departures for a later face-fed loft.
 No small profile stands in for the point.
 
 The profile passes the ordinary Sketch seam and area falsifier. The existing
@@ -104,7 +106,8 @@ vertices, then evaluates both fraction endpoints for a forward or reversed
 axis. It returns cap faces only when their centroid intervals strictly
 separate the complete side interval. Otherwise it returns `ErrUnsupported`.
 
-Rigid placement retains the immutable Split source record for this query.
+Rigid placement retains the immutable Split source record and every applied
+rigid delta in order for this query and a later face-fed loft.
 The cap contour displacement is carried separately from the generic held
 mesh bound: each placement charges the exact basis stretch of the previous
 source gap plus the new rounding and embedding bound. A separate original
