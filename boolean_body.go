@@ -66,6 +66,7 @@ type facetedPayload struct {
 	// Boolean results have nil here; placement keeps the source record.
 	pointSection *pointSectionRecord
 	pointCone    *pointConeTrimRecord
+	pointPlane   *pointPlaneSliceRecord
 	// bevelJoin identifies the immutable blank and first trimmed tooth used
 	// to rebuild a second disjoint tooth on the same root ring.
 	bevelJoin *bevelJoinRecord
@@ -146,6 +147,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.xform = composed
 	next.lowerSupport = nil
 	next.pointCone = nil
+	next.pointPlane = nil
 	next.bevelJoin = nil
 	next.bevelTooth = nil
 	if fp.pointCone != nil && fp.xform == r3.Identity() {

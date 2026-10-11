@@ -1,6 +1,6 @@
 # Surface Intersection Design
 
-`Trim`, `Extend` and `Split` over a pair of bodies whose sweeps share one
+`Trim`, `Extend` and the original `Split` arms take bodies whose sweeps share one
 generator: the 3D intersection reduces to the 2D crossings of the two
 operands' recorded sections, routed entirely through `sketch` — decad selects
 among the fragments and cells `sketch`'s arrangement returns and rebuilds a
@@ -37,6 +37,11 @@ axial level `z(p)`, one per 2D crossing point `p` of their meridians. Both
 are curve kinds decad already records, both are positioned by a crossing
 `sketch` computes and certifies through `BoundaryEdge.TExact`, and neither is
 a quartic. Nothing is fitted anywhere.
+
+`Split` also admits the bounded point-loft/planar-sheet class in
+`docs/loft-point-design.md` "Planar split of a point loft". That arm reads
+the original point-loft fan and the sheet's exact line plane; it does not
+use the shared-generator section arrangement below.
 
 **Every sheet decad builds is generated rather than arbitrary**, which is what
 makes the reduction reach sheets at all: a prism sheet is a recorded 2D loop
