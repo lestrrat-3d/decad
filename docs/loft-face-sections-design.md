@@ -128,3 +128,12 @@ plane that misses its entire tool/root circle. These whole-cap checks rule out
 contacts through an end-cap interior. A caller may also request an exact box
 around either moving flank/root crossing over a narrow X interval; the local
 rim proof uses that box to decide which source surface remains exposed.
+
+The root arc also crosses each finite blank end cap. The toe and heel source
+certificates bound the crossing of the authenticated Sketch arc with the
+blank cap's exact straight meridian. They check all source station cells,
+bound the recorded arc's departure from a rational circle, and prove one
+transverse crossing through the relevant LoftFaces band. Exact polynomial
+signs bound the crossing's X coordinate and angular slope; isolated endpoint
+boxes include the source construction error. A later Union may use those
+bounds only while the original unplaced source record remains current.
