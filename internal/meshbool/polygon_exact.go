@@ -64,19 +64,43 @@ func (p Xp2) Key2() string { return p.U.RatString() + "|" + p.V.RatString() }
 // The exact result remains available for callers that need more than its sign.
 func Cross2x(a, b, c Xp2) *big.Rat {
 	if a.Hu != nil && b.Hu != nil && c.Hu != nil {
-		baU := new(big.Int).Sub(new(big.Int).Mul(b.Hu, a.Hw), new(big.Int).Mul(a.Hu, b.Hw))
-		baV := new(big.Int).Sub(new(big.Int).Mul(b.Hv, a.Hw), new(big.Int).Mul(a.Hv, b.Hw))
-		caU := new(big.Int).Sub(new(big.Int).Mul(c.Hu, a.Hw), new(big.Int).Mul(a.Hu, c.Hw))
-		caV := new(big.Int).Sub(new(big.Int).Mul(c.Hv, a.Hw), new(big.Int).Mul(a.Hv, c.Hw))
-		num := new(big.Int).Sub(new(big.Int).Mul(baU, caV), new(big.Int).Mul(baV, caU))
 		den := new(big.Int).Mul(new(big.Int).Mul(a.Hw, a.Hw), new(big.Int).Mul(b.Hw, c.Hw))
-		return new(big.Rat).SetFrac(num, den)
+		return new(big.Rat).SetFrac(cross2xHomNumerator(a, b, c), den)
 	}
 	bu := new(big.Rat).Sub(b.U, a.U)
 	bv := new(big.Rat).Sub(b.V, a.V)
 	cu := new(big.Rat).Sub(c.U, a.U)
 	cv := new(big.Rat).Sub(c.V, a.V)
 	return new(big.Rat).Sub(new(big.Rat).Mul(bu, cv), new(big.Rat).Mul(bv, cu))
+}
+
+func cross2xHomNumerator(a, b, c Xp2) *big.Int {
+	baU := new(big.Int).Sub(new(big.Int).Mul(b.Hu, a.Hw), new(big.Int).Mul(a.Hu, b.Hw))
+	baV := new(big.Int).Sub(new(big.Int).Mul(b.Hv, a.Hw), new(big.Int).Mul(a.Hv, b.Hw))
+	caU := new(big.Int).Sub(new(big.Int).Mul(c.Hu, a.Hw), new(big.Int).Mul(a.Hu, c.Hw))
+	caV := new(big.Int).Sub(new(big.Int).Mul(c.Hv, a.Hw), new(big.Int).Mul(a.Hv, c.Hw))
+	return new(big.Int).Sub(new(big.Int).Mul(baU, caV), new(big.Int).Mul(baV, caU))
+}
+
+// ratDiffNum leaves the difference's positive denominator implicit. Exact
+// signs only need its numerator, so no rational normalization is needed.
+func ratDiffNum(x, y *big.Rat) *big.Int {
+	return new(big.Int).Sub(new(big.Int).Mul(x.Num(), y.Denom()),
+		new(big.Int).Mul(y.Num(), x.Denom()))
+}
+
+func cross2xRatSign(a, b, c Xp2) int {
+	bu, bv := ratDiffNum(b.U, a.U), ratDiffNum(b.V, a.V)
+	cu, cv := ratDiffNum(c.U, a.U), ratDiffNum(c.V, a.V)
+	// Both terms are scaled to the same positive product of all six
+	// coordinate denominators. Their difference has Cross2x's exact sign.
+	left := new(big.Int).Mul(bu, cv)
+	left.Mul(left, b.V.Denom())
+	left.Mul(left, c.U.Denom())
+	right := new(big.Int).Mul(bv, cu)
+	right.Mul(right, b.U.Denom())
+	right.Mul(right, c.V.Denom())
+	return left.Sub(left, right).Sign()
 }
 
 // ClipFrac is an exact fraction kept UNNORMALISED: no common factor is ever
@@ -158,7 +182,10 @@ func Cross2xSign(a, b, c Xp2) int {
 			}
 		}
 	}
-	return Cross2x(a, b, c).Sign()
+	if a.Hu != nil && b.Hu != nil && c.Hu != nil {
+		return cross2xHomNumerator(a, b, c).Sign()
+	}
+	return cross2xRatSign(a, b, c)
 }
 
 // PointInTriX reports whether p lies inside or on the closed triangle a, b,
