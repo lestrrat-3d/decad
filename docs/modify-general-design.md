@@ -633,26 +633,29 @@ the document.
 
 P8's front top edge from `(3, 0, 20)` to `(37, 0, 20)` ends on two radius-3
 outer cylinders, so route E's third-face plane test (SB7) cannot build its
-fillet. For radius 1, `Fillet` first compares every field of the source BRep
-record with the exact P8 record: a 40×20×20 plate rounded along its four
-vertical corners, with one radius-3 bore centered at `(x, z) = (20, 10)`
+fillet. For radii 0.25, 0.5, 0.75, and 1 mm, `Fillet` first compares every
+field of the source BRep record with the exact P8 record: a 40×20×20 plate
+rounded along its four vertical corners, with one radius-3 bore centered at `(x, z) = (20, 10)`
 through y. The source must have identity placement and zero displacements.
 The selected edge must have those exact endpoints. A different radius, bore,
 corner, placement, or face record falls through to the existing routes and
 their refusals.
 
-The radius-1 quarter-cylinder cutter is swept along x from −22 to 62. Its
+The admitted quarter-cylinder cutter is swept along x from −22 to 62. Its
 local axes are `(0, −1, 0)` and `(0, 0, 1)` about `(20, 0, 20)`. The exact
-source coordinates prove the bore stops at z = 13 below the cutter's z = 19
-minimum, and the back at y = 20 is beyond the cutter's y = 1 reach. The
+source coordinates prove the bore stops at z = 13 below the cutter's z ≥ 19
+minimum, and the back at y = 20 is beyond its y ≤ 1 reach. The
 boolean cut then proves contact with the actual rounded end walls, closes
 the resulting faceted mesh, and holds its occupied-volume difference. This
 route uses 1/64 of the ordinary pair chord tolerance so the faceted area
 and bounds also meet default `Document.Verify` limits. The source is retired
-only after the proof succeeds. The source volume is 15280 mm³; the result
-encloses 15272.2670–15272.2672 mm³. The real public
-Sketch→Fillet→Cut→Fillet path tessellates at 0.1 mm with `VerifyAll` and
-reports Sound under default `Document.Verify`.
+only after the proof succeeds. The source volume is 15280 mm³. For radii
+0.25, 0.5, 0.75, and 1 mm, independent circular-segment integration bounds
+the respective result volumes to 15279.5300–15279.5301,
+15278.0976–15278.0978, 15275.6815–15275.6818, and
+15272.2670–15272.2672 mm³. The real public Sketch→Fillet→Cut→Fillet path
+tessellates at 0.1 mm with `VerifyAll` and reports Sound under default
+`Document.Verify`.
 
 ### 4.4 Table SL — refusals
 

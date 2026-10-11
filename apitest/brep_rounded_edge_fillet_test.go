@@ -66,10 +66,67 @@ func TestBrepRoundedEdgeFilletPublicP8(t *testing.T) {
 	require.Equal(t, decad.ToleranceSatisfied, reading.Bounds.Tolerance.State)
 }
 
+func TestBrepRoundedEdgeFilletPublicQuarterRadii(t *testing.T) {
+	// The source volume is 15280 mm³. The straight 34 mm edge loses
+	// 34r²(1−π/4); each radius-3 end loses the circular-segment integral
+	// from x=3−sqrt(6r−r²) to x=3. Monotone left/right sums with 10,000
+	// steps enclose each result; the decimal endpoints include evaluation
+	// slack. The reported volume interval must contain that enclosure.
+	for _, tc := range []struct {
+		name, low, high string
+		radius          float64
+	}{
+		{"quarter", "15279.5300", "15279.5301", 0.25},
+		{"half", "15278.0976", "15278.0978", 0.5},
+		{"three-quarter", "15275.6815", "15275.6818", 0.75},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plate := roundedDrilledPlate(t)
+			got, err := plate.Fillet(t.Context(), roundedPlateFrontTopEdge(), units.Millimeters(tc.radius))
+			require.NoError(t, err)
+			require.Len(t, got.Faces(), 12)
+			requireEveryEdgeOnTwoFaces(t, got)
+
+			volume, err := got.Volume()
+			require.NoError(t, err)
+			value := new(big.Rat).SetFloat64(volume.Value.Base())
+			bound := new(big.Rat).SetFloat64(volume.Bound.Base())
+			low, _ := new(big.Rat).SetString(tc.low)
+			high, _ := new(big.Rat).SetString(tc.high)
+			require.LessOrEqual(t, new(big.Rat).Sub(value, bound).Cmp(low), 0)
+			require.GreaterOrEqual(t, new(big.Rat).Add(value, bound).Cmp(high), 0)
+			centroid, err := got.Centroid()
+			require.NoError(t, err)
+			cx := new(big.Rat).SetFloat64(centroid.Value.X)
+			cb := new(big.Rat).SetFloat64(centroid.Bound.Base())
+			require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(cx, big.NewRat(20, 1))).Cmp(cb), 0)
+
+			mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1),
+				decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			require.True(t, mesh.VolumeVerified())
+			report, err := got.Document().Verify(t.Context())
+			require.NoError(t, err)
+			reading, err := report.ForBody(got)
+			require.NoError(t, err)
+			require.Equal(t, decad.Sound, reading.Status)
+			require.Equal(t, decad.ToleranceSatisfied, reading.Area.Tolerance.State)
+			require.Equal(t, decad.ToleranceSatisfied, reading.Bounds.Tolerance.State)
+		})
+	}
+}
+
 func TestBrepRoundedEdgeFilletPublicAdmission(t *testing.T) {
 	t.Parallel()
 	plate := roundedDrilledPlate(t)
-	_, err := plate.Fillet(t.Context(), roundedPlateFrontTopEdge(), units.Millimeters(0.5))
+	for _, radius := range []float64{0.125, 0.1, 1.25} {
+		_, err := plate.Fillet(t.Context(), roundedPlateFrontTopEdge(), units.Millimeters(radius))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	}
+	backTop := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
+		decad.EndpointAt(r3.NewVec(3, 20, 20))).Exactly(1)
+	_, err := plate.Fillet(t.Context(), backTop, units.Millimeters(0.5))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	// A bore whose top reaches the cutter's z=19 boundary is outside the
 	// admitted source. The producer still uses the public Sketch and Cut.

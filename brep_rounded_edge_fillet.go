@@ -17,13 +17,13 @@ import (
 // restate those walls as planes (SB7). The complete source record and the
 // selected edge must match the exact construction below; no coordinate
 // tolerance admits a nearby boolean or a displaced face. The bore reaches
-// z=13, while the radius-1 cutter starts at z=19, and its y reach is at most
-// 1 against a body whose back is y=20. Thus the cutter can touch the front
+// z=13, while each admitted cutter starts at z>=19, and its y reach is at
+// most 1 against a body whose back is y=20. Thus it can touch the front
 // rounded wall and cap only. The mesh boolean proves its actual contacts,
 // occupied volume, and closure before the caller's body is retired.
 func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload,
 	edges []*Edge, radius, radiusDelta float64) (*Body, bool, error) {
-	if radius != 1 || radiusDelta != 0 || len(edges) != 1 || !isP8RoundedBrep(bp) {
+	if !p8QuarterRadius(radius) || radiusDelta != 0 || len(edges) != 1 || !isP8RoundedBrep(bp) {
 		return nil, false, nil
 	}
 	edge := edges[0]
@@ -31,7 +31,7 @@ func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload
 		!p8TopFrontEdge(edge) {
 		return nil, false, nil
 	}
-	// Each value is an exactly represented integer in the matched source.
+	// The source integers and admitted quarter-millimeter radii are binary exact.
 	if !(10+3 < 20-radius && radius < 20) {
 		return nil, false, nil
 	}
@@ -64,6 +64,18 @@ func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload
 	}
 	d.commitSpan(out, 2, body)
 	return out, true, nil
+}
+
+// These quarter-millimeter radii are represented exactly in binary. The
+// quarter-cylinder cutter and its P8 clearance were checked at each value;
+// a wider radius interval needs its own contact and Verify bound.
+func p8QuarterRadius(radius float64) bool {
+	switch radius {
+	case 0.25, 0.5, 0.75, 1:
+		return true
+	default:
+		return false
+	}
 }
 
 func p8TopFrontEdge(edge *Edge) bool {
