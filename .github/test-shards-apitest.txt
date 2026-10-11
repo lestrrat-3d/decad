@@ -87,6 +87,9 @@
 1	0.00	TestRevolveSolidCylinderHasNoInnerFace
 1	0.01	TestRevolveToFaceAngular
 1	0.01	TestRevolveWallNormalCoversNearPerpendicularSegment
+1	0.00	TestSectionPlacedPrismKeepsHole
+1	0.00	TestSectionRefusesInvalidOrNonparallelPlane
+1	0.00	TestSectionSketchFeedsExtrude
 1	0.00	TestSelectionErrorUnassertedZero
 1	0.01	TestSelectorRejectsNonPositiveCardinality
 1	0.00	TestSelectorUnionString
