@@ -77,3 +77,60 @@ and the final vertex sweep are added. Retained flank patches carry
 source `Cone` tag, origins, orientation and denoted-normal certificate.
 Placement moves the cone tag and denotation, and drops the radial-chain
 record.
+
+## One-tooth bevel blank union
+
+`Union` admits one unplaced, axis-X, six-line Revolve blank and one unplaced
+point loft after its toe `Cut` and heel `Intersect` when their source records
+match. The blank has a finite root meridian between its toe root and dedendum
+stations. The tooth profile has two whole fitted flanks, a tip arc, a root
+arc, and two root connector lines. A different shape uses the usual Boolean
+path and may refuse on its held-mesh bound.
+
+The join reads the original Sketch entities and revision recorded by
+`LoftFromPoint`. It asks Sketch for exact line crossings with the blank's
+reported root cone and whole-curve side certificates. The two flanks and tip
+arc must lie outside that cone; the root arc must lie inside. Every
+certificate must name the recorded entity, cone, frame and current sketch.
+Its exact implicit margin must exceed the source fan's certified displacement
+and the finite meridian's difference from the reported cone. The line-root
+contacts are then checked against the actual finite meridian, including the
+Sketch crossing interval and float point-evaluation error. The toe and heel
+tool meridians must meet the corresponding blank stations within the charged
+seam allowance.
+
+The mesh removes only the covered angular span of the blank root face. Its
+replacement tooth caps and side walls reuse the blank's root-ring vertex
+indices. A regular 256-chord angular grid bounds blank circular departure;
+three cap subdivision rounds bound the cone-map interpolation. Construction
+checks directed edge pairing, one component, every vertex link, and exact
+nonadjacent triangle contacts under a fixed 64-million-scan work limit.
+The resulting faceted body carries a boundary displacement below 0.1 mm,
+an occupied-volume bound, and the original Cone and NURBSSurface face tags.
+`Tessellate(0.1 mm, VerifyAll)` restates the audited mesh and both proofs.
+
+The reference 8/8 blank and one trimmed tooth pass this path. Its current
+three-round cap bound proves occupied volume but is too broad to prove
+positive inertia in `MassProperties`; that call returns `ErrUnsupported`.
+Additional patterned teeth require a separate structural continuation.
+
+For a blank and tooth built from the same unplaced gear source, the public
+operation order is:
+
+```go
+toeKeeper, err := decad.Cut(ctx, tooth, toeCone)
+if err != nil { return err }
+trimmed, err := decad.Intersect(ctx, toeKeeper, heelCone)
+if err != nil { return err }
+joined, err := decad.Union(ctx, blank, trimmed)
+if err != nil { return err }
+mesh, err := joined.Tessellate(ctx, units.Millimeters(0.1),
+    decad.WithVerification(decad.VerifyAll))
+if err != nil { return err }
+if !mesh.BoundaryVerified() || !mesh.VolumeVerified() {
+    return fmt.Errorf("joined bevel tooth lacks a verified solid")
+}
+```
+
+`apitest/bevel_join_test.go` builds and verifies the complete 8/8 example
+through public Sketch and Decad APIs.

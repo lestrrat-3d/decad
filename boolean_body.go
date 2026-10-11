@@ -59,6 +59,9 @@ type facetGroup struct {
 // measurements compose from. It is what Placed re-evaluates under a composed
 // motion (docs/evaluator-design.md §8).
 type facetedPayload struct {
+	// contactAudited records a whole-mesh exact contact audit at construction.
+	// PlaceMesh preserves it by checking every rounded facet after placement.
+	contactAudited bool
 	// pointSection retains the authenticated Sketch source of a point loft.
 	// Boolean results have nil here; placement keeps the source record.
 	pointSection *pointSectionRecord
