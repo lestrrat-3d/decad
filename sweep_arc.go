@@ -108,28 +108,38 @@ func sweepRatIsZero(v sweepRatVec) bool { return sweeparc.IsZero(v) }
 // reduction, which builds through the Revolve evaluator and so mints roles
 // that know nothing of a path. Every wall role gains the path-span index ahead
 // of the section's loop and segment indices, exactly as
-// prefixSweepSpanZeroRole does for a straight reduction. A span whose Revolve
-// axis was reoriented (reverseArcCaps) also has its two cap roles swapped back
+// prefixSweepSpanZeroRole does for a straight reduction. A closed full-circle
+// reduction adds the second span's role to each seam-free full-turn wall. A
+// span whose Revolve axis was reoriented (reverseArcCaps) has its cap roles swapped back
 // into PATH order, so capStart always names the section the path leaves and
 // capEnd the one it arrives at — the orientation sweep_composite.go's own
 // join pairing reads when it takes one span's end cap against the next span's
-// start cap.
+// start cap. A closed full-circle reduction has no cap.
 func finishArcSweepBody(body *Body, payload sweepPayload) {
 	if built, ok := body.payload.(revolvePayload); ok {
 		payload.revolve = built
 	}
 	for _, face := range body.Faces() {
-		for i, origin := range face.origins {
+		origins := make([]FeatureRef, 0, len(face.origins)*2)
+		for _, origin := range face.origins {
 			switch {
 			case strings.HasPrefix(origin.Role, "side("):
-				origin.Role = "side(0," + strings.TrimPrefix(origin.Role, "side(")
+				suffix := strings.TrimPrefix(origin.Role, "side(")
+				origin.Role = "side(0," + suffix
+				if payload.closedCircle {
+					second := origin
+					second.Role = "side(1," + suffix
+					origins = append(origins, origin, second)
+					continue
+				}
 			case payload.reverseArcCaps && origin.Role == roleCapStart:
 				origin.Role = roleCapEnd
 			case payload.reverseArcCaps && origin.Role == roleCapEnd:
 				origin.Role = roleCapStart
 			}
-			face.origins[i] = origin
+			origins = append(origins, origin)
 		}
+		face.origins = origins
 	}
 	body.payload = payload
 }

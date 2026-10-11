@@ -295,6 +295,8 @@
 2	0.34	TestSweepArcIsABooleanOperand
 2	0.02	TestSweepArcMatchesQuarterRevolveAndReplaysPlacement
 2	0.00	TestSweepChainRibbonReadsValid
+2	0.02	TestSweepClosedCircleBuildsVerifiedSolidAndReplaysPlacement
+2	0.01	TestSweepClosedCircleRefusesUnsupportedVariantsWithoutCommit
 2	0.16	TestSweepCompositeCircularHoleTessellates
 2	0.03	TestSweepCompositePlacedCopyKeepsSourceReplay
 2	0.01	TestSweepMitredCollinearFrustumChain
