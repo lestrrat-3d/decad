@@ -19,8 +19,11 @@ import (
 // loftCylinderBoreRecord names the two certified annular caps of an unplaced
 // through-bore result. Each outer and inner loop is CCW when viewed from +Z.
 type loftCylinderBoreRecord struct {
-	blank                               *Body
-	teeth                               []*Body
+	blank *Body
+	// teeth are exact Cut sources; proofTeeth and axialBridge retain the
+	// private Union witnesses for later source-level admission checks.
+	teeth, proofTeeth                   []*Body
+	axialBridge                         []float64
 	outer, inner                        [2][]int
 	capGroups                           [2]int
 	wallGroup                           int
@@ -92,11 +95,6 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 	}
 	if wall == nil {
 		return nil, false, nil
-	}
-	for _, shift := range record.axialBridge {
-		if shift > 0 {
-			return nil, true, fmt.Errorf("%w: centered bore of an axially bridged Loft/cylinder join lacks a source proof", ErrUnsupported)
-		}
 	}
 	body, err := buildLoftCylinderBore(ctx, d, ref, joined, radius, wall)
 	return body, true, err
@@ -290,8 +288,9 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, err
 	}
-	if err := loftmesh.LoftCrossingAudit(
-		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris); err != nil {
+	if err := loftmesh.LoftCrossingAuditBounded(
+		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
+		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
 		return nil, err
 	}
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
@@ -329,8 +328,11 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	result.volSymDiff, result.areaSlack = volumeGap, areaSlack
 	result.loftCylinderJoin = nil
 	result.loftCylinderBore = &loftCylinderBoreRecord{
-		blank: record.blank, teeth: append([]*Body(nil), record.teeth...),
-		capGroups: record.capGroups, wallGroup: wallGroup,
+		blank:       record.blank,
+		teeth:       append([]*Body(nil), record.teeth...),
+		proofTeeth:  append([]*Body(nil), record.proofTeeth...),
+		axialBridge: append([]float64(nil), record.axialBridge...),
+		capGroups:   record.capGroups, wallGroup: wallGroup,
 		blankRadius: record.radius, boreRadius: radius, boreBound: boreBound,
 		z0: record.z0, z1: record.z1,
 		innerInset: record.innerInset, outerExcess: record.outerExcess, rootCollar: record.rootCollar,
@@ -357,5 +359,6 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		[2]float64{record.z0, record.z1}, ref); err != nil {
 		return nil, err
 	}
+	loftCylinderTagBridgedTop(&result, record.capGroups[1], record.axialBridge)
 	return buildFacetedBody(ctx, d, ref, result)
 }

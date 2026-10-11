@@ -203,6 +203,12 @@ func loftCylinderSourceRingInside(ctx context.Context, fp facetedPayload,
 			record.radius, 0, record.z0, record.z1, edges)
 	}
 	if record := fp.loftCylinderBore; record != nil {
+		for _, shift := range record.axialBridge {
+			if shift > 0 {
+				return loftCylinderRingOccupancy{},
+					fmt.Errorf("%w: split ring has no source proof across a bored axial bridge", ErrUnsupported)
+			}
+		}
 		return loftCylinderSourceRingInsideInputs(ctx, record.teeth,
 			record.blankRadius, record.boreRadius, record.z0, record.z1, edges)
 	}

@@ -78,6 +78,20 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 	return nil
 }
 
+// loftCylinderTagBridgedTop replaces the blank's exact top Plane tag when
+// an original tooth ends below the held cap. The cap role remains intact;
+// buildFacetedBody supplies the source-to-held displacement on its surface.
+func loftCylinderTagBridgedTop(pp *facetedPayload, topGroup int, axialBridge []float64) {
+	for _, shift := range axialBridge {
+		if shift > 0 {
+			top := &pp.groups[topGroup]
+			top.surface = nil
+			top.planar = false
+			return
+		}
+	}
+}
+
 // loftCylinderAuditAnnulus checks the exact planar area and directed edge
 // balance of one rebuilt cap. The old disk audit supplies the outer loop; the
 // bore ring and side-clearance gates supply a disjoint inner loop. The whole
