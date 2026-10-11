@@ -52,7 +52,7 @@ func (k *planarKernel) pruned(alo, ahi, blo, bhi [3]proof.Dyadic, fa, fb floatBo
 	if !bounded {
 		return false
 	}
-	if gapSquaredBelow(fa, fb) > up {
+	if gapSquaredBelowLimit(fa, fb, up) > up {
 		return true
 	}
 	if !boxesApart(alo, ahi, blo, bhi) {

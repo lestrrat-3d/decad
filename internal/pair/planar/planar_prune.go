@@ -184,6 +184,13 @@ func nonnegative(x float64) float64 { return math.Max(x, 0) }
 // whose float boxes are a and b. Each term is nonnegative, so a bound below
 // zero is raised to zero.
 func gapSquaredBelow(a, b floatBox) float64 {
+	return gapSquaredBelowLimit(a, b, math.Inf(1))
+}
+
+// gapSquaredBelowLimit stops once a partial lower bound exceeds limit. Every
+// remaining axis adds a nonnegative term, so that partial sum already proves
+// the full gap exceeds limit.
+func gapSquaredBelowLimit(a, b floatBox, limit float64) float64 {
 	sum := 0.0
 	for axis := range 3 {
 		var gap float64
@@ -196,6 +203,9 @@ func gapSquaredBelow(a, b floatBox) float64 {
 			continue
 		}
 		sum = nonnegative(addDown(sum, nonnegative(mulDown(gap, gap))))
+		if sum > limit {
+			return sum
+		}
 	}
 	return sum
 }
@@ -356,7 +366,7 @@ func blockBoxes(boxes []floatBox) []floatBox {
 // one each held pair would have met.
 func (k *planarKernel) blockPruned(a, block floatBox, n int) (bool, error) {
 	up, bounded := k.boundUp()
-	if !bounded || !(gapSquaredBelow(a, block) > up) {
+	if !bounded || !(gapSquaredBelowLimit(a, block, up) > up) {
 		return false, nil
 	}
 	for range n {
