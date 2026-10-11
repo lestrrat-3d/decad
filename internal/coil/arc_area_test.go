@@ -1,12 +1,14 @@
 package coil_test
 
 import (
+	"context"
 	"math"
 	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -231,6 +233,38 @@ func TestArcAreaEnclosesTheQuadrature(t *testing.T) {
 		f, _ = sum.Float64()
 		requireBracket(t, back, theta*f*step/3)
 	})
+}
+
+func TestArcAreaWorkerCountsAgree(t *testing.T) {
+	for _, fixture := range []struct {
+		name    string
+		loop    sectionrecord.LoopRecord
+		segment int
+	}{
+		{name: "circle", loop: roundWire()},
+		{name: "semicircle", loop: slot(), segment: 1},
+		{name: "reversed arc", loop: bite(), segment: 1},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			profile, err := coil.Loops(fixture.loop, nil, 16)
+			require.NoError(t, err)
+			segment := profile.Segments[fixture.segment]
+			pitch, turns := big.NewRat(3, 2), big.NewRat(5, 1)
+			one, ok, err := coil.ArcArea(orderedwork.WithWorkers(t.Context(), 1), segment, vAxis(), pitch, turns)
+			require.NoError(t, err)
+			require.True(t, ok)
+			four, ok, err := coil.ArcArea(orderedwork.WithWorkers(t.Context(), 4), segment, vAxis(), pitch, turns)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, one, four)
+		})
+	}
+	profile, err := coil.Loops(roundWire(), nil, 16)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, _, err = coil.ArcArea(ctx, profile.Segments[0], vAxis(), big.NewRat(3, 2), big.NewRat(5, 1))
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 // TestCellProofArcLegs pins the arc chord's charges in CellProofUpper: each

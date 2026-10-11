@@ -799,6 +799,9 @@ bounds the drift from the midpoint, which gives both `|h − g²|` and
 `1e-10`; the Taylor remainder is odd about each midpoint, so the true error
 cancels far below the bound, and over four pieces the bound is what holds
 the bracket around the integral.
+The 1024 independent pieces run on up to four workers. Their exact rational
+interval sums fold in piece order, so the result does not depend on the worker
+count.
 
 ### 11.2 Files
 
