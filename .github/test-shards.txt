@@ -8,7 +8,7 @@
 # Shard totals at the last measurement:
 #   shard 0:    0.00s over 1 tests
 #   shard 1:    0.17s over 225 tests
-#   shard 2:   10.17s over 132 tests
+#   shard 2:   10.20s over 135 tests
 #   shard 3:  136.92s over 135 tests
 #   shard 4:  135.87s over 133 tests
 #   shard 5:   94.90s over 130 tests
@@ -327,6 +327,9 @@
 2	0.04	TestPairStationsStationsAdvanceMonotonicallyAlongTheChain
 2	0.00	TestPatchAreaOfEnclosesRoundedRadiusDifference
 2	0.02	TestPlanarBandTransferChargesDeviation
+2	0.01	TestPointConeOutsideWitnessRejectsUncertainContact
+2	0.01	TestPointConeSourceMustClearFiniteFarCap
+2	0.01	TestPointConeTriangleBoundIncludesReciprocalCurvature
 2	0.50	TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace
 2	0.00	TestPrismBooleanGateG2AdmitsAReflectedOperand
 2	0.00	TestPrismGroupMirrorJoinRefuses
