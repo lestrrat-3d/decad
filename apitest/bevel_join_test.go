@@ -172,3 +172,42 @@ func TestBevelOneToothJoinPreservesSourceFacesAndVerifiedSolid(t *testing.T) {
 	_, err = decad.Union(t.Context(), blank, trimmed)
 	require.Error(t, err)
 }
+
+func TestBevelTwoToothJoinReusesOneRootRing(t *testing.T) {
+	doc := decad.New()
+	blank, toeApex := bevelReferenceBlank(t, doc)
+	tooth, _ := bevelReferenceTooth(t, doc)
+	trimmed, err := decad.Cut(t.Context(), tooth, pointConeTool(t, doc, toeApex))
+	require.NoError(t, err)
+	trimmed, err = decad.Intersect(t.Context(), trimmed, pointConeTool(t, doc, 8))
+	require.NoError(t, err)
+	turn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(45))
+	require.NoError(t, err)
+	second, err := trimmed.PlacedCopy(t.Context(), turn)
+	require.NoError(t, err)
+	firstJoin, err := decad.Union(t.Context(), blank, trimmed)
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), firstJoin, second)
+	require.NoError(t, err)
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	firstVolume, err := firstJoin.Volume()
+	require.NoError(t, err)
+	joinedVolume, err := joined.Volume()
+	require.NoError(t, err)
+	blankVolume, err := blank.Volume()
+	require.NoError(t, err)
+	require.Greater(t, joinedVolume.Value.Base(), firstVolume.Value.Base()+1)
+	require.Greater(t, joinedVolume.Value.Base()-joinedVolume.Bound.Base(),
+		blankVolume.Value.Base()+blankVolume.Bound.Base())
+	var fits int
+	for _, face := range joined.Faces() {
+		if _, ok := face.Surface().(decad.NURBSSurface); ok {
+			fits++
+		}
+	}
+	require.GreaterOrEqual(t, fits, 4)
+}

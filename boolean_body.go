@@ -66,7 +66,12 @@ type facetedPayload struct {
 	// Boolean results have nil here; placement keeps the source record.
 	pointSection *pointSectionRecord
 	pointCone    *pointConeTrimRecord
-	verts        []r3.Vec
+	// bevelJoin identifies the immutable blank and first trimmed tooth used
+	// to rebuild a second disjoint tooth on the same root ring.
+	bevelJoin *bevelJoinRecord
+	// bevelTooth identifies a single placed copy of a certified trimmed tooth.
+	bevelTooth *bevelToothPlacement
+	verts      []r3.Vec
 	// vertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
 	// §2, §4.1), composed by the boolean that built the payload (§3) and
 	// carried through every placement. The boolean always writes it; a nil
@@ -141,6 +146,11 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.xform = composed
 	next.lowerSupport = nil
 	next.pointCone = nil
+	next.bevelJoin = nil
+	next.bevelTooth = nil
+	if fp.pointCone != nil && fp.xform == r3.Identity() {
+		next.bevelTooth = &bevelToothPlacement{source: fp.pointCone, motion: composed}
+	}
 	next.groups = append([]facetGroup(nil), fp.groups...)
 	for i := range next.groups {
 		// A later structural trim requires the unplaced source. Its retained
