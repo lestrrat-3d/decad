@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -281,13 +282,13 @@ func bevelCapBoundary(path []bevelPathNode, frame r3.Frame, slope float64,
 	}
 	lastAngle := math.Atan2(path[len(path)-1].p.Z, path[len(path)-1].p.Y)
 	if lastAngle == hi {
-		for i := len(root) - 1; i >= 0; i-- {
-			p, ok := bevelFarRootPoint(frame, slope, root[i])
+		for _, angle := range slices.Backward(root) {
+			p, ok := bevelFarRootPoint(frame, slope, angle)
 			if !ok {
 				return nil, fmt.Errorf("%w: root generator misses the source plane", ErrUnsupported)
 			}
 			nodes = append(nodes, bevelPathNode{p: p, groupToNext: -1,
-				crossing: -1, rootBoundary: true, angle: root[i]})
+				crossing: -1, rootBoundary: true, angle: angle})
 		}
 	} else {
 		for _, angle := range root {

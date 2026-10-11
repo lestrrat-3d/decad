@@ -112,8 +112,8 @@ func certifyBevelToothBoundary(record *pointSectionRecord,
 	}
 	left := (result.insideArc + 5) % 6
 	right := (result.insideArc + 1) % 6
-	if !((result.lineIndex[0] == left && result.lineIndex[1] == right) ||
-		(result.lineIndex[0] == right && result.lineIndex[1] == left)) {
+	if (result.lineIndex[0] != left || result.lineIndex[1] != right) &&
+		(result.lineIndex[0] != right || result.lineIndex[1] != left) {
 		return nil, false
 	}
 	return result, true
