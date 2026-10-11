@@ -545,7 +545,6 @@
 4	0.04	TestArcFragmentSplitHemispheresAreTight
 4	0.05	TestAsymmetricChamferOnBrepLoopSideOverrun
 4	0.03	TestAsymmetricChamferOnStackedLoop
-4	18.54	TestBevelOneToothJoinPreservesSourceFacesAndVerifiedSolid
 4	0.01	TestBlindCutFromBottomFace
 4	0.00	TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne
 4	0.00	TestBox
@@ -744,6 +743,7 @@
 4	0.00	TestWallReadingExactHeightArm
 4	0.01	TestWholeCircleCylinderHasTwoLoops
 5	0.35	TestAnalyticPlateWithCircularHolesArea
+5	110.78	TestBevelOneToothJoinPreservesSourceFacesAndVerifiedSolid
 5	0.01	TestBlindCutBuildsAnalyticPocket
 5	0.00	TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall
 5	0.01	TestBodyPatchReproducesThroughPlacement
