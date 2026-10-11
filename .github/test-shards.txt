@@ -9,7 +9,7 @@
 #   shard 0:    0.00s over 1 tests
 #   shard 1:    1.22s over 229 tests
 #   shard 2:   10.20s over 135 tests
-#   shard 3:  136.92s over 135 tests
+#   shard 3:   58.31s over 135 tests
 #   shard 4:  182.61s over 138 tests
 #   shard 5:   48.16s over 128 tests
 #   shard 6:   85.03s over 133 tests
@@ -440,7 +440,7 @@
 3	0.00	TestLoftCircularCellStationsHandDerivedStationCount
 3	0.00	TestLoftCrossingAuditCancellation
 3	0.00	TestLoftCrossingAuditRejectsGenuineCrossing
-3	82.33	TestLoftEmbeddedFlankRecordsSurviveFilletAndBore
+3	3.72	TestLoftEmbeddedFlankRecordsSurviveFilletAndBore
 3	0.00	TestLoftFitCircleRootCertificateEnclosesIdealContact
 3	3.74	TestLoftGearToothVerifiesSound
 3	0.00	TestLoftMassAccumulatorBoxAnchoredElsewhereStillExact
