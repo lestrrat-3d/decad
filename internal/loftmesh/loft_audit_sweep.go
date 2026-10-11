@@ -56,11 +56,12 @@ func LoftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 }
 
 // LoftCrossingAuditBevelJoin audits the dense root-ring and tooth-cap mesh.
-// Its larger, fixed scan limit admits the circumferential root rings while
-// retaining the generic audit's triangle limit and exact pair decisions.
+// Its 82,000-triangle allowance admits the four-round cap mesh; the fixed
+// scan limit and exact pair decisions still bound the audit.
 func LoftCrossingAuditBevelJoin(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
 	const maxBevelJoinScans = 64_000_000
-	_, err := loftCrossingAudit(budget, verts, tris, nil, loftGenericShortcuts, maxBevelJoinScans)
+	_, err := loftCrossingAuditLimited(budget, verts, tris, nil, loftGenericShortcuts,
+		maxBevelJoinScans, 82_000)
 	return err
 }
 

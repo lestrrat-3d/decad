@@ -727,7 +727,7 @@ func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, triangulation.WrapLoftError(err)
 	}
-	capNodes, caps, edges, farRound, err := bevelSubdivideCap(ctx, capNodes, caps, 3)
+	capNodes, caps, edges, farRound, err := bevelSubdivideCap(ctx, capNodes, caps, 4)
 	if err != nil {
 		return nil, err
 	}

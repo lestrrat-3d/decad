@@ -159,6 +159,17 @@ func TestBevelOneToothJoinPreservesSourceFacesAndVerifiedSolid(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, joinedVolume.Value.Base()-joinedVolume.Bound.Base(),
 		blankVolume.Value.Base()+blankVolume.Bound.Base())
+	properties, err := joined.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(0.001))
+	require.NoError(t, err)
+	require.Greater(t, properties.Mass.Value.Base(), properties.Mass.Bound.Base())
+	for _, diagonal := range []decad.Measurement{
+		properties.Inertia.XX, properties.Inertia.YY, properties.Inertia.ZZ,
+	} {
+		require.Greater(t, diagonal.Value.Base(), diagonal.Bound.Base())
+	}
+	require.LessOrEqual(t,
+		math.Abs(properties.Mass.Value.Base()-0.001*joinedVolume.Value.Base()),
+		properties.Mass.Bound.Base()+0.001*joinedVolume.Bound.Base())
 	var fits int
 	for _, face := range joined.Faces() {
 		if _, ok := face.Surface().(decad.NURBSSurface); ok {
