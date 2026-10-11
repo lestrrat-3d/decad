@@ -63,8 +63,20 @@ func XdotDiffSign(n, p, q Xpt) int {
 		return sum.Add(&sum, &term).Sign()
 	}
 	pNum, qNum := XdotNum(n, p), XdotNum(n, q)
-	pNum.Mul(pNum, q.W)
-	qNum.Mul(qNum, p.W)
+	// Float lifts carry power-of-two weights. Shift their numerators instead
+	// of using general multiplication; other exact points retain that path.
+	qShift := q.W.TrailingZeroBits()
+	if q.W.BitLen() == int(qShift)+1 {
+		pNum.Lsh(pNum, qShift)
+	} else {
+		pNum.Mul(pNum, q.W)
+	}
+	pShift := p.W.TrailingZeroBits()
+	if p.W.BitLen() == int(pShift)+1 {
+		qNum.Lsh(qNum, pShift)
+	} else {
+		qNum.Mul(qNum, p.W)
+	}
 	return pNum.Sub(pNum, qNum).Sign()
 }
 
