@@ -102,16 +102,17 @@ seam allowance.
 The mesh removes only the covered angular span of the blank root face. Its
 replacement tooth caps and side walls reuse the blank's root-ring vertex
 indices. A regular 256-chord angular grid bounds blank circular departure;
-three cap subdivision rounds bound the cone-map interpolation. Construction
+four cap subdivision rounds bound the cone-map interpolation. Construction
 checks directed edge pairing, one component, every vertex link, and exact
-nonadjacent triangle contacts under a fixed 64-million-scan work limit.
+nonadjacent triangle contacts under an 82,000-triangle and fixed
+64-million-scan work limit.
 The resulting faceted body carries a boundary displacement below 0.1 mm,
 an occupied-volume bound, and the original Cone and NURBSSurface face tags.
 `Tessellate(0.1 mm, VerifyAll)` restates the audited mesh and both proofs.
 
-The reference 8/8 blank and one trimmed tooth pass this path. Its current
-three-round cap bound proves occupied volume but is too broad to prove
-positive inertia in `MassProperties`; that call returns `ErrUnsupported`.
+The reference 8/8 blank and one trimmed tooth pass this path. The four-round
+cap bound proves positive inertia in `MassProperties` at a density of
+0.001 kg/mm³ while retaining the occupied-volume and mesh-bound proofs.
 Further `PlacedCopy` teeth can join through the shared-ring continuations
 below, up to eight certified sectors.
 
