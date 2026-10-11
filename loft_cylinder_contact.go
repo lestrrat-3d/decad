@@ -63,8 +63,10 @@ func loftCylinderConnectorContactBound(lp loftPayload, root, connectorCell int,
 		return refuse("held connector has no one-crossing proof")
 	}
 	belowTop := new(big.Rat).Sub(proofarith.FloatRat(z1), level)
-	if belowTop.Cmp(proofarith.FloatRat(max(sourceCollar, heldCollar))) < 0 {
-		return refuse("connector contact lies in the uncertified top collar")
+	aboveBottom := new(big.Rat).Sub(level, proofarith.FloatRat(z0))
+	collar := proofarith.FloatRat(max(sourceCollar, heldCollar))
+	if belowTop.Cmp(collar) < 0 || aboveBottom.Cmp(collar) < 0 {
+		return refuse("connector contact lies in an uncertified root collar")
 	}
 	near, far := 0, 1
 	if connectorCell != 0 {

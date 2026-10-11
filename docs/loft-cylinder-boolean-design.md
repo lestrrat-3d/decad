@@ -19,19 +19,18 @@ triangles. At a fixed height, those triangles give a two-segment chain from
 root endpoint through their common diagonal to flank endpoint. The exact
 quadratic radial derivatives on both segments are nonnegative for every
 height. An exact root-ruling collar proves the held inner endpoint lies
-inside the blank below it. The far endpoint stays outside, so that chain
-crosses the circle once below the collar.
+inside the blank between both cap collars. The far endpoint stays outside,
+so that chain crosses the circle once in this interval.
 
-The root arc's bottom squared radius is at most the blank's exact squared
-radius. If its top is larger, the arc's endpoint angle intervals must prove
-a nonzero twist. For every arc parameter, squared radius along a ruling is
-convex in height. `loftCylinderRootCollar` proves both endpoints of the
-interval from the bottom to `1−ε` lie inside the circle; the root wall is
-inside the blank below the resulting `ε·height` top collar. The measured
-source may have a small top radius mismatch, so the collar and radial gap
-are charged instead of silently treating the surfaces as coincident. Both
-readings multiply the recorded squared radius by the exact squared norm of
-the placed body's XY rotation basis, including its float-basis residual.
+The root arc may have a small radius excess at either cap. Its endpoint
+angle intervals must then prove a nonzero twist with one common sign. For
+every arc parameter, squared radius along a ruling is convex in height.
+`loftCylinderRootCollar` proves both interior endpoints at `ε` and `1−ε`
+lie inside the circle. The root wall is inside the blank between the two
+`ε·height` cap collars. The collar, its lateral root-wall sweep, and radial
+gap are charged. Both radius readings multiply the recorded squared radius
+by the placed body's exact squared XY rotation-basis norm, including its
+float-basis residual.
 
 `loftCylinderRadialGate` computes the exact minimum projected radius of
 every held wall triangle. Fitted flank and tip cells must stay outside the
@@ -60,6 +59,9 @@ contains the origin, and is tiled by only its cap-group triangles with
 matching directed edges and exact area. `LoftCrossingAudit` checks the entire
 constructed shell before the payload records `contactAudited=true`. The
 faceted-body audit then checks manifold closure and orientation.
+An exact midpoint and outline-contact audit keeps every omitted held root
+chord inside its filled cap; only the two global root endpoints may touch
+the outline.
 
 After those audits, each cap group receives the joined body's own `capStart`
 or `capEnd` role and the original blank's exact axial `Plane` surface. The
@@ -72,7 +74,7 @@ select their exterior rims.
 `loftCylinderSourceCircleOf` accepts one authenticated source Loft retained by
 the join or its centered bore. The six-curve admission and matched Loft facet
 departure still apply. The root wall stays strictly inside the exact blank
-circle at open heights below its certified top collar. When the existing
+circle at open heights between its certified cap collars. When the existing
 collar has zero height, the exact squared root radii at both caps are at
 most `R²`; one strict cap radius makes every interior ruling strict by
 convexity. If both equal `R²`, a certified nonzero angular change makes
@@ -110,8 +112,8 @@ are convex, so the whole triangle lies in the angular sector. A failed
 strict inequality refuses the triangle. This gate checks only its angle;
 radial tooth occupancy and source-wall clearance need separate checks.
 
-This certificate applies only at open heights above the start cap and below
-the recorded `safeTop`. A cap cutter must separately prove its top-collar,
+This certificate applies only at open heights between the recorded
+`safeBottom` and `safeTop`. A cap cutter must separately prove its collars,
 cap-plane, bore-wall, and full far-band surface claims. Circle occupancy by
 itself does not place a complete cutter facet inside the source union.
 
@@ -149,7 +151,7 @@ strictly occupied by the tooth. No edge touches any source tooth wall or
 an exposed blank or bore wall. Since the exact edge set is one connected
 cycle with a strict blank-inside witness, every point on the ring lies
 inside the original union. This proof covers the split ring only. The cap
-planes, the top collar, and the cutter band's two-dimensional surfaces
+planes, both collars, and the cutter band's two-dimensional surfaces
 need separate bounds and occupancy proofs.
 
 ## Boundary and occupied-volume bounds
@@ -158,15 +160,48 @@ Away from the root band, the retained tooth walls have the Loft source
 boundary bound and the original circular blank is unchanged. In a gap, the
 ordered ring covers the exposed cylinder. At a connector, its held two-
 segment slice crosses the circle once; the subchain inside the disc lies in
-the charged annulus. The moving-wedge bound and ring ordering pair
-both sides of the exposed seam to that connector or ring. Above the root
-collar, the cap is within the charged axial collar height. The published
-boundary bound includes the Loft source bound, twice the maximum certified
-radial or lateral seam reach, the ring roundoff, the outward root excess, and
-the top collar height. A result whose bound exceeds 0.1 mm is refused.
+the charged annulus. The source-circle proof gives one occupied angular
+sector per tooth; the held ring has its own exact angular ordering. On either
+side, a hidden connector point reaches its same-height circle crossing by
+at most the certified connector reach plus the matched Loft departure.
+The exact radial derivative also bounds the shift between source and held
+crossings: the matched point lies within `δ` of the crossing, so its squared
+radius differs from `R²` by at most `2Rδ+δ²`. Dividing by the certified
+radial derivative and multiplying by the connector piece length bounds the
+remaining shift. The cap's vanishing axial factor cancels in this ratio.
+An exposed source-cylinder point between a held root ray and its connector
+crossing reaches the retained held connector within the charged inward reach.
+Between the held and source crossings, it reaches the held crossing within
+the certified crossing shift. A held ring point inside the
+source tooth's sector first projects radially to `R`, then moves to the source
+crossing. The ring begins at the held root ray, so this second leg includes
+the exact held-to-source root endpoint displacement and the true connector's
+tangential motion before its crossing. The latter uses a cubic Bernstein
+test for the same-height radial deficit and cross product; its height and
+connector parameters stay paired. A strict bound below one quarter of the
+radius keeps each angular move on the short circle arc. The source-circle
+crossing boxes are checked over 256 contiguous exact height slabs, so their
+positive cyclic order holds throughout the admitted interval. Outside these
+narrow disagreements, same-angle projection pairs the ring and cylinder. A point
+inside either root collar first uses the charged radial seam reach to the
+matching cap region. The audited simple cap outline follows the tooth
+exterior and gap ring. Every omitted held root chord, including the closing
+chord, has an exact midpoint strictly inside that polygon. It has no outline
+contact except at the two global root endpoints, so the entire chord lies
+in the filled cap. The true root arc lies within its matched Loft departure
+`δ` of the chord.
+Its XY ruling moves by at most twice the maximum authenticated source radius
+times `collar/height`; the axial move is at most the collar height. The
+published boundary bound includes the Loft source bound, the maximum of
+connector reach plus departure and radial ring reach plus root-angle reach,
+outward root excess, one cap collar height, and its XY sweep. A result above
+0.1 mm refuses.
+If any tooth lacks the tighter connector certificate, the join retains the
+prior two-times-inward-reach bound for the complete pattern. It never mixes
+the two bounds within one result.
 
 The root connector also supports a local bound for a later cap-band cutter.
-At an exact height below both admitted top collars, its two held triangles
+At an exact height between both admitted root collars, its two held triangles
 form the radial-monotone chain through their common diagonal. The source
 connector begins inside the blank and ends outside it, so it crosses the
 exact cylinder. The supplied `δ` covers the matched Loft facet departure.
@@ -199,9 +234,9 @@ bound is added conservatively.
 The payload records the original blank and ordered teeth, both exact cap
 outlines and their group IDs, and the exact minimum projected radius of every
 non-cap held triangle. It also records the upward-rounded inward and outward
-radial seam reaches and the top collar height used by the boundary and volume
-proofs. Those reaches enclose the replaced root seam; retained tooth exterior
-walls use their Loft source bounds. A centered bore must remain inside the
+radial seam reaches and the symmetric cap collar height used by the boundary
+and volume proofs. Those reaches enclose the replaced root seam; retained
+tooth exterior walls use their Loft source bounds. A centered bore must remain inside the
 exact blank, below the side clearance after the joined boundary bound, and
 inside the seam annulus's inner radius. The cap audit proves each recorded
 outline is one disk containing the axis. Placement clears the record, so a
@@ -296,7 +331,7 @@ the path from that facet to the patch stays in `H=C` in the open middle slab.
 The patch is inside the original source tooth when it clears every held
 tooth wall by its two-sided Loft departure and has a strict held-tooth
 inside witness. Near a root wall, the patch instead clears every nonroot
-wall; the true root stays inside the blank below its certified collar, and
+wall; the true root stays inside the blank between its certified collars, and
 each held root triangle clipped to the patch's height slab is strictly
 inside the blank too. The convex blank disk contains their matched wall
 motion. Every patch component outside the disk reaches an outside patch

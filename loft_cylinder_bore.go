@@ -19,14 +19,14 @@ import (
 // loftCylinderBoreRecord names the two certified annular caps of an unplaced
 // through-bore result. Each outer and inner loop is CCW when viewed from +Z.
 type loftCylinderBoreRecord struct {
-	blank                              *Body
-	teeth                              []*Body
-	outer, inner                       [2][]int
-	capGroups                          [2]int
-	wallGroup                          int
-	blankRadius, boreRadius, boreBound float64
-	innerInset, outerExcess, topCollar float64
-	z0, z1                             float64
+	blank                               *Body
+	teeth                               []*Body
+	outer, inner                        [2][]int
+	capGroups                           [2]int
+	wallGroup                           int
+	blankRadius, boreRadius, boreBound  float64
+	innerInset, outerExcess, rootCollar float64
+	z0, z1                              float64
 }
 
 // tryLoftCylinderBoreCut replaces the two planar cap disks of an authenticated
@@ -328,7 +328,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		capGroups: record.capGroups, wallGroup: wallGroup,
 		blankRadius: record.radius, boreRadius: radius, boreBound: boreBound,
 		z0: record.z0, z1: record.z1,
-		innerInset: record.innerInset, outerExcess: record.outerExcess, topCollar: record.topCollar,
+		innerInset: record.innerInset, outerExcess: record.outerExcess, rootCollar: record.rootCollar,
 	}
 	for cap := range 2 {
 		result.loftCylinderBore.outer[cap] = append([]int(nil), record.capOutlines[cap]...)

@@ -30,7 +30,7 @@ type loftCylinderChamferSource struct {
 	boreBound    float64
 	innerInset   float64
 	outerExcess  float64
-	topCollar    float64
+	rootCollar   float64
 	z0, z1       float64
 }
 
@@ -44,7 +44,7 @@ func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, 
 			outer: r.outer, inner: r.inner, capGroups: r.capGroups,
 			boreGroup: r.wallGroup, blankRadius: r.blankRadius,
 			boreRadius: r.boreRadius, boreBound: r.boreBound, innerInset: r.innerInset,
-			outerExcess: r.outerExcess, topCollar: r.topCollar,
+			outerExcess: r.outerExcess, rootCollar: r.rootCollar,
 			z0: r.z0, z1: r.z1,
 		}, true
 	}
@@ -54,7 +54,7 @@ func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, 
 			outer: r.capOutlines, capGroups: r.capGroups,
 			boreGroup: -1, blankRadius: r.radius,
 			innerInset: r.innerInset, outerExcess: r.outerExcess,
-			topCollar: r.topCollar, z0: r.z0, z1: r.z1,
+			rootCollar: r.rootCollar, z0: r.z0, z1: r.z1,
 		}, true
 	}
 	return loftCylinderChamferSource{}, false

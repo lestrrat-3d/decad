@@ -27,9 +27,9 @@ type loftCylinderJoinRecord struct {
 	radius        float64
 	// These upward bounds enclose the replaced root seam around radius.
 	// Retained tooth exterior walls still read their Loft source bounds.
-	// The collar covers the source-root exception near the top cap.
-	innerInset, outerExcess, topCollar float64
-	z0, z1                             float64
+	// The symmetric collar covers source-root exceptions near either cap.
+	innerInset, outerExcess, rootCollar float64
+	z0, z1                              float64
 }
 
 const loftCylinderBlankSideRole = "side(0,0)"
@@ -46,6 +46,10 @@ type loftCylinderTooth struct {
 	vertex    [][]int
 	rootGap   float64
 	inset     float64
+	reach     float64
+	shift     float64
+	angular   float64
+	reachOK   bool
 	collar    float64
 	wedge     float64
 }
@@ -185,6 +189,12 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 			return nil, false, nil
 		}
 		collar = max(collar, connectorCollar)
+		reach, shift, angular, ok := loftCylinderConnectorReach(lp, root, radius, collar)
+		if ok {
+			circle, err := loftCylinderSourceCircleOf(lp, radius)
+			ok = err == nil && circle.OrderedOverSafeInterval()
+		}
+		reachOK := ok
 		inset, ok := loftCylinderRadialGate(lp, root, radius, m.Bound().Base(), gap)
 		if !ok {
 			return nil, false, nil
@@ -193,7 +203,10 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 		if !ok {
 			return nil, false, nil
 		}
-		parts[i].rootGap, parts[i].inset, parts[i].collar, parts[i].wedge = gap, inset, collar, wedge
+		parts[i].rootGap, parts[i].inset = gap, inset
+		parts[i].reach, parts[i].shift, parts[i].angular = reach, shift, angular
+		parts[i].reachOK = reachOK
+		parts[i].collar, parts[i].wedge = collar, wedge
 	}
 	if len(parts) == 0 || len(parts) > 32 {
 		return nil, false, nil
@@ -276,9 +289,9 @@ func loftCylinderRootRadiusGap(lp loftPayload, radius float64) (float64, bool) {
 // A matched pair of centered circular arcs has a constant radius at each
 // cap and a linearly interpolated angular difference along its parameter.
 // At every arc parameter, squared radius along a Loft ruling is convex in
-// height. Both endpoint inequalities therefore certify the entire interval
-// below the returned top collar. A positive top radius roundoff is allowed
-// only when this proof places the root wall inside the blank below it.
+// height. Both interior endpoint inequalities certify the interval between
+// the returned cap collars. A positive cap radius roundoff is admitted only
+// when this proof places the root wall inside the blank between them.
 func loftCylinderRootCollar(lp loftPayload, radius, height float64) (float64, bool) {
 	var q [2]*big.Rat
 	var angles [2][2]proofbound.RatInterval
@@ -302,24 +315,29 @@ func loftCylinderRootCollar(lp loftPayload, radius, height float64) (float64, bo
 		}
 	}
 	r2 := new(big.Rat).Mul(proofarith.FloatRat(radius), proofarith.FloatRat(radius))
-	if q[0].Cmp(r2) > 0 {
-		return 0, false
-	}
-	if q[1].Cmp(r2) <= 0 {
+	if q[0].Cmp(r2) <= 0 && q[1].Cmp(r2) <= 0 {
 		return 0, true
 	}
 	minTwist := new(big.Rat)
+	twistSign := 0
 	for end := range 2 {
 		delta := proofbound.IntervalSub(angles[1][end], angles[0][end])
 		var lower *big.Rat
+		sign := 0
 		switch {
 		case delta.Lo.Sign() > 0 && delta.Hi.Cmp(proofarith.FloatRat(0.4)) < 0:
 			lower = delta.Lo
+			sign = 1
 		case delta.Hi.Sign() < 0 && delta.Lo.Cmp(proofarith.FloatRat(-0.4)) > 0:
 			lower = new(big.Rat).Neg(delta.Hi)
+			sign = -1
 		default:
 			return 0, false
 		}
+		if twistSign != 0 && sign != twistSign {
+			return 0, false
+		}
+		twistSign = sign
 		if end == 0 || lower.Cmp(minTwist) < 0 {
 			minTwist = lower
 		}
@@ -337,13 +355,15 @@ func loftCylinderRootCollar(lp loftPayload, radius, height float64) (float64, bo
 	for shift := 52; shift >= 8; shift-- {
 		epsilon := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), uint(shift)))
 		oneMinus := new(big.Rat).Sub(big.NewRat(1, 1), epsilon)
-		weighted := new(big.Rat).Add(new(big.Rat).Mul(epsilon, q[0]),
-			new(big.Rat).Mul(oneMinus, q[1]))
 		inward := new(big.Rat).Mul(big.NewRat(2, 1), epsilon)
 		inward.Mul(inward, oneMinus)
 		inward.Mul(inward, rProductLo)
 		inward.Mul(inward, oneMinusCos)
-		if weighted.Sub(weighted, inward).Cmp(r2) < 0 {
+		bottom := new(big.Rat).Add(new(big.Rat).Mul(oneMinus, q[0]),
+			new(big.Rat).Mul(epsilon, q[1]))
+		top := new(big.Rat).Add(new(big.Rat).Mul(epsilon, q[0]),
+			new(big.Rat).Mul(oneMinus, q[1]))
+		if bottom.Sub(bottom, inward).Cmp(r2) < 0 && top.Sub(top, inward).Cmp(r2) < 0 {
 			collar := proofbound.ProductUpper(proofbound.RatFloatUp(epsilon), height)
 			return collar, !proofbound.IsNonFinite(collar)
 		}
@@ -446,7 +466,7 @@ func loftCylinderRadialGate(lp loftPayload, root int, radius, bound, rootGap flo
 			}
 		}
 	}
-	return inset, !proofbound.IsNonFinite(inset) && inset < 0.05
+	return inset, !proofbound.IsNonFinite(inset) && inset < 0.1
 }
 
 // The root endpoint rulings delimit a moving angular sector. For one held
@@ -746,7 +766,9 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	width := proofbound.AbsSumUpper(maximumTwist, maximumStep)
 	seamInset := proofbound.ProductUpper(radius,
 		proofbound.ProductUpper(width, width)/8)
-	innerInset, outerExcess, topCollar := seamInset, ringRound, 0.0
+	innerInset, outerExcess, rootCollar, connectorReach := seamInset, ringRound, 0.0, 0.0
+	crossingShift, rootAngular := 0.0, 0.0
+	allReach := true
 	for i, tri := range mesh.tris {
 		if mesh.src[i] != blankGroups[0] {
 			continue
@@ -767,19 +789,38 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 	for _, part := range parts {
+		allReach = allReach && part.reachOK
 		innerInset = max(innerInset, part.inset)
 		innerInset = max(innerInset,
 			proofbound.AbsSumUpper(part.wedge, part.mesh.Bound().Base()))
+		connectorReach = max(connectorReach,
+			proofbound.AbsSumUpper(part.reach, part.mesh.Bound().Base()))
+		crossingShift = max(crossingShift, part.shift)
+		rootAngular = max(rootAngular, part.angular)
 		outerExcess = max(outerExcess,
 			proofbound.AbsSumUpper(part.rootGap, part.mesh.Bound().Base()))
-		topCollar = max(topCollar, part.collar)
+		rootCollar = max(rootCollar, part.collar)
 	}
 	blankMesh, err := blank.Tessellate(ctx, units.Millimeters(0.1), WithVerification(VerifyAll))
 	if err != nil {
 		return nil, err
 	}
-	bound := proofbound.AbsSumUpper(toothBound,
-		proofbound.ProductUpper(2, innerInset), outerExcess, topCollar)
+	// In the angular disagreement between source and held tooth sectors, a
+	// held ring point projects to the cylinder and then follows it to the
+	// source crossing. The latter leg starts at the held root ray, not the
+	// held crossing ray. Source cylinder points under a held tooth use the
+	// separate source-to-held crossing shift. Hidden connector points use
+	// their same-height chain directly.
+	seamReach := proofbound.ProductUpper(2, innerInset)
+	if allReach {
+		seamReach = max(proofbound.AbsSumUpper(innerInset, rootAngular),
+			connectorReach, crossingShift)
+	}
+	collarSweep, ok := loftCylinderCollarSweep(parts, pp.z0, pp.z1, rootCollar)
+	if !ok {
+		return nil, fmt.Errorf("%w: circular join lacks a cap-collar sweep bound", ErrUnsupported)
+	}
+	bound := proofbound.AbsSumUpper(toothBound, seamReach, outerExcess, rootCollar, collarSweep)
 	if proofbound.IsNonFinite(bound) || bound > 0.1 {
 		return nil, fmt.Errorf("%w: circular join exceeds the 0.1 mm boundary proof: bound %g blank %g tooth %g inset %g round %g twist %g step %g", ErrUnsupported, bound, blankMesh.Bound().Base(), toothBound, seamInset, ringRound, maximumTwist, maximumStep)
 	}
@@ -799,6 +840,12 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 				return nil, err
 			}
 			return nil, fmt.Errorf("%w: circular join cap does not tile its recorded outline", ErrUnsupported)
+		}
+		if !loftCylinderRootChordsInsideCap(ctx, mesh, outline, parts, cap) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("%w: circular join root chord leaves its cap", ErrUnsupported)
 		}
 	}
 	minSideRadius := math.Inf(1)
@@ -854,13 +901,78 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 			blank: blank, teeth: toothBodies, capOutlines: outlines,
 			capGroups:     [2]int{blankGroups[1], blankGroups[2]},
 			minSideRadius: minSideRadius, radius: radius, z0: pp.z0, z1: pp.z1,
-			innerInset: innerInset, outerExcess: outerExcess, topCollar: topCollar,
+			innerInset: innerInset, outerExcess: outerExcess, rootCollar: rootCollar,
 		}}
 	if err := loftCylinderTagCaps(&fp, blank, fp.loftCylinderJoin.capGroups,
 		[2]float64{pp.z0, pp.z1}, ref); err != nil {
 		return nil, err
 	}
 	return buildFacetedBody(ctx, d, ref, fp)
+}
+
+// The cap audit establishes a simple filled polygon. Each omitted held root
+// chord stays in that polygon if one interior point is strictly inside and
+// the chord has no interior contact with its outline. Matched source root
+// arcs then use their authenticated Loft departure to reach the cap.
+func loftCylinderRootChordsInsideCap(ctx context.Context, mesh *bevelJoinedMesh,
+	outline []int, parts []loftCylinderTooth, capIndex int) bool {
+	if capIndex < 0 || capIndex > 1 || len(outline) < 3 {
+		return false
+	}
+	points := make([]loftCylinderXY, len(outline))
+	poly := make([]meshbool.Xp2, len(outline))
+	for i, index := range outline {
+		if index < 0 || index >= len(mesh.verts) {
+			return false
+		}
+		points[i] = loftCylinderExactXY(mesh.verts[index])
+		poly[i] = meshbool.NewXP2(points[i].x, points[i].y)
+	}
+	same := func(a, b loftCylinderXY) bool {
+		return a.x.Cmp(b.x) == 0 && a.y.Cmp(b.y) == 0
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	for _, part := range parts {
+		lp := part.loft
+		n := len(lp.verts) / 2
+		if n < 2 || part.rootStart < 0 || part.rootStart >= n-1 {
+			return false
+		}
+		rootA := loftCylinderExactXY(lp.verts[capIndex*n+part.rootStart])
+		rootB := loftCylinderExactXY(lp.verts[capIndex*n])
+		for j := part.rootStart; j < n; j++ {
+			if ctx.Err() != nil {
+				return false
+			}
+			a := loftCylinderExactXY(lp.verts[capIndex*n+j])
+			b := loftCylinderExactXY(lp.verts[capIndex*n+(j+1)%n])
+			if same(a, b) {
+				return false
+			}
+			mid := meshbool.NewXP2(
+				new(big.Rat).Quo(new(big.Rat).Add(a.x, b.x), big.NewRat(2, 1)),
+				new(big.Rat).Quo(new(big.Rat).Add(a.y, b.y), big.NewRat(2, 1)))
+			inside, on, err := meshbool.PointInPoly2(budget, poly, mid)
+			if err != nil || on || !inside {
+				return false
+			}
+			for k, c := range points {
+				d := points[(k+1)%len(points)]
+				if !loftCylinderEdgesMeet(a, b, c, d) {
+					continue
+				}
+				// A non-collinear outline edge may touch only a shared root
+				// endpoint. All other contact, including overlap, refuses.
+				shared := (same(a, rootA) || same(a, rootB)) && (same(a, c) || same(a, d)) ||
+					(same(b, rootA) || same(b, rootB)) && (same(b, c) || same(b, d))
+				if !shared || loftCylinderOrient(a, b, c).Sign() == 0 &&
+					loftCylinderOrient(a, b, d).Sign() == 0 {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
 
 // The angle between neighboring ring rulings stays positive at every z:

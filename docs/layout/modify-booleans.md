@@ -80,6 +80,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_union.go` | Joins a source Loft tooth pattern to a coaxial cylinder with certified seam and volume bounds. See loft-cylinder-boolean design. |
 | `loft_cylinder_cap.go` | Audits joined disks and bored annuli, then tags certified cap faces. See loft-cylinder-boolean design. |
 | `loft_cylinder_seam.go` | Certifies the faceted connector's radial crossing at every height. See loft-cylinder-boolean design. |
+| `loft_cylinder_reach.go` | Certifies source and held connector reach and crossing angles. See loft-cylinder-boolean design. |
 | `loft_cylinder_contact.go` | Bounds an exact same-height connector contact against its source cylinder crossing. See loft-cylinder-boolean design. |
 | `loft_cylinder_source_circle.go` | Bounds a source Loft tooth's exact circle crossings over a rational height interval. See loft-cylinder-boolean design. |
 | `loft_cylinder_ring_distance.go` | Measures exact ring-edge clearance from held Loft walls. See loft-cylinder-boolean design. |
