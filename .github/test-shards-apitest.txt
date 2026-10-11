@@ -357,7 +357,6 @@
 3	0.02	TestBrepPartialChamferMirroredCrossDrilledBar
 3	6.00	TestBrepRoundedEdgeFilletPublicAdmission
 3	6.00	TestBrepRoundedEdgeFilletPublicP8
-3	18.00	TestBrepRoundedEdgeFilletPublicQuarterRadii
 3	0.02	TestBrepShellRemovesRoundThroughWall
 3	0.21	TestCapBlendApexPatchAreaBoundIsTight
 3	0.04	TestCapBlendAsymmetricCircularRim
@@ -1572,6 +1571,7 @@
 9	3.79	TestBooleanChainOfConesContinuesPastEachJoint
 9	1.25	TestBooleanRimVertexBoundCoversTrimAmplification
 9	0.45	TestBrepLoopChamferPublicRoundedPlateExports
+9	115.52	TestBrepRoundedEdgeFilletPublicQuarterRadii
 9	0.06	TestCapBlendAsymmetricOverrunRefused
 9	0.03	TestCapBlendAsymmetricUnrepresentableSetbackRefused
 9	0.02	TestCapBlendCapCircleCarriesInPlaneDistanceRounding
