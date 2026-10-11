@@ -354,6 +354,8 @@
 3	0.02	TestBrepPartialChamferBlindPocket
 3	0.02	TestBrepPartialChamferCrossDrilledBar
 3	0.02	TestBrepPartialChamferMirroredCrossDrilledBar
+3	6.00	TestBrepRoundedEdgeFilletPublicAdmission
+3	6.00	TestBrepRoundedEdgeFilletPublicP8
 3	0.02	TestBrepShellRemovesRoundThroughWall
 3	0.21	TestCapBlendApexPatchAreaBoundIsTight
 3	0.04	TestCapBlendAsymmetricCircularRim

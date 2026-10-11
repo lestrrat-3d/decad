@@ -73,7 +73,7 @@ part makes on them. Every cell was read off the live code with the probe under
 | | | shell removing the top | builds (route S) |
 | | | shell removing the `y = 8` wall | SG5 (its end at the reflex corner) |
 | **P8** rounded plate drilled across: 40×20×20 box, 4 vertical edges filleted r = 3, then Ø6 hole along y | brep (class B) | chamfer a hole rim, or the top cap's loop (4 lines, 4 arcs) | builds (route L) |
-| | | fillet one top edge along x | SB7 (its end face is a fillet cylinder) |
+| | | fillet the front top edge along x at r = 1 | builds as a bounded faceted cut (§4.3c) |
 | | | shell removing the top | builds (route S) |
 | | | shell removing one y wall | shell-opening SO1 (the wall meets the fillets smoothly) |
 | **P9** round rod with a cross hole | faceted | any request | SX9's class (`chamfers a straight prism or a revolve only`); cylinder × cylinder has no analytic class |
@@ -85,7 +85,7 @@ Ranked by the parts each refusal blocks:
 | 1 | SB10 / SB3: shell of a nonprism brep or a noncap face | P1, P2, P3, P5, P6, P6c, P7, P8 | receiver erosion: planes and cylinders for a through cut (§3); spheres, tori or elliptical edges for a blind pocket or union |
 | 2 | SL1: edges sharing a vertex outside complete loops | other mixed-edge parts | route V builds complete loops with independent edges; §4.3b builds P1's all-edge chamfer; a partial fillet builds edges on one planar loop after straight-wall restatement (`docs/vertex-blend-design.md`) |
 | 3 | a loop fillet: the curved-edge and cornered-loop fillets this survey found refused | P1, P2, P3, P4, P7 | `docs/loop-fillet-design.md`'s pipe band, which builds them |
-| 4 | SB7: an edge ending on a curved face or a blend | P8 | the complete-loop fillet, which builds P8's top loop |
+| 4 | SB7: an edge ending on a curved face or a blend | P8 outside §4.3c | the complete-loop fillet builds P8's top loop; §4.3c builds its one exact front top edge |
 | 5 | a faceted receiver | P6b, P9 | an analytic boolean: a cup as a boolean operand, cylinder × cylinder; reach SX9 stays permanent |
 
 Routes S and L below clear every brep and stacked row of ranks 1–2 whose
@@ -629,6 +629,31 @@ placed coordinates, and tessellation uses those same coordinates. A rounded
 coordinate or an oblique transform returns `ErrUnsupported` without changing
 the document.
 
+### 4.3c One rounded cap edge on a cross-drilled plate
+
+P8's front top edge from `(3, 0, 20)` to `(37, 0, 20)` ends on two radius-3
+outer cylinders, so route E's third-face plane test (SB7) cannot build its
+fillet. For radius 1, `Fillet` first compares every field of the source BRep
+record with the exact P8 record: a 40×20×20 plate rounded along its four
+vertical corners, with one radius-3 bore centered at `(x, z) = (20, 10)`
+through y. The source must have identity placement and zero displacements.
+The selected edge must have those exact endpoints. A different radius, bore,
+corner, placement, or face record falls through to the existing routes and
+their refusals.
+
+The radius-1 quarter-cylinder cutter is swept along x from −22 to 62. Its
+local axes are `(0, −1, 0)` and `(0, 0, 1)` about `(20, 0, 20)`. The exact
+source coordinates prove the bore stops at z = 13 below the cutter's z = 19
+minimum, and the back at y = 20 is beyond the cutter's y = 1 reach. The
+boolean cut then proves contact with the actual rounded end walls, closes
+the resulting faceted mesh, and holds its occupied-volume difference. This
+route uses 1/64 of the ordinary pair chord tolerance so the faceted area
+and bounds also meet default `Document.Verify` limits. The source is retired
+only after the proof succeeds. The source volume is 15280 mm³; the result
+encloses 15272.2670–15272.2672 mm³. The real public
+Sketch→Fillet→Cut→Fillet path tessellates at 0.1 mm with `VerifyAll` and
+reports Sound under default `Document.Verify`.
+
 ### 4.4 Table SL — refusals
 
 | SL | Call | Exists? | Sentinel |
@@ -649,7 +674,8 @@ SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
 |---|---|
 | 2c. entry | independent straight edges → route E (brep-modify §6); complete planar-face loops → route L: LB1, LB2; an asymmetric selection outside both routes is SX16 |
 
-For a `Fillet`, route V also partitions complete loops and independent
+For a `Fillet`, §4.3c tries the exact P8 cap edge before the brep receiver.
+Route V also partitions complete loops and independent
 straight edges before LB1/LB2. A selected straight-edge chain on part of
 one planar-face loop, including a swept wall restated as a plane, takes the partial fillet route
 (`docs/vertex-blend-design.md` §2).
@@ -696,7 +722,7 @@ Other record-based consumers keep their existing payload gates.
 | Request | Code | Why not here |
 |---|---|---|
 | chamfers of edges sharing a vertex outside one loop, or fillets whose selected edges share no planar loop after straight-wall restatement | SB5 / SL1 | the mixed chamfer's corner plane has no reference-axis normal; route V and the partial fillet admit the cases in `docs/vertex-blend-design.md` |
-| an edge ending on a blend or a curved face (P8) | SB7 | its honest form is the complete-loop fillet, `docs/loop-fillet-design.md` |
+| an edge ending on a blend or a curved face outside P8's exact front top edge (§4.3c) | SB7 | the complete-loop fillet builds P8's top loop (`docs/loop-fillet-design.md`); other partial edges need a source and cutter-contact proof |
 | shell of a blind pocket outside §3.1b, a blind port, a stacked union outside §3.1a or §3.1c, or a keyway (P2, P3, P6c) | SG3 | the remaining cases need a shape-specific exact transition and occupied-volume proof |
 | an outward or closed shell of a brep | SG1 / SG2 | §3.2 |
 | shell removing a curved outer wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved outer wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |

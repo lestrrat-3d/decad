@@ -21,6 +21,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_fit_ideal_audit.go` | Excludes ideal fit/connector contacts. See loft §17. |
 | `loft_chamfer.go` | Builds both outer cap bands on a matching axial loft's held polygon. See loft §18. |
 | `cap_edge_cutter.go` | Applies `internal/capedge/` admission and cutters to one oblique prism cap-edge fillet or chamfer. |
+| `brep_rounded_edge_fillet.go` | Rounds P8's one front top edge after matching its exact rounded, cross-drilled BRep record. See modify-general §4.3c. |
 | `chamfer.go` | `Body.Chamfer`; cap loops route to `capblend.go`. See modify §7. |
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
 | `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |

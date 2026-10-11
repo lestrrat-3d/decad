@@ -101,8 +101,11 @@ const filletTol = sectionaudit.Tolerance
 // end face is a curved face or an earlier blend, a straight wall the route
 // needs as a plane that is oblique, split or carries a displaced level, end
 // faces whose arcs disagree, and a body whose faces carry a section
-// displacement (SB1) are ErrUnsupported (Table SB). Any other selection of
-// such a body's edges is route L's (docs/modify-general-design.md §4): complete
+// displacement (SB1) are ErrUnsupported (Table SB).
+// P8's exact front top edge uses a radius-1 quarter-cylinder cutter before
+// route E's SB7 curved-third-face gate (modify-general §4.3c).
+// Any other selection of such a body's edges is route L's
+// (docs/modify-general-design.md §4): complete
 // loops of planar faces are filleted as a pipe band at radius r
 // (docs/loop-fillet-design.md) — a quarter cylinder along each line, a torus
 // around each arc and at each reflex corner, cylinders meeting along an
@@ -187,14 +190,24 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	if err := requireNotDraftReceiver(b.payload, "fillets"); err != nil {
 		return nil, err
 	}
+	if bp, ok := b.payload.(brepPayload); ok {
+		out, matched, err := tryRoundedBrepCapEdgeFillet(ctx, b, bp, edges, rmm, rDelta)
+		if err != nil {
+			return nil, err
+		}
+		if matched {
+			return out, nil
+		}
+	}
 	blend := revolveBlendOp{
 		kind: "fillet",
 		corner: func(loop cornerLoop, _, ci int, _ *Edge) (*cornerBlend, error) {
 			return computeFillet(loop, ci, rmm)
 		},
 	}
-	// A brep or stacked receiver takes the brep route
-	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
+	// The exact P8 front top edge takes a bounded cutter before the brep
+	// receiver's SB7 curved-third-face refusal (modify-general §4.3c).
+	// Other brep and stacked receivers take docs/brep-modify-design.md §2.
 	// A loop's fillet radius is both of route L's setbacks
 	// (docs/loop-fillet-design.md §4).
 	loopCall := brepModifyRequest{
