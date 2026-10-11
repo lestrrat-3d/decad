@@ -94,3 +94,29 @@ non-cap held triangle. A centered bore must remain inside the exact blank
 and below the side clearance after the joined boundary bound. The cap audit
 proves each recorded outline is one disk containing the axis. Placement
 clears the record, so a later Boolean cannot rebuild from unplaced operands.
+
+## Centered through-bore Cut
+
+`Cut` accepts an unplaced, audited join record and one centered circular
+prism whose exact axial ends extend past both blank caps. The tool has an XY
+frame, one whole-circle section, and no section displacement. Its radius is
+smaller than the exact blank radius. The exact cap audit runs again before
+either disk is replaced. The held bore radius, its certified polygon error,
+and the joined boundary bound must together stay below the recorded minimum
+projected radius of every retained side triangle.
+
+The bore wall uses 256 ordered circular stations. Interval trigonometry
+bounds each rounded station, and the angular step bounds the chord sagitta.
+An exact planar check proves the inner ring is simple, counterclockwise, and
+contains the axis. Each audited cap disk becomes an annulus with that ring
+as its hole. The new inward wall keeps the tool's cylinder face provenance.
+The final mesh passes orientation, vertex-link, and exact crossing audits.
+
+Cutting the same exact cylinder from the true and held joined solids cannot
+increase their occupied-volume difference. The polygonal bore differs from
+that cylinder only in the certified radial shell around its wall. The result
+adds the whole shell volume, `4π·radius·boreBound·height`, to the join's
+occupied-volume bound. The result carries the larger of the join and bore
+boundary bounds. It replaces the join source record with the certified outer
+and inner cap loops, their facet groups, the bore-wall group, and the original
+blank and tooth sources. Placement clears this post-bore record.
