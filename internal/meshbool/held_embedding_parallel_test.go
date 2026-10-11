@@ -9,7 +9,33 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
+	"github.com/stretchr/testify/require"
 )
+
+func TestPlaneSignSharesCoplanarFacetsWithOppositeWinding(t *testing.T) {
+	verts := []r3.Vec{
+		r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0),
+		r3.NewVec(1, 1, 0), r3.NewVec(0, 0, 1),
+	}
+	h := HeldRounding{
+		Verts: verts,
+		Tris:  [][3]int{{0, 1, 2}, {3, 1, 2}},
+		Exact: make([]proof.Xpt, len(verts)),
+	}
+	for i, v := range verts {
+		h.Exact[i] = proof.XptOf(v)
+	}
+	for _, first := range []int{0, 1} {
+		e := newHeldEmbedding(h, proofbound.NewWorkBudget(t.Context()), true)
+		e.sideSigns = make(map[[2]int]int)
+		require.Equal(t, 1-2*first, e.planeSign(first, 4))
+		require.Equal(t, 2*first-1, e.planeSign(1-first, 4))
+		require.Len(t, e.sideSigns, 1)
+		require.Equal(t, 0, e.planeSign(first, 0))
+		require.Equal(t, 0, e.planeSign(1-first, 0))
+		require.Len(t, e.sideSigns, 2)
+	}
+}
 
 // The rounded facets are separate, but all 4,096 of them need checking.
 // This enters parallelClean and compares its answer with the serial repair

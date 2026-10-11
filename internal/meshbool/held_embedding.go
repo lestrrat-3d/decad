@@ -261,6 +261,7 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 	local.norm = make([]proof.Xpt, len(e.norm))
 	local.normOK = make([]bool, len(e.normOK))
 	local.plane = make([]int, len(e.plane))
+	local.planeSense = make([]int8, len(e.planeSense))
 	for i := range local.plane {
 		local.plane[i] = -1
 	}
@@ -299,15 +300,17 @@ type heldEmbedding struct {
 	normOK []bool
 	// plane is each facet's exact plane, interned so two facets are coplanar
 	// exactly when their ids match; -1 is not yet computed, -2 no plane.
-	plane  []int
-	planes map[string]int
-	fnorm  []r3.Vec
+	plane      []int
+	planeSense []int8
+	planes     map[string]int
+	fnorm      []r3.Vec
 	// cone caches, per facet and corner, a box around the unit directions
 	// the facet leaves that corner in (coneBox).
 	cone   [][3][2]r3.Vec
 	coneOK [][3]bool
-	// sideSigns exists only in read-only scan copies, where facet planes and
-	// vertices cannot move. Repair keeps this nil and recomputes after moves.
+	// sideSigns stores a vertex's sign against the canonical normal of an
+	// exact plane. Read-only scan copies can share one reading across facets
+	// in that plane; repair keeps this nil because vertices can move.
 	sideSigns map[[2]int]int
 	stamp     []int
 	stampID   int
@@ -346,21 +349,22 @@ type heldPair struct {
 
 func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) *heldEmbedding {
 	e := &heldEmbedding{
-		h:      h,
-		budget: budget,
-		memoOn: memo,
-		inc:    make([][]int, len(h.Verts)),
-		taken:  make(map[r3.Vec]int, len(h.Verts)),
-		xv:     make([]proof.Xpt, len(h.Verts)),
-		xvOK:   make([]bool, len(h.Verts)),
-		norm:   make([]proof.Xpt, len(h.Tris)),
-		normOK: make([]bool, len(h.Tris)),
-		plane:  make([]int, len(h.Tris)),
-		fnorm:  make([]r3.Vec, len(h.Tris)),
-		cone:   make([][3][2]r3.Vec, len(h.Tris)),
-		coneOK: make([][3]bool, len(h.Tris)),
-		planes: map[string]int{},
-		stamp:  make([]int, len(h.Tris)),
+		h:          h,
+		budget:     budget,
+		memoOn:     memo,
+		inc:        make([][]int, len(h.Verts)),
+		taken:      make(map[r3.Vec]int, len(h.Verts)),
+		xv:         make([]proof.Xpt, len(h.Verts)),
+		xvOK:       make([]bool, len(h.Verts)),
+		norm:       make([]proof.Xpt, len(h.Tris)),
+		normOK:     make([]bool, len(h.Tris)),
+		plane:      make([]int, len(h.Tris)),
+		planeSense: make([]int8, len(h.Tris)),
+		fnorm:      make([]r3.Vec, len(h.Tris)),
+		cone:       make([][3][2]r3.Vec, len(h.Tris)),
+		coneOK:     make([][3]bool, len(h.Tris)),
+		planes:     map[string]int{},
+		stamp:      make([]int, len(h.Tris)),
 	}
 	for i, t := range h.Tris {
 		for _, v := range t {
@@ -712,9 +716,12 @@ func (e *heldEmbedding) planeOf(i int) int {
 		lead = d[2].Sign()
 	}
 	if lead < 0 {
+		e.planeSense[i] = -1
 		for k := range d {
 			d[k].Neg(d[k])
 		}
+	} else {
+		e.planeSense[i] = 1
 	}
 	off := new(big.Int).Mul(d[0], x[0].X)
 	off.Add(off, new(big.Int).Mul(d[1], x[0].Y))
@@ -787,23 +794,27 @@ func (e *heldEmbedding) orient2(a, b, c, u, v int) int {
 // planeSign is the exact side of held vertex p against facet f's plane: the
 // float filter first, then f's cached exact normal.
 func (e *heldEmbedding) planeSign(f, p int) int {
-	key := [2]int{f, p}
+	var key [2]int
+	cache := false
 	if e.sideSigns != nil {
-		if sign, ok := e.sideSigns[key]; ok {
-			return sign
+		if plane := e.planeOf(f); plane >= 0 {
+			key, cache = [2]int{plane, p}, true
+			if sign, ok := e.sideSigns[key]; ok {
+				return int(e.planeSense[f]) * sign
+			}
 		}
 	}
 	t, v := e.h.Tris[f], e.h.Verts
 	if s, certain := proof.OrientSignFloat(v[t[0]], v[t[1]], v[t[2]], v[p]); certain {
-		if e.sideSigns != nil {
-			e.sideSigns[key] = s
+		if cache {
+			e.sideSigns[key] = int(e.planeSense[f]) * s
 		}
 		return s
 	}
 	_, x, n := e.facet(f)
 	sign := proof.XdotDiffSign(n, e.lift(p), x[0])
-	if e.sideSigns != nil {
-		e.sideSigns[key] = sign
+	if cache {
+		e.sideSigns[key] = int(e.planeSense[f]) * sign
 	}
 	return sign
 }
