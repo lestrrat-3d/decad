@@ -52,4 +52,16 @@ func TestFirstMomentsMatchExactFacetFormula(t *testing.T) {
 	for axis := range got {
 		require.Zero(t, got[axis].Cmp(want[axis]), "axis %d", axis)
 	}
+	scaled := append([]proof.Xpt(nil), xverts...)
+	three := big.NewInt(3)
+	p := scaled[3]
+	scaled[3] = proof.Xpt{
+		X: new(big.Int).Mul(p.X, three), Y: new(big.Int).Mul(p.Y, three),
+		Z: new(big.Int).Mul(p.Z, three), W: new(big.Int).Mul(p.W, three),
+	}
+	got, err = facetproof.FirstMoments(proofbound.NewWorkBudget(t.Context()), scaled, tris)
+	require.NoError(t, err)
+	for axis := range got {
+		require.Zero(t, got[axis].Cmp(want[axis]), "non-dyadic axis %d", axis)
+	}
 }

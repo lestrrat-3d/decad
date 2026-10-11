@@ -191,6 +191,17 @@ func Volume(ctx context.Context, xverts []proof.Xpt, tris [][3]int,
 // order. The caller divides by 24 and the exact volume.
 func FirstMoments(budget *proofbound.WorkBudget, xverts []proof.Xpt, tris [][3]int) ([3]*big.Rat, error) {
 	var moments = [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
+	// Power-of-two weights let every facet term share one growing dyadic
+	// denominator. Normalize once per axis rather than once per facet.
+	dyadic := true
+	for _, vertex := range xverts {
+		if vertex.W.Sign() <= 0 || vertex.W.BitLen() != int(vertex.W.TrailingZeroBits())+1 {
+			dyadic = false
+			break
+		}
+	}
+	var numerators [3]big.Int
+	scaleBits := 0
 	for _, t := range tris {
 		if err := budget.Step(); err != nil {
 			return [3]*big.Rat{}, err
@@ -208,17 +219,36 @@ func FirstMoments(budget *proofbound.WorkBudget, xverts []proof.Xpt, tris [][3]i
 		ab := new(big.Int).Mul(a.W, b.W)
 		den := new(big.Int).Mul(a.W, cross.W)
 		den.Mul(den, new(big.Int).Mul(a.W, bc))
-		add := func(dst *big.Rat, ax, bx, cx *big.Int) {
+		denBits := den.BitLen() - 1
+		if dyadic && denBits > scaleBits {
+			shift := uint(denBits - scaleBits)
+			for axis := range numerators {
+				numerators[axis].Lsh(&numerators[axis], shift)
+			}
+			scaleBits = denBits
+		}
+		add := func(axis int, ax, bx, cx *big.Int) {
 			var sum, term, numerator big.Int
 			sum.Mul(ax, bc)
 			sum.Add(&sum, term.Mul(bx, ac))
 			sum.Add(&sum, term.Mul(cx, ab))
 			numerator.Mul(detNum, &sum)
-			dst.Add(dst, new(big.Rat).SetFrac(&numerator, den))
+			if dyadic {
+				numerator.Lsh(&numerator, uint(scaleBits-denBits))
+				numerators[axis].Add(&numerators[axis], &numerator)
+				return
+			}
+			moments[axis].Add(moments[axis], new(big.Rat).SetFrac(&numerator, den))
 		}
-		add(moments[0], a.X, b.X, c.X)
-		add(moments[1], a.Y, b.Y, c.Y)
-		add(moments[2], a.Z, b.Z, c.Z)
+		add(0, a.X, b.X, c.X)
+		add(1, a.Y, b.Y, c.Y)
+		add(2, a.Z, b.Z, c.Z)
+	}
+	if dyadic {
+		den := new(big.Int).Lsh(big.NewInt(1), uint(scaleBits))
+		for axis := range moments {
+			moments[axis].SetFrac(&numerators[axis], den)
+		}
 	}
 	return moments, nil
 }
