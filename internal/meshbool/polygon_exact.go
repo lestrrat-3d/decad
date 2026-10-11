@@ -221,13 +221,15 @@ func PointInPoly2(budget *proofbound.WorkBudget, poly []Xp2, p Xp2) (bool, bool,
 			return false, false, err
 		}
 		a, b := poly[i], poly[(i+1)%n]
-		if (a.V.Cmp(p.V) <= 0) == (b.V.Cmp(p.V) <= 0) {
+		belowA := a.V.Cmp(p.V) <= 0
+		if belowA == (b.V.Cmp(p.V) <= 0) {
 			continue
 		}
-		// u of the crossing at height p.v: a.u + (p.v−a.v)·(b.u−a.u)/(b.v−a.v).
-		t := new(big.Rat).Quo(new(big.Rat).Sub(p.V, a.V), new(big.Rat).Sub(b.V, a.V))
-		u := new(big.Rat).Add(a.U, new(big.Rat).Mul(t, new(big.Rat).Sub(b.U, a.U)))
-		if u.Cmp(p.U) > 0 {
+		// An upward edge crosses right of p when its orientation with p is
+		// positive; a downward edge does so when the orientation is negative.
+		// Cross2xSign gives that exact comparison without dividing rationals.
+		side := Cross2xSign(a, b, p)
+		if (belowA && side > 0) || (!belowA && side < 0) {
 			inside = !inside
 		}
 	}
