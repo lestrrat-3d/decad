@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"context"
 	"errors"
 	"math"
 	"reflect"
@@ -116,6 +117,24 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			tooth, err := doc.LoftFromPoint(t.Context(), r3.NewVec(apexX, 0, 0),
 				profileSketch, profileSketch.Profiles()[0])
 			require.NoError(t, err)
+			farFaces, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(tooth))).SelectFaces(tooth)
+			require.NoError(t, err)
+			require.Len(t, farFaces, 1)
+			farCenter, err := farFaces[0].Centroid()
+			require.NoError(t, err)
+			require.Less(t, farCenter.Bound.Base(), 0.01)
+			require.InDelta(t, 10, farCenter.Value.X, farCenter.Bound.Base()+1e-12)
+			require.InDelta(t, 0, farCenter.Value.Y, farCenter.Bound.Base()+1e-12)
+			require.InDelta(t, 0, farCenter.Value.Z, farCenter.Bound.Base()+1e-12)
+			for _, face := range tooth.Faces() {
+				if face == farFaces[0] {
+					continue
+				}
+				_, err := face.Centroid()
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+			}
+			_, _, err = tooth.ExtremeFacesByCentroid(t.Context(), r3.NewVec(1, 0, 0))
+			require.ErrorIs(t, err, decad.ErrUnsupported)
 
 			sheetSketch, err := world.CreateSketch(world.XY())
 			require.NoError(t, err)
@@ -141,13 +160,14 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 				away = -1
 			}
 			for _, tc := range []struct {
-				body *decad.Body
-				role decad.FeatureRef
-				want float64
+				body    *decad.Body
+				role    decad.FeatureRef
+				want    float64
+				centerX float64
 			}{
-				{pieces[0], decad.CapEnd(pieces[0]), away},
-				{pieces[1], decad.CapStart(pieces[1]), -away},
-				{pieces[1], decad.CapEnd(pieces[1]), away},
+				{pieces[0], decad.CapEnd(pieces[0]), away, cutX},
+				{pieces[1], decad.CapStart(pieces[1]), -away, cutX},
+				{pieces[1], decad.CapEnd(pieces[1]), away, 10},
 			} {
 				faces, err := decad.Faces(decad.FaceCreatedBy(tc.role)).SelectFaces(tc.body)
 				require.NoError(t, err)
@@ -157,7 +177,67 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 				normal, err := faces[0].NormalAt(plane.Frame.Origin())
 				require.NoError(t, err)
 				require.Greater(t, normal.Value.X*tc.want, 0.99)
+				center, err := faces[0].Centroid()
+				require.NoError(t, err)
+				require.Less(t, center.Bound.Base(), 0.01)
+				require.InDelta(t, tc.centerX, center.Value.X, center.Bound.Base()+1e-12)
+				require.InDelta(t, 0, center.Value.Y, center.Bound.Base()+1e-12)
+				require.InDelta(t, 0, center.Value.Z, center.Bound.Base()+1e-12)
 			}
+			motion, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(0.2))
+			require.NoError(t, err)
+			placed, err := pieces[1].PlacedCopy(t.Context(), motion)
+			require.NoError(t, err)
+			placedCap, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(pieces[1]))).SelectFaces(placed)
+			require.NoError(t, err)
+			require.Len(t, placedCap, 1)
+			placedCenter, err := placedCap[0].Centroid()
+			require.NoError(t, err)
+			require.InDelta(t, cutX, placedCenter.Value.X, placedCenter.Bound.Base()+1e-12)
+			for _, candidate := range []*decad.Body{pieces[1], placed} {
+				least, greatest, err := candidate.ExtremeFacesByCentroid(t.Context(), r3.NewVec(1, 0, 0))
+				require.NoError(t, err)
+				if apexX < 10 {
+					require.Contains(t, least.Origins(), decad.CapStart(pieces[1]))
+					require.Contains(t, greatest.Origins(), decad.CapEnd(pieces[1]))
+				} else {
+					require.Contains(t, least.Origins(), decad.CapEnd(pieces[1]))
+					require.Contains(t, greatest.Origins(), decad.CapStart(pieces[1]))
+				}
+				reverseLeast, reverseGreatest, err := candidate.ExtremeFacesByCentroid(t.Context(), r3.NewVec(-1, 0, 0))
+				require.NoError(t, err)
+				require.Same(t, greatest, reverseLeast)
+				require.Same(t, least, reverseGreatest)
+			}
+			shift, err := r3.Translation(r3.NewVec(2, 0, 0))
+			require.NoError(t, err)
+			unshift, err := r3.Translation(r3.NewVec(-2, 0, 0))
+			require.NoError(t, err)
+			shifted, err := pieces[1].PlacedCopy(t.Context(), shift)
+			require.NoError(t, err)
+			roundTrip, err := shifted.Placed(t.Context(), unshift)
+			require.NoError(t, err)
+			_, _, err = roundTrip.ExtremeFacesByCentroid(t.Context(), r3.NewVec(1, 0, 0))
+			require.NoError(t, err)
+			innerSheetSketch, err := world.CreateSketch(world.XY())
+			require.NoError(t, err)
+			innerX := (cutX + 10) / 2
+			innerA := innerSheetSketch.CreatePoint(innerX, -30)
+			innerB := innerSheetSketch.CreatePoint(innerX, 30)
+			innerSheetSketch.Fix(innerA)
+			innerSheetSketch.Fix(innerB)
+			innerSheetSketch.CreateLine(innerA, innerB)
+			_, err = innerSheetSketch.Solve(t.Context())
+			require.NoError(t, err)
+			innerSheet, err := doc.ExtrudeChain(innerSheetSketch, innerSheetSketch.Chains()[0], decad.TwoSided{
+				One: decad.DistanceSide{D: units.Millimeters(30)},
+				Two: decad.DistanceSide{D: units.Millimeters(30)},
+			})
+			require.NoError(t, err)
+			beforeRoundTripSplit := doc.Bodies()
+			_, err = doc.Split(t.Context(), roundTrip, innerSheet)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.Equal(t, beforeRoundTripSplit, doc.Bodies())
 			for _, piece := range pieces {
 				mesh, err := piece.Tessellate(t.Context(), units.Millimeters(0.1),
 					decad.WithVerification(decad.VerifyAll))
@@ -165,6 +245,24 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 				require.True(t, mesh.BoundaryVerified())
 				require.True(t, mesh.VolumeVerified())
 			}
+			canceledSheet, err := doc.ExtrudeChain(sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
+				One: decad.DistanceSide{D: units.Millimeters(30)},
+				Two: decad.DistanceSide{D: units.Millimeters(30)},
+			})
+			require.NoError(t, err)
+			before := doc.Bodies()
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			_, _, err = pieces[1].ExtremeFacesByCentroid(ctx, r3.NewVec(1, 0, 0))
+			require.ErrorIs(t, err, context.Canceled)
+			_, err = doc.Split(ctx, pieces[0], canceledSheet)
+			require.ErrorIs(t, err, context.Canceled)
+			require.Equal(t, before, doc.Bodies())
+			retained, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pieces[0]))).SelectFaces(pieces[0])
+			require.NoError(t, err)
+			require.Len(t, retained, 1)
+			_, err = retained[0].Centroid()
+			require.NoError(t, err)
 		})
 	}
 }

@@ -79,6 +79,38 @@ slack bounds each true and held patch separately before summing their
 non-cancelling difference. `Tessellate(0.1 mm, VerifyAll)` exercises both
 the boundary and occupied-volume certificates on the real tooth.
 
+`Face.Centroid` returns a bounded area centroid for each complete far or
+split cap. The far cap lifts the authenticated profile centroid through its
+recorded plane. A split cap integrates the exact rational image of the
+original far station polygon. The validated ray map preserves its simple
+boundary, and the mapped source curve lies within the proved displacement
+of its chord walk. A tube around that walk bounds the region difference.
+If the tube area is Δ, the polygon area has lower bound A, and every point
+in the difference lies at most D from the polygon centroid, the centroid
+bound is ΔD/(A−Δ) plus coordinate rounding. A nonpositive area floor leaves
+the Split valid but makes this query return `ErrUnsupported`. A rigid
+`Placed` copy maps the certified centroid and widens its bound by the
+placement's proved stretch and rounding. A source group split into separate
+face patches cannot lend its whole-group centroid to either patch.
+
+`Body.ExtremeFacesByCentroid` certifies the least and greatest centroid
+projections across **all** faces of a complete point-loft Split slab. Its two
+caps have bounded `Face.Centroid` readings. Each side patch is a subset of
+the source cone between the lower and upper cap rays. Along one ray, conical
+area density is proportional to its ray fraction `t`, so the side patch's
+conditional centroid fraction lies between 1/2 and 2/3 of the cap interval.
+The selector bounds both cap contour projection ranges from held ring
+vertices, then evaluates both fraction endpoints for a forward or reversed
+axis. It returns cap faces only when their centroid intervals strictly
+separate the complete side interval. Otherwise it returns `ErrUnsupported`.
+
+Rigid placement retains the immutable Split source record for this query.
+The cap contour displacement is carried separately from the generic held
+mesh bound: each placement charges the exact basis stretch of the previous
+source gap plus the new rounding and embedding bound. A separate original
+source marker prevents any placed copy, including one moved back to its
+original pose, from becoming a structural Split source again.
+
 ## Coaxial finite cone trims
 
 `Cut` and `Intersect` retain the point loft's authenticated fan when the

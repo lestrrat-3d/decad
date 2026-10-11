@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -35,6 +36,10 @@ import (
 // rebuild (Placed) reproduces the same origins.
 type facetGroup struct {
 	origins []FeatureRef
+	// centroid is available only when this entire source group has a separate
+	// certificate. A disconnected group cannot give that reading to a patch.
+	centroid    VecMeasurement
+	hasCentroid bool
 	// surface is set by a source whose authenticated surface is retained,
 	// including structural trims and the smooth three-section loft. Ordinary
 	// mesh booleans leave it nil.
@@ -67,6 +72,13 @@ type facetedPayload struct {
 	pointSection *pointSectionRecord
 	pointCone    *pointConeTrimRecord
 	pointPlane   *pointPlaneSliceRecord
+	// pointPlaneCapDisplacement bounds the true source cap contour against
+	// each held cap ring, including every placed-basis stretch and rounding.
+	pointPlaneCapDisplacement float64
+	// pointPlaneSourceEligible belongs only to an original point loft or
+	// freshly built Split slab. Rigid copies retain pointPlane for queries,
+	// but even a round-trip copy cannot become a new structural Split source.
+	pointPlaneSourceEligible bool
 	// bevelJoin identifies the immutable blank and first trimmed tooth used
 	// to rebuild a second disjoint tooth on the same root ring.
 	bevelJoin *bevelJoinRecord
@@ -147,7 +159,9 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.xform = composed
 	next.lowerSupport = nil
 	next.pointCone = nil
-	next.pointPlane = nil
+	// A rigid copy keeps the immutable Split source for certified face
+	// centroid ranking, but cannot become a new structural Split source.
+	next.pointPlaneSourceEligible = false
 	next.bevelJoin = nil
 	next.bevelTooth = nil
 	if fp.pointCone != nil && fp.xform == r3.Identity() {
@@ -155,6 +169,13 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	}
 	next.groups = append([]facetGroup(nil), fp.groups...)
 	for i := range next.groups {
+		if next.groups[i].hasCentroid {
+			reading, err := placedCapCentroid(next.groups[i].centroid, delta)
+			if err != nil {
+				return nil, err
+			}
+			next.groups[i].centroid = reading
+		}
 		// A later structural trim requires the unplaced source. Its retained
 		// public surface identity still moves with this faceted restatement.
 		if cone, ok := next.groups[i].surface.(Cone); ok {
@@ -191,6 +212,22 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	}
 	next.verts, next.tris = placed.Verts, placed.Tris
 	next.vertexBound, next.meshBound, next.volSymDiff = placed.VertexBound, placed.MeshBound, placed.VolSymDiff
+	if fp.pointPlane != nil {
+		linear, err := massmoment.PlacementRotation(delta)
+		if err != nil {
+			return nil, err
+		}
+		charge, err := massmoment.MapChargeOf(linear)
+		if err != nil {
+			return nil, err
+		}
+		// PlaceMesh's MeshBound includes the held-coordinate rounding and any
+		// embedding correction, but does not stretch the previous source gap.
+		// Add both terms; the possible double charge is conservative.
+		next.pointPlaneCapDisplacement = proofbound.AbsSumUpper(
+			proofbound.ProductUpper(fp.pointPlaneCapDisplacement,
+				proofbound.AbsSumUpper(1, charge.Stretch)), placed.MeshBound)
+	}
 	return buildFacetedBody(ctx, d, ref, next)
 }
 
@@ -282,6 +319,14 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
+	groupPatch := make(map[int]int)
+	for i, group := range pp.src {
+		if first, exists := groupPatch[group]; !exists {
+			groupPatch[group] = patch[i]
+		} else if first != patch[i] {
+			groupPatch[group] = -1
+		}
+	}
 
 	faceIdx := map[int]*Face{}
 	facePlanar := map[*Face]bool{}
@@ -309,6 +354,10 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 				denoted:     pp.groups[pp.src[i]].denoted,
 				normalBound: pp.groups[pp.src[i]].normalBound,
 				reversed:    pp.groups[pp.src[i]].reversed,
+			}
+			group := pp.groups[pp.src[i]]
+			if group.hasCentroid && groupPatch[pp.src[i]] == patch[i] {
+				f.centroid, f.hasCentroid = group.centroid, true
 			}
 			faceIdx[patch[i]] = f
 			facePlanar[f] = pp.groups[pp.src[i]].planar

@@ -98,6 +98,8 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | `Stitch` closing a revolve sheet whose wall tags are not exactly their records: a tilted or round-anchored axis, a near-parallel or near-perpendicular side, a snapped centre | `ErrUnsupported` (R8, `stitchFluxTagsDenoted`) | `docs/surface-design.md` §6.4 |
 | `Extend` of a partially revolved ribbon | `ErrUnsupported` (RS14) | `docs/surface-intersection-design.md` §2.2 |
 | `Trim`/`Extend`/`Split` over a pair sharing no generator, except a point loft split by a finite world-XY line `ExtrudeChain` sheet | Refused outside the bounded point-loft split class | `docs/surface-intersection-design.md` §4, `docs/loft-point-design.md` "Planar split of a point loft" |
+| `Face.Centroid` outside an authenticated point-loft far cap or planar Split cap | `ErrUnsupported`; only complete caps carry a bounded area-centroid certificate | `docs/loft-point-design.md` "Planar split of a point loft" |
+| `Body.ExtremeFacesByCentroid` outside a complete point-loft planar Split slab or its rigid copy | `ErrUnsupported`; this source class has a cone bound for every side-face centroid | `docs/loft-point-design.md` "Planar split of a point loft" |
 | Tolerant stitch, Ruled, Boundary Fill | Refused permanently | `docs/surface-design.md` §1.3 |
 | Reverse Normal | Named, staged for no increment | `docs/surface-design.md` §1.4 |
 

@@ -175,6 +175,9 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 	}
 	capGroup := len(groups) - 1
 	groups[capGroup] = facetGroup{origins: []FeatureRef{{producer: ref, Role: roleCapEnd}}, planar: true}
+	if center, proved := pointFarCapCentroid(record.profile, record.plane); proved {
+		groups[capGroup].centroid, groups[capGroup].hasCentroid = center, true
+	}
 	for j := range pair.W {
 		jn := (j + 1) % len(pair.W)
 		tris = append(tris, [3]int{0, jn + 1, j + 1})
@@ -252,7 +255,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 		verts: verts, tris: tris, src: src, groups: groups, vertexBound: vertexBound,
 		meshBound: meshBound, volSymDiff: volumeGap, areaSlack: areaGap,
 		dPair: diameter, xform: r3.Identity(),
-		pointSection: &record,
+		pointSection: &record, pointPlaneSourceEligible: true,
 	}
 	return buildFacetedBody(ctx, d, ref, pp)
 }
