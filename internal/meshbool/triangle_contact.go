@@ -160,8 +160,8 @@ func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xp
 			return out, nil
 		}
 	}
-	ptsA := PlaneCrossings(xta, xtb, signsA)
-	ptsB := PlaneCrossings(xtb, xta, signsB)
+	ptsA := planeCrossingsPrepared(xta, xtb[0], nb, signsA)
+	ptsB := planeCrossingsPrepared(xtb, xta[0], na, signsB)
 	if len(ptsA) == 0 || len(ptsB) == 0 {
 		return out, nil
 	}
@@ -363,22 +363,36 @@ func SinLowerBound(sin2 *big.Rat) float64 {
 
 // PlaneCrossings collects the exact points where triangle t crosses the
 // other triangle's plane, given the per-vertex signs and the exact
-// plane-side values (computed lazily, only for crossing edges) — as integer
-// numerator/denominator pairs, never as a materialised big.Rat: the crossing
-// parameter t = vi/(vi − vj) is formed directly as tn/td from the two orient
-// values' own numerators and positive denominators (vi = ni/di, vj = nj/dj
-// gives t = ni·dj / (ni·dj − nj·di)) and handed straight to xlerp, which
-// renormalises td's sign itself. A nondegenerate triangle contributes at most
-// two distinct points: its on-plane vertices, or crossings on edges whose
-// endpoints have strictly opposite signs. No canonical point-key pass is
-// needed to deduplicate this list.
+// plane-side values (computed lazily, only for crossing edges). A
+// nondegenerate triangle contributes at most two distinct points: its on-plane
+// vertices, or crossings on edges whose endpoints have strictly opposite
+// signs. No canonical point-key pass is needed to deduplicate this list.
 func PlaneCrossings(xt [3]proof.Xpt, xo [3]proof.Xpt, signs [3]int) []proof.Xpt {
+	n := proof.Xcross(proof.Xsub(xo[1], xo[0]), proof.Xsub(xo[2], xo[0]))
+	return planeCrossingsPrepared(xt, xo[0], n, signs)
+}
+
+// planeCrossingsPrepared reuses the other facet's normal. The positive normal
+// and origin weights are common to all plane-side values and cancel from the
+// edge crossing ratio.
+func planeCrossingsPrepared(xt [3]proof.Xpt, origin, normal proof.Xpt, signs [3]int) []proof.Xpt {
 	var out []proof.Xpt
 	nums := [3]*big.Int{}
 	dens := [3]*big.Int{}
+	var base *big.Int
 	val := func(i int) (*big.Int, *big.Int) {
 		if nums[i] == nil {
-			nums[i], dens[i] = proof.OrientNum(xo[0], xo[1], xo[2], xt[i])
+			if base == nil {
+				base = proof.XdotNum(normal, origin)
+			}
+			point := proof.XdotNum(normal, xt[i])
+			if xt[i].W.Cmp(origin.W) == 0 {
+				nums[i], dens[i] = point.Sub(point, base), big.NewInt(1)
+			} else {
+				nums[i] = point.Mul(point, origin.W)
+				nums[i].Sub(nums[i], new(big.Int).Mul(base, xt[i].W))
+				dens[i] = xt[i].W
+			}
 		}
 		return nums[i], dens[i]
 	}
