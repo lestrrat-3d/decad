@@ -347,11 +347,12 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if p.xform != r3.Identity() {
-		return nil, fmt.Errorf(`%w: placement of the simultaneous all-edge chamfer is not built`, ErrUnsupported)
+	geometry, axisMap, err := p.placedGeometry()
+	if err != nil {
+		return nil, err
 	}
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true, kind: BodySolid}
-	polygons := p.polygons()
+	polygons := geometry.polygons()
 	vertices := map[r3.Vec]*Vertex{}
 	vertex := func(v r3.Vec) *Vertex {
 		if found := vertices[v]; found != nil {
@@ -364,7 +365,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 	type lineKey struct{ a, b r3.Vec }
 	lines := map[lineKey]*Edge{}
 	faces := make([]*Face, 0, len(polygons)+1)
-	for _, poly := range polygons {
+	for polygonIndex, poly := range polygons {
 		points := slices.Clone(poly.points)
 		if points[1].Sub(points[0]).Cross(points[2].Sub(points[0])).Dot(poly.normal) < 0 {
 			slices.Reverse(points)
@@ -374,8 +375,9 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		if err != nil {
 			return nil, fmt.Errorf(`%w: all-edge chamfer plane: %s`, ErrUnsupported, err)
 		}
-		face := &Face{surface: Plane{Frame: frame}, origins: []FeatureRef{{producer: ref, Role: poly.role}},
-			body: body, area: poly.area.Value, areaBound: poly.area.Bound}
+		face := &Face{surface: Plane{Frame: frame},
+			origins: []FeatureRef{{producer: ref, Role: axisMap.faceRole(polygonIndex)}},
+			body:    body, area: poly.area.Value, areaBound: poly.area.Bound}
 		loop := &Loop{outer: true}
 		for i, a := range points {
 			b := points[(i+1)%len(points)]
@@ -401,7 +403,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		face.loops = []*Loop{loop}
 		faces = append(faces, face)
 	}
-	bore, err := p.addBoreTopology(body, ref, faces, vertex)
+	bore, err := geometry.addBoreTopology(body, ref, faces, vertex)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +420,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 	if len(body.lumps) != 1 || body.lumps[0].shells[0].open {
 		return nil, fmt.Errorf(`%w: all-edge chamfer has an open shell`, ErrUnsupported)
 	}
-	if err := p.measure(body, polygons); err != nil {
+	if err := geometry.measure(body, polygons); err != nil {
 		return nil, err
 	}
 	body.payload = p
