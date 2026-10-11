@@ -408,6 +408,7 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 			capRing: &bevelCapRingRecord{
 				angles:   append([]float64(nil), angles...),
 				heel:     append([]int(nil), ring.rings[0]...),
+				toeRoot:  append([]int(nil), ring.rings[2]...),
 				toe:      append([]int(nil), ring.rings[3]...),
 				heelAxis: ring.heelAxis, toeAxis: ring.toeAxis,
 			}}}

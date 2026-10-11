@@ -31,9 +31,9 @@ type bevelJoinRecord struct {
 }
 
 type bevelCapRingRecord struct {
-	angles            []float64
-	heel, toe         []int
-	heelAxis, toeAxis int
+	angles             []float64
+	heel, toeRoot, toe []int
+	heelAxis, toeAxis  int
 }
 
 type bevelToothPlacement struct {

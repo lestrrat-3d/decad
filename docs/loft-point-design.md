@@ -386,3 +386,44 @@ module-4 straight pair and their `VerifyAll` checks live in
 `decad-gallery/models/bevelgear`, where the real producer and consumer run
 together. Decad's focused tests cover cap conformity, root station order,
 and complete source-solid separation.
+
+## Bore through the straight pinion's narrow toe
+
+The module-4, twelve-tooth pinion's source blank has a toe outer radius of
+1.777778 mm and a toe-root radius of 13.333333 mm. Its default centered bore
+has radius 6 mm. The bore removes the complete small toe cap and meets the
+recorded straight toe flank at X = 28.833333 mm. The source bore tool extends
+beyond both blank ends. The eight-tooth annular-cap rewrite does not apply to
+this crossing.
+
+The Cut requires the retained `CombineJoin` source, its eleven placed teeth,
+both cap rings and the toe-root ring, a centered full-circle axis-X prism,
+and the same exact six-line blank meridian. It proves the bore falls strictly
+between the toe outer and toe-root radii. Every untouched blank and tooth
+triangle must clear the bore after its held boundary and circle errors are
+added. The old toe flank must contain exactly two triangles per angular cell;
+the two original cap fans must each contain exactly one triangle per cell.
+
+The rewrite solves the flank-circle intersection with rational arithmetic.
+It removes both cap fans and the old toe-flank band, then joins a heel annulus,
+a shorter toe-flank band ending at the intersection circle, and the inward
+cylinder wall. The new toe ring shares the original angular stations, and the
+toe-root ring keeps the tooth and blank patches sewn. Directed edge pairing,
+vertex links, and exact triangle contacts are checked on the resulting mesh.
+The new triangle count is the joined count plus two per angular station. Its
+finite triangle ceiling is the combined-join ceiling plus at most 3,072. The
+real 1,464-station pinion has 660,624 triangles and its exact audit scans
+221,081,767 pairs, below its 987,408-triangle and 300-million-scan limits.
+
+The joined body's occupied-volume allowance survives subtraction of the same
+exact cylinder from its true and held solids. A separate local allowance
+covers the old and rebuilt toe-flank strips: both remain inside a radial shell
+around the recorded straight meridian. A short axial slab covers the small
+difference in their circle-crossing positions. The circle-chord shell is
+charged over the certified toe-root-to-heel height, which also bounds the
+new cylinder wall area. The boundary allowance includes the rational-to-float
+intersection and trigonometric rounding at every new ring vertex.
+The real pinion passes `Tessellate(0.1 mm, VerifyAll)` with a 0.091775 mm
+boundary allowance. Its occupied-volume allowance is 538.690250 mm³,
+including 1.458015 mm³ for the rebuilt side shell, 0.170380 mm³ for the seam
+slab, and 0.499613 mm³ for the bore circle shell.
