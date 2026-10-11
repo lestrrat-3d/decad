@@ -7,14 +7,14 @@
 #
 # Shard totals at the last measurement:
 #   shard 0: 1059.82s over 1 tests
-#   shard 1:  175.64s over 104 tests
-#   shard 2:  177.64s over 198 tests
-#   shard 3:   41.11s over 213 tests
-#   shard 4:   40.39s over 199 tests
-#   shard 5:   80.90s over 199 tests
+#   shard 1:  175.72s over 113 tests
+#   shard 2:  177.82s over 204 tests
+#   shard 3:   43.63s over 218 tests
+#   shard 4:   40.23s over 205 tests
+#   shard 5:  191.68s over 200 tests
 #   shard 6:   90.77s over 195 tests
 #   shard 7:   92.78s over 200 tests
-#   shard 8:  101.96s over 196 tests
+#   shard 8:  101.99s over 200 tests
 #   shard 9:  118.05s over 202 tests
 #
 0	1059.82	TestLoftEmbeddedSixtyToothGearFeatures
@@ -712,6 +712,8 @@
 4	0.02	TestSweepPairRotatingSourceSpheresImpact
 4	0.03	TestSweepSpatialPathTurnsThroughOrthogonalPlanes
 4	0.04	TestSweepStraightIsABooleanOperand
+4	0.00	TestSweepTwistCompositeCardinalArc
+4	0.00	TestSweepTwistCompositeCardinalArcAdmission
 4	0.00	TestSweepTwistNegativeAngleAndAdmission
 4	0.00	TestSweepTwistStraightPolygon
 4	0.01	TestTangentChainUndecidedRefused
@@ -757,6 +759,7 @@
 4	0.00	TestWallReadingExactHeightArm
 4	0.01	TestWholeCircleCylinderHasTwoLoops
 5	0.35	TestAnalyticPlateWithCircularHolesArea
+5	110.78	TestBevelOneToothJoinPreservesSourceFacesAndVerifiedSolid
 5	0.01	TestBlindCutBuildsAnalyticPocket
 5	0.00	TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall
 5	0.01	TestBodyPatchReproducesThroughPlacement

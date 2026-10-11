@@ -7,11 +7,11 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    0.00s over 1 tests
-#   shard 1:    0.17s over 225 tests
+#   shard 1:    1.22s over 230 tests
 #   shard 2:   10.20s over 135 tests
 #   shard 3:  136.92s over 135 tests
-#   shard 4:  135.87s over 133 tests
-#   shard 5:   94.90s over 130 tests
+#   shard 4:  182.61s over 138 tests
+#   shard 5:   48.16s over 128 tests
 #   shard 6:   85.03s over 133 tests
 #   shard 7:   83.02s over 128 tests
 #   shard 8:   73.84s over 132 tests
@@ -550,6 +550,7 @@
 4	4.70	TestCoilThreadPartnerKeepsItsBounds
 4	11.80	TestCoilThreadRunsOutOfTheEnd
 4	1.67	TestCoilTiltedAxisAgrees
+4	0.00	TestCompositeTwistOccupiedVolumeProof
 4	0.01	TestContactPairFacetedFloorRefusesMultipleSupportFaces
 4	0.03	TestContactPairFacetedFloorRefusesUnprovedPatches
 4	0.04	TestEnumeratePrunedRodsMatchTheFullWalk
@@ -676,8 +677,8 @@
 5	1.83	TestClassBChain
 5	0.02	TestClassBCrossingSlotFloorCornersReadConcave
 5	0.91	TestCoilFractionalTurnCentroid
-5	10.13	TestCoilFullTurnArcClosesLikeACircle
-5	36.61	TestCoilInternalThread
+4	10.13	TestCoilFullTurnArcClosesLikeACircle
+4	36.61	TestCoilInternalThread
 5	1.95	TestCoilMeshProofsEncloseTheBody
 5	0.02	TestCupMassChargesDisplacement
 5	0.76	TestCurveBoundsCoverMappedReference

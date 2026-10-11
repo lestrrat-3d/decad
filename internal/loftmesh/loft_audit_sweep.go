@@ -55,6 +55,15 @@ func LoftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 	return err
 }
 
+// LoftCrossingAuditBevelJoin audits the dense root-ring and tooth-cap mesh.
+// Its larger, fixed scan limit admits the circumferential root rings while
+// retaining the generic audit's triangle limit and exact pair decisions.
+func LoftCrossingAuditBevelJoin(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
+	const maxBevelJoinScans = 64_000_000
+	_, err := loftCrossingAudit(budget, verts, tris, nil, loftGenericShortcuts, maxBevelJoinScans)
+	return err
+}
+
 // LoftCrossingAuditWork is LoftCrossingAudit's body, with each S7 shortcut
 // under its own explicit per-call switch (LoftAuditShortcuts) and the pair
 // loop's own work counts returned to the caller. CapProof has no effect here:

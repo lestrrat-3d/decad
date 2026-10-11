@@ -24,6 +24,18 @@ type pointSectionRecord struct {
 	apex    r3.Vec
 	profile profileRecord
 	plane   planeRecord
+	source  *pointSectionSource
+}
+
+// pointSectionSource names the live Sketch entities authenticated when the
+// point loft was made. A later structural join can request a new certificate
+// only from these entities and must refuse if their revision or frame moved.
+type pointSectionSource struct {
+	sketch   *sketch.Sketch
+	profile  *sketch.Profile
+	revision uint64
+	frame    r3.Frame
+	entities []sketch.Entity
 }
 
 // LoftFromPoint builds a solid from one exact world point to a closed Sketch
@@ -72,7 +84,14 @@ func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec,
 	if err != nil {
 		return nil, err
 	}
-	record := pointSectionRecord{apex: apex, profile: profile, plane: plane}
+	source := &pointSectionSource{
+		sketch: s, profile: p, revision: s.Revision(), frame: frame,
+		entities: make([]sketch.Entity, len(p.Outer)),
+	}
+	for i, edge := range p.Outer {
+		source.entities[i] = edge.Entity
+	}
+	record := pointSectionRecord{apex: apex, profile: profile, plane: plane, source: source}
 	ref := d.nextProducerID()
 	body, err := evalPointSectionLoft(ctx, d, ref, record, frame, area, work0, work1)
 	if err != nil {
