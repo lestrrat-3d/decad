@@ -91,6 +91,23 @@ func LoftCrossingAuditBevelPatternJoin(budget *proofbound.WorkBudget, verts []r3
 	return err
 }
 
+// LoftCrossingAuditBevelBore admits the two annular cap strips and one inward
+// wall added to an already-audited eight-tooth bevel join. Four triangles per
+// ring station are net new after the two old axis fans are replaced. The pair
+// classifier and its exact contact verdicts are the same as the join audit.
+func LoftCrossingAuditBevelBore(budget *proofbound.WorkBudget, verts []r3.Vec,
+	tris [][3]int, stations int) error {
+	if stations < 16 || stations > 1_536 {
+		return fmt.Errorf(`%w: bevel bore requires at most 1536 ring stations`, decaderr.ErrUnsupported)
+	}
+	const maxPatternTriangles = 44_480 + 22_000*6
+	maxTriangles := maxPatternTriangles + 4*stations
+	const maxBoreScans = 128_000_000
+	_, err := loftCrossingAuditLimited(budget, verts, tris, nil,
+		loftGenericShortcuts, maxBoreScans, maxTriangles)
+	return err
+}
+
 // LoftCrossingAuditWork is LoftCrossingAudit's body, with each S7 shortcut
 // under its own explicit per-call switch (LoftAuditShortcuts) and the pair
 // loop's own work counts returned to the caller. CapProof has no effect here:

@@ -373,7 +373,13 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
 		dPair: record.base.dPair, xform: r3.Identity(),
 		bevelJoin: &bevelJoinRecord{blank: blankBody, first: teeth[0],
-			placed: append([]facetedPayload(nil), teeth[1:]...)}}
+			placed: append([]facetedPayload(nil), teeth[1:]...),
+			capRing: &bevelCapRingRecord{
+				angles:   append([]float64(nil), angles...),
+				heel:     append([]int(nil), ring.rings[0]...),
+				toe:      append([]int(nil), ring.rings[3]...),
+				heelAxis: ring.heelAxis, toeAxis: ring.toeAxis,
+			}}}
 	body, err := buildFacetedBody(ctx, d, ref, pp)
 	if err != nil {
 		return nil, err
