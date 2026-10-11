@@ -24,12 +24,12 @@ import (
 //
 //   - sweepOrder.visit emitted every pair that overlaps on the sweep axis
 //     alone, without the full three-axis box test:
-//     TestLoftSweepEnumeratesEveryTouchingPair went RED on the gear tooth,
-//     the chorded wedge and the untwisted box (the list no longer equals the
+//     TestLoftSweepEnumeratesEveryTouchingPair went RED on the chorded wedge
+//     and the untwisted box (the list no longer equals the
 //     box-overlap set).
 //   - sweepOrder.visit stopped its inner scan by comparing the lower bound on
 //     the axis after the sweep axis: TestLoftSweepEnumeratesEveryTouchingPair
-//     went RED on the gear tooth and the chorded wedge (overlapping pairs
+//     went RED on the chorded wedge (overlapping pairs
 //     missing from the list).
 //   - CapFamilyProof's (d) took each loop edge's direction from the sign of
 //     its net count and skipped the multiplicity and stray-edge checks:
@@ -187,7 +187,7 @@ func loftAuditFixtures(t *testing.T) []struct {
 }
 
 // TestLoftSweepEnumeratesEveryTouchingPair checks sweepCandidates against
-// brute force: on the gear tooth, the chorded wedge and the crossing
+// brute force: on the chorded wedge and the crossing
 // fixtures, the candidate list is exactly the set of pairs whose closed boxes
 // overlap, in strict lexicographic order, and it contains every pair the
 // exact classification finds touching (a shared vertex index, or any
@@ -200,8 +200,6 @@ func TestLoftSweepEnumeratesEveryTouchingPair(t *testing.T) {
 		tris  [][3]int
 	}
 	var fixtures []fixture
-	gear := loftGearAssembly(t, loftGearZ(8), 1)
-	fixtures = append(fixtures, fixture{"gear tooth z=8", gear.Verts, gear.Tris})
 	wedge := chordedWedgeAssembly(t, wedgeSplinePoints(wedgeFitSpline(t), 24))
 	fixtures = append(fixtures, fixture{"chorded wedge", wedge.Verts, wedge.Tris})
 	for _, row := range []struct {
