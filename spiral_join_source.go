@@ -43,6 +43,7 @@ type spiralFirstJoinSource struct {
 	heelOffset *big.Rat
 	toeCapGap  *big.Rat
 	heelCapGap *big.Rat
+	flank      [2]freeform.BezierSpan // root-containing cubic of groups 0 and 2
 	crossings  [2][9]spiralRootCrossing
 	junctions  [2][2]spiralJunction // flank 0/2, then toe/heel
 }
@@ -107,6 +108,9 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	if proof.toeOffset.Sign() >= 0 || proof.heelOffset.Sign() <= 0 {
 		return nil, false, nil
 	}
+	if !spiralOriginalCapsAvoidToolRootCircles(trim, m, b, toeX, heelX) {
+		return nil, false, nil
+	}
 	for side, group := range [...]int{0, 2} {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
@@ -118,6 +122,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		if err != nil || len(spans) != 14 {
 			return nil, false, nil
 		}
+		proof.flank[side] = spans[0]
 		for band := 0; band < 8; band++ {
 			if err := ctx.Err(); err != nil {
 				return nil, false, err
@@ -160,7 +165,64 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 			proof.junctions[side][end] = junction
 		}
 	}
+	// The embedded source solid's boundary meets each tool/root circle only
+	// at these two flank junctions. All other contour groups stay on one side.
+	// The whole original cap 0 is below toeX. The whole cap-8 plane misses
+	// its heel tool/root circle. Thus neither end-cap interior can create an
+	// extra contact, even though cap 8 spans the heelX coordinate.
+	// Q_s and J make both junctions transverse. Circle membership therefore
+	// changes at each junction. The long connecting arc crosses Y<0, where
+	// the entire source is absent, so the short arc is inside the source.
+	// The ordered exact Cut and Intersect define the operative tool-cone cap
+	// as this source solid's trace on that cone. The retained cap group IDs
+	// identify held facets only; they do not establish the true trace.
 	return proof, true, nil
+}
+
+// The toe cap lies wholly before the toe tool/root circle in X. The heel
+// cap may span heelX, so its full supporting plane must miss the entire
+// heel tool/root circle. For A+B*cos(theta)+C*sin(theta), A²>B²+C² is an
+// exact rational separation proof for every angle, including cap interiors.
+func spiralOriginalCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
+	m, b, toeX, heelX *big.Rat) bool {
+	box, err := lfSourceBox(trim.source)
+	if err != nil || len(trim.maps) != 9 {
+		return false
+	}
+	for _, end := range [...]int{0, 8} {
+		if lfPositiveDenominator(trim.maps[end], box) != nil {
+			return false
+		}
+	}
+	corners := lfBoxCorners(box)
+	xAxis := loftFaceRatVec{lfOne(), lfZero(), lfZero()}
+	if lfScalarRange(trim.maps[0], xAxis, corners).hi.Cmp(toeX) >= 0 {
+		return false
+	}
+	return spiralCapPlaneAvoidsRootCircle(trim.maps[8], corners, m, b, heelX)
+}
+
+func spiralCapPlaneAvoidsRootCircle(cap loftFaceMap, corners [4][2]*big.Rat,
+	m, b, circleX *big.Rat) bool {
+	p0 := cap.at(corners[0][0], corners[0][1])
+	p1 := cap.at(corners[1][0], corners[1][1])
+	p2 := cap.at(corners[2][0], corners[2][1])
+	normal := lfVCross(lfVSub(p1, p0), lfVSub(p2, p0))
+	if normal[0].Sign() == 0 && normal[1].Sign() == 0 && normal[2].Sign() == 0 {
+		return false
+	}
+	d := lfVDot(normal, p0)
+	if lfVDot(normal, cap.at(corners[3][0], corners[3][1])).Cmp(d) != 0 {
+		return false
+	}
+	radius := lfAdd(lfMul(m, circleX), b)
+	if radius.Sign() <= 0 {
+		return false
+	}
+	a := lfSub(lfMul(normal[0], circleX), d)
+	y := lfMul(normal[1], radius)
+	z := lfMul(normal[2], radius)
+	return lfMul(a, a).Cmp(lfAdd(lfMul(y, y), lfMul(z, z))) > 0
 }
 
 func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
@@ -707,17 +769,86 @@ func spiralIsolateJunction(ctx context.Context, maps []loftFaceMap, span freefor
 	return spiralJunction{band: band, sLo: sLo, sHi: sHi, tLo: tLo, tHi: tHi, box: box}, true
 }
 
+// spiralRootTube encloses the one true flank/root crossing branch over a
+// caller-specified exact X strip. J>0 orders its two endpoint cuts in band
+// time. Bernstein signs enclose every intermediate source parameter before
+// the rational cap maps enclose the entire resulting ruled strip.
+func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
+	xLo, xHi *big.Rat) ([3]loftFaceInterval, bool, error) {
+	var empty [3]loftFaceInterval
+	if ctx == nil {
+		return empty, false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return empty, false, err
+	}
+	if proof == nil || side < 0 || side >= len(proof.flank) ||
+		xLo == nil || xHi == nil || xLo.Cmp(xHi) >= 0 {
+		return empty, false, nil
+	}
+	span := proof.flank[side]
+	low, ok := spiralIsolateJunction(ctx, proof.tooth.maps, span,
+		proof.rootM, proof.rootB, proof.crossings[side], xLo)
+	if !ok {
+		return empty, false, ctx.Err()
+	}
+	high, ok := spiralIsolateJunction(ctx, proof.tooth.maps, span,
+		proof.rootM, proof.rootB, proof.crossings[side], xHi)
+	if !ok || low.band != high.band || low.tHi.Cmp(high.tLo) >= 0 {
+		return empty, false, ctx.Err()
+	}
+	band := low.band
+	q := spiralRootPolynomial(proof.tooth.maps[band], proof.tooth.maps[band+1],
+		span, proof.rootM, proof.rootB)
+	sLo, sHi := lfZero(), lfOne()
+	if !spiralJunctionRootBracket(q, sLo, sHi, low.tLo, high.tHi) {
+		return empty, false, ctx.Err()
+	}
+	for step := 0; step < 64; step++ {
+		if step%8 == 0 && ctx.Err() != nil {
+			return empty, false, ctx.Err()
+		}
+		mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
+		if spiralRootTSign(q, mid, low.tLo, high.tHi, -1) {
+			sLo = mid
+			continue
+		}
+		if spiralRootTSign(q, mid, low.tLo, high.tHi, 1) {
+			sHi = mid
+			continue
+		}
+		break
+	}
+	box, ok := spiralJunctionBox(proof.tooth.maps[band], proof.tooth.maps[band+1],
+		span, sLo, sHi, low.tLo, high.tHi)
+	if err := ctx.Err(); err != nil {
+		return empty, false, err
+	}
+	if !ok || box[0].lo.Cmp(xLo) > 0 || box[0].hi.Cmp(xHi) < 0 {
+		return empty, false, nil
+	}
+	box[0] = loftFaceInterval{lo: xLo, hi: xHi}
+	return box, true, nil
+}
+
+func spiralRootTSign(q [3][]*big.Rat, s, tLo, tHi *big.Rat, sign int) bool {
+	curve := []*big.Rat{spiralBernValue(q[0], s), spiralBernValue(q[1], s),
+		spiralBernValue(q[2], s)}
+	for _, coefficient := range spiralBernRestrict(curve, tLo, tHi) {
+		if coefficient.Sign() != sign {
+			return false
+		}
+	}
+	return true
+}
+
 func spiralJunctionRootBracket(q [3][]*big.Rat, sLo, sHi, tLo, tHi *big.Rat) bool {
 	for _, entry := range []struct {
 		s    *big.Rat
 		sign int
 	}{{sLo, -1}, {sHi, 1}} {
-		curve := []*big.Rat{spiralBernValue(q[0], entry.s), spiralBernValue(q[1], entry.s),
-			spiralBernValue(q[2], entry.s)}
-		for _, coefficient := range spiralBernRestrict(curve, tLo, tHi) {
-			if coefficient.Sign() != entry.sign {
-				return false
-			}
+		if !spiralRootTSign(q, entry.s, tLo, tHi, entry.sign) {
+			return false
 		}
 	}
 	return true

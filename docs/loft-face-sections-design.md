@@ -118,3 +118,13 @@ source record on the unplaced faceted result. The record identifies the two
 surviving tool-cap face groups. A later source-specific Union rechecks the
 original Sketch revision, map denominators, cone order, and both cap groups.
 Every other Intersect result has no continuation record. Placement drops it.
+
+For the first curved tooth joined to its blank, the retained source maps prove
+one transverse blank-root crossing on each fitted flank through all eight
+bands. The other profile edges stay strictly on one side of the root, and the
+crossings advance from toe to heel. The complete original toe cap lies before
+its tool/root circle in X. The complete original heel cap lies in an exact
+plane that misses its entire tool/root circle. These whole-cap checks rule out
+contacts through an end-cap interior. A caller may also request an exact box
+around either moving flank/root crossing over a narrow X interval; the local
+rim proof uses that box to decide which source surface remains exposed.

@@ -1,11 +1,45 @@
 package decad
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestSpiralRootTubePropagatesCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, ok, err := spiralRootTube(ctx, nil, 0, big.NewRat(0, 1), big.NewRat(1, 1))
+	require.False(t, ok)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestSpiralCapPlaneMustMissTheWholeRootCircle(t *testing.T) {
+	box := [4]*big.Rat{big.NewRat(-1, 1), big.NewRat(1, 1),
+		big.NewRat(-1, 1), big.NewRat(1, 1)}
+	corners := lfBoxCorners(box)
+	cap := loftFaceMap{
+		constant: loftFaceRatVec{lfZero(), lfZero(), lfZero()},
+		q0:       loftFaceRatVec{lfZero(), big.NewRat(1, 1), lfZero()},
+		qu:       loftFaceRatVec{lfOne(), lfZero(), lfZero()},
+		qv:       loftFaceRatVec{lfZero(), lfZero(), lfOne()},
+		g0:       lfOne(), gu: lfZero(), gv: lfZero(),
+	}
+	m, b, x := lfZero(), lfOne(), lfZero()
+	require.False(t, spiralCapPlaneAvoidsRootCircle(cap, corners, m, b, x),
+		"a tangent cap can meet the circle")
+	cap.q0[1] = lfAdd(cap.q0[1], big.NewRat(1, 1<<50))
+	require.True(t, spiralCapPlaneAvoidsRootCircle(cap, corners, m, b, x),
+		"an exact sub-femtometre gap still separates the full cap")
+	cap.q0[1] = lfZero()
+	require.False(t, spiralCapPlaneAvoidsRootCircle(cap, corners, m, b, x),
+		"a cap crossing the circle must refuse")
+	cap.qu = loftFaceRatVec{lfZero(), lfZero(), lfZero()}
+	require.False(t, spiralCapPlaneAvoidsRootCircle(cap, corners, m, b, x),
+		"a collapsed cap has no supporting plane")
+}
 
 func TestSpiralToolCapMustStayOnCertifiedSideOfBlankMeridian(t *testing.T) {
 	toe := Point2{U: 2, V: 8}
