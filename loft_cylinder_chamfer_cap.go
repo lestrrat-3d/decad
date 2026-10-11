@@ -181,7 +181,7 @@ func loftCylinderChamferBoxesApart(a, b, c, d r3.Vec, bound float64) bool {
 func loftCylinderChamferHeldOutlineGap(ctx context.Context, verts []r3.Vec,
 	outer, inner []int, bound float64) error {
 	if len(outer) < 3 || len(inner) < 3 || bound < 0 || proofbound.IsNonFinite(bound) ||
-		len(outer)*len(inner) > 4_194_304 {
+		len(outer)*len(inner) > 8_000_000 {
 		return fmt.Errorf("%w: cap outline clearance exceeds its work limit", ErrUnsupported)
 	}
 	old := make([]loftCylinderXY, len(outer))

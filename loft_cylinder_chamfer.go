@@ -20,18 +20,22 @@ import (
 // of an axial loft joined to an exact circular blank. The cap loops are CCW
 // when viewed from +Z, including the start cap whose public coedges are CW.
 type loftCylinderChamferSource struct {
-	blank        *Body
-	teeth        []*Body
-	outer, inner [2][]int
-	capGroups    [2]int
-	boreGroup    int
-	blankRadius  float64
-	boreRadius   float64
-	boreBound    float64
-	innerInset   float64
-	outerExcess  float64
-	rootCollar   float64
-	z0, z1       float64
+	blank          *Body
+	teeth          []*Body
+	originalTeeth  []*Body
+	axialBridge    []float64
+	bridgeBound    float64
+	topSourceLevel *big.Rat
+	outer, inner   [2][]int
+	capGroups      [2]int
+	boreGroup      int
+	blankRadius    float64
+	boreRadius     float64
+	boreBound      float64
+	innerInset     float64
+	outerExcess    float64
+	rootCollar     float64
+	z0, z1         float64
 }
 
 func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, bool) {
@@ -40,7 +44,8 @@ func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, 
 	}
 	if r := fp.loftCylinderBore; r != nil {
 		return loftCylinderChamferSource{
-			blank: r.blank, teeth: r.teeth,
+			blank: r.blank, teeth: r.proofTeeth,
+			originalTeeth: r.teeth, axialBridge: r.axialBridge,
 			outer: r.outer, inner: r.inner, capGroups: r.capGroups,
 			boreGroup: r.wallGroup, blankRadius: r.blankRadius,
 			boreRadius: r.boreRadius, boreBound: r.boreBound, innerInset: r.innerInset,
@@ -50,7 +55,8 @@ func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, 
 	}
 	if r := fp.loftCylinderJoin; r != nil {
 		return loftCylinderChamferSource{
-			blank: r.blank, teeth: r.teeth,
+			blank: r.blank, teeth: r.proofTeeth,
+			originalTeeth: r.teeth, axialBridge: r.axialBridge,
 			outer: r.capOutlines, capGroups: r.capGroups,
 			boreGroup: -1, blankRadius: r.radius,
 			innerInset: r.innerInset, outerExcess: r.outerExcess,
@@ -108,17 +114,6 @@ func loftCylinderChamferCapWalk(loop *Loop, verts []r3.Vec, ring []int, bottom b
 // It never interprets an arbitrary faceted edge as an offset carrier.
 func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	edges []*Edge, d, dDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
-	var axialBridge []float64
-	if r := fp.loftCylinderJoin; r != nil {
-		axialBridge = r.axialBridge
-	} else if r := fp.loftCylinderBore; r != nil {
-		axialBridge = r.axialBridge
-	}
-	for _, shift := range axialBridge {
-		if shift > 0 {
-			return nil, true, fmt.Errorf("%w: cap chamfer of an axially bridged Loft/cylinder body lacks a source proof", ErrUnsupported)
-		}
-	}
 	source, ok := loftCylinderChamferSourceOf(fp)
 	if !ok {
 		return nil, false, nil
@@ -133,6 +128,12 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	endExact := new(big.Rat).Sub(proofarith.FloatRat(source.z1), proofarith.FloatRat(d))
 	if startExact.Cmp(endExact) >= 0 || source.z0+d == source.z0 || source.z1-d == source.z1 {
 		return nil, true, fmt.Errorf("%w: loft/cylinder cap bands reach each other or round onto a cap", ErrUnsupported)
+	}
+	if err := loftCylinderChamferBridgeSources(&source); err != nil {
+		return nil, true, err
+	}
+	if source.topSourceLevel.Cmp(endExact) <= 0 {
+		return nil, true, fmt.Errorf("%w: cap chamfer bridge reaches its side level", ErrUnsupported)
 	}
 	var caps [2]*Face
 	for _, face := range b.Faces() {
@@ -274,10 +275,15 @@ func loftCylinderInset(ctx context.Context, fp facetedPayload, ring []int, d flo
 	return out, nil
 }
 
-func loftCylinderChamferBound(fp facetedPayload, rim, inset, clip float64) (float64, error) {
-	bound := proofbound.AbsSumUpper(max(fp.meshBound, rim), inset, clip)
+func loftCylinderChamferBound(fp facetedPayload, inset, clip, bridge float64) (float64, error) {
+	// Exact containment C⊂H makes the original two-way source/held bound
+	// sufficient in the reverse direction. The complete source-occupied
+	// split rings and cap/side gates prove the forward direction separately.
+	bound := proofbound.AbsSumUpper(max(fp.meshBound, bridge), inset, clip)
 	if math.IsNaN(bound) || math.IsInf(bound, 0) || bound > 0.1 {
-		return 0, fmt.Errorf("%w: loft/cylinder cap chamfer exceeds the 0.1 mm source bound", ErrUnsupported)
+		return 0, fmt.Errorf("%w: loft/cylinder cap chamfer source bound %g mm exceeds 0.1 mm "+
+			"(joined %g, bridge %g, inset %g, clip %g)", ErrUnsupported, bound,
+			fp.meshBound, bridge, inset, clip)
 	}
 	return bound, nil
 }

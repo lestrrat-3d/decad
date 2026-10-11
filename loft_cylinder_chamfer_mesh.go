@@ -236,14 +236,7 @@ func reverseInts(input []int) []int {
 func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
 	mesh *bevelJoinedMesh, source loftCylinderChamferSource, side loftCylinderChamferSide,
 	bands [2][2]int, sideEdges [2]map[[2]int]struct{},
-	xverts []proofarith.Xpt, setback float64, rimBound *float64) error {
-	toothFaces, err := loftCylinderChamferToothFaces(source)
-	if err != nil {
-		return err
-	}
-	if rimBound == nil {
-		return fmt.Errorf("%w: loft/cylinder cap has no rim bound receiver", ErrUnsupported)
-	}
+	xverts []proofarith.Xpt, setback float64) error {
 	oldData := loftmesh.NewLoftAuditData(fp.verts, fp.tris)
 	oldParity := meshbool.NewParityMesh(fp.verts, fp.tris)
 	allTris := make([]int, len(fp.tris))
@@ -338,35 +331,6 @@ func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
 				if _, ok := sideEdges[cap][loftCylinderChamferEdge(a, b)]; !ok {
 					return fmt.Errorf("%w: ideal cap band touches an old wall on a non-rim edge", ErrUnsupported)
 				}
-				group := fp.src[j]
-				if group < 0 || group >= len(fp.groups) || len(fp.groups[group].origins) == 0 {
-					return fmt.Errorf("%w: loft/cylinder wall contact lost its source face", ErrUnsupported)
-				}
-				origin := fp.groups[group].origins[0]
-				localBound := 0.0
-				switch {
-				case origin.producer == source.blank.origin.producer && origin.Role == loftCylinderBlankSideRole:
-					localBound = fp.meshBound
-				default:
-					face, ok := toothFaces[origin]
-					if !ok {
-						return fmt.Errorf("%w: loft/cylinder wall contact has no authenticated tooth", ErrUnsupported)
-					}
-					localBound = face.bound
-					if face.cell == 0 || face.cell == face.root-1 {
-						localBound, err = loftCylinderConnectorContactBound(face.loft,
-							face.root, face.cell, source.blankRadius, trueLevel,
-							contact.P0, contact.P1, face.bound)
-						if err != nil {
-							return err
-						}
-					}
-				}
-				rim := meshbool.RimBound(localBound, 0, contact.Sin2)
-				if proofbound.IsNonFinite(rim) || rim <= 0 {
-					return fmt.Errorf("%w: loft/cylinder cap rim has no transverse source bound", ErrUnsupported)
-				}
-				*rimBound = max(*rimBound, rim)
 			}
 		}
 		for point := range pointTouches {
@@ -449,10 +413,9 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 	// chorded inset bound the constructed mesh; the crossing audit still
 	// performs every exact contact check it would under the default ceiling.
 	const (
-		maxRimVertices   = 2_048
+		maxRimVertices   = 4_096
 		maxInsetVertices = 4_096
 		maxTriangles     = 32_768
-		maxAuditScans    = 16_000_000
 	)
 	if len(source.outer[0]) > maxRimVertices || len(source.outer[1]) > maxRimVertices {
 		return nil, fmt.Errorf("%w: loft/cylinder cap outline exceeds the chamfer work ceiling", ErrUnsupported)
@@ -627,18 +590,25 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 			return nil, err
 		}
 	}
-	rimBound := 0.0
 	if err := loftCylinderChamferContactAudit(ctx, fp, mesh, source, clipped,
-		bands, bandSideEdges, ideal, setback, &rimBound); err != nil {
+		bands, bandSideEdges, ideal, setback); err != nil {
 		return nil, err
 	}
 	if err := loftCylinderChamferIdealBandAudit(ctx, mesh, ideal, bands, clipped.clipBound); err != nil {
 		return nil, err
 	}
-	if _, err := loftCylinderChamferBound(fp, rimBound, maxInset, clipped.clipBound); err != nil {
+	bridgeReach, err := loftCylinderChamferBridgeCap(ctx, fp, source, mesh, ideal,
+		bands[1], inset[1], setback)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := loftCylinderChamferBound(fp, maxInset, clipped.clipBound, bridgeReach); err != nil {
 		return nil, err
 	}
 	for cap, reach := range radialReach {
+		if cap == 1 {
+			reach = proofbound.AbsSumUpper(reach, bridgeReach)
+		}
 		if proofbound.AbsSumUpper(reach, clipped.clipBound) >= 0.1 {
 			return nil, fmt.Errorf("%w: cap %d radial reach exceeds the published boundary bound",
 				ErrUnsupported, cap)
@@ -667,6 +637,7 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 	if len(mesh.tris) > maxTriangles {
 		return nil, fmt.Errorf("%w: loft/cylinder chamfer exceeds the triangle work ceiling", ErrUnsupported)
 	}
+	maxAuditScans := uint64(min(64_000_000, 2_048*len(mesh.tris)))
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
 		maxTriangles, maxAuditScans); err != nil {
 		return nil, err

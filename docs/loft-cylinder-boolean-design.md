@@ -170,8 +170,18 @@ vertex, and one connected cycle. The entire ring stays outside a centered
 bore's exact radius. At least one ring vertex lies strictly inside the
 blank circle, which gives the connected ring an occupied witness.
 
+For an admitted one-ULP axial bridge, the ring's physical height is mapped
+to `z/s` for each private proof tooth separately. Its XY coordinates stay
+exactly the same. The proxy's wall departure includes the original-to-proxy
+bridge; its source-circle crossing and connector gates use the mapped
+height. The exact original top cap must remain above the physical ring,
+and the mapped height must remain between that tooth's root collars.
+
 An edge wholly inside the circle is inside the exact blank. An edge wholly
-outside it must clear every source tooth's true wall. The helper measures
+outside it must clear every exposed source tooth wall. The source-circle
+certificate puts the terminal root wall strictly inside the blank at this
+height, so that hidden wall cannot bound a wholly outer edge. Both connector
+walls, the fitted flanks, and the tip remain checked. The helper measures
 its exact minimum distance to every relevant held Loft wall triangle and
 requires a strict gap beyond that tooth's parameter-matched wall bound.
 The `matchedDelta` and cell twist terms in Loft §5.2 pair every point of a
@@ -244,23 +254,6 @@ If any tooth lacks the tighter connector certificate, the join retains the
 prior two-times-inward-reach bound for the complete pattern. It never mixes
 the two bounds within one result.
 
-The root connector also supports a local bound for a later cap-band cutter.
-At an exact height between both admitted root collars, its two held triangles
-form the radial-monotone chain through their common diagonal. The source
-connector begins inside the blank and ends outside it, so it crosses the
-exact cylinder. The supplied `δ` covers the matched Loft facet departure.
-Every source crossing corresponds to a held point whose radius lies in
-`[R−δ,R+δ]`.
-`loftCylinderConnectorContactBound` brackets that held strip with exact
-rational signs. It requires an exact cutter contact segment on one piece of
-the chain at the same height. The exact contact is split at held radius
-`R+δ`: beyond it the matched source wall is outside the blank and keeps its
-ordinary `δ` bound. For the possibly hidden portion, the helper bounds the
-distance from its endpoints to the entire crossing strip and adds `δ`.
-Convexity covers each portion of the full contact segment.
-The helper returns only this source-seam distance. Its caller separately
-charges cutter rounding and proves the cutter contact and output shell.
-
 For volume, let `B` be the exact blank and `T` the union of exact teeth.
 Replacing each true tooth by its held Loft changes occupied volume by at most
 the sum of its authenticated `volSymDiff` values; union with `B` cannot
@@ -300,10 +293,11 @@ later Boolean cannot rebuild from unplaced operands.
 It also stores the private proxy teeth and each axial bridge distance. A
 later Union rebuilds proofs from the original teeth. A centered through-bore
 copies both tooth lists and the bridge distances into its own source record.
-Cap Chamfer and its split-ring source reader return `ErrUnsupported` for a
-positive bridge, before they use fixed-height source-circle or cap-occupancy
-claims that do not cover `z` versus `z/s` or the original top cap at
-`s·height`.
+Cap Chamfer checks each original/proxy pair again. Its split-ring reader keeps
+the blank and bore at physical height `z`, and reads a proxy tooth at exact
+height `z/s` for the recorded one-ULP axial scale `s`. The proxy's Loft wall
+bound includes the bridge to the original exact source. The top-cap proof
+checks a rational section of the bevel band below every original tooth cap.
 
 ## Centered through-bore Cut
 
@@ -419,8 +413,11 @@ Cut's local `boreBound` correspondence and exact outer-band separation.
 
 For the opposite boundary direction, any point of `∂(S∩C)` inside `C`
 belongs to `∂S`; the original two-way joined or bored boundary bound takes
-it to `∂H`, and the segment to that matched point reaches `∂C` if needed.
-Points already on `∂C` need no transfer. Intersecting both `S` and `H`
+it to `∂H`. Since the containment audit proves `C⊂H`, that matched point
+cannot lie in the interior of `C`. The segment to it reaches `∂C` within the
+old bound. Points already on `∂C` need no transfer. This closed-solid argument
+does not need a crossing-angle rim bound; the exact band/old-wall contact
+audit still proves cutter containment. Intersecting both `S` and `H`
 with one fixed `C` cannot increase their occupied symmetric difference,
 so the old `volSymDiff` remains valid for the ideal shell. The actual mesh
 rounds only certified clip vertices. Both ideal and rounded shells are
@@ -430,7 +427,22 @@ distance of at most the clip-rounding bound. The published boundary bound
 is 0.1 mm only after every band, cap, middle-side, bore, and rounding
 charge fits strictly below it.
 
-The route has private limits of 2,048 outer vertices per rim, 4,096 inset
-vertices, 32,768 output triangles, and 16 million exact crossing scans.
+For a one-ULP axial tooth bridge, every positive-bridge tooth has one common
+exact top source level. The proxy and original retain identical XY sections,
+wall indices, and source identity; the proxy's source bound includes their
+axial difference. The bottom cap is unchanged. On the top band, the exact
+section at the lowest original top station must be one simple loop enclosing
+the inset, while the embedded two-level band prevents a pinch at any higher
+section. If `ε` bounds the axial cap shift, `D` bounds matched cap-to-side XY
+motion, and `d` is the setback, each section in that slab stays within
+`L=(ε/d)D` of the inset. The original top-cap footprint matches the proxy
+footprint in XY. The exterior-contour clearance is checked with `L` added;
+the top cap and band receive an explicit reverse reach `ε+2L`, and the root
+slit's forward reach adds the same amount. Each remaining source-ring query
+uses its tooth's exact mapped height, which lies below that original cap.
+
+The route has private limits of 4,096 outer vertices per rim, 4,096 inset
+vertices, and 32,768 output triangles. Its exact crossing audit allows at most
+the lesser of 64 million scans or 2,048 scans per output triangle.
 Every proof gate refuses when its own bounded work or strict inequality
 cannot be completed.
