@@ -169,9 +169,9 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 	return patches, mass, nil
 }
 
-func partialChamferTerminal(terminals map[brepBandTerminal]*Edge, cap, side *Vertex) *Edge {
+func partialChamferTerminal(terminals map[brepBandTerminal]*Edge, capVertex, side *Vertex) *Edge {
 	for _, edge := range terminals {
-		if edgeConnects(edge, cap, side) {
+		if edgeConnects(edge, capVertex, side) {
 			return edge
 		}
 	}

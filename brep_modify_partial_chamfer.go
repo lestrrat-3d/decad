@@ -28,13 +28,15 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	if len(call.edges) != 2 || len(selected) < 4 {
 		return nil, initial.refuse("SL1", `a partial chamfer requires exactly two adjacent edges with two free ends`)
 	}
-	first := slices.Index(selected, true)
-	second := (first + 1) % len(selected)
-	if first < 0 || !selected[second] || slices.Index(selected[second+1:], true) >= 0 {
-		// Also admit the cyclic pair at the end and start of the loop.
-		if !(first == 0 && selected[len(selected)-1] && slices.Index(selected[1:len(selected)-1], true) < 0) {
-			return nil, initial.refuse("SL1", `a partial chamfer's two walks are not adjacent`)
+	var walks []int
+	for i, on := range selected {
+		if on {
+			walks = append(walks, i)
 		}
+	}
+	if len(walks) != 2 ||
+		(walks[0]+1)%len(selected) != walks[1] && (walks[1]+1)%len(selected) != walks[0] {
+		return nil, initial.refuse("SL1", `a partial chamfer's two walks are not adjacent`)
 	}
 	cl, err := oneLoopCornerLoop(initial.budget, bp.faces[sel.face].regionLoop(sel.loop), freeform.NewFreeformWork())
 	if err != nil {
