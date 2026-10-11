@@ -76,7 +76,10 @@ func TestLoftSectionsVaryingCirclesKeepVolumeAndMeshProof(t *testing.T) {
 	}
 	require.Equal(t, 2, planes)
 	require.Equal(t, 4, nurbs)
-	for _, role := range []string{"capStart", "capEnd", "side(0,0)", "side(0,1)", "side(0,2)", "side(0,3)"} {
+	for _, suffix := range []string{"Start", "End"} {
+		require.True(t, roles["cap"+suffix], "missing cap role %s", suffix)
+	}
+	for _, role := range []string{"side(0,0)", "side(0,1)", "side(0,2)", "side(0,3)"} {
 		require.True(t, roles[role], "missing source role %s", role)
 	}
 
