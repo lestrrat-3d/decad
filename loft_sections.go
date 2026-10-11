@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -22,10 +23,11 @@ type LoftSection struct {
 
 // LoftSections builds one solid through exactly three Sketch
 // profiles. The quadratic route admits positive homothetic whole-line loops
-// star-shaped about their common origin. An exactly matching curved record
-// on all three planes builds as a straight prism. Both routes require
-// ascending, equally spaced world-XY planes and interpolate the middle
-// section exactly (docs/loft-sections-design.md). Other shapes refuse.
+// star-shaped about their common origin. A varying four-arc circular section
+// can build as a ruled cone; exactly matching curved records build as a
+// straight prism. All routes require ascending, equally spaced world-XY
+// planes and interpolate the middle section exactly
+// (docs/loft-sections-design.md). Other shapes refuse.
 func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*Body, error) {
 	if ctx == nil || d == nil || len(sections) != 3 {
 		return nil, fmt.Errorf("%w: LoftSections needs a context, document and exactly three sections", ErrDegenerate)
@@ -50,18 +52,24 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 		}
 		records[i], planes[i] = profile, plane
 	}
+	var built smoothloft.Build
+	var err error
 	if hasCurvedSection(records[0]) {
-		body, err := d.buildConstantCurvedSections(ctx, records, planes, work[0])
-		if err != nil {
-			return nil, err
+		built, err = smoothloft.BuildThreeCircles(ctx, records, planes)
+		if errors.Is(err, ErrUnsupported) {
+			body, constantErr := d.buildConstantCurvedSections(ctx, records, planes, work[0])
+			if constantErr != nil {
+				return nil, constantErr
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			d.commit(body)
+			return body, nil
 		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		d.commit(body)
-		return body, nil
+	} else {
+		built, err = smoothloft.BuildThree(ctx, records, planes)
 	}
-	built, err := smoothloft.BuildThree(ctx, records, planes)
 	if err != nil {
 		return nil, err
 	}

@@ -215,6 +215,23 @@ detector, including the 180° seam. Under the race detector it runs three
 sectors through the same continuation and exact audit: a full eight-sector
 race run did not finish within its 2,400-second CI shard budget.
 The final body retains the immutable blank and all eight certified tooth
-sources for a later bore rewrite. The canonical centered 1 mm bore Cut still
-refuses: the joined body's 0.0774 mm held bound exceeds the bore pair's
-0.000290 mm chord tolerance. That Cut has no source-certified rewrite yet.
+sources and both complete cap rings. A post-pattern Cut admits a single
+centered, axis-X, full-circle Sketch prism that spans both blank caps.
+The tool's held ends are compared with the cap stations as exact sums, so
+a rounded end cannot pass a cap it only touches. The tool's cylindrical
+side face supplies the inward wall source.
+
+The bore rewrite first proves that every non-cap facet lies outside the
+cylinder by its held bound and the new circle bound. It checks one axis-fan
+triangle per angular sector on each cap, replaces both fans with annular
+strips, and sews the cylindrical wall between their inner rings. Directed
+edges, vertex links, and exact nonadjacent triangle contacts are checked
+again. The 1,280-station bore mesh has 176,896 triangles, below its bounded
+181,600-triangle audit limit, and uses a 128-million-pair scan limit.
+
+The original joined body's occupied-volume allowance remains valid when
+the exact cylinder is removed from both the true and held solids. The
+circle-to-polygon radial shell adds the bore's own occupied-volume allowance
+over the blank's exact cap-to-cap span. The area allowance also covers both
+removed cap discs and the new cylindrical wall. The real 8/8 producer passes
+the centered 1 mm Cut and `Tessellate(0.1 mm, VerifyAll)`.

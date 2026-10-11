@@ -36,7 +36,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
 | Coil of a profile with free-form, elliptical or trimmed segments | `ErrUnsupported` (CS7) (`internal/coil/profile.go`) | `docs/helix-design.md` CS7 |
 | Composite path in `SweepChain` | `ErrUnsupported` (R34); one straight span only | `docs/surface-design.md` §1.2 |
-| Four-plus or varying curved-section lofts, guide rails and centerlines | `LoftSections` admits three homothetic line loops or identical curved records; other shapes refuse | `docs/loft-sections-design.md`, `docs/loft-design.md` §1 |
+| Four-plus or varying noncircular curved-section lofts, guide rails and centerlines | `LoftSections` admits three homothetic line loops, identical curved records, or linearly varying four-arc circles; other shapes refuse | `docs/loft-sections-design.md`, `docs/loft-design.md` §1 |
 | Point-section loft of a holed profile | `LoftFromPoint` refuses holes because the common apex would have a non-manifold vertex link | `docs/loft-point-design.md` |
 | Detached profile validation past 11585 reconstruction chords; authenticated Loft still stops above its 46340-chord cap | `ErrUnsupported`: R7 sketch reconstruction work budget | `docs/loft-gear-bounds-design.md` §7, `docs/spline-design.md` R7 |
 | Loft with differing loop or segment counts | `ErrUnsupported` (S1/S2) | `docs/loft-design.md` Table S |
@@ -77,8 +77,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Blind cuts with displaced levels, opposed-hole contact, or other crossing holes | Mesh path, possibly coplanar refusal. A7 builds one exact rectangular crossing | `docs/stacked-prism-design.md` §7; `docs/general-boolean-design.md` §3 A7 |
 | Touching, coplanar or face-on-face contact on the mesh path | `BooleanError` code `BooleanUnsupportedContact` | `docs/general-boolean-design.md` §2, `docs/interference-design.md` |
 | Curved surfaces tangent with facets that never meet | `ErrUnsupported` | `doc.go` support map |
-| Held mesh operand coarser than the pair tolerance | `ErrUnsupported` outside the source-certified bevel joins of up to eight disjoint tooth sectors | `doc.go` support map, `docs/loft-point-design.md` |
-| Centered bore Cut after eight bevel joins | The 1 mm tool refuses: held bound 0.0774 mm exceeds chord tolerance 0.000290 mm | `docs/loft-point-design.md` "Three-to-eight-tooth bevel pattern union" |
+| Held mesh operand coarser than the pair tolerance | `ErrUnsupported` except for certified bevel joins and their centered through-bore | `doc.go` support map, `docs/loft-point-design.md` |
 | Sheet body as a boolean operand | Refused permanently; use `Document.Split` | `docs/surface-design.md` Table X |
 
 ## Free-form curves
