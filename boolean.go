@@ -520,6 +520,15 @@ func (pairMeshes) operandMesh(ctx context.Context, b *Body, pairTol float64) (*M
 // verify_pairs.go), which meshes each body once at one chord for every pair
 // it takes part in (docs/interference-design.md §5.3).
 func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b *Body, meshes operandMeshes) (booleanEvaluation, error) {
+	return evaluateBooleanMeshesAtScale(ctx, op, a, b, meshes, 1)
+}
+
+// evaluateBooleanMeshesAtScale lets one source-certified modify route ask
+// the same audited mesh Boolean for finer operand chords. A power-of-two
+// scale preserves the pair tolerance's represented value exactly, while
+// every operand still reports its own chord and occupied-volume bounds.
+func evaluateBooleanMeshesAtScale(ctx context.Context, op meshbool.OperationKind, a, b *Body,
+	meshes operandMeshes, chordScale float64) (booleanEvaluation, error) {
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -528,6 +537,7 @@ func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b 
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
+	tolMM *= chordScale
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
