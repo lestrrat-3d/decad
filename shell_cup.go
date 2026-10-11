@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
@@ -479,7 +481,7 @@ func renameCavityRoles(ctx context.Context, faces []*Face, ref producerID) error
 // proved the cavity simple and inside the outer region), so the absolute
 // difference is the band's analytic area, with both source bounds carried.
 func loopEnclosedAreaContext(ctx context.Context, l loopRecord) (proofbound.BoundedScalar, error) {
-	ig, err := loopRegionIntegralsContext(ctx, l)
+	ig, err := loopRegionIntegralsContext(ctx, l, freeform.MomentAreaOrder)
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}
@@ -487,10 +489,8 @@ func loopEnclosedAreaContext(ctx context.Context, l loopRecord) (proofbound.Boun
 }
 
 // loopRegionIntegralsContext runs the regionIntegrals accumulator over one
-// loop's own segments about the plane origin — the shared walk
-// loopEnclosedAreaContext and loopEnclosedMomentsContext both read, so the
-// two never disagree about which boundary they integrated.
-func loopRegionIntegralsContext(ctx context.Context, l loopRecord) (regionIntegrals, error) {
+// loop's own segments about the plane origin, through the order its caller reads.
+func loopRegionIntegralsContext(ctx context.Context, l loopRecord, order freeform.MomentIntegralOrder) (regionIntegrals, error) {
 	var ig regionIntegrals
 	for _, seg := range l.Segments {
 		if err := ctx.Err(); err != nil {
@@ -498,7 +498,7 @@ func loopRegionIntegralsContext(ctx context.Context, l loopRecord) (regionIntegr
 		}
 		// Integrated about the plane origin itself; the band's area is a
 		// difference of two loop areas, so no walk anchor is involved.
-		if err := ig.AddAnalytic(seg, Point2{}); err != nil {
+		if err := ig.AddFor(seg, momentinput.Plan{}, Point2{}, order); err != nil {
 			return regionIntegrals{}, err
 		}
 	}
@@ -522,7 +522,7 @@ func loopRegionIntegralsContext(ctx context.Context, l loopRecord) (regionIntegr
 // (outer/hole, by loop index) on top of this canonicalized triple, exactly as
 // it already does to loopEnclosedAreaContext's |area| for the slab volume.
 func loopEnclosedMomentsContext(ctx context.Context, l loopRecord) (area, mu, mv proofbound.BoundedScalar, err error) {
-	ig, err := loopRegionIntegralsContext(ctx, l)
+	ig, err := loopRegionIntegralsContext(ctx, l, freeform.MomentFirstOrder)
 	if err != nil {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
