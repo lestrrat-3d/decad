@@ -113,10 +113,14 @@ bound is added conservatively.
 
 The payload records the original blank and ordered teeth, both exact cap
 outlines and their group IDs, and the exact minimum projected radius of every
-non-cap held triangle. A centered bore must remain inside the exact blank
-and below the side clearance after the joined boundary bound. The cap audit
-proves each recorded outline is one disk containing the axis. Placement
-clears the record, so a later Boolean cannot rebuild from unplaced operands.
+non-cap held triangle. It also records the upward-rounded inward and outward
+radial seam reaches and the top collar height used by the boundary and volume
+proofs. Those reaches enclose the replaced root seam; retained tooth exterior
+walls use their Loft source bounds. A centered bore must remain inside the
+exact blank, below the side clearance after the joined boundary bound, and
+inside the seam annulus's inner radius. The cap audit proves each recorded
+outline is one disk containing the axis. Placement clears the record, so a
+later Boolean cannot rebuild from unplaced operands.
 
 ## Centered through-bore Cut
 
@@ -147,5 +151,6 @@ that cylinder only in the certified radial shell around its wall. The result
 adds the whole shell volume, `4π·radius·boreBound·height`, to the join's
 occupied-volume bound. The result carries the larger of the join and bore
 boundary bounds. It replaces the join source record with the certified outer
-and inner cap loops, their facet groups, the bore-wall group, and the original
-blank and tooth sources. Placement clears this post-bore record.
+and inner cap loops, their facet groups, the bore-wall group, the original
+blank and tooth sources, and the unchanged seam and collar bounds. Placement
+clears this post-bore record.

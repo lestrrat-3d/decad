@@ -19,13 +19,14 @@ import (
 // loftCylinderBoreRecord names the two certified annular caps of an unplaced
 // through-bore result. Each outer and inner loop is CCW when viewed from +Z.
 type loftCylinderBoreRecord struct {
-	blank                   *Body
-	teeth                   []*Body
-	outer, inner            [2][]int
-	capGroups               [2]int
-	wallGroup               int
-	blankRadius, boreRadius float64
-	z0, z1                  float64
+	blank                              *Body
+	teeth                              []*Body
+	outer, inner                       [2][]int
+	capGroups                          [2]int
+	wallGroup                          int
+	blankRadius, boreRadius            float64
+	innerInset, outerExcess, topCollar float64
+	z0, z1                             float64
 }
 
 // tryLoftCylinderBoreCut replaces the two planar cap disks of an authenticated
@@ -203,6 +204,9 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		proofbound.AbsSumUpper(radius, boreBound, joined.meshBound) >= record.minSideRadius {
 		return nil, fmt.Errorf("%w: circular bore reaches a joined side facet", ErrUnsupported)
 	}
+	if proofbound.AbsSumUpper(radius, boreBound, record.innerInset) >= record.radius {
+		return nil, fmt.Errorf("%w: circular bore reaches the joined source seam annulus", ErrUnsupported)
+	}
 	mesh := &bevelJoinedMesh{
 		verts:  append([]r3.Vec(nil), joined.verts...),
 		groups: append([]facetGroup(nil), joined.groups...),
@@ -323,6 +327,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		blank: record.blank, teeth: append([]*Body(nil), record.teeth...),
 		capGroups: record.capGroups, wallGroup: wallGroup,
 		blankRadius: record.radius, boreRadius: radius, z0: record.z0, z1: record.z1,
+		innerInset: record.innerInset, outerExcess: record.outerExcess, topCollar: record.topCollar,
 	}
 	for cap := range 2 {
 		result.loftCylinderBore.outer[cap] = append([]int(nil), record.capOutlines[cap]...)
