@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 
 	"github.com/lestrrat-3d/r3"
@@ -26,17 +27,23 @@ import (
 // it now is — real Face/Loop/Edge/Vertex topology chained along the face
 // boundaries, shells and voids decided by exact signed volume and exact
 // containment parity, and measurements integrated exactly over the held mesh,
-// reported Approximate with the proven composed bounds. A Faceted face IS
-// exactly its polygons; what it approximates is which surface it stands for.
+// reported Approximate with the proven composed bounds. An ordinary Boolean
+// face is Faceted; a structural source with its own surface proof can retain
+// that analytic tag while the polygons remain the held boundary.
 
 // facetGroup is one source face's provenance, carried into the payload so a
 // rebuild (Placed) reproduces the same origins.
 type facetGroup struct {
 	origins []FeatureRef
-	// surface is set only by a structural trim that retains the source
-	// surface's authenticated record. Ordinary mesh booleans leave it nil.
+	// surface is set by a source whose authenticated surface is retained,
+	// including structural trims and the smooth three-section loft. Ordinary
+	// mesh booleans leave it nil.
 	surface Surface
 	denoted *surfacenormal.Revolved
+	// normalBound covers the tag's normal departure from its denoted patch.
+	// A placed planar tag conservatively uses the maximum distance of two
+	// unit normals when its rounded frame has no tighter certificate.
+	normalBound float64
 	// reversed records a retained analytic surface whose natural normal
 	// points into the result, as on the cone exposed by a Cut.
 	reversed bool
@@ -142,6 +149,17 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 			cone.Origin = delta.Apply(cone.Origin)
 			cone.Axis = delta.ApplyDir(cone.Axis)
 			next.groups[i].surface = cone
+		}
+		if plane, ok := next.groups[i].surface.(Plane); ok && delta != r3.Identity() {
+			moved, err := surfacegeom.TransformSurface(internalSurface(plane), delta)
+			if err != nil {
+				return nil, err
+			}
+			next.groups[i].surface = publicSurface(moved)
+			next.groups[i].normalBound = 2
+			if delta.IsReflection() {
+				next.groups[i].reversed = !next.groups[i].reversed
+			}
 		}
 		if next.groups[i].denoted != nil {
 			denoted := next.groups[i].denoted.Transformed(delta)
@@ -273,11 +291,12 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			// both strips of a split cap came from the cap, and both must
 			// still say so, or FaceCreatedBy and the surveys lose them.
 			f = &Face{
-				origins:    append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
-				body:       body,
-				heldPlanar: pp.groups[pp.src[i]].planar,
-				denoted:    pp.groups[pp.src[i]].denoted,
-				reversed:   pp.groups[pp.src[i]].reversed,
+				origins:     append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
+				body:        body,
+				heldPlanar:  pp.groups[pp.src[i]].planar,
+				denoted:     pp.groups[pp.src[i]].denoted,
+				normalBound: pp.groups[pp.src[i]].normalBound,
+				reversed:    pp.groups[pp.src[i]].reversed,
 			}
 			faceIdx[patch[i]] = f
 			facePlanar[f] = pp.groups[pp.src[i]].planar

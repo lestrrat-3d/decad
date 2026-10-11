@@ -138,6 +138,10 @@ func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepM
 		if matched || err != nil {
 			return body, err
 		}
+		body, matched, err = shellRoundBoss(ctx, b, sp, bp, req.shellCall)
+		if matched || err != nil {
+			return body, err
+		}
 		body, matched, err = shellBlindPocket(ctx, b, sp, bp, req.shellCall)
 		if matched || err != nil {
 			return body, err

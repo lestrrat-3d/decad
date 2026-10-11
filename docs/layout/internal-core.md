@@ -51,6 +51,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines. See loop-fillet §7.1. |
 | `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums and mesh proof records. |
+| `internal/smoothloft/` | Exact three-section homothety gate, quadratic held mesh and measurement bounds. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs. |
 | `internal/revolveplan/` | Revolve mesh walk resolution, coordinate ceilings and chord counts. See tessellation §8. |
 | `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |

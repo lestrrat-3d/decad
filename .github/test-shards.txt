@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    0.00s over 1 tests
-#   shard 1:    0.17s over 225 tests
+#   shard 1:    1.22s over 230 tests
 #   shard 2:   10.20s over 135 tests
 #   shard 3:  136.92s over 135 tests
 #   shard 4:  182.61s over 137 tests
@@ -223,6 +223,7 @@
 1	0.00	TestRevolveFreeformDisplacedSectionRefuses
 1	1.05	TestRevolveFreeformPartialCapAreaSlack
 1	0.00	TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
+1	0.00	TestRoundBossShellMeshVolumeProof
 1	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
 1	0.00	TestSegFilterKeepsWhatTheExactPredicateAccepts
 1	0.01	TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture
@@ -238,6 +239,7 @@
 1	0.00	TestTessellateLoftRefusesAnUnrestatablePayload
 1	0.00	TestTorusCrossingsCancellationReachesTheChainBuild
 1	0.00	TestTriangulateStitchFacesTilesAHoledFaceExactly
+1	0.00	TestTwistPlacedAxialRoundVolumeProof
 1	0.00	TestValidateLoftRecordsDistinctPlanesPass
 1	0.00	TestVerifyPublishAbsentConcaveRadius
 1	0.01	TestVerifyPublishCapBlendWallStaged

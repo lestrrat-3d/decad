@@ -7,14 +7,14 @@
 #
 # Shard totals at the last measurement:
 #   shard 0: 1059.82s over 1 tests
-#   shard 1:  175.64s over 104 tests
-#   shard 2:  177.64s over 198 tests
-#   shard 3:   41.03s over 209 tests
-#   shard 4:   40.23s over 201 tests
+#   shard 1:  175.72s over 113 tests
+#   shard 2:  177.82s over 204 tests
+#   shard 3:   43.55s over 214 tests
+#   shard 4:   40.23s over 203 tests
 #   shard 5:  191.68s over 200 tests
 #   shard 6:   90.77s over 195 tests
 #   shard 7:   92.78s over 200 tests
-#   shard 8:  101.96s over 196 tests
+#   shard 8:  101.99s over 200 tests
 #   shard 9:  118.05s over 202 tests
 #
 0	1059.82	TestLoftEmbeddedSixtyToothGearFeatures
@@ -200,6 +200,12 @@
 2	1.02	TestLoftHelicalToothClearsDefaultTolerance
 2	0.01	TestLoftPlacedRotationSoundness
 2	0.00	TestLoftPlacedS13OverflowingCoordinate
+2	0.10	TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof
+2	0.02	TestLoftSectionsConstantCurvesRefuseVaryingProfiles
+2	0.03	TestLoftSectionsInterpolatesThreeSketchesWithCertifiedMesh
+2	0.01	TestLoftSectionsPlacedCapsRemainPlanar
+2	0.01	TestLoftSectionsRefusesUnprovenScaleAndSpacing
+2	0.01	TestLoftSectionsRequiresThreeSections
 2	0.03	TestLoftTessellatePlacedLoftUsesThePositiveBoundPath
 2	0.02	TestMalformedNURBSRefusesBeforeScanningControls
 2	0.01	TestMassPropertiesCompositeSweepTurnedFrame
@@ -466,6 +472,8 @@
 3	0.09	TestShellCupTwoHolesThroughStack
 3	0.01	TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged
 3	0.00	TestShellOffsetRectangularBoss
+3	0.00	TestShellRoundStackedBoss
+3	0.00	TestShellRoundStackedBossClearance
 3	0.00	TestShellSideOpeningObliqueRefusals
 3	0.00	TestShellStackedBossClearanceRefusal
 3	0.03	TestShellTubeInwardBox
@@ -700,6 +708,8 @@
 4	0.02	TestSweepPairRotatingSourceSpheresImpact
 4	0.03	TestSweepSpatialPathTurnsThroughOrthogonalPlanes
 4	0.04	TestSweepStraightIsABooleanOperand
+4	0.00	TestSweepTwistNegativeAngleAndAdmission
+4	0.00	TestSweepTwistStraightPolygon
 4	0.01	TestTangentChainUndecidedRefused
 4	0.14	TestTangentJoinedSlotChamferAtOffsetOrigin
 4	0.05	TestTaperStopExtents

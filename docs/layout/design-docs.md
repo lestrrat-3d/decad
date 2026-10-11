@@ -28,9 +28,10 @@ The rules for rows live in `docs/layout.md`.
 | `docs/shell-opening-design.md` | Shell side openings on a prism and a revolve: rim rule, brep record, Tables RO/SO/BO/DO. |
 | `docs/draft-design.md` | `WithTaper` and `Body.Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
+| `docs/loft-sections-design.md` | Exact positive homothetic three-section loft, quadratic walls, held mesh and proof. |
 | `docs/loft-point-design.md` | Point-to-profile solid loft, its apex topology and mesh proof. |
 | `docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
-| `docs/sweep-design.md` | `Path`/`Sweep`, `SweepChain` and mitred sweeps (§16). |
+| `docs/sweep-design.md` | `Path`/`Sweep`, `SweepChain`, mitred sweeps (§16) and bounded twist (§17). |
 | `docs/helix-design.md` | `Document.Coil`: a profile screwed about an in-plane axis. |
 | `docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |

@@ -141,6 +141,8 @@ type SweepConfig struct {
 	Mitred        bool
 	Scaled        bool
 	Factors       []float64
+	Twisted       bool
+	Twist         units.Value
 }
 
 // DecodeSweep validates sweep options against the path's segment count.
@@ -203,9 +205,11 @@ func DecodeSweep(opts []SweepOption, segments int) (SweepConfig, error) {
 		if _, err := angle.In(units.Radian); err != nil {
 			return SweepConfig{}, fmt.Errorf(`%w: the sweep twist is not representable: %s`, decaderr.ErrNotFinite, err)
 		}
-		if angle.Mag() != 0 {
-			return SweepConfig{}, fmt.Errorf(`%w: nonzero sweep twist is not implemented`, decaderr.ErrUnsupported)
-		}
+		cfg.Twisted = angle.Mag() != 0
+		cfg.Twist = angle
+	}
+	if cfg.Twisted && (cfg.SurfaceResult || cfg.Mitred || cfg.Scaled) {
+		return SweepConfig{}, fmt.Errorf(`%w: nonzero twist does not combine with a sheet, mitred joins, or section scale`, decaderr.ErrUnsupported)
 	}
 	if cfg.SurfaceResult && (cfg.Mitred || cfg.Scaled) {
 		return SweepConfig{}, fmt.Errorf(`%w: a mitred or scaled sweep builds a solid only; WithSurfaceResult is not implemented for it (docs/sweep-design.md Table SM row SM9)`, decaderr.ErrUnsupported)

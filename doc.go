@@ -102,7 +102,9 @@
 //	  composite path without exact transported frames or
 //	    certified span separation                             ErrUnsupported
 //	  closed path                                             ErrUnsupported
-//	  WithSweepTwist nonzero twist                            ErrUnsupported
+//	  WithSweepTwist: centred convex whole-line profile,
+//	    origin XY plane, one positive-Z line, angle <= 1 rad  builds
+//	  other nonzero twist                                     ErrUnsupported
 //	  WithMitredJoins / WithSectionScale over a LineTo path
 //	    and a whole-line profile                              builds
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
@@ -189,11 +191,18 @@
 //	Shell         brep read as a prism cut by through tools,
 //	              inward, caps or one run of straight walls
 //	              along section axes removed                  builds
+//	Shell         exact nested rectangular or circular boss
+//	              on a rectangular plate, top removed         builds
 //	  a brep or stacked result that reads as neither          ErrUnsupported
 //	  outward; a curved removed wall, or a wall run ending
 //	    at a reflex corner; dilated tools that meet, reach
 //	    a cap or the material past their walls                ErrUnsupported
 //	Loft          same-type segment pairs, distinct planes    builds
+//	LoftSections  three exact positive homothetic whole-line
+//	              profiles on equally spaced XY planes       builds
+//	              three exactly identical curved profiles   builds
+//	  another section count                                   ErrDegenerate
+//	  another shape or plane                                  ErrUnsupported
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
 //	  a pair not the same line, arc, circle or Tier A type    ErrUnsupported
 //	  a free-form pair of unequal Bézier span counts          builds
@@ -236,8 +245,8 @@
 // taper the support map does not list is [ErrUnsupported], returned before
 // the document changes. Body.Draft leans an existing prism's walls, all of
 // them or a selected subset, the same way about one of its caps.
-// WithSweepTwist names a sweep's distributed twist, with nonzero twist
-// staged as [ErrUnsupported].
+// WithSweepTwist names a sweep's distributed twist. Its admitted straight
+// polygon case is described in docs/sweep-design.md §17.
 // WithLoftAlignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated
