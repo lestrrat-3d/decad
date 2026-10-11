@@ -82,25 +82,30 @@ func cross2xHomNumerator(a, b, c Xp2) *big.Int {
 	return new(big.Int).Sub(new(big.Int).Mul(baU, caV), new(big.Int).Mul(baV, caU))
 }
 
-// ratDiffNum leaves the difference's positive denominator implicit. Exact
-// signs only need its numerator, so no rational normalization is needed.
-func ratDiffNum(x, y *big.Rat) *big.Int {
-	return new(big.Int).Sub(new(big.Int).Mul(x.Num(), y.Denom()),
-		new(big.Int).Mul(y.Num(), x.Denom()))
+// ratDiffNumInto leaves the difference's positive denominator implicit. The
+// scratch integer is reused across the four differences in one orientation.
+func ratDiffNumInto(dst, scratch *big.Int, x, y *big.Rat) {
+	dst.Mul(x.Num(), y.Denom())
+	scratch.Mul(y.Num(), x.Denom())
+	dst.Sub(dst, scratch)
 }
 
 func cross2xRatSign(a, b, c Xp2) int {
-	bu, bv := ratDiffNum(b.U, a.U), ratDiffNum(b.V, a.V)
-	cu, cv := ratDiffNum(c.U, a.U), ratDiffNum(c.V, a.V)
+	var bu, bv, cu, cv, scratch big.Int
+	ratDiffNumInto(&bu, &scratch, b.U, a.U)
+	ratDiffNumInto(&bv, &scratch, b.V, a.V)
+	ratDiffNumInto(&cu, &scratch, c.U, a.U)
+	ratDiffNumInto(&cv, &scratch, c.V, a.V)
 	// Both terms are scaled to the same positive product of all six
 	// coordinate denominators. Their difference has Cross2x's exact sign.
-	left := new(big.Int).Mul(bu, cv)
-	left.Mul(left, b.V.Denom())
-	left.Mul(left, c.U.Denom())
-	right := new(big.Int).Mul(bv, cu)
-	right.Mul(right, b.U.Denom())
-	right.Mul(right, c.V.Denom())
-	return left.Sub(left, right).Sign()
+	var left, right big.Int
+	left.Mul(&bu, &cv)
+	left.Mul(&left, b.V.Denom())
+	left.Mul(&left, c.U.Denom())
+	right.Mul(&bv, &cu)
+	right.Mul(&right, b.U.Denom())
+	right.Mul(&right, c.V.Denom())
+	return left.Sub(&left, &right).Sign()
 }
 
 // ClipFrac is an exact fraction kept UNNORMALISED: no common factor is ever
