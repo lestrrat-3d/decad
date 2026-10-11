@@ -48,6 +48,8 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect` and the `BooleanError` mapping. See evaluator §9. |
 | `point_cone_trim.go` | Retains point-loft and cone source faces through coaxial Cut/Intersect. See loft-point design. |
+| `bevel_join_source.go` | Matches the live Sketch tooth source to the finite blank root meridian. See loft-point design. |
+| `bevel_join.go` | Rebuilds and audits one shared-root bevel blank and tooth Union. See loft-point design. |
 | `loft_cut.go` | Preserves a matching axial loft through a certified coaxial circle-bore Cut. See loft §18. |
 | `prism_boolean.go` | Analytic booleans of co-directional prisms. See `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Clean-nesting scene adapters. See prism-boolean §4.2. |
