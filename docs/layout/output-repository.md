@@ -17,6 +17,7 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_brep_fillet.go` | Adapts fillet band ring geometry, strips and proof terms. See loop-fillet §7.1. |
 | `tessellate_brep_partial_fillet.go` | Adapts `internal/partialband/` layouts to selected cap-edge fillet meshes. |
 | `tessellate_brep_partial_chamfer.go` | Emits two selected planar chamfer strips over their shared contour vertices. See modify-general §4.3a. |
+| `tessellate_all_edge_chamfer.go` | Meshes the box all-edge bevels and shared circular bore with occupied-volume proof. See modify-general §4.3b. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1. |
 | `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
 | `tessellate_sweep_composite.go` | Plans shared profile stations and assembles composite Sweep meshes. See sweep Table D. |

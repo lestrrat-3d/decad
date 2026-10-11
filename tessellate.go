@@ -440,6 +440,9 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 // off the payload at no cost and publishes them unconditionally;
 // tessellateContext withholds them afterwards.
 func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify Verification) (*Mesh, error) {
+	if p, ok := b.payload.(allEdgeChamferPayload); ok {
+		return tessellateAllEdgeChamfer(ctx, b, p, chord, verify)
+	}
 	if fp, ok := b.payload.(facetedPayload); ok {
 		return tessellateFaceted(ctx, b, fp, chord)
 	}

@@ -44,6 +44,7 @@ The rules for rows live in `docs/layout.md`.
 | `brep_loop_fillet.go` | Route L's fillet topology and mass adapters over `internal/filletband/`. See loop-fillet. |
 | `brep_loop_partial_fillet.go` | Closes partial-loop fillet bands with corner patches and terminal arcs. |
 | `brep_loop_partial_chamfer.go` | Closes two selected chamfer strips and integrates their exact planar mass. See modify-general §4.3a. |
+| `brep_all_edge_chamfer.go` | Builds and measures the twelve simultaneous outer bevels of an exact cross-drilled box. See modify-general §4.3b. |
 
 ### Booleans
 

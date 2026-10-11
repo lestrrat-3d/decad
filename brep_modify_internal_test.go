@@ -55,8 +55,9 @@ func requireSB1Names(t *testing.T, body *Body) {
 
 // TestBrepModifyOutsideRoutePRefuses pins the refusals that follow route P
 // (§2, §6): a selection no prism reading admits falls to route E, L or V
-// (docs/vertex-blend-design.md §2). A Chamfer of every convex edge refuses
-// with SL1 because the selected loops share vertices. A Shell takes route S
+// (docs/vertex-blend-design.md §2). A Chamfer of the three straight edges
+// meeting at one box corner refuses with SL1 because they make no complete
+// loop or admitted two-edge chain. A Shell takes route S
 // (docs/modify-general-design.md §3), which refuses S1's every planar
 // face with shell-opening SO6, since S1 reads as the box along z cut by the
 // tool along y and the selection removes every one of its walls, no proper
@@ -70,7 +71,7 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 	refuses := func(t *testing.T, body *Body, shell ...string) {
 		t.Helper()
 		before := body.doc.Bodies()
-		edges := Edges(Convex()).AtLeast(1)
+		edges := Edges(Convex(), EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3)
 		_, err := body.Chamfer(t.Context(), edges, units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, rowSL1, "chamfers")
 		_, err = body.Shell(t.Context(), Faces(Planar()).AtLeast(1), units.Millimeters(1))

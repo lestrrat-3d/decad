@@ -134,6 +134,9 @@ func (m *Mesh) withholdProofs() {
 // docs/evaluator-design.md §9). Restatement moves no coordinate, so there is
 // no audit for a lower level to decline.
 func payloadAuditsFacetContact(p featurePayload) bool {
+	if _, ok := p.(allEdgeChamferPayload); ok {
+		return true
+	}
 	if _, ok := p.(patchPayload); ok {
 		return true
 	}

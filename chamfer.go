@@ -234,6 +234,15 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		},
 		sel: sel, edges: edges, blend: &blend, asym: asym,
 		loop: &capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}, loopKind: brepBandChamfer}
+	if bp, ok := b.payload.(brepPayload); ok {
+		body, matched, err := tryAllEdgeChamfer(ctx, b, bp, edges, dmm, dDelta, asym)
+		if matched || err != nil {
+			if err != nil {
+				return nil, err
+			}
+			return commitModifyResult(ctx, b, body)
+		}
+	}
 	route, err := modifyBrepReceiver(ctx, b, loopCall)
 	if err != nil {
 		return nil, err
