@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -28,6 +29,14 @@ type loftFacesToeRecord struct {
 	toe     *pointConeLimit
 }
 
+var errLoftCapChanged = errors.New("loft cap changed during cut")
+
+func certifiedLoftCapCone(source *pointSectionRecord, m loftFaceMap,
+	cone *pointConeLimit, outside func(loftFaceMap, [4]*big.Rat, *pointConeLimit) bool) bool {
+	box, err := lfSourceBox(source)
+	return err == nil && lfPositiveDenominator(m, box) == nil && outside(m, box, cone)
+}
+
 func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) error {
 	base, ok := source.payload.(facetedPayload)
 	if !ok || !base.loftFacesPrimitive || base.loftFacesCap == nil || base.xform != r3.Identity() {
@@ -37,19 +46,20 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 	if !ok || !pointConeSourceAboveFarCap(base, cone) {
 		return nil
 	}
-	box, err := lfSourceBox(base.loftFacesCap.source)
-	if err != nil || lfPositiveDenominator(base.loftFacesCap.final, box) != nil ||
-		!loftCapOutsideToeCone(base.loftFacesCap.final, box, cone) {
+	if !certifiedLoftCapCone(base.loftFacesCap.source, base.loftFacesCap.final, cone, loftCapOutsideToeCone) {
 		return nil
 	}
 	capFace, err := unchangedLoftCap(ctx, source, result, base, base.loftFacesCap.group)
+	if errors.Is(err, errLoftCapChanged) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-	if capFace == nil {
-		return nil
+	p, ok := result.payload.(facetedPayload)
+	if !ok {
+		return fmt.Errorf("%w: the loft cut has no faceted proof payload", ErrUnsupported)
 	}
-	p := result.payload.(facetedPayload)
 	p.loftFacesToe = &loftFacesToeRecord{base: base, cap: base.loftFacesCap, capFace: capFace, toe: cone}
 	result.payload = p
 	return nil
@@ -119,7 +129,7 @@ func loftCapTriangleOf(v []r3.Vec, t [3]int) loftCapTriangle {
 // and one unchanged source patch before carrying the cap's true-map proof.
 func unchangedLoftCap(ctx context.Context, source, result *Body, base facetedPayload, group int) (*Face, error) {
 	if group < 0 || group >= len(base.groups) || len(base.faceOf) != len(base.tris) {
-		return nil, nil
+		return nil, errLoftCapChanged
 	}
 	sourceFaces, resultFaces := source.Faces(), result.Faces()
 	var sourceFace *Face
@@ -135,17 +145,17 @@ func unchangedLoftCap(ctx context.Context, source, result *Body, base facetedPay
 		}
 		faceIndex := base.faceOf[i]
 		if faceIndex < 0 || faceIndex >= len(sourceFaces) {
-			return nil, nil
+			return nil, errLoftCapChanged
 		}
 		face := sourceFaces[faceIndex]
 		if sourceFace != nil && sourceFace != face {
-			return nil, nil
+			return nil, errLoftCapChanged
 		}
 		sourceFace = face
 		want[loftCapTriangleOf(base.verts, tri)]++
 	}
 	if sourceFace == nil {
-		return nil, nil
+		return nil, errLoftCapChanged
 	}
 	sourceIndex := -1
 	for i, face := range sourceFaces {
@@ -155,9 +165,12 @@ func unchangedLoftCap(ctx context.Context, source, result *Body, base facetedPay
 		}
 	}
 	if sourceIndex < 0 {
-		return nil, nil
+		return nil, errLoftCapChanged
 	}
-	p := result.payload.(facetedPayload)
+	p, ok := result.payload.(facetedPayload)
+	if !ok {
+		return nil, errLoftCapChanged
+	}
 	var resultFace *Face
 	count := 0
 	for i, tri := range p.tris {
@@ -171,27 +184,27 @@ func unchangedLoftCap(ctx context.Context, source, result *Body, base facetedPay
 		}
 		faceIndex := p.faceOf[i]
 		if faceIndex < 0 || faceIndex >= len(resultFaces) {
-			return nil, nil
+			return nil, errLoftCapChanged
 		}
 		face := resultFaces[faceIndex]
 		if resultFace != nil && resultFace != face {
-			return nil, nil
+			return nil, errLoftCapChanged
 		}
 		resultFace = face
 		key := loftCapTriangleOf(p.verts, tri)
 		if want[key] == 0 {
-			return nil, nil
+			return nil, errLoftCapChanged
 		}
 		want[key]--
 		count++
 	}
 	for _, remaining := range want {
 		if remaining != 0 {
-			return nil, nil
+			return nil, errLoftCapChanged
 		}
 	}
 	if count == 0 {
-		return nil, nil
+		return nil, errLoftCapChanged
 	}
 	return resultFace, nil
 }
@@ -212,9 +225,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		!orderedLoftFacesConeLimits(p.loftFacesToe.toe, cone, p.loftFacesToe.base) {
 		return nil, false, nil
 	}
-	box, err := lfSourceBox(p.loftFacesToe.cap.source)
-	if err != nil || lfPositiveDenominator(p.loftFacesToe.cap.final, box) != nil ||
-		!loftCapOutsideHeelCone(p.loftFacesToe.cap.final, box, cone) {
+	if !certifiedLoftCapCone(p.loftFacesToe.cap.source, p.loftFacesToe.cap.final, cone, loftCapOutsideHeelCone) {
 		return nil, false, nil
 	}
 	var coneFace *Face
@@ -229,13 +240,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	if coneFace == nil {
 		return nil, false, nil
 	}
-	capSource := -1
-	for i, face := range target.Faces() {
-		if face == p.loftFacesToe.capFace {
-			capSource = i
-			break
-		}
-	}
+	capSource := slices.Index(target.Faces(), p.loftFacesToe.capFace)
 	if capSource < 0 {
 		return nil, false, nil
 	}
@@ -243,6 +248,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	// coarse. Retry only its staging refusal; every other gate keeps its
 	// verdict. Each attempt proves its own tessellation and result bounds.
 	var eval booleanEvaluation
+	var err error
 	for scale := 4.0; scale <= 32; scale *= 2 {
 		eval, err = evaluateBooleanMeshesWithConeCap(ctx, op, target, tool, pairMeshes{}, scale,
 			p.loftFacesToe.capFace, coneFace)
@@ -257,11 +263,9 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	}
 	// The cap and wall have no held contact. The mesh result must exclude
 	// the whole cap, agreeing with the exact proof that it is outside.
-	for _, source := range eval.payload.src {
-		if source == capSource {
-			return nil, true, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedContact,
-				fmt.Errorf("%w: the held cone retains a cap certified outside its true surface", ErrUnsupported)))
-		}
+	if slices.Contains(eval.payload.src, capSource) {
+		return nil, true, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedContact,
+			fmt.Errorf("%w: the held cone retains a cap certified outside its true surface", ErrUnsupported)))
 	}
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, eval.payload, eval.audit, eval.volume, eval.volumeRat)
 	if err != nil {
@@ -331,10 +335,10 @@ func loftCapOutsideHeelCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit
 // The true cap and cone are disjoint by the source-map proof. Require the
 // held facets to be disjoint too before skipping their proximity refusal.
 func disjointConeCapFacets(ctx context.Context, a, b *meshbool.BoolMesh,
-	cap, cone []int, memo *meshbool.ContactMemo) error {
+	capFacets, coneFacets []int, memo *meshbool.ContactMemo) error {
 	budget := proofbound.NewWorkBudget(ctx)
-	for _, i := range cap {
-		for _, j := range cone {
+	for _, i := range capFacets {
+		for _, j := range coneFacets {
 			if err := budget.Step(); err != nil {
 				return err
 			}

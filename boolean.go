@@ -944,7 +944,7 @@ func operandSymDiff(m *Mesh) (float64, error) {
 	return m.volSymDiff, nil
 }
 
-// refuseUndecidableProximity is the tangency gate (docs/evaluator-design.md §9,
+// refuseUndecidableProximityWithConeCap is the tangency gate (docs/evaluator-design.md §9,
 // docs/tessellation-design.md §11 step 4). The mesh boolean decides every
 // contact on the CHORDS, and a chord polygon lies strictly inside the curved
 // surface it approximates — so a true tangency between two operands can vanish
@@ -978,10 +978,6 @@ func operandSymDiff(m *Mesh) (float64, error) {
 // It may refuse a valid model whose operands genuinely pass within a chord
 // tolerance of each other. That is the accepted price; the alternative is a
 // verdict decided by chord placement.
-func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *meshbool.BoolMesh, memo *meshbool.ContactMemo) error {
-	return refuseUndecidableProximityWithConeCap(ctx, ma, mb, bmA, bmB, memo, nil, nil)
-}
-
 func refuseUndecidableProximityWithConeCap(ctx context.Context, ma, mb *Mesh,
 	bmA, bmB *meshbool.BoolMesh, memo *meshbool.ContactMemo, capFace, coneFace *Face) error {
 	// One counter spans the grouping and the pair scan it feeds: the grouping
