@@ -36,3 +36,17 @@ first.
   geometry and mesh construction.
 - `docs/layout/internal-checks.md`: internal packages for bounds, surveys,
   sweeps and clearance.
+
+## Splitting oversized agent files
+
+- If `CLAUDE.md` exceeds 8192 bytes, move a cohesive topic into `docs/<topic>.md`.
+  Replace its text with a short trigger and link in `CLAUDE.md`'s pre-read table.
+- If this index exceeds 4096 bytes, move topic detail into its part file or
+  owning document. Keep the index's part-file links short.
+- If a `docs/layout/` part exceeds 12288 bytes, move a cohesive group of rows
+  into a new `docs/layout/<topic>.md` file. Give it one `## Layout` heading and
+  its own table, register it with `layoutPartSpec` in `claude_md_layout_test.go`,
+  and link it under **Part files** above. Move each row; never copy it.
+- If a Layout cell exceeds 300 characters, shorten it to a pointer and move
+  the detail into the file or design document that owns it.
+- Run `go test . -run '^TestCLAUDEMDLayoutStaysCompact$'` after a split.
