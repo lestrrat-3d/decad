@@ -765,7 +765,7 @@ func (e *heldEmbedding) edgeSeparates(t [3]int, pts, shared []int, u, v int) boo
 }
 
 // orient2 is the exact orientation of held vertices a, b, c projected on axes
-// (u, v): a float evaluation whose error bound decides it, else rationals.
+// (u, v): a float evaluation whose error bound decides it, else integer signs.
 func (e *heldEmbedding) orient2(a, b, c, u, v int) int {
 	vs := e.h.Verts
 	pa := [2]float64{AxisCoord(vs[a], u), AxisCoord(vs[a], v)}
@@ -774,12 +774,10 @@ func (e *heldEmbedding) orient2(a, b, c, u, v int) int {
 	if s := Orient2Float(pa, pb, pc); s != 0 {
 		return s
 	}
-	r := func(x float64) *big.Rat { return polynomial.MustRatOf(x) }
-	bu := new(big.Rat).Sub(r(pb[0]), r(pa[0]))
-	bv := new(big.Rat).Sub(r(pb[1]), r(pa[1]))
-	cu := new(big.Rat).Sub(r(pc[0]), r(pa[0]))
-	cv := new(big.Rat).Sub(r(pc[1]), r(pa[1]))
-	return new(big.Rat).Sub(new(big.Rat).Mul(bu, cv), new(big.Rat).Mul(bv, cu)).Sign()
+	project := func(p proof.Xpt) Xp2 {
+		return Xp2{Hu: XIntCoordOf(p, u), Hv: XIntCoordOf(p, v), Hw: p.W}
+	}
+	return cross2xHomNumerator(project(e.lift(a)), project(e.lift(b)), project(e.lift(c))).Sign()
 }
 
 // planeSign is the exact side of held vertex p against facet f's plane: the
