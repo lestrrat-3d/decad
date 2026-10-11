@@ -39,11 +39,12 @@ func (b brepLoopBand) tessView(f brepFace, xform r3.Transform) capBlendPayload {
 // resolves over the receiver's loop in F's frame, the topology use of each
 // side-contour piece, and the mesh vertices of both rings once placed.
 type brepBandChord struct {
-	band  brepLoopBand
-	face  brepFace
-	cbp   capBlendPayload
-	lm    capBlendLoopMesh
-	start bool
+	band      brepLoopBand
+	face      brepFace
+	cbp       capBlendPayload
+	lm        capBlendLoopMesh
+	start     bool
+	bossShell bool
 	// sideZ and sideDelta are the side level and its displacement.
 	sideZ, sideDelta float64
 	// sideUse is walk i's side-contour use (topology.open).
@@ -66,7 +67,7 @@ type brepBandChord struct {
 // both, or the body refuses. A fillet band adds its interior ring count
 // (docs/loop-fillet-design.md §7.1).
 func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, chord float64) ([]brepBandChord, map[int]tessellation.ChordSamples[*Face], error) {
-	if len(bp.loopBands) == 0 {
+	if len(bp.loopBands) == 0 && bp.bossShell == nil {
 		return nil, nil, nil
 	}
 	openAt := map[brepgeom.EdgeKey]int{}
@@ -154,6 +155,24 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 			bc.fillet = &filletRings{n: rings}
 		}
 		bands[bi] = bc
+	}
+	if bp.bossShell != nil {
+		shell := bp.bossShell
+		b := brepLoopBand{face: shell.ledgeFace, loop: 0, orig: shell.boss.profile().Outer,
+			setback: capSetback{dc: shell.t, ds: shell.t}, sigma: 1, kind: brepBandFillet}
+		region := shell.upper.profile()
+		f := brepFace{frame: shell.frame, region: &region, z0: shell.interfaceZ, z1: shell.interfaceZ,
+			outward: false, role: "bossShellBand"}
+		cbp := b.tessView(f, bp.xform)
+		lm, err := chordCapBlendLoop(ctx, budget, cbp, 0, b.orig, chord, work)
+		if err != nil {
+			return nil, nil, err
+		}
+		sideZ, sideDelta := b.sideLevel(f)
+		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: false,
+			sideZ: sideZ, sideDelta: sideDelta, bossShell: true,
+			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), chord)}}
+		bands = append(bands, bc)
 	}
 	return bands, imposed, nil
 }

@@ -88,6 +88,9 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 	}
 	N := len(lm.capPts)
 	fr := bc.fillet
+	if len(fr.seamGap) == 0 {
+		fr.seamGap = make([]float64, len(lm.walks))
+	}
 	fr.match = match
 	fr.cells, fr.patches = cells, patches
 	fr.ringV = make([][]int, n+1)
