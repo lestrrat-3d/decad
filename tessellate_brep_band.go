@@ -39,12 +39,13 @@ func (b brepLoopBand) tessView(f brepFace, xform r3.Transform) capBlendPayload {
 // resolves over the receiver's loop in F's frame, the topology use of each
 // side-contour piece, and the mesh vertices of both rings once placed.
 type brepBandChord struct {
-	band      brepLoopBand
-	face      brepFace
-	cbp       capBlendPayload
-	lm        capBlendLoopMesh
-	start     bool
-	bossShell bool
+	band        brepLoopBand
+	face        brepFace
+	cbp         capBlendPayload
+	lm          capBlendLoopMesh
+	start       bool
+	bossShell   bool
+	pocketShell bool
 	// sideZ and sideDelta are the side level and its displacement.
 	sideZ, sideDelta float64
 	// sideUse is walk i's side-contour use (topology.open).
@@ -67,7 +68,7 @@ type brepBandChord struct {
 // both, or the body refuses. A fillet band adds its interior ring count
 // (docs/loop-fillet-design.md §7.1).
 func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, chord float64) ([]brepBandChord, map[int]tessellation.ChordSamples[*Face], error) {
-	if len(bp.loopBands) == 0 && bp.bossShell == nil {
+	if len(bp.loopBands) == 0 && bp.bossShell == nil && bp.pocketShell == nil {
 		return nil, nil, nil
 	}
 	openAt := map[brepgeom.EdgeKey]int{}
@@ -174,6 +175,49 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), chord)}}
 		bands = append(bands, bc)
 	}
+	if bp.pocketShell != nil {
+		shell := bp.pocketShell
+		b := brepLoopBand{face: shell.floorFace, loop: 0, orig: shell.rounded.Outer,
+			setback: capSetback{dc: shell.t, ds: shell.t}, sigma: 1, kind: brepBandFillet}
+		region := shell.pocket.profile()
+		f := brepFace{frame: shell.frame, region: &region, z0: shell.lowerZ, z1: shell.lowerZ,
+			outward: true, role: "pocketShellBand"}
+		cbp := b.tessView(f, bp.xform)
+		lm, err := chordCapBlendLoop(ctx, budget, cbp, 0, b.orig, chord, work)
+		if err != nil {
+			return nil, nil, err
+		}
+		sideZ, sideDelta := b.sideLevel(f)
+		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: true,
+			sideZ: sideZ, sideDelta: sideDelta, pocketShell: true,
+			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), chord)}}
+		e := topo.embeds[b.face]
+		for i, w := range lm.walks {
+			key, _ := brepgeom.CurveKey(e, w.SegmentWalk, sideZ)
+			ui, ok := openAt[key]
+			if !ok {
+				return nil, nil, fmt.Errorf(`%w: blind-pocket shell side ring is not a boundary of the record`, ErrUnsupported)
+			}
+			bc.sideUse = append(bc.sideUse, ui)
+			u := topo.uses[ui]
+			if !brepIsRim(u.Part) {
+				continue
+			}
+			wallFace := bp.faces[u.Face]
+			samples, err := tessellation.ImposeBandWall[*Face](tessellation.BandWallInput{
+				FaceEmbed: e, WallEmbed: topo.embeds[u.Face],
+				WallSegment: wallFace.wall, WallWalk: topo.walls[u.Face],
+				WalkIndex: i, SideLevel: sideZ, WallHeight: wallFace.z1 - wallFace.z0,
+				Counts: lm.count, SideStarts: lm.sideStart, SidePoints: point2ToRecordSlice(lm.sidePts),
+				SideBounds: lm.sideBound, SideSag: lm.sideSag,
+			})
+			if err != nil {
+				return nil, nil, fmt.Errorf("blind-pocket shell band: %w", err)
+			}
+			imposed[u.Face] = samples
+		}
+		bands = append(bands, bc)
+	}
 	return bands, imposed, nil
 }
 
@@ -215,7 +259,10 @@ func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[s
 		if err := bc.emitFillet(m, faceOfRole, bump); err != nil {
 			return err
 		}
-		if bc.band.sigma > 0 {
+		// The pocket uses an upward virtual cap to generate the band, while
+		// its recorded square underside faces down. Its generated winding
+		// already opposes both neighbouring faces.
+		if bc.band.sigma > 0 && !bc.pocketShell {
 			for i := first; i < len(m.triangles); i++ {
 				m.triangles[i][1], m.triangles[i][2] = m.triangles[i][2], m.triangles[i][1]
 			}

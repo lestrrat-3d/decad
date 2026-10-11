@@ -182,7 +182,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			maps.Copy(terminalPoly, polys)
 			continue
 		}
-		if !bands[bi].bossShell {
+		if !bands[bi].bossShell && !bands[bi].pocketShell {
 			bandsOf[bands[bi].band.face] = append(bandsOf[bands[bi].band.face], bi)
 		}
 	}

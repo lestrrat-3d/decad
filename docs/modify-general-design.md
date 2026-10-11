@@ -46,7 +46,8 @@ part makes on them. Every cell was read off the live code with the probe under
 | | | fillet the 4 floor edges, or the 4 mouth edges | builds (route L fillet arm) |
 | | | chamfer the 4 mouth edges, or the plate's top loop | builds (route L) |
 | | | fillet the plate's 4 vertical edges | builds (route E) |
-| | | shell removing the top or the bottom | SG3 |
+| | | shell removing the top | builds (§3.1b, for exact separated rectangles) |
+| | | shell removing the bottom | SG3 |
 | **P3** round boss on a plate: 40×40×10 ∪ Ø10 boss 15 tall | stacked (A1) | fillet the boss root circle | builds (route L fillet arm) |
 | | | fillet the boss top rim | builds (route L fillet arm) |
 | | | chamfer the boss top rim, or the boss root | builds (route L) |
@@ -182,6 +183,38 @@ surface departure and vertex motion before publishing its occupied-volume
 bound. A later modify operation refuses this payload; class B and clearance
 face views refuse it because they omit its patch faces. Mesh booleans use its
 verified tessellation.
+
+### 3.1b Exact rectangular blind-pocket shell
+
+Before route S's through-cut reading, `shellBlindPocket` admits two slabs in
+one frame: a hole-free axis-aligned outer rectangle below an interface, and
+the same outer rectangle with one nested rectangular hole above it. The one
+removed face is the top cap, and the sense is inward. Sections, levels and
+thickness must have zero displacement. The pocket must leave more than `2t`
+below its floor and between its edges and the outer rectangle; both
+rectangles must remain wider than `2t`. Offset coordinates must be exactly
+representable; otherwise the call
+refuses before building a result.
+
+The result keeps the source exterior and pocket faces except the top cap. It
+adds the outer cavity's flat floor and four walls, the top outer rim, a pocket
+rim around the rounded expansion, four straight and four cylindrical walls
+along the expanded pocket, and a square underside at `zfloor-t`. The floor
+transition uses the loop-fillet band's exact-radius arc collapse: four
+quarter cylinders meet four sphere octants. The expanded pocket's rounded
+rectangle is `offsetProfile(pocket, -1, t)`; its certified displacement must
+be zero, and its fillet contour at `t` must reproduce the source square.
+
+For a pocket of width `w`, depth `d`, axial depth `h`, and thickness `t`, the
+expanded pocket's volume within the outer cavity is
+`wd(h+t) + 2(w+d)th + πt²h + (w+d)πt²/2 + 2πt³/3`.
+The shell volume is the source volume minus the eroded outer box's volume
+plus that expanded-pocket volume. Rational intervals enclose `π` and all
+moments; the body's occupied-volume proof uses the rounded vertical walls'
+chord slivers and the fillet band's sphere/cylinder patch bounds. A later
+modify operation refuses the payload. Class B and clearance face views
+refuse it because its record omits the band patches; mesh booleans require
+its verified tessellation.
 
 ### 3.2 Removed faces and the sense
 
@@ -337,7 +370,7 @@ Modify §1's test picks every sentinel.
 |---|---|---|---|
 | **SG1** | `WithShellSense(Outward)` on a brep or stacked receiver | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
 | **SG2** | `WithNoOpenings` on a brep or stacked receiver | yes; a brep record holds no void shell | `ErrUnsupported` (replaces SX16's text for this call) |
-| **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a: a blind pocket or port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion holds a sphere at each reflex vertex, a torus around each reflex circle, or an elliptical edge where two reflex edges meet | `ErrUnsupported`, naming the first face Table TC does not take |
+| **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a and §3.1b: a blind port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion may hold spheres, tori or elliptical seams beyond the admitted rectangular case | `ErrUnsupported`, naming the first face Table TC does not take |
 | **SG4** | a removed face that is a tool wall, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
 | **SG5** | a removed face that names no face of the record; a removed wall that is no straight wall along a section axis (a fillet cylinder: its rim is no planar face); a wall run whose end cuts backward along the removed carrier (a reflex corner: the rim lies inside the material). A set of walls that is no proper connected run is shell-opening SO6 | yes | `ErrUnsupported` |
 | **SG6** | a tool's dilation reaches material beyond its pierced wall (TC7), or a private class-B cut does not build a brep: two dilated tools within `2t`, a dilated tool reaching a cap of `A'`, an eroded miter off its axis, a dilated tool recorded within twice the cavity's charge of a cavity face, or a cut that takes the crossing reach while that charge is positive (§3.3 step 4) | yes | `ErrUnsupported`, naming the tool |
@@ -544,7 +577,7 @@ BG3's consumer rules are stated in §3.1a.
 |---|---|---|
 | chamfers of edges sharing a vertex outside one loop, or fillets whose selected edges share no planar loop after straight-wall restatement | SB5 / SL1 | the mixed chamfer's corner plane has no reference-axis normal; route V and the partial fillet admit the cases in `docs/vertex-blend-design.md` |
 | an edge ending on a blend or a curved face (P8) | SB7 | its honest form is the complete-loop fillet, `docs/loop-fillet-design.md` |
-| shell of a blind pocket or port, a stacked union outside §3.1a, a keyway (P2, P3, P6c) | SG3 | spheres at the pocket's floor corners, a torus around a round boss's root, elliptical edges where two reflex edges meet at a square boss's corner |
+| shell of a blind pocket outside §3.1b, a blind port, a stacked union outside §3.1a, or a keyway (P2, P3, P6c) | SG3 | the remaining cases need rounded floor corners, a torus around a round boss's root, or elliptical seams where reflex edges meet |
 | an outward or closed shell of a brep | SG1 / SG2 | §3.2 |
 | shell removing a curved wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |
 | any op on a faceted result (P5, P6b, P9) | reach SX9 | permanent (reach §11); the boolean is the owner |
@@ -640,8 +673,8 @@ Route S (S-1):
 - P1 with both caps removed: the rims at both levels, volume within its
   bound of `4480 + 220π` (`5632 + 220π − 36·16·2`: the cavity grows by the
   bottom slab, which the dilated hole does not reach); P1 placed by a
-  translation reproducing the volume. A stacked receiver always holds a
-  blind interface, so Table TC refuses every one (SG3): P2 is that fixture.
+  translation reproducing the volume. A stacked receiver holds a blind
+  interface, so Table TC refuses it unless §3.1a or §3.1b takes it.
 - Bands: P1 with a Ø4 hole along z through `(8, 10)`, top removed: the rim
   and one band between the receiver's hole and the cavity's, volume
   `5632 + 428π`; both caps removed, `4480 + 460π`, the band's wall a lump of
@@ -654,7 +687,7 @@ Route S (S-1):
   vertices red; the test records that leg. The volume encloses the exact
   rational closed form, unplaced and placed `10⁶` mm along x; its own
   rounding bound exceeds `δ`'s charge, so it does not see the leg.
-- Refusals: P2 and P6c → SG3 naming the pocket floor; P3 → SG3 naming the
+- Refusals: P2 outside §3.1b and P6c → SG3 naming the pocket floor; P3 → SG3 naming the
   third planar face across z; a removed hole wall → SG4; a removed wall → SG5
   (until S-2); P1 with a second Ø6 hole along y 7 mm from the first → SG6
   (the dilated holes meet); P1 at 0.1 in → SG6; a U section with a 1 mm

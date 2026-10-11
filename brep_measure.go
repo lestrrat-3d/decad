@@ -186,7 +186,7 @@ func (bp brepPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 // The reading is a normal-direction membership, unaffected by a face's
 // displacements, as a prism's is (docs/prism-boolean-design.md §12).
 func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
-	if bp.bossShell != nil {
+	if bp.bossShell != nil || bp.pocketShell != nil {
 		return undercutOutcome{reason: surveyPayloadStaged}
 	}
 	p, ok := pull.Normalize()
@@ -273,6 +273,9 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 	fillets := make([]radiussurvey.BrepFilletRadius, 0, len(bp.loopBands))
 	if bp.bossShell != nil {
 		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.bossShell.t})
+	}
+	if bp.pocketShell != nil {
+		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.pocketShell.t})
 	}
 	for _, band := range bp.loopBands {
 		if band.kind == brepBandFillet && band.sigma > 0 {

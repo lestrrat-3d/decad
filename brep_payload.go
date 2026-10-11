@@ -88,11 +88,12 @@ type brepSplit = brepgeom.Split
 // the body build attaches them (brep_loop_band.go, brep_loop_fillet.go). It
 // is nil for every record route L did not build.
 type brepPayload struct {
-	faces     []brepFace
-	xform     r3.Transform
-	stack     *brepStack
-	loopBands []brepLoopBand
-	bossShell *bossShellBand
+	faces       []brepFace
+	xform       r3.Transform
+	stack       *brepStack
+	loopBands   []brepLoopBand
+	bossShell   *bossShellBand
+	pocketShell *pocketShellBand
 	// loopPatches is each band's patch geometry, beside its role
 	// chamferLoop(f,l,p), in band order, nil for a fillet band, whose
 	// patches the readers take from the band record and the body's faces
@@ -654,9 +655,18 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		}
 		bands.patches = append(bands.patches, patches...)
 	}
+	if bp.pocketShell != nil {
+		patches, err := attachPocketShellBand(ctx, body, ref, bp, open)
+		if err != nil {
+			return nil, err
+		}
+		bands.patches = append(bands.patches, patches...)
+	}
 	body.lumps = sheetLumps(append(faces, bands.patches...))
 	if bp.bossShell != nil {
 		err = measureBossShell(ctx, bp, body)
+	} else if bp.pocketShell != nil {
+		err = measurePocketShell(ctx, bp, body)
 	} else {
 		err = measureBrepContext(ctx, bp, topo, body, bands.mass)
 	}

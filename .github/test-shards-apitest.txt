@@ -660,6 +660,9 @@
 4	0.01	TestSelectorUnionCardinalityCountsTheUnion
 4	0.00	TestSheetUndercutsListTheWallThatOpposesThePull
 4	0.08	TestShellBothCapsHoledBandsVerify
+4	0.00	TestShellBlindRectangularPocket
+4	0.00	TestShellBlindRectangularPocketClearance
+4	0.00	TestShellBlindRectangularPocketOffsetMoments
 4	0.01	TestShellCupHoledInward
 4	0.02	TestShellCupHoledMinRadius
 4	0.03	TestShellCupHoledTwoPosts

@@ -613,8 +613,8 @@ func TestBrepShellThroughCutDisplacedOffset(t *testing.T) {
 // TestBrepShellThroughCutRefusals pins Table SG's refusals (§3.4, §9). Each
 // leaves the receiver live and the document unchanged:
 //
-//   - a stacked pocket (P2) and a blind port (P6c) are SG3 naming the
-//     floor, and a stacked boss (P3) SG3 naming the third planar face across
+//   - a blind port (P6c) is SG3 naming its floor, and a stacked boss (P3)
+//     is SG3 naming the third planar face across
 //     z, with SB10's text, since none reads as a prism either;
 //   - P1's cylinder removed is SG4; P8's fillet cylinder, a curved wall whose
 //     rim is no planar face, is SG5, and so is P7's y = 8 wall, whose end at
@@ -633,7 +633,7 @@ func TestBrepShellThroughCutDisplacedOffset(t *testing.T) {
 //
 // Shown to fail with requireStripsClear's call deleted (the U fixture then
 // refused with class B's SG6 text instead of TC7's), with
-// readThroughCutAnyAxis naming axis 0's reason always (P2, P3 and P6c then
+// readThroughCutAnyAxis naming axis 0's reason always (P3 and P6c then
 // named no face), with removedFaces' straight-wall test deleted (the fillet
 // cylinder then refused with SO1's text, its ends meeting the walls
 // smoothly), and with openingThroughSection's reflex-end test deleted (P7's
@@ -648,14 +648,6 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 	}
 	top := Faces(Facing(shellUp)).Exactly(1)
 	mm2 := units.Millimeters(2)
-	t.Run("P2", func(t *testing.T) {
-		t.Parallel()
-		_, pocket := internalRouteEPocket(t)
-		bp, err := brepOfStacked(t.Context(), pocket.payload.(stackedPrismPayload))
-		require.NoError(t, err)
-		floor := shellRecordRole(t, bp, 2, 5)
-		refuses(t, pocket, shellFaceAt(t, pocket, shellUp, 10), mm2, nil, "brep-modify SB10", "modify-general SG3", floor+" is a third planar face")
-	})
 	t.Run("P6c", func(t *testing.T) {
 		t.Parallel()
 		doc := New()

@@ -32,6 +32,7 @@ The rules for rows live in `docs/layout.md`.
 | `shell_opening.go` | Prism side opening: classify removed faces and dispatch the audited region build. See shell-opening §3–§5. |
 | `shell_opening_brep.go` | Records a prism side opening from the section or stack engine. See shell-opening §4. |
 | `shell_stacked_boss.go` | Builds and measures the exact two-slab rectangular-boss shell. See modify-general §3.1a. |
+| `shell_blind_pocket.go` | Builds and measures the exact two-slab rectangular blind-pocket shell. See modify-general §3.1b. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
 | `brep_shell.go` | Route S: shell of a through-cut brep. See modify-general §3. |
 | `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |
