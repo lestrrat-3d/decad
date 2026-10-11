@@ -423,8 +423,8 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 	return work, budget.Err()
 }
 
-// parallelLoftPairs classifies the pattern join's large, immutable candidate
-// list concurrently. The shared budget and work counts are replayed in the
+// parallelLoftPairs classifies a large immutable candidate list concurrently.
+// The shared budget and work counts are replayed in the
 // original pair order, so the first refusal and all completed-call counts
 // agree with the serial audit. Only the caller touches the budget closures.
 func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]r3.Vec,
