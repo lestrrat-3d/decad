@@ -16,11 +16,12 @@ import (
 func TestShellRoundStackedBoss(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name   string
-		cx, cy float64
+		name    string
+		cx, cy  float64
+		reflect bool
 	}{
-		{"centered", 10, 10},
-		{"offset", 11, 9},
+		{"center", 10, 10, true},
+		{"offset", 11, 9, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
@@ -70,7 +71,7 @@ func TestShellRoundStackedBoss(t *testing.T) {
 				decad.WithVerification(decad.VerifyAll))
 			require.NoError(t, err)
 			require.True(t, movedMesh.VolumeVerified())
-			if tc.name == "centered" {
+			if tc.reflect {
 				mirror, err := r3.NewFrame(r3.NewVec(0, 0, 0),
 					r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 				require.NoError(t, err)

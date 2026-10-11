@@ -83,7 +83,10 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 			return refuse("needs exactly represented circle extents")
 		}
 	}
-	inner := circle.outer.Outer.Segments[0].(circleSeg)
+	inner, ok := circle.outer.Outer.Segments[0].(circleSeg)
+	if !ok {
+		return refuse("has no recorded whole-circle boundary")
+	}
 	inner.Radius = units.Millimeters(innerR)
 	circle.inner = profileRecord{Outer: loopRecord{Segments: []curveSegment{inner}}}
 	topCapIdx := -1
