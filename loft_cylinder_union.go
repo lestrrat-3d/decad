@@ -25,7 +25,11 @@ type loftCylinderJoinRecord struct {
 	capGroups     [2]int
 	minSideRadius float64
 	radius        float64
-	z0, z1        float64
+	// These upward bounds enclose the replaced root seam around radius.
+	// Retained tooth exterior walls still read their Loft source bounds.
+	// The collar covers the source-root exception near the top cap.
+	innerInset, outerExcess, topCollar float64
+	z0, z1                             float64
 }
 
 const loftCylinderBlankSideRole = "side(0,0)"
@@ -850,6 +854,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 			blank: blank, teeth: toothBodies, capOutlines: outlines,
 			capGroups:     [2]int{blankGroups[1], blankGroups[2]},
 			minSideRadius: minSideRadius, radius: radius, z0: pp.z0, z1: pp.z1,
+			innerInset: innerInset, outerExcess: outerExcess, topCollar: topCollar,
 		}}
 	if err := loftCylinderTagCaps(&fp, blank, fp.loftCylinderJoin.capGroups,
 		[2]float64{pp.z0, pp.z1}, ref); err != nil {

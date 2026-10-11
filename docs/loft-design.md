@@ -910,6 +910,14 @@ own.
 | **facet departure** | a LENGTH: how far one point of a HELD facet sits from the true boundary surface that facet stands for | `absSumUpper(matchedDelta, maxTwistOffsetUpper)` — the two rows above, and no third mechanism | the triangle inequality over two independent departures: `matchedDelta` bounds the held chord's departure from the recorded curve at the SAME parameter, including the held vertices' `delta`, and `maxTwistOffsetUpper` bounds the held flat triangle pair's departure from the bilinear ruled patch through that chorded cell's corners. A set-distance `sectionDelta` cannot replace the parameter-matched term: it may be zero while a free-form curve point and the held chord point at the same parameter differ. On a `LineSeg`-only build `maxTwistOffsetUpper` is zero and `matchedDelta` reduces to `delta`, so an unplaced pairing whose stations are all PINNED publishes zero; another kind receives the same zero-bound standing whenever the two published values are zero. Every per-facet consumer reads this term (§9 D1, D2) and no consumer substitutes `sectionDelta` for `matchedDelta` | outward, in `absSumUpper` | inherits both rows' |
 | **`Bounds.Bound`** | a LENGTH: the radius by which the axis-aligned box the payload holds may fall short of the box the true recorded boundary occupies | `absSumUpper(delta, sectionDelta)` — the two published terms above, summed | §8's `Bounds` paragraph: the recorded boundary can exceed the held box both by a held vertex's own displacement and by the recorded curve's bulge outside the station polygon, and the two act on the same face of the box, so the shortfall is at most their sum. **This reading keeps `sectionDelta` where facet departure needs `matchedDelta`**, because an axis-aligned box asks only for SET containment: every curve point lies near some held chord point, with no same-parameter obligation. The held triangle pair and the bilinear ruled patch both lie in the convex hull of a cell's own four held corners, so a cell's twist moves no face of the box and `maxTwistOffsetUpper` has no term here | outward, in `absSumUpper` | inherits both rows'. `Bounds` is `Exact` only where that sum is exactly zero (§8) |
 
+The wall terms above compare matched parameters rather than only one set's
+nearest point in the other. Each source curve point and held chord point at
+the same parameter have the stated `matchedDelta` gap. Each source bilinear
+wall point and held triangle-pair point at the same cell parameters have
+the stated twist gap. Their sum therefore bounds both source-to-held and
+held-to-source wall displacement. It does not transfer an interior or cap
+point to a wall facet.
+
 At a segment junction, the next segment supplies the held station. The two
 incident records can denote different endpoint positions even when that station
 is pinned to the next segment. `PairRecords` bounds the held station against

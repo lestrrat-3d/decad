@@ -67,6 +67,91 @@ other groups stay `Faceted`. Public `Planar` and `NormalTo(z)` select the two
 caps, and `OuterLoopOf(CapStart(result))` and `OuterLoopOf(CapEnd(result))`
 select their exterior rims.
 
+## Source-circle interval for a later cap cutter
+
+`loftCylinderSourceCircleOf` accepts one authenticated source Loft retained by
+the join or its centered bore. The six-curve admission and matched Loft facet
+departure still apply. The root wall stays strictly inside the exact blank
+circle at open heights below its certified top collar. When the existing
+collar has zero height, the exact squared root radii at both caps are at
+most `R²`; one strict cap radius makes every interior ruling strict by
+convexity. If both equal `R²`, a certified nonzero angular change makes
+every interior ruling strict instead. The cap planes themselves receive no
+circle-occupancy claim.
+
+Every fitted and tip wall stays outside `R` because its held facet minimum
+exceeds `R` by more than the matched Loft departure. Each source `LineSeg`
+connector uses the same two-triangle diagonal as the Loft wall. The helper
+reconstructs its exact source corners from the recorded endpoints, section
+frames, and axial placement. Nonnegative quadratic Bernstein coefficients
+for both horizontal slice pieces prove that squared radius increases from
+the root endpoint to the far endpoint at every height. The root endpoint
+is inside `R` at open admitted heights; the far endpoint's exact ruling
+minimum exceeds `R`. Each connector therefore crosses the circle once,
+transversely. The two crossings are the only source-tooth boundary points
+on that circle.
+
+A positive half-plane contains every held tooth vertex by more than the
+matched boundary departure. The whole bounded source solid lies in that
+half-plane, so the opposite circle ray is exterior. The circle interval
+between its two ordered connector crossings is occupied by the tooth;
+the opposite interval is exterior. `CrossingBox` brackets both crossings
+over any rational axial subinterval with exact endpoint and minimum-radius
+tests. It returns only if the two XY boxes preserve positive angular order
+and remain in the certified half-plane. A caller may subdivide an interval
+that refuses, but it must bound its own subdivision work.
+
+`ContainsTriangleSector` takes an exact triangle and an axial interval that
+contains all three vertices. It uses the crossing boxes for that entire
+interval. Each projected vertex must lie strictly counterclockwise of every
+possible first crossing and strictly clockwise of every possible second
+crossing, using exact cross-product lower bounds. Those two fixed halfplanes
+are convex, so the whole triangle lies in the angular sector. A failed
+strict inequality refuses the triangle. This gate checks only its angle;
+radial tooth occupancy and source-wall clearance need separate checks.
+
+This certificate applies only at open heights above the start cap and below
+the recorded `safeTop`. A cap cutter must separately prove its top-collar,
+cap-plane, bore-wall, and full far-band surface claims. Circle occupancy by
+itself does not place a complete cutter facet inside the source union.
+
+## Strict interior split-ring occupancy
+
+`loftCylinderSourceRingInside` accepts unordered exact edges at one height
+strictly between the blank's caps and below every tooth's certified top root
+collar. It checks exact endpoint equality, nonzero edges, degree two at every
+vertex, and one connected cycle. The entire ring stays outside a centered
+bore's exact radius. At least one ring vertex lies strictly inside the
+blank circle, which gives the connected ring an occupied witness.
+
+An edge wholly inside the circle is inside the exact blank. An edge wholly
+outside it must clear every source tooth's true wall. The helper measures
+its exact minimum distance to every relevant held Loft wall triangle and
+requires a strict gap beyond that tooth's parameter-matched wall bound.
+The `matchedDelta` and cell twist terms in Loft §5.2 pair every point of a
+held wall patch with a point of its true wall patch at the same parameters,
+and conversely. Thus that bound excludes a true wall near the edge in
+both directions; a one-way held-to-source reading would not suffice.
+Expanded coordinate boxes skip only triangles that cannot approach the
+edge by the bound. Exact segment-to-triangle distances decide the rest.
+
+For an edge that touches or crosses the blank circle, the whole edge must
+lie strictly between one tooth's two source connector crossing rays.
+The exact source connector slices are checked for any contact with that
+edge, including endpoint touch or collinear overlap. Every tooth's fitted
+and tip walls must clear the edge by its matched wall bound. The source
+circle record proves each root wall stays inside the blank at this height,
+so those hidden walls cannot form the union boundary. An exact whole-edge
+radius minimum classifies edges; endpoint radii alone do not.
+
+The circle sector claim makes every circle point on a crossing edge
+strictly occupied by the tooth. No edge touches any source tooth wall or
+an exposed blank or bore wall. Since the exact edge set is one connected
+cycle with a strict blank-inside witness, every point on the ring lies
+inside the original union. This proof covers the split ring only. The cap
+planes, the top collar, and the cutter band's two-dimensional surfaces
+need separate bounds and occupancy proofs.
+
 ## Boundary and occupied-volume bounds
 
 Away from the root band, the retained tooth walls have the Loft source
@@ -79,6 +164,23 @@ collar, the cap is within the charged axial collar height. The published
 boundary bound includes the Loft source bound, twice the maximum certified
 radial or lateral seam reach, the ring roundoff, the outward root excess, and
 the top collar height. A result whose bound exceeds 0.1 mm is refused.
+
+The root connector also supports a local bound for a later cap-band cutter.
+At an exact height below both admitted top collars, its two held triangles
+form the radial-monotone chain through their common diagonal. The source
+connector begins inside the blank and ends outside it, so it crosses the
+exact cylinder. The supplied `δ` covers the matched Loft facet departure.
+Every source crossing corresponds to a held point whose radius lies in
+`[R−δ,R+δ]`.
+`loftCylinderConnectorContactBound` brackets that held strip with exact
+rational signs. It requires an exact cutter contact segment on one piece of
+the chain at the same height. The exact contact is split at held radius
+`R+δ`: beyond it the matched source wall is outside the blank and keeps its
+ordinary `δ` bound. For the possibly hidden portion, the helper bounds the
+distance from its endpoints to the entire crossing strip and adds `δ`.
+Convexity covers each portion of the full contact segment.
+The helper returns only this source-seam distance. Its caller separately
+charges cutter rounding and proves the cutter contact and output shell.
 
 For volume, let `B` be the exact blank and `T` the union of exact teeth.
 Replacing each true tooth by its held Loft changes occupied volume by at most
@@ -96,10 +198,14 @@ bound is added conservatively.
 
 The payload records the original blank and ordered teeth, both exact cap
 outlines and their group IDs, and the exact minimum projected radius of every
-non-cap held triangle. A centered bore must remain inside the exact blank
-and below the side clearance after the joined boundary bound. The cap audit
-proves each recorded outline is one disk containing the axis. Placement
-clears the record, so a later Boolean cannot rebuild from unplaced operands.
+non-cap held triangle. It also records the upward-rounded inward and outward
+radial seam reaches and the top collar height used by the boundary and volume
+proofs. Those reaches enclose the replaced root seam; retained tooth exterior
+walls use their Loft source bounds. A centered bore must remain inside the
+exact blank, below the side clearance after the joined boundary bound, and
+inside the seam annulus's inner radius. The cap audit proves each recorded
+outline is one disk containing the axis. Placement clears the record, so a
+later Boolean cannot rebuild from unplaced operands.
 
 ## Centered through-bore Cut
 
@@ -130,5 +236,90 @@ that cylinder only in the certified radial shell around its wall. The result
 adds the whole shell volume, `4π·radius·boreBound·height`, to the join's
 occupied-volume bound. The result carries the larger of the join and bore
 boundary bounds. It replaces the join source record with the certified outer
-and inner cap loops, their facet groups, the bore-wall group, and the original
-blank and tooth sources. Placement clears this post-bore record.
+and inner cap loops, their facet groups, the bore-wall group, the original
+blank and tooth sources, and the unchanged seam and collar bounds. Placement
+clears this post-bore record.
+
+The bore record also retains the upward `boreBound` used in Cut's wall proof.
+That value bounds the two-way, same-height correspondence between the exact
+bore cylinder and its held wall. A later outer-cap edit must recheck Cut's
+strict bore-to-blank clearance before using this local bound.
+
+## Both outer-cap Chamfers on the joined gear
+
+`Chamfer` accepts only an identity-placed, audited Union record or its
+certified centered-bore Cut, with both complete outer cap loops selected and
+one equal setback. Partial loops, mixed edges, asymmetric setbacks, and other
+faceted receivers still refuse. The cap loops in the immutable record must
+again tile exactly one disk or annulus each. The side must still be the
+recorded paired two-triangle strips. All selected public edges must cover
+the two recorded outer walks and no inner bore edge.
+
+This narrow route extends Loft §18's held-polygon cap semantics. It constructs
+one rational polyhedral retained solid `C` from the certified held outer
+loops and source-ordered offset samples. The exact modified source is
+`S∩C`, where `S` is the original blank-and-teeth union after its optional
+centered bore. The construction uses the same `C` for the held solid `H`.
+The inset-sampling bound records deviation from the requested held-polygon
+offset; it does not switch to a smooth-spline offset. Other Chamfer routes
+keep their ordinary analytic semantics.
+
+At each cap, the old side strips are clipped at the exact rational level
+`z0+d` or `z1−d`. An inset cap, its source-ordered bevel strip, and the
+retained middle side form the ideal shell. The builder checks the side and
+inset loops for exact simplicity, nesting, and nonzero edges. Directed edge
+and exact area audits prove cap tiling, including the unchanged bore hole.
+The bevel bands are connected and embedded. Exact band-to-old-wall contacts
+are confined to their intended side-ring edges; an interior witness then
+places the bands inside `H`. The ideal shell has outward orientation and
+no unrecorded self-contact. Its retained middle facets are exact subsets
+of old wall facets, and the inset caps lie inside the old held cap loops.
+Those checks give `C⊂H` and make the ideal held result exactly `H∩C=C`.
+
+A complete rational split ring through each bevel band lies strictly inside
+`S` by the source-ring certificate above. Each ideal band facet has a
+certified distance below the published boundary allowance to that ring.
+Since the ring is also on `∂C`, every band point has a nearby point on
+`∂(S∩C)`. The cap proof separates the exact blank disk, a narrow root-seam
+annulus, and the exterior source tooth caps. The inset stays farther than
+the joined boundary bound from the held outer walk; every source tooth's
+exterior cap chord belongs to that walk and has no greater Loft departure.
+The exterior inset walk is inside the matched source tooth cap by exact
+contour clearance and winding. Monotone radial runs through the thin top
+root slit reach an inset/blank-circle crossing; the certified run length
+plus slit width is charged. The bore remains inside the blank and clear of
+all new outer geometry.
+
+Every retained middle-side facet uses a same-height inward patch shorter
+than the remaining boundary allowance. An exact prism contact audit proves
+the path from that facet to the patch stays in `H=C` in the open middle slab.
+The patch is inside the original source tooth when it clears every held
+tooth wall by its two-sided Loft departure and has a strict held-tooth
+inside witness. Near a root wall, the patch instead clears every nonroot
+wall; the true root stays inside the blank below its certified collar, and
+each held root triangle clipped to the patch's height slab is strictly
+inside the blank too. The convex blank disk contains their matched wall
+motion. Every patch component outside the disk reaches an outside patch
+vertex, whose strict held-tooth parity transfers through the Loft boundary
+homotopy. The portion inside the disk belongs to the exact blank. Thus a
+middle facet either already borders `S∩C` or reaches its boundary along
+that certified inward path. The unchanged bore wall and inner cap loop use
+Cut's local `boreBound` correspondence and exact outer-band separation.
+
+For the opposite boundary direction, any point of `∂(S∩C)` inside `C`
+belongs to `∂S`; the original two-way joined or bored boundary bound takes
+it to `∂H`, and the segment to that matched point reaches `∂C` if needed.
+Points already on `∂C` need no transfer. Intersecting both `S` and `H`
+with one fixed `C` cannot increase their occupied symmetric difference,
+so the old `volSymDiff` remains valid for the ideal shell. The actual mesh
+rounds only certified clip vertices. Both ideal and rounded shells are
+closed and embedded with matching triangle indices; their vertex-linear
+surface motion adds the explicit `SweptVolumeAllow` charge and a boundary
+distance of at most the clip-rounding bound. The published boundary bound
+is 0.1 mm only after every band, cap, middle-side, bore, and rounding
+charge fits strictly below it.
+
+The route has private limits of 2,048 outer vertices per rim, 4,096 inset
+vertices, 32,768 output triangles, and 16 million exact crossing scans.
+Every proof gate refuses when its own bounded work or strict inequality
+cannot be completed.

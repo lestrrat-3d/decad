@@ -105,17 +105,26 @@ func (plane LoftExactPlane) Sign(p proof.Xpt, sum, term *big.Int) int {
 }
 
 func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
+	xverts := make([]proof.Xpt, len(verts))
+	for i, v := range verts {
+		xverts[i] = proof.XptOf(v)
+	}
+	return NewLoftAuditDataWithExact(verts, xverts, tris)
+}
+
+// NewLoftAuditDataWithExact audits a rational construction whose float
+// corners are correctly rounded images of exact. The caller must widen any
+// broad-phase boxes by its certified exact-to-float error before omitting a
+// pair and use LoftAuditShortcuts.ExactInput to disable float-only filters.
+func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int) *LoftAuditData {
 	d := &LoftAuditData{
 		Corners:     make([][3]r3.Vec, len(tris)),
-		Xverts:      make([]proof.Xpt, len(verts)),
+		Xverts:      exact,
 		Xtris:       make([][3]proof.Xpt, len(tris)),
 		Norms:       make([]proof.Xpt, len(tris)),
 		floatNorms:  make([]r3.Vec, len(tris)),
 		Planes:      make([]LoftExactPlane, len(tris)),
 		Projections: make([][3]meshbool.Xp2, len(tris)),
-	}
-	for i, v := range verts {
-		d.Xverts[i] = proof.XptOf(v)
 	}
 	for i, tri := range tris {
 		d.Corners[i] = LoftTriCorners(verts, tri)
@@ -234,6 +243,7 @@ type LoftAuditShortcuts struct {
 	Certificates bool
 	Sweep        bool
 	CapProof     bool
+	ExactInput   bool
 }
 
 // LoftAuditWork records what ONE crossing-audit call's S7 pair loop did,
@@ -466,7 +476,7 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 		return LoftPairVertexCertificate, nil
 	}
 	contact, err := meshbool.TriTriClassifyCore(ta, tb, xta, xtb, na, nb,
-		&data.Projections[i], &data.Projections[j], &signsA, &signsB, true,
+		&data.Projections[i], &data.Projections[j], &signsA, &signsB, !shortcuts.ExactInput,
 		data.floatNorms[i], data.floatNorms[j], true)
 	if err != nil {
 		return LoftPairClassified, err
