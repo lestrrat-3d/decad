@@ -470,6 +470,8 @@
 3	0.09	TestShellCupTwoHolesThroughStack
 3	0.01	TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged
 3	0.00	TestShellOffsetRectangularBoss
+3	0.00	TestShellRoundStackedBoss
+3	0.00	TestShellRoundStackedBossClearance
 3	0.00	TestShellSideOpeningObliqueRefusals
 3	0.00	TestShellStackedBossClearanceRefusal
 3	0.03	TestShellTubeInwardBox

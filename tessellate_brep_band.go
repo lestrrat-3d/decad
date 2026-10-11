@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -159,9 +160,9 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 	}
 	if bp.bossShell != nil {
 		shell := bp.bossShell
-		b := brepLoopBand{face: shell.ledgeFace, loop: 0, orig: shell.boss.profile().Outer,
+		b := brepLoopBand{face: shell.ledgeFace, loop: 0, orig: shell.sideProfile().Outer,
 			setback: capSetback{dc: shell.t, ds: shell.t}, sigma: 1, kind: brepBandFillet}
-		region := shell.upper.profile()
+		region := shell.capProfile()
 		f := brepFace{frame: shell.frame, region: &region, z0: shell.interfaceZ, z1: shell.interfaceZ,
 			outward: false, role: "bossShellBand"}
 		cbp := b.tessView(f, bp.xform)
@@ -173,6 +174,36 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: false,
 			sideZ: sideZ, sideDelta: sideDelta, bossShell: true,
 			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), chord)}}
+		if shell.round != nil {
+			// The upper cavity wall starts on the band's smaller circle.
+			// Impose the band's count and stations on that wall so the
+			// quarter torus and cylinder have one shared rim mesh.
+			e := topo.embeds[shell.ledgeFace]
+			seg := region.Outer.Segments[0]
+			w, err := boundarywalk.WalkOf(seg, nil)
+			if err != nil {
+				return nil, nil, err
+			}
+			key, _ := brepgeom.CurveKey(e, w, shell.interfaceZ)
+			ui, ok := openAt[key]
+			if !ok || !brepIsRim(topo.uses[ui].Part) {
+				return nil, nil, fmt.Errorf(`%w: round boss shell cap ring has no cavity wall`, ErrUnsupported)
+			}
+			face := topo.uses[ui].Face
+			samples, err := tessellation.ImposeBandWall[*Face](tessellation.BandWallInput{
+				FaceEmbed: e, WallEmbed: topo.embeds[face],
+				WallSegment: bp.faces[face].wall, WallWalk: topo.walls[face],
+				WalkIndex: 0, SideLevel: shell.interfaceZ,
+				WallHeight: bp.faces[face].z1 - bp.faces[face].z0,
+				Counts:     lm.count, SideStarts: lm.sideStart,
+				SidePoints: point2ToRecordSlice(lm.capPts), SideBounds: lm.capBound,
+				SideSag: lm.capSag,
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+			imposed[face] = samples
+		}
 		bands = append(bands, bc)
 	}
 	if bp.pocketShell != nil {

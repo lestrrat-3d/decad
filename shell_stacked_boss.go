@@ -21,10 +21,25 @@ import (
 // ledge at lowerZ and the upper cavity walls at interfaceZ.
 type bossShellBand struct {
 	plate, boss, lower, upper    bossRect
+	round                        *roundBossCircle
 	z0, interfaceZ, topZ, lowerZ float64
 	t                            float64
 	ledgeFace                    int
 	frame                        r3.Frame
+}
+
+func (b *bossShellBand) sideProfile() profileRecord {
+	if b.round != nil {
+		return b.round.outer
+	}
+	return b.boss.profile()
+}
+
+func (b *bossShellBand) capProfile() profileRecord {
+	if b.round != nil {
+		return b.round.inner
+	}
+	return b.upper.profile()
 }
 
 type bossRect struct{ u0, v0, u1, v1 float64 }
@@ -206,11 +221,11 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology,
 	band := bp.bossShell
 	e := topo.embeds[band.ledgeFace]
 	for ring, spec := range []struct {
-		rect bossRect
-		z    float64
-	}{{band.boss, band.lowerZ}, {band.upper, band.interfaceZ}} {
+		profile profileRecord
+		z       float64
+	}{{band.sideProfile(), band.lowerZ}, {band.capProfile(), band.interfaceZ}} {
 		view := prismPayload{frame: band.frame, xform: bp.xform, z0: spec.z, z1: spec.z}
-		for _, seg := range spec.rect.profile().Outer.Segments {
+		for _, seg := range spec.profile.Outer.Segments {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
@@ -248,9 +263,9 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology,
 func attachBossShellBand(ctx context.Context, body *Body, ref producerID, bp brepPayload, open brepOpenSet) ([]*Face, error) {
 	band := bp.bossShell
 	bi := len(bp.loopBands)
-	b := brepLoopBand{face: band.ledgeFace, loop: 0, orig: band.boss.profile().Outer,
+	b := brepLoopBand{face: band.ledgeFace, loop: 0, orig: band.sideProfile().Outer,
 		setback: capSetback{dc: band.t, ds: band.t}, sigma: 1, kind: brepBandFillet}
-	upper := band.upper.profile()
+	upper := band.capProfile()
 	fake := brepFace{frame: band.frame, region: &upper,
 		z0: band.interfaceZ, z1: band.interfaceZ, outward: false, role: "bossShellBand"}
 	copyBP := bp
@@ -269,6 +284,9 @@ func attachBossShellBand(ctx context.Context, body *Body, ref producerID, bp bre
 // enclosed by proofbound's rational interval. Face areas already carry each
 // planar or cylindrical patch's own independent bound.
 func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
+	if bp.bossShell.round != nil {
+		return measureRoundBossShell(ctx, bp, body)
+	}
 	b := bp.bossShell
 	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
 	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
