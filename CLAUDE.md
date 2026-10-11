@@ -123,6 +123,15 @@ APIs are design-only.**
 - Design docs live in `docs/<topic>-design.md`, and every one of them carries a
   row in `docs/layout/`, as does every non-test `.go` file in the root.
 
+## Test scope
+
+- Keep Decad's geometry and failure behavior covered by small, focused tests.
+  Split a test that dominates a CI shard into tests for its separate operations.
+- Put full consumer models, including complete gears, in the consumer repository.
+  Test the underlying Decad operations here with minimal geometry.
+- Preserve computed-geometry assertions when replacing a large test. Do not
+  drop coverage just to shorten CI.
+
 ## Verification
 
 - **ALWAYS update `.github/test-shards.txt` or

@@ -6,10 +6,10 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0: 1475.35s over 2 tests
-#   shard 1:  291.46s over 116 tests
+#   shard 0:  415.54s over 2 tests
+#   shard 1:  116.48s over 115 tests
 #   shard 2:  177.82s over 204 tests
-#   shard 3:   43.63s over 218 tests
+#   shard 3:   55.86s over 225 tests
 #   shard 4:   53.23s over 210 tests
 #   shard 5:   80.90s over 199 tests
 #   shard 6:   90.77s over 195 tests
@@ -18,8 +18,8 @@
 #   shard 9:  118.05s over 202 tests
 #   shard 10: 714.56s over 2 tests
 #
+0	0.01	TestLoftEmbeddedFitFlanksKeepOriginalCurve
 0	415.53	TestBevelTwoToothJoinReusesOneRootRing
-0	1059.82	TestLoftEmbeddedSixtyToothGearFeatures
 1	0.01	TestArcSegExactQuarterDisk
 1	0.01	TestBlindPocketPlacedAndVerified
 1	0.02	TestBodyPatchCircularPrismNestedFillMeshRefuses
@@ -60,7 +60,6 @@
 1	0.01	TestLinkagePoseAtWaypoints
 1	0.00	TestLoftChainMultiCellRibbonFreeEdgesAndArea
 1	0.00	TestLoftDuplicateIsMeasurementIdentical
-1	174.98	TestLoftEmbeddedThirtyToothGearFeatures
 1	0.00	TestLoftPlacedReflectionHerringbone
 1	0.01	TestLoftPlacedVerifySound
 1	0.08	TestLoftSectionsVaryingCirclesRefuseOtherShapes
@@ -1637,7 +1636,6 @@
 9	0.00	TestImplicitExactlyOneStopSuccessfulManyRewritten
 9	0.00	TestLoftChainCrossingCorrespondenceIsRefused
 9	0.00	TestLoftDuplicateAlignmentOption
-9	0.01	TestLoftEmbeddedFitFlanksKeepOriginalCurve
 9	0.00	TestLoftPlacedCopyTranslation
 9	0.01	TestLoftVerifyBoxDisjointPairIsSound
 9	0.00	TestLoopCoEdgesMatchEdgesCompatibilityView
@@ -1651,6 +1649,7 @@
 9	0.00	TestNURBSCurveSealsIntoCurve
 9	0.00	TestOffsetPatchPositive
 9	0.01	TestOffsetPrismNarrowNeckAdmitted
+9	0.01	TestOuterCapChamferKeepsBoreCircular
 9	0.00	TestPatchRejections
 9	0.01	TestPatternedEnclosedVoidTakesMeshPath
 9	0.00	TestPlacedCopy
