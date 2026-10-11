@@ -324,21 +324,6 @@ func TestUnionCoplanarCapsBuildAnalyticPrismUnion(t *testing.T) {
 	})
 }
 
-// TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces
-// proves that moving an identical footprint along the sweep separates its caps
-// but leaves its lateral faces coplanar. Their shared lateral area remains a
-// refused contact.
-func TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces(t *testing.T) {
-	t.Parallel()
-	doc := decad.New()
-	a := boxBody(t, doc, 0, 0, 10, 10, 10)
-	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0, 0, 5)
-
-	_, err := decad.Union(t.Context(), a, b)
-	requireCoplanarFaceRefusal(t, err)
-	require.Len(t, doc.Bodies(), 2)
-}
-
 func TestUnionSweepDisplacementChangesEnclosedSolid(t *testing.T) {
 	t.Parallel()
 	t.Run("IntoContainmentRemovesProtrusion", func(t *testing.T) {
@@ -608,13 +593,11 @@ func TestBooleanRejections(t *testing.T) {
 		_ = got
 	})
 	t.Run("CoplanarContact", func(t *testing.T) {
-		// Two cubes stacked face on face: a valid model whose contact the exact
-		// predicates cannot classify. That is the evaluator's reach, not
-		// malformed geometry, so it is a BooleanUnsupportedContact wrapping
-		// ErrUnsupported — never ErrDegenerate, never a wrong mesh.
+		// Two cubes meet face on face after an in-plane shift. G3 excludes that
+		// shift, and the mesh path cannot classify the shared planar area.
 		doc := decad.New()
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
-		b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0, 0, 10)
+		b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
 		_, err := decad.Union(t.Context(), a, b)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.NotErrorIs(t, err, decad.ErrDegenerate)
@@ -693,8 +676,9 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 
 // TestBooleanChainDepthGateReadsOnlyTheTouchedRims is docs/api-design.md
 // §8's "The chain depth" rule (docs/faceted-vertex-bounds-design.md §5): two
-// hole tools Placed 16 mm down stay on the mesh path (the shared-axis arm
-// excludes a placement), and the second hole's rims hold bounds coarser than
+// hole tools Placed 16 mm down and 0.125 mm sideways stay on the mesh path
+// (the exact shared-axis arm excludes an in-plane shift), and the second hole's
+// rims hold bounds coarser than
 // the next pair's chord tolerance. A third hole clear of every earlier rim
 // cuts, and its volume matches the exact drilled plate within the published
 // bound. A pin placed ON the second hole's rim is refused: the refusal names
@@ -711,7 +695,7 @@ func TestBooleanChainDepthGateReadsOnlyTheTouchedRims(t *testing.T) {
 		plate := boxBody(t, doc, -48, -34, 48, 34, 16)
 		for i, tool := range []struct{ cx, r float64 }{{0, 18}, {-36, 7}} {
 			var err error
-			plate, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tool.cx, tool.r, 48), 0, 0, -16))
+			plate, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tool.cx, tool.r, 48), 0.125, 0, -16))
 			require.NoError(t, err, "cut %d", i+1)
 			require.True(t, anyFaceIsFaceted(plate), "cut %d takes the mesh path", i+1)
 		}
@@ -721,7 +705,7 @@ func TestBooleanChainDepthGateReadsOnlyTheTouchedRims(t *testing.T) {
 	t.Run("a contact clear of the coarse rims cuts", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		got, err := decad.Cut(t.Context(), drilled(t, doc), translated(t, discBody(t, doc, 36, 7, 48), 0, 0, -16))
+		got, err := decad.Cut(t.Context(), drilled(t, doc), translated(t, discBody(t, doc, 36, 7, 48), 0.125, 0, -16))
 		require.NoError(t, err, "geometry the pair does not touch is never the reason for a refusal")
 		vol, err := got.Volume()
 		require.NoError(t, err)
@@ -738,7 +722,7 @@ func TestBooleanChainDepthGateReadsOnlyTheTouchedRims(t *testing.T) {
 		plate := drilled(t, doc)
 		held, err := mustTessellate(t, plate, units.Millimeters(1)).Bound().In(units.Millimeter)
 		require.NoError(t, err)
-		_, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, -29, 1, 48), 0, 0, -16))
+		_, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, -29, 1, 48), 0.125, 0, -16))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		var be *decad.BooleanError
 		require.False(t, errors.As(err, &be), "the chain-depth refusal is a plain ErrUnsupported, not a BooleanError")

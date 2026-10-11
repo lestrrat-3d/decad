@@ -26,30 +26,37 @@ type SharedAxis struct {
 	Shift *big.Rat
 }
 
-// SharedAxisOf decides G3's shared-axis arm over the stored floats taken
-// exactly. No float arithmetic is performed in its cross-product or shift.
+// SharedAxisOf decides G3's shared-axis arms over the stored floats taken
+// exactly. Equal transform bases and equal section axes make the section
+// coordinates identical; only an exact displacement along the common sweep
+// axis may change the recorded interval.
 func SharedAxisOf(pa, pb Operand) SharedAxis {
-	if pa.Xform != pb.Xform || pa.Frame.U() != pb.Frame.U() || pa.Frame.V() != pb.Frame.V() {
+	if pa.Xform.Basis() != pb.Xform.Basis() || pa.Frame.U() != pb.Frame.U() || pa.Frame.V() != pb.Frame.V() {
 		return SharedAxis{}
 	}
 	oa, ob, n := pa.Frame.Origin(), pb.Frame.Origin(), pa.Frame.N()
-	if !proofbound.FiniteVec(oa) || !proofbound.FiniteVec(ob) || !proofbound.FiniteVec(n) {
+	basis := pa.Xform.Basis()
+	if !proofbound.FiniteVec(oa) || !proofbound.FiniteVec(ob) || !proofbound.FiniteVec(n) ||
+		!proofbound.FiniteVec(pa.Xform.Translation()) || !proofbound.FiniteVec(pb.Xform.Translation()) ||
+		!proofbound.FiniteVec(basis.EX) || !proofbound.FiniteVec(basis.EY) || !proofbound.FiniteVec(basis.EZ) {
 		return SharedAxis{}
 	}
-	d := proofarith.DvSub(proofarith.DyVec(ob), proofarith.DyVec(oa))
-	nd := proofarith.DyVec(n)
+	d := proofarith.DvSub(proofarith.DvTransform(pb.Xform, proofarith.DyVec(ob)),
+		proofarith.DvTransform(pa.Xform, proofarith.DyVec(oa)))
+	nd := proofarith.DvSub(proofarith.DvTransform(pa.Xform, proofarith.DyVec(n)),
+		proofarith.DyVec(pa.Xform.Translation()))
 	if !proofarith.DvIsZero(proofarith.DvCross(d, nd)) {
 		return SharedAxis{}
 	}
-	// Any nonzero N_i gives s = d_i/N_i. Choose the largest |N_i|.
-	comps := [3]float64{n.X, n.Y, n.Z}
+	// Any nonzero axis component gives s = d_i/axis_i. Choose the
+	// largest magnitude without rounding the exact transformed axis.
 	i := 0
-	for j := 1; j < len(comps); j++ {
-		if math.Abs(comps[j]) > math.Abs(comps[i]) {
+	for j := 1; j < len(nd); j++ {
+		if proofarith.DyCmp(proofarith.DyAbs(nd[j]), proofarith.DyAbs(nd[i])) > 0 {
 			i = j
 		}
 	}
-	if comps[i] == 0 {
+	if nd[i].Sign() == 0 {
 		return SharedAxis{}
 	}
 	return SharedAxis{OK: true, Shift: new(big.Rat).Quo(d[i].Rat(), nd[i].Rat())}

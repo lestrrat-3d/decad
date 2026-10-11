@@ -104,12 +104,12 @@ func TestPrismBooleanGateG1RequiresBothOperandsPrismPayload(t *testing.T) {
 }
 
 // TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes isolates G3's
-// two arms (§3.1). Shown to fail, one deletion at a time: with
+// three arms (§3.1). Shown to fail, one deletion at a time: with
 // admitPrismPairBudget's prismplacement.SharedAxisOf call deleted (the coplanar arm
 // alone), "offset frame on the normal axis clears G3" went red; with
 // prismplacement.SharedAxisOf's exact cross-product test deleted, "an in-plane origin
-// component refuses" went red; with its placement comparison deleted,
-// "placed along the normal stays outside the shared-axis arm" went red; with
+// component refuses" went red; with its transform-basis comparison deleted,
+// "rotated basis refuses" went red; with
 // its U/V comparison deleted, "U/V bits one ulp apart refuse" went red.
 func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 	t.Parallel()
@@ -131,13 +131,40 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		require.False(t, ok)
 	})
 
-	t.Run("placed along the normal stays outside the shared-axis arm", func(t *testing.T) {
+	t.Run("placed along the normal clears G3", func(t *testing.T) {
 		shifted, err := r3.Translation(r3.Vec{Z: 3})
 		require.NoError(t, err)
 		shiftedPP := pp
 		shiftedPP.xform = shifted
 		b := &Body{payload: shiftedPP}
-		_, _, ok := admitPrismPair(a, b)
+		pa, pb, ok := admitPrismPair(a, b)
+		require.True(t, ok)
+		require.Zero(t, prismplacement.ZShift(prismPlacementOf(pa), prismPlacementOf(pb)).Cmp(big.NewRat(3, 1)))
+	})
+
+	t.Run("frame and placement offsets combine exactly", func(t *testing.T) {
+		frameB, err := r3.NewFrame(r3.Vec{Z: 2}, frame.U(), frame.V())
+		require.NoError(t, err)
+		shifted, err := r3.Translation(r3.Vec{Z: 3})
+		require.NoError(t, err)
+		shiftedPP := pp
+		shiftedPP.frame = frameB
+		shiftedPP.xform = shifted
+		pa, pb, ok := admitPrismPair(a, &Body{payload: shiftedPP})
+		require.True(t, ok)
+		require.Zero(t, prismplacement.ZShift(prismPlacementOf(pa), prismPlacementOf(pb)).Cmp(big.NewRat(5, 1)))
+	})
+
+	t.Run("rotated basis refuses", func(t *testing.T) {
+		turned, err := r3.FromBasis(r3.Basis{
+			EX: r3.NewVec(0, 1, 0),
+			EY: r3.NewVec(-1, 0, 0),
+			EZ: r3.NewVec(0, 0, 1),
+		}, r3.Vec{Z: 3})
+		require.NoError(t, err)
+		turnedPP := pp
+		turnedPP.xform = turned
+		_, _, ok := admitPrismPair(a, &Body{payload: turnedPP})
 		require.False(t, ok)
 	})
 

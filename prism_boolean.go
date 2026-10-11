@@ -292,11 +292,11 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 // (prismcells.Reexpression.Rewind). Two operands reflected by one placement share
 // it in G3's shared-axis arm and need no re-expression.
 //
-// G3 has two arms. The shared-axis
-// arm (prismplacement.SharedAxisOf) needs one placement, bit-identical U/V and a
-// frame-origin difference whose cross product with N is exactly zero over the
-// stored floats; the coplanar arm needs the float dot product of the world
-// origin difference with the world normal to be the literal zero. Every
+// G3 has a coplanar arm and two shared-axis arms. SharedAxisOf needs equal
+// stored transform bases and frame U/V, and proves the composed-origin offset
+// lies exactly along the transformed frame normal. The coplanar arm needs the
+// float dot product of the world origin difference with the world normal to
+// be the literal zero. Every
 // comparison is ordinary Go == on the stored r3.Vec/float64 values (the
 // design's "bit-identical" / "the literal zero") or exact dyadic arithmetic:
 // Go's == already treats -0.0 and 0.0 as equal, so no separate zero-sign
