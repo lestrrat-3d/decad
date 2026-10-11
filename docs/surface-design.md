@@ -1964,6 +1964,29 @@ crossing and whole-shell orientation proofs; the open mesh does not run the
 signed-volume audit, whose sum depends on the anchor when caps are absent.
 The sheet mesh carries no occupied-volume proof.
 
+An all-planar `Body.Patch` result tessellates when every face has a zero-bound
+normal and only `Line3` edges. `tessellateBodyPatch` triangulates the live
+faces over one shared vertex table. Each new fill's triangles use the
+opposite direction from the source face's triangles along their shared rim;
+the whole set reverses under a later reflected placement. A filled open rim
+therefore has no mesh free edge, and an unfilled rim remains a mesh free edge.
+The sheet audit checks both cases. Each face bound includes its largest
+vertex bound and its `axialDelta`; the area proof charges those terms per
+triangle. `VerifyBoundary` and `VerifyAll` also check facet contact. A
+`Body.Patch` result whose source is one complete circular surface extrusion
+also tessellates when it fills one or both whole-circle rims in the same call.
+The source prism mesh supplies one station grid for the cylindrical wall and
+the new planar fills. Each fill reuses its wall ring's vertex indices, and
+every triangle names a live face of the patched body. The source wall bound,
+circle sagitta under the source frame's stretch, source coordinate bound,
+axial displacement, and any later rigid placement give each face a two-sided
+bound. At `VerifyAll`, exact
+held-triangle area intervals are compared with each face's certified area.
+The sheet and facet-contact audits run on the completed mesh. A later
+`Body.Patch` call on that result, or another curved source outside this prism
+route, still refuses tessellation. No `Body.Patch` sheet publishes an
+occupied-volume proof.
+
 **A stitched `BodySolid` is a different case from every sheet above, and its
 own mesh follows §14 Table D row 5.** A
 stitched solid is not a sheet — Table X's whole subject — so nothing above
@@ -2111,7 +2134,7 @@ audits of §10.1 apply unchanged. This route publishes
 | `Thicken` | §16.1's six admitted families build; the others are R24 | builds a new solid from a sheet's recorded generator and retires the sheet |
 | `Offset` | §17's patch and profile-fed prism families build; the other families are R37 | builds a second sheet at a stated normal distance from the receiver's own faces, over the same recorded generator `Thicken` reads, and leaves the receiver live |
 | `Placed` / `PlacedCopy` / `Duplicate` | admitted, unchanged | a rigid motion of a payload; nothing in it reads solidity |
-| `Tessellate` / `STL` / `OBJ` | a `Document.Patch`, prism, revolve, loft, all-planar stitched or §10.1–§10.2 revolve-backed stitched sheet tessellates and exports; other curved stitched sheets are R32 | each supported sheet path runs the manifold-with-boundary audit §10 describes |
+| `Tessellate` / `STL` / `OBJ` | a `Document.Patch`, all-planar `Body.Patch`, prism, revolve, loft, all-planar stitched or §10.1–§10.2 revolve-backed stitched sheet tessellates and exports; other curved stitched sheets are R32 | each supported sheet path runs the manifold-with-boundary audit §10 describes |
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
 | `ToFace` naming a curved face of a sheet | as for a solid | this design changes no curved-stop reach |
 | `EdgeAxis` naming a linear edge of a live sheet | admitted | the axis reads the edge's line; `docs/api-design.md` §6.2's exactly-one and liveness rules apply unchanged |
@@ -2663,7 +2686,7 @@ The row-9 curved-mesh obligations are:
 | T7d | two sheets whose boxes meet, in a fixture that would cross if either were a solid | `Verify` keeps `DiagUnsupportedPairSheet`, `Suspect`: neither operand offers a closed boundary to cast against |
 | T7e | T7's fixture with the two bodies created in the opposite order | the `DiagSheetSolidCrossing` diagnostic's `Pair.A`/`Pair.B` follow `Document.Bodies()` order, not "sheet first" |
 | T9 | a sheet handed to `Union`, `Fillet`, `Chamfer` and `Shell` | each is `ErrUnsupported`; the receiver and every operand stay live, and `Document.Bodies()` is unchanged |
-| T10 | a sheet tessellated | `Document.Patch`, prism, revolve and loft sheets tessellate and export through the manifold-with-boundary audit (§10; `apitest/tessellate_patch_test.go`, `apitest/tessellate_sheet_test.go`, `apitest/tessellate_revolve_sheet_test.go`, `apitest/surface_loft_test.go`); a loft sheet omits both recorded cap ranges and carries no occupied-volume proof |
+| T10 | a sheet tessellated | `Document.Patch`, all-planar `Body.Patch`, prism, revolve and loft sheets tessellate and export through the manifold-with-boundary audit (§10; `apitest/tessellate_patch_test.go`, `apitest/patch_body_tessellate_test.go`, `apitest/tessellate_sheet_test.go`, `apitest/tessellate_revolve_sheet_test.go`, `apitest/surface_loft_test.go`); a loft sheet omits both recorded cap ranges and carries no occupied-volume proof |
 | T11 | a three-face assembly welded into a Möbius orientation | `Stitch` is `ErrDegenerate` (R7), and the document is unchanged |
 | T12 | `Body.Patch` on a non-planar four-edge chain | `ErrUnsupported` (R6); and on a bounded chain that carries no shared level token — a revolve seam, or any other chain no builder stamped one onto — `ErrUnsupported` on the same row. A bounded chain that DOES share one level token is T26's own admission, gate 3's second arm |
 | T13 | every Table R row | the stated sentinel, with `errors.Is` holding, and no document change |

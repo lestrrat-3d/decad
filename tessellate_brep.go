@@ -182,7 +182,9 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			maps.Copy(terminalPoly, polys)
 			continue
 		}
-		bandsOf[bands[bi].band.face] = append(bandsOf[bands[bi].band.face], bi)
+		if !bands[bi].bossShell {
+			bandsOf[bands[bi].band.face] = append(bandsOf[bands[bi].band.face], bi)
+		}
 	}
 
 	// faceCapSlack is each planar face's own share of its curved edges'

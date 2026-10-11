@@ -59,14 +59,21 @@ func Example_decad_body_patch() {
 	}
 
 	_, err = decad.Edges(decad.Free()).SelectEdges(capped)
+	mesh, meshErr := capped.Tessellate(context.Background(), units.Millimeters(0.1))
+	if meshErr != nil {
+		fmt.Printf("failed to tessellate the patched tube: %s\n", meshErr)
+		return
+	}
 
 	fmt.Printf("kind is sheet: %v\n", capped.Kind() == decad.BodySheet)
 	fmt.Printf("faces: %d\n", len(capped.Faces()))
 	fmt.Printf("area: %s (%s)\n", area.Value, area.Exactness)
 	fmt.Printf("no free edge remains: %v\n", err != nil)
+	fmt.Printf("mesh triangles: %d, boundary verified: %v\n", len(mesh.Triangles()), mesh.BoundaryVerified())
 	// Output:
 	// kind is sheet: true
 	// faces: 6
 	// area: 15200 mm^2 (Exact)
 	// no free edge remains: true
+	// mesh triangles: 12, boundary verified: true
 }

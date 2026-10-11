@@ -21,6 +21,8 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_sweep_composite.go` | Plans shared profile stations and assembles composite Sweep meshes. See sweep Table D. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
+| `tessellate_body_patch.go` | Triangulates planar Body.Patch sheets and proves face bounds. See tessellation §2. |
+| `tessellate_body_patch_prism.go` | Reuses circular surface-extrusion wall stations to mesh one or both Body.Patch fills with shared rim indices and verified face bounds. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |
 | `tessellate_coil.go` | A coil's held-shell mesh with its area and volume proofs. See helix §8. |
 | `tessellate_capblend.go` | The cap-loop chamfer mesh. See tessellation reach §7. |

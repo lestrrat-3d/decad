@@ -133,6 +133,12 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 // shellThroughCut names it when the record reads as no through-cut record
 // either (SG3).
 func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepModifyRequest, refusal error) (*Body, error) {
+	if sp, ok := b.payload.(stackedPrismPayload); ok {
+		body, matched, err := shellStackedBoss(ctx, b, sp, bp, req.shellCall)
+		if matched || err != nil {
+			return body, err
+		}
+	}
 	return shellThroughCut(ctx, b, bp, req.shellCall, refusal)
 }
 
@@ -159,6 +165,9 @@ func commitModifyResult(ctx context.Context, b, body *Body) (*Body, error) {
 func brepModifyRecord(ctx context.Context, payload featurePayload, op string) (brepPayload, []string, bool, error) {
 	switch p := payload.(type) {
 	case brepPayload:
+		if p.bossShell != nil {
+			return brepPayload{}, nil, true, fmt.Errorf(`%w: this evaluator does not modify the rounded cavity of a stacked boss shell`, ErrUnsupported)
+		}
 		return p, nil, true, nil
 	case stackedPrismPayload:
 		bp, sourceRoles, err := brepOfStackedWithRoles(ctx, p)

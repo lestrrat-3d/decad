@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 
@@ -45,6 +48,17 @@ import (
 // half width of 1.9e-7, while the widest span this bracket's own preflight
 // admits (32 controls, FreeformBracketCost) measures above 2e-5.
 const FreeformLengthDepth = 10
+
+// Bound cached spans across documents so distinct records cannot grow memory
+// without limit. Entries leave in insertion order when the cache fills.
+const lengthBracketCacheSize = 4096
+
+var lengthBracketCache = struct {
+	sync.RWMutex
+	values map[string][2]float64
+	order  []string
+	next   int
+}{}
 
 // FreeformArcLength brackets the converted chain's arc length. It returns the
 // interval midpoint and its half width, so the caller reports a value with a
@@ -150,9 +164,57 @@ func FreeformBracketCost(controls int) uint64 {
 // given depth and summing each piece's chord (below) and control polygon
 // (above).
 //
-// The span is re-expressed once, here, into the split form below; every level
-// under it works in that form and only the leaves come back out as rationals.
+// A cache hit at the production depth returns the same bounds for the exact
+// same rational controls. On a miss, the span is re-expressed once into the
+// split form below; every level under it works in that form.
 func SpanLengthBracket(span BezierSpan, depth int) (float64, float64) {
+	if depth != FreeformLengthDepth || len(span) < 4 {
+		return spanLengthBracket(span, depth)
+	}
+	// The record work charge precedes this call. Reusing a result skips only
+	// arithmetic, so a later walk still consumes its original work budget.
+	key := lengthBracketKey(span, depth)
+	lengthBracketCache.RLock()
+	bound, ok := lengthBracketCache.values[key]
+	lengthBracketCache.RUnlock()
+	if ok {
+		return bound[0], bound[1]
+	}
+	lo, hi := spanLengthBracket(span, depth)
+	lengthBracketCache.Lock()
+	if lengthBracketCache.values == nil {
+		lengthBracketCache.values = make(map[string][2]float64, lengthBracketCacheSize)
+	}
+	if _, present := lengthBracketCache.values[key]; !present {
+		if len(lengthBracketCache.order) == lengthBracketCacheSize {
+			delete(lengthBracketCache.values, lengthBracketCache.order[lengthBracketCache.next])
+			lengthBracketCache.order[lengthBracketCache.next] = key
+			lengthBracketCache.next = (lengthBracketCache.next + 1) % lengthBracketCacheSize
+		} else {
+			lengthBracketCache.order = append(lengthBracketCache.order, key)
+		}
+		lengthBracketCache.values[key] = [2]float64{lo, hi}
+	}
+	lengthBracketCache.Unlock()
+	return lo, hi
+}
+
+// lengthBracketKey names every rational control coordinate, so two keys are
+// equal exactly when their spans and subdivision depths are equal.
+func lengthBracketKey(span BezierSpan, depth int) string {
+	var key strings.Builder
+	key.Grow(16 + 64*len(span))
+	key.WriteString(strconv.Itoa(depth))
+	for _, point := range span {
+		key.WriteByte('|')
+		key.WriteString(point.U.RatString())
+		key.WriteByte(',')
+		key.WriteString(point.V.RatString())
+	}
+	return key.String()
+}
+
+func spanLengthBracket(span BezierSpan, depth int) (float64, float64) {
 	// Unmetered on purpose: FreeformArcLength has already charged this whole
 	// span's subtree through FreeformBracketCost, and a nil counter is exactly
 	// how FreeformWork.step spells "already accounted for". The error a metered

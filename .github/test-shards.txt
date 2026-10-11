@@ -9,7 +9,7 @@
 #   shard 0:    0.00s over 1 tests
 #   shard 1:    0.17s over 225 tests
 #   shard 2:   10.20s over 135 tests
-#   shard 3:  136.92s over 134 tests
+#   shard 3:  136.92s over 135 tests
 #   shard 4:  135.87s over 133 tests
 #   shard 5:   94.90s over 130 tests
 #   shard 6:   85.03s over 133 tests
@@ -43,6 +43,7 @@
 1	0.00	TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload
 1	0.00	TestBodyGateDiameterFreeformArmSkipsAnalyticPrism
 1	0.00	TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism
+1	0.00	TestBodyPatchMeshChargesTheFilledCapsAxialBound
 1	0.00	TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain
 1	0.00	TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver
 1	0.00	TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch
@@ -481,6 +482,7 @@
 3	0.00	TestRvLenUpperEnclosesTheExactNorm
 3	0.06	TestSegFilterNeverRejectsAnExactHit
 3	0.00	TestSeparatedOpposedHoleScene
+3	0.00	TestShellStackedBossMeshVolumeProof
 3	0.03	TestSideOpeningRegionsArcArcCut
 3	0.00	TestSolveTripleStraddledDeterminantDropsOnlyItsOwnCandidate
 3	0.02	TestSpanMatchedDeltaUpperEnclosesDenseSampleOnOrdinarySpans
