@@ -29,6 +29,9 @@ type ResolveInput struct {
 	SnapTol     float64
 	RadialLower float64
 	Transform   r3.Transform
+	// WorkLimit applies only when a composite Sweep replays its certified
+	// fitted-spline profile. Zero preserves Revolve's ordinary limit.
+	WorkLimit uint64
 }
 
 // Resolution holds the recorded walks and count-independent coordinate bounds.
@@ -60,6 +63,9 @@ func Resolve(ctx context.Context, input ResolveInput) (*Resolution, error) {
 		return nil, fmt.Errorf(`%w: this revolve's axis basis holds a coordinate that cannot be enclosed, so the mesh can state no construction bound`, decaderr.ErrUnsupported)
 	}
 	work := freeform.NewFreeformWork()
+	if input.WorkLimit > 0 {
+		work.RaiseLimit(input.WorkLimit)
+	}
 	resolved := make([]revolveaxis.ResolvedWalks, len(input.Loops))
 	junctions := make([][]revolvemesh.RevMeridian, len(input.Loops))
 	junctionGap := 0.0
@@ -108,14 +114,15 @@ func Resolve(ctx context.Context, input ResolveInput) (*Resolution, error) {
 // Counts are the current meridian and angular chording choices. Refinement
 // increases only one of them after a mesh audit asks for a retry.
 type Counts struct {
-	Meridian      [][]int
-	Sagittas      [][]float64
-	Freeform      [][]*freeform.FreeformChain
-	Angular       int
-	MeridianDelta float64
-	AngularDelta  float64
-	Sweep         float64
-	RhoMax        float64
+	Meridian       [][]int
+	Sagittas       [][]float64
+	Freeform       [][]*freeform.FreeformChain
+	Angular        int
+	MeridianTarget float64
+	MeridianDelta  float64
+	AngularDelta   float64
+	Sweep          float64
+	RhoMax         float64
 }
 
 // CountInput carries the tolerance and angle fields needed to choose counts.
@@ -128,6 +135,12 @@ type CountInput struct {
 	// MeridianFloor shares profile stations with adjacent sweep spans.
 	// Nil keeps Revolve's ordinary minimum counts.
 	MeridianFloor [][]int
+	// FreeformTarget selects the same certified dyadic station chain in
+	// adjacent composite Sweep spans. Zero uses this Revolve's own target.
+	FreeformTarget float64
+	// WorkLimit applies to the same composite Sweep profile replay as
+	// ResolveInput.WorkLimit. Zero keeps Revolve's ordinary limit.
+	WorkLimit uint64
 }
 
 // PlanCounts reserves section and coordinate displacement, then chords each
@@ -150,9 +163,12 @@ func PlanCounts(input CountInput) (Counts, error) {
 	counts := Counts{
 		Meridian: make([][]int, len(res.Resolved)), Sagittas: make([][]float64, len(res.Resolved)),
 		Freeform: make([][]*freeform.FreeformChain, len(res.Resolved)),
-		RhoMax:   res.RhoMax,
+		RhoMax:   res.RhoMax, MeridianTarget: meridian,
 	}
 	freeformWork := freeform.NewFreeformWork()
+	if input.WorkLimit > 0 {
+		freeformWork.RaiseLimit(input.WorkLimit)
+	}
 	if input.MeridianFloor != nil && len(input.MeridianFloor) != len(res.Resolved) {
 		return Counts{}, fmt.Errorf(`%w: the shared meridian count plan has a different loop count`, decaderr.ErrUnsupported)
 	}
@@ -166,12 +182,20 @@ func PlanCounts(input CountInput) (Counts, error) {
 		for k, w := range r.Walks {
 			counts.Meridian[li][k] = 1
 			if w.Kind == survey2d.WalkFreeform {
-				if input.MeridianFloor != nil && input.MeridianFloor[li][k] > 1 {
-					return Counts{}, fmt.Errorf(`%w: a free-form meridian needs shared parameter stations`, decaderr.ErrUnsupported)
+				target := meridian
+				if input.FreeformTarget > 0 {
+					if input.FreeformTarget > meridian {
+						return Counts{}, fmt.Errorf(`%w: shared free-form stations exceed this Revolve's meridian budget`, decaderr.ErrUnsupported)
+					}
+					target = input.FreeformTarget
 				}
-				chain, err := freeform.ChainStations(w.Spans, meridian, freeformWork)
+				chain, err := freeform.ChainStations(w.Spans, target, freeformWork)
 				if err != nil {
 					return Counts{}, err
+				}
+				if input.MeridianFloor != nil && input.MeridianFloor[li][k] > 0 &&
+					len(chain.Stations) != input.MeridianFloor[li][k] {
+					return Counts{}, fmt.Errorf(`%w: shared free-form stations have a different meridian count`, decaderr.ErrUnsupported)
 				}
 				if chain.Sagitta >= res.RadialLower {
 					return Counts{}, fmt.Errorf(`%w: a free-form meridian's chord tube reaches the revolve axis`, decaderr.ErrUnsupported)

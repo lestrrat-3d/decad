@@ -342,10 +342,11 @@ difference is at most the nonnegative sum of each span's bound and its
 join-movement swept-volume allowance. No generic `Bound × Area` replacement
 is used. A sheet publishes no occupied-volume proof.
 
-The current adapter refuses Tier A free-form profile walks and meridian poles.
-It also refuses a span whose resolved walk order or station count differs from
-the shared plan, and a shared section whose coordinate gap exceeds the
-two-sided source bounds. All such refusals are `ErrUnsupported`.
+The current adapter chords `FitSplineSeg` profile walks at the smallest
+meridian target across its spans. It refuses other free-form profile kinds and
+meridian poles. It also refuses a span whose resolved walk order or station
+count differs from the shared plan, and a shared section whose coordinate gap
+exceeds the two-sided source bounds. All such refusals are `ErrUnsupported`.
 
 ### `loftPayload` exact restatement
 

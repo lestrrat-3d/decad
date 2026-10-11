@@ -37,6 +37,8 @@ import (
 // section caps, and §4.1's closed-sheet carve-out (a build that mints no
 // closing face at all) stays reachable through Revolve alone.
 
+const compositeFitSweepWorkLimit = 8 * freeform.FreeformWorkLimit
+
 // SweepOption configures Sweep.
 type SweepOption interface {
 	option.Interface
@@ -82,6 +84,9 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 		return nil, err
 	}
 	work := freeform.NewFreeformWork()
+	if len(path.records) > 1 && !cfg.Mitred && !cfg.Scaled {
+		work = newCompositeSweepWork(profile)
+	}
 	if _, err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}

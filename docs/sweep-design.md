@@ -35,10 +35,10 @@ normal, and is position-continuous. Every admitted internal join is tangent.
 The section moves by the unique rotation-minimizing rigid motion along each
 straight or circular path segment.
 
-The first implementation admits:
+The current `Sweep` implementation admits:
 
 - an open path made from `LineTo` and `ArcThrough` segments;
-- line, circle, and arc profile boundaries;
+- line, circle, arc, and fitted-spline profile boundaries;
 - zero total twist;
 - tangent internal joins;
 - a build whose local curvature gates and global contact audit prove a simple,
@@ -46,7 +46,7 @@ The first implementation admits:
 
 The design also fixes these later increments:
 
-- Tier A free-form profile boundaries follow `docs/spline-design.md` reach;
+- other Tier A free-form profile boundaries follow `docs/spline-design.md` reach;
 - nonzero distributed twist builds a certified faceted sweep;
 - exact-restatement tessellation admits the payload to export and booleans;
 - a future constrained 3D sketch may be recorded into the same `Path` without
@@ -431,7 +431,7 @@ withholds the reference and prevents a false `Sound` report.
 | D | Consumer | Status |
 |---|---|---|
 | **D1** | structural `Verify` + tolerance gate | lands with Sweep. For a solid, the construction and global audit prove validity and all four readings are judged. For a `WithSurfaceResult()` sheet, only the one-span straight reduction carries an equivalent construction proof (it IS a prismPayload build, docs/surface-design.md §9.1); the arc reduction and every composite sheet read `Suspect` — the arc build runs no crossing audit of its own, and the composite build's own boundary/vertex-link audit proves assembled topology, not geometric non-self-intersection |
-| **D2** | `Tessellate` / STL / OBJ | one-span sweeps use their prism or revolve reductions. A composite sweep with `LineSeg`, `ArcSeg` and `CircleSeg` profile walks uses one count per recorded segment across all spans, maps each facet to a live `side(k,i,j)` or endpoint cap, and audits the combined mesh. A meridian pole, a station chain that changes order, or a Tier A free-form profile still refuses. A sheet has no occupied-volume proof |
+| **D2** | `Tessellate` / STL / OBJ | One-span sweeps use prism or Revolve. Composite sweeps mesh line, circle, arc and fitted-spline profiles with shared stations. Meridian poles or unmatched stations refuse. Sheets have no occupied-volume proof |
 | **D3** | mesh booleans | one-span solid sweeps use their reduction's `volSymDiff`. An admitted composite solid sums the span occupied-volume bounds and the join-vertex movement bounds, with `symDiffOK == true`; its mesh can enter `Union`, `Cut` and `Intersect` |
 | **D4** | interference | bounds-disjoint pairs work immediately; an admitted solid sweep reaches the mesh intersection D3 admits. Other pairs stay `Suspect` until D3 or a sweep analytic adapter lands |
 | **D5** | clearance | box separation may settle the partition, but `WithClearances` stays `Suspect` until a sweep boundary adapter lands |
@@ -449,6 +449,13 @@ coordinate gap is charged to its source, area and occupied-volume proofs.
 Internal cap triangles are omitted from the published mesh. The two span
 cap triangulations tile the same shared section, so the composite mesh keeps
 one closed shell with no internal face.
+
+For a `FitSplineSeg`, the planner takes the smallest of the prism's chord
+target and each arc span's proven meridian target. Every span independently
+chords the same recorded Bézier chain at that target. The deterministic dyadic
+walk therefore emits the same exact parameter stations in each span. The
+planner records their common count, and each Revolve span checks that its
+independent chain has that count before the shared-grid join audit runs.
 
 `sourceBound(face)` contains the span reduction's profile chording, path
 chording and coordinate displacement, plus any join-vertex movement on that
@@ -475,8 +482,19 @@ facet-work cap, and facet-pair-test cap. It adds one sweep-span cap so topology
 and role counts are preflighted before allocation. The defining source constant,
 not this design document, owns its numeric value and derivation.
 
-No budget resets per span. Checked arithmetic computes the complete build's
-candidate counts before any large allocation or audit.
+A composite `Sweep` carrying a `FitSplineSeg` gives its recorded-profile
+exact-work counter an eightfold allowance, bounded at
+`8 * freeform.FreeformWorkLimit`. The fitted-spline arc-line-arc case spends
+2,101,728 units, above the default 1,048,576-unit ceiling. All analytic span
+builds in one Sweep or placement replay share that counter. The composite mesh
+planner and each independently certified span tessellator use the same bounded
+allowance for their own exact-work replay. Other Sweep paths keep the default
+limit. A profile that exceeds the composite build limit returns
+`ErrUnsupported` before the document commits a body.
+
+The analytic build's exact-work budget does not reset per span. Checked
+arithmetic computes the complete build's candidate counts before any large
+allocation or audit.
 
 ## 12. Increments
 
@@ -492,8 +510,8 @@ separation audit closes. Other composite paths remain staged as
 | **3** | zero-twist one-span arc reduction with Revolve's local gates | composite paths |
 | **4** | composite tangent line/arc transport, internal-section topology, global contact audit, D1 and D7 | D2–D6, nonzero twist |
 | **5a** | one-span arc sweep tessellation through its revolve reduction, one-span sheet tessellation through its existing prism or revolve reduction, and mesh-boolean admission for arc solids; D2 and D3 for those reductions. **This row is landed.** | composite paths |
-| **5b** | shared-station tessellation and complete proof records for composite paths with line and circular profile walks; D2 and D3 for that reach. **This row is landed.** | Tier A free-form profile stations, meridian poles, analytic clearance and surveys |
-| **6** | Tier A free-form profile reach supported by each span builder | Tier B/C profile kinds follow spline staging |
+| **5b** | shared-station tessellation and complete proof records for composite paths with line and circular profile walks; D2 and D3 for that reach. **This row is landed.** | Meridian poles, analytic clearance and surveys |
+| **6** | `FitSplineSeg` profile build and shared dyadic tessellation through composite arc-line-arc paths. **This reach is landed.** | Other Tier A profile kinds and Tier B/C kinds follow spline staging |
 | **7** | nonzero distributed twist as a certified faceted sweep | closed paths, a corner mode or scale other than §16's |
 | **8** | sweep boundary adapter for clearance/interference | non-constant-section surveys |
 | **M1**, **M2** | §16's mitred polyline sweep; §16.9 owns the two rows | what §16.9 lists |
