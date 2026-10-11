@@ -259,4 +259,49 @@ func TestBevelPatternReusesOneRootRing(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, fits, 2*len(pattern))
+	if len(pattern) != galleryTeeth {
+		return
+	}
+	box, err := joined.Bounds()
+	require.NoError(t, err)
+	const margin = 1.0
+	world := sketch.NewWorld()
+	frame, err := r3.NewFrame(r3.NewVec(box.Min.X-margin, 0, 0),
+		r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	plane, err := world.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	boreSketch, err := world.CreateSketch(plane)
+	require.NoError(t, err)
+	center := boreSketch.CreatePoint(0, 0)
+	boreSketch.Fix(center)
+	boreSketch.CreateCircle(center, 0.5)
+	_, err = boreSketch.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := boreSketch.Profiles()
+	require.Len(t, profiles, 1)
+	tool, err := doc.Extrude(boreSketch, profiles[0], decad.Distance{
+		D: units.Millimeters(box.Max.X - box.Min.X + 2*margin), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	bored, err := decad.Cut(t.Context(), joined, tool)
+	require.NoError(t, err)
+	require.True(t, bored.IsSolid())
+	boreMesh, err := bored.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, boreMesh.BoundaryVerified())
+	require.True(t, boreMesh.VolumeVerified())
+	var boreWalls, annularCaps int
+	for _, face := range bored.Faces() {
+		if cyl, ok := face.Surface().(decad.Cylinder); ok &&
+			cyl.Radius == units.Millimeters(0.5) {
+			boreWalls++
+		}
+		if _, ok := face.Surface().(decad.Plane); ok && len(face.Loops()) == 2 {
+			annularCaps++
+		}
+	}
+	require.Equal(t, 1, boreWalls)
+	require.Equal(t, 2, annularCaps)
 }

@@ -25,6 +25,15 @@ type bevelJoinRecord struct {
 	blank  *Body
 	first  facetedPayload
 	placed []facetedPayload
+	// capRing is set by the complete patterned join. Its indices name the
+	// two original axis-cap fans and their common angular stations.
+	capRing *bevelCapRingRecord
+}
+
+type bevelCapRingRecord struct {
+	angles            []float64
+	heel, toe         []int
+	heelAxis, toeAxis int
 }
 
 type bevelToothPlacement struct {
