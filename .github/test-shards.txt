@@ -21,9 +21,13 @@
 0	0.01	TestBevelAxisRotationRequiresPureNonidentityXTurn
 0	0.01	TestBevelBoreCapFanRequiresAdjacentRingVertices
 0	0.01	TestBevelBoreTriangleClearKeepsOnlyOutsideFacets
+0	0.01	TestBevelCapRefinementKeepsSharedEdgesAndBoundaryGroups
 0	0.01	TestBevelPatternAngularGapUsesCircularSeam
 0	0.01	TestBevelPatternRingAnglesKeepCapStationsAcrossHalfTurn
+0	0.01	TestBevelPatternSourceProjectionChargesWholeBodyBounds
+0	0.01	TestBevelRootEdgeOrderRequiresOneDirectedInterval
 0	0.20	TestBevelSharedRingLeavesOnlyToothOwnedRootSectorsOpen
+0	0.01	TestBevelSourceRequiresPositivePublicConeBranch
 0	0.01	TestBevelTrimmedTeethRequireSeparatedCertifiedRanges
 0	0.00	TestXPTKeyDistinguishesCoordinates
 1	0.00	TestAddBlendRolesContextPollsNestedMetadata

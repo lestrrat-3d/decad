@@ -340,3 +340,46 @@ removed cap discs and the new cylindrical wall.
 `decad-gallery/models/bevelgear/bore_test.go` checks the complete eight-tooth
 body with a through-bore. Decad checks cap-fan sector pairing and bore
 clearance decisions in `bevel_join_bore_test.go`.
+
+## Straight-tooth combined join
+
+`CombineJoin` accepts three to twelve copies of one authenticated point-loft
+tooth against the original finite revolve blank. The first tool carries the
+cone-trim record; every later tool must be a recorded near-axis rotation of
+that same source. Pairwise exact projections of the held tooth vertices,
+expanded by each body's certified mesh bound, prove the complete source
+solids disjoint. The original Sketch boundary certificates are checked again
+before rebuilding. The source axial interval, including its mesh allowance,
+must lie on the positive side of the public root cone's `Origin.X`.
+
+The shared blank ring starts halfway between the first and last tooth
+sectors, at `-π / toothCount`. Root nodes must follow their cap boundary in
+strict angular order, and every pair of sectors must remain separate after
+crossing and placement bounds. The public cone may have a rounded, nonzero
+axial origin: finite-meridian residuals and seat contacts therefore use
+`X - Origin.X`. The far root stations are construction samples on the
+zero-origin surrogate. Their mapped endpoints are compared directly with
+the recorded blank ring (`snap`); the continuous mapped edge is bounded
+against its chord by `pointConeTriangleBound`, and the ring chord is bounded
+against the exact root arc by `blankSag`. These three charges cover the
+surrogate without assuming that its intersection equals the public cone's.
+
+After three uniform cap subdivisions, cells whose upper or lower cone-map
+bound exceeds 0.08 mm split once. Shared edges split in both neighboring
+cells, including cap boundary edges, so the cap and root strip remain sewn.
+The final triangles are checked again for their actual cone-map bound. The
+construction permits at most 10,000 input cells per cap and at most four
+children per cell. The audit triangle ceiling adds at most 60,000 triangles
+per tooth to the three-round pattern ceiling, and its scan ceiling is
+25 million per tooth. The real twelve-tooth source yielded 657,696 triangles
+and 230,484,398 scans, below its 984,480-triangle and 300-million-scan
+ceilings. The boundary allowance scales cap interpolation and
+far-node rounding by the held placement's certified stretch, then checks the
+result against the 0.1 mm contract. The existing source-volume and swept-area
+allowances and exact volume check still apply. The eight-tooth serial Union
+and its centered bore keep their separate admission rules.
+
+The complete 16/12 module-4 straight pinion model and its `VerifyAll` check
+live in `decad-gallery/models/bevelgear`, where the real producer and
+consumer run together. Decad's focused tests cover cap conformity, root
+station order, and complete source-solid separation.

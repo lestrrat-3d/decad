@@ -23,9 +23,9 @@ type spiralToothPlacement struct {
 }
 
 // CombineJoin joins target with all tools in one operation. The current
-// evaluator admits a finite spiral-bevel blank and at least two disjoint rigid
-// copies of one authenticated nine-section tooth. Every operand must be live
-// in the same document; a failed call consumes none of them.
+// evaluator admits authenticated spiral and straight bevel patterns. Every
+// operand must be live in the same document; a failed call consumes none of
+// them.
 func CombineJoin(ctx context.Context, target *Body, tools ...*Body) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("%w: a nil context cannot control CombineJoin", ErrDegenerate)
@@ -58,7 +58,11 @@ func CombineJoin(ctx context.Context, target *Body, tools ...*Body) (*Body, erro
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body, err := spiralCombineBody(ctx, d, d.nextProducerID(), target, tools)
+	ref := d.nextProducerID()
+	body, matched, err := tryBevelPatternCombineJoin(ctx, d, ref, target, tools)
+	if !matched {
+		body, err = spiralCombineBody(ctx, d, ref, target, tools)
+	}
 	if err != nil {
 		return nil, err
 	}

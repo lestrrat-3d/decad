@@ -138,6 +138,11 @@ func bevelImplicitDisplacement(blank *bevelBlankSource, base facetedPayload) (fl
 	}
 	minX = math.Nextafter(minX-base.meshBound, math.Inf(-1))
 	maxX = proofbound.AbsSumUpper(maxX, base.meshBound)
+	// ConeCurveSide and ConeLineCrossing certify the positive nappe only.
+	// Include the source boundary's displacement before selecting that nappe.
+	if !(minX > blank.rootCone.Origin.X) {
+		return 0, false
+	}
 	slope := blank.coneSection().Slope
 	meridianAtFar := bevelMeridianExtensionGap(blank, minX, maxX)
 	d := proofbound.AbsSumUpper(base.meshBound, meridianAtFar)
@@ -352,9 +357,11 @@ func (source *bevelBlankSource) meridianEquation() (*big.Rat, *big.Rat) {
 func bevelMeridianExtensionGap(source *bevelBlankSource, xLo, xHi float64) float64 {
 	m, b := source.meridianEquation()
 	slope := proofarith.FloatRat(source.coneSection().Slope)
+	originX := proofarith.FloatRat(source.rootCone.Origin.X)
 	gap := func(x float64) *big.Rat {
 		value := new(big.Rat).Add(new(big.Rat).Mul(
-			new(big.Rat).Sub(m, slope), proofarith.FloatRat(x)), b)
+			new(big.Rat).Sub(m, slope), proofarith.FloatRat(x)),
+			new(big.Rat).Add(b, new(big.Rat).Mul(slope, originX)))
 		return value.Abs(value)
 	}
 	a, z := gap(xLo), gap(xHi)
@@ -499,10 +506,12 @@ func bevelSeatPoint(src *pointSectionSource, cert sketch.ConeLineCrossing,
 	}
 	slope := proofarith.FloatRat(blank.coneSection().Slope)
 	slope2 := new(big.Rat).Mul(slope, slope)
+	originX := proofarith.FloatRat(blank.rootCone.Origin.X)
 	form := func(p [3]*big.Rat) *big.Rat {
+		x := new(big.Rat).Sub(p[0], originX)
 		return new(big.Rat).Sub(new(big.Rat).Add(
 			new(big.Rat).Mul(p[1], p[1]), new(big.Rat).Mul(p[2], p[2])),
-			new(big.Rat).Mul(slope2, new(big.Rat).Mul(p[0], p[0])))
+			new(big.Rat).Mul(slope2, new(big.Rat).Mul(x, x)))
 	}
 	endQ := [3]*big.Rat{}
 	for i := range q {
@@ -510,10 +519,11 @@ func bevelSeatPoint(src *pointSectionSource, cert sketch.ConeLineCrossing,
 	}
 	f0, f1 := form(q), form(endQ)
 	derivative := func(p [3]*big.Rat) *big.Rat {
+		x := new(big.Rat).Sub(p[0], originX)
 		return new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Sub(
 			new(big.Rat).Add(new(big.Rat).Mul(p[1], d[1]),
 				new(big.Rat).Mul(p[2], d[2])),
-			new(big.Rat).Mul(slope2, new(big.Rat).Mul(p[0], d[0]))))
+			new(big.Rat).Mul(slope2, new(big.Rat).Mul(x, d[0]))))
 	}
 	d0, d1 := derivative(q), derivative(endQ)
 	if d0.Sign() == 0 || d0.Sign() != d1.Sign() || f0.Sign() == f1.Sign() {

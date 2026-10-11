@@ -119,9 +119,48 @@ type bevelTwoPlan struct {
 	snap             float64
 }
 
+// The root boundary runs from the last exterior-path node back to the first.
+// Every inserted root station must stay in that directed angular interval.
+func bevelRootEdgeOrdered(nodes []bevelPathNode, edges []bevelCapEdge, lo, hi float64) bool {
+	if len(edges) < 1 || !(lo < hi) {
+		return false
+	}
+	started, ascending, lastVertex, lastAngle := false, false, -1, 0.0
+	for _, edge := range edges {
+		if edge.group != -1 {
+			if started {
+				return false
+			}
+			continue
+		}
+		if edge.u < 0 || edge.u >= len(nodes) || edge.v < 0 || edge.v >= len(nodes) ||
+			!nodes[edge.u].rootBoundary || !nodes[edge.v].rootBoundary {
+			return false
+		}
+		if !started {
+			lastAngle = nodes[edge.u].angle
+			ascending = lastAngle == lo
+			if lastAngle != lo && lastAngle != hi {
+				return false
+			}
+			started = true
+		} else if edge.u != lastVertex || nodes[edge.u].angle != lastAngle {
+			return false
+		}
+		angle := nodes[edge.v].angle
+		if proofbound.IsNonFinite(angle) || angle < lo || angle > hi ||
+			(ascending && angle <= lastAngle) || (!ascending && angle >= lastAngle) {
+			return false
+		}
+		lastAngle, lastVertex = angle, edge.v
+	}
+	return started && ((ascending && lastAngle == hi) || (!ascending && lastAngle == lo))
+}
+
 func makeBevelTwoPlan(ctx context.Context, blank *bevelBlankSource,
 	record *pointConeTrimRecord, boundary *bevelToothBoundary,
-	motion r3.Transform, charge massmoment.MapCharge, ringStart float64) (bevelTwoPlan, error) {
+	motion r3.Transform, charge massmoment.MapCharge, ringStart float64,
+	adaptive bool) (bevelTwoPlan, error) {
 	base := record.base
 	path, crossingBound, err := bevelExteriorPath(base, boundary,
 		base.pointSection.source, blank)
@@ -146,9 +185,21 @@ func makeBevelTwoPlan(ctx context.Context, blank *bevelBlankSource,
 	if err != nil {
 		return bevelTwoPlan{}, err
 	}
+	if adaptive {
+		var extraRound float64
+		nodes, caps, edges, extraRound, err = bevelRefineCap(ctx, nodes, caps, edges,
+			record, bevelCombineCapBound)
+		if err != nil {
+			return bevelTwoPlan{}, err
+		}
+		farRound = proofbound.AbsSumUpper(farRound, extraRound)
+	}
 	plan := bevelTwoPlan{original: nodes, placed: nodes, caps: caps,
 		edges: edges, lo: lo, hi: hi, crossingBound: crossingBound,
 		farRound: farRound}
+	if adaptive && !bevelRootEdgeOrdered(nodes, edges, lo, hi) {
+		return bevelTwoPlan{}, fmt.Errorf("%w: source root stations lose angular order", ErrUnsupported)
+	}
 	if motion == r3.Identity() {
 		return plan, nil
 	}
@@ -174,6 +225,9 @@ func makeBevelTwoPlan(ctx context.Context, blank *bevelBlankSource,
 	if !ok {
 		return bevelTwoPlan{}, fmt.Errorf("%w: placed root contacts cross the angular seam", ErrUnsupported)
 	}
+	if adaptive && !bevelRootEdgeOrdered(plan.placed, edges, plan.lo, plan.hi) {
+		return bevelTwoPlan{}, fmt.Errorf("%w: placed root stations lose angular order", ErrUnsupported)
+	}
 	plan.crossingBound = proofbound.AbsSumUpper(
 		bevelPatternMeshBound(plan.crossingBound, charge), plan.placedRound)
 	return plan, nil
@@ -197,7 +251,7 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 		if i == 1 {
 			charge = placedCharge
 		}
-		plan, err := makeBevelTwoPlan(ctx, blank, record, boundary, motions[i], charge, -math.Pi)
+		plan, err := makeBevelTwoPlan(ctx, blank, record, boundary, motions[i], charge, -math.Pi, false)
 		if err != nil {
 			return nil, err
 		}
