@@ -4,14 +4,18 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
 const (
-	bevelCombineCapCellLimit = 10_000
-	bevelCombineCapBound     = 0.08
+	bevelCombineCapOnePassLimit = 10_000
+	bevelCombineCapSourceLimit  = 12_000
+	bevelCombineCapFinalLimit   = 120_000
+	bevelCombineCapBound        = 0.08
 )
 
 // bevelRefineCap splits every cell whose upper or lower cone-map departure
@@ -20,8 +24,8 @@ const (
 // final cap-map bound from every resulting triangle.
 func bevelRefineCap(ctx context.Context, nodes []bevelPathNode,
 	triangles [][3]int, edges []bevelCapEdge, record *pointConeTrimRecord,
-	limit float64) ([]bevelPathNode, [][3]int, []bevelCapEdge, float64, error) {
-	if len(triangles) == 0 || len(triangles) > bevelCombineCapCellLimit {
+	limit float64, maxCells int) ([]bevelPathNode, [][3]int, []bevelCapEdge, float64, error) {
+	if len(triangles) == 0 || len(triangles) > maxCells {
 		return nil, nil, nil, 0, fmt.Errorf("%w: straight pattern cap has too many source cells", ErrUnsupported)
 	}
 	marked := make(map[pointConeEdge]struct{})
@@ -124,4 +128,56 @@ func bevelRefineCap(ctx context.Context, nodes []bevelPathNode,
 			bevelCapEdge{u: mid, v: edge.v, group: edge.group})
 	}
 	return nodes, next, newEdges, levelRound, nil
+}
+
+// bevelUpperFarSliverBound encloses the difference between the smooth upper
+// cone map and the source's clipped map, which stays on the far plane where
+// the cone crossing lies beyond it. A radial supporting plane bounds g=x+kρ
+// from below on every convex cap cell, including its interior.
+func bevelUpperFarSliverBound(ctx context.Context, nodes []bevelPathNode,
+	caps [][3]int, cone *pointConeLimit) (float64, error) {
+	if cone.apex.Sign() <= 0 || cone.slope.Sign() < 0 {
+		return 0, fmt.Errorf("%w: upper cap has no positive cone branch", ErrUnsupported)
+	}
+	bound := 0.0
+	for _, tri := range caps {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		var y, z *big.Rat
+		y, z = new(big.Rat), new(big.Rat)
+		for _, index := range tri {
+			y.Add(y, proofarith.FloatRat(nodes[index].p.Y))
+			z.Add(z, proofarith.FloatRat(nodes[index].p.Z))
+		}
+		norm2 := new(big.Rat).Add(new(big.Rat).Mul(y, y), new(big.Rat).Mul(z, z))
+		norm, ok := proofbound.IntervalSqrt(proofbound.PointInterval(norm2))
+		if !ok || norm.Hi.Sign() <= 0 {
+			return 0, fmt.Errorf("%w: upper cap has no radial supporting plane", ErrUnsupported)
+		}
+		var minG *big.Rat
+		reach := 0.0
+		for _, index := range tri {
+			p := nodes[index].p
+			py, pz := proofarith.FloatRat(p.Y), proofarith.FloatRat(p.Z)
+			dot := new(big.Rat).Add(new(big.Rat).Mul(y, py), new(big.Rat).Mul(z, pz))
+			if dot.Sign() <= 0 {
+				return 0, fmt.Errorf("%w: upper cap crosses its radial support", ErrUnsupported)
+			}
+			g := new(big.Rat).Add(proofarith.FloatRat(p.X), new(big.Rat).Mul(cone.slope,
+				new(big.Rat).Quo(dot, norm.Hi)))
+			if minG == nil || g.Cmp(minG) < 0 {
+				minG = g
+			}
+			reach = max(reach, proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{})))
+		}
+		if minG.Sign() <= 0 {
+			return 0, fmt.Errorf("%w: upper cap has no positive ray denominator", ErrUnsupported)
+		}
+		excess := new(big.Rat).Sub(new(big.Rat).Quo(cone.apex, minG), big.NewRat(1, 1))
+		if excess.Sign() > 0 {
+			bound = max(bound, proofbound.ProductUpper(reach, proofbound.RatFloatUp(excess)))
+		}
+	}
+	return bound, nil
 }

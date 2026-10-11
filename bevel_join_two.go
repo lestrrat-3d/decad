@@ -108,6 +108,7 @@ type bevelTwoPlan struct {
 	lo, hi           float64
 	crossingBound    float64
 	farRound         float64
+	sourceCapCells   int
 	placedRound      float64
 	rootNode         []int
 	upperBound       float64
@@ -185,18 +186,32 @@ func makeBevelTwoPlan(ctx context.Context, blank *bevelBlankSource,
 	if err != nil {
 		return bevelTwoPlan{}, err
 	}
+	sourceCapCells := len(caps)
 	if adaptive {
-		var extraRound float64
-		nodes, caps, edges, extraRound, err = bevelRefineCap(ctx, nodes, caps, edges,
-			record, bevelCombineCapBound)
-		if err != nil {
-			return bevelTwoPlan{}, err
+		passes := 1
+		if sourceCapCells > bevelCombineCapOnePassLimit {
+			passes = 2
 		}
-		farRound = proofbound.AbsSumUpper(farRound, extraRound)
+		for pass := range passes {
+			var extraRound float64
+			maxCells := bevelCombineCapSourceLimit
+			if pass != 0 {
+				maxCells *= 4
+			}
+			nodes, caps, edges, extraRound, err = bevelRefineCap(ctx, nodes, caps, edges,
+				record, bevelCombineCapBound, maxCells)
+			if err != nil {
+				return bevelTwoPlan{}, err
+			}
+			farRound = proofbound.AbsSumUpper(farRound, extraRound)
+		}
+		if len(caps) > bevelCombineCapFinalLimit {
+			return bevelTwoPlan{}, fmt.Errorf("%w: straight pattern cap exceeds its final cell limit", ErrUnsupported)
+		}
 	}
 	plan := bevelTwoPlan{original: nodes, placed: nodes, caps: caps,
 		edges: edges, lo: lo, hi: hi, crossingBound: crossingBound,
-		farRound: farRound}
+		farRound: farRound, sourceCapCells: sourceCapCells}
 	if adaptive && !bevelRootEdgeOrdered(nodes, edges, lo, hi) {
 		return bevelTwoPlan{}, fmt.Errorf("%w: source root stations lose angular order", ErrUnsupported)
 	}
@@ -325,7 +340,7 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 		}
 		p.nodeRound, p.snap, err = bevelBuildToothMesh(mesh, ring,
 			p.placed, p.original, p.caps, p.edges, p.rootNode,
-			record, motions[i], groups)
+			record, motions[i], groups, false)
 		if err != nil {
 			return nil, err
 		}

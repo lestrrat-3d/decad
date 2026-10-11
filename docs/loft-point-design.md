@@ -365,19 +365,33 @@ against the exact root arc by `blankSag`. These three charges cover the
 surrogate without assuming that its intersection equals the public cone's.
 
 After three uniform cap subdivisions, cells whose upper or lower cone-map
-bound exceeds 0.08 mm split once. Shared edges split in both neighboring
-cells, including cap boundary edges, so the cap and root strip remain sewn.
-The final triangles are checked again for their actual cone-map bound. The
-construction permits at most 10,000 input cells per cap and at most four
-children per cell. The audit triangle ceiling adds at most 60,000 triangles
-per tooth to the three-round pattern ceiling, and its scan ceiling is
-25 million per tooth. The real twelve-tooth source yielded 657,696 triangles
-and 230,484,398 scans, below its 984,480-triangle and 300-million-scan
-ceilings. The boundary allowance scales cap interpolation and
-far-node rounding by the held placement's certified stretch, then checks the
-result against the 0.1 mm contract. The existing source-volume and swept-area
-allowances and exact volume check still apply. The eight-tooth serial Union
-and its centered bore keep their separate admission rules.
+bound exceeds 0.08 mm split. Caps with at most 10,000 cells receive one pass;
+caps with 10,001–12,000 cells receive two. Shared edges split in both
+neighboring cells, including cap boundary edges, so the cap and root strip
+remain sewn. The final cap must contain at most 120,000 cells. The joined
+triangles are checked again for their actual cone-map bound.
+
+The upper trim keeps the source far plane where its cone crossing lies beyond
+that plane. At a clipped node, the exact crossing's interval point error plus
+its held distance to the far node bounds the replacement. For every cap cell,
+a rational radial supporting plane bounds `g = x + kρ` from below. Its minimum
+gives `reach · max(0, a/gMin − 1)`, an upper bound on the smooth-to-clipped
+map difference throughout the cell. The upper cap charges this bound in
+addition to its smooth interpolation bound. The lower cap still requires its
+crossing strictly before the source far plane.
+
+One-pass joins add at most 60,000 audit triangles and allow 25 million scans
+per tooth. Two-pass joins add at most 240,000 audit triangles and allow
+80 million scans per tooth; both ceilings are checked before the exact audit
+allocates triangle lifts. The real twelve-tooth source yielded 657,696
+triangles and 230,484,398 scans, below its 984,480-triangle and
+300-million-scan ceilings. The real 4/4 source yielded 866,784 triangles
+and 235,749,725 scans, below its 1,048,480-triangle and 320-million-scan
+ceilings, and passed 0.1 mm `VerifyAll`. The boundary allowance scales cap
+interpolation and far-node rounding by the held placement's certified stretch.
+The existing source-volume and swept-area allowances and exact volume check
+still apply. The eight-tooth serial Union and its centered bore keep their
+separate admission rules.
 
 The real sixteen-tooth source yielded 736,512 triangles and 250,972,281 scans,
 below its 1,312,480-triangle and 400-million-scan ceilings. Its 0.092906 mm

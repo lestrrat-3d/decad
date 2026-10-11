@@ -550,9 +550,12 @@ func bevelBuildBlankMesh(m *bevelJoinedMesh, blank *bevelBlankSource,
 	return r, proofbound.AbsSumUpper(sag, maxRound), nil
 }
 
+// upperFarSliverCharged is true only for a caller that adds the certified
+// smooth-to-clipped cap error to both its boundary and volume allowances.
 func bevelBuildToothMesh(m *bevelJoinedMesh, ring bevelRingMesh,
 	nodes, original []bevelPathNode, caps [][3]int, edges []bevelCapEdge, rootNode []int,
-	record *pointConeTrimRecord, motion r3.Transform, placedGroups []facetGroup) (float64, float64, error) {
+	record *pointConeTrimRecord, motion r3.Transform, placedGroups []facetGroup,
+	upperFarSliverCharged bool) (float64, float64, error) {
 	if len(nodes) != len(original) {
 		return 0, 0, fmt.Errorf("%w: tooth cap station maps are unequal", ErrUnsupported)
 	}
@@ -593,23 +596,22 @@ func bevelBuildToothMesh(m *bevelJoinedMesh, ring bevelRingMesh,
 		if err != nil {
 			return 0, 0, err
 		}
-		if up.q+up.qError < 1 || down.q-down.qError <= 1 {
+		if down.q-down.qError <= 1 {
 			return 0, 0, fmt.Errorf("%w: tooth cap reaches its far source plane", ErrUnsupported)
 		}
-		if up.q-up.qError <= 1 {
-			maxRound = max(maxRound, proofbound.ProductUpper(
-				proofbound.AbsSumUpper(math.Abs(up.alpha-1), up.qError), far.Len()))
-			up.alpha = 1
+		upperPoint, upperRound, err := bevelUpperCapNode(far, up, upperFarSliverCharged)
+		if err != nil {
+			return 0, 0, err
 		}
-		upperPoint, lowerPoint := far.Scale(up.alpha), far.Scale(down.alpha)
+		lowerPoint := far.Scale(down.alpha)
 		if motion != r3.Identity() {
 			maxInput := max(math.Abs(upperPoint.X), math.Abs(upperPoint.Y), math.Abs(upperPoint.Z),
 				math.Abs(lowerPoint.X), math.Abs(lowerPoint.Y), math.Abs(lowerPoint.Z))
-			maxRound = max(maxRound, proofbound.AbsSumUpper(max(up.pointError, down.pointError),
+			maxRound = max(maxRound, proofbound.AbsSumUpper(max(upperRound, down.pointError),
 				proofbound.RigidRoundAllow(maxInput, 0)))
 			upperPoint, lowerPoint = motion.Apply(upperPoint), motion.Apply(lowerPoint)
 		} else {
-			maxRound = max(maxRound, up.pointError, down.pointError)
+			maxRound = max(maxRound, upperRound, down.pointError)
 		}
 		if !proofbound.FiniteVec(upperPoint) || !proofbound.FiniteVec(lowerPoint) {
 			return 0, 0, fmt.Errorf("%w: placed tooth cap is non-finite", ErrUnsupported)
@@ -642,6 +644,25 @@ func bevelBuildToothMesh(m *bevelJoinedMesh, ring bevelRingMesh,
 		m.add([3]int{upper[u], lower[v], upper[v]}, baseGroups+edge.group)
 	}
 	return maxRound, maxSnap, nil
+}
+
+// bevelUpperCapNode charges any replacement of the exact smooth cone map by
+// the source far plane at one cap station. Cell interiors are charged by the
+// caller's upper far-plane sliver bound when that source class is admitted.
+func bevelUpperCapNode(far r3.Vec, sample pointConeSample,
+	upperFarSliverCharged bool) (r3.Vec, float64, error) {
+	if !upperFarSliverCharged && sample.q+sample.qError < 1 {
+		return r3.Vec{}, 0, fmt.Errorf("%w: tooth cap reaches its far source plane", ErrUnsupported)
+	}
+	smooth := far.Scale(sample.alpha)
+	if !proofbound.FiniteVec(smooth) {
+		return r3.Vec{}, 0, fmt.Errorf("%w: upper cap has no finite crossing", ErrUnsupported)
+	}
+	if sample.q-sample.qError > 1 {
+		return smooth, sample.pointError, nil
+	}
+	return far, proofbound.AbsSumUpper(
+		proofbound.DvLenUpper(proofbound.HeldDelta(far, smooth)), sample.pointError), nil
 }
 
 // bevelOrientMesh proves edge pairing and one connected component before the
@@ -754,7 +775,7 @@ func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	nodeRound, snap, err := bevelBuildToothMesh(mesh, ring, capNodes, capNodes, caps,
-		edges, rootNode, record, r3.Identity(), nil)
+		edges, rootNode, record, r3.Identity(), nil, false)
 	if err != nil {
 		return nil, err
 	}

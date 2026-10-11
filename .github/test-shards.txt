@@ -355,6 +355,8 @@
 2	0.00	TestPatchAreaOfEnclosesRoundedRadiusDifference
 2	0.02	TestPlanarBandTransferChargesDeviation
 2	0.01	TestPointConeOutsideWitnessRejectsUncertainContact
+2	0.01	TestPointConeUpperFarPlaneNodeRequiresCapCharge
+2	0.01	TestPointConeUpperFarPlaneSliverBound
 2	0.01	TestPointConeSourceMustClearFiniteFarCap
 2	0.01	TestPointConeTriangleBoundIncludesReciprocalCurvature
 2	0.01	TestPointPlaneScaleCarriesSourceThroughLaterPlacement
