@@ -662,7 +662,7 @@ func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, b
 			return true, true, pairSideSigns{}
 		}
 		u, v, _ := e.planeAxes(i)
-		return e.orient2(a, b, otherI[0], u, v)*e.orient2(a, b, otherJ[0], u, v) < 0,
+		return e.orient2(a, b, otherI.verts[0], u, v)*e.orient2(a, b, otherJ.verts[0], u, v) < 0,
 			true, pairSideSigns{}
 	}
 	if !coplanar {
@@ -689,19 +689,28 @@ func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, b
 	for _, k := range sharedI {
 		shared = append(shared, ti[k])
 	}
-	if e.edgeSeparates(ti, otherJ, shared, u, v) || e.edgeSeparates(tj, otherI, shared, u, v) {
+	if e.edgeSeparates(ti, otherJ.verts[:otherJ.n], shared, u, v) ||
+		e.edgeSeparates(tj, otherI.verts[:otherI.n], shared, u, v) {
 		return true, true, pairSideSigns{}
 	}
 	// Equal exact planes put every corner on both planes.
 	return false, false, pairSideSigns{}
 }
 
+// unsharedCorners keeps the at most three unshared vertices in the caller's
+// stack frame. Pair separation checks this for every candidate facet pair.
+type unsharedCorners struct {
+	verts [3]int
+	n     int
+}
+
 // unshared lists the corners of t whose positions are not in shared.
-func unshared(t [3]int, shared []int) []int {
-	var out []int
+func unshared(t [3]int, shared []int) unsharedCorners {
+	var out unsharedCorners
 	for k, x := range t {
 		if !slices.Contains(shared, k) {
-			out = append(out, x)
+			out.verts[out.n] = x
+			out.n++
 		}
 	}
 	return out
