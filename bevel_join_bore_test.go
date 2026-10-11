@@ -39,3 +39,20 @@ func TestBevelBoreTriangleClearKeepsOnlyOutsideFacets(t *testing.T) {
 	require.False(t, bevelBoreTriangleClear([3]int{0, 1, 6}, verts, 1),
 		"a facet touching the bound still needs the exact audit")
 }
+
+func TestBevelBorePatternKindRequiresMatchingToeTopology(t *testing.T) {
+	for _, test := range []struct {
+		placed     int
+		toeClipped bool
+		ok         bool
+	}{
+		{placed: 7, ok: true},
+		{placed: 11, toeClipped: true, ok: true},
+		{placed: 15, ok: true},
+		{placed: 14},
+	} {
+		toeClipped, ok := bevelBorePatternKind(test.placed)
+		require.Equal(t, test.ok, ok)
+		require.Equal(t, test.toeClipped, toeClipped)
+	}
+}
