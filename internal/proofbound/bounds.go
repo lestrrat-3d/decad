@@ -989,12 +989,14 @@ func bilinearPatchMomentIntegral(q0, a, b, twist proofarith.DyV3, axis int) *big
 		{0, 1}: nr[axis],
 	}
 	integrand := momentPolyMul(momentPolyMul(q, q), n)
-	out := new(big.Rat)
+	// Every (i+1)(j+1) here divides 144. Accumulate dyadic numerators over
+	// that common denominator, then normalize the rational only once.
+	total := proofarith.DyZero()
 	for degree, coefficient := range integrand {
 		den := int64((degree[0] + 1) * (degree[1] + 1))
-		out.Add(out, new(big.Rat).Quo(coefficient.Rat(), big.NewRat(den, 1)))
+		total = proofarith.DyAdd(total, proofarith.DyMul(coefficient, proofarith.DyInt(144/den)))
 	}
-	return out
+	return new(big.Rat).Quo(total.Rat(), big.NewRat(144, 1))
 }
 
 func triangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
@@ -1007,7 +1009,8 @@ func triangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
 	}
 	q2Poly := momentPolyMul(q, q)
 	n := proofarith.DvCross(e1, e2)[axis]
-	out := new(big.Rat)
+	// Degree is at most two, so every simplex weight divides 1/24.
+	total := proofarith.DyZero()
 	for degree, coefficient := range q2Poly {
 		// Integral over s>=0, r>=0, s+r<=1 of s^i*r^j is
 		// i!*j!/(i+j+2)!; the polynomial degree here is at most two.
@@ -1022,11 +1025,9 @@ func triangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
 		for i := 2; i <= degree[0]+degree[1]+2; i++ {
 			den *= int64(i)
 		}
-		term := proofarith.DyMul(coefficient, n).Rat()
-		term.Mul(term, big.NewRat(num, den))
-		out.Add(out, term)
+		total = proofarith.DyAdd(total, proofarith.DyMul(coefficient, proofarith.DyInt(24*num/den)))
 	}
-	return out
+	return new(big.Rat).Quo(proofarith.DyMul(total, n).Rat(), big.NewRat(24, 1))
 }
 
 // CellTwistQuarterUpper is the CERTIFIED upper endpoint of |T|/4 for a wall
