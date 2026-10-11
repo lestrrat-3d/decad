@@ -24,7 +24,7 @@ recorded full-domain range; the walked vertices must meet exactly. Holes,
 trimmed lines, curved segments, and differing segment counts return
 `ErrUnsupported` on that route. Section 6 owns a separate constant-section
 route for exactly matching curved records. Section 7 admits linearly varying
-four-arc circles.
+four-arc circles. Section 8 admits varying fitted flanks with fixed arcs.
 
 All three planes have world-XY `U` and `V` axes, the same XY origin, and
 strictly increasing Z origins with the middle Z exactly halfway between the
@@ -145,7 +145,7 @@ wall remains `ErrUnsupported`, as for every `NURBSSurface`.
 
 The admitted classes are increments, not a claim that general multi-section
 interpolation is determined by profile boundaries. Nonhomothetic profiles,
-varying curved profiles outside §7, arbitrary planes, guides, centerlines,
+varying curved profiles outside §§7–8, arbitrary planes, guides, centerlines,
 and hole loops remain `ErrUnsupported`. Nil context or document, or a section count
 other than three, returns `ErrDegenerate`. A seam failure returns its own
 sentinel and leaves the document unchanged.
@@ -180,9 +180,9 @@ occupied-volume proofs for `VerifyAll`. Placement and replay use its prism
 payload, including the same curved source records.
 
 This route covers sections whose curve records are exactly identical.
-Changing a fitted-spline flank or arc range between sections still lacks a
-bounded interpolation and returns `ErrUnsupported`. Section 7 handles one
-bounded circular radius change.
+Section 8 owns its bounded fitted-flank exception. Changing another curved
+record still returns `ErrUnsupported`. Section 7 handles one bounded circular
+radius change.
 
 ## 7. Linearly varying circular sections
 
@@ -251,3 +251,116 @@ own held arithmetic and vertex-bound charges. For the 8/10/12 mm public
 case, the 0.1 mm `VerifyAll` boundary and volume proofs pass; default
 `Document.Verify` currently reports `Suspect` because its conservative
 measurement allowances exceed the default tolerance.
+
+## 8. Varying fitted flanks with fixed circular arcs
+
+### 8.1 Source class and denoted wall
+
+Admit three authenticated, hole-free profiles whose outer loop has four
+whole records in the same cyclic order: two `FitSplineSeg` records alternating
+with two `ArcSeg` records. The three planes satisfy §1's common world-XY
+frame and exact midpoint rule. Both arc records must be structurally identical
+in all three sections, have center at the common XY origin, positive exact
+squared radius, equal exact start/end squared radii, and a counterclockwise
+walk. Their recorded joins to the fitted flanks must equal the fitted
+interpolants' own endpoint coordinates exactly. A failed shape gate returns
+`ErrUnsupported`; a seam failure retains the seam's sentinel.
+
+For each corresponding fitted record, consume Sketch's exported natural-cubic
+`FitInterpolant` through the existing Tier A exact Bézier conversion. Keep
+the record's walk direction. Refine all three converted chains by exact
+de Casteljau subdivision to their least common multiple of span counts.
+The shared parameter `u` is the normalized span-index coordinate described
+in `docs/loft-design.md` §5.1, extended from two to three sources: each
+refined span occupies one equal slot, and its local parameter runs from zero
+to one in recorded walk order. No nearest-point or sampled correspondence is
+allowed. A common count that exceeds the resource ceiling refuses before
+allocation.
+
+Let `C_0(u)`, `C_1(u)`, and `C_2(u)` be the three exact converted curves in
+one corresponding slot. With `t=(z-z_0)/(z_2-z_0)`, the denoted fitted wall
+is the tensor-product polynomial patch
+
+```text
+C(u,t) = (1-t)^2 C_0(u)
+       + 2t(1-t) [2 C_1(u) - (C_0(u)+C_2(u))/2]
+       + t^2 C_2(u).
+```
+
+Its three Bernstein control rows in height are `C_0`,
+`2 C_1-(C_0+C_2)/2`, and `C_2`, all exact rationals over Sketch's exported
+interpolants. It equals each recorded curve at `t=0,1/2,1` exactly. The
+unchanged arcs extrude as circular walls. Their endpoint agreement makes the
+four wall patches continuous at every height. The two end caps use the
+recorded end profiles; the middle profile makes no seam face. Fitted walls
+report `NURBSSurface`, arc walls `Cylinder`, and end caps `Plane`.
+
+### 8.2 Continuous-section admission
+
+The first source profile has Sketch's valid positive-area region. Prove the
+fitted wall's polar-angle derivative
+`cross(C(u,t), ∂C(u,t)/∂u) > 0` throughout every refined span and the full
+height. Form its exact rational tensor-product Bernstein coefficients;
+subdivide a cell in `u` or `t` and recheck when their signs differ. Accept a
+cell only when every coefficient is strictly positive. Exhausted subdivision
+or work budget returns `ErrUnsupported`. Strict positivity also excludes the
+common origin. A fixed origin-centered CCW arc of positive radius has the
+same derivative sign. Exact endpoint joins give a continuous boundary for
+each `t`; absence of origin crossings keeps its winding equal to the valid
+first section's winding. Strictly increasing polar angle and winding one
+make each intermediate boundary a simple radial graph. This proves the
+interpolated sections Decad defines, not Sketch's source profiles anew.
+
+### 8.3 Held mesh and boundary bound
+
+Choose shared dyadic parameter cells across all three fitted chains. Measure
+each candidate cell's exact control-net departure from its endpoint chord
+and split until the bound fits its assigned tolerance or the station/work
+ceiling refuses. Use one station table at every Z level. The fixed arcs use
+one certified circular chord chain at every level. Select dyadic Z bands and
+evaluate the exact quadratic at their endpoints; every Z level must be
+representable exactly in float64. Round each XY station once and charge its
+exact rational displacement. Join adjacent rings with the fixed diagonal
+split from `docs/loft-design.md` §5. Cap triangles share the endpoint rings.
+
+On each fitted parameter cell, the u-chord error is bounded by the largest
+control-point difference between each of the three height-Bernstein curves
+and its endpoint line. The height interpolation error within one Z band is
+bounded by `max_u |C_2-2C_1+C_0|_1/(4N^2)`, where these are the height
+Bernstein controls. The bilinear patch between
+four ring corners differs from either diagonal triangle by at most one
+quarter of the corner twist's L1 norm. Compose those terms and the station
+rounding allowance outward to get a parameter-matched wall bound. The fixed
+arcs use their measured circle-to-chord and station-rounding bounds. Publish
+the maximum as `meshBound` and per-vertex bounds; refuse when it exceeds
+0.05 mm. Run `internal/loftmesh`'s exact crossing audit on the complete
+closed triangle set before constructing the faceted body. Each wall triangle
+spans only adjacent Z levels, so every interior horizontal slice of the
+audited mesh has one simple polygonal boundary.
+
+### 8.4 Occupied-volume and area proof
+
+At the same height, parameterize the true boundary and the held mesh's
+horizontal slice by the same source segment and parameter cell. The linear
+homotopy between them is continuous and closed. A point whose occupied state
+differs must lie in the homotopy image: winding number cannot change elsewhere.
+For one parameter cell, let `d` bound the XY distance between matched true
+and held points, and let `L` bound the greater of their parameter speeds.
+Its homotopy sweeps at most `d*L*Δu` area at a fixed height. Multiply by the
+cell's exact Z-band height and sum all cells and bands with outward rounding.
+This non-cancelling sum bounds the occupied-volume symmetric difference;
+the signed difference of total volumes does not replace it. Pass the sum to
+`facetedPayload.volSymDiff` for `VerifyAll` and downstream booleans.
+
+For wall area, the fitted source patch has
+`|S_u × S_t| <= |C_u|_1 (H+|C_t|_1)`. Its rational Bézier control
+differences bound both derivatives. Each fixed arc wall has area at most its
+certified arc-length upper bound times `H`. Every source cap lies inside a
+disk whose radius is bounded by the fitted control nets and fixed arcs, so
+the two cap areas together are at most `2*pi*R²`. Sum these source-area
+uppers with the exact held triangle-area uppers into a conservative
+`areaSlack`: the absolute difference cannot exceed their sum. The occupied
+volume proof above remains local and much tighter. A finite XY/Z extent
+bounds the diameter used by faceted centroid and bounds readings. A
+non-finite proof term or a resource ceiling returns `ErrUnsupported`; no
+zero is inferred from successful mesh construction alone.

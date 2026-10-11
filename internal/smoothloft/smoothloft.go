@@ -26,6 +26,7 @@ type Build struct {
 	VolSymDiff float64
 	AreaSlack  float64
 	Diameter   float64
+	ArcRadii   [4]float64
 }
 
 func rint(n int64) *big.Rat      { return big.NewRat(n, 1) }
