@@ -17,7 +17,7 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 	side int) ([3]loftFaceInterval, bool, error) {
 	var empty [3]loftFaceInterval
 	if ctx == nil || proof == nil || side < 0 || side >= len(proof.flank) ||
-		proof.blank == nil || len(proof.tooth.maps) != 9 {
+		proof.blank == nil || proof.tooth == nil || len(proof.tooth.maps) != 9 {
 		return empty, false, nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -78,13 +78,23 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 // X interval on both curves. An endpoint box covers the held tail after the
 // source seam reaches cap 2.
 func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource,
-	side int, held []r3.Vec, minBound float64) (float64, bool, error) {
+	side int, held []r3.Vec, minBound float64,
+	prepared ...*spiralRootFlankSourceBoxes) (float64, bool, error) {
 	if ctx == nil || proof == nil || side < 0 || side >= len(proof.flank) ||
 		len(held) < 2 || len(held) > 4097 || proofbound.IsNonFinite(minBound) || minBound <= 0 {
 		return 0, false, nil
 	}
 	if err := ctx.Err(); err != nil {
 		return 0, false, err
+	}
+	if len(prepared) > 1 {
+		return 0, false, nil
+	}
+	if len(prepared) == 1 {
+		if prepared[0] == nil || prepared[0].proof != proof || prepared[0].side != side {
+			return 0, false, nil
+		}
+		return spiralRootFlankHeldAgainstSource(ctx, held, minBound, prepared[0])
 	}
 	_, ok, err := spiralBandOneRootBox(ctx, proof, side)
 	if err != nil || !ok {
@@ -186,6 +196,155 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 		return 0, false, nil
 	}
 	bound, ok := spiralRootFlankBoxesBound(endpoint, tail, minBound)
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	if !ok {
+		return bound, false, nil
+	}
+	return max(largest, bound), true, nil
+}
+
+// The source slab boxes depend only on one authenticated first-tooth record.
+// CombineJoin computes them once before validating its independent held
+// switch chains. The record pointer and side bind the cache to that source.
+type spiralRootFlankSourceBoxes struct {
+	proof    *spiralFirstJoinSource
+	side     int
+	toeRoot  *big.Rat
+	cap2     loftFaceInterval
+	slabs    [16][3]loftFaceInterval
+	endpoint [3]loftFaceInterval
+}
+
+func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSource,
+	side int) (*spiralRootFlankSourceBoxes, bool, error) {
+	if ctx == nil || proof == nil || side < 0 || side >= len(proof.flank) ||
+		proof.blank == nil || proof.tooth == nil || len(proof.tooth.maps) != 9 {
+		return nil, false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	rootBox, ok, err := spiralBandOneRootBox(ctx, proof, side)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	toeRoot := lfF(proof.blank.toeRoot.U)
+	cap2 := spiralCapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
+	if rootBox[0].lo.Cmp(toeRoot) != 0 || rootBox[0].hi.Cmp(cap2.hi) != 0 {
+		return nil, false, nil
+	}
+	start := proof.junctions[side][0]
+	if cap2.lo == nil || cap2.hi == nil ||
+		start.band != 1 || start.tLo.Sign() < 0 || start.tLo.Cmp(lfOne()) >= 0 {
+		return nil, false, nil
+	}
+	first, second := proof.tooth.maps[1], proof.tooth.maps[2]
+	span := proof.flank[side]
+	q := spiralRootPolynomial(first, second, span, proof.rootM, proof.rootB)
+	width := lfSub(lfOne(), start.tLo)
+	plan := &spiralRootFlankSourceBoxes{
+		proof: proof, side: side, toeRoot: toeRoot, cap2: cap2,
+	}
+	for slab := range plan.slabs {
+		if err := ctx.Err(); err != nil {
+			return nil, false, err
+		}
+		a := lfAdd(start.tLo, lfMul(width, big.NewRat(int64(slab), 16)))
+		z := lfAdd(start.tLo, lfMul(width, big.NewRat(int64(slab+1), 16)))
+		if !spiralJunctionRootBracket(q, lfZero(), lfOne(), a, z) {
+			return nil, false, nil
+		}
+		rootA := spiralIsolateRootN(spiralRootAtBandT(q, a), 64)
+		rootZ := spiralIsolateRootN(spiralRootAtBandT(q, z), 64)
+		xA := spiralBandXRange(first, second, span, rootA, a)
+		xZ := spiralBandXRange(first, second, span, rootZ, z)
+		if xA.hi.Cmp(xZ.lo) >= 0 {
+			return nil, false, nil
+		}
+		xLo, xHi := xA.lo, xZ.hi
+		if slab == 0 {
+			xLo = toeRoot
+		}
+		if slab == len(plan.slabs)-1 {
+			xHi = cap2.hi
+		}
+		if xLo.Cmp(xHi) >= 0 {
+			return nil, false, nil
+		}
+		sLo, sHi := lfZero(), lfOne()
+		for step := range 64 {
+			if step%8 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, false, err
+				}
+			}
+			mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
+			if spiralRootTSign(q, mid, a, z, -1) {
+				sLo = mid
+				continue
+			}
+			if spiralRootTSign(q, mid, a, z, 1) {
+				sHi = mid
+				continue
+			}
+			break
+		}
+		trueBox, yes := spiralJunctionBox(first, second, span, sLo, sHi, a, z)
+		if !yes || trueBox[0].lo.Cmp(xLo) > 0 || trueBox[0].hi.Cmp(xHi) < 0 {
+			return nil, false, nil
+		}
+		trueBox[0] = loftFaceInterval{lo: xLo, hi: xHi}
+		plan.slabs[slab] = trueBox
+	}
+	endpoint, ok := spiralJunctionBox(second, second, span,
+		proof.crossings[side][2].lo, proof.crossings[side][2].hi, lfZero(), lfZero())
+	if !ok || endpoint[0].lo.Cmp(cap2.lo) > 0 || endpoint[0].hi.Cmp(cap2.hi) < 0 {
+		return nil, false, nil
+	}
+	plan.endpoint = endpoint
+	return plan, true, ctx.Err()
+}
+
+func spiralRootFlankHeldAgainstSource(ctx context.Context, held []r3.Vec,
+	minBound float64, plan *spiralRootFlankSourceBoxes) (float64, bool, error) {
+	if held[0].X > held[len(held)-1].X {
+		reversed := make([]r3.Vec, len(held))
+		for i, p := range held {
+			reversed[len(held)-1-i] = p
+		}
+		held = reversed
+	}
+	for i, p := range held {
+		if !proofbound.FiniteVec(p) || i > 0 && lfF(held[i-1].X).Cmp(lfF(p.X)) >= 0 {
+			return 0, false, nil
+		}
+	}
+	if lfF(held[0].X).Cmp(plan.toeRoot) != 0 ||
+		lfF(held[len(held)-1].X).Cmp(plan.cap2.hi) < 0 {
+		return 0, false, nil
+	}
+	var largest float64
+	for _, source := range plan.slabs {
+		if err := ctx.Err(); err != nil {
+			return 0, false, err
+		}
+		heldBox, yes := spiralHeldXStrip(held, source[0].lo, source[0].hi)
+		if !yes {
+			return 0, false, nil
+		}
+		bound, yes := spiralRootFlankBoxesBound(source, heldBox, minBound)
+		if !yes {
+			return bound, false, nil
+		}
+		largest = max(largest, bound)
+	}
+	tail, ok := spiralHeldXStrip(held, plan.cap2.lo, lfF(held[len(held)-1].X))
+	if !ok {
+		return 0, false, nil
+	}
+	bound, ok := spiralRootFlankBoxesBound(plan.endpoint, tail, minBound)
 	if err := ctx.Err(); err != nil {
 		return 0, false, err
 	}
