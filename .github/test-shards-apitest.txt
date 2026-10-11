@@ -9,7 +9,7 @@
 #   shard 0: 1059.82s over 1 tests
 #   shard 1:  175.64s over 104 tests
 #   shard 2:  177.64s over 198 tests
-#   shard 3:   41.05s over 210 tests
+#   shard 3:   41.11s over 213 tests
 #   shard 4:   40.39s over 199 tests
 #   shard 5:   80.90s over 199 tests
 #   shard 6:   90.77s over 195 tests
@@ -345,6 +345,9 @@
 3	1.05	TestBooleanChainsWithinHeldBound
 3	6.51	TestBooleanCutWasherThroughDiscKeepsStandingPost
 3	1.53	TestBooleanRefusalConcaveHoleSpuriousContact
+3	0.02	TestBrepPartialChamferBlindPocket
+3	0.02	TestBrepPartialChamferCrossDrilledBar
+3	0.02	TestBrepPartialChamferMirroredCrossDrilledBar
 3	0.02	TestBrepShellRemovesRoundThroughWall
 3	0.21	TestCapBlendApexPatchAreaBoundIsTight
 3	0.04	TestCapBlendAsymmetricCircularRim

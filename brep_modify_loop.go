@@ -147,6 +147,11 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 			}
 		}
 	}
+	if call.loopKind == brepBandChamfer && len(call.edges) == 2 {
+		if sel, selected, ok := r.partialSelectedLoop(); ok {
+			return brepChamferPartialLoop(ctx, d, bp, call, sel, selected)
+		}
+	}
 	return r.buildLoops(ctx, d)
 }
 

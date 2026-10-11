@@ -523,6 +523,16 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 			out.mass.add(mass)
 			continue
 		}
+		if b.selected != nil {
+			patches, mass, err := attachPartialChamferBand(ctx, body, ref, bp, bi, open, embeds[b.face])
+			if err != nil {
+				return brepBandsBuilt{}, err
+			}
+			out.patches = append(out.patches, patches...)
+			out.geom = append(out.geom, nil)
+			out.mass.add(mass)
+			continue
+		}
 		cbp := b.view(f, bp.xform)
 		band, err := buildCapBand(ctx, body, ref, cbp, 0, b.orig, f.z0, b.matSign(f), open.side[bi], open.cap[bi], work)
 		if err != nil {
@@ -649,6 +659,11 @@ func brepBandsOccupiedVolumeAdmission(budget *proofbound.WorkBudget, bp brepPayl
 			// slice by slice; SF1 refused the rest at the build, and the LF6
 			// fan's stations are the connector arc's azimuths at every ring
 			// (loop-fillet DF5).
+			continue
+		}
+		if b.selected != nil {
+			// The selected chamfer has only straight, planar strips, whose
+			// shared vertices are the record's exact contour endpoints.
 			continue
 		}
 		refusal, err := capBlendOccupiedVolumeAdmission(budget, b.tessView(bp.faces[b.face], bp.xform))
