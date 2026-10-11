@@ -145,10 +145,10 @@ The blank root lies beyond the toe tool's root intersection and before the
 heel tool's root intersection. These exact affine signs keep the certified
 source crossings on the trimmed tooth. The near-pair table admits the six
 flank contacts, two toe connector contacts, and one toe root-arc contact only
-after their separate source crossing certificates pass. Four other near
+after their separate source crossing certificates pass. Five other near
 pairs have strict source separation: each matching blank/tool cap pair, the
 blank toe cap against the heel tool cap, and the finite blank root against
-the toe tool cap. Their held facets must also be disjoint. Every unlisted
+both tool caps. Their held facets must also be disjoint. Every unlisted
 near pair keeps the ordinary refusal.
 
 The root arc also crosses each finite blank end cap. The toe and heel source

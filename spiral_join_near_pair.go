@@ -36,7 +36,8 @@ func spiralFiniteConeSide(cone *pointConeLimit, first, last Point2, sign int) bo
 // The two trims retain a LoftFaces wall where it meets a blank cap only if
 // the point is outside the toe Cut and inside the heel Intersect. These exact
 // meridian signs prove that fact over both finite blank outer caps. They also
-// separate the two matching tool-cap faces and the toe cap from the heel tool.
+// separate the matching tool-cap faces, the toe cap from the heel tool, and
+// the entire finite blank root from both tool caps.
 func spiralNearTrimSides(proof *spiralFirstJoinSource) bool {
 	if proof == nil || proof.blank == nil || proof.tooth == nil ||
 		proof.tooth.toe == nil || proof.tooth.heel == nil ||
@@ -139,7 +140,7 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 	if toeTool == nil || heelTool == nil || toeTool == heelTool {
 		return nil, false
 	}
-	out := make(map[[2]*Face]spiralNearPairKind, 13)
+	out := make(map[[2]*Face]spiralNearPairKind, 14)
 	add := func(a, b *Face, kind spiralNearPairKind) bool {
 		if a == nil || b == nil || a.body != blank || b.body != tooth ||
 			kind == spiralNearPairUnknown {
@@ -171,12 +172,12 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 		}
 	}
 	for _, pair := range [...][2]*Face{{heel, heelTool}, {toe, toeTool},
-		{toe, heelTool}, {root, toeTool}} {
+		{toe, heelTool}, {root, toeTool}, {root, heelTool}} {
 		if !add(pair[0], pair[1], spiralNearPairSeparated) {
 			return nil, false
 		}
 	}
-	return out, len(out) == 13
+	return out, len(out) == 14
 }
 
 // certifySpiralNearFaceRoles is a reject-only source classifier for the
