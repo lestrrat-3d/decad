@@ -40,8 +40,18 @@ inward reach of the seam. `loftCylinderWedgeGate` evaluates the quadratic
 cross product of every held triangle against both moving root endpoint rays.
 Its Bernstein coefficients bound the whole facet, including the first tooth's
 cap facets. The Loft source bound is added to any lateral wedge departure.
-Every pair of teeth also has an exact through-axis separating plane with a
-margin greater than both source bounds.
+Every pair of teeth has a through-axis separator with a margin greater than
+both source bounds. The fixed-plane arm checks each held vertex. If it fails,
+the moving-plane arm chooses one normal at each cap and interpolates the
+normal linearly in height. Its dot product with position is quadratic on
+each held triangle. All six exact Bernstein coefficients must lie strictly
+on the pair's required sides after the maximum endpoint-normal length times
+the authenticated Loft boundary departure is charged. The matched Loft wall
+correspondence preserves height, so the margin separates each true wall at
+the same height. Both cap contours and the filled sections lie in their
+respective open halfplanes because a halfplane is convex. At most eight
+million exact coefficients may be checked by this arm per Union; exhaustion
+refuses the structural route. The existing cap gap check still applies.
 
 ## Constructed shell
 

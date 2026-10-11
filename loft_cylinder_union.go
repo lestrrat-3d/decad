@@ -527,9 +527,9 @@ func loftCylinderWedgeGate(lp loftPayload, root int, z0, z1 float64) (float64, b
 }
 
 func loftCylinderSeparate(parts []loftCylinderTooth) bool {
-	// Each pair has one through-axis plane with the complete certified Loft
-	// surfaces on opposite sides. Testing every held vertex is sufficient for
-	// its triangular facets; the mesh bound covers the source surface.
+	// Try a fixed through-axis plane first. A twisted pair may need a plane
+	// whose normal changes with height; that case checks whole triangles.
+	movingWork := 8_000_000
 	for i := range parts {
 		for j := i + 1; j < len(parts); j++ {
 			center := func(part loftCylinderTooth) (float64, float64) {
@@ -550,6 +550,7 @@ func loftCylinderSeparate(parts []loftCylinderTooth) bool {
 			if length <= 0 || proofbound.IsNonFinite(length) {
 				return false
 			}
+			fixed := true
 			for k, part := range []loftCylinderTooth{parts[i], parts[j]} {
 				margin := proofbound.ProductUpper(length, part.mesh.Bound().Base())
 				marginRat := proofarith.FloatRat(margin)
@@ -558,9 +559,16 @@ func loftCylinderSeparate(parts []loftCylinderTooth) bool {
 						new(big.Rat).Mul(ry, proofarith.FloatRat(p.Y)))
 					if k == 0 && dot.Cmp(new(big.Rat).Neg(marginRat)) >= 0 ||
 						k == 1 && dot.Cmp(marginRat) <= 0 {
-						return false
+						fixed = false
+						break
 					}
 				}
+				if !fixed {
+					break
+				}
+			}
+			if !fixed && !loftCylinderMovingSeparate(parts[i], parts[j], &movingWork) {
+				return false
 			}
 		}
 	}
