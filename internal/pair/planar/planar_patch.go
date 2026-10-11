@@ -224,17 +224,31 @@ func locate(x Point2, loops [][]Point2) int {
 	for _, loop := range loops {
 		for i, u := range loop {
 			w := loop[(i+1)%len(loop)]
+			uy, wy := u.Y.Cmp(x.Y), w.Y.Cmp(x.Y)
+			if (uy > 0) == (wy > 0) {
+				// Only a horizontal edge or an endpoint at x.Y can
+				// contain x when the ray does not cross this edge.
+				switch {
+				case uy == 0 && wy == 0:
+					ux, wx := u.X.Cmp(x.X), w.X.Cmp(x.X)
+					if (ux <= 0 && wx >= 0) || (wx <= 0 && ux >= 0) {
+						return 0
+					}
+				case uy == 0 && u.X.Cmp(x.X) == 0:
+					return 0
+				case wy == 0 && w.X.Cmp(x.X) == 0:
+					return 0
+				}
+				continue
+			}
 			e := sub2(w, u)
 			rel := sub2(x, u)
-			if cross2(e, rel).Sign() == 0 && dot2(e, rel).Sign() >= 0 && dot2(e, rel).Cmp(dot2(e, e)) <= 0 {
+			side := cross2(e, rel)
+			if side.Sign() == 0 {
 				return 0
-			}
-			if (u.Y.Cmp(x.Y) > 0) == (w.Y.Cmp(x.Y) > 0) {
-				continue
 			}
 			// The edge's x at height x.Y lies right of x exactly when this
 			// sign, normalized by the edge's vertical direction, is positive.
-			side := cross2(e, rel)
 			if e.Y.Sign() < 0 {
 				side.Neg(side)
 			}
