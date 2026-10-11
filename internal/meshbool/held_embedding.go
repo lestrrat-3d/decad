@@ -511,6 +511,9 @@ func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 	if len(sharedI) == 3 {
 		return false
 	}
+	if len(sharedI) == 0 && heldProjectionsSeparated(e.h.Verts, ti, tj) {
+		return true
+	}
 	if len(sharedI) == 1 && !BoxesOverlap(e.coneBox(i, sharedI[0]), e.coneBox(j, sharedJ[0])) {
 		return true
 	}
@@ -557,6 +560,40 @@ func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 			return false
 		}
 	}
+}
+
+// heldProjectionsSeparated proves two triangles disjoint when one coordinate
+// projection has a strict separating edge. A projected contact is necessary
+// for a 3D contact, and FloatEdgeSeparates abstains near rounding uncertainty.
+func heldProjectionsSeparated(verts []r3.Vec, a, b [3]int) bool {
+	for _, axes := range [...][2]int{{0, 1}, {2, 0}, {1, 2}} {
+		var pa, pb [3][2]float64
+		stable := true
+		for k := range 3 {
+			pa[k] = [2]float64{AxisCoord(verts[a[k]], axes[0]), AxisCoord(verts[a[k]], axes[1])}
+			pb[k] = [2]float64{AxisCoord(verts[b[k]], axes[0]), AxisCoord(verts[b[k]], axes[1])}
+			for _, point := range [...][2]float64{pa[k], pb[k]} {
+				for _, coord := range point {
+					magnitude := math.Abs(coord)
+					if !(magnitude == 0 || magnitude >= 1e-100 && magnitude <= 1e100) {
+						stable = false
+					}
+				}
+			}
+		}
+		// Keep every subtraction and product in Orient2Float away from
+		// overflow and underflow; other scales use the exact pair checks.
+		if !stable {
+			continue
+		}
+		for k := range 3 {
+			if FloatEdgeSeparates(pa[k], pa[(k+1)%3], pa[(k+2)%3], pb) ||
+				FloatEdgeSeparates(pb[k], pb[(k+1)%3], pb[(k+2)%3], pa) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // coneBox bounds the unit directions in which facet i leaves its corner k:
