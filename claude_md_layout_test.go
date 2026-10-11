@@ -681,7 +681,7 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 
 		t.Run(spec.path+" file size budget", func(t *testing.T) {
 			require.LessOrEqualf(t, len(data), spec.maxBytes,
-				"%s is %d bytes, over the %d byte budget — trim a Layout table row back to a short pointer, or move the detail into the file the row names, instead of appending prose to it", spec.path, len(data), spec.maxBytes)
+				"%s is %d bytes, over the %d byte budget — follow docs/layout.md's Splitting oversized agent files section to split this file", spec.path, len(data), spec.maxBytes)
 		})
 
 		t.Run(spec.path+" layout cell length budget", func(t *testing.T) {
