@@ -703,20 +703,20 @@ the test computes independently.
 | `Volume` | `Approximate`: the mesh boolean composes the cylinder operand's own chord `volSymDiff` at the pair tolerance, the coil's §8.2 term, and the rim terms of `docs/faceted-vertex-bounds-design.md` §3. The published interval encloses the closed form above; that enclosure is §13's assertion |
 | `Area`, `Centroid`, `Bounds` | `Approximate`, composed the same way |
 | faces | `Faceted` throughout: a boolean result loses analytic identity (`docs/api-design.md` §6.1) |
-| `Verify` | validity by the faceted verdict (`docs/payload-verification-design.md` §6.4): the held audit is clean and the feature scale — the crest-to-crest gap, a fraction of the pitch — clears `2·δ`, so validity is proven; `Status` is then the tolerance gate's answer over the composed bounds. On the §13 fixtures `Volume` sits inside the default tolerance and `Area` does not, nor, on the external thread, does `Centroid`, so both read `Suspect`: the rims run some 250 mm per helical edge and each carries its facet pair's trim amplification `(δ_coil + δ_cylinder)/sin θ ≈ 2e-3 mm`, and a face's area bound charges that times its own perimeter |
+| `Verify` | validity by the faceted verdict (`docs/payload-verification-design.md` §6.4): the held audit is clean and the feature scale — the crest-to-crest gap, a fraction of the pitch — clears `2·δ`, so validity is proven; `Status` is then the tolerance gate's answer over the composed bounds. The one-turn §13 fixtures read `Sound`. The complete eight-turn external thread in `_gallery/thread.go` has longer rims and reads `Suspect` on `Area` and `Centroid` |
 
 The §13 fixtures read (`examples/decad_thread_external_example_test.go`,
 `examples/decad_thread_internal_example_test.go`):
 
-| Fixture | Closed form | `Volume` | `Area` bound | `Verify` |
-|---|---|---|---|---|
-| external, `R = 5`, `L = 20` cylinder, groove root `4.1`, mouth `5.3` | `π·(500 − 16·Q(Ω ∩ {ρ ≤ 5}))` ≈ `1460.31 mm³` | `1460.0 ± 1.5 mm³` | `≈ 4.0 mm²` of `≈ 1000.8 mm²` | valid, `Suspect` on `Area` and `Centroid` |
-| internal, annulus `5 ≤ ρ ≤ 10`, 20 mm, groove root `5.9`, mouth `4.7` | `π·(1500 − 16·Q(Ω ∩ {ρ ≥ 5}))` ≈ `4587.80 mm³` | `4587.3 ± 2.2 mm³` | `≈ 4.7 mm²` of `≈ 2665.7 mm²` | valid, `Suspect` on `Area` |
+| Fixture | Closed form | `Volume` | `Verify` |
+|---|---|---|---|
+| external, `R = 5`, `L = 20` cylinder, groove root `4.1`, mouth `5.3`, one turn | `π·(500 − 2·Q(Ω ∩ {ρ ≤ 5}))` ≈ `1556.99 mm³` | `1556.6 ± 0.5 mm³` | valid, `Sound` |
+| internal, annulus `5 ≤ ρ ≤ 10`, 20 mm, groove root `5.9`, mouth `4.7`, one turn | `π·(1500 − 2·Q(Ω ∩ {ρ ≥ 5}))` ≈ `4696.82 mm³` | `4696.4 ± 1.3 mm³` | valid, `Sound` |
 
-Each cut takes about 6 s, most of it the mesh boolean's exact contact
-classification and stitch.
+The gallery renders the complete eight-turn external model. Its closed-form
+volume is `1460.31 mm³`; its published reading is `1460.0 ± 1.5 mm³`.
 
-**What the station count buys.** Measured on the external fixture with the
+**What the station count buys.** Measured on the eight-turn external model with the
 facet-pair ceiling lifted for the measurement alone:
 
 | Stations per turn | Tool triangles | `δ` | Tool build | Cut | `Volume` | `Area` bound | `Centroid` bound | Audit work, candidates |
@@ -916,15 +916,19 @@ PR 2:
 - `Verify` measures the overlap of the spring with a 60 mm coaxial core of
   radius `2.5` as `4.5π`, and their `Union` encloses `380.5π`.
 - The external thread of §9 on a `Revolve` cylinder (`R = 5`, `L = 20`,
-  a `60°` V of depth `0.9` at pitch `1.5`, `8` turns inside the height):
+  a `60°` V of depth `0.9` at pitch `1.5`, one turn inside the height):
   the result is one lump of one shell, `Volume` encloses
   `π R² L − Θ·Q(clipped)` with `Q(clipped)` the exact polygon moment, the
   box holds the true extremes within its bound; `Verify` proves validity and
-  reads `Suspect` on `Area` and `Centroid` alone; the faceted mesh is
+  reads `Sound`; the faceted mesh is
   watertight. Leg shown to fail: without the coil's arm in the pair
   tolerance, `Cut` refuses at the chain-depth gate.
 - The internal thread on an annular `Extrude`: the same enclosure with
-  `Ω ∩ {ρ ≥ R}`, `Suspect` on `Area` alone.
+  `Ω ∩ {ρ ≥ R}` and `Sound` verification.
+- `_gallery/thread.go` renders the complete eight-turn external thread during
+  gallery CI and checks its valid, `Suspect` verdict with only `Area` and
+  `Centroid` tolerance diagnostics. The one-turn tests above prove the cut's
+  bounds and mesh.
 - The cylinder meshed at the raised pair tolerance is coarser than at the
   diameter-derived one, and its mesh volume and area still lie within its
   own `volSymDiff` and `areaSlack` of `500π` and `250π`.

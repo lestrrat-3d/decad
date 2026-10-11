@@ -456,6 +456,9 @@ jobs:
           go run . clip -probe
           go run . dynamics -scene stack-and-drop -smoke -out "$RUNNER_TEMP/dynamics"
 
+      - name: Render the complete thread example
+        run: go run . -only thread -scale 0.125 -out "$RUNNER_TEMP/thread"
+
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
 
