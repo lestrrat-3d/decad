@@ -84,6 +84,10 @@ type facetedPayload struct {
 	// loftFacesPrimitive identifies one certified LoftFaces held mesh. Rigid
 	// placement preserves this source; a Boolean result starts a new chain.
 	loftFacesPrimitive bool
+	// loftFacesCap records the authenticated final cap map of an original
+	// LoftFaces body. A Cut result receives only the one-use cone trim record.
+	loftFacesCap *loftFacesCapRecord
+	loftFacesToe *loftFacesToeRecord
 	// bevelJoin identifies the immutable blank and first trimmed tooth used
 	// to rebuild a second disjoint tooth on the same root ring.
 	bevelJoin *bevelJoinRecord
@@ -164,6 +168,8 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.xform = composed
 	next.lowerSupport = nil
 	next.pointCone = nil
+	next.loftFacesCap = nil
+	next.loftFacesToe = nil
 	// A rigid copy keeps the immutable Split source for certified face
 	// centroid ranking, but cannot become a new structural Split source.
 	next.pointPlaneSourceEligible = false

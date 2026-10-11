@@ -249,6 +249,11 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return body, nil
 	}
+	if body, ok, err := tryLoftFacesConeHeel(ctx, op, d, ref, a, b); err != nil {
+		return nil, err
+	} else if ok {
+		return body, nil
+	}
 	// Table X (docs/surface-design.md §11): a sheet operand in either position
 	// is a plain ErrUnsupported, never a BooleanError — without this a sheet
 	// falls through to tryPrismBoolean below, which type-asserts prismPayload
@@ -402,6 +407,11 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	if err != nil {
 		return nil, asBooleanError(op, err)
 	}
+	if op == meshbool.OpCut {
+		if err := recordLoftFacesConeToe(ctx, a, b, body); err != nil {
+			return nil, err
+		}
+	}
 	if op == meshbool.OpUnion {
 		if err := certifyFacetedUnionLowerSupport(ctx, body, a, b); err != nil {
 			return nil, err
@@ -539,6 +549,11 @@ func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b 
 // every operand still reports its own chord and occupied-volume bounds.
 func evaluateBooleanMeshesAtScale(ctx context.Context, op meshbool.OperationKind, a, b *Body,
 	meshes operandMeshes, chordScale float64) (booleanEvaluation, error) {
+	return evaluateBooleanMeshesWithConeCap(ctx, op, a, b, meshes, chordScale, nil, nil)
+}
+
+func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.OperationKind, a, b *Body,
+	meshes operandMeshes, chordScale float64, capFace, coneFace *Face) (booleanEvaluation, error) {
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -659,7 +674,7 @@ func evaluateBooleanMeshesAtScale(ctx context.Context, op meshbool.OperationKind
 	// the gate and the mesh pass both walk; it is dropped when the call
 	// returns (boolean_mesh.go, meshbool.ContactMemo).
 	memo := meshbool.NewContactMemo(bmA, bmB)
-	if err := refuseUndecidableProximity(ctx, ma, mb, bmA, bmB, memo); err != nil {
+	if err := refuseUndecidableProximityWithConeCap(ctx, ma, mb, bmA, bmB, memo, capFace, coneFace); err != nil {
 		err = booleanOperandStaging(op, err)
 		if errors.Is(err, ErrUnsupported) {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedContact, err)
@@ -929,7 +944,7 @@ func operandSymDiff(m *Mesh) (float64, error) {
 	return m.volSymDiff, nil
 }
 
-// refuseUndecidableProximity is the tangency gate (docs/evaluator-design.md §9,
+// refuseUndecidableProximityWithConeCap is the tangency gate (docs/evaluator-design.md §9,
 // docs/tessellation-design.md §11 step 4). The mesh boolean decides every
 // contact on the CHORDS, and a chord polygon lies strictly inside the curved
 // surface it approximates — so a true tangency between two operands can vanish
@@ -963,7 +978,8 @@ func operandSymDiff(m *Mesh) (float64, error) {
 // It may refuse a valid model whose operands genuinely pass within a chord
 // tolerance of each other. That is the accepted price; the alternative is a
 // verdict decided by chord placement.
-func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *meshbool.BoolMesh, memo *meshbool.ContactMemo) error {
+func refuseUndecidableProximityWithConeCap(ctx context.Context, ma, mb *Mesh,
+	bmA, bmB *meshbool.BoolMesh, memo *meshbool.ContactMemo, capFace, coneFace *Face) error {
 	// One counter spans the grouping and the pair scan it feeds: the grouping
 	// walks every facet and every new source face's edges, which is work the
 	// §7.2 interval covers just as the pair scan is.
@@ -980,6 +996,12 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *mes
 		for _, gb := range fb {
 			if err := budget.Step(); err != nil {
 				return err
+			}
+			if capFace != nil && ga.source == capFace && gb.source == coneFace {
+				if err := disjointConeCapFacets(ctx, bmA, bmB, ga.facets, gb.facets, memo); err != nil {
+					return err
+				}
+				continue
 			}
 			slack := ga.delta + gb.delta
 			if slack <= 0 {
@@ -1008,6 +1030,7 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *mes
 // faceFacets is one analytic face of an operand: its facets, and the chord
 // displacement between them and the true face.
 type faceFacets struct {
+	source *Face
 	delta  float64
 	facets []int
 }
@@ -1039,7 +1062,7 @@ func facesOfMesh(budget *proofbound.WorkBudget, m *Mesh) ([]faceFacets, error) {
 			}
 			k = len(out)
 			index[f] = k
-			out = append(out, faceFacets{delta: delta})
+			out = append(out, faceFacets{source: f, delta: delta})
 		}
 		out[k].facets = append(out[k].facets, i)
 	}

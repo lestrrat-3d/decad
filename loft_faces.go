@@ -54,6 +54,8 @@ func (d *Document) LoftFaces(ctx context.Context, sections ...*Face) (*Body, err
 		return nil, fmt.Errorf("%w: face-fed loft occupied-volume proof exceeds the held volume", ErrUnsupported)
 	}
 	mesh.loftFacesPrimitive = true
+	mesh.loftFacesCap = &loftFacesCapRecord{source: source,
+		final: embedding.maps[len(embedding.maps)-1], group: len(mesh.groups) - 1}
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, mesh, audit, Measurement{}, nil)
 	if err != nil {
 		return nil, err

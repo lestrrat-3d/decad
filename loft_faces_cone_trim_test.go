@@ -1,0 +1,87 @@
+package decad
+
+import (
+	"math/big"
+	"testing"
+
+	"github.com/lestrrat-3d/r3"
+	"github.com/stretchr/testify/require"
+)
+
+func TestLoftCapConeProofRequiresStrictWholeCapSeparation(t *testing.T) {
+	zero, one := lfZero(), lfOne()
+	near := big.NewRat(10000000000000001, 10000000000000000)
+	m := loftFaceMap{
+		constant: loftFaceRatVec{zero, zero, zero},
+		q0:       loftFaceRatVec{big.NewRat(10, 1), zero, zero},
+		qu:       loftFaceRatVec{one, near, zero},
+		qv:       loftFaceRatVec{zero, zero, big.NewRat(3, 1)},
+		g0:       one, gu: zero, gv: zero,
+	}
+	box := [4]*big.Rat{big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(-1, 1), one}
+	cone := &pointConeLimit{apex: big.NewRat(10, 1), far: zero, slope: one}
+	if !loftCapOutsideHeelCone(m, box, cone) {
+		t.Fatal("the exact positive quadratic with a small radial margin was refused")
+	}
+	changed := m
+	changed.qu[1] = one
+	if loftCapOutsideHeelCone(changed, box, cone) {
+		t.Fatal("a cap that touches the cone at v=0 was admitted")
+	}
+	changed = m
+	changed.qv[1] = one
+	if loftCapOutsideHeelCone(changed, box, cone) {
+		t.Fatal("an uncertified cross term was admitted")
+	}
+	box[1] = one
+	if loftCapOutsideHeelCone(m, box, cone) {
+		t.Fatal("a source rectangle containing the quadratic zero was admitted")
+	}
+}
+
+func TestLoftCapToeConeProofUsesWholeSourceBox(t *testing.T) {
+	zero, one := lfZero(), lfOne()
+	m := loftFaceMap{
+		constant: loftFaceRatVec{zero, zero, zero},
+		q0:       loftFaceRatVec{big.NewRat(5, 1), big.NewRat(10, 1), zero},
+		qu:       loftFaceRatVec{zero, zero, zero},
+		qv:       loftFaceRatVec{zero, zero, zero},
+		g0:       one, gu: zero, gv: zero,
+	}
+	box := [4]*big.Rat{big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(-1, 1), one}
+	cone := &pointConeLimit{apex: big.NewRat(8, 1), far: zero, slope: one}
+	if !loftCapOutsideToeCone(m, box, cone) {
+		t.Fatal("the cap strictly outside the toe cone was refused")
+	}
+	m.q0[1] = big.NewRat(2, 1)
+	if loftCapOutsideToeCone(m, box, cone) {
+		t.Fatal("the cap inside the toe cone was admitted")
+	}
+}
+
+func TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement(t *testing.T) {
+	doc := New()
+	plate := internalBoxBody(t, doc, 0, 0, 20, 20, 8)
+	tool := internalDiscBody(t, doc, 2, 30)
+	lift, err := r3.Translation(r3.NewVec(10, 10, -10))
+	require.NoError(t, err)
+	tool, err = tool.Placed(t.Context(), lift)
+	require.NoError(t, err)
+	drilled, err := Cut(t.Context(), plate, tool)
+	require.NoError(t, err)
+	p := drilled.payload.(facetedPayload)
+	p.loftFacesCap = &loftFacesCapRecord{}
+	p.loftFacesToe = &loftFacesToeRecord{}
+	drilled.payload = p
+	move, err := r3.Translation(r3.NewVec(1, 2, 3))
+	require.NoError(t, err)
+	moved, err := drilled.Placed(t.Context(), move)
+	require.NoError(t, err)
+	back, err := move.Inverse()
+	require.NoError(t, err)
+	roundTrip, err := moved.Placed(t.Context(), back)
+	require.NoError(t, err)
+	final := roundTrip.payload.(facetedPayload)
+	require.Nil(t, final.loftFacesCap)
+	require.Nil(t, final.loftFacesToe)
+}

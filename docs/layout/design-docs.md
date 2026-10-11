@@ -29,7 +29,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/draft-design.md` | `WithTaper` and `Body.Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
 | `docs/loft-sections-design.md` | Exact positive homothetic three-section loft, quadratic walls, held mesh and proof. |
-| `docs/loft-face-sections-design.md` | Source-cap nine-section loft, cap correspondence, embedding and occupied-volume proof. |
+| `docs/loft-face-sections-design.md` | Source-cap nine-section loft, cap correspondence, embedding, occupied-volume proof and two-cone continuation. |
 | `docs/loft-point-design.md` | Point-to-profile solid loft, its apex topology and mesh proof. |
 | `docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
 | `docs/sweep-design.md` | `Path`/`Sweep`, `SweepChain`, mitred sweeps (§16) and bounded straight and curved twist (§17). |
