@@ -194,6 +194,10 @@
 //	    at a reflex corner; dilated tools that meet, reach
 //	    a cap or the material past their walls                ErrUnsupported
 //	Loft          same-type segment pairs, distinct planes    builds
+//	LoftSections  three exact positive homothetic whole-line
+//	              profiles on equally spaced XY planes       builds
+//	  another section count                                   ErrDegenerate
+//	  another shape or plane                                  ErrUnsupported
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
 //	  a pair not the same line, arc, circle or Tier A type    ErrUnsupported
 //	  a free-form pair of unequal Bézier span counts          builds
