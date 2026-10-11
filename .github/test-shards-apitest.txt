@@ -1571,6 +1571,7 @@
 9	3.79	TestBooleanChainOfConesContinuesPastEachJoint
 9	1.25	TestBooleanRimVertexBoundCoversTrimAmplification
 9	0.45	TestBrepLoopChamferPublicRoundedPlateExports
+9	115.52	TestBrepRoundedEdgeFilletPublicQuarterRadii
 9	0.06	TestCapBlendAsymmetricOverrunRefused
 9	0.03	TestCapBlendAsymmetricUnrepresentableSetbackRefused
 9	0.02	TestCapBlendCapCircleCarriesInPlaneDistanceRounding
