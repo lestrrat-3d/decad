@@ -306,6 +306,29 @@ jobs:
       # unsharded `go test ./...` covers. `./internal/...` includes new internal
       # packages automatically. ci_workflow_test.go fails when a package on disk
       # is named by no runner.
+      # Dynamics builds its race binary separately so compilation and test
+      # execution each stay below one minute. The binary runs from its package
+      # directory, as go test would, and the soft budget still includes build.
+      - name: Build dynamics race test binary
+        if: matrix.packages == './dynamics/'
+        shell: bash
+        run: |
+          date +%s > dynamics-start.txt
+          go test -c -race -o dynamics.test ./dynamics/
+
+      - name: Run dynamics race tests
+        if: matrix.packages == './dynamics/'
+        shell: bash
+        run: |
+          (cd dynamics && ../dynamics.test -test.count=1 -test.v -test.timeout '${{ matrix.timeout }}')
+          elapsed=$(( $(date +%s) - $(cat dynamics-start.txt) ))
+          echo "./dynamics/ finished in ${elapsed}s"
+          budget='${{ matrix.budget }}'
+          if [ -n "$budget" ] && [ "$elapsed" -gt "$budget" ]; then
+            echo "::error::./dynamics/ took ${elapsed}s, over the ${budget}s budget; find the tests that grew in the -v durations above"
+            exit 1
+          fi
+
       # -v prints each test's duration, so a slow run shows which tests grew.
       # A runner with a `budget:` fails once the run takes longer than that
       # many seconds, far below its -timeout; see the comment above the matrix.
@@ -314,7 +337,7 @@ jobs:
       # changed. -count=1 makes every test run, so the cache saves compile
       # time only.
       - name: Run tests outside the root package (Ubuntu shard)
-        if: matrix.packages != ''
+        if: matrix.packages != '' && matrix.packages != './dynamics/'
         shell: bash
         run: |
           start=$SECONDS
