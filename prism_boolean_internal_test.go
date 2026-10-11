@@ -47,9 +47,8 @@ func canonicalPrismFrame(t *testing.T) r3.Frame {
 	return f
 }
 
-// synthLineLoop is placeholder single-segment geometry for a gate test that
-// never reaches resolution (admitPrismPair reads only segment KIND, never
-// shape) — every caller uses the same coordinates.
+// synthLineLoop is placeholder single-segment geometry for gate tests that
+// do not enter the placed-axis section gate or geometric resolution.
 func synthLineLoop() loopRecord {
 	return loopRecord{Segments: []curveSegment{
 		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1},
@@ -115,7 +114,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: profileRecord{Outer: synthLineLoop()},
+		profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{payload: pp}
