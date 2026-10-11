@@ -796,7 +796,10 @@ func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, err
 	}
-	if err := loftmesh.LoftCrossingAuditBevelJoin(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris); err != nil {
+	// Four cap subdivision rounds may exceed the ordinary loft's station-derived
+	// triangle ceiling. This construction bounds them independently.
+	if err := loftmesh.LoftCrossingAuditBounded(
+		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris, 82_000, 64_000_000); err != nil {
 		return nil, err
 	}
 	// The source fan's own occupied-volume error is already base.volSymDiff.

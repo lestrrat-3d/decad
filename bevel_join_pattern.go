@@ -349,8 +349,16 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, err
 	}
-	if err := loftmesh.LoftCrossingAuditBevelPatternJoin(
-		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris, len(teeth)); err != nil {
+	if len(teeth) < 3 || len(teeth) > 8 {
+		return nil, fmt.Errorf("%w: patterned bevel audit requires three to eight teeth", ErrUnsupported)
+	}
+	// The 44,480-triangle two-tooth baseline grows by at most 22,000
+	// triangles per sector; its measured source adds 21,216.
+	maxAuditTriangles := 44_480 + 22_000*(len(teeth)-2)
+	maxAuditScans := uint64(12_000_000 * len(teeth))
+	if err := loftmesh.LoftCrossingAuditBounded(
+		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
+		maxAuditTriangles, maxAuditScans); err != nil {
 		return nil, err
 	}
 	roundEnvelope := proofbound.AbsSumUpper(blankSag, localRound)

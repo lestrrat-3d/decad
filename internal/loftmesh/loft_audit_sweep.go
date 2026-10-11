@@ -60,58 +60,17 @@ func LoftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 	return err
 }
 
-// LoftCrossingAuditBevelJoin audits the dense root-ring and tooth-cap mesh.
-// Its 82,000-triangle allowance admits the four-round cap mesh; the fixed
-// scan limit and exact pair decisions still bound the audit.
-func LoftCrossingAuditBevelJoin(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
-	const maxBevelJoinScans = 64_000_000
+// LoftCrossingAuditBounded runs the same exact, unstructured crossing audit
+// as LoftCrossingAudit with caller-supplied resource ceilings. maxTriangles
+// bounds the exact lifts held for the call; maxScans bounds both pair
+// enumeration work and the number of box-overlapping candidates. A caller
+// may choose larger ceilings for a constructed mesh whose size it separately
+// bounds. The contact verdict and candidate selection do not depend on those
+// ceilings. Large candidate sets use the ordered parallel classifier.
+func LoftCrossingAuditBounded(budget *proofbound.WorkBudget, verts []r3.Vec,
+	tris [][3]int, maxTriangles int, maxScans uint64) error {
 	_, err := loftCrossingAuditLimited(budget, verts, tris, nil, loftGenericShortcuts,
-		maxBevelJoinScans, 82_000, true)
-	return err
-}
-
-// LoftCrossingAuditBevelTwoJoin uses four times the one-tooth scan ceiling:
-// a second cap set can double the triangle count, and pair scans grow with
-// its square. It keeps the same triangle ceiling and exact contact verdicts.
-func LoftCrossingAuditBevelTwoJoin(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
-	const maxBevelTwoJoinScans = 256_000_000
-	_, err := loftCrossingAuditLimited(budget, verts, tris, nil, loftGenericShortcuts,
-		maxBevelTwoJoinScans, MaxLoftAuditTriangles, true)
-	return err
-}
-
-// LoftCrossingAuditBevelPatternJoin admits only a certified continuation with
-// three to eight disjoint tooth sectors. Each new sector gets a bounded mesh
-// and pair-scan allowance; the exact contact decisions are unchanged.
-func LoftCrossingAuditBevelPatternJoin(budget *proofbound.WorkBudget, verts []r3.Vec,
-	tris [][3]int, toothCount int) error {
-	if toothCount < 3 || toothCount > 8 {
-		return fmt.Errorf(`%w: patterned bevel audit requires three to eight teeth`, decaderr.ErrUnsupported)
-	}
-	// The real 8/8 source builds 44,480 triangles at two teeth and adds
-	// 21,216 per sector. The spare 784 triangles per sector admits rounding
-	// and source variation without allowing an unbounded exact-lift set.
-	maxTriangles := 44_480 + 22_000*(toothCount-2)
-	maxScans := uint64(12_000_000 * toothCount)
-	_, err := loftCrossingAuditLimited(budget, verts, tris, nil,
-		loftGenericShortcuts, maxScans, maxTriangles, true)
-	return err
-}
-
-// LoftCrossingAuditBevelBore admits the two annular cap strips and one inward
-// wall added to an already-audited eight-tooth bevel join. Four triangles per
-// ring station are net new after the two old axis fans are replaced. The pair
-// classifier and its exact contact verdicts are the same as the join audit.
-func LoftCrossingAuditBevelBore(budget *proofbound.WorkBudget, verts []r3.Vec,
-	tris [][3]int, stations int) error {
-	if stations < 16 || stations > 1_536 {
-		return fmt.Errorf(`%w: bevel bore requires at most 1536 ring stations`, decaderr.ErrUnsupported)
-	}
-	const maxPatternTriangles = 44_480 + 22_000*6
-	maxTriangles := maxPatternTriangles + 4*stations
-	const maxBoreScans = 128_000_000
-	_, err := loftCrossingAuditLimited(budget, verts, tris, nil,
-		loftGenericShortcuts, maxBoreScans, maxTriangles, true)
+		maxScans, maxTriangles, true)
 	return err
 }
 

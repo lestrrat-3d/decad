@@ -272,8 +272,16 @@ func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, err
 	}
-	if err := loftmesh.LoftCrossingAuditBevelBore(
-		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris, n); err != nil {
+	if n < 16 || n > 1_536 {
+		return nil, fmt.Errorf("%w: bevel bore requires at most 1536 ring stations", ErrUnsupported)
+	}
+	// The annular strips and inward wall add four net triangles per station
+	// after the old axis fans are removed.
+	const maxPatternAuditTriangles = 44_480 + 22_000*6
+	maxAuditTriangles := maxPatternAuditTriangles + 4*n
+	if err := loftmesh.LoftCrossingAuditBounded(
+		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
+		maxAuditTriangles, 128_000_000); err != nil {
 		return nil, err
 	}
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
