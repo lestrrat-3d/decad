@@ -92,6 +92,8 @@
 1	0.00	TestSelectorUnionString
 1	0.01	TestShellContextCancellationDuringKernelSetupLeavesReceiverLive
 1	0.00	TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive
+1	0.38	TestShellCoaxialCounterbore
+1	0.01	TestShellCounterboreRefusesInsufficientShoulder
 1	0.01	TestShellCupUndercutsBox
 1	0.01	TestStackedUnionEnclosedVoidTakesMeshPath
 1	0.02	TestStackedUnionRootedBoss

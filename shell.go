@@ -144,6 +144,7 @@ func WithShellSense(s ShellSense) ShellOption {
 // first face route S does not take (SG3). One exact exception is a pair of
 // nested rectangular slabs: removing the boss top inward builds the plate
 // and boss cavity with four cylinder root patches (modify-general §3.1a).
+// A coaxial two-level counterbore has a separate inward route (§3.1e).
 func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a shell`, ErrDegenerate)

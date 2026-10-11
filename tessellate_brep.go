@@ -250,6 +250,15 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 					loopSag[u.Loop] = math.Max(loopSag[u.Loop], sag)
 					capSlack = proofbound.AbsSumUpper(capSlack,
 						tessellation.WalkSegmentArea(bc.lm.walks[0].SegmentWalk, bc.lm.count[0]))
+				} else if bp.pocketShell != nil && bp.pocketShell.round != nil &&
+					fi == bp.pocketShell.floorFace && u.Loop == 0 {
+					bc := &bands[len(bp.loopBands)]
+					poly = append(slices.Clone(bc.capV), bc.capV[0])
+					sag := bc.lm.capSag[0]
+					trim = math.Max(trim, sag)
+					loopSag[u.Loop] = math.Max(loopSag[u.Loop], sag)
+					capSlack = proofbound.AbsSumUpper(capSlack,
+						tessellation.WalkSegmentArea(u.Walk, bc.lm.count[0]))
 				} else {
 					poly = terminalPoly[ui]
 					if poly != nil {

@@ -244,7 +244,7 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 		for _, ring := range []struct {
 			loop loopRecord
 			z    float64
-		}{{band.rounded.Outer, band.floorZ}, {band.pocket.profile().Outer, band.lowerZ}} {
+		}{{band.rounded.Outer, band.floorZ}, {band.capProfile().Outer, band.lowerZ}} {
 			for _, seg := range ring.loop.Segments {
 				if err := add(e, seg, ring.z); err != nil {
 					return nil, err

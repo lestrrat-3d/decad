@@ -131,7 +131,7 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 // the removed faces. refusal is route P's classification refusal where some
 // axis read as a prism (brep-modify SB3), and nil where none did (SB10);
 // shellThroughCut names it when the record reads as no through-cut record
-// either (SG3).
+// either (SG3), unless one of the bounded stacked routes matches first.
 func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepModifyRequest, refusal error) (*Body, error) {
 	if sp, ok := b.payload.(stackedPrismPayload); ok {
 		body, matched, err := shellStackedBoss(ctx, b, sp, bp, req.shellCall)
@@ -143,6 +143,10 @@ func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepM
 			return body, err
 		}
 		body, matched, err = shellBlindPocket(ctx, b, sp, bp, req.shellCall)
+		if matched || err != nil {
+			return body, err
+		}
+		body, matched, err = shellCounterbore(ctx, b, sp, bp, req.shellCall)
 		if matched || err != nil {
 			return body, err
 		}
