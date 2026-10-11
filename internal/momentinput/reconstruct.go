@@ -1,12 +1,15 @@
 package momentinput
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"slices"
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/sketchrecord"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -91,7 +94,59 @@ func momentRecordScene(record Profile) (*sketch.Sketch, bool) {
 	if err != nil {
 		return nil, false
 	}
+	if ok, err := addMomentRecordEntities(record, s, nil); !ok || err != nil {
+		return nil, false
+	}
+	return s, true
+}
 
+// ReconstructProfileOnFrame returns a Sketch profile only when Sketch's fresh
+// arrangement and certified record match the source region. The returned
+// Sketch is on frame and may enter a public feature through the usual seam.
+func ReconstructProfileOnFrame(ctx context.Context, record Profile, frame r3.Frame) (*sketch.Sketch, *sketch.Profile, error) {
+	world := sketch.NewWorld()
+	plane, err := world.CreatePlaneFromFrame(frame)
+	if err != nil {
+		return nil, nil, err
+	}
+	s, err := world.CreateSketch(plane)
+	if err != nil {
+		return nil, nil, err
+	}
+	ok, err := addMomentRecordEntities(record, s, ctx.Err)
+	if err != nil {
+		if canceled := ctx.Err(); canceled != nil {
+			return nil, nil, canceled
+		}
+		return nil, nil, fmt.Errorf(`%w: section record cannot be reconstructed by Sketch: %v`, ErrUnsupported, err)
+	}
+	if !ok {
+		return nil, nil, fmt.Errorf(`%w: section record cannot be reconstructed by Sketch`, ErrUnsupported)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	for _, profile := range s.Profiles() {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		if !profile.Valid {
+			continue
+		}
+		// The scene belongs to this call and profile came directly from its
+		// current arrangement, so no caller snapshot needs authentication.
+		outer, holes, err := sketchrecord.RecordProfileLoops(profile)
+		if err == nil && momentRecordsEqual(record, Profile{Outer: outer, Holes: holes}) {
+			return s, profile, nil
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	return nil, nil, fmt.Errorf(`%w: Sketch did not certify the section record`, ErrUnsupported)
+}
+
+func addMomentRecordEntities(record Profile, s *sketch.Sketch, poll func() error) (bool, error) {
 	interned := make(map[Point2]*sketch.Point)
 	point := func(value Point2) *sketch.Point {
 		if existing, ok := interned[value]; ok {
@@ -111,6 +166,11 @@ func momentRecordScene(record Profile) (*sketch.Sketch, bool) {
 	entities := make(map[momentEntityKey]struct{})
 	for _, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
 		for _, segment := range loop.Segments {
+			if poll != nil {
+				if err := poll(); err != nil {
+					return false, err
+				}
+			}
 			switch segment := segment.(type) {
 			case LineSeg:
 				key, _ := analyticEntityKey(segment)
@@ -134,7 +194,7 @@ func momentRecordScene(record Profile) (*sketch.Sketch, bool) {
 				key := freeformEntityKey(4, segment.Control)
 				if _, ok := entities[key]; !ok {
 					if _, err := s.CreateSpline(points(segment.Control)...); err != nil {
-						return nil, false
+						return false, err
 					}
 					entities[key] = struct{}{}
 				}
@@ -142,7 +202,7 @@ func momentRecordScene(record Profile) (*sketch.Sketch, bool) {
 				key := freeformEntityKey(5, segment.Control)
 				if _, ok := entities[key]; !ok {
 					if _, err := s.CreateClosedSpline(points(segment.Control)...); err != nil {
-						return nil, false
+						return false, err
 					}
 					entities[key] = struct{}{}
 				}
@@ -152,7 +212,7 @@ func momentRecordScene(record Profile) (*sketch.Sketch, bool) {
 				key := freeformEntityKey(6, segment.Control, extra...)
 				if _, ok := entities[key]; !ok {
 					if _, err := s.CreateNURBS(segment.Degree, points(segment.Control), segment.Weights, segment.Knots); err != nil {
-						return nil, false
+						return false, err
 					}
 					entities[key] = struct{}{}
 				}
@@ -160,16 +220,16 @@ func momentRecordScene(record Profile) (*sketch.Sketch, bool) {
 				key := freeformEntityKey(7, segment.Fit)
 				if _, ok := entities[key]; !ok {
 					if _, err := s.CreateFitSpline(points(segment.Fit)...); err != nil {
-						return nil, false
+						return false, err
 					}
 					entities[key] = struct{}{}
 				}
 			default:
-				return nil, false
+				return false, nil
 			}
 		}
 	}
-	return s, true
+	return true, nil
 }
 
 func momentRecordsEqual(a, b Profile) bool {

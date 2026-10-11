@@ -17,6 +17,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/tessellation-design.md` | Tessellation: curve samples, manifold proofs, source faces, certificates, boolean handoff. |
 | `docs/clearance-design.md` | Pair disjointness and bounded gap proofs. |
 | `docs/point-containment-design.md` | Public point classification, distance, and mesh-to-body proofs. |
+| `docs/section-design.md` | Read-only planar section gate and Sketch reconstruction proof. |
 | `docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
 | `docs/modify-design.md` | `Fillet`/`Chamfer`/`Shell` tables, section rewrite, exact offset, and build audit. |
 | `docs/spline-design.md` | Free-form kinds, exactness tiers, refusals, Tier A moments, work budget, proven brackets, and reach. |
@@ -71,6 +72,7 @@ The rules for rows live in `docs/layout.md`.
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
 | `record.go` | Root-owned `Point2`, structural record aliases, and slice adapters. See sketch-seam §2. |
 | `seam.go` | Sketch recording adapters and `MeasureProfile`. See sketch-seam §1–§2. |
+| `section.go` | Public planar section query over certified prism records. See section design. |
 | `path.go` | The immutable spatial `Path`, sealed segments and `internal/sweepinput/` record adapter. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |

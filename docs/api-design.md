@@ -353,6 +353,7 @@ func (b *Body) Centroid() (VecMeasurement, error)
 func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (least, greatest *Face, err error)
 func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (PointLocation, error)
 func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error)
+func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*sketch.Profile, error)
 
 func (b *Body) Origin() FeatureRef  // which feature created this body
 ```
@@ -373,6 +374,11 @@ point inside or on its boundary has distance zero. Its `Measurement` encloses
 the true distance using the verified mesh and its boundary bound. When
 `LocatePoint` cannot prove membership, its lower bound is zero. The point
 query design owns its proof and refusal rules.
+
+`Section` returns Sketch profiles on the requested plane for the admitted
+exact-prism class. `docs/section-design.md` owns the gate and reconstruction
+proof. A returned profile can enter a new feature through the ordinary Sketch
+seam.
 
 A bounding box is a measurement, so it carries the same trust metadata every other
 measurement does — a v1 box around a curved body produced by a boolean is bounded
