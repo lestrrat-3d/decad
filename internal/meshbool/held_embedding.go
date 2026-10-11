@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
@@ -180,13 +181,27 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 		locals[worker] = e.readOnlyScanCopy(ctx, workers)
 	}
 	var group sync.WaitGroup
+	// Nearby facets can have very different candidate counts. Small shared
+	// chunks keep one dense patch from occupying a worker for the whole scan.
+	var next atomic.Int64
+	const chunkSize = 32
 	group.Add(workers)
 	for worker := range workers {
-		start, end := len(query)*worker/workers, len(query)*(worker+1)/workers
 		local := locals[worker]
 		go func() {
 			defer group.Done()
-			clean[worker], errors[worker] = local.cleanPairs(query[start:end], queryFacet)
+			clean[worker] = true
+			for {
+				start := int(next.Add(chunkSize)) - chunkSize
+				if start >= len(query) {
+					return
+				}
+				end := min(start+chunkSize, len(query))
+				clean[worker], errors[worker] = local.cleanPairs(query[start:end], queryFacet)
+				if !clean[worker] || errors[worker] != nil {
+					return
+				}
+			}
 		}()
 	}
 	group.Wait()
