@@ -336,13 +336,15 @@ func SegAlongEdge(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) int {
 // SinSquared is the exact sin²θ of the angle between two facet planes:
 // |na × nb|² / (|na|²·|nb|²).
 func SinSquared(na, nb proof.Xpt) *big.Rat {
-	c := proof.Xcross(na, nb)
-	num := proof.XdotRat(c, c)
-	den := new(big.Rat).Mul(proof.XdotRat(na, na), proof.XdotRat(nb, nb))
+	// Both homogeneous weights cancel from the ratio, so build one fraction
+	// from integer dot products instead of normalizing each intermediate.
+	c := proof.XhpCross(proof.Xhp(na), proof.Xhp(nb))
+	num := proof.XhpDotNum(c, c)
+	den := new(big.Int).Mul(proof.XdotNum(na, na), proof.XdotNum(nb, nb))
 	if den.Sign() == 0 {
 		return new(big.Rat)
 	}
-	return num.Quo(num, den)
+	return new(big.Rat).SetFrac(num, den)
 }
 
 // SinLowerBound is a PROVEN lower bound on sin θ from its exact square: the
