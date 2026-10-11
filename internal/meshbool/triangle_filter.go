@@ -216,14 +216,20 @@ func FivCross(a, b FivVec) FivVec {
 // no candidate was found at all (which AllOneSide's own gate, run before this
 // filter is ever called, has already ruled out for a real non-coplanar pair).
 func TriSpanOnLine(t, o [3]FivVec, signs [3]int, dir FivVec) (FloatInterval, bool) {
+	planeNormal := FivCross(FivSub(o[1], o[0]), FivSub(o[2], o[0]))
+	return triSpanOnLineWithNormal(t, o[0], signs, dir, planeNormal)
+}
+
+// triSpanOnLineWithNormal uses an enclosure of the other triangle's exact
+// normal. The caller already has that normal when classifying a facet pair.
+func triSpanOnLineWithNormal(t [3]FivVec, origin FivVec, signs [3]int, dir, planeNormal FivVec) (FloatInterval, bool) {
 	lo, hi := math.Inf(1), math.Inf(-1)
 	found := false
-	planeNormal := FivCross(FivSub(o[1], o[0]), FivSub(o[2], o[0]))
 	values := [3]FloatInterval{}
 	valueSet := [3]bool{}
 	value := func(i int) FloatInterval {
 		if !valueSet[i] {
-			values[i] = FivDot(planeNormal, FivSub(t[i], o[0]))
+			values[i] = FivDot(planeNormal, FivSub(t[i], origin))
 			valueSet[i] = true
 		}
 		return values[i]
@@ -306,16 +312,15 @@ func TriSpanOnLine(t, o [3]FivVec, signs [3]int, dir FivVec) (FloatInterval, boo
 func TriTriMissesFilter(ta, tb [3]r3.Vec, na, nb r3.Vec, sa, sb [3]int) bool {
 	a := [3]FivVec{FivVecOf(ta[0]), FivVecOf(ta[1]), FivVecOf(ta[2])}
 	b := [3]FivVec{FivVecOf(tb[0]), FivVecOf(tb[1]), FivVecOf(tb[2])}
-	dir := FivCross(
-		FivVec{FivRounded(na.X), FivRounded(na.Y), FivRounded(na.Z)},
-		FivVec{FivRounded(nb.X), FivRounded(nb.Y), FivRounded(nb.Z)},
-	)
+	normalA := FivVec{FivRounded(na.X), FivRounded(na.Y), FivRounded(na.Z)}
+	normalB := FivVec{FivRounded(nb.X), FivRounded(nb.Y), FivRounded(nb.Z)}
+	dir := FivCross(normalA, normalB)
 
-	spanA, ok := TriSpanOnLine(a, b, sa, dir)
+	spanA, ok := triSpanOnLineWithNormal(a, b[0], sa, dir, normalB)
 	if !ok {
 		return false
 	}
-	spanB, ok := TriSpanOnLine(b, a, sb, dir)
+	spanB, ok := triSpanOnLineWithNormal(b, a[0], sb, dir, normalA)
 	if !ok {
 		return false
 	}
