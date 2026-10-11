@@ -48,6 +48,26 @@ func Xcross(a, b Xpt) Xpt {
 // dot product's sign.
 func XdotSign(a, b Xpt) int { return XdotNum(a, b).Sign() }
 
+// XdotDiffSign is the sign of n·(p−q). All weights are positive, so the
+// subtraction can stay in integer numerators without constructing a point.
+func XdotDiffSign(n, p, q Xpt) int {
+	if p.W.Cmp(q.W) == 0 {
+		var diff, sum, term big.Int
+		diff.Sub(p.X, q.X)
+		sum.Mul(n.X, &diff)
+		diff.Sub(p.Y, q.Y)
+		term.Mul(n.Y, &diff)
+		sum.Add(&sum, &term)
+		diff.Sub(p.Z, q.Z)
+		term.Mul(n.Z, &diff)
+		return sum.Add(&sum, &term).Sign()
+	}
+	pNum, qNum := XdotNum(n, p), XdotNum(n, q)
+	pNum.Mul(pNum, q.W)
+	qNum.Mul(qNum, p.W)
+	return pNum.Sub(pNum, qNum).Sign()
+}
+
 // Xlerp is a + t·(b − a) for t = tn/td, exact, with the common power of two
 // stripped on return — the growth control that keeps a chain of lerps from
 // growing its denominator multiplicatively at every link (measured: 14113
