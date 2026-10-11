@@ -2,9 +2,12 @@ package coil
 
 import (
 	"context"
+	"errors"
 	"math"
 	"math/big"
+	"runtime"
 
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
@@ -93,80 +96,104 @@ func arcArea(ctx context.Context, seg Segment, axis Axis, pitch, turns *big.Rat,
 	}
 	two := big.NewRat(2, 1)
 	half := big.NewRat(1, 2)
+	workers := 1
+	if pieces >= 128 {
+		workers = min(orderedwork.Workers(ctx, min(runtime.GOMAXPROCS(0), 4)), 4)
+	}
+	// Each range reads immutable coefficients. Exact interval sums are folded
+	// in piece order, so worker count does not change the published endpoints.
+	jobs := make([]int, min(workers, pieces))
+	for i := range jobs {
+		jobs[i] = i
+	}
+	undecided := errors.New("arc area cannot prove positive integrand")
+	parts, err := orderedwork.Run(ctx, ctx, jobs, len(jobs), func(ctx context.Context, job int) (Iv, error) {
+		part := Point(new(big.Rat))
+		for i := pieces * job / len(jobs); i < pieces*(job+1)/len(jobs); i++ {
+			if err := ctx.Err(); err != nil {
+				return Iv{}, err
+			}
+			lo, mid, hi := at[2*i], at[2*i+1], at[2*i+2]
+			hMid := hOf(mid)
+			hm, _ := Mid(hMid).Float64()
+			if !(hm > 0) || proofbound.IsNonFinite(hm) {
+				return Iv{}, undecided
+			}
+			g := new(big.Rat).SetFloat64(math.Sqrt(hm))
+			g2 := new(big.Rat).Mul(g, g)
+
+			// Exact integrals of A, A², B², A³, A·B², A⁴, B⁴ and A²·B² over the
+			// piece, from A = cos φ, B = −sin φ.
+			diff := func(f func(x ab) Iv) Iv { return proofbound.IntervalSub(f(hi), f(lo)) }
+			bb := diff(func(x ab) Iv { return x.b })
+			b3 := diff(func(x ab) Iv { return proofbound.IntervalMul(proofbound.IntervalSquare(x.b), x.b) })
+			abd := diff(func(x ab) Iv { return proofbound.IntervalMul(x.a, x.b) })
+			ab4 := diff(func(x ab) Iv {
+				return proofbound.IntervalMul(proofbound.IntervalMul(x.a, x.b),
+					proofbound.IntervalSub(proofbound.IntervalSquare(x.a), proofbound.IntervalSquare(x.b)))
+			})
+			third := big.NewRat(1, 3)
+			eighth := big.NewRat(1, 8)
+			iA := proofbound.IntervalNeg(bb)
+			iA2 := proofbound.IntervalSub(proofbound.IntervalScale(delta, half), proofbound.IntervalScale(abd, half))
+			iB2 := proofbound.IntervalAdd(proofbound.IntervalScale(delta, half), proofbound.IntervalScale(abd, half))
+			iA3 := proofbound.IntervalAdd(iA, proofbound.IntervalScale(b3, third))
+			iAB2 := proofbound.IntervalNeg(proofbound.IntervalScale(b3, third))
+			threeEighths := proofbound.IntervalScale(delta, big.NewRat(3, 8))
+			iA4 := proofbound.IntervalSub(proofbound.IntervalSub(threeEighths, proofbound.IntervalScale(abd, half)), proofbound.IntervalScale(ab4, eighth))
+			iB4 := proofbound.IntervalSub(proofbound.IntervalAdd(threeEighths, proofbound.IntervalScale(abd, half)), proofbound.IntervalScale(ab4, eighth))
+			iA2B2 := proofbound.IntervalAdd(proofbound.IntervalScale(delta, eighth), proofbound.IntervalScale(ab4, eighth))
+
+			mul := proofbound.IntervalMul
+			add := proofbound.IntervalAdd
+			ih := add(add(mul(a0, delta), mul(a1, iA)), add(mul(a2, iA2), mul(a3, iB2)))
+			ih2 := add(mul(proofbound.IntervalSquare(a0), delta), mul(proofbound.IntervalSquare(a1), iA2))
+			ih2 = add(ih2, add(mul(proofbound.IntervalSquare(a2), iA4), mul(proofbound.IntervalSquare(a3), iB4)))
+			cross := add(add(mul(mul(a0, a1), iA), mul(mul(a0, a2), iA2)), add(mul(mul(a0, a3), iB2), mul(mul(a1, a2), iA3)))
+			cross = add(cross, add(mul(mul(a1, a3), iAB2), mul(mul(a2, a3), iA2B2)))
+			ih2 = add(ih2, proofbound.IntervalScale(cross, two))
+
+			// T = Δ·g + (∫h − Δ·g²)/(2g) − (∫h² − 2g²·∫h + g⁴·Δ)/(8g³)
+			lin := proofbound.IntervalScale(delta, g)
+			first := proofbound.IntervalScale(proofbound.IntervalSub(ih, proofbound.IntervalScale(delta, g2)), new(big.Rat).Quo(half, g))
+			sq := proofbound.IntervalSub(ih2, proofbound.IntervalScale(ih, new(big.Rat).Mul(two, g2)))
+			sq = proofbound.IntervalAdd(sq, proofbound.IntervalScale(delta, new(big.Rat).Mul(g2, g2)))
+			g3 := new(big.Rat).Mul(g2, g)
+			second := proofbound.IntervalScale(sq, new(big.Rat).Quo(eighth, g3))
+			piece := proofbound.IntervalSub(add(lin, first), second)
+
+			// The remainder over the piece.
+			spread := proofbound.IntervalAbsUpper(proofbound.IntervalSub(hMid, Point(g2)))
+			dev := new(big.Rat).Add(spread, drift)
+			hLo := new(big.Rat).Sub(hMid.Lo, drift)
+			if hLo.Sign() <= 0 {
+				return Iv{}, undecided
+			}
+			root, _ := proofbound.SqrtFixed(hLo)
+			if root.Lo.Sign() <= 0 {
+				return Iv{}, undecided
+			}
+			den := new(big.Rat).Mul(hLo, hLo)
+			den.Mul(den, root.Lo)
+			den.Mul(den, big.NewRat(16, 1))
+			rem := new(big.Rat).Mul(dev, dev)
+			rem.Mul(rem, dev)
+			rem.Mul(rem, delta.Hi)
+			rem.Quo(rem, den)
+			piece = proofbound.IntervalWiden(piece, rem)
+			part = add(part, gridOut(piece))
+		}
+		return part, nil
+	})
+	if errors.Is(err, undecided) {
+		return Iv{}, false, nil
+	}
+	if err != nil {
+		return Iv{}, false, err
+	}
 	sum := Point(new(big.Rat))
-	for i := range pieces {
-		if err := ctx.Err(); err != nil {
-			return Iv{}, false, err
-		}
-		lo, mid, hi := at[2*i], at[2*i+1], at[2*i+2]
-		hMid := hOf(mid)
-		hm, _ := Mid(hMid).Float64()
-		if !(hm > 0) || proofbound.IsNonFinite(hm) {
-			return Iv{}, false, nil
-		}
-		g := new(big.Rat).SetFloat64(math.Sqrt(hm))
-		g2 := new(big.Rat).Mul(g, g)
-
-		// Exact integrals of A, A², B², A³, A·B², A⁴, B⁴ and A²·B² over the
-		// piece, from A = cos φ, B = −sin φ.
-		diff := func(f func(x ab) Iv) Iv { return proofbound.IntervalSub(f(hi), f(lo)) }
-		bb := diff(func(x ab) Iv { return x.b })
-		b3 := diff(func(x ab) Iv { return proofbound.IntervalMul(proofbound.IntervalSquare(x.b), x.b) })
-		abd := diff(func(x ab) Iv { return proofbound.IntervalMul(x.a, x.b) })
-		ab4 := diff(func(x ab) Iv {
-			return proofbound.IntervalMul(proofbound.IntervalMul(x.a, x.b),
-				proofbound.IntervalSub(proofbound.IntervalSquare(x.a), proofbound.IntervalSquare(x.b)))
-		})
-		third := big.NewRat(1, 3)
-		eighth := big.NewRat(1, 8)
-		iA := proofbound.IntervalNeg(bb)
-		iA2 := proofbound.IntervalSub(proofbound.IntervalScale(delta, half), proofbound.IntervalScale(abd, half))
-		iB2 := proofbound.IntervalAdd(proofbound.IntervalScale(delta, half), proofbound.IntervalScale(abd, half))
-		iA3 := proofbound.IntervalAdd(iA, proofbound.IntervalScale(b3, third))
-		iAB2 := proofbound.IntervalNeg(proofbound.IntervalScale(b3, third))
-		threeEighths := proofbound.IntervalScale(delta, big.NewRat(3, 8))
-		iA4 := proofbound.IntervalSub(proofbound.IntervalSub(threeEighths, proofbound.IntervalScale(abd, half)), proofbound.IntervalScale(ab4, eighth))
-		iB4 := proofbound.IntervalSub(proofbound.IntervalAdd(threeEighths, proofbound.IntervalScale(abd, half)), proofbound.IntervalScale(ab4, eighth))
-		iA2B2 := proofbound.IntervalAdd(proofbound.IntervalScale(delta, eighth), proofbound.IntervalScale(ab4, eighth))
-
-		mul := proofbound.IntervalMul
-		add := proofbound.IntervalAdd
-		ih := add(add(mul(a0, delta), mul(a1, iA)), add(mul(a2, iA2), mul(a3, iB2)))
-		ih2 := add(mul(proofbound.IntervalSquare(a0), delta), mul(proofbound.IntervalSquare(a1), iA2))
-		ih2 = add(ih2, add(mul(proofbound.IntervalSquare(a2), iA4), mul(proofbound.IntervalSquare(a3), iB4)))
-		cross := add(add(mul(mul(a0, a1), iA), mul(mul(a0, a2), iA2)), add(mul(mul(a0, a3), iB2), mul(mul(a1, a2), iA3)))
-		cross = add(cross, add(mul(mul(a1, a3), iAB2), mul(mul(a2, a3), iA2B2)))
-		ih2 = add(ih2, proofbound.IntervalScale(cross, two))
-
-		// T = Δ·g + (∫h − Δ·g²)/(2g) − (∫h² − 2g²·∫h + g⁴·Δ)/(8g³)
-		lin := proofbound.IntervalScale(delta, g)
-		first := proofbound.IntervalScale(proofbound.IntervalSub(ih, proofbound.IntervalScale(delta, g2)), new(big.Rat).Quo(half, g))
-		sq := proofbound.IntervalSub(ih2, proofbound.IntervalScale(ih, new(big.Rat).Mul(two, g2)))
-		sq = proofbound.IntervalAdd(sq, proofbound.IntervalScale(delta, new(big.Rat).Mul(g2, g2)))
-		g3 := new(big.Rat).Mul(g2, g)
-		second := proofbound.IntervalScale(sq, new(big.Rat).Quo(eighth, g3))
-		piece := proofbound.IntervalSub(add(lin, first), second)
-
-		// The remainder over the piece.
-		spread := proofbound.IntervalAbsUpper(proofbound.IntervalSub(hMid, Point(g2)))
-		dev := new(big.Rat).Add(spread, drift)
-		hLo := new(big.Rat).Sub(hMid.Lo, drift)
-		if hLo.Sign() <= 0 {
-			return Iv{}, false, nil
-		}
-		root, _ := proofbound.SqrtFixed(hLo)
-		if root.Lo.Sign() <= 0 {
-			return Iv{}, false, nil
-		}
-		den := new(big.Rat).Mul(hLo, hLo)
-		den.Mul(den, root.Lo)
-		den.Mul(den, big.NewRat(16, 1))
-		rem := new(big.Rat).Mul(dev, dev)
-		rem.Mul(rem, dev)
-		rem.Mul(rem, delta.Hi)
-		rem.Quo(rem, den)
-		piece = proofbound.IntervalWiden(piece, rem)
-		sum = add(sum, gridOut(piece))
+	for _, part := range parts {
+		sum = proofbound.IntervalAdd(sum, part)
 	}
 	theta := Theta(turns)
 	return proofbound.IntervalMul(theta, sum), true, nil
