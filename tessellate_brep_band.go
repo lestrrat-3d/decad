@@ -87,7 +87,13 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 		f := bp.faces[b.face]
 		cbp := b.tessView(f, bp.xform)
 		if b.selected != nil {
-			bc, err := chordPartialFilletBand(ctx, b, f, cbp, chord)
+			var bc brepBandChord
+			var err error
+			if b.kind == brepBandFillet {
+				bc, err = chordPartialFilletBand(ctx, b, f, cbp, chord)
+			} else {
+				bc, err = chordPartialChamferBand(ctx, b, f, cbp, chord)
+			}
 			if err != nil {
 				return nil, nil, err
 			}
@@ -275,7 +281,13 @@ func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[s
 	faceOfRole func(string) (*Face, error), bump func(*Face, float64)) error {
 	if bc.partial != nil {
 		first := len(m.triangles)
-		if err := bc.emitPartialFillet(m, faceOfRole, bump); err != nil {
+		var err error
+		if bc.band.kind == brepBandFillet {
+			err = bc.emitPartialFillet(m, faceOfRole, bump)
+		} else {
+			err = bc.emitPartialChamfer(m, faceOfRole, bump)
+		}
+		if err != nil {
 			return err
 		}
 		if bc.band.sigma > 0 {
@@ -367,6 +379,9 @@ func brepBandChordVolume(bands []brepBandChord) float64 {
 		bc := &bands[bi]
 		if bc.fillet != nil {
 			continue
+		}
+		if bc.partial != nil {
+			continue // straight planar cells have no chord-versus-surface volume
 		}
 		loop := bc.lm.proof()
 		loop.ZLo, loop.ZHi = proofbound.MeasuredScalar(0, 0), proofbound.MeasuredScalar(0, 0)

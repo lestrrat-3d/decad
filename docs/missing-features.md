@@ -19,7 +19,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Section below |
 |---|---|
-| Fillet, chamfer and shell take a boolean result only where it reads as a prism, (shell) as a prism cut by through tools with its caps or a run of straight walls removed, or (fillet, chamfer) at straight edges along an axis, or (chamfer) at complete loops of planar faces | Modify operations |
+| Fillet, chamfer and shell take a boolean result only where it reads as a prism, (shell) as a prism cut by through tools with its caps or a run of straight walls removed, or (fillet, chamfer) at straight edges along an axis, or (chamfer) at complete loops or two adjacent straight edges of planar faces | Modify operations |
 | No import of any file format | Data exchange |
 | Booleans outside the exact prism classes fall to a faceted mesh result, and refuse touching contact | Booleans |
 
@@ -59,7 +59,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Shell of a revolve keeping an angular cap, with a holed meridian or one meeting the axis twice, or whose outward wall reaches the axis | `ErrUnsupported` (SX8) (`shell_revolve.go`) | `docs/modify-reach-design.md` §9.3 |
 | Fillet/chamfer of a revolve cap edge or an edge on the axis | `ErrUnsupported` (SX5) (`revolve_blend.go`) | `docs/modify-reach-design.md` §7 |
 | Fillet or chamfer of a prism cap edge outside the convex straight-section cutter admission whose end faces route E cannot restate as planes | `ErrUnsupported` (brep-modify SB7); admitted oblique cap edges build as bounded faceted results | `docs/vertex-blend-design.md` §2 |
-| Chamfer of two or more edges on part of a cap loop, or cap and lateral edges together | `ErrUnsupported` (SX4) | `docs/modify-reach-design.md` Table SX |
+| Chamfer of a prism's partial cap loop or a brep/stacked cap chain other than two adjacent straight outer edges, or cap and lateral edges together | `ErrUnsupported` (SX4, SL1) | `docs/modify-reach-design.md` Table SX, `docs/modify-general-design.md` §4.3a |
 | Cap-loop chamfer at a corner where a circular wall meets a neighbour tangentially but runs back against it (a tangent cusp), or turns past the G1 tolerance too slightly to enclose | `ErrUnsupported` (SX14) (`capblend.go`) | `docs/modify-reach-design.md` Table SX |
 | Asymmetric brep or stacked chamfer selection outside routes E/L | `ErrUnsupported` (SX16); E takes straight edges, L takes full planar loops | `docs/modify-reach-design.md` §6, `docs/modify-general-design.md` §4 |
 | Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`tangent_chain.go`) | `docs/modify-reach-design.md` §5 |

@@ -40,8 +40,10 @@ The rules for rows live in `docs/layout.md`.
 | `brep_modify_edge.go` | Route E: Table EB, restatement, blends, trims and closure. See brep-modify §5. |
 | `brep_modify_loop.go` / `brep_loop_band.go` | Route L: record rewrite, bands and mass. See modify-general §4. |
 | `brep_modify_chain.go` | Route L: selected cap-edge chains and partial-loop record adapters over `internal/offset2d/` and `internal/capband/`. |
+| `brep_modify_partial_chamfer.go` | Rewrites two adjacent straight edges on part of a brep cap loop, including terminal lines. See modify-general §4.3a. |
 | `brep_loop_fillet.go` | Route L's fillet topology and mass adapters over `internal/filletband/`. See loop-fillet. |
 | `brep_loop_partial_fillet.go` | Closes partial-loop fillet bands with corner patches and terminal arcs. |
+| `brep_loop_partial_chamfer.go` | Closes two selected chamfer strips and integrates their exact planar mass. See modify-general §4.3a. |
 
 ### Booleans
 

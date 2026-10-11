@@ -78,10 +78,14 @@ func (bc *brepBandChord) partialOpenPolys(topo *brepTopology, canon [][3]float64
 	for i, terminal := range bc.band.terminals {
 		terminals[i] = partialband.Terminal{Face: terminal.face, Loop: terminal.loop, Seg: terminal.seg}
 	}
+	ringV := [][]int{bc.sideV, bc.capV}
+	if bc.fillet != nil {
+		ringV = bc.fillet.ringV
+	}
 	return partialband.OpenPolys(partialband.OpenPolyInput{
 		Layout: bc.partial, Face: bc.band.face, Loop: bc.band.loop,
 		Orig: bc.band.orig.Segments, CapWalk: bc.band.capWalk, Terminals: terminals,
-		RingV: bc.fillet.ringV, Canon: canon, Uses: topo.uses, FaceUses: topo.faceUses,
+		RingV: ringV, Canon: canon, Uses: topo.uses, FaceUses: topo.faceUses,
 		Open: topo.open, Embed: topo.embeds[bc.band.face], SideZ: bc.sideZ,
 	})
 }
@@ -140,6 +144,9 @@ func (bc *brepBandChord) partialMotion(motion, store, round []float64) {
 	}
 	for _, vi := range bc.capV {
 		motion[vi] = math.Max(motion[vi], proofbound.AbsSumUpper(store[vi], bc.face.delta, bc.face.z0Delta))
+	}
+	if bc.fillet == nil {
+		return
 	}
 	for k := 1; k < bc.fillet.n; k++ {
 		for c, vi := range bc.fillet.ringV[k] {
