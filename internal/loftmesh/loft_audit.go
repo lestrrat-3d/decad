@@ -338,6 +338,26 @@ func LoftPlaneSeparated(ta, tb [3]r3.Vec) bool {
 	return meshbool.AllOneSide(sa)
 }
 
+// loftPlaneSeparatedPrepared reuses the audit's exact lifts and normals if
+// the same adaptive float sign as LoftPlaneSeparated needs an exact fallback.
+func loftPlaneSeparatedPrepared(data *LoftAuditData, i, j int) bool {
+	ta, tb := data.Corners[i], data.Corners[j]
+	var sb [3]int
+	for k := range sb {
+		sb[k] = proof.OrientSignPrepared(ta[0], ta[1], ta[2], tb[k],
+			data.Xtris[i][0], data.Xtris[j][k], data.Norms[i])
+	}
+	if meshbool.AllOneSide(sb) {
+		return true
+	}
+	var sa [3]int
+	for k := range sa {
+		sa[k] = proof.OrientSignPrepared(tb[0], tb[1], tb[2], ta[k],
+			data.Xtris[j][0], data.Xtris[i][k], data.Norms[j])
+	}
+	return meshbool.AllOneSide(sa)
+}
+
 // AuditLoftPair classifies one triangle pair against its recorded adjacency
 // (docs/loft-design.md §6) and returns S7 (ErrDegenerate) when the exact
 // contact is not the one that adjacency expects. It is the tests' reference

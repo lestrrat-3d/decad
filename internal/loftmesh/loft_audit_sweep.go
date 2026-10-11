@@ -364,7 +364,7 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 				work.Skips++
 				return nil
 			}
-			if LoftPlaneSeparated(data.Corners[i], data.Corners[j]) {
+			if loftPlaneSeparatedPrepared(data, i, j) {
 				work.Skips++
 				return nil
 			}
@@ -465,7 +465,7 @@ func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]
 				_, shared := tessellation.SharedVertexIndices(tris[i], tris[j])
 				if shortcuts.BroadPhase && shared == 0 {
 					if !meshbool.BoxesOverlap(boxes[i], boxes[j]) ||
-						LoftPlaneSeparated(data.Corners[i], data.Corners[j]) {
+						loftPlaneSeparatedPrepared(data, i, j) {
 						results[k] = pairSkipped
 						continue
 					}
