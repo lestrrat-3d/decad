@@ -214,20 +214,27 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 	}
 	if bp.pocketShell != nil {
 		shell := bp.pocketShell
+		bandChord := chord
+		if shell.round != nil {
+			// The whole-circle torus adds azimuth, meridian, and cell-twist
+			// departures to one patch bound. Give each part of that sum room
+			// inside the caller's chord tolerance.
+			bandChord = chord / 4
+		}
 		b := brepLoopBand{face: shell.floorFace, loop: 0, orig: shell.rounded.Outer,
 			setback: capSetback{dc: shell.t, ds: shell.t}, sigma: 1, kind: brepBandFillet}
-		region := shell.pocket.profile()
+		region := shell.capProfile()
 		f := brepFace{frame: shell.frame, region: &region, z0: shell.lowerZ, z1: shell.lowerZ,
-			outward: true, role: "pocketShellBand"}
+			outward: shell.capOutward(), role: "pocketShellBand"}
 		cbp := b.tessView(f, bp.xform)
-		lm, err := chordCapBlendLoop(ctx, budget, cbp, 0, b.orig, chord, work)
+		lm, err := chordCapBlendLoop(ctx, budget, cbp, 0, b.orig, bandChord, work)
 		if err != nil {
 			return nil, nil, err
 		}
 		sideZ, sideDelta := b.sideLevel(f)
-		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: true,
+		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: b.matSign(f) > 0,
 			sideZ: sideZ, sideDelta: sideDelta, pocketShell: true,
-			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), chord)}}
+			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), bandChord)}}
 		e := topo.embeds[b.face]
 		for i, w := range lm.walks {
 			key, _ := brepgeom.CurveKey(e, w.SegmentWalk, sideZ)

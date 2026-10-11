@@ -151,6 +151,7 @@
 1	0.00	TestContactFloorUsesTrueSectionBBox
 1	0.00	TestContactMemoPromotesDenseWithoutChangingEntries
 1	0.00	TestContactMemoRepeatsTheClassifier
+1	0.11	TestCounterboreShellMeshVolumeProof
 1	0.00	TestConvexityCertificateChargesTheRecordWorkCounter
 1	0.00	TestConvexityCertificateSpendIncreases
 1	0.00	TestCoplanarRelationCancellationIsBounded

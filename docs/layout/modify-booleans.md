@@ -35,6 +35,7 @@ The rules for rows live in `docs/layout.md`.
 | `shell_stacked_boss.go` | Builds and measures the exact two-slab rectangular-boss shell. See modify-general §3.1a. |
 | `shell_round_boss.go` | Builds and measures the exact two-slab circular-boss shell. See modify-general §3.1c. |
 | `shell_blind_pocket.go` | Builds and measures the exact two-slab rectangular blind-pocket shell. See modify-general §3.1b. |
+| `shell_counterbore.go` | Builds and measures the exact two-level coaxial counterbore shell. See modify-general §3.1e. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
 | `brep_shell.go` / `brep_shell_curved.go` | Route S: through-cut shell and one circular tool-wall opening. See modify-general §3. |
 | `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |

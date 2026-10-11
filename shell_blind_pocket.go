@@ -16,17 +16,30 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// pocketShellBand records the rounded transition below one exact rectangular
-// blind pocket. The side ring is the outward-rounded pocket at floorZ; the
-// cap ring is the producer's square at lowerZ. The four circular side walks
-// collapse to four sphere poles on the cap ring.
+// pocketShellBand records the rounded transition below an exact rectangular
+// blind pocket or across a coaxial counterbore shoulder. A blind pocket has
+// an outward-rounded side ring and a square cap ring; its four circular side
+// walks collapse to sphere poles. A counterbore has a quarter-torus side ring
+// and a circular cap ring.
 type pocketShellBand struct {
 	outer, pocket, inner bossRect
+	round                *counterboreShellRound
 	rounded              profileRecord
 	z0, floorZ, topZ     float64
 	lowerZ, t            float64
 	floorFace            int
 	frame                r3.Frame
+}
+
+func (b *pocketShellBand) capProfile() profileRecord {
+	if b.round != nil {
+		return b.round.large.outer
+	}
+	return b.pocket.profile()
+}
+
+func (b *pocketShellBand) capOutward() bool {
+	return b.round == nil || b.round.sign > 0
 }
 
 // shellBlindPocket takes only the exact two-slab rectangular blind Cut whose
@@ -178,7 +191,7 @@ func pocketShellOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopolog
 	for ring, spec := range []struct {
 		loop loopRecord
 		z    float64
-	}{{band.rounded.Outer, band.floorZ}, {band.pocket.profile().Outer, band.lowerZ}} {
+	}{{band.rounded.Outer, band.floorZ}, {band.capProfile().Outer, band.lowerZ}} {
 		view := prismPayload{frame: band.frame, xform: bp.xform, z0: spec.z, z1: spec.z}
 		for _, seg := range spec.loop.Segments {
 			if err := ctx.Err(); err != nil {
@@ -220,9 +233,9 @@ func attachPocketShellBand(ctx context.Context, body *Body, ref producerID,
 	bi := len(bp.loopBands)
 	b := brepLoopBand{face: band.floorFace, loop: 0, orig: band.rounded.Outer,
 		setback: capSetback{dc: band.t, ds: band.t}, sigma: 1, kind: brepBandFillet}
-	capRegion := band.pocket.profile()
+	capRegion := band.capProfile()
 	fake := brepFace{frame: band.frame, region: &capRegion,
-		z0: band.lowerZ, z1: band.lowerZ, outward: true, role: "pocketShellBand"}
+		z0: band.lowerZ, z1: band.lowerZ, outward: band.capOutward(), role: "pocketShellBand"}
 	copyBP := bp
 	copyBP.faces = append([]brepFace(nil), bp.faces...)
 	copyBP.faces[band.floorFace] = fake
@@ -240,6 +253,9 @@ func attachPocketShellBand(ctx context.Context, body *Body, ref producerID,
 // Minkowski expansion of the blind pocket within that cavity.
 func measurePocketShell(ctx context.Context, bp brepPayload, body *Body) error {
 	b := bp.pocketShell
+	if b.round != nil {
+		return measureCounterboreShell(ctx, bp, body)
+	}
 	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
 	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
 	scale := func(a proofbound.RatInterval, n, d int64) proofbound.RatInterval {

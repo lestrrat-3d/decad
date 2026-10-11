@@ -57,7 +57,7 @@ part makes on them. Every cell was read off the live code with the probe under
 | **P4** drilled plate: 60×40×8 with four Ø5 holes in the sketch | prism | chamfer the hole mouths, the top loop, or both | builds (cap loop) |
 | | | fillet the hole mouths, or the top loop | builds (route L fillet arm, RF3) |
 | | | fillet the vertical edges; shell removing the top | builds |
-| **P5** counterbored hole: Ø6 through, Ø10 counterbore 3 deep | stacked (A2) | shell removing the top | SG3 (the annular shoulder is a third planar face across the reference axis) |
+| **P5** counterbored hole: Ø6 through, Ø10 counterbore 3 deep | stacked (A2) | shell removing the counterbore end | builds (§3.1e, for exact coaxial circles in a rectangular plate) |
 | **P6** enclosure: 60×40×30 box, 20×10 port through both x walls | brep (class B) | chamfer the port mouth's 4 edges | builds (route P cap loop) |
 | | | fillet the 4 vertical edges | builds (route E) |
 | | | shell removing both x walls | builds (route P tube) |
@@ -82,7 +82,7 @@ Ranked by the parts each refusal blocks:
 
 | Rank | Refusal | Blocks | What the body needs |
 |---|---|---|---|
-| 1 | SB10 / SB3: shell of a nonprism brep or a noncap face | P1, P2, P3, P5, P6, P6c, P7, P8 | receiver erosion: planes and cylinders for a through cut (§3); spheres, tori or elliptical edges for a blind pocket or union |
+| 1 | SB10 / SB3: shell of a nonprism brep or a noncap face | P2/P3 from their opposite cap, P6c | receiver erosion with the missing rounded transitions and an occupied-volume proof |
 | 2 | SL1: edges sharing a vertex outside complete loops | other mixed-edge parts | route V builds complete loops with independent edges; §4.3b builds P1's all-edge chamfer; a partial fillet builds edges on one planar loop after straight-wall restatement (`docs/vertex-blend-design.md`) |
 | 3 | a loop fillet: the curved-edge and cornered-loop fillets this survey found refused | P1, P2, P3, P4, P7 | `docs/loop-fillet-design.md`'s pipe band, which builds them |
 | 4 | SB7: an edge ending on a curved face or a blend | P8 outside §4.3c | the complete-loop fillet builds P8's top loop; §4.3c builds its one exact front top edge |
@@ -272,6 +272,48 @@ radius `r`, and thickness `t`, the shell volume is
 `2t(A−πr²) + (h−2t)(A−A')`. For the 40×20×20 reference bar with a
 radius-3 hole and `t=1`, this is `3688−18π` mm³.
 
+### 3.1e Exact coaxial counterbore shell
+
+Before the through-cut reader, `shellCounterbore` accepts two stacked Cut
+slabs with one common axis-aligned rectangular outer loop and one whole-circle
+hole in each slab. The circles must have exactly the same recorded center.
+The larger circle must lie at the sole removed cap, on either end of the
+plate; the two Cut orders give the same reading. The source sections, levels,
+circle radii and thickness must have zero displacement. The far slab must be
+taller than `2t`, the shoulder width must exceed `t`, and the larger circle
+expanded by `t` must lie strictly inside the outer rectangle inset by `t`.
+All offset levels, radii, rectangle coordinates and circle extents must be
+exactly represented. Other counterbores keep SG3.
+
+The result keeps the source faces except the opening cap. Its cavity has an
+inset rectangular floor with a hole of radius `r_s+t` at the kept end, an
+inset outer wall to the opening, and a lining of radius `r_s+t` along the
+smaller bore. At distance `t` before the shoulder, an annular underside runs
+from `r_s+t` to the source larger radius `r_l`. One whole-turn quarter torus
+joins that ring to the radius-`r_l+t` lining at the shoulder. The opening has
+two annular rims, one along the outside rectangle and one around the larger
+bore. The torus uses the blind-pocket shell's band reader with one whole
+circle; its two rings share mesh vertices with the underside and lining.
+
+Let `h_f` be the far slab height, `h_n` the opening-side slab height, and
+`H=h_f+h_n`. Let `A` and `A'` be the outer and inset rectangle areas. The
+source volume is `AH−π(r_s²h_f+r_l²h_n)`. The outer cavity has volume
+`A'(H−t)`. The bore obstacle left within that cavity has volume
+
+```text
+π[(r_s+t)²(h_f−2t) + (r_l+t)²h_n
+  + r_l²t + r_lπt²/2 + 2t³/3].
+```
+
+The shell volume is source minus outer cavity plus that obstacle. In the
+coordinate from the kept end toward the opening, the transition's first
+moment is `h_f V_transition − π(r_l²t²/2 + 2r_lt³/3 + t⁴/4)`.
+Rational intervals enclose both powers of `π`, the volume and all centroid
+coordinates. `Tessellate(VerifyAll)` uses the whole-circle fillet-band proof;
+the band chords at one quarter of the requested tolerance so its azimuth,
+meridian and cell-twist departures fit the requested bound. The result has
+the same later-modify, class-B and clearance restrictions as §3.1b.
+
 ### 3.2 Removed faces and the sense
 
 The removed faces are read against the recognised record:
@@ -426,7 +468,7 @@ Modify §1's test picks every sentinel.
 |---|---|---|---|
 | **SG1** | `WithShellSense(Outward)` on a brep or stacked receiver | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
 | **SG2** | `WithNoOpenings` on a brep or stacked receiver | yes; a brep record holds no void shell | `ErrUnsupported` (replaces SX16's text for this call) |
-| **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a–§3.1c: a blind port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion may hold surfaces beyond the admitted cases | `ErrUnsupported`, naming the first face Table TC does not take |
+| **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a–§3.1e: a blind port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion may hold surfaces beyond the admitted cases | `ErrUnsupported`, naming the first face Table TC does not take |
 | **SG4** | a removed face that is a tool wall outside §3.1d, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
 | **SG5** | a removed face that names no face of the record; a removed wall that is no straight wall along a section axis (a fillet cylinder: its rim is no planar face); a wall run whose end cuts backward along the removed carrier (a reflex corner: the rim lies inside the material). A set of walls that is no proper connected run is shell-opening SO6 | yes | `ErrUnsupported` |
 | **SG6** | a tool's dilation reaches material beyond its pierced wall (TC7), or a private class-B cut does not build a brep: two dilated tools within `2t`, a dilated tool reaching a cap of `A'`, an eroded miter off its axis, a dilated tool recorded within twice the cavity's charge of a cavity face, or a cut that takes the crossing reach while that charge is positive (§3.3 step 4) | yes | `ErrUnsupported`, naming the tool |
@@ -696,6 +738,7 @@ one planar-face loop, including a swept wall restated as a plane, takes the part
 | **BG3** | rectangular-boss shell (§3.1a) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus four cylinder patches and four ellipse seams | `face(k)` / `wall(k)`; the patches carry `filletLoop` roles |
 | **BG4** | circular-boss shell (§3.1c) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus one whole-turn torus patch | `face(k)` / `wall(k)`; the patch carries a `filletLoop` role |
 | **BG5** | box all-edge chamfer (§4.3b) | `allEdgeChamferPayload` | six inset box planes, twelve bevel planes, one bore cylinder | `face(k)` / `chamfer(axis,side,side)` / `wall(6)` |
+| **BG6** | coaxial counterbore shell (§3.1e) | `brepPayload` with `pocketShell`, `stack` nil | retained source faces, two cavity linings and floors, two opening rims, one whole-turn torus patch | `face(k)` / `wall(k)`; the patch carries a `filletLoop` role |
 
 A BG1 result is an ordinary brep: general-boolean §4.5 reads it unchanged.
 A BG2 result is a brep whose body carries extra faces, and each consumer
@@ -717,6 +760,7 @@ below reads the bands where the plain brep reader would miss them:
 | **DG12** | `Placed`, `Mirrored`, `PatternCopies` | re-lifts every face frame | the same; `loopBands` are re-attached by the re-evaluation, as `capBlendPayload.placed` re-derives its bands |
 
 BG3's and BG4's consumer rules are stated in §3.1a and §3.1c.
+BG6 reads §3.1b's downstream gates and §3.1e's proof.
 BG5's measurement, tessellation, and placement rules are stated in §4.3b.
 Other record-based consumers keep their existing payload gates.
 
@@ -726,10 +770,10 @@ Other record-based consumers keep their existing payload gates.
 |---|---|---|
 | chamfers of edges sharing a vertex outside one loop, or fillets whose selected edges share no planar loop after straight-wall restatement | SB5 / SL1 | the mixed chamfer's corner plane has no reference-axis normal; route V and the partial fillet admit the cases in `docs/vertex-blend-design.md` |
 | an edge ending on a blend or a curved face outside P8's exact front top edge (§4.3c) | SB7 | the complete-loop fillet builds P8's top loop (`docs/loop-fillet-design.md`); other partial edges need a source and cutter-contact proof |
-| shell of a blind pocket outside §3.1b, a blind port, a stacked union outside §3.1a or §3.1c, or a keyway (P2, P3, P6c) | SG3 | the remaining cases need a shape-specific exact transition and occupied-volume proof |
+| shell of a blind pocket outside §3.1b, a counterbore outside §3.1e, a blind port, a stacked union outside §3.1a or §3.1c, or a keyway (P2, P3, P6c) | SG3 | the remaining cases need a shape-specific exact transition and occupied-volume proof |
 | an outward or closed shell of a brep | SG1 / SG2 | §3.2 |
 | shell removing a curved outer wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved outer wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |
-| any op on a faceted result (P5, P6b, P9) | reach SX9 | permanent (reach §11); the boolean is the owner |
+| any op on a faceted result (P6b, P9) | reach SX9 | permanent (reach §11); the boolean is the owner |
 
 ## 7. Decided questions
 
