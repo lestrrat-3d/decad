@@ -619,8 +619,15 @@ The mesh uses the analytic polygon vertices directly and one set of chord
 stations on both bore rims and the cylinder. `VerifyAll` audits the closed,
 positive, crossing-free mesh and bounds occupied-volume difference by the
 circle chord slivers times bore length plus the station-position allowance.
-Nonidentity `Placed` and `PlacedCopy` refuse for this payload; placement
-replay is outside this construction's coordinate proof.
+`Placed` and `PlacedCopy` re-evaluate the same record under a signed-axis
+isometry when the transformed bore still runs along y. The placed box
+endpoints and bore center must equal their rational images under the
+transform's exact signed basis and recorded translation; §4.3b's corner
+gate then runs on the placed record. Each face keeps its source role under
+the axis and side mapping. The analytic readings are recomputed from the
+placed coordinates, and tessellation uses those same coordinates. A rounded
+coordinate or an oblique transform returns `ErrUnsupported` without changing
+the document.
 
 ### 4.4 Table SL — refusals
 

@@ -90,7 +90,91 @@ func TestBrepChamferAllStraightOuterEdgesSetbackAdmission(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
-func TestBrepChamferAllStraightOuterEdgesPlacementRefuses(t *testing.T) {
+func TestBrepChamferAllStraightOuterEdgesPlacement(t *testing.T) {
+	quarterTurn, err := r3.FromBasis(r3.Basis{
+		EX: r3.NewVec(0, 0, 1), EY: r3.NewVec(0, 1, 0), EZ: r3.NewVec(-1, 0, 0),
+	}, r3.NewVec(20, 0, 0))
+	require.NoError(t, err)
+	reflection, err := r3.FromBasis(r3.Basis{
+		EX: r3.NewVec(-1, 0, 0), EY: r3.NewVec(0, 1, 0), EZ: r3.NewVec(0, 0, 1),
+	}, r3.NewVec(40, 0, 0))
+	require.NoError(t, err)
+	boreReverse, err := r3.FromBasis(r3.Basis{
+		EX: r3.NewVec(1, 0, 0), EY: r3.NewVec(0, -1, 0), EZ: r3.NewVec(0, 0, 1),
+	}, r3.NewVec(0, 20, 0))
+	require.NoError(t, err)
+	move, err := r3.Translation(r3.NewVec(5, 0, 0))
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name     string
+		pose     r3.Transform
+		min, max r3.Vec
+		center   r3.Vec
+		first    string
+	}{
+		{"translation", move, r3.NewVec(5, 0, 0), r3.NewVec(45, 20, 20), r3.NewVec(25, 10, 10), "face(0)"},
+		{"quarter turn", quarterTurn, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 40), r3.NewVec(10, 10, 20), "face(5)"},
+		{"reflection", reflection, r3.NewVec(0, 0, 0), r3.NewVec(40, 20, 20), r3.NewVec(20, 10, 10), "face(1)"},
+		{"bore reverse", boreReverse, r3.NewVec(0, 0, 0), r3.NewVec(40, 20, 20), r3.NewVec(20, 10, 10), "face(0)"},
+	} {
+		for _, copyBody := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/copy=%t", tc.name, copyBody), func(t *testing.T) {
+				t.Parallel()
+				_, bar := crossDrilledBar(t)
+				selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
+					Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
+					Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
+				got, err := bar.Chamfer(t.Context(), selected, units.Millimeters(1))
+				require.NoError(t, err)
+				originalRoles := map[string]bool{}
+				for _, face := range got.Faces() {
+					originalRoles[face.Origins()[0].Role] = true
+				}
+				if copyBody {
+					got, err = got.PlacedCopy(t.Context(), tc.pose)
+				} else {
+					got, err = got.Placed(t.Context(), tc.pose)
+				}
+				require.NoError(t, err)
+				requireEveryEdgeOnTwoFaces(t, got)
+				require.Len(t, got.Faces(), 19)
+				require.Equal(t, tc.first, got.Faces()[0].Origins()[0].Role)
+				placedRoles := map[string]bool{}
+				for _, face := range got.Faces() {
+					placedRoles[face.Origins()[0].Role] = true
+				}
+				require.Equal(t, originalRoles, placedRoles)
+				bounds, err := got.Bounds()
+				require.NoError(t, err)
+				require.Equal(t, tc.min, bounds.Min)
+				require.Equal(t, tc.max, bounds.Max)
+				volume, err := got.Volume()
+				require.NoError(t, err)
+				requireAnalyticPiSqrt2Interval(t, volume.Value.Base(), volume.Bound.Base(), 15846, -180, 0)
+				area, err := got.Area()
+				require.NoError(t, err)
+				requireAnalyticPiSqrt2Interval(t, area.Value.Base(), area.Bound.Base(), 3384, 102, 302)
+				centroid, err := got.Centroid()
+				require.NoError(t, err)
+				require.Equal(t, tc.center, centroid.Value)
+				mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1),
+					decad.WithVerification(decad.VerifyAll))
+				require.NoError(t, err)
+				require.True(t, mesh.BoundaryVerified())
+				require.True(t, mesh.VolumeVerified())
+				used := map[*decad.Face]bool{}
+				for _, face := range mesh.SourceFaces() {
+					used[face] = true
+				}
+				for _, face := range got.Faces() {
+					require.True(t, used[face])
+				}
+			})
+		}
+	}
+}
+
+func TestBrepChamferAllStraightOuterEdgesPlacementComposition(t *testing.T) {
 	t.Parallel()
 	_, bar := crossDrilledBar(t)
 	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
@@ -100,10 +184,46 @@ func TestBrepChamferAllStraightOuterEdgesPlacementRefuses(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(5, 0, 0))
 	require.NoError(t, err)
-	_, err = got.PlacedCopy(t.Context(), move)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = got.Placed(t.Context(), move)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	first, err := got.PlacedCopy(t.Context(), move)
+	require.NoError(t, err)
+	second, err := first.PlacedCopy(t.Context(), move)
+	require.NoError(t, err)
+	centroid, err := second.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, r3.NewVec(30, 10, 10), centroid.Value)
+	mesh, err := second.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
+func TestBrepChamferAllStraightOuterEdgesPlacementRefusal(t *testing.T) {
+	t.Parallel()
+	oblique, err := r3.RotationAround(r3.Vec{}, r3.NewVec(0, 0, 1), units.Degrees(37))
+	require.NoError(t, err)
+	rounded, err := r3.Translation(r3.NewVec(0.1, 0, 0))
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name string
+		pose r3.Transform
+	}{{"oblique", oblique}, {"rounded coordinate", rounded}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, bar := crossDrilledBar(t)
+			selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
+				Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
+				Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
+			got, err := bar.Chamfer(t.Context(), selected, units.Millimeters(1))
+			require.NoError(t, err)
+			_, err = got.PlacedCopy(t.Context(), tc.pose)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			_, err = got.Placed(t.Context(), tc.pose)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			_, err = got.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+		})
+	}
 }
 
 // TestBrepPartialChamferCrossDrilledBar cuts a through bore in a Sketch-built

@@ -27,6 +27,11 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	geometry, _, err := p.placedGeometry()
+	if err != nil {
+		return nil, err
+	}
+	p = geometry
 	faces := body.Faces()
 	if len(faces) != 19 {
 		return nil, fmt.Errorf(`%w: the all-edge chamfer has no 18 planes and one bore`, ErrUnsupported)

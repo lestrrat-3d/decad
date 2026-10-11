@@ -347,7 +347,9 @@
 3	6.51	TestBooleanCutWasherThroughDiscKeepsStandingPost
 3	1.53	TestBooleanRefusalConcaveHoleSpuriousContact
 3	0.10	TestBrepChamferAllStraightOuterEdges
-3	0.03	TestBrepChamferAllStraightOuterEdgesPlacementRefuses
+3	0.03	TestBrepChamferAllStraightOuterEdgesPlacement
+3	0.03	TestBrepChamferAllStraightOuterEdgesPlacementComposition
+3	0.03	TestBrepChamferAllStraightOuterEdgesPlacementRefusal
 3	0.04	TestBrepChamferAllStraightOuterEdgesSetbackAdmission
 3	0.02	TestBrepPartialChamferBlindPocket
 3	0.02	TestBrepPartialChamferCrossDrilledBar
