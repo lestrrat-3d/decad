@@ -5,6 +5,7 @@ import (
 	"errors"
 	"runtime"
 	"sync"
+	"sync/atomic"
 )
 
 var ErrContactBatchStop = errors.New("decad: contact batch stopped")
@@ -217,42 +218,29 @@ func RunContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 	if workers <= 1 {
 		return runContactBatchSerial(ctx, ma, mb, pairs, results)
 	}
-	type job struct {
-		slot int
-		pair ContactPair
-	}
-	jobs := make(chan job, workers)
+	// Claim eight slots per atomic operation; workers still check cancellation
+	// before classifying each pair and write results in their original slots.
+	const chunkSize = 8
+	var next atomic.Int64
 	var wg sync.WaitGroup
 	wg.Add(workers)
 	for range workers {
 		go func() {
 			defer wg.Done()
 			for {
-				select {
-				case <-ctx.Done():
+				start := int(next.Add(chunkSize)) - chunkSize
+				if start >= len(pairs) {
 					return
-				case next, ok := <-jobs:
-					if !ok {
-						return
-					}
+				}
+				for slot := start; slot < min(start+chunkSize, len(pairs)); slot++ {
 					if err := ctx.Err(); err != nil {
 						return
 					}
-					results[next.slot] = classifyContactPair(ma, mb, next.pair)
+					results[slot] = classifyContactPair(ma, mb, pairs[slot])
 				}
 			}
 		}()
 	}
-	for slot, pair := range pairs {
-		select {
-		case <-ctx.Done():
-			close(jobs)
-			wg.Wait()
-			return ctx.Err()
-		case jobs <- job{slot: slot, pair: pair}:
-		}
-	}
-	close(jobs)
 	wg.Wait()
 	if err := ctx.Err(); err != nil {
 		return err
