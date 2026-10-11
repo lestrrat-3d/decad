@@ -185,7 +185,7 @@ func loftCylinderRingWallClear(ctx context.Context, a, b loftCylinderRingVec,
 // sector and exact connector slices; all other exposed walls use the Loft's
 // two-sided, parameter-matched wall displacement. A bore is excluded by its
 // exact radius. The caller separately proves its cutter band's full surface,
-// both cap planes, and any top collar.
+// both cap planes, and either root collar.
 func loftCylinderSourceRingInside(ctx context.Context, fp facetedPayload,
 	edges [][2]proofarith.Xpt) (loftCylinderRingOccupancy, error) {
 	if !fp.contactAudited || fp.xform != r3.Identity() {
@@ -233,7 +233,7 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, teeth []*Body,
 			tooth.circle.z1.Cmp(proofarith.FloatRat(z1)) != 0 {
 			return refuse("ring tooth has different blank cap levels")
 		}
-		if level.Cmp(tooth.circle.z0) <= 0 || level.Cmp(tooth.circle.safeTop) >= 0 {
+		if level.Cmp(tooth.circle.safeBottom) <= 0 || level.Cmp(tooth.circle.safeTop) >= 0 {
 			return refuse("ring meets a source cap or root collar")
 		}
 		toothRecords[i] = tooth

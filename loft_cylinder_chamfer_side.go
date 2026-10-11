@@ -240,7 +240,7 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 			zHi = z
 		}
 	}
-	if zLo.Cmp(circle.z0) <= 0 || zHi.Cmp(circle.safeTop) >= 0 ||
+	if zLo.Cmp(circle.safeBottom) <= 0 || zHi.Cmp(circle.safeTop) >= 0 ||
 		!loftCylinderChamferMiddleHeldRootInside(lp, face.root, zLo, zHi, blankRadius) {
 		return fmt.Errorf("%w: inward patch has no hidden root-wall interval", ErrUnsupported)
 	}

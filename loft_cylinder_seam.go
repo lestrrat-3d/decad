@@ -89,20 +89,21 @@ func loftCylinderHeldRootCollar(near [2]r3.Vec, radius, height float64) (float64
 	a, b := loftCylinderExactXY(near[0]), loftCylinderExactXY(near[1])
 	r := proofarith.FloatRat(radius)
 	r2 := new(big.Rat).Mul(r, r)
-	if q(a).Cmp(r2) > 0 {
-		return 0, false
-	}
-	if q(b).Cmp(r2) <= 0 {
+	if q(a).Cmp(r2) <= 0 && q(b).Cmp(r2) <= 0 {
 		return 0, true
 	}
 	for shift := 52; shift >= 8; shift-- {
 		epsilon := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), uint(shift)))
 		oneMinus := new(big.Rat).Sub(big.NewRat(1, 1), epsilon)
-		point := loftCylinderXY{
+		bottom := loftCylinderXY{
+			x: new(big.Rat).Add(new(big.Rat).Mul(oneMinus, a.x), new(big.Rat).Mul(epsilon, b.x)),
+			y: new(big.Rat).Add(new(big.Rat).Mul(oneMinus, a.y), new(big.Rat).Mul(epsilon, b.y)),
+		}
+		top := loftCylinderXY{
 			x: new(big.Rat).Add(new(big.Rat).Mul(epsilon, a.x), new(big.Rat).Mul(oneMinus, b.x)),
 			y: new(big.Rat).Add(new(big.Rat).Mul(epsilon, a.y), new(big.Rat).Mul(oneMinus, b.y)),
 		}
-		if q(point).Cmp(r2) < 0 {
+		if q(bottom).Cmp(r2) < 0 && q(top).Cmp(r2) < 0 {
 			collar := proofbound.ProductUpper(proofbound.RatFloatUp(epsilon), height)
 			return collar, !proofbound.IsNonFinite(collar)
 		}

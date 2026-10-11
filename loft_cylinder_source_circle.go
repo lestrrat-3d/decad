@@ -10,14 +10,14 @@ import (
 )
 
 // loftCylinderSourceCircle certifies where one authenticated Loft tooth meets
-// the exact blank circle in the open axial interval (z0, safeTop). Source
-// caps, a possible top root collar, and the rest of the tooth's interior are
+// the exact blank circle in the open axial interval (safeBottom, safeTop). Source
+// caps, possible root collars, and the rest of the tooth's interior are
 // outside this record's claim.
 type loftCylinderSourceCircle struct {
-	z0, z1, safeTop *big.Rat
-	radius          *big.Rat
-	gapAxis         loftCylinderXY
-	connector       [2]loftCylinderSourceConnector
+	z0, z1, safeBottom, safeTop *big.Rat
+	radius                      *big.Rat
+	gapAxis                     loftCylinderXY
+	connector                   [2]loftCylinderSourceConnector
 }
 
 type loftCylinderSourceConnector struct {
@@ -86,8 +86,9 @@ func loftCylinderSourceCircleOf(lp loftPayload, radius float64) (loftCylinderSou
 	record := loftCylinderSourceCircle{
 		z0: proofarith.FloatRat(z0), z1: proofarith.FloatRat(z1), radius: proofarith.FloatRat(radius),
 	}
+	record.safeBottom = new(big.Rat).Add(record.z0, proofarith.FloatRat(collar))
 	record.safeTop = new(big.Rat).Sub(record.z1, proofarith.FloatRat(collar))
-	if record.safeTop.Cmp(record.z0) <= 0 {
+	if record.safeTop.Cmp(record.safeBottom) <= 0 {
 		return refuse("source root collar covers the axial interval")
 	}
 	for i, cell := range [2]int{0, root - 1} {
@@ -117,7 +118,7 @@ func loftCylinderSourcePoint(lp loftPayload, p Point2) loftCylinderXY {
 	}
 }
 
-// The existing root collar is zero when both cap radii are at most R. In
+// The root collar is zero when both cap radii are at most R. In
 // that arm, convexity makes every interior ruling strict if one cap radius
 // is strict. If both equal R, a certified nonzero angle change makes every
 // interior ruling strict. Neither argument asserts strictness on a cap.
@@ -419,10 +420,10 @@ func loftCylinderSourceDotLower(axis loftCylinderXY, box loftCylinderSourceXYBox
 // order and lies in the source tooth's positive gap-witness half-plane. A
 // wide interval can refuse; the caller may subdivide it with a fixed budget.
 // Cap planes are included only as limiting crossing positions. The occupancy
-// claim applies to open heights z0 < z < safeTop.
+// claim applies to open heights safeBottom < z < safeTop.
 func (r loftCylinderSourceCircle) CrossingBox(zLo, zHi *big.Rat) ([2]loftCylinderSourceXYBox, error) {
 	var boxes [2]loftCylinderSourceXYBox
-	if zLo == nil || zHi == nil || zLo.Cmp(r.z0) < 0 || zHi.Cmp(r.safeTop) > 0 ||
+	if zLo == nil || zHi == nil || zLo.Cmp(r.safeBottom) < 0 || zHi.Cmp(r.safeTop) > 0 ||
 		zLo.Cmp(zHi) > 0 {
 		return boxes, fmt.Errorf("%w: source circle query leaves its strict root interval", ErrUnsupported)
 	}
@@ -444,12 +445,33 @@ func (r loftCylinderSourceCircle) CrossingBox(zLo, zHi *big.Rat) ([2]loftCylinde
 	return boxes, nil
 }
 
+// OrderedOverSafeInterval proves the same source crossing order throughout
+// the open root-safe height. Each closed rational slab retains one positive
+// order and the slabs cover the interval without a gap.
+func (r loftCylinderSourceCircle) OrderedOverSafeInterval() bool {
+	const slabs = 256
+	span := new(big.Rat).Sub(r.safeTop, r.safeBottom)
+	if span.Sign() <= 0 {
+		return false
+	}
+	for i := range slabs {
+		lo := new(big.Rat).Add(r.safeBottom,
+			new(big.Rat).Quo(new(big.Rat).Mul(span, big.NewRat(int64(i), 1)), big.NewRat(slabs, 1)))
+		hi := new(big.Rat).Add(r.safeBottom,
+			new(big.Rat).Quo(new(big.Rat).Mul(span, big.NewRat(int64(i+1), 1)), big.NewRat(slabs, 1)))
+		if _, err := r.CrossingBox(lo, hi); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
 // ContainsTriangleSector proves that every projected point of an exact
 // triangle lies strictly between both source connector/circle crossings at
 // every height in [zLo,zHi]. The entire triangle must lie in that axial
 // interval. The result concerns angle only: it does not prove radial tooth
 // occupancy or clearance from another source wall. Endpoints on z0 or
-// safeTop are limiting coordinates; cap planes and the top collar are outside
+// safeBottom and safeTop are limiting coordinates; cap planes and both collars are outside
 // the occupancy claim.
 func (r loftCylinderSourceCircle) ContainsTriangleSector(zLo, zHi *big.Rat,
 	tri [3]proofarith.Xpt) bool {
