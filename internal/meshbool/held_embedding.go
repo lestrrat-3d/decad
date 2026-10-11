@@ -491,7 +491,8 @@ func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 	if len(sharedI) == 1 && !BoxesOverlap(e.coneBox(i, sharedI[0]), e.coneBox(j, sharedJ[0])) {
 		return true
 	}
-	if ok, decided := e.pairSeparated(i, j, sharedI, sharedJ); decided {
+	ok, decided, signs := e.pairSeparated(i, j, sharedI, sharedJ)
+	if decided {
 		return ok
 	}
 	fa, xa, na := e.facet(i)
@@ -499,7 +500,8 @@ func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 	if zeroXpt(na) || zeroXpt(nb) {
 		return false
 	}
-	c, err := TriTriClassifyPrepared(fa, fb, xa, xb, na, nb, e.fnorm[i], e.fnorm[j])
+	c, err := TriTriClassifyCore(fa, fb, xa, xb, na, nb, nil, nil,
+		&signs.a, &signs.b, true, e.fnorm[i], e.fnorm[j], true)
 	if err != nil {
 		return false
 	}
@@ -595,15 +597,30 @@ func (e *heldEmbedding) coneBox(i, k int) [2]r3.Vec {
 //     corner of the other strictly outside separates them.
 //
 // Anything else is left undecided, for the classifier.
-func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, bool) {
+// pairSideSigns stores each triangle's exact side against the other plane.
+// The same signs feed the full contact classifier when separation is undecided.
+type pairSideSigns struct{ a, b [3]int }
+
+func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, bool, pairSideSigns) {
 	ti, tj := e.h.Tris[i], e.h.Tris[j]
 	otherI, otherJ := unshared(ti, sharedI), unshared(tj, sharedJ)
-	// strictSide reports whether pts lie strictly on one side of facet f's
-	// plane.
-	strictSide := func(f int, pts []int) bool {
+	// A side is -1, 0 or 1. Two marks a reading not needed yet.
+	signs := pairSideSigns{a: [3]int{2, 2, 2}, b: [3]int{2, 2, 2}}
+	for k, a := range sharedI {
+		signs.a[a], signs.b[sharedJ[k]] = 0, 0
+	}
+	// strictSide reports whether the unshared corners lie strictly on one
+	// side of facet f's plane, retaining every sign it reads.
+	strictSide := func(f int, tri [3]int, shared []int, values *[3]int) bool {
 		s0 := 0
-		for _, p := range pts {
-			s := e.planeSign(f, p)
+		for k, p := range tri {
+			if slices.Contains(shared, k) {
+				continue
+			}
+			if values[k] == 2 {
+				values[k] = e.planeSign(f, p)
+			}
+			s := values[k]
 			if s == 0 || (s0 != 0 && s != s0) {
 				return false
 			}
@@ -613,35 +630,47 @@ func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, b
 	}
 	pi, pj := e.planeOf(i), e.planeOf(j)
 	if pi == -2 || pj == -2 {
-		return false, true
+		return false, true, pairSideSigns{}
 	}
 	coplanar := pi == pj
 	if len(sharedI) == 2 {
 		a, b := ti[sharedI[0]], ti[sharedI[1]]
 		if !coplanar {
-			return true, true
+			return true, true, pairSideSigns{}
 		}
 		u, v, _ := e.planeAxes(i)
-		return e.orient2(a, b, otherI[0], u, v)*e.orient2(a, b, otherJ[0], u, v) < 0, true
+		return e.orient2(a, b, otherI[0], u, v)*e.orient2(a, b, otherJ[0], u, v) < 0,
+			true, pairSideSigns{}
 	}
 	if !coplanar {
-		if strictSide(i, otherJ) || strictSide(j, otherI) {
-			return true, true
+		if strictSide(i, tj, sharedJ, &signs.b) || strictSide(j, ti, sharedI, &signs.a) {
+			return true, true, pairSideSigns{}
 		}
-		return false, false
+		for k, p := range ti {
+			if signs.a[k] == 2 {
+				signs.a[k] = e.planeSign(j, p)
+			}
+		}
+		for k, p := range tj {
+			if signs.b[k] == 2 {
+				signs.b[k] = e.planeSign(i, p)
+			}
+		}
+		return false, false, signs
 	}
 	u, v, ok := e.planeAxes(i)
 	if !ok {
-		return false, true
+		return false, true, pairSideSigns{}
 	}
 	var shared []int
 	for _, k := range sharedI {
 		shared = append(shared, ti[k])
 	}
 	if e.edgeSeparates(ti, otherJ, shared, u, v) || e.edgeSeparates(tj, otherI, shared, u, v) {
-		return true, true
+		return true, true, pairSideSigns{}
 	}
-	return false, false
+	// Equal exact planes put every corner on both planes.
+	return false, false, pairSideSigns{}
 }
 
 // unshared lists the corners of t whose positions are not in shared.
