@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -33,8 +34,8 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	}
 	sections := make([]*decad.Face, 0, 9)
 	sections = append(sections, pointSlabCap(t, kept[7], decad.CapStart(kept[7])))
-	for i := len(kept) - 1; i >= 0; i-- {
-		sections = append(sections, pointSlabCap(t, kept[i], decad.CapEnd(kept[i])))
+	for _, slab := range slices.Backward(kept) {
+		sections = append(sections, pointSlabCap(t, slab, decad.CapEnd(slab)))
 	}
 	before := doc.Bodies()
 	_, err := doc.LoftFaces(t.Context(), sections[:8]...)

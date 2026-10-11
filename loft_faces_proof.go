@@ -381,7 +381,7 @@ func lfBandGate(ctx context.Context, first, second loftFaceMap,
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	var worst *big.Rat = lfZero()
+	worst := lfZero()
 	// A tile's positive-denominator linear-fractional extrema occur at its
 	// corners. Sixteen subdivisions limit cancellation loss in the two cap
 	// terms of the band velocity while retaining one global injectivity M.
