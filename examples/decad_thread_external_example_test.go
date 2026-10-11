@@ -45,19 +45,17 @@ func clippedGrooveMoment(root, mouth, r float64) float64 {
 }
 
 // An external thread is a Cut whose tool is a coil. The groove is a 60° V of
-// depth 0.9 below the R = 5 surface, opening 0.3 mm past it, coiled 8 turns
+// depth 0.9 below the R = 5 surface, opening 0.3 mm past it, coiled one turn
 // at a 1.5 mm pitch about the cylinder's own axis, starting 3 mm up so both
 // of the coil's caps sit inside the 20 mm cylinder. The coil's held mesh is
 // only proven within its δ, near 9e-4 mm, so the boolean meshes the pair at
 // that tolerance rather than the finer one the pair's size alone would ask.
 //
 // The cylinder's interior is invariant under the screw motion, so the cut
-// removes the screw sweep of the groove's part inside R: Θ·Q with Θ = 16π
+// removes the screw sweep of the groove's part inside R: Θ·Q with Θ = 2π
 // and Q its moment ∫ρ dA. The published volume interval encloses that closed
-// form. The volume reading sits inside Verify's default tolerance, while
-// the area and centroid bounds, each composed from the rims' trim
-// amplification over their long helical length, do not, so the report reads
-// Suspect with the solid proven valid.
+// form. The readings fit within Verify's default tolerances, so it reports
+// Sound with the solid proven valid.
 func Example_decad_thread_external() {
 	w := sketch.NewWorld()
 	cs, err := w.CreateSketch(w.XY())
@@ -85,7 +83,7 @@ func Example_decad_thread_external() {
 		fmt.Printf("failed to draw the groove: %s\n", err)
 		return
 	}
-	tool, err := doc.Coil(context.Background(), gs, gp, axis, units.Millimeters(1.5), units.Scalar(8))
+	tool, err := doc.Coil(context.Background(), gs, gp, axis, units.Millimeters(1.5), units.Scalar(1))
 	if err != nil {
 		fmt.Printf("failed to coil: %s\n", err)
 		return
@@ -106,13 +104,13 @@ func Example_decad_thread_external() {
 		fmt.Printf("failed to verify: %s\n", err)
 		return
 	}
-	exact := math.Pi * (25*20 - 16*clippedGrooveMoment(4.1, 5.3, 5))
+	exact := math.Pi * (25*20 - 2*clippedGrooveMoment(4.1, 5.3, 5))
 	value, bound := vol.Value.Base(), vol.Bound.Base()
 	fmt.Printf("closed form: %.2f mm³\n", exact)
 	fmt.Printf("volume: %.1f ± %.1f mm³, encloses the closed form: %v\n", value, bound, math.Abs(value-exact) <= bound)
 	fmt.Printf("lumps: %d, validity: %s, verify: %s\n", len(threaded.Lumps()), report.Bodies[0].Validity.Outcome, report.Status)
 	// Output:
-	// closed form: 1460.31 mm³
-	// volume: 1460.0 ± 1.5 mm³, encloses the closed form: true
-	// lumps: 1, validity: valid, verify: Suspect
+	// closed form: 1556.99 mm³
+	// volume: 1556.6 ± 0.5 mm³, encloses the closed form: true
+	// lumps: 1, validity: valid, verify: Sound
 }

@@ -2,7 +2,6 @@ package decad
 
 import (
 	"math/big"
-	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -13,9 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures are docs/helix-design.md §13's thread rows: a 60° V groove of
-// depth 0.9 at pitch 1.5, 8 turns, cut from an R = 5, L = 20 cylinder or
-// bored block. The coil's δ, near 9.2e-4 mm, is above the pair's chord
+// These fixtures are docs/helix-design.md §13's focused thread rows: a 60° V
+// groove of depth 0.9 at pitch 1.5, one turn, cut from an R = 5, L = 20
+// cylinder or bored block. The coil's δ is above the pair's chord
 // tolerance 2e-5·diameter, so the pair tolerance rises to δ
 // (heldPrimitiveFloorOf, docs/faceted-vertex-bounds-design.md §5) and the
 // chain-depth gate admits the groove's facets. Shown to fail: without the
@@ -43,11 +42,11 @@ func threadClippedMoment(root, mouth, r float64) *big.Rat {
 }
 
 // threadTool coils the V groove with root at radius root, mouth at radius
-// mouth and centre height z0 about the sketch's V axis, 8 turns at pitch 1.5.
-func threadTool(t *testing.T, doc *Document, root, mouth, z0 float64) *Body {
+// mouth and centre height z0 about the sketch's V axis at pitch 1.5.
+func threadTool(t *testing.T, doc *Document, root, mouth, z0, turns float64) *Body {
 	t.Helper()
 	gs, gp := coilLoopsSketch(t, [][2]float64{{root, z0}, {mouth, z0 - threadHalfWidth}, {mouth, z0 + threadHalfWidth}})
-	tool, err := doc.Coil(t.Context(), gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(8))
+	tool, err := doc.Coil(t.Context(), gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(turns))
 	require.NoError(t, err)
 	return tool
 }
@@ -85,44 +84,29 @@ func requireThreadResult(t *testing.T, doc *Document, res *Body, exactOverPi *bi
 	return rep
 }
 
-// requireOnlyBeyond asserts every diagnostic the report carries is a reading
-// beyond the tolerance, and that the readings named are exactly want.
-func requireOnlyBeyond(t *testing.T, rep *Report, want ...string) {
-	t.Helper()
-	require.Equal(t, Suspect, rep.Status)
-	var got []string
-	for _, d := range rep.Diagnostics {
-		require.Equal(t, DiagMeasurementBeyondTolerance, d.Code, d.Message)
-		got = append(got, strings.Fields(d.Message)[1])
-	}
-	require.ElementsMatch(t, want, got)
-}
-
 // TestCoilExternalThread cuts the groove, root at 4.1 and mouth at 5.3,
 // from a revolved cylinder: the cut removes the screw sweep of the groove's
-// part inside ρ = 5, Θ·Q = 16π·Q, from π·5²·20. The volume reading sits
-// within the default tolerance; the area and the centroid do not, so the
-// report reads Suspect.
+// part inside ρ = 5, Θ·Q = 2π·Q, from π·5²·20. The report reads Sound.
 func TestCoilExternalThread(t *testing.T) {
 	doc := New()
 	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
 	cylinder, err := doc.Revolve(cs, cpf, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
-	tool := threadTool(t, doc, 4.1, 5.3, 3)
+	tool := threadTool(t, doc, 4.1, 5.3, 3, 1)
 	res, err := Cut(t.Context(), cylinder, tool)
 	require.NoError(t, err)
 
-	exact := new(big.Rat).Mul(big.NewRat(16, 1), threadClippedMoment(4.1, 5.3, 5))
+	exact := new(big.Rat).Mul(big.NewRat(2, 1), threadClippedMoment(4.1, 5.3, 5))
 	exact.Sub(big.NewRat(500, 1), exact)
 	rep := requireThreadResult(t, doc, res, exact, r3.NewVec(-5, 0, -5), r3.NewVec(5, 20, 5))
-	requireOnlyBeyond(t, rep, "area", "centroid")
+	require.Equal(t, Sound, rep.Status)
+	require.Empty(t, rep.Diagnostics)
 }
 
 // TestCoilInternalThread cuts the groove, root at 5.9 and mouth at 4.7, from
 // an Extrude of the annulus 5 ≤ ρ ≤ 10 on the XZ plane, which runs from
 // y = −20 to 0: the cut removes the screw sweep of the groove's part outside
-// ρ = 5 from π·(10² − 5²)·20. The volume reading sits within the default
-// tolerance; the area does not, so the report reads Suspect.
+// ρ = 5 from π·(10² − 5²)·20. The report reads Sound.
 func TestCoilInternalThread(t *testing.T) {
 	doc := New()
 	w := sketch.NewWorld()
@@ -143,14 +127,15 @@ func TestCoilInternalThread(t *testing.T) {
 	require.NotNil(t, annulus)
 	block, err := doc.Extrude(s, annulus, Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
-	tool := threadTool(t, doc, 5.9, 4.7, -17)
+	tool := threadTool(t, doc, 5.9, 4.7, -17, 1)
 	res, err := Cut(t.Context(), block, tool)
 	require.NoError(t, err)
 
-	exact := new(big.Rat).Mul(big.NewRat(16, 1), threadClippedMoment(5.9, 4.7, 5))
+	exact := new(big.Rat).Mul(big.NewRat(2, 1), threadClippedMoment(5.9, 4.7, 5))
 	exact.Sub(big.NewRat(1500, 1), exact)
 	rep := requireThreadResult(t, doc, res, exact, r3.NewVec(-10, -20, -10), r3.NewVec(10, 0, 10))
-	requireOnlyBeyond(t, rep, "area")
+	require.Equal(t, Sound, rep.Status)
+	require.Empty(t, rep.Diagnostics)
 }
 
 // TestCoilThreadPartnerKeepsItsBounds reads the pair tolerance the external
@@ -164,7 +149,7 @@ func TestCoilThreadPartnerKeepsItsBounds(t *testing.T) {
 	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
 	cylinder, err := doc.Revolve(cs, cpf, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
-	tool := threadTool(t, doc, 4.1, 5.3, 3)
+	tool := threadTool(t, doc, 4.1, 5.3, 3, 8)
 	delta := tool.payload.(coilPayload).delta
 
 	tol, dPair, err := pairChordTolerance(t.Context(), cylinder, tool)

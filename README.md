@@ -114,6 +114,12 @@ meshes decad tessellates.
 leaving a sheet body.
 </td>
 </tr>
+<tr>
+<td colspan="2">
+<img src="docs/images/features/thread.png" alt="An eight-turn groove cut into a cylinder" width="320"><br>
+<strong>Coil and Cut</strong> make a full thread by sweeping a groove around an axis and removing it from the cylinder.
+</td>
+</tr>
 </table>
 
 Regenerate the gallery GIFs with `cd _gallery && go run . features` (requires

@@ -55,7 +55,7 @@ func featureRenders() []imageRender {
 			},
 		}
 	}
-	return renders
+	return append(renders, threadRender())
 }
 
 // sweepShot renders one Sweep along a rise, two rounded bends, and a straight run.
