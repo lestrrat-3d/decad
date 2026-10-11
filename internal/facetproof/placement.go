@@ -6,6 +6,8 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -20,9 +22,9 @@ type PlacedMesh struct {
 	AreaSlack   float64
 }
 
-// PlaceMesh applies the delta placement, keeps its held facets embedded, and
-// charges the stored basis's exact stretch and determinant before each
-// vertex's own rounding and embedding correction.
+// PlaceMesh rounds each exact affine image to its nearest float, keeps its
+// held facets embedded, and charges the stored basis's exact stretch and
+// determinant before each vertex's own rounding and embedding correction.
 func PlaceMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
 	vertexBound []float64, volSymDiff, areaSlack, stretch, volumeCharge float64,
 	delta r3.Transform) (PlacedMesh, error) {
@@ -36,12 +38,18 @@ func PlaceMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Ve
 	tr := delta.Translation()
 	maxTrans := math.Max(math.Abs(tr.X), math.Max(math.Abs(tr.Y), math.Abs(tr.Z)))
 	vertexAllow := make([]float64, len(verts))
+	exact := make([]proof.Xpt, len(verts))
+	basis := delta.Basis()
 	for i, v := range verts {
 		if err := budget.Step(); err != nil {
 			return PlacedMesh{}, err
 		}
 		vertexAllow[i] = proofbound.RigidRoundAllow(math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))), maxTrans)
-		next.Verts[i] = delta.Apply(v)
+		exact[i] = meshbool.ExactRigidImage(basis, tr, v)
+		next.Verts[i] = exact[i].Vec()
+		if !proofbound.FiniteVec(next.Verts[i]) {
+			return PlacedMesh{}, fmt.Errorf("%w: a placed vertex is not representable", decaderr.ErrUnsupported)
+		}
 	}
 	if err := budget.Err(); err != nil {
 		return PlacedMesh{}, err
@@ -55,7 +63,7 @@ func PlaceMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Ve
 			next.Tris[i] = [3]int{t[0], t[2], t[1]}
 		}
 	}
-	moved, err := KeepPlacedEmbedded(ctx, verts, next.Verts, next.Tris, delta)
+	moved, err := KeepPlacedEmbedded(ctx, exact, next.Verts, next.Tris)
 	if err != nil {
 		return PlacedMesh{}, err
 	}
