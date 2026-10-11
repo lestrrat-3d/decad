@@ -21,7 +21,7 @@ func pointSlabCap(t *testing.T, slab *decad.Body, role decad.FeatureRef) *decad.
 
 func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	doc := decad.New()
-	tooth, _ := bevelReferenceTooth(t, doc)
+	tooth := bevelReferenceTooth(t, doc)
 	span := pointBevelRootSpan()
 	inner := tooth
 	kept := make([]*decad.Body, 0, 8)

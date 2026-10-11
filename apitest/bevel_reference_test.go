@@ -45,7 +45,7 @@ func bevelInvolute(base, radius float64) (float64, float64) {
 		base * (math.Sin(t) - t*math.Cos(t))
 }
 
-func bevelReferenceTooth(t *testing.T, doc *decad.Document) (*decad.Body, *sketch.Sketch) {
+func bevelReferenceTooth(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	angle := math.Atan2(4, 4)
 	coneDist := 4 / math.Sin(angle)
@@ -107,5 +107,5 @@ func bevelReferenceTooth(t *testing.T, doc *decad.Document) (*decad.Body, *sketc
 	require.Len(t, profiles, 1)
 	tooth, err := doc.LoftFromPoint(t.Context(), r3.Vec{}, s, profiles[0])
 	require.NoError(t, err)
-	return tooth, s
+	return tooth
 }

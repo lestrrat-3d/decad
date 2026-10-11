@@ -15,7 +15,7 @@ import (
 
 func TestPointLoftSplitAnchoredScalePreservesCapsAndVolume(t *testing.T) {
 	doc := decad.New()
-	tooth, _ := bevelReferenceTooth(t, doc)
+	tooth := bevelReferenceTooth(t, doc)
 	span := pointBevelRootSpan()
 	first := pointBevelSliceSheet(t, doc, span/6, 30)
 	parts, err := doc.Split(t.Context(), tooth, first)
