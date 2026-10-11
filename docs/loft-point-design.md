@@ -112,8 +112,8 @@ an occupied-volume bound, and the original Cone and NURBSSurface face tags.
 The reference 8/8 blank and one trimmed tooth pass this path. Its current
 three-round cap bound proves occupied volume but is too broad to prove
 positive inertia in `MassProperties`; that call returns `ErrUnsupported`.
-One further `PlacedCopy` tooth can join through the two-tooth continuation
-below. More teeth use the ordinary Boolean path.
+Further `PlacedCopy` teeth can join through the shared-ring continuations
+below, up to eight certified sectors.
 
 For a blank and tooth built from the same unplaced gear source, the public
 operation order is:
@@ -148,11 +148,11 @@ faceted pair follows the ordinary mesh Boolean path.
 Before rebuilding, the join checks the original Sketch source again and asks
 Sketch for fresh cone-crossing and whole-curve side certificates. The two
 complete trimmed tooth bodies must have separated Z ranges after each held
-mesh's boundary displacement is charged. Their root angular sectors must be
-separated after the crossing, placement and mesh errors are converted to an
-angular allowance at the smaller finite root radius. A stale profile, a
-different source tooth, or sectors whose separation cannot be proved do not
-enter this structural path.
+mesh's boundary displacement and the placed basis's stretch are charged.
+Their root angular sectors must remain separate after crossing, placement
+and stretched mesh errors become an angular allowance at the smaller finite
+root radius. A stale profile, a different source tooth, or sectors whose
+separation cannot be proved do not enter this structural path.
 
 Both caps are built from the original source's subdivisions. The copied cap
 points move through its recorded rotation. The blank's root face is removed
@@ -171,8 +171,49 @@ occupied-volume allowance charges both source fans and both cap maps, then
 sweeps the one shared held boundary by its construction error. The copied
 tooth's placed source faces and the original tooth's faces
 retain their Cone and NURBSSurface tags. The reference 8/8 pair passes
-`Tessellate(0.1 mm, VerifyAll)`. The result has no retained join record, so a
-third tooth follows the ordinary mesh Boolean path. In the real 8/8 gallery
-sequence, that third Union refuses because the two-tooth body's 0.0774 mm
-held boundary bound exceeds its 0.000236 mm pair chord. Joining the full
-pattern needs a separate source-certified continuation for more sectors.
+`Tessellate(0.1 mm, VerifyAll)`. Its result retains the immutable blank,
+original trimmed tooth and placed copy for the following continuation.
+
+## Three-to-eight-tooth bevel pattern union
+
+The canonical gallery order in
+`fusion360-gear-generator/spec/bevelgear/instructions.md` (steps 991–1027)
+revolves the blank, lofts one point tooth, cuts its toe and heel with cones,
+makes seven 45° `PlacedCopy` instances, and joins all eight teeth in order.
+A conditional centered bore Cut follows the joined gear body.
+
+For each third through eighth Union, the receiver must carry the retained
+blank and every prior tooth from this same live Sketch and cone-trim source.
+The incoming body must be a recorded axis-X rotation of that source. The
+join rechecks the live Sketch certificates, proves every pair of complete
+trimmed tooth solids disjoint with their held coordinate boxes and boundary
+bounds, including each held rotation basis's stretch, and proves every pair
+of root sectors separate after crossing, placement and mesh errors. A
+different source, non-rigid placement or uncertified overlap follows the
+ordinary Boolean path.
+
+All admitted teeth are rebuilt on one blank root ring. The ring starts at
+−22.5° so the fifth, 180° tooth remains inside one angular interval rather
+than crossing its seam. Each cap owns the root stations inside its sector;
+the blank and caps share the same root vertex indices. Directed edge pairing,
+one component, vertex links and exact nonadjacent triangle contacts are
+checked again for every result. The audit allows 44,480 triangles for the
+two-tooth baseline plus 22,000 for each added sector, and up to 12 million
+scanned pairs per tooth. The real 8/8 final mesh has 171,776 triangles and
+its audit scanned 73,504,567 pairs, both below the eight-tooth limits of
+176,480 triangles and 96 million scans.
+
+The boundary allowance charges the shared blank ring once and uses the
+largest local tooth error. Occupied-volume and area allowances charge every
+source fan and cap map, including the exact stretch and determinant of each
+held placement basis. The shared result's swept-boundary allowance is charged
+once. Every source face retains its Cone or NURBSSurface tag. The real 8/8
+producer passes eight sequential Unions and `Tessellate(0.1 mm, VerifyAll)`.
+The permanent public regression runs all eight sectors without the race
+detector, including the 180° seam. Under the race detector it runs three
+sectors through the same continuation and exact audit: a full eight-sector
+race run did not finish within its 2,400-second CI shard budget.
+The final body retains the immutable blank and all eight certified tooth
+sources for a later bore rewrite. The canonical centered 1 mm bore Cut still
+refuses: the joined body's 0.0774 mm held bound exceeds the bore pair's
+0.000290 mm chord tolerance. That Cut has no source-certified rewrite yet.

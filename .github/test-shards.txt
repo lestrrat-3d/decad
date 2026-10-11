@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    0.00s over 1 tests
-#   shard 1:    1.22s over 230 tests
+#   shard 1:    1.22s over 229 tests
 #   shard 2:   10.20s over 135 tests
 #   shard 3:  136.92s over 135 tests
 #   shard 4:  182.61s over 138 tests
@@ -16,9 +16,9 @@
 #   shard 7:   83.02s over 128 tests
 #   shard 8:   73.84s over 132 tests
 #   shard 9:   57.75s over 126 tests
+#   shard 10:   0.00s over 1 tests
 #
 0	0.00	TestXPTKeyDistinguishesCoordinates
-1	0.00	Example_decad_quickstart
 1	0.00	TestAddBlendRolesContextPollsNestedMetadata
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
@@ -1303,3 +1303,4 @@
 9	0.00	TestWallKernelSetupCancellationIsBounded
 9	0.21	TestWallNormalDecisionEnclosesExactComponent
 9	0.03	TestXHPLerpDenotesTheSameCoordinate
+10	0.00	Example_decad_quickstart

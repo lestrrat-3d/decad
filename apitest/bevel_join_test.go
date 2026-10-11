@@ -211,3 +211,52 @@ func TestBevelTwoToothJoinReusesOneRootRing(t *testing.T) {
 	}
 	require.GreaterOrEqual(t, fits, 4)
 }
+
+// The 8/8 gallery producer rotates the real toe/heel trimmed tooth before
+// joining every instance. Normal CI runs all eight, including the 180° seam.
+// Race CI runs three, which exercises the same continuation and exact audit
+// without exceeding its fixed shard budget.
+func TestBevelPatternReusesOneRootRing(t *testing.T) {
+	const galleryTeeth = 8
+	doc := decad.New()
+	blank, toeApex := bevelReferenceBlank(t, doc)
+	tooth, _ := bevelReferenceTooth(t, doc)
+	trimmed, err := decad.Cut(t.Context(), tooth, pointConeTool(t, doc, toeApex))
+	require.NoError(t, err)
+	trimmed, err = decad.Intersect(t.Context(), trimmed, pointConeTool(t, doc, 8))
+	require.NoError(t, err)
+	pattern := make([]*decad.Body, bevelPatternTestTeeth)
+	pattern[0] = trimmed
+	for i := 1; i < len(pattern); i++ {
+		turn, err := r3.Rotation(r3.NewVec(1, 0, 0),
+			units.Radians(2*math.Pi*float64(i)/galleryTeeth))
+		require.NoError(t, err)
+		pattern[i], err = trimmed.PlacedCopy(t.Context(), turn)
+		require.NoError(t, err)
+	}
+	joined := blank
+	for i, instance := range pattern {
+		joined, err = decad.Union(t.Context(), joined, instance)
+		require.NoError(t, err, "tooth %d", i+1)
+		require.True(t, joined.IsSolid(), "tooth %d", i+1)
+	}
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.LessOrEqual(t, mesh.Bound().Base(), 0.1)
+	blankVolume, err := blank.Volume()
+	require.NoError(t, err)
+	joinedVolume, err := joined.Volume()
+	require.NoError(t, err)
+	require.Greater(t, joinedVolume.Value.Base()-joinedVolume.Bound.Base(),
+		blankVolume.Value.Base()+blankVolume.Bound.Base())
+	var fits int
+	for _, face := range joined.Faces() {
+		if _, ok := face.Surface().(decad.NURBSSurface); ok {
+			fits++
+		}
+	}
+	require.GreaterOrEqual(t, fits, 2*len(pattern))
+}

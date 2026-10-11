@@ -29,7 +29,7 @@ func tryBevelTwoToothUnion(ctx context.Context, op meshbool.OperationKind,
 		jp, joinedOK = joined.payload.(facetedPayload)
 	}
 	tooth, toothOK := placed.payload.(facetedPayload)
-	if !joinedOK || !toothOK || jp.bevelJoin == nil ||
+	if !joinedOK || !toothOK || jp.bevelJoin == nil || len(jp.bevelJoin.placed) != 0 ||
 		jp.xform != r3.Identity() || tooth.bevelTooth == nil ||
 		tooth.bevelTooth.source == nil ||
 		jp.bevelJoin.first.pointCone != tooth.bevelTooth.source ||
@@ -70,8 +70,19 @@ func bevelAxisRotation(t r3.Transform) bool {
 // coordinates. The held triangle extrema plus each body's certified spatial
 // bound therefore prove the two complete source teeth disjoint.
 func bevelTrimmedSourcesSeparateZ(first, second facetedPayload) bool {
-	interval := func(fp facetedPayload) (float64, float64, bool) {
-		if len(fp.verts) == 0 || fp.meshBound < 0 || proofbound.IsNonFinite(fp.meshBound) {
+	if second.bevelTooth == nil {
+		return false
+	}
+	rotation, err := massmoment.PlacementRotation(second.bevelTooth.motion)
+	if err != nil {
+		return false
+	}
+	charge, err := massmoment.MapChargeOf(rotation)
+	if err != nil {
+		return false
+	}
+	interval := func(fp facetedPayload, bound float64) (float64, float64, bool) {
+		if len(fp.verts) == 0 || bound < 0 || proofbound.IsNonFinite(bound) {
 			return 0, 0, false
 		}
 		lo, hi := math.Inf(1), math.Inf(-1)
@@ -81,11 +92,12 @@ func bevelTrimmedSourcesSeparateZ(first, second facetedPayload) bool {
 			}
 			lo, hi = min(lo, p.Z), max(hi, p.Z)
 		}
-		return math.Nextafter(lo-fp.meshBound, math.Inf(-1)),
-			proofbound.AbsSumUpper(hi, fp.meshBound), true
+		return math.Nextafter(lo-bound, math.Inf(-1)),
+			math.Nextafter(hi+bound, math.Inf(1)), true
 	}
-	aLo, aHi, aOK := interval(first)
-	bLo, bHi, bOK := interval(second)
+	aLo, aHi, aOK := interval(first, first.meshBound)
+	bLo, bHi, bOK := interval(second,
+		bevelPatternMeshBound(second.meshBound, charge))
 	return aOK && bOK && (aHi < bLo || bHi < aLo)
 }
 
@@ -109,7 +121,7 @@ type bevelTwoPlan struct {
 
 func makeBevelTwoPlan(ctx context.Context, blank *bevelBlankSource,
 	record *pointConeTrimRecord, boundary *bevelToothBoundary,
-	motion r3.Transform, charge massmoment.MapCharge) (bevelTwoPlan, error) {
+	motion r3.Transform, charge massmoment.MapCharge, ringStart float64) (bevelTwoPlan, error) {
 	base := record.base
 	path, crossingBound, err := bevelExteriorPath(base, boundary,
 		base.pointSection.source, blank)
@@ -148,7 +160,7 @@ func makeBevelTwoPlan(ctx context.Context, blank *bevelBlankSource,
 		}
 		plan.placed[i].p = p
 		if node.rootBoundary {
-			plan.placed[i].angle = math.Atan2(p.Z, p.Y)
+			plan.placed[i].angle = bevelAngleAt(p, ringStart)
 		}
 		maxAbs := max(math.Abs(node.p.X), math.Abs(node.p.Y), math.Abs(node.p.Z))
 		// The held basis is only approximately orthonormal. Its exact rational
@@ -158,11 +170,12 @@ func makeBevelTwoPlan(ctx context.Context, blank *bevelBlankSource,
 			proofbound.RigidRoundAllow(maxAbs, 0),
 			proofbound.ProductUpper(charge.Stretch, proofbound.Radius3D(maxAbs))))
 	}
-	plan.lo, plan.hi, ok = bevelRootAngles(plan.placed[:len(path)])
+	plan.lo, plan.hi, ok = bevelRootNodeAngles(plan.placed[:len(path)])
 	if !ok {
 		return bevelTwoPlan{}, fmt.Errorf("%w: placed root contacts cross the angular seam", ErrUnsupported)
 	}
-	plan.crossingBound = proofbound.AbsSumUpper(plan.crossingBound, plan.placedRound)
+	plan.crossingBound = proofbound.AbsSumUpper(
+		bevelPatternMeshBound(plan.crossingBound, charge), plan.placedRound)
 	return plan, nil
 }
 
@@ -184,7 +197,7 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 		if i == 1 {
 			charge = placedCharge
 		}
-		plan, err := makeBevelTwoPlan(ctx, blank, record, boundary, motions[i], charge)
+		plan, err := makeBevelTwoPlan(ctx, blank, record, boundary, motions[i], charge, -math.Pi)
 		if err != nil {
 			return nil, err
 		}
@@ -199,7 +212,7 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 	minRadius := min(blank.toeRoot.V, blank.ded.V)
 	seamCost := proofbound.AbsSumUpper(
 		plans[0].crossingBound, plans[1].crossingBound,
-		first.meshBound, second.meshBound)
+		first.meshBound, bevelPatternMeshBound(second.meshBound, placedCharge))
 	if !(minRadius > 0 && seamCost < minRadius/2) {
 		return nil, fmt.Errorf("%w: the two root sectors have no angular error bound", ErrUnsupported)
 	}
@@ -248,6 +261,10 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 	localBound, localRound, sourceVolume, sourceArea := 0.0, 0.0, 0.0, 0.0
 	for i := range plans {
 		p := &plans[i]
+		charge := massmoment.MapCharge{}
+		if i == 1 {
+			charge = placedCharge
+		}
 		groups := []facetGroup(nil)
 		if i == 1 {
 			groups = second.groups
@@ -280,7 +297,8 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 		p.capArea = pointConeCapArea(far, p.caps)
 		localBound = max(localBound, proofbound.AbsSumUpper(p.snap, p.nodeRound,
 			proofbound.ProductUpper(p.farRound, p.lip),
-			proofbound.ProductUpper(proofbound.AbsSumUpper(record.base.meshBound,
+			proofbound.ProductUpper(proofbound.AbsSumUpper(
+				bevelPatternMeshBound(record.base.meshBound, charge),
 				p.crossingBound, p.placedRound), p.lip),
 			max(p.upperBound, p.lowerBound), blank.coneGap, p.toolGap))
 		localRound = max(localRound, proofbound.AbsSumUpper(p.snap, p.nodeRound,
@@ -357,7 +375,9 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 	pp := facetedPayload{verts: mesh.verts, tris: mesh.tris, src: mesh.src,
 		groups: mesh.groups, vertexBound: vertexBound, contactAudited: true,
 		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
-		dPair: record.base.dPair, xform: r3.Identity()}
+		dPair: record.base.dPair, xform: r3.Identity(),
+		bevelJoin: &bevelJoinRecord{blank: blankBody, first: first,
+			placed: []facetedPayload{second}}}
 	body, err := buildFacetedBody(ctx, d, ref, pp)
 	if err != nil {
 		return nil, err

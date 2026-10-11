@@ -76,7 +76,8 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Blind cut with displaced interface levels, touching or overlapping opposed holes, or a crossing hole | Mesh path; coplanar contact can refuse. Exact interface cuts with separated opposed holes build after whole-loop proofs | `docs/stacked-prism-design.md` §7 stage 3 |
 | Touching, coplanar or face-on-face contact on the mesh path | `BooleanError` code `BooleanUnsupportedContact` | `docs/general-boolean-design.md` §2, `docs/interference-design.md` |
 | Curved surfaces tangent with facets that never meet | `ErrUnsupported` | `doc.go` support map |
-| Held mesh operand coarser than the pair tolerance | `ErrUnsupported` outside the source-certified one- and two-tooth bevel joins | `doc.go` support map, `docs/loft-point-design.md` |
+| Held mesh operand coarser than the pair tolerance | `ErrUnsupported` outside the source-certified bevel joins of up to eight disjoint tooth sectors | `doc.go` support map, `docs/loft-point-design.md` |
+| Centered bore Cut after eight bevel joins | The 1 mm tool refuses: held bound 0.0774 mm exceeds chord tolerance 0.000290 mm | `docs/loft-point-design.md` "Three-to-eight-tooth bevel pattern union" |
 | Sheet body as a boolean operand | Refused permanently; use `Document.Split` | `docs/surface-design.md` Table X |
 
 ## Free-form curves

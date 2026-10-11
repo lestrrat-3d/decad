@@ -73,6 +73,24 @@ func LoftCrossingAuditBevelTwoJoin(budget *proofbound.WorkBudget, verts []r3.Vec
 	return err
 }
 
+// LoftCrossingAuditBevelPatternJoin admits only a certified continuation with
+// three to eight disjoint tooth sectors. Each new sector gets a bounded mesh
+// and pair-scan allowance; the exact contact decisions are unchanged.
+func LoftCrossingAuditBevelPatternJoin(budget *proofbound.WorkBudget, verts []r3.Vec,
+	tris [][3]int, toothCount int) error {
+	if toothCount < 3 || toothCount > 8 {
+		return fmt.Errorf(`%w: patterned bevel audit requires three to eight teeth`, decaderr.ErrUnsupported)
+	}
+	// The real 8/8 source builds 44,480 triangles at two teeth and adds
+	// 21,216 per sector. The spare 784 triangles per sector admits rounding
+	// and source variation without allowing an unbounded exact-lift set.
+	maxTriangles := 44_480 + 22_000*(toothCount-2)
+	maxScans := uint64(12_000_000 * toothCount)
+	_, err := loftCrossingAuditLimited(budget, verts, tris, nil,
+		loftGenericShortcuts, maxScans, maxTriangles)
+	return err
+}
+
 // LoftCrossingAuditWork is LoftCrossingAudit's body, with each S7 shortcut
 // under its own explicit per-call switch (LoftAuditShortcuts) and the pair
 // loop's own work counts returned to the caller. CapProof has no effect here:
@@ -176,13 +194,23 @@ func errLoftAuditTriangles(f int) error {
 // the audit returns the original failure, which is still S7.
 func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int, structure *LoftAuditStructure,
 	shortcuts LoftAuditShortcuts, ceiling uint64) (LoftAuditWork, error) {
+	return loftCrossingAuditLimited(budget, verts, tris, structure, shortcuts, ceiling, MaxLoftAuditTriangles)
+}
+
+func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
+	structure *LoftAuditStructure, shortcuts LoftAuditShortcuts, ceiling uint64,
+	triangleLimit int) (LoftAuditWork, error) {
 	var work LoftAuditWork
 	if err := budget.Err(); err != nil {
 		return work, err
 	}
 	f := len(tris)
-	if f > MaxLoftAuditTriangles {
-		return work, errLoftAuditTriangles(f)
+	if f > triangleLimit {
+		if triangleLimit == MaxLoftAuditTriangles {
+			return work, errLoftAuditTriangles(f)
+		}
+		return work, fmt.Errorf(`%w: the loft crossing audit's %d triangles exceed the fixed ceiling of %d`,
+			decaderr.ErrUnsupported, f, triangleLimit)
 	}
 
 	// S6: per-triangle existence, before the pair audit runs at all.
