@@ -107,7 +107,7 @@ admits takes it unchanged.
 #### A1 — stacked union
 
 Admission is prism-boolean's G1–G4 and G6 (hole-free operands until A5), G3
-in either arm, and G5 read for `Union` as "the intervals overlap or touch"
+in any arm, and G5 read for `Union` as "the intervals overlap or touch"
 (`z0_b' <= z1_a && z0_a <= z1_b'`, exact over `big.Rat`). The distinct levels
 `{z0_a, z1_a, z0_b', z1_b'}` sorted exactly cut the union into at most three
 slabs. In a slab both operands reach, the region is `Union`'s select-all
@@ -303,6 +303,16 @@ rounding per coordinate; a reflection adds no term. Interference's read-only
 twin (`evaluateAnalyticIntersect`) and the overlap-area reading share the
 same gate and scene, so a reflected pair the analytic `Intersect` resolves is
 measured instead of reaching the mesh path's `unsupported_pair_contact`.
+A pair with equal transform bases whose composed origins differ only along
+the sweep axis also needs no section re-expression; G3 computes that shift
+exactly for a `PlacedCopy` operand. The placed-axis arm requires zero section
+and axial displacement and two hole-free, full-line, axis-aligned rectangles.
+`Union` and `Intersect` require identical bounds; `Cut` requires the tool's
+bounds to lie strictly inside the target's bounds.
+Other placed-axis pairs keep the mesh route. The existing same-transform
+shared-axis arm retains its prior profile admission. `Verify` keeps its
+existing read-only Intersect path and positive-volume gate for a pair
+admitted by the new arm.
 A one-sided reflection is a nonidentity re-expression, so a reflected pair
 whose outlines cross takes A6's crossing charge, and one whose outlines share
 a wall takes A3's reading (M3, T2).

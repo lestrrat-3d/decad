@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -53,7 +54,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	if err := budget.Err(); err != nil {
 		return stackedPrismPayload{}, false, err
 	}
-	target, tool, ok, err := admitPrismPairBudget(budget, a, b)
+	target, tool, ok, err := admitPrismPairBudget(budget, meshbool.OpCut, a, b)
 	if err != nil || !ok {
 		return stackedPrismPayload{}, false, err
 	}
@@ -205,7 +206,7 @@ func tryStackedBlindCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	budget := proofbound.NewWorkBudget(ctx)
 	outer := sp.outerPrism()
 	proxy := &Body{payload: outer}
-	_, tool, ok, err := admitPrismPairBudget(budget, proxy, b)
+	_, tool, ok, err := admitPrismPairBudget(budget, meshbool.OpCut, proxy, b)
 	if err != nil || !ok {
 		return stackedPrismPayload{}, false, err
 	}
@@ -312,7 +313,7 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 	budget := proofbound.NewWorkBudget(ctx)
 	outer := sp.outerPrism()
 	proxy := &Body{payload: outer}
-	_, tool, ok, err := admitPrismPairBudget(budget, proxy, b)
+	_, tool, ok, err := admitPrismPairBudget(budget, meshbool.OpCut, proxy, b)
 	if err != nil || !ok {
 		return stackedPrismPayload{}, false, err
 	}

@@ -764,11 +764,10 @@ func TestClearancePlacedRotatedCube(t *testing.T) {
 	requireBoundedGapContains(t, report, math.Hypot(dx, dy))
 }
 
-func TestClearanceSubTolOverlapNotCertified(t *testing.T) {
+func TestClearanceSubTolAxialOverlapMeasured(t *testing.T) {
 	t.Parallel()
-	// Two boxes overlapping by 5e-9 mm: not a touching contact, and the
-	// exact coplanar certificate must NOT bless it — the pair is neither
-	// proven disjoint nor certified touching, so it reads Suspect.
+	// Two boxes overlapping axially by 5e-9 mm have a positive exact
+	// intersection volume even though their caps lie below the mesh tolerance.
 	doc := decad.New()
 	boxBody(t, doc, 0, 0, 10, 10, 8)
 	other := boxBody(t, doc, 0, 0, 10, 10, 8)
@@ -779,7 +778,10 @@ func TestClearanceSubTolOverlapNotCertified(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Empty(t, report.Clearances, `no fabricated zero row over a real overlap`)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Interfering, report.Status)
+	require.Len(t, report.Interferences, 1)
+	row := report.Interferences[0]
+	require.Greater(t, row.Volume.Value.Base()-row.Volume.Bound.Base(), 0.0)
 }
 
 func TestClearanceBallCenteredInHole(t *testing.T) {

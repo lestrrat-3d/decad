@@ -128,13 +128,60 @@ that pair.
 |---|---|---|
 | G1 | Both operands' payload is `prismPayload`. | Structural — the class this design's reduction applies to (modify §2's same reduction, extended to two operands). |
 | G2 | None: a reflected accumulated placement admits (`docs/general-boolean-design.md` §3 A4). When the composed relative map of §4.1 is a reflection (`Transform.IsReflection`), operand B's record is re-wound before any entity is created; two operands under one reflected placement meet G3's shared-axis arm with no re-expression. | G3 reads the world normal through `ApplyDir`, which maps a reflection's sweep direction like any other. The re-winding restores the "outer CCW, holes CW" convention §4.2's flag comparison reads. |
-| G3 | The two operands' **composed world planes** (`xform ∘ frame`, core §5.2/§6.2's r3 vocabulary — `worldOrigin = xform.Apply(frame.Origin())`, `worldNormal = xform.ApplyDir(frame.N())`) share one sweep axis, exactly: `worldNormalA == worldNormalB` (Go `==` on the stored `r3.Vec` floats — component-wise exact equality, which treats `-0.0` and `0.0` as equal, §3.3; "co-directional" — the same outward sweep sense, never antiparallel) **and** one of two arms holds. **Coplanar arm:** `(worldOriginB − worldOriginA)·worldNormalA == 0.0` (an ordinary float64 dot product compared against the literal zero). **Shared-axis arm:** `xformA == xformB`, `frameA.U() == frameB.U()` and `frameA.V() == frameB.V()` (all Go `==` on the stored floats), and the frame-origin difference `d = frameB.Origin() − frameA.Origin()`, taken EXACTLY over the stored floats (`internal/proof/dyadic.go`'s `DvSub`), has an exactly zero cross product with the shared `frame.N()` (`DvCross`, `DvIsZero`) — `d` is an exact multiple `s·N` of the stored normal. `sketch.CreateOffsetPlane` on a datum or any axis-aligned base plane produces exactly this arm: it re-uses the base frame's `U`/`V` and adds `N·dist` to the origin, so `d = (0, 0, dist)`-shaped with literal zeros (probe `.tmp/repro/probe`); a tilted base re-normalises `U` one ulp apart and misses the arm, soundly. | This is decad's own admission decision, not a question `sketch` answers, so CLAUDE.md's reject-only rule binds it directly: a residual test here would be an admission gate on a residual, which the hard rule forbids outright. Every quantity is read off the stored `r3.Vec` floats as-is (the `clearance_degen.go` discipline: exact arithmetic on the payload's own floats, never a re-derived angle) — never loosened to a tolerance. The shared-axis arm is exact without any orthonormality assumption on the stored frame: B's denoted prism `{X(oB + uU + vV + zN)}` IS `{X(oA + uU + vV + (z + s)N)}` term for term, so B's `Point2` fields are A-frame coordinates verbatim and only the sweep interval moves, by the exact rational `s` (G5). A parallel pair outside both arms — a different placement, `U`/`V` bits that differ, an in-plane origin component — takes the mesh path. §3.3 covers what this excludes and why it is not fixed here. |
+| G3 | The composed world normals agree exactly, and the coplanar, shared-frame-axis, or placed-axis arm below holds. | Use stored floats and exact rational arithmetic for the axis arms; a rounded residual never admits a pair. |
 | G4 | Every segment of both operands' `ProfileRecord` (`Outer` and every loop of `Holes`) is a `LineSeg`, `CircleSeg`, or `ArcSeg`. | `geom.BoundaryEdge.TExact`'s own contract is a **whole-scene** gate (`sketch`'s `geom/region.go`): one `Ellipse`/`EllipticalArc`/`Conic`/`Spline`/`ClosedSpline`/`FitSpline`/`NURBS` anywhere in an arrangement makes every bound in it — including unrelated line/circle/arc edges — report `TExact = false`. A single free-form segment on either operand would silently blind the whole combination, not just its own edges, so the gate excludes the kind entirely rather than trying to admit "the free-form parts don't touch." Staged: §9's free-form row. |
-| G5 | The z-interval relation the op needs (§3.2) holds, computed after re-expressing operand B's `[z0, z1]` onto operand A's normal axis by the shift `s`: `z' = z + s`, where `s` is the exact rational `d_i / N_i` for the largest-magnitude component `i` of the shared `N` in G3's shared-axis arm (the same value for every nonzero component, since `d = s·N` exactly), and the literal zero in G3's coplanar arm. Each `z'` is an exact `big.Rat` sum (`floatRat(z) + s`, `prismplacement.ShiftedInterval`), and every §3.2 comparison is a `big.Rat` comparison against A's own endpoint lifted by `floatRat`. No float operation is performed. | A shift, not a containment test — G3 already certified the shared axis; this is bookkeeping on it, and the bookkeeping is exact: a float sum `z + shift` could round onto A's endpoint and admit a tool whose cap falls a hair short of the target's, which is a blessing by rounding. The shift is only a comparison input for `Union` and `Cut`, whose result interval is one operand's own endpoints verbatim (§3.2). For `Intersect` a shifted endpoint can reach the result: it is rounded to the nearest float once, and `rationalFloatError` over the exact rational charges that rounding into THAT end's axial displacement (`z0Delta`/`z1Delta`), beside B's own incoming displacement (§7). |
+| G5 | Apply G3's exact rational axial shift to B's interval, then check §3.2's interval relation exactly. | A rounded float sum cannot decide whether a tool reaches a target cap. |
 | G6 | `Union` needs both operands hole-free. `Cut` needs the tool hole-free; the target may carry holes. `Intersect` needs both operands hole-free except for the one-hole clean-nesting arm below. | `Union`'s select-all rule would include a hole's void. A holed `Cut` tool can leave separate lumps that one `ProfileRecord` cannot carry. The admitted holed `Intersect` has one nested result profile, including its hole. |
 
 G1–G6 are the only conditions checked before touching `sketch`. **Passing
 them is not admission** — see §3.4.
+
+#### G3 — exact sweep-axis arms
+
+Read each composed world normal as `xform.ApplyDir(frame.N())`. Require Go
+`==` on the two vectors, so `-0.0` equals `0.0` (§3.3), and require one of
+these arms:
+
+- **Coplanar:** `(worldOriginB − worldOriginA)·worldNormalA == 0.0`, with
+  `worldOrigin = xform.Apply(frame.Origin())` and the ordinary float dot product.
+- **Shared frame axis:** `xformA == xformB`, both frames' `U` and `V` agree
+  componentwise, and the exact dyadic difference of their stored origins has
+  zero exact cross product with the stored `frameA.N()`. The exact rational
+  shift `s` satisfies `originB − originA = s·N`. `CreateOffsetPlane` on an
+  axis-aligned base produces this arm; a tilted base whose `U` differs by one
+  ulp does not.
+- **Placed axis:** both frames' `U` and `V` agree componentwise, the two
+  transforms' stored linear bases agree componentwise, and the exact dyadic
+  difference of their composed origins has zero exact cross product with
+  the exact linear image of the stored frame normal. The exact rational
+  shift `s` satisfies `X_B(originB) − X_A(originA) = s·(R·N)`. This admits
+  `PlacedCopy` along the common sweep axis without re-expressing either profile.
+  This new arm additionally requires zero section and axial displacement
+  and two hole-free, full-line, axis-aligned rectangular profiles. `Union`
+  and `Intersect` require identical rectangle bounds; `Cut` requires the
+  tool rectangle to lie strictly inside the target rectangle. These are
+  sufficient profile certificates; every other placed-axis pair falls back
+  to the existing mesh path. The earlier shared-frame-axis arm keeps its
+  existing profile admission. `Verify`'s read-only Intersect twin consumes
+  the same new certificate and applies its existing positive-volume gate.
+
+For both axis arms, B's denoted prism has A's exact section coordinates and
+only its sweep interval moves by `s` (G5). The placed-axis arm does not rely
+on a rounded `ApplyDir` result to prove collinearity: multiply the stored
+transform basis and frame normal in dyadic arithmetic. The existing
+same-transform arm likewise reads the stored frame origins exactly. An
+in-plane translation, a different linear basis, or different frame `U`/`V`
+takes the mesh path. No residual tolerance admits a pair; this is decad's
+own admission rule under `CLAUDE.md`'s reject-only rule.
+
+G5 obtains `s` by dividing the largest-magnitude nonzero component of G3's
+exact composed-origin difference by the corresponding component of its exact
+transformed axis vector `R·N` (`N` when the common transform basis is the
+identity). The coplanar arm uses zero. `prismplacement.ShiftedInterval` adds `s` to each B
+endpoint as a `big.Rat`; every §3.2 comparison is exact. `Union` and `Cut`
+keep an operand's own endpoint. `Intersect` rounds a selected shifted B
+endpoint once and charges `rationalFloatError` plus B's incoming axial
+displacement (§7). No rounded float sum admits a short tool.
 
 `Intersect` has one additional G6 arm: exactly one operand may have exactly
 one hole when the other is hole-free. Reorder this symmetric operation so the
@@ -512,7 +559,7 @@ regardless of who authored the input curves it was cut from.
 |---|---|
 | Antiparallel, tilted, or non-analytic-segment pairs | G1–G4, mesh path, unchanged |
 | A displaced pair whose operands' recorded vertices meet exactly, with no cut there | Known limit: §3.4's crossing charge reads cut vertices only, so a vertex where two recorded vertices meet is charged nothing, though the operands' displacements can open a crossing within `(δ_A + δ_B)/sin θ` of it; the result carries only §7's incoming terms there |
-| A parallel-offset pair outside G3's shared-axis arm: the operands carry different accumulated placements (one of them `Placed`, even along the shared normal), their frames' `U`/`V` differ in the stored bits (an offset of a tilted base plane re-normalises `U` one ulp apart), or the origin difference has an in-plane component (`CreatePlaneFromFrame` with an origin off A's axis) | G3, mesh path. The shared-axis arm could later admit an equal-rotation pair whose placements differ by a pure translation along `N`, by the same exact `d × N == 0` test over `(tB + oB) − (tA + oA)`; not built, since it changes the routing of every existing `Placed`-along-normal fixture |
+| A parallel-offset pair whose frames' `U`/`V` bits differ, whose transform bases differ, or whose exact offset has an in-plane component | G3, mesh path; the placed-axis arm admits equal section axes and equal transform bases with a purely axial composed-origin difference |
 | A tool plane whose normal is genuinely reversed (a frame built with `V` flipped, so `N` opposes the target's), whichever way the tool is extruded | G3's co-directional requirement, mesh path. Admitting it needs a reflection of B's section (`V` reversed, arcs re-sensed) that §4's selection does not carry. A tool sketched on a same-normal offset plane above the target and extruded `Against` is not this case: `Extrude` keeps the sketch frame and records the negative interval `[−D, 0]`, so the shared-axis arm admits it with the exact shift (G3, G5) |
 | `Union` with unequal z-intervals | overlapping or touching: a `stackedPrismPayload` (`docs/general-boolean-design.md` §3 A1); disjoint: G5, mesh path |
 | `Cut` whose tool ends inside the target and whose boundary crosses the target's (a side notch) | mesh path; the walls below the floor would split at the crossing, which `docs/stacked-prism-design.md` §7 leaves unplanned |
@@ -827,10 +874,10 @@ charged sum of the cells' volumes adds only that sum's own accumulated
 rounding (`internal/proofbound/bounds.go`'s `exactSumRound`).
 
 It is **exactly zero in one decidable case**: both inputs carry zero
-displacement, operand B's composed map into A's frame is the identity in the
-stored floats (G3's shared-axis arm: `xformB == xformA`, bit-identical `U`/`V`,
-and an origin difference exactly along `N` — `frameB == frameA` is its `d = 0`
-case), **every surviving edge is whole, AND every consumed
+displacement, operand B's section map into A's frame is the identity under
+G3's exact shared-axis or placed-axis arm (equal stored `U`/`V` and linear
+bases, with a composed-origin difference exactly along the common axis),
+**every surviving edge is whole, AND every consumed
 source segment is whole**. Two caller-drawn profiles on one sketch plane with
 no placement between them meet the first two conditions; they meet the third
 and fourth only where the merge cut nothing — one profile strictly containing
@@ -1052,20 +1099,15 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
   the analytic or mesh path with different exactness claims for
   visually-identical models; kept strict on the reject-only rule, at the cost
   of `RotationAround`'s known under-triggering (§3.3).
-- **§3.1 G3's shared-axis arm admits a parallel offset only under one
-  placement, bit-identical `U`/`V` and an origin difference exactly along
-  `N`.** That is the only shape with an exact statement that needs no
-  orthonormality assumption on the stored frame (§3.1's G3 row), and it is
-  the shape `CreateOffsetPlane` produces from a datum. Two narrower
-  alternatives were rejected. Admitting any parallel pair through the
-  nonidentity re-expression would make G5's shift depend on the stored
-  frame's own orthonormality defect, so the boundary case "tool cap meets
-  target cap" would be decided by rounding. Admitting a pair whose placements
-  differ by a translation along `N` is exact by the same argument and is the
-  natural next step, but it re-routes every existing fixture that positions a
-  tool with `Placed` along the normal, so it waits for its own change. The
-  coplanar arm keeps its float dot product against the literal zero; the
-  shared-axis arm's `d × N` test is exact over the stored floats.
+- **§3.1 G3's axis arms admit only equal stored `U`/`V` and transform bases
+  with an exact composed-origin difference along the transformed normal.**
+  `CreateOffsetPlane` on an axis-aligned datum and `PlacedCopy` along that
+  axis both qualify. No orthonormality assumption on the stored frame enters
+  the proof: the shared section coefficients are identical term for term.
+  A general nonidentity re-expression is still excluded because its rounded
+  shift could decide the boundary case "tool cap meets target cap". The
+  coplanar arm keeps its float dot product against literal zero, while both
+  axis arms use exact dyadic cross products over stored floats.
 - **Opposite normals stay outside G3.** A tool sketched on a plane whose
   normal is genuinely reversed (a frame built with `V` flipped) sweeps the
   same solid as one sketched on the target's own orientation, but its
@@ -1340,8 +1382,8 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   offset plane is `CreatePlaneFromFrame` with an in-plane origin component;
   a tool sketched on an offset of a tilted base plane (the test asserts the
   two frames' `U` differ in the stored bits, so the fixture cannot silently
-  stop being the one under test); a tool moved along the normal through
-  `Placed` instead of a sketch plane; and a tool sketched on a plane above the
+  stop being the one under test); a tool moved along the normal and sideways
+  through `Placed`; and a tool sketched on a plane above the
   target whose `V` is flipped, so its normal opposes the target's. Each
   asserts a `Faceted` face on the result, or the mesh path's own refusal
   where that path refuses the pair.
@@ -1364,8 +1406,8 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   `rationalFloatError(fl(0.1) + fl(0.3), z1)` (no float), and the published
   volume bound contains the exact rational volume `area · (fl(0.3))`. The
   fixture is shown to fail with the charge deleted.
-- The chain-depth refusal's wording: two tools `Placed` 16 mm down (the
-  shared-axis arm excludes a placement, so the pair stays on the mesh path)
+- The chain-depth refusal's wording: two tools `Placed` 16 mm down and
+  0.125 mm sideways (the exact axis arms exclude the sideways offset)
   leave rims coarser than the next pair's chord tolerance. A third tool clear
   of them cuts; a pin placed on the second hole's rim is refused with a plain
   `ErrUnsupported` that is not a `BooleanError`, names the `target`, quotes the

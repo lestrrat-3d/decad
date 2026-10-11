@@ -131,12 +131,10 @@ func TestPrismCutOffsetPlaneToolsChainAnalytically(t *testing.T) {
 }
 
 // TestPrismCutOffsetPlaneExclusionsTakeMeshPath keeps every parallel pair
-// outside G3's shared-axis arm on the mesh path (§4.4): each subtest's single
-// Cut builds and its result carries a Faceted face. Shown to fail, one
-// deletion at a time in prismplacement.SharedAxisOf: without the exact cross-product
-// test "in-plane origin component" went red, without the placement
-// comparison "placed along the normal" went red, and without the U/V
-// comparison "tilted base" went red.
+// outside G3's exact axis arms on the mesh path (§4.4): each subtest's single
+// Cut builds and its result carries a Faceted face. The origin and placement
+// offsets exercise the exact cross-product test, and the tilted base
+// exercises the U/V comparison.
 func TestPrismCutOffsetPlaneExclusionsTakeMeshPath(t *testing.T) {
 	t.Parallel()
 
@@ -181,12 +179,12 @@ func TestPrismCutOffsetPlaneExclusionsTakeMeshPath(t *testing.T) {
 		requireMeshCut(t, plate, offsetDiscBody(t, doc, w, below, 0, 18, 48))
 	})
 
-	t.Run("placed along the normal", func(t *testing.T) {
+	t.Run("placed off axis", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		w := sketch.NewWorld()
 		plate := offsetPlateBody(t, doc, w, w.XY())
-		tool := translated(t, offsetDiscBody(t, doc, w, w.XY(), 0, 18, 48), 0, 0, -16)
+		tool := translated(t, offsetDiscBody(t, doc, w, w.XY(), 0, 18, 48), 0.125, 0, -16)
 		requireMeshCut(t, plate, tool)
 	})
 

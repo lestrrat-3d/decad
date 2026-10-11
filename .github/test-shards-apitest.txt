@@ -391,7 +391,7 @@
 3	0.02	TestClearanceFarOriginTiltedPlanePairContainsTruth
 3	0.03	TestClearanceFrameOriginGapEnclosesExactGap
 3	1.60	TestClearanceOracleOverlapNeverSound
-3	0.01	TestClearanceSubTolOverlapNotCertified
+3	0.01	TestClearanceSubTolAxialOverlapMeasured
 3	0.04	TestContactPairPlanarManifoldPlateHole
 3	0.01	TestContactPairPlanarManifoldSlopedNormal
 3	0.02	TestContactPairRepeatReturnsEqualPrivateReport
@@ -1545,7 +1545,7 @@
 8	0.01	TestThickenRevolvePartialSweep
 8	0.00	TestThickenRibbonStraight
 8	0.02	TestUndercutNearTangentPullDecidedAtRecordedStart
-8	0.01	TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces
+8	0.02	TestPlacedAxisPrismBooleans
 8	0.00	TestUnionProfileRejectsTamperedBoundary
 8	0.28	TestUnionRefusesTangentCylinder
 8	0.01	TestUnstitchRevolveRoundTripStaysASheet
