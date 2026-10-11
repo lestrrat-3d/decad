@@ -279,7 +279,7 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 		}
 		p.nodeRound, p.snap, err = bevelBuildToothMesh(mesh, ring,
 			p.placed, p.original, p.caps, p.edges, p.rootNode,
-			record, motions[i], groups)
+			record, motions[i], groups, true)
 		if err != nil {
 			return nil, err
 		}
@@ -297,6 +297,11 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 		if err != nil {
 			return nil, err
 		}
+		upperSliver, err := bevelUpperFarSliverBound(ctx, p.original, p.caps, record.upper)
+		if err != nil {
+			return nil, err
+		}
+		p.upperBound = proofbound.AbsSumUpper(p.upperBound, upperSliver)
 		p.lowerBound, lowerLip, err = pointConeCapBound(far, p.caps, record.lower)
 		if err != nil {
 			return nil, err
@@ -357,16 +362,18 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 	maxAuditTriangles := 44_480 + 22_000*(len(teeth)-2)
 	maxAuditScans := uint64(12_000_000 * len(teeth))
 	if adaptive {
-		// Each authenticated cap has at most 10,000 source cells. One
-		// red-green pass adds at most three children per source cell,
-		// with two caps per tooth. Add that to the finite three-round
-		// pattern ceiling; the final mesh must fit this bound before
-		// the exact audit allocates its triangle lifts.
-		maxAuditTriangles += 6 * bevelCombineCapCellLimit * len(teeth)
-		// The real twelve-tooth source scanned 230,484,398 pairs.
-		// A bounded 25 million per tooth allows its measured work while
-		// rejecting patterns whose audit grows unexpectedly.
-		maxAuditScans = uint64(25_000_000 * len(teeth))
+		if plans[0].sourceCapCells > bevelCombineCapOnePassLimit {
+			// The second conforming pass is admitted only for caps between
+			// 10,001 and 12,000 source cells. Both final caps must each stay
+			// below 120,000 cells before the exact audit allocates lifts.
+			maxAuditTriangles += 2 * bevelCombineCapFinalLimit * len(teeth)
+			maxAuditScans = uint64(80_000_000 * len(teeth))
+		} else {
+			// One conforming pass adds at most three children per source
+			// cell, with two caps per tooth.
+			maxAuditTriangles += 6 * bevelCombineCapOnePassLimit * len(teeth)
+			maxAuditScans = uint64(25_000_000 * len(teeth))
+		}
 	} else if len(teeth) < 3 || len(teeth) > 8 {
 		return nil, fmt.Errorf("%w: patterned bevel audit requires three to eight teeth", ErrUnsupported)
 	}

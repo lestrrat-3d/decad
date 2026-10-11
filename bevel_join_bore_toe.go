@@ -278,7 +278,7 @@ func buildBevelPostJoinToeBore(ctx context.Context, d *Document, ref producerID,
 	// station. The joined pattern already proved its adaptive cap-cell ceiling.
 	// Its 25-million-per-tooth scan budget also covers the local bore rewrite:
 	// the real twelve-tooth source scans 221,081,767 pairs under 300 million.
-	maxAuditTriangles := 44_480 + 22_000*(12-2) + 6*bevelCombineCapCellLimit*12 + 2*n
+	maxAuditTriangles := 44_480 + 22_000*(12-2) + 6*bevelCombineCapOnePassLimit*12 + 2*n
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
 		mesh.verts, mesh.tris, maxAuditTriangles, 25_000_000*12); err != nil {
 		return nil, err

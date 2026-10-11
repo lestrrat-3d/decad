@@ -26,18 +26,18 @@ func TestBevelCapRefinementKeepsSharedEdgesAndBoundaryGroups(t *testing.T) {
 		{u: 3, v: 2, group: 3},
 		{u: 2, v: 0, group: 3},
 	}
-	bound := func(tri [3]int) float64 {
+	bound := func(points []bevelPathNode, tri [3]int) float64 {
 		b, _, _, err := pointConeTriangleBound(
-			[3]r3.Vec{nodes[tri[0]].p, nodes[tri[1]].p, nodes[tri[2]].p}, cone)
+			[3]r3.Vec{points[tri[0]].p, points[tri[1]].p, points[tri[2]].p}, cone)
 		require.NoError(t, err)
 		return b
 	}
-	small, large := bound(triangles[0]), bound(triangles[1])
+	small, large := bound(nodes, triangles[0]), bound(nodes, triangles[1])
 	require.Less(t, small, large)
 	limit := (small + large) / 2
 
 	refined, cells, perimeter, round, err := bevelRefineCap(t.Context(), nodes,
-		triangles, edges, record, limit)
+		triangles, edges, record, limit, bevelCombineCapSourceLimit)
 	require.NoError(t, err)
 	require.Len(t, cells, 6) // Four children of the marked cell; two of its neighbor.
 	require.Len(t, perimeter, 6)
@@ -62,6 +62,39 @@ func TestBevelCapRefinementKeepsSharedEdgesAndBoundaryGroups(t *testing.T) {
 		}
 	}
 	require.Greater(t, len(refined), len(nodes))
+
+	before := 0.0
+	for _, tri := range cells {
+		before = max(before, bound(refined, tri))
+	}
+	twiceNodes, twiceCells, twicePerimeter, twiceRound, err := bevelRefineCap(t.Context(),
+		refined, cells, perimeter, record, 0, 4*bevelCombineCapSourceLimit)
+	require.NoError(t, err)
+	require.Greater(t, twiceRound, 0.0)
+	require.Greater(t, len(twiceCells), len(cells))
+	require.LessOrEqual(t, len(twiceCells), 4*len(cells))
+	require.Len(t, twicePerimeter, 2*len(perimeter))
+	for i, edge := range perimeter {
+		require.Equal(t, edge.group, twicePerimeter[2*i].group)
+		require.Equal(t, edge.group, twicePerimeter[2*i+1].group)
+	}
+	after := 0.0
+	counts = map[pointConeEdge]int{}
+	for _, tri := range twiceCells {
+		after = max(after, bound(twiceNodes, tri))
+		for i := range 3 {
+			counts[orderedPointConeEdge(tri[i], tri[(i+1)%3])]++
+		}
+	}
+	require.Less(t, after, before)
+	for _, edge := range twicePerimeter {
+		require.Equal(t, 1, counts[orderedPointConeEdge(edge.u, edge.v)])
+	}
+	for edge, count := range counts {
+		if count != 1 {
+			require.Equal(t, 2, count, "interior edge %v must be shared", edge)
+		}
+	}
 }
 
 func TestBevelPatternSourceProjectionChargesWholeBodyBounds(t *testing.T) {

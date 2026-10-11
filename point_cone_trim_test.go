@@ -25,6 +25,44 @@ func TestPointConeTriangleBoundIncludesReciprocalCurvature(t *testing.T) {
 	require.GreaterOrEqual(t, alphaBound, departure)
 }
 
+func TestPointConeUpperFarPlaneSliverBound(t *testing.T) {
+	t.Parallel()
+	cone := &pointConeLimit{apex: big.NewRat(10, 1), slope: big.NewRat(1, 1)}
+	nodes := []bevelPathNode{
+		{p: r3.Vec{X: 5, Y: 4.9}},
+		{p: r3.Vec{X: 5, Y: 5.1}},
+		{p: r3.Vec{X: 5, Y: 5, Z: 0.1}},
+	}
+	bound, err := bevelUpperFarSliverBound(t.Context(), nodes, [][3]int{{0, 1, 2}}, cone)
+	require.NoError(t, err)
+	inside := nodes[0].p.Scale(0.6).Add(nodes[1].p.Scale(0.2)).Add(nodes[2].p.Scale(0.2))
+	alpha := 10 / (inside.X + math.Hypot(inside.Y, inside.Z))
+	require.Greater(t, alpha, 1.0)
+	require.GreaterOrEqual(t, bound, inside.Scale(alpha).Sub(inside).Len())
+
+	for i := range nodes {
+		nodes[i].p.Y += 2
+	}
+	bound, err = bevelUpperFarSliverBound(t.Context(), nodes, [][3]int{{0, 1, 2}}, cone)
+	require.NoError(t, err)
+	require.Zero(t, bound)
+}
+
+func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
+	t.Parallel()
+	cone := &pointConeLimit{apex: big.NewRat(10, 1), slope: big.NewRat(1, 1)}
+	far := r3.Vec{X: 5, Y: 4.9}
+	sample, err := pointConeFactor(far, cone)
+	require.NoError(t, err)
+	require.Less(t, sample.q+sample.qError, 1.0)
+	_, _, err = bevelUpperCapNode(far, sample, false)
+	require.ErrorIs(t, err, ErrUnsupported)
+	clipped, round, err := bevelUpperCapNode(far, sample, true)
+	require.NoError(t, err)
+	require.Equal(t, far, clipped)
+	require.GreaterOrEqual(t, round, far.Scale(sample.alpha).Sub(far).Len())
+}
+
 func TestPointConeSourceMustClearFiniteFarCap(t *testing.T) {
 	t.Parallel()
 	cone := &pointConeLimit{far: big.NewRat(-2, 1)}
