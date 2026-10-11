@@ -21,8 +21,8 @@ func tryBevelPatternCombineJoin(ctx context.Context, d *Document, ref producerID
 	if !ok || first.xform != r3.Identity() || first.pointCone == nil {
 		return nil, false, nil
 	}
-	if len(tools) < 3 || len(tools) > 12 {
-		return nil, true, fmt.Errorf("%w: straight CombineJoin accepts three to twelve teeth", ErrUnsupported)
+	if len(tools) < 3 || len(tools) > 16 {
+		return nil, true, fmt.Errorf("%w: straight CombineJoin accepts three to sixteen teeth", ErrUnsupported)
 	}
 	record := first.pointCone
 	if record.lower == nil || record.upper == nil || record.base.pointSection == nil ||
