@@ -35,6 +35,10 @@ import (
 // rebuild (Placed) reproduces the same origins.
 type facetGroup struct {
 	origins []FeatureRef
+	// centroid is available only when this entire source group has a separate
+	// certificate. A disconnected group cannot give that reading to a patch.
+	centroid    VecMeasurement
+	hasCentroid bool
 	// surface is set by a source whose authenticated surface is retained,
 	// including structural trims and the smooth three-section loft. Ordinary
 	// mesh booleans leave it nil.
@@ -155,6 +159,13 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	}
 	next.groups = append([]facetGroup(nil), fp.groups...)
 	for i := range next.groups {
+		if next.groups[i].hasCentroid {
+			reading, err := placedCapCentroid(next.groups[i].centroid, delta)
+			if err != nil {
+				return nil, err
+			}
+			next.groups[i].centroid = reading
+		}
 		// A later structural trim requires the unplaced source. Its retained
 		// public surface identity still moves with this faceted restatement.
 		if cone, ok := next.groups[i].surface.(Cone); ok {
@@ -282,6 +293,14 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
+	groupPatch := make(map[int]int)
+	for i, group := range pp.src {
+		if first, exists := groupPatch[group]; !exists {
+			groupPatch[group] = patch[i]
+		} else if first != patch[i] {
+			groupPatch[group] = -1
+		}
+	}
 
 	faceIdx := map[int]*Face{}
 	facePlanar := map[*Face]bool{}
@@ -309,6 +328,10 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 				denoted:     pp.groups[pp.src[i]].denoted,
 				normalBound: pp.groups[pp.src[i]].normalBound,
 				reversed:    pp.groups[pp.src[i]].reversed,
+			}
+			group := pp.groups[pp.src[i]]
+			if group.hasCentroid && groupPatch[pp.src[i]] == patch[i] {
+				f.centroid, f.hasCentroid = group.centroid, true
 			}
 			faceIdx[patch[i]] = f
 			facePlanar[f] = pp.groups[pp.src[i]].planar

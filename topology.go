@@ -580,6 +580,10 @@ type Face struct {
 	// areaBound is the proven error bound on area: analytic float evaluation
 	// or the composed chord bound for a boolean-built Faceted face.
 	areaBound float64
+	// centroid is present only for a face with its own proved area-centroid
+	// certificate; whole-group readings are not copied onto split patches.
+	centroid    VecMeasurement
+	hasCentroid bool
 	// axialDelta is the proven displacement of this planar face along its own
 	// normal. A body-relative ToFace stop carries this selected face's bound
 	// into the level it computes; hasAxialDelta distinguishes an exact zero
@@ -785,6 +789,16 @@ func (f *Face) Area() (Measurement, error) {
 		Exactness: exactnessOf(f.areaBound),
 		Bound:     units.SquareMillimeters(f.areaBound),
 	}, nil
+}
+
+// Centroid returns the area centroid of a face with a proved certificate.
+// Point-loft far caps and their planar Split caps provide one; other faces
+// currently return ErrUnsupported.
+func (f *Face) Centroid() (VecMeasurement, error) {
+	if !f.hasCentroid {
+		return VecMeasurement{}, fmt.Errorf("%w: this face has no bounded area centroid", ErrUnsupported)
+	}
+	return f.centroid, nil
 }
 
 // isPlanar reports whether the face this evaluator holds is FLAT: an analytic

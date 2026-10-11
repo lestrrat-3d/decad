@@ -28,6 +28,8 @@ type pointPlaneLimit struct {
 	surface                 Plane
 	origins                 []FeatureRef
 	normalBound, mapStretch float64
+	centroid                VecMeasurement
+	hasCentroid             bool
 	// Whether the sheet's reported normal faces away from the apex.
 	frameTowardFar bool
 }
@@ -269,6 +271,11 @@ func (d *Document) splitPointPlane(ctx context.Context, budget *proofbound.WorkB
 	if err := validatePointPlane(record.base, plane); err != nil {
 		return nil, true, err
 	}
+	if center, proved, err := pointPlaneCapCentroid(ctx, record.base, plane); err != nil {
+		return nil, true, err
+	} else {
+		plane.centroid, plane.hasCentroid = center, proved
+	}
 	if record.lower != nil {
 		switch pointPlaneOrder(record.base, record.lower, plane) {
 		case -1:
@@ -326,13 +333,16 @@ func pointPlaneCapGroup(ref producerID, role string, plane *pointPlaneLimit,
 		)
 		origins := append([]FeatureRef(nil), base.groups[len(base.groups)-1].origins...)
 		origins = append(origins, FeatureRef{producer: ref, Role: role})
+		sourceCap := base.groups[len(base.groups)-1]
 		return facetGroup{origins: origins, surface: Plane{Frame: frame}, planar: true,
-			reversed: apexSide.Sign() > 0}
+			reversed: apexSide.Sign() > 0,
+			centroid: sourceCap.centroid, hasCentroid: sourceCap.hasCentroid}
 	}
 	origins := append([]FeatureRef(nil), plane.origins...)
 	origins = append(origins, FeatureRef{producer: ref, Role: role})
 	return facetGroup{origins: origins, surface: plane.surface, planar: true,
-		normalBound: plane.normalBound, reversed: reverse}
+		normalBound: plane.normalBound, reversed: reverse,
+		centroid: plane.centroid, hasCentroid: plane.hasCentroid}
 }
 
 func pointPlaneRing(ctx context.Context, base facetedPayload, plane *pointPlaneLimit) (

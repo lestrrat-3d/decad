@@ -116,6 +116,15 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			tooth, err := doc.LoftFromPoint(t.Context(), r3.NewVec(apexX, 0, 0),
 				profileSketch, profileSketch.Profiles()[0])
 			require.NoError(t, err)
+			farFaces, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(tooth))).SelectFaces(tooth)
+			require.NoError(t, err)
+			require.Len(t, farFaces, 1)
+			farCenter, err := farFaces[0].Centroid()
+			require.NoError(t, err)
+			require.Less(t, farCenter.Bound.Base(), 0.01)
+			require.InDelta(t, 10, farCenter.Value.X, farCenter.Bound.Base()+1e-12)
+			require.InDelta(t, 0, farCenter.Value.Y, farCenter.Bound.Base()+1e-12)
+			require.InDelta(t, 0, farCenter.Value.Z, farCenter.Bound.Base()+1e-12)
 
 			sheetSketch, err := world.CreateSketch(world.XY())
 			require.NoError(t, err)
@@ -141,13 +150,14 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 				away = -1
 			}
 			for _, tc := range []struct {
-				body *decad.Body
-				role decad.FeatureRef
-				want float64
+				body    *decad.Body
+				role    decad.FeatureRef
+				want    float64
+				centerX float64
 			}{
-				{pieces[0], decad.CapEnd(pieces[0]), away},
-				{pieces[1], decad.CapStart(pieces[1]), -away},
-				{pieces[1], decad.CapEnd(pieces[1]), away},
+				{pieces[0], decad.CapEnd(pieces[0]), away, cutX},
+				{pieces[1], decad.CapStart(pieces[1]), -away, cutX},
+				{pieces[1], decad.CapEnd(pieces[1]), away, 10},
 			} {
 				faces, err := decad.Faces(decad.FaceCreatedBy(tc.role)).SelectFaces(tc.body)
 				require.NoError(t, err)
@@ -157,7 +167,23 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 				normal, err := faces[0].NormalAt(plane.Frame.Origin())
 				require.NoError(t, err)
 				require.Greater(t, normal.Value.X*tc.want, 0.99)
+				center, err := faces[0].Centroid()
+				require.NoError(t, err)
+				require.Less(t, center.Bound.Base(), 0.01)
+				require.InDelta(t, tc.centerX, center.Value.X, center.Bound.Base()+1e-12)
+				require.InDelta(t, 0, center.Value.Y, center.Bound.Base()+1e-12)
+				require.InDelta(t, 0, center.Value.Z, center.Bound.Base()+1e-12)
 			}
+			motion, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(0.2))
+			require.NoError(t, err)
+			placed, err := pieces[1].Placed(t.Context(), motion)
+			require.NoError(t, err)
+			placedCap, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(pieces[1]))).SelectFaces(placed)
+			require.NoError(t, err)
+			require.Len(t, placedCap, 1)
+			placedCenter, err := placedCap[0].Centroid()
+			require.NoError(t, err)
+			require.InDelta(t, cutX, placedCenter.Value.X, placedCenter.Bound.Base()+1e-12)
 			for _, piece := range pieces {
 				mesh, err := piece.Tessellate(t.Context(), units.Millimeters(0.1),
 					decad.WithVerification(decad.VerifyAll))
