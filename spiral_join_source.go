@@ -46,6 +46,7 @@ type spiralFirstJoinSource struct {
 	flank      [2]freeform.BezierSpan // root-containing cubic of groups 0 and 2
 	crossings  [2][9]spiralRootCrossing
 	junctions  [2][2]spiralJunction // flank 0/2, then toe/heel
+	heelSeam   *spiralHeelRootSeam
 }
 
 // certifySpiralFirstJoin proves that each of the two fitted flanks crosses
@@ -176,6 +177,11 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	// The ordered exact Cut and Intersect define the operative tool-cone cap
 	// as this source solid's trace on that cone. The retained cap group IDs
 	// identify held facets only; they do not establish the true trace.
+	seam, ok, err := certifySpiralHeelRootSeam(ctx, proof)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	proof.heelSeam = seam
 	return proof, true, nil
 }
 
