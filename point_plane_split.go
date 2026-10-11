@@ -414,7 +414,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 		record.upper, base, record.upper == nil, upperReversed))
 	triangles := make([][3]int, 0, 2*n+2*(len(base.tris)-n))
 	sources := make([]int, 0, cap(triangles))
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, err
