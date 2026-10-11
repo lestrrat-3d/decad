@@ -545,6 +545,7 @@
 4	0.04	TestArcFragmentSplitHemispheresAreTight
 4	0.05	TestAsymmetricChamferOnBrepLoopSideOverrun
 4	0.03	TestAsymmetricChamferOnStackedLoop
+4	18.54	TestBevelOneToothJoinPreservesSourceFacesAndVerifiedSolid
 4	0.01	TestBlindCutFromBottomFace
 4	0.00	TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne
 4	0.00	TestBox
