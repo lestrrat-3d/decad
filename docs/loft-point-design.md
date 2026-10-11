@@ -234,8 +234,9 @@ if !mesh.BoundaryVerified() || !mesh.VolumeVerified() {
 }
 ```
 
-`apitest/bevel_join_test.go` builds and verifies the 8/8 blank and its first
-trimmed tooth through public Sketch and Decad APIs.
+`decad-gallery/models/bevelgear/join_test.go` builds and verifies the 8/8
+blank with its first trimmed tooth. Decad's `bevel_join_test.go` checks the
+shared ring's held vertices, boundary bound and omitted root facets.
 
 ## Two-tooth bevel blank union
 
@@ -272,8 +273,11 @@ occupied-volume allowance charges both source fans and both cap maps, then
 sweeps the one shared held boundary by its construction error. The copied
 tooth's placed source faces and the original tooth's faces
 retain their Cone and NURBSSurface tags. The reference 8/8 pair passes
-`Tessellate(0.1 mm, VerifyAll)`. Its result retains the immutable blank,
-original trimmed tooth and placed copy for the following continuation.
+`Tessellate(0.1 mm, VerifyAll)` in
+`decad-gallery/models/bevelgear/join_test.go`. Decad's `bevel_join_test.go`
+checks the second root sector, charged tooth separation and rotation gate.
+The result retains the immutable blank, original trimmed tooth and placed
+copy for the following continuation.
 
 ## Three-to-eight-tooth bevel pattern union
 
