@@ -195,6 +195,35 @@ refusal it drops is one a tighter proven bound makes unnecessary. The gate
 stays reject-only: it compares a proven bound against a proven depth and
 never reads the geometry to admit.
 
+### 3.6 The certified first curved-tooth Union
+
+The first Union of an authenticated nine-section curved tooth and its finite
+bevel blank may use a temporary held tooth mesh. Its toe and heel cap vertices
+move only in world Y, while the indexed facets and their source faces stay
+the same. For every changed facet, the proxy raises its maximum corner bound
+to at least the original facet bound plus the largest actual vertex move.
+`meshToBoolMesh` therefore receives a two-sided source departure for every
+changed cap and side facet. The proxy is local to this Union; the operand body
+still describes the original exact tooth.
+
+The source gate certifies the finite blank meridians, ordered cone trims and
+complete true contact curves. The near-face pass checks each source-separated
+pair for exact held-facet disjointness. It checks every contact on a tooth
+facet above the ordinary pair tolerance against the admitted source pairs,
+then checks every stitched cross-operand edge against the admitted source
+families. Complete held chains are compared in both directions with their
+exact source curves before `FacetedCurve.Bound` is published. All other
+contacts and the generic mesh Boolean retain their ordinary gates.
+
+The proxy's occupied-volume charge is the largest actual Y move times the
+sum of exact projected XZ areas of every changed facet. Its endpoints must
+both be closed, oriented meshes with identical indexed triangles. The area
+slack adds both old and new changed-facet area upper bounds. The result also
+adds its held area upper bound and both operands' true area upper bounds, so
+`Face.Area` stays finite but can have a broad bound. The unchanged Boolean
+composition adds the two operand symmetric-difference bounds and Stitch's
+rounding charge.
+
 ## 4. Consumers
 
 ### 4.1 The faceted payload record
