@@ -36,56 +36,75 @@ type MeshIntervals struct {
 // anchor, six times the volume, 24 times each first moment and 120 times each
 // second moment: for one tetrahedron with det = a·(b×c) and s = a+b+c,
 // 6V = det, 24P_i = det·s_i and 120Q_ij = det·(s_i s_j + Σ_v v_i v_j).
-// Every coordinate is an exact rational, so the sums round nothing.
+// Coordinates share one power-of-two denominator. Accumulating their integer
+// numerators avoids normalizing a rational after every triangle; the sums
+// round nothing.
 type tetraMoments struct {
-	volume6 *big.Rat
-	first   [3]*big.Rat
-	second  [3][3]*big.Rat // upper triangle, i <= j
+	volume6 big.Int
+	first   [3]big.Int
+	second  [3][3]big.Int // upper triangle, i <= j
 }
 
 func newTetraMoments() *tetraMoments {
-	m := &tetraMoments{volume6: new(big.Rat)}
-	for i := range 3 {
-		m.first[i] = new(big.Rat)
-		for j := range 3 {
-			m.second[i][j] = new(big.Rat)
-		}
-	}
-	return m
+	return new(tetraMoments)
 }
 
 // add folds one tetrahedron given its three anchored vertices and their exact
 // determinant.
-func (m *tetraMoments) add(a, b, c [3]*big.Rat, det *big.Rat) {
-	m.volume6.Add(m.volume6, det)
-	var sum [3]*big.Rat
+func (m *tetraMoments) add(a, b, c [3]*big.Int, det *big.Int) {
+	m.volume6.Add(&m.volume6, det)
+	var sum [3]big.Int
+	var term, paired big.Int
 	for i := range 3 {
-		sum[i] = new(big.Rat).Add(new(big.Rat).Add(a[i], b[i]), c[i])
-		m.first[i].Add(m.first[i], new(big.Rat).Mul(det, sum[i]))
+		sum[i].Add(a[i], b[i])
+		sum[i].Add(&sum[i], c[i])
+		term.Mul(det, &sum[i])
+		m.first[i].Add(&m.first[i], &term)
 	}
 	for i := range 3 {
 		for j := i; j < 3; j++ {
-			paired := new(big.Rat).Mul(sum[i], sum[j])
-			for _, v := range [][3]*big.Rat{a, b, c} {
-				paired.Add(paired, new(big.Rat).Mul(v[i], v[j]))
+			paired.Mul(&sum[i], &sum[j])
+			for _, v := range [][3]*big.Int{a, b, c} {
+				term.Mul(v[i], v[j])
+				paired.Add(&paired, &term)
 			}
-			m.second[i][j].Add(m.second[i][j], new(big.Rat).Mul(det, paired))
+			term.Mul(det, &paired)
+			m.second[i][j].Add(&m.second[i][j], &term)
 		}
 	}
 }
 
 // moments returns V, P and the upper triangle of Q about the anchor.
-func (m *tetraMoments) moments() (*big.Rat, [3]*big.Rat, [3][3]*big.Rat) {
-	volume := new(big.Rat).Quo(m.volume6, big.NewRat(6, 1))
+func (m *tetraMoments) moments(scale *big.Int) (*big.Rat, [3]*big.Rat, [3][3]*big.Rat) {
+	scale3 := new(big.Int).Exp(scale, big.NewInt(3), nil)
+	scale4 := new(big.Int).Mul(scale3, scale)
+	scale5 := new(big.Int).Mul(scale4, scale)
+	volume := new(big.Rat).SetFrac(new(big.Int).Set(&m.volume6),
+		new(big.Int).Mul(scale3, big.NewInt(6)))
 	var first [3]*big.Rat
 	var second [3][3]*big.Rat
 	for i := range 3 {
-		first[i] = new(big.Rat).Quo(m.first[i], big.NewRat(24, 1))
+		first[i] = new(big.Rat).SetFrac(new(big.Int).Set(&m.first[i]),
+			new(big.Int).Mul(scale4, big.NewInt(24)))
 		for j := i; j < 3; j++ {
-			second[i][j] = new(big.Rat).Quo(m.second[i][j], big.NewRat(120, 1))
+			second[i][j] = new(big.Rat).SetFrac(new(big.Int).Set(&m.second[i][j]),
+				new(big.Int).Mul(scale5, big.NewInt(120)))
 		}
 	}
 	return volume, first, second
+}
+
+func tetraDet(a, b, c [3]*big.Int) *big.Int {
+	var det, cross, term big.Int
+	for i := range 3 {
+		j, k := (i+1)%3, (i+2)%3
+		cross.Mul(b[j], c[k])
+		term.Mul(b[k], c[j])
+		cross.Sub(&cross, &term)
+		term.Mul(a[i], &cross)
+		det.Add(&det, &term)
+	}
+	return &det
 }
 
 // HeldMeshIntervals integrates an audited triangle set about anchor and
@@ -97,9 +116,8 @@ func HeldMeshIntervals(ctx context.Context, bounds MeshBounds, anchor r3.Vec, ve
 	// The binary64 vertex coordinates are exact rational inputs; only the
 	// final readings round.
 	anchorExact := proofarith.XptOf(anchor)
-	vertices := make([][3]*big.Rat, len(verts))
 	lifted := make([]proofarith.Xpt, len(verts))
-	maxMesh := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
+	maxScaleBits := 1
 	budget := proofbound.NewWorkBudget(ctx)
 	for i, v := range verts {
 		if err := budget.Step(); err != nil {
@@ -109,27 +127,44 @@ func HeldMeshIntervals(ctx context.Context, bounds MeshBounds, anchor r3.Vec, ve
 			return MeshIntervals{}, fmt.Errorf("%w: mesh mass vertex is nonfinite", decaderr.ErrUnsupported)
 		}
 		lifted[i] = proofarith.Xsub(proofarith.XptOf(v), anchorExact)
-		x, y, z := proofarith.XhpRat(proofarith.Xhp(lifted[i]))
-		vertices[i] = [3]*big.Rat{x, y, z}
-		for axis, coord := range vertices[i] {
-			magnitude := new(big.Rat).Abs(coord)
-			if magnitude.Cmp(maxMesh[axis]) > 0 {
-				maxMesh[axis] = magnitude
+		if bits := lifted[i].W.BitLen(); bits > maxScaleBits {
+			maxScaleBits = bits
+		}
+	}
+	// XptOf and Xsub keep dyadic coordinates over a power-of-two weight.
+	// Align once, then integrate every tetrahedron over that shared scale.
+	scale := new(big.Int).Lsh(big.NewInt(1), uint(maxScaleBits-1))
+	vertices := make([][3]*big.Int, len(verts))
+	var maxMeshNum [3]big.Int
+	for i, point := range lifted {
+		if err := budget.Step(); err != nil {
+			return MeshIntervals{}, err
+		}
+		shift := uint(maxScaleBits - point.W.BitLen())
+		for axis, numerator := range [3]*big.Int{point.X, point.Y, point.Z} {
+			coord := new(big.Int).Lsh(numerator, shift)
+			vertices[i][axis] = coord
+			if abs := new(big.Int).Abs(coord); abs.Cmp(&maxMeshNum[axis]) > 0 {
+				maxMeshNum[axis].Set(abs)
 			}
 		}
+	}
+	var maxMesh [3]*big.Rat
+	for axis := range maxMesh {
+		maxMesh[axis] = new(big.Rat).SetFrac(&maxMeshNum[axis], scale)
 	}
 	sums := newTetraMoments()
 	for _, tri := range tris {
 		if err := budget.Step(); err != nil {
 			return MeshIntervals{}, err
 		}
-		det := proofarith.XdotRat(lifted[tri[0]], proofarith.Xcross(lifted[tri[1]], lifted[tri[2]]))
+		det := tetraDet(vertices[tri[0]], vertices[tri[1]], vertices[tri[2]])
 		sums.add(vertices[tri[0]], vertices[tri[1]], vertices[tri[2]], det)
 	}
 	if err := budget.Err(); err != nil {
 		return MeshIntervals{}, err
 	}
-	volume, first, second := sums.moments()
+	volume, first, second := sums.moments(scale)
 	if volume.Sign() <= 0 {
 		return MeshIntervals{}, fmt.Errorf("%w: mesh volume is not positive", ErrMeshIntervalUnproved)
 	}
