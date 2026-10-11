@@ -17,11 +17,10 @@ const ChordVectorCost = 2
 // above the chord vector it asks SpanChordVector for: 2 Mul + 1 Add.
 const ChordSquaredCost = 3
 
-// HodographGapCost is SpanHodographGapUpper's own per-index operation count: 3
-// for hu (Sub, Mul, Sub), 3 for hv, 2 Mul + 1 Add for the squared norm, and 1
-// Cmp against its running maximum. It is charged per POINT rather than per
-// index, which over-covers the loop's own n−1 indices and absorbs the degree
-// rational the loop builds once inside that slack.
+// HodographGapCost retains the original per-index charge: 3 operations for
+// each coordinate's deviation, 3 for its squared norm, and 1 comparison.
+// It is charged per POINT rather than per index, preserving the same work
+// budget after the exact calculation switches to shared-denominator integers.
 const HodographGapCost = 10
 
 // RatQuarterCost is RatQuarterOf's own per-call operation count: 1 big.NewRat
@@ -101,29 +100,44 @@ func SpanHodographGapSquared(w *FreeformWork, span BezierSpan) (*big.Rat, error)
 	if n < 2 {
 		return new(big.Rat), nil
 	}
-	dxU, dxV, err := SpanChordVector(w, span)
+	// Keep the chord vector's original charge and refusal order. The exact
+	// integer calculation below forms the same vector over a common denominator.
+	_, _, err := SpanChordVector(w, span)
 	if err != nil {
 		return nil, err
 	}
 	if err := w.Step(CostMul(CostMul(HodographGapCost, uint64(n)), WidthUnits(SpanBitWidth(span)))); err != nil {
 		return nil, err
 	}
-	p := big.NewRat(int64(n-1), 1)
+	den := big.NewInt(1)
+	for _, point := range span {
+		den = RatLCM(den, point.U.Denom())
+		den = RatLCM(den, point.V.Denom())
+	}
+	u := make([]*big.Int, n)
+	v := make([]*big.Int, n)
+	for i, point := range span {
+		u[i] = ScaledNumerator(point.U, den)
+		v[i] = ScaledNumerator(point.V, den)
+	}
+	dxU := new(big.Int).Sub(u[n-1], u[0])
+	dxV := new(big.Int).Sub(v[n-1], v[0])
+	p := big.NewInt(int64(n - 1))
 
-	var maxSq *big.Rat
+	var maxSq *big.Int
 	for i := 0; i+1 < n; i++ {
-		hu := new(big.Rat).Sub(span[i+1].U, span[i].U)
+		hu := new(big.Int).Sub(u[i+1], u[i])
 		hu.Mul(hu, p)
 		hu.Sub(hu, dxU)
-		hv := new(big.Rat).Sub(span[i+1].V, span[i].V)
+		hv := new(big.Int).Sub(v[i+1], v[i])
 		hv.Mul(hv, p)
 		hv.Sub(hv, dxV)
-		sq := new(big.Rat).Add(new(big.Rat).Mul(hu, hu), new(big.Rat).Mul(hv, hv))
+		sq := new(big.Int).Add(new(big.Int).Mul(hu, hu), new(big.Int).Mul(hv, hv))
 		if maxSq == nil || sq.Cmp(maxSq) > 0 {
 			maxSq = sq
 		}
 	}
-	return maxSq, nil
+	return new(big.Rat).SetFrac(maxSq, new(big.Int).Mul(den, den)), nil
 }
 
 // RatQuarterOf returns the exact rational q/4, the radicand
