@@ -97,7 +97,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Tessellation of `Body.Patch` with a curved face or edge outside a single-circle prism sheet filled in one call, or with a nonzero face-normal bound | `ErrUnsupported`: no shared chording for that face or edge | `docs/surface-design.md` §10; `docs/tessellation-design.md` §2 |
 | `Stitch` closing a revolve sheet whose wall tags are not exactly their records: a tilted or round-anchored axis, a near-parallel or near-perpendicular side, a snapped centre | `ErrUnsupported` (R8, `stitchFluxTagsDenoted`) | `docs/surface-design.md` §6.4 |
 | `Extend` of a partially revolved ribbon | `ErrUnsupported` (RS14) | `docs/surface-intersection-design.md` §2.2 |
-| `Trim`/`Extend`/`Split` over a pair sharing no generator | Refused | `docs/surface-intersection-design.md` §4 |
+| `Trim`/`Extend`/`Split` over a pair sharing no generator, except a point loft split by a finite world-XY line `ExtrudeChain` sheet | Refused outside the bounded point-loft split class | `docs/surface-intersection-design.md` §4, `docs/loft-point-design.md` "Planar split of a point loft" |
 | Tolerant stitch, Ruled, Boundary Fill | Refused permanently | `docs/surface-design.md` §1.3 |
 | Reverse Normal | Named, staged for no increment | `docs/surface-design.md` §1.4 |
 

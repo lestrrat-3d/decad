@@ -73,5 +73,6 @@ The rules for rows live in `docs/layout.md`.
 | `classb.go` | Class-B admission and result adapters. See general-boolean §3 B. |
 | `classb_crossing.go` | Class-B scene and BRep adapters. See general-boolean §5, §10. |
 | `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |
+| `point_plane_split.go` | Splits a point loft by a planar chain sheet. See loft-point design. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
 | `boolean_body.go` | Builds faceted bodies and readings from an audited mesh. See evaluator §9. |

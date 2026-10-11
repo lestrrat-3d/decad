@@ -37,6 +37,48 @@ held mesh bound is `ErrUnsupported`; the caller may use a larger tolerance.
 This first point-section form has no holes, section alignment or surface
 result option.
 
+## Planar split of a point loft
+
+`Document.Split` admits an unplaced `LoftFromPoint` body and one unplaced,
+single-line `ExtrudeChain` sheet whose source sketch is world XY and whose
+straight sweep is along world Z. The line and sweep must span every cut
+section, and every source ray must cross the sheet plane strictly between the
+apex and the far profile. A split result may be split again by another sheet
+in this class. Other point-loft/sheet pairs keep `ErrUnsupported`.
+
+The sheet's stored line endpoints define its exact rational plane. For each
+far-section point `p`, the ray from the recorded apex `a` meets that plane
+at `a + α(p)(p-a)`, with `α(p) = d/(n·(p-a))`. Here `n` is the exact cross
+product of the line direction and world Z, and `d` is the exact plane
+offset from the apex. The entry gate uses rational signs and the original
+point loft's boundary displacement to prove `0 < α < 1` over its whole
+source cap. Consecutive planes are ordered over that same cap before any
+piece is built. A sheet missing a ray, crossing an existing cut plane, or
+ending inside the section refuses without consuming either operand.
+
+Every result is rebuilt from the original point-loft fan, never from a
+previously rounded slab. The evaluator maps each original far-ring station
+to its lower and upper plane, adds the corresponding cap triangles, and
+keeps the original side face roles beside fresh `capStart` and `capEnd`
+roles. A boundary crossing audit must accept each rounded result before
+the document commits both pieces. The cap faces report the cutting sheet's
+`Plane` surface. Their outward signs come from comparing the actual sheet
+face frame with the exact apex-away plane normal, independently of Sketch
+line endpoint order. The original far cap keeps its source-plane tag and
+takes its outward sign from the exact side of that plane holding the apex.
+Their selectors remain planar after subsequent splits.
+
+The source-to-held boundary bound is carried through the rational ray-plane
+map using a lower bound on its denominator and an upper bound on its
+Lipschitz factor. Exact-rational intersections are rounded once; their
+coordinate errors add to that bound. The source point loft's occupied-volume
+allowance also bounds each exact clipped piece: intersecting two sets with
+the same half-spaces cannot enlarge their symmetric difference. A separate
+swept-boundary allowance covers rounding of the clipped held mesh. Area
+slack bounds each true and held patch separately before summing their
+non-cancelling difference. `Tessellate(0.1 mm, VerifyAll)` exercises both
+the boundary and occupied-volume certificates on the real tooth.
+
 ## Coaxial finite cone trims
 
 `Cut` and `Intersect` retain the point loft's authenticated fan when the

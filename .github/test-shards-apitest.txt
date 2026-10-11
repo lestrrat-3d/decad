@@ -10,7 +10,7 @@
 #   shard 1:  291.46s over 116 tests
 #   shard 2:  177.82s over 204 tests
 #   shard 3:   43.63s over 218 tests
-#   shard 4:   40.25s over 206 tests
+#   shard 4:   53.23s over 210 tests
 #   shard 5:   80.90s over 199 tests
 #   shard 6:   90.77s over 195 tests
 #   shard 7:   92.78s over 200 tests
@@ -649,6 +649,10 @@
 4	0.01	TestPlacementContextCancelsFullRevolveShellAssembly
 4	0.66	TestPlacementContextVariantsCancelFacetedRebuild
 4	0.02	TestPlanarManifoldEdgeThroughTrayFloor
+4	7.46	TestPointLoftParallelSheetEightSlices
+4	0.01	TestPointLoftParallelSheetFarCapFollowsApexSide
+4	0.67	TestPointLoftParallelSheetRefusesShortToolAtomically
+4	4.84	TestPointLoftParallelSheetReversedLineKeepsOutwardCapNormals
 4	0.01	TestPrismCutCleanNestingKeepsAToolArcEndTheAnglesMiss
 4	0.00	TestPrismCutCrossingBoxesResolvesAnalytically
 4	0.03	TestPrismCutIntersectNonCoplanarPairStillTakesMeshPath

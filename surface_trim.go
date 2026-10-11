@@ -461,6 +461,9 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
+	if pieces, handled, err := d.splitPointPlane(ctx, budget, target, tool); handled {
+		return pieces, err
+	}
 	// S1 routes a revolve pair to its own arm (surface_split_revolve.go); a
 	// mixed pair falls through to admitSplitPair, whose S1 names both
 	// generators.
