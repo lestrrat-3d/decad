@@ -48,7 +48,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/linkagebound/loopchain/` | Sketch loop enclosures. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
 | `internal/freeform/` | Free-form curve proofs. |
-| `internal/meshbool/` | Pair chord inputs, mesh boolean contact, subdivision, stitching, embedding, audits. See evaluator §9. |
+| `internal/meshbool/` | Pair chord inputs, mesh boolean contact, subdivision, stitching, embedding, exact similarity images and audits. See evaluator §9. |
 | `internal/pointquery/` | Exact point-to-mesh distance and the occupied-volume transfer proof. See point-containment design. |
 | `internal/facetedtopology/` | Chains audited mesh face boundaries and selects loops. See evaluator §9. |
 | `internal/clearance/` | Clearance geometry and cell sums. See clearance design. |

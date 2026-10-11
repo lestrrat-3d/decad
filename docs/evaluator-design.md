@@ -738,6 +738,14 @@ feature's check-then-commit are still unguarded, which is why the document as a 
 for concurrent mutation (core §12).
 
 `Body.Placed`, `Body.Duplicate`, and `Body.PlacedCopy` pass the caller's context through payload re-evaluation. Faceted placement polls that context while transforming vertices, auditing and rebuilding topology, and recomputing measurements.
+For a faceted payload, the stored binary64 placement basis is read as an
+exact rational map. Its certified length stretch multiplies every old vertex
+bound and the pair diameter used by centroid bounds; its determinant charge
+multiplies the old occupied-volume gap. Area
+slack gains the old slack's stretch, twice the held mesh area's stretch to
+cover different true and held tangent planes, and each rounded facet's area
+allowance. Vertex rounding and a swept-volume allowance are added after the
+exact map. A non-finite bound refuses the placement.
 When a zero-bound faceted Boolean undergoes translation-only placement, its
 payload also carries the original exact mesh beside the rebuilt held mesh.
 The contact reader may use that source to prove an exact support plane after

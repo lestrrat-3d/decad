@@ -358,7 +358,8 @@ func (b *Body) Origin() FeatureRef  // which feature created this body
 ```
 
 `ExtremeFacesByCentroid` currently certifies only complete point-loft planar
-Split slabs and their rigid `Placed` copies. It returns `ErrUnsupported` when
+Split slabs, their rigid `Placed` copies, and positive uniform `ScaledAt` images.
+It returns `ErrUnsupported` when
 the cap centroid intervals do not strictly separate every side-face centroid.
 See `docs/loft-point-design.md` for the source proof.
 
@@ -838,7 +839,7 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
+Fillet, Chamfer, Shell, Placed, ScaledAt, Duplicate, PlacedCopy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
 Patch, Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve —
 **ExtrudeChain, RevolveChain, SweepChain, LoftChain** — which take a
 `*sketch.Chain` where their siblings take a `*sketch.Profile` and always build a
@@ -1157,6 +1158,7 @@ registers the placed body:
 
 ```go
 func (b *Body) Placed(ctx context.Context, t r3.Transform) (*Body, error)
+func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) (*Body, error)
 ```
 
 This is the whole of the "explicit transforms" story: a body is positioned by an
@@ -1164,6 +1166,15 @@ argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — nev
 an ambient assembly context (§4). The zero `Transform{}` is invalid
 (`Transform.IsValid`) and is `ErrDegenerate` (§12). `Placed` checks `ctx` through any
 faceted-payload rebuild and returns its error without changing the document.
+
+`ScaledAt` retires an authenticated point-loft planar Split slab after a
+positive, finite, dimensionless uniform scale around `anchor` in millimetres.
+It accepts a rigidly placed slab and a previous scaled slab. It keeps the
+original cap origins, face-centroid certificates and rational source cut maps,
+then rebuilds the held mesh with scaled vertex, area and occupied-volume
+bounds. A nonpositive factor is `ErrDegenerate`, a length factor is
+`ErrUnitKind`, and an unsupported body is `ErrUnsupported`. Cancellation and
+proof refusal leave the receiver live.
 
 **A body can be copied without consuming it.** `Placed` retires its receiver, so
 modelling a part once and placing several instances — a bolt pattern, several
