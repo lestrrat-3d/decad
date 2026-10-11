@@ -350,11 +350,17 @@ func (b *Body) Bounds() (Box, error)
 func (b *Body) Volume() (Measurement, error)   // error when not a solid — never 0
 func (b *Body) Area() (Measurement, error)
 func (b *Body) Centroid() (VecMeasurement, error)
+func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (least, greatest *Face, err error)
 func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (PointLocation, error)
 func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error)
 
 func (b *Body) Origin() FeatureRef  // which feature created this body
 ```
+
+`ExtremeFacesByCentroid` currently certifies only complete point-loft planar
+Split slabs and their rigid `Placed` copies. It returns `ErrUnsupported` when
+the cap centroid intervals do not strictly separate every side-face centroid.
+See `docs/loft-point-design.md` for the source proof.
 
 `LocatePoint` returns `PointInside`, `PointOutside`, `PointOnBoundary` or
 `PointUndecided`. It uses the body's verified mesh and returns only classifications
@@ -420,6 +426,7 @@ func (f *Face) Surface() Surface   // sealed; see below
 func (f *Face) Loops() []*Loop     // Loop.IsOuter() distinguishes outer from holes
 func (f *Face) Edges() []*Edge
 func (f *Face) Area() (Measurement, error)
+func (f *Face) Centroid() (VecMeasurement, error) // area centroid when the face has a proof
 func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error)
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) // a computed direction: a measurement
 func (f *Face) Origins() []FeatureRef // provenance: every feature role that created it — canonicalization

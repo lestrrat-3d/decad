@@ -255,7 +255,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 		verts: verts, tris: tris, src: src, groups: groups, vertexBound: vertexBound,
 		meshBound: meshBound, volSymDiff: volumeGap, areaSlack: areaGap,
 		dPair: diameter, xform: r3.Identity(),
-		pointSection: &record,
+		pointSection: &record, pointPlaneSourceEligible: true,
 	}
 	return buildFacetedBody(ctx, d, ref, pp)
 }

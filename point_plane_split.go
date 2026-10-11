@@ -124,7 +124,8 @@ func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
 
 func pointPlaneSource(target *Body) (pointPlaneSliceRecord, bool) {
 	fp, ok := target.payload.(facetedPayload)
-	if !ok || target.Kind() != BodySolid || !target.IsSolid() || fp.xform != r3.Identity() {
+	if !ok || target.Kind() != BodySolid || !target.IsSolid() ||
+		!fp.pointPlaneSourceEligible || fp.xform != r3.Identity() {
 		return pointPlaneSliceRecord{}, false
 	}
 	if fp.pointPlane != nil {
@@ -508,5 +509,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 		vertexBound: vertexBounds, meshBound: meshBound,
 		volSymDiff: volumeGap, areaSlack: areaSlack,
 		dPair: base.dPair, xform: r3.Identity(), pointPlane: &recordCopy,
+		pointPlaneCapDisplacement: meshBound,
+		pointPlaneSourceEligible:  true,
 	})
 }

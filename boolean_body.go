@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -71,6 +72,13 @@ type facetedPayload struct {
 	pointSection *pointSectionRecord
 	pointCone    *pointConeTrimRecord
 	pointPlane   *pointPlaneSliceRecord
+	// pointPlaneCapDisplacement bounds the true source cap contour against
+	// each held cap ring, including every placed-basis stretch and rounding.
+	pointPlaneCapDisplacement float64
+	// pointPlaneSourceEligible belongs only to an original point loft or
+	// freshly built Split slab. Rigid copies retain pointPlane for queries,
+	// but even a round-trip copy cannot become a new structural Split source.
+	pointPlaneSourceEligible bool
 	// bevelJoin identifies the immutable blank and first trimmed tooth used
 	// to rebuild a second disjoint tooth on the same root ring.
 	bevelJoin *bevelJoinRecord
@@ -151,7 +159,9 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.xform = composed
 	next.lowerSupport = nil
 	next.pointCone = nil
-	next.pointPlane = nil
+	// A rigid copy keeps the immutable Split source for certified face
+	// centroid ranking, but cannot become a new structural Split source.
+	next.pointPlaneSourceEligible = false
 	next.bevelJoin = nil
 	next.bevelTooth = nil
 	if fp.pointCone != nil && fp.xform == r3.Identity() {
@@ -202,6 +212,22 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	}
 	next.verts, next.tris = placed.Verts, placed.Tris
 	next.vertexBound, next.meshBound, next.volSymDiff = placed.VertexBound, placed.MeshBound, placed.VolSymDiff
+	if fp.pointPlane != nil {
+		linear, err := massmoment.PlacementRotation(delta)
+		if err != nil {
+			return nil, err
+		}
+		charge, err := massmoment.MapChargeOf(linear)
+		if err != nil {
+			return nil, err
+		}
+		// PlaceMesh's MeshBound includes the held-coordinate rounding and any
+		// embedding correction, but does not stretch the previous source gap.
+		// Add both terms; the possible double charge is conservative.
+		next.pointPlaneCapDisplacement = proofbound.AbsSumUpper(
+			proofbound.ProductUpper(fp.pointPlaneCapDisplacement,
+				proofbound.AbsSumUpper(1, charge.Stretch)), placed.MeshBound)
+	}
 	return buildFacetedBody(ctx, d, ref, next)
 }
 
