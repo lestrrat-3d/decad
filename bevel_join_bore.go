@@ -15,6 +15,8 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+const bevelBoreSideRole = "side(0,0)"
+
 // tryBevelPostJoinBoreCut cuts a coaxial, spanning circle from the complete
 // eight-tooth structural join. Its source record identifies both axis-cap
 // fans, so this path cuts them without asking the broad joined mesh to resolve
@@ -50,6 +52,9 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, nil
 	}
 	radius, err := circle.Radius.In(units.Millimeter)
+	if err != nil {
+		return nil, false, err
+	}
 	origin := prism.frame.Origin()
 	if !proofbound.FiniteVec(origin) ||
 		!proofbound.FiniteVec(r3.Vec{X: prism.z0, Y: prism.z1}) {
@@ -59,7 +64,7 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 	// otherwise put an end just outside a cap that it actually touches.
 	start := new(big.Rat).Add(proofarith.FloatRat(origin.X), proofarith.FloatRat(prism.z0))
 	end := new(big.Rat).Add(proofarith.FloatRat(origin.X), proofarith.FloatRat(prism.z1))
-	if err != nil || !proofbound.FiniteVec(r3.Vec{X: radius}) || radius <= 0 ||
+	if !proofbound.FiniteVec(r3.Vec{X: radius}) || radius <= 0 ||
 		start.Cmp(proofarith.FloatRat(blank.toeAxis.U)) >= 0 ||
 		end.Cmp(proofarith.FloatRat(blank.heelAxis.U)) <= 0 ||
 		radius >= min(blank.heelOuter.V, blank.ded.V, blank.toeRoot.V, blank.toeOuter.V) {
@@ -68,7 +73,7 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 	var wall *Face
 	for _, face := range tool.Faces() {
 		for _, origin := range face.Origins() {
-			if origin.Role != "side(0,0)" {
+			if origin.Role != bevelBoreSideRole {
 				continue
 			}
 			if wall != nil {
