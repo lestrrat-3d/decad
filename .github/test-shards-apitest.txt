@@ -8,7 +8,7 @@
 # Shard totals at the last measurement:
 #   shard 0:  415.54s over 2 tests
 #   shard 1:    0.96s over 114 tests
-#   shard 2:  177.82s over 204 tests
+#   shard 2:   37.08s over 204 tests
 #   shard 3:   82.95s over 226 tests
 #   shard 4:   82.99s over 212 tests
 #   shard 5:  120.11s over 201 tests
@@ -199,7 +199,7 @@
 2	0.01	TestLinkagePoseAt
 2	0.00	TestLoftChainOneCellRibbonPinsTheSideToExtrudeChain
 2	0.00	TestLoftEmptyAlignmentPayload
-2	144.37	TestLoftFilletDefaultGearRoots
+2	3.63	TestLoftFilletCurvedRootJunctions
 2	1.02	TestLoftHelicalToothClearsDefaultTolerance
 2	0.01	TestLoftPlacedRotationSoundness
 2	0.00	TestLoftPlacedS13OverflowingCoordinate
