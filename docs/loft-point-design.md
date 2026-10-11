@@ -112,7 +112,8 @@ an occupied-volume bound, and the original Cone and NURBSSurface face tags.
 The reference 8/8 blank and one trimmed tooth pass this path. Its current
 three-round cap bound proves occupied volume but is too broad to prove
 positive inertia in `MassProperties`; that call returns `ErrUnsupported`.
-Additional patterned teeth require a separate structural continuation.
+One further `PlacedCopy` tooth can join through the two-tooth continuation
+below. More teeth use the ordinary Boolean path.
 
 For a blank and tooth built from the same unplaced gear source, the public
 operation order is:
@@ -132,5 +133,46 @@ if !mesh.BoundaryVerified() || !mesh.VolumeVerified() {
 }
 ```
 
-`apitest/bevel_join_test.go` builds and verifies the complete 8/8 example
-through public Sketch and Decad APIs.
+`apitest/bevel_join_test.go` builds and verifies the 8/8 blank and its first
+trimmed tooth through public Sketch and Decad APIs.
+
+## Two-tooth bevel blank union
+
+`Union` admits the one-tooth joined body and one `PlacedCopy` of the same
+trimmed tooth when the copy is a non-identity rotation about the blank's X
+axis. The first join carries its immutable blank and trimmed-tooth records;
+the copy carries the original cone-trim record and its rigid motion. Placement
+does not preserve a cone-trim record for another Cut or Intersect. An unrelated
+faceted pair follows the ordinary mesh Boolean path.
+
+Before rebuilding, the join checks the original Sketch source again and asks
+Sketch for fresh cone-crossing and whole-curve side certificates. The two
+complete trimmed tooth bodies must have separated Z ranges after each held
+mesh's boundary displacement is charged. Their root angular sectors must be
+separated after the crossing, placement and mesh errors are converted to an
+angular allowance at the smaller finite root radius. A stale profile, a
+different source tooth, or sectors whose separation cannot be proved do not
+enter this structural path.
+
+Both caps are built from the original source's subdivisions. The copied cap
+points move through its recorded rotation. The blank's root face is removed
+over each certified sector, and both cap boundaries use the same root-ring
+vertex indices as the blank. Inside either sector, only that cap inserts
+angular stations into the ring; a second regular-grid station can differ by a
+few ulps after rotation and leave an open edge. The final mesh passes directed
+edge pairing, one component, vertex links and exact nonadjacent triangle
+contact checks. The two-tooth contact audit has a fixed 256-million-scan cap,
+four times the one-tooth cap for up to twice as many triangles.
+
+The boundary bound charges the blank ring once and takes the larger of the
+two tooth errors. The held rotation basis's exact stretch and determinant
+charge its boundary, source-area and occupied-volume allowances. The
+occupied-volume allowance charges both source fans and both cap maps, then
+sweeps the one shared held boundary by its construction error. The copied
+tooth's placed source faces and the original tooth's faces
+retain their Cone and NURBSSurface tags. The reference 8/8 pair passes
+`Tessellate(0.1 mm, VerifyAll)`. The result has no retained join record, so a
+third tooth follows the ordinary mesh Boolean path. In the real 8/8 gallery
+sequence, that third Union refuses because the two-tooth body's 0.0774 mm
+held boundary bound exceeds its 0.000236 mm pair chord. Joining the full
+pattern needs a separate source-certified continuation for more sectors.

@@ -6,7 +6,7 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0: 1059.82s over 1 tests
+#   shard 0: 1475.35s over 2 tests
 #   shard 1:  175.72s over 113 tests
 #   shard 2:  177.82s over 204 tests
 #   shard 3:   43.63s over 218 tests
@@ -17,6 +17,7 @@
 #   shard 8:  101.99s over 200 tests
 #   shard 9:  118.05s over 202 tests
 #
+0	415.53	TestBevelTwoToothJoinReusesOneRootRing
 0	1059.82	TestLoftEmbeddedSixtyToothGearFeatures
 1	0.01	TestArcSegExactQuarterDisk
 1	0.01	TestBlindPocketPlacedAndVerified

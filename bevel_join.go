@@ -21,6 +21,16 @@ import (
 // The one-tooth join replaces exactly the sector of the blank's finite root
 // face covered by the point loft. Its cap and the blank share the very same
 // root-ring vertex indices. An unrelated Union still uses the usual evaluator.
+type bevelJoinRecord struct {
+	blank *Body
+	first facetedPayload
+}
+
+type bevelToothPlacement struct {
+	source *pointConeTrimRecord
+	motion r3.Transform
+}
+
 func tryBevelOneToothUnion(ctx context.Context, op meshbool.OperationKind,
 	d *Document, ref producerID, a, b *Body) (*Body, bool, error) {
 	if op != meshbool.OpUnion {
@@ -49,7 +59,7 @@ func tryBevelOneToothUnion(ctx context.Context, op meshbool.OperationKind,
 	if !ok {
 		return nil, false, nil
 	}
-	body, err := buildBevelOneToothJoin(ctx, d, ref, blank, blankSource, record, boundary)
+	body, err := buildBevelOneToothJoin(ctx, d, ref, blank, blankSource, fp, record, boundary)
 	return body, true, err
 }
 
@@ -452,7 +462,7 @@ type bevelRingMesh struct {
 }
 
 func bevelBuildBlankMesh(m *bevelJoinedMesh, blank *bevelBlankSource,
-	angles []float64, seamLo, seamHi float64) (bevelRingMesh, float64, error) {
+	angles []float64, seams [][2]float64) (bevelRingMesh, float64, error) {
 	if len(angles) < 16 || angles[0] >= -math.Pi/2 ||
 		angles[len(angles)-1] <= math.Pi/2 {
 		return bevelRingMesh{}, 0, fmt.Errorf("%w: blank angular ring is incomplete", ErrUnsupported)
@@ -510,7 +520,13 @@ func bevelBuildBlankMesh(m *bevelJoinedMesh, blank *bevelBlankSource,
 		maxStep = max(maxStep, stepUp)
 		m.add([3]int{r.heelAxis, r.rings[0][i], r.rings[0][j]}, 1)
 		for k, group := range [...]int{2, 3, 4} {
-			if group == 3 && j != 0 && angles[i] >= seamLo && angles[j] <= seamHi {
+			covered := false
+			if group == 3 && j != 0 {
+				for _, seam := range seams {
+					covered = covered || angles[i] >= seam[0] && angles[j] <= seam[1]
+				}
+			}
+			if covered {
 				continue
 			}
 			m.add([3]int{r.rings[k][i], r.rings[k+1][i], r.rings[k+1][j]}, group)
@@ -526,27 +542,45 @@ func bevelBuildBlankMesh(m *bevelJoinedMesh, blank *bevelBlankSource,
 }
 
 func bevelBuildToothMesh(m *bevelJoinedMesh, ring bevelRingMesh,
-	nodes []bevelPathNode, caps [][3]int, edges []bevelCapEdge, rootNode []int,
-	record *pointConeTrimRecord) (float64, float64, error) {
+	nodes, original []bevelPathNode, caps [][3]int, edges []bevelCapEdge, rootNode []int,
+	record *pointConeTrimRecord, motion r3.Transform, placedGroups []facetGroup) (float64, float64, error) {
+	if len(nodes) != len(original) {
+		return 0, 0, fmt.Errorf("%w: tooth cap station maps are unequal", ErrUnsupported)
+	}
 	baseGroups := len(m.groups)
 	toothGroups := append([]facetGroup(nil), record.base.groups...)
 	for i := range len(toothGroups) - 1 {
 		toothGroups[i].surface = NURBSSurface{}
 	}
+	if placedGroups != nil {
+		if len(placedGroups) != len(toothGroups)+2 {
+			return 0, 0, fmt.Errorf("%w: placed tooth lost source faces", ErrUnsupported)
+		}
+		toothGroups = append([]facetGroup(nil), placedGroups[:len(toothGroups)]...)
+	}
 	m.groups = append(m.groups, toothGroups...)
 	upperGroup := len(m.groups)
-	m.groups = append(m.groups, pointConeFacetGroup(record.upper, false))
+	if placedGroups == nil {
+		m.groups = append(m.groups, pointConeFacetGroup(record.upper, false))
+	} else {
+		m.groups = append(m.groups, placedGroups[len(toothGroups)])
+	}
 	lowerGroup := len(m.groups)
-	m.groups = append(m.groups, pointConeFacetGroup(record.lower, true))
+	if placedGroups == nil {
+		m.groups = append(m.groups, pointConeFacetGroup(record.lower, true))
+	} else {
+		m.groups = append(m.groups, placedGroups[len(toothGroups)+1])
+	}
 	upper := make([]int, len(nodes))
 	lower := make([]int, len(nodes))
 	maxRound, maxSnap := 0.0, 0.0
-	for i, node := range nodes {
-		up, err := pointConeFactor(node.p, record.upper)
+	for i := range nodes {
+		far := original[i].p
+		up, err := pointConeFactor(far, record.upper)
 		if err != nil {
 			return 0, 0, err
 		}
-		down, err := pointConeFactor(node.p, record.lower)
+		down, err := pointConeFactor(far, record.lower)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -555,24 +589,36 @@ func bevelBuildToothMesh(m *bevelJoinedMesh, ring bevelRingMesh,
 		}
 		if up.q-up.qError <= 1 {
 			maxRound = max(maxRound, proofbound.ProductUpper(
-				proofbound.AbsSumUpper(math.Abs(up.alpha-1), up.qError), node.p.Len()))
+				proofbound.AbsSumUpper(math.Abs(up.alpha-1), up.qError), far.Len()))
 			up.alpha = 1
 		}
-		maxRound = max(maxRound, up.pointError, down.pointError)
+		upperPoint, lowerPoint := far.Scale(up.alpha), far.Scale(down.alpha)
+		if motion != r3.Identity() {
+			maxInput := max(math.Abs(upperPoint.X), math.Abs(upperPoint.Y), math.Abs(upperPoint.Z),
+				math.Abs(lowerPoint.X), math.Abs(lowerPoint.Y), math.Abs(lowerPoint.Z))
+			maxRound = max(maxRound, proofbound.AbsSumUpper(max(up.pointError, down.pointError),
+				proofbound.RigidRoundAllow(maxInput, 0)))
+			upperPoint, lowerPoint = motion.Apply(upperPoint), motion.Apply(lowerPoint)
+		} else {
+			maxRound = max(maxRound, up.pointError, down.pointError)
+		}
+		if !proofbound.FiniteVec(upperPoint) || !proofbound.FiniteVec(lowerPoint) {
+			return 0, 0, fmt.Errorf("%w: placed tooth cap is non-finite", ErrUnsupported)
+		}
 		if rootNode[i] >= 0 {
 			j := rootNode[i]
 			upper[i], lower[i] = ring.rings[1][j], ring.rings[2][j]
 			maxSnap = max(maxSnap,
 				proofbound.DvLenUpper(proofbound.HeldDelta(
-					node.p.Scale(up.alpha), m.verts[upper[i]])),
+					upperPoint, m.verts[upper[i]])),
 				proofbound.DvLenUpper(proofbound.HeldDelta(
-					node.p.Scale(down.alpha), m.verts[lower[i]])))
+					lowerPoint, m.verts[lower[i]])))
 			continue
 		}
 		upper[i] = len(m.verts)
-		m.verts = append(m.verts, node.p.Scale(up.alpha))
+		m.verts = append(m.verts, upperPoint)
 		lower[i] = len(m.verts)
-		m.verts = append(m.verts, node.p.Scale(down.alpha))
+		m.verts = append(m.verts, lowerPoint)
 	}
 	for _, tri := range caps {
 		m.add([3]int{upper[tri[0]], upper[tri[1]], upper[tri[2]]}, upperGroup)
@@ -660,7 +706,7 @@ func bevelOrientMesh(m *bevelJoinedMesh) error {
 }
 
 func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
-	blankBody *Body, blank *bevelBlankSource, record *pointConeTrimRecord,
+	blankBody *Body, blank *bevelBlankSource, trimmed facetedPayload, record *pointConeTrimRecord,
 	boundary *bevelToothBoundary) (*Body, error) {
 	base := record.base
 	path, crossingBound, err := bevelExteriorPath(base, boundary, base.pointSection.source, blank)
@@ -694,12 +740,12 @@ func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	mesh := &bevelJoinedMesh{groups: append([]facetGroup(nil), blankGroups[:]...)}
-	ring, blankSag, err := bevelBuildBlankMesh(mesh, blank, angles, lo, hi)
+	ring, blankSag, err := bevelBuildBlankMesh(mesh, blank, angles, [][2]float64{{lo, hi}})
 	if err != nil {
 		return nil, err
 	}
-	nodeRound, snap, err := bevelBuildToothMesh(mesh, ring, capNodes, caps,
-		edges, rootNode, record)
+	nodeRound, snap, err := bevelBuildToothMesh(mesh, ring, capNodes, capNodes, caps,
+		edges, rootNode, record, r3.Identity(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -794,7 +840,8 @@ func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
 		groups: mesh.groups, vertexBound: vertexBound,
 		contactAudited: true,
 		meshBound:      bound, volSymDiff: volumeGap, areaSlack: areaSlack,
-		dPair: base.dPair, xform: r3.Identity()}
+		dPair: base.dPair, xform: r3.Identity(),
+		bevelJoin: &bevelJoinRecord{blank: blankBody, first: trimmed}}
 	body, err := buildFacetedBody(ctx, d, ref, pp)
 	if err != nil {
 		return nil, err

@@ -64,6 +64,15 @@ func LoftCrossingAuditBevelJoin(budget *proofbound.WorkBudget, verts []r3.Vec, t
 	return err
 }
 
+// LoftCrossingAuditBevelTwoJoin uses four times the one-tooth scan ceiling:
+// a second cap set can double the triangle count, and pair scans grow with
+// its square. It keeps the same triangle ceiling and exact contact verdicts.
+func LoftCrossingAuditBevelTwoJoin(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
+	const maxBevelTwoJoinScans = 256_000_000
+	_, err := loftCrossingAudit(budget, verts, tris, nil, loftGenericShortcuts, maxBevelTwoJoinScans)
+	return err
+}
+
 // LoftCrossingAuditWork is LoftCrossingAudit's body, with each S7 shortcut
 // under its own explicit per-call switch (LoftAuditShortcuts) and the pair
 // loop's own work counts returned to the caller. CapProof has no effect here:
