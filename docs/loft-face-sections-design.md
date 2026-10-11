@@ -87,3 +87,29 @@ against its held mesh for `Tessellate(VerifyAll)`. Area bounds cover the
 true ruled wall, both fitted end caps, and held arithmetic. A requested
 tolerance below the certified mesh bound refuses. Cancellation leaves the
 document and all source bodies unchanged.
+
+## Two-cone continuation
+
+A Cut by an unplaced, full, straight world-X cone can carry one continuation
+record from an original, unplaced LoftFaces body. The final cap map must place
+the entire authenticated source rectangle strictly outside the toe cone. The
+Cut must leave every final-cap held triangle unchanged, with one surviving cap
+face. A partial or altered cap receives no record.
+
+The next Intersect accepts that record only with a second exact cone sharing
+the toe cone's far plane and strictly ordered outside it over the original
+LoftFaces mesh. The final cap map must have a positive denominator over the
+source rectangle. With the heel cone's actual rational apex and slope, the
+denominator-cleared cone pullback must be `A*u² + C*v²`, with `A,C > 0` and
+the rectangle strictly on one side of `u = 0`. This proves every true cap
+point is outside the heel cone. The cap face's held facets must also be
+disjoint from the heel cone wall's held facets. Only that exact face pair
+skips the proximity refusal. The held Intersect result must contain no facets
+from the cap; a retained held cap would disagree with the true separation.
+
+This continuation tries four, eight, sixteen and at most thirty-two times
+the ordinary pair chord. It retries only a first-operand staging refusal.
+The local chain-depth gate still checks the held bound at every other contact.
+The same mesh Boolean still checks all other face pairs, contacts, rims,
+occupied-volume bounds, and the final mesh. Placement drops the record.
+The Intersect result has no record and cannot continue the special chain.

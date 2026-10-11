@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    0.04s over 5 tests
-#   shard 1:    1.22s over 229 tests
+#   shard 1:    1.22s over 232 tests
 #   shard 2:   10.20s over 135 tests
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  182.61s over 138 tests
@@ -196,6 +196,9 @@
 1	0.01	TestLinkageChainTravel
 1	0.00	TestLinkageChainTravelAcrossWaypoints
 1	0.01	TestLoftArcSegAgainstCircleSegRefusesS3
+1	0.00	TestLoftCapConeProofRequiresStrictWholeCapSeparation
+1	0.00	TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement
+1	0.00	TestLoftCapToeConeProofUsesWholeSourceBox
 1	0.00	TestLoftChordCalibrationSweep
 1	0.00	TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs
 1	0.00	TestLoftCrossingAuditPollsAfterFinalPair

@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"context"
+	"math"
 	"slices"
 	"testing"
 
@@ -100,4 +101,19 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, cutMesh.BoundaryVerified())
 	require.True(t, cutMesh.VolumeVerified())
+	wrongHeel := pointConeTool(t, doc, math.Nextafter(8, math.Inf(1)))
+	beforeWrong := doc.Bodies()
+	_, err = decad.Intersect(t.Context(), cut, wrongHeel)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, beforeWrong, doc.Bodies())
+	heel, err := decad.Intersect(t.Context(), cut, pointConeTool(t, doc, 8))
+	require.NoError(t, err)
+	heelVolume, err := heel.Volume()
+	require.NoError(t, err)
+	require.Less(t, heelVolume.Value.Base(), cutVolume.Value.Base())
+	heelMesh, err := heel.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, heelMesh.BoundaryVerified())
+	require.True(t, heelMesh.VolumeVerified())
 }
