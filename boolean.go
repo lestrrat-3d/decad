@@ -657,6 +657,10 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
+	mb, spiralCombine, err := spiralPrepareCombinedUnion(ctx, op, a, b, mb, tolMM)
+	if err != nil {
+		return booleanEvaluation{}, err
+	}
 	if spiralJoin != nil {
 		allowed, ok := spiralFirstUnionPairs(a, b, spiralJoin, faceID)
 		if !ok {
@@ -664,6 +668,13 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 				fmt.Errorf("%w: first spiral join source faces", ErrUnsupported))
 		}
 		spiralJoin.allowed = allowed
+	}
+	var combinedAdmission *spiralCombinedAdmission
+	if spiralCombine != nil {
+		combinedAdmission, err = spiralCombineFaceRoles(ctx, a, b, spiralCombine, faceID)
+		if err != nil {
+			return booleanEvaluation{}, err
+		}
 	}
 
 	bmA, err := prepBoolMeshContext(ctx, ma, srcA)
@@ -695,6 +706,9 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		// allowance to the authenticated first tooth join.
 		bmB.Gate = max(bmB.Gate, mb.bound)
 	}
+	if spiralCombine != nil {
+		bmB.Gate = max(bmB.Gate, mb.bound)
+	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -705,6 +719,9 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	var spiralPairs map[[2]*Face]spiralNearPairKind
 	if spiralJoin != nil {
 		spiralPairs = spiralJoin.roles
+	}
+	if combinedAdmission != nil {
+		spiralPairs = combinedAdmission.roles
 	}
 	if err := refuseUndecidableProximityWithConeCap(ctx, ma, mb, bmA, bmB, memo,
 		capFace, coneFace, spiralPairs); err != nil {
@@ -723,6 +740,17 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		if !ok {
 			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
 				fmt.Errorf("%w: first spiral join contact faces", ErrUnsupported))
+		}
+	}
+	if combinedAdmission != nil {
+		ok, err := spiralScopeWidenedContacts(ctx, bmA, bmB, memo,
+			combinedAdmission.allowed, tolMM, 24*len(combinedAdmission.source.tools))
+		if err != nil {
+			return booleanEvaluation{}, err
+		}
+		if !ok {
+			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
+				fmt.Errorf("%w: combined spiral join contact faces", ErrUnsupported))
 		}
 	}
 	if err := ctx.Err(); err != nil {
@@ -784,14 +812,14 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		symA, symB, roundVol,
 		ma.areaSlack, mb.areaSlack, stitched.DropArea,
 	)
-	if spiralJoin != nil {
+	if spiralJoin != nil || combinedAdmission != nil {
 		allowance, ok, err := spiralJoinAreaAllowance(ctx, a, b, stitched)
 		if err != nil {
 			return booleanEvaluation{}, err
 		}
 		if !ok {
 			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
-				fmt.Errorf("%w: first spiral join area bound", ErrUnsupported))
+				fmt.Errorf("%w: spiral join area bound", ErrUnsupported))
 		}
 		areaSlack = proofbound.AbsSumUpper(areaSlack, allowance)
 	}
@@ -831,6 +859,25 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		if !ok {
 			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
 				fmt.Errorf("%w: first spiral join boundary proof", ErrUnsupported))
+		}
+	}
+	if combinedAdmission != nil {
+		ok, err := spiralScopeOutputSwitches(ctx, stitched,
+			len(a.Faces()), combinedAdmission.allowed, 24*len(combinedAdmission.source.tools))
+		if err != nil {
+			return booleanEvaluation{}, err
+		}
+		if !ok {
+			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
+				fmt.Errorf("%w: combined spiral join output faces", ErrUnsupported))
+		}
+		ok, err = spiralValidateCombinedUnion(ctx, a, bmA, stitched, combinedAdmission)
+		if err != nil {
+			return booleanEvaluation{}, err
+		}
+		if !ok {
+			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
+				fmt.Errorf("%w: combined spiral join boundary proof", ErrUnsupported))
 		}
 	}
 	volume, volumeRat, err := meshVolumeMeasurement(ctx, audit.XVerts, payload.tris, payload.volSymDiff)

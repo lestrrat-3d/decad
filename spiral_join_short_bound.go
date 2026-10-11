@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -60,6 +61,12 @@ func spiralShortHeldBound(ctx context.Context, proof *spiralFirstJoinSource,
 			mesh = append(mesh, box)
 		}
 	}
+	// Most matching boxes are much closer than minBound. Outward float boxes
+	// can certify those pairs without repeating large rational subtractions
+	// for every tooth copy. Uncertain cases retain the exact search below.
+	if fast, accepted := spiralShortFloatCover(ctx, source, mesh, minBound); accepted {
+		return fast, true, nil
+	}
 	limit := lfMul(lfF(minBound), lfF(minBound))
 	var largest *big.Rat
 	for direction := range 2 {
@@ -99,6 +106,89 @@ func spiralShortHeldBound(ctx context.Context, proof *spiralFirstJoinSource,
 	}
 	bound := proofbound.RatSqrtUp(largest)
 	return bound, !proofbound.IsNonFinite(bound) && bound < minBound, nil
+}
+
+type spiralShortFloatBox [3][2]float64
+
+func spiralShortFloatCover(ctx context.Context, source, mesh [][3]loftFaceInterval,
+	minBound float64) (float64, bool) {
+	convert := func(boxes [][3]loftFaceInterval) ([]spiralShortFloatBox, bool) {
+		out := make([]spiralShortFloatBox, len(boxes))
+		for i, box := range boxes {
+			if i%256 == 0 && ctx.Err() != nil {
+				return nil, false
+			}
+			for axis, interval := range box {
+				if interval.lo == nil || interval.hi == nil || interval.lo.Cmp(interval.hi) > 0 {
+					return nil, false
+				}
+				out[i][axis] = [2]float64{
+					proofbound.RatFloatDown(interval.lo), proofbound.RatFloatUp(interval.hi),
+				}
+				if proofbound.IsNonFinite(out[i][axis][0]) || proofbound.IsNonFinite(out[i][axis][1]) {
+					return nil, false
+				}
+			}
+		}
+		return out, true
+	}
+	a, okA := convert(source)
+	b, okB := convert(mesh)
+	if !okA || !okB || len(a) == 0 || len(b) == 0 {
+		return 0, false
+	}
+	// One step down encloses the exact square of a finite positive float.
+	limit := math.Nextafter(minBound*minBound, math.Inf(-1))
+	if limit <= 0 || proofbound.IsNonFinite(limit) {
+		return 0, false
+	}
+	check := func(from, to []spiralShortFloatBox) (float64, bool) {
+		largest, previous := 0.0, 0
+		for i, box := range from {
+			if i%16 == 0 && ctx.Err() != nil {
+				return 0, false
+			}
+			found := false
+			for offset := range to {
+				candidate := (previous + offset) % len(to)
+				upper := spiralShortFloatDistanceSquared(box, to[candidate])
+				if upper < limit {
+					largest = max(largest, upper)
+					previous, found = candidate, true
+					break
+				}
+			}
+			if !found {
+				return 0, false
+			}
+		}
+		return largest, true
+	}
+	first, okFirst := check(a, b)
+	if !okFirst {
+		return 0, false
+	}
+	second, okSecond := check(b, a)
+	if !okSecond || ctx.Err() != nil {
+		return 0, false
+	}
+	return proofbound.RatSqrtUp(lfF(max(first, second))), true
+}
+
+// The outward endpoints enclose each exact coordinate interval. Either
+// opposite-endpoint difference bounds the maximum separation on that axis.
+func spiralShortFloatDistanceSquared(a, b spiralShortFloatBox) float64 {
+	var squared float64
+	for axis := range a {
+		far := max(0,
+			math.Nextafter(a[axis][1]-b[axis][0], math.Inf(1)),
+			math.Nextafter(b[axis][1]-a[axis][0], math.Inf(1)))
+		if proofbound.IsNonFinite(far) {
+			return math.Inf(1)
+		}
+		squared = proofbound.AbsSumUpper(squared, proofbound.ProductUpper(far, far))
+	}
+	return squared
 }
 
 func spiralShortSourceCells(ctx context.Context, proof *spiralFirstJoinSource,

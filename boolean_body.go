@@ -91,6 +91,12 @@ type facetedPayload struct {
 	loftFacesCap  *loftFacesCapRecord
 	loftFacesToe  *loftFacesToeRecord
 	loftFacesTrim *loftFacesTrimRecord
+	// spiralTooth authenticates a rigid copy of a cone-trimmed LoftFaces tooth.
+	// The source record is immutable; placement never makes a new trim claim.
+	spiralTooth *spiralToothPlacement
+	// spiralTools exists only on a transient disjoint-tool operand built by
+	// CombineJoin. It maps its source faces back to the live input tools.
+	spiralTools *spiralCombinedTools
 	// bevelJoin identifies the immutable blank and first trimmed tooth used
 	// to rebuild a second disjoint tooth on the same root ring.
 	bevelJoin *bevelJoinRecord
@@ -174,6 +180,8 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.loftFacesCap = nil
 	next.loftFacesToe = nil
 	next.loftFacesTrim = nil
+	next.spiralTooth = nil
+	next.spiralTools = nil
 	// A rigid copy keeps the immutable Split source for certified face
 	// centroid ranking, but cannot become a new structural Split source.
 	next.pointPlaneSourceEligible = false
@@ -183,6 +191,9 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.bevelTooth = nil
 	if fp.pointCone != nil && fp.xform == r3.Identity() {
 		next.bevelTooth = &bevelToothPlacement{source: fp.pointCone, motion: composed}
+	}
+	if fp.loftFacesTrim != nil && fp.xform == r3.Identity() {
+		next.spiralTooth = &spiralToothPlacement{source: fp.loftFacesTrim, motion: composed}
 	}
 	next.groups = append([]facetGroup(nil), fp.groups...)
 	for i := range next.groups {
@@ -293,14 +304,24 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	verts, tris := pp.verts, pp.tris
-	diameter, ok, err := diameter.PointsContext(ctx, verts)
+	var diameterReading float64
+	var ok bool
+	var err error
+	if pp.spiralTools != nil {
+		// The transient multi-tool operand needs only a lower witness. Its
+		// coordinate-extreme vertices give one without a quadratic all-pairs
+		// scan over every patterned copy.
+		diameterReading, ok, err = spiralCombinedDiameter(ctx, verts)
+	} else {
+		diameterReading, ok, err = diameter.PointsContext(ctx, verts)
+	}
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return nil, fmt.Errorf(`%w: the held boundary has no usable diameter`, ErrBooleanFailed)
 	}
-	pp.diameter = diameter
+	pp.diameter = diameterReading
 	if audit == nil {
 		audit, err = facetproof.AuditFacetedMesh(ctx, verts, tris)
 		if err != nil {

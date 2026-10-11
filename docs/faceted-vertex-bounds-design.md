@@ -224,6 +224,39 @@ adds its held area upper bound and both operands' true area upper bounds, so
 composition adds the two operand symmetric-difference bounds and Stitch's
 rounding charge.
 
+### 3.7 One Boolean for patterned curved teeth
+
+`CombineJoin` admits one certified finite blank and 2–31 rigid copies of the
+same immutable nine-section trim. Each placed body retains the source trim
+pointer, exact recorded motion, and unchanged triangle order. The call builds
+one transient tool operand and commits only after one Union and complete
+boundary, mass, and topology proofs. A refusal leaves all input bodies live.
+
+Before the Union, each true tooth sector is enclosed by its held facets and
+their two-sided local bounds. Exact rational YZ projections prove separation
+over 64 closed X slabs, with convex-hull axes used only to suggest directions
+that are rechecked exactly. The first tooth and one copy supply a reference
+certificate for each needed angular offset. The recorded matrices transfer
+that clearance to other copies after charging matrix error and the one-ULP
+axial drift. A separate certificate proves held-shell separation against the
+first audited held mesh, using placement rounding only; the cap proxy shells
+receive the same check. These certificates permit the composite mesh audit to
+skip cross-copy triangle scans while retaining each shell's closure, links,
+orientation, and embedding checks.
+
+The first-tooth cap proxy is placed for every copy. Its per-vertex source
+bounds, symmetric-difference volume, and area allowances add across copies.
+The contact gate retains the first tooth's 24 allowed blank/tooth face pairs
+per copy, checks every full-box candidate with the exact contact memo, and
+checks every switched output edge. Each copy's complete held cap and root
+chains are compared with the same authenticated source curves. The expensive
+source-only root-flank slabs are prepared once; four independent workers
+check their own output chains against those immutable boxes. The inverse
+comparison fixes local X to the held blank-ring coordinate and charges the
+recorded transform's X defect in the exact back/forward matrix residual.
+Whole-output area allowance and the ordinary Boolean volume proof still
+apply before publication.
+
 ## 4. Consumers
 
 ### 4.1 The faceted payload record
