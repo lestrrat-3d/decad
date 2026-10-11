@@ -1,6 +1,7 @@
 package diameter_test
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -20,6 +21,10 @@ func TestPointsKeepsExhaustiveWitness(t *testing.T) {
 			got, gotOK := diameter.Points(points)
 			require.Equal(t, wantOK, gotOK)
 			require.Equal(t, math.Float64bits(want), math.Float64bits(got))
+			got, gotOK, err := diameter.PointsContext(t.Context(), points)
+			require.NoError(t, err)
+			require.Equal(t, wantOK, gotOK)
+			require.Equal(t, math.Float64bits(want), math.Float64bits(got))
 		})
 	}
 
@@ -29,6 +34,19 @@ func TestPointsKeepsExhaustiveWitness(t *testing.T) {
 		coil[i] = r3.NewVec(3*math.Cos(angle), 3*math.Sin(angle), 7.5*float64(i)/float64(len(coil)-1))
 	}
 	check("dense coil", coil)
+	longCoil := make([]r3.Vec, 600)
+	for i := range longCoil {
+		angle := 10 * math.Pi * float64(i) / float64(len(longCoil)-1)
+		longCoil[i] = r3.NewVec(3*math.Cos(angle), 3*math.Sin(angle), 7.5*float64(i)/float64(len(longCoil)-1))
+	}
+	check("parallel coil", longCoil)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, _, err := diameter.PointsContext(ctx, longCoil)
+	require.ErrorIs(t, err, context.Canceled)
+	invalidLongCoil := append([]r3.Vec(nil), longCoil...)
+	invalidLongCoil[len(invalidLongCoil)-1].X = math.NaN()
+	check("parallel-size nonfinite", invalidLongCoil)
 
 	rng := rand.New(rand.NewPCG(0x1246674d, 0x36e3be91))
 	for _, scale := range []float64{1e-120, 1, 1e120} {

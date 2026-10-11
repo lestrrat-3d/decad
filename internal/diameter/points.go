@@ -6,6 +6,8 @@ import (
 	"context"
 	"math"
 	"math/big"
+	"runtime"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -21,7 +23,81 @@ func Points(points []r3.Vec) (float64, bool) {
 
 // PointsContext reads a witness set with cancellation through ctx.
 func PointsContext(ctx context.Context, points []r3.Vec) (float64, bool, error) {
+	if len(points) >= 512 && runtime.GOMAXPROCS(0) > 1 && parallelScanSafe(points) {
+		return pointsContextParallel(ctx, points)
+	}
 	return PointsWithBudget(proofbound.NewWorkBudget(ctx), points)
+}
+
+type pairMaximum struct {
+	distance float64
+	i, j     int
+}
+
+// parallelScanSafe keeps the sequential refusal order for non-finite or very
+// large coordinates. Bounded coordinates also keep every pair norm finite.
+func parallelScanSafe(points []r3.Vec) bool {
+	for _, point := range points {
+		if !(math.Abs(point.X) <= 1e100 && math.Abs(point.Y) <= 1e100 && math.Abs(point.Z) <= 1e100) {
+			return false
+		}
+	}
+	return true
+}
+
+func pointsContextParallel(ctx context.Context, points []r3.Vec) (float64, bool, error) {
+	workers := min(runtime.GOMAXPROCS(0), 4)
+	maxima := make([]pairMaximum, workers)
+	var group sync.WaitGroup
+	group.Add(workers)
+	for worker := range workers {
+		go func() {
+			defer group.Done()
+			best := pairMaximum{}
+			skipSq := 0.0
+			work := 0
+			for i := worker; i < len(points); i += workers {
+				for j := i + 1; j < len(points); j++ {
+					work++
+					if work%proofbound.WorkPollInterval == 0 && ctx.Err() != nil {
+						return
+					}
+					delta := points[i].Sub(points[j])
+					if skipSq > 0 && delta.X*delta.X+delta.Y*delta.Y+delta.Z*delta.Z < skipSq {
+						continue
+					}
+					distance := delta.Len()
+					if distance > best.distance {
+						best = pairMaximum{distance: distance, i: i, j: j}
+						if distance > 1e-100 && distance < 1e100 {
+							limit := distance * 0.9
+							skipSq = limit * limit
+						} else {
+							skipSq = 0
+						}
+					}
+				}
+			}
+			maxima[worker] = best
+		}()
+	}
+	group.Wait()
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	best := pairMaximum{}
+	for _, candidate := range maxima {
+		if candidate.distance > best.distance ||
+			(candidate.distance == best.distance &&
+				(candidate.i < best.i || candidate.i == best.i && candidate.j < best.j)) {
+			best = candidate
+		}
+	}
+	if best.distance == 0 {
+		return 0, true, nil
+	}
+	d, ok := pairDistanceDown(points[best.i], points[best.j])
+	return d, ok, nil
 }
 
 // PointsWithBudget selects a witness pair in float arithmetic, then publishes
