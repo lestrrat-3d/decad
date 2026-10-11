@@ -67,6 +67,45 @@ other groups stay `Faceted`. Public `Planar` and `NormalTo(z)` select the two
 caps, and `OuterLoopOf(CapStart(result))` and `OuterLoopOf(CapEnd(result))`
 select their exterior rims.
 
+## Source-circle interval for a later cap cutter
+
+`loftCylinderSourceCircleOf` accepts one authenticated source Loft retained by
+the join or its centered bore. The six-curve admission and matched Loft facet
+departure still apply. The root wall stays strictly inside the exact blank
+circle at open heights below its certified top collar. When the existing
+collar has zero height, the exact squared root radii at both caps are at
+most `R²`; one strict cap radius makes every interior ruling strict by
+convexity. If both equal `R²`, a certified nonzero angular change makes
+every interior ruling strict instead. The cap planes themselves receive no
+circle-occupancy claim.
+
+Every fitted and tip wall stays outside `R` because its held facet minimum
+exceeds `R` by more than the matched Loft departure. Each source `LineSeg`
+connector uses the same two-triangle diagonal as the Loft wall. The helper
+reconstructs its exact source corners from the recorded endpoints, section
+frames, and axial placement. Nonnegative quadratic Bernstein coefficients
+for both horizontal slice pieces prove that squared radius increases from
+the root endpoint to the far endpoint at every height. The root endpoint
+is inside `R` at open admitted heights; the far endpoint's exact ruling
+minimum exceeds `R`. Each connector therefore crosses the circle once,
+transversely. The two crossings are the only source-tooth boundary points
+on that circle.
+
+A positive half-plane contains every held tooth vertex by more than the
+matched boundary departure. The whole bounded source solid lies in that
+half-plane, so the opposite circle ray is exterior. The circle interval
+between its two ordered connector crossings is occupied by the tooth;
+the opposite interval is exterior. `CrossingBox` brackets both crossings
+over any rational axial subinterval with exact endpoint and minimum-radius
+tests. It returns only if the two XY boxes preserve positive angular order
+and remain in the certified half-plane. A caller may subdivide an interval
+that refuses, but it must bound its own subdivision work.
+
+This certificate applies only at open heights above the start cap and below
+the recorded `safeTop`. A cap cutter must separately prove its top-collar,
+cap-plane, bore-wall, and full far-band surface claims. Circle occupancy by
+itself does not place a complete cutter facet inside the source union.
+
 ## Boundary and occupied-volume bounds
 
 Away from the root band, the retained tooth walls have the Loft source
