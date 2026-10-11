@@ -365,13 +365,14 @@ func SpanTangentDeviationCoefficients(w *FreeformWork, span BezierSpan) ([]RatPo
 // the integral itself and never an enclosure of it.
 //
 // No coefficients means no deviation, an exact 0 without charging. Otherwise it
-// charges its whole count first — TangentEnergyPairCost per (i, j) pair,
-// TangentEnergyDegreeCost per k, TangentEnergyCloseCost once — at a width of
-// twice the widest coefficient (a product's operands) plus 3(q+1) bits. Those
-// bits cover the denominator the sum accumulates from the binomials: it
-// divides lcm over k of C(2q,k), which is lcm(1..2q+1)/(2q+1), and lcm(1..m)
-// is below e^(1.03883·m) (Rosser and Schoenfeld's bound on Chebyshev's ψ), so
-// fewer than 1.5·(2q+1) ≤ 3(q+1) bits.
+// retains the original whole-count charge — TangentEnergyPairCost per (i, j)
+// pair, TangentEnergyDegreeCost per k, TangentEnergyCloseCost once — so the
+// same work budget admits the same inputs after this arithmetic optimization.
+// The charge's width covers the result's reduced denominator: the sum divides
+// lcm over k of C(2q,k), which is lcm(1..2q+1)/(2q+1), and lcm(1..m) is below
+// e^(1.03883·m) (Rosser and Schoenfeld's bound on Chebyshev's ψ), so fewer
+// than 1.5·(2q+1) ≤ 3(q+1) bits. The integer accumulator below temporarily
+// carries the larger common factor (2q+1)! before reducing it once.
 func BernsteinSquaredNormIntegral(w *FreeformWork, g []RatPoint) (*big.Rat, error) {
 	if len(g) == 0 {
 		return new(big.Rat), nil
@@ -391,20 +392,44 @@ func BernsteinSquaredNormIntegral(w *FreeformWork, g []RatPoint) (*big.Rat, erro
 	if err := w.Step(CostMul(cost, WidthUnits(2*width+3*(q+1)))); err != nil {
 		return nil, err
 	}
-	sum := new(big.Rat)
-	binom := big.NewInt(1)
-	for k := range 2*q + 1 {
-		ck := new(big.Rat)
-		for i := max(0, k-q); i <= min(q, k); i++ {
-			ck.Add(ck, new(big.Rat).Mul(g[i].U, g[k-i].U))
-			ck.Add(ck, new(big.Rat).Mul(g[i].V, g[k-i].V))
+	// Lift every coordinate to one common denominator. The beta integral of
+	// t^k(1-t)^(2q-k) is k!(2q-k)!/(2q+1)!, so every product can accumulate
+	// as an integer and only the final result needs rational normalization.
+	den := big.NewInt(1)
+	for _, c := range g {
+		for _, coord := range []*big.Rat{c.U, c.V} {
+			gcd := new(big.Int).GCD(nil, nil, den, coord.Denom())
+			den.Quo(den, gcd).Mul(den, coord.Denom())
 		}
-		ck.Quo(ck, new(big.Rat).SetInt(binom))
-		sum.Add(sum, ck)
-		binom.Mul(binom, big.NewInt(int64(2*q-k)))
-		binom.Quo(binom, big.NewInt(int64(k+1)))
 	}
-	return sum.Quo(sum, big.NewRat(int64(2*q+1), 1)), nil
+	scaled := func(coord *big.Rat) *big.Int {
+		factor := new(big.Int).Quo(den, coord.Denom())
+		return factor.Mul(factor, coord.Num())
+	}
+	u := make([]*big.Int, len(g))
+	v := make([]*big.Int, len(g))
+	for i, c := range g {
+		u[i], v[i] = scaled(c.U), scaled(c.V)
+	}
+	factorials := make([]*big.Int, 2*q+2)
+	factorials[0] = big.NewInt(1)
+	for i := 1; i < len(factorials); i++ {
+		factorials[i] = new(big.Int).Mul(factorials[i-1], big.NewInt(int64(i)))
+	}
+	sum := new(big.Int)
+	for k := range 2*q + 1 {
+		ck := new(big.Int)
+		for i := max(0, k-q); i <= min(q, k); i++ {
+			ck.Add(ck, new(big.Int).Mul(u[i], u[k-i]))
+			ck.Add(ck, new(big.Int).Mul(v[i], v[k-i]))
+		}
+		ck.Mul(ck, factorials[k])
+		ck.Mul(ck, factorials[2*q-k])
+		sum.Add(sum, ck)
+	}
+	resultDen := new(big.Int).Mul(den, den)
+	resultDen.Mul(resultDen, factorials[2*q+1])
+	return new(big.Rat).SetFrac(sum, resultDen), nil
 }
 
 // SpanTangentEnergyUpper is docs/loft-design.md §5.2's free-form
