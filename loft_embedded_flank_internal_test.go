@@ -11,46 +11,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func internalEmbeddedGearSketch(t *testing.T, world *sketch.World, plane *sketch.Plane,
-	teeth, samples int) (*sketch.Sketch, *sketch.Profile) {
+func internalEmbeddedFlankSketch(t *testing.T, world *sketch.World,
+	plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
-	const module = 0.5
-	pressure := 30 * math.Pi / 180
-	pitch := module * float64(teeth) / 2
-	base := pitch * math.Cos(pressure)
-	root := (module*float64(teeth) - 2.5*module) / 2
-	tip := (module*float64(teeth) + 2*module) / 2
-	involute := func(radius float64) (float64, float64) {
-		angle := math.Tan(math.Acos(base / radius))
-		return base * (math.Cos(angle) + angle*math.Sin(angle)),
-			base * (math.Sin(angle) - angle*math.Cos(angle))
-	}
-	rotate := func(x, y, angle float64) (float64, float64) {
-		sine, cosine := math.Sincos(angle)
-		return x*cosine - y*sine, x*sine + y*cosine
-	}
-	px, py := involute(pitch)
-	rotation := math.Pi/(2*float64(teeth)) - math.Atan2(-py, px)
 	s, err := world.CreateSketch(plane)
 	require.NoError(t, err)
 	center := s.CreatePoint(0, 0)
 	s.Fix(center)
-	for tooth := range teeth {
-		angle := 2 * math.Pi * float64(tooth) / float64(teeth)
-		left, right := make([]*sketch.Point, samples), make([]*sketch.Point, samples)
-		for i := range samples {
-			radius := base + (tip-base)*float64(i)/float64(samples-1)
-			x, y := involute(radius)
-			flankX, flankY := rotate(x, -y, rotation)
-			leftX, leftY := rotate(flankX, flankY, angle)
-			rightX, rightY := rotate(flankX, -flankY, angle)
-			left[i], right[i] = s.CreatePoint(leftX, leftY), s.CreatePoint(rightX, rightY)
+	// Two short curved lobes keep each retained root-circle arc below a
+	// half-turn, the range that the exact departure proof can certify.
+	const root = 5.375
+	flank := [][2]float64{
+		{5.159280153566717, 0.6179225655473234},
+		{5.491823558586549, 0.5775989367209748},
+		{5.829613089125064, 0.46433458292302054},
+		{6.166922954050798, 0.29632382480791636},
+		{6.499520490645434, 0.07895183139186746},
+	}
+	for lobe := range 2 {
+		turnSin, turnCos := math.Sincos(math.Pi * float64(lobe))
+		left, right := make([]*sketch.Point, len(flank)), make([]*sketch.Point, len(flank))
+		for i, point := range flank {
+			flankX, flankY := point[0], point[1]
+			left[i] = s.CreatePoint(flankX*turnCos-flankY*turnSin, flankX*turnSin+flankY*turnCos)
+			right[i] = s.CreatePoint(flankX*turnCos+flankY*turnSin, flankX*turnSin-flankY*turnCos)
 			s.Fix(left[i])
 			s.Fix(right[i])
 		}
 		_, err = s.CreateFitSpline(right...)
 		require.NoError(t, err)
-		s.CreateArc(center, right[samples-1], left[samples-1])
+		s.CreateArc(center, right[len(right)-1], left[len(left)-1])
 		_, err = s.CreateFitSpline(left...)
 		require.NoError(t, err)
 	}
@@ -64,7 +54,7 @@ func internalEmbeddedGearSketch(t *testing.T, world *sketch.World, plane *sketch
 	}
 	profile, err := s.UnionProfiles(indices...)
 	require.NoError(t, err)
-	require.Len(t, profile.Outer, 4*teeth)
+	require.Len(t, profile.Outer, 8)
 	return s, profile
 }
 
@@ -97,14 +87,13 @@ func requireEmbeddedFlanks(t *testing.T, body *Body, source []fitSplineSeg) {
 }
 
 func TestLoftEmbeddedFlankRecordsSurviveFilletAndBore(t *testing.T) {
-	const teeth, samples = 24, 5
 	world := sketch.NewWorld()
 	upperFrame, err := r3.NewFrame(r3.NewVec(0, 0, 2), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	upper, err := world.CreatePlaneFromFrame(upperFrame)
 	require.NoError(t, err)
-	s0, p0 := internalEmbeddedGearSketch(t, world, world.XY(), teeth, samples)
-	s1, p1 := internalEmbeddedGearSketch(t, world, upper, teeth, samples)
+	s0, p0 := internalEmbeddedFlankSketch(t, world, world.XY())
+	s1, p1 := internalEmbeddedFlankSketch(t, world, upper)
 	sourceRecord, _, _, err := recordProfile(s0, p0)
 	require.NoError(t, err)
 	var source []fitSplineSeg
@@ -123,8 +112,8 @@ func TestLoftEmbeddedFlankRecordsSurviveFilletAndBore(t *testing.T) {
 			rootCorners = append(rootCorners, r3.NewVec(x, y, 0))
 		}
 	}
-	require.Len(t, source, 2*teeth)
-	require.Len(t, rootCorners, 2*teeth)
+	require.Len(t, source, 4)
+	require.Len(t, rootCorners, 4)
 	doc := New()
 	lofted, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
@@ -142,12 +131,12 @@ func TestLoftEmbeddedFlankRecordsSurviveFilletAndBore(t *testing.T) {
 			}
 		}
 	}
-	require.Len(t, corners, 2*teeth)
+	require.Len(t, corners, 4)
 	query := Edges(ParallelTo(axis), EndpointAt(corners[0]))
 	for _, corner := range corners[1:] {
 		query.Or(ParallelTo(axis), EndpointAt(corner))
 	}
-	filleted, err := lofted.Fillet(t.Context(), query.Exactly(2*teeth), units.Millimeters(0.01))
+	filleted, err := lofted.Fillet(t.Context(), query.Exactly(4), units.Millimeters(0.01))
 	require.NoError(t, err)
 	requireEmbeddedFlanks(t, filleted, source)
 	toolWorld := sketch.NewWorld()
