@@ -48,3 +48,34 @@ func TestBevelPatternAngularGapUsesCircularSeam(t *testing.T) {
 	require.True(t, math.IsInf(bevelPatternAngularGap(a,
 		bevelTwoPlan{lo: -0.2, hi: 0.1}), -1))
 }
+
+func TestBevelPatternRingKeepsSixteenSeparateRootSectors(t *testing.T) {
+	const toothCount = 16
+	const halfWidth = 0.03
+	plans := make([]bevelTwoPlan, toothCount)
+	for i := range plans {
+		center := 2 * math.Pi * float64(i) / toothCount
+		lo, hi := center-halfWidth, center+halfWidth
+		plans[i] = bevelTwoPlan{lo: lo, hi: hi, placed: []bevelPathNode{
+			{angle: lo, rootBoundary: true}, {}, {angle: hi, rootBoundary: true},
+		}}
+	}
+	for i := range plans {
+		for j := i + 1; j < len(plans); j++ {
+			require.Greater(t, bevelPatternAngularGap(plans[i], plans[j]), 0.0)
+		}
+	}
+	angles, err := bevelPatternRingAngles(plans, -math.Pi/toothCount)
+	require.NoError(t, err)
+	require.True(t, slices.IsSorted(angles))
+	for _, plan := range plans {
+		require.Equal(t, -1, plan.rootNode[1])
+		require.Equal(t, plan.lo, angles[plan.rootNode[0]])
+		require.Equal(t, plan.hi, angles[plan.rootNode[2]])
+	}
+	for _, angle := range angles {
+		for _, plan := range plans {
+			require.False(t, plan.lo < angle && angle < plan.hi)
+		}
+	}
+}

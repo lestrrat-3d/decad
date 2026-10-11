@@ -343,7 +343,7 @@ clearance decisions in `bevel_join_bore_test.go`.
 
 ## Straight-tooth combined join
 
-`CombineJoin` accepts three to twelve copies of one authenticated point-loft
+`CombineJoin` accepts three to sixteen copies of one authenticated point-loft
 tooth against the original finite revolve blank. The first tool carries the
 cone-trim record; every later tool must be a recorded near-axis rotation of
 that same source. Pairwise exact projections of the held tooth vertices,
@@ -379,7 +379,10 @@ result against the 0.1 mm contract. The existing source-volume and swept-area
 allowances and exact volume check still apply. The eight-tooth serial Union
 and its centered bore keep their separate admission rules.
 
-The complete 16/12 module-4 straight pinion model and its `VerifyAll` check
-live in `decad-gallery/models/bevelgear`, where the real producer and
-consumer run together. Decad's focused tests cover cap conformity, root
-station order, and complete source-solid separation.
+The real sixteen-tooth source yielded 736,512 triangles and 250,972,281 scans,
+below its 1,312,480-triangle and 400-million-scan ceilings. Its 0.092906 mm
+boundary bound meets the 0.1 mm contract. Both members of the complete 16/12
+module-4 straight pair and their `VerifyAll` checks live in
+`decad-gallery/models/bevelgear`, where the real producer and consumer run
+together. Decad's focused tests cover cap conformity, root station order,
+and complete source-solid separation.
