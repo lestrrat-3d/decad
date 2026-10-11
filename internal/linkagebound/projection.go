@@ -167,22 +167,20 @@ func FaceNormals(c Bounds) []motionbound.RatVec {
 // so it is charged Rem·norm, norm an upper bound on |n|.
 func (s Side) ExtentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.Rat) {
 	dot := func(p [3]proofbound.RatInterval) proofbound.RatInterval {
-		var sum proofbound.RatInterval
+		var lo, hi, term big.Rat
 		for d := range 3 {
-			if n[d].Sign() == 0 {
+			sign := n[d].Sign()
+			if sign == 0 {
 				continue
 			}
-			term := proofbound.IntervalScale(p[d], n[d])
-			if sum.Lo == nil {
-				sum = term
-			} else {
-				sum = proofbound.IntervalAdd(sum, term)
+			low, high := p[d].Lo, p[d].Hi
+			if sign < 0 {
+				low, high = high, low
 			}
+			proofarith.AddRat(&lo, &lo, proofarith.MulRat(&term, low, n[d]))
+			proofarith.AddRat(&hi, &hi, proofarith.MulRat(&term, high, n[d]))
 		}
-		if sum.Lo == nil {
-			return proofbound.PointInterval(new(big.Rat))
-		}
-		return sum
+		return proofbound.IntervalOwned(&lo, &hi)
 	}
 	for c := range s.Corners.Hi {
 		pos := dot([3]proofbound.RatInterval{
@@ -192,9 +190,11 @@ func (s Side) ExtentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.R
 		})
 		linUp, linDown := new(big.Rat), new(big.Rat)
 		if s.Seg != nil {
-			sum := proofbound.PointInterval(new(big.Rat))
+			sum := proofbound.IntervalOwned(new(big.Rat), new(big.Rat))
 			for j, v := range s.Corners.Vel[c] {
-				sum = proofbound.IntervalAdd(sum, proofbound.IntervalMul(dot(v), s.Seg[j]))
+				term := proofbound.IntervalMul(dot(v), s.Seg[j])
+				proofarith.AddRat(sum.Lo, sum.Lo, term.Lo)
+				proofarith.AddRat(sum.Hi, sum.Hi, term.Hi)
 			}
 			if sum.Hi.Sign() > 0 {
 				linUp.Set(sum.Hi)
