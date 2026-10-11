@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -15,19 +14,33 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-type loftCircularBounder struct{ seg sectionrecord.CurveSegment }
+type loftCircularBounder struct {
+	endpoint circularbounds.PreparedEndpoint
+	valid    bool
+}
 
 func (b loftCircularBounder) BoundAt(t *big.Rat, u, v float64) proofbound.WalkEndBound {
-	return boundarywalk.CircularPointBound(b.seg, t, u, v)
+	if !b.valid {
+		return proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
+	}
+	uIv, vIv, ok := b.endpoint.At(t)
+	if !ok {
+		return proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
+	}
+	return proofbound.WalkEndBound{
+		U: proofbound.IntervalFloatError(uIv, u),
+		V: proofbound.IntervalFloatError(vIv, v),
+	}
 }
 
 func RecordCircularSide(w survey2d.SegmentWalk, seg sectionrecord.CurveSegment) LoftCircularSide {
 	radius, sweep, enclosed := circularbounds.WalkEnclosures(circularbounds.RecordSegment(seg))
 	tStart, dt, rangeOK := CircularSegmentRange(seg)
+	endpoint, valid := circularbounds.PrepareEndpoint(circularbounds.RecordSegment(seg))
 	return LoftCircularSide{
 		Walk: w, Radius: radius, Sweep: sweep, Enclosed: enclosed,
 		TStart: tStart, DT: dt, RangeOK: rangeOK,
-		EndRadialUpper: ArcNaturalEndRadialUpper(seg), Bounder: loftCircularBounder{seg: seg},
+		EndRadialUpper: ArcNaturalEndRadialUpper(seg), Bounder: loftCircularBounder{endpoint: endpoint, valid: valid},
 	}
 }
 
