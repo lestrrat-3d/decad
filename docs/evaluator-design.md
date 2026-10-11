@@ -744,8 +744,10 @@ bound and the pair diameter used by centroid bounds; its determinant charge
 multiplies the old occupied-volume gap. Area
 slack gains the old slack's stretch, twice the held mesh area's stretch to
 cover different true and held tangent planes, and each rounded facet's area
-allowance. Vertex rounding and a swept-volume allowance are added after the
-exact map. A non-finite bound refuses the placement.
+allowance. Each held vertex starts at the nearest float to its exact rational
+image under that map, before the embedding check can move it to another
+corner of the image's float box. Vertex rounding and a swept-volume allowance
+are added after the exact map. A non-finite bound refuses the placement.
 When a zero-bound faceted Boolean undergoes translation-only placement, its
 payload also carries the original exact mesh beside the rebuilt held mesh.
 The contact reader may use that source to prove an exact support plane after
@@ -1056,11 +1058,10 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     lowers the mesh's count of failing pairs, so the search cannot cycle, and
     its order is fixed, so equal inputs give equal held meshes. A welded
     vertex is never moved: no single float box belongs to it.
-  - **Refuse what no corner clears.** A mesh still failing — a cluster of
-    exact vertices closer together than floats can tell apart — is refused
-    (`ErrUnsupported`, `BooleanExpectedUnsupported`). The exact result has
-    detail below binary64 resolution, and no held mesh at this precision can
-    stand for it while staying embedded.
+  - **Refuse what the bounded search does not clear.** A mesh still failing
+    the exact held-facet checks is refused (`ErrUnsupported`,
+    `BooleanExpectedUnsupported`). The evaluator cannot certify an embedded
+    held mesh from the float-box candidates this bounded search checked.
 
   The bounds stay honest without new terms, because the rounding displacement
   is MEASURED: the per-coordinate distance from every exact vertex to the float
@@ -1072,7 +1073,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
 
   A rigid placement of a faceted body (`Placed`) rounds the same way. The exact
   image of an embedded mesh under the motion's float matrix and translation is
-  embedded, and each held vertex is the motion's float evaluation of its exact
+  embedded, and each held vertex starts at the nearest float to its exact
   image. The same check runs over the vertices that differ from their exact
   images, a failing vertex may take a corner of its exact image's float box,
   and the measured displacement of every vertex the check moved joins the

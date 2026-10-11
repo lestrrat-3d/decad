@@ -54,7 +54,7 @@ const heldGridCellSpan = 512
 
 // EnforceHeldEmbedding proves the held mesh embedded wherever rounding moved
 // it, moving offending vertices to other float-box corners when that is what
-// it takes, and refuses (ErrUnsupported) a mesh no such choice clears. It
+// it takes, and refuses (ErrUnsupported) a mesh still folded after that search. It
 // updates h.Verts in place and returns how many vertices it moved off their
 // first rounding.
 //
@@ -151,7 +151,7 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 		return 0, err
 	}
 	if len(failing) > 0 {
-		return 0, fmt.Errorf(`%w: the result's float rounding folds its held mesh through itself, and no float within an ulp of the exact vertices clears it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
+		return 0, fmt.Errorf(`%w: the result's float rounding folds its held mesh through itself, and the bounded float-box search did not clear it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
 	}
 	return len(moved), nil
 }

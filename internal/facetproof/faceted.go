@@ -13,37 +13,34 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// KeepPlacedEmbedded keeps a placed faceted mesh embedded through the float
-// evaluation of its motion (docs/evaluator-design.md §9): the exact image of
-// an embedded mesh under the motion is embedded, and each held vertex is the
-// motion's float evaluation of its exact image. Every vertex that differs
+// KeepPlacedEmbedded keeps a placed faceted mesh embedded through float
+// rounding of its exact motion (docs/evaluator-design.md §9): the exact image of
+// an embedded mesh under the motion is embedded, and each held vertex starts
+// at the nearest float to its exact image. Every vertex that differs
 // from its exact image is checked and, where its facets fold, may move to a
-// corner of that image's float box (meshbool.EnforceHeldEmbedding); a fold no
-// corner clears is refused. It returns, per vertex, the proven 3D
-// displacement of each vertex the check moved from its exact image — zero for
-// a vertex it left alone, and nil when it moved none — which the caller
+// corner of that image's float box (meshbool.EnforceHeldEmbedding); a fold
+// remaining after the bounded search is refused. It returns, per vertex, the
+// proven 3D displacement of each vertex the check moved from its exact image:
+// zero for a vertex it left alone, and nil when it moved none. The caller
 // charges alongside that vertex's own rounding allowance, since a corner can
-// sit farther from the exact image than the float evaluation did.
-func KeepPlacedEmbedded(ctx context.Context, src, held []r3.Vec, tris [][3]int, delta r3.Transform) ([]float64, error) {
-	b, t := delta.Basis(), delta.Translation()
+// sit farther from the exact image than nearest rounding did.
+func KeepPlacedEmbedded(ctx context.Context, exact []proof.Xpt, held []r3.Vec, tris [][3]int) ([]float64, error) {
 	h := meshbool.HeldRounding{
 		Verts:   held,
 		Tris:    tris,
-		Exact:   make([]proof.Xpt, len(held)),
+		Exact:   exact,
 		Moved:   make([]bool, len(held)),
 		Movable: make([]bool, len(held)),
 	}
 	first := make([]r3.Vec, len(held))
 	copy(first, held)
-	for i, p := range src {
+	for i := range held {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 		}
-		x := meshbool.ExactRigidImage(b, t, p)
-		h.Exact[i] = x
-		if meshbool.CoordDistance(x, held[i]).Sign() != 0 {
+		if meshbool.CoordDistance(exact[i], held[i]).Sign() != 0 {
 			h.Moved[i] = true
 			h.Movable[i] = true
 		}
