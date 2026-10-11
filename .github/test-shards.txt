@@ -29,6 +29,7 @@
 0	0.01	TestBevelRootEdgeOrderRequiresOneDirectedInterval
 0	0.20	TestBevelSharedRingLeavesOnlyToothOwnedRootSectorsOpen
 0	0.01	TestBevelSourceRequiresPositivePublicConeBranch
+0	0.01	TestBevelToeBoreIntersectionUsesRecordedFlank
 0	0.01	TestBevelTrimmedTeethRequireSeparatedCertifiedRanges
 0	0.00	TestXPTKeyDistinguishesCoordinates
 1	0.00	TestAddBlendRolesContextPollsNestedMetadata

@@ -17,10 +17,9 @@ import (
 
 const bevelBoreSideRole = "side(0,0)"
 
-// tryBevelPostJoinBoreCut cuts a coaxial, spanning circle from the complete
-// eight-tooth structural join. Its source record identifies both axis-cap
-// fans, so this path cuts them without asking the broad joined mesh to resolve
-// a second local Boolean contact.
+// tryBevelPostJoinBoreCut cuts a coaxial, spanning circle from a complete
+// structural join. The source record identifies the blank cap fans and toe
+// flank, so their local cut can be rebuilt without remeshing every tooth.
 func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 	d *Document, ref producerID, target, tool *Body) (*Body, bool, error) {
 	if op != meshbool.OpCut {
@@ -28,11 +27,13 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 	}
 	joined, ok := target.payload.(facetedPayload)
 	if !ok || joined.bevelJoin == nil || joined.bevelJoin.capRing == nil ||
-		len(joined.bevelJoin.placed) != 7 || joined.xform != r3.Identity() ||
+		(len(joined.bevelJoin.placed) != 7 && len(joined.bevelJoin.placed) != 11) ||
+		joined.xform != r3.Identity() ||
 		!joined.contactAudited {
 		return nil, false, nil
 	}
-	blank, ok := exactBevelBlank(joined.bevelJoin.blank)
+	blank, ok := matchBevelBlankSection(joined.bevelJoin.blank,
+		len(joined.bevelJoin.placed) == 7)
 	if !ok {
 		return nil, false, nil
 	}
@@ -67,7 +68,12 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 	if !proofbound.FiniteVec(r3.Vec{X: radius}) || radius <= 0 ||
 		start.Cmp(proofarith.FloatRat(blank.toeAxis.U)) >= 0 ||
 		end.Cmp(proofarith.FloatRat(blank.heelAxis.U)) <= 0 ||
-		radius >= min(blank.heelOuter.V, blank.ded.V, blank.toeRoot.V, blank.toeOuter.V) {
+		radius >= min(blank.heelOuter.V, blank.ded.V, blank.toeRoot.V) {
+		return nil, false, nil
+	}
+	toeClipped := radius > blank.toeOuter.V
+	if radius == blank.toeOuter.V ||
+		(toeClipped != (len(joined.bevelJoin.placed) == 11)) {
 		return nil, false, nil
 	}
 	var wall *Face
@@ -88,8 +94,14 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 	if wall == nil {
 		return nil, false, nil
 	}
-	result, err := buildBevelPostJoinBore(ctx, d, ref, joined, blank,
-		joined.bevelJoin.capRing, radius, wall)
+	var result *Body
+	if toeClipped {
+		result, err = buildBevelPostJoinToeBore(ctx, d, ref, joined, blank,
+			joined.bevelJoin.capRing, radius, wall)
+	} else {
+		result, err = buildBevelPostJoinBore(ctx, d, ref, joined, blank,
+			joined.bevelJoin.capRing, radius, wall)
+	}
 	return result, true, err
 }
 
