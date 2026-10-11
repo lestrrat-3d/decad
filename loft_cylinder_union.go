@@ -28,6 +28,8 @@ type loftCylinderJoinRecord struct {
 	z0, z1        float64
 }
 
+const loftCylinderBlankSideRole = "side(0,0)"
+
 type loftCylinderTooth struct {
 	body      *Body
 	loft      loftPayload
@@ -124,7 +126,10 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 			return nil, false, nil
 		}
 		m, err := tooth.Tessellate(ctx, units.Millimeters(0.1), WithVerification(VerifyAll))
-		if err != nil || !m.BoundaryVerified() || !m.VolumeVerified() {
+		if err != nil {
+			return nil, false, err
+		}
+		if !m.BoundaryVerified() || !m.VolumeVerified() {
 			return nil, false, nil
 		}
 		parts[i] = loftCylinderTooth{body: tooth, loft: lp, rootStart: root, mesh: m}
@@ -200,7 +205,8 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 func loftCylinderSectionKinds(lp loftPayload) bool {
 	for _, profile := range []profileRecord{lp.profile0, lp.profile1} {
 		segments := profile.Outer.Segments
-		if _, ok := segments[0].(lineSeg); !ok {
+		start, ok := segments[0].(lineSeg)
+		if !ok {
 			return false
 		}
 		if _, ok := segments[1].(fitSplineSeg); !ok {
@@ -212,15 +218,14 @@ func loftCylinderSectionKinds(lp loftPayload) bool {
 		if _, ok := segments[3].(fitSplineSeg); !ok {
 			return false
 		}
-		if _, ok := segments[4].(lineSeg); !ok {
+		end, ok := segments[4].(lineSeg)
+		if !ok {
 			return false
 		}
 		arc, ok := segments[5].(arcSeg)
 		if !ok || arc.Center != (Point2{}) || arc.TStart != 1 || arc.TEnd != 0 {
 			return false
 		}
-		start := segments[0].(lineSeg)
-		end := segments[4].(lineSeg)
 		if start.TStart != 0 || start.TEnd != 1 || end.TStart != 0 || end.TEnd != 1 ||
 			start.Start != arc.Start || end.End != arc.End {
 			return false
@@ -277,7 +282,10 @@ func loftCylinderRootCollar(lp loftPayload, radius, height float64) (float64, bo
 	c, s := proofarith.FloatRat(basis.EX.X), proofarith.FloatRat(basis.EX.Y)
 	scale2 := new(big.Rat).Add(new(big.Rat).Mul(c, c), new(big.Rat).Mul(s, s))
 	for cap, profile := range []profileRecord{lp.profile0, lp.profile1} {
-		arc := profile.Outer.Segments[5].(arcSeg)
+		arc, ok := profile.Outer.Segments[5].(arcSeg)
+		if !ok {
+			return 0, false
+		}
 		x, y := proofarith.FloatRat(arc.Start.U), proofarith.FloatRat(arc.Start.V)
 		q[cap] = new(big.Rat).Mul(scale2,
 			new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y)))
@@ -461,16 +469,15 @@ func loftCylinderWedgeGate(lp loftPayload, root int, z0, z1 float64) (float64, b
 		var p, a, b [3]r3.Vec
 		for i, index := range tri {
 			p[i] = lp.verts[index]
-			cap := -1
+			capIndex := 0
 			switch p[i].Z {
 			case z0:
-				cap = 0
 			case z1:
-				cap = 1
+				capIndex = 1
 			default:
 				return 0, false
 			}
-			a[i], b[i] = start[cap], end[cap]
+			a[i], b[i] = start[capIndex], end[capIndex]
 		}
 		for i := range 3 {
 			for j := i; j < 3; j++ {
@@ -564,7 +571,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		role := f.Origins()[0].Role
 		group := -1
 		switch role {
-		case "side(0,0)":
+		case loftCylinderBlankSideRole:
 			group = 0
 		case roleCapStart:
 			group = 1
@@ -608,11 +615,11 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 				tri := lp.tris[k]
 				var mapped [3]int
 				for corner, old := range tri {
-					cap, station := old/n, old%n
-					if cap > 1 || station > part.rootStart {
+					capIndex, station := old/n, old%n
+					if capIndex > 1 || station > part.rootStart {
 						return nil, fmt.Errorf("%w: a loft wall crosses its root arc", ErrUnsupported)
 					}
-					mapped[corner] = part.vertex[cap][station]
+					mapped[corner] = part.vertex[capIndex][station]
 				}
 				group := len(mesh.groups)
 				mesh.groups = append(mesh.groups, facetGroup{origins: f.Origins(), planar: true})

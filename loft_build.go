@@ -50,7 +50,7 @@ type loftSourceIdentity struct{ origin producerID }
 type loftPayload struct {
 	// sourceIdentity is shared only by the original Loft and its own placed
 	// copies. It lets a structural consumer require one authenticated source.
-	sourceIdentity *loftSourceIdentity
+	sourceIdentity     *loftSourceIdentity
 	profile0, profile1 profileRecord
 	plane0, plane1     planeRecord
 	frame0, frame1     r3.Frame

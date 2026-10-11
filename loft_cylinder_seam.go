@@ -42,11 +42,12 @@ func loftCylinderConnectorGate(lp loftPayload, root int, radius, height, sourceB
 		}
 		diagonal := [2]int{-1, -1}
 		for _, v := range shared {
-			if v == near || v == far {
+			switch v {
+			case near, far:
 				diagonal[0] = v
-			} else if v == n+near || v == n+far {
+			case n + near, n + far:
 				diagonal[1] = v
-			} else {
+			default:
 				return 0, false
 			}
 		}
