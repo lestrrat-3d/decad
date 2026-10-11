@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -46,7 +47,8 @@ func TestSweepTwistStraightPolygon(t *testing.T) {
 		}
 	}
 	require.Equal(t, 4, facets)
-	for _, role := range []string{"capStart", "capEnd", "side(0,0,0)", "side(0,0,1)", "side(0,0,2)", "side(0,0,3)"} {
+	for edge := range 4 {
+		role := fmt.Sprintf("side(0,0,%d)", edge)
 		require.True(t, roles[role], role)
 	}
 	for _, edge := range body.Edges() {

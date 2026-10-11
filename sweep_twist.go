@@ -311,7 +311,10 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	if err != nil {
 		return nil, err
 	}
-	held := heldBody.payload.(loftPayload)
+	held, ok := heldBody.payload.(loftPayload)
+	if !ok {
+		return nil, fmt.Errorf(`%w: the twisted sweep lost its held Loft proof`, ErrUnsupported)
+	}
 	sourceRoles, err := mergeTwistWalls(ctx, heldBody, ref, len(poly.points))
 	if err != nil {
 		return nil, err
