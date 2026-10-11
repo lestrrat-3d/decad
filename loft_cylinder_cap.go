@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -9,6 +10,170 @@ import (
 )
 
 type loftCylinderXY struct{ x, y *big.Rat }
+
+// loftCylinderTagCaps gives the two already audited cap groups the result's
+// own cap roles and the source blank's exact planar surface. The joined cap
+// audit proves each disk tiles its outline; the bore path audits each annulus
+// before calling this helper. The mesh's remaining groups keep their
+// faceted surface identity.
+func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
+	levels [2]float64, ref producerID) error {
+	if blank == nil || len(pp.tris) != len(pp.src) || groups[0] == groups[1] {
+		return fmt.Errorf("%w: loft/cylinder caps have no separate source groups", ErrUnsupported)
+	}
+	roles := [2]string{roleCapStart, roleCapEnd}
+	for cap, group := range groups {
+		if group < 0 || group >= len(pp.groups) {
+			return fmt.Errorf("%w: loft/cylinder cap names no source group", ErrUnsupported)
+		}
+		var source *Face
+		for _, face := range blank.Faces() {
+			for _, origin := range face.Origins() {
+				if origin != (FeatureRef{producer: blank.origin.producer, Role: roles[cap]}) {
+					continue
+				}
+				if source != nil {
+					return fmt.Errorf("%w: loft/cylinder blank has duplicate cap roles", ErrUnsupported)
+				}
+				source = face
+			}
+		}
+		if source == nil {
+			return fmt.Errorf("%w: loft/cylinder blank has no cap source", ErrUnsupported)
+		}
+		plane, ok := source.Surface().(Plane)
+		if !ok || plane.Frame.Origin().Z != levels[cap] {
+			return fmt.Errorf("%w: loft/cylinder blank cap has no matching plane", ErrUnsupported)
+		}
+		want := float64(1)
+		if cap == 0 {
+			want = -1
+		}
+		if plane.Frame.N() != (r3.Vec{Z: want}) {
+			return fmt.Errorf("%w: loft/cylinder blank cap has no axial normal", ErrUnsupported)
+		}
+		count := 0
+		for i, tri := range pp.tris {
+			if pp.src[i] != group {
+				continue
+			}
+			count++
+			for _, index := range tri {
+				if index < 0 || index >= len(pp.verts) || pp.verts[index].Z != levels[cap] {
+					return fmt.Errorf("%w: loft/cylinder cap facet leaves its source plane", ErrUnsupported)
+				}
+			}
+		}
+		if count == 0 {
+			return fmt.Errorf("%w: loft/cylinder cap group has no facets", ErrUnsupported)
+		}
+		g := &pp.groups[group]
+		g.origins = append(append([]FeatureRef(nil), g.origins...),
+			FeatureRef{producer: ref, Role: roles[cap]})
+		g.surface = plane
+		g.planar = true
+		g.normalBound = source.normalBound
+		g.reversed = source.reversed
+	}
+	return nil
+}
+
+// loftCylinderAuditAnnulus checks the exact planar area and directed edge
+// balance of one rebuilt cap. The old disk audit supplies the outer loop; the
+// bore ring and side-clearance gates supply a disjoint inner loop. The whole
+// shell crossing audit excludes overlapping or folded cap facets.
+func loftCylinderAuditAnnulus(ctx context.Context, mesh *bevelJoinedMesh,
+	outer, inner []int, group int, z float64, bottom bool) bool {
+	if len(outer) < 3 || len(inner) < 3 {
+		return false
+	}
+	allowed := make(map[int]struct{}, len(outer)+len(inner))
+	loopArea := func(loop []int) *big.Rat {
+		area := new(big.Rat)
+		for i, a := range loop {
+			b := loop[(i+1)%len(loop)]
+			if a < 0 || a >= len(mesh.verts) || b < 0 || b >= len(mesh.verts) ||
+				mesh.verts[a].Z != z || mesh.verts[b].Z != z {
+				return nil
+			}
+			if _, exists := allowed[a]; exists {
+				return nil
+			}
+			allowed[a] = struct{}{}
+			pa, pb := loftCylinderExactXY(mesh.verts[a]), loftCylinderExactXY(mesh.verts[b])
+			area.Add(area, new(big.Rat).Sub(
+				new(big.Rat).Mul(pa.x, pb.y), new(big.Rat).Mul(pa.y, pb.x)))
+		}
+		return area
+	}
+	outerArea, innerArea := loopArea(outer), loopArea(inner)
+	if outerArea == nil || innerArea == nil || outerArea.Sign() <= 0 ||
+		innerArea.Sign() <= 0 || outerArea.Cmp(innerArea) <= 0 {
+		return false
+	}
+	expected := new(big.Rat).Sub(outerArea, innerArea)
+	actual := new(big.Rat)
+	edges := make(map[[2]int]int)
+	count := 0
+	for i, tri := range mesh.tris {
+		if i%256 == 0 && ctx.Err() != nil {
+			return false
+		}
+		if mesh.src[i] != group {
+			continue
+		}
+		count++
+		for _, vertex := range tri {
+			if _, ok := allowed[vertex]; !ok || mesh.verts[vertex].Z != z {
+				return false
+			}
+		}
+		a := loftCylinderExactXY(mesh.verts[tri[0]])
+		b := loftCylinderExactXY(mesh.verts[tri[1]])
+		c := loftCylinderExactXY(mesh.verts[tri[2]])
+		twice := loftCylinderOrient(a, b, c)
+		if bottom {
+			if twice.Sign() >= 0 {
+				return false
+			}
+			actual.Sub(actual, twice)
+		} else {
+			if twice.Sign() <= 0 {
+				return false
+			}
+			actual.Add(actual, twice)
+		}
+		for k := range 3 {
+			edges[[2]int{tri[k], tri[(k+1)%3]}]++
+		}
+	}
+	if count == 0 || actual.Cmp(expected) != 0 {
+		return false
+	}
+	consumeBoundary := func(loop []int, reverse bool) bool {
+		for i, a := range loop {
+			b := loop[(i+1)%len(loop)]
+			if reverse {
+				a, b = b, a
+			}
+			if edges[[2]int{a, b}]-edges[[2]int{b, a}] != 1 {
+				return false
+			}
+			delete(edges, [2]int{a, b})
+			delete(edges, [2]int{b, a})
+		}
+		return true
+	}
+	if !consumeBoundary(outer, bottom) || !consumeBoundary(inner, !bottom) {
+		return false
+	}
+	for edge, n := range edges {
+		if n != 1 || edges[[2]int{edge[1], edge[0]}] != 1 {
+			return false
+		}
+	}
+	return true
+}
 
 func loftCylinderExactXY(p r3.Vec) loftCylinderXY {
 	return loftCylinderXY{proofarith.FloatRat(p.X), proofarith.FloatRat(p.Y)}

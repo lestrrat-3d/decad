@@ -593,8 +593,9 @@ type Face struct {
 	// heldPlanar records that a Faceted face descends only from PLANAR source
 	// faces, so the face it stands for in the true result is flat — and a rim
 	// between two such faces is a straight line, whose chord length is honest.
-	// The surface TAG cannot say this: a boolean's faces all read Faceted,
-	// including the ones that are plainly flat.
+	// The surface TAG cannot say this for an ordinary mesh boolean: its faces
+	// all read Faceted, including the ones that are plainly flat. A structural
+	// boolean may instead retain a certified source Plane.
 	heldPlanar bool
 	// reversed is true when the OUTWARD (material-leaving) normal is the
 	// surface's geometric normal negated — a hole's cylinder wall, whose

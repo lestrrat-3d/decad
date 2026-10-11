@@ -329,5 +329,22 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		result.loftCylinderBore.inner[cap] = append([]int(nil), inner[cap]...)
 	}
 	result.contactAudited = true
+	for cap := range 2 {
+		z := record.z0
+		if cap == 1 {
+			z = record.z1
+		}
+		if !loftCylinderAuditAnnulus(ctx, mesh, result.loftCylinderBore.outer[cap],
+			result.loftCylinderBore.inner[cap], record.capGroups[cap], z, cap == 0) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("%w: circular bore cap does not tile its annulus", ErrUnsupported)
+		}
+	}
+	if err := loftCylinderTagCaps(&result, record.blank, record.capGroups,
+		[2]float64{record.z0, record.z1}, ref); err != nil {
+		return nil, err
+	}
 	return buildFacetedBody(ctx, d, ref, result)
 }

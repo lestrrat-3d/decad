@@ -851,6 +851,10 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 			capGroups:     [2]int{blankGroups[1], blankGroups[2]},
 			minSideRadius: minSideRadius, radius: radius, z0: pp.z0, z1: pp.z1,
 		}}
+	if err := loftCylinderTagCaps(&fp, blank, fp.loftCylinderJoin.capGroups,
+		[2]float64{pp.z0, pp.z1}, ref); err != nil {
+		return nil, err
+	}
 	return buildFacetedBody(ctx, d, ref, fp)
 }
 
