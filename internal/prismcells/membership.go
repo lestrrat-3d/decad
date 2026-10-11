@@ -245,6 +245,18 @@ type RegionKey struct {
 // nil then) means a cell's membership in some record could not be reached,
 // or a shape Classify does not cover.
 func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (map[RegionKey][]bool, bool, error) {
+	return classifyRegions(budget, tags, profiles, false)
+}
+
+// ClassifyRegionsWithHoles also reads bounded cells with inner loops. A Cut
+// against a holed section needs those loops to classify its retained area.
+func ClassifyRegionsWithHoles(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile) (map[RegionKey][]bool, bool, error) {
+	return classifyRegions(budget, tags, profiles, true)
+}
+
+func classifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile, allowHoles bool) (map[RegionKey][]bool, bool, error) {
 	n := len(profiles)
 	member := map[RegionKey][]membership{}
 	for _, origin := range tags {
@@ -278,34 +290,36 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 		if err := budget.Step(); err != nil {
 			return nil, false, err
 		}
-		if !p.Valid || len(p.Holes) != 0 {
+		if !p.Valid || (!allowHoles && len(p.Holes) != 0) {
 			return nil, false, nil
 		}
-		for _, e := range p.Outer {
-			if err := budget.Step(); err != nil {
-				return nil, false, err
-			}
-			origin, ok := tags[e.Entity]
-			if !ok {
-				return nil, false, nil
-			}
-			k := RegionKey{IsB: origin.IsB, Region: origin.Region}
-			if !setMember(i, k, e.Reversed == origin.AuthoredReversed) {
-				return nil, false, nil
-			}
-			keys := []RegionKey{k}
-			if c, shared := coincident.Edges[edgeSpan{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]; shared {
-				partner, ok := tags[c.Partner]
-				pk := RegionKey{IsB: partner.IsB, Region: partner.Region}
-				if !ok || pk == k {
+		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
+			for _, e := range loop {
+				if err := budget.Step(); err != nil {
+					return nil, false, err
+				}
+				origin, ok := tags[e.Entity]
+				if !ok {
 					return nil, false, nil
 				}
-				if !setMember(i, pk, (e.Reversed != c.Opposite) == partner.AuthoredReversed) {
+				k := RegionKey{IsB: origin.IsB, Region: origin.Region}
+				if !setMember(i, k, e.Reversed == origin.AuthoredReversed) {
 					return nil, false, nil
 				}
-				keys = append(keys, pk)
+				keys := []RegionKey{k}
+				if c, shared := coincident.Edges[edgeSpan{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]; shared {
+					partner, ok := tags[c.Partner]
+					pk := RegionKey{IsB: partner.IsB, Region: partner.Region}
+					if !ok || pk == k {
+						return nil, false, nil
+					}
+					if !setMember(i, pk, (e.Reversed != c.Opposite) == partner.AuthoredReversed) {
+						return nil, false, nil
+					}
+					keys = append(keys, pk)
+				}
+				occ[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}] = append(occ[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}], occurrence{cell: i, keys: keys})
 			}
-			occ[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}] = append(occ[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}], occurrence{cell: i, keys: keys})
 		}
 	}
 	type regionLink struct {

@@ -77,6 +77,7 @@ func (sc *ubScene) key(ref ubRef) (prismcells.RegionKey, bool) {
 // ubBuild is one brep build over the stacked union's slabs.
 type ubBuild struct {
 	st     *stackedUnionState
+	cut    bool
 	levels []stackedrecord.UnionLevel
 	// reach names, per result slab, each operand's slab reaching it (−1
 	// when it does not).
@@ -134,22 +135,32 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 		}
 		var loops []ubLoop
 		for _, region := range regions {
-			loop, err := b.geom.LoopOf(brepgeom.Profile{Outer: region.Outer, Holes: region.Holes}, b.st.budget)
-			if err != nil {
-				return brepPayload{}, err
+			for _, ring := range append([]loopRecord{region.Outer}, region.Holes...) {
+				loop, err := b.geom.LoopOf(brepgeom.Profile{Outer: ring}, b.st.budget)
+				if err != nil {
+					return brepPayload{}, err
+				}
+				loops = append(loops, loop)
 			}
-			loops = append(loops, loop)
 		}
 		b.slabs = append(b.slabs, regions)
 		b.geom.SlabLoops = append(b.geom.SlabLoops, loops)
 	}
-	for _, loop := range b.geom.SlabLoops[0] {
-		if err := b.geom.AddFace(loop, 0, false); err != nil {
+	for _, region := range b.slabs[0] {
+		outer, holes, err := b.regionLoops(region)
+		if err != nil {
+			return brepPayload{}, err
+		}
+		if err := b.geom.AddFaceRegion(outer, holes, 0, false); err != nil {
 			return brepPayload{}, err
 		}
 	}
-	for _, loop := range b.geom.SlabLoops[n-1] {
-		if err := b.geom.AddFace(loop, n, true); err != nil {
+	for _, region := range b.slabs[n-1] {
+		outer, holes, err := b.regionLoops(region)
+		if err != nil {
+			return brepPayload{}, err
+		}
+		if err := b.geom.AddFaceRegion(outer, holes, n, true); err != nil {
 			return brepPayload{}, err
 		}
 	}
@@ -179,16 +190,34 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	if err != nil {
 		return brepPayload{}, err
 	}
-	// The result keeps its slabs, so a further co-directional Union reads
-	// it as an operand (§4.1).
-	stack := &brepStack{delta: delta}
-	for k, regions := range b.slabs {
-		lo, hi := b.levels[k], b.levels[k+1]
-		stack.slabs = append(stack.slabs, stackedrecord.Slab{Regions: regions,
-			Z0: lo.Held, Z1: hi.Held, Z0Delta: lo.Delta, Z1Delta: hi.Delta})
+	if !b.cut {
+		// A1's union result keeps its slabs for a further co-directional
+		// Union (§4.1). The crossing Cut's holed slabs are not A1 operands.
+		stack := &brepStack{delta: delta}
+		for k, regions := range b.slabs {
+			lo, hi := b.levels[k], b.levels[k+1]
+			stack.slabs = append(stack.slabs, stackedrecord.Slab{Regions: regions,
+				Z0: lo.Held, Z1: hi.Held, Z0Delta: lo.Delta, Z1Delta: hi.Delta})
+		}
+		out.stack = stack
 	}
-	out.stack = stack
 	return out, nil
+}
+
+func (b *ubBuild) regionLoops(region profileRecord) (ubLoop, []ubLoop, error) {
+	outer, err := b.geom.LoopOf(brepgeom.Profile{Outer: region.Outer}, b.st.budget)
+	if err != nil {
+		return ubLoop{}, nil, err
+	}
+	var holes []ubLoop
+	for _, ring := range region.Holes {
+		hole, err := b.geom.LoopOf(brepgeom.Profile{Outer: ring}, b.st.budget)
+		if err != nil {
+			return ubLoop{}, nil, err
+		}
+		holes = append(holes, hole)
+	}
+	return outer, holes, nil
 }
 
 // refs names every record of one operand's slab.
@@ -250,6 +279,20 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 	if err != nil {
 		return nil, err
 	}
+	if b.cut {
+		for _, cell := range profiles {
+			for _, ring := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
+				for _, edge := range ring {
+					if err := b.st.budget.Step(); err != nil {
+						return nil, err
+					}
+					if edge.Partial && !edge.TExact {
+						return nil, errUBMiss
+					}
+				}
+			}
+		}
+	}
 	if len(profiles) == 0 {
 		return nil, errUBMiss
 	}
@@ -290,6 +333,9 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 		verbatim = refsA
 	}
 	if verbatim != nil {
+		if b.cut && len(refsA) == 0 {
+			return nil, errUBMiss
+		}
 		out := make([]profileRecord, len(verbatim))
 		for i, ref := range verbatim {
 			out[i] = b.record(ref)
@@ -302,6 +348,9 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 	}
 	if err := b.charge(sc); err != nil {
 		return nil, err
+	}
+	if b.cut {
+		return b.cutSlabRegion(sc)
 	}
 	voidFree, err := prismcells.CellsHaveNoVoid(b.st.budget, sc.tags, sc.profiles)
 	if err != nil {
@@ -341,6 +390,73 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 		}
 	}
 	return out, nil
+}
+
+// cutSlabRegion keeps the cells inside the target and outside the tool.
+// The selected boundary must close into one outer ring and one inner ring;
+// the exact scene owns every crossing and shared span in those rings.
+func (b *ubBuild) cutSlabRegion(sc *ubScene) ([]profileRecord, error) {
+	if ok, err := sc.delta.SharedSpansBounded(b.st.budget, sc.profiles); err != nil || !ok {
+		if err != nil {
+			return nil, err
+		}
+		return nil, errUBMiss
+	}
+	if sc.matter == nil {
+		matter, resolved, err := prismcells.ClassifyRegionsWithHoles(b.st.budget, sc.tags, sc.profiles)
+		if err != nil {
+			return nil, err
+		}
+		if !resolved {
+			return nil, errUBMiss
+		}
+		sc.matter = matter
+	}
+	selected := make([]*sketch.Profile, 0, len(sc.profiles))
+	for i, cell := range sc.profiles {
+		insideA, insideB := false, false
+		for r := range sc.refsA {
+			insideA = insideA || sc.matter[prismcells.RegionKey{Region: r}][i]
+		}
+		for r := range sc.refsB {
+			insideB = insideB || sc.matter[prismcells.RegionKey{IsB: true, Region: r}][i]
+		}
+		if insideA && !insideB {
+			selected = append(selected, cell)
+		}
+	}
+	loops, cutDelta, resolved, err := prismcells.MergeLoops(b.st.budget, selected, "cut")
+	if err != nil {
+		return nil, err
+	}
+	if !resolved || len(loops) != 2 {
+		return nil, errUBMiss
+	}
+	b.cutDelta = math.Max(b.cutDelta, cutDelta)
+	var region profileRecord
+	for _, loop := range loops {
+		area, err := loopSignedAreaCB(loop)
+		if err != nil {
+			return nil, err
+		}
+		if area > 0 {
+			if len(region.Outer.Segments) != 0 {
+				return nil, errUBMiss
+			}
+			region.Outer = loop
+		} else if area < 0 {
+			region.Holes = append(region.Holes, loop)
+		} else {
+			return nil, errUBMiss
+		}
+	}
+	if len(region.Outer.Segments) == 0 || len(region.Holes) != 1 {
+		return nil, errUBMiss
+	}
+	if err := auditPrismMergeSection(b.st.budget, prismPayload{profile: region}, region); err != nil {
+		return nil, err
+	}
+	return []profileRecord{region}, nil
 }
 
 // interfaceFaces classifies the interface at level k: the scene of every
@@ -408,7 +524,11 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 		return err
 	}
 	if sc.matter == nil {
-		matter, resolved, err := prismcells.ClassifyRegions(b.st.budget, sc.tags, sc.profiles)
+		classify := prismcells.ClassifyRegions
+		if b.cut {
+			classify = prismcells.ClassifyRegionsWithHoles
+		}
+		matter, resolved, err := classify(b.st.budget, sc.tags, sc.profiles)
 		if err != nil {
 			return err
 		}
@@ -418,7 +538,7 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 		sc.matter = matter
 	}
 	for i, p := range sc.profiles {
-		below, above := false, false
+		var sideMatter [2][2]bool
 		for op := range 2 {
 			for _, sd := range sides[op] {
 				key, ok := sc.key(sd.ref)
@@ -426,9 +546,15 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 					return errUBMiss
 				}
 				in := sc.matter[key][i]
-				below = below || (sd.below && in)
-				above = above || (sd.above && in)
+				sideMatter[op][0] = sideMatter[op][0] || (sd.below && in)
+				sideMatter[op][1] = sideMatter[op][1] || (sd.above && in)
 			}
+		}
+		below := sideMatter[0][0] || sideMatter[1][0]
+		above := sideMatter[0][1] || sideMatter[1][1]
+		if b.cut {
+			below = sideMatter[0][0] && !sideMatter[1][0]
+			above = sideMatter[0][1] && !sideMatter[1][1]
 		}
 		if below == above {
 			continue

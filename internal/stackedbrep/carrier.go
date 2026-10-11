@@ -86,6 +86,7 @@ type Loop struct {
 // loop at a level, facing up (outward) or down.
 type Face struct {
 	Loop    Loop
+	Holes   []Loop
 	Level   int
 	Outward bool
 }

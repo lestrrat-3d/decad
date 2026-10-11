@@ -74,7 +74,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Today | Owner |
 |---|---|---|
 | Exact result outside the admitted prism and point-loft/cone classes | Pair takes the mesh boolean → `Faceted` faces with a volume bound | `docs/general-boolean-design.md` §3, `docs/loft-point-design.md` "Coaxial finite cone trims" |
-| Blind cut with displaced interface levels, touching or overlapping opposed holes, or a crossing hole | Mesh path; coplanar contact can refuse. Exact interface cuts with separated opposed holes build after whole-loop proofs | `docs/stacked-prism-design.md` §7 stage 3 |
+| Blind cuts with displaced levels, opposed-hole contact, or other crossing holes | Mesh path, possibly coplanar refusal. A7 builds one exact rectangular crossing | `docs/stacked-prism-design.md` §7; `docs/general-boolean-design.md` §3 A7 |
 | Touching, coplanar or face-on-face contact on the mesh path | `BooleanError` code `BooleanUnsupportedContact` | `docs/general-boolean-design.md` §2, `docs/interference-design.md` |
 | Curved surfaces tangent with facets that never meet | `ErrUnsupported` | `doc.go` support map |
 | Held mesh operand coarser than the pair tolerance | `ErrUnsupported` outside the source-certified one- and two-tooth bevel joins | `doc.go` support map, `docs/loft-point-design.md` |
