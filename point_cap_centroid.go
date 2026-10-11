@@ -65,7 +65,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 		}
 		q, err := pointPlaneMapExact(base.pointSection.apex, far, plane)
 		if err != nil {
-			return VecMeasurement{}, false, nil
+			return VecMeasurement{}, false, nil //nolint:nilerr // failed map withholds the optional centroid reading
 		}
 		polygon[i] = q
 	}
@@ -135,7 +135,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	}
 	value, round, err := pointPlaneRound(center)
 	if err != nil {
-		return VecMeasurement{}, false, nil
+		return VecMeasurement{}, false, nil //nolint:nilerr // failed rounding withholds the optional centroid reading
 	}
 	shift := proofbound.DivUpper(proofbound.ProductUpper(tube, proofbound.AbsSumUpper(radius, delta)), floor)
 	bound := proofbound.AbsSumUpper(shift, round)
