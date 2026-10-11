@@ -5,7 +5,8 @@ import "github.com/lestrrat-3d/decad/internal/proofbound"
 // MeshProof is the proof record a mesh restating the assembled loft publishes.
 // It is composed once from the same triangle set and mass sums as the body.
 type MeshProof struct {
-	// FacetDeparture bounds the distance from a held facet to its true surface.
+	// FacetDeparture bounds both directions between a held facet and its
+	// parameter-matched true wall patch; see docs/loft-design.md §5.2.
 	FacetDeparture float64
 	// AreaSlack bounds the difference between held and true surface areas.
 	AreaSlack float64

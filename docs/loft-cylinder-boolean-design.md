@@ -115,6 +115,43 @@ the recorded `safeTop`. A cap cutter must separately prove its top-collar,
 cap-plane, bore-wall, and full far-band surface claims. Circle occupancy by
 itself does not place a complete cutter facet inside the source union.
 
+## Strict interior split-ring occupancy
+
+`loftCylinderSourceRingInside` accepts unordered exact edges at one height
+strictly between the blank's caps and below every tooth's certified top root
+collar. It checks exact endpoint equality, nonzero edges, degree two at every
+vertex, and one connected cycle. The entire ring stays outside a centered
+bore's exact radius. At least one ring vertex lies strictly inside the
+blank circle, which gives the connected ring an occupied witness.
+
+An edge wholly inside the circle is inside the exact blank. An edge wholly
+outside it must clear every source tooth's true wall. The helper measures
+its exact minimum distance to every relevant held Loft wall triangle and
+requires a strict gap beyond that tooth's parameter-matched wall bound.
+The `matchedDelta` and cell twist terms in Loft §5.2 pair every point of a
+held wall patch with a point of its true wall patch at the same parameters,
+and conversely. Thus that bound excludes a true wall near the edge in
+both directions; a one-way held-to-source reading would not suffice.
+Expanded coordinate boxes skip only triangles that cannot approach the
+edge by the bound. Exact segment-to-triangle distances decide the rest.
+
+For an edge that touches or crosses the blank circle, the whole edge must
+lie strictly between one tooth's two source connector crossing rays.
+The exact source connector slices are checked for any contact with that
+edge, including endpoint touch or collinear overlap. Every tooth's fitted
+and tip walls must clear the edge by its matched wall bound. The source
+circle record proves each root wall stays inside the blank at this height,
+so those hidden walls cannot form the union boundary. An exact whole-edge
+radius minimum classifies edges; endpoint radii alone do not.
+
+The circle sector claim makes every circle point on a crossing edge
+strictly occupied by the tooth. No edge touches any source tooth wall or
+an exposed blank or bore wall. Since the exact edge set is one connected
+cycle with a strict blank-inside witness, every point on the ring lies
+inside the original union. This proof covers the split ring only. The cap
+planes, the top collar, and the cutter band's two-dimensional surfaces
+need separate bounds and occupancy proofs.
+
 ## Boundary and occupied-volume bounds
 
 Away from the root band, the retained tooth walls have the Loft source

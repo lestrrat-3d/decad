@@ -80,6 +80,8 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_seam.go` | Certifies the faceted connector's radial crossing at every height. See loft-cylinder-boolean design. |
 | `loft_cylinder_contact.go` | Bounds an exact same-height connector contact against its source cylinder crossing. See loft-cylinder-boolean design. |
 | `loft_cylinder_source_circle.go` | Bounds a source Loft tooth's exact circle crossings over a rational height interval. See loft-cylinder-boolean design. |
+| `loft_cylinder_ring_distance.go` | Measures exact ring-edge clearance from held Loft walls. See loft-cylinder-boolean design. |
+| `loft_cylinder_ring_occupancy.go` | Certifies one strict interior split ring inside an authenticated loft/cylinder union. See loft-cylinder-boolean design. |
 | `loft_cylinder_bore.go` | Cuts a centered through-bore from an audited loft/cylinder join. See loft-cylinder-boolean design. |
 | `prism_boolean.go` | Analytic booleans of co-directional prisms. See `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Clean-nesting scene adapters. See prism-boolean §4.2. |
