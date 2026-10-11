@@ -1966,7 +1966,7 @@ against this budget.
   before any pair test; a set past the triangle ceiling refuses before S6.
   The grid reports every box-overlapping pair exactly once on random,
   tube, helical, flat-lattice and repeated boxes. The sweep's candidate list equals the
-  box-overlap set on the gear tooth, the chorded wedge and the crossing
+  box-overlap set on the chorded wedge and the crossing
   fixtures, and the structured audit's verdict, refused pair included, equals
   the zero-shortcut reference's on real lofts and on caps mutated to fail each
   of the cap proof's conditions.
