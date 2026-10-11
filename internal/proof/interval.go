@@ -22,6 +22,12 @@ func OwnedInterval(lo, hi *big.Rat) RatInterval {
 }
 
 func AddInterval(a, b RatInterval) RatInterval {
+	if a.Lo.Sign() == 0 && a.Hi.Sign() == 0 {
+		return Interval(b.Lo, b.Hi)
+	}
+	if b.Lo.Sign() == 0 && b.Hi.Sign() == 0 {
+		return Interval(a.Lo, a.Hi)
+	}
 	return OwnedInterval(AddRat(new(big.Rat), a.Lo, b.Lo), AddRat(new(big.Rat), a.Hi, b.Hi))
 }
 
@@ -54,6 +60,9 @@ func PointInterval(value *big.Rat) RatInterval {
 // identify the two extreme products unless both intervals cross zero; that
 // case compares four products. Both result endpoints are owned independently.
 func MulInterval(a, b RatInterval) RatInterval {
+	if a.Lo.Sign() == 0 && a.Hi.Sign() == 0 || b.Lo.Sign() == 0 && b.Hi.Sign() == 0 {
+		return OwnedInterval(new(big.Rat), new(big.Rat))
+	}
 	if a.Lo.Sign() >= 0 {
 		switch {
 		case b.Lo.Sign() >= 0:
