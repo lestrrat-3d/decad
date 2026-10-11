@@ -374,16 +374,22 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | **SB4** | route E reading an edge that is not a straight line along a reference axis; only single straight edges reach route E, and every other Fillet or Chamfer selection takes route L (modify-general §4, `docs/loop-fillet-design.md`), which builds a hole rim, a boss root or a cornered loop or refuses with Table SL or SF | — (a falsifier) | `ErrUnsupported` |
 | **SB5** | selected single straight edges share a vertex outside route V's complete-loop or selected-chain fillet (`docs/vertex-blend-design.md` §2); a mixed `Chamfer` still takes SL1 | yes | `ErrUnsupported` (SL1's text) |
 | **SB6** | an edge vertex with other than three incident edges, or an edge that is one piece of a split side line | yes | `ErrUnsupported` |
-| **SB7** | the third face at an edge vertex is not, and cannot be restated as, a plane across the edge's axis: a cylinder, a plane along the axis, an oblique, split or level-displaced straight wall, a blend face of an earlier call, a trimmed wall whose rim ends on a loop band's patch | yes; the edge ends on a blend or a curved face, whose honest form is the complete loop's fillet (`docs/loop-fillet-design.md`) | `ErrUnsupported` |
+| **SB7** | the third face at an edge vertex cannot be restated as a plane across its axis | yes outside P8's exact front top edge (§4.3c); complete-loop fillets have their own route | `ErrUnsupported` |
 | **SB8** | an adjacent face outside EB4/EB5: a rim-adjacent wall that is oblique, split or level-displaced, a (pl) face whose neighbours at `e` are not straight and across the axis, a narrowed range, consecutive segments on one carrier | yes | `ErrUnsupported` |
 | **SB9** | the two end faces' blends disagree in reference coordinates | — (a falsifier) | `ErrUnsupported` |
 | **SB10** | Shell of a brep that reads as a prism along no axis and as no through-cut record (modify-general Table TC) | yes; the three-dimensional offset puts a sphere at a reflex vertex, a torus around a reflex circle and an elliptical edge where two reflex edges meet, none of which this record holds | `ErrUnsupported`, with SG3's reason |
+
+SB7 includes a cylinder, a plane along the edge's axis, an oblique, split or
+level-displaced wall, an earlier blend, and a trimmed wall ending on a loop
+band patch. Only modify-general §4.3c's exact P8 edge bypasses this gate.
 
 Base S4, S5, S6, S7, S8, S9 keep modify §4's meanings per end face and per
 trimmed wall. Reach SX16 is replaced: a brep receiver either builds here or
 refuses with one of the rows above.
 
-Gate order for a brep receiver, after modify §4's stage 1 and reach SX10:
+Gate order for a brep receiver, after modify §4's stage 1 and reach SX10.
+The exact P8 front top Fillet of modify-general §4.3c is tested before the
+record gate; a mismatch falls through to the table unchanged:
 
 | Stage | Gates |
 |---|---|
