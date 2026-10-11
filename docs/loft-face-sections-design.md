@@ -128,6 +128,14 @@ plane that misses its entire tool/root circle. These whole-cap checks rule out
 contacts through an end-cap interior. A caller may also request an exact box
 around either moving flank/root crossing over a narrow X interval; the local
 rim proof uses that box to decide which source surface remains exposed.
+For the first band, the source proof also encloses each complete flank/root
+seam from the finite toe root ring through cap two. It divides the moving
+branch into exact time slabs and encloses each slab and the matching X strip
+of an authenticated held switch chain. An exact maximum box distance below
+the chain's smallest curve bound covers both boundary directions. The cap-two
+source endpoint has a separate box for the held chain's final X tail. The
+caller must first prove that the held chain is complete, strictly ordered in
+X, and belongs to the matching blank-root and fitted-flank face pair.
 
 The first-join proximity check binds each exceptional face pair to its live
 source origin. The finite blank toe and heel outer meridians lie strictly
