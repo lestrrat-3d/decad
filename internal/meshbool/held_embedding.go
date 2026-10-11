@@ -93,23 +93,25 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 	if err := e.buildGrid(); err != nil {
 		return 0, err
 	}
-	if memo {
-		// A query facet meets a few dozen boxes around it; sizing the memo
-		// for that up front spares it the rehashing of growing there.
-		e.pairs = make(map[uint64]heldPair, 32*len(query))
-	}
 	// Every facet outside check is known embedded against all its
 	// neighbours; a move puts the facets around the moved vertex back in.
 	check := query
 	moved := map[int]struct{}{}
 	for sweep := range heldEmbeddingSweeps {
-		var offenders, failing []int
-		var err error
 		if sweep == 0 && memo && len(check) >= 4096 && runtime.GOMAXPROCS(0) > 1 {
-			offenders, failing, err = e.parallelOffenders(ctx, check)
-		} else {
-			offenders, failing, err = e.offenders(check)
+			clean, err := e.parallelClean(ctx, check)
+			if err != nil {
+				return 0, err
+			}
+			if clean {
+				return 0, nil
+			}
 		}
+		if memo && e.pairs == nil {
+			// Repair needs replayable pair answers; a clean first scan does not.
+			e.pairs = make(map[uint64]heldPair, 32*len(query))
+		}
+		offenders, failing, err := e.offenders(check)
 		if err != nil {
 			return 0, err
 		}
@@ -154,28 +156,27 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 	return len(moved), nil
 }
 
-type embeddingScan struct {
-	offenders []int
-	failing   []int
-	err       error
-}
-
-// parallelOffenders checks the first, unchanged mesh through independent
-// predicate caches. Each worker polls after at most 256/workers operations;
-// their combined unchecked work stays below one polling interval.
-func (e *heldEmbedding) parallelOffenders(ctx context.Context, query []int) ([]int, []int, error) {
+// parallelClean tests each pair involving an unchanged query facet once. A
+// failing pair sends the caller through the original ordered repair scan.
+// Each worker polls after at most 256/workers operations, so their combined
+// unchecked work stays below one polling interval.
+func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, error) {
 	workers := min(runtime.GOMAXPROCS(0), 4)
 	if err := e.budget.Err(); err != nil {
-		return nil, nil, err
+		return false, err
 	}
 	originalBudget := e.budget
 	e.budget = embeddingWorkerBudget(ctx, workers)
-	results := make([]embeddingScan, workers)
+	queryFacet := make([]bool, len(e.h.Tris))
+	for _, i := range query {
+		queryFacet[i] = true
+	}
+	clean := make([]bool, workers)
+	errors := make([]error, workers)
 	locals := make([]*heldEmbedding, workers)
 	locals[0] = e
 	for worker := 1; worker < workers; worker++ {
-		start, end := len(query)*worker/workers, len(query)*(worker+1)/workers
-		locals[worker] = e.readOnlyScanCopy(ctx, workers, end-start)
+		locals[worker] = e.readOnlyScanCopy(ctx, workers)
 	}
 	var group sync.WaitGroup
 	group.Add(workers)
@@ -184,31 +185,47 @@ func (e *heldEmbedding) parallelOffenders(ctx context.Context, query []int) ([]i
 		local := locals[worker]
 		go func() {
 			defer group.Done()
-			results[worker].offenders, results[worker].failing, results[worker].err = local.offenders(query[start:end])
+			clean[worker], errors[worker] = local.cleanPairs(query[start:end], queryFacet)
 		}()
 	}
 	group.Wait()
 	e.budget = originalBudget
 	if err := e.budget.Err(); err != nil {
-		return nil, nil, err
+		return false, err
 	}
-	seen := map[int]struct{}{}
-	var failing []int
-	for _, result := range results {
-		if result.err != nil {
-			return nil, nil, result.err
+	for worker := range workers {
+		if errors[worker] != nil {
+			return false, errors[worker]
 		}
-		failing = append(failing, result.failing...)
-		for _, v := range result.offenders {
-			seen[v] = struct{}{}
+		if !clean[worker] {
+			return false, nil
 		}
 	}
-	offenders := make([]int, 0, len(seen))
-	for v := range seen {
-		offenders = append(offenders, v)
+	return true, nil
+}
+
+func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool) (bool, error) {
+	for _, i := range query {
+		if _, _, n := e.facet(i); zeroXpt(n) {
+			return false, nil
+		}
+		candidates, err := e.candidates(i)
+		if err != nil {
+			return false, err
+		}
+		for _, j := range candidates {
+			if err := e.budget.Step(); err != nil {
+				return false, err
+			}
+			if j == i || j < i && queryFacet[j] {
+				continue
+			}
+			if !e.pairEmbedded(i, j) {
+				return false, nil
+			}
+		}
 	}
-	slices.Sort(offenders)
-	return offenders, failing, nil
+	return true, nil
 }
 
 func embeddingWorkerBudget(ctx context.Context, workers int) *proofbound.WorkBudget {
@@ -228,7 +245,7 @@ func embeddingWorkerBudget(ctx context.Context, workers int) *proofbound.WorkBud
 
 // readOnlyScanCopy shares the immutable grid and incident-facet lists, while
 // each worker writes only its own predicate caches.
-func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers, queryCount int) *heldEmbedding {
+func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *heldEmbedding {
 	local := *e
 	local.budget = embeddingWorkerBudget(ctx, workers)
 	local.xv = make([]proof.Xpt, len(e.xv))
@@ -248,7 +265,7 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers, queryCoun
 	local.cands = nil
 	local.box = make([][2]r3.Vec, len(e.box))
 	local.boxOK = make([]bool, len(e.boxOK))
-	local.pairs = make(map[uint64]heldPair, 8*queryCount)
+	local.pairs = nil
 	return &local
 }
 
