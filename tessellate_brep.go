@@ -240,15 +240,27 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 				if _, ok := ringLoop[u.Loop]; ok {
 					continue
 				}
-				poly = terminalPoly[ui]
-				if poly != nil {
-					sag := tessellation.ChordSagitta(u.Walk.Radius,
-						math.Abs(u.Walk.Th1-u.Walk.Th0), len(poly)-1)
+				if bp.bossShell != nil && bp.bossShell.round != nil &&
+					fi == bp.bossShell.ledgeFace && u.Loop == 1 {
+					bc := &bands[len(bp.loopBands)]
+					poly = append(slices.Clone(bc.sideV), bc.sideV[0])
+					slices.Reverse(poly) // the ledge walks this hole clockwise
+					sag := bc.lm.sideSag[0]
 					trim = math.Max(trim, sag)
 					loopSag[u.Loop] = math.Max(loopSag[u.Loop], sag)
-					capSlack = proofbound.AbsSumUpper(capSlack, tessellation.WalkSegmentArea(u.Walk, len(poly)-1))
+					capSlack = proofbound.AbsSumUpper(capSlack,
+						tessellation.WalkSegmentArea(bc.lm.walks[0].SegmentWalk, bc.lm.count[0]))
 				} else {
-					poly = []int{addVertex(u.DirFrom, u.StartBound()), addVertex(u.DirTo, u.EndBound())}
+					poly = terminalPoly[ui]
+					if poly != nil {
+						sag := tessellation.ChordSagitta(u.Walk.Radius,
+							math.Abs(u.Walk.Th1-u.Walk.Th0), len(poly)-1)
+						trim = math.Max(trim, sag)
+						loopSag[u.Loop] = math.Max(loopSag[u.Loop], sag)
+						capSlack = proofbound.AbsSumUpper(capSlack, tessellation.WalkSegmentArea(u.Walk, len(poly)-1))
+					} else {
+						poly = []int{addVertex(u.DirFrom, u.StartBound()), addVertex(u.DirTo, u.EndBound())}
+					}
 				}
 			}
 			for _, vi := range poly[:len(poly)-1] {

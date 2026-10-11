@@ -223,6 +223,7 @@
 1	0.00	TestRevolveFreeformDisplacedSectionRefuses
 1	1.05	TestRevolveFreeformPartialCapAreaSlack
 1	0.00	TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
+1	0.00	TestRoundBossShellMeshVolumeProof
 1	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
 1	0.00	TestSegFilterKeepsWhatTheExactPredicateAccepts
 1	0.01	TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture

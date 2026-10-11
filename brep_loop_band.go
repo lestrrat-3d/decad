@@ -228,10 +228,10 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 		band := bp.bossShell
 		e := embeds[band.ledgeFace]
 		for _, ring := range []struct {
-			rect bossRect
-			z    float64
-		}{{band.boss, band.lowerZ}, {band.upper, band.interfaceZ}} {
-			for _, seg := range ring.rect.profile().Outer.Segments {
+			profile profileRecord
+			z       float64
+		}{{band.sideProfile(), band.lowerZ}, {band.capProfile(), band.interfaceZ}} {
+			for _, seg := range ring.profile.Outer.Segments {
 				if err := add(e, seg, ring.z); err != nil {
 					return nil, err
 				}

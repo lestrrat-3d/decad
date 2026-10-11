@@ -189,6 +189,8 @@
 //	Shell         brep read as a prism cut by through tools,
 //	              inward, caps or one run of straight walls
 //	              along section axes removed                  builds
+//	Shell         exact nested rectangular or circular boss
+//	              on a rectangular plate, top removed         builds
 //	  a brep or stacked result that reads as neither          ErrUnsupported
 //	  outward; a curved removed wall, or a wall run ending
 //	    at a reflex corner; dilated tools that meet, reach
