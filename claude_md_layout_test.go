@@ -184,6 +184,7 @@ var (
 		layoutPartSpec("design-docs.md"),
 		layoutPartSpec("features.md"),
 		layoutPartSpec("modify-booleans.md"),
+		layoutPartSpec("booleans.md"),
 		layoutPartSpec("verification.md"),
 		layoutPartSpec("output-repository.md"),
 		layoutPartSpec("internal-core.md"),
