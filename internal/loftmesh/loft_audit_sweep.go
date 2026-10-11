@@ -66,7 +66,7 @@ func LoftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 func LoftCrossingAuditBevelJoin(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
 	const maxBevelJoinScans = 64_000_000
 	_, err := loftCrossingAuditLimited(budget, verts, tris, nil, loftGenericShortcuts,
-		maxBevelJoinScans, 82_000, false)
+		maxBevelJoinScans, 82_000, true)
 	return err
 }
 
@@ -75,7 +75,8 @@ func LoftCrossingAuditBevelJoin(budget *proofbound.WorkBudget, verts []r3.Vec, t
 // its square. It keeps the same triangle ceiling and exact contact verdicts.
 func LoftCrossingAuditBevelTwoJoin(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
 	const maxBevelTwoJoinScans = 256_000_000
-	_, err := loftCrossingAudit(budget, verts, tris, nil, loftGenericShortcuts, maxBevelTwoJoinScans)
+	_, err := loftCrossingAuditLimited(budget, verts, tris, nil, loftGenericShortcuts,
+		maxBevelTwoJoinScans, MaxLoftAuditTriangles, true)
 	return err
 }
 
