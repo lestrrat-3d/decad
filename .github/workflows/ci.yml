@@ -152,6 +152,10 @@ jobs:
             race: "-race"
             shard: "9"
             packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "10"
+            packages: ""
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -188,7 +192,7 @@ jobs:
           timeout=10m
           budget=300
           case '${{ matrix.shard }}' in
-            0) timeout=45m; budget=2400 ;;
+            0|10) timeout=45m; budget=2400 ;;
             1|2) budget=420 ;;
           esac
           run_shard() {
@@ -217,9 +221,11 @@ jobs:
           run_shard apitest.test .github/test-shards-apitest.txt apitest
           elapsed=$(( SECONDS - start ))
           echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
-          # Shard 0 reserves the measured 60-tooth gear test and has a 2400s
-          # budget below its 45m timeout. Shards 1 and 2 carry the other two
-          # costly gear tests and allow 420s; all other shards retain 300s.
+          # Shard 0 reserves the measured 60-tooth gear test. Shard 10 holds
+          # the three-tooth race slice of the bevel pattern; normal CI runs
+          # all eight teeth. Both have 2400s budgets below their
+          # 45m timeouts. Shards 1 and 2 carry the other costly gear tests
+          # and allow 420s; all other shards retain 300s.
           # A budget failure reports test-cost drift before a timeout does.
           # Re-measure and regenerate with the command in _shardgen/main.go.
           if [ "$elapsed" -gt "$budget" ]; then
@@ -324,9 +330,10 @@ jobs:
       # The whole-suite run is the non-Linux leg: no shard, and no package
       # operand of its own. The examples runner has a `packages:` operand, so
       # this must test BOTH fields or it would re-run the entire suite there.
+      # Its apitest binary now includes the full eight-tooth bevel pattern.
       - name: Run tests
         if: matrix.shard == '' && matrix.packages == ''
-        run: go test ${{ matrix.race }} -timeout 10m ./...
+        run: go test ${{ matrix.race }} -timeout 30m ./...
 
       - name: Save Go build cache
         if: runner.os == 'Linux'

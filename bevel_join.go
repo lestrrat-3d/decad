@@ -22,8 +22,9 @@ import (
 // face covered by the point loft. Its cap and the blank share the very same
 // root-ring vertex indices. An unrelated Union still uses the usual evaluator.
 type bevelJoinRecord struct {
-	blank *Body
-	first facetedPayload
+	blank  *Body
+	first  facetedPayload
+	placed []facetedPayload
 }
 
 type bevelToothPlacement struct {
@@ -463,8 +464,7 @@ type bevelRingMesh struct {
 
 func bevelBuildBlankMesh(m *bevelJoinedMesh, blank *bevelBlankSource,
 	angles []float64, seams [][2]float64) (bevelRingMesh, float64, error) {
-	if len(angles) < 16 || angles[0] >= -math.Pi/2 ||
-		angles[len(angles)-1] <= math.Pi/2 {
+	if len(angles) < 16 || angles[len(angles)-1]-angles[0] <= math.Pi {
 		return bevelRingMesh{}, 0, fmt.Errorf("%w: blank angular ring is incomplete", ErrUnsupported)
 	}
 	r := bevelRingMesh{angles: angles}

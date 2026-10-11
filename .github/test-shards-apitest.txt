@@ -16,6 +16,7 @@
 #   shard 7:   92.78s over 200 tests
 #   shard 8:  101.99s over 200 tests
 #   shard 9:  118.05s over 202 tests
+#   shard 10: 542.97s over 1 test
 #
 0	415.53	TestBevelTwoToothJoinReusesOneRootRing
 0	1059.82	TestLoftEmbeddedSixtyToothGearFeatures
@@ -1764,3 +1765,4 @@
 9	0.14	TestVertexFrameOriginBoundEnclosesLift
 9	0.01	TestWallNarrowConeTaperZero
 9	0.04	TestWallReadingBoundIsOnTheSpanningDiameter
+10	542.97	TestBevelPatternReusesOneRootRing

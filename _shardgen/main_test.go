@@ -75,7 +75,7 @@ func TestPackKeepsChordSweepReadersTogether(t *testing.T) {
 	}
 	var apiNames []string
 	apiCosts := make(map[string]float64)
-	for i := range 10 {
+	for i := range shardCount {
 		name := fmt.Sprintf("TestOther%02d", i)
 		names = append(names, name)
 		costs[name] = float64(10 - i)
@@ -166,7 +166,7 @@ func TestPackIsolatesCostlyTestAndCoversBothPackages(t *testing.T) {
 
 func TestPackSpreadsZeroCostTests(t *testing.T) {
 	var rootNames, apiNames []string
-	for i := range 60 {
+	for i := range shardCount * 6 {
 		rootNames = append(rootNames, fmt.Sprintf("TestRoot%02d", i))
 		apiNames = append(apiNames, fmt.Sprintf("TestAPI%02d", i))
 	}
