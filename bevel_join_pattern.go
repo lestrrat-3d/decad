@@ -163,6 +163,48 @@ func bevelTrimmedSourcesSeparateBox(teeth []facetedPayload) bool {
 	}
 	return true
 }
+
+// bevelPatternRingAngles gives every cap its own root stations while keeping
+// regular blank stations outside all covered sectors.
+func bevelPatternRingAngles(plans []bevelTwoPlan, ringStart float64) ([]float64, error) {
+	regular := make([]float64, 0, 256+2*len(plans))
+	for i := range 256 {
+		regular = append(regular, ringStart+math.Pi*float64(i)/128)
+	}
+	for _, plan := range plans {
+		regular = append(regular, plan.lo, plan.hi)
+	}
+	// Placed root stations can differ from the regular grid by a few ulps.
+	// A regular station inside a cap sector would leave a free edge there.
+	outside := regular[:0]
+	for _, angle := range regular {
+		covered := false
+		for _, plan := range plans {
+			covered = covered || plan.lo < angle && angle < plan.hi
+		}
+		if covered {
+			continue
+		}
+		outside = append(outside, angle)
+	}
+	angles := outside
+	for i := range plans {
+		var err error
+		angles, _, err = bevelMergedAngles(angles, plans[i].placed)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for i := range plans {
+		var err error
+		_, plans[i].rootNode, err = bevelMergedAngles(angles, plans[i].placed)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return angles, nil
+}
+
 func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 	blankBody *Body, blank *bevelBlankSource, record *pointConeTrimRecord,
 	boundary *bevelToothBoundary, teeth []facetedPayload) (*Body, error) {
@@ -208,42 +250,9 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 			}
 		}
 	}
-	regular := make([]float64, 0, 256+2*len(plans))
-	for i := range 256 {
-		regular = append(regular, ringStart+math.Pi*float64(i)/128)
-	}
-	for _, plan := range plans {
-		regular = append(regular, plan.lo, plan.hi)
-	}
-	// The placed root stations differ by a few ulps from the regular grid.
-	// Inside either covered sector the cap owns every split of the blank ring;
-	// adding an independent regular station there would leave a tiny free edge.
-	outside := regular[:0]
-	for _, angle := range regular {
-		covered := false
-		for _, plan := range plans {
-			covered = covered || plan.lo < angle && angle < plan.hi
-		}
-		if covered {
-			continue
-		}
-		outside = append(outside, angle)
-	}
-	regular = outside
-	angles := regular
-	for i := range plans {
-		var err error
-		angles, _, err = bevelMergedAngles(angles, plans[i].placed)
-		if err != nil {
-			return nil, err
-		}
-	}
-	for i := range plans {
-		var err error
-		_, plans[i].rootNode, err = bevelMergedAngles(angles, plans[i].placed)
-		if err != nil {
-			return nil, err
-		}
+	angles, err := bevelPatternRingAngles(plans, ringStart)
+	if err != nil {
+		return nil, err
 	}
 	blankGroups, err := bevelBlankGroups(blankBody, blank)
 	if err != nil {
