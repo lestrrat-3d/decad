@@ -2,6 +2,8 @@ package capband
 
 import (
 	"math"
+	"runtime"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/measurement"
@@ -96,8 +98,9 @@ func BandMoment(in BandMassInput, work *freeform.FreeformWork) (
 
 	patchAreaTotal := proofbound.BoundedScalar{}
 	locusVolume, locusRadialGap := 0.0, 0.0
-	for _, g := range in.Patches {
-		pmu, pmv, pmz := FirstMomentFlux(g)
+	fluxes := patchMomentFluxes(in.Patches)
+	for i, g := range in.Patches {
+		pmu, pmv, pmz := fluxes[i][0], fluxes[i][1], fluxes[i][2]
 		sign := -in.MaterialSign * in.Orientation
 		muTotal = proofbound.BoundedAdd(muTotal, proofbound.MeasuredScalar(sign*pmu.Value, pmu.Bound))
 		mvTotal = proofbound.BoundedAdd(mvTotal, proofbound.MeasuredScalar(sign*pmv.Value, pmv.Bound))
@@ -142,6 +145,31 @@ func BandMoment(in BandMassInput, work *freeform.FreeformWork) (
 		mzTotal.Bound = proofbound.AbsSumUpper(mzTotal.Bound, axial)
 	}
 	return muTotal, mvTotal, mzTotal, nil
+}
+
+// patchMomentFluxes evaluates independent patch integrals in parallel, then
+// returns them in patch order so BandMoment's bounded sums keep their order.
+func patchMomentFluxes(patches []Patch) [][3]proofbound.BoundedScalar {
+	fluxes := make([][3]proofbound.BoundedScalar, len(patches))
+	workers := min(runtime.GOMAXPROCS(0), len(patches))
+	if len(patches) < 32 || workers < 2 {
+		for i, g := range patches {
+			fluxes[i][0], fluxes[i][1], fluxes[i][2] = FirstMomentFlux(g)
+		}
+		return fluxes
+	}
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for worker := range workers {
+		go func() {
+			defer wg.Done()
+			for i := worker; i < len(patches); i += workers {
+				fluxes[i][0], fluxes[i][1], fluxes[i][2] = FirstMomentFlux(patches[i])
+			}
+		}()
+	}
+	wg.Wait()
+	return fluxes
 }
 
 // CentroidGeometryBound bounds a centroid's distance from an estimate by the
