@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0: 1475.35s over 2 tests
-#   shard 1:  175.72s over 113 tests
+#   shard 1:  291.46s over 116 tests
 #   shard 2:  177.82s over 204 tests
 #   shard 3:   43.63s over 218 tests
 #   shard 4:   40.25s over 206 tests
@@ -33,6 +33,7 @@
 1	0.00	TestBodyPatchPlanarHoleFillTessellates
 1	0.00	TestBodyPatchPlanarMeshPlacementAndVerification
 1	0.01	TestBooleanNilContextIsDegenerate
+1	115.52	TestBrepRoundedEdgeFilletPublicQuarterRadii
 1	0.01	TestCapBlendComputedStopMassBounds
 1	0.00	TestCapBlendPartialLoopSelectionRefused
 1	0.01	TestCapBlendSideLevelCarriesSetbackRounding
@@ -62,6 +63,8 @@
 1	174.98	TestLoftEmbeddedThirtyToothGearFeatures
 1	0.00	TestLoftPlacedReflectionHerringbone
 1	0.01	TestLoftPlacedVerifySound
+1	0.08	TestLoftSectionsVaryingCirclesRefuseOtherShapes
+1	0.14	TestLoftSectionsVaryingCirclesKeepVolumeAndMeshProof
 1	0.00	TestLoopCoEdgesReturnImmutableView
 1	0.01	TestMassPropertiesRefusals
 1	0.01	TestMinRadiusAnnularRevolveStaysExact
@@ -1571,7 +1574,6 @@
 9	3.79	TestBooleanChainOfConesContinuesPastEachJoint
 9	1.25	TestBooleanRimVertexBoundCoversTrimAmplification
 9	0.45	TestBrepLoopChamferPublicRoundedPlateExports
-9	115.52	TestBrepRoundedEdgeFilletPublicQuarterRadii
 9	0.06	TestCapBlendAsymmetricOverrunRefused
 9	0.03	TestCapBlendAsymmetricUnrepresentableSetbackRefused
 9	0.02	TestCapBlendCapCircleCarriesInPlaneDistanceRounding

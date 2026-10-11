@@ -23,7 +23,8 @@ all three profiles. Every line may walk forward or backward according to its
 recorded full-domain range; the walked vertices must meet exactly. Holes,
 trimmed lines, curved segments, and differing segment counts return
 `ErrUnsupported` on that route. Section 6 owns a separate constant-section
-route for exactly matching curved records.
+route for exactly matching curved records. Section 7 admits linearly varying
+four-arc circles.
 
 All three planes have world-XY `U` and `V` axes, the same XY origin, and
 strictly increasing Z origins with the middle Z exactly halfway between the
@@ -144,8 +145,8 @@ wall remains `ErrUnsupported`, as for every `NURBSSurface`.
 
 The admitted classes are increments, not a claim that general multi-section
 interpolation is determined by profile boundaries. Nonhomothetic profiles,
-varying curved profiles, arbitrary planes, guides, centerlines, and hole
-loops remain `ErrUnsupported`. Nil context or document, or a section count
+varying curved profiles outside §7, arbitrary planes, guides, centerlines,
+and hole loops remain `ErrUnsupported`. Nil context or document, or a section count
 other than three, returns `ErrDegenerate`. A seam failure returns its own
 sentinel and leaves the document unchanged.
 
@@ -179,5 +180,74 @@ occupied-volume proofs for `VerifyAll`. Placement and replay use its prism
 payload, including the same curved source records.
 
 This route covers sections whose curve records are exactly identical.
-Changing a fitted-spline flank, circular radius, or arc range between
-sections still lacks a bounded interpolation and returns `ErrUnsupported`.
+Changing a fitted-spline flank or arc range between sections still lacks a
+bounded interpolation and returns `ErrUnsupported`. Section 7 handles one
+bounded circular radius change.
+
+## 7. Linearly varying circular sections
+
+Each real Sketch producer must supply one valid, hole-free profile of exactly
+four whole `ArcSeg` records. The records run counterclockwise through the
+cardinal points `(r,0)`, `(0,r)`, `(-r,0)`, `(0,-r)` with center `(0,0)` and
+full parameter range `[0,1]`. The radius of every section lies in `[1,32]`
+mm. The planes have §1's matching world-XY axes and equally spaced Z levels;
+total height is at most 32 mm. The three exact radii satisfy
+`2r_1=r_0+r_2`, `r_0 != r_2`, and `r_2/r_0` in `[1/2,2]`. These exact
+record comparisons identify circles and the linear law. Sketch remains the
+authority for profile validity and area. A failed gate returns
+`ErrUnsupported` and leaves the document unchanged. Other curved records
+still reach §6's identical-record route.
+
+At height `t`, the denoted section is the disk of radius
+`r(t)=r_0+(r_2-r_0)t`. This is a ruled conical frustum that passes through
+all three supplied profiles. Four side faces retain their arc source roles
+and report `NURBSSurface`; the start and end caps report `Plane`. The middle
+profile creates no seam face. The faceted payload handles placement with its
+ordinary transformed-mesh proof.
+
+The held boundary uses 96 polygon vertices per ring at `t=0,1/2,1`.
+Trigonometry only proposes those vertices. Exact rational checks require
+every proposed vertex to lie inside the unit disk, every turn to be strictly
+convex, each point to stay in its named quadrant, each cardinal seam to lie
+on its axis, and each supporting edge to lie at least `1023/1024` from the
+origin. The polygon therefore lies inside the circle and contains the inner
+circle of radius `r_0(1023/1024)`. Its coordinates, scaled ring coordinates,
+and Z levels must be exactly representable as float64. The two bands tile
+ruled planar polygon faces, while each cap is triangulated from the same
+ring vertices. The faceted audit must confirm a closed outward mesh before
+the body commits.
+
+The corresponding circle and polygon boundary points on any radial ray
+differ by at most `max(r_0,r_2)/1024`; both directions have this bound. It
+must be at most 0.05 mm. `Tessellate(VerifyAll)` restates the audited mesh
+only at a tolerance at least this held bound. Each wall facet names one of
+the four original arc source roles.
+
+Let `A_P` be the exact polygon shoelace area, `H=z_2-z_0`, and
+`q=r_2/r_0`. The polygon sections stay inside the circular sections, so
+their occupied-volume symmetric difference equals
+
+```text
+(pi*r_0² - A_P) * H * (1+q+q²)/3.
+```
+
+The proven upper rational endpoint for pi gives `volSymDiff` directly.
+The faceted integrator then adds its held arithmetic charge to `Volume`,
+`Centroid`, and other readings. The diameter allowance is
+`2*max(r_0,r_2)+H`.
+
+For area, both cap deficits total `(pi*r_0²-A_P)*(1+q²)`. The polygon is
+convex, inscribed in the outer circle, and contains the inner circle, so
+its perimeter lies between their circumferences. Each ruled polygon wall
+has a slant between the inner and outer circle's slants. With
+`δ=r_0/1024` and `Δr=|r_2-r_0|`, a non-cancelling lateral allowance is
+
+```text
+pi*(1+q)*δ*(H+Δr+(r_0-δ)*|q-1|).
+```
+
+Both terms are rounded upward into `areaSlack`, beside the faceted body's
+own held arithmetic and vertex-bound charges. For the 8/10/12 mm public
+case, the 0.1 mm `VerifyAll` boundary and volume proofs pass; default
+`Document.Verify` currently reports `Suspect` because its conservative
+measurement allowances exceed the default tolerance.
