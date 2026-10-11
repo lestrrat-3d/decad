@@ -118,7 +118,12 @@ func TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof(t *testing.T) {
 	require.Equal(t, 2, planes)
 	require.Equal(t, 2, cylinders)
 	require.Equal(t, 2, nurbs)
-	for _, role := range []string{"capStart", "capEnd", "side(0,0)", "side(0,1)", "side(0,2)", "side(0,3)"} {
+	// The cap role constants are private to decad, so build their public names here.
+	for _, suffix := range []string{"Start", "End"} {
+		role := "cap" + suffix
+		require.True(t, roles[role], "missing source role %s", role)
+	}
+	for _, role := range []string{"side(0,0)", "side(0,1)", "side(0,2)", "side(0,3)"} {
 		require.True(t, roles[role], "missing source role %s", role)
 	}
 
