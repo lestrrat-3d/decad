@@ -152,6 +152,9 @@ func GatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 		}
 		return nil
 	})
+	// A face pair usually queues few contacts, so keep its initial buffers
+	// small without changing when the ordered batch is flushed.
+	contacts.initialCapacity = contactBatchInitialCapacity
 	for _, i := range fis {
 		for _, j := range fjs {
 			work++

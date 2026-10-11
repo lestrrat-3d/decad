@@ -56,17 +56,18 @@ type ContactBatchRunner func(context.Context, *BoolMesh, *BoolMesh, []ContactPai
 // cached float normals before starting workers. Workers therefore only read
 // immutable mesh data and write their own result slot.
 type ContactBatchExecutor struct {
-	Ctx     context.Context //nolint:containedctx // one call-scoped cancellation source for this short-lived executor.
-	Ma      *BoolMesh
-	Mb      *BoolMesh
-	Memo    *ContactMemo
-	Workers int
-	Limit   int
-	Run     ContactBatchRunner
-	Consume func(ContactPair, TriContact) error
-	Batch   []ContactBatchEntry
-	Misses  []ContactPair
-	Results []ContactBatchResult
+	Ctx             context.Context //nolint:containedctx // one call-scoped cancellation source for this short-lived executor.
+	Ma              *BoolMesh
+	Mb              *BoolMesh
+	Memo            *ContactMemo
+	Workers         int
+	Limit           int
+	Run             ContactBatchRunner
+	Consume         func(ContactPair, TriContact) error
+	Batch           []ContactBatchEntry
+	Misses          []ContactPair
+	Results         []ContactBatchResult
+	initialCapacity int
 }
 
 type ContactBatchEntry struct {
@@ -80,14 +81,15 @@ func NewContactBatchExecutor(ctx context.Context, ma, mb *BoolMesh, memo *Contac
 		workers = 1
 	}
 	return &ContactBatchExecutor{
-		Ctx:     ctx,
-		Ma:      ma,
-		Mb:      mb,
-		Memo:    memo,
-		Workers: workers,
-		Limit:   ContactBatchSize,
-		Run:     RunContactBatch,
-		Consume: consume,
+		Ctx:             ctx,
+		Ma:              ma,
+		Mb:              mb,
+		Memo:            memo,
+		Workers:         workers,
+		Limit:           ContactBatchSize,
+		Run:             RunContactBatch,
+		Consume:         consume,
+		initialCapacity: ContactBatchSize,
 	}
 }
 
@@ -95,6 +97,8 @@ func NewContactBatchExecutor(ctx context.Context, ma, mb *BoolMesh, memo *Contac
 // is in flight, so an ordered error can cause at most this many extra
 // classifications after its position has been reached by a worker.
 const ContactBatchSize = 256
+
+const contactBatchInitialCapacity = 16
 
 // add records one candidate in discovery order. A memo hit remains in the
 // ordered batch so a cached result cannot leapfrog an earlier uncached pair.
@@ -110,7 +114,7 @@ func (e *ContactBatchExecutor) Add(i, j int) error {
 		entry.Miss = true
 	}
 	if e.Batch == nil {
-		e.Batch = make([]ContactBatchEntry, 0, ContactBatchSize)
+		e.Batch = make([]ContactBatchEntry, 0, e.initialCapacity)
 	}
 	e.Batch = append(e.Batch, entry)
 	if len(e.Batch) < e.Limit {
@@ -127,13 +131,13 @@ func (e *ContactBatchExecutor) Flush() error {
 	for _, entry := range e.Batch {
 		if entry.Miss {
 			if e.Misses == nil {
-				e.Misses = make([]ContactPair, 0, ContactBatchSize)
+				e.Misses = make([]ContactPair, 0, e.initialCapacity)
 			}
 			e.Misses = append(e.Misses, entry.Pair)
 		}
 	}
 	if cap(e.Results) < len(e.Misses) {
-		e.Results = make([]ContactBatchResult, len(e.Misses), ContactBatchSize)
+		e.Results = make([]ContactBatchResult, len(e.Misses), max(e.initialCapacity, len(e.Misses)))
 	} else {
 		e.Results = e.Results[:len(e.Misses)]
 	}
