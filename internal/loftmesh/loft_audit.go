@@ -76,6 +76,7 @@ type LoftAuditData struct {
 	Xverts      []proof.Xpt
 	Xtris       [][3]proof.Xpt
 	Norms       []proof.Xpt
+	floatNorms  []r3.Vec
 	Planes      []LoftExactPlane
 	Projections [][3]meshbool.Xp2
 }
@@ -109,6 +110,7 @@ func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 		Xverts:      make([]proof.Xpt, len(verts)),
 		Xtris:       make([][3]proof.Xpt, len(tris)),
 		Norms:       make([]proof.Xpt, len(tris)),
+		floatNorms:  make([]r3.Vec, len(tris)),
 		Planes:      make([]LoftExactPlane, len(tris)),
 		Projections: make([][3]meshbool.Xp2, len(tris)),
 	}
@@ -119,6 +121,7 @@ func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 		d.Corners[i] = LoftTriCorners(verts, tri)
 		d.Xtris[i] = [3]proof.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
 		d.Norms[i] = proof.Xcross(proof.Xsub(d.Xtris[i][1], d.Xtris[i][0]), proof.Xsub(d.Xtris[i][2], d.Xtris[i][0]))
+		d.floatNorms[i] = d.Norms[i].Vec()
 		d.Planes[i] = NewLoftExactPlane(d.Xtris[i][0], d.Norms[i])
 		projection := ProjectionPairIndex(meshbool.ProjAxes(d.Norms[i]))
 		for j, p := range d.Xtris[i] {
@@ -442,8 +445,9 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 	if shortcuts.Certificates && sharedCount == 1 && IsolatedSharedVertex(tris[i], shared[0], signsA) {
 		return LoftPairVertexCertificate, nil
 	}
-	contact, err := meshbool.TriTriClassifyWithProjections(ta, tb, xta, xtb, na, nb,
-		&data.Projections[i], &data.Projections[j], &signsA, &signsB, true)
+	contact, err := meshbool.TriTriClassifyCore(ta, tb, xta, xtb, na, nb,
+		&data.Projections[i], &data.Projections[j], &signsA, &signsB, true,
+		data.floatNorms[i], data.floatNorms[j], true)
 	if err != nil {
 		return LoftPairClassified, err
 	}
