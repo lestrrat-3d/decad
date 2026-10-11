@@ -2,12 +2,14 @@ package diameter_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -70,6 +72,39 @@ func TestPointsKeepsExhaustiveWitness(t *testing.T) {
 	check("duplicate", []r3.Vec{r3.NewVec(1, 2, 3), r3.NewVec(1, 2, 3)})
 	check("overflow", []r3.Vec{r3.NewVec(math.MaxFloat64, 0, 0), r3.NewVec(-math.MaxFloat64, 0, 0)})
 	check("nonfinite", []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(math.NaN(), 0, 0)})
+}
+
+func TestBudgetedBlocksKeepWitnessAndPollOrder(t *testing.T) {
+	t.Parallel()
+	points := make([]r3.Vec, 576)
+	for i := range points {
+		points[i] = r3.NewVec(float64(i), float64(i%7), 0)
+	}
+	want, wantOK := exhaustivePoints(points)
+	count := 0
+	budget := &proofbound.WorkBudget{
+		StepFn: func() error { count++; return nil },
+		ErrFn:  func() error { return nil },
+	}
+	got, gotOK, err := diameter.PointsWithBudget(budget, points)
+	require.NoError(t, err)
+	require.Equal(t, wantOK, gotOK)
+	require.Equal(t, math.Float64bits(want), math.Float64bits(got))
+	require.Equal(t, len(points)*(len(points)-1)/2, count)
+
+	stop := errors.New("stop")
+	stopAt := count / 2
+	count = 0
+	budget.StepFn = func() error {
+		count++
+		if count == stopAt {
+			return stop
+		}
+		return nil
+	}
+	_, _, err = diameter.PointsWithBudget(budget, points)
+	require.ErrorIs(t, err, stop)
+	require.Equal(t, stopAt, count)
 }
 
 func exhaustivePoints(points []r3.Vec) (float64, bool) {
