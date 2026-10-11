@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -43,8 +44,8 @@ func ratVec(v r3.Vec) ([3]*big.Rat, bool) {
 func outwardBox(c, ext [3]*big.Rat) [2]r3.Vec {
 	var lo, hi [3]float64
 	for i := range 3 {
-		lo[i] = proofbound.RatFloatDown(new(big.Rat).Sub(c[i], ext[i]))
-		hi[i] = proofbound.RatFloatUp(new(big.Rat).Add(c[i], ext[i]))
+		lo[i] = proofbound.RatFloatDown(proof.SubRat(new(big.Rat), c[i], ext[i]))
+		hi[i] = proofbound.RatFloatUp(proof.AddRat(new(big.Rat), c[i], ext[i]))
 	}
 	return [2]r3.Vec{r3.NewVec(lo[0], lo[1], lo[2]), r3.NewVec(hi[0], hi[1], hi[2])}
 }
@@ -148,7 +149,10 @@ func CapBox(f *CFace) [2]r3.Vec {
 		}
 		rx, ry := new(big.Rat).SetFloat64(x), new(big.Rat).SetFloat64(y)
 		for i := range 3 {
-			p[i] = new(big.Rat).Add(o[i], new(big.Rat).Add(new(big.Rat).Mul(u[i], rx), new(big.Rat).Mul(v[i], ry)))
+			ux := proof.MulRat(new(big.Rat), u[i], rx)
+			vy := proof.MulRat(new(big.Rat), v[i], ry)
+			p[i] = proof.AddRat(ux, ux, vy)
+			proof.AddRat(p[i], p[i], o[i])
 		}
 		return p, true
 	}
@@ -174,7 +178,8 @@ func CapBox(f *CFace) [2]r3.Vec {
 		}
 		var ext [3]*big.Rat
 		for i := range 3 {
-			sq := new(big.Rat).Add(new(big.Rat).Mul(u[i], u[i]), new(big.Rat).Mul(v[i], v[i]))
+			u2 := proof.MulRat(new(big.Rat), u[i], u[i])
+			sq := proof.AddRat(u2, u2, proof.MulRat(new(big.Rat), v[i], v[i]))
 			w := proofbound.ProductUpper(math.Abs(e.Rr), proofbound.RatSqrtUp(sq))
 			if proofbound.IsNonFinite(w) {
 				return everywhere()
