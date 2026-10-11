@@ -166,31 +166,55 @@ func PointsWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) (float64, 
 	best := 0.0
 	bestI, bestJ := 0, 0
 	skipSq := 0.0
+	var blocks []pointBlock
+	if len(points) >= 512 && parallelScanSafe(points) {
+		blocks = pointBlocks(points)
+	}
 	for i := range points {
-		for j := i + 1; j < len(points); j++ {
-			if budget != nil {
-				if err := budget.Step(); err != nil {
-					return 0, false, err
+		for j := i + 1; j < len(points); {
+			end := len(points)
+			if blocks != nil {
+				block := j / pointBlockSize
+				end = min((block+1)*pointBlockSize, end)
+				if skipSq > 0 && pointBlockDistanceUpperSq(points[i], blocks[block]) < skipSq {
+					// A budgeted scan still charges each skipped pair in order.
+					if budget == nil {
+						j = end
+						continue
+					}
+					for ; j < end; j++ {
+						if err := budget.Step(); err != nil {
+							return 0, false, err
+						}
+					}
+					continue
 				}
 			}
-			delta := points[i].Sub(points[j])
-			// This wide gap keeps the rounded squared length strictly below
-			// any pair Len could select. Out-of-range and non-finite inputs
-			// still reach Len and its original refusal path.
-			if skipSq > 0 && delta.X*delta.X+delta.Y*delta.Y+delta.Z*delta.Z < skipSq {
-				continue
-			}
-			distance := delta.Len()
-			if !usableMagnitude(distance) {
-				return 0, false, nil
-			}
-			if distance > best {
-				best, bestI, bestJ = distance, i, j
-				if best > 1e-100 && best < 1e100 {
-					limit := best * 0.9
-					skipSq = limit * limit
-				} else {
-					skipSq = 0
+			for ; j < end; j++ {
+				if budget != nil {
+					if err := budget.Step(); err != nil {
+						return 0, false, err
+					}
+				}
+				delta := points[i].Sub(points[j])
+				// This wide gap keeps the rounded squared length strictly below
+				// any pair Len could select. Out-of-range and non-finite inputs
+				// still reach Len and its original refusal path.
+				if skipSq > 0 && delta.X*delta.X+delta.Y*delta.Y+delta.Z*delta.Z < skipSq {
+					continue
+				}
+				distance := delta.Len()
+				if !usableMagnitude(distance) {
+					return 0, false, nil
+				}
+				if distance > best {
+					best, bestI, bestJ = distance, i, j
+					if best > 1e-100 && best < 1e100 {
+						limit := best * 0.9
+						skipSq = limit * limit
+					} else {
+						skipSq = 0
+					}
 				}
 			}
 		}
