@@ -32,6 +32,10 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 	for i, tri := range fp.tris {
 		oldBoxes[i] = meshbool.TriBox(fp.verts, tri)
 	}
+	oldGrid, err := loftCylinderChamferBoxGridOf(oldBoxes, source.z0, source.z1)
+	if err != nil {
+		return err
+	}
 	// A whole old boundary component cannot hide inside a middle collar:
 	// every old vertex is on a cap plane, outside every strict middle prism.
 	for _, p := range fp.verts {
@@ -101,7 +105,7 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 					continue
 				}
 			}
-			if err := loftCylinderChamferMiddlePrism(ctx, fp, old, oldBoxes,
+			if err := loftCylinderChamferMiddlePrism(ctx, fp, old, oldBoxes, oldGrid,
 				oldParity, oldIndices, base, q, shift); err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()
@@ -190,6 +194,7 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 	blankRadius float64) error {
 	lp := face.loft
 	if lp.walls <= 0 || lp.walls > len(lp.tris) || face.root < 3 ||
+		face.scale == nil || face.scale.Sign() <= 0 ||
 		2*face.root >= lp.walls || face.bound < 0 || proofbound.IsNonFinite(face.bound) {
 		return fmt.Errorf("%w: inward patch lacks a bounded Loft wall", ErrUnsupported)
 	}
@@ -240,8 +245,10 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 			zHi = z
 		}
 	}
-	if zLo.Cmp(circle.safeBottom) <= 0 || zHi.Cmp(circle.safeTop) >= 0 ||
-		!loftCylinderChamferMiddleHeldRootInside(lp, face.root, zLo, zHi, blankRadius) {
+	mappedLo := new(big.Rat).Quo(zLo, face.scale)
+	mappedHi := new(big.Rat).Quo(zHi, face.scale)
+	if mappedLo.Cmp(circle.safeBottom) <= 0 || mappedHi.Cmp(circle.safeTop) >= 0 ||
+		!loftCylinderChamferMiddleHeldRootInside(lp, face.root, mappedLo, mappedHi, blankRadius) {
 		return fmt.Errorf("%w: inward patch has no hidden root-wall interval", ErrUnsupported)
 	}
 	r := proofarith.FloatRat(blankRadius)
@@ -381,9 +388,11 @@ func loftCylinderChamferExactTriBox(tri [3]proofarith.Xpt) ([2]r3.Vec, bool) {
 // boundary component inside this prism. One strict q-face witness then puts
 // every open inward segment in the old held solid.
 func loftCylinderChamferMiddlePrism(ctx context.Context, fp facetedPayload,
-	old *loftmesh.LoftAuditData, oldBoxes [][2]r3.Vec, oldParity *meshbool.ParityMesh,
+	old *loftmesh.LoftAuditData, oldBoxes [][2]r3.Vec, oldGrid *loftCylinderChamferBoxGrid,
+	oldParity *meshbool.ParityMesh,
 	oldIndices []int, base, q [3]proofarith.Xpt, shift proofarith.Xpt) error {
-	if len(oldBoxes) != len(fp.tris) || meshbool.RatCoordOf(shift, 2).Sign() != 0 {
+	if len(oldBoxes) != len(fp.tris) || oldGrid == nil ||
+		meshbool.RatCoordOf(shift, 2).Sign() != 0 {
 		return fmt.Errorf("%w: retained middle prism has incomplete source geometry", ErrUnsupported)
 	}
 	var faces [7][3]proofarith.Xpt
@@ -414,9 +423,12 @@ func loftCylinderChamferMiddlePrism(ctx context.Context, fp facetedPayload,
 		}
 		floatFace := [3]r3.Vec{face[0].Vec(), face[1].Vec(), face[2].Vec()}
 		plane := loftmesh.NewLoftExactPlane(face[0], normal)
-		for j := range fp.tris {
-			if !meshbool.BoxesOverlap(box, oldBoxes[j]) ||
-				loftCylinderChamferTriangleGapAbove(face, old.Xtris[j], 0) {
+		candidates, err := oldGrid.candidates(box)
+		if err != nil {
+			return err
+		}
+		for _, j := range candidates {
+			if !meshbool.BoxesOverlap(box, oldBoxes[j]) {
 				continue
 			}
 			signsA := loftmesh.TrianglePlaneSigns(old.Planes[j], face)

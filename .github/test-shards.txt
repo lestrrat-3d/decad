@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    0.26s over 8 tests
-#   shard 1:    1.22s over 236 tests
+#   shard 1:    1.22s over 239 tests
 #   shard 2:   10.21s over 136 tests
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  182.61s over 138 tests
@@ -108,6 +108,8 @@
 1	0.00	TestChainStep
 1	0.00	TestChainWalkEndpointAllowChargesComputedCircularEnds
 1	0.00	TestChainWalkEndpointAllowKeepsExactArcEndsAtZero
+1	0.00	TestChamferMiddleGridKeepsEveryOverlappingBox
+1	0.00	TestChamferSplitRingGridContainsEveryExactReachCandidate
 1	0.00	TestChargesScaleWithOperandWidth
 1	0.00	TestCheckedIntegerArithmeticRefusesOverflow
 1	0.00	TestChordCountHonoursTheWalkMinimum
@@ -240,6 +242,7 @@
 1	0.00	TestRevolveFreeformDisplacedSectionRefuses
 1	1.05	TestRevolveFreeformPartialCapAreaSlack
 1	0.00	TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
+1	0.00	TestRingPlaneRejectPreservesExactDistance
 1	0.00	TestRoundBossShellMeshVolumeProof
 1	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
 1	0.00	TestSegFilterKeepsWhatTheExactPredicateAccepts

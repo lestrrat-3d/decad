@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -19,15 +20,19 @@ type loftCylinderRingOccupancy struct {
 }
 
 type loftCylinderRingWall struct {
-	points [3]loftCylinderRingVec
-	box    loftCylinderRingBox
+	points          [3]loftCylinderRingVec
+	box             loftCylinderRingBox
+	normal          loftCylinderRingVec
+	normal2, plane0 *big.Rat
 }
 
 type loftCylinderRingTooth struct {
 	loft   loftPayload
 	circle loftCylinderSourceCircle
 	bound2 *big.Rat
-	walls  []loftCylinderRingWall
+	// At a certified open circle height, root walls are strictly inside the
+	// blank and cannot bound an edge wholly outside its radius.
+	exterior []loftCylinderRingWall
 	// The fitted and tip cells exclude both source connector walls and the
 	// hidden root wall. A seam segment checks connectors exactly instead.
 	fitted []loftCylinderRingWall
@@ -133,7 +138,7 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 		loft: lp, circle: circle,
 		bound2: new(big.Rat).Mul(proofarith.FloatRat(bound), proofarith.FloatRat(bound)),
 	}
-	result.walls = make([]loftCylinderRingWall, 0, lp.walls)
+	result.exterior = make([]loftCylinderRingWall, 0, 2*root)
 	result.fitted = make([]loftCylinderRingWall, 0, 2*(root-2))
 	for cell := range n {
 		for half := range 2 {
@@ -143,7 +148,13 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 			for k, p := range tri {
 				wall.points[k] = loftCylinderRingVertex(p)
 			}
-			result.walls = append(result.walls, wall)
+			wall.normal = loftCylinderRingCross(loftCylinderRingSub(wall.points[1], wall.points[0]),
+				loftCylinderRingSub(wall.points[2], wall.points[0]))
+			wall.normal2 = loftCylinderRingDot(wall.normal, wall.normal)
+			wall.plane0 = loftCylinderRingDot(wall.points[0], wall.normal)
+			if cell < root {
+				result.exterior = append(result.exterior, wall)
+			}
 			if cell > 0 && cell < root-1 {
 				result.fitted = append(result.fitted, wall)
 			}
@@ -152,10 +163,34 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 	return result, nil
 }
 
+// A same-side segment farther than bound from the entire triangle plane
+// cannot meet that triangle or its parameter-matched true Loft wall. This
+// only rejects pairs; unresolved pairs use the complete exact distance.
+func loftCylinderRingPlaneApart(a, b loftCylinderRingVec,
+	wall loftCylinderRingWall, bound2 *big.Rat) bool {
+	if bound2 == nil || bound2.Sign() <= 0 || wall.normal2 == nil ||
+		wall.normal2.Sign() == 0 || wall.plane0 == nil {
+		return false
+	}
+	da := new(big.Rat).Sub(loftCylinderRingDot(a, wall.normal), wall.plane0)
+	db := new(big.Rat).Sub(loftCylinderRingDot(b, wall.normal), wall.plane0)
+	if da.Sign() == 0 || da.Sign() != db.Sign() {
+		return false
+	}
+	if da.Sign() < 0 {
+		da.Neg(da)
+		db.Neg(db)
+	}
+	if db.Cmp(da) < 0 {
+		da = db
+	}
+	return new(big.Rat).Mul(da, da).Cmp(new(big.Rat).Mul(bound2, wall.normal2)) > 0
+}
+
 func loftCylinderRingWallClear(ctx context.Context, a, b loftCylinderRingVec,
 	box loftCylinderRingBox, tooth loftCylinderRingTooth, walls []loftCylinderRingWall,
 	result *loftCylinderRingOccupancy) error {
-	for _, wall := range walls {
+	for wallIndex, wall := range walls {
 		if !loftCylinderRingBoxesMeet(box, wall.box) {
 			continue
 		}
@@ -166,9 +201,18 @@ func loftCylinderRingWallClear(ctx context.Context, a, b loftCylinderRingVec,
 			}
 			return fmt.Errorf("%w: ring wall clearance work limit", ErrUnsupported)
 		}
+		if loftCylinderRingPlaneApart(a, b, wall, tooth.bound2) {
+			continue
+		}
 		q := loftCylinderRingSegmentTriangle2(a, b, wall.points)
 		if q == nil || q.Cmp(tooth.bound2) <= 0 {
-			return fmt.Errorf("%w: ring may meet a true Loft wall", ErrUnsupported)
+			gap2 := math.NaN()
+			if q != nil {
+				gap2, _ = q.Float64()
+			}
+			bound2, _ := tooth.bound2.Float64()
+			return fmt.Errorf("%w: ring may meet true Loft wall %d (gap²≈%g, bound²≈%g)",
+				ErrUnsupported, wallIndex, gap2, bound2)
 		}
 		if result.minimumClearance2 == nil || q.Cmp(result.minimumClearance2) < 0 {
 			result.minimumClearance2 = q
@@ -192,68 +236,73 @@ func loftCylinderSourceRingInside(ctx context.Context, fp facetedPayload,
 		return loftCylinderRingOccupancy{},
 			fmt.Errorf("%w: split ring has no audited source body", ErrUnsupported)
 	}
-	if record := fp.loftCylinderJoin; record != nil {
-		for _, shift := range record.axialBridge {
-			if shift > 0 {
-				return loftCylinderRingOccupancy{},
-					fmt.Errorf("%w: split ring has no source proof across an axial bridge", ErrUnsupported)
-			}
-		}
-		return loftCylinderSourceRingInsideInputs(ctx, record.teeth,
-			record.radius, 0, record.z0, record.z1, edges)
+	source, ok := loftCylinderChamferSourceOf(fp)
+	if !ok {
+		return loftCylinderRingOccupancy{},
+			fmt.Errorf("%w: split ring has no retained loft/cylinder source", ErrUnsupported)
 	}
-	if record := fp.loftCylinderBore; record != nil {
-		for _, shift := range record.axialBridge {
-			if shift > 0 {
-				return loftCylinderRingOccupancy{},
-					fmt.Errorf("%w: split ring has no source proof across a bored axial bridge", ErrUnsupported)
-			}
-		}
-		return loftCylinderSourceRingInsideInputs(ctx, record.teeth,
-			record.blankRadius, record.boreRadius, record.z0, record.z1, edges)
+	if err := loftCylinderChamferBridgeSources(&source); err != nil {
+		return loftCylinderRingOccupancy{}, err
 	}
-	return loftCylinderRingOccupancy{},
-		fmt.Errorf("%w: split ring has no retained loft/cylinder source", ErrUnsupported)
+	return loftCylinderSourceRingInsideInputs(ctx, source, edges)
 }
 
-func loftCylinderSourceRingInsideInputs(ctx context.Context, teeth []*Body,
-	blankRadius, boreRadius, z0, z1 float64,
+func loftCylinderSourceRingMappedPoint(p proofarith.Xpt, level *big.Rat) proofarith.Xpt {
+	den := level.Denom()
+	return proofarith.Xpt{
+		X: new(big.Int).Mul(p.X, den), Y: new(big.Int).Mul(p.Y, den),
+		Z: new(big.Int).Mul(p.W, level.Num()), W: new(big.Int).Mul(p.W, den),
+	}
+}
+
+func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinderChamferSource,
 	edges [][2]proofarith.Xpt) (loftCylinderRingOccupancy, error) {
 	var result loftCylinderRingOccupancy
 	refuse := func(reason string) (loftCylinderRingOccupancy, error) {
 		return result, fmt.Errorf("%w: %s", ErrUnsupported, reason)
 	}
-	if len(teeth) == 0 || blankRadius <= 0 || boreRadius < 0 || boreRadius >= blankRadius ||
-		proofbound.IsNonFinite(blankRadius) || proofbound.IsNonFinite(boreRadius) || ctx.Err() != nil {
+	if len(source.teeth) == 0 || source.blankRadius <= 0 || source.boreRadius < 0 ||
+		source.boreRadius >= source.blankRadius || proofbound.IsNonFinite(source.blankRadius) ||
+		proofbound.IsNonFinite(source.boreRadius) || ctx.Err() != nil {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
 		return refuse("ring lacks a certified blank and tooth source")
 	}
 	level, valid := loftCylinderRingCycle(edges)
-	if !valid || level.Cmp(proofarith.FloatRat(z0)) <= 0 ||
-		level.Cmp(proofarith.FloatRat(z1)) >= 0 {
+	if !valid || level.Cmp(proofarith.FloatRat(source.z0)) <= 0 ||
+		level.Cmp(source.topSourceLevel) >= 0 {
 		return refuse("ring is not one strict interior cycle")
 	}
-	toothRecords := make([]loftCylinderRingTooth, len(teeth))
-	for i, body := range teeth {
-		tooth, err := loftCylinderRingToothOf(body, blankRadius)
+	type ringTooth struct {
+		loftCylinderRingTooth
+		level *big.Rat
+	}
+	toothRecords := make([]ringTooth, len(source.teeth))
+	for i, body := range source.teeth {
+		tooth, err := loftCylinderRingToothOf(body, source.blankRadius)
 		if err != nil {
 			return result, err
 		}
-		if tooth.circle.z0.Cmp(proofarith.FloatRat(z0)) != 0 ||
-			tooth.circle.z1.Cmp(proofarith.FloatRat(z1)) != 0 {
+		if tooth.circle.z0.Cmp(proofarith.FloatRat(source.z0)) != 0 ||
+			tooth.circle.z1.Cmp(proofarith.FloatRat(source.z1)) != 0 {
 			return refuse("ring tooth has different blank cap levels")
 		}
-		if level.Cmp(tooth.circle.safeBottom) <= 0 || level.Cmp(tooth.circle.safeTop) >= 0 {
+		original, ok := source.originalTeeth[i].payload.(loftPayload)
+		if !ok {
+			return refuse("ring has no authenticated original tooth")
+		}
+		scale := proofarith.FloatRat(original.xform.Basis().EZ.Z)
+		mapped := new(big.Rat).Quo(level, scale)
+		if mapped.Cmp(tooth.circle.safeBottom) <= 0 || mapped.Cmp(tooth.circle.safeTop) >= 0 {
 			return refuse("ring meets a source cap or root collar")
 		}
-		toothRecords[i] = tooth
+		toothRecords[i] = ringTooth{loftCylinderRingTooth: tooth, level: mapped}
 	}
-	r2 := new(big.Rat).Mul(proofarith.FloatRat(blankRadius), proofarith.FloatRat(blankRadius))
-	bore2 := new(big.Rat).Mul(proofarith.FloatRat(boreRadius), proofarith.FloatRat(boreRadius))
+	r2 := new(big.Rat).Mul(proofarith.FloatRat(source.blankRadius), proofarith.FloatRat(source.blankRadius))
+	bore2 := new(big.Rat).Mul(proofarith.FloatRat(source.boreRadius), proofarith.FloatRat(source.boreRadius))
 	witness := false
-	for _, edge := range edges {
+	for edgeIndex, edge := range edges {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
@@ -275,25 +324,33 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, teeth []*Body,
 			result.inner++
 			continue
 		}
-		box := loftCylinderRingEdgeBox(a, b)
 		if min2.Cmp(r2) > 0 {
 			result.outer++
-			for _, tooth := range toothRecords {
-				if err := loftCylinderRingWallClear(ctx, a, b, box, tooth, tooth.walls, &result); err != nil {
-					return result, err
+			for toothIndex, tooth := range toothRecords {
+				mappedA, mappedB := a, b
+				mappedA[2], mappedB[2] = tooth.level, tooth.level
+				if err := loftCylinderRingWallClear(ctx, mappedA, mappedB,
+					loftCylinderRingEdgeBox(mappedA, mappedB), tooth.loftCylinderRingTooth,
+					tooth.exterior, &result); err != nil {
+					return result, fmt.Errorf("ring edge %d tooth %d from %v to %v at proxy z=%s: %w",
+						edgeIndex, toothIndex, edge[0].Vec(), edge[1].Vec(), tooth.level.RatString(), err)
 				}
 			}
 			continue
 		}
 		result.seam++
 		sectorCount := 0
-		for _, tooth := range toothRecords {
-			if tooth.circle.ContainsTriangleSector(level, level,
-				[3]proofarith.Xpt{edge[0], edge[1], edge[1]}) {
+		for toothIndex, tooth := range toothRecords {
+			mappedEdge := [2]proofarith.Xpt{
+				loftCylinderSourceRingMappedPoint(edge[0], tooth.level),
+				loftCylinderSourceRingMappedPoint(edge[1], tooth.level),
+			}
+			if tooth.circle.ContainsTriangleSector(tooth.level, tooth.level,
+				[3]proofarith.Xpt{mappedEdge[0], mappedEdge[1], mappedEdge[1]}) {
 				sectorCount++
 			}
 			for _, connector := range tooth.circle.connector {
-				t := new(big.Rat).Quo(new(big.Rat).Sub(level, tooth.circle.z0),
+				t := new(big.Rat).Quo(new(big.Rat).Sub(tooth.level, tooth.circle.z0),
 					new(big.Rat).Sub(tooth.circle.z1, tooth.circle.z0))
 				inner := loftCylinderSourceLerp(connector.a[0], connector.a[1], t)
 				middle := loftCylinderSourceLerp(connector.d[0], connector.d[1], t)
@@ -303,8 +360,13 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, teeth []*Body,
 					return refuse("ring may touch a true connector wall")
 				}
 			}
-			if err := loftCylinderRingWallClear(ctx, a, b, box, tooth, tooth.fitted, &result); err != nil {
-				return result, err
+			mappedA, mappedB := a, b
+			mappedA[2], mappedB[2] = tooth.level, tooth.level
+			if err := loftCylinderRingWallClear(ctx, mappedA, mappedB,
+				loftCylinderRingEdgeBox(mappedA, mappedB), tooth.loftCylinderRingTooth,
+				tooth.fitted, &result); err != nil {
+				return result, fmt.Errorf("ring seam edge %d tooth %d from %v to %v at proxy z=%s: %w",
+					edgeIndex, toothIndex, edge[0].Vec(), edge[1].Vec(), tooth.level.RatString(), err)
 			}
 		}
 		if sectorCount != 1 {

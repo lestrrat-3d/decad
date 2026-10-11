@@ -9,12 +9,100 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/r3"
 )
 
 type loftCylinderChamferSplitEdge struct {
 	a, b proofarith.Xpt
-	box  [2]r3.Vec
+}
+
+type loftCylinderChamferGridCell struct{ x, y int64 }
+
+type loftCylinderChamferEdgeGrid struct {
+	step  *big.Rat
+	cells map[loftCylinderChamferGridCell][]int
+	edges []loftCylinderChamferSplitEdge
+}
+
+// floor(coord/step) is exact, including for negative coordinates. Very large
+// indices refuse before they can overflow the bounded grid loops.
+func loftCylinderChamferGridIndex(coord, step *big.Rat) (int64, bool) {
+	if coord == nil || step == nil || step.Sign() <= 0 {
+		return 0, false
+	}
+	q := new(big.Rat).Quo(coord, step)
+	i := new(big.Int).Div(q.Num(), q.Denom())
+	return i.Int64(), i.IsInt64()
+}
+
+func loftCylinderChamferEdgeGridOf(edges []loftCylinderChamferSplitEdge,
+	reach *big.Rat) (loftCylinderChamferEdgeGrid, error) {
+	if len(edges) == 0 || reach == nil || reach.Sign() <= 0 || len(edges) > 32_768 {
+		return loftCylinderChamferEdgeGrid{},
+			fmt.Errorf("%w: cap split ring exceeds the spatial work limit", ErrUnsupported)
+	}
+	grid := loftCylinderChamferEdgeGrid{
+		step:  new(big.Rat).Set(reach),
+		cells: make(map[loftCylinderChamferGridCell][]int), edges: edges,
+	}
+	// Each source edge may occupy at most 128 grid cells on average. This
+	// bounds memory without trusting an unbounded coordinate span.
+	maxEntries := min(2_000_000, 128*len(edges))
+	entries := 0
+	for index, edge := range edges {
+		var limits [2][2]int64
+		for axis := range 2 {
+			a, b := meshbool.RatCoordOf(edge.a, axis), meshbool.RatCoordOf(edge.b, axis)
+			if a.Cmp(b) > 0 {
+				a, b = b, a
+			}
+			lo := new(big.Rat).Sub(a, reach)
+			hi := new(big.Rat).Add(b, reach)
+			var ok bool
+			limits[axis][0], ok = loftCylinderChamferGridIndex(lo, reach)
+			if !ok {
+				return loftCylinderChamferEdgeGrid{},
+					fmt.Errorf("%w: cap split ring grid index overflows", ErrUnsupported)
+			}
+			limits[axis][1], ok = loftCylinderChamferGridIndex(hi, reach)
+			if !ok {
+				return loftCylinderChamferEdgeGrid{},
+					fmt.Errorf("%w: cap split ring grid index overflows", ErrUnsupported)
+			}
+		}
+		spanX := new(big.Int).Sub(big.NewInt(limits[0][1]), big.NewInt(limits[0][0]))
+		spanY := new(big.Int).Sub(big.NewInt(limits[1][1]), big.NewInt(limits[1][0]))
+		spanX.Add(spanX, big.NewInt(1))
+		spanY.Add(spanY, big.NewInt(1))
+		count := spanX.Mul(spanX, spanY)
+		if count.Sign() <= 0 || count.Cmp(big.NewInt(int64(maxEntries-entries))) > 0 {
+			return loftCylinderChamferEdgeGrid{},
+				fmt.Errorf("%w: cap split ring grid entries exceed %d", ErrUnsupported, maxEntries)
+		}
+		entries += int(count.Int64())
+		for x := limits[0][0]; ; x++ {
+			for y := limits[1][0]; ; y++ {
+				cell := loftCylinderChamferGridCell{x: x, y: y}
+				grid.cells[cell] = append(grid.cells[cell], index)
+				if y == limits[1][1] {
+					break
+				}
+			}
+			if x == limits[0][1] {
+				break
+			}
+		}
+	}
+	return grid, nil
+}
+
+func (grid loftCylinderChamferEdgeGrid) candidates(tri [3]proofarith.Xpt) []int {
+	center := meshbool.XCentroid(tri[0], tri[1], tri[2])
+	x, xOK := loftCylinderChamferGridIndex(meshbool.RatCoordOf(center, 0), grid.step)
+	y, yOK := loftCylinderChamferGridIndex(meshbool.RatCoordOf(center, 1), grid.step)
+	if !xOK || !yOK {
+		return nil
+	}
+	return grid.cells[loftCylinderChamferGridCell{x: x, y: y}]
 }
 
 // The near part of a two-level band facet is exactly a triangle or a
@@ -54,10 +142,7 @@ func loftCylinderChamferNearPieces(tri [3]int, xverts []proofarith.Xpt,
 		return nil, loftCylinderChamferSplitEdge{},
 			fmt.Errorf("%w: cap band split has nonfinite coordinates", ErrUnsupported)
 	}
-	return near, loftCylinderChamferSplitEdge{a: a, b: b, box: [2]r3.Vec{
-		{X: min(pa.X, pb.X), Y: min(pa.Y, pb.Y), Z: min(pa.Z, pb.Z)},
-		{X: max(pa.X, pb.X), Y: max(pa.Y, pb.Y), Z: max(pa.Z, pb.Z)},
-	}}, nil
+	return near, loftCylinderChamferSplitEdge{a: a, b: b}, nil
 }
 
 // The same split leaves one or two exact triangles between the ring and cap.
@@ -114,26 +199,15 @@ func loftCylinderChamferPointEdgeWithin(p proofarith.Xpt,
 }
 
 func loftCylinderChamferNearCovered(ctx context.Context, tri [3]proofarith.Xpt,
-	edges []loftCylinderChamferSplitEdge, reach float64, reach2 *big.Rat,
-	depth int, steps *int) bool {
-	*steps += len(edges)
-	if *steps > 100_000_000 || ctx.Err() != nil {
+	grid loftCylinderChamferEdgeGrid, reach2 *big.Rat,
+	depth int, steps *int, maxSteps int) bool {
+	candidates := grid.candidates(tri)
+	*steps += 1 + len(candidates)
+	if *steps > maxSteps || ctx.Err() != nil {
 		return false
 	}
-	for _, edge := range edges {
-		candidate := true
-		for _, p := range tri {
-			v := p.Vec()
-			if v.X < edge.box[0].X-reach || v.X > edge.box[1].X+reach ||
-				v.Y < edge.box[0].Y-reach || v.Y > edge.box[1].Y+reach ||
-				v.Z < edge.box[0].Z-reach || v.Z > edge.box[1].Z+reach {
-				candidate = false
-				break
-			}
-		}
-		if !candidate {
-			continue
-		}
+	for _, index := range candidates {
+		edge := grid.edges[index]
 		if loftCylinderChamferPointEdgeWithin(tri[0], edge, reach2) &&
 			loftCylinderChamferPointEdgeWithin(tri[1], edge, reach2) &&
 			loftCylinderChamferPointEdgeWithin(tri[2], edge, reach2) {
@@ -154,9 +228,9 @@ func loftCylinderChamferNearCovered(ctx context.Context, tri [3]proofarith.Xpt,
 	i, j, k := longest, (longest+1)%3, (longest+2)%3
 	mid := proofarith.Xlerp(tri[i], tri[j], big.NewInt(1), big.NewInt(2))
 	return loftCylinderChamferNearCovered(ctx, [3]proofarith.Xpt{tri[i], mid, tri[k]},
-		edges, reach, reach2, depth-1, steps) &&
+		grid, reach2, depth-1, steps, maxSteps) &&
 		loftCylinderChamferNearCovered(ctx, [3]proofarith.Xpt{mid, tri[j], tri[k]},
-			edges, reach, reach2, depth-1, steps)
+			grid, reach2, depth-1, steps, maxSteps)
 }
 
 // The source-ring audit supplies a true-result boundary point on every
@@ -196,9 +270,14 @@ func loftCylinderChamferNearBandReach(ctx context.Context, mesh *bevelJoinedMesh
 		if _, err := loftCylinderSourceRingInside(ctx, fp, sourceEdges); err != nil {
 			return err
 		}
+		grid, err := loftCylinderChamferEdgeGridOf(edges, reachRat)
+		if err != nil {
+			return err
+		}
+		maxSteps := min(8_000_000, 512*len(edges))
 		steps := 0
 		for i, tri := range near {
-			if !loftCylinderChamferNearCovered(ctx, tri, edges, reach, reach2, 10, &steps) {
+			if !loftCylinderChamferNearCovered(ctx, tri, grid, reach2, 10, &steps, maxSteps) {
 				var diagnostic [4]float64
 				points := [4]proofarith.Xpt{tri[0], tri[1], tri[2],
 					meshbool.XCentroid(tri[0], tri[1], tri[2])}
