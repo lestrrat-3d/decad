@@ -458,6 +458,23 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// (internal/loftmesh.RestateLoft's own doc comment owns why).
 		return tessellateLoft(ctx, b, lp)
 	}
+	if tp, ok := b.payload.(twistedSweepPayload); ok {
+		if chord < tp.delta {
+			return nil, fmt.Errorf(`%w: the twisted sweep's held boundary is %g mm from its true wall; %g mm is finer`, ErrUnsupported, tp.delta, chord)
+		}
+		mesh, err := tessellateLoft(ctx, b, tp.held, tp.sourceRoles)
+		if err != nil {
+			return nil, err
+		}
+		for _, face := range mesh.source {
+			mesh.setFaceBound(face, tp.delta)
+		}
+		mesh.bound = tp.delta
+		mesh.areaSlack = tp.areaSlack
+		mesh.volSymDiff = tp.volSymDiff
+		mesh.symDiffOK = true
+		return mesh, nil
+	}
 	if pp, ok := b.payload.(patchPayload); ok {
 		return tessellatePatch(ctx, b, pp, chord, verify)
 	}

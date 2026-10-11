@@ -39,7 +39,7 @@ The current `Sweep` implementation admits:
 
 - an open path made from `LineTo` and `ArcThrough` segments;
 - line, circle, arc, and fitted-spline profile boundaries;
-- zero total twist;
+- zero total twist, or §17's one-span polygon twist;
 - tangent internal joins;
 - a build whose local curvature gates and global contact audit prove a simple,
   closed solid.
@@ -47,7 +47,8 @@ The current `Sweep` implementation admits:
 The design also fixes these later increments:
 
 - other Tier A free-form profile boundaries follow `docs/spline-design.md` reach;
-- nonzero distributed twist builds a certified faceted sweep;
+- nonzero distributed twist over curved and composite paths builds a certified
+  faceted sweep in a later increment;
 - exact-restatement tessellation admits the payload to export and booleans;
 - a future constrained 3D sketch may be recorded into the same `Path` without
   changing `Document.Sweep`.
@@ -122,9 +123,8 @@ func (p *Path) Segments() []PathSegment
 
 type SweepOption interface { /* sealed */ }
 
-// WithSweepTwist is a placeholder for future distributed twist about the
-// transported tangent. Nonzero twist will be distributed by path arc length.
-// Zero is the default and the only value accepted now.
+// WithSweepTwist rotates a profile about the transported tangent. Section 17
+// states the current straight-polygon admission and its proof.
 func WithSweepTwist(angle units.Value) SweepOption
 
 // WithSurfaceResult omits the two section caps and publishes a sheet body
@@ -170,8 +170,8 @@ binary64.
 
 `WithSweepTwist` is accepted at most once. Its angle is a signed displacement,
 not a magnitude: a negative value reverses the twist sense. A wrong kind is
-`ErrUnitKind`; a non-finite value is `ErrNotFinite`. The first implementation
-accepts zero and returns `ErrUnsupported` for a nonzero value.
+`ErrUnitKind`; a non-finite value is `ErrNotFinite`. Section 17 admits one
+nonzero-twist case; other cases return `ErrUnsupported`.
 
 Both profiles pass through the unchanged sketch seam. `p` MUST be a current,
 unaltered, valid profile of `s`. The seam's own sentinel wins before any path
@@ -283,7 +283,7 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S8** | an arc span's rotation axis crosses the transported profile interior, or boundary contact fails Revolve's exact axis-incidence rule | `ErrDegenerate` | yes; the mapped boundary folds or pinches |
 | **S9** | remote patches contact, or neighbours contact beyond their shared boundary | proved contact: `ErrDegenerate`; undecided budget: `ErrUnsupported` | contact is permanent; budget is not |
 | **S10** | profile kind is unsupported by one of the path-span builders | `ErrUnsupported` | follows spline reach |
-| **S11** | nonzero `WithSweepTwist` before the faceted-twist increment | `ErrUnsupported` | no |
+| **S11** | nonzero `WithSweepTwist` outside §17's bounded straight-polygon case | `ErrUnsupported` | no |
 | **S12** | option repeated, or a foreign type embeds the sealed marker | `ErrDegenerate` | yes; `WithSurfaceResult()` is exempt — a repeat is idempotent (docs/surface-design.md §4.1) |
 | **S13** | a computed frame, vertex, measurement, or proof bound is non-finite | `ErrUnsupported` | no; numeric ceiling |
 | **S14** | fixed facet, station, exact-predicate, or work budget is exhausted | `ErrUnsupported` | no; resource ceiling |
@@ -374,8 +374,8 @@ For loop `i`, profile segment `j`, and path span `k`:
 Line-path patches have the same analytic surface variants as Extrude. Arc-path
 patches have the same analytic surface variants as Revolve: plane, cylinder,
 cone, sphere, torus, or `NURBSSurface` when spline reach admits it. A nonzero
-twist increment instead stores certified flat facets and reports `Faceted`
-surfaces; it never labels a twisted patch with an analytic surface it is not.
+twist stores certified flat facets and reports `Faceted` wall surfaces; it
+never labels a twisted patch with an analytic surface it is not.
 
 Internal section edges remain even when the two incident patches are tangent.
 They name the change of path carrier and preserve `side(k,i,j)` provenance.
@@ -417,9 +417,9 @@ no exactness. A single positive span bound makes the combined result
 `Approximate` with the outward-rounded sum or maximum appropriate to that
 quantity.
 
-Nonzero twist uses the certified faceted payload's exact-rational tetrahedron
-sum and the same boundary-displacement, area-slack, and occupied-volume proof
-discipline as Loft. It never sums untwisted analytic span formulas.
+The admitted nonzero twist uses §17's exact cross-sectional volume and centroid,
+wall-area integral, boundary-displacement and occupied-volume proof. It never
+sums untwisted analytic span formulas.
 
 The body tolerance reference reads a proven lower bound on the true diameter.
 It starts from the complete held audit vertex set and subtracts twice the
@@ -512,7 +512,8 @@ separation audit closes. Other composite paths remain staged as
 | **5a** | one-span arc sweep tessellation through its revolve reduction, one-span sheet tessellation through its existing prism or revolve reduction, and mesh-boolean admission for arc solids; D2 and D3 for those reductions. **This row is landed.** | composite paths |
 | **5b** | shared-station tessellation and complete proof records for composite paths with line and circular profile walks; D2 and D3 for that reach. **This row is landed.** | Meridian poles, analytic clearance and surveys |
 | **6** | `FitSplineSeg` profile build and shared dyadic tessellation through composite arc-line-arc paths. **This reach is landed.** | Other Tier A profile kinds and Tier B/C kinds follow spline staging |
-| **7** | nonzero distributed twist as a certified faceted sweep | closed paths, a corner mode or scale other than §16's |
+| **7a** | §17's one-span centred convex polygon twist and verified faceted mesh. **This reach is landed.** | curved/composite paths, holes, non-convex or free-form profiles, sheets, mitres and scale |
+| **7b** | nonzero distributed twist over tangent composite paths | closed paths, a corner mode or scale other than §16's |
 | **8** | sweep boundary adapter for clearance/interference | non-constant-section surveys |
 | **M1**, **M2** | §16's mitred polyline sweep; §16.9 owns the two rows | what §16.9 lists |
 
@@ -687,8 +688,8 @@ and `ChainRevolveOption`: `WithSurfaceResult()` must not compile against a
 chain-fed call. A chain sweep is always a sheet — an open walk encloses no
 region, so there is no cap to omit and no solid to ask for — and accepting the
 option as a no-op would give one option two meanings. `WithSweepTwist` is not a
-member either: a nonzero twist is S11 for a profile-fed sweep, and a chain
-inherits that staging rather than a second spelling of it. The tier carries no
+member either: §17 admits only a solid polygon profile for nonzero twist,
+and an open chain has no corresponding solid. The tier carries no
 member in this increment; it exists so a later chain-only option has one to
 land on. The rejected alternative is the `SweepOption` tier the staged
 signature first landed with, which type-checks `WithSurfaceResult()` against a
@@ -1064,3 +1065,52 @@ deleted once and watched fail before it is trusted.
   `doc.go`'s support map.
 - `docs/api-design.md` needs no edit: `Sweep`'s signature is unchanged and §8
   already names this document as the owner of its options and reach.
+
+## 17. Bounded straight polygon twist
+
+`WithSweepTwist` admits one whole, strictly convex polygon with 3–256 straight
+edges and no holes, drawn on the origin XY sketch plane. Its exact shoelace
+centroid must lie on the Z axis. The path is one positive-Z `LineTo` from the
+origin, and the absolute denoted angle is at most one radian. Sheets, mitred
+joins, section scale, other paths and other profiles remain S11 refusals.
+The preflight uses exact rational coordinates and commits no body on refusal.
+
+At height `h`, the true section is the input polygon rotated by `theta*z/h`.
+Every section is a rigid copy, and the positive Z coordinate keeps distinct
+sections disjoint. Thus the true volume is exactly profile area times `h`;
+the centroid is `(0,0,h/2)` before placement. The wall area is the integral
+over each edge `p(s)=p0+s*v` of
+`sqrt(h²*|v|² + theta²*(p(s)·v)²)`. Exact rational intervals enclose the
+angle, square roots and inverse hyperbolic sine in its antiderivative. Both
+planar cap areas are added to this enclosure.
+
+The held boundary is a certified Loft between the original polygon and its
+rotated endpoint. Its two wall triangles per edge stay in the mesh but form
+one live `Faceted` Face with `side(0,0,j)` provenance. Its internal triangle
+diagonal is not a public Edge. The cap Faces retain `capStart` and `capEnd`.
+The endpoint trigonometric interval encloses the frame Loft actually uses.
+For maximum profile radius `R`, edge length `L`, angle `theta`, and endpoint
+coordinate error `e`, the true wall's departure from the ideal Loft facets is
+bounded by `R*theta²/8 + L*(|theta|+2e)/4 + 2R*e`.
+The mesh `Bound` adds Loft's certified held-vertex displacement. A tolerance
+below that bound returns `ErrUnsupported`.
+
+Each horizontal section of the true twist and ideal Loft differs only within
+a two-sided boundary tube. For polygon perimeter `P` and ideal displacement
+`d`, its area is at most `2P*d + 2*pi*d²`; integrating over `h` bounds their
+occupied-volume difference. Loft's own occupied-volume proof then covers the
+ideal facets to the rounded, placed mesh, including axial rounding. The two
+bounds add without cancellation. The area allowance adds the certified
+true-to-Loft area interval gap to Loft's mesh area allowance. Consequently
+`Tessellate(VerifyAll)` may publish boundary and volume verification for this
+case; boolean consumers receive the same occupied-volume certificate.
+Placement replays the recorded Sketch and path under the new transform.
+
+The real public acceptance uses Sketch's solved centred rectangle, a 5 mm
+positive-Z line and a 30° twist. It measures 20 mm³ of true volume while the
+held 12-triangle shell encloses about 15.77 mm³, so a Loft measurement cannot
+stand in for the twisted solid. It checks six live Faces, one wall Face per
+profile edge, all live source Faces, placement replay, and `VerifyAll` at
+0.5 mm. A thin placed case checks that axial coordinate rounding is included
+in the occupied-volume allowance. A negative-angle case and each S11 refusal
+complete the focused gates.

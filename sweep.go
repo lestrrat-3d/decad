@@ -18,7 +18,7 @@ import (
 // analytic prism and revolve evaluators. Composite paths are admitted when
 // their transported frames and separation certificates close. The distinct
 // sweepPayload preserves the operation's downstream staging and replays every
-// reduction for placement.
+// reduction for placement. sweep_twist.go owns the bounded nonzero-twist case.
 //
 // WithSurfaceResult() (docs/surface-design.md §4, docs/sweep-design.md §14
 // increment 3) reaches every one of Sweep's three build paths, but not through
@@ -45,9 +45,10 @@ type SweepOption interface {
 	sweepOption()
 }
 
-// WithSweepTwist is a placeholder for a future distributed twist implementation.
-// The current evaluator accepts only zero twist; a nonzero angle is
-// ErrUnsupported and leaves the document unchanged.
+// WithSweepTwist rotates the profile about the path tangent as it travels.
+// A nonzero angle currently requires one positive-Z straight path, an origin
+// XY sketch, and a strictly convex whole-line profile centred on the axis.
+// Other nonzero-twist cases return ErrUnsupported without changing the document.
 func WithSweepTwist(angle units.Value) SweepOption {
 	return sweepOptionValue{featureoption.WithSweepTwist(angle)}
 }
@@ -56,9 +57,9 @@ func WithSweepTwist(angle units.Value) SweepOption {
 // it. The path must start in the profile plane and its initial tangent must be
 // exactly codirectional with the plane's positive normal. Composite paths also
 // require tangent joins, exactly representable transported frames, and a
-// certified absence of unintended span contact. Closed paths and nonzero twist
-// remain staged as ErrUnsupported. Every failure and cancellation leaves the
-// document unchanged.
+// certified absence of unintended span contact. Section 17 of the Sweep design
+// states the bounded nonzero-twist reach. Closed paths remain unsupported.
+// Every failure and cancellation leaves the document unchanged.
 func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a sweep`, ErrDegenerate)
@@ -87,7 +88,8 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	if len(path.records) > 1 && !cfg.Mitred && !cfg.Scaled {
 		work = newCompositeSweepWork(profile)
 	}
-	if _, err := falsifyRecordedArea(profile, profileArea, work); err != nil {
+	recordArea, err := falsifyRecordedArea(profile, profileArea, work)
+	if err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -100,6 +102,21 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
+	}
+	if cfg.Twisted {
+		if err := validateSweepPathGeometry(path, plane); err != nil {
+			return nil, err
+		}
+		body, err := evalTwistedSweep(ctx, d, d.nextProducerID(), profile, plane,
+			path, cfg.Twist, recordArea, r3.Identity())
+		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		d.commit(body)
+		return body, nil
 	}
 	if cfg.Mitred || cfg.Scaled {
 		// docs/sweep-design.md §16: either option selects the mitred

@@ -238,6 +238,7 @@
 1	0.00	TestTessellateLoftRefusesAnUnrestatablePayload
 1	0.00	TestTorusCrossingsCancellationReachesTheChainBuild
 1	0.00	TestTriangulateStitchFacesTilesAHoledFaceExactly
+1	0.00	TestTwistPlacedAxialRoundVolumeProof
 1	0.00	TestValidateLoftRecordsDistinctPlanesPass
 1	0.00	TestVerifyPublishAbsentConcaveRadius
 1	0.01	TestVerifyPublishCapBlendWallStaged

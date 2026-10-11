@@ -326,6 +326,8 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 		return gatePoints{Points: pl.verts}, true, nil
 	case loftPayload:
 		return gatePoints{Points: pl.verts, Allow: pl.delta}, true, nil
+	case twistedSweepPayload:
+		return gatePoints{Points: pl.held.verts, Allow: pl.delta}, true, nil
 	case mitredSweepPayload:
 		return gatePoints{Points: pl.verts, Allow: pl.delta}, true, nil
 	case coilPayload:
