@@ -263,15 +263,47 @@ func LowerHullWithWitness(a, b Side) HullWitness {
 	var winner motionbound.RatVec
 	var winnerNorm *big.Rat
 	winnerSense := 0
-	for _, n := range dirs {
+	var aAxisUp, aAxisDown, bAxisUp, bAxisDown [3]*big.Rat
+	for direction, n := range dirs {
 		sq := axisSq(n)
 		normUp := sqrtUpRat(sq)
 		normDown := proofarith.FloatRat(proofbound.RatSqrtDown(sq))
 		if normUp == nil || normDown == nil || normDown.Sign() <= 0 {
 			continue
 		}
-		aUp, aDown := a.ExtentsAlong(n, normUp)
-		bUp, bDown := b.ExtentsAlong(n, normUp)
+		if direction >= 3 {
+			var component *big.Rat
+			axial := true
+			for _, v := range n {
+				if v.Sign() == 0 {
+					continue
+				}
+				if component != nil {
+					axial = false
+					break
+				}
+				component = v
+			}
+			// Both senses of an exact axial direction were already checked.
+			if axial && component != nil {
+				magnitude := new(big.Rat).Abs(component)
+				if normUp.Cmp(magnitude) == 0 && normDown.Cmp(magnitude) == 0 {
+					continue
+				}
+			}
+		}
+		var aUp, aDown, bUp, bDown *big.Rat
+		if direction < 3 {
+			if direction == 0 {
+				aAxisUp, aAxisDown = a.Extents()
+				bAxisUp, bAxisDown = b.Extents()
+			}
+			aUp, aDown = aAxisUp[direction], aAxisDown[direction]
+			bUp, bDown = bAxisUp[direction], bAxisDown[direction]
+		} else {
+			aUp, aDown = a.ExtentsAlong(n, normUp)
+			bUp, bDown = b.ExtentsAlong(n, normUp)
+		}
 		for _, candidate := range []struct {
 			num   *big.Rat
 			sense int
