@@ -38,6 +38,8 @@ straight or circular path segment.
 The current `Sweep` implementation admits:
 
 - an open path made from `LineTo` and `ArcThrough` segments;
+- §3.3's closed full circle made from two complementary `ArcThrough` segments
+  when the result is a zero-twist solid;
 - line, circle, arc, and fitted-spline profile boundaries;
 - zero total twist, or §17's one-span polygon twist;
 - tangent internal joins;
@@ -69,7 +71,7 @@ The following remain outside this design:
 - guide surfaces, guide rails, and a second profile;
 - a corner mode other than §16's join plane: a rounded corner, or a corner
   on an arc span;
-- closed paths and their frame holonomy;
+- closed paths outside §3.3 and their frame holonomy;
 - a sweep that lets the section leave the path-normal plane;
 - a helical path: `docs/helix-design.md` builds it as `Document.Coil`, a
   screw motion whose section stays in the axis plane, and its §12 states
@@ -192,7 +194,7 @@ geometry.
 | **P6** | The initial path point lies exactly in the recorded profile plane, and the first tangent is exactly codirectional with the plane's positive normal. The profile need not contain that point. |
 | **P7** | The initial frame is the profile's `(U, V, N)`. Lines translate it; arcs rotate it about their axes. Composition is rotation-minimizing transport. |
 | **P8** | Zero twist adds no motion. Nonzero twist composes a rotation about the transported tangent by `total * length(prefix) / length(path)`. It never changes the path or section scale. |
-| **P9** | A path ending at its start is closed. Closed-path Sweep is staged even when every join is tangent, because the transported end frame need not equal the start frame. No distributed correction is inferred. |
+| **P9** | A path ending at its start is closed. Sweep admits §3.3's exact full circle, whose transported end frame equals the start frame. Every other closed path is staged, even when its internal joins are tangent. No distributed correction is inferred. |
 
 ### 3.1 Exact path record
 
@@ -233,6 +235,27 @@ On a line, `R` is constant. On an arc, `R` is the right-handed rotation about
 the arc axis through the arc's swept angle. At a tangent join the two segment
 motions have the same position and tangent frame. No Frenet frame is used:
 Frenet normals are undefined on a line and flip at an inflection.
+
+### 3.3 Closed full-circle reduction
+
+`Sweep` admits a zero-twist solid path of exactly two `ArcThrough` segments when
+the second ends at the first start, both exact rational circumcenters agree,
+and the two arc axes are exactly codirectional. The path's existing initial
+tangent and internal-join checks run first. Each arc has a directed angle
+strictly between zero and one turn. The shared endpoints and codirectional
+circle carriers therefore make the arcs complementary: their total turn is
+exactly one, and the terminal tangent is codirectional with the initial one.
+Rotation-minimizing transport about the same fixed axis for one turn returns
+the initial section frame without a fitted correction.
+
+The common axis must lie in the source profile plane. The existing full
+`Revolve` axis-side and axis-incidence checks decide whether the authenticated
+profile sweeps a simple solid. `Sweep` evaluates that full revolution from its
+recorded profile and exact circle carrier, then publishes a `sweepPayload` that
+holds the original path and the full-revolution proof. A closed path with a
+nonzero twist, `WithSurfaceResult()`, a corner option, or section scale is
+staged. A closed path outside the exact two-arc class is also staged; a near
+match never enters this reduction.
 
 ## 4. 3D sketches
 
@@ -279,7 +302,7 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S4** | zero-length line; repeated or collinear `ArcThrough` points | `ErrDegenerate` | yes |
 | **S5** | path start is not on the profile plane, or its initial tangent is not codirectional with the positive plane normal | `ErrDegenerate` | yes for this operation's meaning |
 | **S6** | an internal path join is not tangent, and the call does not carry `WithMitredJoins()` | `ErrUnsupported` | no; `WithMitredJoins()` defines the one admitted corner mode, and §16.4 owns what refuses it |
-| **S7** | path is closed | `ErrUnsupported` | no; closed-frame holonomy is staged |
+| **S7** | path is closed but outside §3.3's full-circle solid reduction | `ErrUnsupported` | no; general closed-frame holonomy is staged |
 | **S8** | an arc span's rotation axis crosses the transported profile interior, or boundary contact fails Revolve's exact axis-incidence rule | `ErrDegenerate` | yes; the mapped boundary folds or pinches |
 | **S9** | remote patches contact, or neighbours contact beyond their shared boundary | proved contact: `ErrDegenerate`; undecided budget: `ErrUnsupported` | contact is permanent; budget is not |
 | **S10** | profile kind is unsupported by one of the path-span builders | `ErrUnsupported` | follows spline reach |
@@ -360,7 +383,7 @@ The result is one `sweepPayload` holding the recorded profile, path, transported
 span frames, analytic span data, audit certificate, and four cached body
 measurements.
 
-For loop `i`, profile segment `j`, and path span `k`:
+For loop `i`, profile segment `j`, and path span `k` on an open path:
 
 | Entity | Construction | Role |
 |---|---|---|
@@ -381,6 +404,13 @@ Internal section edges remain even when the two incident patches are tangent.
 They name the change of path carrier and preserve `side(k,i,j)` provenance.
 Adjacent patches merge only when their complete analytic carriers and trims are
 the same and merging preserves every origin role.
+
+The §3.3 full circle has no section caps or terminal rim. Each full-turn wall
+face carries both `side(0,i,j)` and `side(1,i,j)` origins for its two source
+path arcs. The full `Revolve` builder owns its seam-free analytic topology and
+its exact axis-incidence audit; `Sweep` changes only the face origins and
+retains the source `Path` in its payload. A merged wall face keeps every origin
+of its contributing profile segments.
 
 The body has one lump and one outer shell. Profile holes become void passages
 through the sweep; they do not create extra lumps. S9 rejects any mapping that
@@ -406,6 +436,9 @@ with its two temporary section caps excluded. The body combines them as follows:
 | `Area` | sum of lateral span areas plus the two endpoint cap areas |
 | `Bounds` | componentwise union of every span's proven bounds |
 
+The §3.3 full circle takes all four readings and their bounds from the full
+`Revolve` reduction. It does not sum two partial-turn readings across a seam.
+
 Every span carries the displacement of its derived path carrier, transported
 frame, computed stations, and accumulated rigid motion. A reading composes only
 the terms that can move the geometry it reads. Bounds round outward at every
@@ -430,13 +463,13 @@ withholds the reference and prevents a false `Sound` report.
 
 | D | Consumer | Status |
 |---|---|---|
-| **D1** | structural `Verify` + tolerance gate | lands with Sweep. For a solid, the construction and global audit prove validity and all four readings are judged. For a `WithSurfaceResult()` sheet, only the one-span straight reduction carries an equivalent construction proof (it IS a prismPayload build, docs/surface-design.md §9.1); the arc reduction and every composite sheet read `Suspect` — the arc build runs no crossing audit of its own, and the composite build's own boundary/vertex-link audit proves assembled topology, not geometric non-self-intersection |
-| **D2** | `Tessellate` / STL / OBJ | One-span sweeps use prism or Revolve. Composite sweeps mesh line, circle, arc and fitted-spline profiles with shared stations. Meridian poles or unmatched stations refuse. Sheets have no occupied-volume proof |
-| **D3** | mesh booleans | one-span solid sweeps use their reduction's `volSymDiff`. An admitted composite solid sums the span occupied-volume bounds and the join-vertex movement bounds, with `symDiffOK == true`; its mesh can enter `Union`, `Cut` and `Intersect` |
+| **D1** | structural `Verify` + tolerance gate | lands with Sweep. For a solid, the construction and global audit prove validity and all four readings are judged; §3.3 uses the full `Revolve` construction proof. For a `WithSurfaceResult()` sheet, only the one-span straight reduction carries an equivalent construction proof (it IS a prismPayload build, docs/surface-design.md §9.1); the arc reduction and every composite sheet read `Suspect` — the arc build runs no crossing audit of its own, and the composite build's own boundary/vertex-link audit proves assembled topology, not geometric non-self-intersection |
+| **D2** | `Tessellate` / STL / OBJ | One-span sweeps and §3.3's full circle use prism or Revolve. Composite open sweeps mesh line, circle, arc and fitted-spline profiles with shared stations. Meridian poles or unmatched stations refuse. Sheets have no occupied-volume proof |
+| **D3** | mesh booleans | one-span solids and §3.3's full circle use their reduction's `volSymDiff`. An admitted composite open solid sums the span occupied-volume bounds and the join-vertex movement bounds, with `symDiffOK == true`; its mesh can enter `Union`, `Cut` and `Intersect` |
 | **D4** | interference | bounds-disjoint pairs work immediately; an admitted solid sweep reaches the mesh intersection D3 admits. Other pairs stay `Suspect` until D3 or a sweep analytic adapter lands |
 | **D5** | clearance | box separation may settle the partition, but `WithClearances` stays `Suspect` until a sweep boundary adapter lands |
 | **D6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload` until non-constant-section proofs land |
-| **D7** | `Placed`, `Duplicate`, `PlacedCopy` | re-evaluates the payload under the composed rigid motion and reruns the global audit; every displacement and measurement is recomputed |
+| **D7** | `Placed`, `Duplicate`, `PlacedCopy` | re-evaluates the payload under the composed rigid motion and reruns the applicable construction proof; every displacement and measurement is recomputed |
 | **D8** | Fillet, Chamfer and Shell | `ErrUnsupported`; Table R in `docs/modify-design.md` has no `sweepPayload` receiver row. A one-span sweep sheet takes `Thicken` through its reduction (`docs/surface-design.md` §16.8) |
 
 The composite tessellator chooses the largest required profile chord count
@@ -513,9 +546,10 @@ separation audit closes. Other composite paths remain staged as
 | **5b** | shared-station tessellation and complete proof records for composite paths with line and circular profile walks; D2 and D3 for that reach. **This row is landed.** | Meridian poles, analytic clearance and surveys |
 | **6** | `FitSplineSeg` profile build and shared dyadic tessellation through composite arc-line-arc paths. **This reach is landed.** | Other Tier A profile kinds and Tier B/C kinds follow spline staging |
 | **7a** | §17's one-span centred convex polygon twist and verified faceted mesh. **This reach is landed.** | curved/composite paths, holes, non-convex or free-form profiles, sheets, mitres and scale |
-| **7b** | nonzero distributed twist over tangent composite paths | closed paths, a corner mode or scale other than §16's |
+| **7b** | nonzero distributed twist over tangent composite paths | closed paths outside §3.3, a corner mode or scale other than §16's |
 | **8** | sweep boundary adapter for clearance/interference | non-constant-section surveys |
 | **M1**, **M2** | §16's mitred polyline sweep; §16.9 owns the two rows | what §16.9 lists |
+| **F1** | §3.3's exact two-arc full circle as a zero-twist solid, including D1–D3 and D7 through full `Revolve` | other closed paths and nonzero closed-path twist |
 
 Each published feature increment lands its four measurements and structural
 verification together. An increment never returns a body whose cached reading
@@ -532,7 +566,11 @@ Every test asserts computed geometry or a proof bound.
 - Build tangent line-arc-line and two-plane arc-arc paths. Assert transported
   frames and join sections, not only face counts.
 - Reject an off-plane path start, a reversed initial tangent, every degenerate
-  path segment, a non-tangent join, and a closed path with the stated sentinel.
+  path segment, a non-tangent join, and a closed path outside §3.3.
+- Build §3.3's full circle from an authenticated profile. Compare its four
+  readings with a full `Revolve`, assert both path-span wall roles, no caps,
+  `VerifyAll` occupied-volume proof, and placement replay. Refuse closed-path
+  twist and a closed surface result without committing a body.
 - Put the profile across an arc axis and assert S8 before any document commit.
 - Make a remote path span cross an earlier span. Assert S9 and the specific
   non-neighbouring patches the audit classified.

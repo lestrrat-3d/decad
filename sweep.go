@@ -29,13 +29,10 @@ import (
 // assembleCompositeSweepBody (sweep_composite.go) consumes sweepPayload's own
 // flag to omit the two outer caps after every span has built solid.
 //
-// A Sweep never has a fully closed wall set the way a full Revolve does: a
-// closed path is refused outright (S7, samePathPoint below) and ArcThrough's
-// own three-point form cannot even STATE a full turn — its End coincides with
-// Start, which the same closed-path refusal already catches before an angle is
-// derived. So every admitted Sweep — one span or composite — mints exactly two
-// section caps, and §4.1's closed-sheet carve-out (a build that mints no
-// closing face at all) stays reachable through Revolve alone.
+// An open Sweep mints two section caps. The exact two-arc closed circle of
+// §3.3 instead reduces to a full Revolve and mints no cap or seam face.
+// Other closed paths still refuse because their terminal frame may not equal
+// the initial one.
 
 const compositeFitSweepWorkLimit = 8 * freeform.FreeformWorkLimit
 
@@ -59,7 +56,7 @@ func WithSweepTwist(angle units.Value) SweepOption {
 // exactly codirectional with the plane's positive normal. Composite paths also
 // require tangent joins, exactly representable transported frames, and a
 // certified absence of unintended span contact. Section 17 of the Sweep design
-// states the bounded nonzero-twist reach. Closed paths remain unsupported.
+// states the bounded nonzero-twist reach. Section 3.3 admits one closed circle.
 // Every failure and cancellation leaves the document unchanged.
 func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
 	if ctx == nil {
@@ -105,6 +102,9 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
 	}
 	if cfg.Twisted {
+		if samePathPoint(path.Start(), path.End()) {
+			return nil, fmt.Errorf(`%w: a closed sweep path cannot carry nonzero twist`, ErrUnsupported)
+		}
 		if err := validateSweepPathGeometry(path, plane); err != nil {
 			return nil, err
 		}
@@ -141,7 +141,18 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 
 	ref := d.nextProducerID()
 	if samePathPoint(path.Start(), path.End()) {
-		return nil, fmt.Errorf(`%w: closed sweep paths are not implemented`, ErrUnsupported)
+		if surfaceResult {
+			return nil, fmt.Errorf(`%w: a closed sweep surface result is outside the full-circle solid reduction`, ErrUnsupported)
+		}
+		body, err := evalClosedCircleSweep(ctx, d, ref, profile, plane, frame, path, work)
+		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		d.commit(body)
+		return body, nil
 	}
 	segments := path.Segments()
 
@@ -247,6 +258,7 @@ type sweepPayload struct {
 	prism          prismPayload
 	revolve        revolvePayload
 	arc            bool
+	closedCircle   bool
 	reverseArcCaps bool
 	spans          []sweepSpanPayload
 	path           *Path
