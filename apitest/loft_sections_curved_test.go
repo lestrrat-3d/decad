@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -162,7 +163,76 @@ func TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof(t *testing.T) {
 	require.True(t, placedMesh.VolumeVerified())
 }
 
-func TestLoftSectionsConstantCurvesRefuseVaryingProfiles(t *testing.T) {
+func TestLoftSectionsVaryingFittedFlanksKeepSourceProof(t *testing.T) {
+	t.Parallel()
+	sections := threeCurvedSections(t, [3]float64{-0.24, -0.23, -0.24},
+		[3]float64{8, 8, 8}, [3]float64{0, 5, 10})
+	doc := decad.New()
+	body, err := doc.LoftSections(t.Context(), sections[:]...)
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySolid, body.Kind())
+	require.Len(t, doc.Bodies(), 1)
+	require.Len(t, body.Faces(), 6)
+	planes, cylinders, nurbs := 0, 0, 0
+	roles := make(map[string]struct{})
+	for _, face := range body.Faces() {
+		for _, origin := range face.Origins() {
+			roles[origin.Role] = struct{}{}
+		}
+		switch face.Surface().Kind() {
+		case decad.KindPlane:
+			planes++
+		case decad.KindCylinder:
+			cylinders++
+		case decad.KindNURBS:
+			nurbs++
+		default:
+			t.Fatalf("unexpected fitted loft face kind %v", face.Surface().Kind())
+		}
+	}
+	require.Equal(t, 2, planes)
+	require.Equal(t, 2, cylinders)
+	require.Equal(t, 2, nurbs)
+	for _, role := range []string{roleCapStart, roleCapEnd} {
+		_, ok := roles[role]
+		require.True(t, ok, "missing source role %s", role)
+	}
+	for i := range 4 {
+		role := fmt.Sprintf("side(0,%d)", i)
+		_, ok := roles[role]
+		require.True(t, ok, "missing source role %s", role)
+	}
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.Greater(t, volume.Value.Base(), 0.0)
+	require.False(t, math.IsInf(volume.Bound.Base(), 0) || math.IsNaN(volume.Bound.Base()))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.LessOrEqual(t, mesh.Bound().Base(), 0.1)
+	move, err := r3.Translation(r3.NewVec(16, 0, 0))
+	require.NoError(t, err)
+	placed, err := body.PlacedCopy(t.Context(), move)
+	require.NoError(t, err)
+	placedVolume, err := placed.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(placedVolume.Value.Base()-volume.Value.Base()),
+		placedVolume.Bound.Base()+volume.Bound.Base())
+	placedRoles := make(map[string]struct{})
+	for _, face := range placed.Faces() {
+		for _, origin := range face.Origins() {
+			placedRoles[origin.Role] = struct{}{}
+		}
+	}
+	require.Equal(t, roles, placedRoles)
+	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, placedMesh.BoundaryVerified())
+	require.True(t, placedMesh.VolumeVerified())
+}
+
+func TestLoftSectionsRefuseChangedArcAndUnequalSpacing(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name    string
@@ -170,8 +240,6 @@ func TestLoftSectionsConstantCurvesRefuseVaryingProfiles(t *testing.T) {
 		tips    [3]float64
 		heights [3]float64
 	}{
-		{"changed fitted flank", [3]float64{-0.24, -0.23, -0.24},
-			[3]float64{8, 8, 8}, [3]float64{0, 5, 10}},
 		{"changed circular tip", [3]float64{-0.24, -0.24, -0.24},
 			[3]float64{8, 8.5, 8}, [3]float64{0, 5, 10}},
 		{"unequal spacing", [3]float64{-0.24, -0.24, -0.24},

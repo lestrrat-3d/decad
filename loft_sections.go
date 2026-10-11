@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/smoothloft"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 )
 
 // LoftSection names one recorded section of a smooth LoftSections feature.
@@ -25,7 +26,8 @@ type LoftSection struct {
 // profiles. The quadratic route admits positive homothetic whole-line loops
 // star-shaped about their common origin. A varying four-arc circular section
 // can build as a ruled cone; exactly matching curved records build as a
-// straight prism. All routes require ascending, equally spaced world-XY
+// straight prism. Two varying fitted flanks with unchanged circular arcs
+// use the source interpolants' quadratic height wall. All routes require ascending, equally spaced world-XY
 // planes and interpolate the middle section exactly
 // (docs/loft-sections-design.md). Other shapes refuse.
 func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*Body, error) {
@@ -58,14 +60,17 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 		built, err = smoothloft.BuildThreeCircles(ctx, records, planes)
 		if errors.Is(err, ErrUnsupported) {
 			body, constantErr := d.buildConstantCurvedSections(ctx, records, planes, work[0])
-			if constantErr != nil {
+			if constantErr == nil {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				d.commit(body)
+				return body, nil
+			}
+			if !errors.Is(constantErr, ErrUnsupported) {
 				return nil, constantErr
 			}
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			d.commit(body)
-			return body, nil
+			built, err = smoothloft.BuildThreeFits(ctx, records, planes, work)
 		}
 	} else {
 		built, err = smoothloft.BuildThree(ctx, records, planes)
@@ -86,6 +91,10 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 	for i := range built.EdgeCount {
 		groups[i] = facetGroup{origins: []FeatureRef{{producer: ref,
 			Role: fmt.Sprintf("side(0,%d)", i)}}, surface: NURBSSurface{}}
+		if built.ArcRadii[i] > 0 {
+			groups[i].surface = Cylinder{Origin: planes[0].Origin, Axis: r3.Vec{Z: 1},
+				Radius: units.Millimeters(built.ArcRadii[i])}
+		}
 	}
 	groups[built.EdgeCount] = facetGroup{origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
 		surface: Plane{Frame: frameStart}, planar: true, reversed: true}
