@@ -66,7 +66,7 @@ func LoftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 func LoftCrossingAuditBevelJoin(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
 	const maxBevelJoinScans = 64_000_000
 	_, err := loftCrossingAuditLimited(budget, verts, tris, nil, loftGenericShortcuts,
-		maxBevelJoinScans, 82_000, false)
+		maxBevelJoinScans, 82_000, true)
 	return err
 }
 
@@ -75,7 +75,8 @@ func LoftCrossingAuditBevelJoin(budget *proofbound.WorkBudget, verts []r3.Vec, t
 // its square. It keeps the same triangle ceiling and exact contact verdicts.
 func LoftCrossingAuditBevelTwoJoin(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
 	const maxBevelTwoJoinScans = 256_000_000
-	_, err := loftCrossingAudit(budget, verts, tris, nil, loftGenericShortcuts, maxBevelTwoJoinScans)
+	_, err := loftCrossingAuditLimited(budget, verts, tris, nil, loftGenericShortcuts,
+		maxBevelTwoJoinScans, MaxLoftAuditTriangles, true)
 	return err
 }
 
@@ -422,8 +423,8 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 	return work, budget.Err()
 }
 
-// parallelLoftPairs classifies the pattern join's large, immutable candidate
-// list concurrently. The shared budget and work counts are replayed in the
+// parallelLoftPairs classifies a large immutable candidate list concurrently.
+// The shared budget and work counts are replayed in the
 // original pair order, so the first refusal and all completed-call counts
 // agree with the serial audit. Only the caller touches the budget closures.
 func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]r3.Vec,
