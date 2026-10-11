@@ -557,7 +557,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		Bound:     units.SquareMillimeters(area.Bound),
 	}
 
-	coordUpper, err := momentinput.CoordinateUpper(rp.profile, work, nil)
+	coordUpper, err := momentinput.CoordinateEnvelope(rp.profile, work, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -676,7 +676,8 @@ type revolveWalks = revolveaxis.ResolvedWalks
 // edges, returning the faces, the two caps' coedges in walk order, and the
 // loop's side area.
 func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolvemesh.RevolveBasis, li int, loop loopRecord, work *freeform.FreeformWork, frame massmoment.MapCharge) (revLoopParts, error) {
-	resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the revolve wall build", rp.chargedWalk, rp.ax.SnapTol)
+	resolved, err := revolveaxis.ResolveLoopWithFreeform(ctx, loop, work, "the revolve wall build",
+		rp.chargedWalk, rp.ax.SnapTol, rp.ax.RadialLower)
 	if err != nil {
 		return revLoopParts{}, err
 	}
@@ -814,8 +815,15 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// junction vertices above.
 			seam := rp.denotedPoint(walkStart(resolved.Segs[w.Segs[0]], resolved.Plane[w.Segs[0]]))
 			plane := segPlaneWalks(resolved, w.Segs)
-			cap0[i] = rp.capEdge(b, w.SegmentWalk, plane, singleClosed, vs0, ve0, seam, rp.end0(), holeLoop, frame)
-			cap1[i] = rp.capEdge(b, w.SegmentWalk, plane, singleClosed, vs1, ve1, seam, rp.end1(), holeLoop, frame)
+			freeformConvex := false
+			if w.Kind == survey2d.WalkFreeform {
+				freeformConvex, err = rimConvexity(ctx, w, holeLoop, work)
+				if err != nil {
+					return revLoopParts{}, err
+				}
+			}
+			cap0[i] = rp.capEdge(b, w.SegmentWalk, plane, singleClosed, vs0, ve0, seam, rp.end0(), holeLoop, freeformConvex, frame)
+			cap1[i] = rp.capEdge(b, w.SegmentWalk, plane, singleClosed, vs1, ve1, seam, rp.end1(), holeLoop, freeformConvex, frame)
 		}
 	}
 
@@ -1003,12 +1011,25 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // own seam vertex denotes; that vertex is bounded the same way every other cap
 // vertex is (sweptVertex; docs/evaluator-design.md §6). An open walk reads
 // neither.
-func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, plane []survey2d.SegmentWalk, closed bool, vs, ve *Vertex, seam sweptPoint, end sweptEnd, holeLoop bool, frame massmoment.MapCharge) *Edge {
+func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, plane []survey2d.SegmentWalk, closed bool, vs, ve *Vertex, seam sweptPoint, end sweptEnd, holeLoop, freeformConvex bool, frame massmoment.MapCharge) *Edge {
 	convex := !holeLoop
 	if w.IsCircular() {
 		convex = w.Th0 < w.Th1
 	}
+	if w.Kind == survey2d.WalkFreeform {
+		convex = freeformConvex
+	}
 	e := &Edge{convex: convex, length: w.Length, lengthBound: frame.LengthBound(w.Length, w.LengthBound)}
+	if w.Kind == survey2d.WalkFreeform {
+		e.curve = NURBSCurve{}
+		if closed {
+			v := rp.sweptVertex(b, w.StartU, w.StartV, seam, curveToken{}, end)
+			e.start, e.end = v, v
+		} else {
+			e.start, e.end = vs, ve
+		}
+		return e
+	}
 	if !w.IsCircular() {
 		e.curve = Line3{}
 		e.start, e.end = vs, ve
@@ -1151,6 +1172,8 @@ func (rp revolvePayload) wallSurface(b revolvemesh.RevolveBasis, w survey2d.Segm
 			Major:  units.Millimeters(w.CV),
 			Minor:  units.Millimeters(w.Radius),
 		}, w.Th1 < w.Th0, nil
+	case wallFreeform:
+		return NURBSSurface{}, false, nil
 	default:
 		return nil, false, fmt.Errorf(`%w: a wall on the axis sweeps no surface`, ErrDegenerate)
 	}
@@ -1165,6 +1188,9 @@ func (rp revolvePayload) wallSurface(b revolvemesh.RevolveBasis, w survey2d.Segm
 // where its tag is exactly this surface (docs/evaluator-design.md §6,
 // docs/surface-design.md §6.4).
 func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plane []survey2d.SegmentWalk) *surfacenormal.Revolved {
+	if kind == wallFreeform {
+		return nil
+	}
 	lift, ab := rp.lift(), rp.axisBound()
 	section := revolveaxis.SectionWholeCharges(rp.sectionWhole, rp.sectionDelta)
 	var den surfacenormal.Revolved
@@ -1442,8 +1468,8 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			// walk takes the loop-0 (outer) convention
 			// (docs/surface-design.md §13.4).
 			plane := segPlaneWalks(resolved, w.Segs)
-			cap0 := rp.capEdge(b, w.SegmentWalk, plane, false, js[i].v0, js[i+1].v0, sweptPoint{}, rp.end0(), false, frame)
-			cap1 := rp.capEdge(b, w.SegmentWalk, plane, false, js[i].v1, js[i+1].v1, sweptPoint{}, rp.end1(), false, frame)
+			cap0 := rp.capEdge(b, w.SegmentWalk, plane, false, js[i].v0, js[i+1].v0, sweptPoint{}, rp.end0(), false, false, frame)
+			cap1 := rp.capEdge(b, w.SegmentWalk, plane, false, js[i].v1, js[i+1].v1, sweptPoint{}, rp.end1(), false, false, frame)
 			co := []coedge{{edge: cap0, forward: true}}
 			if a := js[i+1].arc; a != nil {
 				co = append(co, coedge{edge: a, forward: true})

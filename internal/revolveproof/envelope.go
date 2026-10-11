@@ -57,6 +57,11 @@ func Extents(loops WalkLoops) (float64, float64, error) {
 // its own angular interval contains.
 func WalkExtremes(w survey2d.SegmentWalk) [][2]float64 {
 	out := [][2]float64{{w.StartU, w.StartV}, {w.EndU, w.EndV}}
+	if w.Kind == survey2d.WalkFreeform {
+		// The axis-frame envelope encloses every control point and therefore
+		// every point of the Bézier walk, including interior extrema.
+		return append(out, [2]float64{w.AxisRadiusUpper, w.AxisRadiusUpper})
+	}
 	if !w.IsCircular() {
 		return out
 	}

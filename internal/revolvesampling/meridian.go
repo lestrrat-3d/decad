@@ -8,16 +8,19 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // This file forms the certified meridian samples used by revolve tessellation.
-// MeridianJunctions reads each recorded walk's start. Circular walks add
-// interior stations at exact rational parameters. Each sample carries a
+// MeridianJunctions reads each recorded walk's start. Circular and free-form
+// walks add interior stations at exact rational parameters. Each sample carries a
 // certified bound against the point its record denotes (tessellation §8–§9).
 
 // ArcStation is one interior meridian sample of a circular walk: the
@@ -117,13 +120,15 @@ func MeridianJunctions(lift revolvemesh.RevolveLift, r revolveaxis.ResolvedWalks
 }
 
 // MeridianSamples expands one loop's junctions into the polyline the
-// current counts ask for: walk k contributes its own junction plus, for a
-// CIRCULAR walk chorded into counts[k] pieces, that walk's interior stations,
-// each enclosed at the recorded parameter it denotes (ArcStation).
+// current counts ask for: walk k contributes its own junction plus the
+// interior stations of a curved walk, each enclosed at the exact recorded
+// parameter it denotes (ArcStation or freeformStation).
 //
 // The returned gap is the largest interior station gap; the caller combines it
 // with MeridianJunctions' gap before checking the reserved construction bound.
-func MeridianSamples(lift revolvemesh.RevolveLift, loop sectionrecord.LoopRecord, r revolveaxis.ResolvedWalks, junctions []revolvemesh.RevMeridian, counts []int, sags []float64) ([]revolvemesh.RevMeridian, float64, error) {
+func MeridianSamples(lift revolvemesh.RevolveLift, loop sectionrecord.LoopRecord, r revolveaxis.ResolvedWalks,
+	junctions []revolvemesh.RevMeridian, counts []int, sags []float64,
+	chains []*freeform.FreeformChain) ([]revolvemesh.RevMeridian, float64, error) {
 	out := make([]revolvemesh.RevMeridian, 0, len(junctions))
 	worst := 0.0
 	for k, w := range r.Walks {
@@ -133,6 +138,37 @@ func MeridianSamples(lift revolvemesh.RevolveLift, loop sectionrecord.LoopRecord
 		}
 		start := junctions[k]
 		start.Sag, start.Walk = sags[k], k
+		if w.Kind == survey2d.WalkFreeform {
+			if len(chains) <= k || chains[k] == nil || len(chains[k].Stations) != n {
+				return nil, 0, fmt.Errorf(`%w: a free-form revolve meridian has no certified station chain`, decaderr.ErrUnsupported)
+			}
+			chain := chains[k]
+			for i := range n {
+				cell := i
+				if w.Reversed {
+					cell = n - 1 - i
+				}
+				start.Freeform = &revolvemesh.RevFreeformCell{
+					ArcUpper: chain.CellArcUpper[cell], RhoUpper: w.AxisRadiusUpper,
+				}
+				out = append(out, start)
+				if i == n-1 {
+					break
+				}
+				station := chain.Stations[i+1]
+				if w.Reversed {
+					station = chain.Stations[n-1-i]
+				}
+				next, gap, err := freeformStation(lift, station)
+				if err != nil {
+					return nil, 0, err
+				}
+				start = next
+				start.Walk, start.Sag = k, sags[k]
+				worst = math.Max(worst, gap)
+			}
+			continue
+		}
 		if !w.IsCircular() {
 			out = append(out, start)
 			continue
@@ -158,4 +194,23 @@ func MeridianSamples(lift revolvemesh.RevolveLift, loop sectionrecord.LoopRecord
 		}
 	}
 	return out, worst, nil
+}
+
+func freeformStation(lift revolvemesh.RevolveLift, point freeform.RatPoint) (revolvemesh.RevMeridian, float64, error) {
+	_, ok := splinebezier.Point2Of(point)
+	if !ok {
+		return revolvemesh.RevMeridian{}, 0, revolvemesh.ErrRevolveStationEnclosure
+	}
+	zIv, rhoIv, ok := revolvemesh.AxisCoordInterval(lift.AU, lift.AV, lift.DU, lift.DV,
+		proofbound.PointInterval(point.U), proofbound.PointInterval(point.V))
+	if !ok {
+		return revolvemesh.RevMeridian{}, 0, revolvemesh.ErrRevolveStationEnclosure
+	}
+	z, _ := midpoint(zIv).Float64()
+	rho, _ := midpoint(rhoIv).Float64()
+	gap := math.Max(proofbound.IntervalFloatError(zIv, z), proofbound.IntervalFloatError(rhoIv, rho))
+	if proofbound.IsNonFinite(z) || proofbound.IsNonFinite(rho) || proofbound.IsNonFinite(gap) || rho <= 0 {
+		return revolvemesh.RevMeridian{}, 0, revolvemesh.ErrRevolveStationEnclosure
+	}
+	return revolvemesh.RevMeridian{Z: z, Rho: rho, ZIv: zIv, RhoIv: rhoIv}, gap, nil
 }

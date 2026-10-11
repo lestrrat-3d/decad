@@ -12,8 +12,9 @@ import (
 
 // WallAxisMoment is the first moment ∫ρ ds of one boundary walk about the
 // axis. Pappus's first theorem reads the side face's area from it: a straight
-// walk's is its length times its mean radius, a circular walk's is the
-// closed-form antiderivative, and an on-axis walk sweeps nothing.
+// walk uses length times mean radius, a circular walk uses its closed-form
+// antiderivative, a free-form walk uses certified length and radial envelopes,
+// and an on-axis walk sweeps nothing.
 //
 // The straight arm composes the walk's bounded length and radial coordinates.
 // Its magnitude envelope can only shrink the published bound. The circular
@@ -23,6 +24,17 @@ import (
 func WallAxisMoment(w survey2d.SegmentWalk, kind revolveaxis.WallKind, segs []sectionrecord.CurveSegment, ax revolveaxis.Frame) proofbound.BoundedScalar {
 	if kind == revolveaxis.WallAxis {
 		return proofbound.BoundedScalar{}
+	}
+	if kind == revolveaxis.WallFreeform {
+		lengthLower, _ := proofbound.BoundedEnds(proofbound.MeasuredScalar(w.Length, w.LengthBound))
+		lower := 0.0
+		if lengthLower > 0 && ax.RadialLower > 0 {
+			lower = math.Max(0, math.Nextafter(lengthLower*ax.RadialLower, math.Inf(-1)))
+		}
+		upper := w.AxisMomentUpper
+		value := lower + (upper-lower)/2
+		bound := proofbound.UpRound(math.Max(value-lower, upper-value))
+		return proofbound.MeasuredScalar(value, bound)
 	}
 	if !w.IsCircular() {
 		meanRadius := proofbound.BoundedDiv(

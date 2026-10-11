@@ -17,10 +17,14 @@ const (
 	WallCone
 	WallSphere
 	WallTorus
+	WallFreeform
 )
 
 // Classify names the surface of revolution one walk sweeps.
 func Classify(w survey2d.SegmentWalk, snapTol float64) WallKind {
+	if w.Kind == survey2d.WalkFreeform {
+		return WallFreeform
+	}
 	if w.IsCircular() {
 		if math.Abs(w.CV) <= snapTol {
 			return WallSphere

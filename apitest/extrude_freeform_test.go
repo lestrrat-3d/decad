@@ -1101,11 +1101,9 @@ func TestFreeformPrismCapLoopChamferRefuses(t *testing.T) {
 	require.ErrorContains(t, err, "free-form boundary segment")
 }
 
-// TestFreeformPrismRevolveRefuses pins Document.Revolve of a free-form
-// section: rejectInteriorContact (revolve.go) walks every segment before
-// deciding circularity, so it refuses on the free-form span regardless of
-// where the axis sits relative to the profile.
-func TestFreeformPrismRevolveRefuses(t *testing.T) {
+// TestFreeformRevolveAxisContactRefuses pins the strict-clearance gate for a
+// free-form meridian that touches the revolve axis.
+func TestFreeformRevolveAxisContactRefuses(t *testing.T) {
 	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	doc := decad.New()
@@ -1113,7 +1111,7 @@ func TestFreeformPrismRevolveRefuses(t *testing.T) {
 	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
 
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "free-form boundary segment")
+	require.ErrorContains(t, err, "needs proven clearance from the axis")
 	require.Empty(t, doc.Bodies(), "a refused Revolve registers no body")
 }
 

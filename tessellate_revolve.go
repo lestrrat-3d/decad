@@ -29,9 +29,9 @@ import (
 // sequence and axis basis. internal/tessellation audits vertex links.
 // internal/revolvesampling forms certified meridian junctions and stations.
 //
-// A free-form (Tier A NURBS) revolve generator is still refused, by
-// revolveaxis.ResolveLoop's own boundarywalk.RequireAnalyticWalk: those cells are §13's increment
-// T5.
+// A Tier A free-form meridian with proven axis clearance uses certified
+// dyadic stations. Its cells carry conservative boundary-area and occupied-
+// volume allowances; a station chain that reaches the axis is refused.
 //
 // Three structural facts shape everything below, and all three are
 // docs/tessellation-design.md §8's and §9's:
@@ -174,7 +174,8 @@ func tessellateRevolveWithCountFloor(ctx context.Context, b *Body, rp revolvePay
 func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveplan.Resolution, error) {
 	return revolveplan.Resolve(ctx, revolveplan.ResolveInput{
 		Lift: rp.lift(), Loops: append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...),
-		Charge: rp.chargedWalk, SnapTol: rp.ax.SnapTol, Transform: rp.xform,
+		Charge: rp.chargedWalk, SnapTol: rp.ax.SnapTol, RadialLower: rp.ax.RadialLower,
+		Transform: rp.xform,
 	})
 }
 
@@ -259,7 +260,8 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	sampleGap := 0.0
 	for li := range p.resolved {
 		samples, gap, err := revolvesampling.MeridianSamples(
-			rp.lift(), p.loops[li], p.resolved[li], p.junctions[li], p.Meridian[li], p.Sagittas[li])
+			rp.lift(), p.loops[li], p.resolved[li], p.junctions[li], p.Meridian[li], p.Sagittas[li],
+			p.Freeform[li])
 		if err != nil {
 			return nil, err
 		}
@@ -425,8 +427,12 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			return nil, err
 		}
 		if proofs {
+			capSlack, err := revolvesampling.CapSegmentArea(p.resolved, p.Meridian, p.Freeform)
+			if err != nil {
+				return nil, err
+			}
 			cellSlack = proofbound.AbsSumUpper(cellSlack,
-				proofbound.ProductUpper(2, revolvesampling.CapSegmentArea(p.resolved, p.Meridian)))
+				proofbound.ProductUpper(2, capSlack))
 		}
 	}
 	if len(mesh.triangles) == 0 {

@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -25,6 +27,54 @@ func ratNear(t *testing.T, want float64, got *big.Rat) {
 	t.Helper()
 	f, _ := got.Float64()
 	require.InDelta(t, want, f, 1e-15)
+}
+
+func freeformRevolveSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	start := s.CreatePoint(-1, -1)
+	middle := s.CreatePoint(0, -1.25)
+	end := s.CreatePoint(1, -1)
+	_, err = s.CreateFitSpline(start, middle, end)
+	require.NoError(t, err)
+	rightTop := s.CreatePoint(1, 1)
+	leftTop := s.CreatePoint(-1, 1)
+	s.CreateLine(end, rightTop)
+	s.CreateLine(rightTop, leftTop)
+	s.CreateLine(leftTop, start)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	require.True(t, profiles[0].Valid)
+	return s, profiles[0]
+}
+
+func TestRevolveFreeformPartialCapAreaSlack(t *testing.T) {
+	s, profile := freeformRevolveSketch(t)
+
+	axis := SketchLine{Start: Point2{U: -5, V: -5}, End: Point2{U: -5, V: 5}}
+	body, err := New().Revolve(s, profile, axis,
+		AngleExtent{A: units.Radians(0.0001), Dir: Along})
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	area, err := body.Area()
+	require.NoError(t, err)
+	gap := math.Abs(meshArea(mesh.Vertices(), mesh.Triangles()) - area.Value.Base())
+	require.Greater(t, gap, 0.01, "the cap sliver must dominate this narrow sweep")
+	require.LessOrEqual(t, gap, mesh.areaSlack+area.Bound.Base()+1e-9)
+}
+
+func TestRevolveFreeformDisplacedSectionRefuses(t *testing.T) {
+	s, profile := freeformRevolveSketch(t)
+	recorded, _, _, err := recordProfile(s, profile)
+	require.NoError(t, err)
+	_, err = revolveaxis.ChargeOf(recorded, revolveaxis.Frame{}, 0.01, freeform.NewFreeformWork())
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "displaced free-form revolve section")
 }
 
 func TestAbsLinearIntegralMatchesTheClosedForm(t *testing.T) {
