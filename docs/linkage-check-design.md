@@ -1052,14 +1052,15 @@ check declines by design is listed in §1, §13 and §14.10.
 Each pose runs the pair procedure once per evaluated pair; a declared pair costs the same as an evaluated
 one. A pin in a bore costs the kernel's windowed nested cell (clearance §4), about `0.1` ms per pose on
 the folding arm's elbow. A pair the kernel leaves undecided falls to the read-only mesh intersection at
-every pose, the slow path, which re-tessellates each transient placement; the windowed cell keeps a pin
-pair off it. A constant pair (§5.9) costs one evaluation per call, whatever the pose count. The per-call
-`bodyGeomCache` holds every static body's clearance carriers for the whole run,
-and each transient link placement is built, used for its pairs, and dropped per pose, as `VerifyMotion`
-does. The one-mesh-per-body cache of interference §5.3 is `Verify`'s and does not apply: a pose measures
-transient bodies, and each pair keeps its own tolerance, as that section records for the motion check. A
-static body's mesh, when a pair reaches the mesh path, comes from the body's own one-entry tessellation
-cache.
+every pose, the slow path, which tessellates each distinct transient placement; the windowed cell keeps a
+pin pair off it. A constant pair (§5.9) costs one evaluation per call, whatever the pose count. The
+per-call `bodyGeomCache` holds every static body's clearance carriers for the whole run. `VerifyJointBox`
+also retains up to 32 completed, bit-identical float placements per mover. A repeated placement reuses
+its transient body, completed clearance carriers and one-entry tessellation cache; eviction drops its
+clearance carriers. Each cell still computes its own ideal-pose deviation and swept-volume allowance.
+`VerifyMotion` drops each transient placement after its pose. The one-mesh-per-body cache of interference
+§5.3 is `Verify`'s and does not apply across different transient bodies: each pair keeps its own tolerance.
+A static body's mesh, when a pair reaches the mesh path, comes from its own one-entry tessellation cache.
 
 The pose count is governed by the travel rate. A link under `k` sweeping revolute joints has
 `τ ≈ Δs·Σ_i ρ_{ik}·|To_i − From_i|`; a wrist link with `ρ` of `50`, `100` and `150` mm under three quarter-

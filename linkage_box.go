@@ -274,6 +274,7 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 	}
 
 	run := newLinkageRun(ctx, d, spec, frames, bounds, cfg)
+	run.poseBodies = make([]poseBodyCache, len(run.movers))
 	dr, _ := run.drive.(*linkageDriver) // newLinkageRun always drives by a linkageDriver
 	br := &boxRun{run: run, dr: dr, axes: axes, budget: budget}
 	if err := br.subdivide(); err != nil {

@@ -152,6 +152,9 @@ type motionRun struct {
 	// constPlaced holds, per mover of a constant group, the transient
 	// placement built at its first pose and reused at every later one.
 	constPlaced []*motionPlaced
+	// poseBodies is enabled only by VerifyJointBox. Its cells can visit the
+	// same float placement repeatedly while another joint's range is split.
+	poseBodies []poseBodyCache
 
 	// VerifyMotion's own motion. spec is the validated Motion; stretch and
 	// stretchEnd are motionbound.PathAreaUpper's stretch base (§5.1) for a
@@ -949,9 +952,26 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 	if err != nil {
 		return nil, fmt.Errorf(`%w: composing the pose onto a moving body's placement failed: %w`, ErrNotFinite, err)
 	}
-	transient, err := mv.body.payload.placed(r.ctx, r.transient, transientProducer, composed)
-	if err != nil {
-		return nil, err
+	cacheable := r.poseBodies != nil && !group.constant
+	var transient *Body
+	var key [12]uint64
+	if cacheable {
+		if err := r.ctx.Err(); err != nil {
+			return nil, err
+		}
+		key = poseTransformBits(composed)
+		transient = r.poseBodies[i].get(key)
+	}
+	if transient == nil {
+		transient, err = mv.body.payload.placed(r.ctx, r.transient, transientProducer, composed)
+		if err != nil {
+			return nil, err
+		}
+		if cacheable {
+			if old := r.poseBodies[i].put(key, transient); old != nil {
+				delete(r.cache.entries, old)
+			}
+		}
 	}
 	var eta, linear float64
 	for _, ideal := range group.ideals {
@@ -963,7 +983,7 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 	// between the two images, and the area that path carries is the mover's
 	// own, scaled by the path's largest linear stretch.
 	allowance := proofbound.SweptVolumeAllow(eta, motionbound.PathAreaUpper(mv.area, linear, mv.sigma, group.stretch))
-	placed[i] = &motionPlaced{body: transient, eta: eta, allowance: allowance}
+	placed[i] = &motionPlaced{body: transient, eta: eta, allowance: allowance, kept: cacheable}
 	if group.constant {
 		if r.constPlaced == nil {
 			r.constPlaced = make([]*motionPlaced, len(r.movers))
