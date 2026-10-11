@@ -137,3 +137,12 @@ transverse crossing through the relevant LoftFaces band. Exact polynomial
 signs bound the crossing's X coordinate and angular slope; isolated endpoint
 boxes include the source construction error. A later Union may use those
 bounds only while the original unplaced source record remains current.
+
+The same source record can certify four short contact curves at each finite
+blank end cap: two fitted flanks and two straight connectors. Each source
+cell has one transverse cap crossing. The fitted flanks meet the finite cap
+start once because that meridian equals the already certified root meridian
+there; later fitted spans stay outside the root and cannot meet the cap.
+Exact rational boxes enclose each clipped crossing for a later held-edge
+comparison. A missing source segment, multiple clip, or unbounded box
+refuses this source-specific certificate.
