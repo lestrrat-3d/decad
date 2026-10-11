@@ -37,6 +37,37 @@ func TestHeldOrient2MatchesRationalCross(t *testing.T) {
 }
 
 func TestPairSeparatedReusesExactClassifierSigns(t *testing.T) {
+	crossingsByOrient := func(xt, xo [3]proof.Xpt, signs [3]int) []proof.Xpt {
+		var points []proof.Xpt
+		for i := range 3 {
+			if signs[i] == 0 {
+				points = append(points, xt[i])
+			}
+			j := (i + 1) % 3
+			if signs[i]*signs[j] >= 0 {
+				continue
+			}
+			ni, di := proof.OrientNum(xo[0], xo[1], xo[2], xt[i])
+			nj, dj := proof.OrientNum(xo[0], xo[1], xo[2], xt[j])
+			tn := new(big.Int).Mul(ni, dj)
+			td := new(big.Int).Sub(tn, new(big.Int).Mul(nj, di))
+			points = append(points, proof.Xlerp(xt[i], xt[j], tn, td))
+		}
+		return points
+	}
+	checkCrossings := func(t *testing.T, xt, xo [3]proof.Xpt, normal proof.Xpt, signs [3]int) {
+		t.Helper()
+		want := crossingsByOrient(xt, xo, signs)
+		for _, got := range [][]proof.Xpt{
+			planeCrossingsPrepared(xt, xo[0], normal, signs),
+			PlaneCrossings(xt, xo, signs),
+		} {
+			require.Len(t, got, len(want))
+			for i := range got {
+				require.Equal(t, want[i].Key(), got[i].Key())
+			}
+		}
+	}
 	base := []r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 2, Y: 0, Z: 0}, {X: 0, Y: 2, Z: 0}}
 	cases := map[string]struct {
 		other [3]r3.Vec
@@ -72,6 +103,8 @@ func TestPairSeparatedReusesExactClassifierSigns(t *testing.T) {
 			require.False(t, decided)
 			fa, xa, na := e.facet(0)
 			fb, xb, nb := e.facet(1)
+			checkCrossings(t, xa, xb, nb, signs.a)
+			checkCrossings(t, xb, xa, na, signs.b)
 			for k := range 3 {
 				require.Equal(t, proof.OrientSignPrepared(fb[0], fb[1], fb[2], fa[k], xb[0], xa[k], nb), signs.a[k])
 				require.Equal(t, proof.OrientSignPrepared(fa[0], fa[1], fa[2], fb[k], xa[0], xb[k], na), signs.b[k])
