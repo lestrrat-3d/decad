@@ -172,7 +172,7 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	clean := make([]bool, workers)
 	errors := make([]error, workers)
 	locals := make([]*heldEmbedding, workers)
-	e.pollCtx = ctx
+	e.pollErr = ctx.Err
 	e.pollInterval = proofbound.WorkPollInterval / workers
 	e.pollRemaining = e.pollInterval
 	locals[0] = e
@@ -190,7 +190,7 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 		}()
 	}
 	group.Wait()
-	e.pollCtx = nil
+	e.pollErr = nil
 	if err := e.budget.Err(); err != nil {
 		return false, err
 	}
@@ -238,7 +238,7 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool) (bool, error)
 // scanStep preserves the parallel scan's per-worker polling interval without
 // an indirect callback for every candidate in its innermost loop.
 func (e *heldEmbedding) scanStep() error {
-	if e.pollCtx == nil {
+	if e.pollErr == nil {
 		return e.budget.Step()
 	}
 	e.pollRemaining--
@@ -246,14 +246,14 @@ func (e *heldEmbedding) scanStep() error {
 		return nil
 	}
 	e.pollRemaining = e.pollInterval
-	return e.pollCtx.Err()
+	return e.pollErr()
 }
 
 // readOnlyScanCopy shares the immutable grid and incident-facet lists, while
 // each worker writes only its own predicate caches.
 func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *heldEmbedding {
 	local := *e
-	local.pollCtx = ctx
+	local.pollErr = ctx.Err
 	local.pollInterval = proofbound.WorkPollInterval / workers
 	local.pollRemaining = local.pollInterval
 	local.xv = make([]proof.Xpt, len(e.xv))
@@ -282,9 +282,9 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 type heldEmbedding struct {
 	h      HeldRounding
 	budget *proofbound.WorkBudget
-	// pollCtx is set only during the read-only parallel first scan. Each
+	// pollErr is set only during the read-only parallel first scan. Each
 	// worker has its own countdown; later repair uses budget again.
-	pollCtx       context.Context
+	pollErr       func() error
 	pollInterval  int
 	pollRemaining int
 	inc           [][]int
