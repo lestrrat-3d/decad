@@ -31,7 +31,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/loft-sections-design.md` | Exact positive homothetic three-section loft, quadratic walls, held mesh and proof. |
 | `docs/loft-point-design.md` | Point-to-profile solid loft, its apex topology and mesh proof. |
 | `docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
-| `docs/sweep-design.md` | `Path`/`Sweep`, `SweepChain` and mitred sweeps (§16). |
+| `docs/sweep-design.md` | `Path`/`Sweep`, `SweepChain`, mitred sweeps (§16) and bounded twist (§17). |
 | `docs/helix-design.md` | `Document.Coil`: a profile screwed about an in-plane axis. |
 | `docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
