@@ -277,8 +277,8 @@ func (p allEdgeChamferPayload) polygons() []allEdgePolygon {
 			for _, pair := range [][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
 				var q [3]float64
 				q[axis] = p.box[axis][side]
-				q[b] = p.box[b][pair[0]] + p.inward(b, pair[0], p.d)
-				q[c] = p.box[c][pair[1]] + p.inward(c, pair[1], p.d)
+				q[b] = p.box[b][pair[0]] + inward(pair[0], p.d)
+				q[c] = p.box[c][pair[1]] + inward(pair[1], p.d)
 				coords = append(coords, q)
 			}
 			n := [3]float64{}
@@ -303,8 +303,8 @@ func (p allEdgeChamferPayload) polygons() []allEdgePolygon {
 				q := func(along, ub float64) [3]float64 {
 					var v [3]float64
 					v[axis] = along
-					v[b] = p.box[b][sb] + p.inward(b, sb, ub)
-					v[c] = p.box[c][sc] + p.inward(c, sc, p.d-ub)
+					v[b] = p.box[b][sb] + inward(sb, ub)
+					v[c] = p.box[c][sc] + inward(sc, p.d-ub)
 					return v
 				}
 				lo, hi := p.box[axis][0], p.box[axis][1]
@@ -325,7 +325,7 @@ func (p allEdgeChamferPayload) polygons() []allEdgePolygon {
 	return out
 }
 
-func (p allEdgeChamferPayload) inward(axis, side int, d float64) float64 {
+func inward(side int, d float64) float64 {
 	if side == 0 {
 		return d
 	}
