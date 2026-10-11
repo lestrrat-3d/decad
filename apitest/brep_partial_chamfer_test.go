@@ -3,6 +3,7 @@ package apitest_test
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -10,6 +11,100 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBrepChamferAllStraightOuterEdges(t *testing.T) {
+	t.Parallel()
+	_, bar := crossDrilledBar(t)
+	baseMesh, err := bar.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
+		Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
+		Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
+	got, err := bar.Chamfer(t.Context(), selected, units.Millimeters(1))
+	require.NoError(t, err)
+	requireEveryEdgeOnTwoFaces(t, got)
+	require.Len(t, got.Faces(), 19)
+	volume, err := got.Volume()
+	require.NoError(t, err)
+	requireAnalyticPiSqrt2Interval(t, volume.Value.Base(), volume.Bound.Base(), 15846, -180, 0)
+	area, err := got.Area()
+	require.NoError(t, err)
+	requireAnalyticPiSqrt2Interval(t, area.Value.Base(), area.Bound.Base(), 3384, 102, 302)
+	centroid, err := got.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, r3.NewVec(20, 10, 10), centroid.Value)
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.InDelta(t, 154.0, meshVolume(baseMesh)-meshVolume(mesh), 1e-8)
+	require.Len(t, mesh.SourceFaces(), len(mesh.Triangles()))
+	used := map[*decad.Face]bool{}
+	for _, face := range mesh.SourceFaces() {
+		used[face] = true
+	}
+	for _, face := range got.Faces() {
+		require.True(t, used[face])
+	}
+}
+
+// requireAnalyticPiSqrt2Interval compares the published measurement interval
+// with rational enclosures of a+bπ+c√2, independently of its float formula.
+func requireAnalyticPiSqrt2Interval(t *testing.T, held, bound float64, a, b, c int64) {
+	t.Helper()
+	floatRat := func(v float64) *big.Rat { return new(big.Rat).SetFloat64(v) }
+	pi := [2]float64{math.Nextafter(math.Pi, 0), math.Nextafter(math.Pi, math.Inf(1))}
+	sqrt2 := [2]float64{math.Nextafter(math.Sqrt2, 0), math.Nextafter(math.Sqrt2, math.Inf(1))}
+	intervalEnd := func(high bool) *big.Rat {
+		result := big.NewRat(a, 1)
+		for _, term := range []struct {
+			coefficient int64
+			bounds      [2]float64
+		}{{b, pi}, {c, sqrt2}} {
+			index := 0
+			if high != (term.coefficient < 0) {
+				index = 1
+			}
+			result.Add(result, new(big.Rat).Mul(big.NewRat(term.coefficient, 1), floatRat(term.bounds[index])))
+		}
+		return result
+	}
+	require.LessOrEqual(t, new(big.Rat).Sub(floatRat(held), floatRat(bound)).Cmp(intervalEnd(false)), 0)
+	require.GreaterOrEqual(t, new(big.Rat).Add(floatRat(held), floatRat(bound)).Cmp(intervalEnd(true)), 0)
+}
+
+func TestBrepChamferAllStraightOuterEdgesSetbackAdmission(t *testing.T) {
+	t.Parallel()
+	_, bar := crossDrilledBar(t)
+	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
+		Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
+		Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
+	_, err := bar.Chamfer(t.Context(), selected, units.Millimeters(0.1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	got, err := bar.Chamfer(t.Context(), selected, units.Millimeters(0.5))
+	require.NoError(t, err)
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
+func TestBrepChamferAllStraightOuterEdgesPlacementRefuses(t *testing.T) {
+	t.Parallel()
+	_, bar := crossDrilledBar(t)
+	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
+		Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
+		Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
+	got, err := bar.Chamfer(t.Context(), selected, units.Millimeters(1))
+	require.NoError(t, err)
+	move, err := r3.Translation(r3.NewVec(5, 0, 0))
+	require.NoError(t, err)
+	_, err = got.PlacedCopy(t.Context(), move)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	_, err = got.Placed(t.Context(), move)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}
 
 // TestBrepPartialChamferCrossDrilledBar cuts a through bore in a Sketch-built
 // bar, then chamfers the two outer edges meeting at its front upper corner.

@@ -34,7 +34,7 @@ part makes on them. Every cell was read off the live code with the probe under
 | **P1** cross-drilled bar: 40×20×20 box, Ø6 hole along y | brep (class B) | fillet the 4 edges along y | builds (route P) |
 | | | fillet one edge along z | builds (route E) |
 | | | fillet every straight edge | builds (route V; `docs/vertex-blend-design.md`) |
-| | | chamfer every straight edge | SL1 |
+| | | chamfer every straight edge | builds (§4.3b) |
 | | | chamfer the 8 along x and z, the top and bottom loops | builds (route L) |
 | | | fillet the top and bottom loops | builds (route L fillet arm) |
 | | | chamfer a hole rim, or both | builds (route P cap loop) |
@@ -83,7 +83,7 @@ Ranked by the parts each refusal blocks:
 | Rank | Refusal | Blocks | What the body needs |
 |---|---|---|---|
 | 1 | SB10 / SB3: shell of a nonprism brep or a noncap face | P1, P2, P3, P5, P6, P6c, P7, P8 | receiver erosion: planes and cylinders for a through cut (§3); spheres, tori or elliptical edges for a blind pocket or union |
-| 2 | SL1: edges sharing a vertex outside complete loops | P1 | route V builds complete loops with independent edges; a partial fillet builds edges on one planar loop after straight-wall restatement (`docs/vertex-blend-design.md`) |
+| 2 | SL1: edges sharing a vertex outside complete loops | other mixed-edge parts | route V builds complete loops with independent edges; §4.3b builds P1's all-edge chamfer; a partial fillet builds edges on one planar loop after straight-wall restatement (`docs/vertex-blend-design.md`) |
 | 3 | a loop fillet: the curved-edge and cornered-loop fillets this survey found refused | P1, P2, P3, P4, P7 | `docs/loop-fillet-design.md`'s pipe band, which builds them |
 | 4 | SB7: an edge ending on a curved face or a blend | P8 | the complete-loop fillet, which builds P8's top loop |
 | 5 | a faceted receiver | P6b, P9 | an analytic boolean: a cup as a boolean operand, cylinder × cylinder; reach SX9 stays permanent |
@@ -593,11 +593,40 @@ on either cap. The mesh uses those same four vertices per patch; `VerifyAll`
 checks its closed boundary and occupied volume. Curved, reflex, longer and
 disjoint chains continue to SL1.
 
+### 4.3b Simultaneous outer-edge chamfer of a cross-drilled box
+
+The symmetric `Chamfer` of all twelve straight outer edges of P1 has a
+bounded box-with-one-bore construction. Admission requires six zero-bound
+axis-aligned rectangular planes, one through-y cylinder and its two matching
+circle rims, no displaced record faces, and the selected set of all twelve
+outer box edges. The circular bore must remain strictly inside the inset
+x and z faces. The setback and every resulting polygon corner and bore seam
+must equal their rational coordinate expressions as `float64` values. Thus
+`d = 1` and `d = 0.5` build on P1, while `d = 0.1` refuses rather than
+publishing rounded corners as exact.
+
+Six inset box planes and twelve six-sided bevel planes meet at eight shared
+three-plane corners. Each corner lies halfway along every setback. The bore
+wall and its two circular rim edges remain unchanged. The result has 19
+outward source faces and two incident faces at every edge. Bounded scalar
+operations hold each face area, edge length, volume, and centroid. If box
+side lengths are `Lx`, `Ly`, and `Lz`, setback is `d`, and bore radius is
+`r`, the volume is `Lx Ly Lz − πr² Ly − 2d²(Lx + Ly + Lz) + 6d³`.
+The admitted centered bore and twelve symmetric wedges put the centroid at
+the box midpoint.
+
+The mesh uses the analytic polygon vertices directly and one set of chord
+stations on both bore rims and the cylinder. `VerifyAll` audits the closed,
+positive, crossing-free mesh and bounds occupied-volume difference by the
+circle chord slivers times bore length plus the station-position allowance.
+Nonidentity `Placed` and `PlacedCopy` refuse for this payload; placement
+replay is outside this construction's coordinate proof.
+
 ### 4.4 Table SL — refusals
 
 | SL | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SL1** | a partial loop outside one admissible straight-edge fillet chain or §4.3a's two-edge chamfer, two loops sharing an edge after route V's partition, or loops mixed with single edges for a `Chamfer` | yes | `ErrUnsupported` |
+| **SL1** | a partial loop outside one admissible straight-edge fillet chain, §4.3a's two-edge chamfer, or §4.3b's box all-edge chamfer; two loops sharing an edge after route V's partition; or loops mixed with single edges for a `Chamfer` | yes | `ErrUnsupported` |
 | **SL2** | an adjacent face outside LB3/LB4/LB6: a curved or oblique neighbour, a split side line, a neighbour whose own loop continues past the vertex on a curve, walls on both sides of `F` | yes | `ErrUnsupported` |
 | **SL3** | retired: a `Fillet` of complete loops builds through `docs/loop-fillet-design.md`'s fillet arm or refuses with that document's Table SF | — | — |
 | **SL4** | an asymmetric route L reference with no unambiguous record-face identity | yes | reach SX16 |
@@ -605,8 +634,9 @@ disjoint chains continue to SL1.
 Reach SX6, SX7, SX12, SX13, SX14 and SX15 keep their meanings per band, and
 base S6/S7/S8/S9 per rewritten face.
 
-Gate order for a brep or stacked `Chamfer`, after modify §4's stage 1,
-reach SX10, SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
+Gate order for a brep or stacked `Chamfer`: after modify §4's stage 1,
+§4.3b tries the exact all-edge box. Other selections then reach SX10,
+SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
 
 | Stage | Gates |
 |---|---|
@@ -629,6 +659,7 @@ one planar-face loop, including a swept wall restated as a plane, takes the part
 | **BG2** | route L chamfer | `brepPayload` with `loopBands`, `stack` nil | the rewritten record's faces plus the band patches | `face(k)` / `wall(k)`; each patch `chamferLoop(f,l,p)` for face `f`, loop `l`, patch `p` in its band's own order |
 | **BG3** | rectangular-boss shell (§3.1a) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus four cylinder patches and four ellipse seams | `face(k)` / `wall(k)`; the patches carry `filletLoop` roles |
 | **BG4** | circular-boss shell (§3.1c) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus one whole-turn torus patch | `face(k)` / `wall(k)`; the patch carries a `filletLoop` role |
+| **BG5** | box all-edge chamfer (§4.3b) | `allEdgeChamferPayload` | six inset box planes, twelve bevel planes, one bore cylinder | `face(k)` / `chamfer(axis,side,side)` / `wall(6)` |
 
 A BG1 result is an ordinary brep: general-boolean §4.5 reads it unchanged.
 A BG2 result is a brep whose body carries extra faces, and each consumer
@@ -650,6 +681,8 @@ below reads the bands where the plain brep reader would miss them:
 | **DG12** | `Placed`, `Mirrored`, `PatternCopies` | re-lifts every face frame | the same; `loopBands` are re-attached by the re-evaluation, as `capBlendPayload.placed` re-derives its bands |
 
 BG3's and BG4's consumer rules are stated in §3.1a and §3.1c.
+BG5's measurement, tessellation, and placement rules are stated in §4.3b.
+Other record-based consumers keep their existing payload gates.
 
 ## 6. What stays refused, and why
 
