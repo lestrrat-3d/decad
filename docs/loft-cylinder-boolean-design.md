@@ -10,6 +10,19 @@ rotation without translation, and six ordered outer curves: line, fitted
 spline, arc, fitted spline, line, centered root arc. A prior joined body is
 accepted only at identity placement; placing it clears its source record.
 
+When a placed tooth's Z basis is exactly the float immediately below one,
+`loftCylinderProofTooth` may build a private axial proxy with Z basis one.
+Admission requires zero translation, zero XY/Z mixing, a positive blank
+height starting at zero, and bit-identical XY basis and held vertex positions.
+The proxy uses the original tooth's authenticated sections and source identity.
+The original placed tooth remains the exact Boolean operand. If `ε` bounds
+the axial distance between corresponding original and proxy source points
+and held vertices, the proxy Loft proof adds `ε` to its boundary departure,
+`ε·Aupper` to occupied-volume difference, and `(1−s)·Aupper` to area slack,
+where `s` is the original Z basis and `Aupper` bounds the proxy surface area.
+Axial compression from proxy to original cannot increase surface area during
+the sweep, so `ε·Aupper` bounds the swept symmetric difference.
+
 The first and last lines run from the root arc to the flanks. Each has one
 Loft cell and natural `0..1` parameters. Their root endpoints equal the
 recorded root-arc endpoints. The far endpoint ruling of each line has a
@@ -53,6 +66,14 @@ respective open halfplanes because a halfplane is convex. At most eight
 million exact coefficients may be checked by this arm per Union; exhaustion
 refuses the structural route. The existing cap gap check still applies.
 
+The fixed separator depends only on XY and applies unchanged to a bridged
+source. For a moving separator, `N(z)` changes between a proxy point at `z`
+and its original point at `s·z`. Its strict margin also charges
+`|N1−N0|·Rxy_upper·ε/height`, where `Rxy_upper` encloses proxy source XY.
+Thus every original and proxy tooth stays on its assigned side at its own
+physical height. Pairwise separation keeps other teeth from hiding matched
+boundary points during the axial bridge.
+
 ## Constructed shell
 
 The join retains each tooth's exterior Loft wall facets, removes its root
@@ -69,6 +90,13 @@ contains the origin, and is tiled by only its cap-group triangles with
 matching directed edges and exact area. `LoftCrossingAudit` checks the entire
 constructed shell before the payload records `contactAudited=true`. The
 faceted-body audit then checks manifold closure and orientation.
+The structural join uses a 16-million candidate-pair scan ceiling in this
+audit; other callers keep the generic eight-million ceiling. The triangle
+ceiling and all exact pair classifications are unchanged. In the real
+17-tooth gallery build, the generic ceiling stopped tooth 16 after 67.59 s;
+the structural ceiling completed Build and `VerifyAll` in 78.00 s. A
+diagnostic run counted 9,466,787 scanned pairs and 3,054,048 overlapping
+candidate pairs in the final 9,380-triangle join.
 An exact midpoint and outline-contact audit keeps every omitted held root
 chord inside its filled cap; only the two global root endpoints may touch
 the outline.
@@ -78,6 +106,12 @@ or `capEnd` role and the original blank's exact axial `Plane` surface. The
 other groups stay `Faceted`. Public `Planar` and `NormalTo(z)` select the two
 caps, and `OuterLoopOf(CapStart(result))` and `OuterLoopOf(CapEnd(result))`
 select their exterior rims.
+If any tooth uses an axial bridge, the top group keeps `capEnd` but uses a
+bounded `Faceted` surface: the held cap is at the blank's top plane while
+that tooth's true exterior top ends as much as `ε` below it. The bottom
+group still has the blank's exact `Plane`. Analytic `Planar` and
+`NormalTo(z)` therefore select only the bottom cap in this case; the cap
+roles still select both exterior rims.
 
 ## Source-circle interval for a later cap cutter
 
@@ -239,6 +273,18 @@ annular slab, `π·(2R(δin+δout)+δout²)·height`, as an upper bound on the
 remaining occupied difference. The blank mesh's own symmetric-difference
 bound is added conservatively.
 
+The axial bridge also transfers the constructed shell's two-way boundary
+bound to the exact Union. Outside the blank cylinder, each tooth boundary
+point maps to its original or proxy at identical XY and within `ε` in Z.
+Inside the cylinder, the blank occupies every height from zero to its top
+and neither tooth extends beyond those levels. On the cylinder side, a
+tooth's exposed-height set maps by `z ↔ s·z`; the original's unmatched
+top slab reaches the blank's top boundary within `ε`. The strict tooth
+separators, including the moving-normal bridge margin, prevent another
+tooth from hiding these matched points. The constructed-shell seam bound
+then adds the proxy's enlarged Loft departure once, rather than treating
+the proxy as an exact input.
+
 ## Source record for a later bore
 
 The payload records the original blank and ordered teeth, both exact cap
@@ -251,6 +297,11 @@ exact blank, below the side clearance after the joined boundary bound, and
 inside the seam annulus's inner radius. The cap audit proves each recorded
 outline is one disk containing the axis. Placement clears the record, so a
 later Boolean cannot rebuild from unplaced operands.
+It also stores the private proxy teeth and each axial bridge distance. A
+later Union rebuilds proofs from the original teeth. Bore and cap Chamfer
+return `ErrUnsupported` for a positive bridge: their fixed-height source
+circle and cap-occupancy proofs do not yet cover `z` versus `z/s` or the
+original top cap at `s·height`.
 
 ## Centered through-bore Cut
 

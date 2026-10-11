@@ -108,6 +108,13 @@ func loftCylinderChamferCapWalk(loop *Loop, verts []r3.Vec, ring []int, bottom b
 // It never interprets an arbitrary faceted edge as an offset carrier.
 func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	edges []*Edge, d, dDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
+	if r := fp.loftCylinderJoin; r != nil {
+		for _, shift := range r.axialBridge {
+			if shift > 0 {
+				return nil, true, fmt.Errorf("%w: cap chamfer of an axially bridged Loft/cylinder join lacks a source proof", ErrUnsupported)
+			}
+		}
+	}
 	source, ok := loftCylinderChamferSourceOf(fp)
 	if !ok {
 		return nil, false, nil

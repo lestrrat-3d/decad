@@ -57,6 +57,10 @@ func loftCylinderMovingSeparate(a, b loftCylinderTooth, remaining *int) bool {
 	}
 	zStart := proofarith.FloatRat(z0)
 	zSpan := new(big.Rat).Sub(proofarith.FloatRat(z1), zStart)
+	deltaX := new(big.Rat).Sub(normals[1][0], normals[0][0])
+	deltaY := new(big.Rat).Sub(normals[1][1], normals[0][1])
+	deltaNorm := proofbound.RatSqrtUp(new(big.Rat).Add(
+		new(big.Rat).Mul(deltaX, deltaX), new(big.Rat).Mul(deltaY, deltaY)))
 	one := big.NewRat(1, 1)
 	two := big.NewRat(2, 1)
 	for side, part := range []loftCylinderTooth{a, b} {
@@ -65,6 +69,23 @@ func loftCylinderMovingSeparate(a, b loftCylinderTooth, remaining *int) bool {
 			return false
 		}
 		margin := proofbound.ProductUpper(maxNorm, bound)
+		// A bridged source point is at s*z while its proxy point is at z.
+		// The moving normal changes by at most |N1-N0|*bridge/height;
+		// charge its dot product with the source's maximum XY radius.
+		if part.bridge > 0 {
+			radius := 0.0
+			for _, p := range part.loft.verts {
+				q := new(big.Rat).Add(
+					new(big.Rat).Mul(proofarith.FloatRat(p.X), proofarith.FloatRat(p.X)),
+					new(big.Rat).Mul(proofarith.FloatRat(p.Y), proofarith.FloatRat(p.Y)))
+				radius = max(radius, proofbound.RatSqrtUp(q))
+			}
+			radius = proofbound.AbsSumUpper(radius, part.loft.proof.FacetDeparture)
+			fraction := proofbound.RatFloatUp(new(big.Rat).Quo(
+				proofarith.FloatRat(part.bridge), zSpan))
+			margin = proofbound.AbsSumUpper(margin,
+				proofbound.ProductUpper(proofbound.ProductUpper(deltaNorm, radius), fraction))
+		}
 		if proofbound.IsNonFinite(margin) {
 			return false
 		}
