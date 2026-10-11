@@ -83,6 +83,15 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_ring_distance.go` | Measures exact ring-edge clearance from held Loft walls. See loft-cylinder-boolean design. |
 | `loft_cylinder_ring_occupancy.go` | Certifies one strict interior split ring inside an authenticated loft/cylinder union. See loft-cylinder-boolean design. |
 | `loft_cylinder_bore.go` | Cuts a centered through-bore from an audited loft/cylinder join. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer.go` | Admits both outer cap loops and samples their held-polygon insets. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer_mesh.go` | Builds and audits the rational outer-cap cutter and rounded mesh. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer_proof.go` | Checks cutter containment, source contacts and volume witnesses. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer_near.go` | Bounds band points through a source-occupied split ring. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer_clearance.go` | Supplies exact triangle clearance for source-wall checks. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer_cap.go` | Bounds cap root slits and the retained inset region. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer_cap_source.go` | Matches inset cap edges to the original tooth contours. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer_bore.go` | Preserves the centered bore wall and inner loops. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer_side.go` | Certifies retained middle-side reach into the source union. See loft-cylinder-boolean design. |
 | `prism_boolean.go` | Analytic booleans of co-directional prisms. See `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Clean-nesting scene adapters. See prism-boolean §4.2. |
 | `prism_boolean_blind.go` | Blind and spanning Cuts via the whole-loop match. See `docs/prism-boolean-design.md` §3.2. |

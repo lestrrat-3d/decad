@@ -220,11 +220,12 @@ func loftCylinderSourceConnectorOf(lp loftPayload, cell, root int) (loftCylinder
 		}
 		result.a[cap] = loftCylinderSourcePoint(lp, points[0])
 		result.f[cap] = loftCylinderSourcePoint(lp, points[1])
-		if diagonal[cap] == near {
+		switch diagonal[cap] {
+		case near:
 			result.d[cap] = result.a[cap]
-		} else if diagonal[cap] == far {
+		case far:
 			result.d[cap] = result.f[cap]
-		} else {
+		default:
 			return loftCylinderSourceConnector{}, false
 		}
 	}

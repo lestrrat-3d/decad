@@ -86,10 +86,10 @@ func TriTriClassifyPrepared(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proo
 	return TriTriClassifyCore(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, true, fna, fnb, true)
 }
 
-// useFilter says whether this call may take TriTriMissesFilter's early exit in
-// the non-coplanar arm below. Every production caller passes true. Only the
-// tests proving the filter changes no verdict pass false, and what they
-// establish is that the two agree across their whole corpus.
+// useFilter says whether this call may take float-only separation exits in
+// the coplanar and non-coplanar arms below. A caller with rational vertices
+// whose float images have a separate rounding bound must pass false and
+// supply exact plane signs. Ordinary float-vertex callers may pass true.
 //
 // It is an argument rather than a package-level switch because the choice
 // belongs to one call. A switch a test flipped would decide the classification
@@ -130,7 +130,7 @@ func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xp
 		// convex polygon: positive area — or a positive-length shared boundary
 		// — is a face-on-face tangency (§9 refuses it); anything else is at
 		// most a point, carried for the isolated-point rule.
-		if CoplanarFloatSeparated(ta, tb, na) {
+		if useFilter && CoplanarFloatSeparated(ta, tb, na) {
 			return out, nil
 		}
 		overlap := false

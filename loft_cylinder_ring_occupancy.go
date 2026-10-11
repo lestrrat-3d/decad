@@ -135,7 +135,7 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 	}
 	result.walls = make([]loftCylinderRingWall, 0, lp.walls)
 	result.fitted = make([]loftCylinderRingWall, 0, 2*(root-2))
-	for cell := 0; cell < n; cell++ {
+	for cell := range n {
 		for half := range 2 {
 			indices := lp.tris[2*cell+half]
 			tri := [3]r3.Vec{lp.verts[indices[0]], lp.verts[indices[1]], lp.verts[indices[2]]}

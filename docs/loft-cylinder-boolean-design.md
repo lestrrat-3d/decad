@@ -239,3 +239,87 @@ boundary bounds. It replaces the join source record with the certified outer
 and inner cap loops, their facet groups, the bore-wall group, the original
 blank and tooth sources, and the unchanged seam and collar bounds. Placement
 clears this post-bore record.
+
+The bore record also retains the upward `boreBound` used in Cut's wall proof.
+That value bounds the two-way, same-height correspondence between the exact
+bore cylinder and its held wall. A later outer-cap edit must recheck Cut's
+strict bore-to-blank clearance before using this local bound.
+
+## Both outer-cap Chamfers on the joined gear
+
+`Chamfer` accepts only an identity-placed, audited Union record or its
+certified centered-bore Cut, with both complete outer cap loops selected and
+one equal setback. Partial loops, mixed edges, asymmetric setbacks, and other
+faceted receivers still refuse. The cap loops in the immutable record must
+again tile exactly one disk or annulus each. The side must still be the
+recorded paired two-triangle strips. All selected public edges must cover
+the two recorded outer walks and no inner bore edge.
+
+This narrow route extends Loft §18's held-polygon cap semantics. It constructs
+one rational polyhedral retained solid `C` from the certified held outer
+loops and source-ordered offset samples. The exact modified source is
+`S∩C`, where `S` is the original blank-and-teeth union after its optional
+centered bore. The construction uses the same `C` for the held solid `H`.
+The inset-sampling bound records deviation from the requested held-polygon
+offset; it does not switch to a smooth-spline offset. Other Chamfer routes
+keep their ordinary analytic semantics.
+
+At each cap, the old side strips are clipped at the exact rational level
+`z0+d` or `z1−d`. An inset cap, its source-ordered bevel strip, and the
+retained middle side form the ideal shell. The builder checks the side and
+inset loops for exact simplicity, nesting, and nonzero edges. Directed edge
+and exact area audits prove cap tiling, including the unchanged bore hole.
+The bevel bands are connected and embedded. Exact band-to-old-wall contacts
+are confined to their intended side-ring edges; an interior witness then
+places the bands inside `H`. The ideal shell has outward orientation and
+no unrecorded self-contact. Its retained middle facets are exact subsets
+of old wall facets, and the inset caps lie inside the old held cap loops.
+Those checks give `C⊂H` and make the ideal held result exactly `H∩C=C`.
+
+A complete rational split ring through each bevel band lies strictly inside
+`S` by the source-ring certificate above. Each ideal band facet has a
+certified distance below the published boundary allowance to that ring.
+Since the ring is also on `∂C`, every band point has a nearby point on
+`∂(S∩C)`. The cap proof separates the exact blank disk, a narrow root-seam
+annulus, and the exterior source tooth caps. The inset stays farther than
+the joined boundary bound from the held outer walk; every source tooth's
+exterior cap chord belongs to that walk and has no greater Loft departure.
+The exterior inset walk is inside the matched source tooth cap by exact
+contour clearance and winding. Monotone radial runs through the thin top
+root slit reach an inset/blank-circle crossing; the certified run length
+plus slit width is charged. The bore remains inside the blank and clear of
+all new outer geometry.
+
+Every retained middle-side facet uses a same-height inward patch shorter
+than the remaining boundary allowance. An exact prism contact audit proves
+the path from that facet to the patch stays in `H=C` in the open middle slab.
+The patch is inside the original source tooth when it clears every held
+tooth wall by its two-sided Loft departure and has a strict held-tooth
+inside witness. Near a root wall, the patch instead clears every nonroot
+wall; the true root stays inside the blank below its certified collar, and
+each held root triangle clipped to the patch's height slab is strictly
+inside the blank too. The convex blank disk contains their matched wall
+motion. Every patch component outside the disk reaches an outside patch
+vertex, whose strict held-tooth parity transfers through the Loft boundary
+homotopy. The portion inside the disk belongs to the exact blank. Thus a
+middle facet either already borders `S∩C` or reaches its boundary along
+that certified inward path. The unchanged bore wall and inner cap loop use
+Cut's local `boreBound` correspondence and exact outer-band separation.
+
+For the opposite boundary direction, any point of `∂(S∩C)` inside `C`
+belongs to `∂S`; the original two-way joined or bored boundary bound takes
+it to `∂H`, and the segment to that matched point reaches `∂C` if needed.
+Points already on `∂C` need no transfer. Intersecting both `S` and `H`
+with one fixed `C` cannot increase their occupied symmetric difference,
+so the old `volSymDiff` remains valid for the ideal shell. The actual mesh
+rounds only certified clip vertices. Both ideal and rounded shells are
+closed and embedded with matching triangle indices; their vertex-linear
+surface motion adds the explicit `SweptVolumeAllow` charge and a boundary
+distance of at most the clip-rounding bound. The published boundary bound
+is 0.1 mm only after every band, cap, middle-side, bore, and rounding
+charge fits strictly below it.
+
+The route has private limits of 2,048 outer vertices per rim, 4,096 inset
+vertices, 32,768 output triangles, and 16 million exact crossing scans.
+Every proof gate refuses when its own bounded work or strict inequality
+cannot be completed.
