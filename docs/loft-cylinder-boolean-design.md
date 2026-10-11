@@ -80,6 +80,22 @@ boundary bound includes the Loft source bound, twice the maximum certified
 radial or lateral seam reach, the ring roundoff, the outward root excess, and
 the top collar height. A result whose bound exceeds 0.1 mm is refused.
 
+The root connector also supports a local bound for a later cap-band cutter.
+At an exact height below both admitted top collars, its two held triangles
+form the radial-monotone chain through their common diagonal. The source
+connector begins inside the blank and ends outside it, so it crosses the
+exact cylinder. Its matched Loft facet departure is `δ`; every source
+crossing corresponds to a held point whose radius lies in `[R−δ,R+δ]`.
+`loftCylinderConnectorContactBound` brackets that held strip with exact
+rational signs. It requires an exact cutter contact segment on one piece of
+the chain at the same height. The exact contact is split at held radius
+`R+δ`: beyond it the matched source wall is outside the blank and keeps its
+ordinary `δ` bound. For the possibly hidden portion, the helper bounds the
+distance from its endpoints to the entire crossing strip and adds `δ`.
+Convexity covers each portion of the full contact segment.
+The helper returns only this source-seam distance. Its caller separately
+charges cutter rounding and proves the cutter contact and output shell.
+
 For volume, let `B` be the exact blank and `T` the union of exact teeth.
 Replacing each true tooth by its held Loft changes occupied volume by at most
 the sum of its authenticated `volSymDiff` values; union with `B` cannot

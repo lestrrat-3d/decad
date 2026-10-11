@@ -78,6 +78,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_union.go` | Joins a source Loft tooth pattern to a coaxial cylinder with certified seam and volume bounds. See loft-cylinder-boolean design. |
 | `loft_cylinder_cap.go` | Audits joined disks and bored annuli, then tags certified cap faces. See loft-cylinder-boolean design. |
 | `loft_cylinder_seam.go` | Certifies the faceted connector's radial crossing at every height. See loft-cylinder-boolean design. |
+| `loft_cylinder_contact.go` | Bounds an exact same-height connector contact against its source cylinder crossing. See loft-cylinder-boolean design. |
 | `loft_cylinder_bore.go` | Cuts a centered through-bore from an audited loft/cylinder join. See loft-cylinder-boolean design. |
 | `prism_boolean.go` | Analytic booleans of co-directional prisms. See `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Clean-nesting scene adapters. See prism-boolean §4.2. |
