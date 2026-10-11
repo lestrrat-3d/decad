@@ -200,6 +200,8 @@
 2	1.02	TestLoftHelicalToothClearsDefaultTolerance
 2	0.01	TestLoftPlacedRotationSoundness
 2	0.00	TestLoftPlacedS13OverflowingCoordinate
+2	0.10	TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof
+2	0.02	TestLoftSectionsConstantCurvesRefuseVaryingProfiles
 2	0.03	TestLoftSectionsInterpolatesThreeSketchesWithCertifiedMesh
 2	0.01	TestLoftSectionsPlacedCapsRemainPlanar
 2	0.01	TestLoftSectionsRefusesUnprovenScaleAndSpacing

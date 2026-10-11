@@ -838,7 +838,8 @@ Patch, Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve
 sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
 rule, and its increment-1 scope. `docs/loft-sections-design.md` owns the
-separate exact positive homothetic three-section `Document.LoftSections`.
+separate three-section `Document.LoftSections`: quadratic homothetic line
+sections and exactly identical curved sections.
 `docs/loft-point-design.md` owns the separate
 `Document.LoftFromPoint(ctx, apex, sketch, profile)` solid construction from
 an exact world point to one recorded Sketch profile. `docs/sweep-design.md` owns `Sweep`'s

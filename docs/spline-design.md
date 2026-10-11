@@ -1648,7 +1648,8 @@ axis — and the control net falls out of the recorded net and that motion with
 nothing fitted. That is what makes them `Exact` by construction, and it is the
 only way these curve sweeps produce a free-form surface in this evaluator.
 `Document.LoftSections` has a separate exact quadratic surface rule for
-three positive homothetic line profiles (`docs/loft-sections-design.md`).
+three positive homothetic line profiles. Its exactly identical curved-profile
+route uses the analytic extrude surface above (`docs/loft-sections-design.md`).
 
 A closed boundary names no such motion. The surface through it is a choice of
 blending function, so its interior is not determined by the input, and every

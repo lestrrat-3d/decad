@@ -17,11 +17,13 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 ```
 
 The call requires exactly three sections. Each passes the ordinary profile
-seam and area falsifier in argument order. The evaluator admits one outer loop
-with the same number and order of whole `LineSeg` records on all three
-profiles. Every line may walk forward or backward according to its recorded
-full-domain range; the walked vertices must meet exactly. Holes, trimmed
-lines, curved segments, and differing segment counts return `ErrUnsupported`.
+seam and area falsifier in argument order. The quadratic-scale route admits
+one outer loop with the same number and order of whole `LineSeg` records on
+all three profiles. Every line may walk forward or backward according to its
+recorded full-domain range; the walked vertices must meet exactly. Holes,
+trimmed lines, curved segments, and differing segment counts return
+`ErrUnsupported` on that route. Section 6 owns a separate constant-section
+route for exactly matching curved records.
 
 All three planes have world-XY `U` and `V` axes, the same XY origin, and
 strictly increasing Z origins with the middle Z exactly halfway between the
@@ -35,7 +37,8 @@ The scales must be positive. Thus each section is an exact positive homothetic
 copy of the first, about the common plane origin. A mismatch returns
 `ErrUnsupported`; no tolerance or fitted transform can admit it. Sketch's
 profile validity establishes the first loop's simple, positive-area region.
-The first region must also be star-shaped about the common origin. For every
+On the quadratic-scale route, the first region must also be star-shaped about
+the common origin. For every
 counterclockwise edge from `P` to `Q`, exact rational arithmetic checks
 `cross(Q-P, -P) >= 0`. This puts the origin in the polygon's kernel and
 proves every radial contraction stays inside the region. A profile whose
@@ -139,9 +142,42 @@ groups through the existing faceted placement proof; a placed planar tag gets
 a conservative unit-normal departure bound. `Face.NormalAt` on a quadratic
 wall remains `ErrUnsupported`, as for every `NURBSSurface`.
 
-The admitted class above is an increment, not a claim that general
-multi-section interpolation is determined by profile boundaries. Calls with
-four or more sections, nonhomothetic profiles, arbitrary planes, guides,
-centerlines, or hole loops remain `ErrUnsupported`. Nil context or document,
-or the wrong section count, returns `ErrDegenerate`. A seam failure returns
-its own sentinel and leaves the document unchanged.
+The admitted classes are increments, not a claim that general multi-section
+interpolation is determined by profile boundaries. Nonhomothetic profiles,
+varying curved profiles, arbitrary planes, guides, centerlines, and hole
+loops remain `ErrUnsupported`. Nil context or document, or a section count
+other than three, returns `ErrDegenerate`. A seam failure returns its own
+sentinel and leaves the document unchanged.
+
+## 6. Exact constant curved sections
+
+Three profiles with curved segments have a second, narrower construction.
+Each must have one outer loop, no holes, and 3 to 64 recorded segments.
+At least one segment must be curved. `momentinput.ExactProfileEqual` must
+match the middle and last structural records to the first in stored order,
+including every curve parameter and range. This is a sufficient exact
+identity test, not a fitted or sampled equivalence test. A mismatch returns
+`ErrUnsupported` and leaves the document unchanged.
+
+The three planes keep §1's world-XY axes, common XY origin, ascending levels,
+and exact midpoint. Their total Z separation must itself be exactly
+representable as a finite float64. These checks make each recorded profile
+the same plane-local region at its own Z level. This route defines the
+interpolation as the straight prism of the first profile over that total
+height; it meets the middle profile exactly and creates no middle seam face.
+
+`evalPrismContext` builds the prism from the first authenticated record with
+one free-form work counter continued from its area falsifier. Its existing
+segment gates remain in force: line and circular arcs and Tier A free-form
+curves can build; unsupported tiers, curvature changes, unproven endpoint
+joins, and exhausted work budgets refuse with their own sentinel. Side faces
+retain the prism kernel's `Plane`, `Cylinder`, or `NURBSSurface` tags and
+normal certificates. The two caps remain `Plane` faces. The same kernel
+provides bounded `Volume`, `Area`, `Centroid`, and `Bounds` readings. Its
+tessellator keeps live source faces and publishes the existing boundary and
+occupied-volume proofs for `VerifyAll`. Placement and replay use its prism
+payload, including the same curved source records.
+
+This route covers sections whose curve records are exactly identical.
+Changing a fitted-spline flank, circular radius, or arc range between
+sections still lacks a bounded interpolation and returns `ErrUnsupported`.

@@ -75,8 +75,8 @@ between two full-circle loops is not reachable by this construction.
   loft. §12 defers this reach to PR 5; this design does not reserve a shape
   for it.
   `Document.LoftSections` separately admits the exact positive homothetic
-  three-section class in `docs/loft-sections-design.md`; the general case
-  remains deferred here.
+  three-section line class and an exactly identical curved-section class in
+  `docs/loft-sections-design.md`; the general case remains deferred here.
 **Permanently out of scope, for reasons stated once:**
 
 - **Mixed-kind correspondence.** Two sides of different recorded kinds have
