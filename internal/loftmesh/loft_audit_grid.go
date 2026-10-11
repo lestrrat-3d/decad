@@ -31,9 +31,13 @@ type pairScan interface {
 func newPairScan(boxes [][2]r3.Vec, members []int, limit uint64) pairScan {
 	sweep := newSweepOrder(boxes, members)
 	best, bestWork := pairScan(sweep), sweep.work()
-	tree := newTreeScan(boxes, members)
-	if treeWork, ok := tree.workBound(min(bestWork, limit)); ok && treeWork < bestWork {
-		best, bestWork = tree, treeWork
+	// A nonempty tree visit costs at least one unit. Avoid sorting all boxes
+	// when a sparse sweep already costs zero or one comparison.
+	if bestWork > 1 {
+		tree := newTreeScan(boxes, members)
+		if treeWork, ok := tree.workBound(min(bestWork, limit)); ok && treeWork < bestWork {
+			best, bestWork = tree, treeWork
+		}
 	}
 	grid, ok := newGridScan(boxes, members, min(bestWork, limit))
 	if ok && grid.work < bestWork {
