@@ -54,9 +54,11 @@ var (
 // sweep_mitre_build.go, stitch.go, mass_properties_mesh.go and LoftChain call
 // it. A loft calls LoftCrossingAuditStructured instead. Tests that need a
 // shortcut switched off, or the pair loop's own work counts, call
-// LoftCrossingAuditWork.
+// LoftCrossingAuditWork. Large candidate lists classify concurrently and
+// replay verdicts in pair order, preserving the first refusal and work counts.
 func LoftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
-	_, err := loftCrossingAudit(budget, verts, tris, nil, loftGenericShortcuts, proofbound.MaxFacetPairTestsPerCall)
+	_, err := loftCrossingAuditLimited(budget, verts, tris, nil, loftGenericShortcuts,
+		proofbound.MaxFacetPairTestsPerCall, MaxLoftAuditTriangles, true)
 	return err
 }
 

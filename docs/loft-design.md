@@ -1261,9 +1261,11 @@ corner overlap, since `boxesOverlap` compares with `<=`, so a pair touching
 only on a box boundary is still a candidate. A pair of disjoint boxes shares
 no point and no vertex index, and the reference path admits it, so the
 candidate set contains every pair the audit could refuse and every pair Table
-C expects to touch. Candidates are tested in lexicographic `(i, j)` order,
-the all-pairs order, so the first refused pair is the one the reference path
-reports. Both sweep passes are float comparisons only, and the order is
+C expects to touch. Candidate verdicts are applied in lexicographic
+`(i, j)` order, the all-pairs order, so the first refused pair is the one
+the reference path reports. Large candidate lists may be classified
+concurrently; the audit replays their verdicts and work counts in that
+order. Both sweep passes are float comparisons only, and the order is
 deterministic.
 
 **Each cap is decided by one proof, over exact signs alone.** Let `C` be one
