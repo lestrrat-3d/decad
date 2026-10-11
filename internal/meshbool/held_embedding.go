@@ -284,6 +284,8 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 	local.fnorm = make([]r3.Vec, len(e.fnorm))
 	local.cone = make([][3][2]r3.Vec, len(e.cone))
 	local.coneOK = make([][3]bool, len(e.coneOK))
+	local.projected = make([]heldProjectedFacet, len(e.projected))
+	local.projectedOK = make([]bool, len(e.projectedOK))
 	local.sideSigns = make(map[[2]int]int)
 	local.stamp = make([]int, len(e.stamp))
 	local.stampID = 0
@@ -323,6 +325,10 @@ type heldEmbedding struct {
 	// the facet leaves that corner in (coneBox).
 	cone   [][3][2]r3.Vec
 	coneOK [][3]bool
+	// projected holds each facet's three coordinate projections and their
+	// stable directed-edge signs. Worker copies own these mutable caches.
+	projected   []heldProjectedFacet
+	projectedOK []bool
 	// sideSigns stores a vertex's sign against the canonical normal of an
 	// exact plane. Read-only scan copies can share one reading across facets
 	// in that plane; repair keeps this nil because vertices can move.
@@ -364,22 +370,24 @@ type heldPair struct {
 
 func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) *heldEmbedding {
 	e := &heldEmbedding{
-		h:          h,
-		budget:     budget,
-		memoOn:     memo,
-		inc:        make([][]int, len(h.Verts)),
-		taken:      make(map[r3.Vec]int, len(h.Verts)),
-		xv:         make([]proof.Xpt, len(h.Verts)),
-		xvOK:       make([]bool, len(h.Verts)),
-		norm:       make([]proof.Xpt, len(h.Tris)),
-		normOK:     make([]bool, len(h.Tris)),
-		plane:      make([]int, len(h.Tris)),
-		planeSense: make([]int8, len(h.Tris)),
-		fnorm:      make([]r3.Vec, len(h.Tris)),
-		cone:       make([][3][2]r3.Vec, len(h.Tris)),
-		coneOK:     make([][3]bool, len(h.Tris)),
-		planes:     map[string]int{},
-		stamp:      make([]int, len(h.Tris)),
+		h:           h,
+		budget:      budget,
+		memoOn:      memo,
+		inc:         make([][]int, len(h.Verts)),
+		taken:       make(map[r3.Vec]int, len(h.Verts)),
+		xv:          make([]proof.Xpt, len(h.Verts)),
+		xvOK:        make([]bool, len(h.Verts)),
+		norm:        make([]proof.Xpt, len(h.Tris)),
+		normOK:      make([]bool, len(h.Tris)),
+		plane:       make([]int, len(h.Tris)),
+		planeSense:  make([]int8, len(h.Tris)),
+		fnorm:       make([]r3.Vec, len(h.Tris)),
+		cone:        make([][3][2]r3.Vec, len(h.Tris)),
+		coneOK:      make([][3]bool, len(h.Tris)),
+		projected:   make([]heldProjectedFacet, len(h.Tris)),
+		projectedOK: make([]bool, len(h.Tris)),
+		planes:      map[string]int{},
+		stamp:       make([]int, len(h.Tris)),
 	}
 	for i, t := range h.Tris {
 		for _, v := range t {
@@ -478,6 +486,7 @@ func (e *heldEmbedding) setVert(v int, p r3.Vec) {
 		e.normOK[f] = false
 		e.plane[f] = -1
 		e.coneOK[f] = [3]bool{}
+		e.projectedOK[f] = false
 		if e.memoOn {
 			e.boxOK[f] = false
 			e.gen[f] = e.nextGen
@@ -511,7 +520,7 @@ func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 	if len(sharedI) == 3 {
 		return false
 	}
-	if len(sharedI) == 0 && heldProjectionsSeparated(e.h.Verts, ti, tj) {
+	if len(sharedI) == 0 && e.projectionsSeparated(i, j) {
 		return true
 	}
 	if len(sharedI) == 1 && !BoxesOverlap(e.coneBox(i, sharedI[0]), e.coneBox(j, sharedJ[0])) {
@@ -562,38 +571,78 @@ func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 	}
 }
 
-// heldProjectionsSeparated proves two triangles disjoint when one coordinate
-// projection has a strict separating edge. A projected contact is necessary
-// for a 3D contact, and FloatEdgeSeparates abstains near rounding uncertainty.
-func heldProjectionsSeparated(verts []r3.Vec, a, b [3]int) bool {
-	for _, axes := range [...][2]int{{0, 1}, {2, 0}, {1, 2}} {
-		var pa, pb [3][2]float64
-		stable := true
-		for k := range 3 {
-			pa[k] = [2]float64{AxisCoord(verts[a[k]], axes[0]), AxisCoord(verts[a[k]], axes[1])}
-			pb[k] = [2]float64{AxisCoord(verts[b[k]], axes[0]), AxisCoord(verts[b[k]], axes[1])}
-			for _, point := range [...][2]float64{pa[k], pb[k]} {
-				for _, coord := range point {
-					magnitude := math.Abs(coord)
-					if !(magnitude == 0 || magnitude >= 1e-100 && magnitude <= 1e100) {
-						stable = false
-					}
+type heldProjectedFacet struct {
+	points [3][3][2]float64
+	signs  [3][3]int8
+	stable [3]bool
+}
+
+// projection builds each directed edge sign once for this facet. A vertex
+// move invalidates its incident facets; parallel scan workers use separate
+// caches, so the shared held mesh remains read-only during that scan.
+func (e *heldEmbedding) projection(i int) *heldProjectedFacet {
+	if e.projectedOK[i] {
+		return &e.projected[i]
+	}
+	p := &e.projected[i]
+	tri := e.h.Tris[i]
+	for axis, axes := range [...][2]int{{0, 1}, {2, 0}, {1, 2}} {
+		p.stable[axis] = true
+		for k, v := range tri {
+			point := e.h.Verts[v]
+			p.points[axis][k] = [2]float64{AxisCoord(point, axes[0]), AxisCoord(point, axes[1])}
+			for _, coord := range p.points[axis][k] {
+				magnitude := math.Abs(coord)
+				if !(magnitude == 0 || magnitude >= 1e-100 && magnitude <= 1e100) {
+					p.stable[axis] = false
 				}
 			}
 		}
 		// Keep every subtraction and product in Orient2Float away from
 		// overflow and underflow; other scales use the exact pair checks.
-		if !stable {
+		if !p.stable[axis] {
 			continue
 		}
 		for k := range 3 {
-			if FloatEdgeSeparates(pa[k], pa[(k+1)%3], pa[(k+2)%3], pb) ||
-				FloatEdgeSeparates(pb[k], pb[(k+1)%3], pb[(k+2)%3], pa) {
+			p.signs[axis][k] = int8(Orient2Float(p.points[axis][k],
+				p.points[axis][(k+1)%3], p.points[axis][(k+2)%3]))
+		}
+	}
+	e.projectedOK[i] = true
+	return p
+}
+
+// projectionsSeparated proves two triangles disjoint when one coordinate
+// projection has a strict separating edge. A projected contact is necessary
+// for a 3D contact, and Orient2Float abstains near rounding uncertainty.
+func (e *heldEmbedding) projectionsSeparated(i, j int) bool {
+	a, b := e.projection(i), e.projection(j)
+	for axis := range 3 {
+		if !a.stable[axis] || !b.stable[axis] {
+			continue
+		}
+		for k := range 3 {
+			if projectedEdgeSeparates(a, b, axis, k) || projectedEdgeSeparates(b, a, axis, k) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func projectedEdgeSeparates(a, b *heldProjectedFacet, axis, edge int) bool {
+	sign := int(a.signs[axis][edge])
+	if sign == 0 {
+		return false
+	}
+	start := a.points[axis][edge]
+	end := a.points[axis][(edge+1)%3]
+	for _, point := range b.points[axis] {
+		if Orient2Float(start, end, point) != -sign {
+			return false
+		}
+	}
+	return true
 }
 
 // coneBox bounds the unit directions in which facet i leaves its corner k:
