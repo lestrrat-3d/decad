@@ -562,12 +562,12 @@ func sweepArcRole(reverseCaps bool) func(string) string {
 // section walk's wall carries, which is the one thing a prism and the
 // one-span straight sweep that reduced to one name differently.
 func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole func(loop, seg int) string, chord float64, verify Verification) (*Mesh, error) {
-	return tessellatePrismWithCountFloor(ctx, b, pp, wallRole, chord, verify, nil)
+	return tessellatePrismWithCountFloor(ctx, b, pp, wallRole, chord, verify, nil, 0)
 }
 
 func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload,
 	wallRole func(loop, seg int) string, chord float64, verify Verification,
-	countFloor func(loop, seg int) int) (*Mesh, error) {
+	countFloor func(loop, seg int) int, freeformTarget float64) (*Mesh, error) {
 	// sheet is docs/surface-design.md §4.1's own flag, read once: a surface
 	// result omits both caps from its wall build (prism_build.go), and every
 	// arm below that would otherwise touch a cap face, a cap triangulation or
@@ -643,6 +643,9 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	var chorded []tessellation.PrismLoop[*Face]
 	// One free-form counter for the whole chorded record (see chordLoop).
 	work := freeform.NewFreeformWork()
+	if freeformTarget > 0 {
+		work.RaiseLimit(compositeFitSweepWorkLimit)
+	}
 	// The build that produced this body already resolved every boundary
 	// segment's walk and published the set onto the payload (prism_build.go,
 	// docs/evaluator-design.md §8). A tessellation is one of the passes
@@ -672,7 +675,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 		}
 		cl, err := tessellation.ChordLoopWithCountFloor(ctx, loop, budget, pp.z1-pp.z0, work, pw, li, func(w survey2d.SideWalk) (*Face, error) {
 			return faceOfRole(wallRole(li, w.Segs[0]))
-		}, stationbound.ChordStationBound, floor)
+		}, stationbound.ChordStationBound, floor, freeformTarget)
 		if err != nil {
 			return nil, err
 		}

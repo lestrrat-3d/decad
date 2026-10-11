@@ -72,19 +72,42 @@ func StraightSpan(start, end, normal r3.Vec) (float64, float64, error) {
 	return height, bound, nil
 }
 
-// ValidateAnalyticProfile admits only recorded section kinds the span builders read.
+// ValidateAnalyticProfile admits recorded section kinds that Sweep's span
+// builders read, including fitted spline boundaries.
 func ValidateAnalyticProfile(profile momentinput.Profile) error {
 	loops := append([]sectionrecord.LoopRecord{profile.Outer}, profile.Holes...)
 	for _, loop := range loops {
-		if err := ValidateAnalyticSegments(loop.Segments, "profile"); err != nil {
-			return err
+		for _, raw := range loop.Segments {
+			segment, err := sectionrecord.NormalizeSegment(raw)
+			if err != nil {
+				return err
+			}
+			switch segment.(type) {
+			case sectionrecord.LineSeg, sectionrecord.CircleSeg, sectionrecord.ArcSeg, sectionrecord.FitSplineSeg:
+			default:
+				return fmt.Errorf(`%w: Sweep does not support profile segment %T`, decaderr.ErrUnsupported, segment)
+			}
 		}
 	}
 	return nil
 }
 
-// ValidateAnalyticSegments applies Sweep's segment-kind gate to one profile
-// or chain walk. kind names the source argument in its refusal.
+// HasFitSplineProfile reports whether the recorded profile needs Sweep's
+// bounded composite exact-work allowance.
+func HasFitSplineProfile(profile momentinput.Profile) bool {
+	loops := append([]sectionrecord.LoopRecord{profile.Outer}, profile.Holes...)
+	for _, loop := range loops {
+		for _, segment := range loop.Segments {
+			if _, ok := segment.(sectionrecord.FitSplineSeg); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ValidateAnalyticSegments applies SweepChain's segment-kind gate to a chain
+// walk. kind names the source argument in its refusal.
 func ValidateAnalyticSegments(segments []sectionrecord.CurveSegment, kind string) error {
 	for _, raw := range segments {
 		segment, err := sectionrecord.NormalizeSegment(raw)

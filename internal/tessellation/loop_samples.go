@@ -52,16 +52,18 @@ func SampleLoop[F any](walks []survey2d.SideWalk, segments []sectionrecord.Curve
 	wallFace func(survey2d.SideWalk) (F, error),
 	stationBound func(sectionrecord.CurveSegment, int, int, float64, float64) proofbound.WalkEndBound,
 ) (ChordSamples[F], error) {
-	return SampleLoopWithCountFloor(walks, segments, chord, height, work, budget, wallFace, stationBound, nil)
+	return SampleLoopWithCountFloor(walks, segments, chord, height, work, budget, wallFace, stationBound, nil, 0)
 }
 
 // SampleLoopWithCountFloor raises circular station counts to a shared caller
-// floor while recomputing every sagitta and area term at the chosen count.
+// floor and chords free-form walks at the caller's shared target when supplied.
+// Every sagitta and area term is recomputed at the chosen stations.
 func SampleLoopWithCountFloor[F any](walks []survey2d.SideWalk, segments []sectionrecord.CurveSegment,
 	chord, height float64, work *freeform.FreeformWork, budget *proofbound.WorkBudget,
 	wallFace func(survey2d.SideWalk) (F, error),
 	stationBound func(sectionrecord.CurveSegment, int, int, float64, float64) proofbound.WalkEndBound,
 	countFloor func(survey2d.SideWalk) int,
+	freeformTarget float64,
 ) (ChordSamples[F], error) {
 	var samples []sectionrecord.Point2
 	var faceOf []F
@@ -87,7 +89,14 @@ func SampleLoopWithCountFloor[F any](walks []survey2d.SideWalk, segments []secti
 			sagOf = append(sagOf, 0)
 			boundOf = append(boundOf, start)
 		case survey2d.WalkFreeform:
-			chain, err := freeform.ChainStations(w.Spans, chord, work)
+			target := chord
+			if freeformTarget > 0 {
+				if freeformTarget > chord {
+					return ChordSamples[F]{}, fmt.Errorf(`%w: shared free-form stations exceed this prism's chord budget`, decaderr.ErrUnsupported)
+				}
+				target = freeformTarget
+			}
+			chain, err := freeform.ChainStations(w.Spans, target, work)
 			if err != nil {
 				return ChordSamples[F]{}, err
 			}

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
@@ -30,13 +31,23 @@ type sweepSpanPayload struct {
 	reverseArcCaps bool
 }
 
+// newCompositeSweepWork gives one composite fitted-spline profile a bounded
+// counter shared by all of its analytic span reductions and replay steps.
+func newCompositeSweepWork(profile momentinput.Profile) *freeform.FreeformWork {
+	work := freeform.NewFreeformWork()
+	if sweepinput.HasFitSplineProfile(profile) {
+		work.RaiseLimit(compositeFitSweepWorkLimit)
+	}
+	return work
+}
+
 func replayCompositeSweep(
 	ctx context.Context,
 	d *Document,
 	ref producerID,
 	payload sweepPayload,
 ) (*Body, error) {
-	return replayCompositeSweepWork(ctx, d, ref, payload, freeform.NewFreeformWork())
+	return replayCompositeSweepWork(ctx, d, ref, payload, newCompositeSweepWork(payload.prism.profile))
 }
 
 func replayCompositeSweepWork(
