@@ -168,3 +168,14 @@ there; later fitted spans stay outside the root and cannot meet the cap.
 Exact rational boxes enclose each clipped crossing for a later held-edge
 comparison. A missing source segment, multiple clip, or unbounded box
 refuses this source-specific certificate.
+
+For the held comparison, divide each authenticated source crossing into
+sixteen parameter cells. Each cell has a nonempty finite source arc. The one
+cell that contains a fitted flank's isolated cap-start clip may enclose a
+small excluded part, but its larger box is still safe. Divide each held
+switch edge into four exact straight parts. Every source cell box must be
+within the published bound of at least one held part, and every held part
+box must be within that bound of at least one source cell. Compare the most
+distant corners of each paired box with exact rationals and round the final
+distance upward. These two checks cover both complete curves and their
+endpoints without assuming that source X or angle is monotone.
