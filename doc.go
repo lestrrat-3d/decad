@@ -196,6 +196,7 @@
 //	Loft          same-type segment pairs, distinct planes    builds
 //	LoftSections  three exact positive homothetic whole-line
 //	              profiles on equally spaced XY planes       builds
+//	              three exactly identical curved profiles   builds
 //	  another section count                                   ErrDegenerate
 //	  another shape or plane                                  ErrUnsupported
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
