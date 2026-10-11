@@ -1322,10 +1322,16 @@ Before S6 lifts a single triangle, the audit refuses a set of more than
 lifts it holds grow with `F` and no pair count bounds them: far-apart
 triangles give no candidates at all. The pair ceiling reuses tessellation
 design §3's own `maxFacetPairTestsPerCall = 8_000_000`, since the predicate
-under test is the one tessellation's boolean pre-pass runs. A first pass
-counts the candidates the pairwise pass will test — the wall-wall pairs whose
-boxes overlap, plus those of any cap whose proof failed — with no pair-sized
-allocation. Three enumerations report exactly those pairs, each once, and
+under test is the one tessellation's boolean pre-pass runs.
+
+For a separately bounded constructed mesh, `LoftCrossingAuditBounded` accepts
+the construction's explicit triangle and scan ceilings. It uses the same
+candidate enumeration and exact contact verdicts; only the resource refusal
+changes. The construction owns its size formula and any input-specific gates.
+
+A first pass counts the candidates the pairwise pass will test — the wall-wall
+pairs whose boxes overlap, plus those of any cap whose proof failed — with no
+pair-sized allocation. Three enumerations report exactly those pairs, each once, and
 `newPairScan` (`internal/loftmesh/loft_audit_grid.go`) counts their work
 before the candidate pass and keeps the smallest, the sweep on a tie:
 

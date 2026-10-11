@@ -345,7 +345,10 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, err
 	}
-	if err := loftmesh.LoftCrossingAuditBevelTwoJoin(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris); err != nil {
+	// A second cap set can double triangles, while pair scans grow quadratically.
+	if err := loftmesh.LoftCrossingAuditBounded(
+		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
+		loftmesh.MaxLoftAuditTriangles, 256_000_000); err != nil {
 		return nil, err
 	}
 	roundEnvelope := proofbound.AbsSumUpper(blankSag, localRound)
