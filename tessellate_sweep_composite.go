@@ -38,8 +38,12 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 	budget := proofbound.NewWorkBudget(ctx)
 	coordinateBound := 0.0
 	triangleSpan := []int{}
-	join := make([][]int, len(sp.spans)+1)
-	joinBound := make([][]float64, len(sp.spans)+1)
+	stations := len(sp.spans) + 1
+	if sp.closedRacetrack {
+		stations = len(sp.spans)
+	}
+	join := make([][]int, stations)
+	joinBound := make([][]float64, stations)
 	for i := range join {
 		join[i] = make([]int, profileSamples)
 		joinBound[i] = make([]float64, profileSamples)
@@ -88,6 +92,10 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			local[j] = -1
 		}
 		maxMove := 0.0
+		endSection := i + 1
+		if sp.closedRacetrack && endSection == len(sp.spans) {
+			endSection = 0
+		}
 		for station := range profileSamples {
 			if err := budget.Step(); err != nil {
 				return nil, err
@@ -95,7 +103,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			for _, boundary := range []struct {
 				section int
 				index   int
-			}{{i, start[station]}, {i + 1, end[station]}} {
+			}{{i, start[station]}, {endSection, end[station]}} {
 				shared := join[boundary.section][station]
 				if shared < 0 {
 					shared = len(mesh.vertices)
@@ -137,7 +145,8 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			if err != nil {
 				return nil, err
 			}
-			if role == roleCapStart && (sp.surfaceResult || i != 0) ||
+			if sp.closedRacetrack && (role == roleCapStart || role == roleCapEnd) ||
+				role == roleCapStart && (sp.surfaceResult || i != 0) ||
 				role == roleCapEnd && (sp.surfaceResult || i != len(sp.spans)-1) {
 				continue
 			}

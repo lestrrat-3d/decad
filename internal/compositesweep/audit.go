@@ -36,6 +36,16 @@ type AuditSpan struct {
 // section and that every non-neighbour pair has a strict bounded-box gap.
 // The caller first proves matching rim topology at each shared section.
 func Audit(ctx context.Context, spans []AuditSpan) error {
+	return audit(ctx, spans, false)
+}
+
+// AuditClosed certifies a cyclic composite whose final section is already
+// proven identical to its initial section by the caller.
+func AuditClosed(ctx context.Context, spans []AuditSpan) error {
+	return audit(ctx, spans, true)
+}
+
+func audit(ctx context.Context, spans []AuditSpan, closed bool) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -54,7 +64,9 @@ func Audit(ctx context.Context, spans []AuditSpan) error {
 				return err
 			}
 			var err error
-			if j == i+1 {
+			if closed && i == 0 && j == len(spans)-1 {
+				err = auditAdjacentSpans(ctx, spans[j], spans[i], geometry)
+			} else if j == i+1 {
 				err = auditAdjacentSpans(ctx, spans[i], spans[j], geometry)
 			} else if !BoxesStrictlySeparated(spans[i].Box, spans[j].Box) {
 				err = fmt.Errorf(`%w: sweep spans %d and %d have no strict bounded-box separation`,
