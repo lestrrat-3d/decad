@@ -35,8 +35,6 @@ type loftCylinderJoinRecord struct {
 	z0, z1                              float64
 }
 
-const loftCylinderBlankSideRole = "side(0,0)"
-
 // The structural join has at most 32 separately certified Loft teeth. Its
 // final crossing audit and the matched centered bore may scan twice the
 // generic mesh ceiling; exact pair classifications remain unchanged.
@@ -649,7 +647,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		role := f.Origins()[0].Role
 		group := -1
 		switch role {
-		case loftCylinderBlankSideRole:
+		case prismOuterFirstSideRole:
 			group = 0
 		case roleCapStart:
 			group = 1

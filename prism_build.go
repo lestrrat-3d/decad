@@ -27,6 +27,10 @@ import (
 // displacement its own surface was built from. See
 // docs/evaluator-design.md §5.
 
+// prismOuterFirstSideRole names the wall built from the first segment of a
+// prism's outer profile. A single-circle extrusion has only this side wall.
+const prismOuterFirstSideRole = "side(0,0)"
+
 // evalPrism builds the analytic prism body from the payload: side faces per
 // boundary segment, two caps, shared edges and vertices, and Exact
 // measurements (docs/evaluator-design.md §5). The payload's segment kinds
