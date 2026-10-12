@@ -29,6 +29,7 @@ type Origin struct {
 	IsB              bool
 	Region           int
 	Hole             int
+	Segment          int
 	AuthoredReversed bool
 }
 

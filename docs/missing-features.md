@@ -21,7 +21,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 |---|---|
 | Fillet, chamfer and shell take a boolean result only where it reads as a prism, (shell) as a prism cut by through tools with its caps or a run of straight walls removed, or (fillet, chamfer) at straight edges along an axis, or (chamfer) at complete loops, two adjacent straight edges, or every straight outer edge of the admitted cross-drilled box | Modify operations |
 | No import of any file format | Data exchange |
-| Booleans outside the exact prism classes fall to a faceted mesh result, and refuse touching contact | Booleans |
+| Booleans outside the exact prism and common-axis full-Revolve classes fall to a faceted mesh result, and may refuse touching contact | Booleans |
 
 ## Feature operations
 

@@ -35,22 +35,30 @@ import (
 // edge count outside {1, 2}, or a chain that does not close into one simple
 // loop. opName names the op for RB1's message alone.
 func Merge(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) (momentinput.Profile, float64, bool, error) {
+	profile, delta, _, ok, err := MergeWithChain(budget, selected, opName)
+	return profile, delta, ok, err
+}
+
+// MergeWithChain also returns the Sketch edges that formed the result loop.
+// A caller can read their scene entity tags to retain source-face origins.
+func MergeWithChain(budget *proofbound.WorkBudget, selected []*sketch.Profile,
+	opName string) (momentinput.Profile, float64, []sketch.BoundaryEdge, bool, error) {
 	survivors, resolved, err := mergeSurvivors(budget, selected, opName)
 	if err != nil || !resolved {
-		return momentinput.Profile{}, 0, false, err
+		return momentinput.Profile{}, 0, nil, false, err
 	}
 	chain, resolved, err := ChainClosedSurvivors(budget, survivors)
 	if err != nil {
-		return momentinput.Profile{}, 0, false, err
+		return momentinput.Profile{}, 0, nil, false, err
 	}
 	if !resolved {
-		return momentinput.Profile{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
+		return momentinput.Profile{}, 0, nil, false, nil // §4.4: the survivors do not close into one simple loop
 	}
 	loop, cutDelta, err := recordChain(budget, chain)
 	if err != nil {
-		return momentinput.Profile{}, 0, false, err
+		return momentinput.Profile{}, 0, nil, false, err
 	}
-	return momentinput.Profile{Outer: loop}, cutDelta, true, nil
+	return momentinput.Profile{Outer: loop}, cutDelta, chain, true, nil
 }
 
 // MergeLoops is Merge for a selection whose survivors close into several

@@ -210,6 +210,11 @@
 2	0.14	TestClearanceRodPiercingBallIsNeverSound
 2	0.01	TestClearanceStopBuiltStackTouching
 2	0.24	TestClearanceTangentSpheresSuspect
+2	0.13	TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive
+2	0.13	TestCommonAxisRevolveSteppedBooleanOperations
+2	0.13	TestCommonAxisRevolveUnionKeepsBothCoincidentWallSources
+2	0.13	TestCommonAxisRevolveUnionMakesBlindCavity
+2	0.13	TestCommonAxisRevolveUnionSharesAxialDisk
 2	0.02	TestContactPairAnalyticPrismGap
 2	0.04	TestContactPairExactPlanarNonConvex
 2	0.01	TestContactPairPlanarManifoldRotatedBox

@@ -112,6 +112,9 @@ type revolvePayload struct {
 	// re-mint the same roles; a path replacing the profile must clear them.
 	blendSegs []map[int]struct{}
 	blendKind string
+	// sourceSideOrigins records the source faces of an arranged meridian wall.
+	// A Boolean result retains them when Transform or Copy rebuilds its payload.
+	sourceSideOrigins [][][]FeatureRef
 	// draftCircleCaps retains the two axial cap roles when a one-sided
 	// circular draft rim fillet or chamfer is rebuilt as a full revolution. In that
 	// five-segment meridian, side(0,1) is the far cap and side(0,4) the
@@ -890,6 +893,13 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		origins, err := sideOriginsContext(ctx, ref, li, w.Segs)
 		if err != nil {
 			return revLoopParts{}, err
+		}
+		if li < len(rp.sourceSideOrigins) {
+			for _, si := range w.Segs {
+				if si < len(rp.sourceSideOrigins[li]) {
+					origins = append(origins, rp.sourceSideOrigins[li][si]...)
+				}
+			}
 		}
 		segs := make([]curveSegment, len(w.Segs))
 		for j, si := range w.Segs {
