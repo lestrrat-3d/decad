@@ -32,14 +32,28 @@ type bevelToothBoundary struct {
 	insideArc int
 	lineIndex [2]int
 	crossing  [2]sketch.ConeLineCrossing
+	fitIndex  [2]int
+	fitCross  [2]sketch.ConeFitCrossing
+	fitRoute  bool
 	sides     [6]sketch.ConeCurveSide
+}
+
+// certifyBevelToothBoundary selects one of the two source-backed contact
+// classes. A connector-rooted tooth keeps the original line-crossing proof;
+// an embedded flank needs two certified spline crossings and inside lines.
+func certifyBevelToothBoundary(record *pointSectionRecord,
+	blank *bevelBlankSource, base facetedPayload) (*bevelToothBoundary, bool) {
+	if boundary, ok := certifyBevelConnectorBoundary(record, blank, base); ok {
+		return boundary, true
+	}
+	return certifyBevelFitBoundary(record, blank, base)
 }
 
 // certifyBevelToothBoundary authenticates the two complete connector lines
 // and four whole source curves. The Sketch certificates describe the reported
 // cone; the caller must also account for blank.coneGap before accepting their
 // signs as statements about the recorded finite meridian.
-func certifyBevelToothBoundary(record *pointSectionRecord,
+func certifyBevelConnectorBoundary(record *pointSectionRecord,
 	blank *bevelBlankSource, base facetedPayload) (*bevelToothBoundary, bool) {
 	if !pointSourceCurrent(record) || blank == nil || len(record.profile.Outer.Segments) != 6 {
 		return nil, false

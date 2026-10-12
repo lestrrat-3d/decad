@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    0.26s over 8 tests
-#   shard 1:    1.23s over 240 tests
+#   shard 1:    2.49s over 244 tests
 #   shard 2:   10.21s over 136 tests
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  182.61s over 138 tests
@@ -56,6 +56,10 @@
 1	0.00	TestAxisFrameWalkChargeIsAbsentAtZero
 1	0.00	TestAxisFrameWalkChargeWidensEveryFieldItTouches
 1	0.00	TestBezierSliceCountSplitsBrokenFromUnsliceable
+1	0.05	TestBevelFitExteriorPathChargesSeatOnce
+1	0.01	TestBevelFitSeatPointEnclosesRecordedMeridianCrossing
+1	0.00	TestBevelFitStationEdgeRequiresOneStrictBracket
+1	1.20	TestPointLoftFitConeJoinThroughPublicOperations
 1	0.01	TestBlindStackedLevelCarriesToolConversion
 1	0.00	TestBodyGateDiameterCancellation
 1	0.00	TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum

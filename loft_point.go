@@ -21,15 +21,16 @@ import (
 // faceted boundary of a point-section loft. The far section is never replaced
 // by a fitted or scaled profile.
 type pointSectionRecord struct {
-	apex            r3.Vec
-	profile         profileRecord
-	plane           planeRecord
-	source          *pointSectionSource
-	sourceBox       [4]float64 // U min/max, V min/max; contains the true region and station polygon
-	sourceAreaDelta float64    // area of the symmetric difference between source region and station polygon
-	sourceStation   []Point2   // original local station coordinates, in source loop order
-	sourceArcUpper  []float64  // per-cell source curve speed in world millimetres
-	sourceMatched   []float64  // per-cell parameter-matched source departure in world millimetres
+	apex               r3.Vec
+	profile            profileRecord
+	plane              planeRecord
+	source             *pointSectionSource
+	sourceBox          [4]float64 // U min/max, V min/max; contains the true region and station polygon
+	sourceAreaDelta    float64    // area of the symmetric difference between source region and station polygon
+	sourceStation      []Point2   // original local station coordinates, in source loop order
+	sourceStationRound float64    // local error of every held station against its exact curve point
+	sourceArcUpper     []float64  // per-cell source curve speed in world millimetres
+	sourceMatched      []float64  // per-cell parameter-matched source departure in world millimetres
 }
 
 // pointSectionSource names the live Sketch entities authenticated when the
@@ -207,6 +208,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 	// Match the far chord to its source curve in the section plane, then
 	// charge the frame lift separately. The apex is a recorded world point.
 	sectionGap := proofbound.AbsSumUpper(sectionDelta, stationRound, matchedDelta)
+	record.sourceStationRound = stationRound
 	basisU := proofbound.DvLenUpper(proofbound.HeldDelta(record.plane.U, r3.Vec{}))
 	basisV := proofbound.DvLenUpper(proofbound.HeldDelta(record.plane.V, r3.Vec{}))
 	basisUpper := proofbound.AbsSumUpper(basisU, basisV)
