@@ -28,7 +28,7 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile, path, decad.WithSweepTwist(units.Degrees(0)))
+	body, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithSweepTwist(units.Degrees(0)))
 	require.NoError(t, err)
 	extrudeDoc := decad.New()
 	extruded, err := extrudeDoc.Extrude(
@@ -134,7 +134,7 @@ func TestSweepLineStagesModify(t *testing.T) {
 	)
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile, path)
+	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
 	require.NoError(t, err)
 
 	_, err = body.Fillet(t.Context(), decad.Edges().AtLeast(1), units.Millimeters(1))
@@ -164,7 +164,7 @@ func TestSweepLineTiltedFrameCarriesEndpointGap(t *testing.T) {
 	delta := frame.N().Scale(8)
 	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: delta})
 	require.NoError(t, err)
-	body, err := decad.New().Sweep(t.Context(), s, s.Profiles()[0], path)
+	body, err := decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], path)
 	require.NoError(t, err)
 
 	start := faceVertexReadings(faceByRole(t, body, "capStart"))
@@ -284,13 +284,13 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 	doc := decad.New()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := doc.Sweep(t.Context(), test.sketch, test.profile, test.path, test.opts...)
+			_, err := decad.Sweep(t.Context(), doc, test.sketch, test.profile, test.path, test.opts...)
 			require.ErrorIs(t, err, test.want)
 			require.Empty(t, doc.Bodies())
 		})
 	}
 
-	body, err := doc.Sweep(t.Context(), s, profile, validPath)
+	body, err := decad.Sweep(t.Context(), doc, s, profile, validPath)
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
 }
@@ -331,12 +331,12 @@ func TestSweepContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, err = doc.Sweep(ctx, s, profile, path)
+	_, err = decad.Sweep(ctx, doc, s, profile, path)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, doc.Bodies())
 
 	var nilContext context.Context
-	_, err = doc.Sweep(nilContext, s, profile, path)
+	_, err = decad.Sweep(nilContext, doc, s, profile, path)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }

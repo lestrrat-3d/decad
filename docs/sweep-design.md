@@ -55,7 +55,7 @@ The design also fixes these later increments:
   faceted sweep in a later increment;
 - exact-restatement tessellation admits the payload to export and booleans;
 - a future constrained 3D sketch may be recorded into the same `Path` without
-  changing `Document.Sweep`.
+  changing `Sweep`.
 
 **§16 owns the one corner mode and the one scale this document admits**: a
 `LineTo`-only path whose joins are cut on a stated join plane
@@ -84,9 +84,9 @@ direct operation for one angular span. `Sweep` does not infer either operation
 from approximate input; its evaluator may reduce an admitted path segment to
 their existing builders internally.
 
-**`Document.Sweep` takes a closed profile and always will. The OPEN sketch
-chain is `Document.SweepChain`, a separate entry point, and §15 owns it** —
-its pairing rule, signature, refusals, result and staging. Everything §1
+**`Sweep` takes a closed profile or an open sketch chain through one generic
+entry point, and §15 owns the chain case** — its pairing rule, refusals,
+result and staging. Everything §1
 through §14 states about the path, the transport, the span builders and the
 global audit is what that section consumes; what it replaces is the section
 alone.
@@ -94,10 +94,15 @@ alone.
 ## 2. Public API
 
 ```go
-func (d *Document) Sweep(
+// Section is the sketch geometry a section-fed operation consumes: a closed
+// *sketch.Profile or an open *sketch.Chain.
+type Section interface{ *sketch.Profile | *sketch.Chain }
+
+func Sweep[S Section](
     ctx context.Context,
+    d *Document,
     s *sketch.Sketch,
-    p *sketch.Profile,
+    sec S,
     path *Path,
     opts ...SweepOption,
 ) (*Body, error)
@@ -157,7 +162,7 @@ path, err := decad.NewPath(
         End:     r3.NewVec(10, 0, 20),
     },
 )
-body, err := doc.Sweep(ctx, s, profile, path)
+body, err := decad.Sweep(ctx, doc, s, profile, path)
 ```
 
 `Path` is spatial: every point is an `r3.Vec` coordinate in millimetres. It is
@@ -334,7 +339,7 @@ with all of these facts:
 When that type exists, decad may add an adapter that records it into `Path`.
 The adapter may use an upstream tangent certificate to admit a join, but a
 residual may only disprove that certificate. It may never accept a join because
-two sampled tangents happen to be close. `Document.Sweep` and the private sweep
+two sampled tangents happen to be close. `Sweep` and the private sweep
 payload do not change.
 
 This design does not add an unavailable type to the current dependency graph.
@@ -674,13 +679,13 @@ Landing this design makes these contract edits:
 - `doc.go` changes only when an implementation increment changes current
   evaluator support;
 - `docs/surface-design.md` §1.2, §13.5, Table R and Table D name §15 as the
-  owner of `SweepChain`'s pairing rule, and its §15 carries §15.7's test rows.
+  owner of a chain `Sweep`'s pairing rule, and its §15 carries §15.7's test rows.
 
 No current dependency exposes a 3D sketch. This design consumes none. A future
 adapter is a separate design change after an upstream spatial-path snapshot and
 its certification contract exist.
 
-## 15. `SweepChain` — sweeping an open sketch chain
+## 15. `Sweep` over a chain — sweeping an open sketch chain
 
 `docs/surface-design.md` §13 owns the open chain itself: what `sketch.Chain`
 publishes, what `ChainRecord` records, the gates `RecordChain` runs, the four
@@ -762,7 +767,7 @@ span:
   resolved `AngularExtent`.
 
 Both constructions are landed (`docs/surface-design.md` Table D row 6), so a
-one-span `SweepChain` was never waiting on a pairing rule. It was waiting on
+one-span chain `Sweep` was never waiting on a pairing rule. It was waiting on
 this section to say so, and on Table SC to state which path shapes it admits.
 
 **The two reductions are not the same call as their chain siblings, and the
@@ -778,30 +783,43 @@ reading may not be.
 
 ### 15.3 The entry point
 
-```go
-func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch,
-    ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error)
+A chain enters through the same function a profile does:
 
-// ChainSweepOption configures SweepChain. It is its own sealed tier.
-type ChainSweepOption interface { /* sealed */ }
+```go
+func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch,
+    sec S, path *Path, opts ...SweepOption) (*Body, error)
 ```
 
-**`ChainSweepOption` is a sealed tier of its own rather than `SweepOption`**,
-for the reason `docs/surface-design.md` §13.2 states for `ChainExtrudeOption`
-and `ChainRevolveOption`: `WithSurfaceResult()` must not compile against a
-chain-fed call. A chain sweep is always a sheet — an open walk encloses no
-region, so there is no cap to omit and no solid to ask for — and accepting the
-option as a no-op would give one option two meanings. `WithSweepTwist` is not a
-member either: §17 admits only a solid polygon profile for nonzero twist,
-and an open chain has no corresponding solid. The tier carries no
-member in this increment; it exists so a later chain-only option has one to
-land on. The rejected alternative is the `SweepOption` tier the staged
-signature first landed with, which type-checks `WithSurfaceResult()` against a
-call that can never honour it.
+`Section` (`section_input.go`) is the constraint `*sketch.Profile |
+*sketch.Chain`. `Sweep` type-switches on the section and calls the profile
+build (§§2–14, §16, §17) or the chain build (this section). The two builds keep
+distinct payloads, `sweepPayload` and `chainSweepPayload`, for §10's reason: a
+consumer whose proof has not landed for a chain dispatches on the payload type
+and refuses. Each build keeps its own gate order, so the chain build runs Table
+SC below, not Table S.
 
-The call takes `ctx` because `Document.Sweep` does, and takes the sketch beside
-the chain because a chain's geometry is plane-local and the plane is the
-sketch's (`docs/api-design.md` §7).
+**A chain section accepts the one `SweepOption` type, and refuses the options
+it cannot honour at run time.** A chain sweep is always a sheet — an open walk
+encloses no region, so there is no cap to omit and no solid to ask for — so
+`WithSurfaceResult()` returns `ErrUnsupported`: accepting it as a no-op would
+give one option two meanings. `WithSweepTwist` returns `ErrUnsupported` for any
+angle, zero included, because §17 admits only a solid polygon profile for
+nonzero twist (Table S row S11) and an open chain has no corresponding solid.
+`WithMitredJoins` and `WithSectionScale` return `ErrUnsupported` as well,
+because §16 builds solids from a profile only.
+
+**The option refusal runs after the chain's seam gates (SC2) and before every
+path-geometry gate (SC3 onward).** `Sweep` first checks for a nil argument and a
+nil option (SC1), then records the chain, then decodes the options and refuses
+the four above. A foreign, stale, invalid or unrecordable chain therefore still
+reports its seam sentinel when it also carries one of those options, and a
+chain that records but carries one of those options reports `ErrUnsupported`
+even when its path would also fail SC3. A malformed option, such as
+`WithSweepTwist` with a non-angle value, reports its codec sentinel at the same
+point. A refused call commits nothing and leaves `Document.Bodies()` unchanged.
+
+The call takes the sketch beside the chain because a chain's geometry is
+plane-local and the plane is the sketch's (`docs/api-design.md` §7).
 
 **A chain-fed result is always a sheet**, which is `docs/surface-design.md`
 §13.2's answer for `ExtrudeChain` and `RevolveChain` restated with no change:
@@ -816,7 +834,7 @@ chain through `RecordChain` instead of a profile through `RecordProfile`.
 
 | SC | Condition | Sentinel |
 |---|---|---|
-| **SC1** | a nil document, context, sketch, chain or path; an empty path; a nil or foreign option | `ErrDegenerate` |
+| **SC1** | a nil document, context, sketch, section (typed-nil included) or path; an empty path; a nil option | `ErrDegenerate` |
 | **SC2** | the chain fails one of `docs/surface-design.md` §13.3's gates | the seam's own: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
 | **SC3** | the path start is not in the sketch plane, or its initial tangent is not codirectional with that plane's positive normal | `ErrDegenerate`, S5's rule over a chain's own recorded plane |
 | **SC4** | every path condition S3, S4, S7 and S13 through S15 already state — a non-finite point, a degenerate segment, a closed path, a non-finite derived bound, an exhausted budget, a collapse from computed-coordinate rounding | those rows' own sentinels, unchanged |
@@ -829,8 +847,8 @@ chain through `RecordChain` instead of a profile through `RecordProfile`.
 **SC2 is decided before SC3, and that order is load-bearing.** A foreign,
 stale, invalid or unrecordable chain names a repair the caller makes in the
 sketch, and reporting a path refusal first would hide it behind geometry the
-caller cannot act on. It is also what keeps a staged `ErrUnsupported` from
-masking a seam refusal, which is the order the staged signature already runs.
+caller cannot act on. It is also what keeps a staged `ErrUnsupported`, the
+option refusals of §15.3 included, from masking a seam refusal.
 
 ### 15.5 What a chain sweep publishes
 
@@ -853,7 +871,7 @@ a chain sweep adds that neither sibling has is §15.2's path height bound.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **C1** | `Document.SweepChain` over a one-span `LineTo` path: the sealed `ChainSweepOption` tier, Table SC rows SC1 through SC4 and SC6, the chain prism reduction, and the four readings §15.5 states for it | a standalone arc and composite paths outside §15.8 |
+| **C1** | `Sweep` over a chain along a one-span `LineTo` path: Table SC rows SC1 through SC4 and SC6, the chain prism reduction, and the four readings §15.5 states for it | a standalone arc and composite paths outside §15.8 |
 | **C2** | a one-span `ArcThrough` reduction with the chain shell's own axis gates (SC8) | still staged |
 | **C3a** | §15.8's exact cardinal line/half-circle composite, one source `LineSeg`, indexed wall-rim sew, span-separation proof, area/bounds and sheet mesh | other composite paths and a placed composite sheet |
 | **C3** | §15.1's composite join over other tangent line/arc paths: general wall-face rim lists, sew, separation and boundary audit | staged |

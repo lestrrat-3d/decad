@@ -44,7 +44,7 @@ func Example_decad_sweepFitSpline() {
 		fmt.Printf("failed to create path: %s\n", err)
 		return
 	}
-	body, err := decad.New().Sweep(context.Background(), s, profiles[0], path)
+	body, err := decad.Sweep(context.Background(), decad.New(), s, profiles[0], path)
 	if err != nil {
 		fmt.Printf("failed to sweep: %s\n", err)
 		return

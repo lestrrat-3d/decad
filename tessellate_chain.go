@@ -26,7 +26,7 @@ import (
 // states for a loft's exact restatement. A chain holding a curved
 // (CircleSeg/ArcSeg fragment) or free-form segment builds a Cylinder or
 // NURBSSurface wall this file has no chording arm for yet, staged for the
-// increment that chords those walls too. Both ExtrudeChain and SweepChain's
+// increment that chords those walls too. Both ExtrudeChain and the chain Sweep's
 // one-span straight reduction build through evalChainExtrudeContext, so both
 // a chainPayload and the chainPayload a chainSweepPayload wraps reach this
 // function unchanged.

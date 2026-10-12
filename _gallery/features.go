@@ -115,7 +115,7 @@ func curvedDuct(ctx context.Context, rise, firstTurn, run, secondTurn float64) (
 	if err != nil {
 		return nil, fmt.Errorf("record duct path: %w", err)
 	}
-	body, err := decad.New().Sweep(ctx, s, profile, path, decad.WithMitredJoins())
+	body, err := decad.Sweep(ctx, decad.New(), s, profile, path, decad.WithMitredJoins())
 	if err != nil {
 		return nil, fmt.Errorf("sweep duct: %w", err)
 	}
@@ -145,7 +145,7 @@ func ductSpans(ctx context.Context) ([]*decad.Body, error) {
 	if err != nil {
 		return nil, fmt.Errorf("record the sweep path: %w", err)
 	}
-	if _, err := decad.New().Sweep(ctx, s, profile, path); err != nil {
+	if _, err := decad.Sweep(ctx, decad.New(), s, profile, path); err != nil {
 		return nil, fmt.Errorf("sweep the spatial path: %w", err)
 	}
 

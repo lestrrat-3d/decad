@@ -134,7 +134,7 @@ func TestSweepMitredLPath(t *testing.T) {
 	const a, l1, l2 = 2.0, 10.0, 6.0
 	s, profile := squareSweepSketch(t, a)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile,
+	body, err := decad.Sweep(t.Context(), doc, s, profile,
 		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, l1), r3.NewVec(l2, 0, l1)),
 		decad.WithMitredJoins())
 	require.NoError(t, err)
@@ -202,7 +202,7 @@ func TestSweepMitredOneSpanFrustum(t *testing.T) {
 	const a, l, f = 2.0, 3.0, 0.5
 	s, profile := squareSweepSketch(t, a)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile,
+	body, err := decad.Sweep(t.Context(), doc, s, profile,
 		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, l)),
 		decad.WithSectionScale(units.Scalar(f)))
 	require.NoError(t, err)
@@ -232,7 +232,7 @@ func TestSweepMitredCollinearFrustumChain(t *testing.T) {
 	// Σ L_k·A_k·(1 + ρ_k + ρ_k²)/3.
 	s, profile := squareSweepSketch(t, 2)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile,
+	body, err := decad.Sweep(t.Context(), doc, s, profile,
 		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 3), r3.NewVec(0, 0, 9)),
 		decad.WithMitredJoins(), decad.WithSectionScale(scalars(0.5, 0.25)...))
 	require.NoError(t, err)
@@ -249,7 +249,7 @@ func TestSweepMitredHoleIsVoidPassage(t *testing.T) {
 		return []*sketch.Point{outer.A, outer.B, outer.C, outer.D, inner.A, inner.B, inner.C, inner.D}
 	})
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile,
+	body, err := decad.Sweep(t.Context(), doc, s, profile,
 		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 10), r3.NewVec(6, 0, 10)),
 		decad.WithMitredJoins())
 	require.NoError(t, err)
@@ -292,7 +292,7 @@ func TestSweepMitredTreeBranch(t *testing.T) {
 	t.Parallel()
 	s, profile := polygonSweepSketch(t, 16, 1.5)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile, treeBranchPath(t),
+	body, err := decad.Sweep(t.Context(), doc, s, profile, treeBranchPath(t),
 		decad.WithMitredJoins(), decad.WithSectionScale(treeBranchFactors()...))
 	require.NoError(t, err)
 
@@ -356,7 +356,7 @@ func TestSweepMitredZigzagRestatesAndPlaces(t *testing.T) {
 	t.Parallel()
 	s, profile := polygonSweepSketch(t, 16, 1.5)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile,
+	body, err := decad.Sweep(t.Context(), doc, s, profile,
 		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 5), r3.NewVec(3, 0, 9), r3.NewVec(0, 1, 13)),
 		decad.WithMitredJoins(), decad.WithSectionScale(scalars(1.3/1.5, 1.1/1.5, 1/1.5)...))
 	require.NoError(t, err)
@@ -431,7 +431,7 @@ func TestSweepMitredTessellationTolerance(t *testing.T) {
 	t.Parallel()
 	s, profile := polygonSweepSketch(t, 16, 1.5)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile, treeBranchPath(t),
+	body, err := decad.Sweep(t.Context(), doc, s, profile, treeBranchPath(t),
 		decad.WithMitredJoins(), decad.WithSectionScale(treeBranchFactors()...))
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(1))
@@ -508,7 +508,7 @@ func TestSweepMitredRefusals(t *testing.T) {
 			s, profile := tc.profile(t)
 			doc := decad.New()
 			before := doc.Bodies()
-			_, err := doc.Sweep(t.Context(), s, profile, tc.path, tc.opts...)
+			_, err := decad.Sweep(t.Context(), doc, s, profile, tc.path, tc.opts...)
 			require.ErrorIs(t, err, tc.want)
 			require.ErrorContains(t, err, tc.message)
 			require.Equal(t, before, doc.Bodies())
@@ -523,9 +523,9 @@ func requireNextProducerUnchanged(t *testing.T, doc *decad.Document) {
 	t.Helper()
 	s, profile := squareSweepSketch(t, 2)
 	path := mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1))
-	got, err := doc.Sweep(t.Context(), s, profile, path, decad.WithMitredJoins())
+	got, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithMitredJoins())
 	require.NoError(t, err)
-	want, err := decad.New().Sweep(t.Context(), s, profile, path, decad.WithMitredJoins())
+	want, err := decad.Sweep(t.Context(), decad.New(), s, profile, path, decad.WithMitredJoins())
 	require.NoError(t, err)
 	require.Equal(t, want.Faces()[0].Origins(), got.Faces()[0].Origins())
 }
@@ -540,14 +540,14 @@ func TestSweepMitredSharpTaperedBendNamesSpanAndVertex(t *testing.T) {
 	s, profile := squareSweepSketch(t, 3)
 	bend := mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), r3.NewVec(-10, 0, 1))
 	doc := decad.New()
-	_, err := doc.Sweep(t.Context(), s, profile, bend,
+	_, err := decad.Sweep(t.Context(), doc, s, profile, bend,
 		decad.WithMitredJoins(), decad.WithSectionScale(scalars(0.1, 0.1)...))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "span 0, loop 0, vertex")
 	require.ErrorContains(t, err, "past the span's apex")
 	require.Empty(t, doc.Bodies())
 
-	_, err = doc.Sweep(t.Context(), s, profile, bend, decad.WithMitredJoins())
+	_, err = decad.Sweep(t.Context(), doc, s, profile, bend, decad.WithMitredJoins())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "span 0, loop 0, vertex")
 	require.ErrorContains(t, err, "behind its start")
@@ -558,7 +558,7 @@ func TestSweepMitredSelfCrossingNamesFaces(t *testing.T) {
 	t.Parallel()
 	s, profile := squareSweepSketch(t, 2)
 	doc := decad.New()
-	_, err := doc.Sweep(t.Context(), s, profile,
+	_, err := decad.Sweep(t.Context(), doc, s, profile,
 		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 10), r3.NewVec(10, 0, 10),
 			r3.NewVec(10, 0, 5), r3.NewVec(-5, 0, 5)),
 		decad.WithMitredJoins())

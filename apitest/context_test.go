@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -25,8 +26,14 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		{"Document.Patch", func(ctx context.Context) error { _, err := doc.Patch(ctx, nil, nil); return err }},
 		{"Document.Loft", func(ctx context.Context) error { _, err := doc.Loft(ctx, nil, nil, nil, nil); return err }},
 		{"Document.LoftChain", func(ctx context.Context) error { _, err := doc.LoftChain(ctx, nil, nil, nil, nil); return err }},
-		{"Document.Sweep", func(ctx context.Context) error { _, err := doc.Sweep(ctx, nil, nil, nil); return err }},
-		{"Document.SweepChain", func(ctx context.Context) error { _, err := doc.SweepChain(ctx, nil, nil, nil); return err }},
+		{"Sweep profile", func(ctx context.Context) error {
+			_, err := decad.Sweep(ctx, doc, nil, (*sketch.Profile)(nil), nil)
+			return err
+		}},
+		{"Sweep chain", func(ctx context.Context) error {
+			_, err := decad.Sweep(ctx, doc, nil, (*sketch.Chain)(nil), nil)
+			return err
+		}},
 		{"Document.Split", func(ctx context.Context) error { _, err := doc.Split(ctx, nil, nil); return err }},
 		{"Transform", func(ctx context.Context) error { _, err := decad.Transform(ctx, body, r3.Transform{}); return err }},
 		{"Copy identity", func(ctx context.Context) error { _, err := decad.Copy(ctx, body); return err }},

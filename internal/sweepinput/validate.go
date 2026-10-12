@@ -106,7 +106,7 @@ func HasFitSplineProfile(profile momentinput.Profile) bool {
 	return false
 }
 
-// ValidateAnalyticSegments applies SweepChain's segment-kind gate to a chain
+// ValidateAnalyticSegments applies the chain Sweep's segment-kind gate to a chain
 // walk. kind names the source argument in its refusal.
 func ValidateAnalyticSegments(segments []sectionrecord.CurveSegment, kind string) error {
 	for _, raw := range segments {

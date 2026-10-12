@@ -40,7 +40,7 @@ func (m mtiltTree) branch(t *testing.T, doc *decad.Document, theta float64) *dec
 	u := r3.NewVec(math.Cos(theta), math.Sin(theta), 0)
 	path := mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, m.firstSpan),
 		u.Scale(1.5).Add(r3.NewVec(0, 0, 5.5)), u.Scale(4).Add(r3.NewVec(0, 0, 9)))
-	body, err := doc.Sweep(t.Context(), s, profile, path,
+	body, err := decad.Sweep(t.Context(), doc, s, profile, path,
 		decad.WithMitredJoins(), decad.WithSectionScale(scalars(m.factors...)...))
 	require.NoError(t, err)
 	move, err := r3.Translation(u.Scale(m.ring).Add(r3.NewVec(0, 0, m.trunkTop-1)))
@@ -95,7 +95,7 @@ func TestSweepMitredTreeUnionChain(t *testing.T) {
 	m := newMtiltTree()
 	doc := decad.New()
 	trunkSketch, trunkProfile := polygonSweepSketch(t, 16, 10)
-	trunk, err := doc.Sweep(t.Context(), trunkSketch, trunkProfile,
+	trunk, err := decad.Sweep(t.Context(), doc, trunkSketch, trunkProfile,
 		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, m.trunkTop)),
 		decad.WithSectionScale(units.Scalar(0.95)))
 	require.NoError(t, err)
@@ -103,7 +103,7 @@ func TestSweepMitredTreeUnionChain(t *testing.T) {
 	require.NoError(t, err)
 
 	branchSketch, branchProfile := polygonSweepSketch(t, 16, 1.5)
-	unit, err := decad.New().Sweep(t.Context(), branchSketch, branchProfile, mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)), decad.WithMitredJoins())
+	unit, err := decad.Sweep(t.Context(), decad.New(), branchSketch, branchProfile, mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)), decad.WithMitredJoins())
 	require.NoError(t, err)
 	buried := m.buriedVolume(polygonArea(t, unit))
 
@@ -159,9 +159,9 @@ func TestSweepMitredCrossingUnion(t *testing.T) {
 	s, profile := squareSweepSketch(t, 2)
 	doc := decad.New()
 	path := mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 10))
-	a, err := doc.Sweep(t.Context(), s, profile, path, decad.WithMitredJoins())
+	a, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithMitredJoins())
 	require.NoError(t, err)
-	b, err := doc.Sweep(t.Context(), s, profile, path, decad.WithMitredJoins())
+	b, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithMitredJoins())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(-5, 0.5, 5), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
 	require.NoError(t, err)
@@ -204,9 +204,9 @@ func TestSweepMitredTaperedBranchesCross(t *testing.T) {
 	build := func(doc *decad.Document) (*decad.Body, *decad.Body) {
 		s, profile := polygonSweepSketch(t, 16, 1)
 		path := mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2), r3.NewVec(8, 0, 10))
-		a, err := doc.Sweep(t.Context(), s, profile, path, decad.WithMitredJoins(), decad.WithSectionScale(scalars(0.9, 0.6)...))
+		a, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithMitredJoins(), decad.WithSectionScale(scalars(0.9, 0.6)...))
 		require.NoError(t, err)
-		b, err := doc.Sweep(t.Context(), s, profile, path, decad.WithMitredJoins(), decad.WithSectionScale(scalars(0.9, 0.6)...))
+		b, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithMitredJoins(), decad.WithSectionScale(scalars(0.9, 0.6)...))
 		require.NoError(t, err)
 		frame, err := r3.NewFrame(r3.NewVec(4, -4, 0), r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0))
 		require.NoError(t, err)
@@ -268,7 +268,7 @@ func newHollowTrunk() hollowTrunk {
 func (h hollowTrunk) trunk(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, profile := polygonSweepSketch(t, 16, 3)
-	body, err := doc.Sweep(t.Context(), s, profile, mustPath(t, h.points...),
+	body, err := decad.Sweep(t.Context(), doc, s, profile, mustPath(t, h.points...),
 		decad.WithMitredJoins(), decad.WithSectionScale(scalars(17.0/18, 8.0/9, 5.0/6)...))
 	require.NoError(t, err)
 	return body
@@ -282,7 +282,7 @@ func (h hollowTrunk) bore(t *testing.T, doc *decad.Document) *decad.Body {
 	last := h.points[3].Sub(h.points[2])
 	end := h.points[3].Sub(last.Scale(0.25))
 	s, profile := polygonSweepSketch(t, 16, 2)
-	body, err := doc.Sweep(t.Context(), s, profile,
+	body, err := decad.Sweep(t.Context(), doc, s, profile,
 		mustPath(t, r3.NewVec(0, 0, 0), h.points[1].Sub(up), h.points[2].Sub(up), end.Sub(up)),
 		decad.WithMitredJoins(), decad.WithSectionScale(scalars(14.0/15, 13.0/15, 0.8)...))
 	require.NoError(t, err)
@@ -300,7 +300,7 @@ func (h hollowTrunk) bore(t *testing.T, doc *decad.Document) *decad.Body {
 func (h hollowTrunk) branch(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, profile := polygonSweepSketch(t, 16, 0.8)
-	body, err := doc.Sweep(t.Context(), s, profile, mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2), r3.NewVec(0, 2, 5)),
+	body, err := decad.Sweep(t.Context(), doc, s, profile, mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2), r3.NewVec(0, 2, 5)),
 		decad.WithMitredJoins(), decad.WithSectionScale(scalars(0.9, 0.7)...))
 	require.NoError(t, err)
 	// Local z runs along (1, 0, 0.3) and local y along (−0.3, 0, 1).
@@ -627,7 +627,7 @@ func TestSweepMitredClusteredBranchUnionChain(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	trunkSketch, trunkProfile := polygonSweepSketch(t, 16, 5)
-	trunk, err := doc.Sweep(t.Context(), trunkSketch, trunkProfile,
+	trunk, err := decad.Sweep(t.Context(), doc, trunkSketch, trunkProfile,
 		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 30), r3.NewVec(3, 0, 60)),
 		decad.WithMitredJoins(), decad.WithSectionScale(scalars(1, 0.9)...))
 	require.NoError(t, err)
@@ -647,7 +647,7 @@ func TestSweepMitredClusteredBranchUnionChain(t *testing.T) {
 		require.NoError(t, err)
 		xf, err := r3.FromFrame(frame)
 		require.NoError(t, err)
-		unit, err := doc.Sweep(t.Context(), branchSketch, branchProfile, branchPath,
+		unit, err := decad.Sweep(t.Context(), doc, branchSketch, branchProfile, branchPath,
 			decad.WithMitredJoins(), decad.WithSectionScale(scalars(1.375/1.5, 1.2/1.5, 1/1.5)...))
 		require.NoError(t, err)
 		branch, err := decad.Transform(t.Context(), unit, xf)

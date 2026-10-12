@@ -262,7 +262,7 @@ func compositeSweep(t *testing.T, doc *decad.Document) *decad.Body {
 		decad.LineTo{End: r3.NewVec(15, 0, 9)},
 	)
 	require.NoError(t, err)
-	body, err := doc.Sweep(t.Context(), s, s.Profiles()[0], path)
+	body, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path)
 	require.NoError(t, err)
 	return body
 }
@@ -374,7 +374,7 @@ func TestMassPropertiesCompositeSweepTurnedFrame(t *testing.T) {
 		decad.LineTo{End: r3.NewVec(0, 0, 10)},
 	)
 	require.NoError(t, err)
-	body, err := decad.New().Sweep(t.Context(), s, s.Profiles()[0], path)
+	body, err := decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], path)
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 	got, err := body.MassProperties(t.Context(), density)
@@ -414,7 +414,7 @@ func TestMassPropertiesOneSpanSweeps(t *testing.T) {
 
 	straight, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 4)})
 	require.NoError(t, err)
-	body, err := decad.New().Sweep(t.Context(), s, s.Profiles()[0], straight)
+	body, err := decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], straight)
 	require.NoError(t, err)
 	got, err := body.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -423,7 +423,7 @@ func TestMassPropertiesOneSpanSweeps(t *testing.T) {
 	arc, err := decad.NewPath(r3.NewVec(0, 0, 0),
 		decad.ArcThrough{Through: r3.NewVec(2, 0, 4), End: r3.NewVec(5, 0, 5)})
 	require.NoError(t, err)
-	body, err = decad.New().Sweep(t.Context(), s, s.Profiles()[0], arc)
+	body, err = decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], arc)
 	require.NoError(t, err)
 	got, err = body.MassProperties(t.Context(), density)
 	require.NoError(t, err)

@@ -123,7 +123,7 @@ func newClusteredTree(t *testing.T, spreadDeg, zstep float64) clusteredTree {
 	t.Helper()
 	doc := New()
 	s, p := clusterPolygon(t, 16, 5)
-	trunk, err := doc.Sweep(t.Context(), s, p,
+	trunk, err := Sweep(t.Context(), doc, s, p,
 		clusterPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 30), r3.NewVec(3, 0, 60)),
 		WithMitredJoins(), WithSectionScale(units.Scalar(1), units.Scalar(0.9)))
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func newClusteredTree(t *testing.T, spreadDeg, zstep float64) clusteredTree {
 
 func (c clusteredTree) branch(t *testing.T, k int) *Body {
 	t.Helper()
-	unit, err := c.doc.Sweep(t.Context(), c.branchSketch, c.branchProfile,
+	unit, err := Sweep(t.Context(), c.doc, c.branchSketch, c.branchProfile,
 		clusterPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2.5), r3.NewVec(0.8, 0.3, 6), r3.NewVec(2.5, 0.6, 9.5)),
 		WithMitredJoins(), WithSectionScale(units.Scalar(1.375/1.5), units.Scalar(1.2/1.5), units.Scalar(1/1.5)))
 	require.NoError(t, err)

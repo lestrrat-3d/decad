@@ -45,7 +45,7 @@ func Example_decad_sweep_spatial() {
 	}
 
 	doc := decad.New()
-	body, err := doc.Sweep(context.Background(), s, s.Profiles()[0], path)
+	body, err := decad.Sweep(context.Background(), doc, s, s.Profiles()[0], path)
 	if err != nil {
 		fmt.Printf("failed to sweep profile: %s\n", err)
 		return
