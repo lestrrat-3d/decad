@@ -3,6 +3,9 @@ package decad
 import (
 	"fmt"
 	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -454,16 +457,43 @@ func (r loftCylinderSourceCircle) OrderedOverSafeInterval() bool {
 	if span.Sign() <= 0 {
 		return false
 	}
-	for i := range slabs {
+	check := func(i int) bool {
 		lo := new(big.Rat).Add(r.safeBottom,
 			new(big.Rat).Quo(new(big.Rat).Mul(span, big.NewRat(int64(i), 1)), big.NewRat(slabs, 1)))
 		hi := new(big.Rat).Add(r.safeBottom,
 			new(big.Rat).Quo(new(big.Rat).Mul(span, big.NewRat(int64(i+1), 1)), big.NewRat(slabs, 1)))
-		if _, err := r.CrossingBox(lo, hi); err != nil {
-			return false
-		}
+		_, err := r.CrossingBox(lo, hi)
+		return err == nil
 	}
-	return true
+	workers := min(runtime.GOMAXPROCS(0), 4)
+	if workers == 1 {
+		for i := range slabs {
+			if !check(i) {
+				return false
+			}
+		}
+		return true
+	}
+	// Each slab reads the immutable source rationals and owns its box proof.
+	var failed atomic.Bool
+	var group sync.WaitGroup
+	group.Add(workers)
+	for worker := range workers {
+		go func() {
+			defer group.Done()
+			for i := worker; i < slabs; i += workers {
+				if failed.Load() {
+					return
+				}
+				if !check(i) {
+					failed.Store(true)
+					return
+				}
+			}
+		}()
+	}
+	group.Wait()
+	return !failed.Load()
 }
 
 // ContainsTriangleSector proves that every projected point of an exact
