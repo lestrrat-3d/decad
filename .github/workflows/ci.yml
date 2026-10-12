@@ -198,6 +198,10 @@ jobs:
           run_shard() {
             local bin="$GITHUB_WORKSPACE/race-bin/$1" shards="$2" dir="$3"
             chmod +x "$bin"
+            local verbose=()
+            if [[ '${{ matrix.shard }}' == 1 && "$1" == apitest.test ]]; then
+              verbose=(-test.v)
+            fi
             local tests
             tests="$("$bin" -test.list '.*' | awk -v shard='${{ matrix.shard }}' '
               NR == FNR {
@@ -214,7 +218,7 @@ jobs:
             ' "$shards" -)"
             tests="${tests%|}"
             test -n "$tests"
-            (cd "$dir" && "$bin" -test.timeout "$timeout" -test.run "^(${tests})$")
+            (cd "$dir" && "$bin" -test.timeout "$timeout" "${verbose[@]}" -test.run "^(${tests})$")
           }
           start=$SECONDS
           run_shard decad.test .github/test-shards.txt .
