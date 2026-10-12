@@ -68,9 +68,9 @@ func LoftXTriCorners(verts []r3.Vec, tri [3]int) [3]proof.Xpt {
 // LoftAuditData holds the immutable per-vertex and per-triangle values shared
 // by every pair in one crossing audit. The old pair path rebuilt the same
 // exact vertex lifts and triangle normals for every pair, even though both are
-// determined solely by the audit's input tables. Keeping them for the audit's
-// lifetime does not change a predicate or its inputs; it only avoids repeating
-// the same exact arithmetic.
+// determined solely by the audit's input tables. The streamed path retains
+// shared vertex projections and reconstructs triangle triples from them.
+// Both layouts feed the same values to the exact pair predicates.
 type LoftAuditData struct {
 	Corners     [][3]r3.Vec
 	Xverts      []proof.Xpt
@@ -79,6 +79,11 @@ type LoftAuditData struct {
 	floatNorms  []r3.Vec
 	Planes      []LoftExactPlane
 	Projections [][3]meshbool.Xp2
+	compact     bool
+	verts       []r3.Vec
+	tris        [][3]int
+	projAxes    []uint8
+	projected   [3][]meshbool.Xp2
 }
 
 // LoftExactPlane is an owned integer numerator for the oriented plane through
@@ -117,7 +122,17 @@ func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 // broad-phase boxes by its certified exact-to-float error before omitting a
 // pair and use LoftAuditShortcuts.ExactInput to disable float-only filters.
 func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int) *LoftAuditData {
-	return newLoftAuditDataSelected(verts, exact, tris, nil)
+	return newLoftAuditDataSelected(verts, exact, tris, nil, false)
+}
+
+// newCompactLoftAuditData retains one projection per vertex and axis. The
+// streamed S7 path reconstructs triangle triples from these immutable tables.
+func newCompactLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
+	exact := make([]proof.Xpt, len(verts))
+	for i, v := range verts {
+		exact[i] = proof.XptOf(v)
+	}
+	return newLoftAuditDataSelected(verts, exact, tris, nil, true)
 }
 
 // newLoftAuditDataForCandidates keeps full-length index tables while lifting
@@ -145,18 +160,25 @@ func newLoftAuditDataForCandidates(verts []r3.Vec, tris [][3]int, cands loftCand
 			}
 		}
 	}
-	return newLoftAuditDataSelected(verts, exact, tris, selected)
+	return newLoftAuditDataSelected(verts, exact, tris, selected, false)
 }
 
-func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int, selected []bool) *LoftAuditData {
+func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
+	selected []bool, compact bool) *LoftAuditData {
 	d := &LoftAuditData{
-		Corners:     make([][3]r3.Vec, len(tris)),
-		Xverts:      exact,
-		Xtris:       make([][3]proof.Xpt, len(tris)),
-		Norms:       make([]proof.Xpt, len(tris)),
-		floatNorms:  make([]r3.Vec, len(tris)),
-		Planes:      make([]LoftExactPlane, len(tris)),
-		Projections: make([][3]meshbool.Xp2, len(tris)),
+		Xverts:     exact,
+		Norms:      make([]proof.Xpt, len(tris)),
+		floatNorms: make([]r3.Vec, len(tris)),
+		Planes:     make([]LoftExactPlane, len(tris)),
+		compact:    compact,
+	}
+	if compact {
+		d.verts, d.tris = verts, tris
+		d.projAxes = make([]uint8, len(tris))
+	} else {
+		d.Corners = make([][3]r3.Vec, len(tris))
+		d.Xtris = make([][3]proof.Xpt, len(tris))
+		d.Projections = make([][3]meshbool.Xp2, len(tris))
 	}
 	// Neighboring triangles reuse a vertex's exact projection on the same plane.
 	var projected [3][]meshbool.Xp2
@@ -165,12 +187,18 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int, 
 		if selected != nil && !selected[i] {
 			continue
 		}
-		d.Corners[i] = LoftTriCorners(verts, tri)
-		d.Xtris[i] = [3]proof.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
-		d.Norms[i] = proof.Xcross(proof.Xsub(d.Xtris[i][1], d.Xtris[i][0]), proof.Xsub(d.Xtris[i][2], d.Xtris[i][0]))
+		xt := [3]proof.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
+		if !compact {
+			d.Corners[i] = LoftTriCorners(verts, tri)
+			d.Xtris[i] = xt
+		}
+		d.Norms[i] = proof.Xcross(proof.Xsub(xt[1], xt[0]), proof.Xsub(xt[2], xt[0]))
 		d.floatNorms[i] = d.Norms[i].Vec()
-		d.Planes[i] = NewLoftExactPlane(d.Xtris[i][0], d.Norms[i])
+		d.Planes[i] = NewLoftExactPlane(xt[0], d.Norms[i])
 		projection := ProjectionPairIndex(meshbool.ProjAxes(d.Norms[i]))
+		if compact {
+			d.projAxes[i] = uint8(projection)
+		}
 		if projected[projection] == nil {
 			projected[projection] = make([]meshbool.Xp2, len(exact))
 		}
@@ -179,10 +207,41 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int, 
 				uv := axes[projection]
 				projected[projection][vi] = meshbool.NewXP2FromXpt(exact[vi], uv[0], uv[1])
 			}
-			d.Projections[i][j] = projected[projection][vi]
+			if !compact {
+				d.Projections[i][j] = projected[projection][vi]
+			}
 		}
 	}
+	if compact {
+		d.projected = projected
+	}
 	return d
+}
+
+func (d *LoftAuditData) corners(i int) [3]r3.Vec {
+	if d.compact {
+		return LoftTriCorners(d.verts, d.tris[i])
+	}
+	return d.Corners[i]
+}
+
+func (d *LoftAuditData) xtri(i int) [3]proof.Xpt {
+	if d.compact {
+		tri := d.tris[i]
+		return [3]proof.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
+	}
+	return d.Xtris[i]
+}
+
+func (d *LoftAuditData) projection(i, corner int) meshbool.Xp2 {
+	if d.compact {
+		return d.projected[d.projAxes[i]][d.tris[i][corner]]
+	}
+	return d.Projections[i][corner]
+}
+
+func (d *LoftAuditData) projectionTriple(i int) [3]meshbool.Xp2 {
+	return [3]meshbool.Xp2{d.projection(i, 0), d.projection(i, 1), d.projection(i, 2)}
 }
 
 // ErrLoftContact is S7 (docs/loft-design.md §4/§6): the pair's exact contact
@@ -389,11 +448,12 @@ func LoftPlaneSeparated(ta, tb [3]r3.Vec) bool {
 // loftPlaneSeparatedPrepared reuses the audit's exact lifts and normals if
 // the same adaptive float sign as LoftPlaneSeparated needs an exact fallback.
 func loftPlaneSeparatedPrepared(data *LoftAuditData, i, j int) bool {
-	ta, tb := data.Corners[i], data.Corners[j]
+	ta, tb := data.corners(i), data.corners(j)
+	xta, xtb := data.xtri(i), data.xtri(j)
 	var sb [3]int
 	for k := range sb {
 		sb[k] = proof.OrientSignPrepared(ta[0], ta[1], ta[2], tb[k],
-			data.Xtris[i][0], data.Xtris[j][k], data.Norms[i])
+			xta[0], xtb[k], data.Norms[i])
 	}
 	if meshbool.AllOneSide(sb) {
 		return true
@@ -401,7 +461,7 @@ func loftPlaneSeparatedPrepared(data *LoftAuditData, i, j int) bool {
 	var sa [3]int
 	for k := range sa {
 		sa[k] = proof.OrientSignPrepared(tb[0], tb[1], tb[2], ta[k],
-			data.Xtris[j][0], data.Xtris[i][k], data.Norms[j])
+			xtb[0], xta[k], data.Norms[j])
 	}
 	return meshbool.AllOneSide(sa)
 }
@@ -480,10 +540,10 @@ func AuditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 // vertex; the first stays entirely on its own side. Convexity confines their
 // intersection to that vertex. A zero sign falls through to classification.
 func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts) (LoftPairOutcome, error) {
-	ta := data.Corners[i]
-	tb := data.Corners[j]
-	xta := data.Xtris[i]
-	xtb := data.Xtris[j]
+	ta := data.corners(i)
+	tb := data.corners(j)
+	xta := data.xtri(i)
+	xtb := data.xtri(j)
 	na := data.Norms[i]
 	nb := data.Norms[j]
 	shared, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
@@ -513,8 +573,16 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 	if shortcuts.Certificates && sharedCount == 1 && IsolatedSharedVertex(tris[i], shared[0], signsA) {
 		return LoftPairVertexCertificate, nil
 	}
+	var projA, projB *[3]meshbool.Xp2
+	var compactA, compactB [3]meshbool.Xp2
+	if data.compact {
+		compactA, compactB = data.projectionTriple(i), data.projectionTriple(j)
+		projA, projB = &compactA, &compactB
+	} else {
+		projA, projB = &data.Projections[i], &data.Projections[j]
+	}
 	contact, err := meshbool.TriTriClassifyCore(ta, tb, xta, xtb, na, nb,
-		&data.Projections[i], &data.Projections[j], &signsA, &signsB, !shortcuts.ExactInput,
+		projA, projB, &signsA, &signsB, !shortcuts.ExactInput,
 		data.floatNorms[i], data.floatNorms[j], true)
 	if err != nil {
 		return LoftPairClassified, err
@@ -560,15 +628,15 @@ func CoplanarIsolatedSharedVertex(data *LoftAuditData, a, b [3]int, i, j, shared
 	var v meshbool.Xp2
 	for corner, vertex := range a {
 		if vertex == shared {
-			v = data.Projections[i][corner]
+			v = data.projection(i, corner)
 			continue
 		}
-		aOther[countA] = data.Projections[i][corner]
+		aOther[countA] = data.projection(i, corner)
 		countA++
 	}
 	for corner, vertex := range b {
 		if vertex != shared {
-			bOther[countB] = data.Projections[j][corner]
+			bOther[countB] = data.projection(j, corner)
 			countB++
 		}
 	}

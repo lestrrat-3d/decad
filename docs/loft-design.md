@@ -1385,6 +1385,12 @@ steps it once per replayed pair. If the row query exceeds the ceiling after
 the selected S8 scan passes, the audit returns S8's resource refusal before
 any pair classification.
 
+The unstructured batch path keeps exact vertices, triangle normals and planes,
+and one exact projection for each vertex and used axis. It derives each
+triangle's float corners, exact corners and projected corners from those
+immutable tables when classifying a pair. This removes three duplicate
+per-triangle tables without changing the coordinates or exact predicates.
+
 `Loft` threads a shared `workBudget` (`internal/proofbound/budget.go`) through the audit,
 polling at `workPollInterval` exactly as `Fillet` / `Chamfer`
 / `Shell` already do (modify §5). Cancellation returns `ctx.Err()`

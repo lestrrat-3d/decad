@@ -9,6 +9,47 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestCompactLoftAuditDataMatchesFullPairResults(t *testing.T) {
+	t.Parallel()
+	verts := []r3.Vec{
+		{X: 0, Y: 0, Z: 0}, {X: 2, Y: 0, Z: 0}, {X: 0, Y: 2, Z: 0},
+		{X: 0, Y: 0, Z: 1}, {X: 2, Y: 2, Z: 0},
+		{X: 1, Y: -1, Z: 0}, {X: 1, Y: 1, Z: 0}, {X: 1, Y: 0, Z: 1},
+		{X: 10, Y: 0, Z: 0}, {X: 11, Y: 0, Z: 0}, {X: 10, Y: 1, Z: 0},
+	}
+	tris := [][3]int{
+		{0, 1, 2},  // Base triangle.
+		{0, 1, 3},  // Noncoplanar shared edge.
+		{1, 4, 2},  // Coplanar shared edge.
+		{5, 6, 7},  // Crossing triangle with no shared indices.
+		{8, 9, 10}, // Disjoint triangle.
+	}
+	full := NewLoftAuditData(verts, tris)
+	compact := newCompactLoftAuditData(verts, tris)
+	require.Empty(t, compact.Corners)
+	require.Empty(t, compact.Xtris)
+	require.Empty(t, compact.Projections)
+	for i := range tris {
+		require.Equal(t, full.Corners[i], compact.corners(i))
+		require.Equal(t, full.Xtris[i], compact.xtri(i))
+		require.Equal(t, full.Projections[i], compact.projectionTriple(i))
+		for j := i + 1; j < len(tris); j++ {
+			require.Equal(t, loftPlaneSeparatedPrepared(full, i, j),
+				loftPlaneSeparatedPrepared(compact, i, j), "pair %d,%d", i, j)
+			for _, shortcuts := range []LoftAuditShortcuts{{}, loftGenericShortcuts} {
+				want, wantErr := AuditLoftPairData(full, tris, i, j, shortcuts)
+				got, gotErr := AuditLoftPairData(compact, tris, i, j, shortcuts)
+				require.Equal(t, want, got, "pair %d,%d", i, j)
+				if wantErr == nil {
+					require.NoError(t, gotErr, "pair %d,%d", i, j)
+				} else {
+					require.EqualError(t, gotErr, wantErr.Error(), "pair %d,%d", i, j)
+				}
+			}
+		}
+	}
+}
+
 func TestPreparedPlaneSeparationMatchesUnprepared(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(0x8c4d2af1, 0x719cf4ad))

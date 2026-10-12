@@ -374,7 +374,11 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 		data = newLoftAuditDataForCandidates(verts, tris, cands)
 	}
 	if data == nil {
-		data = NewLoftAuditData(verts, tris)
+		if streamed {
+			data = newCompactLoftAuditData(verts, tris)
+		} else {
+			data = NewLoftAuditData(verts, tris)
+		}
 	}
 
 	// S7: every candidate, classified against its recorded adjacency. The
