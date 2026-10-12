@@ -84,6 +84,13 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 	} else {
 		return nil, false, nil
 	}
+	return tryLoftCylinderUnionTeeth(ctx, d, ref, blank, teeth)
+}
+
+// tryLoftCylinderUnionTeeth certifies one complete circular Join from its
+// original Loft operands. Multi-body Union uses this once for the full pattern.
+func tryLoftCylinderUnionTeeth(ctx context.Context, d *Document, ref producerID,
+	blank *Body, teeth []*Body) (*Body, bool, error) {
 	pp, ok := blank.payload.(prismPayload)
 	if !ok || pp.surfaceResult || pp.xform != r3.Identity() ||
 		pp.z0Delta != 0 || pp.z1Delta != 0 || pp.sectionDelta != 0 ||

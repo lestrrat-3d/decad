@@ -68,7 +68,8 @@ pair's middle plane must be the exact dyadic midpoint of the blank's two cap
 planes. Every later copy must retain the first pair's source identity and
 use an axial rotation with no translation. The reflection and each admitted
 rotation commute, so the true union is the reflection of a lower-half union
-against the exact lower half of the blank.
+against the exact lower half of the blank. A rotation whose axial basis is
+one float step below one uses the bounded bridge below.
 
 For every step, the existing Loft-to-cylinder Join rebuilds that lower-half
 union from the original source Loft and the admitted rotated copies. It proves
@@ -88,7 +89,42 @@ The route refuses a non-finite proof or a boundary departure above 0.1 mm;
 ordinary Boolean chord admission is unchanged.
 
 The exterior cap groups keep the original blank and every retained pair's
-source origins, plus the new Join cap roles. Their exact planes remain
-selectable after the middle caps have been sewn away. `VerifyAll` independently
+source origins, plus the new Join cap roles. Exact axial placements keep
+both cap planes; a bridged top cap reports a faceted surface with its charged
+bound. `VerifyAll` independently
 checks the final held shell and occupied-volume allowance at the caller's
 chosen tolerance.
+
+## One-pass mirrored pattern Join
+
+Multi-body `Union` accepts the same centered prism and two to thirty-two distinct
+copies of one authenticated mirrored pair. It checks the common source and
+each recorded placement before any operand is consumed. The circular Join
+builds the lower half once from every original lower Loft; it proves their
+continuous sector separation, root contacts, cap disks, boundary and volume.
+The mirrored result is sewn and audited once. This avoids repeatedly
+rebuilding all prior teeth for each binary `Union`.
+
+The admitted placed copies have zero translation and an XY rotation. Their
+Z basis is either exactly one or `Nextafter(1, 0)`. For the latter, the lower
+circular Join uses its authenticated axial proxy and charges the difference
+between the original lower Loft and that proxy. Let `F` reflect about the
+recorded middle height `m`, and let `T` be the copy's stored affine motion.
+The true upper source `T(F(L))` differs from the reflected true lower source
+`F(T(L))` by the exact constant Z translation `2m(1-T.EZ.Z)`. The evaluator
+computes an upward rational bound for that shift. It adds the shift to all
+reflected upper vertex and boundary bounds and charges the source pair's
+certified area times the shift to occupied-volume difference. The lower
+circular Join's area allowance already includes the held joined area, blank
+area, and every source tooth's area. This also covers any short surface
+exposed by the shifted upper tooth. The original pair's common cap moves as
+one; the blank fills the small level difference. This proof does not admit an
+arbitrary tilted or translated copy.
+
+The final result retains its authenticated private lower-half Join, the
+original full blank and pair bodies, and the exact bottom and top cap groups
+and outline loops. Both final cap triangulations must tile those outlines;
+the loops and lower-half source record support later certified consumers.
+The boundary limit remains 0.1 mm, the final mesh still passes whole-shell
+vertex-link and crossing audits, and the faceted builder publishes bounded
+volume, area, centroid and diameter readings before the atomic commit.
