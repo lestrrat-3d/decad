@@ -1381,7 +1381,9 @@ sorts its partners, so both paths replay verdicts in lexicographic order and
 stop at the same first failing pair. The batch path does not allocate storage
 for the complete candidate list or its complete verdict list. Both row scans
 step the shared budget for each node visit and leaf comparison; the classifier
-steps it once per replayed pair.
+steps it once per replayed pair. If the row query exceeds the ceiling after
+the selected S8 scan passes, the audit returns S8's resource refusal before
+any pair classification.
 
 `Loft` threads a shared `workBudget` (`internal/proofbound/budget.go`) through the audit,
 polling at `workPollInterval` exactly as `Fillet` / `Chamfer`
