@@ -142,18 +142,11 @@ both verification flags are true, and the joined computed-volume lower bound
 exceeds the hub's computed-volume upper bound. Its joined faces retain both
 split-cap source roles and an analytic root cone.
 
-## Removal ledger
+## Public routing
 
-No old production file is removed in this milestone. Each row names the
-generic replacement and focused proof required before deletion.
-
-| Old path or record | Generic replacement | Focused proof |
-|---|---|---|
-| `bevel_join_source.go` | `revolve_loft_source.go` and `revolve_loft_sector.go`, then a dynamic builder without `legacyRevolveLoftBlank` | `TestUnionTaperedHubAndRadialLug` plus split-cap, stale-source, foreign-trim and near-contact refusals |
-| `bevel_join_fit.go` | `revolve_loft_fit.go` and a generic fitted-seat/fan-cell builder without `legacyRevolveLoftBoundary` | `TestUnionTaperedHubAndFittedRadialLug` plus fitted stale-source and near-contact refusals |
-| `bevel_join.go`, `bevel_join_two.go`, `bevel_join_pattern.go` | Dynamic section rings, sector caps and shared N-sector construction | Neutral seven-span, fitted, serial, variadic and separation-refusal tests pass; real gallery consumers remain to be checked |
-| `bevelTooth` and `bevelJoin` payloads and dispatch | `revolveLoftSector` and `revolveLoftJoin` records | Real neutral rotated lugs pass public `Union`, 0.1 mm `VerifyAll`, Euler two and computed-volume tests |
-| `bevel_join_bore.go`, `bevel_join_bore_toe.go` and their Cut dispatch | `revolve_sector_cylinder_cut.go` and `revolve_sector_cylinder_band.go` | Neutral one-sector and repeated-sector annular bores, one strict straight-band crossing, boundary refusals, 0.1 mm `VerifyAll` and Euler zero pass; remove the old route after gallery joins use the generic record |
-
-The old specialized files remain until a gallery consumer pins and passes
-the generic builder. The generic constructor does not call those files.
+Public serial and variadic `Union` use the same certified section-ring and
+sector-cap builder. Public `Cut` uses the joined section record for a centered,
+spanning cylinder. The legacy six-line join and bore constructors are absent.
+A section with unsupported source geometry or an unproved contact refuses.
+Full gear acceptance tests run in `decad-gallery`; Decad tests use small
+Revolve and point-Loft producers.

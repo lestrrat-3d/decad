@@ -107,7 +107,6 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 	next.pointSection, next.pointCone = nil, nil
 	next.exactSourceVerts, next.exactSourceTris = nil, nil
 	next.lowerSupport = nil
-	next.bevelJoin, next.bevelTooth = nil, nil
 	next.groups = append([]facetGroup(nil), fp.groups...)
 	for i := range next.groups {
 		group := &next.groups[i]

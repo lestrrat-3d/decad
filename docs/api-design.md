@@ -1000,15 +1000,21 @@ result, and proves the shared cap, source boundary and occupied volume.
 One-float-step axial placement differences receive explicit boundary and
 swept-volume allowances.
 
+The finite Revolve/point-Loft class accepts an authenticated full Revolve
+section, one cone-trimmed point-Loft sector, and rigid copies of that sector.
+Serial and variadic `Union` rebuild one section ring and its certified sector
+caps. A centered cylinder spanning both axial caps can `Cut` the joined body.
+The source, clearance, boundary and volume proofs are in
+`docs/revolve-loft-sector-design.md`.
+
 The bounded spiral-bevel class accepts an exact finite revolve blank and
 separate rigid copies of one authenticated, cone-trimmed nine-section tooth.
 The tool sectors must be proven disjoint. The
 evaluator cuts the blank and all spiral tools in one mesh Boolean, certifies
 each root and cap contact against its original tooth source, and commits one
 body only after the complete output passes the boundary, volume and topology
-audits. A finite revolve blank with three or more cone-trimmed point-loft teeth
-returns `ErrUnsupported` in the multi-body call. Other multi-body classes also
-return `ErrUnsupported`. A call with no `others` returns `ErrDegenerate`; a
+audits. Other multi-body classes return `ErrUnsupported`.
+A call with no `others` returns `ErrDegenerate`; a
 zero-body call does not compile. A failed or canceled call leaves every
 operand live.
 

@@ -14,14 +14,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// pointBevelSliceSheet follows the gallery's back-cone slice construction.
-// The line belongs to a world-XY Sketch and its two-sided ExtrudeChain is
-// the finite sheet passed to the public Split operation.
-func pointBevelSliceSheet(t *testing.T, doc *decad.Document, offset, halfWidth float64) *decad.Body {
-	return pointBevelSliceSheetDirected(t, doc, offset, halfWidth, false)
+// pointLoftSliceSheet cuts a radial tab fan parallel to its far profile.
+// A world-XY Sketch line and two-sided ExtrudeChain make the finite sheet.
+func pointLoftSliceSheet(t *testing.T, doc *decad.Document, offset, halfWidth float64) *decad.Body {
+	return pointLoftSliceSheetDirected(t, doc, offset, halfWidth, false)
 }
 
-func pointBevelSliceSheetDirected(t *testing.T, doc *decad.Document,
+func pointLoftSliceSheetDirected(t *testing.T, doc *decad.Document,
 	offset, halfWidth float64, reverse bool) *decad.Body {
 	t.Helper()
 	angle := math.Atan2(4, 4)
@@ -56,13 +55,13 @@ func TestPointLoftParallelSheetReversedLineKeepsOutwardCapNormals(t *testing.T) 
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "forward", true: "reverse"}[reverse], func(t *testing.T) {
 			doc := decad.New()
-			tooth := bevelReferenceTooth(t, doc)
-			span := pointBevelRootSpan()
-			first := pointBevelSliceSheetDirected(t, doc, span/6, 30, reverse)
+			tooth := pointLoftRadialTab(t, doc)
+			span := pointLoftSliceSpan()
+			first := pointLoftSliceSheetDirected(t, doc, span/6, 30, reverse)
 			pieces, err := doc.Split(t.Context(), tooth, first)
 			require.NoError(t, err)
 			require.Len(t, pieces, 2)
-			second := pointBevelSliceSheetDirected(t, doc, span/3, 30, !reverse)
+			second := pointLoftSliceSheetDirected(t, doc, span/3, 30, !reverse)
 			parts, err := doc.Split(t.Context(), pieces[0], second)
 			require.NoError(t, err)
 			require.Len(t, parts, 2)
@@ -267,21 +266,11 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 	}
 }
 
-func pointBevelRootSpan() float64 {
-	section, _ := bevelReferenceSection()
-	rootX, rootY := section[3].U, section[3].V
-	rootNorm := math.Hypot(rootX, rootY)
-	coneX, coneY := rootX/rootNorm, rootY/rootNorm
-	toeMidX := (section[4].U + section[5].U) / 2
-	toeMidY := (section[4].V + section[5].V) / 2
-	heelMidX := (section[3].U + section[2].U) / 2
-	heelMidY := (section[3].V + section[2].V) / 2
-	return (heelMidX-toeMidX)*coneX + (heelMidY-toeMidY)*coneY
-}
+func pointLoftSliceSpan() float64 { return 1.8 }
 
 func TestPointLoftParallelSheetEightSlices(t *testing.T) {
 	doc := decad.New()
-	tooth := bevelReferenceTooth(t, doc)
+	tooth := pointLoftRadialTab(t, doc)
 	original, err := tooth.Volume()
 	require.NoError(t, err)
 	var sourceSides []*decad.Face
@@ -291,12 +280,12 @@ func TestPointLoftParallelSheetEightSlices(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, len(sourceSides), 2)
-	span := pointBevelRootSpan()
+	span := pointLoftSliceSpan()
 	require.Positive(t, span)
 	inner := tooth
 	kept := make([]*decad.Body, 0, 8)
 	for k := 1; k <= 8; k++ {
-		sheet := pointBevelSliceSheet(t, doc, span*float64(k)/6, 30)
+		sheet := pointLoftSliceSheet(t, doc, span*float64(k)/6, 30)
 		pieces, err := doc.Split(t.Context(), inner, sheet)
 		require.NoError(t, err)
 		require.Len(t, pieces, 2)
@@ -340,8 +329,8 @@ func TestPointLoftParallelSheetEightSlices(t *testing.T) {
 
 func TestPointLoftParallelSheetRefusesShortToolAtomically(t *testing.T) {
 	doc := decad.New()
-	tooth := bevelReferenceTooth(t, doc)
-	sheet := pointBevelSliceSheet(t, doc, pointBevelRootSpan()/6, 0.1)
+	tooth := pointLoftRadialTab(t, doc)
+	sheet := pointLoftSliceSheet(t, doc, pointLoftSliceSpan()/6, 0.1)
 	before := doc.Bodies()
 	pieces, err := doc.Split(t.Context(), tooth, sheet)
 	require.Error(t, err)

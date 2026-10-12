@@ -263,11 +263,6 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return body, nil
 	}
-	if body, ok, err := tryBevelPostJoinBoreCut(ctx, op, d, ref, a, b); err != nil {
-		return nil, err
-	} else if ok {
-		return body, nil
-	}
 	if body, ok, err := tryLoftMirrorCylinderBoreCut(ctx, op, d, ref, a, b); err != nil {
 		return nil, err
 	} else if ok {
@@ -278,24 +273,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return body, nil
 	}
-	if body, ok, err := tryBevelPatternUnion(ctx, op, d, ref, a, b); err != nil {
-		return nil, err
-	} else if ok {
-		return body, nil
-	}
 	if body, ok, err := tryRevolveLoftNextSectorUnion(ctx, op, d, ref, a, b); err != nil {
-		return nil, err
-	} else if ok {
-		return body, nil
-	}
-	if body, ok, err := tryBevelTwoToothUnion(ctx, op, d, ref, a, b); err != nil {
-		return nil, err
-	} else if ok {
-		return body, nil
-	}
-	// Keep the existing admitted serial source on its proven constructor until
-	// the generic full serial consumer has passed its own acceptance run.
-	if body, ok, err := tryBevelOneToothUnion(ctx, op, d, ref, a, b); err != nil {
 		return nil, err
 	} else if ok {
 		return body, nil
