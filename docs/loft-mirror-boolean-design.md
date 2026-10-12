@@ -51,5 +51,44 @@ itself authorize any other Boolean case.
 ## Scope
 
 `Union` outside this one-source reflection rule follows the existing Boolean
-dispatch. The separate tooth-to-cylinder join must prove its own contacts,
-sections, and resulting occupied volume before it can consume this record.
+dispatch. A centered-cylinder Join proves its own contacts, sections, and
+occupied volume before it consumes this record.
+
+## Centered cylinder and repeated reflected tabs
+
+`Union` also accepts one exact centered circular prism and a mirrored Loft
+pair retained by this route. Later unions may add rigid XY rotations of the
+same pair, up to the circular Join's 32-source limit. A completed result keeps
+the exact blank and pair operands for each next step. A placed result loses
+that incremental source record.
+
+The blank must have exact XY sections, one whole circle, and no section
+displacement. Its bottom equals the lower Loft's start plane. The mirrored
+pair's middle plane must be the exact dyadic midpoint of the blank's two cap
+planes. Every later copy must retain the first pair's source identity and
+use an axial rotation with no translation. The reflection and each admitted
+rotation commute, so the true union is the reflection of a lower-half union
+against the exact lower half of the blank.
+
+For every step, the existing Loft-to-cylinder Join rebuilds that lower-half
+union from the original source Loft and the admitted rotated copies. It proves
+the radial seam, pairwise source separation, held boundary, and occupied
+volume. The result is reflected using the faceted placement proof. The two
+held middle caps must have identical triangles with opposite winding, and
+their vertices must coincide exactly. Both caps are removed. Vertex-link and
+whole-mesh crossing audits check the sewn shell.
+
+The full body's boundary departure is the larger half bound. Its occupied-
+volume error is at most the sum of the two half errors because the true halves
+have disjoint interiors. Its area allowance sums the two half allowances and
+twice the larger allowance for the removed common cap. The held diameter plus
+twice its boundary departure supplies `D` to the faceted centroid allowance
+`min(D, volSymDiff × D / volumeFloor)`.
+The route refuses a non-finite proof or a boundary departure above 0.1 mm;
+ordinary Boolean chord admission is unchanged.
+
+The exterior cap groups keep the original blank and every retained pair's
+source origins, plus the new Join cap roles. Their exact planes remain
+selectable after the middle caps have been sewn away. `VerifyAll` independently
+checks the final held shell and occupied-volume allowance at the caller's
+chosen tolerance.

@@ -1,0 +1,379 @@
+package decad
+
+import (
+	"context"
+	"fmt"
+	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/r3"
+)
+
+// A mirrored cylinder Join rebuilds the lower source against one exact half
+// of the original blank. The upper source is its authenticated reflection.
+// The original Boolean operands remain recorded for each later pattern step.
+type loftMirrorCylinderJoinRecord struct {
+	blank  *Body
+	source *loftMirrorJoinRecord
+	pairs  []*Body
+}
+
+func tryLoftMirrorCylinderUnion(ctx context.Context, op meshbool.OperationKind,
+	d *Document, ref producerID, a, b *Body) (*Body, bool, error) {
+	if op != meshbool.OpUnion {
+		return nil, false, nil
+	}
+	var blank *Body
+	var pairs []*Body
+	var source *loftMirrorJoinRecord
+	if pp, ok := a.payload.(prismPayload); ok && loftMirrorCylinderBlank(pp) {
+		blank, pairs = a, []*Body{b}
+	} else if pp, ok := b.payload.(prismPayload); ok && loftMirrorCylinderBlank(pp) {
+		blank, pairs = b, []*Body{a}
+	} else if fp, ok := a.payload.(facetedPayload); ok &&
+		fp.loftMirrorCylinderJoin != nil && fp.xform == r3.Identity() {
+		blank = fp.loftMirrorCylinderJoin.blank
+		source = fp.loftMirrorCylinderJoin.source
+		pairs = append(append([]*Body(nil), fp.loftMirrorCylinderJoin.pairs...), b)
+	} else if fp, ok := b.payload.(facetedPayload); ok &&
+		fp.loftMirrorCylinderJoin != nil && fp.xform == r3.Identity() {
+		blank = fp.loftMirrorCylinderJoin.blank
+		source = fp.loftMirrorCylinderJoin.source
+		pairs = append(append([]*Body(nil), fp.loftMirrorCylinderJoin.pairs...), a)
+	} else {
+		return nil, false, nil
+	}
+	pp, blankOK := blank.payload.(prismPayload)
+	if !blankOK || !loftMirrorCylinderBlank(pp) || len(pairs) == 0 || len(pairs) > 32 {
+		return nil, false, nil
+	}
+	first, firstOK := pairs[0].payload.(facetedPayload)
+	if !firstOK || first.loftMirrorJoin == nil || first.xform != r3.Identity() ||
+		!first.contactAudited || source != nil && source != first.loftMirrorJoin {
+		return nil, false, nil
+	}
+	record := first.loftMirrorJoin
+	if record.lower == nil || record.upper == nil || record.stationCount < 3 ||
+		record.lower.doc != d || record.upper.doc != d {
+		return nil, false, nil
+	}
+	lower, lowOK := record.lower.payload.(loftPayload)
+	upper, upOK := record.upper.payload.(loftPayload)
+	if !lowOK || !upOK || !lower.authenticatedReconstruction ||
+		!upper.authenticatedReconstruction || lower.sourceIdentity == nil ||
+		lower.sourceIdentity != upper.sourceIdentity ||
+		lower.xform != r3.Identity() || !loftMirrorAxialSource(lower) {
+		return nil, false, nil
+	}
+	reflection, err := r3.Reflection(lower.frame1)
+	if err != nil {
+		return nil, true, fmt.Errorf("%w: mirrored cylinder source has no reflection: %s", ErrUnsupported, err)
+	}
+	if upper.xform != reflection {
+		return nil, false, nil
+	}
+	z0, middle, z2 := pp.z0, lower.frame1.Origin().Z, pp.z1
+	if lower.frame0.Origin().Z != z0 || !(z0 < middle && middle < z2) ||
+		!loftMirrorCylinderLevels(z0, middle, z2) {
+		return nil, false, nil
+	}
+	// The first-stage source relation proves upper=reflection(lower). The
+	// blank has the same circle and exact caps over both half intervals.
+	half := pp
+	half.z1 = middle
+	halfBlank, err := evalPrismContext(ctx, d, ref, half, freeform.NewFreeformWork())
+	if err != nil {
+		return nil, true, err
+	}
+	lowerJoin := halfBlank
+	for i, pair := range pairs {
+		payload, ok := pair.payload.(facetedPayload)
+		if !ok || !payload.contactAudited || pair.doc != d {
+			return nil, false, nil
+		}
+		motion, ok := loftMirrorCylinderPairMotion(payload, record)
+		if !ok {
+			return nil, false, nil
+		}
+		tooth := record.lower
+		if motion != r3.Identity() {
+			tooth, err = lower.placed(ctx, d, ref, motion)
+			if err != nil {
+				return nil, true, err
+			}
+		}
+		var admitted bool
+		lowerJoin, admitted, err = tryLoftCylinderUnion(ctx, op, d, ref, lowerJoin, tooth)
+		if err != nil {
+			return nil, true, err
+		}
+		if !admitted {
+			return nil, true, fmt.Errorf("%w: mirrored cylinder's lower slab lacks a certified circular Join for pair %d", ErrUnsupported, i+1)
+		}
+	}
+	result, err := buildLoftMirrorCylinderUnion(ctx, d, ref, blank, pairs, record, lowerJoin, reflection)
+	return result, true, err
+}
+
+func loftMirrorCylinderPairMotion(fp facetedPayload, source *loftMirrorJoinRecord) (r3.Transform, bool) {
+	if fp.loftMirrorJoin == source && fp.xform == r3.Identity() {
+		return r3.Identity(), true
+	}
+	if fp.loftMirrorCopy == nil || fp.loftMirrorCopy.source != source ||
+		fp.xform != fp.loftMirrorCopy.motion ||
+		!loftCylinderAxialPlacement(fp.loftMirrorCopy.motion) {
+		return r3.Transform{}, false
+	}
+	return fp.loftMirrorCopy.motion, true
+}
+
+func loftMirrorCylinderBlank(pp prismPayload) bool {
+	if pp.surfaceResult || pp.xform != r3.Identity() || pp.z0Delta != 0 ||
+		pp.z1Delta != 0 || pp.sectionDelta != 0 || pp.z1 <= pp.z0 ||
+		len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) != 1 ||
+		pp.frame.Origin() != (r3.Vec{}) || pp.frame.U() != (r3.Vec{X: 1}) ||
+		pp.frame.V() != (r3.Vec{Y: 1}) {
+		return false
+	}
+	circle, ok := pp.profile.Outer.Segments[0].(circleSeg)
+	return ok && circle.CCW && circle.Center == (Point2{}) &&
+		circle.Radius.Base() > 0 && !proofbound.IsNonFinite(circle.Radius.Base())
+}
+
+func loftMirrorCylinderLevels(z0, middle, z2 float64) bool {
+	if proofbound.IsNonFinite(z0) || proofbound.IsNonFinite(middle) || proofbound.IsNonFinite(z2) {
+		return false
+	}
+	// Exact dyadic comparison ensures the reflected lower cap lands on the
+	// original cylinder's upper cap, not merely within a float tolerance.
+	twiceMiddle := new(big.Rat).Mul(big.NewRat(2, 1), proofarith.FloatRat(middle))
+	sumCaps := new(big.Rat).Add(proofarith.FloatRat(z0), proofarith.FloatRat(z2))
+	return twiceMiddle.Cmp(sumCaps) == 0
+}
+
+func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producerID,
+	blank *Body, pairs []*Body, source *loftMirrorJoinRecord,
+	lowerHalf *Body, reflection r3.Transform) (*Body, error) {
+	lower, ok := lowerHalf.payload.(facetedPayload)
+	if !ok || lower.loftCylinderJoin == nil || !lower.contactAudited || lower.xform != r3.Identity() {
+		return nil, fmt.Errorf("%w: mirrored cylinder's lower slab has no audited source", ErrUnsupported)
+	}
+	upperHalf, err := lower.placed(ctx, d, ref, reflection)
+	if err != nil {
+		return nil, err
+	}
+	upper, ok := upperHalf.payload.(facetedPayload)
+	if !ok || !upper.contactAudited || len(lower.verts) != len(upper.verts) ||
+		len(lower.tris) != len(upper.tris) || len(lower.src) != len(upper.src) {
+		return nil, fmt.Errorf("%w: reflected cylinder slab has no matching held mesh", ErrUnsupported)
+	}
+	lowCaps := lower.loftCylinderJoin.capGroups
+	if lowCaps[0] < 0 || lowCaps[1] < 0 || lowCaps[0] == lowCaps[1] {
+		return nil, fmt.Errorf("%w: lower circular Join lacks separate cap groups", ErrUnsupported)
+	}
+	// Reflection preserves the upper outline's XY coordinates. Every middle
+	// vertex of the reflected cap must match the original held vertex exactly.
+	middle := lower.loftCylinderJoin.z1
+	midVertices := make(map[r3.Vec]int)
+	for i, v := range lower.verts {
+		if v.Z == middle {
+			if _, exists := midVertices[v]; exists {
+				return nil, fmt.Errorf("%w: lower circular Join duplicates a middle vertex", ErrUnsupported)
+			}
+			midVertices[v] = i
+		}
+	}
+	if len(midVertices) < 3 {
+		return nil, fmt.Errorf("%w: circular Join has no complete middle outline", ErrUnsupported)
+	}
+	vertexMap := make([]int, len(upper.verts))
+	verts := append([]r3.Vec(nil), lower.verts...)
+	vertexBound := append([]float64(nil), lower.vertexBound...)
+	for i, v := range upper.verts {
+		if v.Z == middle {
+			index, exists := midVertices[v]
+			if !exists {
+				return nil, fmt.Errorf("%w: reflected cylinder caps do not match exactly", ErrUnsupported)
+			}
+			vertexMap[i] = index
+			vertexBound[index] = max(vertexBound[index], upper.vertexBound[i])
+			continue
+		}
+		if v.Z <= middle {
+			return nil, fmt.Errorf("%w: reflected cylinder slab crosses its middle plane", ErrUnsupported)
+		}
+		vertexMap[i] = len(verts)
+		verts = append(verts, v)
+		vertexBound = append(vertexBound, upper.vertexBound[i])
+	}
+	if !loftMirrorCylinderCapsOppose(lower, upper, vertexMap, lowCaps[1], lowCaps[1]) {
+		return nil, fmt.Errorf("%w: reflected cylinder middle caps do not tile equally", ErrUnsupported)
+	}
+	var tris [][3]int
+	var src []int
+	var groups []facetGroup
+	capGroups := [2]int{-1, -1}
+	for half, payload := range []facetedPayload{lower, upper} {
+		// Reflection changes cap orientation and height, not its source
+		// group ID. Both copies omit the original top cap group.
+		omit, keep := lowCaps[1], lowCaps[0]
+		groupMap := make(map[int]int)
+		for i, tri := range payload.tris {
+			if i%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
+			oldGroup := payload.src[i]
+			if oldGroup == omit {
+				continue
+			}
+			group, exists := groupMap[oldGroup]
+			if !exists {
+				if oldGroup < 0 || oldGroup >= len(payload.groups) {
+					return nil, fmt.Errorf("%w: circular Join facet names no source group", ErrUnsupported)
+				}
+				group = len(groups)
+				groupMap[oldGroup] = group
+				groups = append(groups, payload.groups[oldGroup])
+				if oldGroup == keep {
+					capGroups[half] = group
+				}
+			}
+			if half == 1 {
+				for corner, index := range tri {
+					tri[corner] = vertexMap[index]
+				}
+			}
+			tris = append(tris, tri)
+			src = append(src, group)
+		}
+	}
+	if capGroups[0] < 0 || capGroups[1] < 0 {
+		return nil, fmt.Errorf("%w: mirrored cylinder has no exterior cap groups", ErrUnsupported)
+	}
+	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
+		return nil, fmt.Errorf("%w: mirrored cylinder seam has an invalid vertex link: %s", ErrUnsupported, err)
+	}
+	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), verts, tris,
+		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
+		return nil, err
+	}
+	bound := max(lower.meshBound, upper.meshBound)
+	volumeGap := proofbound.AbsSumUpper(lower.volSymDiff, upper.volSymDiff)
+	areaSlack := proofbound.AbsSumUpper(lower.areaSlack, upper.areaSlack,
+		proofbound.ProductUpper(2, max(lower.areaSlack, upper.areaSlack)))
+	diameter := lfHeldDiameter(verts, bound)
+	if bound > 0.1 || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
+		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(diameter) {
+		return nil, fmt.Errorf("%w: mirrored cylinder has no finite 0.1 mm proof", ErrUnsupported)
+	}
+	fp := facetedPayload{verts: verts, tris: tris, src: src, groups: groups,
+		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
+		areaSlack: areaSlack, dPair: diameter, contactAudited: true, xform: r3.Identity(),
+		loftMirrorCylinderJoin: &loftMirrorCylinderJoinRecord{
+			blank: blank, source: source, pairs: append([]*Body(nil), pairs...),
+		},
+	}
+	if err := loftMirrorCylinderCapOrigins(&fp, blank, pairs, capGroups); err != nil {
+		return nil, err
+	}
+	fullBlank, ok := blank.payload.(prismPayload)
+	if !ok {
+		return nil, fmt.Errorf("%w: mirrored cylinder lost its circular blank", ErrUnsupported)
+	}
+	if err := loftCylinderTagCaps(&fp, blank, capGroups,
+		[2]float64{fullBlank.z0, fullBlank.z1}, ref); err != nil {
+		return nil, err
+	}
+	return buildFacetedBody(ctx, d, ref, fp)
+}
+
+func loftMirrorCylinderCapsOppose(lower, upper facetedPayload, upperMap []int,
+	lowerGroup, upperGroup int) bool {
+	indices := make(map[[3]int]int)
+	for i, triangle := range lower.tris {
+		if lower.src[i] != lowerGroup {
+			continue
+		}
+		key, sign := loftMirrorSortedTriangle(triangle)
+		if indices[key] != 0 {
+			return false
+		}
+		indices[key] = sign
+	}
+	if len(indices) == 0 {
+		return false
+	}
+	for i, triangle := range upper.tris {
+		if upper.src[i] != upperGroup {
+			continue
+		}
+		for corner, index := range triangle {
+			if index < 0 || index >= len(upperMap) {
+				return false
+			}
+			triangle[corner] = upperMap[index]
+		}
+		key, sign := loftMirrorSortedTriangle(triangle)
+		if indices[key] != -sign {
+			return false
+		}
+		delete(indices, key)
+	}
+	return len(indices) == 0
+}
+
+func loftMirrorCylinderCapOrigins(fp *facetedPayload, blank *Body, pairs []*Body,
+	groups [2]int) error {
+	for cap, group := range groups {
+		role := roleCapStart
+		if cap == 1 {
+			role = roleCapEnd
+		}
+		seen := make(map[FeatureRef]struct{})
+		var origins []FeatureRef
+		add := func(ref FeatureRef) {
+			if _, exists := seen[ref]; !exists {
+				seen[ref] = struct{}{}
+				origins = append(origins, ref)
+			}
+		}
+		for _, face := range blank.Faces() {
+			for _, origin := range face.Origins() {
+				if origin.producer == blank.origin.producer && origin.Role == role {
+					for _, source := range face.Origins() {
+						add(source)
+					}
+				}
+			}
+		}
+		for _, pair := range pairs {
+			payload, ok := pair.payload.(facetedPayload)
+			if !ok {
+				return fmt.Errorf("%w: mirrored tooth lacks a source cap", ErrUnsupported)
+			}
+			record := payload.loftMirrorJoin
+			if record == nil && payload.loftMirrorCopy != nil {
+				record = payload.loftMirrorCopy.source
+			}
+			if record == nil || record.capGroups[cap] < 0 ||
+				record.capGroups[cap] >= len(payload.groups) {
+				return fmt.Errorf("%w: mirrored tooth lost a source cap role", ErrUnsupported)
+			}
+			for _, origin := range payload.groups[record.capGroups[cap]].origins {
+				add(origin)
+			}
+		}
+		if len(origins) == 0 {
+			return fmt.Errorf("%w: mirrored cylinder cap has no source role", ErrUnsupported)
+		}
+		fp.groups[group].origins = origins
+	}
+	return nil
+}
