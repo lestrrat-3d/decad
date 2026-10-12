@@ -18,6 +18,7 @@
 #   shard 9:  118.05s over 202 tests
 #   shard 10:   0.01s over 1 test
 #
+0	2.43	TestUnionMirroredRadialTabsWithNearAxialCopy
 0	0.01	TestLoftEmbeddedFitFlanksKeepOriginalCurve
 0	2.70	TestLoftMirrorCylinderUnionJoinsRepeatedRadialTabs
 1	0.01	TestBlindPocketPlacedAndVerified

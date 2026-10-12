@@ -917,6 +917,13 @@ sweep interval, with distinct source line carriers. It arranges every section
 in one Sketch scene, audits the resulting boundary, and charges its cuts
 once. Other prism placements and profiles return `ErrUnsupported`.
 
+The bounded mirrored-Loft class accepts one exact centered circular prism
+and up to thirty-two copies of an authenticated three-station reflected Loft
+pair. It joins all lower sources against one half of the prism, reflects the
+result, and proves the shared cap, source boundary and occupied volume.
+One-float-step axial placement differences receive explicit boundary and
+swept-volume allowances.
+
 The bounded straight-bevel class accepts a finite revolve blank and
 three to thirty-one separate copies of one authenticated, cone-trimmed point-loft
 tooth. It rebuilds their caps against one blank ring and checks the resulting
