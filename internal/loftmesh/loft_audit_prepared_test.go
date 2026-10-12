@@ -77,6 +77,9 @@ func TestPreparedPlaneSeparationMatchesUnprepared(t *testing.T) {
 		for j := i + 1; j < len(tris); j++ {
 			want := LoftPlaneSeparated(data.Corners[i], data.Corners[j])
 			require.Equal(t, want, loftPlaneSeparatedPrepared(data, i, j), "pair %d,%d", i, j)
+			require.Equal(t, TrianglePlaneSigns(data.Planes[i], data.Xtris[j]),
+				trianglePlaneSignsAdaptive(data.Planes[i], data.Corners[i], data.Corners[j], data.Xtris[j], true),
+				"plane signs %d,%d", i, j)
 		}
 	}
 }

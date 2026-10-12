@@ -561,7 +561,7 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 		}
 	}
 
-	signsB := TrianglePlaneSigns(data.Planes[i], xtb)
+	signsB := trianglePlaneSignsAdaptive(data.Planes[i], ta, tb, xtb, !shortcuts.ExactInput)
 	if shortcuts.Certificates && sharedCount == 1 && meshbool.CountZero(signsB) == 3 &&
 		CoplanarIsolatedSharedVertex(data, tris[i], tris[j], i, j, shared[0]) {
 		return LoftPairVertexCertificate, nil
@@ -569,7 +569,7 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 	if shortcuts.Certificates && sharedCount == 1 && IsolatedSharedVertex(tris[j], shared[0], signsB) {
 		return LoftPairVertexCertificate, nil
 	}
-	signsA := TrianglePlaneSigns(data.Planes[j], xta)
+	signsA := trianglePlaneSignsAdaptive(data.Planes[j], tb, ta, xta, !shortcuts.ExactInput)
 	if shortcuts.Certificates && sharedCount == 1 && IsolatedSharedVertex(tris[i], shared[0], signsA) {
 		return LoftPairVertexCertificate, nil
 	}
@@ -704,6 +704,24 @@ func TrianglePlaneSigns(plane LoftExactPlane, other [3]proof.Xpt) [3]int {
 	var sum, term big.Int
 	for i, p := range other {
 		signs[i] = plane.Sign(p, &sum, &term)
+	}
+	return signs
+}
+
+// trianglePlaneSignsAdaptive decides common float inputs before reading the
+// exact plane. Rational construction inputs must always use the exact signs.
+func trianglePlaneSignsAdaptive(plane LoftExactPlane, triangle, other [3]r3.Vec,
+	otherExact [3]proof.Xpt, floatInput bool) [3]int {
+	var signs [3]int
+	var sum, term big.Int
+	for k, point := range other {
+		if floatInput {
+			if sign, certain := proof.OrientSignFloat(triangle[0], triangle[1], triangle[2], point); certain {
+				signs[k] = sign
+				continue
+			}
+		}
+		signs[k] = plane.Sign(otherExact[k], &sum, &term)
 	}
 	return signs
 }
