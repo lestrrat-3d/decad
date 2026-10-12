@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/sketch"
@@ -77,6 +78,15 @@ func TestRevolveLoftFacesHeelVerticalArcConsumesLiveNeutralSource(t *testing.T) 
 		require.NoError(t, arcErr)
 		require.False(t, certified, "a replaced live cap-face origin cannot own the arc")
 		circle.capFace.origins = originalOrigins
+		shell := blank.Shells()[0]
+		originalFaces := shell.faces
+		t.Cleanup(func() { shell.faces = originalFaces })
+		shell.faces = append(slices.Clone(originalFaces), &Face{
+			body: blank, origins: []FeatureRef{{Role: "unmatched side"}},
+		})
+		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, circle)
+		require.NoError(t, arcErr)
+		require.False(t, certified, "an unclassified live blank face cannot own the occupied arc")
 		return
 	}
 	t.Fatal("the real heel cone has no vertical contact circle at X=6")
