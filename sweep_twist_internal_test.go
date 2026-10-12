@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -9,6 +10,38 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestStationedTwistOccupiedVolumeProof(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-1, -1, 1, 1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	path, err := NewPath(r3.Vec{}, LineTo{End: r3.NewVec(0, 0, 5)})
+	require.NoError(t, err)
+	body, err := New().Sweep(t.Context(), s, s.Profiles()[0], path,
+		WithSweepTwist(units.Radians(2)))
+	require.NoError(t, err)
+	payload, ok := body.payload.(twistedSweepPayload)
+	require.True(t, ok)
+	require.NotNil(t, payload.mesh)
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	area, err := body.Area()
+	require.NoError(t, err)
+	t.Logf("cells=%d boundary=%g occupied_volume=%g volume=%g volume_bound=%g volume_exactness=%v area=%g area_bound=%g",
+		len(payload.mesh.vertices)/4-1, payload.delta, payload.volSymDiff, volume.Value.Base(),
+		volume.Bound.Base(), volume.Exactness, area.Value.Base(), area.Bound.Base())
+	require.LessOrEqual(t, payload.delta, 0.1)
+	require.Less(t, payload.volSymDiff, 20.0)
+	heldVolume := exactMeshVolume(payload.mesh)
+	heldFloat, _ := heldVolume.Float64()
+	t.Logf("held_volume=%g", heldFloat)
+	gap := new(big.Rat).Abs(new(big.Rat).Sub(heldVolume, big.NewRat(20, 1)))
+	require.LessOrEqual(t, gap.Cmp(new(big.Rat).SetFloat64(payload.volSymDiff)), 0)
+}
 
 // A short twisted extrusion translated far along Z makes the held caps move
 // axially by more than the horizontal-section tube alone can charge. The

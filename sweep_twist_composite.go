@@ -146,9 +146,12 @@ func compositeTwistCellProof(poly twistPolygon, geometry twistCardinalPath,
 }
 
 func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
-	profileEdges int, delta, volSymDiff float64) (*Mesh, proofbound.RatInterval, error) {
+	profileEdges int, pathSpanOfCell []int, delta, volSymDiff float64) (*Mesh, proofbound.RatInterval, error) {
 	if len(cells) < 2 {
 		return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: composite twist has too few held cells`, ErrDegenerate)
+	}
+	if len(pathSpanOfCell) != len(cells) {
+		return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted Loft cells have no path-span map`, ErrDegenerate)
 	}
 	byRole := map[string]*Face{}
 	for _, face := range body.Faces() {
@@ -188,11 +191,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 			}
 			role := roleCapStart
 			if t < held.walls {
-				pathSpan := 1
-				if cell == 0 {
-					pathSpan = 0
-				}
-				role = fmt.Sprintf("side(%d,0,%d)", pathSpan, t/2)
+				role = fmt.Sprintf("side(%d,0,%d)", pathSpanOfCell[cell], t/2)
 			} else if t >= held.walls+held.capStartCount {
 				role = roleCapEnd
 			}
@@ -322,7 +321,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	if _, err := mergeTwistCellFaces(ctx, body, ref, len(poly.points),
+	if err := mergeTwistCellFaces(ctx, body, ref, len(poly.points),
 		[]twistCellGroup{{from: 0, through: 1, pathSpan: 0},
 			{from: 1, through: len(held), pathSpan: 1}}); err != nil {
 		return nil, err
@@ -358,7 +357,12 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if twistRat(volSymDiff).Cmp(volumeIv.Lo) >= 0 {
 		return nil, fmt.Errorf(`%w: twisted sweep boundary tube exceeds the true occupied volume`, ErrUnsupported)
 	}
-	mesh, heldAreaIv, err := compositeTwistMesh(ctx, body, held, len(poly.points), delta, volSymDiff)
+	pathSpanOfCell := make([]int, len(held))
+	for i := 1; i < len(pathSpanOfCell); i++ {
+		pathSpanOfCell[i] = 1
+	}
+	mesh, heldAreaIv, err := compositeTwistMesh(ctx, body, held, len(poly.points),
+		pathSpanOfCell, delta, volSymDiff)
 	if err != nil {
 		return nil, err
 	}
@@ -594,31 +598,30 @@ type twistCellGroup struct{ from, through, pathSpan int }
 // edges cancel in pairs, leaving one public wall patch per input path span
 // and profile edge, as Sweep's source-role contract requires.
 func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
-	profileEdges int, groups []twistCellGroup) (map[*Face]*Face, error) {
+	profileEdges int, groups []twistCellGroup) error {
 	old := body.Faces()
 	cells := 0
 	for _, group := range groups {
 		if group.from != cells || group.through <= group.from {
-			return nil, fmt.Errorf(`%w: twisted Loft cell groups are not consecutive`, ErrDegenerate)
+			return fmt.Errorf(`%w: twisted Loft cell groups are not consecutive`, ErrDegenerate)
 		}
 		cells = group.through
 	}
 	if len(old) != 2+cells*profileEdges {
-		return nil, fmt.Errorf(`%w: twisted Loft cells have unexpected wall topology`, ErrUnsupported)
+		return fmt.Errorf(`%w: twisted Loft cells have unexpected wall topology`, ErrUnsupported)
 	}
 	merged := []*Face{old[0]}
-	redirect := make(map[*Face]*Face, cells*profileEdges)
 	for _, group := range groups {
 		for j := range profileEdges {
 			if err := ctx.Err(); err != nil {
-				return nil, err
+				return err
 			}
 			uses := map[*Edge][]coedge{}
 			area, areaBound := 0.0, 0.0
 			for cell := group.from; cell < group.through; cell++ {
 				face := old[1+cell*profileEdges+j]
 				if len(face.loops) != 1 {
-					return nil, fmt.Errorf(`%w: a twisted Loft wall has multiple loops`, ErrUnsupported)
+					return fmt.Errorf(`%w: a twisted Loft wall has multiple loops`, ErrUnsupported)
 				}
 				for _, use := range face.loops[0].coedges {
 					uses[use.edge] = append(uses[use.edge], use)
@@ -632,19 +635,19 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 				case 1:
 					use := edgeUses[0]
 					if _, exists := boundary[use.Start()]; exists {
-						return nil, fmt.Errorf(`%w: a twisted wall boundary branches`, ErrUnsupported)
+						return fmt.Errorf(`%w: a twisted wall boundary branches`, ErrUnsupported)
 					}
 					boundary[use.Start()] = use
 				case 2:
 					if edgeUses[0].forward == edgeUses[1].forward {
-						return nil, fmt.Errorf(`%w: twisted wall cells use a seam in the same direction`, ErrUnsupported)
+						return fmt.Errorf(`%w: twisted wall cells use a seam in the same direction`, ErrUnsupported)
 					}
 				default:
-					return nil, fmt.Errorf(`%w: a twisted wall edge has an unsupported use count`, ErrUnsupported)
+					return fmt.Errorf(`%w: a twisted wall edge has an unsupported use count`, ErrUnsupported)
 				}
 			}
 			if len(boundary) < 4 {
-				return nil, fmt.Errorf(`%w: a twisted wall has no closed boundary`, ErrUnsupported)
+				return fmt.Errorf(`%w: a twisted wall has no closed boundary`, ErrUnsupported)
 			}
 			var first *Vertex
 			firstCell := old[1+group.from*profileEdges+j]
@@ -655,29 +658,26 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 				}
 			}
 			if first == nil {
-				return nil, fmt.Errorf(`%w: a twisted wall has no deterministic outline start`, ErrUnsupported)
+				return fmt.Errorf(`%w: a twisted wall has no deterministic outline start`, ErrUnsupported)
 			}
 			outline := make([]coedge, 0, len(boundary))
 			current := first
 			for range len(boundary) {
 				use, ok := boundary[current]
 				if !ok {
-					return nil, fmt.Errorf(`%w: a twisted wall outline is disconnected`, ErrUnsupported)
+					return fmt.Errorf(`%w: a twisted wall outline is disconnected`, ErrUnsupported)
 				}
 				outline = append(outline, use)
 				current = use.End()
 				delete(boundary, use.Start())
 			}
 			if current != first || len(boundary) != 0 {
-				return nil, fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
+				return fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 			}
 			face := &Face{
 				surface: Faceted{}, loops: []*Loop{{outer: true, coedges: outline}},
 				origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}},
 				body:    body, area: area, areaBound: areaBound,
-			}
-			for cell := group.from; cell < group.through; cell++ {
-				redirect[old[1+cell*profileEdges+j]] = face
 			}
 			merged = append(merged, face)
 		}
@@ -688,10 +688,10 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 	}
 	body.lumps[0].shells[0].faces = merged
 	if err := attachFaceLoopsContext(ctx, merged); err != nil {
-		return nil, err
+		return err
 	}
 	if err := auditCompositeBoundary(ctx, body, nil); err != nil {
-		return nil, err
+		return err
 	}
-	return redirect, nil
+	return nil
 }

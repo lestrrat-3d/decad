@@ -24,6 +24,7 @@ type twistedSweepPayload struct {
 	recordArea float64
 	xform      r3.Transform
 	held       loftPayload
+	mesh       *Mesh
 	// sourceRoles maps Loft's private triangle roles to the merged live
 	// Sweep faces. Both wall triangles of one profile edge share one face.
 	sourceRoles map[string]*Face
@@ -283,8 +284,11 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		return nil, fmt.Errorf(`%w: this twist angle has no certified denotation`, ErrUnsupported)
 	}
 	upper := proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv))
-	if upper > 1 || upper == 0 {
+	if upper == 0 {
 		return nil, fmt.Errorf(`%w: the twisted sweep admits an angle up to one radian`, ErrUnsupported)
+	}
+	if upper > 1 {
+		return evalStationedTwistedSweep(ctx, d, ref, profile, plane, path, angle, recordArea, xform)
 	}
 	sinIv, cosIv, ok := denoted.SinCosFor(theta)
 	if !ok {

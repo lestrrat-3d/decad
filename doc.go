@@ -103,8 +103,8 @@
 //	    certified span separation                             ErrUnsupported
 //	  closed path                                             ErrUnsupported
 //	  WithSweepTwist: centred convex whole-line profile,
-//	    origin XY plane, one positive-Z line, angle <= 1 rad  builds
-//	    or line then cardinal XZ quarter arc, narrow profile builds
+//	    origin XY plane, one positive-Z line, <= 1 turn     builds
+//	    or line then cardinal XZ quarter arc, <= 1 rad      builds
 //	  other nonzero twist                                     ErrUnsupported
 //	  WithMitredJoins / WithSectionScale over a LineTo path
 //	    and a whole-line profile                              builds

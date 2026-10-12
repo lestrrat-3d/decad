@@ -465,6 +465,10 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		if chord < tp.delta {
 			return nil, fmt.Errorf(`%w: the twisted sweep's held boundary is %g mm from its true wall; %g mm is finer`, ErrUnsupported, tp.delta, chord)
 		}
+		if tp.mesh != nil {
+			mesh := *tp.mesh
+			return &mesh, nil
+		}
 		mesh, err := tessellateLoft(ctx, b, tp.held, tp.sourceRoles)
 		if err != nil {
 			return nil, err

@@ -1,0 +1,272 @@
+package decad
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+// Each station keeps one Loft's turn small enough for its ruled facets to
+// remain simple. The fixed ceiling also bounds the number of exact Loft and
+// cross-cell facet checks before any body is built.
+const maxStationedTwistCells = 64
+
+type straightTwistStation struct {
+	twistStation
+	axialError float64
+}
+
+func stationedTwistCellCount(poly twistPolygon, angleUpper float64) (int, error) {
+	if angleUpper <= 1 || proofbound.IsNonFinite(angleUpper) ||
+		poly.maxRadiusL1 <= 0 || proofbound.IsNonFinite(poly.maxRadiusL1) {
+		return 0, fmt.Errorf(`%w: stationed twist has no finite angle or profile radius`, ErrUnsupported)
+	}
+	// Four percent of the source radius sets a scale-relative boundary target.
+	// The actual cell proof, rather than this planning target, decides whether
+	// Tessellate can certify a caller's requested tolerance.
+	target := proofbound.ProductUpper(poly.maxRadiusL1, 0.04)
+	for cells := 2; cells <= maxStationedTwistCells; cells++ {
+		perCell := proofbound.DivUpper(angleUpper, float64(cells))
+		if perCell > 1 || twistDeparture(poly, perCell, 0, 0) > target {
+			continue
+		}
+		facets := 2*len(poly.points)*cells + 2*(len(poly.points)-2)
+		pairs, ok := proofbound.WallChoose2(uint64(facets))
+		if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
+			return 0, fmt.Errorf(`%w: stationed twist exceeds the fixed facet-pair work ceiling`, ErrUnsupported)
+		}
+		return cells, nil
+	}
+	return 0, fmt.Errorf(`%w: stationed twist needs more than %d cells`, ErrUnsupported, maxStationedTwistCells)
+}
+
+func straightTwistStations(height, heldAngle float64, angle proofbound.RatInterval,
+	poly twistPolygon, cells int) ([]straightTwistStation, error) {
+	stations := make([]straightTwistStation, cells+1)
+	for index := range stations {
+		fraction := big.NewRat(int64(index), int64(cells))
+		betaIv := proofbound.IntervalScale(angle, fraction)
+		betaHeld := heldAngle * float64(index) / float64(cells)
+		z := height * float64(index) / float64(cells)
+		switch index {
+		case 0:
+			betaHeld, z = 0, 0
+		case cells:
+			betaHeld, z = heldAngle, height
+		}
+		sinIv, cosIv, ok := proofbound.RadSinCosSpan(betaIv)
+		if !ok {
+			return nil, fmt.Errorf(`%w: twist station has no trigonometric enclosure`, ErrUnsupported)
+		}
+		sinHeld, cosHeld := math.Sincos(betaHeld)
+		origin := r3.NewVec(0, 0, z)
+		frame, err := r3.NewFrame(origin, r3.NewVec(cosHeld, sinHeld, 0),
+			r3.NewVec(-sinHeld, cosHeld, 0))
+		if err != nil {
+			return nil, fmt.Errorf(`%w: twist station has no held frame: %s`, ErrUnsupported, err)
+		}
+		frameError := max(
+			proofbound.IntervalFloatError(cosIv, frame.U().X),
+			proofbound.IntervalFloatError(sinIv, frame.U().Y),
+			proofbound.IntervalFloatError(proofbound.IntervalNeg(sinIv), frame.V().X),
+			proofbound.IntervalFloatError(cosIv, frame.V().Y),
+		)
+		trueZ := new(big.Rat).Mul(twistRat(height), fraction)
+		axialError := proofbound.IntervalFloatError(proofbound.PointInterval(trueZ), frame.Origin().Z)
+		pointError := proofbound.AbsSumUpper(axialError,
+			proofbound.ProductUpper(3*poly.maxRadiusL1, frameError))
+		if proofbound.IsNonFinite(pointError) || !proofbound.FiniteVec(frame.Origin()) {
+			return nil, fmt.Errorf(`%w: twist station has no finite coordinate bound`, ErrUnsupported)
+		}
+		stations[index] = straightTwistStation{
+			twistStation: twistStation{
+				plane: planeRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()},
+				frame: frame, pointError: pointError,
+			},
+			axialError: axialError,
+		}
+	}
+	return stations, nil
+}
+
+// The true rotating section and the comparison Loft share exact source
+// heights. A wall point differs by the rotation's interpolation error, the
+// quad diagonal's warp, and the station point enclosures. The later axial
+// sweep proof moves this comparison Loft to the rounded held heights.
+func straightTwistCellDeparture(poly twistPolygon, angleUpper, stationError float64) float64 {
+	interp := proofbound.ProductUpper(proofbound.ProductUpper(poly.maxRadiusL1,
+		proofbound.ProductUpper(angleUpper, angleUpper)), 0.125)
+	warp := proofbound.ProductUpper(proofbound.ProductUpper(poly.maxEdgeL1, angleUpper), 0.25)
+	return proofbound.AbsSumUpper(interp, warp, stationError)
+}
+
+func evalStationedTwistedSweep(ctx context.Context, d *Document, ref producerID,
+	profile profileRecord, plane planeRecord, path *Path, angle units.Value,
+	recordArea float64, xform r3.Transform) (*Body, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	poly, err := twistPolygonOf(profile)
+	if err != nil {
+		return nil, err
+	}
+	theta, err := angle.In(units.Radian)
+	if err != nil {
+		return nil, err
+	}
+	thetaIv, ok := revolveangle.FromValue(angle).Enclosure()
+	if !ok {
+		return nil, fmt.Errorf(`%w: stationed twist has no certified angle`, ErrUnsupported)
+	}
+	absTheta := proofbound.IntervalAbsUpper(thetaIv)
+	if absTheta.Cmp(proofbound.TwoPiIv.Hi) > 0 {
+		return nil, fmt.Errorf(`%w: stationed twist admits at most one full turn`, ErrUnsupported)
+	}
+	cells, err := stationedTwistCellCount(poly, proofbound.RatFloatUp(absTheta))
+	if err != nil {
+		return nil, err
+	}
+	stations, err := straightTwistStations(path.End().Z, theta, thetaIv, poly, cells)
+	if err != nil {
+		return nil, err
+	}
+	parts := make([]compositeSpanPart, cells)
+	held := make([]loftPayload, cells)
+	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
+	budget := proofbound.NewWorkBudget(ctx)
+	for i := range parts {
+		part, buildErr := evalLoft(ctx, d, ref, loftPayload{
+			profile0: profile, profile1: profile,
+			plane0: stations[i].plane, plane1: stations[i+1].plane,
+			frame0: stations[i].frame, frame1: stations[i+1].frame,
+			xform: xform, recordArea: [2]float64{recordArea, recordArea},
+		}, budget, work0, work1)
+		if buildErr != nil {
+			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, buildErr)
+		}
+		var heldOK bool
+		held[i], heldOK = part.payload.(loftPayload)
+		if !heldOK {
+			return nil, fmt.Errorf(`%w: twisted sweep cell lost its Loft payload`, ErrUnsupported)
+		}
+		if _, err := mergeTwistWalls(ctx, part, ref, len(poly.points)); err != nil {
+			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
+		}
+		parts[i], err = compositeSpanPartOf(part)
+		if err != nil {
+			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
+		}
+	}
+	body, err := assembleCompositeSweepBodyWithJoin(ctx, d, ref, parts, false,
+		func(ctx context.Context, spans []sweepAuditSpan) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if len(spans) != cells {
+				return fmt.Errorf(`%w: twisted sweep cell count changed during sewing`, ErrDegenerate)
+			}
+			return nil
+		}, sewTwistLoftJoin)
+	if err != nil {
+		return nil, err
+	}
+	if err := mergeTwistCellFaces(ctx, body, ref, len(poly.points),
+		[]twistCellGroup{{from: 0, through: cells, pathSpan: 0}}); err != nil {
+		return nil, err
+	}
+	cellAngle := proofbound.RatFloatUp(new(big.Rat).Quo(absTheta, big.NewRat(int64(cells), 1)))
+	cellHeight := proofbound.RatFloatUp(new(big.Rat).Quo(twistRat(path.End().Z), big.NewRat(int64(cells), 1)))
+	delta, volSymDiff := 0.0, 0.0
+	for i, loft := range held {
+		stationError := max(stations[i].pointError, stations[i+1].pointError)
+		axialError := max(stations[i].axialError, stations[i+1].axialError)
+		ideal := straightTwistCellDeparture(poly, cellAngle, stationError)
+		delta = max(delta, proofbound.AbsSumUpper(ideal, loft.delta))
+		// The horizontal tube compares cells at their exact source heights.
+		// Move that comparison Loft to the rounded station heights separately:
+		// each triangle vertex moves axially by at most axialError, and the
+		// area bound covers every intermediate triangle after placement.
+		axialArea := proofbound.PerturbedAreaUpper(loft.verts, loft.tris,
+			proofbound.AbsSumUpper(axialError, loft.delta))
+		axialMove := proofbound.SweptVolumeAllow(axialError, axialArea)
+		volSymDiff = proofbound.AbsSumUpper(volSymDiff,
+			twistSymDiff(cellHeight, poly.perimeterUpper, ideal),
+			axialMove, loft.proof.VolSymDiff)
+	}
+	if proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(volSymDiff) {
+		return nil, fmt.Errorf(`%w: stationed twist has no finite boundary proof`, ErrUnsupported)
+	}
+	volumeRat := new(big.Rat).Mul(poly.area, twistRat(path.End().Z))
+	if twistRat(volSymDiff).Cmp(volumeRat) >= 0 {
+		return nil, fmt.Errorf(`%w: stationed twist boundary tube exceeds the true occupied volume`, ErrUnsupported)
+	}
+	pathSpanOfCell := make([]int, cells)
+	mesh, heldAreaIv, err := compositeTwistMesh(ctx, body, held, len(poly.points),
+		pathSpanOfCell, delta, volSymDiff)
+	if err != nil {
+		return nil, err
+	}
+	trueAreaIv, err := twistAreaInterval(poly, twistRat(path.End().Z), thetaIv)
+	if err != nil {
+		return nil, err
+	}
+	mesh.areaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
+		proofbound.IntervalSub(trueAreaIv, heldAreaIv)))
+	if proofbound.IsNonFinite(mesh.areaSlack) {
+		return nil, fmt.Errorf(`%w: stationed twist has no finite area proof`, ErrUnsupported)
+	}
+	volume, volumeBound := mitredEnclosure(volumeRat, volumeRat)
+	area, areaBound := mitredEnclosure(trueAreaIv.Lo, trueAreaIv.Hi)
+	body.volume = Measurement{Value: units.CubicMillimeters(volume), Bound: units.CubicMillimeters(volumeBound),
+		Exactness: exactnessOf(volumeBound)}
+	body.area = Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
+		Exactness: exactnessOf(areaBound)}
+	center := r3.NewVec(0, 0, path.End().Z/2)
+	worldCenter := xform.Apply(center)
+	centerBound := 0.0
+	if xform != r3.Identity() {
+		tr := xform.Translation()
+		centerBound = proofbound.RigidRoundAllow(path.End().Z/2,
+			max(math.Abs(tr.X), math.Abs(tr.Y), math.Abs(tr.Z)))
+	}
+	body.centroid = VecMeasurement{Value: worldCenter, Bound: units.Millimeters(centerBound),
+		Exactness: exactnessOf(centerBound)}
+	minV, maxV := mesh.vertices[0], mesh.vertices[0]
+	for _, vertex := range mesh.vertices[1:] {
+		minV.X, minV.Y, minV.Z = min(minV.X, vertex.X), min(minV.Y, vertex.Y), min(minV.Z, vertex.Z)
+		maxV.X, maxV.Y, maxV.Z = max(maxV.X, vertex.X), max(maxV.Y, vertex.Y), max(maxV.Z, vertex.Z)
+	}
+	body.bounds = Box{Min: minV, Max: maxV, Bound: units.Millimeters(delta), Exactness: Approximate}
+	for _, vertex := range body.Vertices() {
+		vertex.bound = units.Millimeters(proofbound.AbsSumUpper(vertex.bound.Base(), delta))
+	}
+	upperTheta := proofbound.RatFloatUp(absTheta)
+	for _, edge := range body.Edges() {
+		edge.curve = FacetedCurve{Bound: units.Millimeters(delta)}
+		edge.lengthBound = proofbound.AbsSumUpper(edge.lengthBound, edge.length,
+			path.End().Z, proofbound.ProductUpper(poly.maxRadiusL1, upperTheta), poly.perimeterUpper)
+	}
+	for _, face := range body.Faces() {
+		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {
+			face.surface = Faceted{Bound: units.Millimeters(delta)}
+		}
+		face.areaBound = proofbound.AbsSumUpper(face.areaBound, face.area, area, areaBound)
+		face.axialDelta, face.hasAxialDelta = delta, true
+	}
+	if err := validateAnalyticBodyMeasurements(body); err != nil {
+		return nil, err
+	}
+	body.payload = twistedSweepPayload{
+		profile: profile, plane: plane, path: path, angle: angle,
+		recordArea: recordArea, xform: xform, mesh: mesh,
+		delta: delta, areaSlack: mesh.areaSlack, volSymDiff: volSymDiff,
+	}
+	return body, nil
+}

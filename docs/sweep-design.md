@@ -1114,6 +1114,8 @@ centroid must lie on the Z axis. The path is one positive-Z `LineTo` from the
 origin, and the absolute denoted angle is at most one radian. Sheets, mitred
 joins, section scale, other paths and other profiles remain S11 refusals.
 The preflight uses exact rational coordinates and commits no body on refusal.
+Section 17.3 extends this straight-path profile class to one full turn with
+multiple certified Loft cells.
 
 At height `h`, the true section is the input polygon rotated by `theta*z/h`.
 Every section is a rigid copy, and the positive Z coordinate keeps distinct
@@ -1221,3 +1223,60 @@ an R=5 mm quarter arc and a 5° twist. Its true volume is about
 0.3510007989 mm³. The published local occupied-volume allowance is
 about 0.256 mm³ and covers the observed 0.00316 mm³ signed gap. It checks
 ten live Faces, source roles, placement replay, and `VerifyAll`.
+
+### 17.3 Stationed straight-path twist
+
+The same centred, strictly convex 3–256-edge polygon and positive-Z line
+admit a nonzero absolute angle above one radian and at most one full turn.
+The denoted angle is compared with the upper rational bound on `2*pi`.
+Other path, profile, sheet, mitre and scale inputs retain §17.1's refusals.
+The build commits no body when a station or proof gate refuses.
+
+The builder chooses 2–64 equal-height cells. Each cell's angle is at most
+one radian, and §17.1's one-cell departure estimate must be at most four
+percent of the profile's maximum L1 radius. Before building a cell, it
+counts `2*edges*cells + 2*(edges-2)` held triangles and refuses a count
+whose pair count exceeds the existing 8,000,000-test ceiling. An input
+needing more than 64 cells also refuses. These are construction limits;
+the completed boundary proof still decides the caller's mesh tolerance.
+
+Station `k` uses exact height `h*k/cells` and the interval enclosure of
+`theta*k/cells`. Rational sine/cosine intervals enclose the true frame;
+the held `r3.Frame` and the height conversion contribute a bounded point
+error. Adjacent Lofts receive the same held station and sew their cap rims
+at exactly equal vertices. Each cell's two wall triangles per source edge
+remain in the mesh. The cell walls merge into one live Face per source edge,
+with `side(0,0,j)` provenance; the two outer caps retain their roles.
+The sewn mesh checks edge uses, vertex links, orientation and facet contact.
+
+For profile maximum L1 radius `R`, maximum edge L1 length `E`, cell angle
+`a`, and maximum adjacent station point error `e`, the true wall's
+departure from the cell's ideal two-triangle Loft is at most
+`R*a*a/8 + E*a/4 + e`. The public boundary bound adds that cell's Loft
+vertex and placement displacement, then takes the maximum over cells.
+A horizontal true section and its ideal Loft section differ inside the
+two-sided tube of this cell departure. For perimeter upper bound `P` and
+cell height `h/cells`, its occupied-volume allowance is
+`(h/cells)*(2*P*d + 2*pi*d*d)`, where `d` is the cell departure. The
+comparison Loft uses the exact source heights. A held station may round
+its height; moving the comparison Loft to the held heights moves each
+cell vertex axially by at most the larger endpoint height error `ez`.
+The build adds `ez*PerturbedAreaUpper(held triangles, ez + Loft delta)`
+for the area every closed cell triangle can visit during that move.
+The horizontal tubes, axial moves and each Loft's ideal-to-held
+occupied-volume proof add across cells. The build refuses if the total reaches the exact
+true volume `area*h`; a signed held-volume gap cannot replace this
+symmetric-difference allowance.
+
+The true volume, centroid and wall-area interval use §17.1's rotating
+section formulas for the full angle. The mesh area interval is computed
+from its held triangles and compared with the true area interval for
+`VerifyAll`. A mesh tolerance below the maximum boundary bound refuses;
+placement replays all stations and proofs under the placed transform.
+
+The public acceptance sweeps Sketch's solved 2×2 mm square for 5 mm with
+two radians. Fourteen cells give a 0.07653061224492375 mm boundary bound
+and a 6.306450007046607 mm³ occupied-volume allowance, below the exact
+20 mm³ volume. The held mesh encloses 18.98294353769568 mm³. It passes
+`Tessellate(0.1 mm, VerifyAll)` before and after placement. Negative twist,
+a full turn and the over-turn and work-ceiling refusals are focused cases.
