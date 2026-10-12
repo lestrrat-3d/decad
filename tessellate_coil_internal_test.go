@@ -44,7 +44,7 @@ func meshArea(verts []r3.Vec, tris [][3]int) float64 {
 
 func TestCoilMeshRestatesTheHeldShell(t *testing.T) {
 	s, p := coilSquare(t)
-	b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+	b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
 	cp := b.payload.(coilPayload)
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(cp.delta))
@@ -108,7 +108,7 @@ func TestCoilMeshProofsEncloseTheBody(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s, p := coilLoopsSketch(t, c.loop)
-			b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(c.turns))
+			b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(c.turns))
 			require.NoError(t, err)
 			mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
 			require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestCoilMeshProofsEncloseTheBody(t *testing.T) {
 
 func TestCoilMassPropertiesSettleAtTheFirstStep(t *testing.T) {
 	s, p := coilSquare(t)
-	b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+	b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
 	got, err := b.MassProperties(t.Context(), meshLadderDensity)
 	require.NoError(t, err)
@@ -154,7 +154,7 @@ func TestCoilInterferenceAndUnionWithACore(t *testing.T) {
 	core, err := doc.Revolve(cs, cpf, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
 	s, p := coilSquare(t)
-	spring, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+	spring, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
 
 	rep, err := doc.Verify(t.Context())

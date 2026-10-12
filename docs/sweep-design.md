@@ -75,7 +75,7 @@ The following remain outside this design:
   on an arc span;
 - closed paths outside §§3.3–3.5 and their frame holonomy;
 - a sweep that lets the section leave the path-normal plane;
-- a helical path: `docs/helix-design.md` builds it as `Document.Coil`, a
+- a helical path: `docs/helix-design.md` builds it as `Coil`, a
   screw motion whose section stays in the axis plane, and its §12 states
   why it is not a `Path` segment.
 

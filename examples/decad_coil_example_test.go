@@ -38,7 +38,7 @@ func Example_decad_coil() {
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 
 	doc := decad.New()
-	spring, err := doc.Coil(context.Background(), s, s.Profiles()[0], axis,
+	spring, err := decad.Coil(context.Background(), doc, s, s.Profiles()[0], axis,
 		units.Millimeters(1.5), units.Scalar(2))
 	if err != nil {
 		fmt.Printf("failed to coil: %s\n", err)

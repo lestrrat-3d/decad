@@ -790,7 +790,7 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 | `Body.ScaledAt` | `ScaledAt(ctx, b, anchor, factor)` |
 | `Body.Mirrored`, `Body.MirroredCopy` | `Mirrored(ctx, b, plane, opts...)`, `MirroredCopy(ctx, b, plane)` |
 | `Body.Patterned`, `Body.PatternCopies` | `Patterned(ctx, b, spec)`, `PatternCopies(ctx, b, spec)` |
-| `Document.Extrude`, `Revolve`, `Coil` | `Extrude(doc, s, p, e, opts...)`, `Revolve(doc, s, p, axis, a, opts...)`, `Coil(ctx, doc, s, p, axis, pitch, turns, opts...)` |
+| `Document.Extrude`, `Revolve` | `Extrude(doc, s, p, e, opts...)`, `Revolve(doc, s, p, axis, a, opts...)` |
 | `Document.Sweep`, `Loft`, `LoftFaces`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
 | `Document.ExtrudeChain`, `RevolveChain`, `SweepChain`, `LoftChain` | the same names with the `Document` argument leading |
 | `Document.Remove` | `Remove(b)` |
@@ -950,7 +950,7 @@ build and `Draft`, the face draft of an existing prism, with its
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
 func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
 func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error)
-func (d *Document) Coil(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
+func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
 func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
 ```
 

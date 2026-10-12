@@ -718,7 +718,7 @@ func TestPairGateDiameterReadsCoilStations(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	s, p := coilSquare(t)
-	spring, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+	spring, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
 	w := sketch.NewWorld()
 	cs, err := w.CreateSketch(w.XY())

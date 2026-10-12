@@ -28,7 +28,7 @@ func coilCoreFixture(t *testing.T) (*Document, *Body, *Body) {
 	t.Helper()
 	doc := New()
 	s, p := coilSquare(t)
-	spring, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+	spring, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
 	core := planarBox(t, doc, -1, 0, -1, 1, 4, 1)
 	return doc, spring, core
@@ -80,7 +80,7 @@ func TestVerifyCoilClearanceAgainstRevolveStaysSuspect(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	s, p := coilSquare(t)
-	spring, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+	spring, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
 	// A ring beside the spring: the planar arm does not serve a revolve
 	// partner, so the pair stays undecided and no Clearance row appears.
@@ -104,7 +104,7 @@ func TestPlanarPairAdmitsCoilPartners(t *testing.T) {
 	t.Parallel()
 	doc, spring, core := coilCoreFixture(t)
 	s, p := coilSquare(t)
-	other, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+	other, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
 	faceted, err := Union(t.Context(), core, planarBox(t, doc, 0, 1, 0, 6, 2, 0.5))
 	require.NoError(t, err)

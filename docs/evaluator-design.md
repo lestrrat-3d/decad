@@ -1303,7 +1303,7 @@ clearance, and surveys remain staged as Table D states. An unlanded Sweep build 
 `ErrUnsupported`; an unlanded verification question reads `Suspect`.
 
 Coil follows `docs/helix-design.md` §11's count-free four-PR plan: PRs 1
-and 2 build `Document.Coil` over whole-line profiles with its four readings,
+and 2 build `Coil` over whole-line profiles with its four readings,
 structural and tolerance `Verify`, placement, tessellation, boolean and
 interference operands and mass properties; arc profiles and clearance land
 with PRs 3 and 4.

@@ -57,7 +57,7 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 	if err != nil {
 		return nil, fmt.Errorf("draw thread groove: %w", err)
 	}
-	tool, err := doc.Coil(ctx, groove, grooveProfile, axis, units.Millimeters(1.5), units.Scalar(8))
+	tool, err := decad.Coil(ctx, doc, groove, grooveProfile, axis, units.Millimeters(1.5), units.Scalar(8))
 	if err != nil {
 		return nil, fmt.Errorf("coil thread groove: %w", err)
 	}
