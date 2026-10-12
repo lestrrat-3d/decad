@@ -213,12 +213,13 @@ func (k *planarKernel) vertexFacet(verts *planarPrep, v int, tris *planarPrep, t
 func (k *planarKernel) edgeEdge(edgeA, edgeB [2]int) {
 	p0, p1 := k.a.s.Verts[edgeA[0]], k.a.s.Verts[edgeA[1]]
 	q0, q1 := k.b.s.Verts[edgeB[0]], k.b.s.Verts[edgeB[1]]
-	k.offer(pointSegment(p0, q0, q1))
-	k.offer(pointSegment(p1, q0, q1))
-	k.offer(pointSegment(q0, p0, p1))
-	k.offer(pointSegment(q1, p0, p1))
 	d1, d2 := proof.DvSub(p1, p0), proof.DvSub(q1, q0)
 	r := proof.DvSub(p0, q0)
+	a, c := proof.DvDot(d1, d1), proof.DvDot(d2, d2)
+	k.offer(pointSegmentRelative(r, d2, c))
+	k.offer(pointSegmentRelative(proof.DvSub(p1, q0), d2, c))
+	k.offer(pointSegmentRelative(proof.DvSub(q0, p0), d1, a))
+	k.offer(pointSegmentRelative(proof.DvSub(q1, p0), d1, a))
 	cross := proof.DvCross(d1, d2)
 	contact := PlanarContact{A: PlanarFeature{Kind: FeatureEdge, Edge: edgeA},
 		B: PlanarFeature{Kind: FeatureEdge, Edge: edgeB}}
@@ -226,7 +227,6 @@ func (k *planarKernel) edgeEdge(edgeA, edgeB [2]int) {
 		if !proof.DvIsZero(proof.DvCross(r, d1)) {
 			return
 		}
-		a := proof.DvDot(d1, d1)
 		t0 := proof.DvDot(proof.DvSub(q0, p0), d1)
 		t1 := proof.DvDot(proof.DvSub(q1, p0), d1)
 		lo, hi := dyMax(proof.DyZero(), dyMin(t0, t1)), dyMin(a, dyMax(t0, t1))
@@ -238,7 +238,7 @@ func (k *planarKernel) edgeEdge(edgeA, edgeB [2]int) {
 		k.addSite(contactSite{contact: contact, at: mid, dir: d1, cell: true})
 		return
 	}
-	a, b, c := proof.DvDot(d1, d1), proof.DvDot(d1, d2), proof.DvDot(d2, d2)
+	b := proof.DvDot(d1, d2)
 	d, e := proof.DvDot(d1, r), proof.DvDot(d2, r)
 	den := proof.DvDot(cross, cross)
 	s := proof.DySubScalar(proof.DyMul(b, e), proof.DyMul(c, d))
@@ -259,14 +259,17 @@ func (k *planarKernel) edgeEdge(edgeA, edgeB [2]int) {
 func pointSegment(x, s0, s1 proof.DyV3) frac {
 	d := proof.DvSub(s1, s0)
 	rel := proof.DvSub(x, s0)
+	return pointSegmentRelative(rel, d, proof.DvDot(d, d))
+}
+
+func pointSegmentRelative(rel, d proof.DyV3, den proof.Dyadic) frac {
 	t := proof.DvDot(rel, d)
-	den := proof.DvDot(d, d)
 	one := proof.DyInt(1)
 	switch {
 	case t.Sign() <= 0:
 		return frac{num: proof.DvDot(rel, rel), den: one}
 	case proof.DyCmp(t, den) >= 0:
-		far := proof.DvSub(x, s1)
+		far := proof.DvSub(rel, d)
 		return frac{num: proof.DvDot(far, far), den: one}
 	default:
 		return frac{num: proof.DySubScalar(proof.DyMul(proof.DvDot(rel, rel), den), proof.DyMul(t, t)), den: den}
