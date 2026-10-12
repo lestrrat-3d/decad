@@ -183,7 +183,9 @@ before building the lower half.
 For a near-axis placed pair, the actual upper source tooth lies below its
 reflected lower proof tooth by the Join's authenticated axial shift. The
 three lower cap-band split rings are checked again against each tooth at its
-shifted physical source level. An exact section through the reflected upper
+shifted physical source level. The circular Join sorts lower teeth by angle,
+so the shifts match authenticated placed tooth sources instead of pair input
+positions. An exact section through the reflected upper
 band at the lowest possible source cap proves the intervening cap sliver's
 reach. The measured vertical and lateral reach is charged to the upper
 vertex and boundary bounds. The Join's swept-volume charge is carried into

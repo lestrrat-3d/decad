@@ -27,7 +27,9 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 	pair, err := decad.Union(t.Context(), lower, upper)
 	require.NoError(t, err)
 	pattern := []*decad.Body{pair}
-	for i := 1; i < 8; i++ {
+	// Feed copies in reverse angular order. The certified source Join sorts
+	// its teeth, so the near-axis upper shift must follow the sorted tooth.
+	for i := 7; i >= 1; i-- {
 		angle := units.Degrees(float64(45 * i))
 		if i == 5 {
 			angle = units.Radians(10 * 2 * math.Pi / 17)

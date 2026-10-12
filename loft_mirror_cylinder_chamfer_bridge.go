@@ -13,9 +13,11 @@ import (
 
 // Recompute the original upper-tooth translations from the authenticated
 // source placements. The Join's accumulated bounds must still contain them.
-func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord) ([]*big.Rat, error) {
+func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
+	source loftCylinderChamferSource) ([]*big.Rat, error) {
 	if record == nil || record.join == nil || record.join.source == nil ||
-		record.join.source.lower == nil || len(record.join.pairs) == 0 {
+		record.join.source.lower == nil || len(record.join.pairs) == 0 ||
+		len(record.join.pairs) != len(source.originalTeeth) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its upper tooth source", ErrUnsupported)
 	}
 	loft, ok := record.join.source.lower.payload.(loftPayload)
@@ -23,7 +25,7 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord) 
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its source Loft", ErrUnsupported)
 	}
 	middle := loft.frame1.Origin().Z
-	shifts := make([]*big.Rat, len(record.join.pairs))
+	byMotion := make(map[r3.Transform]*big.Rat, len(record.join.pairs))
 	var sweptTotal, greatest float64
 	for i, pair := range record.join.pairs {
 		fp, ok := pair.payload.(facetedPayload)
@@ -34,8 +36,11 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord) 
 		if !ok {
 			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its placement", ErrUnsupported, i)
 		}
+		if _, duplicate := byMotion[motion]; duplicate {
+			return nil, fmt.Errorf("%w: mirrored cap has duplicate tooth placement", ErrUnsupported)
+		}
 		if loftCylinderAxialPlacement(motion) {
-			shifts[i] = new(big.Rat)
+			byMotion[motion] = new(big.Rat)
 			continue
 		}
 		shift, swept, proved, err := loftMirrorCylinderUpperBridge(pair, motion, middle)
@@ -51,7 +56,7 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord) 
 		if exactShift.Sign() <= 0 || exactShift.Cmp(proofarith.FloatRat(shift)) > 0 {
 			return nil, fmt.Errorf("%w: mirrored cap tooth %d exceeds its exact bridge", ErrUnsupported, i)
 		}
-		shifts[i] = exactShift
+		byMotion[motion] = exactShift
 		greatest = max(greatest, shift)
 		sweptTotal = proofbound.AbsSumUpper(sweptTotal, swept)
 	}
@@ -60,6 +65,25 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord) 
 	}
 	if greatest == 0 {
 		return nil, nil
+	}
+	// Circular Join sorts teeth by polar position. Match the authenticated
+	// placed lower Loft, rather than relying on the caller's pair order.
+	shifts := make([]*big.Rat, len(source.originalTeeth))
+	for i, tooth := range source.originalTeeth {
+		lp, ok := tooth.payload.(loftPayload)
+		if !ok || !lp.authenticatedReconstruction ||
+			lp.sourceIdentity != loft.sourceIdentity {
+			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its source identity", ErrUnsupported, i)
+		}
+		shift, matched := byMotion[lp.xform]
+		if !matched || shift == nil {
+			return nil, fmt.Errorf("%w: mirrored cap tooth %d has no matching placement", ErrUnsupported, i)
+		}
+		shifts[i] = shift
+		delete(byMotion, lp.xform)
+	}
+	if len(byMotion) != 0 {
+		return nil, fmt.Errorf("%w: mirrored cap has unmatched pair placements", ErrUnsupported)
 	}
 	return shifts, nil
 }

@@ -47,7 +47,7 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	if err := loftMirrorCylinderChamferSelect(ctx, b, fp, record, edges); err != nil {
 		return nil, true, err
 	}
-	shifts, err := loftMirrorCylinderChamferUpperShifts(record)
+	shifts, err := loftMirrorCylinderChamferUpperShifts(record, source)
 	if err != nil {
 		return nil, true, err
 	}
