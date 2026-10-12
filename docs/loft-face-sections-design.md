@@ -291,6 +291,15 @@ One arc that alone passes an axis extremum determines the loop direction.
 The real Sketch profile produces eight cells for the focused neutral case.
 This gate does not decide which tool-cap angles the source occupies.
 
+For a heel-tool circle on a vertical blank side, a positive-determinant
+section map carries that simple source loop into the circle plane. The
+constant-X source classifier must give exactly two transverse crossings
+at the upper retained radius; every other source cell has a strict side.
+The crossing boxes must lie at positive Y on opposite strict Z sides.
+Their radial sign changes in Sketch walk order select the occupied arc.
+The source-parameter brackets enclose its endpoints without treating them
+as rational points. A stale circle, cap origin, or source record refuses.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume

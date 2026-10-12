@@ -48,6 +48,8 @@
 1	0.00	TestRevolveLoftFacesSimpleSeparatedRequiresStrictAxisGap
 1	0.00	TestRevolveLoftFacesShortArcSupportsOnlyItsChordOutside
 1	0.01	TestRevolveLoftFacesArcRefusesUnequalEndpointRadius
+1	0.00	TestRevolveLoftFacesToolBoundaryUsesSketchWalkDirection
+0	3.14	TestRevolveLoftFacesHeelVerticalArcConsumesLiveNeutralSource
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
 1	0.00	TestAddRevolveFacesPreservesMeridianErrorMapping
