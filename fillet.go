@@ -44,6 +44,8 @@ import (
 // docs/modify-reach-design.md §7), and a brep or stacked boolean result takes
 // routes P and E of docs/brep-modify-design.md (brep_modify.go); any other
 // receiver is S3 (ErrUnsupported).
+// A one-sided positive circular draft also admits its one complete far cap
+// rim through the bounded meridian reduction in draft_circle_fillet.go.
 
 // FilletOption configures Fillet. WithTangentChain is the one option a
 // fillet takes (docs/modify-reach-design.md §2).
@@ -124,7 +126,8 @@ const filletTol = sectionaudit.Tolerance
 // are oblique; the cutter and receiver commit atomically. A faceted Union of
 // a rooted oblique circular boss and rectangular plate also accepts its one
 // complete root junction (docs/oblique-boss-fillet-design.md). Any other
-// receiver outside those routes and loft §17 is S3 (ErrUnsupported).
+// receiver outside those routes, loft §17 and draft §10.4 is S3
+// (ErrUnsupported).
 //
 // A loop-filleted body publishes its volume, centroid, area, box and
 // through-all extent, and passes Verify; it meshes with an occupied-volume
@@ -188,6 +191,9 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	// prism" refusal, so the more specific reason leads.
 	if err := requireNotCapBlendReceiver(b.payload, "fillets"); err != nil {
 		return nil, err
+	}
+	if out, matched, err := tryDraftCircleRimFillet(ctx, b, edges, rmm, rDelta); matched || err != nil {
+		return out, err
 	}
 	if err := requireNotDraftReceiver(b.payload, "fillets"); err != nil {
 		return nil, err

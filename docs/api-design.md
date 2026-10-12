@@ -1507,14 +1507,16 @@ shell that built a tube — the analytic prisms and partial revolves whose
 evaluator emits `capStart` / `capEnd` — an admitted analytic `Union`, which
 rebuilds an analytic prism with fresh roles under its own identity, an
 authenticated axial Loft/cylinder `Union` or its centered bore `Cut`, whose
-audited planar caps also get fresh roles, and a `Placed` /
+audited planar caps also get fresh roles, the modified full revolution made by
+a positive-taper circular draft rim fillet (draft §10.4), whose two planar
+disks get cap roles, and a `Placed` /
 `PlacedCopy` / `Duplicate` of one, which re-mints those roles under the copy's
 own identity (the copy-provenance rule above). On a body whose producer mints no such
 role the helper still returns a well-formed `FeatureRef` — it just matches
 nothing, an ordinary `ErrNoMatch` at resolve (or `ErrCardinality` under an
 implicit exactly-one). That covers an ordinary mesh-path `Union` / `Cut` / `Intersect`
 result (its faces carry the operands' UPSTREAM origins, not a cap role keyed to
-the boolean's own identity), a full revolution (no caps at all), and `CapEnd` on a
+the boolean's own identity), an ordinary full revolution (no caps at all), and `CapEnd` on a
 cup (a cup mints `capStart` and a `shellCap` pocket floor, no `capEnd`). To name
 a cap that an ordinary mesh boolean's operand contributed, select
 `FaceCreatedBy(CapStart(originalBody))` against the upstream body whose

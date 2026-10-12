@@ -410,7 +410,7 @@ nothing else.
 | **DD11** | `MassProperties` and `dynamics` | the verified-mesh path (`verifiedMeshMassProperties`) over DD1's mesh; `ErrUnsupported` where the band admission refuses | 2 |
 | **DD12** | `Placed`, `Duplicate`, `PlacedCopy`, `Mirrored`, `MirroredCopy` | the payload implements `transform()` and `placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `WithJoin` refuses (it rewrites a prism's or stacked prism's section) | 1 |
 | **DD13** | `Patterned` | `placedInstance` and a boolean `Union` (the mesh path); the frame-keeping arm does not take the class | 2 |
-| **DD14** | `Fillet`, `Chamfer`, `Shell` | modify S3, `ErrUnsupported`; each refusal message names the draft body among the classes it does not take. A shell of a draft body — the molded cup — is the first reach a later design should take: its cavity is a draft body of the same angle over the section offset by `t / cos α`, floored `t` above the kept cap. Not scheduled here | — |
+| **DD14** | `Fillet`, `Chamfer`, `Shell` | A positive-taper, one-sided, full circular solid admits one complete far-cap outer rim fillet (§10.4). Other fillets, chamfers and shells remain modify S3, `ErrUnsupported`. A shell of a draft body — the molded cup — needs a cavity drafted by the same angle over the section offset by `t / cos α`, floored `t` above the kept cap | — |
 | **DD15** | `Draft` of a draft body | SD23 | — |
 | **DD16** | `Thicken`, `Offset`, `Patch`, `Stitch`, `Trim`/`Extend`/`Split` | not reached: a draft body is a solid (SD12 refuses the sheet form) | — |
 | **DD17** | Motion and linkage bounds | `motion_bound.go` reads near and widened far section bounds. `internal/motionbound/record_radius.go` reads each segment's carrier and walk. | 2 |
@@ -584,6 +584,38 @@ details, each the reading the rule above implies:
   bound and the survey leaves it undecided; a moved wall reads as in a full
   draft.
 
+### 10.4 One circular far-rim fillet (DD14)
+
+`Fillet` accepts the one complete far cap rim of a one-sided inward draft
+whose source is a single full circular outer loop with no holes or kept walls.
+The source sketch frame must have exact signed-axis basis vectors. The draft
+payload authenticates the near circle, sweep levels, taper and far contour.
+An arbitrary rigid placement of that body is retained by the result.
+
+For near radius `R`, height `h`, inward amount `d`, slope `k = d/h`, far radius
+`r = R−d`, and fillet radius `f`, the rounded meridian's arc centre is
+`(z,ρ) = (h−f, r+kf−f√(1+k²))`. Its top contact is directly above the
+centre by `f`; its side contact is
+`(h−f+fk/√(1+k²), r+kf−f√(1+k²)+f/√(1+k²))`.
+The five-segment meridian closes through the rotation axis and revolves a
+top disk, toroidal fillet, conical side and bottom disk. The full-revolution
+evaluator supplies topology, mass readings and occupied-volume proof. The
+top and bottom disks also carry the draft-style `capEnd` and `capStart`
+roles; the torus carries `fillet(0,2)`.
+
+Bounded arithmetic encloses the stated radius, height, inward amount and
+their derived centre and contact coordinates. The result's `sectionDelta`
+charges the largest coordinate and frame-origin displacement by a factor of
+64. With that charge below `f/16`, the per-coordinate error is below
+`f/1024`. An endpoint ray changes by at most `2√2` times that error; the
+resulting angle changes by less than four times the error divided by `f`.
+Interpolating the unwrapped arc sweep of at most a quarter turn moves every
+arc point by less than 16 times the error. Positive interval
+clearances keep the arc outside the axis, on the cone, above the near cap and
+inside the original near rim. Unproved clearances, other cap selections,
+partial circles, holes, reverse taper and non-axis sketch frames remain
+outside this bounded route.
+
 ## 11. Required tests
 
 Every fixture asserts computed geometry against a closed form and asserts
@@ -620,8 +652,8 @@ and F7 with `d` closing the ring), SD7 (a thin rectangle whose short walls'
 miters cross), SD8 (a plate whose off-centre hole widens across the outer
 wall), SD12, SD13 (an angle of
 `1e-14°` on a 1 mm sweep). SD15 is pinned in `internal/offset2d/sharp_test.go`
-(§5). Beside them, the draft body's downstream refusals: `Fillet`, `Chamfer`
-and `Shell` refuse it by name (DD14), and `MirroredCopy` builds it (DD12).
+(§5). Beside them, a draft body's unadmitted `Fillet`, `Chamfer` and `Shell`
+requests refuse it by name (DD14), and `MirroredCopy` builds it (DD12).
 
 **`Draft` fixtures** (`apitest/draft_test.go`, `draft_internal_test.go`):
 
