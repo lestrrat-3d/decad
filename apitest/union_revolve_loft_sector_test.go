@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const splitCapFirstRole = "side(0,1)"
+
 // TestUnionTaperedHubAndRadialLug uses independent real Sketch producers for
 // the Revolve section and the trimmed point-Loft sector. The extra line on
 // the hub cap is exactly collinear and must keep both source origins.
@@ -106,7 +108,7 @@ func taperedHubAndRadialLug(t *testing.T, splitU, toeApex, rootRadius float64, f
 	var splitCap []decad.FeatureRef
 	for _, face := range hub.Faces() {
 		origins := face.Origins()
-		if len(origins) == 2 && origins[0].Role == "side(0,1)" && origins[1].Role == "side(0,2)" {
+		if len(origins) == 2 && origins[0].Role == splitCapFirstRole && origins[1].Role == "side(0,2)" {
 			splitCap = origins
 		}
 	}

@@ -31,8 +31,8 @@ the two contacts. The fitted route uses Sketch's parameter brackets, local
 coordinate derivative and recorded Loft stations. Both routes charge the
 crossing enclosure separately from the source fan displacement.
 The loop keeps source group and root-contact labels on each edge. The joined
-body retains the original sources, placed-sector slots, cap-ring slot and
-published boundary, occupied-volume and area allowances. Placement clears
+body retains the original sources and published boundary, occupied-volume
+and area allowances. Placement clears
 the direct join certificate and records an authenticated rigid copy of the
 original trimmed source.
 

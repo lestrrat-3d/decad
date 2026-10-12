@@ -2,9 +2,10 @@ package decad
 
 import (
 	"fmt"
+	"math"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
-	"math"
 )
 
 // revolveExteriorPath inserts certified root contacts into the original
@@ -145,6 +146,10 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 	if forward[0].crossing < 0 || forward[len(forward)-1].crossing < 0 {
 		return nil, 0, fmt.Errorf("%w: source path lost its cone crossings", ErrUnsupported)
 	}
+	for _, i := range []int{0, len(forward) - 1} {
+		forward[i].rootBoundary = true
+		forward[i].angle = math.Atan2(forward[i].point.Z, forward[i].point.Y)
+	}
 	return forward, maxCrossBound, nil
 }
 
@@ -159,8 +164,10 @@ func revolvePointSegmentDistance(p, a, b r3.Vec) float64 {
 }
 
 func revolveRootAngles(path []revolveSectorNode) (float64, float64, bool) {
-	a := math.Atan2(path[0].point.Z, path[0].point.Y)
-	b := math.Atan2(path[len(path)-1].point.Z, path[len(path)-1].point.Y)
+	if len(path) < 2 || !path[0].rootBoundary || !path[len(path)-1].rootBoundary {
+		return 0, 0, false
+	}
+	a, b := path[0].angle, path[len(path)-1].angle
 	if !proofbound.FiniteVec(r3.Vec{X: a, Y: b}) || a == b || math.Abs(a-b) >= math.Pi {
 		return 0, 0, false
 	}

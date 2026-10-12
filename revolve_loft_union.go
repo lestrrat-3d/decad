@@ -15,15 +15,7 @@ type revolveLoftJoinRecord struct {
 	certificate                           *revolveLoftSectorCertificate
 	blank                                 *Body
 	first                                 facetedPayload
-	placed                                []facetedPayload
-	capRing                               *revolveLoftCapRingRecord
 	boundaryBound, volumeBound, areaBound float64
-}
-
-type revolveLoftCapRingRecord struct {
-	angles            []float64
-	heel, root, toe   []int
-	heelAxis, toeAxis int
 }
 
 type revolveLoftToothPlacement struct {

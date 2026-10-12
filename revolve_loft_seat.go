@@ -1,13 +1,14 @@
 package decad
 
 import (
+	"math"
+	"math/big"
+
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
-	"math"
-	"math/big"
 )
 
 // revolveCrossingPoint lifts Sketch's rounded line evaluation and bounds the
