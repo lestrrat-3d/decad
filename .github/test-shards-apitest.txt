@@ -42,6 +42,9 @@
 1	0.00	TestContactPairSignedAxisPose
 1	0.01	TestContactPairSupportSetTouch
 1	0.00	TestDiagnosticReadingKindTokens
+1	0.04	TestDraftCircleEndRimChamferPlacement
+1	0.02	TestDraftCircleEndRimChamferRefusalsLeaveSourceLive
+1	0.04	TestDraftCircleEndRimChamferVerified
 1	0.10	TestDraftCircleEndRimFilletPlacement
 1	0.02	TestDraftCircleEndRimFilletRefusalsLeaveSourceLive
 1	0.10	TestDraftCircleEndRimFilletVerified

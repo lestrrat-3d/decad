@@ -36,7 +36,8 @@ import (
 // (revolve_blend.go, docs/modify-reach-design.md §7), and a brep or stacked
 // boolean result takes routes P and E of docs/brep-modify-design.md and route
 // L of docs/modify-general-design.md (brep_modify.go); any other non-prism
-// receiver is S3 (ErrUnsupported).
+// receiver is S3 (ErrUnsupported), except the bounded tapered full-circle
+// far-rim case in docs/draft-design.md §10.5.
 //
 // Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
 // which the fillet does not: a selection covering every geometric edge of one
@@ -69,8 +70,10 @@ type ChamferOption interface{ chamferOption() }
 // perpendicular. Any other revolve edge — a cap edge, an edge on the axis — is
 // SX5 (ErrUnsupported).
 //
-// A receiver that is none of a prism, a revolve, or a brep or stacked
-// boolean result is S3 (ErrUnsupported).
+// A one-sided positive-taper circular extrude also accepts one complete
+// far-cap rim at an equal setback on its disk and cone (draft §10.5).
+//
+// A receiver outside the admitted classes is S3 (ErrUnsupported).
 //
 // WithTangentChain expands the edges sel resolves to as Fillet's does
 // (docs/modify-reach-design.md §5). WithAsymmetricChamfer sets each edge back
@@ -208,6 +211,11 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	// "not a prism" refusal, so the more specific reason leads.
 	if err := requireNotCapBlendReceiver(b.payload, "chamfers"); err != nil {
 		return nil, err
+	}
+	if asym == nil {
+		if out, matched, err := tryDraftCircleRimChamfer(ctx, b, edges, dmm, dDelta); matched || err != nil {
+			return out, err
+		}
 	}
 	if err := requireNotDraftReceiver(b.payload, "chamfers"); err != nil {
 		return nil, err

@@ -132,7 +132,7 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 }
 
 // A full revolution normally has no cap role: its meridian walls are all
-// side faces. This particular five-segment meridian has two planar disks.
+// side faces. Both tapered-circle rim rewrites have two planar disks.
 // Preserve their axial cap names so face and rim selectors still work after
 // the draft's rebuild and after placement.
 func addDraftCircleCapRoles(ctx context.Context, body *Body, ref producerID) error {

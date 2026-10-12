@@ -410,7 +410,7 @@ nothing else.
 | **DD11** | `MassProperties` and `dynamics` | the verified-mesh path (`verifiedMeshMassProperties`) over DD1's mesh; `ErrUnsupported` where the band admission refuses | 2 |
 | **DD12** | `Placed`, `Duplicate`, `PlacedCopy`, `Mirrored`, `MirroredCopy` | the payload implements `transform()` and `placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `WithJoin` refuses (it rewrites a prism's or stacked prism's section) | 1 |
 | **DD13** | `Patterned` | `placedInstance` and a boolean `Union` (the mesh path); the frame-keeping arm does not take the class | 2 |
-| **DD14** | `Fillet`, `Chamfer`, `Shell` | A positive-taper, one-sided, full circular solid admits one complete far-cap outer rim fillet (§10.4). Other fillets, chamfers and shells remain modify S3, `ErrUnsupported`. A shell of a draft body — the molded cup — needs a cavity drafted by the same angle over the section offset by `t / cos α`, floored `t` above the kept cap | — |
+| **DD14** | `Fillet`, `Chamfer`, `Shell` | A positive-taper, one-sided, full circular solid admits one complete far-cap outer rim fillet (§10.4) or symmetric chamfer (§10.5). Other fillets, chamfers and shells remain modify S3, `ErrUnsupported`. A shell of a draft body — the molded cup — needs a cavity drafted by the same angle over the section offset by `t / cos α`, floored `t` above the kept cap | — |
 | **DD15** | `Draft` of a draft body | SD23 | — |
 | **DD16** | `Thicken`, `Offset`, `Patch`, `Stitch`, `Trim`/`Extend`/`Split` | not reached: a draft body is a solid (SD12 refuses the sheet form) | — |
 | **DD17** | Motion and linkage bounds | `motion_bound.go` reads near and widened far section bounds. `internal/motionbound/record_radius.go` reads each segment's carrier and walk. | 2 |
@@ -616,6 +616,31 @@ inside the original near rim. Unproved clearances, other cap selections,
 partial circles, holes, reverse taper and non-axis sketch frames remain
 outside this bounded route.
 
+### 10.5 One circular far-rim chamfer (DD14)
+
+`Chamfer` accepts the same source and rim as §10.4, with equal setbacks along
+the cap plane and conical wall. `WithAsymmetricChamfer` remains outside this
+route. The draft record and exact signed-axis sketch frame authenticate the
+source. The result keeps its placement and axial cap roles.
+
+For near radius `R`, height `h`, inward amount `d`, slope `k = d/h`, far radius
+`r = R−d`, bevel setback `c`, and `n = √(1+k²)`, the cap contact is
+`(z,ρ) = (h,r−c)`. The side contact is `(h−c/n,r+kc/n)`: its distance along
+the slanted wall from the original rim is `c`. The meridian closes through
+the axis with these two contacts, the near rim and two axial segments. Its
+full revolution builds the bottom and top disks and the original and bevel
+cones. The bevel cone carries `chamfer(0,2)`.
+
+The operation requires positive interval clearance for `r−c`, `h−c/n` and
+the side contact below the far level and inside the near rim. Bounded
+arithmetic encloses source dimensions and both contacts. The largest
+coordinate and frame-origin displacement is charged to the whole meridian's
+`sectionDelta`; a line between held endpoints stays within their maximum
+displacement. `evalRevolve` then supplies bounded mass and occupied-volume
+proof. The removed volume has the independent closed form
+`πc²/n · [r + c(k/n−1)/3]`. The far circle survives as a smaller cap rim,
+and the new cone meets the source cone at one whole circular junction.
+
 ## 11. Required tests
 
 Every fixture asserts computed geometry against a closed form and asserts
@@ -652,8 +677,8 @@ and F7 with `d` closing the ring), SD7 (a thin rectangle whose short walls'
 miters cross), SD8 (a plate whose off-centre hole widens across the outer
 wall), SD12, SD13 (an angle of
 `1e-14°` on a 1 mm sweep). SD15 is pinned in `internal/offset2d/sharp_test.go`
-(§5). Beside them, a draft body's unadmitted `Fillet`, `Chamfer` and `Shell`
-requests refuse it by name (DD14), and `MirroredCopy` builds it (DD12).
+(§5). Beside them, a draft body's requests outside §10.4–§10.5 refuse it by
+name (DD14), and `MirroredCopy` builds it (DD12).
 
 **`Draft` fixtures** (`apitest/draft_test.go`, `draft_internal_test.go`):
 

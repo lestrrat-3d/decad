@@ -435,13 +435,13 @@ func requireNotCapBlendReceiver(payload featurePayload, op string) error {
 }
 
 // requireNotDraftReceiver is modify S3 for a draft body
-// (docs/draft-design.md Table DD row DD14): no modify op takes a tapered
-// extrude as its receiver yet. It runs beside requireNotCapBlendReceiver, so
-// the refusal names the draft body rather than the generic class.
+// (docs/draft-design.md Table DD row DD14) outside its bounded rim routes.
+// It runs beside requireNotCapBlendReceiver, so the refusal names the draft
+// body rather than the generic class.
 func requireNotDraftReceiver(payload featurePayload, op string) error {
 	switch payload.(type) {
 	case draftPayload, twoSidedDraftPayload:
-		return fmt.Errorf(`%w: this evaluator %s a straight prism, a revolve or their modify results, never a draft body (a tapered extrude) (modify S3)`, ErrUnsupported, op)
+		return fmt.Errorf(`%w: this evaluator %s a straight prism, a revolve or their modify results; this draft body (a tapered extrude) is outside its bounded rim routes (modify S3)`, ErrUnsupported, op)
 	}
 	return nil
 }

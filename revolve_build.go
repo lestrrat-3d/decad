@@ -113,7 +113,7 @@ type revolvePayload struct {
 	blendSegs []map[int]struct{}
 	blendKind string
 	// draftCircleCaps retains the two axial cap roles when a one-sided
-	// circular draft rim fillet is rebuilt as a full revolution. In that
+	// circular draft rim fillet or chamfer is rebuilt as a full revolution. In that
 	// five-segment meridian, side(0,1) is the far cap and side(0,4) the
 	// near cap. Placement re-evaluates this same meridian and roles.
 	draftCircleCaps bool
