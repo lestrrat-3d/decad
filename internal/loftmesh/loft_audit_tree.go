@@ -22,6 +22,7 @@ type treeNode struct {
 	box         [2]r3.Vec
 	start, end  int
 	left, right int
+	maxID       int32
 }
 
 const treeLeafSize = 8
@@ -39,13 +40,15 @@ func newTreeScan(boxes [][2]r3.Vec, members []int) treeScan {
 
 func (t *treeScan) build(start, end int) int {
 	box := t.boxes[t.order[start]]
+	maxID := t.order[start]
 	for _, i := range t.order[start+1 : end] {
+		maxID = max(maxID, i)
 		b := t.boxes[i]
 		box[0] = r3.Vec{X: min(box[0].X, b[0].X), Y: min(box[0].Y, b[0].Y), Z: min(box[0].Z, b[0].Z)}
 		box[1] = r3.Vec{X: max(box[1].X, b[1].X), Y: max(box[1].Y, b[1].Y), Z: max(box[1].Z, b[1].Z)}
 	}
 	index := len(t.nodes)
-	t.nodes = append(t.nodes, treeNode{box: box, start: start, end: end, left: -1, right: -1})
+	t.nodes = append(t.nodes, treeNode{box: box, start: start, end: end, left: -1, right: -1, maxID: maxID})
 	if end-start <= treeLeafSize {
 		return index
 	}
@@ -74,6 +77,54 @@ func (t *treeScan) build(start, end int) int {
 	right := t.build(mid, end)
 	t.nodes[index].left, t.nodes[index].right = left, right
 	return index
+}
+
+// visitRow reports the boxes overlapping member i, with each partner j > i
+// once. It counts node visits and leaf box comparisons, including rejected
+// ones, so a caller can bound the work before running any pair audit.
+func (t treeScan) visitRow(budget *proofbound.WorkBudget, i int, limit uint64,
+	fn func(j int)) (uint64, bool, error) {
+	if len(t.nodes) == 0 {
+		return 0, false, nil
+	}
+	var scanned uint64
+	step := func() (bool, error) {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		scanned++
+		return scanned > limit, nil
+	}
+	var walk func(node int) (bool, error)
+	walk = func(node int) (bool, error) {
+		if exceeded, err := step(); exceeded || err != nil {
+			return exceeded, err
+		}
+		n := t.nodes[node]
+		if int(n.maxID) <= i || !meshbool.BoxesOverlap(t.boxes[i], n.box) {
+			return false, nil
+		}
+		if n.left >= 0 {
+			if exceeded, err := walk(n.left); exceeded || err != nil {
+				return exceeded, err
+			}
+			return walk(n.right)
+		}
+		for _, j := range t.order[n.start:n.end] {
+			if int(j) <= i {
+				continue
+			}
+			if exceeded, err := step(); exceeded || err != nil {
+				return exceeded, err
+			}
+			if meshbool.BoxesOverlap(t.boxes[i], t.boxes[j]) {
+				fn(int(j))
+			}
+		}
+		return false, nil
+	}
+	exceeded, err := walk(0)
+	return scanned, exceeded, err
 }
 
 // visit reports each overlapping member pair once. The same recursion is

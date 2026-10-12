@@ -350,6 +350,19 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 		return work, errLoftAuditCeiling()
 	}
 	work.Candidates = int(count)
+	streamed := data == nil && structure == nil && shortcuts.Sweep && provenPatches == 0 &&
+		parallelPairs && count > loftAuditCandidateBatchSize
+	var rowTree treeScan
+	if streamed {
+		var ok bool
+		rowTree, ok = order.(treeScan)
+		if !ok {
+			rowTree = newTreeScan(boxes, members)
+		}
+		if err := preflightLoftRows(budget, rowTree, members, starts, ceiling); err != nil {
+			return work, err
+		}
+	}
 	var cands loftCandidates
 	sparse := data == nil && structure == nil && shortcuts.Sweep && provenPatches != 0
 	if sparse {
@@ -361,7 +374,11 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 		data = newLoftAuditDataForCandidates(verts, tris, cands)
 	}
 	if data == nil {
-		data = NewLoftAuditData(verts, tris)
+		if streamed {
+			data = newCompactLoftAuditData(verts, tris)
+		} else {
+			data = NewLoftAuditData(verts, tris)
+		}
 	}
 
 	// S7: every candidate, classified against its recorded adjacency. The
@@ -413,10 +430,13 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 
 	var err error
 	if shortcuts.Sweep {
-		if !sparse {
+		if streamed {
+			failI, failJ, err = streamLoftPairs(budget, rowTree, members, starts, count, ceiling,
+				loftAuditCandidateBatchSize, tris, boxes, data, shortcuts, &work, testPair)
+		} else if !sparse {
 			cands, err = sweepCandidates(budget, order, starts, count, keepEveryPair)
 		}
-		if err == nil {
+		if err == nil && !streamed {
 			if parallelPairs && len(cands.js) >= 100_000 && runtime.GOMAXPROCS(0) > 1 {
 				failI, failJ, err = parallelLoftPairs(budget, tris, boxes, data, shortcuts, cands, &work)
 			} else {
@@ -481,12 +501,12 @@ func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]
 			defer group.Done()
 			i := sort.Search(len(cands.starts)-1, func(row int) bool {
 				return cands.starts[row+1] > start
-			})
+			}) + cands.baseRow
 			for k := start; k < end; k++ {
 				if k%proofbound.WorkPollInterval == 0 && stopped.Load() {
 					return
 				}
-				for k >= cands.starts[i+1] {
+				for k >= cands.starts[i-cands.baseRow+1] {
 					i++
 				}
 				j := int(cands.js[k])
@@ -559,7 +579,7 @@ func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]
 			work.Classifications++
 		}
 		if k == first {
-			return i, int(cands.js[k]), firstErr
+			return cands.baseRow + i, int(cands.js[k]), firstErr
 		}
 	}
 	return -1, -1, nil
@@ -774,8 +794,9 @@ type sweepCount struct {
 // loftCandidates is a candidate list in lexicographic order: triangle i's
 // partners are js[starts[i]:starts[i+1]], ascending.
 type loftCandidates struct {
-	starts []int
-	js     []int32
+	baseRow int
+	starts  []int
+	js      []int32
 }
 
 // sweepCandidates is the second sweep pass (docs/loft-design.md §6): it
@@ -807,7 +828,7 @@ func sweepCandidates(budget *proofbound.WorkBudget, s pairScan, starts []int, co
 func (c loftCandidates) each(fn func(i, j int) error) error {
 	for i := range len(c.starts) - 1 {
 		for _, j := range c.js[c.starts[i]:c.starts[i+1]] {
-			if err := fn(i, int(j)); err != nil {
+			if err := fn(c.baseRow+i, int(j)); err != nil {
 				return err
 			}
 		}
