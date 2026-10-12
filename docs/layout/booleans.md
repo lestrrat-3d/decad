@@ -36,7 +36,6 @@ The rules for rows live in `docs/layout.md`.
 | `spiral_join_union.go` | Gates the first curved-tooth Union's source pairs, held contacts and output curves. See faceted-vertex-bounds §3.6. |
 | `spiral_combine.go` | Builds and validates a multi-tool spiral-bevel join. See faceted-vertex-bounds §3.7. |
 | `spiral_combine_sector.go` | Proves source and held tooth sectors disjoint before the combined join. See faceted-vertex-bounds §3.7. |
-| `bevel_join_combine.go` | Admits an authenticated straight-tooth pattern Union and proves complete source solids separate. See loft-point design. |
 | `bevel_join_cap_refine.go` | Refines straight-tooth caps while keeping shared edges and boundary labels. See loft-point design. |
 | `bevel_join.go` | Rebuilds and audits one shared-root bevel blank and tooth Union. See loft-point design. |
 | `joined_mesh.go` | Collects source-labeled join facets and checks closed, connected orientation before geometric audits. See tessellation §4. |

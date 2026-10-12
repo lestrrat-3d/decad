@@ -29,7 +29,6 @@
 0	0.01	TestBevelPatternAngularGapUsesCircularSeam
 0	0.01	TestBevelPatternRingAnglesKeepCapStationsAcrossHalfTurn
 0	0.01	TestBevelPatternRingKeepsSixteenSeparateRootSectors
-0	0.01	TestBevelPatternSourceProjectionChargesWholeBodyBounds
 0	0.01	TestBevelRootEdgeOrderRequiresOneDirectedInterval
 0	0.20	TestBevelSharedRingLeavesOnlyToothOwnedRootSectorsOpen
 0	0.01	TestBevelSourceRequiresPositivePublicConeBranch
