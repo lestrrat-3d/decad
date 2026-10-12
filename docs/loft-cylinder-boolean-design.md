@@ -420,6 +420,9 @@ Cut's local `boreBound` correspondence and exact outer-band separation.
 The source-circle proof depends only on the immutable tooth and blank radius.
 The middle-side audit retains each successful proof for later facets of that
 tooth; every facet still runs its own wall, height, and inward-patch checks.
+An outward-rounded box gap can omit a held wall triangle only when it strictly
+exceeds that tooth's matched Loft departure; all remaining pairs use the exact
+triangle clearance check.
 
 For the opposite boundary direction, any point of `∂(S∩C)` inside `C`
 belongs to `∂S`; the original two-way joined or bored boundary bound takes

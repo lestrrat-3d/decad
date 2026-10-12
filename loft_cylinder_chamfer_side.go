@@ -206,12 +206,16 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 		2*face.root >= lp.walls || face.bound < 0 || proofbound.IsNonFinite(face.bound) {
 		return fmt.Errorf("%w: inward patch lacks a bounded Loft wall", ErrUnsupported)
 	}
+	qBox, boxed := loftCylinderChamferExactTriBox(q)
 	fullClear := true
 	for j := range lp.walls {
 		if j%64 == 0 && ctx.Err() != nil {
 			return ctx.Err()
 		}
 		tri := lp.tris[j]
+		if boxed && loftCylinderChamferBoxGapAbove(qBox, meshbool.TriBox(lp.verts, tri), face.bound) {
+			continue
+		}
 		other := [3]proofarith.Xpt{
 			proofarith.XptOf(lp.verts[tri[0]]),
 			proofarith.XptOf(lp.verts[tri[1]]),

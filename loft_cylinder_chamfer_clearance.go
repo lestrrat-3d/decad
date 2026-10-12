@@ -1,11 +1,28 @@
 package decad
 
 import (
+	"math"
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 )
+
+// The first box encloses an exact triangle by outward rounding; the second
+// holds binary64 vertices exactly. A one-ulp-down coordinate gap strictly
+// above the source displacement separates the full triangle pair.
+func loftCylinderChamferBoxGapAbove(a, b [2]r3.Vec, sourceBound float64) bool {
+	if sourceBound < 0 || proofbound.IsNonFinite(sourceBound) {
+		return false
+	}
+	apart := func(lo, hi float64) bool {
+		return math.Nextafter(lo-hi, math.Inf(-1)) > sourceBound
+	}
+	return apart(a[0].X, b[1].X) || apart(b[0].X, a[1].X) ||
+		apart(a[0].Y, b[1].Y) || apart(b[0].Y, a[1].Y) ||
+		apart(a[0].Z, b[1].Z) || apart(b[0].Z, a[1].Z)
+}
 
 // An axis whose projected intervals have a gap larger than sourceBound
 // separates the whole ideal band triangle from the source wall envelope.
