@@ -15,13 +15,13 @@ import (
 
 func TestPointLoftSplitAnchoredScalePreservesCapsAndVolume(t *testing.T) {
 	doc := decad.New()
-	tooth := bevelReferenceTooth(t, doc)
-	span := pointBevelRootSpan()
-	first := pointBevelSliceSheet(t, doc, span/6, 30)
+	tooth := pointLoftRadialTab(t, doc)
+	span := pointLoftSliceSpan()
+	first := pointLoftSliceSheet(t, doc, span/6, 30)
 	parts, err := doc.Split(t.Context(), tooth, first)
 	require.NoError(t, err)
 	require.Len(t, parts, 2)
-	second := pointBevelSliceSheet(t, doc, span/3, 30)
+	second := pointLoftSliceSheet(t, doc, span/3, 30)
 	parts, err = doc.Split(t.Context(), parts[0], second)
 	require.NoError(t, err)
 	require.Len(t, parts, 2)

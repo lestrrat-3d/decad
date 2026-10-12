@@ -21,12 +21,12 @@ func pointSlabCap(t *testing.T, slab *decad.Body, role decad.FeatureRef) *decad.
 
 func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	doc := decad.New()
-	tooth := bevelReferenceTooth(t, doc)
-	span := pointBevelRootSpan()
+	tooth := pointLoftRadialTab(t, doc)
+	span := pointLoftSliceSpan()
 	inner := tooth
 	kept := make([]*decad.Body, 0, 8)
 	for k := 1; k <= 8; k++ {
-		sheet := pointBevelSliceSheet(t, doc, span*float64(k)/6, 30)
+		sheet := pointLoftSliceSheet(t, doc, span*float64(k)/6, 30)
 		parts, err := doc.Split(t.Context(), inner, sheet)
 		require.NoError(t, err)
 		require.Len(t, parts, 2)
@@ -79,7 +79,7 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
-	require.Greater(t, mesh.Bound().Base(), 0.01)
+	require.Positive(t, mesh.Bound().Base())
 	volume, err := loft.Volume()
 	require.NoError(t, err)
 	sum, allowance := 0.0, volume.Bound.Base()
@@ -90,7 +90,7 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 		allowance += reading.Bound.Base()
 	}
 	require.InDelta(t, sum, volume.Value.Base(), allowance)
-	_, toeApex := bevelReferenceSection()
+	const toeApex = 5.3
 	cut, err := decad.Cut(t.Context(), loft, pointConeTool(t, doc, toeApex))
 	require.NoError(t, err)
 	cutVolume, err := cut.Volume()

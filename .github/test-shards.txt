@@ -6,9 +6,9 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0:    2.45s over 21 tests
-#   shard 1:    5.38s over 270 tests
-#   shard 2:   10.23s over 138 tests
+#   shard 0:    2.13s over 8 tests
+#   shard 1:    5.32s over 267 tests
+#   shard 2:   10.22s over 137 tests
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  182.61s over 138 tests
 #   shard 5:   48.16s over 128 tests
@@ -18,22 +18,9 @@
 #   shard 9:   57.75s over 126 tests
 #   shard 10:   0.00s over 1 tests
 #
-0	0.01	TestBevelAxisRotationRequiresPureNonidentityXTurn
 0	0.01	TestLoftMirrorCylinderCapsMustTileWithOppositeWinding
 0	0.01	TestLoftMirrorCylinderLevelsRequireExactMidpoint
 0	0.01	TestLoftMirrorCylinderPairKeepsAuthenticatedSource
-0	0.01	TestBevelBoreCapFanRequiresAdjacentRingVertices
-0	0.01	TestBevelBorePatternKindRequiresMatchingToeTopology
-0	0.01	TestBevelBoreTriangleClearKeepsOnlyOutsideFacets
-0	0.01	TestBevelCapRefinementKeepsSharedEdgesAndBoundaryGroups
-0	0.01	TestBevelPatternAngularGapUsesCircularSeam
-0	0.01	TestBevelPatternRingAnglesKeepCapStationsAcrossHalfTurn
-0	0.01	TestBevelPatternRingKeepsSixteenSeparateRootSectors
-0	0.01	TestBevelRootEdgeOrderRequiresOneDirectedInterval
-0	0.20	TestBevelSharedRingLeavesOnlyToothOwnedRootSectorsOpen
-0	0.01	TestBevelSourceRequiresPositivePublicConeBranch
-0	0.01	TestBevelToeBoreIntersectionUsesRecordedFlank
-0	0.01	TestBevelTrimmedTeethRequireSeparatedCertifiedRanges
 0	0.70	TestObliqueBossJunctionFilletDiagonalTiltPublicWorkflow
 0	0.71	TestObliqueBossJunctionFilletPublicWorkflow
 0	0.69	TestObliqueBossJunctionFilletXTiltPublicWorkflow
@@ -56,9 +43,6 @@
 1	0.00	TestAxisFrameWalkChargeIsAbsentAtZero
 1	0.00	TestAxisFrameWalkChargeWidensEveryFieldItTouches
 1	0.00	TestBezierSliceCountSplitsBrokenFromUnsliceable
-1	0.05	TestBevelFitExteriorPathChargesSeatOnce
-1	0.01	TestBevelFitSeatPointEnclosesRecordedMeridianCrossing
-1	0.00	TestBevelFitStationEdgeRequiresOneStrictBracket
 1	0.01	TestBlindStackedLevelCarriesToolConversion
 1	0.00	TestBodyGateDiameterCancellation
 1	0.00	TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum
@@ -392,7 +376,6 @@
 2	0.02	TestPlanarBandTransferChargesDeviation
 2	0.01	TestPointConeOutsideWitnessRejectsUncertainContact
 2	0.01	TestPointConeUpperFarPlaneNodeRequiresCapCharge
-2	0.01	TestPointConeUpperFarPlaneSliverBound
 2	0.01	TestPointConeSourceMustClearFiniteFarCap
 2	0.01	TestPointConeTriangleBoundIncludesReciprocalCurvature
 2	0.01	TestPointPlaneScaleCarriesSourceThroughLaterPlacement

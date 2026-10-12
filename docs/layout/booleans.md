@@ -12,8 +12,7 @@ The rules for rows live in `docs/layout.md`.
 | `boolean_many_prism.go` | Arranges identical-interval line prisms in one Sketch scene. See prism-boolean §4.6. |
 | `point_cone_trim.go` | Retains point-loft and cone source faces through coaxial Cut/Intersect. See loft-point design. |
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation. See loft-face-sections design. |
-| `bevel_join_source.go` | Matches the live Sketch tooth source to the finite blank root meridian. See loft-point design. |
-| `bevel_join_fit.go` | Certifies fitted-flank root contacts against the recorded bevel meridian. See loft-point design. |
+| `bevel_join_source.go` | Matches the finite six-line blank for the curved LoftFaces join and checks live point-Loft sources. See loft-face-sections design. |
 | `spiral_join_source.go` | Certifies a cone-trimmed nine-section tooth's continuous flank crossings against a finite bevel blank. See loft-face-sections design. |
 | `spiral_join_heel_seam.go` | Bounds the source root arc's intersection with the blank heel cap. See loft-face-sections design. |
 | `spiral_join_toe_seam.go` | Bounds the source root arc's intersection with the blank toe cap. See loft-face-sections design. |
@@ -30,14 +29,8 @@ The rules for rows live in `docs/layout.md`.
 | `spiral_join_union.go` | Gates the first curved-tooth Union's source pairs, held contacts and output curves. See faceted-vertex-bounds §3.6. |
 | `spiral_combine.go` | Builds and validates a multi-tool spiral-bevel join. See faceted-vertex-bounds §3.7. |
 | `spiral_combine_sector.go` | Proves source and held tooth sectors disjoint before the combined join. See faceted-vertex-bounds §3.7. |
-| `bevel_join_cap_refine.go` | Refines straight-tooth caps while keeping shared edges and boundary labels. See loft-point design. |
-| `bevel_join.go` | Rebuilds and audits one shared-root bevel blank and tooth Union. See loft-point design. |
 | `joined_mesh.go` | Collects source-labeled join facets and checks closed, connected orientation before geometric audits. See tessellation §4. |
-| `bevel_join_two.go` | Rebuilds two separate point-loft teeth on one bevel blank root ring. See loft-point design. |
-| `bevel_join_pattern.go` | Rebuilds separate point-loft teeth on one bevel blank root ring. See loft-point design. |
-| `circular_bore_ring.go` | Samples and bounds the circular bore rings used by bevel and Loft/cylinder Cuts. See loft-point and loft-cylinder-boolean designs. |
-| `bevel_join_bore.go` | Admits a certified centered through-bore after a complete bevel join. See loft-point design. |
-| `bevel_join_bore_toe.go` | Cuts a centered bore through the narrow toe flank of an authenticated combined bevel join. See loft-point design. |
+| `circular_bore_ring.go` | Samples and bounds circular bore rings for Revolve/sector and Loft/cylinder Cuts. See revolve-loft-sector and loft-cylinder-boolean designs. |
 | `loft_cut.go` | Preserves a matching axial loft through a certified coaxial circle-bore Cut. See loft §18. |
 | `loft_mirror_union.go` | Joins one authenticated axial Loft to its end-cap reflection. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_union.go` | Joins repeated reflected Loft pairs to a centered cylinder, including one-pass Union and bounded axial placement. See loft-mirror-boolean design. |

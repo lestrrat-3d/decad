@@ -115,11 +115,6 @@ type facetedPayload struct {
 	// spiralTools exists only on a transient disjoint-tool operand built by
 	// A multi-body Union. It maps its source faces back to the live input tools.
 	spiralTools *spiralCombinedTools
-	// bevelJoin identifies the immutable blank and first trimmed tooth used
-	// to rebuild a second disjoint tooth on the same root ring.
-	bevelJoin *bevelJoinRecord
-	// bevelTooth identifies a single placed copy of a certified trimmed tooth.
-	bevelTooth *bevelToothPlacement
 	// revolveLoftJoin retains a geometry-certified section/sector source.
 	revolveLoftJoin *revolveLoftJoinRecord
 	// revolveLoftSector identifies one rigid copy of a trimmed point loft.
@@ -210,7 +205,6 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	// A rigid copy keeps the immutable Split source for certified face
 	// centroid ranking, but cannot become a new structural Split source.
 	next.pointPlaneSourceEligible = false
-	next.bevelJoin = nil
 	next.revolveLoftJoin = nil
 	next.obliqueBoss = nil
 	next.crossCylinderBore = nil
@@ -220,7 +214,6 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.loftMirrorCopy = nil
 	next.loftMirrorCylinderJoin = nil
 	next.loftMirrorCylinderBore = nil
-	next.bevelTooth = nil
 	next.revolveLoftSector = nil
 	if fp.loftMirrorJoin != nil && fp.xform == r3.Identity() {
 		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorJoin, motion: composed}
@@ -228,7 +221,6 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorCopy.source, motion: composed}
 	}
 	if fp.pointCone != nil && fp.xform == r3.Identity() {
-		next.bevelTooth = &bevelToothPlacement{source: fp.pointCone, motion: composed}
 		next.revolveLoftSector = &revolveLoftSectorPlacement{source: fp.pointCone, motion: composed}
 	}
 	if fp.loftFacesTrim != nil && fp.xform == r3.Identity() {
