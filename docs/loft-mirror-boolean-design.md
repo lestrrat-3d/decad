@@ -115,6 +115,11 @@ The true upper source `T(F(L))` differs from the reflected true lower source
 computes an upward rational bound for that shift. It adds the shift to all
 reflected upper vertex and boundary bounds and charges the source pair's
 certified area times the shift to occupied-volume difference. The lower
+circular Join's moving-plane tooth-separation test also widens each affected
+tooth's margin by the upper shift times its maximum XY radius and the plane's
+normal change per unit height. This keeps upper teeth apart, including the
+thin level where a shifted upper tooth meets another tooth's lower half. A
+fixed through-axis separator needs no height allowance. The lower
 circular Join's area allowance already includes the held joined area, blank
 area, and every source tooth's area. This also covers any short surface
 exposed by the shifted upper tooth. The original pair's common cap moves as

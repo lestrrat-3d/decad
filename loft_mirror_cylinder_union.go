@@ -100,6 +100,7 @@ func tryLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID
 		return nil, true, err
 	}
 	lowerTeeth := make([]*Body, len(pairs))
+	upperBridges := make([]float64, len(pairs))
 	var bridgeBound, bridgeVolume float64
 	for i, pair := range pairs {
 		payload, ok := pair.payload.(facetedPayload)
@@ -120,6 +121,7 @@ func tryLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID
 			}
 			bridgeBound = max(bridgeBound, shift)
 			bridgeVolume = proofbound.AbsSumUpper(bridgeVolume, swept)
+			upperBridges[i] = shift
 		}
 		tooth := record.lower
 		if motion != r3.Identity() {
@@ -130,7 +132,8 @@ func tryLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID
 		}
 		lowerTeeth[i] = tooth
 	}
-	lowerJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, d, ref, halfBlank, lowerTeeth)
+	lowerJoin, admitted, err := tryLoftCylinderUnionTeethWithUpperBridge(
+		ctx, d, ref, halfBlank, lowerTeeth, upperBridges)
 	if err != nil {
 		return nil, true, err
 	}

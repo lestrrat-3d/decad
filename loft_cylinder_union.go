@@ -43,25 +43,28 @@ const loftCylinderBlankSideRole = "side(0,0)"
 const loftCylinderAuditMaxScans = 16_000_000
 
 type loftCylinderTooth struct {
-	body      *Body
-	original  *Body
-	bridge    float64
-	loft      loftPayload
-	rootStart int
-	bottom    [2]float64
-	top       [2]float64
-	bottomIV  [2]proofbound.RatInterval
-	topIV     [2]proofbound.RatInterval
-	mesh      *Mesh
-	vertex    [][]int
-	rootGap   float64
-	inset     float64
-	reach     float64
-	shift     float64
-	angular   float64
-	reachOK   bool
-	collar    float64
-	wedge     float64
+	body     *Body
+	original *Body
+	bridge   float64
+	// upperSeparationBridge widens only the moving-plane separation proof
+	// when a later mirrored assembly translates this tooth's upper source.
+	upperSeparationBridge float64
+	loft                  loftPayload
+	rootStart             int
+	bottom                [2]float64
+	top                   [2]float64
+	bottomIV              [2]proofbound.RatInterval
+	topIV                 [2]proofbound.RatInterval
+	mesh                  *Mesh
+	vertex                [][]int
+	rootGap               float64
+	inset                 float64
+	reach                 float64
+	shift                 float64
+	angular               float64
+	reachOK               bool
+	collar                float64
+	wedge                 float64
 }
 
 func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
@@ -91,6 +94,14 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 // original Loft operands. Multi-body Union uses this once for the full pattern.
 func tryLoftCylinderUnionTeeth(ctx context.Context, d *Document, ref producerID,
 	blank *Body, teeth []*Body) (*Body, bool, error) {
+	return tryLoftCylinderUnionTeethWithUpperBridge(ctx, d, ref, blank, teeth, nil)
+}
+
+func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, ref producerID,
+	blank *Body, teeth []*Body, upperBridges []float64) (*Body, bool, error) {
+	if upperBridges != nil && len(upperBridges) != len(teeth) {
+		return nil, false, nil
+	}
 	pp, ok := blank.payload.(prismPayload)
 	if !ok || pp.surfaceResult || pp.xform != r3.Identity() ||
 		pp.z0Delta != 0 || pp.z1Delta != 0 || pp.sectionDelta != 0 ||
@@ -169,6 +180,12 @@ func tryLoftCylinderUnionTeeth(ctx context.Context, d *Document, ref producerID,
 		parts[i] = loftCylinderTooth{
 			body: tooth, original: teeth[i], bridge: bridge,
 			loft: lp, rootStart: root, mesh: m,
+		}
+		if upperBridges != nil {
+			if upperBridges[i] < 0 || proofbound.IsNonFinite(upperBridges[i]) {
+				return nil, false, nil
+			}
+			parts[i].upperSeparationBridge = upperBridges[i]
 		}
 		for cap := range 2 {
 			offset := cap * n

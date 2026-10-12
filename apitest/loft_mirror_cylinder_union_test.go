@@ -102,7 +102,7 @@ func TestUnionMirroredRadialTabsWithNearAxialCopy(t *testing.T) {
 	middlePlane, err := world.CreatePlaneFromFrame(middleFrame)
 	require.NoError(t, err)
 	bottomSketch, bottomProfile := loftMirrorTabSection(t, world, world.XY(), 0)
-	middleSketch, middleProfile := loftMirrorTabSection(t, world, middlePlane, 0.1)
+	middleSketch, middleProfile := loftMirrorTabSection(t, world, middlePlane, 0.2)
 	lower, err := doc.Loft(t.Context(), bottomSketch, bottomProfile, middleSketch, middleProfile)
 	require.NoError(t, err)
 	upper, err := lower.MirroredCopy(t.Context(), decad.MirrorFrame{Frame: middleFrame})
@@ -110,7 +110,9 @@ func TestUnionMirroredRadialTabsWithNearAxialCopy(t *testing.T) {
 	pair, err := decad.Union(t.Context(), lower, upper)
 	require.NoError(t, err)
 	angle := 2 * math.Pi / 17
-	firstMotion, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(4*angle))
+	// These two copies are 0.45 radians apart; the 0.2-radian twist
+	// requires a height-dependent separator for their full source walls.
+	firstMotion, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(10*angle-0.45))
 	require.NoError(t, err)
 	firstCopy, err := pair.PlacedCopy(t.Context(), firstMotion)
 	require.NoError(t, err)
