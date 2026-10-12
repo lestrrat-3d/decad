@@ -53,6 +53,43 @@ func closedRacetrack(profile profileRecord, plane planeRecord, path *Path) bool 
 		closedSweepCarrier(lower.Arc, major, new(big.Rat))
 }
 
+// closedPlanarTangentLoop admits a cyclic tube only when its recorded arc
+// turns compose one exact rotation about the common Y axis. Transport and
+// the global contact audit supply the remaining frame and separation proofs.
+func closedPlanarTangentLoop(profile profileRecord, plane planeRecord, path *Path) bool {
+	if plane.Origin != (r3.Vec{}) || plane.U != r3.NewVec(1, 0, 0) ||
+		plane.V != r3.NewVec(0, 1, 0) || path.Start() != (r3.Vec{}) ||
+		len(path.records) < 5 || len(profile.Holes) != 0 || len(profile.Outer.Segments) != 1 {
+		return false
+	}
+	circle, ok := profile.Outer.Segments[0].(circleSeg)
+	if !ok || circle.Center.U != 0 || circle.Center.V != 0 ||
+		!circle.CCW || circle.TStart != 0 || circle.TEnd != 1 {
+		return false
+	}
+	turns := new(big.Rat)
+	arcCount := 0
+	for _, record := range path.records {
+		if record.Start.Y != 0 || record.End.Y != 0 {
+			return false
+		}
+		if record.Arc == nil {
+			continue
+		}
+		arcCount++
+		arc := record.Arc
+		angle := record.ArcAngle
+		if arc.Center[1].Sign() != 0 || arc.Axis[0].Sign() != 0 ||
+			arc.Axis[1].Sign() <= 0 || arc.Axis[2].Sign() != 0 ||
+			angle.Turn == nil || angle.Rad == nil || angle.Rad.Sign() != 0 || angle.Span != nil ||
+			(angle.Turn.Cmp(big.NewRat(1, 4)) != 0 && angle.Turn.Cmp(big.NewRat(1, 2)) != 0) {
+			return false
+		}
+		turns.Add(turns, angle.Turn)
+	}
+	return arcCount >= 2 && turns.Cmp(big.NewRat(1, 1)) == 0
+}
+
 func closedSweepHalfTurn(record sweepinput.PathRecord) bool {
 	angle := record.ArcAngle
 	return angle.Turn != nil && angle.Turn.Cmp(big.NewRat(1, 2)) == 0 &&
@@ -69,12 +106,12 @@ func closedSweepCarrier(arc *sweeparc.Record, x, z *big.Rat) bool {
 		arc.Axis[0].Sign() == 0 && arc.Axis[1].Sign() > 0 && arc.Axis[2].Sign() == 0
 }
 
-func evalClosedRacetrackSweep(ctx context.Context, d *Document, ref producerID,
+func evalClosedCyclicSweep(ctx context.Context, d *Document, ref producerID,
 	profile profileRecord, plane planeRecord, frame r3.Frame, path *Path,
 	work *freeform.FreeformWork,
 ) (*Body, error) {
-	if !closedRacetrack(profile, plane, path) {
-		return nil, fmt.Errorf(`%w: the closed sweep path is outside the admitted circle and racetrack classes`, ErrUnsupported)
+	if !closedRacetrack(profile, plane, path) && !closedPlanarTangentLoop(profile, plane, path) {
+		return nil, fmt.Errorf(`%w: the closed sweep path is outside the admitted cyclic classes`, ErrUnsupported)
 	}
 	return evalCompositeSweepContextWithClosure(ctx, d, ref, profile, plane, frame, path, work, false, true)
 }

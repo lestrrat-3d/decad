@@ -32,7 +32,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | `Body.Draft` of a wall subset that moves one of two walls meeting at a circular corner, about a `NeutralFrame` or a non-cap face, or of a receiver that is not a straight prism | `ErrUnsupported`, draft SD4/SD20/SD23 (`draft.go`, `draft_build.go`) | `docs/draft-design.md` §10.2, §14 |
 | Sweep twist outside centred convex polygons or admitted paths; straight twist beyond one turn or the station work ceiling; line-arc twist beyond one radian | `ErrUnsupported` | `docs/sweep-design.md` §17 |
 | Composite sweep mesh over other free-form profile kinds, meridian poles or changed station order | `ErrUnsupported` (`tessellate_sweep_composite.go`); line, circular and `FitSplineSeg` profiles mesh and enter booleans | `docs/sweep-design.md` Table D |
-| Closed sweep path outside the exact two-arc full circle or four-span circular-section racetrack | `ErrUnsupported` (`sweep.go`); the admitted solids use certified full-Revolve or cyclic-span proofs | `docs/sweep-design.md` §§3.3–3.4 |
+| Closed sweep path outside the exact two-arc full circle or exact-turn planar circular-section loops | `ErrUnsupported` (`sweep.go`); the admitted solids use certified full-Revolve or cyclic-span proofs | `docs/sweep-design.md` §§3.3–3.5 |
 | Free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
 | Coil of a profile with free-form, elliptical or trimmed segments | `ErrUnsupported` (CS7) (`internal/coil/profile.go`) | `docs/helix-design.md` CS7 |
 | Composite path in `SweepChain` | `ErrUnsupported` (R34); one straight span only | `docs/surface-design.md` §1.2 |

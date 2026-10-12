@@ -77,7 +77,7 @@ func replayCompositeSweepWork(
 	}
 	var body *Body
 	var err error
-	if payload.closedRacetrack {
+	if payload.closedComposite {
 		body, err = assembleClosedCompositeSweepBody(ctx, d, ref, parts)
 	} else {
 		body, err = assembleCompositeSweepBody(ctx, d, ref, parts, payload.surfaceResult)
@@ -115,15 +115,15 @@ func evalCompositeSweepContextWithClosure(
 	frame r3.Frame,
 	path *Path,
 	work *freeform.FreeformWork,
-	surfaceResult, closedRacetrack bool,
+	surfaceResult, closedComposite bool,
 ) (*Body, error) {
 	if err := compositesweep.Preflight(profile, len(path.records)); err != nil {
 		return nil, err
 	}
 	var frames []sweepTransportFrame
 	var err error
-	if closedRacetrack {
-		frames, err = transportClosedRacetrackFrames(ctx, path, plane)
+	if closedComposite {
+		frames, err = transportClosedSweepFrames(ctx, path, plane)
 	} else {
 		frames, err = transportSweepFramesContext(ctx, path, plane)
 	}
@@ -151,7 +151,7 @@ func evalCompositeSweepContextWithClosure(
 		spans:           make([]sweepSpanPayload, len(path.records)),
 		path:            path,
 		surfaceResult:   surfaceResult,
-		closedRacetrack: closedRacetrack,
+		closedComposite: closedComposite,
 	}
 	for i, record := range path.records {
 		if err := ctx.Err(); err != nil {

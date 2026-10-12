@@ -30,8 +30,8 @@ import (
 // flag to omit the two outer caps after every span has built solid.
 //
 // An open Sweep mints two section caps. The exact two-arc closed circle of
-// §3.3 reduces to a full Revolve. The §3.4 circular-section racetrack sews
-// four analytic spans cyclically. Neither closed build mints section caps.
+// §3.3 reduces to a full Revolve. The §§3.4–3.5 circular-section loops sew
+// analytic spans cyclically. Neither closed build mints section caps.
 
 const compositeFitSweepWorkLimit = 8 * freeform.FreeformWorkLimit
 
@@ -55,7 +55,7 @@ func WithSweepTwist(angle units.Value) SweepOption {
 // exactly codirectional with the plane's positive normal. Composite paths also
 // require tangent joins, exactly representable transported frames, and a
 // certified absence of unintended span contact. Section 17 of the Sweep design
-// states the bounded nonzero-twist reach. Sections 3.3–3.4 admit two bounded
+// states the bounded nonzero-twist reach. Sections 3.3–3.5 admit bounded
 // closed-path classes.
 // Every failure and cancellation leaves the document unchanged.
 func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
@@ -148,7 +148,7 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 		if _, circle := closedSweepCircle(path); circle {
 			body, err = evalClosedCircleSweep(ctx, d, ref, profile, plane, frame, path, work)
 		} else {
-			body, err = evalClosedRacetrackSweep(ctx, d, ref, profile, plane, frame, path, work)
+			body, err = evalClosedCyclicSweep(ctx, d, ref, profile, plane, frame, path, work)
 		}
 		if err != nil {
 			return nil, err
@@ -264,7 +264,7 @@ type sweepPayload struct {
 	revolve         revolvePayload
 	arc             bool
 	closedCircle    bool
-	closedRacetrack bool
+	closedComposite bool
 	reverseArcCaps  bool
 	spans           []sweepSpanPayload
 	path            *Path

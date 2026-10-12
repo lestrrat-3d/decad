@@ -40,7 +40,7 @@ The rules for rows live in `docs/layout.md`.
 | `sweep_twist_composite.go` | Line-and-quarter-arc twist and shared Loft cell sewing, live faces and mesh proof. See sweep §17.2–§17.3. |
 | `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
 | `sweep_closed_circle.go` | Checks the exact two-arc full-circle path and evaluates its full Revolve reduction. See sweep §3.3. |
-| `sweep_closed_racetrack.go` | Admits an exact circular-section racetrack and routes its cyclic span build. See sweep §3.4. |
+| `sweep_closed_racetrack.go` | Admits exact-turn planar circular-section loops and routes the cyclic span build. See sweep §§3.4–3.5. |
 | `sweep_composite.go` | Composite Sweep join topology, boundary adapter over `internal/surfacegroup/`, surface-result caps. See sweep PR 4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and body measurement adapters. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Adapts built span caps, bounds and extents to `internal/compositesweep/`'s separation audit. See sweep §7. |
