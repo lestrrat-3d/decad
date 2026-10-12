@@ -21,7 +21,7 @@ func grazingSphere(t *testing.T, doc *decad.Document) *decad.Body {
 	profile.CreateArc(center, right, left)
 	_, err = profile.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Revolve(profile, profile.Profiles()[0],
+	body, err := decad.Revolve(t.Context(), doc, profile, profile.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body

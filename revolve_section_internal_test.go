@@ -48,7 +48,7 @@ func sectionSketchBody(t *testing.T, build func(*sketch.Sketch), extent AngularE
 	build(s)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, extent)
+	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], revolveAxisU, extent)
 	require.NoError(t, err)
 	return body
 }

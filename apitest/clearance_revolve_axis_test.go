@@ -61,7 +61,7 @@ func TestClearanceRevolveAxisReexpressionContainsTruth(t *testing.T) {
 			doc := decad.New()
 			const a = 1048576.3
 			s := rectSketch(t, 0.201, 0, 0.601, 1)
-			_, err := doc.Revolve(s, s.Profiles()[0],
+			_, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
 				decad.SketchLine{Start: decad.Point2{U: a, V: 0}, End: decad.Point2{U: a, V: 1}},
 				decad.AngleExtent{A: units.Degrees(deg), Dir: decad.Along})
 			require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestClearanceRevolveAxisCornerContainsTruth(t *testing.T) {
 			doc := decad.New()
 			const a = 1048576.3
 			s := rectSketch(t, 0.201, 0, 0.601, 1)
-			_, err := doc.Revolve(s, s.Profiles()[0],
+			_, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
 				decad.SketchLine{Start: decad.Point2{U: a, V: 0}, End: decad.Point2{U: a, V: 1}},
 				decad.AngleExtent{A: units.Degrees(deg), Dir: decad.Along})
 			require.NoError(t, err)
@@ -140,7 +140,7 @@ func TestClearanceRevolveAxisSnapContainsTruth(t *testing.T) {
 			s.CreateArc(c, end, start)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+			_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 			require.NoError(t, err)
 			g := r / 10
 			boxBodyAtZ(t, doc, -r/4, r+g, r/4, 2*r, -r/4, r/2)

@@ -14,7 +14,7 @@ func TestRevolveChainFullTurnWithOnePole(t *testing.T) {
 	t.Parallel()
 	s, ch, axis := coneChainAtRadius(t, 0)
 	doc := decad.New()
-	body, err := doc.RevolveChain(s, ch, axis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, ch, axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, body.Kind())
 	require.Len(t, body.Faces(), 1)
@@ -45,7 +45,7 @@ func TestRevolveChainPoleAtLastEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	body, err := decad.New().RevolveChain(s, s.Chains()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	_, err = decad.Edges(decad.Free()).Exactly(1).SelectEdges(body)
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestRevolveChainRejectsInteriorAxisPinch(t *testing.T) {
 	require.Len(t, s.Chains(), 1)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
 	doc := decad.New()
-	_, err = doc.RevolveChain(s, s.Chains()[0], axis, decad.FullRevolution{})
+	_, err = decad.Revolve(t.Context(), doc, s, s.Chains()[0], axis, decad.FullRevolution{})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "interior axis junction")
 	require.Empty(t, doc.Bodies())
@@ -79,7 +79,7 @@ func TestRevolveChainQuarterTurnWithOnePole(t *testing.T) {
 	t.Parallel()
 	s, ch, axis := coneChainAtRadius(t, 0)
 	doc := decad.New()
-	body, err := doc.RevolveChain(s, ch, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	body, err := decad.Revolve(t.Context(), doc, s, ch, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, body.Kind())
 	require.Len(t, body.Faces(), 1)
@@ -109,7 +109,7 @@ func TestRevolveChainSnappedPoleChargesArea(t *testing.T) {
 	t.Parallel()
 	s, ch, axis := coneChainAtRadius(t, 1e-10)
 	doc := decad.New()
-	body, err := doc.RevolveChain(s, ch, axis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, ch, axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	_, err = decad.Edges(decad.Free()).Exactly(1).SelectEdges(body)
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestRevolveChainPolePlacedBounds(t *testing.T) {
 	t.Parallel()
 	s, ch, axis := coneChain(t, 1e6, 0)
 	doc := decad.New()
-	body, err := doc.RevolveChain(s, ch, axis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, ch, axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	before, err := body.Area()
 	require.NoError(t, err)
@@ -177,8 +177,8 @@ func requireAreaContains15PiFraction(t *testing.T, area decad.Measurement, denom
 }
 
 // This file is docs/surface-design.md §13's public-surface tests for
-// RevolveChain: a chain spun into a shell with no cap, over any segment count
-// and kind Table G admits (§15's T134, T135; the R22 on-axis refusal lives in
+// Revolve over a chain: a chain spun into a shell with no cap, over any
+// segment count and kind Table G admits (§15's T134, T135; the R22 on-axis refusal lives in
 // extrude_chain_test.go's TestChainFedRefusals beside SweepChain/LoftChain's
 // own T139 rows).
 
@@ -215,7 +215,7 @@ func TestRevolveChainQuarterTurnStaysUndecided(t *testing.T) {
 	t.Parallel()
 	s, ch, axis := twoSegmentChainClearOfAxis(t)
 	doc := decad.New()
-	body, err := doc.RevolveChain(s, ch, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	body, err := decad.Revolve(t.Context(), doc, s, ch, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, body.Kind())
@@ -264,7 +264,7 @@ func TestRevolveChainFullTurnStaysOpen(t *testing.T) {
 	t.Parallel()
 	s, ch, axis := twoSegmentChainClearOfAxis(t)
 	doc := decad.New()
-	body, err := doc.RevolveChain(s, ch, axis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, ch, axis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, body.Kind())
@@ -286,7 +286,7 @@ func TestRevolveChainFullTurnStaysOpen(t *testing.T) {
 	require.Empty(t, br.Validity.Diagnostics)
 }
 
-// TestRevolveChainRunsTheSeamGates confirms RevolveChain runs RecordChain's
+// TestRevolveChainRunsTheSeamGates confirms chain Revolve runs RecordChain's
 // own gates exactly as ExtrudeChain does (docs/sketch-seam-design.md §2.2):
 // a stale chain is ErrStaleProfile, and an invalid one is ErrInvalidProfile,
 // neither ever reaching the axis or extent resolution.
@@ -310,12 +310,53 @@ func TestRevolveChainRunsTheSeamGates(t *testing.T) {
 
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 	doc := decad.New()
-	_, err = doc.RevolveChain(s, ch, axis, decad.FullRevolution{})
+	_, err = decad.Revolve(t.Context(), doc, s, ch, axis, decad.FullRevolution{})
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 	require.Empty(t, doc.Bodies())
 
 	fresh := s.Chains()[0]
-	body, err := doc.RevolveChain(s, fresh, axis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, fresh, axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	require.NotNil(t, body)
+}
+
+// TestRevolveChainRefusesSurfaceResult pins that a chain revolve always
+// returns a sheet, so WithSurfaceResult has no solid to toggle: it returns
+// ErrUnsupported and leaves the document unchanged, while the same call
+// without the option builds the sheet.
+func TestRevolveChainRefusesSurfaceResult(t *testing.T) {
+	t.Parallel()
+	s, ch, axis := coneChainAtRadius(t, 0)
+	doc := decad.New()
+
+	body, err := decad.Revolve(t.Context(), doc, s, ch, axis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Nil(t, body)
+	require.Empty(t, doc.Bodies())
+
+	body, err = decad.Revolve(t.Context(), doc, s, ch, axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, body.Kind())
+	require.Len(t, doc.Bodies(), 1)
+}
+
+// TestRevolveChainOptionRefusalFollowsTheSeam pins the refusal point: a chain
+// that is not one of the sketch's own reports the seam's sentinel before the
+// option refusal, and the option refusal precedes the axis gates.
+func TestRevolveChainOptionRefusalFollowsTheSeam(t *testing.T) {
+	t.Parallel()
+	s, ch, axis := coneChainAtRadius(t, 0)
+	otherSketch, _, _ := coneChainAtRadius(t, 0)
+	doc := decad.New()
+
+	_, err := decad.Revolve(t.Context(), doc, otherSketch, ch, axis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	require.ErrorIs(t, err, decad.ErrForeignProfile)
+	require.NotErrorIs(t, err, decad.ErrUnsupported, "the seam error wins over the option refusal")
+
+	degenerate := decad.SketchLine{Start: decad.Point2{U: 1, V: 1}, End: decad.Point2{U: 1, V: 1}}
+	_, err = decad.Revolve(t.Context(), doc, s, ch, degenerate, decad.FullRevolution{})
+	require.ErrorIs(t, err, decad.ErrDegenerate, "the axis gate refuses the zero-length axis without the option")
+	_, err = decad.Revolve(t.Context(), doc, s, ch, degenerate, decad.FullRevolution{}, decad.WithSurfaceResult())
+	require.ErrorIs(t, err, decad.ErrUnsupported, "the option refusal wins over the axis gate")
+	require.Empty(t, doc.Bodies())
 }

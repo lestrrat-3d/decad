@@ -258,7 +258,7 @@ func TestVerifyMotionRevolveKeepsLiveDenotationIdentities(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	mover, err := doc.Revolve(s, s.Profiles()[0],
+	mover, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
 		SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}, FullRevolution{})
 	require.NoError(t, err)
 	static := internalBoxBody(t, doc, 15, -10, 25, 10, 10)
@@ -424,7 +424,7 @@ func TestMotionOverlapThatDoesNotTransferIsUndecided(t *testing.T) {
 		s.Fix(rect.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		disc, err := doc.Revolve(s, s.Profiles()[0], SketchLine{End: Point2{V: 1}}, FullRevolution{})
+		disc, err := Revolve(t.Context(), doc, s, s.Profiles()[0], SketchLine{End: Point2{V: 1}}, FullRevolution{})
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(25, 40, 0))
 		require.NoError(t, err)

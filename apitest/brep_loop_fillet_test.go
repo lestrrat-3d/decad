@@ -248,7 +248,7 @@ func TestBrepLoopFilletPublicRevolveCapRefuses(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	ring, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	ring, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	var capFace *decad.Face
 	for _, f := range ring.Faces() {

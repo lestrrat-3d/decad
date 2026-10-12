@@ -31,7 +31,7 @@ func thickenChainShellOf(t *testing.T, pts [][2]float64) (*decad.Document, *deca
 	chains := s.Chains()
 	require.Len(t, chains, 1)
 	doc := decad.New()
-	shell, err := doc.RevolveChain(s, chains[0], thickenMeridianAxis, decad.FullRevolution{})
+	shell, err := decad.Revolve(t.Context(), doc, s, chains[0], thickenMeridianAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return doc, shell
 }

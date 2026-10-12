@@ -1265,7 +1265,7 @@ func (rp revolvePayload) capDenotation(end sweptEnd, start bool) *surfacenormal.
 	return &den
 }
 
-// This section is RevolveChain's own build (docs/surface-design.md §13.4):
+// This section is chain Revolve's own build (docs/surface-design.md §13.4):
 // the open chain's counterpart of evalRevolveContextWork/buildRevolveLoop
 // above, reusing rp.wallSurface, rp.capEdge, sideOriginsContext and
 // revolvemass.WallAxisMoment unchanged. It differs only in TOPOLOGY: n segments place

@@ -33,7 +33,7 @@ func neutralArcSeamCone(t *testing.T, doc *Document, apex float64) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	tool, err := doc.Revolve(s, s.Profiles()[0],
+	tool, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
 		SketchLine{Start: Point2{}, End: Point2{U: 1}}, FullRevolution{})
 	require.NoError(t, err)
 	return tool
@@ -126,7 +126,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 	_, err = blankSketch.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, blankSketch.Profiles(), 1)
-	blank, err := doc.Revolve(blankSketch, blankSketch.Profiles()[0],
+	blank, err := Revolve(t.Context(), doc, blankSketch, blankSketch.Profiles()[0],
 		SketchLine{Start: Point2{}, End: Point2{U: 1}}, FullRevolution{})
 	require.NoError(t, err)
 	return blank, trimmed, trimmedPayload.loftFacesTrim

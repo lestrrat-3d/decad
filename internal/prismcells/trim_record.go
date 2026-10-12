@@ -270,7 +270,7 @@ func TrimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
 // delta is the payload's own sectionDelta, read as a gate and never as the
 // charge: a payload no construction displaced has every recorded parameter
 // natural anyway, so the two answers would be absent regardless, and gating
-// keeps an ordinary RevolveChain off this path entirely.
+// keeps an ordinary chain Revolve off this path entirely.
 func TrimRevolveSegmentCharges(seg CurveSegment, delta float64) (proofbound.WalkEndBound, proofbound.WalkEndBound, error) {
 	if delta == 0 {
 		return proofbound.WalkEndBound{}, proofbound.WalkEndBound{}, nil

@@ -29,7 +29,7 @@ func TestSweepArcMatchesQuarterRevolveAndReplaysPlacement(t *testing.T) {
 	swept, err := decad.Sweep(t.Context(), sweepDoc, s, profile, path)
 	require.NoError(t, err)
 	revolveDoc := decad.New()
-	revolved, err := revolveDoc.Revolve(
+	revolved, err := decad.Revolve(t.Context(), revolveDoc,
 		s,
 		profile,
 		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 100, V: 0}},
@@ -176,7 +176,7 @@ func TestSweepArcMatchesRevolveFromObliqueSketchPlane(t *testing.T) {
 
 	swept, err := decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], path)
 	require.NoError(t, err)
-	revolved, err := decad.New().Revolve(
+	revolved, err := decad.Revolve(t.Context(), decad.New(),
 		s,
 		s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{U: -10, V: 0}, End: decad.Point2{U: 10, V: 0}},

@@ -54,7 +54,7 @@ func meridianSketch(t *testing.T, pts [][2]float64) (*sketch.Sketch, *sketch.Pro
 func revolveMeridian(t *testing.T, doc *decad.Document, pts [][2]float64, a decad.AngularExtent) *decad.Body {
 	t.Helper()
 	s, p := meridianSketch(t, pts)
-	body, err := doc.Revolve(s, p, uAxis, a)
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, a)
 	require.NoError(t, err)
 	return body
 }

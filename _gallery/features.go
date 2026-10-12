@@ -149,7 +149,7 @@ func ductSpans(ctx context.Context) ([]*decad.Body, error) {
 		return nil, fmt.Errorf("sweep the spatial path: %w", err)
 	}
 
-	first, err := decad.New().Revolve(s, profile, //nolint:contextcheck // Sweep and sketch solve above are cancellable.
+	first, err := decad.Revolve(ctx, decad.New(), s, profile,
 		decad.SketchLine{Start: decad.Point2{U: -20, V: -1}, End: decad.Point2{U: -20, V: 1}},
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	if err != nil {
@@ -194,7 +194,7 @@ func ductSpans(ctx context.Context) ([]*decad.Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	last, err := decad.New().Revolve(lastSketch, lastProfile, //nolint:contextcheck // Sweep and sketch solve above are cancellable.
+	last, err := decad.Revolve(ctx, decad.New(), lastSketch, lastProfile,
 		decad.SketchLine{Start: decad.Point2{U: -39, V: 20}, End: decad.Point2{U: -41, V: 20}},
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	if err != nil {
@@ -256,7 +256,7 @@ func ringBodyAtAngle(ctx context.Context, angle float64) (*decad.Body, error) {
 	if angle == 360 {
 		extent = decad.FullRevolution{}
 	}
-	ring, err := decad.New().Revolve(s, profile, axis, extent) //nolint:contextcheck
+	ring, err := decad.Revolve(ctx, decad.New(), s, profile, axis, extent)
 	if err != nil {
 		return nil, fmt.Errorf("revolve the ring: %w", err)
 	}
@@ -487,7 +487,7 @@ func dishBodyAtAngle(ctx context.Context, angle float64) (*decad.Body, error) {
 	}
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 	// Revolve has no context-aware variant; Solve above is the cancellable phase.
-	dish, err := decad.New().Revolve(s, profile, axis, //nolint:contextcheck
+	dish, err := decad.Revolve(ctx, decad.New(), s, profile, axis,
 		decad.AngleExtent{A: units.Degrees(angle), Dir: decad.Along},
 		decad.WithSurfaceResult())
 	if err != nil {

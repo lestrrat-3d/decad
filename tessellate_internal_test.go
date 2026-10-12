@@ -493,7 +493,7 @@ func TestMeshDerivedVertexBoundsTakeTheLargestIncidentFace(t *testing.T) {
 	sk.Fix(rect.A)
 	_, err = sk.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Revolve(sk, sk.Profiles()[0],
+	body, err := Revolve(t.Context(), New(), sk, sk.Profiles()[0],
 		SketchLine{Start: Point2{}, End: Point2{U: 1}},
 		AngleExtent{A: units.Degrees(90), Dir: Along})
 	require.NoError(t, err)

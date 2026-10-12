@@ -345,7 +345,7 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		s, profile := meshPolygonSketch(t, sc.w, sc.w.XY(), [][2]float64{{0, 2}, {10, 2}, {10, 6}, {0, 6}})
-		body, err := sc.doc.Revolve(s, profile,
+		body, err := decad.Revolve(t.Context(), sc.doc, s, profile,
 			decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
 			decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		require.NoError(t, err)

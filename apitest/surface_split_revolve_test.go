@@ -29,7 +29,7 @@ func splitRevolveSolid(t *testing.T, doc *decad.Document, build func(*sketch.Ske
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := doc.Revolve(s, s.Profiles()[0], trimRevolveAxis(), extent)
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], trimRevolveAxis(), extent)
 	require.NoError(t, err)
 	return body
 }
@@ -55,7 +55,7 @@ func splitRevolveSheetAxis(t *testing.T, doc *decad.Document, u0, v0, u1, v1 flo
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	body, err := doc.RevolveChain(s, s.Chains()[0], axis, extent)
+	body, err := decad.Revolve(t.Context(), doc, s, s.Chains()[0], axis, extent)
 	require.NoError(t, err)
 	return body
 }

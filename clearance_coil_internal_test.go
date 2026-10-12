@@ -85,7 +85,7 @@ func TestVerifyCoilClearanceAgainstRevolveStaysSuspect(t *testing.T) {
 	// A ring beside the spring: the planar arm does not serve a revolve
 	// partner, so the pair stays undecided and no Clearance row appears.
 	rs, rp := coilLoopsSketch(t, [][2]float64{{10, 0}, {11, 0}, {11, 1}, {10, 1}})
-	ring, err := doc.Revolve(rs, rp, coilAxisV, FullRevolution{})
+	ring, err := Revolve(t.Context(), doc, rs, rp, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
 	require.False(t, planarPairAdmits(spring, ring))
 

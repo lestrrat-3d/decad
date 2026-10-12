@@ -46,7 +46,7 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 		return nil, fmt.Errorf("draw thread cylinder: %w", err)
 	}
 	doc := decad.New()
-	cylinder, err := doc.Revolve(section, profile, axis, decad.FullRevolution{}) //nolint:contextcheck
+	cylinder, err := decad.Revolve(ctx, doc, section, profile, axis, decad.FullRevolution{})
 	if err != nil {
 		return nil, fmt.Errorf("revolve thread cylinder: %w", err)
 	}

@@ -41,7 +41,7 @@ func TestChainGateDiameterRevolveNeverExceedsKnownCone(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := New()
-			body, err := doc.RevolveChain(s, chains[0], axis, tc.extent)
+			body, err := Revolve(t.Context(), doc, s, chains[0], axis, tc.extent)
 			require.NoError(t, err)
 			d, ok, err := bodyGateDiameter(t.Context(), body)
 			require.NoError(t, err)

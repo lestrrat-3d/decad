@@ -190,7 +190,7 @@ func TestMassPropertiesSourceSphere(t *testing.T) {
 func TestMassPropertiesRevolvedCylinder(t *testing.T) {
 	doc := decad.New()
 	sketch, profile := solidSketch(t)
-	body, err := doc.Revolve(sketch, profile, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, sketch, profile, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(.001)
 	got, err := body.MassProperties(t.Context(), density)
@@ -233,7 +233,7 @@ func TestMassPropertiesRevolvedCylinder(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, got, again)
 
-	sheet, err := doc.Revolve(sketch, profile, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, sketch, profile, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	reading, err := sheet.MassProperties(t.Context(), density)
 	require.ErrorIs(t, err, decad.ErrNotSolid)

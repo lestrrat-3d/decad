@@ -330,7 +330,7 @@ func TestOffsetStagedFamilies(t *testing.T) {
 	ribbon, err := doc.ExtrudeChain(cs, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
-	shell, err := doc.RevolveChain(cs, chain, axis, decad.FullRevolution{})
+	shell, err := decad.Revolve(t.Context(), doc, cs, chain, axis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	ps, pp := plateSketch(t)

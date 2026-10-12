@@ -15,7 +15,7 @@ import (
 // This file is docs/surface-design.md §13's public-surface tests for the
 // first chain-extrude increment: ExtrudeChain over a chain of exactly one
 // straight segment, and the SweepChain/LoftChain staged refusals (§13.5,
-// §14). Multi-segment and curved-wall chains, and RevolveChain, land in a
+// §14). Multi-segment and curved-wall chains, and chain Revolve, land in a
 // later increment (§15's T131-T135, T140-T141).
 
 // lineChainSketch builds a sketch holding one 40 mm horizontal line on the XY
@@ -397,7 +397,7 @@ func TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate(t *tes
 
 // TestChainFedRefusals is docs/surface-design.md's T139: a SweepChain over a
 // COMPOSITE path is ErrUnsupported (R34) ahead of the increment that builds
-// docs/sweep-design.md §15.1's join, and RevolveChain handed a chain with both
+// docs/sweep-design.md §15.1's join, and chain Revolve handed a chain with both
 // free ends on the resolved axis is ErrUnsupported (R22), pending its
 // closed-sheet pole topology. A one-span straight path builds instead, which
 // sweep_chain_test.go owns; LoftChain's own staged refusal is the curved pair
@@ -434,7 +434,7 @@ func TestChainFedRefusals(t *testing.T) {
 	require.Len(t, axisSketch.Chains(), 1)
 	axisChain := axisSketch.Chains()[0]
 
-	_, err = doc.RevolveChain(axisSketch, axisChain,
+	_, err = decad.Revolve(t.Context(), doc, axisSketch, axisChain,
 		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
 		decad.FullRevolution{})
 	require.ErrorIs(t, err, decad.ErrUnsupported)

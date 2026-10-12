@@ -56,7 +56,7 @@ The rules for rows live in `docs/layout.md`.
 | `prism_payload.go` | `prismPayload` and coordinate adapters. See evaluator §5. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces. See evaluator §5. |
 | `prism_extent.go` | Adapts prism extents and box readings. See evaluator §5. |
-| `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
+| `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents. See evaluator §6 and surface §13.2. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_cap_edge_blend.go` | Bounded quarter-turn radial cap-rim fillet and chamfer with faceted proofs. See modify-reach §7.2. |
 | `revolve_axis.go` | Adapts the public axis and bounded profile scan to `internal/revolveaxis/`. See evaluator §6. |

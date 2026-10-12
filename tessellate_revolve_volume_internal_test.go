@@ -32,7 +32,7 @@ func internalCylinderBody(t *testing.T) *Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, FullRevolution{})
+	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], revolveAxisU, FullRevolution{})
 	require.NoError(t, err)
 	return body
 }
@@ -53,7 +53,7 @@ func internalSphereBody(t *testing.T) *Body {
 	s.CreateLine(b, a)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, FullRevolution{})
+	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], revolveAxisU, FullRevolution{})
 	require.NoError(t, err)
 	return body
 }

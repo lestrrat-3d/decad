@@ -48,7 +48,7 @@ func trimRevolveRingAxis(t *testing.T, doc *decad.Document, u0, v0, u1, v1 float
 	if surface {
 		opts = append(opts, decad.WithSurfaceResult())
 	}
-	body, err := doc.Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{}, opts...)
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{}, opts...)
 	require.NoError(t, err)
 	return body
 }
@@ -68,7 +68,7 @@ func trimRevolvePartial(t *testing.T, doc *decad.Document, u0, v0, u1, v1, degre
 	if surface {
 		opts = append(opts, decad.WithSurfaceResult())
 	}
-	body, err := doc.Revolve(s, s.Profiles()[0], trimRevolveAxis(),
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], trimRevolveAxis(),
 		decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along}, opts...)
 	require.NoError(t, err)
 	return body
@@ -226,7 +226,7 @@ func extendRevolveRibbon(t *testing.T, doc *decad.Document, a decad.AngularExten
 			continue // the upper fragment, anchored at the line's far end
 		}
 		require.InDelta(t, 0.4, seg.TEnd, 1e-12)
-		body, err := doc.RevolveChain(s, chain, trimRevolveAxis(), a)
+		body, err := decad.Revolve(t.Context(), doc, s, chain, trimRevolveAxis(), a)
 		require.NoError(t, err)
 		return body
 	}

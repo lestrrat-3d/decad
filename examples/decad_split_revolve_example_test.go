@@ -30,7 +30,7 @@ func Example_decad_splitRevolve() {
 		fmt.Printf("failed to solve cylinder sketch: %s\n", err)
 		return
 	}
-	cylinder, err := doc.Revolve(cylSketch, cylSketch.Profiles()[0], axis, decad.FullRevolution{})
+	cylinder, err := decad.Revolve(context.Background(), doc, cylSketch, cylSketch.Profiles()[0], axis, decad.FullRevolution{})
 	if err != nil {
 		fmt.Printf("failed to revolve cylinder: %s\n", err)
 		return
@@ -51,7 +51,7 @@ func Example_decad_splitRevolve() {
 		fmt.Printf("failed to solve disc sketch: %s\n", err)
 		return
 	}
-	disc, err := doc.RevolveChain(discSketch, discSketch.Chains()[0], axis, decad.FullRevolution{})
+	disc, err := decad.Revolve(context.Background(), doc, discSketch, discSketch.Chains()[0], axis, decad.FullRevolution{})
 	if err != nil {
 		fmt.Printf("failed to revolve disc: %s\n", err)
 		return

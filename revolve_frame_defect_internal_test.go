@@ -187,7 +187,7 @@ func TestRevolveReadingsCoverFrameDefect(t *testing.T) {
 			if !c.full {
 				ext = AngleExtent{A: units.Degrees(90), Dir: Along}
 			}
-			b, err := New().Revolve(s, s.Profiles()[0], coilAxisV, ext)
+			b, err := Revolve(t.Context(), New(), s, s.Profiles()[0], coilAxisV, ext)
 			require.NoError(t, err)
 			if c.place != r3.Identity() {
 				b, err = Transform(t.Context(), b, c.place)

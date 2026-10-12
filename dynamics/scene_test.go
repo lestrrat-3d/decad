@@ -79,7 +79,7 @@ func sceneSphere(t *testing.T, doc *decad.Document, radius float64) *decad.Body 
 	s.CreateArc(center, right, left)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	ball, err := doc.Revolve(s, s.Profiles()[0],
+	ball, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
 	require.NoError(t, err)
 	return ball

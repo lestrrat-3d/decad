@@ -27,7 +27,7 @@ import (
 func quarterCylinder(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, p := solidSketch(t)
-	b, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	b, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	return b
 }
@@ -157,7 +157,7 @@ func TestRevolveBooleanRefusesAHiddenTangency(t *testing.T) {
 	// that question rather than letting the chord placement answer it.
 	doc := decad.New()
 	s, p := solidSketch(t)
-	cyl, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along})
+	cyl, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along})
 	require.NoError(t, err)
 	box := translated(t, revolveBoxBody(t, doc, 2, -4, 6, 4, 6), 0, 0, 8)
 

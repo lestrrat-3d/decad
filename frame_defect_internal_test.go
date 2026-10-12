@@ -328,7 +328,7 @@ func fdRadialChainSheet(t *testing.T, f r3.Frame, ext AngularExtent) *Body {
 	s.CreateLine(a, b)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().RevolveChain(s, s.Chains()[0], fdAxisU, ext)
+	body, err := Revolve(t.Context(), New(), s, s.Chains()[0], fdAxisU, ext)
 	require.NoError(t, err)
 	return body
 }
@@ -497,7 +497,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			s.CreateCircle(c, 1)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			b, err := New().Revolve(s, s.Profiles()[0], fdAxisU, AngleExtent{A: units.Degrees(90), Dir: Along}, WithSurfaceResult())
+			b, err := Revolve(t.Context(), New(), s, s.Profiles()[0], fdAxisU, AngleExtent{A: units.Degrees(90), Dir: Along}, WithSurfaceResult())
 			require.NoError(t, err)
 			return b.Patch(t.Context(), Edges(Free(), EndpointAt(r3.NewVec(1, 3, 0))))
 		}},
@@ -568,7 +568,7 @@ func TestRevolveMassCoversFrameDefect(t *testing.T) {
 	pl, err := w.CreatePlaneFromFrame(xy)
 	require.NoError(t, err)
 	s, p := fdSketch(t, w, pl, [][2]float64{{2, 0}, {3, 0}, {3, 1}, {2, 1}})
-	b, err := New().Revolve(s, p, coilAxisV, FullRevolution{})
+	b, err := Revolve(t.Context(), New(), s, p, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
 	b, err = Transform(t.Context(), b, rot)
 	require.NoError(t, err)
@@ -599,7 +599,7 @@ func TestRevolveBoxChargesTheBasisRounding(t *testing.T) {
 	pl, err := w.CreatePlaneFromFrame(tilted)
 	require.NoError(t, err)
 	s, p := fdSketch(t, w, pl, [][2]float64{{2, 0}, {3, 0}, {3, 1}, {2, 1}})
-	b, err := New().Revolve(s, p, coilAxisV, FullRevolution{})
+	b, err := Revolve(t.Context(), New(), s, p, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
 	rp := b.payload.(revolvePayload)
 	basis := rp.basis()
@@ -766,7 +766,7 @@ func TestCurveBoundsCoverMappedReference(t *testing.T) {
 			pl, err := w.CreatePlaneFromFrame(f)
 			require.NoError(t, err)
 			s, p := fdSketch(t, w, pl, [][2]float64{{1, 0}, {3, 0}, {3, 1}, {1, 1}})
-			b, err := New().Revolve(s, p, coilAxisV, ext)
+			b, err := Revolve(t.Context(), New(), s, p, coilAxisV, ext)
 			require.NoError(t, err)
 			return b
 		}
@@ -789,7 +789,7 @@ func TestCurveBoundsCoverMappedReference(t *testing.T) {
 			s.CreateCircle(c, 1)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			b, err := New().Revolve(s, s.Profiles()[0], fdAxisU, AngleExtent{A: units.Degrees(90), Dir: Along})
+			b, err := Revolve(t.Context(), New(), s, s.Profiles()[0], fdAxisU, AngleExtent{A: units.Degrees(90), Dir: Along})
 			require.NoError(t, err)
 			return b
 		}},

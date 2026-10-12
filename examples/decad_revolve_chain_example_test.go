@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// RevolveChain spins an open sketch chain about an axis into a shell with no
+// Revolve spins an open sketch chain about an axis into a shell with no
 // cap: one swept wall per recorded segment, and none of the two closing
 // faces a revolved Profile would mint. A FULL revolution of a chain still
 // leaves it open — its two free ends sweep two circles that nothing fills —
@@ -37,7 +37,7 @@ func Example_decad_revolve_chain() {
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 
 	doc := decad.New()
-	body, err := doc.RevolveChain(s, s.Chains()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(context.Background(), doc, s, s.Chains()[0], axis, decad.FullRevolution{})
 	if err != nil {
 		fmt.Printf("failed to revolve chain: %s\n", err)
 		return

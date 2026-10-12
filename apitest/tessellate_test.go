@@ -170,7 +170,7 @@ func TestTessellatePayloadClasses(t *testing.T) {
 
 	t.Run("revolve", func(t *testing.T) {
 		s, p := solidSketch(t)
-		body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)

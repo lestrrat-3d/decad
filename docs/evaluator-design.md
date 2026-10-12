@@ -526,7 +526,7 @@ sampling, the wall survey's cap wedge, and the tolerance gate's reference
 diameter. The clearance kernel reads it as one term of its per-body
 displacement (`bodyGeom.delta`, `docs/clearance-design.md` §2), as it reads
 the prism's axial displacement.
-Every junction, seam and cap vertex `buildRevolveLoop` and the `RevolveChain`
+Every junction, seam and cap vertex `buildRevolveLoop` and the chain `Revolve`
 build place is bounded by ONE exact comparison per sweep end
 (`revolvePayload.sweptVertex`, `revolvemesh.RevolveLift.SweptPointGap`). The
 vertex is PLACED from its walk's float axis coordinates (z, ρ), which
@@ -549,7 +549,7 @@ end with no denotation (a `ToFaceAngular` stop) bounds its vertices at +Inf.
 Every interval is a single point for an exactly resolved axis, recorded
 coordinates and an exactly stated end, so an integer profile about a
 coordinate axis keeps its φ = 0 cap and seam vertices `Exact`. A trimmed
-`RevolveChain`'s section displacement (`sectionDelta`) is not in the vertex
+chain `Revolve`'s section displacement (`sectionDelta`) is not in the vertex
 bound: `Area`, `Bounds` and the tolerance gate charge it, as they do for the
 prism's chain. A whole-section displacement — an offset construction's, which
 `sectionWhole` marks — is: the recorded point is widened by it per component
@@ -652,7 +652,7 @@ Every one of those readings is taken in plane coordinates and takes §5.1's
 frame charge (`revolvePayload.frameCharge`), over the map L = B·[U V U×V]: the
 third column is the exact cross product, because the sweep's own E1 = W × E0
 is one and the swept-vertex comparison reads it so. Every wall's and cap's
-area, in `Revolve` and `RevolveChain` alike, and every latitude, junction-arc
+area, in `Revolve` over a profile and over a chain alike, and every latitude, junction-arc
 and cap-edge length widen by e, and `Volume` by ||det L| − 1|. The centroid
 lift A3 + W·axial (+ the in-plane term) is L applied to the plane-coordinate
 centroid, so it takes no charge. The tilted plane of §5.1 reads

@@ -203,7 +203,7 @@ func (s TrimSide) String() string {
 // tool are consumed on the document's uniform terms (core §6); a refusal
 // consumes neither. It admits a pair whose two sweeps share ONE generator —
 // both the prism family (a straight Extrude/ExtrudeChain sweep) or both the
-// revolve family (a Revolve/RevolveChain spin about one axis,
+// revolve family (a Revolve/chain Revolve spin about one axis,
 // docs/api-design.md's evaluator §5). A mixed pair, or any condition §2.1's
 // S1-S7 states, is [ErrUnsupported] at the call, never a fallback: a sheet's
 // mesh proves no occupied volume (boolean.go's requireVolumeProvingPayload),
@@ -290,7 +290,7 @@ const (
 // trimFamilyName is what a refusal message names — the generator, never the
 // payload class (T181): "a straight sweep" or "a revolve" reads the same
 // whether the body came from Extrude or ExtrudeChain, Revolve or
-// RevolveChain.
+// chain Revolve.
 func trimFamilyName(f trimSweepFamily) string {
 	switch f {
 	case trimFamilyPrism:

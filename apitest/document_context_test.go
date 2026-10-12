@@ -201,7 +201,7 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
-				body, err := doc.Revolve(s, p, decad.SketchLine{
+				body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
 					Start: decad.Point2{U: 0, V: 0},
 					End:   decad.Point2{U: 1, V: 0},
 				}, decad.FullRevolution{})
@@ -261,7 +261,7 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
-				body, err := doc.Revolve(s, p, decad.SketchLine{
+				body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
 					Start: decad.Point2{U: 0, V: 0},
 					End:   decad.Point2{U: 1, V: 0},
 				}, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
@@ -327,7 +327,7 @@ func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
-				body, err := doc.Revolve(s, p, decad.SketchLine{
+				body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
 					Start: decad.Point2{U: 0, V: 0},
 					End:   decad.Point2{U: 1, V: 0},
 				}, decad.FullRevolution{})
@@ -363,7 +363,7 @@ func TestPlacementContextCancelsFullRevolveShellAssembly(t *testing.T) {
 	require.NoError(t, err)
 	s, p := solidSketch(t)
 	doc := decad.New()
-	body, err := doc.Revolve(s, p, decad.SketchLine{
+	body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
 		Start: decad.Point2{U: 0, V: 0},
 		End:   decad.Point2{U: 1, V: 0},
 	}, decad.FullRevolution{})
@@ -462,7 +462,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
-				body, err := doc.Revolve(s, p, decad.SketchLine{
+				body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
 					Start: decad.Point2{U: 0, V: 0},
 					End:   decad.Point2{U: 1, V: 0},
 				}, decad.FullRevolution{})
@@ -497,7 +497,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
-				body, err := doc.Revolve(s, p, decad.SketchLine{
+				body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
 					Start: decad.Point2{U: 0, V: 0},
 					End:   decad.Point2{U: 1, V: 0},
 				}, decad.FullRevolution{})

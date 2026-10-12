@@ -144,7 +144,7 @@ func TestUnionSixSpanHubSerialRadialLugs(t *testing.T) {
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := doc.Revolve(section, profiles[0],
+	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
 	require.NoError(t, err)
 	hubVolume, err := hub.Volume()
@@ -251,7 +251,7 @@ func shoulderedHubAndRadialLug(t *testing.T) (*decad.Document, *decad.Body, *dec
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := doc.Revolve(section, profiles[0],
+	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
 	require.NoError(t, err)
 	require.Greater(t, len(hub.Faces()), 5, "the shoulder must add an effective meridian side")
@@ -304,7 +304,7 @@ func taperedHubAndRadialLug(t *testing.T, splitU, toeApex, rootRadius float64, f
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := doc.Revolve(section, profiles[0],
+	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
 	require.NoError(t, err)
 	var splitCap []decad.FeatureRef
@@ -391,7 +391,7 @@ func radialLugConeTool(t *testing.T, doc *decad.Document, apex float64) *decad.B
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	tool, err := doc.Revolve(section, profiles[0],
+	tool, err := decad.Revolve(t.Context(), doc, section, profiles[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
 	require.NoError(t, err)
 	return tool

@@ -67,7 +67,7 @@ func Example_decad_point_cone_trim() {
 		fmt.Printf("failed to loft from point: %s\n", err)
 		return
 	}
-	cone, err := doc.Revolve(coneSketch, coneSketch.Profiles()[0],
+	cone, err := decad.Revolve(context.Background(), doc, coneSketch, coneSketch.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}},
 		decad.FullRevolution{})
 	if err != nil {

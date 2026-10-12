@@ -169,7 +169,7 @@ func absFloat(x float64) float64 {
 func TestMassPropertiesRevolveQuarterRectangle(t *testing.T) {
 	doc := decad.New()
 	sk, profile := annularSketch(t)
-	body, err := doc.Revolve(sk, profile, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	body, err := decad.Revolve(t.Context(), doc, sk, profile, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 	got, err := body.MassProperties(t.Context(), density)
@@ -266,7 +266,7 @@ func TestMassPropertiesRevolvePartialTriangle(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
 			sk, profile := polygonSketch(t, [][2]float64{{0, 4}, {8, 4}, {8, 8}})
-			body, err := doc.Revolve(sk, profile, uAxis, decad.AngleExtent{A: tc.angle, Dir: decad.Along})
+			body, err := decad.Revolve(t.Context(), doc, sk, profile, uAxis, decad.AngleExtent{A: tc.angle, Dir: decad.Along})
 			require.NoError(t, err)
 			density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 			got, err := body.MassProperties(t.Context(), density)
@@ -312,7 +312,7 @@ func TestMassPropertiesRevolveTorus(t *testing.T) {
 func TestMassPropertiesRevolveArcWedge(t *testing.T) {
 	doc := decad.New()
 	sk, profile := semicircleSketch(t)
-	body, err := doc.Revolve(sk, profile, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	body, err := decad.Revolve(t.Context(), doc, sk, profile, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 	got, err := body.MassProperties(t.Context(), density)
@@ -348,7 +348,7 @@ func TestMassPropertiesRevolveArcWedge(t *testing.T) {
 func TestMassPropertiesRevolveRotated(t *testing.T) {
 	doc := decad.New()
 	sk, profile := polygonSketch(t, [][2]float64{{0, 4}, {8, 4}, {8, 8}})
-	body, err := doc.Revolve(sk, profile, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	body, err := decad.Revolve(t.Context(), doc, sk, profile, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	pose := composedRotation(t, r3.NewVec(2, -3, 5), r3.NewVec(1, 1, 1), 30, 8)
 	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(pose))
@@ -408,11 +408,11 @@ func TestMassPropertiesRevolveRotated(t *testing.T) {
 func TestMassPropertiesRevolveRefusals(t *testing.T) {
 	doc := decad.New()
 	sk, profile := annularSketch(t)
-	body, err := doc.Revolve(sk, profile, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	body, err := decad.Revolve(t.Context(), doc, sk, profile, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 
-	sheet, err := doc.Revolve(sk, profile, uAxis,
+	sheet, err := decad.Revolve(t.Context(), doc, sk, profile, uAxis,
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	reading, err := sheet.MassProperties(t.Context(), density)

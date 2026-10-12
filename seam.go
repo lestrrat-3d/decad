@@ -106,7 +106,7 @@ func recordArrangedProfile(p *sketch.Profile) (profileRecord, error) {
 // recordChain converts a sketch chain — Profile's open counterpart — into the
 // structural records the evaluator carries: the open walk as a chain record
 // and the sketch plane as a plane record, read through s.Plane().Frame().
-// ExtrudeChain and RevolveChain run this conversion.
+// ExtrudeChain and chain Revolve run this conversion.
 //
 // Every profile admission gate also applies to chains
 // (docs/sketch-seam-design.md §2.2, docs/surface-design.md §13.3): ch must

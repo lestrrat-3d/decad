@@ -138,7 +138,7 @@ func BenchmarkModelingRevolveChainCold(b *testing.B) {
 		b.StopTimer()
 		doc := decad.New()
 		b.StartTimer()
-		body, err := doc.RevolveChain(s, chain, axis, decad.FullRevolution{})
+		body, err := decad.Revolve(b.Context(), doc, s, chain, axis, decad.FullRevolution{})
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -267,7 +267,7 @@ func BenchmarkModelingRevolveCold(b *testing.B) {
 		b.StopTimer()
 		doc := decad.New()
 		b.StartTimer()
-		body, err = doc.Revolve(s, profile, axis, decad.FullRevolution{})
+		body, err = decad.Revolve(b.Context(), doc, s, profile, axis, decad.FullRevolution{})
 		if err != nil {
 			b.Fatal(err)
 		}

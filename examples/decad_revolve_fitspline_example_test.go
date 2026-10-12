@@ -36,7 +36,7 @@ func Example_decad_revolveFitSpline() {
 		Start: decad.Point2{U: -5, V: -5},
 		End:   decad.Point2{U: -5, V: 5},
 	}
-	body, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(context.Background(), decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{})
 	if err != nil {
 		fmt.Println(err)
 		return

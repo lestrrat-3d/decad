@@ -73,7 +73,7 @@ func Example_decad_thread_external() {
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 
 	doc := decad.New()
-	cylinder, err := doc.Revolve(cs, cs.Profiles()[0], axis, decad.FullRevolution{})
+	cylinder, err := decad.Revolve(context.Background(), doc, cs, cs.Profiles()[0], axis, decad.FullRevolution{})
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return

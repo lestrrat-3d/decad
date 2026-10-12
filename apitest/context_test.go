@@ -34,6 +34,14 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 			_, err := decad.Sweep(ctx, doc, nil, (*sketch.Chain)(nil), nil)
 			return err
 		}},
+		{"Revolve profile", func(ctx context.Context) error {
+			_, err := decad.Revolve(ctx, doc, nil, (*sketch.Profile)(nil), nil, nil)
+			return err
+		}},
+		{"Revolve chain", func(ctx context.Context) error {
+			_, err := decad.Revolve(ctx, doc, nil, (*sketch.Chain)(nil), nil, nil)
+			return err
+		}},
 		{"Document.Split", func(ctx context.Context) error { _, err := doc.Split(ctx, nil, nil); return err }},
 		{"Transform", func(ctx context.Context) error { _, err := decad.Transform(ctx, body, r3.Transform{}); return err }},
 		{"Copy identity", func(ctx context.Context) error { _, err := decad.Copy(ctx, body); return err }},
@@ -85,4 +93,82 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		require.ErrorContains(t, err, "nil context")
 		require.Equal(t, before, populated.Bodies())
 	})
+}
+
+// TestRevolveTypedNilSectionIsDegenerate pins that a typed-nil section of
+// either kind returns ErrDegenerate and leaves the document unchanged.
+func TestRevolveTypedNilSectionIsDegenerate(t *testing.T) {
+	t.Parallel()
+	s, _, axis := coneChainAtRadius(t, 0)
+	doc := decad.New()
+
+	_, err := decad.Revolve(t.Context(), doc, s, (*sketch.Profile)(nil), axis, decad.FullRevolution{})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = decad.Revolve(t.Context(), doc, s, (*sketch.Chain)(nil), axis, decad.FullRevolution{})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Empty(t, doc.Bodies())
+}
+
+// cancelAtCheckContext reports context.Canceled from its n-th Err call on, so
+// a test can cancel an operation at each of its cancellation checks in turn.
+type cancelAtCheckContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	n               int
+	calls           int
+}
+
+func (c *cancelAtCheckContext) Err() error {
+	c.calls++
+	if c.calls >= c.n {
+		return context.Canceled
+	}
+	return nil
+}
+
+// TestRevolveCanceledContextLeavesDocumentUnchanged cancels a profile and a
+// chain Revolve before the call and at each of its cancellation checks. Every
+// cancellation returns context.Canceled unchanged and leaves Bodies() empty;
+// the first uncanceled run commits one body, after several checks ran.
+func TestRevolveCanceledContextLeavesDocumentUnchanged(t *testing.T) {
+	t.Parallel()
+	profileSketch, profile := solidSketch(t)
+	chainSketch, chain, chainAxis := coneChainAtRadius(t, 0)
+	profileAxis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	tests := []struct {
+		name string
+		call func(context.Context, *decad.Document) (*decad.Body, error)
+	}{
+		{"profile", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+			return decad.Revolve(ctx, doc, profileSketch, profile, profileAxis, decad.FullRevolution{})
+		}},
+		{"chain", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+			return decad.Revolve(ctx, doc, chainSketch, chain, chainAxis, decad.FullRevolution{})
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			canceled, cancel := context.WithCancel(t.Context())
+			cancel()
+			_, err := tc.call(canceled, doc)
+			require.Equal(t, context.Canceled, err)
+			require.Empty(t, doc.Bodies())
+
+			const maxChecks = 1000
+			for n := 1; n <= maxChecks; n++ {
+				ctx := &cancelAtCheckContext{Context: t.Context(), n: n}
+				body, err := tc.call(ctx, doc)
+				if err == nil {
+					require.NotNil(t, body)
+					require.Greater(t, n, 3, "the call checks its context at several steps before it commits")
+					require.Len(t, doc.Bodies(), 1)
+					return
+				}
+				require.Equal(t, context.Canceled, err, "check %d", n)
+				require.Empty(t, doc.Bodies(), "check %d", n)
+			}
+			require.Fail(t, "the call never completed")
+		})
+	}
 }

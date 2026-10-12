@@ -54,7 +54,7 @@ func revolvedCylinder(t *testing.T, doc *decad.Document, u0, u1, axisV, r float6
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: axisV}, End: decad.Point2{U: 1, V: axisV}}
-	body, err := doc.Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body
 }
@@ -207,7 +207,7 @@ func TestContactPairRulingRefusals(t *testing.T) {
 		}},
 		{name: "void wall", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			tubeSketch, tubeProfile := annularSketch(t)
-			tube, err := doc.Revolve(tubeSketch, tubeProfile, uAxis, decad.FullRevolution{})
+			tube, err := decad.Revolve(t.Context(), doc, tubeSketch, tubeProfile, uAxis, decad.FullRevolution{})
 			require.NoError(t, err)
 			return boxBodyAtZ(t, doc, -20, -20, 20, 20, -15, 10), tube
 		}},
@@ -229,7 +229,7 @@ func TestContactPairRulingRefusals(t *testing.T) {
 		}},
 		{name: "void wall pair", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			tubeSketch, tubeProfile := annularSketch(t)
-			tube, err := doc.Revolve(tubeSketch, tubeProfile, uAxis, decad.FullRevolution{})
+			tube, err := decad.Revolve(t.Context(), doc, tubeSketch, tubeProfile, uAxis, decad.FullRevolution{})
 			require.NoError(t, err)
 			return tube, revolvedCylinder(t, doc, 0, 10, 9, 4)
 		}},
@@ -239,7 +239,7 @@ func TestContactPairRulingRefusals(t *testing.T) {
 		{name: "tube", touching: true, reason: decad.ContactPayloadUnsupported,
 			build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 				tubeSketch, tubeProfile := annularSketch(t)
-				tube, err := doc.Revolve(tubeSketch, tubeProfile, uAxis, decad.FullRevolution{})
+				tube, err := decad.Revolve(t.Context(), doc, tubeSketch, tubeProfile, uAxis, decad.FullRevolution{})
 				require.NoError(t, err)
 				return boxBodyAtZ(t, doc, -20, -20, 20, 20, -25, 10), tube
 			}},

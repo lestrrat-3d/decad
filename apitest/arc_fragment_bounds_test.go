@@ -191,7 +191,7 @@ func TestArcFragmentRevolveReadingsAreTight(t *testing.T) {
 			t.Parallel()
 			s := arcFragmentCapSketch(t)
 			doc := decad.New()
-			body, err := doc.Revolve(s, arcFragmentProfile(t, s, tc.sketchA), trimRevolveAxis(), decad.FullRevolution{})
+			body, err := decad.Revolve(t.Context(), doc, s, arcFragmentProfile(t, s, tc.sketchA), trimRevolveAxis(), decad.FullRevolution{})
 			require.NoError(t, err)
 			volume, err := body.Volume()
 			require.NoError(t, err)

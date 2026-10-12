@@ -1863,3 +1863,7 @@
 10	0.00	TestSweepChainOptionRefusalFollowsTheSeam
 10	0.00	TestSweepChainRefusesProfileOnlyOptions
 10	0.00	TestSweepTypedNilSectionIsDegenerate
+10	0.00	TestRevolveCanceledContextLeavesDocumentUnchanged
+10	0.00	TestRevolveChainOptionRefusalFollowsTheSeam
+10	0.00	TestRevolveChainRefusesSurfaceResult
+10	0.00	TestRevolveTypedNilSectionIsDegenerate

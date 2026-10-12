@@ -45,7 +45,7 @@ func internalAnnularRevolveSheet(t *testing.T) *Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	sheet, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, FullRevolution{}, WithSurfaceResult())
+	sheet, err := Revolve(t.Context(), New(), s, s.Profiles()[0], revolveAxisU, FullRevolution{}, WithSurfaceResult())
 	require.NoError(t, err)
 	return sheet
 }

@@ -289,7 +289,7 @@ func TestStitchCurvedMassCorrectsInwardOrientation(t *testing.T) {
 	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
 
 	d := New()
-	sheet, err := d.Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	sheet, err := Revolve(t.Context(), d, s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
 	require.NoError(t, err)
 
 	faces := sheet.Faces()
@@ -325,7 +325,7 @@ func TestStitchCurvedMassPlacementAllowanceWidensBounds(t *testing.T) {
 	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
 
 	d := New()
-	sheet, err := d.Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	sheet, err := Revolve(t.Context(), d, s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
 	require.NoError(t, err)
 	faces := sheet.Faces()
 	anchor := faces[0].loops[0].coedges[0].Start().Position().Value
@@ -698,7 +698,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForCone(t *testing.T) {
 	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
 
 	d := New()
-	sheet, err := d.Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	sheet, err := Revolve(t.Context(), d, s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
 	require.NoError(t, err)
 
 	faces := sheet.Faces()
@@ -738,7 +738,7 @@ func sphereRevolveFacesForInternalTest(t *testing.T, diameter float64) []*Face {
 	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
 
 	d := New()
-	sheet, err := d.Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	sheet, err := Revolve(t.Context(), d, s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
 	require.NoError(t, err)
 	return sheet.Faces()
 }
@@ -1124,7 +1124,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {
 	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
 
 	d := New()
-	sheet, err := d.Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	sheet, err := Revolve(t.Context(), d, s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
 	require.NoError(t, err)
 
 	faces := sheet.Faces()
@@ -1299,7 +1299,7 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
-	sheet, err := New().Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	sheet, err := Revolve(t.Context(), New(), s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
 	require.NoError(t, err)
 
 	var face *Face

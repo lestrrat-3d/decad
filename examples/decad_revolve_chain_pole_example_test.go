@@ -25,7 +25,7 @@ func Example_decad_revolve_chain_pole() {
 		return
 	}
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	body, err := decad.New().RevolveChain(s, s.Chains()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(context.Background(), decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{})
 	if err != nil {
 		fmt.Printf("failed to revolve chain: %s\n", err)
 		return

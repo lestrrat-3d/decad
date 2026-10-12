@@ -729,7 +729,7 @@ func TestVerifyPublishRevolveVoid(t *testing.T) {
 	require.NotNil(t, prof)
 	doc := New()
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
-	body, err := doc.Revolve(s, prof, axis, FullRevolution{})
+	body, err := Revolve(t.Context(), doc, s, prof, axis, FullRevolution{})
 	require.NoError(t, err)
 
 	res := publishBody(t, body)

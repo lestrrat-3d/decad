@@ -57,7 +57,7 @@ func pointConeTool(t *testing.T, doc *decad.Document, apex float64) *decad.Body 
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	tool, err := doc.Revolve(s, profiles[0],
+	tool, err := decad.Revolve(t.Context(), doc, s, profiles[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
 	require.NoError(t, err)
 	return tool

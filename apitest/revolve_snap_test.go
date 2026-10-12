@@ -80,7 +80,7 @@ func TestRevolveChainSnappedPoleEnclosesRadialWallArea(t *testing.T) {
 	require.Len(t, s.Chains(), 1)
 
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	body, err := decad.New().RevolveChain(s, s.Chains()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 1)
 	_, err = decad.Edges(decad.Free()).Exactly(1).SelectEdges(body)
@@ -136,7 +136,7 @@ func TestRevolveSnappedRimEnclosesAreaAndVolume(t *testing.T) {
 			require.Len(t, s.Profiles(), 1)
 
 			axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-			body, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+			body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{})
 			require.NoError(t, err)
 			// The on-axis near edge sweeps nothing: two disks and one cylinder.
 			require.Len(t, body.Faces(), 3)

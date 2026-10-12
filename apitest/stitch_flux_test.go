@@ -43,7 +43,7 @@ func annularRevolveSheet(t *testing.T, uLen, vLo, vHi float64) (*decad.Document,
 	t.Helper()
 	s, p := annularSketchRange(t, uLen, vLo, vHi)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	return doc, sheet
 }
@@ -101,7 +101,7 @@ func TestStitchAnnularSolidMatchesTheRevolveEngine(t *testing.T) {
 
 	s2, p2 := annularSketchRange(t, 10, 5, 15)
 	solidDoc := decad.New()
-	direct, err := solidDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	direct, err := decad.Revolve(t.Context(), solidDoc, s2, p2, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	stitchedVol, err := stitched.Volume()
@@ -318,7 +318,7 @@ func halfTorusRevolveSheet(t *testing.T, u0, major, minor float64) *decad.Body {
 	t.Helper()
 	s, p := offAxisSemicircleSketchGeneral(t, u0, major, minor)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	return sheet
 }
@@ -338,7 +338,7 @@ func TestStitchTorusRevolveSheetClosesToASolid(t *testing.T) {
 	t.Parallel()
 	s, p := offAxisSemicircleSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 	require.Len(t, sheet.Faces(), 2)
@@ -391,7 +391,7 @@ func TestStitchTorusSolidMatchesTheRevolveEngine(t *testing.T) {
 
 	s2, p2 := offAxisSemicircleSketchGeneral(t, 5, 10, 5)
 	solidDoc := decad.New()
-	direct, err := solidDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	direct, err := decad.Revolve(t.Context(), solidDoc, s2, p2, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	stitchedVol, err := stitched.Volume()
@@ -480,7 +480,7 @@ func frustumSheet(t *testing.T, uLen, vLo0, vHi0, vLo1, vHi1 float64) (*decad.Do
 	t.Helper()
 	s, p := trapezoidFrustumSketch(t, uLen, vLo0, vHi0, vLo1, vHi1)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	return doc, sheet
 }
@@ -571,7 +571,7 @@ func TestStitchConicalSolidMatchesTheRevolveEngine(t *testing.T) {
 
 	s2, p2 := trapezoidFrustumSketch(t, uLen, vLo0, vHi0, vLo1, vHi1)
 	solidDoc := decad.New()
-	direct, err := solidDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	direct, err := decad.Revolve(t.Context(), solidDoc, s2, p2, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	stitchedVol, err := stitched.Volume()
@@ -619,7 +619,7 @@ func sphereRevolveSheet(t *testing.T, u0, diameter float64) (*decad.Document, *d
 	t.Helper()
 	s, p := semicircleSketchAt(t, u0, diameter)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	return doc, sheet
 }
@@ -685,7 +685,7 @@ func TestStitchSphereSolidMatchesTheRevolveEngine(t *testing.T) {
 
 	s2, p2 := semicircleSketchAt(t, 0, 10)
 	solidDoc := decad.New()
-	direct, err := solidDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	direct, err := decad.Revolve(t.Context(), solidDoc, s2, p2, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	stitchedVol, err := stitched.Volume()
@@ -814,7 +814,7 @@ func TestStitchRefusesRevolveTagOffItsRecord(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			s, p := polygonSketch(t, tc.pts)
-			sheet, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+			sheet, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 			require.NoError(t, err)
 			solid, err := decad.Stitch(t.Context(), sheet)
 			if err == nil {
@@ -837,7 +837,7 @@ func TestStitchDecimalFrustumEnclosesItsRecord(t *testing.T) {
 	t.Parallel()
 	pts := [][2]float64{{0.1, 0.2}, {1.1, 0.2}, {0.7, 0.9}, {0.3, 0.9}}
 	s, p := polygonSketch(t, pts)
-	sheet, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	decadtest.HasSurfaceKinds(t, sheet, map[decad.SurfaceKind]int{decad.KindCone: 2, decad.KindCylinder: 2})
 	solid, err := decad.Stitch(t.Context(), sheet)

@@ -95,7 +95,7 @@ func TestRevolveCarrierAxisGapExactRevolvesStayZero(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			s, p := draw(t, tc.draw)
-			b, err := New().Revolve(s, p, uAxis, tc.extent)
+			b, err := Revolve(t.Context(), New(), s, p, uAxis, tc.extent)
 			require.NoError(t, err)
 			require.Zero(t, revolveAxisGap(t, b))
 		})

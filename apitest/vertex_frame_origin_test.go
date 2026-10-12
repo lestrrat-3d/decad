@@ -166,7 +166,7 @@ func TestVertexFrameOriginBoundEnclosesLift(t *testing.T) {
 		t.Run(fmt.Sprintf("revolve@%v", o), func(t *testing.T) {
 			t.Parallel()
 			s, p := originRectSketch(t, o, 0, 1, 3, 2)
-			b, err := decad.New().Revolve(s, p, decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
+			b, err := decad.Revolve(t.Context(), decad.New(), s, p, decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
 				decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 			require.NoError(t, err)
 			// Only the start-plane vertices (phi = 0) have an angle-free exact lift.
@@ -341,7 +341,7 @@ func TestVertexIntegerOriginBoundStaysZero(t *testing.T) {
 	t.Run("revolve", func(t *testing.T) {
 		t.Parallel()
 		s, p := intRect(t, 0, 5, 10, 15)
-		b, err := decad.New().Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		b, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		require.NoError(t, err)
 		// The phi = 90° cap reads the libm's own sine and cosine, whose
 		// angular term is charged apart; only the start plane is exact.

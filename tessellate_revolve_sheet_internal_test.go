@@ -44,7 +44,7 @@ func internalOffAxisArcBody(t *testing.T, surfaceResult bool) *Body {
 	if surfaceResult {
 		opts = append(opts, WithSurfaceResult())
 	}
-	body, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, quarter, opts...)
+	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], revolveAxisU, quarter, opts...)
 	require.NoError(t, err)
 	return body
 }
@@ -71,7 +71,7 @@ func internalOffAxisArcFullTurnBody(t *testing.T, surfaceResult bool) *Body {
 	if surfaceResult {
 		opts = append(opts, WithSurfaceResult())
 	}
-	body, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, FullRevolution{}, opts...)
+	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], revolveAxisU, FullRevolution{}, opts...)
 	require.NoError(t, err)
 	return body
 }

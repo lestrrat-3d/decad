@@ -153,7 +153,7 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 			// §2 M7: a stepped section revolved 270° about the sketch's u axis.
 			s, profile := meshPolygonSketch(t, sc.w, sc.w.XY(),
 				[][2]float64{{0, 2}, {10, 2}, {10, 6}, {4, 6}, {4, 4}, {0, 4}})
-			body, err := sc.doc.Revolve(s, profile,
+			body, err := decad.Revolve(t.Context(), sc.doc, s, profile,
 				decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
 				decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
 			require.NoError(t, err)

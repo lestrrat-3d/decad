@@ -22,7 +22,7 @@ func rimQuarterCylinder(t *testing.T, xlo, xhi, radius, angle float64) (*decad.D
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	d := decad.New()
-	b, err := d.Revolve(s, s.Profiles()[0],
+	b, err := decad.Revolve(t.Context(), d, s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}},
 		decad.AngleExtent{A: units.Degrees(angle), Dir: decad.Along})
 	require.NoError(t, err)

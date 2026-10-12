@@ -289,7 +289,7 @@ func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 	require.NotEmpty(t, profiles)
 
 	doc := New()
-	body, err := doc.Revolve(s, profiles[0], tiltedAxis, FullRevolution{})
+	body, err := Revolve(t.Context(), doc, s, profiles[0], tiltedAxis, FullRevolution{})
 	require.NoError(t, err)
 
 	rp, ok := body.payload.(revolvePayload)

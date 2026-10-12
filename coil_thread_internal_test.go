@@ -90,7 +90,7 @@ func requireThreadResult(t *testing.T, doc *Document, res *Body, exactOverPi *bi
 func TestCoilExternalThread(t *testing.T) {
 	doc := New()
 	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
-	cylinder, err := doc.Revolve(cs, cpf, coilAxisV, FullRevolution{})
+	cylinder, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
 	tool := threadTool(t, doc, 4.1, 5.3, 3, 1)
 	res, err := Cut(t.Context(), cylinder, tool)
@@ -147,7 +147,7 @@ func TestCoilInternalThread(t *testing.T) {
 func TestCoilThreadPartnerKeepsItsBounds(t *testing.T) {
 	doc := New()
 	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
-	cylinder, err := doc.Revolve(cs, cpf, coilAxisV, FullRevolution{})
+	cylinder, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
 	tool := threadTool(t, doc, 4.1, 5.3, 3, 8)
 	delta := tool.payload.(coilPayload).delta
@@ -224,7 +224,7 @@ func clipPolygon(pts [][2]*big.Rat, keep func(p [2]*big.Rat) *big.Rat) [][2]*big
 func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
 	doc := New()
 	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
-	cylinder, err := doc.Revolve(cs, cpf, coilAxisV, FullRevolution{})
+	cylinder, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
 	const z0 = -0.375
 	gs, gp := coilLoopsSketch(t, [][2]float64{{4.1, z0}, {5.3, z0 - threadHalfWidth}, {5.3, z0 + threadHalfWidth}})
@@ -263,7 +263,7 @@ func TestCoilCapFlushWithAnAxialFaceRefuses(t *testing.T) {
 	for _, dir := range []Direction{Along, Against} {
 		doc := New()
 		cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
-		half, err := doc.Revolve(cs, cpf, coilAxisV, AngleExtent{A: units.Degrees(180), Dir: dir})
+		half, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, AngleExtent{A: units.Degrees(180), Dir: dir})
 		require.NoError(t, err)
 		gs, gp := coilLoopsSketch(t, [][2]float64{{4.1, 3}, {5.3, 3 - threadHalfWidth}, {5.3, 3 + threadHalfWidth}})
 		tool, err := Coil(t.Context(), doc, gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
