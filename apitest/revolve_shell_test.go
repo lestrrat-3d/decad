@@ -421,7 +421,7 @@ func TestRevolveShellRefusals(t *testing.T) {
 		t.Parallel()
 		s, p := holedSketch(t)
 		doc := decad.New()
-		body, err := doc.Revolve(s, p, uAxis, halfTurn)
+		body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, halfTurn)
 		require.NoError(t, err)
 		_, err = body.Shell(t.Context(), bothAngularCaps(), units.Millimeters(1))
 		requireShellRefused(t, doc, body, err, decad.ErrUnsupported, `SX8`)
@@ -514,7 +514,7 @@ func fullTurnVolume(q float64) units.Value { return units.CubicMillimeters(2 * m
 func sphereBody(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, p := semicircleSketch(t)
-	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body
 }
@@ -720,7 +720,7 @@ func TestRevolveShellClosedRefusals(t *testing.T) {
 		t.Parallel()
 		s, p := holedSketch(t)
 		doc := decad.New()
-		body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
 		_, err = body.Shell(t.Context(), nil, units.Millimeters(1), noOpenings)
 		requireShellRefused(t, doc, body, err, decad.ErrUnsupported, `SX8`)

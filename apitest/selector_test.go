@@ -335,7 +335,7 @@ func annularRevolveBody(t *testing.T) *decad.Body {
 	t.Helper()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body
 }

@@ -1108,7 +1108,7 @@ func TestFreeformRevolveAxisContactRefuses(t *testing.T) {
 	s, p := fitSplineArchSketch(t)
 	doc := decad.New()
 
-	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "needs proven clearance from the axis")

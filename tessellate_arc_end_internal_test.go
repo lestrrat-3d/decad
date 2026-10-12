@@ -257,7 +257,7 @@ func TestRevolveJunctionReachesArcNaturalEnd(t *testing.T) {
 	s.CreateArc(o, start, end)
 	s.CreateLine(end, o)
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}
-	body, err := New().Revolve(s, s.Profiles()[0], axis, FullRevolution{})
+	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], axis, FullRevolution{})
 	require.NoError(t, err)
 	rp, ok := body.payload.(revolvePayload)
 	require.True(t, ok, `got %T`, body.payload)

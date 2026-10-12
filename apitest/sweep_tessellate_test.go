@@ -141,7 +141,7 @@ func TestSweepArcTessellatesAsItsRevolve(t *testing.T) {
 	got, err := swept.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 
-	revolved, err := decad.New().Revolve(s, profile,
+	revolved, err := decad.Revolve(t.Context(), decad.New(), s, profile,
 		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 100, V: 0}},
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)

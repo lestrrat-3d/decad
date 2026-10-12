@@ -68,7 +68,7 @@ func benchRevolve(build func(s *sketch.Sketch), ext decad.AngularExtent) *decad.
 	build(s)
 	must(s.Solve(context.Background()))
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	return must(decad.New().Revolve(s, s.Profiles()[0], axis, ext))
+	return must(decad.Revolve(context.Background(), decad.New(), s, s.Profiles()[0], axis, ext))
 }
 
 func benchLoft() *decad.Body {

@@ -38,7 +38,7 @@ func TestRevolveBoundsEnclosesDenotedExtreme(t *testing.T) {
 	t.Run("quarter turn box encloses the exact minimum", func(t *testing.T) {
 		s, p := annularSketch(t)
 		doc := decad.New()
-		body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		require.NoError(t, err)
 
 		box, err := body.Bounds()
@@ -56,7 +56,7 @@ func TestRevolveBoundsEnclosesDenotedExtreme(t *testing.T) {
 			t.Run("", func(t *testing.T) {
 				s, p := annularSketch(t)
 				doc := decad.New()
-				body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(deg), Dir: decad.Along})
+				body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(deg), Dir: decad.Along})
 				require.NoError(t, err)
 
 				box, err := body.Bounds()
@@ -71,11 +71,11 @@ func TestRevolveBoundsEnclosesDenotedExtreme(t *testing.T) {
 		s, p := annularSketch(t)
 
 		degDoc := decad.New()
-		degBody, err := degDoc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		degBody, err := decad.Revolve(t.Context(), degDoc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		require.NoError(t, err)
 
 		radDoc := decad.New()
-		radBody, err := radDoc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(math.Pi / 2), Dir: decad.Along})
+		radBody, err := decad.Revolve(t.Context(), radDoc, s, p, uAxis, decad.AngleExtent{A: units.Radians(math.Pi / 2), Dir: decad.Along})
 		require.NoError(t, err)
 
 		degCap := faceByRole(t, degBody, roleCapEnd)
@@ -206,7 +206,7 @@ func TestRevolveSweepBoundTightens(t *testing.T) {
 			t.Parallel()
 			s, p := annularSketch(t)
 			doc := decad.New()
-			body, err := doc.Revolve(s, p, uAxis, c.ext)
+			body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, c.ext)
 			require.NoError(t, err)
 
 			vol, err := body.Volume()
@@ -234,7 +234,7 @@ func TestRevolveRadianSweepStaysExact(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
 	require.NoError(t, err)
 
 	vol, err := body.Volume()
@@ -254,7 +254,7 @@ func TestRevolveFullTurnStaysApproximate(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	vol, err := body.Volume()
@@ -285,7 +285,7 @@ func TestRevolvePartialCentroidBoundTightens(t *testing.T) {
 			t.Parallel()
 			s, p := annularSketch(t)
 			doc := decad.New()
-			body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along})
+			body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along})
 			require.NoError(t, err)
 
 			cen, err := body.Centroid()
@@ -340,7 +340,7 @@ func TestRevolveSemicirclePartialSweepCentroidBoundTightens(t *testing.T) {
 
 	s, p := semicircleSketch(t)
 	doc := decad.New()
-	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 
 	c, err := body.Centroid()
@@ -389,7 +389,7 @@ func TestRevolveStraightWallAreaTightens(t *testing.T) {
 		t.Parallel()
 		s, p := annularSketch(t)
 		doc := decad.New()
-		body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
 
 		area, err := body.Area()
@@ -432,7 +432,7 @@ func TestRevolveStraightWallAreaTightens(t *testing.T) {
 		t.Parallel()
 		s, p := annularSketch(t)
 		doc := decad.New()
-		body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(37), Dir: decad.Along})
+		body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(37), Dir: decad.Along})
 		require.NoError(t, err)
 
 		area, err := body.Area()
@@ -494,7 +494,7 @@ func TestRevolveCircularWallAreaTightens(t *testing.T) {
 		require.NoError(t, err)
 
 		doc := decad.New()
-		body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
 
 		area, err := body.Area()
@@ -521,7 +521,7 @@ func TestRevolveCircularWallAreaTightens(t *testing.T) {
 		t.Parallel()
 		s, p := grooveSketch(t)
 		doc := decad.New()
-		body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(math.Pi / 2), Dir: decad.Along})
+		body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Radians(math.Pi / 2), Dir: decad.Along})
 		require.NoError(t, err)
 
 		area, err := body.Area()
@@ -560,7 +560,7 @@ func TestRevolveVerifySoundAnnular(t *testing.T) {
 			t.Parallel()
 			s, p := annularSketch(t)
 			doc := decad.New()
-			_, err := doc.Revolve(s, p, uAxis, ext)
+			_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, ext)
 			require.NoError(t, err)
 
 			decadtest.IsSound(t, doc)
@@ -598,7 +598,7 @@ func TestRevolveTiltedAxisBoundsTighten(t *testing.T) {
 		t.Parallel()
 		s, p := annularSketch(t)
 		doc := decad.New()
-		body, err := doc.Revolve(s, p, tiltedAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(t.Context(), doc, s, p, tiltedAxis, decad.FullRevolution{})
 		require.NoError(t, err)
 
 		vol, err := body.Volume()
@@ -625,7 +625,7 @@ func TestRevolveTiltedAxisBoundsTighten(t *testing.T) {
 		t.Parallel()
 		s, p := annularSketch(t)
 		doc := decad.New()
-		body, err := doc.Revolve(s, p, tiltedAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+		body, err := decad.Revolve(t.Context(), doc, s, p, tiltedAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
 		require.NoError(t, err)
 
 		vol, err := body.Volume()
@@ -742,7 +742,7 @@ func TestRevolveReflexSweepBoundsTighten(t *testing.T) {
 					t.Parallel()
 					s, p := sec.fix(t)
 					doc := decad.New()
-					body, err := doc.Revolve(s, p, uAxis, c.ext)
+					body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, c.ext)
 					require.NoError(t, err)
 
 					lo, hi := annularHandBox(c.phi0, c.phi1)
@@ -771,7 +771,7 @@ func TestRevolveReflexSweepBoundsTightenTiltedAxis(t *testing.T) {
 		t.Parallel()
 		s, p := annularSketch(t)
 		doc := decad.New()
-		body, err := doc.Revolve(s, p, tiltedAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+		body, err := decad.Revolve(t.Context(), doc, s, p, tiltedAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
 		require.NoError(t, err)
 
 		box, err := body.Bounds()
@@ -788,7 +788,7 @@ func TestRevolveReflexSweepBoundsTightenTiltedAxis(t *testing.T) {
 			One: decad.AngleSide{A: units.Degrees(200)},
 			Two: decad.AngleSide{A: units.Degrees(70)},
 		}
-		body, err := doc.Revolve(s, p, tiltedAxis, ext)
+		body, err := decad.Revolve(t.Context(), doc, s, p, tiltedAxis, ext)
 		require.NoError(t, err)
 
 		box, err := body.Bounds()
@@ -823,7 +823,7 @@ func TestRevolveReflexSweepBoundsBoundaryStayTight(t *testing.T) {
 			t.Parallel()
 			s, p := annularSketch(t)
 			doc := decad.New()
-			body, err := doc.Revolve(s, p, uAxis, c.ext)
+			body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, c.ext)
 			require.NoError(t, err)
 
 			box, err := body.Bounds()
@@ -858,7 +858,7 @@ func TestRevolveVerifySoundReflex(t *testing.T) {
 			t.Parallel()
 			s, p := annularSketch(t)
 			doc := decad.New()
-			_, err := doc.Revolve(s, p, uAxis, ext)
+			_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, ext)
 			require.NoError(t, err)
 
 			decadtest.IsSound(t, doc)
@@ -869,7 +869,7 @@ func TestRevolveVerifySoundReflex(t *testing.T) {
 		t.Parallel()
 		s, p := holedSketch(t)
 		doc := decad.New()
-		_, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+		_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
 		require.NoError(t, err)
 
 		decadtest.IsSound(t, doc)

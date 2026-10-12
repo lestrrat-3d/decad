@@ -29,7 +29,7 @@ func Example_body_thicken_revolve() {
 	}
 	doc := decad.New()
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
-	sheet, err := doc.Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{},
+	sheet, err := decad.Revolve(context.Background(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{},
 		decad.WithSurfaceResult())
 	if err != nil {
 		fmt.Println(err)

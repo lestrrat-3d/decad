@@ -363,7 +363,7 @@ func TestSurfaceTrimS4IsExactFloatEquality(t *testing.T) {
 
 // trimRevolveCylinderSheet builds a revolve-family cylindrical sheet — a
 // single meridian line, radius 5, spun a full turn about the sketch's own V
-// axis — through RevolveChain, since a bare line forms no closed profile
+// axis — through chain Revolve, since a bare line forms no closed profile
 // (docs/surface-design.md §13, revolve_chain_test.go's own pattern).
 func trimRevolveCylinderSheet(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
@@ -381,7 +381,7 @@ func trimRevolveCylinderSheet(t *testing.T, doc *decad.Document) *decad.Body {
 	require.Len(t, chains, 1)
 
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
-	body, err := doc.RevolveChain(s, chains[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, chains[0], axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body
 }

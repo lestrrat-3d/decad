@@ -151,7 +151,7 @@ func TestCoilMassPropertiesSettleAtTheFirstStep(t *testing.T) {
 func TestCoilInterferenceAndUnionWithACore(t *testing.T) {
 	doc := New()
 	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, -28}, {2.5, -28}, {2.5, 32}, {0, 32}})
-	core, err := doc.Revolve(cs, cpf, coilAxisV, FullRevolution{})
+	core, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
 	s, p := coilSquare(t)
 	spring, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))

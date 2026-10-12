@@ -99,7 +99,7 @@ func TestSweepPairCylinderDiskTrack(t *testing.T) {
 	require.Equal(t, r3.Vec{X: 2}, restPoint.Points[0].OnB.Value)
 
 	rectangle, profile := solidSketch(t)
-	revolved, err := doc.Revolve(rectangle, profile, uAxis, decad.FullRevolution{})
+	revolved, err := decad.Revolve(t.Context(), doc, rectangle, profile, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	revolvedSlide := sweepDrift(r3.Vec{X: 4}, 1)
 	revolvedSlide.From = revolvedCylinderZPose(t, 0, 0)

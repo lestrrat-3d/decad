@@ -46,7 +46,7 @@ func TestRevolveTessellateFullSphere(t *testing.T) {
 	// semicircleSketch is the half disk of radius 5 about (5, 0): a full turn
 	// sweeps the sphere of radius 5 centred at (5, 0, 0).
 	s, p := semicircleSketch(t)
-	body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -103,7 +103,7 @@ func TestRevolveTessellateSphericalBand(t *testing.T) {
 	s.CreateLine(hiAxis, hi)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -146,7 +146,7 @@ func TestRevolveTessellateRingTorus(t *testing.T) {
 	s.CreateCircle(center, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2))
@@ -195,7 +195,7 @@ func TestRevolveTessellateConcaveTorusWall(t *testing.T) {
 	s.CreateLine(topLeft, left)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -241,7 +241,7 @@ func TestRevolveTessellateHemispherePoleAtOneEnd(t *testing.T) {
 	s.CreateLine(top, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -294,7 +294,7 @@ func TestRevolveTessellateNarrowBulgeHoleClearance(t *testing.T) {
 	}
 	t.Run("clearance above the summed tubes meshes", func(t *testing.T) {
 		s, prof := sketchOf(t, 12)
-		body, err := decad.New().Revolve(s, prof, uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(t.Context(), decad.New(), s, prof, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5))
 		require.NoError(t, err)
@@ -304,7 +304,7 @@ func TestRevolveTessellateNarrowBulgeHoleClearance(t *testing.T) {
 
 	t.Run("clearance below the summed tubes refuses", func(t *testing.T) {
 		s, prof := sketchOf(t, 14.999)
-		body, err := decad.New().Revolve(s, prof, uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(t.Context(), decad.New(), s, prof, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5))
 		require.Nil(t, mesh, `no mesh is returned when the section proof cannot be met`)
@@ -314,7 +314,7 @@ func TestRevolveTessellateNarrowBulgeHoleClearance(t *testing.T) {
 
 	t.Run("a partial sweep runs the same section proof", func(t *testing.T) {
 		s, prof := sketchOf(t, 14.999)
-		body, err := decad.New().Revolve(s, prof, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		body, err := decad.Revolve(t.Context(), decad.New(), s, prof, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		require.NoError(t, err)
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5))
 		require.Nil(t, mesh)
@@ -340,7 +340,7 @@ func TestRevolveTessellateTangentDiskIsRefusedBeforeTessellation(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.NotEmpty(t, s.Profiles())
-	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -350,7 +350,7 @@ func TestRevolveTessellateTangentDiskIsRefusedBeforeTessellation(t *testing.T) {
 func TestRevolveTessellateCircularGeneratorExportIsByteIdentical(t *testing.T) {
 	t.Parallel()
 	s, p := semicircleSketch(t)
-	body, err := decad.New().Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(150), Dir: decad.Along})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(150), Dir: decad.Along})
 	require.NoError(t, err)
 
 	var stl1, stl2, obj1, obj2 bytes.Buffer
@@ -370,7 +370,7 @@ func TestRevolveTessellateCircularMeridianChordsWithTolerance(t *testing.T) {
 	// bound must stay inside every tolerance that produced a mesh: the
 	// meridian and the angular sequence are both chorded against it.
 	s, p := semicircleSketch(t)
-	body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	prev := 0
@@ -416,7 +416,7 @@ func TestRevolveTessellatePartialGrooveMeshes(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 
-	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis,
+	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis,
 		decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
 	require.NoError(t, err)
 

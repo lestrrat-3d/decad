@@ -89,7 +89,7 @@ func TestIsManifoldAcceptsTorus(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Revolve(s, s.Profiles()[0], manifoldUAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], manifoldUAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	require.Len(t, body.Faces(), 1)

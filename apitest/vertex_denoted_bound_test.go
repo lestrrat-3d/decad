@@ -394,7 +394,7 @@ func TestRevolveVertexReachesDenotedCutEnds(t *testing.T) {
 	doc := decad.New()
 	for _, profile := range profiles {
 		ends := denotedEnds(t, recordOf(t, s, profile))
-		body, err := doc.Revolve(s, profile, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		body, err := decad.Revolve(t.Context(), doc, s, profile, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		require.NoError(t, err)
 		bounded, shared := requireVerticesReachDenoted(t, body, ends, quarter)
 		junctions := len(ends) / 2
@@ -439,7 +439,7 @@ func TestExtrudeVertexReachesDenotedMergedRun(t *testing.T) {
 // TestChainVertexReachesDenotedCutEnd records the two open fragments the
 // radius-7.3 circle leaves of the 1370 mm line along v = 0.3. Each is one line
 // segment trimmed at a crossing, so its free end there is a lerp at the
-// recorded t. Every vertex ExtrudeChain and a quarter-turn RevolveChain about
+// recorded t. Every vertex ExtrudeChain and a quarter-turn chain Revolve about
 // v = 20 place there must reach the denoted point, and the extruded line's
 // natural end stays Exact. The quarter-turn image of every vertex also
 // carries the rotation's own rounding, so the revolve's natural end is
@@ -447,7 +447,7 @@ func TestExtrudeVertexReachesDenotedMergedRun(t *testing.T) {
 //
 // Shown-to-fail on amd64: with no walk-end term at a chain's free ends,
 // ExtrudeChain publishes the trimmed end Exact, 1.8e-15 mm from its denoted
-// point. The revolve leg is coverage only: RevolveChain charged its free
+// point. The revolve leg is coverage only: chain Revolve charged its free
 // ends' own walk bound already.
 func TestChainVertexReachesDenotedCutEnd(t *testing.T) {
 	t.Parallel()
@@ -479,7 +479,7 @@ func TestChainVertexReachesDenotedCutEnd(t *testing.T) {
 		bounded, _ := requireVerticesReachDenoted(t, body, ends, inPlane)
 		require.LessOrEqual(t, bounded, 2, `the natural end's two vertices stay Exact`)
 
-		body, err = doc.RevolveChain(s, ch, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		body, err = decad.Revolve(t.Context(), doc, s, ch, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		require.NoError(t, err)
 		bounded, _ = requireVerticesReachDenoted(t, body, ends, quarter)
 		require.GreaterOrEqual(t, bounded, 2, `the trimmed end's vertex at each sweep end carries a bound`)

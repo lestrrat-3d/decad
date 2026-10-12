@@ -75,7 +75,7 @@ func TestSweepClosedCircleBuildsVerifiedSolidAndReplaysPlacement(t *testing.T) {
 	decadtest.MeasuresCentroid(t, body, r3.Vec{})
 	decadtest.MeasuresBounds(t, body, r3.NewVec(-11, -1, -11), r3.NewVec(11, 1, 11))
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: -1}, End: decad.Point2{U: 0, V: 1}}
-	reference, err := decad.New().Revolve(s, profile, axis, decad.FullRevolution{})
+	reference, err := decad.Revolve(t.Context(), decad.New(), s, profile, axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	refVolume, err := reference.Volume()
 	require.NoError(t, err)

@@ -791,7 +791,7 @@ func revolvedRing(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 
 	uAxis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body
 }

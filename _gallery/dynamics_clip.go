@@ -453,7 +453,7 @@ func revolvedSphere(ctx context.Context, doc *decad.Document, radius float64) (*
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return doc.Revolve(s, s.Profiles()[0],
+	return decad.Revolve(ctx, doc, s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
 }
 
@@ -969,7 +969,7 @@ func revolvedBottle(ctx context.Context, doc *decad.Document) (*decad.Body, erro
 	if len(s.Profiles()) != 1 {
 		return nil, fmt.Errorf("bottle: %d profiles, want 1", len(s.Profiles()))
 	}
-	return doc.Revolve(s, s.Profiles()[0], decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}},
+	return decad.Revolve(ctx, doc, s, s.Profiles()[0], decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}},
 		decad.FullRevolution{})
 }
 
@@ -987,6 +987,6 @@ func sideCylinder(ctx context.Context, doc *decad.Document, radius, length float
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return doc.Revolve(s, s.Profiles()[0], decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}},
+	return decad.Revolve(ctx, doc, s, s.Profiles()[0], decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}},
 		decad.FullRevolution{})
 }

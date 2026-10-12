@@ -240,7 +240,7 @@ func ringBody(t *testing.T, doc *decad.Document, u0, v0, u1, v1 float64, holes .
 			break
 		}
 	}
-	body, err := doc.Revolve(s, prof, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, prof, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body
 }

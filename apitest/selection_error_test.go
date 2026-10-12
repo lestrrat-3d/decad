@@ -312,7 +312,7 @@ func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
 	t.Run("FailedAssertionPassesThrough", func(t *testing.T) {
 		// The selector's own .Exactly(2) fails against the host's many edges;
 		// the axis gets that SelectionError unchanged.
-		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges().Exactly(2)}, decad.FullRevolution{})
+		_, err := decad.Revolve(t.Context(), doc, s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges().Exactly(2)}, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrCardinality)
 		var se *decad.SelectionError
 		require.ErrorAs(t, err, &se)
@@ -322,7 +322,7 @@ func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
 	t.Run("SuccessfulManyRewritten", func(t *testing.T) {
 		// An unasserted query matches every edge; the axis needs one and
 		// rewrites to Expected "exactly 1".
-		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges()}, decad.FullRevolution{})
+		_, err := decad.Revolve(t.Context(), doc, s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges()}, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrCardinality)
 		var se *decad.SelectionError
 		require.ErrorAs(t, err, &se)
@@ -332,7 +332,7 @@ func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
 	t.Run("UnassertedZeroRewritten", func(t *testing.T) {
 		// A plate has no circular edges: zero matches, rewritten to Expected
 		// "exactly 1" / Actual 0, no longer ErrNoMatch.
-		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges(decad.Circular())}, decad.FullRevolution{})
+		_, err := decad.Revolve(t.Context(), doc, s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges(decad.Circular())}, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrCardinality)
 		require.NotErrorIs(t, err, decad.ErrNoMatch)
 		var se *decad.SelectionError
@@ -345,7 +345,7 @@ func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
 		// *decad.EdgeQuery to promote the sealed marker is malformed input,
 		// rejected as ErrDegenerate — never a plain untyped cardinality error.
 		foreign := wrappedEdgeSelector{EdgeQuery: decad.Edges()}
-		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: foreign}, decad.FullRevolution{})
+		_, err := decad.Revolve(t.Context(), doc, s, p, decad.EdgeAxis{Body: host, Edge: foreign}, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.NotErrorIs(t, err, decad.ErrCardinality)
 		var se *decad.SelectionError

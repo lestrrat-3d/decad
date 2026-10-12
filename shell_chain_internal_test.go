@@ -24,7 +24,7 @@ func beadBody(t *testing.T) *Body {
 	s.CreateArc(c, end, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, FullRevolution{})
+	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], revolveAxisU, FullRevolution{})
 	require.NoError(t, err)
 	return body
 }

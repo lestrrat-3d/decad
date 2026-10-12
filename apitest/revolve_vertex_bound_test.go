@@ -91,7 +91,7 @@ func TestRevolveVertexBoundCoversAxisReexpression(t *testing.T) {
 		t.Run(fmt.Sprintf("anchor=%v", a), func(t *testing.T) {
 			t.Parallel()
 			s := rectSketch(t, 0.1, 0, 0.5, 1)
-			b, err := decad.New().Revolve(s, s.Profiles()[0],
+			b, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0],
 				decad.SketchLine{Start: decad.Point2{U: a, V: 0}, End: decad.Point2{U: a, V: 1}},
 				decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 			require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestRevolveVertexBoundCoversAxisSnap(t *testing.T) {
 			near := 5e-10 * scale
 			pts := [][2]float64{{near, 0}, {scale, 0}, {scale, scale}, {0, scale}}
 			s, p := polygonSketch(t, pts)
-			b, err := decad.New().Revolve(s, p,
+			b, err := decad.Revolve(t.Context(), decad.New(), s, p,
 				decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}},
 				decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 			require.NoError(t, err)
@@ -175,7 +175,7 @@ func TestRevolveVertexBoundCoversAxisSnap(t *testing.T) {
 func TestRevolveVertexBoundCoversTiltedAxis(t *testing.T) {
 	t.Parallel()
 	s := rectSketch(t, 2, 0, 3, 1)
-	b, err := decad.New().Revolve(s, s.Profiles()[0],
+	b, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 1}},
 		decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along})
 	require.NoError(t, err)
@@ -190,7 +190,7 @@ func TestRevolveVertexBoundCoversTiltedAxis(t *testing.T) {
 	requireRevolveVertices(t, b, phi0, phi1)
 }
 
-// TestRevolveChainVertexBoundCoversAxisReexpression is the RevolveChain build's
+// TestRevolveChainVertexBoundCoversAxisReexpression is the chain Revolve build's
 // reading of the same φ = 0 rounding: an open chain's junctions, its two free
 // ends included, carry the bound a closed profile's junctions do.
 //
@@ -213,7 +213,7 @@ func TestRevolveChainVertexBoundCoversAxisReexpression(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	b, err := decad.New().RevolveChain(s, s.Chains()[0],
+	b, err := decad.Revolve(t.Context(), decad.New(), s, s.Chains()[0],
 		decad.SketchLine{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 1, V: 1}},
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
@@ -239,7 +239,7 @@ func TestRevolveVertexIntegerStaysExact(t *testing.T) {
 	t.Run("full", func(t *testing.T) {
 		t.Parallel()
 		s := rectSketch(t, 0, 5, 10, 15)
-		b, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+		b, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
 		require.Len(t, b.Vertices(), 4)
 		for _, v := range b.Vertices() {
@@ -250,7 +250,7 @@ func TestRevolveVertexIntegerStaysExact(t *testing.T) {
 	t.Run("partial", func(t *testing.T) {
 		t.Parallel()
 		s := rectSketch(t, 0, 5, 10, 15)
-		b, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		b, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		require.NoError(t, err)
 		start := 0
 		for _, v := range b.Vertices() {
@@ -312,7 +312,7 @@ func TestRevolveCentroidBoundCoversTiltedAxis(t *testing.T) {
 	t.Run("sketch-line", func(t *testing.T) {
 		t.Parallel()
 		s := rectSketch(t, 1000, 0, 1001, 1)
-		b, err := decad.New().Revolve(s, s.Profiles()[0],
+		b, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0],
 			decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 1}}, decad.FullRevolution{})
 		require.NoError(t, err)
 		requireCentroidCovers(t, b, fullRevolveTiltedCentroid(new(big.Rat), new(big.Rat),
@@ -334,7 +334,7 @@ func TestRevolveCentroidBoundCoversTiltedAxis(t *testing.T) {
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
 		axis := decad.ConstructionAxis{Origin: r3.NewVec(1e6+0.1, 1e6+0.3, 0), Dir: r3.NewVec(1, 1, 0)}
-		b, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+		b, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{})
 		require.NoError(t, err)
 		lift := func(o, c float64) *big.Rat { return new(big.Rat).Add(ratOf(o), ratOf(c)) }
 		requireCentroidCovers(t, b, fullRevolveTiltedCentroid(ratOf(axis.Origin.X), ratOf(axis.Origin.Y),
@@ -362,7 +362,7 @@ func TestRevolveCentroidBoundCoversTiltedAxis(t *testing.T) {
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
 		axis := decad.ConstructionAxis{Origin: r3.NewVec(0.1, 0, 0), Dir: r3.NewVec(0, 1, 0)}
-		b, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+		b, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{})
 		require.NoError(t, err)
 		requireCentroidCovers(t, b, ratF(0.1, 0, 0))
 	})
@@ -385,7 +385,7 @@ func TestRevolveCentroidBoundCoversTiltedAxis(t *testing.T) {
 		s.Fix(rect.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		b, err := decad.New().Revolve(s, s.Profiles()[0],
+		b, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0],
 			decad.SketchLine{Start: decad.Point2{U: a, V: 0}, End: decad.Point2{U: a, V: 1}}, decad.FullRevolution{})
 		require.NoError(t, err)
 		o, u := f.Origin(), f.U()

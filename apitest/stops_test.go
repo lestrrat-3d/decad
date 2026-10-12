@@ -437,7 +437,7 @@ func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 		// The 10×8 rectangle swept 1 radian about the sketch u axis reaches
 		// z = 8·sin(1) ≈ 6.7317678784631720, which no float64 holds: the box
 		// says so itself, and the stop path must say the same.
-		host, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+		host, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
 		require.NoError(t, err)
 		box, err := host.Bounds()
 		require.NoError(t, err)
@@ -467,7 +467,7 @@ func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 	t.Run("full revolution", func(t *testing.T) {
 		s, p := solidSketch(t)
 		doc := decad.New()
-		host, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+		host, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
 
 		ps, pp := pinFootprint(t)
@@ -486,20 +486,20 @@ func TestRevolveToFaceAngular(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	host, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	host, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 
 	// Stop at the host's end cap — the radial plane at 90°. The sense comes
 	// from the target face: the nearer way around is Along, so the sweep is
 	// exactly [0, π/2].
-	body, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
 	decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, 0), r3.NewVec(10, 15, 15))
 	require.Contains(t, doc.Bodies(), host, `a stop body is depended on, never retired`)
 
 	// The start cap lies in the profile's own half-plane: a zero sweep.
-	_, err = doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capStartFace(host)})
+	_, err = decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capStartFace(host)})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
@@ -509,10 +509,10 @@ func TestRevolveToFaceAngularNearerWay(t *testing.T) {
 	// other way, so a standalone ToFaceAngular sweeps Against to −90°.
 	s, p := annularSketch(t)
 	doc := decad.New()
-	host, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+	host, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
 	require.NoError(t, err)
 
-	body, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
 	decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, -15), r3.NewVec(10, 15, 0))
@@ -522,11 +522,11 @@ func TestRevolveToFaceAngularSides(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	host, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	host, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 
 	// As the along side of a two-sided extent: [−π/4, π/2].
-	body, err := doc.Revolve(s, p, uAxis, decad.TwoSidedAngle{
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.TwoSidedAngle{
 		One: decad.ToFaceAngular{Body: host, Face: capEndFace(host)},
 		Two: decad.AngleSide{A: units.Degrees(45)},
 	})
@@ -535,7 +535,7 @@ func TestRevolveToFaceAngularSides(t *testing.T) {
 
 	// As the against side the side supplies the sense, so the same face is
 	// reached the long way around: [−3π/2, π/4].
-	long, err := doc.Revolve(s, p, uAxis, decad.TwoSidedAngle{
+	long, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.TwoSidedAngle{
 		One: decad.AngleSide{A: units.Degrees(45)},
 		Two: decad.ToFaceAngular{Body: host, Face: capEndFace(host)},
 	})
@@ -550,11 +550,11 @@ func TestRevolveToFaceAngularHalfDiskCap(t *testing.T) {
 	// still an exact, closed-form stop.
 	ss, sp := semicircleSketch(t)
 	doc := decad.New()
-	host, err := doc.Revolve(ss, sp, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	host, err := decad.Revolve(t.Context(), doc, ss, sp, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 
 	s, p := annularSketch(t)
-	body, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
 }
@@ -563,7 +563,7 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	host, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	host, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	es, ep := plateSketch(t)
 	plate, err := doc.Extrude(es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -574,22 +574,22 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 	t.Run("NonPlanarStopFace", func(t *testing.T) {
 		cs, cp := solidSketch(t)
 		doc2 := decad.New()
-		cyl, err := doc2.Revolve(cs, cp, uAxis, decad.FullRevolution{})
+		cyl, err := decad.Revolve(t.Context(), doc2, cs, cp, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
-		_, err = doc2.Revolve(cs, cp, uAxis, decad.ToFaceAngular{Body: cyl, Face: decad.Faces(decad.Cylindrical())})
+		_, err = decad.Revolve(t.Context(), doc2, cs, cp, uAxis, decad.ToFaceAngular{Body: cyl, Face: decad.Faces(decad.Cylindrical())})
 		require.ErrorIs(t, err, decad.ErrUnsupported, `a curved stop face is staged, loudly`)
 	})
 	t.Run("PlaneNormalAlongAxis", func(t *testing.T) {
 		// The prism's x=0 wall: its plane's normal is the revolve axis
 		// itself, so the rotating half-plane never coincides with it.
 		q := decad.Faces(decad.Planar(), decad.NormalTo(r3.NewVec(1, 0, 0)))
-		_, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: prism, Face: q})
+		_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: prism, Face: q})
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("PlaneMissesAxis", func(t *testing.T) {
 		// The plate's far cap plane (z=10) is parallel to the axis but never
 		// contains it.
-		_, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: plate, Face: capEndFace(plate)})
+		_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: plate, Face: capEndFace(plate)})
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("FaceSpansBothSides", func(t *testing.T) {
@@ -604,27 +604,27 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 		require.NoError(t, err)
 		straddle, err := doc.Extrude(ws, ws.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
-		_, err = doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: straddle, Face: capStartFace(straddle)})
+		_, err = decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: straddle, Face: capStartFace(straddle)})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("NilBody", func(t *testing.T) {
-		_, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Face: capEndFace(host)})
+		_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Face: capEndFace(host)})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("TypedNilFace", func(t *testing.T) {
 		var q *decad.FaceQuery
-		_, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: q})
+		_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: host, Face: q})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.NotErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("ZeroMatchesIsErrCardinality", func(t *testing.T) {
-		_, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: plate, Face: decad.Faces(decad.Cylindrical())})
+		_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: plate, Face: decad.Faces(decad.Cylindrical())})
 		require.ErrorIs(t, err, decad.ErrCardinality)
 		require.NotErrorIs(t, err, decad.ErrNoMatch)
 	})
 	t.Run("ForeignBody", func(t *testing.T) {
 		other := decad.New()
-		_, err := other.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
+		_, err := decad.Revolve(t.Context(), other, s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
 		require.ErrorIs(t, err, decad.ErrForeignBody)
 	})
 

@@ -61,7 +61,7 @@ func BenchmarkStitchTorusRevolveSheet(b *testing.B) {
 		_, err = s.Solve(b.Context())
 		require.NoError(b, err)
 		doc := decad.New()
-		sheet, err := doc.Revolve(s, s.Profiles()[0], uAxis,
+		sheet, err := decad.Revolve(b.Context(), doc, s, s.Profiles()[0], uAxis,
 			decad.FullRevolution{}, decad.WithSurfaceResult())
 		require.NoError(b, err)
 		b.StartTimer()

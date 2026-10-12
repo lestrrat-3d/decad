@@ -101,7 +101,7 @@ func Example_decad_selectors() {
 			decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		).Exactly(1),
 	}
-	body, err := doc.Revolve(rs, rs.Profiles()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(context.Background(), doc, rs, rs.Profiles()[0], axis, decad.FullRevolution{})
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return

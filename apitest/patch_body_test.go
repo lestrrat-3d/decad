@@ -643,7 +643,7 @@ func TestBodyPatchFillsARevolvedDiskRim(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	disk, err := decad.New().RevolveChain(s, s.Chains()[0], axis, decad.FullRevolution{})
+	disk, err := decad.Revolve(t.Context(), decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	free, err := decad.Edges(decad.Free()).Exactly(1).SelectEdges(disk)
 	require.NoError(t, err)

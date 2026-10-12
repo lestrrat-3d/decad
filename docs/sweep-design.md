@@ -762,7 +762,7 @@ span:
 
 - a **`LineTo`** span is the chain prism `Document.ExtrudeChain` already
   builds, over the path's own signed height instead of a resolved `Extent`;
-- an **`ArcThrough`** span is the chain shell `Document.RevolveChain` already
+- an **`ArcThrough`** span is the chain shell `Revolve` over a chain already
   builds, over the arc's exact centre, axis and directed angle instead of a
   resolved `AngularExtent`.
 
@@ -822,7 +822,7 @@ The call takes the sketch beside the chain because a chain's geometry is
 plane-local and the plane is the sketch's (`docs/api-design.md` §7).
 
 **A chain-fed result is always a sheet**, which is `docs/surface-design.md`
-§13.2's answer for `ExtrudeChain` and `RevolveChain` restated with no change:
+§13.2's answer for `ExtrudeChain` and a chain `Revolve` restated with no change:
 `Kind()` is `BodySheet` by construction, `IsSolid()` is `false`, and
 `Volume()`/`Centroid()` answer `ErrNotSolid` by KIND rather than by soundness.
 
@@ -841,7 +841,7 @@ chain through `RecordChain` instead of a profile through `RecordProfile`.
 | **SC5** | an internal path join is not tangent | `ErrUnsupported`, S6 |
 | **SC6** | a recorded chain segment outside the line, circle and arc set the span builders admit | `ErrUnsupported`, S10 |
 | **SC7** | a composite path outside §15.8's exact cardinal line/half-circle and one-line source class | `ErrUnsupported` |
-| **SC8** | an arc span the chain shell refuses — a walk that does not lie in one closed half-plane of the arc axis, both free ends on that axis, or an interior on-axis junction | exactly what `RevolveChain` answers: `ErrDegenerate`, or `ErrUnsupported` under `docs/surface-design.md` R22 and R33 |
+| **SC8** | an arc span the chain shell refuses — a walk that does not lie in one closed half-plane of the arc axis, both free ends on that axis, or an interior on-axis junction | exactly what a chain `Revolve` answers: `ErrDegenerate`, or `ErrUnsupported` under `docs/surface-design.md` R22 and R33 |
 | **SC9** | a one-span arc path, before the standalone arc reduction | `ErrUnsupported`, `docs/surface-design.md` R34 |
 
 **SC2 is decided before SC3, and that order is load-bearing.** A foreign,
@@ -861,7 +861,7 @@ option refusals of §15.3 included, from masking a seam refusal.
 | `Edges(Free())` | both rims of the walk over every span, plus the one sweep edge at each of the walk's two free ends; a one-span straight sweep of an `n`-segment walk resolves `2n + 2` |
 | `Area` | the sum of each wall's own area through `boundedAdd`. A straight span's wall is `boundedMul(segment length, span height)`, the height carrying §15.2's composed path bound; an arc span's is `boundedMul(walkAxisMoment, sweep)` on `docs/surface-design.md` §13.4's own terms. A circular wall carries its proven integral enclosure and a free-form wall `internal/freeform/spline_length.go`'s proven bracket |
 | `Bounds` | the recorded walk's per-segment analytic extremes swept over the span's signed interval, from `prism_extent.go` and `revolve_extent.go` verbatim, charging the frame and placement rounding those readings already charge |
-| `Verify`'s validity | exactly what an `ExtrudeChain` ribbon or a `RevolveChain` shell over the same recorded walk and interval reads (`docs/surface-design.md` §13.4, §9.1). A composite chain sweep reads `ValidityUndecided`, for D1's own reason: the assembled topology audit proves how the spans sew together, never that the swept walls do not fold back through one another |
+| `Verify`'s validity | exactly what an `ExtrudeChain` ribbon or a chain `Revolve` shell over the same recorded walk and interval reads (`docs/surface-design.md` §13.4, §9.1). A composite chain sweep reads `ValidityUndecided`, for D1's own reason: the assembled topology audit proves how the spans sew together, never that the swept walls do not fold back through one another |
 
 No bound in that table is new, because no geometry is: every wall is built by
 the per-segment construction its chain sibling already proves, and the one term

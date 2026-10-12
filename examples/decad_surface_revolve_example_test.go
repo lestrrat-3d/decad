@@ -33,7 +33,7 @@ func Example_decad_surfaceRevolve() {
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
 
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(context.Background(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return

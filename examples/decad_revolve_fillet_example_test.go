@@ -42,7 +42,7 @@ func Example_decad_revolve_fillet() {
 
 	doc := decad.New()
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	shaft, err := doc.Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+	shaft, err := decad.Revolve(context.Background(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return

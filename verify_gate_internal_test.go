@@ -673,7 +673,7 @@ func TestRevolveGateDiameterReadsSheetsAndDisplacedSections(t *testing.T) {
 		s.CreateArc(c, end, o)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		body, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, FullRevolution{}, opts...)
+		body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], revolveAxisU, FullRevolution{}, opts...)
 		require.NoError(t, err)
 		return body
 	}

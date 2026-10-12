@@ -291,7 +291,7 @@ single-walk ribbon becomes the one-element case:
 - `sectionDelta float64`, on `prismPayload`'s own terms (prism §7): the proven
   upper bound on how far any recorded boundary coordinate of the section sits
   from the section its construction denotes. It is zero for every ribbon a
-  caller builds through `ExtrudeChain` or `RevolveChain`, and this design's
+  caller builds through `ExtrudeChain` or a chain `Revolve`, and this design's
   trim is the first construction that sets it nonzero.
 
 The alternative — a new payload type per arm — was rejected: it would put a

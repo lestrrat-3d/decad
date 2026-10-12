@@ -561,7 +561,7 @@ func TestSheetUndercutsRefusedOnARevolveSheet(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))

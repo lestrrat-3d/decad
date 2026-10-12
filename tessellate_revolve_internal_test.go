@@ -54,7 +54,7 @@ func TestRevolveFreeformPartialCapAreaSlack(t *testing.T) {
 	s, profile := freeformRevolveSketch(t)
 
 	axis := SketchLine{Start: Point2{U: -5, V: -5}, End: Point2{U: -5, V: 5}}
-	body, err := New().Revolve(s, profile, axis,
+	body, err := Revolve(t.Context(), New(), s, profile, axis,
 		AngleExtent{A: units.Radians(0.0001), Dir: Along})
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
@@ -395,7 +395,7 @@ func TestRevolveMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, p := tc.build(t)
 			axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
-			body, err := New().Revolve(s, p, axis, FullRevolution{})
+			body, err := Revolve(t.Context(), New(), s, p, axis, FullRevolution{})
 			require.NoError(t, err)
 			mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 			require.NoError(t, err)
@@ -495,7 +495,7 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
-	body, err := New().Revolve(s, s.Profiles()[0], axis, FullRevolution{})
+	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], axis, FullRevolution{})
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2))
@@ -526,7 +526,7 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 		s.CreateCircle(center, 3)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		body, err := New().Revolve(s, s.Profiles()[0], axis, FullRevolution{})
+		body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], axis, FullRevolution{})
 		require.NoError(t, err)
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2), WithVerification(VerifyAll))
 		require.NoError(t, err)

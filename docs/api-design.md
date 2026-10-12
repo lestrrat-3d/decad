@@ -624,8 +624,8 @@ type EdgeAxis struct{ Body *Body; Edge EdgeSelector }
 
 `EdgeAxis.Edge` MUST resolve to **exactly one** linear edge of `Body`
 (`EdgeQuery.Exactly(1)`); zero or many is `ErrCardinality` (§12), and a non-linear
-edge is `ErrDegenerate`. `Body` MUST be a live body of the same `Document` the
-`Revolve` is called on — another document's is `ErrForeignBody`, a retired one is
+edge is `ErrDegenerate`. `Body` MUST be a live body of the same `Document` passed to
+`Revolve` — another document's is `ErrForeignBody`, a retired one is
 `ErrRetiredBody`. Resolving the axis does not consume its body.
 
 **`Interference` / `Clearance`** — the pairwise results of §10. Both name the two
@@ -790,14 +790,14 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 | `Body.ScaledAt` | `ScaledAt(ctx, b, anchor, factor)` |
 | `Body.Mirrored`, `Body.MirroredCopy` | `Mirrored(ctx, b, plane, opts...)`, `MirroredCopy(ctx, b, plane)` |
 | `Body.Patterned`, `Body.PatternCopies` | `Patterned(ctx, b, spec)`, `PatternCopies(ctx, b, spec)` |
-| `Document.Extrude`, `Revolve` | `Extrude(ctx, doc, s, p, e, opts...)`, `Revolve(ctx, doc, s, p, axis, a, opts...)` |
+| `Document.Extrude` | `Extrude(ctx, doc, s, p, e, opts...)` |
 | `Document.Loft`, `LoftFaces`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
 | `Document.Sweep` over a profile or a chain | `Sweep(ctx, doc, s, sec, path, opts...)`, one generic function over `Section` (§8) |
-| `Document.ExtrudeChain`, `RevolveChain`, `LoftChain` | the same names with `ctx, doc` leading |
+| `Document.ExtrudeChain`, `LoftChain` | the same names with `ctx, doc` leading |
 | `Document.Remove` | `Remove(b)` |
 
 **Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,
-`Revolve`, `ExtrudeChain` and `RevolveChain` included.** Each checks `ctx` at
+`Revolve` and `ExtrudeChain` included.** Each checks `ctx` at
 entry, between recording the section, resolving the extent and building the
 body, and inside the build evaluators. A canceled `ctx` returns `ctx.Err()`
 unchanged before commit and leaves `Document.Bodies()` and every other body as
@@ -934,7 +934,7 @@ before extruding. decad never re-derives it.
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
 Fillet, Chamfer, Shell, Transform, ScaledAt, Copy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
 Patch, Stitch, Unstitch, Thicken**, plus the sweeps of an OPEN sketch curve —
-**ExtrudeChain, RevolveChain, LoftChain**, and **Sweep** given a
+**ExtrudeChain, LoftChain**, and **Sweep** and **Revolve** given a
 `*sketch.Chain` — which take a `*sketch.Chain` where their siblings take a
 `*sketch.Profile` and always build a sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
@@ -959,7 +959,7 @@ build and `Draft`, the face draft of an existing prism, with its
 
 ```go
 func Extrude(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
-func Revolve(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
+func Revolve[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
 func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, path *Path, opts ...SweepOption) (*Body, error)
 func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
 func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
@@ -974,6 +974,12 @@ profile section builds a solid, or a sheet under `WithSurfaceResult()`. A
 chain section builds a sheet, so `Sweep` returns `ErrUnsupported` for
 `WithSurfaceResult()` and `WithSweepTwist` on a chain, before any commit
 (`docs/surface-design.md` §13.2, `docs/sweep-design.md` §15.3).
+
+`Revolve` infers `S` the same way. A profile section builds a solid, or a
+sheet under `WithSurfaceResult()`. A chain section builds a sheet, so `Revolve`
+returns `ErrUnsupported` for `WithSurfaceResult()` on a chain, after the
+chain's seam gates and before the axis gates and any commit
+(`docs/surface-design.md` §13.2).
 
 `LoftSections(ctx, sections ...LoftSection)` carries each `Sketch` and
 `Profile` together. It admits the three- and four-section classes in
@@ -1261,12 +1267,11 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 func WithThickenSide(side ThickenSide) ThickenOption
 
 // The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a
-// BodySheet, so WithSurfaceResult() is not among their options: ChainExtrudeOption,
-// ChainRevolveOption and ChainLoftOption are their own sealed tiers, which
-// SurfaceResultOption implements none of. Sweep takes a chain through Section
+// BodySheet, so WithSurfaceResult() is not among their options: ChainExtrudeOption
+// and ChainLoftOption are their own sealed tiers, which SurfaceResultOption
+// implements neither of. Sweep and Revolve take a chain through Section
 // instead (above).
 func ExtrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
-func RevolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
 func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
 ```
 

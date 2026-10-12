@@ -212,7 +212,7 @@ func TestDraftRefusals(t *testing.T) {
 	deg5 := units.Degrees(5)
 
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(10, 4))
-	rev, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	rev, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	cyl := cylinderBody(t, doc)
 	other := plainBox(t, doc, decad.Along)
@@ -316,7 +316,7 @@ func cylinderBody(t *testing.T, doc *decad.Document) *decad.Body {
 		r := s.CreateRectangle(0, 0, 10, 4)
 		s.Fix(r.A)
 	})
-	b, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	b, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return b
 }

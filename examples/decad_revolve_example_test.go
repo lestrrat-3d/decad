@@ -35,7 +35,7 @@ func Example_decad_revolve() {
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
 
 	doc := decad.New()
-	body, err := doc.Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(context.Background(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return

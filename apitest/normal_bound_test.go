@@ -1032,7 +1032,7 @@ func coneBody(t *testing.T, top float64) *decad.Body {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body
 }

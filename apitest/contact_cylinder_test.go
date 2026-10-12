@@ -21,7 +21,7 @@ func revolvedCylinderZPose(t *testing.T, z, x float64) r3.Transform {
 func TestContactPairRevolvedCylinderAxialDiskFace(t *testing.T) {
 	doc := decad.New()
 	sketch, profile := solidSketch(t)
-	cylinder, err := doc.Revolve(sketch, profile, uAxis, decad.FullRevolution{})
+	cylinder, err := decad.Revolve(t.Context(), doc, sketch, profile, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
 	ceiling := boxBodyAtZ(t, doc, -20, -20, 20, 20, 10, 10)
@@ -133,13 +133,13 @@ func TestContactPairRevolvedCylinderRefusesUnprovedDiskCorridor(t *testing.T) {
 	doc := decad.New()
 	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
 	sketch, profile := solidSketch(t)
-	full, err := doc.Revolve(sketch, profile, uAxis, decad.FullRevolution{})
+	full, err := decad.Revolve(t.Context(), doc, sketch, profile, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	partial, err := doc.Revolve(sketch, profile, uAxis,
+	partial, err := decad.Revolve(t.Context(), doc, sketch, profile, uAxis,
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	annularInput, annularProfile := annularSketch(t)
-	annular, err := doc.Revolve(annularInput, annularProfile, uAxis, decad.FullRevolution{})
+	annular, err := decad.Revolve(t.Context(), doc, annularInput, annularProfile, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name string

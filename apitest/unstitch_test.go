@@ -94,7 +94,7 @@ func TestUnstitchVoidRevolveMakesNonVoidSheets(t *testing.T) {
 	t.Parallel()
 	s, p := holedSketch(t)
 	doc := decad.New()
-	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	require.Len(t, body.Shells(), 2)
 	require.True(t, body.Shells()[1].IsVoid())
@@ -221,7 +221,7 @@ func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 

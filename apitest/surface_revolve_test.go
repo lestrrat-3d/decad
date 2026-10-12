@@ -86,7 +86,7 @@ func TestSurfaceRevolvePartialClearOfAxisIsASheet(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, sheet.Kind())
@@ -122,7 +122,7 @@ func TestSurfaceRevolvePartialClearOfAxisIsASheet(t *testing.T) {
 	// value AND bound — the extent reading never consults surfaceResult.
 	s2, p2 := annularSketch(t)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Revolve(s2, p2, uAxis, quarterTurn)
+	solid, err := decad.Revolve(t.Context(), solidDoc, s2, p2, uAxis, quarterTurn)
 	require.NoError(t, err)
 	solidBox, err := solid.Bounds()
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestSurfaceRevolvePartialMeetingAxisOmitsOnAxisEdge(t *testing.T) {
 	t.Parallel()
 	s, p := solidSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, sheet.Kind())
@@ -174,7 +174,7 @@ func TestSurfaceRevolvePartialMeetingAxisOmitsOnAxisEdge(t *testing.T) {
 	// (docs/evaluator-design.md §6) — and the sheet has none at all.
 	s2, p2 := solidSketch(t)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Revolve(s2, p2, uAxis, quarterTurn)
+	solid, err := decad.Revolve(t.Context(), solidDoc, s2, p2, uAxis, quarterTurn)
 	require.NoError(t, err)
 	require.Equal(t, 1, onAxisLine3Count(solid))
 	require.Equal(t, 0, onAxisLine3Count(sheet))
@@ -211,7 +211,7 @@ func TestSurfaceRevolveFullTurnClearOfAxisIsClosed(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, sheet.Kind())
@@ -229,7 +229,7 @@ func TestSurfaceRevolveFullTurnClearOfAxisIsClosed(t *testing.T) {
 	// solid's, not merely within its bound.
 	s2, p2 := annularSketch(t)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	solid, err := decad.Revolve(t.Context(), solidDoc, s2, p2, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	solidArea, err := solid.Area()
 	require.NoError(t, err)
@@ -253,7 +253,7 @@ func TestSurfaceRevolveHalfDiscFullTurnIsClosedSphereSheet(t *testing.T) {
 	t.Parallel()
 	s, p := semicircleSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, sheet.Kind())
@@ -275,7 +275,7 @@ func TestSurfaceRevolveHalfDiscFullTurnIsClosedSphereSheet(t *testing.T) {
 	// Bounds (§4.3): unchanged from the solid's, value AND bound.
 	s2, p2 := semicircleSketch(t)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	solid, err := decad.Revolve(t.Context(), solidDoc, s2, p2, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	solidBox, err := solid.Bounds()
 	require.NoError(t, err)
@@ -294,7 +294,7 @@ func TestSurfaceRevolveCapBoundsComposeOnInexactFixture(t *testing.T) {
 
 	s, p := ngonOffAxisSketch(t, n, r, vCenter)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Revolve(s, p, uAxis, quarterTurn)
+	solid, err := decad.Revolve(t.Context(), solidDoc, s, p, uAxis, quarterTurn)
 	require.NoError(t, err)
 
 	capStartFaces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(solid))).Exactly(1).SelectFaces(solid)
@@ -312,7 +312,7 @@ func TestSurfaceRevolveCapBoundsComposeOnInexactFixture(t *testing.T) {
 
 	s2, p2 := ngonOffAxisSketch(t, n, r, vCenter)
 	sheetDoc := decad.New()
-	sheet, err := sheetDoc.Revolve(s2, p2, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), sheetDoc, s2, p2, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	solidArea, err := solid.Area()
@@ -355,7 +355,7 @@ func TestSurfaceRevolveShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 			t.Parallel()
 			s, p := tc.sketch(t)
 			doc := decad.New()
-			body, err := doc.Revolve(s, p, uAxis, tc.extent, decad.WithSurfaceResult())
+			body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, tc.extent, decad.WithSurfaceResult())
 			require.NoError(t, err)
 			requireOpenAgreesWithFreeEdges(t, body)
 		})
@@ -363,7 +363,7 @@ func TestSurfaceRevolveShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 			t.Parallel()
 			s, p := tc.sketch(t)
 			doc := decad.New()
-			body, err := doc.Revolve(s, p, uAxis, tc.extent)
+			body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, tc.extent)
 			require.NoError(t, err)
 			requireOpenAgreesWithFreeEdges(t, body)
 		})
@@ -391,7 +391,7 @@ func TestSurfaceRevolveStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	offset := r3.NewVec(50, 0, 0)
@@ -428,7 +428,7 @@ func TestSurfaceRevolveRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	faces := sheet.Faces()
@@ -457,7 +457,7 @@ func TestSurfaceRevolveSheetVerifiesUndecided(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -485,7 +485,7 @@ func TestSurfaceRevolveFullTurnSheetVerifiesValid(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -516,7 +516,7 @@ func TestSurfaceRevolveAxisStraddlingProfileNeverReachesTheAudit(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.ErrorIs(t, err, decad.ErrDegenerate, `a region straddling the axis is rejected at build`)
 	require.Empty(t, doc.Bodies())
 }
@@ -531,7 +531,7 @@ func TestSurfaceRevolveHoledProfileReportsDisconnectedLumps(t *testing.T) {
 	t.Parallel()
 	s, p := annularHoledSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	require.Len(t, sheet.Lumps(), 2)
 	for _, l := range sheet.Lumps() {
@@ -541,7 +541,7 @@ func TestSurfaceRevolveHoledProfileReportsDisconnectedLumps(t *testing.T) {
 
 	s2, p2 := annularHoledSketch(t)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	solid, err := decad.Revolve(t.Context(), solidDoc, s2, p2, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	require.Len(t, solid.Lumps(), 1)
 	require.Len(t, solid.Lumps()[0].Shells(), 2)

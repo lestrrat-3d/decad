@@ -72,7 +72,7 @@ func ballBody(t *testing.T, doc *decad.Document, r float64) *decad.Body {
 	s.CreateArc(c, end, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body
 }
@@ -89,7 +89,7 @@ func torusBody(t testing.TB, doc *decad.Document, major, minor float64) *decad.B
 	s.CreateCircle(center, minor)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body
 }
@@ -544,7 +544,7 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
 	w2 := sketch.NewWorld()
@@ -627,7 +627,7 @@ func TestClearanceNonFinitePolynomialIsUndecided(t *testing.T) {
 	torusSketch.CreateCircle(torusCenter, minor)
 	_, err = torusSketch.Solve(t.Context())
 	require.NoError(t, err)
-	torus, err := doc.Revolve(
+	torus, err := decad.Revolve(t.Context(), doc,
 		torusSketch,
 		torusSketch.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}},
@@ -667,7 +667,7 @@ func TestClearanceConeCoarseRow(t *testing.T) {
 	s.CreateLine(top, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	boxBody(t, doc, 30, 12, 40, 22, 5)
 
@@ -699,7 +699,7 @@ func TestClearanceConeCoarseUndecided(t *testing.T) {
 	s.CreateLine(top, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	boxBody(t, doc, 7, 4, 9, 6, 2)
 
