@@ -190,6 +190,19 @@ func Cross2xSign(a, b, c Xp2) int {
 	if a.Hu != nil && b.Hu != nil && c.Hu != nil {
 		return cross2xHomNumerator(a, b, c).Sign()
 	}
+	// A shared exact coordinate removes one product from the determinant.
+	if au == bu && a.U.Cmp(b.U) == 0 {
+		return -b.V.Cmp(a.V) * c.U.Cmp(a.U)
+	}
+	if av == bv && a.V.Cmp(b.V) == 0 {
+		return b.U.Cmp(a.U) * c.V.Cmp(a.V)
+	}
+	if au == cu && a.U.Cmp(c.U) == 0 {
+		return b.U.Cmp(a.U) * c.V.Cmp(a.V)
+	}
+	if av == cv && a.V.Cmp(c.V) == 0 {
+		return -b.V.Cmp(a.V) * c.U.Cmp(a.U)
+	}
 	return cross2xRatSign(a, b, c)
 }
 

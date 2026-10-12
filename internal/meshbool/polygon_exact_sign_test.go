@@ -19,6 +19,28 @@ func TestCross2xSignMatchesExactValue(t *testing.T) {
 		require.Equal(t, meshbool.Cross2x(points[0], points[1], points[2]).Sign(),
 			meshbool.Cross2xSign(points[0], points[1], points[2]), "rational case %d", n)
 	}
+	point := func(un, ud, vn, vd int64) meshbool.Xp2 {
+		return meshbool.NewXP2(big.NewRat(un, ud), big.NewRat(vn, vd))
+	}
+	axisBase := point(1, 3, 2, 5)
+	axisCases := [][2]meshbool.Xp2{
+		{point(1, 3, 4, 5), point(1, 2, 3, 5)},
+		{point(2, 3, 2, 5), point(1, 2, 3, 5)},
+		{point(2, 3, 3, 5), point(1, 3, 4, 5)},
+		{point(2, 3, 3, 5), point(1, 2, 2, 5)},
+	}
+	for i, pair := range axisCases {
+		require.Equal(t, meshbool.Cross2x(axisBase, pair[0], pair[1]).Sign(),
+			meshbool.Cross2xSign(axisBase, pair[0], pair[1]), "shared axis case %d", i)
+	}
+	epsilon := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 120))
+	nearU := new(big.Rat).Add(big.NewRat(1, 3), epsilon)
+	farU := new(big.Rat).Add(big.NewRat(1, 3), new(big.Rat).Mul(big.NewRat(2, 1), epsilon))
+	nearV := new(big.Rat).Add(big.NewRat(6, 5), epsilon)
+	nearAxisB := meshbool.NewXP2(nearU, big.NewRat(4, 5))
+	nearAxisC := meshbool.NewXP2(farU, nearV)
+	require.Equal(t, meshbool.Cross2x(axisBase, nearAxisB, nearAxisC).Sign(),
+		meshbool.Cross2xSign(axisBase, nearAxisB, nearAxisC))
 	base := meshbool.NewXP2(big.NewRat(1, 3), big.NewRat(2, 5))
 	step := meshbool.NewXP2(big.NewRat(2, 3), big.NewRat(4, 5))
 	near := new(big.Rat).Add(big.NewRat(6, 5), new(big.Rat).SetFrac(big.NewInt(1),

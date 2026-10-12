@@ -305,6 +305,9 @@ func MeshParityPreparedContext(ctx context.Context, p proof.Xpt, prepared *Parit
 			qc := prepared.VertexProjection(ray.Axis, ray.U, ray.V, tri[2])
 			s1 := Cross2xSign(qa, qb, pa)
 			s2 := Cross2xSign(qb, qc, pa)
+			if s1*s2 < 0 {
+				continue // two opposite edge signs already prove strictly outside
+			}
 			s3 := Cross2xSign(qc, qa, pa)
 			neg := s1 < 0 || s2 < 0 || s3 < 0
 			pos := s1 > 0 || s2 > 0 || s3 > 0
