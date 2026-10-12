@@ -347,6 +347,21 @@ endpoint. The point-loft record compares station coordinates and their
 rounding bound against the values issued at construction. Changed or missing
 stations and partial arc runs refuse the patch.
 
+The blank-shell constructor selects a whole radial-arc source cell from the
+current face-pair census. It compares every supplied side cell with a fresh
+source census and requires every live blank and retained LoftFaces face to
+have a source role. It inserts the complete arc station run into one angular
+grid shared by all Revolve section sides. The contacted straight meridian
+side splits at the certified root-time level; both halves reuse each seam
+vertex index. All other walls and the planar end caps reuse the same rays.
+The rational quarter-circle grid has angular step at most `2/n`, so its
+chord sagitta is at most `maxRadius/(2*n*n)`. Straight ideal meridians have
+zero twist. The face bound adds this sagitta and the largest exact radial
+and rounding displacement of any vertex. The constructor requires a closed,
+oriented, connected genus-zero mesh with positive exact volume and no exact
+facet crossings. The neutral producer yields 494 vertices and 984 triangles.
+The shell is an internal construction piece; it does not admit `Union`.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
