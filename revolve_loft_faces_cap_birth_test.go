@@ -20,6 +20,12 @@ func TestCurvedHeelBirthUsesLiveTipArc(t *testing.T) {
 	require.True(t, birth.rootX.hi.Cmp(birth.lower.circle.x) < 0)
 	require.NotEmpty(t, birth.slices)
 	require.Equal(t, birth.lower.time.Cmp(birth.slices[len(birth.slices)-1].hi), 0)
+	changedOrder := *birth
+	changedOrder.slices = append([]revolveLoftFacesHeelRegionSlice(nil), birth.slices...)
+	changedOrder.slices[0].events[0], changedOrder.slices[0].events[1] =
+		changedOrder.slices[0].events[1], changedOrder.slices[0].events[0]
+	require.False(t, revolveLoftFacesHeelBirthZSides(t.Context(), proof, &changedOrder),
+		"the two crossing boxes must stay on opposite Z sides")
 
 	loop, simple, err := revolveLoftFacesSimpleSourceLoop(t.Context(), trim)
 	require.NoError(t, err)

@@ -115,6 +115,9 @@ func certifyRevolveLoftFacesHeelBirth(ctx context.Context,
 		return nil, false, nil
 	}
 	birth.slices = slices
+	if !revolveLoftFacesHeelBirthZSides(ctx, proof, birth) {
+		return nil, false, nil
+	}
 	return birth, true, nil
 }
 
@@ -472,4 +475,59 @@ func revolveLoftFacesHeelBirthSlices(trim *loftFacesTrimRecord,
 		return nil, false
 	}
 	return slices, true
+}
+
+// Exact event boxes keep the two moving crossings on opposite sides of the
+// positive-Y ray. The budget only bounds the root-box search; the returned
+// intervals, not that budget, decide the strict Z signs.
+func revolveLoftFacesHeelBirthZSides(ctx context.Context,
+	proof *revolveLoftFacesSourceCertificate,
+	birth *revolveLoftFacesHeelBirth) bool {
+	if ctx == nil || proof == nil || proof.trim == nil || birth == nil ||
+		len(birth.slices) == 0 {
+		return false
+	}
+	graph := &revolveLoftFacesHeelRegionEvents{
+		meridian: birth.meridian, slices: birth.slices}
+	for index, slice := range birth.slices {
+		budget := revolveLoftFacesHeelBirthBoxBudget(proof.trim, slice.band)
+		if budget == nil {
+			return false
+		}
+		for event := range slice.events {
+			box, ok, err := revolveLoftFacesHeelEventBoxFromCurrent(ctx,
+				proof, graph, index, event, slice.lo, slice.hi, budget)
+			if err != nil || !ok || box == nil || box.box[2].lo == nil ||
+				box.box[2].hi == nil ||
+				event == 0 && box.box[2].lo.Sign() <= 0 ||
+				event == 1 && box.box[2].hi.Sign() >= 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func revolveLoftFacesHeelBirthBoxBudget(trim *loftFacesTrimRecord,
+	band int) *big.Rat {
+	if trim == nil || trim.source == nil || band < 0 || band+1 >= len(trim.maps) ||
+		!revolveLoftFacesHeelRegionAffine(trim, band) {
+		return nil
+	}
+	source, err := lfSourceBox(trim.source)
+	if err != nil {
+		return nil
+	}
+	corners := lfBoxCorners(source)
+	budget := lfOne()
+	for axis := 0; axis < 3; axis++ {
+		row := loftFaceRatVec{lfZero(), lfZero(), lfZero()}
+		row[axis] = lfOne()
+		for _, m := range [...]loftFaceMap{trim.maps[band], trim.maps[band+1]} {
+			rangeOf := lfScalarRange(m, row, corners)
+			budget = lfAdd(budget, lfAbs(rangeOf.lo))
+			budget = lfAdd(budget, lfAbs(rangeOf.hi))
+		}
+	}
+	return budget
 }

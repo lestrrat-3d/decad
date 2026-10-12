@@ -489,7 +489,9 @@ the strict cells on either side of the bracket. After the root, two fitted
 crossings remain linked through their live knot transfers to the lower
 occupied circle. The exact Revolve section lies strictly below the heel cone
 before that circle and touches it only on the recorded blank side. The source
-box maps to positive world Y throughout the occupied interval. This source
+box maps to positive world Y throughout the occupied interval. Exact mapped
+source boxes keep the two crossings on opposite Z sides in every point and
+open time slice, so the positive-Y ray stays in the occupied arc. This source
 certificate does not select held facets or admit Union.
 
 This source certificate does not change the held mesh or grant a contact
