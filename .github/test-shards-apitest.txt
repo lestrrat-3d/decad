@@ -7,8 +7,8 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:  227.31s over 9 tests
-#   shard 1:    9.05s over 154 tests
-#   shard 2:   58.72s over 219 tests
+#   shard 1:   33.21s over 161 tests
+#   shard 2:   75.91s over 225 tests
 #   shard 3:   82.95s over 226 tests
 #   shard 4:   83.13s over 220 tests
 #   shard 5:  120.40s over 202 tests
@@ -313,6 +313,12 @@
 2	0.02	TestRevolveMinRadiusChargesTheAxisSnap
 2	0.01	TestRevolvePartialUndercutCaps
 2	0.09	TestRevolveReflexSweepBoundsTighten
+2	2.16	TestRevolveSectorAnnularCylinderCutVerified
+2	1.85	TestRevolveSectorCylinderCutRadiusBoundariesLeaveBodiesLive
+2	3.61	TestRevolveSectorCylinderCutRequiresSpanningCenteredToolAndPlanarCaps
+2	3.89	TestRevolveSectorRepeatedAnnularCylinderCutVerified
+2	3.56	TestRevolveSectorRepeatedStraightBandCylinderCutVerified
+2	2.12	TestRevolveSectorStraightBandCylinderCutVerified
 2	0.01	TestRevolveShellSideOpeningRefusals
 2	0.55	TestRevolveShellSlantedRim
 2	0.06	TestRevolveShellSolidCylinder
