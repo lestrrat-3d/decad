@@ -19,13 +19,13 @@ type revolveSectorBandCross struct {
 // revolveSectorStraightBandCross solves a circle/straight-meridian crossing
 // with exact dyadic source coordinates. Its rounded axial mesh coordinate
 // carries a separate outward error and slope interval.
-func revolveSectorStraightBandCross(outer, cap Point2, radius float64) (revolveSectorBandCross, bool) {
+func revolveSectorStraightBandCross(outer, capPoint Point2, radius float64) (revolveSectorBandCross, bool) {
 	if !proofbound.FiniteVec(r3.Vec{X: outer.U, Y: outer.V, Z: radius}) ||
-		!proofbound.FiniteVec(r3.Vec{X: cap.U, Y: cap.V}) {
+		!proofbound.FiniteVec(r3.Vec{X: capPoint.U, Y: capPoint.V}) {
 		return revolveSectorBandCross{}, false
 	}
 	outerX, outerR := proofarith.FloatRat(outer.U), proofarith.FloatRat(outer.V)
-	capX, capR := proofarith.FloatRat(cap.U), proofarith.FloatRat(cap.V)
+	capX, capR := proofarith.FloatRat(capPoint.U), proofarith.FloatRat(capPoint.V)
 	rad := proofarith.FloatRat(radius)
 	dx := new(big.Rat).Sub(capX, outerX)
 	dr := new(big.Rat).Sub(outerR, capR)

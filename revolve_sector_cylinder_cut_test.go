@@ -29,15 +29,15 @@ func TestRevolveSectorCapFanRequiresAdjacentCompleteSourceRing(t *testing.T) {
 }
 
 func TestRevolveSectorStraightBandCrossIsStrictAtBothRadii(t *testing.T) {
-	outer, cap := Point2{U: 5, V: 2.5}, Point2{U: 6, V: 1.5}
-	cross, ok := revolveSectorStraightBandCross(outer, cap, 2)
+	outer, capPoint := Point2{U: 5, V: 2.5}, Point2{U: 6, V: 1.5}
+	cross, ok := revolveSectorStraightBandCross(outer, capPoint, 2)
 	require.True(t, ok)
 	require.Equal(t, 5.5, cross.x)
 	require.LessOrEqual(t, cross.round, 1e-14)
 	require.Equal(t, 1.0, cross.slopeLo)
 	require.Equal(t, 1.0, cross.slopeHi)
 	for _, radius := range []float64{1.5, math.Nextafter(1.5, 0), 2.5, math.Nextafter(2.5, math.Inf(1))} {
-		_, ok := revolveSectorStraightBandCross(outer, cap, radius)
+		_, ok := revolveSectorStraightBandCross(outer, capPoint, radius)
 		require.False(t, ok)
 	}
 }

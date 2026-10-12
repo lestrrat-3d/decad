@@ -14,8 +14,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-const bevelBoreSideRole = "side(0,0)"
-
 func bevelBorePatternKind(placed int) (toeClipped, ok bool) {
 	switch placed {
 	case 3, 7, 15:
@@ -92,7 +90,7 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 	var wall *Face
 	for _, face := range tool.Faces() {
 		for _, origin := range face.Origins() {
-			if origin.Role != bevelBoreSideRole {
+			if origin.Role != prismOuterFirstSideRole {
 				continue
 			}
 			if wall != nil {

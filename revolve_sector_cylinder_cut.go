@@ -144,7 +144,7 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 	var wall *Face
 	for _, face := range tool.Faces() {
 		for _, origin := range face.Origins() {
-			if origin.Role != "side(0,0)" {
+			if origin.Role != prismOuterFirstSideRole {
 				continue
 			}
 			if wall != nil {
