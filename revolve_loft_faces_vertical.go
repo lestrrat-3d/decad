@@ -94,7 +94,7 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
 	payload, ok := proof.tooth.payload.(facetedPayload)
-	if !ok || payload.loftFacesTrim != trim || !revolveLoftFacesTrimCurrent(payload, trim) ||
+	if !ok || payload.loftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
 		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
@@ -165,7 +165,7 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 	}
 	trim := proof.trim
 	payload, ok := proof.tooth.payload.(facetedPayload)
-	if !ok || payload.loftFacesTrim != trim || !revolveLoftFacesTrimCurrent(payload, trim) ||
+	if !ok || payload.loftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
 		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
 		return nil, false, nil
 	}

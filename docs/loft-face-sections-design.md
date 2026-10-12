@@ -122,7 +122,7 @@ surviving tool-cap face groups. A later source-specific Union rechecks the
 original Sketch revision, map denominators, cone order, and both cap groups.
 The curved source gate rederives both exact cone meridians from the live tool
 bodies and rejects changed cached apex, far-plane, or slope values.
-It also requires each tool-cap group to own one result face without triangles
+It also requires each tool-cap group to own one live result face without triangles
 from another source group.
 Every other Intersect result has no continuation record. Placement drops it.
 The current spiral source-specific Union still admits only its nine-cap class.

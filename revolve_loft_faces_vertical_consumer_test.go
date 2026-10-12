@@ -63,6 +63,24 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 	t.Run("source triangle on cap face", func(t *testing.T) {
 		mutateCurvedCapFaceOwner(t, tooth, proof, false)
 	})
+	t.Run("cap face index outside live faces", func(t *testing.T) {
+		original := tooth.payload
+		defer func() { tooth.payload = original }()
+		payload := original.(facetedPayload)
+		payload.faceOf = slices.Clone(payload.faceOf)
+		changed := false
+		for i, group := range payload.src {
+			if group == proof.trim.toeCapGroup {
+				payload.faceOf[i] = len(tooth.Faces()) + 1
+				changed = true
+			}
+		}
+		if !changed {
+			t.Fatal("the real producer lacks a toe cap triangle")
+		}
+		tooth.payload = payload
+		assertChangedCurvedTrimRefuses(t, tooth, proof)
+	})
 	t.Run("extra blank face", func(t *testing.T) {
 		shell := blank.Shells()[0]
 		original := shell.faces
@@ -103,7 +121,7 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		}
 		payload.xform = shift
 		tooth.payload = payload
-		if revolveLoftFacesTrimCurrent(payload, proof.trim) {
+		if revolveLoftFacesTrimCurrent(tooth, proof.trim) {
 			t.Fatal("changed tooth transform retained a current source record")
 		}
 		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
@@ -165,7 +183,7 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 func assertChangedCurvedTrimRefuses(t *testing.T, tooth *Body,
 	proof *revolveLoftFacesSourceCertificate) {
 	t.Helper()
-	if revolveLoftFacesTrimCurrent(tooth.payload.(facetedPayload), proof.trim) {
+	if revolveLoftFacesTrimCurrent(tooth, proof.trim) {
 		t.Fatal("changed trim retained a current source record")
 	}
 	_, certified, err := certifyRevolveLoftFacesSource(t.Context(), proof.blank, tooth)
