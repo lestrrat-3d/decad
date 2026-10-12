@@ -59,6 +59,7 @@
 8	4.00	TestCurvedSourcePairCensusRefusesUnownedRetainedFace
 4	8.80	TestCurvedHeelArcEndpointsBindToLiveSideCells
 8	8.80	TestCurvedHeelArcSideTiesRejectChangedSourceRecord
+4	4.60	TestCurvedLoftFacesArcSeamPatchesShareCertifiedVertices
 2	0.10	TestCurvedHeelArcSideTieTimeEndpointOwnership
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
