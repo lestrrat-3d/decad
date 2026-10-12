@@ -34,4 +34,12 @@ func TestCurvedHeelTailStrictOutsideToApex(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok)
 	require.Nil(t, rejected)
+
+	originalRevision := trim.source.source.revision
+	trim.source.source.revision++
+	defer func() { trim.source.source.revision = originalRevision }()
+	rejected, ok, err = certifyRevolveLoftFacesHeelTail(t.Context(), proof)
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Nil(t, rejected)
 }
