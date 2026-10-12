@@ -19,6 +19,7 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_joint_cell.go` | Certifies one-sided fitted source cells beside isolated time roots. See loft-face-sections design. |
 | `revolve_loft_faces_fit_knot.go` | Certifies the exact side and adjacency at an interior fitted Bezier knot. See loft-face-sections design. |
 | `revolve_loft_faces_line_fit.go` | Certifies exact line-to-fitted source endpoint roots and their one-sided mapped cells. See loft-face-sections design. |
+| `revolve_loft_faces_line_arc.go` | Binds a line endpoint to a live whole radial Arc at an exact mapped time root. See loft-face-sections design. |
 | `revolve_loft_faces_knot_cells.go` | Partitions fitted spans around certified interior-knot time roots. See loft-face-sections design. |
 | `revolve_loft_faces_contacts.go` | Enumerates authenticated fitted-knot and radial-arc joints on a finite Revolve side. See loft-face-sections design. |
 | `revolve_loft_faces_time_merge.go` | Orders fitted-knot, line/fit, and radial-arc time roots with live source ownership. See loft-face-sections design. |

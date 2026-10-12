@@ -17,6 +17,7 @@ const (
 	revolveLoftFacesRadialArcContact
 	revolveLoftFacesWholeArcContact
 	revolveLoftFacesLineFitContact
+	revolveLoftFacesLineArcContact
 )
 
 // Each root owns one live source endpoint. The knot and radial-arc records
@@ -26,7 +27,68 @@ type revolveLoftFacesOwnedRoot struct {
 	cell  revolveLoftFacesJointCell
 	kind  revolveLoftFacesJointKind
 	point *sketch.Point
+	arc   *sketch.Arc
 	atEnd bool
+}
+
+// A straight source span can transfer one crossing to a fitted flank and
+// another to a radial arc. The two live endpoints and their exact root
+// brackets must remain distinct before any open time gap is classified.
+func revolveLoftFacesMergeLineFitLineArcCells(ctx context.Context,
+	trim *loftFacesTrimRecord, section revolveSectionSpan,
+	segment, spanIndex, band int, span freeform.BezierSpan,
+	lineFit *revolveLoftFacesLineFitJoint,
+	lineArc *revolveLoftFacesLineArcJoint) ([]revolveLoftFacesMappedCell, bool, error) {
+	if ctx == nil || trim == nil || trim.source == nil || lineFit == nil || lineArc == nil ||
+		spanIndex != 0 || band < 0 || band+1 >= len(trim.maps) ||
+		lineFit.band != band || lineArc.radial.band != band ||
+		lineFit.vertex.lineSegment != segment || lineArc.vertex.lineSegment != segment ||
+		lineFit.vertex.point == nil || lineArc.vertex.point == nil ||
+		lineFit.vertex.point == lineArc.vertex.point ||
+		lineFit.vertex.lineAtEnd == lineArc.vertex.lineAtEnd ||
+		!revolveLoftFacesSameSpan(span, lineFit.vertex.lineSpan) ||
+		!revolveLoftFacesSameSpan(span, lineArc.vertex.lineSpan) {
+		return nil, false, nil
+	}
+	segments := trim.source.profile.Outer.Segments
+	if segment < 0 || segment >= len(segments) {
+		return nil, false, nil
+	}
+	fitIndex, arcIndex := lineFit.vertex.fitSegment, lineArc.vertex.arcSegment
+	if fitIndex < 0 || fitIndex >= len(segments) ||
+		arcIndex < 0 || arcIndex >= len(segments) {
+		return nil, false, nil
+	}
+	fitAtWalkEnd := (fitIndex+1)%len(segments) == segment
+	arcAtWalkEnd := (segment+1)%len(segments) == arcIndex
+	fitCurrent, ok := certifyRevolveLoftFacesLineFitJoint(ctx, trim, section,
+		segment, fitIndex, band, fitAtWalkEnd)
+	if !ok || fitCurrent.vertex.point != lineFit.vertex.point ||
+		fitCurrent.vertex.lineAtEnd != lineFit.vertex.lineAtEnd {
+		return nil, false, nil
+	}
+	arcCurrent, ok := certifyRevolveLoftFacesLineArcJoint(ctx, trim, section,
+		segment, arcIndex, band, arcAtWalkEnd)
+	if !ok || arcCurrent.vertex.point != lineArc.vertex.point ||
+		arcCurrent.vertex.lineAtEnd != lineArc.vertex.lineAtEnd ||
+		arcCurrent.vertex.arc != lineArc.vertex.arc {
+		return nil, false, nil
+	}
+	roots := make([]revolveLoftFacesOwnedRoot, 0,
+		len(fitCurrent.roots)+len(arcCurrent.roots))
+	for i, root := range fitCurrent.roots {
+		roots = append(roots, revolveLoftFacesOwnedRoot{
+			root: root, cell: fitCurrent.lineCells[i], kind: revolveLoftFacesLineFitContact,
+			point: fitCurrent.vertex.point, atEnd: fitCurrent.vertex.lineAtEnd})
+	}
+	for i, root := range arcCurrent.roots {
+		roots = append(roots, revolveLoftFacesOwnedRoot{
+			root: root, cell: arcCurrent.lineCells[i], kind: revolveLoftFacesLineArcContact,
+			point: arcCurrent.vertex.point, arc: arcCurrent.vertex.arc,
+			atEnd: arcCurrent.vertex.lineAtEnd})
+	}
+	return revolveLoftFacesPartitionOwnedEndpointCells(ctx, trim, section,
+		segment, spanIndex, band, span, roots)
 }
 
 func revolveLoftFacesMergeEndpointCells(ctx context.Context,
@@ -201,7 +263,7 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 			side = revolveLoftFacesAxialMiss
 		}
 		contact := makeCell(side, cell.sLo, cell.sHi)
-		contact.jointKind, contact.jointPoint = owned.kind, owned.point
+		contact.jointKind, contact.jointPoint, contact.jointArc = owned.kind, owned.point, owned.arc
 		cells = append(cells, contact)
 		previous = owned.root.time.hi
 	}
@@ -229,7 +291,9 @@ func revolveLoftFacesOrderOwnedRoots(roots []revolveLoftFacesOwnedRoot) bool {
 		root, cell := owned.root, owned.cell
 		if owned.point == nil || owned.kind != revolveLoftFacesFitKnotContact &&
 			owned.kind != revolveLoftFacesRadialArcContact &&
-			owned.kind != revolveLoftFacesLineFitContact ||
+			owned.kind != revolveLoftFacesLineFitContact &&
+			owned.kind != revolveLoftFacesLineArcContact ||
+			owned.kind == revolveLoftFacesLineArcContact && owned.arc == nil ||
 			root.time.lo == nil || root.time.hi == nil || cell.time.lo == nil ||
 			cell.time.hi == nil || cell.sLo == nil || cell.sHi == nil ||
 			root.time.lo.Cmp(previous) <= 0 ||

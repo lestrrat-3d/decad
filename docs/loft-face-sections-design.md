@@ -241,6 +241,12 @@ line-to-fitted endpoint have distinct contact kinds. Each adjacency requires
 the same live Sketch point handle on both whole entities, exact recorded
 endpoint coordinates, and identical mapped endpoint Bernstein controls.
 Its finite time roots have one-sided source cells on both incident curves.
+For a line-to-radial-arc endpoint, the live Sketch point, exact source record,
+mapped axial coordinate and normalized implicit Bernstein controls must
+agree with the whole-arc certificate. Both incident line ends may reach the
+arc at the same time root. A line that also reaches a fitted source at its
+other end orders both endpoint roots before certifying the intervening open
+time gap. The radial Arc keeps its separate whole-arc contact cell.
 The root bracket owns both contact cells; adjacent time gaps exclude its
 endpoints. Disjoint line-to-fit and interior-knot roots on one fitted span
 are ordered by exact rational brackets after their live joint proofs are

@@ -17,6 +17,7 @@ type revolveLoftFacesNonverticalJoints struct {
 	fitKnots []revolveLoftFacesFitKnotJoint
 	radial   []revolveLoftFacesRadialJoint
 	lineFit  []revolveLoftFacesLineFitJoint
+	lineArc  []revolveLoftFacesLineArcJoint
 }
 
 func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
@@ -133,6 +134,50 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 						ErrUnsupported, arcIndex, band)
 				}
 				out.radial = append(out.radial, joint)
+			}
+		}
+	}
+	for lineIndex, entity := range entities {
+		if err := ctx.Err(); err != nil {
+			return out, false, err
+		}
+		if _, isLine := entity.(*sketch.Line); !isLine {
+			continue
+		}
+		for _, lineAtWalkEnd := range [...]bool{false, true} {
+			arcIndex := (lineIndex - 1 + len(segments)) % len(segments)
+			if lineAtWalkEnd {
+				arcIndex = (lineIndex + 1) % len(segments)
+			}
+			if _, isArc := entities[arcIndex].(*sketch.Arc); !isArc {
+				continue
+			}
+			vertex, ok := revolveLoftFacesLineArcVertexOf(trim,
+				lineIndex, arcIndex, lineAtWalkEnd)
+			if !ok {
+				return out, false, nil
+			}
+			for band := 0; band+1 < len(trim.maps); band++ {
+				radial, ok := mappedArcRadialTimeBand(ctx, trim, arcIndex, band, section)
+				if !ok {
+					continue // a nonradial arc keeps its own strict-side proof
+				}
+				q := [3][]*big.Rat{{radial.q[0]}, {radial.q[1]}, {radial.q[2]}}
+				roots, ok := revolveLoftFacesEndpointTimeRoots(q, false)
+				if !ok {
+					return out, false, fmt.Errorf("%w: radial source arc %d band %d has undecidable time roots",
+						ErrUnsupported, arcIndex, band)
+				}
+				if len(roots) == 0 {
+					continue
+				}
+				joint, ok := certifyRevolveLoftFacesLineArcJoint(ctx, trim, section,
+					lineIndex, arcIndex, band, lineAtWalkEnd)
+				if !ok || joint.vertex.point != vertex.point {
+					return out, false, fmt.Errorf("%w: line/arc source joint %d/%d band %d lacks a joint cell proof",
+						ErrUnsupported, lineIndex, arcIndex, band)
+				}
+				out.lineArc = append(out.lineArc, joint)
 			}
 		}
 	}

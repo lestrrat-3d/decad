@@ -77,6 +77,7 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 				knotLeft := false
 				var radial *revolveLoftFacesRadialJoint
 				var lineFit *revolveLoftFacesLineFitJoint
+				var lineArc *revolveLoftFacesLineArcJoint
 				for i := range joints.fitKnots {
 					joint := &joints.fitKnots[i]
 					if joint.vertex.segment != segment || joint.band != band ||
@@ -119,11 +120,28 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 					}
 					lineFit = joint
 				}
-				if knot != nil || radial != nil || lineFit != nil {
+				for i := range joints.lineArc {
+					joint := &joints.lineArc[i]
+					if joint.vertex.lineSegment != segment || joint.radial.band != band || index != 0 {
+						continue
+					}
+					if lineArc != nil {
+						return nil, false, fmt.Errorf("mapped source segment %d span %d band %d has overlapping line/arc joints",
+							segment, index, band)
+					}
+					lineArc = joint
+				}
+				if knot != nil || radial != nil || lineFit != nil || lineArc != nil {
 					var refined []revolveLoftFacesMappedCell
 					var certified bool
 					var err error
-					if lineFit != nil && radial != nil {
+					if lineArc != nil && (knot != nil || radial != nil) {
+						return nil, false, fmt.Errorf("%w: mapped source segment %d span %d band %d has incompatible endpoint joints",
+							ErrUnsupported, segment, index, band)
+					} else if lineFit != nil && lineArc != nil {
+						refined, certified, err = revolveLoftFacesMergeLineFitLineArcCells(ctx,
+							trim, section, segment, index, band, span, lineFit, lineArc)
+					} else if lineFit != nil && radial != nil {
 						return nil, false, fmt.Errorf("%w: mapped source segment %d span %d band %d has multiple endpoint joint classes",
 							ErrUnsupported, segment, index, band)
 					} else if lineFit != nil && knot != nil {
@@ -138,6 +156,9 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 					} else if radial != nil {
 						refined, certified, err = revolveLoftFacesRadialPartitionCells(ctx,
 							trim, section, segment, index, band, span, *radial)
+					} else if lineArc != nil {
+						refined, certified, err = revolveLoftFacesLineArcPartitionCells(ctx,
+							trim, section, segment, index, band, span, *lineArc)
 					} else {
 						refined, certified, err = revolveLoftFacesLineFitPartitionCells(ctx,
 							trim, section, segment, index, band, span, *lineFit)
