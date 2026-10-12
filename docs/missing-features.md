@@ -36,6 +36,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
 | Coil of a profile with free-form, elliptical or trimmed segments | `ErrUnsupported` (CS7) (`internal/coil/profile.go`) | `docs/helix-design.md` CS7 |
 | Composite path in `SweepChain` | `ErrUnsupported` (R34); one straight span only | `docs/surface-design.md` §1.2 |
+| `Body.Section` outside parallel exact prisms and whole-circle prisms cut by cardinal planes through their sweep axes | `ErrUnsupported`; no exact section profile is available for the other body and plane classes | `docs/section-design.md` |
 | General four-plus or varying noncircular curved-section lofts, guide rails and centerlines | `LoftSections` admits its three-section classes and four rounded-rectangle sections with cubic width; `LoftFaces` admits nine ordered caps from one authenticated point-loft Split source; other shapes refuse | `docs/loft-sections-design.md`, `docs/loft-face-sections-design.md`, `docs/loft-design.md` §1 |
 | Point-section loft of a holed profile | `LoftFromPoint` refuses holes because the common apex would have a non-manifold vertex link | `docs/loft-point-design.md` |
 | Detached profile validation past 11585 reconstruction chords; authenticated Loft still stops above its 46340-chord cap | `ErrUnsupported`: R7 sketch reconstruction work budget | `docs/loft-gear-bounds-design.md` §7, `docs/spline-design.md` R7 |
