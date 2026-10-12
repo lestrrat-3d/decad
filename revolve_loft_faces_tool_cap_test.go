@@ -37,6 +37,11 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	changed.toeFace = proof.heelFace
 	_, accepted = revolveLoftFacesToolCapSidesOf(&changed)
 	require.False(t, accepted)
+	toeSlope := proof.trim.toe.slope
+	proof.trim.toe.slope = lfAdd(toeSlope, big.NewRat(1, 32))
+	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
+	require.False(t, accepted)
+	proof.trim.toe.slope = toeSlope
 	shell := blank.Shells()[0]
 	originalFaces := shell.faces
 	t.Cleanup(func() { shell.faces = originalFaces })
