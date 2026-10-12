@@ -328,7 +328,7 @@ func TestContactPairPlacedBodyAndInputGates(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 0, 0, 10, 10, 10)
-	placed, err := b.Placed(t.Context(), contactPose(t, r3.Vec{X: 20}))
+	placed, err := decad.Transform(t.Context(), b, contactPose(t, r3.Vec{X: 20}))
 	require.NoError(t, err)
 	req := contactRequest()
 	id := r3.Identity()

@@ -180,7 +180,7 @@ func crankRockerScene(ctx context.Context) (*linkageScene, error) {
 	if err != nil {
 		return nil, err
 	}
-	if stop, err = stop.Placed(ctx, shift); err != nil {
+	if stop, err = decad.Transform(ctx, stop, shift); err != nil {
 		return nil, fmt.Errorf("stop: %w", err)
 	}
 	base, err := extrudedBox(ctx, scene.doc, -45, -45, 115, 85, rockerBaseTop-6, 6)

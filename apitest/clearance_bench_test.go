@@ -86,7 +86,7 @@ func BenchmarkVerifyClearanceTori(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	if _, err := torus.Placed(b.Context(), shift); err != nil {
+	if _, err := decad.Transform(b.Context(), torus, shift); err != nil {
 		b.Fatal(err)
 	}
 	b.ResetTimer()

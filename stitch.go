@@ -23,7 +23,7 @@ import (
 // publishes.
 //
 // evalStitchContext is the whole evaluator and is shared, unchanged, by the
-// initial build and by every later Placed/Copy
+// initial build and by every later Transform/Copy
 // re-evaluation: the payload records the operand faces and the weld plan,
 // never a built topology, and placed() replays this same function under a
 // composed transform (docs/surface-design.md's "recorded weld" decision).

@@ -94,7 +94,7 @@ func TestCircularPrismScaledAtAcceptsPlacedAndRepeatedImage(t *testing.T) {
 	source := circularScaleSource(t, false)
 	turn, err := r3.RotationAround(r3.NewVec(1, 1, 0), r3.NewVec(0, 1, 0), units.Radians(0.2))
 	require.NoError(t, err)
-	placed, err := source.Placed(t.Context(), turn)
+	placed, err := decad.Transform(t.Context(), source, turn)
 	require.NoError(t, err)
 	first, err := placed.ScaledAt(t.Context(), r3.NewVec(1, 2, 3), units.Scalar(1.25))
 	require.NoError(t, err)

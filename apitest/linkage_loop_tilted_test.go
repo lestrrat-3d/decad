@@ -43,7 +43,7 @@ func newTiltedScene(t *testing.T) tiltedScene {
 // place carries a body built where the untilted scene has it.
 func (ts tiltedScene) place(b *decad.Body) *decad.Body {
 	ts.t.Helper()
-	placed, err := b.Placed(ts.t.Context(), ts.tilt)
+	placed, err := decad.Transform(ts.t.Context(), b, ts.tilt)
 	require.NoError(ts.t, err)
 	return placed
 }

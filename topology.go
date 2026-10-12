@@ -864,7 +864,7 @@ type Body struct {
 	kind     BodyKind
 
 	// payload is the evaluator's own record of how this body was built —
-	// what Placed re-evaluates under a composed motion
+	// what Transform re-evaluates under a composed motion
 	// (docs/evaluator-design.md §8). Nil for a body this evaluator did not
 	// build.
 	payload featurePayload

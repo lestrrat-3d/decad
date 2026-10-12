@@ -341,7 +341,7 @@ func TestSurfaceSweepCompositeRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceSweepStaysASheetThroughPlacement is §4.2's Placed/Copy
+// TestSurfaceSweepStaysASheetThroughPlacement is §4.2's Transform/Copy
 // claim across all three build paths: each re-evaluates the
 // payload and reproduces the sheet with no further code.
 func TestSurfaceSweepStaysASheetThroughPlacement(t *testing.T) {
@@ -383,7 +383,7 @@ func TestSurfaceSweepStaysASheetThroughPlacement(t *testing.T) {
 
 			motion, err := r3.Translation(r3.NewVec(50, 0, 0))
 			require.NoError(t, err)
-			placed, err := sheet.Placed(t.Context(), motion)
+			placed, err := decad.Transform(t.Context(), sheet, motion)
 			require.NoError(t, err)
 			requireSweepSheetWithFreeEdges(t, placed, n)
 

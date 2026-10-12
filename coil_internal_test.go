@@ -619,9 +619,9 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 	require.NoError(t, err)
 	fc, err := first.Centroid()
 	require.NoError(t, err)
-	placedA, err := first.Placed(t.Context(), rot)
+	placedA, err := Transform(t.Context(), first, rot)
 	require.NoError(t, err)
-	placedB, err := second.Placed(t.Context(), rot)
+	placedB, err := Transform(t.Context(), second, rot)
 	require.NoError(t, err)
 	require.Equal(t, placedA.payload.(coilPayload).verts, placedB.payload.(coilPayload).verts)
 

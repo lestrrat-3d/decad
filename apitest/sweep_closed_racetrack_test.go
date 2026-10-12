@@ -96,7 +96,7 @@ func TestSweepClosedRacetrackBuildsVerifiedTubeAndReplaysPlacement(t *testing.T)
 
 	translation, err := r3.Translation(r3.NewVec(3, 4, 5))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), translation)
+	placed, err := decad.Transform(t.Context(), body, translation)
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -109,7 +109,7 @@ func TestSweepClosedRacetrackBuildsVerifiedTubeAndReplaysPlacement(t *testing.T)
 		volume.Bound.Base()+placedVolume.Bound.Base()+1e-10)
 	rotation, err := r3.RotationAround(r3.Vec{}, r3.NewVec(0, 0, 1), units.Degrees(37))
 	require.NoError(t, err)
-	turned, err := placed.Placed(t.Context(), rotation)
+	turned, err := decad.Transform(t.Context(), placed, rotation)
 	require.NoError(t, err)
 	turnedMesh, err := turned.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))

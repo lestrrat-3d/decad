@@ -68,7 +68,7 @@ func TestPrismGroupDisjointUnion(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "single non-void shell")
 
-	moved, err := got.Placed(t.Context(), mustTranslation(t, 0, 0, 7))
+	moved, err := decad.Transform(t.Context(), got, mustTranslation(t, 0, 0, 7))
 	require.NoError(t, err)
 	require.Len(t, moved.Lumps(), 2)
 	movedVolume, err := moved.Volume()

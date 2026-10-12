@@ -28,7 +28,7 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		{"Document.Sweep", func(ctx context.Context) error { _, err := doc.Sweep(ctx, nil, nil, nil); return err }},
 		{"Document.SweepChain", func(ctx context.Context) error { _, err := doc.SweepChain(ctx, nil, nil, nil); return err }},
 		{"Document.Split", func(ctx context.Context) error { _, err := doc.Split(ctx, nil, nil); return err }},
-		{"Body.Placed", func(ctx context.Context) error { _, err := body.Placed(ctx, r3.Transform{}); return err }},
+		{"Transform", func(ctx context.Context) error { _, err := decad.Transform(ctx, body, r3.Transform{}); return err }},
 		{"Copy identity", func(ctx context.Context) error { _, err := decad.Copy(ctx, body); return err }},
 		{"Copy placement", func(ctx context.Context) error {
 			_, err := decad.Copy(ctx, body, decad.WithCopyPlacement(r3.Transform{}))

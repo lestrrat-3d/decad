@@ -72,7 +72,7 @@ func TestFacetedMassPropertiesUnionAndRefusals(t *testing.T) {
 
 	shift, err := r3.Translation(r3.Vec{X: .1})
 	require.NoError(t, err)
-	placed, err := union.Placed(t.Context(), shift)
+	placed, err := decad.Transform(t.Context(), union, shift)
 	require.NoError(t, err)
 	placedVolume, err := placed.Volume()
 	require.NoError(t, err)

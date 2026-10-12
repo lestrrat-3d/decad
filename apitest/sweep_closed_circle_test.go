@@ -95,7 +95,7 @@ func TestSweepClosedCircleBuildsVerifiedSolidAndReplaysPlacement(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(3, 4, 5))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), move)
+	placed, err := decad.Transform(t.Context(), body, move)
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{placed}, doc.Bodies())
 	for _, face := range placed.Faces() {

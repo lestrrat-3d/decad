@@ -58,7 +58,7 @@ func Example_decad_cut() {
 		fmt.Printf("failed to build translation: %s\n", err)
 		return
 	}
-	tool, err := pin.Placed(context.Background(), down)
+	tool, err := decad.Transform(context.Background(), pin, down)
 	if err != nil {
 		fmt.Printf("failed to place tool: %s\n", err)
 		return

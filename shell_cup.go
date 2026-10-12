@@ -23,7 +23,7 @@ import (
 // over O and a wall slab over the bands between O's loops and C's, with C
 // exposed between them as the pocket floor. The stacked build makes its body,
 // and every cup survey, mesh and mass reading reads the cupView the record
-// re-derives. It re-evaluates under Body.Placed (evaluator §8).
+// re-derives. It re-evaluates under Transform (evaluator §8).
 //
 // A holed section (k ≥ 1 posts in the pocket) builds too: the outer region and
 // the cavity region each carry k holes, so the wall slab holds 1 + k bands, one

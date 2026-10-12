@@ -330,7 +330,7 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		tool := sc.box(t, sc.w.XY(), 4, 4, 6, 6, mirrorAlong(5))
 		shift, err := r3.Translation(r3.NewVec(0.1, 0, 0))
 		require.NoError(t, err)
-		moved, err := tool.Placed(t.Context(), shift)
+		moved, err := decad.Transform(t.Context(), tool, shift)
 		require.NoError(t, err)
 		part, err := decad.Cut(t.Context(), plate, moved)
 		require.NoError(t, err)

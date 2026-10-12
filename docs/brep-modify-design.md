@@ -110,7 +110,7 @@ only denotes its body to within a displacement has no proven displacement of
 its own. Level displacements (`z0Delta`/`z1Delta`) pass through untouched;
 no construction below moves a level.
 
-The receiver is keyed on its payload, not its history: a `Placed` brep reads as
+The receiver is keyed on its payload, not its history: a transformed brep reads as
 the brep it was placed from.
 
 ## 4. Route P — the prism in disguise
@@ -515,7 +515,7 @@ Route E:
   tolerance, the mesh's occupied-volume proof covering `15920 − 160π`, STEP's
   analytic arm (the fillet wall two arcs and two lines), the undercut survey
   listing the fillet wall under a pull along `(1, 1, 0)` and not along `z`,
-  and `Placed` by a translation reproducing volume and area.
+  and transformed by a translation reproducing volume and area.
 
 Refusals:
 

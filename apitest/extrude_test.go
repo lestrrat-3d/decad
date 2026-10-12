@@ -190,7 +190,7 @@ func TestExtrudeQuarterDiskPrism(t *testing.T) {
 	require.Equal(t, 1, cylinders, `the arc sweeps one cylinder patch`)
 }
 
-func TestPlaced(t *testing.T) {
+func TestTransformRetiresSourceAndPreservesGeometry(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
@@ -204,7 +204,7 @@ func TestPlaced(t *testing.T) {
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
 
-	placed, err := body.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), body, motion)
 	require.NoError(t, err)
 
 	// The motion is rigid: volume and area are untouched, the centroid maps
@@ -217,12 +217,12 @@ func TestPlaced(t *testing.T) {
 	decadtest.MeasuresBounds(t, placed, r3.NewVec(140, 0, 0), r3.NewVec(200, 100, 10))
 	requireManifold(t, placed)
 
-	// The receiver is retired but readable; retired bodies take no ops.
+	// The source is retired but readable; retired bodies take no ops.
 	require.Equal(t, []*decad.Body{placed}, doc.Bodies())
 	_, err = body.Volume()
 	require.NoError(t, err, `a retired body remains readable`)
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(60000))
-	_, err = body.Placed(t.Context(), motion)
+	_, err = decad.Transform(t.Context(), body, motion)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -463,7 +463,7 @@ func TestReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, refl.IsReflection())
 
-	placed, err := body.Placed(t.Context(), refl)
+	placed, err := decad.Transform(t.Context(), body, refl)
 	require.NoError(t, err)
 	c, err := placed.Centroid()
 	require.NoError(t, err)
@@ -888,7 +888,7 @@ func TestPlacedUsesEvaluatorCache(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := r3.Translation(r3.NewVec(0, 0, 25))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), body, motion)
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(60000), decadtest.Exactly())
 	decadtest.MeasuresCentroid(t, placed, r3.NewVec(50, 30, 30))

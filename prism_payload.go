@@ -27,7 +27,7 @@ import (
 // prismPayload is the evaluator's own record of a prism body: the recorded
 // region, the plane frame it lifts through, the signed sweep interval, and
 // the accumulated rigid placement. Every measurement and the whole topology
-// derive from it, which is what makes Placed exact: it re-evaluates the same
+// derive from it, which is what makes Transform exact: it re-evaluates the same
 // payload under the composed motion (docs/evaluator-design.md §8).
 //
 // A prism-derived modify body (a filleted or chamfered prism, modify §2) also
@@ -40,7 +40,7 @@ import (
 // surfaceResult is WithSurfaceResult's own flag (docs/surface-design.md §4):
 // true when the build must omit its closing caps and publish a sheet instead
 // of a solid. It is part of the re-evaluable record for the same reason the
-// blend descriptors are, so Placed and Copy reproduce the
+// blend descriptors are, so Transform and Copy reproduce the
 // sheet with no further code — a plain solid extrude leaves it false.
 //
 // sectionDelta is the proven upper bound on how far any recorded boundary

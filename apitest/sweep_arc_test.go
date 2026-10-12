@@ -62,9 +62,9 @@ func TestSweepArcMatchesQuarterRevolveAndReplaysPlacement(t *testing.T) {
 
 	motion, err := r3.Translation(r3.NewVec(7, -3, 11))
 	require.NoError(t, err)
-	placedSweep, err := swept.Placed(t.Context(), motion)
+	placedSweep, err := decad.Transform(t.Context(), swept, motion)
 	require.NoError(t, err)
-	placedRevolve, err := revolved.Placed(t.Context(), motion)
+	placedRevolve, err := decad.Transform(t.Context(), revolved, motion)
 	require.NoError(t, err)
 	requireSameBodyReadings(t, placedRevolve, placedSweep)
 

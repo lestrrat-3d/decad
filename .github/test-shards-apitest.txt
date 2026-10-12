@@ -1511,7 +1511,7 @@
 8	0.01	TestPatchSheetWithHoleTessellates
 8	0.04	TestPatternedCircularGroup
 8	0.09	TestPatternedFallsBackToUnion
-8	0.00	TestPlaced
+8	0.00	TestTransformRetiresSourceAndPreservesGeometry
 8	0.01	TestCopyPlacementPreservesFilletRoles
 8	0.02	TestPlacementContextCancelsAnalyticMetadataRewriting
 8	0.22	TestPlanStorageFollowsConvertedSegments

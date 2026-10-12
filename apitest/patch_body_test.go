@@ -247,7 +247,7 @@ func TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestBodyPatchReproducesThroughPlacement is §5.2's Placed/Copy
+// TestBodyPatchReproducesThroughPlacement is §5.2's Transform/Copy
 // claim: each re-evaluates the payload and reproduces the patch
 // with no further code, on the same terms Document.Patch's own
 // TestPatchReproducesThroughPlacement (patch_test.go) proves for a single
@@ -267,7 +267,7 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 	// below a generous relative tolerance rather than bit-exact.
 	motion, err := r3.Translation(r3.NewVec(50, 0, 0))
 	require.NoError(t, err)
-	placed, err := capped.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), capped, motion)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, placed.Kind())
 	decadtest.MeasuresArea(t, placed, units.SquareMillimeters(3200+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
@@ -566,7 +566,7 @@ func TestBodyPatchCopyKeepsBandNormalBound(t *testing.T) {
 
 		far, err := r3.Translation(r3.NewVec(0.3, 0, 0))
 		require.NoError(t, err)
-		_, err = patched.Placed(t.Context(), far)
+		_, err = decad.Transform(t.Context(), patched, far)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		checked++
 	}

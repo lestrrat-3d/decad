@@ -36,7 +36,7 @@ func Example_decad_remove() {
 		if err != nil {
 			return nil, err
 		}
-		return cube.Placed(context.Background(), shift)
+		return decad.Transform(context.Background(), cube, shift)
 	}
 
 	doc := decad.New()

@@ -281,7 +281,7 @@ The four existing line and arc span builders provide analytic walls and two
 temporary caps per span. All four rims pair by recorded profile station;
 the last rim pairs with the first. The final body omits every temporary cap
 and has one closed shell. It keeps `side(k,0,0)` provenance for all four
-walls. `Placed` replays the same records and the cyclic proof.
+walls. `Transform` replays the same records and the cyclic proof.
 
 The true volume is `pi*r*r*(2*L + 2*pi*R)` and the true area is
 `2*pi*r*(2*L + 2*pi*R)`. The body sums each span's certified volume and
@@ -526,7 +526,7 @@ withholds the reference and prevents a false `Sound` report.
 | **D4** | interference | bounds-disjoint pairs work immediately; an admitted solid sweep reaches the mesh intersection D3 admits. Other pairs stay `Suspect` until D3 or a sweep analytic adapter lands |
 | **D5** | clearance | box separation may settle the partition, but `WithClearances` stays `Suspect` until a sweep boundary adapter lands |
 | **D6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload` until non-constant-section proofs land |
-| **D7** | `Placed`, `Copy` | re-evaluates the payload under the composed rigid motion and reruns the applicable construction proof; every displacement and measurement is recomputed |
+| **D7** | `Transform`, `Copy` | re-evaluates the payload under the composed rigid motion and reruns the applicable construction proof; every displacement and measurement is recomputed |
 | **D8** | Fillet, Chamfer and Shell | `ErrUnsupported`; Table R in `docs/modify-design.md` has no `sweepPayload` receiver row. A one-span sweep sheet takes `Thicken` through its reduction (`docs/surface-design.md` §16.8) |
 
 The composite tessellator chooses the largest required profile chord count
@@ -1142,7 +1142,7 @@ twice `delta`, rounded down.
 | **DM4** | interference | lands with M2: the partition through the exact planar arm of `docs/interference-design.md` §3.2 against a prism, a stitched solid, a faceted result or another mitred sweep, the overlap volume through DM3's mesh path |
 | **DM5** | clearance | box separation at once; `WithClearances` reads the exact planar arm's gap, the held gap widened by `delta`, against the partners DM4 names, and stays `Suspect` against every other payload |
 | **DM6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload`, as D6 |
-| **DM7** | `Placed`, `Copy` | re-runs §16.3 from the record under the composed motion, applied to the rational vertices exactly (a transform's entries are floats, hence rationals), rounds once, recomputes `delta`, re-decides the shell orientation and re-runs SM8; `delta` never accumulates across placements |
+| **DM7** | `Transform`, `Copy` | re-runs §16.3 from the record under the composed motion, applied to the rational vertices exactly (a transform's entries are floats, hence rationals), rounds once, recomputes `delta`, re-decides the shell orientation and re-runs SM8; `delta` never accumulates across placements |
 | **DM8** | modify operations | `ErrUnsupported`, as D8 |
 
 ### 16.8 Determinism, cancellation, and budgets
@@ -1182,7 +1182,7 @@ deleted once and watched fail before it is trusted.
   wall's four rational vertices are coplanar exactly (the exact `orient3d`
   over them is zero); `Tessellate` at `0.01 mm` with `VerifyBoundary` returns
   a verified mesh whose `Bound` equals `delta`; the STL round trip is
-  watertight; `Placed` under a rotation reproduces `Volume` exactly.
+  watertight; `Transform` under a rotation reproduces `Volume` exactly.
 - A hole loop sweeps to a void passage and subtracts from `Volume` exactly.
 - Each Table SM row refuses with its sentinel before any commit: the
   document's live set, order and next producer identity are unchanged.

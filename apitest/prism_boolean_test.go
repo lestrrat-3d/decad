@@ -300,7 +300,7 @@ func TestPrismUnionRotatedToothFallback(t *testing.T) {
 		doc := decad.New()
 		hub := hubBody(t, doc, r, h)
 		toothSrc := toothBody(t, doc, r, r2, th1, th2, h)
-		tooth, err := toothSrc.Placed(t.Context(), tr)
+		tooth, err := decad.Transform(t.Context(), toothSrc, tr)
 		require.NoError(t, err)
 		return decad.Union(t.Context(), hub, tooth)
 	}
@@ -531,7 +531,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	meshBSrc := boxBody(t, meshDoc, 5, 5, 15, 15, 10)
 	farAbove, err := r3.Translation(r3.Vec{Z: 30})
 	require.NoError(t, err)
-	meshB, err := meshBSrc.Placed(t.Context(), farAbove)
+	meshB, err := decad.Transform(t.Context(), meshBSrc, farAbove)
 	require.NoError(t, err)
 	meshGot, err := decad.Union(t.Context(), meshA, meshB)
 	require.NoError(t, err)

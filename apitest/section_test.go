@@ -88,7 +88,7 @@ func TestSectionPlacedPrismKeepsHole(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.Vec{X: 20, Y: 30, Z: 1})
 	require.NoError(t, err)
-	placed, err := source.Placed(t.Context(), move)
+	placed, err := decad.Transform(t.Context(), source, move)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{X: 20, Y: 30, Z: 3.5}, r3.Vec{Y: 1}, r3.Vec{X: -1})
 	require.NoError(t, err)

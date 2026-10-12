@@ -520,7 +520,7 @@ func TestCapBlendMeshMotionCarriesPlacementRounding(t *testing.T) {
 	}, 5)
 	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Radians(0.7))
 	require.NoError(t, err)
-	moved, err := chamfered.Placed(t.Context(), rot)
+	moved, err := Transform(t.Context(), chamfered, rot)
 	require.NoError(t, err)
 	cbp, ok := moved.payload.(capBlendPayload)
 	require.True(t, ok)

@@ -13,7 +13,7 @@ func boundedFacetedFloorFixture(t *testing.T) (*Document, *Body, *Body) {
 	t.Helper()
 	doc, _, union := facetedFloorSweepFixture(t)
 	shift := facetedSweepPose(t, r3.Vec{X: .1})
-	placed, err := union.Placed(t.Context(), shift)
+	placed, err := Transform(t.Context(), union, shift)
 	require.NoError(t, err)
 	pp, ok := placed.payload.(facetedPayload)
 	require.True(t, ok)

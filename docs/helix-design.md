@@ -43,7 +43,7 @@ Question router (navigation, not authority):
 | How the held shell is built, and what every vertex's bound is | §5 |
 | What faces, edges and vertices the body has | §6 |
 | What `Volume`, `Area`, `Centroid` and `Bounds` read, and how tight | §7 |
-| What `Verify`, `Tessellate`, booleans, `Placed` and STEP do | §8 |
+| What `Verify`, `Tessellate`, booleans, `Transform` and STEP do | §8 |
 | How to cut an external or internal thread, and what it measures | §9 |
 | Which PR lands what, and what each must prove first | §11 |
 | Why not a `Helix` path segment, or a Frenet frame | §12 |
@@ -566,7 +566,7 @@ rationals against `math.Log`/`math.Asinh` (enclosure contains, width below
 | **CD4** | interference | landed through `Verify`'s read-only mesh intersection (`docs/interference-design.md` §5) for every partner the mesh boolean admits; a partner the chain-depth gate refuses reads the pair as unsupported staging |
 | **CD5** | clearance | landed: `WithClearances` reads the exact planar arm (`clearance_planar.go`; `planarCoilSolid` in `contact_faceted_pair.go` lifts the held shell with `δ` the payload's) against a prism or a stitched solid, the held gap widened by `δ` outward; a held touch or a gap or overlap within `δ` stays undecided. `Suspect` against every other payload, a mitred sweep, a faceted result and another coil included |
 | **CD6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with the unsupported-survey diagnostic |
-| **CD7** | `Placed`, `Copy` | §5.6 |
+| **CD7** | `Transform`, `Copy` | §5.6 |
 | **CD8** | modify operations | `ErrUnsupported`; no receiver row |
 | **CD9** | mass properties (`dynamics`) | landed through the verified-mesh ladder (`mass_properties_mesh.go`): the restated mesh settles at its first step, its occupied volume widened by §8.2's `volSymDiff` |
 | **CD10** | STEP | the faceted AP214 writer: a `Faceted` wall has no analytic arm, so the whole body writes as held facets, which `docs/step-export-design.md` already states for any body with a non-planar, non-cylindrical face |
@@ -887,8 +887,8 @@ PR 1:
   the axis (`ErrDegenerate`) and at a straddling tilted axis
   (`ErrUnsupported`); CS6 at `H = pitch` with `turns = 1` (refuses) and
   with `turns = 0.75` (builds); CS8 past `maxCoilStations`.
-- Repeated construction and `Placed` under a rotation reproduce
-  bit-identical held tables, roles and readings; `Placed` keeps `Volume`
+- Repeated construction and `Transform` under a rotation reproduce
+  bit-identical held tables, roles and readings; `Transform` keeps `Volume`
   and `Area` within both bodies' bounds and maps `Centroid` within its
   bound. Under that rotation, `Volume`'s exact enclosure holds
   `det L · 12.5π` and the start cap's `Area` holds `|L·U × L·V|`, each read

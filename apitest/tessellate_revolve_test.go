@@ -315,7 +315,7 @@ func TestRevolveTessellateReflectedPlacementKeepsOutwardWinding(t *testing.T) {
 	require.NoError(t, err)
 	xf, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), xf)
+	placed, err := decad.Transform(t.Context(), body, xf)
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.05))

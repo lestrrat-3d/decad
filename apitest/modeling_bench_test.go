@@ -340,7 +340,7 @@ func BenchmarkModelingPlacedFreeform(b *testing.B) {
 		body, buildErr := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(b, buildErr)
 		b.StartTimer()
-		placed, err = body.Placed(b.Context(), transform)
+		placed, err = decad.Transform(b.Context(), body, transform)
 		if err != nil {
 			b.Fatal(err)
 		}

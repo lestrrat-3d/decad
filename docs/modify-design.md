@@ -137,14 +137,14 @@ fact of every result, and Table B (§9) carries it as a column.
 ## 3. Table R — the receiver
 
 The receiver is admitted on **what its payload is**, never on the op history
-that produced it. `Body.Placed` re-evaluates a payload under a composed motion
+that produced it. `Transform` re-evaluates a payload under a composed motion
 and yields the same class (evaluator §8), so a placed body reads exactly as
 the body it was placed from. The receiver must also be **live**: a modify op on
 a retired body is S17, by core §6's retire rule.
 
 | R | Receiver payload | `Fillet` / `Chamfer` | `Shell` |
 |---|---|---|---|
-| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds** for lateral edges here; reach RX1 adds complete cap loops; route E or the bounded cutter adds one straight cap edge for either blend; route V adds mixed complete-loop fillets (`docs/vertex-blend-design.md`) | **builds** for cap removal here, the B4 multi-lump result through reach BX8; reach RX1 adds side/no-opening cases |
+| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these after `Transform` | **builds** for lateral edges here; reach RX1 adds complete cap loops; route E or the bounded cutter adds one straight cap edge for either blend; route V adds mixed complete-loop fillets (`docs/vertex-blend-design.md`) | **builds** for cap removal here, the B4 multi-lump result through reach BX8; reach RX1 adds side/no-opening cases |
 | **R2** | `cupPayload` — a one-cap shell (B5/B6), recorded as a two-slab `stackedPrismPayload` (reach §9.1) | S3 | S3 |
 | **R3** | `revolvePayload` | reach RX2 for swept meridian junctions and one bounded quarter-turn radial cap rim for either fillet or chamfer; otherwise S3/SX5 | reach RX2; otherwise S2/SX8 |
 | **R4** | `facetedPayload` — a boolean output | reach SX9 | reach SX9 |
@@ -674,7 +674,7 @@ it (§12).
 co-directional prisms over the same plane — the outer region on its interval,
 the cavity region on its own — plus the private shell-thickness/sense morphology
 certificate of payload verification §3.1 and the accumulated rigid placement,
-which is what `Body.Placed` re-evaluates (evaluator §8) and what every measurement
+which is what `Transform` re-evaluates (evaluator §8) and what every measurement
 reads (§10). Every edge of B1–B3, B5 and B6 bounds exactly two faces, so each body is
 manifold and watertight by the same structural argument the prism enjoys
 (evaluator §10), on regions the §5 audit has already proven simple.

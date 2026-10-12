@@ -212,7 +212,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
-| **S12** | ANY build — placed (`Placed`/`Copy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's shift `epsV · R_c / clearance` (§8) has no positive `clearance` left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
+| **S12** | ANY build — placed (`Transform`/`Copy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's shift `epsV · R_c / clearance` (§8) has no positive `clearance` left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
 | **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf`, decided in whichever of the two arms the gate-order paragraph below assigns that term | yes — the body exists; this evaluator cannot publish a finite certified enclosure for that term on this build | `ErrUnsupported` | no — an enclosure or numeric-range ceiling, not a shape rule |
 | **S15** | the paired segments' actual chord cells exceed the shared station cap `stationCap(P) = min(max(512, 64·P), 8192)` while meeting the chord target (§5.1) | yes — the ruled surface exists; this evaluator cannot chord it inside its ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
@@ -361,7 +361,7 @@ cell's length/speed upper bound, and `spanMatchedDeltaUpper` supplies its
 native-parameter matched departure (§5.2). A finite pair therefore passes
 S14 on those terms.
 
-**A placement (`Placed`/`Copy`, §12 PR 2a) re-runs every
+**A placement (`Transform`/`Copy`, §12 PR 2a) re-runs every
 gate decided from the records rather than from the call — S1, S2, S3, S4's
 payload-shape half, S5, S6, S7, S8, S12, S13, S14, S15, S16 — never a
 reduced set of them.** The evaluator re-lifts both records under the
@@ -388,7 +388,7 @@ placement receives none of them: the payload carries two already-recorded
 `ProfileRecord`s and one normalized alignment slice, with no `*sketch.Sketch`
 and no `*sketch.Profile` left to authenticate. So a profile that goes stale
 after the loft is built refuses a FRESH `Document.Loft` on that profile while
-`Placed`/`Copy` of the already-built body still succeed,
+`Transform`/`Copy` of the already-built body still succeed,
 which is the evaluate-from-the-record rule every other feature's placement
 follows (`docs/evaluator-design.md` §1).
 
@@ -1752,7 +1752,7 @@ correction, then spends the measure legs alone in its shift form; §8's
 | **D4** | Clearance (`WithClearances`, `docs/clearance-design.md`) | the analytic pair kernel's payload switch | `WithClearances` stays `Suspect`, even for a box-disjoint pair: box separation proves disjoint interiors but does not measure the gap. No loft case exists in the kernel yet. |
 | **D5** | `Wall` / `Undercut` / `ConcaveRadius` (verification §6, `internal/survey2d/wall_kernel.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | The corresponding requested survey reports the staged refusal (`DiagUnsupportedSurveyPayload`, its matching `Survey`, `Suspect`) until its loft implementation lands — a loft is a payload class `runSurveys`' three type switches do not name, so it falls to their `default` arm rather than a numerically undecided result. In increment 1, a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it; `docs/modify-reach-design.md` DX9 states the identical cap-blend reason: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
 | **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed (modify §1's standard; §4's gate-order paragraph owns where that audit sits); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives, and wherever the payload's `delta` is positive all four carry it. A **surface-result** sheet takes `docs/surface-design.md` §9.1's own validity audit instead: it reads `ValidityValid` whenever `sectionDelta` is exactly zero and the build holds no CHORDED cell, since §6's crossing audit already ran over the complete held triangle set — walls and both omitted caps together — before the body could be returned at all, and non-self-intersection of the walls alone follows from that. A positive `sectionDelta` leaves `ValidityUndecided`: the held chords are only within that displacement of the curved surface the body denotes, so the audit's proof does not transfer. A CHORDED build (§5.2's `maxTwistOffsetUpper` row) at zero `sectionDelta` — a degree-1 free-form pair — leaves it undecided too: each wall cell denotes a bilinear ruled patch, and the audit cleared the triangle pair instead |
-| **D7** | `Placed` / `Copy` | the payload | landed (§12 PR 2a): `Placed` retires the receiver; `Copy` leaves it live. No geometry-specific payload case is needed (§7) — every reading composes the payload's own proven displacement `delta` (§5, §8). |
+| **D7** | `Transform` / `Copy` | the payload | landed (§12 PR 2a): `Transform` retires the input; `Copy` leaves it live. No geometry-specific payload case is needed (§7) — every reading composes the payload's own proven displacement `delta` (§5, §8). |
 | **D8** | `Body.Fillet` | matching axial solid loft sections | §17 rewrites selected analytic corners on both records, re-audits the section and rebuilds through `evalLoft`. The result carries the same loft measurements and tessellation proofs as D1/D6. |
 
 ## 10. Provenance and deterministic evaluation
@@ -1779,8 +1779,8 @@ global evaluator increment.
 
 | PR | Lands | Still refused after it |
 |---|---|---|
-| 1 | `Document.Loft`, structural profile conversion and alignment options, Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Copy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
-| 2a | `Placed` / `Copy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
+| 1 | `Document.Loft`, structural profile conversion and alignment options, Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Transform`/`Copy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
+| 2a | `Transform` / `Copy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2). **This row is landed.** | D3/D4's analytic-kernel case, D5 |
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `spanSpeedUpper` length/speed bound, and `spanMatchedDeltaUpper` native-parameter bound plus `delta`, and the exact per-cell `SpanTangentEnergyUpper` energy (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row is landed.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
@@ -2229,7 +2229,7 @@ against this budget.
   sum `-0.0 + 0.0`, which IEEE 754 rounds to `+0.0`) — the identity fast
   path's premise is the zero DISPLACEMENT, not the sign of zero, and both
   halves are pinned. A test that a stale profile refuses a fresh
-  `Document.Loft` while `Copy`/`Placed` of the
+  `Document.Loft` while `Copy`/`Transform` of the
   already-built body each succeed pins §4's original-call-only S9.
   `Copy` of a fresh loft reproduces bit-identical vertices, Exact
   16000 mm³ volume, Exact centroid, Exact bounds, and an Area measurement whose
@@ -2252,13 +2252,13 @@ against this budget.
   `FaceCreatedBy(CapStart(b2))` selects exactly one face; manifoldness and
   per-edge `IsConvex` match the source. The sum of `Face.Area()` equals
   `Body.Area().Value` within the summed bounds, catching a per-face bound that
-  forgot the perturbation term. `Placed` retires the receiver; `Copy`
+  forgot the perturbation term. `Transform` retires the input; `Copy`
   does not; a refused placement (an invalid transform, an S12
   fixture, and an S13 fixture whose composed translation carries a far-plane
   section past `MaxFloat64`) leaves the document untouched, and the
   S13 fixture returns `ErrUnsupported` rather than panicking inside the exact
   lift. A canceled
-  `Placed` returns `ctx.Err()` with the receiver live and the document
+  `Transform` returns `ctx.Err()` with the input live and the document
   unchanged. A placed loft is `Sound` at the default tolerance under `Verify`;
   two lofts placed apart read box-disjoint `Sound`; an internal test asserts
   `bodyGateDiameter` shrinks by `2*delta`, and a second asserts that shrink is

@@ -496,7 +496,7 @@ func TestStitchRefusesAPlacedSheetAgainstItsUnplacedSiblings(t *testing.T) {
 	require.True(t, ok)
 	xf, err := r3.RotationAround(r3.NewVec(41, -17, 9), axis, units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := sheets[0].Placed(t.Context(), xf)
+	placed, err := decad.Transform(t.Context(), sheets[0], xf)
 	require.NoError(t, err)
 
 	operands := append([]*decad.Body{placed}, sheets[1:]...)
@@ -532,7 +532,7 @@ func TestStitchPlacedBoxIsApproximateSolid(t *testing.T) {
 	composed, err := motion.Then(rot)
 	require.NoError(t, err)
 
-	placed, err := box.Placed(t.Context(), composed)
+	placed, err := decad.Transform(t.Context(), box, composed)
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySolid, placed.Kind())
@@ -871,7 +871,7 @@ func TestStitchPlacedStitchedSolidGetsClearance(t *testing.T) {
 
 	motion, err := r3.Translation(r3.NewVec(500, 500, 500))
 	require.NoError(t, err)
-	placed, err := box.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), box, motion)
 	require.NoError(t, err)
 
 	for _, v := range placed.Vertices() {

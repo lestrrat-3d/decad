@@ -13,7 +13,7 @@ import (
 // WithClearances turns the proven pair partition into measured gaps: every
 // pair of proven-disjoint bodies gets a Clearance row whose Gap the analytic
 // kernel proves — here the facing side faces of two plates, 400 mm apart.
-// The first plate arrives via Placed, so its own frame/placement rounding
+// The first plate arrives via Transform, so its own frame/placement rounding
 // widens the proven interval to honest-Approximate. The gap is a
 // measurement, not a verdict: the caller compares it against their own
 // clearance spec, and the report passes because every answer, the gap
@@ -44,7 +44,7 @@ func Example_decad_verify_clearances() {
 		fmt.Printf("failed to build motion: %s\n", err)
 		return
 	}
-	if _, err := first.Placed(context.Background(), shift); err != nil {
+	if _, err := decad.Transform(context.Background(), first, shift); err != nil {
 		fmt.Printf("failed to place: %s\n", err)
 		return
 	}

@@ -16,7 +16,7 @@ axial contact line stays inside a broad source-box face.
 One zero-bound faceted Boolean solid with a certified rectangular lower face
 can certify an affine vertical clear path, first exact face touch, separating
 departure, or persistent face contact against a containing source-box floor.
-The same path accepts a translation-only `Placed` copy when its saved exact
+The same path accepts a translation-only `Transform` result when its saved exact
 source mesh proves the complete lower face despite positive held-mesh and
 occupied-volume bounds. The event and replay retain the placed body's Face.
 A positive-bound mesh `Union` also takes this path when an exact source-box
@@ -197,7 +197,7 @@ isolated rigid drift. Replacing it with endpoint screw interpolation would
 move the center along a different path when `v` is perpendicular to `ω`.
 
 Both variants compose onto each body's existing placement in the same order
-as `Body.Placed`. No path is constructed by subtracting one body's pose from
+as `Transform`. No path is constructed by subtracting one body's pose from
 the other's at the endpoints. The relative transform can have nonlinear
 motion even when both individual paths are simple.
 
@@ -935,7 +935,7 @@ change what another reads, and none changes a value.
 After validation, check `ctx` before each pose and at each subdivision;
 pass it into the contact kernel. Cancellation returns `ctx.Err()` and a nil
 report, even if an earlier prefix was clear. A contact-kernel invariant error
-also returns no report. Never call public `Placed`, `Copy`, `Intersect`,
+also returns no report. Never call public `Transform`, `Copy`, `Intersect`,
 or a commit path. Snapshot tests must show that document membership/order,
 body liveness, and next producer identity are unchanged after clear, impact,
 undecided, error, and cancellation results.

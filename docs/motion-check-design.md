@@ -18,7 +18,7 @@ bodies does or does not meet the rest of the document anywhere along a stated on
 lists "do these bodies interfere, and what is the clearance?" among the questions decad is answerable for,
 and core §13 settles how
 such a pair is positioned: interference and clearance run between explicitly placed bodies, through
-`Body.Placed(ctx, t)`, with no assembly machinery. A motion check is that same pair question asked over a
+`Transform(ctx, body, t)`, with no assembly machinery. A motion check is that same pair question asked over a
 family of placements `t(s)`, `s ∈ [From, To]`, instead of at one placement. It consumes exactly what core
 §13 already grants — a rigid motion stated by the caller as an `r3.Transform` — and adds no `Component`, no
 `Occurrence`, no joint graph, no timeline and no view state. Every v1 non-goal of core §13 stays a non-goal.
@@ -33,7 +33,7 @@ Three things do not belong in `VerifyMotion`, and this design keeps them out:
 
 The layering rule holds unchanged: `decad -> sketch -> r3 -> units`. Every pose is an `r3.Transform` built by
 `r3.RotationAround`, `r3.Translation` or, for a `Between`, `r3.Transform.Screw` read once and `r3.Screw.At`
-per pose; decad composes it onto a body's placement with `Transform.Then` exactly as `Body.Placed` does, and
+per pose; decad composes it onto a body's placement with `Transform.Then` exactly as `Transform` does, and
 hand-rolls no rotation. §11 records what each dependency supplies and the one bound `r3` does not publish.
 
 ## 2. The motion vocabulary
@@ -120,7 +120,7 @@ from the same inputs. Its refusals follow the variant's own fields and the `r3` 
 | the `r3` constructor refusing the result (`r3.ErrNonFinite`, an overflowing pivot offset) | `ErrNotFinite` |
 | a `Between` `From` or `To` with a non-finite basis or translation component | `ErrNotFinite` |
 | a `Between` `From` or `To` that is not a rigid motion (`Transform.IsValid` false: the zero `r3.Transform{}`, a skewed basis) | `ErrDegenerate` |
-| a `Between` joining a reflection to a proper motion (`r3.ErrImproper`: no rigid path joins the two handedness classes); two reflections are a legal pair, as a reflecting placement is legal for `Placed` | `ErrDegenerate` |
+| a `Between` joining a reflection to a proper motion (`r3.ErrImproper`: no rigid path joins the two handedness classes); two reflections are a legal pair, as a reflecting placement is legal for `Transform` | `ErrDegenerate` |
 | a `Between` whose `From` equals `To` (`==` on the two values), or whose relative motion decomposes to the zero screw (`Angle` and `Slide` both zero); checked by `VerifyMotion`, since `PoseAt` of such a motion is `From` at every `s` | `ErrDegenerate` |
 | `rel.Screw()` or `screw.At` refusing the result (`r3.ErrNonFinite`: an axis point or slide past `MaxFloat64`, a `1e-300` rad rotation with a `1e10` mm translation) | `ErrNotFinite` |
 
@@ -310,10 +310,10 @@ because a minimum over the path is a claim about the whole path and an undecided
 ### 5.1 What one pose proves
 
 A pose is evaluated by re-evaluating each mover's payload under the composed motion, exactly as
-`Body.Placed` does (evaluator §8), and then running the pair kernel of clearance §1–§7 and the overlap proof
+`Transform` does (evaluator §8), and then running the pair kernel of clearance §1–§7 and the overlap proof
 of interference §3 over every (placed mover, static) pair. Three rules make it non-mutating and sound:
 
-- **`VerifyMotion` MUST NOT call public `Placed`, `Copy`.** Those register a body and
+- **`VerifyMotion` MUST NOT call public `Transform`, `Copy`.** Those register a body and
   advance the producer identity (core §8). The check calls the payload's private `placed` with the composed
   transform and a reserved transient producer identity that never enters the document, and never calls
   `commit`. Interference §2's invariants hold verbatim: `Document.Bodies()` membership and order, every
@@ -630,7 +630,7 @@ payload's reach without adding a weaker one:
 | mover: zero-vertex-bound closed `stitchPayload` | analytic kernel, but the payload states no `R0`: where the pose's linear part matches the ideal one exactly — under a `Prismatic`, and under a `Between` whose `From` and `To` are both translations, so the read `θ` is `0` and `B(From)` the identity — `η_k` is the translation term alone and the gap is measured; under a `Revolute`, and under any other `Between`, `η_k` is unbounded, the pair reads `DiagUndecidedClearance` at every pose, and no collision transfers | read-only intersection, where the linear parts match only | `IntervalClear` reachable where the linear parts match; every interval `IntervalUndecided` otherwise unless swept-box exclusion settles the pair |
 | `prismPayload` with nonzero section displacement, `cupPayload`, `facetedPayload`, `loftPayload`, `capBlendPayload` | box separation only; gap `Suspect` (clearance §8) | read-only intersection where the payload tessellates (interference §9) | collisions found; intervals `IntervalUndecided` unless swept-box exclusion settles the pair |
 | a `BodySheet` operand on either side | none | none | the pair reads `DiagUnsupportedPairSheet` at every pose, intervals `IntervalUndecided`, unless swept-box exclusion settles it |
-| a mover this evaluator did not build (`payload == nil`) | — | — | `ErrUnsupported` at the call, as for `Placed` |
+| a mover this evaluator did not build (`payload == nil`) | — | — | `ErrUnsupported` at the call, as for `Transform` |
 
 A mover or static body that is not a proven solid is treated as `Verify` treats it (interference §2): its
 pairs are not evaluated, every interval is `IntervalUndecided`, and the body's own validity diagnostic is

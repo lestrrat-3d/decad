@@ -39,7 +39,7 @@ zero-bound faceted Boolean result. It requires zero boundary displacement,
 zero occupied-volume difference, one outward-oriented planar source Face at
 the extremum, and exact triangle area equal to the footprint rectangle. A
 second support patch or nonrectangular footprint is refused. A zero-bound
-Boolean may carry the same exact source mesh through translation-only `Placed`.
+Boolean may carry the same exact source mesh through translation-only `Transform`.
 The rebuilt body has a positive held-mesh bound, but its saved source mesh and
 exact accumulated translation still prove the true support plane and rectangle.
 The reader checks that every rebuilt vertex lies within the published bound of
@@ -53,7 +53,7 @@ box's exact lower plane. The result's lower-plane facets must all map to the
 source box's lower-face group and one live faceted Face, with exact triangle
 area and footprint equal to the source rectangle. The mesh bound widens the
 rest of the result's held extents before the floor-footprint check. A later
-`Placed` drops this source-box certificate; a tool reaching the lower plane
+`Transform` drops this source-box certificate; a tool reaching the lower plane
 never receives it.
 `ContactPair` uses the lower Z support against the upper face of a source-box
 floor when the support rectangle lies strictly inside the floor face. Exact
@@ -155,7 +155,7 @@ type ContactReport struct {
 
 The actual Go names may change, but these fields and their absence rules are
 required. The report always names the original bodies and their caller-supplied
-poses. Poses act **after** each body's recorded placement, as `Body.Placed`
+poses. Poses act **after** each body's recorded placement, as `Transform`
 does. Two identical body pointers, a nil or foreign body, a retired body, a
 sheet, an unsound solid, an invalid transform, or an invalid request is an
 input error with no report. Use the existing typed errors for the relevant
@@ -198,7 +198,7 @@ stronger earlier certificate.
 
 Build both transient bodies through the same private payload placement path
 that `VerifyMotion` uses. Reserve a transient producer identity; never call
-public `Placed`, `Copy`, `Intersect`, or `commit`. The true
+public `Transform`, `Copy`, `Intersect`, or `commit`. The true
 query pose is the exact composition of the read `r3.Transform` entries with
 the body's read placement entries. Bound the difference between that exact
 composition and the float transient payload with the existing
@@ -579,7 +579,7 @@ proven touch with `ContactPayloadUnsupported`; an unmatched face or end gives
 `ContactPointTooCoarse` or `ContactNoNormalProof`. Reversing body order swaps
 faces and reverses the normal; the ends keep their order.
 
-**Placed poses.** Elsewhere, a full source cylinder `M` at any pose with a
+**Transformed poses.** Elsewhere, a full source cylinder `M` at any pose with a
 positive determinant against an exact planar body `S` with zero held
 displacement (multibody §9, §10.4), at its own pose, reads the plane/cylinder
 ruling directly (`classifyPlacedRuling`). `M`'s identity record gives its

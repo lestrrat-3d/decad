@@ -141,7 +141,7 @@ func TestBrepModifySB1RefusesADisplacedReceiver(t *testing.T) {
 		boss := internalCircleBody(t, doc, -0.1, 5, 0, Distance{D: units.Millimeters(25), Dir: Along})
 		move, err := r3.Translation(r3.NewVec(0.1, 0, 0))
 		require.NoError(t, err)
-		boss, err = boss.Placed(t.Context(), move)
+		boss, err = Transform(t.Context(), boss, move)
 		require.NoError(t, err)
 		union, err := Union(t.Context(), plate, boss)
 		require.NoError(t, err)

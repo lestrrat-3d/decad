@@ -45,7 +45,7 @@ func (m mtiltTree) branch(t *testing.T, doc *decad.Document, theta float64) *dec
 	require.NoError(t, err)
 	move, err := r3.Translation(u.Scale(m.ring).Add(r3.NewVec(0, 0, m.trunkTop-1)))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), move)
+	placed, err := decad.Transform(t.Context(), body, move)
 	require.NoError(t, err)
 	return placed
 }
@@ -167,7 +167,7 @@ func TestSweepMitredCrossingUnion(t *testing.T) {
 	require.NoError(t, err)
 	turn, err := r3.FromFrame(frame)
 	require.NoError(t, err)
-	b, err = b.Placed(t.Context(), turn)
+	b, err = decad.Transform(t.Context(), b, turn)
 	require.NoError(t, err)
 
 	// Table DM row DM4: Verify reads the same pair's overlap through the
@@ -212,7 +212,7 @@ func TestSweepMitredTaperedBranchesCross(t *testing.T) {
 		require.NoError(t, err)
 		turn, err := r3.FromFrame(frame)
 		require.NoError(t, err)
-		b, err = b.Placed(t.Context(), turn)
+		b, err = decad.Transform(t.Context(), b, turn)
 		require.NoError(t, err)
 		return a, b
 	}
@@ -288,7 +288,7 @@ func (h hollowTrunk) bore(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	lift, err := r3.Translation(up)
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), lift)
+	placed, err := decad.Transform(t.Context(), body, lift)
 	require.NoError(t, err)
 	return placed
 }
@@ -308,7 +308,7 @@ func (h hollowTrunk) branch(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	turn, err := r3.FromFrame(frame)
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), turn)
+	placed, err := decad.Transform(t.Context(), body, turn)
 	require.NoError(t, err)
 	return placed
 }
@@ -650,7 +650,7 @@ func TestSweepMitredClusteredBranchUnionChain(t *testing.T) {
 		unit, err := doc.Sweep(t.Context(), branchSketch, branchProfile, branchPath,
 			decad.WithMitredJoins(), decad.WithSectionScale(scalars(1.375/1.5, 1.2/1.5, 1/1.5)...))
 		require.NoError(t, err)
-		branch, err := unit.Placed(t.Context(), xf)
+		branch, err := decad.Transform(t.Context(), unit, xf)
 		require.NoError(t, err)
 
 		treeVol, err := tree.Volume()

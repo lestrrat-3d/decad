@@ -48,7 +48,7 @@ func benchRodBody(b *testing.B, doc *decad.Document, cx, cy, r float64) *decad.B
 	require.NoError(b, err)
 	tr, err := r3.Translation(r3.Vec{X: 0, Y: 0, Z: -6})
 	require.NoError(b, err)
-	moved, err := body.Placed(b.Context(), tr)
+	moved, err := decad.Transform(b.Context(), body, tr)
 	require.NoError(b, err)
 	return moved
 }
@@ -88,7 +88,7 @@ func BenchmarkBooleanUnionCrossedRods(b *testing.B) {
 		require.NoError(b, err)
 		xf, err := rot.Then(tr)
 		require.NoError(b, err)
-		c, err = c.Placed(b.Context(), xf)
+		c, err = decad.Transform(b.Context(), c, xf)
 		require.NoError(b, err)
 		b.StartTimer()
 		got, err := decad.Union(b.Context(), a, c)
@@ -139,7 +139,7 @@ func benchmarkUnionFacetCandidateCase(b *testing.B, radiusA, radiusB float64, de
 		require.NoError(b, err)
 		xf, err := rot.Then(tr)
 		require.NoError(b, err)
-		bodyB, err = bodyB.Placed(b.Context(), xf)
+		bodyB, err = decad.Transform(b.Context(), bodyB, xf)
 		require.NoError(b, err)
 		b.StartTimer()
 		got, err := decad.Union(b.Context(), a, bodyB)

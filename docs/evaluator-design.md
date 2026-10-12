@@ -460,7 +460,7 @@ the plane-coordinate body, which is exact for any linear map, and the
 coefficients (L's columns)·g carry their own rounding charge. A frame and
 placement whose bases are exactly orthonormal, every axis-aligned sketch plane
 under the identity among them, read det L = 1 and e = 0, and every reading is
-then unchanged bit for bit; `Placed` under a general rotation keeps each value
+then unchanged bit for bit; `Transform` under a general rotation keeps each value
 and may widen its bound. A defect at or above 1/2 refuses `ErrUnsupported`.
 The loft, the mitred sweep, the faceted boolean and the stitch compute their
 readings from world coordinates their own vertex bounds already cover, and
@@ -737,7 +737,7 @@ its own snapshot. That is what lets a `Remove` run beside a `Verify`. The lock g
 feature's check-then-commit are still unguarded, which is why the document as a whole stays unsafe
 for concurrent mutation (core §12).
 
-`Body.Placed` and `Copy` pass the caller's context through payload re-evaluation.
+`Transform` and `Copy` pass the caller's context through payload re-evaluation.
 Faceted placement polls that context while transforming vertices, auditing and
 rebuilding topology, and recomputing measurements.
 For a faceted payload, the stored binary64 placement basis is read as an
@@ -758,7 +758,7 @@ checking the placed vertices against their published displacement bound.
 A rotated placement and a Boolean with inherited positive error carry no such
 source certificate.
 
-`Body.Placed` transforms analytic geometry exactly in EXACT arithmetic — every
+`Transform` maps analytic geometry exactly in EXACT arithmetic — every
 v1 surface variant maps to itself under an isometry (plane→plane,
 cylinder→cylinder, …), with `IsReflection` flipping face orientation handling
 — but the FLOAT evaluation of the frame lift and the isometry rounds wherever
@@ -856,7 +856,7 @@ scaled around the caller's anchor. A circular source wall becomes a `Faceted`
 face with the inherited boundary bound; this path has no scaled curved-normal
 certificate. The result is not a new `prismPayload`.
 
-The faceted payload marks this source class so a later `Placed`, `Copy` or
+The faceted payload marks this source class so a later `Transform`, `Copy` or
 `ScaledAt` can repeat the proof from its held mesh and bounds.
 Booleans and modify rewrites do not carry that marker. A failed embedding,
 non-finite bound or canceled context returns without retiring the receiver.
@@ -1115,7 +1115,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   charged where it sits. The search moves no vertex farther than an ulp per
   coordinate from its exact point.
 
-  A rigid placement of a faceted body (`Placed`) rounds the same way. The exact
+  A rigid placement of a faceted body (`Transform`) rounds the same way. The exact
   image of an embedded mesh under the motion's float matrix and translation is
   embedded, and each held vertex starts at the nearest float to its exact
   image. The same check runs over the vertices that differ from their exact
@@ -1273,7 +1273,7 @@ silent pass.
 
 | # | Lands |
 |---|---|
-| 1 | topology model, `Document` and private provenance wiring, `Extrude` for line/circle/arc profiles with `Distance`/`Symmetric`/`TwoSided`-of-distance-sides extents, mass properties (§4), `Placed`, structural `Verify` (validity by construction, quantities, tolerance gate; every pair undecided → `Suspect` unless box-proven disjoint) |
+| 1 | topology model, `Document` and private provenance wiring, `Extrude` for line/circle/arc profiles with `Distance`/`Symmetric`/`TwoSided`-of-distance-sides extents, mass properties (§4), `Transform`, structural `Verify` (validity by construction, quantities, tolerance gate; every pair undecided → `Suspect` unless box-proven disjoint) |
 | 2 | `Revolve` (angular extents), selector vocabulary + resolution, the body-relative stops (`ToFace`/`ToFaceAngular`/`EdgeAxis`, `ThroughAll`/`ThroughAllSide`) |
 | 3 | analytic clearance proofs and `WithClearances` (box-disjointness proofs already run from increment 1, §10/§11 row 1) |
 | 4 | tessellation per `docs/tessellation-design.md` + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ`; supplies the geometry and bounds shared by public booleans and read-only interference evaluation |

@@ -62,7 +62,7 @@ func TestShellRoundStackedBoss(t *testing.T) {
 			require.Equal(t, decad.Sound, report.Status)
 			movedBy, err := r3.Translation(r3.NewVec(3, -2, 4))
 			require.NoError(t, err)
-			moved, err := shell.Placed(t.Context(), movedBy)
+			moved, err := decad.Transform(t.Context(), shell, movedBy)
 			require.NoError(t, err)
 			movedVolume, err := moved.Volume()
 			require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestShellRoundStackedBoss(t *testing.T) {
 				require.NoError(t, err)
 				reflection, err := r3.Reflection(mirror)
 				require.NoError(t, err)
-				reflected, err := moved.Placed(t.Context(), reflection)
+				reflected, err := decad.Transform(t.Context(), moved, reflection)
 				require.NoError(t, err)
 				reflectedMesh, err := reflected.Tessellate(t.Context(), units.Millimeters(0.05),
 					decad.WithVerification(decad.VerifyAll))

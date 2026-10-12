@@ -525,7 +525,7 @@ func TestSweepPairSourceSphereTouchContinuation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepUndecided, refused.Outcome)
 	offOrigin := ballBody(t, doc, 5)
-	offOrigin, err = offOrigin.Placed(t.Context(), contactPose(t, r3.Vec{X: 2}))
+	offOrigin, err = decad.Transform(t.Context(), offOrigin, contactPose(t, r3.Vec{X: 2}))
 	require.NoError(t, err)
 	initial, err := doc.ContactPair(t.Context(), floor, offOrigin, r3.Identity(), rotating.From,
 		contactRequest())
@@ -555,7 +555,7 @@ func TestSweepPairRefusesSeparatedOffOriginRotatingSphere(t *testing.T) {
 	doc := decad.New()
 	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
 	ball := ballBody(t, doc, 5)
-	ball, err := ball.Placed(t.Context(), contactPose(t, r3.Vec{X: 2}))
+	ball, err := decad.Transform(t.Context(), ball, contactPose(t, r3.Vec{X: 2}))
 	require.NoError(t, err)
 	from := contactPose(t, r3.Vec{Z: 25})
 	contact, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(), from,

@@ -72,7 +72,7 @@ import "github.com/lestrrat-3d/r3"
 //
 // Every mint is fresh: two separate evaluator calls — two separate Extrude
 // calls building the identical profile at the identical extent, or one call
-// and a later Placed/Copy rebuild of it (evalPrismContext is
+// and a later Transform/Copy rebuild of it (evalPrismContext is
 // their shared entry point) — never share an id, because the document's own
 // counter never resets and never repeats. A caller cannot manufacture two
 // edges that share a level by any means but having this evaluator stamp them

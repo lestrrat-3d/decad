@@ -393,7 +393,7 @@ modify §4's stage 1 and reach SX10:
 | **DF9** | wall survey | staged `Suspect`, as for every brep |
 | **DF10** | STEP | analytic: `supportsAnalyticSTEP` takes a whole-turn torus (LF7), a four-arc torus patch (LF2/LF3) and a straight-walk cylinder patch closed by `Ellipse3` edges (`docs/step-export-design.md`). A horn torus patch (LF6, a three-edge loop closing on the axis) keeps the faceted writer. `Body.Tessellate` admits a banded body (F-2), so `export.STEP` reaches the writer |
 | **DF11** | a later `Fillet`/`Chamfer`/`Shell` | DG11: Tables RB/EB/SB/TC/LB over the rewritten record; a patch's edge is in no record and matches nothing (SL1); a trimmed wall's rim at `sideZ` ends on a patch, so route E's SB7 refuses an edge there; a record carrying bands reads as no prism (route P and Table TC refuse); a second loop fillet or chamfer on another loop appends to `loopBands`, provided the first left `delta = 0` |
-| **DF12** | `Placed`, `Mirrored`, `PatternCopies` | re-lifts every face frame; `loopBands` re-attach on re-evaluation; a reflection flips `outward` and the ellipse's `Axis` sense with every winding (general-boolean A4) |
+| **DF12** | `Transform`, `Mirrored`, `PatternCopies` | re-lifts every face frame; `loopBands` re-attach on re-evaluation; a reflection flips `outward` and the ellipse's `Axis` sense with every winding (general-boolean A4) |
 
 ### 7.1 Tessellation
 

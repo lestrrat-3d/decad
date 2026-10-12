@@ -501,7 +501,7 @@ func TestCapBlendAsymmetricPlacedKeepsSetbacksAndRoles(t *testing.T) {
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(2, 4, 8))
 	require.NoError(t, err)
-	moved, err := out.Placed(t.Context(), shift)
+	moved, err := decad.Transform(t.Context(), out, shift)
 	require.NoError(t, err)
 	requireManifold(t, moved)
 	// A translation by integers keeps every coordinate a float64.

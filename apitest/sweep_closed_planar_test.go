@@ -65,7 +65,7 @@ func TestSweepClosedPlanarTangentLoopBuildsVerifiedSolid(t *testing.T) {
 
 	translation, err := r3.Translation(r3.NewVec(3, 4, 5))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), translation)
+	placed, err := decad.Transform(t.Context(), body, translation)
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))

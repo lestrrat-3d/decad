@@ -73,7 +73,7 @@ func TestDocumentRemoveTakesBodyOutOfTheModel(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 	_, err = decad.Copy(t.Context(), intruder)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
-	_, err = intruder.Placed(t.Context(), r3.Identity())
+	_, err = decad.Transform(t.Context(), intruder, r3.Identity())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 	require.Equal(t, []*decad.Body{keep}, doc.Bodies())
 }

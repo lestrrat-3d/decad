@@ -118,7 +118,7 @@ func TestShellClosedPrism(t *testing.T) {
 
 			rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 			require.NoError(t, err)
-			placed, err := closed.Placed(t.Context(), rotation)
+			placed, err := decad.Transform(t.Context(), closed, rotation)
 			require.NoError(t, err)
 			require.Len(t, placed.Lumps(), 1)
 			require.Len(t, placed.Shells(), 2)

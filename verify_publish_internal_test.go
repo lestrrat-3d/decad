@@ -308,7 +308,7 @@ func translatedBody(t *testing.T, b *Body, x, y, z float64) *Body {
 	t.Helper()
 	tr, err := r3.Translation(r3.Vec{X: x, Y: y, Z: z})
 	require.NoError(t, err)
-	moved, err := b.Placed(t.Context(), tr)
+	moved, err := Transform(t.Context(), b, tr)
 	require.NoError(t, err)
 	return moved
 }

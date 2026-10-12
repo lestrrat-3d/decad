@@ -386,7 +386,7 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 	ball := ballBody(t, doc, 8)
 	shift, err := r3.Translation(r3.NewVec(5, 0, 0))
 	require.NoError(t, err)
-	_, err = ball.Placed(t.Context(), shift)
+	_, err = decad.Transform(t.Context(), ball, shift)
 	require.NoError(t, err)
 	before := snapshotDocument(t, doc)
 
@@ -496,11 +496,11 @@ func TestVerifyCancellationInsideReadOnlyIntersection(t *testing.T) {
 // crossingBoxPair builds box A [0,10]x[0,10] against box B [5,15]x[5,15],
 // both 5 mm tall: a single 5x5 mm crossing overlap over the shared 5 mm
 // height, 125 mm^3. seated draws B directly at its final coordinates; placed
-// builds B at the origin footprint and moves it into place with Body.Placed,
+// builds B at the origin footprint and moves it into place with Transform,
 // reaching the identical footprint through a nonidentity re-expression;
 // placedBackToIdentity moves B twice, by a motion and its inverse, so the
 // ACCUMULATED placement the re-expression actually reads is the identity
-// again even though the last Placed call received a nonidentity transform.
+// again even though the last Transform call received a nonidentity transform.
 //
 // splitCellBody is the walk-charge half: the SAME [1,5]x[0,10] footprint a
 // plain rectangle draws, but cut out of the larger rectangle [1,11]x[0,10] by
@@ -623,11 +623,11 @@ func TestVerifyCrossingPairSeatedAndPlacedResolve(t *testing.T) {
 	})
 
 	// §3.4 reads the operands' ACCUMULATED placement, never the motion one
-	// Placed call received: newPrismReexpression compares pa.frame/pa.xform
-	// against pb.frame/pb.xform, and Placed composes onto the transform
+	// Transform call received: newPrismReexpression compares pa.frame/pa.xform
+	// against pb.frame/pb.xform, and Transform composes onto the transform
 	// the receiver already carries. So a body moved by a motion and then by its
 	// inverse is back at the partner's own placement and the pair is measured
-	// again, even though the last Placed call took a nonidentity transform.
+	// again, even though the last Transform call took a nonidentity transform.
 	t.Run("a placement composed back to the identity is measured again", func(t *testing.T) {
 		doc := decad.New()
 		a, b := crossingBoxPairPlacedBackToIdentity(t, doc)

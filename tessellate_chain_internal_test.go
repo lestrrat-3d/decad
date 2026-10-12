@@ -123,7 +123,7 @@ func TestTessellateChainReflectedPlacementFlipsWinding(t *testing.T) {
 	require.NoError(t, err)
 	reflect, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), reflect)
+	placed, err := Transform(t.Context(), body, reflect)
 	require.NoError(t, err)
 	pp, ok := placed.payload.(chainPayload)
 	require.True(t, ok)

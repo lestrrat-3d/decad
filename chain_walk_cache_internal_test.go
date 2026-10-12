@@ -96,7 +96,7 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 	check(t, body)
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), rotation)
+	placed, err := Transform(t.Context(), body, rotation)
 	require.NoError(t, err)
 	check(t, placed)
 

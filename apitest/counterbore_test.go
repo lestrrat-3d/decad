@@ -52,7 +52,7 @@ func TestCounterboreCutBuildsAnalyticShoulderInEitherOrder(t *testing.T) {
 				requireWatertight(t, mesh)
 				rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 				require.NoError(t, err)
-				placed, err := part.Placed(t.Context(), rotation)
+				placed, err := decad.Transform(t.Context(), part, rotation)
 				require.NoError(t, err)
 				placedVolume, err := placed.Volume()
 				require.NoError(t, err)

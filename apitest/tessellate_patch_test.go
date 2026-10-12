@@ -83,7 +83,7 @@ func TestPatchSheetReflectedMeshFollowsFaceNormal(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := r3.Reflection(plane)
 	require.NoError(t, err)
-	placed, err := b.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), b, motion)
 	require.NoError(t, err)
 	m, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)

@@ -51,7 +51,7 @@ func planarPartAndBranch(t *testing.T, doc *Document, shift r3.Vec, top float64)
 	turn, err := r3.FromBasis(r3.Basis{EX: r3.NewVec(1, 0, 0), EY: r3.NewVec(0, 0, 1), EZ: r3.NewVec(0, -1, 0)},
 		r3.NewVec(0, 20, 0).Add(shift))
 	require.NoError(t, err)
-	part, err = part.Placed(t.Context(), turn)
+	part, err = Transform(t.Context(), part, turn)
 	require.NoError(t, err)
 
 	ps, err := w.CreateSketch(w.XY())
@@ -82,7 +82,7 @@ func planarPartAndBranch(t *testing.T, doc *Document, shift r3.Vec, top float64)
 	require.NoError(t, err)
 	move, err := r3.Translation(path[0].Add(shift))
 	require.NoError(t, err)
-	branch, err = branch.Placed(t.Context(), move)
+	branch, err = Transform(t.Context(), branch, move)
 	require.NoError(t, err)
 	payload, ok := branch.payload.(mitredSweepPayload)
 	require.True(t, ok)
@@ -213,7 +213,7 @@ func planarBox(t *testing.T, doc *Document, x0, y0, z0, x1, y1, z1 float64) *Bod
 	}
 	lift, err := r3.Translation(r3.NewVec(0, 0, z0))
 	require.NoError(t, err)
-	body, err = body.Placed(t.Context(), lift)
+	body, err = Transform(t.Context(), body, lift)
 	require.NoError(t, err)
 	return body
 }

@@ -260,7 +260,7 @@ func TestSurfaceLoftRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceLoftStaysASheetThroughPlacement is §4.2's Placed/Copy
+// TestSurfaceLoftStaysASheetThroughPlacement is §4.2's Transform/Copy
 // claim for Loft: each re-evaluates the payload and reproduces the
 // sheet with no further code.
 func TestSurfaceLoftStaysASheetThroughPlacement(t *testing.T) {
@@ -272,7 +272,7 @@ func TestSurfaceLoftStaysASheetThroughPlacement(t *testing.T) {
 
 	motion, err := r3.Translation(r3.NewVec(50, 0, 0))
 	require.NoError(t, err)
-	placed, err := sheet.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), sheet, motion)
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, placed)
 

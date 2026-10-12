@@ -30,7 +30,7 @@ APIs are design-only.**
 | STEP export | `docs/step-export-design.md` |
 | Free-form geometry or per-kind dispatch | `docs/spline-design.md` |
 | `Union`/`Cut`/`Intersect`, `evaluateBoolean` dispatch, or any code combining recorded sections through a private `sketch` scene | `docs/prism-boolean-design.md`, `docs/general-boolean-design.md` |
-| Mirror, pattern, `Placed`/`Copy` | `docs/mirror-pattern-design.md` |
+| Mirror, pattern, `Transform`/`Copy` | `docs/mirror-pattern-design.md` |
 | Any modify op, option codec or modify payload | `docs/modify-design.md`, `docs/modify-reach-design.md` |
 | `stackedPrismPayload`, blind `Cut`, slabs | `docs/stacked-prism-design.md` |
 | Sheet-body, surface-result, patch or stitch code | `docs/surface-design.md` |

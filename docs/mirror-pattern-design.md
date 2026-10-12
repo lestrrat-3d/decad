@@ -12,7 +12,7 @@ under `.tmp/probe/` at `8cc06f90`.
 ## 1. Problem
 
 A reflection is already a placement. `r3.Transform` represents an improper
-isometry (det −1, `Transform.IsReflection`), `Body.Placed` and
+isometry (det −1, `Transform.IsReflection`), `Transform` and
 `Copy` with `WithCopyPlacement` accept one, and every shipped payload
 re-evaluates under it:
 `prismPayload`, `revolvePayload`, `stackedPrismPayload`, `capBlendPayload`,
@@ -59,7 +59,7 @@ one record set, so a pattern of N holes is one analytic arrangement.
 | M3 | `Union(L, mirror across x = 15)` (overlapping) | `BooleanUnsupportedContact`: coplanar facets |
 | M4 | `Union(mirrored L, same-plane box)` | `BooleanUnsupportedContact`: coplanar facets |
 | M5 | `Cut(mirrored L, same-plane cylinder)` | mesh path: 8 `Faceted` faces, bound 0.05 mm³ |
-| M6 | `Placed(reflection)` | analytic, receiver retired, one live body |
+| M6 | `Transform(ctx, body, reflection)` | analytic, input retired, one live body |
 | T1 | `Cut(mirrored L, mirrored cylinder)` (both reflected, proper relative map) | `BooleanUnsupportedContact`: G2 refuses either reflected operand |
 | T2 | `Verify` on L beside an overlapping mirror | `Suspect`, `unsupported_pair_contact` |
 | T3 | `Verify` on L beside a separated mirror | `Sound`, clearance 20 mm |
@@ -152,10 +152,10 @@ func WithJoin() MirrorOption
 `MirrorOption` is sealed by its private marker. Callers select the join through
 `WithJoin`; the option's codec identity is not part of the modeling contract.
 
-`Mirrored` is `Placed` under `r3.Reflection(frame)`: it retires the receiver
+`Mirrored` is `Transform` under `r3.Reflection(frame)`: it retires the receiver
 and registers the image. `MirroredCopy` uses `Copy` with
 `WithCopyPlacement` under the same transform: the receiver stays live.
-Both take the gates `Placed` takes — a
+Both take the gates `Transform` takes — a
 nil context, a body no evaluator built, a cancelled context before commit —
 and add only the plane's own resolution. A `MirrorFrame` whose frame is the
 zero value is `ErrDegenerate`.
@@ -607,7 +607,7 @@ Each PR ships code and tests; this document ships with PR 1.
 
 1. **`Mirrored`, `MirroredCopy`, `MirrorPlane`.** The sealed plane
    vocabulary, `MirrorFace` resolution through the implicit exactly-one
-   rule, both methods over `Placed`/`Copy` with `r3.Reflection`, the
+   rule, both methods over `Transform`/`Copy` with `r3.Reflection`, the
    §3 consumer table verified by §8's every-payload test, an executable
    example, Layout rows.
 2. **`WithJoin`.** J1–J7, the exact reflection and splice (§5.2) over prism

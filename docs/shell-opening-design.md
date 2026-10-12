@@ -482,7 +482,7 @@ ordinary `brepPayload`, and general-boolean §4.5 reads it unchanged:
 | **DO9** | wall survey | staged `Suspect` (`DiagUnsupportedSurveyPayload`), as for every brep |
 | **DO10** | STEP | analytic where every wall is a plane or a cylinder (the oblique four-face plane writes as four planar faces) |
 | **DO11** | `Fillet`/`Chamfer`/`Shell` on the result | brep-modify Tables RB/EB/SB over the record: RB1 needs `delta = 0`, so a rectilinear exact result takes route E on any axis-parallel straight edge (the opening's edges included: each hole corner is incident to three faces); route P applies only where the result reads as a prism along a reference axis, which a U-channel with kept caps does not; `Shell` again is SB10. A result with `delta > 0` is SB1 |
-| **DO12** | `Placed`/`Mirrored`/`PatternCopies` | re-lifts every face frame; a reflection flips `outward` and every wall's winding |
+| **DO12** | `Transform`/`Mirrored`/`PatternCopies` | re-lifts every face frame; a reflection flips `outward` and every wall's winding |
 
 ## 8. The revolve's slanted rim
 

@@ -499,11 +499,11 @@ func TestShellCupPlacedComposes(t *testing.T) {
 	want, err := cup.Volume()
 	require.NoError(t, err)
 
-	// Body.Placed re-evaluates the cupPayload under the composed motion; volume
+	// Transform re-evaluates the cupPayload under the composed motion; volume
 	// is invariant under a rigid move.
 	motion, err := r3.Translation(r3.NewVec(10, 20, 30))
 	require.NoError(t, err)
-	moved, err := cup.Placed(t.Context(), motion)
+	moved, err := decad.Transform(t.Context(), cup, motion)
 	require.NoError(t, err)
 	require.True(t, moved.IsSolid())
 	requireManifold(t, moved)
@@ -994,7 +994,7 @@ func TestShellCupDownstream(t *testing.T) {
 		// two live, box-disjoint cups in one document.
 		far, err := r3.Translation(r3.NewVec(500, 0, 0))
 		require.NoError(t, err)
-		_, err = cup1.Placed(t.Context(), far)
+		_, err = decad.Transform(t.Context(), cup1, far)
 		require.NoError(t, err)
 		s2, p2 := plateSketch(t)
 		box2, err := doc.Extrude(s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
@@ -1332,7 +1332,7 @@ func TestShellCupTessellateReflected(t *testing.T) {
 	require.NoError(t, err)
 	refl, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := cup.Placed(t.Context(), refl)
+	placed, err := decad.Transform(t.Context(), cup, refl)
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))

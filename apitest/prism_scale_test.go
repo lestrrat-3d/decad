@@ -14,7 +14,7 @@ func TestStraightPrismScaledAtAcceptsPlacedSource(t *testing.T) {
 	prism := boxBody(t, doc, 0, 0, 4, 3, 5)
 	turn, err := r3.RotationAround(r3.NewVec(1, 1, 0), r3.NewVec(0, 1, 0), units.Radians(0.2))
 	require.NoError(t, err)
-	placed, err := prism.Placed(t.Context(), turn)
+	placed, err := decad.Transform(t.Context(), prism, turn)
 	require.NoError(t, err)
 	scaled, err := placed.ScaledAt(t.Context(), r3.NewVec(1, 2, 3), units.Scalar(0.9))
 	require.NoError(t, err)

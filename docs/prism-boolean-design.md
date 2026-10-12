@@ -309,13 +309,13 @@ silent fallback stops being available:
    verification §4's dimensionless noise floor has no charge, and that, or
    any later merge, audit or recording failure, sends it to the mesh path
    with no error (`prismcells.AmplifiedFallback`), exactly as an unresolved
-   topology does. `Body.Placed` is the ordinary way a pair reaches the
+   topology does. `Transform` is the ordinary way a pair reaches the
    re-expression cause, and it reaches it through the ACCUMULATED placement
    rather than through the motion any one call received:
    `prismcells.NewReexpression` reports the identity exactly when G3's shared-axis
    arm holds — `pa.xform == pb.xform`, bit-identical `U`/`V`, and a frame-origin
    difference that is exactly a multiple of the shared `N` (a coplanar pair on
-   one frame is that arm with `d = 0`) — and `Placed` composes its
+   one frame is that arm with `d = 0`) — and `Transform` composes its
    motion onto the transform its receiver already carries instead of replacing
    it. A sequence of motions composing back to the partner's own accumulated
    placement leaves that map the identity again, and the identity charges no
@@ -1404,7 +1404,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   a tool sketched on an offset of a tilted base plane (the test asserts the
   two frames' `U` differ in the stored bits, so the fixture cannot silently
   stop being the one under test); a tool moved along the normal and sideways
-  through `Placed`; and a tool sketched on a plane above the
+  through `Transform`; and a tool sketched on a plane above the
   target whose `V` is flipped, so its normal opposes the target's. Each
   asserts a `Faceted` face on the result, or the mesh path's own refusal
   where that path refuses the pair.
@@ -1427,7 +1427,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   `rationalFloatError(fl(0.1) + fl(0.3), z1)` (no float), and the published
   volume bound contains the exact rational volume `area · (fl(0.3))`. The
   fixture is shown to fail with the charge deleted.
-- The chain-depth refusal's wording: two tools `Placed` 16 mm down and
+- The chain-depth refusal's wording: two tools transformed 16 mm down and
   0.125 mm sideways (the exact axis arms exclude the sideways offset)
   leave rims coarser than the next pair's chord tolerance. A third tool clear
   of them cuts; a pin placed on the second hole's rim is refused with a plain

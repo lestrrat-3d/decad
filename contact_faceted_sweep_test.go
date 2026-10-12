@@ -197,7 +197,7 @@ func TestSweepPairFacetedFloorRefusesUnprovedPath(t *testing.T) {
 	require.NoError(t, err)
 	reflection, err := r3.Reflection(frame)
 	require.NoError(t, err)
-	reflected, err := union.Placed(t.Context(), reflection)
+	reflected, err := Transform(t.Context(), union, reflection)
 	require.NoError(t, err)
 	require.Positive(t, reflected.payload.(facetedPayload).meshBound)
 	require.Empty(t, reflected.payload.(facetedPayload).exactSourceVerts)

@@ -53,7 +53,7 @@ and lining readings. The root payload holds `[]stackedrecord.Slab` and
 There is exactly one interface between each pair of adjacent slabs.
 
 Material is the union of every slab's regions swept over that slab's interval.
-The payload is evaluator-private, re-evaluates under `Body.Placed` through the
+The payload is evaluator-private, re-evaluates under `Transform` through the
 same `featurePayload` interface every other payload implements, and carries the
 accumulated placement in `xform` exactly as `prismPayload` does.
 
@@ -326,7 +326,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 
 | Consumer | Behaviour |
 |---|---|
-| `Body.Placed` / `Copy` | re-evaluates the payload under the composed motion |
+| `Transform` / `Copy` | re-evaluates the payload under the composed motion |
 | later `Cut` with a prism tool | A spanning tool or a blind tool ending inside a slab or exactly at an interface builds when each reached slab proves a clean cut or no change inside a hole; opposed interface holes require exact, separated sections (§7). |
 | `Union` with a stacked operand | `docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
 | `Cut` by a prism-group tool | `docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |
@@ -438,6 +438,6 @@ arm64.
 - `Verify` on the pocketed plate is `Sound` with no survey asked; with the wall
   survey asked it reports `DiagUnsupportedSurveyPayload` and `Suspect`.
 - `Fillet` on the pocketed plate is `ErrUnsupported`.
-- `Placed` by a rotation keeps the volume, exactness and face count.
+- `Transform` under a rotation keeps the volume, exactness and face count.
 - Cancellation during the second slab's arrangement returns `ctx.Err()` and
   leaves both operands live.

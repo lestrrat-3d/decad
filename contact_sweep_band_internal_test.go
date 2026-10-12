@@ -70,7 +70,7 @@ func TestPlanarDepartureLowerGapIsBoundedByLateralClearance(t *testing.T) {
 	outer := internalBoxBody(t, doc, -90, -90, 90, 90, 50)
 	lower, err := r3.Translation(r3.Vec{Z: -10})
 	require.NoError(t, err)
-	outer, err = outer.Placed(t.Context(), lower)
+	outer, err = Transform(t.Context(), outer, lower)
 	require.NoError(t, err)
 	inner := internalBoxBody(t, doc, -80, -80, 80, 80, 50)
 	tray, err := Cut(t.Context(), outer, inner)

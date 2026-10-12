@@ -479,7 +479,7 @@ func TestRevolveWallNormalSurvivesUnstitch(t *testing.T) {
 	shift := r3.NewVec(1e6+0.3, 0.7, -2.5)
 	tr, err := r3.Translation(shift)
 	require.NoError(t, err)
-	placed, err := sheet.Placed(t.Context(), tr)
+	placed, err := decad.Transform(t.Context(), sheet, tr)
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name  string
@@ -697,7 +697,7 @@ func requireCapNormalsEnclose(t *testing.T, fx capFixture) float64 {
 		decad.SketchLine{Start: decad.Point2{U: fx.ax.start[0], V: fx.ax.start[1]}, End: decad.Point2{U: fx.ax.end[0], V: fx.ax.end[1]}},
 		decad.AngleExtent{A: units.Degrees(fx.deg), Dir: decad.Along})
 	require.NoError(t, err)
-	b, err = b.Placed(t.Context(), fx.xf)
+	b, err = decad.Transform(t.Context(), b, fx.xf)
 	require.NoError(t, err)
 	truths := capNormalTruths(t, fx, held)
 	var caps []*decad.Face

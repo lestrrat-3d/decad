@@ -230,7 +230,7 @@ func TestRevolveShellSideOpening(t *testing.T) {
 		require.NoError(t, err)
 		rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 		require.NoError(t, err)
-		placed, err := shelled.Placed(t.Context(), rotation)
+		placed, err := decad.Transform(t.Context(), shelled, rotation)
 		require.NoError(t, err)
 		require.Len(t, placed.Faces(), len(shelled.Faces()))
 		decadtest.MeasuresVolume(t, placed, fullTurnVolume(174))

@@ -157,7 +157,7 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 		// Table DO's DO12: a placement re-lifts every face.
 		rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 		require.NoError(t, err)
-		placed, err := body.Placed(t.Context(), rotation)
+		placed, err := decad.Transform(t.Context(), body, rotation)
 		require.NoError(t, err)
 		require.Len(t, placed.Faces(), 11)
 		requireVolumeNear(t, placed, 4352)

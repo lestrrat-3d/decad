@@ -70,7 +70,7 @@ func bandKnobBody(t *testing.T, doc *Document) *Body {
 	disc := internalDiscBody(t, doc, 2, 4)
 	lift, err := r3.Translation(r3.Vec{Z: 8})
 	require.NoError(t, err)
-	disc, err = disc.Placed(t.Context(), lift)
+	disc, err = Transform(t.Context(), disc, lift)
 	require.NoError(t, err)
 	union, err := Union(t.Context(), base, disc)
 	require.NoError(t, err)

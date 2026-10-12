@@ -51,7 +51,7 @@ func TestShellBlindRectangularPocket(t *testing.T) {
 
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := shell.Placed(t.Context(), rotation)
+	placed, err := decad.Transform(t.Context(), shell, rotation)
 	require.NoError(t, err)
 	requireVolumeNear(t, placed, want)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))

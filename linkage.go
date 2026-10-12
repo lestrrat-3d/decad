@@ -336,7 +336,7 @@ type LinkagePose struct {
 // parent's pose: J_k(q_k).Then(Pose_parent), with J_k the rotation a Revolute
 // and the translation a Prismatic of the same axis or direction build, and
 // the ground's pose the identity; it composes onto each body's own placement
-// as Body.Placed composes. It is the one place a linkage pose is built, so a
+// as Transform composes. It is the one place a linkage pose is built, so a
 // renderer above and VerifyLinkage below evaluate the same transform.
 //
 // It refuses a nil linkage, a sweep naming no link, the ground, a link of

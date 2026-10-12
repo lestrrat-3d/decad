@@ -79,7 +79,7 @@ type loftPayload struct {
 	// §4): true when the build must omit both section caps and publish a
 	// sheet instead of a solid. It is part of the re-evaluable record for the
 	// same reason prismPayload's and revolvePayload's own copies are
-	// (prism_payload.go, revolve_build.go), so Placed and Copy
+	// (prism_payload.go, revolve_build.go), so Transform and Copy
 	// reproduce the sheet with no further code — a plain solid
 	// loft leaves it false.
 	surfaceResult bool

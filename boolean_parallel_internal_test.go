@@ -201,7 +201,7 @@ func TestMeshBooleanWorkerCountsProduceIdenticalResults(t *testing.T) {
 	b := internalDiscBody(t, doc, 6, 20)
 	tr, err := r3.Translation(r3.Vec{X: 12, Y: 10, Z: -6})
 	require.NoError(t, err)
-	placed, err := b.Placed(t.Context(), tr)
+	placed, err := Transform(t.Context(), b, tr)
 	require.NoError(t, err)
 
 	serial, err := evaluateBoolean(meshbool.WithContactWorkers(t.Context(), 1), meshbool.OpUnion, a, placed)
@@ -241,7 +241,7 @@ func BenchmarkMeshBooleanWorkers(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			placed, err := tool.Placed(b.Context(), tr)
+			placed, err := Transform(b.Context(), tool, tr)
 			if err != nil {
 				b.Fatal(err)
 			}
