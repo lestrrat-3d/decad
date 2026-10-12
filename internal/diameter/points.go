@@ -78,47 +78,77 @@ func parallelScanSafe(points []r3.Vec) bool {
 }
 
 func pointsContextParallel(ctx context.Context, points []r3.Vec) (float64, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
 	workers := min(runtime.GOMAXPROCS(0), 4)
-	blocks := pointBlocks(points)
+	ordered, blocks := spatialPointBlocks(points)
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	seed := extremePair(points)
 	maxima := make([]pairMaximum, workers)
 	var group sync.WaitGroup
 	group.Add(workers)
 	for worker := range workers {
 		go func() {
 			defer group.Done()
-			best := pairMaximum{}
+			best := seed
 			skipSq := 0.0
+			if best.distance > 1e-100 && best.distance < 1e100 {
+				limit := best.distance * 0.9
+				skipSq = limit * limit
+			}
 			work := 0
-			for i := worker; i < len(points); i += workers {
-				for j := i + 1; j < len(points); {
-					block := j / pointBlockSize
-					end := min((block+1)*pointBlockSize, len(points))
-					// The 0.9 margin also covers float rounding in the box bound.
-					if skipSq > 0 && pointBlockDistanceUpperSq(points[i], blocks[block]) < skipSq {
-						work += end - j
+			for ai := worker; ai < len(blocks); ai += workers {
+				a := blocks[ai]
+				for bi := ai; bi < len(blocks); bi++ {
+					b := blocks[bi]
+					work++
+					if work%proofbound.WorkPollInterval == 0 && ctx.Err() != nil {
+						return
+					}
+					// Each box encloses every point in its leaf. The 0.9 margin
+					// keeps the floating upper bound safely above skipped pairs.
+					if skipSq > 0 && blockPairDistanceUpperSq(a.box, b.box) < skipSq {
+						count := (a.end - a.begin) * (b.end - b.begin)
+						if ai == bi {
+							count = (a.end - a.begin) * (a.end - a.begin - 1) / 2
+						}
+						work += count
 						if ctx.Err() != nil {
 							return
 						}
-						j = end
 						continue
 					}
-					for ; j < end; j++ {
-						work++
-						if work%proofbound.WorkPollInterval == 0 && ctx.Err() != nil {
-							return
+					for first := a.begin; first < a.end; first++ {
+						secondBegin := b.begin
+						if ai == bi {
+							secondBegin = first + 1
 						}
-						delta := points[i].Sub(points[j])
-						if skipSq > 0 && delta.X*delta.X+delta.Y*delta.Y+delta.Z*delta.Z < skipSq {
-							continue
-						}
-						distance := delta.Len()
-						if distance > best.distance {
-							best = pairMaximum{distance: distance, i: i, j: j}
-							if distance > 1e-100 && distance < 1e100 {
-								limit := distance * 0.9
-								skipSq = limit * limit
-							} else {
-								skipSq = 0
+						for second := secondBegin; second < b.end; second++ {
+							work++
+							if work%proofbound.WorkPollInterval == 0 && ctx.Err() != nil {
+								return
+							}
+							i, j := ordered[first].index, ordered[second].index
+							if i > j {
+								i, j = j, i
+							}
+							delta := points[i].Sub(points[j])
+							if skipSq > 0 && delta.X*delta.X+delta.Y*delta.Y+delta.Z*delta.Z < skipSq {
+								continue
+							}
+							distance := delta.Len()
+							candidate := pairMaximum{distance: distance, i: i, j: j}
+							if betterPair(candidate, best) {
+								best = candidate
+								if distance > 1e-100 && distance < 1e100 {
+									limit := distance * 0.9
+									skipSq = limit * limit
+								} else {
+									skipSq = 0
+								}
 							}
 						}
 					}
@@ -133,9 +163,7 @@ func pointsContextParallel(ctx context.Context, points []r3.Vec) (float64, bool,
 	}
 	best := pairMaximum{}
 	for _, candidate := range maxima {
-		if candidate.distance > best.distance ||
-			(candidate.distance == best.distance &&
-				(candidate.i < best.i || candidate.i == best.i && candidate.j < best.j)) {
+		if betterPair(candidate, best) {
 			best = candidate
 		}
 	}

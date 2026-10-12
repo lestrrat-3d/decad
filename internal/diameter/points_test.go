@@ -59,6 +59,13 @@ func TestPointsKeepsExhaustiveWitness(t *testing.T) {
 	invalidLongCoil[len(invalidLongCoil)-1].X = math.NaN()
 	check("parallel-size nonfinite", invalidLongCoil)
 
+	spatialRNG := rand.New(rand.NewPCG(0x382b614d, 0x5246d1c9))
+	scattered := make([]r3.Vec, 1024)
+	for i := range scattered {
+		scattered[i] = r3.NewVec(2*spatialRNG.Float64()-1, 2*spatialRNG.Float64()-1,
+			2*spatialRNG.Float64()-1)
+	}
+	check("parallel scattered witnesses", scattered)
 	rng := rand.New(rand.NewPCG(0x1246674d, 0x36e3be91))
 	for _, scale := range []float64{1e-120, 1, 1e120} {
 		for scene := range 12 {
