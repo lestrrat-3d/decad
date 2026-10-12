@@ -475,25 +475,13 @@ func bevelBlankGroups(blank *Body, source *bevelBlankSource) ([6]facetGroup, err
 	return groups, nil
 }
 
-type bevelJoinedMesh struct {
-	verts  []r3.Vec
-	tris   [][3]int
-	src    []int
-	groups []facetGroup
-}
-
-func (m *bevelJoinedMesh) add(t [3]int, group int) {
-	m.tris = append(m.tris, t)
-	m.src = append(m.src, group)
-}
-
 type bevelRingMesh struct {
 	angles            []float64
 	rings             [4][]int // heel outer, dedendum, toe root, toe outer
 	toeAxis, heelAxis int
 }
 
-func bevelBuildBlankMesh(m *bevelJoinedMesh, blank *bevelBlankSource,
+func bevelBuildBlankMesh(m *joinedMesh, blank *bevelBlankSource,
 	angles []float64, seams [][2]float64) (bevelRingMesh, float64, error) {
 	if len(angles) < 16 || angles[len(angles)-1]-angles[0] <= math.Pi {
 		return bevelRingMesh{}, 0, fmt.Errorf("%w: blank angular ring is incomplete", ErrUnsupported)
@@ -574,7 +562,7 @@ func bevelBuildBlankMesh(m *bevelJoinedMesh, blank *bevelBlankSource,
 
 // upperFarSliverCharged is true only for a caller that adds the certified
 // smooth-to-clipped cap error to both its boundary and volume allowances.
-func bevelBuildToothMesh(m *bevelJoinedMesh, ring bevelRingMesh,
+func bevelBuildToothMesh(m *joinedMesh, ring bevelRingMesh,
 	nodes, original []bevelPathNode, caps [][3]int, edges []bevelCapEdge, rootNode []int,
 	record *pointConeTrimRecord, motion r3.Transform, placedGroups []facetGroup,
 	upperFarSliverCharged bool) (float64, float64, error) {
@@ -687,76 +675,6 @@ func bevelUpperCapNode(far r3.Vec, sample pointConeSample,
 		proofbound.DvLenUpper(proofbound.HeldDelta(far, smooth)), sample.pointError), nil
 }
 
-// bevelOrientMesh proves edge pairing and one connected component before the
-// geometric audit. Each pair's directed edge is made opposite by propagation.
-func bevelOrientMesh(m *bevelJoinedMesh) error {
-	type use struct{ tri, direction int }
-	edges := map[pointConeEdge][]use{}
-	for i, tri := range m.tris {
-		if tri[0] == tri[1] || tri[1] == tri[2] || tri[2] == tri[0] {
-			return fmt.Errorf("%w: joined mesh has a collapsed triangle", ErrUnsupported)
-		}
-		for j := range 3 {
-			a, b := tri[j], tri[(j+1)%3]
-			key := orderedPointConeEdge(a, b)
-			direction := 1
-			if key.a != a {
-				direction = -1
-			}
-			edges[key] = append(edges[key], use{tri: i, direction: direction})
-		}
-	}
-	adj := make([][]struct{ tri, same int }, len(m.tris))
-	for _, pair := range edges {
-		if len(pair) != 2 {
-			return fmt.Errorf("%w: joined seam does not pair every mesh edge", ErrUnsupported)
-		}
-		same := 0
-		if pair[0].direction == pair[1].direction {
-			same = 1
-		}
-		a, b := pair[0].tri, pair[1].tri
-		adj[a] = append(adj[a], struct{ tri, same int }{b, same})
-		adj[b] = append(adj[b], struct{ tri, same int }{a, same})
-	}
-	flip := make([]int, len(m.tris))
-	for i := range flip {
-		flip[i] = -1
-	}
-	if len(flip) == 0 {
-		return fmt.Errorf("%w: joined mesh is empty", ErrUnsupported)
-	}
-	flip[0] = 0
-	queue := []int{0}
-	for len(queue) != 0 {
-		i := queue[0]
-		queue = queue[1:]
-		for _, next := range adj[i] {
-			want := flip[i] ^ next.same
-			if flip[next.tri] < 0 {
-				flip[next.tri] = want
-				queue = append(queue, next.tri)
-			} else if flip[next.tri] != want {
-				return fmt.Errorf("%w: joined mesh cannot be oriented", ErrUnsupported)
-			}
-		}
-	}
-	for i, f := range flip {
-		if f < 0 {
-			return fmt.Errorf("%w: joined mesh has another component", ErrUnsupported)
-		}
-		if f != 0 {
-			m.tris[i][1], m.tris[i][2] = m.tris[i][2], m.tris[i][1]
-		}
-	}
-	if tessellation.OrientationSign(m.verts, m.tris, r3.Vec{}) < 0 {
-		for i := range m.tris {
-			m.tris[i][1], m.tris[i][2] = m.tris[i][2], m.tris[i][1]
-		}
-	}
-	return nil
-}
-
 func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
 	blankBody *Body, blank *bevelBlankSource, trimmed facetedPayload, record *pointConeTrimRecord,
 	boundary *bevelToothBoundary) (*Body, error) {
@@ -791,7 +709,7 @@ func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	mesh := &bevelJoinedMesh{groups: append([]facetGroup(nil), blankGroups[:]...)}
+	mesh := &joinedMesh{groups: append([]facetGroup(nil), blankGroups[:]...)}
 	ring, blankSag, err := bevelBuildBlankMesh(mesh, blank, angles, [][2]float64{{lo, hi}})
 	if err != nil {
 		return nil, err
@@ -833,7 +751,7 @@ func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(bound) || bound > 0.1 {
 		return nil, fmt.Errorf("%w: joined tooth cannot meet the 0.1 mm boundary proof", ErrUnsupported)
 	}
-	if err := bevelOrientMesh(mesh); err != nil {
+	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {

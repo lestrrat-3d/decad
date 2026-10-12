@@ -56,7 +56,7 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 		!loftMirrorCylinderLevels(blank.z0, lower.loftCylinderJoin.z1, blank.z1) {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its exact axial levels", ErrUnsupported)
 	}
-	source := &bevelJoinedMesh{verts: joined.verts, tris: joined.tris, src: joined.src}
+	source := &joinedMesh{verts: joined.verts, tris: joined.tris, src: joined.src}
 	for cap, group := range record.capGroups {
 		level := blank.z0
 		if cap == 1 {
@@ -236,7 +236,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	if !ok || !loftMirrorCylinderBlank(fullBlank) {
 		return nil, fmt.Errorf("%w: reflected circular bore lost its exact blank", ErrUnsupported)
 	}
-	mesh := &bevelJoinedMesh{verts: verts, tris: tris, src: src}
+	mesh := &joinedMesh{verts: verts, tris: tris, src: src}
 	for cap, group := range capGroups {
 		z := fullBlank.z0
 		if cap == 1 {

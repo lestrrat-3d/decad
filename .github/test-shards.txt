@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    0.26s over 8 tests
-#   shard 1:    2.49s over 244 tests
+#   shard 1:    2.49s over 245 tests
 #   shard 2:   10.21s over 136 tests
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  182.61s over 138 tests
@@ -219,6 +219,7 @@
 1	0.00	TestFitSplineVanishingSpeedStillRefusesRegularity
 1	0.00	TestFreeformWalkWithoutCounterRefuses
 1	0.00	TestInterferencePairDiameterUsesAllFacetedPayloadVertices
+1	0.00	TestJoinedMeshOrientationChecksClosedConnectedShell
 1	0.01	TestLinkageChainTravel
 1	0.00	TestLinkageChainTravelAcrossWaypoints
 1	0.01	TestLoftArcSegAgainstCircleSegRefusesS3

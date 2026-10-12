@@ -235,7 +235,7 @@ func loftCylinderChamferNearCovered(ctx context.Context, tri [3]proofarith.Xpt,
 
 // The source-ring audit supplies a true-result boundary point on every
 // split edge. Exact distance to that ring then bounds every band facet.
-func loftCylinderChamferNearBandReach(ctx context.Context, mesh *bevelJoinedMesh,
+func loftCylinderChamferNearBandReach(ctx context.Context, mesh *joinedMesh,
 	fp facetedPayload, source loftCylinderChamferSource, ideal []proofarith.Xpt, bands [2][2]int,
 	clipBound, publishedBound float64, multipleRings bool, reflectedShift []*big.Rat) error {
 	reach := math.Nextafter(publishedBound-clipBound, math.Inf(-1))

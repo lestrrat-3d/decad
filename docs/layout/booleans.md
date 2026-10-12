@@ -33,6 +33,7 @@ The rules for rows live in `docs/layout.md`.
 | `bevel_join_combine.go` | Admits an authenticated straight-tooth pattern Union and proves complete source solids separate. See loft-point design. |
 | `bevel_join_cap_refine.go` | Refines straight-tooth caps while keeping shared edges and boundary labels. See loft-point design. |
 | `bevel_join.go` | Rebuilds and audits one shared-root bevel blank and tooth Union. See loft-point design. |
+| `joined_mesh.go` | Collects source-labeled join facets and checks closed, connected orientation before geometric audits. See tessellation §4. |
 | `bevel_join_two.go` | Rebuilds two separate point-loft teeth on one bevel blank root ring. See loft-point design. |
 | `bevel_join_pattern.go` | Rebuilds separate point-loft teeth on one bevel blank root ring. See loft-point design. |
 | `circular_bore_ring.go` | Samples and bounds the circular bore rings used by bevel and Loft/cylinder Cuts. See loft-point and loft-cylinder-boolean designs. |

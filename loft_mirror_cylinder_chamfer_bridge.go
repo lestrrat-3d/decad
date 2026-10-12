@@ -151,7 +151,7 @@ func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper fac
 			W: new(big.Int).Mul(p.W, z.Denom()),
 		}
 	}
-	mesh := &bevelJoinedMesh{verts: append([]r3.Vec(nil), upper.verts...), tris: upper.tris}
+	mesh := &joinedMesh{verts: append([]r3.Vec(nil), upper.verts...), tris: upper.tris}
 	outer := make([]int, len(record.outer[1]))
 	for i, index := range record.outer[1] {
 		if index < 0 || index >= len(old.verts) {

@@ -261,7 +261,7 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	mesh := &bevelJoinedMesh{groups: append([]facetGroup(nil), blankGroups[:]...)}
+	mesh := &joinedMesh{groups: append([]facetGroup(nil), blankGroups[:]...)}
 	seams := make([][2]float64, len(plans))
 	for i, plan := range plans {
 		seams[i] = [2]float64{plan.lo, plan.hi}
@@ -353,7 +353,7 @@ func buildBevelPatternJoin(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(bound) || bound > 0.1 {
 		return nil, fmt.Errorf("%w: patterned teeth cannot meet the 0.1 mm boundary proof", ErrUnsupported)
 	}
-	if err := bevelOrientMesh(mesh); err != nil {
+	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {

@@ -105,7 +105,7 @@ func loftCylinderChamferBridgeSources(source *loftCylinderChamferSource) error {
 // and twice the matched section motion in XY. The second motion covers points
 // in the thin swept rim neighborhood, including the source root slit.
 func loftCylinderChamferBridgeCap(ctx context.Context, fp facetedPayload,
-	source loftCylinderChamferSource, mesh *bevelJoinedMesh, ideal []proofarith.Xpt,
+	source loftCylinderChamferSource, mesh *joinedMesh, ideal []proofarith.Xpt,
 	band [2]int, inset []int, setback float64) (float64, error) {
 	if source.bridgeBound == 0 {
 		return 0, nil

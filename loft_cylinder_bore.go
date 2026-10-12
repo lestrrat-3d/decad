@@ -149,7 +149,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	if len(joined.tris) != len(joined.src) || len(joined.verts) != len(joined.vertexBound) {
 		return nil, fmt.Errorf("%w: circular join has an incomplete mesh record", ErrUnsupported)
 	}
-	source := &bevelJoinedMesh{verts: joined.verts, tris: joined.tris, src: joined.src}
+	source := &joinedMesh{verts: joined.verts, tris: joined.tris, src: joined.src}
 	for cap := range 2 {
 		z := record.z0
 		if cap == 1 {
@@ -185,7 +185,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	if proofbound.AbsSumUpper(radius, boreBound, record.innerInset) >= record.radius {
 		return nil, fmt.Errorf("%w: circular bore reaches the joined source seam annulus", ErrUnsupported)
 	}
-	mesh := &bevelJoinedMesh{
+	mesh := &joinedMesh{
 		verts:  append([]r3.Vec(nil), joined.verts...),
 		groups: append([]facetGroup(nil), joined.groups...),
 	}
@@ -255,7 +255,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		mesh.add([3]int{inner[0][i], inner[1][i], inner[1][j]}, wallGroup)
 		mesh.add([3]int{inner[0][i], inner[1][j], inner[0][j]}, wallGroup)
 	}
-	if err := bevelOrientMesh(mesh); err != nil {
+	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {

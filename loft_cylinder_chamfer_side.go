@@ -17,7 +17,7 @@ import (
 // horizontal collar ending inside the source solid gives every point of that
 // facet a source-cut boundary point within the collar's length.
 func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
-	mesh *bevelJoinedMesh, source loftCylinderChamferSource, ideal []proofarith.Xpt,
+	mesh *joinedMesh, source loftCylinderChamferSource, ideal []proofarith.Xpt,
 	middle [2]int, clipBound float64) error {
 	if middle[0] < 0 || middle[1] > len(mesh.tris) || middle[0] >= middle[1] ||
 		len(fp.src) != len(fp.tris) || proofbound.IsNonFinite(clipBound) {

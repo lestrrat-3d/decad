@@ -360,7 +360,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 	if !ok {
 		return nil, fmt.Errorf("%w: mirrored cylinder lost its circular blank", ErrUnsupported)
 	}
-	shell := &bevelJoinedMesh{verts: verts, tris: tris, src: src, groups: groups}
+	shell := &joinedMesh{verts: verts, tris: tris, src: src, groups: groups}
 	for cap, outline := range capOutlines {
 		z := fullBlank.z0
 		if cap == 1 {

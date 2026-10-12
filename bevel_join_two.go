@@ -321,7 +321,7 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	mesh := &bevelJoinedMesh{groups: append([]facetGroup(nil), blankGroups[:]...)}
+	mesh := &joinedMesh{groups: append([]facetGroup(nil), blankGroups[:]...)}
 	ring, blankSag, err := bevelBuildBlankMesh(mesh, blank, angles,
 		[][2]float64{{plans[0].lo, plans[0].hi}, {plans[1].lo, plans[1].hi}})
 	if err != nil {
@@ -407,7 +407,7 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(bound) || bound > 0.1 {
 		return nil, fmt.Errorf("%w: two teeth cannot meet the 0.1 mm boundary proof", ErrUnsupported)
 	}
-	if err := bevelOrientMesh(mesh); err != nil {
+	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, fmt.Errorf("%w; tooth sectors [%g,%g] and [%g,%g]",
 			err, plans[0].lo, plans[0].hi, plans[1].lo, plans[1].hi)
 	}

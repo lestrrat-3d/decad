@@ -54,13 +54,13 @@ func TestBevelSharedRingLeavesOnlyToothOwnedRootSectorsOpen(t *testing.T) {
 	}
 	angles = append(angles, lo, hi, oppositeLo, oppositeHi)
 	sort.Float64s(angles)
-	whole := &bevelJoinedMesh{}
+	whole := &joinedMesh{}
 	wholeRing, wholeBound, err := bevelBuildBlankMesh(whole, blank, angles, nil)
 	require.NoError(t, err)
-	sewn := &bevelJoinedMesh{}
+	sewn := &joinedMesh{}
 	sewnRing, sewnBound, err := bevelBuildBlankMesh(sewn, blank, angles, [][2]float64{{lo, hi}})
 	require.NoError(t, err)
-	paired := &bevelJoinedMesh{}
+	paired := &joinedMesh{}
 	pairedRing, pairedBound, err := bevelBuildBlankMesh(paired, blank, angles,
 		[][2]float64{{lo, hi}, {oppositeLo, oppositeHi}})
 	require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestBevelSharedRingLeavesOnlyToothOwnedRootSectorsOpen(t *testing.T) {
 	require.Equal(t, r3.NewVec(2, 3*math.Cos(hi), 3*math.Sin(hi)),
 		sewn.verts[sewnRing.rings[2][hiIndex]])
 
-	count := func(mesh *bevelJoinedMesh, group int) int {
+	count := func(mesh *joinedMesh, group int) int {
 		n := 0
 		for _, source := range mesh.src {
 			if source == group {

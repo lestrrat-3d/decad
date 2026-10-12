@@ -102,7 +102,7 @@ func loftCylinderChamferLerp(a, b r3.Vec, level *big.Rat, heldLevel float64) (r3
 // Side rings alternate each source ruling with its old triangle diagonal.
 // That is the exact horizontal section of the old two-triangle strip before
 // each intersection point is rounded into the result mesh.
-func loftCylinderChamferClipSide(ctx context.Context, mesh *bevelJoinedMesh,
+func loftCylinderChamferClipSide(ctx context.Context, mesh *joinedMesh,
 	vertexBound *[]float64, fp facetedPayload, source loftCylinderChamferSource,
 	groups [][2]int, d float64) (loftCylinderChamferSide, error) {
 	n := len(groups)
@@ -149,7 +149,7 @@ func loftCylinderChamferClipSide(ctx context.Context, mesh *bevelJoinedMesh,
 	return result, nil
 }
 
-func loftCylinderChamferTriangulate(ctx context.Context, mesh *bevelJoinedMesh,
+func loftCylinderChamferTriangulate(ctx context.Context, mesh *joinedMesh,
 	outer, inner []int, group int, bottom bool) error {
 	points := make([]triangulation.Point2, 0, len(outer)+len(inner))
 	outerLocal := make([]int, len(outer))
@@ -193,7 +193,7 @@ func loftCylinderChamferTriangulate(ctx context.Context, mesh *bevelJoinedMesh,
 // Each old source edge has one offset line. Its side section has a ruling,
 // diagonal, then the next ruling. These local strips preserve that order;
 // a reflex offset arc receives a fan only at its own source corner.
-func loftCylinderChamferBand(mesh *bevelJoinedMesh, side, inset []int,
+func loftCylinderChamferBand(mesh *joinedMesh, side, inset []int,
 	samples loftCylinderInsetSamples, group int) error {
 	n := len(samples.lineStart)
 	if len(side) != 2*n || len(samples.arcStart) != n || len(inset) != len(samples.points) {
@@ -234,7 +234,7 @@ func reverseInts(input []int) []int {
 }
 
 func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
-	mesh *bevelJoinedMesh, source loftCylinderChamferSource, side loftCylinderChamferSide,
+	mesh *joinedMesh, source loftCylinderChamferSource, side loftCylinderChamferSide,
 	bands [2][2]int, sideEdges [2]map[[2]int]struct{},
 	xverts []proofarith.Xpt, setback float64) error {
 	oldData := loftmesh.NewLoftAuditData(fp.verts, fp.tris)
@@ -384,7 +384,7 @@ func loftCylinderChamferRingNested(ctx context.Context, verts []r3.Vec, outer, i
 	return inside && !on, err
 }
 
-func loftCylinderChamferCompact(mesh *bevelJoinedMesh, bounds []float64) ([]float64, []int) {
+func loftCylinderChamferCompact(mesh *joinedMesh, bounds []float64) ([]float64, []int) {
 	used := make([]bool, len(mesh.verts))
 	for _, tri := range mesh.tris {
 		for _, index := range tri {
@@ -423,7 +423,7 @@ type loftCylinderOneCapData struct {
 // The top of a private one-cap rewrite is an exact subset of the old side.
 // The split ring came from the same two-triangle strip as the middle side;
 // joining it to the original top stations leaves the middle cap unchanged.
-func loftCylinderChamferRestoreTop(mesh *bevelJoinedMesh, fp facetedPayload,
+func loftCylinderChamferRestoreTop(mesh *joinedMesh, fp facetedPayload,
 	source loftCylinderChamferSource, groups [][2]int, ring []int) error {
 	n := len(groups)
 	if len(ring) != 2*n || len(source.outer[1]) != n {
@@ -478,7 +478,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	if len(fp.vertexBound) != len(fp.verts) || len(fp.src) != len(fp.tris) {
 		return nil, fmt.Errorf("%w: loft/cylinder source has incomplete mesh proof", ErrUnsupported)
 	}
-	old := &bevelJoinedMesh{verts: fp.verts, tris: fp.tris, src: fp.src, groups: fp.groups}
+	old := &joinedMesh{verts: fp.verts, tris: fp.tris, src: fp.src, groups: fp.groups}
 	for cap := range 2 {
 		level := source.z0
 		if cap == 1 {
@@ -499,7 +499,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	if err != nil {
 		return nil, err
 	}
-	mesh := &bevelJoinedMesh{verts: append([]r3.Vec(nil), fp.verts...),
+	mesh := &joinedMesh{verts: append([]r3.Vec(nil), fp.verts...),
 		groups: append([]facetGroup(nil), fp.groups...)}
 	bounds := append([]float64(nil), fp.vertexBound...)
 	for i, tri := range fp.tris {
@@ -629,7 +629,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			}
 		}
 	}
-	if err := bevelOrientMesh(mesh); err != nil {
+	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
