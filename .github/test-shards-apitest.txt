@@ -7,14 +7,14 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:  227.31s over 9 tests
-#   shard 1:    0.98s over 116 tests
-#   shard 2:   37.30s over 206 tests
+#   shard 1:    9.05s over 154 tests
+#   shard 2:   58.72s over 219 tests
 #   shard 3:   82.95s over 226 tests
-#   shard 4:   82.99s over 212 tests
-#   shard 5:  120.11s over 201 tests
+#   shard 4:   83.13s over 220 tests
+#   shard 5:  120.40s over 202 tests
 #   shard 6:   90.77s over 195 tests
 #   shard 7:   92.78s over 200 tests
-#   shard 8:  101.99s over 200 tests
+#   shard 8:  102.00s over 200 tests
 #   shard 9:  118.05s over 202 tests
 #   shard 10:   0.01s over 1 test
 #
@@ -171,7 +171,6 @@
 1	0.00	TestUnionRejectsKnifeEdgeGraze
 1	5.10	TestUnionTaperedHubAndFittedRadialLug
 1	1.68	TestUnionTaperedHubAndRadialLug
-1	20.31	TestUnionTaperedHubRadialLugRefusals
 1	0.01	TestUnstitchVoidRevolveMakesNonVoidSheets
 1	0.01	TestVerifyCoincidentAnalyticBodiesUseStableFirstVolume
 1	0.00	TestVerifyDiagnosticsEmptyWhenSound
@@ -377,6 +376,7 @@
 2	0.00	TestUndercutNearAntiparallelPull
 2	0.04	TestUnionRefusesPlacedPrismGrazingAlongAnEdge
 2	0.01	TestUnionRejectsVertexTangentContact
+2	20.31	TestUnionTaperedHubRadialLugRefusals
 2	0.00	TestUnstitchBoxFacesReportOwnTightBounds
 2	0.01	TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap
 2	0.01	TestVerifyCoincidentPairIsInterfering
