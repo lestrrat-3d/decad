@@ -12,9 +12,9 @@
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  172.10s over 138 tests
 #   shard 5:   48.16s over 128 tests
-#   shard 6:   85.03s over 133 tests
+#   shard 6:  142.09s over 135 tests
 #   shard 7:   83.02s over 128 tests
-#   shard 8:   77.99s over 133 tests
+#   shard 8:   83.54s over 135 tests
 #   shard 9:   57.75s over 126 tests
 #   shard 10:  16.00s over 3 tests
 #
@@ -769,7 +769,7 @@
 5	0.02	TestClassBCrossingSlotFloorCornersReadConcave
 5	0.91	TestCoilFractionalTurnCentroid
 9	10.13	TestCoilFullTurnArcClosesLikeACircle
-8	36.61	TestCoilInternalThread
+6	36.61	TestCoilInternalThread
 5	1.95	TestCoilMeshProofsEncloseTheBody
 5	0.02	TestCupMassChargesDisplacement
 5	0.76	TestCurveBoundsCoverMappedReference
@@ -1163,7 +1163,7 @@
 8	3.91	TestCoilCapFlushWithAnAxialFaceRefuses
 8	4.31	TestCoilMassPropertiesSettleAtTheFirstStep
 8	0.88	TestCoilMeshRestatesTheHeldShell
-8	20.45	TestCoilSlotSpring
+6	20.45	TestCoilSlotSpring
 8	1.29	TestCoilSquareSpring
 8	3.24	TestCoilUnstitchCarriesTheRimCurveBound
 8	0.13	TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap
