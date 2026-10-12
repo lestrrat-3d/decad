@@ -1,0 +1,187 @@
+package decad
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"math/big"
+	"sort"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+// prismPatternPart is one authenticated source extrusion and its verified
+// boundary mesh. The root wall starts at rootStart and ends at sample zero;
+// the preceding samples form the exterior section path.
+type prismPatternPart struct {
+	body      *Body
+	prism     prismPayload
+	mesh      *Mesh
+	rootStart int
+	start     float64
+	end       float64
+	startIV   proofbound.RatInterval
+	endIV     proofbound.RatInterval
+	vertex    [][]int
+}
+
+// tryPrismPatternUnionMany admits only an authenticated circular prism and
+// rigid copies of one extruded section. Each later proof stage may refuse;
+// the public Union commits only a fully audited result.
+func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
+	operands []*Body) (*Body, bool, error) {
+	source, matched, err := prismPatternSourceOf(ctx, operands)
+	if !matched || err != nil {
+		return nil, matched, err
+	}
+	blank := source.blank
+	if blank.surfaceResult || blank.sectionDelta != 0 || blank.z0Delta != 0 || blank.z1Delta != 0 ||
+		blank.frame.Origin() != (r3.Vec{}) || blank.frame.U() != (r3.Vec{X: 1}) ||
+		blank.frame.V() != (r3.Vec{Y: 1}) || blank.z0 != 0 || blank.z1 <= 0 ||
+		source.rootIndex != len(source.section.profile.Outer.Segments)-1 ||
+		source.rootArc.TStart != 1 || source.rootArc.TEnd != 0 {
+		return nil, true, fmt.Errorf("%w: copied-prism circular join needs a positive axial blank and trailing inward root arc",
+			ErrUnsupported)
+	}
+	parts := make([]prismPatternPart, len(source.sections))
+	for i, body := range source.sections {
+		if err := ctx.Err(); err != nil {
+			return nil, true, err
+		}
+		p := body.payload.(prismPayload)
+		if p.surfaceResult || p.sectionDelta != 0 || p.z0Delta != 0 || p.z1Delta != 0 {
+			return nil, true, fmt.Errorf("%w: copied-prism section %d has a displaced or open source", ErrUnsupported, i+1)
+		}
+		m, err := body.Tessellate(ctx, units.Millimeters(0.02), WithVerification(VerifyAll))
+		if err != nil {
+			return nil, true, err
+		}
+		if !m.BoundaryVerified() || !m.VolumeVerified() {
+			return nil, true, fmt.Errorf("%w: copied-prism section %d lacks a complete mesh proof", ErrUnsupported, i+1)
+		}
+		rootStart, err := prismPatternMeshRoot(m, body, source.rootIndex, blank.z0, blank.z1)
+		if err != nil {
+			return nil, true, err
+		}
+		first := m.vertices[0]
+		last := m.vertices[2*rootStart]
+		start, end := math.Atan2(first.Y, first.X), math.Atan2(last.Y, last.X)
+		startIV := proofbound.Atan2Interval(proofarith.FloatRat(first.Y), proofarith.FloatRat(first.X), false)
+		endIV := proofbound.Atan2Interval(proofarith.FloatRat(last.Y), proofarith.FloatRat(last.X), false)
+		for end <= start {
+			end += 2 * math.Pi
+			endIV = proofbound.IntervalAdd(endIV, proofbound.TwoPiInterval())
+		}
+		if end-start <= 0 || end-start >= math.Pi/2 ||
+			startIV.Hi.Cmp(endIV.Lo) >= 0 {
+			return nil, true, fmt.Errorf("%w: copied-prism section %d has no ordered root sector", ErrUnsupported, i+1)
+		}
+		parts[i] = prismPatternPart{body: body, prism: p, mesh: m, rootStart: rootStart,
+			start: start, end: end, startIV: startIV, endIV: endIV}
+	}
+	sort.Slice(parts, func(i, j int) bool { return parts[i].start < parts[j].start })
+	for i := range parts {
+		for j := i + 1; j < len(parts); j++ {
+			if !prismPatternMeshSeparated(parts[i], parts[j]) {
+				return nil, true, fmt.Errorf("%w: copied-prism sections %d and %d have no certified separating plane",
+					ErrUnsupported, i+1, j+1)
+			}
+		}
+	}
+	for i := range parts {
+		a, b := &parts[i], &parts[(i+1)%len(parts)]
+		nextStart := b.start
+		nextIV := b.startIV
+		for nextStart <= a.end {
+			nextStart += 2 * math.Pi
+			nextIV = proofbound.IntervalAdd(nextIV, proofbound.TwoPiInterval())
+		}
+		if nextStart-a.end >= 2*math.Pi || a.endIV.Hi.Cmp(nextIV.Lo) >= 0 {
+			return nil, true, fmt.Errorf("%w: copied-prism root sectors have no ordered circular gap", ErrUnsupported)
+		}
+	}
+	mesh, _, groups, step, round, err := prismPatternShell(ctx, operands[0], source, parts)
+	if err != nil {
+		return nil, true, err
+	}
+	body, err := prismPatternJoinedBody(ctx, d, ref, operands[0], source, parts,
+		mesh, groups, step, round)
+	return body, true, err
+}
+
+func prismPatternMeshRoot(m *Mesh, body *Body, rootIndex int, z0, z1 float64) (int, error) {
+	if len(m.vertices)%2 != 0 || len(m.vertices) < 8 || len(m.triangles) < len(m.vertices) ||
+		len(m.source) != len(m.triangles) {
+		return 0, fmt.Errorf("%w: copied prism has no paired axial section mesh", ErrUnsupported)
+	}
+	n := len(m.vertices) / 2
+	role := fmt.Sprintf("side(0,%d)", rootIndex)
+	var root *Face
+	for _, face := range body.Faces() {
+		for _, origin := range face.Origins() {
+			if origin.Role == role {
+				if root != nil {
+					return 0, fmt.Errorf("%w: copied prism has duplicate root wall", ErrUnsupported)
+				}
+				root = face
+			}
+		}
+	}
+	if root == nil {
+		return 0, fmt.Errorf("%w: copied prism lost its root wall", ErrUnsupported)
+	}
+	rootStart := -1
+	for j := range n {
+		if m.vertices[2*j].Z != z0 || m.vertices[2*j+1].Z != z1 ||
+			m.source[2*j] != m.source[2*j+1] {
+			return 0, fmt.Errorf("%w: copied prism lost its shared axial stations", ErrUnsupported)
+		}
+		if m.source[2*j] == root {
+			if rootStart < 0 {
+				rootStart = j
+			}
+		} else if rootStart >= 0 {
+			return 0, fmt.Errorf("%w: copied prism root wall is not one trailing run", ErrUnsupported)
+		}
+	}
+	if rootStart < 2 || rootStart >= n-1 {
+		return 0, fmt.Errorf("%w: copied prism has no exterior path beside its root wall", ErrUnsupported)
+	}
+	return rootStart, nil
+}
+
+// All held section vertices strictly separate after charging both verified
+// source-to-mesh bounds. A bounded region lies in the convex hull of its
+// boundary, so this one plane separates the complete source solids.
+func prismPatternMeshSeparated(a, b prismPatternPart) bool {
+	pa := a.mesh.vertices[0].Add(a.mesh.vertices[2*a.rootStart])
+	pb := b.mesh.vertices[0].Add(b.mesh.vertices[2*b.rootStart])
+	nx := new(big.Rat).Sub(proofarith.FloatRat(pa.X), proofarith.FloatRat(pb.X))
+	ny := new(big.Rat).Sub(proofarith.FloatRat(pa.Y), proofarith.FloatRat(pb.Y))
+	normSq := new(big.Rat).Add(new(big.Rat).Mul(nx, nx), new(big.Rat).Mul(ny, ny))
+	if normSq.Sign() == 0 {
+		return false
+	}
+	var minA, maxB *big.Rat
+	for _, v := range a.mesh.vertices {
+		dot := new(big.Rat).Add(new(big.Rat).Mul(nx, proofarith.FloatRat(v.X)),
+			new(big.Rat).Mul(ny, proofarith.FloatRat(v.Y)))
+		if minA == nil || dot.Cmp(minA) < 0 {
+			minA = dot
+		}
+	}
+	for _, v := range b.mesh.vertices {
+		dot := new(big.Rat).Add(new(big.Rat).Mul(nx, proofarith.FloatRat(v.X)),
+			new(big.Rat).Mul(ny, proofarith.FloatRat(v.Y)))
+		if maxB == nil || dot.Cmp(maxB) > 0 {
+			maxB = dot
+		}
+	}
+	margin := proofbound.ProductUpper(proofbound.RatSqrtUp(normSq),
+		proofbound.AbsSumUpper(a.mesh.Bound().Base(), b.mesh.Bound().Base()))
+	return minA != nil && maxB != nil &&
+		new(big.Rat).Sub(minA, maxB).Cmp(proofarith.FloatRat(margin)) > 0
+}

@@ -49,12 +49,7 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 		body, matched, err = tryRevolveLoftSectorUnionMany(ctx, d, ref, operands)
 	}
 	if !matched && err == nil {
-		var source *prismPatternSource
-		source, matched, err = prismPatternSourceOf(ctx, operands)
-		if matched && err == nil {
-			return nil, fmt.Errorf("%w: certified %d copied prism sections with root gap %.9g mm; joined boundary proof is pending",
-				ErrUnsupported, len(source.sections), source.rootGap)
-		}
+		body, matched, err = tryPrismPatternUnionMany(ctx, d, ref, operands)
 	}
 	if !matched && err == nil {
 		body, err = spiralCombineBody(ctx, d, ref, a, tools)

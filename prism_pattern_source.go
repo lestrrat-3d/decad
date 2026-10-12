@@ -18,11 +18,12 @@ import (
 // the shared wall and the caps still need a constructed boundary and volume
 // proof before any result can be published.
 type prismPatternSource struct {
-	blank    prismPayload
-	section  prismPayload
-	rootArc  arcSeg
-	rootGap  float64
-	sections []*Body
+	blank     prismPayload
+	section   prismPayload
+	rootArc   arcSeg
+	rootIndex int
+	rootGap   float64
+	sections  []*Body
 }
 
 // prismPatternSourceOf checks only recorded Extrude sections and Copy
@@ -70,6 +71,7 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 	}
 	gap := 0.0
 	leastScale2 := big.NewRat(1, 1)
+	blankRadiusSq := prismPatternRadiusSq(circle.Radius.Base())
 	for i, body := range operands[1:] {
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
@@ -90,6 +92,10 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 		if scale2.Sign() <= 0 {
 			return nil, true, fmt.Errorf("%w: section %d has no positive radial placement scale", ErrUnsupported, i+1)
 		}
+		if !prismPatternRootInside(root, blankRadiusSq, scale2) {
+			return nil, true, fmt.Errorf("%w: section %d circular root is not strictly inside the blank",
+				ErrUnsupported, i+1)
+		}
 		if scale2.Cmp(leastScale2) < 0 {
 			leastScale2 = scale2
 		}
@@ -100,12 +106,25 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 	// The exact dyadic placement can differ from a unit rotation by one or
 	// more ulps. Prove every non-root source outside the blank after the
 	// smallest radial scale among all copies, not only in source coordinates.
-	outsideRadiusSq := new(big.Rat).Quo(prismPatternRadiusSq(circle.Radius.Base()), leastScale2)
+	outsideRadiusSq := new(big.Rat).Quo(blankRadiusSq, leastScale2)
 	if err := prismPatternOutsideRoot(ctx, segments, rootIndex, root, outsideRadiusSq); err != nil {
 		return nil, true, err
 	}
-	return &prismPatternSource{blank: blank, section: first, rootArc: root,
+	return &prismPatternSource{blank: blank, section: first, rootArc: root, rootIndex: rootIndex,
 		rootGap: gap, sections: operands[1:]}, true, nil
+}
+
+// The source arc's denoted radius comes from Start. Its pinned End can
+// disagree slightly, so both recorded endpoints must lie inside the blank.
+// This exact overlap is needed before the join can remove the root wall.
+func prismPatternRootInside(root arcSeg, blankRadiusSq, scale2 *big.Rat) bool {
+	for _, endpoint := range []Point2{root.Start, root.End} {
+		endpointSq := new(big.Rat).Mul(prismPatternRadialSq(endpoint), scale2)
+		if endpointSq.Cmp(blankRadiusSq) >= 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func prismPatternWholeRange(start, end float64) bool {
