@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -97,6 +98,24 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		_, certified, err := revolveLoftFacesNonverticalManifest(t.Context(), proof)
 		if err != nil || certified {
 			t.Fatalf("wrong live face was admitted: %v, %t", err, certified)
+		}
+	})
+	t.Run("changed tooth transform", func(t *testing.T) {
+		original := tooth.payload
+		defer func() { tooth.payload = original }()
+		payload := original.(facetedPayload)
+		shift, err := r3.Translation(r3.Vec{X: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload.xform = shift
+		tooth.payload = payload
+		if revolveLoftFacesTrimCurrent(payload, proof.trim) {
+			t.Fatal("changed tooth transform retained a current source record")
+		}
+		_, certified, err := revolveLoftFacesNonverticalManifest(t.Context(), proof)
+		if err != nil || certified {
+			t.Fatalf("changed tooth transform was admitted: %v, %t", err, certified)
 		}
 	})
 }

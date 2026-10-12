@@ -109,7 +109,8 @@ func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 }
 
 func revolveLoftFacesTrimCurrent(p facetedPayload, trim *loftFacesTrimRecord) bool {
-	if trim == nil || trim.source == nil || !pointSourceCurrent(trim.source) ||
+	if p.xform != r3.Identity() || trim == nil || trim.source == nil ||
+		!pointSourceCurrent(trim.source) ||
 		trim.toe == nil || trim.heel == nil || len(trim.maps) < 3 || len(trim.maps) > 64 ||
 		len(trim.bounds) != len(trim.maps) ||
 		!orderedLoftFacesConeLimits(trim.toe, trim.heel, trim.base) ||
