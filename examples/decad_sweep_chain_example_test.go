@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// SweepChain moves an open sketch chain along a spatial Path, and publishes
+// Sweep moves an open sketch chain along a spatial Path, and publishes
 // the ribbon it sweeps out: one wall face per recorded segment per span, no cap and no
 // closing face, so the result is always a sheet body. This evaluator sweeps
 // one straight path span, which needs no join between two spans. One exact
@@ -50,7 +50,7 @@ func Example_decad_sweep_chain() {
 	}
 
 	doc := decad.New()
-	body, err := doc.SweepChain(context.Background(), s, chain, path)
+	body, err := decad.Sweep(context.Background(), doc, s, chain, path)
 	if err != nil {
 		fmt.Printf("failed to sweep chain: %s\n", err)
 		return
@@ -87,7 +87,7 @@ func Example_decad_sweep_chain() {
 		fmt.Printf("failed to build composite path: %s\n", err)
 		return
 	}
-	_, err = doc.SweepChain(context.Background(), s, chain, composite)
+	_, err = decad.Sweep(context.Background(), doc, s, chain, composite)
 	fmt.Printf("composite path: %v\n", err)
 	fmt.Printf("bodies: %d\n", len(doc.Bodies()))
 
@@ -95,6 +95,6 @@ func Example_decad_sweep_chain() {
 	// sheet: true, solid: false, faces: 3
 	// free edges: 8
 	// area: 278.5398 mm² (Approximate)
-	// composite path: decad: not supported by the current evaluator: composite SweepChain requires one XY line and a cardinal two-span path
+	// composite path: decad: not supported by the current evaluator: composite chain Sweep requires one XY line and a cardinal two-span path
 	// bodies: 1
 }

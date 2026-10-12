@@ -43,7 +43,7 @@ func Example_decad_surfaceSweep() {
 	}
 
 	doc := decad.New()
-	sheet, err := doc.Sweep(context.Background(), s, s.Profiles()[0], path, decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(context.Background(), doc, s, s.Profiles()[0], path, decad.WithSurfaceResult())
 	if err != nil {
 		fmt.Printf("failed to sweep: %s\n", err)
 		return

@@ -19,7 +19,7 @@ func TestSweepSpatialPathTurnsThroughOrthogonalPlanes(t *testing.T) {
 
 	s, profile, path, vertices, joins := orthogonalSweepFixture(t)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile, path)
+	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
 	require.NoError(t, err)
 
 	require.True(t, body.IsSolid())
@@ -108,7 +108,7 @@ func TestSweepSpatialPathPreservesProfileHole(t *testing.T) {
 	s, profile := orthogonalSweepProfileWithHole(t)
 	path := orthogonalSweepPath(t)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile, path)
+	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 17)
 	require.Len(t, body.Shells(), 1, `the endpoint caps join both wall tubes`)

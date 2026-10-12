@@ -64,11 +64,11 @@ func TestSurfaceSweepLineIsASheet(t *testing.T) {
 
 	solidDoc := decad.New()
 	s0, p0 := plateSketch(t)
-	solid, err := solidDoc.Sweep(t.Context(), s0, p0, sweepLinePath(t))
+	solid, err := decad.Sweep(t.Context(), solidDoc, s0, p0, sweepLinePath(t))
 	require.NoError(t, err)
 
 	doc := decad.New()
-	sheet, err := doc.Sweep(t.Context(), s, p, path, decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(t.Context(), doc, s, p, path, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, sheet.Kind())
@@ -111,7 +111,7 @@ func TestSurfaceSweepLineSheetVerifiesSound(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Sweep(t.Context(), s, p, sweepLinePath(t), decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(t.Context(), doc, s, p, sweepLinePath(t), decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -132,7 +132,7 @@ func TestSurfaceSweepArcIsASheet(t *testing.T) {
 	t.Parallel()
 	s0, p0 := plateSketch(t)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Sweep(t.Context(), s0, p0, sweepArcPath(t))
+	solid, err := decad.Sweep(t.Context(), solidDoc, s0, p0, sweepArcPath(t))
 	require.NoError(t, err)
 
 	capStartFaces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(solid))).Exactly(1).SelectFaces(solid)
@@ -146,7 +146,7 @@ func TestSurfaceSweepArcIsASheet(t *testing.T) {
 
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Sweep(t.Context(), s, p, sweepArcPath(t), decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(t.Context(), doc, s, p, sweepArcPath(t), decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, sheet.Kind())
@@ -192,7 +192,7 @@ func TestSurfaceSweepArcAndCompositeSheetsVerifyUndecided(t *testing.T) {
 		t.Parallel()
 		s, p := plateSketch(t)
 		doc := decad.New()
-		sheet, err := doc.Sweep(t.Context(), s, p, sweepArcPath(t), decad.WithSurfaceResult())
+		sheet, err := decad.Sweep(t.Context(), doc, s, p, sweepArcPath(t), decad.WithSurfaceResult())
 		require.NoError(t, err)
 		requireSweepSheetUndecided(t, doc, sheet)
 	})
@@ -200,7 +200,7 @@ func TestSurfaceSweepArcAndCompositeSheetsVerifyUndecided(t *testing.T) {
 		t.Parallel()
 		s, p := orthogonalSweepProfile(t)
 		doc := decad.New()
-		sheet, err := doc.Sweep(t.Context(), s, p, orthogonalSweepPath(t), decad.WithSurfaceResult())
+		sheet, err := decad.Sweep(t.Context(), doc, s, p, orthogonalSweepPath(t), decad.WithSurfaceResult())
 		require.NoError(t, err)
 		requireSweepSheetUndecided(t, doc, sheet)
 	})
@@ -229,7 +229,7 @@ func TestSurfaceSweepCompositeIsASheet(t *testing.T) {
 	t.Parallel()
 	s0, p0 := regularNGonSketch(t, 5, 1)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Sweep(t.Context(), s0, p0, orthogonalSweepPath(t))
+	solid, err := decad.Sweep(t.Context(), solidDoc, s0, p0, orthogonalSweepPath(t))
 	require.NoError(t, err)
 	require.True(t, solid.IsSolid())
 
@@ -250,7 +250,7 @@ func TestSurfaceSweepCompositeIsASheet(t *testing.T) {
 
 	s1, p1 := regularNGonSketch(t, 5, 1)
 	doc := decad.New()
-	sheet, err := doc.Sweep(t.Context(), s1, p1, orthogonalSweepPath(t), decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(t.Context(), doc, s1, p1, orthogonalSweepPath(t), decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, sheet.Kind())
@@ -292,13 +292,13 @@ func TestSurfaceSweepCompositeHoledProfileReportsDisconnectedLumps(t *testing.T)
 	t.Parallel()
 	s0, p0 := orthogonalSweepProfileWithHole(t)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Sweep(t.Context(), s0, p0, orthogonalSweepPath(t))
+	solid, err := decad.Sweep(t.Context(), solidDoc, s0, p0, orthogonalSweepPath(t))
 	require.NoError(t, err)
 	require.Len(t, solid.Lumps(), 1)
 
 	s1, p1 := orthogonalSweepProfileWithHole(t)
 	doc := decad.New()
-	sheet, err := doc.Sweep(t.Context(), s1, p1, orthogonalSweepPath(t), decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(t.Context(), doc, s1, p1, orthogonalSweepPath(t), decad.WithSurfaceResult())
 	require.NoError(t, err)
 	require.Len(t, sheet.Lumps(), 2)
 	for _, l := range sheet.Lumps() {
@@ -317,7 +317,7 @@ func TestSurfaceSweepCompositeRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	t.Parallel()
 	s, p := orthogonalSweepProfile(t)
 	doc := decad.New()
-	sheet, err := doc.Sweep(t.Context(), s, p, orthogonalSweepPath(t), decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(t.Context(), doc, s, p, orthogonalSweepPath(t), decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	seenSpan := map[string]bool{}
@@ -354,21 +354,21 @@ func TestSurfaceSweepStaysASheetThroughPlacement(t *testing.T) {
 		{"line", func(t *testing.T) (*decad.Document, *decad.Body) {
 			s, p := plateSketch(t)
 			doc := decad.New()
-			b, err := doc.Sweep(t.Context(), s, p, sweepLinePath(t), decad.WithSurfaceResult())
+			b, err := decad.Sweep(t.Context(), doc, s, p, sweepLinePath(t), decad.WithSurfaceResult())
 			require.NoError(t, err)
 			return doc, b
 		}},
 		{"arc", func(t *testing.T) (*decad.Document, *decad.Body) {
 			s, p := plateSketch(t)
 			doc := decad.New()
-			b, err := doc.Sweep(t.Context(), s, p, sweepArcPath(t), decad.WithSurfaceResult())
+			b, err := decad.Sweep(t.Context(), doc, s, p, sweepArcPath(t), decad.WithSurfaceResult())
 			require.NoError(t, err)
 			return doc, b
 		}},
 		{"composite", func(t *testing.T) (*decad.Document, *decad.Body) {
 			s, p := orthogonalSweepProfile(t)
 			doc := decad.New()
-			b, err := doc.Sweep(t.Context(), s, p, orthogonalSweepPath(t), decad.WithSurfaceResult())
+			b, err := decad.Sweep(t.Context(), doc, s, p, orthogonalSweepPath(t), decad.WithSurfaceResult())
 			require.NoError(t, err)
 			return doc, b
 		}},
@@ -422,7 +422,7 @@ func TestSurfaceSweepOneSpanTessellates(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			s, p := plateSketch(t)
-			sheet, err := decad.New().Sweep(t.Context(), s, p, tc.path(t), decad.WithSurfaceResult())
+			sheet, err := decad.Sweep(t.Context(), decad.New(), s, p, tc.path(t), decad.WithSurfaceResult())
 			require.NoError(t, err)
 			mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
 			require.NoError(t, err)
@@ -453,21 +453,21 @@ func TestSurfaceSweepShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 		{"line", func(t *testing.T, opts ...decad.SweepOption) *decad.Body {
 			s, p := plateSketch(t)
 			doc := decad.New()
-			b, err := doc.Sweep(t.Context(), s, p, sweepLinePath(t), opts...)
+			b, err := decad.Sweep(t.Context(), doc, s, p, sweepLinePath(t), opts...)
 			require.NoError(t, err)
 			return b
 		}},
 		{"arc", func(t *testing.T, opts ...decad.SweepOption) *decad.Body {
 			s, p := plateSketch(t)
 			doc := decad.New()
-			b, err := doc.Sweep(t.Context(), s, p, sweepArcPath(t), opts...)
+			b, err := decad.Sweep(t.Context(), doc, s, p, sweepArcPath(t), opts...)
 			require.NoError(t, err)
 			return b
 		}},
 		{"composite", func(t *testing.T, opts ...decad.SweepOption) *decad.Body {
 			s, p := orthogonalSweepProfile(t)
 			doc := decad.New()
-			b, err := doc.Sweep(t.Context(), s, p, orthogonalSweepPath(t), opts...)
+			b, err := decad.Sweep(t.Context(), doc, s, p, orthogonalSweepPath(t), opts...)
 			require.NoError(t, err)
 			return b
 		}},

@@ -51,7 +51,7 @@ func Example_decad_sweepMitred() {
 	// One factor per span: the section at the end of span k is factors[k]
 	// times the authored one, here radius 1.25 mm and then 1 mm.
 	doc := decad.New()
-	branch, err := doc.Sweep(context.Background(), s, s.Profiles()[0], path,
+	branch, err := decad.Sweep(context.Background(), doc, s, s.Profiles()[0], path,
 		decad.WithMitredJoins(),
 		decad.WithSectionScale(units.Scalar(1.25/1.5), units.Scalar(1/1.5)),
 	)

@@ -1860,3 +1860,6 @@
 9	0.01	TestWallNarrowConeTaperZero
 9	0.04	TestWallReadingBoundIsOnTheSpanningDiameter
 10	0.01	TestArcSegExactQuarterDisk
+10	0.00	TestSweepChainOptionRefusalFollowsTheSeam
+10	0.00	TestSweepChainRefusesProfileOnlyOptions
+10	0.00	TestSweepTypedNilSectionIsDegenerate

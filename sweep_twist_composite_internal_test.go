@@ -29,7 +29,7 @@ func TestCompositeTwistOccupiedVolumeProof(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := New().Sweep(t.Context(), s, s.Profiles()[0], path,
+	body, err := Sweep(t.Context(), New(), s, s.Profiles()[0], path,
 		WithSweepTwist(units.Degrees(5)))
 	if err != nil {
 		t.Fatal(err)

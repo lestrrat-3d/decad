@@ -50,15 +50,48 @@ func WithSweepTwist(angle units.Value) SweepOption {
 	return sweepOptionValue{featureoption.WithSweepTwist(angle)}
 }
 
-// Sweep moves p along path, registers the resulting solid, and returns
-// it. The path must start in the profile plane and its initial tangent must be
-// exactly codirectional with the plane's positive normal. Composite paths also
-// require tangent joins, exactly representable transported frames, and a
-// certified absence of unintended span contact. Section 17 of the Sweep design
-// states the bounded nonzero-twist reach. Sections 3.3–3.5 admit bounded
-// closed-path classes.
-// Every failure and cancellation leaves the document unchanged.
-func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
+// Sweep moves the section sec along path, registers the resulting body, and
+// returns it. sec is a closed [*sketch.Profile], which sweeps to a solid
+// (sheet under [WithSurfaceResult]), or an open [*sketch.Chain], which sweeps
+// to a sheet. Both are recorded from s; the type argument S is inferred.
+//
+// A profile section's path must start in the profile plane and its initial
+// tangent must be exactly codirectional with the plane's positive normal.
+// Composite paths also require tangent joins, exactly representable transported
+// frames, and a certified absence of unintended span contact. Section 17 of
+// the Sweep design states the bounded nonzero-twist reach. Sections 3.3–3.5
+// admit bounded closed-path classes.
+//
+// A chain section is gated exactly as [Document.ExtrudeChain] gates it
+// (docs/surface-design.md §13.3); the seam's own sentinel wins before any path
+// geometry is read. The path must start in the sketch plane with its initial
+// tangent codirectional with that plane's positive normal (ErrDegenerate). The
+// evaluator sweeps one straight span or §15.8's cardinal line/arc pair; other
+// composite paths and a single arc are ErrUnsupported (Table SC). The result
+// is always a sheet, one wall per recorded segment per span with no cap or
+// closing face. A chain section therefore returns ErrUnsupported for
+// [WithSurfaceResult] (there is no solid to toggle), [WithSweepTwist],
+// [WithMitredJoins] and [WithSectionScale]. That refusal follows the chain's
+// seam gate and precedes every path-geometry gate (docs/sweep-design.md §15.3).
+//
+// A nil context, document, sketch, section or path returns ErrDegenerate.
+// Every failure and cancellation
+// leaves the document unchanged.
+func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, path *Path,
+	opts ...SweepOption) (*Body, error) {
+	switch v := any(sec).(type) {
+	case *sketch.Profile:
+		return sweepProfile(ctx, d, s, v, path, opts)
+	case *sketch.Chain:
+		return sweepChain(ctx, d, s, v, path, opts)
+	default:
+		return nil, fmt.Errorf(`%w: Sweep section %T is not a profile or chain`, ErrDegenerate, sec)
+	}
+}
+
+// sweepProfile is the profile-fed Sweep body (docs/sweep-design.md §3-§17).
+func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, path *Path,
+	opts []SweepOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a sweep`, ErrDegenerate)
 	}
@@ -310,7 +343,7 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 	return body, nil
 }
 
-// This section is SweepChain of docs/sweep-design.md §15: the open sketch
+// This section is the chain-fed form of Sweep, docs/sweep-design.md §15: the open sketch
 // chain swept along a Path. §15.1 states why the composite join's pairing rule
 // survives an open walk — it pairs by recorded-segment index and reads no
 // winding — and §15.2 states why a ONE-SPAN path needs no such rule at all: it
@@ -320,21 +353,7 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // rather than a resolved Extent. The arc reduction and every composite path
 // stay ErrUnsupported (Table SC rows SC7 and SC9, docs/surface-design.md R34).
 
-// ChainSweepOption configures SweepChain. It is its own sealed tier rather
-// than [SweepOption]: WithSurfaceResult() does not implement it, so the
-// compiler refuses that option outright rather than accepting it as a no-op —
-// a chain-fed sweep always returns a sheet, so there is no "build a solid
-// instead" state for the option to toggle (docs/surface-design.md §13.2,
-// docs/sweep-design.md §15.3). WithSweepTwist is not a member either: a
-// nonzero twist is Table S row S11 for a profile-fed sweep, and a chain
-// inherits that staging rather than a second spelling of it. This placeholder
-// tier has no concrete option yet; it reserves the call for a later chain-only option.
-type ChainSweepOption interface {
-	option.Interface
-	chainSweepOption()
-}
-
-// chainSweepPayload is SweepChain's own record of a ribbon body: one chain
+// chainSweepPayload is the chain Sweep's own record of a ribbon body: one chain
 // prism reduction or two built chain spans, beside their source Path.
 // It stays DISTINCT from chainPayload for the reason sweepPayload stays
 // distinct from prismPayload — a downstream consumer whose Sweep proof has not
@@ -359,7 +378,7 @@ func (sp chainSweepPayload) transform() r3.Transform {
 // mesh stations have their own bound.
 func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	if len(sp.spans) != 0 {
-		return nil, fmt.Errorf(`%w: composite SweepChain placement has no transformed separation proof`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: composite chain Sweep placement has no transformed separation proof`, ErrUnsupported)
 	}
 	sp.chain.xform = composed
 	body, err := evalChainExtrudeContext(ctx, d, ref, sp.chain, freeform.NewFreeformWork())
@@ -370,19 +389,9 @@ func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref produce
 	return body, nil
 }
 
-// SweepChain sweeps the open chain ch of sketch s along path, and registers
-// the resulting ribbon body. ch MUST be a chain of s and a current, unaltered
-// snapshot, under the identical gates ExtrudeChain runs (RecordChain,
-// docs/surface-design.md §13.3); the seam's own sentinel wins before any path
-// geometry is read. The path MUST start in the sketch plane with its initial
-// tangent codirectional with that plane's positive normal (ErrDegenerate), and
-// this evaluator sweeps one straight span or §15.8's cardinal line/arc pair;
-// other composite paths and a single arc are ErrUnsupported (Table SC). The
-// result is always a sheet — Kind() == BodySheet — one wall per recorded
-// segment per span with no cap or closing face, so WithSurfaceResult() does
-// not compile against this call.
-// A failed evaluation leaves the document unchanged.
-func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error) {
+// sweepChain is the chain-fed Sweep body (docs/sweep-design.md §15).
+func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, path *Path,
+	opts []SweepOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a sweep`, ErrDegenerate)
 	}
@@ -390,7 +399,7 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
 	if s == nil || ch == nil || path == nil {
-		return nil, fmt.Errorf(`%w: SweepChain requires a non-nil sketch, chain, and path`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: Sweep requires a non-nil sketch, chain, and path`, ErrDegenerate)
 	}
 	for _, o := range opts {
 		if o == nil {
@@ -406,6 +415,10 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 	// the caller cannot act on (docs/sweep-design.md Table SC).
 	chain, plane, err := recordChain(s, ch)
 	if err != nil {
+		return nil, err
+	}
+	// The option refusal follows the seam gate and precedes every path gate.
+	if err := refuseChainSweepOptions(opts, len(path.segments)); err != nil {
 		return nil, err
 	}
 	if len(path.records) == 0 || len(path.segments) == 0 {
@@ -432,7 +445,7 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 	}
 	if _, ok := segments[0].(LineTo); !ok {
 		return nil, fmt.Errorf(
-			`%w: SweepChain sweeps a straight path span only; the arc reduction is staged (docs/sweep-design.md §15.6)`,
+			`%w: a chain Sweep sweeps a straight path span only; the arc reduction is staged (docs/sweep-design.md §15.6)`,
 			ErrUnsupported)
 	}
 	height, heightBound, err := validateStraightSweepPath(path, frame)
@@ -467,6 +480,29 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 	finishChainSweepBody(body, chainSweepPayload{chain: reduction, path: path})
 	d.commit(body)
 	return body, nil
+}
+
+// refuseChainSweepOptions decodes opts like a profile Sweep and refuses each
+// option a chain section cannot honour with ErrUnsupported. A chain sweep
+// always returns a sheet, so WithSurfaceResult has no solid to toggle; the
+// twist (Table S row S11), mitred-join and section-scale options build solids
+// from a profile only.
+func refuseChainSweepOptions(opts []SweepOption, segments int) error {
+	cfg, err := decodeSweepOptions(opts, segments)
+	if err != nil {
+		return err
+	}
+	switch {
+	case cfg.SurfaceResult:
+		return fmt.Errorf(`%w: a chain sweep always returns a sheet; WithSurfaceResult has no solid to toggle`,
+			ErrUnsupported)
+	case cfg.Twisted || cfg.Twist.Kind() == units.Angle:
+		return fmt.Errorf(`%w: WithSweepTwist is not implemented for a chain sweep (docs/sweep-design.md Table S row S11)`,
+			ErrUnsupported)
+	case cfg.Mitred || cfg.Scaled:
+		return fmt.Errorf(`%w: WithMitredJoins and WithSectionScale build a solid from a profile only`, ErrUnsupported)
+	}
+	return nil
 }
 
 func finishStraightSweepBody(body *Body, payload sweepPayload) {

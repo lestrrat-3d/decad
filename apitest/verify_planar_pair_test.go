@@ -60,7 +60,7 @@ func mitredBranch(t *testing.T, doc *decad.Document, pts []r3.Vec, radii []float
 	}
 	path, err := decad.NewPath(r3.Vec{}, segments...)
 	require.NoError(t, err)
-	body, err := doc.Sweep(t.Context(), s, profile, path, decad.WithMitredJoins(), decad.WithSectionScale(scalars(factors...)...))
+	body, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithMitredJoins(), decad.WithSectionScale(scalars(factors...)...))
 	require.NoError(t, err)
 	move, err := r3.Translation(pts[0])
 	require.NoError(t, err)

@@ -370,7 +370,7 @@ func fdCompositeSweep(t *testing.T) (*Body, error) {
 		ArcThrough{Through: r3.NewVec(2, 0, 4), End: r3.NewVec(5, 0, 5)},
 		LineTo{End: r3.NewVec(8, 0, 5)})
 	require.NoError(t, err)
-	return New().Sweep(t.Context(), s, p, path)
+	return Sweep(t.Context(), New(), s, p, path)
 }
 
 func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
@@ -459,7 +459,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			s, p := fdSketch(t, w, pl, fdRect)
 			path, err := NewPath(r3.Vec{}, LineTo{End: r3.NewVec(0, 0, 2)})
 			require.NoError(t, err)
-			return New().Sweep(t.Context(), s, p, path)
+			return Sweep(t.Context(), New(), s, p, path)
 		}},
 		{name: "composite sweep", xyOnly: true, build: func(t *testing.T, _ r3.Frame) (*Body, error) {
 			return fdCompositeSweep(t)

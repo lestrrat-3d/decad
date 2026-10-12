@@ -407,7 +407,7 @@ func TestChainFedRefusals(t *testing.T) {
 	s, ch := lineChainSketch(t)
 	doc := decad.New()
 
-	_, err := doc.SweepChain(t.Context(), s, ch, nil)
+	_, err := decad.Sweep(t.Context(), doc, s, ch, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a nil path is refused before the staged refusal")
 
 	path, err := decad.NewPath(
@@ -416,7 +416,7 @@ func TestChainFedRefusals(t *testing.T) {
 		decad.ArcThrough{Through: r3.NewVec(5, 0, 25), End: r3.NewVec(10, 0, 20)},
 	)
 	require.NoError(t, err)
-	_, err = doc.SweepChain(t.Context(), s, ch, path)
+	_, err = decad.Sweep(t.Context(), doc, s, ch, path)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
 
@@ -513,7 +513,7 @@ func TestChainFedRefusalsStillRunTheSeamGates(t *testing.T) {
 	doc := decad.New()
 	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
-	_, err = doc.SweepChain(t.Context(), s, ch, path)
+	_, err = decad.Sweep(t.Context(), doc, s, ch, path)
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 
 	_, err = doc.LoftChain(t.Context(), s, ch, s, ch)

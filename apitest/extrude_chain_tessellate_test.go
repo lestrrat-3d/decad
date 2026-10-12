@@ -152,7 +152,7 @@ func TestSweepChainTessellatesRibbon(t *testing.T) {
 	doc := decad.New()
 	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
-	body, err := doc.SweepChain(t.Context(), s, ch, path)
+	body, err := decad.Sweep(t.Context(), doc, s, ch, path)
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))

@@ -935,7 +935,7 @@ func hexagonSweep(ctx context.Context, doc *decad.Document) (*decad.Body, error)
 	if err != nil {
 		return nil, err
 	}
-	return doc.Sweep(ctx, s, p, path)
+	return decad.Sweep(ctx, doc, s, p, path)
 }
 
 // revolvedBottle is the full revolve about z of a line-and-arc half-profile

@@ -36,7 +36,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
 | `docs/loft-cylinder-boolean-design.md` | Certified axial Loft and centered cylinder Union, cap record, seam and volume bounds. |
 | `docs/loft-mirror-boolean-design.md` | Certified end-cap reflection of one axial Loft and its sewn three-ring Union. |
-| `docs/sweep-design.md` | `Path`/`Sweep`, `SweepChain`, mitred sweeps (§16) and bounded one-cell, composite and stationed twist (§17). |
+| `docs/sweep-design.md` | `Path`/`Sweep`, its chain section (§15), mitred sweeps (§16) and bounded one-cell, composite and stationed twist (§17). |
 | `docs/helix-design.md` | `Coil`: a profile screwed about an in-plane axis. |
 | `docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
 | `docs/prism-pattern-union-design.md` | Certified Union of a circular prism and radial copies of one fitted section. |

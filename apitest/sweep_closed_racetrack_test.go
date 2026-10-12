@@ -45,7 +45,7 @@ func TestSweepClosedRacetrackBuildsVerifiedTubeAndReplaysPlacement(t *testing.T)
 	const radius, length, major = 1.0, 5.0, 5.0
 	s, profile := racetrackSection(t, 0, radius)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), s, profile, racetrackPath(t, length, major))
+	body, err := decad.Sweep(t.Context(), doc, s, profile, racetrackPath(t, length, major))
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	require.Len(t, body.Faces(), 4)
@@ -137,7 +137,7 @@ func TestSweepClosedRacetrackRefusesUnprovedClearanceAndSection(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, profile := racetrackSection(t, tc.x, tc.radius)
 			doc := decad.New()
-			body, err := doc.Sweep(t.Context(), s, profile, racetrackPath(t, tc.length, tc.major))
+			body, err := decad.Sweep(t.Context(), doc, s, profile, racetrackPath(t, tc.length, tc.major))
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, doc.Bodies())

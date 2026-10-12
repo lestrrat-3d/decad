@@ -942,7 +942,7 @@ func partsBinSweep(t *testing.T, doc *decad.Document) *decad.Body {
 	})
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
 	require.NoError(t, err)
-	sweep, err := doc.Sweep(t.Context(), s, p, path)
+	sweep, err := decad.Sweep(t.Context(), doc, s, p, path)
 	require.NoError(t, err)
 	return sweep
 }

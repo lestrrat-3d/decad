@@ -32,7 +32,7 @@ func TestSweepClosedPlanarTangentLoopBuildsVerifiedSolid(t *testing.T) {
 	const radius = 0.25
 	section, profile := racetrackSection(t, 0, radius)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), section, profile, roundedRectangleSweepPath(t))
+	body, err := decad.Sweep(t.Context(), doc, section, profile, roundedRectangleSweepPath(t))
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	require.Len(t, doc.Bodies(), 1)
@@ -78,7 +78,7 @@ func TestSweepClosedPlanarTangentLoopRefusesAxisContact(t *testing.T) {
 	t.Parallel()
 	section, profile := racetrackSection(t, 0, 5)
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), section, profile, roundedRectangleSweepPath(t))
+	body, err := decad.Sweep(t.Context(), doc, section, profile, roundedRectangleSweepPath(t))
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())

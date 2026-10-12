@@ -214,7 +214,7 @@ func TestThickenArcSweepSheetKeepsPathAndMesh(t *testing.T) {
 	})
 	require.NoError(t, err)
 	doc := decad.New()
-	sheet, err := doc.Sweep(t.Context(), s, s.Profiles()[0], path, decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	solid, err := sheet.Thicken(t.Context(), units.Millimeters(0.5),
 		decad.WithThickenSide(decad.ThickenNegative))
