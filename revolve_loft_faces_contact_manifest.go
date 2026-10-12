@@ -38,7 +38,7 @@ func revolveLoftFacesAllSideManifest(ctx context.Context,
 	if ctx == nil || proof == nil {
 		return nil, false, nil
 	}
-	if !revolveLoftFacesSectionFacesComplete(proof) {
+	if !revolveLoftFacesSectionCurrent(proof) || !revolveLoftFacesSectionFacesComplete(proof) {
 		return nil, false, nil
 	}
 	nonvertical, ok, err := revolveLoftFacesNonverticalManifest(ctx, proof)

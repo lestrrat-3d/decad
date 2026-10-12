@@ -3,6 +3,8 @@ package decad
 import (
 	"slices"
 	"testing"
+
+	"github.com/lestrrat-3d/r3"
 )
 
 func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
@@ -47,6 +49,42 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
 		if err != nil || complete {
 			t.Fatalf("an unclassified live blank face was admitted: %v, %t", err, complete)
+		}
+	})
+	t.Run("changed root section", func(t *testing.T) {
+		original := proof.section.rootStart
+		defer func() { proof.section.rootStart = original }()
+		proof.section.rootStart.U += 0.125
+		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+		if err != nil || complete {
+			t.Fatalf("changed live root section was admitted: %v, %t", err, complete)
+		}
+	})
+	t.Run("changed root cone", func(t *testing.T) {
+		original := proof.section.rootCone
+		defer func() { proof.section.rootCone = original }()
+		proof.section.rootCone.Origin.X += 0.125
+		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+		if err != nil || complete {
+			t.Fatalf("changed live root cone was admitted: %v, %t", err, complete)
+		}
+	})
+	t.Run("changed tooth transform", func(t *testing.T) {
+		original := tooth.payload
+		defer func() { tooth.payload = original }()
+		payload := original.(facetedPayload)
+		shift, err := r3.Translation(r3.Vec{X: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload.xform = shift
+		tooth.payload = payload
+		if revolveLoftFacesTrimCurrent(payload, proof.trim) {
+			t.Fatal("changed tooth transform retained a current source record")
+		}
+		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+		if err != nil || complete {
+			t.Fatalf("changed tooth transform was admitted: %v, %t", err, complete)
 		}
 	})
 	t.Run("wrong vertical triangle owner", func(t *testing.T) {
