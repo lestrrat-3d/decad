@@ -53,6 +53,7 @@
 1	0.00	TestRevolveLoftFacesSlopedRadialInsideNeedsUniqueOuterCrossing
 1	0.00	TestRevolveLoftFacesSlopedRadialInsideRequiresAxisWalkDirection
 0	2.76	TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource
+4	10.00	TestRevolveLoftFacesToolCapArcBindsLiveSourceCells
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
 1	0.00	TestAddRevolveFacesPreservesMeridianErrorMapping

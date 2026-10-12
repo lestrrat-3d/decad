@@ -2,7 +2,7 @@ package decad
 
 import (
 	"context"
-	"reflect"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/sketch"
@@ -25,6 +25,8 @@ type revolveLoftFacesToolCapBoundary struct {
 // Z=0; throughPositiveY selects the short arc through that axis.
 type revolveLoftFacesToolCapOccupiedArc struct {
 	circle           revolveLoftFacesToolCapCircle
+	band             int
+	time             *big.Rat // exact constant-X time within the authenticated cap band
 	negativeZ        revolveLoftFacesToolCapBoundary
 	positiveZ        revolveLoftFacesToolCapBoundary
 	throughPositiveY bool
@@ -153,6 +155,7 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 		return nil, false, nil
 	}
 	return &revolveLoftFacesToolCapOccupiedArc{circle: circle,
+		band: section.band, time: new(big.Rat).Set(section.time),
 		negativeZ: *negative, positiveZ: *positive,
 		throughPositiveY: negative.outward}, true, nil
 }
@@ -213,7 +216,7 @@ func revolveLoftFacesToolCapSourceCurrent(ctx context.Context,
 			return false, err
 		}
 	}
-	return reflect.DeepEqual(section, fresh), nil
+	return revolveLoftFacesToolCapSourceCellsEqual(section, fresh), nil
 }
 
 func revolveLoftFacesToolCapFaceOriginCurrent(circle revolveLoftFacesToolCapCircle) bool {
