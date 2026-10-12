@@ -121,7 +121,9 @@ const filletTol = sectionaudit.Tolerance
 // A prism's complete cap loops take the same arm through its face view and
 // return a brep body (RF3). A single cap edge on a strictly convex straight
 // prism uses a bounded faceted cutter when that edge or its terminal walls
-// are oblique; the cutter and receiver commit atomically. Any other
+// are oblique; the cutter and receiver commit atomically. A faceted Union of
+// a rooted oblique circular boss and rectangular plate also accepts its one
+// complete root junction (docs/oblique-boss-fillet-design.md). Any other
 // receiver outside those routes and loft §17 is S3 (ErrUnsupported).
 //
 // A loop-filleted body publishes its volume, centroid, area, box and
@@ -232,6 +234,9 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	}
 	if lp, ok := b.payload.(loftPayload); ok {
 		return b.filletStraightLoft(ctx, sel, edges, lp, rmm)
+	}
+	if fp, ok := b.payload.(facetedPayload); ok && fp.obliqueBoss != nil {
+		return b.filletObliqueBoss(ctx, edges, fp.obliqueBoss, rmm, rDelta)
 	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected

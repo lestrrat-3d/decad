@@ -40,6 +40,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
 | `docs/mirror-pattern-design.md` | Mirror and pattern entry points, the exact mirror join, the prism group. |
 | `docs/general-boolean-design.md` | Boolean classes past the prism pair, and `brepPayload`. |
+| `docs/oblique-boss-fillet-design.md` | Complete plane-to-oblique-cylinder boss junction and bounded fillet mesh. |
 | `docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
 | `docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies and their boolean composition. |
 | `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps. |

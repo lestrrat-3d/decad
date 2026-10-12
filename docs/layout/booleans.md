@@ -69,6 +69,7 @@ The rules for rows live in `docs/layout.md`.
 | `brep_payload.go` / `brep_measure.go` | BRep face views, topology and readings. See general-boolean §4. |
 | `classb.go` | Class-B admission and result adapters. See general-boolean §3 B. |
 | `classb_crossing.go` | Class-B scene and BRep adapters. See general-boolean §5, §10. |
+| `oblique_boss.go` | Retains two prism sources after a complete oblique cylinder and plate Union. See oblique-boss-fillet design. |
 | `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |
 | `point_plane_split.go` | Splits a point loft by a planar chain sheet. See loft-point design. |
 | `point_plane_scale.go` | Dispatches certified similar bodies and carries Split-slab source maps. See loft-point design and evaluator §8. |
