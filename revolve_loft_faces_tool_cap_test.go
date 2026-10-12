@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,14 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	changed = *proof
 	changed.toeFace = proof.heelFace
 	_, accepted = revolveLoftFacesToolCapSidesOf(&changed)
+	require.False(t, accepted)
+	shell := blank.Shells()[0]
+	originalFaces := shell.faces
+	t.Cleanup(func() { shell.faces = originalFaces })
+	shell.faces = append(slices.Clone(originalFaces), &Face{
+		body: blank, origins: []FeatureRef{{Role: "unmatched side"}},
+	})
+	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted)
 }
 

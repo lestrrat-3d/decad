@@ -31,6 +31,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 	if proof == nil || proof.blank == nil || proof.tooth == nil ||
 		proof.section.blank != proof.blank || proof.trim == nil ||
 		!revolveLoftFacesSectionCurrent(proof) ||
+		!revolveLoftFacesSectionFacesComplete(proof) ||
 		proof.toeFace == nil || proof.heelFace == nil ||
 		proof.toeFace == proof.heelFace ||
 		proof.toeFace.body != proof.tooth || proof.heelFace.body != proof.tooth {
