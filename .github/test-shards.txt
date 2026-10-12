@@ -57,6 +57,9 @@
 4	0.00	TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence
 4	7.20	TestCurvedSourcePairCensusCoversLiveFaces
 8	4.00	TestCurvedSourcePairCensusRefusesUnownedRetainedFace
+4	8.80	TestCurvedHeelArcEndpointsBindToLiveSideCells
+8	8.80	TestCurvedHeelArcSideTiesRejectChangedSourceRecord
+2	0.10	TestCurvedHeelArcSideTieTimeEndpointOwnership
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
 1	0.00	TestAddRevolveFacesPreservesMeridianErrorMapping
