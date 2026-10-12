@@ -488,7 +488,7 @@ func TestStitchRefusesAPlacedSheetAgainstItsUnplacedSiblings(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, solid.Kind())
 
-	sheets, err := solid.Unstitch(t.Context())
+	sheets, err := decad.Unstitch(t.Context(), solid)
 	require.NoError(t, err)
 	require.Len(t, sheets, 6)
 

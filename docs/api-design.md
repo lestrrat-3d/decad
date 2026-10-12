@@ -785,7 +785,7 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 | `Body.Draft`, `Body.Offset`, `Body.Thicken` | `Draft(ctx, b, ...)`, `Offset(ctx, b, ...)`, `Thicken(ctx, b, ...)` |
 | `Body.Trim`, `Body.Extend` | `Trim(ctx, b, tool, side)`, `Extend(ctx, b, edges, tool)` |
 | `Document.Split` | `Split(ctx, target, tool)` |
-| `Body.Patch`, `Body.Unstitch` | `PatchEdges(ctx, b, sel)`, `Unstitch(ctx, b)` |
+| `Body.Patch` | `PatchEdges(ctx, b, sel)` |
 | `Document.Patch` | `PatchProfile(ctx, doc, s, p)`, so the two patch forms stop sharing one name |
 | `Body.ScaledAt` | `ScaledAt(ctx, b, anchor, factor)` |
 | `Body.Mirrored`, `Body.MirroredCopy` | `Mirrored(ctx, b, plane, opts...)`, `MirroredCopy(ctx, b, plane)` |
@@ -1235,7 +1235,7 @@ func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 
 func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
-func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
+func Unstitch(ctx context.Context, b *Body) ([]*Body, error)
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error)
 func WithThickenSide(side ThickenSide) ThickenOption
 
@@ -1255,7 +1255,7 @@ limits. `WithSurfaceResult()` omits the faces that exist only to close the
 solid and changes nothing else — a wall keeps its surface, its role and every bound.
 `Document.Patch` builds a planar face from a recorded profile and consumes
 nothing; `Body.Patch` fills a closed chain of the receiver's free edges and
-retires it. `Stitch` retires every operand and `Unstitch` its receiver, on §6's
+retires it. `Stitch` retires every operand and `Unstitch` its operand, on §6's
 uniform terms, and neither takes a `*Document` because a `*Body` carries its
 own. `Stitch` closes an existing face assembly; `Thicken` builds a new skin
 and rim from an admitted sheet. `Stitch` joins two free edges only where

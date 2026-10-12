@@ -464,7 +464,7 @@ func TestRevolveWallNormalSurvivesUnstitch(t *testing.T) {
 	s, p := polygonSketch(t, pts)
 	ax := normalOracleAxis{end: [2]float64{1, 0}}
 	b := revolveAbout(t, s, p, ax)
-	sheets, err := b.Unstitch(t.Context())
+	sheets, err := decad.Unstitch(t.Context(), b)
 	require.NoError(t, err)
 	var sheet *decad.Body
 	for _, sh := range sheets {

@@ -85,7 +85,7 @@ func TestStitchCurvedMeshInheritsEverySourceFaceBound(t *testing.T) {
 func TestStitchCurvedWeldedRevolveSiblingRejectsWrongEdgeAncestry(t *testing.T) {
 	t.Parallel()
 	sheet := internalOffAxisArcBody(t, true)
-	pieces, err := sheet.Unstitch(t.Context())
+	pieces, err := Unstitch(t.Context(), sheet)
 	require.NoError(t, err)
 	require.Len(t, pieces, 2)
 	stitched, err := Stitch(t.Context(), pieces...)
@@ -133,7 +133,7 @@ func TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound(t *testing
 	tol := units.Millimeters(0.1)
 	source, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
-	pieces, err := sheet.Unstitch(t.Context())
+	pieces, err := Unstitch(t.Context(), sheet)
 	require.NoError(t, err)
 	require.Len(t, pieces, 2)
 	stitched, err := Stitch(t.Context(), pieces...)

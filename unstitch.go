@@ -24,12 +24,12 @@ import (
 // (document.go) is the multi-produce atomic commit this file's N results
 // need beside the existing single-body commit.
 
-// Unstitch returns one single-face sheet body per face of the
-// receiver, in [Body.Faces] order, retiring the receiver
+// Unstitch returns one single-face sheet body per face of
+// b, in [Body.Faces] order, retiring b
 // (docs/surface-design.md §6.5). Each result carries that face's own
 // surface, loops and readings, and every edge of every result is free: a
 // fresh Face, Edge and Vertex set is minted for each result rather than
-// reusing the receiver's own topology, so the retired receiver stays
+// reusing b's own topology, so the retired b stays
 // readable and unmodified for any caller still holding it.
 //
 // It admits an analytic body, solid or sheet — the asymmetry with [Stitch],
@@ -37,14 +37,14 @@ import (
 // a caller gets sheets to work with in the first place. A Faceted body — a
 // mesh boolean's result — is [ErrUnsupported] (R11): its faces are chord
 // polygons with no analytic identity, and returning thousands of facet
-// sheets would be a shape nobody asked for. A nil receiver or one with no
-// evaluator payload is [ErrDegenerate] (R12); a receiver owned by a
-// different document is [ErrForeignBody] (R13); a retired receiver is
-// [ErrRetiredBody] (R14). A failed call leaves the document and the
-// receiver unchanged: every result is built before any is registered, and
-// Document.commitMany registers all of them (and retires the receiver) in
+// sheets would be a shape nobody asked for. A nil b or a b with no
+// evaluator payload is [ErrDegenerate] (R12); a b owned by a
+// different document is [ErrForeignBody] (R13); a retired b is
+// [ErrRetiredBody] (R14). A failed call leaves the document and
+// b unchanged: every result is built before any is registered, and
+// Document.commitMany registers all of them (and retires b) in
 // one atomic step.
-func (b *Body) Unstitch(ctx context.Context) ([]*Body, error) {
+func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an unstitch`, ErrDegenerate)
 	}
