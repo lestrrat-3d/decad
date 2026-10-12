@@ -39,6 +39,8 @@
 1	0.00	TestRevolveLoftFacesOpenTimeExcludesExactPointRoot
 1	0.00	TestRevolveLoftFacesOpenMovingCrossingRefuses
 1	0.00	TestRevolveLoftFacesToolCircleOnFiniteSection
+1	0.00	TestRevolveLoftFacesCircleMissUsesWholeMappedSourceBox
+0	2.80	TestRevolveLoftFacesCircleMissConsumesLiveNeutralSource
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
 1	0.00	TestAddRevolveFacesPreservesMeridianErrorMapping

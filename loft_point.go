@@ -26,6 +26,7 @@ type pointSectionRecord struct {
 	plane              planeRecord
 	source             *pointSectionSource
 	sourceBox          [4]float64 // U min/max, V min/max; contains the true region and station polygon
+	sourceBoxIssued    [4]float64 // original source rectangle at LoftFromPoint publication
 	sourceAreaDelta    float64    // area of the symmetric difference between source region and station polygon
 	sourceStation      []Point2   // original local station coordinates, in source loop order
 	sourceStationRound float64    // local error of every held station against its exact curve point
@@ -47,7 +48,7 @@ type pointSectionSource struct {
 // pointSourceCurrent checks the source identity held when LoftFromPoint
 // recorded the profile. Certificate getters are checked separately at use.
 func pointSourceCurrent(record *pointSectionRecord) bool {
-	if record == nil || record.source == nil {
+	if record == nil || record.source == nil || record.sourceBox != record.sourceBoxIssued {
 		return false
 	}
 	src := record.source
@@ -262,6 +263,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 		record.sourceBox[i] = math.Nextafter(record.sourceBox[i]-sectionGap, math.Inf(-1))
 		record.sourceBox[i+1] = math.Nextafter(record.sourceBox[i+1]+sectionGap, math.Inf(1))
 	}
+	record.sourceBoxIssued = record.sourceBox
 	liftGap := loftmesh.FrameLiftRoundAllow(frame, maxLocal)
 	meshBound := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(sectionGap, proofbound.AbsSumUpper(basisU, basisV)), liftGap)

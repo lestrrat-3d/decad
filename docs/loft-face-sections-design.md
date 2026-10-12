@@ -273,6 +273,14 @@ by exact axial coordinate and radius. An endpoint or coincident-side contact
 is undecidable. A possible circle does not prove that the trimmed LoftFaces
 source occupies any of its angles; that requires a separate source-region
 check before the Boolean can admit the face pair.
+For a possible circle, the complete authenticated source rectangle bounds
+each mapped cap. The hull of neighboring caps bounds every band point.
+If the circle's exact axial coordinate misses each band's hull, or its
+radius lies strictly outside each overlapping band's radial range, the
+original LoftFaces source misses the entire circle. A surviving circle
+still needs an angular occupancy proof from the live Sketch region.
+The original point loft stores its computed source rectangle by value when
+published. A changed source rectangle refuses before a whole-circle miss is used.
 
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public

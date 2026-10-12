@@ -140,3 +140,62 @@ func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 	require.False(t, decided)
 	require.False(t, crosses)
 }
+
+func TestRevolveLoftFacesCircleMissUsesWholeMappedSourceBox(t *testing.T) {
+	box := [4]*big.Rat{big.NewRat(-1, 1), big.NewRat(1, 1),
+		big.NewRat(-1, 1), big.NewRat(1, 1)}
+	sectionMap := func(x *big.Rat) loftFaceMap {
+		return loftFaceMap{constant: loftFaceRatVec{lfZero(), lfZero(), lfZero()},
+			q0: loftFaceRatVec{x, big.NewRat(2, 1), lfZero()},
+			qu: loftFaceRatVec{lfZero(), lfOne(), lfZero()},
+			qv: loftFaceRatVec{lfZero(), lfZero(), lfOne()},
+			g0: lfOne(), gu: lfZero(), gv: lfZero()}
+	}
+	maps := []loftFaceMap{sectionMap(big.NewRat(5, 1)), sectionMap(big.NewRat(7, 1))}
+	require.True(t, revolveLoftFacesCircleOutsideMaps(maps, box,
+		big.NewRat(6, 1), big.NewRat(1, 2)))
+	require.False(t, revolveLoftFacesCircleOutsideMaps(maps, box,
+		big.NewRat(6, 1), big.NewRat(2, 1)), "the source box can meet this circle")
+	require.True(t, revolveLoftFacesCircleOutsideMaps(maps, box,
+		big.NewRat(8, 1), big.NewRat(2, 1)), "the circle is beyond every band")
+	require.False(t, revolveLoftFacesCircleOutsideMaps(maps, box,
+		big.NewRat(6, 1), big.NewRat(1, 1)), "boundary equality cannot prove a miss")
+	invalid := slices.Clone(maps)
+	invalid[0].g0 = lfZero()
+	require.False(t, revolveLoftFacesCircleOutsideMaps(invalid, box,
+		big.NewRat(6, 1), big.NewRat(1, 2)), "a zero map denominator cannot prove a miss")
+	require.False(t, revolveLoftFacesCircleOutsideMaps(maps[:1], box,
+		big.NewRat(6, 1), big.NewRat(1, 2)), "one cap does not define a band")
+}
+
+func TestRevolveLoftFacesCircleMissConsumesLiveNeutralSource(t *testing.T) {
+	blank, tooth, _ := neutralArcSeamSource(t)
+	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	require.NoError(t, err)
+	require.True(t, ok)
+	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
+	require.True(t, ok)
+	require.NotEmpty(t, sides.circles)
+	misses := 0
+	for _, circle := range sides.circles {
+		require.Equal(t, revolveLoftFacesToolCircleOutsideSource(
+			proof.trim, circle.x, circle.radius), circle.sourceMiss)
+		if circle.sourceMiss {
+			misses++
+		}
+	}
+	require.Len(t, sides.circles, 4)
+	require.Equal(t, 2, misses)
+	map0 := proof.trim.maps[0]
+	proof.trim.maps[0] = proof.trim.maps[1]
+	_, accepted := revolveLoftFacesToolCapSidesOf(proof)
+	require.False(t, accepted, "the source-miss flag needs the current live maps")
+	proof.trim.maps[0] = map0
+	sourceBox := proof.trim.source.sourceBox
+	require.True(t, pointSourceCurrent(proof.trim.source))
+	proof.trim.source.sourceBox[1] = (sourceBox[0] + sourceBox[1]) / 2
+	require.False(t, pointSourceCurrent(proof.trim.source))
+	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
+	require.False(t, accepted, "a narrowed stored source box cannot prove a whole-circle miss")
+	proof.trim.source.sourceBox = sourceBox
+}
