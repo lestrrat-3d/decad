@@ -76,6 +76,20 @@ func LoftCrossingAuditBounded(budget *proofbound.WorkBudget, verts []r3.Vec,
 	return err
 }
 
+// LoftCrossingAuditBoundedProjectedPatches first proves each supplied patch as
+// a projected graph. It omits only within-patch pairs for successful proofs;
+// cross-patch and patch-to-wall pairs retain the exact contact audit. A failed
+// patch proof leaves that family's pairs in the audit. The caller's triangle
+// and scan ceilings are unchanged. Boundary simplicity has its own fixed
+// 100-million-check ceiling, shared by the supplied patches.
+func LoftCrossingAuditBoundedProjectedPatches(budget *proofbound.WorkBudget,
+	verts []r3.Vec, tris [][3]int, patches []ProjectedPatch,
+	maxTriangles int, maxScans uint64) error {
+	_, err := loftCrossingAuditLimited(budget, verts, tris, nil, loftGenericShortcuts,
+		maxScans, maxTriangles, true, patches...)
+	return err
+}
+
 // LoftCrossingAuditWork is LoftCrossingAudit's body, with each S7 shortcut
 // under its own explicit per-call switch (LoftAuditShortcuts) and the pair
 // loop's own work counts returned to the caller. CapProof has no effect here:
@@ -184,7 +198,7 @@ func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 
 func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
 	structure *LoftAuditStructure, shortcuts LoftAuditShortcuts, ceiling uint64,
-	triangleLimit int, parallelPairs bool) (LoftAuditWork, error) {
+	triangleLimit int, parallelPairs bool, patches ...ProjectedPatch) (LoftAuditWork, error) {
 	var work LoftAuditWork
 	if err := budget.Err(); err != nil {
 		return work, err
@@ -206,6 +220,41 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 		if TriangleCollapsed(verts, tri) {
 			return work, fmt.Errorf(`%w: loft triangle %d has collapsed to zero area`, decaderr.ErrDegenerate, i)
 		}
+	}
+	if err := budget.Err(); err != nil {
+		return work, err
+	}
+	var patchFamily []int
+	if len(patches) != 0 {
+		patchFamily = make([]int, f)
+		for i := range patchFamily {
+			patchFamily[i] = -1
+		}
+	}
+	provenPatches := 0
+	remainingPatchChecks := uint64(100_000_000)
+	for family, patch := range patches {
+		if projectedPatchProofLimited(budget, verts, tris, patch,
+			&remainingPatchChecks) != ProjectedPatchHolds {
+			continue
+		}
+		if err := budget.Err(); err != nil {
+			return work, err
+		}
+		unique := true
+		for _, index := range patch.Triangles {
+			if patchFamily[index] >= 0 {
+				unique = false
+				break
+			}
+		}
+		if !unique {
+			continue
+		}
+		for _, index := range patch.Triangles {
+			patchFamily[index] = family
+		}
+		provenPatches++
 	}
 	if err := budget.Err(); err != nil {
 		return work, err
@@ -274,7 +323,11 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 	var count uint64
 	var starts []int
 	if shortcuts.Sweep {
-		order = newPairScan(boxes, members, ceiling)
+		if provenPatches != 0 {
+			order = newGroupedTreeScan(boxes, members, patchFamily)
+		} else {
+			order = newPairScan(boxes, members, ceiling)
+		}
 		sc, err := sweepCandidateCounts(budget, order, f, keepEveryPair, ceiling)
 		work.Scanned = int(sc.scanned)
 		if err != nil {

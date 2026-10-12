@@ -66,6 +66,16 @@ original Revolve, source certificate, placed sources, and dynamic ring IDs.
 Each construction must pass connected orientation, vertex links, the exact
 triangle contact audit, a 0.1 mm boundary bound, finite area and occupied
 volume bounds, and a measured-volume increase over the original Revolve.
+For each cap whose held triangles form a single graph over the plane normal
+to the Revolve axis, the audit may omit pairs within that cap. It proves
+strict and consistent projected triangle orientation, opposite use of each
+internal edge, one directed boundary loop, and a simple exact projected
+boundary. These facts make the oriented triangle chain cover its boundary
+region once, so distinct triangle interiors cannot meet. Failed cap proofs
+leave every pair in the exact audit. Separate cap families and all cap-wall
+and wall-wall pairs always remain in the audit. A family-aware box tree
+counts its node visits and leaf comparisons under the existing per-call
+scan ceiling before allocating candidate pairs.
 The audit triangle allowance follows the section-ring and cap cell counts,
 with a one-million-triangle memory ceiling. The crossing scan allowance is
 the smaller of all triangle pairs and 25 million scans per admitted sector.

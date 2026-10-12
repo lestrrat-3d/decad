@@ -357,8 +357,22 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		return nil, nil, fmt.Errorf("%w: joined sectors exceed the audit work limit", ErrUnsupported)
 	}
 	scans := min(pairCount, workCeiling)
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
-		mesh.verts, mesh.tris, count, scans); err != nil {
+	patches := make([]loftmesh.ProjectedPatch, 2*len(plans))
+	patchByGroup := make(map[int]int, len(patches))
+	for i, plan := range plans {
+		for side, group := range plan.capGroups {
+			patch := 2*i + side
+			patches[patch].Axes = [2]int{1, 2} // The admitted Revolve source has world-X axis.
+			patchByGroup[group] = patch
+		}
+	}
+	for i, group := range mesh.src {
+		if patch, ok := patchByGroup[group]; ok {
+			patches[patch].Triangles = append(patches[patch].Triangles, i)
+		}
+	}
+	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatches(proofbound.NewWorkBudget(ctx),
+		mesh.verts, mesh.tris, patches, count, scans); err != nil {
 		if revolveRootCapContact(mesh, ring, section, plans, err) {
 			return nil, nil, &revolveSectorContactRefineError{cause: err}
 		}
