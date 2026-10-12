@@ -479,6 +479,19 @@ has no X beyond the upper circle, so the retained cap region is also outside
 the blank there. The certificate claims only its bounded witness interval;
 it does not select held facets or admit Union.
 
+Before the lower heel contact circle, a separate source certificate follows the
+live heel cone from its finite far end. Every source span is strictly inside
+the cone circle until one isolated whole tip-Arc time root. Both adjacent
+fitted flanks share that Arc's live endpoint handles and exact root bracket.
+The bracket has those two fitted endpoint contacts and the whole Arc contact;
+every other source span is inside. Rational endpoint ownership checks cover
+the strict cells on either side of the bracket. After the root, two fitted
+crossings remain linked through their live knot transfers to the lower
+occupied circle. The exact Revolve section lies strictly below the heel cone
+before that circle and touches it only on the recorded blank side. The source
+box maps to positive world Y throughout the occupied interval. This source
+certificate does not select held facets or admit Union.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
