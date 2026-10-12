@@ -101,7 +101,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 | RX | Receiver | Fillet / Chamfer | Shell |
 |---|---|---|---|
 | **RX1** | `prismPayload` | base lateral junctions; one straight cap edge through route E or the bounded cutter; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (`docs/vertex-blend-design.md`) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR, for a hole-free section, `WithNoOpenings` |
-| **RX2** | `revolvePayload` | off-axis swept meridian junctions only: a full-turn latitude `Circle3` or partial-turn junction `Arc3` | full turn: one proper connected run of generated side faces, or `WithNoOpenings`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
+| **RX2** | `revolvePayload` | off-axis swept meridian junctions: a full-turn latitude `Circle3` or partial-turn junction `Arc3`; one bounded quarter-turn rectangular cap rim (§7.2) | full turn: one proper connected run of generated side faces, or `WithNoOpenings`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
 | **RX3** | `stackedPrismPayload` | through its face view, `docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
 | **RX5** | `cupPayload`: a two-slab `stackedPrismPayload` record beside the shell morphology (§9.1) | base S3 | base S3 |
@@ -139,7 +139,7 @@ more specific SX row replaces that base refusal.
 | **SX2** | tangent continuation is branch-ambiguous or the analytic oracle cannot decide G1 continuity | evaluator cannot know which chain caller named | `ErrUnsupported` |
 | **SX3** | asymmetric reference is nil, invalid, or does not identify exactly one adjacent face per expanded edge | invalid selector / cardinality | existing selector error; otherwise `ErrCardinality` |
 | **SX4** | a partial prism cap-loop `Chamfer` of at least two edges, a mixed lateral/cap `Chamfer`, a mixed revolve/cap selection, or one prism or brep loop with mixed asymmetric face assignments; route E admits one straight cap edge and route V admits complete cap loops with independent straight edges for `Fillet` | body exists; endpoint/setback transition not built | `ErrUnsupported` |
-| **SX5** | selected revolve edge is not a swept meridian junction | body exists; cap-edge/general rolling blend not built | `ErrUnsupported` |
+| **SX5** | selected revolve edge is neither a swept meridian junction nor §7.2's single quarter-turn rectangular cap rim | body exists; other cap-edge/general rolling blends are not built | `ErrUnsupported` |
 | **SX6** | cap-loop offset loses a carrier, reaches an empty circular offset, or has no regular radius-`r` envelope; LF9's exact-radius inward arc with straight G1 neighbours is the fillet exception (`docs/vertex-blend-design.md`) | no regular requested blend | `ErrDegenerate` |
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
 | **SX8** | shell side/no-opening extension is used on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap; revolve meridian is holed or meets the axis along more than one walk; a revolve wall's offset reaches the axis | body exists outside extension | `ErrUnsupported` |
@@ -347,9 +347,10 @@ section:
 | off-axis corner | latitude circle on a full turn; angular arc on a partial turn |
 | on-axis corner | one vertex, no selectable edge |
 
-Map every selected RX2 edge to `(loop, corner)` of the axis-local coalesced
-walk. Match the stored analytic edge against the junction record; do not use a
-topology index.
+For a meridian-junction selection, map every selected RX2 edge to
+`(loop, corner)` of the axis-local coalesced walk. Match the stored analytic
+edge against the junction record; do not use a topology index. §7.2 covers
+one angular-cap radial rim separately.
 
 Reuse the base `cornerBlend` rewrite and audit:
 
@@ -376,7 +377,8 @@ result record's index space.
 ### 7.1 Implementation
 
 `revolve_blend.go` runs this section; `Body.Fillet` and `Body.Chamfer` route a
-`revolvePayload` receiver to it after stage 1 and SX10/SX16.
+`revolvePayload` receiver to it after stage 1 and SX10/SX16. `Body.Fillet`
+tries §7.2's source-specific radial rim first.
 
 **Matching.** The build stamps every junction edge from
 `revolvePayload.junctionCircle`: centre on the axis at the junction's `z`,
@@ -384,7 +386,8 @@ the placed sweep axis, radius `ρ`. A selected edge is a junction exactly when
 its curve kind is the sweep's (`Circle3` full, `Arc3` partial) and its centre,
 axis and radius equal one junction circle's bit for bit, recomputed from the
 same payload. A cap edge's circle lies in a cap plane, and an on-axis or cap
-line is a `Line3`, so neither matches: SX5. Equality is exact because the two
+line is a `Line3`, so neither matches this junction route: SX5 outside §7.2.
+Equality is exact because the two
 numbers come from one function over one payload; no tolerance chooses a
 junction.
 
@@ -416,6 +419,47 @@ revolve's own (Table DX).
 the meridian, and each carries the `side(i,j)` roles of the recorded segments
 it sweeps. §6's role reading picks which plane-local walk takes `d`, and
 `computeChamfer` sets each walk back by its own distance.
+
+### 7.2 One quarter-turn angular-cap radial-rim fillet
+
+`revolve_cap_edge_fillet.go` admits an unplaced solid Revolve of one exact
+XY-plane rectangle `(xlo,0)`–`(xhi,R)`, swept from zero to a denoted exact
+quarter turn about +X. The four natural-range lines must follow that order;
+the source has no holes, section displacement, previous blend, or draft
+rewrite. `|xlo|,|xhi| ≤ 16`, `1 ≤ xhi−xlo,R ≤ 16`, and the exact millimetre
+fillet radius satisfies `0.125 ≤ a ≤ 4` and `2a < min(xhi−xlo,R)`. One
+selected `Line3` must run from `(xhi,0,0)` to `(xhi,R,0)`. A different
+orientation, angle, placement, source, edge, or radius takes SX5. The result
+is faceted and does not admit another modify op.
+
+For `z ∈ [0,R]`, the true result has `0 ≤ y ≤ H(z) = √(R²−z²)` and
+`xlo ≤ x ≤ f(z)`. On `[0,a]`, `f(z) = xhi−a+√(2az−z²)`; above `a`,
+`f(z) = xhi`. Thus the new quarter-cylinder meets the source outer cylinder
+along their analytic intersection curve. At `y=0`, it meets the other
+angular cap along a quarter-circle. Both `f` and `H` are concave, so chords
+through inward-rounded stations lie inside the true region.
+
+The build uses 128 fillet and 512 outer-wall intervals. Every station's `z`
+is read as an exact dyadic. `RatSqrtDown` puts its held `x,y` at or inside
+the exact radical; `RatSqrtUp` encloses their true values. Adjacent station
+rectangles share vertices; their four ruled walls, first angular cap and
+collapsed last rim form a closed mesh. `RequireVertexLinks` and the faceted
+mesh audit reject a broken held boundary. The five retained source faces
+keep their origins; the new wall carries `fillet(0,1)`.
+
+For each z interval, let `df` be the next station's upper `f` minus the
+current held `f`, and `dh` the current upper `H` minus the next held `H`.
+Monotonicity gives `0 ≤ f−F ≤ df` and `0 ≤ H−G ≤ dh`, where `F,G` are the
+held linear walls. Every true boundary point and its held counterpart are
+within `df+dh`; the maximum becomes each vertex's boundary certificate.
+The call refuses if it reaches 0.1 mm. The held solid is inside the true
+one, so its occupied-volume difference is at most
+`Σ Δz [R·df + (xhi−xlo)·dh]`, summed in exact rational arithmetic and
+rounded upward once. The faceted builder integrates held volume and first
+moments exactly and uses this difference with the box diagonal to bound
+centroid displacement. Each true face area is below the sum
+`2R²+4R(xhi−xlo)+2aR`; `areaSlack` is the larger of that and the audited
+held mesh area upper bound. This bounds each source face's area difference.
 
 ## 8. Complete prism cap-loop blends
 

@@ -82,8 +82,9 @@ const filletTol = sectionaudit.Tolerance
 // audit, and is re-gated against the axis — a new axis contact is
 // ErrDegenerate, an arc centred across the axis ErrUnsupported — before the
 // revolve is rebuilt over the receiver's own axis, sweep and placement. The
-// blend is a Torus, or a Sphere when its centre lies on the axis. Any other
-// revolve edge — a cap edge, an edge on the axis — is SX5 (ErrUnsupported).
+// blend is a Torus, or a Sphere when its centre lies on the axis. One
+// quarter-turn rectangular angular-cap radial rim has a bounded faceted
+// route; other cap edges and edges on the axis are SX5 (ErrUnsupported).
 // An axial loft whose two section records match also accepts line/arc corners
 // on its hole-free section. It rewrites both records together and rebuilds the
 // loft. Unchanged free-form segments retain their recorded curves; a new
@@ -233,9 +234,12 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 		return commitModifyResult(ctx, b, route.body)
 	}
 
-	// Reach RX2 (docs/modify-reach-design.md §7): a revolve receiver rounds its
-	// swept meridian junctions through the same corner rewrite.
+	// Reach RX2 (docs/modify-reach-design.md §7): a quarter-turn rectangular
+	// revolve also admits its one outer angular-cap radial rim.
 	if rp, ok := b.payload.(revolvePayload); ok {
+		if out, matched, err := tryRevolveCapRimFillet(ctx, b, rp, edges, rmm, rDelta); matched || err != nil {
+			return out, err
+		}
 		return b.blendRevolveJunctions(ctx, sel, edges, rp, blend)
 	}
 	if lp, ok := b.payload.(loftPayload); ok {

@@ -95,6 +95,9 @@
 1	0.00	TestRevolveChainRunsTheSeamGates
 1	0.01	TestRevolveChainWallNormalCoversNearParallelSegment
 1	0.01	TestRevolvePartialCentroidBoundTightens
+1	0.06	TestRevolveQuarterCapRadialRimFilletMeasurements
+1	0.01	TestRevolveQuarterCapRadialRimFilletRefusesOtherSources
+1	0.13	TestRevolveQuarterCapRadialRimFilletVerified
 1	0.01	TestRevolveSemicirclePartialSweepCentroidBoundTightens
 1	0.00	TestRevolveSolidCylinderHasNoInnerFace
 1	0.01	TestRevolveToFaceAngular
