@@ -187,6 +187,7 @@ var (
 		layoutPartSpec("booleans.md"),
 		layoutPartSpec("revolve-booleans.md"),
 		layoutPartSpec("prism-pattern.md"),
+		layoutPartSpec("curved-booleans.md"),
 		layoutPartSpec("verification.md"),
 		layoutPartSpec("output-repository.md"),
 		layoutPartSpec("internal-core.md"),
