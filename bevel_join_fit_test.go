@@ -106,8 +106,8 @@ func TestBevelFitSeatPointEnclosesRecordedMeridianCrossing(t *testing.T) {
 	frame, err := plane.Frame()
 	require.NoError(t, err)
 	blank := &bevelBlankSource{
-		toeRoot: Point2{U: 7, V: 7.01},
-		ded:     Point2{U: 9, V: 9.01},
+		toeRoot: Point2{U: 7, V: 7.001},
+		ded:     Point2{U: 9, V: 9.001},
 		rootCone: Cone{
 			Origin: r3.Vec{}, Axis: r3.Vec{X: 1},
 			HalfAngle: units.Radians(math.Pi / 4),
