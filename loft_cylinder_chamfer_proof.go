@@ -188,28 +188,33 @@ func loftCylinderChamferExactNested(ctx context.Context, xverts []proofarith.Xpt
 	if len(outer) < 3 || len(inner) < 3 {
 		return false, nil
 	}
-	for i, a := range outer {
-		b := outer[(i+1)%len(outer)]
-		pa, pb := loftCylinderChamferExactXY(xverts[a]), loftCylinderChamferExactXY(xverts[b])
-		for j, c := range inner {
+	outerPoints := make([]loftCylinderXY, len(outer))
+	for i, index := range outer {
+		outerPoints[i] = loftCylinderChamferExactXY(xverts[index])
+	}
+	innerPoints := make([]loftCylinderXY, len(inner))
+	for i, index := range inner {
+		innerPoints[i] = loftCylinderChamferExactXY(xverts[index])
+	}
+	for i, pa := range outerPoints {
+		pb := outerPoints[(i+1)%len(outerPoints)]
+		for j, pc := range innerPoints {
 			if j%64 == 0 {
 				if err := ctx.Err(); err != nil {
 					return false, err
 				}
 			}
-			d := inner[(j+1)%len(inner)]
-			pc, pd := loftCylinderChamferExactXY(xverts[c]), loftCylinderChamferExactXY(xverts[d])
+			pd := innerPoints[(j+1)%len(innerPoints)]
 			if loftCylinderEdgesMeet(pa, pb, pc, pd) {
 				return false, nil
 			}
 		}
 	}
 	poly := make([]meshbool.Xp2, len(outer))
-	for i, index := range outer {
-		p := loftCylinderChamferExactXY(xverts[index])
+	for i, p := range outerPoints {
 		poly[i] = meshbool.NewXP2(p.x, p.y)
 	}
-	p := loftCylinderChamferExactXY(xverts[inner[0]])
+	p := innerPoints[0]
 	inside, on, err := meshbool.PointInPoly2(proofbound.NewWorkBudget(ctx), poly, meshbool.NewXP2(p.x, p.y))
 	return inside && !on, err
 }
