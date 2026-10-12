@@ -263,7 +263,8 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinder
 	}
 	if len(source.teeth) == 0 || source.blankRadius <= 0 || source.boreRadius < 0 ||
 		source.boreRadius >= source.blankRadius || proofbound.IsNonFinite(source.blankRadius) ||
-		proofbound.IsNonFinite(source.boreRadius) || ctx.Err() != nil {
+		proofbound.IsNonFinite(source.boreRadius) ||
+		len(source.ringLevelShift) != 0 && len(source.ringLevelShift) != len(source.teeth) || ctx.Err() != nil {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
@@ -293,7 +294,15 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinder
 			return refuse("ring has no authenticated original tooth")
 		}
 		scale := proofarith.FloatRat(original.xform.Basis().EZ.Z)
-		mapped := new(big.Rat).Quo(level, scale)
+		mappedLevel := new(big.Rat).Set(level)
+		if len(source.ringLevelShift) != 0 {
+			shift := source.ringLevelShift[i]
+			if shift == nil || shift.Sign() < 0 {
+				return refuse("ring has no finite physical tooth level")
+			}
+			mappedLevel.Sub(mappedLevel, shift)
+		}
+		mapped := new(big.Rat).Quo(mappedLevel, scale)
 		if mapped.Cmp(tooth.circle.safeBottom) <= 0 || mapped.Cmp(tooth.circle.safeTop) >= 0 {
 			return refuse("ring meets a source cap or root collar")
 		}

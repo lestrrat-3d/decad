@@ -237,7 +237,7 @@ func loftCylinderChamferNearCovered(ctx context.Context, tri [3]proofarith.Xpt,
 // split edge. Exact distance to that ring then bounds every band facet.
 func loftCylinderChamferNearBandReach(ctx context.Context, mesh *bevelJoinedMesh,
 	fp facetedPayload, source loftCylinderChamferSource, ideal []proofarith.Xpt, bands [2][2]int,
-	clipBound, publishedBound float64, multipleRings bool) error {
+	clipBound, publishedBound float64, multipleRings bool, reflectedShift []*big.Rat) error {
 	reach := math.Nextafter(publishedBound-clipBound, math.Inf(-1))
 	if reach <= 0 || proofbound.IsNonFinite(reach) {
 		return fmt.Errorf("%w: cap band has no boundary allowance", ErrUnsupported)
@@ -278,6 +278,13 @@ func loftCylinderChamferNearBandReach(ctx context.Context, mesh *bevelJoinedMesh
 			}
 			if _, err := loftCylinderSourceRingInside(ctx, fp, sourceEdges); err != nil {
 				return err
+			}
+			if len(reflectedShift) != 0 {
+				shifted := source
+				shifted.ringLevelShift = reflectedShift
+				if _, err := loftCylinderSourceRingInsideInputs(ctx, shifted, sourceEdges); err != nil {
+					return fmt.Errorf("reflected cap split ring: %w", err)
+				}
 			}
 		}
 		if multipleRings {

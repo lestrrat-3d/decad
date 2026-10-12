@@ -159,3 +159,33 @@ For a near-axis placed pair, the Join record carries its upper source
 translation bound and swept-volume charge into the Cut. The reflected upper
 vertex and mesh bounds include that translation, and the bored top cap retains
 the faceted surface tag when the original upper tooth ends below it.
+
+## Both exterior cap Chamfers after a centered bore
+
+An unplaced, audited mirrored Join with its certified centered through-bore
+accepts one equal setback on both complete exterior outer cap loops. The inner
+bore loops and all side edges stay sharp. The private bored lower half gets
+one start-cap Chamfer. Its opposite cap and middle annulus remain unchanged;
+the audited half is then reflected, its matching middle annuli are removed,
+and the common middle vertices are welded. Separate cap and wall audits prove
+the two exterior annuli, unchanged bore wall, and strict separation of the
+lower and upper slabs outside their shared seam.
+
+The one-cap cutter uses exact side and inset loops, three source-occupied
+split rings, and exact full-band distance checks. Its band can cross the
+side-level ring in XY when the three-dimensional contact audit proves the
+band touches the old held wall only on the intended side ring. The source
+cap and retained side audits still prove both directions of boundary reach.
+The reflection uses the placed-mesh rounding envelope, checked against the
+measured upper-half bound. The final boundary allowance reserves this rounding
+before building the lower half.
+
+For a near-axis placed pair, the actual upper source tooth lies below its
+reflected lower proof tooth by the Join's authenticated axial shift. The
+three lower cap-band split rings are checked again against each tooth at its
+shifted physical source level. An exact section through the reflected upper
+band at the lowest possible source cap proves the intervening cap sliver's
+reach. The measured vertical and lateral reach is charged to the upper
+vertex and boundary bounds. The Join's swept-volume charge is carried into
+the final occupied-volume allowance. Both charges must fit the caller's
+0.1 mm `VerifyAll` tolerance.

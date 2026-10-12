@@ -416,6 +416,8 @@ type loftCylinderOneCapData struct {
 	outer     [2][]int
 	inner     [2][]int
 	boreGroup int
+	ideal     []proofarith.Xpt
+	band      [2]int
 }
 
 // The top of a private one-cap rewrite is an exact subset of the old side.
@@ -445,7 +447,7 @@ func loftCylinderChamferRestoreTop(mesh *bevelJoinedMesh, fp facetedPayload,
 func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerID,
 	fp facetedPayload, source loftCylinderChamferSource, setback float64) (*Body, error) {
 	return buildLoftCylinderCapChamferCaps(ctx, d, ref, fp, source, setback,
-		[2]bool{true, true}, 0.1, nil)
+		[2]bool{true, true}, 0.1, nil, nil)
 }
 
 // The inactive top cap is kept verbatim, including its bore rim and middle
@@ -453,14 +455,15 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 // public two-cap route. This private result is sewn to its reflection.
 func buildLoftCylinderOneCapChamfer(ctx context.Context, d *Document, ref producerID,
 	fp facetedPayload, source loftCylinderChamferSource, setback, allowance float64,
-	data *loftCylinderOneCapData) (*Body, error) {
+	reflectedShift []*big.Rat, data *loftCylinderOneCapData) (*Body, error) {
 	return buildLoftCylinderCapChamferCaps(ctx, d, ref, fp, source, setback,
-		[2]bool{true, false}, allowance, data)
+		[2]bool{true, false}, allowance, reflectedShift, data)
 }
 
 func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref producerID,
 	fp facetedPayload, source loftCylinderChamferSource, setback float64,
-	active [2]bool, allowance float64, oneCap *loftCylinderOneCapData) (*Body, error) {
+	active [2]bool, allowance float64, reflectedShift []*big.Rat,
+	oneCap *loftCylinderOneCapData) (*Body, error) {
 	// This rewrite has its own fixed work envelope. The source ring and its
 	// chorded inset bound the constructed mesh; the crossing audit still
 	// performs every exact contact check it would under the default ceiling.
@@ -700,7 +703,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		}
 	}
 	if err := loftCylinderChamferNearBandReach(ctx, mesh, fp, source, ideal, bands,
-		clipped.clipBound, allowance, !active[1]); err != nil {
+		clipped.clipBound, allowance, !active[1], reflectedShift); err != nil {
 		return nil, err
 	}
 	if err := loftCylinderChamferBoreInheritance(fp, mesh, source); err != nil {
@@ -744,7 +747,25 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	for i := range bounds {
 		bounds[i] = max(bounds[i], bound)
 	}
+	var usedIdeal []bool
+	if oneCap != nil {
+		usedIdeal = make([]bool, len(ideal))
+		for _, tri := range mesh.tris {
+			for _, index := range tri {
+				usedIdeal[index] = true
+			}
+		}
+	}
 	bounds, remap := loftCylinderChamferCompact(mesh, bounds)
+	if oneCap != nil {
+		oneCap.ideal = make([]proofarith.Xpt, len(mesh.verts))
+		for i, x := range ideal {
+			if usedIdeal[i] {
+				oneCap.ideal[remap[i]] = x
+			}
+		}
+		oneCap.band = bands[0]
+	}
 	roundArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris,
 		clipped.clipBound)
 	if err != nil {

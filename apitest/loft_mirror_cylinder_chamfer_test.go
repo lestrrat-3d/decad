@@ -28,8 +28,15 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 	require.NoError(t, err)
 	pattern := []*decad.Body{pair}
 	for i := 1; i < 8; i++ {
-		turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(float64(45*i)))
+		angle := units.Degrees(float64(45 * i))
+		if i == 5 {
+			angle = units.Radians(10 * 2 * math.Pi / 17)
+		}
+		turn, err := r3.Rotation(r3.Vec{Z: 1}, angle)
 		require.NoError(t, err)
+		if i == 5 {
+			require.Equal(t, math.Nextafter(1, 0), turn.Basis().EZ.Z)
+		}
 		turned, err := pair.PlacedCopy(t.Context(), turn)
 		require.NoError(t, err)
 		pattern = append(pattern, turned)
@@ -47,6 +54,17 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 		Or(decad.OuterLoopOf(decad.CapEnd(cut)))
 	chamfered, err := cut.Chamfer(t.Context(), outerCaps, units.Millimeters(0.03))
 	require.NoError(t, err)
+	for _, role := range []decad.FeatureRef{decad.CapStart(chamfered), decad.CapEnd(chamfered)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(chamfered)
+		require.NoError(t, err)
+		require.Len(t, faces[0].Loops(), 2)
+		for _, edge := range faces[0].Loops()[1].Edges() {
+			for _, vertex := range []*decad.Vertex{edge.Start(), edge.End()} {
+				p := vertex.Position().Value
+				require.InDelta(t, 0.5, math.Hypot(p.X, p.Y), 1e-12)
+			}
+		}
+	}
 	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)

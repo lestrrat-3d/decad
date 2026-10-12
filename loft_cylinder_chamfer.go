@@ -26,6 +26,9 @@ type loftCylinderChamferSource struct {
 	axialBridge    []float64
 	bridgeBound    float64
 	topSourceLevel *big.Rat
+	// Optional physical-height correction for a reflected, axially bridged
+	// source tooth. The ring's shared held level stays unchanged.
+	ringLevelShift []*big.Rat
 	outer, inner   [2][]int
 	capGroups      [2]int
 	boreGroup      int

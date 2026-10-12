@@ -47,8 +47,9 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	if err := loftMirrorCylinderChamferSelect(ctx, b, fp, record, edges); err != nil {
 		return nil, true, err
 	}
-	if record.join.bridgeBound != 0 {
-		return nil, true, fmt.Errorf("%w: mirrored cap chamfer needs an upper source-cap bridge proof", ErrUnsupported)
+	shifts, err := loftMirrorCylinderChamferUpperShifts(record)
+	if err != nil {
+		return nil, true, err
 	}
 	var half loftCylinderOneCapData
 	ref := b.doc.nextProducerID()
@@ -56,20 +57,25 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	if err != nil {
 		return nil, true, err
 	}
-	allowance := math.Nextafter(0.1-reserve, math.Inf(-1))
-	for i := 0; i < 4 && proofbound.AbsSumUpper(allowance, reserve) > 0.1; i++ {
+	bridgeReserve, err := loftMirrorCylinderChamferBridgeReserve(lower, record, setback)
+	if err != nil {
+		return nil, true, err
+	}
+	totalReserve := proofbound.AbsSumUpper(reserve, bridgeReserve)
+	allowance := math.Nextafter(0.1-totalReserve, math.Inf(-1))
+	for i := 0; i < 4 && proofbound.AbsSumUpper(allowance, totalReserve) > 0.1; i++ {
 		allowance = math.Nextafter(allowance, math.Inf(-1))
 	}
-	if allowance <= 0 || proofbound.AbsSumUpper(allowance, reserve) > 0.1 {
+	if allowance <= 0 || proofbound.AbsSumUpper(allowance, totalReserve) > 0.1 {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer has no reflection allowance", ErrUnsupported)
 	}
 	lowerBody, err := buildLoftCylinderOneCapChamfer(ctx, b.doc, ref, lower, source,
-		setback, allowance, &half)
+		setback, allowance, shifts, &half)
 	if err != nil {
 		return nil, true, err
 	}
 	result, err := buildLoftMirrorCylinderCapChamfer(ctx, b.doc, ref, fp, record,
-		lowerBody, half, reserve)
+		lowerBody, half, reserve, bridgeReserve, setback)
 	return result, true, err
 }
 
@@ -164,7 +170,7 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 
 func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref producerID,
 	old facetedPayload, record *loftMirrorCylinderBoreRecord, lowerBody *Body,
-	half loftCylinderOneCapData, reserve float64) (*Body, error) {
+	half loftCylinderOneCapData, reflectionReserve, bridgeReserve, setback float64) (*Body, error) {
 	lower, ok := lowerBody.payload.(facetedPayload)
 	if !ok || !lower.contactAudited || lower.xform != r3.Identity() ||
 		record.join.source == nil || record.join.source.lower == nil {
@@ -188,9 +194,17 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		half.capGroups[0] < 0 || half.capGroups[1] < 0 || half.boreGroup < 0 {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer halves have no matching held shell", ErrUnsupported)
 	}
-	if upper.meshBound > proofbound.AbsSumUpper(lower.meshBound, reserve) {
+	if upper.meshBound > proofbound.AbsSumUpper(lower.meshBound, reflectionReserve) {
 		return nil, fmt.Errorf("%w: reflected cap chamfer exceeds its %g mm placement reserve "+
-			"(lower %g, upper %g)", ErrUnsupported, reserve, lower.meshBound, upper.meshBound)
+			"(lower %g, upper %g)", ErrUnsupported, reflectionReserve, lower.meshBound, upper.meshBound)
+	}
+	bridgeReach, err := loftMirrorCylinderChamferUpperCapBridge(ctx, old, upper, record, half, setback)
+	if err != nil {
+		return nil, err
+	}
+	if bridgeReach > bridgeReserve {
+		return nil, fmt.Errorf("%w: reflected cap bridge %g exceeds its %g mm reserve",
+			ErrUnsupported, bridgeReach, bridgeReserve)
 	}
 	middle := loft.frame1.Origin().Z
 	midVertices := make(map[r3.Vec]int)
@@ -213,7 +227,8 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 				return nil, fmt.Errorf("%w: mirrored cap chamfer middle annuli do not match", ErrUnsupported)
 			}
 			mapUpper[i] = index
-			vertexBound[index] = max(vertexBound[index], upper.vertexBound[i])
+			vertexBound[index] = max(vertexBound[index],
+				proofbound.AbsSumUpper(upper.vertexBound[i], bridgeReach))
 			continue
 		}
 		if vertex.Z <= middle {
@@ -221,7 +236,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		}
 		mapUpper[i] = len(verts)
 		verts = append(verts, vertex)
-		vertexBound = append(vertexBound, upper.vertexBound[i])
+		vertexBound = append(vertexBound, proofbound.AbsSumUpper(upper.vertexBound[i], bridgeReach))
 	}
 	if !loftMirrorCylinderCapsOppose(lower, upper, mapUpper,
 		half.capGroups[1], half.capGroups[1]) {
@@ -302,8 +317,9 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	if err := loftMirrorCylinderChamferBoreUnchanged(old, mesh, record.wallGroups, wallGroups); err != nil {
 		return nil, err
 	}
-	bound := max(lower.meshBound, upper.meshBound)
-	volumeGap := proofbound.AbsSumUpper(lower.volSymDiff, upper.volSymDiff)
+	bound := max(lower.meshBound, proofbound.AbsSumUpper(upper.meshBound, bridgeReach))
+	volumeGap := proofbound.AbsSumUpper(lower.volSymDiff, upper.volSymDiff,
+		record.join.bridgeVolume)
 	areaSlack := proofbound.AbsSumUpper(lower.areaSlack, upper.areaSlack,
 		proofbound.ProductUpper(2, max(lower.areaSlack, upper.areaSlack)))
 	diameter := facetedSourceDiameterUpper(verts, bound)
