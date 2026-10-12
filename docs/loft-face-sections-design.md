@@ -266,6 +266,14 @@ either a source candidate or a strict miss; it refuses an undecidable side.
 The live blank face set must equal the section walk's face set exactly.
 An axis span has no boundary face. These records do not prove a solid seam.
 
+The two retained trim-cap faces also identify their original cone sources.
+For each finite Revolve side, exact affine meridian residuals either separate
+the entire side from a trim cone or locate their one possible contact circle
+by exact axial coordinate and radius. An endpoint or coincident-side contact
+is undecidable. A possible circle does not prove that the trimmed LoftFaces
+source occupies any of its angles; that requires a separate source-region
+check before the Boolean can admit the face pair.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume

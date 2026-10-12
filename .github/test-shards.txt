@@ -6,8 +6,8 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0:    2.13s over 8 tests
-#   shard 1:    5.32s over 283 tests
+#   shard 0:    4.67s over 9 tests
+#   shard 1:    5.32s over 284 tests
 #   shard 2:   10.22s over 137 tests
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  188.10s over 140 tests
@@ -26,6 +26,7 @@
 0	0.69	TestObliqueBossJunctionFilletXTiltPublicWorkflow
 0	0.00	TestObliqueBossRejectsPartialJunctionSource
 0	0.00	TestXPTKeyDistinguishesCoordinates
+0	2.54	TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource
 1	0.00	TestAddBlendRolesContextPollsNestedMetadata
 1	0.00	TestMappedArcRadialTimeBandTwoExactTimeCrossings
 1	0.00	TestMappedEndpointFiniteSection
@@ -37,6 +38,7 @@
 1	0.00	TestRevolveLoftFacesOwnedTimeRootsRemainDisjoint
 1	0.00	TestRevolveLoftFacesOpenTimeExcludesExactPointRoot
 1	0.00	TestRevolveLoftFacesOpenMovingCrossingRefuses
+1	0.00	TestRevolveLoftFacesToolCircleOnFiniteSection
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
 1	0.00	TestAddRevolveFacesPreservesMeridianErrorMapping
