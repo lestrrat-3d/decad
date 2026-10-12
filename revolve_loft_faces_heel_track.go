@@ -168,6 +168,8 @@ func revolveLoftFacesHeelTrackPlace(station *revolveLoftFacesHeelTrackStation,
 	if station.box[0][0].lo.Cmp(station.box[1][0].lo) != 0 ||
 		station.box[0][0].hi.Cmp(station.box[1][0].hi) != 0 ||
 		station.point[0].X != station.point[1].X ||
+		station.point[0].Y <= 0 || station.point[1].Y <= 0 ||
+		station.point[0].Z <= 0 || station.point[1].Z >= 0 ||
 		station.box[0][2].lo.Sign() <= 0 || station.box[1][2].hi.Sign() >= 0 {
 		return false
 	}

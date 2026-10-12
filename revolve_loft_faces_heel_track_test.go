@@ -46,3 +46,26 @@ func TestCurvedHeelTrackUsesLiveMovingRoots(t *testing.T) {
 	require.False(t, built)
 	require.Nil(t, refused)
 }
+
+func TestCurvedHeelTrackRefusesRoundedAwaySides(t *testing.T) {
+	tiny := new(big.Rat).SetFrac(big.NewInt(1),
+		new(big.Int).Lsh(big.NewInt(1), 1075))
+	value := func(v *big.Rat) loftFaceInterval {
+		return loftFaceInterval{lo: v, hi: v}
+	}
+	for _, test := range []struct {
+		name   string
+		y0, z0 *big.Rat
+	}{
+		{"positive Y rounds to zero", tiny, lfOne()},
+		{"positive Z rounds to zero", lfOne(), tiny},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			station := revolveLoftFacesHeelTrackStation{box: [2][3]loftFaceInterval{
+				{value(lfOne()), value(test.y0), value(test.z0)},
+				{value(lfOne()), value(lfOne()), value(big.NewRat(-1, 1))},
+			}}
+			require.False(t, revolveLoftFacesHeelTrackPlace(&station, big.NewRat(1, 50)))
+		})
+	}
+}

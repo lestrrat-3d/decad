@@ -213,6 +213,7 @@
 1	0.00	TestRevolveLoftFacesCapCutIntervalMulSigns
 1	0.00	TestRevolveLoftFacesCapCutFinalRaysRejectRoundedReversal
 1	16.00	TestCurvedHeelTrackUsesLiveMovingRoots
+1	0.00	TestCurvedHeelTrackRefusesRoundedAwaySides
 1	12.00	TestCurvedHeelRegionCertifiesContinuousSource
 1	8.00	TestCurvedHeelRegionRejectsChangedBlankSection
 1	8.00	TestCurvedHeelRegionRejectsStaleSource
