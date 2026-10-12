@@ -66,7 +66,10 @@ type facetGroup struct {
 type facetedPayload struct {
 	// prismScale marks a certified similar image of a line/circular
 	// prism. Rigid copies retain it; booleans and modify rewrites do not.
-	prismScale       bool
+	prismScale bool
+	// obliqueBoss retains the two authenticated prism sources for one complete
+	// plate-to-cylinder junction. A later Fillet rebuilds from these records.
+	obliqueBoss      *obliqueBossRecord
 	loftCylinderJoin *loftCylinderJoinRecord
 	loftCylinderBore *loftCylinderBoreRecord
 	// contactAudited records a whole-mesh exact contact audit at construction.
@@ -189,6 +192,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	// centroid ranking, but cannot become a new structural Split source.
 	next.pointPlaneSourceEligible = false
 	next.bevelJoin = nil
+	next.obliqueBoss = nil
 	next.loftCylinderJoin = nil
 	next.loftCylinderBore = nil
 	next.bevelTooth = nil

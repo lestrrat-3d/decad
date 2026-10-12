@@ -27,8 +27,10 @@ Outside prism-boolean's admitted class a boolean tessellates both operands
    partner.
 2. **The result is `Faceted`.** A cross-drilled hole, a slot, a keyway, a
    boss rooted inside a plate, a tee of cylinders all build, but as
-   `facetedPayload`: `Fillet`/`Chamfer`/`Shell` refuse permanently
-   (modify-reach SX9), the three surveys read `Suspect`, the analytic STEP
+   `facetedPayload`: most `Fillet`/`Chamfer`/`Shell` requests refuse
+   (modify-reach SX9). A complete tilted plate-to-cylinder junction can take
+   the bounded `Fillet` in `docs/oblique-boss-fillet-design.md`. The three
+   surveys read `Suspect`, the analytic STEP
    path is gone, and the published bound is 0.5–2 mm³ against 1e-12 mm³ for
    the same part drawn as an analytic cut.
 3. **Chains stop early.** A faceted face's bound is the largest over its

@@ -11,6 +11,7 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `fillet.go` | Fillet entry and section rewrite adapter. See modify §6. |
 | `loft_fillet.go` | Rewrites matching loft records at selected analytic and fitted-spline root corners. See loft §17. |
+| `oblique_boss_fillet.go` / `oblique_boss_proof.go` | Builds and proves the complete tilted cylinder boss-root fillet. See oblique-boss-fillet design. |
 | `loft_fillet_audit.go` | Audits rewritten loft sections and nonadjacent clearance. See loft §17. |
 | `loft_fit_fillet.go` | Finds a numerical fit/circle root-fillet candidate. See loft §17. |
 | `loft_fit_root_cert.go` | Certifies the ideal fit/circle tangent contact. See loft §17. |
