@@ -58,7 +58,6 @@
 1	0.05	TestBevelFitExteriorPathChargesSeatOnce
 1	0.01	TestBevelFitSeatPointEnclosesRecordedMeridianCrossing
 1	0.00	TestBevelFitStationEdgeRequiresOneStrictBracket
-1	1.20	TestPointLoftFitConeJoinThroughPublicOperations
 1	0.01	TestBlindStackedLevelCarriesToolConversion
 1	0.00	TestBodyGateDiameterCancellation
 1	0.00	TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum

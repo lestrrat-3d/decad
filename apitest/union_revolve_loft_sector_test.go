@@ -76,6 +76,26 @@ func TestUnionShoulderedHubAndRadialLug(t *testing.T) {
 	require.Equal(t, 2, revolveLugEuler(mesh))
 }
 
+// A sloped cap adjacent to the root remains an authenticated meridian span.
+func TestUnionSlopedHubCapAndRadialLug(t *testing.T) {
+	_, hub, trimmed, _, splitCap := taperedHubAndRadialLug(t, 8.99, 7.5, 4.3, false)
+	hubVolume, err := hub.Volume()
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), hub, trimmed)
+	require.NoError(t, err)
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Equal(t, 2, revolveLugEuler(mesh))
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	require.Greater(t, volume.Value.Base()-volume.Bound.Base(),
+		hubVolume.Value.Base()+hubVolume.Bound.Base())
+	requireRevolveLugSourceFaces(t, joined, splitCap)
+}
+
 func TestUnionShoulderedHubAndTwoRadialLugs(t *testing.T) {
 	_, hub, trimmed := shoulderedHubAndRadialLug(t)
 	hubVolume, err := hub.Volume()
@@ -332,7 +352,6 @@ func TestUnionTaperedHubRadialLugRefusals(t *testing.T) {
 		stale      bool
 		cancel     bool
 	}{
-		{name: "noncollinear cap", splitU: 8.99, toeApex: 7.5, rootRadius: 4.3},
 		{name: "foreign toe cone", splitU: 9, toeApex: 7.6, rootRadius: 4.3},
 		{name: "near root contact", splitU: 9, toeApex: 7.5, rootRadius: 4.98397},
 		{name: "fitted near root contact", splitU: 9, toeApex: 7.5,

@@ -169,6 +169,12 @@
 1	0.02	TestUnionOfAdmittedCapBlendBodies
 1	0.01	TestUnionOverlappingCubes
 1	0.00	TestUnionRejectsKnifeEdgeGraze
+1	2.40	TestUnionShoulderedHubAndRadialLug
+1	4.70	TestUnionShoulderedHubAndTwoRadialLugs
+1	3.50	TestUnionShoulderedHubAndTwoRadialLugsVariadic
+1	3.60	TestUnionShoulderedHubAndThreeRadialLugsVariadic
+1	2.30	TestUnionShoulderedHubOverlappingLugsLeaveInputsLive
+1	2.40	TestUnionSlopedHubCapAndRadialLug
 1	5.10	TestUnionTaperedHubAndFittedRadialLug
 1	1.68	TestUnionTaperedHubAndRadialLug
 1	0.01	TestUnstitchVoidRevolveMakesNonVoidSheets
