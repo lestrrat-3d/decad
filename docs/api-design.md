@@ -1193,14 +1193,17 @@ an ambient assembly context (§4). The zero `Transform{}` is invalid
 (`Transform.IsValid`) and is `ErrDegenerate` (§12). `Placed` checks `ctx` through any
 faceted-payload rebuild and returns its error without changing the document.
 
-`ScaledAt` retires an authenticated point-loft planar Split slab after a
-positive, finite, dimensionless uniform scale around `anchor` in millimetres.
-It accepts a rigidly placed slab and a previous scaled slab. It keeps the
-original cap origins, face-centroid certificates and rational source cut maps,
-then rebuilds the held mesh with scaled vertex, area and occupied-volume
-bounds. A nonpositive factor is `ErrDegenerate`, a length factor is
-`ErrUnitKind`, and an unsupported body is `ErrUnsupported`. Cancellation and
-proof refusal leave the receiver live.
+`ScaledAt` retires an authenticated point-loft planar Split slab or an exact
+all-line solid prism after a positive, finite, dimensionless uniform scale
+around `anchor` in millimetres. It accepts rigidly placed and previously scaled
+copies of either class. A Split slab keeps its original cap origins,
+face-centroid certificates and rational source cut maps. A straight prism
+keeps its source-face roles and planar tags, but its scaled body is faceted;
+later operations that require an analytic prism can refuse it. Both classes
+rebuild the held mesh with scaled vertex, area and occupied-volume bounds. A
+nonpositive factor is `ErrDegenerate`, a length factor is `ErrUnitKind`, and an
+unsupported body is `ErrUnsupported`. Cancellation and proof refusal leave the
+receiver live.
 
 **A body can be copied without consuming it.** `Placed` retires its receiver, so
 modelling a part once and placing several instances — a bolt pattern, several

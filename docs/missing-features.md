@@ -100,7 +100,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | `Trim`/`Extend`/`Split` over a pair sharing no generator, except a point loft split by a finite world-XY line `ExtrudeChain` sheet | Refused outside the bounded point-loft split class | `docs/surface-intersection-design.md` §4, `docs/loft-point-design.md` "Planar split of a point loft" |
 | `Face.Centroid` outside an authenticated point-loft far cap or planar Split cap | `ErrUnsupported`; only complete caps carry a bounded area-centroid certificate | `docs/loft-point-design.md` "Planar split of a point loft" |
 | `Body.ExtremeFacesByCentroid` outside a complete point-loft planar Split slab, its rigid copy, or its positive uniform image | `ErrUnsupported`; this source class has a cone bound for every side-face centroid | `docs/loft-point-design.md` "Planar split of a point loft" |
-| `Body.ScaledAt` outside an authenticated point-loft planar Split slab or its subsequent rigid/positive uniform image | `ErrUnsupported`; other body classes have no similarity certificate | `docs/loft-point-design.md` "Anchored uniform scale of a Split slab" |
+| `Body.ScaledAt` of other bodies | `ErrUnsupported`; no similarity certificate | `docs/loft-point-design.md` "Anchored uniform scale of a Split slab"; `docs/evaluator-design.md` "Positive uniform scale of a straight prism" |
 | Tolerant stitch, Ruled, Boundary Fill | Refused permanently | `docs/surface-design.md` §1.3 |
 | Reverse Normal | Named, staged for no increment | `docs/surface-design.md` §1.4 |
 
