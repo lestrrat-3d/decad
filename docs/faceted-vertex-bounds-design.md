@@ -226,7 +226,7 @@ rounding charge.
 
 ### 3.7 One Boolean for patterned curved teeth
 
-`CombineJoin` admits one certified finite blank and 2–31 rigid copies of the
+`Union` with three or more operands admits one certified finite blank and 2–31 rigid copies of the
 same immutable nine-section trim. Each placed body retains the source trim
 pointer, exact recorded motion, and unchanged triangle order. The call builds
 one transient tool operand and commits only after one Union and complete

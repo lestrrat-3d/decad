@@ -206,7 +206,7 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 }
 
 // The source slab boxes depend only on one authenticated first-tooth record.
-// CombineJoin computes them once before validating its independent held
+// A multi-body Union computes them once before validating its independent held
 // switch chains. The record pointer and side bind the cache to that source.
 type spiralRootFlankSourceBoxes struct {
 	proof    *spiralFirstJoinSource

@@ -141,13 +141,17 @@ func volumeMM(t *testing.T, m decad.Measurement) float64 {
 	return v
 }
 
+func pairUnion(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
+	return decad.Union(ctx, a, b)
+}
+
 func TestBooleanContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	t.Parallel()
 	testcases := []struct {
 		Name string
 		Call func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
 	}{
-		{Name: "Union", Call: decad.Union},
+		{Name: "Union", Call: pairUnion},
 		{Name: "Cut", Call: decad.Cut},
 		{Name: "Intersect", Call: decad.Intersect},
 	}
@@ -179,7 +183,7 @@ func TestBooleanNilContextIsDegenerate(t *testing.T) {
 		Name string
 		Call func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
 	}{
-		{Name: "Union", Call: decad.Union},
+		{Name: "Union", Call: pairUnion},
 		{Name: "Cut", Call: decad.Cut},
 		{Name: "Intersect", Call: decad.Intersect},
 	}

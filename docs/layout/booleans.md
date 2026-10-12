@@ -8,6 +8,8 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect` and the `BooleanError` mapping. See evaluator §9. |
+| `boolean_many.go` | Validates and commits a multi-body Union as one operation. See API §8. |
+| `boolean_many_prism.go` | Arranges identical-interval line prisms in one Sketch scene. See prism-boolean §4.6. |
 | `point_cone_trim.go` | Retains point-loft and cone source faces through coaxial Cut/Intersect. See loft-point design. |
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation. See loft-face-sections design. |
 | `bevel_join_source.go` | Matches the live Sketch tooth source to the finite blank root meridian. See loft-point design. |
@@ -28,7 +30,7 @@ The rules for rows live in `docs/layout.md`.
 | `spiral_join_union.go` | Gates the first curved-tooth Union's source pairs, held contacts and output curves. See faceted-vertex-bounds §3.6. |
 | `spiral_combine.go` | Builds and validates a multi-tool spiral-bevel join. See faceted-vertex-bounds §3.7. |
 | `spiral_combine_sector.go` | Proves source and held tooth sectors disjoint before the combined join. See faceted-vertex-bounds §3.7. |
-| `bevel_join_combine.go` | Admits an authenticated straight-tooth CombineJoin and proves complete source solids separate. See loft-point design. |
+| `bevel_join_combine.go` | Admits an authenticated straight-tooth pattern Union and proves complete source solids separate. See loft-point design. |
 | `bevel_join_cap_refine.go` | Refines straight-tooth caps while keeping shared edges and boundary labels. See loft-point design. |
 | `bevel_join.go` | Rebuilds and audits one shared-root bevel blank and tooth Union. See loft-point design. |
 | `bevel_join_two.go` | Rebuilds two separate point-loft teeth on one bevel blank root ring. See loft-point design. |

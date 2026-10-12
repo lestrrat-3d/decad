@@ -102,7 +102,7 @@ making booleans this shape will ever observe.
   algebraic root isolation) — the eventual vN destination (api-design §2.1),
   multi-quarter scope; this design's gate/audit/authentication pattern is its
   first honest increment, not a competing direction.
-- **Mesh-path palliatives** (a caller-set chord tolerance, an N-ary `Union`) —
+- **Mesh-path palliatives** (a caller-set chord tolerance) —
   removes only the chaining consequence, and only partially; the coplanar
   refusal — which blocks the gear workload *twice*, independent of chaining —
   stands untouched. Not pursued as the primary fix, though `WithPairTolerance`
@@ -678,6 +678,27 @@ arrangement cap (RB7, `ErrUnsupported`) and the caller's own cancellation —
 plus RB8/RB9 on a cell `recordEdge` rejects or a cell loop that does not join,
 surfaced exactly as they are on the body path so a broken arrangement is never
 hidden as an undecided pair.
+
+### 4.6 One-scene Union of three or more prisms
+
+`Union(ctx, first, others...)` builds one section arrangement for three or more
+same-frame, same-placement prisms with equal recorded sweep intervals. Every
+input section must have no holes, zero section displacement, and only whole
+`LineSeg` edges. Two input edges on the same infinite line carrier are
+refused because this path has no proof for their shared source span. Other
+multi-prism classes return `ErrUnsupported` while all inputs remain live.
+
+Every source region enters `BuildSceneRegions` once, in the same plane. The
+work cap applies to the sum of all input segments. `SplitRuns` resolves
+shared stations, `CellsHaveNoVoid` refuses an enclosed void, and
+`MergeLoops` keeps the exterior boundary. Each resulting loop passes
+`auditPrismMergeSection`; multiple loops also pass
+`ProveGroupDisjoint`. One loop builds a `prismPayload`, while proven
+disjoint loops build one one-slab `stackedPrismPayload`. The result carries
+the maximum of the inputs' axial endpoint bounds and one cut-parameter
+section charge. A group also carries its disjointness walk charge. One
+document commit retires every input after result evaluation succeeds and
+the context remains live.
 
 ## 5. Authentication
 

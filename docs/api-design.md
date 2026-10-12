@@ -97,7 +97,7 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 | 1 | **NEVER expose triangles as the representation.** `Tessellate(ctx, tol)` is an output; the public vocabulary is `Body → Face → Edge → Vertex` even while the backing is approximate. | A public `Triangles()` is a one-way door; callers depend on it and vN can never remove it. |
 | 2 | **Every measurement carries `Exactness`, from the first commit.** | Makes the upgrade **monotonic, not breaking**: callers already branch on `Approximate`; in vN that branch stops being taken and nobody's code changes. A bare `float64` today means adding exactness later breaks every call site. |
 | 3 | **Selectors, never topology indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature or selector names a face, an edge or a vertex by index or by a bare topology pointer. | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
-| 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(ctx, a, b) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
+| 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(ctx, first, others...) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
 
 **What will still churn**, stated honestly: face/edge *counts* may change under an
@@ -904,24 +904,31 @@ implicitly-chosen target — and they never mutate an operand or take a target-o
 parameter:
 
 ```go
-func Union(ctx context.Context, a, b *Body) (*Body, error)
+func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error)
 func Cut(ctx context.Context, target, tool *Body) (*Body, error)
 func Intersect(ctx context.Context, a, b *Body) (*Body, error)
-func CombineJoin(ctx context.Context, target *Body, tools ...*Body) (*Body, error)
 ```
 
-`CombineJoin` consumes one target and at least two distinct tools in one
-operation. Its bounded straight-bevel case accepts a finite revolve blank and
+`Union` requires at least two distinct live bodies from one document. A
+two-body call uses the pair evaluator. For three or more bodies, one operation
+builds one result and retires every input together. The exact prism class
+accepts hole-free whole-line sections on the identical recorded plane and
+sweep interval, with distinct source line carriers. It arranges every section
+in one Sketch scene, audits the resulting boundary, and charges its cuts
+once. Other prism placements and profiles return `ErrUnsupported`.
+
+The bounded straight-bevel class accepts a finite revolve blank and
 three to thirty-one separate copies of one authenticated, cone-trimmed point-loft
 tooth. It rebuilds their caps against one blank ring and checks the resulting
-solid's boundary, volume and topology. Its bounded spiral-bevel case accepts
+solid's boundary, volume and topology. The bounded spiral-bevel class accepts
 an exact finite revolve blank and separate rigid copies of one authenticated,
 cone-trimmed nine-section tooth. The tool sectors must be proven disjoint. The
 evaluator cuts the blank and all spiral tools in one mesh Boolean, certifies
 each root and cap contact against its original tooth source, and commits one
 body only after the complete output passes the boundary, volume and topology
-audits. Other input classes return `ErrUnsupported`. A failed call leaves
-every operand live.
+audits. Other multi-body classes return `ErrUnsupported`. A call with no
+`others` returns `ErrDegenerate`; a zero-body call does not compile. A failed
+or canceled call leaves every operand live.
 
 No `*Document` appears in those signatures, and none is needed: a `*Body` carries
 its owning document (§6), so each call retires its operands and registers its
@@ -932,7 +939,7 @@ Operands owned by different documents are `ErrForeignBody`.
 **Each cancels the complete Boolean before its atomic commit.** They pass `ctx`
 through operand tessellation, exact-predicate classification, cutting,
 stitching, mesh audit, and exact volume calculation. Cancellation returns
-`ctx.Err()` unchanged and leaves both operands and the live-body set unchanged.
+`ctx.Err()` unchanged and leaves all operands and the live-body set unchanged.
 
 **A nil context is `ErrDegenerate`, for every operation that takes one.** The
 context is polled rather than merely stored, so a nil one is a caller mistake

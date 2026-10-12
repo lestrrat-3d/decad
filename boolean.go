@@ -29,9 +29,14 @@ import (
 // from their document and registers the result, reached through the operands'
 // own owning document.
 
-// Union returns the body enclosing the volume of a or b, retiring both
-// operands from their document (core §8). A nil operand or a body unioned with
-// itself is ErrDegenerate. The general result is a Faceted body:
+// Union returns the body enclosing the volume of two or more operands,
+// retiring them together from their document (core §8). A nil operand or a
+// repeated body is ErrDegenerate; a call with no other body is ErrDegenerate.
+// Three or more bodies admit a one-scene exact union of equal-interval,
+// same-placement, hole-free whole-line prisms with distinct source line
+// carriers, plus certified straight and spiral bevel tooth patterns. Other
+// multi-body classes return ErrUnsupported. Failure or cancellation leaves
+// every input live. The two-body general result is a Faceted body:
 // its faces are grouped by the operands' source faces, so provenance
 // (FaceCreatedBy) survives, and its measurements are Approximate with proven
 // bounds (docs/evaluator-design.md §9) — except that an all-planar pair whose
@@ -90,8 +95,20 @@ import (
 //
 // It returns ctx.Err() unchanged when ctx is canceled before the document
 // commit.
-func Union(ctx context.Context, a, b *Body) (*Body, error) {
-	return performBoolean(ctx, meshbool.OpUnion, a, b)
+func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("%w: a nil context cannot control a boolean", ErrDegenerate)
+	}
+	if len(others) == 0 {
+		return nil, fmt.Errorf("%w: Union needs at least two bodies", ErrDegenerate)
+	}
+	if len(others) == 1 {
+		return performBoolean(ctx, meshbool.OpUnion, first, others[0])
+	}
+	bodies := make([]*Body, 0, len(others)+1)
+	bodies = append(bodies, first)
+	bodies = append(bodies, others...)
+	return performUnionMany(ctx, bodies)
 }
 
 // Cut returns target minus tool, retiring both operands from their document

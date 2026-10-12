@@ -154,6 +154,11 @@
 1	0.00	TestThickenPatchRefusals
 1	0.01	TestThickenRevolveWasherInward
 1	0.00	TestThroughAllIgnoresASheetBody
+1	0.00	TestUnionManyArrangesThreePrismsOnce
+1	0.00	TestUnionManyKeepsSeparatePrismLumps
+1	0.00	TestUnionManyRefusalKeepsEveryOperandLive
+1	0.00	TestUnionManyRefusesSharedLineCarrier
+1	0.00	TestUnionNeedsAtLeastTwoBodies
 1	0.02	TestUnionOfAdmittedCapBlendBodies
 1	0.01	TestUnionOverlappingCubes
 1	0.00	TestUnionRejectsKnifeEdgeGraze
