@@ -640,6 +640,14 @@ func TestCopyPlacement(t *testing.T) {
 	require.InDelta(t, -150.0, c2.Value.X, 1e-9)
 
 	require.NotEqual(t, body.Origin(), inst.Origin(), `a placed copy has fresh provenance`)
+
+	identity, err := decad.Copy(t.Context(), inst)
+	require.NoError(t, err)
+	identityCentroid, err := identity.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, c.Value, identityCentroid.Value,
+		`an option-free copy keeps its source's accumulated placement`)
+	require.Contains(t, doc.Bodies(), inst, `copying the placed source leaves it live`)
 }
 
 func TestCopyPlacementOptions(t *testing.T) {
