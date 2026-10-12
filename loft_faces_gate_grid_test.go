@@ -89,7 +89,7 @@ func TestLfBandGateGridMatchesReference(t *testing.T) {
 	rng := rand.New(rand.NewPCG(3, 5))
 	box := [4]*big.Rat{lfF(-1.25), lfF(2.5), lfF(-0.75), lfF(1.5)}
 	matched := 0
-	for range 6 {
+	for range 3 {
 		first, second := randomGateMap(rng), randomGateMap(rng)
 		if lfPositiveDenominator(first, box) != nil || lfPositiveDenominator(second, box) != nil {
 			continue

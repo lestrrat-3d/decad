@@ -28,7 +28,6 @@
 0	0.00	TestXPTKeyDistinguishesCoordinates
 0	2.54	TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource
 1	0.00	TestAddBlendRolesContextPollsNestedMetadata
-1	5.00	TestLfBandGateGridMatchesReference
 1	0.00	TestMappedArcRadialTimeBandTwoExactTimeCrossings
 1	0.00	TestMappedEndpointFiniteSection
 1	0.00	TestMappedEndpointTimeRoots
@@ -310,10 +309,8 @@
 1	0.01	TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture
 1	0.00	TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate
 1	0.00	TestSpanExtremeEnclosureRefusesOverBudget
-1	5.00	TestSpiralBernsteinIntegerMatchesReference
 1	0.00	TestSpiralCapPlaneMustMissTheWholeRootCircle
 1	0.00	TestSpiralFiniteConeSideRequiresWholeGeneratorAndFiniteTool
-1	0.30	TestSpiralRootRowsMatchReference
 1	0.00	TestSpiralRootTubePropagatesCancellation
 1	0.00	TestSpiralToolCapMustStayOnCertifiedSideOfBlankMeridian
 1	0.00	TestStackedLiningAuditRejectsBrokenRecords
@@ -1396,4 +1393,7 @@
 9	0.00	TestWallKernelSetupCancellationIsBounded
 9	0.21	TestWallNormalDecisionEnclosesExactComponent
 9	0.03	TestXHPLerpDenotesTheSameCoordinate
+10	30.00	TestLfBandGateGridMatchesReference
+10	30.00	TestSpiralBernsteinIntegerMatchesReference
+10	2.00	TestSpiralRootRowsMatchReference
 10	0.00	Example_decad_quickstart

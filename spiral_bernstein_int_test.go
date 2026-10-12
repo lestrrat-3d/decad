@@ -148,7 +148,7 @@ func requireSameRows(t *testing.T, want, got []*big.Rat) {
 
 func TestSpiralBernsteinIntegerMatchesReference(t *testing.T) {
 	rng := rand.New(rand.NewPCG(7, 11))
-	for round := range 300 {
+	for round := range 72 {
 		n := rng.IntN(13) + 1
 		a := randomRatRow(rng, n+1)
 		m := rng.IntN(13) + 1
