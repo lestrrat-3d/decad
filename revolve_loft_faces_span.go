@@ -18,11 +18,13 @@ type revolveLoftFacesMappedCell struct {
 	side                int
 	jointKind           revolveLoftFacesJointKind
 	jointPoint          *sketch.Point
+	jointArc            *sketch.Arc
 	first, last         spiralRootCrossing
 	xFirst, xLast       loftFaceInterval
 	xDirection          int
 	sLo, sHi            *big.Rat
 	tLo, tHi            *big.Rat
+	tLoOpen, tHiOpen    bool
 }
 
 // revolveLoftFacesFiniteSpanCells classifies every fitted and straight
@@ -49,6 +51,12 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 		spans, ok := revolveLoftFacesStraightOrFitSpans(trim, segment, source)
 		if !ok {
 			if _, isArc := source.(arcSeg); isArc {
+				arcCells, certified, arcErr := revolveLoftFacesArcSpanCells(ctx,
+					trim, section, segment)
+				if arcErr != nil || !certified {
+					return nil, false, arcErr
+				}
+				cells = append(cells, arcCells...)
 				continue
 			}
 			return nil, false, nil

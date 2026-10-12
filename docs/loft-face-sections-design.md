@@ -228,15 +228,25 @@ angular crossing. A fitted flank may share such a time root only when the
 live Sketch endpoint is the same point handle and all three exact controls
 match. This arc result alone does not admit `Union`.
 
-For each nonvertical finite Revolve side, a source manifest binds every
-mapped fitted or straight span cell to its live Sketch entity, LoftFaces
-band, source face origin and Revolve face. An interior fitted Bezier knot
+For each nonvertical finite Revolve side, a source manifest classifies every
+mapped fitted, straight and arc source span. It emits cells only for source
+origins found on a live trimmed face, and binds each emitted cell to its
+Sketch entity, LoftFaces band, source face origin and Revolve face.
+An interior fitted Bezier knot
 and a fitted-to-radial-arc endpoint have distinct live point handles and
 contact kinds. When both have time roots in one fitted span and band, their
 rational brackets must be disjoint. The manifest sorts them and proves each
-open time gap with the complete source polynomial. Closed root brackets
+open time gap with the complete source polynomial. A nonnegative Bernstein
+box admits a strict gap with an exact zero on an excluded time endpoint only
+when each source column has a positive control and closed ends are strict.
+When a moving source crossing reaches an excluded exact time endpoint, the
+ordinary closed-slab proof can refuse that open gap. Such a pair stays
+unsupported until an open-end-aware moving-crossing proof is available.
+Closed root brackets
 use the corresponding one-sided source cell. A source-current check rejects
 stale LoftFaces, Sketch and Revolve records before collecting these cells.
+Every live Arc band must have a strict finite side, an axial miss, or an
+exact whole-arc radial time contact. An undecidable Arc band refuses.
 The manifest does not assert which source cells survive both cone trims.
 
 This source certificate does not change the held mesh or grant a contact

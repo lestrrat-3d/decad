@@ -83,6 +83,64 @@ func revolveLoftFacesTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 	return append(left, right...), ok, err
 }
 
+// A Bernstein rectangle with nonnegative controls is strictly positive for
+// every interior band time when each source column has a positive control.
+// Closed time endpoints additionally require every source control in that
+// endpoint row to be strict. The root bracket owns excluded endpoints.
+func revolveLoftFacesOpenStrictSide(q [3][]*big.Rat,
+	tLo, tHi *big.Rat, loOpen, hiOpen bool) int {
+	if tLo == nil || tHi == nil || tLo.Cmp(tHi) >= 0 || len(q[0]) == 0 ||
+		len(q[1]) != len(q[0]) || len(q[2]) != len(q[0]) {
+		return 0
+	}
+	box := revolveLoftFacesRestrictBernstein(q, lfZero(), lfOne(), tLo, tHi)
+	for _, side := range [...]int{1, -1} {
+		valid := true
+		for col := range box[0] {
+			positive := false
+			for row := range box {
+				sign := box[row][col].Sign() * side
+				if sign < 0 || row == 0 && !loOpen && sign == 0 ||
+					row == 2 && !hiOpen && sign == 0 {
+					valid = false
+					break
+				}
+				positive = positive || sign > 0
+			}
+			if !valid || !positive {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			return side
+		}
+	}
+	return 0
+}
+
+func revolveLoftFacesOpenTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
+	first, last loftFaceMap, span freeform.BezierSpan, section revolveSectionSpan,
+	segment, spanIndex, band int, tLo, tHi *big.Rat,
+	loOpen, hiOpen bool, remaining *int) ([]revolveLoftFacesMappedCell, bool, error) {
+	if ctx == nil || remaining == nil || *remaining <= 0 {
+		return nil, false, nil
+	}
+	if side := revolveLoftFacesOpenStrictSide(q, tLo, tHi, loOpen, hiOpen); side != 0 {
+		*remaining--
+		return []revolveLoftFacesMappedCell{{segment: segment, span: spanIndex,
+			band: band, side: side, sLo: lfZero(), sHi: lfOne(),
+			tLo: tLo, tHi: tHi, tLoOpen: loOpen, tHiOpen: hiOpen}}, true, nil
+	}
+	cells, ok, err := revolveLoftFacesTimeSlab(ctx, q, j, first, last, span,
+		section, segment, spanIndex, band, tLo, tHi, 0, remaining)
+	for i := range cells {
+		cells[i].tLoOpen = loOpen && cells[i].tLo.Cmp(tLo) == 0
+		cells[i].tHiOpen = hiOpen && cells[i].tHi.Cmp(tHi) == 0
+	}
+	return cells, ok, err
+}
+
 func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 	segment, span, band int, tLo, tHi *big.Rat) ([]revolveLoftFacesMappedCell, bool) {
 	box := revolveLoftFacesRestrictBernstein(q, lfZero(), lfOne(), tLo, tHi)

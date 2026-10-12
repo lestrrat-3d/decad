@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"slices"
 )
 
 // This is a source-only record. A mapped cell names its complete Sketch
@@ -12,6 +13,7 @@ import (
 type revolveLoftFacesSourceCell struct {
 	mapped revolveLoftFacesMappedCell
 	ref    FeatureRef
+	face   *Face
 }
 
 type revolveLoftFacesNonverticalSide struct {
@@ -34,6 +36,15 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 		!pointSourceCurrent(proof.trim.source) {
 		return nil, false, nil
 	}
+	liveRefs, ok := revolveLoftFacesSourceRefs(proof.trim, proof.tooth)
+	if !ok || len(liveRefs) != len(proof.sourceRefs) {
+		return nil, false, nil
+	}
+	for band := range liveRefs {
+		if !slices.Equal(liveRefs[band], proof.sourceRefs[band]) {
+			return nil, false, nil
+		}
+	}
 	current := false
 	for _, candidate := range revolveRootCandidates(proof.blank) {
 		if candidate.rootSpan != proof.section.rootSpan ||
@@ -44,7 +55,9 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 		for i, span := range candidate.spans {
 			old := proof.section.spans[i]
 			matches = matches && span.face == old.face &&
-				span.start == old.start && span.end == old.end
+				span.start == old.start && span.end == old.end &&
+				slices.Equal(span.sourceEdges, old.sourceEdges) &&
+				slices.Equal(span.origins, old.origins)
 		}
 		if matches {
 			current = true
@@ -54,6 +67,7 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 	if !current {
 		return nil, false, nil
 	}
+	faces := proof.tooth.Faces()
 	var manifest []revolveLoftFacesNonverticalSide
 	for sectionIndex, section := range proof.section.spans {
 		if err := ctx.Err(); err != nil {
@@ -78,11 +92,23 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 				cell.segment < 0 || cell.segment >= len(proof.sourceRefs[cell.band]) ||
 				cell.sLo == nil || cell.sHi == nil || cell.tLo == nil || cell.tHi == nil ||
 				cell.side == revolveLoftFacesJointContact &&
-					(cell.jointKind == 0 || cell.jointPoint == nil) {
+					(cell.jointKind == 0 ||
+						cell.jointKind == revolveLoftFacesWholeArcContact && cell.jointArc == nil ||
+						cell.jointKind != revolveLoftFacesWholeArcContact && cell.jointPoint == nil) {
 				return nil, false, nil
 			}
+			ref := liveRefs[cell.band][cell.segment]
+			index, valid := revolveLoftFacesRefFaceIndex(p, ref, len(faces))
+			face, originValid := revolveLoftFacesUniqueOriginFace(proof.tooth, ref)
+			if !valid || !originValid || (index >= 0) != (face != nil) ||
+				index >= 0 && faces[index] != face {
+				return nil, false, nil
+			}
+			if face == nil {
+				continue // the authenticated source wall has no retained face
+			}
 			entry.cells = append(entry.cells, revolveLoftFacesSourceCell{
-				mapped: cell, ref: proof.sourceRefs[cell.band][cell.segment]})
+				mapped: cell, ref: ref, face: face})
 		}
 		manifest = append(manifest, entry)
 	}

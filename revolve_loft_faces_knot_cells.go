@@ -93,9 +93,10 @@ func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 			piece.hiOpen && piece.lo.Cmp(piece.hi) == 0 {
 			return nil, false, nil
 		}
-		openCells, ok, err := revolveLoftFacesTimeSlab(ctx, q, j,
+		openCells, ok, err := revolveLoftFacesOpenTimeSlab(ctx, q, j,
 			trim.maps[band], trim.maps[band+1], span, section,
-			segment, spanIndex, band, piece.lo, piece.hi, 0, &remaining)
+			segment, spanIndex, band, piece.lo, piece.hi,
+			piece.loOpen, piece.hiOpen, &remaining)
 		if err != nil {
 			return nil, false, fmt.Errorf("mapped fitted span %d/%d band %d: %w",
 				segment, spanIndex, band, err)

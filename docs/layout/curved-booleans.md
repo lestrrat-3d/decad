@@ -12,6 +12,7 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_arc.go` | Proves finite meridian sides for live Sketch arc parameter and band-time cells. See loft-face-sections design. |
 | `revolve_loft_faces_arc_derivative.go` | Bounds a mapped Sketch arc implicit derivative over one source and band-time cell. See loft-face-sections design. |
 | `revolve_loft_faces_arc_radial.go` | Proves an entire live Sketch arc has one axial and cone-implicit value at each band time. See loft-face-sections design. |
+| `revolve_loft_faces_arc_cells.go` | Classifies every live mapped Arc band as strict, axially missed, or whole-arc time contact. See loft-face-sections design. |
 | `revolve_loft_faces_adaptive.go` | Partitions mapped fitted spans into strict-side and unique-crossing cells. See loft-face-sections design. |
 | `revolve_loft_faces_span.go` | Proves mapped Bernstein source-span sides against finite Revolve meridians. See loft-face-sections design. |
 | `revolve_loft_faces_joint.go` | Authenticates shared fitted and arc source vertices. See loft-face-sections design. |

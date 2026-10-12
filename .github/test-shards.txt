@@ -36,6 +36,8 @@
 1	0.00	TestMappedSpanAxialHull
 1	0.00	TestRevolveLoftFacesHeldPathsRefusesBranchedSwitch
 1	0.00	TestRevolveLoftFacesOwnedTimeRootsRemainDisjoint
+1	0.00	TestRevolveLoftFacesOpenTimeExcludesExactPointRoot
+1	0.00	TestRevolveLoftFacesOpenMovingCrossingRefuses
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
 1	0.00	TestAddRevolveFacesPreservesMeridianErrorMapping

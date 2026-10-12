@@ -15,6 +15,7 @@ type revolveLoftFacesJointKind uint8
 const (
 	revolveLoftFacesFitKnotContact revolveLoftFacesJointKind = iota + 1
 	revolveLoftFacesRadialArcContact
+	revolveLoftFacesWholeArcContact
 )
 
 // Each root owns one live source endpoint. The knot and radial-arc records
@@ -85,13 +86,14 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 	remaining := revolveLoftFacesMaxBandCells
 	previous := lfZero()
 	var cells []revolveLoftFacesMappedCell
-	appendGap := func(hi *big.Rat) (bool, error) {
+	appendGap := func(hi *big.Rat, loOpen, hiOpen bool) (bool, error) {
 		if previous.Cmp(hi) >= 0 {
 			return false, nil
 		}
-		gap, ok, err := revolveLoftFacesTimeSlab(ctx, q, j,
+		gap, ok, err := revolveLoftFacesOpenTimeSlab(ctx, q, j,
 			trim.maps[band], trim.maps[band+1], span, section,
-			segment, spanIndex, band, previous, hi, 0, &remaining)
+			segment, spanIndex, band, previous, hi,
+			loOpen, hiOpen, &remaining)
 		if err != nil {
 			return false, fmt.Errorf("mapped fitted span %d/%d band %d: %w",
 				segment, spanIndex, band, err)
@@ -102,11 +104,11 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 		cells = append(cells, gap...)
 		return true, nil
 	}
-	for _, owned := range roots {
+	for i, owned := range roots {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		ok, err := appendGap(owned.root.time.lo)
+		ok, err := appendGap(owned.root.time.lo, i != 0, true)
 		if err != nil || !ok {
 			return nil, false, err
 		}
@@ -131,7 +133,7 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 		cells = append(cells, contact)
 		previous = owned.root.time.hi
 	}
-	ok, err := appendGap(lfOne())
+	ok, err := appendGap(lfOne(), true, false)
 	if err != nil || !ok {
 		return nil, false, err
 	}
