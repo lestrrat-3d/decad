@@ -256,8 +256,10 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 		}
 		provenPatches++
 	}
-	if err := budget.Err(); err != nil {
-		return work, err
+	if len(patches) != 0 {
+		if err := budget.Err(); err != nil {
+			return work, err
+		}
 	}
 
 	// The cap proofs read the exact lifts, so a structured audit builds them
