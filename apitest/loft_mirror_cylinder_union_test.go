@@ -144,7 +144,6 @@ func TestUnionMirroredRadialTabsWithNearAxialCopy(t *testing.T) {
 	centroid, err := joined.Centroid()
 	require.NoError(t, err)
 	require.Greater(t, centroid.Bound.Base(), 0.0)
-
 }
 
 func loftMirrorCylinderTwoTabs(t *testing.T, nearAxial bool) (*decad.Document, *decad.Body, *decad.Body) {
@@ -174,7 +173,7 @@ func loftMirrorCylinderTwoTabs(t *testing.T, nearAxial bool) (*decad.Document, *
 	blank := circleBodyAtZ(t, doc, 0, 3, 0, 2)
 	if nearAxial {
 		require.Equal(t, math.Nextafter(1, 0), quarterTurn.Basis().EZ.Z)
-		joined, err := decad.CombineJoin(t.Context(), blank, pair, turnedPair)
+		joined, err := decad.Union(t.Context(), blank, pair, turnedPair)
 		require.NoError(t, err)
 		return doc, joined, blank
 	}
