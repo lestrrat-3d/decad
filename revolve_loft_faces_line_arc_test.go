@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/sketch"
@@ -8,7 +9,24 @@ import (
 )
 
 func TestCurvedLineArcJointUsesLiveNeutralSource(t *testing.T) {
-	_, _, trim := neutralArcSeamSource(t)
+	blank, tooth, trim := neutralArcSeamSource(t)
+	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	require.NoError(t, err)
+	require.True(t, ok)
+	region, ok, err := certifyRevolveLoftFacesHeelRegion(t.Context(), proof)
+	require.NoError(t, err)
+	require.True(t, ok)
+	for _, arc := range []*revolveLoftFacesToolCapOccupiedArc{region.lower, region.upper} {
+		cut, built, cutErr := revolveLoftFacesHeldCapCutPath(t.Context(), proof, arc)
+		require.NoError(t, cutErr)
+		require.True(t, built)
+		require.NotEmpty(t, cut.points)
+	}
+	track, built, err := revolveLoftFacesHeelTrackOf(t.Context(), proof, big.NewRat(1, 50))
+	require.NoError(t, err)
+	require.True(t, built)
+	require.Greater(t, len(track.stations), 2)
+
 	section := revolveSectionSpan{
 		start: Point2{U: 6, V: 2}, end: Point2{U: 6.5, V: 1.5},
 	}
@@ -97,6 +115,13 @@ func TestCurvedLineArcJointUsesLiveNeutralSource(t *testing.T) {
 	changedArc.Start.U += 0.01
 	trim.source.profile.Outer.Segments[arcIndex] = changedArc
 	defer func() { trim.source.profile.Outer.Segments[arcIndex] = originalArc }()
+	_, ok = revolveLoftFacesLineArcVertexOf(trim, lineIndices[0], arcIndex, true)
+	require.False(t, ok)
+	trim.source.profile.Outer.Segments[arcIndex] = originalArc
+
+	originalRevision := trim.source.source.revision
+	trim.source.source.revision++
+	defer func() { trim.source.source.revision = originalRevision }()
 	_, ok = revolveLoftFacesLineArcVertexOf(trim, lineIndices[0], arcIndex, true)
 	require.False(t, ok)
 }

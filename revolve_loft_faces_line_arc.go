@@ -25,7 +25,7 @@ func revolveLoftFacesLineArcVertexOf(trim *loftFacesTrimRecord,
 	lineIndex, arcIndex int, lineAtWalkEnd bool) (revolveLoftFacesLineArcVertex, bool) {
 	var empty revolveLoftFacesLineArcVertex
 	if trim == nil || trim.source == nil || trim.source.source == nil ||
-		!revolvePointSourceCurrent(trim.source) {
+		!pointSourceCurrent(trim.source) {
 		return empty, false
 	}
 	fresh, plane, _, err := recordProfile(trim.source.source.sketch,
