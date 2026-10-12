@@ -32,6 +32,8 @@ import (
 // void's own holes a solid post — and every band still hangs off the one floor
 // slab, so the result is one lump (Table B, B5/B6).
 
+const roleShellCap = "shellCap"
+
 // cupView is a cup read as two prisms, re-derived from its stacked record
 // (cupPayload.view) for every cup survey, mesh and mass reading, and the form
 // the shell assembles before recording it (cupView.payload): the outer region
@@ -383,7 +385,7 @@ func (p cupPlan) capRole(slab, region int, _ bool) string {
 	return fmt.Sprintf("rim(%d)", region)
 }
 
-func (cupPlan) patchRole(stackedrecord.Patch) string { return "shellCap" }
+func (cupPlan) patchRole(stackedrecord.Patch) string { return roleShellCap }
 
 func (p cupPlan) columnDelta(col stackedColumn) float64 {
 	if (col.Start == col.End) == (p.sense != Outward) {
@@ -404,7 +406,7 @@ func (cupPlan) order(faces []*Face) []*Face {
 			return 1
 		case role == roleCapStart:
 			return 2
-		case role == "shellCap":
+		case role == roleShellCap:
 			return 3
 		default:
 			return 4

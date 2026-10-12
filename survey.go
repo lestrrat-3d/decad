@@ -319,7 +319,7 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 		sign float64
 	}{
 		{role: roleCapStart, sign: -sOpen},
-		{role: "shellCap", sign: sOpen},
+		{role: roleShellCap, sign: sOpen},
 	}
 	for i := range oLoops {
 		caps = append(caps, struct {

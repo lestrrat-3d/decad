@@ -72,13 +72,14 @@ func WithShellSense(s ShellSense) ShellOption {
 	return shellOptionValue{encoded: modifyoption.WithShellSense(int(s))}
 }
 
-// Shell removes the selected cap faces of a straight prism and lines the rest
+// Shell removes selected faces and lines the rest
 // with a wall of thickness t, returning the new body and retiring the receiver
 // (docs/modify-design.md §8, core §8). sel names the faces to REMOVE — the
 // openings — resolved against the live receiver; a query matching nothing is
 // loud (ErrNoMatch / ErrCardinality, S16). t is a length magnitude, gated like
 // every other (S15); a zero t is S14 (the wall is the empty region). A
-// receiver whose payload is not a prism is S3, ErrUnsupported. The offset
+// receiver outside the admitted prism, revolve, brep and draft routes is S3,
+// ErrUnsupported. A straight prism's offset
 // section faces the §5 audit before anything is built, so no unproven body is
 // ever made. Removing both caps of a section with k holes returns 1 + k
 // lumps: the band inside the outer loop, then one band lining each hole
@@ -109,6 +110,9 @@ func WithShellSense(s ShellSense) ShellOption {
 // other side selection, a kept angular cap, a holed meridian, a meridian
 // meeting the axis along more than one walk and an offset reaching the axis
 // are ErrUnsupported.
+//
+// A positive-taper one-sided full-circle draft with its far cap removed
+// inward builds a conical cup through draft §10.6's bounded meridian.
 //
 // WithNoOpenings asks for a closed hollow body that keeps every face; it is
 // the one call form that takes a nil sel, and a non-nil sel beside it is
@@ -225,6 +229,9 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	// prism" refusal, so the more specific reason leads.
 	if err := requireNotCapBlendReceiver(b.payload, "shells"); err != nil {
 		return nil, err
+	}
+	if out, taken, err := tryDraftCircleShell(ctx, b, removed, sense, tmm, tDelta); taken {
+		return out, err
 	}
 	if err := requireNotDraftReceiver(b.payload, "shells"); err != nil {
 		return nil, err

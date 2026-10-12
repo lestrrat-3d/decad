@@ -195,7 +195,7 @@ func TestShellCupTwoHolesThroughStack(t *testing.T) {
 	}
 	require.Equal(t, map[string]int{
 		"side": 4 + 4 + 1, "shellSide": 4 + 8 + 1,
-		decad.CapStart(body).Role: 1, "shellCap": 1, "rim(0)": 1, "rim(1)": 1, "rim(2)": 1,
+		decad.CapStart(body).Role: 1, "shellCap": 1, roleRim0: 1, "rim(1)": 1, "rim(2)": 1,
 	}, roles)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)

@@ -108,6 +108,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 | **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | equal-distance `Chamfer` of both complete outer cap loops for an unplaced, authenticated loft/cylinder join or its certified centered-bore Cut (`docs/loft-cylinder-boolean-design.md`); otherwise SX9 | SX9 |
 | **RX7** | `brepPayload` (`docs/general-boolean-design.md` §4) | `docs/brep-modify-design.md` Table RB; outside it, SX16 | the same |
 | **RX8** | `loftPayload` | `Fillet` on analytic corners of matching axial sections (loft §17); equal-distance `Chamfer` on both complete held outer cap loops of a matching axial loft with zero holes or one certified circular bore (loft §18); other chamfers are base S3 | base S3 |
+| **RX9** | `draftPayload` with one positive-taper whole circular wall and its near section at the start level | draft §10.4–§10.5 | Removing its far cap inward builds draft §10.6's cup; other calls are base S3 |
 
 Definitions:
 

@@ -170,6 +170,8 @@
 //	  other receiver, or a cap-loop chamfer result            ErrUnsupported
 //	Shell         straight prism (tube, cup, or one band per
 //	              loop when both caps leave a holed section)  builds
+//	Shell         positive-taper circular draft, far cap removed
+//	              inward                                         builds
 //	Shell         partial revolve, both angular caps removed  builds
 //	Shell         full revolve, WithNoOpenings (closed)       builds
 //	Shell         hole-free prism, WithNoOpenings (closed)    builds

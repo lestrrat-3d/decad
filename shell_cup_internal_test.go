@@ -227,7 +227,7 @@ func TestEvalCupChargesOffsetDisplacement(t *testing.T) {
 			require.NoError(t, err)
 			rim, err := faceWithRole(t, body, "rim(0)").Area()
 			require.NoError(t, err)
-			offsetCap := "shellCap"
+			offsetCap := roleShellCap
 			base := [4]float64{-6, 6, -2, 2}
 			if sense == Outward {
 				offsetCap, base = roleCapStart, [4]float64{-8, 8, -4, 4}
