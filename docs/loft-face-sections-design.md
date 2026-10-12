@@ -318,6 +318,14 @@ trim cones and Revolve. A changed band, time, root bracket, source face or
 cell sign refuses the arc. The comparison includes retained source intervals
 and mapped boxes, not only the two selected circle crossings.
 
+The source pair census rechecks every live Revolve face and retained LoftFaces
+face against the current source-side and tool-cap records. A strict gap is a
+miss; a mapped source crossing or retained vertical cell is a source candidate;
+an occupied heel circle carries its ordered source-bound arc. Missing face
+roles, duplicate pairs and undecidable side values refuse the whole census.
+Later mesh consumers must rederive the census before using its mutable cells.
+These source verdicts do not prove a shared seam, retained patch or volume.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
