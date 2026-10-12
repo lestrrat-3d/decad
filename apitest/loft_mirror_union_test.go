@@ -49,7 +49,9 @@ func TestLoftMirrorUnionSealsTheSharedCap(t *testing.T) {
 	want := 2 * 10 * (16 + math.Sqrt(16*4) + 4) / 3
 	require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base()+1e-9)
 
-	placed, err := joined.PlacedCopy(t.Context(), r3.Identity())
+	spin, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(45))
+	require.NoError(t, err)
+	placed, err := joined.PlacedCopy(t.Context(), spin)
 	require.NoError(t, err)
 	copyMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
