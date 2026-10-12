@@ -29,3 +29,24 @@ func TestCircularBoreRingBoundsShiftedStationChord(t *testing.T) {
 	_, _, err = certifiedCircularBoreRing(t.Context(), radius, angles)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
+
+func TestCircularBoreRingAcceptsCertifiedWiderStepAndBoundsEveryChord(t *testing.T) {
+	const count = 64
+	const radius = 1.0
+	angles := make([]float64, count)
+	for i := range angles {
+		angles[i] = -0.03 + 2*math.Pi*float64(i)/count
+	}
+	_, _, err := certifiedCircularBoreRing(t.Context(), radius, angles)
+	require.ErrorIs(t, err, ErrUnsupported)
+	points, bound, err := certifiedCircularBoreRingAtStep(t.Context(), radius, angles, 0.1)
+	require.NoError(t, err)
+	require.Less(t, bound, 0.1)
+	for i, point := range points {
+		next := points[(i+1)%count]
+		midU, midV := (point.U+next.U)/2, (point.V+next.V)/2
+		require.LessOrEqual(t, radius-math.Hypot(midU, midV), bound)
+	}
+	_, _, err = certifiedCircularBoreRingAtStep(t.Context(), radius, angles, 0.08)
+	require.ErrorIs(t, err, ErrUnsupported)
+}
