@@ -7,6 +7,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -138,6 +139,23 @@ func revolveForwardCollinear(a, b, c Point2) bool {
 }
 
 func revolveSpanFace(blank *Body, span revolveSectionSpan) (*Face, bool) {
+	rp, ok := blank.payload.(revolvePayload)
+	if !ok {
+		return nil, false
+	}
+	dz, dr := span.end.U-span.start.U, span.end.V-span.start.V
+	w := survey2d.SegmentWalk{StartU: span.start.U, StartV: span.start.V,
+		EndU: span.end.U, EndV: span.end.V, TanInU: dz, TanInV: dr}
+	kind := wallCone
+	if dz == 0 {
+		kind = wallPlane
+	} else if dr == 0 {
+		kind = wallCylinder
+	}
+	surface, reversed, err := rp.wallSurface(rp.basis(), w, kind)
+	if err != nil {
+		return nil, false
+	}
 	roles := make(map[string]struct{}, len(span.sourceEdges))
 	for _, index := range span.sourceEdges {
 		roles[fmt.Sprintf("side(0,%d)", index)] = struct{}{}
@@ -161,7 +179,8 @@ func revolveSpanFace(blank *Body, span revolveSectionSpan) (*Face, bool) {
 			}
 			seen[origin.Role] = struct{}{}
 		}
-		if valid && len(seen) == len(roles) {
+		if valid && len(seen) == len(roles) &&
+			face.Surface() == surface && face.reversed == reversed {
 			if matched != nil {
 				return nil, false
 			}

@@ -147,6 +147,34 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 	require.NotNil(t, proof.crossings[0].span)
 	require.NotNil(t, proof.crossings[1].span)
 	require.NotEqual(t, proof.crossings[0].segment, proof.crossings[1].segment)
+	t.Run("changed retained Revolve side surface", func(t *testing.T) {
+		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+		require.NoError(t, err)
+		require.True(t, complete)
+		var face *Face
+		for index, span := range proof.section.spans {
+			if index == proof.section.rootSpan || span.face == nil {
+				continue
+			}
+			if _, ok := span.face.surface.(Cone); ok {
+				face = span.face
+				break
+			}
+		}
+		require.NotNil(t, face)
+		original := face.surface
+		defer func() { face.surface = original }()
+		changed := original.(Cone)
+		changed.Origin.X += 0.125
+		face.surface = changed
+		require.False(t, revolveLoftFacesSectionCurrent(proof))
+		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+		require.NoError(t, err)
+		require.False(t, certified)
+		_, complete, err = revolveLoftFacesAllSideManifest(t.Context(), proof)
+		require.NoError(t, err)
+		require.False(t, complete)
+	})
 
 	t.Run("changed cap departure", func(t *testing.T) {
 		original := trim.bounds[0]
