@@ -20,6 +20,7 @@
 #
 0	0.01	TestBevelAxisRotationRequiresPureNonidentityXTurn
 0	0.01	TestLoftMirrorCylinderCapsMustTileWithOppositeWinding
+0	0.00	TestLoftCylinderChamferAxisGapMatchesRational
 0	0.01	TestLoftMirrorCylinderLevelsRequireExactMidpoint
 0	0.01	TestLoftMirrorCylinderPairKeepsAuthenticatedSource
 0	0.01	TestBevelBoreCapFanRequiresAdjacentRingVertices

@@ -24,43 +24,50 @@ func loftCylinderChamferBoxGapAbove(a, b [2]r3.Vec, sourceBound float64) bool {
 		apart(a[0].Z, b[1].Z) || apart(b[0].Z, a[1].Z)
 }
 
+type loftCylinderChamferBoundSquare struct {
+	num, den *big.Int
+}
+
 // An axis whose projected intervals have a gap larger than sourceBound
 // separates the whole ideal band triangle from the source wall envelope.
-// All coordinates and the squared distance comparison remain rational.
+// Homogeneous integer comparisons avoid normalizing every projected dot
+// product as a rational. The squared comparison remains exact.
 func loftCylinderChamferAxisGapAbove(a, b [3]proofarith.Xpt,
-	axis proofarith.Xpt, sourceBound *big.Rat) bool {
-	norm2 := proofarith.XdotRat(axis, axis)
-	if norm2.Sign() == 0 {
-		return false
-	}
-	minA, maxA := proofarith.XdotRat(axis, a[0]), proofarith.XdotRat(axis, a[0])
-	minB, maxB := proofarith.XdotRat(axis, b[0]), proofarith.XdotRat(axis, b[0])
+	axis proofarith.Xpt, boundSquare loftCylinderChamferBoundSquare) bool {
+	minA, maxA, minB, maxB := a[0], a[0], b[0], b[0]
 	for i := 1; i < 3; i++ {
-		p := proofarith.XdotRat(axis, a[i])
-		if p.Cmp(minA) < 0 {
-			minA = p
+		if proofarith.XdotDiffSign(axis, a[i], minA) < 0 {
+			minA = a[i]
 		}
-		if p.Cmp(maxA) > 0 {
-			maxA = p
+		if proofarith.XdotDiffSign(axis, a[i], maxA) > 0 {
+			maxA = a[i]
 		}
-		p = proofarith.XdotRat(axis, b[i])
-		if p.Cmp(minB) < 0 {
-			minB = p
+		if proofarith.XdotDiffSign(axis, b[i], minB) < 0 {
+			minB = b[i]
 		}
-		if p.Cmp(maxB) > 0 {
-			maxB = p
+		if proofarith.XdotDiffSign(axis, b[i], maxB) > 0 {
+			maxB = b[i]
 		}
 	}
-	gap := new(big.Rat).Sub(minA, maxB)
-	if reverse := new(big.Rat).Sub(minB, maxA); reverse.Cmp(gap) > 0 {
-		gap = reverse
-	}
-	if gap.Sign() <= 0 {
+	var far, near proofarith.Xpt
+	switch {
+	case proofarith.XdotDiffSign(axis, minA, maxB) > 0:
+		far, near = minA, maxB
+	case proofarith.XdotDiffSign(axis, minB, maxA) > 0:
+		far, near = minB, maxA
+	default:
 		return false
 	}
-	gap2 := new(big.Rat).Mul(gap, gap)
-	bound2 := new(big.Rat).Mul(sourceBound, sourceBound)
-	return gap2.Cmp(new(big.Rat).Mul(bound2, norm2)) > 0
+	// gap = dot(axis, far-near) / (axis.W * diff.W), while
+	// |axis|² = dot(axis, axis) / axis.W². Cancel axis.W² and compare
+	// integer numerators after multiplying through positive denominators.
+	diff := proofarith.Xsub(far, near)
+	gapNum := proofarith.XdotNum(axis, diff)
+	normNum := proofarith.XdotNum(axis, axis)
+	var lhs, rhs big.Int
+	lhs.Mul(gapNum, gapNum).Mul(&lhs, boundSquare.den)
+	rhs.Mul(boundSquare.num, normNum).Mul(&rhs, diff.W).Mul(&rhs, diff.W)
+	return lhs.Cmp(&rhs) > 0
 }
 
 // This is a reject-only triangle clearance certificate. Face normals,
@@ -71,6 +78,10 @@ func loftCylinderChamferTriangleGapAbove(a, b [3]proofarith.Xpt, sourceBound flo
 		return false
 	}
 	bound := proofarith.FloatRat(sourceBound)
+	boundSquare := loftCylinderChamferBoundSquare{
+		num: new(big.Int).Mul(bound.Num(), bound.Num()),
+		den: new(big.Int).Mul(bound.Denom(), bound.Denom()),
+	}
 	var ae, be [3]proofarith.Xpt
 	for i := range 3 {
 		ae[i] = proofarith.Xsub(a[(i+1)%3], a[i])
@@ -79,18 +90,18 @@ func loftCylinderChamferTriangleGapAbove(a, b [3]proofarith.Xpt, sourceBound flo
 	na := proofarith.Xcross(ae[0], ae[1])
 	nb := proofarith.Xcross(be[0], be[1])
 	for _, axis := range [2]proofarith.Xpt{na, nb} {
-		if loftCylinderChamferAxisGapAbove(a, b, axis, bound) {
+		if loftCylinderChamferAxisGapAbove(a, b, axis, boundSquare) {
 			return true
 		}
 	}
 	for i := range 3 {
 		for j := range 3 {
-			if loftCylinderChamferAxisGapAbove(a, b, proofarith.Xcross(ae[i], be[j]), bound) {
+			if loftCylinderChamferAxisGapAbove(a, b, proofarith.Xcross(ae[i], be[j]), boundSquare) {
 				return true
 			}
 		}
-		if loftCylinderChamferAxisGapAbove(a, b, proofarith.Xcross(ae[i], na), bound) ||
-			loftCylinderChamferAxisGapAbove(a, b, proofarith.Xcross(be[i], nb), bound) {
+		if loftCylinderChamferAxisGapAbove(a, b, proofarith.Xcross(ae[i], na), boundSquare) ||
+			loftCylinderChamferAxisGapAbove(a, b, proofarith.Xcross(be[i], nb), boundSquare) {
 			return true
 		}
 	}
