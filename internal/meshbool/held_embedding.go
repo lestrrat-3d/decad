@@ -226,23 +226,54 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool) (bool, error)
 			return false, nil
 		}
 		box := e.triBox(i)
-		candidates, err := e.candidates(i)
-		if err != nil {
-			return false, err
+		// Test each facet when first found instead of storing and rescanning
+		// the large candidate list. The grid and wide-facet order is unchanged.
+		e.stampID++
+		id := e.stampID
+		c0, c1 := e.cellRange(box)
+		for x := c0[0]; x <= c1[0]; x++ {
+			for y := c0[1]; y <= c1[1]; y++ {
+				for z := c0[2]; z <= c1[2]; z++ {
+					if err := e.scanStep(); err != nil {
+						return false, err
+					}
+					for _, j := range e.cells[(x*e.dims[1]+y)*e.dims[2]+z] {
+						if e.stamp[j] == id {
+							continue
+						}
+						e.stamp[j] = id
+						if err := e.scanStep(); err != nil {
+							return false, err
+						}
+						if int(j) == i || int(j) < i && queryFacet[j] {
+							continue
+						}
+						// buildGrid filled every box before this read-only scan.
+						if !BoxesOverlap(box, e.box[j]) {
+							continue
+						}
+						if !e.pairEmbedded(i, int(j)) {
+							return false, nil
+						}
+					}
+				}
+			}
 		}
-		for _, j := range candidates {
+		for _, j := range e.wide {
+			if e.stamp[j] == id {
+				continue
+			}
+			e.stamp[j] = id
 			if err := e.scanStep(); err != nil {
 				return false, err
 			}
-			if j == i || j < i && queryFacet[j] {
+			if int(j) == i || int(j) < i && queryFacet[j] {
 				continue
 			}
-			// Grid cells and wide-facet registration include disjoint boxes.
-			// This is pairEmbedded's exact reject-only first gate.
-			if !BoxesOverlap(box, e.triBox(j)) {
+			if !BoxesOverlap(box, e.box[j]) {
 				continue
 			}
-			if !e.pairEmbedded(i, j) {
+			if !e.pairEmbedded(i, int(j)) {
 				return false, nil
 			}
 		}
