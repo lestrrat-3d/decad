@@ -912,7 +912,7 @@ func CombineJoin(ctx context.Context, target *Body, tools ...*Body) (*Body, erro
 
 `CombineJoin` consumes one target and at least two distinct tools in one
 operation. Its bounded straight-bevel case accepts a finite revolve blank and
-three to sixteen separate copies of one authenticated, cone-trimmed point-loft
+three to thirty-one separate copies of one authenticated, cone-trimmed point-loft
 tooth. It rebuilds their caps against one blank ring and checks the resulting
 solid's boundary, volume and topology. Its bounded spiral-bevel case accepts
 an exact finite revolve blank and separate rigid copies of one authenticated,

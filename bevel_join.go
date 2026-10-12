@@ -76,7 +76,7 @@ func tryBevelOneToothUnion(ctx context.Context, op meshbool.OperationKind,
 type bevelPathNode struct {
 	p            r3.Vec
 	groupToNext  int
-	crossing     int // -1 except for the two certified connector contacts
+	crossing     int // -1 except for the two certified root contacts
 	rootBoundary bool
 	angle        float64 // exact mesh station shared with the blank ring
 }
@@ -85,7 +85,7 @@ type bevelCapEdge struct {
 	u, v, group int // group -1 is the shared root arc
 }
 
-// bevelExteriorPath inserts the live line certificates into the original
+// bevelExteriorPath inserts certified root contacts into the original
 // point-loft ring. Only the path through the outside tip arc remains exposed.
 func bevelExteriorPath(base facetedPayload, boundary *bevelToothBoundary,
 	source *pointSectionSource, blank *bevelBlankSource) ([]bevelPathNode, float64, error) {
@@ -122,25 +122,47 @@ func bevelExteriorPath(base facetedPayload, boundary *bevelToothBoundary,
 		edge  int
 	}
 	maxCrossBound := 0.0
-	for k, cert := range boundary.crossing {
-		p, bound, ok := bevelSeatPoint(source, cert, blank, base)
+	for k := range boundary.crossing {
+		var p r3.Vec
+		var bound float64
+		var root [2]float64
+		var ok bool
+		edgeIndex := boundary.lineIndex[k]
+		if boundary.fitRoute {
+			edgeIndex = boundary.fitIndex[k]
+			p, bound, root, ok = bevelFitSeatPoint(source, boundary.fitCross[k], blank)
+		} else {
+			p, bound, ok = bevelSeatPoint(source, boundary.crossing[k], blank, base)
+		}
 		if !ok {
 			return nil, 0, fmt.Errorf("%w: cone crossing has no finite spatial enclosure", ErrUnsupported)
 		}
 		best, edge := math.Inf(1), -1
-		for i := range n {
-			if groups[i] != boundary.lineIndex[k] {
-				continue
+		if boundary.fitRoute {
+			edge, ok = bevelFitStationEdge(base, groups, source, edgeIndex,
+				boundary.fitCross[k], root)
+			if !ok {
+				return nil, 0, fmt.Errorf("%w: cone crossing has no unique source fan cell", ErrUnsupported)
 			}
-			distance := bevelPointSegmentDistance(p, base.verts[i+1], base.verts[(i+1)%n+1])
-			if distance < best {
-				best, edge = distance, i
+			best = bevelPointSegmentDistance(p, base.verts[edge+1], base.verts[(edge+1)%n+1])
+		} else {
+			for i := range n {
+				if groups[i] != edgeIndex {
+					continue
+				}
+				distance := bevelPointSegmentDistance(p, base.verts[i+1], base.verts[(i+1)%n+1])
+				if distance < best {
+					best, edge = distance, i
+				}
 			}
 		}
 		allow := proofbound.AbsSumUpper(base.meshBound, bound)
 		if edge < 0 || !(best <= allow) || !proofbound.FiniteVec(p) {
-			return nil, 0, fmt.Errorf("%w: certified connector is outside its source fan edge", ErrUnsupported)
+			return nil, 0, fmt.Errorf("%w: certified root contact is outside its source fan edge", ErrUnsupported)
 		}
+		// The fan bound admits this source edge for insertion. The contact's
+		// distance from the exact source is the seat enclosure alone; Join
+		// charges the fan's source-to-mesh bound separately.
 		crossing[k] = struct {
 			p     r3.Vec
 			bound float64
@@ -149,7 +171,7 @@ func bevelExteriorPath(base facetedPayload, boundary *bevelToothBoundary,
 		maxCrossBound = max(maxCrossBound, bound)
 	}
 	if crossing[0].edge == crossing[1].edge {
-		return nil, 0, fmt.Errorf("%w: both connector contacts occupy one fan edge", ErrUnsupported)
+		return nil, 0, fmt.Errorf("%w: both root contacts occupy one fan edge", ErrUnsupported)
 	}
 	full := make([]bevelPathNode, 0, n+2)
 	var crossPosition [2]int

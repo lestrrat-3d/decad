@@ -345,7 +345,7 @@ clearance decisions in `bevel_join_bore_test.go`.
 
 ## Straight-tooth combined join
 
-`CombineJoin` accepts three to sixteen copies of one authenticated point-loft
+`CombineJoin` accepts three to thirty-one copies of one authenticated point-loft
 tooth against the original finite revolve blank. The first tool carries the
 cone-trim record; every later tool must be a recorded near-axis rotation of
 that same source. Pairwise exact projections of the held tooth vertices,
@@ -353,6 +353,27 @@ expanded by each body's certified mesh bound, prove the complete source
 solids disjoint. The original Sketch boundary certificates are checked again
 before rebuilding. The source axial interval, including its mesh allowance,
 must lie on the positive side of the public root cone's `Origin.X`.
+
+For an embedded fitted flank, Sketch certifies one transverse root-cone
+crossing on each complete spline and a strict inside side for both connector
+lines. Decad checks the retained spline sides, then bounds the difference
+between Sketch's public cone and the blank's recorded finite meridian over
+the spline. The residual margins and derivative bounds prove a unique
+recorded-meridian crossing inside an expanded parameter interval. Loft
+retains the local rounding bound for its ordered stations on that same
+recorded fitted spline. A strict local-U derivative lets Decad select the
+one source fan cell whose station U intervals bracket the complete root U
+interval. A root near a station or more than one matching cell is refused.
+The selected held chord must also pass the mesh-distance gate.
+
+The fitted contact splits one curved fan cell into two. On the cell's
+normalized parameter, let `e(t)` be the curve minus the original chord.
+`SpanMatchedDeltaUpper` bounds half the maximum `|e'(t)|`. On either new
+subcell of length `s ≤ 1`, the error against its own exact endpoint chord
+is at most `s` times that same bound. The fan's source-to-mesh allowance
+therefore covers both new chords; the crossing charge adds only its held
+point enclosure. Join charges the fan allowance once in its final boundary
+bound.
 
 The shared blank ring starts halfway between the first and last tooth
 sectors, at `-π / toothCount`. Root nodes must follow their cap boundary in
@@ -402,6 +423,11 @@ module-4 straight pair and their `VerifyAll` checks live in
 `decad-gallery/models/bevelgear`, where the real producer and consumer run
 together. Decad's focused tests cover cap conformity, root station order,
 and complete source-solid separation.
+
+The real unbored 31-tooth straight member uses two embedded fitted-flank
+crossings. Its gallery producer passed the 0.1 mm `VerifyAll` boundary and
+volume checks with one connected closed shell. The capped local run took
+274 seconds of test time and reached 3,444,152 KiB peak RSS.
 
 The sixteen-tooth driving member's default centered bore has radius 8 mm,
 inside the recorded toe outer radius. A post-`CombineJoin` Cut with fifteen
