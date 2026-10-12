@@ -1,0 +1,93 @@
+package decad
+
+import (
+	"math/big"
+	"slices"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
+	blank, trimmed, _ := neutralArcSeamSource(t)
+	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	require.NoError(t, err)
+	require.True(t, ok)
+	manifest, ok, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+	require.NoError(t, err)
+	require.True(t, ok)
+	sectionIndex, cellIndex := -1, -1
+	for _, side := range manifest.nonvertical {
+		for index, cell := range side.cells {
+			if cell.mapped.side == revolveLoftFacesJointContact &&
+				cell.mapped.jointKind == revolveLoftFacesWholeArcContact {
+				sectionIndex, cellIndex = side.sectionIndex, index
+				break
+			}
+		}
+		if cellIndex >= 0 {
+			break
+		}
+	}
+	require.GreaterOrEqual(t, cellIndex, 0)
+	shell, ok, err := revolveLoftFacesBlankShellWithCapRings(t.Context(), proof,
+		sectionIndex, cellIndex)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Len(t, shell.capRings, 2)
+	require.Len(t, shell.vertexBounds, len(shell.mesh.verts))
+	require.Less(t, shell.faceBound, 0.1)
+	require.True(t, revolveLoftFacesBlankShellEulerTwo(&shell.mesh))
+	edges := make(map[[2]int]struct{})
+	for _, triangle := range shell.mesh.tris {
+		for corner := range 3 {
+			a, b := triangle[corner], triangle[(corner+1)%3]
+			edges[[2]int{min(a, b), max(a, b)}] = struct{}{}
+		}
+	}
+	require.Equal(t, 2, len(shell.mesh.verts)-len(edges)+len(shell.mesh.tris))
+	vertical, sloped := 0, 0
+	for _, ring := range shell.capRings {
+		require.Len(t, ring.vertices, len(shell.capRings[0].vertices))
+		require.Equal(t, ring.sectionIndex, ring.arc.circle.span)
+		x, radius := ring.arc.circle.x, ring.arc.circle.radius
+		xf, _ := x.Float64()
+		rf, _ := radius.Float64()
+		span := proof.section.spans[ring.sectionIndex]
+		if span.start.U == span.end.U {
+			vertical++
+		} else {
+			sloped++
+		}
+		for _, index := range ring.vertices {
+			require.GreaterOrEqual(t, index, 0)
+			require.Less(t, index, len(shell.mesh.verts))
+			point := shell.mesh.verts[index]
+			bound := shell.vertexBounds[index]
+			require.InDelta(t, xf, point.X, bound+1e-12)
+			require.InDelta(t, rf*rf, point.Y*point.Y+point.Z*point.Z,
+				2*rf*bound+bound*bound+1e-12)
+			incident := 0
+			for _, triangle := range shell.mesh.tris {
+				if slices.Contains(triangle[:], index) {
+					incident++
+				}
+			}
+			require.GreaterOrEqual(t, incident, 4,
+				"both split meridian bands must reuse cap-ring vertex %d", index)
+		}
+	}
+	require.Equal(t, 1, vertical)
+	require.Equal(t, 1, sloped)
+	t.Logf("source-aligned blank shell with %d heel circles: %d vertices, %d triangles",
+		len(shell.capRings), len(shell.mesh.verts), len(shell.mesh.tris))
+	stale := *shell.capRings[0].arc
+	stale.time = new(big.Rat).Add(stale.time, big.NewRat(1, 1000))
+	_, accepted, err := revolveLoftFacesBlankShellAtArcWithCuts(t.Context(), proof, manifest,
+		sectionIndex, cellIndex, []revolveLoftFacesShellCut{{
+			sectionIndex: stale.circle.span,
+			x:            stale.circle.x, radius: stale.circle.radius, arc: &stale,
+		}})
+	require.NoError(t, err)
+	require.False(t, accepted)
+}

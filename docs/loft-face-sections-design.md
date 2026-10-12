@@ -362,6 +362,15 @@ oriented, connected genus-zero mesh with positive exact volume and no exact
 facet crossings. The neutral producer yields 494 vertices and 984 triangles.
 The shell is an internal construction piece; it does not admit `Union`.
 
+The cap-ring constructor rederives the face-pair census and splits that shell
+at each occupied heel-cap circle. It rechecks each arc against the live source,
+requires its exact circle to lie strictly inside one straight section side,
+and orders multiple cuts by their exact meridian fractions. Both bands next
+to a cut reuse the same ring vertex indices. The complete shell then repeats
+the crossing, Euler, volume, and face-bound audits. A changed arc refuses.
+The neutral producer yields two cap rings, 658 vertices, and 1312 triangles.
+The shell still does not admit `Union`.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
