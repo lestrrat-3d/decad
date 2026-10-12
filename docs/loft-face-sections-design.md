@@ -236,9 +236,19 @@ For each nonvertical finite Revolve side, a source manifest classifies every
 mapped fitted, straight and arc source span. It emits cells only for source
 origins found on a live trimmed face, and binds each emitted cell to its
 Sketch entity, LoftFaces band, source face origin and Revolve face.
-An interior fitted Bezier knot
-and a fitted-to-radial-arc endpoint have distinct live point handles and
-contact kinds. When both have time roots in one fitted span and band, their
+An interior fitted Bezier knot, a fitted-to-radial-arc endpoint, and a
+line-to-fitted endpoint have distinct contact kinds. Each adjacency requires
+the same live Sketch point handle on both whole entities, exact recorded
+endpoint coordinates, and identical mapped endpoint Bernstein controls.
+Its finite time roots have one-sided source cells on both incident curves.
+The root bracket owns both contact cells; adjacent time gaps exclude its
+endpoints. Disjoint line-to-fit and interior-knot roots on one fitted span
+are ordered by exact rational brackets after their live joint proofs are
+recomputed. Overlapping brackets or a line-to-fit and radial-arc combination
+refuse.
+A strict axial hull gap across a whole source span and band certifies a finite
+side miss before its infinite-meridian endpoint roots need combining.
+When a fitted knot and radial arc both have time roots in one span and band, their
 rational brackets must be disjoint. The manifest sorts them and proves each
 open time gap with the complete source polynomial. A nonnegative Bernstein
 box admits a strict gap with an exact zero on an excluded time endpoint only

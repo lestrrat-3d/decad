@@ -66,9 +66,17 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 				if err := ctx.Err(); err != nil {
 					return nil, false, err
 				}
+				if revolveLoftFacesSpanAxialMiss(trim.maps[band], trim.maps[band+1],
+					span, section, lfZero(), lfOne(), lfZero(), lfOne()) {
+					cells = append(cells, revolveLoftFacesMappedCell{segment: segment,
+						span: index, band: band, side: revolveLoftFacesAxialMiss,
+						sLo: lfZero(), sHi: lfOne(), tLo: lfZero(), tHi: lfOne()})
+					continue
+				}
 				var knot *revolveLoftFacesFitKnotJoint
 				knotLeft := false
 				var radial *revolveLoftFacesRadialJoint
+				var lineFit *revolveLoftFacesLineFitJoint
 				for i := range joints.fitKnots {
 					joint := &joints.fitKnots[i]
 					if joint.vertex.segment != segment || joint.band != band ||
@@ -94,31 +102,50 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 					}
 					radial = joint
 				}
-				if knot != nil || radial != nil {
+				for i := range joints.lineFit {
+					joint := &joints.lineFit[i]
+					if joint.band != band ||
+						segment != joint.vertex.lineSegment && segment != joint.vertex.fitSegment ||
+						segment == joint.vertex.lineSegment && index != 0 ||
+						segment == joint.vertex.fitSegment &&
+							joint.vertex.fitAtEnd && index != len(spans)-1 ||
+						segment == joint.vertex.fitSegment &&
+							!joint.vertex.fitAtEnd && index != 0 {
+						continue
+					}
+					if lineFit != nil {
+						return nil, false, fmt.Errorf("mapped source segment %d span %d band %d has overlapping line joints",
+							segment, index, band)
+					}
+					lineFit = joint
+				}
+				if knot != nil || radial != nil || lineFit != nil {
 					var refined []revolveLoftFacesMappedCell
 					var certified bool
 					var err error
-					if knot != nil && radial != nil {
+					if lineFit != nil && radial != nil {
+						return nil, false, fmt.Errorf("%w: mapped source segment %d span %d band %d has multiple endpoint joint classes",
+							ErrUnsupported, segment, index, band)
+					} else if lineFit != nil && knot != nil {
+						refined, certified, err = revolveLoftFacesMergeLineFitKnotCells(ctx,
+							trim, section, segment, index, band, span, lineFit, knot, knotLeft)
+					} else if knot != nil && radial != nil {
 						refined, certified, err = revolveLoftFacesMergeEndpointCells(ctx,
 							trim, section, segment, index, band, span, knot, radial, knotLeft)
 					} else if knot != nil {
 						refined, certified, err = revolveLoftFacesKnotPartitionCells(ctx,
 							trim, section, segment, index, band, span, *knot, knotLeft)
-					} else {
+					} else if radial != nil {
 						refined, certified, err = revolveLoftFacesRadialPartitionCells(ctx,
 							trim, section, segment, index, band, span, *radial)
+					} else {
+						refined, certified, err = revolveLoftFacesLineFitPartitionCells(ctx,
+							trim, section, segment, index, band, span, *lineFit)
 					}
 					if err != nil || !certified {
 						return nil, false, err
 					}
 					cells = append(cells, refined...)
-					continue
-				}
-				if revolveLoftFacesSpanAxialMiss(trim.maps[band], trim.maps[band+1],
-					span, section, lfZero(), lfOne(), lfZero(), lfOne()) {
-					cells = append(cells, revolveLoftFacesMappedCell{segment: segment,
-						span: index, band: band, side: revolveLoftFacesAxialMiss,
-						sLo: lfZero(), sHi: lfOne(), tLo: lfZero(), tHi: lfOne()})
 					continue
 				}
 				cell, ok := revolveLoftFacesMappedBezierCell(trim, m, b,

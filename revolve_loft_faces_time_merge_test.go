@@ -42,4 +42,15 @@ func TestRevolveLoftFacesOwnedTimeRootsRemainDisjoint(t *testing.T) {
 	wrongEnd := arc
 	wrongEnd.cell.sHi = big.NewRat(7, 8)
 	require.False(t, revolveLoftFacesOrderOwnedRoots([]revolveLoftFacesOwnedRoot{knot, wrongEnd}))
+
+	linePoint := new(sketch.Point)
+	line := makeRoot(big.NewRat(1, 8), big.NewRat(1, 6),
+		revolveLoftFacesLineFitContact, linePoint, false)
+	roots = []revolveLoftFacesOwnedRoot{knot, line}
+	require.True(t, revolveLoftFacesOrderOwnedRoots(roots))
+	require.Equal(t, revolveLoftFacesLineFitContact, roots[0].kind)
+	require.Same(t, linePoint, roots[0].point)
+	lineOverlap := makeRoot(big.NewRat(1, 3), big.NewRat(1, 2),
+		revolveLoftFacesLineFitContact, linePoint, false)
+	require.False(t, revolveLoftFacesOrderOwnedRoots([]revolveLoftFacesOwnedRoot{knot, lineOverlap}))
 }

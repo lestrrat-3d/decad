@@ -10,12 +10,13 @@ import (
 )
 
 // These are source joints for one authenticated nonvertical Revolve side.
-// They describe all fitted interior knots and fitted/radial-arc adjacencies
+// They describe fitted interior knots, fitted/radial-arc and line/fit adjacencies
 // whose exact side polynomial has a time root. Source cell classification,
 // tool transitions and held-switch coverage remain separate gates.
 type revolveLoftFacesNonverticalJoints struct {
 	fitKnots []revolveLoftFacesFitKnotJoint
 	radial   []revolveLoftFacesRadialJoint
+	lineFit  []revolveLoftFacesLineFitJoint
 }
 
 func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
@@ -65,6 +66,38 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 						ErrUnsupported, segmentIndex, left, band)
 				}
 				out.fitKnots = append(out.fitKnots, joint)
+			}
+		}
+		for _, fitAtWalkEnd := range [...]bool{false, true} {
+			lineIndex := (segmentIndex + 1) % len(segments)
+			if !fitAtWalkEnd {
+				lineIndex = (segmentIndex - 1 + len(segments)) % len(segments)
+			}
+			if _, isLine := entities[lineIndex].(*sketch.Line); !isLine {
+				continue
+			}
+			vertex, ok := revolveLoftFacesLineFitVertexOf(trim,
+				lineIndex, segmentIndex, fitAtWalkEnd)
+			if !ok {
+				return out, false, nil
+			}
+			for band := 0; band+1 < len(trim.maps); band++ {
+				roots, ok := revolveLoftFacesEndpointFiniteRoots(trim, section,
+					vertex.fitSpan, band, vertex.fitAtEnd)
+				if !ok {
+					return out, false, fmt.Errorf("%w: line/fit source joint %d/%d band %d has undecidable time roots",
+						ErrUnsupported, lineIndex, segmentIndex, band)
+				}
+				if len(roots) == 0 {
+					continue
+				}
+				joint, ok := certifyRevolveLoftFacesLineFitJoint(ctx, trim, section,
+					lineIndex, segmentIndex, band, fitAtWalkEnd)
+				if !ok || joint.vertex.point != vertex.point {
+					return out, false, fmt.Errorf("%w: line/fit source joint %d/%d band %d lacks a joint cell proof",
+						ErrUnsupported, lineIndex, segmentIndex, band)
+				}
+				out.lineFit = append(out.lineFit, joint)
 			}
 		}
 		for _, fitAtEnd := range [...]bool{false, true} {
