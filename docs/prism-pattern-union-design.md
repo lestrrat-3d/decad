@@ -68,3 +68,14 @@ source section mesh's already verified occupied-volume bound. Its area
 slack includes a perturbed area upper bound for the joined shell and upper
 areas of the input faces. The two cap groups retain the blank's planar
 surfaces and receive the result's own cap roles; other faces are faceted.
+
+## Axial edge selection
+
+The authenticated inputs and their joined shell are one XY section swept
+through a common Z interval. The result records this source proof. A faceted
+edge chain receives a Z direction for `ParallelTo` only when every held
+chord has exactly fixed X/Y and moves strictly in one Z direction. Bent,
+stationary, reversed, and unproved faceted chains have no selector direction.
+The edge remains a bounded `FacetedCurve`; this certificate does not make its
+held XY position exact. A rigid placement drops the source-specific axial
+selector certificate until that placed result has its own proof.

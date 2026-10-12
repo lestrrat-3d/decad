@@ -104,7 +104,8 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	fp := facetedPayload{verts: mesh.verts, tris: mesh.tris, src: mesh.src, groups: mesh.groups,
-		vertexBound: vertexBound, contactAudited: true,
+		axialSectionJoin: true,
+		vertexBound:      vertexBound, contactAudited: true,
 		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
 		dPair: facetedSourceDiameterUpper(mesh.verts, bound), xform: r3.Identity()}
 	if proofbound.IsNonFinite(fp.dPair) {

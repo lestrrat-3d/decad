@@ -478,6 +478,9 @@ type selectorEdge struct{ *Edge }
 func (e selectorEdge) SelectorConvex() bool { return e.convex }
 func (e selectorEdge) SelectorFree() bool   { return e.IsFree() }
 func (e selectorEdge) SelectorLineDirection() (r3.Vec, bool) {
+	if e.selectorDirectionProven {
+		return e.selectorDirection, true
+	}
 	if _, ok := e.curve.(Line3); !ok {
 		return r3.Vec{}, false
 	}

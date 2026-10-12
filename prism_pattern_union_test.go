@@ -40,6 +40,23 @@ func TestPrismPatternUnionRefusesOutwardRootWithoutRetiringSources(t *testing.T)
 	require.Len(t, doc.Bodies(), 3)
 }
 
+func TestPrismPatternUnionSelectsProvenAxialChains(t *testing.T) {
+	_, blank, section, rotated := prismPatternTabBodies(t, math.Nextafter(3, math.Inf(1)))
+	joined, err := Union(t.Context(), blank, section, rotated)
+	require.NoError(t, err)
+	selected, err := Edges(ParallelTo(r3.Vec{Z: 1})).SelectEdges(joined)
+	require.NoError(t, err)
+	require.Len(t, selected, 12)
+	for _, edge := range selected {
+		_, faceted := edge.Curve().(FacetedCurve)
+		require.True(t, faceted)
+		start, end := edge.Start().Position().Value, edge.End().Position().Value
+		require.Equal(t, start.X, end.X)
+		require.Equal(t, start.Y, end.Y)
+		require.NotEqual(t, start.Z, end.Z)
+	}
+}
+
 func prismPatternTabBodies(t *testing.T, radius float64) (*Document, *Body, *Body, *Body) {
 	t.Helper()
 	ctx := t.Context()
