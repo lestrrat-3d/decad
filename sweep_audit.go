@@ -20,6 +20,14 @@ type sweepAuditSpan struct {
 }
 
 func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
+	return auditCompositeSweepWithClosure(ctx, spans, false)
+}
+
+func auditClosedCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
+	return auditCompositeSweepWithClosure(ctx, spans, true)
+}
+
+func auditCompositeSweepWithClosure(ctx context.Context, spans []sweepAuditSpan, closed bool) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -47,6 +55,9 @@ func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
 			},
 			Extent: span,
 		}
+	}
+	if closed {
+		return compositesweep.AuditClosed(ctx, audit)
 	}
 	return compositesweep.Audit(ctx, audit)
 }

@@ -89,6 +89,12 @@ func assembleCompositeSweepBodyWithAudit(
 	return assembleCompositeSweepBodyWithJoin(ctx, d, ref, parts, surfaceResult, auditSpans, sewCompositeSweepJoin)
 }
 
+func assembleClosedCompositeSweepBody(ctx context.Context, d *Document, ref producerID,
+	parts []compositeSpanPart) (*Body, error) {
+	return assembleCompositeSweepBodyWithJoinMode(ctx, d, ref, parts, false,
+		auditClosedCompositeSweep, sewCompositeSweepJoin, true)
+}
+
 func assembleCompositeSweepBodyWithJoin(
 	ctx context.Context,
 	d *Document,
@@ -98,11 +104,29 @@ func assembleCompositeSweepBodyWithJoin(
 	auditSpans func(context.Context, []sweepAuditSpan) error,
 	joinSpans func(context.Context, *Face, *Face, *Body, map[*Edge]struct{}) error,
 ) (*Body, error) {
+	return assembleCompositeSweepBodyWithJoinMode(ctx, d, ref, parts, surfaceResult, auditSpans, joinSpans, false)
+}
+
+func assembleCompositeSweepBodyWithJoinMode(
+	ctx context.Context,
+	d *Document,
+	ref producerID,
+	parts []compositeSpanPart,
+	surfaceResult bool,
+	auditSpans func(context.Context, []sweepAuditSpan) error,
+	joinSpans func(context.Context, *Face, *Face, *Body, map[*Edge]struct{}) error,
+	closed bool,
+) (*Body, error) {
 	if len(parts) < 2 {
 		return nil, fmt.Errorf(`%w: a composite sweep requires at least two spans`, ErrDegenerate)
 	}
 	if err := validateCompositeSweepRims(ctx, parts); err != nil {
 		return nil, err
+	}
+	if closed {
+		if err := validateCompositeSweepRims(ctx, []compositeSpanPart{parts[len(parts)-1], parts[0]}); err != nil {
+			return nil, err
+		}
 	}
 	audit := make([]sweepAuditSpan, len(parts))
 	for i, part := range parts {
@@ -124,6 +148,12 @@ func assembleCompositeSweepBodyWithJoin(
 			return nil, fmt.Errorf(`sweep path join %d: %w`, join+1, err)
 		}
 	}
+	if closed {
+		last := parts[len(parts)-1]
+		if err := joinSpans(ctx, last.endCap, parts[0].startCap, last.body, sewnEdges); err != nil {
+			return nil, fmt.Errorf(`sweep path closure: %w`, err)
+		}
+	}
 
 	kind := BodySolid
 	if surfaceResult {
@@ -136,7 +166,7 @@ func assembleCompositeSweepBodyWithJoin(
 		kind:   kind,
 	}
 	var faces []*Face
-	if !surfaceResult {
+	if !surfaceResult && !closed {
 		faces = append(faces, parts[0].startCap)
 	}
 	for k, part := range parts {
@@ -152,7 +182,7 @@ func assembleCompositeSweepBodyWithJoin(
 			faces = append(faces, face)
 		}
 	}
-	if !surfaceResult {
+	if !surfaceResult && !closed {
 		parts[0].startCap.body = body
 		parts[len(parts)-1].endCap.body = body
 		faces = append(faces, parts[len(parts)-1].endCap)
@@ -172,6 +202,16 @@ func assembleCompositeSweepBodyWithJoin(
 	}
 	if err := auditCompositeBoundary(ctx, body, sewnEdges); err != nil {
 		return nil, err
+	}
+	if closed {
+		for _, edge := range body.Edges() {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if len(edge.faces) != 2 {
+				return nil, fmt.Errorf(`%w: a closed sweep rim lacks two incident faces`, ErrUnsupported)
+			}
+		}
 	}
 	return body, nil
 }
@@ -309,10 +349,8 @@ type compositeCoedgeUse struct {
 // outer rims) — the same manifold-with-boundary invariant
 // docs/surface-design.md §9.1 states for the sheet validity audit, restated
 // here because this audit runs on the ASSEMBLED composite body rather than
-// its recorded topology. A solid's every edge has exactly two incident faces
-// by construction, so the relaxation below to "one or two" changes nothing a
-// solid can ever exercise; it only admits the free edges a surface result's
-// two omitted outer caps leave behind.
+// its recorded topology. The common audit admits free edges for sheets.
+// A closed composite solid checks exactly two faces per edge after this audit.
 func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]struct{}) error {
 	if body == nil {
 		return fmt.Errorf(`%w: a nil composite sweep body has no boundary`, ErrDegenerate)

@@ -30,9 +30,8 @@ import (
 // flag to omit the two outer caps after every span has built solid.
 //
 // An open Sweep mints two section caps. The exact two-arc closed circle of
-// §3.3 instead reduces to a full Revolve and mints no cap or seam face.
-// Other closed paths still refuse because their terminal frame may not equal
-// the initial one.
+// §3.3 reduces to a full Revolve. The §3.4 circular-section racetrack sews
+// four analytic spans cyclically. Neither closed build mints section caps.
 
 const compositeFitSweepWorkLimit = 8 * freeform.FreeformWorkLimit
 
@@ -56,7 +55,8 @@ func WithSweepTwist(angle units.Value) SweepOption {
 // exactly codirectional with the plane's positive normal. Composite paths also
 // require tangent joins, exactly representable transported frames, and a
 // certified absence of unintended span contact. Section 17 of the Sweep design
-// states the bounded nonzero-twist reach. Section 3.3 admits one closed circle.
+// states the bounded nonzero-twist reach. Sections 3.3–3.4 admit two bounded
+// closed-path classes.
 // Every failure and cancellation leaves the document unchanged.
 func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
 	if ctx == nil {
@@ -142,9 +142,14 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	ref := d.nextProducerID()
 	if samePathPoint(path.Start(), path.End()) {
 		if surfaceResult {
-			return nil, fmt.Errorf(`%w: a closed sweep surface result is outside the full-circle solid reduction`, ErrUnsupported)
+			return nil, fmt.Errorf(`%w: a closed sweep surface result is not implemented`, ErrUnsupported)
 		}
-		body, err := evalClosedCircleSweep(ctx, d, ref, profile, plane, frame, path, work)
+		var body *Body
+		if _, circle := closedSweepCircle(path); circle {
+			body, err = evalClosedCircleSweep(ctx, d, ref, profile, plane, frame, path, work)
+		} else {
+			body, err = evalClosedRacetrackSweep(ctx, d, ref, profile, plane, frame, path, work)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -255,14 +260,15 @@ func samePathPoint(a, b r3.Vec) bool {
 // assembleCompositeSweepBody reads this field alone to decide which two caps
 // to omit from the published face set.
 type sweepPayload struct {
-	prism          prismPayload
-	revolve        revolvePayload
-	arc            bool
-	closedCircle   bool
-	reverseArcCaps bool
-	spans          []sweepSpanPayload
-	path           *Path
-	surfaceResult  bool
+	prism           prismPayload
+	revolve         revolvePayload
+	arc             bool
+	closedCircle    bool
+	closedRacetrack bool
+	reverseArcCaps  bool
+	spans           []sweepSpanPayload
+	path            *Path
+	surfaceResult   bool
 }
 
 func (sp sweepPayload) transform() r3.Transform {

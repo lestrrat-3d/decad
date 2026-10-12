@@ -27,6 +27,14 @@ func transportSweepFramesContext(
 	path *Path,
 	plane planeRecord,
 ) ([]sweepTransportFrame, error) {
+	return transportSweepFrames(ctx, path, plane, false)
+}
+
+func transportClosedRacetrackFrames(ctx context.Context, path *Path, plane planeRecord) ([]sweepTransportFrame, error) {
+	return transportSweepFrames(ctx, path, plane, true)
+}
+
+func transportSweepFrames(ctx context.Context, path *Path, plane planeRecord, closedRacetrack bool) ([]sweepTransportFrame, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -36,7 +44,7 @@ func transportSweepFramesContext(
 	if err := validateSweepPathGeometry(path, plane); err != nil {
 		return nil, err
 	}
-	if samePathPoint(path.Start(), path.End()) {
+	if samePathPoint(path.Start(), path.End()) && !closedRacetrack {
 		return nil, fmt.Errorf(`%w: closed sweep paths have no admitted end frame`, ErrUnsupported)
 	}
 
@@ -64,6 +72,14 @@ func transportSweepFramesContext(
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
 		frames = append(frames, current)
+	}
+	if closedRacetrack {
+		start, end := frames[0], frames[len(frames)-1]
+		if end.OriginBound != 0 || end.UBound != 0 || end.VBound != 0 || end.NBound != 0 ||
+			end.Frame.Origin() != start.Frame.Origin() || end.Frame.U() != start.Frame.U() ||
+			end.Frame.V() != start.Frame.V() || end.Frame.N() != start.Frame.N() {
+			return nil, fmt.Errorf(`%w: the closed sweep's transported section does not exactly match its start`, ErrUnsupported)
+		}
 	}
 	return frames, nil
 }

@@ -75,7 +75,13 @@ func replayCompositeSweepWork(
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
 	}
-	body, err := assembleCompositeSweepBody(ctx, d, ref, parts, payload.surfaceResult)
+	var body *Body
+	var err error
+	if payload.closedRacetrack {
+		body, err = assembleClosedCompositeSweepBody(ctx, d, ref, parts)
+	} else {
+		body, err = assembleCompositeSweepBody(ctx, d, ref, parts, payload.surfaceResult)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -97,10 +103,30 @@ func evalCompositeSweepContext(
 	work *freeform.FreeformWork,
 	surfaceResult bool,
 ) (*Body, error) {
+	return evalCompositeSweepContextWithClosure(ctx, d, ref, profile, plane, frame, path, work, surfaceResult, false)
+}
+
+func evalCompositeSweepContextWithClosure(
+	ctx context.Context,
+	d *Document,
+	ref producerID,
+	profile profileRecord,
+	plane planeRecord,
+	frame r3.Frame,
+	path *Path,
+	work *freeform.FreeformWork,
+	surfaceResult, closedRacetrack bool,
+) (*Body, error) {
 	if err := compositesweep.Preflight(profile, len(path.records)); err != nil {
 		return nil, err
 	}
-	frames, err := transportSweepFramesContext(ctx, path, plane)
+	var frames []sweepTransportFrame
+	var err error
+	if closedRacetrack {
+		frames, err = transportClosedRacetrackFrames(ctx, path, plane)
+	} else {
+		frames, err = transportSweepFramesContext(ctx, path, plane)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -122,9 +148,10 @@ func evalCompositeSweepContext(
 			frame:   frame,
 			xform:   r3.Identity(),
 		},
-		spans:         make([]sweepSpanPayload, len(path.records)),
-		path:          path,
-		surfaceResult: surfaceResult,
+		spans:           make([]sweepSpanPayload, len(path.records)),
+		path:            path,
+		surfaceResult:   surfaceResult,
+		closedRacetrack: closedRacetrack,
 	}
 	for i, record := range path.records {
 		if err := ctx.Err(); err != nil {
