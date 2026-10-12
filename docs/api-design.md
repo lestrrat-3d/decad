@@ -882,7 +882,7 @@ func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec, s *sketch.Ske
 `Profile` together. It admits the three- and four-section classes in
 `docs/loft-sections-design.md`.
 
-`LoftFaces(ctx, sections ...*Face)` consumes nine ordered planar caps from
+`LoftFaces(ctx, sections ...*Face)` consumes two to thirty-two ordered planar caps from
 authenticated point-loft Split slabs. It retains their original Sketch
 profile and exact cut-plane maps through rigid placement and positive
 uniform scale. Its bounded source class and proof are in

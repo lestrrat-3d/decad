@@ -1,10 +1,10 @@
-# Source-cap nine-section loft
+# Source-cap face-fed loft
 
-`Document.LoftFaces(ctx, sections ...*Face)` builds one solid through nine
-ordered planar caps. The admitted producer is eight live, complete Split
-slabs from one authenticated `LoftFromPoint` source. Each section is either
-an original Split cap, its rigid image, or its positive uniform image. The
-first section is the toe cap of the least slab; the remaining eight are the
+`Document.LoftFaces(ctx, sections ...*Face)` builds one solid through two to
+thirty-two ordered planar caps. The admitted producer is one to thirty-one
+live, complete Split slabs from one authenticated `LoftFromPoint` source.
+Each section is an original Split cap, its rigid image, or its positive uniform image. The
+first section is the toe cap of the least slab; the remaining sections are the
 heel caps in source order. This is a separate operation from the three-Sketch
 `LoftSections` route. No public faceted cap edge is promoted to a Sketch
 curve.
@@ -15,17 +15,19 @@ Every admitted cap retains the same immutable point-loft Sketch/profile,
 source station order, exact rational ray-plane cut map, and ordered rigid
 and positive-scale steps. Each source record is current when the loft is
 built. A side face, mixed source, duplicate cap, stale source, reordered
-cap, missing proof record, or any section count other than nine refuses
+cap, missing proof record, or a section count outside two to thirty-two refuses
 without retiring an operand. The record, rather than a face's rounded
 `Plane` tag or `FacetedCurve` edges, defines the cap curve.
+The thirty-two-cap ceiling bounds pairwise section-plane and mesh-contact work;
+every admitted count still passes the same exact embedding and volume proofs.
 
 Write `D` for the original authenticated planar Sketch region and `P` for
 its certified station polygon. An exact cut cap maps each source point `p`
 from the original far plane by `a + d(p-a)/(n·(p-a))`, where `a` is the
 original apex and `n,d` come from the Split sheet's rational plane. The
 far cap is the identity map. Subsequent similarities act in their recorded
-order. Call the resulting map of section `i` `C_i(p)`. The denoted solid is
-the image of `D × [0,8]` under the piecewise ruled map
+order. Call the resulting map of section `i` `C_i(p)`. For `N` sections, the
+denoted solid is the image of `D × [0,N−1]` under the piecewise ruled map
 `F_i(p,t)=(1-t)C_i(p)+t C_{i+1}(p)` for each unit band. The source
 parameter `p` gives the correspondence; a fitted-flank sample or a
 reconstructed Sketch profile does not.
@@ -112,12 +114,14 @@ the ordinary pair chord. It retries only a first-operand staging refusal.
 The local chain-depth gate still checks the held bound at every other contact.
 The same mesh Boolean still checks all other face pairs, contacts, rims,
 occupied-volume bounds, and the final mesh. Placement drops the record.
-When the original LoftFaces result carries nine exact maps and their source
-cell bounds, a successful toe Cut and heel Intersect retain an immutable
-source record on the unplaced faceted result. The record identifies the two
+When the original LoftFaces result carries two to thirty-two exact maps,
+matching source-cell bounds, and a complete source-station group, a successful
+toe Cut and heel Intersect retain an immutable source record on the unplaced
+faceted result. The record identifies the two
 surviving tool-cap face groups. A later source-specific Union rechecks the
 original Sketch revision, map denominators, cone order, and both cap groups.
 Every other Intersect result has no continuation record. Placement drops it.
+The current spiral source-specific Union still admits only its nine-cap class.
 
 For the first curved tooth joined to its blank, the retained source maps prove
 one transverse blank-root crossing on each fitted flank through all eight

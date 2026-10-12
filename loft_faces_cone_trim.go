@@ -34,7 +34,7 @@ type loftFacesToeRecord struct {
 }
 
 // loftFacesTrimRecord retains the authenticated source of one unplaced
-// LoftFaces tooth after its original toe Cut and heel Intersect.
+// LoftFaces body after its original toe Cut and heel Intersect.
 // The Boolean result remains faceted; this record only admits later
 // source-specific proofs after those source identities are checked again.
 type loftFacesTrimRecord struct {
@@ -45,6 +45,15 @@ type loftFacesTrimRecord struct {
 	stationGroup              []int
 	toe, heel                 *pointConeLimit
 	toeCapGroup, heelCapGroup int
+}
+
+func loftFacesCapRecordReady(record *loftFacesCapRecord) bool {
+	if record == nil || record.source == nil {
+		return false
+	}
+	n := len(record.maps)
+	return n >= 2 && n <= maxLoftFacesSections && len(record.bounds) == n &&
+		len(record.stationGroup) == len(record.source.sourceStation) && len(record.stationGroup) >= 3
 }
 
 func uniqueConeFace(body *Body) (*Face, bool) {
@@ -97,7 +106,8 @@ func uniqueResultSourceFace(body *Body, source int) *Face {
 
 func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) error {
 	base, ok := source.payload.(facetedPayload)
-	if !ok || !base.loftFacesPrimitive || base.loftFacesCap == nil || base.xform != r3.Identity() {
+	if !ok || !base.loftFacesPrimitive || !loftFacesCapRecordReady(base.loftFacesCap) ||
+		base.xform != r3.Identity() {
 		return nil
 	}
 	cone, ok := exactPointCone(tool)
@@ -289,7 +299,8 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		return nil, false, nil
 	}
 	p, ok := target.payload.(facetedPayload)
-	if !ok || p.loftFacesToe == nil || p.xform != r3.Identity() ||
+	if !ok || p.loftFacesToe == nil || !loftFacesCapRecordReady(p.loftFacesToe.cap) ||
+		p.xform != r3.Identity() ||
 		p.loftFacesToe.capFace == nil || p.loftFacesToe.capFace.body != target {
 		return nil, false, nil
 	}
@@ -354,25 +365,23 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	if err != nil {
 		return nil, true, asBooleanError(op, err)
 	}
-	if len(p.loftFacesToe.cap.maps) == 9 {
-		result, ok := body.payload.(facetedPayload)
-		if !ok {
-			return body, true, nil
-		}
-		if uniqueResultSourceFace(body, toeCapSource) == nil ||
-			uniqueResultSourceFace(body, heelCapSource) == nil {
-			return body, true, nil
-		}
-		result.loftFacesTrim = &loftFacesTrimRecord{
-			base: p.loftFacesToe.base, source: p.loftFacesToe.cap.source,
-			maps:         append([]loftFaceMap(nil), p.loftFacesToe.cap.maps...),
-			bounds:       append([]loftFaceCapBounds(nil), p.loftFacesToe.cap.bounds...),
-			stationGroup: append([]int(nil), p.loftFacesToe.cap.stationGroup...),
-			toe:          p.loftFacesToe.toe, heel: cone,
-			toeCapGroup: toeCapSource, heelCapGroup: heelCapSource,
-		}
-		body.payload = result
+	result, ok := body.payload.(facetedPayload)
+	if !ok {
+		return body, true, nil
 	}
+	if uniqueResultSourceFace(body, toeCapSource) == nil ||
+		uniqueResultSourceFace(body, heelCapSource) == nil {
+		return body, true, nil
+	}
+	result.loftFacesTrim = &loftFacesTrimRecord{
+		base: p.loftFacesToe.base, source: p.loftFacesToe.cap.source,
+		maps:         append([]loftFaceMap(nil), p.loftFacesToe.cap.maps...),
+		bounds:       append([]loftFaceCapBounds(nil), p.loftFacesToe.cap.bounds...),
+		stationGroup: append([]int(nil), p.loftFacesToe.cap.stationGroup...),
+		toe:          p.loftFacesToe.toe, heel: cone,
+		toeCapGroup: toeCapSource, heelCapGroup: heelCapSource,
+	}
+	body.payload = result
 	return body, true, nil
 }
 
