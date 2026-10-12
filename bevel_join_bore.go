@@ -19,7 +19,7 @@ const bevelBoreSideRole = "side(0,0)"
 
 func bevelBorePatternKind(placed int) (toeClipped, ok bool) {
 	switch placed {
-	case 7, 15:
+	case 3, 7, 15:
 		return false, true
 	case 11:
 		return true, true
@@ -156,14 +156,29 @@ func bevelBoreTriangleClear(t [3]int, verts []r3.Vec, clearance float64) bool {
 	a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 	loY, hiY := min(a.Y, b.Y, c.Y), max(a.Y, b.Y, c.Y)
 	loZ, hiZ := min(a.Z, b.Z, c.Z), max(a.Z, b.Z, c.Z)
-	return loY > clearance || hiY < -clearance || loZ > clearance || hiZ < -clearance
+	if loY > clearance || hiY < -clearance || loZ > clearance || hiZ < -clearance {
+		return true
+	}
+	// A diagonal flank can clear the cylinder although neither coordinate
+	// interval clears its surrounding square. Check the whole held triangle
+	// against the axis using exact dyadic coordinates before refusing it.
+	projected := [3]r3.Vec{
+		{X: a.Y, Y: a.Z}, {X: b.Y, Y: b.Z}, {X: c.Y, Y: c.Z},
+	}
+	return loftCylinderTriangleMinRadius(projected[:], [3]int{0, 1, 2}) > clearance
 }
 
 func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, blank *bevelBlankSource, ring *bevelCapRingRecord,
 	radius float64, wall *Face) (*Body, error) {
 	n := len(ring.angles)
+	teeth := len(joined.bevelJoin.placed) + 1
+	maxRingStations := 1_536
+	if teeth == 4 {
+		maxRingStations = 2_304
+	}
 	if n < 16 || len(ring.heel) != n || len(ring.toe) != n ||
+		n > maxRingStations ||
 		len(joined.tris) != len(joined.src) || len(joined.verts) != len(joined.vertexBound) ||
 		ring.heelAxis == ring.toeAxis {
 		return nil, fmt.Errorf("%w: bevel bore has no complete cap-ring record", ErrUnsupported)
@@ -298,14 +313,16 @@ func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, err
 	}
-	if n < 16 || n > 1_536 {
-		return nil, fmt.Errorf("%w: bevel bore requires at most 1536 ring stations", ErrUnsupported)
-	}
 	// The annular strips and inward wall add four net triangles per station
 	// after the old axis fans are removed.
-	teeth := len(joined.bevelJoin.placed) + 1
 	maxPatternAuditTriangles := 44_480 + 22_000*(teeth-2)
 	maxAuditScans := uint64(128_000_000)
+	if teeth == 4 {
+		// The two-pass cap source already proved by CombineJoin can contribute
+		// at most two final caps of 120,000 cells per tooth.
+		maxPatternAuditTriangles += 2 * bevelCombineCapFinalLimit * teeth
+		maxAuditScans = uint64(80_000_000 * teeth)
+	}
 	if teeth == 16 {
 		// CombineJoin's one-pass cap refinement adds at most three children
 		// per source cell on each of two caps per tooth.

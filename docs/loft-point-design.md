@@ -420,13 +420,35 @@ The existing cylinder-shell volume charge spans the exact blank caps. The
 real source passes `Tessellate(0.1 mm, VerifyAll)` with a 0.092906 mm
 boundary bound and a 788.859944 mm³ occupied-volume allowance.
 
+## Small straight member's annular bore
+
+The module-4, four-tooth member's source-default bore has radius 2 mm, inside
+its 2.666667 mm toe outer radius. Its two-pass combined Join records 2,304
+angular cap stations, so this annular Cut admits at most 2,304 stations; the
+other annular cases keep their 1,536-station limit. The original cap-fan,
+contact, and cylinder-shell volume proofs apply without changing their
+geometry.
+
+An untouched facet whose Y and Z coordinate boxes both meet the bore's
+surrounding square is checked by the exact-dyadic minimum radius of its whole
+projected triangle. A radius no greater than the bore plus both boundary
+bounds refuses the Cut. The real source has 76 such toe-flank facets; their
+smallest certified held radius is 2.6664658715710501 mm, above the charged
+2.0918973931155183 mm clearance.
+
+The two-pass Join ceiling plus four triangles per angular station bounds the
+Cut at 1,057,696 triangles and 320 million scanned pairs. The real source
+has 876,000 triangles and scans 285,455,819 pairs. The complete gallery
+`Build` → centered `Cut` → `Tessellate(0.1 mm, VerifyAll)` produces one
+through-hole.
+
 ## Bore through the straight pinion's narrow toe
 
 The module-4, twelve-tooth pinion's source blank has a toe outer radius of
 1.777778 mm and a toe-root radius of 13.333333 mm. Its default centered bore
 has radius 6 mm. The bore removes the complete small toe cap and meets the
 recorded straight toe flank at X = 28.833333 mm. The source bore tool extends
-beyond both blank ends. The eight-tooth annular-cap rewrite does not apply to
+beyond both blank ends. The annular-cap rewrite does not apply to
 this crossing.
 
 The Cut requires the retained `CombineJoin` source, its eleven placed teeth,
