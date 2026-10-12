@@ -44,6 +44,7 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 		circle.tool != 1 || circle.sourceMiss || circle.x == nil || circle.radius == nil ||
 		circle.span < 0 || circle.span >= len(proof.section.spans) ||
 		circle.blankFace == nil || circle.capFace != proof.heelFace ||
+		!revolveLoftFacesSectionFacesComplete(proof) ||
 		!proof.trim.source.source.profile.Valid ||
 		len(proof.trim.source.source.profile.Holes) != 0 {
 		return nil, false, nil
