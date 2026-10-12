@@ -27,6 +27,25 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 		require.Zero(t, lfSub(lfAdd(circle.x,
 			lfMul(tool.slope, circle.radius)), tool.apex).Sign())
 	}
+	t.Run("changed non-root Revolve surface", func(t *testing.T) {
+		for index, span := range proof.section.spans {
+			if index == proof.section.rootSpan || span.face == nil {
+				continue
+			}
+			cone, ok := span.face.surface.(Cone)
+			if !ok {
+				continue
+			}
+			original := span.face.surface
+			defer func() { span.face.surface = original }()
+			cone.Origin.X += 0.125
+			span.face.surface = cone
+			_, accepted := revolveLoftFacesToolCapSidesOf(proof)
+			require.False(t, accepted)
+			return
+		}
+		t.Fatal("missing non-root cone face")
+	})
 	changed := *proof
 	changed.section = proof.section
 	changed.section.spans = append([]revolveSectionSpan(nil), proof.section.spans...)
