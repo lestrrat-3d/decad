@@ -147,4 +147,61 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 	require.NotNil(t, proof.crossings[0].span)
 	require.NotNil(t, proof.crossings[1].span)
 	require.NotEqual(t, proof.crossings[0].segment, proof.crossings[1].segment)
+
+	t.Run("changed cap departure", func(t *testing.T) {
+		original := trim.bounds[0]
+		defer func() { trim.bounds[0] = original }()
+		changed := original
+		changed.sourceDeparture = slices.Clone(original.sourceDeparture)
+		require.NotEmpty(t, changed.sourceDeparture)
+		changed.sourceDeparture[0]++
+		trim.bounds[0] = changed
+		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+		require.NoError(t, err)
+		require.False(t, certified)
+	})
+	t.Run("changed station group", func(t *testing.T) {
+		original := trim.stationGroup[0]
+		defer func() { trim.stationGroup[0] = original }()
+		trim.stationGroup[0] = original + 1
+		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+		require.NoError(t, err)
+		require.False(t, certified)
+	})
+
+	var owner *Face
+	var ref FeatureRef
+	for band, face := range proof.crossings[0].faces {
+		if face != nil {
+			owner = face
+			ref = proof.sourceRefs[band][proof.crossings[0].segment]
+			break
+		}
+	}
+	require.NotNil(t, owner)
+	t.Run("missing crossing owner", func(t *testing.T) {
+		original := owner.origins
+		defer func() { owner.origins = original }()
+		owner.origins = slices.DeleteFunc(slices.Clone(original),
+			func(got FeatureRef) bool { return got == ref })
+		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+		require.NoError(t, err)
+		require.False(t, certified)
+	})
+	t.Run("duplicate crossing owner", func(t *testing.T) {
+		var other *Face
+		for _, face := range tooth.Faces() {
+			if face != owner {
+				other = face
+				break
+			}
+		}
+		require.NotNil(t, other)
+		original := other.origins
+		defer func() { other.origins = original }()
+		other.origins = append(slices.Clone(original), ref)
+		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+		require.NoError(t, err)
+		require.False(t, certified)
+	})
 }

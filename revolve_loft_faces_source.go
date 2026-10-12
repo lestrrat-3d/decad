@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -22,6 +23,7 @@ type revolveLoftFacesCrossing struct {
 	last    int
 	caps    []spiralRootCrossing
 	x       []loftFaceInterval
+	faces   []*Face
 }
 
 // revolveLoftFacesSourceCertificate describes a certified curved contact
@@ -117,6 +119,14 @@ func revolveLoftFacesTrimCurrent(p facetedPayload, trim *loftFacesTrimRecord) bo
 		!spiralTrimCapGroupsCurrent(p, trim) {
 		return false
 	}
+	if !slices.Equal(trim.stationGroup, trim.base.loftFacesCap.stationGroup) {
+		return false
+	}
+	for i, bound := range trim.bounds {
+		if !revolveLoftFacesSameCapBound(bound, trim.base.loftFacesCap.bounds[i]) {
+			return false
+		}
+	}
 	for _, edge := range trim.source.source.profile.Outer {
 		if edge.Partial {
 			return false
@@ -133,6 +143,14 @@ func revolveLoftFacesTrimCurrent(p facetedPayload, trim *loftFacesTrimRecord) bo
 		}
 	}
 	return true
+}
+
+func revolveLoftFacesSameCapBound(a, b loftFaceCapBounds) bool {
+	return a.stationRound == b.stationRound &&
+		slices.Equal(a.projectiveDeparture, b.projectiveDeparture) &&
+		slices.Equal(a.polygonSpeed, b.polygonSpeed) &&
+		slices.Equal(a.sourceSpeed, b.sourceSpeed) &&
+		slices.Equal(a.sourceDeparture, b.sourceDeparture)
 }
 
 func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
@@ -214,6 +232,26 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 	}
 	proof.sourceRefs = refs
 	p, _ := tooth.payload.(facetedPayload)
+	faces := tooth.Faces()
+	for i := range proof.crossings {
+		crossing := &proof.crossings[i]
+		crossing.faces = make([]*Face, len(refs))
+		retained := false
+		for band := range refs {
+			ref := refs[band][crossing.segment]
+			index, valid := revolveLoftFacesRefFaceIndex(p, ref, len(faces))
+			face, originValid := revolveLoftFacesUniqueOriginFace(tooth, ref)
+			if !valid || !originValid || (index >= 0) != (face != nil) ||
+				index >= 0 && faces[index] != face {
+				return nil, false, nil
+			}
+			crossing.faces[band] = face
+			retained = retained || index >= 0
+		}
+		if !retained {
+			return nil, false, nil
+		}
+	}
 	proof.toeFace = uniqueResultSourceFace(tooth, p.loftFacesTrim.toeCapGroup)
 	proof.heelFace = uniqueResultSourceFace(tooth, p.loftFacesTrim.heelCapGroup)
 	if proof.toeFace == nil || proof.heelFace == nil || proof.toeFace == proof.heelFace {
@@ -349,4 +387,40 @@ func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]Fea
 		}
 	}
 	return refs, true
+}
+
+func revolveLoftFacesUniqueOriginFace(body *Body, want FeatureRef) (*Face, bool) {
+	var result *Face
+	for _, face := range body.Faces() {
+		for _, origin := range face.Origins() {
+			if origin != want {
+				continue
+			}
+			if face.body != body || result != nil {
+				return nil, false
+			}
+			result = face
+		}
+	}
+	return result, true
+}
+
+func revolveLoftFacesRefFaceIndex(p facetedPayload, want FeatureRef, faceCount int) (int, bool) {
+	if len(p.src) != len(p.tris) || len(p.faceOf) != len(p.tris) {
+		return -1, false
+	}
+	index := -1
+	for i, group := range p.src {
+		if group < 0 || group >= len(p.groups) {
+			return -1, false
+		}
+		if slices.Contains(p.groups[group].origins, want) {
+			if p.faceOf[i] < 0 || p.faceOf[i] >= faceCount ||
+				index >= 0 && index != p.faceOf[i] {
+				return -1, false
+			}
+			index = p.faceOf[i]
+		}
+	}
+	return index, true
 }

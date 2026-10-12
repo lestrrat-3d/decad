@@ -194,6 +194,10 @@ faces and exact rational meridians. A placed or off-axis Revolve refuses
 this gate. The LoftFaces record must still name the live whole-entity Sketch
 profile, the same nine exact maps and source bounds, and two surviving tool
 caps. A stale, partial or foreign profile refuses.
+The copied station groups and every cap-bound term must still equal the
+original LoftFaces cap record. Every crossing source group that has retained
+triangles must map to one live result face carrying its origin, and each
+crossing must retain at least one such face.
 
 For each candidate root, the gate evaluates the exact signed cone implicit
 on every mapped source station cell. Its recorded curve departure enlarges
