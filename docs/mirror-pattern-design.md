@@ -13,7 +13,8 @@ under `.tmp/probe/` at `8cc06f90`.
 
 A reflection is already a placement. `r3.Transform` represents an improper
 isometry (det −1, `Transform.IsReflection`), `Body.Placed` and
-`Body.PlacedCopy` accept one, and every shipped payload re-evaluates under it:
+`Copy` with `WithCopyPlacement` accept one, and every shipped payload
+re-evaluates under it:
 `prismPayload`, `revolvePayload`, `stackedPrismPayload`, `capBlendPayload`,
 `cupPayload` and the chain ribbon flip their outward normals, windings and
 arc senses through `reflected()`; `loftPayload` re-decides its whole-shell
@@ -34,7 +35,7 @@ What is missing is everything a caller does WITH a mirror image:
   (general-boolean §3 A3) the same pair still takes the mesh path: the image
   carries the placement's rounding, and a displaced pair's wall inside the
   union is a sliver no recorded edge bounds;
-- a pattern built from `PlacedCopy` and `Union` ends in one of three places:
+- a pattern built from `Copy` and `Union` ends in one of three places:
   disjoint instances become a `Faceted` multi-lump body whose surveys read
   `Suspect` and which no later coplanar boolean accepts as a tool; instances
   placed by an in-plane translation combine analytically but carry a section
@@ -52,7 +53,7 @@ one record set, so a pattern of N holes is one analytic arrangement.
 
 | Row | Scene | Result |
 |---|---|---|
-| M1 | L prism (1750 mm³) `PlacedCopy` across the plane x = 30 | analytic, `Exact` 1750 mm³, centroid x = 53.2143 (= 60 − 6.7857), bounds `Exact`, `Facing(+x)` one face, 17 of 18 edges convex on both bodies, mesh signed volume +1750, `Verify` `Sound`, wall measured, `Fillet` OK |
+| M1 | L prism (1750 mm³) `Copy` across the plane x = 30 | analytic, `Exact` 1750 mm³, centroid x = 53.2143 (= 60 − 6.7857), bounds `Exact`, `Facing(+x)` one face, 17 of 18 edges convex on both bodies, mesh signed volume +1750, `Verify` `Sound`, wall measured, `Fillet` OK |
 | M1 | STEP of the mirrored L | analytic writer path, 7617 bytes |
 | M2 | `Union(L, mirror across the wall x = 20)` (touching along the wall) | `BooleanUnsupportedContact`: coplanar facets |
 | M3 | `Union(L, mirror across x = 15)` (overlapping) | `BooleanUnsupportedContact`: coplanar facets |
@@ -68,11 +69,11 @@ one record set, so a pattern of N holes is one analytic arrangement.
 | M10 | blind-cut (stacked) body mirrored | same volume, mesh outward |
 | M11 | filleted prism mirrored | same volume, `Verify` `Sound`, wall measured |
 | M12 | cup mirrored | `Exact` 1952 mm³, mesh outward |
-| S5 | plate cut by six `PlacedCopy`-translated cylinders | six analytic cuts, bound 5e-10 mm³, `Fillet` refuses (section displacement), wall `undecided` |
+| S5 | plate cut by six `Copy`-translated cylinders | six analytic cuts, bound 5e-10 mm³, `Fillet` refuses (section displacement), wall `undecided` |
 | S5b | the same six holes each drawn in its own sketch | bound 2e-12 mm³, `Fillet` OK |
-| S5c | six cylinders `PlacedCopy`-rotated about the plate normal (60° steps) | six analytic cuts (every rotation here keeps the normal exact), bound 5e-10 mm³ |
+| S5c | six cylinders `Copy`-rotated about the plate normal (60° steps) | six analytic cuts (every rotation here keeps the normal exact), bound 5e-10 mm³ |
 | P1 | hub ∪ six teeth placed by `RotationAround` (60° steps) | tooth 1 analytic; tooth 2 `BooleanUnsupportedContact` (§3.4 reroute, then coplanar facets) |
-| P2 | four disjoint pegs by `PlacedCopy` + `Union` | `Faceted`, 4 lumps, `Exact` 500 mm³, wall `unavailable`; as a `Cut` tool: `BooleanUnsupportedContact` |
+| P2 | four disjoint pegs by `Copy` + `Union` | `Faceted`, 4 lumps, `Exact` 500 mm³, wall `unavailable`; as a `Cut` tool: `BooleanUnsupportedContact` |
 | W1–W4 | `Union` of two boxes sharing a wall (whole, partial, longer, 1 mm overlap with collinear walls) | `ErrUnsupported`: "the union scene's arrangement reports an invalid region" (RB1) |
 | W5 | the same with no collinear walls | analytic, 800 mm³ |
 | W6 | `Cut` by a box sharing the wall | `BooleanUnsupportedContact` |
@@ -152,8 +153,9 @@ func WithJoin() MirrorOption
 `WithJoin`; the option's codec identity is not part of the modeling contract.
 
 `Mirrored` is `Placed` under `r3.Reflection(frame)`: it retires the receiver
-and registers the image. `MirroredCopy` is `PlacedCopy` under the same
-transform: the receiver stays live. Both take the gates `Placed` takes — a
+and registers the image. `MirroredCopy` uses `Copy` with
+`WithCopyPlacement` under the same transform: the receiver stays live.
+Both take the gates `Placed` takes — a
 nil context, a body no evaluator built, a cancelled context before commit —
 and add only the plane's own resolution. A `MirrorFrame` whose frame is the
 zero value is `ErrDegenerate`.
@@ -205,13 +207,13 @@ and the motion keeps it co-directional — the exact rational `Dir · N` zero
 for a linear pattern, or `Axis` bit-identical to `±N` for a circular one,
 both read on the composed world normal `xform.ApplyDir(frame.N())` as
 prism-boolean G3 reads it — an
-instance is NOT a `PlacedCopy`. It is the same frame and placement over a
+instance is not a `Copy` with `WithCopyPlacement`. It is the same frame and placement over a
 TRANSLATED or ROTATED copy of the record (§6.2), with the rounding of that
 record motion charged into the instance's `sectionDelta`. That is what keeps
 a later analytic boolean's re-expression the identity (prism-boolean §3.4),
 and what makes a pattern of integer-millimetre holes `Exact`. Every other
 receiver, and every non-co-directional motion, instances through
-`PlacedCopy` under the composed rigid motion, which is what a caller's own
+`Copy` with `WithCopyPlacement` under the composed rigid motion, which is what a caller's own
 loop would do.
 
 ## 5. The mirror join
@@ -405,7 +407,7 @@ under an in-plane motion of the section:
   on the side its receiver records. A union-built stack keeps its frame only
   under a motion with `δ_pattern == 0`: its narrower outer lies inside the
   wider one by construction, which no audit re-proves, so a rounding motion
-  copies through `PlacedCopy` instead.
+  copies through `Copy` instead.
 
 `PatternCopies` builds exactly these records too, one `prismPayload` per
 instance under the receiver's frame and placement, so a copy and a group
@@ -538,7 +540,7 @@ Every test asserts computed geometry; bounds are asserted as relations
   six-hole linear group reports no `Faceted` face, volume within its bound of
   `12000 − 6·π·4·5`, a bound below 1e-9 mm³, `sectionDelta` exactly `0.0`,
   `Fillet` succeeding and the wall survey measured. The fixture is shown to
-  fail with the group tool replaced by six `PlacedCopy` cuts (which publish a
+  fail with the group tool replaced by six `Copy` cuts (which publish a
   positive `sectionDelta`).
 - **Overlapping instances**: a 15 mm peg at 10 mm steps: the disjointness
   scene does not prove the pair disjoint, the test asserts that premise, and
@@ -549,7 +551,7 @@ Every test asserts computed geometry; bounds are asserted as relations
 - **Touching instances**: a 10 mm peg at 10 mm steps: `Patterned` returns
   `Union`'s one analytic prism of 500 mm³, pinned to `Union`'s own outcome.
 - **Non-co-directional**: a 5 mm peg patterned along +z at 5 mm: a
-  `PlacedCopy` instance and, for `Patterned`, `Union`'s own result: the
+  `Copy` instance and, for `Patterned`, `Union`'s own result: the
   mesh path's coplanar refusal, since the instance's own placement keeps the
   pair off the analytic stacked union, pinned.
 - **Cancellation**: a context cancelled during the disjointness arrangement
@@ -567,7 +569,7 @@ Every test asserts computed geometry; bounds are asserted as relations
   forever: no `Fillet`, no survey, no later coplanar boolean (§2 P2).
 - **Let `Patterned` merge overlapping instances silently.** It runs `Union`
   and returns that boolean's own verdict (§6.1 rule 3).
-- **Place prism instances by `PlacedCopy` inside the pattern.** A per-instance
+- **Place prism instances by `Copy` inside the pattern.** A per-instance
   placement makes every later analytic boolean re-express the section and
   charge `δ_reexpress` (§2 S5); the group keeps one frame.
 - **Wait on an exact planar rotation from `r3`.** The circular pattern rotates
@@ -605,7 +607,7 @@ Each PR ships code and tests; this document ships with PR 1.
 
 1. **`Mirrored`, `MirroredCopy`, `MirrorPlane`.** The sealed plane
    vocabulary, `MirrorFace` resolution through the implicit exactly-one
-   rule, both methods over `Placed`/`PlacedCopy` with `r3.Reflection`, the
+   rule, both methods over `Placed`/`Copy` with `r3.Reflection`, the
    §3 consumer table verified by §8's every-payload test, an executable
    example, Layout rows.
 2. **`WithJoin`.** J1–J7, the exact reflection and splice (§5.2) over prism
@@ -613,7 +615,7 @@ Each PR ships code and tests; this document ships with PR 1.
    tests, and the stacked §2.2 wording for a joined stacked payload.
 3. **`PatternCopies`, `LinearPattern`, `CircularPattern`.** The frame-keeping
    instance records (§6.2) with `δ_pattern`, certified trig and the exact
-   quarter/half turns, `PlacedCopy` for every other case, §8's pattern tests.
+   quarter/half turns, `Copy` for every other case, §8's pattern tests.
 4. **`Patterned` and the prism group.** Stacked §2.2's I1/I2 reading, the
    disjointness scene, multi-region slab topology, measurements and
    tessellation, rule 3's `Union` fallback, and the N-hole `Cut` admission

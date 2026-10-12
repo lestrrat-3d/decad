@@ -374,9 +374,9 @@ func TestBrepPlacementReEvaluatesUnderMotion(t *testing.T) {
 	mirror, err := r3.Reflection(plane)
 	require.NoError(t, err)
 	for _, motion := range []r3.Transform{turn, mirror} {
-		placedPrism, err := prism.PlacedCopy(t.Context(), motion)
+		placedPrism, err := Copy(t.Context(), prism, WithCopyPlacement(motion))
 		require.NoError(t, err)
-		placed, err := brep.PlacedCopy(t.Context(), motion)
+		placed, err := Copy(t.Context(), brep, WithCopyPlacement(motion))
 		require.NoError(t, err)
 		_, ok := placed.payload.(brepPayload)
 		require.True(t, ok)

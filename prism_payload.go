@@ -40,7 +40,7 @@ import (
 // surfaceResult is WithSurfaceResult's own flag (docs/surface-design.md §4):
 // true when the build must omit its closing caps and publish a sheet instead
 // of a solid. It is part of the re-evaluable record for the same reason the
-// blend descriptors are, so Placed, Duplicate and PlacedCopy reproduce the
+// blend descriptors are, so Placed and Copy reproduce the
 // sheet with no further code — a plain solid extrude leaves it false.
 //
 // sectionDelta is the proven upper bound on how far any recorded boundary

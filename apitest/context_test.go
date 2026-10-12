@@ -29,8 +29,11 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		{"Document.SweepChain", func(ctx context.Context) error { _, err := doc.SweepChain(ctx, nil, nil, nil); return err }},
 		{"Document.Split", func(ctx context.Context) error { _, err := doc.Split(ctx, nil, nil); return err }},
 		{"Body.Placed", func(ctx context.Context) error { _, err := body.Placed(ctx, r3.Transform{}); return err }},
-		{"Body.Duplicate", func(ctx context.Context) error { _, err := body.Duplicate(ctx); return err }},
-		{"Body.PlacedCopy", func(ctx context.Context) error { _, err := body.PlacedCopy(ctx, r3.Transform{}); return err }},
+		{"Copy identity", func(ctx context.Context) error { _, err := decad.Copy(ctx, body); return err }},
+		{"Copy placement", func(ctx context.Context) error {
+			_, err := decad.Copy(ctx, body, decad.WithCopyPlacement(r3.Transform{}))
+			return err
+		}},
 		{"Body.Patch", func(ctx context.Context) error { _, err := body.Patch(ctx, nil); return err }},
 		{"Body.Fillet", func(ctx context.Context) error { _, err := body.Fillet(ctx, nil, units.Value{}); return err }},
 		{"Body.Chamfer", func(ctx context.Context) error { _, err := body.Chamfer(ctx, nil, units.Value{}); return err }},

@@ -177,14 +177,14 @@ func TestTessellationCacheCopiesDoNotInheritEntries(t *testing.T) {
 	base := holedPlateBody(t)
 	baseMesh := mustTessellate(t, base, tol)
 
-	duplicate, err := base.Duplicate(t.Context())
+	duplicate, err := decad.Copy(t.Context(), base)
 	require.NoError(t, err)
 	duplicateMesh := mustTessellate(t, duplicate, tol)
 	require.NotSame(t, baseMesh, duplicateMesh)
 	require.NotSame(t, base.Faces()[0], duplicate.Faces()[0])
 	require.Same(t, duplicateMesh, mustTessellate(t, duplicate, tol))
 
-	copied, err := base.PlacedCopy(t.Context(), mustTransform(t, r3.NewVec(5, 0, 0)))
+	copied, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(mustTransform(t, r3.NewVec(5, 0, 0))))
 	require.NoError(t, err)
 	copyMesh := mustTessellate(t, copied, tol)
 	require.NotSame(t, baseMesh, copyMesh)

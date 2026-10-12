@@ -97,7 +97,7 @@ func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 		require.NoError(t, err)
 		return motion
 	}()} {
-		placed, err := filled.PlacedCopy(t.Context(), pose)
+		placed, err := decad.Copy(t.Context(), filled, decad.WithCopyPlacement(pose))
 		require.NoError(t, err)
 		mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
 		require.NoError(t, err)

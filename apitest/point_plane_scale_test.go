@@ -100,7 +100,7 @@ func TestPointLoftSplitAnchoredScalePreservesCapsAndVolume(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
-	placedCopy, err := scaled.PlacedCopy(t.Context(), r3.Identity())
+	placedCopy, err := decad.Copy(t.Context(), scaled, decad.WithCopyPlacement(r3.Identity()))
 	require.NoError(t, err)
 	copyFaces, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(slab))).SelectFaces(placedCopy)
 	require.NoError(t, err)

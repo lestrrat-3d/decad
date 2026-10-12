@@ -186,7 +186,7 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			}
 			motion, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(0.2))
 			require.NoError(t, err)
-			placed, err := pieces[1].PlacedCopy(t.Context(), motion)
+			placed, err := decad.Copy(t.Context(), pieces[1], decad.WithCopyPlacement(motion))
 			require.NoError(t, err)
 			placedCap, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(pieces[1]))).SelectFaces(placed)
 			require.NoError(t, err)
@@ -213,7 +213,7 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			require.NoError(t, err)
 			unshift, err := r3.Translation(r3.NewVec(-2, 0, 0))
 			require.NoError(t, err)
-			shifted, err := pieces[1].PlacedCopy(t.Context(), shift)
+			shifted, err := decad.Copy(t.Context(), pieces[1], decad.WithCopyPlacement(shift))
 			require.NoError(t, err)
 			roundTrip, err := shifted.Placed(t.Context(), unshift)
 			require.NoError(t, err)

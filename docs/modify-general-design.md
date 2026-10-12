@@ -661,7 +661,7 @@ The mesh uses the analytic polygon vertices directly and one set of chord
 stations on both bore rims and the cylinder. `VerifyAll` audits the closed,
 positive, crossing-free mesh and bounds occupied-volume difference by the
 circle chord slivers times bore length plus the station-position allowance.
-`Placed` and `PlacedCopy` re-evaluate the same record under a signed-axis
+`Placed` and `Copy` re-evaluate the same record under a signed-axis
 isometry when the transformed bore still runs along y. The placed box
 endpoints and bore center must equal their rational images under the
 transform's exact signed basis and recorded translation; §4.3b's corner

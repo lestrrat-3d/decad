@@ -342,7 +342,7 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Degrees(37))
 	require.NoError(t, err)
-	rotated, err := body.PlacedCopy(t.Context(), rot)
+	rotated, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(rot))
 	require.NoError(t, err)
 	rotMesh, err := rotated.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -352,7 +352,7 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 
 	far, err := r3.Translation(r3.Vec{X: 1e7, Y: 3e6, Z: -2e6})
 	require.NoError(t, err)
-	moved, err := body.PlacedCopy(t.Context(), far)
+	moved, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(far))
 	require.NoError(t, err)
 	farMesh, err := moved.Tessellate(t.Context(), tol)
 	require.NoError(t, err)

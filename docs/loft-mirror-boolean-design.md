@@ -43,7 +43,7 @@ tolerance.
 The `loftMirrorJoin` record preserves both original Loft operands, separate
 lower and upper wall groups, outer cap groups, and the number of vertices in
 each station. Both retained outer caps keep their source origins and planar
-surface, with new Union cap roles appended. A later rigid `PlacedCopy` keeps a
+surface, with new Union cap roles appended. A later rigid `Copy` keeps a
 source-backed placement record, gives those caps copy-local roles, and
 revalidates the held mesh and displacement bounds. This record does not by
 itself authorize any other Boolean case.

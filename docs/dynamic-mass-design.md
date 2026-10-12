@@ -240,7 +240,7 @@ placement**. For a later rigid pose `T`, transform the center with `T.Apply`
 and rotate the centroidal tensor as `R I Rᵀ` using `T`'s orthogonal basis.
 Translation leaves centroidal inertia unchanged. Reflection follows the same
 tensor rule; it does not change mass. Carry interval bounds through each
-basis product and its rounding. `Body.PlacedCopy` or `Body.Placed` must agree
+basis product and its rounding. `Copy` or `Body.Placed` must agree
 with that transformed reading within both reported bounds. The dynamics state
 applies its pose to the body's current placement exactly once.
 

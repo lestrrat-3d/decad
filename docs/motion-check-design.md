@@ -132,7 +132,7 @@ selector resolution at the call. A second form taking core §6.2's sealed `Axis`
 hinge pin's own edge — is a later addition on the same `Motion` set; it is not refused today, it does not
 exist.
 
-**One shape is deliberately absent.** A list of discrete poses adds nothing the API lacks: `PlacedCopy`
+**One shape is deliberately absent.** A list of discrete poses adds nothing the API lacks: `Copy`
 then `Verify` already checks any finite set of placements the caller can name, and a pose list carries no
 path between its entries, so nothing continuous could be proven over it (§5.2). A caller with a sequence of
 poses states one `Between` per consecutive pair.
@@ -313,7 +313,7 @@ A pose is evaluated by re-evaluating each mover's payload under the composed mot
 `Body.Placed` does (evaluator §8), and then running the pair kernel of clearance §1–§7 and the overlap proof
 of interference §3 over every (placed mover, static) pair. Three rules make it non-mutating and sound:
 
-- **`VerifyMotion` MUST NOT call public `Placed`, `PlacedCopy` or `Duplicate`.** Those register a body and
+- **`VerifyMotion` MUST NOT call public `Placed`, `Copy`.** Those register a body and
   advance the producer identity (core §8). The check calls the payload's private `placed` with the composed
   transform and a reserved transient producer identity that never enters the document, and never calls
   `commit`. Interference §2's invariants hold verbatim: `Document.Bodies()` membership and order, every
@@ -756,7 +756,7 @@ farthest corner `(48, 14)` sits at exactly `50` mm from the axis and at polar an
    `Against`, in no `PoseResult` row, and that the report's `Status` and `Clearance` are unchanged from
    fixture 2.
 7. **Non-mutation and determinism** (interference §10.1). Before and after each call: `Document.Bodies()`
-   identical in membership and order; every body's live state unchanged; a `Duplicate` after the call
+   identical in membership and order; every body's live state unchanged; a `Copy` after the call
    receives the producer identity it would have received before it. Two calls on the same inputs return
    reports equal in every field.
 8. **Pose deviation is charged.** For a `Revolute` stated in degrees with `Center` at `(1e6, 0, 0)`, assert

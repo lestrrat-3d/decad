@@ -658,7 +658,7 @@ func TestSweepPairRotatingPathClear(t *testing.T) {
 	// placement with the query pose in float can hide part of their error.
 	placement, err := r3.Translation(r3.Vec{X: 1e9})
 	require.NoError(t, err)
-	placed, err := a.PlacedCopy(t.Context(), placement)
+	placed, err := decad.Copy(t.Context(), a, decad.WithCopyPlacement(placement))
 	require.NoError(t, err)
 	motion := sweepDrift(r3.Vec{}, .1)
 	motion.Center = r3.Vec{X: 1e9 + 5, Y: 5, Z: 5}

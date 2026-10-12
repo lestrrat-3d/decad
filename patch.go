@@ -23,8 +23,8 @@ import (
 // mirrors evalPrismContext's order without ever building a solid.
 //
 // patchPayload records what the body was built from — profile, frame and
-// placement — exactly as prismPayload does for an extrude, so Placed,
-// Duplicate and PlacedCopy re-evaluate it the same way (docs/evaluator-design.md
+// placement — exactly as prismPayload does for an extrude, so Placed and
+// Copy re-evaluate it the same way (docs/evaluator-design.md
 // §8). It is its own type rather than a zero-height prismPayload: roughly
 // sixteen call sites across the package type-assert prismPayload, each
 // ok-guarded or carrying a default arm, so a patch falls through to the

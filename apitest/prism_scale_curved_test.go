@@ -100,7 +100,7 @@ func TestCircularPrismScaledAtAcceptsPlacedAndRepeatedImage(t *testing.T) {
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(2, -1, 0.5))
 	require.NoError(t, err)
-	placedCopy, err := first.PlacedCopy(t.Context(), shift)
+	placedCopy, err := decad.Copy(t.Context(), first, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
 	again, err := placedCopy.ScaledAt(t.Context(), r3.NewVec(0, 0, 0), units.Scalar(0.8))
 	require.NoError(t, err)

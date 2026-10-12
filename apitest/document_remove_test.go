@@ -71,7 +71,7 @@ func TestDocumentRemoveTakesBodyOutOfTheModel(t *testing.T) {
 	// ...and no operation takes it, so nothing returns it to the model.
 	_, err = decad.Union(t.Context(), keep, intruder)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
-	_, err = intruder.Duplicate(t.Context())
+	_, err = decad.Copy(t.Context(), intruder)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 	_, err = intruder.Placed(t.Context(), r3.Identity())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
@@ -134,7 +134,7 @@ func TestDocumentRemoveLeavesDerivedBodiesUnaffected(t *testing.T) {
 	source := boxBody(t, doc, 0, 0, 10, 10, 10)
 	shift, err := r3.Translation(r3.NewVec(30, 0, 0))
 	require.NoError(t, err)
-	instance, err := source.PlacedCopy(t.Context(), shift)
+	instance, err := decad.Copy(t.Context(), source, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
 	partner := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 35, 5, 5)
 	merged, err := decad.Union(t.Context(), instance, partner)

@@ -14,7 +14,7 @@ import (
 
 // This file is docs/general-boolean-design.md §3 A4's public-API suite: the
 // analytic booleans and Verify's interference reading with a reflected
-// operand. Reflected bodies are built with PlacedCopy/Placed under
+// operand. Reflected bodies are built with Copy/Placed under
 // r3.Reflection. The L is docs/mirror-pattern-design.md §2's: the union of
 // [0, 20]×[0, 5] and [0, 5]×[5, 20], 175 mm², swept 10 mm. The re-wound
 // record's mechanics are prism_boolean_reflected_internal_test.go's.
@@ -90,7 +90,7 @@ func TestPrismCutReflectedTargetByCylinder(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	l := polyPrismBody(t, doc, reflectedLPts, reflectedHeight)
-	image, err := l.PlacedCopy(t.Context(), mirrorAcrossX30(t))
+	image, err := decad.Copy(t.Context(), l, decad.WithCopyPlacement(mirrorAcrossX30(t)))
 	require.NoError(t, err)
 	tool := reflectedDiscBody(t, doc, 57.5, 12, 1.5)
 
@@ -122,7 +122,7 @@ func TestPrismCutReflectedTargetByArcTool(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := boxBody(t, doc, 0, 0, 20, 20, reflectedHeight)
-	image, err := box.PlacedCopy(t.Context(), mirrorAcrossX30(t))
+	image, err := decad.Copy(t.Context(), box, decad.WithCopyPlacement(mirrorAcrossX30(t)))
 	require.NoError(t, err)
 	tool := quarterDiscBody(t, doc, 45, 5, 8)
 
@@ -172,7 +172,7 @@ func TestPrismUnionReflectedOperandInsideBox(t *testing.T) {
 	doc := decad.New()
 	box := boxBody(t, doc, 35, -5, 65, 25, reflectedHeight)
 	l := polyPrismBody(t, doc, reflectedLPts, reflectedHeight)
-	image, err := l.PlacedCopy(t.Context(), mirrorAcrossX30(t))
+	image, err := decad.Copy(t.Context(), l, decad.WithCopyPlacement(mirrorAcrossX30(t)))
 	require.NoError(t, err)
 
 	got, err := decad.Union(t.Context(), box, image)
@@ -197,7 +197,7 @@ func TestVerifyReflectedOperandMeasuresInterference(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	l := polyPrismBody(t, doc, reflectedLPts, reflectedHeight)
-	image, err := l.PlacedCopy(t.Context(), mirrorAcrossX30(t))
+	image, err := decad.Copy(t.Context(), l, decad.WithCopyPlacement(mirrorAcrossX30(t)))
 	require.NoError(t, err)
 	require.NoError(t, doc.Remove(l))
 	pin := reflectedDiscBody(t, doc, 57.5, 12, 1.5)

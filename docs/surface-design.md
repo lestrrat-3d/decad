@@ -378,8 +378,8 @@ owning document, which is what lets `Union` take the same shape.
 `Body.Patch` retires its receiver and registers the filled body.
 `Document.Patch` consumes nothing — it builds from a sketch profile, as
 `Extrude` does. `Body.Offset` consumes nothing either: it registers its result
-and leaves its receiver LIVE, on the non-consuming terms `PlacedCopy` and
-`Duplicate` already take, because the offset sheet and the sheet it came from
+and leaves its receiver LIVE, on the non-consuming terms `Copy` already
+takes, because the offset sheet and the sheet it came from
 are what a caller measures, stitches or thickens together (§17.1).
 
 Worked, end to end — a closed box from three sheets:
@@ -463,7 +463,7 @@ body is how a caller reaches it.
 | `Loft` | every `side(i, j, k)` wall triangle | both section caps | the solid's outward normal on each triangle | both section-plane rims |
 
 A surface-result body's payload is the feature's own payload plus the flag
-that its closing faces are omitted. `Placed`, `Duplicate` and `PlacedCopy`
+that its closing faces are omitted. `Placed`, `Copy`
 re-evaluate it exactly as they re-evaluate the solid's (`docs/api-design.md`
 §8), and a copy carries the source's roles under its own producer identity by
 the same copy-provenance rule.
@@ -704,7 +704,7 @@ evaluator built it (`b`'s own evaluator payload is not `nil`): a body reads
 its topology regardless of payload, but this operation's own re-evaluation
 contract — a placed copy re-derives each chain's orientation and re-runs its
 simplicity audit rather than re-proving its planarity, on the same terms
-every other rebuilding operation (`Placed`, `PlacedCopy`, `Duplicate`)
+every other rebuilding operation (`Placed`, `Copy`)
 already states — needs the payload every one of those already requires. A
 receiver with no payload is `ErrUnsupported` (R19). On a solid every edge is
 shared, so gate 1 refuses every selection, which is the correct answer: a
@@ -859,7 +859,7 @@ reject-only rule; `TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch` is
 the permanent proof that bit-identity alone never admits, and it stays green
 unchanged by this certificate).
 
-A rebuild from a record — `Placed`/`Duplicate`/`PlacedCopy` re-evaluating a
+A rebuild from a record — `Placed`/`Copy` re-evaluating a
 straight prism or a revolve from `evalPrismContext`/`evalRevolveContextWork`
 — mints fresh ids every time, which is safe because a fresh id only ever
 declines: two builds of the identical profile at the identical extent, one
@@ -1360,7 +1360,7 @@ reused audit's own sentinel for the closed case: R9 and R10 are its
 **Placing a stitched body replays the recorded weld; it never re-derives
 it.** `stitchPayload` records the operand faces and Table J's own admission
 (`stitch_weld.go`'s `stitchWeldPlan`) — never a built topology — and
-`Placed`/`Duplicate`/`PlacedCopy` re-evaluate from those same two values
+`Placed`/`Copy` re-evaluate from those same two values
 under the composed transform. A rigid motion rounds every coordinate, so
 re-running Table J against the PLACED, rounded values would admit nothing —
 a placed box would come back a sheet with 24 free edges, since no two placed
@@ -2134,7 +2134,7 @@ audits of §10.1 apply unchanged. This route publishes
 | `Shell` | `ErrUnsupported` | removes faces from a solid and offsets its material section; a prism sheet does carry a section, but it has no material or caps to remove. `Thicken` uses that section under §16's separate contract |
 | `Thicken` | §16.1's seven admitted families build; the others are R24 | builds a new solid from a sheet's recorded generator and retires the sheet |
 | `Offset` | §17's patch and profile-fed prism families build; the other families are R37 | builds a second sheet at a stated normal distance from the receiver's own faces, over the same recorded generator `Thicken` reads, and leaves the receiver live |
-| `Placed` / `PlacedCopy` / `Duplicate` | admitted, unchanged | a rigid motion of a payload; nothing in it reads solidity |
+| `Placed` / `Copy` | admitted, unchanged | a rigid motion of a payload; nothing in it reads solidity |
 | `Tessellate` / `STL` / `OBJ` | a `Document.Patch`, all-planar `Body.Patch`, prism, revolve, loft, all-planar stitched or §10.1–§10.2 revolve-backed stitched sheet tessellates and exports; other curved stitched sheets are R32 | each supported sheet path runs the manifold-with-boundary audit §10 describes |
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
 | `ToFace` naming a curved face of a sheet | as for a solid | this design changes no curved-stop reach |
@@ -2168,7 +2168,7 @@ reverses a decision already taken.
 | `docs/api-design.md` §6.1 | `Edge.Faces()`'s `len != 2` gloss gains the per-kind reading (§2.2) |
 | `docs/api-design.md` §8 | the v1 feature vocabulary gains `Patch`, `Stitch`, `Unstitch` and `WithSurfaceResult`; the signatures land beside the existing ones |
 | `docs/api-design.md` §8 | `Body.Thicken`, `ThickenSide` and `WithThickenSide` add §16's sheet-to-solid path under §6's consuming-body rule |
-| `docs/api-design.md` §8 | `Body.Offset`, `OffsetSide` and `WithOffsetSide` add §17's sheet-to-sheet path under §6's NON-consuming rule, the one `PlacedCopy` and `Duplicate` already take |
+| `docs/api-design.md` §8 | `Body.Offset`, `OffsetSide` and `WithOffsetSide` add §17's sheet-to-sheet path under §6's NON-consuming rule, the one `Copy` already takes |
 | `docs/api-design.md` §9 | the predicate list gains `Free()`, and the rendering table gains its `free` token |
 | `docs/api-design.md` §13 | the v1 non-goal list keeps sheet-metal, and names §1.2's staged commands, §1.3's permanent refusals and §1.4's unstaged one, so the list stays the whole of what is out |
 | `docs/evaluator-design.md` §3 | the `Lump` row states "connected piece"; the topology-model rules gain the free-edge reading |
@@ -2485,7 +2485,7 @@ profile revolve does (§9.2).
 
 **Everything else a sheet already does, a ribbon does unchanged.** Table X
 governs it row for row: a boolean, `Fillet`, `Chamfer` and `Shell` refuse it,
-`Placed`/`PlacedCopy`/`Duplicate` admit it, a planar wall answers `ToFace`, and
+`Placed`/`Copy` admit it, a planar wall answers `ToFace`, and
 every selector predicate reads its faces and edges. A chain-fed prism ribbon
 built from `LineSeg` segments alone tessellates and exports through §10's
 manifold-with-boundary audit, reading each wall's own exact planar quad
@@ -3482,9 +3482,9 @@ before commit.
 **The receiver stays LIVE.** Offset depends on its source and consumes nothing:
 the offset sheet and the sheet it came from are the pair a caller measures a
 clearance between, stitches into a closed boundary, or thickens separately, and
-retiring the source would put a `Duplicate` in front of each of those. The
+retiring the source would put a `Copy` in front of each of those. The
 result registers under a new producer identity on the non-consuming terms
-`PlacedCopy` and `Duplicate` already take (`docs/api-design.md` §6). That is
+`Copy` already takes (`docs/api-design.md` §6). That is
 the one contract difference from `Thicken`, which consumes.
 
 The source sheet's positive side is §2.3's built orientation, read exactly as
@@ -3509,7 +3509,7 @@ one recorded generator and a closed-form rule that carries it a stated distance.
 **The patch arm is a translation, and it mints no geometry.** The result is the
 receiver's `patchPayload` under the composed motion that translates it by
 `±d·N` in the recorded patch frame, `N` the frame's own normal — the identical
-rebuild `PlacedCopy` performs, charging the identical placement rounding. The
+rebuild `Copy` performs, charging the identical placement rounding. The
 recorded profile, its frame axes and every plane-local coordinate are the
 source's, unchanged: a planar region carried along its own normal is congruent
 to itself, so no boundary is regenerated, no corner is minted and no offset
@@ -3519,7 +3519,7 @@ patch's prism levels. A conversion or composition this evaluator cannot carry
 is R39.
 
 This arm therefore adds no proof the evaluator does not already run, and a
-caller can spell it today as `PlacedCopy` under a translation built by hand.
+caller can spell it today as `Copy` under a translation built by hand.
 The entry point exists so that the direction comes from the sheet's own
 recorded normal rather than from the caller's arithmetic, and so that one
 operation covers both admitted families under one refusal set.
@@ -3606,7 +3606,7 @@ Where each reading and each bound comes from:
 | Reading | Value | Bound |
 |---|---|---|
 | `Area`, patch arm | the source's, unchanged | the source's, unchanged: the recorded profile and its region integral are the same ones, and a rigid motion moves no area |
-| `Bounds`, patch arm | the recorded boundary's box under the composed motion | the frame and placement rounding `prismBoundsContext` already charges, as `PlacedCopy` charges it |
+| `Bounds`, patch arm | the recorded boundary's box under the composed motion | the frame and placement rounding `prismBoundsContext` already charges, as `Copy` charges it |
 | `Area`, prism arm | `evalPrismContext`'s wall sum over `Q`, the omitted caps subtracted as §4.3 states | the perimeter and height terms that builder already composes; the section term is zero by §17.2's gate |
 | `Bounds`, prism arm | `prism_extent.go`'s reading over `Q` | the source's `z0Delta`/`z1Delta` unchanged, plus the frame and placement rounding |
 | `Volume`, `Centroid` | `ErrNotSolid`, both arms | — §8, by kind, not by soundness |

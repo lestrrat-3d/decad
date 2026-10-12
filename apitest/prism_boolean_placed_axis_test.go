@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestPlacedAxisPrismBooleans passes real sketch extrusions through PlacedCopy
+// TestPlacedAxisPrismBooleans passes real sketch extrusions through Copy
 // and the public Boolean operations. The matching section coordinates and
 // exact axial displacement let the existing prism and stacked builders prove
 // the result without falling to a coplanar mesh contact.
@@ -19,7 +19,7 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 		t.Helper()
 		motion, err := r3.Translation(r3.NewVec(x, y, z))
 		require.NoError(t, err)
-		placedBody, err := source.PlacedCopy(t.Context(), motion)
+		placedBody, err := decad.Copy(t.Context(), source, decad.WithCopyPlacement(motion))
 		require.NoError(t, err)
 		return placedBody
 	}
@@ -96,7 +96,7 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 			EZ: r3.NewVec(1, 0, 0),
 		}, r3.NewVec(10, 0, 10))
 		require.NoError(t, err)
-		b, err := a.PlacedCopy(t.Context(), motion)
+		b, err := decad.Copy(t.Context(), a, decad.WithCopyPlacement(motion))
 		require.NoError(t, err)
 		_, err = decad.Union(t.Context(), a, b)
 		requireCoplanarFaceRefusal(t, err)

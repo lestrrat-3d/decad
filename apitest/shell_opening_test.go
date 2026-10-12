@@ -321,7 +321,7 @@ func TestShellSideOpeningRefusals(t *testing.T) {
 			require.ErrorIs(t, err, tc.want)
 			require.ErrorContains(t, err, tc.text)
 			require.Equal(t, before.bodies, doc.Bodies())
-			_, err = box.Duplicate(t.Context())
+			_, err = decad.Copy(t.Context(), box)
 			require.NoError(t, err, "the receiver stays live")
 		})
 	}
@@ -359,7 +359,7 @@ func TestShellSideOpeningObliqueRefusals(t *testing.T) {
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, tc.text)
 			require.Equal(t, before.bodies, doc.Bodies())
-			_, err = body.Duplicate(t.Context())
+			_, err = decad.Copy(t.Context(), body)
 			require.NoError(t, err, "the receiver stays live")
 		})
 	}

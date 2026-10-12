@@ -69,12 +69,12 @@ func TestUnstitchChamferBandNormalAtBoundCoversSource(t *testing.T) {
 		"the unstitched face's own published bound must still cover the source's normalBound")
 }
 
-// TestUnstitchPlacedCopyOfNonzeroNormalBoundFaceRefuses is
+// TestUnstitchPlacementOfNonzeroNormalBoundFaceRefuses is
 // docs/surface-design.md's T82: normalBound is dimensionless and a
 // placement's own rounding is a length, so composing them is unsound;
 // copyFaceUnderContext refuses a placed copy of a face whose normalBound is
 // nonzero rather than invent the missing term.
-func TestUnstitchPlacedCopyOfNonzeroNormalBoundFaceRefuses(t *testing.T) {
+func TestUnstitchPlacementOfNonzeroNormalBoundFaceRefuses(t *testing.T) {
 	t.Parallel()
 	_, results, idx := unstitchOneChamferBand(t)
 	sheet := results[idx]

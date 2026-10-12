@@ -308,9 +308,9 @@ operation that consumes a body (the booleans of §8, `Body.Fillet` /
 `Stitch` / `Unstitch`, and `Body.Placed`) retires its input body or
 bodies from the document and registers every body it returns. A retired body
 remains readable, but it is gone from `Document.Bodies()` and
-`Document.Verify()` never reports on it. The two copies of §8 —
-`Body.Duplicate` and `Body.PlacedCopy` — are the deliberate exception: they
-**depend on** the source without consuming it, exactly as an `Extrude` depends
+`Document.Verify()` never reports on it. The copy operation of §8 —
+`Copy` — is the deliberate exception: it
+**depends on** the source without consuming it, exactly as an `Extrude` depends
 on the body a `ToFace` names (§8.1), so the source stays live and the copy is a
 new body beside it.
 
@@ -845,7 +845,7 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed, ScaledAt, Duplicate, PlacedCopy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
+Fillet, Chamfer, Shell, Placed, ScaledAt, Copy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
 Patch, Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve —
 **ExtrudeChain, RevolveChain, SweepChain, LoftChain** — which take a
 `*sketch.Chain` where their siblings take a `*sketch.Profile` and always build a
@@ -1223,24 +1223,22 @@ receiver live.
 **A body can be copied without consuming it.** `Placed` retires its receiver, so
 modelling a part once and placing several instances — a bolt pattern, several
 interference placements, one cutting tool reused for several holes — would mean
-rebuilding the whole feature chain per instance. The two non-consuming copies
-close that gap:
+rebuilding the whole feature chain per instance. `Copy` closes that gap:
 
 ```go
-func (b *Body) Duplicate(ctx context.Context) (*Body, error)
-func (b *Body) PlacedCopy(ctx context.Context, t r3.Transform) (*Body, error)
+func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error)
+func WithCopyPlacement(t r3.Transform) CopyOption
 ```
 
-Each returns a NEW live body and leaves the receiver **live**: the source is
-depended on, never consumed. `Duplicate` re-registers the receiver's immutable
-payload under a new producer identity — identical, independent geometry, a fresh body
-identity. `PlacedCopy(t)` re-evaluates the payload under the composed rigid
-motion exactly as `Placed` does, so `Duplicate` is `PlacedCopy` with no motion;
-the zero `Transform{}` is `ErrDegenerate` as in `Placed`, and `r3.Identity()` is
-a valid no-op motion. A body this evaluator did not build is `ErrUnsupported`, as
-`Placed`'s is. Both check `ctx` throughout a faceted
-rebuild and leave the source and live-body set unchanged on
-cancellation.
+`Copy` returns a NEW live body and leaves its source **live**: the source is
+depended on, never consumed. With no options, it re-registers the source's
+immutable payload under a new producer identity at the same placement. With
+`WithCopyPlacement(t)`, it re-evaluates the payload under the composed rigid
+motion exactly as `Placed` does. Repeated placement options use the last value.
+The zero `Transform{}` is `ErrDegenerate`; `r3.Identity()` is a valid no-op.
+A nil option is `ErrDegenerate`, and a body this evaluator did not build is
+`ErrUnsupported`. Cancellation during a faceted rebuild leaves the source
+and live-body set unchanged.
 
 **A copy preserves geometry, so it preserves provenance.** A copy is the same
 part at a new identity and position, and `FaceCreatedBy` (§9) must still find its
@@ -1526,8 +1524,8 @@ authenticated axial Loft/cylinder `Union` or its centered bore `Cut`, whose
 audited planar caps also get fresh roles, an authenticated axial Loft mirror
 `Union` with two retained outer caps, the modified full revolution made by
 a positive-taper circular draft rim fillet (draft §10.4), whose two planar
-disks get cap roles, and a `Placed` /
-`PlacedCopy` / `Duplicate` of one, which re-mints those roles under the copy's
+disks get cap roles, and a `Placed` or
+`Copy` of one, which re-mints those roles under the copy's
 own identity (the copy-provenance rule above). On a body whose producer mints no such
 role the helper still returns a well-formed `FeatureRef` — it just matches
 nothing, an ordinary `ErrNoMatch` at resolve (or `ErrCardinality` under an

@@ -440,7 +440,7 @@ func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := spin.Then(shift)
 	require.NoError(t, err)
-	placed, err := body.PlacedCopy(t.Context(), motion)
+	placed, err := Copy(t.Context(), body, WithCopyPlacement(motion))
 	require.NoError(t, err)
 
 	src := body.payload.(loftPayload)

@@ -215,7 +215,7 @@ an occupied-volume bound, and the original Cone and NURBSSurface face tags.
 The reference 8/8 blank and one trimmed tooth pass this path. The four-round
 cap bound proves positive inertia in `MassProperties` at a density of
 0.001 kg/mm³ while retaining the occupied-volume and mesh-bound proofs.
-Further `PlacedCopy` teeth can join through the shared-ring continuations
+Further `Copy` teeth can join through the shared-ring continuations
 below, up to eight certified sectors.
 
 For a blank and tooth built from the same unplaced gear source, the public
@@ -242,7 +242,7 @@ shared ring's held vertices, boundary bound and omitted root facets.
 
 ## Two-tooth bevel blank union
 
-`Union` admits the one-tooth joined body and one `PlacedCopy` of the same
+`Union` admits the one-tooth joined body and one `Copy` of the same
 trimmed tooth when the copy is a non-identity rotation about the blank's X
 axis. The first join carries its immutable blank and trimmed-tooth records;
 the copy carries the original cone-trim record and its rigid motion. Placement
@@ -286,7 +286,7 @@ copy for the following continuation.
 The canonical gallery order in
 `fusion360-gear-generator/spec/bevelgear/instructions.md` (steps 991–1027)
 revolves the blank, lofts one point tooth, cuts its toe and heel with cones,
-makes seven 45° `PlacedCopy` instances, and joins all eight teeth in order.
+makes seven 45° `Copy` instances, and joins all eight teeth in order.
 A conditional centered bore Cut follows the joined gear body.
 
 For each third through eighth Union, the receiver must carry the retained

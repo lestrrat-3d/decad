@@ -21,7 +21,7 @@ import (
 // keeps it co-directional, an instance keeps the receiver's frame and
 // placement and moves its RECORD in the plane, with the motion's rounding
 // charged into its section displacement; every other instance is a
-// PlacedCopy under the composed rigid motion.
+// Copy under the composed rigid motion.
 
 // PatternSpec is how a pattern lays out its instances: a [LinearPattern] or
 // a [CircularPattern]. The set is sealed.
@@ -77,7 +77,7 @@ func resolvePatternSpec(spec PatternSpec) (patternrecord.Spec, error) {
 // spec in order, and leaves the receiver live (docs/mirror-pattern-design.md
 // §4.3).
 //
-// The gates are PlacedCopy's — a nil context is ErrDegenerate, a body this
+// The gates are Copy's — a nil context is ErrDegenerate, a body this
 // evaluator did not build is ErrUnsupported, a retired or foreign receiver is
 // refused — plus the spec's own: a nil spec or a Count below 2 is
 // ErrDegenerate; a non-finite Dir, Axis or Center is ErrNotFinite and a zero
@@ -165,7 +165,7 @@ func (rp resolvedPattern) buildInstances(ctx context.Context, d *Document, base 
 // resolvedPattern adds body construction to a validated neutral pattern spec.
 type resolvedPattern struct{ patternrecord.Spec }
 
-// placedInstance is the PlacedCopy arm: the payload re-evaluated under its
+// placedInstance is the Copy arm: the payload re-evaluated under its
 // placement composed with instance i's motion.
 func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref producerID, payload featurePayload, i int) (*Body, error) {
 	m, err := rp.WorldMotion(i)

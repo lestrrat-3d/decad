@@ -14,7 +14,7 @@ import (
 )
 
 // This file is docs/loft-design.md §12 PR 2a's public-surface placement
-// tests: Placed/Duplicate/PlacedCopy over the landed loft payload's own
+// tests: Placed/Copy over the landed loft payload's own
 // proven displacement term delta (§5, §8). loft_build_internal_test.go and
 // loft_moments_internal_test.go cover the evaluator/accumulator internals;
 // this file needs a live sketch, the public entry points, or the recorded
@@ -77,7 +77,7 @@ func TestR3IdentityApplyIsBitIdentical(t *testing.T) {
 // "S9, S10, S11 and S4's ARITY half belong to the original call alone": a
 // placement rebuilds from the payload's already-authenticated records and
 // never touches a live sketch, so a profile that goes stale AFTER the body
-// is built refuses a fresh Document.Loft (S9) while Duplicate/PlacedCopy/
+// is built refuses a fresh Document.Loft (S9) while Copy/
 // Placed of that body still succeed and reproduce its volume.
 func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
 	t.Parallel()
@@ -104,9 +104,9 @@ func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
 	move, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
 
-	dup, err := body.Duplicate(t.Context())
+	dup, err := decad.Copy(t.Context(), body)
 	require.NoError(t, err)
-	copied, err := body.PlacedCopy(t.Context(), move)
+	copied, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
 	require.NoError(t, err)
 	// Placed retires the receiver, so it runs last.
 	placed, err := body.Placed(t.Context(), move)
@@ -124,18 +124,18 @@ func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
 	}
 }
 
-// TestLoftDuplicateIsMeasurementIdentical proves Duplicate's identity
+// TestLoftCopyIdentityIsMeasurementIdentical proves Copy's identity
 // motion carries delta 0 (the identity fast path): every measurement and
 // every held vertex is bit-identical to the source's, the source stays
 // live, and the document gains a second body.
-func TestLoftDuplicateIsMeasurementIdentical(t *testing.T) {
+func TestLoftCopyIdentityIsMeasurementIdentical(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20) // two 40x40 squares, h=10 -> 16000 mm3 box
 	doc := decad.New()
 	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
 
-	dup, err := body.Duplicate(t.Context())
+	dup, err := decad.Copy(t.Context(), body)
 	require.NoError(t, err)
 
 	srcVol, err := body.Volume()
@@ -226,10 +226,10 @@ func TestLoftPlacedRotationSoundness(t *testing.T) {
 	require.Equal(t, decad.Approximate, bounds.Exactness)
 }
 
-// TestLoftPlacedCopyTranslation proves a pure translation moves Bounds and
+// TestLoftCopyPlacementTranslation proves a pure translation moves Bounds and
 // Centroid by exactly the translation, keeps the volume value, publishes a
 // positive bound enclosing the true 16000 mm3, and leaves the source live.
-func TestLoftPlacedCopyTranslation(t *testing.T) {
+func TestLoftCopyPlacementTranslation(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
@@ -246,7 +246,7 @@ func TestLoftPlacedCopyTranslation(t *testing.T) {
 	shift := r3.NewVec(100, 0, 0)
 	move, err := r3.Translation(shift)
 	require.NoError(t, err)
-	copied, err := body.PlacedCopy(t.Context(), move)
+	copied, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
 	require.NoError(t, err)
 
 	copiedBounds, err := copied.Bounds()
@@ -290,7 +290,7 @@ func TestLoftPlacedReflectionHerringbone(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mirror.IsReflection())
 
-	mirrored, err := body.PlacedCopy(t.Context(), mirror)
+	mirrored, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(mirror))
 	require.NoError(t, err)
 
 	vol, err := mirrored.Volume()
@@ -338,14 +338,14 @@ func TestLoftPlacedReflectionHerringbone(t *testing.T) {
 	require.Equal(t, []*decad.Body{body, mirrored}, doc.Bodies())
 }
 
-// TestLoftPlacedCopyChainDoesNotAccumulate proves the re-lift-from-record
-// path (docs/loft-design.md §7, §12 PR 2a): ten successive PlacedCopy pure
+// TestLoftCopyPlacementChainDoesNotAccumulate proves the re-lift-from-record
+// path (docs/loft-design.md §7, §12 PR 2a): ten successive Copy pure
 // rotations, chained one onto the last, keep the volume bound within a
 // small constant factor of the FIRST placement's own, since each
 // evaluation re-lifts from the two ORIGINAL recorded profiles rather than
 // moving an already-placed mesh — never accumulating rounding across the
 // chain the way facetedPayload.placed's move-the-held-mesh path would.
-func TestLoftPlacedCopyChainDoesNotAccumulate(t *testing.T) {
+func TestLoftCopyPlacementChainDoesNotAccumulate(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
@@ -358,7 +358,7 @@ func TestLoftPlacedCopyChainDoesNotAccumulate(t *testing.T) {
 	cur := body
 	var firstBound float64
 	for i := range 10 {
-		cur, err = cur.PlacedCopy(t.Context(), rot)
+		cur, err = decad.Copy(t.Context(), cur, decad.WithCopyPlacement(rot))
 		require.NoError(t, err)
 		vol, err := cur.Volume()
 		require.NoError(t, err)
@@ -496,7 +496,7 @@ func TestLoftPlacedAccessorExactness(t *testing.T) {
 }
 
 // TestLoftPlacedRetireAndLiveness proves Placed retires the receiver while
-// Duplicate/PlacedCopy leave it live, and a refused placement — an invalid
+// Copy leaves it live, and a refused placement — an invalid
 // (zero-value) transform, and an S12 fixture whose proven volume allowance
 // swamps its tiny held volume — leaves the document untouched.
 func TestLoftPlacedRetireAndLiveness(t *testing.T) {
@@ -512,13 +512,13 @@ func TestLoftPlacedRetireAndLiveness(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{placed}, doc.Bodies(), "Placed retires the receiver")
 
-	dup, err := placed.Duplicate(t.Context())
+	dup, err := decad.Copy(t.Context(), placed)
 	require.NoError(t, err)
-	require.Equal(t, []*decad.Body{placed, dup}, doc.Bodies(), "Duplicate leaves the receiver live")
+	require.Equal(t, []*decad.Body{placed, dup}, doc.Bodies(), "Copy leaves the receiver live")
 
-	copied, err := dup.PlacedCopy(t.Context(), move)
+	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(move))
 	require.NoError(t, err)
-	require.Equal(t, []*decad.Body{placed, dup, copied}, doc.Bodies(), "PlacedCopy leaves the receiver live")
+	require.Equal(t, []*decad.Body{placed, dup, copied}, doc.Bodies(), "Copy leaves the receiver live")
 
 	bodiesBefore := doc.Bodies()
 

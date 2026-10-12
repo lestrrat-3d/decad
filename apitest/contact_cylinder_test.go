@@ -25,15 +25,15 @@ func TestContactPairRevolvedCylinderAxialDiskFace(t *testing.T) {
 	require.NoError(t, err)
 	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
 	ceiling := boxBodyAtZ(t, doc, -20, -20, 20, 20, 10, 10)
-	placed, err := cylinder.PlacedCopy(t.Context(), revolvedCylinderZPose(t, 0, 0))
+	placed, err := decad.Copy(t.Context(), cylinder, decad.WithCopyPlacement(revolvedCylinderZPose(t, 0, 0)))
 	require.NoError(t, err)
-	fractionalPlaced, err := cylinder.PlacedCopy(t.Context(), revolvedCylinderZPose(t, .1, 0))
+	fractionalPlaced, err := decad.Copy(t.Context(), cylinder, decad.WithCopyPlacement(revolvedCylinderZPose(t, .1, 0)))
 	require.NoError(t, err)
 	reflection, err := r3.FromBasis(r3.Basis{
 		EX: r3.Vec{Z: -1}, EY: r3.Vec{X: 1}, EZ: r3.Vec{Y: 1},
 	}, r3.Vec{Z: 10})
 	require.NoError(t, err)
-	reflected, err := cylinder.PlacedCopy(t.Context(), reflection)
+	reflected, err := decad.Copy(t.Context(), cylinder, decad.WithCopyPlacement(reflection))
 	require.NoError(t, err)
 	before := doc.Bodies()
 	req := contactRequest()

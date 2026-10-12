@@ -341,8 +341,8 @@ func TestSurfaceSweepCompositeRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceSweepStaysASheetThroughPlacement is §4.2's Placed/Duplicate/
-// PlacedCopy claim across all three build paths: each re-evaluates the
+// TestSurfaceSweepStaysASheetThroughPlacement is §4.2's Placed/Copy
+// claim across all three build paths: each re-evaluates the
 // payload and reproduces the sheet with no further code.
 func TestSurfaceSweepStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()
@@ -387,13 +387,13 @@ func TestSurfaceSweepStaysASheetThroughPlacement(t *testing.T) {
 			require.NoError(t, err)
 			requireSweepSheetWithFreeEdges(t, placed, n)
 
-			dup, err := placed.Duplicate(t.Context())
+			dup, err := decad.Copy(t.Context(), placed)
 			require.NoError(t, err)
 			requireSweepSheetWithFreeEdges(t, dup, n)
 
 			copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 			require.NoError(t, err)
-			copied, err := dup.PlacedCopy(t.Context(), copyMotion)
+			copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
 			require.NoError(t, err)
 			requireSweepSheetWithFreeEdges(t, copied, n)
 		})

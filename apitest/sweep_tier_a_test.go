@@ -113,7 +113,7 @@ func TestSweepCompositeTwoFittedSplinesReplayAndVerify(t *testing.T) {
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 
-	duplicate, err := body.Duplicate(t.Context())
+	duplicate, err := decad.Copy(t.Context(), body)
 	require.NoError(t, err)
 	copyMesh, err := duplicate.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))

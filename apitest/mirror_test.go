@@ -293,7 +293,7 @@ func TestMirroredCopyFlipsTheLsFacing(t *testing.T) {
 
 // TestMirroredRetiresTheReceiver is §2 M6: Mirrored is Placed under the
 // reflection, so the receiver is retired and the image is the one live body.
-// Shown to fail with Mirrored delegating to PlacedCopy: the receiver stays
+// Shown to fail with Mirrored delegating to Copy: the receiver stays
 // live.
 func TestMirroredRetiresTheReceiver(t *testing.T) {
 	t.Parallel()

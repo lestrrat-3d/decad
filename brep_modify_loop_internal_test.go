@@ -639,7 +639,7 @@ func TestBrepLoopChamferConsumers(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(5, -7, 3))
 	require.NoError(t, err)
-	placed, err := out.PlacedCopy(t.Context(), move)
+	placed, err := Copy(t.Context(), out, WithCopyPlacement(move))
 	require.NoError(t, err)
 	require.Equal(t, out.volume, placed.volume)
 	require.Equal(t, out.area, placed.area)

@@ -55,7 +55,7 @@ func TestMassPropertiesCupOuterMinusCavity(t *testing.T) {
 	require.Less(t, got.Center.Value.Z, 5.0)
 
 	pose := composedRotation(t, r3.NewVec(2, -3, 5), r3.NewVec(1, 1, 1), 40, 8)
-	placed, err := cup.PlacedCopy(t.Context(), pose)
+	placed, err := decad.Copy(t.Context(), cup, decad.WithCopyPlacement(pose))
 	require.NoError(t, err)
 	turned, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)

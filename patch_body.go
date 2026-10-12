@@ -63,7 +63,7 @@ import (
 // named the case without giving it a row).
 //
 // evalBodyPatchContext is the whole evaluator, shared by the initial build
-// and every later Placed/Duplicate/PlacedCopy re-evaluation: gate 3's exact
+// and every later Placed/Copy re-evaluation: gate 3's exact
 // plane proof runs ONCE, in buildPatchChains, and is never re-proven (a
 // rigid motion preserves planarity exactly, so re-proving would only make
 // Placed refuse most rotations for no soundness gain). Its own result is
@@ -101,7 +101,7 @@ const (
 // regardless of payload, but Patch's own re-evaluation contract — a placed
 // copy replays from the recorded plane rather than re-proving it — needs the
 // same payload-carrying contract every other rebuilding operation
-// (Placed, PlacedCopy, Duplicate) already requires. A body owned by a
+// (Placed, Copy) already requires. A body owned by a
 // different document is [ErrForeignBody], and a retired receiver is
 // [ErrRetiredBody]. sel's own resolution failure ([SelectionError] wrapping
 // [ErrNoMatch] or [ErrCardinality], Table R row R16) and every one of gates

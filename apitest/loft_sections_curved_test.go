@@ -156,7 +156,7 @@ func TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(16, 0, 0))
 	require.NoError(t, err)
-	placed, err := body.PlacedCopy(t.Context(), move)
+	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -213,7 +213,7 @@ func TestLoftSectionsVaryingFittedFlanksKeepSourceProof(t *testing.T) {
 	require.LessOrEqual(t, mesh.Bound().Base(), 0.1)
 	move, err := r3.Translation(r3.NewVec(16, 0, 0))
 	require.NoError(t, err)
-	placed, err := body.PlacedCopy(t.Context(), move)
+	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
 	require.NoError(t, err)
 	placedVolume, err := placed.Volume()
 	require.NoError(t, err)

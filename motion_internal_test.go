@@ -211,7 +211,7 @@ func TestMotionAxisRadiusReadsTheBox(t *testing.T) {
 
 // TestVerifyMotionKeepsTheNextProducerIdentity is §9 test 7's document
 // identity half: a transient placement must mint no live producer, level, or
-// curve identity. A Duplicate after the call receives the next producer.
+// curve identity. A Copy after the call receives the next producer.
 func TestVerifyMotionKeepsTheNextProducerIdentity(t *testing.T) {
 	t.Parallel()
 	doc := New()
@@ -243,7 +243,7 @@ func TestVerifyMotionKeepsTheNextProducerIdentity(t *testing.T) {
 	}
 	require.Equal(t, levelBefore, doc.nextLevel)
 	require.Equal(t, curveBefore, doc.nextCurve)
-	dup, err := cube.Duplicate(t.Context())
+	dup, err := Copy(t.Context(), cube)
 	require.NoError(t, err)
 	require.Equal(t, before, dup.originProducer())
 }

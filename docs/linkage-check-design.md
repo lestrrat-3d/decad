@@ -1449,7 +1449,7 @@ func (l *Linkage) Configuration(values []units.Value) (JointConfiguration, error
 ```
 
 A **varying** joint is a listed joint with `Min < Max`; `n` is their count. A box with no varying joint
-names one configuration, which `PlacedCopy` then `Verify` already answers, and is `ErrDegenerate`, as a
+names one configuration, which `Copy` then `Verify` already answers, and is `ErrDegenerate`, as a
 drive in which every sweep holds is. `Min > Max` is `ErrDegenerate`: a box has no sense of traversal, so
 nothing is run the other way. A range's `Kind`, finiteness and limits are checked as a sweep's are (§2.4):
 both ends inside the joint's declared limits put the whole range inside them, and an unlisted joint whose

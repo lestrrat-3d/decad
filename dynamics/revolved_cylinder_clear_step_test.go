@@ -282,7 +282,7 @@ func TestRevolvedCylinderClearSweepReverseAndRefusals(t *testing.T) {
 	torus := makeTorus(t, doc)
 	placement, err := r3.Translation(r3.Vec{Y: 3})
 	require.NoError(t, err)
-	placed, err := full.PlacedCopy(t.Context(), placement)
+	placed, err := decad.Copy(t.Context(), full, decad.WithCopyPlacement(placement))
 	require.NoError(t, err)
 	req := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
 		NormalResolution: units.Radians(1e-6)}

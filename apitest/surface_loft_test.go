@@ -260,8 +260,8 @@ func TestSurfaceLoftRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceLoftStaysASheetThroughPlacement is §4.2's Placed/Duplicate/
-// PlacedCopy claim for Loft: each re-evaluates the payload and reproduces the
+// TestSurfaceLoftStaysASheetThroughPlacement is §4.2's Placed/Copy
+// claim for Loft: each re-evaluates the payload and reproduces the
 // sheet with no further code.
 func TestSurfaceLoftStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()
@@ -276,13 +276,13 @@ func TestSurfaceLoftStaysASheetThroughPlacement(t *testing.T) {
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, placed)
 
-	dup, err := placed.Duplicate(t.Context())
+	dup, err := decad.Copy(t.Context(), placed)
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, dup)
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := dup.PlacedCopy(t.Context(), copyMotion)
+	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, copied)
 }
@@ -417,7 +417,7 @@ func TestSurfaceLoftTessellationRestatesWalls(t *testing.T) {
 	}
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := sheet.PlacedCopy(t.Context(), rotation)
+	placed, err := decad.Copy(t.Context(), sheet, decad.WithCopyPlacement(rotation))
 	require.NoError(t, err)
 	placedArea, err := placed.Area()
 	require.NoError(t, err)

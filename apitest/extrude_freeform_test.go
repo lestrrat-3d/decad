@@ -472,7 +472,7 @@ func TestExtrudeFreeformVerifySound(t *testing.T) {
 }
 
 // TestExtrudeFreeformPlacementReproducesVolume asserts observable test 15:
-// Placed, Duplicate and PlacedCopy of a free-form prism each reproduce the
+// Placed and Copy of a free-form prism each reproduce the
 // unplaced volume. Each mints its own R7 work ceiling (prismPayload.placed
 // carries no preflight counter across the call), so each re-spends the full
 // budget — cheap for this fixture, but the reason a caller placing a large
@@ -489,19 +489,19 @@ func TestExtrudeFreeformPlacementReproducesVolume(t *testing.T) {
 	move, err := r3.Translation(r3.NewVec(5, -3, 2))
 	require.NoError(t, err)
 
-	// Duplicate and PlacedCopy leave the receiver LIVE; Placed retires it
+	// Copy leaves the receiver LIVE; Placed retires it
 	// (core §8), so it runs last.
-	dup, err := body.Duplicate(t.Context())
+	dup, err := decad.Copy(t.Context(), body)
 	require.NoError(t, err)
 	dv, err := dup.Volume()
 	require.NoError(t, err)
-	require.InDelta(t, base.Value.Mag(), dv.Value.Mag(), 1e-9, "Duplicate reproduces the volume")
+	require.InDelta(t, base.Value.Mag(), dv.Value.Mag(), 1e-9, "Copy reproduces the volume")
 
-	copied, err := body.PlacedCopy(t.Context(), move)
+	copied, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
 	require.NoError(t, err)
 	cv, err := copied.Volume()
 	require.NoError(t, err)
-	require.InDelta(t, base.Value.Mag(), cv.Value.Mag(), 1e-9, "PlacedCopy reproduces the volume")
+	require.InDelta(t, base.Value.Mag(), cv.Value.Mag(), 1e-9, "placed Copy reproduces the volume")
 
 	placed, err := body.Placed(t.Context(), move)
 	require.NoError(t, err)
@@ -930,7 +930,7 @@ func TestFreeformPrismInterferenceDecided(t *testing.T) {
 	// shares no face plane with its twin.
 	shift, err := r3.Translation(r3.NewVec(2, 0.2, 1))
 	require.NoError(t, err)
-	_, err = body.PlacedCopy(t.Context(), shift)
+	_, err = decad.Copy(t.Context(), body, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())

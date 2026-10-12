@@ -13,8 +13,8 @@ import (
 // A body can be copied without consuming it. Placed retires its receiver, so
 // modelling a part once and instancing it several times — a bolt pattern, a
 // reused cutting tool — would otherwise mean rebuilding the feature chain per
-// instance. Duplicate and PlacedCopy leave the source live: the source is
-// depended on, never consumed. PlacedCopy re-evaluates the payload under the
+// instance. Copy leaves the source live: the source is
+// depended on, never consumed. Copy re-evaluates the payload under the
 // motion, so each instance's centroid moves by its own placement while the
 // master part stays put.
 func Example_decad_copy() {
@@ -40,7 +40,7 @@ func Example_decad_copy() {
 		return
 	}
 
-	// Place three instances at 40 mm spacing along x. PlacedCopy can
+	// Place three instances at 40 mm spacing along x. Copy can
 	// cancel any faceted rebuild and leaves the same master live, so one feature
 	// chain feeds the whole pattern.
 	for i := 1; i <= 3; i++ {
@@ -49,7 +49,7 @@ func Example_decad_copy() {
 			fmt.Printf("failed to build placement: %s\n", err)
 			return
 		}
-		inst, err := master.PlacedCopy(context.Background(), shift)
+		inst, err := decad.Copy(context.Background(), master, decad.WithCopyPlacement(shift))
 		if err != nil {
 			fmt.Printf("failed to place instance %d: %s\n", i, err)
 			return
