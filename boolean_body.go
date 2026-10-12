@@ -76,6 +76,7 @@ type facetedPayload struct {
 	loftMirrorJoin         *loftMirrorJoinRecord
 	loftMirrorCopy         *loftMirrorPlacementRecord
 	loftMirrorCylinderJoin *loftMirrorCylinderJoinRecord
+	loftMirrorCylinderBore *loftMirrorCylinderBoreRecord
 	// contactAudited records a whole-mesh exact contact audit at construction.
 	// PlaceMesh preserves it by checking every rounded facet after placement.
 	contactAudited bool
@@ -204,6 +205,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.loftMirrorJoin = nil
 	next.loftMirrorCopy = nil
 	next.loftMirrorCylinderJoin = nil
+	next.loftMirrorCylinderBore = nil
 	next.bevelTooth = nil
 	if fp.loftMirrorJoin != nil && fp.xform == r3.Identity() {
 		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorJoin, motion: composed}

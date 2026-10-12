@@ -417,6 +417,12 @@ homotopy. The portion inside the disk belongs to the exact blank. Thus a
 middle facet either already borders `S∩C` or reaches its boundary along
 that certified inward path. The unchanged bore wall and inner cap loop use
 Cut's local `boreBound` correspondence and exact outer-band separation.
+The source-circle proof depends only on the immutable tooth and blank radius.
+The middle-side audit retains each successful proof for later facets of that
+tooth; every facet still runs its own wall, height, and inward-patch checks.
+An outward-rounded box gap can omit a held wall triangle only when it strictly
+exceeds that tooth's matched Loft departure; all remaining pairs use the exact
+triangle clearance check.
 
 For the opposite boundary direction, any point of `∂(S∩C)` inside `C`
 belongs to `∂S`; the original two-way joined or bored boundary bound takes
@@ -453,3 +459,15 @@ vertices, and 32,768 output triangles. Its exact crossing audit allows at most
 the lesser of 64 million scans or 2,048 scans per output triangle.
 Every proof gate refuses when its own bounded work or strict inequality
 cannot be completed.
+
+The mirrored-bore consumer privately rewrites only the lower exterior cap.
+It leaves the opposite cap and upper side strips in place for an exact middle
+seam with its reflection. Three exact split rings at one-quarter, one-half,
+and three-quarters of the active band are checked inside the source union;
+an exact distance check covers each complete band facet from those rings.
+The one-cap contact audit partitions old cap facets, inherited held-wall
+pairs, and changed band contacts. It checks every changed non-cap contact
+exactly while the already audited unchanged pairs retain their certificate.
+For near-axis mirrored copies, each split ring is checked a second time at
+the corresponding original tooth's shifted physical source level. The
+reflected upper band also gets the exact source-cap section proof above.

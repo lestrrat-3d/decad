@@ -48,8 +48,9 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 	for i := range oldIndices {
 		oldIndices[i] = i
 	}
-	toothParity := make(map[producerID]*meshbool.ParityMesh)
-	toothIndices := make(map[producerID][]int)
+	toothParity := make(map[*Body]*meshbool.ParityMesh)
+	toothIndices := make(map[*Body][]int)
+	toothCircles := make(map[*Body]loftCylinderSourceCircle)
 	for i := middle[0]; i < middle[1]; i++ {
 		if i%32 == 0 && ctx.Err() != nil {
 			return ctx.Err()
@@ -83,25 +84,32 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 				continue
 			}
 			if !loftCylinderChamferMiddleBlank(q, source.blankRadius) {
-				face, ok := faces[origin]
-				if !ok {
+				candidates := faces[origin]
+				if len(candidates) == 0 {
 					last = "source face has no authenticated tooth"
 					continue
 				}
-				key := origin.producer
-				parity, ok := toothParity[key]
-				if !ok {
-					parity = meshbool.NewParityMesh(face.loft.verts, face.loft.tris)
-					toothParity[key] = parity
-					indices := make([]int, len(face.loft.tris))
-					for j := range indices {
-						indices[j] = j
+				certified := false
+				for _, face := range candidates {
+					parity, ok := toothParity[face.body]
+					if !ok {
+						parity = meshbool.NewParityMesh(face.loft.verts, face.loft.tris)
+						toothParity[face.body] = parity
+						indices := make([]int, len(face.loft.tris))
+						for j := range indices {
+							indices[j] = j
+						}
+						toothIndices[face.body] = indices
 					}
-					toothIndices[key] = indices
+					if err := loftCylinderChamferMiddleToothSource(ctx, q, face,
+						parity, toothIndices[face.body], source.blankRadius, toothCircles); err != nil {
+						last = err.Error()
+						continue
+					}
+					certified = true
+					break
 				}
-				if err := loftCylinderChamferMiddleToothSource(ctx, q, face,
-					parity, toothIndices[key], source.blankRadius); err != nil {
-					last = err.Error()
+				if !certified {
 					continue
 				}
 			}
@@ -191,19 +199,23 @@ func loftCylinderChamferMiddleBlank(q [3]proofarith.Xpt, radius float64) bool {
 // hidden root walls meet it, use the exact blank disk for that part instead.
 func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.Xpt,
 	face loftCylinderChamferToothFace, parity *meshbool.ParityMesh, indices []int,
-	blankRadius float64) error {
+	blankRadius float64, circles map[*Body]loftCylinderSourceCircle) error {
 	lp := face.loft
 	if lp.walls <= 0 || lp.walls > len(lp.tris) || face.root < 3 ||
 		face.scale == nil || face.scale.Sign() <= 0 ||
 		2*face.root >= lp.walls || face.bound < 0 || proofbound.IsNonFinite(face.bound) {
 		return fmt.Errorf("%w: inward patch lacks a bounded Loft wall", ErrUnsupported)
 	}
+	qBox, boxed := loftCylinderChamferExactTriBox(q)
 	fullClear := true
 	for j := range lp.walls {
 		if j%64 == 0 && ctx.Err() != nil {
 			return ctx.Err()
 		}
 		tri := lp.tris[j]
+		if boxed && loftCylinderChamferBoxGapAbove(qBox, meshbool.TriBox(lp.verts, tri), face.bound) {
+			continue
+		}
 		other := [3]proofarith.Xpt{
 			proofarith.XptOf(lp.verts[tri[0]]),
 			proofarith.XptOf(lp.verts[tri[1]]),
@@ -231,9 +243,14 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 	// The original root arc is hidden by the blank over this middle slab.
 	// Both matched held and true root patches must remain in the convex disk;
 	// their entire same-height homotopy then stays in that disk too.
-	circle, err := loftCylinderSourceCircleOf(lp, blankRadius)
-	if err != nil {
-		return err
+	circle, ok := circles[face.body]
+	if !ok {
+		var err error
+		circle, err = loftCylinderSourceCircleOf(lp, blankRadius)
+		if err != nil {
+			return err
+		}
+		circles[face.body] = circle
 	}
 	zLo, zHi := meshbool.RatCoordOf(q[0], 2), meshbool.RatCoordOf(q[0], 2)
 	for _, p := range q[1:] {

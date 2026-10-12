@@ -105,7 +105,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 | **RX3** | `stackedPrismPayload` | through its face view, `docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
 | **RX5** | `cupPayload`: a two-slab `stackedPrismPayload` record beside the shell morphology (§9.1) | base S3 | base S3 |
-| **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | equal-distance `Chamfer` of both outer cap loops for an authenticated loft/cylinder join or centered-bore Cut (`docs/loft-cylinder-boolean-design.md`), or one positive cross-cylinder bore mouth (`docs/cross-cylinder-bore-chamfer-design.md`); otherwise SX9 | SX9 |
+| **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | certified loft/cylinder outer cap `Chamfer`, including mirrored bore results, or one cross-cylinder bore-mouth `Chamfer`; otherwise SX9 | SX9 |
 | **RX7** | `brepPayload` (`docs/general-boolean-design.md` §4) | `docs/brep-modify-design.md` Table RB; outside it, SX16 | the same |
 | **RX8** | `loftPayload` | `Fillet` on analytic corners of matching axial sections (loft §17); equal-distance `Chamfer` on both complete held outer cap loops of a matching axial loft with zero holes or one certified circular bore (loft §18); other chamfers are base S3 | base S3 |
 | **RX9** | `draftPayload` with one positive-taper whole circular wall and its near section at the start level | draft §10.4–§10.5 | Removing its far cap inward builds draft §10.6's cup; other calls are base S3 |
@@ -1621,6 +1621,11 @@ samples of the certified held cap polygons. That same cutter applies to the
 true source and held joined solid. The inset sampling bound charges deviation
 from the requested held-polygon offset, and the published boundary and volume
 bounds charge rounding of the final mesh. No smooth-spline offset is denoted.
+The mirrored-bore case rewrites one exterior cap on its audited lower half,
+reflects that result, and removes the two matching middle annuli. It proves
+the cap, bore wall, and seam separately. For a near-axis tooth placement,
+the upper cap proof checks split rings against the translated original teeth
+and adds the inherited bridge reach and swept-volume charge.
 The perpendicular cylinder Cut retains two full source circles for a
 separate one-mouth chamfer (`docs/cross-cylinder-bore-chamfer-design.md`).
 Other faceted modifications remain SX9.

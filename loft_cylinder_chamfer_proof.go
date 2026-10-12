@@ -274,6 +274,9 @@ func loftCylinderChamferIdealBandAudit(ctx context.Context, mesh *bevelJoinedMes
 	const maxPairs = 32_000_000
 	budget := proofbound.NewWorkBudget(ctx)
 	for cap, band := range bands {
+		if band[0] == band[1] {
+			continue
+		}
 		tris := mesh.tris[band[0]:band[1]]
 		pairCount := uint64(len(tris)) * uint64(len(tris)-1) / 2
 		if pairCount > maxPairs {
@@ -383,6 +386,7 @@ func loftCylinderChamferSolidWitness(ctx context.Context, fp facetedPayload,
 }
 
 type loftCylinderChamferToothFace struct {
+	body  *Body
 	loft  loftPayload
 	root  int
 	cell  int
@@ -393,12 +397,12 @@ type loftCylinderChamferToothFace struct {
 // Union copied these precise Loft face triangles, and Cut retained their
 // groups. Match by authenticated origin instead of interpreting a role string
 // on a faceted result that may coalesce several public edges.
-func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[FeatureRef]loftCylinderChamferToothFace, error) {
+func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[FeatureRef][]loftCylinderChamferToothFace, error) {
 	if source.blank == nil || len(source.teeth) == 0 ||
 		len(source.originalTeeth) != len(source.teeth) || source.blankRadius <= 0 {
 		return nil, fmt.Errorf("%w: loft/cylinder chamfer lost its source operands", ErrUnsupported)
 	}
-	faces := make(map[FeatureRef]loftCylinderChamferToothFace)
+	faces := make(map[FeatureRef][]loftCylinderChamferToothFace)
 	for toothIndex, tooth := range source.teeth {
 		if tooth == nil || source.originalTeeth[toothIndex] == nil {
 			return nil, fmt.Errorf("%w: loft/cylinder tooth source is absent", ErrUnsupported)
@@ -429,13 +433,10 @@ func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[Featur
 					return nil, fmt.Errorf("%w: loft/cylinder tooth face lost its origin", ErrUnsupported)
 				}
 				origin := f.origins[0]
-				if _, duplicate := faces[origin]; duplicate {
-					return nil, fmt.Errorf("%w: loft/cylinder tooth repeats a source face", ErrUnsupported)
-				}
-				faces[origin] = loftCylinderChamferToothFace{
-					loft: lp, root: root, cell: j, bound: lp.proof.FacetDeparture,
+				faces[origin] = append(faces[origin], loftCylinderChamferToothFace{
+					body: tooth, loft: lp, root: root, cell: j, bound: lp.proof.FacetDeparture,
 					scale: proofarith.FloatRat(original.xform.Basis().EZ.Z),
-				}
+				})
 			}
 		}
 	}
