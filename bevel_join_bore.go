@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -198,39 +197,11 @@ func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 		return nil, fmt.Errorf("%w: bevel bore cap ring repeats a vertex", ErrUnsupported)
 	}
 	// The same ordered angular stations built the blank's complete outer cap
-	// rings. Interval trigonometry charges each new inner vertex; the step
-	// bound charges the exact circular wall between those vertices.
-	innerCos, innerSin := make([]float64, n), make([]float64, n)
-	maxRound, maxStep := 0.0, 0.0
-	ratRadius := proofarith.FloatRat(radius)
-	for i, angle := range ring.angles {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		sinIv, cosIv, ok := proofbound.RadSinCosInterval(proofarith.FloatRat(angle))
-		if !ok {
-			return nil, fmt.Errorf("%w: bevel bore ring angle has no trigonometric enclosure", ErrUnsupported)
-		}
-		innerCos[i], innerSin[i] = radius*math.Cos(angle), radius*math.Sin(angle)
-		yErr := proofbound.IntervalFloatError(proofbound.IntervalScale(cosIv, ratRadius), innerCos[i])
-		zErr := proofbound.IntervalFloatError(proofbound.IntervalScale(sinIv, ratRadius), innerSin[i])
-		maxRound = max(maxRound, proofbound.Radius3D(max(yErr, zErr)))
-		j := (i + 1) % n
-		step := new(big.Rat)
-		if j == 0 {
-			step.Add(proofbound.TwoPiInterval().Hi,
-				new(big.Rat).Sub(proofarith.FloatRat(ring.angles[0]), proofarith.FloatRat(angle)))
-		} else {
-			step.Sub(proofarith.FloatRat(ring.angles[j]), proofarith.FloatRat(angle))
-		}
-		stepUp := proofbound.RatFloatUp(step)
-		if step.Sign() <= 0 || proofbound.IsNonFinite(stepUp) || stepUp > 0.025 {
-			return nil, fmt.Errorf("%w: bevel bore cap angles are not ordered", ErrUnsupported)
-		}
-		maxStep = max(maxStep, stepUp)
+	// rings. The shared certificate bounds their new inner circle and chords.
+	inner, boreBound, err := certifiedCircularBoreRing(ctx, radius, ring.angles)
+	if err != nil {
+		return nil, err
 	}
-	sag := proofbound.ProductUpper(radius, proofbound.ProductUpper(maxStep, maxStep)/8)
-	boreBound := proofbound.AbsSumUpper(sag, maxRound)
 	if proofbound.IsNonFinite(boreBound) || boreBound >= radius {
 		return nil, fmt.Errorf("%w: bevel bore circle has no radial bound", ErrUnsupported)
 	}
@@ -283,8 +254,8 @@ func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 	vertexBound := append([]float64(nil), joined.vertexBound...)
 	innerHeel, innerToe := make([]int, n), make([]int, n)
 	for i := range n {
-		heelPoint := r3.Vec{X: blank.heelAxis.U, Y: innerCos[i], Z: innerSin[i]}
-		toePoint := r3.Vec{X: blank.toeAxis.U, Y: innerCos[i], Z: innerSin[i]}
+		heelPoint := r3.Vec{X: blank.heelAxis.U, Y: inner[i].U, Z: inner[i].V}
+		toePoint := r3.Vec{X: blank.toeAxis.U, Y: inner[i].U, Z: inner[i].V}
 		if i == 0 {
 			innerHeel[i], innerToe[i] = ring.heelAxis, ring.toeAxis
 			mesh.verts[ring.heelAxis], mesh.verts[ring.toeAxis] = heelPoint, toePoint

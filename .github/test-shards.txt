@@ -135,6 +135,7 @@
 1	0.00	TestChordStationBoundRefusesWhatItCannotEnclose
 1	0.00	TestChordedBoundsNeverPublishAFlushedZero
 1	0.00	TestChordingRefusalsSplitFromOperandDegeneracy
+1	0.00	TestCircularBoreRingBoundsShiftedStationChord
 1	0.00	TestCircularStationChainRefusesAnUnenclosableRecord
 1	0.00	TestClampedConversionCostIsQuadratic
 1	0.01	TestClassBCutCrossSlot

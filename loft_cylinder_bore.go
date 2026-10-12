@@ -170,38 +170,13 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	}
 	const stations = 256
 	angles := make([]float64, stations)
-	maxRound, maxStep := 0.0, 0.0
-	ratRadius := proofarith.FloatRat(radius)
 	for i := range angles {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		angle := 2 * math.Pi * float64(i) / stations
-		angles[i] = angle
-		sinIv, cosIv, ok := proofbound.RadSinCosInterval(proofarith.FloatRat(angle))
-		if !ok {
-			return nil, fmt.Errorf("%w: circular bore has no trigonometric enclosure", ErrUnsupported)
-		}
-		x, y := radius*math.Cos(angle), radius*math.Sin(angle)
-		xErr := proofbound.IntervalFloatError(proofbound.IntervalScale(cosIv, ratRadius), x)
-		yErr := proofbound.IntervalFloatError(proofbound.IntervalScale(sinIv, ratRadius), y)
-		maxRound = max(maxRound, proofbound.Radius3D(max(xErr, yErr)))
-		var step *big.Rat
-		if i+1 == stations {
-			step = new(big.Rat).Sub(proofbound.TwoPiInterval().Hi, proofarith.FloatRat(angle))
-		} else {
-			step = new(big.Rat).Sub(
-				proofarith.FloatRat(2*math.Pi*float64(i+1)/stations),
-				proofarith.FloatRat(angle))
-		}
-		stepUp := proofbound.RatFloatUp(step)
-		if step.Sign() <= 0 || proofbound.IsNonFinite(stepUp) || stepUp > 0.025 {
-			return nil, fmt.Errorf("%w: circular bore stations are unordered", ErrUnsupported)
-		}
-		maxStep = max(maxStep, stepUp)
+		angles[i] = 2 * math.Pi * float64(i) / stations
 	}
-	sag := proofbound.ProductUpper(radius, proofbound.ProductUpper(maxStep, maxStep)/8)
-	boreBound := proofbound.AbsSumUpper(sag, maxRound)
+	innerStations, boreBound, err := certifiedCircularBoreRing(ctx, radius, angles)
+	if err != nil {
+		return nil, err
+	}
 	if proofbound.IsNonFinite(boreBound) || boreBound >= radius ||
 		proofbound.AbsSumUpper(radius, boreBound) >= record.radius ||
 		proofbound.AbsSumUpper(radius, boreBound, joined.meshBound) >= record.minSideRadius {
@@ -231,11 +206,9 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		if cap == 1 {
 			z = record.z1
 		}
-		for i, angle := range angles {
+		for i, point := range innerStations {
 			inner[cap][i] = len(mesh.verts)
-			mesh.verts = append(mesh.verts, r3.Vec{
-				X: radius * math.Cos(angle), Y: radius * math.Sin(angle), Z: z,
-			})
+			mesh.verts = append(mesh.verts, r3.Vec{X: point.U, Y: point.V, Z: z})
 			vertexBound = append(vertexBound, boreBound)
 		}
 		if cap == 0 && !loftCylinderBoreRingSimple(ctx, mesh.verts, inner[cap]) {
