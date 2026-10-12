@@ -22,57 +22,6 @@ type spiralToothPlacement struct {
 	motion r3.Transform
 }
 
-// CombineJoin joins target with all tools in one operation. The current
-// evaluator admits authenticated spiral and straight bevel patterns. Every
-// operand must be live in the same document; a failed call consumes none of
-// them.
-func CombineJoin(ctx context.Context, target *Body, tools ...*Body) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf("%w: a nil context cannot control CombineJoin", ErrDegenerate)
-	}
-	if target == nil || target.doc == nil {
-		return nil, fmt.Errorf("%w: the target belongs to no document", ErrDegenerate)
-	}
-	if len(tools) < 2 {
-		return nil, fmt.Errorf("%w: CombineJoin needs at least two tools", ErrDegenerate)
-	}
-	d := target.doc
-	seen := map[*Body]struct{}{target: {}}
-	operands := make([]*Body, 0, len(tools)+1)
-	operands = append(operands, target)
-	for _, body := range operands {
-		if err := d.requireLive(body); err != nil {
-			return nil, err
-		}
-	}
-	for _, tool := range tools {
-		if err := d.requireLive(tool); err != nil {
-			return nil, err
-		}
-		if _, duplicate := seen[tool]; duplicate {
-			return nil, fmt.Errorf("%w: CombineJoin needs distinct bodies", ErrDegenerate)
-		}
-		seen[tool] = struct{}{}
-		operands = append(operands, tool)
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	ref := d.nextProducerID()
-	body, matched, err := tryBevelPatternCombineJoin(ctx, d, ref, target, tools)
-	if !matched {
-		body, err = spiralCombineBody(ctx, d, ref, target, tools)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	d.commit(body, operands...)
-	return body, nil
-}
-
 // r3.Rotation's Rodrigues evaluation can round its X basis length one float
 // step below or above one. Keep that narrow case separate from the exact-axis
 // class, because the sector certificate must charge its axial displacement.

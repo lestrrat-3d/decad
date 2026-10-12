@@ -345,7 +345,7 @@ clearance decisions in `bevel_join_bore_test.go`.
 
 ## Straight-tooth combined join
 
-`CombineJoin` accepts three to thirty-one copies of one authenticated point-loft
+`Union` with three or more operands accepts three to thirty-one copies of one authenticated point-loft
 tooth against the original finite revolve blank. The first tool carries the
 cone-trim record; every later tool must be a recorded near-axis rotation of
 that same source. Pairwise exact projections of the held tooth vertices,
@@ -430,7 +430,7 @@ volume checks with one connected closed shell. The capped local run took
 274 seconds of test time and reached 3,444,152 KiB peak RSS.
 
 The sixteen-tooth driving member's default centered bore has radius 8 mm,
-inside the recorded toe outer radius. A post-`CombineJoin` Cut with fifteen
+inside the recorded toe outer radius. A post-pattern-Union Cut with fifteen
 placed teeth uses the annular-cap rewrite above. It requires the complete
 source record, both cap rings, the finite six-line blank meridian and a
 spanning axis-X circle. Each non-cap facet must clear the bore after the
@@ -479,7 +479,7 @@ recorded straight toe flank at X = 28.833333 mm. The source bore tool extends
 beyond both blank ends. The annular-cap rewrite does not apply to
 this crossing.
 
-The Cut requires the retained `CombineJoin` source, its eleven placed teeth,
+The Cut requires the retained pattern-Union source, its eleven placed teeth,
 both cap rings and the toe-root ring, a centered full-circle axis-X prism,
 and the same exact six-line blank meridian. It proves the bore falls strictly
 between the toe outer and toe-root radii. Every untouched blank and tooth

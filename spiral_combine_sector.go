@@ -19,7 +19,7 @@ import (
 // their meshes enter one Boolean operand.
 func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spiralCombineSource, error) {
 	if len(tools) < 2 || len(tools) > 31 {
-		return nil, fmt.Errorf("%w: this CombineJoin class accepts two to 31 tools", ErrUnsupported)
+		return nil, fmt.Errorf("%w: this spiral-tooth Union class accepts two to 31 tools", ErrUnsupported)
 	}
 	first, ok, err := certifySpiralFirstJoin(ctx, blank, tools[0])
 	if err != nil {

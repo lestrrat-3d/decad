@@ -104,7 +104,7 @@ type facetedPayload struct {
 	// The source record is immutable; placement never makes a new trim claim.
 	spiralTooth *spiralToothPlacement
 	// spiralTools exists only on a transient disjoint-tool operand built by
-	// CombineJoin. It maps its source faces back to the live input tools.
+	// A multi-body Union. It maps its source faces back to the live input tools.
 	spiralTools *spiralCombinedTools
 	// bevelJoin identifies the immutable blank and first trimmed tooth used
 	// to rebuild a second disjoint tooth on the same root ring.

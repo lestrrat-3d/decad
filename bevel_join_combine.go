@@ -8,10 +8,10 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// tryBevelPatternCombineJoin admits a single original point-loft tooth and
+// tryBevelPatternUnionMany admits a single original point-loft tooth and
 // authenticated rigid copies. It rebuilds the complete pattern against the
 // original finite blank, avoiding the accumulating bounds of serial Unions.
-func tryBevelPatternCombineJoin(ctx context.Context, d *Document, ref producerID,
+func tryBevelPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 	blankBody *Body, tools []*Body) (*Body, bool, error) {
 	blank, ok := matchBevelBlankSection(blankBody, false)
 	if !ok || len(tools) < 2 {
@@ -22,7 +22,7 @@ func tryBevelPatternCombineJoin(ctx context.Context, d *Document, ref producerID
 		return nil, false, nil
 	}
 	if len(tools) < 3 || len(tools) > 31 {
-		return nil, true, fmt.Errorf("%w: straight CombineJoin accepts three to thirty-one teeth", ErrUnsupported)
+		return nil, true, fmt.Errorf("%w: this straight-tooth Union class accepts three to thirty-one teeth", ErrUnsupported)
 	}
 	record := first.pointCone
 	if record.lower == nil || record.upper == nil || record.base.pointSection == nil ||

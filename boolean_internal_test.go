@@ -796,7 +796,9 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 		op   func(ctx context.Context, a, b *Body) (*Body, error)
 		want want
 	}{
-		{"Union", Union, want{1875, 7.5, 7.5, 7.5, 0, 0, 0, 15, 15, 15}},
+		{"Union", func(ctx context.Context, a, b *Body) (*Body, error) {
+			return Union(ctx, a, b)
+		}, want{1875, 7.5, 7.5, 7.5, 0, 0, 0, 15, 15, 15}},
 		{"Cut", Cut, want{875, 4.642857142857143, 4.642857142857143, 4.642857142857143, 0, 0, 0, 10, 10, 10}},
 		{"Intersect", Intersect, want{125, 7.5, 7.5, 7.5, 5, 5, 5, 10, 10, 10}},
 	}

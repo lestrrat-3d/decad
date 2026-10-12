@@ -318,13 +318,13 @@ func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 	maxPatternAuditTriangles := 44_480 + 22_000*(teeth-2)
 	maxAuditScans := uint64(128_000_000)
 	if teeth == 4 {
-		// The two-pass cap source already proved by CombineJoin can contribute
+		// The two-pass cap source already proved by pattern Union can contribute
 		// at most two final caps of 120,000 cells per tooth.
 		maxPatternAuditTriangles += 2 * bevelCombineCapFinalLimit * teeth
 		maxAuditScans = uint64(80_000_000 * teeth)
 	}
 	if teeth == 16 {
-		// CombineJoin's one-pass cap refinement adds at most three children
+		// Pattern Union's one-pass cap refinement adds at most three children
 		// per source cell on each of two caps per tooth.
 		maxPatternAuditTriangles += 6 * bevelCombineCapOnePassLimit * teeth
 		maxAuditScans = uint64(25_000_000 * teeth)
