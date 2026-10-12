@@ -140,6 +140,8 @@
 1	0.00	TestSweepChainRefusesCompositeAndArcPaths
 1	0.01	TestSweepChainCardinalLineArcRefusesNonradialSource
 1	0.01	TestSweepChainCardinalLineArcSheet
+1	0.01	TestSweepChainCardinalThickenSolid
+1	0.01	TestSweepChainThickenConservativeRefusals
 1	0.01	TestSweepCompositeSpanBudgetRejectsBeforeCommit
 1	0.00	TestSweepMitredOneSpanFrustum
 1	0.01	TestSweepPairPlanarWedgeStops

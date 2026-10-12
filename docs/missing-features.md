@@ -94,7 +94,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| `Thicken` of composite sweep, chain-sweep, loft, stitched, `Body.Patch` or `Unstitch` sheets | `ErrUnsupported` (R24); one-span profile-fed straight and arc sweep sheets use their analytic reductions | `docs/surface-design.md` §16.8 |
+| `Thicken` of other composite or chain sweeps, loft, stitched, `Body.Patch` or `Unstitch` sheets | `ErrUnsupported` (R24); cardinal chain and one-span profile sweeps build | `docs/surface-design.md` §16.8 |
 | `Body.Patch` over a rim with a bounded vertex (a cut junction, a trimmed line end, a circle seam whose centre plus radius rounds) that no straight prism build stamped with one level token, such as a `Patch` sheet's rim | `ErrUnsupported` (R6) | `docs/surface-design.md` §5.2 |
 | Tessellation of `Body.Patch` with a curved face or edge outside a single-circle prism sheet filled in one call, or with a nonzero face-normal bound | `ErrUnsupported`: no shared chording for that face or edge | `docs/surface-design.md` §10; `docs/tessellation-design.md` §2 |
 | `Stitch` closing a revolve sheet whose wall tags are not exactly their records: a tilted or round-anchored axis, a near-parallel or near-perpendicular side, a snapped centre | `ErrUnsupported` (R8, `stitchFluxTagsDenoted`) | `docs/surface-design.md` §6.4 |

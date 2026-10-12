@@ -20,6 +20,7 @@ The rules for rows live in `docs/layout.md`.
 | `thicken.go` | `Body.Thicken`. See surface §16. |
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
 | `thicken_axis.go` | Assembles thicken sections. See surface §16. |
+| `thicken_chain_sweep.go` | Thickens the cardinal composite chain sheet through one certified section. See surface §16.8. |
 | `offset.go` | `Body.Offset`: a second sheet at a normal distance. See surface §17. |
 | `patch_body.go` | `Body.Patch` topology adapter and face build. See surface §5.2. |
 | `denotation.go` | Mints document tokens. |
