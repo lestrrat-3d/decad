@@ -118,6 +118,17 @@ func revolveLoftFacesHeelRetainedPatchesOf(ctx context.Context,
 					proofbound.RatFloatUp(lfMul(big.NewRat(2, 1), radius)))
 			}
 		}
+		for _, root := range track.bracket {
+			if root == nil {
+				return nil, false, nil
+			}
+			radius := revolveLoftFacesHeelBoxRadius(root.box)
+			if radius == nil {
+				return nil, false, nil
+			}
+			out.curveBound = max(out.curveBound,
+				proofbound.RatFloatUp(lfMul(big.NewRat(2, 1), radius)))
+		}
 		stationRows := make([][]int, 0, len(track.stations))
 		for index, station := range track.stations {
 			if side == 0 && index == len(track.stations)-1 {

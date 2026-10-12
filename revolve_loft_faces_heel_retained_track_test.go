@@ -12,8 +12,9 @@ func TestCurvedRetainedHeelTracksUseLiveSourceOwners(t *testing.T) {
 	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
 	require.NoError(t, err)
 	require.True(t, ok)
+	budget := big.NewRat(1, 50)
 	tracks, ok, err := revolveLoftFacesHeelRetainedTracksOf(t.Context(), proof,
-		big.NewRat(1, 50))
+		budget)
 	require.NoError(t, err)
 	require.True(t, ok)
 	for _, track := range []*revolveLoftFacesHeelRetainedTrack{
@@ -21,6 +22,12 @@ func TestCurvedRetainedHeelTracksUseLiveSourceOwners(t *testing.T) {
 		require.NotEmpty(t, track.stations)
 		require.NotEmpty(t, track.slabs)
 		require.NotEmpty(t, track.arc)
+		for _, bracket := range track.bracket {
+			require.NotNil(t, bracket)
+			require.NotEmpty(t, bracket.members)
+			require.LessOrEqual(t,
+				revolveLoftFacesHeelBoxRadius(bracket.box).Cmp(budget), 0)
+		}
 		for _, slab := range track.slabs {
 			require.LessOrEqual(t, slab.time.lo.Cmp(slab.time.hi), 0)
 			for _, root := range slab.root {

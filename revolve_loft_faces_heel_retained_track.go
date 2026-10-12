@@ -13,6 +13,7 @@ type revolveLoftFacesHeelRetainedTrack struct {
 	stations []revolveLoftFacesHeelTrackStation
 	slabs    []revolveLoftFacesHeelRetainedSlab
 	arc      []revolveLoftFacesSeamVertex
+	bracket  [2]*revolveLoftFacesHeelRootEnclosure
 	calls    int
 }
 
@@ -53,13 +54,15 @@ func revolveLoftFacesHeelRetainedTracksOf(ctx context.Context,
 		return nil, false, nil
 	}
 	first, ok, err := revolveLoftFacesHeelRetainedTrackFromCurrent(ctx, proof,
-		birth.meridian, birth.slices, birth.arc, birth.lower.band, birth.root, budget)
+		birth.meridian, birth.slices, birth.arc, birth.lower.band, birth.root,
+		birth.fits, birth.ends, true, budget)
 	if err != nil || !ok {
 		return nil, false, err
 	}
 	second, ok, err := revolveLoftFacesHeelRetainedTrackFromCurrent(ctx, proof,
 		terminal.meridian, []revolveLoftFacesHeelRegionSlice{terminal.before},
-		terminal.arc, terminal.upper.band, terminal.root, budget)
+		terminal.arc, terminal.upper.band, terminal.root,
+		terminal.lines, terminal.ends, false, budget)
 	if err != nil || !ok {
 		return nil, false, err
 	}
@@ -75,7 +78,8 @@ func revolveLoftFacesHeelRetainedTracksOf(ctx context.Context,
 func revolveLoftFacesHeelRetainedTrackFromCurrent(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate, meridian revolveSectionSpan,
 	slices []revolveLoftFacesHeelRegionSlice, arc *sketch.Arc, band int,
-	root loftFaceInterval, budget *big.Rat) (*revolveLoftFacesHeelRetainedTrack, bool, error) {
+	root loftFaceInterval, neighbors [2]int, ends [2]*sketch.Point,
+	fitted bool, budget *big.Rat) (*revolveLoftFacesHeelRetainedTrack, bool, error) {
 	if len(slices) == 0 || arc == nil || root.lo == nil || root.hi == nil {
 		return nil, false, nil
 	}
@@ -162,5 +166,58 @@ func revolveLoftFacesHeelRetainedTrackFromCurrent(ctx context.Context,
 	if err != nil || !ok || len(track.arc) < 2 {
 		return nil, false, err
 	}
+	track.bracket, ok = revolveLoftFacesHeelRootBrackets(ctx, proof, meridian,
+		band, root, arc, neighbors, ends, fitted, budget)
+	if !ok || !revolveLoftFacesHeelRootBracketTies(track, fitted) {
+		return nil, false, nil
+	}
 	return track, true, nil
+}
+
+func revolveLoftFacesHeelRootBracketTies(track *revolveLoftFacesHeelRetainedTrack,
+	birth bool) bool {
+	if track == nil || len(track.arc) < 2 || len(track.slabs) == 0 ||
+		track.bracket[0] == nil || track.bracket[1] == nil {
+		return false
+	}
+	adjacent := track.slabs[0]
+	if !birth {
+		adjacent = track.slabs[len(track.slabs)-1]
+	}
+	for event, bracket := range track.bracket {
+		if adjacent.root[event] == nil ||
+			len(bracket.members) != 1 || len(adjacent.root[event].members) != 1 ||
+			birth && bracket.time.hi.Cmp(adjacent.time.lo) != 0 ||
+			!birth && bracket.time.lo.Cmp(adjacent.time.hi) != 0 {
+			return false
+		}
+		left, right := bracket.members[0], adjacent.root[event].members[0]
+		if left.segment != right.segment || left.span != right.span ||
+			left.band != right.band || left.ref != right.ref ||
+			left.face != right.face ||
+			left.source.hi.Cmp(right.source.lo) < 0 ||
+			right.source.hi.Cmp(left.source.lo) < 0 {
+			return false
+		}
+		for axis := range bracket.box {
+			other := adjacent.root[event].box[axis]
+			if bracket.box[axis].hi.Cmp(other.lo) < 0 ||
+				other.hi.Cmp(bracket.box[axis].lo) < 0 {
+				return false
+			}
+		}
+		arcEnd := 0
+		if track.arc[0].exact[2].Sign() <= 0 && event == 0 ||
+			track.arc[0].exact[2].Sign() > 0 && event == 1 {
+			arcEnd = len(track.arc) - 1
+		}
+		point := track.arc[arcEnd].exact
+		for axis, value := range point {
+			if value.Cmp(bracket.box[axis].lo) < 0 ||
+				value.Cmp(bracket.box[axis].hi) > 0 {
+				return false
+			}
+		}
+	}
+	return true
 }

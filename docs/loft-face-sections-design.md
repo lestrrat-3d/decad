@@ -519,6 +519,13 @@ box and its source parameter, face, and origin even when rounded stations
 merge. It places both terminal Arc station sets from their certified time
 brackets. The lower and upper contact-circle rows reuse vertex IDs from the
 closed Revolve shell. Every added triangle carries the live heel-cap origin.
+Each Arc bracket also rederives the adjacent fitted or connector joint. The
+joint's one-sided source sliver is narrowed only when exact Bernstein signs
+prove every excluded source point stays strictly on one side over the entire
+root-time bracket. The mapped XYZ box of the remaining sliver must fit the
+caller budget. The first and last cap strips charge those boxes as well as
+the open-slice moving-root boxes; a shallow source derivative that permits a
+wide root motion refuses even when its time bracket is narrow.
 
 The neutral nine-cap producer yields two open cone patches with 399 triangles.
 Their source-only crossing audit passes. Exact rational Z/Y intervals bound
