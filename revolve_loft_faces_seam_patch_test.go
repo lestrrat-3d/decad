@@ -8,50 +8,10 @@ import (
 
 func TestCurvedLoftFacesArcSeamPatchesShareCertifiedVertices(t *testing.T) {
 	blank, trimmed, trim := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
-	require.NoError(t, err)
-	require.True(t, ok)
-	census, ok, err := revolveLoftFacesCensus(t.Context(), proof)
-	require.NoError(t, err)
-	require.True(t, ok)
-
-	var section revolveSectionSpan
-	var contact revolveLoftFacesMappedCell
-	found := false
-	for _, pair := range census.pairs {
-		if pair.verdict != revolveLoftFacesPairSourceCandidate {
-			continue
-		}
-		for _, cell := range pair.sourceCells {
-			mapped := cell.mapped
-			if mapped.side != revolveLoftFacesJointContact ||
-				mapped.jointKind != revolveLoftFacesWholeArcContact || found {
-				continue
-			}
-			section = proof.section.spans[pair.sectionIndex]
-			contact = mapped
-			found = true
-		}
-	}
-	require.True(t, found)
-	require.NotNil(t, section.face)
-	require.NotNil(t, contact.jointArc)
-	require.NotNil(t, contact.tLo)
-	require.NotNil(t, contact.tHi)
-	var stations []int
-	for index, group := range trim.stationGroup {
-		if group == contact.segment {
-			stations = append(stations, index)
-		}
-	}
-	require.NotEmpty(t, stations)
-	stations = append(stations, (stations[len(stations)-1]+1)%len(trim.stationGroup))
-	seam, ok, err := revolveLoftFacesArcSeamVertices(t.Context(), trim,
-		contact.band, stations, loftFaceInterval{lo: contact.tLo, hi: contact.tHi}, section)
-	require.NoError(t, err)
-	require.True(t, ok)
-	blankPatch, loftPatch, ok, err := revolveLoftFacesArcPatches(t.Context(), trim,
-		contact.band, contact.segment, section, seam)
+	sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
+	seam, blankPatch, loftPatch, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(),
+		blank, trimmed, sectionIndex, contact.segment, contact.band,
+		loftFaceInterval{lo: contact.tLo, hi: contact.tHi}, stations)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Len(t, blankPatch.triangles, 4*(len(stations)-1))
@@ -73,4 +33,87 @@ func TestCurvedLoftFacesArcSeamPatchesShareCertifiedVertices(t *testing.T) {
 	}
 	t.Logf("source-aligned radial seam: %d stations, maximum vertex bounds blank %.9g mm, loft %.9g mm",
 		len(seam), maxBlank, maxLoft)
+}
+
+func neutralArcSeamContact(t *testing.T, blank, trimmed *Body, trim *loftFacesTrimRecord) (
+	int, revolveLoftFacesMappedCell, []int,
+) {
+	t.Helper()
+	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	require.NoError(t, err)
+	require.True(t, ok)
+	census, ok, err := revolveLoftFacesCensus(t.Context(), proof)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	var section revolveSectionSpan
+	sectionIndex := -1
+	var contact revolveLoftFacesMappedCell
+	found := false
+	for _, pair := range census.pairs {
+		if pair.verdict != revolveLoftFacesPairSourceCandidate {
+			continue
+		}
+		for _, cell := range pair.sourceCells {
+			mapped := cell.mapped
+			if mapped.side != revolveLoftFacesJointContact ||
+				mapped.jointKind != revolveLoftFacesWholeArcContact || found {
+				continue
+			}
+			section = proof.section.spans[pair.sectionIndex]
+			sectionIndex = pair.sectionIndex
+			contact = mapped
+			found = true
+		}
+	}
+	require.True(t, found)
+	require.NotNil(t, section.face)
+	require.NotNil(t, contact.jointArc)
+	require.NotNil(t, contact.tLo)
+	require.NotNil(t, contact.tHi)
+	var stations []int
+	for index, group := range trim.stationGroup {
+		if group == contact.segment {
+			stations = append(stations, index)
+		}
+	}
+	require.NotEmpty(t, stations)
+	stations = append(stations, (stations[len(stations)-1]+1)%len(trim.stationGroup))
+	return sectionIndex, contact, stations
+}
+
+func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
+	t.Run("changed station", func(t *testing.T) {
+		blank, trimmed, trim := neutralArcSeamSource(t)
+		sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
+		trim.source.sourceStation[stations[1]].U += 0.001
+		require.False(t, pointSourceCurrent(trim.source))
+		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
+			sectionIndex, contact.segment, contact.band,
+			loftFaceInterval{lo: contact.tLo, hi: contact.tHi}, stations)
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+	t.Run("changed station bound", func(t *testing.T) {
+		blank, trimmed, trim := neutralArcSeamSource(t)
+		sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
+		require.Positive(t, trim.source.sourceStationRound)
+		trim.source.sourceStationRound = 0
+		require.False(t, pointSourceCurrent(trim.source))
+		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
+			sectionIndex, contact.segment, contact.band,
+			loftFaceInterval{lo: contact.tLo, hi: contact.tHi}, stations)
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+	t.Run("truncated arc run", func(t *testing.T) {
+		blank, trimmed, trim := neutralArcSeamSource(t)
+		sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
+		require.Greater(t, len(stations), 2)
+		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
+			sectionIndex, contact.segment, contact.band,
+			loftFaceInterval{lo: contact.tLo, hi: contact.tHi}, stations[:2])
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
 }

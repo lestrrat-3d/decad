@@ -342,6 +342,12 @@ the Revolve meridian residual and LoftFaces time, station and rounding error.
 The patches retain their source origins. Their vertex bounds do not include
 curve and twist error over whole faces, so they are not a closed shell or a
 Boolean result.
+The checked patch constructor rederives the live source certificate and
+face-pair census. It matches one whole-arc contact and its rational root
+bracket, then requires every issued station of that arc through its shared
+endpoint. The point-loft record compares station coordinates and their
+rounding bound against the values issued at construction. Changed or missing
+stations and partial arc runs refuse the patch.
 
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public

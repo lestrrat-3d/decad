@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -21,17 +22,19 @@ import (
 // faceted boundary of a point-section loft. The far section is never replaced
 // by a fitted or scaled profile.
 type pointSectionRecord struct {
-	apex               r3.Vec
-	profile            profileRecord
-	plane              planeRecord
-	source             *pointSectionSource
-	sourceBox          [4]float64 // U min/max, V min/max; contains the true region and station polygon
-	sourceBoxIssued    [4]float64 // original source rectangle at LoftFromPoint publication
-	sourceAreaDelta    float64    // area of the symmetric difference between source region and station polygon
-	sourceStation      []Point2   // original local station coordinates, in source loop order
-	sourceStationRound float64    // local error of every held station against its exact curve point
-	sourceArcUpper     []float64  // per-cell source curve speed in world millimetres
-	sourceMatched      []float64  // per-cell parameter-matched source departure in world millimetres
+	apex                r3.Vec
+	profile             profileRecord
+	plane               planeRecord
+	source              *pointSectionSource
+	sourceBox           [4]float64 // U min/max, V min/max; contains the true region and station polygon
+	sourceBoxIssued     [4]float64 // original source rectangle at LoftFromPoint publication
+	sourceAreaDelta     float64    // area of the symmetric difference between source region and station polygon
+	sourceStation       []Point2   // original local station coordinates, in source loop order
+	sourceStationIssued []Point2   // station coordinates published with the original point loft
+	sourceStationRound  float64    // local error of every held station against its exact curve point
+	sourceRoundIssued   float64    // station error published with the original point loft
+	sourceArcUpper      []float64  // per-cell source curve speed in world millimetres
+	sourceMatched       []float64  // per-cell parameter-matched source departure in world millimetres
 }
 
 // pointSectionSource names the live Sketch entities authenticated when the
@@ -48,7 +51,11 @@ type pointSectionSource struct {
 // pointSourceCurrent checks the source identity held when LoftFromPoint
 // recorded the profile. Certificate getters are checked separately at use.
 func pointSourceCurrent(record *pointSectionRecord) bool {
-	if record == nil || record.source == nil || record.sourceBox != record.sourceBoxIssued {
+	if record == nil || record.source == nil || record.sourceBox != record.sourceBoxIssued ||
+		!slices.Equal(record.sourceStation, record.sourceStationIssued) ||
+		proofbound.IsNonFinite(record.sourceStationRound) ||
+		record.sourceStationRound < 0 ||
+		record.sourceStationRound != record.sourceRoundIssued {
 		return false
 	}
 	src := record.source
@@ -252,6 +259,8 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 		record.sourceMatched[j] = proofbound.ProductUpper(
 			proofbound.AbsSumUpper(pair.MatchedDelta[j], stationRound, sectionDelta), basisUpper)
 	}
+	record.sourceStationIssued = slices.Clone(record.sourceStation)
+	record.sourceRoundIssued = record.sourceStationRound
 	record.sourceBox = [4]float64{math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)}
 	for _, pt := range pair.W {
 		record.sourceBox[0] = min(record.sourceBox[0], pt.U)
