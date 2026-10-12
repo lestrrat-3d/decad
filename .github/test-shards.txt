@@ -209,6 +209,9 @@
 1	0.00	TestRevolveLoftFacesVerticalClipsLiveSourceSpan
 1	0.00	TestRevolveLoftFacesVerticalAffineOrientation
 1	2.56	TestCurvedLoftFacesSourceCertifiesLiveProducer
+1	8.00	TestCurvedHeelCapCutsFollowLiveOccupiedArcs
+1	0.00	TestRevolveLoftFacesCapCutIntervalMulSigns
+1	0.00	TestRevolveLoftFacesCapCutFinalRaysRejectRoundedReversal
 1	12.00	TestCurvedHeelRegionCertifiesContinuousSource
 1	8.00	TestCurvedHeelRegionRejectsChangedBlankSection
 1	8.00	TestCurvedHeelRegionRejectsStaleSource

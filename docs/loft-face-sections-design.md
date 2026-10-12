@@ -397,6 +397,14 @@ repeats the exact crossing, Euler, and volume audits. LoftFaces wall and cap
 facets need separate source-curve, chord,
 and rounding bounds before they can be welded to these vertices.
 
+The held heel-cap X-section builder cuts the actual cap facets at each live
+occupied circle. It requires one simple path, with each end owned by the
+matching live wall face. Its interior rays must advance through positive Y
+and lie strictly between the certified source endpoint boxes. Each ray is
+placed on the exact circle, while the original facet bound, cut-to-circle
+movement and source-point rounding remain separate. This section is a
+topology template; it does not select retained cap facets or admit Union.
+
 Between two occupied heel circles, a source-only cap-region certificate
 rederives the pair census, live Sketch loop and exact cone meridian. It uses
 only float-representable points on the authenticated cone as a finite witness;
