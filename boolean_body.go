@@ -64,11 +64,11 @@ type facetGroup struct {
 // measurements compose from. It is what Placed re-evaluates under a composed
 // motion (docs/evaluator-design.md §8).
 type facetedPayload struct {
-	// straightPrismScale marks a certified similar image of an all-line
+	// prismScale marks a certified similar image of a line/circular
 	// prism. Rigid copies retain it; booleans and modify rewrites do not.
-	straightPrismScale bool
-	loftCylinderJoin   *loftCylinderJoinRecord
-	loftCylinderBore   *loftCylinderBoreRecord
+	prismScale       bool
+	loftCylinderJoin *loftCylinderJoinRecord
+	loftCylinderBore *loftCylinderBoreRecord
 	// contactAudited records a whole-mesh exact contact audit at construction.
 	// PlaceMesh preserves it by checking every rounded facet after placement.
 	contactAudited bool

@@ -1194,11 +1194,11 @@ an ambient assembly context (§4). The zero `Transform{}` is invalid
 faceted-payload rebuild and returns its error without changing the document.
 
 `ScaledAt` retires an authenticated point-loft planar Split slab or an exact
-all-line solid prism after a positive, finite, dimensionless uniform scale
+line/circular solid prism after a positive, finite, dimensionless uniform scale
 around `anchor` in millimetres. It accepts rigidly placed and previously scaled
 copies of either class. A Split slab keeps its original cap origins,
-face-centroid certificates and rational source cut maps. A straight prism
-keeps its source-face roles and planar tags, but its scaled body is faceted;
+face-centroid certificates and rational source cut maps. A prism keeps its
+source-face roles and planar tags, while circular wall faces become `Faceted`;
 later operations that require an analytic prism can refuse it. Both classes
 rebuild the held mesh with scaled vertex, area and occupied-volume bounds. A
 nonpositive factor is `ErrDegenerate`, a length factor is `ErrUnitKind`, and an

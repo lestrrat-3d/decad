@@ -28,7 +28,7 @@ type pointPlaneSimilarityStep struct {
 }
 
 // ScaledAt returns the positive uniform image of an authenticated point-loft
-// Split slab or exact all-line solid prism about anchor and retires the
+// Split slab or exact line/circular solid prism about anchor and retires the
 // receiver. Source roles and certified boundary and occupied-volume bounds
 // follow the image. A refused or canceled call leaves the document unchanged.
 func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) (*Body, error) {
@@ -62,13 +62,13 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 			return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
 		}
 		var err error
-		fp, err = straightPrismScaleSource(ctx, b, prism)
+		fp, err = prismScaleSource(ctx, b, prism, s)
 		if err != nil {
 			return nil, err
 		}
 	}
 	pointSlab := fp.pointPlane != nil && fp.pointPlane.base.pointSection != nil
-	if (!pointSlab && !fp.straightPrismScale) || !fp.xform.IsValid() ||
+	if (!pointSlab && !fp.prismScale) || !fp.xform.IsValid() ||
 		len(fp.verts) == 0 || len(fp.vertexBound) != len(fp.verts) {
 		return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
 	}

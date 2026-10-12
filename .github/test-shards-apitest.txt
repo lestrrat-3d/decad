@@ -600,6 +600,8 @@
 4	1.02	TestClearanceOraclePrismPairs
 4	0.47	TestClearanceOracleWellSeparatedSound
 4	0.04	TestClearanceRevolveConeApexContainsTruth
+4	0.01	TestCircularPrismScaledAtAcceptsPlacedAndRepeatedImage
+4	0.01	TestCircularPrismScaledAtKeepsMeasuredProofAndSourceRoles
 4	0.05	TestClosedSplineProfileAreaExactWhenRepresentable
 4	0.02	TestContactPairBandChamferedBlockOnFloor
 4	0.01	TestContactPairOrientedSourceBoxes
@@ -664,6 +666,7 @@
 4	0.00	TestPrismCutCrossingBoxesResolvesAnalytically
 4	0.03	TestPrismCutIntersectNonCoplanarPairStillTakesMeshPath
 4	0.01	TestPrismIntersectDisjointFootprintsFallsBack
+4	0.01	TestPrismScaledAtRefusesSheetSource
 4	0.02	TestPrismUnionCutFragmentOperandRefusesNonClosingMerge
 4	0.30	TestPrismUnionRotatedToothFallback
 4	0.01	TestPrismUnionRoundedReExpressionStaysWithinItsBound
@@ -711,7 +714,6 @@
 4	0.01	TestStraightPrismScaledAtAcceptsPlacedSource
 4	0.01	TestStraightPrismScaledAtKeepsPolygonHole
 4	0.01	TestStraightPrismScaledAtPreservesVolumeAndCapRoles
-4	0.01	TestStraightPrismScaledAtRefusesCurvedAndSheetSources
 4	0.01	TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof
 4	1.80	TestStitchCurvedRevolveSurfaceKindsTessellate
 4	0.02	TestStitchCurvedVolumeBoundEncloses

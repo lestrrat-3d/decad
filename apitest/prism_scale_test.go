@@ -5,7 +5,6 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -81,23 +80,7 @@ func TestStraightPrismScaledAtKeepsPolygonHole(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
-func TestStraightPrismScaledAtRefusesCurvedAndSheetSources(t *testing.T) {
-	curvedDoc := decad.New()
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
-	require.NoError(t, err)
-	center := s.CreatePoint(0, 0)
-	s.Fix(center)
-	s.CreateCircle(center, 3)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	curved, err := curvedDoc.Extrude(s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
-	require.NoError(t, err)
-	_, err = curved.ScaledAt(t.Context(), r3.NewVec(0, 0, 0), units.Scalar(2))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, []*decad.Body{curved}, curvedDoc.Bodies())
-
+func TestPrismScaledAtRefusesSheetSource(t *testing.T) {
 	sheetDoc := decad.New()
 	s, profile := plateSketch(t)
 	sheet, err := sheetDoc.Extrude(s, profile,
