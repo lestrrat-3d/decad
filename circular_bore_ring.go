@@ -15,8 +15,19 @@ import (
 // departure from the exact circle. Callers prove their own cap and side
 // clearance, then lift these points into their respective section frames.
 func certifiedCircularBoreRing(ctx context.Context, radius float64, angles []float64) ([]Point2, float64, error) {
+	return certifiedCircularBoreRingAtStep(ctx, radius, angles, 0.025)
+}
+
+// certifiedCircularBoreRingAtStep permits a caller with its own certified
+// angular plan to supply that plan's largest step. The returned sag bound
+// still uses the actual upper bound of every station interval.
+func certifiedCircularBoreRingAtStep(ctx context.Context, radius float64,
+	angles []float64, maxAllowedStep float64) ([]Point2, float64, error) {
 	if len(angles) < 3 || radius <= 0 || proofbound.IsNonFinite(radius) {
 		return nil, 0, fmt.Errorf("%w: circular bore ring has no positive radius or complete stations", ErrUnsupported)
+	}
+	if maxAllowedStep <= 0 || maxAllowedStep > math.Pi/2 || proofbound.IsNonFinite(maxAllowedStep) {
+		return nil, 0, fmt.Errorf("%w: circular bore ring has no bounded station step", ErrUnsupported)
 	}
 	points := make([]Point2, len(angles))
 	ratRadius := proofarith.FloatRat(radius)
@@ -49,7 +60,7 @@ func certifiedCircularBoreRing(ctx context.Context, radius float64, angles []flo
 			step = new(big.Rat).Sub(proofarith.FloatRat(angles[i+1]), ratAngle)
 		}
 		stepUp := proofbound.RatFloatUp(step)
-		if step.Sign() <= 0 || proofbound.IsNonFinite(stepUp) || stepUp > 0.025 {
+		if step.Sign() <= 0 || proofbound.IsNonFinite(stepUp) || stepUp > maxAllowedStep {
 			return nil, 0, fmt.Errorf("%w: circular bore ring stations are unordered", ErrUnsupported)
 		}
 		maxStep = max(maxStep, stepUp)

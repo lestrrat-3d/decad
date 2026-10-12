@@ -95,6 +95,44 @@ mesh must pass the same exact audit. Refusal leaves all operands live.
 The current source class requires a canonical unplaced, full axis-X Revolve.
 Off-axis and transformed Revolves use the ordinary Boolean route or refuse.
 
+## Coaxial cylinder Cut
+
+`Cut` accepts a full centered cylinder spanning both axial ends of a joined
+Revolve/point-Loft sector body. It reads the same authenticated section,
+ordered ring IDs, source groups, and published boundary, occupied-volume and
+area bounds as `Union`. The two spans adjacent to the section's sole axial
+span must be planar radial caps. Their ring IDs identify one complete axis
+fan per angular station. The cylinder side keeps its source face and origins.
+The result clears the join record because a second structural rewrite has no
+unmodified source mesh to authenticate.
+
+When the bore radius is strictly inside both cap outer radii, `Cut` removes
+both complete axis fans. It inserts two annuli and one cylindrical wall at
+the joined ring's angular stations. Every other meridian span and every
+untouched triangle must clear the cylinder by the joined and new bore bounds.
+The cap census removes one old triangle per cap and station, then adds six;
+the net count increases by four per station.
+
+When the bore radius lies strictly between the low cap outer radius and its
+adjacent straight band's outer radius, `Cut` solves that band's one crossing
+with exact rational source coordinates. It removes both cap fans and exactly
+two band triangles per station. It inserts the clipped band, the high annulus
+and the cylindrical wall. Every other section span and untouched triangle
+must clear the bore. This census increases the triangle count by two per
+station. Equality at either band radius refuses the route.
+
+The retained Union station gaps are rechecked with rational intervals. The
+circular bore ring bounds its own trigonometric rounding and chord sag at
+those stations. Existing bore callers keep their 0.025 radian station limit;
+this route supplies the certified joined ring's largest step and requires a
+0.1 mm result boundary bound. The rewrite limits stations to 2,304, audited
+triangles to 1,321,696 and audit scans to 400 million. It checks connected
+orientation, vertex links and triangle contacts before building a result.
+The occupied-volume allowance adds the cylinder's radial shell to the
+joined allowance. A clipped band also adds its side shell and crossing slab.
+The area allowance includes the held areas and new wall. Failed checks leave
+the target and tool bodies live.
+
 The real neutral acceptance model uses a tapered Revolve hub whose outer cap
 has two exactly collinear source edges. A separate Sketch makes a radial lug,
 point-Loft makes its solid fan, and two real conical tools trim its toe and
@@ -115,6 +153,7 @@ generic replacement and focused proof required before deletion.
 | `bevel_join_fit.go` | `revolve_loft_fit.go` and a generic fitted-seat/fan-cell builder without `legacyRevolveLoftBoundary` | `TestUnionTaperedHubAndFittedRadialLug` plus fitted stale-source and near-contact refusals |
 | `bevel_join.go`, `bevel_join_two.go`, `bevel_join_pattern.go`, `bevel_join_combine.go` | Dynamic section rings, sector caps and shared N-sector construction | Neutral seven-span, fitted, serial, variadic and separation-refusal tests pass; real gallery consumers remain to be checked |
 | `bevelTooth` and `bevelJoin` payloads and dispatch | `revolveLoftSector` and `revolveLoftJoin` records | Real neutral rotated lugs pass public `Union`, 0.1 mm `VerifyAll`, Euler two and computed-volume tests |
+| `bevel_join_bore.go`, `bevel_join_bore_toe.go` and their Cut dispatch | `revolve_sector_cylinder_cut.go` and `revolve_sector_cylinder_band.go` | Neutral one-sector and repeated-sector annular bores, one strict straight-band crossing, boundary refusals, 0.1 mm `VerifyAll` and Euler zero pass; remove the old route after gallery joins use the generic record |
 
 The old specialized files remain until a gallery consumer pins and passes
 the generic builder. The generic constructor does not call those files.

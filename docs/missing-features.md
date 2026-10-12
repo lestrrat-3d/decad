@@ -75,12 +75,12 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Multi-body Union outside equal-interval, same-placement whole-line prisms, certified bevel tooth patterns, or certified circular-prism joins of radial copied sections | `ErrUnsupported` (`boolean_many.go`); two-body Union retains its general evaluator | `docs/api-design.md` §8, `docs/prism-boolean-design.md` §4.6, `docs/prism-pattern-union-design.md` |
+| Multi-body Union outside equal-interval, same-placement whole-line prisms, certified Revolve/sector joins, certified bevel tooth patterns, or certified circular-prism joins of radial copied sections | `ErrUnsupported` (`boolean_many.go`); two-body Union retains its general evaluator | `docs/api-design.md` §8, `docs/prism-boolean-design.md` §4.6, `docs/revolve-loft-sector-design.md`, `docs/prism-pattern-union-design.md` |
 | Exact result outside the admitted prism and point-loft/cone classes | Pair takes the mesh boolean → `Faceted` faces with a volume bound | `docs/general-boolean-design.md` §3, `docs/loft-point-design.md` "Coaxial finite cone trims" |
 | Blind cuts with displaced levels, opposed-hole contact, or other crossing holes | Mesh path, possibly coplanar refusal. A7 builds one exact rectangular crossing | `docs/stacked-prism-design.md` §7; `docs/general-boolean-design.md` §3 A7 |
 | Touching, coplanar or face-on-face contact on the mesh path | `BooleanError` code `BooleanUnsupportedContact` | `docs/general-boolean-design.md` §2, `docs/interference-design.md` |
 | Curved surfaces tangent with facets that never meet | `ErrUnsupported` | `doc.go` support map |
-| Held mesh operand coarser than the pair tolerance | `ErrUnsupported` except for held primitives including certified `LoftFaces` results, certified bevel joins with their centered through-bore, and authenticated mirrored-Loft pairs joined to a centered cylinder | `docs/faceted-vertex-bounds-design.md` §5, `docs/loft-face-sections-design.md`, `docs/loft-point-design.md`, `docs/loft-mirror-boolean-design.md` |
+| Held mesh operand coarser than the pair tolerance | `ErrUnsupported` except for held primitives including certified `LoftFaces` results, certified Revolve/sector joins with a centered spanning cylinder Cut, certified bevel joins with their centered through-bore, and authenticated mirrored-Loft pairs joined to a centered cylinder | `docs/faceted-vertex-bounds-design.md` §5, `docs/loft-face-sections-design.md`, `docs/revolve-loft-sector-design.md`, `docs/loft-point-design.md`, `docs/loft-mirror-boolean-design.md` |
 | Sheet body as a boolean operand | Refused permanently; use `Document.Split` | `docs/surface-design.md` Table X |
 
 ## Free-form curves
