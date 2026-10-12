@@ -53,7 +53,7 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 	if startX.Cmp(endX) > 0 {
 		startX, endX = endX, startX
 	}
-	for depth := 0; depth <= 12; depth++ {
+	for depth := range 13 {
 		width := big.NewRat(1, int64(1<<depth))
 		sLo, sHi := lfZero(), width
 		if atEnd {
@@ -97,7 +97,7 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 		x, ok := revolveLoftFacesSpanXRange(trim.maps[band], trim.maps[band+1],
 			span, sLo, sHi, root.time.lo, root.time.hi)
 		if !ok || root.finite && (x.lo.Cmp(startX) <= 0 || x.hi.Cmp(endX) >= 0) ||
-			!root.finite && !(x.hi.Cmp(startX) < 0 || x.lo.Cmp(endX) > 0) {
+			!root.finite && x.hi.Cmp(startX) >= 0 && x.lo.Cmp(endX) <= 0 {
 			continue
 		}
 		return revolveLoftFacesJointCell{sLo: sLo, sHi: sHi,

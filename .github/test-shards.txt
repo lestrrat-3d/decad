@@ -34,7 +34,6 @@
 1	0.00	TestMappedRadialJointExactRootBoundary
 1	0.00	TestMappedRadialJointTimePartition
 1	0.00	TestMappedSpanAxialHull
-1	0.00	TestRevolveLoftFacesHeldPathsRefusesBranchedSwitch
 1	0.00	TestRevolveLoftFacesOwnedTimeRootsRemainDisjoint
 1	0.00	TestRevolveLoftFacesOpenTimeExcludesExactPointRoot
 1	0.00	TestRevolveLoftFacesOpenMovingCrossingRefuses

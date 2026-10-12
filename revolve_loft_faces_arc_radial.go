@@ -64,7 +64,7 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 		mappedArcRadiusSquare(endU, endV, centerU, centerV).Cmp(radius2) != 0 {
 		return empty, false
 	}
-	var cap [2]mappedArcRadialCap
+	var mappedCaps [2]mappedArcRadialCap
 	for index, mapped := range [...]loftFaceMap{trim.maps[band], trim.maps[band+1]} {
 		if mapped.g0.Sign() <= 0 || mapped.gu.Sign() != 0 || mapped.gv.Sign() != 0 ||
 			mapped.qu[0].Sign() != 0 || mapped.qv[0].Sign() != 0 {
@@ -74,20 +74,20 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 		if atCenter[1].Sign() != 0 || atCenter[2].Sign() != 0 {
 			return empty, false
 		}
-		cap[index] = mappedArcRadialCap{x: atCenter[0],
+		mappedCaps[index] = mappedArcRadialCap{x: atCenter[0],
 			u: [2]*big.Rat{lfDiv(mapped.qu[1], mapped.g0), lfDiv(mapped.qu[2], mapped.g0)},
 			v: [2]*big.Rat{lfDiv(mapped.qv[1], mapped.g0), lfDiv(mapped.qv[2], mapped.g0)}}
 	}
-	lambda0, ok0 := mappedArcRadialScale(cap, lfZero())
-	lambdaMid, okMid := mappedArcRadialScale(cap, big.NewRat(1, 2))
-	lambda2, ok2 := mappedArcRadialScale(cap, lfOne())
+	lambda0, ok0 := mappedArcRadialScale(mappedCaps, lfZero())
+	lambdaMid, okMid := mappedArcRadialScale(mappedCaps, big.NewRat(1, 2))
+	lambda2, ok2 := mappedArcRadialScale(mappedCaps, lfOne())
 	lambda1 := lfSub(lfMul(big.NewRat(2, 1), lambdaMid),
 		lfMul(big.NewRat(1, 2), lfAdd(lambda0, lambda2)))
 	if !ok0 || !okMid || !ok2 ||
 		lambda0.Sign() <= 0 || lambda1.Sign() < 0 || lambda2.Sign() <= 0 {
 		return empty, false
 	}
-	x0, x2 := cap[0].x, cap[1].x
+	x0, x2 := mappedCaps[0].x, mappedCaps[1].x
 	xMid := lfMul(big.NewRat(1, 2), lfAdd(x0, x2))
 	sectionX0, sectionX1 := lfF(meridian.start.U), lfF(meridian.end.U)
 	sectionR0, sectionR1 := lfF(meridian.start.V), lfF(meridian.end.V)
@@ -112,13 +112,13 @@ func mappedArcRadiusSquare(u, v, centerU, centerV *big.Rat) *big.Rat {
 // A quadratic polynomial in band time vanishes identically when its exact
 // values at 0, 1/2, and 1 vanish. These checks prove angular independence
 // for every intermediate map, not merely for the two cap endpoints.
-func mappedArcRadialScale(cap [2]mappedArcRadialCap, t *big.Rat) (*big.Rat, bool) {
+func mappedArcRadialScale(mappedCaps [2]mappedArcRadialCap, t *big.Rat) (*big.Rat, bool) {
 	var u, v [2]*big.Rat
 	for axis := range u {
-		u[axis] = lfAdd(lfMul(lfSub(lfOne(), t), cap[0].u[axis]),
-			lfMul(t, cap[1].u[axis]))
-		v[axis] = lfAdd(lfMul(lfSub(lfOne(), t), cap[0].v[axis]),
-			lfMul(t, cap[1].v[axis]))
+		u[axis] = lfAdd(lfMul(lfSub(lfOne(), t), mappedCaps[0].u[axis]),
+			lfMul(t, mappedCaps[1].u[axis]))
+		v[axis] = lfAdd(lfMul(lfSub(lfOne(), t), mappedCaps[0].v[axis]),
+			lfMul(t, mappedCaps[1].v[axis]))
 	}
 	u2 := lfAdd(lfMul(u[0], u[0]), lfMul(u[1], u[1]))
 	v2 := lfAdd(lfMul(v[0], v[0]), lfMul(v[1], v[1]))
