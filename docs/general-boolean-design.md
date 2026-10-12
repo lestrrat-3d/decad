@@ -59,7 +59,7 @@ its source surface tags.
 | S1 | 40×20×20 box `Cut` by Ø6 cylinder along y through its middle | mesh | 7 `Faceted` faces, 15434.9 mm³ ± 1.12 (closed form 15434.51), `Fillet`: no analytic edge, wall `unavailable` |
 | S2 | Ø30×20 cylinder `Union` Ø8 radial boss | mesh | 5 `Faceted` faces, bound 1.79 mm³ |
 | S3 | full revolve (cylinder along x) `Union` box crossing it | mesh | 13 `Faceted` faces, bound 0.21 mm³ |
-| S3b | the same revolve `Union` a coaxial disk sharing its end plane (flange) | mesh | `BooleanUnsupportedContact` |
+| S3b | the same revolve `Union` a coaxial disk sharing its end plane (flange) | mesh at the survey commit; common-axis Revolve when both inputs qualify | `BooleanUnsupportedContact` at the survey commit; analytic common-axis result now |
 | S4a | plate `Cut` through hole, both on XY | analytic | 7 faces, bound 8e-13 mm³ |
 | S4b | 20×20×10 plate with Ø4 through hole, then `Cut` Ø8 counterbore from z = 7 | analytic | 9 faces, volume 4000 − 76π mm³ within a 2.9e-13 mm³ bound |
 | S4c/d | the same counterbore first, then the Ø4 through hole inside it | analytic | the same 9 faces and bounded volume |
@@ -594,6 +594,32 @@ and each cylinder's pieces are read off the planar faces across its axis
 key, a scene whose cells this reach does not cover, and a crossing result
 with a hole each send the pair to the mesh path; a face that fails modify
 §5's audit, or a result whose edges do not pair, refuses.
+
+### Common-axis full revolutions
+
+Two solid full-Revolve bodies with the same stored plane frame, placement,
+axis anchor and direction share one rotational motion. For this bounded
+class, `Union`, `Cut` and `Intersect` arrange their authenticated meridian
+profiles in one private Sketch scene. Sketch decides each cell's membership
+and certifies every retained cut parameter. The result revolves the selected
+meridian cells through one full turn, so a shared axial cap or cylindrical
+wall is classified in the source plane instead of by chorded mesh contact.
+
+The admission requires one simple line-segment outer loop per operand, no
+meridian holes, no section displacement, a matching full-turn angle record,
+and one resulting closed loop. Every input segment must have a distinct scene
+entity so its source-face role is unambiguous. The existing prism-cell work
+cap and cancellation apply. A result cut through a source line carries the
+cut parameter's displacement through `revolvePayload.sectionDelta`. A kept
+wall retains its source face's origins; a coincident wall retains both source
+faces' origins. Every shared span must lie on exactly the same recorded line
+carrier, with both ends inside both finite segments. Sketch's identity band
+alone cannot join a positive gap. An empty `Cut` or `Intersect` returns
+`BooleanEmpty`.
+An unresolved arrangement, a disconnected result, a different axis, or a
+curved meridian continues to the existing mesh path and its documented
+error behavior. An edge-only or point-only contact is not promoted to a
+solid join.
 
 ## 4. The `brepPayload`
 

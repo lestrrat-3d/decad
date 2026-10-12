@@ -19,12 +19,12 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the public boolean surface of core §8 over the exact-predicate
-// mesh boolean of docs/evaluator-design.md §9: Union, Cut and Intersect
-// tessellate both operands at an evaluator-internal chord tolerance derived
-// from the pair's own diameter, intersect the meshes with adaptive-exact
-// predicates, and produce a Faceted body whose measurements carry proven
-// composed bounds. The signatures follow core §3 invariant #4: no operand is
+// This file is the public boolean surface of core §8. Admitted prism and
+// common-axis Revolve pairs use their source records; other pairs use the
+// exact-predicate mesh boolean of docs/evaluator-design.md §9. The mesh path
+// tessellates both operands at an internal chord tolerance derived from the
+// pair's diameter and produces a Faceted body with proven measurement bounds.
+// The signatures follow core §3 invariant #4: no operand is
 // mutated, no target-out parameter exists — each call retires its operands
 // from their document and registers the result, reached through the operands'
 // own owning document.
@@ -36,7 +36,7 @@ import (
 // same-placement, hole-free whole-line prisms with distinct source line
 // carriers, plus certified straight and spiral bevel tooth patterns. Other
 // multi-body classes return ErrUnsupported. Failure or cancellation leaves
-// every input live. The two-body general result is a Faceted body:
+// every input live. A two-body result from the mesh path is a Faceted body:
 // its faces are grouped by the operands' source faces, so provenance
 // (FaceCreatedBy) survives, and its measurements are Approximate with proven
 // bounds (docs/evaluator-design.md §9) — except that an all-planar pair whose
@@ -46,7 +46,9 @@ import (
 // against any real tolerance. An admitted co-directional, coplanar analytic
 // prism pair instead returns an analytic prism. Its faces have fresh roles under
 // the Union step, including CapStart and CapEnd, and do not retain the operands'
-// origins. Operands from different
+// origins. A pair of full Revolves about one authenticated axis can instead
+// return an analytic Revolve with the source-face origins of its kept walls.
+// Operands from different
 // documents are ErrForeignBody; retired operands ErrRetiredBody. A boolean
 // that fails on the geometry returns a typed [BooleanError] wrapping the §12
 // sentinel: a valid but unclassifiable contact — a curved-surface tangency or
@@ -57,7 +59,7 @@ import (
 // a result with no volume is BooleanEmpty (wrapping ErrBooleanFailed); an
 // internal invariant break is BooleanEvaluatorFailure (wrapping
 // ErrBooleanFailed). errors.As(err, &be) reads the Code.
-// Every pair outside that analytic path tessellates both operands at a chord
+// Every pair outside those analytic paths tessellates both operands at a chord
 // tolerance derived from the pair's diameter, so an operand no boolean may
 // consume — a cap-loop chamfer body whose band has a corner this evaluator
 // cannot prove a line-line miter or an exactly tangent join, or a reflex
@@ -438,6 +440,14 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		return nil, err
 	} else if ok {
 		return analyticBooleanBody(ctx, d, ref, payload)
+	}
+	if body, ok, err := tryCommonAxisRevolveBoolean(ctx, op, d, ref, a, b); err != nil {
+		if errors.Is(err, ErrUnsupported) {
+			return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
+		}
+		return nil, err
+	} else if ok {
+		return body, nil
 	}
 
 	eval, err := evaluateBoolean(ctx, op, a, b)

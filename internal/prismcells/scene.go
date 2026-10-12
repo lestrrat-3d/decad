@@ -74,10 +74,11 @@ func BuildSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []Scene
 		loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
 		for li, loop := range loops {
 			hole := li - 1
-			tag := func(ent sketch.Entity, authoredReversed bool) {
-				tags[ent] = Origin{IsB: isB, Region: region, Hole: hole, AuthoredReversed: authoredReversed}
+			tag := func(ent sketch.Entity, segment int, authoredReversed bool) {
+				tags[ent] = Origin{IsB: isB, Region: region, Hole: hole,
+					Segment: segment, AuthoredReversed: authoredReversed}
 			}
-			for _, seg := range loop.Segments {
+			for segment, seg := range loop.Segments {
 				if err := budget.Step(); err != nil {
 					return err
 				}
@@ -104,14 +105,14 @@ func BuildSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []Scene
 					end := reexpressPt(sectionrecord.Point2{U: w.EndU, V: w.EndV})
 					key := entityKey{kind: 1, a: start, b: end}
 					if _, ok := entities[key]; !ok {
-						tag(s.CreateLine(point(start), point(end)), authoredReversed)
+						tag(s.CreateLine(point(start), point(end)), segment, authoredReversed)
 						entities[key] = struct{}{}
 					}
 				case w.IsCircular() && w.Closed:
 					center := reexpressPt(sectionrecord.Point2{U: w.CU, V: w.CV})
 					key := entityKey{kind: 2, a: center, radius: w.Radius}
 					if _, ok := entities[key]; !ok {
-						tag(s.CreateCircle(point(center), w.Radius), authoredReversed)
+						tag(s.CreateCircle(point(center), w.Radius), segment, authoredReversed)
 						entities[key] = struct{}{}
 					}
 				case w.IsCircular():
@@ -127,7 +128,7 @@ func BuildSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []Scene
 					hi := reexpressPt(sectionrecord.Point2{U: hiU, V: hiV})
 					key := entityKey{kind: 3, a: center, b: lo, c: hi}
 					if _, ok := entities[key]; !ok {
-						tag(s.CreateArc(point(center), point(lo), point(hi)), authoredReversed)
+						tag(s.CreateArc(point(center), point(lo), point(hi)), segment, authoredReversed)
 						entities[key] = struct{}{}
 					}
 				default:

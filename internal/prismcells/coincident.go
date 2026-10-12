@@ -90,6 +90,49 @@ func (r CoincidentReading) Lookup(entity sketch.Entity, t0, t1 float64) (Coincid
 	return c, ok
 }
 
+// ExactLineCarriers reports whether both recorded lines of every shared span
+// lie on precisely one line and cover the reported span. Sketch also resolves
+// spans whose carriers differ within its identity band; those spans cannot
+// certify exact solid contact.
+func (r CoincidentReading) ExactLineCarriers(budget *proofbound.WorkBudget) (bool, error) {
+	for _, span := range r.Spans {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		losing, ok := span.Losing.(*sketch.Line)
+		if !ok || span.A == span.B {
+			return false, nil
+		}
+		g := losing.Geometry()
+		for _, p := range [][2]float64{{g.Start.X, g.Start.Y}, {g.End.X, g.End.Y}} {
+			if pointLineDistanceUpper(p, span.Named) != 0 {
+				return false, nil
+			}
+		}
+		for _, entity := range []sketch.Entity{span.Named, span.Losing} {
+			line, ok := entity.(*sketch.Line)
+			if !ok {
+				return false, nil
+			}
+			g := line.Geometry()
+			axis := 0
+			if g.Start.X == g.End.X {
+				axis = 1
+			}
+			lo, hi := [2]float64{g.Start.X, g.Start.Y}[axis], [2]float64{g.End.X, g.End.Y}[axis]
+			if lo > hi {
+				lo, hi = hi, lo
+			}
+			for _, p := range [][2]float64{span.A, span.B} {
+				if pointLineDistanceUpper(p, entity) != 0 || p[axis] < lo || p[axis] > hi {
+					return false, nil
+				}
+			}
+		}
+	}
+	return true, nil
+}
+
 // window is one parameter range of a losing entity no fragment covers.
 type window struct {
 	lo, hi         float64

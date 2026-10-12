@@ -79,6 +79,38 @@ func TestCoincidentEdgesReadsASharedArc(t *testing.T) {
 	require.Less(t, reading.Gap(), 20e-12)
 }
 
+func TestCoincidentReadingRequiresExactFiniteLineContact(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	line := func(x, y0, y1 float64) sketch.Entity {
+		return s.CreateLine(s.CreatePoint(x, y0), s.CreatePoint(x, y1))
+	}
+	a := line(4, 0, 3)
+	exact := line(4, 1, 2)
+	near := line(4.0000000000005, 1, 2)
+	for _, tc := range []struct {
+		name string
+		span CoincidentSpan
+		want bool
+	}{
+		{name: "exact overlap", span: CoincidentSpan{Named: a, Losing: exact,
+			A: [2]float64{4, 1}, B: [2]float64{4, 2}}, want: true},
+		{name: "sub-band gap", span: CoincidentSpan{Named: a, Losing: near,
+			A: [2]float64{4, 1}, B: [2]float64{4, 2}}},
+		{name: "outside finite segment", span: CoincidentSpan{Named: a, Losing: exact,
+			A: [2]float64{4, 1}, B: [2]float64{4, 2.5}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reading := CoincidentReading{Spans: []CoincidentSpan{tc.span}}
+			got, err := reading.ExactLineCarriers(proofbound.NewWorkBudget(t.Context()))
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
 // TestClassifyReadsASharedArc is the flood the coincident reading stops.
 // The cell outside the disk has no edge of A's own: its one A boundary is
 // the shared span, emitted under B's arc. Propagating A's membership across
