@@ -744,11 +744,24 @@ func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, b
 		}
 		return true
 	}
-	pi, pj := e.planeOf(i), e.planeOf(j)
-	if pi == -2 || pj == -2 {
+	fi, xi, ni := e.facet(i)
+	_, _, nj := e.facet(j)
+	if zeroXpt(ni) || zeroXpt(nj) {
 		return false, true, pairSideSigns{}
 	}
-	coplanar := pi == pj
+	// Testing the unshared corners against i's plane avoids normalizing and
+	// interning both exact planes for the usual noncoplanar pair.
+	coplanar := true
+	for _, p := range otherJ.verts[:otherJ.n] {
+		sign, certain := proof.OrientSignFloat(fi[0], fi[1], fi[2], e.h.Verts[p])
+		if !certain {
+			sign = proof.XdotDiffSign(ni, e.lift(p), xi[0])
+		}
+		if sign != 0 {
+			coplanar = false
+			break
+		}
+	}
 	if len(sharedI) == 2 {
 		a, b := ti[sharedI[0]], ti[sharedI[1]]
 		if !coplanar {
@@ -911,6 +924,12 @@ func (e *heldEmbedding) orient2(a, b, c, u, v int) int {
 // planeSign is the exact side of held vertex p against facet f's plane: the
 // float filter first, then f's cached exact normal.
 func (e *heldEmbedding) planeSign(f, p int) int {
+	if e.plane[f] == -1 {
+		t, v := e.h.Tris[f], e.h.Verts
+		if sign, certain := proof.OrientSignFloat(v[t[0]], v[t[1]], v[t[2]], v[p]); certain {
+			return sign
+		}
+	}
 	var key [2]int
 	cache := false
 	if e.sideSigns != nil {
