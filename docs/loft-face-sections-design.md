@@ -463,6 +463,22 @@ the caller's source budget. The per-station bound adds the box's L1 radius
 and float rounding. Later cap triangles must add their own chord, held-facet
 and volume bounds before this track can support a Union result.
 
+After the upper heel circle, a separate source certificate chooses an exact
+float witness on the live cone within one LoftFaces band. Two adjacent
+connector lines reach opposite live endpoints of one radial Arc at the same
+isolated time root. The Arc's whole-source time polynomial and both line
+endpoint polynomials agree exactly. The open interval from the upper circle
+to the root bracket has two linked transverse crossings. Inside the bracket,
+those two line endpoint cells and the whole Arc are the only contacts; every
+other source cell is strictly outside the cone circle. After the bracket and
+through the witness, every source cell is strictly outside. The complete
+source box maps to positive world Y, so a negative-Y point on each cone circle
+is outside the exact simple profile. With no boundary crossing after the
+root, the entire circle is outside the profile. The current Revolve section
+has no X beyond the upper circle, so the retained cap region is also outside
+the blank there. The certificate claims only its bounded witness interval;
+it does not select held facets or admit Union.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
