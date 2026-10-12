@@ -377,8 +377,8 @@ result record's index space.
 ### 7.1 Implementation
 
 `revolve_blend.go` runs this section; `Body.Fillet` and `Body.Chamfer` route a
-`revolvePayload` receiver to it after stage 1 and SX10/SX16. `Body.Fillet`
-tries §7.2's source-specific radial rim first.
+`revolvePayload` receiver to it after stage 1 and SX10/SX16. Both operations
+try §7.2's source-specific radial rim first.
 
 **Matching.** The build stamps every junction edge from
 `revolvePayload.junctionCircle`: centre on the axis at the junction's `z`,
@@ -420,32 +420,37 @@ the meridian, and each carries the `side(i,j)` roles of the recorded segments
 it sweeps. §6's role reading picks which plane-local walk takes `d`, and
 `computeChamfer` sets each walk back by its own distance.
 
-### 7.2 One quarter-turn angular-cap radial-rim fillet
+### 7.2 One quarter-turn angular-cap radial-rim blend
 
-`revolve_cap_edge_fillet.go` admits an unplaced solid Revolve of one exact
+`revolve_cap_edge_blend.go` admits an unplaced solid Revolve of one exact
 XY-plane rectangle `(xlo,0)`–`(xhi,R)`, swept from zero to a denoted exact
 quarter turn about +X. The four natural-range lines must follow that order;
 the source has no holes, section displacement, previous blend, or draft
 rewrite. `|xlo|,|xhi| ≤ 16`, `1 ≤ xhi−xlo,R ≤ 16`, and the exact millimetre
-fillet radius satisfies `0.125 ≤ a ≤ 4` and `2a < min(xhi−xlo,R)`. One
+fillet radius or equal chamfer setback satisfies `0.125 ≤ a ≤ 4` and
+`2a < min(xhi−xlo,R)`. An asymmetric chamfer remains SX5. One
 selected `Line3` must run from `(xhi,0,0)` to `(xhi,R,0)`. A different
-orientation, angle, placement, source, edge, or radius takes SX5. The result
-is faceted and does not admit another modify op.
+orientation, angle, placement, source, edge, or magnitude takes SX5. The
+result is faceted and does not admit another modify op.
 
 For `z ∈ [0,R]`, the true result has `0 ≤ y ≤ H(z) = √(R²−z²)` and
-`xlo ≤ x ≤ f(z)`. On `[0,a]`, `f(z) = xhi−a+√(2az−z²)`; above `a`,
-`f(z) = xhi`. Thus the new quarter-cylinder meets the source outer cylinder
-along their analytic intersection curve. At `y=0`, it meets the other
-angular cap along a quarter-circle. Both `f` and `H` are concave, so chords
-through inward-rounded stations lie inside the true region.
+`xlo ≤ x ≤ f(z)`. On `[0,a]`, the fillet has
+`f(z) = xhi−a+√(2az−z²)` and the chamfer has `f(z) = xhi−a+z`; above `a`,
+both have `f(z) = xhi`. The fillet's quarter-cylinder and the chamfer's
+plane each meet the source outer cylinder along an analytic intersection
+curve. At `y=0`, the fillet meets the other angular cap along a quarter-circle
+and the chamfer meets it along a line. Both forms of `f`, and `H`, are concave,
+so chords through inward-rounded stations lie inside the true region.
 
-The build uses 128 fillet and 512 outer-wall intervals. Every station's `z`
-is read as an exact dyadic. `RatSqrtDown` puts its held `x,y` at or inside
-the exact radical; `RatSqrtUp` encloses their true values. Adjacent station
+The build uses 128 blend and 512 outer-wall intervals. Every station's `z`
+is read as an exact dyadic. `RatSqrtDown` puts the fillet's held `x` and both
+blends' held `y` at or inside their exact radicals. The chamfer's held `x`
+is the downward-rounded exact affine value. `RatSqrtUp` encloses the radical
+values. Adjacent station
 rectangles share vertices; their four ruled walls, first angular cap and
 collapsed last rim form a closed mesh. `RequireVertexLinks` and the faceted
 mesh audit reject a broken held boundary. The five retained source faces
-keep their origins; the new wall carries `fillet(0,1)`.
+keep their origins; the new wall carries `fillet(0,1)` or `chamfer(0,1)`.
 
 For each z interval, let `df` be the next station's upper `f` minus the
 current held `f`, and `dh` the current upper `H` minus the next held `H`.

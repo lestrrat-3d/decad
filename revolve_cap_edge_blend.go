@@ -13,17 +13,25 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file builds one angular-cap radial-rim fillet of a source-authenticated
-// quarter cylinder. The fillet is the curved x-bound of a convex solid whose
-// other curved bound is the source cylinder. Shared z stations give an
+// This file builds one angular-cap radial-rim blend of a source-authenticated
+// quarter cylinder. Its x-bound is either the fillet circle or a chamfer line;
+// the other curved bound is the source cylinder. Shared z stations give an
 // inscribed polyhedron, so no mesh Boolean contact decision is involved.
 const (
-	revolveRimFilletStations = 128
-	revolveRimWallStations   = 512
+	revolveRimBlendStations = 128
+	revolveRimWallStations  = 512
+)
+
+type revolveRimBlendKind uint8
+
+const (
+	revolveRimFillet revolveRimBlendKind = iota
+	revolveRimChamfer
 )
 
 type revolveRimSource struct {
-	xlo, xhi, radius, fillet float64
+	xlo, xhi, radius, setback float64
+	kind                      revolveRimBlendKind
 }
 
 // tryRevolveCapRimFillet admits only the unplaced XY rectangular meridian
@@ -35,12 +43,28 @@ func tryRevolveCapRimFillet(ctx context.Context, body *Body, rp revolvePayload,
 	if !ok {
 		return nil, false, nil
 	}
-	out, err := buildRevolveCapRimFillet(ctx, body, source)
+	out, err := buildRevolveCapRimBlend(ctx, body, source)
 	return out, true, err
 }
 
-func revolveRimSourceOf(rp revolvePayload, edges []*Edge, fillet, filletDelta float64) (revolveRimSource, bool) {
-	if len(edges) != 1 || filletDelta != 0 || rp.full || rp.surfaceResult || rp.sectionDelta != 0 ||
+// tryRevolveCapRimChamfer uses the same source class and one-edge selector as
+// the fillet. An asymmetric setback changes the trimming plane and is staged.
+func tryRevolveCapRimChamfer(ctx context.Context, body *Body, rp revolvePayload,
+	edges []*Edge, setback, setbackDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
+	if asym != nil {
+		return nil, false, nil
+	}
+	source, ok := revolveRimSourceOf(rp, edges, setback, setbackDelta)
+	if !ok {
+		return nil, false, nil
+	}
+	source.kind = revolveRimChamfer
+	out, err := buildRevolveCapRimBlend(ctx, body, source)
+	return out, true, err
+}
+
+func revolveRimSourceOf(rp revolvePayload, edges []*Edge, setback, setbackDelta float64) (revolveRimSource, bool) {
+	if len(edges) != 1 || setbackDelta != 0 || rp.full || rp.surfaceResult || rp.sectionDelta != 0 ||
 		rp.sectionWhole || !rp.radialProof || rp.xform != r3.Identity() ||
 		len(rp.profile.Holes) != 0 || len(rp.profile.Outer.Segments) != 4 ||
 		len(rp.blendSegs) != 0 || rp.blendKind != "" || rp.draftCircleCaps || rp.draftCircleShellRoles {
@@ -79,9 +103,9 @@ func revolveRimSourceOf(rp revolvePayload, edges []*Edge, fillet, filletDelta fl
 	}
 	length := xhi - xlo
 	if proofbound.IsNonFinite(xlo) || proofbound.IsNonFinite(xhi) || proofbound.IsNonFinite(outer) ||
-		proofbound.IsNonFinite(fillet) || math.Abs(xlo) > 16 || math.Abs(xhi) > 16 ||
+		proofbound.IsNonFinite(setback) || math.Abs(xlo) > 16 || math.Abs(xhi) > 16 ||
 		length < 1 || length > 16 || outer < 1 || outer > 16 ||
-		fillet < 0.125 || fillet > 4 || 2*fillet >= length || 2*fillet >= outer {
+		setback < 0.125 || setback > 4 || 2*setback >= length || 2*setback >= outer {
 		return revolveRimSource{}, false
 	}
 	e := edges[0]
@@ -93,7 +117,7 @@ func revolveRimSourceOf(rp revolvePayload, edges []*Edge, fillet, filletDelta fl
 	if (a != lo || b != hi) && (a != hi || b != lo) {
 		return revolveRimSource{}, false
 	}
-	return revolveRimSource{xlo: xlo, xhi: xhi, radius: outer, fillet: fillet}, true
+	return revolveRimSource{xlo: xlo, xhi: xhi, radius: outer, setback: setback}, true
 }
 
 type revolveRimStation struct {
@@ -103,23 +127,23 @@ type revolveRimStation struct {
 }
 
 func revolveRimStations(source revolveRimSource) ([]revolveRimStation, error) {
-	n := revolveRimFilletStations + revolveRimWallStations + 1
+	n := revolveRimBlendStations + revolveRimWallStations + 1
 	stations := make([]revolveRimStation, 0, n)
-	for i := 0; i <= revolveRimFilletStations; i++ {
-		q := float64(i) / revolveRimFilletStations
-		z := source.fillet * q * q
-		if i == revolveRimFilletStations {
-			z = source.fillet
+	for i := 0; i <= revolveRimBlendStations; i++ {
+		q := float64(i) / revolveRimBlendStations
+		z := source.setback * q * q
+		if i == revolveRimBlendStations {
+			z = source.setback
 		}
 		station, ok := revolveRimStationAt(source, z)
 		if !ok {
-			return nil, fmt.Errorf("%w: the fillet circle has no certified station", ErrUnsupported)
+			return nil, fmt.Errorf("%w: the cap rim has no certified blend station", ErrUnsupported)
 		}
 		stations = append(stations, station)
 	}
 	for i := 1; i <= revolveRimWallStations; i++ {
 		q := float64(revolveRimWallStations-i) / revolveRimWallStations
-		z := source.radius - (source.radius-source.fillet)*q*q
+		z := source.radius - (source.radius-source.setback)*q*q
 		if i == revolveRimWallStations {
 			z = source.radius
 		}
@@ -139,9 +163,10 @@ func revolveRimStations(source revolveRimSource) ([]revolveRimStation, error) {
 }
 
 // The float station z is read as an exact dyadic coordinate. Directed square
-// roots place x and y on or inside their analytic circles. This makes every
-// interpolated station rectangle a subset of the true result: both source
-// upper-bound curves are concave in z.
+// roots place the fillet's x and both blends' y on or inside their analytic
+// circles; the chamfer's x is rounded down from its exact affine value. This
+// makes every interpolated station rectangle a subset of the true result:
+// both upper-bound curves are concave in z.
 func revolveRimStationAt(source revolveRimSource, z float64) (revolveRimStation, bool) {
 	qz := proofarith.FloatRat(z)
 	if qz == nil || z < 0 || z > source.radius {
@@ -154,12 +179,18 @@ func revolveRimStationAt(source revolveRimSource, z float64) (revolveRimStation,
 	}
 	y, yu := proofbound.RatSqrtDown(qh), proofbound.RatSqrtUp(qh)
 	station := revolveRimStation{z: z, y: y, yUpper: proofarith.FloatRat(yu)}
-	if z >= source.fillet {
+	if z >= source.setback {
 		station.x = source.xhi
 		station.xUpper = proofarith.FloatRat(source.xhi)
 		return station, true
 	}
-	qf := proofarith.FloatRat(source.fillet)
+	qf := proofarith.FloatRat(source.setback)
+	if source.kind == revolveRimChamfer {
+		x := new(big.Rat).Add(new(big.Rat).Sub(proofarith.FloatRat(source.xhi), qf), qz)
+		station.x = proofbound.RatFloatDown(x)
+		station.xUpper = x
+		return station, !proofbound.IsNonFinite(station.x) && !proofbound.IsNonFinite(station.y)
+	}
 	qroot := new(big.Rat).Sub(new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(2, 1), qf), qz),
 		new(big.Rat).Mul(qz, qz))
 	if qroot.Sign() < 0 {
@@ -183,7 +214,7 @@ func revolveRimBounds(source revolveRimSource, stations []revolveRimStation) (fl
 		df := new(big.Rat).Sub(b.xUpper, proofarith.FloatRat(a.x))
 		dh := new(big.Rat).Sub(a.yUpper, proofarith.FloatRat(b.y))
 		if df.Sign() < 0 || dh.Sign() < 0 {
-			return 0, 0, fmt.Errorf("%w: rim circle intervals are not monotone", ErrUnsupported)
+			return 0, 0, fmt.Errorf("%w: cap rim intervals are not monotone", ErrUnsupported)
 		}
 		gap := new(big.Rat).Add(df, dh)
 		if gap.Cmp(maxGap) > 0 {
@@ -200,7 +231,7 @@ func revolveRimBounds(source revolveRimSource, stations []revolveRimStation) (fl
 	return bound, missing, nil
 }
 
-func buildRevolveCapRimFillet(ctx context.Context, body *Body, source revolveRimSource) (*Body, error) {
+func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolveRimSource) (*Body, error) {
 	stations, err := revolveRimStations(source)
 	if err != nil {
 		return nil, err
@@ -231,7 +262,11 @@ func buildRevolveCapRimFillet(ctx context.Context, body *Body, source revolveRim
 		groups[i] = facetGroup{origins: f.Origins(), planar: f.isPlanar()}
 	}
 	ref := body.doc.nextProducerID()
-	groups[5] = facetGroup{origins: []FeatureRef{{producer: ref, Role: "fillet(0,1)"}}}
+	blendRole := "fillet(0,1)"
+	if source.kind == revolveRimChamfer {
+		blendRole = "chamfer(0,1)"
+	}
+	groups[5] = facetGroup{origins: []FeatureRef{{producer: ref, Role: blendRole}}}
 	tris := make([][3]int, 0, 8*n)
 	src := make([]int, 0, 8*n)
 	add := func(group, a, b, c int) {
@@ -263,7 +298,7 @@ func buildRevolveCapRimFillet(ctx context.Context, body *Body, source revolveRim
 		quad(1, d, dn, cn, c)
 		quad(2, a, an, dn, d)
 		group := 0
-		if i < revolveRimFilletStations {
+		if i < revolveRimBlendStations {
 			group = 5
 		}
 		quad(group, b, c, cn, bn)
@@ -277,11 +312,11 @@ func buildRevolveCapRimFillet(ctx context.Context, body *Body, source revolveRim
 	}
 	length := new(big.Rat).Sub(proofarith.FloatRat(source.xhi), proofarith.FloatRat(source.xlo))
 	radius := proofarith.FloatRat(source.radius)
-	fillet := proofarith.FloatRat(source.fillet)
+	setback := proofarith.FloatRat(source.setback)
 	r2 := new(big.Rat).Mul(radius, radius)
 	trueArea := new(big.Rat).Add(new(big.Rat).Mul(big.NewRat(2, 1), r2),
 		new(big.Rat).Add(new(big.Rat).Mul(big.NewRat(4, 1), new(big.Rat).Mul(length, radius)),
-			new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Mul(fillet, radius))))
+			new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Mul(setback, radius))))
 	areaSlack := math.Max(proofbound.RatFloatUp(trueArea), facetproof.MeshAreaUpper(verts, tris))
 	diameter2 := new(big.Rat).Add(new(big.Rat).Mul(length, length), new(big.Rat).Mul(big.NewRat(2, 1), r2))
 	dPair := proofbound.RatSqrtUp(diameter2)
