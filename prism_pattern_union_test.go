@@ -44,9 +44,11 @@ func TestPrismPatternUnionSelectsProvenAxialChains(t *testing.T) {
 	_, blank, section, rotated := prismPatternTabBodies(t, math.Nextafter(3, math.Inf(1)))
 	joined, err := Union(t.Context(), blank, section, rotated)
 	require.NoError(t, err)
+	require.Len(t, joined.Edges(), 36)
 	selected, err := Edges(ParallelTo(r3.Vec{Z: 1})).SelectEdges(joined)
 	require.NoError(t, err)
 	require.Len(t, selected, 12)
+	require.Equal(t, 24, len(joined.Edges())-len(selected))
 	for _, edge := range selected {
 		_, faceted := edge.Curve().(FacetedCurve)
 		require.True(t, faceted)
