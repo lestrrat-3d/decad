@@ -30,6 +30,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 	var out revolveLoftFacesToolCapSides
 	if proof == nil || proof.blank == nil || proof.tooth == nil ||
 		proof.section.blank != proof.blank || proof.trim == nil ||
+		!revolveLoftFacesSectionCurrent(proof) ||
 		proof.toeFace == nil || proof.heelFace == nil ||
 		proof.toeFace == proof.heelFace ||
 		proof.toeFace.body != proof.tooth || proof.heelFace.body != proof.tooth {
@@ -37,6 +38,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 	}
 	p, ok := proof.tooth.payload.(facetedPayload)
 	if !ok || p.loftFacesTrim != proof.trim ||
+		!revolveLoftFacesTrimCurrent(p, proof.trim) ||
 		uniqueResultSourceFace(proof.tooth, proof.trim.toeCapGroup) != proof.toeFace ||
 		uniqueResultSourceFace(proof.tooth, proof.trim.heelCapGroup) != proof.heelFace {
 		return out, false

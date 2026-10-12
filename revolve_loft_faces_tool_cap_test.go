@@ -7,6 +7,37 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
+	blank, tooth, _ := neutralArcSeamSource(t)
+	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	require.NoError(t, err)
+	require.True(t, ok)
+	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
+	require.True(t, ok)
+	require.NotEmpty(t, sides.circles)
+	for _, circle := range sides.circles {
+		require.Same(t, blank, circle.blankFace.body)
+		require.Same(t, tooth, circle.capFace.body)
+		require.Positive(t, circle.radius.Sign())
+		tool := proof.trim.toe
+		if circle.tool == 1 {
+			tool = proof.trim.heel
+		}
+		require.Zero(t, lfSub(lfAdd(circle.x,
+			lfMul(tool.slope, circle.radius)), tool.apex).Sign())
+	}
+	changed := *proof
+	changed.section = proof.section
+	changed.section.spans = append([]revolveSectionSpan(nil), proof.section.spans...)
+	changed.section.spans[proof.section.rootSpan].end.V += 0.125
+	_, accepted := revolveLoftFacesToolCapSidesOf(&changed)
+	require.False(t, accepted)
+	changed = *proof
+	changed.toeFace = proof.heelFace
+	_, accepted = revolveLoftFacesToolCapSidesOf(&changed)
+	require.False(t, accepted)
+}
+
 func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 	tool := &pointConeLimit{apex: big.NewRat(8, 1), far: big.NewRat(-2, 1),
 		slope: big.NewRat(1, 1)}
