@@ -16,8 +16,9 @@ import (
 // returned Sketch uses plane and its profiles can enter another feature. The
 // query is read-only, including when the body has been retired.
 //
-// The first class is an exact straight prism cut strictly between its caps by
-// a plane whose frame preserves the prism's recorded section coordinates.
+// One class is an exact straight prism cut strictly between its caps by a
+// plane whose frame preserves the prism's recorded section coordinates.
+// Another is a whole-circle prism cut by a cardinal plane through its axis.
 // Other body or plane classes return [ErrUnsupported]. A nil body or context,
 // or an invalid plane, returns [ErrDegenerate]. A sheet or unsound solid returns
 // [ErrNotSolid]. See docs/section-design.md.
@@ -35,18 +36,23 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 	if !ok || pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 {
 		return nil, nil, fmt.Errorf(`%w: section needs an exact straight prism`, ErrUnsupported)
 	}
+	profile := pp.profile
 	if !prismSectionPlaneInside(pp, plane) {
-		return nil, nil, fmt.Errorf(`%w: section plane does not cross the exact prism interior`, ErrUnsupported)
+		var admitted bool
+		profile, admitted = cardinalCircleSectionRecord(pp, plane)
+		if !admitted {
+			return nil, nil, fmt.Errorf(`%w: section plane does not cross an admitted exact prism section`, ErrUnsupported)
+		}
 	}
 	work := freeform.NewFreeformWork()
-	if _, err := momentinput.ChargeReconstruction(pp.profile, work); err != nil {
+	if _, err := momentinput.ChargeReconstruction(profile, work); err != nil {
 		return nil, nil, err
 	}
-	s, profile, err := momentinput.ReconstructProfileOnFrame(ctx, pp.profile, plane)
+	s, result, err := momentinput.ReconstructProfileOnFrame(ctx, profile, plane)
 	if err != nil {
 		return nil, nil, err
 	}
-	return s, []*sketch.Profile{profile}, nil
+	return s, []*sketch.Profile{result}, nil
 }
 
 // prismSectionPlaneInside proves that the entire placed sweep preserves the
