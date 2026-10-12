@@ -277,6 +277,8 @@ If the circle's exact axial coordinate misses each band's hull, or its
 radius lies strictly outside each overlapping band's radial range, the
 original LoftFaces source misses the entire circle. A surviving circle
 still needs an angular occupancy proof from the live Sketch region.
+The original point loft stores its computed source rectangle by value when
+published. A changed source rectangle refuses before a whole-circle miss is used.
 
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public

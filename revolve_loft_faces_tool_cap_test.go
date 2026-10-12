@@ -172,4 +172,11 @@ func TestRevolveLoftFacesCircleMissConsumesLiveNeutralSource(t *testing.T) {
 	_, accepted := revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted, "the source-miss flag needs the current live maps")
 	proof.trim.maps[0] = map0
+	sourceBox := proof.trim.source.sourceBox
+	require.True(t, pointSourceCurrent(proof.trim.source))
+	proof.trim.source.sourceBox[1] = (sourceBox[0] + sourceBox[1]) / 2
+	require.False(t, pointSourceCurrent(proof.trim.source))
+	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
+	require.False(t, accepted, "a narrowed stored source box cannot prove a whole-circle miss")
+	proof.trim.source.sourceBox = sourceBox
 }

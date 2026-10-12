@@ -125,6 +125,7 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 		!orderedLoftFacesConeLimits(trim.toe, trim.heel, trim.base) ||
 		!trim.base.loftFacesPrimitive || trim.base.loftFacesCap == nil ||
 		trim.base.loftFacesCap.source != trim.source ||
+		trim.source.sourceBoxIssued != trim.source.sourceBox ||
 		len(trim.base.loftFacesCap.maps) != len(trim.maps) ||
 		len(trim.base.loftFacesCap.bounds) != len(trim.bounds) ||
 		len(trim.stationGroup) != len(trim.source.sourceStation) ||
