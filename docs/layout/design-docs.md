@@ -39,6 +39,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/sweep-design.md` | `Path`/`Sweep`, `SweepChain`, mitred sweeps (§16) and bounded one-cell, composite and stationed twist (§17). |
 | `docs/helix-design.md` | `Document.Coil`: a profile screwed about an in-plane axis. |
 | `docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
+| `docs/prism-pattern-union-design.md` | Certified Union of a circular prism and radial copies of one fitted section. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
 | `docs/mirror-pattern-design.md` | Mirror and pattern entry points, the exact mirror join, the prism group. |
 | `docs/general-boolean-design.md` | Boolean classes past the prism pair, and `brepPayload`. |

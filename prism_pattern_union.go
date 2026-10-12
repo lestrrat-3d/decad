@@ -51,7 +51,10 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
-		p := body.payload.(prismPayload)
+		p, ok := body.payload.(prismPayload)
+		if !ok {
+			return nil, true, fmt.Errorf("%w: copied-prism section %d lost its prism payload", ErrUnsupported, i+1)
+		}
 		if p.surfaceResult || p.sectionDelta != 0 || p.z0Delta != 0 || p.z1Delta != 0 {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d has a displaced or open source", ErrUnsupported, i+1)
 		}

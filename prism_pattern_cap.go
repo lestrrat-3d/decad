@@ -13,8 +13,8 @@ import (
 // lie strictly inside the blank circle; the source mesh bound later charges
 // the small difference between each arc and these held chords.
 func prismPatternRootChordsInsideCap(ctx context.Context, mesh *joinedMesh,
-	outline []int, parts []prismPatternPart, cap int) bool {
-	if cap < 0 || cap > 1 || len(outline) < 3 {
+	outline []int, parts []prismPatternPart, capIndex int) bool {
+	if capIndex < 0 || capIndex > 1 || len(outline) < 3 {
 		return false
 	}
 	points := make([]loftCylinderXY, len(outline))
@@ -32,14 +32,14 @@ func prismPatternRootChordsInsideCap(ctx context.Context, mesh *joinedMesh,
 	budget := proofbound.NewWorkBudget(ctx)
 	for _, part := range parts {
 		n := len(part.mesh.vertices) / 2
-		rootA := loftCylinderExactXY(part.mesh.vertices[2*part.rootStart+cap])
-		rootB := loftCylinderExactXY(part.mesh.vertices[cap])
+		rootA := loftCylinderExactXY(part.mesh.vertices[2*part.rootStart+capIndex])
+		rootB := loftCylinderExactXY(part.mesh.vertices[capIndex])
 		for j := part.rootStart; j < n; j++ {
 			if ctx.Err() != nil {
 				return false
 			}
-			a := loftCylinderExactXY(part.mesh.vertices[2*j+cap])
-			b := loftCylinderExactXY(part.mesh.vertices[2*((j+1)%n)+cap])
+			a := loftCylinderExactXY(part.mesh.vertices[2*j+capIndex])
+			b := loftCylinderExactXY(part.mesh.vertices[2*((j+1)%n)+capIndex])
 			if same(a, b) {
 				return false
 			}

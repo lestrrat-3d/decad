@@ -19,7 +19,7 @@ import (
 func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	blank *Body, source *prismPatternSource, parts []prismPatternPart,
 	mesh *joinedMesh, groups [3]int, maxStep, ringRound float64) (*Body, error) {
-	radius := source.blank.profile.Outer.Segments[0].(circleSeg).Radius.Base()
+	radius := source.blankRadius
 	toothBound, toothVolume, toothArea := 0.0, 0.0, 0.0
 	connectorReach, rootHeldExcess := 0.0, 0.0
 	for i := range parts {

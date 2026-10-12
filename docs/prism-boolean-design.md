@@ -685,8 +685,10 @@ hidden as an undecided pair.
 same-frame, same-placement prisms with equal recorded sweep intervals. Every
 input section must have no holes, zero section displacement, and only whole
 `LineSeg` edges. Two input edges on the same infinite line carrier are
-refused because this path has no proof for their shared source span. Other
-multi-prism classes return `ErrUnsupported` while all inputs remain live.
+refused because this path has no proof for their shared source span. A
+circular prism joined to radial copies of one fitted section has a separate
+certified path in `docs/prism-pattern-union-design.md`. Other multi-prism
+classes return `ErrUnsupported` while all inputs remain live.
 
 Every source region enters `BuildSceneRegions` once, in the same plane. The
 work cap applies to the sum of all input segments. `SplitRuns` resolves

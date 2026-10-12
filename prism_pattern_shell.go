@@ -51,11 +51,11 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 	for i := range parts {
 		part := &parts[i]
 		part.vertex = make([][]int, 2)
-		for cap := range 2 {
-			part.vertex[cap] = make([]int, part.rootStart+1)
-			for j := range part.vertex[cap] {
-				part.vertex[cap][j] = len(mesh.verts)
-				mesh.verts = append(mesh.verts, part.mesh.vertices[2*j+cap])
+		for capIndex := range 2 {
+			part.vertex[capIndex] = make([]int, part.rootStart+1)
+			for j := range part.vertex[capIndex] {
+				part.vertex[capIndex][j] = len(mesh.verts)
+				mesh.verts = append(mesh.verts, part.mesh.vertices[2*j+capIndex])
 			}
 		}
 		groups := make(map[*Face]int)
@@ -72,18 +72,18 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 				old := part.mesh.triangles[k]
 				var mapped [3]int
 				for corner, index := range old {
-					station, cap := index/2, index%2
+					station, capIndex := index/2, index%2
 					if station > part.rootStart {
 						return nil, [2][]int{}, blankGroup, 0, 0,
 							fmt.Errorf("%w: retained prism wall enters its root arc", ErrUnsupported)
 					}
-					mapped[corner] = part.vertex[cap][station]
+					mapped[corner] = part.vertex[capIndex][station]
 				}
 				mesh.add(mapped, group)
 			}
 		}
 	}
-	radius := source.blank.profile.Outer.Segments[0].(circleSeg).Radius.Base()
+	radius := source.blankRadius
 	maxStep, ringRound := 0.0, 0.0
 	for i := range parts {
 		part, next := &parts[i], &parts[(i+1)%len(parts)]

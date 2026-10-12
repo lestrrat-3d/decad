@@ -75,7 +75,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Multi-body Union outside equal-interval, same-placement whole-line prisms or certified bevel tooth patterns | `ErrUnsupported` (`boolean_many.go`); two-body Union retains its general evaluator | `docs/api-design.md` §8, `docs/prism-boolean-design.md` §4.6 |
+| Multi-body Union outside equal-interval, same-placement whole-line prisms, certified bevel tooth patterns, or certified circular-prism joins of radial copied sections | `ErrUnsupported` (`boolean_many.go`); two-body Union retains its general evaluator | `docs/api-design.md` §8, `docs/prism-boolean-design.md` §4.6, `docs/prism-pattern-union-design.md` |
 | Exact result outside the admitted prism and point-loft/cone classes | Pair takes the mesh boolean → `Faceted` faces with a volume bound | `docs/general-boolean-design.md` §3, `docs/loft-point-design.md` "Coaxial finite cone trims" |
 | Blind cuts with displaced levels, opposed-hole contact, or other crossing holes | Mesh path, possibly coplanar refusal. A7 builds one exact rectangular crossing | `docs/stacked-prism-design.md` §7; `docs/general-boolean-design.md` §3 A7 |
 | Touching, coplanar or face-on-face contact on the mesh path | `BooleanError` code `BooleanUnsupportedContact` | `docs/general-boolean-design.md` §2, `docs/interference-design.md` |
