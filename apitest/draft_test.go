@@ -135,7 +135,7 @@ func TestDraftPlacedAndFilleted(t *testing.T) {
 	const deg = 5.0
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	placed, err := box.Placed(t.Context(), generalMotion(t, 23, -7.5))
+	placed, err := decad.Transform(t.Context(), box, generalMotion(t, 23, -7.5))
 	require.NoError(t, err)
 	got, err := placed.Draft(t.Context(), decad.Faces(decad.Walls(placed)), capNeutral(placed, decad.CapStart), units.Degrees(deg))
 	require.NoError(t, err)

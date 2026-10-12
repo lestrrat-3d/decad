@@ -12,7 +12,7 @@ import (
 )
 
 // A body is mirrored across a plane named by one of its own planar faces.
-// MirroredCopy keeps the source live; Mirrored would retire it, as Placed
+// MirroredCopy keeps the source live; Mirrored would retire it, as Transform
 // does. The face selector must name exactly one face: the L below has two
 // walls facing +x, so naming "the +x wall" is a cardinality error, while its
 // single -x wall names the plane x = 0.

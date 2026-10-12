@@ -230,7 +230,7 @@ prismatic one (motion §2), so a joint's refusals are a `Motion`'s. Applied to a
 zero pose, this rotates it about its own joint first, where that joint's axis still sits at its zero-pose
 place, and then carries the result through every ancestor joint up to the ground; `kinetograph`'s
 `Node.World` composes the same way, `Local(t).Then(parent.World(t))`. The pose composes onto each body's
-own placement as `Body.Placed` composes, `placement.Then(Pose_k)`. `PoseAt` is the one place a pose is
+own placement as `Transform` composes, `placement.Then(Pose_k)`. `PoseAt` is the one place a pose is
 built, so a renderer above and the verifier below evaluate the same transform from the same inputs; a
 `TransformTrack` for `kinetograph` is one `PoseAt` call per frame: `kinetograph.LinkageTrack`, which
 `Scene.AddLinkage` puts on one driven node per link under the rig's root, reading the drive fraction from a
@@ -2628,7 +2628,7 @@ body. The loop folds at `cos θ2 = 0.04`, `θ2 = 87.707557°`.
 
 **Scene 10 — the tilted loop.** Scenes 7 and 8 carried by the rotation that takes `X` to `(1, −1, 0)/√2`
 and `Z` to `(1, 1, 1)/√3` (`r3.FromFrame` of the frame `u = (1, −1, 0)`, `v = (1, 1, −2)`): each body built
-as its scene builds it and placed by the rotation (`Body.Placed`), each pin the rotation of the scene's,
+as its scene builds it and placed by the rotation (`Transform`), each pin the rotation of the scene's,
 every revolute and the closure about `(1, 1, 1)`, scene 8's slide along `(1, −1, 0)`, exactly
 perpendicular to it. No pin's plane position is a float, so every fixed point is a box.
 

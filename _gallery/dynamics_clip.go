@@ -643,7 +643,7 @@ func translatedBox(ctx context.Context, doc *decad.Document, x0, y0, x1, y1, z0,
 	if err != nil {
 		return nil, err
 	}
-	return body.Placed(ctx, shift)
+	return decad.Transform(ctx, body, shift)
 }
 
 // extrudedPolygon is the prism over the closed polygon corners, sketched on

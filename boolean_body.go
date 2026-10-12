@@ -33,7 +33,7 @@ import (
 // that analytic tag while the polygons remain the held boundary.
 
 // facetGroup is one source face's provenance, carried into the payload so a
-// rebuild (Placed) reproduces the same origins.
+// rebuild (Transform) reproduces the same origins.
 type facetGroup struct {
 	origins []FeatureRef
 	// centroid is available only when this entire source group has a separate
@@ -61,7 +61,7 @@ type facetGroup struct {
 
 // facetedPayload is the evaluator's own record of a mesh-built body: the
 // held mesh, its per-facet source grouping, and the proven error terms the
-// measurements compose from. It is what Placed re-evaluates under a composed
+// measurements compose from. It is what Transform re-evaluates under a composed
 // motion (docs/evaluator-design.md §8).
 type facetedPayload struct {
 	// prismScale marks a certified similar image of a line/circular

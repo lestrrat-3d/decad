@@ -168,7 +168,7 @@ func TestStitchCurvedVolumeBoundWidensWhenPlaced(t *testing.T) {
 	composed, err := motion.Then(rot)
 	require.NoError(t, err)
 
-	placed, err := unplaced.Placed(t.Context(), composed)
+	placed, err := decad.Transform(t.Context(), unplaced, composed)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, placed.Kind())
 

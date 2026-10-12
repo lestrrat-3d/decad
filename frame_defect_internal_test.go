@@ -544,7 +544,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 					b, err := k.build(t, v.frame)
 					require.NoError(t, err)
 					if v.place != r3.Identity() {
-						b, err = b.Placed(t.Context(), v.place)
+						b, err = Transform(t.Context(), b, v.place)
 						require.NoError(t, err)
 					}
 					requireCoversMappedReference(t, ref, b, fdMapThrough(fdRecordedFrame(t, v.frame), v.place, k.exactCross))
@@ -570,7 +570,7 @@ func TestRevolveMassCoversFrameDefect(t *testing.T) {
 	s, p := fdSketch(t, w, pl, [][2]float64{{2, 0}, {3, 0}, {3, 1}, {2, 1}})
 	b, err := New().Revolve(s, p, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
-	b, err = b.Placed(t.Context(), rot)
+	b, err = Transform(t.Context(), b, rot)
 	require.NoError(t, err)
 	rp := b.payload.(revolvePayload)
 	l, err := massmoment.PlaneMap(rp.frame, rp.xform)
@@ -688,7 +688,7 @@ func TestPlaneMapMassCoversFrameDefect(t *testing.T) {
 					b, err := c.build(t, v.frame)
 					require.NoError(t, err)
 					if v.place != r3.Identity() {
-						b, err = b.Placed(t.Context(), v.place)
+						b, err = Transform(t.Context(), b, v.place)
 						require.NoError(t, err)
 					}
 					m1, err := b.MassProperties(t.Context(), density)
@@ -821,7 +821,7 @@ func TestCurveBoundsCoverMappedReference(t *testing.T) {
 					b := c.build(t, v.frame)
 					if v.place != r3.Identity() {
 						var err error
-						b, err = b.Placed(t.Context(), v.place)
+						b, err = Transform(t.Context(), b, v.place)
 						require.NoError(t, err)
 					}
 					frame := fdRecordedFrame(t, v.frame)

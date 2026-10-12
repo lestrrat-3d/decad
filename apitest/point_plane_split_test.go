@@ -215,7 +215,7 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			require.NoError(t, err)
 			shifted, err := decad.Copy(t.Context(), pieces[1], decad.WithCopyPlacement(shift))
 			require.NoError(t, err)
-			roundTrip, err := shifted.Placed(t.Context(), unshift)
+			roundTrip, err := decad.Transform(t.Context(), shifted, unshift)
 			require.NoError(t, err)
 			_, _, err = roundTrip.ExtremeFacesByCentroid(t.Context(), r3.NewVec(1, 0, 0))
 			require.NoError(t, err)

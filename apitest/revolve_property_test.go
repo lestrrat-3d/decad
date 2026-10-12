@@ -551,7 +551,7 @@ func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Tr
 	cen0, err := body.Centroid()
 	require.NoError(t, err)
 
-	placed, err := body.Placed(t.Context(), xf)
+	placed, err := decad.Transform(t.Context(), body, xf)
 	require.NoError(t, err)
 	checkRevolveBody(t, placed, su, ap, xf, sw)
 

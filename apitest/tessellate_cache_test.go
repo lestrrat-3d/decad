@@ -192,7 +192,7 @@ func TestTessellationCacheCopiesDoNotInheritEntries(t *testing.T) {
 
 	placedSource := holedPlateBody(t)
 	placedSourceMesh := mustTessellate(t, placedSource, tol)
-	placed, err := placedSource.Placed(t.Context(), mustTransform(t, r3.NewVec(5, 0, 0)))
+	placed, err := decad.Transform(t.Context(), placedSource, mustTransform(t, r3.NewVec(5, 0, 0)))
 	require.NoError(t, err)
 	placedMesh := mustTessellate(t, placed, tol)
 	require.NotSame(t, placedSourceMesh, placedMesh)
@@ -311,7 +311,7 @@ func BenchmarkTessellationCacheVerify(b *testing.B) {
 	doc := decad.New()
 	a := benchRodBody(b, doc, 0, 0, 4)
 	c := benchRodBody(b, doc, 0, 0, 3)
-	placed, err := c.Placed(b.Context(), mustTransform(b, r3.NewVec(0, -4, 2)))
+	placed, err := decad.Transform(b.Context(), c, mustTransform(b, r3.NewVec(0, -4, 2)))
 	if err != nil {
 		b.Fatal(err)
 	}

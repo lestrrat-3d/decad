@@ -149,7 +149,7 @@ func internalFrustumBody(t *testing.T, doc *Document, a, b r3.Vec, ra, rb float6
 	require.True(t, ok)
 	place, err := r3.FromBasis(r3.Basis{EX: d, EY: p.Cross(d), EZ: p}, a)
 	require.NoError(t, err)
-	body, err = body.Placed(t.Context(), place)
+	body, err = Transform(t.Context(), body, place)
 	require.NoError(t, err)
 	return body
 }

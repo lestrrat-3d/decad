@@ -12,7 +12,7 @@ import (
 
 // ExtremeFacesByCentroid returns the faces with the least and greatest
 // area-centroid projections onto axis. It currently certifies complete
-// point-loft Split slabs, including rigid Placed copies. A side face need
+// point-loft Split slabs, including rigidly transformed copies. A side face need
 // not have an individual Centroid reading: the source cone proves that every
 // side centroid lies strictly between the two returned cap centroids.
 func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, *Face, error) {

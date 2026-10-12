@@ -236,7 +236,7 @@ func TestCoilSlotSpring(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.NewVec(1, 2, 2), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := b.Placed(t.Context(), rot)
+	placed, err := Transform(t.Context(), b, rot)
 	require.NoError(t, err)
 	pv, err := placed.Volume()
 	require.NoError(t, err)

@@ -349,7 +349,7 @@ func TestTaperTwoSidedCurvedMesh(t *testing.T) {
 			requireWatertight(t, mesh)
 			require.True(t, mesh.VolumeVerified())
 
-			placed, err := body.Placed(t.Context(), generalMotion(t, 37, 3.25))
+			placed, err := decad.Transform(t.Context(), body, generalMotion(t, 37, 3.25))
 			require.NoError(t, err)
 			requireManifold(t, placed)
 			placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -792,7 +792,7 @@ func TestTaperFarOrigin(t *testing.T) {
 		doc := decad.New()
 		s, p := taperSketch(t, farOrigin, 0, drawSquare(0, a))
 		b := taperExtrude(t, doc, s, p, h, deg, decad.Along)
-		placed, err := b.Placed(t.Context(), motion)
+		placed, err := decad.Transform(t.Context(), b, motion)
 		require.NoError(t, err)
 		d := bfMul(bf(h), taperTan(deg))
 		for _, body := range []struct {
@@ -828,7 +828,7 @@ func TestTaperFarOrigin(t *testing.T) {
 		doc := decad.New()
 		s, p := taperSketch(t, farOrigin, 0, drawSlot(0, 0))
 		b := taperExtrude(t, doc, s, p, 8, 3, decad.Along)
-		placed, err := b.Placed(t.Context(), motion)
+		placed, err := decad.Transform(t.Context(), b, motion)
 		require.NoError(t, err)
 		d := bfMul(bf(8), taperTan(3))
 		for _, su := range []float64{-1, 1} {
@@ -891,7 +891,7 @@ func TestTaperPlacedEquivalence(t *testing.T) {
 	require.NoError(t, err)
 
 	motion := generalMotion(t, 23, -7.5)
-	placed, err := b.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), b, motion)
 	require.NoError(t, err)
 	requireManifold(t, placed)
 	vol, err := placed.Volume()

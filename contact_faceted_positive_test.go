@@ -15,7 +15,7 @@ func positiveBoundFacetedFixture(t *testing.T, reverse bool) (*Document, *Body, 
 	upper := internalDiscBody(t, doc, 2, 4)
 	shift, err := r3.Translation(r3.Vec{Z: 8})
 	require.NoError(t, err)
-	upper, err = upper.Placed(t.Context(), shift)
+	upper, err = Transform(t.Context(), upper, shift)
 	require.NoError(t, err)
 	if reverse {
 		base, upper = upper, base
@@ -61,7 +61,7 @@ func positiveBoundFacetedUnionRetainsExactLowerFace(t *testing.T, reverse bool) 
 	}
 	shift, err := r3.Translation(r3.Vec{X: .1})
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), shift)
+	placed, err := Transform(t.Context(), body, shift)
 	require.NoError(t, err)
 	require.Nil(t, placed.payload.(facetedPayload).lowerSupport)
 	uncertain, err := doc.ContactPair(t.Context(), floor, placed, r3.Identity(), r3.Identity(),
@@ -79,7 +79,7 @@ func TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace(t *testing.T) {
 	upper := internalDiscBody(t, doc, 2, 4)
 	shift, err := r3.Translation(r3.Vec{Z: -1})
 	require.NoError(t, err)
-	upper, err = upper.Placed(t.Context(), shift)
+	upper, err = Transform(t.Context(), upper, shift)
 	require.NoError(t, err)
 	union, err := Union(t.Context(), base, upper)
 	require.NoError(t, err)

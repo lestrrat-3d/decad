@@ -128,7 +128,7 @@ func TestPlacedPrismChargesEveryFaceItsPlacementRounding(t *testing.T) {
 	// rounds every coordinate, so no face is held exactly any more.
 	motion, err := r3.Rotation(r3.NewVec(1, 1, 1), units.Radians(math.Pi/5))
 	require.NoError(t, err)
-	turned, err := flat.Placed(t.Context(), motion)
+	turned, err := Transform(t.Context(), flat, motion)
 	require.NoError(t, err)
 	mesh, err := tessellateContext(t.Context(), turned, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
@@ -259,7 +259,7 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 	tool := internalDiscBody(t, doc, 2, 30)
 	moved, err := r3.Translation(r3.NewVec(10, 10, -10))
 	require.NoError(t, err)
-	placed, err := tool.Placed(t.Context(), moved)
+	placed, err := Transform(t.Context(), tool, moved)
 	require.NoError(t, err)
 	drilled, err := Cut(t.Context(), plate, placed)
 	require.NoError(t, err)

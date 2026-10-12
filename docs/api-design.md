@@ -185,7 +185,7 @@ solve. Reflections are representable (det = −1) and `Transform.IsReflection`
 reports them, because a reflected solid has inverted face normals. `Basis()`
 and `Translation()` read a transform out as plain vectors and `FromBasis`
 rebuilds it, which is how a placement survives encoding (§6.2). It is what
-`Body.Placed` (§8) takes.
+`Transform` (§8) takes.
 
 **The one deliberate exception to §5.1.** An `r3.Vec` *position* — `Box.Min`,
 `Box.Max`, a `VecMeasurement.Value` (§5.3), `Cylinder.Origin`, every point the API
@@ -305,7 +305,7 @@ themselves are untouched: retiring is a change of *document* membership, not of
 the body, which stays immutable and readable. The rule is uniform — every
 operation that consumes a body (the booleans of §8, `Body.Fillet` /
 `Chamfer` / `Shell`, the surface operations `Thicken` / `Body.Patch` /
-`Stitch` / `Unstitch`, and `Body.Placed`) retires its input body or
+`Stitch` / `Unstitch`, and `Transform`) retires its input body or
 bodies from the document and registers every body it returns. A retired body
 remains readable, but it is gone from `Document.Bodies()` and
 `Document.Verify()` never reports on it. The copy operation of §8 —
@@ -359,7 +359,7 @@ func (b *Body) Origin() FeatureRef  // which feature created this body
 ```
 
 `ExtremeFacesByCentroid` currently certifies only complete point-loft planar
-Split slabs, their rigid `Placed` copies, and positive uniform `ScaledAt` images.
+Split slabs, their rigidly transformed copies, and positive uniform `ScaledAt` images.
 It returns `ErrUnsupported` when
 the cap centroid intervals do not strictly separate every side-face centroid.
 See `docs/loft-point-design.md` for the source proof.
@@ -845,7 +845,7 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed, ScaledAt, Copy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
+Fillet, Chamfer, Shell, Transform, ScaledAt, Copy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
 Patch, Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve —
 **ExtrudeChain, RevolveChain, SweepChain, LoftChain** — which take a
 `*sketch.Chain` where their siblings take a `*sketch.Profile` and always build a
@@ -1194,18 +1194,18 @@ earns, and there is
 no chain-fed `Document.Patch`: an open walk encloses no region to fill, and a
 walk whose ends met is a `sketch.Profile`.
 
-Placement is a body operation on the same terms — it retires the receiver and
-registers the placed body:
+Transform is a body operation on the same terms: it retires the input and
+registers the transformed body.
 
 ```go
-func (b *Body) Placed(ctx context.Context, t r3.Transform) (*Body, error)
+func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error)
 func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) (*Body, error)
 ```
 
 This is the whole of the "explicit transforms" story: a body is positioned by an
 argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — never by
 an ambient assembly context (§4). The zero `Transform{}` is invalid
-(`Transform.IsValid`) and is `ErrDegenerate` (§12). `Placed` checks `ctx` through any
+(`Transform.IsValid`) and is `ErrDegenerate` (§12). `Transform` checks `ctx` through any
 faceted-payload rebuild and returns its error without changing the document.
 
 `ScaledAt` retires an authenticated point-loft planar Split slab or an exact
@@ -1220,7 +1220,7 @@ nonpositive factor is `ErrDegenerate`, a length factor is `ErrUnitKind`, and an
 unsupported body is `ErrUnsupported`. Cancellation and proof refusal leave the
 receiver live.
 
-**A body can be copied without consuming it.** `Placed` retires its receiver, so
+**A body can be copied without consuming it.** `Transform` retires its input, so
 modelling a part once and placing several instances — a bolt pattern, several
 interference placements, one cutting tool reused for several holes — would mean
 rebuilding the whole feature chain per instance. `Copy` closes that gap:
@@ -1234,7 +1234,7 @@ func WithCopyPlacement(t r3.Transform) CopyOption
 depended on, never consumed. With no options, it re-registers the source's
 immutable payload under a new producer identity at the same placement. With
 `WithCopyPlacement(t)`, it re-evaluates the payload under the composed rigid
-motion exactly as `Placed` does. Repeated placement options use the last value.
+motion exactly as `Transform` does. Repeated placement options use the last value.
 The zero `Transform{}` is `ErrDegenerate`; `r3.Identity()` is a valid no-op.
 A nil option is `ErrDegenerate`, and a body this evaluator did not build is
 `ErrUnsupported`. Cancellation during a faceted rebuild leaves the source
@@ -1524,7 +1524,7 @@ authenticated axial Loft/cylinder `Union` or its centered bore `Cut`, whose
 audited planar caps also get fresh roles, an authenticated axial Loft mirror
 `Union` with two retained outer caps, the modified full revolution made by
 a positive-taper circular draft rim fillet (draft §10.4), whose two planar
-disks get cap roles, and a `Placed` or
+disks get cap roles, and a `Transform` or
 `Copy` of one, which re-mints those roles under the copy's
 own identity (the copy-provenance rule above). On a body whose producer mints no such
 role the helper still returns a well-formed `FeatureRef` — it just matches
@@ -1962,5 +1962,5 @@ turns on a side its caller cannot already name (`docs/surface-design.md` §1.4).
 
 The assemblies non-goal rests on a capability in hand, not on an instancing
 graph: interference and clearance (§10) are computed between
-**explicitly-placed bodies** — `Body.Placed(ctx context.Context, t r3.Transform)` (§8) — which needs
+**explicitly-placed bodies** — `Transform(ctx context.Context, body *Body, t r3.Transform)` (§8) — which needs
 no `Component`/`Occurrence` machinery.

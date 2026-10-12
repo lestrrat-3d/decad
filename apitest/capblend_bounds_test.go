@@ -236,7 +236,7 @@ func TestCapBlendThroughAllBehindPlaneRefused(t *testing.T) {
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(0, 0, -drop))
 	require.NoError(t, err)
-	behind, err := chamfered.Placed(t.Context(), shift)
+	behind, err := decad.Transform(t.Context(), chamfered, shift)
 	require.NoError(t, err)
 
 	zHi := math.Inf(-1)
@@ -259,7 +259,7 @@ func TestCapBlendBooleanReceiverRefusedSX9(t *testing.T) {
 	// is a genuine interior crossing rather than a coplanar cap tangency.
 	shift, err := r3.Translation(r3.NewVec(0, 0, 2))
 	require.NoError(t, err)
-	b, err = b.Placed(t.Context(), shift)
+	b, err = decad.Transform(t.Context(), b, shift)
 	require.NoError(t, err)
 	union, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
@@ -1303,7 +1303,7 @@ func TestCapBlendContourHeldExtentCarriesItsDisplacement(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(0.4))
 	require.NoError(t, err)
-	tilted, err := chamfered.Placed(t.Context(), rot)
+	tilted, err := decad.Transform(t.Context(), chamfered, rot)
 	require.NoError(t, err)
 	tiltedBounds, err := tilted.Bounds()
 	require.NoError(t, err)
@@ -1708,7 +1708,7 @@ func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
 
 	far, err := r3.Translation(r3.NewVec(math.Ldexp(1, 60), 0, 0))
 	require.NoError(t, err)
-	_, err = chamfered.Placed(t.Context(), far)
+	_, err = decad.Transform(t.Context(), chamfered, far)
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.False(t, errors.Is(err, decad.ErrDegenerate),
@@ -1719,7 +1719,7 @@ func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
 	// fixPatchOrientation decides it when NormalAt succeeds.
 	near, err := r3.Translation(r3.NewVec(1000, 0, 0))
 	require.NoError(t, err)
-	nearBody, err := chamfered.Placed(t.Context(), near)
+	nearBody, err := decad.Transform(t.Context(), chamfered, near)
 	require.NoError(t, err)
 
 	// The hole's cap-level radius grows from r to r+d (a countersink widens a
@@ -1946,7 +1946,7 @@ func TestCapBlendBoundsEnclosesPlacedVertices(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := chamfered.Placed(t.Context(), rot)
+	placed, err := decad.Transform(t.Context(), chamfered, rot)
 	require.NoError(t, err)
 
 	bounds, err := placed.Bounds()

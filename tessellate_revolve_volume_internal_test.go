@@ -279,7 +279,7 @@ func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
 	body := internalCylinderBody(t)
 	far, err := r3.Translation(r3.Vec{X: 1e12, Y: 1e12, Z: 1e12})
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), far)
+	placed, err := Transform(t.Context(), body, far)
 	require.NoError(t, err)
 
 	w := sketch.NewWorld()
@@ -291,7 +291,7 @@ func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
 	require.NoError(t, err)
 	near, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
-	box, err := near.Placed(t.Context(), far)
+	box, err := Transform(t.Context(), near, far)
 	require.NoError(t, err)
 
 	reserve := coordDisplacementOf(t.Context(), placed)

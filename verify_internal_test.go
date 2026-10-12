@@ -865,7 +865,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		body, err := evalRevolveContext(t.Context(), doc, doc.nextProducerID(), rp)
 		require.NoError(t, err)
 		doc.commit(body)
-		placed, err := body.Placed(t.Context(), motion)
+		placed, err := Transform(t.Context(), body, motion)
 		require.NoError(t, err)
 		placedPayload, ok := placed.payload.(revolvePayload)
 		require.True(t, ok)

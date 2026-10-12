@@ -34,7 +34,7 @@ func displacedUnionBody(t *testing.T, shift float64) *Body {
 	b := internalBoxBody(t, doc, 2-shift, 2, 8-shift, 8, 10)
 	m, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
-	moved, err := b.Placed(t.Context(), m)
+	moved, err := Transform(t.Context(), b, m)
 	require.NoError(t, err)
 	got, err := Union(t.Context(), a, moved)
 	require.NoError(t, err)

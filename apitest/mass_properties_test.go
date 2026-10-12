@@ -49,7 +49,7 @@ func TestMassPropertiesTrianglePrism(t *testing.T) {
 		EZ: r3.NewVec(0, 0, 1),
 	}, r3.NewVec(30, 0, 0))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), turn)
+	placed, err := decad.Transform(t.Context(), body, turn)
 	require.NoError(t, err)
 	rotated, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -101,7 +101,7 @@ func TestMassPropertiesSourceBox(t *testing.T) {
 
 	translation, err := r3.Translation(r3.NewVec(3, -4, 7))
 	require.NoError(t, err)
-	placed, err := box.Placed(t.Context(), translation)
+	placed, err := decad.Transform(t.Context(), box, translation)
 	require.NoError(t, err)
 	shifted, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestMassPropertiesSourceBox(t *testing.T) {
 		EZ: r3.NewVec(0, 0, 1),
 	}, r3.NewVec(50, 0, 0))
 	require.NoError(t, err)
-	turned, err := rectangular.Placed(t.Context(), quarterTurn)
+	turned, err := decad.Transform(t.Context(), rectangular, quarterTurn)
 	require.NoError(t, err)
 	rotated, err := turned.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func TestMassPropertiesSourceSphere(t *testing.T) {
 
 	pose, err := r3.RotationAround(r3.NewVec(20, -3, 7), r3.NewVec(1, 1, 1), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := ball.Placed(t.Context(), pose)
+	placed, err := decad.Transform(t.Context(), ball, pose)
 	require.NoError(t, err)
 	rotated, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -318,7 +318,7 @@ func TestMassPropertiesRefusals(t *testing.T) {
 	// path admits it.
 	shift, err := r3.Translation(r3.NewVec(.1, 0, 0))
 	require.NoError(t, err)
-	placed, err := stitchedBox(t, decad.New()).Placed(t.Context(), shift)
+	placed, err := decad.Transform(t.Context(), stitchedBox(t, decad.New()), shift)
 	require.NoError(t, err)
 	got, err = placed.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

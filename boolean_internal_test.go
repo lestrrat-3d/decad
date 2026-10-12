@@ -57,7 +57,7 @@ func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 			b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 			tr, err := r3.Translation(r3.Vec{X: 5, Y: 5, Z: 5})
 			require.NoError(t, err)
-			b, err = b.Placed(t.Context(), tr)
+			b, err = Transform(t.Context(), b, tr)
 			require.NoError(t, err)
 			beforeProducer := doc.nextProducer
 			beforeBodies := doc.Bodies()
@@ -402,7 +402,7 @@ func internalOctagonPrism(t *testing.T, doc *Document, frame r3.Transform, l, r,
 	require.NoError(t, err)
 	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(l), Dir: Along})
 	require.NoError(t, err)
-	body, err = body.Placed(t.Context(), frame)
+	body, err = Transform(t.Context(), body, frame)
 	require.NoError(t, err)
 	return body
 }
@@ -809,7 +809,7 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 			b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 			tr, err := r3.Translation(r3.Vec{X: 5, Y: 5, Z: 5})
 			require.NoError(t, err)
-			b, err = b.Placed(t.Context(), tr)
+			b, err = Transform(t.Context(), b, tr)
 			require.NoError(t, err)
 
 			var op meshbool.OperationKind
@@ -1183,7 +1183,7 @@ func TestFacetedPlacementEnclosesExactPriorAndMotionBounds(t *testing.T) {
 	b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	shift, err := r3.Translation(r3.NewVec(5, 5, 5))
 	require.NoError(t, err)
-	b, err = b.Placed(t.Context(), shift)
+	b, err = Transform(t.Context(), b, shift)
 	require.NoError(t, err)
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
@@ -1229,7 +1229,7 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 	disc := internalDiscBody(t, doc, 4, 10)
 	tr, err := r3.Translation(r3.NewVec(10, 10, 5))
 	require.NoError(t, err)
-	pin, err := disc.Placed(t.Context(), tr)
+	pin, err := Transform(t.Context(), disc, tr)
 	require.NoError(t, err)
 
 	tolMM, _, err := pairChordTolerance(t.Context(), plate, pin)

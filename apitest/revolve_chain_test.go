@@ -130,7 +130,7 @@ func TestRevolveChainPolePlacedBounds(t *testing.T) {
 	require.NoError(t, err)
 	rot, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(30))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), rot)
+	placed, err := decad.Transform(t.Context(), body, rot)
 	require.NoError(t, err)
 	_, err = decad.Edges(decad.Free()).Exactly(1).SelectEdges(placed)
 	require.NoError(t, err)

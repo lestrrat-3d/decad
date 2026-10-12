@@ -178,7 +178,7 @@ func (d *Document) requireLive(b *Body) error {
 }
 
 // featurePayload is the evaluator's own record of how a body was built —
-// what Placed re-evaluates under a composed motion (docs/evaluator-design.md
+// what Transform re-evaluates under a composed motion (docs/evaluator-design.md
 // §8). Each feature's payload carries its accumulated rigid placement and
 // rebuilds the same record under a new one.
 type featurePayload interface {
@@ -189,50 +189,50 @@ type featurePayload interface {
 	placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error)
 }
 
-// Placed returns a new body carrying the receiver's geometry under the
-// rigid motion t, retiring the receiver (core §8). The zero transform is
+// Transform returns a new body carrying body's geometry under the rigid
+// motion t, retiring body (core §8). body MUST NOT be nil. The zero transform is
 // invalid and is ErrDegenerate. A canceled context stops the rebuild before
-// the document changes. The motion composes onto the placement this body already carries,
+// the document changes. The motion composes onto the placement body already carries,
 // and it is that ACCUMULATED placement, never t alone, that the analytic
 // booleans and interference reading compare against a coplanar partner's:
 // where the two differ, the partner's coordinates are re-expressed and every
 // crossing they cut is charged that rounding over the crossing angle
 // (docs/prism-boolean-design.md §3.4), while motions composing back to the
 // partner's own placement leave the re-expression the identity.
-func (b *Body) Placed(ctx context.Context, t r3.Transform) (*Body, error) {
+func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a placement`, ErrDegenerate)
 	}
-	if b == nil || b.doc == nil {
+	if body == nil || body.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := b.doc
-	if err := d.requireLive(b); err != nil {
+	d := body.doc
+	if err := d.requireLive(body); err != nil {
 		return nil, err
 	}
 	if !t.IsValid() {
 		return nil, fmt.Errorf(`%w: an invalid transform names no placement`, ErrDegenerate)
 	}
-	if b.payload == nil {
+	if body.payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot place a body it did not build`, ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	composed, err := b.payload.transform().Then(t)
+	composed, err := body.payload.transform().Then(t)
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
 	ref := d.nextProducerID()
-	placed, err := b.payload.placed(ctx, d, ref, composed)
+	placed, err := body.payload.placed(ctx, d, ref, composed)
 	if err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(placed, b)
+	d.commit(placed, body)
 	return placed, nil
 }
 
@@ -276,7 +276,7 @@ func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error) 
 }
 
 // copyUnder leaves its source live while re-evaluating at a new identity.
-// It mirrors Placed's gate order and commit (core §8, docs/api-design.md H4).
+// It mirrors Transform's gate order and commit (core §8, docs/api-design.md H4).
 func (b *Body) copyUnder(ctx context.Context, motion r3.Transform) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)

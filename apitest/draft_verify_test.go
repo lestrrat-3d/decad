@@ -163,7 +163,7 @@ func TestDraftUndercutPlaced(t *testing.T) {
 	doc := decad.New()
 	b := taperExtrude(t, doc, s, p, boxHeight, 5, decad.Along)
 	motion := generalMotion(t, 23, -7.5)
-	placed, err := b.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), b, motion)
 	require.NoError(t, err)
 	e := motion.ApplyDir(r3.NewVec(0, 0, 1))
 

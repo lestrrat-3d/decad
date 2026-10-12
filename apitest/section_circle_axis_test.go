@@ -118,7 +118,7 @@ func TestSectionCardinalCylinderOffsetSignsAndPlacement(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(3, 4, 7))
 	require.NoError(t, err)
-	placed, err := source.Placed(t.Context(), placement)
+	placed, err := decad.Transform(t.Context(), source, placement)
 	require.NoError(t, err)
 	frame := cardinalAxisSectionPlane(t, r3.NewVec(0, 4, 12), r3.NewVec(0, 1, 0))
 	child := verifyOffsetCylinderSection(t, placed, frame, 4, 10)
@@ -196,7 +196,7 @@ func TestSectionCardinalCylinderPlacedFrame(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(3, 4, 7))
 	require.NoError(t, err)
-	placed, err := source.Placed(t.Context(), placement)
+	placed, err := decad.Transform(t.Context(), source, placement)
 	require.NoError(t, err)
 	frame := cardinalAxisSectionPlane(t, r3.NewVec(3, 4, 9.5), r3.NewVec(0, 1, 0))
 	section, profiles, err := placed.Section(t.Context(), frame)

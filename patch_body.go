@@ -63,10 +63,10 @@ import (
 // named the case without giving it a row).
 //
 // evalBodyPatchContext is the whole evaluator, shared by the initial build
-// and every later Placed/Copy re-evaluation: gate 3's exact
+// and every later Transform/Copy re-evaluation: gate 3's exact
 // plane proof runs ONCE, in buildPatchChains, and is never re-proven (a
 // rigid motion preserves planarity exactly, so re-proving would only make
-// Placed refuse most rotations for no soundness gain). Its own result is
+// Transform refuse most rotations for no soundness gain). Its own result is
 // discarded once the proof passes — the payload carries only the chain's own
 // edges, never a plane value — because the new face's actual plane is
 // derived fresh, every evaluation, from that chain's own (placed) oriented
@@ -101,7 +101,7 @@ const (
 // regardless of payload, but Patch's own re-evaluation contract — a placed
 // copy replays from the recorded plane rather than re-proving it — needs the
 // same payload-carrying contract every other rebuilding operation
-// (Placed, Copy) already requires. A body owned by a
+// (Transform, Copy) already requires. A body owned by a
 // different document is [ErrForeignBody], and a retired receiver is
 // [ErrRetiredBody]. sel's own resolution failure ([SelectionError] wrapping
 // [ErrNoMatch] or [ErrCardinality], Table R row R16) and every one of gates
@@ -219,7 +219,7 @@ func (pp bodyPatchPayload) placed(ctx context.Context, d *Document, ref producer
 // (each chain's exact plane proof). Gate 4 (simplicity) and the orientation
 // derivation are NOT run here — they run inside evalBodyPatchContext, every
 // time, including the very first build, since building the actual face
-// needs the SAME per-placement machinery a later Placed call replays
+// needs the SAME per-placement machinery a later Transform call replays
 // (docs/surface-design.md's "re-run the combinatorial and in-plane gates on
 // re-evaluation, but not the plane proof" decision).
 func buildPatchChains(edges []*Edge) ([]bodyPatchChain, error) {

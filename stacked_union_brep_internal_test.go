@@ -322,7 +322,7 @@ func TestStackedUnionBrepPlacedResult(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
-	moved, err := got.Placed(t.Context(), move)
+	moved, err := Transform(t.Context(), got, move)
 	require.NoError(t, err)
 	require.Equal(t, 17500.0, moved.volume.Value.Base())
 	require.Equal(t, Exact, moved.volume.Exactness)

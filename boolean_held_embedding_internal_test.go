@@ -148,7 +148,7 @@ func (c clusteredTree) branch(t *testing.T, k int) *Body {
 	require.NoError(t, err)
 	xf, err := r3.FromFrame(frame)
 	require.NoError(t, err)
-	placed, err := unit.Placed(t.Context(), xf)
+	placed, err := Transform(t.Context(), unit, xf)
 	require.NoError(t, err)
 	return placed
 }
@@ -188,7 +188,7 @@ func TestPlacedFacetedBodyStaysEmbedded(t *testing.T) {
 	axis := r3.NewVec(1, 2, 3)
 	turn, err := r3.Rotation(axis.Scale(1/axis.Len()), units.Radians(0.7))
 	require.NoError(t, err)
-	placed, err := tree.Placed(t.Context(), turn)
+	placed, err := Transform(t.Context(), tree, turn)
 	require.NoError(t, err)
 	pp, ok := placed.payload.(facetedPayload)
 	require.True(t, ok)

@@ -86,9 +86,9 @@ func TestPlacementContextVariantsCancelFacetedRebuild(t *testing.T) {
 		run  func(context.Context, *decad.Body) (*decad.Body, error)
 	}{
 		{
-			name: "Placed",
+			name: "Transform",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.Placed(ctx, shift)
+				return decad.Transform(ctx, body, shift)
 			},
 		},
 		{
@@ -136,10 +136,10 @@ func TestPlacementContextChecksCancellationBeforeCommit(t *testing.T) {
 		run    func(context.Context, *decad.Body) (*decad.Body, error)
 	}{
 		{
-			name:   "Placed",
-			target: "Placed",
+			name:   "Transform",
+			target: "Transform",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.Placed(ctx, shift)
+				return decad.Transform(ctx, body, shift)
 			},
 		},
 		{
@@ -226,7 +226,7 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 			beforeBodies := doc.Bodies()
 			ctx := newCancelAfterContext(t.Context(), 3)
 
-			got, err := body.Placed(ctx, shift)
+			got, err := decad.Transform(ctx, body, shift)
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
 			require.GreaterOrEqual(t, ctx.calls.Load(), int32(3),
@@ -289,7 +289,7 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 				target:  "attachFaceLoopsContext",
 			}
 
-			got, err := body.Placed(ctx, shift)
+			got, err := decad.Transform(ctx, body, shift)
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
 			require.Equal(t, 2, ctx.targetCalls,
@@ -347,7 +347,7 @@ func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
 				limit:   1,
 			}
 
-			got, err := body.Placed(ctx, shift)
+			got, err := decad.Transform(ctx, body, shift)
 
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
@@ -375,7 +375,7 @@ func TestPlacementContextCancelsFullRevolveShellAssembly(t *testing.T) {
 		limit:   1,
 	}
 
-	got, err := body.Placed(ctx, shift)
+	got, err := decad.Transform(ctx, body, shift)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, got)
@@ -425,7 +425,7 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 				limit:   1,
 			}
 
-			got, err := body.Placed(ctx, shift)
+			got, err := decad.Transform(ctx, body, shift)
 
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
@@ -537,7 +537,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 				limit:   2,
 			}
 
-			got, err := body.Placed(ctx, shift)
+			got, err := decad.Transform(ctx, body, shift)
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
 			require.True(t, ctx.entered, `cancellation must reach %s`, test.target)

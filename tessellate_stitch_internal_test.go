@@ -292,7 +292,7 @@ func TestTessellateStitchDoesNotPublishSymDiffForAPlacedBody(t *testing.T) {
 	box := internalStitchedBox(t, New())
 	motion, err := r3.Translation(r3.NewVec(5, 5, 5))
 	require.NoError(t, err)
-	placed, err := box.Placed(t.Context(), motion)
+	placed, err := Transform(t.Context(), box, motion)
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))

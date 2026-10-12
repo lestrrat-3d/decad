@@ -133,7 +133,7 @@ func TestBrepChamferAllStraightOuterEdgesPlacement(t *testing.T) {
 				if copyBody {
 					got, err = decad.Copy(t.Context(), got, decad.WithCopyPlacement(tc.pose))
 				} else {
-					got, err = got.Placed(t.Context(), tc.pose)
+					got, err = decad.Transform(t.Context(), got, tc.pose)
 				}
 				require.NoError(t, err)
 				requireEveryEdgeOnTwoFaces(t, got)
@@ -218,7 +218,7 @@ func TestBrepChamferAllStraightOuterEdgesPlacementRefusal(t *testing.T) {
 			require.NoError(t, err)
 			_, err = decad.Copy(t.Context(), got, decad.WithCopyPlacement(tc.pose))
 			require.ErrorIs(t, err, decad.ErrUnsupported)
-			_, err = got.Placed(t.Context(), tc.pose)
+			_, err = decad.Transform(t.Context(), got, tc.pose)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			_, err = got.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 			require.NoError(t, err)

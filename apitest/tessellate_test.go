@@ -342,7 +342,7 @@ func TestTessellatePlacedReflected(t *testing.T) {
 	require.NoError(t, err)
 	refl, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), refl)
+	placed, err := decad.Transform(t.Context(), body, refl)
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))

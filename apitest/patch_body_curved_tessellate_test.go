@@ -106,7 +106,7 @@ func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 		require.Zero(t, directedEdgeCensus(t, mesh))
 		requireLiveBodyPatchMeshFaces(t, placed, mesh)
 	}
-	reflectedSource, err := circularPatchTube(t).Placed(t.Context(), reflection)
+	reflectedSource, err := decad.Transform(t.Context(), circularPatchTube(t), reflection)
 	require.NoError(t, err)
 	filledAfterReflection, err := reflectedSource.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(2))
 	require.NoError(t, err)

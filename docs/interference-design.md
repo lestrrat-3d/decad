@@ -404,7 +404,7 @@ volumes, so it needs no single assembled section and no body, and a pair of
 meshing gears — whose overlap is always multi-region — is measured rather
 than deferred to a mesh refusal. A crossing pair whose operands carry a
 section displacement or walk charge, or whose re-expression is nonidentity (a
-gear moved with `Body.Placed`), is measured too: that document's §3.4 charges
+gear moved with `Transform`), is measured too: that document's §3.4 charges
 each crossing the displacement it can amplify
 (`docs/general-boolean-design.md` §3 A6), and sends one too close to
 tangent to bound to the mesh path below. A pair neither analytic

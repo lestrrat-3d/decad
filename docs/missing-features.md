@@ -132,7 +132,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today |
 |---|---|
-| Assemblies (`Component`/`Occurrence`) | Bodies are placed explicitly with `Placed`/`Copy` |
+| Assemblies (`Component`/`Occurrence`) | Bodies are placed explicitly with `Transform`/`Copy` |
 | Feature tree, timeline, rollback, re-evaluation after a sketch edit | Bodies are immutable; a sketch edit rebuilds nothing |
 | Sheet metal | No entry point exists |
 | GUI or view state | No entry point exists |
@@ -154,7 +154,7 @@ moves its row to the matching section above, with that doc as owner.
 | Gap | Today |
 |---|---|
 | Direct edits: move, offset, delete or replace a face of a solid, press-pull | No entry point exists; `Body.Offset` refuses every solid (`offset.go`, `docs/surface-design.md` R37) |
-| Scaling a body, uniform or per axis | No entry point exists; `Placed`/`Copy` take a rigid motion only (`document.go`) |
+| Scaling a body, uniform or per axis | No entry point exists; `Transform`/`Copy` take a rigid motion only (`document.go`) |
 | Saving a `Document` to a file or loading one back | No entry point exists; a model is rebuilt by rerunning the Go program that built it |
 | Text profiles from a font, for engraved or embossed lettering | No entry point exists |
 | 2D drawings: projected views, silhouette and hidden lines, DXF output | No entry point exists |

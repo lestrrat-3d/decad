@@ -14,7 +14,7 @@ import (
 )
 
 // This file is docs/loft-design.md §12 PR 2a's public-surface placement
-// tests: Placed/Copy over the landed loft payload's own
+// tests: Transform/Copy over the landed loft payload's own
 // proven displacement term delta (§5, §8). loft_build_internal_test.go and
 // loft_moments_internal_test.go cover the evaluator/accumulator internals;
 // this file needs a live sketch, the public entry points, or the recorded
@@ -77,8 +77,8 @@ func TestR3IdentityApplyIsBitIdentical(t *testing.T) {
 // "S9, S10, S11 and S4's ARITY half belong to the original call alone": a
 // placement rebuilds from the payload's already-authenticated records and
 // never touches a live sketch, so a profile that goes stale AFTER the body
-// is built refuses a fresh Document.Loft (S9) while Copy/
-// Placed of that body still succeed and reproduce its volume.
+// is built refuses a fresh Document.Loft (S9) while Copy and Transform
+// of that body still succeed and reproduce its volume.
 func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20) // two 40x40 squares, h=10 -> 16000 mm3 box
@@ -108,8 +108,8 @@ func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
 	require.NoError(t, err)
 	copied, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
 	require.NoError(t, err)
-	// Placed retires the receiver, so it runs last.
-	placed, err := body.Placed(t.Context(), move)
+	// Transform retires the input, so it runs last.
+	placed, err := decad.Transform(t.Context(), body, move)
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
@@ -198,7 +198,7 @@ func TestLoftPlacedRotationSoundness(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), rot)
+	placed, err := decad.Transform(t.Context(), body, rot)
 	require.NoError(t, err)
 
 	vol, err := placed.Volume()
@@ -386,7 +386,7 @@ func TestLoftPlacedTopologyAndRoles(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(50, -25, 5))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), move)
+	placed, err := decad.Transform(t.Context(), body, move)
 	require.NoError(t, err)
 
 	faces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(placed))).SelectFaces(placed)
@@ -405,7 +405,7 @@ func TestLoftPlacedTopologyAndRoles(t *testing.T) {
 			"a placement's own junction turn reads the same geometric relation under any rigid motion")
 	}
 
-	require.Equal(t, []*decad.Body{placed}, doc.Bodies(), "Placed retires the receiver")
+	require.Equal(t, []*decad.Body{placed}, doc.Bodies(), "Transform retires the input")
 }
 
 // TestLoftPlacedFaceAreaSumMatchesBodyArea catches a per-face bound that
@@ -420,7 +420,7 @@ func TestLoftPlacedFaceAreaSumMatchesBodyArea(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.NewVec(1, 1, 1), units.Degrees(23))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), rot)
+	placed, err := decad.Transform(t.Context(), body, rot)
 	require.NoError(t, err)
 
 	bodyArea, err := placed.Area()
@@ -466,7 +466,7 @@ func TestLoftPlacedAccessorExactness(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(50, -25, 5))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), move)
+	placed, err := decad.Transform(t.Context(), body, move)
 	require.NoError(t, err)
 
 	verts := placed.Vertices()
@@ -495,7 +495,7 @@ func TestLoftPlacedAccessorExactness(t *testing.T) {
 	}
 }
 
-// TestLoftPlacedRetireAndLiveness proves Placed retires the receiver while
+// TestLoftPlacedRetireAndLiveness proves Transform retires the input while
 // Copy leaves it live, and a refused placement — an invalid
 // (zero-value) transform, and an S12 fixture whose proven volume allowance
 // swamps its tiny held volume — leaves the document untouched.
@@ -508,9 +508,9 @@ func TestLoftPlacedRetireAndLiveness(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(1, 2, 3))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), move)
+	placed, err := decad.Transform(t.Context(), body, move)
 	require.NoError(t, err)
-	require.Equal(t, []*decad.Body{placed}, doc.Bodies(), "Placed retires the receiver")
+	require.Equal(t, []*decad.Body{placed}, doc.Bodies(), "Transform retires the input")
 
 	dup, err := decad.Copy(t.Context(), placed)
 	require.NoError(t, err)
@@ -522,7 +522,7 @@ func TestLoftPlacedRetireAndLiveness(t *testing.T) {
 
 	bodiesBefore := doc.Bodies()
 
-	invalid, err := copied.Placed(t.Context(), r3.Transform{})
+	invalid, err := decad.Transform(t.Context(), copied, r3.Transform{})
 	require.Nil(t, invalid)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, bodiesBefore, doc.Bodies())
@@ -547,7 +547,7 @@ func TestLoftPlacedS12TinyBodyFarTranslation(t *testing.T) {
 
 	far, err := r3.Translation(r3.NewVec(1e10, 0, 0))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), far)
+	placed, err := decad.Transform(t.Context(), body, far)
 	require.Nil(t, placed)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
@@ -577,7 +577,7 @@ func TestLoftPlacedS13OverflowingCoordinate(t *testing.T) {
 
 	far, err := r3.Translation(r3.NewVec(0, 0, math.MaxFloat64))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), far)
+	placed, err := decad.Transform(t.Context(), body, far)
 	require.Nil(t, placed)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotErrorIs(t, err, decad.ErrNotFinite)
@@ -616,7 +616,7 @@ func TestLoftPlacedNearMaxFloatSectionRefusesUnsupported(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), move)
+	placed, err := decad.Transform(t.Context(), body, move)
 	require.Nil(t, placed)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotErrorIs(t, err, decad.ErrNotFinite,
@@ -638,7 +638,7 @@ func TestLoftPlacedContextCancellation(t *testing.T) {
 	cancel()
 	move, err := r3.Translation(r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
-	placed, err := body.Placed(ctx, move)
+	placed, err := decad.Transform(ctx, body, move)
 	require.Nil(t, placed)
 	require.ErrorIs(t, err, context.Canceled)
 
@@ -656,7 +656,7 @@ func TestLoftPlacedVerifySound(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), rot)
+	placed, err := decad.Transform(t.Context(), body, rot)
 	require.NoError(t, err)
 	require.NotNil(t, placed)
 
@@ -670,7 +670,7 @@ func TestLoftPlacedVerifySound(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(2000, 0, 0))
 	require.NoError(t, err)
-	otherPlaced, err := other.Placed(t.Context(), move)
+	otherPlaced, err := decad.Transform(t.Context(), other, move)
 	require.NoError(t, err)
 
 	report, err = doc.Verify(t.Context())

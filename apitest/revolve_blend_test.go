@@ -458,7 +458,7 @@ func TestRevolveBlendRolesSurvivePlacementAndReplay(t *testing.T) {
 	// and the torus moves with the body.
 	move, err := r3.Translation(r3.NewVec(5, -3, 7))
 	require.NoError(t, err)
-	placed, err := second.Placed(t.Context(), move)
+	placed, err := decad.Transform(t.Context(), second, move)
 	require.NoError(t, err)
 	require.Equal(t, roles(first), roles(placed))
 	torus := blendFaces(t, placed, "fillet")[0].Surface().(decad.Torus)
@@ -471,7 +471,7 @@ func TestRevolveBlendRolesSurvivePlacementAndReplay(t *testing.T) {
 	// placed shaft gives the placed fillet.
 	doc := decad.New()
 	shaft := revolveMeridian(t, doc, shaftMeridian, decad.FullRevolution{})
-	movedShaft, err := shaft.Placed(t.Context(), move)
+	movedShaft, err := decad.Transform(t.Context(), shaft, move)
 	require.NoError(t, err)
 	movedFillet, err := movedShaft.Fillet(t.Context(), concaveJunctions(), units.Millimeters(r))
 	require.NoError(t, err)

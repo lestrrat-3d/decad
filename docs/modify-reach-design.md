@@ -411,7 +411,7 @@ the axis reaches it as the spindle refusal (`ErrUnsupported`).
 **Payload.** The result is a `revolvePayload` with the receiver's frame,
 oriented axis, angular interval, denotation and placement, and the rewritten
 profile. Its `blendSegs`/`blendKind` fields carry the blend roles, so
-`Placed` and `Copy` re-mint them; a path that replaces the profile
+`Transform` and `Copy` re-mint them; a path that replaces the profile
 clears them. Measurements, topology, tessellation and the surveys are the
 revolve's own (Table DX).
 

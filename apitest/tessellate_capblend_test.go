@@ -357,7 +357,7 @@ func TestTessellateCapBlendPlacedStaysWatertight(t *testing.T) {
 	chamfered := chamferedPlate(t)
 	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Radians(0.7))
 	require.NoError(t, err)
-	moved, err := chamfered.Placed(t.Context(), rot)
+	moved, err := decad.Transform(t.Context(), chamfered, rot)
 	require.NoError(t, err)
 	mesh, err := moved.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)

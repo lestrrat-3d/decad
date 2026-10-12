@@ -60,7 +60,7 @@ func TestTwistPlacedAxialRoundVolumeProof(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(0, 0, 1e8))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), move)
+	placed, err := Transform(t.Context(), body, move)
 	require.NoError(t, err)
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(1e-4), WithVerification(VerifyAll))
 	require.NoError(t, err)

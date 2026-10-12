@@ -100,12 +100,12 @@ func TestVerifyReportForBody(t *testing.T) {
 	_, err = report.ForBody(nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
-	// Placed retires the receiver (doc.go); the historical report still
+	// Transform retires the input (document.go); the historical report still
 	// resolves the retired pointer, consulting neither current document
 	// membership nor liveness.
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = body.Placed(t.Context(), shift)
+	_, err = decad.Transform(t.Context(), body, shift)
 	require.NoError(t, err)
 	stillResolves, err := report.ForBody(body)
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestVerifyDisjointPairIsSound(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = body.Placed(t.Context(), shift)
+	_, err = decad.Transform(t.Context(), body, shift)
 	require.NoError(t, err)
 
 	s, p := plateSketch(t)
@@ -275,7 +275,7 @@ func TestVerifyTouchingBoxesAreDisjoint(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
-	_, err = body.Placed(t.Context(), shift)
+	_, err = decad.Transform(t.Context(), body, shift)
 	require.NoError(t, err)
 
 	s, p := plateSketch(t)
@@ -367,7 +367,7 @@ func TestVerifyClearancesMeasureBoxProvenPair(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = body.Placed(t.Context(), shift)
+	_, err = decad.Transform(t.Context(), body, shift)
 	require.NoError(t, err)
 	s, p := plateSketch(t)
 	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -548,7 +548,7 @@ func TestVerifyCoversLiveBodiesOnly(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), shift)
+	placed, err := decad.Transform(t.Context(), body, shift)
 	require.NoError(t, err)
 
 	// The original was retired by the placement: it stays readable but it
@@ -892,7 +892,7 @@ func coplanarContactPairDocument(t *testing.T) *decad.Document {
 
 	shift, err := r3.Translation(r3.NewVec(0, 5, 5))
 	require.NoError(t, err)
-	_, err = box2.Placed(t.Context(), shift)
+	_, err = decad.Transform(t.Context(), box2, shift)
 	require.NoError(t, err)
 	return doc
 }
@@ -1064,7 +1064,7 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	require.NoError(t, err)
 	far, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = cup1.Placed(t.Context(), far)
+	_, err = decad.Transform(t.Context(), cup1, far)
 	require.NoError(t, err)
 	s2, p2 := plateSketch(t)
 	box2, err := doc.Extrude(s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
@@ -1229,7 +1229,7 @@ func TestVerifyToleranceGateTracksScaleAndPlacement(t *testing.T) {
 			require.NoError(t, err)
 			placement, err := rotation.Then(translation)
 			require.NoError(t, err)
-			placed, err := body.Placed(t.Context(), placement)
+			placed, err := decad.Transform(t.Context(), body, placement)
 			require.NoError(t, err)
 
 			report, err := doc.Verify(t.Context())

@@ -399,7 +399,7 @@ func TestVerifyLinkageKeepsTheNextProducerIdentity(t *testing.T) {
 }
 
 // TestVerifyLinkageRefusesABodyItDidNotBuild is §8's row the public API
-// cannot reach: a link body with no payload is ErrUnsupported, as for Placed.
+// cannot reach: a link body with no payload is ErrUnsupported, as for Transform.
 func TestVerifyLinkageRefusesABodyItDidNotBuild(t *testing.T) {
 	t.Parallel()
 	doc := New()

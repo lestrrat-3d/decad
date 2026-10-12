@@ -81,12 +81,12 @@ func exactResidual(reported float64, truth *big.Rat) float64 {
 }
 
 // placedFar translates b by shift along +X, keeping the receiver retired
-// exactly as Placed always does.
+// exactly as Transform always does.
 func placedFar(t *testing.T, b *decad.Body, shift float64) *decad.Body {
 	t.Helper()
 	m, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
-	out, err := b.Placed(t.Context(), m)
+	out, err := decad.Transform(t.Context(), b, m)
 	require.NoError(t, err)
 	return out
 }

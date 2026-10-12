@@ -157,7 +157,7 @@ file is written.
 | RD | Entry point | Admits | Result |
 |---|---|---|---|
 | **RD1** | `Extrude` with nonzero `WithTaper` | analytic walks with G1 circular joins; `Distance`, `ToFace`, `ThroughAll`, `Symmetric` or `TwoSided`; `|α| < 90°`; no `WithSurfaceResult` | a one- or two-slab draft solid (Table BD) |
-| **RD2** | `Body.Draft` | a live `prismPayload` receiver (an extrude, a filleted or chamfered body, a tube, or any of these `Placed`) whose section carries no displacement; a `NeutralFace` naming one cap of the receiver; a selection resolving to exactly the receiver's complete wall set; `0 < |α| < 90°` | a `draftPayload` solid over the receiver's section, the receiver retired |
+| **RD2** | `Body.Draft` | a live `prismPayload` receiver (an extrude, a filleted or chamfered body, a tube, or any of these after `Transform`) whose section carries no displacement; a `NeutralFace` naming one cap of the receiver; a selection resolving to exactly the receiver's complete wall set; `0 < |α| < 90°` | a `draftPayload` solid over the receiver's section, the receiver retired |
 | **RD3** | `Body.Draft` | as RD2 with a selection naming a **subset** of the walls, where every corner between a selected and an unselected wall is a line–line corner | a `draftPayload` whose far section moves the selected walls only (§10.2) |
 
 Everything else is Table SD.
@@ -408,7 +408,7 @@ nothing else.
 | **DD9** | `Verify` clearance (`WithClearances`) | `Suspect` (`pairUndecided`): `newBodyGeomBudget` has no carrier model for the class. A later PR adds the Plane/Cone carriers; not scheduled | — |
 | **DD10** | `Verify` interference | box-disjoint proofs from the body's `Bounds`; the read-only mesh intersection over DD1's mesh | 2 |
 | **DD11** | `MassProperties` and `dynamics` | the verified-mesh path (`verifiedMeshMassProperties`) over DD1's mesh; `ErrUnsupported` where the band admission refuses | 2 |
-| **DD12** | `Placed`, `Copy`, `Mirrored`, `MirroredCopy` | the payload implements `transform()` and `placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `WithJoin` refuses (it rewrites a prism's or stacked prism's section) | 1 |
+| **DD12** | `Transform`, `Copy`, `Mirrored`, `MirroredCopy` | the payload implements `transform()` and `placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `WithJoin` refuses (it rewrites a prism's or stacked prism's section) | 1 |
 | **DD13** | `Patterned` | `placedInstance` and a boolean `Union` (the mesh path); the frame-keeping arm does not take the class | 2 |
 | **DD14** | `Fillet`, `Chamfer`, `Shell` | A positive-taper, one-sided, full circular solid admits one complete far-cap outer rim fillet (§10.4), symmetric chamfer (§10.5), or inward shell with that cap removed (§10.6). Other selections and draft shapes remain modify S3, `ErrUnsupported` | — |
 | **DD15** | `Draft` of a draft body | SD23 | — |
@@ -699,7 +699,7 @@ the red run's failing assertion in the test's comment, and restores the leg.
 | F6 against | F1 with `Against` | the far cap at `z = −h` and `capStart`; volume as F1 |
 | F7 ring | annulus `R = 10`, `r = 4`, `h = 10`, `α = 5°` | `Volume = πh[R² − r² − d(R + r)]`: the hole widens; the hole wall is a `Cone` opening toward the far end, its rims concave |
 | F8 far origin | F1 and F3 on a sketch plane whose origin is `(10⁶ + 0.1, 0.1, 0)` and under a rotation placement; F3 drawn at `v = 10⁶` in the plane | every vertex's published bound covers the exact rational lift (the `apitest/vertex_frame_origin_test.go` pattern); F1's volume and area and F3's volume bounds cover their closed forms; the slot at `v = 10⁶` covers its volume, its centroid and each straight wall's denoted normal |
-| F9 placed equivalence | F1 built, then `Placed` under a translation and a rotation | volume, area and centroid equal the unplaced readings within bounds; `Bounds` covers the placed box |
+| F9 placed equivalence | F1 built, then `Transform` under a translation and a rotation | volume, area and centroid equal the unplaced readings within bounds; `Bounds` covers the placed box |
 | F10 tangent span | F1 with `a = 2` | each far corner `a/2 − d`, a Sterbenz subtraction exact for the held `d`, lies within its bound of the exact corner the stated taper denotes |
 | F11 stop extents | F1's section, with a planar stop at 30 mm and a 5 mm thick stop body | `ToFace` ends at +30 or −30 mm; `ThroughAll` ends at +35 or −35 mm; an offset in inches propagates its rounding; the far corner and `Volume = h(a² − 2ad + 4d²/3)` lie within their bounds |
 

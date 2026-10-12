@@ -329,7 +329,7 @@ func TestSurfaceRevolveCapBoundsComposeOnInexactFixture(t *testing.T) {
 }
 
 // revolveOpenCase is one Table W row's fixture plus the extent to build it
-// with, shared by the IsOpen-derivation table and the Placed test.
+// with, shared by the IsOpen-derivation table and the Transform test.
 type revolveOpenCase struct {
 	name   string
 	sketch func(t *testing.T) (*sketch.Sketch, *sketch.Profile)
@@ -384,7 +384,7 @@ func requireOpenAgreesWithFreeEdges(t *testing.T, b *decad.Body) {
 	}
 }
 
-// TestSurfaceRevolveStaysASheetThroughPlacement is §4.2's Placed/Copy
+// TestSurfaceRevolveStaysASheetThroughPlacement is §4.2's Transform/Copy
 // claim for Revolve: each re-evaluates the payload and reproduces
 // the sheet with no further code.
 func TestSurfaceRevolveStaysASheetThroughPlacement(t *testing.T) {
@@ -398,7 +398,7 @@ func TestSurfaceRevolveStaysASheetThroughPlacement(t *testing.T) {
 	motion, err := r3.Translation(offset)
 	require.NoError(t, err)
 
-	placed, err := sheet.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), sheet, motion)
 	require.NoError(t, err)
 	requireRevolveSheetWithFreeEdges(t, placed, 8)
 

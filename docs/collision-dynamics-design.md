@@ -36,7 +36,7 @@ frictionless motion, the rigid
 solver consumes that first-impact bracket, rebounds or rests on the floor, and
 replays the rounded path on either side of impact.
 The same zero-bound Boolean can retain its exact lower-face proof after
-translation-only `Placed` widens its held mesh. `ContactPair` recognizes that
+translation-only `Transform` widens its held mesh. `ContactPair` recognizes that
 placed face at floor touch. Its exact-source sweep brackets first axial impact
 and certifies separating departure. A density-backed dynamic placed union
 with centered frictionless motion and positive restitution rebounds from a

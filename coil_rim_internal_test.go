@@ -175,7 +175,7 @@ func TestCoilRimCurveBoundHoldsTheDenotedCircle(t *testing.T) {
 			b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
 			require.NoError(t, err)
 			if c.placed {
-				b, err = b.Placed(t.Context(), rot)
+				b, err = Transform(t.Context(), b, rot)
 				require.NoError(t, err)
 			}
 			rec, err := coilRecordOfPayload(b.payload.(coilPayload))

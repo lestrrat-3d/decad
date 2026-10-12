@@ -350,7 +350,7 @@ func TestRevolveShellPlaced(t *testing.T) {
 	require.NoError(t, err)
 	doc := decad.New()
 	cyl := revolveMeridian(t, doc, cylinderMeridian, halfTurn)
-	placed, err := cyl.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), cyl, motion)
 	require.NoError(t, err)
 	// Both caps turned with the body, so their shared normal is the image of z.
 	caps := decad.Faces(decad.NormalTo(motion.ApplyDir(r3.NewVec(0, 0, 1)))).Exactly(2)
@@ -373,7 +373,7 @@ func TestRevolveShellPlaced(t *testing.T) {
 	}
 	up, err := r3.Translation(r3.NewVec(0, 0, 50))
 	require.NoError(t, err)
-	moved, err := shelled.Placed(t.Context(), up)
+	moved, err := decad.Transform(t.Context(), shelled, up)
 	require.NoError(t, err)
 	for _, b := range []*decad.Body{shelled, moved} {
 		for _, ref := range []decad.FeatureRef{decad.CapStart(b), decad.CapEnd(b)} {

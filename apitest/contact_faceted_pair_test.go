@@ -31,7 +31,7 @@ func placedBox(t *testing.T, doc *decad.Document, box [6]float64) *decad.Body {
 	if box[4] == 0 {
 		return body
 	}
-	placed, err := body.Placed(t.Context(), contactPose(t, r3.Vec{Z: box[4]}))
+	placed, err := decad.Transform(t.Context(), body, contactPose(t, r3.Vec{Z: box[4]}))
 	require.NoError(t, err)
 	return placed
 }
@@ -245,7 +245,7 @@ func TestExactPlanarPairAdmitsStitchedSolid(t *testing.T) {
 	// down moves no held corner: every coordinate below 8 keeps its ulp.
 	lift, err := r3.Translation(r3.Vec{Z: 1})
 	require.NoError(t, err)
-	placed, err := tetrahedron.Placed(t.Context(), lift)
+	placed, err := decad.Transform(t.Context(), tetrahedron, lift)
 	require.NoError(t, err)
 	var widest float64
 	for _, vertex := range placed.Vertices() {

@@ -196,9 +196,9 @@ func TestSurfaceExtrudeRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceExtrudeStaysASheetThroughPlacement is §4.2's Placed/Copy
+// TestSurfaceExtrudeStaysASheetThroughPlacement is §4.2's Transform/Copy
 // claim: each re-evaluates the payload and reproduces the sheet
-// with no further code, and Placed's box is the sheet's own translated.
+// with no further code, and Transform returns the translated sheet's box.
 func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
@@ -212,7 +212,7 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	motion, err := r3.Translation(offset)
 	require.NoError(t, err)
 
-	placed, err := sheet.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), sheet, motion)
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, placed)
 	placedBox, err := placed.Bounds()
@@ -726,7 +726,7 @@ func TestSheetSolidPairContainedProvenSound(t *testing.T) {
 	raw := sheetBoxBody(t, doc, 5, 5, 15, 15, 10)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 5))
 	require.NoError(t, err)
-	sheet, err := raw.Placed(t.Context(), shift)
+	sheet, err := decad.Transform(t.Context(), raw, shift)
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())

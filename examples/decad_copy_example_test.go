@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// A body can be copied without consuming it. Placed retires its receiver, so
+// A body can be copied without consuming it. Transform retires its input, so
 // modelling a part once and instancing it several times — a bolt pattern, a
 // reused cutting tool — would otherwise mean rebuilding the feature chain per
 // instance. Copy leaves the source live: the source is

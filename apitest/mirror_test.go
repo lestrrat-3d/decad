@@ -291,7 +291,7 @@ func TestMirroredCopyFlipsTheLsFacing(t *testing.T) {
 	require.Len(t, img.Edges(), len(l.Edges()))
 }
 
-// TestMirroredRetiresTheReceiver is §2 M6: Mirrored is Placed under the
+// TestMirroredRetiresTheReceiver is §2 M6: Mirrored uses Transform under the
 // reflection, so the receiver is retired and the image is the one live body.
 // Shown to fail with Mirrored delegating to Copy: the receiver stays
 // live.
@@ -456,7 +456,7 @@ func requireMirrorBox(t *testing.T, b *decad.Body, lo, hi r3.Vec) {
 }
 
 // TestMirrorFrameGates covers the gates Mirrored and MirroredCopy share with
-// Placed, plus the frame's own: every refusal leaves the document unchanged.
+// Transform, plus the frame's own: every refusal leaves the document unchanged.
 //
 // Legs shown to fail (each broken in mirror.go, the fixture watched go red,
 // then restored):

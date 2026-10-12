@@ -33,7 +33,7 @@ func TestSpinEventConservationUsesRealPointImpulses(t *testing.T) {
 	initial := conservationBox(t, doc, -5, 5)
 	placement, err := r3.Translation(r3.Vec{Z: 10})
 	require.NoError(t, err)
-	b, err := initial.Placed(t.Context(), placement)
+	b, err := decad.Transform(t.Context(), initial, placement)
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(.001)
 	material := Material{Restitution: units.Scalar(.5), Friction: units.Scalar(.5)}

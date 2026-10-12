@@ -47,7 +47,7 @@ type joinWall struct {
 	slab, loop, seg int
 }
 
-// mirroredJoin is Mirrored under WithJoin. It runs Placed's receiver gates,
+// mirroredJoin is Mirrored under WithJoin. It runs Transform's receiver gates,
 // then §5.1's admission J1-J7 in order, assembles the joined record (§5.2),
 // audits it (§5.3) and commits the result in place of the receiver.
 func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, error) {

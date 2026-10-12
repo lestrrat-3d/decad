@@ -105,7 +105,7 @@ func TestPatchWithHoleNetArea(t *testing.T) {
 	require.Equal(t, 1, holeConcave)
 }
 
-// TestPatchReproducesThroughPlacement is §5.1's Placed/Copy
+// TestPatchReproducesThroughPlacement is §5.1's Transform/Copy
 // claim: each re-evaluates the payload and reproduces the patch with no
 // further code.
 func TestPatchReproducesThroughPlacement(t *testing.T) {
@@ -118,7 +118,7 @@ func TestPatchReproducesThroughPlacement(t *testing.T) {
 	motion, err := r3.Translation(r3.NewVec(50, 0, 0))
 	require.NoError(t, err)
 
-	placed, err := patch.Placed(t.Context(), motion)
+	placed, err := decad.Transform(t.Context(), patch, motion)
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, placed, units.SquareMillimeters(6000), decadtest.Exactly())
 	decadtest.MeasuresBounds(t, placed, r3.NewVec(50, 0, 0), r3.NewVec(150, 60, 0), decadtest.Exactly())

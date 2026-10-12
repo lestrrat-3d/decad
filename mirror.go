@@ -53,12 +53,12 @@ type MirrorOption interface {
 var errNilMirrorPlane = fmt.Errorf(`%w: nil mirror plane`, ErrDegenerate)
 
 // Mirrored returns a new body carrying the receiver's mirror image across
-// plane, retiring the receiver. It is [Body.Placed] under r3.Reflection of the
+// plane, retiring the receiver. It calls [Transform] under r3.Reflection of the
 // resolved plane (docs/mirror-pattern-design.md §4.2): the reflection is
 // carried in the body's accumulated placement, and every reading — volume,
 // centroid, outward normals, tessellation winding, export — follows it.
 //
-// The gates are Placed's — a nil context is ErrDegenerate, a body this
+// The gates are Transform's — a nil context is ErrDegenerate, a body this
 // evaluator did not build is ErrUnsupported, and a canceled context stops the
 // rebuild before the document changes — plus the plane's own resolution (see
 // [MirrorFrame] and [MirrorFace]). A nil plane or a nil option is
@@ -87,7 +87,7 @@ func (b *Body) Mirrored(ctx context.Context, plane MirrorPlane, opts ...MirrorOp
 	if err != nil {
 		return nil, err
 	}
-	return b.Placed(ctx, t)
+	return Transform(ctx, b, t)
 }
 
 // MirroredCopy returns a new live body carrying the receiver's mirror image

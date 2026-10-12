@@ -472,7 +472,7 @@ func TestExtrudeFreeformVerifySound(t *testing.T) {
 }
 
 // TestExtrudeFreeformPlacementReproducesVolume asserts observable test 15:
-// Placed and Copy of a free-form prism each reproduce the
+// Transform and Copy of a free-form prism each reproduce the
 // unplaced volume. Each mints its own R7 work ceiling (prismPayload.placed
 // carries no preflight counter across the call), so each re-spends the full
 // budget — cheap for this fixture, but the reason a caller placing a large
@@ -489,7 +489,7 @@ func TestExtrudeFreeformPlacementReproducesVolume(t *testing.T) {
 	move, err := r3.Translation(r3.NewVec(5, -3, 2))
 	require.NoError(t, err)
 
-	// Copy leaves the receiver LIVE; Placed retires it
+	// Copy leaves the input LIVE; Transform retires it
 	// (core §8), so it runs last.
 	dup, err := decad.Copy(t.Context(), body)
 	require.NoError(t, err)
@@ -503,7 +503,7 @@ func TestExtrudeFreeformPlacementReproducesVolume(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, base.Value.Mag(), cv.Value.Mag(), 1e-9, "placed Copy reproduces the volume")
 
-	placed, err := body.Placed(t.Context(), move)
+	placed, err := decad.Transform(t.Context(), body, move)
 	require.NoError(t, err)
 	pv, err := placed.Volume()
 	require.NoError(t, err)
@@ -902,7 +902,7 @@ func TestFreeformPrismCutsAnInteriorBox(t *testing.T) {
 
 	lift, err := r3.Translation(r3.NewVec(0, 0, 3))
 	require.NoError(t, err)
-	inner, err := boxBody(t, doc, 3, 0.5, 5, 1.5, 4).Placed(t.Context(), lift)
+	inner, err := decad.Transform(t.Context(), boxBody(t, doc, 3, 0.5, 5, 1.5, 4), lift)
 	require.NoError(t, err)
 	innerVolume, err := inner.Volume()
 	require.NoError(t, err)

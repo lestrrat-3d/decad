@@ -14,7 +14,7 @@ import (
 
 // This file is docs/general-boolean-design.md §3 A4's public-API suite: the
 // analytic booleans and Verify's interference reading with a reflected
-// operand. Reflected bodies are built with Copy/Placed under
+// operand. Reflected bodies are built with Copy/Transform under
 // r3.Reflection. The L is docs/mirror-pattern-design.md §2's: the union of
 // [0, 20]×[0, 5] and [0, 5]×[5, 20], 175 mm², swept 10 mm. The re-wound
 // record's mechanics are prism_boolean_reflected_internal_test.go's.
@@ -147,9 +147,9 @@ func TestPrismCutBothReflectedSharedAxis(t *testing.T) {
 	mirror := mirrorAcrossX30(t)
 	l := polyPrismBody(t, doc, reflectedLPts, reflectedHeight)
 	disc := reflectedDiscBody(t, doc, 2.5, 12, 1.5)
-	ml, err := l.Placed(t.Context(), mirror)
+	ml, err := decad.Transform(t.Context(), l, mirror)
 	require.NoError(t, err)
-	md, err := disc.Placed(t.Context(), mirror)
+	md, err := decad.Transform(t.Context(), disc, mirror)
 	require.NoError(t, err)
 
 	got, err := decad.Cut(t.Context(), ml, md)

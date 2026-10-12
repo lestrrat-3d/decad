@@ -63,7 +63,7 @@ applies to all material lumps and excludes all cavities.
 `MassProperties` is a read-only query. It may read a retired body, as `Volume`
 and `Centroid` do; the `dynamics.World` live-body gate is separate. A nil body,
 a body without an evaluator payload, or a sheet is rejected. The method does
-not call `Placed`, commit a body, consume a producer identity, or change the
+not call `Transform`, commit a body, consume a producer identity, or change the
 document. An uncanceled repeated call on the same body and density produces
 the same values, bounds, and error.
 
@@ -240,7 +240,7 @@ placement**. For a later rigid pose `T`, transform the center with `T.Apply`
 and rotate the centroidal tensor as `R I Rᵀ` using `T`'s orthogonal basis.
 Translation leaves centroidal inertia unchanged. Reflection follows the same
 tensor rule; it does not change mass. Carry interval bounds through each
-basis product and its rounding. `Copy` or `Body.Placed` must agree
+basis product and its rounding. `Copy` or `Transform` must agree
 with that transformed reading within both reported bounds. The dynamics state
 applies its pose to the body's current placement exactly once.
 

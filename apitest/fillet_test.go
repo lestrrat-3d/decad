@@ -126,7 +126,7 @@ func (s retiringEdgeSelector) SelectEdges(body *decad.Body) ([]*decad.Edge, erro
 	if err != nil {
 		return nil, err
 	}
-	_, err = body.Placed(context.Background(), r3.Identity())
+	_, err = decad.Transform(context.Background(), body, r3.Identity())
 	return edges, err
 }
 

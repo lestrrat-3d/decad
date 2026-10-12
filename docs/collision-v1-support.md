@@ -122,7 +122,7 @@ exercise density-backed impact, rest, and trace replay.
 
 Two exact planar solids are prisms over straight-edged sections with no
 recorded displacement, zero-bound faceted Booleans, directly or after a
-translation-only `Placed`, or closed all-planar `Stitch` solids welded in
+translation-only `Transform`, or closed all-planar `Stitch` solids welded in
 place with every vertex bound zero. `ContactPair` proves their relation under any
 rotation: an enclosed gap, a touch at a vertex, edge or face, or an overlap,
 including one body nested in the other's material. When neither body is

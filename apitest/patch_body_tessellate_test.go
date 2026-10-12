@@ -77,7 +77,7 @@ func TestBodyPatchPlanarMeshPlacementAndVerification(t *testing.T) {
 	require.InDelta(t, 60000, meshVolume(reflMesh), 1e-7)
 
 	other := decad.New()
-	reflectedWalls, err := surfaceTube(t, other).Placed(t.Context(), reflection)
+	reflectedWalls, err := decad.Transform(t.Context(), surfaceTube(t, other), reflection)
 	require.NoError(t, err)
 	filledAfterReflection, err := reflectedWalls.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)

@@ -73,7 +73,7 @@ func TestBlindPocketPlacedAndVerified(t *testing.T) {
 	require.True(t, staged)
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := pocket.Placed(t.Context(), rotation)
+	placed, err := decad.Transform(t.Context(), pocket, rotation)
 	require.NoError(t, err)
 	require.Len(t, placed.Faces(), len(pocket.Faces()))
 	// The placed pocket keeps the value 936; the rotation's held basis is

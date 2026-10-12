@@ -661,7 +661,7 @@ The mesh uses the analytic polygon vertices directly and one set of chord
 stations on both bore rims and the cylinder. `VerifyAll` audits the closed,
 positive, crossing-free mesh and bounds occupied-volume difference by the
 circle chord slivers times bore length plus the station-position allowance.
-`Placed` and `Copy` re-evaluate the same record under a signed-axis
+`Transform` and `Copy` re-evaluate the same record under a signed-axis
 isometry when the transformed bore still runs along y. The placed box
 endpoints and bore center must equal their rational images under the
 transform's exact signed basis and recorded translation; §4.3b's corner
@@ -757,7 +757,7 @@ below reads the bands where the plain brep reader would miss them:
 | **DG9** | wall survey | staged `Suspect`, as for every brep. The wall behind every kept face is `t` by construction, but the material between two features the erosion left solid is not, and no reader proves which is which | staged `Suspect` |
 | **DG10** | STEP | analytic: planes and cylinders | analytic where every patch is a `Plane`; a `Cone` sends the whole body to the faceted writer (`docs/step-export-design.md`) |
 | **DG11** | a later `Fillet`/`Chamfer`/`Shell` | Tables RB/EB/SB/TC/LB over the record; RB1 needs `delta = 0`, so a shell whose offsets are exact floats takes route E or L again, and one whose offsets rounded is SB1 | the same over the rewritten record; an edge of a band patch is not in the record and matches nothing (route E's SB6, route L's SL1) |
-| **DG12** | `Placed`, `Mirrored`, `PatternCopies` | re-lifts every face frame | the same; `loopBands` are re-attached by the re-evaluation, as `capBlendPayload.placed` re-derives its bands |
+| **DG12** | `Transform`, `Mirrored`, `PatternCopies` | re-lifts every face frame | the same; `loopBands` are re-attached by the re-evaluation, as `capBlendPayload.placed` re-derives its bands |
 
 BG3's and BG4's consumer rules are stated in §3.1a and §3.1c.
 BG6 reads §3.1b's downstream gates and §3.1e's proof.

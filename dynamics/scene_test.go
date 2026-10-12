@@ -430,7 +430,7 @@ func tumbleTrayBox(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, h floa
 	body := makeBox(t, doc, x0, y0, x1, y1, 0, h)
 	shift, err := r3.Translation(r3.Vec{Z: z0})
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), shift)
+	placed, err := decad.Transform(t.Context(), body, shift)
 	require.NoError(t, err)
 	return placed
 }

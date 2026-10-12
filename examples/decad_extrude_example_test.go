@@ -66,10 +66,10 @@ func Example_decad_extrude() {
 	// live bodies: 1
 }
 
-// Placed applies a rigid motion to a body: the moved body is a new body with
+// Transform applies a rigid motion to a body: the moved body is a new body with
 // fresh provenance, and the original is retired —
 // it stays readable, but takes no further operations.
-func Example_decad_placed() {
+func Example_decad_transform() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -96,7 +96,7 @@ func Example_decad_placed() {
 		fmt.Printf("failed to build motion: %s\n", err)
 		return
 	}
-	placed, err := body.Placed(context.Background(), motion)
+	placed, err := decad.Transform(context.Background(), body, motion)
 	if err != nil {
 		fmt.Printf("failed to place: %s\n", err)
 		return
@@ -118,7 +118,7 @@ func Example_decad_placed() {
 	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 
 	// The original was consumed by the placement.
-	if _, err := body.Placed(context.Background(), motion); err != nil {
+	if _, err := decad.Transform(context.Background(), body, motion); err != nil {
 		fmt.Printf("moving the original again: %s\n", err)
 	}
 	// Output:

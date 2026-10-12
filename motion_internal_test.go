@@ -278,7 +278,7 @@ func TestVerifyMotionRevolveKeepsLiveDenotationIdentities(t *testing.T) {
 }
 
 // TestVerifyMotionRefusesABodyItDidNotBuild is §9 test 9's row the public
-// API cannot reach: a mover with no payload is ErrUnsupported, as for Placed.
+// API cannot reach: a mover with no payload is ErrUnsupported, as for Transform.
 func TestVerifyMotionRefusesABodyItDidNotBuild(t *testing.T) {
 	t.Parallel()
 	doc := New()
@@ -308,7 +308,7 @@ func farCornerFixture(t *testing.T, pivot, depth float64) (*Document, *Body, *Bo
 	block := internalBoxBody(t, doc, -10, -20, 10, 0, 20)
 	shift, err := r3.Translation(r3.NewVec(cornerX, lowest+depth, -5))
 	require.NoError(t, err)
-	block, err = block.Placed(t.Context(), shift)
+	block, err = Transform(t.Context(), block, shift)
 	require.NoError(t, err)
 	swing := Revolute{Center: r3.NewVec(pivot, 0, 0), Axis: r3.NewVec(0, 0, 1), From: units.Degrees(0), To: units.Degrees(45)}
 	return doc, arm, block, swing
@@ -428,7 +428,7 @@ func TestMotionOverlapThatDoesNotTransferIsUndecided(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(25, 40, 0))
 		require.NoError(t, err)
-		block, err := disc.Placed(t.Context(), move)
+		block, err := Transform(t.Context(), disc, move)
 		require.NoError(t, err)
 		swing := Revolute{Axis: r3.NewVec(0, 0, 1), From: units.Degrees(0), To: units.Degrees(45)}
 		requireUndecided(t, doc, arm, block, swing)

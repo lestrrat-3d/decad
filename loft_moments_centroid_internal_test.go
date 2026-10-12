@@ -260,7 +260,7 @@ func TestLoftCentroidShiftFormEnclosesTwoArcLobe(t *testing.T) {
 			want := lobeTrueCentroid(row.bulgeOffset, row.twist)
 			boundary := lobeTrueBoundary(row.bulgeOffset, row.twist, 1<<14)
 			if row.placed {
-				body, err = body.Placed(t.Context(), rot)
+				body, err = Transform(t.Context(), body, rot)
 				require.NoError(t, err)
 				want = rot.Apply(want)
 				for i, p := range boundary {

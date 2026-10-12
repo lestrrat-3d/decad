@@ -477,7 +477,7 @@ func TestBrepFaceViewChargesSectionDisplacement(t *testing.T) {
 	tool := internalBoxBody(t, doc, 3-shift, 3, 7-shift, 7, 4)
 	move, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
-	tool, err = tool.Placed(t.Context(), move)
+	tool, err = Transform(t.Context(), tool, move)
 	require.NoError(t, err)
 	pocket, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)

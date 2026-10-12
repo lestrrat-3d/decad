@@ -50,7 +50,7 @@ func TestSweepCompositeArcLineArcMeasurementsReplay(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(20, -10, 3))
 	require.NoError(t, err)
-	placed, err := body.Placed(t.Context(), move)
+	placed, err := decad.Transform(t.Context(), body, move)
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(12+20*math.Pi))
 	decadtest.MeasuresArea(t, placed, units.SquareMillimeters(32+40*math.Pi))

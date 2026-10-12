@@ -82,6 +82,6 @@ func TestUnstitchPlacementOfNonzeroNormalBoundFaceRefuses(t *testing.T) {
 
 	further, err := r3.Translation(r3.NewVec(1, 1, 1))
 	require.NoError(t, err)
-	_, err = sheet.Placed(t.Context(), further)
+	_, err = Transform(t.Context(), sheet, further)
 	require.ErrorIs(t, err, ErrUnsupported)
 }

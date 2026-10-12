@@ -28,7 +28,7 @@ func TestPointLoftSplitAnchoredScalePreservesCapsAndVolume(t *testing.T) {
 	slab := parts[1]
 	turn, err := r3.RotationAround(r3.Vec{}, r3.NewVec(1, 0, 0), units.Radians(0.1366860654293528))
 	require.NoError(t, err)
-	twisted, err := slab.Placed(t.Context(), turn)
+	twisted, err := decad.Transform(t.Context(), slab, turn)
 	require.NoError(t, err)
 	heelFaces, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(slab))).SelectFaces(twisted)
 	require.NoError(t, err)

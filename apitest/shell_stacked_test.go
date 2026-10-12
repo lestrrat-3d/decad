@@ -130,7 +130,7 @@ func TestShellBothCapsHoledBands(t *testing.T) {
 
 			rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 			require.NoError(t, err)
-			placed, err := body.Placed(t.Context(), rotation)
+			placed, err := decad.Transform(t.Context(), body, rotation)
 			require.NoError(t, err)
 			require.Len(t, placed.Lumps(), 3)
 			require.Len(t, placed.Faces(), len(body.Faces()))

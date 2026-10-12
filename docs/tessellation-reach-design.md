@@ -233,7 +233,7 @@ tess §14's loft bullet in full, plus:
   body's `Vertices()` positions exactly.
 - Unplaced pinned `LineSeg`-only loft: `Bound() == 0`, and `Union(loft, prism)` reports an `Exact` volume
   equal to the analytic sum minus overlap.
-- Placed `LineSeg`-only loft: `Bound() == delta` (read `Bounds().Bound` from the body, which equals
+- Transformed `LineSeg`-only loft: `Bound() == delta` (read `Bounds().Bound` from the body, which equals
   `absSumUpper(delta, 0)`), and `Cut(prism, loft)` succeeds with a positive `Volume().Bound`.
 - Chorded `ArcSeg` pair loft: `Bound()` strictly greater than `Bounds().Bound()` whenever
   `maxTwistOffsetUpper > 0` (assert through a helical-tooth fixture, `loft_helical_tooth_test.go`).

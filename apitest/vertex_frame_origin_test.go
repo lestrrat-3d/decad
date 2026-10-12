@@ -233,7 +233,7 @@ func TestVertexFarBuiltPlacedBackBoundEnclosesLift(t *testing.T) {
 	t.Run("box", func(t *testing.T) {
 		t.Parallel()
 		b := originBox(t, decad.New(), o, 0, 0, 1, 1, 1, decad.Along)
-		moved, err := b.Placed(t.Context(), back)
+		moved, err := decad.Transform(t.Context(), b, back)
 		require.NoError(t, err)
 		worst := requireVerticesEnclosed(t, moved,
 			shiftedCands(liftGrid(o, []float64{0, 1}, []float64{0, 1}, []float64{0, 1}), tr), 8)
@@ -244,7 +244,7 @@ func TestVertexFarBuiltPlacedBackBoundEnclosesLift(t *testing.T) {
 		box := originBox(t, decad.New(), o, 0, 0, 4, 4, 2, decad.Along)
 		c, err := box.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(1))
 		require.NoError(t, err)
-		moved, err := c.Placed(t.Context(), back)
+		moved, err := decad.Transform(t.Context(), c, back)
 		require.NoError(t, err)
 		cands := append(liftGrid(o, []float64{0, 4}, []float64{0, 4}, []float64{0, 1}), chamferTop(o)...)
 		worst := requireVerticesEnclosed(t, moved, shiftedCands(cands, tr), 12)

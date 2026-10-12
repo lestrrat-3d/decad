@@ -91,7 +91,7 @@ If the tube area is Δ, the polygon area has lower bound A, and every point
 in the difference lies at most D from the polygon centroid, the centroid
 bound is ΔD/(A−Δ) plus coordinate rounding. A nonpositive area floor leaves
 the Split valid but makes this query return `ErrUnsupported`. A rigid
-`Placed` copy maps the certified centroid and widens its bound by the
+`Transform` maps the certified centroid and widens its bound by the
 placement's proved stretch and rounding. A source group split into separate
 face patches cannot lend its whole-group centroid to either patch.
 
