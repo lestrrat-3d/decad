@@ -35,7 +35,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Closed sweep path outside the exact two-arc full circle or exact-turn planar circular-section loops | `ErrUnsupported` (`sweep.go`); the admitted solids use certified full-Revolve or cyclic-span proofs | `docs/sweep-design.md` §§3.3–3.5 |
 | Free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
 | Coil of a profile with free-form, elliptical or trimmed segments | `ErrUnsupported` (CS7) (`internal/coil/profile.go`) | `docs/helix-design.md` CS7 |
-| Composite path in `SweepChain` | `ErrUnsupported` (R34); one straight span only | `docs/surface-design.md` §1.2 |
+| `SweepChain` over other composite paths or a single arc; placement of its composite sheet | `ErrUnsupported`; one radial Sketch line on the exact cardinal positive-Z line and XZ half-circle builds and meshes (R34) | `docs/sweep-design.md` §15.8 |
 | `Body.Section` outside parallel exact prisms and whole-circle prisms cut by cardinal planes with exact half-chords | `ErrUnsupported`; no exact section profile is available for the other body and plane classes | `docs/section-design.md` |
 | General four-plus or varying noncircular curved-section lofts, guide rails and centerlines | `LoftSections` admits its three-section classes and four rounded-rectangle sections with cubic width; `LoftFaces` admits nine ordered caps from one authenticated point-loft Split source; other shapes refuse | `docs/loft-sections-design.md`, `docs/loft-face-sections-design.md`, `docs/loft-design.md` §1 |
 | Point-section loft of a holed profile | `LoftFromPoint` refuses holes because the common apex would have a non-manifold vertex link | `docs/loft-point-design.md` |
@@ -94,7 +94,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| `Thicken` of composite sweep, loft, stitched, `Body.Patch` or `Unstitch` sheets | `ErrUnsupported` (R24); one-span straight and arc sweep sheets use their analytic reductions | `docs/surface-design.md` §16.8 |
+| `Thicken` of composite sweep, chain-sweep, loft, stitched, `Body.Patch` or `Unstitch` sheets | `ErrUnsupported` (R24); one-span profile-fed straight and arc sweep sheets use their analytic reductions | `docs/surface-design.md` §16.8 |
 | `Body.Patch` over a rim with a bounded vertex (a cut junction, a trimmed line end, a circle seam whose centre plus radius rounds) that no straight prism build stamped with one level token, such as a `Patch` sheet's rim | `ErrUnsupported` (R6) | `docs/surface-design.md` §5.2 |
 | Tessellation of `Body.Patch` with a curved face or edge outside a single-circle prism sheet filled in one call, or with a nonzero face-normal bound | `ErrUnsupported`: no shared chording for that face or edge | `docs/surface-design.md` §10; `docs/tessellation-design.md` §2 |
 | `Stitch` closing a revolve sheet whose wall tags are not exactly their records: a tilted or round-anchored axis, a near-parallel or near-perpendicular side, a snapped centre | `ErrUnsupported` (R8, `stitchFluxTagsDenoted`) | `docs/surface-design.md` §6.4 |

@@ -12,12 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/sweep-design.md §15's public-surface tests for the
-// first chain-sweep increment — docs/surface-design.md §15's T190 through
-// T195: SweepChain over a ONE-SPAN straight path, which §15.2 states needs no
-// pairing rule because it has no join to pair. The arc reduction and every
-// composite path stay refused (Table SC rows SC7 and SC9), and T194 is what
-// asserts each refusal fires for its own reason rather than for a shared one.
+// This file tests SweepChain's one-span straight path. The standalone arc
+// and composite paths outside §15.8's cardinal class still refuse.
 
 // straightSweepPath is the one-span path every axis-aligned fixture below
 // sweeps along: from the XY plane's origin, h mm along that plane's own
@@ -290,15 +286,8 @@ func TestSweepChainRefusesAnOffNormalPath(t *testing.T) {
 }
 
 // TestSweepChainRefusesCompositeAndArcPaths is docs/surface-design.md's T194:
-// a composite path and a one-span arc path are each ErrUnsupported, and each
-// message names its own staged case — the composite join of
-// docs/sweep-design.md §15.1 and the arc reduction of its §15.6 — rather than
-// a shared refusal that would hide which gate fired.
-//
-// Shown-to-fail: removing the span-count gate lets the composite fixture reach
-// validateStraightSweepPath, which refuses it with the profile-fed sweep's own
-// "this evaluator sweeps one straight path span only" wording and leaves the
-// message assertion below red.
+// a source extending beyond the half-circle radius and a standalone arc
+// each refuse at their own gate.
 func TestSweepChainRefusesCompositeAndArcPaths(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
@@ -312,7 +301,7 @@ func TestSweepChainRefusesCompositeAndArcPaths(t *testing.T) {
 	require.NoError(t, err)
 	_, err = doc.SweepChain(t.Context(), s, ch, composite)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "composite path join")
+	require.ErrorContains(t, err, "radial source inside its radius")
 
 	// A half turn in the XZ plane about (10, 0, 0), so its initial tangent is
 	// exactly +Z and the path clears SC3 before reaching the staged arm.

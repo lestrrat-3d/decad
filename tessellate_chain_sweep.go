@@ -1,0 +1,290 @@
+package decad
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/r3"
+)
+
+// The line/half-circle chain sweep is a planar rectangle joined to a half
+// annulus. Its one recorded line supplies the two profile stations at every
+// angular section. The join reuses the straight wall's own two vertices, and
+// the far rim reuses the arc wall's vertices. No coordinate-based weld occurs.
+const maxChainSweepArcCells = 4096
+
+func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
+	chord float64, verify Verification) (*Mesh, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	w, height, radius, straight, curved, err := chainSweepMeshClass(b, sp)
+	if err != nil {
+		return nil, err
+	}
+	upperPi := proofbound.RatFloatUp(proofbound.PiUpper)
+	n := 8
+	for n <= maxChainSweepArcCells && tessellation.ChordSagitta(radius, upperPi, n) > chord/2 {
+		n *= 2
+	}
+	if n > maxChainSweepArcCells {
+		return nil, fmt.Errorf(`%w: the chain sweep arc needs more than %d chord cells at this tolerance`,
+			ErrUnsupported, maxChainSweepArcCells)
+	}
+
+	lineCo := straight.Loops()[0].CoEdges()
+	arcCo := curved.Loops()[0].CoEdges()
+	if len(lineCo) != 4 || len(arcCo) != 4 ||
+		arcCo[0].Start() != lineCo[3].Start() || arcCo[1].Start() != lineCo[2].Start() {
+		return nil, fmt.Errorf(`%w: the chain sweep walls do not share their two indexed join vertices`, ErrUnsupported)
+	}
+	// The straight wall's coedge order is source-start at its near rim,
+	// source-end at its near rim, source-end at the join, source-start at
+	// the join. The arc wall walks the same source indices at its start.
+	mesh := &Mesh{}
+	store := make([]float64, 0, 2*n+4)
+	for i, nominal := range []r3.Vec{{}, {X: w}, {X: w, Z: height}, {Z: height}} {
+		v := lineCo[i].Start()
+		mesh.vertices = append(mesh.vertices, v.position)
+		store = append(store, chainSweepVertexGap(v, nominal))
+	}
+	mesh.addTriangle([3]int{0, 1, 2}, straight)
+	mesh.addTriangle([3]int{0, 2, 3}, straight)
+	outer, inner := 3, 2
+	budget := proofbound.NewWorkBudget(ctx)
+	for j := 1; j <= n; j++ {
+		if err := budget.Step(); err != nil {
+			return nil, err
+		}
+		nextOuter, nextInner := len(mesh.vertices), len(mesh.vertices)+1
+		for k, radial := range []float64{radius, radius - w} {
+			var p r3.Vec
+			var gap float64
+			if j == n {
+				v := arcCo[3-k].Start()
+				p = v.position
+				x := new(big.Rat).Mul(proofarith.FloatRat(radius), big.NewRat(2, 1))
+				if k == 1 {
+					x.Sub(x, proofarith.FloatRat(w))
+				}
+				gap = chainSweepVertexGapRat(v, x, new(big.Rat), proofarith.FloatRat(height))
+			} else {
+				p, gap, err = chainSweepArcStation(height, radius, radial, j, n)
+				if err != nil {
+					return nil, err
+				}
+			}
+			mesh.vertices = append(mesh.vertices, p)
+			store = append(store, gap)
+		}
+		mesh.addTriangle([3]int{outer, inner, nextInner}, curved)
+		mesh.addTriangle([3]int{outer, nextInner, nextOuter}, curved)
+		outer, inner = nextOuter, nextInner
+	}
+	if err := budget.Err(); err != nil {
+		return nil, err
+	}
+	coord, err := tessellation.StoreMax(store)
+	if err != nil {
+		return nil, err
+	}
+	mesh.coordBound = coord
+	straightBound := max(store[0], store[1], store[2], store[3])
+	mesh.setFaceBound(straight, proofbound.UpRound(straightBound))
+	arcBound := proofbound.AbsSumUpper(tessellation.ChordSagitta(radius, upperPi, n), coord)
+	if proofbound.IsNonFinite(arcBound) || arcBound > chord {
+		return nil, fmt.Errorf(`%w: the chain sweep arc's chord and coordinate bound exceeds the requested tolerance`,
+			ErrUnsupported)
+	}
+	mesh.setFaceBound(curved, arcBound)
+
+	// A per-triangle exact area bracket checks positive area at every level.
+	// At VerifyAll, the two live faces' certified area intervals bound the
+	// difference from their attributed held triangle sums.
+	areas := map[*Face]chainSweepAreaInterval{}
+	for i, tri := range mesh.triangles {
+		if err := budget.Step(); err != nil {
+			return nil, err
+		}
+		lo, hi, ok := chainSweepTriangleArea(mesh.vertices, tri)
+		if !ok {
+			return nil, fmt.Errorf(`%w: chain sweep facet %d has no positive area`, ErrUnsupported, i)
+		}
+		pair := areas[mesh.source[i]]
+		if pair.lo == nil {
+			pair.lo, pair.hi = new(big.Rat), new(big.Rat)
+		}
+		pair.lo.Add(pair.lo, proofarith.FloatRat(lo))
+		pair.hi.Add(pair.hi, proofarith.FloatRat(hi))
+		areas[mesh.source[i]] = pair
+	}
+	if verify >= VerifyBoundary {
+		data, auditErr := revolvemesh.RequireRevolveFacetAreas(budget, mesh.vertices, mesh.triangles, coord)
+		if auditErr != nil {
+			return nil, liftTessellationError(auditErr)
+		}
+		if auditErr = revolvemesh.RevolveContactAudit(budget, data, mesh.triangles, coord); auditErr != nil {
+			return nil, liftTessellationError(auditErr)
+		}
+	}
+	if verify >= VerifyAll {
+		for _, f := range []*Face{straight, curved} {
+			slack, proofErr := chainSweepFaceAreaSlack(f, areas[f])
+			if proofErr != nil {
+				return nil, proofErr
+			}
+			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, slack)
+		}
+		if proofbound.IsNonFinite(mesh.areaSlack) {
+			return nil, fmt.Errorf(`%w: the chain sweep mesh has no finite area bound`, ErrUnsupported)
+		}
+	}
+	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
+		return nil, err
+	}
+	// A sheet has no occupied volume, so symDiffOK stays false.
+	return mesh, nil
+}
+
+// chainSweepMeshClass admits exactly the producer's cardinal one-line class.
+// Other line and arc orientations need a separate certified station map.
+func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float64, *Face, *Face, error) {
+	refuse := func() (float64, float64, float64, *Face, *Face, error) {
+		return 0, 0, 0, nil, nil,
+			fmt.Errorf(`%w: this chain sweep mesh requires one cardinal line and one positive half-circle`, ErrUnsupported)
+	}
+	if b.Kind() != BodySheet || len(sp.spans) != 2 || sp.spans[0].arc || !sp.spans[1].arc ||
+		sp.spans[1].reverseArcRims || sp.path == nil || len(sp.path.segments) != 2 ||
+		sp.spans[0].chain.xform != r3.Identity() ||
+		sp.spans[1].revolve.xform != r3.Identity() || len(sp.spans[0].chain.chains) != 1 ||
+		len(sp.spans[1].revolve.chains) != 1 {
+		return refuse()
+	}
+	chain := sp.spans[0].chain.chains[0]
+	if len(chain.Segments) != 1 || len(sp.spans[1].revolve.chains[0].Segments) != 1 {
+		return refuse()
+	}
+	seg, ok := chain.Segments[0].(lineSeg)
+	if !ok || seg.Start.U != 0 || seg.Start.V != 0 || seg.End.V != 0 || seg.End.U <= 0 ||
+		sp.spans[0].chain.frame.Origin() != (r3.Vec{}) ||
+		sp.spans[0].chain.frame.U() != (r3.Vec{X: 1}) ||
+		sp.spans[0].chain.frame.V() != (r3.Vec{Y: 1}) {
+		return refuse()
+	}
+	w := seg.End.U
+	line, ok := sp.path.segments[0].(LineTo)
+	if !ok || sp.path.start != (r3.Vec{}) || line.End.X != 0 || line.End.Y != 0 || line.End.Z <= 0 {
+		return refuse()
+	}
+	height := line.End.Z
+	arc, ok := sp.path.segments[1].(ArcThrough)
+	if !ok || arc.Through.Y != 0 || arc.End.Y != 0 || arc.End.Z != height {
+		return refuse()
+	}
+	radius := arc.Through.X
+	if !proofbound.FiniteVec(arc.Through) || !proofbound.FiniteVec(arc.End) || radius <= w ||
+		proofarith.FloatRat(arc.Through.Z).Cmp(new(big.Rat).Add(proofarith.FloatRat(height), proofarith.FloatRat(radius))) != 0 ||
+		proofarith.FloatRat(arc.End.X).Cmp(new(big.Rat).Mul(proofarith.FloatRat(radius), big.NewRat(2, 1))) != 0 ||
+		proofarith.FloatRat(radius-w).Cmp(new(big.Rat).Sub(proofarith.FloatRat(radius), proofarith.FloatRat(w))) != 0 {
+		return refuse()
+	}
+	if sp.spans[0].chain.z0 != 0 || sp.spans[0].chain.z1 != height ||
+		sp.spans[0].chain.sectionDelta != 0 || sp.spans[1].revolve.sectionDelta != 0 ||
+		sp.spans[1].revolve.frame.Origin() != (r3.Vec{Z: height}) ||
+		sp.spans[1].revolve.frame.U() != (r3.Vec{X: 1}) ||
+		sp.spans[1].revolve.frame.V() != (r3.Vec{Y: 1}) ||
+		sp.spans[1].revolve.ax.AU != radius || sp.spans[1].revolve.ax.AV != 0 ||
+		sp.spans[1].revolve.ax.DU != 0 || sp.spans[1].revolve.ax.DV != 1 ||
+		sp.spans[1].revolve.ax.AUBound != 0 || sp.spans[1].revolve.ax.AVBound != 0 ||
+		sp.spans[1].revolve.ax.DUBound != 0 || sp.spans[1].revolve.ax.DVBound != 0 {
+		return refuse()
+	}
+	var straight, curved *Face
+	for _, f := range b.Faces() {
+		for _, origin := range f.Origins() {
+			switch origin.Role {
+			case "side(0,0,0)":
+				straight = f
+			case "side(1,0,0)":
+				curved = f
+			}
+		}
+	}
+	if straight == nil || curved == nil || straight == curved || len(b.Faces()) != 2 ||
+		len(straight.Loops()) != 1 || len(curved.Loops()) != 1 {
+		return refuse()
+	}
+	return w, height, radius, straight, curved, nil
+}
+
+func chainSweepVertexGap(v *Vertex, ideal r3.Vec) float64 {
+	if !proofbound.FiniteVec(ideal) {
+		return math.Inf(1)
+	}
+	return chainSweepVertexGapRat(v, proofarith.FloatRat(ideal.X), proofarith.FloatRat(ideal.Y),
+		proofarith.FloatRat(ideal.Z))
+}
+
+func chainSweepVertexGapRat(v *Vertex, x, y, z *big.Rat) float64 {
+	if v == nil || !proofbound.FiniteVec(v.position) {
+		return math.Inf(1)
+	}
+	dx := proofarith.RationalFloatError(x, v.position.X)
+	dy := proofarith.RationalFloatError(y, v.position.Y)
+	dz := proofarith.RationalFloatError(z, v.position.Z)
+	return proofbound.AbsSumUpper(v.bound.Mag(), dx, dy, dz)
+}
+
+// chainSweepArcStation encloses its angular station using exact rational
+// turns. The held midpoint is merely an output coordinate; interval error
+// bounds its distance to the true circular station.
+func chainSweepArcStation(height, radius, radial float64, j, n int) (r3.Vec, float64, error) {
+	sin, cos := proofbound.TurnSinCosInterval(big.NewRat(int64(j), int64(2*n)))
+	r := proofarith.FloatRat(radial)
+	x := proofbound.IntervalSub(proofbound.PointInterval(proofarith.FloatRat(radius)),
+		proofbound.IntervalScale(cos, r))
+	z := proofbound.IntervalAdd(proofbound.PointInterval(proofarith.FloatRat(height)),
+		proofbound.IntervalScale(sin, r))
+	mid := func(iv proofbound.RatInterval) float64 {
+		value, _ := new(big.Rat).Quo(new(big.Rat).Add(iv.Lo, iv.Hi), big.NewRat(2, 1)).Float64()
+		return value
+	}
+	p := r3.Vec{X: mid(x), Z: mid(z)}
+	if !proofbound.FiniteVec(p) {
+		return r3.Vec{}, 0, fmt.Errorf(`%w: the chain sweep arc station is not finite`, ErrUnsupported)
+	}
+	gap := proofbound.AbsSumUpper(proofbound.IntervalFloatError(x, p.X),
+		proofbound.IntervalFloatError(z, p.Z))
+	if proofbound.IsNonFinite(gap) {
+		return r3.Vec{}, 0, fmt.Errorf(`%w: the chain sweep arc station has no finite coordinate bound`, ErrUnsupported)
+	}
+	return p, gap, nil
+}
+
+type chainSweepAreaInterval struct{ lo, hi *big.Rat }
+
+func chainSweepTriangleArea(vertices []r3.Vec, tri [3]int) (float64, float64, bool) {
+	a, b, c := proofarith.DyVec(vertices[tri[0]]), proofarith.DyVec(vertices[tri[1]]),
+		proofarith.DyVec(vertices[tri[2]])
+	n := proofarith.DvCross(proofarith.DvSub(b, a), proofarith.DvSub(c, a))
+	squared := proofarith.DyShift(proofarith.DvDot(n, n), -2)
+	lo, hi := proofarith.DySqrtDown(squared), proofarith.DySqrtUp(squared)
+	return lo, hi, lo > 0 && !proofbound.IsNonFinite(hi)
+}
+
+func chainSweepFaceAreaSlack(f *Face, held chainSweepAreaInterval) (float64, error) {
+	if held.lo == nil || !proofbound.FiniteVec(r3.Vec{X: f.area, Y: f.areaBound}) || f.areaBound < 0 {
+		return 0, fmt.Errorf(`%w: a chain sweep face has no certified area interval`, ErrUnsupported)
+	}
+	lo := new(big.Rat).Sub(proofarith.FloatRat(f.area), proofarith.FloatRat(f.areaBound))
+	hi := new(big.Rat).Add(proofarith.FloatRat(f.area), proofarith.FloatRat(f.areaBound))
+	d1 := new(big.Rat).Abs(new(big.Rat).Sub(lo, held.hi))
+	d2 := new(big.Rat).Abs(new(big.Rat).Sub(hi, held.lo))
+	return proofbound.RatFloatUp(proofbound.RatMax(d1, d2)), nil
+}

@@ -148,6 +148,7 @@
 1	0.00	TestCollinearNetProvesTheZeroCurvatureNumerator
 1	0.00	TestComputeLoftChordedAllowChargesTheHeldStationDisplacement
 1	0.00	TestComputeLoftChordedAllowReversesSignedCorrections
+1	0.01	TestCompositeChainSweepAreaSlackEnclosesTheAnalyticSheet
 1	0.00	TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell
 1	0.00	TestConeFrustumAreaBracketEnclosesReference
 1	0.00	TestConformCandidateScanCancellationIsBounded
