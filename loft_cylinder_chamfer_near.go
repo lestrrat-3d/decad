@@ -246,6 +246,9 @@ func loftCylinderChamferNearBandReach(ctx context.Context, mesh *bevelJoinedMesh
 	reach2 := new(big.Rat).Mul(reachRat, reachRat)
 	fraction := big.NewRat(11, 20)
 	for cap, band := range bands {
+		if band[0] == band[1] {
+			continue
+		}
 		capLevel := proofarith.FloatRat(source.z0)
 		if cap == 1 {
 			capLevel = proofarith.FloatRat(source.z1)

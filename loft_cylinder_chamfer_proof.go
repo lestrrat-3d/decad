@@ -274,6 +274,9 @@ func loftCylinderChamferIdealBandAudit(ctx context.Context, mesh *bevelJoinedMes
 	const maxPairs = 32_000_000
 	budget := proofbound.NewWorkBudget(ctx)
 	for cap, band := range bands {
+		if band[0] == band[1] {
+			continue
+		}
 		tris := mesh.tris[band[0]:band[1]]
 		pairCount := uint64(len(tris)) * uint64(len(tris)-1) / 2
 		if pairCount > maxPairs {

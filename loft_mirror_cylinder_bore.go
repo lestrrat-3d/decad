@@ -13,6 +13,17 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// This record retains the certified private lower bore and the full shell's
+// exterior and bore loops for a later outer-cap rewrite. Placement clears it.
+type loftMirrorCylinderBoreRecord struct {
+	join       *loftMirrorCylinderJoinRecord
+	lowerBore  *Body
+	capGroups  [2]int
+	outer      [2][]int
+	inner      [2][]int
+	wallGroups [2]int
+}
+
 // tryLoftMirrorCylinderBoreCut cuts the exact centered cylinder from both
 // reflected source halves. The lower half keeps the authenticated circular
 // Join record, so its existing bore proof supplies the inner wall and annular
@@ -140,6 +151,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	var src []int
 	var groups []facetGroup
 	capGroups := [2]int{-1, -1}
+	wallGroups := [2]int{-1, -1}
 	for half, payload := range []facetedPayload{lower, upper} {
 		groupMap := make(map[int]int)
 		for i, tri := range payload.tris {
@@ -163,6 +175,9 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 				if oldGroup == lowCaps[0] {
 					capGroups[half] = group
 				}
+				if oldGroup == lower.loftCylinderBore.wallGroup {
+					wallGroups[half] = group
+				}
 			}
 			if half == 1 {
 				for corner, index := range tri {
@@ -173,7 +188,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 			src = append(src, group)
 		}
 	}
-	if capGroups[0] < 0 || capGroups[1] < 0 {
+	if capGroups[0] < 0 || capGroups[1] < 0 || wallGroups[0] < 0 || wallGroups[1] < 0 {
 		return nil, fmt.Errorf("%w: reflected circular bore lost an exterior annulus", ErrUnsupported)
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
@@ -233,7 +248,11 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	}
 	fp := facetedPayload{verts: verts, tris: tris, src: src, groups: groups,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
-		areaSlack: areaSlack, dPair: diameter, contactAudited: true, xform: r3.Identity()}
+		areaSlack: areaSlack, dPair: diameter, contactAudited: true, xform: r3.Identity(),
+		loftMirrorCylinderBore: &loftMirrorCylinderBoreRecord{
+			join: record, lowerBore: lowerBody, capGroups: capGroups,
+			outer: outer, inner: inner, wallGroups: wallGroups,
+		}}
 	if err := loftMirrorCylinderCapOrigins(&fp, record.blank, record.pairs, capGroups); err != nil {
 		return nil, err
 	}

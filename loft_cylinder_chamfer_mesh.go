@@ -248,6 +248,9 @@ func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
 		oldBoxes[i] = meshbool.TriBox(fp.verts, tri)
 	}
 	for cap, band := range bands {
+		if band[0] == band[1] {
+			continue
+		}
 		pointTouches := make(map[string]struct{})
 		segmentEnds := make(map[string]struct{})
 		sideVertexKeys := make(map[string]struct{}, len(side.rings[cap]))
@@ -380,7 +383,7 @@ func loftCylinderChamferRingNested(ctx context.Context, verts []r3.Vec, outer, i
 	return inside && !on, err
 }
 
-func loftCylinderChamferCompact(mesh *bevelJoinedMesh, bounds []float64) []float64 {
+func loftCylinderChamferCompact(mesh *bevelJoinedMesh, bounds []float64) ([]float64, []int) {
 	used := make([]bool, len(mesh.verts))
 	for _, tri := range mesh.tris {
 		for _, index := range tri {
@@ -404,11 +407,59 @@ func loftCylinderChamferCompact(mesh *bevelJoinedMesh, bounds []float64) []float
 		}
 	}
 	mesh.verts = verts
-	return newBounds
+	return newBounds, index
+}
+
+type loftCylinderOneCapData struct {
+	capGroups [2]int
+	outer     [2][]int
+	inner     [2][]int
+	boreGroup int
+}
+
+// The top of a private one-cap rewrite is an exact subset of the old side.
+// The split ring came from the same two-triangle strip as the middle side;
+// joining it to the original top stations leaves the middle cap unchanged.
+func loftCylinderChamferRestoreTop(mesh *bevelJoinedMesh, fp facetedPayload,
+	source loftCylinderChamferSource, groups [][2]int, ring []int) error {
+	n := len(groups)
+	if len(ring) != 2*n || len(source.outer[1]) != n {
+		return fmt.Errorf("%w: one-cap chamfer lost its top side ring", ErrUnsupported)
+	}
+	for i, pair := range groups {
+		j := (i + 1) % n
+		topI, topJ := source.outer[1][i], source.outer[1][j]
+		mesh.add([3]int{ring[2*i+1], ring[2*j], topJ}, pair[0])
+		mesh.add([3]int{ring[2*i], ring[2*i+1], topJ}, pair[1])
+		mesh.add([3]int{ring[2*i], topJ, topI}, pair[1])
+	}
+	for i, group := range fp.src {
+		if group == source.capGroups[1] {
+			mesh.add(fp.tris[i], group)
+		}
+	}
+	return nil
 }
 
 func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerID,
 	fp facetedPayload, source loftCylinderChamferSource, setback float64) (*Body, error) {
+	return buildLoftCylinderCapChamferCaps(ctx, d, ref, fp, source, setback,
+		[2]bool{true, true}, 0.1, nil)
+}
+
+// The inactive top cap is kept verbatim, including its bore rim and middle
+// annulus. The active bottom band uses the same fixed-cutter proof as the
+// public two-cap route. This private result is sewn to its reflection.
+func buildLoftCylinderOneCapChamfer(ctx context.Context, d *Document, ref producerID,
+	fp facetedPayload, source loftCylinderChamferSource, setback, allowance float64,
+	data *loftCylinderOneCapData) (*Body, error) {
+	return buildLoftCylinderCapChamferCaps(ctx, d, ref, fp, source, setback,
+		[2]bool{true, false}, allowance, data)
+}
+
+func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref producerID,
+	fp facetedPayload, source loftCylinderChamferSource, setback float64,
+	active [2]bool, allowance float64, oneCap *loftCylinderOneCapData) (*Body, error) {
 	// This rewrite has its own fixed work envelope. The source ring and its
 	// chorded inset bound the constructed mesh; the crossing audit still
 	// performs every exact contact check it would under the default ceiling.
@@ -458,7 +509,15 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 		return nil, err
 	}
 	middle := [2]int{middleFirst, len(mesh.tris)}
+	if !active[1] {
+		if err := loftCylinderChamferRestoreTop(mesh, fp, source, groups, clipped.rings[1]); err != nil {
+			return nil, err
+		}
+	}
 	for cap := range 2 {
+		if !active[cap] {
+			continue
+		}
 		if !loftCylinderBoreRingSimple(ctx, mesh.verts, clipped.rings[cap]) {
 			return nil, fmt.Errorf("%w: loft/cylinder side level is not one simple outer ring", ErrUnsupported)
 		}
@@ -468,6 +527,11 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 	var radialReach [2]float64
 	maxInset := 0.0
 	for cap := range 2 {
+		if !active[cap] {
+			inset[cap] = source.outer[cap]
+			bands[cap] = [2]int{len(mesh.tris), len(mesh.tris)}
+			continue
+		}
 		samples, err := loftCylinderInset(ctx, fp, source.outer[cap], setback)
 		if err != nil {
 			return nil, fmt.Errorf("loft/cylinder cap %d inset: %w", cap, err)
@@ -565,6 +629,9 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 	ideal := loftCylinderChamferIdealVertices(mesh.verts, clipped)
 	var bandSideEdges [2]map[[2]int]struct{}
 	for cap := range 2 {
+		if !active[cap] {
+			continue
+		}
 		capLevel := proofarith.FloatRat(source.z0)
 		sideLevel := new(big.Rat).Add(capLevel, proofarith.FloatRat(setback))
 		if cap == 1 {
@@ -597,25 +664,35 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 	if err := loftCylinderChamferIdealBandAudit(ctx, mesh, ideal, bands, clipped.clipBound); err != nil {
 		return nil, err
 	}
-	bridgeReach, err := loftCylinderChamferBridgeCap(ctx, fp, source, mesh, ideal,
-		bands[1], inset[1], setback)
+	bridgeReach := 0.0
+	if active[1] {
+		bridgeReach, err = loftCylinderChamferBridgeCap(ctx, fp, source, mesh, ideal,
+			bands[1], inset[1], setback)
+		if err != nil {
+			return nil, err
+		}
+	}
+	needed, err := loftCylinderChamferBound(fp, maxInset, clipped.clipBound, bridgeReach)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := loftCylinderChamferBound(fp, maxInset, clipped.clipBound, bridgeReach); err != nil {
-		return nil, err
+	if needed > allowance || allowance > 0.1 || allowance <= 0 || proofbound.IsNonFinite(allowance) {
+		return nil, fmt.Errorf("%w: cap chamfer has no finite boundary allowance", ErrUnsupported)
 	}
 	for cap, reach := range radialReach {
+		if !active[cap] {
+			continue
+		}
 		if cap == 1 {
 			reach = proofbound.AbsSumUpper(reach, bridgeReach)
 		}
-		if proofbound.AbsSumUpper(reach, clipped.clipBound) >= 0.1 {
+		if proofbound.AbsSumUpper(reach, clipped.clipBound) >= allowance {
 			return nil, fmt.Errorf("%w: cap %d radial reach exceeds the published boundary bound",
 				ErrUnsupported, cap)
 		}
 	}
 	if err := loftCylinderChamferNearBandReach(ctx, mesh, fp, source, ideal, bands,
-		clipped.clipBound, 0.1); err != nil {
+		clipped.clipBound, allowance); err != nil {
 		return nil, err
 	}
 	if err := loftCylinderChamferBoreInheritance(fp, mesh, source); err != nil {
@@ -627,7 +704,7 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 	}
 	// The exact band-to-source witness consumes the full certified tolerance.
 	// Publish that allowance so VerifyAll does not understate the new boundary.
-	bound := 0.1
+	bound := allowance
 	if err := loftCylinderChamferIdealOrientation(ctx, mesh, ideal); err != nil {
 		return nil, err
 	}
@@ -661,7 +738,7 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 	for i := range bounds {
 		bounds[i] = max(bounds[i], bound)
 	}
-	bounds = loftCylinderChamferCompact(mesh, bounds)
+	bounds, remap := loftCylinderChamferCompact(mesh, bounds)
 	roundArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris,
 		clipped.clipBound)
 	if err != nil {
@@ -681,5 +758,23 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 	result.vertexBound, result.meshBound = bounds, bound
 	result.volSymDiff, result.areaSlack = volumeGap, proofbound.AbsSumUpper(fp.areaSlack, area)
 	result.loftCylinderJoin, result.loftCylinderBore = nil, nil
-	return buildFacetedBody(ctx, d, ref, result)
+	body, err := buildFacetedBody(ctx, d, ref, result)
+	if err != nil {
+		return nil, err
+	}
+	if oneCap != nil {
+		oneCap.capGroups = source.capGroups
+		oneCap.boreGroup = source.boreGroup
+		for cap := range 2 {
+			oneCap.outer[cap] = make([]int, len(inset[cap]))
+			for i, index := range inset[cap] {
+				oneCap.outer[cap][i] = remap[index]
+			}
+			oneCap.inner[cap] = make([]int, len(source.inner[cap]))
+			for i, index := range source.inner[cap] {
+				oneCap.inner[cap][i] = remap[index]
+			}
+		}
+	}
+	return body, nil
 }
