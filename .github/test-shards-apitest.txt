@@ -21,6 +21,8 @@
 0	2.43	TestUnionMirroredRadialTabsWithNearAxialCopy
 0	0.01	TestLoftEmbeddedFitFlanksKeepOriginalCurve
 0	2.70	TestLoftMirrorCylinderUnionJoinsRepeatedRadialTabs
+0	3.30	TestLoftMirrorCylinderBoreCutsRepeatedRadialTabs
+0	3.01	TestLoftMirrorCylinderBoreRejectsToolEndingInsideUpperHalf
 1	0.01	TestBlindPocketPlacedAndVerified
 1	0.02	TestBodyPatchCircularPrismNestedFillMeshRefuses
 1	0.02	TestBodyPatchCircularPrismOneRimTessellates

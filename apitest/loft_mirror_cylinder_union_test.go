@@ -144,4 +144,68 @@ func TestUnionMirroredRadialTabsWithNearAxialCopy(t *testing.T) {
 	centroid, err := joined.Centroid()
 	require.NoError(t, err)
 	require.Greater(t, centroid.Bound.Base(), 0.0)
+
+}
+
+func loftMirrorCylinderTwoTabs(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
+	t.Helper()
+	doc := decad.New()
+	world := sketch.NewWorld()
+	middleFrame, err := r3.NewFrame(r3.Vec{Z: 1}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	middlePlane, err := world.CreatePlaneFromFrame(middleFrame)
+	require.NoError(t, err)
+	bottomSketch, bottomProfile := loftMirrorTabSection(t, world, world.XY(), 0)
+	middleSketch, middleProfile := loftMirrorTabSection(t, world, middlePlane, 0.1)
+	lower, err := doc.Loft(t.Context(), bottomSketch, bottomProfile, middleSketch, middleProfile)
+	require.NoError(t, err)
+	upper, err := lower.MirroredCopy(t.Context(), decad.MirrorFrame{Frame: middleFrame})
+	require.NoError(t, err)
+	pair, err := decad.Union(t.Context(), lower, upper)
+	require.NoError(t, err)
+	quarterTurn, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(90))
+	require.NoError(t, err)
+	turnedPair, err := pair.PlacedCopy(t.Context(), quarterTurn)
+	require.NoError(t, err)
+	blank := circleBodyAtZ(t, doc, 0, 3, 0, 2)
+	joined, err := decad.Union(t.Context(), blank, pair)
+	require.NoError(t, err)
+	joined, err = decad.Union(t.Context(), joined, turnedPair)
+	require.NoError(t, err)
+	return doc, joined, blank
+}
+
+func TestLoftMirrorCylinderBoreCutsRepeatedRadialTabs(t *testing.T) {
+	doc, joined, blank := loftMirrorCylinderTwoTabs(t)
+	before, err := joined.Volume()
+	require.NoError(t, err)
+	bore := circleBodyAtZ(t, doc, 0, 0.5, -1, 4)
+	cut, err := decad.Cut(t.Context(), joined, bore)
+	require.NoError(t, err)
+	after, err := cut.Volume()
+	require.NoError(t, err)
+	removed := math.Pi * 0.5 * 0.5 * 2
+	require.LessOrEqual(t, math.Abs(before.Value.Base()-after.Value.Base()-removed),
+		before.Bound.Base()+after.Bound.Base()+1e-10)
+	mesh, err := cut.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	for _, role := range []decad.FeatureRef{decad.CapStart(blank), decad.CapEnd(blank),
+		decad.CapStart(cut), decad.CapEnd(cut)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(cut)
+		require.NoError(t, err)
+		require.Len(t, faces[0].Loops(), 2)
+	}
+	require.Len(t, doc.Bodies(), 1)
+}
+
+func TestLoftMirrorCylinderBoreRejectsToolEndingInsideUpperHalf(t *testing.T) {
+	doc, joined, _ := loftMirrorCylinderTwoTabs(t)
+	tool := circleBodyAtZ(t, doc, 0, 0.5, -1, 2.5)
+	_, err := decad.Cut(t.Context(), joined, tool)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "tool ends inside the upper half")
+	require.Contains(t, doc.Bodies(), joined)
 }

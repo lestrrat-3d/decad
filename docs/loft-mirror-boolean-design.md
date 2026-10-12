@@ -133,3 +133,24 @@ the loops and lower-half source record support later certified consumers.
 The boundary limit remains 0.1 mm, the final mesh still passes whole-shell
 vertex-link and crossing audits, and the faceted builder publishes bounded
 volume, area, centroid and diameter readings before the atomic commit.
+
+## Centered through-bore
+
+`Cut` accepts an exact centered circular prism through an unplaced, audited
+reflected Loft/cylinder join. The join record retains its certified lower-half
+Loft/cylinder join and the full body's exterior cap groups and outlines.
+Both exterior cap disks are checked against those recorded outlines before
+the Cut. The existing lower-half bore route authenticates the cutter and
+proves its inner wall and annular caps. The cutter must extend beyond both
+exact end planes of the full blank.
+
+The bored lower half is reflected through the original Loft end frame. The
+two middle annuli must have matching held vertices and oppositely wound
+triangles; they are removed and their vertices are welded. The remaining
+mesh passes vertex-link and whole-mesh crossing audits. Its boundary departure
+is the greater half bound. The occupied-volume allowance sums both half
+allowances, and the area allowance also charges the removed middle annuli.
+The final held diameter and departure bound the centroid reading. Both
+exterior annuli must tile the blank's exact end planes. The result keeps the
+blank's cap origins and receives Cut cap roles; `VerifyAll` checks its boundary
+and occupied-volume allowances at the requested tolerance.
