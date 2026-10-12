@@ -38,6 +38,13 @@ func TestBevelBoreTriangleClearKeepsOnlyOutsideFacets(t *testing.T) {
 	require.False(t, bevelBoreTriangleClear([3]int{3, 4, 5}, verts, 1))
 	require.False(t, bevelBoreTriangleClear([3]int{0, 1, 6}, verts, 1),
 		"a facet touching the bound still needs the exact audit")
+	// Neither coordinate interval clears the square around the bore, but the
+	// complete projected triangle stays radially outside the cylinder.
+	diagonal := []r3.Vec{
+		r3.NewVec(0, 2, 2), r3.NewVec(1, 1.8, 2.2), r3.NewVec(2, 2.2, 1.8),
+	}
+	require.True(t, bevelBoreTriangleClear([3]int{0, 1, 2}, diagonal, 2.1))
+	require.False(t, bevelBoreTriangleClear([3]int{0, 1, 2}, diagonal, 2.9))
 }
 
 func TestBevelBorePatternKindRequiresMatchingToeTopology(t *testing.T) {
@@ -46,6 +53,7 @@ func TestBevelBorePatternKindRequiresMatchingToeTopology(t *testing.T) {
 		toeClipped bool
 		ok         bool
 	}{
+		{placed: 3, ok: true},
 		{placed: 7, ok: true},
 		{placed: 11, toeClipped: true, ok: true},
 		{placed: 15, ok: true},
