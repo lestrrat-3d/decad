@@ -21,6 +21,7 @@ type revolveLoftFacesHeelTerminal struct {
 	root     loftFaceInterval
 	rootX    loftFaceInterval
 	endTime  *big.Rat
+	before   revolveLoftFacesHeelRegionSlice
 	capFace  *Face
 }
 
@@ -123,6 +124,7 @@ func certifyRevolveLoftFacesHeelTerminal(ctx context.Context,
 		!revolveLoftFacesHeelTerminalPositiveY(proof.trim, terminal) {
 		return nil, false, nil
 	}
+	terminal.before = before
 	return terminal, true, nil
 }
 

@@ -54,6 +54,23 @@ func TestCurvedHeelTerminalUsesLiveWholeArc(t *testing.T) {
 		require.Equal(t, 0, terminal.root.lo.Cmp(joint.roots[0].time.lo))
 		require.Equal(t, 0, terminal.root.hi.Cmp(joint.roots[0].time.hi))
 	}
+	require.False(t, terminal.before.point)
+	require.Equal(t, 0, terminal.before.lo.Cmp(terminal.upper.time))
+	require.Equal(t, 0, terminal.before.hi.Cmp(terminal.root.lo))
+	graph := &revolveLoftFacesHeelRegionEvents{
+		meridian: terminal.meridian,
+		slices:   []revolveLoftFacesHeelRegionSlice{terminal.before},
+	}
+	for event := range terminal.before.events {
+		box, bounded, boxErr := revolveLoftFacesHeelEventBoxFromCurrent(t.Context(),
+			proof, graph, 0, event, terminal.before.lo, terminal.before.hi,
+			big.NewRat(1, 1))
+		require.NoError(t, boxErr)
+		require.True(t, bounded)
+		require.NotNil(t, box)
+		require.Len(t, box.members, 1)
+		require.Same(t, proof.tooth, box.members[0].face.body)
+	}
 
 	loop, simple, err := revolveLoftFacesSimpleSourceLoop(t.Context(), trim)
 	require.NoError(t, err)

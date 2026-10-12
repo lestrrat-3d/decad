@@ -471,7 +471,9 @@ endpoint polynomials agree exactly. The open interval from the upper circle
 to the root bracket has two linked transverse crossings. Inside the bracket,
 those two line endpoint cells and the whole Arc are the only contacts; every
 other source cell is strictly outside the cone circle. After the bracket and
-through the witness, every source cell is strictly outside. The complete
+through the witness, every source cell is strictly outside. The terminal
+record stores the certified open pre-root slice so a cap builder can derive
+both moving connector root boxes and their live wall-face owners. The complete
 source box maps to positive world Y, so a negative-Y point on each cone circle
 is outside the exact simple profile. With no boundary crossing after the
 root, the entire circle is outside the profile. The current Revolve section
