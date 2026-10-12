@@ -70,6 +70,7 @@ type facetedPayload struct {
 	// obliqueBoss retains the two authenticated prism sources for one complete
 	// plate-to-cylinder junction. A later Fillet rebuilds from these records.
 	obliqueBoss            *obliqueBossRecord
+	crossCylinderBore      *crossCylinderBoreRecord
 	loftCylinderJoin       *loftCylinderJoinRecord
 	loftCylinderBore       *loftCylinderBoreRecord
 	loftMirrorJoin         *loftMirrorJoinRecord
@@ -197,6 +198,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.pointPlaneSourceEligible = false
 	next.bevelJoin = nil
 	next.obliqueBoss = nil
+	next.crossCylinderBore = nil
 	next.loftCylinderJoin = nil
 	next.loftCylinderBore = nil
 	next.loftMirrorJoin = nil

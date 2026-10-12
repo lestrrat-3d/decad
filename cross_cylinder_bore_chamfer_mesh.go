@@ -1,0 +1,289 @@
+package decad
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
+)
+
+const (
+	crossBoreHalfStations = 2048
+	crossBoreRestStations = 512
+	crossBoreAuditScans   = 1_200_000_000
+)
+
+type crossBoreMesh struct {
+	verts             []r3.Vec
+	tris              [][3]int
+	src               []int
+	groups            []facetGroup
+	outerStationError float64
+	outerAngularGap   float64
+}
+
+// crossBoreStationError bounds a held outer-ring vertex against the exact
+// source circle at this station's recorded angle. It covers both radial
+// rounding and the angle conversion used to build a cap or outer-wall ring.
+func crossBoreStationError(p r3.Vec, radius *big.Rat, phi float64) (float64, bool) {
+	s, c, ok := proofbound.RadSinCosSpan(proofbound.PointInterval(proofarith.FloatRat(phi)))
+	if !ok {
+		return 0, false
+	}
+	x := proofbound.IntervalMul(c, proofbound.PointInterval(radius))
+	y := proofbound.IntervalMul(s, proofbound.PointInterval(radius))
+	err := max(proofbound.IntervalFloatError(x, p.X), proofbound.IntervalFloatError(y, p.Y))
+	return proofbound.Radius3D(err), true
+}
+
+func (m *crossBoreMesh) point(p r3.Vec) int {
+	i := len(m.verts)
+	m.verts = append(m.verts, p)
+	return i
+}
+
+func (m *crossBoreMesh) triangle(a, b, c, source int) {
+	m.tris = append(m.tris, [3]int{a, b, c})
+	m.src = append(m.src, source)
+}
+
+func (m *crossBoreMesh) quad(a, b, c, d, source int) {
+	m.triangle(a, b, c, source)
+	m.triangle(a, c, d, source)
+}
+
+type crossBoreStation struct {
+	phi          float64
+	lower, upper r3.Vec
+	kind, j      int
+}
+
+const (
+	crossBorePositive = iota
+	crossBoreNegative
+	crossBoreRest
+)
+
+// crossBoreFeet starts from the exact cylinder-cylinder seam. The outer and
+// inner points have equal intrinsic setback on their respective unrolled
+// cylinders. The source intersection is x=sqrt(R²-r²cos²t), y=r cos t,
+// z=c+r sin t; Q=sqrt(R²-r²cos⁴t) makes both normal offsets explicit.
+func crossBoreFeet(rec *crossCylinderBoreRecord, setback, theta float64) (r3.Vec, r3.Vec) {
+	R, r, c := rec.radius, rec.bore, rec.centerZ
+	s, co := math.Sincos(theta)
+	x := math.Sqrt(R*R - r*r*co*co)
+	Q := math.Sqrt(R*R - r*r*co*co*co*co)
+	do := setback * co * x / (R * Q)
+	sdo, cdo := math.Sincos(do)
+	outer := r3.Vec{
+		X: x*cdo - r*co*sdo,
+		Y: x*sdo + r*co*cdo,
+		Z: c + r*s + setback*R*s/Q,
+	}
+	db := setback * co * s / Q
+	sdb, cdb := math.Sincos(db)
+	inner := r3.Vec{
+		X: x * (1 - setback/Q),
+		Y: r * (co*cdb - s*sdb),
+		Z: c + r*(s*cdb+co*sdb),
+	}
+	return outer, inner
+}
+
+func crossBoreFaceGroup(body *Body, role string) (facetGroup, bool) {
+	for _, face := range body.Faces() {
+		for _, origin := range face.Origins() {
+			if origin.producer == body.origin.producer && origin.Role == role {
+				return facetGroup{origins: face.Origins(), planar: face.isPlanar()}, true
+			}
+		}
+	}
+	return facetGroup{}, false
+}
+
+func crossBoreMeshGroups(rec *crossCylinderBoreRecord) ([]facetGroup, error) {
+	groups := make([]facetGroup, 0, 5)
+	for _, source := range []struct {
+		body *Body
+		role string
+	}{
+		{rec.target, roleCapStart},
+		{rec.target, roleCapEnd},
+		{rec.target, loftCylinderBlankSideRole},
+		{rec.tool, loftCylinderBlankSideRole},
+	} {
+		group, ok := crossBoreFaceGroup(source.body, source.role)
+		if !ok {
+			return nil, fmt.Errorf("%w: a cross-bore source lost face %q", ErrUnsupported, source.role)
+		}
+		groups = append(groups, group)
+	}
+	groups = append(groups, facetGroup{origins: []FeatureRef{{Role: "boreMouthChamfer"}}})
+	return groups, nil
+}
+
+func crossBoreStationPlan(rec *crossCylinderBoreRecord, setback float64) ([]crossBoreStation, error) {
+	const half, rest = crossBoreHalfStations, crossBoreRestStations
+	positive := make([]crossBoreStation, half+1)
+	negative := make([]crossBoreStation, half+1)
+	for j := range positive {
+		theta := math.Pi * float64(j) / half
+		upper, _ := crossBoreFeet(rec, setback, theta)
+		lower, _ := crossBoreFeet(rec, setback, 2*math.Pi-theta)
+		positive[half-j] = crossBoreStation{
+			phi: math.Atan2(upper.Y, upper.X), lower: lower, upper: upper,
+			kind: crossBorePositive, j: j,
+		}
+		co, s := math.Cos(theta), math.Sin(theta)
+		x, y := -math.Sqrt(rec.radius*rec.radius-rec.bore*rec.bore*co*co), rec.bore*co
+		negative[j] = crossBoreStation{
+			phi:   math.Atan2(y, x),
+			lower: r3.Vec{X: x, Y: y, Z: rec.centerZ - rec.bore*s},
+			upper: r3.Vec{X: x, Y: y, Z: rec.centerZ + rec.bore*s},
+			kind:  crossBoreNegative, j: j,
+		}
+		if negative[j].phi < 0 {
+			negative[j].phi += 2 * math.Pi
+		}
+	}
+	for _, stations := range [][]crossBoreStation{positive, negative} {
+		for i := 0; i+1 < len(stations); i++ {
+			if !(stations[i].phi < stations[i+1].phi) {
+				return nil, fmt.Errorf("%w: a cross-bore mouth turns backward", ErrUnsupported)
+			}
+		}
+	}
+	addRest := func(stations []crossBoreStation, first, last float64) []crossBoreStation {
+		for k := 1; k < rest; k++ {
+			phi := first + (last-first)*float64(k)/rest
+			p := r3.Vec{X: rec.radius * math.Cos(phi),
+				Y: rec.radius * math.Sin(phi), Z: rec.centerZ}
+			stations = append(stations, crossBoreStation{
+				phi: phi, lower: p, upper: p, kind: crossBoreRest,
+			})
+		}
+		return stations
+	}
+	stations := make([]crossBoreStation, 0, 2*(half+rest))
+	stations = append(stations, positive...)
+	stations = addRest(stations, positive[half].phi, negative[0].phi)
+	stations = append(stations, negative...)
+	stations = addRest(stations, negative[half].phi, positive[0].phi+2*math.Pi)
+	for i, station := range stations {
+		if !proofbound.FiniteVec(station.lower) || !proofbound.FiniteVec(station.upper) ||
+			(i > 0 && !(stations[i-1].phi < station.phi)) {
+			return nil, fmt.Errorf("%w: a cross-bore station has no finite ordered position", ErrUnsupported)
+		}
+	}
+	return stations, nil
+}
+
+// crossBoreStationGap certifies the largest source-cylinder angle covered
+// by one outer-wall panel, including the wrap across a full turn. It uses
+// each held station angle as an exact rational parameter and keeps the
+// full-turn endpoint outward because π is irrational.
+func crossBoreStationGap(stations []crossBoreStation) (float64, error) {
+	maximum := new(big.Rat)
+	for i := 0; i+1 < len(stations); i++ {
+		gap := new(big.Rat).Sub(proofarith.FloatRat(stations[i+1].phi),
+			proofarith.FloatRat(stations[i].phi))
+		if gap.Sign() <= 0 {
+			return 0, fmt.Errorf("%w: an outer-ring angle is not increasing", ErrUnsupported)
+		}
+		if gap.Cmp(maximum) > 0 {
+			maximum = gap
+		}
+	}
+	start := proofarith.FloatRat(stations[0].phi)
+	end := proofarith.FloatRat(stations[len(stations)-1].phi)
+	wrapLower := new(big.Rat).Add(new(big.Rat).Mul(proofbound.PiLower, big.NewRat(2, 1)), start)
+	wrapLower.Sub(wrapLower, end)
+	if wrapLower.Sign() <= 0 {
+		return 0, fmt.Errorf("%w: an outer-ring wrap is not increasing", ErrUnsupported)
+	}
+	wrapUpper := new(big.Rat).Add(new(big.Rat).Mul(proofbound.PiUpper, big.NewRat(2, 1)), start)
+	wrapUpper.Sub(wrapUpper, end)
+	if wrapUpper.Cmp(maximum) > 0 {
+		maximum = wrapUpper
+	}
+	return proofbound.RatFloatUp(maximum), nil
+}
+
+func buildCrossBoreChamferMesh(ctx context.Context,
+	rec *crossCylinderBoreRecord, setback float64) (*crossBoreMesh, error) {
+	groups, err := crossBoreMeshGroups(rec)
+	if err != nil {
+		return nil, err
+	}
+	stations, err := crossBoreStationPlan(rec, setback)
+	if err != nil {
+		return nil, err
+	}
+	outerGap, err := crossBoreStationGap(stations)
+	if err != nil {
+		return nil, err
+	}
+	m := &crossBoreMesh{groups: groups}
+	m.outerAngularGap = outerGap
+	radiusRat := proofarith.FloatRat(rec.radius)
+	bottom := make([]int, len(stations))
+	lower := make([]int, len(stations))
+	upper := make([]int, len(stations))
+	top := make([]int, len(stations))
+	n := 2 * crossBoreHalfStations
+	positiveOuter, negativeOuter := make([]int, n), make([]int, n)
+	for i, station := range stations {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		x, y := rec.radius*math.Cos(station.phi), rec.radius*math.Sin(station.phi)
+		bottom[i] = m.point(r3.Vec{X: x, Y: y})
+		lower[i] = m.point(station.lower)
+		upper[i] = lower[i]
+		if station.lower.Sub(station.upper).Len() >= 1e-13 {
+			upper[i] = m.point(station.upper)
+		}
+		top[i] = m.point(r3.Vec{X: x, Y: y, Z: rec.height})
+		for _, vertex := range []int{bottom[i], lower[i], upper[i], top[i]} {
+			err, ok := crossBoreStationError(m.verts[vertex], radiusRat, station.phi)
+			if !ok || proofbound.IsNonFinite(err) {
+				return nil, fmt.Errorf("%w: an outer-ring station has no circular bound", ErrUnsupported)
+			}
+			m.outerStationError = max(m.outerStationError, err)
+		}
+		if station.kind == crossBorePositive {
+			positiveOuter[station.j] = upper[i]
+			positiveOuter[(n-station.j)%n] = lower[i]
+		}
+		if station.kind == crossBoreNegative {
+			negativeOuter[station.j] = upper[i]
+			negativeOuter[(n-station.j)%n] = lower[i]
+		}
+	}
+	bottomCenter, topCenter := m.point(r3.Vec{}), m.point(r3.Vec{Z: rec.height})
+	for i := range stations {
+		j := (i + 1) % len(stations)
+		m.quad(bottom[i], bottom[j], lower[j], lower[i], 2)
+		m.quad(upper[i], upper[j], top[j], top[i], 2)
+		m.triangle(bottomCenter, bottom[j], bottom[i], 0)
+		m.triangle(topCenter, top[i], top[j], 1)
+	}
+	inner := make([]int, n)
+	for i := range inner {
+		theta := 2 * math.Pi * float64(i) / float64(n)
+		_, foot := crossBoreFeet(rec, setback, theta)
+		inner[i] = m.point(foot)
+	}
+	for i := range inner {
+		j := (i + 1) % n
+		m.quad(negativeOuter[i], inner[i], inner[j], negativeOuter[j], 3)
+		m.quad(positiveOuter[i], positiveOuter[j], inner[j], inner[i], 4)
+	}
+	return m, nil
+}
