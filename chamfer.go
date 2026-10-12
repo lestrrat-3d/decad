@@ -67,8 +67,9 @@ type ChamferOption interface{ chamferOption() }
 // faces the same audit and the revolve's axis gates, and the revolve is rebuilt
 // over the receiver's own axis, sweep and placement. The bevel is a Cone, a
 // Cylinder where the chord runs parallel to the axis, or a Plane where it runs
-// perpendicular. Any other revolve edge — a cap edge, an edge on the axis — is
-// SX5 (ErrUnsupported).
+// perpendicular. One source-authenticated quarter-turn rectangular radial
+// cap rim takes the bounded faceted route in docs/modify-reach-design.md §7.2.
+// Other cap edges and edges on the axis are SX5 (ErrUnsupported).
 //
 // A one-sided positive-taper circular extrude also accepts one complete
 // far-cap rim at an equal setback on its disk and cone (draft §10.5).
@@ -282,8 +283,12 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	// second class — every geometric edge of one or more complete prism cap
 	// loops (SX4 otherwise; docs/modify-reach-design.md §4/§8.3).
 	// Reach RX2 (docs/modify-reach-design.md §7): a revolve receiver bevels its
-	// swept meridian junctions through the same corner rewrite.
+	// swept meridian junctions through the same corner rewrite. One certified
+	// quarter-turn radial cap rim takes the source-backed §7.2 route first.
 	if rp, ok := b.payload.(revolvePayload); ok {
+		if out, matched, err := tryRevolveCapRimChamfer(ctx, b, rp, edges, dmm, dDelta, asym); matched || err != nil {
+			return out, err
+		}
 		return b.blendRevolveJunctions(ctx, sel, edges, rp, blend)
 	}
 	pp, ok := b.payload.(prismPayload)
