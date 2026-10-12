@@ -43,19 +43,25 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		original := proof.trim.toe.slope
 		defer func() { proof.trim.toe.slope = original }()
 		proof.trim.toe.slope = lfAdd(original, lfF(0.001))
-		assertChangedCurvedConeRefuses(t, tooth, proof)
+		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("changed heel cone apex", func(t *testing.T) {
 		original := proof.trim.heel.apex
 		defer func() { proof.trim.heel.apex = original }()
 		proof.trim.heel.apex = lfAdd(original, lfF(0.001))
-		assertChangedCurvedConeRefuses(t, tooth, proof)
+		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("changed toe tool", func(t *testing.T) {
 		original := proof.trim.toeTool
 		defer func() { proof.trim.toeTool = original }()
 		proof.trim.toeTool = proof.trim.heelTool
-		assertChangedCurvedConeRefuses(t, tooth, proof)
+		assertChangedCurvedTrimRefuses(t, tooth, proof)
+	})
+	t.Run("cap triangle on source face", func(t *testing.T) {
+		mutateCurvedCapFaceOwner(t, tooth, proof, true)
+	})
+	t.Run("source triangle on cap face", func(t *testing.T) {
+		mutateCurvedCapFaceOwner(t, tooth, proof, false)
 	})
 	t.Run("extra blank face", func(t *testing.T) {
 		shell := blank.Shells()[0]
@@ -156,20 +162,50 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 	})
 }
 
-func assertChangedCurvedConeRefuses(t *testing.T, tooth *Body,
+func assertChangedCurvedTrimRefuses(t *testing.T, tooth *Body,
 	proof *revolveLoftFacesSourceCertificate) {
 	t.Helper()
 	if revolveLoftFacesTrimCurrent(tooth.payload.(facetedPayload), proof.trim) {
-		t.Fatal("changed cone retained a current source record")
+		t.Fatal("changed trim retained a current source record")
 	}
 	_, certified, err := certifyRevolveLoftFacesSource(t.Context(), proof.blank, tooth)
 	if err != nil || certified {
-		t.Fatalf("changed cone reached source admission: %v, %t", err, certified)
+		t.Fatalf("changed trim reached source admission: %v, %t", err, certified)
 	}
 	_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
 	if err != nil || complete {
-		t.Fatalf("changed cone reached all-side consumer: %v, %t", err, complete)
+		t.Fatalf("changed trim reached all-side consumer: %v, %t", err, complete)
 	}
+}
+
+func mutateCurvedCapFaceOwner(t *testing.T, tooth *Body,
+	proof *revolveLoftFacesSourceCertificate, capToSource bool) {
+	t.Helper()
+	original := tooth.payload
+	defer func() { tooth.payload = original }()
+	payload := original.(facetedPayload)
+	payload.faceOf = slices.Clone(payload.faceOf)
+	capGroup := proof.trim.toeCapGroup
+	capTriangle, sourceTriangle := -1, -1
+	for i, group := range payload.src {
+		if group == capGroup && capTriangle < 0 {
+			capTriangle = i
+		}
+		if group != proof.trim.toeCapGroup && group != proof.trim.heelCapGroup && sourceTriangle < 0 {
+			sourceTriangle = i
+		}
+	}
+	if capTriangle < 0 || sourceTriangle < 0 ||
+		payload.faceOf[capTriangle] == payload.faceOf[sourceTriangle] {
+		t.Fatal("the real producer lacks separate cap and source faces")
+	}
+	if capToSource {
+		payload.faceOf[capTriangle] = payload.faceOf[sourceTriangle]
+	} else {
+		payload.faceOf[sourceTriangle] = payload.faceOf[capTriangle]
+	}
+	tooth.payload = payload
+	assertChangedCurvedTrimRefuses(t, tooth, proof)
 }
 
 func rejectChangedCurvedSourceOwner(t *testing.T, tooth *Body, ref FeatureRef,

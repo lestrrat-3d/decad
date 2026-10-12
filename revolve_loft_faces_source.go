@@ -126,7 +126,8 @@ func revolveLoftFacesTrimCurrent(p facetedPayload, trim *loftFacesTrimRecord) bo
 		len(trim.source.profile.Outer.Segments) < 4 ||
 		len(trim.source.profile.Outer.Segments) > 128 ||
 		len(trim.source.profile.Outer.Segments) != len(trim.source.source.entities) ||
-		!spiralTrimCapGroupsCurrent(p, trim) {
+		!spiralTrimCapGroupsCurrent(p, trim) ||
+		!revolveLoftFacesCapGroupsPure(p, trim) {
 		return false
 	}
 	if !slices.Equal(trim.stationGroup, trim.base.loftFacesCap.stationGroup) {
@@ -165,6 +166,37 @@ func revolveLoftFacesConeCurrent(tool *Body, recorded *pointConeLimit) bool {
 	live, ok := exactPointCone(tool)
 	return ok && recorded.apex.Cmp(live.apex) == 0 &&
 		recorded.far.Cmp(live.far) == 0 && recorded.slope.Cmp(live.slope) == 0
+}
+
+// A retained cone cap owns its entire live result face. A face shared with a
+// different source group cannot be treated as an isolated tool-cap boundary.
+func revolveLoftFacesCapGroupsPure(p facetedPayload, trim *loftFacesTrimRecord) bool {
+	if len(p.src) != len(p.tris) || len(p.faceOf) != len(p.tris) {
+		return false
+	}
+	capFaces := [2]int{-1, -1}
+	capGroups := [2]int{trim.toeCapGroup, trim.heelCapGroup}
+	for i, group := range p.src {
+		for capIndex, capGroup := range capGroups {
+			if group != capGroup {
+				continue
+			}
+			if p.faceOf[i] < 0 || capFaces[capIndex] >= 0 && capFaces[capIndex] != p.faceOf[i] {
+				return false
+			}
+			capFaces[capIndex] = p.faceOf[i]
+		}
+	}
+	if capFaces[0] < 0 || capFaces[1] < 0 || capFaces[0] == capFaces[1] {
+		return false
+	}
+	for i, face := range p.faceOf {
+		if face == capFaces[0] && p.src[i] != capGroups[0] ||
+			face == capFaces[1] && p.src[i] != capGroups[1] {
+			return false
+		}
+	}
+	return true
 }
 
 func revolveLoftFacesSameCapBound(a, b loftFaceCapBounds) bool {
