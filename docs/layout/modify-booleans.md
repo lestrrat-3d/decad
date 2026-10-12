@@ -11,6 +11,7 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `fillet.go` | Fillet entry and section rewrite adapter. See modify §6. |
 | `draft_circle_fillet.go` | Rebuilds a positive-taper circular draft's far cap-rim fillet as a bounded full meridian revolution. See draft §10.4. |
+| `draft_circle_chamfer.go` | Rebuilds a positive-taper circular draft's far cap-rim chamfer as a bounded full meridian revolution. See draft §10.5. |
 | `loft_fillet.go` | Rewrites matching loft records at selected analytic and fitted-spline root corners. See loft §17. |
 | `oblique_boss_fillet.go` / `oblique_boss_proof.go` | Builds and proves the complete tilted cylinder boss-root fillet. See oblique-boss-fillet design. |
 | `loft_fillet_audit.go` | Audits rewritten loft sections and nonadjacent clearance. See loft §17. |
