@@ -1245,7 +1245,9 @@ source's, reproduced from the same record:
   a role keyed to the boolean itself (§9), so keeping it verbatim is outside
   the never-inherited rule — that rule governs the new references a copy DOES
   re-derive from its own record, `Body.Origin()` (the `body` role, below) and the
-  analytic/modified feature roles;
+  analytic/modified feature roles. A certified Loft mirror `Union` is a bounded
+  faceted exception: it mints two outer-cap roles, so a placed copy keeps the
+  source origins and also mints those two roles under the copy's identity;
 - an **analytic** or **modified** copy (a prism, revolve, cup, tube) carries no
   separate upstream provenance — a prism cap is created by the prism step itself
   — so re-evaluation reproduces the body's own fixed roles (`capStart`, `capEnd`,
@@ -1507,7 +1509,8 @@ shell that built a tube — the analytic prisms and partial revolves whose
 evaluator emits `capStart` / `capEnd` — an admitted analytic `Union`, which
 rebuilds an analytic prism with fresh roles under its own identity, an
 authenticated axial Loft/cylinder `Union` or its centered bore `Cut`, whose
-audited planar caps also get fresh roles, the modified full revolution made by
+audited planar caps also get fresh roles, an authenticated axial Loft mirror
+`Union` with two retained outer caps, the modified full revolution made by
 a positive-taper circular draft rim fillet (draft §10.4), whose two planar
 disks get cap roles, and a `Placed` /
 `PlacedCopy` / `Duplicate` of one, which re-mints those roles under the copy's
