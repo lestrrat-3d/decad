@@ -125,7 +125,7 @@ func TestPointConeTrimKeepsFittedSidesAndCone(t *testing.T) {
 	}
 }
 
-func TestPointConeTrimConeNormalAndPlacedCopy(t *testing.T) {
+func TestPointConeTrimConeNormalAndCopyPlacement(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	tooth := pointConeTooth(t, doc)

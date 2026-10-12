@@ -124,11 +124,11 @@ func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
 	}
 }
 
-// TestLoftDuplicateIsMeasurementIdentical proves Duplicate's identity
+// TestLoftCopyIdentityIsMeasurementIdentical proves Copy's identity
 // motion carries delta 0 (the identity fast path): every measurement and
 // every held vertex is bit-identical to the source's, the source stays
 // live, and the document gains a second body.
-func TestLoftDuplicateIsMeasurementIdentical(t *testing.T) {
+func TestLoftCopyIdentityIsMeasurementIdentical(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20) // two 40x40 squares, h=10 -> 16000 mm3 box
 	doc := decad.New()
@@ -226,10 +226,10 @@ func TestLoftPlacedRotationSoundness(t *testing.T) {
 	require.Equal(t, decad.Approximate, bounds.Exactness)
 }
 
-// TestLoftPlacedCopyTranslation proves a pure translation moves Bounds and
+// TestLoftCopyPlacementTranslation proves a pure translation moves Bounds and
 // Centroid by exactly the translation, keeps the volume value, publishes a
 // positive bound enclosing the true 16000 mm3, and leaves the source live.
-func TestLoftPlacedCopyTranslation(t *testing.T) {
+func TestLoftCopyPlacementTranslation(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
@@ -338,14 +338,14 @@ func TestLoftPlacedReflectionHerringbone(t *testing.T) {
 	require.Equal(t, []*decad.Body{body, mirrored}, doc.Bodies())
 }
 
-// TestLoftPlacedCopyChainDoesNotAccumulate proves the re-lift-from-record
+// TestLoftCopyPlacementChainDoesNotAccumulate proves the re-lift-from-record
 // path (docs/loft-design.md §7, §12 PR 2a): ten successive Copy pure
 // rotations, chained one onto the last, keep the volume bound within a
 // small constant factor of the FIRST placement's own, since each
 // evaluation re-lifts from the two ORIGINAL recorded profiles rather than
 // moving an already-placed mesh — never accumulating rounding across the
 // chain the way facetedPayload.placed's move-the-held-mesh path would.
-func TestLoftPlacedCopyChainDoesNotAccumulate(t *testing.T) {
+func TestLoftCopyPlacementChainDoesNotAccumulate(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
@@ -514,7 +514,7 @@ func TestLoftPlacedRetireAndLiveness(t *testing.T) {
 
 	dup, err := decad.Copy(t.Context(), placed)
 	require.NoError(t, err)
-	require.Equal(t, []*decad.Body{placed, dup}, doc.Bodies(), "Duplicate leaves the receiver live")
+	require.Equal(t, []*decad.Body{placed, dup}, doc.Bodies(), "Copy leaves the receiver live")
 
 	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(move))
 	require.NoError(t, err)

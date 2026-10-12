@@ -384,8 +384,8 @@ func requireOpenAgreesWithFreeEdges(t *testing.T, b *decad.Body) {
 	}
 }
 
-// TestSurfaceRevolveStaysASheetThroughPlacement is §4.2's Placed/Duplicate/
-// Copy claim for Revolve: each re-evaluates the payload and reproduces
+// TestSurfaceRevolveStaysASheetThroughPlacement is §4.2's Placed/Copy
+// claim for Revolve: each re-evaluates the payload and reproduces
 // the sheet with no further code.
 func TestSurfaceRevolveStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()

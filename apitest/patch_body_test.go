@@ -247,8 +247,8 @@ func TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestBodyPatchReproducesThroughPlacement is §5.2's Placed/Duplicate/
-// Copy claim: each re-evaluates the payload and reproduces the patch
+// TestBodyPatchReproducesThroughPlacement is §5.2's Placed/Copy
+// claim: each re-evaluates the payload and reproduces the patch
 // with no further code, on the same terms Document.Patch's own
 // TestPatchReproducesThroughPlacement (patch_test.go) proves for a single
 // patch face.

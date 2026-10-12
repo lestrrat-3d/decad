@@ -685,7 +685,7 @@ func TestCopyPlacementOptions(t *testing.T) {
 	require.Equal(t, []*decad.Body{body, inst, last}, doc.Bodies())
 }
 
-func TestDuplicatePreservesFilletRoles(t *testing.T) {
+func TestCopyPreservesFilletRoles(t *testing.T) {
 	t.Parallel()
 	// A filleted prism's blend-role provenance is part of its re-evaluable
 	// record, so a Copy re-mints its own fillet(i,j) roles: the copy has
@@ -718,7 +718,7 @@ func TestDuplicatePreservesFilletRoles(t *testing.T) {
 	require.NotEmpty(t, faces, `a fillet role selects a face on the duplicate`)
 }
 
-func TestPlacedCopyPreservesFilletRoles(t *testing.T) {
+func TestCopyPlacementPreservesFilletRoles(t *testing.T) {
 	t.Parallel()
 	// The same guarantee under a non-identity placement: Copy re-evaluates
 	// the payload under the composed motion and re-mints the fillet roles.
@@ -737,7 +737,7 @@ func TestPlacedCopyPreservesFilletRoles(t *testing.T) {
 	requireManifold(t, inst)
 }
 
-func TestPlacedCopyPreservesChamferRoles(t *testing.T) {
+func TestCopyPlacementPreservesChamferRoles(t *testing.T) {
 	t.Parallel()
 	// Chamfer shares the blend-descriptor machinery, so a copy re-mints its
 	// chamfer(i,j) roles the same way a fillet's are re-minted.
@@ -760,7 +760,7 @@ func TestPlacedCopyPreservesChamferRoles(t *testing.T) {
 		`the duplicate re-mints the same chamfer roles`)
 }
 
-func TestDuplicatePlainExtrudeHasNoBlendRoles(t *testing.T) {
+func TestCopyPlainExtrudeHasNoBlendRoles(t *testing.T) {
 	t.Parallel()
 	// A plain extrude carries no blend descriptors, so its copy gains no spurious
 	// fillet/chamfer roles — the empty descriptor path is a no-op.
@@ -777,7 +777,7 @@ func TestDuplicatePlainExtrudeHasNoBlendRoles(t *testing.T) {
 	require.Zero(t, countRolePrefix(inst, "chamfer("), `a plain extrude copy has no chamfer roles`)
 }
 
-func TestDuplicatePreservesFacetedProvenance(t *testing.T) {
+func TestCopyPreservesFacetedProvenance(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)

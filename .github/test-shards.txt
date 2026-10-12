@@ -489,7 +489,7 @@
 3	3.74	TestLoftGearToothVerifiesSound
 3	0.00	TestLoftMassAccumulatorBoxAnchoredElsewhereStillExact
 3	0.00	TestLoftPairingsConsumesTheGateResolvedWalks
-3	0.83	TestLoftPlacedCopyTenTimesSectionDeltaUnchanged
+3	0.83	TestLoftCopyPlacementTenTimesSectionDeltaUnchanged
 3	0.01	TestLoftPlacedGateDiameterRoundsTheShrinkOutward
 3	0.00	TestLoftStationCapFitsTheAuditTriangleCeiling
 3	0.13	TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference
@@ -1207,7 +1207,7 @@
 8	0.61	TestTessellatePrismReusesPublishedWalks
 8	0.00	TestThickenRibbonWalkClassRefusals
 8	0.00	TestTriTriClassifyIsSymmetric
-8	0.02	TestUnstitchPlacedCopyOfNonzeroNormalBoundFaceRefuses
+8	0.02	TestUnstitchPlacementOfNonzeroNormalBoundFaceRefuses
 8	0.00	TestValidateLoftRecordsCoincidentPlanes
 8	2.09	TestVerifyCoilClearanceAgainstRevolveStaysSuspect
 8	0.01	TestVerifyLinkageKeepsTheNextProducerIdentity

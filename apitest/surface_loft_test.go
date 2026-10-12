@@ -260,8 +260,8 @@ func TestSurfaceLoftRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceLoftStaysASheetThroughPlacement is §4.2's Placed/Duplicate/
-// Copy claim for Loft: each re-evaluates the payload and reproduces the
+// TestSurfaceLoftStaysASheetThroughPlacement is §4.2's Placed/Copy
+// claim for Loft: each re-evaluates the payload and reproduces the
 // sheet with no further code.
 func TestSurfaceLoftStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()

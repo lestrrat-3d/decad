@@ -834,10 +834,10 @@ func TestLoftPlacedArcWedgeCarriesBothDisplacements(t *testing.T) {
 	require.Greater(t, loaded.sectionDelta, 0.0, "a curved pair's sectionDelta must be positive whether or not the body is placed")
 }
 
-// TestLoftPlacedCopyTenTimesSectionDeltaUnchanged is the ask's own line: ten
+// TestLoftCopyPlacementTenTimesSectionDeltaUnchanged is the ask's own line: ten
 // successive Copy motions leave sectionDelta UNCHANGED, proving it is
 // a record property and not an accumulating one.
-func TestLoftPlacedCopyTenTimesSectionDeltaUnchanged(t *testing.T) {
+func TestLoftCopyPlacementTenTimesSectionDeltaUnchanged(t *testing.T) {
 	t.Parallel()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := smallSweepWedgeSketch(t, w, base)

@@ -495,7 +495,7 @@ func TestExtrudeFreeformPlacementReproducesVolume(t *testing.T) {
 	require.NoError(t, err)
 	dv, err := dup.Volume()
 	require.NoError(t, err)
-	require.InDelta(t, base.Value.Mag(), dv.Value.Mag(), 1e-9, "Duplicate reproduces the volume")
+	require.InDelta(t, base.Value.Mag(), dv.Value.Mag(), 1e-9, "Copy reproduces the volume")
 
 	copied, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
 	require.NoError(t, err)

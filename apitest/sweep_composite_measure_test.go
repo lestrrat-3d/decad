@@ -62,7 +62,7 @@ func TestSweepCompositeArcLineArcMeasurementsReplay(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 }
 
-func TestSweepCompositePlacedCopyKeepsSourceReplay(t *testing.T) {
+func TestSweepCompositeCopyPlacementKeepsSourceReplay(t *testing.T) {
 	t.Parallel()
 
 	sketch, profile, path, _, _ := orthogonalSweepFixture(t)

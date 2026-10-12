@@ -196,8 +196,8 @@ func TestSurfaceExtrudeRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceExtrudeStaysASheetThroughPlacement is §4.2's Placed/Duplicate/
-// Copy claim: each re-evaluates the payload and reproduces the sheet
+// TestSurfaceExtrudeStaysASheetThroughPlacement is §4.2's Placed/Copy
+// claim: each re-evaluates the payload and reproduces the sheet
 // with no further code, and Placed's box is the sheet's own translated.
 func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()

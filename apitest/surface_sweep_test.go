@@ -341,8 +341,8 @@ func TestSurfaceSweepCompositeRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceSweepStaysASheetThroughPlacement is §4.2's Placed/Duplicate/
-// Copy claim across all three build paths: each re-evaluates the
+// TestSurfaceSweepStaysASheetThroughPlacement is §4.2's Placed/Copy
+// claim across all three build paths: each re-evaluates the
 // payload and reproduces the sheet with no further code.
 func TestSurfaceSweepStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()

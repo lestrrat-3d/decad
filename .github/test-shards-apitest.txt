@@ -57,7 +57,7 @@
 1	0.02	TestDraftCircleShellRefusals
 1	0.03	TestDraftCircleShellVerified
 1	0.01	TestDraftNotchWall
-1	0.01	TestDuplicatePreservesFilletRoles
+1	0.01	TestCopyPreservesFilletRoles
 1	0.00	TestExtrudeArcSegPrismBoundsTighten
 1	0.00	TestExtrudeChainRectangleMinusOneSideBuildsThreeWalls
 1	0.00	TestExtrudeCircularReadingsStayApproximate
@@ -70,7 +70,7 @@
 1	0.00	TestImplicitExactlyOneStopUnassertedZeroRewritten
 1	0.01	TestLinkagePoseAtWaypoints
 1	0.00	TestLoftChainMultiCellRibbonFreeEdgesAndArea
-1	0.00	TestLoftDuplicateIsMeasurementIdentical
+1	0.00	TestLoftCopyIdentityIsMeasurementIdentical
 1	0.01	TestLoftMirrorUnionKeepsUnrelatedSourcesSeparate
 1	0.01	TestLoftMirrorUnionSealsTheSharedCap
 1	0.00	TestLoftPlacedReflectionHerringbone
@@ -343,7 +343,7 @@
 2	0.14	TestSweepClosedRacetrackBuildsVerifiedTubeAndReplaysPlacement
 2	0.01	TestSweepClosedRacetrackRefusesUnprovedClearanceAndSection
 2	0.16	TestSweepCompositeCircularHoleTessellates
-2	0.03	TestSweepCompositePlacedCopyKeepsSourceReplay
+2	0.03	TestSweepCompositeCopyPlacementKeepsSourceReplay
 2	0.01	TestSweepMitredCollinearFrustumChain
 2	0.00	TestSweepMitredSelfCrossingNamesFaces
 2	0.19	TestSweepMitredTreeBranch
@@ -492,7 +492,7 @@
 3	0.01	TestPatternCopiesCircular
 3	0.01	TestPlacementContextCancelsAnalyticRebuilds
 3	0.02	TestPlacementContextPollsAnalyticRebuildHelpers
-3	1.00	TestPointConeTrimConeNormalAndPlacedCopy
+3	1.00	TestPointConeTrimConeNormalAndCopyPlacement
 3	1.00	TestPointConeTrimContainingCutCannotBuildInvertedBand
 3	0.01	TestPointDistanceFromBore
 3	0.01	TestPointDistanceFromBox
@@ -685,7 +685,7 @@
 4	0.00	TestLoftChainRefusesAMismatchedOrCurvedPairing
 4	0.00	TestLoftForeignOption
 4	0.01	TestLoftHoledProfilesMakePassage
-4	0.03	TestLoftPlacedCopyChainDoesNotAccumulate
+4	0.03	TestLoftCopyPlacementChainDoesNotAccumulate
 4	0.00	TestLoftSameKindCircleAgainstCircleAdmitted
 4	0.01	TestLoftTessellatePinnedLineSegLoftIsExact
 4	0.01	TestMassPropertiesRevolveRefusals
@@ -1081,7 +1081,7 @@
 6	0.13	TestDraftNearTangentJoinRefusesBooleans
 6	0.05	TestDraftPlacedAndFilleted
 6	0.01	TestDraftSubsetUndercut
-6	0.00	TestDuplicatePlainExtrudeHasNoBlendRoles
+6	0.00	TestCopyPlainExtrudeHasNoBlendRoles
 6	0.00	TestExtrudeChainDiagonalLineAreaBoundEnclosesAnalyticValue
 6	0.00	TestExtrudeChainRibbonsWeldAtAProvenCoincidentPair
 6	0.01	TestExtrudeFreeformJointCarriesChainVerdict
@@ -1314,7 +1314,7 @@
 7	0.00	TestPatternCopiesNonCoDirectional
 7	0.02	TestPatternCopiesUnionStack
 7	0.16	TestPatternedNHoleCut
-7	0.01	TestPlacedCopyPreservesChamferRoles
+7	0.01	TestCopyPlacementPreservesChamferRoles
 7	0.01	TestPointLocationOnAPlate
 7	2.41	TestPointLocationOnFacetedAndPlacedBodies
 7	0.28	TestPrismBooleanToothTouchingHubDoesNotOverlap
@@ -1472,7 +1472,7 @@
 8	0.51	TestDraftSubsetVerify
 8	0.02	TestDraftSymmetricReceiver
 8	0.01	TestDraftUndercutBox
-8	0.81	TestDuplicatePreservesFacetedProvenance
+8	0.81	TestCopyPreservesFacetedProvenance
 8	0.00	TestExactness
 8	0.00	TestExtrudeChainOneLineRibbon
 8	0.00	TestExtrudeChainTessellatesOneWallRibbon
@@ -1512,7 +1512,7 @@
 8	0.04	TestPatternedCircularGroup
 8	0.09	TestPatternedFallsBackToUnion
 8	0.00	TestPlaced
-8	0.01	TestPlacedCopyPreservesFilletRoles
+8	0.01	TestCopyPlacementPreservesFilletRoles
 8	0.02	TestPlacementContextCancelsAnalyticMetadataRewriting
 8	0.22	TestPlanStorageFollowsConvertedSegments
 8	0.05	TestPointLocationAcrossPocketsAndBores
@@ -1699,7 +1699,7 @@
 9	0.00	TestImplicitExactlyOneStopSuccessfulManyRewritten
 9	0.00	TestLoftChainCrossingCorrespondenceIsRefused
 9	0.00	TestLoftDuplicateAlignmentOption
-9	0.00	TestLoftPlacedCopyTranslation
+9	0.00	TestLoftCopyPlacementTranslation
 9	0.01	TestLoftVerifyBoxDisjointPairIsSound
 9	0.00	TestLoopCoEdgesMatchEdgesCompatibilityView
 9	0.02	TestMassPropertiesOneSpanSweeps
