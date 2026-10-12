@@ -852,9 +852,10 @@ Patch, Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve
 sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
 rule, and its increment-1 scope. `docs/loft-sections-design.md` owns the
-separate three-section `Document.LoftSections`: quadratic homothetic line
-sections, exactly identical curved sections, and linearly varying four-arc
-circles, and the bounded varying fitted-flank class with fixed arcs.
+separate `Document.LoftSections`: three quadratic homothetic line sections,
+exactly identical curved sections, linearly varying four-arc circles, and the
+bounded varying fitted-flank class with fixed arcs; or four rounded-rectangle
+sections with cubic width and fixed height and corner radius.
 `docs/loft-point-design.md` owns the separate
 `Document.LoftFromPoint(ctx, apex, sketch, profile)` solid construction from
 an exact world point to one recorded Sketch profile. `docs/sweep-design.md` owns `Sweep`'s
@@ -878,7 +879,7 @@ func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec, s *sketch.Ske
 ```
 
 `LoftSections(ctx, sections ...LoftSection)` carries each `Sketch` and
-`Profile` together. It admits exactly the three-section class in
+`Profile` together. It admits the three- and four-section classes in
 `docs/loft-sections-design.md`.
 
 `LoftFaces(ctx, sections ...*Face)` consumes nine ordered planar caps from

@@ -8,7 +8,7 @@
 # Shard totals at the last measurement:
 #   shard 0:    0.01s over 1 test
 #   shard 1:    0.95s over 113 tests
-#   shard 2:   37.08s over 204 tests
+#   shard 2:   37.30s over 206 tests
 #   shard 3:   82.95s over 226 tests
 #   shard 4:   82.99s over 212 tests
 #   shard 5:  120.11s over 201 tests
@@ -207,6 +207,8 @@
 2	0.01	TestLoftPlacedRotationSoundness
 2	0.00	TestLoftPlacedS13OverflowingCoordinate
 2	0.10	TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof
+2	0.20	TestLoftSectionsFourRoundedProfilesInterpolateNonAffineWidth
+2	0.02	TestLoftSectionsFourRoundedProfilesRefuseUnprovedShape
 2	0.02	TestLoftSectionsRefuseChangedArcAndUnequalSpacing
 2	0.20	TestLoftSectionsVaryingFittedFlanksKeepSourceProof
 2	0.03	TestLoftSectionsInterpolatesThreeSketchesWithCertifiedMesh
