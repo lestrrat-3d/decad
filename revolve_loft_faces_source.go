@@ -98,11 +98,19 @@ func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 	if !ok || proof == nil {
 		return false, nil
 	}
+	_, certified, manifestErr := revolveLoftFacesNonverticalManifest(ctx, proof)
+	if manifestErr != nil {
+		return true, manifestErr
+	}
+	if !certified {
+		return true, fmt.Errorf("%w: curved LoftFaces source cells are undecidable", ErrUnsupported)
+	}
 	return true, fmt.Errorf("%w: certified curved LoftFaces contact needs a held-seam builder", ErrUnsupported)
 }
 
 func revolveLoftFacesTrimCurrent(p facetedPayload, trim *loftFacesTrimRecord) bool {
-	if trim == nil || trim.source == nil || !pointSourceCurrent(trim.source) ||
+	if p.xform != r3.Identity() || trim == nil || trim.source == nil ||
+		!pointSourceCurrent(trim.source) ||
 		trim.toe == nil || trim.heel == nil || len(trim.maps) < 3 || len(trim.maps) > 64 ||
 		len(trim.bounds) != len(trim.maps) ||
 		!orderedLoftFacesConeLimits(trim.toe, trim.heel, trim.base) ||
@@ -209,6 +217,13 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		side := revolveLoftFacesStationSide(ctx, trim, m, b, i)
 		if side == 0 {
 			return nil, false, nil
+		}
+		if _, arc := segment.(arcSeg); arc {
+			finiteSide, certified := mappedArcFiniteSide(ctx, trim, i,
+				section.spans[section.rootSpan])
+			if !certified || finiteSide != mappedArcMiss && finiteSide != side {
+				return nil, false, nil
+			}
 		}
 		start[i], end[i], proof.sides[i] = side, side, side
 	}

@@ -32,6 +32,7 @@ first.
 - `docs/layout/booleans.md`: Boolean files.
 - `docs/layout/revolve-booleans.md`: Revolve and sector Boolean files.
 - `docs/layout/prism-pattern.md`: circular-prism Union files.
+- `docs/layout/curved-booleans.md`: Curved LoftFaces and Revolve Boolean files.
 - `docs/layout/verification.md`: verification, survey and check files.
 - `docs/layout/output-repository.md`: tessellation and export, then
   examples, test kits, tooling and CI.

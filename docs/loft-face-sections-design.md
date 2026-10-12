@@ -186,13 +186,13 @@ endpoints without assuming that source X or angle is monotone.
 
 ## Generic finite Revolve source gate
 
-The ordinary public `Union` also checks a nine-cap LoftFaces result after
+The ordinary public `Union` also checks a bounded LoftFaces result after
 its authenticated toe Cut and heel Intersect against a finite, unplaced,
 full world-X Revolve. The Revolve section must have one axial span and
 whole straight source edges. Its candidate conical roots keep their source
 faces and exact rational meridians. A placed or off-axis Revolve refuses
 this gate. The LoftFaces record must still name the live whole-entity Sketch
-profile, the same nine exact maps and source bounds, and two surviving tool
+profile, the same exact maps and source bounds, and two surviving tool
 caps. A stale, partial or foreign profile refuses.
 The copied station groups and every cap-bound term must still equal the
 original LoftFaces cap record. Every crossing source group that has retained
@@ -213,6 +213,41 @@ two finite tool cones must bracket the root span, while the original end
 caps avoid their root circles. Every surviving source face origin must name
 the authenticated LoftFaces producer. Any undecidable cell or extra crossing
 refuses the gate.
+
+For a live whole Sketch arc, its certified parameter-slice box encloses the
+ideal circular carrier. Its recorded center and endpoints must match the
+live entity, and the source box must contain the carrier. Exact cap-map interval
+arithmetic proves a strict side or finite axial miss on each source and band
+time cell; an undecidable box refuses. When both cap maps have constant
+denominators and their source-plane vectors remain centered, orthogonal and
+equally scaled throughout the band, a separate exact identity proves that
+every point of the arc has the same axial coordinate and cone implicit at a
+given band time. Three exact quadratic Bernstein controls describe that time
+implicit. Its roots describe whole-arc contacts; they do not establish one
+angular crossing. A fitted flank may share such a time root only when the
+live Sketch endpoint is the same point handle and all three exact controls
+match. This arc result alone does not admit `Union`.
+
+For each nonvertical finite Revolve side, a source manifest classifies every
+mapped fitted, straight and arc source span. It emits cells only for source
+origins found on a live trimmed face, and binds each emitted cell to its
+Sketch entity, LoftFaces band, source face origin and Revolve face.
+An interior fitted Bezier knot
+and a fitted-to-radial-arc endpoint have distinct live point handles and
+contact kinds. When both have time roots in one fitted span and band, their
+rational brackets must be disjoint. The manifest sorts them and proves each
+open time gap with the complete source polynomial. A nonnegative Bernstein
+box admits a strict gap with an exact zero on an excluded time endpoint only
+when each source column has a positive control and closed ends are strict.
+When a moving source crossing reaches an excluded exact time endpoint, the
+ordinary closed-slab proof can refuse that open gap. Such a pair stays
+unsupported until an open-end-aware moving-crossing proof is available.
+Closed root brackets
+use the corresponding one-sided source cell. A source-current check rejects
+stale LoftFaces, Sketch and Revolve records before collecting these cells.
+Every live Arc band must have a strict finite side, an axial miss, or an
+exact whole-arc radial time contact. An undecidable Arc band refuses.
+The manifest does not assert which source cells survive both cone trims.
 
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
