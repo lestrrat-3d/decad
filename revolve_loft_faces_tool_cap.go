@@ -7,12 +7,13 @@ import "math/big"
 // says where a contact could occur; a separate source-region proof must show
 // which part of the circle belongs to the surviving tool cap.
 type revolveLoftFacesToolCapCircle struct {
-	blankFace *Face
-	capFace   *Face
-	capOrigin FeatureRef
-	span      int
-	tool      int // 0 is the Cut cone, 1 is the Intersect cone.
-	x, radius *big.Rat
+	blankFace  *Face
+	capFace    *Face
+	capOrigin  FeatureRef
+	span       int
+	tool       int // 0 is the Cut cone, 1 is the Intersect cone.
+	x, radius  *big.Rat
+	sourceMiss bool
 }
 
 type revolveLoftFacesToolCapSides struct {
@@ -85,7 +86,8 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 			}
 			out.circles = append(out.circles, revolveLoftFacesToolCapCircle{
 				blankFace: span.face, capFace: tool.face, capOrigin: origin,
-				span: spanIndex, tool: toolIndex, x: x, radius: radius})
+				span: spanIndex, tool: toolIndex, x: x, radius: radius,
+				sourceMiss: revolveLoftFacesToolCircleOutsideSource(proof.trim, x, radius)})
 		}
 	}
 	return out, true
@@ -123,4 +125,54 @@ func revolveLoftFacesToolCircleOnSpan(tool *pointConeLimit, span revolveSectionS
 
 func revolveLoftFacesToolResidual(tool *pointConeLimit, point Point2) *big.Rat {
 	return lfSub(lfAdd(lfF(point.U), lfMul(tool.slope, lfF(point.V))), tool.apex)
+}
+
+// Every true LoftFaces band is inside the image of the authenticated source
+// rectangle. A circle missed by every full band image cannot meet the
+// surviving Cut/Intersect cap. Exact coordinate hulls intentionally include
+// more than the actual Sketch region and therefore only prove misses.
+func revolveLoftFacesToolCircleOutsideSource(trim *loftFacesTrimRecord,
+	x, radius *big.Rat) bool {
+	if trim == nil || trim.source == nil || x == nil || radius == nil ||
+		radius.Sign() <= 0 {
+		return false
+	}
+	box, err := lfSourceBox(trim.source)
+	if err != nil {
+		return false
+	}
+	return revolveLoftFacesCircleOutsideMaps(trim.maps, box, x, radius)
+}
+
+func revolveLoftFacesCircleOutsideMaps(maps []loftFaceMap, box [4]*big.Rat,
+	x, radius *big.Rat) bool {
+	if len(maps) < 2 || x == nil || radius == nil || radius.Sign() <= 0 {
+		return false
+	}
+	corners := lfBoxCorners(box)
+	axis := [3]loftFaceRatVec{{lfOne(), lfZero(), lfZero()},
+		{lfZero(), lfOne(), lfZero()}, {lfZero(), lfZero(), lfOne()}}
+	for _, mapped := range maps {
+		if lfPositiveDenominator(mapped, box) != nil {
+			return false
+		}
+	}
+	radius2 := lfMul(radius, radius)
+	for band := 0; band+1 < len(maps); band++ {
+		var range3 [3]loftFaceInterval
+		for coordinate, direction := range axis {
+			first := lfScalarRange(maps[band], direction, corners)
+			second := lfScalarRange(maps[band+1], direction, corners)
+			range3[coordinate] = lfIntervalHull(first, second)
+		}
+		if x.Cmp(range3[0].lo) < 0 || x.Cmp(range3[0].hi) > 0 {
+			continue
+		}
+		minimum := lfAdd(loftIntervalSquareMin(range3[1]), loftIntervalSquareMin(range3[2]))
+		maximum := lfAdd(loftIntervalSquareMax(range3[1]), loftIntervalSquareMax(range3[2]))
+		if radius2.Cmp(minimum) >= 0 && radius2.Cmp(maximum) <= 0 {
+			return false
+		}
+	}
+	return true
 }
