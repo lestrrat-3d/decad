@@ -249,6 +249,16 @@ Every live Arc band must have a strict finite side, an axial miss, or an
 exact whole-arc radial time contact. An undecidable Arc band refuses.
 The manifest does not assert which source cells survive both cone trims.
 
+For a vertical Revolve side, the source gate first binds the complete section
+to the live Revolve and obtains exact toe and heel radial limits. A strict
+gap between the retained radial range and the whole blank face proves a
+face miss. Otherwise, one exact constant-X time within the LoftFaces maps
+cuts every live line, fitted span and arc against those limits. Each retained
+source interval keeps its open clip endpoints, mapped box, source origin and
+unique live face. The all-side record gives every live Revolve boundary face
+either a source candidate or a strict miss; it refuses an undecidable side.
+An axis span has no boundary face. These records do not prove a solid seam.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume

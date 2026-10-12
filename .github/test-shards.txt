@@ -171,6 +171,13 @@
 1	0.00	TestCupWallRequiresExactMorphology
 1	0.00	TestCurveTokenComposeDeclinesTheZeroToken
 1	2.93	TestCurvedMappedSourceConsumesLiveProducer
+1	4.15	TestCurvedVerticalSourceConsumesLiveProducer
+1	0.00	TestRevolveLoftFacesVerticalRefusesChangedBlankSection
+1	0.00	TestRevolveLoftFacesConstantXRejectsSubstitutedSourceRef
+1	0.00	TestRevolveLoftFacesVerticalConstantXAndTrimLimits
+1	0.00	TestRevolveLoftFacesConstantXBand
+1	0.00	TestRevolveLoftFacesVerticalClipsLiveSourceSpan
+1	0.00	TestRevolveLoftFacesVerticalAffineOrientation
 1	2.56	TestCurvedLoftFacesSourceCertifiesLiveProducer
 1	0.00	TestDecidePullMatchesOpposesPullAtZeroAllowance
 1	0.00	TestDegCertifiedContainment

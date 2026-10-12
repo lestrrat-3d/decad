@@ -22,3 +22,5 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_contacts.go` | Enumerates authenticated fitted-knot and radial-arc joints on a finite Revolve side. See loft-face-sections design. |
 | `revolve_loft_faces_time_merge.go` | Orders fitted-knot and radial-arc time roots with distinct live source ownership. See loft-face-sections design. |
 | `revolve_loft_faces_manifest.go` | Binds mapped source cells to current LoftFaces and Revolve producers and face origins. See loft-face-sections design. |
+| `revolve_loft_faces_vertical.go` | Classifies exact constant-X source cells and vertical Revolve side contact or strict miss. See loft-face-sections design. |
+| `revolve_loft_faces_contact_manifest.go` | Records one source candidate or strict miss for each live Revolve boundary face. See loft-face-sections design. |
