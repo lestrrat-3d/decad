@@ -42,6 +42,29 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted)
 	proof.trim.toe.slope = toeSlope
+	originalPayload := tooth.payload
+	t.Cleanup(func() { tooth.payload = originalPayload })
+	payload := originalPayload.(facetedPayload)
+	payload.faceOf = slices.Clone(payload.faceOf)
+	toeFaceIndex := indexOfFace(tooth.Faces(), proof.toeFace)
+	require.GreaterOrEqual(t, toeFaceIndex, 0)
+	changedTriangle := -1
+	for index, group := range payload.src {
+		if group != proof.trim.toeCapGroup &&
+			group != proof.trim.heelCapGroup && payload.faceOf[index] != toeFaceIndex {
+			changedTriangle = index
+			break
+		}
+	}
+	require.GreaterOrEqual(t, changedTriangle, 0)
+	payload.faceOf[changedTriangle] = toeFaceIndex
+	tooth.payload = payload
+	require.True(t, revolveLoftFacesTrimCurrent(payload, proof.trim))
+	require.Same(t, proof.toeFace,
+		uniqueResultSourceFace(tooth, proof.trim.toeCapGroup))
+	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
+	require.False(t, accepted)
+	tooth.payload = originalPayload
 	shell := blank.Shells()[0]
 	originalFaces := shell.faces
 	t.Cleanup(func() { shell.faces = originalFaces })
