@@ -300,6 +300,15 @@ Their radial sign changes in Sketch walk order select the occupied arc.
 The source-parameter brackets enclose its endpoints without treating them
 as rational points. A stale circle, cap origin, or source record refuses.
 
+A sloped blank side uses the same angular source proof after an exact
+section slice proves its retained radial interval. The circle X must lie
+strictly inside the axis span and the selected sloped span, away from every
+section vertex. Every other non-axis span must miss that X. The axis walk
+heads toward positive X and the selected outer side toward negative X, so
+the two slice crossings enclose the filled interval up to the circle.
+The heel cone sets the upper radius; the toe cone sets the lower trim radius.
+An extra crossing or vertex touch refuses.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
