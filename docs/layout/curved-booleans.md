@@ -41,6 +41,7 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_cap_region_root.go` | Bounds each moving heel-cap source crossing over a rational time slab and records its live face owner. See loft-face-sections design. |
 | `revolve_loft_faces_cap_terminal.go` | Certifies a heel-cap source region ending at a live whole radial Arc contact. See loft-face-sections design. |
 | `revolve_loft_faces_cap_birth.go` | Certifies a heel-cap source region beginning at a live whole radial Arc contact. See loft-face-sections design. |
+| `revolve_loft_faces_cap_tail.go` | Proves the live source stays radially outside the heel cone through its remaining cap bands. See loft-face-sections design. |
 | `revolve_loft_faces_seam_vertices.go` | Places one shared held vertex row inside a certified radial arc root bracket and bounds each source side. See loft-face-sections design. |
 | `revolve_loft_faces_seam_patch.go` | Splits open Revolve and LoftFaces source strips through shared seam vertices. See loft-face-sections design. |
 | `revolve_loft_faces_seam_checked.go` | Rechecks live source face pairs and the complete radial arc station run before building open seam patches. See loft-face-sections design. |

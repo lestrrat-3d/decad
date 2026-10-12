@@ -479,6 +479,14 @@ has no X beyond the upper circle, so the retained cap region is also outside
 the blank there. The certificate claims only its bounded witness interval;
 it does not select held facets or admit Union.
 
+For every remaining LoftFaces band after that witness, a source-wide exact
+rectangle bounds world Y below. Each cap map has a positive denominator and
+constant X across the source. Both the Y lower bound and the heel cone radius
+are affine in band time, so a strict Y-minus-radius margin at each band end
+proves every source point lies outside the cone throughout that band. The
+certificate stops at the cone apex or the final source cap, whichever comes
+first. It records the live heel-cap face but selects no held facets.
+
 Before the lower heel contact circle, a separate source certificate follows the
 live heel cone from its finite far end. Every source span is strictly inside
 the cone circle until one isolated whole tip-Arc time root. Both adjacent

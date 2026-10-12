@@ -217,6 +217,7 @@
 1	12.00	TestCurvedHeelRegionCertifiesContinuousSource
 1	7.00	TestCurvedHeelTerminalUsesLiveWholeArc
 1	8.00	TestCurvedHeelBirthUsesLiveTipArc
+1	7.00	TestCurvedHeelTailStrictOutsideToApex
 1	8.00	TestCurvedHeelRegionRejectsChangedBlankSection
 1	8.00	TestCurvedHeelRegionRejectsStaleSource
 1	18.00	TestCurvedHeelRegionBoxesLiveMovingJoint
