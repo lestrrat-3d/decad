@@ -48,6 +48,22 @@ func TestPrismPatternFilletConnectorDiskClearance(t *testing.T) {
 		point(big.NewRat(0, 1), big.NewRat(0, 1)),
 		point(big.NewRat(-1, 1), big.NewRat(1, 1)),
 		point(big.NewRat(1, 1), big.NewRat(1, 1)), 1))
+	// The nearest point is b, so a's distance must not be added to b's.
+	require.False(t, prismPatternSegmentClearsDisk(
+		point(big.NewRat(0, 1), big.NewRat(0, 1)),
+		point(big.NewRat(2, 1), big.NewRat(0, 1)),
+		point(big.NewRat(1, 1), big.NewRat(0, 1)), 1.5))
+	// Both roots are inside the 3 mm blank and more than 6r apart. The
+	// outward connector ends beyond the blank inside the other root's disk.
+	selectedRoot := point(big.NewRat(599, 200), big.NewRat(-1, 10))
+	connectorRoot := point(big.NewRat(149, 50), big.NewRat(33, 100))
+	connectorFar := point(big.NewRat(61, 20), big.NewRat(1, 100))
+	require.Less(t, math.Hypot(2.995, -0.1), 3.0)
+	require.Less(t, math.Hypot(2.98, 0.33), 3.0)
+	require.Greater(t, math.Hypot(3.05, 0.01), 3.0)
+	require.Greater(t, math.Hypot(2.995-2.98, -0.1-0.33), 0.3)
+	require.False(t, prismPatternSegmentClearsDisk(
+		selectedRoot, connectorRoot, connectorFar, 0.15))
 }
 
 func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {

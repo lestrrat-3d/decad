@@ -178,7 +178,7 @@ func prismPatternSegmentClearsDisk(center, a, b prismPatternIVPoint, reach float
 	if projection.Cmp(lengthSq) >= 0 {
 		wx.Sub(center.x.Lo, b.x.Lo)
 		wy.Sub(center.y.Lo, b.y.Lo)
-		distanceSq.Add(new(big.Rat).Mul(wx, wx), new(big.Rat).Mul(wy, wy))
+		distanceSq = new(big.Rat).Add(new(big.Rat).Mul(wx, wx), new(big.Rat).Mul(wy, wy))
 	} else if projection.Sign() > 0 {
 		distanceSq.Sub(distanceSq, new(big.Rat).Quo(
 			new(big.Rat).Mul(projection, projection), lengthSq))
