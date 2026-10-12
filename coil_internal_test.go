@@ -150,7 +150,7 @@ func coilFace(t *testing.T, b *Body, role string) *Face {
 func TestCoilSquareSpring(t *testing.T) {
 	s, p := coilSquare(t)
 	doc := New()
-	b, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+	b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
 	pi := bigPi()
 	mulPi := func(x float64) *big.Float { return new(big.Float).SetPrec(512).Mul(pi, bigOf(x)) }
@@ -289,7 +289,7 @@ func coilSamples(pitch, turns float64, sigma float64) []r3.Vec {
 func TestCoilBoundsEncloseTheSolid(t *testing.T) {
 	for _, turns := range []float64{2, 1.3} {
 		s, p := coilSquare(t)
-		b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(turns))
+		b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(turns))
 		require.NoError(t, err)
 		box, err := b.Bounds()
 		require.NoError(t, err)
@@ -318,7 +318,7 @@ func TestCoilBoundsEncloseTheSolid(t *testing.T) {
 
 func TestCoilFractionalTurnCentroid(t *testing.T) {
 	s, p := coilSquare(t)
-	b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5))
+	b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5))
 	require.NoError(t, err)
 	pi := bigPi()
 	vol, err := b.Volume()
@@ -352,9 +352,9 @@ func TestCoilFractionalTurnCentroid(t *testing.T) {
 func TestCoilLeftHandMirrors(t *testing.T) {
 	s, p := coilSquare(t)
 	doc := New()
-	right, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5))
+	right, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5))
 	require.NoError(t, err)
-	left, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5), WithLeftHand())
+	left, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5), WithLeftHand())
 	require.NoError(t, err)
 
 	rv, lv := right.payload.(coilPayload).verts, left.payload.(coilPayload).verts
@@ -380,11 +380,11 @@ func TestCoilTiltedAxisAgrees(t *testing.T) {
 	// a rounding bound. The profile is the square ρ ∈ [10, 15], ζ ∈ [0, 5]
 	// about it, whose corners ζ·d + ρ·e_r land on integers.
 	ts, tp := coilLoopsSketch(t, [][2]float64{{-8, 6}, {-12, 9}, {-9, 13}, {-5, 10}})
-	tilted, err := New().Coil(t.Context(), ts, tp, SketchLine{Start: Point2{}, End: Point2{U: 3, V: 4}},
+	tilted, err := Coil(t.Context(), New(), ts, tp, SketchLine{Start: Point2{}, End: Point2{U: 3, V: 4}},
 		units.Millimeters(6), units.Scalar(2))
 	require.NoError(t, err)
 	as, ap := coilLoopsSketch(t, [][2]float64{{10, 0}, {15, 0}, {15, 5}, {10, 5}})
-	aligned, err := New().Coil(t.Context(), as, ap, coilAxisV, units.Millimeters(6), units.Scalar(2))
+	aligned, err := Coil(t.Context(), New(), as, ap, coilAxisV, units.Millimeters(6), units.Scalar(2))
 	require.NoError(t, err)
 
 	tv, err := tilted.Volume()
@@ -414,7 +414,7 @@ func TestCoilHolePassage(t *testing.T) {
 	s, p := coilLoopsSketch(t, outer, hole)
 	require.Len(t, p.Holes, 1)
 	doc := New()
-	b, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(3), units.Scalar(2))
+	b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(3), units.Scalar(2))
 	require.NoError(t, err)
 	require.Len(t, b.Lumps(), 1)
 	require.Len(t, b.Shells(), 1)
@@ -427,10 +427,10 @@ func TestCoilHolePassage(t *testing.T) {
 	requireEnclosesBig(t, vol.Value.Base(), vol.Bound.Base(), exact, "holed volume")
 
 	so, po := coilLoopsSketch(t, outer)
-	whole, err := doc.Coil(t.Context(), so, po, coilAxisV, units.Millimeters(3), units.Scalar(2))
+	whole, err := Coil(t.Context(), doc, so, po, coilAxisV, units.Millimeters(3), units.Scalar(2))
 	require.NoError(t, err)
 	sh, ph := coilLoopsSketch(t, hole)
-	core, err := doc.Coil(t.Context(), sh, ph, coilAxisV, units.Millimeters(3), units.Scalar(2))
+	core, err := Coil(t.Context(), doc, sh, ph, coilAxisV, units.Millimeters(3), units.Scalar(2))
 	require.NoError(t, err)
 	wv, err := whole.Volume()
 	require.NoError(t, err)
@@ -453,61 +453,61 @@ func TestCoilRefusals(t *testing.T) {
 	pitch, turns := units.Millimeters(1.5), units.Scalar(2)
 	foreign := func(doc *Document, s *sketch.Sketch, _ *sketch.Profile) error {
 		_, other := coilSquare(t)
-		_, err := doc.Coil(t.Context(), s, other, coilAxisV, pitch, turns)
+		_, err := Coil(t.Context(), doc, s, other, coilAxisV, pitch, turns)
 		return err
 	}
 	calls := []call{
 		{"nil context", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(nil, s, p, coilAxisV, pitch, turns) //nolint:staticcheck // CS1 refuses a nil context.
+			_, err := Coil(nil, doc, s, p, coilAxisV, pitch, turns) //nolint:staticcheck // CS1 refuses a nil context.
 			return err
 		}, ErrDegenerate},
 		{"nil sketch", func(doc *Document, _ *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), nil, p, coilAxisV, pitch, turns)
+			_, err := Coil(t.Context(), doc, nil, p, coilAxisV, pitch, turns)
 			return err
 		}, ErrDegenerate},
 		{"nil profile", func(doc *Document, s *sketch.Sketch, _ *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, nil, coilAxisV, pitch, turns)
+			_, err := Coil(t.Context(), doc, s, nil, coilAxisV, pitch, turns)
 			return err
 		}, ErrDegenerate},
 		{"nil axis", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, p, nil, pitch, turns)
+			_, err := Coil(t.Context(), doc, s, p, nil, pitch, turns)
 			return err
 		}, ErrDegenerate},
 		{"nil option", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, p, coilAxisV, pitch, turns, nil)
+			_, err := Coil(t.Context(), doc, s, p, coilAxisV, pitch, turns, nil)
 			return err
 		}, ErrDegenerate},
 		{"repeated hand", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, p, coilAxisV, pitch, turns, WithLeftHand(), WithLeftHand())
+			_, err := Coil(t.Context(), doc, s, p, coilAxisV, pitch, turns, WithLeftHand(), WithLeftHand())
 			return err
 		}, ErrDegenerate},
 		{"foreign profile", foreign, ErrForeignProfile},
 		{"axis out of plane", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, p, ConstructionAxis{Dir: r3.NewVec(0, 0, 1)}, pitch, turns)
+			_, err := Coil(t.Context(), doc, s, p, ConstructionAxis{Dir: r3.NewVec(0, 0, 1)}, pitch, turns)
 			return err
 		}, ErrDegenerate},
 		{"pitch kind", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Scalar(1.5), turns)
+			_, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Scalar(1.5), turns)
 			return err
 		}, ErrUnitKind},
 		{"turns kind", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, p, coilAxisV, pitch, units.Millimeters(2))
+			_, err := Coil(t.Context(), doc, s, p, coilAxisV, pitch, units.Millimeters(2))
 			return err
 		}, ErrUnitKind},
 		{"pitch not finite", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(math.Inf(1)), turns)
+			_, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(math.Inf(1)), turns)
 			return err
 		}, ErrNotFinite},
 		{"zero pitch", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(0), turns)
+			_, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(0), turns)
 			return err
 		}, ErrDegenerate},
 		{"negative turns", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, p, coilAxisV, pitch, units.Scalar(-1))
+			_, err := Coil(t.Context(), doc, s, p, coilAxisV, pitch, units.Scalar(-1))
 			return err
 		}, ErrDegenerate},
 		{"past the station ceiling", func(doc *Document, s *sketch.Sketch, p *sketch.Profile) error {
-			_, err := doc.Coil(t.Context(), s, p, coilAxisV, pitch, units.Scalar(129))
+			_, err := Coil(t.Context(), doc, s, p, coilAxisV, pitch, units.Scalar(129))
 			return err
 		}, ErrUnsupported},
 	}
@@ -527,7 +527,7 @@ func TestCoilRefusals(t *testing.T) {
 		t.Helper()
 		doc := New()
 		before := doc.nextProducer
-		_, err := doc.Coil(t.Context(), s, p, axis, pitch, turns)
+		_, err := Coil(t.Context(), doc, s, p, axis, pitch, turns)
 		require.ErrorIs(t, err, sentinel)
 		require.ErrorContains(t, err, says)
 		require.Empty(t, doc.Bodies())
@@ -547,7 +547,7 @@ func TestCoilRefusals(t *testing.T) {
 		s, p := coilLoopsSketch(t, [][2]float64{{2, 0}, {3, 0}, {3, 1.5}, {2, 1.5}})
 		refuse(t, ErrUnsupported, "at or past the 1.5 mm pitch", s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(1))
 		doc := New()
-		b, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(0.75))
+		b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(0.75))
 		require.NoError(t, err)
 		require.Len(t, doc.Bodies(), 1)
 		vol, err := b.Volume()
@@ -599,9 +599,9 @@ func vertexBoundPolygonSketchAt(t *testing.T, n int, r, cx float64) (*sketch.Ske
 func TestCoilRepeatAndPlacement(t *testing.T) {
 	s, p := coilSquare(t)
 	doc := New()
-	first, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5))
+	first, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5))
 	require.NoError(t, err)
-	second, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5))
+	second, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5))
 	require.NoError(t, err)
 	fp, sp := first.payload.(coilPayload), second.payload.(coilPayload)
 	require.Equal(t, fp.verts, sp.verts)
@@ -752,7 +752,7 @@ func TestCoilFacetBoundHoldsTheSurface(t *testing.T) {
 			s, p := coilLoopsSketch(t, c.loop)
 			doc := New()
 			const pitch = 1.5
-			b, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(pitch), units.Scalar(c.turns))
+			b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(pitch), units.Scalar(c.turns))
 			require.NoError(t, err)
 			cp := b.payload.(coilPayload)
 			rec, err := coilRecordOfPayload(cp)

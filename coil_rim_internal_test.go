@@ -46,7 +46,7 @@ func TestCoilFullTurnArcClosesLikeACircle(t *testing.T) {
 	require.Equal(t, arc.Start, arc.End)
 
 	doc := New()
-	b, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
+	b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
 	require.NoError(t, err)
 	require.Len(t, b.Faces(), 3)
 	require.Len(t, b.Edges(), 2)
@@ -65,7 +65,7 @@ func TestCoilFullTurnArcClosesLikeACircle(t *testing.T) {
 	}
 
 	sc, pc := coilRoundWire(t, 0.5)
-	circle, err := New().Coil(t.Context(), sc, pc, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
+	circle, err := Coil(t.Context(), New(), sc, pc, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
 	require.NoError(t, err)
 	for _, read := range []func(*Body) (Measurement, error){(*Body).Volume, (*Body).Area} {
 		got, err := read(b)
@@ -172,7 +172,7 @@ func TestCoilRimCurveBoundHoldsTheDenotedCircle(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s, p := c.profile(t)
-			b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
+			b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
 			require.NoError(t, err)
 			if c.placed {
 				b, err = Transform(t.Context(), b, rot)
@@ -244,14 +244,14 @@ func TestCoilRimCurveBoundHoldsTheDenotedCircle(t *testing.T) {
 // curve bound rather than dropping it.
 func TestCoilUnstitchCarriesTheRimCurveBound(t *testing.T) {
 	s, p := coilRoundWire(t, 0.5)
-	b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
+	b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
 	require.NoError(t, err)
 	var want float64
 	for _, e := range coilFace(t, b, roleCapEnd).Loops()[0].CoEdges() {
 		require.True(t, e.Edge().curveBounded)
 		want = e.Edge().curveBound
 	}
-	sheets, err := b.Unstitch(t.Context())
+	sheets, err := Unstitch(t.Context(), b)
 	require.NoError(t, err)
 	found := false
 	for _, sh := range sheets {

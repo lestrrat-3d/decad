@@ -87,7 +87,7 @@ func circleWallIntegral(cu, r, pitch, turns float64) float64 {
 func TestCoilRoundWireSpring(t *testing.T) {
 	s, p := coilRoundWire(t, 0.5)
 	doc := New()
-	b, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(5))
+	b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(5))
 	require.NoError(t, err)
 	pi := bigPi()
 
@@ -178,7 +178,7 @@ func TestCoilRoundWireSpring(t *testing.T) {
 func TestCoilSlotSpring(t *testing.T) {
 	s, p := coilSlot(t)
 	doc := New()
-	b, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(3))
+	b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(3))
 	require.NoError(t, err)
 
 	// Q = 3·(0.8 + 0.16π): the section is symmetric about ρ = 3.
@@ -258,12 +258,12 @@ func TestCoilArcRefusals(t *testing.T) {
 	t.Run("CS6 at a wire diameter equal to the pitch", func(t *testing.T) {
 		s, p := coilRoundWire(t, 0.75)
 		doc := New()
-		_, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(1))
+		_, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(1))
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "at or past the 1.5 mm pitch")
 		require.Empty(t, doc.Bodies())
 		// Below one turn the same wire builds.
-		b, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(0.75))
+		b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(0.75))
 		require.NoError(t, err)
 		vol, err := b.Volume()
 		require.NoError(t, err)
@@ -274,7 +274,7 @@ func TestCoilArcRefusals(t *testing.T) {
 	t.Run("CS5 a circle reaching the axis", func(t *testing.T) {
 		s, p := coilRoundWire(t, 3)
 		doc := New()
-		_, err := doc.Coil(t.Context(), s, p, coilAxisV, units.Millimeters(7), units.Scalar(1))
+		_, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(7), units.Scalar(1))
 		require.ErrorIs(t, err, ErrDegenerate)
 		require.Empty(t, doc.Bodies())
 	})
@@ -322,7 +322,7 @@ func TestCoilArcFacetBoundHoldsTheSurface(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s, p := c.profile(t)
-			b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(3), units.Scalar(c.turns))
+			b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(3), units.Scalar(c.turns))
 			require.NoError(t, err)
 			cp := b.payload.(coilPayload)
 			rec, err := coilRecordOfPayload(cp)
@@ -408,7 +408,7 @@ func TestCoilArcFacetBoundHoldsTheSurface(t *testing.T) {
 // falsifiers; the proofs are docs/helix-design.md §8.1 and §8.2.
 func TestCoilArcMeshProofsEncloseTheBody(t *testing.T) {
 	s, p := coilRoundWire(t, 0.5)
-	b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+	b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)

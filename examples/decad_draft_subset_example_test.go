@@ -38,8 +38,7 @@ func Example_decad_draft_subset() {
 
 	// Lean the one wall facing +X by 5 degrees about the cap on the sketch
 	// plane.
-	drafted, err := box.Draft(context.Background(),
-		decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
+	drafted, err := decad.Draft(context.Background(), box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
 		decad.NeutralFace{Body: box, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(box)))},
 		units.Degrees(5))
 	if err != nil {

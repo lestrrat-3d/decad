@@ -6,8 +6,8 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0:    2.13s over 8 tests
-#   shard 1:    5.32s over 283 tests
+#   shard 0:    4.67s over 9 tests
+#   shard 1:    5.32s over 285 tests
 #   shard 2:   10.22s over 137 tests
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  188.10s over 140 tests
@@ -26,6 +26,7 @@
 0	0.69	TestObliqueBossJunctionFilletXTiltPublicWorkflow
 0	0.00	TestObliqueBossRejectsPartialJunctionSource
 0	0.00	TestXPTKeyDistinguishesCoordinates
+0	2.54	TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource
 1	0.00	TestAddBlendRolesContextPollsNestedMetadata
 1	0.00	TestMappedArcRadialTimeBandTwoExactTimeCrossings
 1	0.00	TestMappedEndpointFiniteSection
@@ -37,6 +38,23 @@
 1	0.00	TestRevolveLoftFacesOwnedTimeRootsRemainDisjoint
 1	0.00	TestRevolveLoftFacesOpenTimeExcludesExactPointRoot
 1	0.00	TestRevolveLoftFacesOpenMovingCrossingRefuses
+1	0.00	TestRevolveLoftFacesToolCircleOnFiniteSection
+1	0.00	TestRevolveLoftFacesCircleMissUsesWholeMappedSourceBox
+0	2.80	TestRevolveLoftFacesCircleMissConsumesLiveNeutralSource
+1	0.01	TestRevolveLoftFacesSimpleSourceCertifiesWholeCurveLoop
+1	0.01	TestRevolveLoftFacesSimpleSourceRefusesExtraSketchEntity
+1	0.01	TestRevolveLoftFacesSimpleSourceRefusesChangedRecordedArc
+1	0.00	TestRevolveLoftFacesSimpleNeighborsRequireOppositeInteriorSides
+1	0.00	TestRevolveLoftFacesSimpleSeparatedRequiresStrictAxisGap
+1	0.00	TestRevolveLoftFacesShortArcSupportsOnlyItsChordOutside
+1	0.01	TestRevolveLoftFacesArcRefusesUnequalEndpointRadius
+1	0.00	TestRevolveLoftFacesToolBoundaryUsesSketchWalkDirection
+0	3.14	TestRevolveLoftFacesHeelVerticalArcConsumesLiveNeutralSource
+1	0.00	TestRevolveLoftFacesSlopedRadialInsideNeedsUniqueOuterCrossing
+1	0.00	TestRevolveLoftFacesSlopedRadialInsideRequiresAxisWalkDirection
+0	2.76	TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource
+4	12.00	TestRevolveLoftFacesToolCapArcBindsLiveSourceCells
+4	0.00	TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
 1	0.00	TestAddRevolveFacesPreservesMeridianErrorMapping
@@ -112,6 +130,7 @@
 1	0.00	TestChainStep
 1	0.00	TestChainWalkEndpointAllowChargesComputedCircularEnds
 1	0.00	TestChainWalkEndpointAllowKeepsExactArcEndsAtZero
+1	0.00	TestChamferAxisGapIntegerMatchesRational
 1	0.00	TestChamferMiddleGridKeepsEveryOverlappingBox
 1	0.00	TestChamferSplitRingGridContainsEveryExactReachCandidate
 1	0.00	TestChargesScaleWithOperandWidth

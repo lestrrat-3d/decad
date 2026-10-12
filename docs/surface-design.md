@@ -338,7 +338,7 @@ func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 
 // Joining sheets, and taking a body apart.
 func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
-func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
+func Unstitch(ctx context.Context, b *Body) ([]*Body, error)
 
 // Turn an admitted sheet into a solid (§16).
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error)
@@ -371,7 +371,7 @@ with no audit to poll (§13.2).
 
 `Stitch` and `Unstitch` consume their operands and register their results, on
 `docs/api-design.md` §6's uniform terms: `Stitch` retires every body handed
-to it, `Unstitch` retires its receiver, and a retired body stays readable. No
+to it, `Unstitch` retires its operand, and a retired body stays readable. No
 `*Document` appears in `Stitch`'s signature because a `*Body` carries its
 owning document, which is what lets `Union` take the same shape.
 
@@ -1397,7 +1397,7 @@ answer.
 
 ### 6.5 `Unstitch`
 
-`b.Unstitch(ctx)` returns one single-face sheet body per face of `b`, in
+`Unstitch(ctx, b)` returns one single-face sheet body per face of `b`, in
 `b.Faces()` order, retiring `b`. Each result carries that face's own surface,
 loops and readings; every edge of every result is free.
 
@@ -1447,7 +1447,7 @@ face's identical surface and identical tag — `Unstitch` mints no new
 geometry of its own — so `normalBound` (how far that surface departs from
 that tag) and `axialDelta` (that same tag's own displacement along that same
 normal) stay exactly as true of the copy as they were of the source.
-`hasAxialDelta` and `normalBound` copy verbatim; `Body.Unstitch`'s public
+`hasAxialDelta` and `normalBound` copy verbatim; `Unstitch`'s public
 call always places under the identity transform (`Unstitch`), so a
 verbatim copy is correct for every call the public API makes today.
 `unstitchPayload.placed`'s own replay under a composed, non-identity

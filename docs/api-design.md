@@ -782,15 +782,15 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 |---|---|
 | `Body.Fillet`, `Body.Chamfer` | `Fillet(ctx, b, sel, r, opts...)`, `Chamfer(ctx, b, sel, d, opts...)` |
 | `Body.Shell` | `Shell(ctx, b, sel, t, opts...)` |
-| `Body.Draft`, `Body.Offset`, `Body.Thicken` | `Draft(ctx, b, ...)`, `Offset(ctx, b, ...)`, `Thicken(ctx, b, ...)` |
+| `Body.Offset`, `Body.Thicken` | `Offset(ctx, b, ...)`, `Thicken(ctx, b, ...)` |
 | `Body.Trim`, `Body.Extend` | `Trim(ctx, b, tool, side)`, `Extend(ctx, b, edges, tool)` |
 | `Document.Split` | `Split(ctx, target, tool)` |
-| `Body.Patch`, `Body.Unstitch` | `PatchEdges(ctx, b, sel)`, `Unstitch(ctx, b)` |
+| `Body.Patch` | `PatchEdges(ctx, b, sel)` |
 | `Document.Patch` | `PatchProfile(ctx, doc, s, p)`, so the two patch forms stop sharing one name |
 | `Body.ScaledAt` | `ScaledAt(ctx, b, anchor, factor)` |
 | `Body.Mirrored`, `Body.MirroredCopy` | `Mirrored(ctx, b, plane, opts...)`, `MirroredCopy(ctx, b, plane)` |
 | `Body.Patterned`, `Body.PatternCopies` | `Patterned(ctx, b, spec)`, `PatternCopies(ctx, b, spec)` |
-| `Document.Extrude`, `Revolve`, `Coil` | `Extrude(doc, s, p, e, opts...)`, `Revolve(doc, s, p, axis, a, opts...)`, `Coil(ctx, doc, s, p, axis, pitch, turns, opts...)` |
+| `Document.Extrude`, `Revolve` | `Extrude(doc, s, p, e, opts...)`, `Revolve(doc, s, p, axis, a, opts...)` |
 | `Document.Sweep`, `Loft`, `LoftFaces`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
 | `Document.ExtrudeChain`, `RevolveChain`, `SweepChain`, `LoftChain` | the same names with the `Document` argument leading |
 | `Document.Remove` | `Remove(b)` |
@@ -943,14 +943,14 @@ together with `WithSurfaceResult()`, the option that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the four chain-fed forms that
 sweep an open curve (§13 there). `docs/draft-design.md` owns `WithTaper`'s
-build and `Body.Draft`, the face draft of an existing prism, with its
+build and `Draft`, the face draft of an existing prism, with its
 `NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
 func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
 func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error)
-func (d *Document) Coil(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
+func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
 func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
 ```
 
@@ -1235,7 +1235,7 @@ func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 
 func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
-func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
+func Unstitch(ctx context.Context, b *Body) ([]*Body, error)
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error)
 func WithThickenSide(side ThickenSide) ThickenOption
 
@@ -1255,7 +1255,7 @@ limits. `WithSurfaceResult()` omits the faces that exist only to close the
 solid and changes nothing else — a wall keeps its surface, its role and every bound.
 `Document.Patch` builds a planar face from a recorded profile and consumes
 nothing; `Body.Patch` fills a closed chain of the receiver's free edges and
-retires it. `Stitch` retires every operand and `Unstitch` its receiver, on §6's
+retires it. `Stitch` retires every operand and `Unstitch` its operand, on §6's
 uniform terms, and neither takes a `*Document` because a `*Body` carries its
 own. `Stitch` closes an existing face assembly; `Thicken` builds a new skin
 and rim from an admitted sheet. `Stitch` joins two free edges only where
@@ -2006,7 +2006,7 @@ the resulting bodies, measurements, and verification reports directly.
   displacements, not magnitudes**, and are outside it: `ToFace.Offset`, which
   displaces along the target face's normal and whose sign says which side of that
   face the sweep stops on (§8.1); `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
-  whose sign says which way the wall leans; and `Body.Draft`'s angle
+  whose sign says which way the wall leans; and `Draft`'s angle
   (`docs/draft-design.md` §10), read the same way about its neutral plane. Neither carries a `Direction` to reverse,
   so a negative value there is a legal intent, not an error.
 - **`ErrCardinality` takes precedence at zero matches.** A failed cardinality

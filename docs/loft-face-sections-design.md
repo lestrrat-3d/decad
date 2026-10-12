@@ -266,6 +266,58 @@ either a source candidate or a strict miss; it refuses an undecidable side.
 The live blank face set must equal the section walk's face set exactly.
 An axis span has no boundary face. These records do not prove a solid seam.
 
+The two retained trim-cap faces also identify their original cone sources.
+For each finite Revolve side, exact affine meridian residuals either separate
+the entire side from a trim cone or locate their one possible contact circle
+by exact axial coordinate and radius. An endpoint or coincident-side contact
+is undecidable. A possible circle does not prove that the trimmed LoftFaces
+source occupies any of its angles; that requires a separate source-region
+check before the Boolean can admit the face pair.
+For a possible circle, the complete authenticated source rectangle bounds
+each mapped cap. The hull of neighboring caps bounds every band point.
+If the circle's exact axial coordinate misses each band's hull, or its
+radius lies strictly outside each overlapping band's radial range, the
+original LoftFaces source misses the entire circle. A surviving circle
+still needs an angular occupancy proof from the live Sketch region.
+The original point loft stores its computed source rectangle by value when
+published. A changed source rectangle refuses before a whole-circle miss is used.
+
+An exact simple-loop gate uses the current Sketch profile and its newly
+recorded whole boundary. Every current entity must occur once on that walk,
+so another contour cannot change occupancy. Lines and fitted Bezier spans
+need a strictly monotone coordinate. Whole arcs need equal exact endpoint
+radii and a certified sweep shorter than a half-turn. Exact control hulls
+and arc boxes must separate nonadjacent cells. Adjacent cells must meet at
+one exact endpoint and lie on opposite strict sides of one coordinate.
+One arc that alone passes an axis extremum determines the loop direction.
+The real Sketch profile produces eight cells for the focused neutral case.
+This gate does not decide which tool-cap angles the source occupies.
+
+For a heel-tool circle on a vertical blank side, a positive-determinant
+section map carries that simple source loop into the circle plane. The
+constant-X source classifier must give exactly two transverse crossings
+at the upper retained radius; every other source cell has a strict side.
+The crossing boxes must lie at positive Y on opposite strict Z sides.
+Their radial sign changes in Sketch walk order select the occupied arc.
+The source-parameter brackets enclose its endpoints without treating them
+as rational points. A stale circle, cap origin, or source record refuses.
+
+A sloped blank side uses the same angular source proof after an exact
+section slice proves its retained radial interval. The circle X must lie
+strictly inside the axis span and the selected sloped span, away from every
+section vertex. Every other non-axis span must miss that X. The axis walk
+heads toward positive X and the selected outer side toward negative X, so
+the two slice crossings enclose the filled interval up to the circle.
+The heel cone sets the upper radius; the toe cone sets the lower trim radius.
+An extra crossing or vertex touch refuses.
+
+Each occupied heel arc records its exact LoftFaces band and rational time.
+Before a later consumer uses its endpoints, it rederives the contact circle
+and the complete constant-X source cells from the live Sketch, LoftFaces,
+trim cones and Revolve. A changed band, time, root bracket, source face or
+cell sign refuses the arc. The comparison includes retained source intervals
+and mapped boxes, not only the two selected circle crossings.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume

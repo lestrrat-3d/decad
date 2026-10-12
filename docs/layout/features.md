@@ -29,7 +29,7 @@ The rules for rows live in `docs/layout.md`.
 | `stitch_flux.go` | Stitch face flux, mass and tag adapters. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split and placement. See surface §6.5. |
 | `extrude.go` | `Document.Extrude`, `WithTaper`, linear-extent resolution. See evaluator §5. |
-| `draft.go` | `Body.Draft`, `NeutralPlane`, `Walls` gates. See draft §10. |
+| `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates. See draft §10. |
 | `draft_payload.go` | `draftPayload`, its band view and offset span. See draft §6, §8.1. |
 | `draft_build.go` | Tapered extrude gates and assembly. See draft §5, §7. |
 | `draft_two_sided.go` | Two-slab draft assembly and placement. See draft §7. |
@@ -49,7 +49,7 @@ The rules for rows live in `docs/layout.md`.
 | `sweep_mitre.go` | Mitred options, entry adapters, payload, placement and restatement. See sweep §16. |
 | `sweep_mitre_build.go` | Adapts mitred construction and runs the SM8 audit. See sweep §16.3–§16.4. |
 | `sweep_mitre_body.go` | Builds Table BM's topology and publishes §16.6's readings. See sweep §16.5–§16.6. |
-| `coil.go` | `Document.Coil`, `CoilOption`, Table CS gates, payload and placement. See helix §2, §4, §5.6. |
+| `coil.go` | `Coil`, `CoilOption`, Table CS gates, payload and placement. See helix §2, §4, §5.6. |
 | `coil_body.go` | The coil's Table CB topology and Table CM readings. See helix §6–§7. |
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
 | `prism_payload.go` | `prismPayload` and coordinate adapters. See evaluator §5. |

@@ -174,7 +174,7 @@ func TestDraftUndercutPlaced(t *testing.T) {
 	requireDraftWallsListed(t, report, br, placed)
 }
 
-// TestDraftUndercutBodyDraft reads the survey on Body.Draft's result, whose
+// TestDraftUndercutBodyDraft reads the survey on Draft's result, whose
 // roles are minted under its own producer: D1's drafted box clears along the
 // sweep and lists every wall against it.
 func TestDraftUndercutBodyDraft(t *testing.T) {
@@ -183,7 +183,7 @@ func TestDraftUndercutBodyDraft(t *testing.T) {
 	doc := decad.New()
 	box, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(boxHeight), Dir: decad.Along})
 	require.NoError(t, err)
-	b, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5))
+	b, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5))
 	require.NoError(t, err)
 
 	report, br := draftSurvey(t, doc, b, r3.NewVec(0, 0, 1))

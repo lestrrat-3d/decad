@@ -152,7 +152,7 @@ func (cp coilPayload) placed(ctx context.Context, d *Document, ref producerID, c
 // segment spanning every turn, read through Table CM's closed forms and, on
 // an arc, docs/helix-design.md §11.1's area bracket. A failed call leaves
 // the document untouched.
-func (d *Document) Coil(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error) {
+func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error) {
 	// CS1: nils, owned options and option arity.
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a coil`, ErrDegenerate)

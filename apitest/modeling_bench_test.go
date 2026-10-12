@@ -624,7 +624,7 @@ func BenchmarkModelingUnstitchPrism(b *testing.B) {
 		doc := decad.New()
 		body := modelingBenchRect(b, doc, 0, 0, 20, 20, 10)
 		b.StartTimer()
-		sheets, err := body.Unstitch(b.Context())
+		sheets, err := decad.Unstitch(b.Context(), body)
 		if err != nil {
 			b.Fatal(err)
 		}
