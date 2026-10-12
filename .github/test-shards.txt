@@ -215,6 +215,10 @@
 1	12.00	TestCurvedHeelRegionCertifiesContinuousSource
 1	8.00	TestCurvedHeelRegionRejectsChangedBlankSection
 1	8.00	TestCurvedHeelRegionRejectsStaleSource
+1	18.00	TestCurvedHeelRegionBoxesLiveMovingJoint
+1	8.00	TestCurvedHeelRegionBoxRejectsChangedStoredCell
+1	6.00	TestCurvedHeelRegionBoxesNeutralEventStations
+1	6.00	TestCurvedHeelRegionBoxRefusesBroadTimeBudget
 1	8.66	TestCurvedLineFitJointUsesLiveNeutralSource
 1	0.00	TestDecidePullMatchesOpposesPullAtZeroAllowance
 1	0.00	TestDegCertifiedContainment

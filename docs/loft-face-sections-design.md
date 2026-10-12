@@ -437,6 +437,16 @@ certificate still does not choose held facets or admit public Union. It
 refuses interior radial steps, extra section crossings, ambiguous source
 events, or a cone witness outside its exact finite bounds.
 
+For each linked crossing, a separate source helper rederives the live event
+graph and restricts its exact Bernstein residual to a caller's closed rational
+time slab. Strict opposite signs and one derivative direction enclose its
+unique moving root. At a fitted-to-line or fitted-knot vertex, both adjacent
+source cells share the exact endpoint polynomial, so one root can transfer
+between them. Rational source brackets map to an XYZ box with live face
+origins. The box's L1 corner radius must fit the caller's positive millimeter
+budget. A broad time slab or unresolved sign refuses; the caller may split
+time and retry. These boxes do not select held facets or admit Union.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
