@@ -7,13 +7,13 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:  227.31s over 9 tests
-#   shard 1:   33.21s over 161 tests
+#   shard 1:   21.19s over 159 tests
 #   shard 2:   89.42s over 221 tests
 #   shard 3:   69.44s over 230 tests
 #   shard 4:   83.13s over 220 tests
-#   shard 5:  120.40s over 202 tests
-#   shard 6:   90.77s over 195 tests
-#   shard 7:   92.78s over 200 tests
+#   shard 5:  125.66s over 203 tests
+#   shard 6:   95.87s over 196 tests
+#   shard 7:   97.48s over 201 tests
 #   shard 8:  102.00s over 200 tests
 #   shard 9:  118.05s over 202 tests
 #   shard 10:   0.01s over 1 test
@@ -170,14 +170,11 @@
 1	0.02	TestUnionOfAdmittedCapBlendBodies
 1	0.01	TestUnionOverlappingCubes
 1	0.00	TestUnionRejectsKnifeEdgeGraze
-1	5.26	TestUnionSixSpanHubSerialRadialLugs
 1	2.40	TestUnionShoulderedHubAndRadialLug
-1	4.70	TestUnionShoulderedHubAndTwoRadialLugs
 1	3.50	TestUnionShoulderedHubAndTwoRadialLugsVariadic
 1	3.60	TestUnionShoulderedHubAndThreeRadialLugsVariadic
 1	2.30	TestUnionShoulderedHubOverlappingLugsLeaveInputsLive
 1	2.40	TestUnionSlopedHubCapAndRadialLug
-1	5.10	TestUnionTaperedHubAndFittedRadialLug
 1	1.68	TestUnionTaperedHubAndRadialLug
 1	0.01	TestUnstitchVoidRevolveMakesNonVoidSheets
 1	0.01	TestVerifyCoincidentAnalyticBodiesUseStableFirstVolume
@@ -860,6 +857,7 @@
 4	0.01	TestWallKnifeEdgeExactZero
 4	0.00	TestWallReadingExactHeightArm
 4	0.01	TestWholeCircleCylinderHasTwoLoops
+5	5.26	TestUnionSixSpanHubSerialRadialLugs
 5	0.35	TestAnalyticPlateWithCircularHolesArea
 5	0.01	TestBlindCutBuildsAnalyticPocket
 5	0.00	TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall
@@ -1062,6 +1060,7 @@
 5	0.01	TestVertexPlacedPrismBoundEnclosesDisplacement
 5	0.00	TestVertexTiltedPlaneUnplacedBoundEnclosesDisplacement
 5	0.01	TestWallPlacedBodyReadsThePart
+6	5.10	TestUnionTaperedHubAndFittedRadialLug
 6	0.02	TestAnalyticChordsAreCharged
 6	0.08	TestArcFragmentRevolveReadingsAreTight
 6	0.05	TestAsymmetricChamferOnObliquePrismCapEdge
@@ -1257,6 +1256,7 @@
 6	0.01	TestVertexIntegerOriginBoundStaysZero
 6	0.02	TestWallHolePlateReadsThickness
 6	0.01	TestWallPartialRevolve
+7	4.70	TestUnionShoulderedHubAndTwoRadialLugs
 7	0.01	FuzzFillet
 7	0.02	TestAsymmetricChamferFeet
 7	0.41	TestAsymmetricChamferOnBrepLoop
