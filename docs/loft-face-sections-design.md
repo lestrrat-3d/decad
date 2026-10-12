@@ -447,6 +447,16 @@ origins. The box's L1 corner radius must fit the caller's positive millimeter
 budget. A broad time slab or unresolved sign refuses; the caller may split
 time and retry. These boxes do not select held facets or admit Union.
 
+A reject-only heel-track consumer asks for bounded boxes on both crossing
+curves at each exact source event. It bisects broad open time intervals and
+requires every adjacent box to overlap at the shared source point. Each
+rounded station has the same increasing X on both curves, lies on the
+correct positive-Y side, and preserves their strict angular order. Stations
+that round to the same X merge only when the combined exact box still fits
+the caller's source budget. The per-station bound adds the box's L1 radius
+and float rounding. Later cap triangles must add their own chord, held-facet
+and volume bounds before this track can support a Union result.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
