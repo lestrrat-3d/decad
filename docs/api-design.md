@@ -791,8 +791,9 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 | `Body.Mirrored`, `Body.MirroredCopy` | `Mirrored(ctx, b, plane, opts...)`, `MirroredCopy(ctx, b, plane)` |
 | `Body.Patterned`, `Body.PatternCopies` | `Patterned(ctx, b, spec)`, `PatternCopies(ctx, b, spec)` |
 | `Document.Extrude`, `Revolve` | `Extrude(doc, s, p, e, opts...)`, `Revolve(doc, s, p, axis, a, opts...)` |
-| `Document.Sweep`, `Loft`, `LoftFaces`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
-| `Document.ExtrudeChain`, `RevolveChain`, `SweepChain`, `LoftChain` | the same names with the `Document` argument leading |
+| `Document.Loft`, `LoftFaces`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
+| `Document.Sweep` over a profile or a chain | `Sweep(ctx, doc, s, sec, path, opts...)`, one generic function over `Section` (§8) |
+| `Document.ExtrudeChain`, `RevolveChain`, `LoftChain` | the same names with the `Document` argument leading |
 | `Document.Remove` | `Remove(b)` |
 
 `Union`, `Cut`, `Intersect`, `CombineJoin`, `Stitch`, `Transform` and `Copy`
@@ -922,10 +923,10 @@ before extruding. decad never re-derives it.
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
 Fillet, Chamfer, Shell, Transform, ScaledAt, Copy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
-Patch, Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve —
-**ExtrudeChain, RevolveChain, SweepChain, LoftChain** — which take a
-`*sketch.Chain` where their siblings take a `*sketch.Profile` and always build a
-sheet.
+Patch, Stitch, Unstitch, Thicken**, plus the sweeps of an OPEN sketch curve —
+**ExtrudeChain, RevolveChain, LoftChain**, and **Sweep** given a
+`*sketch.Chain` — which take a `*sketch.Chain` where their siblings take a
+`*sketch.Profile` and always build a sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
 rule, and its increment-1 scope. `docs/loft-sections-design.md` owns the
 separate `Document.LoftSections`: three quadratic homothetic line sections,
@@ -941,7 +942,7 @@ turns.
 `docs/surface-design.md` owns `Patch`, `Stitch`, `Unstitch` and `Thicken`,
 together with `WithSurfaceResult()`, the option that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
-sheet instead of closing it into a solid, and the four chain-fed forms that
+sheet instead of closing it into a solid, and the chain-fed forms that
 sweep an open curve (§13 there). `docs/draft-design.md` owns `WithTaper`'s
 build and `Draft`, the face draft of an existing prism, with its
 `NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
@@ -949,10 +950,20 @@ build and `Draft`, the face draft of an existing prism, with its
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
 func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
-func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error)
+func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, path *Path, opts ...SweepOption) (*Body, error)
 func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
 func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
+
+// Section is the sketch geometry a section-fed operation consumes: a closed
+// *sketch.Profile or an open *sketch.Chain.
+type Section interface{ *sketch.Profile | *sketch.Chain }
 ```
+
+`Sweep` infers `S` from `sec`, so no call site names the type argument. A
+profile section builds a solid, or a sheet under `WithSurfaceResult()`. A
+chain section builds a sheet, so `Sweep` returns `ErrUnsupported` for
+`WithSurfaceResult()` and `WithSweepTwist` on a chain, before any commit
+(`docs/surface-design.md` §13.2, `docs/sweep-design.md` §15.3).
 
 `LoftSections(ctx, sections ...LoftSection)` carries each `Sketch` and
 `Profile` together. It admits the three- and four-section classes in
@@ -1241,11 +1252,11 @@ func WithThickenSide(side ThickenSide) ThickenOption
 
 // The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a
 // BodySheet, so WithSurfaceResult() is not among their options: ChainExtrudeOption,
-// ChainRevolveOption, ChainSweepOption and ChainLoftOption are their own sealed
-// tiers, which SurfaceResultOption implements none of.
+// ChainRevolveOption and ChainLoftOption are their own sealed tiers, which
+// SurfaceResultOption implements none of. Sweep takes a chain through Section
+// instead (above).
 func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
 func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
-func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error)
 func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
 ```
 
@@ -1265,10 +1276,10 @@ An edge it cannot join stays free, which is a result rather than an error, so
 the caller reads `Edges(Free())` to see what did not close.
 
 **A chain-fed form takes the sketch beside the chain, on §7's terms, and
-consumes nothing.** All four build the part of their reach
-`docs/surface-design.md` §1.2 states: `SweepChain` sweeps one straight path
-span and `LoftChain` rules a `LineSeg`-only correspondence between two
-exactly-parallel walks, and each refuses the rest at the call with
+consumes nothing.** All four (`Sweep` over a chain included) build the part of
+their reach `docs/surface-design.md` §1.2 states: a chain `Sweep` sweeps one
+straight path span and `LoftChain` rules a `LineSeg`-only correspondence between
+two exactly-parallel walks, and each refuses the rest at the call with
 `ErrUnsupported`. All four run §7's four gates over
 the internal chain recording path and return the same four sentinels a profile
 earns, and there is

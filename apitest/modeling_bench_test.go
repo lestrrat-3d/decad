@@ -225,7 +225,7 @@ func BenchmarkModelingSweepChainCold(b *testing.B) {
 		b.StopTimer()
 		doc := decad.New()
 		b.StartTimer()
-		body, buildErr := doc.SweepChain(b.Context(), s, chain, path)
+		body, buildErr := decad.Sweep(b.Context(), doc, s, chain, path)
 		if buildErr != nil {
 			b.Fatal(buildErr)
 		}

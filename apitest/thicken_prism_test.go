@@ -76,7 +76,7 @@ func TestThickenStraightSweepSheetBuildsReplayableSolid(t *testing.T) {
 	t.Parallel()
 	s, profile := plateSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Sweep(t.Context(), s, profile, sweepLinePath(t), decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(t.Context(), doc, s, profile, sweepLinePath(t), decad.WithSurfaceResult())
 	require.NoError(t, err)
 	solid, err := sheet.Thicken(t.Context(), units.Millimeters(1),
 		decad.WithThickenSide(decad.ThickenNegative))
@@ -119,7 +119,7 @@ func TestThickenStraightSweepSheetSidesMatchExtrude(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			s, profile := plateSketch(t)
-			sweepSheet, err := decad.New().Sweep(t.Context(), s, profile, sweepLinePath(t),
+			sweepSheet, err := decad.Sweep(t.Context(), decad.New(), s, profile, sweepLinePath(t),
 				decad.WithSurfaceResult())
 			require.NoError(t, err)
 			extrudeSheet, err := decad.New().Extrude(s, profile,
@@ -277,7 +277,7 @@ func TestThickenStagedFamiliesRefuse(t *testing.T) {
 		decad.LineTo{End: r3.NewVec(0, 0, 5)},
 		decad.LineTo{End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
-	sweepSheet, err := doc.Sweep(t.Context(), s, p, path, decad.WithSurfaceResult())
+	sweepSheet, err := decad.Sweep(t.Context(), doc, s, p, path, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	_, err = sweepSheet.Thicken(t.Context(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

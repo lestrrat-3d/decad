@@ -19,7 +19,7 @@ func BenchmarkSweepComposite(b *testing.B) {
 	path := orthogonalSweepPath(b)
 	b.ResetTimer()
 	for b.Loop() {
-		body, err := decad.New().Sweep(b.Context(), s, profile, path)
+		body, err := decad.Sweep(b.Context(), decad.New(), s, profile, path)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -63,7 +63,7 @@ func BenchmarkSweepCurvedPathScale(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			for b.Loop() {
-				body, err := decad.New().Sweep(b.Context(), s, profile, tc.path)
+				body, err := decad.Sweep(b.Context(), decad.New(), s, profile, tc.path)
 				if err != nil {
 					b.Fatal(err)
 				}

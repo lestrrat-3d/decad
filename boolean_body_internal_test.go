@@ -88,7 +88,7 @@ func vertexBoundTree(t *testing.T, n int, each func(tree, branch *Body)) (*Mesh,
 	}
 	doc := New()
 	ts, tp := vertexBoundPolygonSketch(t, 16, 5)
-	tree, err := doc.Sweep(t.Context(), ts, tp,
+	tree, err := Sweep(t.Context(), doc, ts, tp,
 		path(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 30), r3.NewVec(3, 0, 60)),
 		WithMitredJoins(), WithSectionScale(units.Scalar(1), units.Scalar(0.9)))
 	require.NoError(t, err)
@@ -100,7 +100,7 @@ func vertexBoundTree(t *testing.T, n int, each func(tree, branch *Body)) (*Mesh,
 	for k := range n {
 		phi := golden * float64(k)
 		u := r3.NewVec(math.Cos(phi), math.Sin(phi), 0)
-		unit, err := doc.Sweep(t.Context(), bs, bp,
+		unit, err := Sweep(t.Context(), doc, bs, bp,
 			path(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2.5), r3.NewVec(0.8, 0.3, 6), r3.NewVec(2.5, 0.6, 9.5)),
 			WithMitredJoins(), WithSectionScale(units.Scalar(1.375/1.5), units.Scalar(1.2/1.5), units.Scalar(1/1.5)))
 		require.NoError(t, err)

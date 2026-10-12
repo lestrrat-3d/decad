@@ -34,7 +34,7 @@ func TestSweepCompositeTierAFitProfile(t *testing.T) {
 	sectionCentroid, err := measured.Centroid()
 	require.NoError(t, err)
 
-	body, err := decad.New().Sweep(t.Context(), s, profiles[0], orthogonalSweepPath(t))
+	body, err := decad.Sweep(t.Context(), decad.New(), s, profiles[0], orthogonalSweepPath(t))
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	freeformWalls := 0
@@ -95,7 +95,7 @@ func TestSweepCompositeTwoFittedSplinesReplayAndVerify(t *testing.T) {
 	sectionArea, err := measured.Area()
 	require.NoError(t, err)
 
-	body, err := decad.New().Sweep(t.Context(), s, profiles[0], orthogonalSweepPath(t))
+	body, err := decad.Sweep(t.Context(), decad.New(), s, profiles[0], orthogonalSweepPath(t))
 	require.NoError(t, err)
 	volume, err := body.Volume()
 	require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestSweepCompositeTierAWorkCeiling(t *testing.T) {
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
 	doc := decad.New()
-	_, err = doc.Sweep(t.Context(), s, profiles[0], orthogonalSweepPath(t))
+	_, err = decad.Sweep(t.Context(), doc, s, profiles[0], orthogonalSweepPath(t))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "fixed work budget of 8388608")
 	require.Empty(t, doc.Bodies())

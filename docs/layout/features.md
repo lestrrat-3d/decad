@@ -35,7 +35,8 @@ The rules for rows live in `docs/layout.md`.
 | `draft_two_sided.go` | Two-slab draft assembly and placement. See draft §7. |
 | `draft_moments.go` | Draft body measurements. See draft §8. |
 | `draft_survey.go` | Draft body undercut survey. See draft DD7. |
-| `sweep.go` | `Document.Sweep`/`SweepChain`, path admission adapters and span payloads. See sweep design. |
+| `section_input.go` | `Section`: the profile-or-chain constraint a section-fed operation is generic over. See surface §13.2. |
+| `sweep.go` | Generic `Sweep` over a profile or chain, path admission adapters and span payloads. See sweep design. |
 | `sweep_chain_composite.go` | Certified cardinal line/arc chain sheet, indexed rim join, separation and readings. See sweep §15.8. |
 | `sweep_twist.go` | One-span polygon twist admission, true-shape readings and held-shell proof. See sweep §17. |
 | `sweep_twist_stations.go` | Straight-path twist stations, bounded Loft cells and occupied-volume proof. See sweep §17.3. |

@@ -37,7 +37,7 @@ func TestSweepStraightTessellatesAsItsPrism(t *testing.T) {
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
 	require.NoError(t, err)
 	sweepDoc := decad.New()
-	swept, err := sweepDoc.Sweep(t.Context(), s, profile, path)
+	swept, err := decad.Sweep(t.Context(), sweepDoc, s, profile, path)
 	require.NoError(t, err)
 	got, err := swept.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -121,7 +121,7 @@ func TestSweepStraightIsABooleanOperand(t *testing.T) {
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
 	require.NoError(t, err)
 	got := union(t, func(doc *decad.Document, s *sketch.Sketch, p *sketch.Profile) (*decad.Body, error) {
-		return doc.Sweep(t.Context(), s, p, path)
+		return decad.Sweep(t.Context(), doc, s, p, path)
 	})
 	want := union(t, func(doc *decad.Document, s *sketch.Sketch, p *sketch.Profile) (*decad.Body, error) {
 		return doc.Extrude(s, p, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
@@ -136,7 +136,7 @@ func TestSweepStraightIsABooleanOperand(t *testing.T) {
 func TestSweepArcTessellatesAsItsRevolve(t *testing.T) {
 	t.Parallel()
 	s, profile := plateSketch(t)
-	swept, err := decad.New().Sweep(t.Context(), s, profile, sweepArcPath(t))
+	swept, err := decad.Sweep(t.Context(), decad.New(), s, profile, sweepArcPath(t))
 	require.NoError(t, err)
 	got, err := swept.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -189,7 +189,7 @@ func TestSweepArcTessellationMapsReversedCaps(t *testing.T) {
 		Through: r3.NewVec(20, 106, 8), End: r3.NewVec(20, 100, 10),
 	})
 	require.NoError(t, err)
-	body, err := decad.New().Sweep(t.Context(), s, profile, path)
+	body, err := decad.Sweep(t.Context(), decad.New(), s, profile, path)
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -203,7 +203,7 @@ func TestSweepArcIsABooleanOperand(t *testing.T) {
 	t.Parallel()
 	s, profile := plateSketch(t)
 	doc := decad.New()
-	swept, err := doc.Sweep(t.Context(), s, profile, sweepArcPath(t))
+	swept, err := decad.Sweep(t.Context(), doc, s, profile, sweepArcPath(t))
 	require.NoError(t, err)
 	bw := sketch.NewWorld()
 	bs, bp := meshPolygonSketch(t, bw, bw.XY(), [][2]float64{
@@ -233,7 +233,7 @@ func TestSweepArcIsABooleanOperand(t *testing.T) {
 func TestSweepCompositeTessellatesSharedGrid(t *testing.T) {
 	t.Parallel()
 	s, profile, path, _, joins := orthogonalSweepFixture(t)
-	body, err := decad.New().Sweep(t.Context(), s, profile, path)
+	body, err := decad.Sweep(t.Context(), decad.New(), s, profile, path)
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -286,7 +286,7 @@ func TestSweepCompositePolygonHoleTessellates(t *testing.T) {
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.New().Sweep(t.Context(), s, profile, orthogonalSweepPath(t))
+	body, err := decad.Sweep(t.Context(), decad.New(), s, profile, orthogonalSweepPath(t))
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
@@ -294,7 +294,7 @@ func TestSweepCompositePolygonHoleTessellates(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 
 	outerSketch, outerProfile, outerPath, _, _ := orthogonalSweepFixture(t)
-	full, err := decad.New().Sweep(t.Context(), outerSketch, outerProfile, outerPath)
+	full, err := decad.Sweep(t.Context(), decad.New(), outerSketch, outerProfile, outerPath)
 	require.NoError(t, err)
 	holeVolume, err := body.Volume()
 	require.NoError(t, err)
@@ -307,7 +307,7 @@ func TestSweepCompositePolygonHoleTessellates(t *testing.T) {
 func TestSweepCompositePlacedMesh(t *testing.T) {
 	t.Parallel()
 	s, profile, path, _, _ := orthogonalSweepFixture(t)
-	base, err := decad.New().Sweep(t.Context(), s, profile, path)
+	base, err := decad.Sweep(t.Context(), decad.New(), s, profile, path)
 	require.NoError(t, err)
 	baseMesh, err := base.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -326,7 +326,7 @@ func TestSweepCompositePlacedMesh(t *testing.T) {
 func TestSweepCompositeSheetMesh(t *testing.T) {
 	t.Parallel()
 	s, profile, path, _, _ := orthogonalSweepFixture(t)
-	sheet, err := decad.New().Sweep(t.Context(), s, profile, path, decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(t.Context(), decad.New(), s, profile, path, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -347,7 +347,7 @@ func TestSweepCompositeMeshBoolean(t *testing.T) {
 	t.Parallel()
 	s, profile, path, _, _ := orthogonalSweepFixture(t)
 	doc := decad.New()
-	swept, err := doc.Sweep(t.Context(), s, profile, path)
+	swept, err := decad.Sweep(t.Context(), doc, s, profile, path)
 	require.NoError(t, err)
 	w := sketch.NewWorld()
 	bs, bp := meshPolygonSketch(t, w, w.XY(), [][2]float64{{0, 0}, {2, 0}, {2, 2}, {0, 2}})
@@ -371,7 +371,7 @@ func TestSweepCompositeCircularHoleTessellates(t *testing.T) {
 	t.Parallel()
 	s, profile := orthogonalSweepProfileWithHole(t)
 	path := orthogonalSweepPath(t)
-	body, err := decad.New().Sweep(t.Context(), s, profile, path)
+	body, err := decad.Sweep(t.Context(), decad.New(), s, profile, path)
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -380,7 +380,7 @@ func TestSweepCompositeCircularHoleTessellates(t *testing.T) {
 	volume, err := body.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, volume.Value.Base(), meshVolume(mesh), volume.Value.Base()*0.02)
-	sheet, err := decad.New().Sweep(t.Context(), s, profile, path, decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(t.Context(), decad.New(), s, profile, path, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	sheetMesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -395,7 +395,7 @@ func TestSweepCompositeStraightCircularHoleMesh(t *testing.T) {
 		decad.LineTo{End: r3.NewVec(0, 0, 5)},
 		decad.LineTo{End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
-	body, err := decad.New().Sweep(t.Context(), s, profile, path)
+	body, err := decad.Sweep(t.Context(), decad.New(), s, profile, path)
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)

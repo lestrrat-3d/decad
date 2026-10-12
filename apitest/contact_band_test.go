@@ -478,7 +478,7 @@ func partsBinSweep(t *testing.T, doc *decad.Document) *decad.Body {
 	s, profile := meshPolygonSketch(t, w, w.XY(), sweepHexagonCorners)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
 	require.NoError(t, err)
-	body, err := doc.Sweep(t.Context(), s, profile, path)
+	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
 	require.NoError(t, err)
 	return body
 }

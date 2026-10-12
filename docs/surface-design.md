@@ -55,7 +55,7 @@ Ten tables are normative:
   sheet, the source left live (§17);
 - **`ExtrudeChain` / `RevolveChain`** — a ribbon from one open sketch curve, and
   an uncapped shell from an open profile revolved (§13);
-- **`SweepChain` / `LoftChain`** — a ribbon from one open chain swept along a
+- **`Sweep` over a chain / `LoftChain`** — a ribbon from one open chain swept along a
   straight path or §15.8's cardinal line/arc path, and a ribbon ruled between
   two open chains on exactly-parallel planes (`docs/sweep-design.md` §15,
   `docs/loft-design.md` §16);
@@ -80,7 +80,7 @@ one is queued.
 | `Thicken` | §16.1's seven sheet families build | Other composite sweeps, one-span chain sweeps, loft, stitched, `Body.Patch` and `Unstitch` sheets refuse under R24; §16.8 names their missing proofs |
 | `Trim`, `Extend` | `Trim` over a receiver whose section is one closed loop and `Extend` over a chain ribbon, in the prism family and the revolve family alike (`docs/surface-intersection-design.md` §2.2) | `Extend` over a PARTIALLY revolved ribbon, RS14. A partial revolution gathers the wall's swept free edge into one loop with its two cap edges, and no recorded fact separates them; lifting it is a recorded free-end map from the chain-revolve build, not a bound and not a gate (that document's §2.2). That document's §4 states every other shape outside the admitted class, and `docs/api-design.md` §2.1's reasoning is what keeps a pair sharing no generator refused |
 | `Document.Split` | the prism family and the revolve family alike: one solid target, a sheet tool, and one solid body per arranged piece out (`docs/surface-intersection-design.md` §8). A revolve piece charges its cut ends through that document's §7.2 | nothing is staged. That document's §4 states every shape outside the admitted class |
-| `SweepChain` | one straight span, or §15.8's exact cardinal line/arc path over one radial source line | a one-span arc and other composite paths refuse R34. `docs/sweep-design.md` §15 states the indexed join. Table D row 13 |
+| `Sweep` over a chain | one straight span, or §15.8's exact cardinal line/arc path over one radial source line | a one-span arc and other composite paths refuse R34. `docs/sweep-design.md` §15 states the indexed join. Table D row 13 |
 | `LoftChain` | a `LineSeg`-only correspondence between two exactly-parallel walks whose to-plane origin lies strictly on the from-plane's positive side (`docs/loft-design.md` §16.6's PR L1) | a curved correspondence, R36, until §5.1's station generator there states each COMPUTED station's own side against the from-plane (that document's §16.2, §16.6's PR L2). A non-parallel plane pair refuses at R35, which §7 reads as a reach boundary rather than a queued build: the ribbon between two non-parallel open walks exists, and what this evaluator lacks is a stated positive side for it |
 
 ### 1.3 What this design refuses permanently
@@ -348,13 +348,13 @@ func WithThickenSide(side ThickenSide) ThickenOption
 func (b *Body) Offset(ctx context.Context, distance units.Value, opts ...OffsetOption) (*Body, error)
 func WithOffsetSide(side OffsetSide) OffsetOption
 
-// A sheet from one open sketch curve. §13 owns all four.
+// A sheet from one open sketch curve. §13 owns all four; Sweep takes the
+// chain through Section (§13.2).
 type ChainExtrudeOption interface{ option.Interface; chainExtrudeOption() }
 type ChainRevolveOption interface{ option.Interface; chainRevolveOption() }
 
 func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
 func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
-func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error)
 func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
 
 // The free-edge selector predicate.
@@ -1517,7 +1517,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 
 | # | Condition | Sentinel |
 |---|---|---|
-| R1 | `WithSurfaceResult()` on a feature this evaluator cannot yet build as a surface (Table D) | `ErrUnsupported` |
+| R1 | `WithSurfaceResult()` on a feature this evaluator cannot yet build as a surface (Table D), and on a chain `Sweep`, whose result is always a sheet (§13.2) | `ErrUnsupported` |
 | R2 | `Document.Patch` handed a profile that fails `docs/api-design.md` §7's seam gates | as the seam states: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
 | R3 | `Document.Patch` handed a profile whose recorded boundary carries a free-form segment this evaluator cannot integrate | `ErrUnsupported` |
 | R4 | `Body.Patch` selection holds an edge that is not free | `ErrDegenerate` |
@@ -1539,7 +1539,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R20 | `Stitch`'s assembled lumps are not proven mutually separate by axis-aligned bounding box | `ErrUnsupported` |
 | R21 | `ExtrudeChain` or `RevolveChain` handed a chain that fails one of §13.3's gates | as the seam states: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
 | R22 | `RevolveChain` handed a chain with both free ends on the resolved axis, or an on-axis free end whose incident walk lies along the axis | `ErrUnsupported` |
-| R34 | `SweepChain` over a one-span arc or a composite path outside `docs/sweep-design.md` §15.8's cardinal class (Table SC rows SC7 and SC9) | `ErrUnsupported` |
+| R34 | `Sweep` over a chain, a one-span arc or a composite path outside `docs/sweep-design.md` §15.8's cardinal class (Table SC rows SC7 and SC9) | `ErrUnsupported` |
 | R35 | `LoftChain` whose two recorded planes are not exactly parallel, or whose to-plane origin does not lie strictly on the from-plane's positive side (`docs/loft-design.md` §16.2, Table SL row SL5) | `ErrUnsupported` |
 | R36 | `LoftChain` over a curved correspondence, before the increment that states each computed station's own side (`docs/loft-design.md` Table SL row SL7) | `ErrUnsupported` |
 | R24 | `Thicken` outside §16.1's seven sheet families, on a solid or unrecorded sheet, or on a receiver outside its admitted section class | `ErrUnsupported` |
@@ -1559,7 +1559,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R41 | `Offset` on a retired receiver | `ErrRetiredBody` |
 | R43 | `Thicken` on a revolve sheet or a chain revolve shell whose axis is not stated exactly along a recorded plane axis, whose swept offset has no proven strictly positive radius from that axis over the whole interval, or whose assembled section leaves the axis side undecided (§16.5, §16.7) | `ErrUnsupported` |
 | R44 | `Thicken` on a chain-fed sheet holding more than one recorded walk, carrying a nonzero section displacement, or holding a walk outside §16.6's axis-parallel right-angle class | `ErrUnsupported` |
-| R45 | `ExtrudeChain` or `SweepChain`'s tessellation or export over a chain holding a curved (`CircleSeg`/`ArcSeg` fragment) or free-form wall, before the increment that chords that wall too | `ErrUnsupported` |
+| R45 | `ExtrudeChain` or a chain `Sweep`'s tessellation or export over a chain holding a curved (`CircleSeg`/`ArcSeg` fragment) or free-form wall, before the increment that chords that wall too | `ErrUnsupported` |
 | R46 | `Body.Patch` chain holding a circular edge whose curve bound could not be proven (a cap copy at a sweep end with no denotation, a bound not below half the radius), so the new face has no proven area (§5.2) | `ErrUnsupported` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
@@ -1601,7 +1601,9 @@ boundary its own §16.6 names rather than a build waiting in a queue. The one
 refusal in §13 that is permanent has no Table R row at all, because the
 compiler carries it: `Document.Patch` takes a `*sketch.Profile`, and
 `WithSurfaceResult()` implements no chain option tier — `ChainExtrudeOption`,
-`ChainRevolveOption`, `ChainSweepOption` or `ChainLoftOption` (§13.2, §13.5).
+`ChainRevolveOption` or `ChainLoftOption` (§13.2, §13.5). A chain `Sweep` is
+the exception: it takes `SweepOption`, so `WithSurfaceResult()` compiles and
+returns `ErrUnsupported` at run time (§13.2).
 
 R32's own naming is not uniform across its causes, and the row's wording
 states the weaker claim true of all of them. `tessellateStitchCurved`'s
@@ -2184,7 +2186,7 @@ reverses a decision already taken.
 | `docs/api-design.md` §6.2 | `Clearance`'s doc comment states the one consequence: for a sheet-solid pair the row states the distance to the solid's boundary without asserting which side the sheet is on; a solid-solid row's meaning is unchanged |
 | `docs/tessellation-design.md` §1 | the Geometry row and the mandatory closed-mesh audit become kind-conditional (§10) |
 | `docs/api-design.md` §7 | the internal seam records an open chain through `sketchrecord.RecordChain` beside `momentinput.RecordProfile`, under the foreign, stale, snapshot-match and `TExact` gates (§13.3) |
-| `docs/api-design.md` §8 | the v1 feature vocabulary gains `ExtrudeChain`, `RevolveChain`, `SweepChain` and `LoftChain`; the four signatures land beside the existing surface block |
+| `docs/api-design.md` §8 | the v1 feature vocabulary gains `ExtrudeChain`, `RevolveChain` and `LoftChain`, and `Sweep` takes a `Section`; the signatures land beside the existing surface block |
 | `docs/api-design.md` §12 | `ErrForeignProfile`, `ErrStaleProfile`, `ErrInvalidProfile` and `ErrUnrecordableProfile` each state that their cause is a profile OR an open chain (§7 there, §13.3 here) |
 | `docs/sketch-seam-design.md` §2 | the recording IR gains `ChainRecord` and `RecordChain`, over the same ten `CurveSegment` variants; §2.1's admission list gains the chain's own interior-junction reading (§13.3) |
 | `docs/api-design.md` §2.1 | the admitted-class sentence names the shared-generator predicate and both owning documents, in place of the one class it named before |
@@ -2255,42 +2257,66 @@ rather than left to be found later:
 
 ### 13.2 The entry points
 
-**A chain gets its own two entry points rather than widening the profile
-path's.**
+**`Sweep` takes a profile or a chain through one generic entry point; the
+other three chain operations keep their own entry points.**
 
 ```go
+type Section interface{ *sketch.Profile | *sketch.Chain }
+
+func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch,
+    sec S, path *Path, opts ...SweepOption) (*Body, error)
+
 func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent,
     opts ...ChainExtrudeOption) (*Body, error)
 func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis,
     a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
 ```
 
-Each takes the sketch beside the chain, for the reason `Extrude` does: a chain's
-geometry is plane-local and the plane is the sketch's (`docs/api-design.md` §7).
-Each resolves its extent through the vocabulary its profile-fed sibling already
-uses, and neither takes a context, exactly as `Extrude` and `Revolve` take none.
+`Section` is declared once (`section_input.go`) as the sketch geometry a
+section-fed operation consumes. A caller passes a `*sketch.Profile` or a
+`*sketch.Chain` and the compiler infers `S`; no call site writes the type
+argument. A `Section`-typed parameter rejects every other pointer type at
+compile time, and a typed-nil section of either kind returns `ErrDegenerate`.
 
-**The rejected alternative is a sealed `Section` interface that both
-`*sketch.Profile` and `*sketch.Chain` satisfy**, handed to the existing
-`Extrude` and `Revolve`. It would turn every existing call site's compile-time
-guarantee — this argument is a closed region, so this call builds a solid — into
-a runtime question, and it would make `WithSurfaceResult()`'s ABSENCE mean
-"build a solid" for one variant and nothing at all for the other. Two entry
-points keep each contract decidable by the type.
+Every entry point takes the sketch beside the section, for the reason `Extrude`
+does: a section's geometry is plane-local and the plane is the sketch's
+(`docs/api-design.md` §7). `ExtrudeChain` and `RevolveChain` resolve their
+extent through the vocabulary their profile-fed siblings use, and neither takes
+a context, exactly as `Extrude` and `Revolve` take none.
 
-**`WithSurfaceResult()` does not compile against either call, which is this
-design's answer to whether a chain result is always a sheet.** It always is: an
-open walk encloses no region, so there is no closing face to omit and no solid
-to ask for. `ChainExtrudeOption` and `ChainRevolveOption` are their own sealed
-option tiers, and `SurfaceResultOption` — `ExtrudeOption` + `RevolveOption` +
-`SweepOption` + `LoftOption` — implements neither, so the compiler refuses the
-option and Table R carries no row for it. The rejected alternative is accepting
-it as a no-op, which gives one option two meanings: omit the closing faces here,
-state nothing there. Neither tier has a concrete option in this increment; both exist so
-a later chain-only option has a tier to land on. The empty chain option tiers
-keep `option.Interface` in their method sets, including `ChainSweepOption` and
-`ChainLoftOption`. A later chain-only option can use the same codec contract
-without redefining its tier.
+**`Sweep` keeps two payloads behind its one signature.** It type-switches on
+the section and calls the profile build or the chain build. The profile build
+records a `sweepPayload` and the chain build records a `chainSweepPayload`;
+the two stay distinct so that a downstream consumer dispatches on the payload
+type, and one whose proof has not landed for a chain refuses instead of
+reading a profile proof as its own (`docs/sweep-design.md` §10). Each build
+keeps its own refusal order: a chain section runs the seam gates of §13.3 before
+any path geometry (Table SC), a profile section runs the profile gates of
+`docs/sweep-design.md` Table S.
+
+**A chain result is always a sheet, so `WithSurfaceResult()` returns
+`ErrUnsupported` when the section is a chain.** An open walk encloses no
+region, so there is no closing face to omit and no solid to ask for, and
+accepting the option as a no-op would give it two meanings: omit the caps for a
+profile, state nothing for a chain. `WithSweepTwist` returns `ErrUnsupported`
+on a chain too, because a nonzero twist is Table S row S11 for a profile-fed
+sweep and the chain build stages no second spelling of it.
+`WithMitredJoins` and `WithSectionScale`, which build solids from a profile,
+return `ErrUnsupported` on a chain as well. All four refusals run after the
+chain's seam gates and before every path-geometry gate, commit nothing, and
+leave the document unchanged. `docs/sweep-design.md` §15.3 states the point.
+
+**`ExtrudeChain` and `RevolveChain` do not take a `Section`.** `Extrude` and
+`Revolve` keep their `*sketch.Profile` signatures, so their compile-time
+guarantee (this argument is a closed region, so this call builds a solid) is
+unchanged, and `WithSurfaceResult()` does not compile against either chain
+call: `ChainExtrudeOption` and `ChainRevolveOption` are their own sealed option
+tiers, and `SurfaceResultOption` (`ExtrudeOption` + `RevolveOption` +
+`SweepOption` + `LoftOption`) implements neither, so Table R carries no row for
+it. Neither tier has a concrete option yet; both exist so a later chain-only
+option has a tier to land on. The empty chain option tiers, and
+`ChainLoftOption`, keep `option.Interface` in their method sets so a later
+chain-only option can use the same codec contract without redefining its tier.
 
 ### 13.3 `ChainRecord` — the record, and its gates
 
@@ -2511,10 +2537,10 @@ reads a ribbon's free edges as one closed chain and admits or refuses it on
   `Document.Patch` takes a `*sketch.Profile` — and the caller's move is to close
   the curve in the sketch. This is §1.3's shape of permanent refusal: no later
   proof changes it.
-- **`SweepChain` and `LoftChain` each build part of their reach and refuse the
+- **A chain `Sweep` and `LoftChain` each build part of their reach and refuse the
   rest with `ErrUnsupported`**, on §14's own staging rule — the signature lands
   so a caller's intent has somewhere to go and a refusal to read, and each
-  remaining build lands with its own increment. `SweepChain` sweeps one straight
+  remaining build lands with its own increment. A chain `Sweep` sweeps one straight
   path span or §15.8's cardinal composite, refusing a standalone arc and other
   composite paths at R34; `LoftChain`
   rules a `LineSeg`-only correspondence, refusing a curved one at R36 and a
@@ -2523,12 +2549,14 @@ reads a ribbon's free edges as one closed chain and admits or refuses it on
   `docs/sweep-design.md` §15.1 for the composite join, and
   `docs/loft-design.md` §16.1 for Table P over two open walks, with its §16.2
   carrying the positive side a closed shell supplied and two open walks do not.
-  Both entry points take a sealed chain-only option tier for §13.2's reason, so
-  `WithSurfaceResult()` compiles against neither.
+  `LoftChain` takes a sealed chain-only option tier for §13.2's reason, so
+  `WithSurfaceResult()` does not compile against it.
 - **`Stitch` and `Unstitch` never see a chain.** Both take bodies, so there is
   nothing to refuse: a ribbon reaches them as the sheet it is, on §6's terms.
-- **`WithSurfaceResult()` never reaches a chain-fed call**, by §13.2's option
-  tiers — a compile error rather than a sentinel.
+- **`WithSurfaceResult()` never builds a chain-fed sheet differently.** On
+  `ExtrudeChain`, `RevolveChain` and `LoftChain` it is a compile error, by
+  §13.2's option tiers. On a chain `Sweep` it returns `ErrUnsupported` at run
+  time (R1).
 
 ## 14. Table D — delivery
 
@@ -2546,14 +2574,14 @@ ANSWER is accepted and reads `Suspect`.
 | 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate — two distinct proofs sharing one name, never one lifted "together": a LEVEL token proving N chain vertices coplanar by shared construction, which lifts §5.2 gate 3's bounded-chain half of R6 for a straight prism's own rim; a separate CURVE token proving two edges (or two vertices) denote one curve or point, which lifts Table J's J5 for a straight prism's own rim and a revolve's own internal junction, and does not follow from the level token proving anything — coplanarity and coincidence are different proofs over different code paths; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a surface-extruded prism sheet's positive side — the only sheet family this increment opens it on; a loft, stitch or one-span-sweep sheet moves from `DiagSurveyPrerequisite` to `DiagUnsupportedSurveyPayload` for it instead, and stays there until its own proof lands |
 | 4 | The revolve sheet mesh (§10): the meridian and angular chordings a surface result keeps, the caps it omits — and, where the profile meets the axis, the on-axis edge between two poles that only the caps carried (Table W) — the cap terms its area slack drops, and the manifold-with-boundary audit in the closed-mesh audit's place. It also settles which audit a CLOSED sheet runs |
 | 5 | An all-planar stitched body's own mesh, CLOSED or OPEN: `stitchPayload` records the final wound triangle set `Stitch`'s own build assembled and audited (§6.4), attributed by the live rebuilt face per triangle rather than by role (two welded operands can carry the same role string), and `tessellate_stitch.go` restates it with no chording. A CLOSED body runs the closed-mesh audit plus its own vertex-link safety net over that restated set; an OPEN body — a sheet — runs `docs/tessellation-design.md` §1.2's manifold-with-boundary audit instead, its free-boundary attribution agreeing with the body's own recorded free `Edge`s by the identical live face pointer on both sides, never a role lookup. A curved or mixed stitched body's mesh stays `ErrUnsupported`, staged to a later increment, whether open or closed. The mesh publishes a zero occupied-volume proof (`symDiffOK == true`) for a CLOSED body whose every vertex carries a proven bound of exactly zero, admitting it to a boolean like any other zero-bound operand; every other stitched body keeps `symDiffOK` false, so no boolean admits it — an open one refusing on Table X's own sheet-boolean rule, a bounded or placed closed one on `boolean.go`'s `requireVolumeProvingPayload` arm. `newBodyGeomBudget` (`docs/clearance-design.md` §2) carries the identical zero-bound `stitchPayload` arm already, which is what lets a stitched solid reach a proven pair relation at all; a bounded or placed stitched solid still reads undecided exactly as it does for any other payload this evaluator has not wired a carrier for |
-| 6 | The open sketch chain (§13): `ChainRecord` and `RecordChain` beside `ProfileRecord` and `RecordProfile`, under the same gates and the same four sentinels; `Document.ExtrudeChain` and `Document.RevolveChain` with their two sealed option tiers, building Table G's wall set with no cap and no closing face; the fourth validity leg for a chain-fed prism and for a full-turn chain revolve clear of the axis; prism ribbon tessellation and export on the identical manifold-with-boundary audit; Table A's four new amendment rows; §15's T130–T141. `Document.SweepChain` and `Document.LoftChain` land as signatures refusing with `ErrUnsupported`, and rows 12 and 14 build their first admitted cases; a chain free end ON the revolve axis stays R22 until row 10; the chain-fed revolve mesh remains separate |
+| 6 | The open sketch chain (§13): `ChainRecord` and `RecordChain` beside `ProfileRecord` and `RecordProfile`, under the same gates and the same four sentinels; `Document.ExtrudeChain` and `Document.RevolveChain` with their two sealed option tiers, building Table G's wall set with no cap and no closing face; the fourth validity leg for a chain-fed prism and for a full-turn chain revolve clear of the axis; prism ribbon tessellation and export on the identical manifold-with-boundary audit; Table A's four new amendment rows; §15's T130–T141. `Document.LoftChain` and a chain `Sweep` land as signatures refusing with `ErrUnsupported`, and rows 12 and 14 build their first admitted cases; a chain free end ON the revolve axis stays R22 until row 10; the chain-fed revolve mesh remains separate |
 | 7 | Patch and profile prism `Thicken`, all sides, interval and crossing audits (T150–T157). Revolve and chain land in rows 16–18, one-span sweep in row 20, cardinal chain composite in row 21; other families stay R24 |
 | 8 | `Trim`, `Extend` and `Split` over a pair whose two sweeps share one generator, in the five PRs `docs/surface-intersection-design.md` §11 states: its §2 entry gate, `buildPrismScene`'s `ChainRecord` arm, `prismcells.Classify`'s side reading consumed unchanged, the open-walk chaining of its §3.3, `chainPayload`'s and `chainRevolvePayload`'s walk set and section displacement, the one displacement term its §7 derives from `internal/proofbound/bounds.go`'s existing `cutParamUlps`/`cutDisplacementAllow`, and §7.1's fold of that term into the revolve's own axis-coordinate walk. Table A's five new rows; Table R's R29–R31; §15's T170–T186. A pair sharing no generator, a chain ribbon as `Trim`'s receiver, and a second trim of an already-trimmed body each refuse with `ErrUnsupported`, and that document's §4 and §5 own why |
 | 9 | §10.1's curved or mixed stitched mesh from one complete revolve sheet, closed or open. Other source constructions and new curved welds remain R32 until they can prove identical seam samples. |
 | 10 | One free pole on `RevolveChain` (§13.3): Table G's pole topology, the wall `Area` and `Bounds` charges, one free rim after a full revolution, and T139 plus T142–T146. Both free ends on the axis stay R22; interior axis pinches are R33. The chain-fed revolve mesh remains a separate increment because its open-walk pole fan and boundary audit need their own proof |
 | 11 | §10.2's open stitched mesh from all single-face sheets unstitched from one revolve sheet. Pointer-proven re-welds reuse the source mesh's identical curved seam samples; other curved welds remain R32. |
-| 12 | `Document.SweepChain` over a ONE-SPAN straight path (`docs/sweep-design.md` §15, PR C1): the sealed `ChainSweepOption` tier in place of the staged signature's `SweepOption`, Table SC's gate set, the chain prism reduction over the path's own height and composed length bound, and §15's T190–T195. An arc span and every composite path stay R34 |
-| 13 | `SweepChain`'s bounded cardinal composite (`docs/sweep-design.md` §15.8): two real chain spans, indexed wall-rim sew, separation and boundary audits, and a certified sheet mesh. Standalone arcs and other composites stay R34 |
+| 12 | `Sweep` over a chain along a ONE-SPAN straight path (`docs/sweep-design.md` §15, PR C1): `SweepOption` with the chain refusals of §13.2, Table SC's gate set, the chain prism reduction over the path's own height and composed length bound, and §15's T190–T195. An arc span and every composite path stay R34 |
+| 13 | A chain `Sweep`'s bounded cardinal composite (`docs/sweep-design.md` §15.8): two real chain spans, indexed wall-rim sew, separation and boundary audits, and a certified sheet mesh. Standalone arcs and other composites stay R34 |
 | 14 | `Document.LoftChain` over a `LineSeg`-only correspondence (`docs/loft-design.md` §16, PR L1): the sealed `ChainLoftOption` tier, Table SL's gate set, §16.2's exactly-parallel plane gate and per-wall positive side, the open-walk cell walk with its two free end rungs, and §15's T196–T199 and T208. A curved correspondence stays R36 and a non-parallel plane pair stays R35 |
 | 15 | `Body.Offset` for §17's patch and profile-fed prism families, both sides: the patch arm's translation over the existing placement rebuild; the prism arm's `offsetProfile` section reused from §16.2 with its exact-generation gate, its offset audit and its whole-interval certification, and WITHOUT the source-and-offset nesting audit an annulus needs; Table R's R37–R41; Table X's own row; and §15's T200–T207. Other sheet families stay R37 |
 | 16 | `Body.Thicken` on a profile-fed revolve sheet (§16.5): the exact axis class, the meridian annulus over §16.2's own offsets, the radial gate over the interval scan's own boxes, the re-resolved axis frame, and §15's T158–T161 |
@@ -2561,7 +2589,7 @@ ANSWER is accepted and reads `Suspect`.
 | 18 | `Body.Thicken` on a chain revolve shell (§16.7): §16.6's assembled section under §16.5's sweep and radial gate, and §15's T165–T169. A free end on the axis stays R43 |
 | 19 | The chain-fed prism ribbon's `Tessellate`/`STL`/`OBJ` mesh over a `LineSeg`-only chain (`tessellate_chain.go`): every wall's exact planar quad read straight off its topology with no chording. A curved or free-form wall, and the chain-fed revolve ribbon's mesh, stay R45 and row 10's own staging respectively |
 | 20 | `Body.Thicken` on one-span straight and arc sweep sheets (§16.8): reuse the prism or revolve offset proof, then publish the new solid as `sweepPayload` with its path and roles. Composite sweep sheets stay R24. T213 checks both reductions and replay |
-| 21 | Cardinal composite `SweepChain` `Thicken` (§16.8): exact ribbon section and radial interval; two-span solid sweep sews caps and proves measurements and mesh. Other chain sweeps stay R24 (T195c) |
+| 21 | Cardinal composite chain `Sweep` `Thicken` (§16.8): exact ribbon section and radial interval; two-span solid sweep sews caps and proves measurements and mesh. Other chain sweeps stay R24 (T195c) |
 
 **Increment 7 depends on increment 1's patch and prism sheets and analytic
 prism builder, plus `docs/modify-design.md` §5/§8's section offset and audit.**
@@ -2790,7 +2818,7 @@ The row-9 curved-mesh obligations are:
 | T136 | a rectangle-minus-one-side chain in a sketch that also holds an untouched spline, so every edge reads `TExact == false` | `ErrUnrecordableProfile`, the identical seam refusal the equivalent profile earns, and the document is unchanged |
 | T137 | a chain held across a `Params().SetValue` plus `Solve`, and separately a chain whose `Valid` is false | `ErrStaleProfile` for the first, `ErrInvalidProfile` for the second; neither call touches `Document.Bodies()` |
 | T138 | a held chain re-ranked by RENAMING one of its entities, with no geometry change and no re-solve | `ch.IsStale()` is false and `ExtrudeChain` succeeds, publishing the same `Area` and `Bounds` as the pre-rename call: the authentication gate matches the held snapshot against the whole fresh `s.Chains()` set by content, never at one index. Shown-to-fail: matching at the held chain's original index turns this `ErrInvalidProfile` |
-| T139 | `SweepChain` handed a valid chain and a composite path, and `RevolveChain` handed a chain with BOTH free ends on the resolved axis | `ErrUnsupported` at each call (R34, R22); `errors.Is` holds; the document and every operand are unchanged. From Table D row 12 onward the `SweepChain` leg is the composite path rather than any path, since a one-span straight path builds; from row 14 onward `LoftChain`'s own staged refusal is the curved pair (R36) and sits with T199 rather than here |
+| T139 | `Sweep` handed a valid chain and a composite path, and `RevolveChain` handed a chain with BOTH free ends on the resolved axis | `ErrUnsupported` at each call (R34, R22); `errors.Is` holds; the document and every operand are unchanged. From Table D row 12 onward the chain `Sweep` leg is the composite path rather than any path, since a one-span straight path builds; from row 14 onward `LoftChain`'s own staged refusal is the curved pair (R36) and sits with T199 rather than here |
 | T140 | two `ExtrudeChain` ribbons whose free end edges are a proven-coincident, zero-bound pair, `Stitch`ed | the pair welds under Table J's `Line3` row and the result is a `BodySheet` whose `Edges(Free())` resolves to the remaining 6 edges, not 8 — a ribbon is an ordinary stitch operand, admitted by the existing gates and not by a new one |
 | T141 | a chain holding a free-form fragment, `ExtrudeChain` 10 mm `Along` | `Area` is `Approximate` with a strictly positive `Bound`, and its interval encloses the analytic wall area; `ch.Length · h` sits at or below that interval's lower end, never inside it — the underestimate §13.3 refuses to publish. Shown-to-fail: replacing the per-segment sum with `ch.Length · h` published as `Exact` turns the enclosure assertion red |
 | T142 | a single line from (z = 0, r = 0) to (z = 4, r = 3), spun a full turn about r = 0 | `BodySheet`, one cone face, one free circle, `Bounds` exactly (0, -3, -3)–(4, 3, 3) mm, and `Area` enclosing 15π mm²; the pole adds no edge or area. Shown-to-fail: an otherwise identical start radius within the axis snap band must still enclose the snapped cone's 15π mm² area, and a snapped RADIAL wall — a meridian at constant z, which sweeps a disk — must enclose its own; dropping either of `walkAxisMoment`'s two snap terms, the start radius or the wall length, turns one of those enclosures red |
@@ -2881,12 +2909,12 @@ prints, so each assertion reads the number rather than only the sentinel.
 | T184 | `Document.Split` over the revolve family, each target spun about the sketch plane's v axis and cut by a co-axial `RevolveChain` sheet of one line: the solid cylinder r ∈ [0, 4], v ∈ [0, 10] by the disc at v = 6; the ball of radius 5 by the equatorial disc; the torus of tube radius 3 about r = 10 by the cylinder sheet r = 10; the cylinder a quarter turn, by a quarter-turn disc and separately by a full-turn one; and the torus a half turn | 2 bodies each, `Kind() == BodySolid`; each piece's `Volume` and `Area` intervals enclose the whole closed-form bracket taken over `math/big.Rat` from a 60-digit π: 96π and 64π mm³ for the cylinder, 250π/3 mm³ twice for the ball, 90π² ∓ 36π mm³ for the torus, 24π and 16π mm³ for the quarter cylinder, 45π² ∓ 18π mm³ for the half torus; the full-turn centroids lie within their bounds of the closed-form points; the pieces' summed volume interval encloses the target's closed form and overlaps the target's own reading; every piece tessellates watertight. Shown-to-fail: forcing each piece's `sectionDelta` to zero leaves the line and circle fixtures at most 2.9e-13 mm³ of volume bound against at least 1.1e-11 mm³ charged, and turns the 1e-12 floor assertion red on each of them while every enclosure stays green. The ball's pieces publish a bound wider than their volume under either setting: their meridian holds a trimmed `ArcSeg`, whose region integral `circularbounds` proves no interval for |
 | T185 | T184's cylinder, full turn and quarter turn | the cut disc of each full-turn piece selects as `Faces(Planar(), Facing(±y)).Exactly(1)` with an area interval enclosing 16π mm² and every edge at v = 6, and each piece's single `Cylindrical()` wall encloses 48π or 32π mm²; no quarter-turn piece carries a role its target's faces carried or one the other piece carries, `FaceCreatedBy(CapStart(target))` is `ErrNoMatch` on a piece, and each piece's own `CapStart`/`CapEnd` selects one 4 × h rectangle; the torus split replays to the same piece order and the same volumes |
 | T186 | revolve pairs `Split` declines: a tool about a parallel axis 2 mm away, a quarter-turn tool against a full-turn target, a disc at v = 20 that separates nothing, a sheet target, a solid tool, a T184 piece split again, and a straight-sweep ribbon against a revolve target | `ErrUnsupported`, `ErrDegenerate` for the disc that separates nothing; each read by message text, naming the axis, the angular span, the empty separation, the solid target, the sheet tool, the section displacement and the straight-sweep generator in turn; the document and the target's `Area` are unchanged in every case |
-| T190 | T130's single 40 mm line chain, `SweepChain` along a one-span `LineTo` path from the sketch plane's origin 10 mm along its positive normal | `Kind() == BodySheet`, `IsSolid() == false`, `Volume()` is `ErrNotSolid`; exactly 1 face; `Edges(Free()).Exactly(4)`; `Bounds` is the 40×0×10 slab, `Exact`; and `Area` is bit-identical to T130's own `ExtrudeChain` reading, value, `Exactness` and `Bound` alike — the equality is the assertion, since the two calls denote one ribbon and reach it by two different height derivations |
+| T190 | T130's single 40 mm line chain, `Sweep` along a one-span `LineTo` path from the sketch plane's origin 10 mm along its positive normal | `Kind() == BodySheet`, `IsSolid() == false`, `Volume()` is `ErrNotSolid`; exactly 1 face; `Edges(Free()).Exactly(4)`; `Bounds` is the 40×0×10 slab, `Exact`; and `Area` is bit-identical to T130's own `ExtrudeChain` reading, value, `Exactness` and `Bound` alike — the equality is the assertion, since the two calls denote one ribbon and reach it by two different height derivations |
 | T191 | T131's open line/arc/line walk, swept along the same one-span path | 3 faces; `Edges(Free()).Exactly(8)`, the two junction sweep edges matching nothing under `Free()`; the arc wall's `Area` is `Approximate` while both line walls read `Exact`; the body's `Area` equals the three walls' `boundedAdd` sum, value and bound |
 | T192 | T190's chain on a sketch plane whose positive normal is not a signed coordinate vector, swept `7√2` mm along that normal | `Area` is `Approximate` with a strictly positive `Bound` whose interval encloses the analytic `280√2` mm²; each of the walk's two SWEEP edges reads `Length` `Approximate` with a strictly positive `Bound` whose interval encloses the analytic `7√2` mm. Shown-to-fail: dropping `validateStraightSweepPath`'s composed height bound — the square root's committed error against the exact rational squared length, and the per-component departure of the held sweep vector from the exact path tangent — turns the two sweep-edge assertions red. The edge reading is what ISOLATES that bound: a wall's area is a `boundedMul` of two scalars and carries the product's own rounding whatever the height bound says, while a sweep edge's length IS the height and carries nothing else |
 | T193 | T190's chain against a path whose start lies off the sketch plane, and separately against one whose initial tangent opposes the plane's positive normal | `ErrDegenerate` both ways (`docs/sweep-design.md` Table SC row SC3); `Document.Bodies()` is unchanged |
 | T194 | T190's 40 mm chain against a radius-5 two-span tangent line/arc path, and separately against a one-span `ArcThrough` path | `ErrUnsupported` both ways (R34): the 40 mm source extends past the composite's radius, and the standalone arc reduction is staged; the document is unchanged |
-| T195 | `SweepChain` handed a chain held across a `Params().SetValue` plus `Solve`, and separately a chain whose `Valid` is false, each with a path that would otherwise refuse at SC3 | `ErrStaleProfile` for the first and `ErrInvalidProfile` for the second, never the path refusal — the seam gate runs first (`docs/sweep-design.md` Table SC); neither call touches `Document.Bodies()` |
+| T195 | `Sweep` handed a chain held across a `Params().SetValue` plus `Solve`, and separately a chain whose `Valid` is false, each with a path that would otherwise refuse at SC3 | `ErrStaleProfile` for the first and `ErrInvalidProfile` for the second, never the path refusal — the seam gate runs first (`docs/sweep-design.md` Table SC); neither call touches `Document.Bodies()` |
 | T195a | Sketch line `(0,0)`–`(4,0)` over +Z 20 then a radius-5 XZ half-circle | Two-face sheet, six free edges; area encloses `80+12π`; box ends at `(10,0,25)`; 0.1 mm `VerifyAll` proves boundary and area, not volume |
 | T195b | the same path with a nonradial one-line Sketch source | `ErrUnsupported` at SC7; no body is committed |
 | T195c | T195a thickened 1 mm on three sides; a second 2/3/10 source | Ten-face solid; bounded volume, area and mass; no free edges; source retires; 0.1 mm `VerifyAll` proves boundary and volume. Zero or rounded thickness and one-span chain refuse |

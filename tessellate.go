@@ -248,7 +248,7 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // this package cannot prove.
 //
 // Prism, revolve, cup, loft, cap-loop chamfer and boolean-built bodies
-// tessellate. A one-span [Document.Sweep] reuses its prism or Revolve mesh.
+// tessellate. A one-span [Sweep] reuses its prism or Revolve mesh.
 // A composite Sweep with line and circular profile walks chooses shared
 // profile stations across its spans and maps each facet to the body's live
 // face. A solid composite mesh carries an occupied-volume proof; a sheet
@@ -528,7 +528,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		if len(sp.spans) != 0 {
 			return tessellateChainSweep(ctx, b, sp, chord, verify)
 		}
-		// SweepChain's one-span straight reduction builds through the
+		// the chain Sweep's one-span straight reduction builds through the
 		// identical evalChainExtrudeContext a plain ExtrudeChain does, over
 		// the chainPayload it wraps unchanged (sweep.go's
 		// finishChainSweepBody), so it reuses that same restatement rather

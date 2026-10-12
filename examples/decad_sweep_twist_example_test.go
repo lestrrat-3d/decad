@@ -31,7 +31,7 @@ func Example_decad_sweepTwist() {
 		fmt.Println(err)
 		return
 	}
-	body, err := decad.New().Sweep(context.Background(), s, s.Profiles()[0], path,
+	body, err := decad.Sweep(context.Background(), decad.New(), s, s.Profiles()[0], path,
 		decad.WithSweepTwist(units.Degrees(30)))
 	if err != nil {
 		fmt.Println(err)
@@ -78,7 +78,7 @@ func Example_decad_sweepTwistCardinalArc() {
 		fmt.Println(err)
 		return
 	}
-	body, err := decad.New().Sweep(context.Background(), s, s.Profiles()[0], path,
+	body, err := decad.Sweep(context.Background(), decad.New(), s, s.Profiles()[0], path,
 		decad.WithSweepTwist(units.Degrees(5)))
 	if err != nil {
 		fmt.Println(err)

@@ -26,7 +26,7 @@ func TestCompositeChainSweepAreaSlackEnclosesTheAnalyticSheet(t *testing.T) {
 	path, err := NewPath(r3.Vec{}, LineTo{End: r3.Vec{Z: 20}},
 		ArcThrough{Through: r3.Vec{X: 5, Z: 25}, End: r3.Vec{X: 10, Z: 20}})
 	require.NoError(t, err)
-	sheet, err := New().SweepChain(t.Context(), s, s.Chains()[0], path)
+	sheet, err := Sweep(t.Context(), New(), s, s.Chains()[0], path)
 	require.NoError(t, err)
 	all, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
 	require.NoError(t, err)

@@ -21,7 +21,7 @@ func TestStationedTwistOccupiedVolumeProof(t *testing.T) {
 	require.NoError(t, err)
 	path, err := NewPath(r3.Vec{}, LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
-	body, err := New().Sweep(t.Context(), s, s.Profiles()[0], path,
+	body, err := Sweep(t.Context(), New(), s, s.Profiles()[0], path,
 		WithSweepTwist(units.Radians(2)))
 	require.NoError(t, err)
 	payload, ok := body.payload.(twistedSweepPayload)
@@ -56,7 +56,7 @@ func TestTwistPlacedAxialRoundVolumeProof(t *testing.T) {
 	require.NoError(t, err)
 	path, err := NewPath(r3.Vec{}, LineTo{End: r3.NewVec(0, 0, 1e-4)})
 	require.NoError(t, err)
-	body, err := New().Sweep(t.Context(), s, s.Profiles()[0], path, WithSweepTwist(units.Radians(1e-6)))
+	body, err := Sweep(t.Context(), New(), s, s.Profiles()[0], path, WithSweepTwist(units.Radians(1e-6)))
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(0, 0, 1e8))
 	require.NoError(t, err)

@@ -30,7 +30,7 @@ func TestSweepCompositeArcLineArcMeasurementsReplay(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Sweep(t.Context(), sketch, profile, path)
+	body, err := decad.Sweep(t.Context(), doc, sketch, profile, path)
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	require.Len(t, body.Lumps(), 1)
@@ -67,7 +67,7 @@ func TestSweepCompositeCopyPlacementKeepsSourceReplay(t *testing.T) {
 
 	sketch, profile, path, _, _ := orthogonalSweepFixture(t)
 	doc := decad.New()
-	source, err := doc.Sweep(t.Context(), sketch, profile, path)
+	source, err := decad.Sweep(t.Context(), doc, sketch, profile, path)
 	require.NoError(t, err)
 	sourceCentroid, err := source.Centroid()
 	require.NoError(t, err)
@@ -96,7 +96,7 @@ func TestSweepCompositeSpanBudgetRejectsBeforeCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	_, err = doc.Sweep(t.Context(), sketch, profile, path)
+	_, err = decad.Sweep(t.Context(), doc, sketch, profile, path)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
 }

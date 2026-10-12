@@ -168,7 +168,7 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 		{Name: "arc sweep", Build: func(t *testing.T, sc *mirrorScene) *decad.Body {
 			// A quarter turn about the x axis of the rectangle [0, 10]×[0, 6].
 			s, profile := meshPolygonSketch(t, sc.w, sc.w.XY(), [][2]float64{{0, 0}, {10, 0}, {10, 6}, {0, 6}})
-			body, err := sc.doc.Sweep(t.Context(), s, profile, sweepArcPath(t))
+			body, err := decad.Sweep(t.Context(), sc.doc, s, profile, sweepArcPath(t))
 			require.NoError(t, err)
 			return body
 		}},

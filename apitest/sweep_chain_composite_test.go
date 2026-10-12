@@ -35,7 +35,7 @@ func TestSweepChainCardinalLineArcSheet(t *testing.T) {
 	t.Parallel()
 	s, chain, path := cardinalLineArcChain(t)
 	doc := decad.New()
-	sheet, err := doc.SweepChain(t.Context(), s, chain, path)
+	sheet, err := decad.Sweep(t.Context(), doc, s, chain, path)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 	require.Len(t, sheet.Faces(), 2)
@@ -88,7 +88,7 @@ func TestSweepChainCardinalLineArcRefusesNonradialSource(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, other.Chains(), 1)
 	doc := decad.New()
-	_, err = doc.SweepChain(t.Context(), other, other.Chains()[0], path)
+	_, err = decad.Sweep(t.Context(), doc, other, other.Chains()[0], path)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
 }

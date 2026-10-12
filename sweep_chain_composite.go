@@ -47,19 +47,19 @@ func cardinalChainSweepClass(chain chainRecord, plane planeRecord, path *Path) e
 	if plane.Origin != (r3.Vec{}) || plane.U != r3.NewVec(1, 0, 0) ||
 		plane.V != r3.NewVec(0, 1, 0) || len(chain.Segments) != 1 ||
 		len(path.records) != 2 || path.Start() != (r3.Vec{}) {
-		return fmt.Errorf(`%w: composite SweepChain requires one XY line and a cardinal two-span path`, ErrUnsupported)
+		return fmt.Errorf(`%w: composite chain Sweep requires one XY line and a cardinal two-span path`, ErrUnsupported)
 	}
 	line, ok := chain.Segments[0].(lineSeg)
 	if !ok || line.Start.U != 0 || line.Start.V != 0 || line.End.V != 0 ||
 		line.TStart != 0 || line.TEnd != 1 {
-		return fmt.Errorf(`%w: composite SweepChain requires one forward radial source line`, ErrUnsupported)
+		return fmt.Errorf(`%w: composite chain Sweep requires one forward radial source line`, ErrUnsupported)
 	}
 	width := line.End.U
 	straight := path.records[0]
 	arc := path.records[1]
 	arcSegment, ok := path.segments[1].(ArcThrough)
 	if !ok {
-		return fmt.Errorf(`%w: composite SweepChain requires an ArcThrough second span`, ErrUnsupported)
+		return fmt.Errorf(`%w: composite chain Sweep requires an ArcThrough second span`, ErrUnsupported)
 	}
 	radius := arcSegment.Through.X
 	height := straight.End.Z
@@ -70,7 +70,7 @@ func cardinalChainSweepClass(chain chainRecord, plane planeRecord, path *Path) e
 		!dyadicSumEquals(radius, radius, arc.End.X) ||
 		!dyadicSumEquals(radius-width, width, radius) ||
 		!dyadicSumEquals(arc.End.X-width, width, arc.End.X) {
-		return fmt.Errorf(`%w: composite SweepChain requires a positive-Z line, tangent XZ half-circle, and radial source inside its radius`, ErrUnsupported)
+		return fmt.Errorf(`%w: composite chain Sweep requires a positive-Z line, tangent XZ half-circle, and radial source inside its radius`, ErrUnsupported)
 	}
 	return nil
 }
@@ -90,11 +90,11 @@ func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, p
 		return nil, err
 	}
 	if len(frames) != 3 {
-		return nil, fmt.Errorf(`%w: composite SweepChain has no complete transported frame chain`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: composite chain Sweep has no complete transported frame chain`, ErrUnsupported)
 	}
 	for i, frame := range frames {
 		if frame.OriginBound != 0 || frame.UBound != 0 || frame.VBound != 0 || frame.NBound != 0 {
-			return nil, fmt.Errorf(`%w: composite SweepChain frame %d has a nonzero displacement`, ErrUnsupported, i)
+			return nil, fmt.Errorf(`%w: composite chain Sweep frame %d has a nonzero displacement`, ErrUnsupported, i)
 		}
 	}
 	work := freeform.NewFreeformWork()
@@ -136,7 +136,7 @@ func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, p
 func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref producerID,
 	payload chainSweepPayload, work *freeform.FreeformWork) (*Body, error) {
 	if len(payload.spans) != 2 || payload.spans[0].arc || !payload.spans[1].arc {
-		return nil, fmt.Errorf(`%w: composite SweepChain has no admitted span sequence`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: composite chain Sweep has no admitted span sequence`, ErrUnsupported)
 	}
 	parts := make([]*Body, 2)
 	for i := range payload.spans {
@@ -145,7 +145,7 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 			return nil, fmt.Errorf("sweep path span %d: %w", i, err)
 		}
 		if len(part.Faces()) != 1 || part.Kind() != BodySheet {
-			return nil, fmt.Errorf(`%w: composite SweepChain span %d has no single source wall`, ErrUnsupported, i)
+			return nil, fmt.Errorf(`%w: composite chain Sweep span %d has no single source wall`, ErrUnsupported, i)
 		}
 		parts[i] = part
 	}
