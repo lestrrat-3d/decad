@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    0.26s over 8 tests
-#   shard 1:    1.22s over 239 tests
+#   shard 1:    1.23s over 240 tests
 #   shard 2:   10.21s over 136 tests
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  182.61s over 138 tests
@@ -255,6 +255,7 @@
 1	0.00	TestRingPlaneRejectPreservesExactDistance
 1	0.00	TestRoundBossShellMeshVolumeProof
 1	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
+1	0.01	TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding
 1	0.00	TestSegFilterKeepsWhatTheExactPredicateAccepts
 1	0.01	TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture
 1	0.00	TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate
