@@ -787,8 +787,7 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 | `Document.Split` | `Split(ctx, target, tool)` |
 | `Body.Patch`, `Body.Unstitch` | `PatchEdges(ctx, b, sel)`, `Unstitch(ctx, b)` |
 | `Document.Patch` | `PatchProfile(ctx, doc, s, p)`, so the two patch forms stop sharing one name |
-| `Body.Placed`, `Body.ScaledAt` | `Placed(ctx, b, t)`, `ScaledAt(ctx, b, anchor, factor)` |
-| `Body.PlacedCopy`, `Body.Duplicate` | `PlacedCopy(ctx, b, t)`, `Duplicate(ctx, b)` |
+| `Body.ScaledAt` | `ScaledAt(ctx, b, anchor, factor)` |
 | `Body.Mirrored`, `Body.MirroredCopy` | `Mirrored(ctx, b, plane, opts...)`, `MirroredCopy(ctx, b, plane)` |
 | `Body.Patterned`, `Body.PatternCopies` | `Patterned(ctx, b, spec)`, `PatternCopies(ctx, b, spec)` |
 | `Document.Extrude`, `Revolve`, `Coil` | `Extrude(doc, s, p, e, opts...)`, `Revolve(doc, s, p, axis, a, opts...)`, `Coil(ctx, doc, s, p, axis, pitch, turns, opts...)` |
@@ -796,7 +795,9 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 | `Document.ExtrudeChain`, `RevolveChain`, `SweepChain`, `LoftChain` | the same names with the `Document` argument leading |
 | `Document.Remove` | `Remove(b)` |
 
-`Union`, `Cut`, `Intersect`, `CombineJoin` and `Stitch` already have this form.
+`Union`, `Cut`, `Intersect`, `CombineJoin`, `Stitch`, `Transform` and `Copy`
+already have this form. `Transform(ctx, b, t)` places a body, and
+`Copy(ctx, b, WithCopyPlacement(t))` copies it under a rigid motion (§8).
 
 **A builder is not an operation.** `Linkage` is a mutable value that records
 joints and loops, and its methods (`Close`, `DeclareJointContact`, `Ground`,
@@ -806,8 +807,8 @@ would be an operation and would follow the rule above.
 
 **New API follows the rule.** A new public entry point that builds, retires or
 registers a body is a free function. A new read is a method on the value it
-reads. The code in the root package still carries the method forms in the table;
-each migrates to its free function in the change that updates that operation's
+reads. The code in the root package carries the method form of every row in the
+table; each migrates to its free function in the change that updates that operation's
 companion design.
 
 ## 7. The sketch seam
