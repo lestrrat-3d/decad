@@ -268,7 +268,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 	volumeGap := proofbound.AbsSumUpper(lower.volSymDiff, upper.volSymDiff)
 	areaSlack := proofbound.AbsSumUpper(lower.areaSlack, upper.areaSlack,
 		proofbound.ProductUpper(2, max(lower.areaSlack, upper.areaSlack)))
-	diameter := lfHeldDiameter(verts, bound)
+	diameter := facetedSourceDiameterUpper(verts, bound)
 	if bound > 0.1 || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
 		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(diameter) {
 		return nil, fmt.Errorf("%w: mirrored cylinder has no finite 0.1 mm proof", ErrUnsupported)

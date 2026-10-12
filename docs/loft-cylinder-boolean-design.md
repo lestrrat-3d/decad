@@ -266,6 +266,11 @@ annular slab, `π·(2R(δin+δout)+δout²)·height`, as an upper bound on the
 remaining occupied difference. The blank mesh's own symmetric-difference
 bound is added conservatively.
 
+The faceted result uses the held mesh's coordinate-box diagonal plus twice
+its two-way boundary bound as an upper diameter for the centroid reading.
+That diameter multiplies the occupied-volume difference in the faceted
+centroid allowance. A non-finite diameter refuses the join.
+
 The axial bridge also transfers the constructed shell's two-way boundary
 bound to the exact Union. Outside the blank cylinder, each tooth boundary
 point maps to its original or proxy at identical XY and within `ε` in Z.
@@ -336,10 +341,12 @@ increase their occupied-volume difference. The polygonal bore differs from
 that cylinder only in the certified radial shell around its wall. The result
 adds the whole shell volume, `4π·radius·boreBound·height`, to the join's
 occupied-volume bound. The result carries the larger of the join and bore
-boundary bounds. It replaces the join source record with the certified outer
-and inner cap loops, their facet groups, the bore-wall group, the original
-blank and tooth sources, the private proof teeth and bridge distances, and
-the unchanged seam and collar bounds. The strict bore-to-blank and bore-to-side
+boundary bounds. Its held vertex box and that resulting boundary bound
+recompute the centroid diameter after the bore mesh is built. It replaces
+the join source record with the certified outer and inner cap loops, their
+facet groups, the bore-wall group, the original blank and tooth sources,
+the private proof teeth and bridge distances, and the unchanged seam and
+collar bounds. The strict bore-to-blank and bore-to-side
 clearances place its exact cylinder inside the common blank of both the
 original and proxy unions. Thus the unchanged outer boundary keeps the joined
 bound, while the new bore wall and inner annular rims use `boreBound`.

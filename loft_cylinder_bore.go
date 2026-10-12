@@ -326,6 +326,10 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	result.verts, result.tris, result.src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
 	result.vertexBound, result.meshBound = vertexBound, bound
 	result.volSymDiff, result.areaSlack = volumeGap, areaSlack
+	result.dPair = facetedSourceDiameterUpper(result.verts, result.meshBound)
+	if proofbound.IsNonFinite(result.dPair) {
+		return nil, fmt.Errorf("%w: circular bore has no finite diameter proof", ErrUnsupported)
+	}
 	result.loftCylinderJoin = nil
 	result.loftCylinderBore = &loftCylinderBoreRecord{
 		blank:       record.blank,

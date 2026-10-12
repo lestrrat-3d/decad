@@ -740,8 +740,9 @@ for concurrent mutation (core §12).
 `Body.Placed`, `Body.Duplicate`, and `Body.PlacedCopy` pass the caller's context through payload re-evaluation. Faceted placement polls that context while transforming vertices, auditing and rebuilding topology, and recomputing measurements.
 For a faceted payload, the stored binary64 placement basis is read as an
 exact rational map. Its certified length stretch multiplies every old vertex
-bound and the pair diameter used by centroid bounds; its determinant charge
-multiplies the old occupied-volume gap. Area
+bound; its determinant charge multiplies the old occupied-volume gap. The
+placed held vertices' coordinate-box diagonal plus twice their new boundary
+bound supplies the centroid's diameter after vertex rounding. Area
 slack gains the old slack's stretch, twice the held mesh area's stretch to
 cover different true and held tangent planes, and each rounded facet's area
 allowance. Each held vertex starts at the nearest float to its exact rational

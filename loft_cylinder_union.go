@@ -932,6 +932,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	fp := facetedPayload{verts: mesh.verts, tris: mesh.tris, src: mesh.src,
 		groups: mesh.groups, vertexBound: vertexBound, contactAudited: true,
 		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
+		dPair: facetedSourceDiameterUpper(mesh.verts, bound),
 		xform: r3.Identity(), loftCylinderJoin: &loftCylinderJoinRecord{
 			blank: blank, teeth: toothBodies, proofTeeth: proofBodies,
 			axialBridge: axialBridge, capOutlines: outlines,
@@ -939,6 +940,9 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 			minSideRadius: minSideRadius, radius: radius, z0: pp.z0, z1: pp.z1,
 			innerInset: innerInset, outerExcess: outerExcess, rootCollar: rootCollar,
 		}}
+	if proofbound.IsNonFinite(fp.dPair) {
+		return nil, fmt.Errorf("%w: circular join has no finite diameter proof", ErrUnsupported)
+	}
 	if err := loftCylinderTagCaps(&fp, blank, fp.loftCylinderJoin.capGroups,
 		[2]float64{pp.z0, pp.z1}, ref); err != nil {
 		return nil, err

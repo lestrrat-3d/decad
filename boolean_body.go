@@ -144,7 +144,8 @@ type facetedPayload struct {
 	// bounds the area the held mesh cannot report: the chord-length deficit
 	// the operand tessellations carry, plus the area of any facet the final
 	// weld collapsed out of the mesh.
-	// dPair is the operand pair's diameter, the centroid bound's yardstick.
+	// dPair bounds the held and true result diameter for the centroid
+	// allowance. Some sources supply the broader operand-pair diameter.
 	meshBound  float64
 	volSymDiff float64
 	areaSlack  float64
@@ -273,10 +274,6 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	if err != nil {
 		return nil, err
 	}
-	next.dPair = proofbound.ProductUpper(fp.dPair, proofbound.AbsSumUpper(1, charge.Stretch))
-	if proofbound.IsNonFinite(next.dPair) {
-		return nil, fmt.Errorf("%w: the placed pair diameter has no finite proof", ErrUnsupported)
-	}
 	placed, err := facetproof.PlaceMesh(ctx, budget, fp.verts, fp.tris, fp.vertexBound,
 		fp.volSymDiff, fp.areaSlack, charge.Stretch, charge.Volume, delta)
 	if err != nil {
@@ -285,6 +282,10 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.verts, next.tris = placed.Verts, placed.Tris
 	next.vertexBound, next.meshBound, next.volSymDiff = placed.VertexBound, placed.MeshBound, placed.VolSymDiff
 	next.areaSlack = placed.AreaSlack
+	next.dPair = facetedSourceDiameterUpper(next.verts, next.meshBound)
+	if proofbound.IsNonFinite(next.dPair) {
+		return nil, fmt.Errorf("%w: the placed pair diameter has no finite proof", ErrUnsupported)
+	}
 	if fp.pointPlane != nil {
 		// PlaceMesh's MeshBound includes the held-coordinate rounding and any
 		// embedding correction, but does not stretch the previous source gap.
@@ -699,6 +700,24 @@ func facetedCentroidAllowance(sym, diameter, volumeFloor float64) float64 {
 		return diameter
 	}
 	return math.Min(diameter, proofbound.DivUpper(proofbound.ProductUpper(sym, diameter), volumeFloor))
+}
+
+// facetedSourceDiameterUpper bounds any pair of held or true boundary
+// points. Every true point lies within departure of the held surface, and
+// the held surface lies inside its vertices' coordinate box.
+func facetedSourceDiameterUpper(verts []r3.Vec, departure float64) float64 {
+	lo, hi := [3]float64{math.Inf(1), math.Inf(1), math.Inf(1)},
+		[3]float64{math.Inf(-1), math.Inf(-1), math.Inf(-1)}
+	for _, vertex := range verts {
+		coords := [3]float64{vertex.X, vertex.Y, vertex.Z}
+		for i, v := range coords {
+			lo[i] = min(lo[i], v)
+			hi[i] = max(hi[i], v)
+		}
+	}
+	return proofbound.AbsSumUpper(proofbound.DvLenUpper(proofbound.HeldDelta(
+		r3.NewVec(hi[0], hi[1], hi[2]), r3.NewVec(lo[0], lo[1], lo[2]))),
+		proofbound.ProductUpper(2, departure))
 }
 
 // buildFacetedTopology chains the face-boundary mesh edges into topological
