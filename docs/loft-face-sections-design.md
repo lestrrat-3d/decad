@@ -309,6 +309,13 @@ the two slice crossings enclose the filled interval up to the circle.
 The heel cone sets the upper radius; the toe cone sets the lower trim radius.
 An extra crossing or vertex touch refuses.
 
+Each occupied heel arc records its exact LoftFaces band and rational time.
+Before a later consumer uses its endpoints, it rederives the contact circle
+and the complete constant-X source cells from the live Sketch, LoftFaces,
+trim cones and Revolve. A changed band, time, root bracket, source face or
+cell sign refuses the arc. The comparison includes retained source intervals
+and mapped boxes, not only the two selected circle crossings.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
