@@ -12,12 +12,6 @@ The rules for rows live in `docs/layout.md`.
 | `boolean_many_prism.go` | Arranges identical-interval line prisms in one Sketch scene. See prism-boolean §4.6. |
 | `point_cone_trim.go` | Retains point-loft and cone source faces through coaxial Cut/Intersect. See loft-point design. |
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation. See loft-face-sections design. |
-| `revolve_loft_source.go` | Authenticates finite Revolve section spans, retained source faces and candidate conical roots. See revolve-loft-sector design. |
-| `revolve_loft_sector.go` | Certifies a live trimmed point-Loft sector's Sketch contacts and source sides. See revolve-loft-sector design. |
-| `revolve_loft_fit.go` | Certifies fitted flank contacts and side transitions against the finite Revolve root. See revolve-loft-sector design. |
-| `revolve_loft_seat.go` | Bounds exact Sketch line crossings against the recorded finite Revolve meridian. See revolve-loft-sector design. |
-| `revolve_loft_path.go` | Selects the certified exterior point-Loft fan path and root sector. See revolve-loft-sector design. |
-| `revolve_loft_union.go` | Carries the source certificate through the first one-sector Union and temporary construction adapter. See revolve-loft-sector design. |
 | `bevel_join_source.go` | Matches the live Sketch tooth source to the finite blank root meridian. See loft-point design. |
 | `bevel_join_fit.go` | Certifies fitted-flank root contacts against the recorded bevel meridian. See loft-point design. |
 | `spiral_join_source.go` | Certifies a cone-trimmed nine-section tooth's continuous flank crossings against a finite bevel blank. See loft-face-sections design. |

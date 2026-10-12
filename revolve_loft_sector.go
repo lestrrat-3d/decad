@@ -50,11 +50,11 @@ type revolveSectorNode struct {
 // certifyRevolveLoftSector tries each authenticated finite conical face of
 // the Revolve section. The source must certify exactly one face as the
 // contact surface; a held geometric resemblance never selects one.
-func certifyRevolveLoftSector(blank, tooth *Body) (*revolveLoftSectorCertificate, bool) {
-	if tooth == nil {
+func certifyRevolveLoftSector(blank, sector *Body) (*revolveLoftSectorCertificate, bool) {
+	if sector == nil {
 		return nil, false
 	}
-	fp, ok := tooth.payload.(facetedPayload)
+	fp, ok := sector.payload.(facetedPayload)
 	if !ok || fp.xform != r3.Identity() || fp.pointCone == nil ||
 		fp.pointCone.lower == nil || fp.pointCone.upper == nil ||
 		fp.pointCone.base.pointSection == nil ||

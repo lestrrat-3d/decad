@@ -77,7 +77,7 @@ func bevelAngleAt(p r3.Vec, ringStart float64) float64 {
 	return angle
 }
 
-func bevelRootNodeAngles(path []bevelPathNode) (float64, float64, bool) {
+func bevelRootNodeAngles(path []sectorPathNode) (float64, float64, bool) {
 	a, b := path[0].angle, path[len(path)-1].angle
 	if proofbound.IsNonFinite(a) || proofbound.IsNonFinite(b) ||
 		a == b || math.Abs(a-b) >= math.Pi {
@@ -190,14 +190,14 @@ func bevelPatternRingAngles(plans []bevelTwoPlan, ringStart float64) ([]float64,
 	angles := outside
 	for i := range plans {
 		var err error
-		angles, _, err = bevelMergedAngles(angles, plans[i].placed)
+		angles, _, err = sectorMergedAngles(angles, plans[i].placed)
 		if err != nil {
 			return nil, err
 		}
 	}
 	for i := range plans {
 		var err error
-		_, plans[i].rootNode, err = bevelMergedAngles(angles, plans[i].placed)
+		_, plans[i].rootNode, err = sectorMergedAngles(angles, plans[i].placed)
 		if err != nil {
 			return nil, err
 		}

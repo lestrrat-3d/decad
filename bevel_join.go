@@ -73,22 +73,10 @@ func tryBevelOneToothUnion(ctx context.Context, op meshbool.OperationKind,
 	return body, true, err
 }
 
-type bevelPathNode struct {
-	p            r3.Vec
-	groupToNext  int
-	crossing     int // -1 except for the two certified root contacts
-	rootBoundary bool
-	angle        float64 // exact mesh station shared with the blank ring
-}
-
-type bevelCapEdge struct {
-	u, v, group int // group -1 is the shared root arc
-}
-
 // bevelExteriorPath inserts certified root contacts into the original
 // point-loft ring. Only the path through the outside tip arc remains exposed.
 func bevelExteriorPath(base facetedPayload, boundary *bevelToothBoundary,
-	source *pointSectionSource, blank *bevelBlankSource) ([]bevelPathNode, float64, error) {
+	source *pointSectionSource, blank *bevelBlankSource) ([]sectorPathNode, float64, error) {
 	n := len(base.verts) - 1
 	if n < 6 || len(base.tris) < n || len(base.src) != len(base.tris) {
 		return nil, 0, fmt.Errorf("%w: point-loft fan is incomplete", ErrUnsupported)
@@ -173,14 +161,14 @@ func bevelExteriorPath(base facetedPayload, boundary *bevelToothBoundary,
 	if crossing[0].edge == crossing[1].edge {
 		return nil, 0, fmt.Errorf("%w: both root contacts occupy one fan edge", ErrUnsupported)
 	}
-	full := make([]bevelPathNode, 0, n+2)
+	full := make([]sectorPathNode, 0, n+2)
 	var crossPosition [2]int
 	for i := range n {
-		full = append(full, bevelPathNode{p: base.verts[i+1], groupToNext: groups[i], crossing: -1})
+		full = append(full, sectorPathNode{p: base.verts[i+1], groupToNext: groups[i], crossing: -1})
 		for k := range crossing {
 			if crossing[k].edge == i {
 				crossPosition[k] = len(full)
-				full = append(full, bevelPathNode{p: crossing[k].p,
+				full = append(full, sectorPathNode{p: crossing[k].p,
 					groupToNext: groups[i], crossing: k})
 			}
 		}
@@ -200,7 +188,7 @@ func bevelExteriorPath(base facetedPayload, boundary *bevelToothBoundary,
 	if tipArc < 0 {
 		return nil, 0, fmt.Errorf("%w: tooth has no exposed tip arc", ErrUnsupported)
 	}
-	forward := make([]bevelPathNode, 0, len(full))
+	forward := make([]sectorPathNode, 0, len(full))
 	for i := crossPosition[0]; ; i = (i + 1) % len(full) {
 		forward = append(forward, full[i])
 		if i == crossPosition[1] {
@@ -213,7 +201,7 @@ func bevelExteriorPath(base facetedPayload, boundary *bevelToothBoundary,
 		hasRoot = hasRoot || forward[i].groupToNext == boundary.insideArc
 	}
 	if !hasTip || hasRoot {
-		other := make([]bevelPathNode, 0, len(full))
+		other := make([]sectorPathNode, 0, len(full))
 		for i := crossPosition[1]; ; i = (i + 1) % len(full) {
 			other = append(other, full[i])
 			if i == crossPosition[0] {
@@ -246,7 +234,7 @@ func bevelPointSegmentDistance(p, a, b r3.Vec) float64 {
 	return p.Sub(a.Add(d.Scale(t))).Len()
 }
 
-func bevelRootAngles(path []bevelPathNode) (float64, float64, bool) {
+func bevelRootAngles(path []sectorPathNode) (float64, float64, bool) {
 	a := math.Atan2(path[0].p.Z, path[0].p.Y)
 	b := math.Atan2(path[len(path)-1].p.Z, path[len(path)-1].p.Y)
 	if !proofbound.FiniteVec(r3.Vec{X: a, Y: b}) || a == b || math.Abs(a-b) >= math.Pi {
@@ -268,34 +256,6 @@ func bevelUniformAngles(lo, hi float64) []float64 {
 	return angles
 }
 
-func bevelPolygonArea(points []triangulation.Point2) float64 {
-	a := 0.0
-	for i := range points {
-		j := (i + 1) % len(points)
-		a += points[i].U*points[j].V - points[j].U*points[i].V
-	}
-	return a * 0.5
-}
-
-func bevelCapTriangulate(ctx context.Context, nodes []bevelPathNode,
-	frame r3.Frame) ([][3]int, error) {
-	local := make([]triangulation.Point2, len(nodes))
-	loop := make([]int, len(nodes))
-	for i, node := range nodes {
-		p := frame.ToLocal(node.p)
-		if !proofbound.FiniteVec(p) {
-			return nil, fmt.Errorf("%w: the tooth cap has a non-finite station", ErrUnsupported)
-		}
-		local[i], loop[i] = triangulation.Point2{U: p.X, V: p.Y}, i
-	}
-	if bevelPolygonArea(local) < 0 {
-		for i, j := 0, len(loop)-1; i < j; i, j = i+1, j-1 {
-			loop[i], loop[j] = loop[j], loop[i]
-		}
-	}
-	return triangulation.Triangulate(ctx, local, [][]int{loop})
-}
-
 func bevelFarRootPoint(frame r3.Frame, slope, angle float64) (r3.Vec, bool) {
 	normal := frame.U().Cross(frame.V())
 	direction := r3.Vec{X: 1, Y: slope * math.Cos(angle), Z: slope * math.Sin(angle)}
@@ -308,9 +268,9 @@ func bevelFarRootPoint(frame r3.Frame, slope, angle float64) (r3.Vec, bool) {
 	return p, proofbound.FiniteVec(p) && x > 0
 }
 
-func bevelCapBoundary(path []bevelPathNode, frame r3.Frame, slope float64,
-	angles []float64, lo, hi float64) ([]bevelPathNode, error) {
-	nodes := append([]bevelPathNode(nil), path...)
+func bevelCapBoundary(path []sectorPathNode, frame r3.Frame, slope float64,
+	angles []float64, lo, hi float64) ([]sectorPathNode, error) {
+	nodes := append([]sectorPathNode(nil), path...)
 	nodes[0].rootBoundary = true
 	nodes[0].angle = math.Atan2(nodes[0].p.Z, nodes[0].p.Y)
 	nodes[len(nodes)-1].rootBoundary = true
@@ -329,7 +289,7 @@ func bevelCapBoundary(path []bevelPathNode, frame r3.Frame, slope float64,
 			if !ok {
 				return nil, fmt.Errorf("%w: root generator misses the source plane", ErrUnsupported)
 			}
-			nodes = append(nodes, bevelPathNode{p: p, groupToNext: -1,
+			nodes = append(nodes, sectorPathNode{p: p, groupToNext: -1,
 				crossing: -1, rootBoundary: true, angle: angle})
 		}
 	} else {
@@ -338,111 +298,11 @@ func bevelCapBoundary(path []bevelPathNode, frame r3.Frame, slope float64,
 			if !ok {
 				return nil, fmt.Errorf("%w: root generator misses the source plane", ErrUnsupported)
 			}
-			nodes = append(nodes, bevelPathNode{p: p, groupToNext: -1,
+			nodes = append(nodes, sectorPathNode{p: p, groupToNext: -1,
 				crossing: -1, rootBoundary: true, angle: angle})
 		}
 	}
 	return nodes, nil
-}
-
-// bevelSubdivideCap reduces the cone-map interpolation bound. Boundary edge
-// labels are carried through every split so the exposed side and root seam
-// are reconstructed from the same triangulation, without a guessed contact.
-func bevelSubdivideCap(ctx context.Context, nodes []bevelPathNode,
-	triangles [][3]int, rounds int) ([]bevelPathNode, [][3]int, []bevelCapEdge, float64, error) {
-	edges := make([]bevelCapEdge, len(nodes))
-	for i := range nodes {
-		edges[i] = bevelCapEdge{u: i, v: (i + 1) % len(nodes), group: nodes[i].groupToNext}
-	}
-	totalRound := 0.0
-	for range rounds {
-		midpoints := map[pointConeEdge]int{}
-		levelRound := 0.0
-		boundary := map[pointConeEdge]int{}
-		for _, edge := range edges {
-			boundary[orderedPointConeEdge(edge.u, edge.v)] = edge.group
-		}
-		midpoint := func(u, v int) int {
-			key := orderedPointConeEdge(u, v)
-			if id, ok := midpoints[key]; ok {
-				return id
-			}
-			p, q := nodes[u].p, nodes[v].p
-			held := p.Scale(0.5).Add(q.Scale(0.5))
-			// The same held interpolation is used for the two cap maps; its
-			// arithmetic departure is charged in the result bound.
-			levelRound = max(levelRound, proofbound.ProductUpper(
-				proofbound.AbsSumUpper(p.Len(), q.Len()), 8*math.Nextafter(1, 2)*math.Ldexp(1, -53)))
-			group, onBoundary := boundary[key]
-			id := len(nodes)
-			root := onBoundary && group == -1
-			angle := 0.0
-			if root {
-				angle = nodes[u].angle*0.5 + nodes[v].angle*0.5
-			}
-			nodes = append(nodes, bevelPathNode{p: held, crossing: -1,
-				rootBoundary: root, angle: angle})
-			midpoints[key] = id
-			return id
-		}
-		next := make([][3]int, 0, 4*len(triangles))
-		for _, tri := range triangles {
-			if err := ctx.Err(); err != nil {
-				return nil, nil, nil, 0, err
-			}
-			a, b, c := tri[0], tri[1], tri[2]
-			ab, bc, ca := midpoint(a, b), midpoint(b, c), midpoint(c, a)
-			next = append(next, [3]int{a, ab, ca}, [3]int{ab, b, bc},
-				[3]int{ca, bc, c}, [3]int{ab, bc, ca})
-		}
-		newEdges := make([]bevelCapEdge, 0, len(edges)*2)
-		for _, edge := range edges {
-			m, ok := midpoints[orderedPointConeEdge(edge.u, edge.v)]
-			if !ok {
-				return nil, nil, nil, 0, fmt.Errorf("%w: cap boundary was not triangulated", ErrUnsupported)
-			}
-			newEdges = append(newEdges,
-				bevelCapEdge{u: edge.u, v: m, group: edge.group},
-				bevelCapEdge{u: m, v: edge.v, group: edge.group})
-		}
-		triangles, edges = next, newEdges
-		totalRound = proofbound.AbsSumUpper(totalRound, levelRound)
-	}
-	return nodes, triangles, edges, totalRound, nil
-}
-
-func bevelMergedAngles(base []float64, nodes []bevelPathNode) ([]float64, []int, error) {
-	angles := append([]float64(nil), base...)
-	rootNode := make([]int, len(nodes))
-	for i, node := range nodes {
-		rootNode[i] = -1
-		if !node.rootBoundary {
-			continue
-		}
-		angle := node.angle
-		if !proofbound.FiniteVec(r3.Vec{X: angle}) {
-			return nil, nil, fmt.Errorf("%w: root angle is non-finite", ErrUnsupported)
-		}
-		angles = append(angles, angle)
-	}
-	sort.Float64s(angles)
-	unique := angles[:0]
-	for _, angle := range angles {
-		if len(unique) == 0 || angle != unique[len(unique)-1] {
-			unique = append(unique, angle)
-		}
-	}
-	for i, node := range nodes {
-		if node.rootBoundary {
-			angle := node.angle
-			j := sort.SearchFloat64s(unique, angle)
-			if j == len(unique) || unique[j] != angle {
-				return nil, nil, fmt.Errorf("%w: root node has no angular station", ErrUnsupported)
-			}
-			rootNode[i] = j
-		}
-	}
-	return unique, rootNode, nil
 }
 
 func bevelBlankGroups(blank *Body, source *bevelBlankSource) ([6]facetGroup, error) {
@@ -563,7 +423,7 @@ func bevelBuildBlankMesh(m *joinedMesh, blank *bevelBlankSource,
 // upperFarSliverCharged is true only for a caller that adds the certified
 // smooth-to-clipped cap error to both its boundary and volume allowances.
 func bevelBuildToothMesh(m *joinedMesh, ring bevelRingMesh,
-	nodes, original []bevelPathNode, caps [][3]int, edges []bevelCapEdge, rootNode []int,
+	nodes, original []sectorPathNode, caps [][3]int, edges []sectorCapEdge, rootNode []int,
 	record *pointConeTrimRecord, motion r3.Transform, placedGroups []facetGroup,
 	upperFarSliverCharged bool) (float64, float64, error) {
 	if len(nodes) != len(original) {
@@ -609,7 +469,7 @@ func bevelBuildToothMesh(m *joinedMesh, ring bevelRingMesh,
 		if down.q-down.qError <= 1 {
 			return 0, 0, fmt.Errorf("%w: tooth cap reaches its far source plane", ErrUnsupported)
 		}
-		upperPoint, upperRound, err := bevelUpperCapNode(far, up, upperFarSliverCharged)
+		upperPoint, upperRound, err := sectorUpperCapNode(far, up, upperFarSliverCharged)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -656,25 +516,6 @@ func bevelBuildToothMesh(m *joinedMesh, ring bevelRingMesh,
 	return maxRound, maxSnap, nil
 }
 
-// bevelUpperCapNode charges any replacement of the exact smooth cone map by
-// the source far plane at one cap station. Cell interiors are charged by the
-// caller's upper far-plane sliver bound when that source class is admitted.
-func bevelUpperCapNode(far r3.Vec, sample pointConeSample,
-	upperFarSliverCharged bool) (r3.Vec, float64, error) {
-	if !upperFarSliverCharged && sample.q+sample.qError < 1 {
-		return r3.Vec{}, 0, fmt.Errorf("%w: tooth cap reaches its far source plane", ErrUnsupported)
-	}
-	smooth := far.Scale(sample.alpha)
-	if !proofbound.FiniteVec(smooth) {
-		return r3.Vec{}, 0, fmt.Errorf("%w: upper cap has no finite crossing", ErrUnsupported)
-	}
-	if sample.q-sample.qError > 1 {
-		return smooth, sample.pointError, nil
-	}
-	return far, proofbound.AbsSumUpper(
-		proofbound.DvLenUpper(proofbound.HeldDelta(far, smooth)), sample.pointError), nil
-}
-
 func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
 	blankBody *Body, blank *bevelBlankSource, trimmed facetedPayload, record *pointConeTrimRecord,
 	boundary *bevelToothBoundary) (*Body, error) {
@@ -693,15 +534,15 @@ func buildBevelOneToothJoin(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	caps, err := bevelCapTriangulate(ctx, capNodes, base.pointSection.source.frame)
+	caps, err := sectorCapTriangulate(ctx, capNodes, base.pointSection.source.frame)
 	if err != nil {
 		return nil, triangulation.WrapLoftError(err)
 	}
-	capNodes, caps, edges, farRound, err := bevelSubdivideCap(ctx, capNodes, caps, 4)
+	capNodes, caps, edges, farRound, err := sectorSubdivideCap(ctx, capNodes, caps, 4)
 	if err != nil {
 		return nil, err
 	}
-	angles, rootNode, err := bevelMergedAngles(regular, capNodes)
+	angles, rootNode, err := sectorMergedAngles(regular, capNodes)
 	if err != nil {
 		return nil, err
 	}

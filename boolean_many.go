@@ -46,6 +46,9 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	tools := operands[1:]
 	body, matched, err := tryLoftMirrorCylinderPairs(ctx, d, ref, a, tools, nil)
 	if !matched && err == nil {
+		body, matched, err = tryRevolveLoftSectorUnionMany(ctx, d, ref, operands)
+	}
+	if !matched && err == nil {
 		body, err = spiralCombineBody(ctx, d, ref, a, tools)
 	}
 	if err != nil {
