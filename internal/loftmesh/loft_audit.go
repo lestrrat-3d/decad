@@ -117,6 +117,38 @@ func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 // broad-phase boxes by its certified exact-to-float error before omitting a
 // pair and use LoftAuditShortcuts.ExactInput to disable float-only filters.
 func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int) *LoftAuditData {
+	return newLoftAuditDataSelected(verts, exact, tris, nil)
+}
+
+// newLoftAuditDataForCandidates keeps full-length index tables while lifting
+// only triangles that S8 retained for pairwise classification. S6 and the
+// projected patch proof have already checked every triangle before this call.
+func newLoftAuditDataForCandidates(verts []r3.Vec, tris [][3]int, cands loftCandidates) *LoftAuditData {
+	selected := make([]bool, len(tris))
+	for i := range len(cands.starts) - 1 {
+		if cands.starts[i] != cands.starts[i+1] {
+			selected[i] = true
+		}
+	}
+	for _, j := range cands.js {
+		selected[j] = true
+	}
+
+	exact := make([]proof.Xpt, len(verts))
+	for i, tri := range tris {
+		if !selected[i] {
+			continue
+		}
+		for _, vertex := range tri {
+			if exact[vertex].W == nil {
+				exact[vertex] = proof.XptOf(verts[vertex])
+			}
+		}
+	}
+	return newLoftAuditDataSelected(verts, exact, tris, selected)
+}
+
+func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int, selected []bool) *LoftAuditData {
 	d := &LoftAuditData{
 		Corners:     make([][3]r3.Vec, len(tris)),
 		Xverts:      exact,
@@ -130,6 +162,9 @@ func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int)
 	var projected [3][]meshbool.Xp2
 	axes := [3][2]int{{0, 1}, {2, 0}, {1, 2}}
 	for i, tri := range tris {
+		if selected != nil && !selected[i] {
+			continue
+		}
 		d.Corners[i] = LoftTriCorners(verts, tri)
 		d.Xtris[i] = [3]proof.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
 		d.Norms[i] = proof.Xcross(proof.Xsub(d.Xtris[i][1], d.Xtris[i][0]), proof.Xsub(d.Xtris[i][2], d.Xtris[i][0]))

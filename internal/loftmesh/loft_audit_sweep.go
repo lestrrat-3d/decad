@@ -350,6 +350,16 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 		return work, errLoftAuditCeiling()
 	}
 	work.Candidates = int(count)
+	var cands loftCandidates
+	sparse := data == nil && structure == nil && shortcuts.Sweep && provenPatches != 0
+	if sparse {
+		var err error
+		cands, err = sweepCandidates(budget, order, starts, count, keepEveryPair)
+		if err != nil {
+			return work, err
+		}
+		data = newLoftAuditDataForCandidates(verts, tris, cands)
+	}
 	if data == nil {
 		data = NewLoftAuditData(verts, tris)
 	}
@@ -403,8 +413,9 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 
 	var err error
 	if shortcuts.Sweep {
-		var cands loftCandidates
-		cands, err = sweepCandidates(budget, order, starts, count, keepEveryPair)
+		if !sparse {
+			cands, err = sweepCandidates(budget, order, starts, count, keepEveryPair)
+		}
 		if err == nil {
 			if parallelPairs && len(cands.js) >= 100_000 && runtime.GOMAXPROCS(0) > 1 {
 				failI, failJ, err = parallelLoftPairs(budget, tris, boxes, data, shortcuts, cands, &work)
