@@ -13,20 +13,20 @@ import (
 func TestBevelCapRefinementKeepsSharedEdgesAndBoundaryGroups(t *testing.T) {
 	cone := &pointConeLimit{apex: big.NewRat(20, 1), slope: big.NewRat(1, 1)}
 	record := &pointConeTrimRecord{lower: cone, upper: cone}
-	nodes := []bevelPathNode{
+	nodes := []sectorPathNode{
 		{p: r3.NewVec(10, 5, 0)},
 		{p: r3.NewVec(10, 6, 0)},
 		{p: r3.NewVec(10, 5, 1)},
 		{p: r3.NewVec(10, 10, 10)},
 	}
 	triangles := [][3]int{{0, 1, 2}, {1, 3, 2}}
-	edges := []bevelCapEdge{
+	edges := []sectorCapEdge{
 		{u: 0, v: 1, group: 2},
 		{u: 1, v: 3, group: 2},
 		{u: 3, v: 2, group: 3},
 		{u: 2, v: 0, group: 3},
 	}
-	bound := func(points []bevelPathNode, tri [3]int) float64 {
+	bound := func(points []sectorPathNode, tri [3]int) float64 {
 		b, _, _, err := pointConeTriangleBound(
 			[3]r3.Vec{points[tri[0]].p, points[tri[1]].p, points[tri[2]].p}, cone)
 		require.NoError(t, err)
@@ -144,13 +144,13 @@ func TestBevelSourceRequiresPositivePublicConeBranch(t *testing.T) {
 }
 
 func TestBevelRootEdgeOrderRequiresOneDirectedInterval(t *testing.T) {
-	nodes := []bevelPathNode{
+	nodes := []sectorPathNode{
 		{angle: 0, rootBoundary: true},
 		{angle: 0.3, rootBoundary: true},
 		{angle: 0.2, rootBoundary: true},
 		{angle: 0.1, rootBoundary: true},
 	}
-	edges := []bevelCapEdge{
+	edges := []sectorCapEdge{
 		{u: 0, v: 1, group: 4},
 		{u: 1, v: 2, group: -1},
 		{u: 2, v: 3, group: -1},

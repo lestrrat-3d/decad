@@ -36,16 +36,38 @@ and area allowances. Placement clears
 the direct join certificate and records an authenticated rigid copy of the
 original trimmed source.
 
-## First construction class
+## Sector construction
 
-This milestone converts the general source certificate to the existing
-one-sector builder. That temporary adapter accepts six geometric section
-spans, a cone with zero axial origin, and six whole sector entities. It uses
-the existing finite-root crossing, fan-cell, topology/contact, source-face,
-area and volume audits. The ordinary Boolean route remains available when
-the certificate or adapter refuses. A later dynamic sector builder will use
-the ordered spans and exposed loop directly. Until then, this route is not a
-replacement for multi-sector joins or every finite Revolve section.
+The builder meshes every recorded meridian span at one shared angular plan.
+It omits a root-face interval only where a certified sector cap replaces that
+interval. Its rings follow section order, so a shoulder or split cap adds a
+ring without changing any positional profile role. The source cap is
+triangulated and refined once, then placed by each authenticated axis
+rotation. The original unplaced source controls each cone map; placement is
+applied once after that map. The placed caps share the exact ring vertex IDs
+at every root station.
+
+For repeated sectors, the complete trimmed source solids must be separate by
+one certified coordinate range for every pair. A seam is selected from the
+unused angular complement. Each pair of root intervals must remain separate
+after source mesh, crossing, and placement bounds are converted to an angular
+allowance at the finite root radius. The seam uses held root intervals and
+those pairwise margins; it is not a separate Sketch side certificate. All
+admitted sectors use one ring mesh.
+Serial and variadic `Union` use the same constructor; serial joins retain the
+original Revolve, source certificate, placed sources, and dynamic ring IDs.
+
+Each construction must pass connected orientation, vertex links, the exact
+triangle contact audit, a 0.1 mm boundary bound, finite area and occupied
+volume bounds, and a measured-volume increase over the original Revolve.
+The audit triangle allowance follows the section-ring and cap cell counts,
+with a one-million-triangle memory ceiling. The crossing scan allowance is
+the smaller of all triangle pairs and 25 million scans per admitted sector.
+An occupied-volume refusal may refine the angular plan up to eight times.
+A specific cap/root adjacency contact may also trigger refinement; the new
+mesh must pass the same exact audit. Refusal leaves all operands live.
+The current source class requires a canonical unplaced, full axis-X Revolve.
+Off-axis and transformed Revolves use the ordinary Boolean route or refuse.
 
 The real neutral acceptance model uses a tapered Revolve hub whose outer cap
 has two exactly collinear source edges. A separate Sketch makes a radial lug,
@@ -65,8 +87,8 @@ generic replacement and focused proof required before deletion.
 |---|---|---|
 | `bevel_join_source.go` | `revolve_loft_source.go` and `revolve_loft_sector.go`, then a dynamic builder without `legacyRevolveLoftBlank` | `TestUnionTaperedHubAndRadialLug` plus split-cap, stale-source, foreign-trim and near-contact refusals |
 | `bevel_join_fit.go` | `revolve_loft_fit.go` and a generic fitted-seat/fan-cell builder without `legacyRevolveLoftBoundary` | `TestUnionTaperedHubAndFittedRadialLug` plus fitted stale-source and near-contact refusals |
-| `bevelTooth` and `bevelJoin` payloads and dispatch | `revolveLoftTooth` and `revolveLoftJoin` records, then dynamic placement and repeated-sector `Union` | A real neutral rotated-lug producer through public `Union` and `VerifyAll` is still required |
+| `bevel_join.go`, `bevel_join_two.go`, `bevel_join_pattern.go`, `bevel_join_combine.go` | Dynamic section rings, sector caps and shared N-sector construction | Neutral seven-span, fitted, serial, variadic and separation-refusal tests pass; real gallery consumers remain to be checked |
+| `bevelTooth` and `bevelJoin` payloads and dispatch | `revolveLoftSector` and `revolveLoftJoin` records | Real neutral rotated lugs pass public `Union`, 0.1 mm `VerifyAll`, Euler two and computed-volume tests |
 
-The temporary conversion still calls `buildBevelOneToothJoin`. A gallery
-consumer must pin and pass the later fully generic builder before the old
-file family can be deleted.
+The old specialized files remain until a gallery consumer pins and passes
+the generic builder. The generic constructor does not call those files.

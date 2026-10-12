@@ -22,9 +22,9 @@ const (
 // exceeds limit. Neighboring cells split on the same edge, so the original
 // planar cap remains a conforming triangulation. The caller recomputes the
 // final cap-map bound from every resulting triangle.
-func bevelRefineCap(ctx context.Context, nodes []bevelPathNode,
-	triangles [][3]int, edges []bevelCapEdge, record *pointConeTrimRecord,
-	limit float64, maxCells int) ([]bevelPathNode, [][3]int, []bevelCapEdge, float64, error) {
+func bevelRefineCap(ctx context.Context, nodes []sectorPathNode,
+	triangles [][3]int, edges []sectorCapEdge, record *pointConeTrimRecord,
+	limit float64, maxCells int) ([]sectorPathNode, [][3]int, []sectorCapEdge, float64, error) {
 	if len(triangles) == 0 || len(triangles) > maxCells {
 		return nil, nil, nil, 0, fmt.Errorf("%w: straight pattern cap has too many source cells", ErrUnsupported)
 	}
@@ -76,7 +76,7 @@ func bevelRefineCap(ctx context.Context, nodes []bevelPathNode,
 			angle = nodes[u].angle*0.5 + nodes[v].angle*0.5
 		}
 		id := len(nodes)
-		nodes = append(nodes, bevelPathNode{p: held, crossing: -1,
+		nodes = append(nodes, sectorPathNode{p: held, crossing: -1,
 			rootBoundary: root, angle: angle})
 		midpoints[key] = id
 		return id
@@ -116,7 +116,7 @@ func bevelRefineCap(ctx context.Context, nodes []bevelPathNode,
 				[3]int{ca, bc, c}, [3]int{ab, bc, ca})
 		}
 	}
-	newEdges := make([]bevelCapEdge, 0, 2*len(edges))
+	newEdges := make([]sectorCapEdge, 0, 2*len(edges))
 	for _, edge := range edges {
 		mid, split := midpoints[orderedPointConeEdge(edge.u, edge.v)]
 		if !split {
@@ -124,8 +124,8 @@ func bevelRefineCap(ctx context.Context, nodes []bevelPathNode,
 			continue
 		}
 		newEdges = append(newEdges,
-			bevelCapEdge{u: edge.u, v: mid, group: edge.group},
-			bevelCapEdge{u: mid, v: edge.v, group: edge.group})
+			sectorCapEdge{u: edge.u, v: mid, group: edge.group},
+			sectorCapEdge{u: mid, v: edge.v, group: edge.group})
 	}
 	return nodes, next, newEdges, levelRound, nil
 }
@@ -134,7 +134,7 @@ func bevelRefineCap(ctx context.Context, nodes []bevelPathNode,
 // cone map and the source's clipped map, which stays on the far plane where
 // the cone crossing lies beyond it. A radial supporting plane bounds g=x+kρ
 // from below on every convex cap cell, including its interior.
-func bevelUpperFarSliverBound(ctx context.Context, nodes []bevelPathNode,
+func bevelUpperFarSliverBound(ctx context.Context, nodes []sectorPathNode,
 	caps [][3]int, cone *pointConeLimit) (float64, error) {
 	if cone.apex.Sign() <= 0 || cone.slope.Sign() < 0 {
 		return 0, fmt.Errorf("%w: upper cap has no positive cone branch", ErrUnsupported)

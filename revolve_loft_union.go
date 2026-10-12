@@ -2,7 +2,7 @@ package decad
 
 import (
 	"context"
-	"math"
+	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/r3"
@@ -15,39 +15,92 @@ type revolveLoftJoinRecord struct {
 	certificate                           *revolveLoftSectorCertificate
 	blank                                 *Body
 	first                                 facetedPayload
+	placed                                []facetedPayload
+	capRing                               *revolvedSectionRing
 	boundaryBound, volumeBound, areaBound float64
 }
 
-type revolveLoftToothPlacement struct {
+// tryRevolveLoftSectorUnionMany admits one Revolve and one authentic point
+// Loft source, followed by copies of that same source. Operand order does
+// not assign a geometric role; source records do.
+func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref producerID,
+	operands []*Body) (*Body, bool, error) {
+	for blankIndex, blank := range operands {
+		for firstIndex, first := range operands {
+			if firstIndex == blankIndex {
+				continue
+			}
+			cert, ok := certifyRevolveLoftSector(blank, first)
+			if !ok {
+				continue
+			}
+			path, bound, err := revolveExteriorPath(cert.base, cert.boundary,
+				cert.trim.base.pointSection.source, cert.section)
+			if err != nil {
+				return nil, true, err
+			}
+			lo, hi, ok := revolveRootAngles(path)
+			if !ok {
+				return nil, true, ErrUnsupported
+			}
+			cert.sector, cert.crossingBound = [2]float64{lo, hi}, bound
+			cert.loop = path
+			sources := make([]facetedPayload, 0, len(operands)-1)
+			sources = append(sources, cert.trimmed)
+			for i, operand := range operands {
+				if i == blankIndex || i == firstIndex {
+					continue
+				}
+				placed, ok := operand.payload.(facetedPayload)
+				if !ok || placed.revolveLoftSector == nil ||
+					placed.revolveLoftSector.source != cert.trim ||
+					placed.xform != placed.revolveLoftSector.motion {
+					return nil, true, fmt.Errorf("%w: placed sector lost its source", ErrUnsupported)
+				}
+				sources = append(sources, placed)
+			}
+			if !revolveSectorSourcesSeparate(sources) {
+				return nil, true, fmt.Errorf("%w: complete sector sources are not separate", ErrUnsupported)
+			}
+			body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, cert, sources)
+			if err != nil {
+				return nil, true, err
+			}
+			payload, ok := body.payload.(facetedPayload)
+			if !ok {
+				return nil, true, ErrUnsupported
+			}
+			payload.revolveLoftJoin = &revolveLoftJoinRecord{certificate: cert,
+				blank: blank, first: sources[0],
+				placed: append([]facetedPayload(nil), sources[1:]...), capRing: ring,
+				boundaryBound: payload.meshBound, volumeBound: payload.volSymDiff,
+				areaBound: payload.areaSlack}
+			body.payload = payload
+			return body, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
+type revolveLoftSectorPlacement struct {
 	source *pointConeTrimRecord
 	motion r3.Transform
 }
 
-// tryRevolveLoftSectorUnion authenticates source geometry before the older
-// shape-specific routes. The six-side conversion is a temporary construction
-// adapter; the certificate itself admits an ordered section of any supported
-// size and does not use a tooth-count or fixed profile-role matcher.
+// tryRevolveLoftSectorUnion authenticates source geometry before construction.
 func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 	d *Document, ref producerID, a, b *Body) (*Body, bool, error) {
 	if op != meshbool.OpUnion {
 		return nil, false, nil
 	}
-	blank, tooth := a, b
-	cert, ok := certifyRevolveLoftSector(blank, tooth)
+	blank, sector := a, b
+	cert, ok := certifyRevolveLoftSector(blank, sector)
 	if !ok {
-		blank, tooth = b, a
-		cert, ok = certifyRevolveLoftSector(blank, tooth)
+		blank, sector = b, a
+		cert, ok = certifyRevolveLoftSector(blank, sector)
 		if !ok {
 			return nil, false, nil
 		}
-	}
-	legacyBlank, ok := legacyRevolveLoftBlank(cert.section)
-	if !ok {
-		return nil, false, nil
-	}
-	legacyBoundary, ok := legacyRevolveLoftBoundary(cert.boundary)
-	if !ok {
-		return nil, false, nil
 	}
 	path, bound, err := revolveExteriorPath(cert.base, cert.boundary,
 		cert.trim.base.pointSection.source, cert.section)
@@ -60,8 +113,8 @@ func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 	}
 	cert.sector, cert.crossingBound = [2]float64{lo, hi}, bound
 	cert.loop = path
-	body, err := buildBevelOneToothJoin(ctx, d, ref, blank, legacyBlank,
-		cert.trimmed, cert.trim, legacyBoundary)
+	body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, cert,
+		[]facetedPayload{cert.trimmed})
 	if err != nil {
 		return nil, true, err
 	}
@@ -70,112 +123,57 @@ func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 		return nil, true, ErrUnsupported
 	}
 	payload.revolveLoftJoin = &revolveLoftJoinRecord{certificate: cert, blank: blank,
-		first: cert.trimmed, boundaryBound: payload.meshBound,
+		first: cert.trimmed, capRing: ring, boundaryBound: payload.meshBound,
 		volumeBound: payload.volSymDiff, areaBound: payload.areaSlack}
 	body.payload = payload
 	return body, true, nil
 }
 
-// legacyRevolveLoftBlank maps the first bounded construction class into the
-// existing audited six-side mesh builder. Source admission happened above.
-func legacyRevolveLoftBlank(section revolveSectionCertificate) (*bevelBlankSource, bool) {
-	if len(section.spans) != 6 || section.rootCone.Origin.X != 0 {
-		return nil, false
+// tryRevolveLoftNextSectorUnion rebuilds a serial join from the retained
+// authenticated Revolve and point-Loft sources. The faceted joined operand
+// is not used as a geometric source for the next contact.
+func tryRevolveLoftNextSectorUnion(ctx context.Context, op meshbool.OperationKind,
+	d *Document, ref producerID, a, b *Body) (*Body, bool, error) {
+	if op != meshbool.OpUnion {
+		return nil, false, nil
 	}
-	var axis, outer []Point2
-	for _, span := range section.spans {
-		point := span.start
-		if point.V == 0 {
-			axis = append(axis, point)
-		} else {
-			outer = append(outer, point)
-		}
+	joined, placed := a, b
+	jp, ok := joined.payload.(facetedPayload)
+	if !ok || jp.revolveLoftJoin == nil {
+		joined, placed = b, a
+		jp, ok = joined.payload.(facetedPayload)
 	}
-	if len(axis) != 2 || len(outer) != 4 {
-		return nil, false
+	p, placedOK := placed.payload.(facetedPayload)
+	if !ok || !placedOK || jp.revolveLoftJoin == nil ||
+		jp.xform != r3.Identity() || p.revolveLoftSector == nil ||
+		p.revolveLoftSector.source == nil ||
+		jp.revolveLoftJoin.certificate == nil ||
+		jp.revolveLoftJoin.certificate.trim != p.revolveLoftSector.source ||
+		p.xform != p.revolveLoftSector.motion ||
+		!revolveAxisRotation(p.revolveLoftSector.motion) {
+		return nil, false, nil
 	}
-	if axis[0].U > axis[1].U {
-		axis[0], axis[1] = axis[1], axis[0]
+	record := jp.revolveLoftJoin
+	sectors := make([]facetedPayload, 0, len(record.placed)+2)
+	sectors = append(sectors, record.first)
+	sectors = append(sectors, record.placed...)
+	sectors = append(sectors, p)
+	if !revolveSectorSourcesSeparate(sectors) {
+		return nil, false, nil
 	}
-	result := &bevelBlankSource{toeAxis: axis[0], heelAxis: axis[1]}
-	var interior []Point2
-	for _, point := range outer {
-		switch point.U {
-		case result.toeAxis.U:
-			if result.toeOuter != (Point2{}) {
-				return nil, false
-			}
-			result.toeOuter = point
-		case result.heelAxis.U:
-			if result.heelOuter != (Point2{}) {
-				return nil, false
-			}
-			result.heelOuter = point
-		default:
-			interior = append(interior, point)
-		}
+	body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, record.certificate, sectors)
+	if err != nil {
+		return nil, true, err
 	}
-	if len(interior) != 2 || result.toeOuter == (Point2{}) || result.heelOuter == (Point2{}) {
-		return nil, false
+	result, ok := body.payload.(facetedPayload)
+	if !ok {
+		return nil, true, ErrUnsupported
 	}
-	if interior[0].U > interior[1].U {
-		interior[0], interior[1] = interior[1], interior[0]
-	}
-	result.toeRoot, result.ded = interior[0], interior[1]
-	if !(result.toeRoot.U < result.toeAxis.U && result.toeAxis.U < result.ded.U &&
-		result.ded.U < result.heelAxis.U) ||
-		section.rootStart != result.toeRoot || section.rootEnd != result.ded {
-		return nil, false
-	}
-	cycle := [6]Point2{result.toeAxis, result.heelAxis, result.heelOuter,
-		result.ded, result.toeRoot, result.toeOuter}
-	var seen [6]bool
-	for _, span := range section.spans {
-		matched := false
-		for i := range cycle {
-			a, z := cycle[i], cycle[(i+1)%len(cycle)]
-			if span.start != a || span.end != z {
-				if span.start != z || span.end != a {
-					continue
-				}
-			}
-			if seen[i] || len(span.sourceEdges) == 0 {
-				return nil, false
-			}
-			seen[i], matched = true, true
-			result.edgeIndex[i] = span.sourceEdges[0]
-			if i == 3 {
-				result.rootFace = span.face
-			}
-			break
-		}
-		if !matched {
-			return nil, false
-		}
-	}
-	if result.rootFace == nil {
-		return nil, false
-	}
-	result.rootCone, result.coneGap = section.rootCone, section.coneGap
-	return result, !math.IsNaN(result.coneGap) && !math.IsInf(result.coneGap, 0)
-}
-
-func legacyRevolveLoftBoundary(boundary revolveSectorBoundary) (*bevelToothBoundary, bool) {
-	if len(boundary.sides) != 6 ||
-		boundary.insideSegment < 0 || boundary.outsideWitness < 0 {
-		return nil, false
-	}
-	result := &bevelToothBoundary{insideArc: boundary.insideSegment,
-		fitRoute: boundary.fitRoute}
-	for i := range result.crossing {
-		if boundary.fitRoute {
-			result.fitIndex[i], result.fitCross[i] = boundary.contacts[i].segment,
-				boundary.contacts[i].fit
-		} else {
-			result.lineIndex[i], result.crossing[i] = boundary.contacts[i].segment,
-				boundary.contacts[i].line
-		}
-	}
-	copy(result.sides[:], boundary.sides)
-	return result, true
+	result.revolveLoftJoin = &revolveLoftJoinRecord{certificate: record.certificate,
+		blank: record.blank, first: record.first,
+		placed: append([]facetedPayload(nil), sectors[1:]...), capRing: ring,
+		boundaryBound: result.meshBound, volumeBound: result.volSymDiff,
+		areaBound: result.areaSlack}
+	body.payload = result
+	return body, true, nil
 }

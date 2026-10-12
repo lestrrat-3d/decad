@@ -102,9 +102,9 @@ func bevelTrimmedSourcesSeparateZ(first, second facetedPayload) bool {
 }
 
 type bevelTwoPlan struct {
-	original, placed []bevelPathNode
+	original, placed []sectorPathNode
 	caps             [][3]int
-	edges            []bevelCapEdge
+	edges            []sectorCapEdge
 	lo, hi           float64
 	crossingBound    float64
 	farRound         float64
@@ -122,7 +122,7 @@ type bevelTwoPlan struct {
 
 // The root boundary runs from the last exterior-path node back to the first.
 // Every inserted root station must stay in that directed angular interval.
-func bevelRootEdgeOrdered(nodes []bevelPathNode, edges []bevelCapEdge, lo, hi float64) bool {
+func bevelRootEdgeOrdered(nodes []sectorPathNode, edges []sectorCapEdge, lo, hi float64) bool {
 	if len(edges) < 1 || !(lo < hi) {
 		return false
 	}
@@ -178,11 +178,11 @@ func makeBevelTwoPlan(ctx context.Context, blank *bevelBlankSource,
 	if err != nil {
 		return bevelTwoPlan{}, err
 	}
-	caps, err := bevelCapTriangulate(ctx, nodes, base.pointSection.source.frame)
+	caps, err := sectorCapTriangulate(ctx, nodes, base.pointSection.source.frame)
 	if err != nil {
 		return bevelTwoPlan{}, triangulation.WrapLoftError(err)
 	}
-	nodes, caps, edges, farRound, err := bevelSubdivideCap(ctx, nodes, caps, 3)
+	nodes, caps, edges, farRound, err := sectorSubdivideCap(ctx, nodes, caps, 3)
 	if err != nil {
 		return bevelTwoPlan{}, err
 	}
@@ -218,7 +218,7 @@ func makeBevelTwoPlan(ctx context.Context, blank *bevelBlankSource,
 	if motion == r3.Identity() {
 		return plan, nil
 	}
-	plan.placed = append([]bevelPathNode(nil), nodes...)
+	plan.placed = append([]sectorPathNode(nil), nodes...)
 	for i, node := range nodes {
 		p := motion.Apply(node.p)
 		if !proofbound.FiniteVec(p) {
@@ -305,15 +305,15 @@ func buildBevelTwoToothJoin(ctx context.Context, d *Document, ref producerID,
 		outside = append(outside, angle)
 	}
 	regular = outside
-	angles, _, err := bevelMergedAngles(regular, plans[0].placed)
+	angles, _, err := sectorMergedAngles(regular, plans[0].placed)
 	if err != nil {
 		return nil, err
 	}
-	angles, plans[1].rootNode, err = bevelMergedAngles(angles, plans[1].placed)
+	angles, plans[1].rootNode, err = sectorMergedAngles(angles, plans[1].placed)
 	if err != nil {
 		return nil, err
 	}
-	_, plans[0].rootNode, err = bevelMergedAngles(angles, plans[0].placed)
+	_, plans[0].rootNode, err = sectorMergedAngles(angles, plans[0].placed)
 	if err != nil {
 		return nil, err
 	}

@@ -28,7 +28,7 @@ func TestPointConeTriangleBoundIncludesReciprocalCurvature(t *testing.T) {
 func TestPointConeUpperFarPlaneSliverBound(t *testing.T) {
 	t.Parallel()
 	cone := &pointConeLimit{apex: big.NewRat(10, 1), slope: big.NewRat(1, 1)}
-	nodes := []bevelPathNode{
+	nodes := []sectorPathNode{
 		{p: r3.Vec{X: 5, Y: 4.9}},
 		{p: r3.Vec{X: 5, Y: 5.1}},
 		{p: r3.Vec{X: 5, Y: 5, Z: 0.1}},
@@ -55,9 +55,9 @@ func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
 	sample, err := pointConeFactor(far, cone)
 	require.NoError(t, err)
 	require.Less(t, sample.q+sample.qError, 1.0)
-	_, _, err = bevelUpperCapNode(far, sample, false)
+	_, _, err = sectorUpperCapNode(far, sample, false)
 	require.ErrorIs(t, err, ErrUnsupported)
-	clipped, round, err := bevelUpperCapNode(far, sample, true)
+	clipped, round, err := sectorUpperCapNode(far, sample, true)
 	require.NoError(t, err)
 	require.Equal(t, far, clipped)
 	require.GreaterOrEqual(t, round, far.Scale(sample.alpha).Sub(far).Len())
