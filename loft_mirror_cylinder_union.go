@@ -19,12 +19,14 @@ import (
 // of the original blank. The upper source is its authenticated reflection.
 // The original Boolean operands remain recorded for each later pattern step.
 type loftMirrorCylinderJoinRecord struct {
-	blank       *Body
-	source      *loftMirrorJoinRecord
-	pairs       []*Body
-	lowerHalf   *Body
-	capGroups   [2]int
-	capOutlines [2][]int
+	blank        *Body
+	source       *loftMirrorJoinRecord
+	pairs        []*Body
+	lowerHalf    *Body
+	capGroups    [2]int
+	capOutlines  [2][]int
+	bridgeBound  float64
+	bridgeVolume float64
 }
 
 func tryLoftMirrorCylinderUnion(ctx context.Context, op meshbool.OperationKind,
@@ -374,6 +376,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 		loftMirrorCylinderJoin: &loftMirrorCylinderJoinRecord{
 			blank: blank, source: source, pairs: append([]*Body(nil), pairs...),
 			lowerHalf: lowerHalf, capGroups: capGroups, capOutlines: capOutlines,
+			bridgeBound: bridgeBound, bridgeVolume: bridgeVolume,
 		},
 	}
 	if err := loftMirrorCylinderCapOrigins(&fp, blank, pairs, capGroups); err != nil {
