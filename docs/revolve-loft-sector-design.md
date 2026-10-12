@@ -151,7 +151,7 @@ generic replacement and focused proof required before deletion.
 |---|---|---|
 | `bevel_join_source.go` | `revolve_loft_source.go` and `revolve_loft_sector.go`, then a dynamic builder without `legacyRevolveLoftBlank` | `TestUnionTaperedHubAndRadialLug` plus split-cap, stale-source, foreign-trim and near-contact refusals |
 | `bevel_join_fit.go` | `revolve_loft_fit.go` and a generic fitted-seat/fan-cell builder without `legacyRevolveLoftBoundary` | `TestUnionTaperedHubAndFittedRadialLug` plus fitted stale-source and near-contact refusals |
-| `bevel_join.go`, `bevel_join_two.go`, `bevel_join_pattern.go`, `bevel_join_combine.go` | Dynamic section rings, sector caps and shared N-sector construction | Neutral seven-span, fitted, serial, variadic and separation-refusal tests pass; real gallery consumers remain to be checked |
+| `bevel_join.go`, `bevel_join_two.go`, `bevel_join_pattern.go` | Dynamic section rings, sector caps and shared N-sector construction | Neutral seven-span, fitted, serial, variadic and separation-refusal tests pass; real gallery consumers remain to be checked |
 | `bevelTooth` and `bevelJoin` payloads and dispatch | `revolveLoftSector` and `revolveLoftJoin` records | Real neutral rotated lugs pass public `Union`, 0.1 mm `VerifyAll`, Euler two and computed-volume tests |
 | `bevel_join_bore.go`, `bevel_join_bore_toe.go` and their Cut dispatch | `revolve_sector_cylinder_cut.go` and `revolve_sector_cylinder_band.go` | Neutral one-sector and repeated-sector annular bores, one strict straight-band crossing, boundary refusals, 0.1 mm `VerifyAll` and Euler zero pass; remove the old route after gallery joins use the generic record |
 
