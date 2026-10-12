@@ -27,7 +27,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/loop-fillet-design.md` | Route L's fillet arm: pipe bands on a planar face's loop. |
 | `docs/vertex-blend-design.md` | Three-edge fillets, sphere patches, route V, and exact-radius refusals. |
 | `docs/shell-opening-design.md` | Shell side openings on a prism and a revolve: rim rule, brep record, Tables RO/SO/BO/DO. |
-| `docs/draft-design.md` | `WithTaper` and `Body.Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
+| `docs/draft-design.md` | `WithTaper` and `Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
 | `docs/loft-sections-design.md` | Three-section smooth lofts and four-section cubic-width rounded lofts, held meshes and proofs. |
 | `docs/loft-face-sections-design.md` | Source-cap nine-section loft, cap correspondence, embedding, occupied-volume proof and two-cone continuation. |

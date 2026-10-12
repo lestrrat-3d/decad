@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is Body.Draft's fixture set (docs/draft-design.md §11, D1–D5 and
+// This file is Draft's fixture set (docs/draft-design.md §11, D1–D5 and
 // the selector Walls). The closed forms are F1's and F5's, from
 // extrude_taper_test.go's helpers.
 
@@ -70,7 +70,7 @@ func TestDraftEquivalence(t *testing.T) {
 		if dir == decad.Against {
 			neutral = capNeutral(box, decad.CapEnd)
 		}
-		got, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box)), neutral, units.Degrees(deg))
+		got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), neutral, units.Degrees(deg))
 		require.NoError(t, err)
 		requireManifold(t, got)
 		requireSameBody(t, want, got)
@@ -89,7 +89,7 @@ func TestDraftOtherCap(t *testing.T) {
 	const deg = 5.0
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	got, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapEnd), units.Degrees(deg))
+	got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapEnd), units.Degrees(deg))
 	require.NoError(t, err)
 	requireManifold(t, got)
 	d := bfMul(bf(boxHeight), taperTan(deg))
@@ -119,7 +119,7 @@ func TestDraftNegative(t *testing.T) {
 	const deg = -5.0
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	got, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(deg))
+	got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(deg))
 	require.NoError(t, err)
 	requireManifold(t, got)
 	d := bfMul(bf(boxHeight), taperTan(deg))
@@ -137,7 +137,7 @@ func TestDraftPlacedAndFilleted(t *testing.T) {
 	box := plainBox(t, doc, decad.Along)
 	placed, err := decad.Transform(t.Context(), box, generalMotion(t, 23, -7.5))
 	require.NoError(t, err)
-	got, err := placed.Draft(t.Context(), decad.Faces(decad.Walls(placed)), capNeutral(placed, decad.CapStart), units.Degrees(deg))
+	got, err := decad.Draft(t.Context(), placed, decad.Faces(decad.Walls(placed)), capNeutral(placed, decad.CapStart), units.Degrees(deg))
 	require.NoError(t, err)
 	requireManifold(t, got)
 	d := bfMul(bf(boxHeight), taperTan(deg))
@@ -157,7 +157,7 @@ func TestDraftPlacedAndFilleted(t *testing.T) {
 	walls, err := decad.Faces(decad.Walls(rounded)).SelectFaces(rounded)
 	require.NoError(t, err)
 	require.Len(t, walls, 5)
-	got2, err := rounded.Draft(t.Context(), decad.Faces(decad.Walls(rounded)), capNeutral(rounded, decad.CapStart), units.Degrees(deg))
+	got2, err := decad.Draft(t.Context(), rounded, decad.Faces(decad.Walls(rounded)), capNeutral(rounded, decad.CapStart), units.Degrees(deg))
 	require.NoError(t, err)
 	requireManifold(t, got2)
 	require.Len(t, got2.Faces(), 7)
@@ -175,10 +175,10 @@ func TestDraftRetires(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	got, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5))
+	got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5))
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{got}, doc.Bodies())
-	_, err = box.Draft(t.Context(), decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5))
+	_, err = decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5))
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -223,66 +223,66 @@ func TestDraftRefusals(t *testing.T) {
 		want error
 	}{
 		{"SD1 angle kind", func() error {
-			_, err := box.Draft(t.Context(), walls(box), capNeutral(box, decad.CapStart), units.Millimeters(5))
+			_, err := decad.Draft(t.Context(), box, walls(box), capNeutral(box, decad.CapStart), units.Millimeters(5))
 			return err
 		}, decad.ErrUnitKind},
 		{"SD2 right angle", func() error {
-			_, err := box.Draft(t.Context(), walls(box), capNeutral(box, decad.CapStart), units.Degrees(90))
+			_, err := decad.Draft(t.Context(), box, walls(box), capNeutral(box, decad.CapStart), units.Degrees(90))
 			return err
 		}, decad.ErrDegenerate},
 		{"SD18 zero angle", func() error {
-			_, err := box.Draft(t.Context(), walls(box), capNeutral(box, decad.CapStart), units.Degrees(0))
+			_, err := decad.Draft(t.Context(), box, walls(box), capNeutral(box, decad.CapStart), units.Degrees(0))
 			return err
 		}, decad.ErrDegenerate},
 		{"SD19 zero faces", func() error {
-			_, err := box.Draft(t.Context(), walls(box),
+			_, err := decad.Draft(t.Context(), box, walls(box),
 				decad.NeutralFace{Body: box, Face: decad.Faces(decad.NormalTo(r3.NewVec(1, 1, 1)))}, deg5)
 			return err
 		}, decad.ErrCardinality},
 		{"SD19 two faces", func() error {
-			_, err := box.Draft(t.Context(), walls(box), decad.NeutralFace{Body: box, Face: decad.Faces(decad.Planar())}, deg5)
+			_, err := decad.Draft(t.Context(), box, walls(box), decad.NeutralFace{Body: box, Face: decad.Faces(decad.Planar())}, deg5)
 			return err
 		}, decad.ErrCardinality},
 		{"SD19 curved neutral face", func() error {
-			_, err := box.Draft(t.Context(), walls(box),
+			_, err := decad.Draft(t.Context(), box, walls(box),
 				decad.NeutralFace{Body: cyl, Face: decad.Faces(decad.Cylindrical())}, deg5)
 			return err
 		}, decad.ErrDegenerate},
 		{"SD20 NeutralFrame", func() error {
 			f, err := r3.NewFrame(r3.NewVec(0, 0, 5), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 			require.NoError(t, err)
-			_, err = box.Draft(t.Context(), walls(box), decad.NeutralFrame{Frame: f}, deg5)
+			_, err = decad.Draft(t.Context(), box, walls(box), decad.NeutralFrame{Frame: f}, deg5)
 			return err
 		}, decad.ErrUnsupported},
 		{"SD20 wall as neutral face", func() error {
-			_, err := box.Draft(t.Context(), walls(box),
+			_, err := decad.Draft(t.Context(), box, walls(box),
 				decad.NeutralFace{Body: box, Face: decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))}, deg5)
 			return err
 		}, decad.ErrUnsupported},
 		{"SD20 another body's cap", func() error {
-			_, err := box.Draft(t.Context(), walls(box), capNeutral(other, decad.CapStart), deg5)
+			_, err := decad.Draft(t.Context(), box, walls(box), capNeutral(other, decad.CapStart), deg5)
 			return err
 		}, decad.ErrUnsupported},
 		{"SD21 empty selection", func() error {
-			_, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(0, 0, 1))),
+			_, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(0, 0, 1))),
 				capNeutral(box, decad.CapStart), deg5)
 			return err
 		}, decad.ErrNoMatch},
 		{"SD22 the other cap selected", func() error {
-			_, err := box.Draft(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))),
+			_, err := decad.Draft(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))),
 				capNeutral(box, decad.CapStart), deg5)
 			return err
 		}, decad.ErrDegenerate},
 		{"SD23 revolve", func() error {
-			_, err := rev.Draft(t.Context(), decad.Faces(), capNeutral(box, decad.CapStart), deg5)
+			_, err := decad.Draft(t.Context(), rev, decad.Faces(), capNeutral(box, decad.CapStart), deg5)
 			return err
 		}, decad.ErrUnsupported},
 		{"nil neutral", func() error {
-			_, err := box.Draft(t.Context(), walls(box), nil, deg5)
+			_, err := decad.Draft(t.Context(), box, walls(box), nil, deg5)
 			return err
 		}, decad.ErrDegenerate},
 		{"nil selector", func() error {
-			_, err := box.Draft(t.Context(), nil, capNeutral(box, decad.CapStart), deg5)
+			_, err := decad.Draft(t.Context(), box, nil, capNeutral(box, decad.CapStart), deg5)
 			return err
 		}, decad.ErrDegenerate},
 	}
@@ -298,12 +298,12 @@ func TestDraftRefusals(t *testing.T) {
 	t.Run("SD17 retired receiver and SD23 second draft", func(t *testing.T) {
 		d2 := decad.New()
 		b := plainBox(t, d2, decad.Along)
-		got, err := b.Draft(t.Context(), walls(b), capNeutral(b, decad.CapStart), deg5)
+		got, err := decad.Draft(t.Context(), b, walls(b), capNeutral(b, decad.CapStart), deg5)
 		require.NoError(t, err)
-		_, err = b.Draft(t.Context(), walls(b), capNeutral(b, decad.CapStart), deg5)
+		_, err = decad.Draft(t.Context(), b, walls(b), capNeutral(b, decad.CapStart), deg5)
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 		before := d2.Bodies()
-		_, err = got.Draft(t.Context(), walls(got), capNeutral(got, decad.CapStart), deg5)
+		_, err = decad.Draft(t.Context(), got, walls(got), capNeutral(got, decad.CapStart), deg5)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, d2.Bodies())
 	})
@@ -345,7 +345,7 @@ func TestDraftSymmetricReceiver(t *testing.T) {
 		if neutralStart {
 			role, farZ = decad.CapStart, boxHeight/2
 		}
-		got, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box)), capNeutral(box, role), units.Degrees(deg))
+		got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, role), units.Degrees(deg))
 		require.NoError(t, err)
 		requireManifold(t, got)
 

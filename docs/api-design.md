@@ -782,7 +782,7 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 |---|---|
 | `Body.Fillet`, `Body.Chamfer` | `Fillet(ctx, b, sel, r, opts...)`, `Chamfer(ctx, b, sel, d, opts...)` |
 | `Body.Shell` | `Shell(ctx, b, sel, t, opts...)` |
-| `Body.Draft`, `Body.Offset`, `Body.Thicken` | `Draft(ctx, b, ...)`, `Offset(ctx, b, ...)`, `Thicken(ctx, b, ...)` |
+| `Body.Offset`, `Body.Thicken` | `Offset(ctx, b, ...)`, `Thicken(ctx, b, ...)` |
 | `Body.Trim`, `Body.Extend` | `Trim(ctx, b, tool, side)`, `Extend(ctx, b, edges, tool)` |
 | `Document.Split` | `Split(ctx, target, tool)` |
 | `Body.Patch`, `Body.Unstitch` | `PatchEdges(ctx, b, sel)`, `Unstitch(ctx, b)` |
@@ -943,7 +943,7 @@ together with `WithSurfaceResult()`, the option that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the four chain-fed forms that
 sweep an open curve (§13 there). `docs/draft-design.md` owns `WithTaper`'s
-build and `Body.Draft`, the face draft of an existing prism, with its
+build and `Draft`, the face draft of an existing prism, with its
 `NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
 
 ```go
@@ -2006,7 +2006,7 @@ the resulting bodies, measurements, and verification reports directly.
   displacements, not magnitudes**, and are outside it: `ToFace.Offset`, which
   displaces along the target face's normal and whose sign says which side of that
   face the sweep stops on (§8.1); `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
-  whose sign says which way the wall leans; and `Body.Draft`'s angle
+  whose sign says which way the wall leans; and `Draft`'s angle
   (`docs/draft-design.md` §10), read the same way about its neutral plane. Neither carries a `Direction` to reverse,
   so a negative value there is a legal intent, not an error.
 - **`ErrCardinality` takes precedence at zero matches.** A failed cardinality

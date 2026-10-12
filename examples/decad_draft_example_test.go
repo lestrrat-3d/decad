@@ -36,8 +36,7 @@ func Example_decad_draft() {
 	}
 
 	// Lean every wall 5 degrees about the cap on the sketch plane.
-	drafted, err := box.Draft(context.Background(),
-		decad.Faces(decad.Walls(box)),
+	drafted, err := decad.Draft(context.Background(), box, decad.Faces(decad.Walls(box)),
 		decad.NeutralFace{Body: box, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(box)))},
 		units.Degrees(5))
 	if err != nil {

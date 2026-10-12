@@ -320,7 +320,7 @@ func draftMeshSubset(t *testing.T, holes int, draw func(*sketch.Sketch), h, deg 
 			}
 		}
 		require.NotNil(t, q)
-		got, err := b.Draft(t.Context(), q, NeutralFace{Body: b, Face: Faces(FaceCreatedBy(CapStart(b)))}, units.Degrees(deg))
+		got, err := Draft(t.Context(), b, q, NeutralFace{Body: b, Face: Faces(FaceCreatedBy(CapStart(b)))}, units.Degrees(deg))
 		require.NoError(t, err)
 		return got
 	}

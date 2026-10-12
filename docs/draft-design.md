@@ -1,7 +1,7 @@
 # Draft design
 
 How decad builds a drafted body: a tapered extrude (`Extrude` with a nonzero
-`WithTaper`) and a face draft of an existing prism (`Body.Draft`). Both
+`WithTaper`) and a face draft of an existing prism (`Draft`). Both
 produce a `draftPayload` for one-sided extents or a `twoSidedDraftPayload`
 for extents that cross the sketch plane. Their walls lean at a stated angle
 to the sweep axis so that a molded part releases along that axis.
@@ -17,7 +17,7 @@ Four tables are normative and each states its facts once:
 
 | Table | States | Section |
 |---|---|---|
-| **RD** — the inputs | which profile, extent, receiver and selection each entry point admits | §4 |
+| **RD** — the inputs | which profile, extent, operand and selection each entry point admits | §4 |
 | **SD** — the refusals | every refusal, modify §1's existence test, its sentinel, and the gate order | §5 |
 | **BD** — the result | the payload, its faces, edges and roles | §6 |
 | **DD** — downstream | one row per consumer and what it does with a draft body | §9 |
@@ -29,7 +29,7 @@ Question router (navigation, not authority):
 | What is a draft, and which offset family defines it | §1, §2 |
 | Why the far section is decad's own geometry, not a `sketch` answer | §3 |
 | What `WithTaper` admits | §4 Table RD |
-| What `Body.Draft` admits, and its signature | §4, §10 |
+| What `Draft` admits, and its signature | §4, §10 |
 | Why a call refused, and in which order the gates run | §5 Table SD |
 | What faces, edges and roles come out | §6 Table BD |
 | How the body is built | §7 |
@@ -53,7 +53,7 @@ rest.
 The evaluator already builds exactly one drafted surface family: the cap-loop
 chamfer band of modify-reach §8.3, which joins a cap loop at one level to its
 exact offset at another level with `Plane` and `Cone` patches, and proves
-every reading off it. A tapered extrude is that band with the receiver's
+every reading off it. A tapered extrude is that band with the operand's
 straight part removed, so this design reuses the band's construction and
 proofs and adds the far section's offset rule, the entry points and the
 refusals.
@@ -81,7 +81,7 @@ sewn rim, not an internal cap.
 **The sign.** A positive `α` narrows the body with distance from the sketch
 plane: every wall's carrier moves `t(z)` into the material. A negative `α`
 widens it. `WithTaper` keeps its existing meaning (core §12: a signed
-displacement, outside `ErrNegativeMagnitude`), and `Body.Draft` (§10) reads
+displacement, outside `ErrNegativeMagnitude`), and `Draft` (§10) reads
 its angle the same way about its neutral plane.
 
 **The offset is sharp.** `P(z)` is the section whose every wall carrier is
@@ -157,8 +157,8 @@ file is written.
 | RD | Entry point | Admits | Result |
 |---|---|---|---|
 | **RD1** | `Extrude` with nonzero `WithTaper` | analytic walks with G1 circular joins; `Distance`, `ToFace`, `ThroughAll`, `Symmetric` or `TwoSided`; `|α| < 90°`; no `WithSurfaceResult` | a one- or two-slab draft solid (Table BD) |
-| **RD2** | `Body.Draft` | a live `prismPayload` receiver (an extrude, a filleted or chamfered body, a tube, or any of these after `Transform`) whose section carries no displacement; a `NeutralFace` naming one cap of the receiver; a selection resolving to exactly the receiver's complete wall set; `0 < |α| < 90°` | a `draftPayload` solid over the receiver's section, the receiver retired |
-| **RD3** | `Body.Draft` | as RD2 with a selection naming a **subset** of the walls, where every corner between a selected and an unselected wall is a line–line corner | a `draftPayload` whose far section moves the selected walls only (§10.2) |
+| **RD2** | `Draft` | a live `prismPayload` operand (an extrude, a filleted or chamfered body, a tube, or any of these after `Transform`) whose section carries no displacement; a `NeutralFace` naming one cap of the operand; a selection resolving to exactly the operand's complete wall set; `0 < |α| < 90°` | a `draftPayload` solid over the operand's section, the operand retired |
+| **RD3** | `Draft` | as RD2 with a selection naming a **subset** of the walls, where every corner between a selected and an unselected wall is a line–line corner | a `draftPayload` whose far section moves the selected walls only (§10.2) |
 
 Everything else is Table SD.
 
@@ -185,13 +185,13 @@ any evaluator?) and the sentinel that follows from it.
 | **SD14** | a far corner whose displacement enclosure cannot be built (`offset2d.ErrUnbounded`) | yes | `ErrUnsupported` (SX14) |
 | **SD15** | a corner whose two moved carriers have no intersection — a cusp (`|cross| ≤ tol`, `dot ≤ 0`) between two lines | yes | `ErrUnsupported` (`offset2d.ErrTopology`, modify S11's row) |
 | **SD16** | a wall patch whose outward orientation `fixPatchOrientation` cannot certify | yes | `ErrUnsupported` (SX15) |
-| **SD17** | `Draft` of a retired receiver, or of a sheet | — | `ErrRetiredBody`; a sheet as `Fillet`'s `refuseSheetOperand` refuses it |
-| **SD18** | `Draft` with a zero angle | it exists and is the receiver (modify S13) | `ErrDegenerate` |
+| **SD17** | `Draft` of a retired operand, or of a sheet | — | `ErrRetiredBody`; a sheet as `Fillet`'s `refuseSheetOperand` refuses it |
+| **SD18** | `Draft` with a zero angle | it exists and is the operand (modify S13) | `ErrDegenerate` |
 | **SD19** | a neutral selector resolving to zero or several faces; a curved neutral face; a `Faceted` neutral face | — | `ErrCardinality` (Expected "exactly 1"); `ErrDegenerate`; `ErrUnsupported` — `MirrorFace`'s own three rules |
-| **SD20** | a `NeutralFrame`, or a `NeutralFace` that is not a cap of the receiver | yes | `ErrUnsupported` (staged, §14) |
-| **SD21** | a selected face that is no wall of the receiver, or a selection that splits the recorded segments of one coalesced walk; an empty selection | yes | `ErrUnsupported`; `ErrNoMatch`/`ErrCardinality` as core §9 |
+| **SD20** | a `NeutralFrame`, or a `NeutralFace` that is not a cap of the operand | yes | `ErrUnsupported` (staged, §14) |
+| **SD21** | a selected face that is no wall of the operand, or a selection that splits the recorded segments of one coalesced walk; an empty selection | yes | `ErrUnsupported`; `ErrNoMatch`/`ErrCardinality` as core §9 |
 | **SD22** | a selected face parallel to the neutral plane — the other cap — or the neutral face itself | no — a face with no trace on the neutral plane has no line to tilt about | `ErrDegenerate` |
-| **SD23** | `Draft` of a receiver that is not a `prismPayload`, or whose section carries a displacement (`requireExactSection`), or that is itself a draft body | yes | `ErrUnsupported` (modify S3; a second draft is SX10's composition rule) |
+| **SD23** | `Draft` of an operand that is not a `prismPayload`, or whose section carries a displacement (`requireExactSection`), or that is itself a draft body | yes | `ErrUnsupported` (modify S3; a second draft is SX10's composition rule) |
 
 The sharp offset of a convex section past its collapse is the section
 point-reflected through a centre, which keeps its walk sense, so S8 never sees
@@ -208,7 +208,7 @@ one constructed section the existence question is asked first (modify §4).
 | Stage | Gates, in order |
 |---|---|
 | 1 — the pre-gates | `Extrude`: the seam gates of core §7, then SD1, SD2 (the seam gates run first, as they do for SD1 on a straight prism). `Draft`: SD1, SD2, SD17, SD18, SD19's cardinality |
-| 2 — the receiver and its inputs | `Draft`: SD23, SD20's `NeutralFrame` refusal, SD19's kind rules, SD20's cap test, SD22, SD21. `Extrude`: the extent's own validation (unchanged), SD12 |
+| 2 — the operand and its inputs | `Draft`: SD23, SD20's `NeutralFrame` refusal, SD19's kind rules, SD20's cap test, SD22, SD21. `Extrude`: the extent's own validation (unchanged), SD12 |
 | 3 — the section's kinds | SD3; then per corner SD4 and SD15 |
 | 4 — the far section is built | the span of `d` (§8.1); SD5, SD7 and SD6's consumed outer loop as the walks are offset, then SD13 |
 | 5 — the audit | SD6, then SD8, then SD9, over the far section at `d` |
@@ -223,7 +223,7 @@ document unchanged (evaluator §8).
 | BD | Entry | Payload | Lumps | Faces and roles | Edges |
 |---|---|---|---|---|---|
 | **BD1** | `Extrude` + taper | `draftPayload`: the near record `P`, the far record `Q` with its displacement, the frame, `[z0, z1]` with the end displacements, `α` with the span of `d`, the placement | 1 | `capStart` over the section at `z0`, `capEnd` over the section at `z1` (the prism's convention: `Along` puts `P` at `z0`, `Against` puts `P` at `z1`); one wall per walk of `P` with role `side(i, j)`: `Plane` for a line, `Cone` for a circular walk, a seamless `Cone` for a whole circle | cap rims `Line3`/`Arc3`/`Circle3` from each record; lateral edges `Line3`, convex by the walk's turn exactly as a prism's (evaluator §3) |
-| **BD2** | `Draft` (RD2) | the same payload over the receiver's record, under the receiver's placement | 1 | as BD1, every role minted under the result's own producer (modify §11: a result's roles are its own) | as BD1 |
+| **BD2** | `Draft` (RD2) | the same payload over the operand's record, under the operand's placement | 1 | as BD1, every role minted under the result's own producer (modify §11: a result's roles are its own) | as BD1 |
 | **BD3** | `Draft` (RD3) | the same payload; `Q` moves the selected walls only | 1 | as BD2; an unselected wall keeps its vertical `Plane`/`Cylinder` | as BD1 |
 | **BD4** | two-sided `Extrude` + taper | `twoSidedDraftPayload` with a negative and positive `draftPayload` | 1 | outer `capStart` and `capEnd`; walls `side(0,i,j)` below and `side(1,i,j)` above the sketch plane | one shared middle rim; the two slabs have no published middle cap |
 
@@ -298,7 +298,7 @@ composite sweep boundary and adjacent-span audits check the resulting shell.
 The two slab volumes and first moments add; the body area sums its published
 faces, and its bounds enclose both slabs.
 
-`Body.Draft` reaches step 1 with the receiver's record and placement after its
+`Draft` reaches step 1 with the operand's record and placement after its
 own gates (§10), and builds the identical body `Extrude` would build from the
 same section and sweep.
 
@@ -315,7 +315,7 @@ as exact.
 The draft body is one closed sub-solid: the near disk, the far disk and the
 wall band between them. Every reading reuses the cap-loop band's closed forms
 over the patches of step 8, with the band's `dc = d`, `ds = h`, and no
-receiver slab.
+operand slab.
 
 | Reading | Closed form | Owner of the code |
 |---|---|---|
@@ -466,7 +466,7 @@ needs a proven bound on the area between the conic foot locus and the ruling
 in every slice, integrated over the sweep: the per-cell integral of
 `docs/tessellation-reach-design.md` §9's open question, a separate increment.
 
-## 10. `Body.Draft`
+## 10. `Draft`
 
 ```go
 // NeutralPlane is the plane a draft tilts faces about. The set is sealed.
@@ -485,7 +485,7 @@ type NeutralFrame struct {
     Frame r3.Frame
 }
 
-func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralPlane, angle units.Value, opts ...DraftOption) (*Body, error)
+func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane, angle units.Value, opts ...DraftOption) (*Body, error)
 
 // Walls matches every face a sweep made: the side(i, j) roles of b's own
 // producer. It is the sibling of CapStart and CapEnd.
@@ -493,7 +493,7 @@ func Walls(b *Body) FacePredicate
 ```
 
 `Draft` is a modify operation on core §8's terms: it takes a context, resolves
-`sel` against the live receiver, returns a new body and retires the receiver,
+`sel` against the live operand, returns a new body and retires the operand,
 and leaves the document unchanged on any error, including `ctx.Err()`.
 `angle` is a signed `units.Value` of `Kind` Angle (core §12 lists it with
 `ToFace.Offset` and `WithTaper` as the signed displacements outside
@@ -507,31 +507,31 @@ option.
 
 1. The neutral face resolves through `SelectFaces(neutral.Body)` under the
    implicit exactly-one rule (SD19). It must be `capStart` or `capEnd` of the
-   receiver (SD20).
-2. `sel` resolves against the receiver. The resolved set must not contain a
+   operand (SD20).
+2. `sel` resolves against the operand. The resolved set must not contain a
    cap (SD22), and every face of it must carry a `side(i, j)` role (SD21). The
    complete set of such faces is RD2; any other set is RD3 (§10.2).
 3. The sweep direction `e` runs from the neutral cap toward the other cap.
    With the neutral cap at `z0`, `e` is the frame normal and the far end is
    `z1`; with the neutral cap at `z1`, `e` is its negation and the far end is
-   `z0`. The section `P` is the receiver's record, which lies in the frame's
+   `z0`. The section `P` is the operand's record, which lies in the frame's
    plane at level 0 and is the section of every level of a straight prism, so
    the neutral cap's section is `P` whichever cap is named.
-4. `h` is the receiver's height with its end displacements; `d = h · tan α`
+4. `h` is the operand's height with its end displacements; `d = h · tan α`
    per §8.1.
 5. §7 builds the body over `P`, `Q` and `[z0, z1]`; the far record sits at
    the far end. The result's roles are minted under the new producer.
 
-A `NeutralFace` whose `Body` is not the receiver passes SD19's cardinality and
+A `NeutralFace` whose `Body` is not the operand passes SD19's cardinality and
 kind rules on that body's face and is then SD20, so a curved neutral face is
 `ErrDegenerate` wherever it lies. `Walls(b)` is a face predicate over the
 `side(i, j)` roles of `b`'s own producer (`selectorquery.WallsKind`), and the
-complete wall set is the receiver's faces carrying such a role, fillet and
+complete wall set is the operand's faces carrying such a role, fillet and
 chamfer rounds included.
 
 The body `Draft` builds equals the body `Extrude` would build from the same
 sketch with `WithTaper(angle)` and a `Distance` extent toward the far end,
-bit for bit when the receiver is unplaced. §11 asserts it.
+bit for bit when the operand is unplaced. §11 asserts it.
 
 ### 10.2 The subset case (RD3)
 
@@ -727,10 +727,10 @@ negative taper and a holed section refuse.
 
 | Fixture | Asserts |
 |---|---|
-| D1 equivalence | `Draft(Walls(b), NeutralFace{b, Faces(FaceCreatedBy(CapStart(b)))}, 5°)` of F1's untapered box equals F1's body: same volume, area, centroid, vertex coordinates and face count, bit for bit |
+| D1 equivalence | `Draft(ctx, b, Faces(Walls(b)), NeutralFace{b, Faces(FaceCreatedBy(CapStart(b)))}, 5°)` of F1's untapered box equals F1's body: same volume, area, centroid, vertex coordinates and face count, bit for bit |
 | D2 other cap | the neutral face `CapEnd`: the far cap is `capStart`, at `z0`; volume as F1 |
 | D3 negative | `−5°` widens: volume as F5 |
-| D4 retire | the receiver is retired; the result is live; the document holds one body |
+| D4 retire | the operand is retired; the result is live; the document holds one body |
 | D5 refusals | SD17, SD18, SD19 (zero faces, two faces, a cylindrical neutral face), SD20 (`NeutralFrame`; a wall as the neutral face), SD21 (an empty selection), SD22 (the other cap selected), SD23 (a revolve; a drafted body drafted again) |
 
 **PR 2 fixtures**: F1–F7 tessellated at three tolerances, each mesh closed,
@@ -821,7 +821,7 @@ undecided.
 
 ## 13. Decided questions
 
-- **One payload for both entry points**: `draftPayload`, over the receiver's
+- **One payload for both entry points**: `draftPayload`, over the operand's
   or the sketch's record. `Draft` is `Extrude` with a taper over an existing
   prism's section (§10.1), so the two share §7 entirely.
 - **Order**: the tapered extrude ships first (it has no selection or neutral
@@ -838,7 +838,7 @@ undecided.
 - **Exactness**: every draft measurement is `Approximate` (§8).
 - **Extents**: `Distance`, `ToFace`, `ThroughAll`, `Symmetric` and `TwoSided`.
   A crossing extent uses two slabs with one sewn sketch rim (§7, §14).
-- **Neutral plane**: a cap of the receiver, through a `NeutralFace`; a
+- **Neutral plane**: a cap of the operand, through a `NeutralFace`; a
   `NeutralFrame` and an interior neutral level are deferred (SD20, §14).
 - **Selection vocabulary**: `Walls(b)` added as a `FacePredicate` beside
   `CapStart`/`CapEnd`; no nil-selector form.
@@ -857,7 +857,7 @@ every new root file. This document ships with PR 1.
 |---|---|---|---|---|
 | **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `transform`/`placed`; `draft_build.go` (§7); `draft_moments.go` (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class; `Tessellate` refuses the class through its default | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `draft_payload.go`, `draft_build.go`, `draft_moments.go`, `extrude.go`, `capblend*.go` (the band's `draft` view), `verify_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `draft_build_internal_test.go`, `internal/offset2d/sharp_test.go`, `examples/decad_extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
 | **2** | tessellation and the mesh volume proof (DD1), which opens DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `tessellate_draft.go`, `tessellate.go` (dispatch), `tessellate_capblend.go` and `capblend_admit.go` (§9.1's three differences), `draft_payload.go`/`draft_build.go` (`patches`, `bandDelta`), `boolean.go` (the admission arm), `mass_properties.go` (the mesh path needs no arm), `motion_bound.go`, `apitest/draft_mesh_test.go`, `tessellate_draft_internal_test.go` | the PR 2 fixtures | 1 |
-| **3** | `Body.Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `docs/api-design.md` §8/§12, `apitest/draft_test.go`, `draft_internal_test.go`, `examples/decad_draft_example_test.go` | D1–D5 | 1 |
+| **3** | `Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `docs/api-design.md` §8/§12, `apitest/draft_test.go`, `draft_internal_test.go`, `examples/decad_draft_example_test.go` | D1–D5 | 1 |
 | **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `capblend_survey.go` (`capPatchUndercuts`, the patch loop both surveys run), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
 | **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `internal/capcontour/displacement.go`, `internal/capband/`, `draft.go`, `draft_build.go`, `draft_payload.go`, `capblend*.go` (the band view's per-walk amounts), `tessellate_capblend.go` and `internal/tessellation/` (the mesh's per-walk setbacks), `apitest/draft_subset_test.go` | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
 | **6** | RD1 with a one-sided `ToFace` or `ThroughAll`: resolve the stop through `resolveLinearExtent`, then build the existing single-slab draft with the stop's axial bound | `draft_build.go`, `apitest/extrude_taper_test.go` | the far-cap vertex and volume match the selected stop level within their bounds | 5 |
@@ -873,7 +873,7 @@ draft body, `Draft`'s included:
 
 | After | State | Still refused |
 |---|---|---|
-| 1 | landed | every draft body's tessellation, boolean, export, mass and interference reading (DD1's dependants); `Body.Draft` (no entry point); surveys `Suspect`; SD3, SD4, SD11, SD12 |
+| 1 | landed | every draft body's tessellation, boolean, export, mass and interference reading (DD1's dependants); `Draft` (no entry point); surveys `Suspect`; SD3, SD4, SD11, SD12 |
 | 2 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21; booleans, interference and mass of a body the band admission refuses (§9.1) |
 | 3 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21 |
 | 4 | landed | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20 |
