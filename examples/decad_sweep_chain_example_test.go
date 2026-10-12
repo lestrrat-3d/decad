@@ -11,12 +11,11 @@ import (
 )
 
 // SweepChain moves an open sketch chain along a spatial Path, and publishes
-// the ribbon it sweeps out: one wall face per recorded segment, no cap and no
+// the ribbon it sweeps out: one wall face per recorded segment per span, no cap and no
 // closing face, so the result is always a sheet body. This evaluator sweeps
-// one straight path span, which is the case that needs no join between two
-// spans and therefore no rule for pairing their rims. A composite path and an
-// arc span each return decad.ErrUnsupported, shown below, so a caller reads
-// which case is staged rather than guessing.
+// one straight path span, which needs no join between two spans. One exact
+// cardinal line/arc path over one radial source line also builds. The
+// multi-segment composite path below and a standalone arc still refuse.
 //
 // The height comes from the path's own two points rather than from an Extent,
 // which is the whole difference from ExtrudeChain over the same walk.
@@ -78,8 +77,7 @@ func Example_decad_sweep_chain() {
 	fmt.Printf("free edges: %d\n", len(free))
 	fmt.Printf("area: %.4f mm² (%s)\n", surface, area.Exactness)
 
-	// A second span asks for a join between two swept sections, which is the
-	// case this evaluator stages.
+	// This multi-segment chain falls outside the admitted one-line composite.
 	composite, err := decad.NewPath(
 		r3.NewVec(0, 0, 0),
 		decad.LineTo{End: r3.NewVec(0, 0, 20)},
@@ -97,6 +95,6 @@ func Example_decad_sweep_chain() {
 	// sheet: true, solid: false, faces: 3
 	// free edges: 8
 	// area: 278.5398 mm² (Approximate)
-	// composite path: decad: not supported by the current evaluator: SweepChain has no composite path join yet: it sweeps one path span and this path has 2 (docs/sweep-design.md §15.1)
+	// composite path: decad: not supported by the current evaluator: composite SweepChain requires one XY line and a cardinal two-span path
 	// bodies: 1
 }

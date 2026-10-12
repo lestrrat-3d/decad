@@ -35,6 +35,7 @@ The rules for rows live in `docs/layout.md`.
 | `draft_moments.go` | Draft body measurements. See draft §8. |
 | `draft_survey.go` | Draft body undercut survey. See draft DD7. |
 | `sweep.go` | `Document.Sweep`/`SweepChain`, path admission adapters and span payloads. See sweep design. |
+| `sweep_chain_composite.go` | Certified cardinal line/arc chain sheet, indexed rim join, separation and readings. See sweep §15.8. |
 | `sweep_twist.go` | One-span polygon twist admission, true-shape readings and held-shell proof. See sweep §17. |
 | `sweep_twist_stations.go` | Straight-path twist stations, bounded Loft cells and occupied-volume proof. See sweep §17.3. |
 | `sweep_twist_composite.go` | Line-and-quarter-arc twist and shared Loft cell sewing, live faces and mesh proof. See sweep §17.2–§17.3. |

@@ -334,8 +334,8 @@ type ChainSweepOption interface {
 	chainSweepOption()
 }
 
-// chainSweepPayload is SweepChain's own record of a ribbon body: the chain
-// ribbon payload the reduction built, beside the Path that stated its height.
+// chainSweepPayload is SweepChain's own record of a ribbon body: one chain
+// prism reduction or two built chain spans, beside their source Path.
 // It stays DISTINCT from chainPayload for the reason sweepPayload stays
 // distinct from prismPayload — a downstream consumer whose Sweep proof has not
 // landed dispatches on this type and refuses, rather than reading the analytic
@@ -343,15 +343,24 @@ type ChainSweepOption interface {
 type chainSweepPayload struct {
 	chain chainPayload
 	path  *Path
+	spans []chainSweepSpanPayload
 }
 
 // transform is the accumulated rigid placement.
-func (sp chainSweepPayload) transform() r3.Transform { return sp.chain.transform() }
+func (sp chainSweepPayload) transform() r3.Transform {
+	if len(sp.spans) != 0 {
+		return sp.spans[0].transform()
+	}
+	return sp.chain.transform()
+}
 
-// placed re-evaluates the same records under the composed motion (core §8),
-// through the identical reduction the first build took, and restates the
-// path-span role prefix the reduction itself does not mint.
+// placed re-evaluates a one-span reduction under the composed motion (core
+// §8). The cardinal composite refuses until its transformed join plane and
+// mesh stations have their own bound.
 func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	if len(sp.spans) != 0 {
+		return nil, fmt.Errorf(`%w: composite SweepChain placement has no transformed separation proof`, ErrUnsupported)
+	}
 	sp.chain.xform = composed
 	body, err := evalChainExtrudeContext(ctx, d, ref, sp.chain, freeform.NewFreeformWork())
 	if err != nil {
@@ -367,10 +376,11 @@ func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref produce
 // docs/surface-design.md §13.3); the seam's own sentinel wins before any path
 // geometry is read. The path MUST start in the sketch plane with its initial
 // tangent codirectional with that plane's positive normal (ErrDegenerate), and
-// this evaluator sweeps ONE straight span: a composite path and an arc span
-// are ErrUnsupported (docs/sweep-design.md Table SC). The result is always a
-// sheet — Kind() == BodySheet — one wall per recorded segment with no cap and
-// no closing face, so WithSurfaceResult() does not compile against this call.
+// this evaluator sweeps one straight span or §15.8's cardinal line/arc pair;
+// other composite paths and a single arc are ErrUnsupported (Table SC). The
+// result is always a sheet — Kind() == BodySheet — one wall per recorded
+// segment per span with no cap or closing face, so WithSurfaceResult() does
+// not compile against this call.
 // A failed evaluation leaves the document unchanged.
 func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error) {
 	if ctx == nil {
@@ -418,9 +428,7 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 
 	segments := path.Segments()
 	if len(segments) > 1 {
-		return nil, fmt.Errorf(
-			`%w: SweepChain has no composite path join yet: it sweeps one path span and this path has %d (docs/sweep-design.md §15.1)`,
-			ErrUnsupported, len(segments))
+		return d.sweepCompositeChain(ctx, chain, plane, path)
 	}
 	if _, ok := segments[0].(LineTo); !ok {
 		return nil, fmt.Errorf(

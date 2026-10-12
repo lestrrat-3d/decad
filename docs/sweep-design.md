@@ -822,9 +822,9 @@ chain through `RecordChain` instead of a profile through `RecordProfile`.
 | **SC4** | every path condition S3, S4, S7 and S13 through S15 already state — a non-finite point, a degenerate segment, a closed path, a non-finite derived bound, an exhausted budget, a collapse from computed-coordinate rounding | those rows' own sentinels, unchanged |
 | **SC5** | an internal path join is not tangent | `ErrUnsupported`, S6 |
 | **SC6** | a recorded chain segment outside the line, circle and arc set the span builders admit | `ErrUnsupported`, S10 |
-| **SC7** | a composite path, before the increment that builds §15.1's join | `ErrUnsupported` |
+| **SC7** | a composite path outside §15.8's exact cardinal line/half-circle and one-line source class | `ErrUnsupported` |
 | **SC8** | an arc span the chain shell refuses — a walk that does not lie in one closed half-plane of the arc axis, both free ends on that axis, or an interior on-axis junction | exactly what `RevolveChain` answers: `ErrDegenerate`, or `ErrUnsupported` under `docs/surface-design.md` R22 and R33 |
-| **SC9** | an arc span, before the increment that builds §15.6's C2 reduction | `ErrUnsupported`, `docs/surface-design.md` R34 |
+| **SC9** | a one-span arc path, before the standalone arc reduction | `ErrUnsupported`, `docs/surface-design.md` R34 |
 
 **SC2 is decided before SC3, and that order is load-bearing.** A foreign,
 stale, invalid or unrecordable chain names a repair the caller makes in the
@@ -853,14 +853,15 @@ a chain sweep adds that neither sibling has is §15.2's path height bound.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **C1** | `Document.SweepChain` over a one-span `LineTo` path: the sealed `ChainSweepOption` tier, Table SC rows SC1 through SC4, SC6 and SC7, the chain prism reduction, and the four readings §15.5 states for it | the arc reduction, every composite path, D2 through D8 |
-| **C2** | the one-span `ArcThrough` reduction with the chain shell's own axis gates (SC8) | every composite path |
-| **C3** | §15.1's composite join over a tangent line/arc path: the wall-face rim lists, the sew, the separation certificate over chain spans, and the assembled boundary audit | D2 through D8 for a chain sweep |
+| **C1** | `Document.SweepChain` over a one-span `LineTo` path: the sealed `ChainSweepOption` tier, Table SC rows SC1 through SC4 and SC6, the chain prism reduction, and the four readings §15.5 states for it | a standalone arc and composite paths outside §15.8 |
+| **C2** | a one-span `ArcThrough` reduction with the chain shell's own axis gates (SC8) | still staged |
+| **C3a** | §15.8's exact cardinal line/half-circle composite, one source `LineSeg`, indexed wall-rim sew, span-separation proof, area/bounds and sheet mesh | other composite paths and a placed composite sheet |
+| **C3** | §15.1's composite join over other tangent line/arc paths: general wall-face rim lists, sew, separation and boundary audit | staged |
 
-Every downstream row of Table D reads a chain sweep exactly as it reads a
-profile-fed one, and each stays staged on its own terms: a chain sweep's mesh
-is `ErrUnsupported` until D2 lands, and the modify operations have no receiver
-row for it (D8).
+The one-span straight chain sweep reuses the chain prism's exact-quad mesh.
+§15.8's composite uses its own bounded sheet mesh. Other chain-sweep meshes
+remain `ErrUnsupported`, and the modify operations have no receiver row for
+it (D8).
 
 ### 15.7 Required tests
 
@@ -868,6 +869,44 @@ Each row asserts on computed geometry, and each bound assertion is shown to
 fail before it is trusted. `docs/surface-design.md` §15 carries the rows
 themselves, as T190 onward, so the obligations sit beside every other
 chain-fed obligation rather than in two places.
+
+### 15.8 Exact cardinal line/arc chain sheet
+
+The admitted composite has one authenticated `LineSeg` whose complete forward
+walk is `(0,0)` to `(w,0)` on the world XY sketch, with `0 < w < R`.
+The path starts at the origin, rises on +Z by `L > 0`, then follows the XZ
+half-circle through `(R,0,L+R)` to `(2R,0,L)`. The comparisons
+`L+R`, `2R`, `R−w` and `2R−w` must hold as exact binary-rational equalities;
+the transported frames must carry zero displacement. A source or path outside
+this class refuses SC7. A single arc still refuses SC9.
+
+The two spans build from that ONE `ChainRecord`, using the chain prism and
+chain revolve builders. Each has one wall with a start and end source-line
+rim. The first wall's end rim is paired with the second wall's path-start
+rim by source endpoint order, including the arc-axis reversal flag. The
+coordinate-bound comparison can only reject a mismatch; it does not admit
+one. The resulting shared edge uses one vertex per source endpoint and is
+traversed in opposite directions by the two faces. The composite boundary
+audit checks each edge use and every vertex link after the sew.
+
+The line span lies at `z ≤ L`, and the half-circle span at `z ≥ L`.
+The common section is their only contact: `compositesweep.Audit` checks
+each built span's analytic extent against the incoming section plane. Its
+chain prism and chain revolve extent views read the same recorded segment.
+The sheet has two faces, six free edges, area `wL + π(Rw−w²/2)`, and a box
+formed from the two bounded span boxes. `Verify` reports validity undecided:
+the topology and separation checks do not certify every swept-wall contact
+for a more general chain.
+
+The mesh shares the two source-indexed join vertices. The straight face is
+an exact quad; the arc face is a half-annulus divided into angular cells.
+Exact-turn sine/cosine intervals enclose each circular station. The outer
+radius `R` sets the chord sagitta bound; station and source-vertex bounds add
+to each face's boundary bound. Exact triangle-area intervals and the live
+faces' certified area intervals give `VerifyAll` an area slack. The sheet
+publishes no occupied-volume proof. `VerifyNone` keeps identical triangles
+and withholds area and contact results. A placed composite sheet refuses until
+its transformed join-plane and station bounds have their own proof.
 
 ## 16. Mitred polyline sweep with a per-span section scale
 
