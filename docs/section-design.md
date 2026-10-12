@@ -42,7 +42,7 @@ the prism record. A source segment that cannot be recreated or whose
 trim Sketch does not certify returns `ErrUnsupported`. A reconstructed profile
 that does not match the source never becomes a section result.
 
-## Cardinal axis plane of an exact cylinder
+## Cardinal vertical plane of an exact cylinder
 
 The second class reads an exact straight prism whose authenticated source is
 one whole, counterclockwise `CircleSeg` with positive radius and no holes.
@@ -53,15 +53,20 @@ returns `ErrUnsupported`.
 
 The requested plane's V axis must equal either sense of the placed sweep
 axis. Its U axis must equal either sense of one placed source radial axis.
-The requested normal must equal the exact U×V cross product. The plane
-must contain the placed circle centre's sweep axis: the exact dot product
-of its normal with the displacement to that centre is zero. A plane offset
-from the axis or a frame that fails any equality returns `ErrUnsupported`.
+The requested normal must equal the exact U×V cross product. The plane may
+be offset from the placed circle centre's sweep axis. Compute its signed
+normal offset `d` in exact dyadic arithmetic. For a recorded radius `r`,
+require `q = r² − d² > 0`. At zero offset, retain the recorded radius as the
+half-chord. At nonzero offset, use the downward dyadic square root and an
+exact square comparison to require a binary64 half-chord `h` with `h² = q`.
+A tangent plane, an exterior plane, a chord without such an exact `h`, or a
+frame that fails the cardinal equalities returns `ErrUnsupported`.
 
 The source circle denotes a disk; sweeping it through the recorded interval
-denotes disk × interval. The admitted plane cuts the disk on a diameter,
-so the section is the Cartesian product of a radius interval and the two
-recorded cap levels. Compute the four corners in the requested frame using
+denotes disk × interval. The admitted plane cuts the disk on a chord,
+so the section is the Cartesian product of the exact interval
+`[uCenter − h, uCenter + h]` and the two recorded cap levels. Compute the
+four corners in the requested frame using
 exact dyadic arithmetic. A corner whose local coordinate is not finite and
 exactly representable as `float64` returns `ErrUnsupported`; no rounded
 intersection is published as an exact Sketch line. Reconstruct the four-line
@@ -81,8 +86,14 @@ circle result and its cap-plane refusal.
   its axis and check the exact 2×5 mm rectangle. Re-extrude the returned
   profile by 2 mm and require `Tessellate(0.1 mm, VerifyAll)` to certify the
   resulting 20 mm³ prism. Check a translated cardinal cylinder too.
-- Refuse a parallel-offset cardinal plane, a non-cardinal axis plane, and a
-  radius or frame whose derived rectangle corner cannot be held exactly.
+- Extrude a 5 mm whole circle by 10 mm. Section it by a cardinal plane 3 mm
+  from its axis and check the exact 8×10 mm rectangle. Re-extrude the returned
+  profile by 2 mm and require `Tessellate(0.1 mm, VerifyAll)` to certify the
+  resulting 160 mm³ prism. Check another exact chord, both offset signs, and
+  a rigidly placed cylinder.
+- Refuse a tangent or exterior cardinal plane, a positive `q` whose square
+  root is not exactly binary64, a non-cardinal plane, and a radius or frame
+  whose derived rectangle corner cannot be held exactly.
 - A cap plane, oblique plane, sheet body, invalid input, and
   canceled context must return their stated errors without changing the
   body's document.

@@ -36,7 +36,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
 | Coil of a profile with free-form, elliptical or trimmed segments | `ErrUnsupported` (CS7) (`internal/coil/profile.go`) | `docs/helix-design.md` CS7 |
 | Composite path in `SweepChain` | `ErrUnsupported` (R34); one straight span only | `docs/surface-design.md` §1.2 |
-| `Body.Section` outside parallel exact prisms and whole-circle prisms cut by cardinal planes through their sweep axes | `ErrUnsupported`; no exact section profile is available for the other body and plane classes | `docs/section-design.md` |
+| `Body.Section` outside parallel exact prisms and whole-circle prisms cut by cardinal planes with exact half-chords | `ErrUnsupported`; no exact section profile is available for the other body and plane classes | `docs/section-design.md` |
 | General four-plus or varying noncircular curved-section lofts, guide rails and centerlines | `LoftSections` admits its three-section classes and four rounded-rectangle sections with cubic width; `LoftFaces` admits nine ordered caps from one authenticated point-loft Split source; other shapes refuse | `docs/loft-sections-design.md`, `docs/loft-face-sections-design.md`, `docs/loft-design.md` §1 |
 | Point-section loft of a holed profile | `LoftFromPoint` refuses holes because the common apex would have a non-manifold vertex link | `docs/loft-point-design.md` |
 | Detached profile validation past 11585 reconstruction chords; authenticated Loft still stops above its 46340-chord cap | `ErrUnsupported`: R7 sketch reconstruction work budget | `docs/loft-gear-bounds-design.md` §7, `docs/spline-design.md` R7 |
@@ -120,7 +120,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 |---|---|---|
 | Point containment near an approximate boundary or on a body without a verified occupied-volume mesh | `Body.LocatePoint` returns `PointUndecided` or the mesh's `ErrUnsupported`; certified interior, exterior and exact-boundary points build | `docs/point-containment-design.md` |
 | Closest point from a point to a body or face | `Body.DistanceToPoint` measures a solid and `Face.DistanceToPoint` measures a trimmed face; neither returns a nearest point | `docs/point-containment-design.md` §§4–5, `docs/clearance-design.md` |
-| Planar cross-section outside the exact parallel-prism class | `Body.Section` returns `ErrUnsupported` | `docs/section-design.md` |
+| Planar cross-section outside the exact parallel-prism and cardinal whole-circle classes | `Body.Section` returns `ErrUnsupported` | `docs/section-design.md` |
 | Surveys (undercut, wall, concave radius) of bodies other than prisms, revolves, cups, cap blends and one-sided draft bodies; the wall and concave-radius surveys of a draft body | `Verify` reports `Suspect`; a draft body's with `DiagUnsupportedSurveyPayload` | `docs/verification-design.md`, `docs/draft-design.md` DD8 |
 | Wall survey of a sphere's revolve, solid or hollow (its meridian arcs meet the axis at both ends) | `Verify` reports `Suspect` (`DiagUndecidedWall`) | `docs/verification-design.md` |
 | Wall, undercut and concave-radius surveys and clearance on a revolve whose meridian carries a displacement bound | `Verify` reports `Suspect` | `docs/surface-intersection-design.md` §7.2 |

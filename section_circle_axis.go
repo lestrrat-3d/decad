@@ -9,7 +9,7 @@ import (
 )
 
 // cardinalCircleSectionRecord derives a rectangle from a whole-circle prism
-// and a plane containing its sweep axis. Every image and corner is compared
+// and a cardinal plane with an exact chord. Every image and corner is compared
 // in exact dyadic arithmetic before Sketch receives held coordinates.
 func cardinalCircleSectionRecord(pp prismPayload, plane r3.Frame) (profileRecord, bool) {
 	if len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) != 1 ||
@@ -49,13 +49,22 @@ func cardinalCircleSectionRecord(pp prismPayload, plane r3.Frame) (profileRecord
 	))
 	centerWorld := proofarith.DvTransform(pp.xform, centerLocal)
 	delta := proofarith.DvSub(centerWorld, proofarith.DyVec(plane.Origin()))
-	if !proofarith.DvDot(delta, requestN).IsZero() {
-		return profileRecord{}, false
-	}
 	uCenter := proofarith.DvDot(delta, requestU)
 	vCenter := proofarith.DvDot(delta, requestV)
 	r := proofarith.DyOfFinite(radius)
-	uLo, uHi := proofarith.DySubScalar(uCenter, r), proofarith.DyAdd(uCenter, r)
+	halfChord := r
+	if offset := proofarith.DvDot(delta, requestN); !offset.IsZero() {
+		q := proofarith.DySubScalar(proofarith.DyMul(r, r), proofarith.DyMul(offset, offset))
+		if q.Sign() <= 0 {
+			return profileRecord{}, false
+		}
+		h := proofarith.DySqrtDown(q)
+		if !proofarith.DySquareEquals(h, q) {
+			return profileRecord{}, false
+		}
+		halfChord = proofarith.DyOfFinite(h)
+	}
+	uLo, uHi := proofarith.DySubScalar(uCenter, halfChord), proofarith.DyAdd(uCenter, halfChord)
 	axisSense := proofarith.DvDot(axis, requestV)
 	vLo := proofarith.DyAdd(vCenter, proofarith.DyMul(axisSense, proofarith.DyOfFinite(pp.z0)))
 	vHi := proofarith.DyAdd(vCenter, proofarith.DyMul(axisSense, proofarith.DyOfFinite(pp.z1)))
