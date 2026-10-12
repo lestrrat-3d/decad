@@ -99,6 +99,7 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 | 3 | **Selectors, never topology indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature or selector names a face, an edge or a vertex by index or by a bare topology pointer. | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
 | 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(ctx, first, others...) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
+| 6 | **Operations are free functions; queries are methods.** `Fillet(ctx, b, sel, r)`, not `b.Fillet(...)`; `b.Volume()` stays a method (§6.3). | A body-consuming call written as a method reads as an edit of the receiver. A free function states that every body it names is an input and that the result is a new body. |
 
 **What will still churn**, stated honestly: face/edge *counts* may change under an
 exact kernel (canonicalize under evaluator §3's rules, so v1 counts
@@ -114,7 +115,7 @@ Loosely based on the Fusion SDK. The odd parts are thrown away deliberately.
 
 | Idea | Why |
 |---|---|
-| B-rep topology `Body → Lump → Shell → Face → Loop → CoEdge → Edge → Vertex`, with co-edges as directed edge uses | The right model, and it makes agent traversal code map 1:1 onto Fusion's. |
+| B-rep topology `Body → Lump → FaceShell → Face → Loop → CoEdge → Edge → Vertex`, with co-edges as directed edge uses | The right model, and it makes agent traversal code map 1:1 onto Fusion's. |
 | Face geometry as a **tagged surface** (`Plane`/`Cylinder`/`Cone`/`Sphere`/`Torus`/`NURBS`), not everything-is-NURBS | Preserves intent: "this hole is exactly Ø6", not "about 5.997". |
 | `Profile` as a derived, planar, one-outer-loop-plus-N-holes region back-referencing its source curves | Already exactly what `sketch.Profile` is. |
 | Feature owns the faces it created (`Feature.faces`) | The basis of provenance and of selectors. |
@@ -339,7 +340,7 @@ type Body struct{ /* ... */ }
 func (b *Body) Document() *Document // the document that owns this body
 
 func (b *Body) Lumps() []*Lump    // disjoint pieces; len > 1 means disconnected
-func (b *Body) Shells() []*Shell  // Shell.IsVoid() marks an internal cavity, IsOpen() a free boundary
+func (b *Body) Shells() []*FaceShell  // FaceShell.IsVoid() marks an internal cavity, IsOpen() a free boundary
 func (b *Body) Faces() []*Face
 func (b *Body) Edges() []*Edge
 func (b *Body) Vertices() []*Vertex
@@ -403,7 +404,7 @@ implementation has to guess where it falls:
   position produced by a v1 tessellation-backed boolean is approximated exactly as
   its volume is, and says by how much.
 - **Only a predicate the evaluator *decides* is exempt** — `Body.IsSolid`,
-  `Edge.IsConvex`, `Loop.IsOuter`, `Shell.IsVoid`, `Shell.IsOpen`,
+  `Edge.IsConvex`, `Loop.IsOuter`, `FaceShell.IsVoid`, `FaceShell.IsOpen`,
   `Edge.IsFree`. These are answers, not approximations of answers, so they stay
   bare bools. `Body.Kind` joins them as a bare enum on the same terms: it is
   decided by the operation that built the body, and it measures nothing.
@@ -707,10 +708,10 @@ carries its weight:
 // shell (docs/surface-design.md §2.2).
 type Lump struct{ /* ... */ }
 
-// Shell is a connected set of faces.
-type Shell struct{ /* ... */ }
-func (s *Shell) IsVoid() bool // true when the shell bounds an internal cavity
-func (s *Shell) IsOpen() bool // true when the shell has at least one free edge
+// FaceShell is a connected set of faces.
+type FaceShell struct{ /* ... */ }
+func (s *FaceShell) IsVoid() bool // true when the shell bounds an internal cavity
+func (s *FaceShell) IsOpen() bool // true when the shell has at least one free edge
 
 // Vertex is a topological point.
 type Vertex struct{ /* ... */ }
@@ -726,7 +727,7 @@ of a profile with a hole, and for a Boolean result with an enclosed negative
 boundary component, such as a `Cut` by a wholly embedded tool. `Extrude` and
 `Loft` of holed profiles make passages between their end caps. An admitted
 open-path `Sweep` does the same. A partial `Revolve` opens its groove at the
-angular caps. Those bodies have one connected, non-void shell. A `Shell`
+angular caps. Those bodies have one connected, non-void shell. The `Shell`
 operation that removes a face leaves an opening, so its inner and outer skins
 connect. `Shell` accepts the closed `WithNoOpenings()` form of
 `docs/modify-reach-design.md` §9.2 and returns `ErrUnsupported` for it on every
@@ -734,6 +735,80 @@ receiver until reach §14 rows C and D build it. Sheet shells
 always report `IsVoid() == false`, even when closed
 (`docs/surface-design.md` §2.2). `Stitch` refuses a closed assembly whose
 components are not proven separate, rather than publish an unrecorded cavity.
+
+### 6.3 Operation form: free functions, and methods for queries
+
+An operation is a package-level function. A query is a method. This section
+owns the rule; a companion design that writes an operation as a method
+(`func (b *Body) Fillet(...)`, `func (d *Document) Extrude(...)`) means the
+free function the table below names for it.
+
+**An operation is any call that builds a body, retires a body, or registers a
+body in a document.** It is a free function, so the document and every body it
+consumes appear in the argument list. Calls read the same whether they take one
+body (`Fillet(ctx, b, sel, r)`), two (`Cut(ctx, target, tool)`) or none
+(`Extrude(doc, s, p, e)`).
+
+**A query is a read that changes nothing.** It retires no body, registers no
+body, and leaves `Document.Bodies()` as it found it. A query is a method on the
+value it reads, so a retired body still answers it (§6). The query set is:
+
+- topology and identity reads: `Faces`, `Edges`, `Vertices`, `Lumps`, `Shells`,
+  `Kind`, `IsSolid`, `Origin`, `Document`, and every method on `Face`, `Edge`,
+  `Loop`, `CoEdge`, `Vertex`, `Lump` and `FaceShell`;
+- measurements: `Bounds`, `Volume`, `Area`, `Centroid`, `MassProperties`,
+  `LocatePoint`, `DistanceToPoint`, `ExtremeFacesByCentroid`;
+- `Tessellate`, which returns a `Mesh` and registers nothing;
+- the document reads `Bodies`, `Verify`, `VerifyMotion`, `VerifyLinkage`,
+  `VerifyJointBox`, `ContactPair`, `SweepPair` and `SweptBox`, each of which
+  returns a report and leaves the document unchanged;
+- the accessors and report methods on result types (`Report`, `MotionReport`,
+  `SweepReport`, `Path`, `Mesh` and the like).
+
+**The topology type is `FaceShell`.** The package-level name `Shell` belongs to
+the shell operation, so the connected set of faces between a `Lump` and its
+`Face`s is `FaceShell`, and `Body.Shells()` returns `[]*FaceShell`. A companion
+design that writes `Shell` as the topology type (`Shell.IsVoid`, `*Shell`) means
+`FaceShell`.
+
+**Form of a free function.** Parameters appear in this order: `ctx` when the
+operation takes one, then the owning `*Document` when no body argument
+identifies it, then the body or bodies operated on, then the remaining inputs,
+then options. An operation that takes a body reaches the document through that
+body (§6) and takes no `*Document` argument. An operation that takes no body
+(a feature built from a sketch) takes the `*Document` first.
+
+| Shipped method form | Free function |
+|---|---|
+| `Body.Fillet`, `Body.Chamfer` | `Fillet(ctx, b, sel, r, opts...)`, `Chamfer(ctx, b, sel, d, opts...)` |
+| `Body.Shell` | `Shell(ctx, b, sel, t, opts...)` |
+| `Body.Draft`, `Body.Offset`, `Body.Thicken` | `Draft(ctx, b, ...)`, `Offset(ctx, b, ...)`, `Thicken(ctx, b, ...)` |
+| `Body.Trim`, `Body.Extend` | `Trim(ctx, b, tool, side)`, `Extend(ctx, b, edges, tool)` |
+| `Document.Split` | `Split(ctx, target, tool)` |
+| `Body.Patch`, `Body.Unstitch` | `PatchEdges(ctx, b, sel)`, `Unstitch(ctx, b)` |
+| `Document.Patch` | `PatchProfile(ctx, doc, s, p)`, so the two patch forms stop sharing one name |
+| `Body.Placed`, `Body.ScaledAt` | `Placed(ctx, b, t)`, `ScaledAt(ctx, b, anchor, factor)` |
+| `Body.PlacedCopy`, `Body.Duplicate` | `PlacedCopy(ctx, b, t)`, `Duplicate(ctx, b)` |
+| `Body.Mirrored`, `Body.MirroredCopy` | `Mirrored(ctx, b, plane, opts...)`, `MirroredCopy(ctx, b, plane)` |
+| `Body.Patterned`, `Body.PatternCopies` | `Patterned(ctx, b, spec)`, `PatternCopies(ctx, b, spec)` |
+| `Document.Extrude`, `Revolve`, `Coil` | `Extrude(doc, s, p, e, opts...)`, `Revolve(doc, s, p, axis, a, opts...)`, `Coil(ctx, doc, s, p, axis, pitch, turns, opts...)` |
+| `Document.Sweep`, `Loft`, `LoftFaces`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
+| `Document.ExtrudeChain`, `RevolveChain`, `SweepChain`, `LoftChain` | the same names with the `Document` argument leading |
+| `Document.Remove` | `Remove(b)` |
+
+`Union`, `Cut`, `Intersect`, `CombineJoin` and `Stitch` already have this form.
+
+**A builder is not an operation.** `Linkage` is a mutable value that records
+joints and loops, and its methods (`Close`, `DeclareJointContact`, `Ground`,
+`Links`, `Loops`, `Configuration`, `PoseAt`, `Schedule`) edit or read that
+value. They stay methods. A `Linkage` method that built or retired a body
+would be an operation and would follow the rule above.
+
+**New API follows the rule.** A new public entry point that builds, retires or
+registers a body is a free function. A new read is a method on the value it
+reads. The code in the root package still carries the method forms in the table;
+each migrates to its free function in the change that updates that operation's
+companion design.
 
 ## 7. The sketch seam
 
