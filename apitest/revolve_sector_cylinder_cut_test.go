@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -15,7 +16,7 @@ func TestRevolveSectorAnnularCylinderCutVerified(t *testing.T) {
 	doc, hub, lug, _, _ := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
 	joined, err := decad.Union(t.Context(), hub, lug)
 	require.NoError(t, err)
-	requireRevolveSectorCylinderCut(t, doc, joined, 1)
+	requireRevolveSectorCylinderCut(t, doc, hub, joined, 1)
 }
 
 func TestRevolveSectorRepeatedAnnularCylinderCutVerified(t *testing.T) {
@@ -26,14 +27,25 @@ func TestRevolveSectorRepeatedAnnularCylinderCutVerified(t *testing.T) {
 	require.NoError(t, err)
 	joined, err := decad.Union(t.Context(), hub, lug, second)
 	require.NoError(t, err)
-	requireRevolveSectorCylinderCut(t, doc, joined, 1)
+	requireRevolveSectorCylinderCut(t, doc, hub, joined, 1)
 }
 
 func TestRevolveSectorStraightBandCylinderCutVerified(t *testing.T) {
 	doc, hub, lug, _, _ := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
 	joined, err := decad.Union(t.Context(), hub, lug)
 	require.NoError(t, err)
-	requireRevolveSectorCylinderCut(t, doc, joined, 2)
+	requireRevolveSectorCylinderCut(t, doc, hub, joined, 2)
+}
+
+func TestRevolveSectorRepeatedStraightBandCylinderCutVerified(t *testing.T) {
+	doc, hub, lug, _, _ := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
+	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
+	require.NoError(t, err)
+	second, err := decad.Copy(t.Context(), lug, decad.WithCopyPlacement(turn))
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), hub, lug, second)
+	require.NoError(t, err)
+	requireRevolveSectorCylinderCut(t, doc, hub, joined, 2)
 }
 
 func TestRevolveSectorCylinderCutRadiusBoundariesLeaveBodiesLive(t *testing.T) {
@@ -103,7 +115,7 @@ func revolveSectorCylinderTool(t *testing.T, doc *decad.Document,
 }
 
 func requireRevolveSectorCylinderCut(t *testing.T, doc *decad.Document,
-	joined *decad.Body, radius float64) {
+	hub, joined *decad.Body, radius float64) {
 	t.Helper()
 	tool := revolveSectorCylinderTool(t, doc, radius, 4, 6, 0)
 	before, err := joined.Volume()
@@ -121,4 +133,44 @@ func requireRevolveSectorCylinderCut(t *testing.T, doc *decad.Document,
 	require.True(t, mesh.VolumeVerified())
 	require.Equal(t, 0, revolveLugEuler(mesh))
 	require.Contains(t, doc.Bodies(), cut)
+	highCapX := math.Inf(-1)
+	for _, original := range hub.Faces() {
+		if plane, planar := original.Surface().(decad.Plane); planar {
+			highCapX = max(highCapX, plane.Frame.Origin().X)
+		}
+	}
+	checkedCaps := 0
+	for _, original := range hub.Faces() {
+		plane, planar := original.Surface().(decad.Plane)
+		if !planar || (radius > 1.5 && plane.Frame.Origin().X != highCapX) {
+			continue
+		}
+		checkedCaps++
+		found := false
+		for _, current := range cut.Faces() {
+			if _, planar := current.Surface().(decad.Plane); planar &&
+				slices.Equal(original.Origins(), current.Origins()) {
+				found = true
+			}
+		}
+		require.True(t, found, "a Revolve cap lost its source origins")
+	}
+	if radius > 1.5 {
+		require.Equal(t, 1, checkedCaps)
+	} else {
+		require.Equal(t, 2, checkedCaps)
+	}
+	wallFound := false
+	for _, original := range tool.Faces() {
+		if _, cylindrical := original.Surface().(decad.Cylinder); !cylindrical {
+			continue
+		}
+		for _, current := range cut.Faces() {
+			if _, cylindrical := current.Surface().(decad.Cylinder); cylindrical &&
+				slices.Equal(original.Origins(), current.Origins()) {
+				wallFound = true
+			}
+		}
+	}
+	require.True(t, wallFound, "the bore wall lost its source origins")
 }
