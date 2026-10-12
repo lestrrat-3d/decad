@@ -846,6 +846,9 @@ and adds the image's rounding. It multiplies the source area allowance by the
 scale squared and the occupied-volume difference by the scale cubed, then
 charges the rounded boundary's area and swept volume. `buildFacetedBody`
 audits the image's topology and rebuilds bounded volume and area readings.
+The centroid's diameter allowance takes the larger of the scaled source
+diameter and the rounded image's held coordinate-box diagonal plus twice
+its mesh displacement. This includes any vertex movement in the image.
 The source-face groups keep their origin roles; each planar frame's origin is
 scaled around the caller's anchor. A circular source wall becomes a `Faceted`
 face with the inherited boundary bound; this path has no scaled curved-normal

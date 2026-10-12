@@ -93,7 +93,11 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 	next.verts, next.tris = mesh.Verts, mesh.Tris
 	next.vertexBound, next.meshBound = mesh.VertexBound, mesh.MeshBound
 	next.volSymDiff, next.areaSlack = mesh.VolSymDiff, mesh.AreaSlack
-	next.dPair = proofbound.ProductUpper(fp.dPair, s)
+	// Scaling the old diameter does not include the held vertices' new
+	// rounding or an embedding adjustment. The centroid's yardstick must
+	// cover both the true body and this rounded held body.
+	next.dPair = max(proofbound.ProductUpper(fp.dPair, s),
+		facetedSourceDiameterUpper(next.verts, next.meshBound))
 	next.xform = r3.Identity()
 	next.pointPlaneSourceEligible = false
 	if pointSlab {

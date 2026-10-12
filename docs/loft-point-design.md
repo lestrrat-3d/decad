@@ -125,6 +125,8 @@ float box or refuse the image. Each source vertex bound grows by the factor
 plus that vertex's image rounding. The occupied-volume gap grows by the cube
 of the factor plus the rounded boundary's swept volume. Area slack grows by
 the square of the factor plus the rounded facets' area allowance.
+The body centroid's diameter allowance includes the scaled source diameter
+and the new held coordinate-box diagonal plus twice its mesh displacement.
 
 The result keeps the original `pointPlaneSliceRecord`, including the source
 Sketch revision, far station order and rational lower/upper ray-plane maps.
