@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    4.67s over 9 tests
-#   shard 1:    5.32s over 284 tests
+#   shard 1:    5.32s over 285 tests
 #   shard 2:   10.22s over 137 tests
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  188.10s over 140 tests
@@ -132,6 +132,7 @@
 1	0.00	TestChainStep
 1	0.00	TestChainWalkEndpointAllowChargesComputedCircularEnds
 1	0.00	TestChainWalkEndpointAllowKeepsExactArcEndsAtZero
+1	0.00	TestChamferAxisGapIntegerMatchesRational
 1	0.00	TestChamferMiddleGridKeepsEveryOverlappingBox
 1	0.00	TestChamferSplitRingGridContainsEveryExactReachCandidate
 1	0.00	TestChargesScaleWithOperandWidth
