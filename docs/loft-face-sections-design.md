@@ -120,6 +120,8 @@ toe Cut and heel Intersect retain an immutable source record on the unplaced
 faceted result. The record identifies the two
 surviving tool-cap face groups. A later source-specific Union rechecks the
 original Sketch revision, map denominators, cone order, and both cap groups.
+The curved source gate rederives both exact cone meridians from the live tool
+bodies and rejects changed cached apex, far-plane, or slope values.
 Every other Intersect result has no continuation record. Placement drops it.
 The current spiral source-specific Union still admits only its nine-cap class.
 

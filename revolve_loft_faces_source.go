@@ -111,7 +111,9 @@ func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 func revolveLoftFacesTrimCurrent(p facetedPayload, trim *loftFacesTrimRecord) bool {
 	if p.xform != r3.Identity() || trim == nil || trim.source == nil ||
 		!pointSourceCurrent(trim.source) ||
-		trim.toe == nil || trim.heel == nil || len(trim.maps) < 3 || len(trim.maps) > 64 ||
+		!revolveLoftFacesConeCurrent(trim.toeTool, trim.toe) ||
+		!revolveLoftFacesConeCurrent(trim.heelTool, trim.heel) ||
+		len(trim.maps) < 3 || len(trim.maps) > 64 ||
 		len(trim.bounds) != len(trim.maps) ||
 		!orderedLoftFacesConeLimits(trim.toe, trim.heel, trim.base) ||
 		!trim.base.loftFacesPrimitive || trim.base.loftFacesCap == nil ||
@@ -151,6 +153,18 @@ func revolveLoftFacesTrimCurrent(p facetedPayload, trim *loftFacesTrimRecord) bo
 		}
 	}
 	return true
+}
+
+// Boolean source proofs read exact cone parameters from the live tool
+// meridians. The retained trim scalars alone are mutable cached data.
+func revolveLoftFacesConeCurrent(tool *Body, recorded *pointConeLimit) bool {
+	if tool == nil || recorded == nil || recorded.apex == nil ||
+		recorded.far == nil || recorded.slope == nil {
+		return false
+	}
+	live, ok := exactPointCone(tool)
+	return ok && recorded.apex.Cmp(live.apex) == 0 &&
+		recorded.far.Cmp(live.far) == 0 && recorded.slope.Cmp(live.slope) == 0
 }
 
 func revolveLoftFacesSameCapBound(a, b loftFaceCapBounds) bool {

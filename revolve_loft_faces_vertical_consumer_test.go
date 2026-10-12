@@ -39,6 +39,24 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 	if contacts == 0 || misses == 0 {
 		t.Fatalf("real source did not exercise both vertical answers: contacts=%d misses=%d", contacts, misses)
 	}
+	t.Run("changed toe cone slope", func(t *testing.T) {
+		original := proof.trim.toe.slope
+		defer func() { proof.trim.toe.slope = original }()
+		proof.trim.toe.slope = lfAdd(original, lfF(0.001))
+		assertChangedCurvedConeRefuses(t, tooth, proof)
+	})
+	t.Run("changed heel cone apex", func(t *testing.T) {
+		original := proof.trim.heel.apex
+		defer func() { proof.trim.heel.apex = original }()
+		proof.trim.heel.apex = lfAdd(original, lfF(0.001))
+		assertChangedCurvedConeRefuses(t, tooth, proof)
+	})
+	t.Run("changed toe tool", func(t *testing.T) {
+		original := proof.trim.toeTool
+		defer func() { proof.trim.toeTool = original }()
+		proof.trim.toeTool = proof.trim.heelTool
+		assertChangedCurvedConeRefuses(t, tooth, proof)
+	})
 	t.Run("extra blank face", func(t *testing.T) {
 		shell := blank.Shells()[0]
 		original := shell.faces
@@ -136,6 +154,22 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 			return err == nil && complete
 		})
 	})
+}
+
+func assertChangedCurvedConeRefuses(t *testing.T, tooth *Body,
+	proof *revolveLoftFacesSourceCertificate) {
+	t.Helper()
+	if revolveLoftFacesTrimCurrent(tooth.payload.(facetedPayload), proof.trim) {
+		t.Fatal("changed cone retained a current source record")
+	}
+	_, certified, err := certifyRevolveLoftFacesSource(t.Context(), proof.blank, tooth)
+	if err != nil || certified {
+		t.Fatalf("changed cone reached source admission: %v, %t", err, certified)
+	}
+	_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+	if err != nil || complete {
+		t.Fatalf("changed cone reached all-side consumer: %v, %t", err, complete)
+	}
 }
 
 func rejectChangedCurvedSourceOwner(t *testing.T, tooth *Body, ref FeatureRef,
