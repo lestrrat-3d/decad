@@ -447,6 +447,9 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	if op == meshbool.OpUnion {
 		eval.payload.obliqueBoss = recognizeObliqueBoss(a, b)
 	}
+	if op == meshbool.OpCut {
+		eval.payload.crossCylinderBore = recognizeCrossCylinderBore(a, b)
+	}
 
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, eval.payload, eval.audit, eval.volume, eval.volumeRat)
 	if err != nil {

@@ -105,7 +105,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 | **RX3** | `stackedPrismPayload` | through its face view, `docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
 | **RX5** | `cupPayload`: a two-slab `stackedPrismPayload` record beside the shell morphology (§9.1) | base S3 | base S3 |
-| **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | equal-distance `Chamfer` of both complete outer cap loops for an unplaced, authenticated loft/cylinder join or its certified centered-bore Cut (`docs/loft-cylinder-boolean-design.md`); otherwise SX9 | SX9 |
+| **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | equal-distance `Chamfer` of both outer cap loops for an authenticated loft/cylinder join or centered-bore Cut (`docs/loft-cylinder-boolean-design.md`), or one positive cross-cylinder bore mouth (`docs/cross-cylinder-bore-chamfer-design.md`); otherwise SX9 | SX9 |
 | **RX7** | `brepPayload` (`docs/general-boolean-design.md` §4) | `docs/brep-modify-design.md` Table RB; outside it, SX16 | the same |
 | **RX8** | `loftPayload` | `Fillet` on analytic corners of matching axial sections (loft §17); equal-distance `Chamfer` on both complete held outer cap loops of a matching axial loft with zero holes or one certified circular bore (loft §18); other chamfers are base S3 | base S3 |
 | **RX9** | `draftPayload` with one positive-taper whole circular wall and its near section at the start level | draft §10.4–§10.5 | Removing its far cap inward builds draft §10.6's cup; other calls are base S3 |
@@ -143,7 +143,7 @@ more specific SX row replaces that base refusal.
 | **SX6** | cap-loop offset loses a carrier, reaches an empty circular offset, or has no regular radius-`r` envelope; LF9's exact-radius inward arc with straight G1 neighbours is the fillet exception (`docs/vertex-blend-design.md`) | no regular requested blend | `ErrDegenerate` |
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
 | **SX8** | shell side/no-opening extension is used on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap; revolve meridian is holed or meets the axis along more than one walk; a revolve wall's offset reaches the axis | body exists outside extension | `ErrUnsupported` |
-| **SX9** | any modify op on `facetedPayload` outside RX6's certified outer-cap chamfer | body exists; no admitted source and topology certificate for the selected modification | `ErrUnsupported` |
+| **SX9** | any modify op on `facetedPayload` outside RX6's certified chamfer classes | body exists; no admitted source and topology certificate for the selected modification | `ErrUnsupported` |
 | **SX10** | another modify op on `capBlendPayload`, or on a `stackedPrismPayload` whose face view refuses (`docs/brep-modify-design.md` SB2) | body exists; compound feature composition not built | `ErrUnsupported` |
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
@@ -1613,14 +1613,16 @@ A build-time question has no `Suspect`. Any proof the builder cannot finish is
 `ErrUnsupported`.
 
 `facetedPayload` stays excluded even when `meshBound == 0`, except for RX6's
-authenticated loft/cylinder cap route. Its groups retain provenance and a
-planar flag, not general analytic carrier or trim intent. The RX6 route reads
+authenticated routes. Its groups retain provenance and a planar flag, not
+general analytic carrier or trim intent. The loft/cylinder cap route reads
 the immutable Union or Bore Cut source record and requires both complete
 outer cap loops. It denotes one rational polyhedral cutter built from offset
 samples of the certified held cap polygons. That same cutter applies to the
 true source and held joined solid. The inset sampling bound charges deviation
 from the requested held-polygon offset, and the published boundary and volume
 bounds charge rounding of the final mesh. No smooth-spline offset is denoted.
+The perpendicular cylinder Cut retains two full source circles for a
+separate one-mouth chamfer (`docs/cross-cylinder-bore-chamfer-design.md`).
 Other faceted modifications remain SX9.
 
 **What SX9 leaves a caller proving.** Outside RX6, a caller whose
@@ -1890,9 +1892,9 @@ Each PR lands its result payload, structural topology, measurement path, and
 tests together. A PR may leave a DX question staged only where
 Table DX explicitly says `Suspect` or `ErrUnsupported`.
 
-The authenticated loft/cylinder cap route is RX6's only SX9 exception. Brep
-and stacked receivers are `docs/brep-modify-design.md`'s, not another row in
-this extension.
+The authenticated loft/cylinder cap and perpendicular cross-bore routes are
+RX6's SX9 exceptions. Brep and stacked receivers are
+`docs/brep-modify-design.md`'s, not another row in this extension.
 
 ## Implementation notes
 

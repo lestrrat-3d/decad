@@ -15,6 +15,7 @@ The rules for rows live in `docs/layout.md`.
 | `draft_circle_shell.go` | Builds the inward cup of a positive-taper circular draft through a bounded meridian revolution. See draft §10.6. |
 | `loft_fillet.go` | Rewrites matching loft records at selected analytic and fitted-spline root corners. See loft §17. |
 | `oblique_boss_fillet.go` / `oblique_boss_proof.go` | Builds and proves the complete tilted cylinder boss-root fillet. See oblique-boss-fillet design. |
+| `cross_cylinder_bore_chamfer.go` / `_mesh.go` / `_proof.go` | Builds and proves one perpendicular cylinder bore-mouth chamfer. See cross-cylinder-bore-chamfer design. |
 | `loft_fillet_audit.go` | Audits rewritten loft sections and nonadjacent clearance. See loft §17. |
 | `loft_fit_fillet.go` | Finds a numerical fit/circle root-fillet candidate. See loft §17. |
 | `loft_fit_root_cert.go` | Certifies the ideal fit/circle tangent contact. See loft §17. |

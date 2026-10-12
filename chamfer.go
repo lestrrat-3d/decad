@@ -37,7 +37,8 @@ import (
 // boolean result takes routes P and E of docs/brep-modify-design.md and route
 // L of docs/modify-general-design.md (brep_modify.go); any other non-prism
 // receiver is S3 (ErrUnsupported), except the bounded tapered full-circle
-// far-rim case in docs/draft-design.md §10.5.
+// far-rim case in docs/draft-design.md §10.5 and the source-authenticated
+// perpendicular cylindrical bore mouth in docs/cross-cylinder-bore-chamfer-design.md.
 //
 // Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
 // which the fillet does not: a selection covering every geometric edge of one
@@ -269,7 +270,14 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		}
 	}
 	if fp, ok := b.payload.(facetedPayload); ok {
-		body, recognized, err := tryLoftCylinderCapChamfer(ctx, b, fp, edges, dmm, dDelta, asym)
+		body, recognized, err := tryCrossCylinderBoreMouthChamfer(ctx, b, fp, edges, dmm, dDelta, asym)
+		if recognized || err != nil {
+			if err != nil {
+				return nil, err
+			}
+			return commitModifyResult(ctx, b, body)
+		}
+		body, recognized, err = tryLoftCylinderCapChamfer(ctx, b, fp, edges, dmm, dDelta, asym)
 		if recognized || err != nil {
 			if err != nil {
 				return nil, err

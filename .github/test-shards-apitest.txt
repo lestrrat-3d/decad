@@ -6,7 +6,7 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0:    0.01s over 1 test
+#   shard 0:   59.07s over 8 tests
 #   shard 1:    0.98s over 116 tests
 #   shard 2:   37.30s over 206 tests
 #   shard 3:   82.95s over 226 tests
@@ -18,12 +18,14 @@
 #   shard 9:  118.05s over 202 tests
 #   shard 10:   0.01s over 1 test
 #
-0	2.43	TestUnionMirroredRadialTabsWithNearAxialCopy
+0	0.22	TestCrossCylinderBoreMouthChamferRefusesUnprovedCases
+0	45.15	TestCrossCylinderBoreMouthChamferVerified
 0	0.01	TestLoftEmbeddedFitFlanksKeepOriginalCurve
 0	2.70	TestLoftMirrorCylinderUnionJoinsRepeatedRadialTabs
 0	3.30	TestLoftMirrorCylinderBoreCutsRepeatedRadialTabs
 0	3.01	TestLoftMirrorCylinderBoreRejectsToolEndingInsideUpperHalf
 0	2.25	TestLoftMirrorCylinderBorePreservesNearAxialBridge
+0	2.43	TestUnionMirroredRadialTabsWithNearAxialCopy
 1	0.01	TestBlindPocketPlacedAndVerified
 1	0.02	TestBodyPatchCircularPrismNestedFillMeshRefuses
 1	0.02	TestBodyPatchCircularPrismOneRimTessellates
