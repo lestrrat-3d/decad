@@ -280,6 +280,17 @@ still needs an angular occupancy proof from the live Sketch region.
 The original point loft stores its computed source rectangle by value when
 published. A changed source rectangle refuses before a whole-circle miss is used.
 
+An exact simple-loop gate uses the current Sketch profile and its newly
+recorded whole boundary. Every current entity must occur once on that walk,
+so another contour cannot change occupancy. Lines and fitted Bezier spans
+need a strictly monotone coordinate. Whole arcs need equal exact endpoint
+radii and a certified sweep shorter than a half-turn. Exact control hulls
+and arc boxes must separate nonadjacent cells. Adjacent cells must meet at
+one exact endpoint and lie on opposite strict sides of one coordinate.
+One arc that alone passes an axis extremum determines the loop direction.
+The real Sketch profile produces eight cells for the focused neutral case.
+This gate does not decide which tool-cap angles the source occupies.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
