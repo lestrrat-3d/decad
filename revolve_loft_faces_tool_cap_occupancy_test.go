@@ -70,6 +70,13 @@ func TestRevolveLoftFacesHeelVerticalArcConsumesLiveNeutralSource(t *testing.T) 
 		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, changed)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "the occupied arc must name its live cap origin")
+		originalOrigins := circle.capFace.origins
+		t.Cleanup(func() { circle.capFace.origins = originalOrigins })
+		circle.capFace.origins = []FeatureRef{{Role: "unrelated cap"}}
+		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, circle)
+		require.NoError(t, arcErr)
+		require.False(t, certified, "a replaced live cap-face origin cannot own the arc")
+		circle.capFace.origins = originalOrigins
 		return
 	}
 	t.Fatal("the real heel cone has no vertical contact circle at X=6")

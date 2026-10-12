@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"slices"
 
 	"github.com/lestrrat-3d/sketch"
 )
@@ -58,6 +59,7 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 		proof.trim.heelCapGroup < 0 || proof.trim.heelCapGroup >= len(payload.groups) ||
 		len(payload.groups[proof.trim.heelCapGroup].origins) != 1 ||
 		payload.groups[proof.trim.heelCapGroup].origins[0] != circle.capOrigin ||
+		!revolveLoftFacesToolCapFaceOriginCurrent(circle) ||
 		uniqueResultSourceFace(proof.tooth, proof.trim.heelCapGroup) != circle.capFace {
 		return nil, false, nil
 	}
@@ -126,6 +128,10 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 	return &revolveLoftFacesToolCapOccupiedArc{circle: circle,
 		negativeZ: *negative, positiveZ: *positive,
 		throughPositiveY: negative.outward}, true, nil
+}
+
+func revolveLoftFacesToolCapFaceOriginCurrent(circle revolveLoftFacesToolCapCircle) bool {
+	return circle.capFace != nil && slices.Contains(circle.capFace.Origins(), circle.capOrigin)
 }
 
 func revolveLoftFacesToolBoundaryOutward(edge sketch.BoundaryEdge,
