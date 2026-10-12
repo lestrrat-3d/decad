@@ -353,8 +353,8 @@ func WithOffsetSide(side OffsetSide) OffsetOption
 type ChainExtrudeOption interface{ option.Interface; chainExtrudeOption() }
 type ChainRevolveOption interface{ option.Interface; chainRevolveOption() }
 
-func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
-func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
+func ExtrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
+func RevolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
 func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
 
 // The free-edge selector predicate.
@@ -365,9 +365,9 @@ Every one of these that takes a context bounds cancellation in its own
 construction and audit paths, returns `ctx.Err()` unchanged before commit, and
 leaves the document and every operand unchanged, exactly as
 `docs/api-design.md` §8 states for every other operation. `ExtrudeChain` and
-`RevolveChain` take none, for the same reason `Extrude` and `Revolve` take
-none: each resolves an extent and walks a recorded boundary in bounded work,
-with no audit to poll (§13.2).
+`RevolveChain` take a `ctx` on the same terms: each checks it at entry, between
+the record, extent and build steps, and inside the chain evaluator, and a
+canceled call returns `ctx.Err()` before commit (§13.2).
 
 `Stitch` and `Unstitch` consume their operands and register their results, on
 `docs/api-design.md` §6's uniform terms: `Stitch` retires every body handed
@@ -385,7 +385,7 @@ are what a caller measures, stitches or thickens together (§17.1).
 Worked, end to end — a closed box from three sheets:
 
 ```go
-walls, err := doc.Extrude(s, prof,
+walls, err := decad.Extrude(ctx, doc, s, prof,
     decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
     decad.WithSurfaceResult())                    // 4 walls, 8 free edges
 bottom, err := doc.Patch(ctx, s, prof)            // 1 face at z = 0
@@ -2266,10 +2266,11 @@ type Section interface{ *sketch.Profile | *sketch.Chain }
 func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch,
     sec S, path *Path, opts ...SweepOption) (*Body, error)
 
-func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent,
-    opts ...ChainExtrudeOption) (*Body, error)
-func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis,
-    a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
+func ExtrudeChain(ctx context.Context, d *Document, s *sketch.Sketch,
+    ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
+func RevolveChain(ctx context.Context, d *Document, s *sketch.Sketch,
+    ch *sketch.Chain, axis Axis, a AngularExtent,
+    opts ...ChainRevolveOption) (*Body, error)
 ```
 
 `Section` is declared once (`section_input.go`) as the sketch geometry a
@@ -2281,8 +2282,8 @@ compile time, and a typed-nil section of either kind returns `ErrDegenerate`.
 Every entry point takes the sketch beside the section, for the reason `Extrude`
 does: a section's geometry is plane-local and the plane is the sketch's
 (`docs/api-design.md` §7). `ExtrudeChain` and `RevolveChain` resolve their
-extent through the vocabulary their profile-fed siblings use, and neither takes
-a context, exactly as `Extrude` and `Revolve` take none.
+extent through the vocabulary their profile-fed siblings use, and each takes a
+context, as `Extrude` and `Revolve` do.
 
 **`Sweep` keeps two payloads behind its one signature.** It type-switches on
 the section and calls the profile build or the chain build. The profile build
