@@ -132,7 +132,7 @@ func TestCrossCylinderBoreMouthChamferRefusesUnprovedCases(t *testing.T) {
 			if tc.placed {
 				motion, err := r3.Translation(r3.NewVec(0, 0, 1))
 				require.NoError(t, err)
-				receiver, err = bored.PlacedCopy(t.Context(), motion)
+				receiver, err = decad.Copy(t.Context(), bored, decad.WithCopyPlacement(motion))
 				require.NoError(t, err)
 				centerZ++
 			}
