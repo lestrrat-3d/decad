@@ -27,6 +27,12 @@ type revolveSectorPlan struct {
 
 type revolveSectorVolumeRefineError struct{ gain, bound float64 }
 
+type revolveSectorCapRefineError struct{ limit float64 }
+
+func (r *revolveSectorCapRefineError) Error() string {
+	return fmt.Sprintf("%v: joined sectors need a finer cone cap", ErrUnsupported)
+}
+
 func (r *revolveSectorVolumeRefineError) Error() string {
 	return fmt.Sprintf("%v: joined sectors have no certified occupied volume", ErrUnsupported)
 }
@@ -46,10 +52,18 @@ func buildRevolveLoftSectorsJoin(ctx context.Context, d *Document, ref producerI
 		return nil, nil, fmt.Errorf("%w: sector source is incomplete or stale", ErrUnsupported)
 	}
 	sag := 0.01
+	capLimit := math.Inf(1)
 	for attempt := range 8 {
-		body, ring, err := buildRevolveLoftSectorsAtSag(ctx, d, ref, cert, sources, sag)
+		body, ring, err := buildRevolveLoftSectorsAtSag(ctx, d, ref, cert, sources, sag, capLimit)
 		if err == nil {
 			return body, ring, nil
+		}
+		if refine, ok := err.(*revolveSectorCapRefineError); ok {
+			if attempt == 7 || !(refine.limit > 0 && refine.limit < capLimit) {
+				return nil, nil, err
+			}
+			capLimit = refine.limit
+			continue
 		}
 		if _, contact := err.(*revolveSectorContactRefineError); contact {
 			if attempt == 7 {
@@ -74,7 +88,7 @@ func buildRevolveLoftSectorsJoin(ctx context.Context, d *Document, ref producerI
 
 func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producerID,
 	cert *revolveLoftSectorCertificate, sources []facetedPayload,
-	sagAllowance float64) (*Body, *revolvedSectionRing, error) {
+	sagAllowance, capLimit float64) (*Body, *revolvedSectionRing, error) {
 	section, record, base := cert.section, cert.trim, cert.base
 	regularSource, sourceSector, err := revolveSectionAngles(section, cert.sector, sagAllowance)
 	if err != nil {
@@ -97,6 +111,28 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	original, caps, edges, farRound, err := sectorSubdivideCap(ctx, original, caps, 4)
 	if err != nil {
 		return nil, nil, err
+	}
+	if !math.IsInf(capLimit, 1) {
+		maxCells := 1_000_000 / (2 * len(sources))
+		for round := range 4 {
+			upper, lower, capErr := sectorConeCapBounds(original, caps, record)
+			if capErr != nil {
+				return nil, nil, capErr
+			}
+			if max(upper, lower) <= capLimit {
+				break
+			}
+			if round == 3 {
+				return nil, nil, fmt.Errorf("%w: sector cap refinement is exhausted", ErrUnsupported)
+			}
+			var extraRound float64
+			original, caps, edges, extraRound, err = sectorRefineCap(ctx,
+				original, caps, edges, record, capLimit, maxCells)
+			if err != nil {
+				return nil, nil, err
+			}
+			farRound = proofbound.AbsSumUpper(farRound, extraRound)
+		}
 	}
 	motions := make([]r3.Transform, len(sources))
 	charges := make([]massmoment.MapCharge, len(sources))
@@ -237,6 +273,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		return nil, nil, err
 	}
 	localBound, localRound, sourceVolume, sourceArea := 0.0, 0.0, 0.0, 0.0
+	refineCapLimit, capRefinePossible := math.Inf(1), true
 	for i := range plans {
 		plan := &plans[i]
 		var placedGroups []facetGroup
@@ -258,13 +295,21 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 				ErrUnsupported, i, plan.snap, seamAllowance)
 		}
 		stretch := proofbound.AbsSumUpper(1, plan.charge.Stretch)
+		farTerm := proofbound.ProductUpper(proofbound.ProductUpper(farRound, stretch), lip)
+		baseTerm := proofbound.ProductUpper(proofbound.AbsSumUpper(
+			revolvePlacedBound(base.meshBound, plan.charge),
+			plan.crossingBound, plan.placedRound), lip)
+		capTerm := proofbound.ProductUpper(max(upperBound, lowerBound), stretch)
+		otherBound := proofbound.AbsSumUpper(plan.snap, plan.nodeRound,
+			farTerm, baseTerm, section.coneGap, toolGap)
+		remaining := 0.1 - sectionSag - otherBound
+		if remaining <= 0 || proofbound.IsNonFinite(remaining) {
+			capRefinePossible = false
+		} else {
+			refineCapLimit = min(refineCapLimit, 0.9*remaining/stretch)
+		}
 		localBound = max(localBound, proofbound.AbsSumUpper(plan.snap, plan.nodeRound,
-			proofbound.ProductUpper(proofbound.ProductUpper(farRound, stretch), lip),
-			proofbound.ProductUpper(proofbound.AbsSumUpper(
-				revolvePlacedBound(base.meshBound, plan.charge),
-				plan.crossingBound, plan.placedRound), lip),
-			proofbound.ProductUpper(max(upperBound, lowerBound), stretch),
-			section.coneGap, toolGap))
+			farTerm, baseTerm, capTerm, section.coneGap, toolGap))
 		localRound = max(localRound, proofbound.AbsSumUpper(plan.snap, plan.nodeRound,
 			proofbound.ProductUpper(proofbound.ProductUpper(farRound, stretch), lip),
 			proofbound.ProductUpper(proofbound.AbsSumUpper(
@@ -287,6 +332,10 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	}
 	bound := proofbound.AbsSumUpper(sectionSag, localBound)
 	if proofbound.IsNonFinite(bound) || bound > 0.1 {
+		if capRefinePossible && refineCapLimit > 0 &&
+			refineCapLimit < capLimit && max(upperBound, lowerBound) > refineCapLimit {
+			return nil, nil, &revolveSectorCapRefineError{limit: refineCapLimit}
+		}
 		return nil, nil, fmt.Errorf("%w: joined sectors cannot meet the 0.1 mm boundary proof", ErrUnsupported)
 	}
 	if err := orientJoinedMesh(mesh); err != nil {
@@ -297,8 +346,8 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	}
 	count := len(mesh.tris)
 	ringLimit := uint64(2) * uint64(len(section.spans)-1) * uint64(len(angles))
-	capLimit := uint64(len(sources)) * uint64(2*len(caps)+2*len(edges))
-	maxTriangles, sumOK := proofbound.WallCheckedAdd(ringLimit, capLimit)
+	capTriangleLimit := uint64(len(sources)) * uint64(2*len(caps)+2*len(edges))
+	maxTriangles, sumOK := proofbound.WallCheckedAdd(ringLimit, capTriangleLimit)
 	if !sumOK || count == 0 || uint64(count) > maxTriangles || maxTriangles > 1_000_000 {
 		return nil, nil, fmt.Errorf("%w: joined sectors exceed the audit mesh limit", ErrUnsupported)
 	}

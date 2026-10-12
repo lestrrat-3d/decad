@@ -42,7 +42,7 @@ The builder meshes every recorded meridian span at one shared angular plan.
 It omits a root-face interval only where a certified sector cap replaces that
 interval. Its rings follow section order, so a shoulder or split cap adds a
 ring without changing any positional profile role. The source cap is
-triangulated and refined once, then placed by each authenticated axis
+triangulated and refined before placement by each authenticated axis
 rotation. The original unplaced source controls each cone map; placement is
 applied once after that map. The placed caps share the exact ring vertex IDs
 at every root station.
@@ -69,6 +69,12 @@ volume bounds, and a measured-volume increase over the original Revolve.
 The audit triangle allowance follows the section-ring and cap cell counts,
 with a one-million-triangle memory ceiling. The crossing scan allowance is
 the smaller of all triangle pairs and 25 million scans per admitted sector.
+If the cone cap interpolation term exceeds the remaining 0.1 mm boundary
+budget, the builder splits only cap cells above that term's target. Shared
+edges split together, including root edges. It rebuilds the shared ring and
+recomputes the cone cap and full boundary bounds after refinement. Each
+construction attempt permits at most three additional cap passes within the same mesh
+ceiling; a cap that still exceeds the budget refuses the join.
 An occupied-volume refusal may refine the angular plan up to eight times.
 A specific cap/root adjacency contact may also trigger refinement; the new
 mesh must pass the same exact audit. Refusal leaves all operands live.

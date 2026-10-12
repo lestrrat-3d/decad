@@ -261,6 +261,7 @@
 1	0.00	TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
 1	0.01	TestRevolveSectorProjectionRefusesOverlap
 1	0.01	TestRevolveSectorProjectionSeparatesRotatedSources
+1	0.01	TestSectorCapRefinementKeepsSharedEdges
 1	0.00	TestRingPlaneRejectPreservesExactDistance
 1	0.00	TestRoundBossShellMeshVolumeProof
 1	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
