@@ -257,6 +257,7 @@ cuts every live line, fitted span and arc against those limits. Each retained
 source interval keeps its open clip endpoints, mapped box, source origin and
 unique live face. The all-side record gives every live Revolve boundary face
 either a source candidate or a strict miss; it refuses an undecidable side.
+The live blank face set must equal the section walk's face set exactly.
 An axis span has no boundary face. These records do not prove a solid seam.
 
 This source certificate does not change the held mesh or grant a contact

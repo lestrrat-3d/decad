@@ -280,19 +280,20 @@ func revolveLoftFacesConstantXBand(maps []loftFaceMap, box [4]*big.Rat,
 }
 
 func revolveLoftFacesVerticalLiveFace(tooth *Body, ref FeatureRef) *Face {
-	var result *Face
-	for _, face := range tooth.Faces() {
-		for _, origin := range face.Origins() {
-			if origin != ref {
-				continue
-			}
-			if result != nil && result != face {
-				return nil
-			}
-			result = face
-		}
+	if tooth == nil {
+		return nil
 	}
-	return result
+	payload, ok := tooth.payload.(facetedPayload)
+	if !ok {
+		return nil
+	}
+	faces := tooth.Faces()
+	index, valid := revolveLoftFacesRefFaceIndex(payload, ref, len(faces))
+	face, originValid := revolveLoftFacesUniqueOriginFace(tooth, ref)
+	if !valid || !originValid || index < 0 || face == nil || faces[index] != face {
+		return nil
+	}
+	return face
 }
 
 func verticalOriginsMatch(actual, recorded []FeatureRef) bool {

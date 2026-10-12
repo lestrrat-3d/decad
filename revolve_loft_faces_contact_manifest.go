@@ -38,6 +38,9 @@ func revolveLoftFacesAllSideManifest(ctx context.Context,
 	if ctx == nil || proof == nil {
 		return nil, false, nil
 	}
+	if !revolveLoftFacesSectionFacesComplete(proof) {
+		return nil, false, nil
+	}
 	nonvertical, ok, err := revolveLoftFacesNonverticalManifest(ctx, proof)
 	if err != nil || !ok {
 		return nil, false, err
@@ -87,4 +90,35 @@ func revolveLoftFacesAllSideManifest(ctx context.Context,
 		}
 	}
 	return manifest, true, nil
+}
+
+// A section walk cannot describe the whole blank while a live face is
+// omitted or assigned to more than one source side.
+func revolveLoftFacesSectionFacesComplete(proof *revolveLoftFacesSourceCertificate) bool {
+	if proof == nil || proof.blank == nil {
+		return false
+	}
+	faces := proof.blank.Faces()
+	if len(faces) == 0 {
+		return false
+	}
+	seen := make(map[*Face]bool, len(faces))
+	for _, span := range proof.section.spans {
+		if span.face == nil {
+			continue // the Revolve axis has no boundary face
+		}
+		if span.face.body != proof.blank || seen[span.face] {
+			return false
+		}
+		seen[span.face] = true
+	}
+	if len(seen) != len(faces) {
+		return false
+	}
+	for _, face := range faces {
+		if face == nil || face.body != proof.blank || !seen[face] {
+			return false
+		}
+	}
+	return true
 }
