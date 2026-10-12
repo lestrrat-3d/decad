@@ -1,0 +1,70 @@
+package decad
+
+import (
+	"math"
+	"math/big"
+	"testing"
+
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+func TestPrismPatternRootNeedsExactInwardOverlap(t *testing.T) {
+	root := arcSeg{Center: Point2{}, Start: Point2{U: 3, V: -4}, End: Point2{U: 3, V: 4}}
+	radiusSq := prismPatternRadiusSq(5)
+	require.False(t, prismPatternRootInside(root, radiusSq, big.NewRat(1, 1)))
+	require.False(t, prismPatternRootInside(root, radiusSq, big.NewRat(2, 1)))
+	require.True(t, prismPatternRootInside(root, radiusSq, big.NewRat(99, 100)))
+	root.End = Point2{U: 4, V: 3}
+	require.False(t, prismPatternRootInside(root, radiusSq, big.NewRat(1, 1)))
+}
+
+func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.T) {
+	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	root := math.Sqrt(10)
+	blank := &Body{payload: prismPayload{
+		frame: frame, xform: r3.Identity(), z1: 2,
+		profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+			circleSeg{Center: Point2{}, Radius: units.Millimeters(root), TStart: 0, TEnd: 1},
+		}}},
+	}}
+	section := prismPayload{
+		frame: frame, xform: r3.Identity(), z1: 2,
+		profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+			arcSeg{Center: Point2{}, Start: Point2{U: 3, V: -1},
+				End: Point2{U: 3, V: 1}, TStart: 0, TEnd: 1},
+			lineSeg{Start: Point2{U: 3, V: 1}, End: Point2{U: 4, V: 1}, TStart: 0, TEnd: 1},
+			fitSplineSeg{Fit: point2ToRecordSlice([]Point2{{U: 4, V: 1}, {U: 4.5, V: 1.5}, {U: 5, V: 2}}),
+				TStart: 0, TEnd: 1},
+			arcSeg{Center: Point2{}, Start: Point2{U: 5, V: -2},
+				End: Point2{U: 5, V: 2}, TStart: 1, TEnd: 0},
+			fitSplineSeg{Fit: point2ToRecordSlice([]Point2{{U: 5, V: -2}, {U: 4.5, V: -1.5}, {U: 4, V: -1}}),
+				TStart: 0, TEnd: 1},
+			lineSeg{Start: Point2{U: 4, V: -1}, End: Point2{U: 3, V: -1}, TStart: 0, TEnd: 1},
+		}}},
+	}
+	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))
+	require.NoError(t, err)
+	copySection := section
+	copySection.xform = turn
+	first := &Body{payload: section}
+	copyBody := &Body{payload: copySection}
+	operands := []*Body{blank, first, copyBody}
+
+	source, matched, err := prismPatternSourceOf(t.Context(), operands)
+	require.NoError(t, err)
+	require.True(t, matched)
+	require.Len(t, source.sections, 2)
+	require.Less(t, source.rootGap, 1e-12)
+
+	// Rebuilding a similar section is not a Copy certificate.
+	separate := copySection
+	separate.profile.Outer.Segments = append([]curveSegment(nil), copySection.profile.Outer.Segments...)
+	operands[2] = &Body{payload: separate}
+	_, matched, err = prismPatternSourceOf(t.Context(), operands)
+	require.True(t, matched)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "not a radial copy")
+}

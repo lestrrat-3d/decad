@@ -421,12 +421,16 @@ func (ce CoEdge) IsForward() bool { return ce.forward }
 // Edge is a topological edge: a tagged curve between two vertices, with the
 // faces adjacent to it.
 type Edge struct {
-	curve  Curve
-	start  *Vertex
-	end    *Vertex
-	faces  []*Face
-	convex bool    // the walked-boundary convexity — see IsConvex
-	length float64 // held millimetres for the analytic curve set
+	curve Curve
+	start *Vertex
+	end   *Vertex
+	faces []*Face
+	// A source-proven straight generator can have a faceted held curve.
+	// ParallelTo reads this direction without changing Curve or its bound.
+	selectorDirection       r3.Vec
+	selectorDirectionProven bool
+	convex                  bool    // the walked-boundary convexity — see IsConvex
+	length                  float64 // held millimetres for the analytic curve set
 	// lengthBound is the proven error bound on length: zero only when the
 	// analytic curve's held result is exact, otherwise its evaluation bound;
 	// boolean-built chains carry their proven chord bound.

@@ -52,6 +52,7 @@
 1	0.00	TestAuditSheetBoundaryUndecidedPayload
 1	0.00	TestAuditTrimmedWall
 1	0.00	TestAuthenticateChainMatchesByContentAfterRename
+1	0.00	TestAxialFacetedChainDirectionRejectsBentAndAmbiguousChains
 1	0.00	TestAxisFrameWalkChargeIsAbsentAtZero
 1	0.00	TestAxisFrameWalkChargeWidensEveryFieldItTouches
 1	0.00	TestBezierSliceCountSplitsBrokenFromUnsliceable
@@ -247,6 +248,16 @@
 1	0.01	TestPrismBooleanWholeSourceSegmentsChargeNothing
 1	0.00	TestPrismGroupGateDiameterSpansEveryLump
 1	0.00	TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange
+1	0.40	TestPrismPatternFilletAcrossCircularWallStations
+1	0.40	TestPrismPatternFilletOfCopiedExtrudes
+1	0.20	TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius
+1	0.25	TestPrismPatternFilletSectorBeyondRootDisk
+1	0.00	TestPrismPatternFilletSectorRejectsAnotherConnector
+1	0.00	TestPrismPatternRootNeedsExactInwardOverlap
+1	0.01	TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections
+1	0.15	TestPrismPatternUnionOfCopiedExtrudes
+1	0.02	TestPrismPatternUnionRefusesOutwardRootWithoutRetiringSources
+1	0.15	TestPrismPatternUnionSelectsProvenAxialChains
 1	0.01	TestPrismReflectedOperandChargesItsWalk
 1	0.00	TestPrismUnionPreservesEndDisplacements
 1	0.00	TestProvePatchChainPlaneAdmitsABoundedCoLevelChain

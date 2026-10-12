@@ -64,6 +64,13 @@ type facetGroup struct {
 // measurements compose from. It is what Transform re-evaluates under a composed
 // motion (docs/evaluator-design.md §8).
 type facetedPayload struct {
+	// axialSectionJoin marks a proven XY section swept through one axial
+	// interval. Its held vertical boundary chains retain a Z direction for
+	// selectors even though their curve type remains bounded FacetedCurve.
+	axialSectionJoin bool
+	// prismPatternJoin retains immutable source and shell records for a later
+	// certified local corner rewrite. Placement drops this source relation.
+	prismPatternJoin *prismPatternJoinRecord
 	// prismScale marks a certified similar image of a line/circular
 	// prism. Rigid copies retain it; booleans and modify rewrites do not.
 	prismScale bool
@@ -190,6 +197,8 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
 	next := fp
+	next.axialSectionJoin = false
+	next.prismPatternJoin = nil
 	next.xform = composed
 	next.lowerSupport = nil
 	next.pointCone = nil
@@ -481,7 +490,8 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 
-	if err := buildFacetedTopology(ctx, verts, tris, facetFace, facePlanar, pp.vertexBound); err != nil {
+	if err := buildFacetedTopology(ctx, verts, tris, facetFace, facePlanar,
+		pp.vertexBound, pp.axialSectionJoin); err != nil {
 		return nil, err
 	}
 
@@ -744,6 +754,7 @@ func buildFacetedTopology(
 	facetFace []*Face,
 	facePlanar map[*Face]bool,
 	vertexBound []float64,
+	axialSectionJoin bool,
 ) error {
 	faceID := map[*Face]int{}
 	faces := []*Face{}
@@ -784,6 +795,10 @@ func buildFacetedTopology(
 			lengthBound:     chain.LengthBound,
 			lengthUnbounded: chain.LengthUnbounded,
 		}
+		if axialSectionJoin {
+			e.selectorDirection, e.selectorDirectionProven =
+				axialFacetedChainDirection(verts, chain.Vertices)
+		}
 		edgeObj[chain] = e
 	}
 	for fi, loops := range plan.FaceLoops {
@@ -797,6 +812,41 @@ func buildFacetedTopology(
 		}
 	}
 	return nil
+}
+
+// axialFacetedChainDirection proves that every held chord has one exact
+// Cartesian Z direction. Callers must separately prove the represented
+// source boundary is an axial extrusion; a straight held chain alone cannot
+// make that claim for an arbitrary FacetedCurve.
+func axialFacetedChainDirection(verts []r3.Vec, chain []int) (r3.Vec, bool) {
+	if len(chain) < 2 || chain[0] < 0 || chain[0] >= len(verts) {
+		return r3.Vec{}, false
+	}
+	first := verts[chain[0]]
+	if proofbound.IsNonFinite(first.X) || proofbound.IsNonFinite(first.Y) ||
+		proofbound.IsNonFinite(first.Z) {
+		return r3.Vec{}, false
+	}
+	previous := first.Z
+	direction := 0.0
+	for _, index := range chain[1:] {
+		if index < 0 || index >= len(verts) {
+			return r3.Vec{}, false
+		}
+		v := verts[index]
+		if v.X != first.X || v.Y != first.Y || proofbound.IsNonFinite(v.Z) || v.Z == previous {
+			return r3.Vec{}, false
+		}
+		step := 1.0
+		if v.Z < previous {
+			step = -1
+		}
+		if direction != 0 && direction != step {
+			return r3.Vec{}, false
+		}
+		direction, previous = step, v.Z
+	}
+	return r3.Vec{Z: direction}, true
 }
 
 // refuseRimPastPair refuses a boolean whose largest rim bound has stopped

@@ -248,6 +248,13 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	if fp, ok := b.payload.(facetedPayload); ok && fp.obliqueBoss != nil {
 		return b.filletObliqueBoss(ctx, edges, fp.obliqueBoss, rmm, rDelta)
 	}
+	if fp, ok := b.payload.(facetedPayload); ok && fp.prismPatternJoin != nil {
+		out, err := prismPatternFilletBody(ctx, b, edges, rmm, rDelta)
+		if err != nil {
+			return nil, err
+		}
+		return commitModifyResult(ctx, b, out)
+	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1).

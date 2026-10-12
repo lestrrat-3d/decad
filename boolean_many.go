@@ -49,6 +49,9 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 		body, matched, err = tryRevolveLoftSectorUnionMany(ctx, d, ref, operands)
 	}
 	if !matched && err == nil {
+		body, matched, err = tryPrismPatternUnionMany(ctx, d, ref, operands)
+	}
+	if !matched && err == nil {
 		body, err = spiralCombineBody(ctx, d, ref, a, tools)
 	}
 	if err != nil {
