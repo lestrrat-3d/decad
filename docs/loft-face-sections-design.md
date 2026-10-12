@@ -183,3 +183,35 @@ box must be within that bound of at least one source cell. Compare the most
 distant corners of each paired box with exact rationals and round the final
 distance upward. These two checks cover both complete curves and their
 endpoints without assuming that source X or angle is monotone.
+
+## Generic finite Revolve source gate
+
+The ordinary public `Union` also checks a nine-cap LoftFaces result after
+its authenticated toe Cut and heel Intersect against a finite, unplaced,
+full world-X Revolve. The Revolve section must have one axial span and
+whole straight source edges. Its candidate conical roots keep their source
+faces and exact rational meridians. A placed or off-axis Revolve refuses
+this gate. The LoftFaces record must still name the live whole-entity Sketch
+profile, the same nine exact maps and source bounds, and two surviving tool
+caps. A stale, partial or foreign profile refuses.
+
+For each candidate root, the gate evaluates the exact signed cone implicit
+on every mapped source station cell. Its recorded curve departure enlarges
+each cell box before a strict side is accepted. A fitted curve crossing uses
+the exact denominator-cleared Bernstein polynomial of the source spline
+under both maps of every band. Strict endpoint signs and derivative signs
+prove one transverse root in the same source span throughout the bands.
+The root's axial derivative has a strict positive Bernstein bound. Exact
+rational brackets locate the root on each cap; a cap's axial map must be
+monotone or constant over that span. The complete profile walk must have
+exactly two fitted crossings and matching strict sides between them. The
+two finite tool cones must bracket the root span, while the original end
+caps avoid their root circles. Every surviving source face origin must name
+the authenticated LoftFaces producer. Any undecidable cell or extra crossing
+refuses the gate.
+
+This source certificate does not change the held mesh or grant a contact
+exception. A certified pair currently returns `ErrUnsupported` at public
+`Union` because the source-aligned held seam and its boundary, area, volume
+and complete-contact audits have not been built. The same producer remains
+unchanged after that refusal.

@@ -160,6 +160,7 @@
 1	0.00	TestCupWallCancellationDuringProfileIntegrals
 1	0.00	TestCupWallRequiresExactMorphology
 1	0.00	TestCurveTokenComposeDeclinesTheZeroToken
+1	2.56	TestCurvedLoftFacesSourceCertifiesLiveProducer
 1	0.00	TestDecidePullMatchesOpposesPullAtZeroAllowance
 1	0.00	TestDegCertifiedContainment
 1	0.00	TestDegCircleCircleCritsNeedExactCoaxiality

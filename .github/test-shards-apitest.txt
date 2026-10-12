@@ -49,6 +49,7 @@
 1	0.01	TestContactPairPlanarManifoldWalls
 1	0.00	TestContactPairSignedAxisPose
 1	0.01	TestContactPairSupportSetTouch
+1	3.04	TestCurvedLoftFacesSourceNeedsHeldSeam
 1	0.00	TestDiagnosticReadingKindTokens
 1	0.04	TestDraftCircleEndRimChamferPlacement
 1	0.02	TestDraftCircleEndRimChamferRefusalsLeaveSourceLive
