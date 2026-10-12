@@ -139,7 +139,7 @@ there carried.
 | **RF2** | `stackedPrismPayload` | the same through `brepOfStacked` (SB2 first) |
 | **RF3** | `prismPayload` whose selection holds a cap edge | `fillet.go`: where `matchCornerBudget` finds no lateral corner for a selected edge, the call takes `brepOfPrism(pp)` and dispatches route E, L or V by the selection (`docs/vertex-blend-design.md` §2). The result is a brep body; every-lateral selections keep the prism path and B1's roles |
 | **RF4** | `revolvePayload` cap edge | SX5 unchanged: the cap's adjacent faces are revolve surfaces, not faces swept along the cap normal (LB3 fails), and the blend of a planar loop whose walls are revolved surfaces is a pipe about a general planar curve that no level set of an offset family states |
-| **RF5** | `capBlendPayload`, draft, sweep, loft, faceted | SX10, modify S3, SX9 unchanged |
+| **RF5** | `capBlendPayload`, other draft, sweep, loft, faceted | SX10, modify S3, SX9 unchanged. A positive-taper full-circle draft's far outer cap rim takes draft §10.4 before S3 |
 
 RF3's result is a `brepPayload`, not a `capBlendPayload`: the fillet patches
 and their readers (§5, §7) live once, on the band record, and the prism cap

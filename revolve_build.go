@@ -112,6 +112,11 @@ type revolvePayload struct {
 	// re-mint the same roles; a path replacing the profile must clear them.
 	blendSegs []map[int]struct{}
 	blendKind string
+	// draftCircleCaps retains the two axial cap roles when a one-sided
+	// circular draft rim fillet is rebuilt as a full revolution. In that
+	// five-segment meridian, side(0,1) is the far cap and side(0,4) the
+	// near cap. Placement re-evaluates this same meridian and roles.
+	draftCircleCaps bool
 }
 
 // requireExactRevolveSection is the reject-only guard an operation that
@@ -512,6 +517,11 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	body.lumps = lumps
 	if err := addBlendRoles(ctx, body, ref, rp.blendSegs, rp.blendKind); err != nil {
 		return nil, err
+	}
+	if rp.draftCircleCaps {
+		if err := addDraftCircleCapRoles(ctx, body, ref); err != nil {
+			return nil, err
+		}
 	}
 
 	// Measurements — Pappus with the profile and float-evaluation bounds
