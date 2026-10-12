@@ -27,7 +27,7 @@ case into nil, an empty list, or `Sound`.
 | `cupPayload` | exact construction proof | exact analytic adapter (§3) | exact shell theorem (§4) | existing exact cup walk | existing exact cup walk |
 | `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `sweepPayload` | exact construction audit | bounds-disjoint shortcut; all other pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
-| `twistedSweepPayload` | bounded construction and held-shell audit (§17 of `docs/sweep-design.md`) | bounds-disjoint shortcut; overlapping pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
+| `twistedSweepPayload` | bounded one-cell or stationed construction and held-shell audit (§17 of `docs/sweep-design.md`) | bounds-disjoint shortcut; overlapping pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `compositeTwistedSweepPayload` | bounded construction, sewn topology and held-facet contact audit (§17.2 of `docs/sweep-design.md`) | bounds-disjoint shortcut; overlapping pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `mitredSweepPayload` | exact construction audit | bounds-disjoint shortcut; the exact planar arm (§7) against a prism, a stitched solid, a faceted result or another mitred sweep; overlap volume through the mesh-boolean path | `Unavailable` | `Unavailable` | `Unavailable` |
 | `coilPayload` | exact construction proof (`docs/helix-design.md` CP5) and the build's held-shell audit | bounds-disjoint shortcut; `WithClearances` against a prism or a stitched solid reads the exact planar arm (`docs/helix-design.md` CD5), and stays `Suspect` against every other payload; overlap volume through the mesh-boolean path, for a partner whose pair tolerance the coil's facets meet | `Unavailable` | `Unavailable` | `Unavailable` |
@@ -64,11 +64,12 @@ Four payload classes require different treatment:
   design's Table D.
 
 - `twistedSweepPayload` retains the true rotating polygon separately from
-  Loft's held facets. Its §17 construction proves a non-intersecting solid;
+  one Loft or §17.3's sewn Loft cells. Its §17 construction proves a non-intersecting solid;
   its volume and centroid are exact before coordinate publication, while wall
   area and boundary departure carry rational interval bounds. The held mesh
-  carries the horizontal-section occupied-volume proof composed with Loft's
-  vertex-rounding proof. Pair and survey answers remain staged.
+  carries the horizontal-section occupied-volume proof, §17.3's axial station
+  movement allowance and each Loft's vertex-rounding proof. Pair and survey
+  answers remain staged.
 
 - `compositeTwistedSweepPayload` retains the true curved-path polygon separately
   from its nine held Loft cells. The exact Sketch profile and path prove

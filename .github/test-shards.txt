@@ -256,6 +256,7 @@
 1	0.00	TestSpiralToolCapMustStayOnCertifiedSideOfBlankMeridian
 1	0.00	TestStackedLiningAuditRejectsBrokenRecords
 1	0.01	TestStackedUnionBrepLBossReflexCornerReadsConcave
+1	0.03	TestStationedTwistOccupiedVolumeProof
 1	0.00	TestStitchConeFluxAndMomentChargeRimRadiusBound
 1	0.01	TestStitchCurvedMassSphereCoordUpperTracksRadius
 1	0.00	TestStitchFluxRefusesNonzeroNormalBound

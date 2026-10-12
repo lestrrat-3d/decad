@@ -102,6 +102,101 @@ func TestSweepTwistStraightPolygon(t *testing.T) {
 	require.True(t, placedMesh.VolumeVerified())
 }
 
+func TestSweepTwistStraightStationsVerifyAll(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-1, -1, 1, 1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
+	require.NoError(t, err)
+	body, err := decad.New().Sweep(t.Context(), s, s.Profiles()[0], path,
+		decad.WithSweepTwist(units.Radians(2)))
+	require.NoError(t, err)
+	require.Len(t, body.Faces(), 6)
+	roles := make(map[string]bool)
+	for _, face := range body.Faces() {
+		origins := face.Origins()
+		require.Len(t, origins, 1)
+		roles[origins[0].Role] = true
+	}
+	for edge := range 4 {
+		require.True(t, roles[fmt.Sprintf("side(0,0,%d)", edge)])
+	}
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 20, volume.Value.Base(), volume.Bound.Base()+1e-12)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.LessOrEqual(t, mesh.Bound().Base(), 0.1)
+	live := make(map[*decad.Face]bool)
+	for _, face := range body.Faces() {
+		live[face] = true
+	}
+	for _, face := range mesh.SourceFaces() {
+		require.True(t, live[face])
+	}
+	move, err := r3.Translation(r3.NewVec(7, -3, 11))
+	require.NoError(t, err)
+	placed, err := body.Placed(t.Context(), move)
+	require.NoError(t, err)
+	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, placedMesh.VolumeVerified())
+}
+
+func TestSweepTwistStraightStationsNegativeAndLimits(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-1, -1, 1, 1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
+	require.NoError(t, err)
+	doc := decad.New()
+	negative, err := doc.Sweep(t.Context(), s, s.Profiles()[0], path,
+		decad.WithSweepTwist(units.Radians(-2)))
+	require.NoError(t, err)
+	mesh, err := negative.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.VolumeVerified())
+	fullTurn, err := doc.Sweep(t.Context(), s, s.Profiles()[0], path,
+		decad.WithSweepTwist(units.Degrees(360)))
+	require.NoError(t, err)
+	fullMesh, err := fullTurn.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, fullMesh.VolumeVerified())
+
+	before := doc.Bodies()
+	_, err = doc.Sweep(t.Context(), s, s.Profiles()[0], path,
+		decad.WithSweepTwist(units.Radians(7)))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "at most one full turn")
+	require.Equal(t, before, doc.Bodies())
+
+	thinS, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	narrow := thinS.CreateRectangle(-1, -0.01, 1, 0.01)
+	thinS.Fix(narrow.A)
+	_, err = thinS.Solve(t.Context())
+	require.NoError(t, err)
+	_, err = doc.Sweep(t.Context(), thinS, thinS.Profiles()[0], path,
+		decad.WithSweepTwist(units.Degrees(360)))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "more than 64 cells")
+	require.Equal(t, before, doc.Bodies())
+}
+
 func TestSweepTwistNegativeAngleAndAdmission(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -123,7 +218,7 @@ func TestSweepTwistNegativeAngleAndAdmission(t *testing.T) {
 
 	before := doc.Bodies()
 	_, err = doc.Sweep(t.Context(), s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(70)))
+		decad.WithSweepTwist(units.Radians(7)))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 	_, err = doc.Sweep(t.Context(), s, s.Profiles()[0], path,
