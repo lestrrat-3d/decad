@@ -311,6 +311,8 @@
 2	0.00	TestSweepChainRibbonReadsValid
 2	0.02	TestSweepClosedCircleBuildsVerifiedSolidAndReplaysPlacement
 2	0.01	TestSweepClosedCircleRefusesUnsupportedVariantsWithoutCommit
+2	0.08	TestSweepClosedPlanarTangentLoopBuildsVerifiedSolid
+2	0.00	TestSweepClosedPlanarTangentLoopRefusesAxisContact
 2	0.14	TestSweepClosedRacetrackBuildsVerifiedTubeAndReplaysPlacement
 2	0.01	TestSweepClosedRacetrackRefusesUnprovedClearanceAndSection
 2	0.16	TestSweepCompositeCircularHoleTessellates

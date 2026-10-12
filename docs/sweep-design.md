@@ -41,6 +41,7 @@ The current `Sweep` implementation admits:
 - §3.3's closed full circle made from two complementary `ArcThrough` segments
   when the result is a zero-twist solid;
 - §3.4's closed planar racetrack with one authenticated circular section;
+- §3.5's closed planar tangent line/arc loop with one authenticated circular section;
 - line, circle, arc, and fitted-spline profile boundaries;
 - zero total twist, or §17's one-span polygon twist;
 - tangent internal joins;
@@ -72,7 +73,7 @@ The following remain outside this design:
 - guide surfaces, guide rails, and a second profile;
 - a corner mode other than §16's join plane: a rounded corner, or a corner
   on an arc span;
-- closed paths outside §§3.3–3.4 and their frame holonomy;
+- closed paths outside §§3.3–3.5 and their frame holonomy;
 - a sweep that lets the section leave the path-normal plane;
 - a helical path: `docs/helix-design.md` builds it as `Document.Coil`, a
   screw motion whose section stays in the axis plane, and its §12 states
@@ -195,7 +196,7 @@ geometry.
 | **P6** | The initial path point lies exactly in the recorded profile plane, and the first tangent is exactly codirectional with the plane's positive normal. The profile need not contain that point. |
 | **P7** | The initial frame is the profile's `(U, V, N)`. Lines translate it; arcs rotate it about their axes. Composition is rotation-minimizing transport. |
 | **P8** | Zero twist adds no motion. Nonzero twist composes a rotation about the transported tangent by `total * length(prefix) / length(path)`. It never changes the path or section scale. |
-| **P9** | A path ending at its start is closed. Sweep admits §§3.3–3.4 when exact path geometry proves the transported end frame equals the start frame. Every other closed path is staged, even when its internal joins are tangent. No distributed correction is inferred. |
+| **P9** | A path ending at its start is closed. Sweep admits §§3.3–3.5 when exact path geometry proves the transported end frame equals the start frame. Every other closed path is staged, even when its internal joins are tangent. No distributed correction is inferred. |
 
 ### 3.1 Exact path record
 
@@ -290,6 +291,25 @@ first. It omits cap triangles, charges the final rim's coordinate movement
 like every other join, and audits cyclic contact, closed vertex links and
 positive orientation before publishing the occupied-volume proof.
 
+### 3.5 Closed planar tangent line/arc loop
+
+The cyclic span construction also admits a whole circular section centred on
+the path start, in the origin XY plane. The path has at least five tangent
+spans, lies exactly in XZ, and closes at its recorded start. Each arc has a
+positive Y carrier axis and an exact quarter- or half-turn angle. The sum of
+its arc turns is exactly one whole turn. Lines may have any positive length;
+the sequence need not have the racetrack's four-span shape. The frame
+transport must independently return the exact initial frame with zero
+displacement. A structural mismatch returns S7.
+
+Each arc builder proves the circular section stays outside its carrier axis.
+The cyclic contact audit proves neighboring spans lie on opposite sides of
+their common section and every other span pair has a strict bounded gap.
+The construction then pairs all rims and omits every temporary cap. Its
+measurements, placement replay, and tessellation use §3.4's cyclic span
+proof. Paths with non-cardinal arc turns or uncertain frame closure remain
+staged.
+
 ## 4. 3D sketches
 
 `sketch.Sketch` is planar, and `r3` deliberately owns coordinates and rigid
@@ -335,7 +355,7 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S4** | zero-length line; repeated or collinear `ArcThrough` points | `ErrDegenerate` | yes |
 | **S5** | path start is not on the profile plane, or its initial tangent is not codirectional with the positive plane normal | `ErrDegenerate` | yes for this operation's meaning |
 | **S6** | an internal path join is not tangent, and the call does not carry `WithMitredJoins()` | `ErrUnsupported` | no; `WithMitredJoins()` defines the one admitted corner mode, and §16.4 owns what refuses it |
-| **S7** | path is closed but outside §§3.3–3.4's bounded solid reductions | `ErrUnsupported` | no; general closed-frame holonomy is staged |
+| **S7** | path is closed but outside §§3.3–3.5's bounded solid reductions | `ErrUnsupported` | no; general closed-frame holonomy is staged |
 | **S8** | an arc span's rotation axis crosses the transported profile interior, or boundary contact fails Revolve's exact axis-incidence rule | `ErrDegenerate` | yes; the mapped boundary folds or pinches |
 | **S9** | remote patches contact, or neighbours contact beyond their shared boundary | proved contact: `ErrDegenerate`; undecided budget: `ErrUnsupported` | contact is permanent; budget is not |
 | **S10** | profile kind is unsupported by one of the path-span builders | `ErrUnsupported` | follows spline reach |
@@ -587,7 +607,8 @@ separation audit closes. Other composite paths remain staged as
 | **8** | sweep boundary adapter for clearance/interference | non-constant-section surveys |
 | **M1**, **M2** | §16's mitred polyline sweep; §16.9 owns the two rows | what §16.9 lists |
 | **F1** | §3.3's exact two-arc full circle as a zero-twist solid, including D1–D3 and D7 through full `Revolve` | general closed paths and nonzero closed-path twist |
-| **F2** | §3.4's four-span circular-section racetrack as a zero-twist solid, including D1–D3 and D7 | other closed paths and nonzero closed-path twist |
+| **F2** | §3.4's four-span circular-section racetrack as a zero-twist solid, including D1–D3 and D7 | nonzero closed-path twist |
+| **F3** | §3.5's exact-turn planar circular-section loop with cyclic span proof and verified tessellation | non-cardinal or spatial closed paths and nonzero closed-path twist |
 
 Each published feature increment lands its four measurements and structural
 verification together. An increment never returns a body whose cached reading
@@ -604,7 +625,7 @@ Every test asserts computed geometry or a proof bound.
 - Build tangent line-arc-line and two-plane arc-arc paths. Assert transported
   frames and join sections, not only face counts.
 - Reject an off-plane path start, a reversed initial tangent, every degenerate
-  path segment, a non-tangent join, and a closed path outside §§3.3–3.4.
+  path segment, a non-tangent join, and a closed path outside §§3.3–3.5.
 - Build §3.3's full circle from an authenticated profile. Compare its four
   readings with a full `Revolve`, assert both path-span wall roles, no caps,
   `VerifyAll` occupied-volume proof, and placement replay. Refuse closed-path
@@ -613,6 +634,9 @@ Every test asserts computed geometry or a proof bound.
   area against the tube formulas, four shared rims, no caps, cyclic
   `VerifyAll` at 0.1 mm, and placement replay. Refuse insufficient gap and
   an off-centre circle without committing a body.
+- Build §3.5's eight-span rounded rectangle from a solved Sketch circle.
+  Check its tube volume and area, eight shared rims, no caps, `VerifyAll`
+  at 0.1 mm, and placement replay. Refuse axis contact without committing.
 - Put the profile across an arc axis and assert S8 before any document commit.
 - Make a remote path span cross an earlier span. Assert S9 and the specific
   non-neighbouring patches the audit classified.

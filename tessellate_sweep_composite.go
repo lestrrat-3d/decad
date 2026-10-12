@@ -39,7 +39,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 	coordinateBound := 0.0
 	triangleSpan := []int{}
 	stations := len(sp.spans) + 1
-	if sp.closedRacetrack {
+	if sp.closedComposite {
 		stations = len(sp.spans)
 	}
 	join := make([][]int, stations)
@@ -93,7 +93,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		}
 		maxMove := 0.0
 		endSection := i + 1
-		if sp.closedRacetrack && endSection == len(sp.spans) {
+		if sp.closedComposite && endSection == len(sp.spans) {
 			endSection = 0
 		}
 		for station := range profileSamples {
@@ -145,7 +145,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			if err != nil {
 				return nil, err
 			}
-			if sp.closedRacetrack && (role == roleCapStart || role == roleCapEnd) ||
+			if sp.closedComposite && (role == roleCapStart || role == roleCapEnd) ||
 				role == roleCapStart && (sp.surfaceResult || i != 0) ||
 				role == roleCapEnd && (sp.surfaceResult || i != len(sp.spans)-1) {
 				continue
