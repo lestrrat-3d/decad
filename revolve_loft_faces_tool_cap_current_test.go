@@ -2,8 +2,10 @@ package decad
 
 import (
 	"math/big"
+	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,6 +40,32 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 		current, currentErr := revolveLoftFacesToolCapOccupiedArcCurrent(t.Context(), proof, arc)
 		require.NoError(t, currentErr)
 		require.True(t, current)
+		if span.start.U != span.end.U {
+			lower := lfZero()
+			if circle.x.Cmp(proof.trim.toe.apex) < 0 {
+				lower = lfDiv(lfSub(proof.trim.toe.apex, circle.x), proof.trim.toe.slope)
+			}
+			section, sourceOK, sourceErr := revolveLoftFacesConstantXSourceCells(t.Context(), proof,
+				circle.x, lower, circle.radius)
+			require.NoError(t, sourceErr)
+			require.True(t, sourceOK)
+			changedSection := *section
+			changedSection.cells = slices.Clone(section.cells)
+			changedArcCell := false
+			for i := range changedSection.cells {
+				if changedSection.cells[i].source != nil {
+					continue
+				}
+				changedSection.cells[i].source = make(freeform.BezierSpan, 0)
+				changedArcCell = true
+				break
+			}
+			require.True(t, changedArcCell)
+			_, certified, sourceErr = revolveLoftFacesHeelOccupiedFromSource(t.Context(), proof,
+				circle, &changedSection)
+			require.NoError(t, sourceErr)
+			require.False(t, certified, "an empty spline record cannot replace the live whole Arc")
+		}
 
 		changed := *arc
 		changed.band++
@@ -64,4 +92,21 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 		checked++
 	}
 	require.Equal(t, 2, checked, "the real source has vertical and sloped heel arcs")
+}
+
+func TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence(t *testing.T) {
+	original := &revolveLoftFacesConstantXSource{}
+	changed := *original
+	changed.cells = []revolveLoftFacesVerticalCell{}
+	require.False(t, revolveLoftFacesToolCapSourceCellsEqual(original, &changed))
+
+	original.cells = []revolveLoftFacesVerticalCell{{}}
+	changed = *original
+	changed.cells = slices.Clone(original.cells)
+	changed.cells[0].source = make(freeform.BezierSpan, 0)
+	require.False(t, revolveLoftFacesToolCapSourceCellsEqual(original, &changed))
+
+	changed.cells[0] = original.cells[0]
+	changed.cells[0].retained = []revolveLoftFacesVerticalPiece{}
+	require.False(t, revolveLoftFacesToolCapSourceCellsEqual(original, &changed))
 }

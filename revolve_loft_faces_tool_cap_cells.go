@@ -9,6 +9,7 @@ func revolveLoftFacesToolCapSourceCellsEqual(a, b *revolveLoftFacesConstantXSour
 		!revolveLoftFacesToolCapRatEqual(a.lower, b.lower) ||
 		!revolveLoftFacesToolCapRatEqual(a.upper, b.upper) ||
 		a.hasRetained != b.hasRetained || len(a.cells) != len(b.cells) ||
+		(a.cells == nil) != (b.cells == nil) ||
 		!revolveLoftFacesToolCapAffineEqual(a.yzAffine, b.yzAffine) {
 		return false
 	}
@@ -46,7 +47,9 @@ func revolveLoftFacesToolCapAffineEqual(a, b *revolveLoftFacesVerticalAffine) bo
 func revolveLoftFacesToolCapCellEqual(a, b revolveLoftFacesVerticalCell) bool {
 	if a.segment != b.segment || a.span != b.span || a.band != b.band ||
 		a.ref != b.ref || a.face != b.face || len(a.source) != len(b.source) ||
+		(a.source == nil) != (b.source == nil) ||
 		len(a.retained) != len(b.retained) ||
+		(a.retained == nil) != (b.retained == nil) ||
 		!revolveLoftFacesToolCapLimitEqual(a.lower, b.lower) ||
 		!revolveLoftFacesToolCapLimitEqual(a.upper, b.upper) {
 		return false
