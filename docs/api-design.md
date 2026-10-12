@@ -376,9 +376,9 @@ the true distance using the verified mesh and its boundary bound. When
 query design owns its proof and refusal rules.
 
 `Section` returns Sketch profiles on the requested plane for the admitted
-exact-prism class. `docs/section-design.md` owns the gate and reconstruction
-proof. A returned profile can enter a new feature through the ordinary Sketch
-seam.
+exact-prism and exact cardinal cylinder-chord classes. `docs/section-design.md`
+owns the gates and reconstruction proof. A returned profile can enter a new
+feature through the ordinary Sketch seam.
 
 A bounding box is a measurement, so it carries the same trust metadata every other
 measurement does — a v1 box around a curved body produced by a boolean is bounded

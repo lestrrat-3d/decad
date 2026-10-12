@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    0.01s over 1 test
-#   shard 1:    0.95s over 113 tests
+#   shard 1:    0.98s over 116 tests
 #   shard 2:   37.30s over 206 tests
 #   shard 3:   82.95s over 226 tests
 #   shard 4:   82.99s over 212 tests
@@ -105,8 +105,11 @@
 1	0.00	TestRevolveSolidCylinderHasNoInnerFace
 1	0.01	TestRevolveToFaceAngular
 1	0.01	TestRevolveWallNormalCoversNearPerpendicularSegment
+1	0.01	TestSectionCardinalCylinderExactOffsetChordsFeedVerifiedExtrude
 1	0.01	TestSectionCardinalCylinderOffsetCentreAndReverseAxis
+1	0.01	TestSectionCardinalCylinderOffsetSignsAndPlacement
 1	0.01	TestSectionCardinalCylinderPlacedFrame
+1	0.01	TestSectionCardinalCylinderRefusesUnprovedOffsetChords
 1	0.01	TestSectionCardinalCylinderRefusesUnprovedPlanes
 1	0.01	TestSectionCardinalCylinderSketchFeedsVerifiedExtrude
 1	0.00	TestSectionCardinalPlaneRefusesNoncircularSource

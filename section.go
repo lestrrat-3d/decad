@@ -18,7 +18,7 @@ import (
 //
 // One class is an exact straight prism cut strictly between its caps by a
 // plane whose frame preserves the prism's recorded section coordinates.
-// Another is a whole-circle prism cut by a cardinal plane through its axis.
+// Another is a whole-circle prism cut by a cardinal plane with an exact chord.
 // Other body or plane classes return [ErrUnsupported]. A nil body or context,
 // or an invalid plane, returns [ErrDegenerate]. A sheet or unsound solid returns
 // [ErrNotSolid]. See docs/section-design.md.
