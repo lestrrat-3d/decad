@@ -3,9 +3,9 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -52,13 +52,59 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	}
 	var half loftCylinderOneCapData
 	ref := b.doc.nextProducerID()
-	lowerBody, err := buildLoftCylinderOneCapChamfer(ctx, b.doc, ref, lower, source,
-		setback, 0.1, &half)
+	reserve, err := loftMirrorCylinderChamferReflectionReserve(lower, record, setback)
 	if err != nil {
 		return nil, true, err
 	}
-	result, err := buildLoftMirrorCylinderCapChamfer(ctx, b.doc, ref, fp, record, lowerBody, half)
+	allowance := math.Nextafter(0.1-reserve, math.Inf(-1))
+	for i := 0; i < 4 && proofbound.AbsSumUpper(allowance, reserve) > 0.1; i++ {
+		allowance = math.Nextafter(allowance, math.Inf(-1))
+	}
+	if allowance <= 0 || proofbound.AbsSumUpper(allowance, reserve) > 0.1 {
+		return nil, true, fmt.Errorf("%w: mirrored cap chamfer has no reflection allowance", ErrUnsupported)
+	}
+	lowerBody, err := buildLoftCylinderOneCapChamfer(ctx, b.doc, ref, lower, source,
+		setback, allowance, &half)
+	if err != nil {
+		return nil, true, err
+	}
+	result, err := buildLoftMirrorCylinderCapChamfer(ctx, b.doc, ref, fp, record,
+		lowerBody, half, reserve)
 	return result, true, err
+}
+
+// Reserve the same certified rounding envelope used by placed faceted meshes
+// for the reflection, with a second copy for any embedding correction. The
+// assembled upper half must also pass the measured bound check below.
+func loftMirrorCylinderChamferReflectionReserve(lower facetedPayload,
+	record *loftMirrorCylinderBoreRecord, setback float64) (float64, error) {
+	if record == nil || record.join == nil || record.join.source == nil ||
+		record.join.source.lower == nil {
+		return 0, fmt.Errorf("%w: mirrored cap chamfer lost its Loft frame", ErrUnsupported)
+	}
+	loft, ok := record.join.source.lower.payload.(loftPayload)
+	if !ok || !loft.authenticatedReconstruction {
+		return 0, fmt.Errorf("%w: mirrored cap chamfer lost its Loft frame", ErrUnsupported)
+	}
+	reflection, err := r3.Reflection(loft.frame1)
+	if err != nil {
+		return 0, fmt.Errorf("%w: mirrored cap chamfer has no source reflection: %s", ErrUnsupported, err)
+	}
+	maxInput := 0.0
+	for _, v := range lower.verts {
+		maxInput = max(maxInput, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
+	}
+	// The inset stays inside the old cap; adding the setback also covers the
+	// new side stations and their held rounding.
+	maxInput = proofbound.AbsSumUpper(maxInput, setback)
+	tr := reflection.Translation()
+	maxTrans := max(math.Abs(tr.X), math.Abs(tr.Y), math.Abs(tr.Z))
+	round := proofbound.RigidRoundAllow(maxInput, maxTrans)
+	reserve := proofbound.AbsSumUpper(round, round)
+	if reserve <= 0 || reserve >= 0.1 || proofbound.IsNonFinite(reserve) {
+		return 0, fmt.Errorf("%w: mirrored cap chamfer reflection has no finite allowance", ErrUnsupported)
+	}
+	return reserve, nil
 }
 
 func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPayload,
@@ -118,7 +164,7 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 
 func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref producerID,
 	old facetedPayload, record *loftMirrorCylinderBoreRecord, lowerBody *Body,
-	half loftCylinderOneCapData) (*Body, error) {
+	half loftCylinderOneCapData, reserve float64) (*Body, error) {
 	lower, ok := lowerBody.payload.(facetedPayload)
 	if !ok || !lower.contactAudited || lower.xform != r3.Identity() ||
 		record.join.source == nil || record.join.source.lower == nil {
@@ -141,6 +187,10 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		len(lower.tris) != len(upper.tris) || len(lower.src) != len(upper.src) ||
 		half.capGroups[0] < 0 || half.capGroups[1] < 0 || half.boreGroup < 0 {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer halves have no matching held shell", ErrUnsupported)
+	}
+	if upper.meshBound > proofbound.AbsSumUpper(lower.meshBound, reserve) {
+		return nil, fmt.Errorf("%w: reflected cap chamfer exceeds its %g mm placement reserve "+
+			"(lower %g, upper %g)", ErrUnsupported, reserve, lower.meshBound, upper.meshBound)
 	}
 	middle := loft.frame1.Origin().Z
 	midVertices := make(map[r3.Vec]int)
@@ -176,6 +226,9 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	if !loftMirrorCylinderCapsOppose(lower, upper, mapUpper,
 		half.capGroups[1], half.capGroups[1]) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer middle annuli do not tile equally", ErrUnsupported)
+	}
+	if err := loftMirrorCylinderChamferSeam(ctx, lower, upper, half, middle); err != nil {
+		return nil, err
 	}
 	var tris [][3]int
 	var src []int
@@ -222,10 +275,6 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer has an invalid vertex link: %s", ErrUnsupported, err)
 	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), verts, tris,
-		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
-		return nil, err
-	}
 	blank, ok := record.join.blank.payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its exact blank", ErrUnsupported)
@@ -260,7 +309,9 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	diameter := facetedSourceDiameterUpper(verts, bound)
 	if bound > 0.1 || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
 		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(diameter) {
-		return nil, fmt.Errorf("%w: mirrored cap chamfer has no finite 0.1 mm proof", ErrUnsupported)
+		return nil, fmt.Errorf("%w: mirrored cap chamfer has no finite 0.1 mm proof "+
+			"(lower %g, upper %g, volume %g, area %g, diameter %g)",
+			ErrUnsupported, lower.meshBound, upper.meshBound, volumeGap, areaSlack, diameter)
 	}
 	result := facetedPayload{verts: verts, tris: tris, src: src, groups: groups,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
@@ -273,6 +324,76 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		return nil, err
 	}
 	return buildFacetedBody(ctx, d, ref, result)
+}
+
+// Each half was audited before reflection. Their only possible geometric
+// contact is on the middle plane: all other vertices lie on strict opposite
+// sides. The opposed middle annuli are removed, and every remaining facet
+// meets that plane only in a vertex or full edge of their shared two loops.
+func loftMirrorCylinderChamferSeam(ctx context.Context, lower, upper facetedPayload,
+	half loftCylinderOneCapData, middle float64) error {
+	if half.capGroups[1] < 0 || len(half.outer[1]) < 3 || len(half.inner[1]) < 3 ||
+		!loftCylinderBoreRingSimple(ctx, lower.verts, half.outer[1]) ||
+		!loftCylinderBoreRingSimple(ctx, lower.verts, half.inner[1]) {
+		return fmt.Errorf("%w: mirrored cap chamfer has no simple middle loops", ErrUnsupported)
+	}
+	nested, err := loftCylinderChamferRingNested(ctx, lower.verts, half.outer[1], half.inner[1])
+	if err != nil {
+		return err
+	}
+	if !nested {
+		return fmt.Errorf("%w: mirrored cap chamfer middle loops are not nested", ErrUnsupported)
+	}
+	vertices := make(map[int]struct{}, len(half.outer[1])+len(half.inner[1]))
+	edges := make(map[[2]int]struct{}, len(vertices))
+	for _, loop := range [][]int{half.outer[1], half.inner[1]} {
+		for i, index := range loop {
+			vertices[index] = struct{}{}
+			edges[loftCylinderChamferEdge(index, loop[(i+1)%len(loop)])] = struct{}{}
+		}
+	}
+	for side, payload := range []facetedPayload{lower, upper} {
+		mesh := &bevelJoinedMesh{verts: payload.verts, tris: payload.tris,
+			src: payload.src, groups: payload.groups}
+		if !loftCylinderAuditAnnulus(ctx, mesh, half.outer[1], half.inner[1],
+			half.capGroups[1], middle, side == 1) {
+			return fmt.Errorf("%w: mirrored cap chamfer half %d has no tiled middle annulus",
+				ErrUnsupported, side)
+		}
+		for i, tri := range payload.tris {
+			if i%256 == 0 && ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if payload.src[i] == half.capGroups[1] {
+				continue
+			}
+			var on []int
+			for _, index := range tri {
+				if index < 0 || index >= len(payload.verts) {
+					return fmt.Errorf("%w: mirrored cap chamfer has an invalid middle facet", ErrUnsupported)
+				}
+				z := payload.verts[index].Z
+				if side == 0 && z > middle || side == 1 && z < middle {
+					return fmt.Errorf("%w: mirrored cap chamfer half crosses the middle plane", ErrUnsupported)
+				}
+				if z == middle {
+					if _, ok := vertices[index]; !ok {
+						return fmt.Errorf("%w: mirrored cap chamfer touches off its middle loop", ErrUnsupported)
+					}
+					on = append(on, index)
+				}
+			}
+			if len(on) == 3 {
+				return fmt.Errorf("%w: mirrored cap chamfer has a planar seam wall", ErrUnsupported)
+			}
+			if len(on) == 2 {
+				if _, ok := edges[loftCylinderChamferEdge(on[0], on[1])]; !ok {
+					return fmt.Errorf("%w: mirrored cap chamfer has an unmatched seam edge", ErrUnsupported)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func loftMirrorCylinderChamferBoreUnchanged(old facetedPayload, mesh *bevelJoinedMesh,

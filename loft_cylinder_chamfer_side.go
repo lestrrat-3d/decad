@@ -48,8 +48,8 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 	for i := range oldIndices {
 		oldIndices[i] = i
 	}
-	toothParity := make(map[producerID]*meshbool.ParityMesh)
-	toothIndices := make(map[producerID][]int)
+	toothParity := make(map[*Body]*meshbool.ParityMesh)
+	toothIndices := make(map[*Body][]int)
 	for i := middle[0]; i < middle[1]; i++ {
 		if i%32 == 0 && ctx.Err() != nil {
 			return ctx.Err()
@@ -83,25 +83,32 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 				continue
 			}
 			if !loftCylinderChamferMiddleBlank(q, source.blankRadius) {
-				face, ok := faces[origin]
-				if !ok {
+				candidates := faces[origin]
+				if len(candidates) == 0 {
 					last = "source face has no authenticated tooth"
 					continue
 				}
-				key := origin.producer
-				parity, ok := toothParity[key]
-				if !ok {
-					parity = meshbool.NewParityMesh(face.loft.verts, face.loft.tris)
-					toothParity[key] = parity
-					indices := make([]int, len(face.loft.tris))
-					for j := range indices {
-						indices[j] = j
+				certified := false
+				for _, face := range candidates {
+					parity, ok := toothParity[face.body]
+					if !ok {
+						parity = meshbool.NewParityMesh(face.loft.verts, face.loft.tris)
+						toothParity[face.body] = parity
+						indices := make([]int, len(face.loft.tris))
+						for j := range indices {
+							indices[j] = j
+						}
+						toothIndices[face.body] = indices
 					}
-					toothIndices[key] = indices
+					if err := loftCylinderChamferMiddleToothSource(ctx, q, face,
+						parity, toothIndices[face.body], source.blankRadius); err != nil {
+						last = err.Error()
+						continue
+					}
+					certified = true
+					break
 				}
-				if err := loftCylinderChamferMiddleToothSource(ctx, q, face,
-					parity, toothIndices[key], source.blankRadius); err != nil {
-					last = err.Error()
+				if !certified {
 					continue
 				}
 			}

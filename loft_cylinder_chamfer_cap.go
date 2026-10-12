@@ -208,8 +208,8 @@ func loftCylinderChamferHeldOutlineGap(ctx context.Context, verts []r3.Vec,
 			}
 			if !loftCylinderChamferSegmentGapAbove(old[i], old[(i+1)%len(old)],
 				newLoop[j], newLoop[(j+1)%len(newLoop)], bound2) {
-				return fmt.Errorf("%w: cap inset lies within source-outline allowance at edges %d/%d",
-					ErrUnsupported, i, j)
+				return fmt.Errorf("%w: cap inset lies within source-outline allowance %g at edges %d/%d",
+					ErrUnsupported, bound, i, j)
 			}
 		}
 	}

@@ -368,7 +368,8 @@ func loftCylinderChamferRingNested(ctx context.Context, verts []r3.Vec, outer, i
 			}
 			if loftCylinderEdgesMeet(loftCylinderExactXY(pa), loftCylinderExactXY(pb),
 				loftCylinderExactXY(pc), loftCylinderExactXY(pd)) {
-				return false, nil
+				return false, fmt.Errorf("%w: cap rings meet at outer edge %d (%v,%v) and inner edge %d (%v,%v)",
+					ErrUnsupported, i, pa, pb, j, pc, pd)
 			}
 		}
 	}
@@ -558,12 +559,17 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		if err != nil {
 			return nil, err
 		}
-		inSide, err := loftCylinderChamferRingNested(ctx, mesh.verts, clipped.rings[cap], inset[cap])
-		if err != nil {
-			return nil, err
+		if !inSource {
+			return nil, fmt.Errorf("%w: loft/cylinder inset crosses its source cap", ErrUnsupported)
 		}
-		if !inSource || !inSide {
-			return nil, fmt.Errorf("%w: loft/cylinder inset crosses its source or side-level ring", ErrUnsupported)
+		if active[1] {
+			inSide, err := loftCylinderChamferRingNested(ctx, mesh.verts, clipped.rings[cap], inset[cap])
+			if err != nil {
+				return nil, err
+			}
+			if !inSide {
+				return nil, fmt.Errorf("%w: loft/cylinder inset crosses its side-level ring", ErrUnsupported)
+			}
 		}
 		if err := loftCylinderChamferHeldOutlineGap(ctx, mesh.verts,
 			source.outer[cap], inset[cap], fp.meshBound); err != nil {
@@ -641,12 +647,14 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		if !loftCylinderChamferExactRingSimple(ctx, ideal, clipped.rings[cap]) {
 			return nil, fmt.Errorf("%w: ideal loft/cylinder side section is not simple", ErrUnsupported)
 		}
-		nested, err := loftCylinderChamferExactNested(ctx, ideal, clipped.rings[cap], inset[cap])
-		if err != nil {
-			return nil, err
-		}
-		if !nested {
-			return nil, fmt.Errorf("%w: ideal loft/cylinder inset crosses its side section", ErrUnsupported)
+		if active[1] {
+			nested, err := loftCylinderChamferExactNested(ctx, ideal, clipped.rings[cap], inset[cap])
+			if err != nil {
+				return nil, err
+			}
+			if !nested {
+				return nil, fmt.Errorf("%w: ideal loft/cylinder inset crosses its side section", ErrUnsupported)
+			}
 		}
 		bandSideEdges[cap], err = loftCylinderChamferBandBoundary(mesh, bands[cap], clipped.rings[cap], inset[cap])
 		if err != nil {
@@ -692,7 +700,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		}
 	}
 	if err := loftCylinderChamferNearBandReach(ctx, mesh, fp, source, ideal, bands,
-		clipped.clipBound, allowance); err != nil {
+		clipped.clipBound, allowance, !active[1]); err != nil {
 		return nil, err
 	}
 	if err := loftCylinderChamferBoreInheritance(fp, mesh, source); err != nil {
@@ -714,9 +722,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	if len(mesh.tris) > maxTriangles {
 		return nil, fmt.Errorf("%w: loft/cylinder chamfer exceeds the triangle work ceiling", ErrUnsupported)
 	}
-	maxAuditScans := uint64(min(64_000_000, 2_048*len(mesh.tris)))
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
-		maxTriangles, maxAuditScans); err != nil {
+	if err := loftCylinderChamferCrossingAudit(ctx, mesh, source, inset, maxTriangles); err != nil {
 		return nil, err
 	}
 	for cap := range 2 {
