@@ -39,7 +39,7 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 		if i == 5 {
 			require.Equal(t, math.Nextafter(1, 0), turn.Basis().EZ.Z)
 		}
-		turned, err := pair.PlacedCopy(t.Context(), turn)
+		turned, err := decad.Copy(t.Context(), pair, decad.WithCopyPlacement(turn))
 		require.NoError(t, err)
 		pattern = append(pattern, turned)
 	}
