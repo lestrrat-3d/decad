@@ -70,8 +70,9 @@ func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge
 	return contacts, nil
 }
 
-// Nonconnector source walls clear every 3r contact disk. The root disks
-// themselves are pairwise separate after charging source mesh displacement.
+// Nonconnector source walls clear every 3r contact disk. Each other source
+// connector clears each disk separately; radial distance and root spacing
+// alone do not prove that a long outward connector stays clear.
 func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecord,
 	radius, sourceBound float64) error {
 	reach := proofbound.AbsSumUpper(rec.source.blankRadius,
@@ -111,7 +112,78 @@ func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecor
 			}
 		}
 	}
+	diskReach := proofbound.AbsSumUpper(proofbound.ProductUpper(3, radius), sourceBound)
+	for i, part := range rec.parts {
+		for _, station := range []int{0, part.rootStart} {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			rootPoint := rec.source.rootArc.Start
+			if station == part.rootStart {
+				rootPoint = rec.source.rootArc.End
+			}
+			root := prismPatternExactPlacedPoint(part, rootPoint)
+			held := part.mesh.vertices[2*station]
+			rootError := proofbound.AbsSumUpper(
+				proofbound.IntervalFloatError(root.x, held.X),
+				proofbound.IntervalFloatError(root.y, held.Y))
+			if rootError > part.mesh.Bound().Base() {
+				return fmt.Errorf("%w: joined-prism fillet root %d lost its source station",
+					ErrUnsupported, i)
+			}
+			for j, other := range rec.parts {
+				for _, connector := range []struct {
+					index, station int
+				}{{0, 0}, {rec.source.rootIndex - 1, other.rootStart}} {
+					if i == j && station == connector.station {
+						continue
+					}
+					line, ok := other.prism.profile.Outer.Segments[connector.index].(lineSeg)
+					if !ok || !prismPatternSegmentClearsDisk(root,
+						prismPatternExactPlacedPoint(other, line.Start),
+						prismPatternExactPlacedPoint(other, line.End),
+						diskReach) {
+						return fmt.Errorf("%w: joined-prism fillet root %d station %d connector %d segment %d lacks local clearance",
+							ErrUnsupported, i, station, j, connector.index)
+					}
+				}
+			}
+		}
+	}
 	return nil
+}
+
+// All coordinates are exact dyadic placements. Compare squared distances to
+// the segment's closest point, including either endpoint when the projection
+// lies outside the segment. Equality is a refusal.
+func prismPatternSegmentClearsDisk(center, a, b prismPatternIVPoint, reach float64) bool {
+	if proofbound.IsNonFinite(reach) || reach <= 0 {
+		return false
+	}
+	for _, p := range []prismPatternIVPoint{center, a, b} {
+		if p.x.Lo.Cmp(p.x.Hi) != 0 || p.y.Lo.Cmp(p.y.Hi) != 0 {
+			return false
+		}
+	}
+	dx := new(big.Rat).Sub(b.x.Lo, a.x.Lo)
+	dy := new(big.Rat).Sub(b.y.Lo, a.y.Lo)
+	wx := new(big.Rat).Sub(center.x.Lo, a.x.Lo)
+	wy := new(big.Rat).Sub(center.y.Lo, a.y.Lo)
+	lengthSq := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
+	if lengthSq.Sign() <= 0 {
+		return false
+	}
+	projection := new(big.Rat).Add(new(big.Rat).Mul(wx, dx), new(big.Rat).Mul(wy, dy))
+	distanceSq := new(big.Rat).Add(new(big.Rat).Mul(wx, wx), new(big.Rat).Mul(wy, wy))
+	if projection.Cmp(lengthSq) >= 0 {
+		wx.Sub(center.x.Lo, b.x.Lo)
+		wy.Sub(center.y.Lo, b.y.Lo)
+		distanceSq.Add(new(big.Rat).Mul(wx, wx), new(big.Rat).Mul(wy, wy))
+	} else if projection.Sign() > 0 {
+		distanceSq.Sub(distanceSq, new(big.Rat).Quo(
+			new(big.Rat).Mul(projection, projection), lengthSq))
+	}
+	return distanceSq.Cmp(prismPatternRadiusSq(reach)) > 0
 }
 
 func prismPatternFilletContactFitsRing(rec *prismPatternJoinRecord,

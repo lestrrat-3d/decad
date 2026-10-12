@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -27,6 +28,26 @@ func TestPrismPatternFilletOfCopiedExtrudes(t *testing.T) {
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 	require.Less(t, mesh.Bound().Base(), 0.1)
+}
+
+func TestPrismPatternFilletConnectorDiskClearance(t *testing.T) {
+	point := func(x, y *big.Rat) prismPatternIVPoint { return prismPatternIVPointOf(x, y) }
+	root := point(big.NewRat(3, 1), big.NewRat(0, 1))
+	otherRoot := point(big.NewRat(149, 50), big.NewRat(33, 100))
+	far := point(big.NewRat(61, 20), big.NewRat(0, 1))
+	// The two roots clear their 0.15 mm disks, and the other connector
+	// moves outward across the 3 mm blank, but it enters the first disk.
+	require.Greater(t, math.Hypot(0.02, 0.33), 0.3)
+	require.Less(t, math.Hypot(2.98, 0.33), 3.0)
+	require.Greater(t, math.Hypot(3.05, 0), 3.0)
+	require.False(t, prismPatternSegmentClearsDisk(root, otherRoot, far, 0.15))
+	require.True(t, prismPatternSegmentClearsDisk(root, otherRoot,
+		point(big.NewRat(16, 5), big.NewRat(1, 100)), 0.15))
+	// A tangency is not enough clearance for a later proof.
+	require.False(t, prismPatternSegmentClearsDisk(
+		point(big.NewRat(0, 1), big.NewRat(0, 1)),
+		point(big.NewRat(-1, 1), big.NewRat(1, 1)),
+		point(big.NewRat(1, 1), big.NewRat(1, 1)), 1))
 }
 
 func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {

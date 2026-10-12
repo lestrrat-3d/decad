@@ -96,6 +96,10 @@ the circle foot must lie within the first shared-ring step. The entire
 tangent arc fits within `3r` of the source root. The source control-hull
 certificate keeps every nonconnector wall outside `R+3r+oldBound`, and all
 root disks are pairwise separate after charging source mesh displacement.
+Each other copied connector must also clear every root disk. Exact dyadic
+point-to-segment distance checks both endpoints and the interior projection
+against `3r+oldBound`; equality refuses. The connector belonging to that
+root is the only exception.
 
 The shell moves each selected connector endpoint to its line foot, splits
 the shared ring at the circle foot, and joins them with a sampled circular
