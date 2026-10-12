@@ -907,6 +907,9 @@ faces' certified area intervals give `VerifyAll` an area slack. The sheet
 publishes no occupied-volume proof. `VerifyNone` keeps identical triangles
 and withholds area and contact results. A placed composite sheet refuses until
 its transformed join-plane and station bounds have their own proof.
+`Body.Thicken` admits this exact cardinal sheet on its three thickness sides
+through `docs/surface-design.md` §16.8's generated rectangular section. Other
+chain sweeps still refuse at that consumer.
 
 ## 16. Mitred polyline sweep with a per-span section scale
 

@@ -48,9 +48,6 @@ func TestSweepChainCardinalLineArcSheet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, r3.NewVec(0, 0, 0), box.Min)
 	require.Equal(t, r3.NewVec(10, 0, 25), box.Max)
-	_, err = sheet.Thicken(t.Context(), units.Millimeters(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-
 	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)

@@ -45,6 +45,7 @@ func WithThickenSide(side ThickenSide) ThickenOption { return thickenSideOption{
 // interval, or sweeps a ribbon's own assembled section through the ribbon's
 // interval and spins a chain shell's own through the shell's. A one-span
 // sweep sheet uses its prism or revolve reduction and restores sweep roles.
+// A cardinal composite chain sweep assembles one section and sweeps both spans.
 // Other sheet families are staged under docs/surface-design.md §16.8.
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error) {
 	if ctx == nil {
@@ -95,6 +96,8 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 		result, err = thickenChainExtrude(ctx, d, payload, side, tmm, tDelta)
 	case chainRevolvePayload:
 		result, err = thickenChainRevolve(ctx, d, payload, side, tmm, tDelta)
+	case chainSweepPayload:
+		result, err = thickenCompositeChainSweep(ctx, d, payload, side, tmm, tDelta)
 	default:
 		return nil, fmt.Errorf(`%w: this sheet has no admitted Thicken generator`, ErrUnsupported)
 	}
