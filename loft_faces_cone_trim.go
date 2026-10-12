@@ -31,6 +31,7 @@ type loftFacesToeRecord struct {
 	capFace    *Face
 	toeCapFace *Face
 	toe        *pointConeLimit
+	toeTool    *Body
 }
 
 // loftFacesTrimRecord retains the authenticated source of one unplaced
@@ -44,6 +45,7 @@ type loftFacesTrimRecord struct {
 	bounds                    []loftFaceCapBounds
 	stationGroup              []int
 	toe, heel                 *pointConeLimit
+	toeTool, heelTool         *Body
 	toeCapGroup, heelCapGroup int
 }
 
@@ -144,7 +146,7 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 		return nil
 	}
 	p.loftFacesToe = &loftFacesToeRecord{base: base, cap: base.loftFacesCap,
-		capFace: capFace, toeCapFace: toeCapFace, toe: cone}
+		capFace: capFace, toeCapFace: toeCapFace, toe: cone, toeTool: tool}
 	result.payload = p
 	return nil
 }
@@ -379,6 +381,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		bounds:       append([]loftFaceCapBounds(nil), p.loftFacesToe.cap.bounds...),
 		stationGroup: append([]int(nil), p.loftFacesToe.cap.stationGroup...),
 		toe:          p.loftFacesToe.toe, heel: cone,
+		toeTool: p.loftFacesToe.toeTool, heelTool: tool,
 		toeCapGroup: toeCapSource, heelCapGroup: heelCapSource,
 	}
 	body.payload = result

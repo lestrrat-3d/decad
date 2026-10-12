@@ -110,7 +110,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		}
 		payload.xform = shift
 		tooth.payload = payload
-		if revolveLoftFacesTrimCurrent(payload, proof.trim) {
+		if revolveLoftFacesTrimCurrent(tooth, proof.trim) {
 			t.Fatal("changed tooth transform retained a current source record")
 		}
 		_, certified, err := revolveLoftFacesNonverticalManifest(t.Context(), proof)

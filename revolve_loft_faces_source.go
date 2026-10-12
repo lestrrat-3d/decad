@@ -53,7 +53,7 @@ func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
 	}
 	p, ok := tooth.payload.(facetedPayload)
 	if !ok || p.xform != r3.Identity() || p.loftFacesTrim == nil ||
-		!revolveLoftFacesTrimCurrent(p, p.loftFacesTrim) {
+		!revolveLoftFacesTrimCurrent(tooth, p.loftFacesTrim) {
 		return nil, false, nil
 	}
 	trim := p.loftFacesTrim
@@ -108,10 +108,19 @@ func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 	return true, fmt.Errorf("%w: certified curved LoftFaces contact needs a held-seam builder", ErrUnsupported)
 }
 
-func revolveLoftFacesTrimCurrent(p facetedPayload, trim *loftFacesTrimRecord) bool {
+func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
+	if tooth == nil {
+		return false
+	}
+	p, ok := tooth.payload.(facetedPayload)
+	if !ok || p.loftFacesTrim != trim {
+		return false
+	}
 	if p.xform != r3.Identity() || trim == nil || trim.source == nil ||
 		!pointSourceCurrent(trim.source) ||
-		trim.toe == nil || trim.heel == nil || len(trim.maps) < 3 || len(trim.maps) > 64 ||
+		!revolveLoftFacesConeCurrent(trim.toeTool, trim.toe) ||
+		!revolveLoftFacesConeCurrent(trim.heelTool, trim.heel) ||
+		len(trim.maps) < 3 || len(trim.maps) > 64 ||
 		len(trim.bounds) != len(trim.maps) ||
 		!orderedLoftFacesConeLimits(trim.toe, trim.heel, trim.base) ||
 		!trim.base.loftFacesPrimitive || trim.base.loftFacesCap == nil ||
@@ -124,7 +133,8 @@ func revolveLoftFacesTrimCurrent(p facetedPayload, trim *loftFacesTrimRecord) bo
 		len(trim.source.profile.Outer.Segments) < 4 ||
 		len(trim.source.profile.Outer.Segments) > 128 ||
 		len(trim.source.profile.Outer.Segments) != len(trim.source.source.entities) ||
-		!spiralTrimCapGroupsCurrent(p, trim) {
+		!spiralTrimCapGroupsCurrent(p, trim) ||
+		!revolveLoftFacesCapGroupsPure(p, trim, len(tooth.Faces())) {
 		return false
 	}
 	if !slices.Equal(trim.stationGroup, trim.base.loftFacesCap.stationGroup) {
@@ -147,6 +157,50 @@ func revolveLoftFacesTrimCurrent(p facetedPayload, trim *loftFacesTrimRecord) bo
 	for i, mapped := range trim.maps {
 		if lfPositiveDenominator(mapped, box) != nil ||
 			mapped != trim.base.loftFacesCap.maps[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// Boolean source proofs read exact cone parameters from the live tool
+// meridians. The retained trim scalars alone are mutable cached data.
+func revolveLoftFacesConeCurrent(tool *Body, recorded *pointConeLimit) bool {
+	if tool == nil || recorded == nil || recorded.apex == nil ||
+		recorded.far == nil || recorded.slope == nil {
+		return false
+	}
+	live, ok := exactPointCone(tool)
+	return ok && recorded.apex.Cmp(live.apex) == 0 &&
+		recorded.far.Cmp(live.far) == 0 && recorded.slope.Cmp(live.slope) == 0
+}
+
+// A retained cone cap owns its entire live result face. A face shared with a
+// different source group cannot be treated as an isolated tool-cap boundary.
+func revolveLoftFacesCapGroupsPure(p facetedPayload, trim *loftFacesTrimRecord, faceCount int) bool {
+	if len(p.src) != len(p.tris) || len(p.faceOf) != len(p.tris) {
+		return false
+	}
+	capFaces := [2]int{-1, -1}
+	capGroups := [2]int{trim.toeCapGroup, trim.heelCapGroup}
+	for i, group := range p.src {
+		for capIndex, capGroup := range capGroups {
+			if group != capGroup {
+				continue
+			}
+			if p.faceOf[i] < 0 || p.faceOf[i] >= faceCount ||
+				capFaces[capIndex] >= 0 && capFaces[capIndex] != p.faceOf[i] {
+				return false
+			}
+			capFaces[capIndex] = p.faceOf[i]
+		}
+	}
+	if capFaces[0] < 0 || capFaces[1] < 0 || capFaces[0] == capFaces[1] {
+		return false
+	}
+	for i, face := range p.faceOf {
+		if face == capFaces[0] && p.src[i] != capGroups[0] ||
+			face == capFaces[1] && p.src[i] != capGroups[1] {
 			return false
 		}
 	}
