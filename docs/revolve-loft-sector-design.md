@@ -48,7 +48,13 @@ applied once after that map. The placed caps share the exact ring vertex IDs
 at every root station.
 
 For repeated sectors, the complete trimmed source solids must be separate by
-one certified coordinate range for every pair. A seam is selected from the
+one certified projection for every pair. The builder first checks expanded
+world-coordinate ranges. When those ranges overlap, it chooses a YZ direction
+from the held box centers and projects every held source vertex with exact
+rational arithmetic. Each projection range expands by the source spatial
+bound and authenticated placement charge. A direction whose enlarged ranges
+overlap refuses the pair; choosing the direction alone proves nothing.
+A seam is selected from the
 unused angular complement. Each pair of root intervals must remain separate
 after source mesh, crossing, and placement bounds are converted to an angular
 allowance at the finite root radius. The seam uses held root intervals and
