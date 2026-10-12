@@ -29,7 +29,9 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 	}
 	record := joined.loftMirrorCylinderJoin
 	if record.blank == nil || record.source == nil || record.lowerHalf == nil ||
-		len(record.pairs) == 0 || record.lowerHalf.doc != d || record.blank.doc != d {
+		len(record.pairs) == 0 || record.lowerHalf.doc != d || record.blank.doc != d ||
+		record.bridgeBound < 0 || record.bridgeVolume < 0 ||
+		proofbound.IsNonFinite(record.bridgeBound) || proofbound.IsNonFinite(record.bridgeVolume) {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its bore sources", ErrUnsupported)
 	}
 	lower, ok := record.lowerHalf.payload.(facetedPayload)
@@ -119,7 +121,8 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 				return nil, fmt.Errorf("%w: reflected circular bore middle annuli do not match", ErrUnsupported)
 			}
 			vertexMap[i] = index
-			vertexBound[index] = max(vertexBound[index], upper.vertexBound[i])
+			vertexBound[index] = max(vertexBound[index],
+				proofbound.AbsSumUpper(upper.vertexBound[i], record.bridgeBound))
 			continue
 		}
 		if vertex.Z <= middle {
@@ -127,7 +130,8 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		}
 		vertexMap[i] = len(verts)
 		verts = append(verts, vertex)
-		vertexBound = append(vertexBound, upper.vertexBound[i])
+		vertexBound = append(vertexBound,
+			proofbound.AbsSumUpper(upper.vertexBound[i], record.bridgeBound))
 	}
 	if !loftMirrorCylinderCapsOppose(lower, upper, vertexMap, lowCaps[1], lowCaps[1]) {
 		return nil, fmt.Errorf("%w: reflected circular bore middle annuli do not tile equally", ErrUnsupported)
@@ -179,8 +183,9 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
 		return nil, err
 	}
-	bound := max(lower.meshBound, upper.meshBound)
-	volumeGap := proofbound.AbsSumUpper(lower.volSymDiff, upper.volSymDiff)
+	bound := max(lower.meshBound,
+		proofbound.AbsSumUpper(upper.meshBound, record.bridgeBound))
+	volumeGap := proofbound.AbsSumUpper(lower.volSymDiff, upper.volSymDiff, record.bridgeVolume)
 	areaSlack := proofbound.AbsSumUpper(lower.areaSlack, upper.areaSlack,
 		proofbound.ProductUpper(2, max(lower.areaSlack, upper.areaSlack)))
 	diameter := facetedSourceDiameterUpper(verts, bound)
@@ -236,5 +241,6 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		[2]float64{fullBlank.z0, fullBlank.z1}, ref); err != nil {
 		return nil, err
 	}
+	loftCylinderTagBridgedTop(&fp, capGroups[1], []float64{record.bridgeBound})
 	return buildFacetedBody(ctx, d, ref, fp)
 }

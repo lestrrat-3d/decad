@@ -154,3 +154,8 @@ The final held diameter and departure bound the centroid reading. Both
 exterior annuli must tile the blank's exact end planes. The result keeps the
 blank's cap origins and receives Cut cap roles; `VerifyAll` checks its boundary
 and occupied-volume allowances at the requested tolerance.
+
+For a near-axis placed pair, the Join record carries its upper source
+translation bound and swept-volume charge into the Cut. The reflected upper
+vertex and mesh bounds include that translation, and the bored top cap retains
+the faceted surface tag when the original upper tooth ends below it.
